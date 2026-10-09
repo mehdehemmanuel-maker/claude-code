@@ -15,9 +15,9 @@ import { compPart, componentOf } from '../components';
 import { pinHeader, usbCPlug } from '../boardparts';
 import { resolve } from '../inventory';
 import type { Part } from '../kits';
-import { CHP170_OPEN, HANDS, ironInStand, S11 } from '../kit-solder';
+import { aaCell, CHP170_OPEN, H3951, HANDS, ironInStand, S11 } from '../kit-solder';
 import { grade, idealVolume, type JointShape } from '../solder-joint';
-import { ALLOY, cut, HAND, LAYOUT, leadAt, letGo, newBench, payOut, pinAt, PROTO, protoHold, readout, takeUp, tick, wipe, type Bench, type BenchJoint, type PlanId, type Thing, type V3 } from '../solder-lesson';
+import { ALLOY, cut, HAND, LAYOUT, leadAt, letGo, lit, newBench, payOut, pinAt, PROTO, protoHold, readout, takeUp, throwSwitch, tick, wipe, type Bench, type BenchJoint, type PlanId, type Thing, type V3 } from '../solder-lesson';
 
 const MM = 0.001, PI = Math.PI;
 /** A thing the library draws, by the words it is called by. */
@@ -42,6 +42,11 @@ type Seated = 'resistor' | 'led' | 'link';
  *  goes to row a, the link lying across its three holes. */
 const WAIT: Record<Seated, { at: V3; rot: V3 }> = { resistor: { at: [-35, 0, 22], rot: [0, 0, 0] }, led: { at: [-40, 2.95, 48], rot: [0, 0, PI / 2] }, link: { at: [-30, 0.75, 72], rot: [0, 0, PI / 2] } };
 const midOf = (k: Seated): [number, number] => { const q = PROTO.seats[k]; return [(q[0]![0] + q[1]![0]) / 2, (q[0]![1] + q[1]![1]) / 2]; };
+/** The battery holder: waiting to the parts' left, its leads laid out toward the board; once its pins are in, set on
+ *  the helping hands' base under the board (its floor on the base's top, 12 up), its leads up to the rails. Its leads'
+ *  roots in its own frame (src/nexus/kit-solder.ts's holder3951): the red from the switch's clip, the black from a
+ *  spring. */
+const BATTERY = { wait: [-75, 0, 0] as V3, seated: [PROTO.hands[0] - 20, HANDS.base[1], PROTO.hands[2] + 10] as V3, red: [H3951.L / 2, H3951.H - 3, H3951.W / 2 - 5] as V3, black: [H3951.L / 2, H3951.H - 3, -7.6] as V3 };
 const SEAT: Record<Seated, { at: V3; rot: V3 }> = { resistor: { at: [midOf('resistor')[0], 0, midOf('resistor')[1]], rot: [0, 0, 0] }, led: { at: [midOf('led')[0], 3, midOf('led')[1]], rot: [0, PI / 2, 0] }, link: { at: [midOf('link')[0], 0, midOf('link')[1]], rot: [0, 0, 0] } };
 /** The cutters' jaws' tip and their rivet, in their own frame (m): Hakko's 138 mm over all, the rivet 15 mm behind the
  *  tip (src/nexus/kit-solder.ts); how far each half stands open about it, its spring holding them so till a hand
@@ -61,6 +66,9 @@ export class SolderBench {
   private fillets: { at: THREE.Group; cone: THREE.Mesh; ball: THREE.Mesh; stub: THREE.Mesh | null; rosin: THREE.Mesh }[] = [];
   /** a seated part's leads as they are bent into its holes, and the straight ones it came with */
   private looks: Partial<Record<Seated, { straight: THREE.Object3D[]; bent: THREE.Object3D[] }>> = {};
+  /** the battery holder's parts that change: its leads as laid out, its knife switch's blade and knob (and where they
+   *  stand open), its leads as run up to the board, the LED's lens to light */
+  private power: { laid: THREE.Object3D[]; blade: THREE.Object3D[]; home: Map<THREE.Object3D, THREE.Quaternion>; hinge: THREE.Vector3; run: THREE.Object3D[]; lens: THREE.MeshStandardMaterial[] } | null = null;
   /** cut-off leads falling to the bench and lying there */
   private pieces: { m: THREE.Mesh; v: number; down: boolean; len: number }[] = [];
   /** the cutters' two halves, swung about their rivet, and how long they stay shut after a cut */
@@ -100,6 +108,9 @@ export class SolderBench {
       this.obj.led = add(drawn('led red 5mm'), WAIT.led.at, WAIT.led.rot);
       this.obj.link = this.link(); this.obj.link.position.set(...WAIT.link.at.map((v) => v * MM) as V3); this.obj.link.rotation.set(...WAIT.link.rot); this.group.add(this.obj.link);
       this.bendLeads();
+      this.obj.battery = this.holder(add); this.obj.battery.position.set(...BATTERY.wait.map((v) => v * MM) as V3); this.group.add(this.obj.battery);
+      const lens: THREE.MeshStandardMaterial[] = []; this.obj.led.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.userData.part as Part | undefined)?.mat === 'epoxy-clear') { m.material = (m.material as THREE.MeshStandardMaterial).clone(); lens.push(m.material as THREE.MeshStandardMaterial); } });
+      this.power!.lens = lens;
     }
     add(drawn('ironstand s-11'), this.places.stand, [0, STAND_YAW, 0]); add(drawn('tipcleaner 599b'), this.places.cleaner);
     this.obj.iron = add(drawn('solderiron pinecil-v2'), [0, 0, 0]); this.placeIronInStand();
@@ -182,11 +193,13 @@ export class SolderBench {
    *  hand points; the solder's wire out of the fingers, forward and down toward the work; a header or the Pico as it
    *  was). What it did, said; null where nothing is near. */
   grab(hand: 'right' | 'left', grip: THREE.Object3D, ray: THREE.Object3D = grip): string | null {
-    const at = grip.getWorldPosition(new THREE.Vector3()), parts: Thing[] = this.plan === 'pico' ? ['header-a', 'header-b', 'pico'] : ['proto', 'resistor', 'led', 'link'];
+    const at = grip.getWorldPosition(new THREE.Vector3()), parts: Thing[] = this.plan === 'pico' ? ['header-a', 'header-b', 'pico'] : ['proto', 'resistor', 'led', 'link', 'battery'];
     const can: Thing[] = hand === 'right' ? ['iron', ...(this.plan === 'proto' ? ['cutters' as const] : []), ...parts] : ['solder', ...parts];
     let best: Thing | null = null, bd = 0.09;
     for (const k of can) { if (this.held.left === k || this.held.right === k || !this.obj[k]) continue; const d = this.grabPoint(k).distanceTo(at); if (d < bd) { bd = d; best = k; } }
     if (!best) return null;
+    // (the holder, its leads soldered in, is not taken up: a grip on it throws its knife switch)
+    if (best === 'battery' && this.bench.placed.battery && this.bench.joints.some((q) => q.part === 'battery' && q.j.solder > 0)) { const s = throwSwitch(this.bench, !this.bench.on); this.swingSwitch(); return s; }
     const said = takeUp(this.bench, best); if (/first|soldered to|soldered in: it stays/.test(said)) return said;
     this.held[hand] = best; const o = this.obj[best]!;
     // (held as a hand holds it, set in the frame of where the hand points (a controller's grip frame lies along its
@@ -236,6 +249,7 @@ export class SolderBench {
     if ((k === 'resistor' || k === 'led' || k === 'link') && b.placed[k]) { this.obj.proto!.add(o); o.position.set(...SEAT[k].at.map((v) => v * MM) as V3); o.rotation.set(...SEAT[k].rot); this.look(k, true); return; }
     if (k === 'resistor' || k === 'led' || k === 'link') this.look(k, false);
     if (k === 'cutters') this.swing(JAWS.open);
+    if (k === 'battery') { this.runLeads(b.placed.battery === true); if (b.placed.battery) { if (o.parent !== this.group) this.group.add(o); o.position.set(...BATTERY.seated.map((v) => v * MM) as V3); o.rotation.set(0, 0, 0); return; } }
     home();
   }
   /** Is the LED held the wrong way round over its holes: its long lead (its anode) nearer the − rail's hole than its
@@ -292,6 +306,9 @@ export class SolderBench {
     } else {
       const part = /place (the )?resistor/.test(t) ? 'resistor' : /place (the )?led/.test(t) ? 'led' : /place (the )?(link|wire|jumper)/.test(t) ? 'link' : null;
       if (part) { const [x, z] = midOf(part), s = letGo(b, part, [PROTO.at[0] + x, 5, PROTO.at[2] + z], { reversed: part === 'led' && /backwards?|reversed|wrong way|other way/.test(t) }); this.settle(part); return s; }
+      if (/(place|put) (the )?(battery|holder)|battery (in|leads in)|holder in/.test(t)) { const s = letGo(b, 'battery', protoHold()); this.settle('battery'); return s; }
+      if (/close (the )?(knife )?switch|switch (it )?on|turn (it )?on/.test(t)) { const s = throwSwitch(b, true); this.swingSwitch(); return s; }
+      if (/open (the )?(knife )?switch|switch (it )?off|turn (it )?off/.test(t)) { const s = throwSwitch(b, false); this.swingSwitch(); return s; }
       if (/(board|perma-?proto) (in|into) (the )?hands|clip (the )?board|mount (the )?board|put (the )?board in/.test(t)) { const s = letGo(b, 'proto', protoHold()); this.settle('proto'); return s; }
       if (/take (the )?board out|board out|unclip/.test(t)) { const s = takeUp(b, 'proto'); this.settle('proto'); return s; }
       if (/take (the )?(flush )?cutters/.test(t)) { this.script.cutters = true; this.poseCuttersAt(leadAt(b.joints[0]!, 12), b.joints[0]!); return takeUp(b, 'cutters'); }
@@ -313,7 +330,7 @@ export class SolderBench {
     if (/more solder|pull more/.test(t)) { payOut(b, 10); return `${Math.round(b.wire.out)} mm of wire out`; }
     if (/iron (down|back)|in (its|the) stand/.test(t)) { this.script.tip = null; this.script.wire = null; this.placeIronInStand(); return letGo(b, 'iron', null); }
     return this.plan === 'pico' ? 'Say: place the headers, place the pico, take the iron, take the solder, tin the tip, wipe, heat pin N, feed pin N, lift, more solder, iron down.'
-      : 'Say: place the resistor, place the led, place the link, board in the hands, take the iron, take the solder, tin the tip, wipe, heat joint N, feed joint N, lift, take the cutters, cut lead N at 1.5, cutters down, iron down.';
+      : 'Say: place the resistor, place the led, place the link, board in the hands, take the iron, take the solder, tin the tip, wipe, heat joint N, feed joint N, lift, take the cutters, cut lead N at 1.5, cutters down, place the battery, close the switch, iron down.';
   }
   /** On a screen: the cutters held to a lead as a hand would, level, their edge across it 3 mm back from their tip. */
   private poseCuttersAt(p: V3, q: BenchJoint): void {
@@ -354,6 +371,8 @@ export class SolderBench {
     for (const p of this.pieces) { if (p.down) continue; p.v += 9.81 * dt; p.m.position.y -= p.v * dt; const x = p.m.position.x / MM - PROTO.hands[0], z = p.m.position.z / MM - PROTO.hands[2];
       const floor = (Math.abs(x) < HANDS.base[0] / 2 && Math.abs(z) < HANDS.base[2] / 2 ? HANDS.base[1] : 0) * MM, r = (p.m.geometry as THREE.CylinderGeometry).parameters.radiusTop;
       if (p.m.position.y - r <= floor + (p.len / 2) * MM * Math.abs(new THREE.Vector3(0, 1, 0).applyQuaternion(p.m.quaternion).y)) { p.down = true; p.m.position.y = floor + r; p.m.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (x * 7.3) % PI).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), PI / 2)); } }
+    // (the LED glows by the current the circuit gives it: 250 mcd at 20 mA (Adafruit's 299), its light in proportion)
+    if (this.power) { const mA = lit(b).mA, k = Math.min(3, mA / 20 * 6); for (const m of this.power.lens) { m.emissive.setHex(0xff2414); m.emissiveIntensity = mA > 0.5 ? 0.4 + k : 0; } }
     // (the cutters' spring holds their jaws open in a hand; the trigger shuts them a moment)
     if (this.jaws) { this.jaws.shut = Math.max(0, this.jaws.shut - dt); this.swing(this.jaws.shut > 0 ? 0 : JAWS.open); }
     // (the tip bright where it is tinned, dark where it has oxidised)
@@ -387,7 +406,8 @@ export class SolderBench {
     p.t = 0; p.s.visible = true; p.s.scale.setScalar(0.004); p.s.position.set(at[0] * MM, (at[1] + 2) * MM, at[2] * MM);
   }
   private drawCard(): void {
-    const r = readout(this.bench), lines = [`Step ${r.step} of ${r.of}: ${r.do}`, ...(r.check ? [`Done when: ${r.check}`] : []), `Iron: ${r.iron}`, `Wire: ${Math.round(this.bench.wire.out)} mm out`, ...(r.joint ? [r.joint] : []), `${r.good} of ${this.bench.joints.length} good`, ...r.bridges, ...r.last.map((s) => `· ${s}`)], text = lines.join('\n');
+    const l = this.bench.plan === 'proto' && this.bench.placed.battery ? lit(this.bench) : null, power = l ? [l.mA > 0.5 ? `LED: lit, ${l.mA.toFixed(1)} mA` : `LED: dark (${l.why})`] : [];
+    const r = readout(this.bench), lines = [`Step ${r.step} of ${r.of}: ${r.do}`, ...(r.check ? [`Done when: ${r.check}`] : []), ...power, `Iron: ${r.iron}`, `Wire: ${Math.round(this.bench.wire.out)} mm out`, ...(r.joint ? [r.joint] : []), `${r.good} of ${this.bench.joints.length} good`, ...r.bridges, ...r.last.map((s) => `· ${s}`)], text = lines.join('\n');
     if (text === this.cardText || !this.cardCtx) return; this.cardText = text; const x = this.cardCtx, W = 1024, Hh = 600;
     x.clearRect(0, 0, W, Hh); x.fillStyle = 'rgba(16,20,24,0.88)'; x.beginPath(); x.roundRect(0, 0, W, Hh, 24); x.fill();
     x.fillStyle = '#e8edf2'; x.font = '28px system-ui, sans-serif'; let y = 46;
@@ -401,11 +421,11 @@ export class SolderBench {
   /** For tests: the bench run on by `s` seconds of its own time, a sixtieth at a time, whatever the frame rate. */
   advance(s: number): void { for (let t = 0; t < s - 1e-9; t += 1 / 60) this.update(1 / 60); }
   /** For tests: the lesson as it stands. */
-  now() { const r = readout(this.bench); return { plan: this.plan, step: r.step, of: r.of, do: r.do, iron: Math.round(this.bench.iron.T), tinned: this.bench.iron.tinned > 0, good: r.good, graded: r.graded, joint: r.joint, placed: { ...this.bench.placed }, held: { ...this.held }, wire: +this.bench.wire.out.toFixed(1), leads: this.bench.joints.map((q) => +q.lead.toFixed(2)), cut: this.pieces.length }; }
+  now() { const r = readout(this.bench); return { on: this.bench.on, mA: this.bench.plan === 'proto' ? +lit(this.bench).mA.toFixed(2) : 0, plan: this.plan, step: r.step, of: r.of, do: r.do, iron: Math.round(this.bench.iron.T), tinned: this.bench.iron.tinned > 0, good: r.good, graded: r.graded, joint: r.joint, placed: { ...this.bench.placed }, held: { ...this.held }, wire: +this.bench.wire.out.toFixed(1), leads: this.bench.joints.map((q) => +q.lead.toFixed(2)), cut: this.pieces.length }; }
   reset(): void {
     this.bench = newBench(this.plan); this.script = { tip: null, wire: null, cutters: false }; this.held = { right: null, left: null };
     for (const p of this.pieces) { p.m.geometry.dispose(); p.m.removeFromParent(); } this.pieces = [];
-    for (const k of ['proto', 'header-a', 'header-b', 'pico', 'resistor', 'led', 'link', 'cutters'] as const) this.settle(k); this.placeIronInStand();
+    for (const k of ['proto', 'header-a', 'header-b', 'pico', 'resistor', 'led', 'link', 'battery', 'cutters'] as const) this.settle(k); this.placeIronInStand(); this.swingSwitch();
   }
   // ---- the joints and the second lesson's parts ----------------------------------------------------------------------
   /** Each joint's solder (a concave cone round its lead, from its pad's edge, or a ball where there is far too much) on
@@ -419,14 +439,14 @@ export class SolderBench {
     this.bench.joints.forEach((q, i) => {
       const at = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: 0xc8ccd0, metalness: 1, roughness: 0.25 });
       if (this.plan === 'pico') { const p = pinAt(i + 1); at.position.set(p[0] * MM, p[1] * MM, p[2] * MM); this.group.add(at); }
-      else { const [x, z] = PROTO.seats[q.part!][q.part === 'resistor' ? i : q.part === 'led' ? i - 2 : i - 4]!; at.position.set(x * MM, -1.6 * MM, z * MM); at.rotation.set(PI, 0, 0); this.obj.proto!.add(at); }
+      else { const k = this.bench.joints.slice(0, i).filter((r) => r.part === q.part).length, [x, z] = PROTO.seats[q.part!][k]!; at.position.set(x * MM, -1.6 * MM, z * MM); at.rotation.set(PI, 0, 0); this.obj.proto!.add(at); }
       const cone = new THREE.Mesh(coneOf(q.shape), m), ball = new THREE.Mesh(ballGeo, m); cone.visible = false; ball.visible = false; at.add(cone, ball);
       // (what the wire's rosin core leaves: a glassy amber ring flowed about a millimetre past the pad (2 % rosin in
       // the reel's wire; its spread an estimate))
       const rosin = new THREE.Mesh(new THREE.RingGeometry(q.shape.pad / 2 * MM, (q.shape.pad / 2 + 1.1) * MM, 32).rotateX(-PI / 2), new THREE.MeshStandardMaterial({ color: 0xb8792c, transparent: true, opacity: 0.5, roughness: 0.12, depthWrite: false }));
       rosin.position.y = 0.02 * MM; rosin.visible = false; at.add(rosin);
       let stub: THREE.Mesh | null = null;
-      if (q.part) { const sq = !q.shape.round, r = (sq ? q.shape.pin / Math.SQRT2 : q.shape.pin / 2) * MM, lead = this.looks[q.part]?.bent[0] as THREE.Mesh | undefined;
+      if (q.part) { const sq = !q.shape.round, r = (sq ? q.shape.pin / Math.SQRT2 : q.shape.pin / 2) * MM, lead = this.looks[q.part as Seated]?.bent[0] as THREE.Mesh | undefined;
         stub = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, sq ? 4 : 8).translate(0, 0.5, 0), lead?.material ?? new THREE.MeshStandardMaterial({ color: 0xc9cdd1, metalness: 1, roughness: 0.3 }));
         if (sq) stub.geometry.rotateY(PI / 4); stub.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...q.dir)); stub.castShadow = true; stub.visible = false; at.add(stub); }
       this.fillets.push({ at, cone, ball, stub, rosin });
@@ -462,6 +482,40 @@ export class SolderBench {
       }
       this.looks[k] = { straight, bent };
     }
+  }
+  /** The battery holder as the bench has it: Adafruit's 3951 as the library draws it, two AA cells in its wells in
+   *  series (cell A's + toward the switch end, cell B's the other way). */
+  private holder(add: (part: Part, at: V3, rot?: [number, number, number]) => THREE.Object3D): THREE.Group {
+    const g = new THREE.Group(), part = drawn('switchholder 3951'), v = add(part, [0, 0, 0]); g.add(v);
+    const cell = compPart(aaCell(), 'AA alkaline cell'), y = 1.2 + 7.1;
+    for (const [x, z, th] of [[-25.15, 7.6, -PI / 2], [25.15, -7.6, PI / 2]] as const) g.add(add(cell, [x, y, z], [0, 0, th]));
+    // (its leads as made, laid out; its switch's blade and knob, standing open, turned about its hinge to close)
+    const laid: THREE.Object3D[] = [], blade: THREE.Object3D[] = [], sw = part.parts?.find((p) => p.name.endsWith('3951 knife switch'));
+    v.traverse((o) => { const pp = o.userData.part as Part | undefined; if (!pp) return; if (/lead$/.test(pp.name) && o.type === 'Group') laid.push(o); if (sw && o.type === 'Group' && (pp === sw.parts?.[4] || pp === sw.parts?.[5])) blade.push(o); });
+    const home = new Map<THREE.Object3D, THREE.Quaternion>(); for (const o of blade) home.set(o, o.quaternion.clone());
+    this.power = { laid, blade, home, hinge: new THREE.Vector3(H3951.L / 2 - 3, H3951.H + 3, -(H3951.W / 2 - 3)).multiplyScalar(MM), run: [], lens: [] };
+    return g;
+  }
+  /** The knife switch as the lesson has it: its blade standing up (open) or turned down into its clip (closed). */
+  private swingSwitch(): void {
+    const p = this.power; if (!p) return; const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), this.bench.on ? PI / 2 : 0);
+    for (const o of p.blade) { const h = p.home.get(o)!; if (!o.userData.homeAt) o.userData.homeAt = o.position.clone(); const at = (o.userData.homeAt as THREE.Vector3).clone().sub(p.hinge).applyQuaternion(q).add(p.hinge); o.position.copy(at); o.quaternion.copy(q).multiply(h); }
+  }
+  /** The holder's leads: laid out as made while it waits; run up to the board once its pins are in, each from its root
+   *  on the holder to its crimped end's housing, standing 14 mm off the board's top over its hole. */
+  private runLeads(inBoard: boolean): void {
+    const p = this.power, board = this.obj.proto; if (!p || !board) return;
+    for (const o of p.run) { (o as THREE.Mesh).geometry?.dispose(); o.removeFromParent(); } p.run = [];
+    for (const o of p.laid) o.visible = !inBoard; if (!inBoard) return;
+    this.group.updateMatrixWorld(true); const pins = PROTO.seats.battery, colours = [0xc62828, 0x1e1e1e];
+    [BATTERY.red, BATTERY.black].forEach((root, i) => {
+      const [hx, hz] = pins[i]!, housing = new THREE.Mesh(new THREE.BoxGeometry(2.54 * MM, 14 * MM, 2.54 * MM).translate(0, 7 * MM, 0), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.5 }));
+      housing.position.set(hx * MM, 0, hz * MM); board.add(housing); p.run.push(housing);
+      const end = this.group.worldToLocal(board.localToWorld(new THREE.Vector3(hx * MM, 14 * MM, hz * MM))), out = this.group.worldToLocal(board.localToWorld(new THREE.Vector3(hx * MM, 30 * MM, hz * MM)));
+      const r0 = new THREE.Vector3(...BATTERY.seated).add(new THREE.Vector3(...root)).multiplyScalar(MM), r1 = r0.clone().add(new THREE.Vector3(0.015, 0.004, 0)), mid = out.clone().lerp(r1, 0.5).add(new THREE.Vector3(0, -0.012, 0));
+      const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([end, out, mid, r1, r0], false, 'centripetal'), 48, 0.75 * MM, 8, false), new THREE.MeshStandardMaterial({ color: colours[i], roughness: 0.45 }));
+      wire.castShadow = true; this.group.add(wire); p.run.push(wire);
+    });
   }
   /** A part drawn as it is in its holes (its leads bent) or out of them (straight, as it came). */
   private look(k: Seated, seated: boolean): void { const l = this.looks[k]; if (!l) return; for (const m of l.straight) m.visible = !seated; for (const m of l.bent) m.visible = seated; if (k === 'link') for (const m of l.bent) m.visible = true; }

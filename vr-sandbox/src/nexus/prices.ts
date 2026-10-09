@@ -61,6 +61,7 @@ export const PRICES: Record<string, Price> = {
   'flux-pen': { what: 'no-clean flux pen', item: 'fluxpen-cq4lf', offers: [ada('Chip Quik No-Clean Liquid Flux Pen - 10ml Pen w/ Tip - CQ4LF', 7.95, 3468)] },
   'tip-cleaner': { what: 'tip cleaner', offers: [ada('Square 60mm x 60mm Soldering Sponge - 3 Pack', 2.5, 3540, { note: 'used damp' }), ada('Hakko Brass Sponge Solder Tip Cleaner', 10.95, 1172, { note: 'dry: cools the tip less than a wet sponge' })] },
   'iron-stand': { what: 'soldering iron stand', offers: [ada('Soldering iron stand', 10.95, 150)] },
+  'battery-holder-knife': { what: '2 × AA battery holder with knife switch', item: 'switchholder-3951', offers: [ada('2 x AA Battery Holder with Knife Switch', 0.95, 3951)] },
   'helping-hands': { what: 'helping hands with magnifier', offers: [ada('Helping Third Hand Magnifier W/Magnifying Glass Tool - MZ101', 6.95, 291)] },
   'solder-wick': { what: 'desoldering braid', offers: [ada('Solder wick - 1.5mm wide and 1.5m / 5 feet long', 3.5, 149)] },
   'flush-cutters': { what: 'flush cutters', item: 'pliers', offers: [ada('Flush diagonal cutters - CHP170', 7.25, 152)] },

@@ -12,7 +12,7 @@ export const DENSITY: Record<string, number> = {
   'steel-low': 7850, 'steel-tool': 7850, 'steel-spring': 7850, 'steel-alloy': 7850, 'stainless-304': 8000, 'cast-iron': 7200, 'al-6061': 2700, 'al-6063': 2700, copper: 8960,
   wood: 500, oak: 750, glass: 2500, brick: 1900, concrete: 2400, granite: 2700, rubber: 1150, abs: 1050, pp: 905, pc: 1200, pmma: 1190, nylon: 1140,
   cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,
-  pe: 950, pu: 1200, fibreglass: 1850, 'al-a380': 2710, 'al-5052': 2680, 'stainless-316': 8000, 'stainless-440c': 7800, brass: 8500, bronze: 8800, 'phosphor-bronze': 8800, 'steel-chrome': 7830, pvc: 1400, pom: 1410, ptfe: 2200, 'al-7075': 2810, 'wood-veneer': 680, fr4: 1850,
+  pe: 950, mno2: 3200 /* a cell's pressed MnO2 and graphite cathode (typical) */, 'zinc-gel': 2800 /* zinc powder in KOH gel, a cell's anode (typical) */, pu: 1200, fibreglass: 1850, 'al-a380': 2710, 'al-5052': 2680, 'stainless-316': 8000, 'stainless-440c': 7800, brass: 8500, bronze: 8800, 'phosphor-bronze': 8800, 'steel-chrome': 7830, pvc: 1400, pom: 1410, ptfe: 2200, 'al-7075': 2810, 'wood-veneer': 680, fr4: 1850,
   'steel-electrical': 7650, 'magnet-wire': 8900, ndfeb: 7500, nbr: 1200, pet: 1380,
   // (die-cast zinc, Zamak 3: 6.6 g/cm³; tin-lead 63/37: 8.4; paper and cellulose: 0.8, typical)
   zamak: 6600, 'solder-snpb': 8400, paper: 800,

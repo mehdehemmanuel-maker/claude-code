@@ -396,6 +396,59 @@ export function hakko599B(): Comp {
   return { name: 'Hakko 599B tip cleaner', item: 'tipcleaner-599b', at: [0, 0, 0], kids: [base, top, wool] };
 }
 
+// ---- an AA alkaline cell, and Adafruit's 3951 holder with its knife switch ----------------------------------------------
+/** An AA alkaline cell (IEC 60086-2's LR6: 13.5–14.5 mm across and 49.2–50.5 long, its + nub at most 5.5 across and at
+ *  least 1 high), as makers' cross-sections draw it: a nickel-plated steel can, its + terminal, holding a ring of
+ *  pressed manganese dioxide and graphite against its wall; inside that a paper separator and the zinc gel anode, a
+ *  brass nail down it welded to the − cap; a nylon seal under the cap; a printed sleeve round the can. Estimated, said
+ *  so: the can 14.0 across, 0.25 thick (0.3 at its top); the cathode ring 2.3 thick, 3.2 g/cm³ pressed; the anode gel
+ *  8.7 across, 2.8 g/cm³; the nail 1.3 across; the seal 1.7 thick; so the whole about 24 g against the 23 g typical of an
+ *  alkaline AA. Its wrap's print not drawn. Frame: its axis up y, its − end on y 0, its + nub up. */
+export const AA = { D: 14.0, H: 50.3, nub: 5.5 } as const;
+export function aaCell(): Comp {
+  const R = AA.D / 2, w = 0.25, top = 48.9, steel = { color: 0xc9cdd0, finish: 'bright' } as const;
+  const can = piece('AA cell can', 'battery-can', [{ role: 'body', shape: { lathe: [[0, AA.H], [AA.nub / 2, AA.H], [AA.nub / 2, top + 0.3], [R, top], [R, 1.2], [R - 0.45, 0.75], [R - 0.45 - w, 0.75], [R - w, 1.2], [R - w, top - 0.3], [0, top - 0.3], [0, AA.H]] }, at: [0, 0, 0], mat: 'steel-low', ...steel }]);
+  const cathode = piece('AA cell cathode', 'cathode-ring', [{ role: 'body', shape: { lathe: [[4.45, 2.5], [R - w, 2.5], [R - w, 47.5], [4.45, 47.5], [4.45, 2.5]] }, at: [0, 0, 0], mat: 'mno2', color: 0x2b2b2b }]);
+  const sep = piece('AA cell separator', 'cell-separator', [{ role: 'body', shape: { lathe: [[4.35, 2.5], [4.45, 2.5], [4.45, 45], [4.35, 45], [4.35, 2.5]] }, at: [0, 0, 0], mat: 'paper', color: 0xe8e2d0 }]);
+  const anode = piece('AA cell anode', 'anode-gel', [{ role: 'body', shape: { lathe: [[0.65, 3], [4.35, 3], [4.35, 44], [0, 44], [0, 33], [0.65, 33], [0.65, 3]] }, at: [0, 0, 0], mat: 'zinc-gel', color: 0x8e9294 }]);
+  const nail = piece('AA cell collector', 'current-collector', [post('body', 0.65, 32.7, [0, 0.3, 0], 'brass', { color: 0xc8a04a, finish: 'bright' })]);
+  const seal = piece('AA cell seal', 'cell-seal', [{ role: 'body', shape: { lathe: [[0.65, 0.3], [R - 0.5, 0.3], [R - w, 2.0], [0.65, 2.0], [0.65, 0.3]] }, at: [0, 0, 0], mat: 'nylon', color: 0xe9e4d6 }]);
+  const cap = piece('AA cell − cap', 'negative-cap', [{ role: 'body', shape: { lathe: [[0, 0], [5.9, 0], [6.3, 0.3], [0, 0.3], [0, 0]] }, at: [0, 0, 0], mat: 'steel-low', ...steel }]);
+  const label = piece('AA cell sleeve', 'battery-label', [{ role: 'body', shape: { lathe: [[R, 0.6], [R + 0.07, 0.6], [R + 0.07, top - 0.1], [R - 0.6, top + 0.2], [R - 0.6, top + 0.13], [R, top - 0.17], [R, 0.6]] }, at: [0, 0, 0], mat: 'pet', color: 0x3a3d42, finish: 'paint' }]);
+  return { name: 'AA alkaline cell', item: 'battery-aa-alkaline', at: [0, 0, 0], kids: [can, cathode, sep, anode, nail, seal, cap, label] };
+}
+/** Adafruit's 3951: a 2 × AA holder with a knife switch (58 × 32 × 14 mm without its leads, the switch 32 long, its
+ *  leads about 130 mm with crimped ends since 2022: its listing; black plastic, metal contacts, red and black leads,
+ *  the switch standing up when open, perpendicular to the holder: its photos' captions). Estimated, said so: its tray
+ *  ABS 1.2 mm thick, open on top so the cells stand 1.4 above its walls; at one end a coil spring for one cell's − and
+ *  a plate for the other's +, joined by a strap (the cells in series); at the other end a plate and a spring, the + plate
+ *  to the switch's hinge and the red lead from its clip, the black lead from the spring; the switch across that end's
+ *  top (its 32 mm the holder's width): a phenolic base, a brass blade 26 long hinged at one side, closing into a brass
+ *  clip at the other, a black knob on its end; the leads 22 AWG, laid straight out. Frame: along x (its switch end
+ *  +x), across z, up y, its floor on y 0. */
+export const H3951 = { L: 58, W: 32, H: 14, wall: 1.2, lead: 130, blade: 26 } as const;
+export function holder3951(open = true): Comp {
+  const { L, W, H, wall: t } = H3951, black = { color: 0x1a1a1b, finish: 'moulded' } as const, ni = { color: 0xc6c9cb, finish: 'bright' } as const, br = { color: 0xc89b45, finish: 'bright' } as const;
+  const body = piece('3951 holder', 'holder-body', [box('body', [L, t, W], [0, t / 2, 0], 'abs', black), ...[-1, 1].map((sz): Solid => box('body', [L, H - t, t], [0, t + (H - t) / 2, sz * (W / 2 - t / 2)], 'abs', black)),
+    ...[-1, 1].map((sx): Solid => box('body', [t, H - t, W - 2 * t], [sx * (L / 2 - t / 2), t + (H - t) / 2, 0], 'abs', black)), box('body', [L - 2 * t - 8, 3, 1.0], [0, t + 1.5, 0], 'abs', black)]);
+  // (its contacts: a coil spring where a cell's − end sits, a plate where its + sits; cell A (+z) its + toward +x)
+  const zA = 7.6, x0 = L / 2 - t;
+  const spring = (x: number, z: number, sx: number): Solid => ({ role: 'body', shape: { tube: { r: 0.25, pts: Array.from({ length: 61 }, (_, i): V3 => { const a = (i / 10) * 2 * PI, r = 3.6 - (i / 60) * 1.2; return [x - sx * (i / 60) * 4.6, t + 7.1 + r * Math.sin(a), z + r * Math.cos(a)]; }) } }, at: [0, 0, 0], mat: 'steel-spring', ...ni });
+  const plate = (x: number, z: number): Solid => box('body', [0.4, 8, 8], [x, t + 7.1, z], 'steel-spring', ni);
+  const contacts = [piece('3951 − spring, cell A', 'battery-contact', [spring(-x0, zA, -1)]), piece('3951 + plate, cell B', 'battery-contact', [plate(-x0 + 0.2, -zA), box('body', [0.4, 3, 2 * zA], [-x0 + 0.2, t + 3, 0], 'steel-spring', ni)]),
+    piece('3951 + plate, cell A', 'battery-contact', [plate(x0 - 0.2, zA)]), piece('3951 − spring, cell B', 'battery-contact', [spring(x0, -zA, 1)])];
+  // (its knife switch across the + end's top: base, hinge post, clip, blade (up when open), knob)
+  const sx = L / 2 - 3, yb = H, hz = -(W / 2 - 3), cz = W / 2 - 3, B = H3951.blade;
+  const bladeAt: { at: V3; rot: V3 } = open ? { at: [sx, yb + 3 + B / 2, hz], rot: [0, 0, 0] } : { at: [sx, yb + 3, hz + B / 2], rot: [PI / 2, 0, 0] };
+  const knife = piece('3951 knife switch', 'knife-switch', [box('body', [6, 1.6, W - 2], [sx, yb + 0.8, 0], 'abs', { color: 0x3b2a1e, finish: 'moulded' }), box('body', [3, 4.5, 1.6], [sx, yb + 3.8, hz], 'brass', br),
+    ...[-1, 1].map((d): Solid => box('body', [0.5, 4.5, 2.2], [sx + d * 1.0, yb + 3.8, cz], 'brass', br)),
+    { role: 'body', shape: { box: [1.2, B, 0.8] }, at: bladeAt.at, rot: [bladeAt.rot[0], 0, 0], mat: 'brass', ...br },
+    { role: 'body', shape: { cyl: [2.2, 6] }, at: open ? [sx, yb + 3 + B + 2.5, hz] : [sx, yb + 3, hz + B + 2.5], rot: open ? [0, 0, 0] : [PI / 2, 0, 0], mat: 'abs', ...black }]);
+  // (its leads, laid straight out from the switch end: red from the switch's clip, black from cell B's − spring)
+  const wire = (name: string, z: number, colour: number): Comp => piece(name, 'wire-hookup', [{ role: 'body', shape: { tube: { r: 0.75, pts: [[L / 2, yb - 3, z], [L / 2 + 15, 1.0, z], [L / 2 + H3951.lead, 0.75, z]] } }, at: [0, 0, 0], mat: 'pvc', color: colour }]);
+  return { name: 'Adafruit 3951 battery holder', item: 'switchholder-3951', at: [0, 0, 0], kids: [body, ...contacts, knife, wire('3951 red lead', cz - 2, 0xc62828), wire('3951 black lead', -zA, 0x1e1e1e)] };
+}
+
 // ---- Chip Quik's CQ4LF flux pen ------------------------------------------------------------------------------------
 /** Chip Quik's CQ4LF no-clean liquid flux pen, as Adafruit sells it (its 3468): 10 ml of flux (INM0: no halide; Chip
  *  Quik's own showcase calls it VOC-, halide- and rosin-free, so water-borne: its density taken as water's, an

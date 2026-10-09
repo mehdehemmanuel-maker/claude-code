@@ -27,7 +27,7 @@ await p.waitForFunction(() => window.ready === true, null, { timeout: Number(pro
 for (const s of steps) {
   const k = s.indexOf(':'), kind = s.slice(0, k), arg = s.slice(k + 1);
   try {
-    if (kind === 'js') { const r = await p.evaluate(async (e) => { const v = await (0, eval)(e); return typeof v === 'object' ? JSON.stringify(v) : String(v); }, arg); console.log(`${arg.slice(0, 60)} → ${String(r).slice(0, 400)}`); }
+    if (kind === 'js') { const r = await p.evaluate(async (e) => { const v = await (0, eval)(e); return typeof v === 'object' ? JSON.stringify(v) : String(v); }, arg); console.log(`${arg.slice(0, 60)} → ${String(r).slice(0, Number(process.env.FORGE_OUT ?? 400))}`); }
     else if (kind === 'say') { await p.evaluate((w) => window.forgeSend(w), arg); console.log(`said: ${arg}`); }
     else if (kind === 'wait') await p.waitForTimeout(Number(arg));
     else if (kind === 'shot') { await p.screenshot({ path: `${out}/${arg}.png` }); console.log(`shot ${arg}`); }

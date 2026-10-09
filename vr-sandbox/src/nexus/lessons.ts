@@ -57,6 +57,9 @@ export const LESSONS: Record<string, Lesson> = {
       { do: 'Clip the board in the helping hands by its ends, its underside up.' },
       { do: 'Solder each of the six leads, the joint lesson\'s way: pad and lead heated together, the solder fed to them.', check: 'each a smooth cone, the hole filled' },
       { do: 'Trim each lead close above its joint with the flush cutters, their flat side to the board, holding the lead\'s end.', check: 'its end still in sight in the solder, at most 2.5 mm standing (IPC-A-610\'s lead protrusion)' },
+      { do: 'Put two AA cells in the battery holder, its knife switch up (open); push its red lead\'s pin into the + rail at column 1 and its black lead\'s into the − rail at column 3, through from the top.', check: 'red to +, black to −, and the switch open' },
+      { do: 'Solder the two pins and trim them, as you did the leads.', check: 'two more good joints, their pins at most 2.5 mm standing' },
+      { do: 'Close the knife switch: the LED lights.', check: 'about 4 mA through it: two fresh cells\' 3.2 V less the LED\'s 1.9, over the 330 Ω' },
     ], src: `${ADA}, "Common Problems" and "Making a good solder joint"; Adafruit's Perma-Proto listing; IPC-A-610's lead protrusion`,
   },
   'flash-pi-os': {

@@ -124,6 +124,13 @@ export const TOOLS: KindDef[] = [
     box: () => [155, 12.8, 16.2], g: () => 28,
   },
   {
+    id: 'switchholder', look: 'box', name: 'battery holder with a switch', path: 'Electrical/Power/Battery holders', says: 'a holder for cells in series with a switch on it to make or break their circuit', std: 'the holders drawn here: Adafruit\'s 3951',
+    axes: [bare('model', 'model', ['3951'])], title: () => '2 × AA battery holder with knife switch (Adafruit 3951)', of: () => 'holder-body battery-contact*4 knife-switch wire-hookup*2', make: 'assemble',
+    how: 'its tray moulded, its contacts pressed in, its knife switch fixed across one end, its leads soldered to the switch and a contact',
+    spec: () => 'two AA cells in series (3 V; 3.2 fresh), a knife switch 32 mm long, leads about 130 mm with crimped ends; 58 × 32 × 14 mm without its leads; $0.95 (Adafruit\'s listing)',
+    box: () => [58, 14, 32], g: () => 8 /* its estimated parts' weight (its tray, contacts, switch and leads, drawn 7.7 g): no weight is listed */,
+  },
+  {
     id: 'fluxpen', look: 'box', name: 'flux pen', path: 'Tools/Soldering/Flux', says: 'a pen of liquid flux behind a felt nib, drawn onto a joint to lift its oxide and let the solder wet it', std: 'the pens drawn here: Chip Quik\'s CQ4LF (Adafruit\'s 3468)',
     axes: [bare('model', 'model', ['cq4lf'])], title: () => 'Chip Quik CQ4LF no-clean flux pen, 10 ml', of: () => 'pen-barrel flux-no-clean felt-nib pen-cap', make: 'assemble',
     how: 'its moulded barrel filled with flux, its felt nib pressed into its nose, its cap pressed on',

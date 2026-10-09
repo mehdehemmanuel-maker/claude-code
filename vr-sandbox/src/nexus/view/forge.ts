@@ -2306,7 +2306,7 @@ function benchWords(text: string): string | null {
   if (/^(teach me (to|how to) solder|(a |the )?solder(ing)? lesson|learn to solder|let me solder|i want to solder|solder (the )?pico('s)?( pins| headers)?|(start|open|set up) (the |a )?(soldering )?bench)\b/.test(t)) return startBench();
   if (!bench) return null;
   if (/^(close|end|stop|put away) (the )?(soldering )?(bench|lesson)/.test(t)) { bench.dispose(); bench = null; return 'The bench put away.'; }
-  if (/^(place|take|tin|wipe|heat|feed|lift|away|more solder|pull more|iron (down|back)|put the (iron|board|cutters)|board|clip|mount|unclip|cut|trim|snip|cutters?)\b/.test(t)) return bench.act(t);
+  if (/^(place|take|tin|wipe|heat|feed|lift|away|more solder|pull more|iron (down|back)|put the (iron|board|cutters|battery|holder)|board|clip|mount|unclip|cut|trim|snip|cutters?|battery|holder|(close|open) (the )?(knife )?switch|switch (it )?(on|off)|turn (it )?(on|off))\b/.test(t)) return bench.act(t);
   if (/^(what now|what next|next step|which step|where am i)\b/.test(t)) { const n = bench.now(); return `Step ${n.step} of ${n.of}: ${n.do}`; }
   return null;
 }
