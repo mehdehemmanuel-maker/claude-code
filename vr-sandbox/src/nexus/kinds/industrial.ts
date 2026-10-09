@@ -36,7 +36,7 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'dinterminal', name: 'DIN-rail terminal block', path: 'Electrical/Connectors/Terminal blocks', says: 'a screw terminal that clips onto a DIN rail: wires meet in a panel', std: 'IEC 60947-7-1 cross-sections and rated currents; widths typical',
     axes: [unit('mm2', 'conductor', 'mm²', Object.keys(TERM).map(Number)), bare('type', 'type', ['feed-through', 'earth', 'fuse', 'two-level'])],
-    title: (p) => `${p.mm2} mm² ${p.type} DIN-rail terminal`, of: (p) => `nylon copper brass steel-low${p.type === 'earth' ? ' steel-spring' : ''}`, make: 'assemble', how: 'a brass current bar and steel screw clamps in a nylon housing that snaps onto a 35 mm rail',
+    title: (p) => `${p.mm2} mm² ${p.type} DIN-rail terminal`, of: () => 'terminal-housing busbar terminal-clamp*2 terminal-screw*2', make: 'assemble', how: 'a brass current bar and steel screw clamps in a nylon housing that snaps onto a 35 mm rail',
     spec: (p) => `${p.mm2} mm²: rated ${TERM[n(p, 'mm2')]![0]} A (IEC 60947-7-1); ${TERM[n(p, 'mm2')]![1]} mm wide; ${p.type === 'earth' ? 'green-yellow, bonded to the rail' : p.type === 'fuse' ? 'takes a 5 × 20 mm fuse' : p.type === 'two-level' ? 'two circuits stacked in one width' : 'grey'}`,
     box: (p) => [TERM[n(p, 'mm2')]![1], 45 + n(p, 'mm2'), 42 + n(p, 'mm2') * 0.6], g: (p) => 4 + n(p, 'mm2') * 1.2, look: 'case',
   },
@@ -76,13 +76,13 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'buzzer', name: 'buzzer', path: 'Electrical/Audio/Buzzers', says: 'a small sounder: a magnetic or piezo element that beeps', std: 'the types and voltages sold; loudness typical',
     axes: [bare('type', 'type', ['magnetic', 'piezo']), unit('V', 'supply', 'V', [3, 5, 12, 24]), bare('drive', 'drive', ['active', 'passive'])],
-    title: (p) => `${p.V} V ${p.drive} ${p.type} buzzer`, of: (p) => (p.type === 'piezo' ? 'pzt brass abs' : 'magnet-wire ferrite-hard steel-low abs'), make: 'assemble', how: (p) => (p.type === 'piezo' ? 'a piezo ceramic disc on brass in a resonant case' : 'a coil pulling a thin steel diaphragm in a resonant case'),
+    title: (p) => `${p.V} V ${p.drive} ${p.type} buzzer`, of: () => 'buzzer-case buzzer-diaphragm coil-bobbin winding magnetic-core ring-magnet ic-package pcb-pin*2', make: 'assemble', how: (p) => (p.type === 'piezo' ? 'a piezo ceramic disc on brass in a resonant case' : 'a coil pulling a thin steel diaphragm in a resonant case'),
     spec: (p) => `${p.drive === 'active' ? 'beeps at its own tone (about 2.3 kHz) when powered' : 'sounds the frequency it is driven at'}; about 85 dB at 10 cm (typical)`, box: () => [12, 12, 9.5], g: () => 2, look: 'can',
   },
   {
     id: 'varistor', name: 'metal oxide varistor', path: 'Electrical/Circuit protection/Surge protection', says: 'a disc that conducts only above its voltage, clamping a surge off the mains', std: 'disc sizes and voltages sold; surge currents (8/20 µs) and energies typical of datasheets',
     axes: [ax('d', 'disc', 'mm', [7, 10, 14, 20]), unit('V', 'AC voltage', 'V', [130, 150, 175, 230, 250, 275, 300, 385, 420, 460])],
-    title: (p) => `${p.d} mm varistor, ${p.V} V AC`, of: () => 'zinc-oxide epoxy copper silver-paste', make: 'assemble', how: 'zinc oxide grains sintered into a disc, silvered, with leads, dipped in epoxy',
+    title: (p) => `${p.d} mm varistor, ${p.V} V AC`, of: () => 'mov-disc lead-wire*2 dip-coat', make: 'assemble', how: 'zinc oxide grains sintered into a disc, silvered, with leads, dipped in epoxy',
     spec: (p) => { const [I, J] = ({ 7: [1.2, 17], 10: [2.5, 36], 14: [4.5, 71], 20: [8, 151] } as Record<number, [number, number]>)[n(p, 'd')]!; return `for ${p.V} V AC; takes about ${I} kA once (8/20 µs) and ${Math.round((J * n(p, 'V')) / 275)} J (typical); across the line, before a fuse`; },
     box: (p) => [n(p, 'd') + 2, 5, n(p, 'd') + 4], g: (p) => n(p, 'd') * 0.15, look: 'ring',
   },
@@ -128,19 +128,19 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'breadboard', name: 'solderless breadboard', path: 'Electrical/Boards and controllers/Prototyping', says: 'a board of spring clips at 2.54 mm pitch: circuits built by pushing parts in', std: 'the sizes sold, by tie points',
     axes: [unit('points', 'tie points', 'pts', [170, 400, 830, 1660])],
-    title: (p) => `${p.points}-point breadboard`, of: () => 'abs phosphor-bronze', make: 'assemble', how: 'phosphor-bronze clip strips in a moulded ABS body, adhesive backed',
+    title: (p) => `${p.points}-point breadboard`, of: (p) => `breadboard-body clip-strip*${Math.round(n(p, 'points') / 5)} adhesive-backing`, make: 'assemble', how: 'phosphor-bronze clip strips in a moulded ABS body, adhesive backed',
     spec: (p) => `${p.points} tie points at 2.54 mm (0.1 in) pitch${n(p, 'points') >= 400 ? '; power rails along both sides' : ''}`, box: (p) => ({ 170: [47, 35, 8.5], 400: [84, 55, 8.5], 830: [165, 55, 8.5], 1660: [165, 110, 8.5] } as Record<number, [number, number, number]>)[n(p, 'points')]!, g: (p) => n(p, 'points') * 0.07, look: 'board',
   },
   {
     id: 'icsocket', name: 'IC socket', path: 'Electrical/Connectors/IC sockets', says: 'a socket a DIP chip plugs into, so it can be changed', std: 'the pin counts and kinds sold; 2.54 mm pitch',
     axes: [unit('pins', 'pins', 'P', [6, 8, 14, 16, 18, 20, 24, 28, 40]), bare('type', 'kind', (p) => (n(p, 'pins') >= 14 ? ['dual-wipe', 'turned-pin', 'zif'] : ['dual-wipe', 'turned-pin']))],
-    title: (p) => `${p.pins}-pin ${p.type === 'zif' ? 'ZIF' : p.type} DIP socket`, of: () => 'pbt phosphor-bronze gold tin', make: 'assemble', how: (p) => (p.type === 'zif' ? 'a lever that opens and closes every contact at once' : 'tinned or gold-plated contacts in a moulded frame'),
+    title: (p) => `${p.pins}-pin ${p.type === 'zif' ? 'ZIF' : p.type} DIP socket`, of: (p) => `insulator-insert contact-socket*${n(p, 'pins')}`, make: 'assemble', how: (p) => (p.type === 'zif' ? 'a lever that opens and closes every contact at once' : 'tinned or gold-plated contacts in a moulded frame'),
     spec: (p) => `${p.pins} pins at 2.54 mm, rows ${n(p, 'pins') >= 24 ? '15.24 (or 7.62)' : '7.62'} mm apart`, box: (p) => [n(p, 'pins') >= 24 ? 17 : 10, r1((n(p, 'pins') / 2) * 2.54 + 2.5), p.type === 'zif' ? 12 : 4.5], g: (p) => n(p, 'pins') * (p.type === 'zif' ? 0.3 : 0.06), look: 'chip',
   },
   {
     id: 'jumperwire', name: 'jumper wires', path: 'Electrical/Wiring and connectors/Jumper wires', says: 'short wires with header pins or sockets on their ends, for breadboards and boards', std: 'the ends, lengths and counts sold',
     axes: [bare('ends', 'ends', ['M-M', 'M-F', 'F-F']), unit('L', 'length', 'cm', [10, 20, 30]), ax('count', 'count', '', [10, 20, 40, 65])],
-    title: (p) => `${p.count} ${p.ends} jumper wires, ${p.L} cm`, of: () => 'copper pvc brass tin', make: 'crimp', how: 'stranded wire with crimped header pins or sockets in plastic shells',
+    title: (p) => `${p.count} ${p.ends} jumper wires, ${p.L} cm`, of: (p) => `insulated-conductor*${n(p, 'count')} crimp-contact*${2 * n(p, 'count')} connector-housing*${2 * n(p, 'count')}`, make: 'crimp', how: 'stranded wire with crimped header pins or sockets in plastic shells',
     spec: (p) => `${p.ends === 'M-M' ? 'pin to pin' : p.ends === 'M-F' ? 'pin to socket' : 'socket to socket'}; 2.54 mm; ${p.L} cm`, box: (p) => [r1(n(p, 'L') * 10 + 30), 20, 15], g: (p) => n(p, 'count') * n(p, 'L') * 0.04, look: 'coil w1.5',
   },
   {
@@ -160,21 +160,21 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'gearpump', name: 'hydraulic gear pump', path: 'Fluid/Hydraulics/Pumps', says: 'two gears meshing in a close case: oil carried round their teeth, pushed out at pressure', std: 'the displacements sold (group 1 and 2); 250 bar; efficiencies typical',
     axes: [unit('cc', 'displacement', 'cc', [1, 2, 4, 6, 8, 10, 12, 16, 20, 25])],
-    title: (p) => `${p.cc} cc/rev hydraulic gear pump`, of: () => 'al-a380 steel-alloy*2 bronze nbr', make: 'assemble', how: 'two hardened gears in bronze bushings in an aluminium body, a shaft seal',
+    title: (p) => `${p.cc} cc/rev hydraulic gear pump`, of: () => 'pump-housing pump-gear*2 bushing*4 shaft-seal seal-ring*2', make: 'assemble', how: 'two hardened gears in bronze bushings in an aluminium body, a shaft seal',
     spec: (p) => { const Q = (n(p, 'cc') * 1500 * 0.93) / 1000, P = (250e5 * (Q / 60000)) / 0.85; return `at 1500 rpm: Q = V n η_v = ${Q.toFixed(2)} l/min (η_v 0.93, typical); at 250 bar it takes P = p Q / η = ${(P / 1000).toFixed(1)} kW (η 0.85, typical)`; },
     box: (p) => [80, 80, r1(70 + n(p, 'cc') * 2.2)], g: (p) => 1000 + n(p, 'cc') * 90, look: 'box',
   },
   {
     id: 'directionalvalve', name: 'hydraulic directional valve', path: 'Fluid/Hydraulics/Valves', says: 'a solenoid valve on a standard subplate that sends oil one way or the other to a cylinder or motor', std: 'ISO 4401 mounting sizes (CETOP 3 and 5); flows and pressures typical',
     axes: [bare('size', 'size', Object.keys(NG)), bare('spool', 'spool', ['4/3-closed', '4/3-tandem', '4/3-open', '4/2']), bare('coil', 'coil', ['24VDC', '230VAC'])],
-    title: (p) => `${p.size} ${s(p, 'spool').replace('-', ' ')} directional valve, ${p.coil}`, of: () => 'cast-iron steel-alloy nbr magnet-wire', make: 'assemble', how: 'a hardened spool sliding in a cast-iron body, pushed by wet-pin solenoids and centred by springs',
+    title: (p) => `${p.size} ${s(p, 'spool').replace('-', ' ')} directional valve, ${p.coil}`, of: (p) => `valve-body spool solenoid-coil*${p.spool === '4/2' ? 1 : 2} return-spring*2 seal-ring*6`, make: 'assemble', how: 'a hardened spool sliding in a cast-iron body, pushed by wet-pin solenoids and centred by springs',
     spec: (p) => `${NG[s(p, 'size')]![1]}; to about ${NG[s(p, 'size')]![0]} l/min and 315 bar (typical); ${({ '4/3-closed': 'centred, every port closed: the load held', '4/3-tandem': 'centred, the pump to tank: the load held, the pump unloaded', '4/3-open': 'centred, every port to tank: the load free', '4/2': 'two positions, sprung back' } as Record<string, string>)[s(p, 'spool')]}`,
     box: (p) => (p.size === 'NG6' ? [45, 210, 90] : [70, 260, 110]), g: (p) => (p.size === 'NG6' ? 1500 : 4200), look: 'box',
   },
   {
     id: 'airprep', name: 'air preparation unit', path: 'Fluid/Pneumatics/Air preparation', says: 'a filter, regulator and lubricator for compressed air: clean, steady, oiled', std: 'the ports and units sold; flows typical at 6 bar',
     axes: [bare('port', 'port', ['G1/8', 'G1/4', 'G3/8', 'G1/2']), bare('units', 'units', ['F', 'R', 'FR', 'FRL']), ax('um', 'filter', 'µm', [5, 40])],
-    title: (p) => `${p.units} unit ${p.port}, ${p.um} µm`, of: () => 'zamak pc nbr brass bronze', make: 'assemble', how: 'die-cast bodies with clear bowls: a sintered filter element, a diaphragm regulator with its gauge, an oil-mist lubricator',
+    title: (p) => `${p.units} unit ${p.port}, ${p.um} µm`, of: (p) => `valve-body${/F/.test(String(p.units)) ? ' filter-bowl filter-element' : ''}${/R/.test(String(p.units)) ? ' regulator-diaphragm return-spring' : ''}${/L/.test(String(p.units)) ? ' filter-bowl' : ''} seal-ring*2`, make: 'assemble', how: 'die-cast bodies with clear bowls: a sintered filter element, a diaphragm regulator with its gauge, an oil-mist lubricator',
     spec: (p) => `${({ F: 'a filter', R: 'a regulator, 0.5–10 bar', FR: 'a filter and regulator in one', FRL: 'filter, regulator and lubricator' } as Record<string, string>)[s(p, 'units')]}; filters to ${p.um} µm; about ${({ 'G1/8': 500, 'G1/4': 1000, 'G3/8': 1800, 'G1/2': 2500 } as Record<string, number>)[s(p, 'port')]} l/min at 6 bar (typical)`,
     box: (p) => [r1(40 * s(p, 'units').length), 170, 40], g: (p) => 250 * s(p, 'units').length, look: 'box',
   },
@@ -187,7 +187,7 @@ export const INDUSTRIAL: KindDef[] = [
   {
     id: 'hvacfilter', name: 'air filter (HVAC)', path: 'Fluid/Filters/Air filters', says: 'a pleated panel filter for a ventilation system or furnace', std: 'ISO 16890 groups for metric sizes, ASHRAE 52.2 MERV for inch sizes',
     axes: [bare('size', 'size', Object.keys(FILTERS)), bare('grade', 'grade', (p) => FILTERS[s(p, 'size')]![0])],
-    title: (p) => `${s(p, 'size').replace(/x/g, ' × ').replace('in', ' in')} filter, ${/^MERV/.test(s(p, 'grade')) ? s(p, 'grade').replace('MERV', 'MERV ') : isoSaid(s(p, 'grade'))}`, of: () => 'pet paper steel-low', make: 'assemble', how: 'pleated synthetic media in a card or galvanised frame, wire-backed',
+    title: (p) => `${s(p, 'size').replace(/x/g, ' × ').replace('in', ' in')} filter, ${/^MERV/.test(s(p, 'grade')) ? s(p, 'grade').replace('MERV', 'MERV ') : isoSaid(s(p, 'grade'))}`, of: () => 'filter-media filter-frame support-mesh', make: 'assemble', how: 'pleated synthetic media in a card or galvanised frame, wire-backed',
     spec: (p) => (/^MERV/.test(s(p, 'grade')) ? MERV[s(p, 'grade')]! : `${isoSaid(s(p, 'grade'))}: catches at least that share of the particles of its size band (ISO 16890)`), box: (p) => FILTERS[s(p, 'size')]![1], g: (p) => { const [a, b] = FILTERS[s(p, 'size')]![1]; return (a * b) / 1000; }, look: 'sheet',
   },
   {

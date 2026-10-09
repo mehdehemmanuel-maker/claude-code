@@ -117,7 +117,7 @@ export const MOTION: KindDef[] = [
   {
     id: 'camfollower', name: 'cam follower', path: 'Mechanical/Bearings/Track rollers', says: 'a thick-ringed needle bearing on a threaded stud, to roll along a track or cam', std: 'the KR series (makers\' tables)',
     axes: [bare('size', 'size', Object.keys(KR))],
-    title: (p) => `cam follower ${p.size}`, of: () => 'steel-chrome steel-alloy grease', make: 'assemble', how: 'a hardened outer ring on needle rollers round a hardened stud', spec: (p) => { const [D, t] = KR[String(p.size)]!; return `${D} mm roller on an ${t} stud`; },
+    title: (p) => `cam follower ${p.size}`, of: () => 'bearing-ring cam-stud needle-roller*16 bearing-cage grease', make: 'assemble', how: 'a hardened outer ring on needle rollers round a hardened stud', spec: (p) => { const [D, t] = KR[String(p.size)]!; return `${D} mm roller on an ${t} stud`; },
     box: (p) => { const [D] = KR[String(p.size)]!; return [D, D, D * 1.9]; }, g: (p) => { const [D] = KR[String(p.size)]!; return gOf(cyl(D, D * 0.5) + cyl(D * 0.4, D * 1.4), 7.85); },
   },
   {

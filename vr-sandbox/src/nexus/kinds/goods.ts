@@ -51,7 +51,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'carbattery', name: 'car battery', path: 'Mechanical/Vehicle parts/Batteries', says: 'a 12 V lead-acid starter battery: flooded, enhanced (EFB) or glass-mat (AGM)', std: 'EN 50342-2 L sizes; capacities sold; cold-cranking currents typical for each kind',
     axes: [unit('Ah', 'capacity', 'Ah', [36, 45, 55, 60, 70, 80, 95, 100]), bare('tech', 'kind', ['flooded', 'EFB', 'AGM'])],
-    title: (p) => `12 V ${p.Ah} Ah ${p.tech} car battery (${lSize(n(p, 'Ah'))[0]})`, of: (p) => `lead pbo2 acid-electrolyte pp${p.tech === 'AGM' ? ' fibreglass' : ''}`, make: 'assemble', how: 'lead grids pasted with lead and lead dioxide, stacked with separators in six cells of acid, in a polypropylene case',
+    title: (p) => `12 V ${p.Ah} Ah ${p.tech} car battery (${lSize(n(p, 'Ah'))[0]})`, of: (p) => `battery-case battery-lid battery-post*2 plate-positive*${6 * Math.max(3, Math.round(n(p, 'Ah') / 12))} plate-negative*${6 * (Math.max(3, Math.round(n(p, 'Ah') / 12)) + 1)} plate-separator*${6 * Math.max(3, Math.round(n(p, 'Ah') / 12))} acid-electrolyte`, make: 'assemble', how: 'lead grids pasted with lead and lead dioxide, stacked with separators in six cells of acid, in a polypropylene case',
     spec: (p) => { const Ah = n(p, 'Ah'), cca = Math.round((Ah * ({ flooded: 8.5, EFB: 9.3, AGM: 10.5 } as Record<string, number>)[s(p, 'tech')]!) / 10) * 10; return `six 2 V cells: 12 V, ${Ah} Ah (20-hour rate): ${12 * Ah} Wh (E = V·Ah); about ${cca} A cold cranking (EN, typical); size ${lSize(Ah)[0]} (EN 50342-2)${p.tech === 'flooded' ? '' : '; for stop-start'}`; },
     box: (p) => lSize(n(p, 'Ah'))[1], g: (p) => n(p, 'Ah') * 250, look: 'box',
   },
@@ -143,7 +143,7 @@ export const GOODS: KindDef[] = [
   {
     id: 'pallet', name: 'pallet', path: 'Materials/Packaging/Pallets', says: 'a wooden platform a fork-lift lifts by its gaps', std: 'EN 13698-1 (the EUR pallet, EPAL ratings); the others typical',
     axes: [bare('type', 'type', Object.keys(PALLET))],
-    title: (p) => `${p.type === 'GMA' ? 'GMA' : s(p, 'type').replace('EUR', 'EUR ')} pallet, ${PALLET[s(p, 'type')]![0].slice(0, 2).join(' × ')} mm`, of: () => 'wood steel-low', make: 'assemble', how: 'sawn boards and blocks nailed together',
+    title: (p) => `${p.type === 'GMA' ? 'GMA' : s(p, 'type').replace('EUR', 'EUR ')} pallet, ${PALLET[s(p, 'type')]![0].slice(0, 2).join(' × ')} mm`, of: () => 'pallet-board*11 pallet-block*9 pallet-nail*78', make: 'assemble', how: 'sawn boards and blocks nailed together',
     spec: (p) => { const [, kg, load, std] = PALLET[s(p, 'type')]!; return `about ${kg} kg; carries ${load} kg spread evenly (${std})${p.type === 'EUR1' ? '; 4000 kg stacked on flat ground' : ''}`; }, box: (p) => PALLET[s(p, 'type')]![0], g: (p) => PALLET[s(p, 'type')]![1] * 1000, look: 'box',
   },
   {

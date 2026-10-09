@@ -56,7 +56,7 @@ export const DEVICES: KindDef[] = [
   {
     id: 'relay', name: 'PCB relay', path: 'Electrical/Switches/Relays', says: 'a switch worked by a coil: a small current at the coil switches a big one at its contacts', std: 'the coil voltages and contact ratings PCB relays are sold in; coil powers from typical datasheets',
     axes: [unit('V', 'coil', 'V', [3, 5, 12, 24]), bare('form', 'contacts', ['SPDT', 'DPDT']), unit('A', 'contact rating', 'A', (p) => (p.form === 'SPDT' ? [2, 5, 10, 16, 30] : [1, 2, 5, 8]))],
-    title: (p) => `${p.V} V relay, ${p.form}, ${p.A} A`, of: (p) => `pbt magnet-wire steel-electrical silver copper*${p.form === 'DPDT' ? 2 : 1} steel-spring`, make: 'assemble', how: 'a coil on an iron core pulls an armature that moves springy contacts tipped with silver alloy, in a sealed case',
+    title: (p) => `${p.V} V relay, ${p.form}, ${p.A} A`, of: (p) => `coil-bobbin winding magnetic-core armature contact-spring*${p.form === 'DPDT' ? 2 : 1} contact-silver*${p.form === 'DPDT' ? 6 : 3} return-spring relay-cover switch-housing pcb-pin*${p.form === 'DPDT' ? 8 : 5}`, make: 'assemble', how: 'a coil on an iron core pulls an armature that moves springy contacts tipped with silver alloy, in a sealed case',
     spec: (p) => { const [P] = relayOf(n(p, 'A'), s(p, 'form')), V = n(p, 'V'); return `coil ${V} V: about ${((P / V) * 1000).toFixed(0)} mA, ${((V * V) / P).toFixed(0)} Ω (${P} W, typical); contacts ${p.form === 'SPDT' ? 'one changeover' : 'two changeovers'} at ${p.A} A, 250 V AC; put a diode across its coil when a transistor drives it`; },
     box: (p) => relayOf(n(p, 'A'), s(p, 'form'))[1], g: (p) => relayOf(n(p, 'A'), s(p, 'form'))[2], look: 'case',
   },
@@ -91,7 +91,7 @@ export const DEVICES: KindDef[] = [
   {
     id: 'pump', name: 'water pump', path: 'Fluid/Pumps/Water pumps', says: 'a pump that moves water: lifting it by its head, at its flow', std: 'the flows sold by type; heads and efficiencies typical; the power is ρgQH',
     axes: [bare('type', 'type', Object.keys(PUMPS)), unit('Q', 'flow', 'l/min', (p) => PUMPS[s(p, 'type')]![0])],
-    title: (p) => `${p.type} pump, ${p.Q} l/min`, of: (p) => (p.type === 'centrifugal' ? 'cast-iron stainless-304 magnet-wire steel-electrical {bearing 6202|steel-chrome}*2' : `pp nbr magnet-wire ndfeb steel-low${p.type === 'peristaltic' ? ' silicone' : ''}`), make: 'assemble', how: (p) => ({ diaphragm: 'a motor rocks a rubber diaphragm over check valves', centrifugal: 'a motor spins an impeller that flings water outward in a volute', peristaltic: 'rollers squeeze a soft tube along: the liquid never touches the pump', submersible: 'a sealed motor spins a small impeller under the water' } as Record<string, string>)[s(p, 'type')]!,
+    title: (p) => `${p.type} pump, ${p.Q} l/min`, of: () => 'pump-head diaphragm valve-flap*2 coil-bobbin winding magnetic-core ring-magnet return-spring', make: 'assemble', how: (p) => ({ diaphragm: 'a motor rocks a rubber diaphragm over check valves', centrifugal: 'a motor spins an impeller that flings water outward in a volute', peristaltic: 'rollers squeeze a soft tube along: the liquid never touches the pump', submersible: 'a sealed motor spins a small impeller under the water' } as Record<string, string>)[s(p, 'type')]!,
     spec: (p) => { const [, H, eta, sup] = PUMPS[s(p, 'type')]!, Q = n(p, 'Q') / 60000, P = 1000 * 9.81 * Q * H; return `${p.Q} l/min against about ${H} m of head (typical); water power ρgQH = ${P.toFixed(1)} W, so it draws about ${(P / eta).toFixed(0)} W at about ${eta * 100} % efficiency (typical); ${sup}`; },
     box: (p) => { const [, H, eta] = PUMPS[s(p, 'type')]!, Pin = (1000 * 9.81 * (n(p, 'Q') / 60000) * H) / eta, side = Math.cbrt((200 + Pin * 8) / 1.5) * 10; return [r1(side * 1.3), r1(side), r1(side)]; },
     g: (p) => { const [, H, eta] = PUMPS[s(p, 'type')]!; return 200 + ((1000 * 9.81 * (n(p, 'Q') / 60000) * H) / eta) * 8; }, look: 'motor',
@@ -106,7 +106,7 @@ export const DEVICES: KindDef[] = [
   {
     id: 'sparkplug', name: 'spark plug', path: 'Mechanical/Vehicle parts/Engine parts', says: 'the plug that sparks a petrol engine\'s mixture: a centre electrode in a ceramic insulator in a threaded shell', std: 'the threads and reaches in use; hex sizes typical',
     axes: [bare('thread', 'thread', Object.keys(PLUG)), ax('reach', 'reach', 'mm', (p) => PLUG[s(p, 'thread')]![0]), bare('tip', 'centre electrode', ['nickel', 'platinum'])],
-    title: (p) => `spark plug ${p.thread}, ${p.reach} mm reach, ${p.tip}`, of: (p) => `alumina steel-low nickel-alloy copper glass${p.tip === 'platinum' ? ' platinum' : ''}`, make: 'assemble', how: 'a copper-cored centre electrode sealed through an alumina insulator, crimped into a steel shell with its ground electrode welded on',
+    title: (p) => `spark plug ${p.thread}, ${p.reach} mm reach, ${p.tip}`, of: () => 'spark-plug-shell spark-plug-insulator centre-electrode ground-electrode terminal-stud sealing-washer glass', make: 'assemble', how: 'a copper-cored centre electrode sealed through an alumina insulator, crimped into a steel shell with its ground electrode welded on',
     spec: (p) => `${p.thread} thread, ${p.reach} mm reach, ${PLUG[s(p, 'thread')]![1](n(p, 'reach'))} mm hex; gap about 0.7–1.1 mm (typical); ${p.tip === 'platinum' ? 'a platinum tip wears slowly' : 'a nickel tip'}`,
     box: (p) => { const h = PLUG[s(p, 'thread')]![1](n(p, 'reach')); return [r1(h * 1.15), r1(h * 1.15), r1(n(p, 'reach') + 55)]; }, g: (p) => 35 + n(p, 'reach') * 0.6, look: 'screw hex',
   },
@@ -122,7 +122,7 @@ export const DEVICES: KindDef[] = [
   {
     id: 'autobulb', name: 'car bulb', path: 'Mechanical/Vehicle parts/Lighting', says: 'a halogen headlamp bulb or a signal bulb, by its UN R37 category', std: 'UN R37 categories with their watts and lumens at 12 V',
     axes: [bare('type', 'category', Object.keys(BULBS))],
-    title: (p) => `${p.type} 12 V car bulb (${BULBS[s(p, 'type')]![1]})`, of: (p) => (/^H/.test(s(p, 'type')) ? 'quartz tungsten brass pbt' : 'glass tungsten brass'), make: 'assemble', how: (p) => (/^H/.test(s(p, 'type')) ? 'a tungsten filament in a quartz capsule filled with halogen gas, on its keyed base' : 'a tungsten filament in a glass bulb on its base'),
+    title: (p) => `${p.type} 12 V car bulb (${BULBS[s(p, 'type')]![1]})`, of: () => 'bulb-envelope filament*2 bulb-base', make: 'assemble', how: (p) => (/^H/.test(s(p, 'type')) ? 'a tungsten filament in a quartz capsule filled with halogen gas, on its keyed base' : 'a tungsten filament in a glass bulb on its base'),
     spec: (p) => { const [base, W, lm] = BULBS[s(p, 'type')]!; return `${W}, ${lm} at 13.2 V (UN R37); base ${base}`; }, box: (p) => BULBS[s(p, 'type')]![3], g: (p) => (s(p, 'type') === 'W5W' ? 1 : 12), look: 'dome',
   },
   {

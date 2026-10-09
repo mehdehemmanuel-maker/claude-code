@@ -97,13 +97,13 @@ export const SITE: KindDef[] = [
   {
     id: 'socketoutlet', name: 'wall socket', path: 'Electrical/Wiring accessories/Sockets', says: 'a mains socket outlet on its wall plate, by its country\'s standard', std: 'BS 1363, CEE 7/3, NEMA WD 6 and AS/NZS 3112 ratings; plate sizes typical',
     axes: [bare('std', 'standard', Object.keys(SOCKET)), unit('gang', 'gangs', 'G', [1, 2]), bare('sw', 'switch', (p) => (SOCKET[s(p, 'std')]![3] ? ['switched', 'unswitched'] : ['unswitched']))],
-    title: (p) => `${p.gang}-gang ${p.sw} ${s(p, 'std').replace(/(\d)/, ' $1')} socket`, of: (p) => `pc brass*${p.gang} copper steel-spring steel-low`, make: 'assemble', how: 'brass contacts on springs behind a moulded plate with shutters, screw terminals behind',
+    title: (p) => `${p.gang}-gang ${p.sw} ${s(p, 'std').replace(/(\d)/, ' $1')} socket`, of: (p) => `faceplate mounting-frame socket-contact*${3 * n(p, 'gang')} shutter*${n(p, 'gang')} terminal-screw*${3 * n(p, 'gang')}${p.sw === 'switched' ? ` contact-spring*${2 * n(p, 'gang')} contact-silver*${4 * n(p, 'gang')} switch-actuator*${n(p, 'gang')}` : ''}`, make: 'assemble', how: 'brass contacts on springs behind a moulded plate with shutters, screw terminals behind',
     spec: (p) => `${SOCKET[s(p, 'std')]![0]}; ${p.sw === 'switched' ? 'a switch on each' : 'no switch'}`, box: (p) => [...SOCKET[s(p, 'std')]![n(p, 'gang') === 1 ? 1 : 2], 35] as [number, number, number], g: (p) => 70 * n(p, 'gang'), look: 'case',
   },
   {
     id: 'lightswitch', name: 'light switch', path: 'Electrical/Wiring accessories/Switches', says: 'a wall switch for lights: one-way, two-way (for stairs), or intermediate', std: 'EN 60669-1, 10 AX; plates typical',
     axes: [bare('way', 'way', ['1-way', '2-way', 'intermediate']), unit('gang', 'gangs', 'G', [1, 2, 3, 4])],
-    title: (p) => `${p.gang}-gang ${p.way} light switch`, of: (p) => `pc brass*${p.gang} copper silver steel-spring`, make: 'assemble', how: 'a rocker on a snap mechanism with silver contacts, behind a moulded plate',
+    title: (p) => `${p.gang}-gang ${p.way} light switch`, of: (p) => `faceplate mounting-frame switch-actuator*${n(p, 'gang')} contact-spring*${n(p, 'gang')} contact-silver*${(p.way === '1-way' ? 2 : p.way === '2-way' ? 3 : 4) * n(p, 'gang')} switch-terminal*${(p.way === '1-way' ? 2 : p.way === '2-way' ? 3 : 4) * n(p, 'gang')} terminal-screw*${(p.way === '1-way' ? 2 : p.way === '2-way' ? 3 : 4) * n(p, 'gang')}`, make: 'assemble', how: 'a rocker on a snap mechanism with silver contacts, behind a moulded plate',
     spec: (p) => `10 AX, 250 V (EN 60669-1); ${p.way === '1-way' ? 'on and off from here' : p.way === '2-way' ? 'with another 2-way, a light worked from two places' : 'between two 2-way switches, a third place'}`, box: (p) => (n(p, 'gang') <= 2 ? [86, 86, 35] : [146, 86, 35]), g: (p) => 40 + 15 * n(p, 'gang'), look: 'case',
   },
   {
@@ -158,7 +158,7 @@ export const SITE: KindDef[] = [
   {
     id: 'shieldgas', name: 'shielding gas cylinder', path: 'Tools/Welding/Gas', says: 'a cylinder of gas that keeps air off a weld', std: 'the gases and cylinder sizes sold; argon and mixes at 200 bar, CO₂ filled at 0.75 kg/l; cylinder masses typical',
     axes: [bare('gas', 'gas', Object.keys(GAS)), unit('L', 'water capacity', 'L', [10, 20, 50])],
-    title: (p) => `${p.gas === 'Ar-18CO2' ? 'argon with 18 % CO₂' : p.gas === 'co2' ? 'CO₂' : 'argon'} cylinder, ${p.L} l`, of: (p) => `steel-alloy brass ${GAS[s(p, 'gas')]![0]}`, make: 'assemble', how: 'a seamless steel cylinder with its valve, filled with gas',
+    title: (p) => `${p.gas === 'Ar-18CO2' ? 'argon with 18 % CO₂' : p.gas === 'co2' ? 'CO₂' : 'argon'} cylinder, ${p.L} l`, of: () => 'gas-cylinder cylinder-valve argon', make: 'assemble', how: 'a seamless steel cylinder with its valve, filled with gas',
     spec: (p) => { const V = n(p, 'L'); return p.gas === 'co2' ? `${(V * 0.75).toFixed(1)} kg of liquid CO₂: about ${((V * 0.75) / 1.87).toFixed(1)} m³ of gas at 1 atm, 15 °C (ρ = 1.87 kg/m³); for ${GAS.co2![1]}` : `at 200 bar: about ${((V * 200) / 1.013 / 0.97 / 1000).toFixed(1)} m³ of gas at 1 atm (pV = ZnRT, Z ≈ 0.97, an estimate); for ${GAS[s(p, 'gas')]![1]}`; },
     box: (p) => { const [d, h] = CYL[n(p, 'L')]!; return [d, d, h]; }, g: (p) => { const V = n(p, 'L'); return CYL[V]![2] * 1000 + (p.gas === 'co2' ? V * 750 : ((V * 200) / 1.013 / 0.97) * 1.67); }, look: 'can',
   },
@@ -177,19 +177,19 @@ export const SITE: KindDef[] = [
   {
     id: 'dialindicator', name: 'dial indicator', path: 'Tools/Measuring/Indicators', says: 'a plunger geared to a needle: how far a surface runs out', std: 'DIN 878 faces and ranges; graduation 0.01 mm',
     axes: [ax('range', 'range', 'mm', [5, 10, 30, 50])],
-    title: (p) => `dial indicator 0–${p.range} mm, 0.01 mm`, of: () => 'brass steel-tool pc', make: 'assemble', how: 'a rack on its plunger turns gears and a hairspring-loaded needle behind a clear face',
+    title: (p) => `dial indicator 0–${p.range} mm, 0.01 mm`, of: () => 'indicator-case plunger gear-train gauge-dial indicator-crystal return-spring', make: 'assemble', how: 'a rack on its plunger turns gears and a hairspring-loaded needle behind a clear face',
     spec: (p) => `0.01 mm a mark, a turn of the needle 1 mm, ${p.range} mm in all; ${n(p, 'range') <= 5 ? 40 : 58} mm face`, box: (p) => { const f = n(p, 'range') <= 5 ? 40 : 58; return [f, f + 30 + n(p, 'range'), 30]; }, g: (p) => (n(p, 'range') <= 5 ? 90 : 120 + n(p, 'range') * 2), look: 'can',
   },
   {
     id: 'tapemeasure', name: 'tape measure', path: 'Tools/Measuring/Tapes', says: 'a curved steel blade that rolls back into its case', std: 'the lengths and blade widths sold; accuracy classes of MID 2014/32/EU',
     axes: [unit('L', 'length', 'm', Object.keys(TAPE).map(Number)), ax('w', 'blade', 'mm', (p) => TAPE[n(p, 'L')]!), bare('class', 'class', ['I', 'II'])],
-    title: (p) => `${p.L} m tape measure, ${p.w} mm blade, class ${p.class}`, of: () => 'steel-spring abs pu nylon', make: 'assemble', how: 'a lacquered spring-steel blade on a coiled return spring in a moulded case, a hook riveted on its end',
+    title: (p) => `${p.L} m tape measure, ${p.w} mm blade, class ${p.class}`, of: () => 'tape-blade tape-spring tape-case tape-hook tape-lock belt-clip', make: 'assemble', how: 'a lacquered spring-steel blade on a coiled return spring in a moulded case, a hook riveted on its end',
     spec: (p) => { const [a, b] = TAPECLASS[s(p, 'class')]!, L = n(p, 'L'); return `class ${p.class}: within ±${r1(a + b * L)} mm over its whole ${L} m (MID: ±(a + bL), a = ${a}, b = ${b})`; }, box: (p) => { const k = r1(55 + n(p, 'L') * 4); return [k, k, 25 + n(p, 'w')]; }, g: (p) => 100 + n(p, 'L') * 40 + n(p, 'w') * 5, look: 'case',
   },
   {
     id: 'clamp', name: 'clamp', path: 'Tools/Hand tools/Clamps', says: 'a G-clamp, an F-clamp or a one-handed quick clamp, by how wide it opens', std: 'the openings and throats sold; masses an estimate; clamping forces not given here (makers\' figures vary)',
     axes: [bare('type', 'type', Object.keys(CLAMP)), ax('open', 'opening', 'mm', (p) => CLAMP[s(p, 'type')]![0])],
-    title: (p) => `${p.open} mm ${p.type === 'quick' ? 'quick clamp' : `${p.type}-clamp`}`, of: (p) => CLAMP[s(p, 'type')]![2], make: (p) => (p.type === 'quick' ? 'assemble' : 'cast'), how: (p) => ({ G: 'a cast or forged C frame with a screw and swivel pad', F: 'a steel bar with a fixed jaw and a sliding cast arm with its screw', quick: 'a steel bar and a trigger that ratchets its jaw closed' } as Record<string, string>)[s(p, 'type')]!,
+    title: (p) => `${p.open} mm ${p.type === 'quick' ? 'quick clamp' : `${p.type}-clamp`}`, of: () => 'clamp-bar clamp-jaw*2 clamp-trigger return-spring', make: (p) => (p.type === 'quick' ? 'assemble' : 'cast'), how: (p) => ({ G: 'a cast or forged C frame with a screw and swivel pad', F: 'a steel bar with a fixed jaw and a sliding cast arm with its screw', quick: 'a steel bar and a trigger that ratchets its jaw closed' } as Record<string, string>)[s(p, 'type')]!,
     spec: (p) => `opens to ${p.open} mm, reaches ${r1(CLAMP[s(p, 'type')]![1](n(p, 'open')))} mm in from the edge`, box: (p) => { const o = n(p, 'open'), t = CLAMP[s(p, 'type')]![1](o); return [r1(o + 80), r1(t + 40), 30]; }, g: (p) => CLAMP[s(p, 'type')]![3](n(p, 'open')), look: 'frame',
   },
   {

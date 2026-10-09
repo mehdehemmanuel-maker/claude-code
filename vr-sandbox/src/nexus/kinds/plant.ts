@@ -88,13 +88,13 @@ export const PLANT: KindDef[] = [
   {
     id: 'floatswitch', name: 'float switch', path: 'Electrical/Sensors/Level switches', says: 'a float with a magnet that closes a reed switch as the level reaches it', std: 'the forms sold; contact ratings typical',
     axes: [bare('form', 'form', ['vertical', 'side-mount', 'cable']), bare('matter', 'material', ['PP', 'stainless']), bare('contact', 'contact', ['NO', 'NC'])],
-    title: (p) => `${p.form} float switch, ${p.matter}, ${p.contact}`, of: (p) => `${p.matter === 'PP' ? 'pp' : 'stainless-316'} ferrite-hard glass nickel`, make: 'assemble', how: 'a hollow float carrying a magnet slides on a stem holding a sealed reed switch',
+    title: (p) => `${p.form} float switch, ${p.matter}, ${p.contact}`, of: () => 'float ring-magnet float-stem reed-switch insulated-conductor*2 cable-jacket', make: 'assemble', how: 'a hollow float carrying a magnet slides on a stem holding a sealed reed switch',
     spec: (p) => `${p.contact === 'NO' ? 'closes' : 'opens'} as the level lifts its float; about 10–50 W at its reed (typical): drive a relay with it, not a pump${p.form === 'cable' ? '; a tilting float on its cable, for sumps' : ''}`, box: (p) => (p.form === 'cable' ? [70, 70, 110] : p.form === 'side-mount' ? [25, 25, 85] : [30, 30, 90]), g: (p) => (p.form === 'cable' ? 300 : 40), look: 'can',
   },
   {
     id: 'limitswitch', name: 'limit switch', path: 'Electrical/Switches/Limit switches', says: 'a rugged switch worked by a machine part touching its lever or plunger', std: 'IEC 60947-5-1; EN 50041 bodies; ratings typical',
     axes: [bare('act', 'actuator', ['roller-lever', 'plunger', 'roller-plunger', 'wobble']), bare('body', 'body', ['metal', 'plastic'])],
-    title: (p) => `${s(p, 'act').replace('-', ' ')} limit switch, ${p.body} body`, of: (p) => `${p.body === 'metal' ? 'zamak' : 'pbt'} silver brass steel-spring nylon`, make: 'assemble', how: 'a snap-action contact block, 1 NO + 1 NC, in a sealed body with its head',
+    title: (p) => `${s(p, 'act').replace('-', ' ')} limit switch, ${p.body} body`, of: (p) => `switch-housing switch-actuator return-spring contact-spring contact-silver*4 switch-terminal*4 terminal-screw*4${p.body === 'metal' ? ' valve-body' : ''}`, make: 'assemble', how: 'a snap-action contact block, 1 NO + 1 NC, in a sealed body with its head',
     spec: (p) => `1 NO + 1 NC, positive opening (IEC 60947-5-1), about 3 A at 240 V AC-15 (typical); ${p.act === 'wobble' ? 'worked from any side' : 'worked by a cam or a stop'}`, box: (p) => [31, 30, p.act === 'roller-lever' ? 110 : 85], g: (p) => (p.body === 'metal' ? 180 : 90), look: 'case',
   },
   {

@@ -1,20 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { breakdown, sayBreakdown } from '../../src/nexus/breakdown';
-import { INVENTORY, resolve } from '../../src/nexus/inventory';
+import { breakdown, judge, sayBreakdown } from '../../src/nexus/breakdown';
+import { INVENTORY, resolve, type Item } from '../../src/nexus/inventory';
+
+const thing = (o: Partial<Item>): Item => ({ id: 'x', name: 'x', path: ['x'], kind: 'product', make: 'assemble', of: [], says: '', ...o }) as Item;
+const find = (id: string) => INVENTORY.get(id);
 
 describe('the breakdown queue', () => {
-  it('takes every item stored off the queue, finds each thing in it in the table, and says what waits and why', () => {
+  it('takes every item stored off the queue and finds each thing in it in the table', () => {
     const first = breakdown();
     expect(first.taken).toBe(INVENTORY.size);
     expect(first.waiting.filter((w) => w.why === 'not in the table')).toEqual([]);
     // (a stepper stored now is queued: it, its bearing and its tie screws made to its sizes, broken down to their steel)
-    const st = resolve('stepper nema17 40'); expect(typeof st).toBe('object');
+    expect(typeof resolve('stepper nema17 40')).toBe('object');
     const next = breakdown(); expect(next.taken).toBeGreaterThanOrEqual(1);
     expect(next.waiting.filter((w) => w.in === 'stepper-nema17-40')).toEqual([]);
     expect(INVENTORY.has('bearing-625zz') && INVENTORY.has('screw-m3x32')).toBe(true);
-    // (a thing assembled and listed only as its materials waits to have its parts broken out of it)
-    expect(first.waiting.some((w) => w.why === 'only its materials listed')).toBe(true);
     expect(breakdown().taken).toBe(0); // nothing new stored, nothing to take
     expect(sayBreakdown(first)).toMatch(/^# Breakdown queue/);
+  });
+  it('judges what waits and why: joined of only materials, several materials shaped as one, nothing in it; and what is whole', () => {
+    expect(judge(thing({ make: 'assemble', of: [{ id: 'steel-low', n: 1 }, { id: 'pvc', n: 1 }] }), find)).toBe('only its materials listed');
+    expect(judge(thing({ make: 'mould', of: [{ id: 'nylon', n: 1 }, { id: 'phosphor-bronze', n: 1 }, { id: 'tin', n: 1 }] }), find)).toBe('several materials in one shaping');
+    expect(judge(thing({ of: [] }), find)).toBe('nothing in it listed');
+    expect(judge(thing({ make: 'roll-thread', of: [{ id: 'steel-alloy', n: 1 }, { id: 'zinc', n: 1 }] }), find)).toBeNull(); // a screw, zinc-plated: one piece
+    expect(judge(thing({ make: 'assemble', of: [{ id: 'bearing-ring', n: 2 }, { id: 'steel-chrome', n: 1 }] }), find)).toBeNull(); // has parts
+    expect(judge(thing({ kind: 'part', make: 'weld', of: [{ id: 'steel-low', n: 1 }] }), find)).toBeNull(); // a tube welded along its seam
   });
 });

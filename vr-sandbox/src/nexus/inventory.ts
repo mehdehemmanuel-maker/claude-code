@@ -179,21 +179,21 @@ e('bond-wire', 'bond wire', 'Electrical/Semiconductors/Packaging', 'part', 'draw
 e('lead-frame', 'lead frame', 'Electrical/Semiconductors/Packaging', 'part', 'stamp', 'copper tin', 'the stamped copper frame a die sits on, its leads part of it');
 e('mould-compound', 'moulding compound', 'Electrical/Semiconductors/Packaging', 'part', 'mould', 'epoxy', 'the black epoxy body of a chip');
 e('ic-package', 'packaged chip', 'Electrical/Semiconductors/Integrated circuits', 'assembly', 'assemble', 'si-die lead-frame bond-wire*8 mould-compound', 'a die on a lead frame, bonded out and moulded in epoxy (QFN or SOIC)');
-e('pin-header', 'pin header (1 × 20, 2.54 mm)', 'Electrical/Wiring and connectors/Headers', 'part', 'assemble', 'nylon brass gold', 'square brass pins in a moulded strip, their ends gold-flashed', '2.54 mm (0.1 in) pitch');
-e('screw-terminal', 'screw terminal block', 'Electrical/Wiring and connectors/Terminals', 'part', 'assemble', 'nylon brass steel-low', 'a moulded body with a brass clamp and screw for each wire');
+e('pin-header', 'pin header (1 × 20, 2.54 mm)', 'Electrical/Wiring and connectors/Headers', 'part', 'assemble', 'header-pin*20 header-insulator', 'square brass pins in a moulded strip, their ends gold-flashed', '2.54 mm (0.1 in) pitch');
+e('screw-terminal', 'screw terminal block', 'Electrical/Wiring and connectors/Terminals', 'part', 'assemble', 'terminal-housing terminal-clamp*2 terminal-screw*2', 'a moulded body with a brass clamp and screw for each wire');
 e('wire-hookup', 'hook-up wire', 'Electrical/Wiring and connectors/Wire', 'part', 'extrude', 'copper pvc', 'stranded copper in PVC insulation', 'e.g. 22 AWG');
 e('crimp-contact', 'crimp contact', 'Electrical/Wiring and connectors/Contacts', 'part', 'stamp', 'brass tin', 'a stamped, tin-plated brass contact crimped onto a wire');
 e('connector-housing', 'connector housing', 'Electrical/Wiring and connectors/Housings', 'part', 'mould', 'nylon', 'the moulded shell the contacts click into', '', { alt: 'print', size: [10, 6, 6] });
 e('jst-xh', 'JST XH connector (2.5 mm)', 'Electrical/Wiring and connectors/Connectors', 'assembly', 'crimp', 'connector-housing crimp-contact*2 wire-hookup*2', 'two wires crimped into contacts and clicked into a housing', '2.5 mm pitch');
 e('usb-c-socket', 'USB-C socket', 'Electrical/Wiring and connectors/Connectors', 'part', 'stamp', 'stainless-304 copper gold nylon', 'a stamped shell round 24 gold-plated contacts in a moulded tongue');
-e('smd-passives', 'chip resistors and capacitors', 'Electrical/Passive components/Chip passives', 'part', 'fab', 'alumina batio3 nickel tin', 'the tiny surface-mount resistors and capacitors a board is strewn with');
+e('smd-passives', 'chip resistors and capacitors', 'Electrical/Passive components/Chip passives', 'part', 'fab', 'chip-resistor*10 chip-capacitor*10', 'the tiny surface-mount resistors and capacitors a board is strewn with');
 e('resistor-film', 'metal-film resistor', 'Electrical/Passive components/Resistors', 'product', 'assemble', 'alumina nichrome lead-wire*2 epoxy', 'a thin metal film on a ceramic rod, a spiral cut into it to set its resistance, end caps, leads and a lacquer coat', 'tolerance 1 %, 0.25 W typical');
 e('capacitor-electrolytic', 'aluminium electrolytic capacitor', 'Electrical/Passive components/Capacitors', 'product', 'assemble', 'al-foil*2 paper electrolyte-al lead-wire*2 rubber al-6061', 'two aluminium foils, one with an oxide film for its dielectric, wound with paper soaked in electrolyte, sealed in a can with a rubber bung');
 e('capacitor-ceramic', 'ceramic capacitor (MLCC)', 'Electrical/Passive components/Capacitors', 'product', 'sinter', 'batio3 nickel tin', 'layers of barium-titanate ceramic and nickel electrodes, fired together, ends plated');
 e('inductor-power', 'power inductor', 'Electrical/Passive components/Inductors', 'product', 'wind', 'ferrite-soft magnet-wire', 'a winding on a ferrite core');
 e('potentiometer', 'potentiometer', 'Electrical/Passive components/Potentiometers', 'product', 'assemble', 'phenolic graphite brass steel-low lead-wire*3', 'a carbon track on a phenolic disc, a sprung wiper turned by the shaft, three terminals');
-e('fuse-glass', 'glass cartridge fuse', 'Electrical/Passive components/Fuses', 'product', 'assemble', 'glass nickel brass', 'a wire that melts at its rated current, in a glass tube between brass caps', '5 × 20 mm');
-e('crystal', 'quartz crystal', 'Electrical/Passive components/Oscillators', 'product', 'assemble', 'quartz silver steel-low', 'a quartz blank cut to ring at its frequency, electrodes on its faces, sealed in a can');
+e('fuse-glass', 'glass cartridge fuse', 'Electrical/Passive components/Fuses', 'product', 'assemble', 'fuse-tube fuse-cap*2 fuse-element', 'a wire that melts at its rated current, in a glass tube between brass caps', '5 × 20 mm');
+e('crystal', 'quartz crystal', 'Electrical/Passive components/Oscillators', 'product', 'assemble', 'quartz-blank crystal-base crystal-can lead-wire*2', 'a quartz blank cut to ring at its frequency, electrodes on its faces, sealed in a can');
 e('thermistor-ntc', 'NTC thermistor (100 kΩ)', 'Electrical/Sensors/Temperature', 'product', 'sinter', 'ntc-ceramic glass lead-wire*2', 'a bead of sintered oxides, its resistance falling as it warms, sealed in glass', '100 kΩ at 25 °C; the hot-end sensor of many printers');
 
 // ==== electrical products ==============================================================================================
@@ -211,8 +211,8 @@ e('mpu6050-board', 'MPU-6050 IMU board', 'Electrical/Sensors/Motion', 'product',
 e('bme280-board', 'BME280 environment sensor board', 'Electrical/Sensors/Environment', 'product', 'solder', 'pcb-bare ic-package smd-passives pin-header', 'a MEMS sensor for temperature, humidity and pressure, on a breakout', '300–1100 hPa');
 e('strain-gauge', 'foil strain gauge', 'Electrical/Sensors/Force', 'part', 'etch', 'polyimide copper', 'a fine grid of metal foil on polyimide: its resistance changes as it stretches');
 e('load-cell', 'load cell (bar)', 'Electrical/Sensors/Force', 'product', 'assemble', 'al-6061 strain-gauge*4 wire-hookup*4 silicone', 'an aluminium bar machined to bend where four strain gauges are glued, wired as a bridge, sealed', '', { alt: 'cast', size: [80, 13, 13] });
-e('thermocouple-k', 'type K thermocouple probe', 'Electrical/Sensors/Temperature', 'product', 'assemble', 'chromel alumel mgo stainless-304', 'a chromel and an alumel wire welded at the tip, packed in magnesium oxide in a stainless sheath', '−200 to 1350 °C');
-e('image-sensor', 'image sensor', 'Electrical/Sensors/Imaging', 'part', 'fab', 'silicon glass', 'a CMOS die of millions of photodiodes under a colour filter and microlenses');
+e('thermocouple-k', 'type K thermocouple probe', 'Electrical/Sensors/Temperature', 'product', 'assemble', 'thermoelement-chromel thermoelement-alumel tc-sheath mgo', 'a chromel and an alumel wire welded at the tip, packed in magnesium oxide in a stainless sheath', '−200 to 1350 °C');
+e('image-sensor', 'image sensor', 'Electrical/Sensors/Imaging', 'part', 'fab', 'si-die cover-glass ceramic-package', 'a CMOS die of millions of photodiodes under a colour filter and microlenses');
 e('lens-stack', 'camera lens', 'Electrical/Sensors/Imaging', 'part', 'mould', 'pmma pc', 'several moulded lens elements in a barrel');
 e('camera-module', 'camera module', 'Electrical/Sensors/Imaging', 'product', 'assemble', 'image-sensor lens-stack winding magnet-ndfeb pcb-bare', 'an image sensor under a lens moved by a voice-coil motor for focus, on a small board with its flex cable', 'e.g. 12 MP');
 e('motor-130', 'brushed DC motor (130 size)', 'Electrical/Motors and actuators/DC motors', 'product', 'assemble', 'motor-can magnet-ferrite-arc*2 armature end-cap-motor carbon-brush*2 brush-spring*2 sleeve-bearing*2', 'a wound rotor turning in the field of two ferrite magnets; carbon brushes on its commutator switch the current in its coils', 'about 3–6 V', { g: 18 });
@@ -230,12 +230,12 @@ e('mg996r', 'MG996R servo', 'Electrical/Motors and actuators/Servos', 'product',
 e('bldc-outrunner', 'brushless outrunner motor', 'Electrical/Motors and actuators/Brushless motors', 'product', 'assemble', 'lamination-stack winding*12 motor-can magnet-ndfeb*14 shaft-steel bearing-625*2 end-bell', 'a wound stator of 12 teeth inside a spinning bell lined with 14 magnets; an electronic controller switches its three phases', 'e.g. 2212 size');
 e('solenoid', 'push-pull solenoid', 'Electrical/Motors and actuators/Solenoids', 'product', 'assemble', 'bobbin winding steel-low*2 spring-compression', 'a coil in a steel frame pulls a steel plunger in; a spring returns it');
 e('relay', 'relay', 'Electrical/Switching/Relays', 'product', 'assemble', 'bobbin winding steel-low silver phosphor-bronze pbt', 'a coil pulls an armature that moves a sprung contact from one silver contact to another, in a sealed case');
-e('pushbutton', 'tactile push button', 'Electrical/Switching/Switches', 'product', 'assemble', 'stainless-304 pbt brass', 'a domed stainless disc that snaps down onto two contacts, under a plunger, in a moulded base');
+e('pushbutton', 'tactile push button', 'Electrical/Switching/Switches', 'product', 'assemble', 'switch-housing snap-dome switch-actuator switch-terminal*4', 'a domed stainless disc that snaps down onto two contacts, under a plunger, in a moulded base');
 e('transformer', 'mains transformer (small)', 'Electrical/Power/Transformers', 'product', 'assemble', 'lamination-stack bobbin winding*2 steel-low', 'a primary and a secondary winding on one bobbin over an E-I laminated core, in a steel frame', 'turns ratio sets the voltage ratio');
 e('cell-18650', 'lithium-ion cell 18650', 'Electrical/Power/Cells', 'product', 'assemble', 'jelly-roll electrolyte-li cell-can cell-cap', 'a wound roll of cathode, separator and anode in a steel can, filled with electrolyte, sealed under a cap with its safety vent and interrupt', '18 mm × 65 mm; 3.6 V nominal', { g: 47 });
-e('jelly-roll', 'electrode roll', 'Electrical/Power/Cell parts', 'assembly', 'wind', 'nmc al-foil graphite copper-foil pe', 'cathode (NMC on aluminium foil) and anode (graphite on copper foil) wound with a polyethylene separator between');
+e('jelly-roll', 'electrode roll', 'Electrical/Power/Cell parts', 'assembly', 'wind', 'cathode-sheet anode-sheet separator-film*2', 'cathode (NMC on aluminium foil) and anode (graphite on copper foil) wound with a polyethylene separator between');
 e('cell-can', 'cell can', 'Electrical/Power/Cell parts', 'part', 'stamp', 'steel-low nickel', 'a deep-drawn, nickel-plated steel can: the negative terminal');
-e('cell-cap', 'cell top cap', 'Electrical/Power/Cell parts', 'assembly', 'assemble', 'steel-low al-foil nbr', 'the positive cap: a vent, a current-interrupt disc and a gasket');
+e('cell-cap', 'cell top cap', 'Electrical/Power/Cell parts', 'assembly', 'assemble', 'cap-plate vent-disc cap-gasket', 'the positive cap: a vent, a current-interrupt disc and a gasket');
 e('bms-board', 'battery protection board (2S)', 'Electrical/Power/Battery management', 'product', 'solder', 'pcb-bare ic-package mosfet-to220*2 smd-passives', 'a protection chip and two MOSFETs that cut the pack off when it is over-charged, over-drained or shorted');
 e('pack-2s', 'battery pack, 2 cells', 'Electrical/Power/Battery packs', 'product', 'assemble', 'cell-18650*2 bms-board nickel*2 pack-holder jst-xh', 'two cells in series in a printed holder, joined by nickel strip, behind a protection board', '7.2 V nominal');
 e('pack-holder', 'cell holder', 'Electrical/Power/Battery packs', 'part', 'mould', 'abs', 'the holder two cells sit in', '', { alt: 'print', size: [40, 70, 20] });
@@ -250,7 +250,7 @@ e('usb-cable', 'USB-C cable', 'Electrical/Wiring and connectors/Cables', 'produc
 e('multimeter', 'digital multimeter', 'Electrical/Instruments/Meters', 'product', 'assemble', 'meter-case pcb-bare ic-package fuse-glass*2 potentiometer lcd-glass probes', 'a measuring chip and its range resistors on a board turned by a rotary switch, fuses, an LCD, probes, in a moulded case');
 e('meter-case', 'meter case', 'Electrical/Instruments/Meter parts', 'part', 'mould', 'abs', 'the two-piece case', '', { alt: 'print', size: [75, 150, 35] });
 e('lcd-glass', 'LCD glass', 'Electrical/Instruments/Meter parts', 'part', 'fab', 'glass', 'liquid crystal between two patterned glass plates and polarisers');
-e('probes', 'test probes', 'Electrical/Instruments/Meter parts', 'part', 'assemble', 'brass silicone pvc', 'sharp brass tips in moulded handles on silicone leads');
+e('probes', 'test probes', 'Electrical/Instruments/Meter parts', 'part', 'assemble', 'probe-tip*2 probe-handle*2 test-lead*2 banana-plug*2', 'sharp brass tips in moulded handles on silicone leads');
 
 // ==== mechanical =======================================================================================================
 e('bearing-ring', 'bearing ring', 'Mechanical/Bearings/Bearing parts', 'part', 'grind', 'steel-chrome', 'an inner or outer ring: turned, hardened, its raceway ground and honed');
@@ -261,14 +261,14 @@ e('bearing-608', 'ball bearing 608 (8 × 22 × 7)', 'Mechanical/Bearings/Ball be
 e('lm8uu', 'linear bearing LM8UU', 'Mechanical/Bearings/Linear bearings', 'product', 'assemble', 'steel-chrome bearing-ball*40 pom nbr*2', 'a hardened sleeve round rows of balls that roll and come back round in a plastic retainer, sealed at both ends', 'for 8 mm rods; balls about 40, typical');
 e('bushing-bronze', 'bronze bushing', 'Mechanical/Bearings/Plain bearings', 'product', 'sinter', 'bronze oil', 'an oil-soaked sintered bronze sleeve');
 e('spur-gear', 'spur gear (module 1, 30 teeth)', 'Mechanical/Gears and gearboxes/Spur gears', 'product', 'machine', 'steel-low', 'a gear cut with involute teeth', 'pitch circle 30 mm (module × teeth)', { alt: 'print', size: [32, 32, 8] });
-e('worm-set', 'worm and wheel', 'Mechanical/Gears and gearboxes/Worm gears', 'product', 'assemble', 'steel-alloy bronze', 'a hardened steel worm turning a bronze wheel: a large ratio in one stage, and it does not drive back');
+e('worm-set', 'worm and wheel', 'Mechanical/Gears and gearboxes/Worm gears', 'product', 'assemble', 'worm worm-wheel', 'a hardened steel worm turning a bronze wheel: a large ratio in one stage, and it does not drive back');
 e('planet-gearbox', 'planetary gearbox', 'Mechanical/Gears and gearboxes/Gearboxes', 'product', 'assemble', 'gear-plastic*4 ring-gear planet-carrier bearing-608*2 shaft-steel gearbox-housing', 'a sun gear driving three planets inside a ring gear; the planets\' carrier is the output', 'ratio 1 + ring teeth ÷ sun teeth');
 e('ring-gear', 'ring gear', 'Mechanical/Gears and gearboxes/Gearbox parts', 'part', 'machine', 'steel-low', 'internal teeth round the inside of a ring', '', { alt: 'print', size: [50, 50, 12] });
 e('planet-carrier', 'planet carrier', 'Mechanical/Gears and gearboxes/Gearbox parts', 'part', 'machine', 'al-6061', 'the plate the planets turn on, its middle the output', '', { alt: 'print', size: [40, 40, 6] });
 e('gearbox-housing', 'gearbox housing', 'Mechanical/Gears and gearboxes/Gearbox parts', 'part', 'cast', 'al-a380', 'the case that holds the bearings and the ring', '', { size: [60, 60, 30] });
 e('gt2-pulley', 'GT2 pulley, 20 teeth', 'Mechanical/Linear motion/Belts and pulleys', 'product', 'machine', 'al-6061 screw-set*2', 'an aluminium pulley with 20 teeth for a 2 mm pitch belt, held by two set screws', '2 mm pitch: 40 mm a turn', { alt: 'print', size: [16, 16, 16] });
 e('gt2-belt', 'GT2 belt (6 mm)', 'Mechanical/Linear motion/Belts and pulleys', 'product', 'mould', 'neoprene fibreglass', 'a toothed neoprene belt round glass-fibre tension cords', '2 mm pitch, 6 mm wide');
-e('lead-screw-t8', 'T8 lead screw and nut', 'Mechanical/Linear motion/Screws', 'product', 'assemble', 'stainless-304 brass', 'a rolled-thread stainless screw and a brass nut', '8 mm, 2 mm pitch × 4 starts: 8 mm a turn (or 2 mm single-start)');
+e('lead-screw-t8', 'T8 lead screw and nut', 'Mechanical/Linear motion/Screws', 'product', 'assemble', 'lead-screw lead-nut', 'a rolled-thread stainless screw and a brass nut', '8 mm, 2 mm pitch × 4 starts: 8 mm a turn (or 2 mm single-start)');
 e('linear-rail', 'linear rail MGN12 with carriage', 'Mechanical/Linear motion/Rails', 'product', 'assemble', 'steel-chrome*2 bearing-ball*40 pom nbr grease', 'a ground steel rail and a carriage whose balls roll along it and recirculate through plastic end caps, wipers at each end', '12 mm rail');
 e('smooth-rod', 'smooth rod, 8 mm', 'Mechanical/Linear motion/Rods', 'product', 'grind', 'steel-chrome', 'a hardened, ground, chromed rod for linear bearings to run on');
 e('coupling-flex', 'flexible shaft coupling 5 × 8', 'Mechanical/Shafts and couplings/Couplings', 'product', 'machine', 'al-6061 screw-set*4', 'an aluminium cylinder cut in a helix so it bends but not twists, clamped to each shaft', '', { alt: 'print', size: [19, 19, 25] });
@@ -276,7 +276,7 @@ e('shaft-collar', 'shaft collar', 'Mechanical/Shafts and couplings/Collars', 'pr
 e('spring-compression', 'compression spring', 'Mechanical/Springs/Compression', 'product', 'coil', 'steel-spring', 'music wire coiled on a mandrel, ends closed and ground, stress-relieved', 'rate k = G d⁴ / (8 D³ n)');
 e('spring-extension', 'extension spring', 'Mechanical/Springs/Extension', 'product', 'coil', 'steel-spring', 'tightly coiled wire with a hook at each end');
 e('spring-torsion', 'torsion spring', 'Mechanical/Springs/Torsion', 'product', 'coil', 'steel-spring', 'a coil whose legs are twisted round its axis');
-e('gas-spring', 'gas spring', 'Mechanical/Springs/Gas springs', 'product', 'assemble', 'steel-low steel-alloy nbr nitrogen oil', 'nitrogen under pressure in a steel tube pushes a piston rod out through a seal');
+e('gas-spring', 'gas spring', 'Mechanical/Springs/Gas springs', 'product', 'assemble', 'gas-spring-tube gas-spring-rod gas-spring-piston rod-seal nitrogen oil', 'nitrogen under pressure in a steel tube pushes a piston rod out through a seal');
 e('caster', 'swivel caster', 'Mechanical/Wheels and casters/Casters', 'product', 'assemble', 'wheel-pu steel-low bearing-ball*20 screw-m5', 'a wheel on an axle in a stamped fork that swivels on a ring of balls under its plate');
 e('wheel-pu', 'polyurethane wheel', 'Mechanical/Wheels and casters/Wheels', 'product', 'mould', 'pu pp', 'a polyurethane tread moulded onto a polypropylene hub', '', { alt: 'print', size: [50, 50, 20] });
 e('wheel-robot', 'robot wheel 65 mm', 'Mechanical/Wheels and casters/Wheels', 'product', 'assemble', 'rubber wheel-hub', 'a rubber tyre on a plastic hub for a gear motor\'s shaft');
@@ -285,7 +285,7 @@ e('omni-wheel', 'omni wheel', 'Mechanical/Wheels and casters/Wheels', 'product',
 e('roller', 'omni roller', 'Mechanical/Wheels and casters/Wheel parts', 'part', 'mould', 'pu', 'a small free roller', '', { alt: 'print', size: [10, 10, 15] });
 e('hinge-butt', 'butt hinge', 'Mechanical/Hinges and joints/Hinges', 'product', 'assemble', 'hinge-leaf*2 steel-low', 'two stamped leaves rolled round a steel pin');
 e('hinge-leaf', 'hinge leaf', 'Mechanical/Hinges and joints/Hinge parts', 'part', 'stamp', 'steel-low', 'a stamped leaf, its edge rolled into knuckles', '', { alt: 'print', size: [40, 30, 2] });
-e('rod-end', 'rod end (ball joint)', 'Mechanical/Hinges and joints/Ball joints', 'product', 'assemble', 'steel-low steel-chrome ptfe', 'a steel housing round a hardened ball with a bore, in a PTFE liner');
+e('rod-end', 'rod end (ball joint)', 'Mechanical/Hinges and joints/Ball joints', 'product', 'assemble', 'rodend-housing rodend-ball rodend-liner', 'a steel housing round a hardened ball with a bore, in a PTFE liner');
 e('u-joint', 'universal joint', 'Mechanical/Hinges and joints/Universal joints', 'product', 'assemble', 'steel-alloy*3 bearing-ball*40', 'two yokes joined by a cross on four needle-bearing cups');
 e('pump-gear', 'gear pump', 'Mechanical/Fluid power/Pumps', 'product', 'assemble', 'pump-housing spur-gear*2 shaft-steel*2 bushing-bronze*4 nbr', 'two meshing gears in a close-fitting housing carry fluid round the outside from inlet to outlet');
 e('pump-housing', 'pump housing', 'Mechanical/Fluid power/Pump parts', 'part', 'cast', 'al-a380', 'the body the gears fit closely in', '', { size: [60, 50, 40] });
@@ -294,7 +294,7 @@ e('pump-head', 'peristaltic pump head', 'Mechanical/Fluid power/Pump parts', 'pa
 e('valve-ball', 'ball valve', 'Mechanical/Fluid power/Valves', 'product', 'assemble', 'valve-body brass ptfe*2 brass steel-low nbr', 'a bored ball turned a quarter turn by a stem between two PTFE seats in a brass body; a handle on the stem');
 e('valve-body', 'valve body', 'Mechanical/Fluid power/Valve parts', 'part', 'forge', 'brass', 'the forged brass body', '', { alt: 'cast', size: [50, 30, 30] });
 e('valve-solenoid', 'solenoid valve', 'Mechanical/Fluid power/Valves', 'product', 'assemble', 'valve-body bobbin winding steel-low spring-compression nbr', 'a coil lifts a plunger off its seat against a spring; a diaphragm opens the flow');
-e('cylinder-hydraulic', 'hydraulic cylinder', 'Mechanical/Fluid power/Cylinders', 'product', 'assemble', 'steel-low steel-alloy nbr*4 steel-low*2', 'a honed steel barrel, a piston with seals on a chromed rod, end caps with ports', 'force = pressure × piston area');
+e('cylinder-hydraulic', 'hydraulic cylinder', 'Mechanical/Fluid power/Cylinders', 'product', 'assemble', 'cylinder-barrel piston-rod cylinder-piston cylinder-gland cylinder-cap rod-seal piston-seal wiper-seal seal-ring*2 oil', 'a honed steel barrel, a piston with seals on a chromed rod, end caps with ports', 'force = pressure × piston area');
 e('extrusion-2020', 'aluminium extrusion 2020', 'Hardware/Structural/Extrusions', 'product', 'extrude', 'al-6063', 'a T-slot profile extruded from 6063 and aged', '20 × 20 mm, 6 mm slots; about 0.5 kg a metre');
 
 // ==== hardware =========================================================================================================
@@ -318,7 +318,7 @@ e('screwdriver', 'screwdriver', 'Hardware/Hand tools/Drivers', 'product', 'assem
 e('driver-shaft', 'screwdriver shaft', 'Hardware/Hand tools/Tool parts', 'part', 'heat-treat', 'steel-tool', 'a tool-steel rod forged or ground to its tip, hardened and tempered');
 e('driver-handle', 'screwdriver handle', 'Hardware/Hand tools/Tool parts', 'part', 'mould', 'pp', 'a moulded grip', '', { alt: 'print', size: [30, 30, 100] });
 e('hex-key', 'hex key', 'Hardware/Hand tools/Drivers', 'product', 'heat-treat', 'steel-tool', 'hex bar bent to an L, hardened and tempered', 'ISO 2936');
-e('pliers', 'pliers', 'Hardware/Hand tools/Pliers', 'product', 'assemble', 'steel-alloy*2 steel-low pvc*2', 'two forged, hardened halves riveted at their pivot, grips on the handles');
+e('pliers', 'pliers', 'Hardware/Hand tools/Pliers', 'product', 'assemble', 'plier-jaw*2 plier-rivet handle-grip*2', 'two forged, hardened halves riveted at their pivot, grips on the handles');
 e('caliper-digital', 'digital caliper', 'Hardware/Hand tools/Measuring', 'product', 'assemble', 'stainless-304 pcb-bare ic-package lcd-glass abs', 'a stainless beam and jaws; a capacitive encoder on the slider reads where it is to 0.01 mm on an LCD');
 e('soldering-iron', 'soldering iron', 'Hardware/Hand tools/Soldering', 'product', 'assemble', 'heater-cartridge copper iron-plating driver-handle wire-hookup*3 thermistor-ntc', 'a heater in a copper tip plated with iron, its temperature read by a sensor, in an insulated handle');
 e('iron-plating', 'iron-plated tip', 'Hardware/Hand tools/Soldering', 'part', 'coat', 'steel-low', 'the iron plating that keeps solder from eating a copper tip');
@@ -353,13 +353,13 @@ e('esc', 'electronic speed controller', 'Electrical/Boards and controllers/Motor
 e('flight-controller', 'flight controller', 'Electrical/Boards and controllers/Flight controllers', 'product', 'solder', 'pcb-bare ic-package*2 mpu6050-board smd-passives pin-header', 'a microcontroller reading its gyro and accelerometer hundreds of times a second and setting each motor\'s speed to keep level');
 e('propeller', 'propeller', 'Mechanical/Wheels and casters/Propellers', 'part', 'mould', 'nylon fibreglass', 'two moulded blades, pitched to push air down', '', { alt: 'print', size: [127, 12, 8] });
 e('frame-quad', 'quadcopter frame', 'Mechanical/Structures/Frames', 'part', 'machine', 'cfrp', 'carbon-fibre plates cut to arms and a body', '', { alt: 'print', size: [220, 220, 4] });
-e('pouch-cell', 'lithium polymer pouch cell', 'Electrical/Power/Cells', 'product', 'assemble', 'nmc graphite al-foil copper-foil pe electrolyte-li al-laminate', 'stacked cathode, separator and anode sheets sealed in an aluminium-laminate pouch', '3.7 V nominal');
+e('pouch-cell', 'lithium polymer pouch cell', 'Electrical/Power/Cells', 'product', 'assemble', 'cathode-sheet anode-sheet separator-film*2 electrolyte-li pouch-film cell-tab*2', 'stacked cathode, separator and anode sheets sealed in an aluminium-laminate pouch', '3.7 V nominal');
 e('xt60', 'XT60 connector', 'Electrical/Wiring and connectors/Connectors', 'part', 'mould', 'nylon brass gold', 'a moulded body round two gold-plated brass contacts, for battery current', 'about 60 A');
 e('pack-lipo-4s', 'LiPo pack 4S', 'Electrical/Power/Battery packs', 'product', 'assemble', 'pouch-cell*4 xt60 jst-xh wire-hookup*2 pe', 'four pouch cells in series, wrapped, a main lead and a balance lead', '14.8 V nominal');
 e('rc-receiver', 'radio receiver', 'Electrical/Boards and controllers/Radio', 'product', 'solder', 'pcb-bare ic-package crystal wire-hookup', 'a 2.4 GHz radio chip and its antenna wire, passing the sticks\' positions on');
 e('quadcopter', 'quadcopter drone', 'Electrical/Machines/Drones', 'product', 'assemble', 'frame-quad bldc-outrunner*4 esc*4 flight-controller propeller*4 pack-lipo-4s camera-module rc-receiver screw-m3*24', 'four brushless motors on a frame, each with its controller, a flight controller keeping it level, a battery, a camera, a radio', 'it lifts what its four motors\' thrust exceeds its weight by');
 // a cordless drill
-e('drill-chuck', 'keyless chuck', 'Mechanical/Tools parts/Chucks', 'assembly', 'assemble', 'steel-alloy*3 steel-low pp', 'three hardened jaws driven in and out of a body by a threaded sleeve');
+e('drill-chuck', 'keyless chuck', 'Mechanical/Tools parts/Chucks', 'assembly', 'assemble', 'chuck-body chuck-jaw*3 chuck-nut chuck-sleeve', 'three hardened jaws driven in and out of a body by a threaded sleeve');
 e('clutch-drill', 'torque clutch', 'Mechanical/Gears and gearboxes/Clutches', 'assembly', 'assemble', 'spring-compression*6 bearing-ball*6 steel-low', 'balls pressed by springs into a ring gear\'s face: past the torque set, they ride out and it slips');
 e('trigger-switch', 'variable-speed trigger', 'Electrical/Switching/Switches', 'product', 'assemble', 'pcb-bare mosfet-to220 abs brass spring-compression', 'a trigger that slides a contact along a resistive track and a MOSFET that sets the motor\'s speed from it, with forward and reverse');
 e('tool-housing', 'tool housing', 'Hardware/Hand tools/Tool parts', 'part', 'mould', 'abs', 'the two-part moulded body of a power tool', '', { alt: 'print', size: [200, 60, 180] });
@@ -373,8 +373,8 @@ e('fan-blade', 'fan blade', 'Mechanical/Wheels and casters/Propellers', 'part', 
 e('fan-guard', 'fan guard', 'Hardware/Structural/Wire forms', 'part', 'bend', 'steel-low', 'steel wire bent into rings and spokes and welded', '');
 e('desk-fan', 'desk fan', 'Electrical/Appliances/Fans', 'product', 'assemble', 'motor-shaded-pole fan-blade fan-guard*2 tool-housing gear-plastic*3 pushbutton*3 wire-hookup*3', 'a shaded-pole motor turning blades between two guards, a little gearbox nodding it side to side, speed buttons, on a base');
 // a computer mouse and a keyboard
-e('micro-switch', 'micro switch', 'Electrical/Switching/Switches', 'product', 'assemble', 'pbt phosphor-bronze silver brass', 'a snap-action leaf of phosphor bronze over silver contacts, in a moulded case', 'the click of a mouse button');
-e('encoder-rotary', 'rotary encoder', 'Electrical/Sensors/Position', 'product', 'assemble', 'pbt phosphor-bronze brass steel-low', 'sprung contacts wiping a patterned disc: two signals a quarter out of step say which way it turns');
+e('micro-switch', 'micro switch', 'Electrical/Switching/Switches', 'product', 'assemble', 'switch-housing switch-actuator contact-spring contact-silver*3 switch-terminal*3', 'a snap-action leaf of phosphor bronze over silver contacts, in a moulded case', 'the click of a mouse button');
+e('encoder-rotary', 'rotary encoder', 'Electrical/Sensors/Position', 'product', 'assemble', 'switch-housing code-disc contact-spring*3 pot-shaft detent-spring pcb-pin*5', 'sprung contacts wiping a patterned disc: two signals a quarter out of step say which way it turns');
 e('optical-sensor', 'optical mouse sensor', 'Electrical/Sensors/Imaging', 'product', 'assemble', 'image-sensor lens-stack led-5mm', 'a tiny camera taking thousands of pictures a second of the surface, lit by an LED, working out how far they moved');
 e('mouse-shell', 'mouse shell', 'Electrical/Computer parts/Cases', 'part', 'mould', 'abs', 'the top and bottom of a mouse', '', { alt: 'print', size: [65, 115, 38] });
 e('mouse', 'computer mouse', 'Electrical/Computer parts/Input', 'product', 'assemble', 'mouse-shell pcb-bare optical-sensor micro-switch*3 encoder-rotary rubber ic-package usb-cable ptfe', 'an optical sensor and a chip that reports its moves over USB, three switches under its buttons, a wheel on an encoder, in a shell on PTFE feet');
@@ -386,7 +386,7 @@ e('keyboard', 'mechanical keyboard', 'Electrical/Computer parts/Input', 'product
 // a kettle
 e('bimetal-strip', 'bimetal disc', 'Mechanical/Thermal/Thermostats', 'part', 'laminate', 'steel-low brass', 'two metals bonded together: heated, one grows more, and the disc snaps over', '');
 e('thermostat-bimetal', 'kettle thermostat', 'Mechanical/Thermal/Thermostats', 'product', 'assemble', 'bimetal-strip silver phosphor-bronze pbt', 'steam on a bimetal disc snaps it over and opens the contacts', 'opens at the boil');
-e('heating-element', 'sheathed heating element', 'Electrical/Heating/Heaters', 'product', 'assemble', 'nichrome mgo stainless-304', 'a nichrome coil packed in magnesium oxide in a stainless tube, bent to shape', 'e.g. 2 kW at 230 V: 26 Ω');
+e('heating-element', 'sheathed heating element', 'Electrical/Heating/Heaters', 'product', 'assemble', 'heater-sheath resistance-wire terminal-pin*2 mgo', 'a nichrome coil packed in magnesium oxide in a stainless tube, bent to shape', 'e.g. 2 kW at 230 V: 26 Ω');
 e('kettle', 'electric kettle', 'Electrical/Appliances/Kettles', 'product', 'assemble', 'stainless-304 heating-element thermostat-bimetal pp brass pushbutton nbr', 'a stainless body over a sheathed element, a bimetal thermostat that switches it off at the boil, a base whose ring contacts let it sit any way round');
 // a solar panel
 e('solar-cell', 'silicon solar cell', 'Electrical/Power/Solar', 'product', 'fab', 'silicon silver-paste al-foil', 'a doped silicon wafer: light frees charges across its junction; silver fingers on its face and aluminium on its back collect them', 'about 0.6 V');
@@ -400,7 +400,7 @@ e('flashlight', 'LED flashlight', 'Electrical/Lighting/Flashlights', 'product', 
 e('tube-flash', 'flashlight body', 'Electrical/Lighting/Flashlight parts', 'part', 'machine', 'al-6061', 'the turned aluminium tube, anodised', '', { alt: 'cast', size: [25, 25, 120] });
 e('smoke-alarm', 'smoke alarm', 'Electrical/Safety/Alarms', 'product', 'assemble', 'abs led-5mm*2 ic-package buzzer-piezo pushbutton cell-18650 pcb-bare', 'an infrared LED and a sensor at an angle in a dark chamber: smoke scatters the light onto the sensor, and a chip sounds the buzzer');
 // a car's spark plug and alternator
-e('spark-plug', 'spark plug', 'Mechanical/Vehicle parts/Ignition', 'product', 'assemble', 'steel-low alumina nickel-alloy copper', 'a steel shell, a sintered alumina insulator, a copper-cored nickel-alloy centre electrode and a ground electrode a gap away', 'e.g. 14 mm thread; gap about 0.7–1.1 mm');
+e('spark-plug', 'spark plug', 'Mechanical/Vehicle parts/Ignition', 'product', 'assemble', 'spark-plug-shell spark-plug-insulator centre-electrode ground-electrode terminal-stud sealing-washer glass', 'a steel shell, a sintered alumina insulator, a copper-cored nickel-alloy centre electrode and a ground electrode a gap away', 'e.g. 14 mm thread; gap about 0.7–1.1 mm');
 e('rotor-claw', 'claw-pole rotor', 'Electrical/Motors and actuators/Motor parts', 'assembly', 'assemble', 'steel-low*2 winding copper shaft-steel', 'a field coil between two interlocking steel claw poles on the shaft, fed through two slip rings');
 e('alternator', 'car alternator', 'Mechanical/Vehicle parts/Charging', 'product', 'assemble', 'lamination-stack winding*3 rotor-claw diode-1n4007*6 ic-package carbon-brush*2 bearing-608*2 al-a380*2 steel-low', 'a claw-pole rotor spun by the engine inside a three-phase stator, six diodes rectifying its output, a regulator setting its field', 'about 14 V');
 
@@ -487,7 +487,7 @@ e('fuse-cap', 'fuse end cap', 'Electrical/Circuit protection/Fuse parts', 'part'
 e('fuse-element', 'fuse element', 'Electrical/Circuit protection/Fuse parts', 'part', 'draw', 'copper tin', 'the wire that melts at its rating, soldered into the caps');
 // gauges
 e('bourdon-tube', 'Bourdon tube', 'Fluid/Instruments/Gauge parts', 'part', 'draw', 'phosphor-bronze', 'a flattened tube bent in a C that straightens under pressure');
-e('gauge-movement', 'movement', 'Fluid/Instruments/Gauge parts', 'part', 'assemble', 'brass', 'the sector and pinion that turn the tube\'s small movement into the pointer\'s sweep');
+e('gauge-movement', 'movement', 'Fluid/Instruments/Gauge parts', 'part', 'machine', 'brass', 'the sector and pinion that turn the tube\'s small movement into the pointer\'s sweep');
 e('gauge-dial', 'dial and pointer', 'Fluid/Instruments/Gauge parts', 'part', 'stamp', 'steel-low', 'the printed dial and the pointer on the pinion');
 e('gauge-case', 'gauge case', 'Fluid/Instruments/Gauge parts', 'part', 'stamp', 'steel-low', 'the drawn steel case');
 e('gauge-window', 'gauge window', 'Fluid/Instruments/Gauge parts', 'part', 'mould', 'pc', 'the clear window over the dial');
@@ -527,6 +527,188 @@ e('wiper-adapter', 'wiper adapter', 'Mechanical/Vehicle parts/Wiper parts', 'par
 e('screwdriver-blade', 'screwdriver blade', 'Tools/Hand tools/Screwdriver parts', 'part', 'forge', 'steel-tool', 'a chrome-vanadium bar forged to its tip, hardened and tempered');
 e('screwdriver-handle', 'screwdriver handle', 'Tools/Hand tools/Screwdriver parts', 'part', 'mould', 'pp rubber', 'a polypropylene core moulded onto the blade, a soft grip moulded over it');
 
+// switches, relays and contactors
+e('switch-housing', 'switch housing', 'Electrical/Switches/Switch parts', 'part', 'mould', 'pbt', 'the moulded case that holds a switch\'s contacts and its works');
+e('switch-actuator', 'actuator', 'Electrical/Switches/Switch parts', 'part', 'mould', 'pom', 'the plunger, lever, rocker or button that is pressed');
+e('contact-spring', 'contact spring', 'Electrical/Switches/Switch parts', 'part', 'stamp', 'phosphor-bronze', 'a stamped spring arm that carries a moving contact');
+e('contact-silver', 'silver contact', 'Electrical/Switches/Switch parts', 'part', 'cold-head', 'silver copper', 'a silver-alloy contact rivet headed onto a copper base');
+e('switch-terminal', 'switch terminal', 'Electrical/Switches/Switch parts', 'part', 'stamp', 'brass tin', 'a tinned brass terminal through the base, a fixed contact on its inner end');
+e('return-spring', 'return spring', 'Mechanical/Springs/Small springs', 'part', 'coil', 'steel-spring', 'the small coil that returns a button or a valve');
+e('snap-dome', 'snap dome', 'Electrical/Switches/Switch parts', 'part', 'stamp', 'stainless-304', 'a domed stainless disc that snaps through to close the contacts with a click');
+e('toggle-lever', 'toggle lever', 'Electrical/Switches/Switch parts', 'part', 'machine', 'brass nickel', 'the nickel-plated lever and its threaded bushing');
+e('faceplate', 'faceplate', 'Electrical/Wiring accessories/Accessory parts', 'part', 'mould', 'pc', 'the moulded front plate of a socket or a switch');
+e('mounting-frame', 'mounting frame', 'Electrical/Wiring accessories/Accessory parts', 'part', 'stamp', 'steel-low zinc', 'the steel frame the works are fixed to and screwed to the box');
+e('socket-contact', 'socket contact', 'Electrical/Wiring accessories/Accessory parts', 'part', 'stamp', 'brass', 'a pair of brass leaves that grip a plug\'s pin');
+e('shutter', 'shutter', 'Electrical/Wiring accessories/Accessory parts', 'part', 'mould', 'pc', 'the sprung shutter over the live and neutral holes, opened by the earth pin');
+e('coil-bobbin', 'coil bobbin', 'Electrical/Coils/Coil parts', 'part', 'mould', 'pbt', 'the moulded former a coil is wound on, its pins in its flanges');
+e('magnetic-core', 'magnetic core', 'Electrical/Coils/Coil parts', 'part', 'stamp', 'steel-electrical', 'soft iron or laminated steel inside a coil, that its field magnetises');
+e('armature', 'armature', 'Electrical/Coils/Coil parts', 'part', 'stamp', 'steel-electrical', 'the iron plate a coil pulls in, that moves the contacts');
+e('relay-cover', 'relay cover', 'Electrical/Switches/Relay parts', 'part', 'mould', 'pbt', 'the moulded cover sealed onto the base');
+e('pcb-pin', 'board pin', 'Electrical/Switches/Relay parts', 'part', 'stamp', 'brass tin', 'a tinned pin moulded through a base, soldered into a board');
+e('contact-bridge', 'contact bridge', 'Electrical/Switches/Contactor parts', 'part', 'stamp', 'copper silver', 'a copper bar with a silver contact at each end that closes across a pole\'s two fixed contacts');
+e('toroid-core', 'toroid core', 'Electrical/Coils/Coil parts', 'part', 'sinter', 'ferrite-soft', 'a ring core the live and neutral pass through: any difference between them magnetises it');
+e('latch-mechanism', 'latch mechanism', 'Electrical/Circuit protection/Breaker parts', 'part', 'stamp', 'steel-low', 'the toggle, latch and springs that trip the contacts open and hold them');
+e('reed-switch', 'reed switch', 'Electrical/Switches/Switch parts', 'part', 'blow', 'glass nickel', 'two nickel-iron reeds sealed in a glass tube, closed by a magnet');
+// connectors
+e('connector-shell', 'connector shell', 'Electrical/Connectors/Housing parts', 'part', 'stamp', 'steel-low tin', 'the drawn steel D shell, tin-plated, that shields and keys the connector');
+e('insulator-insert', 'insulator insert', 'Electrical/Connectors/Housing parts', 'part', 'mould', 'pbt', 'the moulded insulator the contacts sit in');
+e('contact-pin', 'contact pin', 'Electrical/Connectors/Contact parts', 'part', 'machine', 'brass gold', 'a turned or stamped pin or socket contact, gold-plated where it mates');
+e('contact-socket', 'socket contact', 'Electrical/Connectors/Contact parts', 'part', 'stamp', 'phosphor-bronze gold tin', 'a two-leaf contact that grips a pin, gold where it grips, tin where it is soldered');
+e('header-pin', 'header pin', 'Electrical/Connectors/Contact parts', 'part', 'stamp', 'brass gold', 'a square brass pin, 0.64 mm, gold-plated');
+e('header-insulator', 'header insulator', 'Electrical/Connectors/Housing parts', 'part', 'mould', 'nylon', 'the moulded strip that holds the pins at their pitch');
+e('plug-pin', 'plug pin', 'Electrical/Connectors/Contact parts', 'part', 'machine', 'brass gold', 'a turned brass pin or split socket for power, gold-plated');
+e('jack-tip', 'jack tip', 'Electrical/Connectors/Contact parts', 'part', 'machine', 'brass nickel', 'the turned tip of a jack plug');
+e('jack-sleeve', 'jack sleeve', 'Electrical/Connectors/Contact parts', 'part', 'machine', 'brass nickel', 'the turned sleeve (and any ring) of a jack plug, or a DC plug\'s barrel');
+e('jack-insulator', 'jack insulator', 'Electrical/Connectors/Housing parts', 'part', 'mould', 'pbt', 'the insulating washers between a jack\'s tip, rings and sleeve');
+e('plug-handle', 'plug handle', 'Electrical/Connectors/Housing parts', 'part', 'mould', 'nylon', 'the moulded grip screwed or moulded over a plug');
+e('usb-plug', 'USB plug', 'Electrical/Connectors/Plugs', 'assembly', 'assemble', 'connector-shell insulator-insert contact-pin*4 plug-handle', 'four (or, for C, twenty-four) contacts in an insert, in a steel shell, moulded over at the cable', 'USB-IF');
+e('jack-plug', 'jack plug', 'Electrical/Connectors/Plugs', 'assembly', 'assemble', 'jack-tip jack-sleeve jack-insulator*2 plug-handle', 'a tip and a sleeve insulated from each other, in a handle', 'IEC 60603-11');
+e('mains-plug', 'mains plug', 'Electrical/Connectors/Plugs', 'assembly', 'assemble', 'plug-pin*3 plug-handle terminal-screw*3 fuse-tube', 'three pins and their terminals in a moulded body (BS 1363 with its fuse)', 'BS 1363 or IEC 60884');
+e('cable-shield', 'cable shield', 'Electrical/Wiring and connectors/Cable parts', 'part', 'laminate', 'copper', 'a braid of fine copper wires (or a foil) round a cable\'s cores');
+e('xlr-shell', 'XLR shell', 'Electrical/Connectors/Housing parts', 'part', 'cast', 'zamak nickel', 'a die-cast shell with its latch');
+e('busbar', 'busbar', 'Electrical/Connectors/Terminal parts', 'part', 'stamp', 'copper tin', 'the copper bar a terminal\'s clamps carry current along');
+// batteries
+e('battery-can', 'battery can', 'Electrical/Power/Cell parts', 'part', 'stamp', 'steel-low nickel', 'a deep-drawn nickel-plated steel can, the positive terminal');
+e('cathode-ring', 'cathode', 'Electrical/Power/Cell parts', 'part', 'sinter', 'mno2 graphite', 'manganese dioxide and graphite pressed into rings against the can');
+e('anode-gel', 'anode gel', 'Electrical/Power/Cell parts', 'part', 'stock', 'zinc koh-electrolyte', 'zinc powder in a potassium hydroxide gel, in the middle');
+e('cell-separator', 'separator', 'Electrical/Power/Cell parts', 'part', 'laminate', 'pp', 'a non-woven sheet between anode and cathode that ions cross and electrons cannot');
+e('current-collector', 'current collector', 'Electrical/Power/Cell parts', 'part', 'cold-head', 'brass', 'the brass nail down the anode, welded to the negative cap');
+e('cell-seal', 'cell seal', 'Electrical/Power/Cell parts', 'part', 'mould', 'nylon', 'the moulded seal and vent between the can and the negative cap');
+e('negative-cap', 'negative cap', 'Electrical/Power/Cell parts', 'part', 'stamp', 'steel-low nickel', 'the plated steel end cap, the negative terminal');
+e('lithium-anode', 'lithium anode', 'Electrical/Power/Cell parts', 'part', 'roll', 'lithium', 'lithium metal foil pressed into the cap (a coin cell) or wound with the cathode');
+e('nimh-positive', 'nickel hydroxide electrode', 'Electrical/Power/Cell parts', 'part', 'coat', 'nickel', 'nickel hydroxide pasted in a nickel foam');
+e('nimh-negative', 'metal hydride electrode', 'Electrical/Power/Cell parts', 'part', 'coat', 'lani5 nickel', 'a hydrogen-storing alloy pasted on a perforated nickel strip');
+e('silver-oxide-pellet', 'silver oxide cathode', 'Electrical/Power/Cell parts', 'part', 'sinter', 'ag2o graphite', 'a pressed pellet of silver oxide and graphite');
+e('battery-label', 'label', 'Electrical/Power/Cell parts', 'part', 'laminate', 'pet', 'the printed shrink sleeve round the can');
+e('plate-positive', 'positive plate', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead pbo2', 'a cast lead-alloy grid pasted with lead dioxide');
+e('plate-negative', 'negative plate', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead', 'a cast lead-alloy grid pasted with sponge lead');
+e('plate-separator', 'plate separator', 'Electrical/Power/Lead-acid parts', 'part', 'extrude', 'pe', 'a ribbed polyethylene envelope round a plate (or, in AGM and gel cells, a glass mat)');
+e('battery-case', 'battery case', 'Electrical/Power/Lead-acid parts', 'part', 'mould', 'pp', 'the moulded box of cells, a wall between each');
+e('battery-lid', 'battery lid', 'Electrical/Power/Lead-acid parts', 'part', 'mould', 'pp', 'the lid heat-sealed onto the case, its vents in it');
+e('battery-post', 'terminal post', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead', 'a cast lead post through the lid, joined to its cells\' straps');
+e('cathode-sheet', 'cathode sheet', 'Electrical/Power/Cell parts', 'part', 'coat', 'nmc al-foil', 'lithium nickel manganese cobalt oxide coated both sides of aluminium foil');
+e('anode-sheet', 'anode sheet', 'Electrical/Power/Cell parts', 'part', 'coat', 'graphite copper-foil', 'graphite coated both sides of copper foil');
+e('separator-film', 'separator film', 'Electrical/Power/Cell parts', 'part', 'extrude', 'pe', 'a porous polyethylene film between the electrodes');
+e('pouch-film', 'pouch film', 'Electrical/Power/Cell parts', 'part', 'laminate', 'al-laminate', 'the aluminium-laminate pouch, heat-sealed round the stack');
+e('cell-tab', 'cell tab', 'Electrical/Power/Cell parts', 'part', 'stamp', 'al-foil nickel', 'an aluminium (positive) or nickel-plated copper (negative) tab welded to the electrodes');
+e('cap-plate', 'cap plate', 'Electrical/Power/Cell parts', 'part', 'stamp', 'steel-low nickel', 'the positive cap of a cylindrical cell');
+e('vent-disc', 'vent disc', 'Electrical/Power/Cell parts', 'part', 'stamp', 'al-foil', 'a scored aluminium disc that opens if the cell\'s pressure rises');
+e('cap-gasket', 'cap gasket', 'Electrical/Power/Cell parts', 'part', 'mould', 'nbr', 'the ring that seals the cap into the can\'s crimp');
+// valves and pumps
+e('valve-body', 'valve body', 'Fluid/Valves/Valve parts', 'part', 'cast', 'brass', 'the cast and machined body, its ports threaded');
+e('valve-disc', 'valve disc', 'Fluid/Valves/Valve parts', 'part', 'machine', 'brass', 'the disc or flap that closes on the seat');
+e('valve-seat-seal', 'seat seal', 'Fluid/Valves/Valve parts', 'part', 'mould', 'nbr', 'the rubber face the disc closes on');
+e('valve-cap', 'valve cap', 'Fluid/Valves/Valve parts', 'part', 'machine', 'brass', 'the screwed cap that closes the body');
+e('spool', 'valve spool', 'Fluid/Valves/Valve parts', 'part', 'grind', 'steel-alloy', 'the ground spool whose lands open and close the ports as it slides');
+e('solenoid-coil', 'solenoid', 'Fluid/Valves/Valve parts', 'part', 'wind', 'magnet-wire pbt', 'a coil wound and moulded over, that pushes the spool');
+e('filter-bowl', 'filter bowl', 'Fluid/Pneumatics/Air prep parts', 'part', 'mould', 'pc', 'the clear bowl the water and dirt collect in');
+e('filter-element', 'filter element', 'Fluid/Pneumatics/Air prep parts', 'part', 'sinter', 'bronze', 'sintered bronze, its pores the filter\'s rating');
+e('regulator-diaphragm', 'diaphragm', 'Fluid/Pneumatics/Air prep parts', 'part', 'mould', 'nbr', 'the rubber diaphragm a regulator\'s spring balances the pressure against');
+e('pump-housing', 'pump housing', 'Fluid/Pumps/Pump parts', 'part', 'cast', 'al-a380', 'the die-cast body, bored for its gears');
+e('pump-gear', 'pump gear', 'Fluid/Pumps/Pump parts', 'part', 'grind', 'steel-alloy', 'a ground spur gear and its shaft, one of a meshing pair');
+e('bushing', 'bushing', 'Mechanical/Bearings/Plain bearings', 'part', 'sinter', 'bronze', 'a plain bearing sleeve');
+e('shaft-seal', 'shaft seal', 'Mechanical/Seals/Shaft seals', 'part', 'mould', 'nbr steel-low', 'a lipped rubber seal on a steel case, round a turning shaft');
+e('pump-head', 'pump head', 'Fluid/Pumps/Pump parts', 'part', 'mould', 'pp', 'the moulded head with its inlet and outlet');
+e('diaphragm', 'diaphragm', 'Fluid/Pumps/Pump parts', 'part', 'mould', 'nbr', 'the rubber diaphragm a cam flexes to pump');
+e('valve-flap', 'valve flap', 'Fluid/Pumps/Pump parts', 'part', 'mould', 'nbr', 'a rubber flap that lets the flow one way');
+// bearings with rollers
+e('tapered-roller', 'tapered roller', 'Mechanical/Bearings/Bearing parts', 'part', 'grind', 'steel-chrome', 'a ground tapered roller');
+e('spherical-roller', 'spherical roller', 'Mechanical/Bearings/Bearing parts', 'part', 'grind', 'steel-chrome', 'a ground barrel-shaped roller');
+e('needle-roller', 'needle roller', 'Mechanical/Bearings/Bearing parts', 'part', 'grind', 'steel-chrome', 'a ground needle roller');
+e('cam-stud', 'cam follower stud', 'Mechanical/Bearings/Bearing parts', 'part', 'grind', 'steel-alloy', 'the hardened stud the outer ring turns on, threaded for its nut');
+// lamps, plugs, cylinders
+e('bulb-envelope', 'bulb envelope', 'Electrical/Lighting/Lamp parts', 'part', 'blow', 'quartz', 'the quartz bulb, filled with halogen gas');
+e('filament', 'filament', 'Electrical/Lighting/Lamp parts', 'part', 'coil', 'tungsten', 'the coiled tungsten wire that glows');
+e('bulb-base', 'bulb base', 'Electrical/Lighting/Lamp parts', 'part', 'stamp', 'brass pbt', 'the metal base and its moulded holder, the filament\'s leads welded to its contacts');
+e('spark-plug-shell', 'spark plug shell', 'Mechanical/Vehicle parts/Spark plug parts', 'part', 'cold-head', 'steel-low nickel', 'the threaded, hexed steel shell, nickel-plated, its ground electrode welded on');
+e('spark-plug-insulator', 'insulator', 'Mechanical/Vehicle parts/Spark plug parts', 'part', 'sinter', 'alumina', 'the fired alumina insulator round the centre electrode');
+e('centre-electrode', 'centre electrode', 'Mechanical/Vehicle parts/Spark plug parts', 'part', 'draw', 'nickel-alloy copper', 'a nickel-alloy electrode with a copper core to carry the heat away');
+e('ground-electrode', 'ground electrode', 'Mechanical/Vehicle parts/Spark plug parts', 'part', 'draw', 'nickel-alloy', 'the bent electrode welded to the shell that the spark jumps to');
+e('terminal-stud', 'terminal stud', 'Mechanical/Vehicle parts/Spark plug parts', 'part', 'cold-head', 'steel-low', 'the stud the ignition lead clips onto, sealed into the insulator with glass');
+e('sealing-washer', 'sealing washer', 'Mechanical/Seals/Gaskets', 'part', 'stamp', 'steel-low', 'a folded steel washer that crushes to seal');
+e('gas-cylinder', 'gas cylinder', 'Hardware/Gas/Cylinder parts', 'part', 'forge', 'steel-alloy', 'a seamless alloy-steel cylinder spun from a billet, tested to its pressure');
+e('cylinder-valve', 'cylinder valve', 'Hardware/Gas/Cylinder parts', 'part', 'forge', 'brass', 'the forged brass valve screwed into its neck');
+e('gas-spring-tube', 'gas spring tube', 'Mechanical/Springs/Gas spring parts', 'part', 'draw', 'steel-low', 'the sealed tube of nitrogen and a little oil');
+e('gas-spring-rod', 'gas spring rod', 'Mechanical/Springs/Gas spring parts', 'part', 'grind', 'steel-alloy chromium', 'a ground, hard-chromed rod');
+e('gas-spring-piston', 'gas spring piston', 'Mechanical/Springs/Gas spring parts', 'part', 'machine', 'steel-low', 'the piston on the rod, its orifice damping the stroke');
+// tools and goods
+e('tape-blade', 'tape blade', 'Tools/Measuring/Tape parts', 'part', 'roll', 'steel-spring', 'a curved spring-steel strip, painted and printed with its scale');
+e('tape-spring', 'recoil spring', 'Tools/Measuring/Tape parts', 'part', 'roll', 'steel-spring', 'the flat coiled spring that winds the blade back');
+e('tape-case', 'tape case', 'Tools/Measuring/Tape parts', 'part', 'mould', 'abs', 'the moulded case, its grip overmoulded');
+e('tape-hook', 'tape hook', 'Tools/Measuring/Tape parts', 'part', 'stamp', 'steel-low', 'the riveted end hook that slides by its own thickness');
+e('tape-lock', 'tape lock', 'Tools/Measuring/Tape parts', 'part', 'mould', 'nylon', 'the slide that locks the blade');
+e('belt-clip', 'belt clip', 'Tools/Measuring/Tape parts', 'part', 'stamp', 'steel-spring', 'the spring-steel clip on the back');
+e('clamp-bar', 'clamp bar', 'Tools/Clamps/Clamp parts', 'part', 'roll', 'steel-low', 'the steel bar the moving jaw slides on');
+e('clamp-jaw', 'clamp jaw', 'Tools/Clamps/Clamp parts', 'part', 'mould', 'nylon pu', 'a nylon jaw with a soft pad');
+e('clamp-trigger', 'clamp trigger', 'Tools/Clamps/Clamp parts', 'part', 'mould', 'nylon', 'the trigger and handle whose grip plates step the jaw along the bar');
+e('indicator-case', 'indicator case', 'Tools/Measuring/Indicator parts', 'part', 'machine', 'brass chromium', 'the chromed brass case and its stem');
+e('plunger', 'plunger', 'Tools/Measuring/Indicator parts', 'part', 'grind', 'steel-tool', 'the hardened, ground spindle with its rack and contact point');
+e('gear-train', 'gear train', 'Tools/Measuring/Indicator parts', 'part', 'machine', 'brass', 'the pinions and wheels that turn the rack\'s travel into the pointer\'s turns, a hairspring taking up their play');
+e('indicator-crystal', 'indicator crystal', 'Tools/Measuring/Indicator parts', 'part', 'mould', 'pc', 'the clear cover over the dial');
+e('breadboard-body', 'breadboard body', 'Electrical/Boards and controllers/Breadboard parts', 'part', 'mould', 'abs', 'the moulded body, its grid of holes over the clip strips');
+e('clip-strip', 'clip strip', 'Electrical/Boards and controllers/Breadboard parts', 'part', 'stamp', 'phosphor-bronze', 'a strip of five spring clips joined, under a row of holes');
+e('adhesive-backing', 'adhesive backing', 'Materials/Adhesives/Tapes', 'part', 'laminate', 'pet', 'a foam-and-film backing with its adhesive and release paper');
+e('pallet-board', 'pallet board', 'Materials/Packaging/Pallet parts', 'part', 'machine', 'wood', 'a sawn board of the deck, the bottom or a stringer');
+e('pallet-block', 'pallet block', 'Materials/Packaging/Pallet parts', 'part', 'machine', 'wood', 'a sawn block (or one of pressed chips) between the decks');
+e('pallet-nail', 'pallet nail', 'Materials/Packaging/Pallet parts', 'part', 'cold-head', 'steel-low', 'a ring-shanked nail clenched through the boards');
+e('filter-media', 'filter media', 'Fluid/Filters/Filter parts', 'part', 'laminate', 'pet', 'a pleated non-woven web that catches the dust');
+e('filter-frame', 'filter frame', 'Fluid/Filters/Filter parts', 'part', 'mould', 'paper', 'the frame round the pleats (board, plastic or steel)');
+e('support-mesh', 'support mesh', 'Fluid/Filters/Filter parts', 'part', 'draw', 'steel-low', 'the expanded mesh that holds the pleats');
+e('antenna-element', 'antenna element', 'Electrical/RF/Antenna parts', 'part', 'draw', 'brass', 'the radiating wire or rod, a quarter of a wavelength (or two, for a dipole)');
+e('antenna-base', 'antenna base', 'Electrical/RF/Antenna parts', 'part', 'machine', 'brass nickel', 'the plated base and its connector');
+e('antenna-sheath', 'antenna sheath', 'Electrical/RF/Antenna parts', 'part', 'extrude', 'pvc', 'the moulded or sleeved cover');
+e('float', 'float', 'Electrical/Sensors/Float parts', 'part', 'blow', 'pp', 'a sealed hollow float with a ring magnet in it');
+e('float-stem', 'float stem', 'Electrical/Sensors/Float parts', 'part', 'mould', 'pp', 'the stem the float slides on, its reed switch inside');
+e('ring-magnet', 'ring magnet', 'Electrical/Magnets/Ferrite', 'part', 'sinter', 'ferrite-hard', 'a sintered ferrite ring');
+e('buzzer-diaphragm', 'buzzer diaphragm', 'Electrical/Audio/Buzzer parts', 'part', 'stamp', 'steel-low', 'a thin steel disc the coil pulls and releases');
+e('buzzer-case', 'buzzer case', 'Electrical/Audio/Buzzer parts', 'part', 'mould', 'abs', 'the moulded case, its sound hole in its top');
+e('mov-disc', 'varistor disc', 'Electrical/Circuit protection/Varistor parts', 'part', 'sinter', 'zinc-oxide silver-paste', 'a sintered zinc-oxide disc, silver electrodes fired on its faces');
+e('dip-coat', 'dipped coating', 'Electrical/Passive components/Coatings', 'part', 'coat', 'epoxy', 'an epoxy coat a part is dipped in and cured');
+e('chuck-body', 'chuck body', 'Tools/Power tool parts/Chuck parts', 'part', 'machine', 'steel-low', 'the body, bored at three angles for the jaws, threaded for the spindle');
+e('chuck-jaw', 'chuck jaw', 'Tools/Power tool parts/Chuck parts', 'part', 'grind', 'steel-alloy', 'a hardened jaw, threaded on its back');
+e('chuck-nut', 'chuck nut', 'Tools/Power tool parts/Chuck parts', 'part', 'machine', 'steel-alloy', 'the split nut that drives the jaws in and out');
+e('chuck-sleeve', 'chuck sleeve', 'Tools/Power tool parts/Chuck parts', 'part', 'mould', 'pp', 'the gripped sleeve turned by hand');
+e('plier-jaw', 'plier half', 'Tools/Hand tools/Plier parts', 'part', 'forge', 'steel-alloy', 'one forged half: its jaw, its cutting edge and its handle');
+e('plier-rivet', 'pivot rivet', 'Tools/Hand tools/Plier parts', 'part', 'cold-head', 'steel-low', 'the rivet the halves turn on');
+e('handle-grip', 'handle grip', 'Tools/Hand tools/Grip parts', 'part', 'mould', 'pvc', 'a dipped or moulded grip over a handle');
+e('worm', 'worm', 'Mechanical/Power transmission/Worm parts', 'part', 'grind', 'steel-alloy', 'the hardened, ground screw that drives the wheel');
+e('worm-wheel', 'worm wheel', 'Mechanical/Power transmission/Worm parts', 'part', 'machine', 'bronze', 'the bronze wheel hobbed to the worm');
+e('lead-screw', 'lead screw', 'Mechanical/Linear motion/Lead screw parts', 'part', 'roll', 'stainless-304', 'a stainless rod rolled with its trapezoidal thread');
+e('lead-nut', 'lead screw nut', 'Mechanical/Linear motion/Lead screw parts', 'part', 'machine', 'brass', 'the flanged brass nut that rides on it');
+e('heater-sheath', 'heater sheath', 'Electrical/Heating/Heater parts', 'part', 'draw', 'stainless-304', 'the tube round the coil, packed with magnesia and swaged tight');
+e('resistance-wire', 'resistance wire', 'Electrical/Heating/Heater parts', 'part', 'coil', 'nichrome', 'a coil of nickel-chromium wire');
+e('terminal-pin', 'terminal pin', 'Electrical/Heating/Heater parts', 'part', 'cold-head', 'steel-low nickel', 'the pin each end of the coil is welded to, out through the seal');
+e('mica-sheet', 'mica sheet', 'Electrical/Heating/Heater parts', 'part', 'laminate', 'mica', 'a sheet of bonded mica the wire is wound on and laid between');
+e('saddle-shell', 'saddle shell', 'Mechanical/Vehicle parts/Saddle parts', 'part', 'mould', 'nylon', 'the moulded nylon base');
+e('saddle-padding', 'saddle padding', 'Mechanical/Vehicle parts/Saddle parts', 'part', 'mould', 'pu', 'moulded foam over the shell');
+e('saddle-cover', 'saddle cover', 'Mechanical/Vehicle parts/Saddle parts', 'part', 'laminate', 'pu', 'the stretched cover over the foam');
+e('saddle-rails', 'saddle rails', 'Mechanical/Vehicle parts/Saddle parts', 'part', 'bend', 'steel-low', 'the bent rails the seat post clamps');
+e('rc-tyre', 'RC tyre', 'Mechanical/Vehicle parts/Wheel parts', 'part', 'mould', 'rubber', 'a moulded rubber tyre, glued on its rim');
+e('rc-rim', 'RC rim', 'Mechanical/Vehicle parts/Wheel parts', 'part', 'mould', 'nylon', 'a moulded nylon rim with its hex hub');
+e('tyre-foam', 'tyre insert', 'Mechanical/Vehicle parts/Wheel parts', 'part', 'mould', 'pu', 'the foam ring inside the tyre that holds its shape');
+e('hose-wall', 'hose wall', 'Fluid/Hoses/Hose parts', 'part', 'extrude', 'pvc', 'the flexible PVC wall');
+e('hose-helix', 'hose helix', 'Fluid/Hoses/Hose parts', 'part', 'coil', 'steel-spring', 'the steel wire helix in the wall that keeps it round');
+e('headband-spring', 'headband spring', 'Electrical/Audio/Headphone parts', 'part', 'roll', 'steel-spring', 'the spring-steel band that presses the cups to the head');
+e('headband-cushion', 'headband cushion', 'Electrical/Audio/Headphone parts', 'part', 'mould', 'pu', 'the foam pad under the band');
+e('headband-shell', 'headband shell', 'Electrical/Audio/Headphone parts', 'part', 'mould', 'pp', 'the moulded cover over the spring');
+e('mic-diaphragm', 'mic diaphragm', 'Electrical/Audio/Microphone parts', 'part', 'mould', 'pet', 'a thin film dome, its voice coil glued under it');
+e('mic-magnet', 'mic magnet', 'Electrical/Audio/Microphone parts', 'part', 'sinter', 'ndfeb nickel', 'a small neodymium magnet in the pole piece');
+e('mic-housing', 'mic housing', 'Electrical/Audio/Microphone parts', 'part', 'stamp', 'steel-low', 'the steel cup and pole that carry the magnet\'s field to the coil\'s gap');
+e('electret-film', 'electret diaphragm', 'Electrical/Audio/Microphone parts', 'part', 'laminate', 'pet', 'a thin film charged for good and metallised on one face, over the backplate');
+e('mic-backplate', 'backplate', 'Electrical/Audio/Microphone parts', 'part', 'stamp', 'brass', 'the perforated plate the diaphragm is a capacitor with');
+e('mic-can', 'capsule can', 'Electrical/Audio/Microphone parts', 'part', 'stamp', 'al-foil', 'the drawn can, its sound hole behind a cloth');
+e('probe-tip', 'probe tip', 'Tools/Measuring/Probe parts', 'part', 'machine', 'brass nickel', 'the pointed tip');
+e('probe-handle', 'probe handle', 'Tools/Measuring/Probe parts', 'part', 'mould', 'pvc', 'the insulated handle with its finger guard');
+e('banana-plug', 'banana plug', 'Electrical/Connectors/Plugs', 'part', 'machine', 'brass nickel', 'the sprung 4 mm plug at the lead\'s end');
+e('test-lead', 'test lead', 'Electrical/Wiring and connectors/Cable parts', 'part', 'extrude', 'copper silicone', 'fine stranded copper in silicone insulation');
+e('cover-glass', 'cover glass', 'Electrical/Optoelectronics/Sensor parts', 'part', 'draw', 'glass', 'the optical glass lid over an image sensor\'s die, its infrared filter coated on it');
+e('chip-resistor', 'chip resistor', 'Electrical/Passive components/Resistors', 'assembly', 'assemble', 'chip-substrate resistive-film overglaze chip-termination*2', 'a thick-film resistor on a ceramic chip');
+e('mlcc-body', 'ceramic capacitor body', 'Electrical/Passive components/Chip parts', 'part', 'sinter', 'batio3 nickel', 'barium titanate layers with nickel electrodes between, laminated and fired as one');
+e('chip-capacitor', 'chip capacitor', 'Electrical/Passive components/Capacitors', 'assembly', 'assemble', 'mlcc-body chip-termination*2', 'a fired multilayer ceramic body, terminated at its ends');
+e('platinum-film', 'platinum film', 'Electrical/Sensors/RTD parts', 'part', 'coat', 'platinum', 'a meandering platinum film sputtered on the chip and laser-trimmed to 100 Ω at 0 °C');
+e('code-disc', 'code disc', 'Electrical/Sensors/Encoder parts', 'part', 'stamp', 'phosphor-bronze', 'the patterned contact disc the wipers read as the shaft turns');
+e('detent-spring', 'detent spring', 'Electrical/Sensors/Encoder parts', 'part', 'stamp', 'steel-spring', 'the spring that gives each step its click');
+
 for (const [id, fam] of [['screw-m3', 'screw'], ['screw-set', 'screw'], ['nut-m3', 'nut'], ['washer-m3', 'washer'], ['bearing-608', 'bearing'], ['bearing-625', 'bearing'], ['spur-gear', 'gear'], ['spring-compression', 'spring'], ['wire-hookup', 'wire'], ['extrusion-2020', 'extrusion'], ['resistor-film', 'resistor'], ['nema17', 'stepper'], ['cell-18650', 'cell'], ['gt2-pulley', 'pulley'], ['lead-screw-t8', 'leadscrew'], ['led-5mm', 'led']] as const) { const it = items.get(id); if (it) it.family = fam; }
 
 // ==== more kinds of things: vehicles, home appliances, sound, light and heat, fluid, robots ===========================
@@ -556,7 +738,7 @@ e('chain-bike', 'bicycle chain', 'Mechanical/Belts and chains/Roller chain', 'pr
 e('freewheel', 'freewheel', 'Mechanical/Vehicle parts/Drivetrain', 'assembly', 'assemble', 'steel-low*7 bearing-ball*40 steel-spring steel-alloy', 'seven sprockets on a body that turns one way only: pawls on springs catch a ratchet', '14–28 teeth');
 e('pedal-body', 'pedal body', 'Mechanical/Vehicle parts/Drivetrain', 'part', 'cast', 'al-a380', 'a cast platform with pins to grip the shoe', '', { size: [100, 90, 20] });
 e('pedal', 'pedal', 'Mechanical/Vehicles/Bicycles', 'assembly', 'assemble', `pedal-body ${F('rod 9mm 90 steel')} bushing-bronze*2`, 'a platform turning on a steel spindle in bushings');
-e('saddle', 'saddle', 'Mechanical/Vehicles/Bicycles', 'product', 'assemble', 'pu nylon steel-low', 'foam on a moulded nylon shell, on steel rails');
+e('saddle', 'saddle', 'Mechanical/Vehicles/Bicycles', 'product', 'assemble', 'saddle-shell saddle-padding saddle-cover saddle-rails', 'foam on a moulded nylon shell, on steel rails');
 e('handlebar', 'handlebar', 'Mechanical/Vehicles/Bicycles', 'part', 'bend', F('tube round 22x2 600 aluminium'), 'an aluminium tube bent to shape', '600 mm wide');
 e('brake-arm', 'brake arm', 'Mechanical/Vehicle parts/Brakes', 'part', 'forge', 'al-6061', 'a forged arm that swings a pad onto the rim', '', { alt: 'cast' });
 e('brake-pad', 'brake pad', 'Mechanical/Vehicle parts/Brakes', 'part', 'mould', 'rubber', 'a moulded rubber block that grips the rim');
@@ -581,14 +763,14 @@ e('wheel-skate', 'skateboard wheel', 'Mechanical/Vehicles/Skateboards', 'part', 
 e('skateboard', 'skateboard', 'Mechanical/Vehicles/Skateboards', 'product', 'assemble', `deck-skate griptape truck*2 wheel-skate*4 ${F('bearing 608')}*8 ${F('screw M5x30')}*8`, 'a maple deck on two trucks; two 608 bearings in each wheel');
 // a radio-controlled car
 e('chassis-rc', 'RC car chassis', 'Electrical/Vehicles/RC cars', 'part', 'mould', 'pp', 'a moulded tub that carries everything', '', { alt: 'print', size: [300, 150, 40] });
-e('wheel-rc', 'RC car wheel', 'Electrical/Vehicles/RC cars', 'assembly', 'assemble', 'rubber nylon', 'a rubber tyre glued on a nylon rim', '', { size: [80, 80, 35] });
+e('wheel-rc', 'RC car wheel', 'Electrical/Vehicles/RC cars', 'assembly', 'assemble', 'rc-tyre rc-rim tyre-foam', 'a rubber tyre glued on a nylon rim', '', { size: [80, 80, 35] });
 e('shock-rc', 'RC shock absorber', 'Electrical/Vehicles/RC cars', 'assembly', 'assemble', 'spring-compression al-6061 oil nbr', 'a piston in an oil-filled body inside a spring');
 e('rc-car', 'radio-controlled car', 'Electrical/Vehicles/RC cars', 'product', 'assemble', `chassis-rc dcmotor-550 esc mg996r wheel-rc*4 ${F('gear m1 z60 b6 pom')} ${F('gear m1 z15 b6 steel')} shock-rc*4 pack-2s rc-receiver ${F('bearing 625')}*8`, 'a brushed motor drives the wheels through a spur gear; a servo steers the front; a receiver hands both the sticks of the transmitter');
 // home appliances
-e('mica-heater', 'mica heating element', 'Electrical/Heating/Heaters', 'assembly', 'wind', 'nichrome mica', 'nichrome ribbon wound back and forth on a mica card', '', { size: [140, 100, 2] });
+e('mica-heater', 'mica heating element', 'Electrical/Heating/Heaters', 'assembly', 'wind', 'resistance-wire mica-sheet*2', 'nichrome ribbon wound back and forth on a mica card', '', { size: [140, 100, 2] });
 e('toaster-case', 'toaster case', 'Electrical/Home appliances/Kitchen', 'part', 'stamp', 'steel-low', 'steel sheet stamped and folded, painted');
 e('toast-carriage', 'toast carriage', 'Electrical/Home appliances/Kitchen', 'part', 'stamp', 'steel-low', 'the wire racks that lower the bread and push it back up');
-e('power-cord', 'mains cord', 'Electrical/Connectors/Cables', 'assembly', 'crimp', 'copper pvc brass', 'three copper conductors in PVC, the plug moulded on its end');
+e('power-cord', 'mains cord', 'Electrical/Connectors/Cables', 'assembly', 'crimp', 'insulated-conductor*3 cable-jacket mains-plug', 'three copper conductors in PVC, the plug moulded on its end');
 e('toaster', 'toaster', 'Electrical/Home appliances/Kitchen', 'product', 'assemble', 'mica-heater*3 toaster-case toast-carriage thermostat-bimetal solenoid spring-extension power-cord', 'a lever lowers the bread and switches the elements on; an electromagnet holds it down until the bimetal timer lets it spring up', 'about 900 W (typical)');
 e('field-coil', 'field winding', 'Electrical/Motors and actuators/Motor parts', 'assembly', 'wind', 'lamination-stack winding*2', 'two coils on a laminated stator: the field of a universal motor');
 e('motor-universal', 'universal motor', 'Electrical/Motors and actuators/Brushed motors', 'assembly', 'assemble', `field-coil armature carbon-brush*2 brush-spring*2 ${F('bearing 608')}*2`, 'a brushed motor whose field is wound and in series with its armature, so it runs on AC: fast and strong for its size', 'e.g. 500 W, 20 000 rpm unloaded (typical)');
@@ -599,25 +781,25 @@ e('drive-coupling', 'drive coupling', 'Mechanical/Shafts and hubs/Couplings', 'p
 e('base-blender', 'blender base', 'Electrical/Home appliances/Kitchen', 'part', 'mould', 'abs', 'the moulded housing the motor stands in', '', { alt: 'print', size: [180, 180, 120] });
 e('blender', 'blender', 'Electrical/Home appliances/Kitchen', 'product', 'assemble', 'motor-universal blade-assembly jar-blender drive-coupling base-blender pushbutton*3 power-cord', 'a universal motor under the jar spins the blades through a coupling; buttons choose its speed');
 e('fan-vacuum', 'vacuum impeller', 'Electrical/Home appliances/Cleaning', 'part', 'stamp', 'al-6061', 'aluminium blades stamped and riveted between two discs: it spins at 30 000 rpm and more', '', { alt: 'cast' });
-e('filter-hepa', 'HEPA filter', 'Electrical/Home appliances/Cleaning', 'part', 'assemble', 'fibreglass pp', 'pleated glass-fibre paper in a moulded frame: it holds 99.97 % of particles of 0.3 µm (the HEPA standard)');
+e('filter-hepa', 'HEPA filter', 'Electrical/Home appliances/Cleaning', 'part', 'assemble', 'filter-media filter-frame', 'pleated glass-fibre paper in a moulded frame: it holds 99.97 % of particles of 0.3 µm (the HEPA standard)');
 e('dust-bin', 'dust bin', 'Electrical/Home appliances/Cleaning', 'part', 'mould', 'pp', 'a clear moulded bin the air whirls round in', '', { alt: 'print' });
-e('hose', 'vacuum hose', 'Electrical/Home appliances/Cleaning', 'assembly', 'extrude', 'pvc steel-spring', 'PVC extruded round a spring-steel coil');
+e('hose', 'vacuum hose', 'Electrical/Home appliances/Cleaning', 'assembly', 'extrude', 'hose-wall hose-helix', 'PVC extruded round a spring-steel coil');
 e('brush-roll', 'brush roll', 'Electrical/Home appliances/Cleaning', 'assembly', 'assemble', 'nylon pp gt2-belt', 'nylon bristles set in a spinning roll, driven by a belt');
 e('vacuum-cleaner', 'vacuum cleaner', 'Electrical/Home appliances/Cleaning', 'product', 'assemble', 'motor-universal fan-vacuum filter-hepa dust-bin hose brush-roll caster*2 pushbutton power-cord', 'a universal motor spins an impeller that pulls air through the hose, the bin and the filter; the brush roll lifts the dirt');
-e('heater-coil', 'heating coil', 'Electrical/Heating/Heaters', 'assembly', 'wind', 'nichrome mica', 'nichrome wire coiled round a mica cross');
+e('heater-coil', 'heating coil', 'Electrical/Heating/Heaters', 'assembly', 'wind', 'resistance-wire mica-sheet', 'nichrome wire coiled round a mica cross');
 e('dryer-housing', 'hair dryer housing', 'Electrical/Home appliances/Personal', 'part', 'mould', 'pc', 'two moulded halves with a handle and a nozzle', '', { alt: 'print' });
 e('hair-dryer', 'hair dryer', 'Electrical/Home appliances/Personal', 'product', 'assemble', 'heater-coil fan-impeller motor-130 diode-1n4007*4 thermostat-bimetal fuse-glass dryer-housing pushbutton*2 power-cord', 'a small DC motor, fed through four diodes, blows air over a nichrome coil; a bimetal cuts the heat if it runs too hot', 'about 1800 W (typical)');
 // sound
 e('driver-headphone', 'headphone driver', 'Electrical/Audio/Speakers', 'assembly', 'assemble', 'magnet-ndfeb steel-low winding pet', 'a voice coil in the gap of a small neodymium magnet moves a thin PET diaphragm', '40 mm, 32 Ω (typical)');
-e('headband', 'headband', 'Electrical/Audio/Headphones', 'assembly', 'assemble', 'steel-spring pu pp', 'a spring-steel band in a padded cover, its sliders to fit');
+e('headband', 'headband', 'Electrical/Audio/Headphones', 'assembly', 'assemble', 'headband-spring headband-cushion headband-shell', 'a spring-steel band in a padded cover, its sliders to fit');
 e('ear-cushion', 'ear cushion', 'Electrical/Audio/Headphones', 'part', 'mould', 'pu', 'memory foam in a soft cover');
 e('ear-cup', 'ear cup', 'Electrical/Audio/Headphones', 'part', 'mould', 'abs', 'the moulded shell a driver sits in', '', { alt: 'print', size: [80, 70, 30] });
-e('audio-cable', 'audio cable', 'Electrical/Connectors/Cables', 'assembly', 'crimp', 'copper pvc brass', 'three thin conductors in a jacket, a 3.5 mm plug on its end');
+e('audio-cable', 'audio cable', 'Electrical/Connectors/Cables', 'assembly', 'crimp', 'insulated-conductor*2 cable-shield cable-jacket jack-plug*2', 'three thin conductors in a jacket, a 3.5 mm plug on its end');
 e('headphones', 'headphones', 'Electrical/Audio/Headphones', 'product', 'assemble', 'driver-headphone*2 headband ear-cushion*2 ear-cup*2 audio-cable', 'a driver in each cup over each ear, on a sprung band');
 e('alnico-rod', 'alnico pole piece', 'Electrical/Audio/Music', 'part', 'cast', 'alnico', 'a cast rod of alnico, ground and magnetised', '5 mm × 17 mm', { size: [5, 5, 17] });
 e('guitar-pickup', 'guitar pickup', 'Electrical/Audio/Music', 'product', 'assemble', 'alnico-rod*6 bobbin winding lead-wire*2', 'six magnets under the strings in a bobbin wound with about 8 000 turns of fine wire: a moving steel string changes the field and makes a voltage in the coil', 'single coil, about 6 kΩ (typical)');
 // light and heat
-e('laser-diode', 'laser diode', 'Electrical/Optics/Lasers', 'product', 'fab', 'gan copper gold', 'a GaN laser die on a copper block in a TO-can', '405 nm, about 100 mW (typical)');
+e('laser-diode', 'laser diode', 'Electrical/Optics/Lasers', 'product', 'fab', 'laser-chip submount to-header to-cap monitor-photodiode', 'a GaN laser die on a copper block in a TO-can', '405 nm, about 100 mW (typical)');
 e('lens-collimator', 'collimating lens', 'Electrical/Optics/Lenses', 'part', 'grind', 'glass', 'a ground and polished glass lens that makes the diode\'s cone of light a beam');
 e('housing-laser', 'laser housing', 'Electrical/Optics/Lasers', 'part', 'machine', 'brass', 'a turned brass barrel that holds the diode and focuses the lens on a thread', '', { alt: 'cast', size: [12, 12, 30] });
 e('laser-driver', 'laser driver', 'Electrical/Optics/Lasers', 'product', 'solder', 'pcb-bare ic-package smd-passives', 'a constant-current supply: a laser diode fed by voltage alone destroys itself');

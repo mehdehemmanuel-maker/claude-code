@@ -66,7 +66,7 @@ export const FLUID: KindDef[] = [
   {
     id: 'checkvalve', name: 'check valve', path: 'Fluid/Valves/Check valves', says: 'a one-way valve: flow pushes it open, back-flow shuts it', std: 'ISO 228-1 threads',
     axes: [bare('size', 'thread', Object.keys(BSP)), bare('matter', 'body', ['brass', 'stainless']), bare('style', 'style', ['spring', 'swing'])],
-    title: (p) => `${p.size} ${p.style} check valve, ${madeOf(p)[2]}`, of: (p) => { const g = G(p), D = Math.min(80, Math.max(2, Math.round(g * 5) / 10)), w = Math.max(0.3, Math.round(D) / 10); return p.style === 'spring' ? `${madeOf(p)[0]} {spring d${w} D${D} L${Math.max(5, Math.round(g))} n6} nbr` : `${madeOf(p)[0]} nbr`; }, make: 'assemble', how: (p) => (p.style === 'spring' ? 'a poppet held on its seat by a light spring' : 'a hinged flap that the flow swings open'), spec: (p) => `${p.size}; opens at about ${p.style === 'spring' ? '0.02–0.05' : '0.01'} bar (typical)`,
+    title: (p) => `${p.size} ${p.style} check valve, ${madeOf(p)[2]}`, of: (p) => (p.style === 'swing' ? 'valve-body valve-disc valve-seat-seal valve-cap' : 'valve-body valve-disc valve-seat-seal return-spring'), make: 'assemble', how: (p) => (p.style === 'spring' ? 'a poppet held on its seat by a light spring' : 'a hinged flap that the flow swings open'), spec: (p) => `${p.size}; opens at about ${p.style === 'spring' ? '0.02–0.05' : '0.01'} bar (typical)`,
     box: (p) => [G(p) * 1.6, G(p) * 1.6, G(p) * 3], g: (p) => gOf(G(p) ** 3 * 3, madeOf(p)[1]),
   },
   {
