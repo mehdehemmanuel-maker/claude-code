@@ -18,7 +18,7 @@ import { organicInto } from './organic';
 import { clockOf } from '../life/time';
 import { componentOf } from '../components';
 import type { Part } from '../kits';
-import { massOf } from '../mass';
+import { grams, massOf } from '../mass';
 import { kitView, type KitView } from './kit3d';
 
 const ease = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
@@ -172,7 +172,7 @@ export class Exploded {
     // the whole fades to a ghost when apart: its own copies of the shared finishes, so the parts keep theirs (a drawn
     // piece's finishes are the viewer's, cached for every view: all of them copied)
     this.wholeObj = drawn ? this.drawnWhole(drawn, p.scale) : meshOfLook(p.whole);
-    { const mine = new Map<THREE.Material, THREE.Material>(); this.wholeObj.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; const m0 = me.material as THREE.Material; if (drawn || (m0 as THREE.Material & { shared?: boolean }).shared) { let c = mine.get(m0); if (!c) { c = m0.clone(); c.userData.base = m0.opacity; mine.set(m0, c); } me.material = c; } }); }
+    { const mine = new Map<THREE.Material, THREE.Material>(); this.wholeObj.traverse((o) => { const me = o as THREE.Mesh; if (!me.isMesh) return; const own = (m0: THREE.Material): THREE.Material => { if (!drawn && !(m0 as THREE.Material & { shared?: boolean }).shared) return m0; let c = mine.get(m0); if (!c) { c = m0.clone(); c.userData.base = m0.opacity; mine.set(m0, c); } return c; }; me.material = Array.isArray(me.material) ? me.material.map(own) : own(me.material); }); }
     mergeStatic(this.wholeObj); this.stage.add(this.wholeObj);
     p.pieces.forEach((pc, k) => {
       const obj = meshOfLook(pc.look); mergeStatic(obj); obj.userData.piece = pc.id; obj.visible = false; this.stage.add(obj);
@@ -216,7 +216,11 @@ export class Exploded {
     for (const o of [...view.group.children]) if (o !== root) view.group.remove(o);
     view.explode(1); const nodes = root.children.filter((o) => o.userData.part), to = nodes.map((o) => o.position.clone());
     view.explode(0);
-    const box = new THREE.Box3().setFromObject(view.group), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()), ext = Math.max(1e-4, sz.x, sz.y, sz.z), k = 0.42 / ext;
+    // (fitted to the view whole, unless its own body is lost in what reaches out of it, a leaded part's leads: then to
+    // three times its body, or half the whole, whichever is more, and centred on its body)
+    const box = new THREE.Box3().setFromObject(view.group), sz = box.getSize(new THREE.Vector3()), whole = Math.max(1e-4, sz.x, sz.y, sz.z);
+    const own = nodes.find((o) => (o.userData.part as Part).name === part.name), ob = own ? new THREE.Box3().setFromObject(own) : null, os = ob ? ob.getSize(new THREE.Vector3()) : null;
+    const ext = os ? Math.min(whole, Math.max(3 * Math.max(os.x, os.y, os.z), 0.5 * whole)) : whole, c = (ext < whole ? ob! : box).getCenter(new THREE.Vector3()), k = 0.42 / ext;
     // (its middle at the middle of the view; a long part laid across you, not end on, and the whole tipped a little to
     // you, so its top is seen as well as its side)
     const inner = new THREE.Group(); inner.position.copy(c).negate(); inner.add(view.group);
@@ -242,7 +246,7 @@ export class Exploded {
     this.tree = { part, id, view, byId, scale: k };
     this.mode = this.shown.length > 1 ? 'apart' : 'whole'; this.t0 = now; this.group.visible = true; this.drawInfo();
     const c0 = componentOf(id), g = massOf(part) * 1000;
-    return `${part.name}: drawn ${piecesOf(part) > 1 ? `in ${piecesOf(part)} pieces` : 'in one piece'}, ${g < 10 ? g.toFixed(2) : g.toFixed(0)} g${c0?.item.g ? ` (its standard's ${c0.item.g < 10 ? c0.item.g.toFixed(2) : c0.item.g.toFixed(0)} g)` : ''}. Point at a piece to open it.`;
+    return `${part.name}: drawn ${piecesOf(part) > 1 ? `in ${piecesOf(part)} pieces` : 'in one piece'}, ${grams(g)}${c0?.item.g ? ` (its standard's ${grams(c0.item.g)})` : ''}. Point at a piece to open it.`;
   }
   /** A piece as the library draws it, at a plan's scale, its middle at the origin, standing as it is drawn in its whole. */
   private drawnWhole(q: Part, scale: number): THREE.Object3D {
@@ -338,11 +342,11 @@ export class Exploded {
   private drawInfo(): void {
     const p = this.plan, t = this.tree;
     if (t) {
-      const c = componentOf(t.id), g = massOf(t.part) * 1000, n = piecesOf(t.part), x = t.scale, fmt = (v: number) => (v < 10 ? v.toFixed(2) : v.toFixed(0));
+      const c = componentOf(t.id), g = massOf(t.part) * 1000, n = piecesOf(t.part), x = t.scale, fmt = grams;
       this.info.draw(t.part.name, [
         { text: this.path, color: '#7fb3c8', size: 0.75 },
         { text: (t.part.says ?? c?.item.says ?? '').slice(0, 220), color: '#e6fbff', size: 0.78 },
-        { text: `drawn 1:1 to its standard, shown ${x >= 1 ? `${x.toFixed(x < 10 ? 1 : 0)} × life size` : `at 1:${(1 / x).toFixed(1 / x < 10 ? 1 : 0)}`} · ${fmt(g)} g drawn${c?.item.g ? `, ${fmt(c.item.g)} g by its standard` : ''}`, color: '#ffe082', size: 0.76 },
+        { text: `drawn 1:1 to its standard, shown ${x >= 1 ? `${x.toFixed(x < 10 ? 1 : 0)} × life size` : `at 1:${(1 / x).toFixed(1 / x < 10 ? 1 : 0)}`} · ${fmt(g)} drawn${c?.item.g ? `, ${fmt(c.item.g)} by its standard` : ''}`, color: '#ffe082', size: 0.76 },
         ...(c?.leaves && c.leaves !== 'nothing' ? [{ text: `left out: ${c.leaves}`, color: '#b0bec5', size: 0.7 }] : []),
         ...(c?.faults.length ? [{ text: `⚠ ${c.faults.slice(0, 2).join('; ')}`, color: '#ff8a80', size: 0.72 }] : []),
         { text: n > 1 ? `${n} pieces, ${this.shown.length} kinds: point at one to open it` : 'one piece: point at it to see what it is made of', color: '#69f0ae', size: 0.82 },

@@ -5,6 +5,7 @@
 // Tables are the standards' (ISO 261 pitches, ISO 4762 heads, ISO 4032 nuts, ISO 7089 washers, ISO 15 bearing sizes,
 // the AWG formula, NEMA ICS 16 faces); laws are the textbooks' (a spring's rate, a gear's pitch circle).
 
+import { BAND, axialBody, axialResistorSolids, bandsOf, ledSolids, solidsMass } from './packages';
 import type { Item, Process } from './inventory';
 import { METRIC, PAN, SETSCREW_KEY } from './threads';
 import { KINDS } from './kinds';
@@ -124,8 +125,8 @@ const resistor: Family = {
   id: 'resistor', name: 'metal-film resistor', path: ['Electrical', 'Passive components', 'Resistors'], says: 'any value and power: "4.7k", "220R", "1M"', params: [{ key: 'ohms', says: 'resistance', unit: 'Ω', min: 1, max: 1e7, default: 1000 }, { key: 'watts', says: 'power', unit: 'W', values: [0.125, 0.25, 0.5, 1, 2], default: 0.25 }],
   examples: ['resistor 220R', 'resistor 4.7k 0.5W', 'resistor 1M'],
   read(w) { const m = /(\d+(?:[.,]\d+)?)\s*([rkm])?(\d*)\b/i.exec(w.replace(/resistor/i, '')); if (!m) return 'What value? e.g. 220R, 4.7k, 1M.'; const mul = { r: 1, k: 1e3, m: 1e6 }[(m[2] ?? 'r').toLowerCase() as 'r' | 'k' | 'm']; const v = num(`${m[1]}${m[3] ? `.${m[3]}` : ''}`) * mul; const W = num(/(\d+(?:\.\d+)?)\s*w\b/i.exec(w)?.[1]) || 0.25; return { ohms: v, watts: W }; },
-  make(p) { const R = Number(p.ohms), W = Number(p.watts), say = R >= 1e6 ? `${R / 1e6} MΩ` : R >= 1e3 ? `${R / 1e3} kΩ` : `${R} Ω`, L = W <= 0.25 ? 6.3 : W <= 0.5 ? 9 : 12, D = W <= 0.25 ? 2.5 : W <= 0.5 ? 3.5 : 5;
-    return item(`resistor-${R}-${W}w`, `${say} resistor, ${W} W`, 'Electrical/Passive components/Resistors', 'product', 'assemble', 'alumina nichrome lead-wire*2 epoxy', 'a metal film on a ceramic rod, a spiral cut to set its value, end caps, leads, a lacquer coat', `${say} ±1 %; carries up to ${Math.sqrt(W / R).toFixed(4)} A at ${W} W (I = √(P/R)); ${L} × ${D} mm body (typical)`, [D, D, L], 0.3); },
+  make(p) { const R = Number(p.ohms), W = Number(p.watts), say = R >= 1e6 ? `${R / 1e6} MΩ` : R >= 1e3 ? `${R / 1e3} kΩ` : `${R} Ω`, [L, D, ld] = axialBody(W);
+    return item(`resistor-${R}-${W}w`, `${say} resistor, ${W} W`, 'Electrical/Passive components/Resistors', 'product', 'assemble', 'alumina nichrome lead-wire*2 epoxy', 'a metal film on a ceramic rod, a spiral cut to set its value, end caps, leads, a lacquer coat', `${say} ±1 %; carries up to ${Math.sqrt(W / R).toFixed(4)} A at ${W} W (I = √(P/R)); ${L} × ${D} mm body (typical); its bands ${bandsOf(R).map((b) => BAND[b]![0]).join(', ')} (IEC 60062)`, [D, D, L], +solidsMass(axialResistorSolids(L, D, R, ld)).toFixed(4)); },
 };
 const PI = Math.PI, polarXZ = (r: number, a: number): [number, number] => [r * Math.cos(a), r * Math.sin(a)];
 const insideOct = (x: number, z: number, F: number, c: number) => Math.min(F / 2 - Math.abs(x), F / 2 - Math.abs(z), (F - c - Math.abs(x) - Math.abs(z)) / Math.SQRT2);
@@ -213,7 +214,7 @@ const led: Family = {
   id: 'led', name: 'LED', path: ['Electrical', 'Semiconductors', 'LEDs'], says: 'any colour and size; its forward voltage typical of its die', params: [{ key: 'colour', says: 'colour', unit: '', values: ['red', 'yellow', 'green', 'blue', 'white'], default: 'red' }, { key: 'size', says: 'size', unit: 'mm', values: [3, 5, 10], default: 5 }],
   examples: ['led red 5mm', 'led white 3mm', 'led blue 10mm'],
   read(w) { const c = /(red|yellow|green|blue|white)/i.exec(w)?.[1]?.toLowerCase() ?? 'red', s = num(/(\d+)\s*mm/i.exec(w)?.[1]) || 5; return { colour: c, size: s }; },
-  make(p) { const c = String(p.colour), s = Number(p.size), vf = c === 'red' || c === 'yellow' ? 2 : 3.1, die = c === 'red' || c === 'yellow' ? 'si-die' : 'gan'; return item(`led-${c}-${s}mm`, `${c} LED, ${s} mm`, 'Electrical/Semiconductors/LEDs', 'product', 'assemble', `${die} lead-frame bond-wire epoxy`, `a ${c === 'red' || c === 'yellow' ? 'AlGaInP' : 'InGaN'} die in a reflector cup, a bond wire to the other lead, cast in an epoxy lens`, `about ${vf} V forward at 20 mA (typical); a series resistor of (V − ${vf}) / 0.02 Ω`, [s, s, s * 1.7], 0.3); },
+  make(p) { const c = String(p.colour), s = Number(p.size), vf = c === 'red' || c === 'yellow' ? 2 : 3.1, die = c === 'red' || c === 'yellow' ? 'led-die-algainp' : 'led-die-ingan'; return item(`led-${c}-${s}mm`, `${c} LED, ${s} mm`, 'Electrical/Semiconductors/LEDs', 'product', 'assemble', `${die} lead-frame bond-wire epoxy`, `a ${c === 'red' || c === 'yellow' ? 'AlGaInP' : 'InGaN'} die in a reflector cup, a bond wire to the other lead, cast in an epoxy lens`, `about ${vf} V forward at 20 mA (typical); a series resistor of (V − ${vf}) / 0.02 Ω`, [s, s, s * 1.7], +solidsMass(ledSolids(s, c === 'red' || c === 'yellow' ? 'algainp' : 'gan')).toFixed(4)); },
 };
 
 // ---- O-rings by inside diameter and cross-section ---------------------------------------------------------------------

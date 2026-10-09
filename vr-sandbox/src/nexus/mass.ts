@@ -5,6 +5,7 @@
 import { latheArea, latheVolume, loftArea, loftVolume, prismArea, prismVolume, tubeLength, tubeVolume } from './form';
 import { surfaceArea } from './surface';
 import type { Part, Shape } from './kits';
+import { PKG_DENSITY } from './packages';
 
 /** Densities, kg/m³ (typical values). */
 export const DENSITY: Record<string, number> = {
@@ -13,6 +14,8 @@ export const DENSITY: Record<string, number> = {
   cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,
   pe: 950, pu: 1200, fibreglass: 1850, 'al-a380': 2710, 'al-5052': 2680, 'stainless-316': 8000, 'stainless-440c': 7800, brass: 8500, bronze: 8800, 'steel-chrome': 7830, pvc: 1400, pom: 1410, ptfe: 2200, 'al-7075': 2810, 'wood-veneer': 680, fr4: 1850,
   'steel-electrical': 7650, 'magnet-wire': 8900, ndfeb: 7500, nbr: 1200,
+  // (what electronic packages are made of: src/nexus/packages.ts, each with its source)
+  ...Object.fromEntries(Object.entries(PKG_DENSITY).map(([k, [v]]) => [k, v])),
   tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
 };
 const vol = (s: Shape): number => {
@@ -51,3 +54,5 @@ export function massOf(p: Part): number {
   const own = p.kg !== undefined ? p.kg : p.shape && p.mat && DENSITY[p.mat] ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * DENSITY[p.mat]! * (p.fill ?? 1) : 0;
   return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
 }
+/** A mass to read, from grams: "1,240 g", "12 g", "0.50 g", "2.17 mg", "0.42 mg" (a chip's parts weigh milligrams). */
+export const grams = (g: number): string => (g >= 100 ? `${Math.round(g).toLocaleString('en')} g` : g >= 10 ? `${g.toFixed(0)} g` : g >= 0.1 ? `${g.toFixed(2)} g` : `${+(g * 1000).toPrecision(3)} mg`);

@@ -31,7 +31,7 @@ const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
 const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: string, wear = 0, open = false): THREE.MeshStandardMaterial => {
   const w = Math.round(wear * 10) / 10, key = `${color}|${mat}|${glow}|${finish}|${w}|${open}`; let m = mats.get(key);
   if (!m) {
-    const metal = /steel|al-|copper|iron|gold|silver|titanium/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
+    const metal = /steel|al-|copper|iron|gold|silver|titanium|nickel/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc' || mat === 'epoxy-clear', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
     // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
     const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
     const rough = Math.min(1, (f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
@@ -72,17 +72,20 @@ export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24
   return new THREE.LatheGeometry(pts, seg);
 }
 /** A box's broad faces printed with characters (a number plate's): its face pair across its thinnest side textured,
- *  the rest plain. Drawn on a canvas where there is a document; plain where there is none. */
+ *  the rest plain; or, on a dark moulding (a chip's, a resistor's overcoat), laser-marked: pale characters on its top
+ *  face alone, as wide as it allows. Drawn on a canvas where there is a document; plain where there is none. */
 const printed = new Map<string, THREE.CanvasTexture>();
 function printedMats(p: Part, base: THREE.Material): THREE.Material | THREE.Material[] {
   if (!p.text || !p.shape || !('box' in p.shape) || typeof document === 'undefined') return base;
   const [w, h, d] = p.shape.box, k = w <= h && w <= d ? 0 : h <= d ? 1 : 2, [a, b] = k === 0 ? [d, h] : k === 1 ? [w, d] : [w, h], key = `${p.text}|${a.toFixed(3)}|${b.toFixed(3)}`;
-  let tex = printed.get(key);
-  if (!tex) { const c = document.createElement('canvas'); c.width = 1024; c.height = Math.max(64, Math.round((1024 * b) / a)); const x = c.getContext('2d')!; x.fillStyle = '#' + new THREE.Color(p.color ?? 0xffffff).getHexString(); x.fillRect(0, 0, c.width, c.height); x.strokeStyle = '#1a1a1a'; x.lineWidth = c.height * 0.05; x.strokeRect(c.height * 0.04, c.height * 0.04, c.width - c.height * 0.08, c.height - c.height * 0.08); x.fillStyle = '#141414'; x.font = `bold ${Math.round(c.height * 0.68)}px "DejaVu Sans Mono", monospace`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(p.text, c.width / 2, c.height * 0.54); tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; printed.set(key, tex); }
-  // (a plate's face is a printed film, not bare metal)
-  const face = (base as THREE.MeshStandardMaterial).clone(); face.map = tex; face.color = new THREE.Color(0xffffff); face.metalness = 0.05; face.roughness = 0.45;
+  const dark = new THREE.Color(p.color ?? 0xffffff).getHSL({ h: 0, s: 0, l: 0 }).l < 0.15;
+  let tex = printed.get(`${key}|${dark}`);
+  if (!tex && dark) { const c = document.createElement('canvas'); c.width = 512; c.height = Math.max(32, Math.round((512 * b) / a)); const x = c.getContext('2d')!; x.fillStyle = '#' + new THREE.Color(p.color ?? 0).getHexString(); x.fillRect(0, 0, c.width, c.height); let fs = Math.round(c.height * 0.42); x.font = `600 ${fs}px "DejaVu Sans", sans-serif`; const tw = x.measureText(p.text).width; if (tw > c.width * 0.86) { fs = Math.floor((fs * c.width * 0.86) / tw); x.font = `600 ${fs}px "DejaVu Sans", sans-serif`; } x.fillStyle = '#b9bab5'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(p.text, c.width / 2, c.height / 2); tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; printed.set(`${key}|${dark}`, tex); }
+  if (!tex) { const c = document.createElement('canvas'); c.width = 1024; c.height = Math.max(64, Math.round((1024 * b) / a)); const x = c.getContext('2d')!; x.fillStyle = '#' + new THREE.Color(p.color ?? 0xffffff).getHexString(); x.fillRect(0, 0, c.width, c.height); x.strokeStyle = '#1a1a1a'; x.lineWidth = c.height * 0.05; x.strokeRect(c.height * 0.04, c.height * 0.04, c.width - c.height * 0.08, c.height - c.height * 0.08); x.fillStyle = '#141414'; x.font = `bold ${Math.round(c.height * 0.68)}px "DejaVu Sans Mono", monospace`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(p.text, c.width / 2, c.height * 0.54); tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; printed.set(`${key}|${dark}`, tex); }
+  // (a plate's face is a printed film, not bare metal; a laser mark is the moulding's own matt surface)
+  const face = (base as THREE.MeshStandardMaterial).clone(); face.map = tex; face.color = new THREE.Color(0xffffff); face.metalness = 0.05; face.roughness = dark ? 0.8 : 0.45;
   // (BoxGeometry's faces in order: +x, -x, +y, -y, +z, -z)
-  return [0, 1, 2, 3, 4, 5].map((i) => (Math.floor(i / 2) === k ? face : base));
+  return [0, 1, 2, 3, 4, 5].map((i) => (dark ? i === 2 * k : Math.floor(i / 2) === k) ? face : base);
 }
 const thinnest = (s: Shape): number => ('box' in s ? Math.min(...s.box) : 'cyl' in s ? Math.min(2 * s.cyl[0], s.cyl[1]) : 'cone' in s ? s.cone[0] : 1);
 /** A freeform skin as triangles: as finely as about 3 cm a step across it (between 6 and 96 steps each way), its normals

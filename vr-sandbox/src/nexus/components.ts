@@ -24,6 +24,8 @@ import { WHEEL } from './kinds/fasteners';
 import { itemOf, type Item } from './inventory';
 import type { Cut, Iface, Part, Port, V3 } from './kits';
 import { DENSITY, massOf } from './mass';
+import { axialBody, axialResistorSolids, chipCode, chipSolids, ledSolids, pkgItem, pkgOf, pkgSolids, smdLedSolids, solidMasses, type Role, type Solid } from './packages';
+import { chipCase, ledDieOf, mlccCase, packageOf, smdLedCase } from './kinds/electrical';
 
 const PI = Math.PI, mm = 1e-3;
 /** A design: its part in its own frame, from its family's numbers and its item. */
@@ -84,6 +86,10 @@ const socket = (s: number, dep: number, k: number): Cut => ({ r: s / Math.sqrt(3
 /** A port on a part, its pattern in metres (src/nexus/kits.ts Port). */
 const port = (name: string, sex: Port['sex'], thread: string, pattern: [number, number][], at: V3, n: V3, u: V3, t: number, more: Partial<Port> = {}): Port => ({ name, sex, thread, pattern, at, n, u, t, ...more });
 const sq = (side: number): [number, number][] => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => [(x! * side) / 2, (y! * side) / 2] as [number, number]);
+const PKG_SAYS = 'a semiconductor in its package (its JEDEC outline, src/nexus/packages.ts): its moulded body (or a diode\'s glass) marked with its part number, its leads, the lead frame\'s paddle (or tab) its silicon die sits on, and a gold bond wire from the die to each lead the die is not on';
+const PKG_LEAVES = 'its outline nominal within JEDEC\'s tolerances; its die typical in size (not its maker\'s), its wires\' loops drawn as two straights; its moulding\'s draft, its leads\' plating and its mould\'s ejector marks not drawn; its mass from these solids and their materials\' densities, checked against makers\' weights (tests/nexus/packages.test.ts)';
+const TIN = 0xc4c8cb;
+const LED_TINT: Record<string, number> = { red: 0xff5a48, orange: 0xffa040, yellow: 0xffe050, green: 0x6aea7a, blue: 0x6a8cff, white: 0xf2f6ff, warmwhite: 0xfff2dc };
 const DESIGNS: Record<string, { says: string; leaves: string; make: Design; iface?: (p: Record<string, string | number>) => Iface[]; ports?: (p: Record<string, string | number>) => Port[] }> = {
   stepper: {
     says: 'a hybrid stepper (its face NEMA ICS 16): its die-cast end bells, each with a cavity for its coils\' ends and a hub round its bearing\'s pocket; its stator, a stack of laminations of eight poles of six teeth, a coil wound on each pole; its rotor, two laminated cups of fifty teeth half a tooth apart either side of an axially magnetised neodymium ring, on its shaft; a ball bearing in each bell; four tie screws from the rear clamping bells and stack; its four leads out of the rear bell to a JST XH plug',
@@ -248,7 +254,95 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     says: 'a T-slot aluminium extrusion: a slot down the middle of each face of each cell, its centre bored for a tapped end', leaves: 'its slots\' undercut chamfers and its inner webs drawn square (a typical outline, not one maker\'s die)',
     make: (p, it) => { const s = String(p.series), cell = Number(s.slice(0, 2)), n = Math.max(1, Number(s.slice(2)) / cell), L = Number(p.length), mat = 'al-6063'; return [P(it.name, section(tslot(cell, n), tslotHollows(cell, n), L), { mat, color: 0xc9ced3, finish: 'brushed', rot: ALONG_Y })]; },
   },
+  // ---- electronics: each drawn from its outline (src/nexus/packages.ts), down to its die and its bond wires --------------
+  chip: { says: PKG_SAYS, leaves: PKG_LEAVES, make: (p, it) => semiParts(String(p.pkg), it.name, String(p.part)) },
+  transistor: { says: PKG_SAYS, leaves: PKG_LEAVES, make: (p, it) => semiParts(packageOf('transistor', p)!, it.name, String(p.part)) },
+  regulator: { says: PKG_SAYS, leaves: PKG_LEAVES, make: (p, it) => semiParts(packageOf('regulator', p)!, it.name, String(p.part).replace(/-.*$/, '')) },
+  diode: { says: PKG_SAYS, leaves: PKG_LEAVES, make: (p, it) => semiParts(packageOf('diode', p)!, it.name, '') },
+  zener: { says: PKG_SAYS, leaves: PKG_LEAVES, make: (p, it) => semiParts(packageOf('zener', p)!, it.name, '') },
+  chipresistor: {
+    says: 'a thick-film chip resistor: its alumina substrate, the ruthenium-oxide film printed on its top (laser-trimmed to value), its glass and epoxy overcoat marked with its value (IEC 60062\'s codes), and a termination wrapped round each end',
+    leaves: 'its film\'s trim cut, its inner silver electrodes and the termination\'s three platings (silver, nickel, tin) drawn as one skin 10 µm thick; its layers\' thicknesses typical of makers\' drawings',
+    make: (p, it) => { const pk = String(p.pkg), [L, W, T] = chipCase(pk)!; return passiveParts(chipSolids('resistor', L, W, T), it.name, { body: 'chip-substrate', film: 'resistive-film', glaze: 'overglaze', term: 'chip-termination' }, chipCode(Number(p.R), String(p.tol), pk)); },
+  },
+  mlcc: {
+    says: 'a multilayer ceramic chip capacitor: its fired body of barium-titanate layers between nickel electrodes, and a termination over each end that joins every other electrode',
+    leaves: 'its electrodes, hundreds of layers a micrometre or so thick, inside its body and not drawn one by one (their nickel taken in its density); the termination\'s copper, nickel and tin drawn as one skin 20 µm thick',
+    make: (p, it) => { const [L, W, T] = mlccCase(String(p.pkg)); return passiveParts(chipSolids('capacitor', L, W, T), it.name, { body: 'mlcc-body', term: 'chip-termination' }, '', String(p.dielectric) === 'C0G' ? 0xa89c8a : 0x9a7a55); },
+  },
+  smdled: {
+    says: 'a surface LED: its die (or three, in a 5050) on its lead frame, wired to the other pad, in a white moulded cup filled with silicone (yellow with phosphor where it is white), or on a laminate base under a clear block',
+    leaves: 'its cup\'s reflective slope drawn square, its phosphor mixed in its silicone, its ESD diode and its lead frame\'s bends under the cup not drawn',
+    make: (p, it) => { const [L, W, H] = smdLedCase(String(p.pkg))!, c = String(p.colour); return passiveParts(smdLedSolids(L, W, H, ledDieOf(c), c.includes('white')), it.name, { lead: 'lead-frame', die: ledDieOf(c) === 'gan' ? 'led-die-ingan' : 'led-die-algainp', wire: 'bond-wire' }, '', undefined, LED_TINT[c]); },
+  },
+  resistor: {
+    says: 'a metal-film resistor: its alumina rod under a film cut in a spiral to its value, a steel cap pressed on each end with its lead welded on, its lacquer coat thicker over the caps, and its five colour bands (IEC 60062: three digits, the multiplier, brown for ±1 %)',
+    leaves: 'its film and its spiral cut not drawn (a few micrometres of nickel-chromium); its bands painted on, weighing nothing here; its body\'s size typical of its power',
+    make: (p, it) => { const [L, D, ld] = axialBody(Number(p.watts)); return passiveParts(axialResistorSolids(L, D, Number(p.ohms), ld), it.name, { lead: 'lead-wire' }); },
+  },
+  led: {
+    says: 'a through-hole LED: its clear epoxy lens on its flange, its cathode\'s lead ending in the anvil whose reflector cup holds the die, its anode\'s in the post, a gold wire from the die\'s top to the post',
+    leaves: 'its reflector cup drawn as a block, its lens\'s flat at the cathode not drawn, its lens tinted its colour; its proportions typical of makers\' T-1 and T-1¾ drawings',
+    make: (p, it) => { const c = String(p.colour); return passiveParts(ledSolids(Number(p.size), c === 'red' || c === 'yellow' ? 'algainp' : 'gan'), it.name, { lead: 'lead-frame', die: c === 'red' || c === 'yellow' ? 'led-die-algainp' : 'led-die-ingan', wire: 'bond-wire' }, '', undefined, LED_TINT[c]); },
+
+  },
 };
+
+// ---- electronics from their solids ------------------------------------------------------------------------------------
+/** How each solid looks: a moulding matt black, a diode's glass orange, tinned leads and tabs, a paddle bare copper, a die
+ *  mirror-dark, gold wires, a resistor's substrate white under its black overcoat, its terminations tin. */
+function lookOf(s: Solid): Partial<Part> {
+  const L: Record<Role, Partial<Part>> = {
+    body: s.mat === 'glass' ? { color: 0xe0823c } : s.mat === 'alumina' ? { color: 0xf1eee6, finish: 'texture' } : s.mat === 'epoxy' ? { color: 0x86b4d6, finish: 'paint' } : s.mat === 'epoxy-clear' ? { color: 0xf2f6ff } : s.mat === 'silicone' ? { color: 0xe8eef2, finish: 'texture' } : { color: 0x1d1d1f, finish: 'texture' },
+    lead: { color: TIN, finish: 'plate' }, tab: { color: TIN, finish: 'plate' }, pad: { color: TIN, finish: 'plate' }, frame: { color: 0xc8794a, finish: 'brushed' }, die: { color: 0x3c4258, finish: 'ground' }, wire: { color: 0xd9b24c, finish: 'brushed' },
+    mark: { color: 0xb5b5b0, finish: 'texture' }, film: { color: 0x2a2a2a, finish: 'texture' }, glaze: { color: 0x161616, finish: 'texture' }, term: { color: TIN, finish: 'plate' },
+    core: { color: s.mat === 'ppa' ? 0xf4f4f0 : s.mat === 'fr4' ? 0xe8e0c8 : 0xf1eee6, finish: 'texture' }, cap: { color: 0xb8bcc0, finish: 'plate' }, band: { finish: 'paint' },
+  };
+  return { ...L[s.role], ...(s.color !== undefined ? { color: s.color } : {}) };
+}
+const NAME: Record<Role, string> = { body: '', lead: 'lead', pad: 'exposed pad', tab: 'tab', frame: 'die paddle', die: 'die', wire: 'bond wire', mark: 'band', film: 'resistive film', glaze: 'overcoat', term: 'termination', core: 'core', cap: 'end cap', band: 'colour band' };
+const HOW: Partial<Record<Role, string>> = { lead: 'moulded into its body', frame: 'moulded into its body', tab: 'moulded into its body', pad: 'moulded into its body', die: 'bonded to what it sits on', wire: 'ball-bonded to the die, stitch-bonded to its lead', film: 'printed and fired on its substrate', glaze: 'printed and fired over its film', term: 'dipped and plated over its end', cap: 'pressed on the end of its rod', band: 'painted on its coat', mark: 'printed on its body' };
+/** A solid as a part, mm to m: its shape, place and turn, its material and look, its item; the body's shape the share
+ *  of it that is its own (what lies inside it taken out), a skin weighed as a skin. */
+function solidPart(m: { s: Solid; g: number; fill: number }, name: string, item: string | undefined, more: Partial<Part> = {}): Part {
+  const s = m.s, sh = s.shape, k = (v: number) => v * mm;
+  const shape: Part['shape'] = 'box' in sh ? { box: [k(sh.box[0]), k(sh.box[1]), k(sh.box[2])] } : 'cyl' in sh ? { cyl: [k(sh.cyl[0]), k(sh.cyl[1])] } : 'lathe' in sh ? lathe(sh.lathe) : 'prism' in sh ? { prism: { pts: sh.prism.pts.map(([x, y]) => [k(x), k(y)] as [number, number]), L: k(sh.prism.L) } } : { tube: { r: k(sh.tube.r), pts: sh.tube.pts.map((q) => [k(q[0]), k(q[1]), k(q[2])] as V3), bend: k(sh.tube.r * 4) } };
+  const t = 'box' in sh ? sh.box[2] : 0;
+  return P(name, shape, { at: [k(s.at[0]), k(s.at[1]), k(s.at[2])], ...(s.rot ? { rot: s.rot } : {}), ...(s.mat ? { mat: s.mat } : {}), ...lookOf(s), ...(item ? { item } : {}), ...(HOW[s.role] ? { fixed: HOW[s.role] } : {}),
+    ...(s.shell ? { kg: m.g / 1000 } : m.fill < 1 ? { fill: m.fill } : {}), ...(s.hole ? { cuts: [{ r: k(s.hole.r), depth: k(t), at: [0, k(s.hole.y), k(t / 2)] as V3, dir: [0, 0, -1] as V3 }] } : {}), ...more });
+}
+/** A semiconductor as drawn from its package: its body under its name (marked with its part number where it is big
+ *  enough to read), its lead frame (leads, paddle, tab and pad) as one, or an axial diode's two leads each its own;
+ *  its die and each of its wires. On a tab, the tab is under its name, the moulding what is on it. */
+function semiParts(pk: string, nm: string, mark: string): Part[] {
+  const q = pkgOf(pk); if (!q) throw new Error(`${nm}: no outline is kept for its package ${pk}`);
+  // (a package on a tab, a TO-220's or a D²PAK's, is its tab: the moulding comes off it)
+  const ms = solidMasses(pkgSolids(q)), frame: Part[] = [], leads = new Map<number, Part[]>(), out: Part[] = [], onTab = q.form === 'to220' || q.form === 'to263';
+  for (const m of ms) {
+    const it = pkgItem(q, m.s.role), name = m.s.role === 'body' ? (onTab ? `${nm} moulding` : nm) : `${nm} ${NAME[m.s.role]}`;
+    if (it === 'lead-frame') { frame.push(solidPart(m, name, undefined)); continue; }
+    if (it === 'lead-wire') { const l = m.s.lead ?? 0; (leads.get(l) ?? leads.set(l, []).get(l)!).push(solidPart(m, `${nm} lead`, undefined)); continue; }
+    out.push(solidPart(m, name, it, m.s.role === 'body' && mark && q.L >= 4 && q.form !== 'to92' ? { text: mark } : {}));
+  }
+  if (frame.length) out.push(group(onTab ? nm : `${nm} lead frame`, 'lead-frame', onTab ? frame.map((f) => (f.name === `${nm} tab` ? { ...f, name: nm } : f)) : frame));
+  for (const ps of leads.values()) out.push(ps.length === 1 ? { ...ps[0]!, item: 'lead-wire' } : group(`${nm} lead`, 'lead-wire', ps));
+  return out;
+}
+/** A passive (a chip resistor or capacitor, a leaded resistor, an LED) as drawn from its solids: each under the item its
+ *  role is (its leads grouped by lead, under one lead frame where the items say so), its body marked where it says. */
+function passiveParts(ss: Solid[], nm: string, items: Partial<Record<Role, string>>, mark = '', bodyColor?: number, lens?: number): Part[] {
+  const ms = solidMasses(ss), out: Part[] = [], leads = new Map<number, Part[]>();
+  for (const m of ms) {
+    const r = m.s.role, name = r === 'body' ? nm : `${nm} ${NAME[r]}`, it = items[r], colour = r === 'body' && (bodyColor ?? (lens && m.s.mat !== 'silicone' ? lens : undefined));
+    if (r === 'lead') { const l = m.s.lead ?? 0; (leads.get(l) ?? leads.set(l, []).get(l)!).push(solidPart(m, `${nm} lead`, undefined)); continue; }
+    out.push(solidPart(m, name, it, { ...(colour ? { color: colour } : {}), ...(r === 'glaze' && mark ? { text: mark } : {}) }));
+  }
+  const li = items.lead;
+  if (li === 'lead-frame') out.push(group(`${nm} lead frame`, 'lead-frame', [...leads.values()].flat()));
+  else for (const ps of leads.values()) out.push(ps.length === 1 ? { ...ps[0]!, ...(li ? { item: li } : {}) } : group(`${nm} lead`, li ?? '', ps));
+  return out;
+}
+
 /** A section drawn along z, its length L mm, turned so its length runs along y. */
 const ALONG_Y: V3 = [-PI / 2, 0, 0];
 const section = (outer: [number, number][], holes: [number, number][][], L: number): Part['shape'] => ({ prism: { pts: outer.map(([x, y]) => [x * mm, y * mm] as [number, number]), ...(holes.length ? { holes: holes.map((h) => h.map(([x, y]) => [x * mm, y * mm] as [number, number])) } : {}), L: L * mm } });

@@ -5,6 +5,7 @@
 // flexible cord ratings); parts named by their makers' part numbers carry those numbers' datasheet ratings.
 
 import { ax, bare, cyl, decades, E12, E24, gOf, range, ring, si, unit, type KindDef, type P } from './core';
+import { chipSolids, pkgBox, pkgMakeup, pkgMass, pkgOf, smdLedDies, smdLedSolids, solidsMass } from '../packages';
 
 const n = (p: P, k: string) => Number(p[k]);
 const s = (p: P, k: string) => String(p[k]);
@@ -47,8 +48,21 @@ const CHIPS: Record<string, [string, string[]]> = {
   INA219: ['I²C current and power monitor', ['SOIC-8']], LM2596: ['buck regulator, 3 A', ['TO-263']], MT3608: ['boost regulator, 2 A', ['SOT-23-6']], A3144: ['Hall switch', ['TO-92']], SS49E: ['linear Hall sensor', ['TO-92']], DS18B20: ['1-wire thermometer', ['TO-92']],
   PC817: ['optocoupler', ['DIP-4']], '6N137': ['fast optocoupler, 10 Mbit/s', ['DIP-8']], MOC3021: ['opto triac driver', ['DIP-6']], LM35: ['analogue thermometer, 10 mV/°C', ['TO-92']],
 };
-/** A package's pins and mass (g, typical). */
-const PKG = (pk: string): [number, number] => { const pins = Number(/(\d+)$/.exec(pk)?.[1] ?? (pk.startsWith('TO-92') ? 3 : pk.startsWith('TO-2') ? 3 : pk === 'SOT-223' ? 4 : 3)); const per = /^DIP/.test(pk) ? 0.065 : /^TO-220/.test(pk) ? 0.6 : /^TO-263/.test(pk) ? 0.5 : /^TO-92/.test(pk) ? 0.07 : /^(SOIC|SSOP|MSOP|HTSSOP)/.test(pk) ? 0.012 : /^(TQFP|LQFP|QFN)/.test(pk) ? 0.005 : 0.004; return [pins, +(pins * per).toFixed(3)]; };
+/** A package's pins, and its box, mass and make-up as its outline draws it (src/nexus/packages.ts: JEDEC, nominal). */
+const PKG = (pk: string): [number, number] => { const q = pkgOf(pk)!; return [q.pins, +pkgMass(q).toFixed(4)]; };
+const pkgBoxOf = (pk: string): [number, number, number] => pkgBox(pkgOf(pk)!);
+const pkgOfMakeup = (pk: string): string => pkgMakeup(pkgOf(pk)!);
+/** A Zener's package by its power: 0.5 W in glass (DO-35), 1 W moulded (DO-41), 5 W moulded (DO-201). */
+const ZENER_PKG = (P: number) => (P >= 5 ? 'DO-201' : P >= 1 ? 'DO-41' : 'DO-35');
+/** A ceramic chip capacitor's thickness by its case (mm; its width, but a 1210's 2.5, typical). */
+const MLCC_LWT = (pk: string): [number, number, number] => { const c = CHIP[pk] ?? [3.2, 2.5, 1, 0]; return [c[0], c[1], pk === '1210' ? 2.5 : c[1]]; };
+/** What the library draws each electronic size as (src/nexus/components.ts): a semiconductor's package by its family
+ *  and sizes; a chip passive's case; a surface LED's; an LED's die by its colour. */
+export const packageOf = (family: string, p: P): string | null => (family === 'chip' ? s(p, 'pkg') : family === 'transistor' ? TRANS[s(p, 'part')]?.[3] ?? null : family === 'regulator' ? REGS[s(p, 'part')]?.[3] ?? null : family === 'diode' ? DIODES[s(p, 'part')]?.[4] ?? null : family === 'zener' ? ZENER_PKG(n(p, 'P')) : null);
+export const chipCase = (pk: string): [number, number, number] | null => (CHIP[pk] ? (CHIP[pk]!.slice(0, 3) as [number, number, number]) : null);
+export const mlccCase = (pk: string): [number, number, number] => MLCC_LWT(pk);
+export const smdLedCase = (pk: string): [number, number, number] | null => (LED_PKG[pk] ? (LED_PKG[pk]!.slice(0, 3) as [number, number, number]) : null);
+export const ledDieOf = (colour: string): 'gan' | 'algainp' => (LED_VF[colour]?.[1].startsWith('algainp') ? 'algainp' : 'gan');
 /** IEC 60086 cells: dimensions (mm; diameter × height, or w × d × h), mass (g) and capacity (mAh) by chemistry (typical). */
 const CELLS: Record<string, { dim: number[]; chem: Record<string, [number, number, number]> }> = {
   AA: { dim: [14.5, 50.5], chem: { alkaline: [1.5, 2500, 23], lithium: [1.5, 3000, 15], nimh: [1.2, 2000, 27] } }, AAA: { dim: [10.5, 44.5], chem: { alkaline: [1.5, 1150, 11.5], lithium: [1.5, 1200, 7.6], nimh: [1.2, 800, 12] } },
@@ -105,7 +119,7 @@ export const ELECTRICAL: KindDef[] = [
     axes: [bare('dielectric', 'dielectric', ['C0G', 'X7R', 'X5R']), bare('pkg', 'package', ['0402', '0603', '0805', '1206', '1210']), unit('C', 'capacitance', 'F', (p) => decades([1, 1.5, 2.2, 3.3, 4.7, 6.8], ...(({ C0G: [1e-12, ({ '0402': 1e-9, '0603': 4.7e-9, '0805': 2.2e-8, '1206': 1e-7, '1210': 1e-7 } as Record<string, number>)[s(p, 'pkg')]!], X7R: [1e-10, ({ '0402': 1e-7, '0603': 1e-6, '0805': 4.7e-6, '1206': 1e-5, '1210': 2.2e-5 } as Record<string, number>)[s(p, 'pkg')]!], X5R: [1e-8, ({ '0402': 1e-6, '0603': 1e-5, '0805': 2.2e-5, '1206': 4.7e-5, '1210': 1e-4 } as Record<string, number>)[s(p, 'pkg')]!] } as Record<string, [number, number]>)[s(p, 'dielectric')]!))), unit('V', 'rated voltage', 'V', [6.3, 10, 16, 25, 50, 100])],
     title: (p) => `${si(n(p, 'C'))}F ${p.dielectric} capacitor, ${p.pkg}, ${p.V} V`, of: () => 'mlcc-body chip-termination*2', make: 'sinter', how: 'barium titanate (or, for C0G, a stable titanate) tape printed with nickel, stacked, cut, fired, its ends terminated',
     spec: (p) => `${si(n(p, 'C'))}F; ${p.dielectric === 'C0G' ? 'C0G: ±30 ppm/°C, no loss of capacitance with voltage' : p.dielectric === 'X7R' ? 'X7R: ±15 % over −55…125 °C; loses some capacitance under DC bias' : 'X5R: ±15 % over −55…85 °C; loses much under DC bias'}; ${p.V} V`,
-    box: (p) => { const c = CHIP[s(p, 'pkg')] ?? [3.2, 2.5, 1, 0]; return [c[0], c[1], s(p, 'pkg') === '1210' ? 2.5 : c[1]]; }, g: (p) => { const c = CHIP[s(p, 'pkg')] ?? [3.2, 2.5, 1, 0]; return gOf(c[0] * c[1] * c[1], 5.5); },
+    box: (p) => MLCC_LWT(s(p, 'pkg')), g: (p) => { const [L, W, T] = MLCC_LWT(s(p, 'pkg')); return +solidsMass(chipSolids('capacitor', L, W, T)).toFixed(6); },
   },
   {
     id: 'inductor', look: 'can', name: 'inductor', path: 'Electrical/Passive components/Inductors', says: 'a coil of wire on a ferrite core, to store energy in its field and smooth a current', std: 'E12 values (IEC 60063) in the ranges each style is wound in; current ratings typical',
@@ -129,41 +143,41 @@ export const ELECTRICAL: KindDef[] = [
   {
     id: 'diode', look: 'rod', name: 'diode', path: 'Electrical/Discrete semiconductors/Diodes', says: 'a one-way valve for current', std: 'the common part numbers, with their datasheet ratings',
     axes: [bare('part', 'part number', Object.keys(DIODES))],
-    title: (p) => { const [k, V, A] = DIODES[s(p, 'part')]!; return `${p.part} ${k} diode, ${V} V ${A} A`; }, of: () => 'si-die lead-wire*2 epoxy-body', make: 'assemble', how: 'a doped silicon die between two leads, in glass or moulded epoxy',
+    title: (p) => { const [k, V, A] = DIODES[s(p, 'part')]!; return `${p.part} ${k} diode, ${V} V ${A} A`; }, of: (p) => pkgOfMakeup(DIODES[s(p, 'part')]![4]), make: 'assemble', how: 'a doped silicon die between two leads, in glass or moulded epoxy',
     spec: (p) => { const [k, V, A, Vf, pkg] = DIODES[s(p, 'part')]!; return `${k}; ${V} V reverse, ${A} A forward, about ${Vf} V dropped at ${A} A (so ${(Vf * A).toFixed(2)} W as heat); ${pkg}`; },
-    box: (p) => ({ 'DO-41': [2.7, 2.7, 5.2], 'DO-201': [5.3, 5.3, 9.5], 'DO-35': [1.9, 1.9, 4], SMA: [4.3, 2.6, 2.1], 'SOT-23': [2.9, 1.3, 1] } as Record<string, [number, number, number]>)[DIODES[s(p, 'part')]![4]]!, g: (p) => ({ 'DO-41': 0.35, 'DO-201': 1.1, 'DO-35': 0.13, SMA: 0.06, 'SOT-23': 0.008 } as Record<string, number>)[DIODES[s(p, 'part')]![4]]!,
+    box: (p) => pkgBoxOf(DIODES[s(p, 'part')]![4]), g: (p) => PKG(DIODES[s(p, 'part')]![4])[1],
   },
   {
     id: 'zener', look: 'rod', name: 'Zener diode', path: 'Electrical/Discrete semiconductors/Diodes', says: 'a diode that conducts backwards at a set voltage: a simple voltage reference', std: 'E24 voltages 2.4–100 V (IEC 60063), 0.5 W, 1 W and 5 W',
     axes: [unit('Vz', 'Zener voltage', 'V', decades(E24, 2.4, 100)), unit('P', 'power', 'W', [0.5, 1, 5])],
-    title: (p) => `${p.Vz} V Zener diode, ${p.P} W`, of: (p) => `si-die lead-wire*2 ${n(p, 'P') <= 0.5 ? 'glass-body' : 'epoxy-body'}`, make: 'assemble', how: 'a heavily doped silicon junction between two leads', spec: (p) => `${p.Vz} V ±5 %; at most ${((n(p, 'P') / n(p, 'Vz')) * 1000).toFixed(0)} mA through it (I = P/V); its series resistor (Vin − ${p.Vz}) / I`,
-    box: (p) => (n(p, 'P') >= 5 ? [5.3, 5.3, 9.5] : n(p, 'P') >= 1 ? [2.7, 2.7, 5.2] : [1.9, 1.9, 4]), g: (p) => (n(p, 'P') >= 5 ? 1.1 : n(p, 'P') >= 1 ? 0.35 : 0.13),
+    title: (p) => `${p.Vz} V Zener diode, ${p.P} W`, of: (p) => pkgOfMakeup(ZENER_PKG(n(p, 'P'))), make: 'assemble', how: 'a heavily doped silicon junction between two leads', spec: (p) => `${p.Vz} V ±5 %; at most ${((n(p, 'P') / n(p, 'Vz')) * 1000).toFixed(0)} mA through it (I = P/V); its series resistor (Vin − ${p.Vz}) / I`,
+    box: (p) => pkgBoxOf(ZENER_PKG(n(p, 'P'))), g: (p) => PKG(ZENER_PKG(n(p, 'P')))[1],
   },
   {
     id: 'transistor', name: 'transistor', path: 'Electrical/Discrete semiconductors/Transistors', says: 'a switch or amplifier: a small current (or a gate voltage) controls a large one', std: 'the common part numbers, with their datasheet ratings',
     axes: [bare('part', 'part number', Object.keys(TRANS))],
-    title: (p) => { const [t, V, A] = TRANS[s(p, 'part')]!; return `${p.part} ${t}, ${V} V ${A} A`; }, of: (p) => `silicon mould-compound copper${TRANS[s(p, 'part')]![3] === 'TO-220' ? ' copper' : ''} tin`, make: 'assemble', how: 'a silicon die bonded to a lead frame by fine wires, moulded in epoxy',
+    title: (p) => { const [t, V, A] = TRANS[s(p, 'part')]!; return `${p.part} ${t}, ${V} V ${A} A`; }, of: (p) => pkgOfMakeup(TRANS[s(p, 'part')]![3]), make: 'assemble', how: 'a silicon die bonded to a lead frame by fine wires, moulded in epoxy',
     spec: (p) => { const [t, V, A, pkg, R] = TRANS[s(p, 'part')]!; return `${t}; ${V} V, ${A} A; ${pkg}${R ? `; ${R * 1000} mΩ on (at 10 V gate): ${(R * A * A).toFixed(2)} W at full current` : ''}`; },
-    box: (p) => ({ 'TO-92': [4.5, 3.5, 4.5], 'TO-220': [10, 4.5, 29], 'SOT-23': [2.9, 1.3, 1] } as Record<string, [number, number, number]>)[TRANS[s(p, 'part')]![3]]!, g: (p) => ({ 'TO-92': 0.2, 'TO-220': 2, 'SOT-23': 0.008 } as Record<string, number>)[TRANS[s(p, 'part')]![3]]!,
+    box: (p) => pkgBoxOf(TRANS[s(p, 'part')]![3]), g: (p) => PKG(TRANS[s(p, 'part')]![3])[1],
   },
   {
     id: 'regulator', name: 'linear voltage regulator', path: 'Electrical/Power/Linear regulators', says: 'a chip that holds its output at a set voltage, burning off the rest as heat', std: 'the common part numbers, with their datasheet ratings',
     axes: [bare('part', 'part number', Object.keys(REGS))],
-    title: (p) => { const [v, A] = REGS[s(p, 'part')]!; return `${p.part} regulator, ${v.startsWith('adj') ? 'adjustable' : `${v} V`}, ${A} A`; }, of: () => 'silicon mould-compound copper tin', make: 'assemble', how: 'a silicon die with a reference, an error amplifier and a pass transistor, moulded in epoxy on a copper tab',
+    title: (p) => { const [v, A] = REGS[s(p, 'part')]!; return `${p.part} regulator, ${v.startsWith('adj') ? 'adjustable' : `${v} V`}, ${A} A`; }, of: (p) => pkgOfMakeup(REGS[s(p, 'part')]![3]), make: 'assemble', how: 'a silicon die with a reference, an error amplifier and a pass transistor, moulded in epoxy on a copper tab',
     spec: (p) => { const [v, A, drop, pkg] = REGS[s(p, 'part')]!; return `${v.startsWith('adj') ? `adjustable (Vout = 1.25 × (1 + R2/R1))` : `${v} V out`}, up to ${A} A; needs ${drop} V over its output; heat (Vin − Vout) × I; ${pkg}`; },
-    box: (p) => ({ 'TO-220': [10, 4.5, 29], 'TO-92': [4.5, 3.5, 4.5], 'SOT-223': [6.5, 3.5, 1.6], 'SOT-23': [2.9, 1.3, 1] } as Record<string, [number, number, number]>)[REGS[s(p, 'part')]![3]]!, g: (p) => ({ 'TO-220': 2, 'TO-92': 0.2, 'SOT-223': 0.12, 'SOT-23': 0.008 } as Record<string, number>)[REGS[s(p, 'part')]![3]]!,
+    box: (p) => pkgBoxOf(REGS[s(p, 'part')]![3]), g: (p) => PKG(REGS[s(p, 'part')]![3])[1],
   },
   {
     id: 'chip', name: 'integrated circuit', path: 'Electrical/Integrated circuits/Chips', says: 'a silicon die of many transistors, packaged with its pins', std: 'common part numbers, in the packages each is sold in',
     axes: [bare('part', 'part number', Object.keys(CHIPS)), bare('pkg', 'package', (p) => CHIPS[s(p, 'part')]![1])],
-    title: (p) => `${p.part} ${CHIPS[s(p, 'part')]![0]}, ${p.pkg}`, of: () => 'si-die lead-frame bond-wire mould-compound', make: 'assemble', how: 'a silicon die cut from a wafer, bonded to a lead frame by gold or copper wires, moulded in epoxy, its leads plated',
-    spec: (p) => `${CHIPS[s(p, 'part')]![0]}; ${p.pkg}, ${PKG(s(p, 'pkg'))[0]} pins`, box: (p) => { const [pins] = PKG(s(p, 'pkg')); return /^DIP/.test(s(p, 'pkg')) ? [7.6, (pins / 2) * 2.54, 4] : /^(TQFP|LQFP|QFN)/.test(s(p, 'pkg')) ? [Math.sqrt(pins) * 1.6, Math.sqrt(pins) * 1.6, 1.2] : /^TO/.test(s(p, 'pkg')) ? [10, 4.5, 15] : [4, (pins / 2) * 1.27, 1.6]; }, g: (p) => PKG(s(p, 'pkg'))[1],
+    title: (p) => `${p.part} ${CHIPS[s(p, 'part')]![0]}, ${p.pkg}`, of: (p) => pkgOfMakeup(s(p, 'pkg')), make: 'assemble', how: 'a silicon die cut from a wafer, bonded to a lead frame by gold or copper wires, moulded in epoxy, its leads plated',
+    spec: (p) => `${CHIPS[s(p, 'part')]![0]}; ${p.pkg}, ${PKG(s(p, 'pkg'))[0]} pins`, box: (p) => pkgBoxOf(s(p, 'pkg')), g: (p) => PKG(s(p, 'pkg'))[1],
   },
   {
     id: 'smdled', name: 'SMD LED', path: 'Electrical/Optoelectronics/LEDs', says: 'a light-emitting die in a chip package, for a board\'s surface', std: 'the packages and colours sold; forward voltages typical',
     axes: [bare('pkg', 'package', Object.keys(LED_PKG)), bare('colour', 'colour', Object.keys(LED_VF))],
-    title: (p) => `${p.colour === 'warmwhite' ? 'warm white' : p.colour} SMD LED, ${p.pkg}`, of: (p) => `${LED_VF[s(p, 'colour')]![1]} lead-frame epoxy silicone`, make: 'assemble', how: (p) => `a ${LED_VF[s(p, 'colour')]![1].startsWith('algainp') ? 'AlGaInP' : 'GaN'} die${s(p, 'colour').includes('white') ? ' under a yellow phosphor that turns its blue white' : ''} on a lead frame, under a clear lens`,
-    spec: (p) => { const [Vf] = LED_VF[s(p, 'colour')]!, I = LED_PKG[s(p, 'pkg')]![3]; return `about ${Vf} V at ${I * 1000} mA (typical); its resistor (V − ${Vf}) / ${I} Ω`; }, box: (p) => LED_PKG[s(p, 'pkg')]!.slice(0, 3) as [number, number, number], g: () => 0.02,
+    title: (p) => `${p.colour === 'warmwhite' ? 'warm white' : p.colour} SMD LED, ${p.pkg}`, of: (p) => { const [L, W] = LED_PKG[s(p, 'pkg')]!, k = smdLedDies(L, W); return `${LED_VF[s(p, 'colour')]![1].startsWith('algainp') ? 'led-die-algainp' : 'led-die-ingan'}*${k} bond-wire*${k} lead-frame${s(p, 'colour').includes('white') ? ' yag-phosphor' : ''} epoxy silicone`; }, make: 'assemble', how: (p) => `a ${LED_VF[s(p, 'colour')]![1].startsWith('algainp') ? 'AlGaInP' : 'GaN'} die${s(p, 'colour').includes('white') ? ' under a yellow phosphor that turns its blue white' : ''} on a lead frame, under a clear lens`,
+    spec: (p) => { const [Vf] = LED_VF[s(p, 'colour')]!, I = LED_PKG[s(p, 'pkg')]![3]; return `about ${Vf} V at ${I * 1000} mA (typical); its resistor (V − ${Vf}) / ${I} Ω`; }, box: (p) => LED_PKG[s(p, 'pkg')]!.slice(0, 3) as [number, number, number], g: (p) => { const [L, W, H] = LED_PKG[s(p, 'pkg')]!; return +solidsMass(smdLedSolids(L, W, H, LED_VF[s(p, 'colour')]![1].startsWith('algainp') ? 'algainp' : 'gan', s(p, 'colour').includes('white'))).toFixed(6); },
   },
   {
     id: 'battery', name: 'battery (primary or NiMH cell)', path: 'Electrical/Power/Batteries', says: 'a cell or small battery of a standard size', std: 'IEC 60086 sizes; capacities and masses typical for each chemistry',

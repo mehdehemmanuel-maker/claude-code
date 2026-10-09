@@ -13,7 +13,7 @@ import { numberOf, partAt, randomPart, spaceSize } from '../partspace';
 import { callFamily } from '../families';
 import { FAMILIES, type Family } from '../families';
 import { DESIGNED, component } from '../components';
-import { massOf as partMass } from '../mass';
+import { grams, massOf as partMass } from '../mass';
 import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
@@ -261,30 +261,42 @@ export interface LibraryHost { /** stand it before you, drawn 1:1 to its standar
  *  sold in, with what the drawing weighs against what its standard says; press a size and it stands before you, drawn,
  *  to take apart piece by piece down to its elements. Three presses from home to any part. */
 export function libraryApp(h: LibraryHost): PhoneApp {
-  const C = '#ffd740', per = 8; let said = '';
+  const C = '#ffd740', per = 8, BIG = 40; let said = '';
   const fams = (): Family[] => DESIGNED.map((id) => FAMILIES.find((f) => f.id === id)).filter((f): f is Family => !!f);
   const trade = (f: Family) => f.path.slice(0, 2).join(' › ');
   const sizes = (f: Family): string[] => { const l = catalogue(f.id); return l.length ? l : f.examples; };
-  const g3 = (v: number) => (v < 1 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : v.toFixed(0));
   type Row = { label: string; note: string; act: string; arg: string };
   const list = (sub: string): Row[] => {
     if (sub === '') { const by = new Map<string, Family[]>(); for (const f of fams()) (by.get(trade(f)) ?? by.set(trade(f), []).get(trade(f))!).push(f); return [...by].sort((a, b) => b[1].length - a[1].length).map(([t, fs]) => ({ label: t, note: `${fs.length} kind${fs.length > 1 ? 's' : ''} of part · ${fs.reduce((a, f) => a + sizes(f).length, 0).toLocaleString('en-GB')} sizes`, act: 'go', arg: `t:${t}` })); }
     if (sub.startsWith('t:')) return fams().filter((f) => trade(f) === sub.slice(2)).map((f) => ({ label: f.name, note: `${sizes(f).length} size${sizes(f).length > 1 ? 's' : ''} · ${f.path.slice(2).join(' › ') || f.says.slice(0, 50)}`, act: 'go', arg: `f:${f.id}` }));
-    if (sub.startsWith('f:')) { const f = FAMILIES.find((x) => x.id === sub.slice(2)); return f ? sizes(f).map((w) => ({ label: w, note: '', act: 'see', arg: w })) : []; }
+    if (sub.startsWith('f:')) {
+      // (a family of thousands of sizes, a chip resistor's, opens by its sizes' words in turn, its case, then its
+      // tolerance, then its values a page of them at a time: never more than a few presses to any one)
+      const { f, pre, from } = at(sub); if (!f) return [];
+      const ws = sizes(f).filter((w) => { const t = w.split(/\s+/).slice(1); return pre.every((x, i) => t[i] === x); });
+      if (ws.length <= BIG) return ws.map((w) => ({ label: w, note: '', act: 'see', arg: w }));
+      if (from !== null) return ws.slice(from, from + BIG).map((w) => ({ label: w, note: '', act: 'see', arg: w }));
+      const next = new Map<string, number>(); for (const w of ws) { const v = w.split(/\s+/)[pre.length + 1] ?? ''; next.set(v, (next.get(v) ?? 0) + 1); }
+      const head = `${f.id}|${pre.join(' ')}`;
+      if (next.size > 1 && next.size < ws.length) return [...next].map(([v, n]) => ({ label: `${f.name} ${[...pre, v].join(' ')}`, note: `${n} size${n > 1 ? 's' : ''}`, act: 'go', arg: `f:${f.id}|${[...pre, v].join(' ')}` }));
+      return Array.from({ length: Math.ceil(ws.length / BIG) }, (_, k) => { const a = ws[k * BIG]!, b = ws[Math.min(ws.length, (k + 1) * BIG) - 1]!, last = (w: string) => w.split(/\s+/).slice(pre.length + 1).join(' '); return { label: `${last(a)} – ${last(b)}`, note: `${Math.min(BIG, ws.length - k * BIG)} sizes`, act: 'go', arg: `f:${head}#${k * BIG}` }; });
+    }
     return [];
   };
+  /** Where a family's list is: its family, the words its sizes start with, the first of a run of them. */
+  const at = (sub: string) => { const m = /^f:([^|#]+)(?:\|([^#]*))?(?:#(\d+))?$/.exec(sub); return { f: m ? FAMILIES.find((x) => x.id === m[1]) : undefined, pre: m?.[2] ? m[2].split(' ').filter(Boolean) : [], from: m?.[3] !== undefined ? Number(m[3]) : null }; };
   return {
     id: 'library', name: 'Library', icon: '🔩', colour: C,
     pages: (sub) => Math.max(1, Math.ceil(list(sub).length / per)),
     draw(k: Kit, v: View) {
-      const { text, wrapped, g, W, bottom, hit } = k, sub = v.sub, f = sub.startsWith('f:') ? FAMILIES.find((x) => x.id === sub.slice(2)) : undefined;
-      text(sub === '' ? 'Library' : f ? f.name : sub.slice(2), 40, 118, sub === '' ? 44 : 28, C, 800, W - 80);
+      const { text, wrapped, g, W, bottom, hit } = k, sub = v.sub, here = sub.startsWith('f:') ? at(sub) : null, f = here?.f;
+      text(sub === '' ? 'Library' : f ? [f.name, ...here!.pre].join(' ') : sub.slice(2), 40, 118, sub === '' ? 44 : 28, C, 800, W - 80);
       wrapped(sub === '' ? `${DESIGNED.length} kinds of part, each drawn whole from its standard, every piece inside it drawn too. Press one to see it before you, 1:1.` : f ? f.says : 'press one for its sizes', 40, 148, 15, W - 80, '#ffe9a8', 2);
       const y0 = 196, rows = list(sub).slice(v.page * per, v.page * per + per), rh = Math.min(84, (bottom - y0 - (said ? 110 : 50)) / per - 6);
       rows.forEach((r, j) => {
         const ry = y0 + j * (rh + 6);
         // (a size's line says what its drawing weighs against its standard, and whether its own check holds: drawn when shown)
-        let note = r.note; if (r.act === 'see') { const c = component(r.arg); note = typeof c === 'string' ? c : `${g3(partMass(c.part) * 1000)} g drawn${c.item.g ? `, ${g3(c.item.g)} g by its standard` : ''} · ${c.faults.length ? `⚠ ${c.faults[0]}` : 'whole, every piece in it'}`; }
+        let note = r.note; if (r.act === 'see') { const c = component(r.arg); note = typeof c === 'string' ? c : `${grams(partMass(c.part) * 1000)} drawn${c.item.g ? `, ${grams(c.item.g)} by its standard` : ''} · ${c.faults.length ? `⚠ ${c.faults[0]}` : 'whole, every piece in it'}`; }
         g.fillStyle = 'rgba(255,215,64,0.10)'; g.beginPath(); g.roundRect(30, ry, W - 60, rh, 12); g.fill();
         text(r.label, 46, ry + rh * 0.42, 19, '#ffffff', 600, W - 130); text(note, 46, ry + rh * 0.78, 14, '#ffe9a8', 500, W - 130);
         text(r.act === 'see' ? '🧊' : '›', W - 74, ry + rh * 0.6, 24, C, 700, 40);

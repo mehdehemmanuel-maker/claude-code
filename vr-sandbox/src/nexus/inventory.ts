@@ -178,6 +178,8 @@ e('gear-plastic', 'plastic spur gear', 'Mechanical/Gears and gearboxes/Spur gear
 e('pcb-bare', 'bare circuit board', 'Electrical/Boards and controllers/Circuit boards', 'part', 'etch', 'fr4 copper-foil solder-mask tin', 'FR-4 with copper traces etched on it, solder mask over them, and pads tinned', 'a few layers of 35 µm copper');
 e('lead-wire', 'component lead', 'Electrical/Wiring and connectors/Leads', 'part', 'draw', 'copper tin', 'tinned copper wire');
 e('si-die', 'silicon die', 'Electrical/Semiconductors/Dies', 'part', 'fab', 'silicon', 'a chip cut from a processed wafer');
+e('led-die-ingan', 'InGaN LED die', 'Electrical/Semiconductors/Dies', 'part', 'fab', 'gan', 'indium gallium nitride layers grown on sapphire: the die of a blue, green or (under phosphor) white LED', 'about 0.3 mm square, 0.12 mm thick (typical of small-signal dies)', { size: [0.3, 0.3, 0.12] });
+e('led-die-algainp', 'AlGaInP LED die', 'Electrical/Semiconductors/Dies', 'part', 'fab', 'algainp', 'aluminium gallium indium phosphide layers: the die of a red, orange or yellow LED', 'about 0.3 mm square, 0.12 mm thick (typical of small-signal dies)', { size: [0.3, 0.3, 0.12] });
 e('bond-wire', 'bond wire', 'Electrical/Semiconductors/Packaging', 'part', 'draw', 'gold', 'gold or copper wire tens of micrometres across that joins a die to its leads');
 e('lead-frame', 'lead frame', 'Electrical/Semiconductors/Packaging', 'part', 'stamp', 'copper tin', 'the stamped copper frame a die sits on, its leads part of it');
 e('mould-compound', 'moulding compound', 'Electrical/Semiconductors/Packaging', 'part', 'mould', 'epoxy', 'the black epoxy body of a chip');
