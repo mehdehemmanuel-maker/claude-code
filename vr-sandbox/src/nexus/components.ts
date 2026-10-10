@@ -15,7 +15,7 @@
 
 import { dhArmParts, ik, UR5E } from './dharm';
 import { robotFor, TASKS, type Robot } from './robot';
-import { alongZ, bmeParts, camModuleParts, changerParts, depthCamParts, earNoseParts, ftParts, handParts } from './kit-robot';
+import { alongZ, bmeParts, camModuleParts, changerParts, depthCamParts, earNoseParts, ftParts, gripperParts, handParts } from './kit-robot';
 import { FAMILIES, callFamily } from './families';
 import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
@@ -310,7 +310,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     leaves: 'its castings\' outer forms simplified to cylinders and boxes of its links\' sizes, hollow (0.45 of them metal, typical); its drives\' insides (motor, gear, encoder) not published and drawn as one solid each, sized so the whole weighs its published 4.6 kg; its cables, connectors and brake not drawn',
     make: (p, it) => (String(p.model) === 'UR5e' ? dhArmParts(UR5E, it.name) : armParts(it.name)),
   },
-  robothand: { says: 'a hand as its maker gives it (src/nexus/kit-robot.ts): its palm, its six drives and board, four fingers and a thumb of two links each', leaves: 'its sizes an adult hand\'s (Inspire publish none here), its drives drawn as blocks; its knuckles\' linkages not drawn apart', make: (_p, it) => handParts(it.name) },
+  robothand: { says: 'a hand as its maker gives it (src/nexus/kit-robot.ts): the RH56DFX\'s palm, its six drives and board, four fingers and a thumb of two links each; the 2F-85\'s coupling, housing and drive, and its two four-bar fingers where Robotiq\'s own model puts their pivots', leaves: 'the RH56DFX\'s sizes an adult hand\'s (Inspire publish none here), its drives drawn as blocks; the 2F-85\'s links as bars between their pivots, its drive\'s kind not published', make: (p, it) => (String(p.model) === '2F-85' ? gripperParts(it.name) : handParts(it.name)) },
   toolchanger: { says: 'a changer as its maker gives it (src/nexus/kit-robot.ts): its master plate, its tool plate and the ring its balls lock into', leaves: 'its 63 mm diameter an estimate to an ISO 50 flange; its piston and balls inside not drawn apart', make: (_p, it) => changerParts(it.name) },
   ftsensor: { says: 'a force/torque sensor as its maker gives it (src/nexus/kit-robot.ts): its stainless body and its six silicon gauges on its flexures', leaves: 'its height an estimate; its flexures and cable not drawn', make: (_p, it) => ftParts(it.name) },
   depthcamera: { says: 'a depth camera as its maker gives it (src/nexus/kit-robot.ts): its case, its glass face, its two infrared imagers and colour one behind their lenses, its projector, its board', leaves: 'its imagers\' places estimates; its vision processor not drawn apart from its board', make: (_p, it) => depthCamParts(it.name) },
@@ -427,7 +427,7 @@ function armParts(nm: string): Part[] {
  *  D435 on a mast behind looking down on the whole table, its microphone and gas sensor on the mast: only what its
  *  design has. Its table's, mast's and bracket's sizes estimates. Null with what is not drawn yet. */
 export function robotPart(r: Robot, nm = 'the robot'): Part | string {
-  const no = [...new Set(r.arms.flatMap((a) => [...(a.arm.id !== 'ur5e' ? [`${a.arm.name} on a robot's table (it is drawn on its own: "robotarm Meca500")`] : []), ...(a.hand.id !== 'rh56dfx' ? [`${a.hand.name}`] : [])]))];
+  const no = [...new Set(r.arms.flatMap((a) => [...(a.arm.id !== 'ur5e' ? [`${a.arm.name} on a robot's table (it is drawn on its own: "robotarm Meca500")`] : []), ...(!['rh56dfx', '2f-85'].includes(a.hand.id) ? [`${a.hand.name}`] : [])]))];
   if (no.length) return `not drawn yet: ${no.join('; ')}`;
   return { name: nm, at: [0, 0, 0], parts: robotParts(nm, r) };
 }
@@ -450,7 +450,7 @@ function robotParts(nm: string, r: Robot = robotFor(TASKS.map((t) => t.id)).robo
   const arm = (side: number, k: number): Part[] => {
     const sideName = n === 1 ? '' : side < 0 ? ' left' : side > 0 ? ' right' : ` ${k + 1}`, b = base(side), bolts = UR5E.base.bolts!, foot = UR5E.base.foot!.h, a = r.arms[k]!;
     const changer: Part[] = a.changer ? [{ name: `${nm}${sideName} tool changer`, item: 'toolchanger-qc-11', at: [0, 0, 0], parts: [alongZ(changerParts(), 'its stack')] }] : [];
-    const hand: Part = { name: `${nm}${sideName} hand`, item: 'robothand-rh56dfx', at: [0, 0, a.changer ? m(52.4) : 0], parts: [alongZ(handParts(`${nm}${sideName} hand`, has('touch')), 'its fingers out of the wrist')] };
+    const grip = a.hand.id === '2f-85', hand: Part = { name: `${nm}${sideName} ${grip ? 'gripper' : 'hand'}`, item: grip ? 'robothand-2f-85' : 'robothand-rh56dfx', at: [0, 0, a.changer ? m(52.4) : 0], parts: [alongZ(grip ? gripperParts(`${nm}${sideName} gripper`) : handParts(`${nm}${sideName} hand`, has('touch')), 'its fingers out of the wrist')] };
     // (the right wrist's camera (the only arm's, if one) on a printed bracket off the flange's side, looking along the
     // tool past the back of the hand: 250 mm or so from the work it is over)
     const eye: Part[] = has('sight') && k === n - 1 ? [P(`${nm} wrist camera bracket`, { box: [m(20), m(14), m(5.5)] }, { mat: 'pla', color: 0x2b2d30, finish: 'printed', item: 'camera-bracket', at: [0, m(38), m(26.75)], fixed: 'clamped round the wrist\'s tool plate' }),

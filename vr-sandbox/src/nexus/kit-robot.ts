@@ -47,6 +47,37 @@ export function handParts(nm = 'Inspire Robots RH56DFX dexterous hand', ft = fal
   const thumb = G(`${nm} thumb`, [P(`${nm} thumb link 1`, { cyl: [9 * mm, 40 * mm] }, { ...AL, at: [0, 20 * mm, 0] }), P(`${nm} thumb knuckle`, { cyl: [9.5 * mm, 19 * mm] }, { ...DARK, at: [0, 40 * mm, 0], rot: [0, 0, PI / 2] }), P(`${nm} thumb link 2`, { cyl: [8.5 * mm, 32 * mm] }, { ...AL, at: [0, 56 * mm, 0] })], { item: 'hand-finger', at: [-44 * mm, 40 * mm, 8 * mm], rot: [0.5, 0, 0.45] });
   return [palm, wrist, ...servos, board, ...fingers, thumb];
 }
+/** Robotiq's 2F-85, open: its coupling (Ø 75 × 13.9 mm, its electronics inside: Robotiq's manual) and its housing (75 ×
+ *  84.9 mm, up to 90 mm off the flange), and on each side its four-bar finger as Robotiq's own model puts it (ros-industrial/robotiq,
+ *  BSD): the outer knuckle pivoting 30.6 mm out and 54.9 mm up the housing, the inner knuckle 12.7 mm out and 61.4 mm
+ *  up, the outer finger fixed to the outer knuckle, the inner finger pivoting at both and carrying its pad; the pads'
+ *  faces 85 mm apart, the whole 162.8 mm tall and 148.6 wide open (its manual). Each link's width and mass are its
+ *  model's; its drive a motor and screw in a case (its kind not published: an estimate), its colours typical of its
+ *  pictures. Along +y, its fingers opening along x. */
+export function gripperParts(nm = 'Robotiq 2F-85 gripper'): Part[] {
+  // (its model's frame at the flange's face, as its 162.8 mm to the pads' tops says)
+  const blk = { mat: 'al-6061', color: 0x2a2c30, finish: 'anodised' }, cy = 0, cp = 13.9;
+  // (a link drawn from one point to another in the fingers' plane (x, y), so many mm thick across it and wide along z)
+  const link = (name: string, a: [number, number], b: [number, number], thick: number, wide: number, g: number): Part => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
+    return P(name, { box: [L * mm, thick * mm, wide * mm] }, { ...blk, item: 'finger-link', at: [((a[0] + b[0]) / 2) * mm, ((a[1] + b[1]) / 2) * mm, 0], rot: [0, 0, Math.atan2(dy, dx)], kg: g / 1000 });
+  };
+  const finger = (sx: number): Part[] => {
+    const X = (p: [number, number]): [number, number] => [sx * p[0], p[1] + cy], P1: [number, number] = [30.6011, 54.904], P2: [number, number] = [P1[0] + 31.5, P1[1] - 4.1], P3: [number, number] = [P2[0] + 6.1, P2[1] + 47.1];
+    const P4: [number, number] = [12.7, 61.42], P5: [number, number] = [P4[0] + P3[0] - P1[0], P4[1] + P3[1] - P1[1]], pad: [number, number] = [P3[0] - 22.02, P3[1] + 32.42], side = sx < 0 ? 'left' : 'right';
+    return [link(`${nm} ${side} outer knuckle`, X(P1), X(P2), 15, 24, 8.53), link(`${nm} ${side} outer finger`, X(P2), X(P3), 12, 27, 22.6), link(`${nm} ${side} inner knuckle`, X(P4), X(P5), 12, 39, 27.1),
+      // (the inner finger from its two pivots up behind its pad: its upright, and its tab out to the outer finger's pivot)
+      G(`${nm} ${side} inner finger`, [{ ...link(`${nm} ${side} inner finger upright`, X([pad[0] + 8.5, P5[1] - 3]), X([pad[0] + 8.5, pad[1] + 12]), 12, 15, 8.4), item: undefined },
+        { ...link(`${nm} ${side} inner finger tab`, X([pad[0] + 14.5, P3[1]]), X(P3), 10, 15, 2), item: undefined }], { item: 'finger-link' }),
+      P(`${nm} ${side} pad`, { box: [7 * mm, 37 * mm, 22 * mm] }, { mat: 'silicone', color: 0x4a4d52, item: 'finger-pad', at: [sx * (pad[0] - 0.7) * mm, (pad[1] + cy) * mm, 0] })];
+  };
+  return [P(nm, { box: [84.9 * mm, (90 - cp) * mm, 75 * mm] }, { ...blk, mat: 'al-a380', item: 'gripper-housing', at: [0, ((90 + cp) / 2) * mm, 0], fill: 0.45 }),
+    P(`${nm} coupling`, { cyl: [37.5 * mm, cp * mm] }, { ...blk, item: 'gripper-coupling', at: [0, (cp / 2) * mm, 0], fill: 0.55 }),
+    P(`${nm} coupling board`, { cyl: [30 * mm, 1.6 * mm] }, { mat: 'fr4', color: 0x1f5a2a, item: 'pcb-bare', at: [0, 7 * mm, 0] }),
+    G(`${nm} drive`, [P(`${nm} drive case`, { box: [24 * mm, 50 * mm, 24 * mm] }, { mat: 'steel-alloy', color: 0x55585c, at: [0, 55 * mm, 0], fill: 0.3 }),
+      P(`${nm} drive board`, { box: [22 * mm, 0.8 * mm, 22 * mm] }, { mat: 'fr4', color: 0x1f5a2a, item: 'pcb-bare', at: [0, 29.5 * mm, 0] })], { item: 'linear-servo' }),
+    ...finger(-1), ...finger(1)];
+}
 /** ATI's QC-11: its master plate and a tool plate stacked 52.4 mm (Universal Robots' certification), 0.245 kg (ATI's
  *  page); 63 mm across to an ISO 50 flange (an estimate); along +y. */
 export function changerParts(nm = 'ATI QC-11 robotic tool changer'): Part[] {

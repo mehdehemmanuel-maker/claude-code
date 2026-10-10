@@ -26,7 +26,7 @@ describe('arms by their DH tables: the UR5e', () => {
 
 describe('the robot drawn from its parts', () => {
   const walk = (p: { name: string; item?: string; parts?: unknown[] }, out: { name: string; item?: string }[] = []) => { out.push(p); for (const q of (p.parts ?? []) as typeof p[]) walk(q, out); return out; };
-  for (const w of ['robothand RH56DFX', 'toolchanger QC-11', 'ftsensor Nano17', 'depthcamera D435', 'gassensor BME688', 'robot jarvis']) it(`draws ${w} with every part its inventory lists`, () => {
+  for (const w of ['robothand RH56DFX', 'robothand 2F-85', 'toolchanger QC-11', 'ftsensor Nano17', 'depthcamera D435', 'gassensor BME688', 'robot jarvis']) it(`draws ${w} with every part its inventory lists`, () => {
     const it0 = resolve(w); if (!it0 || typeof it0 === 'string') throw new Error(`${w}: ${String(it0)}`);
     const c = componentOf(it0.id); expect(c, w).toBeTruthy(); expect(c!.faults, w).toEqual([]);
   });
@@ -55,15 +55,15 @@ describe('the robot drawn from its parts', () => {
     const clash = contacts(nodes).map((c) => [top(c.a), top(c.b)]).filter(([a, b]) => a !== b && /arm$|mast$/.test(a!) && /arm$|mast$/.test(b!));
     expect(clash).toEqual([]);
   });
-  it('draws a robot for only what it is asked, and says what it cannot draw yet', () => {
-    for (const words of ['design a robot that can solder and type on a computer', 'build a robot that can solder and hear', 'make a robot that can type and smell']) {
+  it('draws a robot for only what it is asked, a gripper or a hand as its tasks pick', () => {
+    for (const words of ['design a robot that can solder and type on a computer', 'build a robot that can solder and hear', 'make a robot that can type and smell', 'build a robot that can weld and hear', 'design a robot that can grab things and see']) {
       const d = robotFor(robotTasks(words)!).robot, p = robotPart(d); if (typeof p === 'string') throw new Error(`${words}: ${p}`);
       const all = walk(p), n = (id: string) => all.filter((q) => q.item === id).length, has = (s: string) => d.senses.some((x) => x.sense === s);
       expect([n('robotarm-ur5e'), n('toolchanger-qc-11'), n('camera-module'), n('depthcamera-d435'), n('microphone-mems'), n('gassensor-bme688'), n('ftsensor-nano17')], words)
         .toEqual([d.arms.length, d.arms.filter((a) => a.changer).length, has('sight') ? 1 : 0, has('depth') ? 1 : 0, has('hearing') ? 1 : 0, has('smell') ? 1 : 0, has('touch') ? d.arms.length : 0]);
+      expect(n('robothand-2f-85') + n('robothand-rh56dfx'), words).toBe(d.arms.length);
       const nodes = layout(p), top = (x: Node): string => { let y = x; while (y.parent?.parent) y = y.parent; return y.p.name; };
       expect(contacts(nodes).map((c) => [top(c.a), top(c.b)]).filter(([a, b]) => a !== b && /arm$|mast$/.test(a!) && /arm$|mast$/.test(b!)), words).toEqual([]);
     }
-    expect(robotPart(robotFor(['grab']).robot)).toMatch(/not drawn yet: .*2F-85/);
   });
 });

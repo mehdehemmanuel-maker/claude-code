@@ -22,9 +22,9 @@ export const ARMS: Arm[] = [
 export type Grip = 'pen' | 'power' | 'pinch' | 'press' | 'flange';
 /** A hand: the grips it can make, how wide it opens (mm), the force each finger presses with (N, least to most), what
  *  it carries, how closely it repeats. */
-export interface Hand { id: string; name: string; mass: number; grips: Grip[]; open: number; force: [number, number]; payload: number; repeat: number; dof: number; src: string }
+export interface Hand { id: string; name: string; mass: number; grips: Grip[]; open: number; force: [number, number]; payload: number; repeat: number; dof: number; src: string; /** what it feels of its own grip, without a sensor added */ feels?: string }
 export const HANDS: Hand[] = [
-  { id: '2f-85', name: 'Robotiq\'s 2F-85', mass: 1, grips: ['power', 'pinch'], open: 85, force: [20, 235], payload: 5, repeat: 0.05, dof: 1, src: 'Robotiq\'s adaptive grippers page: 85 mm stroke, 20–235 N grip, 5 kg payload, 1 kg, 0.05 mm repeatability' },
+  { id: '2f-85', name: 'Robotiq\'s 2F-85', mass: 1, grips: ['power', 'pinch'], open: 85, force: [20, 235], payload: 5, repeat: 0.05, dof: 1, src: 'Robotiq\'s adaptive grippers page: 85 mm stroke, 20–235 N grip, 5 kg payload, 1 kg, 0.05 mm repeatability', feels: 'its grip itself, by its own object detection, position and force (Robotiq\'s page)' },
   { id: 'rh56dfx', name: 'Inspire Robots\' RH56DFX', mass: 0.54, grips: ['pen', 'power', 'pinch', 'press'], open: 90, force: [0.5, 10], payload: 3, repeat: 0.2, dof: 6, src: 'Inspire Robots\' RH56DFX page: 6 degrees of freedom on 12 joints, 540 g, ±0.20 mm, each fingertip 10 N (the thumb 15), its force read to 0.5 N; 3 kg load (a reseller\'s figure); its opening about a hand\'s, 90 mm (an estimate)' },
 ];
 /** A tool changer between the arm's flange and what it holds: so it puts down one hand or tool and takes up another. */
@@ -102,6 +102,7 @@ export function canDo(r: Robot, t: Task): Can {
   if (t.precision !== undefined && arm0) { const flange = t.tools.some((id) => TOOLS.find((x) => x.id === id)?.grip === 'flange'), rep = arm0.arm.repeat + (flange ? CHANGER.repeat : arm0.hand.repeat); if (rep > t.precision) refused.push(`${t.name} wants ±${t.precision} mm: ${arm0.arm.name} and ${arm0.hand.name} return within ±${rep.toFixed(2)}`); else uses.push(`${arm0.arm.name} and ${arm0.hand.name} return within ±${rep.toFixed(2)} mm of ±${t.precision} (repeatability; finding the place is the camera's)`); }
   if (t.force !== undefined && arm0) { const f = t.tools.includes('keyboard') ? arm0.hand.force[1] : Infinity; if (t.tools.includes('keyboard') && !arm0.hand.grips.includes('press')) refused.push(`${arm0.hand.name} has no finger to press a key with`); else if (f < t.force) refused.push(`${t.name} presses ${t.force} N: ${arm0.hand.name}'s fingers give ${f} N`); }
   for (const s of t.senses) {
+    const own = s === 'touch' && t.force === undefined ? r.arms.find((a) => a.hand.feels)?.hand : undefined; if (own && !has(r, s)) { uses.push(`${own.name} feels ${own.feels}`); continue; }
     const c = has(r, s); if (!c) { refused.push(`${t.name} needs ${s}: ${r.name} has no sensor for it (${SENSORS.filter((x) => x.sense === s).map((x) => x.name).join(' or ')})`); continue; }
     const look = s === 'sight' ? t.see : s === 'depth' ? t.depth ?? t.see : undefined;
     if (look) { const px = pixelsAcross(c, look[0], look[1]); if (px < 3) refused.push(`${c.name} puts ${px.toFixed(1)} pixels across ${look[0]} mm at ${look[1]} mm: it needs 3 to find its edges`); else uses.push(`${c.name} ${s === 'depth' ? 'tells how far' : 'sees'} ${look[0]} mm at ${look[1]} mm across ${px.toFixed(0)} pixels`); if (s === 'depth' && look[1] < (c.fig.near ?? 0)) warn.push(`${c.name} sees depth from ${c.fig.near} mm, not nearer`); }
@@ -132,7 +133,9 @@ export function robotFor(ids: string[]): { robot: Robot; can: Record<string, Can
   const hand = tools.some((x) => x.grip === 'pen' || x.grip === 'press') || tasks.some((t) => t.id === 'regrip') ? HANDS.find((h) => h.dof >= 6)! : HANDS[0]!;
   const load = hand.mass + (changer ? CHANGER.mass : 0) + Math.max(0, ...tools.map((x) => x.mass));
   const arm = [...ARMS].sort((a, b) => a.payload - b.payload).find((a) => a.payload >= load && a.repeat + hand.repeat <= fine) ?? [...ARMS].sort((a, b) => b.payload - a.payload)[0]!;
-  const senses = [...new Set(tasks.flatMap((t) => t.senses))].map((s) => SENSORS.find((x) => x.sense === s)!).filter(Boolean);
+  // (touch from a sensor only where the hand does not feel its own grip: a Nano17 on a gripper is overloaded, by its 20 N
+  // least grip at a pad or by the gripper's own weight turned at the wrist)
+  const senses = [...new Set(tasks.flatMap((t) => t.senses))].filter((s) => s !== 'touch' || !hand.feels).map((s) => SENSORS.find((x) => x.sense === s)!).filter(Boolean);
   const robot: Robot = { name: 'the robot', arms: Array.from({ length: n }, () => ({ arm, hand, changer })), senses };
   const parts = [`${n === 1 ? 'one' : n === 2 ? 'two' : n} ${arm.name} arm${n > 1 ? 's' : ''}`, `${hand.name} on each`, ...(changer ? [`${CHANGER.name} on each wrist (air at ${CHANGER.air} bar)`] : []), ...senses.map((s) => s.name)];
   return { robot, can: Object.fromEntries(tasks.map((t) => [t.id, canDo(robot, t)])), parts };

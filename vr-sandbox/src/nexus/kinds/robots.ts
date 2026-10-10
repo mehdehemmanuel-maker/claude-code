@@ -18,10 +18,11 @@ export const ROBOT_KINDS: KindDef[] = [
   },
   {
     id: 'robothand', look: 'box', name: 'robot hand', path: 'Mechanical/Robots/Hands', says: 'a hand of four fingers and a thumb a robot\'s wrist carries, each curled by its own drive, its grip\'s force read', std: 'Inspire Robots\' RH56DFX page',
-    axes: [bare('model', 'model', ['RH56DFX'])], title: () => 'Inspire Robots RH56DFX dexterous hand', of: () => 'hand-palm hand-finger*5 linear-servo*6 pcb-bare', make: 'assemble',
-    how: 'six micro linear servos in its palm, each pulling a finger\'s linkage (the thumb two: its curl and its swing across the palm), its board reading each one\'s force',
-    spec: () => '6 degrees of freedom on 12 joints; each fingertip 10 N, the thumb 15 N, read to 0.5 N; ±0.20 mm; 540 g; 12–48 V DC; RS485 (Inspire Robots\' page)',
-    box: () => [190, 90, 40], g: () => 540,
+    axes: [bare('model', 'model', ['RH56DFX', '2F-85'])], title: (p) => (s(p, 'model') === '2F-85' ? 'Robotiq 2F-85 adaptive gripper' : 'Inspire Robots RH56DFX dexterous hand'),
+    of: (p) => (s(p, 'model') === '2F-85' ? 'gripper-coupling gripper-housing linear-servo pcb-bare*2 finger-link*8 finger-pad*2' : 'hand-palm hand-finger*5 linear-servo*6 pcb-bare'), make: 'assemble',
+    how: (p) => (s(p, 'model') === '2F-85' ? 'one drive in its housing closing two four-bar fingers together: their pads stay parallel as they close, or the fingers wrap round what they meet first' : 'six micro linear servos in its palm, each pulling a finger\'s linkage (the thumb two: its curl and its swing across the palm), its board reading each one\'s force'),
+    spec: (p) => (s(p, 'model') === '2F-85' ? '85 mm stroke; 20–235 N grip; 20–150 mm/s; 5 kg payload; ±0.05 mm; 162.8 mm tall and 148.6 wide open; 850 g (its manual), 1 kg (Robotiq\'s page, with its coupling); 24 V, 2 A; ISO 9409-1-50-4-M6 coupling' : '6 degrees of freedom on 12 joints; each fingertip 10 N, the thumb 15 N, read to 0.5 N; ±0.20 mm; 540 g; 12–48 V DC; RS485 (Inspire Robots\' page)'),
+    box: (p) => (s(p, 'model') === '2F-85' ? [148.6, 162.8, 75] : [190, 90, 40]), g: (p) => (s(p, 'model') === '2F-85' ? 1000 : 540),
   },
   {
     id: 'toolchanger', look: 'box', name: 'robot tool changer', path: 'Mechanical/Robots/Tool changers', says: 'two plates between an arm\'s flange and its tool, locked by air, so the arm puts one tool down and takes up another', std: 'ATI\'s QC-11 page',
