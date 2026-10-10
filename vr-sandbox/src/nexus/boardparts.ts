@@ -81,10 +81,10 @@ export function usbC(contacts: 16 | 24): BoardPart {
  *  at x 0 facing −x (it goes in toward −x), its overmould toward +x where its cable leaves. */
 export function usbCPlug(): BoardPart {
   const W = 8.25, H = 2.4, L = 6.65, sw = 7.85, sh = 2.0, slotW = 6.9, slotH = 0.78, mw = 12.0, mh = 6.2, ml = 20;
-  const shell = piece('USB-C plug shell', 'usb-c-plug', [along('term', stadium(W, H, -H / 2), [stadium(sw, sh, -sh / 2)], L, 0, 'stainless-304', { color: HUE.stainless, finish: 'bright' })]);
-  const ins = piece('USB-C plug insulator', 'usb-c-plug', [along('body', stadium(sw, sh, -sh / 2), [[[-slotW / 2, -slotH / 2], [slotW / 2, -slotH / 2], [slotW / 2, slotH / 2], [-slotW / 2, slotH / 2]]], L - 0.4, 0.4, 'pbt', { color: HUE.black })]);
-  const pins = [-1, 1].flatMap((face) => Array.from({ length: 12 }, (_, k): Comp => piece(`USB-C plug contact ${face > 0 ? 'A' : 'B'}${k + 1}`, 'usb-c-plug', [box('lead', [L - 1.2, 0.08, 0.25], [0.8 + (L - 1.2) / 2, face * (slotH / 2 - 0.04), (k - 5.5) * 0.5], 'phosphor-bronze', { color: HUE.gold })])));
-  const mould = piece('USB-C plug overmould', 'usb-c-plug', [along('body', stadium(mw, mh, -mh / 2, 12), [], ml, L, 'pvc', { color: 0x1c1c1e, finish: 'moulded' })]);
+  const shell = piece('USB-C plug shell', 'usb-c-plug-shell', [along('term', stadium(W, H, -H / 2), [stadium(sw, sh, -sh / 2)], L, 0, 'stainless-304', { color: HUE.stainless, finish: 'bright' })]);
+  const ins = piece('USB-C plug insulator', 'usb-c-plug-insulator', [along('body', stadium(sw, sh, -sh / 2), [[[-slotW / 2, -slotH / 2], [slotW / 2, -slotH / 2], [slotW / 2, slotH / 2], [-slotW / 2, slotH / 2]]], L - 0.4, 0.4, 'pbt', { color: HUE.black })]);
+  const pins = [-1, 1].flatMap((face) => Array.from({ length: 12 }, (_, k): Comp => piece(`USB-C plug contact ${face > 0 ? 'A' : 'B'}${k + 1}`, 'usb-c-contact', [box('lead', [L - 1.2, 0.08, 0.25], [0.8 + (L - 1.2) / 2, face * (slotH / 2 - 0.04), (k - 5.5) * 0.5], 'phosphor-bronze', { color: HUE.gold })])));
+  const mould = piece('USB-C plug overmould', 'plug-overmould', [along('body', stadium(mw, mh, -mh / 2, 12), [], ml, L, 'pvc', { color: 0x1c1c1e, finish: 'moulded' })]);
   return { comp: { name: 'USB-C plug', item: 'usb-c-plug', at: [0, 0, 0], kids: [shell, ins, ...pins, mould] }, size: [L + ml, mw, mh],
     src: 'USB Type-C spec: plug shell 8.25 × 2.40 mm, 6.65 mm from its end; overmould within 12.35 × 6.5 mm (its length typical)' };
 }

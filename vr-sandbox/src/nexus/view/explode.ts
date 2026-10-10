@@ -302,11 +302,11 @@ export class Exploded {
   /** What is in the hand put back: it flies home to its place round the whole. */
   /** Turn a drawn arm's joints, its groups "<its name> joint k", to q (degrees) about their axes (x, y, or -z): what
    *  springs back to its place springs back to that pose. True where it has joints to turn. */
-  pose(q: number[], axes: ('y' | '-z' | 'x')[]): boolean {
+  pose(q: number[], axes: ('y' | '-z' | 'x' | 'z')[]): boolean {
     if (!this.tree) return false; let n = 0;
     this.tree.view.group.traverse((o) => {
       const m = / joint (\d)$/.exec(o.name); if (!m) return; const k = Number(m[1]) - 1, a = ((q[k] ?? 0) * Math.PI) / 180, ax = axes[k];
-      o.rotation.set(ax === 'x' ? a : 0, ax === 'y' ? a : 0, ax === '-z' ? -a : 0); n++;
+      o.rotation.set(ax === 'x' ? a : 0, ax === 'y' ? a : 0, ax === '-z' ? -a : ax === 'z' ? a : 0); n++;
       for (const s of this.shown) for (const mm of s.members ?? []) if (mm.obj === o) mm.q.copy(o.quaternion);
     });
     return n > 0;

@@ -84,7 +84,10 @@ export function pinecilV2(): Comp {
     put(kmr(), [gripAt - 3.5, bt, 0]), put(kmr(), [gripAt - 37, bt, 0]),
     // (both its ports at its back (PINE64), the USB-C under its board's end, the barrel above it: their order an estimate)
     put(usbc, [wall + 3.7, pcbY - pcbT / 2, 0], { turn: PI, under: true }),
-    piece('DC barrel jack', 'dc-jack-5525', [box('body', [9.0, 6.0, 6.4], [wall + 4.5, 3.4 + 2.6, 0], 'nylon', { color: 0x141414 }), turned('lead', [[0, wall + 0.6], [1.0, wall + 0.6], [1.0, wall + 8.5], [0, wall + 8.5]], 'brass', { color: 0xc9b26a }, [0, 3.4 + 2.6, 0])]),
+    // (its body, its centre pin and the sprung strip under the pin that the plug's sleeve presses: the strip's size typical)
+    { name: 'DC barrel jack', item: 'dc-jack-5525', at: [0, 0, 0] as V3, kids: [piece('DC barrel jack body', 'connector-housing', [box('body', [9.0, 6.0, 6.4], [wall + 4.5, 3.4 + 2.6, 0], 'nylon', { color: 0x141414 })]),
+      piece('DC barrel jack centre pin', 'dc-jack-pin', [turned('lead', [[0, wall + 0.6], [1.0, wall + 0.6], [1.0, wall + 8.5], [0, wall + 8.5]], 'brass', { color: 0xc9b26a }, [0, 3.4 + 2.6, 0])]),
+      piece('DC barrel jack sleeve spring', 'dc-jack-sleeve', [box('lead', [6.0, 0.25, 1.6], [wall + 5.2, 3.4 + 2.6 - 2.4, 0], 'phosphor-bronze', { color: 0xc9a46a })])] },
   ] };
   // (its face: the display's window, the two buttons proud of it with their marks, the ground screw by [-])
   const window = piece('Pinecil display window', 'pinecil-shell', [box('film', [22, 0.2, 6], [49, top + 0.02, 0], 'pc', { color: 0x050608 })]);
@@ -105,8 +108,9 @@ export function tsTip(at = 103): Comp {
   const x0 = at - 34, c = at, nk = c + 3, hb = nk + 13, hs = hb + 1.6, pt = hs + 28, end = x0 + 86;
   const chrome = { color: 0xb9bcbe, finish: 'chrome' } as const;
   return { name: 'soldering tip (TS100 type, B2)', item: 'soldering-tip', at: [0, 0, 0], kids: [
-    piece('tip contacts and insulator', 'tip-connector', [turned('body', [[0, x0 + 0.6], [1.5, x0 + 0.6], [1.5, x0 + 3], [0, x0 + 3]], 'alumina', { color: 0xeeebe2 }),
-      turned('lead', [[0, x0], [0.7, x0], [0.7, x0 + 0.6], [0, x0 + 0.6]], 'nickel', { color: 0xd9dcdc, finish: 'bright' }), turned('lead', [[1.5, x0 + 1.6], [1.62, x0 + 1.6], [1.62, x0 + 2.3], [1.5, x0 + 2.3]], 'nickel', { color: 0xd9dcdc, finish: 'bright' })]),
+    { name: 'tip contacts and insulator', item: 'tip-connector', at: [0, 0, 0], kids: [piece('tip insulator', 'tip-insulator', [turned('body', [[0, x0 + 0.6], [1.5, x0 + 0.6], [1.5, x0 + 3], [0, x0 + 3]], 'alumina', { color: 0xeeebe2 })]),
+      piece('tip pin contact', 'tip-pin', [turned('lead', [[0, x0], [0.7, x0], [0.7, x0 + 0.6], [0, x0 + 0.6]], 'nickel', { color: 0xd9dcdc, finish: 'bright' })]),
+      piece('tip ring contact', 'tip-ring', [turned('lead', [[1.5, x0 + 1.6], [1.62, x0 + 1.6], [1.62, x0 + 2.3], [1.5, x0 + 2.3]], 'nickel', { color: 0xd9dcdc, finish: 'bright' })])] },
     piece('tip sleeve', 'tip-sleeve', [turned('body', [[0, x0 + 3], [2.25, x0 + 3], [2.25, c], [3.65, c], [3.65, nk - 0.3], [1.4, nk], [1.4, hb], [2.1, hb], [2.1, pt], [0, pt]], 'stainless-304', { ...chrome, share: 0.8 })]),
     piece('tip heater', 'tip-heater', [turned('core', [[0, hb + 2], [1.2, hb + 2], [1.2, pt - 1], [0, pt - 1]], 'alumina', { color: 0x9a8f80 })]),
     piece('tip point', 'tip-core', [turned('core', [[0, pt], [2.1, pt], [1.6, pt + 2.2], [0.55, end - 0.35], [0.25, end - 0.08], [0, end]], 'copper', { color: 0xcfd1d0, finish: 'bright' })],
@@ -468,10 +472,11 @@ export function holder3951(open = true): Comp {
   // walls): base, hinge post, clip, blade (up when open), knob)
   const sx = H3951.sx, yb = H, hz = -(W / 2 - 3), cz = W / 2 - 3, B = H3951.blade;
   const bladeAt: { at: V3; rot: V3 } = open ? { at: [sx, yb + 3 + B / 2, hz], rot: [0, 0, 0] } : { at: [sx, yb + 3, hz + B / 2], rot: [PI / 2, 0, 0] };
-  const knife = piece('3951 knife switch', 'knife-switch', [box('body', [3.6, 1.6, W - 2], [sx, yb + 0.8, 0], 'abs', { color: 0x3b2a1e, finish: 'moulded' }), box('body', [3, 4.5, 1.6], [sx, yb + 3.8, hz], 'brass', br),
-    ...[-1, 1].map((d): Solid => box('body', [0.5, 4.5, 2.2], [sx + d * 1.0, yb + 3.8, cz], 'brass', br)),
-    { role: 'body', shape: { box: [1.2, B, 0.8] }, at: bladeAt.at, rot: [bladeAt.rot[0], 0, 0], mat: 'brass', ...br },
-    { role: 'body', shape: { cyl: [2.2, 6] }, at: open ? [sx, yb + 3 + B + 2.5, hz] : [sx, yb + 3, hz + B + 2.5], rot: open ? [0, 0, 0] : [PI / 2, 0, 0], mat: 'abs', ...black }]);
+  const knife: Comp = { name: '3951 knife switch', item: 'knife-switch', at: [0, 0, 0], kids: [piece('3951 knife switch base', 'switch-base', [box('body', [3.6, 1.6, W - 2], [sx, yb + 0.8, 0], 'abs', { color: 0x3b2a1e, finish: 'moulded' })]),
+    piece('3951 knife switch hinge post', 'knife-post', [box('body', [3, 4.5, 1.6], [sx, yb + 3.8, hz], 'brass', br)]),
+    piece('3951 knife switch clip', 'knife-clip', [-1, 1].map((d): Solid => box('body', [0.5, 4.5, 2.2], [sx + d * 1.0, yb + 3.8, cz], 'brass', br))),
+    piece('3951 knife switch blade', 'knife-blade', [{ role: 'body', shape: { box: [1.2, B, 0.8] }, at: bladeAt.at, rot: [bladeAt.rot[0], 0, 0], mat: 'brass', ...br }]),
+    piece('3951 knife switch knob', 'knife-knob', [{ role: 'body', shape: { cyl: [2.2, 6] }, at: open ? [sx, yb + 3 + B + 2.5, hz] : [sx, yb + 3, hz + B + 2.5], rot: open ? [0, 0, 0] : [PI / 2, 0, 0], mat: 'abs', ...black }])] };
   // (its leads, laid straight out from the switch end: red from the switch's clip, black from cell B's − spring)
   const wire = (name: string, z: number, colour: number): Comp => piece(name, 'wire-hookup', [{ role: 'body', shape: { tube: { r: 0.75, pts: [[L / 2, yb - 3, z], [L / 2 + 15, 1.0, z], [L / 2 + H3951.lead, 0.75, z]] } }, at: [0, 0, 0], mat: 'pvc', color: colour }]);
   return { name: 'Adafruit 3951 battery holder', item: 'switchholder-3951', at: [0, 0, 0], kids: [body, ...contacts, knife, wire('3951 red lead', cz - 2, 0xc62828), wire('3951 black lead', -zA, 0x1e1e1e)] };
