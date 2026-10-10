@@ -25,6 +25,7 @@ import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, fanDims,
 import { tubeLength } from './form';
 import { CLEAR, VWHEEL } from './kinds/motion';
 import { RIBS, capDims } from './kinds/fasteners';
+import { SNAP } from './kinds/electrical';
 import { HOTEND, rootR } from './kinds/plant';
 import { SOCKET_HEAD } from './embody/stock';
 import { BUTTON, PAN, SETSCREW_KEY } from './threads';
@@ -288,6 +289,29 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
         return [P(nm, { box: [run * mm, t * mm, w * mm] }, { ...at, at: [0, r * mm, 0] }), P(`${nm} lower run`, { box: [run * mm, t * mm, w * mm] }, { ...at, at: [0, -r * mm, 0] }),
           ...[-1, 1].map((e) => P(`${nm} turn ${e < 0 ? 1 : 2}`, { prism: { pts: arc(e), L: w * mm } }, { ...at, at: [((e * run) / 2) * mm, 0, 0] }))]; };
       return [group(it.name, 'timing-belt-body', band(`${it.name} body`, d / 2 + 0.1, 1.2, W, neo)), group(`${it.name} cords`, 'tension-cord-glass', band(`${it.name} cords`, d / 2 - 0.6, 0.2, W - 1, glass))]; },
+  },
+  snapswitch: {
+    says: 'a snap-action micro switch: its moulded housing, its plunger in its top, a lever (or a roller on one) over it, its contact spring with the moving contact between two fixed ones, its three terminals out of its base', leaves: 'its works drawn as their parts\' sizes (typical), its spring\'s snap shape not drawn; its housing weighed as its share of its box',
+    make: (p, it) => { const s = SNAP[String(p.size)]!, { L, T, H } = s, lever = p.lever !== 'plunger', roll = p.lever === 'roller', dark = { mat: 'pbt', color: 0x1d1e21, finish: 'moulded' as const };
+      // (in its own frame: its length along x, its thickness along y, its height along z, its terminals at -z)
+      const parts: Part[] = [P(it.name, { box: [L * mm, T * mm, H * mm] }, { ...dark, item: 'switch-housing', fill: s.fill }),
+        P(`${it.name} plunger`, { box: [0.12 * L * mm, 0.4 * T * mm, 0.12 * H * mm] }, { mat: 'pom', color: 0xb3261e, finish: 'moulded', item: 'switch-actuator', at: [-0.2 * L * mm, 0, 0.56 * H * mm] }),
+        P(`${it.name} contact spring`, { box: [0.55 * L * mm, 0.15 * mm, 0.08 * H * mm] }, { mat: 'phosphor-bronze', color: 0xc9a24a, item: 'contact-spring', at: [0, 0, 0.05 * H * mm] }),
+        ...[-1, 0, 1].map((k) => P(`${it.name} contact ${k + 2}`, { cyl: [0.03 * H * mm, 0.06 * H * mm] }, { mat: 'silver', color: 0xd9d9d6, item: 'contact-silver', at: [(0.25 * L + k * 0.04 * L) * mm, 0, (k === 0 ? 0.05 : k * 0.12) * H * mm] })),
+        ...[-1, 0, 1].map((k) => P(`${it.name} terminal ${k + 2}`, { box: [0.05 * L * mm, 0.08 * T * mm, 0.35 * H * mm] }, { mat: 'brass', color: 0xd9d6cc, finish: 'plate', item: 'switch-terminal', at: [k * 0.38 * L * mm, 0, -0.675 * H * mm] }))];
+      if (lever) parts.push(P(`${it.name} lever`, { box: [0.95 * L * mm, 0.6 * T * mm, 0.3 * mm] }, { mat: 'stainless-304', color: 0xb9bdc2, finish: 'plate', at: [0.02 * L * mm, 0, (0.62 * H + 0.15) * mm], rot: [0, 0.08, 0] }));
+      if (roll) parts.push(P(`${it.name} roller`, { cyl: [0.12 * H * mm, 0.5 * T * mm] }, { mat: 'pom', color: 0xf1ede2, at: [0.47 * L * mm, 0, (0.7 * H + 0.12 * H) * mm], rot: [PI / 2, 0, 0] }));
+      return parts; },
+  },
+  endstop: {
+    says: 'an endstop board: a lever micro switch standing on a 26 × 20 mm board (its maker\'s model\'s size), a 3-way XH socket beside it for its cable', leaves: 'its board\'s traces and the switch\'s solder joints not drawn; where the socket sits on the board typical',
+    make: (_p, it) => { const sw = SNAP.subminiature!, b = 1.6;
+      // (the board along x and z, y up; the switch stood on its base, its length along x, its lever up; the socket at the board's other end)
+      const housing = P(`${it.name} socket housing`, { box: [9.9 * mm, 7 * mm, 5.75 * mm] }, { mat: 'nylon', color: 0xf1ede2, finish: 'texture', item: 'xh-housing', at: [-7 * mm, (b + 3.5) * mm, 5 * mm] });
+      const pins = [-1, 0, 1].map((k) => P(`${it.name} socket pin ${k + 2}`, { box: [0.64 * mm, 9.5 * mm, 0.64 * mm] }, { mat: 'brass', color: 0xd9d6cc, finish: 'plate', item: 'xh-pin', at: [(-7 + k * 2.5) * mm, (b + 9.5 / 2 - 3) * mm, 5 * mm] }));
+      return [P(it.name, { box: [26 * mm, b * mm, 20 * mm] }, { mat: 'fr4', color: 0xb3261e, item: 'pcb-bare', at: [0, (b / 2) * mm, 0] }),
+        use('snapswitch subminiature lever', [3 * mm, (b + 0.35 * sw.H + sw.H / 2) * mm, -4 * mm], { rot: [-PI / 2, 0, 0], name: `${it.name} switch`, fixed: 'its terminals soldered through the board' }),
+        group(`${it.name} socket`, 'jst-xh-3-top', [housing, ...pins])]; },
   },
   vwheel: {
     says: 'a solid V wheel turned about its axle: its hub bored for two 625 bearings, its V edge for a V-slot\'s groove (OpenBuilds\' sizes)', leaves: 'its V\'s proportions typical; its bearings drawn apart (they are their own parts)',

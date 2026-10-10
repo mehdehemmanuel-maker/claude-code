@@ -300,6 +300,10 @@ e('wafer-housing', 'socket housing', 'Electrical/Connectors/Housing parts', 'par
 e('wafer-pin', 'socket pin', 'Electrical/Connectors/Contact parts', 'part', 'stamp', 'phosphor-bronze tin', 'a square pin a crimped contact slides onto', 'its size as drawn (src/nexus/boardparts.ts), the largest it is drawn', { size: [5, 1.66, 0.32] });
 // (JST's PH: 2.0 mm pitch; a 6-way side-entry header, S6B-PH-K-S, 13.9 mm long, its pins 10.0 across (JST's PH catalogue);
 // its section 4.5 × 4.8 mm (a distributor's listing): the socket a 3D printer's stepper takes its cable in)
+// (JST's XH: 2.5 mm pitch; a 3-way top-entry header 9.9 × 5.75 mm, 7 mm tall, its pins 0.64 mm square: typical of B3B-XH-A)
+e('xh-housing', 'XH socket housing', 'Electrical/Connectors/Housing parts', 'part', 'mould', 'nylon', 'the moulded housing of a 2.5 mm pitch top-entry socket', 'JST XH, 3 ways: 9.9 mm long', { size: [9.9, 7, 5.75] });
+e('xh-pin', 'XH socket pin', 'Electrical/Connectors/Contact parts', 'part', 'stamp', 'brass tin', 'a 0.64 mm square pin through a board', '', { size: [0.64, 9.5, 0.64] });
+e('jst-xh-3-top', 'JST XH socket, 3 ways, top entry', 'Electrical/Wiring and connectors/Connectors', 'assembly', 'assemble', 'xh-housing xh-pin*3', 'a 2.5 mm pitch wire-to-board socket entered from above, its three pins soldered through a board', 'B3B-XH-A type: 9.9 × 5.75 mm', { size: [9.9, 7, 5.75] });
 e('ph-housing', 'PH socket housing', 'Electrical/Connectors/Housing parts', 'part', 'mould', 'nylon', 'the moulded housing of a 2.0 mm pitch side-entry socket', 'JST PH, 6 ways: 13.9 mm long', { size: [13.9, 4.8, 4.5] });
 e('ph-pin', 'PH socket pin', 'Electrical/Connectors/Contact parts', 'part', 'stamp', 'brass tin', 'a 0.5 mm square pin bent at a right angle, its tail soldered through a board', '', { size: [6, 4, 0.5] });
 e('jst-ph-6-side', 'JST PH socket, 6 ways, side entry', 'Electrical/Wiring and connectors/Connectors', 'assembly', 'assemble', 'ph-housing ph-pin*6', 'a 2.0 mm pitch wire-to-board socket entered from the side, its six pins soldered into a board', 'S6B-PH-K-S (JST): 13.9 mm long, its pins 10.0 across', { size: [13.9, 4.8, 6] });

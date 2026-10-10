@@ -94,6 +94,11 @@ const DISPLAYS: Record<string, [string, number, number, string]> = {
   EPD29: ['2.9" 296 × 128 e-paper', 79, 36, 'glass'], SEG4: ['0.56" four-digit 7-segment LED', 50, 19, 'gan'], MAX7219: ['8 × 8 LED matrix (MAX7219)', 32, 32, 'algainp'],
 };
 
+/** Micro switches' bodies by size, mm (length, thickness, height) and weight, g (typical of the subminiature, miniature and
+ *  standard bodies makers sell, Omron's SS, D2F-type and V-type among them); its housing's share of its box (its cavity
+ *  the rest, typical). One table for its drawing (components.ts) and its weight. */
+export const SNAP: Record<string, { L: number; T: number; H: number; g: number; fill: number }> = {
+  subminiature: { L: 20, T: 6.5, H: 10, g: 2, fill: 0.85 }, miniature: { L: 28, T: 10, H: 16, g: 5, fill: 0.6 }, standard: { L: 49, T: 18, H: 17, g: 15, fill: 0.55 } };
 export const ELECTRICAL: KindDef[] = [
   {
     id: 'fuse', name: 'cartridge fuse', path: 'Electrical/Circuit protection/Cartridge fuses', says: 'a wire in a glass or ceramic tube that melts open when too much current flows', std: 'IEC 60127, 5 × 20 and 6.3 × 32 mm, the rated currents of its R10 series',
@@ -312,7 +317,13 @@ export const ELECTRICAL: KindDef[] = [
     id: 'snapswitch', name: 'snap-action micro switch', path: 'Electrical/Switches/Micro switches', says: 'a switch that snaps over at a fixed point of a short travel: limit switches, doors, endstops', std: 'the subminiature, miniature and standard bodies; ratings typical',
     axes: [bare('size', 'body', ['subminiature', 'miniature', 'standard']), bare('lever', 'actuator', ['plunger', 'lever', 'roller'])],
     title: (p) => `${p.size} micro switch, ${p.lever}`, of: () => 'switch-housing switch-actuator contact-spring contact-silver*3 switch-terminal*3', make: 'assemble', how: 'a phosphor-bronze spring that snaps a silver contact between two others, in a PBT body', spec: (p) => `${p.size === 'subminiature' ? '20 × 10 mm; 3 A' : p.size === 'miniature' ? '28 × 16 mm; 5 A' : '49 × 17 mm; 15 A'} at 250 V AC (typical); changeover`,
-    box: (p) => (p.size === 'subminiature' ? [20, 6.5, 10] : p.size === 'miniature' ? [28, 10, 16] : [49, 18, 17]), g: (p) => (p.size === 'subminiature' ? 2 : p.size === 'miniature' ? 5 : 15),
+    box: (p) => { const s = SNAP[String(p.size)]!; return [s.L, s.T, s.H]; }, g: (p) => SNAP[String(p.size)]!.g,
+  },
+  {
+    id: 'endstop', name: 'endstop switch board', path: 'Electrical/Switches/Limit switches', says: 'a lever micro switch upright on a small board with a 3-way socket for its cable: a 3D printer\'s endstop',
+    std: 'the Ender-3\'s (its board 26 × 20 mm, 11 mm over its switch\'s lever: its maker\'s model); a subminiature lever switch and a JST XH 3-way socket on it (typical)',
+    axes: [bare('form', 'form', ['creality'])], title: () => 'endstop board, lever switch', of: () => 'pcb-bare {snapswitch subminiature lever} jst-xh-3-top', make: 'assemble', how: 'a lever micro switch and a socket soldered through a small board',
+    spec: () => '26 × 20 mm board; normally open or closed by its wiring; 3-way XH socket', box: () => [26, 11.6, 20], g: () => gOf(26 * 20 * 1.6, 1.85) + SNAP.subminiature!.g + gOf(9.9 * 7 * 5.75 * 0.45, 1.14) + 3 * gOf(0.64 * 0.64 * 9.5, 8.5), look: 'board',
   },
   {
     id: 'proxsensor', name: 'inductive proximity sensor', path: 'Electrical/Sensors/Proximity', says: 'a threaded barrel that senses metal near its face, with no contact', std: 'IEC 60947-5-2 barrels, with their rated sensing distances',

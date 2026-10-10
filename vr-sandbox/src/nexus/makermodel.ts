@@ -55,6 +55,7 @@ export function libraryWords(p: ModelPart): string | null {
   if ((m = /^(2020|2040|4040|3030)\s*endcap$/i.exec(n))) return `endcap ${m[1]}`;
   if (/^hand twisted nut$/i.test(n)) { const [D, T] = round2(p); return `thumbwheel M4 D${D} t${T}`; }
   if (/^e gear$/i.test(n)) return 'drivegear mk8';
+  if (/^limit switch$/i.test(n)) return 'endstop creality';
   if (/^[xy] belt$/i.test(n)) { const e = [...extents(p)].sort((a, b) => b - a), d = +(e[1]! - 1.4).toFixed(1), L = Math.round(2 * (e[0]! - e[1]!) + Math.PI * d); return `belt GT2 ${L} ${Math.round(e[2]!)}mm loop d${d}`; }
   if (/^catheter$|heat ?break|throat/i.test(n)) return `heatbreak L${longest(p)} ptfe`;
   if (/^radiator$/i.test(n)) return 'hotendsink ender3';
