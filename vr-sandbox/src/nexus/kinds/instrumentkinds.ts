@@ -4,7 +4,7 @@
 // spec here is that arithmetic run, not a figure looked up, and the two that are dangerous say so in every size.
 
 import { ax, bare, type KindDef, type P } from './core';
-import { HAZARDS, anodeSeconds, camKg, ftir, ftirKg, glow, halfValue, lidar, lidarKg, panelKg, pulseResolution, shieldFor, thermalCam, tubeKg, xrayTube, MU_100KEV } from '../instruments';
+import { HAZARDS, anodeSeconds, camBox, camKg, ftir, ftirBox, ftirKg, glow, halfValue, lidar, lidarBox, lidarKg, panelBox, panelKg, pulseResolution, shieldFor, thermalCam, tubeBox, tubeKg, xrayTube, MU_100KEV } from '../instruments';
 
 const n = (p: P, k: string): number => Number(p[k]);
 const s = (p: P, k: string): string => String(p[k]);
@@ -21,8 +21,9 @@ export const INSTRUMENT_KINDS: KindDef[] = [
     how: 'an insert made and pumped down to vacuum, aged at voltage, then set in a lead-lined housing and the housing filled with oil',
     spec: (p) => { const t = xrayTube(n(p, 'kV'), n(p, 'mA')); const hvl = halfValue(MU_100KEV.lead!) * 1000;
       return `${t.says}. ${(hvl).toFixed(2)} mm of lead halves that beam and ${(shieldFor(MU_100KEV.lead!, 0.001) * 1000).toFixed(1)} mm cuts it to a thousandth. An anode storing 300 kJ takes ${anodeSeconds(t.heat, 300000)} s of this before it is at its limit. ${HAZARDS.xray!.join('. ')}`; },
-    // (the housing is what is seen: about 220 mm across and 330 long, with the collimator under it)
-    box: () => [330, 260, 220],
+    // (what the drawing spans, from the same figures it is drawn from: its barrel and end bells along x with a
+    //  receptacle standing out of each end, its trunnions across, and the collimator under the port)
+    box: (p) => tubeBox(n(p, 'kV'), n(p, 'mA')),
     g: (p) => tubeKg(n(p, 'kV'), n(p, 'mA'), s(p, 'anode') as 'rotating' | 'fixed') * 1000,
   },
   {
@@ -37,7 +38,7 @@ export const INSTRUMENT_KINDS: KindDef[] = [
     spec: (p) => { const [w, h] = s(p, 'size').split('x').map((x) => Number(x) * 10), pitch = n(p, 'pitch');
       const px = Math.round(w * 1000 / pitch), py = Math.round(h * 1000 / pitch);
       return `${px} × ${py} pixels at ${pitch} µm over ${w} × ${h} mm: ${((px * py) / 1e6).toFixed(1)} megapixels, and the finest thing it can show is two pixels across, ${(pitch * 2 / 1000).toFixed(2)} mm. ${HAZARDS.xray![1]}`; },
-    box: (p) => { const [w, h] = s(p, 'size').split('x').map((x) => Number(x) * 10); return [w!, 15, h!]; },
+    box: (p) => { const [w, h] = s(p, 'size').split('x').map((x) => Number(x) * 10); return panelBox(w!, h!); },
     g: (p) => { const [w, h] = s(p, 'size').split('x').map((x) => Number(x) * 10); return panelKg(w!, h!) * 1000; },
   },
   {
@@ -51,7 +52,7 @@ export const INSTRUMENT_KINDS: KindDef[] = [
     how: 'an array wafer diced and sealed under vacuum with its getter, the lens barrel threaded onto the body, and the whole calibrated against a black body at two temperatures',
     spec: (p) => { const c = thermalCam(n(p, 'px'), n(p, 'pitch'), n(p, 'f'));
       return `${c.says}. ${glow(293.15).says}, which is the band this is built for. ${HAZARDS.infrared!.join('. ')}`; },
-    box: () => [115, 95, 62],
+    box: (p) => camBox(n(p, 'px'), n(p, 'pitch'), n(p, 'f')),
     g: (p) => camKg(n(p, 'px'), n(p, 'f')) * 1000,
   },
   {
@@ -65,7 +66,7 @@ export const INSTRUMENT_KINDS: KindDef[] = [
     how: 'an optical bench aligned on a cast base, its mirrors on kinematic mounts, the whole purged with dry air and left purged for its life',
     spec: (p) => { const f = ftir(n(p, 'res'));
       return `${f.says}. ${s(p, 'detector') === 'MCT' ? 'Its MCT detector is a hundred times more sensitive and must be filled with liquid nitrogen every day it is used' : 'Its DTGS detector works at room temperature and needs nothing'}. ${HAZARDS.spectrometer!.join('. ')}`; },
-    box: () => [580, 260, 500],
+    box: (p) => ftirBox(n(p, 'res')),
     g: (p) => ftirKg(n(p, 'res')) * 1000,
   },
   {
@@ -80,7 +81,7 @@ export const INSTRUMENT_KINDS: KindDef[] = [
     spec: (p) => { const ch = n(p, 'channels'), rpm = n(p, 'rpm');
       const l = lidar({ Pt: n(p, 'wave') === 1550 ? 120 : 25, rho: 0.1, apertureMm: 25, nepW: 1e-9, channels: ch, rpm, hz: 18000 });
       return `${l.says}. A 5 ns pulse cannot tell apart two things closer than ${pulseResolution(5)} m, which is why a lidar reports more than one return for a shot through leaves. ${HAZARDS.lidar!.join('. ')}`; },
-    box: () => [103, 72, 103],
+    box: (p) => lidarBox(n(p, 'channels')),
     g: (p) => lidarKg(n(p, 'channels')) * 1000,
   },
 ];

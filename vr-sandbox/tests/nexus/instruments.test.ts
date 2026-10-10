@@ -4,6 +4,7 @@
 // said in words, not hinted at.
 
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import { HAZARDS, MU_100KEV, anodeSeconds, camKg, camWatts, ftir, ftirKg, glow, halfValue, lidar, lidarKg, panelKg, pulseResolution, shieldFor, thermalCam, through, tubeKg, xrayTube } from '../../src/nexus/instruments';
 import { componentOf } from '../../src/nexus/components';
 import { resolve } from '../../src/nexus/inventory';
@@ -12,6 +13,7 @@ import { lawById } from '../../src/nexus/book';
 import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
 import { apply } from '../../src/nexus/law';
 import { leaf } from '../../src/nexus/term';
+import { layout } from '../../src/nexus/make/space';
 
 /** The kind a word names, drawn. */
 function drawn(words: string) {
@@ -138,6 +140,15 @@ describe('each instrument drawn whole, and weighing what its kind says', () => {
       const d = drawn(words);
       expect(d.faults).toEqual([]);
       expect(d.g).toBeGreaterThan(0);
+    });
+    // the size the catalogue sells it by is the drawing's own span, worked out from the same figures the drawing is: so a
+    // part cannot grow out through its own case unseen (a screen wider than its body, an electronics box through its cover)
+    it(`${words}: its drawing spans the size its kind is sold by`, () => {
+      const r = resolve(words); if (!r || typeof r === 'string' || !('size' in r) || !r.size) throw new Error(`${words}: no size`);
+      const all = new THREE.Box3();
+      for (const n of layout(drawn(words).part)) if (n.box) all.union(n.box);
+      const got = all.getSize(new THREE.Vector3()).toArray().map((x) => x * 1000);
+      for (const i of [0, 1, 2]) expect(Math.abs(got[i]! - r.size[i]!), `${words}: drawn ${got.map((x) => x.toFixed(0)).join(' × ')} against ${r.size.join(' × ')} mm`).toBeLessThanOrEqual(2 + r.size[i]! * 0.02);
     });
   }
   it('a bigger tube is heavier, and a rotating anode heavier than a fixed one', () => {
