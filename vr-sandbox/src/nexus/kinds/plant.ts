@@ -31,6 +31,21 @@ const FLOW: Record<string, [string, string, number]> = { 'YF-S201': ['G1/2', '1�
 /** DC-DC modules: currents sold and ranges (V, typical), by type. */
 const DCDC: Record<string, [number[], string, string]> = { buck: [[1, 2, 3, 5, 10], '4.5–28', '0.8–20'], boost: [[1, 2, 4], '3–32', '5–35'], 'buck-boost': [[1, 2, 3], '3–30', '1.25–30'] };
 
+/** The Ender-3's hot end as Creality's own model has it (measured from its published assembly: makermodel.ts): its heat
+ *  block 20 × 20 × 10 mm lying flat, the nozzle's thread 5 mm up into it, the heater's 6 mm bore 9.5 mm off the nozzle's
+ *  axis, the thermistor's hole in from its side; its heat sink 20 × 27.8 × 12 mm, the heat break 27 mm long across a
+ *  5 mm gap into it; the push-in couplers' sizes by thread (their hexes 10 and 8 mm, 16.5 and 15 mm long, Creality's
+ *  model; an M5's typical). Where a size is not in the model (a fin's thickness, a bore), typical, and said so. */
+export const HOTEND = { block: { w: 20, h: 10, d: 20, nozzle: 3.95, heater: -5.55, therm: [1.5, -3] as [number, number] },
+  sink: { w: 20, h: 27.8, d: 12, plate: 3, col: 6, fins: 8, fin: 1, finX: [6, 10] as [number, number] },
+  fit: { M10: { af: 10, L: 16.5, th: 6 }, M6: { af: 8, L: 15, th: 5 }, M5: { af: 8, L: 13, th: 4 } } as Record<string, { af: number; L: number; th: number }> };
+/** A tapped hole's root radius, mm (ISO 261's coarse pitch for M3–M10, fine M10 × 1 for a coupler's). */
+export const rootR = (d: number, p: number) => (d - 1.0825 * p) / 2;
+const hexA = (af: number) => (Math.sqrt(3) / 2) * af * af;
+const sinkMm3 = () => { const s = HOTEND.sink, pl = s.w * s.plate * s.d, colH = s.h - 2 * s.plate;
+  return 2 * pl - Math.PI * (rootR(6, 1) ** 2 + rootR(10, 1) ** 2) * s.plate + Math.PI * (s.col ** 2 - rootR(6, 1) ** 2) * colH + s.fins * 2 * (s.finX[1] - s.finX[0]) * s.fin * s.d; };
+const fitMm3 = (th: string) => { const f = HOTEND.fit[th] ?? HOTEND.fit.M6!, d = Number(th.slice(1)), hx = f.L - f.th - 3;
+  return { brass: Math.PI * ((d / 2) ** 2 - 2.05 ** 2) * f.th * 0.8 + (hexA(f.af) - Math.PI * 2.05 ** 2) * hx, pom: Math.PI * ((f.af / 2 - 0.5) ** 2 - 2.6 ** 2) * 3, steel: Math.PI * (2.6 ** 2 - 2.05 ** 2) * 1.5 }; };
 export const PLANT: KindDef[] = [
   {
     id: 'steelpipe', name: 'steel pipe', path: 'Fluid/Tubing and hose/Steel pipe', says: 'carbon steel pipe by its nominal size and schedule: the pressure pipe of plant', std: 'ASME B36.10M outside diameters and walls (schedules 40 and 80); any length to 6 m cut to the centimetre',
@@ -115,6 +130,39 @@ export const PLANT: KindDef[] = [
     axes: [ax('d', 'bore', 'mm', Object.keys(UJ).map(Number)), bare('type', 'type', ['single', 'double'])],
     title: (p) => `${p.type} universal joint, ${p.d} mm bore (DIN 808)`, of: () => 'yoke*2 cross-pin*2 centre-block', make: 'machine', how: 'forged yokes and a cross on needle or plain bearings, hardened',
     spec: () => `to about 45° a joint (typical); at angle β the shaft out turns unevenly, between cos β and 1/cos β of the speed in (at 30°, 0.87 to 1.15): two joints in phase cancel it`, box: (p) => { const D = UJ[n(p, 'd')]!; return [D, D, r1(D * (p.type === 'double' ? 2.9 : 1.95))]; }, g: (p) => gOf(cyl(UJ[n(p, 'd')]!, UJ[n(p, 'd')]! * (p.type === 'double' ? 2.9 : 1.95)) * 0.6, 7.85), look: 'rod',
+  },
+  {
+    id: 'heatblock', name: 'heater block', path: 'Mechanical/3D printer parts/Hot end', says: 'the aluminium block a hot end melts in: the nozzle screwed up into it, the heater and the thermistor through it',
+    std: 'the MK8 block as the Ender-3\'s (Creality\'s own model: 20 × 20 × 10 mm, the nozzle 3.95 mm and the heater 5.55 mm either side of its middle)',
+    axes: [bare('form', 'form', ['mk8'])], title: () => 'MK8 heater block, aluminium', of: () => 'al-6061', make: 'machine', how: 'cut from aluminium bar, tapped M6 for the nozzle and heat break, bored 6 mm for the heater and 2.2 mm for the thermistor',
+    spec: () => '20 × 20 × 10 mm; M6 × 1 through for the nozzle and heat break; a 6 mm bore for a 6 mm heater 9.5 mm from the nozzle', box: () => [20, 10, 20],
+    g: () => { const b = HOTEND.block; return gOf(b.w * b.h * b.d - Math.PI * (rootR(6, 1) ** 2 * b.h + 9 * b.w + 1.1 ** 2 * 8), 2.7); }, look: 'block',
+  },
+  {
+    id: 'heatbreak', name: 'heat break', path: 'Mechanical/3D printer parts/Hot end', says: 'the thin stainless tube between a hot end\'s heat block and its heat sink: it carries the filament and keeps the heat from climbing',
+    std: 'M6 throats as MK8 hot ends take them (the Ender-3\'s 27 mm long in Creality\'s model; M6 × 26 sold); bored 4.1 mm for a PTFE liner, or 2 mm bare (typical)',
+    axes: [ax('L', 'long', 'mm', [26, 27, 30], [20, 40, 0.5]), bare('lined', 'lined', ['ptfe', 'bare'])], title: (p) => `M6 heat break ${p.L} mm${p.lined === 'ptfe' ? ', PTFE-lined' : ', all-metal'}`,
+    of: (p) => (p.lined === 'ptfe' ? 'heat-break ptfe-liner' : 'stainless-304'), make: (p) => (p.lined === 'ptfe' ? 'assemble' : 'machine'), how: 'turned from stainless bar, threaded M6 its length, bored through', spec: (p) => `M6 × 1, ${p.L} mm long; bored ${p.lined === 'ptfe' ? '4.1 mm round a 4 × 2 mm PTFE liner' : '2 mm for 1.75 mm filament'}`,
+    box: (p) => [6, 6, n(p, 'L')], g: (p) => { const b = p.lined === 'ptfe' ? 2.05 : 1; return gOf(Math.PI * (9 - b * b) * n(p, 'L'), 8.0) + (p.lined === 'ptfe' ? gOf(Math.PI * 3 * n(p, 'L'), 2.2) : 0); }, look: 'ring',
+  },
+  {
+    id: 'hotendsink', name: 'hot end heat sink', path: 'Mechanical/3D printer parts/Hot end', says: 'the finned aluminium cold end above a heat break, cooled by its fan, holding the coupler for the filament\'s tube',
+    std: 'the Ender-3\'s (Creality\'s own model: 20 × 27.8 × 12 mm); its eight fins 1 mm, its column 12 mm across, its plates 3 mm (typical)',
+    axes: [bare('form', 'form', ['ender3'])], title: () => 'Ender-3 hot end heat sink, aluminium', of: () => 'al-6061', make: 'machine', how: 'cut from aluminium bar, its fins slotted, tapped M6 below for the heat break and M10 × 1 above for the coupler',
+    spec: () => '20 × 27.8 × 12 mm; M6 below, M10 × 1 above', box: () => [20, 27.8, 12], g: () => gOf(sinkMm3(), 2.7), look: 'block',
+  },
+  {
+    id: 'bowden', name: 'PTFE tube', path: 'Mechanical/3D printer parts/Filament path', says: 'the slippery tube a 3D printer\'s filament runs in, from extruder to hot end',
+    std: 'PTFE tube 4 mm outside, 2 mm inside for 1.75 mm filament (3 mm for 2.85), cut to any length (typical)', axes: [ax('od', 'outside', 'mm', [4]), ax('id', 'inside', 'mm', [2, 3]), ax('L', 'long', 'mm', [50, 100, 300, 500, 1000], [5, 3000, 1])],
+    title: (p) => `PTFE tube ${p.od} × ${p.id} mm, ${p.L} mm`, of: () => 'ptfe', make: 'extrude', how: 'paste-extruded PTFE, sintered, cut to length', spec: (p) => `${p.od} mm outside, ${p.id} mm bore, ${p.L} mm`,
+    box: (p) => [n(p, 'od'), n(p, 'od'), n(p, 'L')], g: (p) => gOf(ring(n(p, 'od'), n(p, 'id'), n(p, 'L')), 2.2), look: 'ring',
+  },
+  {
+    id: 'tubefit', name: 'push-in tube coupler', path: 'Mechanical/3D printer parts/Filament path', says: 'a brass push-in fitting for a 4 mm tube: screwed into a hot end or extruder, its collet\'s teeth grip the tube until its collar is pressed',
+    std: 'PC4 couplers by thread (the Ender-3\'s M10 × 1 and M6, their hexes and lengths from Creality\'s model; an M5\'s typical)', axes: [bare('thread', 'thread', ['M10', 'M6', 'M5'])],
+    title: (p) => `PC4-${p.thread} push-in coupler`, of: () => 'tubefit-body grab-ring collet', make: 'assemble', how: 'a brass body turned and threaded, a stainless collet pressed into it, a POM release collar on the collet',
+    spec: (p) => { const f = HOTEND.fit[String(p.thread)]!; return `${p.thread} thread ${f.th} mm, a ${f.af} mm hex, ${f.L} mm long; for a 4 mm tube`; }, box: (p) => { const f = HOTEND.fit[String(p.thread)]!; return [f.af / Math.cos(Math.PI / 6), f.af, f.L]; },
+    g: (p) => { const v = fitMm3(String(p.thread)); return gOf(v.brass, 8.5) + gOf(v.pom, 1.41) + gOf(v.steel, 8.0); }, look: 'screw hex',
   },
   {
     id: 'printnozzle', name: '3D printer nozzle', path: 'Mechanical/3D printer parts/Nozzles', says: 'the brass (or hardened) tip a 3D printer extrudes through', std: 'MK8, V6 and Volcano forms, M6 thread; flows typical',

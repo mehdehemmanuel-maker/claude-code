@@ -48,6 +48,13 @@ export function libraryWords(p: ModelPart): string | null {
   if (/thermistor/i.test(n)) return 'thermistor 100k 3950';
   if (/^cold section fan$/i.test(n)) { const [a, , c] = [...extents(p)].sort((x, y) => y - x); return `fan ${Math.round(a!)}x${Math.round(c! / 5) * 5} 24V`; }
   if (/^z coupler$/i.test(n)) return 'coupling 5x8';
+  // (its hot end's block, heat break, heat sink, PTFE tube and couplers: kinds/plant.ts sizes them from this model)
+  if (/^heat block$/i.test(n)) return 'heatblock mk8';
+  if (/^catheter$|heat ?break|throat/i.test(n)) return `heatbreak L${longest(p)} ptfe`;
+  if (/^radiator$/i.test(n)) return 'hotendsink ender3';
+  if (/teflon tube|ptfe tube/i.test(n)) return `bowden od4 id2 L${longest(p)}`;
+  if ((m = /^M(\d+)\s*pneumatic joint$/i.exec(n))) return `tubefit M${m[1]}`;
+  if (/^pneumatic joint$/i.test(n)) return 'tubefit M10';
   // (its V-slot wheels and what they ride on: a round part's two like extents its diameter, the third its length)
   if (/^rollers?$|v ?wheel/i.test(n)) return 'vwheel solid pom';
   // (its T-slot nuts, in its profiles' 6 mm slots; its bed's and extruder's springs, as measured (8.9 mm across, 17.1 long),

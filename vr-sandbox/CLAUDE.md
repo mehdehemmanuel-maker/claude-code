@@ -90,6 +90,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   GABA, glutamate … a map of all the brain regions … no room for context drift … use md to keep yourself on point …
   use the fuck out of edges … turn everything into a loop" (2026-10-09: `edges.ts`, the lesson language; the rest in
   "Now" in this order)
+- "no make the best 3d printer if any make the best robotic arm make the best kiln or whatever make a 3d printer that can
+  print metal or something gene editing stuff, a meta quest 3, ever part on seed studio jet packs or hover crafts drones
+  submarines, lab level equipment x-rays, infrared … lidar like I need these and so much more but you can finish this
+  first" (2026-10-10: the Ender-3 finished first; then Now item 14, in that order)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -560,6 +564,16 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    drawn on the phone. Next: the other messengers' rhythms where studies give one (serotonin and dopamine's are weak
    and contested in blood: say so rather than draw one); the map's regions drawn as shapes, not dots; dates as well
    as hours; the 3D brain from brain.ts.
+14. The user's list (2026-10-10), after the Ender-3 is finished and judged, each by the same builder (a maker's own
+   published model where there is one, else its maker's drawings, every part from the library, through the breakdown
+   queue, judged blind): the best 3D printer (Prusa's and Voron's models are published), a printer that prints metal
+   (a bound-metal filament printer and a laser powder-bed fuser, how each makes a part, its sintering furnace), the best
+   robot arm, the best kiln and its firing workflow; gene-editing lab equipment (a thermal cycler, a centrifuge, gel
+   electrophoresis, pipettes, a biosafety cabinet: the instruments, as instruments); the Meta Quest 3 (the headset the
+   forge runs on); every part Seeed Studio sells (its catalogue read into the inventory by category); jet packs,
+   hovercraft, drones, submarines (by the vehicle maker: lift, thrust and buoyancy by their laws); lab instruments: an
+   X-ray tube and detector, infrared cameras and spectrometers, lidar. Where a thing is hazardous to build (an X-ray
+   source, a jet pack's engine), what it is and how it works drawn fully, and the hazard said plainly.
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);

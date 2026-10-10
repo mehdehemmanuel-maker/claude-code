@@ -24,6 +24,7 @@ import { FAMILIES, callFamily } from './families';
 import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, fanDims, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
 import { CLEAR, VWHEEL } from './kinds/motion';
+import { HOTEND, rootR } from './kinds/plant';
 import { SOCKET_HEAD } from './embody/stock';
 import { BUTTON, PAN, SETSCREW_KEY } from './threads';
 import { UPN } from './kinds/stock';
@@ -216,6 +217,40 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
       const sec = ([[-W / 2, 0], [W / 2, 0], [W / 2, H - b], [W / 2 - b, H], [-W / 2 + b, H], [-W / 2, H - b]] as [number, number][]).map(([x, y2]) => [x * mm, y2 * mm] as [number, number]);
       // (its section in x and y, drawn along its length in z about its middle; tapped up through it)
       return [P(it.name, { prism: { pts: sec, L: Lx * mm } }, { mat: 'steel-low', color: 0xc9cdd1, finish: 'plate', cuts: [{ r: r1 * mm, depth: H * mm, at: [0, H * mm, 0], dir: [0, -1, 0] }] })]; },
+  },
+  heatblock: {
+    says: 'the MK8 heater block as Creality\'s model has it: tapped M6 through for the nozzle below and the heat break above, bored 6 mm through for the heater and 2.2 mm in from its side for the thermistor', leaves: 'its heater\'s clamp slot and screw not drawn; its holes\' threads drawn at their root',
+    make: (_p, it) => { const b = HOTEND.block, al = { mat: 'al-6061', color: 0xc9cdd1, finish: 'cast' as const };
+      return [P(it.name, { box: [b.w * mm, b.h * mm, b.d * mm] }, { ...al, cuts: [{ r: rootR(6, 1) * mm, depth: b.h * mm, at: [0, (b.h / 2) * mm, b.nozzle * mm], dir: [0, -1, 0] }, { r: 3 * mm, depth: b.w * mm, at: [(b.w / 2) * mm, 0, b.heater * mm], dir: [-1, 0, 0] }, { r: 1.1 * mm, depth: 8 * mm, at: [(-b.w / 2) * mm, b.therm[1] * mm, b.therm[0] * mm], dir: [1, 0, 0] }] })]; },
+  },
+  heatbreak: {
+    says: 'an M6 heat break: a stainless tube threaded its length, bored through; PTFE-lined, its liner 4 × 2 mm inside it', leaves: 'its thread drawn at its major diameter',
+    make: (p, it) => { const L = Number(p.L), lined = p.lined === 'ptfe', b = lined ? 2.05 : 1;
+      return [P(it.name, lathe([[b, -L / 2], [3, -L / 2], [3, L / 2], [b, L / 2], [b, -L / 2]]), { mat: 'stainless-304', color: 0xb9bdc2, finish: 'thread', ...(lined ? { item: 'heat-break' } : {}) }),
+        ...(lined ? [P(`${it.name} liner`, lathe([[1, -L / 2], [2, -L / 2], [2, L / 2], [1, L / 2], [1, -L / 2]]), { mat: 'ptfe', color: 0xf2f2ee, finish: 'moulded', item: 'ptfe-liner' })] : [])]; },
+  },
+  hotendsink: {
+    says: 'the Ender-3\'s heat sink as Creality\'s model sizes it: a plate below tapped M6 for the heat break, a plate above tapped M10 × 1 for the coupler, a column between them bored for the filament, eight fins either side', leaves: 'its fins\', column\'s and plates\' thicknesses typical; its mounting holes not drawn',
+    make: (_p, it) => { const s = HOTEND.sink, al = { mat: 'al-6061', color: 0xc9cdd1, finish: 'cast' as const }, colH = s.h - 2 * s.plate, pitch = colH / s.fins, fx = (s.finX[0] + s.finX[1]) / 2;
+      // (its bottom at y = 0)
+      return [P(it.name, { box: [s.w * mm, s.plate * mm, s.d * mm] }, { ...al, at: [0, (s.plate / 2) * mm, 0], cuts: [{ r: rootR(6, 1) * mm, depth: s.plate * mm, at: [0, (-s.plate / 2) * mm, 0], dir: [0, 1, 0] }] }),
+        P(`${it.name} top`, { box: [s.w * mm, s.plate * mm, s.d * mm] }, { ...al, at: [0, (s.h - s.plate / 2) * mm, 0], cuts: [{ r: rootR(10, 1) * mm, depth: s.plate * mm, at: [0, (s.plate / 2) * mm, 0], dir: [0, -1, 0] }] }),
+        P(`${it.name} column`, lathe([[rootR(6, 1), s.plate], [s.col, s.plate], [s.col, s.h - s.plate], [rootR(6, 1), s.h - s.plate], [rootR(6, 1), s.plate]]), al),
+        ...Array.from({ length: s.fins }, (_, k) => [-1, 1].map((e) => P(`${it.name} fin ${k + 1}${e < 0 ? 'a' : 'b'}`, { box: [(s.finX[1] - s.finX[0]) * mm, s.fin * mm, s.d * mm] }, { ...al, at: [e * fx * mm, (s.plate + (k + 0.5) * pitch) * mm, 0] }))).flat()]; },
+  },
+  bowden: {
+    says: 'a PTFE tube, its bore for the filament', leaves: 'drawn straight',
+    make: (p, it) => { const o = Number(p.od) / 2, i = Number(p.id) / 2, L = Number(p.L); return [P(it.name, lathe([[i, -L / 2], [o, -L / 2], [o, L / 2], [i, L / 2], [i, -L / 2]]), { mat: 'ptfe', color: 0xf2f2ee, finish: 'moulded' })]; },
+  },
+  tubefit: {
+    says: 'a PC4 push-in coupler: its brass body (its thread, its hex) bored 4.1 mm, its stainless grab ring in its top, its POM release collet over the ring', leaves: 'its collet\'s teeth drawn as a ring; its O-ring not drawn; its thread drawn at four fifths filled',
+    make: (p, it) => { const th = String(p.thread), f = HOTEND.fit[th]!, d = Number(th.slice(1)), hx = f.L - f.th - 3, brass = { mat: 'brass', color: 0xc9a24a, finish: 'cast' as const };
+      const hex = Array.from({ length: 6 }, (_, q) => [((f.af / 2) / Math.cos(PI / 6)) * Math.cos((q * PI) / 3) * mm, ((f.af / 2) / Math.cos(PI / 6)) * Math.sin((q * PI) / 3) * mm] as [number, number]);
+      // (its thread from y = 0 up, its hex over it, its collar and collet on top)
+      return [group(`${it.name} body`, 'tubefit-body', [P(it.name, lathe([[2.05, 0], [d / 2, 0], [d / 2, f.th], [2.05, f.th], [2.05, 0]]), { ...brass, finish: 'thread', fill: 0.8 }),
+        P(`${it.name} hex`, { prism: { pts: hex, L: hx * mm } }, { ...brass, at: [0, (f.th + hx / 2) * mm, 0], rot: [-PI / 2, 0, 0], cuts: [{ r: 2.05 * mm, depth: hx * mm, at: [0, 0, (hx / 2) * mm], dir: [0, 0, -1] }] })]),
+        P(`${it.name} collar`, lathe([[2.6, f.L - 3], [f.af / 2 - 0.5, f.L - 3], [f.af / 2 - 0.5, f.L], [2.6, f.L], [2.6, f.L - 3]]), { mat: 'pom', color: 0x2f5fa8, finish: 'moulded', item: 'collet' }),
+        P(`${it.name} collet`, lathe([[2.05, f.L - 1.5], [2.6, f.L - 1.5], [2.6, f.L], [2.05, f.L], [2.05, f.L - 1.5]]), { mat: 'stainless-304', color: 0xb9bdc2, finish: 'plate', item: 'grab-ring' })]; },
   },
   vwheel: {
     says: 'a solid V wheel turned about its axle: its hub bored for two 625 bearings, its V edge for a V-slot\'s groove (OpenBuilds\' sizes)', leaves: 'its V\'s proportions typical; its bearings drawn apart (they are their own parts)',

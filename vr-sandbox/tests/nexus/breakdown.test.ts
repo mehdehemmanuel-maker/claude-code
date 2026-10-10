@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { breakdown, judge, sayBreakdown } from '../../src/nexus/breakdown';
+import { catalogue } from '../../src/nexus/catalogue';
 import { INVENTORY, resolve, type Item } from '../../src/nexus/inventory';
 
 const thing = (o: Partial<Item>): Item => ({ id: 'x', name: 'x', path: ['x'], kind: 'product', make: 'assemble', of: [], says: '', ...o }) as Item;
@@ -27,4 +28,11 @@ describe('the breakdown queue', () => {
     expect(judge(thing({ make: 'assemble', of: [{ id: 'bearing-ring', n: 2 }, { id: 'steel-chrome', n: 1 }] }), find)).toBeNull(); // has parts
     expect(judge(thing({ kind: 'part', make: 'weld', of: [{ id: 'steel-low', n: 1 }] }), find)).toBeNull(); // a tube welded along its seam
   });
+  it('breaks down every size the catalogue sells: nothing waits but what CLAUDE.md names as waiting', () => {
+    // (the round's step: `npm run breakdown` leaves only these; a new part listed as bare materials fails here)
+    for (const l of catalogue()) resolve(l);
+    const b = breakdown(), waits = [...new Set(b.waiting.map((w) => w.in))].sort();
+    expect(b.taken).toBeGreaterThan(1000);
+    expect(waits.filter((w) => w !== 'joint-drive')).toEqual([]);
+  }, 120_000);
 });
