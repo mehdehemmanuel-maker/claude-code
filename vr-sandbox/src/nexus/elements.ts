@@ -59,6 +59,11 @@ export const ELEMENTS: Record<string, { name: string; w: number; group: string; 
   Ce: { name: 'cerium', w: 140.12, group: 'Rare earths', from: 'rare-earth ores (bastnäsite, monazite), separated by solvent extraction' },
   Pt: { name: 'platinum', w: 195.08, group: 'Metals', from: 'platinum ores (the Bushveld, Norilsk), and a by-product of refining nickel' },
   I: { name: 'iodine', w: 126.9, group: 'Non-metals', from: 'brine from gas and oil wells (Japan, the US) and caliche in Chile, where it comes with nitrate' },
+  // (what the instruments that see by light are made of: src/nexus/instruments.ts)
+  Ge: { name: 'germanium', w: 72.63, group: 'Metalloids', from: 'a by-product of refining zinc ore and of coal fly ash, zone-refined to a crystal' },
+  Br: { name: 'bromine', w: 79.904, group: 'Non-metals', from: 'brine from the Dead Sea and from wells in Arkansas, displaced by chlorine' },
+  Se: { name: 'selenium', w: 78.971, group: 'Non-metals', from: 'the anode slimes of copper refining' },
+  Cs: { name: 'caesium', w: 132.905, group: 'Metals', from: 'pollucite ore, nearly all of it from one lake in Manitoba' },
 };
 
 /** A formula's mass fractions, %: "C3H4O2" (PLA's unit), "PbZr0.52Ti0.48O3" (PZT). */
@@ -102,6 +107,10 @@ export const MATERIALS: Record<string, Spec> = {
   pbt: { formula: 'C12H12O4' }, pp: { formula: 'C3H6' }, pe: { formula: 'C2H4' }, pvc: { formula: 'C2H3Cl' }, pmma: { formula: 'C5H8O2' }, ptfe: { formula: 'C2F4' }, polyimide: { formula: 'C22H10N2O5', says: 'Kapton' },
   silicone: { formula: 'C2H6OSi', says: 'polydimethylsiloxane' }, rubber: { formula: 'C5H8', says: 'polyisoprene (the polymer only: fillers and carbon black are a third of a tyre)' }, neoprene: { formula: 'C4H5Cl' }, phenolic: { formula: 'C7H6O', says: 'phenol-formaldehyde (Bakelite)' },
   pet: { formula: 'C10H8O4' }, paper: { formula: 'C6H10O5', says: 'cellulose' }, graphite: { formula: 'C' }, glue: { formula: 'C4H6O2', says: 'polyvinyl acetate wood glue, dry' },
+  // (what sees by light: src/nexus/instruments.ts)
+  molybdenum: { alloy: { Mo: 'bal' }, grade: 'pure molybdenum' }, germanium: { alloy: { Ge: 'bal' }, grade: 'single-crystal germanium, optical grade' },
+  'csi-tl': { formula: 'CsI', says: 'caesium iodide with about 0.1 % thallium as the activator, which is what makes it flash' }, kbr: { formula: 'KBr' }, 'zinc-selenide': { formula: 'ZnSe' }, 'silicon-carbide': { formula: 'SiC' },
+  'oil-transformer': { formula: 'C20H42', says: 'a refined mineral oil: a mixture of paraffins, taken as eicosane' },
   alumina: { formula: 'Al2O3' }, batio3: { formula: 'BaTiO3' }, pzt: { formula: 'PbZr0.52Ti0.48O3' }, mgo: { formula: 'MgO' }, 'ntc-ceramic': { formula: 'NiMn2O4', says: 'a nickel-manganese spinel' }, quartz: { formula: 'SiO2' },
   silicon: { formula: 'Si' }, gan: { formula: 'GaN' }, gaas: { formula: 'GaAs' }, nmc: { formula: 'LiNi0.333Mn0.333Co0.333O2', says: 'NMC 111' }, nitrogen: { formula: 'N2' }, water: { formula: 'H2O' }, bi2te3: { formula: 'Bi2Te3' }, sic: { formula: 'SiC' },
   mica: { formula: 'KAl3Si3O12H2', says: 'muscovite' }, oil: { formula: 'CH2', says: 'mineral oil, as (CH₂)ₙ' },

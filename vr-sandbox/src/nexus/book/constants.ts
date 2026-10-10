@@ -11,6 +11,7 @@ export const CONST = {
   g: fundamental('standard gravity', 9.80665, 'm/s^2', 'ISO 80000-3: standard acceleration of free fall, a defined conventional value'),
   c: fundamental('speed of light in vacuum', 299792458, 'm/s', 'SI (2019): exact by definition'),
   h: fundamental('Planck constant', 6.62607015e-34, 'J s', 'SI (2019): exact by definition'),
+  e: fundamental('elementary charge', 1.602176634e-19, 'C', 'SI (2019): exact by definition'),
   kB: fundamental('Boltzmann constant', 1.380649e-23, 'J/K', 'SI (2019): exact by definition'),
   R: fundamental('molar gas constant', 8.314462618, 'J/mol K', 'SI (2019): k_B N_A, exact (8.314462618…)'),
   F: fundamental('Faraday constant', 96485.33212, 'C/mol', 'SI (2019): e N_A, exact (96485.33212…)'),
@@ -30,6 +31,8 @@ export const CONST = {
   REV: fundamental('one revolution', 1, 'rev', 'mathematics: 2π rad'),
   me: measured('mass of the electron', 9.1093837015e-31, 'kg', 'CODATA 2018: 9.1093837015(28)e-31 kg', 2.8e-40),
   mu: measured('atomic mass constant: a twelfth of a carbon-12 atom, about one nucleon', 1.66053906660e-27, 'kg', 'CODATA 2018: 1.66053906660(50)e-27 kg', 5.0e-37),
+  bWien: fundamental('Wien displacement constant', 2.897771955e-3, 'm K', 'CODATA 2018: b = hc/(4.965114231… k_B), exact from exact constants'),
+  kXray: empirical('x-ray yield constant of a thick target', 1.1e-9, '1/V', 'Bushberg et al., The Essential Physics of Medical Imaging, 3rd ed.: η ≈ 1.1 × 10⁻⁹ Z V, fitted to thick-target measurements'),
   Tcmb: measured('temperature of the cosmic microwave background: the coldest anything sees', 2.72548, 'K', 'Fixsen 2009, ApJ 707, 916 (COBE/FIRAS): 2.72548 ± 0.00057 K', 0.00057),
 };
 

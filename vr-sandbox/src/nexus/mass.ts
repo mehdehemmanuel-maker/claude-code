@@ -32,6 +32,16 @@ export const DENSITY: Record<string, number> = {
   cfrp: 1600,
   // (silver, a switch's contacts: 10.49 g/cm³)
   silver: 10490,
+  // (what instruments that see by light are made of, each at its handbook density: tungsten, an x-ray target and a
+  //  filament, 19.25 g/cm³; molybdenum, the disc that carries that target, 10.22; lead, what stops the beam, 11.34;
+  //  transformer oil, what insulates and cools a tube's insert, 0.88; germanium, the only cheap window for the
+  //  long-wave infrared, 5.323; caesium iodide doped with thallium, the scintillator a flat panel sees x-rays with,
+  //  4.51; potassium bromide, an interferometer's beamsplitter, 2.75; zinc selenide, its windows, 5.27; silicon
+  //  carbide, the glower that is its source, 3.21)
+  // (and Kovar, ASTM F15, the iron-nickel-cobalt that seals to glass: 8.36 g/cm³, which a crystal's lid and a
+  //  detector's package are made of)
+  kovar: 8360,
+  tungsten: 19250, molybdenum: 10220, lead: 11340, 'oil-transformer': 880, germanium: 5323, 'csi-tl': 4510, kbr: 2750, 'zinc-selenide': 5270, 'silicon-carbide': 3210,
   // (what electronic packages are made of: src/nexus/packages.ts, each with its source)
   ...Object.fromEntries(Object.entries(PKG_DENSITY).map(([k, [v]]) => [k, v])),
   tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,

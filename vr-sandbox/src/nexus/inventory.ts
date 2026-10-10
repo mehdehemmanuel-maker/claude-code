@@ -445,6 +445,23 @@ e('rivet-pop', 'blind rivet', 'Hardware/Fasteners/Rivets', 'product', 'cold-head
 e('standoff', 'M3 standoff', 'Hardware/Fasteners/Spacers', 'product', 'machine', 'brass', 'a hex spacer threaded both ends, for boards', '', { alt: 'print', size: [5, 5, 10] });
 e('bracket-corner', 'corner bracket (2020)', 'Hardware/Structural/Brackets', 'product', 'cast', 'al-a380', 'an L-shaped cast bracket with ribs, for joining extrusions at right angles', '', { size: [20, 20, 20] });
 e('sheet-al', 'aluminium sheet 2 mm', 'Hardware/Structural/Sheet', 'product', 'extrude', 'al-6061', 'aluminium rolled to 2 mm');
+// ---- what instruments that see by light are made of (src/nexus/instruments.ts) --------------------------------------
+e('xray-anode', 'rotating anode disc', 'Electrical/Instruments/X-ray parts', 'part', 'machine', 'molybdenum tungsten', 'a molybdenum disc faced with tungsten-rhenium, bevelled at its rim: the target electrons are stopped in, spun so no one spot of it melts', 'IEC 60336 names the focal spot it makes', { size: [100, 100, 12] });
+e('filament-tungsten', 'tube filament', 'Electrical/Instruments/X-ray parts', 'part', 'coil', 'tungsten', 'tungsten wire coiled to a helix: run at about 2400 °C it boils off the electrons that become the beam', '', { size: [12, 2, 2] });
+e('lead-sheet', 'lead sheet', 'Hardware/Structural/Sheet', 'product', 'roll', 'lead', 'lead rolled to a sheet: what a beam is stopped with, and the reason a housing weighs what it does', '1 mm of it cuts a 100 keV beam to about a hundredth', { size: [600, 1200, 1] });
+e('xray-window', 'tube window', 'Electrical/Instruments/X-ray parts', 'part', 'machine', 'al-6061', 'the port a beam leaves the housing by: aluminium, which also filters out the softest photons, the ones that would stop in the patient and do nothing but dose', '', { size: [50, 50, 4] });
+e('scintillator-csi', 'caesium iodide scintillator', 'Electrical/Instruments/X-ray parts', 'part', 'grow', 'csi-tl', 'caesium iodide doped with thallium, grown as needles: each needle pipes the light it makes down to one pixel instead of spreading it', '', { size: [430, 350, 0.6] });
+e('tft-array', 'thin-film transistor array', 'Electrical/Instruments/X-ray parts', 'part', 'fab', 'glass silicon', 'photodiodes and their switching transistors laid on glass: the thing that replaced film', '', { size: [430, 350, 0.7] });
+e('lens-germanium', 'germanium lens', 'Electrical/Instruments/Infrared parts', 'part', 'machine', 'germanium', 'a lens ground from germanium and coated: glass is opaque past 2.5 µm, so a thermal camera sees through this or through nothing', '', { size: [20, 20, 4] });
+e('bolometer-array', 'microbolometer array', 'Electrical/Instruments/Infrared parts', 'part', 'fab', 'silicon kovar', 'an array of vanadium-oxide bridges on legs a few hundred nanometres thick, in a vacuum package: the heat arriving changes each bridge\'s resistance, and that is the picture', '', { size: [22, 22, 12] });
+e('ir-glower', 'silicon carbide glower', 'Electrical/Instruments/Spectrometer parts', 'part', 'sinter', 'silicon-carbide', 'a rod of silicon carbide run at about 1200 °C: a black body, which is what a spectrometer wants — every wavelength at once', '', { size: [8, 8, 20] });
+e('beamsplitter-kbr', 'potassium bromide beamsplitter', 'Electrical/Instruments/Spectrometer parts', 'part', 'coat', 'kbr germanium', 'a KBr plate coated with germanium: it sends half the light down each arm of an interferometer, and it dissolves in the moisture of a breath', '', { size: [50, 50, 4] });
+e('helium-neon-laser', 'helium-neon laser', 'Electrical/Instruments/Spectrometer parts', 'part', 'blow', 'glass nickel', 'a glass tube of helium and neon at 632.8 nm: the ruler an interferometer measures its own mirror against', '', { size: [24, 24, 90] });
+e('dtgs-detector', 'pyroelectric detector', 'Electrical/Instruments/Spectrometer parts', 'part', 'fab', 'kovar kbr', 'deuterated triglycine sulfate behind a window: a crystal whose charge changes as it warms, which reads the beam at room temperature', '', { size: [30, 30, 40] });
+e('mct-detector', 'mercury cadmium telluride detector', 'Electrical/Instruments/Spectrometer parts', 'part', 'fab', 'kovar silicon', 'a photon detector in a dewar of liquid nitrogen: a hundred times the sensitivity, filled every day it is used', '', { size: [30, 30, 40] });
+e('slip-ring', 'slip ring', 'Electrical/Connection/Rotating', 'part', 'assemble', 'brass pom', 'rings and brushes that carry power and signal across a joint that turns for ever', '', { size: [34, 34, 16] });
+e('photodiode-apd', 'avalanche photodiode', 'Electrical/Sensors/Light', 'part', 'fab', 'silicon', 'a photodiode run near breakdown so each photon makes an avalanche of carriers: what times a lidar\'s echo', '', { size: [4, 4, 3] });
+e('lens-plastic', 'moulded lens', 'Electrical/Instruments/Optics', 'part', 'mould', 'pmma', 'an acrylic lens moulded rather than ground: what gathers the return in anything made in quantity', '', { size: [25, 25, 4] });
 e('pressure-shell', 'pressure hull shell', 'Mechanical/Vehicles/Submarine parts', 'part', 'roll', 'steel-alloy', 'plate rolled into a cylinder and seam-welded, with a formed end at each end: the shell a pressure hull is, whose thickness is what its depth asked for', '', { size: [1200, 1200, 4900] });
 e('tube-steel', 'square steel tube 20 × 20', 'Hardware/Structural/Tube', 'product', 'weld', 'steel-low', 'strip rolled into a square and seam-welded', '1.5 mm wall');
 e('acrylic-sheet', 'acrylic sheet 3 mm', 'Hardware/Structural/Sheet', 'product', 'chemistry', 'pmma', 'cast PMMA sheet');
@@ -1294,6 +1311,14 @@ m('zinc-oxide', 'zinc oxide', 'Ceramics', 'a white semiconductor ceramic: sinter
 m('zirconia', 'zirconia', 'Ceramics', 'a tough white ceramic: fibre ferrules, blades and bearing balls');
 m('ps', 'polystyrene', 'Polymers', 'a light rigid plastic; foamed, it is EPS and XPS insulation');
 m('tungsten', 'tungsten', 'Metals', 'the metal with the highest melting point: lamp filaments and TIG electrodes');
+// (what instruments that see by light are made of: src/nexus/instruments.ts)
+m('molybdenum', 'molybdenum', 'Metals', 'a refractory metal that stays stiff when hot and conducts heat badly: the disc an x-ray target is carried on, and the stem that holds it away from its bearings');
+m('germanium', 'germanium', 'Semiconductors', 'a grey semiconductor, opaque to the eye and clear from 2 to 14 µm: the window and the lens of everything that sees heat');
+m('csi-tl', 'caesium iodide (thallium doped)', 'Ceramics', 'a salt that flashes visible light when an x-ray stops in it, grown as needles so the flash stays in its own column', 'CsI:Tl, about 54 photons a keV');
+m('kbr', 'potassium bromide', 'Ceramics', 'a salt transparent from 0.25 to 25 µm: an infrared window and beamsplitter, and it dissolves in the moisture of a breath');
+m('zinc-selenide', 'zinc selenide', 'Ceramics', 'a yellow crystal that passes the infrared and does not dissolve: the window into a sample, and the optics of a CO₂ laser');
+m('silicon-carbide', 'silicon carbide', 'Ceramics', 'a hard ceramic that conducts and glows: abrasive, heating element and the glower of a spectrometer');
+m('oil-transformer', 'transformer oil', 'Oils and fluids', 'a refined mineral oil that insulates and carries heat: what fills a transformer tank and an x-ray tube\'s housing', 'IEC 60296');
 m('al-4043', '4043 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % silicon: a filler wire that flows well', 'AWS A5.10 ER4043');
 m('al-5356', '5356 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % magnesium: a stronger filler wire', 'AWS A5.10 ER5356');
 

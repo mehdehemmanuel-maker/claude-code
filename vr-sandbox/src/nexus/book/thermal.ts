@@ -130,4 +130,12 @@ export const THERMAL = [
     term: (v) => sub(v.Q, v.W),
     source: { cite: "Young & Freedman, University Physics, 15th ed., Pearson 2019", kind: "textbook" }, example: { inputs: {"Q":1000,"W":300}, output: 700 },
   }),
+  L({
+    id: "wien.displacement", name: "Wien's displacement law", statement: "The wavelength a body radiates most at is Wien's constant over its temperature: a room at 300 K peaks near 10 \u00b5m, which is the band a thermal camera is built for, and a filament at 3000 K peaks at 1 \u00b5m, which is why it looks yellow.", formula: "\u03bb_max = b / T",
+    valid: "A black body; a grey body peaks at the same place, a selective emitter need not.",
+    inputs: [["T", "K", "temperature"]], output: ["lambda", "m", "wavelength of the peak"],
+    term: (v) => div(CONST.bWien, v.T),
+    domain: (v) => [{ says: 'a temperature above absolute zero', holds: gt(v.T, est('absolute zero', 0, 'K', 'nothing is colder, so nothing has a peak there')) }],
+    source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011, ch. 12", kind: "textbook" }, example: { inputs: {"T":300}, output: 9.65923985e-6 },
+  }),
 ];

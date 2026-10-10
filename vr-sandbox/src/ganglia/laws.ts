@@ -38,6 +38,12 @@ const GILLESPIE = { cite: 'Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992
 const HILL = { cite: 'Hill & Peterson, Mechanics and Thermodynamics of Propulsion, 2nd ed., Addison-Wesley 1992, ch. 5', kind: 'textbook' as const };
 const YUN2 = { cite: 'Yun & Bliault, Theory and Design of Air Cushion Craft, Butterworth-Heinemann 2000, ch. 2', kind: 'textbook' as const };
 const YUN3 = { cite: 'Yun & Bliault, Theory and Design of Air Cushion Craft, Butterworth-Heinemann 2000, ch. 3', kind: 'textbook' as const };
+const ATTIX = { cite: 'Attix, Introduction to Radiological Physics and Radiation Dosimetry, Wiley 1986, ch. 3', kind: 'textbook' as const };
+const ATTIX9 = { cite: 'Attix, Introduction to Radiological Physics and Radiation Dosimetry, Wiley 1986, ch. 9', kind: 'textbook' as const };
+const BUSHBERG = { cite: 'Bushberg, Seibert, Leidholdt & Boone, The Essential Physics of Medical Imaging, 3rd ed., Lippincott 2011, ch. 6', kind: 'textbook' as const };
+const LADAR = { cite: 'Richmond & Cain, Direct-Detection LADAR Systems, SPIE Press 2010, ch. 2', kind: 'textbook' as const };
+const FTIR = { cite: 'Griffiths & de Haseth, Fourier Transform Infrared Spectrometry, 2nd ed., Wiley 2007, ch. 2', kind: 'textbook' as const };
+const INCROPERA12 = { cite: 'Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011, ch. 12', kind: 'textbook' as const };
 const WT = { cite: 'Windenburg & Trilling, Collapse by instability of thin cylindrical shells under external pressure, Trans. ASME 56 (1934) 819', kind: 'paper' as const };
 const ISO281 = { cite: 'ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life', kind: 'standard' as const };
 const G = { g: { value: g, unit: 'm/s^2', name: 'standard gravity (ISO 80000-3)' } };
@@ -945,6 +951,41 @@ export const LAWS: Law[] = [
     id: 'tsiolkovsky', name: 'Rocket equation', domain: 'mechanics', statement: 'Velocity gained is the exhaust speed times the log of the initial over the final mass.', formula: 'Δv = v_e ln(m₀ / m₁)',
     inputs: [q('ve', 'exhaust speed', 'm/s'), q('m0', 'initial mass', 'kg'), q('m1', 'final mass', 'kg')], output: q('dv', 'velocity gained', 'm/s'), eval: ({ ve, m0, m1 }) => ve! * Math.log(m0! / m1!),
     valid: 'No gravity or drag during the burn.', example: { inputs: { ve: 3000, m0: 10, m1: 1 }, output: 6907.7552789821375 }, source: PHYSICS, tags: ['rocket', 'propulsion', 'thrust'],
+  },
+  {
+    id: 'xray.cutoff', name: 'Duane-Hunt law', domain: 'optics', statement: 'An x-ray tube makes nothing shorter than the wavelength one whole electron\'s energy would be: the tube\'s voltage sets the hardest photon it can make, and nothing above it.', formula: 'λ_min = h c / (e V)',
+    inputs: [q('V', 'tube voltage', 'V')], output: q('lambda', 'shortest wavelength', 'm'), constants: { h: { value: 6.62607015e-34, unit: 'J s', name: 'Planck constant' }, c: { value: 299792458.0, unit: 'm/s', name: 'speed of light' }, e: { value: 1.602176634e-19, unit: 'C', name: 'elementary charge' } }, eval: ({ V, h: hh, c: cc, e: ee }) => (hh! * cc!) / (ee! * V!),
+    valid: 'A tube accelerating electrons through V into a target; the voltage as applied, not the mean of a ripply supply.', example: { inputs: { V: 100000 }, output: 1.2398419843320027e-11 }, source: ATTIX9, tags: ['x-ray', 'tube', 'spectrum', 'radiography'],
+  },
+  {
+    id: 'xray.efficiency', name: 'thick-target x-ray yield', domain: 'optics', statement: 'Almost all of an x-ray tube\'s power becomes heat: the share that leaves as x-rays is about a billionth of the target\'s atomic number times the volts, which at 100 kV into tungsten is under one per cent.', formula: 'η ≈ 1.1e-9 Z V',
+    inputs: [q('Z', 'atomic number of the target', '-'), q('V', 'tube voltage', 'V')], output: q('eta', 'share of the beam power radiated', '-'), constants: { kXray: { value: 1.1e-9, unit: '1/V', name: 'x-ray yield constant of a thick target' } }, eval: ({ Z, V, kXray }) => kXray! * Z! * V!,
+    valid: 'A thick target of one element, 30 kV to about 300 kV. It is a fit, not a derivation.', example: { inputs: { Z: 74, V: 100000 }, output: 0.00814 }, source: BUSHBERG, tags: ['x-ray', 'tube', 'anode', 'heat'],
+  },
+  {
+    id: 'attenuation.exponential', name: 'Beer-Lambert attenuation', domain: 'optics', statement: 'A beam of photons through matter loses the same share in every equal layer, so what is left falls off exponentially with thickness: what an x-ray image is made of.', formula: 'I = I₀ e^(-μ x)',
+    inputs: [q('I0', 'incident intensity', 'W/m^2'), q('mu', 'linear attenuation coefficient', '1/m'), q('x', 'thickness', 'm')], output: q('I', 'intensity left', 'W/m^2'), eval: ({ I0, mu, x }) => I0! * Math.exp(-mu! * x!),
+    valid: 'A narrow beam of one energy, no build-up from scatter. μ is the material\'s linear attenuation coefficient at that energy (NIST XCOM).', example: { inputs: { I0: 1, mu: 17.07, x: 0.1 }, output: 0.18140920470554706 }, source: ATTIX, tags: ['x-ray', 'shielding', 'contrast', 'imaging'],
+  },
+  {
+    id: 'lidar.time-of-flight', name: 'time of flight', domain: 'optics', statement: 'A pulse\'s echo comes back in twice the range over the speed of light: a lidar is a clock, and a nanosecond is 150 mm.', formula: 'R = c t / 2',
+    inputs: [q('t', 'time from pulse to echo', 's')], output: q('R', 'range', 'm'), constants: { c: { value: 299792458.0, unit: 'm/s', name: 'speed of light' } }, eval: ({ t, c: cc }) => (cc! * t!) / 2,
+    valid: 'In air (the speed of light in air is lower by about 3 parts in 10,000, which is 30 mm in 100 m).', example: { inputs: { t: 1e-6 }, output: 149.896229 }, source: LADAR, tags: ['lidar', 'range', 'time', 'robot'],
+  },
+  {
+    id: 'lidar.return', name: 'lidar range equation', domain: 'optics', statement: 'What comes back from a scattering surface is the transmitted power times its reflectance times the share of a hemisphere the receiver\'s aperture fills: it falls as the square of the range, so doubling the range asks four times the power.', formula: 'P_r = P_t ρ A η / (π R²)',
+    inputs: [q('Pt', 'transmitted power', 'W'), q('rho', 'target reflectance', '-'), q('A', 'receiver aperture area', 'm^2'), q('eta', 'optical efficiency', '-'), q('R', 'range', 'm')], output: q('Pr', 'power received', 'W'), eval: ({ Pt, rho, A, eta, R }) => (Pt! * rho! * A! * eta!) / (Math.PI * R! * R!),
+    valid: 'A Lambertian target larger than the beam, filling the field of view, no atmospheric loss, the receiver normal to the return.', example: { inputs: { Pt: 25, rho: 0.1, A: 2.8e-4, eta: 0.9, R: 100 }, output: 2.005352282957881e-8 }, source: LADAR, tags: ['lidar', 'range', 'power', 'detector'],
+  },
+  {
+    id: 'ftir.resolution', name: 'interferometer resolution', domain: 'optics', statement: 'An interferometer tells apart wavenumbers no closer than one over the path difference its mirror travels: to see 1 cm⁻¹ apart the mirror must move a centimetre.', formula: 'Δν̃ = 1 / OPD',
+    inputs: [q('opd', 'optical path difference', 'm')], output: q('dnu', 'resolution in wavenumber', '1/m'), eval: ({ opd }) => 1 / opd!,
+    valid: 'An unapodised spectrum; apodising to suppress its ringing widens the line by up to half as much again.', example: { inputs: { opd: 0.01 }, output: 100 }, source: FTIR, tags: ['infrared', 'spectrometer', 'ftir', 'resolution'],
+  },
+  {
+    id: 'wien.displacement', name: 'Wien\'s displacement law', domain: 'thermal', statement: 'The wavelength a body radiates most at is Wien\'s constant over its temperature: a room at 300 K peaks near 10 µm, which is the band a thermal camera is built for, and a filament at 3000 K peaks at 1 µm, which is why it looks yellow.', formula: 'λ_max = b / T',
+    inputs: [q('T', 'temperature', 'K')], output: q('lambda', 'wavelength of the peak', 'm'), constants: { bWien: { value: 2.897771955e-3, unit: 'm K', name: 'Wien displacement constant' } }, eval: ({ T, bWien }) => bWien! / T!, outside: ({ T }) => (T! > 0 ? null : `a temperature of ${T} K is at or below absolute zero: nothing is colder, so nothing has a peak there`),
+    valid: 'A black body; a grey body peaks at the same place, a selective emitter need not.', example: { inputs: { T: 300 }, output: 9.65923985e-6 }, source: INCROPERA12, tags: ['infrared', 'thermal camera', 'radiation', 'temperature'],
   },
   {
     id: 'bragg.law', name: 'Bragg\'s law', domain: 'optics', statement: 'Waves reflect from crystal planes only at angles where the path difference between planes is whole wavelengths: how structure is seen.', formula: 'n λ = 2 d sin θ',
