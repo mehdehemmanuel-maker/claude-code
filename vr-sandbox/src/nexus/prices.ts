@@ -126,6 +126,18 @@ export const PRICES: Record<string, Price> = {
   'pack-lipo-4s': { what: 'LiPo pack 4S', offers: [
     { name: 'CNHL MINISTAR 1500mAh 14.8V 4S 120C', usd: 25.99, seller: 'Pyrodrone', url: 'https://pyrodrone.com/products/cnhl-ministar-1500mah-14-8v-4s-120c-lipo-battery', seen: D2, note: '189 g with its leads; 120C continuous. Batteries ship by ground only, and not outside the United States' },
     { name: 'RDQ Series 14.8V 4S 1500mAh 100C LiPo - XT60', usd: 32.49, seller: 'RaceDayQuads', url: 'https://www.racedayquads.com/products/rdq-series-14-8v-4s-1500mah-100c-lipo-battery-xt60', seen: D2, note: 'measured at 60 A continuous and 80 A pulse in Bardwell\'s tests, which the seller publishes' }] },
+  // ---- the machines a works is made of (src/nexus/works.ts) ----------------------------------------------------------
+  'printer-fff': { what: 'FFF 3D printer', offers: [
+    { name: 'Creality Ender-3 V3 SE', usd: 179, seller: 'MatterHackers', url: 'https://www.matterhackers.com/store/l/creality-ender-3-v3-se-3d-printer/sk/M5EYNWU0', seen: D2, note: '220 × 220 × 250 mm, 0.4 mm nozzle; the cheapest machine that makes its own fixtures, jigs and patterns, which is most of what it is for' }] },
+  'cnc-benchtop': { what: 'benchtop CNC router/mill', offers: [
+    { name: 'Genmitsu 3018-PRO Desktop CNC Router DIY Kit', usd: 149, seller: 'SainSmart', url: 'https://www.sainsmart.com/products/sainsmart-genmitsu-cnc-router-3018-pro-diy-kit', seen: D2, note: '300 × 180 × 45 mm; wood, acrylic and soft aluminium in light cuts. The cheapest way to hold a flat face and a bored hole, which no printer does' },
+    { name: 'Genmitsu 3018-PROVer V2, semi-assembled', usd: 269, seller: 'SainSmart', url: 'https://www.sainsmart.com/products/genmitsu-3018-prover-v2-upgraded-semi-assembled-cnc-router-kit', seen: D2, note: 'the same envelope in a stiffer frame with limit switches and an emergency stop' }] },
+  'welder-fluxcore': { what: 'flux-core/MIG welder', offers: [
+    { name: 'TITANIUM 125 Amp Easy Flux-Core Inverter Welder, 120V', usd: 149.99, seller: 'Harbor Freight', url: 'https://www.harborfreight.com/search?category=2291&q=titanium', seen: D2, note: '120 V, up to 3/16 in; read off its search listing. Flux core needs no gas bottle, which is what makes it the cheapest way to join steel' }] },
+  'lathe-mini': { what: 'benchtop metal lathe', offers: [
+    { name: 'CENTRAL MACHINERY 7 in. x 10 in. Precision Benchtop Mini Lathe (93212)', usd: 729.99, seller: 'Harbor Freight', url: 'https://www.harborfreight.com/7-inch-x-10-inch-precision-mini-lathe-93212.html', seen: D2, stock: 'in', note: 'read off its own listing and the lathes category page; 180 mm swing over the bed, 250 mm between centres, 2500 rev/min, 120 V. The cheapest new machine that makes a round part a bearing will sit on, and the only station in a cheap works that does' }] },
+  'xiao-esp32c3': { what: 'BLE-UART bridge board', offers: [
+    { name: 'Seeed Studio XIAO ESP32C3', usd: 4.99, seller: 'Seeed Studio', url: 'https://www.seeedstudio.com/Seeed-XIAO-ESP32C3-p-5431.html', seen: D2, stock: 'in', note: 'Seeed\'s own price; $13.49 for three, so $4.50 each. 2.4 GHz wifi and Bluetooth LE on a 21 \u00d7 17.5 mm board: this is the part that turns a printer\'s serial header into the Nordic UART service a browser can reach (link.ts)' }] },
   'rc-receiver': { what: 'radio receiver', offers: [
     { name: 'RadioMaster DBR4 Dual-band Xross Gemini ExpressLRS Receiver', usd: 38.99, seller: 'Pyrodrone', url: 'https://pyrodrone.com/collections/receivers', seen: D2, note: 'read off its receivers page; ExpressLRS, so it binds to any ELRS handset' }] },
 };

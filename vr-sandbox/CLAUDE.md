@@ -153,6 +153,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
 | How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
+| Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works.ts` (`planJob`, `canMake`, `worksUnder`, `BUILDS`, `ALWAYS_BOUGHT`, `STOCK`, `FINISH`) |
+| The wire out: the program a machine is sent and the transport that carries it (Marlin's line protocol with its checksum and resends, down a 20-byte BLE pipe to the Nordic UART service; Moonraker over wifi where the machine is Klipper; the steps where there is no port) | `src/nexus/link.ts` (`Streamer`, `gcodeFor`, `printStart`, `kilnProgram`, `LINKS`), browser half in `src/nexus/view/ble.ts` |
 | What an inventory item looks like, how it comes apart | `src/nexus/pieces.ts`, `looks.ts` |
 | An item the library draws, seen in 3D: drawn as the library draws it (not its look), taken apart by the viewer's own explode, each piece opening into its pieces, the part the library draws it as, or (one piece) what it is made of, drawn | `src/nexus/view/explode.ts` (`showPart`), `src/nexus/components.ts` (`componentOf`) |
 | How a drawn part comes apart (`explode`): what is the part itself stays, those round it go out from its middle, those at its middle out past its ends along its length (heaviest first, each kind as one), and no piece parted onto another | `src/nexus/view/kit3d.ts` |
@@ -876,6 +878,60 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    is a different instrument in a different body, so it is kept off this kind's grid and said so, rather than made to
    fit figures that are not its own.
    Next: the older Now items (robot benches, likeness, life graph, prices).
+8. The works, and the wire out of it (2026-10-10). The user: *"designe me a advanced actually working industrial
+   creation engineer thing ran by a robot or robots think of the cheapest possible enviornments where anything can be
+   created I don't care if I gotta build it peice by peice from the ground up"*, then — rejecting the first answer, a
+   catalogue of shop tiers — *"no redesign it think about throwing random builds at it and how it would manage building
+   that in real life oooh actually this will be the spot and whatever you build in there I'm gonna build in real life
+   and connect whatever program you do into it via Bluetooth so make that possible that like I can run programming
+   through here like you could manage the process in real life"*, and then two constraints: *"it just needs to be super
+   capable for under 3000$"* and *"anything that cuts price will be done even if it causes a lot more work"*.
+   So `works.ts` is a job router, not a shopping list. All making is six families — add, cut, form, join, treat,
+   measure — and a works that covers all six over a class of material can make anything in that class inside its
+   envelope, which is checkable. Throw any bill of materials at `planJob` and every line becomes an operation on a
+   named station, a purchase with the process that is missing as its reason, or a gap that names its cause and the
+   cheapest station that would close it; then the operations are scheduled across the machines there are, one job at a
+   time per station. Six unlike builds are kept to test it (`BUILDS`: a welded steel bench, a go-kart frame, a
+   quadcopter, a thrown mug, a cast gearbox housing, a concrete wall) and nothing in the router is special-cased for
+   any of them.
+   The routing rules are written down because every one of them was a fault the first run made: a process that only
+   prepares, finishes or joins never makes a part (a bandsaw was producing a gearbox housing); a process that makes one
+   shape is only offered that shape (a lathe was turning a printed landing foot, because turning is faster per cubic
+   centimetre than printing — true and absurd); among the processes that fit, the one that does *this* job in the
+   fewest minutes wins, setup included, which is what makes a 390 cm³ housing a casting and a plate a milled part
+   without either being named; measuring never makes anything; a treatment is charged per load, not per part (a kiln
+   fires one mug in the time it fires forty); a part cut from sheet is charged its kerf and not its block; and what is
+   bought as a finished component (`ALWAYS_BOUGHT`, with the process that is missing for each: a ground raceway, a
+   wound coil, a rolled thread, a wafer fab) is kept apart from what is bought as material and still worked here
+   (`STOCK`) — conflating the two is how a plan for a welded bench quietly loses the welding. A joint the build
+   declares can happen before the firing (`when: 'before-finishing'`), because a handle slipped onto a fired mug does
+   not stick.
+   The wire out is `link.ts`. Web Bluetooth is BLE only, so every HC-05 is unreachable from a browser and the bridge is
+   a XIAO ESP32C3 ($4.99, Seeed's own price) running UART-to-NUS on the controller's serial header. One BLE write
+   carries 20 bytes and a browser never reports the negotiated MTU, so a line of G-code is two or three writes;
+   Marlin's `ok` is the flow control and `N<n> … *<xor>` turns a dropped byte into a `Resend:` instead of a feedrate
+   silently a tenth of what was meant. `Streamer` holds all of that and runs in the gate without a radio;
+   `view/ble.ts` is the thin half that cannot be tested here. Klipper takes no G-code on a serial port from a host, so
+   a Klipper machine goes over wifi to Moonraker and this says so rather than pretending one way fits. Every operation
+   carries its own program: real runnable G-code for a cut part, a real start and end for a print, a kiln's segments to
+   be keyed in, and steps with a check for the stations that have no port — which is most of a cheap works, and saying
+   so beats a Connect button that fails.
+   The $3,000 works is derived, not chosen: `worksUnder(3000)` spends each dollar where it buys the most capability,
+   scoring a family of making far above a second machine in a family already covered and a wanted material class above
+   one that is not — without that last part it buys a potter's wheel before a 3D printer and is right by its own score.
+   It takes the cheap-and-laborious path wherever there is one, because that is what was asked for: each station
+   carries a secondhand price and, where it is genuinely makeable, a self-build with its material cost, its hours and
+   the stations it needs first (the bench is welded once there is a welder; the forge is a lined tube and a pipe-fitting
+   burner; the foundry is that same burner in a lined pail; the brake is two lengths of angle; the kiln is firebrick
+   and Kanthal). It comes out at 16 stations, about $2,590 and 48 hours of work against $4,973 bought new, covering all
+   six families over nine material classes and holding ±0.05 mm. The safety kit is the one line it will not cut, and it
+   is added automatically the moment a hazardous station is chosen: a works that owns a welder and not a helmet is not
+   cheaper, it is unbuilt.
+   What that works still cannot do, and says so: a bearing seat to ±0.02 mm (the cheapest station that would is a used
+   knee mill at $4,000), a ground shaft to ±0.01, and anything in concrete. Those are the real limits of a cheap shop
+   and the engine names them instead of making something up.
+   Next: the Bluetooth bridge drawn and priced as a part of the build pack, the works standing in the forge room as
+   real stations you walk between, and the older Now items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);
