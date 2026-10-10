@@ -292,7 +292,7 @@ export function xrayTubeParts(nm: string, kV: number, mA: number, o: { anode?: '
   }
   // the rating plate, on a pad machined into the top of the barrel so it lies on metal and not in the air
   parts.push(
-    B(`${nm} rating plate`, [HL * 0.42, 0.0016, 0.034], [0, housing - 0.0012, 0], { mat: 'pet', color: 0xd8d9db, text: `${kV}kV ${mA}mA`, ink: 0x17191c, says: 'the rating plate: a tube is run to what is on this and no further' }),
+    B(`${nm} rating plate`, [HL * 0.42, 0.0016, 0.034], [0, housing - 0.0012, 0], { mat: 'pet', color: 0xd8d9db, text: `${kV} kV`, ink: 0x17191c, says: 'the rating plate: a tube is run to what is on this and no further' }),
     // the port and the collimator under it: what shuts the beam down to the part being looked at
     P(`${nm} port`, { lathe: [[0, 0], [0.028, 0], [0.028, 0.004], [0, 0.004]] }, { at: [port, -housing - 0.002, 0], mat: 'al-6061', color: 0xb9bcc0, item: 'xray-window', says: 'the window: aluminium, which also filters out the softest photons — the ones that would stop in the patient and do nothing but dose' }),
     B(`${nm} collimator flange`, [col + 0.012, 0.008, col + 0.012], [port, -housing - 0.004, 0], { mat: 'al-6061', color: 0x3a3e43, finish: 'crinkle', says: 'the collimator\'s flange, bolted up to the port: it is taken off to change it, and a tube is useless without one' }),
@@ -306,8 +306,9 @@ export function xrayTubeParts(nm: string, kV: number, mA: number, o: { anode?: '
     // the two knobs that drive those leaves, and the light the field is set by
     ...[0, 1].map((k) => P(`${nm} collimator knob ${k + 1}`, { cyl: [0.014, 0.012] }, { at: [port + (k === 0 ? col / 2 + 0.006 : 0), -housing - 0.012 - colH * 0.4, k === 0 ? 0 : col / 2 + 0.006], rot: [0, 0, PI / 2] as Vec, facets: 16, mat: 'abs', color: 0x1b1e22, finish: 'moulded', says: 'the knob that drives one pair of leaves: a collimator is set by hand, by the light field, before the exposure' })),
     ...[0, 1].map((k) => CY(`${nm} collimator knob ${k + 1} shaft`, 0.004, 0.008, [port + (k === 0 ? col / 2 + 0.001 : 0), -housing - 0.012 - colH * 0.4, k === 0 ? 0 : col / 2 + 0.001], { rot: [0, 0, PI / 2] as Vec, mat: 'steel-low', color: 0x8b8f94, says: 'its shaft, through the wall on an oil-tight bush' })),
+    B(`${nm} field window`, [col * 0.3, 0.05, 0.002], [port - col * 0.26, -housing - 0.012 - colH * 0.42, col / 2 + 0.0005], { mat: 'pmma', color: 0xd8d2b4, finish: 'polished', glow: true, says: 'the window the field lamp throws its light out of: the beam itself cannot be seen, so a collimator is set by a light the same size' }),
     B(`${nm} field lamp`, [0.018, 0.012, 0.018], [port - col * 0.3, -housing - 0.008 - colH * 0.35, col * 0.26], { mat: 'glass', color: 0xf4e8c0, glow: true, says: 'the field lamp: it throws a light the size of the beam, with the cross-hairs in it, because the beam itself cannot be seen' }),
-    B(`${nm} collimator plate`, [col * 0.52, 0.02, 0.0008], [port, -housing - 0.012 - colH * 0.62, col / 2 + 0.0005], { mat: 'pet', color: 0x3c0a08, text: 'CAUTION X-RAY', says: 'the warning on it, which is all a person gets: nothing is seen, heard, felt or smelt at the dose that matters' }),
+    B(`${nm} collimator plate`, [0.0008, 0.02, col * 0.52], [port + col / 2 + 0.0005, -housing - 0.012 - colH * 0.5, 0], { mat: 'pet', color: 0x3c0a08, text: 'CAUTION X-RAY', says: 'the warning on it, which is all a person gets: nothing is seen, heard, felt or smelt at the dose that matters' }),
     // the cross-hairs in the light field, which is what the field is lined up by
     ...[0, 1].map((k) => B(`${nm} cross-hair ${k + 1}`, k === 0 ? [col * 0.5, 0.0006, 0.0008] : [0.0008, 0.0006, col * 0.5], [port, -housing - 0.0135 - colH, 0], { mat: 'steel-low', color: 0x26292d, one: true, says: 'one of the two wires across the field: where they cross is the middle of the beam' })),
   );
@@ -359,7 +360,7 @@ export function xrayPanelParts(nm: string, wMm: number, hMm: number, pitchUm: nu
         mark(0, ah / 2 - 0.008, 0.0015, 0.012), mark(0, -(ah / 2 - 0.008), 0.0015, 0.012),
         mark(aw / 2 - 0.008, 0, 0.012, 0.0015), mark(-(aw / 2 - 0.008), 0, 0.012, 0.0015),
         { t: `${(wMm / 10).toFixed(0)} x ${(hMm / 10).toFixed(0)} cm`, at: [-aw / 2 + 0.075, ah / 2 - 0.018], h: 0.008, ink: 0x8d9298 },
-        { t: 'TUBE SIDE', at: [aw / 2 - 0.055, ah / 2 - 0.018], h: 0.007, ink: 0x8d9298 },
+        { t: 'TUBE SIDE', at: [0, ah / 2 - 0.009], h: 0.006, ink: 0x8d9298 },
       ],
       says: 'its active area marked at the middle and at the four edges, and which edge faces the tube: a panel is lined up by these and by nothing else, because the beam cannot be seen' }),
     B(`${nm} scintillator`, [aw - 0.006, 0.0006, ah - 0.006], [0, top - 0.0038, 0], { mat: 'csi-tl', color: 0xe6e2cf, item: 'scintillator-csi', says: 'caesium iodide doped with thallium, grown as needles 0.6 mm deep: each needle pipes its light down to one pixel, so the picture stays sharp where a plain powder screen would blur it' }),
@@ -383,7 +384,10 @@ export function xrayPanelParts(nm: string, wMm: number, hMm: number, pitchUm: nu
     ...[0, 1, 2].map((k) => CY(`${nm} light ${k + 1}`, 0.0022, 0.0014, [-w / 2 + bez / 2, top + 0.0003, h * 0.3 + (k - 1) * 0.008], { mat: 'pmma', color: [0x27c24c, 0xf0b429, 0x2d7ff9][k], glow: true, says: 'one of the three: charged, ready, and linked to its console' })),
     B(`${nm} plate`, [0.06, 0.0005, 0.024], [-w * 0.2, -top - 0.0003, -h * 0.3], { mat: 'pet', color: 0xd8d9db, text: `${(wMm / 10).toFixed(0)}x${(hMm / 10).toFixed(0)}`, ink: 0x17191c, rot: [PI, 0, 0] as Vec, says: 'its plate: format, serial and the marks it is sold under' }),
     // the rubber at the corners: what a dropped panel lands on
-    ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz], i) => B(`${nm} corner bumper ${i + 1}`, [0.034, T + 0.0025, 0.034], [sx! * (w / 2 - 0.017), 0, sz! * (h / 2 - 0.017)], { mat: 'rubber', color: 0x1b1d20, says: 'a moulded rubber corner: a panel is dropped, and a corner is where it lands' })),
+    ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].flatMap(([sx, sz], i) => [
+      B(`${nm} corner bumper ${i + 1}`, [0.05, T + 0.0025, bez], [sx! * (w / 2 - 0.025), 0, sz! * (h / 2 - bez / 2)], { mat: 'rubber', color: 0x1b1d20, says: 'a moulded rubber corner, wrapped round the frame\'s own band and no further: a panel is dropped, and a corner is where it lands' }),
+      B(`${nm} corner bumper ${i + 1} return`, [bez, T + 0.0025, 0.05 - bez], [sx! * (w / 2 - bez / 2), 0, sz! * (h / 2 - bez - (0.05 - bez) / 2)], { mat: 'rubber', color: 0x1b1d20, says: 'its return down the side, so the corner is covered both ways' }),
+    ]),
   ];
   const kg = panelKg(wMm, hMm), drawn = parts.reduce((a, q) => a + massOf(q), 0);
   parts.push({ name: `${nm} radio, lead backing and fittings`, at: [0, 0, 0] as Vec, kg: Math.max(0, kg - drawn), says: `${((kg - drawn) * 1000).toFixed(0)} g not drawn apart: its radio, the thin lead sheet behind the array that stops what comes back off the table, and its seals (an estimate)` } as Part);
@@ -415,7 +419,7 @@ export function thermalCamParts(nm: string, px: number, pitchUm: number, fMm: nu
     B(`${nm} front shell`, [L * 0.42, bodyH, W], [L * 0.29, bodyY, 0], { mat: 'abs', color: 0x2f3338, finish: 'moulded', shell: 0.0022, says: 'the front half of the case, which carries the optics: it is screwed to the back half on a step, and that step is the line round every moulded instrument' }),
     B(`${nm} back shell`, [L * 0.58, bodyH - 0.0012, W - 0.0012], [-L * 0.21, bodyY, 0], { mat: 'abs', color: 0x33363b, finish: 'moulded', shell: 0.0022, says: 'the back half, a shade narrower where it goes inside the front: it carries the screen, the board and the battery' }),
     B(`${nm} grip`, [gripW, gripH, W * 0.78], [gripX, -H / 2 + gripH / 2, 0], { mat: 'abs', color: 0x2f3338, finish: 'moulded', shell: 0.0022, says: 'the grip: a thermal camera is held up at arm\'s length and pointed, so the weight is over the hand' }),
-    ...[-1, 1].map((sz, i) => B(`${nm} grip pad ${i + 1}`, [gripW * 0.86, gripH * 0.8, 0.0025], [gripX, -H / 2 + gripH / 2, sz * (W * 0.39 + 0.0009)], { mat: 'rubber', color: 0x1b1d20, says: 'the rubber over-mould where it is held: a camera used up a ladder is dropped' })),
+    ...[-1, 1].map((sz, i) => B(`${nm} grip pad ${i + 1}`, [gripW * 0.56, gripH * 0.6, 0.0025], [gripX, -H / 2 + gripH * 0.48, sz * (W * 0.39 + 0.0009)], { mat: 'rubber', color: 0x1b1d20, says: 'the rubber over-mould where it is held: a camera used up a ladder is dropped' })),
     // the optics: the barrel out in front, the lens down a well in it so the aperture is an opening and not a flat face
     CY(`${nm} lens barrel`, barrelR, barrelL, [barrelX, bodyY, 0], { rot: [0, 0, PI / 2] as Vec, mat: 'al-6061', color: 0x33363b, finish: 'anodised', shell: 0.0015,
       cuts: [{ r: lens / 2 + 0.0012, depth: 0.009, at: [0, -barrelL / 2, 0], dir: [0, 1, 0] }],
@@ -437,12 +441,12 @@ export function thermalCamParts(nm: string, px: number, pitchUm: number, fMm: nu
     B(`${nm} port well`, [0.026, 0.012, 0.003], [-L * 0.2, bodyY - 0.012, W / 2 - 0.0012], { mat: 'abs', color: 0x14161a, finish: 'moulded', says: 'the well the connectors sit in, so a plug does not stand on the case' }),
     B(`${nm} usb socket`, [0.009, 0.0033, 0.0026], [-L * 0.2 - 0.006, bodyY - 0.012, W / 2 - 0.0016], { mat: 'steel-low', color: 0xb9bcc0, finish: 'plate', says: 'USB-C: the pictures come off here, and the battery charges through it' }),
     B(`${nm} card slot`, [0.013, 0.0022, 0.0022], [-L * 0.2 + 0.007, bodyY - 0.012, W / 2 - 0.0016], { mat: 'steel-low', color: 0x8b8f94, finish: 'plate', says: 'the microSD slot: a radiometric picture is a megabyte of temperatures, not a photograph' }),
-    B(`${nm} port flap`, [0.03, 0.016, 0.0022], [-L * 0.2, bodyY - 0.012, W / 2 - 0.0005], { mat: 'rubber', color: 0x1b1d20, says: 'the rubber flap over them, which is all the sealing a handheld camera has' }),
+    B(`${nm} port flap`, [0.03, 0.016, 0.0022], [-L * 0.2, bodyY - 0.0012, W / 2 - 0.0005], { mat: 'rubber', color: 0x1b1d20, says: 'the rubber flap over them, which is all the sealing a handheld camera has' }),
     // the tripod boss and the lanyard lug: how it is put on a stand and how it is kept from falling
     P(`${nm} tripod boss`, { cyl: [0.008, 0.005] }, { at: [gripX, -H / 2 + 0.0025, 0], mat: 'brass', color: 0xb08d57, finish: 'plate',
       cuts: [{ r: 0.00318, depth: 0.005, at: [0, -0.0025, 0], dir: [0, 1, 0] }], says: 'a 1/4-20 brass insert in the foot: a camera left watching a switchboard is on a tripod' }),
     P(`${nm} lanyard lug`, { torus: [0.005, 0.0016] }, { at: [-L * 0.36, bodyY + bodyH / 2 - 0.0031, -W * 0.36], rot: [0, 0, PI / 2] as Vec, mat: 'steel-low', color: 0x8b8f94, says: 'the lug the strap goes through, standing out of the top: the camera is held over live gear, and a dropped one lands on the gear' }),
-    B(`${nm} plate`, [0.05, 0.0006, 0.028], [-L * 0.1, bodyY + bodyH / 2 + 0.0003, 0], { mat: 'pet', color: 0x1b1d20, text: `${px}x${Math.round(px * 0.75)}  ${fMm}mm`, ink: 0xd8d9db, says: 'its plate on the top: the array, the lens and what it is sold as' }),
+    B(`${nm} plate`, [0.05, 0.0006, 0.028], [-L * 0.1, bodyY + bodyH / 2 + 0.0003, 0], { mat: 'pet', color: 0x1b1d20, text: `${px} px`, ink: 0xd8d9db, says: 'its plate on the top: the array, the lens and what it is sold as' }),
   ];
   void sc;
   const kg = camKg(px, fMm), drawn = parts.reduce((a, q) => a + massOf(q), 0);
@@ -480,12 +484,15 @@ export function ftirParts(nm: string, resCm: number, detector: 'DTGS' | 'MCT' = 
   //  that in every direction, and ten times the mass)
   const W = 0.34 + (f.travel / 1000) * 8, D = 0.28 + W * 0.36, H = 0.2 + W * 0.1;
   const plinth = 0.03, wall = 0.003, iW = W - 2 * wall, iD = D - 2 * wall, deck = plinth + 0.012;
+  // (the cover stands on the base, 8 mm narrower, so the base shows as the plinth it is: its own faces are what
+  //  anything on the outside is placed against)
+  const fz = (D - 0.008) / 2, fx = (W - 0.008) / 2;
   const coverH = H - plinth, coverY = plinth + coverH / 2, topY = H;
   const travel = (f.travel / 1000) * 2; // (the mirror's stroke either side of zero path difference)
   // the sample compartment, and the hatch over it in the cover's top: the one part of an FTIR a person touches
   const sc = Math.min(0.2, iW * 0.46), scX = -iW * 0.06, scZ = iD * 0.16;
   const parts: Part[] = [
-    B(`${nm} base`, [W - 0.006, plinth, D - 0.006], [0, plinth / 2, 0], { mat: 'cast-iron', color: 0x3c4045, finish: 'cast', fill: 0.45, says: 'a cast base, standing a little out from the cover it carries: an interferometer is a ruler made of light, and anything that moves the mirrors a fraction of a wavelength is a line in the spectrum that is not there' }),
+    B(`${nm} base`, [W, plinth, D], [0, plinth / 2, 0], { mat: 'cast-iron', color: 0x3c4045, finish: 'cast', fill: 0.45, says: 'a cast base, standing a little out from the cover it carries: an interferometer is a ruler made of light, and anything that moves the mirrors a fraction of a wavelength is a line in the spectrum that is not there' }),
     ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz], i) => CY(`${nm} foot ${i + 1}`, 0.016, 0.009, [sx! * (W / 2 - 0.03), -0.0045, sz! * (D / 2 - 0.03)], { mat: 'rubber', color: 0x1b1d20, says: 'one of four rubber feet: a bench instrument is set down on a bench that is never quite flat' })),
     P(`${nm} source`, { cyl: [0.004, 0.02] }, { at: [-iW * 0.36, deck, -iD * 0.26], mat: 'silicon-carbide', color: 0xd8703a, glow: true, item: 'ir-glower',
       says: 'a silicon carbide glower at about 1200 °C: a black body, because what is wanted is every infrared wavelength at once' }),
@@ -505,29 +512,35 @@ export function ftirParts(nm: string, resCm: number, detector: 'DTGS' | 'MCT' = 
       says: detector === 'MCT' ? 'mercury cadmium telluride in a dewar of liquid nitrogen: a hundred times more sensitive, and it must be filled every day' : 'deuterated triglycine sulfate at room temperature: it reads the heat of the beam through a pyroelectric crystal, and it is what most instruments carry because it needs nothing' }),
     B(`${nm} electronics`, [iW * 0.42, 0.08, iD * 0.46], [iW * 0.24, deck + 0.05, -iD * 0.2], { mat: 'al-6061', color: 0x33363b, finish: 'crinkle', shell: 0.0015, says: 'the amplifier, the converter and the computer that does the transform: its boards not drawn apart' }),
     // the cover, standing on the base, with the hatch cut out of its top for the sample compartment
-    B(`${nm} cover`, [W, coverH, D], [0, coverY, 0], { mat: 'abs', color: 0xd8d9db, finish: 'moulded', shell: 0.003,
+    B(`${nm} cover`, [W - 0.008, coverH, D - 0.008], [0, coverY, 0], { mat: 'abs', color: 0xd8d9db, finish: 'moulded', shell: 0.003,
       cuts: [{ r: (sc + 0.016) / 2, depth: 0.01, at: [scX, coverH / 2, scZ], dir: [0, -1, 0], n: 4 }],
       says: 'the cover: it keeps the purge in and the room\'s air out, and the hatch in its top is cut square over the sample compartment' }),
     // the hatch: hinged at the back, latched at the front, with a window in it, because a sample is looked at as it runs
     B(`${nm} hatch`, [sc + 0.012, 0.014, sc + 0.012], [scX, topY + 0.004, scZ], { mat: 'abs', color: 0xc9cbce, finish: 'moulded', shell: 0.0025, joint: 'hinge', says: 'the lid over the sample compartment: it is lifted every time the instrument is used, which is why it is the one part of an FTIR that wears out' }),
     B(`${nm} hatch window`, [sc * 0.44, 0.003, sc * 0.44], [scX, topY + 0.012, scZ], { mat: 'pmma', color: 0x2a3138, finish: 'polished', says: 'a window in the lid: the sample is watched while it runs, and the beam is infrared, so the window can be plastic' }),
-    ...[-1, 1].map((sx, i) => CY(`${nm} hatch hinge ${i + 1}`, 0.005, 0.016, [scX + sx * sc * 0.3, topY + 0.004, scZ - sc / 2 - 0.004], { rot: [0, 0, PI / 2] as Vec, mat: 'steel-low', color: 0x8b8f94, finish: 'ground', joint: 'hinge', says: 'one of its two hinge knuckles, at the back where the lid folds away from the operator' })),
+    ...[-1, 1].map((sx, i) => CY(`${nm} hatch hinge ${i + 1}`, 0.007, 0.024, [scX + sx * sc * 0.3, topY + 0.006, scZ - sc / 2 - 0.003], { rot: [0, 0, PI / 2] as Vec, mat: 'steel-low', color: 0x8b8f94, finish: 'ground', joint: 'hinge', says: 'one of its two hinge knuckles, at the back where the lid folds away from the operator' })),
+    CY(`${nm} hatch handle`, 0.005, 0.07, [scX, topY + 0.015, scZ + sc / 2 - 0.004], { rot: [0, 0, PI / 2] as Vec, mat: 'abs', color: 0x3c4046, finish: 'moulded', says: 'the handle the lid is lifted by: it is opened for every sample run, which is why it is the one part of an FTIR that wears out' }),
+    ...[-1, 1].map((sx, i) => B(`${nm} hatch handle post ${i + 1}`, [0.008, 0.009, 0.008], [scX + sx * 0.03, topY + 0.0105, scZ + sc / 2 - 0.004], { mat: 'abs', color: 0x3c4046, finish: 'moulded', says: 'one of its two posts' })),
     B(`${nm} hatch latch`, [0.03, 0.009, 0.012], [scX, topY + 0.006, scZ + sc / 2 + 0.006], { mat: 'nylon', color: 0x3c4046, finish: 'moulded', says: 'the latch at the front: the purge is worth keeping, so the lid is held down and not just laid on' }),
     // the front: the display sunk behind its bezel, its keys, the switch, and the name plate
-    ...[[0, 1], [0, -1], [1, 0], [-1, 0]].map(([a, b], i) => B(`${nm} display bezel ${i + 1}`, a ? [0.004, 0.05, 0.005] : [0.1, 0.005, 0.005], [-W * 0.26 + (a ? a * 0.048 : 0), coverY + 0.03 + (b ? b * 0.0225 : 0), D / 2 + 0.0025], { mat: 'abs', color: 0x9ca0a4, finish: 'moulded', says: 'one side of the bezel the display sits down inside' })),
-    B(`${nm} display`, [0.092, 0.04, 0.0035], [-W * 0.26, coverY + 0.03, D / 2 + 0.0012], { mat: 'glass', color: 0x161b20, finish: 'polished', says: 'what the instrument says of itself when no computer is on it: the scan, the purge and whether the laser has locked' }),
-    ...[0, 1, 2, 3].map((k) => CY(`${nm} key ${k + 1}`, 0.006, 0.0035, [-W * 0.26 + (k - 1.5) * 0.018, coverY - 0.004, D / 2 + 0.0015], { rot: [PI / 2, 0, 0] as Vec, mat: 'abs', color: 0x3c4046, finish: 'moulded', says: 'one of the four keys under it: scan, background, purge and stop' })),
-    B(`${nm} switch`, [0.019, 0.011, 0.004], [W * 0.38, coverY - 0.012, D / 2 + 0.0015], { mat: 'abs', color: 0x1b1d20, finish: 'moulded', says: 'the power switch, lit when it is on: an FTIR is left on, because a cold bench drifts' }),
+    ...[[0, 1], [0, -1], [1, 0], [-1, 0]].map(([a, b], i) => B(`${nm} display bezel ${i + 1}`, a ? [0.004, 0.05, 0.005] : [0.1, 0.005, 0.005], [-W * 0.26 + (a ? a * 0.048 : 0), coverY + 0.03 + (b ? b * 0.0225 : 0), fz + 0.0025], { mat: 'abs', color: 0x9ca0a4, finish: 'moulded', says: 'one side of the bezel the display sits down inside' })),
+    B(`${nm} display`, [0.092, 0.04, 0.0035], [-W * 0.26, coverY + 0.03, fz + 0.0012], { mat: 'glass', color: 0x161b20, finish: 'polished', says: 'what the instrument says of itself when no computer is on it: the scan, the purge and whether the laser has locked' }),
+    ...[0, 1, 2, 3].map((k) => CY(`${nm} key ${k + 1}`, 0.006, 0.0035, [-W * 0.26 + (k - 1.5) * 0.018, coverY - 0.004, fz + 0.0015], { rot: [PI / 2, 0, 0] as Vec, mat: 'abs', color: 0x3c4046, finish: 'moulded', says: 'one of the four keys under it: scan, background, purge and stop' })),
+    B(`${nm} switch`, [0.019, 0.011, 0.004], [W * 0.38, coverY - 0.012, fz + 0.0015], { mat: 'abs', color: 0x1b1d20, finish: 'moulded', says: 'the power switch, lit when it is on: an FTIR is left on, because a cold bench drifts' }),
+    B(`${nm} name plate`, [0.15, 0.018, 0.0008], [W * 0.14, coverY + 0.03, fz + 0.0004], { mat: 'pet', color: 0x1b1d20, text: 'FTIR SPECTROMETER', says: 'its name across the front, where every bench instrument carries it: an instrument no one can name from across the room is an instrument no one trusts' }),
     B(`${nm} plate`, [0.066, 0.0006, 0.02], [W * 0.17, topY + 0.0003, D * 0.38], { mat: 'pet', color: 0x2f3338, text: `${resCm} cm-1`, ink: 0xe8eaec, says: 'its plate: what it is, its resolution and its serial' }),
     // the back: the inlet, the purge fitting and the fan, and the screws that open it
-    B(`${nm} inlet`, [0.05, 0.028, 0.006], [-W * 0.3, coverY - 0.02, -D / 2 - 0.003], { mat: 'pbt', color: 0x1b1d20, finish: 'moulded',
+    B(`${nm} inlet`, [0.05, 0.028, 0.006], [-W * 0.3, coverY - 0.02, -fz - 0.003], { mat: 'pbt', color: 0x1b1d20, finish: 'moulded',
       cuts: [{ r: 0.011, depth: 0.005, at: [0, 0, -0.003], dir: [0, 0, 1] }], item: 'connector-housing', says: 'the mains inlet with its fuse: an IEC socket, because every bench instrument in the world takes the same lead' }),
-    ...[0, 1, 2].map((k) => CY(`${nm} inlet pin ${k + 1}`, 0.0009, 0.008, [-W * 0.3 + (k - 1) * 0.0071, coverY - 0.02 + (k === 1 ? 0.004 : -0.002), -D / 2 - 0.0015], { rot: [PI / 2, 0, 0] as Vec, mat: 'brass', color: 0xc9a227, finish: 'plate', says: 'one of its three: live, neutral and the earth that is longer than the others' })),
-    P(`${nm} purge fitting`, { cyl: [0.007, 0.016] }, { at: [W * 0.1, coverY - 0.02, -D / 2 - 0.008], rot: [PI / 2, 0, 0] as Vec, facets: 6, mat: 'brass', color: 0xb08d57, finish: 'plate', says: 'the purge inlet: dry air or nitrogen, 0.5 litres a minute for the whole of the instrument\'s life, because the beamsplitter is a salt' }),
-    CY(`${nm} purge nipple`, 0.0035, 0.012, [W * 0.1, coverY - 0.02, -D / 2 - 0.021], { rot: [PI / 2, 0, 0] as Vec, mat: 'brass', color: 0xc9a227, finish: 'plate', says: 'its hose nipple, where the line from the air drier goes on' }),
-    CY(`${nm} fan guard`, 0.03, 0.004, [W * 0.3, coverY + 0.02, -D / 2 - 0.002], { rot: [PI / 2, 0, 0] as Vec, mat: 'steel-low', color: 0x3c4046, finish: 'plate', shell: 0.0008, says: 'the fan guard: the electronics are the only thing in here that wants cooling, and the bench wants to be left alone' }),
-    ...[0, 1, 2, 3, 4].map((k) => B(`${nm} vent ${k + 1}`, [0.004, 0.05, 0.0025], [W / 2 + 0.0004, coverY + 0.01, -D * 0.1 + (k - 2) * 0.012], { rot: [0, 0, 0] as Vec, mat: 'abs', color: 0x4a4e53, finish: 'moulded', says: 'one of the louvres in the side: what the fan draws through' })),
-    ...[-1, 1].flatMap((sx) => [-1, 1].map((sy, i) => screw(`${nm} cover screw ${sx > 0 ? i + 3 : i + 1}`, 0.005, 0.005, [sx * (W / 2 - 0.016), coverY + sy * (coverH / 2 - 0.016), -D / 2 - 0.002], { rot: [-PI / 2, 0, 0] as Vec, says: 'one of the four that hold the cover down, in the back where an instrument is opened' }))),
+    ...[0, 1, 2].map((k) => CY(`${nm} inlet pin ${k + 1}`, 0.0009, 0.008, [-W * 0.3 + (k - 1) * 0.0071, coverY - 0.02 + (k === 1 ? 0.004 : -0.002), -fz - 0.0015], { rot: [PI / 2, 0, 0] as Vec, mat: 'brass', color: 0xc9a227, finish: 'plate', says: 'one of its three: live, neutral and the earth that is longer than the others' })),
+    P(`${nm} purge fitting`, { cyl: [0.007, 0.016] }, { at: [W * 0.1, coverY - 0.02, -fz - 0.008], rot: [PI / 2, 0, 0] as Vec, facets: 6, mat: 'brass', color: 0xb08d57, finish: 'plate', says: 'the purge inlet: dry air or nitrogen, 0.5 litres a minute for the whole of the instrument\'s life, because the beamsplitter is a salt' }),
+    CY(`${nm} purge nipple`, 0.0035, 0.012, [W * 0.1, coverY - 0.02, -fz - 0.021], { rot: [PI / 2, 0, 0] as Vec, mat: 'brass', color: 0xc9a227, finish: 'plate', says: 'its hose nipple, where the line from the air drier goes on' }),
+    CY(`${nm} fan guard`, 0.03, 0.004, [W * 0.3, coverY + 0.02, -fz - 0.002], { rot: [PI / 2, 0, 0] as Vec, mat: 'steel-low', color: 0x3c4046, finish: 'plate', shell: 0.0008, says: 'the fan guard: the electronics are the only thing in here that wants cooling, and the bench wants to be left alone' }),
+    ...[0, 1, 2, 3, 4].map((k) => B(`${nm} vent ${k + 1}`, [0.004, 0.05, 0.0025], [fx + 0.0004, coverY + 0.01, -D * 0.1 + (k - 2) * 0.012], { rot: [0, 0, 0] as Vec, mat: 'abs', color: 0x4a4e53, finish: 'moulded', says: 'one of the louvres in the side: what the fan draws through' })),
+    ...[-1, 1].flatMap((sx) => [-1, 1].map((sy, i) => screw(`${nm} cover screw ${sx > 0 ? i + 3 : i + 1}`, 0.005, 0.005, [sx * (W / 2 - 0.016), coverY + sy * (coverH / 2 - 0.016), -fz - 0.002], { rot: [-PI / 2, 0, 0] as Vec, says: 'one of the four that hold the cover down, in the back where an instrument is opened' }))),
+    // and the lead it runs on: an instrument with no cable anywhere is the tell a blind judge named first
+    P(`${nm} mains boot`, { lathe: [[0, 0], [0.009, 0], [0.009, 0.008], [0.0055, 0.03], [0, 0.03]] }, { at: [-W * 0.3, coverY - 0.02, -fz + 0.0004], rot: [PI / 2, 0, 0] as Vec, mat: 'rubber', color: 0x1b1d20, says: 'the moulded plug on its lead, in the inlet' }),
+    CY(`${nm} mains lead`, 0.0045, 0.09, [-W * 0.3, coverY - 0.052, -fz - 0.044], { rot: [PI / 2 - 0.6, 0, 0] as Vec, mat: 'rubber', color: 0x24262a, says: 'its lead, down to the bench behind it: an FTIR is left on, because a cold bench drifts' }),
   ];
   const kg = ftirKg(resCm), drawn = parts.reduce((a, q) => a + massOf(q), 0);
   parts.push({ name: `${nm} purge, optics mounts and fittings`, at: [0, 0, 0] as Vec, kg: Math.max(0, kg - drawn), says: `${(kg - drawn).toFixed(1)} kg not drawn apart: its purge manifold and desiccant, the kinematic mounts under every mirror and its power supply (an estimate)` } as Part);
@@ -537,7 +550,7 @@ export function ftirParts(nm: string, resCm: number, detector: 'DTGS' | 'MCT' = 
  *  round that, so a 4 cm⁻¹ box is a third of a metre across and a 0.25 one half a metre. */
 export function ftirBox(resCm: number): Vec {
   const W = 0.34 + (ftir(resCm).travel / 1000) * 8, D = 0.28 + W * 0.36, H = 0.2 + W * 0.1;
-  return [+((W + 0.002) * 1000).toFixed(0), +((H + 0.023) * 1000).toFixed(0), +((D + 0.033) * 1000).toFixed(0)] as Vec;
+  return [+((W + 0.002) * 1000).toFixed(0), +((H + 0.029) * 1000).toFixed(0), +((D + 0.0885) * 1000).toFixed(0)] as Vec;
 }
 /** What a benchtop FTIR weighs, kg: an estimate of the class — a routine instrument is about 25 kg and a research one
  *  with a long bench and a cooled detector about 45. Resolution is what makes it bigger: the mirror's travel sets the
@@ -546,7 +559,9 @@ export const ftirKg = (resCm: number): number => +(22 + 8 / Math.max(0.125, resC
 
 /** How big a spinning lidar of this many channels is: Velodyne's own 103 × 72 mm for the 16-channel VLP-16 and
  *  103 × 87 for the 32-channel VLP-32C; above that the fan of channels will not fit a puck and the instrument is a
- *  bigger body in every direction (an estimate of the class, between the VLP-32C and the 165 × 110 mm VLS-128). */
+ *  bigger body in every direction (an estimate of the class, between the VLP-32C and the 165 × 110 mm VLS-128).
+ *  Below 16 is not this instrument: a single-beam 2D scanner (Hokuyo's UST-10LX, 130 g in a 60 mm body; SICK's TiM) is
+ *  a different body with a different mass law, and the kind keeps it off its grid rather than make it fit these. */
 export const lidarSize = (channels: number): { D: number; H: number } =>
   channels <= 16 ? { D: 0.103, H: 0.072 } : channels <= 32 ? { D: 0.103, H: 0.087 } : { D: 0.145, H: 0.105 };
 
@@ -560,22 +575,26 @@ export const lidarSize = (channels: number): { D: number; H: number } =>
 export function lidarParts(nm: string, channels: number, rpm: number, o: { apertureMm?: number; nm?: 905 | 1550 } = {}): Part[] {
   const { D, H } = lidarSize(channels), ap = o.apertureMm ?? 25, wave = o.nm ?? 905;
   const shown = Math.min(channels, 32), bandH = Math.min(H * 0.42, Math.max(0.018, channels * 0.0016));
-  const headLo = H * 0.325, headHi = H - 0.006, bandY = (headLo + headHi) / 2, headR = D / 2 - 0.014, glass = 0.002;
+  const headLo = H * 0.325, headHi = H - 0.006, bandY = (headLo + headHi) / 2, headR = D / 2 - 0.014, glass = 0.002, shroud = D / 2 - 0.001;
   const yOf = (i: number) => bandY + (i / Math.max(1, shown - 1) - 0.5) * bandH * 0.72;
   const parts: Part[] = [
     // the base: it does not turn, it is what the instrument is bolted down by, and everything that leaves leaves through it
     CY(`${nm} base`, D / 2, H * 0.3, [0, 0.006 + H * 0.15, 0], { mat: 'al-6061', color: 0x33363b, finish: 'anodised', shell: 0.003, says: 'the base: it does not turn, and everything that leaves the instrument leaves through it' }),
-    P(`${nm} base flange`, { lathe: [[0, 0], [D / 2 + 0.004, 0], [D / 2 + 0.004, 0.004], [D / 2 - 0.002, 0.006], [0, 0.006]] }, { at: [0, 0, 0], mat: 'al-6061', color: 0x2a2d31, finish: 'anodised',
-      cuts: [0, 1, 2, 3].map((k) => { const a = (k / 4) * 2 * PI + PI / 4; return { r: 0.0033, depth: 0.007, at: [(D / 2 - 0.009) * Math.cos(a), 0.0065, (D / 2 - 0.009) * Math.sin(a)] as Vec, dir: [0, -1, 0] as Vec }; }),
-      says: 'the flange it is bolted down by: four M6 on a 85 mm circle, and a lidar that is not bolted down reads a world that rolls' }),
-    ...[0, 1, 2, 3].map((k) => { const a = (k / 4) * 2 * PI + PI / 4; return screw(`${nm} mounting screw ${k + 1}`, 0.01, 0.005, [(D / 2 - 0.009) * Math.cos(a), 0.0035, (D / 2 - 0.009) * Math.sin(a)], { says: 'one of the four M6 screws that hold it down' }); }),
+    P(`${nm} base flange`, { lathe: [[0, 0], [D / 2 + 0.009, 0], [D / 2 + 0.009, 0.004], [D / 2 - 0.002, 0.007], [0, 0.007]] }, { at: [0, 0, 0], mat: 'al-6061', color: 0x2a2d31, finish: 'anodised',
+      cuts: [0, 1, 2, 3].map((k) => { const a = (k / 4) * 2 * PI + PI / 4; return { r: 0.0033, depth: 0.008, at: [(D / 2 + 0.0045) * Math.cos(a), 0.0075, (D / 2 + 0.0045) * Math.sin(a)] as Vec, dir: [0, -1, 0] as Vec }; }),
+      says: `the flange it is bolted down by: four M6 on a ${((D + 0.009) * 1000).toFixed(0)} mm circle, clear of the body so a key can reach them, and a lidar that is not bolted down reads a world that rolls` }),
+    ...[0, 1, 2, 3].map((k) => { const a = (k / 4) * 2 * PI + PI / 4; return screw(`${nm} mounting screw ${k + 1}`, 0.01, 0.006, [(D / 2 + 0.0045) * Math.cos(a), 0.007, (D / 2 + 0.0045) * Math.sin(a)], { says: 'one of the four M6 screws that hold it down, its head standing on the flange where a key reaches it' }); }),
     CY(`${nm} alignment pin`, 0.002, 0.008, [0, 0.001, -(D / 2 - 0.02)], { mat: 'steel-low', color: 0x8b8f94, finish: 'ground', says: 'the pin that fixes which way round it goes on: a lidar\'s own frame has to be known to a tenth of a degree, and a bolt circle alone does not say it' }),
     CY(`${nm} motor stator`, D * 0.3, 0.014, [0, H * 0.3, 0], { mat: 'steel-electrical', color: 0x5a5e63, fill: 0.5, item: 'lamination-stack', says: `the brushless motor that spins the head at ${rpm} rev/min: ${(rpm / 60).toFixed(0)} turns a second, which is the frame rate` }),
     CY(`${nm} slip ring`, D * 0.16, 0.016, [0, H * 0.4, 0], { mat: 'brass', color: 0xc9a227, finish: 'plate', item: 'slip-ring', says: 'power up and data down through rings and brushes, because the head turns for ever and a cable cannot' }),
     // the step where the spinning part begins: the one line on the outside that says which half turns
     P(`${nm} shroud step`, ring(D / 2 - 0.004, D / 2, 0.003), { at: [0, H * 0.31, 0], mat: 'al-6061', color: 0x24262a, finish: 'anodised', says: 'the step between the base and what turns on it: the gap is 0.4 mm, and it is the only thing on the outside that says half of this spins' }),
-    // what turns: a core narrower than the window, so what is behind the glass is the blocks and not a wall
-    CY(`${nm} head`, headR, headHi - headLo, [0, bandY, 0], { mat: 'al-6061', color: 0x4a4e53, finish: 'anodised', shell: 0.0025, says: 'what turns: the lasers, the detectors and their boards all ride round together, so every channel sees the same angle at the same time' }),
+    // the spinning shroud, above and below the window: the outside of the head is one drum with a band of glass let
+    // into it. Drawn without it, there was an open annulus between the cap and the core that could be seen down into
+    P(`${nm} shroud lower`, ring(shroud - 0.0025, shroud, bandY - bandH / 2 - headLo), { at: [0, (headLo + bandY - bandH / 2) / 2, 0], mat: 'al-6061', color: 0x2f3338, finish: 'anodised', says: 'the lower half of what turns: the outside of a lidar is a drum, and the window is the band cut out of it' }),
+    P(`${nm} shroud upper`, ring(shroud - 0.0025, shroud, headHi - (bandY + bandH / 2)), { at: [0, (headHi + bandY + bandH / 2) / 2, 0], mat: 'al-6061', color: 0x2f3338, finish: 'anodised', says: 'the upper half, up to the cap it carries' }),
+    // what turns inside it: a core narrower than the window, so what is behind the glass is the blocks and not a wall
+    P(`${nm} head`, ring(headR - 0.0025, headR, headHi - headLo), { at: [0, bandY, 0], mat: 'al-6061', color: 0x4a4e53, finish: 'anodised', says: 'what turns: the lasers, the detectors and their boards all ride round together, so every channel sees the same angle at the same time' }),
     // the emitter block and the receiver block, each with its own lenses out at the glass
     ...[1, -1].flatMap((side) => [
       B(`${nm} ${side > 0 ? 'emitter' : 'receiver'} block`, [0.014, bandH * 0.96, 0.05], [side * (D / 2 - 0.012), bandY, 0], { mat: 'pbt', color: 0x14161a, finish: 'moulded', says: side > 0 ? 'the emitter block: every laser in the instrument is potted in this one moulding, each aimed a fraction of a degree from its neighbour' : 'the receiver block: each detector behind its own lens, looking exactly where its own laser points' }),
@@ -590,16 +609,20 @@ export function lidarParts(nm: string, channels: number, rpm: number, o: { apert
     ...[-1, 1].map((sz, i) => B(`${nm} baffle ${i + 1}`, [D * 0.44, bandH * 0.9, 0.003], [0, bandY, sz * 0.027], { mat: 'abs', color: 0x101214, finish: 'moulded', says: 'a baffle between the emitter and the receiver: a watt of pulse leaving beside a nanowatt coming back would swamp it' })),
     P(`${nm} window`, { lathe: [[D / 2 - glass, -bandH / 2], [D / 2, -bandH / 2], [D / 2, bandH / 2], [D / 2 - glass, bandH / 2], [D / 2 - glass, -bandH / 2]] }, { at: [0, bandY, 0], mat: 'pc', color: 0x33383d, finish: 'polished', says: 'the band the beams leave and return through: 2 mm of polycarbonate, tinted, because it passes the infrared and keeps daylight and curiosity out' }),
     // the cap: flush with the head, not a lid on a jar, with its screws and its marks
-    CY(`${nm} cap`, headR + 0.002, 0.006, [0, H - 0.003, 0], { mat: 'al-6061', color: 0x33363b, finish: 'anodised', says: 'the top cap, flush with the head it closes: a cap that stood out would be the first thing knocked off' }),
-    ...screwsY(`${nm} cap`, 4, headR * 0.62, H - 0.0008, 0.004, 'one of the four that hold the cap on: the head is opened to aim the channels, and nothing else is'),
+    CY(`${nm} cap`, shroud, 0.003, [0, H - 0.0015, 0], { mat: 'al-6061', color: 0x33363b, finish: 'anodised', says: 'the top cap, flush with the head it closes: a cap that stood out would be the first thing knocked off' }),
+    ...screwsY(`${nm} cap`, 4, shroud * 0.6, H - 0.0005, 0.004, 'one of the four that hold the cap on: the head is opened to aim the channels, and nothing else is'),
     B(`${nm} cap plate`, [0.05, 0.0004, 0.02], [0, H + 0.0002, -0.016], { mat: 'pet', color: 0x26292d, text: `${channels}ch ${wave}nm`, ink: 0xd8d9db, says: 'its plate on the top: the channels, the wavelength and its serial' }),
     B(`${nm} laser label`, [0.034, 0.0004, 0.014], [0, H + 0.0002, 0.018], { mat: 'pet', color: 0xf0c419, text: 'LASER', ink: 0x17191c, says: 'the laser label every one of these carries: a Class 1 instrument is safe as its maker set it up, and is not safe once it is opened' }),
     B(`${nm} board`, [D * 0.6, 0.0016, D * 0.6], [0, H * 0.46, 0], { mat: 'fr4', color: 0x14301f, item: 'pcb-bare', says: 'the head\'s board: the drivers, the timing circuits and the processor that turns times into points' }),
     // the connector, standing out of the base where a cable can reach it, with its coupling ring and its tail
-    CY(`${nm} connector`, 0.0085, 0.014, [D / 2 + 0.002, 0.006 + H * 0.16, 0], { rot: [0, 0, PI / 2] as Vec, mat: 'pbt', color: 0x17191c, finish: 'moulded',
+    P(`${nm} connector boss`, ring(0.009, 0.015, 0.008), { at: [D / 2 - 0.004, 0.007 + H * 0.16, 0], rot: [0, 0, PI / 2] as Vec, mat: 'al-6061', color: 0x2a2d31, finish: 'anodised', says: 'the machined boss the connector is sealed into: the one hole in the case, and the one place water gets in if it is not' }),
+    CY(`${nm} connector`, 0.0085, 0.014, [D / 2 + 0.002, 0.007 + H * 0.16, 0], { rot: [0, 0, PI / 2] as Vec, mat: 'pbt', color: 0x17191c, finish: 'moulded',
       cuts: [{ r: 0.0058, depth: 0.005, at: [0, -0.007, 0], dir: [0, 1, 0] }], item: 'connector-housing', says: 'power and Ethernet: a lidar is a camera that talks in packets, and this is the only hole in the case' }),
-    P(`${nm} connector ring`, ring(0.0087, 0.0105, 0.006), { at: [D / 2 + 0.0105, 0.006 + H * 0.16, 0], rot: [0, 0, PI / 2] as Vec, facets: 14, mat: 'steel-low', color: 0x8b8f94, finish: 'plate', says: 'its knurled coupling ring: a sensor on a vehicle is shaken for its whole life, and a plug that is not screwed down comes off' }),
-    ...[0, 1, 2, 3].map((k) => { const a = (k / 4) * 2 * PI + PI / 4; return CY(`${nm} connector pin ${k + 1}`, 0.0007, 0.006, [D / 2 + 0.0015, 0.006 + H * 0.16 + 0.0028 * Math.cos(a), 0.0028 * Math.sin(a)], { rot: [0, 0, PI / 2] as Vec, mat: 'brass', color: 0xc9a227, finish: 'plate', says: 'one of its contacts: two pairs for the Ethernet and two for the power' }); }),
+    P(`${nm} connector ring`, ring(0.0087, 0.0105, 0.006), { at: [D / 2 + 0.0105, 0.007 + H * 0.16, 0], rot: [0, 0, PI / 2] as Vec, facets: 14, mat: 'steel-low', color: 0x8b8f94, finish: 'plate', says: 'its knurled coupling ring: a sensor on a vehicle is shaken for its whole life, and a plug that is not screwed down comes off' }),
+    ...[0, 1, 2, 3].map((k) => { const a = (k / 4) * 2 * PI + PI / 4; return CY(`${nm} connector pin ${k + 1}`, 0.0007, 0.006, [D / 2 + 0.0015, 0.007 + H * 0.16 + 0.0028 * Math.cos(a), 0.0028 * Math.sin(a)], { rot: [0, 0, PI / 2] as Vec, mat: 'brass', color: 0xc9a227, finish: 'plate', says: 'one of its contacts: two pairs for the Ethernet and two for the power' }); }),
+    // and the cable in it, because a sensor with no cable is a sensor that does nothing
+    P(`${nm} cable boot`, { lathe: [[0, 0], [0.009, 0], [0.009, 0.006], [0.0055, 0.022], [0, 0.022]] }, { at: [D / 2 + 0.0135, 0.007 + H * 0.16, 0], rot: [0, 0, -PI / 2] as Vec, mat: 'rubber', color: 0x1b1d20, says: 'the moulded boot over the plug: what stops the cable being bent where it leaves' }),
+    CY(`${nm} cable`, 0.0048, 0.05, [D / 2 + 0.057, 0.007 + H * 0.16 - 0.008, 0], { rot: [0, 0, PI / 2 - 0.3] as Vec, mat: 'rubber', color: 0x24262a, says: 'power in and a hundred megabits of points out, down one cable' }),
   ];
   const kg = lidarKg(channels), drawn = parts.reduce((a, q) => a + massOf(q), 0);
   parts.push({ name: `${nm} wiring, bearings and fittings`, at: [0, 0, 0] as Vec, kg: Math.max(0, kg - drawn), says: `${((kg - drawn) * 1000).toFixed(0)} g not drawn apart: the head's bearings, its wiring, its potting and the rest of its screws (an estimate)` } as Part);
@@ -608,7 +631,7 @@ export function lidarParts(nm: string, channels: number, rpm: number, o: { apert
 /** How big a spinning lidar is, mm: its own body, with its flange and its connector standing out of it. */
 export function lidarBox(channels: number): Vec {
   const { D, H } = lidarSize(channels);
-  return [+((D + 0.008 + 0.0085) * 1000).toFixed(0), +((H + 0.0035) * 1000).toFixed(0), +((D + 0.008) * 1000).toFixed(0)] as Vec;
+  return [+((D + 0.009 + 0.082) * 1000).toFixed(0), +((H + 0.0035) * 1000).toFixed(0), +((D + 0.018) * 1000).toFixed(0)] as Vec;
 }
 /** What a spinning lidar weighs, kg: two straight lines through makers' published figures, because a lidar's mass is
  *  its housing and the housing changes class at about 32 channels. To 32 it is a puck: Velodyne's 830 g for the

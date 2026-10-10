@@ -166,10 +166,13 @@ if (cut) {
 }
 const box = new THREE.Box3(); for (const m of meshes) if (m.visible) box.expandByObject(m); if (box.isEmpty()) box.setFromObject(view.group); const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3()), r = size.length() / 2;
 const s = sun.shadow.camera as THREE.OrthographicCamera; s.left = s.bottom = -r * 1.5; s.right = s.top = r * 1.5; s.far = 60; s.updateProjectionMatrix(); sun.target.position.copy(c); scene.add(sun.target);
-// (and its bias with it: a normal bias is a distance, so 30 mm — enough to keep a car's curved skin from shadowing
-//  itself in rings — slides a chip's shadow 30 mm off a board 50 mm long, which is why every board was judged to have
-//  a shadow detached from the thing casting it. A fiftieth of the thing across, and never more than the old 30 mm)
-sun.shadow.normalBias = Math.max(0.0004, Math.min(0.03, r * 0.02)); sun.shadow.bias = -Math.max(8e-6, Math.min(4e-4, r * 3e-4));
+// (and its bias with it. A normal bias exists for one reason: a shadow map has texels, and a surface nearly edge-on to
+//  the light falls across more than one of them. So it is a texel wide, not a fraction of the object — a fiftieth of the
+//  thing across is 5.5 mm on a flat panel 19 mm thick, which pushes the floor's own samples up far enough to cancel the
+//  panel's contact shadow altogether, and a blind judge said so: "it floats; there is no contact shadow at all, not a
+//  soft one, none". The map covers 3 r at mapSize texels, and the usual rule is a texel and a half to two)
+const texel = (3 * r) / sun.shadow.mapSize.width;
+sun.shadow.normalBias = Math.max(2e-5, Math.min(0.03, texel * 1.8)); sun.shadow.bias = -Math.max(8e-6, Math.min(4e-4, r * 3e-4));
 // a closer look: &aim=x,y,z looks at that point instead of the middle (with &zoom under 1, or &dist, to come close)
 const aim = num3(q.get('aim')); if (aim) c.set(...aim);
 // (&ortho=1: a lens 0.8° wide from far off, so it draws as a draughtsman's elevation does, to within half a percent, for laying

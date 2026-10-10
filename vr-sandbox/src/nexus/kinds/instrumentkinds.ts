@@ -73,7 +73,10 @@ export const INSTRUMENT_KINDS: KindDef[] = [
     id: 'lidar', look: 'can', name: 'scanning lidar', path: 'Electrical/Sensors/Lidar',
     says: 'a laser that measures by its own echo: a pulse goes out, a photodiode times what comes back, and the range is half that time times the speed of light. A head of them spins, so a point becomes a line and a line becomes a cloud',
     std: 'time of flight and the lidar range equation (Richmond & Cain); its sizes and masses Velodyne\'s published figures for the VLP-16 and VLP-32C',
-    axes: [bare('channels', 'channels', [1, 16, 32, 64]), ax('rpm', 'spin', 'rev/min', [300, 600, 1200]), bare('wave', 'wavelength', [905, 1550])],
+    // (16 channels up: a spinning multi-beam head. A single-beam 2D scanner — Hokuyo's UST-10LX at 130 g in a
+    //  60 mm body, SICK's TiM — is a different instrument in a different body, and is not drawn here yet, so it is
+    //  kept off the grid rather than made to fit this one's figures)
+    axes: [bare('channels', 'channels', [16, 32, 64]), ax('rpm', 'spin', 'rev/min', [300, 600, 1200]), bare('wave', 'wavelength', [905, 1550])],
     title: (p) => `${n(p, 'channels')}-channel lidar, ${n(p, 'rpm')} rev/min, ${n(p, 'wave')} nm`,
     of: () => 'al-6061 pc pbt brass steel-electrical silicon fr4 pmma slip-ring photodiode-apd lens-plastic lamination-stack pcb-bare connector-housing',
     make: 'assemble',

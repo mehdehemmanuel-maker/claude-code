@@ -838,6 +838,32 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    128-channel Alpha Prime rather than a per-channel guess), and a part carrying `prints` is drawn as that one face
    alone — putting the panel's marks on the cover itself had made the cover invisible and shown the scintillator
    through it, so the marks are their own print laid over it, as a board's silkscreen is.
+   Judged blind again (round 2, a fresh judge on a stricter scale — "all five sit well below 50 % of a photograph"):
+   the tube head 4/10, the panel 3, the camera 3, the FTIR 2, the lidar 5. It named the panel, the lidar and the tube
+   head on sight, which round 1 could not, and it gave the same cause again, sharper: *model the service interface —
+   connectors, cable entries, fasteners and panel seams — on every object, instead of leaving it off or substituting a
+   decal.* Of what it listed, four were real and are fixed at the cause. The lidar had an open annulus between its cap
+   and its core that you could see down into, because what turns was drawn as a narrow drum with the window band
+   floating outside it: the outside of a spinning lidar is one drum with a band of glass let into it, so it now has a
+   shroud above and below the window, the cap is flush with that shroud, and the window's inside is the emitter and
+   receiver blocks. Its mounting bolt circle was under its own body where no key could reach it, and is now outside it
+   on a wider flange with the screw heads standing on top. Its connector sat half-buried in the base; it is now sealed
+   into a machined boss and has a cable. The FTIR's cover had been made 8 mm narrower than the base it stands on
+   without re-anchoring what is on its faces, so the display stood 4 mm proud and the name plate was sunk inside: every
+   outside part is now placed against the cover's own faces, and it carries its name across the front — which is what
+   took it from "I cannot tell what it is, and that is the honest answer" to an instrument you can name from across the
+   room. It also has a mains lead now, and the lidar a cable, because "no cables of any kind" was the judge's first
+   note on three of the five.
+   And one fault that was mine from the round before, found by that same note: the panel had no contact shadow at all.
+   A normal bias is there to compensate the shadow map's texel size, and the renderer-wide round had set it to a
+   fiftieth of the object across — which on a 430 mm panel 19 mm thick is 5.5 mm, enough to push the floor's own
+   samples up past the panel and cancel its shadow. It is now a texel and a half of the shadow map (`look.ts`), which
+   is what the number is for, and every flat thing in the library gets its contact shadow back.
+   The breakdown queue's own check caught the last one: a one-channel lidar in a 103 mm puck drew 24 % over its mass
+   law, because that law is fitted to Velodyne's 16- and 32-channel pucks and extrapolating it down to one channel
+   prices a body that does not change. A single-beam 2D scanner (Hokuyo's UST-10LX, 130 g in a 60 mm body; SICK's TiM)
+   is a different instrument in a different body, so it is kept off this kind's grid and said so, rather than made to
+   fit figures that are not its own.
    Next: the older Now items (robot benches, likeness, life graph, prices).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
