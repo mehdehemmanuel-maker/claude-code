@@ -22,8 +22,8 @@ const screwG = (p: P, head: number) => gOf(cyl(dOf(p), Number(p.L)) * 0.92 + hea
 
 export const FASTENERS: KindDef[] = [
   {
-    id: 'countersunk', name: 'countersunk socket screw', path: 'Hardware/Fasteners/Countersunk screws', says: 'a flat-head screw with a hex socket, its 90° head sunk flush in a countersink', std: 'ISO 10642, M3–M20, in the lengths the standard gives each',
-    axes: [bare('thread', 'thread', threads('M3', 'M20')), ax('L', 'length', 'mm', (p) => pref(...(({ M3: [6, 30], M4: [8, 40], M5: [8, 50], M6: [8, 60], M8: [10, 80], M10: [12, 100], M12: [20, 100], M14: [25, 100], M16: [30, 100], M20: [35, 100] } as Record<string, [number, number]>)[String(p.thread)] ?? [10, 50]))), bare('matter', 'made of', ['black', 'A2', 'A4'])],
+    id: 'countersunk', name: 'countersunk socket screw', path: 'Hardware/Fasteners/Countersunk screws', says: 'a flat-head screw with a hex socket, its 90° head sunk flush in a countersink', std: 'ISO 10642, M3–M20, in the lengths the standard gives each (M3 on past its 30 mm to 40, as made: the Ender-3\'s own model holds its bed with M3 × 40)',
+    axes: [bare('thread', 'thread', threads('M3', 'M20')), ax('L', 'length', 'mm', (p) => pref(...(({ M3: [6, 40], M4: [8, 40], M5: [8, 50], M6: [8, 60], M8: [10, 80], M10: [12, 100], M12: [20, 100], M14: [25, 100], M16: [30, 100], M20: [35, 100] } as Record<string, [number, number]>)[String(p.thread)] ?? [10, 50]))), bare('matter', 'made of', ['black', 'A2', 'A4'])],
     title: (p) => `${p.thread} × ${p.L} countersunk socket screw, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'roll-thread', how: (p) => `cold-headed from ${madeOf(p)[2]} wire, its socket punched and its thread rolled${p.matter === 'black' ? ', hardened to class 10.9 and black-oxided' : ''}`,
     spec: (p) => `${T(p).p} mm pitch; head ${(2.24 * dOf(p)).toFixed(1)} mm across, ${(0.62 * dOf(p)).toFixed(1)} mm deep at 90°; ${p.matter === 'black' ? 'class 10.9' : p.matter === 'A2' ? 'A2-70' : 'A4-70'}`,
     box: (p) => [2.24 * dOf(p), 2.24 * dOf(p), Number(p.L)], g: (p) => screwG(p, (Math.PI / 12) * 0.62 * dOf(p) * ((2.24 * dOf(p)) ** 2 + 2.24 * dOf(p) ** 2 + dOf(p) ** 2) * 0.85),

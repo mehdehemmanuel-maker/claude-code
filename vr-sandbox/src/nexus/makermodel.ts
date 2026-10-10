@@ -31,8 +31,24 @@ export function libraryWords(p: ModelPart): string | null {
   if ((m = /^M(\d+)\s*nut$/i.exec(n))) return `nut M${m[1]}`;
   if ((m = /^M(\d+)\s*split washer/i.exec(n))) return `springwasher M${m[1]}`;
   if ((m = /^M(\d+)\s*washer\d*$/i.exec(n))) return `washer M${m[1]}`;
+  if (M && /flush head|countersunk/i.test(n)) return `countersunk M${M[1]}x${M[2]}`;
+  // (a lead screw's lead is not in its model: 8 mm a turn, the Ender-3's (Marlin's Ender-3 configuration, 400 steps a mm
+  // on a 1.8° stepper at 16 microsteps: 3200 / 400), a T8's 2 mm pitch in four starts)
+  if (/^z threaded rod$|lead ?screw/i.test(n)) return `leadscrew T${Math.round(Math.min(...extents(p)))} p2 s4 ${longest(p)}`;
+  // (the hot end's: an MK8 nozzle, 0.4 mm, brass, as the Ender-3 ships; its heater 24 V 40 W, 6 × 20 mm, and its NTC 100 kΩ,
+  // β 3950, as sellers of its spares list them; its hot end's 40 × 10 mm fan; the coupler from its stepper's 5 mm shaft
+  // to its 8 mm screw)
+  if (/^nozzle$/i.test(n)) return 'printnozzle MK8 d0.4 brass';
+  if (/^heater$/i.test(n)) return 'heater 6x20 40W 24V';
+  if (/thermistor/i.test(n)) return 'thermistor 100k 3950';
+  if (/^cold section fan$/i.test(n)) { const [a, , c] = [...extents(p)].sort((x, y) => y - x); return `fan ${Math.round(a!)}x${Math.round(c! / 5) * 5} 24V`; }
+  if (/^z coupler$/i.test(n)) return 'coupling 5x8';
   return null;
 }
+
+/** Parts a maker's model lists apart that the library draws inside another: a lead screw's nut, which its model has
+ *  where its carriage holds it. Each: the model's part, the part it is drawn in, and its item there. */
+export const DRAWN_IN: { name: RegExp; in: RegExp; item: string }[] = [{ name: /^z nut$/i, in: /^z threaded rod$|lead ?screw/i, item: 'lead-nut' }];
 
 /** What a part the library does not make yet is, by its name: what it is made of, its colour and how much of its box it
  *  fills (a power supply's case is mostly air), as typical of such parts (estimates), so its measured box is drawn as
@@ -74,6 +90,8 @@ export function boxedAs(name: string): { mat: string; color: number; finish: str
 /** The model's bill of materials as the library has it: how many of each library part, and what is drawn as its box. */
 export function billOf(model: MakerModel): { words: Record<string, number>; boxed: Record<string, number> } {
   const words: Record<string, number> = {}, boxed: Record<string, number> = {};
-  for (const p of model.parts) { const w = libraryWords(p); if (w) words[w] = (words[w] ?? 0) + 1; else boxed[p[0]] = (boxed[p[0]] ?? 0) + 1; }
+  // (a part drawn inside another, the screw's nut, counted in it)
+  const within = (p: ModelPart) => DRAWN_IN.some((d) => d.name.test(p[0]) && model.parts.some((q) => d.in.test(q[0]) && libraryWords(q)));
+  for (const p of model.parts) { if (within(p)) continue; const w = libraryWords(p); if (w) words[w] = (words[w] ?? 0) + 1; else boxed[p[0]] = (boxed[p[0]] ?? 0) + 1; }
   return { words, boxed };
 }

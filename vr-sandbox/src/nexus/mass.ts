@@ -16,6 +16,9 @@ export const DENSITY: Record<string, number> = {
   'steel-electrical': 7650, 'magnet-wire': 8900, ndfeb: 7500, nbr: 1200, pet: 1380,
   // (die-cast zinc, Zamak 3: 6.6 g/cm³; tin-lead 63/37: 8.4; paper and cellulose: 0.8, typical)
   zamak: 6600, 'solder-snpb': 8400, paper: 800,
+  // (magnesium oxide 3.58 g/cm³ solid, a heater packs it to about 85 %: its parts say so; nichrome 80/20 8.4; sintered
+  // barium or strontium ferrite 4.9; an NTC thermistor's Mn–Ni–Co oxide 5.0, typical)
+  mgo: 3580, nichrome: 8400, 'ferrite-hard': 4900, 'ntc-ceramic': 5000,
   // (what electronic packages are made of: src/nexus/packages.ts, each with its source)
   ...Object.fromEntries(Object.entries(PKG_DENSITY).map(([k, [v]]) => [k, v])),
   tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,

@@ -15,13 +15,13 @@
 
 import { dhArmParts, ik, UR5E } from './dharm';
 import { robotFor, TASKS, type Robot } from './robot';
-import { boxedAs, extents, libraryWords, type MakerModel, type ModelPart } from './makermodel';
+import { DRAWN_IN, boxedAs, extents, libraryWords, type MakerModel, type ModelPart } from './makermodel';
 import { ENDER3 } from './models/ender3';
 import { layout } from './make/space';
 import * as THREE from 'three';
 import { alongZ, bmeParts, camModuleParts, changerParts, depthCamParts, earNoseParts, ftParts, gripperParts, handParts } from './kit-robot';
 import { FAMILIES, callFamily } from './families';
-import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
+import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, fanDims, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
 import { CLEAR } from './kinds/motion';
 import { SOCKET_HEAD } from './embody/stock';
@@ -34,6 +34,7 @@ import { DENSITY, massOf } from './mass';
 import { axialBody, axialResistorSolids, chipCode, chipSolids, ledSolids, pkgItem, pkgOf, pkgSolids, smdLedSolids, solidMasses, type Role, type Solid } from './packages';
 import { chipCase, ledDieOf, mlccCase, packageOf, smdLedCase } from './kinds/electrical';
 import { boardComps, boardDef, screwFor, type Comp } from './sbc';
+import { chip } from './boardparts';
 import { breadboard, chp170, cq4lf, hakko599B, holder3951, helpingHands, pinecilV2, solderReel, standS11, permaProto } from './kit-solder';
 import { LINK } from './meca';
 
@@ -200,6 +201,66 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     says: 'DIN 976: threaded its whole length', leaves: 'the thread drawn as its major cylinder',
     make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.length), mat = matIn(it), root = (d - 1.0825 * P0) / 2; return [P(it.name, lathe([[0, -L / 2], [root, -L / 2], [d / 2, -L / 2 + P0], [d / 2, L / 2 - P0], [root, L / 2], [0, L / 2]]), { mat, ...looks(it, mat), finish: 'thread', fill: threadFill(d, P0) })]; },
     iface: (p) => [{ kind: 'studs', role: 'provides', d: thr(p).d * mm, n: 1 }],
+  },
+  countersunk: {
+    says: 'ISO 10642: a 90° countersunk head 2.24 d across its top and 0.62 d deep (its cone), its hex socket, threaded to its head; its length to its top', leaves: 'the thread its major cylinder; its head\'s sizes the standard\'s proportions (2.24 d, 0.62 d), its socket the standard\'s key',
+    make: (p, it) => { const t = String(p.thread), d = Number(t.slice(1)), L = Number(p.L), mat = matIn(it), at = { mat, ...looks(it, mat) }, dk = 2.24 * d, k = 0.62 * d, key = ({ 3: 2, 4: 2.5, 5: 3, 6: 4, 8: 5, 10: 6, 12: 8, 16: 10, 20: 12 } as Record<number, number>)[d] ?? 0.6 * d;
+      // (its top at y = 0, its cone down to the shank, the shank down to its length)
+      return [P(it.name, lathe([[0, 0], [dk / 2, 0], [d / 2, -k], [d / 2, -L], [0, -L]]), { ...at, cuts: [socket(key * mm, 0.5 * k * mm, 0)] })]; },
+    iface: (p) => [{ kind: 'studs', role: 'provides', d: Number(String(p.thread).slice(1)) * mm, n: 1 }],
+  },
+  leadscrew: {
+    says: 'a rolled-thread stainless screw and its flanged brass nut (for T8 the flange 22 mm across and 3.5 thick, its body 10.2 across and 15 long, four 3.5 mm holes on 16 mm: typical of T8 nuts; other sizes scaled by diameter)', leaves: 'the thread its major cylinder at four fifths filled (its trapezoid\'s share, typical); the nut at its middle (a build moves it to its carriage)',
+    make: (p, it) => { const d = Number(p.d), L = Number(p.length), k = d / 8, steel = { mat: 'stainless-304', color: 0xb9bdc2, finish: 'thread' as const }, brass = { mat: 'brass', color: 0xc9a24a, finish: 'cast' as const }, h = 7.5 * k;
+      const nut: Part = { name: `${it.name} nut`, item: 'lead-nut', at: [0, 0, 0], parts: [P(`${it.name} nut`, lathe([[d / 2, -h], [5.1 * k, -h], [5.1 * k, h - 3.5 * k], [11 * k, h - 3.5 * k], [11 * k, h], [d / 2, h], [d / 2, -h]]), { ...brass, cuts: [0, 1, 2, 3].map((q) => ({ r: 1.75 * k * mm, depth: 4 * k * mm, at: [8 * k * Math.cos((q * PI) / 2) * mm, h * mm, 8 * k * Math.sin((q * PI) / 2) * mm] as V3, dir: [0, -1, 0] as V3 })) })] };
+      return [P(it.name, lathe([[0, -L / 2], [d / 2, -L / 2], [d / 2, L / 2], [0, L / 2]]), { ...steel, item: 'lead-screw', fill: 0.8 }), nut]; },
+  },
+  printnozzle: {
+    says: 'a nozzle turned from bar: its M6 × 1 thread, its hex, its cone to the orifice, bored 2 mm for 1.75 mm filament down to the cone (an MK8 13 mm long overall with its thread 5 mm long: McMaster-Carr\'s listing; its hex 6 mm across flats, 6.9 across corners: Creality\'s own Ender-3 model, as Raise3D\'s guide gives a V6\'s)', leaves: 'its cone 2.5 mm and its hex 3 mm high, typical; sellers\' hexes vary 6–8 mm (Raise3D gives an MK8 7); a V6\'s 12.5 mm and a Volcano\'s 21 mm long, their threads typical (5 and 12.5 mm)',
+    make: (p, it) => { const form = String(p.form), d = Number(p.d), mat = matIn(it), at = { mat, ...looks(it, mat), finish: 'cast' as const }, L = form === 'Volcano' ? 21 : form === 'V6' ? 12.5 : 13, th = form === 'Volcano' ? 12.5 : 5, cone = 2.5, hx = 3, neck = L - cone - hx - th;
+      const hex = Array.from({ length: 6 }, (_, q) => [(3 / Math.cos(PI / 6)) * Math.cos((q * PI) / 3) * mm, (3 / Math.cos(PI / 6)) * Math.sin((q * PI) / 3) * mm] as [number, number]), bore = { r: 1 * mm, depth: (L - 1.5) * mm, dir: [0, -1, 0] as V3 };
+      // (its tip at y = 0: the cone, bored to a land above the orifice; the hex over it; the neck and the thread above, bored through)
+      return [P(it.name, lathe([[d / 2, 0], [0.5, 0], [3.2, cone], [1, cone], [1, 1.5], [d / 2, 0.6], [d / 2, 0]]), at),
+        P(`${it.name} hex`, { prism: { pts: hex, L: hx * mm } }, { ...at, at: [0, cone * mm, 0], rot: [-PI / 2, 0, 0], cuts: [{ ...bore, depth: hx * mm, at: [0, hx * mm, 0] }] }),
+        P(`${it.name} thread`, lathe([[1, cone + hx], [3, cone + hx], [3, L], [1, L], [1, cone + hx]]), { ...at, finish: 'thread', fill: (neck * 1 + th * threadFill(6, 1)) / (neck + th) })]; },
+  },
+  coupling: {
+    says: 'a beam coupling turned from aluminium bar, its two bores, a set screw over each bore twice', leaves: 'its helical cut not drawn; its set screws typical (M3 × 3)',
+    make: (p, it) => { const a = Number(p.d1), b = Number(p.d2), big = Math.max(a, b) > 8, D = big ? 25 : 19, L = big ? 30 : 25, al = { mat: 'al-6061', color: 0xc9cdd1, finish: 'cast' as const };
+      const body = P(it.name, lathe([[0, -L / 2], [D / 2, -L / 2], [D / 2, L / 2], [0, L / 2]]), { ...al, cuts: [{ r: (a / 2) * mm, depth: (L / 2) * mm, at: [0, (-L / 2) * mm, 0], dir: [0, 1, 0] }, { r: (b / 2) * mm, depth: (L / 2) * mm, at: [0, (L / 2) * mm, 0], dir: [0, -1, 0] }] });
+      const set = [-1, 1].flatMap((e) => [0, PI / 2].map((t, k) => P(`${it.name} set screw ${e < 0 ? 'low' : 'high'} ${k + 1}`, { cyl: [1.5 * mm, 3 * mm] }, { mat: 'steel-alloy', color: 0x2a2b2e, finish: 'plate', item: 'screw-set', at: [(D / 2 - 1.5) * Math.cos(t) * mm, e * (L / 2 - 4) * mm, (D / 2 - 1.5) * Math.sin(t) * mm], rot: [0, -t, PI / 2] })));
+      return [body, ...set]; },
+  },
+  heater: {
+    says: 'a cartridge heater: its stainless sheath (its wall 6 % of its diameter, at least 0.3 mm, typical), the nichrome coil packed in magnesium oxide inside it (swaged to about 85 % of its solid density, typical), its two terminal pins out of one end; its coil a tenth of the core it winds round (typical), so its nichrome\'s gauge follows from its resistance (V² / W, at 1.1 µΩ·m): 0.2 mm for 24 V 40 W, 0.1 for 230 V 100 W', leaves: 'its coil drawn as the cylinder it winds round, its pins short (its leads not drawn)',
+    make: (p, it) => { const d = Number(p.d), L = Number(p.length), wall = Math.max(0.3, 0.06 * d), ri = d / 2 - wall, rc = ri * 0.6;
+      return [P(it.name, lathe([[0, -L / 2], [d / 2, -L / 2], [d / 2, L / 2], [ri, L / 2], [ri, -L / 2 + wall], [0, -L / 2 + wall]]), { mat: 'stainless-304', color: 0xb9bdc2, finish: 'cast', item: 'heater-sheath' }),
+        P(`${it.name} magnesia`, { cyl: [ri * mm, (L - wall) * mm] }, { mat: 'mgo', color: 0xeeeeea, fill: 0.85, at: [0, (wall / 2) * mm, 0] }),
+        P(`${it.name} coil`, { cyl: [rc * mm, (L - 2) * mm] }, { mat: 'nichrome', color: 0x8e8a80, item: 'resistance-wire', fill: 0.1, at: [0, 0.25 * mm, 0] }),
+        ...[-1, 1].map((e) => P(`${it.name} terminal ${e < 0 ? 1 : 2}`, { cyl: [Math.min(0.4, 0.1 * d) * mm, 3 * mm] }, { mat: 'nickel', color: 0xc9cdd1, finish: 'bright', item: 'terminal-pin', at: [e * d * 0.18 * mm, (L / 2 + 1.5) * mm, 0] }))]; },
+  },
+  thermistor: {
+    says: 'a glass-sealed NTC thermistor: its sintered bead between two leads, sealed in a glass body 2 mm across and 4 long, its leads 0.3 mm and 40 mm (typical)', leaves: 'its leads straight (the wires to the board not drawn)',
+    make: (_p, it) => [P(it.name, { cyl: [1 * mm, 4 * mm] }, { mat: 'glass', color: 0x3a2a1a, item: 'glass-body' }), P(`${it.name} bead`, { sphere: 0.5 * mm }, { mat: 'ntc-ceramic', color: 0x1d1e21, item: 'ntc-bead', at: [0, -0.8 * mm, 0] }),
+      ...[-1, 1].map((e) => P(`${it.name} lead ${e < 0 ? 1 : 2}`, { cyl: [0.15 * mm, 40 * mm] }, { mat: 'copper', color: 0xc9a24a, item: 'lead-wire', at: [e * 0.35 * mm, 22 * mm, 0] }))],
+  },
+  fan: {
+    says: 'an axial fan: its moulded frame (the square, its round throat, its motor seat on three struts, four holes on its pattern), its impeller (a hub, seven blades, the ferrite ring magnet lining the hub), the four windings of its stator round a sintered bronze bushing, its driver chip and its two leads', leaves: 'its proportions typical (families.ts fanDims: its hub, its frame\'s flanges and throat wall); its blades flat plates pitched 30°; its frame drawn whole but weighed as its flanges and throat wall; its windings half filled with wire; its chip an MSOP-8',
+    make: (p, it) => { const S = Number(p.size), t = Number(p.thick), pbt = { mat: 'pbt', color: 0x1a1b1d, finish: 'moulded' as const }, { rt, rh, fl, wall, hubH, rs } = fanDims(S, t), face = S * S - PI * rt * rt, hole = ({ 25: 20, 30: 24, 40: 32, 50: 40, 60: 50, 80: 71.5, 92: 82.5, 120: 105 } as Record<number, number>)[S] ?? S * 0.8, hd = S >= 80 ? 4.3 : 3.4, y0 = -t / 2;
+      const frame: Part = { name: `${it.name} frame`, item: 'fan-frame', at: [0, 0, 0], parts: [
+        P(`${it.name} frame`, { box: [S * mm, t * mm, S * mm] }, { ...pbt, fill: Math.min(1, (2 * fl * face + 2 * PI * rt * wall * t) / (face * t)), cuts: [{ r: rt * mm, depth: t * mm, at: [0, (t / 2) * mm, 0], dir: [0, -1, 0] }, ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b]) => ({ r: (hd / 2) * mm, depth: t * mm, at: [a! * (hole / 2) * mm, (t / 2) * mm, b! * (hole / 2) * mm] as V3, dir: [0, -1, 0] as V3 }))] }),
+        P(`${it.name} motor seat`, { cyl: [rh * mm, 1.5 * mm] }, { ...pbt, at: [0, (y0 + 0.75) * mm, 0] }),
+        ...[0, 1, 2].map((q) => { const a = (q * 2 * PI) / 3, r = (rh + rt) / 2; return P(`${it.name} strut ${q + 1}`, { box: [(rt - rh) * mm, 1.5 * mm, 1.6 * mm] }, { ...pbt, at: [r * Math.cos(a) * mm, (y0 + 0.75) * mm, r * Math.sin(a) * mm], rot: [0, -a, 0] }); })] };
+      const hy = y0 + 1.5 + hubH / 2 + 0.3;
+      const imp: Part = { name: `${it.name} impeller`, item: 'fan-impeller', at: [0, 0, 0], parts: [
+        P(`${it.name} hub`, lathe([[0, hy + hubH / 2], [rh, hy + hubH / 2], [rh, hy - hubH / 2], [rh - 0.8, hy - hubH / 2], [rh - 0.8, hy + hubH / 2 - 0.8], [0, hy + hubH / 2 - 0.8]]), pbt),
+        ...Array.from({ length: 7 }, (_, q) => { const a = (q * 2 * PI) / 7, r = (rh + rt - 0.6) / 2; return P(`${it.name} blade ${q + 1}`, { box: [(rt - 0.6 - rh) * mm, hubH * 0.9 * mm, 0.8 * mm] }, { ...pbt, at: [r * Math.cos(a) * mm, hy * mm, r * Math.sin(a) * mm], rot: [PI / 6, -a, 0] }); }),
+        P(`${it.name} magnet ring`, lathe([[rh - 2, hy - hubH / 2], [rh - 0.8, hy - hubH / 2], [rh - 0.8, hy + hubH / 2 - 1.2], [rh - 2, hy + hubH / 2 - 1.2], [rh - 2, hy - hubH / 2]]), { mat: 'ferrite-hard', color: 0x3a3b3e, item: 'magnet-ferrite-arc' })] };
+      const stator = Array.from({ length: 4 }, (_, q) => { const a = (q * PI) / 2 + PI / 4; return P(`${it.name} winding ${q + 1}`, { box: [Math.max(1, rs - 1.5) * mm, hubH * 0.5 * mm, Math.max(1, rs * 0.5) * mm] }, { mat: 'magnet-wire', color: 0xb87333, item: 'winding', fill: 0.45, at: [((rh - 2.6 + 1.5) / 2) * Math.cos(a) * mm, (hy - hubH * 0.1) * mm, ((rh - 2.6 + 1.5) / 2) * Math.sin(a) * mm], rot: [0, -a, 0] }); });
+      const bush = P(`${it.name} bushing`, lathe([[0.75, y0 + 1.5], [1.5, y0 + 1.5], [1.5, y0 + 1.5 + hubH * 0.7], [0.75, y0 + 1.5 + hubH * 0.7], [0.75, y0 + 1.5]]), { mat: 'bronze', color: 0xa8743a, item: 'sleeve-bearing' });
+      const ic = compPart({ ...chip('MSOP-8', 'driver chip'), at: [(rh - 1.6) * 0.5, y0 + 1.5, 0] }, it.name);
+      const leads = [-1, 1].map((e) => P(`${it.name} lead ${e < 0 ? 'red' : 'black'}`, { cyl: [0.6 * mm, 20 * mm] }, { mat: 'copper', color: e < 0 ? 0xb3261e : 0x1a1b1d, item: 'wire-hookup', at: [(S / 2 + 10) * mm, (y0 + 1) * mm, e * 0.7 * mm], rot: [0, 0, PI / 2] }));
+      return [frame, imp, ...stator, bush, ic, ...leads]; },
   },
   dowel: {
     says: 'ISO 8734: hardened and ground, one end chamfered, the other domed', leaves: 'nothing',
@@ -488,13 +549,17 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
   const euler = (R: M3): V3 => { const m13 = Math.max(-1, Math.min(1, R[0]![2]!)), y = Math.asin(m13); return Math.abs(m13) < 0.9999999 ? [Math.atan2(-R[1]![2]!, R[2]![2]!), y, Math.atan2(-R[0]![1]!, R[0]![0]!)] : [Math.atan2(R[2]![1]!, R[1]![1]!), y, 0]; };
   const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
   // (a drawn part's box and the middle of its pieces, weighted by their boxes, in its own frame, m: its body's, its
-  // leads, wires and plug left out, as a maker's model leaves them out)
-  const loose = (x: { p: Part; parent: { p: Part } | null }): boolean => /\b(lead|leads|wire|cable|plug|connector)\b/i.test(x.p.name) || /wire|cable|jst/i.test(x.p.item ?? '') || (!!x.p.shape && 'tube' in x.p.shape) || (!!x.parent && loose(x.parent as never));
+  // leads, wires and plug left out, as a maker's model leaves them out: a lead screw and its nut are not leads)
+  const loose = (x: { p: Part; parent: { p: Part } | null }): boolean => /\b(leads?(?!\s*(?:screw|nut))|wire|cable|plug|connector)\b/i.test(x.p.name) || /wire|cable|jst/i.test(x.p.item ?? '') || (!!x.p.shape && 'tube' in x.p.shape) || (!!x.parent && loose(x.parent as never));
   const own = (p: Part) => { const q = { ...p, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3 }, ns = layout(q).filter((x) => x.box && !x.box.isEmpty() && !loose(x)), b = new THREE.Box3(); let w = 0; const c = new THREE.Vector3();
     for (const x of ns) { b.union(x.box!); const s = x.box!.getSize(new THREE.Vector3()), v = Math.max(1e-12, s.x * s.y * s.z); c.addScaledVector(x.box!.getCenter(new THREE.Vector3()), v); w += v; }
     return { min: b.min.toArray() as V3, max: b.max.toArray() as V3, mid: (w ? c.divideScalar(w) : b.getCenter(new THREE.Vector3())).toArray() as V3 }; };
   const placed: { p: Part; corners: V3[] }[] = []; let drawn = 0, boxed = 0;
+  // (a part the library draws inside another, where the model has it: its box's middle in the model's frame)
+  const middleOf = (mp: ModelPart): V3 => { const R = rotOf(mp[2]), t = tOf(mp[2]), c = mv(R, [0, 1, 2].map((k) => (mp[3][k]! + mp[3][k + 3]!) / 2) as V3); return [c[0] + t[0], c[1] + t[1], c[2] + t[2]]; };
+  const inside = DRAWN_IN.map((d) => ({ ...d, at: model.parts.filter((mp) => d.name.test(mp[0])).map(middleOf) }));
   model.parts.forEach((mp: ModelPart, i) => {
+    if (inside.some((d) => d.name.test(mp[0]) && model.parts.some((q) => d.in.test(q[0]) && libraryWords(q)))) return;
     const R = rotOf(mp[2]), t = tOf(mp[2]), lo: V3 = [mp[3][0]!, mp[3][1]!, mp[3][2]!], hi: V3 = [mp[3][3]!, mp[3][4]!, mp[3][5]!], ext = extents(mp), cm: V3 = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as V3;
     const corners = [0, 1].flatMap((a) => [0, 1].flatMap((b) => [0, 1].map((c) => { const v = mv(R, [a ? hi[0] : lo[0], b ? hi[1] : lo[1], c ? hi[2] : lo[2]]); return [v[0] + t[0], v[1] + t[1], v[2] + t[2]] as V3; })));
     const words = libraryWords(mp); let lib: Part | null = null; try { lib = words ? use(words) : null; } catch { lib = null; }
@@ -506,7 +571,14 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
       const F: M3 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; conf.forEach((c, k) => { F[k]![perm[k]!] = c.s; });
       if (det(F) < 0) { const k = [0, 1, 2].sort((a, b) => conf[a]!.sure - conf[b]!.sure)[0]!; F[k]![perm[k]!]! *= -1; }
       const fc = mv(F, cl as V3), tt: V3 = [cm[0] - fc[0], cm[1] - fc[1], cm[2] - fc[2]], W = mm3(R, F), wt = mv(R, tt);
-      placed.push({ p: { ...lib, name: mp[1], at: [wt[0] + t[0], wt[1] + t[1], wt[2] + t[2]], rot: euler(W) } as Part, corners }); drawn++;
+      const at: V3 = [wt[0] + t[0], wt[1] + t[1], wt[2] + t[2]];
+      // (what it holds that the model has elsewhere, moved there: in its own frame, the world's offset turned back by W, m)
+      for (const d of inside.filter((d) => d.in.test(mp[0]) && d.at.length)) {
+        const w = d.at.shift()!, off: V3 = [w[0] - at[0], w[1] - at[1], w[2] - at[2]], WT: M3 = [0, 1, 2].map((r) => [W[0]![r]!, W[1]![r]!, W[2]![r]!]), lo = mv(WT, off);
+        const move = (q: Part): Part => (q.item === d.item ? { ...q, at: [lo[0] * mm, lo[1] * mm, lo[2] * mm] as V3 } : q.parts ? { ...q, parts: q.parts.map(move) } : q);
+        lib = move(lib);
+      }
+      placed.push({ p: { ...lib, name: mp[1], at, rot: euler(W) } as Part, corners }); drawn++;
     } else {
       // (a part folded from sheet, deeper than its sheet: what of its box its sheet fills, its two largest faces' worth)
       const b = boxedAs(mp[0]), wc = mv(R, cm), [e0, e1, e2] = [...ext].sort((a, b2) => b2 - a) as [number, number, number];

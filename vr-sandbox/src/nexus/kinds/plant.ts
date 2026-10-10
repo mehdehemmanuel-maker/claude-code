@@ -21,7 +21,8 @@ const hole = (M: number) => M + 2;
 const JIC: Record<string, [string, number]> = { '-4': ['7/16-20 UNF', 11.1], '-6': ['9/16-18 UNF', 14.3], '-8': ['3/4-16 UNF', 19.1], '-10': ['7/8-14 UNF', 22.2], '-12': ['1-1/16-12 UN', 27], '-16': ['1-5/16-12 UN', 33.3] };
 /** DIN 808 joints: outside (mm, typical) by bore. */
 const UJ: Record<number, number> = { 6: 16, 8: 16, 10: 22, 12: 25, 16: 32, 20: 40, 25: 45, 32: 56, 40: 63, 50: 80 };
-/** Hot ends' nozzles: the most melt they pass (mm³/s, typical). */
+/** Nozzles by form: their melt rate (mm³/s, typical) and length (mm: an MK8 13 overall, McMaster-Carr's listing); their
+ *  weight (`g` below) an estimate, their turned volume in their metal, as no seller lists one. */
 const NOZZLE: Record<string, [number, number]> = { MK8: [12, 13], V6: [15, 12.5], Volcano: [28, 21] };
 /** DIN 46235 lugs: the studs each cross-section is made for. */
 const LUG: Record<number, number[]> = { 16: [6, 8, 10], 25: [6, 8, 10, 12], 35: [8, 10, 12], 50: [8, 10, 12], 70: [10, 12, 16], 95: [10, 12, 16], 120: [12, 16], 150: [12, 16], 185: [12, 16], 240: [12, 16] };
@@ -119,7 +120,7 @@ export const PLANT: KindDef[] = [
     id: 'printnozzle', name: '3D printer nozzle', path: 'Mechanical/3D printer parts/Nozzles', says: 'the brass (or hardened) tip a 3D printer extrudes through', std: 'MK8, V6 and Volcano forms, M6 thread; flows typical',
     axes: [bare('form', 'form', Object.keys(NOZZLE)), ax('d', 'orifice', 'mm', [0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2]), bare('matter', 'material', ['brass', 'hardened', 'copper'])],
     title: (p) => `${p.form} nozzle ${p.d} mm, ${p.matter}`, of: (p) => (p.matter === 'hardened' ? 'steel-tool' : p.matter === 'copper' ? 'copper nickel' : 'brass'), make: 'machine', how: 'turned with its M6 thread, its cone and its orifice drilled fine, hardened or plated',
-    spec: (p) => { const d = n(p, 'd'); return `M6 × 1 thread; lines about ${+(d * 1.1).toFixed(2)}–${+(d * 1.2).toFixed(2)} mm wide, layers to ${+(d * 0.75).toFixed(2)} mm; melts to about ${NOZZLE[s(p, 'form')]![0]} mm³/s (typical)${p.matter === 'hardened' ? '; for abrasive filaments' : ''}`; }, box: (p) => [7, 7, NOZZLE[s(p, 'form')]![1]], g: (p) => (p.form === 'Volcano' ? 3 : 2), look: 'screw hex',
+    spec: (p) => { const d = n(p, 'd'); return `M6 × 1 thread; lines about ${+(d * 1.1).toFixed(2)}–${+(d * 1.2).toFixed(2)} mm wide, layers to ${+(d * 0.75).toFixed(2)} mm; melts to about ${NOZZLE[s(p, 'form')]![0]} mm³/s (typical)${p.matter === 'hardened' ? '; for abrasive filaments' : ''}`; }, box: (p) => [7, 7, NOZZLE[s(p, 'form')]![1]], g: (p) => +((({ MK8: 2.6, V6: 2.5, Volcano: 4 } as Record<string, number>)[s(p, 'form')] ?? 2.6) * (p.matter === 'hardened' ? 7.85 : p.matter === 'copper' ? 8.96 : 8.5) / 8.5).toFixed(2), look: 'screw hex',
   },
   {
     id: 'glasssheet', name: 'glass sheet', path: 'Materials/Sheet/Glass', says: 'float glass cut to size: annealed, toughened or laminated', std: 'EN 572-2 thicknesses; EN 12150 toughening; laminated 3+3 to 5+5 with 0.38 mm PVB; any size 100–3000 mm by the millimetre',

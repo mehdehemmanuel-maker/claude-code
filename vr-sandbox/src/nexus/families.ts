@@ -208,7 +208,7 @@ const leadscrew: Family = {
   id: 'leadscrew', name: 'lead screw', path: ['Mechanical', 'Linear motion', 'Screws'], says: 'any diameter, pitch, starts and length: its lead is pitch × starts', params: [{ key: 'd', says: 'diameter', unit: 'mm', values: [5, 6, 8, 10, 12], default: 8 }, { key: 'pitch', says: 'pitch', unit: 'mm', min: 1, max: 5, default: 2 }, { key: 'starts', says: 'starts', unit: '', min: 1, max: 4, default: 4 }, { key: 'length', says: 'length', unit: 'mm', min: 50, max: 1500, default: 300 }],
   examples: ['leadscrew T8 p2 s4 300', 'leadscrew T8 p2 s1 400', 'leadscrew T12 p3 s1 500'],
   read(w) { const d = num(/T\s*(\d+)/i.exec(w)?.[1]) || 8, p = num(/\bp\s*(\d+(?:\.\d+)?)/i.exec(w)?.[1]) || 2, s = num(/\bs\s*(\d)/i.exec(w)?.[1]) || 4, L = num(/\b(\d{2,4})\s*(?:mm)?\s*$/.exec(w)?.[1]) || 300; return { d, pitch: p, starts: s, length: L }; },
-  make(p) { const d = Number(p.d), pi = Number(p.pitch), s = Number(p.starts), L = Number(p.length), lead = pi * s; return item(`leadscrew-t${d}-p${pi}-s${s}-${L}`, `T${d} lead screw, lead ${lead} mm, ${L} mm`, 'Mechanical/Linear motion/Screws', 'product', 'roll-thread', 'lead-screw lead-nut', 'a rolled-thread stainless screw with its brass nut', `lead ${lead} mm a turn (pitch ${pi} × ${s} start${s > 1 ? 's' : ''}); on a 1.8° stepper ${(lead / 200).toFixed(3)} mm a full step; ${s === 1 ? 'self-locking: it does not back-drive' : 'fast, and it can back-drive'}`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L * 0.8, RHO.stainless)); },
+  make(p) { const d = Number(p.d), pi = Number(p.pitch), s = Number(p.starts), L = Number(p.length), lead = pi * s; return item(`leadscrew-t${d}-p${pi}-s${s}-${L}`, `T${d} lead screw, lead ${lead} mm, ${L} mm`, 'Mechanical/Linear motion/Screws', 'product', 'roll-thread', 'lead-screw lead-nut', 'a rolled-thread stainless screw with its brass nut', `lead ${lead} mm a turn (pitch ${pi} × ${s} start${s > 1 ? 's' : ''}); on a 1.8° stepper ${(lead / 200).toFixed(3)} mm a full step; ${s === 1 ? 'self-locking: it does not back-drive' : 'fast, and it can back-drive'}`, [d, d, L], +(mm3g(Math.PI * (d / 2) ** 2 * L * 0.8, RHO.stainless) + mm3g(Math.PI * ((5.1 ** 2 - 16) * 11.5 + (11 ** 2 - 16) * 3.5 - 4 * 1.75 ** 2 * 3.5) * (d / 8) ** 3, RHO.brass)).toFixed(2)); },
 };
 const led: Family = {
   id: 'led', name: 'LED', path: ['Electrical', 'Semiconductors', 'LEDs'], says: 'any colour and size; its forward voltage typical of its die', params: [{ key: 'colour', says: 'colour', unit: '', values: ['red', 'yellow', 'green', 'blue', 'white'], default: 'red' }, { key: 'size', says: 'size', unit: 'mm', values: [3, 5, 10], default: 5 }],
@@ -241,11 +241,25 @@ const servo: Family = {
   make(p) { const k = String(p.size), S = SERVOS[k]!; return item(`servo-${k}`, `${k} servo`, 'Electrical/Motors and actuators/Servos', 'product', 'assemble', `servo-case motor-130 ${S.gears} potentiometer servo-board wire-hookup*3`, 'a DC motor through a gear train to an output shaft, a potentiometer on it for feedback, a control board, in a case', `${S.box.join(' × ')} mm, ${S.g} g; stall ${S.torque}`, S.box, S.g); },
 };
 // ---- axial fans by frame and voltage --------------------------------------------------------------------------------------
+/** An axial fan's proportions, mm (all typical): its throat 0.95 of its frame across; its hub 6 mm + a third of its frame
+ *  across (a motor shrinks less than its fan: 19 mm on a 40, 46 on a 120) and 0.75 of its depth tall; its frame's two
+ *  flanges 0.13 of its depth (at least 1.2 mm) and its throat's wall 1.2 mm (1.6 over 60 mm); its stator inside the
+ *  hub's magnet ring. One table for its drawing (components.ts) and its weight. */
+export function fanDims(S: number, t: number) { const rt = 0.475 * S, rh = (6 + 0.33 * S) / 2; return { rt, rh, fl: Math.max(1.2, 0.13 * t), wall: S > 60 ? 1.6 : 1.2, hubH: 0.75 * t, rs: rh - 2.6 }; }
+/** An axial fan's weight, g, an estimate from its proportions: PBT frame, seat, struts, hub and seven blades; its ferrite
+ *  ring; its four windings half filled with copper; its leads. */
+export function fanGrams(S: number, t: number): number {
+  const { rt, rh, fl, wall, hubH, rs } = fanDims(S, t), A = S * S - Math.PI * rt * rt, pbt = 1.5e-3;
+  const frame = 2 * fl * A + 2 * Math.PI * rt * wall * t + Math.PI * rh * rh * 1.5 + 3 * (rt - rh) * 1.5 * 1.6;
+  const rotor = Math.PI * rh * rh * 0.8 + Math.PI * (rh * rh - (rh - 0.8) ** 2) * (hubH - 0.8) + 7 * (rt - 0.6 - rh) * 0.9 * hubH * 0.8;
+  const ring = Math.PI * ((rh - 0.8) ** 2 - (rh - 2) ** 2) * (hubH - 1.2), coils = 4 * Math.max(1, rs - 1.5) * 0.5 * hubH * Math.max(1, 0.5 * rs) * 0.45;
+  return (frame + rotor) * pbt + ring * 4.9e-3 + coils * 8.9e-3 + 2 * Math.PI * 0.36 * 20 * 8.96e-3;
+}
 const fan: Family = {
   id: 'fan', name: 'axial fan', path: ['Electrical', 'Motors and actuators', 'Fans'], says: 'any square frame (40–120 mm), thickness and voltage', params: [{ key: 'size', says: 'frame', unit: 'mm', values: [25, 30, 40, 50, 60, 80, 92, 120], default: 40 }, { key: 'thick', says: 'thickness', unit: 'mm', values: [10, 15, 20, 25], default: 10 }, { key: 'volts', says: 'voltage', unit: 'V', values: [5, 12, 24], default: 12 }],
   examples: ['fan 40x10 12V', 'fan 120x25 12V', 'fan 30x10 5V'],
   read(w) { const m = /(\d{2,3})\s*[x×]\s*(\d{2})/.exec(w); return { size: num(m?.[1]) || 40, thick: num(m?.[2]) || 10, volts: num(/(\d+)\s*v\b/i.exec(w)?.[1]) || 12 }; },
-  make(p) { const s2 = Number(p.size), t = Number(p.thick); return item(`fan-${s2}x${t}-${p.volts}v`, `${s2} × ${t} mm fan, ${p.volts} V`, 'Electrical/Motors and actuators/Fans', 'product', 'assemble', 'fan-frame fan-impeller winding*4 magnet-ferrite-arc ic-package sleeve-bearing wire-hookup*2', 'a small brushless motor (a wound stator and a magnet ring in the hub) turning moulded blades in a square frame, switched by a driver chip', `${s2} mm square, ${t} mm thick, holes ${s2 === 40 ? 32 : s2 === 120 ? 105 : s2 === 80 ? 71.5 : s2 === 60 ? 50 : s2 === 92 ? 82.5 : s2 === 50 ? 40 : s2 === 30 ? 24 : 20} mm apart (typical)`, [s2, s2, t], +(s2 * s2 * t * 0.00035).toFixed(0)); },
+  make(p) { const s2 = Number(p.size), t = Number(p.thick); return item(`fan-${s2}x${t}-${p.volts}v`, `${s2} × ${t} mm fan, ${p.volts} V`, 'Electrical/Motors and actuators/Fans', 'product', 'assemble', 'fan-frame fan-impeller winding*4 magnet-ferrite-arc ic-package sleeve-bearing wire-hookup*2', 'a small brushless motor (a wound stator and a magnet ring in the hub) turning moulded blades in a square frame, switched by a driver chip', `${s2} mm square, ${t} mm thick, holes ${s2 === 40 ? 32 : s2 === 120 ? 105 : s2 === 80 ? 71.5 : s2 === 60 ? 50 : s2 === 92 ? 82.5 : s2 === 50 ? 40 : s2 === 30 ? 24 : 20} mm apart (typical)`, [s2, s2, t], +fanGrams(s2, t).toFixed(1)); },
 };
 // ---- linear rails by size and length ------------------------------------------------------------------------------------
 /** HIWIN MGN miniature guideways (HIWIN MG series catalogue, 2-6-12; mm, kg): the assembly H high over the rail's foot,
@@ -514,19 +528,21 @@ const header: Family = {
   read(w) { const m = /(\d+)\s*[x×]\s*(\d+)/.exec(w); return m ? { rows: num(m[1]), pins: num(m[2]) } : 'A header as rows × pins: "header 2x20".'; },
   make(p) { const r = Number(p.rows), n = Number(p.pins); return item(`header-${r}x${n}`, `pin header ${r} × ${n}, 2.54 mm`, 'Electrical/Connectors/Pin headers', 'product', 'mould', `header-insulator header-pin*${r * n}`, 'square brass pins, gold-flashed, held in a moulded PBT strip', `${r} × ${n} pins at 2.54 mm; about 3 A a pin`, [2.54 * n, 2.54 * r, 8.5], +(0.08 * r * n).toFixed(2)); },
 };
+// (a cartridge heater weighs about 4.5 g/cm³ of its cylinder, an estimate: mostly magnesia packed to 3 g/cm³ in a thin
+// stainless tube)
 const heater: Family = {
   id: 'heater', name: 'cartridge heater', path: ['Electrical', 'Heating', 'Cartridge heaters'], says: 'a cartridge heater of any diameter, length, voltage and power',
   params: [{ key: 'd', says: 'diameter', unit: 'mm', min: 3, max: 25, default: 6 }, { key: 'length', says: 'length', unit: 'mm', min: 10, max: 300, default: 20 }, { key: 'volts', says: 'voltage', unit: 'V', min: 5, max: 400, default: 24 }, { key: 'watts', says: 'power', unit: 'W', min: 5, max: 3000, default: 40 }],
   examples: ['heater 24V 40W 6x20', 'heater 12V 40W', 'heater 230V 200W 10x60'],
   read(w) { const m = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/.exec(w); return { d: m ? num(m[1]) : 6, length: m ? num(m[2]) : 20, volts: num(/(\d+(?:\.\d+)?)\s*V\b/i.exec(w)?.[1]) || 24, watts: num(/(\d+(?:\.\d+)?)\s*W\b/i.exec(w)?.[1]) || 40 }; },
-  make(p) { const d = Number(p.d), L = Number(p.length), V = Number(p.volts), W = Number(p.watts); return item(`heater-${d}x${L}-${V}v-${W}w`, `cartridge heater ${d} × ${L}, ${V} V ${W} W`, 'Electrical/Heating/Cartridge heaters', 'product', 'swage', 'heater-sheath resistance-wire terminal-pin*2 mgo', 'a nichrome coil in magnesium oxide inside a stainless sheath, swaged down so the powder packs tight', `${d} × ${L} mm; ${W} W at ${V} V, so ${((V * V) / W).toFixed(1)} Ω`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L, 5.5)); },
+  make(p) { const d = Number(p.d), L = Number(p.length), V = Number(p.volts), W = Number(p.watts); return item(`heater-${d}x${L}-${V}v-${W}w`, `cartridge heater ${d} × ${L}, ${V} V ${W} W`, 'Electrical/Heating/Cartridge heaters', 'product', 'swage', 'heater-sheath resistance-wire terminal-pin*2 mgo', 'a nichrome coil in magnesium oxide inside a stainless sheath, swaged down so the powder packs tight', `${d} × ${L} mm; ${W} W at ${V} V, so ${((V * V) / W).toFixed(1)} Ω`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L, 4.5)); },
 };
 const thermistor: Family = {
   id: 'thermistor', name: 'NTC thermistor', path: ['Electrical', 'Sensors', 'Temperature'], says: 'an NTC thermistor of any resistance at 25 °C and β',
   params: [{ key: 'r25', says: 'resistance at 25 °C', unit: 'Ω', min: 100, max: 1e6, default: 100000 }, { key: 'beta', says: 'β', unit: 'K', min: 2000, max: 5000, default: 3950 }],
   examples: ['thermistor 100k B3950', 'thermistor 10k B3435', 'thermistor 100k'],
   read(w) { const m = /(\d+(?:\.\d+)?)\s*(k|M)?\b/i.exec(w); const r = m ? num(m[1]) * (m[2]?.toLowerCase() === 'k' ? 1e3 : m[2] === 'M' ? 1e6 : 1) : 1e5; return { r25: r, beta: num(/\bB\s*(\d{4})/i.exec(w)?.[1]) || 3950 }; },
-  make(p) { const r = Number(p.r25), b = Number(p.beta), rs = r >= 1e3 ? `${r / 1e3}k` : String(r); return item(`ntc-${rs}-b${b}`, `NTC thermistor ${rs}Ω, β ${b}`, 'Electrical/Sensors/Temperature', 'product', 'sinter', 'ntc-bead lead-wire*2 glass-body', 'a bead of metal-oxide ceramic sintered onto two leads and sealed in glass', `${rs}Ω at 25 °C, β ${b} K`, [2, 2, 4], 0.1); },
+  make(p) { const r = Number(p.r25), b = Number(p.beta), rs = r >= 1e3 ? `${r / 1e3}k` : String(r); return item(`ntc-${rs}-b${b}`, `NTC thermistor ${rs}Ω, β ${b}`, 'Electrical/Sensors/Temperature', 'product', 'sinter', 'ntc-bead lead-wire*2 glass-body', 'a bead of metal-oxide ceramic sintered onto two leads and sealed in glass', `${rs}Ω at 25 °C, β ${b} K`, [2, 2, 4], +(mm3g(Math.PI * 4, 2.5) + 2 * mm3g(Math.PI * 0.15 ** 2 * 40, RHO.copper)).toFixed(3)); },
 };
 const coupling: Family = {
   id: 'coupling', name: 'flexible shaft coupling', path: ['Mechanical', 'Shafts and hubs', 'Couplings'], says: 'a helical-beam coupling joining any two shafts up to 12 mm, held by set screws',
