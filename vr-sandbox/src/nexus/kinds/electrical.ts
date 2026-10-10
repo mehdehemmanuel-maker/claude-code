@@ -74,6 +74,20 @@ const CELLS: Record<string, { dim: number[]; chem: Record<string, [number, numbe
 const CHEM_OF: Record<string, string> = { alkaline: 'battery-can cathode-ring anode-gel cell-separator current-collector cell-seal negative-cap battery-label', lithium: 'battery-can lithium-anode cathode-ring cell-separator cell-seal negative-cap electrolyte-li', nimh: 'battery-can nimh-positive nimh-negative cell-separator*2 cap-plate cell-seal koh-electrolyte battery-label', silveroxide: 'battery-can silver-oxide-pellet anode-gel cell-separator cell-seal negative-cap' };
 /** Thermocouple types (IEC 60584): legs, the range a class 2 one is good over (°C), and its Seebeck coefficient near 25 °C (µV/K, about). */
 const TC: Record<string, [string, string, number, number, number]> = { K: ['chromel', 'alumel', -40, 1200, 41], J: ['iron', 'constantan', -40, 750, 52], T: ['copper', 'constantan', -40, 350, 41], E: ['chromel', 'constantan', -40, 900, 61], N: ['nicrosil', 'nisil', -40, 1200, 27], R: ['pt-rh13', 'platinum', 0, 1600, 6], S: ['pt-rh10', 'platinum', 0, 1600, 6], B: ['pt-rh30', 'pt-rh6', 600, 1700, 0.3] };
+/** A thermocouple's build, mm: a bare bead's two 24 AWG legs (0.51 mm), each in glass braid 1.2 mm across and the pair in
+ *  one 3 mm across (its braid six tenths glass); a sheathed one's legs 0.16 of its sheath across in packed magnesia
+ *  (eight tenths dense) in a sheath a tenth of its diameter thick (typical of mineral-insulated cable); and what each
+ *  weighs a millimetre, g, its legs' alloys' densities (kg/m³) given. */
+export function tcDims(form: string, rhoA: number, rhoB: number) {
+  const bead = form === 'bead', d = form === 'sheath6' ? 6 : 3, wire = bead ? 0.51 : 0.16 * d, wall = bead ? 0 : 0.1 * d, ri = d / 2 - wall;
+  const legs = (Math.PI * (wire / 2) ** 2 * (rhoA + rhoB)) / 1e6;
+  const gpm = bead ? legs + (2 * Math.PI * (0.6 ** 2 - 0.3 ** 2) + Math.PI * (1.5 ** 2 - 1.3 ** 2)) * 2500 * 0.6 / 1e6
+    : legs + (Math.PI * ((d / 2) ** 2 - ri ** 2) * 8470 + (Math.PI * ri ** 2 - 2 * Math.PI * (wire / 2) ** 2) * 3580 * 0.8) / 1e6;
+  return { bead, d, wire, wall, ri, gpm };
+}
+/** The legs' alloys' densities, kg/m³ (as mass.ts has them). */
+const TC_RHO: Record<string, number> = { chromel: 8730, alumel: 8600, iron: 7870, constantan: 8900, copper: 8960, nicrosil: 8520, nisil: 8700, platinum: 21450, 'pt-rh6': 20590, 'pt-rh10': 19970, 'pt-rh13': 19610, 'pt-rh30': 17600 };
+export const tcOf = (type: string, form: string) => { const [a, b] = TC[type]!; return tcDims(form, TC_RHO[a]!, TC_RHO[b]!); };
 const SECTIONS = [0.14, 0.25, 0.5, 0.75, 1, 1.5, 2.5];
 /** Flexible cords: current a 2-core carries (A), BS 7671 table 4F3A. */
 const CORD_A: Record<number, number> = { 0.5: 3, 0.75: 6, 1: 10, 1.25: 13, 1.5: 16, 2.5: 25, 4: 32 };
@@ -335,7 +349,7 @@ export const ELECTRICAL: KindDef[] = [
     id: 'thermocouple', name: 'thermocouple probe', path: 'Electrical/Sensors/Temperature', says: 'two different metals welded at a tip: their junction makes a voltage that grows with heat', std: 'IEC 60584 types; class 2 ranges',
     axes: [bare('type', 'type', Object.keys(TC)), bare('form', 'form', ['bead', 'sheath3', 'sheath6']), unit('L', 'probe length', 'mm', [100, 150, 200, 300, 500])],
     title: (p) => `type ${p.type} thermocouple, ${p.form === 'bead' ? 'bare bead' : `${String(p.form).replace('sheath', '')} mm sheathed`}, ${p.L} mm`, of: (p) => `thermoelement-${TC[s(p, 'type')]![0]} thermoelement-${TC[s(p, 'type')]![1]} ${p.form === 'bead' ? 'tc-sleeving*3' : 'tc-sheath mgo'}`, make: 'assemble', how: (p) => (p.form === 'bead' ? 'two alloy wires welded at a bead, insulated with glass braid' : 'two alloy wires in packed magnesia inside an Inconel sheath, welded closed at its tip'),
-    spec: (p) => { const [, , lo, hi, sb] = TC[s(p, 'type')]!; return `${lo} to ${hi} °C (class 2, IEC 60584-2); about ${sb} µV/K near room temperature`; }, box: (p) => [p.form === 'sheath6' ? 6 : 3, p.form === 'sheath6' ? 6 : 3, n(p, 'L')], g: (p) => gOf(cyl(p.form === 'sheath6' ? 6 : 3, n(p, 'L')), 6),
+    spec: (p) => { const [, , lo, hi, sb] = TC[s(p, 'type')]!; return `${lo} to ${hi} °C (class 2, IEC 60584-2); about ${sb} µV/K near room temperature`; }, box: (p) => [p.form === 'sheath6' ? 6 : 3, p.form === 'sheath6' ? 6 : 3, n(p, 'L')], g: (p) => tcOf(s(p, 'type'), s(p, 'form')).gpm * n(p, 'L'),
   },
   {
     id: 'rtd', name: 'platinum resistance thermometer', path: 'Electrical/Sensors/Temperature', says: 'a platinum resistor whose resistance rises steadily with heat', std: 'IEC 60751: Pt100 and Pt1000, classes AA, A and B',

@@ -148,6 +148,8 @@ m('wood-veneer', 'wood veneer', 'Other materials/Natural', 'plies for plywood', 
 m('alumina', 'alumina', 'Ceramics and glass/Technical ceramics', 'Al₂O₃: insulators and resistor cores', '');
 m('batio3', 'barium titanate', 'Ceramics and glass/Technical ceramics', 'the dielectric of ceramic capacitors', '');
 m('pzt', 'PZT', 'Ceramics and glass/Technical ceramics', 'lead zirconate titanate: piezo elements', '');
+m('firebrick-insulating', 'insulating firebrick', 'Ceramics', 'a light, porous brick of fired clay and alumina that holds heat in and stores little of it: a kiln\'s walls', '2300 °F grade (K23): 0.48 g/cm³ (typical)');
+m('kanthal-a1', 'Kanthal A-1', 'Metals', 'an iron-chromium-aluminium alloy whose oxide skin lets it run red-hot in air for years: a kiln\'s and a furnace\'s elements', '7.10 g/cm³ (Kanthal)');
 m('mgo', 'magnesium oxide', 'Ceramics and glass/Technical ceramics', 'packed round heater wire: insulates, conducts heat', '');
 m('ntc-ceramic', 'NTC ceramic', 'Ceramics and glass/Technical ceramics', 'sintered metal oxides whose resistance falls as they warm', '');
 m('glass', 'glass', 'Ceramics and glass/Glass', 'soda-lime and borosilicate', '');
@@ -1145,6 +1147,15 @@ e('pbf-filter', 'gas circulation filter', 'Electrical/Machines/Metal printers', 
 e('pbf-electrics', 'control cabinet', 'Electrical/Machines/Metal printers', 'assembly', 'assemble', 'steel-low copper fr4', 'the machine\'s power supplies, drives and safety relays, and the computer that runs the build', '', { size: [340, 750, 1200] });
 e('pbf-screen', 'operator screen', 'Electrical/Machines/Metal printers', 'assembly', 'assemble', 'glass fr4 al-6061', 'the touch screen the build is set up and watched on', '', { size: [480, 300, 40] });
 e('machine-foot', 'levelling foot', 'Hardware/Structural/Feet', 'part', 'machine', 'steel-low nbr', 'a threaded foot on a rubber pad, screwed up or down to level a heavy machine', '', { size: [80, 80, 80] });
+// ---- an electric kiln's parts (Skutt's KM-1027 by its listings; their makeup typical of such kilns) ----
+e('kiln-stand', 'kiln stand', 'Electrical/Machines/Kilns', 'part', 'weld', 'steel-low', 'the welded steel stand that holds a kiln off the floor so air cools under it', '', { size: [740, 152, 740] });
+e('kiln-floor', 'kiln floor', 'Electrical/Machines/Kilns', 'part', 'assemble', 'firebrick-insulating stainless-304', 'the kiln\'s bottom: a slab of firebrick in a stainless band', '', { size: [740, 76, 740] });
+e('kiln-ring', 'kiln section', 'Electrical/Machines/Kilns', 'part', 'assemble', 'firebrick-insulating stainless-304', 'one ring of a sectional kiln: firebricks cut to a ten-sided wall, grooved inside for its elements, held in a stainless jacket by band clamps', '', { size: [740, 229, 740] });
+e('kiln-lid', 'kiln lid', 'Electrical/Machines/Kilns', 'part', 'assemble', 'firebrick-insulating stainless-304 steel-low', 'the firebrick lid in a stainless band, its handle at the front and its hinge at the back', '', { size: [740, 76, 740] });
+e('kiln-element', 'kiln element', 'Electrical/Machines/Kilns', 'part', 'coil', 'kanthal-a1', 'a long coil of Kanthal A-1 wire laid in a groove round the kiln\'s wall: it glows as the current through it heats it', '', { size: [700, 10, 700] });
+e('kiln-controller', 'kiln controller', 'Electrical/Machines/Kilns', 'assembly', 'assemble', 'steel-low fr4 glass', 'the box on the kiln\'s side that runs its firing program: its keypad and display, the relays that switch its elements and its thermocouple\'s input', '', { size: [90, 300, 250] });
+e('lid-lifter', 'lid lifter', 'Electrical/Machines/Kilns', 'part', 'assemble', 'steel-spring steel-low', 'the spring at the lid\'s hinge that takes most of its weight as it is lifted', '', { size: [60, 250, 60] });
+e('peephole-plug', 'peephole plug', 'Electrical/Machines/Kilns', 'part', 'cast', 'alumina', 'a ceramic plug in a hole through the kiln\'s wall, taken out to see the cones inside or to vent it', '', { size: [30, 30, 50] });
 e('te-pellet', 'thermoelectric pellet', 'Electrical/Thermal/Peltier', 'part', 'sinter', 'bi2te3', 'a small block of n- or p-doped bismuth telluride');
 e('copper-tab', 'copper tab', 'Electrical/Thermal/Peltier', 'part', 'stamp', 'copper', 'a little copper strap that joins two pellets in series');
 e('peltier-module', 'Peltier module', 'Electrical/Thermal/Peltier', 'product', 'solder', 'te-pellet*254 copper-tab*254 alumina*2 solder silicone wire-hookup*2', '127 pairs of n and p pellets in series between two ceramic plates: a current carries heat from one plate to the other', 'TEC1-12706: 12 V, about 6 A, up to about 66 K across it (typical of its makers\' sheets)');

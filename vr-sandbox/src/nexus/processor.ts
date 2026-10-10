@@ -147,6 +147,7 @@ const workshop = new Kiln(), SC2_MAX = 1093;
 export const KILNS: KilnSpec[] = [
   { id: 'paragon-sc2', name: 'Paragon\'s SC-2', max: SC2_MAX, volts: 120, watts: 1680, src: 'Paragon\'s SC-2 as The Ceramic Shop lists it: 2000 °F (1093 °C) inside, 120 V, 14 A, 1680 W; a jewellery, enamel and glass kiln' },
   { id: 'skutt-km818', name: 'Skutt\'s KM-818', max: 1288, volts: 240, watts: 6400, src: 'Skutt\'s KM-818 page (cone 10, 2350 °F: 1288 °C) and its KilnMaster manual (240 V, 26.7 A, 6400 W)' },
+  { id: 'skutt-km1027', name: 'Skutt\'s KM-1027', max: 1288, volts: 240, watts: 11520, src: 'sellers\' listings of Skutt\'s KM-1027: cone 10, 2350 °F (1288 °C); 240 V single-phase, 48 A, 11,520 W; 23 × 23 × 27 in inside, ten-sided, 3 in of firebrick' },
   { id: 'workshop', name: 'the workshop\'s kiln', max: Math.min(SC2_MAX, Math.round(20 + workshop.P / workshop.h)), volts: 120, watts: workshop.P, src: `its model in ./cell.ts (${workshop.P} W, estimates), held to the rating of the kiln it stands for, Paragon's SC-2: 2000 °F (1093 °C)` },
 ];
 /** Quartz turns from its α form to its β at 573 °C, growing by about 1 % as it does: ware is taken through it slowly. */
@@ -202,7 +203,7 @@ const MATERIAL_WORDS: [RegExp, string][] = [[/\b(ultrafuse|316l (filament|metal)
   [/\bearthenware\b/, 'earthenware'], [/\b(high[- ]fire )?porcelain\b/, 'porcelain'], [/\bhigh[- ]fire stoneware|stoneware (at |to )?cone 10\b/, 'stoneware-10'], [/\bstoneware\b/, 'stoneware-6'],
   [/\balumin(i)?um\b/, 'aluminium'], [/\bzinc\b/, 'zinc'], [/\b(tin|pewter)\b/, 'tin'], [/\bbronze\b/, 'bronze']];
 const MACHINE_WORDS: [RegExp, string][] = [[/\bvoron\b/, 'voron-24'], [/\b(eos|m ?290)\b/, 'eos-m290'],[/\bmini\+?|mini plus\b/, 'prusa-mini-plus'], [/\bmk4\b/, 'prusa-mk4'], [/\b(x1c|x1 carbon|bambu)\b/, 'bambu-x1c'],
-  [/\b(sc-?2|paragon)\b/, 'paragon-sc2'], [/\b(km-?818|skutt)\b/, 'skutt-km818'], [/\b(workshop'?s? kiln|my kiln|the kiln)\b/, 'workshop']];
+  [/\b(sc-?2|paragon)\b/, 'paragon-sc2'], [/\b(km-?1027|1027)\b/, 'skutt-km1027'], [/\b(km-?818|skutt)\b/, 'skutt-km818'], [/\b(workshop'?s? kiln|my kiln|the kiln)\b/, 'workshop']];
 const said = (r: Made<unknown>, what: string): string => r.ok
   ? `${what}: ${r.steps.map((s, i) => `${i + 1}. ${s.do}${s.check ? ` (check: ${s.check})` : ''}`).join(' ')}${r.warn.length ? ` Mind: ${r.warn.map((w) => w.replace(/\.$/, '')).join('; ')}.` : ''}`
   : `${what} cannot be done: ${r.refused.join('; ')}.`;

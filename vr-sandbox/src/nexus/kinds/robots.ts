@@ -1,5 +1,6 @@
-// Robot arms by their makers' figures: the Meca500 (Mecademic), its R3 and R4 revisions, from its user manual
-// (src/nexus/meca.ts holds its figures, its kinematics and its controller).
+// Machines by their makers' figures: 3D printers from their makers' own assemblies, EOS's M 290 metal printer and Skutt's
+// KM-1027 kiln from their data sheets and listings; robot arms: the Meca500 (Mecademic), its R3 and R4 revisions, from
+// its user manual (src/nexus/meca.ts holds its figures, its kinematics and its controller).
 
 import { bare, type KindDef, type P } from './core';
 import { MECA500 } from '../meca';
@@ -34,6 +35,14 @@ export const ROBOT_KINDS: KindDef[] = [
     // (the Voron's size its model's, measured over its parts; its mass the sum of its parts', an estimate: VoronDesign
     // gives none)
     box: (p) => (s(p, 'model') === 'Voron-2.4' ? VORON_BOX : [440, 465, 440]), g: (p) => (s(p, 'model') === 'Voron-2.4' ? VORON_G : 6700),
+  },
+  {
+    id: 'kiln', look: 'box', name: 'electric kiln', path: 'Electrical/Machines/Kilns', says: 'a box of insulating firebrick heated by coiled resistance wire in grooves round its walls, its controller taking it through a firing program', std: 'its sellers\' listings (Skutt\'s KM-1027)',
+    axes: [bare('model', 'model', ['Skutt-KM1027'])], title: () => 'Skutt KM-1027 electric kiln',
+    of: () => 'kiln-stand kiln-floor kiln-ring*3 kiln-lid kiln-element*6 kiln-controller lid-lifter peephole-plug*3 {thermocouple K sheath6 200mm}', make: 'assemble',
+    how: 'three rings of firebrick, each with its two elements in grooves round its wall, stacked on a firebrick floor on a stand and closed by a firebrick lid; its controller switches its elements to follow a firing program against its thermocouple',
+    spec: () => '23 × 23 in inside, 27 in deep (7.0 cu ft), ten-sided, 3 in of firebrick; to cone 10, 2350 °F (1288 °C); 240 V single-phase, 48 A, 11,520 W (on 6 AWG wire and a 60 A breaker); its KilnMaster controller: six programs of up to eight segments each, a delayed start, an alarm, the cost of a firing; a spring-loaded lid lifter; 290 lb as listed (sellers\' listings of Skutt\'s KM-1027). Hazards: its outside burns, its inside reaches 1288 °C, glazes give off fumes as they fire (it needs a vent), and it draws 48 A (wired by an electrician)',
+    box: () => [780, 1000, 830], g: () => 131500,
   },
   {
     id: 'pbf', look: 'box', name: 'laser powder-bed fusion machine', path: 'Electrical/Machines/Metal printers', says: 'a metal printer: a laser melts a thin bed of metal powder where the part is, layer on layer, in a chamber of argon or nitrogen', std: 'its maker\'s data sheet (EOS\'s M 290)',

@@ -26,7 +26,7 @@ import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, fanDims,
 import { tubeLength } from './form';
 import { CLEAR, FB, VWHEEL, idlerDims } from './kinds/motion';
 import { RIBS, capDims } from './kinds/fasteners';
-import { SNAP } from './kinds/electrical';
+import { SNAP, tcOf } from './kinds/electrical';
 import { HOTEND, rootR } from './kinds/plant';
 import { SOCKET_HEAD } from './embody/stock';
 import { BUTTON, PAN, SETSCREW_KEY } from './threads';
@@ -532,6 +532,8 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   ftsensor: { says: 'a force/torque sensor as its maker gives it (src/nexus/kit-robot.ts): its stainless body and its six silicon gauges on its flexures', leaves: 'its height an estimate; its flexures and cable not drawn', make: (_p, it) => ftParts(it.name) },
   depthcamera: { says: 'a depth camera as its maker gives it (src/nexus/kit-robot.ts): its case, its glass face, its two infrared imagers and colour one behind their lenses, its projector, its board', leaves: 'its imagers\' places estimates; its vision processor not drawn apart from its board', make: (_p, it) => depthCamParts(it.name) },
   gassensor: { says: 'a gas sensor as its maker gives it (src/nexus/kit-robot.ts): its LGA package, its two dies inside', leaves: 'its dies\' sizes estimates; its lid and pads not drawn apart', make: (_p, it) => bmeParts(it.name) },
+  thermocouple: { says: 'a thermocouple probe: its two alloy legs welded together at its tip; bare, each leg in glass braid and the pair in another; or sheathed, the legs in packed magnesia in a drawn nickel-alloy tube welded shut at its tip', leaves: 'its legs\' and sheath\'s sizes typical (tcDims names each); its tip\'s weld drawn as a bead; its cold end\'s plug or leads not drawn', make: (p, it) => tcParts(p, it.name) },
+  kiln: { says: 'an electric kiln, Skutt\'s KM-1027 by its listings: three ten-sided rings of 3 in insulating firebrick in stainless jackets, two Kanthal elements in each ring\'s wall, stacked on a firebrick floor on a steel stand and closed by a firebrick lid on a sprung hinge; its controller on its side, its thermocouple through its wall beside it, a peephole in each ring', leaves: 'its inside, its walls and its rings\' number Skutt\'s (23 × 23 × 27 in, 3 in brick); its stand, its elements\' coils, its controller\'s box and its peepholes typical of such kilns (estimates); its elements drawn on its walls\' faces, not in grooves cut in them; its band clamps, wiring and switch box not drawn', make: (_p, it) => kilnParts(it.name) },
   pbf: { says: 'a laser powder-bed fusion machine, EOS\'s M 290 by its data sheet: its cabinet (2500 × 1300 × 2190 mm) on a welded frame and six levelling feet; its stainless process chamber at working height, its door\'s window and two glove ports; the build plate (250 × 250 mm) on its piston in the build cylinder, the powder dispenser beside it and the recoater between them on two rails; above the chamber the galvanometer scanner and its F-theta lens, fed by fibre from the 400 W fibre laser; the gas filter in its own section, the control cabinet below, the operator screen at the door', leaves: 'its outside, its build volume, its laser and its mass EOS\'s; where each part sits inside, and each part\'s size and makeup, typical of such machines (estimates); its gas lines, cables and the powder\'s overflow not drawn', make: (_p, it) => pbfParts(it.name) },
   printer3d: { says: 'a 3D printer drawn from its maker\'s own assembly (Creality\'s Ender-3 3DXML, read by tools/measure/xml3d.py; VoronDesign\'s Voron 2.4r2 STEP, read by tools/measure/stepasm.py): every part where the model puts it, each library part (extrusions, rails, steppers, bearings, the GT2 pulleys and idlers, screws, nuts, washers, inserts and T-nuts) fitted to its box', leaves: 'what the library does not make yet drawn as its measured box, or as the walls its surface covers, said as what it is and coloured as its model colours it (the Voron\'s printed parts, its panels, its bed, its boards and supplies), each its fill an estimate', make: (p, it) => modelPart(PRINTER_MODELS[String(p.model) as keyof typeof PRINTER_MODELS] ?? ENDER3, it.name).part.parts! },
   robot: { says: 'the robot its tasks design (src/nexus/robot.ts), each part the library\'s: its table, two UR5e arms bolted down by their makers\' pattern and posed ready, a QC-11 and an RH56DFX hand on each (a Nano17 at each index fingertip), the Camera Module 3 on the right wrist, the D435, microphone and gas sensor on a mast', leaves: 'its table, mast and camera bracket estimates; its cables, air lines and controllers not drawn', make: (_p, it) => robotParts(it.name) },
@@ -803,6 +805,62 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
   const shift: V3 = [(lo[0]! + hi[0]!) / 2, lo[1]!, (lo[2]! + hi[2]!) / 2];
   const parts = placed.map(({ p }) => ({ ...p, at: [((p.at?.[0] ?? 0) - shift[0]) * mm, ((p.at?.[1] ?? 0) - shift[1]) * mm, ((p.at?.[2] ?? 0) - shift[2]) * mm] as V3 }));
   return { part: { name: nm, at: [0, 0, 0], parts }, drawn, boxed };
+}
+/** A thermocouple probe, mm (src/nexus/kinds/electrical.ts tcDims): along z from its cold end at 0 to its tip at its
+ *  length. */
+function tcParts(p: Record<string, string | number>, nm: string): Part[] {
+  const L = Number(p.L), [ma, mb] = ({ K: ['chromel', 'alumel'], J: ['iron', 'constantan'], T: ['copper', 'constantan'], E: ['chromel', 'constantan'], N: ['nicrosil', 'nisil'], R: ['pt-rh13', 'platinum'], S: ['pt-rh10', 'platinum'], B: ['pt-rh30', 'pt-rh6'] } as Record<string, [string, string]>)[String(p.type)]!;
+  const d = tcOf(String(p.type), String(p.form)), along = [PI / 2, 0, 0] as V3, out: Part[] = [];
+  const leg = (m: string, x: number) => P(`${nm} ${m} leg`, { cyl: [(d.wire / 2) * mm, L * mm] }, { mat: m, color: 0xb8b2a4, finish: 'brushed', item: `thermoelement-${m}`, rot: along, at: [x * mm, 0, (L / 2) * mm] });
+  if (d.bead) {
+    out.push(leg(ma, -0.6), leg(mb, 0.6), P(`${nm} bead`, { sphere: 0.6 * mm }, { mat: ma, color: 0xb8b2a4, finish: 'brushed', at: [0, 0, L * mm] }));
+    for (const x of [-0.6, 0.6]) out.push(P(`${nm} leg braid`, lathe([[0.3, 0], [0.6, 0], [0.6, L - 8], [0.3, L - 8], [0.3, 0]]), { mat: 'glass', color: 0xd8cfa8, finish: 'weave', item: 'tc-sleeving', rot: along, at: [x * mm, 0, 0], fill: 0.6 }));
+    out.push(P(`${nm} braid`, lathe([[1.3, 0], [1.5, 0], [1.5, L - 20], [1.3, L - 20], [1.3, 0]]), { mat: 'glass', color: 0xc9bf96, finish: 'weave', item: 'tc-sleeving', rot: along, at: [0, 0, 0], fill: 0.6 }));
+  } else {
+    out.push(leg(ma, -d.wire), leg(mb, d.wire));
+    out.push(P(`${nm} sheath`, lathe([[d.ri, 0], [d.d / 2, 0], [d.d / 2, L - d.d / 2], [d.ri, L - d.wall], [d.ri, 0]]), { mat: 'nickel-alloy', color: 0xa9adb1, finish: 'brushed', item: 'tc-sheath', rot: along }),
+      P(`${nm} magnesia`, { cyl: [d.ri * mm, (L - d.wall) * mm] }, { mat: 'mgo', color: 0xeeeae2, finish: 'texture', rot: along, at: [0, 0, ((L - d.wall) / 2) * mm], fill: 0.8 - (2 * (d.wire / 2) ** 2) / d.ri ** 2 }));
+  }
+  return out;
+}
+/** An electric kiln (Skutt's KM-1027), mm: its inside 23 × 23 in across its flats, 27 in deep in three 9 in rings, its
+ *  walls, floor and lid 3 in of insulating firebrick (its listings); a flat of its ten sides to its front, +x, where its
+ *  controller is; on a 6 in stand (typical). */
+function kilnParts(nm: string): Part[] {
+  const IN = 25.4, aIn = 11.5 * IN, t = 3 * IN, aOut = aIn + t, jk = 0.6, ringH = 9 * IN, n = 10, stand = 6 * IN;
+  const gon = (a: number): [number, number][] => Array.from({ length: n }, (_, k) => polar(a / Math.cos(PI / n), PI / n + (2 * PI * k) / n));
+  const brick = { mat: 'firebrick-insulating', color: 0xe9e1cf, finish: 'texture' }, steel = { mat: 'stainless-304', color: 0xc4c8cc, finish: 'brushed' };
+  const out: Part[] = [];
+  // ---- its stand: a ten-sided top frame on five legs
+  out.push(group(`${nm} stand`, 'kiln-stand', [slab(`${nm} stand`, S(gon(aOut - 10)), [S(gon(aOut - 60))], stand - 4, stand, { mat: 'steel-low', color: 0x2b2d30, finish: 'paint' }),
+    ...Array.from({ length: 5 }, (_, k) => { const [x, z] = polar(aOut - 35, (2 * PI * k) / 5); return P(`${nm} stand leg`, { box: [25 * mm, (stand - 4) * mm, 25 * mm] }, { mat: 'steel-low', color: 0x2b2d30, finish: 'paint', at: [x * mm, ((stand - 4) / 2) * mm, z * mm], fill: (25 ** 2 - 21 ** 2) / 25 ** 2 }); })]));
+  // ---- its floor, its three rings and its lid: firebrick in stainless bands
+  const y0 = stand, yTop = y0 + t + 3 * ringH;
+  out.push(group(`${nm} floor`, 'kiln-floor', [slab(`${nm} floor`, S(gon(aOut)), [], y0, y0 + t, brick), slab(`${nm} floor band`, S(gon(aOut + jk)), [S(gon(aOut))], y0, y0 + t, steel)]));
+  for (let r = 0; r < 3; r++) {
+    const ya = y0 + t + r * ringH, yb = ya + ringH;
+    // (its jacket closed by a band clamp near its top and its bottom, 12 mm wide, 1.2 mm proud: typical)
+    out.push(group(`${nm} ring ${r + 1}`, 'kiln-ring', [slab(`${nm} ring ${r + 1}`, S(gon(aOut)), [S(gon(aIn))], ya, yb, brick), slab(`${nm} ring ${r + 1} jacket`, S(gon(aOut + jk)), [S(gon(aOut))], ya, yb, steel),
+      ...[ya + 10, yb - 22].map((y) => slab(`${nm} ring ${r + 1} band clamp`, S(gon(aOut + jk + 1.2)), [S(gon(aOut + jk))], y, y + 12, { ...steel, color: 0xd2d5d8 }))]));
+    // (its two elements, coils of Kanthal A-1 10 mm across, a third and two thirds up its wall; the coil's wire its share)
+    for (const f of [1 / 3, 2 / 3]) { const g = gon(aIn - 5), pts = [...g, g[0]!].map(([x, z]) => [x * mm, (ya + f * ringH) * mm, z * mm] as V3);
+      out.push(P(`${nm} element`, { tube: { r: 5 * mm, pts, bend: 2 * mm } }, { mat: 'kanthal-a1', color: 0x9a9894, finish: 'texture', item: 'kiln-element', fill: 0.2, fixed: 'laid in its groove' })); }
+    out.push(P(`${nm} peephole plug`, lathe([[0, 0], [12, 0], [10, 50], [0, 50], [0, 0]]), { mat: 'alumina', color: 0xf1ede4, finish: 'moulded', item: 'peephole-plug', rot: [0, 0, -PI / 2], at: [(aIn + 2) * mm, (ya + ringH / 2) * mm, 220 * mm] }));
+  }
+  const lidHinge: V3 = [-(aOut + 30) * mm, (yTop + t / 2) * mm, 0];
+  out.push(group(`${nm} lid`, 'kiln-lid', [slab(`${nm} lid`, S(gon(aOut)), [], yTop, yTop + t, brick), slab(`${nm} lid band`, S(gon(aOut + jk)), [S(gon(aOut))], yTop, yTop + t, steel),
+    P(`${nm} lid handle`, { cyl: [10 * mm, 220 * mm] }, { mat: 'steel-low', color: 0x2b2d30, finish: 'paint', rot: [PI / 2, 0, 0], at: [(aOut + 40) * mm, (yTop + t / 2) * mm, 0] }),
+    ...[-90, 90].map((z) => P(`${nm} lid handle mount`, { box: [40 * mm, 20 * mm, 16 * mm] }, { mat: 'steel-low', color: 0x2b2d30, finish: 'paint', at: [(aOut + 20) * mm, (yTop + t / 2) * mm, z * mm] })),
+    P(`${nm} lid hinge`, { cyl: [12 * mm, 300 * mm] }, { mat: 'steel-low', color: 0x2b2d30, finish: 'paint', rot: [PI / 2, 0, 0], at: lidHinge })], { joint: 'hinge' }));
+  out.push(P(`${nm} lid lifter`, { cyl: [18 * mm, 230 * mm] }, { mat: 'steel-spring', color: 0x6b6e72, finish: 'paint', item: 'lid-lifter', at: [-(aOut + 30) * mm, (yTop - 115) * mm, 0] }));
+  // ---- its controller on the middle ring's front, its thermocouple through the wall beside it
+  const yc = y0 + t + 1.5 * ringH;
+  out.push(group(`${nm} controller`, 'kiln-controller', [P(`${nm} controller`, { box: [90 * mm, 300 * mm, 250 * mm] }, { mat: 'steel-low', color: 0x26292c, finish: 'paint', at: [(aOut + jk + 45) * mm, yc * mm, 0], fill: 0.12 }),
+    P(`${nm} controller display`, { box: [3 * mm, 50 * mm, 120 * mm] }, { mat: 'glass', color: 0x1a2a20, finish: 'moulded', at: [(aOut + jk + 91) * mm, (yc + 80) * mm, 0] }),
+    P(`${nm} controller keypad`, { box: [3 * mm, 130 * mm, 160 * mm] }, { mat: 'fr4', color: 0x3c4046, finish: 'moulded', at: [(aOut + jk + 91) * mm, (yc - 40) * mm, 0] })]));
+  // (its probe along -x from outside its jacket, its tip 2 in inside its wall)
+  out.push(use('thermocouple K sheath6 200mm', [(aIn + 149) * mm, (yc + 60) * mm, -180 * mm], { name: `${nm} thermocouple`, rot: [0, -PI / 2, 0], fixed: 'through its wall, its tip 2 in into the kiln' }));
+  return out;
 }
 /** A laser powder-bed fusion machine (EOS's M 290): its outside, build volume and laser from EOS's data sheet, the rest
  *  typical of such machines (estimates), mm: its front +x, its width along z, standing on the floor. */

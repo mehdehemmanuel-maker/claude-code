@@ -619,7 +619,16 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    two MGN15 rails, the scanner, F-theta lens, fibre laser, filter, control cabinet and screen; its outside, build
    volume, laser and 1250 kg EOS's, its inside's layout and makeup typical (estimates); drawn 98 % of its mass. Judged
    blind: 2/10, read as a powder-bed metal printer (30 %); its panels' coincident faces and its door's gaps fixed, a
-   handle, hinges, window frame, emergency stop and chamber lamp added. Next: a sintering furnace drawn; the kiln.
+   handle, hinges, window frame, emergency stop and chamber lamp added.
+   The kiln (2026-10-10): Skutt's KM-1027 as a kind (`kiln Skutt-KM1027`, `kilnParts`) by its sellers' listings (ten-sided,
+   23 × 23 × 27 in inside, 3 in of firebrick, cone 10 at 2350 °F, 240 V 48 A 11,520 W, its KilnMaster's six programs of
+   eight segments, a sprung lid lifter, 290 lb listed): three firebrick rings in stainless jackets with band clamps, two
+   Kanthal A-1 elements in each, a peephole each, its floor, stand, lid on its hinge, controller and a type K sheathed
+   thermocouple through its wall (thermocouples now drawn: `tcParts`, their masses from their build); in `processor.ts`'s
+   KILNS so "fire porcelain in the 1027" runs Orton's cone 10 program in it; firebrick (K23, 0.48 g/cm³) and Kanthal A-1
+   (7.10 g/cm³, its make-up 22 Cr 5.8 Al Fe) as materials, the thermocouple alloys' densities added. Judged blind: an
+   electric pottery kiln (95 %), named the Skutt KM-1027 (40 %), 3/10 (its jacket reads matte, its lid's and stand's
+   hardware thin). Next: a sintering furnace drawn; the robot arm, the lab instruments, the Quest 3.
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);

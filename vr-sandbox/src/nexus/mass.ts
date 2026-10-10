@@ -18,6 +18,11 @@ export const DENSITY: Record<string, number> = {
   zamak: 6600, 'solder-snpb': 8400, paper: 800,
   // (magnesium oxide 3.58 g/cm³ solid, a heater packs it to about 85 %: its parts say so; nichrome 80/20 8.4; sintered
   // barium or strontium ferrite 4.9; an NTC thermistor's Mn–Ni–Co oxide 5.0, typical)
+  // (insulating firebrick of the 2300 °F grade, K23, typical; Kanthal A-1's FeCrAl, Kanthal's figure)
+  'firebrick-insulating': 480, 'kanthal-a1': 7100,
+  // (thermocouple alloys and their sheath, handbook figures as thermocouple wire tables give them: chromel, alumel,
+  // constantan, Nicrosil, Nisil, the platinum-rhodiums; Inconel 600 for a sheath's nickel alloy)
+  chromel: 8730, alumel: 8600, constantan: 8900, nicrosil: 8520, nisil: 8700, platinum: 21450, 'pt-rh6': 20590, 'pt-rh10': 19970, 'pt-rh13': 19610, 'pt-rh30': 17600, 'nickel-alloy': 8470, iron: 7870,
   mgo: 3580, nichrome: 8400, 'ferrite-hard': 4900, 'ntc-ceramic': 5000,
   // (neoprene, a timing belt's body: 1.23 g/cm³, typical)
   neoprene: 1230,

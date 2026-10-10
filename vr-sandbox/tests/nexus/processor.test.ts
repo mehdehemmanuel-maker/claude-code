@@ -36,7 +36,7 @@ describe('the materials processor', () => {
   });
   it('says what every machine here can do to a material', () => {
     expect(processorFor('pc').map((x) => x.ok)).toEqual([true, true, true, true]);
-    expect(processorFor('stoneware-10').map((x) => x.ok)).toEqual([false, true, false]);
+    expect(processorFor('stoneware-10').map((x) => x.ok)).toEqual([false, true, true, false]);
     expect(processorFor('bronze')[0]!.ok).toBe(true); expect(processorFor('unobtainium')).toEqual([]);
   });
 });
