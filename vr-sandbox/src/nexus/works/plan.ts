@@ -162,10 +162,15 @@ export function planJob(what: string, lines: PartLine[], ids: string[], joins: J
     }
     const id = `op${++k}`, after: string[] = [];
     const start = v.fit ? v.fit.make(line.n) : line.n, spares = start - line.n;
-    // a cut that cannot be cut: the cutter's own rules, before the machine finds out (link.ts `cutRefuses`)
+    // a cut that cannot be cut: the cutter's own rules, before the machine finds out (link.ts `cutRefuses`). Each
+    // rule belongs to one process and is only asked of that one — a lathe has no stickout, a mill no slenderness.
     if (p.family === 'cut') {
       const cut = cutAt({ material: (cls in CUTTING ? cls : 'thermoplastic') as keyof typeof CUTTING, spindle: s.kw * 1000 });
-      const no = cutRefuses({ cut, depth: Math.min(...size), wall: line.wall });
+      const sorted = [...size].sort((a, b) => a - b);
+      const no = cutRefuses({ cut,
+        ...(p.id === 'mill' ? { depth: sorted[0], wall: line.wall } : {}),
+        ...(p.id === 'drill' ? { holeD: line.feature, holeDepth: sorted[2] } : {}),
+        ...(p.id === 'turn' ? { slender: { len: sorted[2]!, dia: line.feature ?? sorted[0]! } } : {}) });
       if (no.length) { gaps.push({ line, why: `${s.name} cannot cut it as drawn: ${no.join('; ')}` }); continue; }
     }
     // a touch probe finds the part instead of the operator finding it, which is most of a setup

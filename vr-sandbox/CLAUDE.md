@@ -908,7 +908,7 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    is a different instrument in a different body, so it is kept off this kind's grid and said so, rather than made to
    fit figures that are not its own.
    Next: the older Now items (robot benches, likeness, life graph, prices).
-8. The works, and the wire out of it (2026-10-10). The user: *"designe me a advanced actually working industrial
+15. The works, and the wire out of it (2026-10-10). The user: *"designe me a advanced actually working industrial
    creation engineer thing ran by a robot or robots think of the cheapest possible enviornments where anything can be
    created I don't care if I gotta build it peice by peice from the ground up"*, then — rejecting the first answer, a
    catalogue of shop tiers — *"no redesign it think about throwing random builds at it and how it would manage building
@@ -960,6 +960,44 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    What that works still cannot do, and says so: a bearing seat to ±0.02 mm (the cheapest station that would is a used
    knee mill at $4,000), a ground shaft to ±0.01, and anything in concrete. Those are the real limits of a cheap shop
    and the engine names them instead of making something up.
+   Then (2026-10-10), the user: *"increase efficiency, add ability, stop having to think and make a tool for anything
+   that does make you think or makes things hard or gets tricky … edges, probes, pipeline, edged superior math and
+   context and awareness"*, and then *"look at how messy you have the code … go organize code merge stuff seperate
+   stuff and move it to the right thing … organize hard"* and *"organize the full systems code"*.
+   Taken literally, and the first part first: every tolerance in the engine had been a number written down by feel.
+   `parts/fits.ts` deletes that. ISO 286's grade table, its fundamental deviations for f, g, k and p (tables, not
+   formulas: a closed form fitted to them gave a press fit at 25 mm that could come out with seven microns of
+   clearance in it, which is not a press fit), the fits built on them, tolerance stack-up worst-case and
+   root-sum-square, and process capability — Cp, Cpk, parts per million outside, and how many to start to keep n.
+   A tolerance is now derived from what a feature has to do, and a part that locates nothing carries none: that last
+   part is the fix that let a potter's wheel make a mug again, because no wheel holds IT11 and nothing about a thrown
+   mug asks it to.
+   That bought the ability the round was for. The tolerance check is no longer a cliff: a process is eligible while
+   its Cpk is above a floor, the scrap it costs comes back in the verdict, and the plan starts eight to keep six
+   instead of finding out at the measuring bench. A refusal now reads "the nearest is a mini lathe at Cpk 0.18, three
+   made for every one kept" instead of "nothing here holds that".
+   Then the tools for the things that had been worked out by hand: `machines/link.ts` gained the real cutting
+   arithmetic (surface speed, chip load, material off a minute, spindle power, the stickout that chatters, the inside
+   corner a cutter cannot leave) so a run time comes from the cutter and the material rather than a number invented
+   per process; `parts/finish.ts` gained the burr (which side, how tall, what takes it off, and that 0.2 mm of it
+   under a face held to 0.02 is a shim); `works/audit.ts` has the engine check its own plan and attach the complaint
+   rather than hand back a plan that lost a part; `works/schedule.ts` reports the makespan against the floor set by
+   the critical path and the busiest station, so a schedule is judged against what is possible; and a touch probe is
+   an operation now, taking 40 % off a setup where the station has one. The awareness: `works/can.ts` keeps what has
+   been measured, and from about thirty parts believes the measurement over the class figure — which is the loop the
+   file kept claiming to close, closed. A machine measured better is then given work it was refused before, and the
+   test for that is what caught the end-mill stickout rule being applied to a lathe, which has no stickout.
+   `npm run works` prints a plan, a budget, a build or the fits table. The four rounds before this one each opened by
+   writing a probe test whose only job was to print what the engine says, and then deleting it; this file has said
+   since the beginning that a thing worked out by hand twice becomes a tool, and this had been worked out four times.
+   It found four faults in its first run (a bearing seat read as a wheel, a LiPo pack priced off a battery holder, a
+   tolerance chain of ±Infinity, a gap that quoted a whole fit lecture).
+   And the organizing, which was the second ask and the fair one: `works.ts` had become six concerns in 1,233 lines,
+   which is exactly what this file's own rule exists to prevent, and `src/nexus` was 183 files in one directory, which
+   is how a second owner gets written for something that already had one. `works/` is now twelve files with one
+   concern each, and the tree is fifteen directories (see "Where the code lives" above), done as one mechanical pass
+   with every import recomputed from the real dependency. 135 files carried `src/nexus/x.ts` paths inside their own
+   prose; the geometry taxonomy asserts those paths exist, which is how that was caught rather than discovered later.
    Next: the Bluetooth bridge drawn and priced as a part of the build pack, the works standing in the forge room as
    real stations you walk between, and the older Now items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,

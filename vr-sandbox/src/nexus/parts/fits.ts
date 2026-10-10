@@ -69,27 +69,40 @@ export interface Fit {
 
 const H = (grade: number) => (mm: number): [number, number] => [0, Math.round(itBand(mm, grade) * 1000)];
 const h = (grade: number) => (mm: number): [number, number] => [-Math.round(itBand(mm, grade) * 1000), 0];
-// g, k and p need ISO 286's fundamental deviations. Rather than reprint tables I am not certain of end to end, each
-// is given as the rule the standard states, over the sizes a small works actually works (under 120 mm), and said so.
-/** ISO 286's fundamental deviation for shaft g, µm: es = −2.5 · D^0.34, rounded as the standard rounds it. */
-const gEs = (mm: number) => -Math.round(2.5 * Math.pow(Math.max(1, Math.abs(mm)), 0.34));
-/** For shaft k at grades 4 to 7 the lower deviation is +Δ, where Δ is IT(grade) − IT(grade−1): the standard's own
- *  construction, which makes k a fit that is always slightly into the hole. */
-const kEi = (mm: number, grade: number) => Math.round((itBand(mm, grade) - itBand(mm, grade - 1)) * 1000);
-/** For shaft p the lower deviation is +IT7 − IT6 plus the standard's 6 µm step for p: taken as IT7 − IT6 + 6. */
-const pEi = (mm: number) => Math.round((itBand(mm, 7) - itBand(mm, 6)) * 1000) + 6;
+
+// The fundamental deviations: how far a letter's band sits from nominal, µm. ISO 286 computes these from the
+// *geometric mean of the size step*, not from the actual size, so every diameter in a step shares one deviation —
+// and then rounds the result to a convenient number. So they are tables, and trying to reproduce them with the
+// closed forms gave a press fit at 25 mm that could come out with seven microns of clearance in it, and an f7 a
+// micron wide of the handbook. A press fit that can be loose is not a press fit. The check that caught both is the
+// one asserting the handbook's own numbers at 25 mm, and it is worth more than the formulas were.
+//
+// Source: ISO 286-1's table of fundamental deviations for shafts, over the sizes a small works works (to 120 mm).
+const STEP_DEV: { upTo: number; f: number; g: number; k: number; p: number }[] = [
+  { upTo: 3, f: -6, g: -2, k: 0, p: 6 },
+  { upTo: 6, f: -10, g: -4, k: 1, p: 12 },
+  { upTo: 10, f: -13, g: -5, k: 1, p: 15 },
+  { upTo: 18, f: -16, g: -6, k: 1, p: 18 },
+  { upTo: 30, f: -20, g: -7, k: 2, p: 22 },
+  { upTo: 50, f: -25, g: -9, k: 2, p: 26 },
+  { upTo: 80, f: -30, g: -10, k: 2, p: 32 },
+  { upTo: 120, f: -36, g: -12, k: 3, p: 37 },
+];
+export const DEV_SRC = "ISO 286-1's fundamental deviations for shafts f, g, k and p, by size step to 120 mm";
+const devOf = (mm: number, which: 'f' | 'g' | 'k' | 'p'): number =>
+  (STEP_DEV.find((s) => Math.abs(mm) <= s.upTo) ?? STEP_DEV[STEP_DEV.length - 1]!)[which];
 
 export const FITS: Fit[] = [
   { id: 'H7/h6', name: 'a locating fit', says: 'it goes together by hand and does not rattle: a spigot into a bore, a cover onto a boss. It will not turn in service and it is not meant to',
     hole: H(7), shaft: h(6), src: `${IT_SRC}; H is zero at the bottom and h is zero at the top, by definition` },
   { id: 'H7/g6', name: 'a sliding fit', says: 'it slides and turns freely with oil on it: a shaft in a plain bush, a pin in a lever. Make it H7/h6 instead and it seizes the first time it gets warm',
-    hole: H(7), shaft: (mm) => [gEs(mm) - Math.round(itBand(mm, 6) * 1000), gEs(mm)], src: `${IT_SRC}; shaft g's upper deviation es = −2.5·D^0.34 µm (ISO 286)` },
+    hole: H(7), shaft: (mm) => [devOf(mm, 'g') - Math.round(itBand(mm, 6) * 1000), devOf(mm, 'g')], src: `${IT_SRC}; ${DEV_SRC} (g6 is −20/−7 at 25 mm)` },
   { id: 'H7/k6', name: 'a bearing seat on a shaft', says: "what a rolling bearing's inner ring wants when the shaft turns under load: slightly into the hole, so the ring cannot creep round the shaft and polish it away. A sliding fit here destroys the shaft in a few hundred hours",
-    hole: H(7), shaft: (mm) => [kEi(mm, 6), kEi(mm, 6) + Math.round(itBand(mm, 6) * 1000)], src: `${IT_SRC}; shaft k's lower deviation is +Δ (ISO 286); SKF and every bearing maker recommend k5 or k6 for a rotating inner ring under normal load` },
+    hole: H(7), shaft: (mm) => [devOf(mm, 'k'), devOf(mm, 'k') + Math.round(itBand(mm, 6) * 1000)], src: `${IT_SRC}; ${DEV_SRC} (k6 is +2/+15 at 25 mm); SKF and every bearing maker recommend k5 or k6 for a rotating inner ring under normal load` },
   { id: 'H7/p6', name: 'a press fit', says: 'driven in with a press and never coming out: a bush into a housing, a dowel. It needs the press, and it needs the bore not to be tapered',
-    hole: H(7), shaft: (mm) => [pEi(mm), pEi(mm) + Math.round(itBand(mm, 6) * 1000)], src: `${IT_SRC}; shaft p is interference throughout (ISO 286)` },
+    hole: H(7), shaft: (mm) => [devOf(mm, 'p'), devOf(mm, 'p') + Math.round(itBand(mm, 6) * 1000)], src: `${IT_SRC}; ${DEV_SRC} (p6 is +22/+35 at 25 mm, which is what makes it interference throughout)` },
   { id: 'H8/f7', name: 'a running fit', says: 'a loose running fit for a shaft in a bearing that is wet, dirty or hot: more clearance on purpose',
-    hole: H(8), shaft: (mm) => [-Math.round((itBand(mm, 7) + itBand(mm, 6)) * 1000), -Math.round(itBand(mm, 6) * 1000)], src: `${IT_SRC}; f is the next clearance letter out from g (ISO 286), its deviation taken as one IT6 clear` },
+    hole: H(8), shaft: (mm) => [devOf(mm, 'f') - Math.round(itBand(mm, 7) * 1000), devOf(mm, 'f')], src: `${IT_SRC}; ${DEV_SRC} (f7 is −41/−20 at 25 mm)` },
   { id: 'H11/h11', name: 'a free fit', says: 'a bolt through a hole, a bracket on a slot: nothing is located by it, so nothing is spent on it. This is the fit most of a machine is made to and the one a saw and a drill can hold',
     hole: H(11), shaft: h(11), src: `${IT_SRC}; the grade a drilled and sawn part reaches` },
 ];

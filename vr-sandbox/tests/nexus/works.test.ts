@@ -3,9 +3,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALWAYS_BOUGHT, BUILDS, FAMILIES, FINISH, PROCESSES, STATIONS, STOCK, TIERS, under3K, WANT_MACHINES,
-  bootstrapOf, buildById, canMake, classOf, handling, jobForModel, jobText, makes, planJob, priceOfLine, processById,
-  programsText, runMinutes, scheduleOf, shapeOf, stationById, stationCost, stationUsd, throwAt, worksOf, worksText,
-  worksUnder, worksUnderText, worksWords, worthMaking, type Job, type PartLine,
+  auditJob, boundOf, bootstrapOf, buildById, canMake, classOf, emptyState, handling, holdsOf, jobForModel, jobText,
+  makes, planJob, priceOfLine, processById, programsText, runMinutes, sawPart, scheduleOf, shapeOf, stationById,
+  stationCost, stationUsd, throwAt, tolOf, worksOf, worksText, worksUnder, worksUnderText, worksWords, worthMaking,
+  type Job, type PartLine,
 } from '../../src/nexus/works';
 import { linkFor, linesOf } from '../../src/nexus/machines/link';
 
@@ -433,5 +434,142 @@ describe('words in the room', () => {
   });
   it('every build says where its own numbers come from', () => {
     for (const b of BUILDS) { expect(b.src.length).toBeGreaterThan(60); expect(b.lines.length).toBeGreaterThan(1); }
+  });
+});
+
+describe('the engine checks its own answer', () => {
+  it('every plan it hands back holds up, for every build in every works', () => {
+    for (const shop of [...SHOPS, { id: '3k', stations: under3K().ids }]) for (const b of BUILDS) {
+      const j = throwAt(b, shop.stations);
+      expect(j.audit.ok, `${b.id}/${shop.id}: ${j.audit.complaints.join('; ')}`).toBe(true);
+      expect(j.audit.lines).toBe(b.lines.length);
+      expect(j.audit.says.length).toBeGreaterThan(40);
+    }
+  });
+  it('it notices a line that fell off the plan', () => {
+    const j = throwAt('gokart', under3K().ids);
+    const a = auditJob(j, [...buildById('gokart').lines, { name: 'a part nobody planned', n: 1, mat: 'steel-low' }]);
+    expect(a.ok).toBe(false);
+    expect(a.complaints.join(' ')).toMatch(/nowhere in the plan/);
+  });
+  it('it notices an operation on a station that cannot do it, and an impossible schedule', () => {
+    const j = throwAt('workbench', under3K().ids);
+    const bad: Job = { ...j, ops: [...j.ops, { ...j.ops[0]!, id: 'opX', process: 'pbf', station: 'bench' }] };
+    expect(auditJob(bad, buildById('workbench').lines).complaints.join(' ')).toMatch(/does not do it/);
+    const wrong: Job = { ...j, minutes: j.minutes + 999 };
+    expect(auditJob(wrong, buildById('workbench').lines).complaints.join(' ')).toMatch(/the plan says/);
+  });
+  it('it notices a station doing two things at once', () => {
+    const j = throwAt('gokart', under3K().ids);
+    const clash: Job = { ...j, schedule: j.schedule.map((x) => ({ ...x, start: 0, end: 10 })) };
+    expect(auditJob(clash, buildById('gokart').lines).complaints.join(' ')).toMatch(/two things at once/);
+  });
+});
+
+describe('how good the schedule is', () => {
+  it('the makespan is never under the floor, and the floor is never under the longest chain', () => {
+    for (const b of BUILDS) {
+      const j = throwAt(b, under3K().ids);
+      if (!j.ops.length) continue;
+      expect(j.bound.makespan).toBeGreaterThanOrEqual(j.bound.floor - 1e-6);
+      expect(j.bound.floor).toBeGreaterThanOrEqual(j.bound.chain - 1e-6);
+      expect(j.bound.floor).toBeGreaterThanOrEqual(j.bound.busiest.minutes - 1e-6);
+      expect(j.bound.slack).toBeGreaterThanOrEqual(-1e-6);
+    }
+  });
+  it('the critical path is a real chain, each operation waiting on the next one back', () => {
+    const j = throwAt('quadcopter', under3K().ids);
+    const by = new Map(j.ops.map((o) => [o.id, o]));
+    const path = j.bound.critical;
+    expect(path.length).toBeGreaterThan(1);
+    for (let i = 1; i < path.length; i++) expect(by.get(path[i]!)!.after, `${path[i]} should wait on ${path[i - 1]}`).toContain(path[i - 1]);
+  });
+  it('one operation is its own floor; nothing to schedule says so', () => {
+    const one = boundOf([{ id: 'a', part: 'a', n: 1, process: 'saw', station: 'bench', setup: 3, run: 7, after: [], transport: 'hand', lang: 'hand', program: '', says: '' }]);
+    expect(one.floor).toBe(10);
+    expect(one.makespan).toBe(10);
+    expect(one.slack).toBe(0);
+    expect(boundOf([]).says).toMatch(/nothing to schedule/);
+  });
+  it('a chain cannot be shortened by another machine, and it says which it is', () => {
+    const j = throwAt('mug', under3K().ids);
+    expect(j.bound.says).toMatch(/floor of/);
+    expect(j.bound.says).toMatch(/chain|work/);
+  });
+});
+
+describe('what the works learns about itself', () => {
+  it('nothing measured means the class figure, and the class figure is what the catalogue says', () => {
+    const st = stationById('cnc-benchtop');
+    const h = holdsOf(st, 'mill');
+    expect(h.from).toBe('class');
+    expect(h.tol).toBe(st.tol);
+    expect(h.says).toMatch(/nothing measured/);
+  });
+  it('a few parts is a hint; thirty is believed over the class figure', () => {
+    let s = emptyState();
+    for (let i = 0; i < 5; i++) s = sawPart(s, 'cnc-benchtop', 'mill', 0.004 * ((i % 3) - 1));
+    expect(holdsOf(stationById('cnc-benchtop'), 'mill', s).from).toBe('class');
+    for (let i = 0; i < 30; i++) s = sawPart(s, 'cnc-benchtop', 'mill', 0.004 * ((i % 3) - 1));
+    const h = holdsOf(stationById('cnc-benchtop'), 'mill', s);
+    expect(h.from).toBe('measured');
+    expect(h.tol).toBeLessThan(stationById('cnc-benchtop').tol!);
+  });
+  it('a machine measured better can then be given work it was refused before', () => {
+    const line: PartLine = { name: 'a bore, bearing seat', n: 2, mat: 'al-6061', size: [30, 30, 12], feature: 30, shape: 'round' };
+    const ids = under3K().ids;
+    const before = planJob('a part', [line], ids);
+    let s = emptyState();
+    for (let i = 0; i < 40; i++) s = sawPart(s, 'lathe-mini', 'turn', 0.0008 * ((i % 3) - 1));
+    const after = planJob('a part', [line], ids, [], s);
+    expect(before.gaps.length + before.buy.length, 'out of reach on the class figure').toBeGreaterThan(0);
+    expect(after.ops.length, 'and in reach once the machine has been measured').toBeGreaterThan(before.ops.length);
+  });
+  it('a measurement never changes another station or another process', () => {
+    let s = emptyState();
+    for (let i = 0; i < 40; i++) s = sawPart(s, 'lathe-mini', 'turn', 0.0005);
+    expect(holdsOf(stationById('cnc-benchtop'), 'mill', s).from).toBe('class');
+    expect(holdsOf(stationById('lathe-mini'), 'drill', s).from).toBe('class');
+  });
+});
+
+describe('tolerances and spares', () => {
+  it("a line's tolerance is its own if it gives one, and derived if it does not", () => {
+    expect(tolOf({ name: 'anything', n: 1, mat: 'al-6061', tol: 0.03 }).tol).toBe(0.03);
+    expect(tolOf({ name: 'bearing seat', n: 1, mat: 'steel-low', feature: 25 }).fit).toBe('H7/k6');
+    expect(Number.isFinite(tolOf({ name: 'a frame rail', n: 1, mat: 'steel-low', size: [40, 40, 900] }).tol)).toBe(false);
+  });
+  it('an operation that scraps some starts spares, and says how many and why', () => {
+    const line: PartLine = { name: 'a plate', n: 6, mat: 'al-6061', size: [80, 60, 6], tol: 0.06, shape: 'flat' };
+    const j = planJob('spares', [line], under3K().ids);
+    const made = j.ops.find((o) => o.part === 'a plate');
+    expect(made, 'it should be made at all').toBeTruthy();
+    if (made?.spares) {
+      expect(made.n).toBeGreaterThan(line.n);
+      expect(made.fit!.cpk).toBeLessThan(1.33);
+      expect(jobText(j)).toMatch(/started beyond what is wanted/);
+    }
+  });
+  it('a comfortable tolerance starts no spares', () => {
+    const line: PartLine = { name: 'a plate', n: 6, mat: 'al-6061', size: [80, 60, 6], tol: 2, shape: 'flat' };
+    const made = planJob('easy', [line], under3K().ids).ops.find((o) => o.part === 'a plate');
+    expect(made?.spares ?? 0).toBe(0);
+  });
+  it('the tolerance chain is only the parts that locate something', () => {
+    const j = throwAt('gearbox', TIERS[4]!.stations);
+    if (j.stack) { expect(j.stack.n).toBeGreaterThan(0); expect(Number.isFinite(j.stack.worst)).toBe(true); }
+    const frame = throwAt('workbench', under3K().ids);
+    expect(frame.stack, 'a welded bench locates nothing to a tolerance').toBeUndefined();
+  });
+  it('a probe on the machine takes time off the setup and says why', () => {
+    const line: PartLine = { name: 'a bore, bearing seat', n: 1, mat: 'al-6061', size: [40, 40, 20], feature: 40, shape: 'round' };
+    const j = planJob('probed', [line], TIERS[4]!.stations);
+    const probe = j.ops.find((o) => o.process === 'probe');
+    if (probe) {
+      expect(probe.says).toMatch(/off the setup/);
+      const cut = j.ops.find((o) => o.part === line.name)!;
+      expect(cut.after).toContain(probe.id);
+      expect(cut.setup).toBeLessThan(processById(cut.process).setup);
+    }
   });
 });

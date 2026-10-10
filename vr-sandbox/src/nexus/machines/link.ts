@@ -226,8 +226,10 @@ export function cutAt(o: { d?: number; z?: number; material?: keyof typeof CUTTI
 /** What a cut cannot do to a drawing, said before the drawing is cut rather than after. Each is the trade's own rule
  *  and each is a thing a person otherwise finds out on the machine: an inside corner smaller than the cutter, a
  *  pocket deeper than the cutter may stick out, a hole deeper than five diameters drilled in one plunge, a wall
- *  thinner than it can be held. */
-export function cutRefuses(o: { cut: Cut; corner?: number; depth?: number; holeDepth?: number; holeD?: number; wall?: number }): string[] {
+ *  thinner than it can be held, a shaft too slender to turn unsupported. Each applies to the process it belongs to and
+ *  no other: the stickout rule is an end mill's, and applying it to a lathe (which has no stickout, only slenderness)
+ *  refused a 12 mm bore that any lathe turns without noticing. */
+export function cutRefuses(o: { cut: Cut; corner?: number; depth?: number; holeDepth?: number; holeD?: number; wall?: number; slender?: { len: number; dia: number } }): string[] {
   const no: string[] = [], c = o.cut;
   if (o.corner != null && o.corner < c.minCorner)
     no.push(`a ${o.corner} mm inside corner cannot be milled with a ${c.d} mm cutter, which leaves ${c.minCorner}: use a ${(o.corner * 2).toFixed(1)} mm cutter, or draw the corner at ${c.minCorner} and let the mating part have the relief`);
@@ -235,6 +237,8 @@ export function cutRefuses(o: { cut: Cut; corner?: number; depth?: number; holeD
     no.push(`${o.depth} mm deep with a ${c.d} mm cutter is ${(o.depth / c.d).toFixed(1)} diameters of stickout: it chatters, because deflection goes as the cube of it. Step down in ${c.maxDepth} mm passes with a longer tool each time, or use a bigger cutter`);
   if (o.holeDepth != null && o.holeD != null && o.holeDepth > 5 * o.holeD)
     no.push(`a ⌀${o.holeD} hole ${o.holeDepth} deep is ${(o.holeDepth / o.holeD).toFixed(1)} diameters: peck it, or the flutes pack and the drill snaps in the hole, where getting it out costs more than the part`);
+  if (o.slender && o.slender.dia > 0 && o.slender.len / o.slender.dia > 10)
+    no.push(`turning ⌀${o.slender.dia} over ${o.slender.len} mm is ${(o.slender.len / o.slender.dia).toFixed(1)} diameters out of the chuck: it springs away from the tool and comes out tapered and chattered. Support the far end with a centre or a steady, or turn it in two halves and join them`);
   if (o.wall != null && o.wall < c.d / 3)
     no.push(`a ${o.wall} mm wall beside a ${c.d} mm cutter will be pushed over by the cut itself: leave it ${(c.d / 3).toFixed(1)} mm or support it`);
   return no;
