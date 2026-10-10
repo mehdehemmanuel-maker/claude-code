@@ -504,7 +504,18 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    build's joints, the LED's drop in volts). Still from round 3: the S-11 read as a toy tray (third time: check its
    drawing), the sponge a flat slab, the cells bare (no wrapper print), the magnifier with no refraction, the robot's
    red disc and a checker tile off the table's edge in the room (not the bench's), the table untextured.
-7. Prices for the common parts the build packs list without one (motors, hot ends, boards, belts, rails…).
+7. Prices for the common parts the build packs list without one (motors, hot ends, boards, belts, rails…). Begun
+   2026-10-10: a probe over 22 asks listed every line a pack kept with no price, and "a 3D printer" came back fifteen of
+   them — the whole machine was unpriced. Seventeen keys now have a seller's own page, the figure it showed and the day
+   seen: the NEMA 17 (ZYLtech's 1.5 A 0.42 N·m, the Ender-3's own size, $9.95 or $42.95 for five), the hot end, the
+   extruder (Bondtech's BMG, $80), the heated bed (LDO's magnetic 24 V with its thermistor, $86.99), the control board
+   (BTT's SKR Mini E3 V3.0, $44.99), the 24 V supply (Mean Well LRS-350-24, $38.99), the GT2 belt ($2.40 a metre) and
+   its 20-tooth pulley ($3.99), the MGN12H rail with its carriage ($35.99), the 625 bearing ($1.19), the cartridge
+   heater ($4.29), the thermistor ($4.99), the 30 mm fan ($6.49), a JST-XH kit, a flexible coupling, and for a
+   quadcopter its motor (a FIVE33 2207, $23.97), its 4S pack ($25.99) and its ExpressLRS receiver. A 3D printer now
+   prices 11 of its 15 lines and a quadcopter 3 of its 7. Still unpriced, and said so: the printer's frame, its display,
+   its T8 lead screw (the seller prices it by length in a dropdown no reader can see), hook-up wire, an ESC, a flight
+   controller, an FPV camera, and the stock materials (aluminium, ABS, copper, epoxy, polyimide, silicon).
 8. Edges (the user, 2026-10-09: "universal edge … every setup that would be the same have a edge"): one graph of what
    works on what. A tool's capability meets a part's feature (an iron and a plated hole with a lead in it; cutters and
    a lead; a kiln and a fired body; a printer and a filament), by a process, its figures read from both ends (the

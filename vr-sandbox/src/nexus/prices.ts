@@ -17,10 +17,12 @@ export interface Offer {
 }
 export interface Price { /** what it is, plainly */ what: string; /** the inventory item it is, where the library keeps one */ item?: string; offers: Offer[] }
 
-const D = '2026-10-09';
+const D = '2026-10-09', D2 = '2026-10-10';
 const pishop = (name: string, usd: number, path: string, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'PiShop.us (official Raspberry Pi reseller)', url: `https://www.pishop.us/product/${path}/`, seen: D, ...o });
 const ada = (name: string, usd: number, pid: number, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'Adafruit', url: `https://www.adafruit.com/product/${pid}`, seen: D, ...o });
 const lcsc = (name: string, usd: number, c: string, min: number, o: Partial<Offer> = {}): Offer => ({ name, usd, min, seller: 'LCSC', url: `https://www.lcsc.com/product-detail/${c}.html`, seen: D, note: `the price at ${min}+ pieces; it falls with more`, ...o });
+const kb = (name: string, usd: number, path: string, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'KB-3D', url: `https://kb-3d.com/store/${path}`, seen: D2, ...o });
+const zyl = (name: string, usd: number, path: string, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'ZYLtech Engineering', url: `https://www.zyltech.com/${path}`, seen: D2, ...o });
 const pi5 = (gb: number, usd: number): [string, Price] => [`sbc-pi5-${gb}gb`, { what: `Raspberry Pi 5, ${gb} GB`, item: `sbc-pi5-${gb}gb`, offers: [pishop(`Raspberry Pi 5/${gb}GB`, usd, `raspberry-pi-5-${gb}gb`)] }];
 const pi4 = (gb: number, usd: number): [string, Price] => [`sbc-pi4b-${gb}gb`, { what: `Raspberry Pi 4 Model B, ${gb} GB`, item: `sbc-pi4b-${gb}gb`, offers: [pishop(`Raspberry Pi 4 Model B/${gb}GB`, usd, `raspberry-pi-4-model-b-${gb}gb`)] }];
 
@@ -86,6 +88,46 @@ export const PRICES: Record<string, Price> = {
   'mlcc-x7r-0805-1e-7-100': { what: '100 nF X7R capacitor, 0805, 100 V', item: 'mlcc-x7r-0805-1e-7-100', offers: [lcsc('Samsung CL21B104KCFNNNE', 0.0332, 'C28233', 50, { stock: 'out' })] },
   'regulator-ams1117-3.3': { what: 'AMS1117-3.3 regulator', item: 'regulator-ams1117-3.3', offers: [lcsc('Advanced Monolithic Systems AMS1117-3.3', 0.21, 'C6186', 5)] },
   'chip-rp2040-qfn-56': { what: 'RP2040 microcontroller', item: 'chip-rp2040-qfn-56', offers: [lcsc('Raspberry Pi RP2040', 0.9975, 'C2040', 1)] },
+
+  // ---- what a 3D printer is made of -----------------------------------------------------------------------------------
+  // (the parts a build pack kept listing with no price: a printer asked for whole came back fifteen lines of them. Every
+  //  figure below is its seller's own page, read on the day said, and where a page did not show the figure itself it says so)
+  nema17: { what: 'NEMA 17 stepper motor', offers: [
+    zyl('Nema 17 Stepper Motor 1.5 A, 0.42 Nm, 59 ozin', 9.95, 'nema-17-stepper-motor-1-5-a-0-42-nm-59-ozin-1-3-or-5-pack', { note: 'the 42 × 40 mm motor an Ender-3 uses on all four axes (Creality\'s is 0.4 N·m at 1.5 A)' }),
+    zyl('Nema 17 Stepper Motor 1.5 A, 0.42 Nm — 5-pack', 42.95, 'nema-17-stepper-motor-1-5-a-0-42-nm-59-ozin-1-3-or-5-pack', { per: 5, note: 'five at once, which is what a whole printer needs' }),
+    zyl('Nema 17 Stepper Motor 1.7 A, 0.59 Nm, 84 ozin', 10.95, 'nema-17-stepper-motor-1-7-a-0-59-nm-84-ozin-1-3-or-5-pack', { note: 'more torque, for a bed or a direct-drive extruder' })] },
+  hotend: { what: 'hot end', offers: [
+    { name: 'E3D V6 All-Metal HotEnd 1.75mm 24V Full Kit - Direct Drive', usd: 61.46, seller: '3D Printing USA', url: 'https://3dprintingusa.com/products/official-e3d-v6-all-metal-hotend-1-75mm-24v-full-kit-direct-drive', seen: D2, note: 'as its listing showed in a search; the page itself did not show the figure when read, so check it before ordering' }] },
+  extruder: { what: 'extruder', offers: [kb('Bondtech BMG Extruder', 80, 'bmg/280-bondtech-bmg-extruder-7350011410309.html', { stock: 'in', note: '3:1 dual-drive, for any NEMA 17 with a 5 mm shaft; its Bowden adapter is sold apart at $7.90' })] },
+  'heated-bed': { what: 'heated bed', offers: [kb('LDO Motors Heated Bed for Switchwire / Prusa MK3 - Magnetic - 24V', 86.99, 'heated-bed-electronics/812-ldo-motors-heated-bed-for-switchwire-prusa-mk3-magnetic-24v-1677363868661.html', { note: 'complete: magnets for a flex plate, guide pins and its thermistor. The spring-steel plate itself is $21.99 beside it' })] },
+  'printer-board': { what: 'printer control board', offers: [kb('BIGTREETECH SKR Mini E3 V3.0 32 Bit Control Board', 44.99, 'controllers-displays-drivers/420-bigtreetech-skr-mini-e3-v30-32-bit-control-board-1639888431041.html', { stock: 'in', note: 'STM32G0B1RET6, four TMC2209 drivers on the board; a drop-in for an Ender-3, and it runs Marlin or Klipper' })] },
+  'psu-24v': { what: 'switching power supply, 24 V', offers: [kb('Mean Well LRS-350-24 Switching Power Supply - 24V - 350W', 38.99, 'power-supplies-converters/185-mean-well-lrs-350-24-switching-power-supply-24v-350w.html', { stock: 'in', note: '24 V at 14.6 A: a 350 W bed and a hot end with room over' })] },
+  'gt2-belt': { what: 'GT2 belt (6 mm)', offers: [
+    zyl('Steel-Reinforced GT2 T2 Timing Belt - 6mm', 2.4, 'steel-reinforced-gt2-t2-timing-belt-6mm', { note: 'the price for one metre, sent as one continuous length' }),
+    kb('Gates PowerGrip 2GT Belt - Open - 6mm Width', 0.49, '49-motion', { note: 'Gates\' own, by the piece on its motion page; the length each piece is was not on the listing read' })] },
+  'gt2-pulley': { what: 'GT2 pulley, 20 teeth', offers: [kb('Gates PowerGrip 2GT Pulley - 20 Tooth - 5mm - 6mm', 3.99, '49-motion', { note: '5 mm bore for a NEMA 17 shaft, 6 mm wide for the belt above; read off its motion page' })] },
+  'pulley-gt2-20t-5': { what: 'GT2 pulley, 20 teeth, 5 mm bore', offers: [kb('Gates PowerGrip 2GT Pulley - 20 Tooth - 5mm - 6mm', 3.99, '49-motion', { note: 'read off its motion page' })] },
+  'rail-mgn12h-400': { what: 'MGN12H rail, 400 mm, with its carriage', offers: [kb('KB3D MGN12H Linear Rail / Guide - With Carriage - 400mm', 35.99, 'motion/384-kb3d-linear-rail-guide-kit-trident-350mm.html', { note: 'the figure its own kit pages list for the 400 mm length; the rail\'s page sells every length from one listing' })] },
+  'bearing-625': { what: 'ball bearing 625 (5 × 16 × 5)', offers: [kb('5x16x5 Metric Ball-Bearing - 625-RS', 1.19, '49-motion', { note: 'rubber sealed; read off its motion page' })] },
+  'heater-cartridge': { what: 'cartridge heater', offers: [
+    kb('Generic Heater Cartridge - 24V - 40W', 4.29, 'heaters-thermistors/3663-generic-heater-cartridge-24v-40w-1740625556153.html', { stock: 'in', note: '6 × 20 mm, bare leads, 1 m of wire: the size a V6 or an MK8 block takes' }),
+    kb('E3D 24V 40W Heater Cartridge', 18.99, 'heaters-thermistors/175-e3d-24v-40w-heater-cartridge-1644021678917.html', { note: 'E3D\'s own, ferruled' })] },
+  'thermistor-ntc': { what: 'NTC thermistor (100 kΩ)', offers: [kb('E3D Thermistor Cartridge - Temperature Sensor', 4.99, '68-heaters-thermistors', { note: 'read off its heaters page; a PT1000 is $18.99 and a PT100 $16.99 beside it' })] },
+  'fan-30': { what: 'fan, 30 mm', offers: [
+    kb('3010 Ball Bearing Cooling Fan / 24V / Axial', 6.49, 'fans/571-3010-ball-bearing-cooling-fan-24v-axial-1654721311496.html', { stock: 'in', note: '30 × 30 × 10 mm, 4.7 CFM, 0.15 A, on a JST-XH lead: the fan that blows over a hot end\'s heat sink' }),
+    kb('3010 Ball Bearing Blower Fan / 24V', 5.99, 'fans/3-3010-ball-bearing-blower-fan-24v.html', { note: 'the blower, for the part-cooling duct' })] },
+  'jst-xh': { what: 'JST XH connector (2.5 mm)', offers: [kb('JST-XH Connector Kit - 195 Pieces', 15.99, '5-electronics?page=3', { per: 195, note: 'housings, headers and crimps in one box; read off its electronics page' })] },
+  'coupling-flex': { what: 'flexible shaft coupling 5 × 8', offers: [
+    zyl('Aluminum Flexible Shaft Coupler - 5/8', 2.95, 'flexible-plum-coupler-shaft-various-combinations-from-5mm-to-12-7mm', { note: 'the helical-cut aluminium one, 5 mm motor shaft to 8 mm lead screw; read beside the plum coupler, which is $3.95 and up' })] },
+
+  // ---- what a quadcopter is made of -----------------------------------------------------------------------------------
+  'bldc-outrunner': { what: 'brushless outrunner motor', offers: [
+    { name: 'Headsup | FIVE33 2207 Motor w/ MR30 (1960 Kv)', usd: 23.97, seller: 'RaceDayQuads', url: 'https://www.racedayquads.com/products/headsup-five33-2207-motor-w-mr30', seen: D2, stock: 'in', note: '2207 stator, 28.4 g: the size a 5-inch quadcopter flies on. Four are wanted' }] },
+  'pack-lipo-4s': { what: 'LiPo pack 4S', offers: [
+    { name: 'CNHL MINISTAR 1500mAh 14.8V 4S 120C', usd: 25.99, seller: 'Pyrodrone', url: 'https://pyrodrone.com/products/cnhl-ministar-1500mah-14-8v-4s-120c-lipo-battery', seen: D2, note: '189 g with its leads; 120C continuous. Batteries ship by ground only, and not outside the United States' },
+    { name: 'RDQ Series 14.8V 4S 1500mAh 100C LiPo - XT60', usd: 32.49, seller: 'RaceDayQuads', url: 'https://www.racedayquads.com/products/rdq-series-14-8v-4s-1500mah-100c-lipo-battery-xt60', seen: D2, note: 'measured at 60 A continuous and 80 A pulse in Bardwell\'s tests, which the seller publishes' }] },
+  'rc-receiver': { what: 'radio receiver', offers: [
+    { name: 'RadioMaster DBR4 Dual-band Xross Gemini ExpressLRS Receiver', usd: 38.99, seller: 'Pyrodrone', url: 'https://pyrodrone.com/collections/receivers', seen: D2, note: 'read off its receivers page; ExpressLRS, so it binds to any ELRS handset' }] },
 };
 
 /** What n of it would cost by one offer: how many packs (the seller's least taken), and the money, with what it needs
