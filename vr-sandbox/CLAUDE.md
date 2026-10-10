@@ -766,7 +766,22 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    it listed — no guard on the fan, no column under the wheel, no belt, no straighteners — is drawn and was missed.
    Still open: the lift fan's own belt is not drawn, the engine is still a block, a blade's stations show as faint
    ribs in a plan view, and the deck is a rectangle where the hull's plan is not.
-   Next: those four renderer-wide faults, then x-ray, infrared and lidar.
+   The four renderer-wide faults (2026-10-10), fixed at the renderer rather than part by part, because they cost every
+   board and every craft in the library the same two or three points before any geometry was touched. Three of the four
+   were defaults, not missing machinery. Ambient occlusion was already built (a GTAO pass in `look.ts`) and switched
+   off unless a round asked for it: it is now on by default with its radius sized to what is being looked at (a
+   fiftieth of the thing across, 1.5 mm at a chip's shoulder, 60 at a hull), and `&ao=0` turns it off. The shadow was
+   not detached from its object by any fault of the shadow map but by its bias: a normal bias is a distance, and 30 mm
+   — right for keeping a car's curved skin from shadowing itself in rings — slides a chip's shadow 30 mm across a board
+   50 mm long, so nothing small cast a shadow on anything. It is now a fiftieth of the thing across, and a Pico's
+   components drop their own shadows on its board. A board's milled edge is the laminate, not the mask: `sbc.ts` had
+   this right already (its boards are a tan core with 0.02 mm mask films over each face), but every board drawn
+   elsewhere as a box of `fr4` was green all the way round, so the renderer now gives any fr4 box the laminate's colour
+   on its four cut sides and the part's own on its two faces. And solder: through-hole joints were drawn (IPC-A-610's
+   target fillet, a pad and a concave fillet under the board), but nothing surface-mounted was soldered at all, so
+   every chip and passive sat on the board unattached. Each termination standing on the board's top face now gets its
+   fillet, drawn as the collar it fills rather than the meniscus's own curve (223 of them on a Pi 5, 170 on a Pico).
+   Next: x-ray, infrared and lidar.
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);

@@ -78,13 +78,17 @@ describe('single-board computers', () => {
     expect(DEFS.pi4b!.ink?.res).toBe(20); expect(DEFS.pi4b!.copper?.w).toBe(85 * 14);
     expect(ps.some((p) => /VL805/.test(p.text ?? ''))).toBe(true); expect(ps.some((p) => /BCM54213PE/.test(p.text ?? ''))).toBe(true);
   });
-  it('solders every through-hole lead it draws: a pad and a fillet under the board where each comes through', () => {
+  it('solders every lead it draws: a fillet under the board where one comes through, and round the foot of one that sits on it', () => {
     const j = boardComps('pi5').find((c) => c.name === JOINTS)!;
     // (its 40-pin and PoE headers' 44 pins, its two USB stacks' 18 + 8 contacts and 8 legs, its RJ45's 8 contacts, 2 shield
     // legs and 4 lights' leads)
-    expect(j.kids).toHaveLength(44 + 18 + 8 + 8 + 8 + 2 + 4);
+    const through = (j.kids ?? []).filter((k) => /^solder joint /.test(k.name));
+    expect(through).toHaveLength(44 + 18 + 8 + 8 + 8 + 2 + 4);
+    // (and every surface-mounted termination standing on the board's top face: a chip's leads, a passive's end caps)
+    expect((j.kids ?? []).filter((k) => /^solder fillet /.test(k.name)).length).toBeGreaterThan(100);
     const c = component('sbc pi5 8GB'); if (typeof c === 'string') throw new Error(c);
-    expect(all(c.part).filter((p) => p.item === 'solder-joint')).toHaveLength(92);
+    expect(all(c.part).filter((p) => p.item === 'solder-joint' && /solder joint /.test(p.name))).toHaveLength(92);
+    expect(all(c.part).filter((p) => p.item === 'solder-joint' && /solder fillet /.test(p.name)).length).toBeGreaterThan(100);
   });
   it('keeps D-Robotics\' RDK X5 as its maker gives it: 8 Cortex-A55 at 1.5 GHz, a 10 TOPS BPU, 100 × 80 mm', () => {
     const c = component('sbc rdkx5 8GB'); if (typeof c === 'string') throw new Error(c);

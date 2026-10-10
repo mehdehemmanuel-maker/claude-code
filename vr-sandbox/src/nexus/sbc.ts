@@ -503,20 +503,25 @@ function silk(b: BoardDef, w: Silk): Comp {
 export const JOINTS = 'through-hole solder joints';
 function thtJoints(b: BoardDef, parts: Comp[]): { pads: Solid[]; joints: Comp } | null {
   const t = b.t ?? 1.6, found: { x: number; z: number; r: number; out: number }[] = [];
+  const feet: { x: number; z: number; dx: number; dz: number; h: number }[] = [];
   const walk = (c: Comp, up: (q: V3) => V3): void => {
     if (c.under) return; // (a part under the board has its joints on top: none of these yet)
     const mine = (q: V3): V3 => { const r = turnBy(q, [0, c.turn ?? 0, 0]); return up([r[0] + c.at[0], r[1] + c.at[1], r[2] + c.at[2]]); };
     for (const sd of c.solids ?? []) {
       if (sd.role !== 'lead' && sd.role !== 'term') continue;
       const ps = solidCorners(sd).map(mine), ys = ps.map((q) => q[1]), xs = ps.map((q) => q[0]), zs = ps.map((q) => q[2]);
-      if (Math.min(...ys) > -t - 0.1 || Math.max(...ys) < 0) continue;
       const dx = Math.max(...xs) - Math.min(...xs), dz = Math.max(...zs) - Math.min(...zs);
-      found.push({ x: (Math.max(...xs) + Math.min(...xs)) / 2, z: (Math.max(...zs) + Math.min(...zs)) / 2, r: Math.hypot(dx, dz) / 2, out: -t - Math.min(...ys) });
+      const x = (Math.max(...xs) + Math.min(...xs)) / 2, z = (Math.max(...zs) + Math.min(...zs)) / 2;
+      // (a terminal standing on the board's top face, not through it: a chip's lead, a resistor's end cap, a shield's
+      //  tab. Its foot is at the mask, within a tenth of a millimetre either way, and it rises from there)
+      if (Math.min(...ys) > -0.06 && Math.min(...ys) < 0.08 && Math.max(...ys) > Math.min(...ys) + 0.02 && dx < 6 && dz < 6) { feet.push({ x, z, dx, dz, h: Math.max(...ys) - Math.min(...ys) }); continue; }
+      if (Math.min(...ys) > -t - 0.1 || Math.max(...ys) < 0) continue;
+      found.push({ x, z, r: Math.hypot(dx, dz) / 2, out: -t - Math.min(...ys) });
     }
     for (const k of c.kids ?? []) walk(k, mine);
   };
   for (const c of parts) walk(c, (q) => q);
-  if (!found.length) return null;
+  if (!found.length && !feet.length) return null;
   const pads: Solid[] = [], joints: Comp[] = [];
   found.forEach((f, i) => {
     const rh = f.r + 0.1, rp = rh + 0.3, ri = f.r * 0.7, h = Math.min(0.75 * f.out, rp - ri), at: V3 = [f.x, -t - 0.04, f.z];
@@ -524,6 +529,16 @@ function thtJoints(b: BoardDef, parts: Comp[]): { pads: Solid[]; joints: Comp } 
     // (its fillet: from the lead low down, a quarter round concave out to the pad's edge)
     const arc = Array.from({ length: 7 }, (_, k): [number, number] => { const a = (Math.PI / 2) * (1 - k / 6); return [rp - (rp - ri) * Math.sin(a), -h * (1 - Math.cos(a))]; });
     joints.push({ name: `solder joint ${i + 1}`, item: 'solder-joint', at: [0, 0, 0], solids: [{ role: 'lead', shape: { lathe: [...arc, [ri, 0], arc[0]!] }, at, mat: 'solder', color: 0xc9cdd1 }] });
+  });
+  // (and the surface-mounted ones: solder wets the pad and climbs the side of the termination, which is the fillet
+  //  IPC-A-610 asks for — at least a quarter of the termination's height, and the joint that is looked at first when a
+  //  board is inspected. Drawn as the collar it fills rather than as the meniscus's own curve: at the size a chip's
+  //  lead is drawn, what a photograph shows is the bright ring round each foot, and its solder is a fraction of a
+  //  milligram either way)
+  feet.forEach((f, i) => {
+    const grow = Math.max(0.04, Math.min(0.2, Math.min(f.dx, f.dz) * 0.3)), h = Math.max(0.03, Math.min(0.3, f.h * 0.4));
+    joints.push({ name: `solder fillet ${i + 1}`, item: 'solder-joint', at: [0, 0, 0],
+      solids: [{ role: 'pad', shape: { box: [f.dx + 2 * grow, h, f.dz + 2 * grow] }, at: [f.x, h / 2, f.z], mat: 'solder', color: 0xc9cdd1 }] });
   });
   return { pads, joints: { name: JOINTS, at: [0, 0, 0], kids: joints } };
 }

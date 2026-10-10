@@ -130,7 +130,22 @@ function printsMats(p: Part): THREE.Material[] {
   }
   return m;
 }
+/** A circuit board's milled edge: the laminate itself, not the mask over its faces. A board is woven glass in epoxy
+ *  with a coloured mask screened on its top and bottom only, so where it is routed out of its panel the edge shows the
+ *  laminate — pale tan, matt, the weave in it — and every board in the library was drawn green all the way round, which
+ *  three blind judges in a row marked as the thing that gave a board away. Boxes of fr4 only: a board cut to any other
+ *  shape keeps one colour, and says so. */
+const FR4_EDGE = new THREE.MeshStandardMaterial({ color: 0xcbbd93, roughness: 0.78, metalness: 0 });
+function milledEdge(p: Part, faces: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
+  if (p.mat !== 'fr4' || !p.shape || !('box' in p.shape)) return faces;
+  // (BoxGeometry's faces in order: +x, -x, +y, -y, +z, -z — the four sides are the routed edge, the two flats the mask)
+  const six = Array.isArray(faces) ? faces : [faces, faces, faces, faces, faces, faces];
+  return [FR4_EDGE, FR4_EDGE, six[2]!, six[3]!, FR4_EDGE, FR4_EDGE];
+}
 function printedMats(p: Part, base: THREE.Material): THREE.Material | THREE.Material[] {
+  return milledEdge(p, printedFaces(p, base));
+}
+function printedFaces(p: Part, base: THREE.Material): THREE.Material | THREE.Material[] {
   if (p.prints && p.shape && 'box' in p.shape && typeof document !== 'undefined') return printsMats(p);
   if (p.paint && p.shape && 'box' in p.shape) return paintMats(p);
   if (!p.text || !p.shape || !('box' in p.shape) || typeof document === 'undefined') return base;
