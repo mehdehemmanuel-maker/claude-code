@@ -14,6 +14,7 @@
 // down -y; stock and profiles are centred, their length along y.
 
 import { dhArmParts, ik, UR5E } from './dharm';
+import { robotFor, TASKS, type Robot } from './robot';
 import { alongZ, bmeParts, camModuleParts, changerParts, depthCamParts, earNoseParts, ftParts, handParts } from './kit-robot';
 import { FAMILIES, callFamily } from './families';
 import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
@@ -419,45 +420,53 @@ function armParts(nm: string): Part[] {
   return [base, drv(1, 30, 60, [0, 50, 0]), j1];
 }
 
-/** The robot the user asked for, drawn from the library's parts: its welded table, two UR5e arms bolted to it 500 mm
- *  apart by their makers' pattern, each posed ready by its own inverse kinematics (its tool pointing down at the work),
- *  a QC-11 changer and an RH56DFX hand on each flange (each index fingertip a Nano17), the Camera Module 3 on the right
- *  wrist where the soldering task needs it (it sees a 0.6 mm lead from 200 mm), the D435 on a mast behind looking down
- *  on the whole table, the microphone and gas sensor on the mast. Its table's, mast's and bracket's sizes estimates. */
-function robotParts(nm: string): Part[] {
+/** A robot designed for its tasks (robot.ts's `robotFor`), drawn from the library's parts: its welded table, its arms
+ *  bolted to it by their makers' pattern, each posed ready by its own inverse kinematics (its tool pointing down at the
+ *  work), a QC-11 changer where a tool bolts on, its hand on each flange (each index fingertip a Nano17 where it feels),
+ *  the Camera Module 3 on the right wrist where the soldering task needs it (it sees a 0.6 mm lead from 200 mm), the
+ *  D435 on a mast behind looking down on the whole table, its microphone and gas sensor on the mast: only what its
+ *  design has. Its table's, mast's and bracket's sizes estimates. Null with what is not drawn yet. */
+export function robotPart(r: Robot, nm = 'the robot'): Part | string {
+  const no = [...new Set(r.arms.flatMap((a) => [...(a.arm.id !== 'ur5e' ? [`${a.arm.name} on a robot's table (it is drawn on its own: "robotarm Meca500")`] : []), ...(a.hand.id !== 'rh56dfx' ? [`${a.hand.name}`] : [])]))];
+  if (no.length) return `not drawn yet: ${no.join('; ')}`;
+  return { name: nm, at: [0, 0, 0], parts: robotParts(nm, r) };
+}
+function robotParts(nm: string, r: Robot = robotFor(TASKS.map((t) => t.id)).robot): Part[] {
   // (each arm stands on the table turned a quarter about its own z (its x toward the back, its y to the left), and is
   // posed by its own inverse kinematics: its tool pointing down 300 mm over the table at a work point in front of the
-  // mast, 120 mm to its side of the middle, put into its base's frame)
-  const m = (v: number) => v * mm, { top, work, reach } = ROBOT_CELL, base = (side: number): V3 => [side * 250, top, -200];
+  // mast, to its side of the middle, put into its base's frame)
+  const m = (v: number) => v * mm, { top, work, reach } = ROBOT_CELL, n = r.arms.length, sides = n === 1 ? [0] : Array.from({ length: n }, (_, k) => -1 + (2 * k) / (n - 1));
+  const base = (side: number): V3 => [side * 250, top, -200], has = (s: string) => r.senses.some((x) => x.sense === s);
   const inArm = (side: number, w: V3): V3 => { const b = base(side); return [-(w[2] - b[2]), -(w[0] - b[0]), w[1] - b[1]]; };
   const ready = (side: number) => ik(UR5E, inArm(side, [side * reach, top + 300, work[2]]), [0, 0, -1]).q;
   const steel = { mat: 'steel-low', color: 0x3d4247, finish: 'paint' as const };
   // (its top on a frame welded of 50 mm square tube: four legs, an apron under the top and stretchers 150 mm off the
-  // floor between them, so it stands stiff under two arms moving; sizes estimates)
+  // floor between them, so it stands stiff under the arms moving; sizes estimates)
   const tube = (name: string, L: number, at: V3, along: 'x' | 'y' | 'z') => P(`${nm} table ${name}`, { box: along === 'x' ? [m(L), m(50), m(50)] : along === 'y' ? [m(50), m(L), m(50)] : [m(50), m(50), m(L)] }, { ...steel, at: at.map(m) as V3, fill: 0.15 });
   const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const;
   const table: Part = { name: `${nm} table`, item: 'robot-table', at: [0, 0, 0], parts: [P(`${nm} table top`, { box: [m(900), m(12), m(650)] }, { ...steel, at: [0, m(top - 6), 0] }),
     ...corners.map(([sx, sz], i) => tube(`leg ${i + 1}`, top - 12, [sx * 415, (top - 12) / 2, sz * 290], 'y')),
     ...[top - 37, 150].flatMap((y) => [...[-1, 1].map((sz) => tube(`${y > 300 ? 'apron' : 'stretcher'} ${sz < 0 ? 'back' : 'front'}`, 780, [0, y, sz * 290], 'x')), ...[-1, 1].map((sx) => tube(`${y > 300 ? 'apron' : 'stretcher'} ${sx < 0 ? 'left' : 'right'}`, 530, [sx * 415, y, 0], 'z'))])] };
-  const arm = (side: number): Part[] => {
-    const sideName = side < 0 ? 'left' : 'right', b = base(side), bolts = UR5E.base.bolts!, foot = UR5E.base.foot!.h;
-    const changer: Part = { name: `${nm} ${sideName} tool changer`, item: 'toolchanger-qc-11', at: [0, 0, 0], parts: [alongZ(changerParts(), 'its stack')] };
-    const hand: Part = { name: `${nm} ${sideName} hand`, item: 'robothand-rh56dfx', at: [0, 0, m(52.4)], parts: [alongZ(handParts(`${nm} ${sideName} hand`, true), 'its fingers out of the wrist')] };
-    // (the right wrist's camera on a printed bracket off the changer's side, looking along the tool past the back of the
-    // hand: 250 mm or so from the work it is over)
-    const eye: Part[] = side > 0 ? [P(`${nm} wrist camera bracket`, { box: [m(20), m(14), m(5.5)] }, { mat: 'pla', color: 0x2b2d30, finish: 'printed', item: 'camera-bracket', at: [0, m(38), m(26.75)], fixed: 'clamped round the changer\'s tool plate' }),
+  const arm = (side: number, k: number): Part[] => {
+    const sideName = n === 1 ? '' : side < 0 ? ' left' : side > 0 ? ' right' : ` ${k + 1}`, b = base(side), bolts = UR5E.base.bolts!, foot = UR5E.base.foot!.h, a = r.arms[k]!;
+    const changer: Part[] = a.changer ? [{ name: `${nm}${sideName} tool changer`, item: 'toolchanger-qc-11', at: [0, 0, 0], parts: [alongZ(changerParts(), 'its stack')] }] : [];
+    const hand: Part = { name: `${nm}${sideName} hand`, item: 'robothand-rh56dfx', at: [0, 0, a.changer ? m(52.4) : 0], parts: [alongZ(handParts(`${nm}${sideName} hand`, has('touch')), 'its fingers out of the wrist')] };
+    // (the right wrist's camera (the only arm's, if one) on a printed bracket off the flange's side, looking along the
+    // tool past the back of the hand: 250 mm or so from the work it is over)
+    const eye: Part[] = has('sight') && k === n - 1 ? [P(`${nm} wrist camera bracket`, { box: [m(20), m(14), m(5.5)] }, { mat: 'pla', color: 0x2b2d30, finish: 'printed', item: 'camera-bracket', at: [0, m(38), m(26.75)], fixed: 'clamped round the wrist\'s tool plate' }),
       { name: `${nm} wrist camera`, at: [0, m(45), m(30)], parts: camModuleParts(`${nm} wrist camera`) }] : [];
-    const drawn = dhArmParts(UR5E, `${nm} ${sideName} arm`, ready(side), [changer, hand, ...eye])[0]!;
-    const screws = Array.from({ length: bolts.n }, (_, k) => { const a = PI / 4 + (2 * PI * k) / bolts.n, r = bolts.pcd / 2;
-      return use(bolts.words, [m(b[0] + r * Math.cos(a)), m(top + foot), m(b[2] + r * Math.sin(a))], { name: `${nm} ${sideName} arm base screw ${k + 1}`, fixed: `down through the arm's foot into a thread tapped in the table's top, at ${bolts.torque} N·m (Universal Robots' manual)` }); });
-    return [{ ...drawn, name: `${nm} ${sideName} arm`, item: 'robotarm-ur5e', at: [m(b[0]), m(b[1]), m(b[2])], rot: [-PI / 2, 0, PI / 2] }, ...screws];
+    const drawn = dhArmParts(UR5E, `${nm}${sideName} arm`, ready(side), [...changer, hand, ...eye])[0]!;
+    const screws = Array.from({ length: bolts.n }, (_, j) => { const t = PI / 4 + (2 * PI * j) / bolts.n, rr = bolts.pcd / 2;
+      return use(bolts.words, [m(b[0] + rr * Math.cos(t)), m(top + foot), m(b[2] + rr * Math.sin(t))], { name: `${nm}${sideName} arm base screw ${j + 1}`, fixed: `down through the arm's foot into a thread tapped in the table's top, at ${bolts.torque} N·m (Universal Robots' manual)` }); });
+    return [{ ...drawn, name: `${nm}${sideName} arm`, item: 'robotarm-ur5e', at: [m(b[0]), m(b[1]), m(b[2])], rot: [-PI / 2, 0, PI / 2] }, ...screws];
   };
-  // (the mast behind the arms: the D435 at its top turned down onto the work, the ear and nose board below it)
-  const mz = -260, eyeY = 720, tilt = Math.atan2(eyeY - (work[1] - top), work[2] - (mz + 25));
-  const mast: Part = { name: `${nm} mast`, item: 'sensor-mast', at: [0, m(top), m(mz)], parts: [P(`${nm} mast post`, { box: [m(40), m(eyeY), m(40)] }, { mat: 'al-6063', color: 0xc9cdd1, finish: 'brushed', at: [0, m(eyeY / 2), 0], fill: 0.45 }),
-    { name: `${nm} depth camera`, item: 'depthcamera-d435', at: [0, m(eyeY - 12.5), m(25)], rot: [tilt, 0, 0], parts: depthCamParts(`${nm} depth camera`) },
-    { name: `${nm} ear and nose`, at: [0, m(eyeY - 160), m(21)], parts: earNoseParts(`${nm} ear and nose board`) }] };
-  return [table, ...arm(-1), ...arm(1), mast];
+  // (the mast behind the arms, if it carries anything (beside a middle arm's base, if there is one): the D435 at its top
+  // turned down onto the work, the ear and nose board below it)
+  const mz = -260, mx = n % 2 === 1 ? -220 : 0, eyeY = 720, tilt = Math.atan2(eyeY - (work[1] - top), work[2] - (mz + 25)), ear = has('hearing'), nose = has('smell');
+  const mast: Part[] = has('depth') || ear || nose ? [{ name: `${nm} mast`, item: 'sensor-mast', at: [m(mx), m(top), m(mz)], parts: [P(`${nm} mast post`, { box: [m(40), m(eyeY), m(40)] }, { mat: 'al-6063', color: 0xc9cdd1, finish: 'brushed', at: [0, m(eyeY / 2), 0], fill: 0.45 }),
+    ...(has('depth') ? [{ name: `${nm} depth camera`, item: 'depthcamera-d435', at: [0, m(eyeY - 12.5), m(25)] as V3, rot: [tilt, 0, 0] as V3, parts: depthCamParts(`${nm} depth camera`) }] : []),
+    ...(ear || nose ? [{ name: `${nm} ${ear && nose ? 'ear and nose' : ear ? 'ear' : 'nose'}`, at: [0, m(eyeY - 160), m(21)] as V3, parts: earNoseParts(`${nm} ${ear && nose ? 'ear and nose' : ear ? 'ear' : 'nose'} board`, ear, nose) }] : [])] }] : [];
+  return [table, ...sides.flatMap((s, k) => arm(s, k)), ...mast];
 }
 /** Where the robot's work is: its table's top (mm above the floor), the point its tasks are done at (mm, the table's
  *  frame: a board held 60 mm over the table, in front of the mast) and how far to each side of it each hand works. */

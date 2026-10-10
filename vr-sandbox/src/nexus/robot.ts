@@ -140,9 +140,14 @@ export function robotFor(ids: string[]): { robot: Robot; can: Record<string, Can
 /** "Design a robot that can weld, solder and type", "can the robot weld": the robot those tasks make, and what it can
  *  and cannot do, said; null when the words are not about it. */
 export function robotWords(text: string): string | null {
-  const t = text.toLowerCase(); if (!/\brobot\b/.test(t) || !/\b(design|make|build|can|could|able)\b/.test(t)) return null;
-  const WORD: [RegExp, string][] = [[/\bgrab|pick (things )?up|\bhold\b/, 'grab'], [/\bsolder/, 'solder'], [/\btrim|\bcut leads?/, 'trim'], [/\bweld/, 'weld'], [/\btype|keyboard|computer/, 'type'], [/\bhear|listen/, 'hear'], [/\bsmell|sniff/, 'smell'], [/\bsee|vision|camera|sight/, 'see'], [/\b(regrip|change (its|his|her) (own )?grip|any tool|tools?)\b/, 'regrip']];
-  const ids = WORD.filter(([re]) => re.test(t)).map(([, id]) => id); if (!ids.length) return null;
+  const ids = robotTasks(text); if (!ids) return null;
   const d = robotFor(ids), lines = Object.entries(d.can).map(([id, c]) => `${TASKS.find((x) => x.id === id)!.name}: ${c.ok ? `yes (${c.uses.join('; ')})` : `no (${c.refused.join('; ')})`}${c.warn.length ? `; mind: ${c.warn.join('; ')}` : ''}`);
   return `A robot for that: ${d.parts.join(', ')}. ${lines.join('. ')}.`;
+}
+/** The tasks words ask a robot for ("a robot that can weld, solder and type": weld, solder, type), or null when the
+ *  words are not about one. */
+export function robotTasks(text: string): string[] | null {
+  const t = text.toLowerCase(); if (!/\brobot\b/.test(t) || !/\b(design|make|build|can|could|able)\b/.test(t)) return null;
+  const WORD: [RegExp, string][] = [[/\bgrab|pick (things )?up|\bhold\b/, 'grab'], [/\bsolder/, 'solder'], [/\btrim|\bcut leads?/, 'trim'], [/\bweld/, 'weld'], [/\btype|keyboard|computer/, 'type'], [/\bhear|listen/, 'hear'], [/\bsmell|sniff/, 'smell'], [/\bsee|vision|camera|sight/, 'see'], [/\b(regrip|change (its|his|her) (own )?grip|any tool|tools?)\b/, 'regrip']];
+  const ids = WORD.filter(([re]) => re.test(t)).map(([, id]) => id); return ids.length ? ids : null;
 }

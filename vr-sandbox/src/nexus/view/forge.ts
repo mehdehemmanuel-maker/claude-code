@@ -22,7 +22,7 @@
 // Query: ?t=seconds (freeze the timeline), ?pace=multiplier, ?view=front|close|side|pipeline|wide, ?xr=quest3.
 
 import { processWords } from '../processor';
-import { robotWords as robotDesign } from '../robot';
+import { robotFor, robotTasks, robotWords as robotDesign } from '../robot';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -123,7 +123,7 @@ import { profileLines } from '../derive';
 import { LOCI, childOf, earwax, phenotype, possibilities, randomGenome, type Genome } from '../life/genome';
 import { countSays } from '../inventory';
 import { PY_PRELUDE, readPy, runMeca, type Ran, type Target as CodeTarget } from '../codesim';
-import { ARM_AXES } from '../components';
+import { ARM_AXES, robotPart } from '../components';
 import type { Frame } from '../meca';
 import { setBody } from '../anatomy';
 import { FAMILIES, callFamily } from '../families';
@@ -2545,7 +2545,7 @@ async function converse(text: string): Promise<void> {
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = packWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = robotDesign(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = robotDesign(text); if (said) { line('you', text); say(`${said} ${seeRobot(text)}`, undefined, 'nexus'); return; } }
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = benchWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -3635,6 +3635,15 @@ function seePack(): string {
   eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f);
   apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d();
   const said = apart3d.showPart(part, 'build-pack', performance.now() / 1000); apart3d.whole(performance.now() / 1000, true); return said;
+}
+/** The robot words design, stood before you as the library draws it (each part opening into its own), or what of it is
+ *  not drawn yet. */
+function seeRobot(text: string): string {
+  const ids = robotTasks(text); if (!ids) return '';
+  const part = robotPart(robotFor(ids).robot); if (typeof part === 'string') return `Its drawing: ${part}.`;
+  eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f);
+  apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d();
+  const said = apart3d.showPart(part, 'robot', performance.now() / 1000); apart3d.whole(performance.now() / 1000, true); return `It stands before you: ${said}`;
 }
 /** "What do I need to build …", "parts list for …", "how much would … cost", "pack …": a build pack for it. */
 function packWords(text: string): string | null {

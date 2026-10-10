@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { fk, flangeOf, ik, UR5E } from '../../src/nexus/dharm';
 import * as THREE from 'three';
-import { componentOf, ROBOT_CELL } from '../../src/nexus/components';
+import { componentOf, robotPart, ROBOT_CELL } from '../../src/nexus/components';
 import { contacts, layout, type Node } from '../../src/nexus/make/space';
-import { pixelsAcross, SENSORS, TASKS } from '../../src/nexus/robot';
+import { pixelsAcross, robotFor, robotTasks, SENSORS, TASKS } from '../../src/nexus/robot';
 import { resolve } from '../../src/nexus/inventory';
 
 describe('arms by their DH tables: the UR5e', () => {
@@ -54,5 +54,16 @@ describe('the robot drawn from its parts', () => {
     const nodes = layout(robot()), top = (n: Node): string => { let x = n; while (x.parent?.parent) x = x.parent; return x.p.name; };
     const clash = contacts(nodes).map((c) => [top(c.a), top(c.b)]).filter(([a, b]) => a !== b && /arm$|mast$/.test(a!) && /arm$|mast$/.test(b!));
     expect(clash).toEqual([]);
+  });
+  it('draws a robot for only what it is asked, and says what it cannot draw yet', () => {
+    for (const words of ['design a robot that can solder and type on a computer', 'build a robot that can solder and hear', 'make a robot that can type and smell']) {
+      const d = robotFor(robotTasks(words)!).robot, p = robotPart(d); if (typeof p === 'string') throw new Error(`${words}: ${p}`);
+      const all = walk(p), n = (id: string) => all.filter((q) => q.item === id).length, has = (s: string) => d.senses.some((x) => x.sense === s);
+      expect([n('robotarm-ur5e'), n('toolchanger-qc-11'), n('camera-module'), n('depthcamera-d435'), n('microphone-mems'), n('gassensor-bme688'), n('ftsensor-nano17')], words)
+        .toEqual([d.arms.length, d.arms.filter((a) => a.changer).length, has('sight') ? 1 : 0, has('depth') ? 1 : 0, has('hearing') ? 1 : 0, has('smell') ? 1 : 0, has('touch') ? d.arms.length : 0]);
+      const nodes = layout(p), top = (x: Node): string => { let y = x; while (y.parent?.parent) y = y.parent; return y.p.name; };
+      expect(contacts(nodes).map((c) => [top(c.a), top(c.b)]).filter(([a, b]) => a !== b && /arm$|mast$/.test(a!) && /arm$|mast$/.test(b!)), words).toEqual([]);
+    }
+    expect(robotPart(robotFor(['grab']).robot)).toMatch(/not drawn yet: .*2F-85/);
   });
 });

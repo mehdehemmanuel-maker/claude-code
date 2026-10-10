@@ -80,17 +80,17 @@ export function camModuleParts(nm = 'Raspberry Pi Camera Module 3'): Part[] {
 }
 /** A small board on the robot's mast carrying its TDK INMP441 microphone (4.72 × 3.76 × 1 mm, its datasheet) and Bosch's BME688
  *  (3 × 3 × 0.93 mm, its datasheet), facing +z. */
-export function earNoseParts(nm = 'the robot\'s ear and nose board'): Part[] {
+export function earNoseParts(nm = 'the robot\'s ear and nose board', ear = true, nose = true): Part[] {
   return [P(nm, { box: [30 * mm, 20 * mm, 1.6 * mm] }, { mat: 'fr4', color: 0x1f5a2a, item: 'pcb-bare', at: [0, 0, 0] }),
     // (its MEMS die beside its packaged amplifier chip: the chip's own die, lead frame, eight bond wires and moulding, as
     // the inventory has a packaged chip; their sizes typical, in its 4.72 × 3.76 mm lid)
-    G('MEMS microphone', [P('MEMS microphone die', { box: [1.2 * mm, 1.2 * mm, 0.4 * mm] }, { mat: 'silicon', color: 0x3a3f55, item: 'si-die', at: [-0.8 * mm, 0, 0.2 * mm] }),
+    ...(ear ? [G('MEMS microphone', [P('MEMS microphone die', { box: [1.2 * mm, 1.2 * mm, 0.4 * mm] }, { mat: 'silicon', color: 0x3a3f55, item: 'si-die', at: [-0.8 * mm, 0, 0.2 * mm] }),
       G('MEMS microphone amplifier', [P('its lead frame', { box: [1.4 * mm, 1.4 * mm, 0.1 * mm] }, { mat: 'copper', color: 0xb87333, item: 'lead-frame', at: [0, 0, 0] }),
         P('its moulding', { box: [1.4 * mm, 1.4 * mm, 0.5 * mm] }, { mat: 'epoxy', color: 0x1a1b1d, item: 'mould-compound', at: [0, 0, 0.3 * mm] }),
         P('its die', { box: [0.8 * mm, 0.8 * mm, 0.15 * mm] }, { mat: 'silicon', color: 0x3a3f55, item: 'si-die', at: [0, 0, 0.15 * mm] }),
         ...Array.from({ length: 8 }, (_, i) => P(`its bond wire ${i + 1}`, { cyl: [0.0125 * mm, 0.4 * mm] }, { mat: 'gold', color: 0xe6c35c, item: 'bond-wire', at: [(-0.35 + (i % 4) * 0.23) * mm, (i < 4 ? -0.5 : 0.5) * mm, 0.25 * mm], rot: [PI / 2, 0, 0] }))], { item: 'ic-package', at: [0.8 * mm, 0, 0] }),
-      P('MEMS microphone lid', { box: [4.72 * mm, 3.76 * mm, 1 * mm] }, { mat: 'nickel', color: 0xc9cdd1, at: [0, 0, 0.5 * mm], fill: 0.12 })], { item: 'microphone-mems', at: [-7 * mm, 0, 1.3 * mm] }),
-    G('Bosch BME688 gas sensor', bmeParts(), { item: 'gassensor-bme688', at: [7 * mm, 0, 1.3 * mm] })];
+      P('MEMS microphone lid', { box: [4.72 * mm, 3.76 * mm, 1 * mm] }, { mat: 'nickel', color: 0xc9cdd1, at: [0, 0, 0.5 * mm], fill: 0.12 })], { item: 'microphone-mems', at: [-7 * mm, 0, 1.3 * mm] })] : []),
+    ...(nose ? [G('Bosch BME688 gas sensor', bmeParts(), { item: 'gassensor-bme688', at: [7 * mm, 0, 1.3 * mm] })] : [])];
 }
 /** Bosch's BME688: its 3 × 3 × 0.93 mm 8-pin LGA (its datasheet) with its metal lid, its pressure and humidity die
  *  and its heated gas plate inside (their sizes an estimate); facing +z. */
