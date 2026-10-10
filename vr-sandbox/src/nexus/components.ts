@@ -23,7 +23,7 @@ import { alongZ, bmeParts, camModuleParts, changerParts, depthCamParts, earNoseP
 import { FAMILIES, callFamily } from './families';
 import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, fanDims, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
-import { CLEAR } from './kinds/motion';
+import { CLEAR, VWHEEL } from './kinds/motion';
 import { SOCKET_HEAD } from './embody/stock';
 import { BUTTON, PAN, SETSCREW_KEY } from './threads';
 import { UPN } from './kinds/stock';
@@ -202,6 +202,39 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.length), mat = matIn(it), root = (d - 1.0825 * P0) / 2; return [P(it.name, lathe([[0, -L / 2], [root, -L / 2], [d / 2, -L / 2 + P0], [d / 2, L / 2 - P0], [root, L / 2], [0, L / 2]]), { mat, ...looks(it, mat), finish: 'thread', fill: threadFill(d, P0) })]; },
     iface: (p) => [{ kind: 'studs', role: 'provides', d: thr(p).d * mm, n: 1 }],
   },
+  spring: {
+    says: 'a compression spring: its wire wound in a helix of its mean diameter, its end coils closed (touching) and the rest open to its free length', leaves: 'its ends not ground flat; its helix drawn in 24 straight pieces a turn',
+    make: (p, it) => { const d = Number(p.d), D = Number(p.D), L = Number(p.L), n = Number(p.n), rise = L - d, pa = Math.max(d, (rise - 2 * d) / n), k = 24, turns = n + 2;
+      // (its centreline's height after t turns: a closed coil (one wire's rise), the active coils, a closed coil)
+      const y = (t: number) => d / 2 + (t <= 1 ? t * d : t <= n + 1 ? d + (t - 1) * pa : d + n * pa + (t - n - 1) * d);
+      const pts = Array.from({ length: turns * k + 1 }, (_, i) => { const t = i / k, a = 2 * PI * t; return [(D / 2) * Math.cos(a) * mm, y(t) * mm, (D / 2) * Math.sin(a) * mm] as V3; });
+      return [P(it.name, { tube: { r: (d / 2) * mm, pts, bend: 0 } }, { mat: 'steel-spring', color: 0xb9bdc2, finish: 'bright' })]; },
+  },
+  slotnut: {
+    says: 'a T-slot nut: its section a hammer nut\'s (its sides upright, its top bevelled to turn into the slot), tapped through its middle, bored at its thread\'s root as a nut is', leaves: 'a roll-in\'s spring ball and a sliding nut\'s flange not drawn: each drawn as a hammer nut\'s section; its sizes the kind\'s (1.8, 1.1 and 0.7 of its slot)',
+    make: (p, it) => { const w = Number(p.slot), Lx = w * 1.8, W = w * 1.1, H = w * 0.7, b = W * 0.27, { d: dT, P: P0 } = thr(p), r1 = (dT - 1.0825 * P0) / 2;
+      const sec = ([[-W / 2, 0], [W / 2, 0], [W / 2, H - b], [W / 2 - b, H], [-W / 2 + b, H], [-W / 2, H - b]] as [number, number][]).map(([x, y2]) => [x * mm, y2 * mm] as [number, number]);
+      // (its section in x and y, drawn along its length in z about its middle; tapped up through it)
+      return [P(it.name, { prism: { pts: sec, L: Lx * mm } }, { mat: 'steel-low', color: 0xc9cdd1, finish: 'plate', cuts: [{ r: r1 * mm, depth: H * mm, at: [0, H * mm, 0], dir: [0, -1, 0] }] })]; },
+  },
+  vwheel: {
+    says: 'a solid V wheel turned about its axle: its hub bored for two 625 bearings, its V edge for a V-slot\'s groove (OpenBuilds\' sizes)', leaves: 'its V\'s proportions typical; its bearings drawn apart (they are their own parts)',
+    make: (_p, it) => [P(it.name, lathe(VWHEEL), { mat: 'pom', color: 0x1d1e21, finish: 'moulded' })],
+  },
+  spacer: {
+    says: 'a plain tube: its outside, bored 0.2 mm over its screw, cut to its length', leaves: 'its ends\' chamfers not drawn',
+    make: (p, it) => { const D = Number(p.d), b = (Number(String(p.thread).slice(1)) + 0.2) / 2, L = Number(p.L), mat = matIn(it);
+      return [P(it.name, lathe([[b, -L / 2], [D / 2, -L / 2], [D / 2, L / 2], [b, L / 2], [b, -L / 2]]), { mat, ...looks(it, mat), finish: 'cast' })]; },
+  },
+  eccentric: {
+    says: 'an eccentric spacer: its 10 mm hex, its rim 7.1 mm across under it, both bored 5 mm 0.79 mm off their centre', leaves: 'its hex\'s chamfers not drawn',
+    make: (p, it) => { const h = Number(p.h), r = Number(p.r), mat = matIn(it), at = { mat, ...looks(it, mat), finish: 'cast' as const }, e = 0.79;
+      const hex = Array.from({ length: 6 }, (_, q) => [(5 / Math.cos(PI / 6)) * Math.cos((q * PI) / 3 + PI / 6) * mm, (5 / Math.cos(PI / 6)) * Math.sin((q * PI) / 3 + PI / 6) * mm] as [number, number]);
+      // (its hex from y = 0 up, its rim below; the bore at x = 0.79 through both)
+      // (a prism is drawn about its middle along its own z, turned up here: its bore along that z)
+      return [P(it.name, { prism: { pts: hex, L: h * mm } }, { ...at, at: [0, (h / 2) * mm, 0], rot: [-PI / 2, 0, 0], cuts: [{ r: 2.5 * mm, depth: h * mm, at: [e * mm, 0, (h / 2) * mm], dir: [0, 0, -1] }] }),
+        P(`${it.name} rim`, lathe([[0, -r], [3.55, -r], [3.55, 0], [0, 0]]), { ...at, cuts: [{ r: 2.5 * mm, depth: r * mm, at: [e * mm, 0, 0], dir: [0, -1, 0] }] })]; },
+  },
   countersunk: {
     says: 'ISO 10642: a 90° countersunk head 2.24 d across its top and 0.62 d deep (its cone), its hex socket, threaded to its head; its length to its top', leaves: 'the thread its major cylinder; its head\'s sizes the standard\'s proportions (2.24 d, 0.62 d), its socket the standard\'s key',
     make: (p, it) => { const t = String(p.thread), d = Number(t.slice(1)), L = Number(p.L), mat = matIn(it), at = { mat, ...looks(it, mat) }, dk = 2.24 * d, k = 0.62 * d, key = ({ 3: 2, 4: 2.5, 5: 3, 6: 4, 8: 5, 10: 6, 12: 8, 16: 10, 20: 12 } as Record<number, number>)[d] ?? 0.6 * d;
@@ -221,7 +254,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
       const hex = Array.from({ length: 6 }, (_, q) => [(3 / Math.cos(PI / 6)) * Math.cos((q * PI) / 3) * mm, (3 / Math.cos(PI / 6)) * Math.sin((q * PI) / 3) * mm] as [number, number]), bore = { r: 1 * mm, depth: (L - 1.5) * mm, dir: [0, -1, 0] as V3 };
       // (its tip at y = 0: the cone, bored to a land above the orifice; the hex over it; the neck and the thread above, bored through)
       return [P(it.name, lathe([[d / 2, 0], [0.5, 0], [3.2, cone], [1, cone], [1, 1.5], [d / 2, 0.6], [d / 2, 0]]), at),
-        P(`${it.name} hex`, { prism: { pts: hex, L: hx * mm } }, { ...at, at: [0, cone * mm, 0], rot: [-PI / 2, 0, 0], cuts: [{ ...bore, depth: hx * mm, at: [0, hx * mm, 0] }] }),
+        P(`${it.name} hex`, { prism: { pts: hex, L: hx * mm } }, { ...at, at: [0, (cone + hx / 2) * mm, 0], rot: [-PI / 2, 0, 0], cuts: [{ ...bore, depth: hx * mm, at: [0, 0, (hx / 2) * mm], dir: [0, 0, -1] }] }),
         P(`${it.name} thread`, lathe([[1, cone + hx], [3, cone + hx], [3, L], [1, L], [1, cone + hx]]), { ...at, finish: 'thread', fill: (neck * 1 + th * threadFill(6, 1)) / (neck + th) })]; },
   },
   coupling: {
@@ -551,7 +584,8 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
   // (a drawn part's box and the middle of its pieces, weighted by their boxes, in its own frame, m: its body's, its
   // leads, wires and plug left out, as a maker's model leaves them out: a lead screw and its nut are not leads)
   const loose = (x: { p: Part; parent: { p: Part } | null }): boolean => /\b(leads?(?!\s*(?:screw|nut))|wire|cable|plug|connector)\b/i.test(x.p.name) || /wire|cable|jst/i.test(x.p.item ?? '') || (!!x.p.shape && 'tube' in x.p.shape) || (!!x.parent && loose(x.parent as never));
-  const own = (p: Part) => { const q = { ...p, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3 }, ns = layout(q).filter((x) => x.box && !x.box.isEmpty() && !loose(x)), b = new THREE.Box3(); let w = 0; const c = new THREE.Vector3();
+  // (a part that is all wire-like, a coil spring, fitted whole)
+  const own = (p: Part) => { const q = { ...p, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3 }, all = layout(q).filter((x) => x.box && !x.box.isEmpty()), body = all.filter((x) => !loose(x)), ns = body.length ? body : all, b = new THREE.Box3(); let w = 0; const c = new THREE.Vector3();
     for (const x of ns) { b.union(x.box!); const s = x.box!.getSize(new THREE.Vector3()), v = Math.max(1e-12, s.x * s.y * s.z); c.addScaledVector(x.box!.getCenter(new THREE.Vector3()), v); w += v; }
     return { min: b.min.toArray() as V3, max: b.max.toArray() as V3, mid: (w ? c.divideScalar(w) : b.getCenter(new THREE.Vector3())).toArray() as V3 }; };
   const placed: { p: Part; corners: V3[] }[] = []; let drawn = 0, boxed = 0;

@@ -13,6 +13,10 @@ export interface MakerModel { id: string; name: string; src: string; parts: Mode
 /** A part's size along its own axes, mm, largest first. */
 export const extents = (p: ModelPart): number[] => [p[3][3]! - p[3][0]!, p[3][4]! - p[3][1]!, p[3][5]! - p[3][2]!];
 const longest = (p: ModelPart) => Math.round(Math.max(...extents(p)));
+/** How far the two extents other than k are from a hexagon's corners over its flats (2/√3). */
+const hexness = (e: number[], k: number) => { const [a, b] = [e[(k + 1) % 3]!, e[(k + 2) % 3]!]; return Math.abs(Math.max(a, b) / Math.min(a, b) - 2 / Math.sqrt(3)); };
+/** A round part's diameter (its two like extents) and length (the third), mm, to a tenth. */
+const round2 = (p: ModelPart): [number, number] => { const e = extents(p), k = [0, 1, 2].sort((a, b) => Math.abs(e[(a + 1) % 3]! - e[(a + 2) % 3]!) - Math.abs(e[(b + 1) % 3]! - e[(b + 2) % 3]!))[0]!; return [+((e[(k + 1) % 3]! + e[(k + 2) % 3]!) / 2).toFixed(1), +e[k]!.toFixed(1)]; };
 
 /** How makers name the parts the library makes: the library's words for each, from its name and its measured size; null
  *  where the library does not make it. */
@@ -44,6 +48,16 @@ export function libraryWords(p: ModelPart): string | null {
   if (/thermistor/i.test(n)) return 'thermistor 100k 3950';
   if (/^cold section fan$/i.test(n)) { const [a, , c] = [...extents(p)].sort((x, y) => y - x); return `fan ${Math.round(a!)}x${Math.round(c! / 5) * 5} 24V`; }
   if (/^z coupler$/i.test(n)) return 'coupling 5x8';
+  // (its V-slot wheels and what they ride on: a round part's two like extents its diameter, the third its length)
+  if (/^rollers?$|v ?wheel/i.test(n)) return 'vwheel solid pom';
+  // (its T-slot nuts, in its profiles' 6 mm slots; its bed's and extruder's springs, as measured (8.9 mm across, 17.1 long),
+  // their wire 0.8 mm and five active coils typical; a bare "M3 Screw" as long as it is wide, a set screw)
+  if ((m = /^M(\d+)\s*T-?slot nut$/i.exec(n))) return `slotnut slot6 M${m[1]} hammer`;
+  if (/^(bed level|extrusion) springs?$/i.test(n)) { const [od, L] = round2(p); return `spring d0.8 D${+(od - 0.8).toFixed(1)} L${L} n5`; }
+  if ((m = /^M(\d+)\s*screw$/i.exec(n)) && Math.max(...extents(p)) < 2 * Number(m[1])) return `setscrew M${m[1]}x${Math.round(Math.max(...extents(p)))}`;
+  if (/spacers? for rollers?|^spacer/i.test(n)) { const [d, L] = round2(p); return `spacer M5 d${d} L${L} aluminium`; }
+  // (a hex part's length: the extent left when its corners and flats, 2/√3 apart, are taken out)
+  if (/eccentric/i.test(n)) { const e = extents(p), k = [0, 1, 2].sort((a, b) => hexness(e, a) - hexness(e, b))[0]!; return `eccentric h6 r${+(e[k]! - 6).toFixed(1)} stainless`; }
   return null;
 }
 

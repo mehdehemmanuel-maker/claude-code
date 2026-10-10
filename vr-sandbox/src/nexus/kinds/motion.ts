@@ -62,6 +62,12 @@ const GM: Record<string, { d: number; L: number; rpmV: number; ratios: number[];
   '37GB': { d: 37, L: 65, rpmV: 600, ratios: [6.3, 10, 19, 30, 50, 90, 131, 270], volts: [12, 24] },
 };
 
+/** A solid V wheel's section, mm (radius, along its axis), closed: its bore for two 625 bearings, its hub the wheel's
+ *  full width out to 19 mm across, then its V, 45° flanks to a 2.3 mm flat at 23.90 mm across (OpenBuilds' sizes; the V's
+ *  proportions typical). One table for its drawing (components.ts) and its weight. */
+export const VWHEEL: [number, number][] = [[7.987, -5.115], [9.5, -5.115], [9.5, -3.6], [11.95, -1.15], [11.95, 1.15], [9.5, 3.6], [9.5, 5.115], [7.987, 5.115], [7.987, -5.115]];
+/** A closed turned section's volume, mm³ (each edge's cone frustum, Pappus). */
+const latheMm3 = (s: [number, number][]) => Math.abs(s.slice(1).reduce((v, [r1, y1], i) => { const [r0, y0] = s[i]!; return v + (Math.PI * (y1 - y0) * (r0 * r0 + r0 * r1 + r1 * r1)) / 3; }, 0));
 export const MOTION: KindDef[] = [
   {
     id: 'thrustbearing', name: 'thrust ball bearing', path: 'Mechanical/Bearings/Thrust bearings', says: 'two washers and a ring of balls between them, to carry a load along the shaft', std: 'ISO 104, the 511 series',
@@ -219,6 +225,29 @@ export const MOTION: KindDef[] = [
     axes: [bare('style', 'style', ['rigid', 'oldham', 'bellows']), ax('d1', 'first bore', 'mm', [3, 4, 5, 6, 6.35, 8, 10, 12, 14, 15, 16, 20]), ax('d2', 'second bore', 'mm', [3, 4, 5, 6, 6.35, 8, 10, 12, 14, 15, 16, 20])],
     title: (p) => `${p.style} coupling ${p.d1} × ${p.d2} mm`, of: (p) => `${p.style === 'oldham' ? 'al-6061*2 pom' : p.style === 'bellows' ? 'al-6061*2 stainless-304' : 'al-6061'} {screw ${Math.max(n(p, 'd1'), n(p, 'd2')) >= 10 ? 'M4x12' : 'M3x10'}}*${p.style === 'rigid' ? 4 : 2}`, make: 'machine', alt: 'print', how: (p) => (p.style === 'oldham' ? 'two turned aluminium hubs with slots, an acetal disc between' : p.style === 'bellows' ? 'two clamp hubs welded to a thin stainless bellows' : 'one aluminium sleeve with two clamping slits'),
     spec: (p) => `${p.d1} and ${p.d2} mm bores; ${p.style === 'rigid' ? 'takes no misalignment' : p.style === 'oldham' ? 'takes about 0.5 mm offset (typical)' : 'takes about 1–2° and 0.2 mm offset, no backlash (typical)'}`, box: (p) => { const D = Math.max(16, 2.5 * Math.max(n(p, 'd1'), n(p, 'd2')) + 6); return [D, D, D * 1.3]; }, g: (p) => { const D = Math.max(16, 2.5 * Math.max(n(p, 'd1'), n(p, 'd2')) + 6); return gOf(cyl(D, D * 1.3) * 0.65, 2.7); },
+  },
+  {
+    id: 'vwheel', name: 'V-slot wheel', path: 'Mechanical/Linear motion/V-slot wheels', says: 'a wheel with a V edge that rides in a V-slot extrusion\'s groove, bored for two 625 bearings pressed in either side',
+    std: 'OpenBuilds\' Solid V Wheel: 23.90 mm across, 10.23 thick, bored 15.974 for two 625 bearings, in Delrin (OpenBuilds\' listing); its V\'s flanks 45° to fit the groove (typical)',
+    axes: [bare('form', 'form', ['solid']), bare('matter', 'made of', ['pom'])],
+    title: () => 'solid V wheel, Delrin', of: () => 'pom', make: 'mould', alt: 'print', how: 'moulded in acetal (Delrin), its bore sized to press two 625 bearings in',
+    spec: () => '23.90 mm across, 10.23 mm thick; a 15.974 mm bore for two 625 bearings and a 5 mm precision shim between them; rides a V-slot groove', box: () => [23.9, 23.9, 10.23], g: () => gOf(latheMm3(VWHEEL), 1.41), look: 'ring',
+  },
+  {
+    id: 'spacer', name: 'round spacer', path: 'Hardware/Spacers/Round spacers', says: 'a plain tube cut to length that holds two parts apart on a screw through it',
+    std: 'any outside diameter 4–20 mm and length 0.5–60 mm, bored 0.2 mm over its screw (typical of turned spacers)',
+    axes: [bare('thread', 'for', ['M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8']), ax('d', 'outside', 'mm', (p) => [4, 5, 6, 7, 8, 10, 12, 16, 20].filter((x) => x >= Number(String(p.thread).slice(1)) + 1.5), [4, 20, 0.1]), ax('L', 'long', 'mm', range(1, 30, 1), [0.5, 60, 0.1]), bare('matter', 'made of', ['aluminium', 'steel', 'stainless', 'brass', 'nylon'])],
+    title: (p) => `spacer ${p.d} × ${p.L} mm for ${p.thread}, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'machine', alt: 'print', how: (p) => `turned from ${madeOf(p)[2]} tube or bar, bored and parted off to length`,
+    spec: (p) => `${p.d} mm outside, bored ${(Number(String(p.thread).slice(1)) + 0.2).toFixed(1)} mm for ${p.thread}, ${p.L} mm long`, box: (p) => [n(p, 'd'), n(p, 'd'), n(p, 'L')],
+    g: (p) => gOf(ring(n(p, 'd'), Number(String(p.thread).slice(1)) + 0.2, n(p, 'L')), madeOf(p)[1]), look: 'ring',
+  },
+  {
+    id: 'eccentric', name: 'eccentric spacer', path: 'Mechanical/Linear motion/V-slot wheels', says: 'a hex spacer bored off its centre: turned in its hole, it moves the wheel on it toward or away from its rail, so the wheel is set snug in its slot',
+    std: 'OpenBuilds\' eccentric spacer: its cam 6 or 6.35 mm high, a 5 mm bore, its rim to fit a 7.12 mm hole (OpenBuilds\' listing), turned with a 10 mm spanner, its bore 0.79 mm off centre (resellers\'); its rim\'s length any 1–8 mm (the Ender-3\'s 4.8, its maker\'s model)',
+    axes: [ax('h', 'cam', 'mm', [6, 6.35]), ax('r', 'rim', 'mm', [2.5, 4.8], [1, 8, 0.1]), bare('matter', 'made of', ['stainless', 'steel', 'aluminium'])],
+    title: (p) => `eccentric spacer ${p.h} mm, rim ${p.r} mm, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'machine', how: (p) => `turned from ${madeOf(p)[2]} hex bar, its rim turned down, bored off its centre`,
+    spec: (p) => `a 10 mm hex ${p.h} mm high, its rim 7.1 mm across and ${p.r} mm long for a 7.12 mm hole; bored 5 mm, 0.79 mm off its centre (1.58 mm of travel)`, box: (p) => [11.55, 10, n(p, 'h') + n(p, 'r')],
+    g: (p) => gOf((2 * Math.sqrt(3) * 25 - Math.PI * 6.25) * n(p, 'h') + ring(7.1, 5, n(p, 'r')), madeOf(p)[1]), look: 'screw hex',
   },
   {
     id: 'collar', name: 'shaft collar', path: 'Mechanical/Shafts and hubs/Collars', says: 'a ring fixed on a shaft to locate something along it: by a set screw, or clamped by a split', std: 'DIN 705 sizes, bores 3–50 mm',
