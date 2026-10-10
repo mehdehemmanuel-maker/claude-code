@@ -653,5 +653,7 @@ export const BOARD_PARTS: Record<string, () => BoardPart> = {
   'hdmi-a': () => hdmi('A'), 'hdmi-c': () => hdmi('C'), 'hdmi-d': () => hdmi('D'),
   'usb-a-2': () => usbA([2]), 'usb-a-3': () => usbA([3]), 'usb-a-2x2': () => usbA([2, 2]), 'usb-a-3x3': () => usbA([3, 3]), 'usb-a-2-side': () => usbA([2], { depth: 16.3, onSide: true }),
   'rj45': rj45, 'microsd-push': microSD, 'header-2x13': () => pinHeader(2, 13), 'header-2x20': () => pinHeader(2, 20), 'header-1x3': () => pinHeader(1, 3),
-  'fpc-30': fpc30, 'b2b-30': b2b30, 'tact-kmr2': tactKMR2, 'tact-side': tactSide, 'jack-3.5': jack35, 'av-jack-4p': () => avJack(), 'wafer-2': wafer2, 'mic-4': () => micElectret(4.0, 1.5),
+  'fpc-30': fpc30, 'b2b-30': b2b30, 'tact-kmr2': tactKMR2, 'tact-side': tactSide,
+  // (the smallest SMD tact switch a thumbnail board takes: Alps' SKRPA type, 2.0 × 1.2 × 0.55 mm, its plunger 0.8 across)
+  'tact-xiao': () => tactTop({ L: 2.0, W: 1.2, H: 0.55, plunger: [0.8, 0.2], src: 'Alps SKRPA-type SMD tact switch, 2.0 × 1.2 × 0.55 mm (its catalogue); fits a thumbnail board\'s buttons by its size' }), 'jack-3.5': jack35, 'av-jack-4p': () => avJack(), 'wafer-2': wafer2, 'mic-4': () => micElectret(4.0, 1.5),
 };

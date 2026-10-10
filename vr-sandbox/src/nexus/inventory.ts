@@ -1042,6 +1042,11 @@ for (const m of [ENDER3, VORON24]) for (const w of Object.keys(billOf(m).words))
 F('rail MGN15H 700');
 for (const w of ['robotarm UR5e', 'screw M8x20', 'toolchanger QC-11', 'ftsensor Nano17', 'robothand RH56DFX', 'robothand 2F-85', 'robothand Franka-Hand', 'fan 60x25 24V', 'depthcamera D435', 'microphone mems', 'gassensor BME688']) F(w);
 
+// ---- Seeed's two systems: the XIAO footprint and Grove (src/nexus/seeed.ts) ----
+e('grove-socket', 'Grove socket', 'Electrical/Wiring and connectors/Connectors', 'assembly', 'assemble', 'pbt phosphor-bronze tin', 'the four-pin 2.0 mm socket every Grove module carries, keyed so its cable goes in one way round (Seeed\'s Grove standard)', '4-pin, 2.0 mm pitch', { size: [11, 5.9, 4.9] });
+e('grove-part', 'Grove module part', 'Electrical/Sensors/Modules', 'part', 'assemble', 'epoxy silicon copper', 'whatever the module itself is — a sensor, a driver, a switch, a display — on its own board behind the Grove socket; what it is belongs to the module, not to Grove', '', { size: [14, 4.5, 14] });
+e('castellated-pad', 'castellated pad', 'Electrical/Boards and controllers/Circuit boards', 'part', 'etch', 'copper tin', 'half a plated hole at a board\'s edge: it solders flat onto the pads of another board, or takes a header pin', '', { size: [1.6, 1, 1.6] });
+
 // ---- a headset's own parts (src/nexus/headset.ts) ----
 e('lens-pancake', 'pancake lens stack', 'Optics/Lenses/Headset optics', 'assembly', 'assemble', 'pmma pet', 'two moulded elements with a half-mirror and a quarter-wave film between them: the light goes round inside the stack three times, which is why a pancake headset is short (its real prescription is its maker\'s: this is the arrangement, not the figures)', '', { size: [44, 44, 10] });
 e('headset-optic', 'headset eye optic', 'Optics/Lenses/Headset optics', 'assembly', 'assemble', 'lens-pancake headset-display pcb-bare', 'one eye\'s lens stack over its display on its board, carried on the slide that sets the distance between the eyes', '', { size: [46, 48, 36] });

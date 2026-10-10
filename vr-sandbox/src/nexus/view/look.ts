@@ -175,6 +175,9 @@ const dq = num3(q.get('dir')), d = (dq ? new THREE.Vector3(...dq) : (dirs[q.get(
 const cam = num3(q.get('cam')); if (cam) camera.position.set(...cam); else camera.position.copy(c).addScaledVector(d, dist);
 // (&up=x,y,z: the camera's up, where a photograph laid over it was taken with its camera tilted)
 const upq = num3(q.get('up')); if (upq) camera.up.set(...upq).normalize();
+// (looking all but straight down or up, the camera's own up is nearly the way it looks, so what it is rolled to is
+//  anyone's guess and a board reads turned 45°. A plan view is squared instead: +x to the right, +z toward the reader)
+else if (Math.abs(d.y) > 0.9) camera.up.set(0, 0, d.y > 0 ? -1 : 1);
 // (from under the floor, the floor is not there: what is underneath is what is looked at)
 if (camera.position.y < 0.02) floor.visible = false;
 // (and lit from the side looked at, as a board is turned over to photograph its underside: else its face is in its own

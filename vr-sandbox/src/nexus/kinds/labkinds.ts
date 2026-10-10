@@ -7,9 +7,12 @@
 import { bare, type KindDef, type P } from './core';
 import { BSC_A2, C5425, C5425_RADIUS, MINISUB, POWERPAC, RESEARCH_PLUS, SAFE_IMAGER, T100, cabinetAir } from '../lab';
 import { QUEST3, pixelsPerDegree } from '../headset';
+import { GROVE, XIAO, XIAOS, XIAO_G, groveGrams, groveOf, xiaoOf } from '../seeed';
 
 const s = (p: P, k: string) => String(p[k]);
 const air = cabinetAir();
+/** What sharing a port means for a bus, said once for the kind's own words. */
+const groveChainSays = (bus: string) => (bus === 'i2c' ? 'I²C is a bus: several modules share one port through a hub, as long as no two answer to the same address' : bus === 'uart' ? 'a UART is point to point: one module to a port' : 'its pins are that port\'s own: one module to a port');
 
 export const LAB_KINDS: KindDef[] = [
   {
@@ -107,5 +110,29 @@ export const LAB_KINDS: KindDef[] = [
     spec: () => `${QUEST3.controller.size.join(' × ')} mm, ${QUEST3.controller.kg * 1000} g with its ${QUEST3.controller.cell} cell; no tracking ring — the headset\'s own cameras find it, helped by the infrared LEDs under its shell (${QUEST3.src})`,
     // (stood on its grip, as it is set down: its 126 mm up, its 67 across, its 43 through, plus its trigger)
     box: () => [63, 131, 84], g: () => QUEST3.controller.kg * 1000,
+  },
+  {
+    id: 'xiao', look: 'board', name: 'XIAO board', path: 'Electrical/Boards and controllers/Microcontroller boards',
+    says: 'a thumbnail board on one footprint whatever chip is on it: fourteen castellated pads down its edges, a USB-C socket at one end, and pads underneath for a cell it charges itself',
+    std: 'Seeed Studio\'s wiki (the common XIAO footprint)',
+    axes: [bare('chip', 'chip', XIAOS.map((x) => x.id))], title: (p) => `Seeed Studio XIAO ${s(p, 'chip')}`,
+    of: (p) => xiaoOf(s(p, 'chip')), make: 'solder',
+    how: 'its chip goes on a two-layer board the size of a thumbnail, with its USB-C socket over one end; its pads are half-holes at the board\'s edge, so the whole board solders flat onto another like a big component, or takes headers for a breadboard',
+    spec: (p) => { const b = XIAOS.find((x) => x.id === s(p, 'chip')) ?? XIAOS[0]!; return `${b.chip}: ${b.core} at ${b.mhz} MHz, ${b.sram} SRAM, ${b.flash} flash; ${b.radio}; ${XIAO.gpio} GPIO and ${XIAO.power} power pins on ${XIAO.size[1]} × ${XIAO.size[0]} mm at ${XIAO.pitch} mm (${b.src}; ${XIAO.src}). Its family is larger than the chips here — SAMD21, RP2350, nRF52840, ESP32S3, ESP32C6, ESP32C5, RA4M1, MG24 and nRF54L15, each with its Sense variant — all the same footprint; only the ones whose figures are taken from Seeed\'s own wiki are offered. Seeed\'s 3.5 mm thickness is its board and chips: over its USB-C socket it stands 4.2 mm, which is what is drawn. Seeed publishes no weight; the kind\'s is an estimate`; },
+    // (Seeed's 3.5 mm is the board and its chips; the drawing stands 4.2 over its USB-C socket (a 1.0 mm board and a
+    //  3.21 mm receptacle, the Type-C spec's), so the box is the drawing's own extents and the spec says why)
+    box: () => [XIAO.size[0], 4.3, XIAO.size[1]],
+    g: () => XIAO_G,
+  },
+  {
+    id: 'grove', look: 'board', name: 'Grove module', path: 'Electrical/Sensors/Modules',
+    says: 'a module on one of five board sizes with the same four-pin plug, so what it does is plugged into a bus rather than wired pin by pin',
+    std: 'Seeed Studio\'s Grove standard',
+    axes: [bare('size', 'board size', Object.keys(GROVE.sizes)), bare('bus', 'what it talks over', Object.keys(GROVE.bus))],
+    title: (p) => `Grove module, ${s(p, 'size')} over ${s(p, 'bus') === 'i2c' ? 'I²C' : s(p, 'bus')}`,
+    of: (p) => groveOf(s(p, 'bus')), make: 'solder',
+    how: 'its own part sits on a board of its size behind the Grove socket; a four-core cable takes it to a port on a board or a hub, and its two holes take M2 screws',
+    spec: (p) => { const sz = GROVE.sizes[s(p, 'size')] ?? GROVE.sizes['1x1']!, bus = s(p, 'bus'); return `${sz[0]} × ${sz[1]} mm; its plug four pins at ${GROVE.pitch} mm, ${(GROVE.bus[bus] ?? GROVE.bus.digital!).join(', ')}; ${GROVE.volts.join(' or ')} V (${GROVE.src}). ${groveChainSays(bus)}`; },
+    box: (p) => { const sz = GROVE.sizes[s(p, 'size')] ?? GROVE.sizes['1x1']!; return [sz[0], 8, sz[1]]; }, g: (p) => groveGrams(s(p, 'size')),
   },
 ];
