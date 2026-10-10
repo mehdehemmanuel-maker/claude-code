@@ -771,7 +771,14 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
         const fw = ext[thin]! < 0.15 * Math.min(L1, L2) && cov > 0.005 && cov < 0.5 ? (L1 + L2 - Math.sqrt((L1 + L2) ** 2 - 4 * cov * L1 * L2)) / 4 : 0;
         if (fw > 0) placed.push({ p: { name: mp[1], at, rot: euler(R), parts: [[i1, 1], [i1, -1], [i2, 1], [i2, -1]].map(([k, sd], j) => { const o = k === i1 ? i2 : i1, sz = [...ext] as V3; sz[o] = fw; if (k === i2) sz[i2] = L2 - 2 * fw; const off: V3 = [0, 0, 0]; off[o] = sd * (ext[o]! / 2 - fw / 2);
           return P(j ? `${mp[1]} side ${j + 1}` : mp[1], { box: [sz[0] * mm, sz[1] * mm, sz[2] * mm] }, { ...look, at: [off[0] * mm, off[1] * mm, off[2] * mm] }); }) } as Part, corners });
-        else placed.push({ p: P(mp[1], { box: [ext[0]! * mm, ext[1]! * mm, ext[2]! * mm] }, { ...look, at, rot: euler(R), fill }), corners });
+        else if (mp[6]?.hull) {
+          // (else its outline from its least box-like side, measured, drawn through its depth that way: a prism along its
+          // axis k, its section in the other two axes' order, turned from the prism's z to k)
+          const [k, ratio, flat] = mp[6].hull, u = (k + 1) % 3, v = (k + 2) % 3, Pk: M3 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+          Pk[u]![0] = 1; Pk[v]![1] = 1; Pk[k]![2] = 1;
+          const pts = Array.from({ length: flat.length / 2 }, (_, j) => [flat[2 * j]! * mm, flat[2 * j + 1]! * mm] as [number, number]);
+          placed.push({ p: P(mp[1], { prism: { pts, L: ext[k]! * mm } }, { ...look, at, rot: euler(mm3(R, Pk)), fill: Math.min(1, fill / ratio) }), corners });
+        } else placed.push({ p: P(mp[1], { box: [ext[0]! * mm, ext[1]! * mm, ext[2]! * mm] }, { ...look, at, rot: euler(R), fill }), corners });
       }
       boxed++;
     }

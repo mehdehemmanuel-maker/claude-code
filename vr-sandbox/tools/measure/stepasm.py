@@ -16,7 +16,8 @@ by angle from vertex to vertex, B-splines evaluated by de Boor's algorithm), so 
 in the box and not only its vertices. A sphere's cap adds its pole. A curved face's bulge between its edges (a torus, a
 B-spline surface) is not walked: the box is its edges' box. The middle is the edges' length-weighted middle (which end
 is heavier). A box face's cover is the area of the flat faces lying in its plane and facing along its axis, each face
-its outer loop less its holes, over the box face's area.
+its outer loop less its holes, over the box face's area. Its outline: the convex hull of its edges seen along whichever
+of its axes shows it least like its box, cut to 20 corners (`outline`): a measure, as a drawing's outline is.
 
 Units are the file's (mm for these exports; a conversion-based unit is refused, not guessed).
 """
@@ -211,7 +212,48 @@ class Model:
         fa = [ext[1] * ext[2], ext[0] * ext[2], ext[0] * ext[1]]
         faces = [round(min(1.0, acc[i] / fa[i // 2]), 2) if fa[i // 2] > 0 else 0 for i in range(6)]
         mid = [segs[k] / segs[3] for k in range(3)] if segs[3] > 0 else [(lb[0][k] + lb[1][k]) / 2 for k in range(3)]
-        return lb, mid, faces
+        return lb, mid, faces, outline(pts, lb)
+
+
+def hull2(ps):
+    """The convex hull of 2D points, counter-clockwise (Andrew's monotone chain)."""
+    ps = sorted(set((round(x, 3), round(y, 3)) for x, y in ps))
+    if len(ps) < 3: return ps
+    cross = lambda o, a, b: (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lo, hi = [], []
+    for p in ps:
+        while len(lo) >= 2 and cross(lo[-2], lo[-1], p) <= 0: lo.pop()
+        lo.append(p)
+    for p in reversed(ps):
+        while len(hi) >= 2 and cross(hi[-2], hi[-1], p) <= 0: hi.pop()
+        hi.append(p)
+    return lo[:-1] + hi[:-1]
+
+
+def area2(q):
+    return abs(sum(q[i][0] * q[(i + 1) % len(q)][1] - q[(i + 1) % len(q)][0] * q[i][1] for i in range(len(q)))) / 2
+
+
+def outline(pts, lb, n=20):
+    """A part's outline seen along whichever of its own axes shows it least like its box: the convex hull of its edges
+    projected along that axis, cut to n corners by dropping the corner that adds least area each time (Visvalingam), in
+    the other two axes' order (axis k: (k+1) % 3, (k+2) % 3), about its box's middle; with how much of its box's face the
+    outline fills. A measure of its shape from one side, as a drawing's outline is, not its surface."""
+    best = None
+    for k in range(3):
+        u, v = (k + 1) % 3, (k + 2) % 3
+        fa = (lb[1][u] - lb[0][u]) * (lb[1][v] - lb[0][v])
+        if fa <= 0: continue
+        cu, cv = (lb[0][u] + lb[1][u]) / 2, (lb[0][v] + lb[1][v]) / 2
+        q = hull2([(p[u] - cu, p[v] - cv) for p in pts])
+        while len(q) > n:
+            i = min(range(len(q)), key=lambda j: area2([q[j - 1], q[j], q[(j + 1) % len(q)]]))
+            q.pop(i)
+        if len(q) < 3: continue
+        r = area2(q) / fa
+        if best is None or r < best[0]: best = (r, k, q)
+    if not best: return None
+    return [best[1], round(best[0], 3), [round(c, 1) for p in best[2] for c in p]]
 
 
 def mul(a, b):
@@ -328,7 +370,7 @@ def walk(M, info, drop=(), whole=()):
                 if len(M.P) > 400000: M.drop()
             r = cache[key]
             if r:
-                lb, mid, faces = r
+                lb, mid, faces, hull = r
                 corners = [[lb[a][0], lb[b][1], lb[c][2]] for a in (0, 1) for b in (0, 1) for c in (0, 1)]
                 w = [apply(m, c) for c in corners]
                 sol = [x for x, _ in under(d, None)] if one else solids[d]
@@ -336,7 +378,7 @@ def walk(M, info, drop=(), whole=()):
                 out.append({'path': path or [name[d]], 'name': name[d], 'depth': depth, 'm': [row[:] for row in m[:3]], 'local': lb,
                             'world': [[min(p[k] for p in w) for k in range(3)], [max(p[k] for p in w) for k in range(3)]],
                             'size': [round(lb[1][k] - lb[0][k], 3) for k in range(3)], 'mid': mid, 'faces': faces,
-                            'mat': mat.get(d, {}).get('mat'), 'rho': mat.get(d, {}).get('rho'), 'colour': col, 'in': path[-2] if len(path) > 1 else None})
+                            'mat': mat.get(d, {}).get('mat'), 'rho': mat.get(d, {}).get('rho'), 'colour': col, 'in': path[-2] if len(path) > 1 else None, 'hull': hull})
         if one: return
         for n, nm, c in kids.get(d, []):
             p2 = path + [nm]; s2 = '/'.join(p2)
@@ -352,6 +394,7 @@ def main():
     ap.add_argument('--id'); ap.add_argument('--name'); ap.add_argument('--src'); ap.add_argument('--out')
     ap.add_argument('--drop', action='append', default=[], help='leave out an instance and all under it whose path (instance names joined by /) matches')
     ap.add_argument('--whole', action='append', default=[], help='measure an instance whose path matches as one part')
+    ap.add_argument('--no-outline', default='', help='write no outline for parts whose name matches (the parts the library draws)')
     a = ap.parse_args()
     M = Model(load(a.file)); info = tree(M); name, solids, mat, colour, kids, place, roots = info
     if a.cmd == 'tree':
@@ -373,12 +416,14 @@ def main():
             if p['rho']: e['rho'] = p['rho']
             if p['colour']: e['look'] = p['colour'][0]; e['rgb'] = p['colour'][1]
             if p['in']: e['in'] = re.sub(r':\d+$', '', p['in'])
+            # (its outline from its least box-like side, where it fills under nine tenths of its box's face there)
+            if p.get('hull') and p['hull'][1] < 0.9 and not (a.no_outline and re.search(a.no_outline, p['name'])): e['hull'] = p['hull']
             return ', ' + json.dumps(e, ensure_ascii=False) if e else ''
         rows = [f"  [{json.dumps(p['name'], ensure_ascii=False)}, {json.dumps(p['path'][-1], ensure_ascii=False)}, [{', '.join(str(r(x, 5)) for row in p['m'] for x in row)}], [{', '.join(str(r(x)) for x in p['local'][0] + p['local'][1])}], [{', '.join(str(r(x)) for x in p['mid'])}], [{', '.join(str(x) for x in p['faces'])}]{extra(p)}],"
                 for p in parts]
         chose = ''.join(f"\n//   left out: {x}" for x in a.drop) + ''.join(f"\n//   measured whole: {x}" for x in a.whole)
         txt = (f"// Generated by tools/measure/stepasm.py from {a.src}: each part's name, its instance's name, its place (the\n"
-               f"// model's transform: rotation rows then translation, mm), its box in its own frame (min then max, mm), its edges' middle,\n// how much of each of its box's faces (x-, x+, y-, y+, z-, z+) its flat faces cover, and the model's material, its look\n// (its appearance's name and colour) and the assembly it is in.{chose}\n"
+               f"// model's transform: rotation rows then translation, mm), its box in its own frame (min then max, mm), its edges' middle,\n// how much of each of its box's faces (x-, x+, y-, y+, z-, z+) its flat faces cover, and the model's material, its look\n// (its appearance's name and colour), the assembly it is in, and its outline from its least box-like side (its axis,\n// how much of its box's face the outline fills, its convex corners about its box's middle, mm).{chose}\n"
                f"// Measured numbers only; none of the model's surface is copied. Do not edit by hand: regenerate.\n"
                f"import type {{ MakerModel }} from '../makermodel';\n\n"
                f"export const {a.id.upper().replace('-', '_')}: MakerModel = {{ id: {json.dumps(a.id)}, name: {json.dumps(a.name)}, src: {json.dumps(a.src)}, parts: [\n" + '\n'.join(rows) + "\n] };\n")

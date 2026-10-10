@@ -13,8 +13,10 @@ import { NEMA_FACE } from './kinds/motion';
 export type ModelPart = [name: string, inst: string, m: number[], box: number[], mid: number[], faces?: number[], info?: ModelInfo];
 /** What a STEP export says of a part beyond its shape (tools/measure/stepasm.py): its material and density as its model
  *  assigns them (Fusion's default "Steel" where none was), its look (its appearance's name, "Plastic - Matte (Red)",
- *  and colour) and the assembly it is in. */
-export interface ModelInfo { mat?: string; rho?: number; look?: string; rgb?: number; in?: string }
+ *  and colour), the assembly it is in, and its outline seen along whichever of its axes shows it least like its box (that
+ *  axis, how much of its box's face the outline fills, its convex corners about its box's middle as u, v pairs in the
+ *  other two axes' order, mm). */
+export interface ModelInfo { mat?: string; rho?: number; look?: string; rgb?: number; in?: string; hull?: [axis: number, fills: number, corners: number[]] }
 export interface MakerModel { id: string; name: string; src: string; parts: ModelPart[] }
 /** Which way each maker's model faces, in its own frame: the Ender-3's front is its -z (its screen and its bed's front
  *  there, its Y motor at +z, its Z screw and extruder at +x, its left as one faces it: measured from its parts). The
