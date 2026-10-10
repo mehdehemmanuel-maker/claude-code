@@ -45,3 +45,39 @@ export function edgeMatOf(id: string | undefined): string | undefined {
   if (!id) return undefined; const k = id.split('.')[0]!;
   return ({ steel: 'steel-low', stainless: 'steel-low', aluminum: 'al-6061', copper: 'copper', brass: 'copper', titanium: 'steel-low', composite: 'steel-low', 'cast-iron': 'cast-iron', wood: 'wood', cork: 'wood', polymer: 'abs', rubber: 'rubber', glass: 'glass', concrete: 'concrete', ceramic: 'brick', textile: 'cotton', leather: 'leather', foam: 'foam' } as Record<string, string>)[k];
 }
+
+// ---- the burr a cut leaves, and what takes it off ---------------------------------------------------------------
+// The rules above say how round an edge is once a part is finished. This says what is there before anyone finishes
+// it, which is the part a plan forgets: every cut leaves a burr, the burr is always on the side the tool came out,
+// and a burr left on a mating face is a 0.2 mm shim under a part that was made to 0.02. Deburring is not optional
+// tidying — it is the difference between an assembly that measures right and one that does not.
+
+export interface Burr {
+  /** which side of the cut it stands on */ side: 'exit' | 'both' | 'none';
+  /** how tall it stands, mm (an estimate of the class) */ mm: number;
+  /** what takes it off, and how long for the whole part */ by: string; minutes: number;
+  /** why it matters here rather than in general */ says: string;
+}
+/** The burr a process leaves on a material, and what takes it off. A drill leaves its burr where it breaks through
+ *  and a crown round the entry; a mill leaves it on the exit side of each pass; a laser leaves dross underneath; a
+ *  saw leaves it on the far face; a punch leaves a rollover one side and a burr the other, which is why a punched
+ *  part has a right way up. */
+export function burrOf(process: string, mat: string | undefined, o: { thickMm?: number; holes?: number; edges?: number } = {}): Burr {
+  const t = o.thickMm ?? 3, n = (o.holes ?? 0) + (o.edges ?? 1);
+  const hard = /steel|stainless|iron|titanium/.test(mat ?? ''), soft = /al-|brass|copper|zinc/.test(mat ?? '');
+  const plastic = /abs|pla|petg|pc|pmma|nylon|pp|pe/.test(mat ?? '');
+  if (process === 'drill') return { side: 'both', mm: hard ? 0.15 : 0.25, by: 'a countersink turned by hand in each hole, both sides', minutes: +(0.25 * Math.max(1, o.holes ?? 1)).toFixed(1),
+    says: 'a drill leaves a crown where it enters and a ring where it breaks through; the breakout side is the taller, and on a part held in a vice that is the side you cannot see' };
+  if (process === 'mill') return { side: 'exit', mm: soft ? 0.2 : hard ? 0.1 : 0.3, by: 'a file along each edge, or a 0.5 mm chamfer cut with the same cutter before it comes off the machine', minutes: +(0.3 * n).toFixed(1),
+    says: `${soft ? 'aluminium throws a long ragged burr that comes off in one piece and takes a fingertip with it' : plastic ? 'plastic leaves a whisker that melts back onto the part if the cutter is dull' : 'steel leaves a short hard burr that files off and blunts the file'}; chamfering it on the machine costs a minute and saves filing six edges by hand` };
+  if (process === 'laser-co2' || process === 'laser-fibre') return { side: 'exit', mm: 0.1, by: 'dross broken off the underside and the edge wiped', minutes: +(0.2 * n).toFixed(1),
+    says: 'a laser leaves its dross on the underside where the melt was blown out, and a heat-affected edge that is harder than the parent metal: tap it before you harden anything, not after' };
+  if (process === 'saw') return { side: 'both', mm: 0.3, by: 'a file across both faces of each cut', minutes: +(0.2 * n).toFixed(1),
+    says: 'a sawn end has a burr on the face the blade left and a lip on the one it entered; both sit under whatever is clamped to it' };
+  if (process === 'press' || process === 'bend') return { side: 'exit', mm: +(0.1 * t).toFixed(2), by: 'the part kept the right way up: its rollover face outward, its burr face inward', minutes: 0,
+    says: 'a punched edge has a rolled-over side where the punch pushed in and a burr side where it broke through, so a punched part has a right way up and a wrong one, and fitting it upside down puts the burr on the show face' };
+  if (process === 'turn') return { side: 'exit', mm: 0.1, by: 'a chamfer or a radius turned on each shoulder before it comes out of the chuck', minutes: 0.5,
+    says: 'a turned shoulder leaves a wire edge that will not let a bearing seat square; take it off while the part is still running' };
+  return { side: 'none', mm: 0, by: 'nothing: this process leaves no burr', minutes: 0,
+    says: `${process} adds or forms material rather than shearing it, so there is no burr — but a print has its own first layer's elephant foot and a casting its flash, which are the same problem by another name` };
+}

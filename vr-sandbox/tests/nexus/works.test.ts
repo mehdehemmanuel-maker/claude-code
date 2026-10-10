@@ -2,7 +2,7 @@
 // nothing is routed to a machine that could not do it, and that the money and the hours are the ones that were paid.
 import { describe, expect, it } from 'vitest';
 import {
-  ALWAYS_BOUGHT, BUILDS, FAMILIES, FINISH, PROCESSES, STATIONS, STOCK, TIERS, UNDER_3K, WANT_MACHINES,
+  ALWAYS_BOUGHT, BUILDS, FAMILIES, FINISH, PROCESSES, STATIONS, STOCK, TIERS, under3K, WANT_MACHINES,
   bootstrapOf, buildById, canMake, classOf, handling, jobForModel, jobText, makes, planJob, priceOfLine, processById,
   programsText, runMinutes, scheduleOf, shapeOf, stationById, stationCost, stationUsd, throwAt, worksOf, worksText,
   worksUnder, worksUnderText, worksWords, worthMaking, type Job, type PartLine,
@@ -117,11 +117,13 @@ describe('routing: a machine is only given what it could do', () => {
     for (const g of j.gaps) { expect(g.why).toMatch(/concrete/); expect(g.why).toMatch(/\$/); }
   });
   it('a tolerance nothing holds is a gap that names the tolerance and the cheapest station that would', () => {
-    const j = throwAt('gearbox', UNDER_3K.ids);
+    const j = throwAt('gearbox', under3K().ids);
     const bore = j.gaps.find((g) => /bearing bore/.test(g.line.name));
     expect(bore, 'a $3,000 works cannot cut a bearing seat, and should say so').toBeTruthy();
-    expect(bore!.why).toMatch(/±0\.02 mm/);
-    expect(bore!.why).toMatch(/knee mill/);
+    // the tolerance is derived, not written: a 6205's housing is H7, and H7 at ⌀52 is 30 µm wide
+    expect(bore!.why).toMatch(/±0\.015 mm/);
+    expect(bore!.why, 'it should say how badly it would do it, not just that it cannot').toMatch(/Cpk/);
+    expect(bore!.why).toMatch(/made for every one kept/);
   });
 });
 
@@ -136,7 +138,7 @@ describe('what is not finished when it is formed', () => {
     for (const g of j.gaps) expect(g.why).toMatch(/dissolves in the water|finishes it/);
   });
   it('the firings are batched and in order: one bisque load, then one glaze load', () => {
-    const j = throwAt('mug', UNDER_3K.ids);
+    const j = throwAt('mug', under3K().ids);
     const fires = j.ops.filter((o) => o.process === 'kiln');
     expect(fires.length, 'one load each, not one firing per mug').toBe(2);
     const at = (id: string) => j.schedule.find((x) => x.op.id === id)!;
@@ -144,7 +146,7 @@ describe('what is not finished when it is formed', () => {
     for (const f of fires) expect(f.n).toBe(12);
   });
   it('a green joint happens before the firing, not after it', () => {
-    const j = throwAt('mug', UNDER_3K.ids);
+    const j = throwAt('mug', under3K().ids);
     const bond = j.ops.find((o) => o.process === 'bond')!, fire = j.ops.find((o) => o.process === 'kiln')!;
     const at = (id: string) => j.schedule.find((x) => x.op.id === id)!;
     expect(at(bond.id).end, 'a handle slipped onto a fired mug does not stick').toBeLessThanOrEqual(at(fire.id).start);
@@ -198,7 +200,7 @@ describe('every line is accounted for', () => {
         expect(made || bought || gap, `${j.what}: ${l.name} fell off the plan`).toBe(true);
       }
     };
-    for (const shop of [...SHOPS, { id: 'bench', stations: TIERS[0]!.stations }, { id: '3k', stations: UNDER_3K.ids }])
+    for (const shop of [...SHOPS, { id: 'bench', stations: TIERS[0]!.stations }, { id: '3k', stations: under3K().ids }])
       for (const b of BUILDS) counted(throwAt(b, shop.stations), b.lines);
   });
   it('a joint the build declares is either an operation or a named gap', () => {
@@ -237,7 +239,7 @@ describe('the program each operation sends', () => {
     }
   });
   it('a milled part is sent real G-code, and a print is sent a real start and end', () => {
-    const j = throwAt('quadcopter', UNDER_3K.ids);
+    const j = throwAt('quadcopter', under3K().ids);
     const mill = j.ops.find((o) => o.process === 'mill')!, print = j.ops.find((o) => o.process === 'fff')!;
     expect(mill.lang).toBe('gcode');
     const lines = linesOf(mill.program);
@@ -250,19 +252,19 @@ describe('the program each operation sends', () => {
     expect(print.program).toMatch(/M84/);
   });
   it('a kiln is given its segments to key in, because there is no port on it', () => {
-    const fire = throwAt('mug', UNDER_3K.ids).ops.find((o) => o.process === 'kiln')!;
+    const fire = throwAt('mug', under3K().ids).ops.find((o) => o.process === 'kiln')!;
     expect(fire.lang).toBe('kiln'); expect(fire.transport).toBe('hand');
     expect(fire.program).toMatch(/SEG 1\s+RA \d+/);
     expect(fire.program.split('\n').filter((l) => /^SEG/.test(l)).length).toBeGreaterThanOrEqual(2);
   });
   it('a hand operation is steps with a check, and names its hazard where it has one', () => {
-    const weld = throwAt('workbench', UNDER_3K.ids).ops.find((o) => o.process === 'weld-mig')!;
+    const weld = throwAt('workbench', under3K().ids).ops.find((o) => o.process === 'weld-mig')!;
     expect(weld.lang).toBe('hand');
     expect(weld.program).toMatch(/hazard:/);
     expect(weld.program).toMatch(/2\. Run it, then measure/);
   });
   it('the programs read out in the order they are sent', () => {
-    const j = throwAt('gearbox', UNDER_3K.ids), text = programsText(j);
+    const j = throwAt('gearbox', under3K().ids), text = programsText(j);
     for (const x of j.schedule) expect(text).toContain(`==== ${x.op.id}`);
     const at = j.schedule.map((x) => text.indexOf(`==== ${x.op.id}`));
     expect([...at].sort((a, b) => a - b)).toEqual(at);
@@ -311,7 +313,7 @@ describe('a works adds up', () => {
 
 describe('the works a budget buys', () => {
   it('under $3,000 it covers all six families, works what the library builds with, and stays under', () => {
-    const r = UNDER_3K;
+    const r = under3K();
     expect(r.usd).toBeLessThanOrEqual(3000);
     expect(r.left).toBeGreaterThanOrEqual(0);
     const w = worksOf(r.ids);
@@ -372,7 +374,7 @@ describe('the works a budget buys', () => {
 describe('bootstrapping, handling and make-or-buy', () => {
   it('a real printer is about half makeable, and the rest is bought for stated reasons', () => {
     for (const m of ['ender3', 'voron24'] as const) {
-      const b = bootstrapOf(UNDER_3K.ids, m, 'build');
+      const b = bootstrapOf(under3K().ids, m, 'build');
       expect(b.total).toBeGreaterThan(100);
       expect(b.share).toBeGreaterThan(20);
       expect(b.share).toBeLessThan(80);
@@ -381,7 +383,7 @@ describe('bootstrapping, handling and make-or-buy', () => {
     }
   });
   it('the printer job itself routes and schedules', () => {
-    const j = jobForModel('ender3', UNDER_3K.ids);
+    const j = jobForModel('ender3', under3K().ids);
     expect(j.ops.length).toBeGreaterThan(5);
     expect(j.makespan).toBeGreaterThan(0);
     expect(jobText(j)).toMatch(/operations/);
@@ -424,7 +426,7 @@ describe('words in the room', () => {
     expect(worksWords('what is the weather')).toBeNull();
   });
   it('a works reads out with its families, its limits and what the building must give it', () => {
-    const t = worksText(UNDER_3K.ids, 'build');
+    const t = worksText(under3K().ids, 'build');
     expect(t).toMatch(/stations/); expect(t).toMatch(/Covers:/);
     expect(t).toMatch(/The building must give it/);
     expect(t).toMatch(/of your own work/);

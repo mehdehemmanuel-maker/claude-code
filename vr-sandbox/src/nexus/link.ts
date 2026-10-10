@@ -171,6 +171,75 @@ export const CUTTING: Record<string, Cutting> = {
   'composite': { rpm: 14000, feed: 600, plunge: 120, doc: 0.5, says: 'carbon and glass laminate: a diamond-cut cutter, and the dust is a hazard — extraction at the cutter, not a mask' },
 };
 
+// ---- what a cut actually does ----------------------------------------------------------------------------------
+// The figures above are a table. These are the arithmetic over it, and they exist because the first version of the
+// works invented a cubic-centimetres-a-minute number per process and then had to be patched twice when it gave
+// nine hours for a job that takes half of one. A cut's rate is not a property of a process: it is the cutter, the
+// material and the machine, and it comes out of four lines of trade arithmetic that have not changed in a century.
+
+export interface Cut {
+  /** cutter diameter, mm */ d: number; /** flutes */ z: number;
+  rpm: number; /** mm a minute along the path */ feed: number;
+  /** mm the cutter goes down each pass */ doc: number; /** mm of the cutter's width engaged */ woc: number;
+  /** surface speed at the cutter's rim, m a minute */ vc: number;
+  /** what each tooth takes, mm — the number that decides whether a cutter lives or rubs itself blunt */ fz: number;
+  /** material off, cm³ a minute */ mrr: number;
+  /** what the spindle must put in, W */ watts: number;
+  /** how deep this cutter may go before it chatters, mm */ maxDepth: number;
+  /** the smallest inside corner it can leave, mm */ minCorner: number;
+  warn: string[]; says: string;
+}
+/** The specific cutting force of a material, N/mm²: how much power a cubic millimetre a second costs. These are the
+ *  trade's own kc figures, which is how a spindle is sized. A 500 W router cutting steel is not slow, it is stalled. */
+export const KC: Record<keyof typeof CUTTING, number> = {
+  thermoplastic: 250, wood: 200, 'metal-soft': 800, 'metal-hard': 2200, composite: 500,
+};
+/** What a cutter does in a material: the surface speed, the chip each tooth takes, the material off a minute, the
+ *  power that needs, how deep it may go before it chatters, and the smallest inside corner it leaves behind.
+ *
+ *  The chip load is the one to watch. Below about 0.01 mm a tooth the cutter rubs instead of cutting and work-hardens
+ *  the surface in front of itself, which is how a beginner blunts a cutter in a minute and concludes that cheap
+ *  cutters are bad. Above the cutter's own limit it breaks. Both are said.
+ *
+ *  The depth limit is the overhang rule: a cutter chatters past about three times its diameter in metal and five in
+ *  wood, whatever its length, because the deflection goes as the cube of the stickout. The corner is unarguable: a
+ *  3 mm cutter cannot leave a corner sharper than 1.5 mm, so a drawing with a square internal corner is not a
+ *  drawing of a milled part. That is the check no CAD package makes and every machinist makes first. */
+export function cutAt(o: { d?: number; z?: number; material?: keyof typeof CUTTING; woc?: number; spindle?: number }): Cut {
+  const material = o.material ?? 'thermoplastic', c = CUTTING[material]!;
+  const d = o.d ?? 3, z = o.z ?? 2, rpm = c.rpm, feed = c.feed, doc = c.doc;
+  const woc = o.woc ?? d * 0.4;
+  const vc = +((Math.PI * d * rpm) / 1000).toFixed(1);
+  const fz = +(feed / (rpm * z)).toFixed(4);
+  const mrr = +((woc * doc * feed) / 1000).toFixed(3);
+  const watts = Math.round((mrr * 1000 * KC[material]) / 60000);
+  const maxDepth = +(d * (material === 'wood' || material === 'thermoplastic' ? 5 : 3)).toFixed(1);
+  const minCorner = +(d / 2).toFixed(2);
+  const warn: string[] = [];
+  if (fz < 0.01) warn.push(`${fz} mm a tooth is rubbing, not cutting: it work-hardens the surface in front of itself and blunts the cutter in a minute. Feed faster or turn the spindle down`);
+  if (fz > d * 0.05) warn.push(`${fz} mm a tooth is more than a twentieth of the cutter's diameter: it will break`);
+  if (o.spindle && watts > o.spindle) warn.push(`this cut wants ${watts} W and the spindle has ${o.spindle}: it will stall, bog or belt-slip. Take ${(doc * (o.spindle / watts)).toFixed(2)} mm a pass instead`);
+  return { d, z, rpm, feed, doc, woc, vc, fz, mrr, watts, maxDepth, minCorner, warn,
+    says: `a ${d} mm ${z}-flute at ${rpm} rev/min and ${feed} mm/min in ${material}: ${vc} m/min at the rim, ${fz} mm a tooth, ${mrr} cm³/min off, ${watts} W at the spindle. It will not go deeper than ${maxDepth} mm without chattering, and it cannot leave an inside corner under ${minCorner} mm` };
+}
+
+/** What a cut cannot do to a drawing, said before the drawing is cut rather than after. Each is the trade's own rule
+ *  and each is a thing a person otherwise finds out on the machine: an inside corner smaller than the cutter, a
+ *  pocket deeper than the cutter may stick out, a hole deeper than five diameters drilled in one plunge, a wall
+ *  thinner than it can be held. */
+export function cutRefuses(o: { cut: Cut; corner?: number; depth?: number; holeDepth?: number; holeD?: number; wall?: number }): string[] {
+  const no: string[] = [], c = o.cut;
+  if (o.corner != null && o.corner < c.minCorner)
+    no.push(`a ${o.corner} mm inside corner cannot be milled with a ${c.d} mm cutter, which leaves ${c.minCorner}: use a ${(o.corner * 2).toFixed(1)} mm cutter, or draw the corner at ${c.minCorner} and let the mating part have the relief`);
+  if (o.depth != null && o.depth > c.maxDepth)
+    no.push(`${o.depth} mm deep with a ${c.d} mm cutter is ${(o.depth / c.d).toFixed(1)} diameters of stickout: it chatters, because deflection goes as the cube of it. Step down in ${c.maxDepth} mm passes with a longer tool each time, or use a bigger cutter`);
+  if (o.holeDepth != null && o.holeD != null && o.holeDepth > 5 * o.holeD)
+    no.push(`a ⌀${o.holeD} hole ${o.holeDepth} deep is ${(o.holeDepth / o.holeD).toFixed(1)} diameters: peck it, or the flutes pack and the drill snaps in the hole, where getting it out costs more than the part`);
+  if (o.wall != null && o.wall < c.d / 3)
+    no.push(`a ${o.wall} mm wall beside a ${c.d} mm cutter will be pushed over by the cut itself: leave it ${(c.d / 3).toFixed(1)} mm or support it`);
+  return no;
+}
+
 /** A flat part's real, runnable G-code: drill every hole and cut the outline, in passes the machine will take. The
  *  profile is the one `fab.ts` already makes for a plate — so a part the library designed is a program a machine runs,
  *  with nothing drawn by hand in between. */
