@@ -6,9 +6,14 @@
 // Owner of: reading a maker's model's parts into library words, and its bill of materials.
 
 /** One part of a maker's model: its reference's name, its instance's name, its place (the model's 3×4 matrix, rows:
- *  rotation then translation, mm), its box in its own frame (min x y z, max x y z, mm) and its surface's middle (mm). */
-export type ModelPart = [name: string, inst: string, m: number[], box: number[], mid: number[]];
+ *  rotation then translation, mm), its box in its own frame (min x y z, max x y z, mm), its surface's middle (mm) and
+ *  how much of each of its box's faces its surface covers (x-, x+, y-, y+, z-, z+; 0 open to 1 whole). */
+export type ModelPart = [name: string, inst: string, m: number[], box: number[], mid: number[], faces?: number[]];
 export interface MakerModel { id: string; name: string; src: string; parts: ModelPart[] }
+/** Which way each maker's model faces, in its own frame: the Ender-3's front is its -z (its screen and its bed's front
+ *  there, its Y motor at +z, its Z screw and extruder at +x, its left as one faces it: measured from its parts). The
+ *  library's things face +x. */
+export const FRONT: Record<string, [number, number, number]> = { ender3: [0, 0, -1] };
 
 /** A part's size along its own axes, mm, largest first. */
 export const extents = (p: ModelPart): number[] => [p[3][3]! - p[3][0]!, p[3][4]! - p[3][1]!, p[3][5]! - p[3][2]!];
@@ -67,7 +72,8 @@ export function libraryWords(p: ModelPart): string | null {
   // (its T-slot nuts, in its profiles' 6 mm slots; its bed's and extruder's springs, as measured (8.9 mm across, 17.1 long),
   // their wire 0.8 mm and five active coils typical; a bare "M3 Screw" as long as it is wide, a set screw)
   if ((m = /^M(\d+)\s*T-?slot nut$/i.exec(n))) return `slotnut slot6 M${m[1]} hammer`;
-  if (/^(bed level|extrusion) springs?$/i.test(n)) { const [od, L] = round2(p); return `spring d0.8 D${+(od - 0.8).toFixed(1)} L${L} n5`; }
+  // (its bed's springs yellow, as the Ender-3's are in its photos; its extruder's plain)
+  if (/^(bed level|extrusion) springs?$/i.test(n)) { const [od, L] = round2(p); return `spring d0.8 D${+(od - 0.8).toFixed(1)} L${L} n5${/bed/i.test(n) ? ' yellow' : ''}`; }
   if ((m = /^M(\d+)\s*screw$/i.exec(n)) && Math.max(...extents(p)) < 2 * Number(m[1])) return `setscrew M${m[1]}x${Math.round(Math.max(...extents(p)))}`;
   if (/spacers? for rollers?|^spacer/i.test(n)) { const [d, L] = round2(p); return `spacer M5 d${d} L${L} aluminium`; }
   // (a hex part's length: the extent left when its corners and flats, 2/√3 apart, are taken out)

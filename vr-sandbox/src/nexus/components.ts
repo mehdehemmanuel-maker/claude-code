@@ -15,7 +15,7 @@
 
 import { dhArmParts, ik, UR5E } from './dharm';
 import { robotFor, TASKS, type Robot } from './robot';
-import { DRAWN_IN, boxedAs, extents, libraryWords, type MakerModel, type ModelPart } from './makermodel';
+import { DRAWN_IN, FRONT, boxedAs, extents, libraryWords, type MakerModel, type ModelPart } from './makermodel';
 import { ENDER3 } from './models/ender3';
 import { layout } from './make/space';
 import * as THREE from 'three';
@@ -211,7 +211,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
       // (its centreline's height after t turns: a closed coil (one wire's rise), the active coils, a closed coil)
       const y = (t: number) => d / 2 + (t <= 1 ? t * d : t <= n + 1 ? d + (t - 1) * pa : d + n * pa + (t - n - 1) * d);
       const pts = Array.from({ length: turns * k + 1 }, (_, i) => { const t = i / k, a = 2 * PI * t; return [(D / 2) * Math.cos(a) * mm, y(t) * mm, (D / 2) * Math.sin(a) * mm] as V3; });
-      return [P(it.name, { tube: { r: (d / 2) * mm, pts, bend: 0 } }, { mat: 'steel-spring', color: 0xb9bdc2, finish: 'bright' })]; },
+      return [P(it.name, { tube: { r: (d / 2) * mm, pts, bend: 0 } }, { mat: 'steel-spring', ...(p.coat === 'yellow' ? { color: 0xe8c22a, finish: 'paint' as const } : { color: 0xb9bdc2, finish: 'bright' as const }) })]; },
   },
   slotnut: {
     says: 'a T-slot nut: its section a hammer nut\'s (its sides upright, its top bevelled to turn into the slot), tapped through its middle, bored at its thread\'s root as a nut is', leaves: 'a roll-in\'s spring ball and a sliding nut\'s flange not drawn: each drawn as a hammer nut\'s section; its sizes the kind\'s (1.8, 1.1 and 0.7 of its slot)',
@@ -685,12 +685,15 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
     for (const x of ns) { b.union(x.box!); const s = x.box!.getSize(new THREE.Vector3()), v = Math.max(1e-12, s.x * s.y * s.z); c.addScaledVector(x.box!.getCenter(new THREE.Vector3()), v); w += v; }
     return { min: b.min.toArray() as V3, max: b.max.toArray() as V3, mid: (w ? c.divideScalar(w) : b.getCenter(new THREE.Vector3())).toArray() as V3 }; };
   const placed: { p: Part; corners: V3[] }[] = []; let drawn = 0, boxed = 0;
+  // (the model turned about its up so it faces the library's front, +x: each part's place turned with it)
+  const fr = FRONT[model.id] ?? [1, 0, 0], th = Math.atan2(fr[2], fr[0]), Ry: M3 = [[Math.cos(th), 0, Math.sin(th)], [0, 1, 0], [-Math.sin(th), 0, Math.cos(th)]];
+  const rotIn = (m: number[]): M3 => mm3(Ry, rotOf(m)), tIn = (m: number[]): V3 => mv(Ry, tOf(m));
   // (a part the library draws inside another, where the model has it: its box's middle in the model's frame)
-  const middleOf = (mp: ModelPart): V3 => { const R = rotOf(mp[2]), t = tOf(mp[2]), c = mv(R, [0, 1, 2].map((k) => (mp[3][k]! + mp[3][k + 3]!) / 2) as V3); return [c[0] + t[0], c[1] + t[1], c[2] + t[2]]; };
+  const middleOf = (mp: ModelPart): V3 => { const R = rotIn(mp[2]), t = tIn(mp[2]), c = mv(R, [0, 1, 2].map((k) => (mp[3][k]! + mp[3][k + 3]!) / 2) as V3); return [c[0] + t[0], c[1] + t[1], c[2] + t[2]]; };
   const inside = DRAWN_IN.map((d) => ({ ...d, at: model.parts.filter((mp) => d.name.test(mp[0])).map(middleOf) }));
   model.parts.forEach((mp: ModelPart, i) => {
     if (inside.some((d) => d.name.test(mp[0]) && model.parts.some((q) => d.in.test(q[0]) && libraryWords(q)))) return;
-    const R = rotOf(mp[2]), t = tOf(mp[2]), lo: V3 = [mp[3][0]!, mp[3][1]!, mp[3][2]!], hi: V3 = [mp[3][3]!, mp[3][4]!, mp[3][5]!], ext = extents(mp), cm: V3 = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as V3;
+    const R = rotIn(mp[2]), t = tIn(mp[2]), lo: V3 = [mp[3][0]!, mp[3][1]!, mp[3][2]!], hi: V3 = [mp[3][3]!, mp[3][4]!, mp[3][5]!], ext = extents(mp), cm: V3 = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as V3;
     const corners = [0, 1].flatMap((a) => [0, 1].flatMap((b) => [0, 1].map((c) => { const v = mv(R, [a ? hi[0] : lo[0], b ? hi[1] : lo[1], c ? hi[2] : lo[2]]); return [v[0] + t[0], v[1] + t[1], v[2] + t[2]] as V3; })));
     const words = libraryWords(mp); let lib: Part | null = null; try { lib = words ? use(words) : null; } catch { lib = null; }
     if (lib) {
@@ -713,7 +716,15 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
       // (a part folded from sheet, deeper than its sheet: what of its box its sheet fills, its two largest faces' worth)
       const b = boxedAs(mp[0]), wc = mv(R, cm), [e0, e1, e2] = [...ext].sort((a, b2) => b2 - a) as [number, number, number];
       const fill = b.sheet && e2 > 2 * b.sheet ? Math.min(1, (b.sheet * (e0 * e1 + e0 * e2)) / (e0 * e1 * e2)) : b.fill;
-      placed.push({ p: P(mp[1], { box: [ext[0]! * mm, ext[1]! * mm, ext[2]! * mm] }, { mat: b.mat, color: b.color, finish: b.finish as Part['finish'], at: [wc[0] + t[0], wc[1] + t[1], wc[2] + t[2]], rot: euler(R), fill }), corners }); boxed++;
+      // (a sheet's or a moulding's box drawn as the walls its own surface covers, its open sides open: each face its model
+      // covers a third or more of, a wall its sheet thick (a moulding's 2 mm, typical); a plate, a closed box, or a part
+      // whose surface lies on none of its box's faces drawn as its box)
+      const fc = mp[5], wt = b.sheet ?? 2, look = { mat: b.mat, color: b.color, finish: b.finish as Part['finish'] }, at: V3 = [wc[0] + t[0], wc[1] + t[1], wc[2] + t[2]];
+      const walls = fc && Math.min(...ext) > 2.5 * wt && fc.filter((v) => v >= 0.6).length < 5 ? [0, 1, 2].flatMap((k) => [0, 1].filter((sd) => fc[2 * k + sd]! >= 0.3).map((sd) => ({ k, sd }))) : [];
+      if (walls.length) placed.push({ p: { name: mp[1], at, rot: euler(R), parts: walls.map(({ k, sd }, i) => { const sz = [...ext] as V3; sz[k] = wt; const off: V3 = [0, 0, 0]; off[k] = (sd ? 1 : -1) * (ext[k]! / 2 - wt / 2);
+        return P(i ? `${mp[1]} wall ${i + 1}` : mp[1], { box: [sz[0] * mm, sz[1] * mm, sz[2] * mm] }, { ...look, at: [off[0] * mm, off[1] * mm, off[2] * mm] }); }) } as Part, corners });
+      else placed.push({ p: P(mp[1], { box: [ext[0]! * mm, ext[1]! * mm, ext[2]! * mm] }, { ...look, at, rot: euler(R), fill }), corners });
+      boxed++;
     }
     void i;
   });

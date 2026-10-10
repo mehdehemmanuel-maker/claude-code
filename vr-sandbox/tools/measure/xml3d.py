@@ -11,8 +11,9 @@ where its parts are; the library draws them from their standards and is placed b
   count  model.3DXML                     how many of each part by name (the model's bill of materials)
   ts     model.3DXML --id ID --name NAME --src SRC [--out file.ts]
                                          the parts as a TypeScript data file for src/nexus/makermodel.ts: each part's
-                                         name, place (its matrix, mm) and box, its surface's middle; numbers measured
-                                         from the model, none of its surface copied
+                                         name, place (its matrix, mm) and box, its surface's middle, how much of each
+                                         box face its surface covers; numbers measured from the model, none of its
+                                         surface copied
 
 Units are the model's (mm for SOLIDWORKS' export). A 3DXML file is a zip: it is read in place, nothing extracted.
 """
@@ -89,6 +90,50 @@ def middle(z, f, cache={}):
     cache[f] = r; return r
 
 
+def tris(z, f, cache={}):
+    """A part's surface as triangles (three points each): each polygonal rep's own vertex buffer, its faces' triangles,
+    strips (each run of indices a strip: every three in a row a triangle) and fans."""
+    if f in cache: return cache[f]
+    d = z.read(f).decode('utf-8', 'replace'); out = []
+    for rep in d.split('xsi:type="PolygonalRepType"')[1:]:
+        pos = []
+        for blk in re.findall(r'<Positions>([^<]*)</Positions>', rep):
+            pos += [[float(x) for x in t.split()] for t in blk.split(',') if len(t.split()) == 3]
+        def add(a, b, c):
+            if max(a, b, c) < len(pos): out.append((pos[a], pos[b], pos[c]))
+        for face in re.findall(r'<Face ([^>]*)>', rep):
+            for key, runs in re.findall(r'(triangles|strips|fans)="([^"]*)"', face):
+                for run in runs.split(','):
+                    ix = [int(x) for x in run.split()]
+                    if key == 'triangles':
+                        for k in range(0, len(ix) - 2, 3): add(ix[k], ix[k + 1], ix[k + 2])
+                    elif key == 'strips':
+                        for k in range(len(ix) - 2): add(ix[k], ix[k + 1], ix[k + 2])
+                    else:
+                        for k in range(1, len(ix) - 1): add(ix[0], ix[k], ix[k + 1])
+    cache[f] = out; return out
+
+
+def faces(z, files, lb):
+    """How much of each of its box's six faces (x-, x+, y-, y+, z-, z+) the part's own surface covers, 0 to 1: the area of
+    its triangles that lie in that face's plane (within 0.6 mm, or 3 % of the box across it) and face that way, over the
+    face's area. A sheet's or a moulding's open sides read near 0; a block's six near 1. A measure, not its surface."""
+    ext = [lb[1][k] - lb[0][k] for k in range(3)]; acc = [0.0] * 6
+    for f in files:
+        for a, b, c in tris(z, f):
+            u = [b[i] - a[i] for i in range(3)]; v = [c[i] - a[i] for i in range(3)]
+            n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; L = (n[0] ** 2 + n[1] ** 2 + n[2] ** 2) ** 0.5
+            if L == 0: continue
+            area = 0.5 * L; cen = [(a[i] + b[i] + c[i]) / 3 for i in range(3)]
+            for k in range(3):
+                if abs(n[k]) / L < 0.9: continue
+                tol = max(0.6, 0.03 * ext[k])
+                if abs(cen[k] - lb[0][k]) < tol: acc[2 * k] += area
+                if abs(cen[k] - lb[1][k]) < tol: acc[2 * k + 1] += area
+    fa = [ext[1] * ext[2], ext[0] * ext[2], ext[0] * ext[1]]
+    return [round(min(1.0, acc[i] / fa[i // 2]), 2) if fa[i // 2] > 0 else 0 for i in range(6)]
+
+
 def box(ps):
     if not ps: return None
     return [[min(p[i] for p in ps) for i in range(3)], [max(p[i] for p in ps) for i in range(3)]]
@@ -110,7 +155,8 @@ def walk(z, root, refs, inst, reps, irep):
                     wb = box([apply(mm, c) for c in corners])
                     mids = [middle(z, f) for f in files]; mids = [x for x in mids if x]
                     out.append({'path': p, 'name': refs.get(i['ref'], i['name']), 'depth': depth, 'm': [r[:] for r in mm[:3]], 'local': lb, 'world': wb,
-                                'size': [round(lb[1][k] - lb[0][k], 3) for k in range(3)], 'mid': [sum(x[k] for x in mids) / len(mids) for k in range(3)] if mids else None})
+                                'size': [round(lb[1][k] - lb[0][k], 3) for k in range(3)], 'mid': [sum(x[k] for x in mids) / len(mids) for k in range(3)] if mids else None,
+                                'faces': faces(z, files, lb)})
             go(i['ref'], mm, p, depth + 1)
     go(root, I4, [], 0)
     return out
@@ -136,10 +182,10 @@ def main():
         return
     if a.cmd == 'ts':
         r = lambda v, k=3: round(v, k)
-        rows = [f"  [{json.dumps(p['name'], ensure_ascii=False)}, {json.dumps(p['path'][-1], ensure_ascii=False)}, [{', '.join(str(r(x, 5)) for row in p['m'] for x in row)}], [{', '.join(str(r(x)) for x in p['local'][0] + p['local'][1])}], [{', '.join(str(r(x)) for x in (p['mid'] or [0, 0, 0]))}]],"
+        rows = [f"  [{json.dumps(p['name'], ensure_ascii=False)}, {json.dumps(p['path'][-1], ensure_ascii=False)}, [{', '.join(str(r(x, 5)) for row in p['m'] for x in row)}], [{', '.join(str(r(x)) for x in p['local'][0] + p['local'][1])}], [{', '.join(str(r(x)) for x in (p['mid'] or [0, 0, 0]))}], [{', '.join(str(x) for x in p['faces'])}]],"
                 for p in parts]
         txt = (f"// Generated by tools/measure/xml3d.py from {a.src}: each part's name, its instance's name, its place (the model's\n"
-               f"// matrix: rotation rows then translation, mm), its box in its own frame (min then max, mm) and its surface's middle.\n"
+               f"// matrix: rotation rows then translation, mm), its box in its own frame (min then max, mm), its surface's middle and how\n// much of each of its box's faces (x-, x+, y-, y+, z-, z+) its surface covers.\n"
                f"// Measured numbers only; none of the model's surface is copied. Do not edit by hand: regenerate.\n"
                f"import type {{ MakerModel }} from '../makermodel';\n\n"
                f"export const {a.id.upper().replace('-', '_')}: MakerModel = {{ id: {json.dumps(a.id)}, name: {json.dumps(a.name)}, src: {json.dumps(a.src)}, parts: [\n" + '\n'.join(rows) + "\n] };\n")
