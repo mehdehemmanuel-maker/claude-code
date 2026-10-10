@@ -15,7 +15,7 @@
 
 import { dhArmParts, ik, UR5E } from './dharm';
 import { robotFor, TASKS, type Robot } from './robot';
-import { DRAWN_IN, FRONT, boxedAs, extents, libraryWords, type MakerModel, type ModelPart } from './makermodel';
+import { DRAWN_IN, FRONT, RUNS, boxedAs, extents, libraryWords, type MakerModel, type ModelPart } from './makermodel';
 import { ENDER3 } from './models/ender3';
 import { layout } from './make/space';
 import * as THREE from 'three';
@@ -280,7 +280,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   belt: {
     says: 'a GT2 belt: its neoprene body and teeth, the glass cords that carry its load wound in it at its pitch line; open, a strip its length; a loop, two runs and their turns round its ends (a 20-tooth pulley\'s 12.73 mm unless said)', leaves: 'its teeth not drawn (its body 1.2 mm thick their band, its cords a 0.2 mm layer in it); a loop drawn as an oval, its path round idlers and clamps not traced',
-    make: (p, it) => { const L = Number(p.length), W = Number(p.width), loop = p.loop === 'yes', d = Number(p.d ?? 12.73), neo = { mat: 'neoprene', color: 0x1a1b1d, finish: 'moulded' as const }, glass = { mat: 'fibreglass', color: 0xd8d2c0, finish: 'moulded' as const };
+    make: (p, it) => { const L = Number(p.length), W = Number(p.width), loop = p.loop === 'yes', d = Number(p.d ?? 12.73), neo = { mat: 'neoprene', color: 0x1a1b1d, finish: 'moulded' as const }, glass = { mat: 'fibreglass', color: 0x1a1b1d, finish: 'moulded' as const }; // (its cords inside its body: unseen, drawn its colour)
       if (!loop) return [P(it.name, { box: [W * mm, 1.2 * mm, L * mm] }, { ...neo, item: 'timing-belt-body', at: [0, 0.1 * mm, 0] }), P(`${it.name} cords`, { box: [(W - 1) * mm, 0.2 * mm, L * mm] }, { ...glass, item: 'tension-cord-glass', at: [0, -0.6 * mm, 0] })];
       const run = Math.max(0, (L - PI * d) / 2);
       // (a band of thickness t whose middle is r from each end's centre: its two runs and two half-turns, in x and y, its width along z)
@@ -717,17 +717,33 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
       const b = boxedAs(mp[0]), wc = mv(R, cm), [e0, e1, e2] = [...ext].sort((a, b2) => b2 - a) as [number, number, number];
       const fill = b.sheet && e2 > 2 * b.sheet ? Math.min(1, (b.sheet * (e0 * e1 + e0 * e2)) / (e0 * e1 * e2)) : b.fill;
       // (a sheet's or a moulding's box drawn as the walls its own surface covers, its open sides open: each face its model
-      // covers a third or more of, a wall its sheet thick (a moulding's 2 mm, typical); a plate, a closed box, or a part
-      // whose surface lies on none of its box's faces drawn as its box)
+      // covers three fifths or more of, a wall its sheet thick (a moulding's 2 mm, typical); a plate, a closed box, or a
+      // moulding whose surface lies on none of its box's faces drawn as its box)
       const fc = mp[5], wt = b.sheet ?? 2, look = { mat: b.mat, color: b.color, finish: b.finish as Part['finish'] }, at: V3 = [wc[0] + t[0], wc[1] + t[1], wc[2] + t[2]];
-      const walls = fc && Math.min(...ext) > 2.5 * wt && fc.filter((v) => v >= 0.6).length < 5 ? [0, 1, 2].flatMap((k) => [0, 1].filter((sd) => fc[2 * k + sd]! >= 0.3).map((sd) => ({ k, sd }))) : [];
-      if (walls.length) placed.push({ p: { name: mp[1], at, rot: euler(R), parts: walls.map(({ k, sd }, i) => { const sz = [...ext] as V3; sz[k] = wt; const off: V3 = [0, 0, 0]; off[k] = (sd ? 1 : -1) * (ext[k]! / 2 - wt / 2);
+      const open = fc && Math.min(...ext) > 2.5 * wt && fc.filter((v) => v >= 0.6).length < 5, walls = open ? [0, 1, 2].flatMap((k) => [0, 1].filter((sd) => fc[2 * k + sd]! >= 0.6).map((sd) => ({ k, sd }))) : [];
+      // (a sheet part whose surface lies on none of its box's faces, a plate standing off bosses: its sheet across its
+      // thinnest way at its surface's middle)
+      const thin = ext.indexOf(Math.min(...ext)), sheetMid = open && !walls.length && b.sheet ? mp[4][thin]! - cm[thin]! : null;
+      if (walls.length || sheetMid !== null) placed.push({ p: { name: mp[1], at, rot: euler(R), parts: (walls.length ? walls : [{ k: thin, sd: -1 }]).map(({ k, sd }, i) => { const sz = [...ext] as V3; sz[k] = wt; const off: V3 = [0, 0, 0]; off[k] = sd < 0 ? sheetMid! : (sd ? 1 : -1) * (ext[k]! / 2 - wt / 2);
         return P(i ? `${mp[1]} wall ${i + 1}` : mp[1], { box: [sz[0] * mm, sz[1] * mm, sz[2] * mm] }, { ...look, at: [off[0] * mm, off[1] * mm, off[2] * mm] }); }) } as Part, corners });
       else placed.push({ p: P(mp[1], { box: [ext[0]! * mm, ext[1]! * mm, ext[2]! * mm] }, { ...look, at, rot: euler(R), fill }), corners });
       boxed++;
     }
     void i;
   });
+  // (what runs between two of its parts that the model leaves out: from the top of one, up, over and down into the top of
+  // the other, a smooth tube; its length the path's)
+  for (const run of RUNS) {
+    const a = model.parts.find((q) => run.from.test(q[0])), b2 = model.parts.find((q) => run.to.test(q[0]));
+    if (!a || !b2) continue;
+    const top = (q: ModelPart): V3 => { const c = middleOf(q), R = rotIn(q[2]), e = extents(q), hy = [0, 1, 2].reduce((h, k) => h + Math.abs(R[1]![k]!) * e[k]! / 2, 0); return [c[0], c[1] + hy, c[2]]; };
+    const A = top(a), B = top(b2), over = Math.max(A[1], B[1]) + 80;
+    const pts: V3[] = [A, [A[0], A[1] + 30, A[2]], [(A[0] + B[0]) / 2, over, (A[2] + B[2]) / 2], [B[0], B[1] + 30, B[2]], B];
+    const len = pts.slice(1).reduce((l, q, i) => l + Math.hypot(q[0] - pts[i]![0], q[1] - pts[i]![1], q[2] - pts[i]![2]), 0);
+    let it: Part | null = null; try { it = use(`${run.words} L${Math.round(len)}`); } catch { it = null; }
+    if (!it) continue;
+    placed.push({ p: { name: `${it.name} (run)`, item: it.item, at: [0, 0, 0], says: run.says, parts: [P(`${it.name} (run)`, { tube: { r: run.r * mm, pts: pts.map((q) => q.map((v) => v * mm) as V3), bend: 25 * mm } }, { mat: 'ptfe', color: 0xf2f2ee, finish: 'moulded' })] } as Part, corners: pts }); drawn++;
+  }
   // (stood on the floor, its footprint centred; mm to m)
   const all = placed.flatMap((x) => x.corners), lo = [0, 1, 2].map((k) => Math.min(...all.map((c) => c[k]!))), hi = [0, 1, 2].map((k) => Math.max(...all.map((c) => c[k]!)));
   const shift: V3 = [(lo[0]! + hi[0]!) / 2, lo[1]!, (lo[2]! + hi[2]!) / 2];

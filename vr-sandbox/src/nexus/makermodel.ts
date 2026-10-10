@@ -85,6 +85,12 @@ export function libraryWords(p: ModelPart): string | null {
  *  where its carriage holds it. Each: the model's part, the part it is drawn in, and its item there. */
 export const DRAWN_IN: { name: RegExp; in: RegExp; item: string }[] = [{ name: /^z nut$/i, in: /^z threaded rod$|lead ?screw/i, item: 'lead-nut' }];
 
+/** What a maker's model leaves out that runs between two of its parts: the Bowden tube, PTFE from the extruder's coupler
+ *  up over and down into the hot end's (the Ender-3's model has only its 50 mm inside the heat sink). Run by us, rising
+ *  from each end and over between them, its length the path's: a routing, not the maker's, and said so. */
+export const RUNS: { words: string; from: RegExp; to: RegExp; r: number; says: string }[] = [
+  { words: 'bowden od4 id2', from: /^M6 pneumatic joint$/i, to: /^pneumatic joint$/i, r: 2, says: 'its Bowden tube, which its model leaves out: run by us from its extruder\'s coupler up, over and down into its hot end\'s' }];
+
 /** What a part the library does not make yet is, by its name: what it is made of, its colour and how much of its box it
  *  fills (a power supply's case is mostly air), as typical of such parts (estimates), so its measured box is drawn as
  *  what it is. */
