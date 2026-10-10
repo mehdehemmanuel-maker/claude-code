@@ -445,6 +445,7 @@ e('rivet-pop', 'blind rivet', 'Hardware/Fasteners/Rivets', 'product', 'cold-head
 e('standoff', 'M3 standoff', 'Hardware/Fasteners/Spacers', 'product', 'machine', 'brass', 'a hex spacer threaded both ends, for boards', '', { alt: 'print', size: [5, 5, 10] });
 e('bracket-corner', 'corner bracket (2020)', 'Hardware/Structural/Brackets', 'product', 'cast', 'al-a380', 'an L-shaped cast bracket with ribs, for joining extrusions at right angles', '', { size: [20, 20, 20] });
 e('sheet-al', 'aluminium sheet 2 mm', 'Hardware/Structural/Sheet', 'product', 'extrude', 'al-6061', 'aluminium rolled to 2 mm');
+e('pressure-shell', 'pressure hull shell', 'Mechanical/Vehicles/Submarine parts', 'part', 'roll', 'steel-alloy', 'plate rolled into a cylinder and seam-welded, with a formed end at each end: the shell a pressure hull is, whose thickness is what its depth asked for', '', { size: [1200, 1200, 4900] });
 e('tube-steel', 'square steel tube 20 × 20', 'Hardware/Structural/Tube', 'product', 'weld', 'steel-low', 'strip rolled into a square and seam-welded', '1.5 mm wall');
 e('acrylic-sheet', 'acrylic sheet 3 mm', 'Hardware/Structural/Sheet', 'product', 'chemistry', 'pmma', 'cast PMMA sheet');
 e('plywood', 'birch plywood 6 mm', 'Hardware/Structural/Sheet', 'product', 'laminate', 'wood-veneer*5 glue', 'odd numbers of veneers, grain crossed, glued and pressed');

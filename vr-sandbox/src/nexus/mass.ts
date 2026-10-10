@@ -28,6 +28,8 @@ export const DENSITY: Record<string, number> = {
   mgo: 3580, nichrome: 8400, 'ferrite-hard': 4900, 'ntc-ceramic': 5000,
   // (neoprene, a timing belt's body: 1.23 g/cm³, typical)
   neoprene: 1230,
+  // (carbon fibre in epoxy, a woven laminate or a pultruded tube: 1.6 g/cm³, typical of 60 % fibre by volume)
+  cfrp: 1600,
   // (silver, a switch's contacts: 10.49 g/cm³)
   silver: 10490,
   // (what electronic packages are made of: src/nexus/packages.ts, each with its source)

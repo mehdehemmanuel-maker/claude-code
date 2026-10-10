@@ -91,4 +91,32 @@ export const FLUIDS = [
     term: (v) => div(mul(v.v1, v.A1), v.A2),
     source: { cite: "Young & Freedman, University Physics, 15th ed., Pearson 2019", kind: "textbook" }, example: { inputs: {"v1":1,"A1":0.01,"A2":0.0025}, output: 4 },
   }),
+  L({
+    id: "thrust.jet", name: "Thrust of a jet", statement: "An engine that takes in air and throws it out faster pushes forward by its mass flow times the gain in speed: a jet pack's turbine throws a few kilograms a second out at hundreds of metres a second.", formula: "T = \u1e41 (v_e \u2212 v_0)",
+    valid: "Steady, the exhaust at ambient pressure (no pressure-thrust term), one stream in and out; a turbofan's two streams are added.",
+    inputs: [["mdot", "kg/s", "mass flow"], ["ve", "m/s", "exhaust speed"], ["v0", "m/s", "speed of the craft"]], output: ["T", "N", "thrust"],
+    term: (v) => mul(v.mdot, sub(v.ve, v.v0)),
+    source: { cite: "Hill & Peterson, Mechanics and Thermodynamics of Propulsion, 2nd ed., Addison-Wesley 1992, ch. 5", kind: "textbook" }, example: { inputs: {"mdot":2,"ve":500,"v0":0}, output: 1000 },
+  }),
+  L({
+    id: "cushion.pressure", name: "Pressure under an air cushion", statement: "A hovercraft floats on air no harder to make than its own weight spread over the area it sits on: a tonne on ten square metres is a thousandth of an atmosphere.", formula: "p = m g / A",
+    valid: "The cushion at rest over a flat surface, its skirt sealing; over waves or a gap the pressure is what is left after the air escapes.",
+    inputs: [["m", "kg", "all-up mass"], ["A", "m^2", "cushion area"]], output: ["p", "Pa", "cushion pressure"],
+    term: (v) => div(mul(v.m, CONST.g), v.A),
+    source: { cite: "Yun & Bliault, Theory and Design of Air Cushion Craft, Butterworth-Heinemann 2000, ch. 2", kind: "textbook" }, example: { inputs: {"m":1000,"A":10}, output: 980.665 },
+  }),
+  L({
+    id: "cushion.escape", name: "Air escaping under a skirt", statement: "The air under a cushion runs out through the gap round its skirt at the speed its own pressure gives it, so the lift fan must put back the gap times the perimeter times that speed.", formula: "Q = C_d L h \u221a(2 p / \u03c1)",
+    valid: "Incompressible, the gap small against the cushion; the discharge coefficient about 0.53 to 0.6 for a skirt's hem.",
+    inputs: [["Cd", "-", "discharge coefficient"], ["Lp", "m", "skirt perimeter"], ["h", "m", "gap under the skirt"], ["p", "Pa", "cushion pressure"], ["rho", "kg/m^3", "air density"]], output: ["Q", "m^3/s", "air flow"],
+    term: (v) => mul(v.Cd, v.Lp, v.h, pow(div(mul(k(2), v.p), v.rho), 0.5)),
+    source: { cite: "Yun & Bliault, Theory and Design of Air Cushion Craft, Butterworth-Heinemann 2000, ch. 3", kind: "textbook" }, example: { inputs: {"Cd":0.53,"Lp":20,"h":0.02,"p":980.665,"rho":1.204}, output: 8.556535432326053 },
+  }),
+  L({
+    id: "hull.collapse", name: "Collapse of an unstiffened cylinder under outside pressure", statement: "A tube squeezed from outside does not crush, it buckles into lobes, at a pressure that falls off as the cube and a half of how thin it is: a hull twice as deep needs more than twice the plate.", formula: "p = 2.6 E (t/D)^2.5 / (L/D \u2212 0.45 \u221a(t/D))",
+    valid: "Windenburg and Trilling's approximation to von Mises, for a cylinder of length L between rigid ends, thin (D/t above about 20) and elastic: it holds only while that pressure is under the plate's own yield, 2 \u03c3 t / D.",
+    inputs: [["E", "Pa", "Young's modulus"], ["t", "m", "wall thickness"], ["D", "m", "outside diameter"], ["Lh", "m", "length between frames"]], output: ["p", "Pa", "collapse pressure"],
+    term: (v) => div(mul(k(2.6), v.E, pow(div(v.t, v.D), 2.5)), sub(div(v.Lh, v.D), mul(k(0.45), pow(div(v.t, v.D), 0.5)))),
+    source: { cite: "Windenburg & Trilling, Collapse by instability of thin cylindrical shells under external pressure, Trans. ASME 56 (1934) 819", kind: "paper" }, example: { inputs: {"E":200000000000,"t":0.02,"D":2,"Lh":2}, output: 5445026.178010471 },
+  }),
 ];

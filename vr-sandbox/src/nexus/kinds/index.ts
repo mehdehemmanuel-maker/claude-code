@@ -12,10 +12,11 @@ import { MOTION } from './motion';
 import { PLANT } from './plant';
 import { SBC_KINDS } from './sbc';
 import { ROBOT_KINDS } from './robots';
+import { CRAFT_KINDS } from './craftkinds';
 import { LAB_KINDS } from './labkinds';
 import { SITE } from './site';
 import { STOCK } from './stock';
 import { TOOLS } from './tools';
 
-export const KINDS: KindDef[] = [...FASTENERS, ...MOTION, ...ELECTRICAL, ...FLUID, ...STOCK, ...TOOLS, ...MORE, ...DEVICES, ...SITE, ...INDUSTRIAL, ...GOODS, ...PLANT, ...SBC_KINDS, ...ROBOT_KINDS, ...LAB_KINDS];
+export const KINDS: KindDef[] = [...FASTENERS, ...MOTION, ...ELECTRICAL, ...FLUID, ...STOCK, ...TOOLS, ...MORE, ...DEVICES, ...SITE, ...INDUSTRIAL, ...GOODS, ...PLANT, ...SBC_KINDS, ...ROBOT_KINDS, ...LAB_KINDS, ...CRAFT_KINDS];
 export type { KindDef } from './core';

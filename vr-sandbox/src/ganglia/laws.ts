@@ -35,6 +35,10 @@ const MCMAHON = { cite: 'McMahon, Muscles, Reflexes, and Locomotion, Princeton 1
 const NORTON = { cite: 'Norton, Design of Machinery, 6th ed., McGraw-Hill 2020 (Gruebler\'s equation)', kind: 'textbook' as const };
 const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
 const GILLESPIE = { cite: 'Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance', url: 'https://www.engineeringtoolbox.com/rolling-friction-resistance-d_1303.html', kind: 'textbook' as const };
+const HILL = { cite: 'Hill & Peterson, Mechanics and Thermodynamics of Propulsion, 2nd ed., Addison-Wesley 1992, ch. 5', kind: 'textbook' as const };
+const YUN2 = { cite: 'Yun & Bliault, Theory and Design of Air Cushion Craft, Butterworth-Heinemann 2000, ch. 2', kind: 'textbook' as const };
+const YUN3 = { cite: 'Yun & Bliault, Theory and Design of Air Cushion Craft, Butterworth-Heinemann 2000, ch. 3', kind: 'textbook' as const };
+const WT = { cite: 'Windenburg & Trilling, Collapse by instability of thin cylindrical shells under external pressure, Trans. ASME 56 (1934) 819', kind: 'paper' as const };
 const ISO281 = { cite: 'ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life', kind: 'standard' as const };
 const G = { g: { value: g, unit: 'm/s^2', name: 'standard gravity (ISO 80000-3)' } };
 
@@ -566,6 +570,34 @@ export const LAWS: Law[] = [
     formula: 'T = (2 ρ A P²)^(1/3)', inputs: [q('rho', 'fluid density', 'kg/m^3'), q('A', 'disc area', 'm^2'), q('P', 'shaft power', 'W')], output: q('T', 'thrust', 'N'),
     eval: ({ rho, A, P }) => Math.cbrt(2 * rho! * A! * P! * P!),
     valid: 'Ideal actuator disc, hovering or static, uniform inflow: a real propeller makes about 60 to 80% of the ideal (its figure of merit), and less as it moves forward.', example: { inputs: { rho: 1.225, A: 0.07068583470577035, P: 100 }, output: 12.008796675640253 }, source: { cite: 'Leishman, Principles of Helicopter Aerodynamics, 2nd ed., Cambridge 2006, ch. 2 (momentum theory)', kind: 'textbook' }, tags: ['propeller', 'thrust', 'boat', 'drone', 'fan', 'fluid'],
+  },
+  {
+    id: 'thrust.jet', name: 'Thrust of a jet', domain: 'fluids',
+    statement: 'An engine that takes in air and throws it out faster pushes forward by its mass flow times the gain in speed: a jet pack\'s turbine throws a few kilograms a second out at hundreds of metres a second.',
+    formula: 'T = \u1e41 (v_e \u2212 v_0)', inputs: [q('mdot', 'mass flow', 'kg/s'), q('ve', 'exhaust speed', 'm/s'), q('v0', 'speed of the craft', 'm/s')], output: q('T', 'thrust', 'N'),
+    eval: ({ mdot, ve, v0 }) => mdot! * (ve! - v0!),
+    valid: 'Steady, the exhaust at ambient pressure (no pressure-thrust term), one stream in and out; a turbofan\'s two streams are added.', example: { inputs: { mdot: 2, ve: 500, v0: 0 }, output: 1000 }, source: HILL, tags: ['jet', 'turbine', 'thrust', 'jet pack', 'rocket', 'fluid'],
+  },
+  {
+    id: 'cushion.pressure', name: 'Pressure under an air cushion', domain: 'fluids',
+    statement: 'A hovercraft floats on air no harder to make than its own weight spread over the area it sits on: a tonne on ten square metres is a thousandth of an atmosphere.',
+    formula: 'p = m g / A', inputs: [q('m', 'all-up mass', 'kg'), q('A', 'cushion area', 'm^2')], output: q('p', 'cushion pressure', 'Pa'),
+    eval: ({ m, A }) => (m! * g) / A!, constants: G,
+    valid: 'The cushion at rest over a flat surface, its skirt sealing; over waves or a gap the pressure is what is left after the air escapes.', example: { inputs: { m: 1000, A: 10 }, output: 980.665 }, source: YUN2, tags: ['hovercraft', 'air cushion', 'skirt', 'lift', 'fluid'],
+  },
+  {
+    id: 'cushion.escape', name: 'Air escaping under a skirt', domain: 'fluids',
+    statement: 'The air under a cushion runs out through the gap round its skirt at the speed its own pressure gives it, so the lift fan must put back the gap times the perimeter times that speed.',
+    formula: 'Q = C_d L h \u221a(2 p / \u03c1)', inputs: [q('Cd', 'discharge coefficient', '-'), q('Lp', 'skirt perimeter', 'm'), q('h', 'gap under the skirt', 'm'), q('p', 'cushion pressure', 'Pa'), q('rho', 'air density', 'kg/m^3')], output: q('Q', 'air flow', 'm^3/s'),
+    eval: ({ Cd, Lp, h, p, rho }) => Cd! * Lp! * h! * Math.sqrt((2 * p!) / rho!),
+    valid: 'Incompressible, the gap small against the cushion; the discharge coefficient about 0.53 to 0.6 for a skirt\'s hem.', example: { inputs: { Cd: 0.53, Lp: 20, h: 0.02, p: 980.665, rho: 1.204 }, output: 8.556535432326053 }, source: YUN3, tags: ['hovercraft', 'air cushion', 'skirt', 'lift fan', 'fluid'],
+  },
+  {
+    id: 'hull.collapse', name: 'Collapse of an unstiffened cylinder under outside pressure', domain: 'fluids',
+    statement: 'A tube squeezed from outside does not crush, it buckles into lobes, at a pressure that falls off as the cube and a half of how thin it is: a hull twice as deep needs more than twice the plate.',
+    formula: 'p = 2.6 E (t/D)^2.5 / (L/D \u2212 0.45 \u221a(t/D))', inputs: [q('E', 'Young\'s modulus', 'Pa'), q('t', 'wall thickness', 'm'), q('D', 'outside diameter', 'm'), q('Lh', 'length between frames', 'm')], output: q('p', 'collapse pressure', 'Pa'),
+    eval: ({ E, t, D, Lh }) => (2.6 * E! * Math.pow(t! / D!, 2.5)) / (Lh! / D! - 0.45 * Math.sqrt(t! / D!)),
+    valid: 'Windenburg and Trilling\'s approximation to von Mises, for a cylinder of length L between rigid ends, thin (D/t above about 20) and elastic: it holds only while that pressure is under the plate\'s own yield, 2 \u03c3 t / D.', example: { inputs: { E: 200e9, t: 0.02, D: 2, Lh: 2 }, output: 5445026.178010471 }, source: WT, tags: ['submarine', 'pressure hull', 'buckling', 'diving', 'fluid'],
   },
   {
     id: 'screw.force', name: 'Force from a power screw', domain: 'machine elements',

@@ -33,7 +33,7 @@ describe('the derived laws of the slice', () => {
 describe('the kept book as terms: every law, by its own example', () => {
   const kept = Object.fromEntries(LAWS.map((l) => [l.id, l]));
   it('holds every kept law once, with the kept ports in the kept order, and nothing twice', () => {
-    expect(LAWS.length).toBe(144);
+    expect(LAWS.length).toBe(148);
     const ids = Object.values(KEPT).flat().map((l) => l.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect([...ids].sort()).toEqual(LAWS.map((l) => l.id).sort());
