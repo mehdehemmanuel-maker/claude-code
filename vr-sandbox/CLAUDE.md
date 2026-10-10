@@ -614,7 +614,12 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    120 °C, 250 × 250 × 210 mm). And laser powder-bed fusion (`fuse`) on the EOS M 290 by its data sheet (400 W, 100 µm,
    7 m/s, 250 × 250 × 325 mm, 30 µm layers), with 316L, Ti-6Al-4V and AlSi10Mg powders and their hazards (class 4
    laser, argon, combustible dust). In words: "how do I print metal", "print ultrafuse on the voron", "fuse titanium on
-   the eos 30x30x45". Next: the EOS M 290 drawn; a sintering furnace drawn.
+   the eos 30x30x45". The EOS M 290 drawn (`pbf EOS-M290`, `pbfParts`): its cabinet, frame and feet, its stainless
+   chamber at 1000 mm with its windowed glove-port door, the build plate in its cylinder, the dispenser, the recoater on
+   two MGN15 rails, the scanner, F-theta lens, fibre laser, filter, control cabinet and screen; its outside, build
+   volume, laser and 1250 kg EOS's, its inside's layout and makeup typical (estimates); drawn 98 % of its mass. Judged
+   blind: 2/10, read as a powder-bed metal printer (30 %); its panels' coincident faces and its door's gaps fixed, a
+   handle, hinges, window frame, emergency stop and chamber lamp added. Next: a sintering furnace drawn; the kiln.
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);

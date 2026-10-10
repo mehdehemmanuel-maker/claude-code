@@ -532,6 +532,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   ftsensor: { says: 'a force/torque sensor as its maker gives it (src/nexus/kit-robot.ts): its stainless body and its six silicon gauges on its flexures', leaves: 'its height an estimate; its flexures and cable not drawn', make: (_p, it) => ftParts(it.name) },
   depthcamera: { says: 'a depth camera as its maker gives it (src/nexus/kit-robot.ts): its case, its glass face, its two infrared imagers and colour one behind their lenses, its projector, its board', leaves: 'its imagers\' places estimates; its vision processor not drawn apart from its board', make: (_p, it) => depthCamParts(it.name) },
   gassensor: { says: 'a gas sensor as its maker gives it (src/nexus/kit-robot.ts): its LGA package, its two dies inside', leaves: 'its dies\' sizes estimates; its lid and pads not drawn apart', make: (_p, it) => bmeParts(it.name) },
+  pbf: { says: 'a laser powder-bed fusion machine, EOS\'s M 290 by its data sheet: its cabinet (2500 × 1300 × 2190 mm) on a welded frame and six levelling feet; its stainless process chamber at working height, its door\'s window and two glove ports; the build plate (250 × 250 mm) on its piston in the build cylinder, the powder dispenser beside it and the recoater between them on two rails; above the chamber the galvanometer scanner and its F-theta lens, fed by fibre from the 400 W fibre laser; the gas filter in its own section, the control cabinet below, the operator screen at the door', leaves: 'its outside, its build volume, its laser and its mass EOS\'s; where each part sits inside, and each part\'s size and makeup, typical of such machines (estimates); its gas lines, cables and the powder\'s overflow not drawn', make: (_p, it) => pbfParts(it.name) },
   printer3d: { says: 'a 3D printer drawn from its maker\'s own assembly (Creality\'s Ender-3 3DXML, read by tools/measure/xml3d.py; VoronDesign\'s Voron 2.4r2 STEP, read by tools/measure/stepasm.py): every part where the model puts it, each library part (extrusions, rails, steppers, bearings, the GT2 pulleys and idlers, screws, nuts, washers, inserts and T-nuts) fitted to its box', leaves: 'what the library does not make yet drawn as its measured box, or as the walls its surface covers, said as what it is and coloured as its model colours it (the Voron\'s printed parts, its panels, its bed, its boards and supplies), each its fill an estimate', make: (p, it) => modelPart(PRINTER_MODELS[String(p.model) as keyof typeof PRINTER_MODELS] ?? ENDER3, it.name).part.parts! },
   robot: { says: 'the robot its tasks design (src/nexus/robot.ts), each part the library\'s: its table, two UR5e arms bolted down by their makers\' pattern and posed ready, a QC-11 and an RH56DFX hand on each (a Nano17 at each index fingertip), the Camera Module 3 on the right wrist, the D435, microphone and gas sensor on a mast', leaves: 'its table, mast and camera bracket estimates; its cables, air lines and controllers not drawn', make: (_p, it) => robotParts(it.name) },
 };
@@ -802,6 +803,65 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
   const shift: V3 = [(lo[0]! + hi[0]!) / 2, lo[1]!, (lo[2]! + hi[2]!) / 2];
   const parts = placed.map(({ p }) => ({ ...p, at: [((p.at?.[0] ?? 0) - shift[0]) * mm, ((p.at?.[1] ?? 0) - shift[1]) * mm, ((p.at?.[2] ?? 0) - shift[2]) * mm] as V3 }));
   return { part: { name: nm, at: [0, 0, 0], parts }, drawn, boxed };
+}
+/** A laser powder-bed fusion machine (EOS's M 290): its outside, build volume and laser from EOS's data sheet, the rest
+ *  typical of such machines (estimates), mm: its front +x, its width along z, standing on the floor. */
+function pbfParts(nm: string): Part[] {
+  const paint = { mat: 'steel-low', color: 0xd9dbdd, finish: 'paint' }, dark = { mat: 'steel-low', color: 0x3b3e42, finish: 'paint' }, ss = { mat: 'stainless-304', color: 0xb9bdc1, finish: 'brushed' };
+  type R = [number, number];
+  const B = (n: string, item: string | undefined, x: R, y: R, z: R, look: Partial<Part>, more: Partial<Part> = {}) => P(n, { box: [(x[1] - x[0]) * mm, (y[1] - y[0]) * mm, (z[1] - z[0]) * mm] }, { ...look, at: [((x[0] + x[1]) / 2) * mm, ((y[0] + y[1]) / 2) * mm, ((z[0] + z[1]) / 2) * mm], ...(item ? { item } : {}), ...more });
+  const out: Part[] = [];
+  // ---- its frame: 100 mm box section round its base and across it, 80 mm uprights at its corners (their tubes' share of
+  // their boxes), on six feet
+  const t100 = (100 ** 2 - 92 ** 2) / 100 ** 2, t80 = (80 ** 2 - 74 ** 2) / 80 ** 2, fr = { ...dark, fixed: 'welded' };
+  // (inside its panels by 10 mm, so no face of it lies on theirs)
+  out.push(group(`${nm} frame`, 'pbf-frame', [B(`${nm} frame`, undefined, [540, 640], [80, 180], [-1240, 1240], { ...fr, fill: t100 }), B(`${nm} frame`, undefined, [-640, -540], [80, 180], [-1240, 1240], { ...fr, fill: t100 }),
+    ...[-1190, -650, 1190].map((z) => B(`${nm} frame`, undefined, [-540, 540], [80, 180], [z - 50, z + 50], { ...fr, fill: t100 })),
+    ...[[-600, -1200], [-600, 1200], [600, -1200], [600, 1200]].map(([x, z]) => B(`${nm} frame`, undefined, [x! - 40, x! + 40], [180, 2178], [z! - 40, z! + 40], { ...fr, fill: t80 }))]));
+  for (const [x, z] of [[560, -1160], [560, 0], [560, 1160], [-560, -1160], [-560, 0], [-560, 1160]] as R[]) out.push(P(`${nm} foot`, { cyl: [40 * mm, 80 * mm] }, { mat: 'steel-low', color: 0x2a2b2e, finish: 'plate', item: 'machine-foot', at: [x * mm, 40 * mm, z * mm] }));
+  // ---- its cabinet: twelve folded sheets, 2 mm, its sides over its front's and back's ends so no two faces lie in one
+  // plane (its door's opening, its screen's and its filter's section in its front)
+  const pn = (x: R, y: R, z: R, look = paint) => B(`${nm} panel`, 'pbf-panel', x, y, z, look);
+  out.push(pn([-650, 650], [2188, 2190], [-1250, 1250]), pn([-650, -648], [180, 2188], [-1248, 1248]), pn([-650, 650], [180, 2188], [1248, 1250]), pn([-650, 650], [180, 2188], [-1250, -1248]),
+    pn([646, 648], [80, 180], [-1246, 1246], dark), pn([648, 650], [180, 950], [-1248, 1248]), pn([648, 650], [1750, 2188], [-1248, 1248], dark), pn([648, 650], [950, 1750], [700, 1248]),
+    pn([648, 650], [950, 1750], [-650, -100]), pn([648, 650], [950, 1750], [-1248, -650], dark), pn([-646, 646], [180, 2186], [-652, -650]), pn([-646, 646], [1898, 1900], [-650, 1246]));
+  // ---- its process chamber, 6 mm stainless, 700 × 700 × 650 inside, its floor the working plane at 1000 mm
+  const ch = { ...ss, fixed: 'welded gas-tight' };
+  out.push(group(`${nm} process chamber`, 'pbf-chamber', [B(`${nm} chamber`, undefined, [-356, 350], [994, 1000], [-56, 656], ch), B(`${nm} chamber`, undefined, [-356, -350], [1000, 1650], [-56, 656], ch),
+    B(`${nm} chamber`, undefined, [-356, 640], [1000, 1650], [-56, -50], ch), B(`${nm} chamber`, undefined, [-356, 640], [1000, 1650], [650, 656], ch), B(`${nm} chamber`, undefined, [-356, 640], [1650, 1656], [-56, 656], ch)]));
+  // ---- its door: a stainless plate, its window (laser-safe glass) and two glove ports with their gloves
+  // (over its opening's edges, its window laser-safe glass in a frame, a handle down its free edge, two hinges)
+  out.push(group(`${nm} door`, 'pbf-door', [B(`${nm} door`, undefined, [650, 662], [940, 1760], [-110, 710], ss), B(`${nm} door window frame`, undefined, [662, 668], [1360, 1720], [20, 580], { ...dark }),
+    B(`${nm} door window`, undefined, [668, 671], [1380, 1700], [40, 560], { mat: 'glass', color: 0x6f9a6a, finish: 'cast' }),
+    P(`${nm} door handle`, { cyl: [14 * mm, 520 * mm] }, { mat: 'stainless-304', color: 0xd0d3d6, finish: 'brushed', at: [700 * mm, 1350 * mm, -70 * mm] }),
+    ...[1100, 1580].map((y) => B(`${nm} door handle mount`, undefined, [662, 700], [y, y + 20], [-82, -58], ss)),
+    ...[1000, 1640].map((y) => P(`${nm} door hinge`, { cyl: [16 * mm, 90 * mm] }, { mat: 'steel-low', color: 0x3b3e42, finish: 'paint', at: [670 * mm, y * mm, 712 * mm] })),
+    ...[130, 470].flatMap((z) => [P(`${nm} glove port`, lathe([[80, 0], [100, 0], [100, 30], [80, 30], [80, 0]]), { ...ss, rot: [0, 0, -PI / 2], at: [662 * mm, 1190 * mm, z * mm] }), P(`${nm} glove`, { cyl: [80 * mm, 20 * mm] }, { mat: 'nbr', color: 0x1b1c1e, finish: 'texture', rot: [0, 0, -PI / 2], at: [672 * mm, 1190 * mm, z * mm] })])], { joint: 'hinge' }));
+  // ---- the build cylinder under its plate (250 × 250, its 325 mm of travel), the dispenser beside it, both with their
+  // powder at the working plane; the recoater between them on two rails across the chamber
+  const well = (n: string, item: string, z0: number) => group(`${nm} ${n}`, item, [B(`${nm} ${n}`, undefined, [-145, 145], [620, 994], [z0 - 20, z0], ss), B(`${nm} ${n}`, undefined, [-145, 145], [620, 994], [z0 + 250, z0 + 270], ss),
+    B(`${nm} ${n}`, undefined, [-145, -125], [620, 994], [z0, z0 + 250], ss), B(`${nm} ${n}`, undefined, [125, 145], [620, 994], [z0, z0 + 250], ss), P(`${nm} ${n} piston rod`, { cyl: [25 * mm, 400 * mm] }, { mat: 'steel-alloy', color: 0xc9cdd1, finish: 'ground', at: [0, 420 * mm, (z0 + 125) * mm] })]);
+  out.push(well('build cylinder', 'pbf-build-cylinder', 110), B(`${nm} build plate`, 'pbf-build-plate', [-125, 125], [975, 1000], [110, 360], { mat: 'steel-low', color: 0x8d9195, finish: 'ground' }),
+    well('dispenser', 'pbf-dispenser', 400),
+    B(`${nm} powder`, undefined, [-125, 125], [1000, 1000.6], [110, 360], { mat: 'stainless-304', color: 0x7d8186, finish: 'texture', fill: 0.6 }), B(`${nm} powder`, undefined, [-125, 125], [1000, 1000.6], [400, 650], { mat: 'stainless-304', color: 0x7d8186, finish: 'texture', fill: 0.6 }));
+  out.push(group(`${nm} recoater`, 'pbf-recoater', [B(`${nm} recoater`, undefined, [-160, 160], [1004, 1044], [370, 395], { mat: 'al-6061', color: 0x9aa0a6, finish: 'anodised' }), B(`${nm} recoater blade`, undefined, [-150, 150], [1000.6, 1004], [381, 384], { mat: 'steel-hss', color: 0xc0c4c8, finish: 'ground' })], { travel: { slide: { dir: [0, 0, 1], from: -280 * mm, to: 250 * mm } } }));
+  for (const x of [-180, 180]) out.push(use('rail MGN15H 700', [x * mm, 1000 * mm, 300 * mm], { name: `${nm} recoater rail`, fixed: 'screwed to the chamber floor' }));
+  // ---- the optics: the scanner over the build plate, its F-theta lens through the chamber's roof, the laser source on
+  // the shelf above, its fibre to the scanner
+  out.push(B(`${nm} scanner`, 'galvo-scanner', [-110, 110], [1700, 1860], [125, 345], { mat: 'al-6061', color: 0x2c2f33, finish: 'anodised', fill: 0.3 }),
+    P(`${nm} F-theta lens`, { cyl: [60 * mm, 50 * mm] }, { mat: 'quartz', color: 0x9fb3c0, finish: 'cast', item: 'ftheta-lens', at: [0, 1675 * mm, 235 * mm] }),
+    B(`${nm} fibre laser`, 'fibre-laser', [-600, -250], [1900, 2140], [0, 600], { ...dark, fill: 0.12 }),
+    P(`${nm} laser fibre`, { tube: { r: 6 * mm, pts: [[-425, 1900, 300], [-425, 1880, 300], [-200, 1880, 260], [0, 1860, 235]].map((q) => q.map((v) => v * mm) as V3), bend: 60 * mm } }, { mat: 'pvc', color: 0xe8b020, finish: 'moulded' }));
+  // ---- its gas filter in its own section, the control cabinet below the chamber, its screen at the door
+  out.push(P(`${nm} gas filter`, { cyl: [220 * mm, 1000 * mm] }, { mat: 'steel-low', color: 0xb0b4b8, finish: 'paint', item: 'pbf-filter', at: [0, 700 * mm, -950 * mm], fill: 0.1 }),
+    B(`${nm} control cabinet`, 'pbf-electrics', [-640, -300], [190, 940], [-600, 600], { ...dark, fill: 0.06 }),
+    B(`${nm} operator screen`, 'pbf-screen', [650, 690], [1300, 1600], [-615, -135], { mat: 'glass', color: 0x101215, finish: 'moulded', fill: 0.25 }),
+    // (its emergency stop under the screen: a red mushroom on a yellow plate, as EN ISO 13850 has it; a lamp in the
+    // chamber's roof)
+    B(`${nm} emergency stop plate`, undefined, [650, 654], [1150, 1230], [-415, -335], { mat: 'abs', color: 0xf2c200, finish: 'moulded' }),
+    P(`${nm} emergency stop`, { cyl: [22 * mm, 30 * mm] }, { mat: 'abs', color: 0xc8161d, finish: 'moulded', rot: [0, 0, -PI / 2], at: [669 * mm, 1190 * mm, -375 * mm] }),
+    B(`${nm} chamber lamp`, undefined, [300, 330], [1630, 1650], [0, 600], { mat: 'glass', color: 0xfff4dc, finish: 'diffused', glow: true }));
+  return out;
 }
 /** Where the robot's work is: its table's top (mm above the floor), the point its tasks are done at (mm, the table's
  *  frame: a board held 60 mm over the table, in front of the mast), how far to each side of it each hand works, its

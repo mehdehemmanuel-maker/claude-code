@@ -36,6 +36,14 @@ export const ROBOT_KINDS: KindDef[] = [
     box: (p) => (s(p, 'model') === 'Voron-2.4' ? VORON_BOX : [440, 465, 440]), g: (p) => (s(p, 'model') === 'Voron-2.4' ? VORON_G : 6700),
   },
   {
+    id: 'pbf', look: 'box', name: 'laser powder-bed fusion machine', path: 'Electrical/Machines/Metal printers', says: 'a metal printer: a laser melts a thin bed of metal powder where the part is, layer on layer, in a chamber of argon or nitrogen', std: 'its maker\'s data sheet (EOS\'s M 290)',
+    axes: [bare('model', 'model', ['EOS-M290'])], title: () => 'EOS M 290 laser powder-bed fusion machine',
+    of: () => 'pbf-frame pbf-panel*12 pbf-chamber pbf-door pbf-build-cylinder pbf-build-plate pbf-dispenser pbf-recoater {rail MGN15H 700}*2 galvo-scanner ftheta-lens fibre-laser pbf-filter pbf-electrics pbf-screen machine-foot*6', make: 'assemble',
+    how: 'the chamber flooded with argon (or nitrogen); each layer the dispenser lifts fresh powder, the recoater spreads 30 µm of it over the build plate, and the scanner\'s mirrors steer the laser\'s focused spot over the part\'s slice of it, melting it into the layer below; the plate drops a layer and it repeats; the part dug out of its powder, stress-relieved and cut off its plate',
+    spec: () => '250 × 250 × 325 mm build (its height with its plate); one 400 W Yb fibre laser, focused to 100 µm, scanning at up to 7.0 m/s; 30 µm layers typical (TU Darmstadt); inert gas at 7 bar, 20 m³/h; 32 A, 2.4 kW typical, 8.5 kW at most; 2500 × 1300 × 2190 mm; about 1250 kg (EOS\'s M 290 system data sheet). Hazards: a class 4 laser inside it, argon that displaces air round it, and metal powders that are breathed in or (titanium, aluminium) burn and explode as dust',
+    box: () => [2500, 2190, 1300], g: () => 1250000,
+  },
+  {
     id: 'robotarm', name: 'six-axis robot arm', path: 'Mechanical/Robots/Robot arms', says: 'a six-jointed arm that puts its tool at any pose in its reach, programmed in its maker\'s commands', std: 'Mecademic\'s Meca500 user and programming manuals',
     axes: [bare('model', 'model', ['Meca500-R3', 'Meca500-R4', 'UR5e'])],
     title: (p) => (s(p, 'model') === 'UR5e' ? 'Universal Robots UR5e six-axis arm' : `Mecademic ${s(p, 'model').replace('-', ' ')} six-axis arm`),
