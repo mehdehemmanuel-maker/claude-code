@@ -91,7 +91,7 @@ export class SolderBench {
   private tipMeshes: THREE.Mesh[] = [];
   private card: THREE.Mesh; private cardCtx: CanvasRenderingContext2D | null; private cardTex: THREE.CanvasTexture; private cardText = ''; private cardAt = 0;
   private puffs: { s: THREE.Sprite; t: number }[] = [];
-  private legs: THREE.Mesh[] = [];
+  private legs: THREE.Mesh[] = []; private slab: THREE.Mesh | null = null;
   private cable: THREE.Mesh; private cableFrom = new THREE.Vector3(1e9, 0, 0); private tail: THREE.Mesh;
   /** for words and tests: where the tip and the wire's end are, bench mm, when no hand holds them */
   private script: { tip: V3 | null; wire: V3 | null; cutters: boolean } = { tip: null, wire: null, cutters: false };
@@ -106,7 +106,7 @@ export class SolderBench {
     // (the bench: a plywood top 25 mm thick on four legs, as a workbench is (its height set where it is placed); the
     // lesson's things on it)
     const wood = new THREE.MeshStandardMaterial({ color: 0x9a7a55, roughness: 0.75 }), top = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.025, 0.38), wood);
-    top.position.set(0.03, -0.0125, -0.05); top.receiveShadow = true; top.castShadow = true; this.group.add(top);
+    top.position.set(0.03, -0.0125, -0.05); top.receiveShadow = true; top.castShadow = true; this.group.add(top); this.slab = top;
     for (const [x, z] of [[-0.27, -0.21], [0.33, -0.21], [-0.27, 0.11], [0.33, 0.11]] as const) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1, 0.04), wood); leg.position.set(x, -0.525, z); leg.name = 'bench leg'; this.legs.push(leg); this.group.add(leg); }
     const add = (part: Part, at: V3, rot: [number, number, number] = [0, 0, 0]): THREE.Object3D => { const v = kitView(part, { maxLights: 0 }); this.views.push(v); v.group.position.set(at[0] * MM, at[1] * MM, at[2] * MM); v.group.rotation.set(...rot); this.group.add(v.group); return v.group; };
     if (plan === 'pico') {
@@ -180,6 +180,8 @@ export class SolderBench {
     this.group.position.copy(at); this.group.rotation.set(0, yaw, 0); const h = Math.max(0.1, at.y - 0.025 - floorY);
     for (const l of this.legs) { l.scale.y = h; l.position.y = -0.025 - h / 2; }
   }
+  /** Its things set out on another table (a robot's): its own plywood top and legs put away, or back. */
+  ownTable(yes: boolean): void { if (this.slab) this.slab.visible = yes; for (const l of this.legs) l.visible = yes; }
   /** What a hand holds of the bench's things. */
   holding(hand: 'right' | 'left'): Thing | null { return this.held[hand]; }
   // ---- the iron ------------------------------------------------------------------------------------------------------

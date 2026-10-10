@@ -23,6 +23,7 @@
 
 import { processWords } from '../processor';
 import { robotFor, robotTasks, robotWords as robotDesign } from '../robot';
+import { RobotAtBench } from './robot-bench';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -123,7 +124,7 @@ import { profileLines } from '../derive';
 import { LOCI, childOf, earwax, phenotype, possibilities, randomGenome, type Genome } from '../life/genome';
 import { countSays } from '../inventory';
 import { PY_PRELUDE, readPy, runMeca, type Ran, type Target as CodeTarget } from '../codesim';
-import { ARM_AXES, robotPart } from '../components';
+import { ARM_AXES, robotPart, ROBOT_CELL } from '../components';
 import type { Frame } from '../meca';
 import { setBody } from '../anatomy';
 import { FAMILIES, callFamily } from '../families';
@@ -2287,9 +2288,10 @@ window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement
 // ---- the soldering bench (src/nexus/view/solder-bench.ts, src/nexus/solder-lesson.ts): the Pico's headers soldered by
 // your own hands, the iron in your right as a pen, the solder in your left; each joint heated and fed where your hands
 // put the tip and the wire, and judged as it is made. On a screen the same moves are said ("heat pin 3", "feed pin 3") ----
-let bench: SolderBench | null = null;
+let bench: SolderBench | null = null, robotAt: RobotAtBench | null = null;
 function startBench(plan: PlanId = 'pico', build: Build = PROTO_BUILD): string {
-  if (bench && bench.plan === plan && (plan === 'pico' || bench.bench.build === build)) { bench.reset(); return `The bench is set out again. ${stepsOf(bench.bench)[0]!.do}`; }
+  if (bench && bench.plan === plan && (plan === 'pico' || bench.bench.build === build)) { robotAt?.dispose(); robotAt = null; bench.reset(); return `The bench is set out again. ${stepsOf(bench.bench)[0]!.do}`; }
+  robotAt?.dispose(); robotAt = null;
   if (bench) { bench.dispose(); bench = null; }
   bench = new SolderBench(plan, build); scene.add(bench.group); named(bench.group, 'the soldering bench');
   eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
@@ -2304,6 +2306,15 @@ function startBench(plan: PlanId = 'pico', build: Build = PROTO_BUILD): string {
   }
   const hands = renderer.xr.isPresenting ? 'Grip with your right hand to take a header, the Pico or the iron (held as a pen, its tip ahead of your fist); grip with your left to take the solder, and pull its trigger for more wire.' : 'On a screen, say the moves: "place the headers", "place the pico", "take the iron", "take the solder", "tin the tip", "heat pin 1", "feed pin 1", "lift", "wipe", "iron down".';
   return `A soldering bench before you: a Raspberry Pi Pico, two 20-pin headers, a breadboard, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner and a reel of 63/37 solder. ${hands} First: ${first}`;
+}
+/** "Let the robot solder it", "robot, solder the LED": the LED lesson's bench set out on the robot's own table, and the
+ *  robot doing it by the bench's words, its arms following where the iron, the wire and the cutters go. */
+function robotSolders(): string {
+  startBench('proto', bench?.plan === 'proto' && bench.bench.build ? bench.bench.build : PROTO_BUILD);
+  // (its table stands on the floor: the bench's things at its 750 mm top)
+  const at0 = bench!.group.position.clone(); at0.y = ROBOT_CELL.top / 1000; bench!.place(at0, bench!.group.rotation.y, 0); robotAt = new RobotAtBench(bench!);
+  if (!renderer.xr.isPresenting) { const at = bench!.group.getWorldPosition(new THREE.Vector3()), f = new THREE.Vector3(0, 0, -1).applyQuaternion(bench!.group.quaternion); camera.position.copy(at).add(new THREE.Vector3(0, 0.55, 0)).addScaledVector(f, -0.9); orbit.target.copy(at).add(new THREE.Vector3(0, 0.15, 0)).addScaledVector(f, 0.15); orbit.update(); }
+  return `The robot stands at the bench, its things on its table: it does the lesson by the bench's own words, ${robotAt.said.length ? '' : 'step by step, '}its right hand on the iron and the cutters, its left on the solder. Watch it, or say "stop the robot".`;
 }
 function benchWords(text: string): string | null {
   const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
@@ -2545,6 +2556,8 @@ async function converse(text: string): Promise<void> {
   if (/^(go )?back to the table[.!]?$/i.test(text.trim())) { line('you', text); say(goPlace('table'), undefined, 'nexus'); return; }
   if (/^(go to|take me to|show me) the workshop[.!]?$|^workshop$/i.test(text.trim())) { line('you', text); say(goPlace('workshop'), undefined, 'nexus'); return; }
   { const said = packWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  if (/\b(let|have|get|watch) (the |my )?robot (do it|solder|do the lesson)|^robot,? solder|\brobot (solders|do the soldering)\b/i.test(text.trim())) { line('you', text); say(robotSolders(), undefined, 'nexus'); return; }
+  if (/^stop (the )?robot\b/i.test(text.trim()) && robotAt) { line('you', text); robotAt.dispose(); robotAt = null; say('The robot has stepped back.', undefined, 'nexus'); return; }
   { const said = robotDesign(text); if (said) { line('you', text); say(`${said} ${seeRobot(text)}`, undefined, 'nexus'); return; } }
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = benchWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
@@ -3924,7 +3937,7 @@ async function boot() {
     T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else if (!coaster?.seated) orbit.update(); });
     T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
     guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
-    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('the bench', () => T('bench', () => bench?.update(dt))); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
+    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('the bench', () => T('bench', () => bench?.update(dt))); guarded('the robot at the bench', () => robotAt?.update(dt)); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
     for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt);
     T('phone', () => phone.render(renderer, scene)); T('render', () => renderer.render(scene, camera));
   });
@@ -4002,7 +4015,7 @@ async function boot() {
     restPerson: (name: string, on = true) => { const p = personNamed(name), v = p && personViews.get(p); v?.rest(on); return !!v; },
     pointerNow: () => [0, 1].map((i) => ({ hand: handOf[i], touching: touching[i], beam: lasers[i]?.scale.z ?? null, ball: balls[i]!.visible ? balls[i]!.position.toArray() : null })),
     phonePeek: (app: string, sub?: string, page?: number) => phone.peek(app, sub, page),
-    benchStart: (plan?: string) => { const leds = plan && plan !== 'proto' && plan !== 'pico' ? ledsAsked(`solder ${plan}`) : null, r = leds ? ledBuild(leds) : null; return r ? (r.build && !r.refused.length ? startBench('proto', r.build) : r.refused.join('; ')) : startBench(plan === 'proto' ? 'proto' : 'pico'); }, benchAct: (t: string) => (bench ? bench.act(t) : null), benchRun: (s: number) => { bench?.advance(s); return bench ? bench.now() : null; },
+    benchStart: (plan?: string) => { const leds = plan && plan !== 'proto' && plan !== 'pico' ? ledsAsked(`solder ${plan}`) : null, r = leds ? ledBuild(leds) : null; return r ? (r.build && !r.refused.length ? startBench('proto', r.build) : r.refused.join('; ')) : startBench(plan === 'proto' ? 'proto' : 'pico'); }, benchAct: (t: string) => (bench ? bench.act(t) : null), benchRun: (s: number) => { bench?.advance(s); return bench ? bench.now() : null; }, robotBench: () => robotSolders(), robotRun: (s: number) => { for (let t = 0; t < s - 1e-9 && robotAt && bench; t += 1 / 60) { bench.update(1 / 60); robotAt.update(1 / 60); } return robotAt && bench ? { finished: robotAt.finished, steps: robotAt.said.length, last: robotAt.said.slice(-2), bench: bench.now() } : null; },
     benchPoint: (what: string) => (bench ? bench.point(what as Parameters<SolderBench['point']>[0]) : null),
     // (an emulated headset's hands, for a test: a controller put so its grip is at a point in the room, level and facing
     // ahead, or turned by a quaternion; its grip or trigger pressed or let go)
