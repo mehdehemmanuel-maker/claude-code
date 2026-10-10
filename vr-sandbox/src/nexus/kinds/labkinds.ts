@@ -1,4 +1,4 @@
-// Molecular-biology bench instruments as kinds, by their makers' own published figures: a thermal cycler, a
+// Bench instruments and a headset as kinds, by their makers' own published figures: a thermal cycler, a
 // microcentrifuge, a horizontal gel tank with its supply, a blue-light transilluminator, an air-displacement pipette and
 // a Class II Type A2 safety cabinet. Their figures and their drawings are in src/nexus/lab.ts, which also holds what
 // each does as numbers (a program's time, the force at a speed, a gel's field, a melting point, a pipette's error,
@@ -6,6 +6,7 @@
 
 import { bare, type KindDef, type P } from './core';
 import { BSC_A2, C5425, C5425_RADIUS, MINISUB, POWERPAC, RESEARCH_PLUS, SAFE_IMAGER, T100, cabinetAir } from '../lab';
+import { QUEST3, pixelsPerDegree } from '../headset';
 
 const s = (p: P, k: string) => String(p[k]);
 const air = cabinetAir();
@@ -80,5 +81,31 @@ export const LAB_KINDS: KindDef[] = [
     how: 'its blower pushes air up the back plenum and down through the work zone\'s HEPA filter; the grilles at the front and back draw it off again, about 70 % of it round once more and the rest out through the second HEPA filter and the collar on its top',
     spec: () => `${BSC_A2.inner[0] / 10} cm wide inside, ${BSC_A2.height / 10} cm high without its stand, a ${BSC_A2.sash} mm sash opening, under 63 dBA; at NSF/ANSI 49's velocities that is about ${Math.round(air.inflow)} m³/h in through the opening, ${Math.round(air.downflow)} m³/h down through the work zone and ${Math.round(air.exhaust)} m³/h out of the collar; about ${BSC_A2.recirculated * 100} % of its air round again (${BSC_A2.src}). Hazards: ${BSC_A2.hazard}`,
     box: () => [BSC_A2.inner[0] + 40, BSC_A2.height + 760, BSC_A2.inner[1] + 60], g: () => BSC_A2.kg * 1000,
+  },
+  {
+    id: 'headset', look: 'box', name: 'mixed-reality headset', path: 'Electrical/Instruments/Headsets',
+    says: 'two displays seen through pancake lenses, their place set to the eyes; its cameras and depth sensor let what is round you be seen through it and let its controllers and hands be tracked without anything else in the room',
+    std: 'its maker\'s figures and what its teardowns show (Meta\'s Quest 3)',
+    axes: [bare('model', 'model', ['Quest-3'])], title: () => QUEST3.name,
+    of: () => 'headset-optic*2 headset-pod*5 headset-camera*6 depth-sensor pcb-bare headset-battery headset-speaker*2 facial-interface head-strap', make: 'assemble',
+    how: 'its optics ride a slide the wheel underneath moves, so the two lens stacks sit where the eyes are; its cameras and depth sensor look out of the pods across its face, and what they see is drawn back onto the displays with the room\'s depth in it',
+    spec: () => {
+      const [ppdx, ppdy] = pixelsPerDegree();
+      return `${QUEST3.pixels[0].toLocaleString('en')} × ${QUEST3.pixels[1].toLocaleString('en')} an eye through pancake lenses, ${QUEST3.fov[0]}° across by ${QUEST3.fov[1]}° up, which is ${ppdx.toFixed(0)} pixels on a degree across and ${ppdy.toFixed(0)} up; ${QUEST3.hz.join(', ')} Hz; ${QUEST3.chip} with ${QUEST3.ram} GB and ${QUEST3.storage.join(' or ')} GB; its eyes set ${QUEST3.ipd[0]}–${QUEST3.ipd[1]} mm apart and in and out; ${QUEST3.cameras.colour} colour and ${QUEST3.cameras.mono} tracking cameras and a depth sensor; ${QUEST3.wh} Wh, about ${QUEST3.hours} h, about 2 h to charge at ${QUEST3.chargeW} W; ${QUEST3.size.join(' × ')} mm, about ${QUEST3.kg * 1000} g, that size taken with its strap at its shortest (${QUEST3.src}). Hazards: ${QUEST3.hazard}`;
+    },
+    // (Meta's 184 × 160 × 98 mm is the headset with its strap at its shortest; it is drawn as it is worn, its strap
+    // open round the head, so it is deeper and less tall than that)
+    box: () => [184, 132, 189], g: () => QUEST3.kg * 1000,
+  },
+  {
+    id: 'vrcontroller', look: 'box', name: 'tracked controller', path: 'Electrical/Instruments/Headsets',
+    says: 'a controller the headset\'s own cameras find, by the infrared LEDs under its shell: a thumbstick, four buttons, a trigger and a grip button, and a motor that lets a touch be felt',
+    std: 'its maker\'s figures (Meta\'s Touch Plus)',
+    axes: [bare('model', 'model', ['Touch-Plus'])], title: () => `Meta ${QUEST3.controller.name} controller`,
+    of: () => 'thumbstick pcb-bare cell-aa vibration-motor', make: 'assemble',
+    how: 'its board reads its stick, its buttons and its trigger and sends them to the headset over Bluetooth; its infrared LEDs let the headset\'s cameras see where it is, and its motor shakes it when something is touched',
+    spec: () => `${QUEST3.controller.size.join(' × ')} mm, ${QUEST3.controller.kg * 1000} g with its ${QUEST3.controller.cell} cell; no tracking ring — the headset\'s own cameras find it, helped by the infrared LEDs under its shell (${QUEST3.src})`,
+    // (stood on its grip, as it is set down: its 126 mm up, its 67 across, its 43 through, plus its trigger)
+    box: () => [63, 131, 84], g: () => QUEST3.controller.kg * 1000,
   },
 ];
