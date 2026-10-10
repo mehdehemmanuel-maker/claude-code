@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLAYS, CONES, FILAMENTS, fire, FURNACE_MAX, KILNS, pour, PRINTERS, printWith, processorFor, processWords, QUARTZ } from '../../src/nexus/processor';
+import { CLAYS, CONES, FILAMENTS, fire, fuse, FUSERS, FURNACE_MAX, greenDensity, KILNS, POWDERS, pour, PRINTERS, printWith, processorFor, processWords, QUARTZ, sinter } from '../../src/nexus/processor';
 import { Kiln, METALS } from '../../src/nexus/cell';
 
 const P = (id: string) => PRINTERS.find((p) => p.id === id)!, F = (id: string) => FILAMENTS.find((f) => f.id === id)!;
@@ -35,7 +35,7 @@ describe('the materials processor', () => {
     for (const m of METALS) { const r = pour(m); expect(r.ok, m.id).toBe(true); expect(r.steps[0]!.do).toContain(`${m.pour[0]}–${m.pour[1]} °C`); }
   });
   it('says what every machine here can do to a material', () => {
-    expect(processorFor('pc').map((x) => x.ok)).toEqual([true, true, true]);
+    expect(processorFor('pc').map((x) => x.ok)).toEqual([true, true, true, true]);
     expect(processorFor('stoneware-10').map((x) => x.ok)).toEqual([false, true, false]);
     expect(processorFor('bronze')[0]!.ok).toBe(true); expect(processorFor('unobtainium')).toEqual([]);
   });
@@ -50,5 +50,29 @@ describe('the processor in words', () => {
     expect(processWords('bisque stoneware')).toMatch(/^mid-fire stoneware bisqued in Paragon's SC-2: .*Mind: cone 04/);
     expect(processWords('how do I pour bronze')).toMatch(/^tin bronze poured from the workshop's furnace: 1\. Melt the tin bronze .*1100–1150 °C/);
     expect(processWords('print the bracket')).toBeNull(); expect(processWords('hello')).toBeNull();
+  });});
+
+describe('metal printed', () => {
+  it('prints Ultrafuse 316L on the Voron oversize and solid, then makes it metal by a service, its hazards said', () => {
+    const f = F('ultrafuse-316l'), r = printWith(P('voron-24'), f);
+    expect(r.ok).toBe(true); expect(r.settings).toEqual({ nozzle: 240, bed: 105 });
+    expect(r.steps[0]!.do).toMatch(/1\.20 times in X and Y and 1\.26 in Z/); expect(r.warn.join()).toMatch(/polyimide tape/);
+    // (its green density from its spool: 3 kg on 250 m of 1.75 mm)
+    expect(greenDensity(f.metal!)).toBeCloseTo(4989, -1);
+    const s = sinter(f, [20, 20, 20], 8);
+    expect(s.settings.printed).toEqual([24, 24, 25.2]); expect(s.settings.binder).toBeGreaterThan(0.1); expect(s.settings.binder).toBeLessThan(0.16);
+    expect(s.settings.grams).toBeCloseTo(62.8, 1); expect(s.settings.greenGrams!).toBeGreaterThan(s.settings.grams!);
+    expect(s.warn.join()).toMatch(/nitric acid.*formaldehyde/); expect(s.warn.join()).toMatch(/hydrogen.*4 % to 75 %/); expect(s.warn.join()).toMatch(/service/);
+    expect(sinter(F('pla')).ok).toBe(false);
+  });
+  it('melts a powder bed layer on layer on the EOS M 290, refusing what does not fit, every hazard said', () => {
+    const u = FUSERS[0]!, ti = POWDERS.find((w) => w.id === 'ti64-powder')!, r = fuse(u, ti, [40, 40, 60]);
+    expect(r.ok).toBe(true); expect(r.settings.layers).toBe(2000); expect(r.warn.join()).toMatch(/class 4/); expect(r.warn.join()).toMatch(/explodes/);
+    expect(fuse(u, ti, [300, 300, 40]).ok).toBe(false);
+  });
+  it('answers in words: how to print metal, Ultrafuse on the Voron, titanium on the EOS', () => {
+    expect(processWords('how do I print metal')).toMatch(/Two ways/);
+    expect(processWords('print ultrafuse on the voron')).toMatch(/Then: its green part made metal/);
+    expect(processWords('fuse titanium on the eos 30x30x45')).toMatch(/1500 layers/);
   });
 });

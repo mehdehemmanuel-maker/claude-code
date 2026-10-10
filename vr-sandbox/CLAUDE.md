@@ -604,6 +604,17 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    Voron 2.4 (80 %), 3/10 (the toolhead still a block; belts, motors and wiring not seen). Next: the Stealthburner
    still a rounded red block over its fans and hot end (an outline from one side cannot hollow it); no wiring; its
    supply and display boxes; the PTFE guide tube's run outside its top panel.
+   Metal printed (2026-10-10, `processor.ts`): two ways. Bound metal on the Voron (`printWith` with BASF's Ultrafuse
+   316L, its TDS v1.1: 230–250 °C, bed 90–120 °C on glass with glue or polyimide tape, 15–50 mm/s; printed 1.20 × in X
+   and Y and 1.26 × in Z, solid), then `sinter`: catalytic debinding in nitrogen with a few per cent of nitric acid gas
+   at 100–140 °C (BASF's Catamold brochure), sintered in pure hydrogen in a cold-wall retort (BASF; Nabertherm), about
+   1380 °C (an estimate), 7850 kg/m³ after; its green density from its spool (3 kg on 250 m of 1.75 mm: 4.99 g/cm³) and
+   so its binder, 13 % by mass; both steps a service (Elnik, DSH Technologies), their hazards said (nitric acid,
+   formaldehyde, hydrogen 4–75 % in air). The Voron's limits from VoronDesign's own Klipper config (extruder 270 °C, bed
+   120 °C, 250 × 250 × 210 mm). And laser powder-bed fusion (`fuse`) on the EOS M 290 by its data sheet (400 W, 100 µm,
+   7 m/s, 250 × 250 × 325 mm, 30 µm layers), with 316L, Ti-6Al-4V and AlSi10Mg powders and their hazards (class 4
+   laser, argon, combustible dust). In words: "how do I print metal", "print ultrafuse on the voron", "fuse titanium on
+   the eos 30x30x45". Next: the EOS M 290 drawn; a sintering furnace drawn.
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);
