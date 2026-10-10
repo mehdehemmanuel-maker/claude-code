@@ -6,19 +6,34 @@ import { MECA500 } from '../meca';
 import { UR5E } from '../dharm';
 import { billOf } from '../makermodel';
 import { ENDER3 } from '../models/ender3';
+import { VORON24 } from '../models/voron24';
 
 /** A maker's model's bill of materials as kind words: each library part by its words and how many. */
-const bill = () => Object.entries(billOf(ENDER3).words).map(([w, n]) => `{${w}}${n > 1 ? `*${n}` : ''}`).join(' ');
+const bill = (m = ENDER3) => Object.entries(billOf(m).words).map(([w, n]) => `{${w}}${n > 1 ? `*${n}` : ''}`).join(' ');
+/** The printers drawn from their makers' own assemblies. */
+export const PRINTER_MODELS = { 'Ender-3': ENDER3, 'Voron-2.4': VORON24 };
 
 const s = (p: P, k: string) => String(p[k]);
+/** The Voron 2.4r2's size, mm (wide, high, deep: its model's as drawn, over its panels, skirts, door handles, spool
+ *  holder and filter housing, and its guide tube's run over them), and its mass, g: the sum of its drawn parts' masses
+ *  (an estimate: VoronDesign gives none; 18.5 kg, its library parts' from their standards, the rest as boxedAs fills
+ *  them). */
+const VORON_BOX: [number, number, number] = [430, 573, 513], VORON_G = 18500;
 
 export const ROBOT_KINDS: KindDef[] = [
   {
-    id: 'printer3d', look: 'box', name: '3D printer', path: 'Electrical/Machines/3D printers', says: 'a machine that draws a part layer on layer from melted filament: a hot end moved over a heated bed on belts and a lead screw', std: 'its maker\'s published assembly (Creality\'s Ender-3 3DXML)',
-    axes: [bare('model', 'model', ['Ender-3'])], title: () => 'Creality Ender-3 3D printer', of: () => bill(), make: 'assemble',
-    how: 'its frame of T-slot extrusion; the bed carried front to back on V-wheels by a belt from its Y stepper; the gantry raised on a T8 lead screw by its Z stepper; the hot end carried across on V-wheels by a belt from its X stepper; filament driven into it by the extruder\'s stepper through a PTFE tube',
-    spec: () => '220 × 220 × 250 mm print area on a 235 × 235 mm bed; 440 × 440 × 465 mm (wevolver, from Creality\'s figures); 6.7 kg (Creality\'s official UK listing); 24 V 15 A supply; its parts and where each sits from Creality\'s own assembly (311 parts)',
-    box: () => [440, 465, 440], g: () => 6700,
+    id: 'printer3d', look: 'box', name: '3D printer', path: 'Electrical/Machines/3D printers', says: 'a machine that draws a part layer on layer from melted filament: a hot end moved over a heated bed on belts and a lead screw (or the bed lowered under a CoreXY gantry)', std: 'its maker\'s published assembly (Creality\'s Ender-3 3DXML; VoronDesign\'s Voron 2.4r2 STEP)',
+    axes: [bare('model', 'model', ['Ender-3', 'Voron-2.4'])],
+    title: (p) => (s(p, 'model') === 'Voron-2.4' ? 'Voron 2.4r2 3D printer, 250 mm' : 'Creality Ender-3 3D printer'), of: (p) => bill(s(p, 'model') === 'Voron-2.4' ? VORON24 : ENDER3), make: 'assemble',
+    how: (p) => (s(p, 'model') === 'Voron-2.4'
+      ? 'its frame a cube of 2020 T-slot extrusion, closed by panels; its toolhead (a Stealthburner, a Clockwork 2 extruder on it and a Revo hot end in it) carried on an MGN12 rail across a gantry that slides on MGN9 rails front to back, moved in X and Y together by two belts from two steppers at its back (CoreXY); the whole gantry hung on four belts from four Z steppers, one at each corner, so it is levelled to the bed by probing (quad gantry levelling); its bed fixed'
+      : 'its frame of T-slot extrusion; the bed carried front to back on V-wheels by a belt from its Y stepper; the gantry raised on a T8 lead screw by its Z stepper; the hot end carried across on V-wheels by a belt from its X stepper; filament driven into it by the extruder\'s stepper through a PTFE tube'),
+    spec: (p) => (s(p, 'model') === 'Voron-2.4'
+      ? `250 × 250 × 250 mm print volume (Wikipedia, the 250 build); the 2.4R2 released February 2022 (Wikipedia); an enclosed CoreXY with a flying gantry levelled on four Z belts; its parts and where each sits from VoronDesign's own assembly (${VORON24.parts.length} parts, its stock options: an Octopus board, an Omron TL-Q5MC2 probe, microswitch endstops, Gates idlers, 9 mm Z belts)`
+      : '220 × 220 × 250 mm print area on a 235 × 235 mm bed; 440 × 440 × 465 mm (wevolver, from Creality\'s figures); 6.7 kg (Creality\'s official UK listing); 24 V 15 A supply; its parts and where each sits from Creality\'s own assembly (311 parts)'),
+    // (the Voron's size its model's, measured over its parts; its mass the sum of its parts', an estimate: VoronDesign
+    // gives none)
+    box: (p) => (s(p, 'model') === 'Voron-2.4' ? VORON_BOX : [440, 465, 440]), g: (p) => (s(p, 'model') === 'Voron-2.4' ? VORON_G : 6700),
   },
   {
     id: 'robotarm', name: 'six-axis robot arm', path: 'Mechanical/Robots/Robot arms', says: 'a six-jointed arm that puts its tool at any pose in its reach, programmed in its maker\'s commands', std: 'Mecademic\'s Meca500 user and programming manuals',

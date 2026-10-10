@@ -205,10 +205,10 @@ export const ELECTRICAL: KindDef[] = [
     spec: (p) => `${p.V} V, ${p.Ah} Ah (${n(p, 'V') * n(p, 'Ah')} Wh at the 20-hour rate); float at ${(n(p, 'V') * 2.275).toFixed(2)} V`, box: (p) => { const v = ((n(p, 'V') * n(p, 'Ah')) / 0.08) * 1000; return [Math.cbrt(v) * 1.6, Math.cbrt(v) * 0.7, Math.cbrt(v)]; }, g: (p) => ((n(p, 'V') * n(p, 'Ah')) / 35) * 1000,
   },
   {
-    id: 'psu', look: 'case', name: 'enclosed switching power supply', path: 'Electrical/Power/Power supplies', says: 'a mains-to-DC switching supply in a vented metal case, with screw terminals', std: 'the voltages and powers sold; sizes and masses typical',
+    id: 'psu', look: 'case', name: 'enclosed switching power supply', path: 'Electrical/Power/Power supplies', says: 'a mains-to-DC switching supply in a vented metal case, with screw terminals', std: 'the voltages and powers sold; sizes as Mean Well\'s LRS series (100 W 129 × 97 × 30, 150 W 159 × 97 × 30, 200 and 350 W 215 × 115 × 30 mm), masses typical',
     axes: [unit('V', 'output', 'V', [5, 12, 15, 24, 36, 48]), unit('W', 'power', 'W', [35, 50, 75, 100, 150, 200, 350, 600])],
     title: (p) => `${p.W} W ${p.V} V power supply`, of: () => 'psu-case pcb-bare transformer-ferrite capacitor-electrolytic*3 mosfet-to220 diode-1n4007*4 fan-30 screw-terminal', make: 'assemble', how: 'mains rectified and chopped at tens of kHz through a ferrite transformer, rectified and filtered, regulated by feedback',
-    spec: (p) => `${p.V} V at up to ${(n(p, 'W') / n(p, 'V')).toFixed(2)} A; 100–240 V AC in; about 88 % efficient (typical)${n(p, 'W') >= 350 ? '; fan-cooled' : ''}`, box: (p) => { const W = n(p, 'W'); return W <= 50 ? [85, 58, 33] : W <= 100 ? [129, 97, 30] : W <= 200 ? [159, 97, 30] : W <= 350 ? [215, 115, 30] : [215, 115, 50]; }, g: (p) => 150 + n(p, 'W') * 1.5,
+    spec: (p) => `${p.V} V at up to ${(n(p, 'W') / n(p, 'V')).toFixed(2)} A; 100–240 V AC in; about 88 % efficient (typical)${n(p, 'W') >= 350 ? '; fan-cooled' : ''}`, box: (p) => { const W = n(p, 'W'); return W <= 50 ? [85, 58, 33] : W <= 100 ? [129, 97, 30] : W <= 150 ? [159, 97, 30] : W <= 350 ? [215, 115, 30] : [215, 115, 50]; }, g: (p) => 150 + n(p, 'W') * 1.5,
   },
   {
     id: 'walladapter', look: 'case', name: 'plug-in power adapter', path: 'Electrical/Power/Power supplies', says: 'a wall-plug switching supply on a lead with a barrel plug', std: 'the voltages and currents sold (typical)',

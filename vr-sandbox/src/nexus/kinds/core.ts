@@ -152,6 +152,10 @@ export function familyOf(k: KindDef): Family & { kind: true } {
 
 // ---- shapes and masses ---------------------------------------------------------------------------------------------
 /** Grams of a solid of mm³ at ρ g/cm³. */
+/** A deep-groove bearing's balls: each about 0.3 of its rings' section across (typical), on the pitch circle midway
+ *  between its bore and its outside, as many as its rings take when they are pushed eccentric to put them in (the Conrad
+ *  assembly: about half the pitch circle full, and one more; typical, within one of makers' counts). */
+export const ballsOf = (d: number, D: number): { Db: number; dm: number; z: number } => { const Db = 0.3 * (D - d), dm = (d + D) / 2; return { Db, dm, z: Math.max(6, Math.round((0.5 * Math.PI * dm) / Db + 1)) }; };
 export const gOf = (mm3: number, rho: number) => (mm3 / 1000) * rho;
 export const cyl = (d: number, L: number) => Math.PI * (d / 2) ** 2 * L;
 export const ring = (D: number, d: number, L: number) => Math.PI * ((D / 2) ** 2 - (d / 2) ** 2) * L;

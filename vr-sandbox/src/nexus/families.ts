@@ -61,11 +61,12 @@ export const BEARINGS: Record<string, [number, number, number]> = {
   // (miniatures, shielded widths: the 684 and 685 a small stepper's bells hold; and the inch R4, 1/4 × 5/8 × 0.196 in,
   // ABMA, for a 1/4 in shaft)
   '684': [4, 9, 4], '685': [5, 11, 5], '686': [6, 13, 5], '687': [7, 14, 5], '688': [8, 16, 5], '689': [9, 17, 5], 'R4': [6.35, 15.875, 4.978],
+  // (the metric miniatures' MR series, named by outside then bore, MR85 5 × 8: makers' tables (NMB), their shielded widths)
+  'MR52': [2, 5, 2.5], 'MR63': [3, 6, 2.5], 'MR74': [4, 7, 2.5], 'MR83': [3, 8, 3], 'MR84': [4, 8, 3], 'MR85': [5, 8, 2.5], 'MR95': [5, 9, 3], 'MR105': [5, 10, 4], 'MR106': [6, 10, 3],
+  'MR115': [5, 11, 4], 'MR117': [7, 11, 3], 'MR126': [6, 12, 4], 'MR128': [8, 12, 3.5], 'MR137': [7, 13, 4], 'MR148': [8, 14, 4],
 };
-/** A deep-groove bearing's balls: each about 0.3 of its rings' section across (typical), on the pitch circle midway
- *  between its bore and its outside, as many as its rings take when they are pushed eccentric to put them in (the Conrad
- *  assembly: about half the pitch circle full, and one more; typical, within one of makers' counts). */
-export const ballsOf = (d: number, D: number): { Db: number; dm: number; z: number } => { const Db = 0.3 * (D - d), dm = (d + D) / 2; return { Db, dm, z: Math.max(6, Math.round((0.5 * Math.PI * dm) / Db + 1)) }; };
+import { ballsOf } from './kinds/core';
+export { ballsOf };
 /** The bearing a stepper's shaft runs in at each end: of the bearings with the shaft's bore (or the next bore up, the
  *  shaft turned up to it where it sits), the 62 series where its bell's hub round it clears the coils' ends, else a
  *  thinner one; and the tie screws that clamp its bells to its stator: the face's thread where the face is tapped, else M4
@@ -79,11 +80,11 @@ export function stepperBuild(nema: string): { bearing: string; tie: string } {
   return { bearing, tie: f.through ? (F < 70 ? 'M4' : 'M5') : f.thread };
 }
 const bearing: Family = {
-  id: 'bearing', name: 'deep-groove ball bearing', path: ['Mechanical', 'Bearings', 'Ball bearings'], says: 'any bearing number of the 62x, 60xx, 62xx, 63xx, 68xx and 69xx series and the miniatures, its bore, outside and width from ISO 15 (the inch R4 from ABMA)', params: [{ key: 'number', says: 'bearing number', unit: '', values: Object.keys(BEARINGS), default: '608' }, { key: 'seal', says: 'shields or seals', unit: '', values: ['ZZ', '2RS', 'open'], default: 'ZZ' }],
+  id: 'bearing', name: 'deep-groove ball bearing', path: ['Mechanical', 'Bearings', 'Ball bearings'], says: 'any bearing number of the 62x, 60xx, 62xx, 63xx, 68xx and 69xx series and the miniatures, its bore, outside and width from ISO 15 (the inch R4 from ABMA, the MR miniatures from NMB\'s table)', params: [{ key: 'number', says: 'bearing number', unit: '', values: Object.keys(BEARINGS), default: '608' }, { key: 'seal', says: 'shields or seals', unit: '', values: ['ZZ', '2RS', 'open'], default: 'ZZ' }],
   examples: ['bearing 608', 'bearing 6201 2RS', 'bearing 625'],
-  read(w) { const n = /\b(6\d{2,3}|R\d{1,2})\b/i.exec(w)?.[1]?.toUpperCase(); if (!n || !BEARINGS[n]) return `Which bearing? ${Object.keys(BEARINGS).join(', ')}.`; return { number: n, seal: /2rs/i.test(w) ? '2RS' : /open/i.test(w) ? 'open' : 'ZZ' }; },
+  read(w) { const n = /\b(MR\d{2,3}|6\d{2,3}|R\d{1,2})\b/i.exec(w)?.[1]?.toUpperCase(); if (!n || !BEARINGS[n]) return `Which bearing? ${Object.keys(BEARINGS).join(', ')}.`; return { number: n, seal: /2rs/i.test(w) ? '2RS' : /open/i.test(w) ? 'open' : 'ZZ' }; },
   // (about 0.68 of its rings' envelope is steel: SKF's 608-2Z weighs 12 g, its 6204-2Z 110 g)
-  make(p) { const n = String(p.number), [d, D, B] = BEARINGS[n]!, v = Math.PI * ((D / 2) ** 2 - (d / 2) ** 2) * B * 0.68; return item(`bearing-${n.toLowerCase()}${p.seal === 'ZZ' ? 'zz' : String(p.seal).toLowerCase()}`, `ball bearing ${n}${p.seal === 'open' ? '' : ` ${p.seal}`} (${d} × ${D} × ${B})`, 'Mechanical/Bearings/Ball bearings', 'product', 'assemble', `bearing-ring*2 bearing-ball*${ballsOf(d, D).z} bearing-cage ${p.seal === 'open' ? '' : p.seal === '2RS' ? 'nbr*2' : 'bearing-shield*2'} grease`, `two rings and a row of balls in a cage${p.seal === 'open' ? '' : p.seal === '2RS' ? ', rubber seals both sides' : ', steel shields both sides'}, greased`, `${d} mm bore, ${D} mm outside, ${B} mm wide (${/^R/.test(n) ? 'ABMA' : 'ISO 15'}); ${ballsOf(d, D).z} balls of about ${ballsOf(d, D).Db.toFixed(1)} mm (typical)`, [D, D, B], mm3g(v, RHO.steel)); },
+  make(p) { const n = String(p.number), [d, D, B] = BEARINGS[n]!, v = Math.PI * ((D / 2) ** 2 - (d / 2) ** 2) * B * 0.68; return item(`bearing-${n.toLowerCase()}${p.seal === 'ZZ' ? 'zz' : String(p.seal).toLowerCase()}`, `ball bearing ${n}${p.seal === 'open' ? '' : ` ${p.seal}`} (${d} × ${D} × ${B})`, 'Mechanical/Bearings/Ball bearings', 'product', 'assemble', `bearing-ring*2 bearing-ball*${ballsOf(d, D).z} bearing-cage ${p.seal === 'open' ? '' : p.seal === '2RS' ? 'nbr*2' : 'bearing-shield*2'} grease`, `two rings and a row of balls in a cage${p.seal === 'open' ? '' : p.seal === '2RS' ? ', rubber seals both sides' : ', steel shields both sides'}, greased`, `${d} mm bore, ${D} mm outside, ${B} mm wide (${/^MR/.test(n) ? 'NMB\'s table, shielded' : /^R/.test(n) ? 'ABMA' : 'ISO 15'}); ${ballsOf(d, D).z} balls of about ${ballsOf(d, D).Db.toFixed(1)} mm (typical)`, [D, D, B], mm3g(v, RHO.steel)); },
 };
 // ---- spur gears by module and teeth -----------------------------------------------------------------------------------
 const gear: Family = {

@@ -3,7 +3,7 @@
 // and the motors and actuators sold by size. Standards' sizes where there are standards; makers' typical tables
 // otherwise, said so.
 
-import { ax, bare, cyl, gOf, matOf, pref, range, ring, tagged, unit, type KindDef, type P } from './core';
+import { ax, ballsOf, bare, cyl, gOf, matOf, pref, range, ring, tagged, unit, type KindDef, type P } from './core';
 /** NEMA frame sizes, mm across the body. */
 export const NEMA: Record<string, number> = { '8': 20.3, '11': 28.2, '14': 35.2, '17': 42.3, '23': 57.15, '34': 86 };
 /** NEMA frames' faces: the four holes' square, their thread (tapped 4.5 mm deep on 8–17, through holes on 23 and 34),
@@ -24,7 +24,7 @@ const T511: Record<string, [number, number, number]> = { '51100': [10, 24, 9], '
 /** Drawn-cup needle roller bearings (ISO 3245), HK: bore, outside, width. */
 const HK: Record<string, [number, number, number]> = { HK0408: [4, 8, 8], HK0509: [5, 9, 9], HK0608: [6, 10, 8], HK0810: [8, 12, 10], HK1010: [10, 14, 10], HK1210: [12, 18, 10], HK1412: [14, 20, 12], HK1512: [15, 21, 12], HK2016: [20, 26, 16], HK2520: [25, 32, 20], HK3020: [30, 37, 20] };
 /** Flanged miniature bearings: bore, outside, width, flange diameter. */
-const FB: Record<string, [number, number, number, number]> = { F623: [3, 10, 4, 11.5], F624: [4, 13, 5, 15], F625: [5, 16, 5, 18], F626: [6, 19, 6, 22], F608: [8, 22, 7, 25], F688: [8, 16, 5, 18], F695: [5, 13, 4, 15], F693: [3, 8, 4, 9.5] };
+export const FB: Record<string, [number, number, number, number]> = { F623: [3, 10, 4, 11.5], F624: [4, 13, 5, 15], F625: [5, 16, 5, 18], F626: [6, 19, 6, 22], F608: [8, 22, 7, 25], F688: [8, 16, 5, 18], F695: [5, 13, 4, 15], F693: [3, 8, 4, 9.5] };
 /** UC insert bearings in housings: bore. */
 const UC: Record<string, number> = { '201': 12, '202': 15, '203': 17, '204': 20, '205': 25, '206': 30, '207': 35, '208': 40, '209': 45, '210': 50 };
 /** UCP pillow blocks: centre height and length, mm (makers' tables, typical). */
@@ -68,6 +68,18 @@ const GM: Record<string, { d: number; L: number; rpmV: number; ratios: number[];
 export const VWHEEL: [number, number][] = [[7.987, -5.115], [9.5, -5.115], [9.5, -3.6], [11.95, -1.15], [11.95, 1.15], [9.5, 3.6], [9.5, 5.115], [7.987, 5.115], [7.987, -5.115]];
 /** A closed turned section's volume, mm³ (each edge's cone frustum, Pappus). */
 const latheMm3 = (s: [number, number][]) => Math.abs(s.slice(1).reduce((v, [r1, y1], i) => { const [r0, y0] = s[i]!; return v + (Math.PI * (y1 - y0) * (r0 * r0 + r0 * r1 + r1 * r1)) / 3; }, 0));
+
+/** A GT2 idler's sizes, mm: its face (a 16 or 20 tooth GT2 face, its outside 0.508 under its pitch circle, PowerDrive's;
+ *  a smooth face a 20 tooth's outside), its flanges 3 mm proud of it and 1 mm thick, its face 1 mm wider than its belt,
+ *  and the two miniature bearings pressed side by side in its bore: MR63 on a 3 mm bore, MR105 on a 5 mm one, MR85 under
+ *  a 16 tooth face too small round for an MR105 (typical of the idlers sold); its aluminium's volume less its grooves. */
+export function idlerDims(p: P) {
+  const t = p.face === 'smooth' ? 20 : Number(String(p.face).replace('t', '')), Ro = ((2 * t) / Math.PI - 0.508) / 2, Rf = Ro + 3, fl = 1, face = n(p, 'w') + 1, L = face + 2 * fl;
+  const [bearing, bd, bD, bB] = (n(p, 'bore') === 3 ? ['MR63', 3, 6, 2.5] : t < 20 ? ['MR85', 5, 8, 2.5] : ['MR105', 5, 10, 4]) as [string, number, number, number];
+  const groove = p.face === 'smooth' ? 0 : t * 0.6 * 1.15 * 0.75;
+  return { t, Ro, Rf, fl, face, L, bearing, bd, bD, bB, vol: 2 * Math.PI * (Rf ** 2 - (bD / 2) ** 2) * fl + (Math.PI * (Ro ** 2 - (bD / 2) ** 2) - groove) * face };
+}
+
 export const MOTION: KindDef[] = [
   {
     id: 'thrustbearing', name: 'thrust ball bearing', path: 'Mechanical/Bearings/Thrust bearings', says: 'two washers and a ring of balls between them, to carry a load along the shaft', std: 'ISO 104, the 511 series',
@@ -93,8 +105,8 @@ export const MOTION: KindDef[] = [
   {
     id: 'flangebearing', name: 'flanged miniature ball bearing', path: 'Mechanical/Bearings/Ball bearings', says: 'a small ball bearing with a flange on its outer ring, so it locates itself in a plate', std: 'F6xx and F69x miniature series (makers\' tables)',
     axes: [bare('number', 'bearing number', Object.keys(FB)), bare('seal', 'shields or seals', ['ZZ', '2RS'])],
-    title: (p) => { const [d, D, B] = FB[String(p.number)]!; return `flanged bearing ${p.number}${p.seal} (${d} × ${D} × ${B})`; }, of: (p) => `bearing-ring*2 bearing-ball*7 bearing-cage ${p.seal === '2RS' ? 'nbr*2' : 'bearing-shield*2'} grease`, make: 'assemble', how: 'a deep-groove bearing whose outer ring is turned with a flange',
-    spec: (p) => { const [d, D, B, F] = FB[String(p.number)]!; return `${d} mm bore, ${D} mm outside, ${B} mm wide, flange ${F} mm`; }, box: (p) => { const [, , B, F] = FB[String(p.number)]!; return [F, F, B]; }, g: (p) => { const [d, D, B] = FB[String(p.number)]!; return gOf(ring(D, d, B) * 0.6, 7.83); },
+    title: (p) => { const [d, D, B] = FB[String(p.number)]!; return `flanged bearing ${p.number}${p.seal} (${d} × ${D} × ${B})`; }, of: (p) => { const [d, D] = FB[String(p.number)]!; return `bearing-ring*2 bearing-ball*${ballsOf(d, D).z} bearing-cage ${p.seal === '2RS' ? 'nbr*2' : 'bearing-shield*2'} grease`; }, make: 'assemble', how: 'a deep-groove bearing whose outer ring is turned with a flange',
+    spec: (p) => { const [d, D, B, F] = FB[String(p.number)]!; return `${d} mm bore, ${D} mm outside, ${B} mm wide, flange ${F} mm`; }, box: (p) => { const [, , B, F] = FB[String(p.number)]!; return [F, F, B]; }, g: (p) => { const [d, D, B, F] = FB[String(p.number)]!; return gOf(ring(D, d, B) * 0.68 + ring(F, D, Math.max(0.6, 0.07 * D)), 7.83); },
   },
   {
     id: 'pillowblock', name: 'pillow block bearing', path: 'Mechanical/Bearings/Mounted bearings', says: 'a self-aligning insert bearing in a cast-iron housing that bolts down beside the shaft', std: 'UCP 201–210 (bores 12–50 mm), housings from makers\' tables (typical)',
@@ -178,9 +190,9 @@ export const MOTION: KindDef[] = [
   },
   {
     id: 'idler', name: 'GT2 idler pulley', path: 'Mechanical/Linear motion/Belts and pulleys', says: 'a free-turning pulley on a bearing, to guide or tension a GT2 belt', std: 'the bores, tooth counts and widths sold (typical)',
-    axes: [ax('bore', 'bore', 'mm', [3, 5]), bare('face', 'face', ['smooth', '16t', '20t']), ax('w', 'for belt width', 'mm', [6, 10])],
-    title: (p) => `GT2 idler, ${p.face === 'smooth' ? 'smooth' : `${String(p.face).replace('t', '')} teeth`}, ${p.bore} mm bore, ${p.w} mm belt`, of: () => 'al-6061 bearing-ring*2 bearing-ball*7', make: 'assemble', how: 'a turned aluminium pulley pressed onto two small bearings', spec: (p) => `${p.bore} mm bore on ${p.bore === 3 ? 'MR63' : '625'}-size bearings`,
-    box: (p) => [18, 18, n(p, 'w') + 3], g: (p) => gOf(cyl(18, n(p, 'w') + 3) * 0.55, 2.7) + 3,
+    axes: [ax('bore', 'bore', 'mm', [3, 5]), bare('face', 'face', ['smooth', '16t', '20t']), ax('w', 'for belt width', 'mm', [6, 9, 10])],
+    title: (p) => `GT2 idler, ${p.face === 'smooth' ? 'smooth' : `${String(p.face).replace('t', '')} teeth`}, ${p.bore} mm bore, ${p.w} mm belt`, of: (p) => `al-6061 {bearing ${idlerDims(p).bearing}}*2`, make: 'assemble', how: 'a turned aluminium pulley pressed onto two small bearings', spec: (p) => { const d = idlerDims(p); return `${p.bore} mm bore on two ${d.bearing} bearings (${d.bd} × ${d.bD} × ${d.bB}); ${p.face === 'smooth' ? 'its face smooth' : `${d.t} teeth, ${((2 * d.t) / Math.PI).toFixed(2)} mm on its pitch line`}, ${(2 * d.Ro).toFixed(2)} mm outside; flanges ${(2 * d.Rf).toFixed(1)} mm (typical)`; },
+    box: (p) => { const d = idlerDims(p); return [2 * d.Rf, 2 * d.Rf, d.L]; }, g: (p) => { const d = idlerDims(p); return gOf(d.vol, 2.7) + 2 * gOf(ring(d.bD, d.bd, d.bB) * 0.62, 7.83); },
   },
   {
     id: 'rack', name: 'gear rack', path: 'Mechanical/Gears and gearboxes/Racks', says: 'a straight bar of gear teeth: a pinion turning on it runs along it', std: 'modules of ISO 54 0.5–5, in the lengths sold or cut to any',

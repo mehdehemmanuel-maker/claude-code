@@ -15,15 +15,16 @@
 
 import { dhArmParts, ik, UR5E } from './dharm';
 import { robotFor, TASKS, type Robot } from './robot';
-import { DRAWN_IN, FRONT, RUNS, boxedAs, extents, libraryWords, type MakerModel, type ModelPart } from './makermodel';
+import { DRAWN_IN, RUNS, baseName, extents, frameOf, libraryWords, lookAs, type MakerModel, type ModelPart } from './makermodel';
 import { ENDER3 } from './models/ender3';
+import { PRINTER_MODELS } from './kinds/robots';
 import { layout } from './make/space';
 import * as THREE from 'three';
 import { alongZ, bmeParts, camModuleParts, changerParts, depthCamParts, earNoseParts, ftParts, gripperParts, handParts } from './kit-robot';
 import { FAMILIES, callFamily } from './families';
 import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, fanDims, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
-import { CLEAR, VWHEEL } from './kinds/motion';
+import { CLEAR, FB, VWHEEL, idlerDims } from './kinds/motion';
 import { RIBS, capDims } from './kinds/fasteners';
 import { SNAP } from './kinds/electrical';
 import { HOTEND, rootR } from './kinds/plant';
@@ -119,6 +120,28 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     leaves: 'its balls about 0.3 of its rings\' section across and counted by the Conrad rule (typical, within one of makers\' counts); its cage\'s halves drawn flat beside the balls, not wrapped round them; its grease not drawn',
     make: (p, it) => bearingParts(p, it.name),
     iface: (p) => [{ kind: 'shaft', role: 'requires', d: BEARINGS[String(p.number)]![0] * mm }],
+  },
+  flangebearing: {
+    says: 'a flanged miniature ball bearing: a deep-groove bearing (its rings, balls, cage and shields or seals) whose outer ring is turned with a flange at one face, so it seats itself in a plate\'s hole',
+    leaves: 'its flange 0.07 of its outside across thick (typical of the F6xx and F69x tables), its balls counted by the Conrad rule; its cage\'s halves drawn flat beside the balls; its grease not drawn',
+    make: (p, it) => { const [d, D, B, F] = FB[String(p.number)]!; return bearingParts(p, it.name, [d, D, B], [F, Math.max(0.6, 0.07 * D)]); },
+    iface: (p) => [{ kind: 'shaft', role: 'requires', d: FB[String(p.number)]![0] * mm }],
+  },
+  idler: {
+    says: 'a GT2 idler: its turned aluminium pulley, a flange each side of its face (toothed as a GT2 pulley\'s, or smooth), bored for the two miniature bearings pressed into it side by side',
+    leaves: 'its flanges, face and bearings typical of the idlers sold (idlerDims names each); its grooves round-bottomed slots, not the GT2 curve; its bearings drawn by the library',
+    make: (p, it) => idlerParts(p, it.name),
+    iface: (p) => [{ kind: 'shaft', role: 'requires', d: Number(p.bore) * mm }],
+  },
+  insert: {
+    says: 'a heat-set insert: a brass sleeve knurled outside in two bands, a plain waist between them that the melted plastic flows into, its lead-in tapered, threaded through',
+    leaves: 'its knurls drawn as plain bands (their diamonds not cut) and its thread as a bore at its root (ISO 261); its outside 1.6 of its thread, typical of those sold',
+    make: (p, it) => insertParts(p, it.name),
+  },
+  magnet: {
+    says: 'a neodymium disc magnet: sintered NdFeB, ground and nickel-plated, magnetised through its height',
+    leaves: 'its plating not drawn apart from it; its edges square',
+    make: (p, it) => [P(it.name, { cyl: [(Number(p.d) / 2) * mm, Number(p.h) * mm] }, { mat: 'ndfeb', color: 0xc9cdd1, finish: 'plate', at: [0, (Number(p.h) / 2) * mm, 0] })],
   },
   rail: {
     says: 'a HIWIN MGN miniature guideway: its ground rail, a groove down each side and its holes counterbored; its carriage\'s ground block, a groove facing each of the rail\'s with a return hole beside it and four tapped holes on top; its two circuits of balls, a load row between the grooves and a return row in the hole, turned round through channels in the moulded end cap at each end; a retaining wire under each load row; a rubber seal on a steel plate at each end, its lip on the rail, held with the cap by two screws',
@@ -509,7 +532,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   ftsensor: { says: 'a force/torque sensor as its maker gives it (src/nexus/kit-robot.ts): its stainless body and its six silicon gauges on its flexures', leaves: 'its height an estimate; its flexures and cable not drawn', make: (_p, it) => ftParts(it.name) },
   depthcamera: { says: 'a depth camera as its maker gives it (src/nexus/kit-robot.ts): its case, its glass face, its two infrared imagers and colour one behind their lenses, its projector, its board', leaves: 'its imagers\' places estimates; its vision processor not drawn apart from its board', make: (_p, it) => depthCamParts(it.name) },
   gassensor: { says: 'a gas sensor as its maker gives it (src/nexus/kit-robot.ts): its LGA package, its two dies inside', leaves: 'its dies\' sizes estimates; its lid and pads not drawn apart', make: (_p, it) => bmeParts(it.name) },
-  printer3d: { says: 'a 3D printer drawn from its maker\'s own assembly (Creality\'s Ender-3 3DXML, read by tools/measure/xml3d.py): every part where the model puts it, each library part (extrusions, steppers, bearings, the GT2 pulleys, screws, nuts and washers) fitted to its box', leaves: 'what the library does not make yet drawn as its measured box, said as what it is (its brackets and plates, the bed, the power supply, the display, the fans, the V-wheels, the lead screw, the hot end\'s parts), each its fill an estimate', make: (_p, it) => modelPart(ENDER3, it.name).part.parts! },
+  printer3d: { says: 'a 3D printer drawn from its maker\'s own assembly (Creality\'s Ender-3 3DXML, read by tools/measure/xml3d.py; VoronDesign\'s Voron 2.4r2 STEP, read by tools/measure/stepasm.py): every part where the model puts it, each library part (extrusions, rails, steppers, bearings, the GT2 pulleys and idlers, screws, nuts, washers, inserts and T-nuts) fitted to its box', leaves: 'what the library does not make yet drawn as its measured box, or as the walls its surface covers, said as what it is and coloured as its model colours it (the Voron\'s printed parts, its panels, its bed, its boards and supplies), each its fill an estimate', make: (p, it) => modelPart(PRINTER_MODELS[String(p.model) as keyof typeof PRINTER_MODELS] ?? ENDER3, it.name).part.parts! },
   robot: { says: 'the robot its tasks design (src/nexus/robot.ts), each part the library\'s: its table, two UR5e arms bolted down by their makers\' pattern and posed ready, a QC-11 and an RH56DFX hand on each (a Nano17 at each index fingertip), the Camera Module 3 on the right wrist, the D435, microphone and gas sensor on a mast', leaves: 'its table, mast and camera bracket estimates; its cables, air lines and controllers not drawn', make: (_p, it) => robotParts(it.name) },
 };
 
@@ -681,23 +704,28 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
   // leads, wires and plug left out, as a maker's model leaves them out: a lead screw and its nut are not leads)
   const loose = (x: { p: Part; parent: { p: Part } | null }): boolean => /\b(leads?(?!\s*(?:screw|nut))|wire|cable|plug|connector)\b/i.test(x.p.name) || /wire|cable|jst/i.test(x.p.item ?? '') || (!!x.p.shape && 'tube' in x.p.shape) || (!!x.parent && loose(x.parent as never));
   // (a part that is all wire-like, a coil spring, fitted whole)
-  const own = (p: Part) => { const q = { ...p, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3 }, all = layout(q).filter((x) => x.box && !x.box.isEmpty()), body = all.filter((x) => !loose(x)), ns = body.length ? body : all, b = new THREE.Box3(); let w = 0; const c = new THREE.Vector3();
+  // (and a rail's carriage, which the model has apart: the rail fitted to its own box)
+  const tied = (x: { p: Part; parent: { p: Part } | null }, re: RegExp): boolean => (!!x.p.link && re.test(x.p.link)) || (!!x.parent && tied(x.parent as never, re));
+  const own = (p: Part, skip?: RegExp) => { const q = { ...p, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3 }, all = layout(q).filter((x) => x.box && !x.box.isEmpty()), body = all.filter((x) => !loose(x) && !(skip && tied(x, skip))), ns = body.length ? body : all, b = new THREE.Box3(); let w = 0; const c = new THREE.Vector3();
     for (const x of ns) { b.union(x.box!); const s = x.box!.getSize(new THREE.Vector3()), v = Math.max(1e-12, s.x * s.y * s.z); c.addScaledVector(x.box!.getCenter(new THREE.Vector3()), v); w += v; }
     return { min: b.min.toArray() as V3, max: b.max.toArray() as V3, mid: (w ? c.divideScalar(w) : b.getCenter(new THREE.Vector3())).toArray() as V3 }; };
   const placed: { p: Part; corners: V3[] }[] = []; let drawn = 0, boxed = 0;
-  // (the model turned about its up so it faces the library's front, +x: each part's place turned with it)
-  const fr = FRONT[model.id] ?? [1, 0, 0], th = Math.atan2(fr[2], fr[0]), Ry: M3 = [[Math.cos(th), 0, Math.sin(th)], [0, 1, 0], [-Math.sin(th), 0, Math.cos(th)]];
+  // (the model turned so it faces the library's front, +x, and stands on its own up, +y: each part's place turned with it)
+  const Ry: M3 = frameOf(model.id);
   const rotIn = (m: number[]): M3 => mm3(Ry, rotOf(m)), tIn = (m: number[]): V3 => mv(Ry, tOf(m));
   // (a part the library draws inside another, where the model has it: its box's middle in the model's frame)
   const middleOf = (mp: ModelPart): V3 => { const R = rotIn(mp[2]), t = tIn(mp[2]), c = mv(R, [0, 1, 2].map((k) => (mp[3][k]! + mp[3][k + 3]!) / 2) as V3); return [c[0] + t[0], c[1] + t[1], c[2] + t[2]]; };
-  const inside = DRAWN_IN.map((d) => ({ ...d, at: model.parts.filter((mp) => d.name.test(mp[0])).map(middleOf) }));
+  const inside = DRAWN_IN.map((d) => ({ ...d, at: model.parts.filter((mp) => d.name.test(baseName(mp[0]))).map(middleOf) }));
+  const has = (re: RegExp) => model.parts.some((q) => re.test(baseName(q[0])));
   model.parts.forEach((mp: ModelPart, i) => {
-    if (inside.some((d) => d.name.test(mp[0]) && model.parts.some((q) => d.in.test(q[0]) && libraryWords(q)))) return;
+    if (inside.some((d) => d.name.test(baseName(mp[0])) && model.parts.some((q) => d.in.test(baseName(q[0])) && libraryWords(q)))) return;
+    // (a part the model has that is run by us instead, between its two ends)
+    if (RUNS.some((r) => r.replaces?.test(baseName(mp[0])) && has(r.from) && has(r.to))) return;
     const R = rotIn(mp[2]), t = tIn(mp[2]), lo: V3 = [mp[3][0]!, mp[3][1]!, mp[3][2]!], hi: V3 = [mp[3][3]!, mp[3][4]!, mp[3][5]!], ext = extents(mp), cm: V3 = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as V3;
     const corners = [0, 1].flatMap((a) => [0, 1].flatMap((b) => [0, 1].map((c) => { const v = mv(R, [a ? hi[0] : lo[0], b ? hi[1] : lo[1], c ? hi[2] : lo[2]]); return [v[0] + t[0], v[1] + t[1], v[2] + t[2]] as V3; })));
     const words = libraryWords(mp); let lib: Part | null = null; try { lib = words ? use(words) : null; } catch { lib = null; }
     if (lib) {
-      const o = own(lib), le = [0, 1, 2].map((k) => (o.max[k]! - o.min[k]!) * 1000), cl = [0, 1, 2].map((k) => ((o.min[k]! + o.max[k]!) / 2) * 1000), ml = o.mid.map((v) => v * 1000);
+      const o = own(lib, DRAWN_IN.find((d) => d.link && d.in.test(baseName(mp[0])))?.link), le = [0, 1, 2].map((k) => (o.max[k]! - o.min[k]!) * 1000), cl = [0, 1, 2].map((k) => ((o.min[k]! + o.max[k]!) / 2) * 1000), ml = o.mid.map((v) => v * 1000);
       const perm = PERMS.map((pm) => ({ pm, e: pm.reduce((s, j, k) => s + Math.abs(le[j]! - ext[k]!) / Math.max(1, ext[k]!), 0) })).sort((a, b) => a.e - b.e)[0]!.pm;
       // (each axis's way by the side its weight lies on, where both lean clearly; else as it comes)
       const conf = [0, 1, 2].map((k) => { const dm = mp[4][k]! - cm[k]!, dl = ml[perm[k]!]! - cl[perm[k]!]!; return { s: Math.abs(dm) > 0.02 * ext[k]! && Math.abs(dl) > 0.02 * le[perm[k]!]! ? Math.sign(dm * dl) : 1, sure: Math.min(Math.abs(dm) / Math.max(1, ext[k]!), Math.abs(dl) / Math.max(1, le[perm[k]!]!)) }; });
@@ -706,15 +734,25 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
       const fc = mv(F, cl as V3), tt: V3 = [cm[0] - fc[0], cm[1] - fc[1], cm[2] - fc[2]], W = mm3(R, F), wt = mv(R, tt);
       const at: V3 = [wt[0] + t[0], wt[1] + t[1], wt[2] + t[2]];
       // (what it holds that the model has elsewhere, moved there: in its own frame, the world's offset turned back by W, m)
-      for (const d of inside.filter((d) => d.in.test(mp[0]) && d.at.length)) {
-        const w = d.at.shift()!, off: V3 = [w[0] - at[0], w[1] - at[1], w[2] - at[2]], WT: M3 = [0, 1, 2].map((r) => [W[0]![r]!, W[1]![r]!, W[2]![r]!]), lo = mv(WT, off);
+      for (const d of inside.filter((d) => d.in.test(baseName(mp[0])) && d.at.length)) {
+        const WT: M3 = [0, 1, 2].map((r) => [W[0]![r]!, W[1]![r]!, W[2]![r]!]), local = (w: V3) => mv(WT, [w[0] - at[0], w[1] - at[1], w[2] - at[2]]);
+        if (d.link) {
+          // (a carriage: the model's nearest to this rail's line and within its length, slid along it there; its travel
+          // still the rail's)
+          const k = d.at.map((w, j) => ({ j, l: local(w) })).filter(({ l }) => Math.abs(l[2]) <= le[2]! / 2 && Math.hypot(l[0], l[1]) < 30).sort((a, b) => Math.hypot(a.l[0], a.l[1]) - Math.hypot(b.l[0], b.l[1]))[0];
+          if (!k) continue;
+          d.at.splice(k.j, 1); const dz = k.l[2] * mm, re = d.link;
+          const slide = (q: Part): Part => (q.link && re.test(q.link) ? { ...q, at: [q.at?.[0] ?? 0, q.at?.[1] ?? 0, (q.at?.[2] ?? 0) + dz] as V3, ...(q.travel?.slide ? { travel: { ...q.travel, slide: { ...q.travel.slide, from: q.travel.slide.from - dz, to: q.travel.slide.to - dz } } } : {}) } : q.parts ? { ...q, parts: q.parts.map(slide) } : q);
+          lib = slide(lib); continue;
+        }
+        const lo = local(d.at.shift()!);
         const move = (q: Part): Part => (q.item === d.item ? { ...q, at: [lo[0] * mm, lo[1] * mm, lo[2] * mm] as V3 } : q.parts ? { ...q, parts: q.parts.map(move) } : q);
         lib = move(lib);
       }
       placed.push({ p: { ...lib, name: mp[1], at, rot: euler(W) } as Part, corners }); drawn++;
     } else {
       // (a part folded from sheet, deeper than its sheet: what of its box its sheet fills, its two largest faces' worth)
-      const b = boxedAs(mp[0]), wc = mv(R, cm), [e0, e1, e2] = [...ext].sort((a, b2) => b2 - a) as [number, number, number];
+      const b = lookAs(baseName(mp[0]), mp[6]), wc = mv(R, cm), [e0, e1, e2] = [...ext].sort((a, b2) => b2 - a) as [number, number, number];
       const fill = b.sheet && e2 > 2 * b.sheet ? Math.min(1, (b.sheet * (e0 * e1 + e0 * e2)) / (e0 * e1 * e2)) : b.fill;
       // (a sheet's or a moulding's box drawn as the walls its own surface covers, its open sides open: each face its model
       // covers three fifths or more of, a wall its sheet thick (a moulding's 2 mm, typical); a plate, a closed box, or a
@@ -726,7 +764,15 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
       const thin = ext.indexOf(Math.min(...ext)), sheetMid = open && !walls.length && b.sheet ? mp[4][thin]! - cm[thin]! : null;
       if (walls.length || sheetMid !== null) placed.push({ p: { name: mp[1], at, rot: euler(R), parts: (walls.length ? walls : [{ k: thin, sd: -1 }]).map(({ k, sd }, i) => { const sz = [...ext] as V3; sz[k] = wt; const off: V3 = [0, 0, 0]; off[k] = sd < 0 ? sheetMid! : (sd ? 1 : -1) * (ext[k]! / 2 - wt / 2);
         return P(i ? `${mp[1]} wall ${i + 1}` : mp[1], { box: [sz[0] * mm, sz[1] * mm, sz[2] * mm] }, { ...look, at: [off[0] * mm, off[1] * mm, off[2] * mm] }); }) } as Part, corners });
-      else placed.push({ p: P(mp[1], { box: [ext[0]! * mm, ext[1]! * mm, ext[2]! * mm] }, { ...look, at, rot: euler(R), fill }), corners });
+      else {
+        // (a thin part whose two broad faces its surface covers only a fraction of, a tape round a panel's edge or a belt
+        // loop: a frame round its edge, as wide as covers that fraction of them, measured)
+        const [i1, i2] = [0, 1, 2].filter((k) => k !== thin) as [number, number], L1 = ext[i1]!, L2 = ext[i2]!, cov = fc ? Math.max(fc[2 * thin]!, fc[2 * thin + 1]!) : 1;
+        const fw = ext[thin]! < 0.15 * Math.min(L1, L2) && cov > 0.005 && cov < 0.5 ? (L1 + L2 - Math.sqrt((L1 + L2) ** 2 - 4 * cov * L1 * L2)) / 4 : 0;
+        if (fw > 0) placed.push({ p: { name: mp[1], at, rot: euler(R), parts: [[i1, 1], [i1, -1], [i2, 1], [i2, -1]].map(([k, sd], j) => { const o = k === i1 ? i2 : i1, sz = [...ext] as V3; sz[o] = fw; if (k === i2) sz[i2] = L2 - 2 * fw; const off: V3 = [0, 0, 0]; off[o] = sd * (ext[o]! / 2 - fw / 2);
+          return P(j ? `${mp[1]} side ${j + 1}` : mp[1], { box: [sz[0] * mm, sz[1] * mm, sz[2] * mm] }, { ...look, at: [off[0] * mm, off[1] * mm, off[2] * mm] }); }) } as Part, corners });
+        else placed.push({ p: P(mp[1], { box: [ext[0]! * mm, ext[1]! * mm, ext[2]! * mm] }, { ...look, at, rot: euler(R), fill }), corners });
+      }
       boxed++;
     }
     void i;
@@ -734,7 +780,7 @@ export function modelPart(model: MakerModel, nm = model.name): { part: Part; dra
   // (what runs between two of its parts that the model leaves out: from the top of one, up, over and down into the top of
   // the other, a smooth tube; its length the path's)
   for (const run of RUNS) {
-    const a = model.parts.find((q) => run.from.test(q[0])), b2 = model.parts.find((q) => run.to.test(q[0]));
+    const a = model.parts.find((q) => run.from.test(baseName(q[0]))), b2 = model.parts.find((q) => run.to.test(baseName(q[0])));
     if (!a || !b2) continue;
     const top = (q: ModelPart): V3 => { const c = middleOf(q), R = rotIn(q[2]), e = extents(q), hy = [0, 1, 2].reduce((h, k) => h + Math.abs(R[1]![k]!) * e[k]! / 2, 0); return [c[0], c[1] + hy, c[2]]; };
     const A = top(a), B = top(b2), over = Math.max(A[1], B[1]) + 80;
@@ -802,8 +848,8 @@ const slab = (name: string, outline: [number, number][], holes: [number, number]
   P(name, section(S(outline), holes, y1 - y0), { rot: ALONG_Y, at: [0, ((y0 + y1) / 2) * mm, 0], ...more });
 
 /** A deep-groove ball bearing, mm, centred, its axis y. */
-function bearingParts(p: Record<string, string | number>, nm: string): Part[] {
-  const n = String(p.number), [d, D, B] = BEARINGS[n]!, { Db, dm, z } = ballsOf(d, D), seal = String(p.seal), shut = seal !== 'open';
+function bearingParts(p: Record<string, string | number>, nm: string, dims?: [number, number, number], flange?: [number, number]): Part[] {
+  const n = String(p.number), [d, D, B] = dims ?? BEARINGS[n]!, { Db, dm, z } = ballsOf(d, D), seal = String(p.seal), shut = seal !== 'open';
   // (a radial internal clearance of 10 µm, CN-class, typical: half of it at each raceway)
   const cl = 0.005, rg = 0.52 * Db, sh = 0.22 * Db, ri = dm / 2 - Db / 2 - cl, ro = dm / 2 + Db / 2 + cl, Ri = ri + sh, Ro = ro - sh, ch = Math.max(0.1, Math.min(0.5, 0.03 * D));
   const phi0 = Math.acos(1 - sh / rg), yg = rg * Math.sin(phi0);
@@ -812,7 +858,9 @@ function bearingParts(p: Record<string, string | number>, nm: string): Part[] {
   // (its cage's halves beside the balls, its shields outside them in recesses in the outer ring's bore)
   const tc = Math.max(0.15, 0.06 * Db), y0 = Db / 2 + 0.03 * Db, ys = y0 + tc + 0.04 * Db, ts = Math.min((seal === '2RS' ? 2 : 1) * (0.02 * D + 0.05), B / 2 - 0.05 - ys), Rr = shut ? Ro + 0.4 * (D / 2 - Ro) : Ro;
   const ring = { mat: 'steel-chrome', color: 0xb9bdc1, finish: 'brushed' };
-  const outer: [number, number][] = [[Rr, -B / 2], [D / 2 - ch, -B / 2], [D / 2, -B / 2 + ch], [D / 2, B / 2 - ch], [D / 2 - ch, B / 2], [Rr, B / 2], ...(shut ? [[Rr, ys], [Ro, ys]] as [number, number][] : []), [Ro, yg], ...groove(ro, -1, phi0, -phi0), [Ro, -yg], ...(shut ? [[Ro, -ys], [Rr, -ys]] as [number, number][] : []), [Rr, -B / 2]];
+  // (a flanged one's flange at its -y face: F across, T thick)
+  const cf = flange ? Math.min(ch, flange[1] / 3) : 0, face0: [number, number][] = flange ? [[flange[0] / 2 - cf, -B / 2], [flange[0] / 2, -B / 2 + cf], [flange[0] / 2, -B / 2 + flange[1] - cf], [flange[0] / 2 - cf, -B / 2 + flange[1]], [D / 2, -B / 2 + flange[1]]] : [[D / 2 - ch, -B / 2], [D / 2, -B / 2 + ch]];
+  const outer: [number, number][] = [[Rr, -B / 2], ...face0, [D / 2, B / 2 - ch], [D / 2 - ch, B / 2], [Rr, B / 2], ...(shut ? [[Rr, ys], [Ro, ys]] as [number, number][] : []), [Ro, yg], ...groove(ro, -1, phi0, -phi0), [Ro, -yg], ...(shut ? [[Ro, -ys], [Rr, -ys]] as [number, number][] : []), [Rr, -B / 2]];
   const inner: [number, number][] = [[d / 2, -B / 2 + ch], [d / 2 + ch, -B / 2], [Ri, -B / 2], [Ri, -yg], ...groove(ri, 1, -phi0, phi0), [Ri, yg], [Ri, B / 2], [d / 2 + ch, B / 2], [d / 2, B / 2 - ch], [d / 2, -B / 2 + ch]];
   const out: Part[] = [P(nm, lathe(outer), { ...ring, item: 'bearing-ring' }), P(`${nm} inner ring`, lathe(inner), { ...ring, item: 'bearing-ring' })];
   for (let k = 0; k < z; k++) { const [x, zz] = polar(dm / 2, (2 * PI * k) / z); out.push(P(`${nm} ball`, { sphere: (Db / 2) * mm }, { at: [x * mm, 0, zz * mm], mat: 'steel-chrome', color: 0xd5d8db, finish: 'brushed', item: 'bearing-ball', joint: 'bearing', fixed: 'rolling in the grooves of its rings' })); }
@@ -876,12 +924,31 @@ function railParts(p: Record<string, string | number>, nm: string): Part[] {
 }
 
 /** A GT2 pulley, mm (src/nexus/families.ts gt2Dims), its axis y: its hub at the bottom, a flange, its teeth, a flange. */
+/** A GT2 face's outline, world x, z: its outside circle with a groove each pitch, round-bottomed, 0.75 mm deep and 1.15
+ *  mm across at the top. */
+function gt2Teeth(Ro: number, teeth: number): [number, number][] {
+  const out: [number, number][] = [], hg = 0.575 / Ro, phi = (2 * PI) / teeth;
+  for (let k = 0; k < teeth; k++) { const a = k * phi; for (let i = 0; i <= 6; i++) { const u = -1 + i / 3; out.push(polar(Ro - 0.75 * Math.cos((u * PI) / 2), a + u * hg)); } out.push(polar(Ro, a + phi / 2)); }
+  return out;
+}
+/** A GT2 idler, mm (src/nexus/kinds/motion.ts idlerDims): along y from its first flange, its two bearings side by side
+ *  in its bore. */
+function idlerParts(p: Record<string, string | number>, nm: string): Part[] {
+  const d = idlerDims(p), al = { mat: 'al-6061', color: 0xc9ced3, finish: 'brushed' }, rB = d.bD / 2, y1 = d.fl, y2 = y1 + d.face, y3 = y2 + d.fl;
+  const ringP = (r: number, a: number, b: number) => lathe([[rB, a], [r, a], [r, b], [rB, b], [rB, a]]);
+  const out: Part[] = [P(nm, ringP(d.Rf, 0, y1), al), p.face === 'smooth' ? P(nm, ringP(d.Ro, y1, y2), al) : slab(nm, gt2Teeth(d.Ro, d.t), [hole(rB, 0, 0, 32)], y1, y2, al), P(nm, ringP(d.Rf, y2, y3), al)];
+  for (const s2 of [-1, 1]) out.push(use(`bearing ${d.bearing}`, [0, (y3 / 2 + (s2 * d.bB) / 2) * mm, 0], { name: `${nm} bearing`, fixed: 'pressed into its bore beside the other' }));
+  return out;
+}
+/** A heat-set insert, mm: along y from its tapered lead-in, its two knurled bands and its waist, bored at its thread's
+ *  root. */
+function insertParts(p: Record<string, string | number>, nm: string): Part[] {
+  const t = String(p.thread), d = Number(t.slice(1)), L = Number(p.length), R = (1.6 * d) / 2, rb = (d - 1.0825 * (METRIC[t]?.p ?? 0.5)) / 2, w = Math.min(0.3, 0.1 * d);
+  return [P(nm, lathe([[rb, 0], [R - w, 0], [R - w, 0.12 * L], [R, 0.18 * L], [R, 0.4 * L], [R - w, 0.4 * L], [R - w, 0.6 * L], [R, 0.6 * L], [R, L], [rb, L], [rb, 0]]), { mat: 'brass', color: 0xc9a24a, finish: 'cast' })];
+}
 function pulleyParts(p: Record<string, string | number>, nm: string): Part[] {
   const d = gt2Dims(p), al = { mat: 'al-6061', color: 0xc9ced3, finish: 'brushed' }, rb = d.bore / 2, out: Part[] = [];
-  // (its teeth: the outside circle with a groove each pitch, round-bottomed, 0.75 mm deep and 1.15 mm across at the top)
-  const teeth: [number, number][] = [], hg = 0.575 / d.Ro, phi = (2 * PI) / d.teeth;
-  for (let k = 0; k < d.teeth; k++) { const a = k * phi; for (let i = 0; i <= 6; i++) { const u = -1 + i / 3; teeth.push(polar(d.Ro - 0.75 * Math.cos((u * PI) / 2), a + u * hg)); } teeth.push(polar(d.Ro, a + phi / 2)); }
-  const y1 = d.hubL, y2 = y1 + d.fl, y3 = y2 + d.face, y4 = y3 + d.fl, ring = (r: number, a: number, b: number) => lathe([[rb, a], [r, a], [r, b], [rb, b], [rb, a]]);
+  const teeth = gt2Teeth(d.Ro, d.teeth), y1 = d.hubL, y2 = y1 + d.fl, y3 = y2 + d.face, y4 = y3 + d.fl, ring = (r: number, a: number, b: number) => lathe([[rb, a], [r, a], [r, b], [rb, b], [rb, a]]);
   const taps: Cut[] = d.angles.map((t) => ({ r: (d.ss / 2 / Math.cos(PI / 16) + 0.02) * mm, depth: (d.Rh - rb + 0.05) * mm, at: [d.Rh * Math.cos(t) * mm, (d.hubL / 2) * mm, d.Rh * Math.sin(t) * mm] as V3, dir: [-Math.cos(t), 0, -Math.sin(t)] as V3, n: 16 }));
   out.push(P(nm, ring(d.Rh, 0, y1), { ...al, cuts: taps }), P(nm, ring(d.Rf, y1, y2), al), slab(nm, teeth, [hole(rb, 0, 0, 32)], y2, y3, al), P(nm, ring(d.Rf, y3, y4), al));
   // (its set screws in their tapped holes, each cupped onto the shaft, its top within the hub)
