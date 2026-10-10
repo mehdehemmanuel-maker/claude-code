@@ -425,7 +425,7 @@ function armParts(nm: string): Part[] {
  *  work), a QC-11 changer where a tool bolts on, its hand on each flange (each index fingertip a Nano17 where it feels),
  *  the Camera Module 3 on the right wrist where the soldering task needs it (it sees a 0.6 mm lead from 200 mm), the
  *  D435 on a mast behind looking down on the whole table, its microphone and gas sensor on the mast: only what its
- *  design has. Its table's, mast's and bracket's sizes estimates. Null with what is not drawn yet. */
+ *  design has. Its table's, mast's and bracket's sizes estimates. What is not drawn yet said instead. */
 export function robotPart(r: Robot, nm = 'the robot'): Part | string {
   const no = [...new Set(r.arms.flatMap((a) => [...(a.arm.id !== 'ur5e' ? [`${a.arm.name} on a robot's table (it is drawn on its own: "robotarm Meca500")`] : []), ...(!['rh56dfx', '2f-85'].includes(a.hand.id) ? [`${a.hand.name}`] : [])]))];
   if (no.length) return `not drawn yet: ${no.join('; ')}`;
@@ -435,8 +435,8 @@ function robotParts(nm: string, r: Robot = robotFor(TASKS.map((t) => t.id)).robo
   // (each arm stands on the table turned a quarter about its own z (its x toward the back, its y to the left), and is
   // posed by its own inverse kinematics: its tool pointing down 300 mm over the table at a work point in front of the
   // mast, to its side of the middle, put into its base's frame)
-  const m = (v: number) => v * mm, { top, work, reach } = ROBOT_CELL, n = r.arms.length, sides = n === 1 ? [0] : Array.from({ length: n }, (_, k) => -1 + (2 * k) / (n - 1));
-  const base = (side: number): V3 => [side * 250, top, -200], has = (s: string) => r.senses.some((x) => x.sense === s);
+  const m = (v: number) => v * mm, { top, work, reach, depth, back } = ROBOT_CELL, n = r.arms.length, sides = n === 1 ? [0] : Array.from({ length: n }, (_, k) => -1 + (2 * k) / (n - 1));
+  const base = (side: number): V3 => [side * 250, top, -back], has = (s: string) => r.senses.some((x) => x.sense === s);
   const inArm = (side: number, w: V3): V3 => { const b = base(side); return [-(w[2] - b[2]), -(w[0] - b[0]), w[1] - b[1]]; };
   const ready = (side: number) => ik(UR5E, inArm(side, [side * reach, top + 300, work[2]]), [0, 0, -1]).q;
   const steel = { mat: 'steel-low', color: 0x3d4247, finish: 'paint' as const };
@@ -444,9 +444,9 @@ function robotParts(nm: string, r: Robot = robotFor(TASKS.map((t) => t.id)).robo
   // floor between them, so it stands stiff under the arms moving; sizes estimates)
   const tube = (name: string, L: number, at: V3, along: 'x' | 'y' | 'z') => P(`${nm} table ${name}`, { box: along === 'x' ? [m(L), m(50), m(50)] : along === 'y' ? [m(50), m(L), m(50)] : [m(50), m(50), m(L)] }, { ...steel, at: at.map(m) as V3, fill: 0.15 });
   const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const;
-  const table: Part = { name: `${nm} table`, item: 'robot-table', at: [0, 0, 0], parts: [P(`${nm} table top`, { box: [m(900), m(12), m(650)] }, { ...steel, at: [0, m(top - 6), 0] }),
-    ...corners.map(([sx, sz], i) => tube(`leg ${i + 1}`, top - 12, [sx * 415, (top - 12) / 2, sz * 290], 'y')),
-    ...[top - 37, 150].flatMap((y) => [...[-1, 1].map((sz) => tube(`${y > 300 ? 'apron' : 'stretcher'} ${sz < 0 ? 'back' : 'front'}`, 780, [0, y, sz * 290], 'x')), ...[-1, 1].map((sx) => tube(`${y > 300 ? 'apron' : 'stretcher'} ${sx < 0 ? 'left' : 'right'}`, 530, [sx * 415, y, 0], 'z'))])] };
+  const lz = depth / 2 - 35, table: Part = { name: `${nm} table`, item: 'robot-table', at: [0, 0, 0], parts: [P(`${nm} table top`, { box: [m(900), m(12), m(depth)] }, { ...steel, at: [0, m(top - 6), 0] }),
+    ...corners.map(([sx, sz], i) => tube(`leg ${i + 1}`, top - 12, [sx * 415, (top - 12) / 2, sz * lz], 'y')),
+    ...[top - 37, 150].flatMap((y) => [...[-1, 1].map((sz) => tube(`${y > 300 ? 'apron' : 'stretcher'} ${sz < 0 ? 'back' : 'front'}`, 780, [0, y, sz * lz], 'x')), ...[-1, 1].map((sx) => tube(`${y > 300 ? 'apron' : 'stretcher'} ${sx < 0 ? 'left' : 'right'}`, 2 * lz - 50, [sx * 415, y, 0], 'z'))])] };
   const arm = (side: number, k: number): Part[] => {
     const sideName = n === 1 ? '' : side < 0 ? ' left' : side > 0 ? ' right' : ` ${k + 1}`, b = base(side), bolts = UR5E.base.bolts!, foot = UR5E.base.foot!.h, a = r.arms[k]!;
     const changer: Part[] = a.changer ? [{ name: `${nm}${sideName} tool changer`, item: 'toolchanger-qc-11', at: [0, 0, 0], parts: [alongZ(changerParts(), 'its stack')] }] : [];
@@ -462,15 +462,17 @@ function robotParts(nm: string, r: Robot = robotFor(TASKS.map((t) => t.id)).robo
   };
   // (the mast behind the arms, if it carries anything (beside a middle arm's base, if there is one): the D435 at its top
   // turned down onto the work, the ear and nose board below it)
-  const mz = -260, mx = n % 2 === 1 ? -220 : 0, eyeY = 720, tilt = Math.atan2(eyeY - (work[1] - top), work[2] - (mz + 25)), ear = has('hearing'), nose = has('smell');
+  const mz = -back - 60, mx = n % 2 === 1 ? -220 : 0, eyeY = 720, tilt = Math.atan2(eyeY - (work[1] - top), work[2] - (mz + 25)), ear = has('hearing'), nose = has('smell');
   const mast: Part[] = has('depth') || ear || nose ? [{ name: `${nm} mast`, item: 'sensor-mast', at: [m(mx), m(top), m(mz)], parts: [P(`${nm} mast post`, { box: [m(40), m(eyeY), m(40)] }, { mat: 'al-6063', color: 0xc9cdd1, finish: 'brushed', at: [0, m(eyeY / 2), 0], fill: 0.45 }),
     ...(has('depth') ? [{ name: `${nm} depth camera`, item: 'depthcamera-d435', at: [0, m(eyeY - 12.5), m(25)] as V3, rot: [tilt, 0, 0] as V3, parts: depthCamParts(`${nm} depth camera`) }] : []),
     ...(ear || nose ? [{ name: `${nm} ${ear && nose ? 'ear and nose' : ear ? 'ear' : 'nose'}`, at: [0, m(eyeY - 160), m(21)] as V3, parts: earNoseParts(`${nm} ${ear && nose ? 'ear and nose' : ear ? 'ear' : 'nose'} board`, ear, nose) }] : [])] }] : [];
   return [table, ...sides.flatMap((s, k) => arm(s, k)), ...mast];
 }
 /** Where the robot's work is: its table's top (mm above the floor), the point its tasks are done at (mm, the table's
- *  frame: a board held 60 mm over the table, in front of the mast) and how far to each side of it each hand works. */
-export const ROBOT_CELL = { top: 750, work: [0, 810, 80] as V3, reach: 120 };
+ *  frame: a board held 60 mm over the table, in front of the mast), how far to each side of it each hand works, its
+ *  table's depth and how far behind its middle the arms stand (so a tool held at a slant over the work keeps its
+ *  flange 250 mm or more out from its arm's own axis, where a UR5e reaches; estimates). */
+export const ROBOT_CELL = { top: 750, work: [0, 810, 80] as V3, reach: 120, depth: 800, back: 275 };
 
 /** A section drawn along z, its length L mm, turned so its length runs along y. */
 const ALONG_Y: V3 = [-PI / 2, 0, 0];

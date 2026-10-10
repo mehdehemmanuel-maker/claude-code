@@ -95,6 +95,15 @@ export class SolderBench {
   private cable: THREE.Mesh; private cableFrom = new THREE.Vector3(1e9, 0, 0); private tail: THREE.Mesh;
   /** for words and tests: where the tip and the wire's end are, bench mm, when no hand holds them */
   private script: { tip: V3 | null; wire: V3 | null; cutters: boolean } = { tip: null, wire: null, cutters: false };
+  /** which side what is said is held from: you, before the bench, or a robot behind it (its far side) */
+  from: 'front' | 'back' = 'front';
+  /** The way said things point from where they are held, in the bench's frame: the iron toward its tip, the wire toward
+   *  its end (held from your right and left, toward the work; from behind, by a robot's hands over the work, the iron
+   *  steeper, 60° down and leaning away from it, the wire mirrored across the bench). */
+  way(what: 'iron' | 'wire'): THREE.Vector3 {
+    const v = what === 'iron' ? (this.from === 'back' ? new THREE.Vector3(-0.3, -0.866, 0.4) : new THREE.Vector3(-0.62, -Math.sin(0.61), -0.45)) : new THREE.Vector3(0.6, -0.5, this.from === 'back' ? 0.62 : -0.62);
+    return v.normalize();
+  }
 
   private places: typeof PLACES;
   /** where the iron lies in its stand, found once by letting it down onto the rings (restIron) */
@@ -383,7 +392,7 @@ export class SolderBench {
   /** On a screen: the cutters held to a lead as a hand would, level, their edge across it 3 mm back from their tip. */
   private poseCuttersAt(p: V3, q: BenchJoint): void {
     const o = this.obj.cutters!; if (o.parent !== this.group) this.group.attach(o);
-    let x = new THREE.Vector3(q.dir[2], 0, -q.dir[0]); if (x.lengthSq() < 1e-6) x.set(0, 0, -1); x.normalize(); if (x.z > 0) x.negate();
+    let x = new THREE.Vector3(q.dir[2], 0, -q.dir[0]); if (x.lengthSq() < 1e-6) x.set(0, 0, -1); x.normalize(); if ((x.z > 0) === (this.from === 'front')) x.negate();
     const up = new THREE.Vector3(0, 1, 0), z = x.clone().cross(up);
     o.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, up, z)); o.position.set(p[0] * MM, p[1] * MM, p[2] * MM).addScaledVector(x, 0.003 - JAWS.tip);
     this.swing(JAWS.open);
@@ -401,7 +410,7 @@ export class SolderBench {
     if (b.wire.used > used && (tip || wire)) this.puff(wire ?? tip!);
     if (wireHand) this.wire.scale.set(1, 1, Math.max(0.001, b.wire.out * MM));
     // (said, not done by hand: the wire drawn from where a left hand would hold it to where its end is)
-    else if (this.script.wire && b.wire.inHand) { const e = new THREE.Vector3(...this.script.wire).multiplyScalar(MM), d = new THREE.Vector3(0.6, -0.5, -0.62).normalize(); if (this.wire.parent !== this.group) this.group.add(this.wire);
+    else if (this.script.wire && b.wire.inHand) { const e = new THREE.Vector3(...this.script.wire).multiplyScalar(MM), d = this.way('wire'); if (this.wire.parent !== this.group) this.group.add(this.wire);
       this.wire.visible = true; this.wire.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), d); this.wire.scale.set(1, 1, Math.max(0.001, b.wire.out * MM)); this.wire.position.copy(e).addScaledVector(d, -b.wire.out * MM); }
     else if (!wireHand) this.wire.visible = false;
     this.tail.visible = !this.wire.visible;
@@ -438,7 +447,7 @@ export class SolderBench {
     // (held from your right and toward you, as a right hand holds it: its tip down onto the point at 35° from the bench,
     // its face up)
     const o = this.obj.iron!; if (o.parent !== this.group) this.group.attach(o);
-    const d = new THREE.Vector3(-0.62, -Math.sin(0.61), -0.45).normalize(), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), d);
+    const d = this.way('iron'), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), d);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q); if (up.y < 0) q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), PI));
     o.quaternion.copy(q); o.position.set(p[0] * MM, p[1] * MM, p[2] * MM).addScaledVector(d, -0.155);
   }

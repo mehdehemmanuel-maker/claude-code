@@ -57,6 +57,7 @@ export const ROBOT_KINDS: KindDef[] = [
     axes: [bare('build', 'build', ['jarvis'])], title: () => 'the robot that welds, solders and types (two UR5e arms with RH56DFX hands)', of: () => 'robot-table {robotarm UR5e}*2 {screw M8x20}*8 {toolchanger QC-11}*2 {ftsensor Nano17}*2 {robothand RH56DFX}*2 camera-module camera-bracket sensor-mast {depthcamera D435} {microphone mems} {gassensor BME688}', make: 'assemble',
     how: 'its two arms bolted to its table 500 mm apart, a force sensor, a changer and a hand on each wrist, its cameras, microphone and gas sensor on a mast between them',
     spec: () => 'welds (a 1.2 kg MIG torch through its changers), solders (its iron in a pen grip, the wire in the other hand), types (45 cN keys), sees, hears, smells, feels its grip and changes it (src/nexus/robot.ts says each, with its figures)',
-    box: () => [1100, 1300, 700], g: () => 2 * (UR5E.mass * 1000 + 245 + 9 + 540) + 60000,
+    // (its table about 94 kg: a 900 × 800 × 12 mm steel top, 68 kg, on about 9 m of 50 mm square tube; its mast 1.5 kg: estimates)
+    box: () => [1100, 1470, 860], g: () => 2 * (UR5E.mass * 1000 + 245 + 9 + 540) + 94000 + 1500,
   },
 ];

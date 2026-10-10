@@ -513,10 +513,16 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    grip take it; its housing a box where the real one is rounded, its links bars between their pivots). Then
    (2026-10-10) it soldered the LED lesson on the bench by the bench's own words, its arms by their inverse
    kinematics (`robot-bench.ts`): played through in the browser, 47 steps, all 8 joints good, 8 leads at 1.5 mm, the
-   LED lit at 4.03 mA. Still simplified, said so: its hands hold the iron, the wire and the cutters from above (their
-   grip on each not drawn: the bench poses what is held, the hand goes to it), and parts go into the board by the
-   bench's words while its hands are over the board, not placed by its fingers. Next: its grips drawn (the pen grip
-   round the iron), judged blind at the bench; welding and typing done the same way on their own benches.
+   LED lit at 4.03 mA. Judged blind (2026-10-10): named two UR-style arms soldering a perfboard with an LED; its first
+   finding mended by cause: its hands came down through the board and the magnifier, because the bench held the iron,
+   the wire and the cutters as a person before it does and the robot reached from behind across the work, and when
+   that was mirrored, the iron's slant put the flange within 170 mm of its arm's own axis, which a UR5e does not reach
+   (so the hand stayed at ready): now the bench holds them from its far side when the robot does (`SolderBench.from`,
+   `way`), the iron steeper, each hand behind and along what it holds, and the robot's table 800 mm deep with its arms
+   275 mm back (estimates). Still from that judge, and simplified, said so: its grip on each tool not drawn (the bench
+   poses what is held, the hand goes to it), parts put into the board by the bench's words while its hands are over it,
+   the iron's cord ending at the bench's old edge, no fume or heat at the work, the holder's leads rigid. Next: its
+   grips drawn (the pen grip round the iron); welding and typing done the same way on their own benches.
 11. A materials processor: what any material becomes by what process (melt, cast, fire, mill, print, refine), on edges. Begun
    (2026-10-09): `processor.ts`, its three heats: four Prusament filaments on three printers (the PC Blend's bed at the
    MINI+'s 100 °C said as the low end, ASA refused on it), four clay bodies by Orton's cones in three kilns (cone 10
