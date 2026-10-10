@@ -10,11 +10,12 @@ describe('the breakdown queue', () => {
     const first = breakdown();
     expect(first.taken).toBe(INVENTORY.size);
     expect(first.waiting.filter((w) => w.why === 'not in the table')).toEqual([]);
-    // (a stepper stored now is queued: it, its bearing and its tie screws made to its sizes, broken down to their steel)
-    expect(typeof resolve('stepper nema17 40')).toBe('object');
+    // (a stepper stored now is queued: it, its bearing and its tie screws made to its sizes, broken down to their steel;
+    // a size nothing in the inventory seeds, the Ender-3's 34 and 40 mm being stored already)
+    expect(typeof resolve('stepper nema17 48')).toBe('object');
     const next = breakdown(); expect(next.taken).toBeGreaterThanOrEqual(1);
-    expect(next.waiting.filter((w) => w.in === 'stepper-nema17-40')).toEqual([]);
-    expect(INVENTORY.has('bearing-625zz') && INVENTORY.has('screw-m3x32')).toBe(true);
+    expect(next.waiting.filter((w) => w.in === 'stepper-nema17-48')).toEqual([]);
+    expect(INVENTORY.has('stepper-nema17-48') && INVENTORY.has('bearing-625zz')).toBe(true);
     expect(breakdown().taken).toBe(0); // nothing new stored, nothing to take
     expect(sayBreakdown(first)).toMatch(/^# Breakdown queue/);
   });

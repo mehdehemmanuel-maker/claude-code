@@ -9,6 +9,8 @@
 // standard parts carry their standard's name and sizes (ISO 4762 screws, the 608 bearing's 8 × 22 × 7 mm, the NEMA 17
 // face). Counts and masses marked "about" or "typical" vary from maker to maker.
 
+import { billOf } from './makermodel';
+import { ENDER3 } from './models/ender3';
 import { shapes, type Section } from './cell';
 import type { Board } from './boards';
 import { callFamily, FAMILIES } from './families';
@@ -1019,6 +1021,8 @@ for (const [id, fam] of [['screw-m3', 'screw'], ['screw-set', 'screw'], ['nut-m3
 /** A part made to sizes by its family, put in the inventory for an entry's list: F('bearing 6805') gives its id. */
 const F = (words: string): string => { const it = callFamily(words); if (!it || typeof it === 'string') throw new Error(`the inventory's seed: "${words}": ${it ?? 'no such family'}`); if (!items.has(it.id)) put(it); return it.id; };
 // (the robot's parts made by their kinds, so its own kind's list finds each in the table)
+// (and the Ender-3's, as its maker's model lists them)
+for (const w of Object.keys(billOf(ENDER3).words)) F(w);
 for (const w of ['robotarm UR5e', 'screw M8x20', 'toolchanger QC-11', 'ftsensor Nano17', 'robothand RH56DFX', 'robothand 2F-85', 'depthcamera D435', 'microphone mems', 'gassensor BME688']) F(w);
 e('printer-fdm', 'FDM 3D printer', 'Electrical/Machines/3D printers', 'product', 'assemble', `printer-frame nema17*4 hotend extruder heated-bed printer-board psu-24v lcd-module gt2-belt*2 gt2-pulley*2 ${F('rail MGN12H 400')}*3 lead-screw-t8 coupling-flex wire-hookup*20 jst-xh*10`, 'a frame carrying a hot end on belts and rails over a heated bed, steppers moving each axis, a board reading G-code, a power supply, a display', 'e.g. 220 × 220 × 250 mm build volume');
 m('mica', 'mica', 'Minerals', 'a sheet silicate that splits into thin plates: it insulates and stands red heat', 'muscovite');

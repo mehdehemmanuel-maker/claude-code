@@ -4,10 +4,22 @@
 import { bare, type KindDef, type P } from './core';
 import { MECA500 } from '../meca';
 import { UR5E } from '../dharm';
+import { billOf } from '../makermodel';
+import { ENDER3 } from '../models/ender3';
+
+/** A maker's model's bill of materials as kind words: each library part by its words and how many. */
+const bill = () => Object.entries(billOf(ENDER3).words).map(([w, n]) => `{${w}}${n > 1 ? `*${n}` : ''}`).join(' ');
 
 const s = (p: P, k: string) => String(p[k]);
 
 export const ROBOT_KINDS: KindDef[] = [
+  {
+    id: 'printer3d', look: 'box', name: '3D printer', path: 'Electrical/Machines/3D printers', says: 'a machine that draws a part layer on layer from melted filament: a hot end moved over a heated bed on belts and a lead screw', std: 'its maker\'s published assembly (Creality\'s Ender-3 3DXML)',
+    axes: [bare('model', 'model', ['Ender-3'])], title: () => 'Creality Ender-3 3D printer', of: () => bill(), make: 'assemble',
+    how: 'its frame of T-slot extrusion; the bed carried front to back on V-wheels by a belt from its Y stepper; the gantry raised on a T8 lead screw by its Z stepper; the hot end carried across on V-wheels by a belt from its X stepper; filament driven into it by the extruder\'s stepper through a PTFE tube',
+    spec: () => '220 × 220 × 250 mm print area on a 235 × 235 mm bed; 440 × 440 × 465 mm (wevolver, from Creality\'s figures); 6.7 kg (Creality\'s official UK listing); 24 V 15 A supply; its parts and where each sits from Creality\'s own assembly (311 parts)',
+    box: () => [440, 465, 440], g: () => 6700,
+  },
   {
     id: 'robotarm', name: 'six-axis robot arm', path: 'Mechanical/Robots/Robot arms', says: 'a six-jointed arm that puts its tool at any pose in its reach, programmed in its maker\'s commands', std: 'Mecademic\'s Meca500 user and programming manuals',
     axes: [bare('model', 'model', ['Meca500-R3', 'Meca500-R4', 'UR5e'])],

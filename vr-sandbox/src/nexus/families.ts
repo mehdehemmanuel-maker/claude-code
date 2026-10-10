@@ -60,7 +60,7 @@ export const BEARINGS: Record<string, [number, number, number]> = {
   '6900': [10, 22, 6], '6901': [12, 24, 6], '6902': [15, 28, 7], '6903': [17, 30, 7], '6904': [20, 37, 9], '6905': [25, 42, 9],
   // (miniatures, shielded widths: the 684 and 685 a small stepper's bells hold; and the inch R4, 1/4 × 5/8 × 0.196 in,
   // ABMA, for a 1/4 in shaft)
-  '684': [4, 9, 4], '685': [5, 11, 5], 'R4': [6.35, 15.875, 4.978],
+  '684': [4, 9, 4], '685': [5, 11, 5], '686': [6, 13, 5], '687': [7, 14, 5], '688': [8, 16, 5], '689': [9, 17, 5], 'R4': [6.35, 15.875, 4.978],
 };
 /** A deep-groove bearing's balls: each about 0.3 of its rings' section across (typical), on the pitch circle midway
  *  between its bore and its outside, as many as its rings take when they are pushed eccentric to put them in (the Conrad

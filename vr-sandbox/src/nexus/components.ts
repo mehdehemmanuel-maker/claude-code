@@ -15,6 +15,10 @@
 
 import { dhArmParts, ik, UR5E } from './dharm';
 import { robotFor, TASKS, type Robot } from './robot';
+import { boxedAs, extents, libraryWords, type MakerModel, type ModelPart } from './makermodel';
+import { ENDER3 } from './models/ender3';
+import { layout } from './make/space';
+import * as THREE from 'three';
 import { alongZ, bmeParts, camModuleParts, changerParts, depthCamParts, earNoseParts, ftParts, gripperParts, handParts } from './kit-robot';
 import { FAMILIES, callFamily } from './families';
 import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
@@ -315,6 +319,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   ftsensor: { says: 'a force/torque sensor as its maker gives it (src/nexus/kit-robot.ts): its stainless body and its six silicon gauges on its flexures', leaves: 'its height an estimate; its flexures and cable not drawn', make: (_p, it) => ftParts(it.name) },
   depthcamera: { says: 'a depth camera as its maker gives it (src/nexus/kit-robot.ts): its case, its glass face, its two infrared imagers and colour one behind their lenses, its projector, its board', leaves: 'its imagers\' places estimates; its vision processor not drawn apart from its board', make: (_p, it) => depthCamParts(it.name) },
   gassensor: { says: 'a gas sensor as its maker gives it (src/nexus/kit-robot.ts): its LGA package, its two dies inside', leaves: 'its dies\' sizes estimates; its lid and pads not drawn apart', make: (_p, it) => bmeParts(it.name) },
+  printer3d: { says: 'a 3D printer drawn from its maker\'s own assembly (Creality\'s Ender-3 3DXML, read by tools/measure/xml3d.py): every part where the model puts it, each library part (extrusions, steppers, bearings, the GT2 pulleys, screws, nuts and washers) fitted to its box', leaves: 'what the library does not make yet drawn as its measured box, said as what it is (its brackets and plates, the bed, the power supply, the display, the fans, the V-wheels, the lead screw, the hot end\'s parts), each its fill an estimate', make: (_p, it) => modelPart(ENDER3, it.name).part.parts! },
   robot: { says: 'the robot its tasks design (src/nexus/robot.ts), each part the library\'s: its table, two UR5e arms bolted down by their makers\' pattern and posed ready, a QC-11 and an RH56DFX hand on each (a Nano17 at each index fingertip), the Camera Module 3 on the right wrist, the D435, microphone and gas sensor on a mast', leaves: 'its table, mast and camera bracket estimates; its cables, air lines and controllers not drawn', make: (_p, it) => robotParts(it.name) },
 };
 
@@ -467,6 +472,54 @@ function robotParts(nm: string, r: Robot = robotFor(TASKS.map((t) => t.id)).robo
     ...(has('depth') ? [{ name: `${nm} depth camera`, item: 'depthcamera-d435', at: [0, m(eyeY - 12.5), m(25)] as V3, rot: [tilt, 0, 0] as V3, parts: depthCamParts(`${nm} depth camera`) }] : []),
     ...(ear || nose ? [{ name: `${nm} ${ear && nose ? 'ear and nose' : ear ? 'ear' : 'nose'}`, at: [0, m(eyeY - 160), m(21)] as V3, parts: earNoseParts(`${nm} ${ear && nose ? 'ear and nose' : ear ? 'ear' : 'nose'} board`, ear, nose) }] : [])] }] : [];
   return [table, ...sides.flatMap((s, k) => arm(s, k)), ...mast];
+}
+/** A maker's own assembly drawn from the library (makermodel.ts reads its parts' names into the library's words): each
+ *  library part fitted to the model's part by its box (its axes matched to the model's by their lengths) and by where
+ *  its surface's middle lies (so a screw's head, a motor's shaft and a pulley's hub face the way the model's do), then
+ *  placed by the model's own matrix; what the library does not make yet drawn as its measured box, said as what it is.
+ *  The whole stood on the floor, its footprint centred. */
+export function modelPart(model: MakerModel, nm = model.name): { part: Part; drawn: number; boxed: number } {
+  type M3 = number[][];
+  const rotOf = (m: number[]): M3 => [[m[0]!, m[1]!, m[2]!], [m[4]!, m[5]!, m[6]!], [m[8]!, m[9]!, m[10]!]], tOf = (m: number[]): V3 => [m[3]!, m[7]!, m[11]!];
+  const mv = (R: M3, v: V3): V3 => [R[0]![0]! * v[0] + R[0]![1]! * v[1] + R[0]![2]! * v[2], R[1]![0]! * v[0] + R[1]![1]! * v[1] + R[1]![2]! * v[2], R[2]![0]! * v[0] + R[2]![1]! * v[1] + R[2]![2]! * v[2]];
+  const mm3 = (A: M3, B: M3): M3 => A.map((r) => [0, 1, 2].map((j) => r[0]! * B[0]![j]! + r[1]! * B[1]![j]! + r[2]! * B[2]![j]!));
+  const det = (R: M3) => R[0]![0]! * (R[1]![1]! * R[2]![2]! - R[1]![2]! * R[2]![1]!) - R[0]![1]! * (R[1]![0]! * R[2]![2]! - R[1]![2]! * R[2]![0]!) + R[0]![2]! * (R[1]![0]! * R[2]![1]! - R[1]![1]! * R[2]![0]!);
+  // (the Euler angles, x then y then z, the drawing turns a part by)
+  const euler = (R: M3): V3 => { const m13 = Math.max(-1, Math.min(1, R[0]![2]!)), y = Math.asin(m13); return Math.abs(m13) < 0.9999999 ? [Math.atan2(-R[1]![2]!, R[2]![2]!), y, Math.atan2(-R[0]![1]!, R[0]![0]!)] : [Math.atan2(R[2]![1]!, R[1]![1]!), y, 0]; };
+  const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+  // (a drawn part's box and the middle of its pieces, weighted by their boxes, in its own frame, m: its body's, its
+  // leads, wires and plug left out, as a maker's model leaves them out)
+  const loose = (x: { p: Part; parent: { p: Part } | null }): boolean => /\b(lead|leads|wire|cable|plug|connector)\b/i.test(x.p.name) || /wire|cable|jst/i.test(x.p.item ?? '') || (!!x.p.shape && 'tube' in x.p.shape) || (!!x.parent && loose(x.parent as never));
+  const own = (p: Part) => { const q = { ...p, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3 }, ns = layout(q).filter((x) => x.box && !x.box.isEmpty() && !loose(x)), b = new THREE.Box3(); let w = 0; const c = new THREE.Vector3();
+    for (const x of ns) { b.union(x.box!); const s = x.box!.getSize(new THREE.Vector3()), v = Math.max(1e-12, s.x * s.y * s.z); c.addScaledVector(x.box!.getCenter(new THREE.Vector3()), v); w += v; }
+    return { min: b.min.toArray() as V3, max: b.max.toArray() as V3, mid: (w ? c.divideScalar(w) : b.getCenter(new THREE.Vector3())).toArray() as V3 }; };
+  const placed: { p: Part; corners: V3[] }[] = []; let drawn = 0, boxed = 0;
+  model.parts.forEach((mp: ModelPart, i) => {
+    const R = rotOf(mp[2]), t = tOf(mp[2]), lo: V3 = [mp[3][0]!, mp[3][1]!, mp[3][2]!], hi: V3 = [mp[3][3]!, mp[3][4]!, mp[3][5]!], ext = extents(mp), cm: V3 = [0, 1, 2].map((k) => (lo[k]! + hi[k]!) / 2) as V3;
+    const corners = [0, 1].flatMap((a) => [0, 1].flatMap((b) => [0, 1].map((c) => { const v = mv(R, [a ? hi[0] : lo[0], b ? hi[1] : lo[1], c ? hi[2] : lo[2]]); return [v[0] + t[0], v[1] + t[1], v[2] + t[2]] as V3; })));
+    const words = libraryWords(mp); let lib: Part | null = null; try { lib = words ? use(words) : null; } catch { lib = null; }
+    if (lib) {
+      const o = own(lib), le = [0, 1, 2].map((k) => (o.max[k]! - o.min[k]!) * 1000), cl = [0, 1, 2].map((k) => ((o.min[k]! + o.max[k]!) / 2) * 1000), ml = o.mid.map((v) => v * 1000);
+      const perm = PERMS.map((pm) => ({ pm, e: pm.reduce((s, j, k) => s + Math.abs(le[j]! - ext[k]!) / Math.max(1, ext[k]!), 0) })).sort((a, b) => a.e - b.e)[0]!.pm;
+      // (each axis's way by the side its weight lies on, where both lean clearly; else as it comes)
+      const conf = [0, 1, 2].map((k) => { const dm = mp[4][k]! - cm[k]!, dl = ml[perm[k]!]! - cl[perm[k]!]!; return { s: Math.abs(dm) > 0.02 * ext[k]! && Math.abs(dl) > 0.02 * le[perm[k]!]! ? Math.sign(dm * dl) : 1, sure: Math.min(Math.abs(dm) / Math.max(1, ext[k]!), Math.abs(dl) / Math.max(1, le[perm[k]!]!)) }; });
+      const F: M3 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; conf.forEach((c, k) => { F[k]![perm[k]!] = c.s; });
+      if (det(F) < 0) { const k = [0, 1, 2].sort((a, b) => conf[a]!.sure - conf[b]!.sure)[0]!; F[k]![perm[k]!]! *= -1; }
+      const fc = mv(F, cl as V3), tt: V3 = [cm[0] - fc[0], cm[1] - fc[1], cm[2] - fc[2]], W = mm3(R, F), wt = mv(R, tt);
+      placed.push({ p: { ...lib, name: mp[1], at: [wt[0] + t[0], wt[1] + t[1], wt[2] + t[2]], rot: euler(W) } as Part, corners }); drawn++;
+    } else {
+      // (a part folded from sheet, deeper than its sheet: what of its box its sheet fills, its two largest faces' worth)
+      const b = boxedAs(mp[0]), wc = mv(R, cm), [e0, e1, e2] = [...ext].sort((a, b2) => b2 - a) as [number, number, number];
+      const fill = b.sheet && e2 > 2 * b.sheet ? Math.min(1, (b.sheet * (e0 * e1 + e0 * e2)) / (e0 * e1 * e2)) : b.fill;
+      placed.push({ p: P(mp[1], { box: [ext[0]! * mm, ext[1]! * mm, ext[2]! * mm] }, { mat: b.mat, color: b.color, finish: b.finish as Part['finish'], at: [wc[0] + t[0], wc[1] + t[1], wc[2] + t[2]], rot: euler(R), fill }), corners }); boxed++;
+    }
+    void i;
+  });
+  // (stood on the floor, its footprint centred; mm to m)
+  const all = placed.flatMap((x) => x.corners), lo = [0, 1, 2].map((k) => Math.min(...all.map((c) => c[k]!))), hi = [0, 1, 2].map((k) => Math.max(...all.map((c) => c[k]!)));
+  const shift: V3 = [(lo[0]! + hi[0]!) / 2, lo[1]!, (lo[2]! + hi[2]!) / 2];
+  const parts = placed.map(({ p }) => ({ ...p, at: [((p.at?.[0] ?? 0) - shift[0]) * mm, ((p.at?.[1] ?? 0) - shift[1]) * mm, ((p.at?.[2] ?? 0) - shift[2]) * mm] as V3 }));
+  return { part: { name: nm, at: [0, 0, 0], parts }, drawn, boxed };
 }
 /** Where the robot's work is: its table's top (mm above the floor), the point its tasks are done at (mm, the table's
  *  frame: a board held 60 mm over the table, in front of the mast), how far to each side of it each hand works, its
