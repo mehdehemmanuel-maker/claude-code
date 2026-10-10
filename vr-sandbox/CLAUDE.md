@@ -180,6 +180,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/parts/kits.ts`, checked in `src/nexus/make/critic.ts` |
 | A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
 | Places, rides and games | `places.ts`, `karting.ts`, `coaster.ts`, `pingpong.ts` |
+| Whether the tree is still clean: nothing loose at the root, every file saying what it owns, no file quietly grown into six concerns, no name with two owners, no path in prose that has gone stale, and no layer importing one that should depend on it — the last three as ratchets whose declared numbers may shrink and never grow | `tests/nexus/tidy.test.ts` (`npm run tidy`, and inside `npm run gate` for free) |
 
 ## The organising principle: interfaces, envelopes, one graph
 
@@ -256,7 +257,7 @@ the root.
 | `models/` | generated data files from makers' own CAD |
 | `book/`, `life/`, `embody/` | the law book, the life graph, embodiment |
 | `cli/` | every command-line entry point (`npm run nexus`, `works`, `breakdown`, `pack`, …) |
-| `index.ts`, `works.ts` | the two doors kept at the root so existing imports go on meaning what they meant |
+| `index.ts`, `works.ts` | the two doors kept at the root so existing imports go on meaning what they meant; both own nothing but `export *` lines |
 
 ## Before writing a new file or function
 
@@ -996,10 +997,34 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    which is exactly what this file's own rule exists to prevent, and `src/nexus` was 183 files in one directory, which
    is how a second owner gets written for something that already had one. `works/` is now twelve files with one
    concern each, and the tree is fifteen directories (see "Where the code lives" above), done as one mechanical pass
-   with every import recomputed from the real dependency. 135 files carried `src/nexus/x.ts` paths inside their own
+   with every import recomputed from the real dependency. 135 files carried `src/nexus/<name>.ts` paths inside their own
    prose; the geometry taxonomy asserts those paths exist, which is how that was caught rather than discovered later.
+   And then, the user: *"keep cleaning up code and improving effeciency give yourself tasks on the build I requested
+   and monitor yourself also avoid making the same mistake that's making the code get sloppy keep it clean"*. The
+   mistake has five repeatable forms and none of them is caught by a type checker, so each is now caught by
+   machinery (`tests/nexus/tidy.test.ts`, `npm run tidy`, half a second inside the gate): content goes to the nearest
+   open file until that file owns six things; a file arrives with no header, so the next round cannot tell it is
+   already the owner of something and writes a second one; two files export one name; a path in prose goes stale the
+   moment a file moves; and a layer imports one that should depend on it, which is a cycle as soon as anything
+   answers back. Two of the five are pass/fail (a header on every file, and every `src/nexus/….ts` path named in
+   any file or in this one being real — which is how the 135 stale paths from the move were caught); three are
+   ratchets, because this tree already carries the debt and a gate that fails on day one gets switched off. A ratchet
+   writes the debt down to the number and refuses to let it grow: a new oversize file, a new name clash or one more
+   import up a layer fails with its own name in the message, and a *fixed* one fails too, until its line is deleted.
+   So the lists only get shorter and every line is a piece of work someone can pick up. What they say today: four
+   tables of real things are allowed to be long and nine files of logic are too long with what each splits into
+   written beside it (`view/forge.ts` at 4,043 lines is five concerns); 111 names have two declarations; and 23
+   edges, 108 imports, run up a layer. Four causes account for 63 of those 108, and three of the four are the same
+   mistake — a vocabulary (`Term` and `Law` in the engine, `Want` in the asking) living inside one of the two
+   layers that speak it, which is fixed by moving the vocabulary below both. The fourth is `parts/components.ts`,
+   the registry that draws every kind: it imports every machine's, board's and catalogue's drawer, so 45 of those
+   imports are one file reaching up out of the library it lives in. A registry belongs above what it registers.
+   It found three faults as soon as it ran: `src/nexus/index.ts` had no header at all (it is the door, and now says
+   so), and two files named a path that was never real — the illustration `src/nexus/<name>.ts`, which is now
+   written so it cannot be mistaken for one.
    Next: the Bluetooth bridge drawn and priced as a part of the build pack, the works standing in the forge room as
-   real stations you walk between, and the older Now items (robot benches, likeness, life graph).
+   real stations you walk between, working the three ratchets down by cause, and the older Now items (robot benches,
+   likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);
@@ -1009,5 +1034,9 @@ the user can widen it under the environment's Network access.
 
 - Gate: `npm run gate` (long; run it in the background and log to a file). Build the viewer:
   `npx vite build --config vite.view.config.ts --logLevel error`.
+- `npm run tidy` is the half-second part of the gate that checks the tree's own shape, and it is the thing to run
+  before and after moving anything. Its three ratchets (oversize files, name clashes, imports up a layer) hold the
+  present debt to the number: they fail on a new one by name, and they fail on a fixed one until its line is
+  deleted, so the lists only ever get shorter. Never raise a number to make it pass.
 - Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing.
 - Never put API keys in the repo or in client code.

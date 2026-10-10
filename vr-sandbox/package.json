@@ -7,6 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "tidy": "vitest run tests/nexus/tidy.test.ts",
     "test:watch": "vitest",
     "gate": "tsc --noEmit -p . && vitest run",
     "nexus:build": "vite build --config vite.nexus.config.ts",
