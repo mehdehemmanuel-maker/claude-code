@@ -1,14 +1,19 @@
 // Machines by their makers' figures: 3D printers from their makers' own assemblies, EOS's M 290 metal printer and Skutt's
 // KM-1027 kiln from their data sheets and listings; robot arms: the Meca500 (Mecademic), its R3 and R4 revisions, from
-// its user manual (src/nexus/meca.ts holds its figures, its kinematics and its controller).
+// its user manual (src/nexus/meca.ts holds its figures, its kinematics and its controller), the UR5e by Universal
+// Robots' figures (src/nexus/dharm.ts) and the Franka Research 3 by Franka's own description and data sheet
+// (src/nexus/franka.ts).
 
 import { bare, type KindDef, type P } from './core';
 import { MECA500 } from '../meca';
 import { UR5E } from '../dharm';
+import { FR3, FRANKA_HAND } from '../franka';
 import { billOf } from '../makermodel';
 import { ENDER3 } from '../models/ender3';
 import { VORON24 } from '../models/voron24';
 
+/** The FR3's box at its rest pose with its Franka Hand on (wide, high, deep, mm): its drawing's own, by Franka's figures. */
+const FR3_BOX: [number, number, number] = [670, 778, 260];
 /** A maker's model's bill of materials as kind words: each library part by its words and how many. */
 const bill = (m = ENDER3) => Object.entries(billOf(m).words).map(([w, n]) => `{${w}}${n > 1 ? `*${n}` : ''}`).join(' ');
 /** The printers drawn from their makers' own assemblies. */
@@ -53,20 +58,21 @@ export const ROBOT_KINDS: KindDef[] = [
     box: () => [2500, 2190, 1300], g: () => 1250000,
   },
   {
-    id: 'robotarm', name: 'six-axis robot arm', path: 'Mechanical/Robots/Robot arms', says: 'a six-jointed arm that puts its tool at any pose in its reach, programmed in its maker\'s commands', std: 'Mecademic\'s Meca500 user and programming manuals',
-    axes: [bare('model', 'model', ['Meca500-R3', 'Meca500-R4', 'UR5e'])],
-    title: (p) => (s(p, 'model') === 'UR5e' ? 'Universal Robots UR5e six-axis arm' : `Mecademic ${s(p, 'model').replace('-', ' ')} six-axis arm`),
-    of: () => 'arm-casting*6 joint-drive*6 robot-flange', make: 'assemble', how: 'six anodised aluminium castings, a drive in each joint (its motor, gear and encoder), wired through its hollow joints to its base\'s connectors',
-    spec: (p) => s(p, 'model') === 'UR5e' ? `repeatability ±0.03 mm (ISO 9283); payload 5 kg; reach 850 mm; ${UR5E.mass} kg arm (20.6 kg with its cable); six joints ±360°, 180 °/s; force at its flange to 3.5 N in 50 N; ISO 9409-1-50-4-M6 flange; 200 W typical (Universal Robots' UR5e fact sheet)` : `repeatability ${MECA500.repeatability} mm; payload ${MECA500.payload} kg rated; reach ${MECA500.reach} mm at its flange; ${MECA500.mass} kg; joints ${MECA500.limits.map(([a, b], i) => `J${i + 1} ${a}°…${b}°`).join(', ')}; top speeds ${MECA500.speed[s(p, 'model').endsWith('R4') ? 'R4' : 'R3'].join(', ')} °/s; ${MECA500.power}; controlled over Ethernet, port ${MECA500.ports.control} (${MECA500.src})`,
-    box: (p) => (s(p, 'model') === 'UR5e' ? [960, 300, 260] : [190, 120, 450]), g: (p) => (s(p, 'model') === 'UR5e' ? UR5E.mass : MECA500.mass) * 1000, look: 'arm',
+    id: 'robotarm', name: 'robot arm', path: 'Mechanical/Robots/Robot arms', says: 'a six- or seven-jointed arm that puts its tool at any pose in its reach, programmed in its maker\'s commands', std: 'Mecademic\'s Meca500 user and programming manuals; Universal Robots\' UR5e fact sheet; Franka\'s Research 3 data sheet and robot description',
+    axes: [bare('model', 'model', ['Meca500-R3', 'Meca500-R4', 'UR5e', 'FR3'])],
+    title: (p) => (s(p, 'model') === 'UR5e' ? 'Universal Robots UR5e six-axis arm' : s(p, 'model') === 'FR3' ? 'Franka Research 3 seven-axis arm with its Franka Hand' : `Mecademic ${s(p, 'model').replace('-', ' ')} six-axis arm`),
+    of: (p) => (s(p, 'model') === 'FR3' ? 'arm-casting*8 joint-drive*7 joint-torque-sensor*7 robot-flange {robothand Franka-Hand}' : 'arm-casting*6 joint-drive*6 robot-flange'), make: 'assemble',
+    how: (p) => (s(p, 'model') === 'FR3' ? 'eight aluminium links, a drive in each joint (its motor, strain-wave gear, brake and encoder) and a torque sensor between each drive and the link it turns, so the arm feels what it touches and can be guided by hand; wired through its joints to its base, and from there to its Control; its Franka Hand bolted to its flange and plugged into its connector' : 'six anodised aluminium castings, a drive in each joint (its motor, gear and encoder), wired through its hollow joints to its base\'s connectors'),
+    spec: (p) => s(p, 'model') === 'UR5e' ? `repeatability ±0.03 mm (ISO 9283); payload 5 kg; reach 850 mm; ${UR5E.mass} kg arm (20.6 kg with its cable); six joints ±360°, 180 °/s; force at its flange to 3.5 N in 50 N; ISO 9409-1-50-4-M6 flange; 200 W typical (Universal Robots' UR5e fact sheet)` : s(p, 'model') === 'FR3' ? `seven joints, a torque sensor at the link side of each; payload ${FR3.payload} kg; reach ${FR3.reach} mm; repeatability <±${FR3.repeatability} mm (ISO 9283); joints ${FR3.limits!.map(([a, b], i) => `A${i + 1} ${Math.round((a * 180) / Math.PI)}°…${Math.round((b * 180) / Math.PI)}°`).join(', ')}; torque A1–A4 ±87 N·m, A5–A7 ±12 N·m; 150 °/s (A1–A4), 301 °/s (A5–A7), up to 2 m/s at its tool; guided by hand at about 2.5 N; DIN ISO 9409-1-A50 flange; about ${FR3.mass} kg; IP40; its Control a 19 in rack box, 355 × 483 × 89 mm, about 80 W and 7 kg, its 1 kHz Franka Control Interface over Ethernet (Franka's data sheet R02212 v2.6); its Franka Hand ${FRANKA_HAND.stroke} mm stroke, ${FRANKA_HAND.force[0]} N continuous and ${FRANKA_HAND.force[1]} N at most, ${FRANKA_HAND.mass * 1000} g` : `repeatability ${MECA500.repeatability} mm; payload ${MECA500.payload} kg rated; reach ${MECA500.reach} mm at its flange; ${MECA500.mass} kg; joints ${MECA500.limits.map(([a, b], i) => `J${i + 1} ${a}°…${b}°`).join(', ')}; top speeds ${MECA500.speed[s(p, 'model').endsWith('R4') ? 'R4' : 'R3'].join(', ')} °/s; ${MECA500.power}; controlled over Ethernet, port ${MECA500.ports.control} (${MECA500.src})`,
+    box: (p) => (s(p, 'model') === 'UR5e' ? [960, 300, 260] : s(p, 'model') === 'FR3' ? FR3_BOX : [190, 120, 450]), g: (p) => (s(p, 'model') === 'UR5e' ? UR5E.mass : s(p, 'model') === 'FR3' ? FR3.mass + FRANKA_HAND.mass : MECA500.mass) * 1000, look: 'arm',
   },
   {
     id: 'robothand', look: 'box', name: 'robot hand', path: 'Mechanical/Robots/Hands', says: 'a hand of four fingers and a thumb a robot\'s wrist carries, each curled by its own drive, its grip\'s force read', std: 'Inspire Robots\' RH56DFX page',
-    axes: [bare('model', 'model', ['RH56DFX', '2F-85'])], title: (p) => (s(p, 'model') === '2F-85' ? 'Robotiq 2F-85 adaptive gripper' : 'Inspire Robots RH56DFX dexterous hand'),
-    of: (p) => (s(p, 'model') === '2F-85' ? 'gripper-coupling gripper-housing linear-servo pcb-bare*2 finger-link*8 finger-pad*2' : 'hand-palm hand-finger*5 linear-servo*6 pcb-bare'), make: 'assemble',
-    how: (p) => (s(p, 'model') === '2F-85' ? 'one drive in its housing closing two four-bar fingers together: their pads stay parallel as they close, or the fingers wrap round what they meet first' : 'six micro linear servos in its palm, each pulling a finger\'s linkage (the thumb two: its curl and its swing across the palm), its board reading each one\'s force'),
-    spec: (p) => (s(p, 'model') === '2F-85' ? '85 mm stroke; 20–235 N grip; 20–150 mm/s; 5 kg payload; ±0.05 mm; 162.8 mm tall and 148.6 wide open; 850 g (its manual), 1 kg (Robotiq\'s page, with its coupling); 24 V, 2 A; ISO 9409-1-50-4-M6 coupling' : '6 degrees of freedom on 12 joints; each fingertip 10 N, the thumb 15 N, read to 0.5 N; ±0.20 mm; 540 g; 12–48 V DC; RS485 (Inspire Robots\' page)'),
-    box: (p) => (s(p, 'model') === '2F-85' ? [148.6, 162.8, 75] : [190, 90, 40]), g: (p) => (s(p, 'model') === '2F-85' ? 1000 : 540),
+    axes: [bare('model', 'model', ['RH56DFX', '2F-85', 'Franka-Hand'])], title: (p) => (s(p, 'model') === '2F-85' ? 'Robotiq 2F-85 adaptive gripper' : s(p, 'model') === 'Franka-Hand' ? 'Franka Hand two-finger gripper' : 'Inspire Robots RH56DFX dexterous hand'),
+    of: (p) => (s(p, 'model') === '2F-85' ? 'gripper-coupling gripper-housing linear-servo pcb-bare*2 finger-link*8 finger-pad*2' : s(p, 'model') === 'Franka-Hand' ? 'gripper-coupling gripper-housing linear-servo pcb-bare finger-link*2 finger-pad*2' : 'hand-palm hand-finger*5 linear-servo*6 pcb-bare'), make: 'assemble',
+    how: (p) => (s(p, 'model') === 'Franka-Hand' ? 'one drive in its housing moving both fingers along their rails together, each 40 mm out and back, their rubber tips meeting in the middle; fed and commanded through the arm\'s flange connector' : s(p, 'model') === '2F-85' ? 'one drive in its housing closing two four-bar fingers together: their pads stay parallel as they close, or the fingers wrap round what they meet first' : 'six micro linear servos in its palm, each pulling a finger\'s linkage (the thumb two: its curl and its swing across the palm), its board reading each one\'s force'),
+    spec: (p) => (s(p, 'model') === 'Franka-Hand' ? `${FRANKA_HAND.stroke} mm stroke (40 mm a finger); ${FRANKA_HAND.force[0]} N continuous, ${FRANKA_HAND.force[1]} N at most; ${FRANKA_HAND.speed} mm/s a finger; its fingers exchangeable; ${FRANKA_HAND.mass * 1000} g; ${FRANKA_HAND.size.join(' × ')} mm (Franka's Franka Hand page; its force and speed resellers' copies of its data sheet)` : s(p, 'model') === '2F-85' ? '85 mm stroke; 20–235 N grip; 20–150 mm/s; 5 kg payload; ±0.05 mm; 162.8 mm tall and 148.6 wide open; 850 g (its manual), 1 kg (Robotiq\'s page, with its coupling); 24 V, 2 A; ISO 9409-1-50-4-M6 coupling' : '6 degrees of freedom on 12 joints; each fingertip 10 N, the thumb 15 N, read to 0.5 N; ±0.20 mm; 540 g; 12–48 V DC; RS485 (Inspire Robots\' page)'),
+    box: (p) => (s(p, 'model') === '2F-85' ? [148.6, 162.8, 75] : s(p, 'model') === 'Franka-Hand' ? [205, 127, 63] : [190, 90, 40]), g: (p) => (s(p, 'model') === '2F-85' ? 1000 : s(p, 'model') === 'Franka-Hand' ? FRANKA_HAND.mass * 1000 : 540),
   },
   {
     id: 'toolchanger', look: 'box', name: 'robot tool changer', path: 'Mechanical/Robots/Tool changers', says: 'two plates between an arm\'s flange and its tool, locked by air, so the arm puts one tool down and takes up another', std: 'ATI\'s QC-11 page',

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fk, flangeOf, ik, UR5E } from '../../src/nexus/dharm';
+import { FR3, FRANKA_HAND } from '../../src/nexus/franka';
+import { massOf } from '../../src/nexus/mass';
 import * as THREE from 'three';
 import { componentOf, robotPart, ROBOT_CELL } from '../../src/nexus/components';
 import { contacts, layout, type Node } from '../../src/nexus/make/space';
@@ -21,6 +23,32 @@ describe('arms by their DH tables: the UR5e', () => {
     const c = componentOf(it0.id)!; expect(c).toBeTruthy(); const names: string[] = []; const walk = (p: { name: string; parts?: unknown[] }) => { names.push(p.name); for (const q of (p.parts ?? []) as { name: string }[]) walk(q); }; walk(c.part);
     for (let k = 1; k <= 6; k++) expect(names.some((n) => n.endsWith(` joint ${k}`)), `joint ${k}`).toBe(true);
     expect(names.some((n) => /tool flange/.test(n))).toBe(true);
+  });
+});
+
+describe('arms by their DH tables: the Franka Research 3\'s seven joints (modified DH)', () => {
+  it('puts its flange where Franka\'s table does: 88 mm out and 926 up at zero, 307 out and 590 up at its rest pose', () => {
+    const z = flangeOf(FR3, [0, 0, 0, 0, 0, 0, 0]); expect(z.at[0]).toBeCloseTo(88, 6); expect(z.at[1]).toBeCloseTo(0, 6); expect(z.at[2]).toBeCloseTo(926, 6); expect(z.z[2]).toBeCloseTo(-1, 9);
+    const h = flangeOf(FR3, FR3.home!); expect(h.at[0]).toBeCloseTo(306.9, 1); expect(h.at[2]).toBeCloseTo(590.3, 1); expect(h.z[2]).toBeCloseTo(-1, 9);
+    // (the base's frame, each joint's, and its flange's)
+    expect(fk(FR3, FR3.home!).length).toBe(9);
+  });
+  it('finds seven joint angles within its limits that put its tool on a point pointing down', () => {
+    for (const at of [[500, 0, 200], [400, -250, 350], [300, 300, 100]] as [number, number, number][]) {
+      const r = ik(FR3, at, [0, 0, -1]); expect(r.miss, `${at}`).toBeLessThan(0.1); expect(r.off, `${at}`).toBeLessThan(0.5); expect(r.q.length).toBe(7);
+      r.q.forEach((v, k) => { expect(v).toBeGreaterThanOrEqual(FR3.limits![k]![0]); expect(v).toBeLessThanOrEqual(FR3.limits![k]![1]); });
+    }
+    // (past its 855 mm reach it says how far it misses)
+    expect(ik(FR3, [1500, 0, 333], null).miss).toBeGreaterThan(300);
+  });
+  it('is drawn by the library with its Franka Hand on, each joint a group its program turns, weighing what Franka\'s model says its links and its hand do', () => {
+    const it0 = resolve('robotarm FR3'); if (!it0 || typeof it0 === 'string') throw new Error(String(it0));
+    const c = componentOf(it0.id)!; expect(c.faults).toEqual([]); const all: { name: string; item?: string }[] = []; const walk = (p: { name: string; item?: string; parts?: unknown[] }) => { all.push(p); for (const q of (p.parts ?? []) as typeof p[]) walk(q); }; walk(c.part);
+    for (let k = 1; k <= 7; k++) expect(all.some((n) => n.name.endsWith(` joint ${k}`)), `joint ${k}`).toBe(true);
+    expect([all.filter((p) => p.item === 'joint-drive').length, all.filter((p) => p.item === 'joint-torque-sensor').length]).toEqual([7, 7]);
+    expect(all.filter((p) => p.item === 'robothand-franka-hand').length).toBe(1);
+    // (its links' and its hand's own masses, and the few grams of the lines drawn between its links)
+    expect(Math.abs(massOf(c.part) - (FR3.kg.reduce((a, b) => a + b, 0) + FRANKA_HAND.kg + 2 * FRANKA_HAND.finger))).toBeLessThan(0.1);
   });
 });
 

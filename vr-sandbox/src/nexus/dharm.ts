@@ -1,18 +1,23 @@
-// Six-axis arms from their makers' Denavit–Hartenberg tables: where every joint and the flange are for any joint
-// angles (each joint turning about its own z, the next frame d along it and a along the new x, then turned α about
-// that x: the standard convention), the angles that put the flange at a point with its tool pointing a way (found by
-// damped least squares, from a seed), and the arm drawn as a housing at each joint and a tube along each link, each
-// joint a group its program turns. First the UR5e (Universal Robots' figures); any arm given its table is the same.
-// Owner of: arms by their DH tables (their kinematics and their drawing). The Meca500, with its own closed-form
+// Arms from their makers' Denavit–Hartenberg tables: where every joint and the flange are for any joint angles, the
+// angles that put the flange at a point with its tool pointing a way (found by damped least squares, from a seed, within
+// each joint's limits), and a six-axis arm drawn as a housing at each joint and a tube along each link, each joint a
+// group its program turns. A table is standard (each joint turning about its own z, the next frame d along it and a
+// along the new x, then turned α about that x) or modified (Craig's: a along x and turned α about it first, then the
+// joint turning about the new z, d along it: Franka's), of any number of joints, with a fixed tip past the last (its
+// flange). First the UR5e (Universal Robots' figures); the Franka Research 3's seven joints are its own (./franka.ts).
+// Owner of: arms by their DH tables (their kinematics, and the six-axis drawing). The Meca500, with its own closed-form
 // inverse and drawing, stays in ./meca.ts.
 
 import type { Part } from './kits';
 
 export interface DH { d: number; a: number; alpha: number }
+/** A chain of joints by its table (mm, rad): standard, or modified (`mdh`); its fixed tip past its last joint (a flange
+ *  set off along it), each joint's limits (rad, low and high) and the pose it rests in, a seed for its inverse. */
+export interface Chain { dh: DH[]; mdh?: boolean; tip?: DH; limits?: [number, number][]; home?: number[] }
 /** An arm by its table (mm, rad) and how it is drawn: each joint's housing (its radius, and where it runs along its
  *  axis, from and to, mm: a wrist's covers its offset to the next joint), each link's tube (radius, mm), its base, its
  *  mass (kg) and colours, each figure's source. */
-export interface DHArm { id: string; name: string; dh: DH[]; housing: [number, number, number][]; tube: number[]; base: { r: number; h: number; foot?: { r: number; h: number }; bolts?: { n: number; pcd: number; words: string; torque: number } }; mass: number; flange: { r: number; h: number }; body: number; caps: number; src: string; leaves: string }
+export interface DHArm extends Chain { id: string; name: string; housing: [number, number, number][]; tube: number[]; base: { r: number; h: number; foot?: { r: number; h: number }; bolts?: { n: number; pcd: number; words: string; torque: number } }; mass: number; flange: { r: number; h: number }; body: number; caps: number; src: string; leaves: string }
 const PI = Math.PI;
 export const UR5E: DHArm = {
   id: 'ur5e', name: 'Universal Robots UR5e',
@@ -27,32 +32,43 @@ export const DH_ARMS: Record<string, DHArm> = { ur5e: UR5E };
 type M4 = number[];
 const mul = (A: M4, B: M4): M4 => { const C = new Array(16).fill(0); for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) for (let k = 0; k < 4; k++) C[r * 4 + c] += A[r * 4 + k]! * B[k * 4 + c]!; return C; };
 const I4: M4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-/** One joint's transform: turned θ about z, d along it, a along the new x, α about it. */
-const step = (j: DH, th: number): M4 => { const ct = Math.cos(th), st = Math.sin(th), ca = Math.cos(j.alpha), sa = Math.sin(j.alpha); return [ct, -st * ca, st * sa, j.a * ct, st, ct * ca, -ct * sa, j.a * st, 0, sa, ca, j.d, 0, 0, 0, 1]; };
-/** Every joint's frame for joint angles q (rad), the base's first; the last is the flange (its z out of it). */
-export function fk(arm: DHArm, q: number[]): M4[] { const out: M4[] = [I4]; let T = I4; arm.dh.forEach((j, i) => { T = mul(T, step(j, q[i] ?? 0)); out.push(T); }); return out; }
+/** One joint's transform. Standard: turned θ about z, d along it, a along the new x, α about it. Modified: a along x,
+ *  α about it, then θ about the new z and d along it. */
+const step = (j: DH, th: number, mdh = false): M4 => {
+  const ct = Math.cos(th), st = Math.sin(th), ca = Math.cos(j.alpha), sa = Math.sin(j.alpha);
+  return mdh ? [ct, -st, 0, j.a, st * ca, ct * ca, -sa, -sa * j.d, st * sa, ct * sa, ca, ca * j.d, 0, 0, 0, 1] : [ct, -st * ca, st * sa, j.a * ct, st, ct * ca, -ct * sa, j.a * st, 0, sa, ca, j.d, 0, 0, 0, 1];
+};
+/** Every joint's frame for joint angles q (rad), the base's first; the last is the flange (its z out of it), its tip's
+ *  where it has one. */
+export function fk(arm: Chain, q: number[]): M4[] {
+  const out: M4[] = [I4]; let T = I4;
+  arm.dh.forEach((j, i) => { T = mul(T, step(j, q[i] ?? 0, arm.mdh)); out.push(T); });
+  if (arm.tip) out.push(mul(T, step(arm.tip, 0, arm.mdh)));
+  return out;
+}
 /** The flange's point (mm) and the way its tool points (its z), for joint angles q. */
-export function flangeOf(arm: DHArm, q: number[]): { at: [number, number, number]; z: [number, number, number] } { const T = fk(arm, q).at(-1)!; return { at: [T[3]!, T[7]!, T[11]!], z: [T[2]!, T[6]!, T[10]!] }; }
+export function flangeOf(arm: Chain, q: number[]): { at: [number, number, number]; z: [number, number, number] } { const T = fk(arm, q).at(-1)!; return { at: [T[3]!, T[7]!, T[11]!], z: [T[2]!, T[6]!, T[10]!] }; }
 /** Joint angles putting the flange at `at` (mm) with its tool pointing along `z` (a unit vector; none: any way), from
- *  `seed`: damped least squares on the numerical Jacobian, each step limited. Its miss (mm, and degrees off the
- *  way) said, so a point out of reach is seen. */
-export function ik(arm: DHArm, at: [number, number, number], z: [number, number, number] | null, seed: number[] = [0, -PI / 2, PI / 2, -PI / 2, -PI / 2, 0]): { q: number[]; miss: number; off: number } {
+ *  `seed` (its rest pose if not said): damped least squares on the numerical Jacobian, each step limited and each joint
+ *  kept within its limits. Its miss (mm, and degrees off the way) said, so a point out of reach is seen. */
+export function ik(arm: Chain, at: [number, number, number], z: [number, number, number] | null, seed: number[] = arm.home ?? [0, -PI / 2, PI / 2, -PI / 2, -PI / 2, 0]): { q: number[]; miss: number; off: number } {
   // (the point first, from the seed with its base turned toward it; then the way the tool points as well, from there:
   // asked for both at once from far off, the pointing's pull stalls it)
   const s0 = [...seed]; s0[0] = Math.atan2(at[1], at[0]) - Math.atan2(flangeOf(arm, seed).at[1], flangeOf(arm, seed).at[0]) + seed[0]!;
   const near = z ? solve(arm, at, null, s0).q : s0; return solve(arm, at, z, near);
 }
-function solve(arm: DHArm, at: [number, number, number], z: [number, number, number] | null, seed: number[]): { q: number[]; miss: number; off: number } {
-  const q = [...seed], err = (qq: number[]) => { const f = flangeOf(arm, qq), e = [at[0] - f.at[0], at[1] - f.at[1], at[2] - f.at[2]]; if (z) e.push(...[z[0] - f.z[0], z[1] - f.z[1], z[2] - f.z[2]].map((v) => v * 200)); return e; };
+function solve(arm: Chain, at: [number, number, number], z: [number, number, number] | null, seed: number[]): { q: number[]; miss: number; off: number } {
+  const N = arm.dh.length, lim = (k: number, v: number) => (arm.limits?.[k] ? Math.max(arm.limits[k]![0], Math.min(arm.limits[k]![1], v)) : v);
+  const q = seed.slice(0, N).map((v, k) => lim(k, v)), err = (qq: number[]) => { const f = flangeOf(arm, qq), e = [at[0] - f.at[0], at[1] - f.at[1], at[2] - f.at[2]]; if (z) e.push(...[z[0] - f.z[0], z[1] - f.z[1], z[2] - f.z[2]].map((v) => v * 200)); return e; };
   for (let it = 0; it < 200; it++) {
-    const e = err(q), n = e.length, J: number[][] = Array.from({ length: n }, () => new Array(6).fill(0)), h = 1e-5;
+    const e = err(q), n = e.length, J: number[][] = Array.from({ length: n }, () => new Array(N).fill(0)), h = 1e-5;
     if (Math.hypot(...e.slice(0, 3)) < 0.01 && (!z || Math.hypot(...e.slice(3)) < 0.02)) break;
-    for (let k = 0; k < 6; k++) { const qq = [...q]; qq[k]! += h; const e2 = err(qq); for (let r = 0; r < n; r++) J[r]![k] = (e[r]! - e2[r]!) / h; }
+    for (let k = 0; k < N; k++) { const qq = [...q]; qq[k]! += h; const e2 = err(qq); for (let r = 0; r < n; r++) J[r]![k] = (e[r]! - e2[r]!) / h; }
     // (Δq = Jᵀ (J Jᵀ + λ² I)⁻¹ e, solved by Gauss–Jordan on the small n×n system)
     const lam = 10, A = J.map((ri, r) => J.map((rj, c) => ri.reduce((s, v, k) => s + v * rj[k]!, 0) + (r === c ? lam * lam : 0))), b = [...e];
     for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r]![c]!) > Math.abs(A[p]![c]!)) p = r; [A[c], A[p]] = [A[p]!, A[c]!]; [b[c], b[p]] = [b[p]!, b[c]!]; for (let r = 0; r < n; r++) if (r !== c) { const f = A[r]![c]! / A[c]![c]!; for (let k = c; k < n; k++) A[r]![k]! -= f * A[c]![k]!; b[r]! -= f * b[c]!; } }
     const y = b.map((v, r) => v / A[r]![r]!);
-    for (let k = 0; k < 6; k++) { const d = J.reduce((s, row, r) => s + row[k]! * y[r]!, 0); q[k]! += Math.max(-0.2, Math.min(0.2, d)); }
+    for (let k = 0; k < N; k++) { const d = J.reduce((s, row, r) => s + row[k]! * y[r]!, 0); q[k] = lim(k, q[k]! + Math.max(-0.2, Math.min(0.2, d))); }
   }
   const f = flangeOf(arm, q), miss = Math.hypot(at[0] - f.at[0], at[1] - f.at[1], at[2] - f.at[2]), off = z ? (Math.acos(Math.max(-1, Math.min(1, z[0] * f.z[0] + z[1] * f.z[1] + z[2] * f.z[2]))) * 180) / PI : 0;
   return { q, miss, off };
