@@ -164,15 +164,15 @@ export function stepperDims(p: Record<string, string | number>) {
 // (NEMA frames and faces: src/nexus/kinds/motion.ts, where the motor plate's kind reads them too)
 
 const stepper: Family = {
-  id: 'stepper', name: 'stepper motor', path: ['Electrical', 'Motors and actuators', 'Stepper motors'], says: 'any NEMA frame and body length, 1.8° a step', params: [{ key: 'nema', says: 'frame', unit: 'NEMA', values: Object.keys(NEMA), default: '17' }, { key: 'length', says: 'body length', unit: 'mm', min: 20, max: 120, default: 40 }],
-  examples: ['stepper nema17 40', 'stepper nema23 56', 'stepper nema14 34'],
-  read(w) { const n = /nema\s*(\d+)/i.exec(w)?.[1] ?? '17'; if (!NEMA[n]) return `Which frame? NEMA ${Object.keys(NEMA).join(', ')}.`; const L = num(/\b(\d{2,3})\s*(?:mm)?\s*$/.exec(w.replace(/nema\s*\d+/i, ''))?.[1]) || 40; return { nema: n, length: L }; },
+  id: 'stepper', name: 'stepper motor', path: ['Electrical', 'Motors and actuators', 'Stepper motors'], says: 'any NEMA frame and body length, 1.8° a step', params: [{ key: 'nema', says: 'frame', unit: 'NEMA', values: Object.keys(NEMA), default: '17' }, { key: 'length', says: 'body length', unit: 'mm', min: 20, max: 120, default: 40 }, { key: 'leads', says: 'its leads', unit: '', values: ['flying', 'socket'], default: 'flying' }],
+  examples: ['stepper nema17 40', 'stepper nema23 56', 'stepper nema14 34', 'stepper nema17 34 socket'],
+  read(w) { const n = /nema\s*(\d+)/i.exec(w)?.[1] ?? '17'; if (!NEMA[n]) return `Which frame? NEMA ${Object.keys(NEMA).join(', ')}.`; const sock = /\bsocket(?:ed)?\b/i.test(w), L = num(/\b(\d{2,3})\s*(?:mm)?\s*$/.exec(w.replace(/nema\s*\d+/i, '').replace(/\bsocket(?:ed)?\b/i, '').trim())?.[1]) || 40; return { nema: n, length: L, leads: sock ? 'socket' : 'flying' }; },
   // (its mass rises with its stack, its bells light: steel 0.62 of its square face over its length less 4.8 mm, fitted to
   // STEPPERONLINE's NEMA 17 sheets: 17HS08-1004S 20 mm 0.14 kg, 17HS4401 40 mm 280 g, 17HS19-2004S1 48 mm 0.40 kg; other
   // frames scaled by their face, typical)
   make(p) { const n = String(p.nema), F = NEMA[n]!, L = Number(p.length), g = mm3g(F * F * Math.max(0.3 * L, L - 4.8) * 0.62, RHO.steel), b = stepperBuild(n);
-    const { of, inner } = partsOf(`stator-stepper rotor-stepper end-bell*2 {bearing ${b.bearing}}*2 {screw ${b.tie}x${stepperDims(p).tieL}}*4 wire-hookup*4 jst-xh`);
-    return { ...item(`stepper-nema${n}-${L}`, `NEMA ${n} stepper, ${L} mm`, 'Electrical/Motors and actuators/Stepper motors', 'product', 'assemble', '', 'two phases of coils on a toothed stator, a toothed magnet rotor, end bells, a bearing in each, four tie screws, four leads to a plug', `${F} mm face (NEMA ICS 16); 1.8° a step (200 a turn); holding torque grows with body length; mass from its shape: about ${g} g`, [F, F, L], g), of, inner }; },
+    const { of, inner } = partsOf(`stator-stepper rotor-stepper end-bell*2 {bearing ${b.bearing}}*2 {screw ${b.tie}x${stepperDims(p).tieL}}*4 ${p.leads === 'socket' ? 'pcb-bare jst-ph-6-side' : 'wire-hookup*4 jst-xh'}`), sock = p.leads === 'socket';
+    return { ...item(`stepper-nema${n}-${L}${sock ? '-socket' : ''}`, `NEMA ${n} stepper, ${L} mm${sock ? ', socketed' : ''}`, 'Electrical/Motors and actuators/Stepper motors', 'product', 'assemble', '', `two phases of coils on a toothed stator, a toothed magnet rotor, end bells, a bearing in each, four tie screws, ${sock ? 'its coils\' ends on a small board in its rear bell, a 6-way JST PH socket on it for its cable (as a 3D printer\'s are)' : 'four leads to a plug'}`, `${F} mm face (NEMA ICS 16); 1.8° a step (200 a turn); holding torque grows with body length; mass from its shape: about ${g} g`, [F, F, L], g), of, inner }; },
 };
 // ---- cells by their size code --------------------------------------------------------------------------------------------
 const CELLS: Record<string, [number, number, number]> = { '18650': [18, 65, 47], '21700': [21, 70, 68], '14500': [14, 50, 20], '26650': [26, 65, 90] };

@@ -807,7 +807,17 @@ function stepperParts(p: Record<string, string | number>, nm: string): Part[] {
   const plug = P(`${nm} plug`, section([[-6.2, -5.75 / 2], [6.2, -5.75 / 2], [6.2, 5.75 / 2], [-6.2, 5.75 / 2]], [0, 1, 2, 3].map((i) => [[-0.75, -0.75], [0.75, -0.75], [0.75, 0.75], [-0.75, 0.75]].map(([x, y]) => [x! - (i - 1.5) * 2.5, y!] as [number, number])), 9.8), { rot: [0, PI / 2, 0], at: [(X0 + 4.9) * mm, yc * mm, 0], mat: 'nylon', color: 0xf1ede2, finish: 'texture', item: 'connector-housing', passes: leads, fixed: 'on the ends of its leads' });
   const contacts = [0, 1, 2, 3].map((i) => P(`${nm} plug contact`, { box: [3.6 * mm, 1.1 * mm, 1.1 * mm] }, { at: [(X0 + 6 + 1.8) * mm, yc * mm, (i - 1.5) * 2.5 * mm], mat: 'brass', color: 0xd9d6cc, finish: 'plate', item: 'crimp-contact', fixed: 'crimped on its lead, clicked into its plug' }));
   return [group(`${nm} front end bell`, 'end-bell', [face, skirtF, hubF, boss]), stator, rotorG, brg(-fb + Bb / 2, 'front'), brg(-L + rb - Bb / 2, 'rear'),
-    group(`${nm} rear end bell`, 'end-bell', [...back, skirtR, hubR]), ...screws, group(`${nm} leads and plug`, 'jst-xh', [...leadParts, plug, ...contacts])];
+    group(`${nm} rear end bell`, 'end-bell', [...back, skirtR, hubR]), ...screws, ...(p.leads === 'socket' ? socketParts() : [group(`${nm} leads and plug`, 'jst-xh', [...leadParts, plug, ...contacts])])];
+  // (socketed, as a 3D printer's are: its coils' ends on a small board in its rear bell, a 6-way JST PH side-entry socket on
+  // it, its mouth flush with its side where the leads would come out; the board 1.6 mm, as wide as the socket and 8 mm
+  // deep (typical); the bell's opening for it not cut)
+  function socketParts(): Part[] {
+    const yc = -L + Math.max(2.6, rb / 2), xs = F / 2 - 4.5 / 2, nyl = { mat: 'nylon', color: 0xf1ede2, finish: 'texture' as const };
+    const board = P(`${nm} socket board`, { box: [8 * mm, 1.6 * mm, 15 * mm] }, { mat: 'fr4', color: 0x1f5a2a, item: 'pcb-bare', at: [(F / 2 - 4.5 - 4) * mm, (yc - 2.4 - 0.8) * mm, 0], fixed: 'held in its rear end bell, its coils\' ends soldered to it' });
+    const housing = P(`${nm} socket housing`, { box: [4.5 * mm, 4.8 * mm, 13.9 * mm] }, { ...nyl, item: 'ph-housing', at: [xs * mm, yc * mm, 0] });
+    const pins = Array.from({ length: 6 }, (_, i) => P(`${nm} socket pin ${i + 1}`, { box: [6 * mm, 0.5 * mm, 0.5 * mm] }, { mat: 'brass', color: 0xd9d6cc, finish: 'plate', item: 'ph-pin', at: [(F / 2 - 3) * mm, yc * mm, (i - 2.5) * 2 * mm] }));
+    return [board, group(`${nm} socket`, 'jst-ph-6-side', [housing, ...pins])];
+  }
 }
 
 /** What a part's inventory says is in it that is not drawn in it: for each thing it is made of (not its materials), as

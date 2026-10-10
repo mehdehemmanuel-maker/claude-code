@@ -20,8 +20,9 @@ export function libraryWords(p: ModelPart): string | null {
   const n = p[0].trim(), M = /\bM(\d+(?:\.\d+)?)\s*[X×x*]\s*(\d+(?:\.\d+)?)/.exec(n);
   let m: RegExpExecArray | null;
   if ((m = /^(2020|2040|3030|4040)\s*profile$/i.exec(n))) return `extrusion ${m[1]} ${longest(p)}`;
-  // (a NEMA 17 named by its frame and body length either way round: "42-34 motor", "40-42 motor")
-  if ((m = /^(\d{2})-(\d{2})\s*motor$/i.exec(n))) { const [a, b] = [Number(m[1]), Number(m[2])], len = a === 42 ? b : a; return `stepper nema17 ${len}`; }
+  // (a NEMA 17 named by its frame and body length either way round: "42-34 motor", "40-42 motor"; socketed, a 6-way PH
+  // socket taking its cable, as the Ender-3's are: its cable's motor end, sellers of its spares list it so)
+  if ((m = /^(\d{2})-(\d{2})\s*motor$/i.exec(n))) { const [a, b] = [Number(m[1]), Number(m[2])], len = a === 42 ? b : a; return `stepper nema17 ${len} socket`; }
   if ((m = /^F?(6\d\d|68\d)\s*(?:zz|2rs|u)?\s*pillow$/i.exec(n))) return `bearing ${m[1]}`;
   if (/2GT-pulley|GT2 pulley/i.test(n)) return 'pulley 20 5';
   if (M && /socket head|杯头/i.test(n)) return `screw M${M[1]}x${M[2]}`;
