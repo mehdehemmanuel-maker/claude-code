@@ -14,6 +14,8 @@ export const DENSITY: Record<string, number> = {
   cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,
   pe: 950, mno2: 3200 /* a cell's pressed MnO2 and graphite cathode (typical) */, 'zinc-gel': 2800 /* zinc powder in KOH gel, a cell's anode (typical) */, pu: 1200, fibreglass: 1850, 'al-a380': 2710, 'al-5052': 2680, 'stainless-316': 8000, 'stainless-440c': 7800, brass: 8500, bronze: 8800, 'phosphor-bronze': 8800, 'steel-chrome': 7830, pvc: 1400, pom: 1410, ptfe: 2200, 'al-7075': 2810, 'wood-veneer': 680, fr4: 1850,
   'steel-electrical': 7650, 'magnet-wire': 8900, ndfeb: 7500, nbr: 1200, pet: 1380,
+  // (Kapton-type polyimide film, 1.42 g/cm³: a film heater's carrier)
+  polyimide: 1420,
   // (die-cast zinc, Zamak 3: 6.6 g/cm³; tin-lead 63/37: 8.4; paper and cellulose: 0.8, typical)
   zamak: 6600, 'solder-snpb': 8400, paper: 800,
   // (magnesium oxide 3.58 g/cm³ solid, a heater packs it to about 85 %: its parts say so; nichrome 80/20 8.4; sintered
