@@ -9,6 +9,20 @@ const T = (p: P) => METRIC[String(p.thread)]!;
 const dOf = (p: P) => Number(String(p.thread).slice(1));
 const threads = (from: string, to: string) => { const ks = Object.keys(METRIC), a = ks.indexOf(from), b = ks.indexOf(to); return ks.slice(a, b + 1); };
 const madeOf = (p: P) => matOf(p.matter);
+/** An end cap's size and its plugs' places (mm from its middle) for a profile series: a plug in each slot, 6 mm slots on
+ *  a 20 mm grid (8 mm on 3030). */
+export function capDims(series: string): { w: number; h: number; slot: number; plugs: [number, number, number][] } {
+  const [a, b] = series === '3030' ? [30, 30] : [Number(series.slice(0, 2)), Number(series.slice(2))], slot = series === '3030' ? 8 : 6, g = series === '3030' ? 30 : 20, plugs: [number, number, number][] = [];
+  // (each slot's plug: its middle's x and y, and which way it faces: 0 along x, 1 along y)
+  for (let i = 0; i < a / g; i++) { const x = -a / 2 + g * (i + 0.5); plugs.push([x, b / 2 - 3, 1], [x, -b / 2 + 3, 1]); }
+  for (let j = 0; j < b / g; j++) { const y = -b / 2 + g * (j + 0.5); plugs.push([a / 2 - 3, y, 0], [-a / 2 + 3, y, 0]); }
+  return { w: a, h: b, slot, plugs };
+}
+/** A thumb wheel's ribs (one every 4 mm of its rim, 0.8 mm proud, 2 wide: typical) and its moulding, mm³: its disc bored
+ *  for its screw, its ribs, less its nut's pocket (the nut's hex). */
+export const RIBS = (D: number) => Math.round((Math.PI * D) / 4);
+export const wheelMm3 = (D: number, T: number, d: number) => Math.PI * ((D / 2 - 0.8) ** 2 - (d / 2) ** 2) * T + RIBS(D) * 0.8 * 2 * T - (Math.sqrt(3) / 2) * (1.6 * d + 1) ** 2 * (0.8 * d);
+const nutG = (th: string) => { const d = Number(th.slice(1)), s = 1.6 * d + 1; return gOf((Math.sqrt(3) / 2) * s * s * 0.8 * d - Math.PI * (d / 2) ** 2 * 0.8 * d, 7.85); };
 /** Wheel threads: each thread's diameter and pitch, the hex across flats its wheel nut usually takes and the nut's height,
  *  mm (typical of each: an M12 × 1.5 nut 21 mm across and about 19 mm tall, as Toyota's are; a truck's M22 × 1.5 nut 33 mm
  *  across, as ISO 4107's two-piece flange nuts are). Of two pitches for one size, the commoner first (M12 × 1.5: Toyota's,
@@ -82,6 +96,21 @@ export const FASTENERS: KindDef[] = [
     axes: [bare('thread', 'thread', threads('M3', 'M8')), bare('matter', 'made of', ['zinc', 'A2'])],
     title: (p) => `${p.thread} thin square nut, ${madeOf(p)[2]}`, of: (p) => madeOf(p)[0], make: 'stamp', how: 'stamped from strip, tapped', spec: (p) => { const S: Record<string, [number, number]> = { M3: [5.5, 1.8], M4: [7, 2.2], M5: [8, 2.7], M6: [10, 3.2], M8: [13, 4] }; const [s, m] = S[String(p.thread)]!; return `${s} mm square, ${m} mm thick (DIN 562)`; },
     box: (p) => [T(p).s, T(p).s, 0.5 * dOf(p) + 0.3], g: (p) => gOf(T(p).s ** 2 * (0.5 * dOf(p) + 0.3) - cyl(dOf(p), 0.5 * dOf(p)), 7.85),
+  },
+  {
+    id: 'endcap', name: 'profile end cap', path: 'Hardware/Structural/Extrusion fittings', says: 'a moulded cap over a T-slot profile\'s cut end, held by a plug in each of its slots',
+    std: 'for 20-series profiles (2020, 2040, 4040: their slots 6 mm) and 3030 (8 mm); its plate 2.5 mm and its plugs 5.5 mm long (typical; the Ender-3\'s 8 to 8.15 mm deep, its maker\'s model)',
+    axes: [bare('series', 'profile', ['2020', '2040', '4040', '3030'])], title: (p) => `end cap for ${p.series} profile`, of: () => 'nylon', make: 'mould', alt: 'print', how: 'moulded in nylon, a plug for each slot standing off its back',
+    spec: (p) => `${capDims(String(p.series)).w} × ${capDims(String(p.series)).h} mm, ${capDims(String(p.series)).plugs.length} plugs`, box: (p) => { const c = capDims(String(p.series)); return [c.w, c.h, 8]; },
+    g: (p) => { const c = capDims(String(p.series)); return gOf(c.w * c.h * 2.5 + c.plugs.length * 3 * c.slot * 5.5, 1.14); }, look: 'block',
+  },
+  {
+    id: 'thumbwheel', name: 'thumb wheel', path: 'Hardware/Fasteners/Hand knobs', says: 'a knurled wheel turned by hand on a screw, a nut pressed into its middle: a 3D printer\'s bed-levelling knob',
+    std: 'any diameter 15–80 mm and thickness 5–20 mm (the Ender-3\'s 59.9 × 10 mm, its maker\'s model); a rib every 4 mm of its rim, its nut a standard hex nut pressed in (typical)',
+    axes: [bare('thread', 'thread', ['M3', 'M4', 'M5']), ax('D', 'across', 'mm', [20, 30, 40, 60], [15, 80, 0.1]), ax('t', 'thick', 'mm', [6, 8, 10], [5, 20, 0.1])],
+    title: (p) => `thumb wheel ${p.D} × ${p.t} mm, ${p.thread}`, of: (p) => `abs {nut ${p.thread}}`, make: 'mould', alt: 'print', how: 'moulded in ABS round a pressed-in hex nut, its rim ribbed for a grip',
+    spec: (p) => `${p.D} mm across, ${p.t} mm thick, threaded ${p.thread} by its nut`, box: (p) => [Number(p.D), Number(p.t), Number(p.D)],
+    g: (p) => { const D = Number(p.D), T = Number(p.t), d = Number(String(p.thread).slice(1)); return gOf(wheelMm3(D, T, d), 1.05) + nutG(String(p.thread)); }, look: 'ring',
   },
   {
     id: 'slotnut', name: 'T-slot nut for extrusion', path: 'Hardware/Structural/Extrusion fittings', says: 'a nut that slides or drops into an aluminium profile\'s slot to bolt things on anywhere along it', std: 'the slot widths of 20, 30/40 and 45 series profiles, with the threads makers fit (typical)',

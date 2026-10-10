@@ -46,6 +46,9 @@ const sinkMm3 = () => { const s = HOTEND.sink, pl = s.w * s.plate * s.d, colH = 
   return 2 * pl - Math.PI * (rootR(6, 1) ** 2 + rootR(10, 1) ** 2) * s.plate + Math.PI * (s.col ** 2 - rootR(6, 1) ** 2) * colH + s.fins * 2 * (s.finX[1] - s.finX[0]) * s.fin * s.d; };
 const fitMm3 = (th: string) => { const f = HOTEND.fit[th] ?? HOTEND.fit.M6!, d = Number(th.slice(1)), hx = f.L - f.th - 3;
   return { brass: Math.PI * ((d / 2) ** 2 - 2.05 ** 2) * f.th * 0.8 + (hexA(f.af) - Math.PI * 2.05 ** 2) * hx, pom: Math.PI * ((f.af / 2 - 0.5) ** 2 - 2.6 ** 2) * 3, steel: Math.PI * (2.6 ** 2 - 2.05 ** 2) * 1.5 }; };
+/** The MK8 drive gear's body, mm³: its hub 11 across, bored 5 mm, cut to 8 mm across for the 3 mm band its 40 teeth
+ *  stand round (each 1.5 mm proud, 0.35 thick: typical), less its set screw's hole. */
+export const gearMm3 = () => Math.PI * ((5.5 ** 2 - 2.5 ** 2) * 8 + (4 ** 2 - 2.5 ** 2) * 3 - 1.25 ** 2 * 3) + 40 * 1.5 * 3 * 0.35;
 export const PLANT: KindDef[] = [
   {
     id: 'steelpipe', name: 'steel pipe', path: 'Fluid/Tubing and hose/Steel pipe', says: 'carbon steel pipe by its nominal size and schedule: the pressure pipe of plant', std: 'ASME B36.10M outside diameters and walls (schedules 40 and 80); any length to 6 m cut to the centimetre',
@@ -163,6 +166,12 @@ export const PLANT: KindDef[] = [
     title: (p) => `PC4-${p.thread} push-in coupler`, of: () => 'tubefit-body grab-ring collet', make: 'assemble', how: 'a brass body turned and threaded, a stainless collet pressed into it, a POM release collar on the collet',
     spec: (p) => { const f = HOTEND.fit[String(p.thread)]!; return `${p.thread} thread ${f.th} mm, a ${f.af} mm hex, ${f.L} mm long; for a 4 mm tube`; }, box: (p) => { const f = HOTEND.fit[String(p.thread)]!; return [f.af / Math.cos(Math.PI / 6), f.af, f.L]; },
     g: (p) => { const v = fitMm3(String(p.thread)); return gOf(v.brass, 8.5) + gOf(v.pom, 1.41) + gOf(v.steel, 8.0); }, look: 'screw hex',
+  },
+  {
+    id: 'drivegear', name: 'extruder drive gear', path: 'Mechanical/3D printer parts/Extruder', says: 'the toothed wheel on an extruder\'s motor shaft that bites the filament and pushes it, held by a set screw',
+    std: 'the MK8 gear (the Ender-3\'s, its maker\'s model: 11 mm across and 11 tall): 40 teeth, bored 5 mm for its motor, a set screw onto the shaft\'s flat (typical)',
+    axes: [bare('form', 'form', ['mk8'])], title: () => 'MK8 drive gear, 40 teeth', of: () => 'brass {setscrew M3x3}', make: 'machine', how: 'turned from brass, its teeth cut round its middle, bored 5 mm and tapped M3 for its set screw',
+    spec: () => '40 teeth, 11 mm across, 11 mm tall, bored 5 mm; its filament groove 1.5 mm deep', box: () => [11, 11, 11], g: () => gOf(gearMm3(), 8.5) + 0.12, look: 'ring',
   },
   {
     id: 'printnozzle', name: '3D printer nozzle', path: 'Mechanical/3D printer parts/Nozzles', says: 'the brass (or hardened) tip a 3D printer extrudes through', std: 'MK8, V6 and Volcano forms, M6 thread; flows typical',

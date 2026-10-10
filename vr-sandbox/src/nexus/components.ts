@@ -24,6 +24,7 @@ import { FAMILIES, callFamily } from './families';
 import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, fanDims, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
 import { CLEAR, VWHEEL } from './kinds/motion';
+import { RIBS, capDims } from './kinds/fasteners';
 import { HOTEND, rootR } from './kinds/plant';
 import { SOCKET_HEAD } from './embody/stock';
 import { BUTTON, PAN, SETSCREW_KEY } from './threads';
@@ -251,6 +252,42 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
         P(`${it.name} hex`, { prism: { pts: hex, L: hx * mm } }, { ...brass, at: [0, (f.th + hx / 2) * mm, 0], rot: [-PI / 2, 0, 0], cuts: [{ r: 2.05 * mm, depth: hx * mm, at: [0, 0, (hx / 2) * mm], dir: [0, 0, -1] }] })]),
         P(`${it.name} collar`, lathe([[2.6, f.L - 3], [f.af / 2 - 0.5, f.L - 3], [f.af / 2 - 0.5, f.L], [2.6, f.L], [2.6, f.L - 3]]), { mat: 'pom', color: 0x2f5fa8, finish: 'moulded', item: 'collet' }),
         P(`${it.name} collet`, lathe([[2.05, f.L - 1.5], [2.6, f.L - 1.5], [2.6, f.L], [2.05, f.L], [2.05, f.L - 1.5]]), { mat: 'stainless-304', color: 0xb9bdc2, finish: 'plate', item: 'grab-ring' })]; },
+  },
+  endcap: {
+    says: 'a profile\'s end cap: its plate over the profile\'s end, a plug standing off its back into each slot', leaves: 'its plugs\' barbs not drawn',
+    make: (p, it) => { const c = capDims(String(p.series)), ny = { mat: 'nylon', color: 0x1d1e21, finish: 'moulded' as const };
+      return [P(it.name, { box: [c.w * mm, c.h * mm, 2.5 * mm] }, { ...ny, at: [0, 0, 1.25 * mm] }),
+        ...c.plugs.map(([x, y, way], i) => P(`${it.name} plug ${i + 1}`, { box: [(way ? c.slot : 3) * mm, (way ? 3 : c.slot) * mm, 5.5 * mm] }, { ...ny, at: [x * mm, y * mm, -2.75 * mm] }))]; },
+  },
+  thumbwheel: {
+    says: 'a thumb wheel: its moulded disc, ribs round its rim every 4 mm of it, a hex nut pressed into its middle', leaves: 'its ribs drawn square; its nut\'s pocket its nut\'s size',
+    make: (p, it) => { const D = Number(p.D), T = Number(p.t), th = String(p.thread), d = Number(th.slice(1)), abs = { mat: 'abs', color: 0x1d1e21, finish: 'moulded' as const }, s = 1.6 * d + 1;
+      const pocket = { r: (s / 2) / Math.cos(PI / 6) * mm, depth: 0.8 * d * mm, at: [0, (T / 2) * mm, 0] as V3, dir: [0, -1, 0] as V3, n: 6 };
+      // (its disc 0.8 mm inside its diameter, its ribs standing that far off it, so it measures its diameter over them)
+      return [P(it.name, { cyl: [(D / 2 - 0.8) * mm, T * mm] }, { ...abs, cuts: [pocket, { r: (d / 2) * mm, depth: T * mm, at: [0, (T / 2) * mm, 0], dir: [0, -1, 0] }] }),
+        ...Array.from({ length: RIBS(D) }, (_, k) => { const a = (k * 2 * PI) / RIBS(D); return P(`${it.name} rib ${k + 1}`, { box: [0.8 * mm, T * mm, 2 * mm] }, { ...abs, at: [(D / 2 - 0.4) * Math.cos(a) * mm, 0, (D / 2 - 0.4) * Math.sin(a) * mm], rot: [0, -a, 0] }); }),
+        use(`nut ${th}`, [0, (T / 2 - 0.8 * d) * mm, 0], { name: `${it.name} nut`, fixed: 'pressed into the wheel\'s pocket' })]; },
+  },
+  drivegear: {
+    says: 'the MK8 drive gear: its brass hub bored 5 mm, its 40 teeth round its middle with the filament\'s groove cut through them, its set screw in its hub', leaves: 'its teeth drawn as 40 ridges; their hobbing not drawn',
+    make: (_p, it) => { const brass = { mat: 'brass', color: 0xc9a24a, finish: 'cast' as const };
+      // (its hub below and above its teeth's band, y = 0 to 11; the band at 4 to 7, its groove 1.5 mm into it)
+      return [P(it.name, lathe([[2.5, 0], [5.5, 0], [5.5, 4], [4, 4], [4, 7], [5.5, 7], [5.5, 11], [2.5, 11], [2.5, 0]]), { ...brass, cuts: [{ r: 1.25 * mm, depth: 3 * mm, at: [5.5 * mm, 2 * mm, 0], dir: [-1, 0, 0] }] }),
+        ...Array.from({ length: 40 }, (_, k) => { const a = (k * 2 * PI) / 40; return P(`${it.name} tooth ${k + 1}`, { box: [1.5 * mm, 3 * mm, 0.35 * mm] }, { ...brass, at: [4.75 * Math.cos(a) * mm, 5.5 * mm, 4.75 * Math.sin(a) * mm], rot: [0, -a, 0] }); }),
+        // (its set screw's top flush with the hub, its point on the shaft's flat: turned to point in)
+        use('setscrew M3x3', [5.5 * mm, 2 * mm, 0], { rot: [0, 0, -PI / 2], name: `${it.name} set screw`, fixed: 'threaded in its hub onto the shaft\'s flat' })]; },
+  },
+  belt: {
+    says: 'a GT2 belt: its neoprene body and teeth, the glass cords that carry its load wound in it at its pitch line; open, a strip its length; a loop, two runs and their turns round its ends (a 20-tooth pulley\'s 12.73 mm unless said)', leaves: 'its teeth not drawn (its body 1.2 mm thick their band, its cords a 0.2 mm layer in it); a loop drawn as an oval, its path round idlers and clamps not traced',
+    make: (p, it) => { const L = Number(p.length), W = Number(p.width), loop = p.loop === 'yes', d = Number(p.d ?? 12.73), neo = { mat: 'neoprene', color: 0x1a1b1d, finish: 'moulded' as const }, glass = { mat: 'fibreglass', color: 0xd8d2c0, finish: 'moulded' as const };
+      if (!loop) return [P(it.name, { box: [W * mm, 1.2 * mm, L * mm] }, { ...neo, item: 'timing-belt-body', at: [0, 0.1 * mm, 0] }), P(`${it.name} cords`, { box: [(W - 1) * mm, 0.2 * mm, L * mm] }, { ...glass, item: 'tension-cord-glass', at: [0, -0.6 * mm, 0] })];
+      const run = Math.max(0, (L - PI * d) / 2);
+      // (a band of thickness t whose middle is r from each end's centre: its two runs and two half-turns, in x and y, its width along z)
+      const band = (nm: string, r: number, t: number, w: number, at: Record<string, unknown>): Part[] => {
+        const arc = (e: number) => { const pts: [number, number][] = []; for (let k = 0; k <= 16; k++) { const a = -PI / 2 + (k * PI) / 16; pts.push([e * (r + t / 2) * Math.cos(a) * mm, (r + t / 2) * Math.sin(a) * mm]); } for (let k = 16; k >= 0; k--) { const a = -PI / 2 + (k * PI) / 16; pts.push([e * (r - t / 2) * Math.cos(a) * mm, (r - t / 2) * Math.sin(a) * mm]); } return pts; };
+        return [P(nm, { box: [run * mm, t * mm, w * mm] }, { ...at, at: [0, r * mm, 0] }), P(`${nm} lower run`, { box: [run * mm, t * mm, w * mm] }, { ...at, at: [0, -r * mm, 0] }),
+          ...[-1, 1].map((e) => P(`${nm} turn ${e < 0 ? 1 : 2}`, { prism: { pts: arc(e), L: w * mm } }, { ...at, at: [((e * run) / 2) * mm, 0, 0] }))]; };
+      return [group(it.name, 'timing-belt-body', band(`${it.name} body`, d / 2 + 0.1, 1.2, W, neo)), group(`${it.name} cords`, 'tension-cord-glass', band(`${it.name} cords`, d / 2 - 0.6, 0.2, W - 1, glass))]; },
   },
   vwheel: {
     says: 'a solid V wheel turned about its axle: its hub bored for two 625 bearings, its V edge for a V-slot\'s groove (OpenBuilds\' sizes)', leaves: 'its V\'s proportions typical; its bearings drawn apart (they are their own parts)',

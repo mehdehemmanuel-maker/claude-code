@@ -50,6 +50,12 @@ export function libraryWords(p: ModelPart): string | null {
   if (/^z coupler$/i.test(n)) return 'coupling 5x8';
   // (its hot end's block, heat break, heat sink, PTFE tube and couplers: kinds/plant.ts sizes them from this model)
   if (/^heat block$/i.test(n)) return 'heatblock mk8';
+  // (its profiles' end caps, its bed's levelling wheels, its extruder's drive gear; its belts, each a loop across its
+  // box's height, its length the oval's: two runs and two turns)
+  if ((m = /^(2020|2040|4040|3030)\s*endcap$/i.exec(n))) return `endcap ${m[1]}`;
+  if (/^hand twisted nut$/i.test(n)) { const [D, T] = round2(p); return `thumbwheel M4 D${D} t${T}`; }
+  if (/^e gear$/i.test(n)) return 'drivegear mk8';
+  if (/^[xy] belt$/i.test(n)) { const e = [...extents(p)].sort((a, b) => b - a), d = +(e[1]! - 1.4).toFixed(1), L = Math.round(2 * (e[0]! - e[1]!) + Math.PI * d); return `belt GT2 ${L} ${Math.round(e[2]!)}mm loop d${d}`; }
   if (/^catheter$|heat ?break|throat/i.test(n)) return `heatbreak L${longest(p)} ptfe`;
   if (/^radiator$/i.test(n)) return 'hotendsink ender3';
   if (/teflon tube|ptfe tube/i.test(n)) return `bowden od4 id2 L${longest(p)}`;

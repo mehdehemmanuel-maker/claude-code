@@ -19,6 +19,8 @@ export const DENSITY: Record<string, number> = {
   // (magnesium oxide 3.58 g/cm³ solid, a heater packs it to about 85 %: its parts say so; nichrome 80/20 8.4; sintered
   // barium or strontium ferrite 4.9; an NTC thermistor's Mn–Ni–Co oxide 5.0, typical)
   mgo: 3580, nichrome: 8400, 'ferrite-hard': 4900, 'ntc-ceramic': 5000,
+  // (neoprene, a timing belt's body: 1.23 g/cm³, typical)
+  neoprene: 1230,
   // (what electronic packages are made of: src/nexus/packages.ts, each with its source)
   ...Object.fromEntries(Object.entries(PKG_DENSITY).map(([k, [v]]) => [k, v])),
   tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
