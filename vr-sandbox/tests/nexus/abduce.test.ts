@@ -5,19 +5,19 @@
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { candidates, discriminates, groups, observation, validate } from '../../src/nexus/abduce';
+import { candidates, discriminates, groups, observation, validate } from '../../src/nexus/substrate/abduce';
 import { RECT_MODULUS } from '../../src/nexus/book';
-import { dimOf } from '../../src/nexus/dimension';
-import { evaluate, measurement, ofLeaf } from '../../src/nexus/evaluate';
-import { anomalyOf, failuresOf } from '../../src/nexus/failure';
-import { compare } from '../../src/nexus/observe';
-import { solve, type System } from '../../src/nexus/solve';
-import { admit, choose, noTolerance, restIntent, restStudy, toppleStudy, type Study } from '../../src/nexus/study';
-import { k, leaf, varsOf, type Leaf } from '../../src/nexus/term';
-import { beamOnTwoSupports, lumberCatalogue, materialLeaves } from '../../src/nexus/beam';
-import { stale } from '../../src/nexus/why';
+import { dimOf } from '../../src/nexus/substrate/dimension';
+import { evaluate, measurement, ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { anomalyOf, failuresOf } from '../../src/nexus/substrate/failure';
+import { compare } from '../../src/nexus/substrate/observe';
+import { solve, type System } from '../../src/nexus/substrate/solve';
+import { admit, choose, noTolerance, restIntent, restStudy, toppleStudy, type Study } from '../../src/nexus/substrate/study';
+import { k, leaf, varsOf, type Leaf } from '../../src/nexus/substrate/term';
+import { beamOnTwoSupports, lumberCatalogue, materialLeaves } from '../../src/nexus/substrate/beam';
+import { stale } from '../../src/nexus/substrate/why';
 import { WEIGHT, BENDING_STRESS, RECT_AREA } from '../../src/nexus/book';
-import { mul, le, variable } from '../../src/nexus/term';
+import { mul, le, variable } from '../../src/nexus/substrate/term';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 

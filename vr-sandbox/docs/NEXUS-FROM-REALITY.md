@@ -173,7 +173,7 @@ Where Nexus itself has regrown it since, that is said.
 
 **Must change, because each is a recorded failure regrown:**
 
-- **The generator** (src/nexus/manifold.ts) decides structure in TypeScript branches over carrier ids, face names and
+- **The generator** (src/nexus/substrate/manifold.ts) decides structure in TypeScript branches over carrier ids, face names and
   element-id prefixes, and returns elements of a fixed set of kinds. It must become generic constraint generation over
   carriers and couplings in a domain. The element kinds become computed classes of coupling topology, if they are kept
   at all.
@@ -435,19 +435,19 @@ These compute real results from real inputs, within tests:
 
 ### Runs as a process (since step 1)
 
-- **The runtime** (src/nexus/runtime.ts, journal.ts, sink-file.ts, main.ts). `npm run nexus -- <journal.jsonl>`
+- **The runtime** (src/nexus/substrate/runtime.ts, journal.ts, sink-file.ts, main.ts). `npm run nexus -- <journal.jsonl>`
   starts a Node process. It opens on a journal file and rebuilds the state from it, checking each term read back
   against its identity. It admits contributions (given or measured leaves, kept laws put to work at addresses, wants
   as bounds, withdrawals) from the text channel. It evaluates again only what reads what changed, and reports every
   gap as a structured term at an address.
-- **Places in the domain** (src/nexus/place.ts). A place is a box: its centre, its turn and its half-extents, every
+- **Places in the domain** (src/nexus/substrate/place.ts). A place is a box: its centre, its turn and its half-extents, every
   number a leaf, in a domain whose gravity is a measured vector. For every place alike, the runtime generates its
   volume, its extent along gravity, its mass and weight once its matter's density is known, and the area of the
   section across each of its axes. Where gravity has a part across a section, and only there, it also generates that
   section's second moment and modulus about the line gravity bends it around. On edge, a 38 by 184 board's section
   has exactly what the kept rectangle laws give; turned flat, its modulus falls by 184 over 38. Nothing names a
   breadth or a depth.
-- **Couplings between places** (src/nexus/contact.ts, since step 3). Contacts form where faces touch. A place's weight
+- **Couplings between places** (src/nexus/substrate/contact.ts, since step 3). Contacts form where faces touch. A place's weight
   and what rests on it go down its contacts to what is held:
   - on one contact, the place stays only if its load falls within the patch;
   - on two, they share by moments, and neither may pull;
@@ -588,7 +588,7 @@ Step 3 is couplings between places.
 ## 18. Step 3, executed: what running it found
 
 **What was built.** Couplings between places are generated from geometry in the running state
-(src/nexus/contact.ts):
+(src/nexus/substrate/contact.ts):
 
 - **Contacts.** Where a face of one place faces a face of another, with their planes within the contact tolerance (an
   assumed 1 mm leaf), their in-plane axes aligned, and an overlap greater than zero, a contact forms. It has an area
@@ -673,7 +673,7 @@ for what statics refuses.
 
 ## 19. Step 4, executed: what running it found
 
-**What was built.** The moment along a place is now one rule, `largestMoment` in src/nexus/contact.ts. Every force
+**What was built.** The moment along a place is now one rule, `largestMoment` in src/nexus/substrate/contact.ts. Every force
 on a place is spread evenly over an interval of the line it bends along:
 - its weight over its own extent;
 - each contact's share over that contact's patch, the shares from what rests on it and the reactions alike.
@@ -745,7 +745,7 @@ Step 5 is an evolver over generated structure, starting with the places the stat
 
 ## 20. Step 5, executed: what running it found
 
-**What was built.** An evolver over the state's generated structure (src/nexus/evolve.ts), on the kept rigid-body
+**What was built.** An evolver over the state's generated structure (src/nexus/substrate/evolve.ts), on the kept rigid-body
 kernel and its measured contract:
 - every place not held is given to the kernel as the state has it: its box, its turn, and the mass its matter's
   density gives;
@@ -806,7 +806,7 @@ Step 6 is contacts of any feature against a face, with vector forces and the ful
 ## 21. Step 6, executed: what running it found
 
 **What was built.**
-- **Contacts of any feature.** A contact is where the surfaces of two places meet, whatever touches (src/nexus/contact.ts):
+- **Contacts of any feature.** A contact is where the surfaces of two places meet, whatever touches (src/nexus/substrate/contact.ts):
   - the separating face is the one of the twelve along whose normal the two are farthest apart;
   - they touch when that distance is within what the two places' origins resolve;
   - the other place's corners within that distance of the face are the feature that touches (one, two or four), clipped to the face.
@@ -863,8 +863,8 @@ classified, the general distinction is promoted, and the findings above, with ev
 
 ## 22. Drawn round 1: intents the manifold draws for itself
 
-**The method.** A round no longer starts from a scene or an invention a person wrote down (src/nexus/draw.ts,
-src/nexus/round.ts; `npm run nexus:round -- <seed> <count> <bar>`).
+**The method.** A round no longer starts from a scene or an invention a person wrote down (src/nexus/substrate/draw.ts,
+src/nexus/substrate/round.ts; `npm run nexus:round -- <seed> <count> <bar>`).
 - **The draw.** Each intent is composed at random from the manifold's own vocabulary:
   - the carriers physics conserves;
   - the roles a region can take: a person's region, a reservoir that holds a potential, a limit on what it gives;
@@ -918,7 +918,7 @@ failure section 10 named. It has to become structured.
 
 ## 23. The scale tuner: regimes derived, not listed
 
-Scale is a change of generative regime, not a change of magnification. `src/nexus/tuner.ts` derives what a world must
+Scale is a change of generative regime, not a change of magnification. `src/nexus/substrate/tuner.ts` derives what a world must
 be at a size and a temperature from the constants alone (G, the electric coupling k_C e², ħ, c, the electron's and the
 nucleon's masses, and k_B T where a temperature is given). It works in five steps, each a derivation with its record.
 
@@ -986,7 +986,7 @@ regimes change.
 ## 24. Depth: as far down as the question goes
 
 Water showed the requirement (sections 9 and 10, rounds 8 to 12): its boiling, its viscosity and its density each
-needed a different depth. `src/nexus/depth.ts` makes depth a property of every descent, for any phenomenon. It is not
+needed a different depth. `src/nexus/substrate/depth.ts` makes depth a property of every descent, for any phenomenon. It is not
 a list of layers and not a count of them. A level is whatever is there:
 - what the tuner's ladder settles;
 - each particle, held together by its rest energy;
@@ -1092,7 +1092,7 @@ nothing takes from it.
 
 ## 26. The Nexus room: what is generated, in the headset
 
-`src/nexus/scene.ts` runs Nexus from nothing and writes `view/public/world.json` (`npm run nexus:scene`). It holds:
+`src/nexus/substrate/scene.ts` runs Nexus from nothing and writes `view/public/world.json` (`npm run nexus:scene`). It holds:
 - the ladder;
 - descents of water, iron and hydrogen;
 - the cold bodies' branches;

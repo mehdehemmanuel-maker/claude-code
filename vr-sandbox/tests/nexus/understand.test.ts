@@ -1,10 +1,10 @@
-// What a person means on a board (src/nexus/understand.ts): said roughly, misspelled, or described for want of the
+// What a person means on a board (src/nexus/substrate/understand.ts): said roughly, misspelled, or described for want of the
 // word; read against what Nexus knows the names of and against the board, and given back as what was understood and
 // the changes it asks for, none of them made until taken.
 
 import { describe, expect, it } from 'vitest';
-import { addNode, deepMerge, link, nodesOf, type Board, type Patch } from '../../src/nexus/boards';
-import { checked, claudePrompt, clauses, edits, named, resolve, spelling, stem, termsIn, understand } from '../../src/nexus/understand';
+import { addNode, deepMerge, link, nodesOf, type Board, type Patch } from '../../src/nexus/substrate/boards';
+import { checked, claudePrompt, clauses, edits, named, resolve, spelling, stem, termsIn, understand } from '../../src/nexus/substrate/understand';
 
 const apply = (b: Board, p: Patch | null) => (p ? deepMerge(b, p) : b);
 function board(...labels: string[]): Board {

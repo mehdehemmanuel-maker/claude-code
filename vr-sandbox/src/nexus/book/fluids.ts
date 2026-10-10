@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST } from './constants';
-import { add, sub, mul, div, pow, cbrt, gt, ln, log10, k } from '../term';
+import { add, sub, mul, div, pow, cbrt, gt, ln, log10, k } from '../substrate/term';
 
 export const FLUIDS = [
   L({

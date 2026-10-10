@@ -2,9 +2,9 @@
 // can read wants into, a product it shows, people it brings in. Claude's pick is used only as a plain ask.
 
 import { describe, expect, it } from 'vitest';
-import { checkSurprise, DESIGNS, OTHERS, surpriseHere, surprisePrompt } from '../../src/nexus/surprise';
-import { conceive } from '../../src/nexus/conceive';
-import { readPlain } from '../../src/nexus/directive';
+import { checkSurprise, DESIGNS, OTHERS, surpriseHere, surprisePrompt } from '../../src/nexus/ask/surprise';
+import { conceive } from '../../src/nexus/ask/conceive';
+import { readPlain } from '../../src/nexus/substrate/directive';
 
 const rng = (s: number) => () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 

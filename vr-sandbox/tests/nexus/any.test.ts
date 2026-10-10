@@ -2,8 +2,8 @@
 // generator derived of its ask, with no designer written for the thing by name; and what nothing designs yet, located.
 
 import { describe, expect, it } from 'vitest';
-import { car, house, printer } from '../../src/nexus/asked';
-import { generate } from '../../src/nexus/manifold';
+import { car, house, printer } from '../../src/nexus/ask/asked';
+import { generate } from '../../src/nexus/substrate/manifold';
 import { embodyAny } from '../../src/nexus/embody/any';
 import { buildSteps, treeOf } from '../../src/nexus/embody/tree';
 import { base, vehicle } from './families';

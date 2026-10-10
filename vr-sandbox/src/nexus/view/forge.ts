@@ -21,22 +21,22 @@
 // moves it until let go; X or Y on the left puts the phone away, and back; the left stick walks, the right stick turns.
 // Query: ?t=seconds (freeze the timeline), ?pace=multiplier, ?view=front|close|side|pipeline|wide, ?xr=quest3.
 
-import { processWords } from '../processor';
-import { robotFor, robotTasks, robotWords as robotDesign } from '../robot';
+import { processWords } from '../machines/processor';
+import { robotFor, robotTasks, robotWords as robotDesign } from '../machines/robot';
 import { RobotAtBench } from './robot-bench';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
-import { printer, type PrinterAsk } from '../asked';
+import { printer, type PrinterAsk } from '../ask/asked';
 import type { Choices, Machine, Step } from '../embody/embody';
 import { embodyAny, type Learned } from '../embody/any';
 import { practice, type Operation, type OpEvent } from '../embody/operate';
 import { breaks, causalOf, trace, type Causal, type CauseKind } from '../embody/causal';
 import { inside, type Descent } from '../embody/inside';
 import { executionOf, explain, retryOf, type ExecKind, type ExecNode, type Execution, type Question, type Relation } from '../embody/execution';
-import { foldDemand, readAsk } from '../words';
-import { intentFromSpec } from '../spec';
+import { foldDemand, readAsk } from '../ask/words';
+import { intentFromSpec } from '../ask/spec';
 import { Hud } from './hud';
 import { Keyboard } from './keyboard';
 import { askClaude, describe, makeBrain, plainBrain, type Brain, type PartBrief, type WorldApi } from './brain';
@@ -45,94 +45,94 @@ import { makeNotes, STAGES as LOOP_STAGES, type Note, type NoteKind, type Notes,
 import { buildSteps, nodeAt as treeNodeAt, pathOf, treeOf, type BuildStep, type TreeNode } from '../embody/tree';
 import { Unravel } from './unravel';
 import { Exploded, type BuildPiece } from './explode';
-import { MATTER_TO_INVENTORY } from '../pieces';
+import { MATTER_TO_INVENTORY } from '../parts/pieces';
 import { LAW_UPDATES } from '../embody/journal';
 import { boxOf, type Flaw, type Part } from '../embody/part';
-import { generate, type Structure } from '../manifold';
-import type { Intent } from '../want';
+import { generate, type Structure } from '../substrate/manifold';
+import type { Intent } from '../ask/want';
 import { card, label } from './holo';
 import { meshOfPart } from './parts';
 import { Robot } from './robot';
 import { Boards3D } from './boards3d';
-import { claudeBoard, guessStep, type FlowApi } from '../flows';
-import { Workshop, type Made, type PartRef } from '../generate';
+import { claudeBoard, guessStep, type FlowApi } from '../substrate/flows';
+import { Workshop, type Made, type PartRef } from '../ask/generate';
 import { glow } from '../../engineering/thermal';
-import type { Jolt } from '../realize';
-import type { SimTrack } from '../sim';
-import { setTestPhysics } from '../calltest';
-import { checkDirective, directivePrompt, readPlain, type Parsed } from '../directive';
-import { checkSurprise, DESIGNS, surpriseHere, surprisePrompt } from '../surprise';
-import { G as GRAVITY, PLACES, readPlace, sayPlace, type Place } from '../places';
+import type { Jolt } from '../substrate/realize';
+import type { SimTrack } from '../substrate/sim';
+import { setTestPhysics } from '../substrate/calltest';
+import { checkDirective, directivePrompt, readPlain, type Parsed } from '../substrate/directive';
+import { checkSurprise, DESIGNS, surpriseHere, surprisePrompt } from '../ask/surprise';
+import { G as GRAVITY, PLACES, readPlace, sayPlace, type Place } from '../world/places';
 import { placeView, DARTBOARD, dartScore, type PlaceView } from './place3d';
-import { dartFlight, Pool, POOL, targetOn, throwDart } from '../games';
-import { bump, drive as driveKart, idealLap, KART, lapSaid, makeTrack, onGrid, order, runKart, speedProfile, topSpeed, type KartState, type Track } from '../karting';
+import { dartFlight, Pool, POOL, targetOn, throwDart } from '../world/games';
+import { bump, drive as driveKart, idealLap, KART, lapSaid, makeTrack, onGrid, order, runKart, speedProfile, topSpeed, type KartState, type Track } from '../world/karting';
 import { kartView, trackView, type KartView, type TrackView } from './kart3d';
-import { at as coasterAt, LIMITS, makeCoaster, newRide, runRide, sayCoaster, type Ride, type Track as CoasterTrack } from '../coaster';
+import { at as coasterAt, LIMITS, makeCoaster, newRide, runRide, sayCoaster, type Ride, type Track as CoasterTrack } from '../world/coaster';
 import { coasterView, type CoasterView } from './coaster3d';
-import { assistHit, batHit, meetPoint, newRally, pingSkillSaid, robotStep, serveBall, setSkill, stepBall, terminalSpeed, TT, type Rally, type V3 as V3pp } from '../pingpong';
+import { assistHit, batHit, meetPoint, newRally, pingSkillSaid, robotStep, serveBall, setSkill, stepBall, terminalSpeed, TT, type Rally, type V3 as V3pp } from '../world/pingpong';
 import { bat, pingView, type PingView } from './pingpong3d';
 import { measure, speciesFor, type Species } from '../life/reproduce';
 import { lifeCycleView } from './lifecycle3d';
-import '../creatures';
+import '../world/creatures';
 import { perfect, sayMade, type Made as MadeThing } from '../make/pipeline';
-import { boardOfInvention, sayInvention, type Invention } from '../invent';
-import { routeMake } from '../route';
-import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../kits';
+import { boardOfInvention, sayInvention, type Invention } from '../ask/invent';
+import { routeMake } from '../ask/route';
+import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../parts/kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { SolderBench } from './solder-bench';
-import { stepsOf, type PlanId } from '../solder-lesson';
-import { ledBuild, ledsAsked, partsSaid, PROTO_BUILD } from '../lessons';
-import type { Build } from '../edges';
-import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../finish';
+import { stepsOf, type PlanId } from '../teach/solder-lesson';
+import { ledBuild, ledsAsked, partsSaid, PROTO_BUILD } from '../teach/lessons';
+import type { Build } from '../teach/edges';
+import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../parts/finish';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import type { Board } from '../boards';
-import { People, boardOfPerson, fighterBuild, fitBuild, factName as personFact, type Person } from '../person';
+import type { Board } from '../substrate/boards';
+import { People, boardOfPerson, fighterBuild, fitBuild, factName as personFact, type Person } from '../world/person';
 import { personView, type PersonView } from './people3d';
-import { PARAMS as BODY_PARAMS, type BodyParams } from '../anatomy';
-import { answersFrom, clipOfDesign, conceive, designs as designsOf, sayConception, sayDesign, sayTrace, type Conception, type Design } from '../conceive';
+import { PARAMS as BODY_PARAMS, type BodyParams } from '../world/anatomy';
+import { answersFrom, clipOfDesign, conceive, designs as designsOf, sayConception, sayDesign, sayTrace, type Conception, type Design } from '../ask/conceive';
 import { chartPanel } from './chart';
 import { Windows } from './windows';
 import { Phone } from './phone';
-import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../fleet';
+import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../machines/fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
 import { computerApp, dataApp, inventoryApp, libraryApp, lifeApp, packApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
 import { LifeGraph, type Saved as LifeSaved } from '../life/graph';
-import { pack, packPart, packZip, type Pack } from '../buildpack';
-import { usd } from '../prices';
-import { Profile, BUDGET_MS } from '../profile';
+import { pack, packPart, packZip, type Pack } from '../teach/buildpack';
+import { usd } from '../parts/prices';
+import { Profile, BUDGET_MS } from '../machines/profile';
 import { held, mergeStatic } from './merge-static';
-import { behave } from '../behave';
-import { compare as compareItems, flatBom, massOf, scadOf, search as searchInventory, typeOf, types as inventoryTypes, usedIn } from '../outputs';
-import { SERIES, catalogue, searchCatalogue } from '../catalogue';
-import { MADE_TO_ORDER_CAP, numberOfWords, partAt as spacePart, randomPart, spaceSize } from '../partspace';
-import { findPlaces, forMaking, forecastFacts, placeName, sky, weatherLine, type Place as WPlace } from '../weather';
-import { Cell, METALS, RECIPES, buildBoard, programBoard, type Recipe } from '../cell';
+import { behave } from '../world/behave';
+import { compare as compareItems, flatBom, massOf, scadOf, search as searchInventory, typeOf, types as inventoryTypes, usedIn } from '../ask/outputs';
+import { SERIES, catalogue, searchCatalogue } from '../parts/catalogue';
+import { MADE_TO_ORDER_CAP, numberOfWords, partAt as spacePart, randomPart, spaceSize } from '../parts/partspace';
+import { findPlaces, forMaking, forecastFacts, placeName, sky, weatherLine, type Place as WPlace } from '../world/weather';
+import { Cell, METALS, RECIPES, buildBoard, programBoard, type Recipe } from '../machines/cell';
 import { CellView, deviceMesh } from './cell-view';
-import { Devices } from '../devices';
-import { expression, feel, feeling, newMind, pass, thought, type Appraisal, type Feeling } from '../emotions';
-import { learn, lessons, newPractice, nextTry, trialOf, type Practice as Training } from '../practice';
-import { TEST_ASKS } from '../test-asks';
-import { INVENTORY, boardOfInventory, boardOfTree, feed, fundamentals, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../inventory';
+import { Devices } from '../machines/devices';
+import { expression, feel, feeling, newMind, pass, thought, type Appraisal, type Feeling } from '../world/emotions';
+import { learn, lessons, newPractice, nextTry, trialOf, type Practice as Training } from '../teach/practice';
+import { TEST_ASKS } from '../ask/test-asks';
+import { INVENTORY, boardOfInventory, boardOfTree, feed, fundamentals, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../parts/inventory';
 import { aged, clockOf, turnover } from '../life/time';
 import { LASTING, lifetimeLines, lifetimeOf, yearsSays } from '../life/decay';
 import { flowLines, flowsOf } from '../life/flows';
-import { CREATURES, abilityLines, type Creature } from '../abilities';
-import { discover, graphSummary } from '../lawgraph';
-import { profileLines } from '../derive';
+import { CREATURES, abilityLines, type Creature } from '../ask/abilities';
+import { discover, graphSummary } from '../substrate/lawgraph';
+import { profileLines } from '../substrate/derive';
 import { LOCI, childOf, earwax, phenotype, possibilities, randomGenome, type Genome } from '../life/genome';
-import { countSays } from '../inventory';
-import { PY_PRELUDE, readPy, runMeca, type Ran, type Target as CodeTarget } from '../codesim';
-import { ARM_AXES, robotPart, ROBOT_CELL } from '../components';
-import type { Frame } from '../meca';
-import { setBody } from '../anatomy';
-import { FAMILIES, callFamily } from '../families';
-import { byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage, type Language } from '../languages';
+import { countSays } from '../parts/inventory';
+import { PY_PRELUDE, readPy, runMeca, type Ran, type Target as CodeTarget } from '../teach/codesim';
+import { ARM_AXES, robotPart, ROBOT_CELL } from '../parts/components';
+import type { Frame } from '../machines/meca';
+import { setBody } from '../world/anatomy';
+import { FAMILIES, callFamily } from '../parts/families';
+import { byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage, type Language } from '../teach/languages';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { runPipeline, type PipeBuild, type PipeEdits, type PipeRun, type PipeWhere } from '../pipe';
+import { runPipeline, type PipeBuild, type PipeEdits, type PipeRun, type PipeWhere } from '../substrate/pipe';
 import { makeBoardStore } from './boards-store';
-import { checked, claudePrompt, understand, type Understanding } from '../understand';
+import { checked, claudePrompt, understand, type Understanding } from '../substrate/understand';
 
 const params = new URLSearchParams(location.search);
 const frozen = params.has('t') ? Number(params.get('t')) : null;
@@ -1636,7 +1636,7 @@ voice = false;
 // what I say, over my head: under every window and the board (drawn before them), so what you put up in front of you
 // covers it, never the other way round
 const voiceCard = card(0.55, 0.16, 1200); voiceCard.mesh.renderOrder = 13; scene.add(voiceCard.mesh);
-// ---- what Claude's body feels, and why (src/nexus/emotions.ts): a model of feeling, shown honestly as one ---------------
+// ---- what Claude's body feels, and why (src/nexus/world/emotions.ts): a model of feeling, shown honestly as one ---------------
 const mind = newMind(performance.now());
 let felt: Feeling = 'content', thoughtAt = 0, restUntil = 0;
 const thoughtTag = label('', 0.02, '#e0f7fa', 'rgba(0,0,0,0)'); scene.add(thoughtTag);
@@ -1766,7 +1766,7 @@ function say(text: string, el?: HTMLDivElement, who: 'claude' | 'nexus' = 'claud
 /** Words that clear the table: reset, clear, start over. */
 const RESET_WORDS = /^(reset|clear|clear all|start over|start again|new table|reset (the )?(build|table|room|everything|it)|clear (the )?(build|table|room|everything|it all))[.!]?$/i;
 const LIFE_WORDS = /^(?:nexus[,:]?\s*)?(?:what does (?:the|a) body make|what a body makes|(?:body )?(?:flows|secretions)$|what can (?!you\b|i\b|we\b|nexus\b)(?:a |an |the )?\S|abilities of\s|(?:the )?law(?:s| graph)$|find (?:a )?law for\s|(?:profile|density of|derive)\s|(?:why|breakdown of|explain)\s+(?:does |is |do )?(?:a |an |the )?\S.*\b(?:last|lasts|live|lives)\b|(?:generate|make|grow|create)\s+(?:me\s+)?(?:a\s+|an\s+)?(?:random\s+)?(?:human|person|man|woman|child|baby|kid)(?:\s+of\s+(?:the\s+)?last\s+two)?[.!]?$|how long (?:does|would|will|can)\s|lifetime of\s|(?:time|clock|lifespan)\s+(?:of\s+)?\S|turnover$|a day in (?:the|a) body|what does (?:the|a) body do in a day|age\s+\d+|3d\s+\S)/i;
-// ---- people in the room, by real physics (src/nexus/person.ts), each drawn on its own segments (people3d.ts) --------------
+// ---- people in the room, by real physics (src/nexus/world/person.ts), each drawn on its own segments (people3d.ts) --------------
 let peopleWorld: People | null = null, personSeq = 0, lastPeople: Person[] = [], lastKind: 'build' | 'people' | 'kit' = 'build';
 const personViews = new Map<Person, PersonView>(), peopleGroup = new THREE.Group(); peopleGroup.name = 'people'; scene.add(peopleGroup);
 const PEOPLE_NAMES = { XY: ['Kai', 'Leo', 'Ivo', 'Teo', 'Max', 'Rio', 'Jon', 'Sol', 'Bo', 'Oz', 'Ren', 'Eli'], XX: ['Mia', 'Ana', 'Zoe', 'Nia', 'Ada', 'Lua', 'Eva', 'Uma', 'Lia', 'Ivy', 'Noa', 'Isa'] } as const;
@@ -1849,7 +1849,7 @@ function reproWords(text: string): string | null {
   if (/^(close|hide|put away|remove) (the )?(life ?cycle|cycle)$/.test(t) && cycleView) { scene.remove(cycleView.group); cycleView.dispose(); cycleView = null; return 'Put away.'; }
   return null;
 }
-// ---- kits: makers of things (src/nexus/kits.ts), drawn with every edge as it is made (src/nexus/view/kit3d.ts) ----
+// ---- kits: makers of things (src/nexus/parts/kits.ts), drawn with every edge as it is made (src/nexus/view/kit3d.ts) ----
 const kitGroup = new THREE.Group(); scene.add(kitGroup); named(kitGroup, 'what the kits made');
 interface KitThing { name: string; part: KitPart; view: KitView; level: number; kit: string; words: string;
   /** a creature: how it moves and what it is doing (follow you, wander, swim past, hover, stay), where it is going */
@@ -1982,7 +1982,7 @@ function openEdges(): void {
   edgeRuleLines().forEach((l, i) => { nodes[`r${i}`] = { label: l.split(':')[0]!, step: { kind: 'action', what: l.replace(/:.*$/, '').replace(/ by thickness$/, '') } }; edges[`e${i}`] = { from: i ? `r${i - 1}` : 'start', to: `r${i}`, rel: 'flows to' }; });
   boards.put('edges', b); summonTo('boards'); boards.openBoard('edges');
 }
-// ---- places: where you are, from what you say (src/nexus/places.ts), drawn round you (src/nexus/view/place3d.ts) ----
+// ---- places: where you are, from what you say (src/nexus/world/places.ts), drawn round you (src/nexus/view/place3d.ts) ----
 let placeNow: { p: Place; v: PlaceView } | null = null, flying = false;
 const forgeRoom = () => [floor, grid, pedestal, rim, bay, robot.root, warehouse.group, cellView.group, ...robot.senses];
 /** Taken to a place: the forge's own room put away, the place's sky, ground, sea, weather and things round you, its air
@@ -2037,7 +2037,7 @@ function placeWords(words: string): string {
 function stepPlace(dt: number): void {
   if (!placeNow) return; const you = new THREE.Vector3(); eyeOf(you); placeNow.v.update(dt, you); stepBar(dt); stepKarts(dt); stepCoaster(dt); stepPing(dt);
 }
-// ---- the bar's games, by real physics (src/nexus/games.ts): the pool table's balls moved by their own physics world, and
+// ---- the bar's games, by real physics (src/nexus/world/games.ts): the pool table's balls moved by their own physics world, and
 // darts thrown by hand (in a headset) or by saying so, landing where their flight takes them and scored by the board ----
 let bar: { pool: Pool; table: THREE.Object3D; balls: Map<number, THREE.Object3D>; board: THREE.Vector3; oche: THREE.Vector3; darts: THREE.Group; scores: number[] } | null = null;
 async function setUpBar(): Promise<void> {
@@ -2107,7 +2107,7 @@ function dartLetGo(i: number): void {
   const s = dartScore(f.hit[0], f.hit[1]); if (s.score > 0 || Math.hypot(...f.hit) < 0.3) stickDart(f.hit); bar.scores.push(s.score);
   say(`${s.says} (let go at ${v.length().toFixed(1)} m/s, ${(f.t * 1000).toFixed(0)} ms in the air).`, undefined, 'nexus');
 }
-// ---- the go-kart track (src/nexus/karting.ts): your kart driven by your hands (in a headset: the right trigger is the
+// ---- the go-kart track (src/nexus/world/karting.ts): your kart driven by your hands (in a headset: the right trigger is the
 // throttle, the left the brake, a stick steers) or by keys (W/S or ↑/↓, A/D or ←/→), the others by drivers following the
 // racing line at the speed its corners allow; five lights start the race; every lap timed ----
 interface Racer { k: KartState; v: KartView; skill: number; name: string; you: boolean }
@@ -2223,7 +2223,7 @@ const KART_KEYS = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowlef
 window.addEventListener('keydown', (e) => { const k = e.key.toLowerCase(), tag = (e.target as HTMLElement).tagName; if (!karting?.seated || !KART_KEYS.has(k) || tag === 'INPUT' || tag === 'TEXTAREA') return; kartKeys.add(k); e.preventDefault(); e.stopImmediatePropagation(); }, true);
 window.addEventListener('keyup', (e) => { kartKeys.delete(e.key.toLowerCase()); }, true);
 window.addEventListener('blur', () => kartKeys.clear());
-// ---- the roller coaster (src/nexus/coaster.ts): you in the front seat, the train run by its own physics, what you feel
+// ---- the roller coaster (src/nexus/world/coaster.ts): you in the front seat, the train run by its own physics, what you feel
 // said when it is back; a trigger (or the space bar, or "go") sends it from the station ----
 let coaster: { tr: CoasterTrack; view: CoasterView; ride: Ride; seated: boolean; head: THREE.Vector3 | null } | null = null;
 function setUpCoaster(): void {
@@ -2285,7 +2285,7 @@ function coasterWords(text: string): string | null {
   return null;
 }
 window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement).tagName; if (!coaster?.seated || e.key !== ' ' || tag === 'INPUT' || tag === 'TEXTAREA') return; e.preventDefault(); e.stopImmediatePropagation(); if (coaster.ride.phase === 'waiting') say(sendTrain(), undefined, 'nexus'); }, true);
-// ---- the soldering bench (src/nexus/view/solder-bench.ts, src/nexus/solder-lesson.ts): the Pico's headers soldered by
+// ---- the soldering bench (src/nexus/view/solder-bench.ts, src/nexus/teach/solder-lesson.ts): the Pico's headers soldered by
 // your own hands, the iron in your right as a pen, the solder in your left; each joint heated and fed where your hands
 // put the tip and the wire, and judged as it is made. On a screen the same moves are said ("heat pin 3", "feed pin 3") ----
 let bench: SolderBench | null = null, robotAt: RobotAtBench | null = null;
@@ -2331,7 +2331,7 @@ function benchWords(text: string): string | null {
   if (/^(what now|what next|next step|which step|where am i)\b/.test(t)) { const n = bench.now(); return `Step ${n.step} of ${n.of}: ${n.do}`; }
   return null;
 }
-// ---- table tennis against a robot (src/nexus/pingpong.ts): in a headset your bat is in your right hand and hits by its
+// ---- table tennis against a robot (src/nexus/world/pingpong.ts): in a headset your bat is in your right hand and hits by its
 // own motion; on a screen the bat follows the ball and you swing it (space or a click) and aim it (the mouse, left to
 // right); the robot plays the other end ----
 let ping: { R: Rally; view: PingView; bat: THREE.Group; prev: THREE.Vector3 | null; aim: number; swing: number; armed: number } | null = null;
@@ -2453,7 +2453,7 @@ function gripPerson(i: number): string | null {
   return `Holding ${h.person.name}'s ${h.person.rig.segments.find((s) => s.id === h.seg)!.name}.`;
 }
 function ungripPerson(i: number): void { const id = personGrip[i]; if (id != null) { peopleWorld?.letGo(id); personGrip[i] = null; } }
-// ---- what is said, read into a directive (src/nexus/directive.ts), and carried out ----------------------------------------
+// ---- what is said, read into a directive (src/nexus/substrate/directive.ts), and carried out ----------------------------------------
 let pendingDirective: { parsed: Parsed; answers: string[] } | null = null;
 /** The directive in what was said: Claude reads it where Claude can be asked (the directive and any questions, in one
  *  call; an answer to what it asked is read into the directive it asked for), else it is read here by rule. */
@@ -2480,7 +2480,7 @@ async function perform(p: Parsed): Promise<string> {
     // inventory has, is the inventory's own, brought in; what neither has is said, with what can be
     // a ride or a track to ride on is a place built round you: you are put on it
     if (/\b(roller ?coasters?|rollercoasters?|go[- ]?kart tracks?|kart tracks?|race ?tracks?|theme park|amusement park)\b/i.test(d.what)) return placeWords(d.words);
-    // where it goes is decided from the ask itself (src/nexus/route.ts): designed, invented, a kit, a place, or the
+    // where it goes is decided from the ask itself (src/nexus/ask/route.ts): designed, invented, a kit, a place, or the
     // inventory's own; and what of the ask was not done is said beside what was made
     const r = routeMake(d.what, d.n), words = r.words;
     if (r.by === 'design') return conceiveAndMake(words, d.n);
@@ -2660,7 +2660,7 @@ async function understandOnBoard(words: string, b: Parameters<typeof understand>
   if (relay) void relay.send(text, renderer.domElement).then((r2) => { if (!r2.ok) { unsent.push(text); drawUnsent(); } }); else { unsent.push(text); drawUnsent(); }
   return local;
 }
-// ---- pipelines: what a pipeline's steps do in the room, through the same world you act on (src/nexus/flows.ts) ---------
+// ---- pipelines: what a pipeline's steps do in the room, through the same world you act on (src/nexus/substrate/flows.ts) ---------
 /** A wait that Stop cuts short. */
 const nap = (ms: number, signal?: AbortSignal) => new Promise<void>((ok, no) => { if (signal?.aborted) { no(new Error('stopped')); return; } const t = setTimeout(ok, ms); signal?.addEventListener('abort', () => { clearTimeout(t); no(new Error('stopped')); }, { once: true }); });
 /** The numbers a pipeline's checks read, as they stand: the flaws and gaps left in the last round, as the HUD counts them. */
@@ -2700,7 +2700,7 @@ async function pipelineStep(arg: string): Promise<string> {
   if (/^best$/i.test(t)) { await phone.findBest(); return phone.pipeSaid || 'Searched.'; }
   throw new Error(`"pipeline ${t}"? Say pipeline run, pipeline run <an ask>, pipeline ask <an ask>, pipeline set seed 101, matter any, physics on, grow on, pipeline seed +1, pipeline matter steel, pipeline physics off, pipeline stage check, or pipeline best.`);
 }
-// ---- code in a pipeline step: each language where the forge can run it, else handed on (src/nexus/languages.ts) --------
+// ---- code in a pipeline step: each language where the forge can run it, else handed on (src/nexus/teach/languages.ts) --------
 let codeWorker: Worker | null = null, codeSeq = 0; const codeWaiting = new Map<number, { ok: (r: { value: string; logs: string[]; steps: string[] }) => void; no: (e: Error) => void }>();
 let pyLoaded = false, dataFacts: Record<string, number> = {};
 function codeRun(lang: 'js' | 'ts' | 'python' | 'cpp', code: string, input: string): Promise<{ value: string; logs: string[]; steps: string[] }> {
@@ -2740,7 +2740,7 @@ async function runLanguage(lang: Language, code: string, input: string, signal?:
   }
 }
 
-// ---- the inventory: real products down to their materials, made in the workshop (src/nexus/inventory.ts) ---------------
+// ---- the inventory: real products down to their materials, made in the workshop (src/nexus/parts/inventory.ts) ---------------
 const INV_KEY = 'forge:inventory-yours';
 let invMade = 0, invLast: string | null = null;
 function keepInventory(): void { try { localStorage.setItem(INV_KEY, [...INVENTORY.values()].filter((i) => i.yours).map((i) => [i.id, i.name, i.path.join('/'), i.kind, i.make, i.of.map((c) => (c.n > 1 ? `${c.id}*${c.n}` : c.id)).join(' '), i.says, i.spec ?? ''].join(' | ')).join('\n')); } catch { /* kept for this visit */ } }
@@ -2923,7 +2923,7 @@ const flowApi: FlowApi = {
   // what is made and the facts as the workshop reads them, and the robots' numbers beside them
   reader: () => { const sc = shop.reader(), more: Record<string, number> = { ...fleet.facts(), ...(peopleWorld?.facts() ?? {}), ...pipeFacts, ...cell.facts(), ...devices.facts(), ...dataFacts, inventory_items: INVENTORY.size, inventory_made: invMade, ...mindFacts(), ...forecastFacts(hud.forecast) }; return { get: (n: string) => sc.get(n) ?? more[n], names: () => [...sc.names(), ...Object.keys(more)], ...(sc.box ? { box: sc.box.bind(sc) } : {}) }; },
 };
-// ---- what pipelines make: the workshop (src/nexus/generate.ts), offline, its shapes in the build's own frame -----------
+// ---- what pipelines make: the workshop (src/nexus/ask/generate.ts), offline, its shapes in the build's own frame -----------
 /** The build's parts as things to place by: each part's box in the machine's frame, a round's radius, bore and axis. */
 function partRefs(): PartRef[] {
   if (empty || !run) return [];
@@ -3016,7 +3016,7 @@ function meshOf(m: Made): THREE.Object3D {
   }
   let geo: THREE.BufferGeometry;
   switch (m.kind) {
-    // no edge is truly sharp: each is as its material is made (src/nexus/finish.ts)
+    // no edge is truly sharp: each is as its material is made (src/nexus/parts/finish.ts)
     case 'box': { const f = edgeRadius(edgeMatOf(mt?.id), Math.min(d.w!, d.h!, d.d!)); geo = f > 1e-4 ? new RoundedBoxGeometry(d.w!, d.h!, d.d!, 2, f) : new THREE.BoxGeometry(d.w!, d.h!, d.d!); break; }
     case 'cylinder': geo = filletCyl(d.D! / 2, d.h!, d.D! / 2, edgeRadius(edgeMatOf(mt?.id), Math.min(d.D!, d.h!)), 40); break;
     case 'tube': { const ro = d.D! / 2, ri = ro - d.wall!, hh = d.h! / 2; geo = new THREE.LatheGeometry([new THREE.Vector2(ri, -hh), new THREE.Vector2(ro, -hh), new THREE.Vector2(ro, hh), new THREE.Vector2(ri, hh), new THREE.Vector2(ri, -hh)], 40); break; }
@@ -3144,7 +3144,7 @@ function stepBuild(now: number): void {
   boards?.event({ kind: 'built', text: B.b.title });
   rulesEvent?.({ kind: 'built' }); happened('success', `${B.b.title} stands on the table`, 0.6);
 }
-// ---- the warehouse behind you: builds kept on shelves, robots at work (src/nexus/fleet.ts, view/warehouse.ts) ------------
+// ---- the warehouse behind you: builds kept on shelves, robots at work (src/nexus/machines/fleet.ts, view/warehouse.ts) ------------
 /** The last build made on the table as steps to make it again; and the kept build the table now holds, if it is one. */
 let lastBuilt: (PipeBuild & { verdict?: string; kg?: number }) | null = null, onTable: string | null = null;
 const KEPT_KEY = 'forge:warehouse', FLEET_KEY = 'forge:fleet';
@@ -3160,9 +3160,9 @@ try { const saved = JSON.parse(localStorage.getItem(FLEET_KEY) ?? '{}') as Recor
 const keepFleet = () => { try { localStorage.setItem(FLEET_KEY, JSON.stringify(Object.fromEntries(fleet.bots.map((b) => [b.id, { name: b.name, abilities: b.abilities }])))); } catch { /* kept for this visit */ } };
 for (const k of kept) { const s2 = fleet.floor.slots.find((x) => x.id === k.slot) ?? fleet.floor.slots.find((x) => !x.holds?.startsWith('build-')); if (s2) { s2.holds = k.id; k.slot = s2.id; } }
 const warehouse = new Warehouse(fleet); scene.add(warehouse.group); named(warehouse.group, 'the warehouse'); merged.warehouse = mergeStatic(warehouse.group, held(warehouse));
-// the workshop corner to your left: the printer, the kiln and furnace, the two arms, the rack (src/nexus/cell.ts)
+// the workshop corner to your left: the printer, the kiln and furnace, the two arms, the rack (src/nexus/machines/cell.ts)
 const cell = new Cell({ said: (t2) => line('system', `🔩 ${t2}`), made: (m2) => line('system', `🔩 Made: ${m2.name} (${m2.kind}, ${m2.g.toFixed(0)} g). ${m2.spec.join('; ')}`), released: (r) => setDown(r) });
-// what the workshop builds, set down in the room and running its program (src/nexus/devices.ts)
+// what the workshop builds, set down in the room and running its program (src/nexus/kinds/devices.ts)
 const devices = new Devices();
 const deviceViews = new Map<string, ReturnType<typeof deviceMesh>>();
 /** A device built, set down: the rover on the floor in front of the workshop, the rest on the floor beside the bench. */
@@ -3592,7 +3592,7 @@ phone.add(warehouseApp({ fleet, kept: () => kept, store: () => { const t2 = stor
 let invSaid = '';
 phone.add(inventoryApp({ make: (w2) => { void inventoryStep(`make ${w2}`).then((t2) => { invSaid = t2; line('system', `🗃 ${t2}`); phone.draw(); }, (e) => { invSaid = (e as Error).message; phone.draw(); }); }, board: (id) => { void inventoryStep(`board ${id}`).catch(() => undefined); return 'Its make pipeline is on the board.'; }, tree: (id) => { let out = ''; void inventoryStep(`map ${id}`).then((t2) => { out = t2; }); summonTo('boards'); window.setTimeout(() => boards?.openBoard(`inv-tree-${id}`), 50); return out || 'Its tree is on the board.'; }, open: () => { void inventoryStep('open'); return 'The inventory is on the board.'; }, feed: (t2) => { const r = feed(t2); keepInventory(); return `${r.added.length} added${r.refused.length ? `; not: ${r.refused.join('; ')}` : ''}.`; }, said: () => invSaid, see: (id) => see3d(id) }));
 phone.add(libraryApp({ see: (w2) => { const x = resolve(w2); return x && typeof x === 'object' ? see3d(x.id) : String(x ?? `nothing called ${w2}`); } }));
-// ---- the computer: programs for the boards and the arm, run here (src/nexus/codesim.ts), Claude beside them ----------
+// ---- the computer: programs for the boards and the arm, run here (src/nexus/teach/codesim.ts), Claude beside them ----------
 let armPlay: { frames: Frame[]; t0: number } | null = null;
 /** The arm before you moves as its program moved it, in real time, from its first frame to its last. */
 function playArm(now: number): void {
@@ -3626,7 +3626,7 @@ async function computerAsk(t: CodeTarget, code: string, ask: string, out: string
 }
 phone.add(computerApp({ run: computerRun, ask: computerAsk, see: seeWhole, buy: (t) => packFor(t.runner === 'meca' || /^robotarm/.test(t.board) ? t.board : `${t.board}, red led`) }));
 // ---- the build pack: what you want to make for real, priced at its cheapest real offers, its bench, the part to have
-// made and who makes it cheapest, and a lesson for every step (src/nexus/buildpack.ts) -----------------------------------
+// made and who makes it cheapest, and a lesson for every step (src/nexus/teach/buildpack.ts) -----------------------------------
 let packNow: Pack | null = null;
 const range$ = (x: [number, number]) => (x[0] === x[1] ? usd(x[0]) : `${usd(x[0])}-${usd(x[1])}`);
 /** A pack made from words and opened on the phone; what it comes to, said. */
@@ -3715,7 +3715,7 @@ phone.add(weatherApp({ forecast: () => hud.forecast, note: () => hud.weatherNote
 if (wPlaces[0]) window.setTimeout(() => { void weatherAt(wPlaces[0]!); }, 1500);
 window.setInterval(() => { if (wLast && document.visibilityState !== 'hidden') void (wLast === 'here' ? weatherHere() : weatherAt(wLast)); }, 15 * 60_000);
 
-/** What each part of a frame costs (src/nexus/profile.ts): read by the Data app, and by the work of making the room faster. */
+/** What each part of a frame costs (src/nexus/machines/profile.ts): read by the Data app, and by the work of making the room faster. */
 const prof = new Profile();
 // ---- data: the forge in numbers; what changes over time sampled every 10 s, the last quarter hour kept --------------------
 const hist: Record<string, number[]> = {}; let histAt = -1e9;
@@ -3739,7 +3739,7 @@ function dataSections(): DataSection[] {
     { id: 'workshop', name: 'Workshop', icon: '🔥', colour: '#ff7043', stats: [{ label: 'jobs done', value: `${jobs.filter((j) => j.done && !j.failed).length} of ${jobs.length}${jobs.some((j) => j.failed) ? ` (${jobs.filter((j) => j.failed).length} failed)` : ''}` }, { label: 'parts on the shelf', value: String(cell.shelf.length) }, { label: 'filament used', value: `${(cell.printer.filament / 1000).toFixed(2)} m` }, { label: 'printer drew', value: kwh(cell.printer.energy) }, { label: 'kiln drew', value: kwh(cell.kiln.energy) }, { label: 'furnace burnt', value: `${(cell.furnace.energy / 1e6).toFixed(1)} MJ of propane` }], bars: { name: 'Temperatures now, °C, on one scale (0–1300)', rows: ([['nozzle', cell.printer.hot.t], ['bed', cell.printer.bed.t], ['kiln', cell.kiln.t], ['furnace', cell.furnace.t]] as [string, number][]).map(([l, v]) => ({ label: l, v, max: 1300, note: `${Math.round(v)} °C` })) }, series: { name: `Furnace, °C, ${mins('furnace')}`, unit: '°', points: hist.furnace ?? [] }, note: `The workshop runs ${cell.speed}× faster than real time; energy is what its heaters drew, counted as they ran.` },
     { id: 'inventory', name: 'Inventory', icon: '🗃', colour: '#26c6da', stats: [{ label: 'entries', value: String(INVENTORY.size) }, { label: 'products', value: String(kinds.get('product') ?? 0) }, { label: 'assemblies and parts', value: String((kinds.get('assembly') ?? 0) + (kinds.get('part') ?? 0)) }, { label: 'materials', value: String(kinds.get('material') ?? 0) }, { label: 'adjustable families', value: String(FAMILIES.length) }, { label: 'catalogue sizes', value: catalogue().length.toLocaleString('en-GB') }, { label: 'parts that can be made', value: spaceSize().total.toLocaleString('en-GB') }, { label: 'elements at the bottom', value: String(kinds.get('element') ?? 0) }, { label: 'made here this visit', value: String(invMade) }], bars: { name: 'Entries by category', rows: byCat.sort((a, c) => c.v - a.v).map((r) => ({ ...r, max: cmax })) } },
     { id: 'devices', name: 'Devices', icon: '🛰', colour: '#69f0ae', stats: [{ label: 'devices set down', value: String(devices.list.length) }, { label: 'running a program', value: String(devices.list.filter((d) => cell.programmed.has(d.recipe)).length) }], bars: { name: 'Battery, each device', rows: devices.list.map((d) => ({ label: d.name, v: (d.wh / d.whFull) * 100, max: 100, note: `${d.wh.toFixed(1)} of ${d.whFull} Wh` })) }, note: devices.list.length ? undefined : 'Build a device in the workshop (Workshop app, or "cell build rover") and it is set down here.' },
-    { id: 'claude', name: 'Claude', icon: '◉', colour: '#4dd0e1', stats: [{ label: 'feels', value: felt }, { label: 'energy', value: `${Math.round(mind.energy * 100)} %` }, { label: 'bored', value: `${Math.round(mind.boredom * 100)} %` }, { label: 'curious', value: `${Math.round(mind.curiosity * 100)} %` }, { label: 'trials practised', value: String(training.trials.length) }, { label: 'asks it found better for', value: String(Object.keys(training.best).length) }], series: { name: `How pleased, %, ${mins('pleased')}`, unit: ' %', points: hist.pleased ?? [] }, note: 'A model of feeling (src/nexus/emotions.ts): it moves with what happens, and says why. It is not a claim that Claude feels.' },
+    { id: 'claude', name: 'Claude', icon: '◉', colour: '#4dd0e1', stats: [{ label: 'feels', value: felt }, { label: 'energy', value: `${Math.round(mind.energy * 100)} %` }, { label: 'bored', value: `${Math.round(mind.boredom * 100)} %` }, { label: 'curious', value: `${Math.round(mind.curiosity * 100)} %` }, { label: 'trials practised', value: String(training.trials.length) }, { label: 'asks it found better for', value: String(Object.keys(training.best).length) }], series: { name: `How pleased, %, ${mins('pleased')}`, unit: ' %', points: hist.pleased ?? [] }, note: 'A model of feeling (src/nexus/world/emotions.ts): it moves with what happens, and says why. It is not a claim that Claude feels.' },
     (() => { const parts = prof.report().slice(0, 9), top = Math.max(BUDGET_MS, ...parts.map((x) => x.mean)), info = renderer.info; return { id: 'frame', name: 'Frame', icon: '⏱', colour: '#ff80ab', stats: [{ label: 'a frame takes', value: `${prof.frameMean.toFixed(1)} ms` }, { label: 'a 90 Hz headset gives', value: `${BUDGET_MS.toFixed(1)} ms` }, { label: 'worst lately', value: `${prof.frameWorst.toFixed(1)} ms` }, { label: 'draw calls', value: String(info.render.calls) }, { label: 'triangles', value: info.render.triangles.toLocaleString('en-GB') }, { label: 'geometries, textures', value: `${info.memory.geometries}, ${info.memory.textures}` }], bars: { name: 'Each part of a frame, ms, on one scale', rows: parts.map((x) => ({ label: x.name, v: x.mean, max: top, note: `${x.mean.toFixed(2)} ms` })) }, note: 'Measured as the room runs: each part timed every frame, a running mean of the last 20 or so. Render is the time to hand the frame to the GPU, not the GPU\'s own time.' } as DataSection; })(),
     fc ? { id: 'weather', name: 'Weather', icon: '🌦', colour: '#4fc3f7', stats: [{ label: fc.place.name, value: `${fc.now.temp.toFixed(1)} °C` }, { label: 'humidity', value: `${fc.now.humidity.toFixed(0)} %` }, { label: 'wind, gusts', value: `${fc.now.wind.toFixed(1)}, ${fc.now.gusts.toFixed(1)} m/s` }, { label: 'rain chance, 6 h', value: `${Math.max(0, ...fc.hours.slice(0, 6).map((h) => h.rainChance))} %` }], series: { name: 'Temperature, °C, the next 24 hours', unit: '°', points: fc.hours.map((h) => h.temp), ticks: fc.hours.map((h) => h.time.slice(11, 13)) } }
       : { id: 'weather', name: 'Weather', icon: '🌦', colour: '#4fc3f7', stats: [{ label: 'forecast', value: 'none yet' }], note: hud.weatherNote.replace(/^weather: /, '') || 'Open the Weather app to find where you are, or name a place.' },
@@ -3998,7 +3998,7 @@ async function boot() {
     fleetNow: () => ({ bots: fleet.bots.map((b) => ({ name: b.name, x: +b.x.toFixed(2), z: +b.z.toFixed(2), state: b.state, doing: b.doing, battery: Math.round(b.battery), carrying: b.carrying, task: b.task?.kind ?? null })), waiting: fleet.waiting, kept: kept.map((k) => ({ id: k.id, title: k.title, slot: k.slot ?? null, parts: k.parts.length })), robotBoards: boards ? [...boards.all.keys()].filter((k) => k.startsWith('robot-')) : [] }),
     robotSay: (t: string) => robotWords(t),
     forgeSend: (t: string) => { send(t); return true; },
-    computerRun: async (id: string, code?: string) => { const { TARGETS } = await import('../codesim'); const t = TARGETS.find((x) => x.id === id)!; const r = await computerRun(t, code ?? t.examples[0]!.code); return { ok: r.ok, end: r.end, t: r.t, pins: [...r.pins].map(([p, ch]) => [p, ch.length]), out: r.out.slice(0, 8), said: r.said?.slice(-3), frames: r.frames?.length ?? 0 }; },
+    computerRun: async (id: string, code?: string) => { const { TARGETS } = await import('../teach/codesim'); const t = TARGETS.find((x) => x.id === id)!; const r = await computerRun(t, code ?? t.examples[0]!.code); return { ok: r.ok, end: r.end, t: r.t, pins: [...r.pins].map(([p, ch]) => [p, ch.length]), out: r.out.slice(0, 8), said: r.said?.slice(-3), frames: r.frames?.length ?? 0 }; },
     armNow: () => armPlay ? { playing: true, frames: armPlay.frames.length } : { playing: false },
     cellSay: (t: string) => cellWords(t), devicesNow: () => devices.list.map((d) => ({ id: d.id, x: +d.x.toFixed(2), z: +d.z.toFixed(2), h: +d.h.toFixed(2), doing: d.doing, read: d.read })), buildOnBoard: (id: string) => buildOnBoard(RECIPES.find((r) => r.id === id)!, true), cellNow: () => ({ ...cell.facts(), jobs: cell.jobs.map((j) => `${j.name}: ${j.stage}`), beads: cell.printer.beads.length, rail: cell.arms.rail.doing, bench: cell.arms.bench.doing, speed: cell.speed }), cellSpeed: (x: number) => { cell.speed = x; },
     holoOut: (app: string) => { eyeOf(eye); const f = new THREE.Vector3(); camera.getWorldDirection(f); return holos.spawn(app, eye.clone().addScaledVector(f, 1.1).add(new THREE.Vector3(0.35, -0.1, 0)), eye); },

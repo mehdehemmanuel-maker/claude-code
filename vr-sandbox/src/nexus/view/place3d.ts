@@ -1,10 +1,10 @@
-// A place drawn (src/nexus/places.ts is it as numbers): the sky for the sun's height, the sun's light, the ground and its
+// A place drawn (src/nexus/world/places.ts is it as numbers): the sky for the sun's height, the sun's light, the ground and its
 // relief (flat where you stand, rising beyond), the sea moving by the deep-water law (ω² = g k), whatever falls falling
 // at its terminal speed, a room round you if it is indoors, and what stands in it. Everything here is the place's own
 // group: taken down whole when you leave.
 
 import * as THREE from 'three';
-import { terminal, wavePeriod, type Place, type Prop } from '../places';
+import { terminal, wavePeriod, type Place, type Prop } from '../world/places';
 
 export interface PlaceView { group: THREE.Group; update(dt: number, you: THREE.Vector3): void; dispose(): void; sun: THREE.DirectionalLight; torch: THREE.SpotLight | null }
 

@@ -2,10 +2,10 @@
 // adjustable families that make any size from their standards; entries fed fast and checked; all of it as boards.
 
 import { describe, expect, it } from 'vitest';
-import { INVENTORY, PROCESSES, WRITTEN_TWICE, boardOfInventory, boardOfTree, categories, feed, lineOf, makeBoard, plan, resolve, routeOf, summary } from '../../src/nexus/inventory';
-import type { Item } from '../../src/nexus/inventory';
-import { FAMILIES, callFamily } from '../../src/nexus/families';
-import { triggersOf } from '../../src/nexus/flows';
+import { INVENTORY, PROCESSES, WRITTEN_TWICE, boardOfInventory, boardOfTree, categories, feed, lineOf, makeBoard, plan, resolve, routeOf, summary } from '../../src/nexus/parts/inventory';
+import type { Item } from '../../src/nexus/parts/inventory';
+import { FAMILIES, callFamily } from '../../src/nexus/parts/families';
+import { triggersOf } from '../../src/nexus/substrate/flows';
 
 describe('the inventory', () => {
   it('is filed by category and subcategory, electrical, mechanical and hardware among them, with materials at the bottom', () => {

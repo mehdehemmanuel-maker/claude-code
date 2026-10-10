@@ -2,7 +2,7 @@
 // bits, screwdrivers, sockets, spanners, and solder. Sizes from DIN 338 (drills), ISO 2936 (hex keys), ISO 3318
 // (spanners), FEPA P-grits (abrasives) and DIN 223 (dies); cutting speeds typical.
 
-import { METRIC } from '../threads';
+import { METRIC } from '../parts/threads';
 import { ax, bare, cyl, gOf, range, tagged, unit, type KindDef, type P } from './core';
 
 const n = (p: P, k: string) => Number(p[k]);

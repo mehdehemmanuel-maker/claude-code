@@ -3,12 +3,12 @@
 // the frame's origin; the ledger balances.
 
 import { describe, expect, it } from 'vitest';
-import { coordinate, ledger, restOn, standOn, topOf, type Prism } from '../../src/nexus/coupling';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { declareFrame, flatGround, gravity, observer, RIGID_BOUND, rigidDomain } from '../../src/nexus/field';
-import { abs, div, ge, k, leaf, mul, neg, variable } from '../../src/nexus/term';
-import { cites, leavesUnder, why } from '../../src/nexus/why';
-import { coarse, coverage, domain, field, fieldOf, lattice, resolution, resolves, sample } from '../../src/nexus/domain';
+import { coordinate, ledger, restOn, standOn, topOf, type Prism } from '../../src/nexus/substrate/coupling';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { declareFrame, flatGround, gravity, observer, RIGID_BOUND, rigidDomain } from '../../src/nexus/substrate/field';
+import { abs, div, ge, k, leaf, mul, neg, variable } from '../../src/nexus/substrate/term';
+import { cites, leavesUnder, why } from '../../src/nexus/substrate/why';
+import { coarse, coverage, domain, field, fieldOf, lattice, resolution, resolves, sample } from '../../src/nexus/substrate/domain';
 import { PATCH_MOMENT } from '../../src/nexus/book';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));

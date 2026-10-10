@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GEOMETRY, census } from '../../src/nexus/embody/geometry';
 import { TAXONOMY, find, type Node } from '../../src/nexus/embody/taxonomy';
-import { named } from '../../src/nexus/understand';
+import { named } from '../../src/nexus/substrate/understand';
 
 const all = (n: Node): Node[] => n.children.flatMap((c) => [c, ...all(c)]);
 const root = join(__dirname, '../..');
@@ -51,7 +51,7 @@ describe('geometry in the taxonomy', () => {
 
 describe('a board of what Nexus knows', () => {
   it('is the branch as nodes under what holds them, each saying what it is, its law, and what makes it', async () => {
-    const { boardOfKnowledge, derive, nodesOf, edgesOf } = await import('../../src/nexus/boards');
+    const { boardOfKnowledge, derive, nodesOf, edgesOf } = await import('../../src/nexus/substrate/boards');
     const b = boardOfKnowledge(GEOMETRY), ns = nodesOf(b);
     expect(ns).toHaveLength(181); expect(edgesOf(b)).toHaveLength(180);
     expect(b.about).toMatch(/180 entries, 58 of them made or measured by Nexus/);
@@ -68,7 +68,7 @@ describe('a board of what Nexus knows', () => {
 
 describe('the board of geometry on the wall', () => {
   it('is a page of columns its words can be read on, not one long column', async () => {
-    const { boardOfKnowledge, derive, layout } = await import('../../src/nexus/boards');
+    const { boardOfKnowledge, derive, layout } = await import('../../src/nexus/substrate/boards');
     const b = boardOfKnowledge(GEOMETRY), d = derive(b), box = () => ({ w: 150, h: 42 }), pos = layout(d, 'categories', box);
     const xs = [...pos.values()].map((p) => p.x), ys = [...pos.values()].map((p) => p.y);
     const w = Math.max(...xs) - Math.min(...xs) + 150, h = Math.max(...ys) - Math.min(...ys) + 42;

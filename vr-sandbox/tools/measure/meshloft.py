@@ -1,7 +1,7 @@
 """Measure a closed mesh (an STL) as loft stations: cut it across an axis every so many millimetres and, for each cut,
 the section's extent across it two ways (its bottom and top one way, its half-width and middle the other) and how square
 it is (the superellipse exponent whose area, in that box, is the section's own: 2 an ellipse, more a squarer one).
-Those are what src/nexus/form.ts's Loft takes, so a part whose maker publishes only its mesh is drawn as its measured
+Those are what src/nexus/machines/form.ts's Loft takes, so a part whose maker publishes only its mesh is drawn as its measured
 sections, not its mesh copied. Measured facts only: the sections' sizes, never the triangles.
 
   python -I meshloft.py loft FILE.stl --along z --up x [--step 10] [--clip "x>25,z<0"] [--scale 1000]

@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { LOCI, TRAITS, childOf, earwax, gamete, phenotype, possibilities, randomGenome, rng, scores } from '../../src/nexus/life/genome';
-import { layOut } from '../../src/nexus/anatomy';
+import { layOut } from '../../src/nexus/world/anatomy';
 
 describe('a body from a genome', () => {
   it('maps height to 12,111 loci over the 22 autosomes, and every trait to its own', () => {

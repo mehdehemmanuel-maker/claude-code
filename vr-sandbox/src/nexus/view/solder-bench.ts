@@ -1,4 +1,4 @@
-// The soldering bench in the room: the lesson of src/nexus/solder-lesson.ts done by your own hands. Every thing on it is
+// The soldering bench in the room: the lesson of src/nexus/teach/solder-lesson.ts done by your own hands. Every thing on it is
 // drawn by the library as it is made (the Pico, its two headers, the BB400 breadboard, PINE64's Pinecil, the Atten
 // stand and Hakko's brass cleaner, the solder wire); the right hand takes the iron and holds it as a pen, the left the
 // solder; either takes a header or the Pico and lets it go over its place. Each joint's solder is drawn as it is (a
@@ -11,15 +11,15 @@
 
 import * as THREE from 'three';
 import { kitView, type KitView } from './kit3d';
-import { compPart, componentOf } from '../components';
-import { pinHeader, usbCPlug } from '../boardparts';
-import { resolve } from '../inventory';
-import type { Part } from '../kits';
-import { aaCell, CHP170_OPEN, H3951, HANDS, ironInStand, S11 } from '../kit-solder';
-import { grade, idealVolume, type JointShape } from '../solder-joint';
-import { ALLOY, cut, HAND, LAYOUT, leadAt, letGo, lit, newBench, payOut, pinAt, PROTO, protoHold, readout, seatsOf, takeUp, throwSwitch, tick, wipe, type Bench, type BenchJoint, type PlanId, type Thing, type V3 } from '../solder-lesson';
-import { LED_KINDS, PROTO_BUILD } from '../lessons';
-import type { Build, Thing as BuildThing, XZ } from '../edges';
+import { compPart, componentOf } from '../parts/components';
+import { pinHeader, usbCPlug } from '../boards/boardparts';
+import { resolve } from '../parts/inventory';
+import type { Part } from '../parts/kits';
+import { aaCell, CHP170_OPEN, H3951, HANDS, ironInStand, S11 } from '../machines/kit-solder';
+import { grade, idealVolume, type JointShape } from '../teach/solder-joint';
+import { ALLOY, cut, HAND, LAYOUT, leadAt, letGo, lit, newBench, payOut, pinAt, PROTO, protoHold, readout, seatsOf, takeUp, throwSwitch, tick, wipe, type Bench, type BenchJoint, type PlanId, type Thing, type V3 } from '../teach/solder-lesson';
+import { LED_KINDS, PROTO_BUILD } from '../teach/lessons';
+import type { Build, Thing as BuildThing, XZ } from '../teach/edges';
 
 const MM = 0.001, PI = Math.PI;
 /** A thing the library draws, by the words it is called by. */
@@ -55,11 +55,11 @@ function spotsOf(build: Build): Record<string, { wait: Spot; seat: Spot; half: n
 }
 /** The battery holder: waiting to the parts' left, its leads laid out toward the board; once its pins are in, set on
  *  the helping hands' base under the board (its floor on the base's top, 12 up), its leads up to the rails. Its leads'
- *  roots in its own frame (src/nexus/kit-solder.ts's holder3951): the red from the switch's clip, the black from a
+ *  roots in its own frame (src/nexus/machines/kit-solder.ts's holder3951): the red from the switch's clip, the black from a
  *  spring. */
 const BATTERY = { wait: [-75, 0, 0] as V3, seated: [PROTO.hands[0] - 20, HANDS.base[1], PROTO.hands[2] + 10] as V3, red: [H3951.L / 2 - 1.5, H3951.H - 3, H3951.W / 2 - 5] as V3, black: [H3951.L / 2 - 1.5, H3951.H - 3, -7.6] as V3 };
 /** The cutters' jaws' tip and their rivet, in their own frame (m): Hakko's 138 mm over all, the rivet 15 mm behind the
- *  tip (src/nexus/kit-solder.ts); how far each half stands open about it, its spring holding them so till a hand
+ *  tip (src/nexus/machines/kit-solder.ts); how far each half stands open about it, its spring holding them so till a hand
  *  closes them (rad: the jaws about 5 mm apart at the tip, the grips about 20° apart: an estimate). */
 const JAWS = { tip: 0.138, rivet: 0.123, open: CHP170_OPEN };
 /** A tube along points given in mm. */

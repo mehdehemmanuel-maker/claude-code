@@ -4,9 +4,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { bracketCatalogue, bracketIntent, bracketMaterial, bracketOnPost, type BracketSlice } from '../../src/nexus/bracket';
+import { bracketCatalogue, bracketIntent, bracketMaterial, bracketOnPost, type BracketSlice } from '../../src/nexus/substrate/bracket';
 import { GROUP_BENDING } from '../../src/nexus/book';
-import { leavesUnder, why, type WhyNode } from '../../src/nexus/why';
+import { leavesUnder, why, type WhyNode } from '../../src/nexus/substrate/why';
 
 const KIND_WORDS = ['plate', 'block', 'lumber', 'table', 'shelf', 'template', 'default', 'bracket'];
 let built: BracketSlice | null = null;

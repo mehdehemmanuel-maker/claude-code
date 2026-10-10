@@ -4,12 +4,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type Slice } from '../../src/nexus/beam';
-import { elasticContract, realizeCantilever, realizeElastic } from '../../src/nexus/elastic';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { declareFrame } from '../../src/nexus/field';
-import { leaf } from '../../src/nexus/term';
-import { leavesUnder, why } from '../../src/nexus/why';
+import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type Slice } from '../../src/nexus/substrate/beam';
+import { elasticContract, realizeCantilever, realizeElastic } from '../../src/nexus/substrate/elastic';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { declareFrame } from '../../src/nexus/substrate/field';
+import { leaf } from '../../src/nexus/substrate/term';
+import { leavesUnder, why } from '../../src/nexus/substrate/why';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 const frame = declareFrame('test', 'x along, y up, z across');

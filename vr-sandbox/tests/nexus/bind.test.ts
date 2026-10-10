@@ -5,10 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { AMPLITUDE_FACTOR, PERIOD_FACTOR, PRISM_INERTIA, PRISM_MASS, RECT_AREA, RECT_I } from '../../src/nexus/book';
-import { evaluate, ofLeaf } from '../../src/nexus/evaluate';
-import { apply } from '../../src/nexus/law';
-import { add, boundSyms, cells, div, integral, k, leaf, leavesOf, mul, neg, pow, show, sin, sqrt, substitute, varsOf, variable, PI, zero } from '../../src/nexus/term';
-import { closure, leavesUnder } from '../../src/nexus/why';
+import { evaluate, ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { apply } from '../../src/nexus/substrate/law';
+import { add, boundSyms, cells, div, integral, k, leaf, leavesOf, mul, neg, pow, show, sin, sqrt, substitute, varsOf, variable, PI, zero } from '../../src/nexus/substrate/term';
+import { closure, leavesUnder } from '../../src/nexus/substrate/why';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'the test' }));
 const res = (n: number) => cells(n, 'the test');

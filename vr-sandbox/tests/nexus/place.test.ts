@@ -1,16 +1,16 @@
-// Places in the domain (src/nexus/place.ts): a box with its centre, its turn and its half-extents, every number a
+// Places in the domain (src/nexus/substrate/place.ts): a box with its centre, its turn and its half-extents, every number a
 // leaf, in a domain whose gravity is measured. The runtime generates what the geometry implies for every place alike.
 // The kept section laws are the evidence the generated integrals are checked against; nothing names a breadth or a depth.
 
 import { describe, expect, it } from 'vitest';
-import { apply } from '../../src/nexus/law';
+import { apply } from '../../src/nexus/substrate/law';
 import { RECT_I, RECT_MODULUS } from '../../src/nexus/book/slice';
 import { lawById } from '../../src/nexus/book';
-import { MemorySink } from '../../src/nexus/journal';
-import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/place';
-import { Runtime } from '../../src/nexus/runtime';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { leaf, type Leaf } from '../../src/nexus/term';
+import { MemorySink } from '../../src/nexus/substrate/journal';
+import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/substrate/place';
+import { Runtime } from '../../src/nexus/substrate/runtime';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { leaf, type Leaf } from '../../src/nexus/substrate/term';
 
 const person = 'the person';
 const given = (name: string, v: number, unit: string): Leaf => leaf(name, v, unit, { class: 'given', by: person, grounds: 'what the person said' });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARMS, canDo, CHANGER, HANDS, pixelsAcross, robotFor, robotWords, SENSORS, TASKS, type Robot } from '../../src/nexus/robot';
+import { ARMS, canDo, CHANGER, HANDS, pixelsAcross, robotFor, robotWords, SENSORS, TASKS, type Robot } from '../../src/nexus/machines/robot';
 
 const task = (id: string) => TASKS.find((t) => t.id === id)!, part = <T extends { id: string }>(xs: T[], id: string) => xs.find((x) => x.id === id)!;
 

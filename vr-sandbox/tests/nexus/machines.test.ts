@@ -2,8 +2,8 @@
 // wheelbases, every interface checked, every axle hung from its frame, and nothing in a wheel's way.
 import { describe, expect, test } from 'vitest';
 import * as THREE from 'three';
-import { KITS, makeKit, massOf, type Part } from '../../src/nexus/kits';
-import { MACHINES, makeMachine, tyreOf } from '../../src/nexus/machines';
+import { KITS, makeKit, massOf, type Part } from '../../src/nexus/parts/kits';
+import { MACHINES, makeMachine, tyreOf } from '../../src/nexus/machines/machines';
 import { perfect } from '../../src/nexus/make/pipeline';
 import { layout } from '../../src/nexus/make/space';
 

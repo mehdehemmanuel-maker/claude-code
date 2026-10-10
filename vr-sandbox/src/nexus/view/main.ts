@@ -1,5 +1,5 @@
 // The Nexus room (docs/NEXUS-FROM-REALITY.md, section 26): a projection of what Nexus generated, for a headset or a
-// screen. Nothing here is generated: the scene is read from world.json (src/nexus/scene.ts), and every shape stands for
+// screen. Nothing here is generated: the scene is read from world.json (src/nexus/substrate/scene.ts), and every shape stands for
 // one number or one element in it. Laid out around where you stand, facing −z:
 //
 // - in front, on the floor, at their true size: the places in the room, after the kernel evolved them, with a ghost of
@@ -17,7 +17,7 @@
 
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import type { World } from '../scene';
+import type { World } from '../substrate/scene';
 
 const params = new URLSearchParams(location.search);
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });

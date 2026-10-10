@@ -1,8 +1,8 @@
 // The laws the beam slice rests on that are not in the kept book: definitions and derivations by superposition,
 // each with the domain it holds in and an example checked at the book's own limits (tests/nexus/book.test.ts).
 
-import { law, type Law } from '../law';
-import { PI, add, and, cells, div, ge, gt, integral, k, le, leaf, lt, max, mul, pow, sin, sqrt, sub, variable, zero } from '../term';
+import { law, type Law } from '../substrate/law';
+import { PI, add, and, cells, div, ge, gt, integral, k, le, leaf, lt, max, mul, pow, sin, sqrt, sub, variable, zero } from '../substrate/term';
 
 export const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 export const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002, table 8.1', kind: 'handbook' as const };

@@ -1,12 +1,12 @@
-// The scale tuner (src/nexus/tuner.ts): regimes derived from the constants and from what the derivation finds at
+// The scale tuner (src/nexus/substrate/tuner.ts): regimes derived from the constants and from what the derivation finds at
 // smaller sizes. Nothing in the tuner names an atom, a planet or a star; the measured values here are the evidence its
 // derivations are checked against, never inputs. Factors of order one that the dimensions cannot see are not claimed.
 
 import { describe, expect, it } from 'vitest';
 import { CONST } from '../../src/nexus/book/constants';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { leaf } from '../../src/nexus/term';
-import { axes, ladder, reach, regimeAt, universe, type Q } from '../../src/nexus/tuner';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { leaf } from '../../src/nexus/substrate/term';
+import { axes, ladder, reach, regimeAt, universe, type Q } from '../../src/nexus/substrate/tuner';
 
 const eV = 1.602176634e-19;
 const temp = (T: number) => ofLeaf(leaf('temperature', T, 'K', { class: 'given', by: 'the test', grounds: 'a temperature to derive at' }));

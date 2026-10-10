@@ -1,18 +1,18 @@
-// A kit's thing drawn (src/nexus/kits.ts makes it as a tree of parts): every part its shape, its colour, its edges as its
-// material is made (src/nexus/finish.ts: a moulded edge as round as its mould, a machined one broken, a wooden one
+// A kit's thing drawn (src/nexus/parts/kits.ts makes it as a tree of parts): every part its shape, its colour, its edges as its
+// material is made (src/nexus/parts/finish.ts: a moulded edge as round as its mould, a machined one broken, a wooden one
 // eased), what gives light lit by its lumens, a galaxy's stars turning faster inside, a terrain's land. It can be taken
 // apart: each level of parts drawn out from the middle of what holds them.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { edgeRadius } from '../finish';
-import type { Cut, Part, Shape } from '../kits';
+import { edgeRadius } from '../parts/finish';
+import type { Cut, Part, Shape } from '../parts/kits';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
-import { massOf } from '../mass';
-import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
-import { patchAt, tessellate, type Patch } from '../surface';
-import { findItem, resolve } from '../inventory';
-import { lookOf } from '../pieces';
+import { massOf } from '../parts/mass';
+import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../machines/form';
+import { patchAt, tessellate, type Patch } from '../machines/surface';
+import { findItem, resolve } from '../parts/inventory';
+import { lookOf } from '../parts/pieces';
 import { meshOfLook } from './explode';
 
 export interface KitView { group: THREE.Group; update(dt: number): void; explode(level: number): void; dispose(): void; lights: number; /** how fast its limbs go round, strides a second (0: still) */ gait: number }

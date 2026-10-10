@@ -3,8 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { check, conductorOf, layOut, type Component } from '../../src/nexus/embody/breadboard';
-import { printer } from '../../src/nexus/asked';
-import { generate } from '../../src/nexus/manifold';
+import { printer } from '../../src/nexus/ask/asked';
+import { generate } from '../../src/nexus/substrate/manifold';
 import { embodyAny } from '../../src/nexus/embody/any';
 
 const R = (id: string, a: string, b: string, I?: number): Component => ({ id, name: id, body: [0.0063, 0.0025, 0.0025], colour: 0, pins: [{ name: '1', net: a, I }, { name: '2', net: b, I }] });

@@ -2,7 +2,7 @@
 // is measured (Elia 1992's organ rates, Sender & Milo 2021's cell turnover, ATP turned over at about a body's mass).
 
 import { describe, expect, it } from 'vitest';
-import { INVENTORY } from '../../src/nexus/inventory';
+import { INVENTORY } from '../../src/nexus/parts/inventory';
 import { LIFESPAN, aged, atpPerDay, clockOf, turnover, wattsOf } from '../../src/nexus/life/time';
 
 describe('time in a body', () => {

@@ -1,14 +1,14 @@
 // High bars as instruments (tests/nexus/high-bar.ts): a printer at a kilogram an hour and twenty micrometres, a hall
 // that computes a billion billion operations a second, a vessel that grows a hundred kilograms of cells a day. At the
 // printer's old bar and its new one the generator found the same gaps: it did not see the bar. What all three lacked
-// was what a change costs and how fast it can go; the rules added are general (src/nexus/transport.ts, information in
-// src/nexus/carrier.ts), and these intents test them.
+// was what a change costs and how fast it can go; the rules added are general (src/nexus/substrate/transport.ts, information in
+// src/nexus/substrate/carrier.ts), and these intents test them.
 
 import { describe, expect, it } from 'vitest';
 import { CONST } from '../../src/nexus/book/constants';
-import { generate, lacking } from '../../src/nexus/manifold';
-import { attemptRate, changeTime } from '../../src/nexus/rate';
-import { centreFourier, cylinderCentre, leastHeatedLength } from '../../src/nexus/transport';
+import { generate, lacking } from '../../src/nexus/substrate/manifold';
+import { attemptRate, changeTime } from '../../src/nexus/substrate/rate';
+import { centreFourier, cylinderCentre, leastHeatedLength } from '../../src/nexus/substrate/transport';
 import { cellVessel, computeHall, fastPrinter } from './high-bar';
 import { printer } from './inventions';
 

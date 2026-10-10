@@ -6,9 +6,9 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
-import type { Jolt } from '../../src/nexus/realize';
-import { answersFrom, conceive, designs, heelBox, sayConception } from '../../src/nexus/conceive';
-import { parseAsk } from '../../src/nexus/parse';
+import type { Jolt } from '../../src/nexus/substrate/realize';
+import { answersFrom, conceive, designs, heelBox, sayConception } from '../../src/nexus/ask/conceive';
+import { parseAsk } from '../../src/nexus/ask/parse';
 
 let J: Jolt;
 beforeAll(async () => { J = (await initJolt()) as unknown as Jolt; });

@@ -5,10 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import { CONST } from '../../src/nexus/book/constants';
 import { CRYSTALS, MELTING } from '../../src/data/species';
-import { boundState } from '../../src/nexus/eigen';
-import { conductionDensity, degeneracyBulk, fermiEnergy, freeElectronBulk, thermalShare } from '../../src/nexus/fermi';
-import { cohesionRule, lindemannRule, meltingPoint } from '../../src/nexus/melt';
-import { descend, heat, hottestOf, sahaShare } from '../../src/nexus/depth';
+import { boundState } from '../../src/nexus/substrate/eigen';
+import { conductionDensity, degeneracyBulk, fermiEnergy, freeElectronBulk, thermalShare } from '../../src/nexus/substrate/fermi';
+import { cohesionRule, lindemannRule, meltingPoint } from '../../src/nexus/substrate/melt';
+import { descend, heat, hottestOf, sahaShare } from '../../src/nexus/substrate/depth';
 
 const eV = 1.602176634e-19;
 const crystal = (el: string) => CRYSTALS.find((c) => c.element === el)!;

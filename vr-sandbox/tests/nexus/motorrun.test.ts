@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { MOTORS } from '../../src/data/motors';
 import { LIQUIDS, jacketOf, runMotor } from '../../src/engineering/motorrun';
-import { Workshop } from '../../src/nexus/generate';
+import { Workshop } from '../../src/nexus/ask/generate';
 
 const re40 = MOTORS['motor.dc.coreless.d40-150w-24v']!;
 const near = (a: number, b: number, rel = 1e-3) => expect(Math.abs(a - b) / Math.abs(b)).toBeLessThan(rel);

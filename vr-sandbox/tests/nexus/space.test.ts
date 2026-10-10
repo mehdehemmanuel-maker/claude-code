@@ -7,17 +7,17 @@
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { beamOnTwoSupports, beamSystem, leastMaterial, lumberCatalogue, materialLeaves, partXXV } from '../../src/nexus/beam';
-import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
-import { gravity, observer } from '../../src/nexus/field';
-import { sample } from '../../src/nexus/domain';
-import { explore, type Exploration } from '../../src/nexus/explore';
-import { rigidContract } from '../../src/nexus/realize';
-import { search } from '../../src/nexus/solve';
-import { among, asOption, derive, evaluateAt, preferenceField, solveAt, spaceOf, type Derived } from '../../src/nexus/space';
-import { observe, restStudy, type Study } from '../../src/nexus/study';
-import { leaf } from '../../src/nexus/term';
-import { closure, why } from '../../src/nexus/why';
+import { beamOnTwoSupports, beamSystem, leastMaterial, lumberCatalogue, materialLeaves, partXXV } from '../../src/nexus/substrate/beam';
+import { ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
+import { gravity, observer } from '../../src/nexus/substrate/field';
+import { sample } from '../../src/nexus/substrate/domain';
+import { explore, type Exploration } from '../../src/nexus/substrate/explore';
+import { rigidContract } from '../../src/nexus/substrate/realize';
+import { search } from '../../src/nexus/substrate/solve';
+import { among, asOption, derive, evaluateAt, preferenceField, solveAt, spaceOf, type Derived } from '../../src/nexus/substrate/space';
+import { observe, restStudy, type Study } from '../../src/nexus/substrate/study';
+import { leaf } from '../../src/nexus/substrate/term';
+import { closure, why } from '../../src/nexus/substrate/why';
 
 const g = (n: string, v: number) => ofLeaf(leaf(n, v, 'm', { class: 'given', by: 'the test', grounds: 'the range of sections the test lets the space span' }));
 const extent = { b: { lo: g('least breadth', 0.019), hi: g('most breadth', 0.3) }, h: { lo: g('least depth', 0.019), hi: g('most depth', 0.3) } };

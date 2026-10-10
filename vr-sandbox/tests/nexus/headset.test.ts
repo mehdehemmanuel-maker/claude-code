@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { QUEST3, fitsIpd, frameBudget, pixelAt, pixelsPerDegree, runtime } from '../../src/nexus/headset';
-import { componentOf } from '../../src/nexus/components';
-import { resolve } from '../../src/nexus/inventory';
-import { massOf } from '../../src/nexus/mass';
+import { QUEST3, fitsIpd, frameBudget, pixelAt, pixelsPerDegree, runtime } from '../../src/nexus/machines/headset';
+import { componentOf } from '../../src/nexus/parts/components';
+import { resolve } from '../../src/nexus/parts/inventory';
+import { massOf } from '../../src/nexus/parts/mass';
 
 describe('a headset by its maker\'s figures', () => {
   it('gives how many pixels fall on a degree, from its own pixels and its own field', () => {

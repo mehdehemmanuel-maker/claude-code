@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST, est } from './constants';
-import { add, sub, mul, div, pow, sqrt, le, ge, and, exp, k } from '../term';
+import { add, sub, mul, div, pow, sqrt, le, ge, and, exp, k } from '../substrate/term';
 
 export const ELECTRICAL = [
   L({

@@ -9,7 +9,7 @@
 // "What is in it" is "id*n" for n of a thing, "id:g" for g grams of it (how tissue and fluid are said), and "id:*" for
 // the rest of its mass, whatever the others leave. Its grams are a number, or "=" for the sum of what is in it. Counts
 // and masses are a typical adult's or a typical cell's, from the source each line names; where a number is an estimate
-// it says so. The tables are only data: ./index.ts settles every mass, src/nexus/inventory.ts makes them entries.
+// it says so. The tables are only data: ./index.ts settles every mass, src/nexus/parts/inventory.ts makes them entries.
 
 /** A molecule: its formula or its blend, and its molecular weight (daltons) where it has no formula (a protein). */
 export interface Molecule { id: string; name: string; group: string; spec: { formula: string } | { blend: [string, number][] }; says: string; da?: number }

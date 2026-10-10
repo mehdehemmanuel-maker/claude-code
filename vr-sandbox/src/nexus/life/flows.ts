@@ -6,10 +6,10 @@
 // acid's cost is the free energy of its gradient. Each flow keeps its whole breakdown, and the range it is measured in,
 // so where the laws and the measurements disagree it shows.
 
-import { INVENTORY, countIn, gramsOfItem } from '../inventory';
-import { estimate, fixed, measured, setting, solve, step, valueIn } from '../lawgraph';
-import { ofLeaf, type Derivation } from '../evaluate';
-import { leaf } from '../term';
+import { INVENTORY, countIn, gramsOfItem } from '../parts/inventory';
+import { estimate, fixed, measured, setting, solve, step, valueIn } from '../substrate/lawgraph';
+import { ofLeaf, type Derivation } from '../substrate/evaluate';
+import { leaf } from '../substrate/term';
 import { LIFESPAN, wattsOf } from './time';
 
 /** A count or mass read off the body's tree, as a record: where it is from is the tree. */

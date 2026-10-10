@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CLAYS, CONES, FILAMENTS, fire, fuse, FUSERS, FURNACE_MAX, greenDensity, KILNS, POWDERS, pour, PRINTERS, printWith, processorFor, processWords, QUARTZ, sinter } from '../../src/nexus/processor';
-import { Kiln, METALS } from '../../src/nexus/cell';
+import { CLAYS, CONES, FILAMENTS, fire, fuse, FUSERS, FURNACE_MAX, greenDensity, KILNS, POWDERS, pour, PRINTERS, printWith, processorFor, processWords, QUARTZ, sinter } from '../../src/nexus/machines/processor';
+import { Kiln, METALS } from '../../src/nexus/machines/cell';
 
 const P = (id: string) => PRINTERS.find((p) => p.id === id)!, F = (id: string) => FILAMENTS.find((f) => f.id === id)!;
 

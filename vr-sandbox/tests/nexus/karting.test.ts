@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { bump, drive, driveForce, idealLap, KART, lapSaid, makeTrack, nearest, onGrid, order, runKart, speedProfile, topSpeed, type KartState } from '../../src/nexus/karting';
-import { readPlace, sayPlace } from '../../src/nexus/places';
-import { readPlain } from '../../src/nexus/directive';
+import { bump, drive, driveForce, idealLap, KART, lapSaid, makeTrack, nearest, onGrid, order, runKart, speedProfile, topSpeed, type KartState } from '../../src/nexus/world/karting';
+import { readPlace, sayPlace } from '../../src/nexus/world/places';
+import { readPlain } from '../../src/nexus/substrate/directive';
 
 const g = 9.80665;
 // a track too wide to leave: the kart alone with its tyres, no grass or walls

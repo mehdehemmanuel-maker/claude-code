@@ -2,9 +2,9 @@
 // standard when asked for, each with everything inside it known, and each coming down, at the bottom, to elements.
 
 import { describe, expect, it } from 'vitest';
-import { SERIES, catalogue, catalogueItem, searchCatalogue } from '../../src/nexus/catalogue';
-import { INVENTORY, fundamentals, resolve } from '../../src/nexus/inventory';
-import { ELEMENTS } from '../../src/nexus/elements';
+import { SERIES, catalogue, catalogueItem, searchCatalogue } from '../../src/nexus/parts/catalogue';
+import { INVENTORY, fundamentals, resolve } from '../../src/nexus/parts/inventory';
+import { ELEMENTS } from '../../src/nexus/parts/elements';
 
 describe('the catalogue', () => {
   it('lists over ten thousand different parts, cheaply, family by family', () => {

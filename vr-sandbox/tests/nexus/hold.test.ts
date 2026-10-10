@@ -1,11 +1,11 @@
-// Holding a temperature across scale (src/nexus/hold.ts): the least conductance a body has to a still medium grows with
+// Holding a temperature across scale (src/nexus/substrate/hold.ts): the least conductance a body has to a still medium grows with
 // its size, while what it makes grows with its mass, so a least size holds a body's temperature by its own heat. The
 // production law is Kleiber's, measured on whole animals (src/data/life.ts); the media's conductivities are measured;
 // the observed smallest mammals are estimates the derivation is compared with, never fed.
 
 import { describe, expect, it } from 'vitest';
 import { BODY_TEMPERATURE, KLEIBER, MEDIA_CONDUCTIVITY, SMALLEST_MAMMAL, TISSUE } from '../../src/data/life';
-import { heldBy, leastMassToHold, ownTime, sphereMass } from '../../src/nexus/hold';
+import { heldBy, leastMassToHold, ownTime, sphereMass } from '../../src/nexus/substrate/hold';
 
 const dT = BODY_TEMPERATURE - 288.15;
 const air = MEDIA_CONDUCTIVITY.air.k, water = MEDIA_CONDUCTIVITY.water.k;

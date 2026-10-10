@@ -6,7 +6,7 @@
 
 import { cellOf, type CellType } from './cells';
 import { entries, type LifeEntry } from './core';
-import { boxShape } from '../boxfill';
+import { boxShape } from '../substrate/boxfill';
 
 // ---- tissues, a gram of each ------------------------------------------------------------------------------------------
 export const TISSUES = entries(`
@@ -248,7 +248,7 @@ export const MUSCLE_ENTRIES: LifeEntry[] = MUSCLES.map((m) => {
   return { id: m.id, name: m.name, path: `Life/Human/Muscles/${m.where}`, kind: 'part', of: [{ id: t, n: m.g }], mass: { [t]: m.g }, g: m.g, size: muscleSize(m.g, m.id), look: 'muscle', says: `${m.does}. ${m.runs}; ${m.nerve}`, spec: `${m.count === 2 ? 'one each side' : 'one'}; about ${m.g} g (an estimate for a typical adult man)` };
 });
 /** A muscle belly of its mass, mm: an ellipsoid about 4 times as long as it is wide and 0.7 as deep as wide (an estimate),
- *  at 1.06 g/ml (what src/nexus/derive.ts finds of muscle from its make-up: 1.067). A sheet of a muscle (the diaphragm)
+ *  at 1.06 g/ml (what src/nexus/substrate/derive.ts finds of muscle from its make-up: 1.067). A sheet of a muscle (the diaphragm)
  *  is given its own size. */
 function muscleSize(g: number, id: string): [number, number, number] {
   if (id === 'diaphragm') return [300, 270, 3.5]; // a dome about 30 by 27 cm, 2–5 mm thick (an estimate): 300 g at 1.06 g/ml
@@ -258,7 +258,7 @@ const musclesOf = () => MUSCLES.map((m) => (m.count === 2 ? `${m.id}*2` : m.id))
 
 // ---- tendons and ligaments, by name --------------------------------------------------------------------------------------
 // id | name | a side or one | where | its tissue | how many like it, each its size | LxWxH mm | what it is
-// Each one's mass is its size's volume (its shape's share of its box, src/nexus/boxfill.ts) at its tissue's density (the
+// Each one's mass is its size's volume (its shape's share of its box, src/nexus/substrate/boxfill.ts) at its tissue's density (the
 // gram of it its swatch holds): an estimate from its typical size, worked out rather than guessed.
 const CONNECTIVE_TABLE = `
 achilles-tendon | Achilles (calcaneal) tendon | 2 | Tendons/Leg | tendon-tissue | 1 | 150x15x6 | the thickest, strongest tendon: gastrocnemius and soleus to the heel; takes up to 12 times body weight running

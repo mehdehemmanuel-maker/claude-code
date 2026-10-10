@@ -1,6 +1,6 @@
 // What wood is made of, at the level below the board: a solid (the cell wall) and room (the cells' hollows), arranged
 // as long cells along the stem. These are measurements kept as evidence: the arrangement's laws are derived elsewhere
-// (src/nexus/network.ts, src/nexus/frame.ts) and checked against them, never fitted to them.
+// (src/nexus/substrate/network.ts, src/nexus/substrate/frame.ts) and checked against them, never fitted to them.
 
 /** The cell wall's own density, whatever the species: wood's density over it is the solid's share of the volume. */
 export const CELL_WALL_DENSITY = { value: 1500, unit: 'kg/m^3', source: 'USDA Wood Handbook FPL-GTR-282 ch. 4: the specific gravity of the cell-wall substance is about 1.5 for all species; Gibson & Ashby, Cellular Solids (1997) ch. 10: 1500 kg/m³' };

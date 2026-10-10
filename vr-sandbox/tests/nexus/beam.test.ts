@@ -4,10 +4,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type Slice } from '../../src/nexus/beam';
+import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type Slice } from '../../src/nexus/substrate/beam';
 import { PATCH_MOMENT, RECT_MODULUS, WEIGHT } from '../../src/nexus/book';
-import type { Derivation } from '../../src/nexus/evaluate';
-import { explain, impact, leavesUnder, stale, why, type WhyNode } from '../../src/nexus/why';
+import type { Derivation } from '../../src/nexus/substrate/evaluate';
+import { explain, impact, leavesUnder, stale, why, type WhyNode } from '../../src/nexus/substrate/why';
 
 const KIND_WORDS = ['plate', 'block', 'lumber', 'table', 'shelf', 'template', 'default'];
 

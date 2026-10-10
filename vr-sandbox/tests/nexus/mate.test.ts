@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { use } from '../../src/nexus/components';
-import { STANDARD, assemble, fit, mate } from '../../src/nexus/mate';
-import type { Port } from '../../src/nexus/kits';
+import { use } from '../../src/nexus/parts/components';
+import { STANDARD, assemble, fit, mate } from '../../src/nexus/parts/mate';
+import type { Port } from '../../src/nexus/parts/kits';
 
 const sq = (s: number): [number, number][] => [[-s, -s], [s, -s], [s, s], [-s, s]];
 const p = (sex: Port['sex'], pattern: [number, number][], thread = 'M6'): Port => ({ name: sex, sex, thread, pattern, at: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], t: 0.005 });

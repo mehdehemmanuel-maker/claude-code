@@ -12,7 +12,7 @@ and one upgrade.
 
 ## Round 0: the substrate as it was
 
-The substrate built no system from a want. The attempt (`src/nexus/attempt.ts`) added the one generic move the
+The substrate built no system from a want. The attempt (`src/nexus/substrate/attempt.ts`) added the one generic move the
 language allowed: a closure over the book's 166 laws, from each wanted quantity to the laws with its dimension and
 from their inputs to what the intent gives. Every outcome is classified mechanically.
 
@@ -43,7 +43,7 @@ the closure makes nothing. A library of laws is not a generative manifold: this 
 The five distinctions are one. A flow is not primitive: what generates it is a quantity that is conserved, counted
 over regions. Its content in a region changes only by what crosses the region's boundary and what is made inside
 it. Physics names the conserved quantities from its symmetries: energy, momentum, angular momentum and charge, and
-the amount of each matter that does not react. So the carrier is the primitive (`src/nexus/carrier.ts`):
+the amount of each matter that does not react. So the carrier is the primitive (`src/nexus/substrate/carrier.ts`):
 
 - a **balance** is the carrier's content over a region;
 - a **flow** is its flux across a boundary, driven by the difference of its **potential**;
@@ -70,7 +70,7 @@ and series networks (a composition, not a law).
 
 ## Round 1b: the balance generates structure
 
-`src/nexus/manifold.ts` generates structure from wants by the carriers' balances. Every rule is about carriers,
+`src/nexus/substrate/manifold.ts` generates structure from wants by the carriers' balances. Every rule is about carriers,
 never about a kind of thing: a held potential exchanges its carrier with every neighbour at another potential; a
 supply comes from a reservoir always above, or from a conversion of a carrier the environment offers power in, and a
 conserved carrier is raised from a reservoir, never made; a delivered charge returns; delivered matter leaves when a
@@ -133,7 +133,7 @@ region must be a domain in the frame (y opposite gravity) with faces, areas and 
 travel some way. Geometry, orientation and direction are that one primitive. A process's duration is the balance
 integrated over time: a content change over the flux that makes it.
 
-The language already had the geometric primitive (`domain.ts`); the generator had not used it. `src/nexus/shape.ts`
+The language already had the geometric primitive (`domain.ts`); the generator had not used it. `src/nexus/substrate/shape.ts`
 gives a region with an extent its faces; a free extent is chosen in the configuration space under a declared
 preference, never assumed: the inside's 120 m² plan with the least boundary is derived square (the isoperimetric
 principle). The want language gains extents, what each face touches, which way a flux travels, and a want's
@@ -177,7 +177,7 @@ A matter has, for each carrier, properties in roles: a conductivity, a capacity 
 the most flux density and the highest potential it bears, an expansion per degree, and thresholds, the potentials of
 one carrier at which its other properties change (above which it flows, below which it holds its shape). Matters
 come from what the intent states of a region and from the kept material data, an availability set with sources
-(`src/nexus/matter.ts`). A threshold is generative: a matter that flows only above a temperature makes the place it
+(`src/nexus/substrate/matter.ts`). A threshold is generative: a matter that flows only above a temperature makes the place it
 must flow a region held above it. And a role the language can read that no matter states is a gap in the knowledge,
 not in the language; the ranking now says which.
 
@@ -308,7 +308,7 @@ The question changed from "what happens at a small scale" to "what becomes invis
 changes". Scale is not a size. It is a relation between a distance, how fast something crosses it, and the system's own
 time, and nothing that carries information crosses a distance L sooner than L / c.
 
-**The generator** (src/nexus/scale.ts) makes mechanisms from a matter's measured quantities by their dimensions alone.
+**The generator** (src/nexus/substrate/scale.ts) makes mechanisms from a matter's measured quantities by their dimensions alone.
 A quantity whose dimension already holds a time is a mechanism by itself: a speed, a diffusivity, an acceleration or a
 rate. Two quantities that hold no time alone make one by their ratio or product. Each mechanism's time grows with the
 size as a power, τ = (L^a / P)^(1/b). A combination of two mechanisms is never a third: it is where they cross. One
@@ -382,7 +382,7 @@ where its constraints hold.
 
 ## Round 7: the tuner, and observation as a projection
 
-The tuner is a part of the generative loop, not a reporter (src/nexus/tune.ts). A manifold is generated in a
+The tuner is a part of the generative loop, not a reporter (src/nexus/substrate/tune.ts). A manifold is generated in a
 representation the generator may choose, judged by the language and by what it realizes, and when the judgement says
 the representation does not hold the phenomenon, the pathway changes and everything is generated again from it. The
 first representation axis it works on is time: the step a realization integrates at.
@@ -417,7 +417,7 @@ and a slice judged under a language that has since grown is stale.
 refused constructions; only relations in force judge now, and the beam's exploration test shows it. And the swing had
 no constraint that the bar clears the floor (round 6).
 
-**Observation is a physical projection** (src/nexus/perceive.ts). An observer is a configuration of senses: a carrier,
+**Observation is a physical projection** (src/nexus/substrate/perceive.ts). An observer is a configuration of senses: a carrier,
 a band, the least and most it registers, a window, a resolution and a latency. A person (sight, hearing, touch,
 balance, smell, taste, and the time to act) and fourteen instruments are values of those fields (src/data/observers.ts).
 Diffraction and the electron's wavelength generate the microscopes' and telescopes' resolutions. The medium between
@@ -449,10 +449,10 @@ A matter is no longer only a name with numbers. A species is counted by the iden
 bound. Chemistry has electronvolts and keeps each element's atoms and the charge. Below a nucleus's millions of
 electronvolts, only charge, baryon number and lepton number are kept. A transformation is a balance, so the balanced
 transformations of a set of species are the integer null space of what they count. That is the same algebra that finds
-dimensionless groups, now shared (src/nexus/dimension.ts). Every balance is an assignment of the null space's free
+dimensionless groups, now shared (src/nexus/substrate/dimension.ts). Every balance is an assignment of the null space's free
 variables, so the smallest one is found by enumerating them.
 
-| Asked | Generated (src/nexus/compose.ts) | Measured |
+| Asked | Generated (src/nexus/substrate/compose.ts) | Measured |
 |---|---|---|
 | methane with oxygen | CH₄ + 2 O₂ → CO₂ + 2 H₂O, −802.3 kJ/mol | the lower heating value, −802.3 kJ/mol |
 | lead to gold, keeping atoms | refused: lead and gold atoms are each kept | |
@@ -466,7 +466,7 @@ than its bonds say: more than seven times any other residual, the delocalized bo
 more stable than its gas by a binding no bond in the molecule holds, between molecules: exactly the enthalpy its boiling
 takes in, 44.0 kJ/mol for water.
 
-**State.** Each phase has a Gibbs energy at a temperature and pressure (src/nexus/phase.ts), and a species takes the
+**State.** Each phase has a Gibbs energy at a temperature and pressure (src/nexus/substrate/phase.ts), and a species takes the
 phase of least Gibbs energy. Where two phases' Gibbs energies meet is the vapour curve, generated from the phases'
 standard enthalpy, entropy and heat capacity, none of them a boiling point:
 
@@ -495,7 +495,7 @@ space. And the smallest balance was missed by combining scaled basis vectors.
 
 ## Round 9: a solid from its constituents
 
-A crystal is atoms at the sites of a lattice (src/nexus/solid.ts). The atoms a cell holds are counted from the cell's
+A crystal is atoms at the sites of a lattice (src/nexus/substrate/solid.ts). The atoms a cell holds are counted from the cell's
 geometry: a corner is shared by eight cells, a face by two, a site inside by none. That gives four for a face-centred
 cube and two for a body-centred one. Density is an atom's mass over the room the lattice gives it. Stiffness is a
 pressure, and the only pressure an atom's binding and its room make is the cohesive energy over the volume per atom.
@@ -523,7 +523,7 @@ unchanged and the finding is recorded.
 ## Round 10: what happens during a change
 
 A change that must pass over a barrier is attempted at the thermal rate kT / h and succeeds with the Boltzmann factor of
-the barrier's Gibbs energy (src/nexus/rate.ts, after Eyring). A liquid flows because its molecules change places over
+the barrier's Gibbs energy (src/nexus/substrate/rate.ts, after Eyring). A liquid flows because its molecules change places over
 such a barrier, so its viscosity is that rate seen from the continuum. The time of one change is then the viscosity
 times one molecule's volume over kT, with Planck's constant gone. The scale generator of round 6 had already made that
 time without the theory: thermal energy over viscosity, evaluated at the molecule's size. The two agree.
@@ -542,7 +542,7 @@ changes with temperature: the network of bonds a molecule must break to move is 
 
 ## Round 11: local clocks
 
-A manifold no longer advances on one step (src/nexus/clock.ts). Each region advances at the time its own mechanisms
+A manifold no longer advances on one step (src/nexus/substrate/clock.ts). Each region advances at the time its own mechanisms
 need: for a stored carrier conducted across its boundaries, its capacity over all that conducts to and from it (the
 carrier family's time constant). The steps are powers of two of the finest, so the clocks meet. Across each boundary
 the side with the finer clock computes the flux and the coarser side receives exactly the content that crossed, so
@@ -574,7 +574,7 @@ could be separate worlds on separate steps, which is what this round does for a 
 
 ## Round 12: holding a temperature across scale
 
-A region held above its surroundings loses energy at its conductance times the difference (src/nexus/hold.ts). For a
+A region held above its surroundings loses energy at its conductance times the difference (src/nexus/substrate/hold.ts). For a
 body in a still medium the least conductance is conduction alone: 4π k r for a sphere of radius r in a medium of
 conductivity k (Carslaw and Jaeger). That grows with the size, while what a body makes grows with its mass. Kleiber's
 measured law for mammals is 70 kcal a day times the mass to the three quarters (src/data/life.ts). So the difference a
@@ -597,7 +597,7 @@ That is why holding a temperature is a property of bodies, not of cells.
 
 ## Round 13: systems from elements
 
-A generated element states bounds and stops. Now the element becomes a configuration space (src/nexus/size.ts). The
+A generated element states bounds and stops. Now the element becomes a configuration space (src/nexus/substrate/size.ts). The
 quantities that would realize it are its variables, its carrier's laws are its relations, and its bounds and its
 matter's limits are its constraints. What can be had is the catalogue, and a declared preference picks. The existing
 search derives the configuration, with every record citing the element it came from.
@@ -622,7 +622,7 @@ is made against their tables.
 ## Round 14: members from the loads on the faces they span
 
 The generator states the snow on the house's roof: 1400 Pa, 168 kN over the up face, whose members span 10.95 m. The
-element becomes a system of counts (src/nexus/size.ts). The number of members across the width, the spacing, the support
+element becomes a system of counts (src/nexus/substrate/size.ts). The number of members across the width, the spacing, the support
 lines across the span, the section, and the matter's density, stiffness and strength are its variables. Each bay takes
 the load on its strip and the member's own weight, simply supported, which is conservative for a member continuous over
 its supports. Its bending stress is held within the clear-wood strength over a declared factor of two, and its
@@ -648,7 +648,7 @@ tables.
 
 After round 14 the generator still said "no system is generated from an element" about the members it generated, and
 it left their weight out of what reaches the ground. The language could size them, but the generator did not use it.
-Now every member element is sized where it is generated (src/nexus/manifold.ts, src/nexus/size.ts), and what it weighs
+Now every member element is sized where it is generated (src/nexus/substrate/manifold.ts, src/nexus/substrate/size.ts), and what it weighs
 is carried on:
 
 - **The load per area each face receives.** It is recorded on that face's members as the loads arrive.
@@ -721,10 +721,10 @@ standard, and Douglas-fir as a row of properties. The kept data even states one 
 strength for every wood. Those are evidence with domains, not the skeleton.
 
 This round looks for what lies under several of them at once, and finds it in linear algebra
-(src/nexus/network.ts). A network of bars carries a load at its joints by stretching only if the load lies in the
+(src/nexus/substrate/network.ts). A network of bars carries a load at its joints by stretching only if the load lies in the
 span of its equilibrium matrix. What the bars cannot reach is a mechanism, and a load that meets a mechanism is
 carried only by the members bending where they meet, or not at all. A plane frame of members that bend as well as
-stretch (src/nexus/frame.ts) measures what the count predicts. Nothing in either names a material or a structure.
+stretch (src/nexus/substrate/frame.ts) measures what the count predicts. Nothing in either names a material or a structure.
 
 | Arrangement | Bars carry the load? | Stiffness grows as the solid's share to the power |
 |---|---|---|
@@ -775,7 +775,7 @@ asked for a reservoir of cells to supply its growth. What the three lacked in co
 sheds, and how fast it can go. Two general rules come from that; the third is named.
 
 **A change carried through matter takes the matter's own time, and the matter must stay that long where it changes**
-(src/nexus/transport.ts). This is the heat equation in a cylinder, solved by its Bessel series and checked against a
+(src/nexus/substrate/transport.ts). This is the heat equation in a cylinder, solved by its Bessel series and checked against a
 direct solve. The centre of a round stream reaches the threshold at a Fourier number, here 0.41, set by where it starts,
 the threshold, and the hottest its surface may be. Its own time goes as its radius squared, and its speed as one over
 its radius squared, so the length it must be held over is Fo Q ρ c / (π k), whatever its diameter. A thinner stream

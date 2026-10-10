@@ -1,6 +1,6 @@
 # Nexus census
 
-2026-10-05: 704 asks in 51 s on 4 threads. Written by `npm run nexus:census -- out.jsonl --report docs/NEXUS-CENSUS.md` (src/nexus/census.ts); every build counts as built only when its own checks hold.
+2026-10-05: 704 asks in 51 s on 4 threads. Written by `npm run nexus:census -- out.jsonl --report docs/NEXUS-CENSUS.md` (src/nexus/substrate/census.ts); every build counts as built only when its own checks hold.
 
 ## How each kind of ask fared
 

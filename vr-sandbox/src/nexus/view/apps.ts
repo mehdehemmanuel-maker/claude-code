@@ -3,23 +3,23 @@
 // can do, its rules as a pipeline you can open, and what you can tell it: sleep, wake, charge, come, patrol, dance …).
 
 import type { Kit, Nav, PhoneApp, View } from './phone';
-import { ABILITIES, factName, type AbilityId, type Bot, type Fleet } from '../fleet';
-import { METALS, RECIPES, bill, type Cell, type MadePart } from '../cell';
-import { INVENTORY, categories, fundamentals, resolve, routeOf, summary, type Item } from '../inventory';
-import { behave } from '../behave';
-import { flatBom, massOf, typeOf } from '../outputs';
-import { catalogue, SERIES } from '../catalogue';
-import { numberOf, partAt, randomPart, spaceSize } from '../partspace';
-import { callFamily } from '../families';
-import { FAMILIES, type Family } from '../families';
-import { DESIGNED, component } from '../components';
-import { grams, massOf as partMass } from '../mass';
-import { TARGETS, pinSays, type Ran, type Target } from '../codesim';
-import type { Line, Pack } from '../buildpack';
-import { usd } from '../prices';
+import { ABILITIES, factName, type AbilityId, type Bot, type Fleet } from '../machines/fleet';
+import { METALS, RECIPES, bill, type Cell, type MadePart } from '../machines/cell';
+import { INVENTORY, categories, fundamentals, resolve, routeOf, summary, type Item } from '../parts/inventory';
+import { behave } from '../world/behave';
+import { flatBom, massOf, typeOf } from '../ask/outputs';
+import { catalogue, SERIES } from '../parts/catalogue';
+import { numberOf, partAt, randomPart, spaceSize } from '../parts/partspace';
+import { callFamily } from '../parts/families';
+import { FAMILIES, type Family } from '../parts/families';
+import { DESIGNED, component } from '../parts/components';
+import { grams, massOf as partMass } from '../parts/mass';
+import { TARGETS, pinSays, type Ran, type Target } from '../teach/codesim';
+import type { Line, Pack } from '../teach/buildpack';
+import { usd } from '../parts/prices';
 import { BRAIN_MAP, MESSENGER_IDS, type Kind, type LifeGraph, type Node as LifeNode } from '../life/graph';
 import { clock, dayOf, RHYTHMS } from '../life/rhythm';
-import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../weather';
+import { compass, forMaking, placeName, rainAhead, sky, skyIcon, type Forecast, type Place } from '../world/weather';
 
 /** A build kept in the warehouse: what it is called, what made it, how to make it again, and where it is shelved. */
 export interface StoredBuild { id: string; title: string; ask?: string; kind: 'steps' | 'machine' | 'shapes'; steps?: string[]; footprint?: [number, number]; verdict?: string; kg?: number; slot?: string; at: number; parts: MiniPart[] }

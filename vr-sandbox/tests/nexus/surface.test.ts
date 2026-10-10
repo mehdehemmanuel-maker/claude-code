@@ -2,7 +2,7 @@
 // curvature and a mean curvature of 1/(2R), a plane has none; a Coons patch keeps its boundary; a symmetric half
 // crosses its mirror with one tangent plane; a dent is seen as a wobble and as broken zebra lines.
 import { describe, expect, test } from 'vitest';
-import { comb, coons, curvature, curveAt, curvatures, draft, fair, fairness, fromEdge, interpolate, pointAt, pull, seam, skinParams, skinThrough, split, surfaceAt, surfaceArea, symmetric, tessellate, zebra, type Curve, type Surface, type V3 } from '../../src/nexus/surface';
+import { comb, coons, curvature, curveAt, curvatures, draft, fair, fairness, fromEdge, interpolate, pointAt, pull, seam, skinParams, skinThrough, split, surfaceAt, surfaceArea, symmetric, tessellate, zebra, type Curve, type Surface, type V3 } from '../../src/nexus/machines/surface';
 
 const r2 = Math.SQRT1_2;
 const quarter: Curve = { P: [[1, 0, 0], [1, 1, 0], [0, 1, 0]], w: [1, r2, 1], p: 2 };

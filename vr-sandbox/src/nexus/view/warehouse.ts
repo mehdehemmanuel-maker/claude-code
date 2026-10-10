@@ -3,11 +3,11 @@
 // along the front, a pick station, and the way out to the table marked on the floor. The robots are mast robots of the
 // kind that take totes off shelves: a base on two driven wheels and casters, a mast its carriage climbs, forks that
 // reach into a shelf, a light strip that says what it is doing, and its name, battery and doing over it.
-// What they do is the fleet's (src/nexus/fleet.ts); this draws it, as it is, every frame.
+// What they do is the fleet's (src/nexus/machines/fleet.ts); this draws it, as it is, every frame.
 
 import * as THREE from 'three';
-import { BAY_W, BAY_X, Fleet, LANES, LEVELS, RACK_D, RACK_Z, ROWS, SIDE_X, WZ, type Bot, type BotState } from '../fleet';
-import { wheelSpeeds, pitchOf } from '../motion';
+import { BAY_W, BAY_X, Fleet, LANES, LEVELS, RACK_D, RACK_Z, ROWS, SIDE_X, WZ, type Bot, type BotState } from '../machines/fleet';
+import { wheelSpeeds, pitchOf } from '../substrate/motion';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';

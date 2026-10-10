@@ -1,10 +1,10 @@
-// Depth (src/nexus/depth.ts): how far down a phenomenon must be followed, decided by what is asked of it. What these
+// Depth (src/nexus/substrate/depth.ts): how far down a phenomenon must be followed, decided by what is asked of it. What these
 // tests hold is what the descent must reproduce from the ladder the tuner derives, never what one descent printed.
 
 import { describe, expect, it } from 'vitest';
 import { CONST } from '../../src/nexus/book/constants';
-import { descend, explain, heat, levelsAt, motion, potential, powersFor } from '../../src/nexus/depth';
-import { copyAt, ladder, universe } from '../../src/nexus/tuner';
+import { descend, explain, heat, levelsAt, motion, potential, powersFor } from '../../src/nexus/substrate/depth';
+import { copyAt, ladder, universe } from '../../src/nexus/substrate/tuner';
 
 const eV = 1.602176634e-19;
 

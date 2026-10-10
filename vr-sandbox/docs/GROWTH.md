@@ -14,7 +14,7 @@ A slime mould spreads over everything it can reach. Then the tubes that carry th
 
 For a bone this is Wolff's law, as modelled by Huiskes et al. (*J. Biomech.* 20, 1987).
 
-`src/nexus/adapt.ts` applies that one rule to any carrier:
+`src/nexus/substrate/adapt.ts` applies that one rule to any carrier:
 
 1. **Lay down the ground:** every way the carrier could go within the room the thing may take.
 2. **Solve the flow** through all of those ways at once, by the carrier's own law.
@@ -51,7 +51,7 @@ Size changes with demand: ten times the load grows thicker struts and a heavier 
 
 ## Conditions, read from what the ask says
 
-`src/nexus/conditions.ts` reads an ask for physics, not for a name. Whatever the thing is called (a clamp-on bracket, a calf carrier, a boom arm, a walkway, an arm for a lamp), a thing that holds something up comes down to three facts:
+`src/nexus/ask/conditions.ts` reads an ask for physics, not for a name. Whatever the thing is called (a clamp-on bracket, a calf carrier, a boom arm, a walkway, an arm for a lamp), a thing that holds something up comes down to three facts:
 
 - **The loads,** and where they are. A load can be "180 kg split over 4 brackets", "two followspot ops plus a 40 kg spot each", "call it 120 kg in all", or a cow that "will hit it with her head", which pushes sideways at about half her weight (estimate). It can also be the wind on a face the thing carries: "a 1.5 m wide x 5 m tall mesh banner" in 60 km/h gusts, at half solid.
 - **What holds it.**
@@ -88,7 +88,7 @@ A frame as made is solved again at every size from a thousandth to a thousand ti
 - **What it carries scaled with it:** every margin goes as 1/s, measured, not assumed. Its weight grows as s³ while what its struts bear grows as s². This is Galileo's square–cube law (1638): a thing of the same stuff and shape is weaker for its size the bigger it is.
 - **The same load kept:** strength and buckling go nearly as s². What a strut bears shrinks as s²; buckling as s⁴ over s². Shrunk 1000 times, a tower still carrying its 5 kg antenna keeps 0.3% of the strength it needs.
 
-At the size asked for (`--scale 0.001` on the command line), the pipeline also says which of the effects that rule things of a given size (`src/nexus/sizing.ts`) pass their thresholds between the two sizes:
+At the size asked for (`--scale 0.001` on the command line), the pipeline also says which of the effects that rule things of a given size (`src/nexus/substrate/sizing.ts`) pass their thresholds between the two sizes:
 
 - its own weight against its strength
 - the stickiness of air (Reynolds)

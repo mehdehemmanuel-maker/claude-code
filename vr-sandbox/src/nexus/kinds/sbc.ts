@@ -3,10 +3,10 @@
 // line, and D-Robotics' robot development kits (RDK X3, RDK X5, RDK S100, S100P). Each board's chip, cores and clock,
 // its AI accelerator, the memory it is sold with, its size, its weight where its maker gives one, its power and its
 // ports, from its maker's own page or datasheet (named in `src`); where a maker gives no weight, the board's drawing
-// weighs it (src/nexus/sbc.ts) and says so.
+// weighs it (src/nexus/kinds/sbc.ts) and says so.
 
 import { bare, type KindDef, type P } from './core';
-import { approx, boardDef, BOARD_DEFS, boardMakeup, boardMass } from '../sbc';
+import { approx, boardDef, BOARD_DEFS, boardMakeup, boardMass } from '../boards/sbc';
 
 const s = (p: P, k: string) => String(p[k]);
 

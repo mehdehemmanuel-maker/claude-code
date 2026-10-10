@@ -1,16 +1,16 @@
-// Systems from elements (src/nexus/size.ts): the generator's path for charge into the house states a least conductance
+// Systems from elements (src/nexus/substrate/size.ts): the generator's path for charge into the house states a least conductance
 // and the heat it makes there; the element becomes a system (the wire's section and route, the carrier's laws, the
 // insulation's limit), searched over the standard sections for the least conductor. Nothing here names a wire size.
 
 import { describe, expect, it } from 'vitest';
 import { MATERIALS } from '../../src/data/materials';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { generate } from '../../src/nexus/manifold';
-import { shapeOf } from '../../src/nexus/shape';
-import { routeAcross, sizeByDropAlone, sizeConductor, sizeMembers } from '../../src/nexus/size';
-import { lumberCatalogue, materialLeaves } from '../../src/nexus/beam';
-import { gravity } from '../../src/nexus/field';
-import { leaf } from '../../src/nexus/term';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { generate } from '../../src/nexus/substrate/manifold';
+import { shapeOf } from '../../src/nexus/substrate/shape';
+import { routeAcross, sizeByDropAlone, sizeConductor, sizeMembers } from '../../src/nexus/substrate/size';
+import { lumberCatalogue, materialLeaves } from '../../src/nexus/substrate/beam';
+import { gravity } from '../../src/nexus/substrate/field';
+import { leaf } from '../../src/nexus/substrate/term';
 import { house } from './inventions';
 
 const i = house();

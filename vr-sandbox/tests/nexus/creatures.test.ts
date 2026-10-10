@@ -4,8 +4,8 @@
 // weight and a rider at 15 m/s asks.
 
 import { describe, expect, it } from 'vitest';
-import { flapRate, froudeSpeed, wingArea } from '../../src/nexus/creatures';
-import { kitById, kitFor, makeKit, massOf } from '../../src/nexus/kits';
+import { flapRate, froudeSpeed, wingArea } from '../../src/nexus/world/creatures';
+import { kitById, kitFor, makeKit, massOf } from '../../src/nexus/parts/kits';
 
 describe('creatures as their size lets them move', () => {
   it('walks, trots, swims and flies at the rates their bodies give', () => {

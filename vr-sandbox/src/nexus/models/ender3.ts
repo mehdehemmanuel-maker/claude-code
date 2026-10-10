@@ -2,7 +2,7 @@
 // matrix: rotation rows then translation, mm), its box in its own frame (min then max, mm), its surface's middle and how
 // much of each of its box's faces (x-, x+, y-, y+, z-, z+) its surface covers.
 // Measured numbers only; none of the model's surface is copied. Do not edit by hand: regenerate.
-import type { MakerModel } from '../makermodel';
+import type { MakerModel } from '../machines/makermodel';
 
 export const ENDER3: MakerModel = { id: "ender3", name: "Creality Ender-3", src: "Creality's Ender-3 assembly (github.com/Creality3DPrinting/Ender-3, Ender-3 Mechanical/3DXML/Ender3.3DXML, SOLIDWORKS 2016, 2018-09-04; GPL-3.0: measured, not copied)", parts: [
   ["4040 profile", "4040 profile-2", [0.0, -1.0, 0.0, 111.999, 0.0, 0.0, -1.0, 30.0, 1.0, 0.0, 0.0, -231.54886], [0.0, -10.0, -10.0, 290.0, 30.0, 30.0], [144.814, 8.29, 9.78], [0.3, 0.3, 0.52, 0.52, 0.52, 0.52]],

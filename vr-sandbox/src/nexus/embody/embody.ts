@@ -19,8 +19,8 @@
 // kept, so how it came to be is part of what it is.
 
 import { MATERIALS } from '../../data/materials';
-import type { Structure } from '../manifold';
-import type { Intent } from '../want';
+import type { Structure } from '../substrate/manifold';
+import type { Intent } from '../ask/want';
 import { toSI } from '../../ganglia/units';
 import { axisFor, type LinearAxis } from './axis';
 import { designElectrical, type Electrical, type Load } from './electrical';

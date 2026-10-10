@@ -4,8 +4,8 @@
 // What was asked and is not in the place yet is said, not left out.
 
 import { describe, expect, it } from 'vitest';
-import { FALLS, G, readPlace, terminal, wavePeriod } from '../../src/nexus/places';
-import { readPlain } from '../../src/nexus/directive';
+import { FALLS, G, readPlace, terminal, wavePeriod } from '../../src/nexus/world/places';
+import { readPlain } from '../../src/nexus/substrate/directive';
 import { dartScore } from '../../src/nexus/view/place3d';
 
 describe('a place read from words', () => {

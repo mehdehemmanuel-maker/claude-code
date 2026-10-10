@@ -2,8 +2,8 @@
 // told, builds carried between the table and the shelves, and their rules as a pipeline the flow engine reads.
 
 import { describe, expect, it } from 'vitest';
-import { BATTERY, Fleet, boardOfBot, factName, renameOnBoard, route, warehouseFloor } from '../../src/nexus/fleet';
-import { evaluate, triggerOf, triggersOf } from '../../src/nexus/flows';
+import { BATTERY, Fleet, boardOfBot, factName, renameOnBoard, route, warehouseFloor } from '../../src/nexus/machines/fleet';
+import { evaluate, triggerOf, triggersOf } from '../../src/nexus/substrate/flows';
 
 const seeded = (s = 7) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
 const run = (f: Fleet, secs: number, dt = 0.05, each?: () => void) => { for (let t = 0; t < secs; t += dt) { f.step(dt); each?.(); } };

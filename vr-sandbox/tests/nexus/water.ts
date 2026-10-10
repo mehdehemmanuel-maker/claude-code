@@ -1,12 +1,12 @@
 // Water as a probe of scale. Not an object: the measured quantities of one matter in one state (liquid, 25 °C, one
 // atmosphere), the site it sits on (the earth's gravity and rotation), the universe's bound on how fast information
 // travels, and optionally a motion. Every value is sourced or labelled an estimate. The scale generator
-// (src/nexus/scale.ts) makes the mechanisms from these alone; nothing here names a regime, a number or a level.
+// (src/nexus/substrate/scale.ts) makes the mechanisms from these alone; nothing here names a regime, a number or a level.
 
 import { CONST } from '../../src/nexus/book/constants';
-import { evaluate, ofLeaf, type Derivation } from '../../src/nexus/evaluate';
-import { causal, type Quantity } from '../../src/nexus/scale';
-import { div, k, leaf, mul, pow, variable } from '../../src/nexus/term';
+import { evaluate, ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
+import { causal, type Quantity } from '../../src/nexus/substrate/scale';
+import { div, k, leaf, mul, pow, variable } from '../../src/nexus/substrate/term';
 
 const measured = (name: string, v: number, unit: string, source: string): Derivation => ofLeaf(leaf(name, v, unit, { class: 'measured', source }));
 const estimated = (name: string, v: number, unit: string, grounds: string): Derivation => ofLeaf(leaf(name, v, unit, { class: 'estimated', grounds }));

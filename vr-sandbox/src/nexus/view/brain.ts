@@ -24,7 +24,7 @@ export interface WorldApi {
   /** Bring one panel in front of the person (pipeline, rounds, laws, bill, loop, flaws, chat), or put it away (none). */
   show(panel: string): string;
   /**
-   * Design and build anything from an ask: the person's words, read plainly, or an ask as data (src/nexus/spec.ts)
+   * Design and build anything from an ask: the person's words, read plainly, or an ask as data (src/nexus/ask/spec.ts)
    * composed from them. Returns what was heard and assumed, and what came of it: rounds, parts, flaws, gaps.
    */
   make(words: string, spec?: unknown): string;

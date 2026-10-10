@@ -1,9 +1,9 @@
-// Loops, the parts list, loads and charts (src/nexus/generate.ts). A plate across two blocks is simply supported:
+// Loops, the parts list, loads and charts (src/nexus/ask/generate.ts). A plate across two blocks is simply supported:
 // M = F a b / L, σ = M c / I, deflection F L³ / 48 E I at its middle; its end past a post is a cantilever, M = F a,
 // deflection F a³ / 3 E I; a block on the floor bears its load, σ = F / A. Each worked by hand here.
 
 import { describe, expect, it } from 'vitest';
-import { Workshop } from '../../src/nexus/generate';
+import { Workshop } from '../../src/nexus/ask/generate';
 
 const near = (a: number, b: number, rel = 1e-6) => expect(Math.abs(a - b) / Math.abs(b)).toBeLessThan(rel);
 const shop = () => { const w = new Workshop({ parts: () => [] }); w.run('material steel'); return w; };

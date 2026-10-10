@@ -2,10 +2,10 @@
 // that runs, SQL asked of the inventory, and every example read as a step.
 
 import { describe, expect, it } from 'vitest';
-import { LANGUAGES, byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage } from '../../src/nexus/languages';
-import { Workshop } from '../../src/nexus/generate';
-import { guessStep } from '../../src/nexus/flows';
-import { INVENTORY } from '../../src/nexus/inventory';
+import { LANGUAGES, byCategory, cppToJs, scadToSteps, sqlSelect, stepLanguage } from '../../src/nexus/teach/languages';
+import { Workshop } from '../../src/nexus/ask/generate';
+import { guessStep } from '../../src/nexus/substrate/flows';
+import { INVENTORY } from '../../src/nexus/parts/inventory';
 
 describe('languages, by what they are for', () => {
   it('each has a category and type, says whether it runs here, and its example is read as a step in it', () => {

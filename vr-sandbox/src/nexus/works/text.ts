@@ -2,8 +2,8 @@
 //
 // Owner of: how a works, a job and its programs are said, and which of them a sentence asks for.
 
-import { usd as money } from '../prices';
-import { linkFor } from '../link';
+import { usd as money } from '../parts/prices';
+import { linkFor } from '../machines/link';
 import { FAMILIES } from './families';
 import { TIERS, stationById, stationCost, stationUsd, worksOf, type Buying } from './stations';
 import { under3K, worksUnder } from './budget';

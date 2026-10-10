@@ -2,9 +2,9 @@
 // is drawn if and only if a coordinate binds it; a change in a record changes the scene's identity.
 
 import { describe, expect, it } from 'vitest';
-import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV } from '../../src/nexus/beam';
-import { project } from '../../src/nexus/project';
-import { leaf } from '../../src/nexus/term';
+import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV } from '../../src/nexus/substrate/beam';
+import { project } from '../../src/nexus/substrate/project';
+import { leaf } from '../../src/nexus/substrate/term';
 
 describe('projection', () => {
   const slice = () => beamOnTwoSupports(partXXV('the person'), materialLeaves('wood.douglas-fir'), lumberCatalogue());

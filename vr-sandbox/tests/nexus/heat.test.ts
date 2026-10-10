@@ -1,11 +1,11 @@
-// Heat between things that touch, and to the air (src/nexus/heatflow.ts): two steel blocks share heat at the rate the
+// Heat between things that touch, and to the air (src/nexus/substrate/heatflow.ts): two steel blocks share heat at the rate the
 // conductance between their middles gives; fused they share it faster than touching, glued slower; a heater comes to
 // the temperature where the air takes what it puts in; and what goes in, out and is held balances.
 
 import { describe, expect, it } from 'vitest';
-import { Workshop } from '../../src/nexus/generate';
+import { Workshop } from '../../src/nexus/ask/generate';
 import { heatLoss } from '../../src/engineering/thermal';
-import { flowHeat, TOUCHING_R } from '../../src/nexus/heatflow';
+import { flowHeat, TOUCHING_R } from '../../src/nexus/substrate/heatflow';
 
 const room = () => { const w = new Workshop({ parts: () => [] }, 3); w.run('material steel'); return w; };
 const pair = (how?: string) => { const w = room(); w.run('place cube named hot at 0, 0.5 m, 0 size 100 mm'); w.run('place cube named cold at 0.1 m, 0.5 m, 0 size 100 mm'); if (how) w.run(`${how} hot and cold as pair`); w.run('heat hot to 200 °C'); return w; };

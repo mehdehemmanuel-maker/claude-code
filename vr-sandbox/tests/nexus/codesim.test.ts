@@ -3,8 +3,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PY_PRELUDE, TARGETS, readPy, runMeca } from '../../src/nexus/codesim';
-import { component } from '../../src/nexus/components';
+import { PY_PRELUDE, TARGETS, readPy, runMeca } from '../../src/nexus/teach/codesim';
+import { component } from '../../src/nexus/parts/components';
 
 const py = (() => { try { execFileSync('python3', ['-c', 'pass']); return true; } catch { return false; } })();
 const dir = mkdtempSync(join(tmpdir(), 'codesim-'));

@@ -4,8 +4,8 @@
 // catalogue's lines (every standard size), and blocks of the part space (every size it can be made to order in). So
 // adding a kind of part is adding its table; nothing else is written for it.
 
-import type { Family, Param } from '../families';
-import type { Item, Process } from '../inventory';
+import type { Family, Param } from '../parts/families';
+import type { Item, Process } from '../parts/inventory';
 
 export type V = string | number;
 export type P = Record<string, V>;
@@ -100,7 +100,7 @@ export function readKind(k: KindDef, words: string): P | string {
 }
 const idPart = (v: V) => String(v).toLowerCase().replace(/\//g, '_').replace(/[^\w.+-]/g, '');
 let caller: ((words: string) => Item | string | null) | null = null;
-/** How a kind's parts made to their own sizes are called: by their families' words (set by src/nexus/families.ts). */
+/** How a kind's parts made to their own sizes are called: by their families' words (set by src/nexus/works/families.ts). */
 export function useFamilies(f: (words: string) => Item | string | null): void { caller = f; }
 /** What goes into one, read: materials and parts by id ("id*n"), and parts made to sizes by their own families in
  *  braces ("{tube round 34x2.5 150 aluminium}*2"), each made now and carried with it; after a bar, what to use if that

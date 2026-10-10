@@ -10,8 +10,8 @@
 // every pair. A holder with no shape of its own (a wheel's group) has the bounds of what it holds.
 
 import * as THREE from 'three';
-import type { Part, Shape } from '../kits';
-import { boundsOf, piecesOf, type LocalBox } from '../form';
+import type { Part, Shape } from '../parts/kits';
+import { boundsOf, piecesOf, type LocalBox } from '../machines/form';
 
 export interface OBB { c: THREE.Vector3; u: [THREE.Vector3, THREE.Vector3, THREE.Vector3]; h: [number, number, number] }
 export interface Node { p: Part; parent: Node | null; kids: Node[]; m: THREE.Matrix4; box: THREE.Box3 | null; obb: OBB | null; /** where a shape is long and bent or swept (a tube, a loft), the boxes that cover it tightly; else its one box */ pieces: OBB[]; local: THREE.Box3 | null; sub: THREE.Box3 | null; depth: number; path: string }

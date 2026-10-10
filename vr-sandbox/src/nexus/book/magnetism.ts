@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST, est } from './constants';
-import { mul, div, pow, sqrt, le, k, PI } from '../term';
+import { mul, div, pow, sqrt, le, k, PI } from '../substrate/term';
 
 export const MAGNETISM = [
   L({

@@ -11,11 +11,11 @@
 //
 // Owner of: an operation, a job, how long a run takes, what is not finished when it is formed, and the router.
 
-import { usd as money } from '../prices';
-import { burrOf } from '../finish';
-import { cutAt, cutRefuses } from '../link';
-import { CUTTING, type Lang, type Transport } from '../link';
-import { stackOf, type Capable } from '../fits';
+import { usd as money } from '../parts/prices';
+import { burrOf } from '../parts/finish';
+import { cutAt, cutRefuses } from '../machines/link';
+import { CUTTING, type Lang, type Transport } from '../machines/link';
+import { stackOf, type Capable } from '../parts/fits';
 import { PROCESSES, processById, type MatClass, type Process } from './families';
 import { STATIONS, stationById, stationUsd } from './stations';
 import { ALWAYS_BOUGHT, STOCK, classOf, priceOfLine, shapeOf, tolOf, type Join, type PartLine } from './lines';

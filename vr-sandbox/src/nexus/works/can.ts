@@ -11,7 +11,7 @@
 // Owner of: what has been measured, what a station therefore holds, and the verdict on whether a works can make a
 // given thing — which station, which process, how well, and what stops it when nothing can.
 
-import { capable, measured, type Capable } from '../fits';
+import { capable, measured, type Capable } from '../parts/fits';
 import { makes, processById, type Family, type MatClass, type Process, type Shape } from './families';
 import { STATIONS, stationById, stationUsd, type Station } from './stations';
 import { runMinutes } from './plan';

@@ -32,7 +32,7 @@ Say "checks" in the forge to see every stage on a board.
 
 ## Wheeled machines from their figures
 
-`src/nexus/machines.ts` makes every wheeled machine one way, from:
+`src/nexus/machines/machines.ts` makes every wheeled machine one way, from:
 
 - its axles: position, track, tyre code, steering, drive, twin tyres, brake;
 - how each axle hangs from the frame: rigid, pivot, strut, beam, wishbone, swingarm, leaf or air;
@@ -64,7 +64,7 @@ its published dimensions, tyres, wheelbase, track, mass, engine and part list, a
 
 ## Panelled bodies
 
-A car's body is made by `src/nexus/panels.ts` on the freeform surface tools of `src/nexus/surface.ts` (NURBS curves and
+A car's body is made by `src/nexus/machines/panels.ts` on the freeform surface tools of `src/nexus/machines/surface.ts` (NURBS curves and
 skins, fitting, knot insertion, regions and trims, fairness, zebra, draft, closest points):
 
 - **One side skin,** nose to tail, each section a convex control polygon, so no line on it ripples. Its arches are the

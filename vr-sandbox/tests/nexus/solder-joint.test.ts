@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLOYS, freshJoint, grade, idealVolume, PICO_PIN, step, timeToMelt, type Hands, type JointState } from '../../src/nexus/solder-joint';
+import { ALLOYS, freshJoint, grade, idealVolume, PICO_PIN, step, timeToMelt, type Hands, type JointState } from '../../src/nexus/teach/solder-joint';
 
 /** The hands held so for `s` seconds, solder fed at `rate` mm³/s: the joint after. */
 function hold(j: JointState, h: Omit<Hands, 'feed'>, s: number, rate = 0): JointState {

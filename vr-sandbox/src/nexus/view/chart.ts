@@ -5,7 +5,7 @@
 // adjacent pair clear for colour-blind and normal vision, each at 3:1 or more against the surface.
 
 import * as THREE from 'three';
-import type { Chart } from '../generate';
+import type { Chart } from '../ask/generate';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
 const SERIES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];

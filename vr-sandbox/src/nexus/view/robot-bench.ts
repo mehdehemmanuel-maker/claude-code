@@ -7,11 +7,11 @@
 import * as THREE from 'three';
 import { kitView, type KitView } from './kit3d';
 import type { SolderBench } from './solder-bench';
-import { robotPart, ROBOT_CELL } from '../components';
-import { ik, UR5E } from '../dharm';
-import { robotFor, TASKS, type Robot } from '../robot';
-import { PROTO } from '../solder-lesson';
-import { grade } from '../solder-joint';
+import { robotPart, ROBOT_CELL } from '../parts/components';
+import { ik, UR5E } from '../machines/dharm';
+import { robotFor, TASKS, type Robot } from '../machines/robot';
+import { PROTO } from '../teach/solder-lesson';
+import { grade } from '../teach/solder-joint';
 
 type Side = 'left' | 'right';
 /** A step: the bench's words, and when it is done (the joint good, or the time it takes). */

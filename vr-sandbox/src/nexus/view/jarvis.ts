@@ -1,6 +1,6 @@
 // The workshop (docs/NEXUS-FROM-REALITY.md, section 27): Nexus generating, live, in front of you, and Claude in the
 // room with you. Ask for something (a drawn intent, or one a person has asked for) and the generator runs here, in
-// the page, from nothing: its structure is given a body in space (src/nexus/realize-space.ts) on the holo-table, one
+// the page, from nothing: its structure is given a body in space (src/nexus/substrate/realize-space.ts) on the holo-table, one
 // element at a time, in the order it was generated. Claude, on wheels, drives to each, reaches out and places it, and
 // says what it is; its lidar senses what is there. A card says what each element is, the values it derived and why it
 // exists, back to what you said. Gaps appear where generation stopped, in red, with what they lack.
@@ -12,10 +12,10 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
-import { car, house, printer } from '../asked';
-import { drawIntent } from '../draw';
-import { generate } from '../manifold';
-import { realize, whyOf, type Space, type Thing } from '../realize-space';
+import { car, house, printer } from '../ask/asked';
+import { drawIntent } from '../substrate/draw';
+import { generate } from '../substrate/manifold';
+import { realize, whyOf, type Space, type Thing } from '../substrate/realize-space';
 
 import { card, label } from './holo';
 import { Robot } from './robot';

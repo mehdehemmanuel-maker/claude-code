@@ -9,8 +9,8 @@
 // holds continuously is the duty's root mean square, the energy stored is what the trip used), and it is built again
 // and operated again until the duty holds or nothing it learned changes it.
 
-import type { Structure } from '../manifold';
-import type { Intent } from '../want';
+import type { Structure } from '../substrate/manifold';
+import type { Intent } from '../ask/want';
 import { embodyAny, type Learned } from './any';
 import { causalOf, trace } from './causal';
 import type { Machine, Plant } from './embody';

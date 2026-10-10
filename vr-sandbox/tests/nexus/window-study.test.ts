@@ -6,11 +6,11 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import type { Jolt } from '../../src/nexus/realize';
-import { barOnHinge, swingIntent, swingMaterial } from '../../src/nexus/swing';
-import { tuneSwing, windowStudy, type WindowStudy } from '../../src/nexus/study-swing';
-import { Language } from '../../src/nexus/abduce';
-import { boundOn, stale } from '../../src/nexus/tune';
+import type { Jolt } from '../../src/nexus/substrate/realize';
+import { barOnHinge, swingIntent, swingMaterial } from '../../src/nexus/substrate/swing';
+import { tuneSwing, windowStudy, type WindowStudy } from '../../src/nexus/substrate/study-swing';
+import { Language } from '../../src/nexus/substrate/abduce';
+import { boundOn, stale } from '../../src/nexus/substrate/tune';
 
 let J: Jolt;
 let study: WindowStudy;

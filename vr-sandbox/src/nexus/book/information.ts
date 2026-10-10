@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST, est } from './constants';
-import { add, mul, div, le, ge, lt, and, ln, log2, k, PI } from '../term';
+import { add, mul, div, le, ge, lt, and, ln, log2, k, PI } from '../substrate/term';
 
 export const INFORMATION = [
   L({

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { fk, flangeOf, ik, UR5E } from '../../src/nexus/dharm';
-import { FR3, FRANKA_HAND } from '../../src/nexus/franka';
-import { massOf } from '../../src/nexus/mass';
+import { fk, flangeOf, ik, UR5E } from '../../src/nexus/machines/dharm';
+import { FR3, FRANKA_HAND } from '../../src/nexus/machines/franka';
+import { massOf } from '../../src/nexus/parts/mass';
 import * as THREE from 'three';
-import { componentOf, robotPart, ROBOT_CELL } from '../../src/nexus/components';
+import { componentOf, robotPart, ROBOT_CELL } from '../../src/nexus/parts/components';
 import { contacts, layout, type Node } from '../../src/nexus/make/space';
-import { pixelsAcross, robotFor, robotTasks, SENSORS, TASKS } from '../../src/nexus/robot';
-import { resolve } from '../../src/nexus/inventory';
+import { pixelsAcross, robotFor, robotTasks, SENSORS, TASKS } from '../../src/nexus/machines/robot';
+import { resolve } from '../../src/nexus/parts/inventory';
 
 describe('arms by their DH tables: the UR5e', () => {
   it('puts its flange where Universal Robots\' table does at zero: stretched out, 817.2 mm along, 232.9 across, 62.8 up', () => {

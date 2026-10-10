@@ -4,13 +4,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { Language } from '../../src/nexus/abduce';
-import { admitBy, beamOnTwoSupports, couplingQuantities, lumberCatalogue, materialLeaves } from '../../src/nexus/beam';
-import { bracketCatalogue, bracketIntent, bracketMaterial, bracketOnPost } from '../../src/nexus/bracket';
-import { flatGround } from '../../src/nexus/field';
-import { restIntent, restStudy } from '../../src/nexus/study';
-import { jointStudy, studyBolts, type JointCase } from '../../src/nexus/study-joint';
-import { stale } from '../../src/nexus/why';
+import { Language } from '../../src/nexus/substrate/abduce';
+import { admitBy, beamOnTwoSupports, couplingQuantities, lumberCatalogue, materialLeaves } from '../../src/nexus/substrate/beam';
+import { bracketCatalogue, bracketIntent, bracketMaterial, bracketOnPost } from '../../src/nexus/substrate/bracket';
+import { flatGround } from '../../src/nexus/substrate/field';
+import { restIntent, restStudy } from '../../src/nexus/substrate/study';
+import { jointStudy, studyBolts, type JointCase } from '../../src/nexus/substrate/study-joint';
+import { stale } from '../../src/nexus/substrate/why';
 
 const restCases = [{ patch: 0.1, across: 0.1 }, { patch: 0.1, across: 0.2 }, { patch: 0.1, across: 0.3 }, { patch: 0.1, across: 0.4 }, { patch: 0.1, across: 0.6 }, { patch: 0.1, across: 0.15 }, { patch: 0.1, across: 0.12 }, { patch: 0.3, across: 0.0255 }];
 const heavy = { patch: 0.1, across: 0.5 };

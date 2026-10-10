@@ -1,12 +1,12 @@
-// Sizes far from ours (src/nexus/sizing.ts) and what the laws say of what is asked before anything is made
-// (src/nexus/bounds.ts): each dimensionless group read at the size asked, on its side of the threshold where the
+// Sizes far from ours (src/nexus/substrate/sizing.ts) and what the laws say of what is asked before anything is made
+// (src/nexus/substrate/bounds.ts): each dimensionless group read at the size asked, on its side of the threshold where the
 // physics changes, and each bound worked out from the figures the ask gives, with its estimates said.
 
 import { describe, expect, it } from 'vitest';
-import { namedSize, sizeAt } from '../../src/nexus/sizing';
-import { bounds } from '../../src/nexus/bounds';
-import { conceive } from '../../src/nexus/conceive';
-import { transfer } from '../../src/nexus/orbits';
+import { namedSize, sizeAt } from '../../src/nexus/substrate/sizing';
+import { bounds } from '../../src/nexus/substrate/bounds';
+import { conceive } from '../../src/nexus/ask/conceive';
+import { transfer } from '../../src/nexus/substrate/orbits';
 
 const group = (L: number, key: string, o = {}) => sizeAt(L, o).groups.find((g) => g.key === key)!;
 

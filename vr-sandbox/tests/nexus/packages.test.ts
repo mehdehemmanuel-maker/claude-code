@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { component } from '../../src/nexus/components';
-import { massOf } from '../../src/nexus/mass';
-import { bandsOf, BAND, chipCode, chipSolids, pkgMass, pkgOf, pkgSolids, solidsMass, solidVolume } from '../../src/nexus/packages';
-import type { Part } from '../../src/nexus/kits';
+import { component } from '../../src/nexus/parts/components';
+import { massOf } from '../../src/nexus/parts/mass';
+import { bandsOf, BAND, chipCode, chipSolids, pkgMass, pkgOf, pkgSolids, solidsMass, solidVolume } from '../../src/nexus/boards/packages';
+import type { Part } from '../../src/nexus/parts/kits';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 

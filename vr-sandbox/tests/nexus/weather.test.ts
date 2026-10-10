@@ -3,8 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { guessStep, triggerOf } from '../../src/nexus/flows';
-import { DRONE_WIND, STEAM_EXPANSION, compass, fetchForecast, findPlaces, forMaking, forecastFacts, forecastUrl, placeName, readForecast, readPlaces, sky, weatherLine, type Forecast } from '../../src/nexus/weather';
+import { guessStep, triggerOf } from '../../src/nexus/substrate/flows';
+import { DRONE_WIND, STEAM_EXPANSION, compass, fetchForecast, findPlaces, forMaking, forecastFacts, forecastUrl, placeName, readForecast, readPlaces, sky, weatherLine, type Forecast } from '../../src/nexus/world/weather';
 
 const kept = JSON.parse(readFileSync(new URL('./data/open-meteo-lagos.json', import.meta.url), 'utf8')) as { forecast: unknown; places: unknown };
 const lagos = readForecast(kept.forecast, { name: 'Lagos', country: 'Nigeria' }) as Forecast;

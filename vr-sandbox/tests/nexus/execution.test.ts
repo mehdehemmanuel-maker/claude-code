@@ -2,8 +2,8 @@
 // its own dependencies, and every question about a node answered from its records and edges.
 
 import { describe, expect, it } from 'vitest';
-import { car, printer } from '../../src/nexus/asked';
-import { generate } from '../../src/nexus/manifold';
+import { car, printer } from '../../src/nexus/ask/asked';
+import { generate } from '../../src/nexus/substrate/manifold';
 import { embodyAny } from '../../src/nexus/embody/any';
 import { executionOf, explain, retryOf } from '../../src/nexus/embody/execution';
 

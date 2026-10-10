@@ -6,7 +6,7 @@
 // alone can make 2⁴⁶ (about 70 trillion) different sets of chromosomes before crossing over adds more.
 
 import { CHROMOSOMES } from './cells';
-import type { BodyParams } from '../anatomy';
+import type { BodyParams } from '../world/anatomy';
 
 /** A seeded random stream (mulberry32): the same seed, the same genome. */
 export function rng(seed: number): () => number { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }

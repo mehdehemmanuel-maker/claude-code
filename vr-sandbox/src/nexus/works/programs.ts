@@ -6,9 +6,9 @@
 //
 // Owner of: which program an operation is given. Nothing else here decides what a machine is sent.
 
-import type { Profile } from '../fab';
-import { CUTTING, gcodeFor, kilnProgram, linkFor, printStart, type Lang, type Transport } from '../link';
-import { CLAYS, FILAMENTS, fire, KILNS } from '../processor';
+import type { Profile } from '../parts/fab';
+import { CUTTING, gcodeFor, kilnProgram, linkFor, printStart, type Lang, type Transport } from '../machines/link';
+import { CLAYS, FILAMENTS, fire, KILNS } from '../machines/processor';
 import { processById } from './families';
 import { stationById } from './stations';
 import { classOf, type PartLine } from './lines';

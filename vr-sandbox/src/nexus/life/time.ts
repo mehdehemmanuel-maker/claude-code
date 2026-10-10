@@ -4,7 +4,7 @@
 // where it says so; power is each tissue's rate at rest (Elia 1992: liver 200, brain 240, heart and kidneys 440,
 // skeletal muscle 13, fat 4.5, everything else 12 kcal a kilogram a day) times its mass.
 
-import { INVENTORY, countIn, gramsOfItem } from '../inventory';
+import { INVENTORY, countIn, gramsOfItem } from '../parts/inventory';
 
 /** How long one lives, days (Infinity: kept all life), and where that is from. */
 export const LIFESPAN: Record<string, { days: number; says: string }> = {

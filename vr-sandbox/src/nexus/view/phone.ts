@@ -7,9 +7,9 @@
 // Point at it with your right hand and pull the trigger, as at everything else. On a screen it is the 📱 Phone button.
 
 import * as THREE from 'three';
-import { EDITS0, noteFor, STAGES, type PipeEdits, type PipeRun, type StageId } from '../pipe';
-import { bestOf, variants } from '../practice';
-import { TEST_ASKS } from '../test-asks';
+import { EDITS0, noteFor, STAGES, type PipeEdits, type PipeRun, type StageId } from '../substrate/pipe';
+import { bestOf, variants } from '../teach/practice';
+import { TEST_ASKS } from '../ask/test-asks';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
 const PW = 0.074, PH = 0.152, SW = 0.068, SH = 0.144;

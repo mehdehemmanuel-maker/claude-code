@@ -5,10 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { BOOK, lawById } from '../../src/nexus/book';
-import { carrierById, coupling, family, matter, roleOf, UNIVERSAL, type Carrier } from '../../src/nexus/carrier';
-import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
-import { apply, type Law } from '../../src/nexus/law';
-import { leaf } from '../../src/nexus/term';
+import { carrierById, coupling, family, matter, roleOf, UNIVERSAL, type Carrier } from '../../src/nexus/substrate/carrier';
+import { ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
+import { apply, type Law } from '../../src/nexus/substrate/law';
+import { leaf } from '../../src/nexus/substrate/term';
 
 const rec = (name: string, v: number, unit: string): Derivation => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'the test' }));
 const gen = (c: Carrier, what: string): Law => family(c).find((l) => l.id === `${c.id}.${what}`)!;

@@ -1,9 +1,9 @@
-// Generation (src/nexus/generate.ts): what a pipeline makes, worked out offline from laws and the kept data. Each
+// Generation (src/nexus/ask/generate.ts): what a pipeline makes, worked out offline from laws and the kept data. Each
 // number here is checked against its law worked by hand: a plate's thickness from its bending stress, a shaft's
 // diameter from its torque, energies from m g h, m c ΔT and ½ I ω², a union's volume counting where walls meet once.
 
 import { describe, expect, it } from 'vitest';
-import { Workshop, calc, matterOf, scopeOf, type PartRef } from '../../src/nexus/generate';
+import { Workshop, calc, matterOf, scopeOf, type PartRef } from '../../src/nexus/ask/generate';
 import { thermalOf } from '../../src/engineering/thermal';
 
 const bearing: PartRef = { name: 'front bearing 6204 (20×47×14 mm)', at: [0, 0.3, 0], w: 0.047, h: 0.047, d: 0.014, mass: 0.11, r: 0.0235, bore: 0.02, axis: 'z' };

@@ -1,11 +1,11 @@
-// An ask in plain words (src/nexus/words.ts): what the person says is kept as given, what they leave out is an
+// An ask in plain words (src/nexus/ask/words.ts): what the person says is kept as given, what they leave out is an
 // estimate on stated grounds, and the ask built from it is one the generator and the embodiment make hardware of.
 
 import { describe, expect, it } from 'vitest';
-import { generate } from '../../src/nexus/manifold';
+import { generate } from '../../src/nexus/substrate/manifold';
 import { embodyAny } from '../../src/nexus/embody/any';
-import { readAsk, type AskReading, foldDemand } from '../../src/nexus/words';
-import { intentFromSpec } from '../../src/nexus/spec';
+import { readAsk, type AskReading, foldDemand } from '../../src/nexus/ask/words';
+import { intentFromSpec } from '../../src/nexus/ask/spec';
 
 const read = (s: string) => { const r = readAsk(s); if ('problems' in r) throw new Error(r.problems.join('; ')); return r as AskReading; };
 const q = (r: AskReading, region: string, sym: string) => r.intent.regions.find((x) => x.id === region)!.quantities[sym]!;

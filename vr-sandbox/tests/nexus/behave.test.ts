@@ -1,9 +1,9 @@
 // What parts do, by their laws, against the standards' and textbooks' own numbers.
 
 import { describe, expect, it } from 'vitest';
-import { behave, e12Up, given, type Behaviour } from '../../src/nexus/behave';
-import { resolve } from '../../src/nexus/inventory';
-import { FAMILIES, callFamily } from '../../src/nexus/families';
+import { behave, e12Up, given, type Behaviour } from '../../src/nexus/world/behave';
+import { resolve } from '../../src/nexus/parts/inventory';
+import { FAMILIES, callFamily } from '../../src/nexus/parts/families';
 
 const b = (w: string, at = ''): Behaviour => { const i = resolve(w); if (!i || typeof i === 'string') throw new Error(String(i)); const r = behave(i, at, FAMILIES, callFamily); if (typeof r === 'string') throw new Error(r); return r; };
 describe('what a part does', () => {

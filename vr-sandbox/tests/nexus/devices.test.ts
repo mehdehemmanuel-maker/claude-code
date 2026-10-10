@@ -2,10 +2,10 @@
 // another in the workshop; a device set down runs its program, a pipeline of IF → THEN rules, through its own parts.
 
 import { describe, expect, it } from 'vitest';
-import { Cell, RECIPES, buildBoard, programBoard, type Recipe } from '../../src/nexus/cell';
-import { Devices, ROVER } from '../../src/nexus/devices';
-import { evaluate, triggerOf, triggersOf } from '../../src/nexus/flows';
-import { nodesOf } from '../../src/nexus/boards';
+import { Cell, RECIPES, buildBoard, programBoard, type Recipe } from '../../src/nexus/machines/cell';
+import { Devices, ROVER } from '../../src/nexus/machines/devices';
+import { evaluate, triggerOf, triggersOf } from '../../src/nexus/substrate/flows';
+import { nodesOf } from '../../src/nexus/substrate/boards';
 
 const rover = RECIPES.find((r) => r.id === 'rover')!;
 /** Run the cell until a promise settles: its result, or its error. */

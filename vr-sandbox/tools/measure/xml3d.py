@@ -10,7 +10,7 @@ where its parts are; the library draws them from their standards and is placed b
                                          the middle of its surface (area-weighted, its own frame: which end is heavier)
   count  model.3DXML                     how many of each part by name (the model's bill of materials)
   ts     model.3DXML --id ID --name NAME --src SRC [--out file.ts]
-                                         the parts as a TypeScript data file for src/nexus/makermodel.ts: each part's
+                                         the parts as a TypeScript data file for src/nexus/machines/makermodel.ts: each part's
                                          name, place (its matrix, mm) and box, its surface's middle, how much of each
                                          box face its surface covers; numbers measured from the model, none of its
                                          surface copied

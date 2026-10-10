@@ -3,13 +3,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { BOOK, CANTILEVER_TIP_SAG, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, SLICE, UNIVERSAL as UNIVERSAL_LAWS, WEIGHT, lawById } from '../../src/nexus/book';
-import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
-import { apply, invert, law } from '../../src/nexus/law';
+import { ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
+import { apply, invert, law } from '../../src/nexus/substrate/law';
 import { LAWS } from '../../src/ganglia/laws';
 import { parseUnit } from '../../src/ganglia/units';
-import { leaf, mul, variable } from '../../src/nexus/term';
-import { leavesUnder } from '../../src/nexus/why';
-import { carrierById, coupling, family } from '../../src/nexus/carrier';
+import { leaf, mul, variable } from '../../src/nexus/substrate/term';
+import { leavesUnder } from '../../src/nexus/substrate/why';
+import { carrierById, coupling, family } from '../../src/nexus/substrate/carrier';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 const env = (l: { inputs: readonly { sym: string; unit: string; name: string }[] }, values: Record<string, number>): Record<string, Derivation> =>

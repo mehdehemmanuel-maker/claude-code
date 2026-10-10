@@ -1,13 +1,13 @@
-// Table tennis drawn (src/nexus/pingpong.ts is it as numbers), in the game's own frame: x along the table (your end −x,
+// Table tennis drawn (src/nexus/world/pingpong.ts is it as numbers), in the game's own frame: x along the table (your end −x,
 // the robot's +x), y up, z across. The table as the Laws have it, 2.74 by 1.525 m with its top 76 cm up, dark blue with a
 // white line 2 cm wide round it and a 3 mm one down its middle; the net 15.25 cm high on its posts; the ball 40 mm across;
 // your bat (a blade about 150 mm across, red rubber on one face and black on the other); the robot, an arm on a column at
-// the far end with its own bat; and the score. Edges as things are made (src/nexus/finish.ts).
+// the far end with its own bat; and the score. Edges as things are made (src/nexus/parts/finish.ts).
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { edgeRadius } from '../finish';
-import { TT, type Rally, type V3 } from '../pingpong';
+import { edgeRadius } from '../parts/finish';
+import { TT, type Rally, type V3 } from '../world/pingpong';
 import { filletCyl } from './kit3d';
 
 const std = (c: number, rough = 0.6, metal = 0, more: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal, ...more });

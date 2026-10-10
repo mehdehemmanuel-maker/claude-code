@@ -1,9 +1,9 @@
 // How a law of the book is written: ports, a term over them, the domain predicates, the source and the kept worked
 // example. The variables are made from the ports, so a term can only mention inputs.
 
-import type { DomainCheck } from '../evaluate';
-import { law, type Law, type Source } from '../law';
-import { variable, type Term, type Var } from '../term';
+import type { DomainCheck } from '../substrate/evaluate';
+import { law, type Law, type Source } from '../substrate/law';
+import { variable, type Term, type Var } from '../substrate/term';
 
 export type Port = [sym: string, unit: string, name: string];
 

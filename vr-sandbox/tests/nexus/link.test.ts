@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   BLE_CHUNK, CUTTING, LINKS, NUS, Streamer, checksum, chunksOf, gcodeFor, kilnProgram, linesOf, linkFor, numbered,
   printStart,
-} from '../../src/nexus/link';
+} from '../../src/nexus/machines/link';
 import { STATIONS } from '../../src/nexus/works';
-import { plateFor } from '../../src/nexus/fab';
+import { plateFor } from '../../src/nexus/parts/fab';
 
 describe('the Nordic UART service', () => {
   it('is the standard one, and the three UUIDs differ only in their second group', () => {

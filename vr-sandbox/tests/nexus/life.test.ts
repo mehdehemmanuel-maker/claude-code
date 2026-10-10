@@ -4,7 +4,7 @@
 // numbers their sources give.
 
 import { describe, expect, it } from 'vitest';
-import { INVENTORY, atomsOf, countIn, fundamentals, massMakeup, resolve, routeOf, treeLines } from '../../src/nexus/inventory';
+import { INVENTORY, atomsOf, countIn, fundamentals, massMakeup, resolve, routeOf, treeLines } from '../../src/nexus/parts/inventory';
 import { AMU, LIFE, LIFE_FAULTS, MOLECULES, daltonsOf } from '../../src/nexus/life';
 import { BONES } from '../../src/nexus/life/human';
 

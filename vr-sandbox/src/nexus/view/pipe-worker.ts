@@ -1,8 +1,8 @@
 // The pipeline, run off the page's own thread: a roof of hundreds of parts takes minutes to grow and make, and the room
 // in the headset must not stop while it does. The physics is loaded here once, the first time a run asks for it.
 
-import { runPipeline, type PipeEdits, type PipeWhere } from '../pipe';
-import type { Jolt } from '../realize';
+import { runPipeline, type PipeEdits, type PipeWhere } from '../substrate/pipe';
+import type { Jolt } from '../substrate/realize';
 
 let J: Promise<Jolt> | null = null;
 self.onmessage = async (e: MessageEvent<{ id: number; ask: string; edits: PipeEdits; where?: PipeWhere }>) => {

@@ -822,7 +822,7 @@ Those are said as not kept, and their laws are weighed. The fixes below are to w
 
 ## Phase 4a: folding the whole of it
 
-"Folding" was the most-asked thing not kept: five of wave 4's twenty asks want it. Directive C asks for it too ("collapsing and unfolding structures"). It is now kept, planned on whatever is made, with no template per kind of thing. The planner is `src/nexus/fold.ts`, by geometry alone. The generator (`src/nexus/conceive.ts`) makes it, tests it and judges it.
+"Folding" was the most-asked thing not kept: five of wave 4's twenty asks want it. Directive C asks for it too ("collapsing and unfolding structures"). It is now kept, planned on whatever is made, with no template per kind of thing. The planner is `src/nexus/fold.ts`, by geometry alone. The generator (`src/nexus/ask/conceive.ts`) makes it, tests it and judges it.
 
 ### How it folds
 
@@ -901,7 +901,7 @@ Phase 4a folded the parts held to one flat base, a quarter turn each. That left 
 - folding onto an upright base (a bookshelf's side);
 - folding against the wall a thing hangs on.
 
-The planner is now `src/nexus/foldtree.ts`; `src/nexus/fold.ts` is gone. It is still geometry alone, with no template per kind of thing.
+The planner is now `src/nexus/substrate/foldtree.ts`; `src/nexus/fold.ts` is gone. It is still geometry alone, with no template per kind of thing.
 
 ### How it folds
 
@@ -942,7 +942,7 @@ A 9 mm kennel floor joined to its two 9 mm hinge blocks sank 9 mm into the floor
 - Jolt merges the contacts of every sub-shape of a body that face the same way into one set of four.
 - The block on top of the plate is 9 mm up, within the 10 mm ahead that a contact is looked for, so its points replaced the plate's own corner contacts on that side.
 
-The same compound made in raw Jolt does it too; a 20 mm plate or a centred block does not. A body of joined parts in `src/nexus/sim.ts` now keeps each part's contacts its own (`mUseManifoldReduction = false`). The kennel now settles 12 µm.
+The same compound made in raw Jolt does it too; a 20 mm plate or a centred block does not. A body of joined parts in `src/nexus/substrate/sim.ts` now keeps each part's contacts its own (`mUseManifoldReduction = false`). The kennel now settles 12 µm.
 
 The VR world (`src/physics/world.ts`) builds compounds the same way, but its conformance suite failed with the same change (a thin bonded angle no longer came to rest). So it is left as it was, and is open.
 

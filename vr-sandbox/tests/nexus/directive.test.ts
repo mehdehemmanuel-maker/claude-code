@@ -4,7 +4,7 @@
 // Claude's answer is checked before it is acted on.
 
 import { describe, expect, it } from 'vitest';
-import { checkDirective, directivePrompt, readPlain } from '../../src/nexus/directive';
+import { checkDirective, directivePrompt, readPlain } from '../../src/nexus/substrate/directive';
 
 const act = (t: string) => readPlain(t).directive;
 

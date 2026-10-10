@@ -1,13 +1,13 @@
-// The intent pipeline (src/nexus/conceive.ts, src/nexus/parse.ts): what an ask names is the thing named last before
+// The intent pipeline (src/nexus/ask/conceive.ts, src/nexus/ask/parse.ts): what an ask names is the thing named last before
 // what it does, not a word that only qualifies it; each number is read by the words beside it, or said to be unused;
 // what is not something kept is said, with what it would need, and nothing is made in its place; what is made is
 // checked under the laws, against the limits said, and with real physics where it moves.
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
-import type { Jolt } from '../../src/nexus/realize';
-import { answersFrom, conceive, designs, len } from '../../src/nexus/conceive';
-import { parseAsk } from '../../src/nexus/parse';
+import type { Jolt } from '../../src/nexus/substrate/realize';
+import { answersFrom, conceive, designs, len } from '../../src/nexus/ask/conceive';
+import { parseAsk } from '../../src/nexus/ask/parse';
 import { findQuantities } from '../../src/ganglia/units';
 
 let J: Jolt;

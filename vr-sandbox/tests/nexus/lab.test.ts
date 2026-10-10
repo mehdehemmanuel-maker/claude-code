@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BSC_A2, C5425, C5425_RADIUS, MINISUB, POWERPAC, RESEARCH_PLUS, SAFE_IMAGER, T100, cabinetAir, cycleTime, gelRun, meltingPoint, pipetteError, rcf, rpmFor, spin, type CycleProgram } from '../../src/nexus/lab';
-import { componentOf } from '../../src/nexus/components';
-import { resolve } from '../../src/nexus/inventory';
-import { massOf } from '../../src/nexus/mass';
+import { BSC_A2, C5425, C5425_RADIUS, MINISUB, POWERPAC, RESEARCH_PLUS, SAFE_IMAGER, T100, cabinetAir, cycleTime, gelRun, meltingPoint, pipetteError, rcf, rpmFor, spin, type CycleProgram } from '../../src/nexus/machines/lab';
+import { componentOf } from '../../src/nexus/parts/components';
+import { resolve } from '../../src/nexus/parts/inventory';
+import { massOf } from '../../src/nexus/parts/mass';
 
 describe('the bench instruments by their makers\' figures', () => {
   it('times a cycling program by the cycler\'s own ramp rate, and refuses a step it cannot reach', () => {

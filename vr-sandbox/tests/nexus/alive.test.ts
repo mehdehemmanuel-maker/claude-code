@@ -2,13 +2,13 @@
 // machine moves and practises; and nodes that may be duplicated.
 
 import { describe, expect, it } from 'vitest';
-import { due, newRule, ROBOT_RULES, ruleSays, COOLDOWN, DEEPEST, type Rule } from '../../src/nexus/rules';
-import { feel, feeling, newMind, pass, expression, thought } from '../../src/nexus/emotions';
-import { Servo, QServo, wheelSpeeds, pitchOf } from '../../src/nexus/motion';
-import { bestOf, learn, lessons, newPractice, nextTry, trialOf, variants } from '../../src/nexus/practice';
-import { EDITS0, type PipeRun } from '../../src/nexus/pipe';
-import { compass, readWeather, sayWeather, skyOf, weatherFacts, fetchWeather, findPlace } from '../../src/nexus/weather';
-import { duplicateNode, freeName, edgesOf, nodesOf, type Board } from '../../src/nexus/boards';
+import { due, newRule, ROBOT_RULES, ruleSays, COOLDOWN, DEEPEST, type Rule } from '../../src/nexus/ask/rules';
+import { feel, feeling, newMind, pass, expression, thought } from '../../src/nexus/world/emotions';
+import { Servo, QServo, wheelSpeeds, pitchOf } from '../../src/nexus/substrate/motion';
+import { bestOf, learn, lessons, newPractice, nextTry, trialOf, variants } from '../../src/nexus/teach/practice';
+import { EDITS0, type PipeRun } from '../../src/nexus/substrate/pipe';
+import { compass, readWeather, sayWeather, skyOf, weatherFacts, fetchWeather, findPlace } from '../../src/nexus/world/weather';
+import { duplicateNode, freeName, edgesOf, nodesOf, type Board } from '../../src/nexus/substrate/boards';
 
 describe('if this, then that', () => {
   it('a rule starts on its event, at most once a minute, and no deeper than three rules set off by rules', () => {

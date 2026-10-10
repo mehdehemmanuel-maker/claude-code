@@ -1,9 +1,9 @@
-// Bodies held up by electrons that cannot share a state (src/nexus/compact.ts): hydrostatic balance with Chandrasekhar's
+// Bodies held up by electrons that cannot share a state (src/nexus/substrate/compact.ts): hydrostatic balance with Chandrasekhar's
 // pressure of filling. What these tests hold is what the integration must reproduce, every check cited.
 
 import { describe, expect, it } from 'vitest';
-import { bodyAt, branch, chandrasekharMass, coldBody, laneEmden } from '../../src/nexus/compact';
-import { levelsAt } from '../../src/nexus/depth';
+import { bodyAt, branch, chandrasekharMass, coldBody, laneEmden } from '../../src/nexus/substrate/compact';
+import { levelsAt } from '../../src/nexus/substrate/depth';
 
 const Msun = 1.98847e30, Rsun = 6.957e8; // IAU 2015 nominal solar values
 

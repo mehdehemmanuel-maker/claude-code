@@ -6,9 +6,9 @@
 // lawfully, its motion propelled lawfully, its power somewhere, nothing impossible generated), and never names a
 // class: classes, if they emerge, are regions of the space.
 
-import type { Intent } from '../../src/nexus/want';
-import type { Element, Structure } from '../../src/nexus/manifold';
-import { base, GRAVITIES, MEDIA, SOURCES, vehicle, type Gravity, type Medium, type Source, type VehiclePoint } from '../../src/nexus/vehicle';
+import type { Intent } from '../../src/nexus/ask/want';
+import type { Element, Structure } from '../../src/nexus/substrate/manifold';
+import { base, GRAVITIES, MEDIA, SOURCES, vehicle, type Gravity, type Medium, type Source, type VehiclePoint } from '../../src/nexus/machines/vehicle';
 
 export { base, GRAVITIES, MEDIA, SOURCES, vehicle, type Gravity, type Medium, type Source, type VehiclePoint };
 

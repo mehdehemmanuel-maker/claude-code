@@ -1,15 +1,15 @@
-// The go-kart track and its karts drawn (src/nexus/karting.ts is them as numbers): the asphalt along the track's centre
+// The go-kart track and its karts drawn (src/nexus/world/karting.ts is them as numbers): the asphalt along the track's centre
 // line at its width, red and white kerbs on its corners, white lines at its edges, the start line chequered, grid boxes,
 // stacked tyre walls round it, a timing board. A kart at its real size: a rental kart about 1.85 by 1.35 m, its front
 // tyres 10 × 4.50-5 and its rear 11 × 7.10-5 (inches: 254 and 279 mm across, typical), its seat, wheel, bodywork moulded
-// round (rotomoulded polyethylene: its edges as round as a styled panel, src/nexus/finish.ts), the engine box on the
+// round (rotomoulded polyethylene: its edges as round as a styled panel, src/nexus/parts/finish.ts), the engine box on the
 // right behind the seat at the GX270's own size (381 × 428 × 422 mm, Honda).
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { edgeRadius } from '../finish';
+import { edgeRadius } from '../parts/finish';
 import { filletCyl } from './kit3d';
-import type { Track } from '../karting';
+import type { Track } from '../world/karting';
 
 const std = (c: number, rough = 0.7, metal = 0, more: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal, ...more });
 const rbox = (w: number, h: number, d: number, mat: string, make?: 'pressed') => { const f = edgeRadius(mat, Math.min(w, h, d), make); return f > 1e-4 ? new RoundedBoxGeometry(w, h, d, 2, f) : new THREE.BoxGeometry(w, h, d); };

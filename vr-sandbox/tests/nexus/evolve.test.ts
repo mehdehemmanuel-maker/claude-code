@@ -1,14 +1,14 @@
-// The evolver (src/nexus/evolve.ts): the state's places realized in the rigid-body kernel, stepped until still, and
+// The evolver (src/nexus/substrate/evolve.ts): the state's places realized in the rigid-body kernel, stepped until still, and
 // where each came to rest returned as a measured place. Statics says what cannot stay; the kernel says where it goes.
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { contactAt } from '../../src/nexus/contact';
-import { evolve, evolverContract, notAtRest } from '../../src/nexus/evolve';
-import { MemorySink } from '../../src/nexus/journal';
-import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/place';
-import { Runtime } from '../../src/nexus/runtime';
-import { leaf, type Leaf } from '../../src/nexus/term';
+import { contactAt } from '../../src/nexus/substrate/contact';
+import { evolve, evolverContract, notAtRest } from '../../src/nexus/substrate/evolve';
+import { MemorySink } from '../../src/nexus/substrate/journal';
+import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/substrate/place';
+import { Runtime } from '../../src/nexus/substrate/runtime';
+import { leaf, type Leaf } from '../../src/nexus/substrate/term';
 
 const person = 'the person';
 const given = (name: string, v: number, unit: string): Leaf => leaf(name, v, unit, { class: 'given', by: person, grounds: 'placed' });

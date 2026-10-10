@@ -1,14 +1,14 @@
 // Machines by their makers' figures: 3D printers from their makers' own assemblies, EOS's M 290 metal printer and Skutt's
 // KM-1027 kiln from their data sheets and listings; robot arms: the Meca500 (Mecademic), its R3 and R4 revisions, from
-// its user manual (src/nexus/meca.ts holds its figures, its kinematics and its controller), the UR5e by Universal
-// Robots' figures (src/nexus/dharm.ts) and the Franka Research 3 by Franka's own description and data sheet
-// (src/nexus/franka.ts).
+// its user manual (src/nexus/machines/meca.ts holds its figures, its kinematics and its controller), the UR5e by Universal
+// Robots' figures (src/nexus/machines/dharm.ts) and the Franka Research 3 by Franka's own description and data sheet
+// (src/nexus/machines/franka.ts).
 
 import { bare, type KindDef, type P } from './core';
-import { MECA500 } from '../meca';
-import { UR5E } from '../dharm';
-import { FR3, FRANKA_HAND } from '../franka';
-import { billOf } from '../makermodel';
+import { MECA500 } from '../machines/meca';
+import { UR5E } from '../machines/dharm';
+import { FR3, FRANKA_HAND } from '../machines/franka';
+import { billOf } from '../machines/makermodel';
 import { ENDER3 } from '../models/ender3';
 import { VORON24 } from '../models/voron24';
 
@@ -103,10 +103,10 @@ export const ROBOT_KINDS: KindDef[] = [
     box: () => [3, 0.93, 3], g: () => 0.02,
   },
   {
-    id: 'robot', look: 'box', name: 'robot', path: 'Mechanical/Robots/Robots', says: 'a robot designed for its tasks from real parts (src/nexus/robot.ts): its arms, hands and changers, its senses, on its table', std: 'its parts\' makers\' figures',
+    id: 'robot', look: 'box', name: 'robot', path: 'Mechanical/Robots/Robots', says: 'a robot designed for its tasks from real parts (src/nexus/machines/robot.ts): its arms, hands and changers, its senses, on its table', std: 'its parts\' makers\' figures',
     axes: [bare('build', 'build', ['jarvis'])], title: () => 'the robot that welds, solders and types (two UR5e arms with RH56DFX hands)', of: () => 'robot-table {robotarm UR5e}*2 {screw M8x20}*8 {toolchanger QC-11}*2 {ftsensor Nano17}*2 {robothand RH56DFX}*2 camera-module camera-bracket sensor-mast {depthcamera D435} {microphone mems} {gassensor BME688}', make: 'assemble',
     how: 'its two arms bolted to its table 500 mm apart, a force sensor, a changer and a hand on each wrist, its cameras, microphone and gas sensor on a mast between them',
-    spec: () => 'welds (a 1.2 kg MIG torch through its changers), solders (its iron in a pen grip, the wire in the other hand), types (45 cN keys), sees, hears, smells, feels its grip and changes it (src/nexus/robot.ts says each, with its figures)',
+    spec: () => 'welds (a 1.2 kg MIG torch through its changers), solders (its iron in a pen grip, the wire in the other hand), types (45 cN keys), sees, hears, smells, feels its grip and changes it (src/nexus/machines/robot.ts says each, with its figures)',
     // (its table about 94 kg: a 900 × 800 × 12 mm steel top, 68 kg, on about 9 m of 50 mm square tube; its mast 1.5 kg: estimates)
     box: () => [1100, 1470, 860], g: () => 2 * (UR5E.mass * 1000 + 245 + 9 + 540) + 94000 + 1500,
   },

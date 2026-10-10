@@ -4,8 +4,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { ENVS, LASTING, arrhenius, fatigueCycles, lifetimeLines, lifetimeOf, woodMoisture, yearsSays } from '../../src/nexus/life/decay';
-import { lawsUnder, valueIn } from '../../src/nexus/lawgraph';
-import { INVENTORY } from '../../src/nexus/inventory';
+import { lawsUnder, valueIn } from '../../src/nexus/substrate/lawgraph';
+import { INVENTORY } from '../../src/nexus/parts/inventory';
 
 const yrs = (id: string, env: string) => lifetimeOf(id, env)!.years;
 describe('lifetime, from where a thing is', () => {

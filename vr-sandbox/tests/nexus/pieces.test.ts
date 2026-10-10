@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { INVENTORY, resolve } from '../../src/nexus/inventory';
+import { INVENTORY, resolve } from '../../src/nexus/parts/inventory';
 import { KINDS } from '../../src/nexus/kinds';
 import { linesOf } from '../../src/nexus/kinds/core';
-import { lookOf, planOf, sized, wayDown, finishOf, SHAPES, MOST, MATTER_TO_INVENTORY } from '../../src/nexus/pieces';
+import { lookOf, planOf, sized, wayDown, finishOf, SHAPES, MOST, MATTER_TO_INVENTORY } from '../../src/nexus/parts/pieces';
 import { MATERIALS as MATTERS } from '../../src/data/materials';
-import { LOOKS, lookRow } from '../../src/nexus/looks';
-import type { Item } from '../../src/nexus/inventory';
+import { LOOKS, lookRow } from '../../src/nexus/parts/looks';
+import type { Item } from '../../src/nexus/parts/inventory';
 
 const get = (w: string) => { const r = resolve(w); if (!r || typeof r === 'string') throw new Error(`${w}: ${r}`); return r as Item; };
 

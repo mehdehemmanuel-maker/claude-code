@@ -2,8 +2,8 @@
 // composition; and every part's tree, followed down, ending in the same elements.
 
 import { describe, expect, it } from 'vitest';
-import { ELEMENTS, MATERIALS, elementsOf, formula, makeup } from '../../src/nexus/elements';
-import { INVENTORY, boardOfTree, fundamentals, treeLines } from '../../src/nexus/inventory';
+import { ELEMENTS, MATERIALS, elementsOf, formula, makeup } from '../../src/nexus/parts/elements';
+import { INVENTORY, boardOfTree, fundamentals, treeLines } from '../../src/nexus/parts/inventory';
 
 describe('the elements, and what is made of them', () => {
   it('a formula by mass, from the standard atomic weights: PLA, alumina, PTFE', () => {

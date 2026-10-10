@@ -1,4 +1,4 @@
-// The runtime (src/nexus/runtime.ts, src/nexus/journal.ts): the state as a fold over one append-only journal, the
+// The runtime (src/nexus/substrate/runtime.ts, src/nexus/substrate/journal.ts): the state as a fold over one append-only journal, the
 // constraint store, and the loop that evaluates again only what reads what changed. Laws are the kept ones; the leaves
 // are given or measured with their origins; nothing here is an object, a kind or an intent.
 
@@ -8,11 +8,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { lawById } from '../../src/nexus/book';
 import { LINE_WEIGHT, RECT_AREA, RECT_I, RECT_MODULUS } from '../../src/nexus/book/slice';
-import { address, MemorySink } from '../../src/nexus/journal';
-import { bound, instance, Runtime } from '../../src/nexus/runtime';
-import { FileSink } from '../../src/nexus/sink-file';
-import { leaf } from '../../src/nexus/term';
-import { explain } from '../../src/nexus/why';
+import { address, MemorySink } from '../../src/nexus/substrate/journal';
+import { bound, instance, Runtime } from '../../src/nexus/substrate/runtime';
+import { FileSink } from '../../src/nexus/substrate/sink-file';
+import { leaf } from '../../src/nexus/substrate/term';
+import { explain } from '../../src/nexus/substrate/why';
 
 const person = 'the person';
 const given = (at: string, name: string, v: number, unit: string) => ({ kind: 'leaf' as const, at, leaf: leaf(name, v, unit, { class: 'given', by: person, grounds: 'what the person said' }) });

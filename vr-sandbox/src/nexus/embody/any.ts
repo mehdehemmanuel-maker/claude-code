@@ -28,8 +28,8 @@
 
 import { MATERIALS } from '../../data/materials';
 import { toSI } from '../../ganglia/units';
-import type { Structure } from '../manifold';
-import type { Intent } from '../want';
+import type { Structure } from '../substrate/manifold';
+import type { Intent } from '../ask/want';
 import { embody, type Choices, type DriveMap, type Gate, type Machine, type Plant, type Read, type Round, type Step } from './embody';
 import { conductorTemperature } from './electrical';
 import { motorFor, type Motor } from './motor';

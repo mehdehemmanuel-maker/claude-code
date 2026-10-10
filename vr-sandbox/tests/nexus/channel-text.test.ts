@@ -1,11 +1,11 @@
-// The text channel (src/nexus/channel-text.ts): lines in, the state's changes and gaps out. What it shows is read
+// The text channel (src/nexus/substrate/channel-text.ts): lines in, the state's changes and gaps out. What it shows is read
 // from the state, never written for a case: what a gap bears on, what nothing in the state holds or derives, and
 // WHY as the graph a derivation is, each shared part once.
 
 import { describe, expect, it } from 'vitest';
-import { answer, project, read } from '../../src/nexus/channel-text';
-import { MemorySink } from '../../src/nexus/journal';
-import { Runtime } from '../../src/nexus/runtime';
+import { answer, project, read } from '../../src/nexus/substrate/channel-text';
+import { MemorySink } from '../../src/nexus/substrate/journal';
+import { Runtime } from '../../src/nexus/substrate/runtime';
 
 const lines = [
   '{"gravity": {"value": 9.80665, "direction": [0, -1, 0], "by": "the headset\'s floor estimate"}}',

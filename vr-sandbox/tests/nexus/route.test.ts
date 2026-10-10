@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { routeMake } from '../../src/nexus/route';
+import { routeMake } from '../../src/nexus/ask/route';
 
 describe('where an ask to make something goes', () => {
   it('finds a kit by the thing it is, never by a word in what it does', () => {

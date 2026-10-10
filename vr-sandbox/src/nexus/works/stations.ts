@@ -11,7 +11,7 @@
 // Owner of: the stations, their prices, how a station is come by, the illustrative works sizes (`TIERS`), and what
 // a set of stations covers. Choosing a set to fit a budget is `budget.ts`.
 
-import { cheapest } from '../prices';
+import { cheapest } from '../parts/prices';
 import { FAMILIES, processById, type Family, type MatClass, type Need, type Process } from './families';
 
 export interface Station {

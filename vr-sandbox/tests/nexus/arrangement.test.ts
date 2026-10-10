@@ -1,4 +1,4 @@
-// How an arrangement carries a load (src/nexus/network.ts, src/nexus/frame.ts). Whether bars carry a load by stretching
+// How an arrangement carries a load (src/nexus/substrate/network.ts, src/nexus/substrate/frame.ts). Whether bars carry a load by stretching
 // is counted by linear algebra; how stiffness grows with the solid is measured on frames of members that bend. Nothing
 // here is a material or a structure: lattices, wood and a house's walls are tests of one counting, at micrometres and
 // at metres. Wood's measured stiffness is evidence the counting is checked against, never fitted to.
@@ -6,9 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { MATERIALS } from '../../src/data/materials';
 import { ALONG_FROM_BENDING, CELL_WALL_DENSITY, CELL_WALL_MODULUS_ALONG, ELASTIC_RATIOS } from '../../src/data/wood';
-import { asNetwork, effectiveModulus, hexagonal, solidFraction, square, triangular, type Lattice } from '../../src/nexus/frame';
-import { generate } from '../../src/nexus/manifold';
-import { carries, count, loadOn } from '../../src/nexus/network';
+import { asNetwork, effectiveModulus, hexagonal, solidFraction, square, triangular, type Lattice } from '../../src/nexus/substrate/frame';
+import { generate } from '../../src/nexus/substrate/manifold';
+import { carries, count, loadOn } from '../../src/nexus/substrate/network';
 import { house } from './inventions';
 
 const lattices: Lattice[] = [triangular(6, 6), square(6, 6), square(6, 6, 1, 1), hexagonal(5, 5)];

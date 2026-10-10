@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { at, COASTER, LIMITS, makeCoaster, newRide, runRide, stepRide, type Ride, type Track } from '../../src/nexus/coaster';
-import { readPlace, sayPlace } from '../../src/nexus/places';
-import { readPlain } from '../../src/nexus/directive';
+import { at, COASTER, LIMITS, makeCoaster, newRide, runRide, stepRide, type Ride, type Track } from '../../src/nexus/world/coaster';
+import { readPlace, sayPlace } from '../../src/nexus/world/places';
+import { readPlain } from '../../src/nexus/substrate/directive';
 
 const g = 9.80665;
 /** One whole ride, from the station back to it, watched at every step. */

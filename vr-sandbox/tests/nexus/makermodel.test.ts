@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { modelPart, use } from '../../src/nexus/components';
+import { modelPart, use } from '../../src/nexus/parts/components';
 import { layout } from '../../src/nexus/make/space';
-import { baseName, billOf, frameOf, libraryWords } from '../../src/nexus/makermodel';
+import { baseName, billOf, frameOf, libraryWords } from '../../src/nexus/machines/makermodel';
 import { ENDER3 } from '../../src/nexus/models/ender3';
 import { VORON24 } from '../../src/nexus/models/voron24';
 import { KINDS } from '../../src/nexus/kinds';
-import type { Part } from '../../src/nexus/kits';
+import type { Part } from '../../src/nexus/parts/kits';
 
 const boxOf = (p: Part) => { const b = new THREE.Box3(); for (const x of layout(p)) if (x.box && !x.box.isEmpty()) b.union(x.box); return b; };
 

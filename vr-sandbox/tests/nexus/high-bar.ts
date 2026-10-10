@@ -3,8 +3,8 @@
 // terms; none names a part, a mechanism or a technology. They are chosen far apart so that what stops all of them is a
 // distinction the language lacks, never a fix for one of them.
 
-import type { Intent, Region, Want } from '../../src/nexus/want';
-import { leaf, type Leaf } from '../../src/nexus/term';
+import type { Intent, Region, Want } from '../../src/nexus/ask/want';
+import { leaf, type Leaf } from '../../src/nexus/substrate/term';
 import { printer } from './inventions';
 
 const person = 'the person';

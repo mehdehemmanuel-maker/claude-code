@@ -7,10 +7,10 @@
 
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
-import type { Jolt } from '../../src/nexus/realize';
-import { People, legsFor, STANCES } from '../../src/nexus/person';
+import type { Jolt } from '../../src/nexus/substrate/realize';
+import { People, legsFor, STANCES } from '../../src/nexus/world/person';
 import { centreOfMass, rigOf } from '../../src/nexus/life/segments';
-import { layOut } from '../../src/nexus/anatomy';
+import { layOut } from '../../src/nexus/world/anatomy';
 
 let J: Jolt;
 beforeAll(async () => { J = (await initJolt()) as unknown as Jolt; });

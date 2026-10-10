@@ -1,12 +1,12 @@
 // What matter is made of and how it changes, generated from the identities each level of energy keeps, the bonds that
-// hold molecules, and the Gibbs energies of their phases (src/nexus/compose.ts, src/nexus/phase.ts). Every check below is
+// hold molecules, and the Gibbs energies of their phases (src/nexus/substrate/compose.ts, src/nexus/substrate/phase.ts). Every check below is
 // against a measured value that is not an input: a known reaction, a decay's energy, a boiling point, a vapour pressure.
 
 import { describe, expect, it } from 'vitest';
 import { BOILING_AT_ONE_ATMOSPHERE, MOLECULES, PARTICLES, WATER_SATURATION, type Species } from '../../src/data/species';
 import { CONST } from '../../src/nexus/book/constants';
-import { balance, CHEMICAL, enthalpyOf, fromBonds, halfIonized, ionizedFraction, NUCLEAR, released, transformations } from '../../src/nexus/compose';
-import { boilingPoint, phaseAt, vaporizationEnthalpy, vapourPressure } from '../../src/nexus/phase';
+import { balance, CHEMICAL, enthalpyOf, fromBonds, halfIonized, ionizedFraction, NUCLEAR, released, transformations } from '../../src/nexus/substrate/compose';
+import { boilingPoint, phaseAt, vaporizationEnthalpy, vapourPressure } from '../../src/nexus/substrate/phase';
 
 const sp = (n: string, ph?: Species['phase']) => { const s = [...MOLECULES, ...PARTICLES].find((x) => x.name === n && (!ph || x.phase === ph)); if (!s) throw new Error(n); return s; };
 const MeV = 1.602176634e-13;

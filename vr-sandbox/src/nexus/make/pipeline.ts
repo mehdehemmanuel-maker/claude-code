@@ -10,7 +10,7 @@
 //
 // Nothing here is about one thing: every stage reads parts by their materials, sizes, contacts and kinds.
 
-import { countParts, massOf, type Part } from '../kits';
+import { countParts, massOf, type Part } from '../parts/kits';
 import { applyConditions, readConditions, type Conditions } from './conditions';
 import { addDetails, RULES, stripDetails } from './detail';
 import { contracts, critique, type Contract, type Finding } from './critic';

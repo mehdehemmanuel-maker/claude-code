@@ -1,9 +1,9 @@
-// Local clocks (src/nexus/clock.ts) on a heat network whose regions' own times span four decades: a room's air, its
+// Local clocks (src/nexus/substrate/clock.ts) on a heat network whose regions' own times span four decades: a room's air, its
 // masonry walls, and a small temperature sensor in the air, heated for a day against the outside. The steps come from
 // the regions' own capacities and conductances; nothing here sets a step.
 
 import { describe, expect, it } from 'vitest';
-import { advance, oneClock, plan, refineWhereNeeded, type Boundary, type Region } from '../../src/nexus/clock';
+import { advance, oneClock, plan, refineWhereNeeded, type Boundary, type Region } from '../../src/nexus/substrate/clock';
 
 // the room: 300 m³ of air (1.2 kg/m³, 1005 J/kg K); 30 m³ of fired clay brick (1900 kg/m³, the kept materials' density;
 // about 840 J/kg K, an estimate); 200 m² of wall between them at the interior surface resistance 0.13 m² K/W (ISO 6946);

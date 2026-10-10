@@ -5,7 +5,7 @@
 // flexible cord ratings); parts named by their makers' part numbers carry those numbers' datasheet ratings.
 
 import { ax, bare, cyl, decades, E12, E24, gOf, range, ring, si, unit, type KindDef, type P } from './core';
-import { chipSolids, pkgBox, pkgMakeup, pkgMass, pkgOf, smdLedDies, smdLedSolids, solidsMass } from '../packages';
+import { chipSolids, pkgBox, pkgMakeup, pkgMass, pkgOf, smdLedDies, smdLedSolids, solidsMass } from '../boards/packages';
 
 const n = (p: P, k: string) => Number(p[k]);
 const s = (p: P, k: string) => String(p[k]);
@@ -48,7 +48,7 @@ const CHIPS: Record<string, [string, string[]]> = {
   INA219: ['I²C current and power monitor', ['SOIC-8']], LM2596: ['buck regulator, 3 A', ['TO-263']], MT3608: ['boost regulator, 2 A', ['SOT-23-6']], A3144: ['Hall switch', ['TO-92']], SS49E: ['linear Hall sensor', ['TO-92']], DS18B20: ['1-wire thermometer', ['TO-92']],
   PC817: ['optocoupler', ['DIP-4']], '6N137': ['fast optocoupler, 10 Mbit/s', ['DIP-8']], MOC3021: ['opto triac driver', ['DIP-6']], LM35: ['analogue thermometer, 10 mV/°C', ['TO-92']],
 };
-/** A package's pins, and its box, mass and make-up as its outline draws it (src/nexus/packages.ts: JEDEC, nominal). */
+/** A package's pins, and its box, mass and make-up as its outline draws it (src/nexus/boards/packages.ts: JEDEC, nominal). */
 const PKG = (pk: string): [number, number] => { const q = pkgOf(pk)!; return [q.pins, +pkgMass(q).toFixed(4)]; };
 const pkgBoxOf = (pk: string): [number, number, number] => pkgBox(pkgOf(pk)!);
 const pkgOfMakeup = (pk: string): string => pkgMakeup(pkgOf(pk)!);
@@ -56,7 +56,7 @@ const pkgOfMakeup = (pk: string): string => pkgMakeup(pkgOf(pk)!);
 const ZENER_PKG = (P: number) => (P >= 5 ? 'DO-201' : P >= 1 ? 'DO-41' : 'DO-35');
 /** A ceramic chip capacitor's thickness by its case (mm; its width, but a 1210's 2.5, typical). */
 const MLCC_LWT = (pk: string): [number, number, number] => { const c = CHIP[pk] ?? [3.2, 2.5, 1, 0]; return [c[0], c[1], pk === '1210' ? 2.5 : c[1]]; };
-/** What the library draws each electronic size as (src/nexus/components.ts): a semiconductor's package by its family
+/** What the library draws each electronic size as (src/nexus/parts/components.ts): a semiconductor's package by its family
  *  and sizes; a chip passive's case; a surface LED's; an LED's die by its colour. */
 export const packageOf = (family: string, p: P): string | null => (family === 'chip' ? s(p, 'pkg') : family === 'transistor' ? TRANS[s(p, 'part')]?.[3] ?? null : family === 'regulator' ? REGS[s(p, 'part')]?.[3] ?? null : family === 'diode' ? DIODES[s(p, 'part')]?.[4] ?? null : family === 'zener' ? ZENER_PKG(n(p, 'P')) : null);
 export const chipCase = (pk: string): [number, number, number] | null => (CHIP[pk] ? (CHIP[pk]!.slice(0, 3) as [number, number, number]) : null);

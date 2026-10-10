@@ -3,7 +3,7 @@
 // One document per board. A change is a patch merged into it; writes to one board go one at a time, the next merged
 // from every change made while one is on its way; a board written whole is written without what was deleted.
 
-import { compact, deepMerge, type Board, type Patch } from '../boards';
+import { compact, deepMerge, type Board, type Patch } from '../substrate/boards';
 
 interface DocRef { set(d: object): Promise<void>; update(d: object): Promise<void>; delete(): Promise<void> }
 interface Snap { docs: { id: string; data(): unknown }[] }

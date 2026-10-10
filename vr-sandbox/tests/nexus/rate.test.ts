@@ -1,4 +1,4 @@
-// Rates across barriers (src/nexus/rate.ts): the molecular time of a liquid's change from its viscosity, and the barrier
+// Rates across barriers (src/nexus/substrate/rate.ts): the molecular time of a liquid's change from its viscosity, and the barrier
 // over temperature, against measured water (src/data/species.ts). The scale generator of round 6 made the same time
 // from the same quantities without Eyring's theory: the two are checked against each other and against the
 // spectroscopic relaxation time.
@@ -6,8 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import { WATER_DEBYE_TIME, WATER_MOLAR_MASS, WATER_VISCOSITY } from '../../src/data/species';
 import { CONST } from '../../src/nexus/book/constants';
-import { attemptRate, barrierFromViscosity, changeTime, fitBarrier, viscosityFrom } from '../../src/nexus/rate';
-import { generate, molecularSize, timeOf } from '../../src/nexus/scale';
+import { attemptRate, barrierFromViscosity, changeTime, fitBarrier, viscosityFrom } from '../../src/nexus/substrate/rate';
+import { generate, molecularSize, timeOf } from '../../src/nexus/substrate/scale';
 import { water } from './water';
 
 const at25 = WATER_VISCOSITY.find((p) => p.T === 298.15)!;

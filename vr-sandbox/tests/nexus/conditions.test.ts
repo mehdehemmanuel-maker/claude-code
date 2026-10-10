@@ -2,7 +2,7 @@
 // where, held by what, how far, and the limits said, whatever the thing is called.
 
 import { describe, expect, it } from 'vitest';
-import { readConditions } from '../../src/nexus/conditions';
+import { readConditions } from '../../src/nexus/ask/conditions';
 
 const kg = (N: number) => +(N / 9.80665).toFixed(1);
 

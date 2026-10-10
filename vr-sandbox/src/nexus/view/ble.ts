@@ -21,7 +21,7 @@
 // Owner of: asking for the device, the two characteristics, the notification handler, and a run loop that drives a
 // `Streamer`. It owns no protocol and no timing policy.
 
-import { BLE_CHUNK, NUS, Streamer, type Link } from '../link';
+import { BLE_CHUNK, NUS, Streamer, type Link } from '../machines/link';
 
 /** What a connected machine looks like from here. */
 export interface Radio {

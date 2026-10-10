@@ -6,8 +6,8 @@
 // Densities added for materials that may be asked for (typical values): gold 19,300, silver 10,490, titanium 4,500,
 // carbon fibre composite 1,600, marble 2,700, ice 917, bamboo 700, chocolate 1,300, cardboard 690 kg/m³.
 
-import type { Surface } from '../surface';
-import { DENSITY, type Part } from '../kits';
+import type { Surface } from '../machines/surface';
+import { DENSITY, type Part } from '../parts/kits';
 
 export interface Conditions {
   /** 0 new … 1 derelict */ age: number;

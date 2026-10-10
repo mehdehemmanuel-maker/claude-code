@@ -5,7 +5,7 @@
 // that may not reach it (a claude.ai artifact) says so and shows the rest.
 
 import * as THREE from 'three';
-import { fetchForecast, sky, weatherLine, type Forecast, type Place } from '../weather';
+import { fetchForecast, sky, weatherLine, type Forecast, type Place } from '../world/weather';
 
 export type Status = 'idle' | 'listening' | 'thinking' | 'working' | 'building';
 const STATUS: Record<Status, { text: string; color: string }> = {

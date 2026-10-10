@@ -5,9 +5,9 @@
 // trunk as thick as H^1.5 asks, a sandwich's energy from what is in it).
 
 import { describe, expect, it } from 'vitest';
-import { choose, countParts, KITS, kitById, kitFor, log10All, log10Kinds, makeKit, massOf, type Part } from '../../src/nexus/kits';
-import { edgeRadius, ruleFor, setEdge, EDGE_RULES } from '../../src/nexus/finish';
-import { INVENTORY } from '../../src/nexus/inventory';
+import { choose, countParts, KITS, kitById, kitFor, log10All, log10Kinds, makeKit, massOf, type Part } from '../../src/nexus/parts/kits';
+import { edgeRadius, ruleFor, setEdge, EDGE_RULES } from '../../src/nexus/parts/finish';
+import { INVENTORY } from '../../src/nexus/parts/inventory';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 const rng = () => 0.5;

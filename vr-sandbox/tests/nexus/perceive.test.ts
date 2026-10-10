@@ -8,8 +8,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
 import { instruments, person } from '../../src/data/observers';
 import { CONST } from '../../src/nexus/book/constants';
-import { glowOnset, meetRate, pushOver, radianceIn, receiveGlow, receiveLevel, receiveSeries, type Placement, type Series } from '../../src/nexus/perceive';
-import { barOnHinge, swingIntent, swingMaterial, tipSeries, type SwingSlice } from '../../src/nexus/swing';
+import { glowOnset, meetRate, pushOver, radianceIn, receiveGlow, receiveLevel, receiveSeries, type Placement, type Series } from '../../src/nexus/substrate/perceive';
+import { barOnHinge, swingIntent, swingMaterial, tipSeries, type SwingSlice } from '../../src/nexus/substrate/swing';
 
 const sense = (name: string) => person.senses.find((s) => s.name === name)!;
 const c = CONST.c.value!;

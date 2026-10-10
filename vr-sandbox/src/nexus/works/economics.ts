@@ -5,7 +5,7 @@
 //
 // Owner of: handling (hands, an arm, an arm on a track, more arms) and make-or-buy.
 
-import { usd as money } from '../prices';
+import { usd as money } from '../parts/prices';
 import { stationById, stationUsd } from './stations';
 
 /** How the work gets from station to station. Not an opinion: a rail buys reach at about a fifth of what another arm

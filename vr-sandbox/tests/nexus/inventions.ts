@@ -1,7 +1,7 @@
-// The three asked intents (src/nexus/asked.ts) as instruments, with the aspects each request names and the evaluator's
+// The three asked intents (src/nexus/ask/asked.ts) as instruments, with the aspects each request names and the evaluator's
 // predicates over what the language generated.
 
-export { car, house, printer } from '../../src/nexus/asked';
+export { car, house, printer } from '../../src/nexus/ask/asked';
 
 /**
  * The aspects of each invention the request names, used only to evaluate what the language produced: never given to
@@ -19,7 +19,7 @@ export const ASPECTS = {
  * represent (orientation, members, joints, materials, how a thing is made) is not covered by something that only
  * resembles it. These predicates are the evaluator's, never the generator's.
  */
-import type { Element, Structure } from '../../src/nexus/manifold';
+import type { Element, Structure } from '../../src/nexus/substrate/manifold';
 type Check = (s: Structure) => boolean;
 const has = (s: Structure, f: (e: Element) => boolean) => s.elements.some(f);
 const gapFor = (s: Structure, re: RegExp, el?: (id: string) => boolean) => s.gaps.some((g) => re.test(g.lacks) && (!el || (g.element !== null && el(g.element))));

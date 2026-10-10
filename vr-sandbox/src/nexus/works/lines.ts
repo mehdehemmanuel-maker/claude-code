@@ -9,8 +9,8 @@
 // Owner of: a build's line, the two bought lists, the material class and shape a line's own words give it, the
 // tolerance it is really held to (through `fits.ts`), and what it costs to buy.
 
-import { PRICES, cheapest, priceKeyOf } from '../prices';
-import { tolFor } from '../fits';
+import { PRICES, cheapest, priceKeyOf } from '../parts/prices';
+import { tolFor } from '../parts/fits';
 import type { MatClass, Shape } from './families';
 
 /** What no small works makes, and the real reason — not "it is hard" but the process that is missing. This list is the

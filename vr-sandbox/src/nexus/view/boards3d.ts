@@ -1,4 +1,4 @@
-// The node board in the room (src/nexus/boards.ts): a wall of words and the links between them in front of you, a list
+// The node board in the room (src/nexus/substrate/boards.ts): a wall of words and the links between them in front of you, a list
 // beside it of every other node, and a strip of controls above. Point at a node and press to open its list; press a row
 // to link it or unlink it, one press each, so you go down the list linking; hold a node (the right grip in a headset,
 // the mouse on a screen) and move to drag it, and let go to leave it there. A word comes from the keyboard of light or
@@ -6,20 +6,20 @@
 // the same nodes in the order they are derived. Each surface is one canvas, so a board of hundreds of nodes is three
 // textures, not hundreds.
 //
-// Every board is a pipeline too (src/nexus/flows.ts): a node given something to do is a step, chosen from every call
-// there is, sorted by what it is for (src/nexus/calls.ts), or said in a word or two; a link from a step runs the next
+// Every board is a pipeline too (src/nexus/substrate/flows.ts): a node given something to do is a step, chosen from every call
+// there is, sorted by what it is for (src/nexus/substrate/calls.ts), or said in a word or two; a link from a step runs the next
 // after it; ▶ Run runs it, Arm lets its trigger start it by itself, every step shows on its card what it did as it
-// runs, and what a board's steps make is made offline (src/nexus/generate.ts). 📋 Copy and 📥 Paste carry a pipeline
+// runs, and what a board's steps make is made offline (src/nexus/ask/generate.ts). 📋 Copy and 📥 Paste carry a pipeline
 // from one board to another; 💾 Save keeps it to start boards from.
 
 import * as THREE from 'three';
-import { BACK, STRUCT, UNDIRECTED, addNode, boardOfBuild, boardOfKnowledge, categoriesOf, deleteNode, derive, duplicateNode, freeName, edgesOf, findNodes, levelOf, moveNode, nodesOf, pathTo, placesOf, toggleLink, unpin, uid, type Board, type Derived, type PartLike, type View } from '../boards';
+import { BACK, STRUCT, UNDIRECTED, addNode, boardOfBuild, boardOfKnowledge, categoriesOf, deleteNode, derive, duplicateNode, freeName, edgesOf, findNodes, levelOf, moveNode, nodesOf, pathTo, placesOf, toggleLink, unpin, uid, type Board, type Derived, type PartLike, type View } from '../substrate/boards';
 import type { BoardStore } from './boards-store';
-import { resolve, type Understanding } from '../understand';
+import { resolve, type Understanding } from '../substrate/understand';
 import { TAXONOMY, find as findKnown, type Node as TaxNode } from '../embody/taxonomy';
-import { TEMPLATES, boardOfClip, boardOfTemplate, clipOf, evaluate, graphOf, guessStep, keptRun, orderFrom, pasteOf, runFlow, saidOf, starts, stepOf, triggerOf, triggersOf, type Clip, type FlowApi, type FlowEvent, type FlowRun, type Step, type StepKind, type StepRun } from '../flows';
-import { CALLS, callsFor } from '../calls';
-import { testCall, type CallTest } from '../calltest';
+import { TEMPLATES, boardOfClip, boardOfTemplate, clipOf, evaluate, graphOf, guessStep, keptRun, orderFrom, pasteOf, runFlow, saidOf, starts, stepOf, triggerOf, triggersOf, type Clip, type FlowApi, type FlowEvent, type FlowRun, type Step, type StepKind, type StepRun } from '../substrate/flows';
+import { CALLS, callsFor } from '../substrate/calls';
+import { testCall, type CallTest } from '../substrate/calltest';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
 const HUE = ['#78909c', '#80deea', '#69f0ae', '#ffd740', '#ff8a80', '#b388ff', '#ffb74d', '#90caf9', '#f48fb1'];

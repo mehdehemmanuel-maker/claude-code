@@ -2,7 +2,7 @@
 // furnace that melts metal through its latent heat, the lost-PLA casting process end to end, and recipes put together.
 
 import { describe, expect, it } from 'vitest';
-import { BURNOUT, Cell, Furnace, Kiln, METALS, Printer, RECIPES, bill, fillLines, heatTo, patternOf, shapes, slice, stateOf, trapezoid, volumeOf } from '../../src/nexus/cell';
+import { BURNOUT, Cell, Furnace, Kiln, METALS, Printer, RECIPES, bill, fillLines, heatTo, patternOf, shapes, slice, stateOf, trapezoid, volumeOf } from '../../src/nexus/machines/cell';
 
 const runFor = (step: (dt: number) => void, secs: number, dt = 0.5) => { for (let t = 0; t < secs; t += dt) step(dt); };
 

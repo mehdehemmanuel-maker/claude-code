@@ -3,9 +3,9 @@
 // that is in it known, down to the elements.
 
 import { describe, expect, it } from 'vitest';
-import { MADE_TO_ORDER_CAP, numberOf, numberOfWords, partAt, partItem, spaceSize } from '../../src/nexus/partspace';
-import { callFamily } from '../../src/nexus/families';
-import { INVENTORY, fundamentals, resolve } from '../../src/nexus/inventory';
+import { MADE_TO_ORDER_CAP, numberOf, numberOfWords, partAt, partItem, spaceSize } from '../../src/nexus/parts/partspace';
+import { callFamily } from '../../src/nexus/parts/families';
+import { INVENTORY, fundamentals, resolve } from '../../src/nexus/parts/inventory';
 
 describe('the space of parts', () => {
   it('holds over a billion parts, worked out in milliseconds and stored nowhere', () => {

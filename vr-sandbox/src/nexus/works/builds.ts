@@ -6,10 +6,10 @@
 //
 // Owner of: the builds, throwing one at a works, a maker's own machine as a job, and the bootstrap share.
 
-import { usd as money } from '../prices';
+import { usd as money } from '../parts/prices';
 import { ENDER3 } from '../models/ender3';
 import { VORON24 } from '../models/voron24';
-import { billOf, boxedAs, type MakerModel } from '../makermodel';
+import { billOf, boxedAs, type MakerModel } from '../machines/makermodel';
 import { processById } from './families';
 import { stationById, stationCost, type Buying } from './stations';
 import { worksOf } from './stations';

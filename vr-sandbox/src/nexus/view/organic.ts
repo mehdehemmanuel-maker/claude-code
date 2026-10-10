@@ -1,14 +1,14 @@
 // Living things drawn: every form of src/nexus/life by its own shape, from a molecule's lump to a whole body. Soft
 // forms (organs, cells, the skull, the skin) are fields of blended capsules meshed by surface nets
-// (src/nexus/anatomy.ts), each meshed once, in its own unit box, and kept: drawing another of it is a copy of the
+// (src/nexus/world/anatomy.ts), each meshed once, in its own unit box, and kept: drawing another of it is a copy of the
 // kept arrays, scaled. Hard ones (bones, muscles, tubes) are lathes and tubes of three. A system of the body (its
 // skeleton, its muscles, its organs) is drawn where each part lies, from the body laid out by anatomy.ts, and merged
 // by the view into a few draws.
 
 import * as THREE from 'three';
-import { SKULL_REGIONS, bonesOf, currentBody, currentKey, extentOf, skullBox, surfaceNets, type Body, type Placed, type Prim, type V3 } from '../anatomy';
-import { INVENTORY } from '../inventory';
-import type { Look } from '../pieces';
+import { SKULL_REGIONS, bonesOf, currentBody, currentKey, extentOf, skullBox, surfaceNets, type Body, type Placed, type Prim, type V3 } from '../world/anatomy';
+import { INVENTORY } from '../parts/inventory';
+import type { Look } from '../parts/pieces';
 
 type Add = (geo: THREE.BufferGeometry, m?: THREE.Material) => THREE.Mesh;
 const mats = new Map<string, THREE.Material>();
@@ -318,7 +318,7 @@ export function organicInto(l: Look, g: THREE.Group, add: Add): void {
   if (SYSTEMS.has(ref)) {
     const body = bodyNow(), before = g.children.length;
     systemInto(ref, body, add);
-    // the drawn body scaled into the look's box, about the middle of its reach (src/nexus/pieces.ts places its parts by the same)
+    // the drawn body scaled into the look's box, about the middle of its reach (src/nexus/parts/pieces.ts places its parts by the same)
     const { c, k } = fitOf(body, ref, l.size);
     for (let i = before; i < g.children.length; i++) { const me = g.children[i] as THREE.Mesh; me.geometry.translate(-c[0], -c[1], -c[2]); me.geometry.scale(k, k, k); }
     return;

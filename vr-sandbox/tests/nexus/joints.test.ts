@@ -1,11 +1,11 @@
-// Moving joints (src/nexus/sim.ts, Jolt hinge and slider constraints): made only where two things touch; let go, a
+// Moving joints (src/nexus/substrate/sim.ts, Jolt hinge and slider constraints): made only where two things touch; let go, a
 // flap hinged to a rail swings as a compound pendulum swings, a carriage on a slide runs as F = m a says and stops at
 // its limit, and a wheel on a motor's hinge spins up as the motor's own torque line says it must.
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
-import { Workshop } from '../../src/nexus/generate';
-import type { Jolt } from '../../src/nexus/realize';
+import { Workshop } from '../../src/nexus/ask/generate';
+import type { Jolt } from '../../src/nexus/substrate/realize';
 import { motorModel, windingR } from '../../src/engineering/dcmotor';
 import { MOTORS } from '../../src/data/motors';
 

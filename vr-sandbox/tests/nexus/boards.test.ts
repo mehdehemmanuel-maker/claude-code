@@ -1,11 +1,11 @@
-// Node boards (src/nexus/boards.ts): words and links, and what the links make of them. The most connected node a node
+// Node boards (src/nexus/substrate/boards.ts): words and links, and what the links make of them. The most connected node a node
 // links to is what it sits under; a node no neighbour outranks heads a category; the pipeline is the same structure in
 // order. And a board made from a real build: the categories its parts are filed in.
 
 import { describe, expect, it } from 'vitest';
-import { addNode, boardOfBuild, categoriesOf, compact, deepMerge, deleteNode, derive, edgesOf, findNodes, layout, levelOf, link, moveNode, nodesOf, pathTo, placesOf, toggleLink, unpin, type Board, type Patch } from '../../src/nexus/boards';
-import { readAsk } from '../../src/nexus/words';
-import { generate } from '../../src/nexus/manifold';
+import { addNode, boardOfBuild, categoriesOf, compact, deepMerge, deleteNode, derive, edgesOf, findNodes, layout, levelOf, link, moveNode, nodesOf, pathTo, placesOf, toggleLink, unpin, type Board, type Patch } from '../../src/nexus/substrate/boards';
+import { readAsk } from '../../src/nexus/ask/words';
+import { generate } from '../../src/nexus/substrate/manifold';
 import { embodyAny } from '../../src/nexus/embody/any';
 
 const empty = (): Board => ({ title: 't', nodes: {}, edges: {} });

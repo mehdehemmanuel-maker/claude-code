@@ -1,10 +1,10 @@
-// Observers as configurations of the same fields (src/nexus/perceive.ts): a person and some instruments. Nothing in the
+// Observers as configurations of the same fields (src/nexus/substrate/perceive.ts): a person and some instruments. Nothing in the
 // projection names any of them; each is values of a carrier, a band, the least and most it registers, a window, a
 // resolution and a latency. Where physics gives a resolution (diffraction, the electron's wavelength) it is computed
 // here from the instrument's own quantities; every other value is a sourced figure or a labelled estimate.
 
 import { CONST } from '../nexus/book/constants';
-import type { Observer, Sense } from '../nexus/perceive';
+import type { Observer, Sense } from '../nexus/substrate/perceive';
 
 const c = CONST.c.value!, h = CONST.h.value!;
 const hz = (lambda: number) => c / lambda;

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildOn, ledCurrent, lessonOf, PERMA_PROTO_HALF, type Build, type PartHow } from '../../src/nexus/edges';
+import { buildOn, ledCurrent, lessonOf, PERMA_PROTO_HALF, type Build, type PartHow } from '../../src/nexus/teach/edges';
 import { layProto, type Component } from '../../src/nexus/embody/breadboard';
-import { LED_CIRCUIT, LED_RAILS, LESSONS, PROTO_BUILD } from '../../src/nexus/lessons';
-import { PROTO_STEPS } from '../../src/nexus/solder-lesson';
-import { ppCol } from '../../src/nexus/kit-solder';
+import { LED_CIRCUIT, LED_RAILS, LESSONS, PROTO_BUILD } from '../../src/nexus/teach/lessons';
+import { PROTO_STEPS } from '../../src/nexus/teach/solder-lesson';
+import { ppCol } from '../../src/nexus/machines/kit-solder';
 
 const steps = LESSONS['solder-proto']!.steps;
 /** The LED lesson's build with one thing changed. */

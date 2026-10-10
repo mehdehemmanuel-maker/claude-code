@@ -2,8 +2,8 @@
 // it happens with what asked it and what it hangs from; and practice, the design learning from what was observed.
 
 import { describe, expect, it } from 'vitest';
-import { car, house } from '../../src/nexus/asked';
-import { generate } from '../../src/nexus/manifold';
+import { car, house } from '../../src/nexus/ask/asked';
+import { generate } from '../../src/nexus/substrate/manifold';
 import { embodyAny } from '../../src/nexus/embody/any';
 import { learnFrom, operate, practice } from '../../src/nexus/embody/operate';
 

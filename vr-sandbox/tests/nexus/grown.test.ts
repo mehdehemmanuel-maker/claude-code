@@ -3,8 +3,8 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
-import type { Jolt } from '../../src/nexus/realize';
-import { answersFrom, conceive, designs } from '../../src/nexus/conceive';
+import type { Jolt } from '../../src/nexus/substrate/realize';
+import { answersFrom, conceive, designs } from '../../src/nexus/ask/conceive';
 
 let J: Jolt;
 beforeAll(async () => { J = (await initJolt()) as unknown as Jolt; });

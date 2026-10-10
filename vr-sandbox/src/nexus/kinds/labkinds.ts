@@ -1,13 +1,13 @@
 // Bench instruments and a headset as kinds, by their makers' own published figures: a thermal cycler, a
 // microcentrifuge, a horizontal gel tank with its supply, a blue-light transilluminator, an air-displacement pipette and
-// a Class II Type A2 safety cabinet. Their figures and their drawings are in src/nexus/lab.ts, which also holds what
+// a Class II Type A2 safety cabinet. Their figures and their drawings are in src/nexus/machines/lab.ts, which also holds what
 // each does as numbers (a program's time, the force at a speed, a gel's field, a melting point, a pipette's error,
 // a cabinet's airflow).
 
 import { bare, type KindDef, type P } from './core';
-import { BSC_A2, C5425, C5425_RADIUS, MINISUB, POWERPAC, RESEARCH_PLUS, SAFE_IMAGER, T100, cabinetAir } from '../lab';
-import { QUEST3, pixelsPerDegree } from '../headset';
-import { GROVE, XIAO, XIAOS, XIAO_G, groveGrams, groveOf, xiaoOf } from '../seeed';
+import { BSC_A2, C5425, C5425_RADIUS, MINISUB, POWERPAC, RESEARCH_PLUS, SAFE_IMAGER, T100, cabinetAir } from '../machines/lab';
+import { QUEST3, pixelsPerDegree } from '../machines/headset';
+import { GROVE, XIAO, XIAOS, XIAO_G, groveGrams, groveOf, xiaoOf } from '../machines/seeed';
 
 const s = (p: P, k: string) => String(p[k]);
 const air = cabinetAir();

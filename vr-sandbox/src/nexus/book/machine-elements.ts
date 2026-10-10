@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST, est } from './constants';
-import { add, sub, mul, div, pow, sqrt, cbrt, le, ge, and, exp, ln, cos, tan, atan, k, PI } from '../term';
+import { add, sub, mul, div, pow, sqrt, cbrt, le, ge, and, exp, ln, cos, tan, atan, k, PI } from '../substrate/term';
 
 export const MACHINE_ELEMENTS = [
   L({

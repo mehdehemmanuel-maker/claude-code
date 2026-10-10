@@ -5,10 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { RECT_AREA, RECT_MODULUS, BENDING_STRESS, WEIGHT } from '../../src/nexus/book';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { law } from '../../src/nexus/law';
-import { search, solve, type System } from '../../src/nexus/solve';
-import { div, le, leaf, mul, variable } from '../../src/nexus/term';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { law } from '../../src/nexus/substrate/law';
+import { search, solve, type System } from '../../src/nexus/substrate/solve';
+import { div, le, leaf, mul, variable } from '../../src/nexus/substrate/term';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 const g = ofLeaf(leaf('g', 9.80665, 'm/s^2', { class: 'fundamental', source: 'ISO 80000-3' }));

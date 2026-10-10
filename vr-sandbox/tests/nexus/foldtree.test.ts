@@ -1,10 +1,10 @@
-// Folding a made thing flat, in general (src/nexus/foldtree.ts): by geometry alone, its widest part stays (or, fixed to a
+// Folding a made thing flat, in general (src/nexus/substrate/foldtree.ts): by geometry alone, its widest part stays (or, fixed to a
 // wall, the wall does); each part folds onto what holds it after what it holds has, a quarter turn where it stands off a
 // face, a half turn where it lies in line; where it would land on what lies there it hangs from a block or is set in
 // sideways; the path each takes meets nothing; which part goes next is searched and the least way kept.
 
 import { describe, expect, it } from 'vitest';
-import { planTree, touching, type Box } from '../../src/nexus/foldtree';
+import { planTree, touching, type Box } from '../../src/nexus/substrate/foldtree';
 
 const top: Box = { name: 't_top', at: [0.6, 0.729, 0], w: 1.2, h: 0.022, d: 0.7 };
 const leg = (n: string, x: number, z: number): Box => ({ name: n, at: [x, 0.359, z], w: 0.03, h: 0.718, d: 0.03 });

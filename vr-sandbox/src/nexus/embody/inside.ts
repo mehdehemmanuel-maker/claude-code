@@ -1,11 +1,11 @@
 // What a part is made of, all the way down (docs/NEXUS-FROM-REALITY.md, section 24): a part's matter, followed down
-// the levels the generator's depth derives for it (src/nexus/depth.ts): its crystal or its molecule from the kept
+// the levels the generator's depth derives for it (src/nexus/substrate/depth.ts): its crystal or its molecule from the kept
 // species, then what settles at each size the scale tuner's ladder finds, the particles, and the length below which
 // no kept law holds. Nothing here is drawn for any part: the matter is read from what the part is made of, and every
 // level carries the size, the binding and the clock its own derivation gives. Where the part's matter is not among
 // the kept species, that is said, as a gap in the data, and the descent goes on from the atoms its composition names.
 
-import { levelsAt, type Level } from '../depth';
+import { levelsAt, type Level } from '../substrate/depth';
 import { MATERIALS } from '../../data/materials';
 import type { Part } from './part';
 

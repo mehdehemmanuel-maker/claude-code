@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fk, ik, Meca500, MECA500, poseOf } from '../../src/nexus/meca';
+import { fk, ik, Meca500, MECA500, poseOf } from '../../src/nexus/machines/meca';
 
 describe('the Meca500', () => {
   it('stands at its zero joints with its flange at 190, 0, 308 mm, its tool axis forward (0, 90, 0)', () => {

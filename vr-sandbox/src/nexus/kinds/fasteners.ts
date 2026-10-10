@@ -2,7 +2,7 @@
 // and the hardware of doors, drawers and cabinets. Sizes from their standards where they have one (ISO, DIN); where
 // they have not, the sizes makers list, said to be typical.
 
-import { BUTTON, METRIC, PAN } from '../threads';
+import { BUTTON, METRIC, PAN } from '../parts/threads';
 import { ax, bare, cyl, gOf, hexPrism, matOf, pref, ring, unit, type KindDef, type P } from './core';
 
 const T = (p: P) => METRIC[String(p.thread)]!;

@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST, est } from './constants';
-import { add, sub, mul, div, pow, sqrt, le, ge, lt, gt, and, ln, sin, k, PI } from '../term';
+import { add, sub, mul, div, pow, sqrt, le, ge, lt, gt, and, ln, sin, k, PI } from '../substrate/term';
 
 export const MECHANICS = [
   L({

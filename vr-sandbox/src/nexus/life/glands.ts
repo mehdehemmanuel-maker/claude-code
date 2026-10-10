@@ -7,8 +7,8 @@
 
 import { cellOf, type CellType } from './cells';
 import { entries, type LifeEntry } from './core';
-import { measured, estimate, step, valueIn } from '../lawgraph';
-import type { Derivation } from '../evaluate';
+import { measured, estimate, step, valueIn } from '../substrate/lawgraph';
+import type { Derivation } from '../substrate/evaluate';
 
 // ---- hair, by geometry: a strand is a cylinder of keratin -----------------------------------------------------------------
 /** Hair's density at its usual water (Robbins 2012). */

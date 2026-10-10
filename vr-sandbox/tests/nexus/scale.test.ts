@@ -5,7 +5,7 @@
 // literature values are only a sanity check on the inputs.
 
 import { describe, expect, it } from 'vitest';
-import { crossings, generate, levels, molecularSize, observe, spectrum, timeOf, type Mechanism, type Observer } from '../../src/nexus/scale';
+import { crossings, generate, levels, molecularSize, observe, spectrum, timeOf, type Mechanism, type Observer } from '../../src/nexus/substrate/scale';
 import { water } from './water';
 
 const qs = water(1);

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
-import { catalogue } from '../../src/nexus/catalogue';
-import { componentOf } from '../../src/nexus/components';
-import { resolve } from '../../src/nexus/inventory';
-import { boardWords, findThing, haveOf, pack, packPart, packText, packZip } from '../../src/nexus/buildpack';
-import { areaOf, dxf, fabPack, gerbers, plateFor, profileFaults, stl } from '../../src/nexus/fab';
-import { e12AtLeast, ledResistor, LESSONS } from '../../src/nexus/lessons';
-import { cheapest, costBy, PRICES } from '../../src/nexus/prices';
+import { catalogue } from '../../src/nexus/parts/catalogue';
+import { componentOf } from '../../src/nexus/parts/components';
+import { resolve } from '../../src/nexus/parts/inventory';
+import { boardWords, findThing, haveOf, pack, packPart, packText, packZip } from '../../src/nexus/teach/buildpack';
+import { areaOf, dxf, fabPack, gerbers, plateFor, profileFaults, stl } from '../../src/nexus/parts/fab';
+import { e12AtLeast, ledResistor, LESSONS } from '../../src/nexus/teach/lessons';
+import { cheapest, costBy, PRICES } from '../../src/nexus/parts/prices';
 
 describe('prices', () => {
   it('keeps each as a sighting: a seller, its page, the day seen, a positive price; each library item one the library draws', () => {

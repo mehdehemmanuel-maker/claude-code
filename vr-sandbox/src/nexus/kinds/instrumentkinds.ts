@@ -1,10 +1,10 @@
-// Instruments that see what an eye cannot, each sized by the law that makes it work (src/nexus/instruments.ts): an
+// Instruments that see what an eye cannot, each sized by the law that makes it work (src/nexus/machines/instruments.ts): an
 // x-ray tube by its voltage and the heat its anode must take, a flat panel by its pixels, a thermal camera by its
 // array and its lens, an interferometer by how far its mirror travels, a lidar by what comes back off a target. Every
 // spec here is that arithmetic run, not a figure looked up, and the two that are dangerous say so in every size.
 
 import { ax, bare, type KindDef, type P } from './core';
-import { HAZARDS, anodeSeconds, camBox, camKg, ftir, ftirBox, ftirKg, glow, halfValue, lidar, lidarBox, lidarKg, panelBox, panelKg, pulseResolution, shieldFor, thermalCam, tubeBox, tubeKg, xrayTube, MU_100KEV } from '../instruments';
+import { HAZARDS, anodeSeconds, camBox, camKg, ftir, ftirBox, ftirKg, glow, halfValue, lidar, lidarBox, lidarKg, panelBox, panelKg, pulseResolution, shieldFor, thermalCam, tubeBox, tubeKg, xrayTube, MU_100KEV } from '../machines/instruments';
 
 const n = (p: P, k: string): number => Number(p[k]);
 const s = (p: P, k: string): string => String(p[k]);

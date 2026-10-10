@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { DESIGNED, boltedJoint, component, componentOf, library, use, type Component } from '../../src/nexus/components';
-import { catalogue } from '../../src/nexus/catalogue';
-import { FAMILIES } from '../../src/nexus/families';
-import { kitFor, makeKit, kitById, type Part } from '../../src/nexus/kits';
+import { DESIGNED, boltedJoint, component, componentOf, library, use, type Component } from '../../src/nexus/parts/components';
+import { catalogue } from '../../src/nexus/parts/catalogue';
+import { FAMILIES } from '../../src/nexus/parts/families';
+import { kitFor, makeKit, kitById, type Part } from '../../src/nexus/parts/kits';
 import { critique } from '../../src/nexus/make/critic';
 import { kitView } from '../../src/nexus/view/kit3d';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { areaFor, designFrame, sectionFor, flowScalar, frameAt, ground, growFrame, growTree, lattice, scaleLaw, treeFlows, truss, type FrameMatter, type Strut, type V3 } from '../../src/nexus/adapt';
-import { matterOf } from '../../src/nexus/generate';
+import { areaFor, designFrame, sectionFor, flowScalar, frameAt, ground, growFrame, growTree, lattice, scaleLaw, treeFlows, truss, type FrameMatter, type Strut, type V3 } from '../../src/nexus/substrate/adapt';
+import { matterOf } from '../../src/nexus/ask/generate';
 
 const TUBES: [number, number][] = [[12, 1], [16, 1.5], [20, 1.5], [25, 2], [30, 2], [40, 2], [50, 2.5], [60, 3], [76, 3], [89, 3.5], [114, 4], [168, 5]];
 const tubes = TUBES.map(([D, w]) => { const d = D / 1e3, t = w / 1e3; return { A: (Math.PI * (d * d - (d - 2 * t) ** 2)) / 4, I: (Math.PI * (d ** 4 - (d - 2 * t) ** 4)) / 64, label: `${D} × ${w} mm tube` }; });

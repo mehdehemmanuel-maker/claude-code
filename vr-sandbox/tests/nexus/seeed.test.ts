@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { GROVE, XIAO, XIAOS, groveChain, groveFits, groveOf, groveParts, grovePlugParts, xiaoOf } from '../../src/nexus/seeed';
-import { componentOf } from '../../src/nexus/components';
-import { resolve } from '../../src/nexus/inventory';
-import { massOf } from '../../src/nexus/mass';
+import { GROVE, XIAO, XIAOS, groveChain, groveFits, groveOf, groveParts, grovePlugParts, xiaoOf } from '../../src/nexus/machines/seeed';
+import { componentOf } from '../../src/nexus/parts/components';
+import { resolve } from '../../src/nexus/parts/inventory';
+import { massOf } from '../../src/nexus/parts/mass';
 
 /** The kind a word names, drawn: its parts, its faults and what it weighs. */
 function drawn(words: string) {

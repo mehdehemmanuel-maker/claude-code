@@ -3,7 +3,7 @@
 // lacks, and a distinction that stops all three is a candidate for the language itself, never a fix for one of them.
 
 import { describe, expect, it } from 'vitest';
-import { attempt, distinctions, showChain } from '../../src/nexus/attempt';
+import { attempt, distinctions, showChain } from '../../src/nexus/substrate/attempt';
 import { ASPECTS, car, house, printer } from './inventions';
 
 const all = () => [house(), car(), printer()];
@@ -59,10 +59,10 @@ describe('attempt 0: the substrate as it is', () => {
   });
 });
 
-import { carrierById, coupling, family, matter, UNIVERSAL } from '../../src/nexus/carrier';
-import { generate, lacking, type Structure } from '../../src/nexus/manifold';
+import { carrierById, coupling, family, matter, UNIVERSAL } from '../../src/nexus/substrate/carrier';
+import { generate, lacking, type Structure } from '../../src/nexus/substrate/manifold';
 import { covered } from './inventions';
-import type { Intent } from '../../src/nexus/want';
+import type { Intent } from '../../src/nexus/ask/want';
 
 const round1 = () => { const intents = [house(), car(), printer()]; return { intents, structures: intents.map(generate) }; };
 const el = (s: Structure, id: string) => s.elements.find((e) => e.id === id)!;
@@ -197,7 +197,7 @@ describe('the language now: carriers, balances and shapes generate structure', (
   it('the failures rank the next upgrade: what blocks all three inventions now is data, not the language', () => {
     const { intents, structures } = round1();
     const ranked = lacking(intents, structures);
-    // what the kept data does not state, and, since the depth of each potential is followed (src/nexus/depth.ts), how
+    // what the kept data does not state, and, since the depth of each potential is followed (src/nexus/substrate/depth.ts), how
     // far a charge moves freely in their matter: each holds a potential past what binds the settled level, and whether
     // that takes it apart lies between the field across one unit and the whole drop
     expect(ranked.filter((l) => l.inventions.length === 3).map((l) => l.distinction)).toEqual(['knowledge: the kept data does not state it', 'depth (data): how far a charge moves freely before it strikes something']);

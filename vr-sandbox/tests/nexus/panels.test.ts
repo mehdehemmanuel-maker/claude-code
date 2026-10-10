@@ -1,10 +1,10 @@
-// A panelled body made as its designers draw it (src/nexus/panels.ts): its arches from how its wheels move, its skin
+// A panelled body made as its designers draw it (src/nexus/machines/panels.ts): its arches from how its wheels move, its skin
 // closing smoothly across its middle, its hood over what is under it, its lines without ripples.
 import { describe, expect, test } from 'vitest';
-import { bodyPlanOf, MACHINES, makeMachine, styledCar, travelOf, tyreOf, tyreSection } from '../../src/nexus/machines';
-import { BODY_RULES, bodyScore, bodyPanels, inSweep, lineBy, practise } from '../../src/nexus/panels';
-import { closestOn, comb, patchAt, patchPoints, type Patch } from '../../src/nexus/surface';
-import type { Part } from '../../src/nexus/kits';
+import { bodyPlanOf, MACHINES, makeMachine, styledCar, travelOf, tyreOf, tyreSection } from '../../src/nexus/machines/machines';
+import { BODY_RULES, bodyScore, bodyPanels, inSweep, lineBy, practise } from '../../src/nexus/machines/panels';
+import { closestOn, comb, patchAt, patchPoints, type Patch } from '../../src/nexus/machines/surface';
+import type { Part } from '../../src/nexus/parts/kits';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 const corolla = MACHINES.find((m) => m.short === 'corolla')!, car = makeMachine(corolla), part = (n: string) => all(car).find((p) => p.name === n)!;

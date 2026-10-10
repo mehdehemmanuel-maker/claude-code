@@ -1,16 +1,16 @@
-// Couplings between places (src/nexus/contact.ts), generated from geometry in the running state: contacts where faces
+// Couplings between places (src/nexus/substrate/contact.ts), generated from geometry in the running state: contacts where faces
 // touch, weight down them to what is held at rest, shares by the laws, bending and stress by the kept law. The places
 // are boxes with numbers; nothing names a floor, a support, a beam or a shelf. The kept beam law is the evidence.
 
 import { describe, expect, it } from 'vitest';
-import { apply } from '../../src/nexus/law';
+import { apply } from '../../src/nexus/substrate/law';
 import { PATCH_MOMENT, SELF_MOMENT } from '../../src/nexus/book/slice';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { MemorySink } from '../../src/nexus/journal';
-import { contactAt } from '../../src/nexus/contact';
-import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/place';
-import { bound, Runtime } from '../../src/nexus/runtime';
-import { leaf, type Leaf } from '../../src/nexus/term';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { MemorySink } from '../../src/nexus/substrate/journal';
+import { contactAt } from '../../src/nexus/substrate/contact';
+import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/substrate/place';
+import { bound, Runtime } from '../../src/nexus/substrate/runtime';
+import { leaf, type Leaf } from '../../src/nexus/substrate/term';
 
 const person = 'the person';
 const given = (name: string, v: number, unit: string): Leaf => leaf(name, v, unit, { class: 'given', by: person, grounds: 'placed' });

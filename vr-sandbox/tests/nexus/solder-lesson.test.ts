@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { bridges, cut, HAND, jointPoint, LAYOUT, leadAt, letGo, lit, throwSwitch, newBench, payOut, PROTO, PROTO_STEPS, protoHold, readout, STEPS, stepsOf, takeUp, tick, TRIM, wipe, type Bench, type V3 } from '../../src/nexus/solder-lesson';
-import { ledBuild, ledsAsked } from '../../src/nexus/lessons';
-import { grade, idealVolume } from '../../src/nexus/solder-joint';
+import { bridges, cut, HAND, jointPoint, LAYOUT, leadAt, letGo, lit, throwSwitch, newBench, payOut, PROTO, PROTO_STEPS, protoHold, readout, STEPS, stepsOf, takeUp, tick, TRIM, wipe, type Bench, type V3 } from '../../src/nexus/teach/solder-lesson';
+import { ledBuild, ledsAsked } from '../../src/nexus/teach/lessons';
+import { grade, idealVolume } from '../../src/nexus/teach/solder-joint';
 
 const dt = 1 / 60;
 /** The hands held so for s seconds: the tip at `tip`, the wire's end at `wire` (each null when away). */

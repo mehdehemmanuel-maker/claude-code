@@ -4,8 +4,8 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
-import type { Jolt } from '../../src/nexus/realize';
-import { aimDart, dartFlight, Pool, POOL, POCKETS, rack, targetOn, throwDart } from '../../src/nexus/games';
+import type { Jolt } from '../../src/nexus/substrate/realize';
+import { aimDart, dartFlight, Pool, POOL, POCKETS, rack, targetOn, throwDart } from '../../src/nexus/world/games';
 import { DARTBOARD } from '../../src/nexus/view/place3d';
 
 let J: Jolt; beforeAll(async () => { J = (await initJolt()) as unknown as Jolt; });

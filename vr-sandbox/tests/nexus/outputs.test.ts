@@ -2,9 +2,9 @@
 // the entries words find, and its type.
 
 import { describe, expect, it } from 'vitest';
-import { bomCsv, compare, flatBom, massOf, scadOf, search, typeOf, types, usedIn } from '../../src/nexus/outputs';
-import { INVENTORY, resolve, type Item } from '../../src/nexus/inventory';
-import { scadToSteps } from '../../src/nexus/languages';
+import { bomCsv, compare, flatBom, massOf, scadOf, search, typeOf, types, usedIn } from '../../src/nexus/ask/outputs';
+import { INVENTORY, resolve, type Item } from '../../src/nexus/parts/inventory';
+import { scadToSteps } from '../../src/nexus/teach/languages';
 
 describe('outputs', () => {
   it('a flat bill of materials, added up across the tree, and as CSV', () => {

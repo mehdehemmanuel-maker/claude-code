@@ -1,5 +1,5 @@
-// People in the room, drawn on their physics: each body's own skin (its layout's surface, src/nexus/anatomy.ts), hair,
-// brows and eyes, skinned to its sixteen segments (src/nexus/person.ts) so the skin goes where the segments go. A skin
+// People in the room, drawn on their physics: each body's own skin (its layout's surface, src/nexus/world/anatomy.ts), hair,
+// brows and eyes, skinned to its sixteen segments (src/nexus/world/person.ts) so the skin goes where the segments go. A skin
 // point is carried by the two segments nearest it, weighted by how near (more by the nearer), so a knee bends as a knee
 // rather than as two sticks. Which segments carry a point is asked of the skin's own shape: the capsule of skin the point
 // is on (a forearm's, the side of the chest's) stands for the point, so the side of the chest stays with the chest when
@@ -7,8 +7,8 @@
 // pressed to the side: meshed with the trunk, the skin between them would be one sheet, pulled into a web as it lifts.
 
 import * as THREE from 'three';
-import { primDist, surfaceNets, type Body, type Prim, type V3 } from '../anatomy';
-import type { Person } from '../person';
+import { primDist, surfaceNets, type Body, type Prim, type V3 } from '../world/anatomy';
+import type { Person } from '../world/person';
 import { centreOf, type Segment } from '../life/segments';
 import { hairColor, irisColor, skinColor } from './organic';
 

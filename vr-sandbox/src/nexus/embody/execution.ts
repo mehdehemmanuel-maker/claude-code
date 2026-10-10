@@ -14,8 +14,8 @@
 // A domain is not a taxonomy laid over it: it is read from what each node is about (the carrier an element is of, the
 // kind of the parts a subsystem is made of).
 
-import type { Intent } from '../want';
-import type { Structure } from '../manifold';
+import type { Intent } from '../ask/want';
+import type { Structure } from '../substrate/manifold';
 import type { Machine } from './embody';
 import { causalOf, type Causal } from './causal';
 import type { Learned } from './any';

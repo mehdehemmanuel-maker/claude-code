@@ -1,4 +1,4 @@
-// What a body makes and holds, for holding a temperature across scale (src/nexus/hold.ts). Kleiber's law is a measured
+// What a body makes and holds, for holding a temperature across scale (src/nexus/substrate/hold.ts). Kleiber's law is a measured
 // regularity of whole animals, kept here as data and never explained by the code; the tissue values and the observed
 // smallest mammals are labelled estimates.
 

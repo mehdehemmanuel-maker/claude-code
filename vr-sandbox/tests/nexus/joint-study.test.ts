@@ -4,10 +4,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
-import { candidates, discriminates } from '../../src/nexus/abduce';
-import { choose } from '../../src/nexus/study';
-import { jointStudy, type JointCase, type JointStudy } from '../../src/nexus/study-joint';
-import { varsOf } from '../../src/nexus/term';
+import { candidates, discriminates } from '../../src/nexus/substrate/abduce';
+import { choose } from '../../src/nexus/substrate/study';
+import { jointStudy, type JointCase, type JointStudy } from '../../src/nexus/substrate/study-joint';
+import { varsOf } from '../../src/nexus/substrate/term';
 
 const heavy = { patch: 0.1, across: 0.5 };
 const cases: JointCase[] = [

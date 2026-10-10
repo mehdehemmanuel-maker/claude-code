@@ -1,6 +1,6 @@
-// A body as the rigid segments physics moves: fifteen of them, from the body laid out (src/nexus/anatomy.ts), each with
+// A body as the rigid segments physics moves: fifteen of them, from the body laid out (src/nexus/world/anatomy.ts), each with
 // the share of the body's mass de Leva measured for its sex, the room that mass takes at the body's own density (its
-// make-up through the mixing law, src/nexus/derive.ts) as the shape round its bone, and between them the joints with
+// make-up through the mixing law, src/nexus/substrate/derive.ts) as the shape round its bone, and between them the joints with
 // the ranges a joint moves through and the torques the muscles across it can give. Nothing here moves; it is what a
 // physics engine needs to make a body that falls, stands, steps and strikes by its own masses and muscles.
 //
@@ -13,7 +13,7 @@
 //     by the body's muscle: a muscle's force is its specific tension times its cross-section, F = σ A, and A is its
 //     volume over its length, so with moment arms that grow with height the torque grows with the muscle's mass alone.
 
-import type { Body, BodyParams, V3 } from '../anatomy';
+import type { Body, BodyParams, V3 } from '../world/anatomy';
 
 export type SegmentId =
   | 'pelvis' | 'abdomen' | 'thorax' | 'head'

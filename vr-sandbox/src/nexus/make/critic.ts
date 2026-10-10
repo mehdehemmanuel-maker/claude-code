@@ -21,17 +21,17 @@
 //   density        a thing as a whole lighter than air or heavier than solid gold is wrong somewhere: said
 
 import * as THREE from 'three';
-import { DENSITY, massOf, type Part } from '../kits';
+import { DENSITY, massOf, type Part } from '../parts/kits';
 import { loadPath } from '../embody/tree';
 import type { Part as EPart } from '../embody/part';
 import { classOf, onePiece, sealedIn } from './detail';
 import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from './space';
-import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../form';
-import { inSweep } from '../panels';
+import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../machines/form';
+import { inSweep } from '../machines/panels';
 /** How wide a turned part is along its axis: a tyre's width at its sidewalls' widest, from its section (its covering
  *  boxes stand a few millimetres proud of it, which is room for them, not for it). */
 const latheWidth = (l: Lathe) => Math.max(...l.map((q) => q[1])) - Math.min(...l.map((q) => q[1]));
-import { closestOn, draft, fairness, patchAt, patchPoints, type Patch, type V3 as SV3 } from '../surface';
+import { closestOn, draft, fairness, patchAt, patchPoints, type Patch, type V3 as SV3 } from '../machines/surface';
 
 export interface Finding { check: string; part: string; says: string; fixed: boolean }
 
@@ -141,7 +141,7 @@ export function critique(root: Part): Finding[] {
       if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
       // (and then exactly: within the cylinder it sweeps, not merely that cylinder's box)
       if (!f.pieces.some((pc) => hitsCylinder(pc, ctr, ax, sweep + need.clearance, along + sideRoom, bore))) continue;
-      // a skin (src/nexus/panels.ts) is tested exactly, point by point on it, against the room the wheel sweeps through
+      // a skin (src/nexus/machines/panels.ts) is tested exactly, point by point on it, against the room the wheel sweeps through
       // its lock and its bump: its arch is its maker's to draw (from that same sweep), never the critic's to cut
       if (f.p.shape && 'surf' in f.p.shape) {
         // (its tyre sweeps the ring about the tyre's own middle, its full width; what is inside its rim, the hub and the
@@ -301,7 +301,7 @@ function moveBy(n: Node, world: THREE.Vector3): void {
   const at = n.p.at ?? [0, 0, 0]; n.p.at = [at[0] + d.x, at[1] + d.y, at[2] + d.z];
 }
 
-// ---- skins (src/nexus/panels.ts): each checked once, its own results kept with it ----------------------------------
+// ---- skins (src/nexus/machines/panels.ts): each checked once, its own results kept with it ----------------------------------
 const formed = new WeakMap<Patch, { least: number; pull: SV3; rmin: number; rminAt: [number, number] }>(), grids = new WeakMap<Patch, { a: number; b: number; at: SV3 }[]>();
 const met = new WeakMap<Patch, Map<string, { gap: number; angle: number }>>(), ids = new WeakMap<Patch, number>(); let nextId = 0;
 const idOf = (pt: Patch) => { let i = ids.get(pt); if (i === undefined) { i = nextId++; ids.set(pt, i); } return i; };

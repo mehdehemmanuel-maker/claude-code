@@ -1,13 +1,13 @@
-// The roller coaster drawn (src/nexus/coaster.ts is it as numbers): two tubular running rails 1.1 m apart on a spine
+// The roller coaster drawn (src/nexus/world/coaster.ts is it as numbers): two tubular running rails 1.1 m apart on a spine
 // beneath them, tied every 1.2 m, white columns down to the ground wherever the track runs upright above it, the chain
 // up the lift, the station's platform and roof, the train of six cars with their riders, and, when asked, a volcano
-// whose breached crater the helix runs round over a lake of lava. Edges as things are made (src/nexus/finish.ts):
+// whose breached crater the helix runs round over a lake of lava. Edges as things are made (src/nexus/parts/finish.ts):
 // steel tube is round already; the cars' fibreglass bodies are moulded round, the platform's concrete chamfered.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { edgeRadius } from '../finish';
-import { at, COASTER, cross, type Ride, type Track, type V3 } from '../coaster';
+import { edgeRadius } from '../parts/finish';
+import { at, COASTER, cross, type Ride, type Track, type V3 } from '../world/coaster';
 import { filletCyl } from './kit3d';
 
 const std = (c: number, rough = 0.6, metal = 0, more: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal, ...more });

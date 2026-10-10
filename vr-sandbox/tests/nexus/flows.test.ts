@@ -1,13 +1,13 @@
-// Pipelines you run (src/nexus/flows.ts): a board of steps, run in its own order. A check lets on only what its
+// Pipelines you run (src/nexus/substrate/flows.ts): a board of steps, run in its own order. A check lets on only what its
 // condition holds for; a repeat goes back along its loop until its condition holds; a step that fails stops the flow;
 // a trigger starts it on its event. The world here counts what it is asked to do, and its numbers change as it acts,
 // so a loop that converges does so on what the actions did.
 
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, SUGGEST, TEMPLATES, boardOfClip, boardOfTemplate, clipOf, evaluate, graphOf, guessStep, keptRun, maxRounds, orderFrom, pasteOf, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/flows';
-import { addNode, deepMerge, link, nodesOf, type Board } from '../../src/nexus/boards';
-import { Workshop } from '../../src/nexus/generate';
-import { ALL_CALLS, CALLS } from '../../src/nexus/calls';
+import { ACTIONS, SUGGEST, TEMPLATES, boardOfClip, boardOfTemplate, clipOf, evaluate, graphOf, guessStep, keptRun, maxRounds, orderFrom, pasteOf, runFlow, starts, triggerOf, triggersOf, type FlowApi } from '../../src/nexus/substrate/flows';
+import { addNode, deepMerge, link, nodesOf, type Board } from '../../src/nexus/substrate/boards';
+import { Workshop } from '../../src/nexus/ask/generate';
+import { ALL_CALLS, CALLS } from '../../src/nexus/substrate/calls';
 
 /** A room whose flaws go down by one each time it is built again, and whose AI says what it was asked. */
 function room(flaws = 2): FlowApi & { done: string[] } {

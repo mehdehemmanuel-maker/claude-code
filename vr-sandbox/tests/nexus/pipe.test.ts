@@ -1,9 +1,9 @@
 // The pipeline as the phone runs it: stage by stage, with your edits, two runs compared, and a note for Claude.
 
 import { describe, expect, it } from 'vitest';
-import { compare, EDITS0, noteFor, runPipeline, STAGES } from '../../src/nexus/pipe';
-import { TEST_ASKS } from '../../src/nexus/test-asks';
-import { READING } from '../../src/nexus/conceive';
+import { compare, EDITS0, noteFor, runPipeline, STAGES } from '../../src/nexus/substrate/pipe';
+import { TEST_ASKS } from '../../src/nexus/ask/test-asks';
+import { READING } from '../../src/nexus/ask/conceive';
 
 const ASK = 'a wall bracket that holds a 17 kg camera 400 mm out from the wall';
 

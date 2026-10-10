@@ -1,11 +1,11 @@
-// Every call in the catalogue, run for real (src/nexus/calltest.ts): each in a room of its own, offline. A call that
+// Every call in the catalogue, run for real (src/nexus/substrate/calltest.ts): each in a room of its own, offline. A call that
 // would act on the build standing in the forge, or ask Claude, is not run, and says so; every other call works.
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
-import { ALL_CALLS, callsFor } from '../../src/nexus/calls';
-import { setTestPhysics, testCall, testCalls, type CallTest } from '../../src/nexus/calltest';
-import type { Jolt } from '../../src/nexus/realize';
+import { ALL_CALLS, callsFor } from '../../src/nexus/substrate/calls';
+import { setTestPhysics, testCall, testCalls, type CallTest } from '../../src/nexus/substrate/calltest';
+import type { Jolt } from '../../src/nexus/substrate/realize';
 
 describe('every call, run for real', () => {
   let all: CallTest[] = [];

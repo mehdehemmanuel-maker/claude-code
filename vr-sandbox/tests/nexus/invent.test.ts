@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EFFECTS, invent, sayInvention } from '../../src/nexus/invent';
+import { EFFECTS, invent, sayInvention } from '../../src/nexus/ask/invent';
 
 describe('inventing what nothing kept does', () => {
   it('turns ocean waves into drinking water by a chain whose ports mate, sized under the floor of the laws, its missing membrane said', () => {

@@ -2,8 +2,8 @@
 // break in it is found where it lies, with what it hangs from and what hangs from it.
 
 import { describe, expect, it } from 'vitest';
-import { car, printer } from '../../src/nexus/asked';
-import { generate } from '../../src/nexus/manifold';
+import { car, printer } from '../../src/nexus/ask/asked';
+import { generate } from '../../src/nexus/substrate/manifold';
 import { embodyAny } from '../../src/nexus/embody/any';
 import { breaks, causalOf, trace } from '../../src/nexus/embody/causal';
 

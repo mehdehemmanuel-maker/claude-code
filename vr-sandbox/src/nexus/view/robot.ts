@@ -6,8 +6,8 @@
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { QServo } from '../motion';
-import type { Expression } from '../emotions';
+import { QServo } from '../substrate/motion';
+import type { Expression } from '../world/emotions';
 
 const metal = new THREE.MeshStandardMaterial({ color: 0x2b3340, metalness: 0.85, roughness: 0.32 });
 const gun = new THREE.MeshStandardMaterial({ color: 0x161b22, metalness: 0.7, roughness: 0.45 });

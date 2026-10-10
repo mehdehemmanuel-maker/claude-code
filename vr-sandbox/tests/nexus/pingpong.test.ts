@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { advance, aimShot, assistHit, batHit, bounce, flight, meetPoint, newRally, point, robotStep, serveBall, serveShot, setSkill, stepBall, terminalSpeed, TT, type Ball, type V3 } from '../../src/nexus/pingpong';
-import { readPlace } from '../../src/nexus/places';
-import { readPlain } from '../../src/nexus/directive';
+import { advance, aimShot, assistHit, batHit, bounce, flight, meetPoint, newRally, point, robotStep, serveBall, serveShot, setSkill, stepBall, terminalSpeed, TT, type Ball, type V3 } from '../../src/nexus/world/pingpong';
+import { readPlace } from '../../src/nexus/world/places';
+import { readPlain } from '../../src/nexus/substrate/directive';
 
 const g = 9.80665;
 const seeded = (s0: number) => { let s = s0 >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };

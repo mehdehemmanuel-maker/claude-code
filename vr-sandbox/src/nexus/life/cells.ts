@@ -4,7 +4,7 @@
 // or mass, so a cell comes down, through them, to its elements.
 
 import { entries, type LifeEntry } from './core';
-import { holding } from '../boxfill';
+import { holding } from '../substrate/boxfill';
 
 /** g a cubic micrometre: a cell is 1.05–1.10 g/ml (typical). */
 export const DENS = 1.07e-12;
@@ -55,7 +55,7 @@ ach-vesicle | synaptic vesicle (acetylcholine) | Life/Brain/Synapse | part | syn
 
 /** A kind of cell, built from its volume (µm³) and what is special to it; everything else typical. Its size gives its
  *  proportions and a typical length; where that size's shape cannot hold its volume it is grown, in proportion, until it
- *  does (src/nexus/boxfill.ts). */
+ *  does (src/nexus/substrate/boxfill.ts). */
 export interface CellType {
   id: string; name: string; path: string; v: number; size: [number, number, number]; says: string; spec?: string; look?: string;
   /** g/µm³ */ dens?: number;

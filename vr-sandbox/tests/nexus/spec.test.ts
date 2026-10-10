@@ -1,9 +1,9 @@
-// An ask as data (src/nexus/spec.ts): any intent written as a spec and built back is the same ask to the generator.
+// An ask as data (src/nexus/ask/spec.ts): any intent written as a spec and built back is the same ask to the generator.
 
 import { describe, expect, it } from 'vitest';
-import { car, house, printer } from '../../src/nexus/asked';
-import { generate } from '../../src/nexus/manifold';
-import { intentFromSpec, specOf } from '../../src/nexus/spec';
+import { car, house, printer } from '../../src/nexus/ask/asked';
+import { generate } from '../../src/nexus/substrate/manifold';
+import { intentFromSpec, specOf } from '../../src/nexus/ask/spec';
 
 describe('an ask as data', () => {
   for (const [name, i] of [['printer', printer()], ['car', car()], ['house', house()]] as const) {

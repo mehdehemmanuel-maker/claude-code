@@ -1,12 +1,12 @@
-// A generated structure given a body in space (src/nexus/realize-space.ts): whatever was asked, every region and every
+// A generated structure given a body in space (src/nexus/substrate/realize-space.ts): whatever was asked, every region and every
 // element the generator made becomes a thing with a place, in the order it was made, and every gap is placed where it
 // stopped. What these tests hold is that rule, never one layout.
 
 import { describe, expect, it } from 'vitest';
-import { car, house, printer } from '../../src/nexus/asked';
-import { drawIntent } from '../../src/nexus/draw';
-import { generate } from '../../src/nexus/manifold';
-import { realize, whyOf } from '../../src/nexus/realize-space';
+import { car, house, printer } from '../../src/nexus/ask/asked';
+import { drawIntent } from '../../src/nexus/substrate/draw';
+import { generate } from '../../src/nexus/substrate/manifold';
+import { realize, whyOf } from '../../src/nexus/substrate/realize-space';
 
 describe('anything generated has a body in space', () => {
   for (const [name, intent] of [['a 3D printer', printer()], ['a house', house()], ['a car', car()], ['a drawn intent', drawIntent(5007, 3).intent]] as const) {

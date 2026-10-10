@@ -18,7 +18,7 @@
 //   posed        &pose=steer:<rad>,bump:<m> (each wheel that steers turned so far, each that rises risen so far, with what
 //                is carried with it: its knuckle, its strut's tube and spring), so what clears it can be looked at and
 //                clashed where it moves to
-//   tried        &rules=<JSON> and &lines=<JSON> try body rules and lines (src/nexus/panels.ts) on what is made, so a
+//   tried        &rules=<JSON> and &lines=<JSON> try body rules and lines (src/nexus/machines/panels.ts) on what is made, so a
 //                critic can show what it would change
 // And on window.look: parts() (each part drawn: name, holders, material, finish, colour, what it says of itself, its
 // bounds), facts() (what the thing says of itself and its measured size), pick(x, y) (the part under a pixel),
@@ -34,13 +34,13 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { KITS, makeKit, massOf, type Part } from '../kits';
-import '../creatures';
+import { KITS, makeKit, massOf, type Part } from '../parts/kits';
+import '../world/creatures';
 import { perfect } from '../make/pipeline';
 import { frame, held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
-import { tryBody } from '../panels';
+import { tryBody } from '../machines/panels';
 import { kitView } from './kit3d';
-import { draft } from '../surface';
+import { draft } from '../machines/surface';
 
 const q = new URLSearchParams(location.search), kit = KITS.find((k) => k.id === (q.get('kit') ?? 'car')) ?? KITS[0]!, words = q.get('words') ?? kit.name, seed = Number(q.get('seed') ?? 7);
 const num3 = (s: string | null) => (s ? (s.split(',').map(Number) as [number, number, number]) : null);

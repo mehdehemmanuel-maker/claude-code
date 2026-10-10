@@ -1,7 +1,7 @@
 // The frame profiler: each part timed, kept as a running mean and its worst lately, the slowest first.
 
 import { describe, expect, it } from 'vitest';
-import { BUDGET_MS, Profile } from '../../src/nexus/profile';
+import { BUDGET_MS, Profile } from '../../src/nexus/machines/profile';
 
 describe('the frame profiler', () => {
   it('times each part, slowest first, each with its share; what a part throws is thrown after it is counted', () => {

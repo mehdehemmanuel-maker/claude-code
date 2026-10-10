@@ -8,7 +8,7 @@ What is true now is marked **works**; what is half there, **partial**; what is n
 ## 1. Saying it: one directive, carried out in one place
 
 - **works**: whatever you say is read into one directive: make it, bring people in, set them fighting, take it away, or
-  pass it on as talk (src/nexus/directive.ts). Where Claude can be asked (the forge in claude.ai), one call reads it,
+  pass it on as talk (src/nexus/substrate/directive.ts). Where Claude can be asked (the forge in claude.ai), one call reads it,
   asks only what it must, and folds your answer in; elsewhere the same directive is read here by rule. "generate a car",
   "spawn a kettle", "I want a house", "remove it", "get rid of the chair", "undo", "throw it away" all work.
 - **works**: a make goes to the intent pipeline when it can read what the thing must do into it, else to the inventory's
@@ -17,20 +17,20 @@ What is true now is marked **works**; what is half there, **partial**; what is n
   picks where it can be asked, and its pick is used only if it reads as something the forge can do; elsewhere it is
   picked here from 22 kinds of design the pipeline is tested to read (a bridge over so far, a raft that floats so much,
   a cabin for so cold a winter), the inventory's real products, people or a fight. It goes ahead on what I would take
-  for anything not said (src/nexus/surprise.ts).
+  for anything not said (src/nexus/ask/surprise.ts).
 - **next**: things the pipeline cannot yet read into wants (a guitar, a sword, a dog): Claude, where it can be asked,
-  writes them as an ask the pipeline can make (an ask as data, src/nexus/spec.ts); here, more kinds of want.
+  writes them as an ask the pipeline can make (an ask as data, src/nexus/ask/spec.ts); here, more kinds of want.
 - **next**: every directive a node on a board, so what was said, what it was read as and what was done can be seen and
   changed (the pipeline engine already runs boards of IF and THEN).
 
 ## 2. People: anatomical, physical and behavioural models
 
 - **works (anatomical)**: a body grown from a genome, male or female, every organ, tissue and cell down to molecules;
-  its proportions from measured anthropometry; hair, skin and eyes from its genes (src/nexus/life, src/nexus/anatomy.ts).
+  its proportions from measured anthropometry; hair, skin and eyes from its genes (src/nexus/life, src/nexus/world/anatomy.ts).
 - **works (physical)**: sixteen rigid segments with de Leva's (1996) masses for its sex, fifteen
   joints moving only through the AAOS ranges, each turned by a motor that is its muscles (stiff enough for what the
   joint carries, never more torque than the muscles give). It stands on its joints alone, falls when slack, a fighter
-  holds its guard, and a jab and a cross reach 7 and 9 m/s (src/nexus/life/segments.ts, src/nexus/person.ts).
+  holds its guard, and a jab and a cross reach 7 and 9 m/s (src/nexus/life/segments.ts, src/nexus/world/person.ts).
 - **works (behavioural, as facts)**: what a body senses (reach to its target, how hard its head was jolted in g, down,
   balance, stamina) is read out as facts a rules board reads.
 - **works**: people in the room: "spawn a man", "spawn a fighter", "generate 5 random people", male or female, each
@@ -85,20 +85,20 @@ Each is a place in the room with its own physics, a coach that measures you, and
 
 ## 4. The world
 
-- **works (places, src/nexus/places.ts)**: say where you want to be and you are there:
+- **works (places, src/nexus/world/places.ts)**: say where you want to be and you are there:
   - outdoors: a beach, the surface of Mars, the Moon, a canyon rim (flying on), a snowfield, a desert, a forest, a garden, under the sea, space, a volcano, the late Cretaceous, the mountains;
   - rooms: a cabin (fire, snow at the window), a bar (a WPA 9-foot pool table, racked, and a WDF dartboard at 1.73 m with its throw line at 2.37 m), a haunted mansion (a torch in your hand), a stadium stage.
   - Change it as you stand in it: the time ("sunset", "night"), the weather ("make it rain", a blizzard, "raindrops of gummy bears", each falling at its own terminal speed), gravity ("turn gravity off", the Moon's 1.62, Mars's 3.71 m/s², which the people feel too), your size ("shrink me to an ant", 340 times smaller).
   - The sea's waves go by ω² = g k. What was asked and is not there yet (dinosaurs, whales, a crowd) is said.
-- **works (kits, src/nexus/kits.ts)**: makers of things whose kinds multiply. Each is a tree of parts you can take apart level by level ("take it apart") and ask "what is the tyre made of" down to its elements:
+- **works (kits, src/nexus/parts/kits.ts)**: makers of things whose kinds multiply. Each is a tree of parts you can take apart level by level ("take it apart") and ask "what is the tyre made of" down to its elements:
   - things: trees (trunk thickness by D ∝ H^1.5, palms excepted), plants, houses, cars (real dimensions by body type, tyres by their size code), roads (FHWA lanes), lamp posts (lumens by lamp), beds (named mattress sizes), swords, prop blasters, a light sword prop, sandwiches (USDA energy), toy bricks (LEGO's brick dimensions, a house-sized heap counted in millions), a solar system (NASA sizes, Kepler years), a galaxy (logarithmic arms, a flat rotation curve), terrain, a treehouse;
   - scenes that are kits of kits: a street, a village, a park, a forest, a car park, a flower garden, a sword rack.
   - Every choice multiplies: 23 kits make about 10^384 different things, counted exactly ("how many things can you make").
   - Masses come from shapes and densities, with what is hollow counted as hollow. They are checked against real ones: a car 1.1–1.4 t, a tyre about 10 kg, a brick house about 90 t.
-- **works (edges, src/nexus/finish.ts)**: no edge is perfectly sharp; each is rounded as its material is made:
+- **works (edges, src/nexus/parts/finish.ts)**: no edge is perfectly sharp; each is rounded as its material is made:
   - machined edges broken by 0.5 mm, moulded plastic rounded by its wall, castings filleted, wood eased by 2 mm, concrete chamfered by 20 mm, glass arrissed, pressed car panels as round as they are styled.
   - It applies to the forge's own builds too. The rules are a board ("edges") whose steps can be changed and run.
-- **works (the bar's games, src/nexus/games.ts)**:
+- **works (the bar's games, src/nexus/world/games.ts)**:
   - **pool** by its own physics:
     - balls of 57.15 mm and 170 g, bouncing off each other at 0.93 and off the cushions at 0.8;
     - a struck ball slides (friction 0.2) until it rolls at 5/7 of its speed, then the cloth's rolling resistance (0.01) stops it;
@@ -109,7 +109,7 @@ Each is a place in the room with its own physics, a coach that measures you, and
     - a casual hand's spread: median miss 4.4 cm, about one in eleven off the board when aimed at treble 20.
     - Say "throw 3 darts at treble 20"; in a headset, hold the trigger at the line and let go to throw with your hand's own speed.
   - Spin (follow, draw, side) is not modelled yet.
-- **works (the go-kart track, src/nexus/karting.ts)**: "take me to a go-kart track", and you are in a kart on the grid.
+- **works (the go-kart track, src/nexus/world/karting.ts)**: "take me to a go-kart track", and you are in a kart on the grid.
   - The track is a 546 m loop, 7 m wide (the CIK-FIA asks 6–8 m by circuit grade), with 9 corners, the tightest a hairpin
     8 m in radius. Red-and-white kerbs mark the corners, grass beyond them grips about half as well, tyre walls stand 3 m
     out, and a gantry over the line carries five start lights and a timing board.
@@ -124,7 +124,7 @@ Each is a place in the room with its own physics, a coach that measures you, and
     W/S and A/D or the arrow keys. Say "go" (five lights, then out), "restart", "practice" (alone), "race 5 karts",
     "lap times", "get out" or "get in", "behind view", or "why did I spin" for the physics.
   - Not yet: engine sound, the karts' weight shifting onto the outer tyres, kerbs as bumps.
-- **works (the roller coaster, src/nexus/coaster.ts)**: "ride a roller coaster" or "build a roller coaster that goes
+- **works (the roller coaster, src/nexus/world/coaster.ts)**: "ride a roller coaster" or "build a roller coaster that goes
   through a volcano", and you are in the front seat with the lap bar down.
   - The track is about a kilometre of steel, laid piece by piece as a designer lays it, each piece a straight or an arc
     of a stated radius:
@@ -151,7 +151,7 @@ Each is a place in the room with its own physics, a coach that measures you, and
   - Say "go" (or squeeze a trigger, or press space), "wait", "get off" (in the station, to watch from the platform),
     "get on", "stats", or "why don't I fall out at the top".
   - Not yet: wind and sound, cars that sway, a coaster you lay yourself piece by piece.
-- **works (table tennis against a robot, src/nexus/pingpong.ts)**: "I want to play ping pong against a robot that's way
+- **works (table tennis against a robot, src/nexus/world/pingpong.ts)**: "I want to play ping pong against a robot that's way
   better than me", and you are at the table, the robot at the other end.
   - The table, ball and net follow the ITTF's Laws: 2.74 by 1.525 m, the top 76 cm up, a 15.25 cm net, a 40 mm ball of
     2.7 g. Dropped from 30 cm, the ball comes back to about 23 cm.
@@ -171,7 +171,7 @@ Each is a place in the room with its own physics, a coach that measures you, and
   - Measured, not assumed: a 6 m/s ball with heavy topspin cannot reach 1 m deep on the far side (the air takes too
     much). The robot then plays slower or shorter.
   - Not yet: the lift dip at low spin found in free-flight measurements (Miyazaki et al., 2017), sound, a person to play.
-- **works (creatures, src/nexus/creatures.ts)**:
+- **works (creatures, src/nexus/world/creatures.ts)**:
   - a dog (a golden retriever, by age), penguins (emperor, king, Adélie), a humpback whale, a T. rex, and a dragon;
   - each at the size and mass its sources give, moving as its size lets it: walkers at the Froude number their gait keeps
     (a puppy trots at 1.3 m/s), a whale's flukes at a Strouhal number of 0.3, a flier flapping at Pennycuick's rate;

@@ -1,11 +1,11 @@
-// The build domain manifold (src/nexus/atlas.ts) and the census that grounds it (src/nexus/census.ts): one node however
+// The build domain manifold (src/nexus/substrate/atlas.ts) and the census that grounds it (src/nexus/substrate/census.ts): one node however
 // many domains name a term, carriers joining every domain, grounding only from builds that ran; and the laws the census
 // found missing: fuel burns only where there is air, a push on light is not a rotor's, sunlight takes the area it takes,
 // and a way offered beside the one taken is not a gap.
 
 import { describe, expect, it } from 'vitest';
-import { DOMAINS, atlasOf, involves, reach, termId } from '../../src/nexus/atlas';
-import { quickAsks, runAsk, summarize } from '../../src/nexus/census';
+import { DOMAINS, atlasOf, involves, reach, termId } from '../../src/nexus/substrate/atlas';
+import { quickAsks, runAsk, summarize } from '../../src/nexus/substrate/census';
 
 describe('the build domain manifold', () => {
   const a = atlasOf();

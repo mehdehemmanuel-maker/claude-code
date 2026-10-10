@@ -6,15 +6,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { BOOK, UNIVERSAL, lawById } from '../../src/nexus/book';
-import { breakdown, discover, families, forcedByUnits, graphSummary, leavesUnder, lawsUnder, measured, principlesOf, solve, step, valueIn } from '../../src/nexus/lawgraph';
-import { densityOf, profile, profileFaults } from '../../src/nexus/derive';
+import { breakdown, discover, families, forcedByUnits, graphSummary, leavesUnder, lawsUnder, measured, principlesOf, solve, step, valueIn } from '../../src/nexus/substrate/lawgraph';
+import { densityOf, profile, profileFaults } from '../../src/nexus/substrate/derive';
 import { flowsOf } from '../../src/nexus/life/flows';
-import { INVENTORY, countIn, gramsOfItem } from '../../src/nexus/inventory';
+import { INVENTORY, countIn, gramsOfItem } from '../../src/nexus/parts/inventory';
 import { MOLECULES } from '../../src/nexus/life';
 import { GLAND_KINDS } from '../../src/nexus/life/glands';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { leaf } from '../../src/nexus/term';
-import { holding } from '../../src/nexus/boxfill';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { leaf } from '../../src/nexus/substrate/term';
+import { holding } from '../../src/nexus/substrate/boxfill';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 

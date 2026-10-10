@@ -13,7 +13,7 @@ This is the plan for all of that, in the order it is built. Each phase ends test
 
 ## Where it stands (round D1, this round)
 
-`src/nexus/conceive.ts`, the intent pipeline:
+`src/nexus/ask/conceive.ts`, the intent pipeline:
 
 - **Reading.** Words are read into *wants*: hold a weight up, move a load, turn, swing open, slide, hold a liquid,
   enclose, keep warm, lift itself, float. Each want carries its figures. A figure is given by you, answered, the usual

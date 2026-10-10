@@ -1,11 +1,11 @@
-// A solid's continuum quantities from its constituents (src/nexus/solid.ts): density from an atom's mass and the room
+// A solid's continuum quantities from its constituents (src/nexus/substrate/solid.ts): density from an atom's mass and the room
 // the lattice gives it, stiffness against the binding over that room. Measured densities and bulk moduli are checked
 // against, never fed; the residuals' structure names what the constituents' description lacks.
 
 import { describe, expect, it } from 'vitest';
 import { CRYSTALS } from '../../src/data/species';
 import { MATERIALS } from '../../src/data/materials';
-import { atomsPerCell, bulkFrom, densityOf, stiffnessRatio } from '../../src/nexus/solid';
+import { atomsPerCell, bulkFrom, densityOf, stiffnessRatio } from '../../src/nexus/substrate/solid';
 
 const crystal = (el: string) => CRYSTALS.find((c) => c.element === el)!;
 const off = (c: (typeof CRYSTALS)[number]) => densityOf(c) / c.measured.density - 1;

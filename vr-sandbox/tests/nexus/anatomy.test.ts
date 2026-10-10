@@ -4,9 +4,9 @@
 
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { PARAMS, bodyOf, dist, layOut, placeIn, surfaceNets, type Prim } from '../../src/nexus/anatomy';
-import { INVENTORY } from '../../src/nexus/inventory';
-import { lookOf, planOf } from '../../src/nexus/pieces';
+import { PARAMS, bodyOf, dist, layOut, placeIn, surfaceNets, type Prim } from '../../src/nexus/world/anatomy';
+import { INVENTORY } from '../../src/nexus/parts/inventory';
+import { lookOf, planOf } from '../../src/nexus/parts/pieces';
 import { organicInto, skinGeos } from '../../src/nexus/view/organic';
 
 describe('a body laid out', () => {

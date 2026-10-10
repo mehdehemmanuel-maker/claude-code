@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { breakdown, judge, sayBreakdown } from '../../src/nexus/breakdown';
-import { catalogue } from '../../src/nexus/catalogue';
-import { INVENTORY, resolve, type Item } from '../../src/nexus/inventory';
+import { breakdown, judge, sayBreakdown } from '../../src/nexus/parts/breakdown';
+import { catalogue } from '../../src/nexus/parts/catalogue';
+import { INVENTORY, resolve, type Item } from '../../src/nexus/parts/inventory';
 
 const thing = (o: Partial<Item>): Item => ({ id: 'x', name: 'x', path: ['x'], kind: 'product', make: 'assemble', of: [], says: '', ...o }) as Item;
 const find = (id: string) => INVENTORY.get(id);

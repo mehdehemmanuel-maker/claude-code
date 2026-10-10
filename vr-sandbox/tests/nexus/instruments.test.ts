@@ -5,14 +5,14 @@
 
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { HAZARDS, MU_100KEV, anodeSeconds, camKg, camWatts, ftir, ftirKg, glow, halfValue, lidar, lidarKg, panelKg, pulseResolution, shieldFor, thermalCam, through, tubeKg, xrayTube } from '../../src/nexus/instruments';
-import { componentOf } from '../../src/nexus/components';
-import { resolve } from '../../src/nexus/inventory';
-import { massOf } from '../../src/nexus/mass';
+import { HAZARDS, MU_100KEV, anodeSeconds, camKg, camWatts, ftir, ftirKg, glow, halfValue, lidar, lidarKg, panelKg, pulseResolution, shieldFor, thermalCam, through, tubeKg, xrayTube } from '../../src/nexus/machines/instruments';
+import { componentOf } from '../../src/nexus/parts/components';
+import { resolve } from '../../src/nexus/parts/inventory';
+import { massOf } from '../../src/nexus/parts/mass';
 import { lawById } from '../../src/nexus/book';
-import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
-import { apply } from '../../src/nexus/law';
-import { leaf } from '../../src/nexus/term';
+import { ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
+import { apply } from '../../src/nexus/substrate/law';
+import { leaf } from '../../src/nexus/substrate/term';
 import { layout } from '../../src/nexus/make/space';
 
 /** The kind a word names, drawn. */

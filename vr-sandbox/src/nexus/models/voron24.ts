@@ -22,7 +22,7 @@
 //   measured whole: /5015 Fan:\d+$
 //   measured whole: /6020 Fan( \(\d+\))?:\d+$
 // Measured numbers only; none of the model's surface is copied. Do not edit by hand: regenerate.
-import type { MakerModel } from '../makermodel';
+import type { MakerModel } from '../machines/makermodel';
 
 export const VORON24: MakerModel = { id: "voron24", name: "Voron 2.4r2 (250 mm)", src: "VoronDesign's Voron 2.4r2 assembly (github.com/VoronDesign/Voron-2, CAD/Voron_2.4r2_Assembly_STEP.zip, Fusion 360 export, 2023-09-03; GPL-3.0: measured, not copied)", parts: [
   ["B Drive Frame Upper", "B Drive Frame Upper:1", [-0.0, -1.0, 0.0, -35.02261, -1.0, 0.0, -0.0, 349.52984, 0.0, -0.0, -1.0, 44.69399], [-20.5, -73.023, -48.306, 35.529, 42.977, -33.306], [7.099, -6.096, -43.779], [0.19, 0.03, 0.07, 0.14, 0.47, 0.09], {"mat": "Steel", "rho": 7850.0, "look": "Plastic - Matte (Black)", "rgb": 4802889, "in": "B Drive", "hull": [2, 0.744, [-28.0, -53.0, -27.3, -55.5, -26.6, -56.5, -24.3, -57.8, -23.0, -58.0, -9.0, -58.0, -7.5, -57.6, -6.4, -56.5, 14.5, -22.7, 15.8, -19.4, 27.9, 40.2, 28.0, 41.0, 28.0, 55.0, 26.5, 57.6, 25.0, 58.0, 3.0, 58.0, 0.9, 57.1, -25.2, 35.0, -27.3, 32.4, -28.0, 29.2]]}],

@@ -6,12 +6,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { BOOK, lawById } from '../../src/nexus/book';
-import { carrierById, coupling, family, reaction, UNIVERSAL } from '../../src/nexus/carrier';
-import { ofLeaf } from '../../src/nexus/evaluate';
-import { apply, type Law } from '../../src/nexus/law';
-import { generate, type Structure } from '../../src/nexus/manifold';
-import { vapourPressure } from '../../src/nexus/phase';
-import { leaf } from '../../src/nexus/term';
+import { carrierById, coupling, family, reaction, UNIVERSAL } from '../../src/nexus/substrate/carrier';
+import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { apply, type Law } from '../../src/nexus/substrate/law';
+import { generate, type Structure } from '../../src/nexus/substrate/manifold';
+import { vapourPressure } from '../../src/nexus/substrate/phase';
+import { leaf } from '../../src/nexus/substrate/term';
 import { base, lattice, read, vehicle, type VehiclePoint } from './families';
 
 const run = (l: Law, inputs: Record<string, number>) => apply(l, Object.fromEntries(l.inputs.map((p) => [p.sym, ofLeaf(leaf(p.name, inputs[p.sym]!, p.unit, { class: 'given', by: 'the test' }))])));

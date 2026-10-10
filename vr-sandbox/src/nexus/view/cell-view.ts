@@ -1,4 +1,4 @@
-// The workshop corner, drawn as the cell has it (src/nexus/cell.ts): the printer laying down its beads at their real
+// The workshop corner, drawn as the cell has it (src/nexus/machines/cell.ts): the printer laying down its beads at their real
 // size, its tool head where the G-code has it, its screen; the computer the bench arm presses Print on, showing the
 // G-code and the layer; the investing table and its flask; the kiln, its door and the glow inside it; the crucible
 // furnace, its lid, its flame and the metal's glow; the pour, a stream of light the colour of its heat; the quench
@@ -6,7 +6,7 @@
 // two arms, each solved to where its tool is (yaw at the base, then the law of cosines for shoulder and elbow).
 
 import * as THREE from 'three';
-import { COMPONENTS, Cell, RAIL_X, RAIL_Z, RECIPES, STATIONS, BENCH_ARM, Printer, METALS, stateOf, type Arm, type MadePart, type Section } from '../cell';
+import { COMPONENTS, Cell, RAIL_X, RAIL_Z, RECIPES, STATIONS, BENCH_ARM, Printer, METALS, stateOf, type Arm, type MadePart, type Section } from '../machines/cell';
 import { glow } from '../../engineering/thermal';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 

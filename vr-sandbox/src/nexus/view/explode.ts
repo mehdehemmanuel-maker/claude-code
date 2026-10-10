@@ -1,6 +1,6 @@
 // Anything, in three dimensions, coming apart in front of you: an item of the inventory, or a build on the table. Whole,
 // it turns slowly on a ring of light. Apart, its parts fly out round where it was, each in its own shape and finish at
-// the same scale as the whole (src/nexus/pieces.ts says how each looks and where each goes), each named under it.
+// the same scale as the whole (src/nexus/parts/pieces.ts says how each looks and where each goes), each named under it.
 // Point at a part (the trigger, or a click) and it comes forward and opens in turn: down through its parts, then the
 // material, then the elements, the same few dozen under everything. Back goes up a level; close puts it away.
 // A build on the table comes apart where it stands, from its real places, and its parts open the same way.
@@ -10,15 +10,15 @@
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { INVENTORY, atomsOf, countSays } from '../inventory';
-import { fitFor, planOf, type Look, type Plan } from '../pieces';
+import { INVENTORY, atomsOf, countSays } from '../parts/inventory';
+import { fitFor, planOf, type Look, type Plan } from '../parts/pieces';
 import { card, label } from './holo';
 import { mergeStatic } from './merge-static';
 import { organicInto } from './organic';
 import { clockOf } from '../life/time';
-import { componentOf } from '../components';
-import type { Part } from '../kits';
-import { grams, massOf } from '../mass';
+import { componentOf } from '../parts/components';
+import type { Part } from '../parts/kits';
+import { grams, massOf } from '../parts/mass';
 import { kitView, type KitView } from './kit3d';
 
 const ease = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
@@ -50,7 +50,7 @@ const steel = () => SHARED.steel, dark = () => SHARED.dark, rubber = () => SHARE
 /** A tube along a path of points: a frame's member, a spoke, a coil of wire. */
 const strut = (a: THREE.Vector3, b: THREE.Vector3, r: number, m: THREE.Material) => { const len = a.distanceTo(b), g = new THREE.CylinderGeometry(r, r, len, 10), me = new THREE.Mesh(g, m); me.position.copy(a).lerp(b, 0.5); me.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); return me; };
 /** A look drawn: its shape at its size, in its finish, centred on the origin. Axial shapes stand upright, disc shapes
- *  face you, the rest sit as boxes (src/nexus/pieces.ts says which is which). */
+ *  face you, the rest sit as boxes (src/nexus/parts/pieces.ts says which is which). */
 export function meshOfLook(l: Look, ghost = false): THREE.Object3D {
   const big = Math.max(...l.size), [x, y, z] = l.size.map((v) => Math.max(v, big * 0.01)) as [number, number, number], mat = matOf(l, ghost), g = new THREE.Group();
   const add = (geo: THREE.BufferGeometry, m: THREE.Material = mat) => { const me = new THREE.Mesh(geo, ghost ? mat : m); g.add(me); return me; };

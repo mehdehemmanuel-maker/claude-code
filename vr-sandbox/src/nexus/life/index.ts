@@ -4,7 +4,7 @@
 // of a thing that weighs something is that many times its weight, and the rest of an entry ("id:*") is what its other
 // parts leave of its weight. What does not add up (a rest below nothing, a part that weighs nothing) is a fault, listed.
 
-import { ELEMENTS } from '../elements';
+import { ELEMENTS } from '../parts/elements';
 import { BRAIN_ENTRIES } from './brain';
 import { CELLS, MUSCLE, PARTS } from './cells';
 import type { LifeEntry, Molecule } from './core';

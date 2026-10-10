@@ -3,11 +3,11 @@
 // weakest input sets the status; uncertainty propagates.
 
 import { describe, expect, it } from 'vitest';
-import { evaluate, isDerivation, ofLeaf, recompute } from '../../src/nexus/evaluate';
-import { apply } from '../../src/nexus/law';
+import { evaluate, isDerivation, ofLeaf, recompute } from '../../src/nexus/substrate/evaluate';
+import { apply } from '../../src/nexus/substrate/law';
 import { PATCH_SAG, WEIGHT } from '../../src/nexus/book';
-import { leaf, mul, unknown, variable } from '../../src/nexus/term';
-import { why } from '../../src/nexus/why';
+import { leaf, mul, unknown, variable } from '../../src/nexus/substrate/term';
+import { why } from '../../src/nexus/substrate/why';
 
 const given = (name: string, v: number, unit: string, u?: number) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }, u));
 

@@ -6,9 +6,9 @@
 // above the floor, and an arm held only at its joined end.
 
 import { describe, expect, it } from 'vitest';
-import { answersFrom, conceive, designs } from '../../src/nexus/conceive';
-import { Workshop } from '../../src/nexus/generate';
-import { planTree, type Box } from '../../src/nexus/foldtree';
+import { answersFrom, conceive, designs } from '../../src/nexus/ask/conceive';
+import { Workshop } from '../../src/nexus/ask/generate';
+import { planTree, type Box } from '../../src/nexus/substrate/foldtree';
 
 const go = (words: string) => { let c = conceive(words), all: Record<string, string> = {}; for (let k = 0; k < 3 && c.questions.length; k++) { all = { ...all, ...answersFrom(c, 'go') }; c = conceive(words, all); } return c; };
 const law = (words: string, what: RegExp) => go(words).bounds.find((b) => what.test(b.what));

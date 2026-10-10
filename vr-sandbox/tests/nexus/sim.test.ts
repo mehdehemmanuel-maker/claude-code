@@ -1,11 +1,11 @@
-// What is made, let go (src/nexus/sim.ts, Jolt rigid bodies): a cube held up falls and lands on what is under it; a
+// What is made, let go (src/nexus/substrate/sim.ts, Jolt rigid bodies): a cube held up falls and lands on what is under it; a
 // ball falls to the floor at the speed √(2 g h) gives; a tilted plate lands flat; a joined tower pushed over topples
 // as one; where each comes to rest is where it is made from then on.
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
-import { Workshop } from '../../src/nexus/generate';
-import type { Jolt } from '../../src/nexus/realize';
+import { Workshop } from '../../src/nexus/ask/generate';
+import type { Jolt } from '../../src/nexus/substrate/realize';
 
 let J: Jolt;
 beforeAll(async () => { J = (await initJolt()) as unknown as Jolt; });

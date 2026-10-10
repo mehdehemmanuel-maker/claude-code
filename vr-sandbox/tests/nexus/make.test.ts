@@ -1,6 +1,6 @@
 // The make pipeline: conditions read and applied, the attention to detail, the critic, in rounds.
 import { describe, expect, test } from 'vitest';
-import { KITS, makeKit, massOf, type Part } from '../../src/nexus/kits';
+import { KITS, makeKit, massOf, type Part } from '../../src/nexus/parts/kits';
 import { applyConditions, readConditions } from '../../src/nexus/make/conditions';
 import { critique, meshClashes, turning, type TriMesh } from '../../src/nexus/make/critic';
 import { RULES } from '../../src/nexus/make/detail';

@@ -2,14 +2,14 @@
 // test holds a law the experiment found or updated (src/nexus/embody/journal.ts), not an example's numbers.
 
 import { describe, expect, it } from 'vitest';
-import { printer } from '../../src/nexus/asked';
+import { printer } from '../../src/nexus/ask/asked';
 import { AT_SPEED, embody, type Machine } from '../../src/nexus/embody/embody';
 import { LAW_UPDATES } from '../../src/nexus/embody/journal';
 import { boxOf, extentOf, part, placeParts, type Part } from '../../src/nexus/embody/part';
 import { WINDING_CLASS } from '../../src/nexus/embody/stock';
 import { find } from '../../src/nexus/embody/taxonomy';
 import { buildSteps, loadPath, nodeAt, treeOf } from '../../src/nexus/embody/tree';
-import { generate } from '../../src/nexus/manifold';
+import { generate } from '../../src/nexus/substrate/manifold';
 import { plainBrain, type WorldApi } from '../../src/nexus/view/brain';
 
 const build = (o = {}) => { const i = printer(o); return embody(i, generate(i))!; };

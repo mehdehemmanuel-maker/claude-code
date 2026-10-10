@@ -7,7 +7,7 @@
 // Owner of: scoring a works' capability, the walk that spends a budget, and the works under $3,000 this was asked
 // for. The stations it spends on, and their prices, are `stations.ts`.
 
-import { usd as money } from '../prices';
+import { usd as money } from '../parts/prices';
 import { processById, type MatClass } from './families';
 import { STATIONS, stationById, stationCost, stationUsd, worksOf, type Buying } from './stations';
 

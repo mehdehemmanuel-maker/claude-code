@@ -22,13 +22,13 @@
 //   wear       as old as the conditions say: rust where steel is bare outside, paint faded, worn where it is touched.
 
 import * as THREE from 'three';
-import { massOf, type Part } from '../kits';
-import { use } from '../components';
-import { METRIC } from '../threads';
+import { massOf, type Part } from '../parts/kits';
+import { use } from '../parts/components';
+import { METRIC } from '../parts/threads';
 import type { Conditions } from './conditions';
-import { edgeRadius } from '../finish';
-import { insideBy, stationAt, surfaceZ } from '../form';
-import { patchAt, patchPoints, type V3 } from '../surface';
+import { edgeRadius } from '../parts/finish';
+import { insideBy, stationAt, surfaceZ } from '../machines/form';
+import { patchAt, patchPoints, type V3 } from '../machines/surface';
 import { contacts, dirToLocal, grownOf, layout, least, patchIn, sat, toLocal, type Contact, type Node, type OBB } from './space';
 
 export type MatClass = 'metal' | 'wood' | 'polymer' | 'rubber' | 'glass' | 'masonry' | 'soft' | 'organic';
@@ -90,7 +90,7 @@ function headClear(c: Ctx, host: Node, other: Node, at: THREE.Vector3, k: number
   }
   placed.push(o); return true;
 }
-/** A bolt from the component library (src/nexus/components.ts) through a washer, the part it is laid on and into the
+/** A bolt from the component library (src/nexus/parts/components.ts) through a washer, the part it is laid on and into the
  *  part behind (its thread engaged 1.5 d, or as deep as that part allows less half a millimetre: into a tapped hole or a
  *  clinch nut there, which is not drawn), its holes in both said; on a part's face in its own frame, pointing out along
  *  its axis k one way. Stainless (A2) by the sea. */
@@ -174,9 +174,9 @@ const radiusOf = (n: Node) => { const s = n.p.shape!; return 'cyl' in s ? Math.m
 
 export const RULES: DetailRule[] = [
   {
-    // the edges rule is src/nexus/finish.ts's, the one place edges are decided; it is drawn where each part is drawn
+    // the edges rule is src/nexus/parts/finish.ts's, the one place edges are decided; it is drawn where each part is drawn
     // (src/nexus/view/kit3d.ts), and listed here so every detail of a made thing is in one list
-    id: 'edges', family: 'edges', on: true, source: 'src/nexus/finish.ts (each rule names its own)', says: 'no edge truly sharp: each rounded as its material is made, never more than a third of its thinnest side',
+    id: 'edges', family: 'edges', on: true, source: 'src/nexus/parts/finish.ts (each rule names its own)', says: 'no edge truly sharp: each rounded as its material is made, never more than a third of its thinnest side',
     run(c) { let n = 0; for (const x of c.nodes) if (x.local && !x.p.detail && edgeRadius(x.p.mat, least(x.local), x.p.make) > 2e-4) n++; return n; },
   },
   {
@@ -186,7 +186,7 @@ export const RULES: DetailRule[] = [
       for (const t of c.touch) {
         const key = `${t.a.path}|${t.b.path}`; if (c.joined.has(key)) continue; c.joined.add(key);
         if ((c.living(t.a) || c.living(t.b)) && (classOf(t.a.p.mat) === 'wood' || classOf(t.b.p.mat) === 'wood')) continue; // grown, not joined
-        // a skinned panel (src/nexus/panels.ts) meets its neighbours at shut lines, not joints: how it is fixed (hinged,
+        // a skinned panel (src/nexus/machines/panels.ts) meets its neighbours at shut lines, not joints: how it is fixed (hinged,
         // bolted along its flanges, bonded) is its maker's, said with it
         if ((t.a.p.shape && 'surf' in t.a.p.shape) || (t.b.p.shape && 'surf' in t.b.p.shape)) continue;
         // (one piece is not a joint: what is cast or moulded with what holds it, of the same stuff, as an alloy wheel's
@@ -309,7 +309,7 @@ export const RULES: DetailRule[] = [
     id: 'doors', family: 'access', on: true, source: 'car door gaps 3–5 mm (typical); handles at hand height', says: 'a space people sit in has a door for each row of seats on each side, its seam a 4 mm gap and its handle where a hand reaches',
     run(c) {
       const seats = c.nodes.filter((x) => /\bseat\b/i.test(x.p.name) && !x.p.detail); if (!seats.length) return 0;
-      // (a panelled body, src/nexus/panels.ts, has its doors already: its own panels between its shut lines, handles on them)
+      // (a panelled body, src/nexus/machines/panels.ts, has its doors already: its own panels between its shut lines, handles on them)
       if (c.nodes.some((x) => x.p.shape && 'surf' in x.p.shape && /\bdoors?\b/.test(x.p.name))) return 0;
       const pos = (x: Node) => new THREE.Vector3().setFromMatrixPosition(x.m);
       // (a cabin people sit inside: a shell round every seat, wide enough to sit in and rising well above the cushions; an
@@ -379,7 +379,7 @@ export const RULES: DetailRule[] = [
         if (x.p.glow) continue; let built = false; for (let y = x.parent; y; y = y.parent) if ((y.p.parts ?? []).some((q) => q.glow || /lamp unit/.test(q.name))) built = true; if (built) continue;
         // (nor a lens over a housing its maker built beside it, its lit parts and projectors in it)
         if (x.parent?.kids.some((y) => y !== x && (y.p.parts ?? []).some((q) => q.glow || /projector|lamp unit/.test(q.name)))) continue;
-        // a lens that is a region of a skin (src/nexus/panels.ts): its reflector the same region set in behind it, its bulb
+        // a lens that is a region of a skin (src/nexus/machines/panels.ts): its reflector the same region set in behind it, its bulb
         // behind its middle, on each side it is drawn
         if (x.p.shape && 'surf' in x.p.shape) {
           // (a lamp its maker built in its layers, a housing and units under the lens, is left as built)
@@ -411,11 +411,11 @@ export const RULES: DetailRule[] = [
         const under = c.nodes.filter((x) => x !== T && x.box && !x.p.detail && within(x, T));
         if (!under.some((x) => /\bseat\b/i.test(x.p.name)) || !under.some((x) => /\b(wheel|tyre|tire)s?\b/i.test(x.p.name))) continue;
         const lb = new THREE.Box3(); for (const x of under) for (const q of corners(x)) lb.expandByPoint(toLocal(T, q));
-        // (its body: its skin where it has one (src/nexus/panels.ts), not its floor, which is a painted metal shell too and
+        // (its body: its skin where it has one (src/nexus/machines/panels.ts), not its floor, which is a painted metal shell too and
         // often the longest part)
         const shells = under.filter((x) => x.p.shell && classOf(x.p.mat) === 'metal'), skins = shells.filter((x) => x.p.shape && 'surf' in x.p.shape), body = (skins.length ? skins : shells).sort((a, b) => b.box!.getSize(new THREE.Vector3()).length() - a.box!.getSize(new THREE.Vector3()).length())[0];
         const belt = body ? Math.max(...corners(body).map((q) => toLocal(T, q).y)) : lb.min.y + (lb.max.y - lb.min.y) * 0.6, yp = Math.min(0.55, lb.min.y + (belt - lb.min.y) * 0.45);
-        // on a skinned body (src/nexus/panels.ts) a plate sits on the skin itself, where it is at the plate's height and
+        // on a skinned body (src/nexus/machines/panels.ts) a plate sits on the skin itself, where it is at the plate's height and
         // width, and a mirror stands just off the skin at the side glass's front; else at the thing's bounds
         const skin: THREE.Vector3[] = [], paint: THREE.Vector3[] = [];
         for (const x of under) if (x.p.shape && 'surf' in x.p.shape) for (const q of patchPoints(x.p.shape.surf, 48, 18)) { const v = toLocal(T, new THREE.Vector3(...q).applyMatrix4(x.m)); skin.push(v); if (shells.includes(x)) paint.push(v); }

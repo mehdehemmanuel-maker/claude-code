@@ -7,7 +7,7 @@ import {
   programsText, runMinutes, scheduleOf, shapeOf, stationById, stationCost, stationUsd, throwAt, worksOf, worksText,
   worksUnder, worksUnderText, worksWords, worthMaking, type Job, type PartLine,
 } from '../../src/nexus/works';
-import { linkFor, linesOf } from '../../src/nexus/link';
+import { linkFor, linesOf } from '../../src/nexus/machines/link';
 
 const SHOPS = [TIERS[1]!, TIERS[2]!, TIERS[3]!, TIERS[4]!];
 

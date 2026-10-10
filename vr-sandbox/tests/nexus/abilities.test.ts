@@ -3,8 +3,8 @@
 // soars but cannot hover, a man with wings cannot lift himself; an eagle sees a mouse a man cannot.
 
 import { describe, expect, it } from 'vitest';
-import { ABILITIES, CREATURES, canDo, restingPower } from '../../src/nexus/abilities';
-import { valueIn } from '../../src/nexus/lawgraph';
+import { ABILITIES, CREATURES, canDo, restingPower } from '../../src/nexus/ask/abilities';
+import { valueIn } from '../../src/nexus/substrate/lawgraph';
 
 const c = (id: string) => CREATURES.find((x) => x.id === id)!;
 const can = (id: string, ability: string) => canDo(c(id)).find((v) => v.ability === ABILITIES.find((a) => a.id === ability)!.name)?.ok;

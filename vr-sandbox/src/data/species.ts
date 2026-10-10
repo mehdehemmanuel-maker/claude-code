@@ -2,7 +2,7 @@
 // charge, baryon number and lepton number; an atom by its protons, neutrons and electrons; a molecule by its atoms,
 // with the bonds that hold them; a phase of a molecule by its standard enthalpy, entropy and heat capacity at
 // 298.15 K and 1 bar. Nothing here is a property to be read off a name: these are the quantities from which the
-// language derives what a matter does (src/nexus/compose.ts, src/nexus/phase.ts).
+// language derives what a matter does (src/nexus/substrate/compose.ts, src/nexus/substrate/phase.ts).
 
 /** What a species counts of the identities. Particles count charge, baryon and lepton number; atoms and molecules count elements, and their nuclei are expanded by Z and A. */
 export interface Species {

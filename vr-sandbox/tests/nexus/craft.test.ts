@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { AIR, G, SEAWATER, HAZARDS, ballast, burn, climb, cushion, droneKg, endurance, hover, hoverAllUp, hoverKg, hovers, hull, jet, jetFuelKg, jetKg, lift, plateFor, subKg } from '../../src/nexus/craft';
-import { componentOf } from '../../src/nexus/components';
-import { resolve } from '../../src/nexus/inventory';
-import { massOf } from '../../src/nexus/mass';
+import { AIR, G, SEAWATER, HAZARDS, ballast, burn, climb, cushion, droneKg, endurance, hover, hoverAllUp, hoverKg, hovers, hull, jet, jetFuelKg, jetKg, lift, plateFor, subKg } from '../../src/nexus/machines/craft';
+import { componentOf } from '../../src/nexus/parts/components';
+import { resolve } from '../../src/nexus/parts/inventory';
+import { massOf } from '../../src/nexus/parts/mass';
 import { lawById } from '../../src/nexus/book';
-import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
-import { apply } from '../../src/nexus/law';
-import { leaf } from '../../src/nexus/term';
+import { ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
+import { apply } from '../../src/nexus/substrate/law';
+import { leaf } from '../../src/nexus/substrate/term';
 
 /** The kind a word names, drawn. */
 function drawn(words: string) {

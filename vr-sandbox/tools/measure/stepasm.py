@@ -9,7 +9,7 @@ read straight from the file's entities, no CAD kernel: a 240 MB assembly reads i
   parts  model.step [--json out.json]    every part drawn (an instance whose product has a solid): path, size, world box
   count  model.step                      how many of each part by name (the model's bill of materials)
   ts     model.step --id ID --name NAME --src SRC [--out file.ts]
-                                         the parts as a TypeScript data file for src/nexus/makermodel.ts
+                                         the parts as a TypeScript data file for src/nexus/machines/makermodel.ts
 
 How the boundary is measured: each edge of each solid is walked along its curve (lines end to end, circles and ellipses
 by angle from vertex to vertex, B-splines evaluated by de Boor's algorithm), so a hole's or a boss's round extent is

@@ -1,9 +1,9 @@
-// Craft that are not wheeled, each sized by what holds it up (src/nexus/craft.ts): a multirotor by momentum theory, a
+// Craft that are not wheeled, each sized by what holds it up (src/nexus/machines/craft.ts): a multirotor by momentum theory, a
 // hovercraft by its cushion, a jet suit by its engines' thrust against a person's weight, a submarine by the pressure
 // at the depth it is rated to. Every spec here is that arithmetic run, not a figure looked up.
 
 import { ax, bare, type KindDef, type P } from './core';
-import { HAZARDS, burn, cushion, droneKg, droneWh, endurance, hover, hovers, hoverAllUp, hoverKg, hull, jetFuelKg, jetKg, plateFor, subKg } from '../craft';
+import { HAZARDS, burn, cushion, droneKg, droneWh, endurance, hover, hovers, hoverAllUp, hoverKg, hull, jetFuelKg, jetKg, plateFor, subKg } from '../machines/craft';
 
 
 const n = (p: P, k: string): number => Number(p[k]);

@@ -1,15 +1,15 @@
-// Rounds the manifold draws for itself (src/nexus/draw.ts, src/nexus/round.ts): intents composed at random from its own
+// Rounds the manifold draws for itself (src/nexus/substrate/draw.ts, src/nexus/substrate/round.ts): intents composed at random from its own
 // carriers, region roles and want forms, every magnitude from what the kept laws cover pushed past it by the bar, each
 // generated from nothing. What these tests hold is the mathematics a round must reproduce, never what one draw said.
 
 import { describe, expect, it } from 'vitest';
-import { drawIntent, knownSpans } from '../../src/nexus/draw';
+import { drawIntent, knownSpans } from '../../src/nexus/substrate/draw';
 import { parseUnit } from '../../src/ganglia/units';
-import { dimText } from '../../src/nexus/dimension';
-import { runRound } from '../../src/nexus/round';
-import { generate } from '../../src/nexus/manifold';
-import { scaleOf } from '../../src/nexus/dimension';
-import { reach } from '../../src/nexus/tuner';
+import { dimText } from '../../src/nexus/substrate/dimension';
+import { runRound } from '../../src/nexus/substrate/round';
+import { generate } from '../../src/nexus/substrate/manifold';
+import { scaleOf } from '../../src/nexus/substrate/dimension';
+import { reach } from '../../src/nexus/substrate/tuner';
 
 describe('a round draws its own intents', () => {
   it('the same seed draws the same intent, another seed another: a round can be run again exactly', () => {

@@ -4,10 +4,10 @@
 // walk, equilibrium thermodynamics, geometry and least dissipation: each law here rests on one of them and says where
 // else it holds. Every term is SI; each worked example is computed independently (Python, in the commit that adds it).
 
-import { law, type Law, type Source } from '../law';
+import { law, type Law, type Source } from '../substrate/law';
 import { CONST } from './constants';
-import { add, and, cbrt, cells, div, erfOf, exp, ge, gt, integral, k, le, leaf, ln, lt, mul, pow, sqrt, sub, variable, zero, PI, type Term, type Var } from '../term';
-import type { DomainCheck } from '../evaluate';
+import { add, and, cbrt, cells, div, erfOf, exp, ge, gt, integral, k, le, leaf, ln, lt, mul, pow, sqrt, sub, variable, zero, PI, type Term, type Var } from '../substrate/term';
+import type { DomainCheck } from '../substrate/evaluate';
 
 type Port = [sym: string, unit: string, name: string];
 interface Spec { id: string; name: string; statement: string; formula: string; valid: string; inputs: Port[]; output: Port; term: (v: Record<string, Var>) => Term; domain?: (v: Record<string, Var>) => DomainCheck[]; source: Source; example: { inputs: Record<string, number>; output: number; rel?: number } }

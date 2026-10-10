@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { KINDS } from '../../src/nexus/kinds';
 import { linesOf, readKind, wordsOf } from '../../src/nexus/kinds/core';
-import { FAMILIES, HAND_FAMILIES, callFamily } from '../../src/nexus/families';
-import { INVENTORY, fundamentals, resolve } from '../../src/nexus/inventory';
-import { catalogue } from '../../src/nexus/catalogue';
-import { numberOf, partAt, randomPart, spaceSize } from '../../src/nexus/partspace';
-import { ELEMENTS, MATERIALS, elementsOf } from '../../src/nexus/elements';
-import type { Item } from '../../src/nexus/inventory';
-import { behave } from '../../src/nexus/behave';
+import { FAMILIES, HAND_FAMILIES, callFamily } from '../../src/nexus/parts/families';
+import { INVENTORY, fundamentals, resolve } from '../../src/nexus/parts/inventory';
+import { catalogue } from '../../src/nexus/parts/catalogue';
+import { numberOf, partAt, randomPart, spaceSize } from '../../src/nexus/parts/partspace';
+import { ELEMENTS, MATERIALS, elementsOf } from '../../src/nexus/parts/elements';
+import type { Item } from '../../src/nexus/parts/inventory';
+import { behave } from '../../src/nexus/world/behave';
 
 const make = (w: string): Item => { const r = callFamily(w); if (!r || typeof r === 'string') throw new Error(`${w}: ${r}`); return r; };
 

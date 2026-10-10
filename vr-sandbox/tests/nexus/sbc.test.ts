@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { component } from '../../src/nexus/components';
-import { massOf } from '../../src/nexus/mass';
-import { approx, BOARD_DEFS, boardMass, PI4_HAND } from '../../src/nexus/sbc';
-import { OPI5_SMALL } from '../../src/nexus/sbc-opi5-small';
-import { PI5_SMALL } from '../../src/nexus/sbc-pi5-small';
-import { PI4_SMALL } from '../../src/nexus/sbc-pi4-small';
-import { BOARD_DEFS as DEFS, boardComps, JOINTS } from '../../src/nexus/sbc';
-import { pkgOf } from '../../src/nexus/packages';
-import type { Part } from '../../src/nexus/kits';
+import { component } from '../../src/nexus/parts/components';
+import { massOf } from '../../src/nexus/parts/mass';
+import { approx, BOARD_DEFS, boardMass, PI4_HAND } from '../../src/nexus/boards/sbc';
+import { OPI5_SMALL } from '../../src/nexus/boards/sbc-opi5-small';
+import { PI5_SMALL } from '../../src/nexus/boards/sbc-pi5-small';
+import { PI4_SMALL } from '../../src/nexus/boards/sbc-pi4-small';
+import { BOARD_DEFS as DEFS, boardComps, JOINTS } from '../../src/nexus/boards/sbc';
+import { pkgOf } from '../../src/nexus/boards/packages';
+import type { Part } from '../../src/nexus/parts/kits';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 const words = (id: string) => (BOARD_DEFS[id]!.cls === 'pico' ? `pico ${id}` : `sbc ${id} ${BOARD_DEFS[id]!.ram[0]}GB`);
