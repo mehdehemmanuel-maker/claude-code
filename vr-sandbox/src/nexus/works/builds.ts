@@ -20,6 +20,7 @@ import { planJob, type Job } from './plan';
 import { component } from '../parts/components';
 import { massOf, DENSITY } from '../parts/mass';
 import type { Machine } from '../ask/machine';
+import { blockShape, type Sketch } from '../ask/sketch';
 
 // ---- builds to throw at it -----------------------------------------------------------------------------------------
 // The test of a job router is not the job it was written for. These six are deliberately unalike — a welded steel
@@ -206,8 +207,8 @@ export const BUILDS: Build[] = [
       { name: 'chamber coating, 2 mm rigidised refractory', n: 1, mat: 'castable', size: [202, 202, 450], cm3: 565, shape: 'round', bore: [198, 450] },
       { name: 'floor, 230 \u00d7 114 \u00d7 32 firebrick split', n: 2, mat: 'firebrick-insulating', size: [114, 32, 230], cm3: 839 },
       { name: 'burner mixing tube, 3/4 in black iron pipe', n: 1, mat: 'steel-low', size: [27, 27, 230], cm3: 51, shape: 'round', bore: [21, 230] },
-      { name: 'burner tee, 3/4 in black iron', n: 1, mat: 'steel-low' },
-      { name: 'burner flare, 1 1/4 \u00d7 3/4 in black iron reducer', n: 1, mat: 'steel-low' },
+      { name: 'burner body, a 3/4 in black-iron tee', n: 1, mat: 'steel-low' },
+      { name: 'burner flare, a 1 1/4 \u00d7 3/4 in black-iron reducing coupling', n: 1, mat: 'steel-low' },
       { name: 'jet, 0.8 mm (0.035 in) MIG contact tip in a 1/8 in nipple', n: 1, mat: 'copper' },
       { name: 'needle valve and hose, 1/8 in brass', n: 1, mat: 'brass' },
       { name: 'regulator, 0\u201330 psi POL with its hose', n: 1, mat: 'steel-low' },
@@ -523,6 +524,38 @@ export function sectionOf(line: PartLine): { prism: { pts: [number, number][]; h
       holes: [[P(-i[0]!, -i[1]!), P(i[0]!, -i[1]!), P(i[0]!, i[1]!), P(-i[0]!, i[1]!)]] } };
   }
   return null;
+}
+
+/** The plan as a bill, so it can be thrown at a works the minute it is written. A block with no material is left
+ *  without one rather than given a guess: the router then says it is a finished part to buy, which is the honest
+ *  answer for something nobody has decided about yet. */
+export function billOfSketch(s: Sketch): PartLine[] {
+  const out: PartLine[] = [];
+  for (const b of s.blocks) {
+    if (b.form === 'use') {
+      const g = component(b.words ?? '');
+      const size = typeof g === 'string' ? undefined : g.item?.size;
+      out.push({ name: b.words ?? b.id, n: 1, mat: (typeof g === 'string' ? undefined : g.part.mat) ?? 'steel-low', ...(size ? { size: [...size] as [number, number, number] } : {}) });
+      continue;
+    }
+    const f = blockShape(b);
+    if (!f) continue;
+    // a block that says what fraction of itself is really there is standing in for an *assembly* (a welded frame is
+    // 6 % of its own box), and an assembly is not a part: giving the router its box had it forge a 500 mm frame on
+    // the anvil. It goes on the bill as a thing named and not yet dimensioned, which is what it is.
+    if (b.fill !== undefined && b.fill < 1) {
+      out.push({ name: `${b.id}, ${b.label ?? 'a block of the plan'} (an assembly, not yet a part)`, n: 1, mat: b.mat ?? 'steel-low' });
+      continue;
+    }
+    const mm3 = f.box[0] * f.box[1] * f.box[2] * 1e9, round = b.form !== 'box' && b.form !== 'plate';
+    // a block with no material named is a thing nobody has decided about yet, so the bill gives it no volume and the
+    // router buys it as the finished part it is standing in for — which is the honest answer at this stage
+    out.push({ name: `${b.id}, ${b.label ?? 'a block of the plan'}`, n: 1, mat: b.mat ?? 'steel-low',
+      size: [Math.round(f.box[0] * 1000), Math.round(f.box[1] * 1000), Math.round(f.box[2] * 1000)],
+      ...(b.mat ? { cm3: +(((round ? (Math.PI / 4) * mm3 : mm3) * (b.fill ?? 1)) / 1000).toFixed(1) } : {}),
+      ...(round ? { shape: 'round' as const } : {}) });
+  }
+  return out;
 }
 
 /** A belt (or chain) round two pulleys, drawn as what it is: two straight runs on the pulleys' common external

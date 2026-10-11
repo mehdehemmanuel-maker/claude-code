@@ -21,7 +21,8 @@
     "pack": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/pack.mjs",
     "boardmap": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/boardmap.mjs",
     "works": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/works.mjs",
-    "machine": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/machine.mjs"
+    "machine": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/machine.mjs",
+    "plan": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/plan.mjs"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

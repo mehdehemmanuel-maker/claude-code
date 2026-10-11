@@ -14,11 +14,24 @@
  *  new build is checked the moment it is written instead of when a test is next thought of. */
 import { DENSITY } from '../parts/mass';
 import { component } from '../parts/components';
+import { findItem, INVENTORY } from '../parts/inventory';
 import { BUILDS, lineFor, sectionOf, type Build } from './builds';
-import { classOf, priceOfLine, type PartLine } from './lines';
+import { ALWAYS_BOUGHT, classOf, priceOfLine, STOCK, type PartLine } from './lines';
+
+/** Whether a bill line's own words carry a stored part's name inside them: "jet, 0.8 mm (0.035 in) MIG contact tip
+ *  in a 1/8 in nipple" is a `MIG contact tip`, said the way a bill says things. The lookup goes this way round as
+ *  well as the other because a bill names a part by what it is *for* and the inventory by what it *is*. */
+export function namesAStoredPart(name: string): boolean {
+  const said = ` ${name.toLowerCase().replace(/[-,()]/g, ' ').replace(/\s+/g, ' ')} `;
+  for (const i of INVENTORY.values()) {
+    const plain = i.name.toLowerCase().split(',')[0]!.replace(/[-()]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (plain.length > 4 && said.includes(` ${plain} `)) return true;
+  }
+  return false;
+}
 
 /** Something the designer will not let a bill say. `line` is absent where the fault is the build's as a whole. */
-export interface Fault { build: string; line?: string; kind: 'volume' | 'material' | 'place' | 'price' | 'library'; says: string }
+export interface Fault { build: string; line?: string; kind: 'volume' | 'material' | 'place' | 'price' | 'library' | 'unstored'; says: string }
 
 const area = (pts: [number, number][]): number => {
   let a = 0;
@@ -89,6 +102,27 @@ export function designFaults(b: Build): Fault[] {
     else if (!classOf(line.mat) && !/^(refractory|castable|fibre-blanket|firebrick|gypsum|plaster|portland|lime|graphite|rubber)/.test(line.mat)) {
       f('material', `"${line.mat}" is in no material class, so no process here can be offered it`, line.name);
     }
+    // every new part is stored, which is this repository's oldest standing rule (CLAUDE.md: "for each new part stored
+    // it has to be queued for a break down"). A bill line that neither the component library draws nor the inventory
+    // lists is a part nobody has stored, and the breakdown queue will never see it, because the queue walks the
+    // inventory. Saying so here is what turns the rule from something to remember into something that is checked.
+    const noun = line.name.split(',')[0]!.trim(), words = noun.split(/\s+/);
+    // and the library's own words may run the other way round, or be one word of the line: "pack-lipo-4s battery" is
+    // the stored `pack-lipo-4s` and "burner tee" is a `black-iron tee`. Six of this check's first eleven findings
+    // were stored already and only named differently, which is the two-vocabularies fault, not a missing part.
+    const tries = [noun, [...words].reverse().join(' '), ...words.filter((w) => w.length > 3)];
+    // a length of stock cut to size is stored as its stock, not as a part of its own ("long rail, 40 × 40 × 2 box
+    // section" is box section), and the library's own words may run the other way round ("6205 bearing" is
+    // "bearing 6205"), which is two vocabularies for one thing again
+    // and a part this works *makes* from stock is not a product to store: the inventory is real products and what
+    // each contains, so what belongs in it is what a bill buys finished
+    const stock = STOCK.some((r) => r.what.test(line.name) && !(r.unless?.test(line.name) ?? false));
+    const bought = ALWAYS_BOUGHT.some((r) => r.what.test(line.name) && !(r.unless?.test(line.name) ?? false));
+    if (bought
+      && !stock && !tries.some((w) => findItem(w) || typeof component(w) !== 'string') && !namesAStoredPart(line.name)
+      && !/bolt|screw|nut|washer|pin\b/i.test(noun)) {
+      f('unstored', `nothing in the library draws "${noun}" and nothing in the inventory lists it: it is a part that was never stored, so the breakdown queue cannot see it`, line.name);
+    }
     if (!priceOfLine(line)) f('price', 'no seller’s page prices it, so this build’s cost is short by this line', line.name);
     // where the library already draws the part the line names, the library's own size is the accurate one
     // only where the line's own head is a library word *with a size on it* ("slotnut slot6 M3", "buttonhead M5x10"):
@@ -131,7 +165,7 @@ export function editBuild(b: Build, edits: Edit[]): Build {
 
 /** Every build's faults, worst first by kind: a wrong volume is arithmetic, a missing price is work not yet done. */
 export function designAll(builds: Build[] = BUILDS): Fault[] {
-  const order: Fault['kind'][] = ['volume', 'place', 'library', 'material', 'price'];
+  const order: Fault['kind'][] = ['volume', 'place', 'library', 'material', 'unstored', 'price'];
   return builds.flatMap(designFaults).sort((x, y) => order.indexOf(x.kind) - order.indexOf(y.kind));
 }
 
@@ -153,6 +187,6 @@ export function designText(builds: Build[] = BUILDS): string {
     out.push('');
   }
   const all = designAll(builds);
-  out.push(`${all.length} faults over ${builds.length} builds: ${['volume', 'place', 'library', 'material', 'price'].map((k) => `${all.filter((x) => x.kind === k).length} ${k}`).join(', ')}`);
+  out.push(`${all.length} faults over ${builds.length} builds: ${['volume', 'place', 'library', 'material', 'unstored', 'price'].map((k) => `${all.filter((x) => x.kind === k).length} ${k}`).join(', ')}`);
   return out.join('\n');
 }

@@ -4,6 +4,11 @@
 // across, a NEMA 17 stator 42 mm, an Arduino Uno 69 × 53 mm. Parts made to sizes by their families carry their own.
 
 export const LOOKS: Record<string, string> = {
+  // what the works' own builds buy finished (a 3/4 in fitting is about 50 mm across the flats; an SSR-25DA is
+  // 58 × 45 × 23; a contact tip is an M6 × 28; the rest are typical)
+  'pipe-tee-bi': 'tube 50 50 45', 'pipe-reducer-bi': 'tube 55 55 45', 'contact-tip-mig': 'rod 6 6 28',
+  'ssr-25a': 'box 58 23 45', 'triac-die': 'chip 4 4 0.3', 'opto-die': 'chip 2 2 0.3',
+  'clevis-pin': 'rod 8 8 40', 'split-pin': 'rod 2 2 25', 'foot-switch': 'box 100 70 55', 'speed-board-ac': 'board 70 25 50',
   // motors and their parts
   'lamination-stack': 'ring 30 30 20', winding: 'ring 28 28 18', 'shaft-steel': 'rod 5 5 60', commutator: 'ring 10 10 8', 'carbon-brush': 'box 5 5 8', 'brush-spring': 'spring 5 5 10',
   'magnet-ferrite-arc': 'box 20 6 25', 'magnet-ndfeb': 'box 10 3 10', 'motor-can': 'tube 28 28 38', 'sleeve-bearing': 'ring 6 6 6', armature: 'can 22 22 25', 'gearbox-n20': 'box 12 10 9',

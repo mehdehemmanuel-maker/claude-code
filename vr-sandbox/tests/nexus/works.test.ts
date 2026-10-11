@@ -803,6 +803,11 @@ describe('a bill whose numbers are derived and not typed', () => {
   it('where the library already draws the part, the bill agrees with the library about its size', () => {
     expect(designAll().filter((f) => f.kind === 'library').map((f) => f.says)).toEqual([]);
   });
+  it('every part a bill buys finished is stored, so the breakdown queue can take it', () => {
+    // the oldest standing rule here (CLAUDE.md: "for each new part stored it has to be queued for a break down").
+    // A part the inventory has never heard of is one the queue can never see, so a new build may not add one.
+    expect(designAll().filter((f) => f.kind === 'unstored').map((f) => `${f.build}/${f.line}`)).toEqual([]);
+  });
   it('the lines with no price only ever get fewer', () => {
     // a ratchet, as tidy.test.ts has: this is the work the standing ask names ("prices for the lines that still have
     // none"), and a new build may not quietly add to it. Lower the number when lines are priced; never raise it.

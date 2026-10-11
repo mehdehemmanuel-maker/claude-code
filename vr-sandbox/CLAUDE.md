@@ -156,6 +156,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
 | The robot that runs the works: the rails it rides (one rail serves the two rows facing its aisle and no more, so the number of rails a shop wants is what says whether a rail or a floor robot is the cheap answer), which stations each puts within its arm's reach, the edge between what an operation needs of a pair of hands and what this robot's hands are (a port and a grip load a machine, start it and take the part out; they do not strike an arc, pour 700 °C metal or throw clay — each refused with the reason, which is what names the next tool to buy), the basket for everything the plan says to buy (each line the cheapest real offer with its seller, its page, the figure it showed and the day it was seen, split by seller because shipping is), and the division of a job into the robot's minutes and yours. It says plainly that it cannot pay for anything | `src/nexus/works/tend.ts` (`tendWorks`, `aislesOf`, `offRail`, `tends` returning a `Tended` verdict that says *what kind* of why it is, `TOOL_FOR`, `orderFor`, `runWorks`, `runText`, `tendWords`), `npm run works -- tend [build]` |
 | Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (seventeen files: `plan.ts` routes, `designer.ts` checks a bill against its own geometry, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
+| An invention sketched before it is designed: labelled blocks (box, disc, can, bar, plate) and the component library's own parts where the plan knows which, pins between them for what drives, carries or feeds what, read from four kinds of text line; stood in the room and taken apart like anything else, weighed, its envelope said, and turned into a bill a works can route — where a block that says what fraction of itself is really there is an assembly and not yet a part | `src/nexus/ask/sketch.ts` (`sketchOf`, `sketchParts`, `sketchText`, `sketchWeighs`, `sketchSpan`, `planWords`), `billOfSketch` in `src/nexus/works/builds.ts`, `npm run plan` |
 | Every build's own numbers derived from its own geometry rather than typed, and a build edited: a line's volume from the same section, cylinder and bore the drawing is made of (`materialIn`), its mass (`lineKg`), a size changed with every volume re-derived from it (`editBuild`), and every build's faults at once — a volume its geometry does not give it, a material nothing can weigh or work, a lay placing more than the bill buys, a size the library disagrees with, a line with no price | `src/nexus/works/designer.ts` (`designFaults`, `designAll`, `designText`, `weighBuild`, `solidToItsBox`), `npm run works -- design` |
 | The works as a thing to order: every station in the order to come by it (which is not by price — the welder comes before the forge because the forge is welded), its seller's own listing where one sells it, the used market where that is the cheap path, and where the cheapest way is to make it, the job that makes it routed through the works *as it stood at that moment* | `src/nexus/works/pack.ts` (`worksPack`, `worksPackText`, `BUILT_BY`), `npm run pack -- works <folder>` |
 | The wire out: the program a machine is sent and the transport that carries it (Marlin's line protocol with its checksum and resends, down a 20-byte BLE pipe to the Nordic UART service; Moonraker over wifi where the machine is Klipper; the steps where there is no port) | `src/nexus/machines/link.ts` (`Streamer`, `gcodeFor`, `printStart`, `kilnProgram`, `LINKS`), the binding in `works/programs.ts`, the browser half in `src/nexus/view/ble.ts` |
@@ -427,6 +428,8 @@ When a step takes working out by hand twice, it becomes a tool here, and a line 
   library affords with its mass, its price and what limits it; `npm run machine -- "a machine that cuts 400x300x80" works`
   composes it and throws its bill at the $3,000 works. Written the same round it was needed, for the same reason as
   `npm run works`: the alternative was a probe test that prints what the engine says and is then deleted.
+- `npm run plan -- <file> works`: an invention sketched as labelled blocks and pins, printed, weighed and thrown
+  at the works before anything in it is designed (`src/nexus/ask/sketch.ts`).
 - `npm run works`: a plan, a budget or a build printed from the command line. Four rounds in a row opened by writing a probe
   test whose only job was to print what the engine says, and then deleting it; this is that, kept.
 
@@ -1446,6 +1449,35 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    What that judge still has, and it is honest: there are no weld beads, no feet, no levelling pads and no fasteners on any built station (the bolts are in
    every bill and carry no size, so nothing draws them); and the head has no hub, bat pins or bolts where it meets its
    shaft.
+   The fast plan (2026-10-11), which is the user's next word: *"everything you build needs to be able to be exploded to
+   see components and then the components should be able to be exploded also, every new part needs to be stored ... you
+   can do something like placing blocks or pins to describe your plan and see how it works, make a tool called
+   visualize or fast plan, this is where you just place stuff with labels ... for planning out a new invention"*.
+   `ask/sketch.ts` is that tool. Everything else here needs a finished answer before it will draw anything — the
+   inventor wants an affordance and a size, a build wants a volume for every line — and that is the wrong shape for the
+   first ten minutes of an invention, where what you know is *this goes above that, and this drives that*. A sketch is
+   four kinds of line: a block (`head disc 300x25 at 0,0.72,0 "the wheel head" wood`), a `use` block, which is the
+   component library's own part drawn whole (`brg use bearing 6205 at 0,0.585,0`), a pin (`belt big -> small "4:1"`),
+   and a title. It stands in the room ("fast plan: —") and comes apart like anything else, a `use` block into the
+   real part's own pieces; `npm run plan -- <file> works` throws it at the $3,000 works the minute it is written.
+   Three faults in its own first run, and the first two are the tool being precious where speed is the whole point:
+   a pin written with a name of its own (`belt big -> small`) was unreadable, and so was `pan tub 520x110`, because
+   `tub` was not one of the five form words. A plan is written fast, so twenty-odd words map to the five forms now and
+   an unknown one is named rather than swallowed. The third was arithmetic: a 500 × 600 × 500 block of "frame" weighs
+   1.2 tonnes as solid steel, so a block may say what fraction of itself is really there (`steel-low@0.013`) — and
+   that fraction is also what tells the bill it is an *assembly*, not a part, which is what stopped the works forging a
+   500 mm frame on the anvil.
+   And the oldest standing rule is machinery now rather than memory: the designer's `unstored` check names any bill
+   line that is *bought finished* and is in neither the component library nor the inventory, because a part the
+   inventory has never heard of is one the breakdown queue can never take. Its first run named eleven; six of those
+   turned out to be stored already under the library's own words (a "pack-lipo-4s battery" is `pack-lipo-4s`, a
+   "burner tee" is a `black-iron tee`), which is the two-vocabularies fault again and is fixed in the lookup — both
+   ways round, and by the line's own words carrying a stored part's name inside them. The five that were really
+   missing are stored with what each contains: the black-iron tee and reducing coupling a burner is made of, the MIG
+   contact tip that is the cheapest gas jet of a known bore there is, a 25 A solid-state relay down to its triac and
+   opto dies, a clevis and split pin, a momentary foot switch, and the phase-angle speed board that turns a salvaged
+   washing-machine motor into a potter's wheel. The queue takes them (67,057 items, nothing missing from the table),
+   and a test holds the count at zero so a new build cannot add one.
    Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).

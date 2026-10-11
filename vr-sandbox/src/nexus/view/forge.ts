@@ -85,6 +85,7 @@ import { SolderBench } from './solder-bench';
 import { worksStep, worksStood, worksRoomWords } from './works-room';
 import { lightRoom } from './light';
 import { worksWords } from '../works/text';
+import { planWords } from '../ask/sketch';
 import { stepsOf, type PlanId } from '../teach/solder-lesson';
 import { ledBuild, ledsAsked, partsSaid, PROTO_BUILD } from '../teach/lessons';
 import type { Build } from '../teach/edges';
@@ -118,7 +119,7 @@ import { Devices } from '../machines/devices';
 import { expression, feel, feeling, newMind, pass, thought, type Appraisal, type Feeling } from '../world/emotions';
 import { learn, lessons, newPractice, nextTry, trialOf, type Practice as Training } from '../teach/practice';
 import { TEST_ASKS } from '../ask/test-asks';
-import { INVENTORY, boardOfInventory, boardOfTree, feed, fundamentals, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../parts/inventory';
+import { INVENTORY, boardOfInventory, boardOfTree, countSays, feed, fundamentals, makeBoard, resolve, routeOf, sectionsOf, summary, treeLines, categories as invCategories, type Item } from '../parts/inventory';
 import { aged, clockOf, turnover } from '../life/time';
 import { LASTING, lifetimeLines, lifetimeOf, yearsSays } from '../life/decay';
 import { flowLines, flowsOf } from '../life/flows';
@@ -126,7 +127,6 @@ import { CREATURES, abilityLines, type Creature } from '../ask/abilities';
 import { discover, graphSummary } from '../substrate/lawgraph';
 import { profileLines } from '../substrate/derive';
 import { LOCI, childOf, earwax, phenotype, possibilities, randomGenome, type Genome } from '../life/genome';
-import { countSays } from '../parts/inventory';
 import { PY_PRELUDE, readPy, runMeca, type Ran, type Target as CodeTarget } from '../teach/codesim';
 import { ARM_AXES, robotPart, ROBOT_CELL, use } from '../parts/components';
 import type { Frame } from '../machines/meca';
@@ -2562,7 +2562,7 @@ async function converse(text: string): Promise<void> {
   if (/^stop (the )?robot\b/i.test(text.trim()) && robotAt) { line('you', text); robotAt.dispose(); robotAt = null; say('The robot has stepped back.', undefined, 'nexus'); return; }
   { const said = robotDesign(text); if (said) { line('you', text); say(`${said} ${seeRobot(text)}`, undefined, 'nexus'); return; } }
   { const said = reproWords(text) ?? benchWords(text) ?? pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = worksRoomWords(text, { scene, camera, orbit, dolly, xr: () => renderer.xr.isPresenting, home: () => goPlace('table') }) ?? worksWords(text) ?? machineWords(text, { use: (w) => use(w), stand: (p) => { eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d(); return apart3d.showPart(p, 'invented', performance.now() / 1000, true, false); } }) ?? tendWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = worksRoomWords(text, { scene, camera, orbit, dolly, xr: () => renderer.xr.isPresenting, home: () => goPlace('table') }) ?? worksWords(text) ?? planWords(text, { stand: (p) => { eyeOf(eye); const f2 = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f2); apart3d.place(eye, f2, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d(); return apart3d.showPart(p, 'fast-plan', performance.now() / 1000, true, false); } }) ?? machineWords(text, { use: (w) => use(w), stand: (p) => { eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d(); return apart3d.showPart(p, 'invented', performance.now() / 1000, true, false); } }) ?? tendWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // (each asked in turn and the first that answers wins, which is what five identical if-blocks said at five times the length)
   { const said = barWords(text) ?? kitWords(text) ?? cellWords(text) ?? processWords(text) ?? robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { let said: string | null; try { said = personWords(text); } catch (e) { said = (e as Error).message; } if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }

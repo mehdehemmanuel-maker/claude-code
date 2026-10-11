@@ -1052,6 +1052,23 @@ e('foil-facing', 'foil facing', 'Building/Insulation/Board parts', 'part', 'lami
 
 for (const [id, fam] of [['screw-m3', 'screw'], ['screw-set', 'screw'], ['nut-m3', 'nut'], ['washer-m3', 'washer'], ['bearing-608', 'bearing'], ['bearing-625', 'bearing'], ['spur-gear', 'gear'], ['spring-compression', 'spring'], ['wire-hookup', 'wire'], ['extrusion-2020', 'extrusion'], ['resistor-film', 'resistor'], ['nema17', 'stepper'], ['cell-18650', 'cell'], ['gt2-pulley', 'pulley'], ['lead-screw-t8', 'leadscrew'], ['led-5mm', 'led']] as const) { const it = items.get(id); if (it) it.family = fam; }
 
+// ---- what the works' own builds buy finished (src/nexus/works/builds.ts). The designer's `unstored` check names any
+// ---- bill line that is bought and is not here, because a part the inventory has never heard of is a part the
+// ---- breakdown queue can never take: CLAUDE.md, "for each new part stored it has to be queued for a break down".
+// ---- Its first run named eleven; six of them turned out to be stored already under the library's own words (a
+// ---- "pack-lipo-4s battery" is `pack-lipo-4s`), which is the two-vocabularies fault again and is fixed in the
+// ---- lookup rather than by storing a second copy. These five are the ones that were really missing.
+e('pipe-tee-bi', 'black-iron tee', 'Fluid/Pipe fittings/Threaded iron', 'part', 'cast', 'cast-iron', 'a malleable-iron threaded tee: a gas burner\u2019s body, where its air inlet, its jet and its mixing tube all meet', 'ASME B16.3');
+e('pipe-reducer-bi', 'black-iron reducing coupling', 'Fluid/Pipe fittings/Threaded iron', 'part', 'cast', 'cast-iron', 'a threaded reducer; on a burner it is the flare the flame sits in', 'ASME B16.3');
+e('contact-tip-mig', 'MIG contact tip', 'Tools/Welding/Torch parts', 'part', 'machine', 'copper', 'a drilled copper tip that carries the welding current to the wire \u2014 and, drilled 0.8\u20131.2 mm, the cheapest gas jet of a known bore there is, which is why every home-built burner uses one', 'e.g. 0.035 in (0.9 mm)');
+e('ssr-25a', 'solid-state relay, 25 A', 'Electrical/Relays/Solid state', 'assembly', 'assemble', 'triac-die opto-die epoxy al-6061 pcb-bare', 'an opto-isolated triac potted on an aluminium base: what lets a controller\u2019s few milliamps switch a kiln\u2019s kilowatts, with no contacts to burn', 'e.g. SSR-25DA, zero-crossing');
+e('triac-die', 'triac die', 'Electrical/Semiconductors/Dies', 'part', 'etch', 'silicon', 'the silicon that carries the mains current both ways');
+e('opto-die', 'opto-isolator die', 'Electrical/Semiconductors/Dies', 'part', 'etch', 'silicon', 'an LED facing a photo-triac, so the control side never touches the mains');
+e('clevis-pin', 'clevis pin', 'Fasteners/Pins', 'part', 'machine', 'steel-low', 'a plain pin with a head and a cross hole: a pivot that comes apart with your fingers', 'ISO 2341');
+e('split-pin', 'split pin', 'Fasteners/Pins', 'part', 'bend', 'steel-low', 'a folded wire pin whose legs are spread: what keeps a clevis pin in', 'ISO 1234');
+e('foot-switch', 'momentary foot switch', 'Electrical/Switches/Foot', 'assembly', 'assemble', 'micro-switch abs steel-spring wire-hookup*2', 'a micro switch under a hinged pedal in a moulded shell, so both hands stay on the work');
+e('speed-board-ac', 'motor speed board', 'Electrical/Motors and actuators/Drives', 'assembly', 'assemble', 'pcb-bare triac-die opto-die potentiometer heatsink-cast capacitor-electrolytic*2', 'a phase-angle board for a mains motor, as a washing machine\u2019s own is: a triac, its trigger and a knob \u2014 which is what makes a salvaged motor into a potter\u2019s wheel', '');
+
 // ==== more kinds of things: vehicles, home appliances, sound, light and heat, fluid, robots ===========================
 /** A part made to sizes by its family, put in the inventory for an entry's list: F('bearing 6805') gives its id. */
 const F = (words: string): string => { const it = callFamily(words); if (!it || typeof it === 'string') throw new Error(`the inventory's seed: "${words}": ${it ?? 'no such family'}`); if (!items.has(it.id)) put(it); return it.id; };
