@@ -20,7 +20,8 @@
     "breakdown": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/breakdown.mjs",
     "pack": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/pack.mjs",
     "boardmap": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/boardmap.mjs",
-    "works": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/works.mjs"
+    "works": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/works.mjs",
+    "machine": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/machine.mjs"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

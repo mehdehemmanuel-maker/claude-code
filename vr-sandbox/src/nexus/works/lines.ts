@@ -23,6 +23,16 @@ export const ALWAYS_BOUGHT: { what: RegExp; unless?: RegExp; why: string }[] = [
   { what: /linear (rail|guide|bearing|shaft)|guide ?rail|guideway|\bmgn\d|\bhgr\d|ball ?screw|lead ?screw|\bsbr\d/i, why: 'ground and preloaded over its whole length: the bearing\'s problem again, on something a metre long' },
   { what: /\bmotor\b|stepper|\bservo\b|solenoid|outrunner|\bnema\s?\d/i, unless: /mount|bracket|plate|adapter|coupler|pulley|boss/i, why: 'sintered magnets, stamped and insulated laminations and a machine-wound coil: three processes, none of them in a small works' },
   { what: /\bbelt\b|timing belt/i, unless: /tension|clamp|guide/i, why: 'moulded onto its steel or glass cords in a heated press, to a pitch held over its whole length' },
+  // (found 2026-10-11 by throwing an invented machine at the works: a toothed pulley came out turned on a mini lathe
+  //  and a $3 coupling came out forged. A GT2 tooth form is hobbed or moulded to the same pitch as its belt, and
+  //  nothing that turns a cylinder cuts it; a plain flat or V pulley still is turned here, which is why this is
+  //  written on the tooth form and not on the word "pulley")
+  { what: /\b(gt2|htd|mxl|t2\.5|timing|toothed)\b[^,]*\b(pulley|idler|sprocket)\b|\b(pulley|idler|sprocket)\b[^,]*\b(gt2|htd|mxl|timing|toothed)\b/i, why: 'its tooth form is hobbed or moulded to the belt\'s own pitch over every tooth: a lathe turns the blank and cannot cut the form' },
+  { what: /\b(coupling|coupler)\b/i, unless: /\bpipe\b|\bhose\b|\bbowden\b/i, why: 'a slit flexible coupling is bored, slit and tapped in one setup on a mill with a slitting saw, concentric to a hundredth: $3 finished' },
+  // (the whole hot end is a purchase. Each of its pieces failed here for a different reason — the block and the sink
+  //  for cutter stickout, the nozzle because a 0.4 mm orifice wants a 0.4 mm drill — and all three are the same $5
+  //  answer, which is the kind of thing a plan should say once rather than three times)
+  { what: /hot ?end|heat ?break|heat(er)? ?block|\bnozzle\b|\b(drive|extruder|hobbed) gear\b/i, why: 'a hot end\'s pieces are turned and drilled to bores a tenth of a millimetre across in hardened or free-cutting stock, and sold as a set for a few dollars: making one costs more in cutters than buying ten' },
   { what: /screw|bolt|\bnut\b|washer|fastener|t-slot|\binsert\b|rivet|\bstud\b/i, unless: /\bboss\b|plate\b|housing|lead ?screw/i, why: 'cold-headed and thread-rolled by the thousand at a few cents each; a lathe cuts one in twenty minutes and it is weaker, because a rolled thread\'s grain follows the form and a cut one\'s is severed' },
   { what: /\bboard\b|\bpcb\b|electronic|display|\blcd\b|\bpsu\b|power supply|\bchip\b|sensor|thermistor|endstop|\bswitch\b|camera|receiver|transmitter|\besc\b|flight controller|antenna/i,
     unless: /cradle|mount|bracket|holder|housing|\bcase\b|cover|clamp|shroud|stand\b|plate\b|tray/i, why: 'a wafer fab and a pick-and-place line' },

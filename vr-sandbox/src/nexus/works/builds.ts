@@ -16,12 +16,10 @@ import { worksOf } from './stations';
 import type { Join, PartLine } from './lines';
 import type { WorksState } from './can';
 import { planJob, type Job } from './plan';
-
-// ---- builds to throw at it -----------------------------------------------------------------------------------------
-// The test of a job router is not the job it was written for. These six are deliberately unalike — a welded steel
-// frame, a machine with a ground tolerance on it, a flying thing, a fired pot, a cast housing, a wall — and each is a
-// real bill with real sizes and its own joints. Throw any of them at any works and it says what happens: which
-// machine, in what order, what gets bought and why, and what this works cannot do at all.
+import { component } from '../parts/components';
+import { massOf, DENSITY } from '../parts/mass';
+import type { Part } from '../parts/kits';
+import type { Machine } from '../ask/machine';
 
 // ---- builds to throw at it -----------------------------------------------------------------------------------------
 // The test of a job router is not the job it was written for. These six are deliberately unalike — a welded steel
@@ -168,4 +166,57 @@ export function bootstrapOf(ids: string[], model: 'ender3' | 'voron24', prefer: 
   const share = total ? +((made / total) * 100).toFixed(1) : 0;
   return { model: j.what, total, made: { n: made, by }, bought: { n: bought, why }, share, hours: +(j.makespan / 60).toFixed(1),
     says: `${j.what}: of ${total} parts, ${made} (${share} %) could be made in ${w.stations.length} stations costing ${money(+paid.toFixed(2))}, and ${bought} must be bought. A works does not bootstrap by making more of the machine — it bootstraps by making the ${share} % that is shaped and buying the ${(100 - share).toFixed(1)} % that is ground, wound, rolled or fabbed` };
+}
+
+// ---- a machine the inventor composed, thrown at a works -------------------------------------------------------------
+// src/nexus/ask/machine.ts composes a machine out of what the library affords and says what it is made of. This turns
+// that into a build, so the same router that plans a go-kart says what to do about a machine nobody drew: which lines
+// are bought whole (a rail, a stepper, a belt, a board), which are stock cut to length here (every extrusion), and
+// which are printed on the works' own printer. That is the order the user asked for — "whatever we have to do first or
+// buy or code" — derived rather than written down.
+//
+// The lines are named by the component library's own names for the parts, not by the words that drew them, because the
+// router matches on what a thing *is* ("M5 T-slot nut" is a fastener, "slotnut slot6 M5 hammer" is a spelling).
+
+/** What a drawn part is mostly made of, and how many cm³ of it there are: the material carrying the most of its mass,
+ *  and its mass over that material's density. A part of several materials is routed by its heaviest, which is what
+ *  decides the process. */
+export function madeOf(p: Part): { mat: string; cm3: number } {
+  const by = new Map<string, number>();
+  const walk = (q: Part) => {
+    const kg = massOf({ ...q, parts: undefined });
+    if (q.mat && kg > 0) by.set(q.mat, (by.get(q.mat) ?? 0) + kg);
+    for (const r of q.parts ?? []) walk(r);
+  };
+  walk(p);
+  const best = [...by.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!best) return { mat: 'steel-low', cm3: 0 };
+  const rho = DENSITY[best[0]] ?? 7850;
+  return { mat: best[0], cm3: +((massOf(p) / rho) * 1e6).toFixed(2) };
+}
+
+/** A composed machine as a build to throw at a works. */
+export function machineBuild(m: Machine): Build {
+  const lines: PartLine[] = [];
+  const add = (name: string, n: number, mat: string, size?: [number, number, number], cm3?: number) => {
+    const was = lines.find((l) => l.name === name && l.mat === mat);
+    if (was) { was.n += n; return; }
+    lines.push({ name, n, mat, ...(size ? { size } : {}), ...(cm3 != null ? { cm3 } : {}) });
+  };
+  for (const s of m.stages) {
+    for (const { words, n } of s.unit.of) {
+      const c = component(words);
+      if (typeof c === 'string') continue;
+      const { mat, cm3 } = madeOf(c.part);
+      add(c.item.name, n, mat, c.item.size as [number, number, number] | undefined, cm3);
+    }
+    // a line bought whole is named as what it is, so the router reaches the same verdict from the words alone
+    for (const b of s.unit.bought ?? []) add(b.what, b.n, 'steel-low');
+  }
+  return {
+    id: 'invented', what: m.name + `, ${m.reach.join(' × ')} mm`,
+    src: `composed from what the component library affords (src/nexus/ask/machine.ts): ${m.stages.map((s) => s.unit.name).join(', ')}`,
+    lines,
+    joins: [{ how: 'fasten', n: lines.filter((l) => /bolt|screw|nut/i.test(l.name)).reduce((a, l) => a + l.n, 0), says: 'every bolt into a T-slot nut or a tapped plate: the whole machine comes apart again, which is what extrusion is for' }],
+  };
 }

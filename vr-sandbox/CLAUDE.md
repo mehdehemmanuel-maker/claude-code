@@ -110,6 +110,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Words to wants, figures, questions; designs from laws | `src/nexus/ask/conceive.ts` |
 | Where a make ask goes (designed, invented, a kit by the thing's own name, a place, the inventory's own) and what of it was not done, said beside what was made | `src/nexus/ask/route.ts` (`routeMake`; the forge's `perform` carries it out) |
 | Inventing what turns one thing into another (waves into drinking water, a weight's fall into light, a flame into cold): a chain of real effects whose ports mate (power as effort × flow, a bond graph's rule; shafts of one kind but not one speed matched by as many gear stages as the ratio needs), sized by conservation from its source, under the floor of the laws, each effect made of inventory parts or said as a gap; on a board as steps | `src/nexus/ask/invent.ts` (`invent`, `boardOfInvention`) |
+| Inventing a *machine* rather than a flow: what each unit of machine affords (slide, turn, grip, deposit, cut, see, think, hold), each unit a real assembly of library parts with what it carries, what it raises, what it costs and where that figure came from; an ask read into the affordances it needs and the size it needs them over; the units stacked so every stage carries the mass above it and a payload is checked against the grip that holds it; refused with the number that refuses it | `src/nexus/ask/machine.ts` (`UNITS` as `screwAxis`, `beltAxis`, `turnAxis`, `HOT_END`, `SPINDLE`, `GRIPPER`, `EYE`, `BRAIN`, `baseFrame`; `stack`, `composeMachine`, `machineText`, `machineWords`, `machineParts`), `npm run machine`; its bill thrown at a works by `machineBuild` in `src/nexus/works/builds.ts` |
 | Generated structure for any intent; its body in space | `src/nexus/ask/generate.ts`, `src/nexus/substrate/realize-space.ts` |
 | Machines as real hardware from generated elements | `src/nexus/embody/` (`any.ts`, `tree.ts` load path, `stock.ts`) |
 | Real products and what each contains, down to elements | `src/nexus/parts/inventory.ts` (about 1,500 items) |
@@ -246,7 +247,7 @@ the root.
 | Directory | What is in it |
 | --- | --- |
 | `substrate/` | the Nexus engine: terms, domains, laws, places, couplings, and the loop that evolves them |
-| `ask/` | words in, wants out: how an ask becomes something to make (`conceive`, `route`, `generate`, `invent`, `spec`) |
+| `ask/` | words in, wants out: how an ask becomes something to make (`conceive`, `route`, `generate`, `invent` for flows, `machine` for mechanisms, `spec`) |
 | `parts/` | the parts library and the geometry a part is made of: every part designed once from its standard, the shapes it is drawn from (lofts, bent tubes, turned profiles, NURBS surfaces), where its pieces end up in space and which of them touch, its mass and what it costs |
 | `boards/` | single-board computers, their parts, and the photo-measured data files |
 | `machines/` | real machines from their makers' figures, and the wire out to them (`link.ts`). Not geometry: a loft, a surface and an oriented box are `parts/`, because a body is not a machine |
@@ -419,6 +420,10 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   calibrate each photo by four points of the same plane and use `photo.py same`).
 - `kicad.py`: a part's drawing from KiCad's footprints, with the datasheet it was drawn from.
 When a step takes working out by hand twice, it becomes a tool here, and a line in this list.
+- `npm run machine`: a machine composed from the library and printed — `npm run machine -- units` lists every unit the
+  library affords with its mass, its price and what limits it; `npm run machine -- "a machine that cuts 400x300x80" works`
+  composes it and throws its bill at the $3,000 works. Written the same round it was needed, for the same reason as
+  `npm run works`: the alternative was a probe test that prints what the engine says and is then deleted.
 - `npm run works`: a plan, a budget or a build printed from the command line. Four rounds in a row opened by writing a probe
   test whose only job was to print what the engine says, and then deleting it; this is that, kept.
 
@@ -1070,8 +1075,51 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    it by the bag and pour it by hand: stock of a material no process here works is now bought with its own reason
    rather than called impossible, because saying "cannot be done here" of a $20 bag is the engine being wrong in the
    most discouraging direction.
-   Next: the works standing in the forge room as real stations you walk between, working the three ratchets down by
-   cause, and the older Now items (robot benches, likeness, life graph).
+   Then the works standing in the forge room (2026-10-11): `works/floor.ts` lays the stations out on a real floor (hot
+   ones against the outside wall first, rows in pairs sharing a 0.9 m aisle, the room's width from the widest station
+   and the floor it needs: 7.6 × 9 m for the $3,000 works's 35.8 m² of stations), and `view/works-room.ts` stands that
+   up — floor, metre grid, four walls with a doorway, its own light, and each station with a card saying what it does
+   and how a program reaches it. "show me the works" walks you in at its door.
+   And then the user, seeing it: *"why does everything look bogus you need to use the tools we have already spent days
+   working on and making those more capable instead of thinking so hard"*. Right, and the fault was mine: the room drew
+   stand-in silhouettes for fifteen of its sixteen stations when the library already draws the Ender-3 whole from
+   Creality's own assembly. Then, redirecting again: *"no create new machines and new inventions so go find components
+   and you already have other machines to reference ... there's code you can review and ways to create your own code
+   and stuff think about how you made this app or can make any app random without having to know an exact blueprint
+   rails could be mobility robotic hands"*.
+   So: `src/nexus/ask/machine.ts`, which is the same rule as `invent.ts` one level up. `invent.ts` chains *flows* —
+   a port carries power in one domain, meets a port of the same kind, and conservation sizes the chain. This chains
+   *motion and structure*: a unit has a base it is bolted to and a moving end that carries the next, and a stack is
+   sound when every stage carries the mass of everything above it. The words are a screw axis, a belt axis, a turn
+   axis, a hot end, a spindle, a gripper, an eye, a brain and a frame — nine units, every one of them a real assembly
+   of parts the component library really draws, checked by a test that no unit names a part the library cannot make.
+   Three slides under a hot end spell a 3D printer; three under a spindle spell a router; two under a gripper and an
+   eye spell a pick-and-place; one long slide under a hand is the thing the user named. None of them is stored
+   anywhere. A 300 × 300 × 400 printer comes out at 10.9 kg and $414, a 400 × 300 × 80 router at 11.1 kg and $381, a
+   pick-and-place at 14.8 kg and $288 — each priced off the seller pages an earlier round sourced, with every line that
+   has no page named rather than guessed at.
+   The numbers are the point, and they are all derived: a screw axis's force is 2π T η / lead off the NEMA 17's own
+   0.42 N·m, so it raises 13.5 kg at 40 mm/s; a belt axis is the same parts over a 20-tooth GT2's 6.37 mm pitch radius,
+   so it raises 6.7 kg at 300 mm/s. That is why a cut gets screws on all three axes and a print gets belts across —
+   derived, not written down. And what a unit *carries* is a different number from what it *raises*: the rail takes the
+   first and the drive takes the second, which is the whole difference between a Z axis and an X axis of the same parts.
+   Two faults in its own first run, both kept as tests: tools were stacked on each other, so a camera beside a gripper
+   was asked to hold the gripper's load, and a payload was added to every stage alike. Tools bolt to the top axis side
+   by side; a payload hangs from whatever grips it and is checked against *that* grip ("it grips 1.5 kg and was asked to
+   hold 2 kg"). A third: bought lines carried no mass, so the eye and the brain weighed a gram and every stage below
+   them was checked against a load that was not there — a bought line now carries its own listing's weight.
+   Then `machineBuild` in `works/builds.ts` throws the invented machine at the works, which is the rest of what was
+   asked ("whatever we have to do first or buy or code"): 25 lines bought for $201, fifteen lengths of extrusion cut
+   here, 145 bolts, 7.5 h of hands, nothing it cannot do. The lines are named by the component library's own names for
+   the parts, not by the words that drew them, because the router matches on what a thing *is*. Throwing a machine it
+   had never seen at it found four faults in the router's own data, each fixed at the cause in `works/lines.ts`: a $3
+   flexible coupling came out *forged on the propane forge*, a GT2 pulley came out turned on the mini lathe (a tooth
+   form is hobbed or moulded to the belt's pitch; a lathe turns the blank and cannot cut the form), and the MK8 block,
+   heat sink, nozzle and drive gear each failed for a different reason when all four are the same $5 answer.
+   Next: the room drawing every station from the library rather than as a stand-in (the Ender-3 is wired; the rest want
+   their kinds, and the inventor's units are now the vocabulary to build them from), an invented machine stood in the
+   room and judged blind, prices for the lines that still have none, working the three ratchets down by cause, and the
+   older Now items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);

@@ -76,10 +76,13 @@ import { lifeCycleView } from './lifecycle3d';
 import '../world/creatures';
 import { perfect, sayMade, type Made as MadeThing } from '../make/pipeline';
 import { boardOfInvention, sayInvention, type Invention } from '../ask/invent';
+import { machineWords } from '../ask/machine';
 import { routeMake } from '../ask/route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../parts/kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { SolderBench } from './solder-bench';
+import { worksStep, worksStood, worksRoomWords } from './works-room';
+import { worksWords } from '../works/text';
 import { stepsOf, type PlanId } from '../teach/solder-lesson';
 import { ledBuild, ledsAsked, partsSaid, PROTO_BUILD } from '../teach/lessons';
 import type { Build } from '../teach/edges';
@@ -2562,11 +2565,9 @@ async function converse(text: string): Promise<void> {
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = benchWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = barWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = kitWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = cellWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = processWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = worksRoomWords(text, { scene, camera, orbit, dolly, xr: () => renderer.xr.isPresenting, home: () => goPlace('table') }) ?? worksWords(text) ?? machineWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  // (each asked in turn and the first that answers wins, which is what five identical if-blocks said at five times the length)
+  { const said = barWords(text) ?? kitWords(text) ?? cellWords(text) ?? processWords(text) ?? robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { let said: string | null; try { said = personWords(text); } catch (e) { said = (e as Error).message; } if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   if (/^(?:stop|stop fighting|break|break it up)$/i.test(text.trim()) && peopleWorld?.list.some((p) => p.target)) { line('you', text); for (const p of peopleWorld.list) { p.target = null; p.move = null; } say('They stop: no target, guards held.', undefined, 'nexus'); return; }
   if (/^pipeline\s+new\b/i.test(text.trim()) || /^(inventory|weather)\b/i.test(text.trim()) || stepLanguage(text)) { line('you', text); try { say(await flowAct(text.trim()), undefined, 'nexus'); } catch (e) { say((e as Error).message, undefined, 'nexus'); } return; }
@@ -3937,7 +3938,7 @@ async function boot() {
     T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else if (!coaster?.seated) orbit.update(); });
     T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
     guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
-    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('the bench', () => T('bench', () => bench?.update(dt))); guarded('the robot at the bench', () => robotAt?.update(dt)); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
+    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('the bench', () => T('bench', () => bench?.update(dt))); guarded('the works', () => worksStep(camera)); guarded('the robot at the bench', () => robotAt?.update(dt)); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
     for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt);
     T('phone', () => phone.render(renderer, scene)); T('render', () => renderer.render(scene, camera));
   });
@@ -3977,6 +3978,9 @@ async function boot() {
   const toScreen = (w: THREE.Vector3 | null): [number, number] | null => { if (!w) return null; const q = w.clone().project(camera); return [((q.x + 1) / 2) * window.innerWidth, ((1 - q.y) / 2) * window.innerHeight]; };
   Object.assign(window as object, {
     winPoint: (id: string, act: 'move' | 'min' | 'close') => toScreen(windows.pointOf(id, act)),
+    // the works as it stands: where the camera is, where the room is, and what is on its floor (a test hook, so a
+    // screenshot can be framed from the layout's own numbers rather than by guessing at them)
+    worksNow: () => { const w = worksStood(); return w ? { ...w, cam: camera.position.toArray().map((n) => +n.toFixed(2)), target: orbit.target.toArray().map((n) => +n.toFixed(2)) } : null; },
     winWorld: (id: string, act: 'move' | 'min' | 'close') => { const w = windows.pointOf(id, act); return w ? [w.x, w.y, w.z] : null; },
     winList: () => windows.list(),
     pingNow: () => ping ? { armed: +ping.armed.toFixed(2), bounces: ping.R.bounces, live: ping.R.live, hitBy: ping.R.hitBy, server: ping.R.server, served: ping.R.served, score: ping.R.score, ball: ping.R.ball.p.map((x) => +x.toFixed(2)), bat: ping.bat.position.toArray().map((x) => +x.toFixed(2)), skill: ping.R.robot.skill } : null,
