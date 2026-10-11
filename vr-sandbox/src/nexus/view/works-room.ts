@@ -37,6 +37,18 @@ export const COMPOSED: Record<string, string> = {
   wheel: 'a turning machine that turns 350x350x400',
 };
 
+/** Stations that stay stand-ins but carry the library's own tools on their bench, because the tools *are* drawn even
+ *  where the bench is not. A blind judge's complaint was that every station was an anonymous grey box; a bench with a
+ *  Pinecil in its stand, a brass-wool cleaner, a reel of 63/37 and a pair of CHP-170s on it is not one.
+ *
+ *  The hand tools and the measuring set are deliberately absent: the library *knows* a 16 oz claw hammer and a 150 mm
+ *  vernier caliper (they are in the catalogue with their figures) but does not draw them yet, and putting a box on the
+ *  bench and calling it a micrometer is the exact fault this is fixing. Those benches stay bare and their cards say so. */
+export const KIT_ON: Record<string, string[]> = {
+  soldering: ['ironstand s-11', 'solderiron pinecil-v2', 'tipcleaner 599b', 'solderreel ts-635050', 'flushcutter chp-170', 'helpinghands mz101', 'breadboard 170pts', 'fluxpen cq4lf'],
+  computer: ['xiao ESP32C3', 'permaproto half'],
+};
+
 export interface WorksRoom {
   group: THREE.Group; floor: Floor;
   /** which stations are drawn as the machine they are, and what each stand-in says it is */ drawn: Record<string, string>;
@@ -124,7 +136,7 @@ function standIn(s: Stood): THREE.Group {
 }
 
 /** What a station's card says: what it does, what it cost and how, what it draws, and how a program reaches it. */
-export function stationCard(s: Stood, drawn: 'model' | 'composed' | 'stand-in'): string[] {
+export function stationCard(s: Stood, drawn: 'model' | 'composed' | 'kit' | 'stand-in'): string[] {
   const st = stationById(s.id);
   const does = st.does.map((d) => processById(d).name ?? d);
   const link = linkFor(s.id);
@@ -134,7 +146,7 @@ export function stationCard(s: Stood, drawn: 'model' | 'composed' | 'stand-in'):
     does.length ? short(does.join(', ')) : short(st.why),
     `${s.size[0]} × ${s.size[1]} m${st.kw ? `, ${st.kw} kW` : ''}${st.needs.length ? `, needs ${st.needs.join(', ')}` : ''}`,
     link && link.transport !== 'hand' ? `a program can be sent: ${link.transport}` : 'no port: its program is steps with a check at each one',
-    { model: '', composed: 'composed here out of library parts, not a model of a named machine', 'stand-in': 'not drawn yet: it stands as its own floor area' }[drawn],
+    { model: '', composed: 'composed here out of library parts, not a model of a named machine', kit: 'its tools are drawn whole; the bench under them is not yet', 'stand-in': 'not drawn yet: it stands as its own floor area' }[drawn],
   ].filter(Boolean);
 }
 
@@ -218,12 +230,32 @@ export function worksRoom(ids: string[], o: { width?: number } = {}): WorksRoom 
       stand.add(v.group);
     } else {
       stand.add(standIn(s));
+      // a stand-in bench still carries the tools the library really draws, laid along its top the way they lie on a
+      // bench you work at: what is reached for with the right hand on the right, the reel and the spares behind
+      const kit = KIT_ON[s.id];
+      if (kit) {
+        const top = Math.min(0.92, s.h), on: Part[] = [];
+        kit.forEach((w, i) => {
+          try {
+            const across = (i / Math.max(1, kit.length - 1) - 0.5) * (s.size[0] * 0.72);
+            on.push({ ...use(w), at: [across, 0, (i % 2 ? 0.1 : -0.08)] });
+          } catch { /* said in `drawn` below */ }
+        });
+        if (on.length) {
+          const v = kitView({ name: `${s.name} tools`, at: [0, 0, 0], parts: on }); views.push(v);
+          const b = new THREE.Box3().setFromObject(v.group);
+          v.group.position.y = top + 0.005 - b.min.y;
+          v.group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          stand.add(v.group);
+          drawn[s.id] = `kit: a stand-in bench carrying ${on.length} of the library's own tools, each drawn whole`;
+        }
+      }
       const name = label(stationById(s.id).name.replace(/^(a|an|the) /, ''), 0.1);
       name.position.set(0, s.h + 0.16, 0); stand.add(name);
     }
 
     const c = card(CARD_W, CARD_H);
-    const lines = stationCard(s, comp ? 'model' : made ? 'composed' : 'stand-in');
+    const lines = stationCard(s, comp ? 'model' : made ? 'composed' : drawn[s.id]?.startsWith('kit') ? 'kit' : 'stand-in');
     c.draw(lines[0]!, lines.slice(1).map((text) => ({ text })), s.wall ? "#c08a4a" : "#4dd0e1");
     c.mesh.position.set(0, s.h + 0.55, 0); c.mesh.userData['faces'] = true; stand.add(c.mesh);
     group.add(stand); by.set(s.id, stand);
@@ -305,5 +337,6 @@ export function worksRoomWords(text: string, r: RoomHandles): string | null {
   //  a sentence that goes stale the moment the room gets better at its job has to be derived, not written)
   const kinds = Object.values(standing.drawn);
   const modelled = kinds.filter((x) => x.startsWith('drawn')).length, built = kinds.filter((x) => x.startsWith('composed')).length;
-  return `${standing.floor.says} Walk into it: the ones in brown are against the outside wall because they burn or fume. ${modelled} ${modelled === 1 ? 'is' : 'are'} drawn from a maker's own model${built ? `, ${built} ${built === 1 ? 'is' : 'are'} composed out of library parts by the inventor (a benchtop CNC is three slides and a spindle, so it is built rather than boxed)` : ''}, and the other ${kinds.length - modelled - built} stand as a stand-in at their own size. Each card says which it is: a stand-in labelled as one is honest, and a box pretending to be a lathe is not.`;
+  const kitted = kinds.filter((x) => x.startsWith('kit')).length;
+  return `${standing.floor.says} Walk into it: the ones in brown are against the outside wall because they burn or fume. ${modelled} ${modelled === 1 ? 'is' : 'are'} drawn from a maker's own model${built ? `, ${built} ${built === 1 ? 'is' : 'are'} composed out of library parts by the inventor (a benchtop CNC is three slides and a spindle, so it is built rather than boxed)` : ''}${kitted ? `, ${kitted} ${kitted === 1 ? 'is' : 'are'} a bench carrying the library's own tools drawn whole` : ''}, and the other ${kinds.length - modelled - built - kitted} stand as a stand-in at their own size. Each card says which it is: a stand-in labelled as one is honest, and a box pretending to be a lathe is not.`;
 }

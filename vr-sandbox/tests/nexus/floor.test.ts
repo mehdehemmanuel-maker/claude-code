@@ -6,7 +6,8 @@ import { footprint, layWorks } from '../../src/nexus/works/floor';
 import { under3K } from '../../src/nexus/works/budget';
 import { stationById, STATIONS } from '../../src/nexus/works/stations';
 import type { Stood } from '../../src/nexus/works/floor';
-import { COMPOSED, stationCard } from '../../src/nexus/view/works-room';
+import { COMPOSED, KIT_ON, stationCard } from '../../src/nexus/view/works-room';
+import { component } from '../../src/nexus/parts/components';
 import { composeMachine } from '../../src/nexus/ask/machine';
 
 describe('the works on the floor', () => {
@@ -80,6 +81,20 @@ describe('what the room stands, and what it admits it has not got', () => {
       expect(m.gaps, `${id}: ${words}`).toEqual([]);
       expect(m.stages.length, id).toBeGreaterThan(2);
     }
+  });
+  it('every tool a bench is given is one the library really draws', () => {
+    // (the hand tools and the measuring set are deliberately absent: the library *knows* a 16 oz claw hammer and a
+    //  150 mm vernier caliper and does not draw them yet, and a box on a bench called a micrometer is the fault
+    //  this is fixing)
+    for (const [id, kit] of Object.entries(KIT_ON)) {
+      expect(kit.length, id).toBeGreaterThan(0);
+      for (const w of kit) expect(typeof component(w), `${id}: ${w}`).not.toBe('string');
+    }
+  });
+  it('a card for a kitted bench says the tools are drawn and the bench is not', () => {
+    const s: Stood = { id: 'soldering', name: 'the soldering bench', at: [1, 1], size: [1.8, 0.8], h: 0.95, wall: false, needs: [], row: 0 };
+    expect(stationCard(s, 'kit').join(' ')).toMatch(/its tools are drawn whole; the bench under them is not yet/);
+    expect(stationCard(s, 'kit').join(' ')).not.toMatch(/not drawn yet: it stands as its own floor area/);
   });
   it('a composed station is sized from that station\'s own envelope, not from a guess', () => {
     for (const [id, words] of Object.entries(COMPOSED)) {

@@ -1232,6 +1232,15 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    stools, stock racks, chip bins or swarf; every material is one flat colour with the same shader, so steel, cast
    iron, MDF and clay look alike; no chamfer on any slab edge; the floor markings are zero-thickness decals that clip
    their benches; and the twelve stand-ins are still interchangeable grey boxes that only their cards tell apart.
+   The first of the judge's "every station is an anonymous grey box" fixed the same way the CNC was (2026-10-11): the
+   tools *are* drawn even where the bench is not. `KIT_ON` puts the library's own soldering kit on the soldering
+   bench — the S-11 stand with the Pinecil in it, the 599B brass-wool cleaner, the reel of 0.5 mm 63/37, the CHP-170
+   cutters, the MZ101 helping hands, a BB400 and the flux pen — and the XIAO and a Perma-Proto on the computer bench.
+   The hand tools and the measuring set are deliberately left off: the library *knows* a 16 oz claw hammer and a
+   150 mm vernier caliper (they are in the catalogue with their figures) and does not draw them yet, and putting a box
+   on a bench and calling it a micrometer is the exact fault this is fixing. Those benches stay bare, their cards say
+   "not drawn yet", and a kitted one says "its tools are drawn whole; the bench under them is not yet". The room's own
+   sentence counts all four kinds now: 1 modelled, 3 composed, 2 kitted, 10 stand-ins.
    Next: the rest of the stations (a forge is a lined tube on a stand, a brake is two lengths of angle on a hinge:
    each is a small builder of its own), the room's light and its bare walls, a blind judge on the works as it now
    stands, prices for the lines that still have none, working the three ratchets down by cause, and the older Now
