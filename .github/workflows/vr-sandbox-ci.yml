@@ -14,6 +14,8 @@ on:
     paths:
       - 'vr-sandbox/**'
       - '.github/workflows/vr-sandbox-*.yml'
+  # A button on the Actions tab, so a run can be started by hand to check the workflow itself.
+  workflow_dispatch:
 
 permissions:
   contents: read
