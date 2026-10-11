@@ -1,3 +1,8 @@
+# Locally `npm run gate` is one typecheck and 175 test files on four workers: 141-146 s, and nothing else can use the
+# machine while it runs. Here the typecheck and the tidy lint are their own jobs and the test files are dealt into four
+# shards that run at once. Measured on this tree, vitest's own file dealing is even - the four shards are 46, 30, 27 and
+# 43 s, summing to the whole gate - so the slowest shard is the wall clock. Vitest deals by file, and the two long
+# sweeps are already several files each (vr-sandbox/tests/nexus/sweep.ts), so no one shard inherits all of them.
 name: vr-sandbox CI
 
 on:
@@ -13,13 +18,20 @@ on:
 permissions:
   contents: read
 
+# A second push supersedes the first: the older run is cancelled rather than paid for.
+concurrency:
+  group: vr-sandbox-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: vr-sandbox
+
 jobs:
-  test:
+  # Types first and alone: it is seconds, and a red typecheck makes four shards' failures unreadable.
+  typecheck:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: vr-sandbox
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,7 +40,38 @@ jobs:
           cache: npm
           cache-dependency-path: vr-sandbox/package-lock.json
       - run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Unit, golden, codec, physics conformance and architecture tests
-        run: npm test
+      - run: npm run typecheck
+
+  # The lint that keeps the tree clean, beside the typecheck, for the same reason.
+  tidy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vr-sandbox/package-lock.json
+      - run: npm ci
+      - run: npm run tidy
+
+  # Unit, golden, codec, physics conformance and architecture tests, in four shards at once.
+  test:
+    needs: typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false # one red shard must not hide the other three
+      matrix:
+        shard: [1, 2, 3, 4]
+    name: test ${{ matrix.shard }}/4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vr-sandbox/package-lock.json
+      - run: npm ci
+      - run: npx vitest run --shard=${{ matrix.shard }}/4
