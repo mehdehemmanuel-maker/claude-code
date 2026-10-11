@@ -60,7 +60,7 @@ const BIG: { file: string; max: number; why: string }[] = [
 /** Logic that is too long, with the ceiling set at what it measures today so it cannot grow while it waits its turn.
  *  Every line names what it should be split into: that is the work, not the number. */
 const DEBT: { file: string; max: number; into: string }[] = [
-  { file: 'src/nexus/view/forge.ts', max: 4050, into: 'the room, the asking, the phone, the benches and the pipeline player are five concerns in one file; the benches already moved out, the rest have not' },
+  { file: 'src/nexus/view/forge.ts', max: 4046, into: 'the room, the asking, the phone, the benches and the pipeline player are five concerns in one file; the benches and the lighting have moved out, the rest have not' },
   { file: 'src/nexus/ask/conceive.ts', max: 3890, into: 'reading words into wants, the figures each want needs, and designing from laws are three files' },
   { file: 'src/nexus/ask/generate.ts', max: 1670, into: 'placing, repeating and turning shapes is one concern; sizing by law is another' },
   { file: 'src/nexus/substrate/manifold.ts', max: 1280, into: 'deriving structure from wants, and the balances that check it' },

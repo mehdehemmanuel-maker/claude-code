@@ -210,6 +210,55 @@ export function worksRoom(ids: string[], o: { width?: number; cap?: number } = {
       group.add(f);
     }
   }
+  // what the wall actually carries. The room has labelled this wall "power, extraction, gas…" from the day it was
+  // laid out, and a blind judge put it first: "no services anywhere, in a room whose own label says power,
+  // extraction, gas". A service is not a word, it is a run along the wall with something on the end of it, so each
+  // one the floor says this works needs is drawn at the height its trade runs it, and every station against that
+  // wall gets the drop its own `needs` asks for: an isolator where it takes power, a cock where it takes gas, a
+  // hood where it fumes. Sizes are what a small shop uses (50 × 50 trunking, 150 mm spiral duct, 22 mm gas,
+  // 15 mm water), and nothing is drawn for a service this works does not need.
+  {
+    const wallZ = -0.30, runL = W + 0.5;
+    const bar = (w: number, h: number, d: number, x: number, y: number, z: number, color: number, rough = 0.6): THREE.Mesh => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: color === 0xb8bcc0 ? 0.6 : 0.2 }));
+      m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; group.add(m); return m;
+    };
+    const pipe = (len: number, r: number, y: number, z: number, color: number, metal = 0.7): THREE.Mesh => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 16), new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: metal }));
+      m.rotation.z = Math.PI / 2; m.position.set(W / 2, y, z); m.castShadow = true; m.receiveShadow = true; group.add(m); return m;
+    };
+    const has = (s: string) => floor.services.includes(s);
+    if (has('extraction') || has('vent')) {                                        // 150 mm spiral duct into its fan
+      pipe(runL, 0.075, 2.55, wallZ + 0.10, 0xaeb3b8);
+      bar(0.42, 0.42, 0.34, W + 0.18, 2.55, wallZ + 0.10, 0x9aa0a6);                // the fan box at the end of the run
+    }
+    if (has('power')) {                                                            // trunking at 1.5 m, its board at the door end
+      bar(runL, 0.05, 0.05, W / 2, 1.50, wallZ + 0.07, 0xd7d9db, 0.5);
+      bar(0.30, 0.42, 0.11, 0.25, 1.55, wallZ + 0.09, 0xc9ccce, 0.5);
+    }
+    if (has('gas')) pipe(runL, 0.011, 1.18, wallZ + 0.06, 0xd8c33a, 0.5);
+    if (has('water')) pipe(runL, 0.0075, 0.28, wallZ + 0.05, 0x3f7fa6, 0.5);
+    // the drops: each wall station takes what it needs, where it stands
+    for (const s of floor.stood.filter((q) => q.wall)) {
+      const x = s.at[0], needs = stationById(s.id).needs;
+      if (needs.includes('power') || needs.includes('3-phase')) {
+        bar(0.10, 0.14, 0.07, x + s.size[0] / 2 - 0.2, 1.22, wallZ + 0.08, 0xcf7a2a, 0.5);   // its isolator
+        bar(0.02, 0.26, 0.02, x + s.size[0] / 2 - 0.2, 1.37, wallZ + 0.06, 0x2b2b2d, 0.8);   // the cable to the trunking
+      }
+      if (needs.includes('gas')) bar(0.035, 0.12, 0.035, x, 1.12, wallZ + 0.07, 0xd8c33a, 0.4);
+      if (needs.includes('extraction') || needs.includes('vent')) {                           // a hood over what fumes
+        const hood = new THREE.Mesh(new THREE.ConeGeometry(Math.min(0.55, s.size[0] * 0.3), 0.34, 4, 1, true), new THREE.MeshStandardMaterial({ color: 0xa7acb1, roughness: 0.5, metalness: 0.55, side: THREE.DoubleSide }));
+        hood.rotation.y = Math.PI / 4; hood.position.set(x, 2.22, s.at[1] - 0.1); hood.castShadow = true; group.add(hood);
+        const duct = new THREE.MeshStandardMaterial({ color: 0xaeb3b8, roughness: 0.45, metalness: 0.7 });
+        const up = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.26, 12), duct);
+        up.position.set(x, 2.42, s.at[1] - 0.1); up.castShadow = true; group.add(up);
+        // and back to the main run, because a hood that goes nowhere is a lampshade
+        const z0 = s.at[1] - 0.1, len = Math.max(0.1, z0 - (wallZ + 0.1));
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, len, 12), duct);
+        arm.rotation.x = Math.PI / 2; arm.position.set(x, 2.55, z0 - len / 2); arm.castShadow = true; group.add(arm);
+      }
+    }
+  }
   const wallSign = label(`outside wall — ${floor.services.join(', ')}`, 0.12);
   wallSign.position.set(W / 2, 2.2, -0.28); group.add(wallSign);
 

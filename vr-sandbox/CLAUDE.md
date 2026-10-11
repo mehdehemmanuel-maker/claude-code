@@ -1341,8 +1341,34 @@ In order; each through the breakdown queue, rendered, compared with its photos a
      a digital's about 10).
    Its micrometer, its indicator and its granite plate are in the catalogue and not drawn yet, so the bench carries
    the calliper and its card still says the rest are not drawn — which is the whole point of the kit rule.
-   Next: the rest of the stations (a welder is bought; a micrometer and a dial indicator would finish the measuring
-   bench the same way the calliper started it), the brake's own stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
+   **A blind judge on the works as it now stands (2026-10-11): 3/10, up from 1/10.** "The room reads as a floor plan
+   rendered in 3D, not as a workshop. Nothing in it has been used, plugged in, or put down by a person." Of a dozen
+   objects it could name two from their shape alone (a bucket, a table) and a third nearly (the forge: "a drum lying
+   on its side on a table — if you told me it was a small forge I would accept it"). Two of its findings were
+   mine and are fixed at the cause:
+   • **"No contact shadows. Everything hovers."** Right, and worse than it knew: a round ago I switched the
+     renderer's shadow map on and **never told a light to cast into it**, so every `castShadow` in every room of this
+     app did nothing at all. A shadow takes three things in three places — the map on the renderer, `castShadow`
+     on a light, `castShadow` on a mesh — and the middle one was missing. The key light casts now, and because a
+     directional light's shadow box is 10 m at the origin while the works stands 34 m away, the box follows what is
+     being looked at, once a frame. The lighting moved out of `view/forge.ts` into `view/light.ts` as it went, which
+     is the split that file's own debt line asks for (4,046 lines now, and its ceiling came down with it).
+   • **"No services anywhere, in a room whose own label says power, extraction, gas."** Also right, and the room
+     had been printing that label on the wall since the day it was laid out. A service is not a word, it is a run
+     along the wall with something on the end of it, so the room now draws what `floor.services` says it needs —
+     150 mm spiral duct into its fan, 50 × 50 trunking off a board, a 22 mm gas line, a 15 mm water line — and
+     every station against that wall takes the drop its own `needs` asks for: an isolator and a cable where it takes
+     power, a cock where it takes gas, a hood ducted back to the main where it fumes. Nothing is drawn for a service
+     this works does not need.
+   Its other findings stand and are not done: the composed machines (the lathe, the wheel, the CNC) read as "the same
+   lattice of thin round posts and small cubes" and it would delete them all; the bench is bare where its own name
+   says "a bench, a vice and hand tools"; the forge has no burner, hose, bottle or anvil drawn (they are bought lines
+   and carry no size); there is no stock, no swarf, no bins, no stools, no PPE and nothing half-finished anywhere; the
+   cards are "the loudest thing in the room" and occlude what they describe; the floor markings have no wear, no oil
+   and no striping; the ceiling fittings are bare bars with no housing and cast no pool.
+   Next: the composed-machine faults above (a mini lathe is a bought machine with a known form and the inventor cannot
+   make that form — so it should not claim to; a potter's wheel has its own bill in its station and should be built
+   from it like the other six), a vice on the bench, the rest of the stations, the brake's own stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
    height (0.9 m) already contradicts — the room's bare walls, a blind judge on the works as it now stands, prices
    for the lines that still have none, working the three ratchets down by cause, and the older Now items (robot
    benches, likeness, life graph).

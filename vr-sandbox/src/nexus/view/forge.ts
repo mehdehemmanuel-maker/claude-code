@@ -83,13 +83,13 @@ import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitM
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { SolderBench } from './solder-bench';
 import { worksStep, worksStood, worksRoomWords } from './works-room';
+import { lightRoom } from './light';
 import { worksWords } from '../works/text';
 import { stepsOf, type PlanId } from '../teach/solder-lesson';
 import { ledBuild, ledsAsked, partsSaid, PROTO_BUILD } from '../teach/lessons';
 import type { Build } from '../teach/edges';
 import { edgeLines as edgeRuleLines, edgeMatOf, edgeRadius, EDGE_RULES, ruleFor, setEdge } from '../parts/finish';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Board } from '../substrate/boards';
 import { People, boardOfPerson, fighterBuild, fitBuild, factName as personFact, type Person } from '../world/person';
 import { personView, type PersonView } from './people3d';
@@ -159,11 +159,7 @@ const camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerH
 // lit face: a Raspberry Pi 5's mask, 0x21b984, read #63ffdd (green clipped, the mint it was faulted for) under the old
 // key 1.6, sky 0.9 and a lamp 1.4 a hand's length above it, and #36bd8b under these (tools/forge-look.mjs, its board
 // sampled); &env=, &sky=, &key=, &lamp= to try)
-scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = Number(params.get('env') ?? 0.4);
-scene.add(new THREE.HemisphereLight(0xbfe9ff, 0x0b1218, Number(params.get('sky') ?? 0.3)));
-const key = new THREE.DirectionalLight(0xffffff, Number(params.get('key') ?? 0.8)); key.position.set(1.2, 3.5, 1.8); scene.add(key);
-const fill = new THREE.DirectionalLight(0x80deea, 0.5); fill.position.set(-2, 1.5, -1); scene.add(fill);
+const { keyFollow } = lightRoom(scene, renderer, params);
 const floor = new THREE.Mesh(new THREE.CircleGeometry(10, 72), new THREE.MeshStandardMaterial({ color: 0x060b10, roughness: 0.7, metalness: 0.3 }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
 const grid = new THREE.GridHelper(20, 40, 0x0f3a48, 0x0a1a24); scene.add(grid);
@@ -3937,6 +3933,7 @@ async function boot() {
   renderer.setAnimationLoop(() => {
     frames++; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); prof.frame(now - last); last = now; const T = prof.time.bind(prof);
     T('controls', () => { if (renderer.xr.isPresenting) walk(dt); else if (!coaster?.seated) orbit.update(); });
+    keyFollow(renderer.xr.isPresenting ? dolly.getWorldPosition(new THREE.Vector3()) : orbit.target);
     T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
     guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
     guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('the bench', () => T('bench', () => bench?.update(dt))); guarded('the works', () => worksStep(camera)); guarded('the robot at the bench', () => robotAt?.update(dt)); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
