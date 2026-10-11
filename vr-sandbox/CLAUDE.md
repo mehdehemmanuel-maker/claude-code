@@ -156,7 +156,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A cutaway draws a solid's section flat and hatched in its own colour (a shell's inside as it is) | `src/nexus/view/look.ts` (`cut`) |
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
 | How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
-| Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
+| Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library ; and a port **read off the geometry** instead of declared, because a drilled pattern is already in the solids: a `Cut` is a hole with a place, a direction, a radius and a depth, and a ring or row of equal holes drilled the same way into one face *is* a bolt pattern. Coaxial cuts are one hole (a counterbore is a seat and the hole through it, not two patterns), two holes are the fewest that fix a turn, and what a hole takes is physical - a through hole passes the largest screw it clears, a hole at a thread's own nominal diameter is tapped for it | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`, `portsFrom`; kit `part` with "a + b"); `tests/nexus/ports-from.test.ts` |
 | The robot that runs the works: the rails it rides (one rail serves the two rows facing its aisle and no more, so the number of rails a shop wants is what says whether a rail or a floor robot is the cheap answer), which stations each puts within its arm's reach, the edge between what an operation needs of a pair of hands and what this robot's hands are (a port and a grip load a machine, start it and take the part out; they do not strike an arc, pour 700 °C metal or throw clay — each refused with the reason, which is what names the next tool to buy), the basket for everything the plan says to buy (each line the cheapest real offer with its seller, its page, the figure it showed and the day it was seen, split by seller because shipping is), and the division of a job into the robot's minutes and yours. It says plainly that it cannot pay for anything | `src/nexus/works/tend.ts` (`tendWorks`, `aislesOf`, `offRail`, `tends` returning a `Tended` verdict that says *what kind* of why it is, `TOOL_FOR`, `orderFor`, `runWorks`, `runText`, `tendWords`), `npm run works -- tend [build]` |
 | Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (seventeen files: `plan.ts` routes, `designer.ts` checks a bill against its own geometry, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
 | An invention sketched before it is designed: labelled blocks (box, disc, can, bar, plate) and the component library's own parts where the plan knows which, pins between them for what drives, carries or feeds what, read from four kinds of text line; stood in the room and taken apart like anything else, weighed, its envelope said, and turned into a bill a works can route — where a block that says what fraction of itself is really there is an assembly and not yet a part | `src/nexus/ask/sketch.ts` (`sketchOf`, `sketchParts`, `sketchText`, `sketchWeighs`, `sketchSpan`, `planWords`), `billOfSketch` in `src/nexus/works/builds.ts`, `npm run plan` |
@@ -1742,6 +1742,35 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    anything but a browser - which is the same wall this file already records for the sellers' size tables. One sighting
    with no page of its own is left (the $32.89 Walmart vice, the cheapest 100 mm one seen), and it is visible debt now
    rather than invisible.
+   Connectors read off the geometry (2026-10-11), which is the one change to mating that multiplies rather than adds.
+   The state it starts from, measured: `parts/mate.ts` is 117 lines and knows exactly one mate - face to face on a
+   bolted pattern, matched by mirroring and turning to within a fifth of a millimetre, with the fasteners then laid
+   from the library and sized by the plies they clamp. It knows two standards (NEMA ICS 16 faces, ISO 9409-1 flanges)
+   and **28 parts in the whole library declare a port**, 18 of them boards' mounting holes, against 9,074 catalogue
+   sizes. Beside it sits a second, unconnected system: `Iface` (36 declarations - shaft and bore, studs and nuts,
+   chain and sprocket, drive and torque, mount) which the critic *checks* and which never places anything. One system
+   places but only bolted faces; the other checks but never places. On a CAD scale that is about 1.5 of the twenty-odd
+   mate types an assembly solver has, and no degrees-of-freedom count at all.
+   Hand-declaring ports will never close that, so they are derived instead: `portsFrom` walks a part's tree, puts every
+   `Cut` in the part's own frame, and reads the patterns back out. What it buys is not 28 ports plus a few - a
+   *generator* that drills holes gives every size it makes its own ports, so the MGN rail covers MGN7 to MGN15 at
+   every length at once, which is why the test checks three sizes rather than one example.
+   Its first run found three faults in itself, which is what a first run is for. A counterbore came out as two
+   patterns of different sizes on one face, because cuts were grouped by radius: coaxial cuts are one hole now, the
+   narrowest being what a screw passes and the widest its seat, and the MGN12 went from five ports to two. A NEMA 17's
+   four tapped M3 holes were called "M2.5", because every cut was read as a clearance hole. And the fix for that was
+   wrong twice: adding the thread's root form flipped the rail's own Ø3.5 clearance holes to "M4 tapped" instead.
+   The cause is worth writing down because it is the library's, not the reader's: **this library draws tapped holes at
+   three different diameters** depending on the generator - the clearance size, the thread's major diameter, and its
+   root diameter (`rootR` in `kinds/plant.ts`) - and those interleave, so an M3 at its root is 2.459 mm where an M2.5
+   at its nominal is 2.5. Four hundredths apart: no reading of a radius tells them apart. So the rule is physical
+   rather than clever (a through hole passes the largest screw it clears; a hole at a thread's own nominal is tapped
+   for it), where a generator uses the root form the derived thread is one size small, the port a part *declares* is
+   the authority there, and the fix is one convention in the library rather than a third guess.
+   Next on this, in order: give tapped holes one convention; merge `Port` and `Iface` into one connector that both
+   places and checks (a bore accepts a shaft *and* carries a torque limit, and today those are two unrelated
+   declarations); derive bores and faces as well as patterns; then the degrees-of-freedom solver, after which
+   concentric, tangent, gear, screw and slot are cheap additions to one mechanism instead of twenty special cases.
    What a parts API has that this did not, added as fields rather than waited for (2026-10-11). Going through Nexar's
    own part model against ours, six things it carries were genuinely missing and each changes a build pack: the maker
    and its own part number (a seller's product title is not an identity - two sellers write the same part three ways -

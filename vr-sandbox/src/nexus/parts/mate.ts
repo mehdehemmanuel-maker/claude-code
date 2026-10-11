@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { boltedJoint, use } from './components';
+import { CLEAR } from './fab';
 import { METRIC, NEMA_FACE } from './families';
 import type { Part, Port, V3 } from './kits';
 
@@ -114,4 +115,89 @@ export function assemble(name: string, parts: Part[]): { part: Part; mates: stri
   }
   unplaced.push(...todo.map((x) => `${x.name}: mates nothing placed (its ports: ${(x.ports ?? []).map((q) => `${q.name} ${q.sex} ${q.thread}`).join(', ') || 'none'})`));
   return { part: { name, at: [0, 0, 0], says: `${name}: ${mates.join('; ')}`, parts: [...placed, ...extra] }, mates, unplaced };
+}
+
+// ---- connectors read off the geometry, rather than declared -------------------------------------------------------------
+// Twenty-eight parts in this library declare a port by hand, against nine thousand catalogue sizes, so a hand-declared
+// port will never be how most parts mate. But a drilled pattern is already in the geometry: a `Cut` is a hole with a
+// place, a direction, a radius and a depth (src/nexus/parts/kits.ts), and a ring or a row of equal cuts drilled the same
+// way into the same face *is* a bolt pattern, whether or not anyone wrote one down. So it is read back out instead.
+// What that buys is not 28 ports plus a few: a generator that drills holes gives every size it makes its own ports, so
+// the rail, the block and the board cover their whole catalogue at once.
+// Two holes are the fewest that can fix a turn, so a lone hole is not a pattern here and is left for a bore to own.
+
+/** What a drilled hole of this radius takes. The rule is physical rather than clever: a through hole passes the
+ *  largest metric screw it clears (ISO 273's medium series, so a 3.5 mm hole passes an M3 whose table size is 3.4),
+ *  and a hole drawn at a thread's own nominal diameter is one tapped for that thread.
+ *
+ *  What this cannot do, said plainly because two attempts at it failed: this library draws tapped holes at three
+ *  different diameters depending on the generator - the clearance size, the thread's major diameter, and its root
+ *  diameter (`rootR` in src/nexus/kinds/plant.ts) - and those interleave. An M3 at its root is 2.459 mm and an M2.5 at
+ *  its nominal is 2.5, so no reading of the radius tells them apart; the first attempt here called a NEMA 17's four
+ *  tapped M3 holes "M2.5", and adding the root form to fix it flipped an MGN rail's Ø3.5 clearance holes to "M4
+ *  tapped" instead. So where a generator uses the root form the derived thread is one size small, the port the part
+ *  *declares* is the authority there, and the fix is one convention in the library rather than a third guess. */
+function holeOf(r: number): { thread: string; sex: 'holes' | 'threads' } | null {
+  const d = r * 2000;
+  // a hole at a thread's own nominal diameter is tapped for it: that reading is exact, so it wins
+  for (const t of Object.keys(CLEAR)) if (Math.abs(d - Number(t.slice(1))) < 0.08) return { thread: t, sex: 'threads' };
+  // otherwise it passes the largest screw whose clearance hole is no bigger than it, drilled at most 0.2 mm over
+  let best: string | null = null, size = 0;
+  for (const [t, clear] of Object.entries(CLEAR)) if (clear <= d + 0.001 && d - clear <= 0.2 && clear > size) { size = clear; best = t; }
+  return best ? { thread: best, sex: 'holes' } : null;
+}
+
+/** A unit vector across `n`, chosen from the world axis least along it, so the frame is the same every run. */
+function across(n: THREE.Vector3): THREE.Vector3 {
+  const ax = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
+  const pick = ax.reduce((a, b) => (Math.abs(a.dot(n)) <= Math.abs(b.dot(n)) ? a : b));
+  return pick.clone().sub(n.clone().multiplyScalar(pick.dot(n))).normalize();
+}
+
+/** Every mating face this part's own drilled holes make, in the part's frame: holes of one size, drilled one way into
+ *  one face, gathered into the pattern they are. A port that was declared is not replaced - this is what a part has
+ *  *as well*, and `assemble` may use either. */
+export function portsFrom(p: Part): Port[] {
+  interface Hole { at: THREE.Vector3; dir: THREE.Vector3; r: number; depth: number; seat?: number }
+  let holes: Hole[] = [];
+  const walk = (q: Part, m: THREE.Matrix4): void => {
+    const mm = m.clone().multiply(matOf(q)), rot = new THREE.Matrix4().extractRotation(mm);
+    for (const c of q.cuts ?? []) holes.push({ at: v(c.at).applyMatrix4(mm), dir: v(c.dir).applyMatrix4(rot).normalize(), r: c.r, depth: c.depth });
+    for (const r of q.parts ?? []) walk(r, mm);
+  };
+  walk(p, new THREE.Matrix4());
+
+  // A counterbore is one hole, not two. Cuts down the same axis are the same hole: the narrowest is the hole a screw
+  // passes or threads into, the widest is the seat its head drops into. Read as two, the rail's counterbores came out
+  // as an M3 pattern and an M5 pattern on one face, and only one of those is a thing you can bolt to.
+  const axis = (h: Hole) => `${h.dir.toArray().map((x) => x.toFixed(3)).join(',')}|${h.at.clone().sub(h.dir.clone().multiplyScalar(h.at.dot(h.dir))).toArray().map((x) => x.toFixed(4)).join(',')}`;
+  const coax = new Map<string, Hole[]>();
+  for (const h of holes) { const k = axis(h); (coax.get(k) ?? coax.set(k, []).get(k)!).push(h); }
+  holes = [...coax.values()].map((g) => {
+    const thin = g.reduce((a, b) => (a.r <= b.r ? a : b)), wide = g.reduce((a, b) => (a.r >= b.r ? a : b));
+    return { ...thin, depth: Math.max(...g.map((x) => x.depth)), ...(wide.r > thin.r ? { seat: wide.r } : {}) };
+  });
+
+  // one group a (direction, size, face): the face is where along the drilling direction the holes start.
+  const key = (h: Hole) => `${h.dir.toArray().map((x) => x.toFixed(3)).join(',')}|${h.r.toFixed(5)}|${h.at.dot(h.dir).toFixed(4)}`;
+  const groups = new Map<string, Hole[]>();
+  for (const h of holes) { const k = key(h); (groups.get(k) ?? groups.set(k, []).get(k)!).push(h); }
+
+  const out: Port[] = [];
+  for (const [, g] of [...groups].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    if (g.length < 2) continue; // two holes are the fewest that can fix a turn; a lone one is a bore, not a pattern
+    const kind = holeOf(g[0]!.r); if (!kind) continue;
+    const dir = g[0]!.dir, n = dir.clone().negate(), u = across(n), w = n.clone().cross(u);
+    const o = g.reduce((a, h) => a.add(h.at), new THREE.Vector3()).divideScalar(g.length);
+    const pattern = g.map((h) => { const d = h.at.clone().sub(o); return [+d.dot(u).toFixed(6), +d.dot(w).toFixed(6)] as [number, number]; })
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    // a standard's pattern is named where ours lands on it in any turn about the face, to a tenth of a millimetre
+    const std = Object.entries(STANDARD).find(([, sd]) => sd.thread === kind.thread && sd.pattern.length === pattern.length
+      && [0, 1, 2, 3].some((t) => sd.pattern.every((q) => { const a = (t * Math.PI) / 2, qx = q[0] * Math.cos(a) - q[1] * Math.sin(a), qy = q[0] * Math.sin(a) + q[1] * Math.cos(a);
+        return pattern.some((r) => Math.hypot(qx - r[0], qy - r[1]) < 0.0001); })))?.[0];
+    out.push({ name: `${g.length} × ${kind.thread} read off its ${kind.sex === 'threads' ? 'tapped holes' : 'holes'}`,
+      sex: kind.sex, thread: kind.thread, pattern, at: [o.x, o.y, o.z], n: [n.x, n.y, n.z], u: [u.x, u.y, u.z],
+      t: Math.max(...g.map((h) => h.depth)), ...(std ? { std } : {}) });
+  }
+  return out;
 }

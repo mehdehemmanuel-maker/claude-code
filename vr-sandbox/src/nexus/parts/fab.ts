@@ -22,7 +22,10 @@ export interface Hole { x: number; y: number; d: number; why: string }
 export interface Profile { name: string; L: number; W: number; r: number; holes: Hole[]; on: { id: string; name: string; x: number; y: number; L: number; W: number; screw: string }[]; why: string }
 
 /** ISO 273's medium-series clearance hole for a metric screw, mm. */
-export const CLEAR: Record<string, number> = { M2: 2.4, 'M2.5': 2.9, M3: 3.4, M4: 4.5, M5: 5.5, M6: 6.6 };
+export const CLEAR: Record<string, number> = { M2: 2.4, 'M2.5': 2.9, M3: 3.4, M4: 4.5, M5: 5.5, M6: 6.6,
+  // the sizes a mechanical part is bolted with, for reading a drilled pattern back off geometry
+  // (src/nexus/parts/mate.ts): M8 and up, same series.
+  M8: 9, M10: 11, M12: 13, M14: 15, M16: 17, M20: 21 };
 
 /** A plate for these boards: laid side by side along it, so far apart and in from its edges, each drilled to its own
  *  pattern, and a hole in each corner (M3) to fix the plate by. */
