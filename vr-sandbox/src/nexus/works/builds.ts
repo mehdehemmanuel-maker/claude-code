@@ -165,8 +165,8 @@ export const BUILDS: Build[] = [
   { id: 'furnace-crucible', what: 'a crucible furnace, made here',
     src: 'the station\u2019s own self-build: the forge\u2019s burner in a steel pail lined with 50 mm of refractory, with the tongs, the lifting ring and the flask made and the crucible bought. The lining is cast inside the pail, so it is the pail\u2019s bore across (298) and its volume is that cylinder less its own bore (a 300 mm pail, 350 mm deep, bored 200 \u00d7 250)',
     lines: [
-      { name: 'lining, 50 mm refractory castable', n: 1, mat: 'refractory', size: [298, 298, 349], cm3: 16490, shape: 'round', bore: [200, 250] },
-      { name: 'shell, steel pail', n: 1, mat: 'steel-low', size: [300, 300, 350], cm3: 420, shape: 'round', bore: [298, 349] },
+      { name: 'lining, 50 mm refractory castable', n: 1, mat: 'castable', size: [298, 298, 349], cm3: 16490, shape: 'round', bore: [200, 250] },
+      { name: 'shell, steel pail', n: 1, mat: 'steel-low', size: [300, 300, 350], cm3: 200, shape: 'round', bore: [299, 349.5] },
       { name: 'crucible, #6 clay-graphite', n: 1, mat: 'graphite' },
       { name: 'lifting ring, 10 mm round bar', n: 1, mat: 'steel-low', size: [10, 10, 900], cm3: 71, shape: 'round' },
       { name: 'tong arm, 12 mm round bar', n: 2, mat: 'steel-low', size: [12, 12, 600], cm3: 68, shape: 'round' },
@@ -199,9 +199,9 @@ export const BUILDS: Build[] = [
       + 'the bench. The burner, the blanket and the firebrick are bought; everything else is cut and welded here',
     lines: [
       { name: 'shell, 20 lb propane tank, purged and cut open', n: 1, mat: 'steel-low', size: [305, 305, 450], cm3: 750, shape: 'round', bore: [302, 448] },
-      { name: 'lining, 50 mm ceramic fibre blanket', n: 1, mat: 'refractory', size: [302, 302, 450], cm3: 17810, shape: 'round', bore: [202, 450] },
-      { name: 'chamber coating, 2 mm rigidised refractory', n: 1, mat: 'refractory', size: [202, 202, 450], cm3: 565, shape: 'round', bore: [198, 450] },
-      { name: 'floor, 230 \u00d7 114 \u00d7 32 firebrick split', n: 2, mat: 'refractory', size: [114, 32, 230], cm3: 839 },
+      { name: 'lining, 50 mm ceramic fibre blanket', n: 1, mat: 'fibre-blanket', size: [302, 302, 450], cm3: 17810, shape: 'round', bore: [202, 450] },
+      { name: 'chamber coating, 2 mm rigidised refractory', n: 1, mat: 'castable', size: [202, 202, 450], cm3: 565, shape: 'round', bore: [198, 450] },
+      { name: 'floor, 230 \u00d7 114 \u00d7 32 firebrick split', n: 2, mat: 'firebrick-insulating', size: [114, 32, 230], cm3: 839 },
       { name: 'burner mixing tube, 3/4 in black iron pipe', n: 1, mat: 'steel-low', size: [27, 27, 230], cm3: 51, shape: 'round', bore: [21, 230] },
       { name: 'burner tee, 3/4 in black iron', n: 1, mat: 'steel-low' },
       { name: 'burner flare, 1 1/4 \u00d7 3/4 in black iron reducer', n: 1, mat: 'steel-low' },
@@ -242,10 +242,10 @@ export const BUILDS: Build[] = [
       + 'It is a real fire risk \u2014 1.8 kW inside a brick box \u2014 which is why the station will not be counted until the '
       + 'safety kit is in, and why the mains side of it is a person\u2019s work and not the robot\u2019s',
     lines: [
-      { name: 'wall brick, 229 \u00d7 114 \u00d7 64 K23 insulating firebrick', n: 8, mat: 'refractory', size: [229, 114, 64], cm3: 1672 },
-      { name: 'wall offcut, sawn to 50 \u00d7 114 \u00d7 64', n: 8, mat: 'refractory', size: [50, 114, 64], cm3: 365 },
-      { name: 'floor and lid brick, 229 \u00d7 114 \u00d7 64 K23', n: 6, mat: 'refractory', size: [229, 114, 64], cm3: 1672 },
-      { name: 'floor and lid packer, sawn to 114 \u00d7 114 \u00d7 64', n: 6, mat: 'refractory', size: [114, 114, 64], cm3: 832 },
+      { name: 'wall brick, 229 \u00d7 114 \u00d7 64 K23 insulating firebrick', n: 8, mat: 'firebrick-insulating', size: [229, 114, 64], cm3: 1672 },
+      { name: 'wall offcut, sawn to 50 \u00d7 114 \u00d7 64', n: 8, mat: 'firebrick-insulating', size: [50, 114, 64], cm3: 365 },
+      { name: 'floor and lid brick, 229 \u00d7 114 \u00d7 64 K23', n: 6, mat: 'firebrick-insulating', size: [229, 114, 64], cm3: 1672 },
+      { name: 'floor and lid packer, sawn to 114 \u00d7 114 \u00d7 64', n: 6, mat: 'firebrick-insulating', size: [114, 114, 64], cm3: 832 },
       { name: 'frame upright, 25 \u00d7 25 \u00d7 3 angle', n: 4, mat: 'steel-low', size: [25, 25, 330], cm3: 47 },
       { name: 'frame rail, 25 \u00d7 25 \u00d7 3 angle', n: 8, mat: 'steel-low', size: [25, 25, 350], cm3: 49 },
       { name: 'element, 16 AWG Kanthal A-1 resistance wire, coiled', n: 1, mat: 'steel-high', size: [1.29, 1.29, 7210], cm3: 9, shape: 'round' },
@@ -319,6 +319,51 @@ export const BUILDS: Build[] = [
       { line: 'lever', at: [[-0.06, 0.21, 0]], along: [1, 0, 0.35] },
       { line: 'insulator', at: [[0.02, 0.13, 0]], along: [1, 0, 0] },
       { line: 'enclosure', at: [[-0.12, 0.08, 0.16]] },
+    ] },
+  { id: 'wheel-potters', what: "a potter's wheel, made here",
+    src: 'the station\u2019s own self-build (stations.ts): a welded frame, a plywood-and-plaster head on a bought shaft '
+      + 'in two bearings, driven by a washing-machine motor through a V-belt. The ratio is the one number that '
+      + 'matters: a 60 mm pulley on the motor and a 240 mm on the head is 4:1, so a 1,425 rpm motor gives 356 rpm at '
+      + 'the head wide open and the board takes it down from there \u2014 centring wants 100\u2013200 rpm and throwing 60\u2013120. '
+      + 'The head is 300 mm, which is what the station\u2019s own envelope says. The bearings, the motor, its board, the '
+      + 'belt and the pedal are bought; the frame, the head, the shaft\u2019s pulley and the splash pan are made here',
+    lines: [
+      { name: 'frame leg, 40 \u00d7 40 \u00d7 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 600], cm3: 182 },
+      { name: 'frame rail, 40 \u00d7 40 \u00d7 2 box section', n: 8, mat: 'steel-low', size: [40, 40, 420], cm3: 128 },
+      { name: 'bearing plate, 6 mm steel sheet', n: 2, mat: 'steel-low', size: [160, 160, 6], cm3: 153 },
+      { name: 'shaft, 25 mm round bar', n: 1, mat: 'steel-high', size: [25, 25, 500], cm3: 245, shape: 'round' },
+      { name: 'head, 300 mm 25 mm birch ply disc', n: 1, mat: 'wood', size: [300, 300, 25], cm3: 1767, shape: 'round' },
+      { name: 'head facing, 10 mm plaster', n: 1, mat: 'gypsum', size: [300, 300, 10], cm3: 707, shape: 'round' },
+      { name: 'splash pan, 2 mm sheet', n: 1, mat: 'steel-low', size: [520, 520, 90], cm3: 560, shape: 'round', bore: [320, 88] },
+      { name: 'bearing, 6205-2RS', n: 2, mat: 'steel-high', size: [52, 52, 15], cm3: 17, shape: 'round', bore: [25, 15] },
+      { name: 'motor, washing-machine induction motor', n: 1, mat: 'steel-high', size: [180, 180, 200], cm3: 637, shape: 'round' },
+      { name: 'pulley, 60 mm V on the motor', n: 1, mat: 'al-6061', size: [60, 60, 20], cm3: 45, shape: 'round' },
+      { name: 'pulley, 240 mm 20 mm birch ply disc on the head shaft', n: 1, mat: 'wood', size: [240, 240, 20], cm3: 850, shape: 'round' },
+      { name: 'belt, A-section V-belt 1000 mm', n: 1, mat: 'rubber', size: [13, 8, 1000], cm3: 83 },
+      { name: 'speed board for the motor', n: 1, mat: 'abs' },
+      { name: 'foot pedal, speed control', n: 1, mat: 'abs' },
+      { name: 'M8 \u00d7 30 bolt and nut', n: 8, mat: 'steel-low' },
+    ],
+    joins: [
+      { how: 'weld-mig', n: 16, mm: 160, says: 'the frame welded at every corner and the two bearing plates welded in: the plates are what hold the shaft upright, and a wheel head that is not square to its shaft wobbles where the hands are' },
+      { how: 'fasten', n: 8, says: 'the head bolted to its flange, the motor on slotted holes so the belt can be tensioned, and the pan dropped on last: everything that wears is bolted' },
+    ],
+    // a table with a shaft up the middle of it: the head and its pan on top where the hands are, the motor hung
+    // under the plate beside the shaft, the belt between their pulleys
+    lay: [
+      { line: 'frame leg', at: [[-0.21, 0.3, -0.21], [0.21, 0.3, -0.21], [-0.21, 0.3, 0.21], [0.21, 0.3, 0.21]], along: [0, 1, 0] },
+      { line: 'frame rail', at: [[0, 0.58, -0.21], [0, 0.58, 0.21], [0, 0.08, -0.21], [0, 0.08, 0.21]], along: [1, 0, 0] },
+      { line: 'frame rail', at: [[-0.21, 0.58, 0], [0.21, 0.58, 0], [-0.21, 0.08, 0], [0.21, 0.08, 0]], along: [0, 0, 1] },
+      { line: 'bearing plate', at: [[0, 0.58, 0], [0, 0.30, 0]], along: [0, 1, 0] },
+      { line: 'shaft', at: [[0, 0.45, 0]], along: [0, 1, 0] },
+      { line: 'bearing', at: [[0, 0.585, 0], [0, 0.305, 0]], along: [0, 1, 0] },
+      { line: 'pulley, 240', at: [[0, 0.44, 0]], along: [0, 1, 0] },
+      { line: 'motor', at: [[0.15, 0.36, 0]], along: [0, 1, 0] },
+      { line: 'pulley, 60', at: [[0.15, 0.44, 0]], along: [0, 1, 0] },
+      { line: 'belt', at: [[0.075, 0.44, 0]], bent: 'ring', along: [0, 1, 0] },
+      { line: 'splash pan', at: [[0, 0.655, 0]], along: [0, 1, 0] },
+      { line: 'head', at: [[0, 0.7125, 0]], along: [0, 1, 0] },
+      { line: 'head facing', at: [[0, 0.73, 0]], along: [0, 1, 0] },
     ] },
   { id: 'wall', what: 'a garden wall, 6 m long and 1.2 m high',
     src: 'thrown at it on purpose: nothing below the plant touches concrete, so this is where the engine has to say so rather than make something up',
@@ -470,13 +515,26 @@ export function sectionOf(line: PartLine): { prism: { pts: [number, number][]; h
   return null;
 }
 
+/** The line a lay's words name: the closest match, never the first in the bill. A place called "bearing" matched the line
+ *  "bearing plate, 6 mm steel sheet" because it came first in the bill, so a wheel's two bearings were drawn as two
+ *  more plates. The closest is the *shortest* line the words still begin, because a lay names its line as
+ *  briefly as it can — and the longest match picked the plate for the place that says only "bearing". */
+export function lineFor(b: Build, words: string): PartLine | undefined {
+  const w = words.toLowerCase(), names = b.lines.filter((l) => l.name.toLowerCase().startsWith(w));
+  // a place that names a whole head noun means that line and not one the noun begins: "head" is the ply disc and not
+  // "head facing", "bearing" is the 6205 and not "bearing plate". A place that stops mid-segment ("pulley, 240")
+  // takes the shortest line it begins, which is the closest thing to what it said.
+  return names.find((l) => l.name.toLowerCase() === w || l.name.toLowerCase().startsWith(`${w},`))
+    ?? names.sort((x, y) => x.name.length - y.name.length)[0];
+}
+
 /** A self-build as a drawn part: every line of its bill at the place the build gives it, at the bill's own size. A
  *  line the build does not place is left out rather than dropped somewhere, and `says` names how many of each. */
 export function builtParts(b: Build): Part[] {
   if (!b.lay) return [];
   const mm = 0.001, out: Part[] = [];
   for (const place of b.lay) {
-    const line = b.lines.find((l) => l.name.toLowerCase().startsWith(place.line.toLowerCase()));
+    const line = lineFor(b, place.line);
     if (!line?.size) continue;
     const [a, c, L] = line.size, look = BILL_LOOK[line.mat] ?? BILL_LOOK['steel-low']!;
     place.at.forEach((at, i) => {

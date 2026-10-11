@@ -36,9 +36,12 @@ const DRAWN: Record<string, string> = { 'printer-fff': 'printer3d Ender-3' };
  *  card says so, because a wrong machine is worse than an admitted placeholder. */
 export const COMPOSED: Record<string, string> = {
   'cnc-benchtop': 'a machine that cuts 300x180x45',
-  'lathe-mini': 'a turning machine that cuts 250x90x90',
-  wheel: 'a turning machine that turns 350x350x400',
 };
+// A mini lathe and a potter's wheel were composed here and both were wrong to be. A mini lathe is a bought machine
+// with a known form — a cast bed, a headstock, a tailstock, a compound slide — and the inventor makes gantries and
+// turning tables out of extrusion and NEMA 17s: it cannot make that form, so it should not claim to. And the wheel
+// has a bill of its own in its station's own words, so it is built from it like the other seven (`wheel-potters`).
+// A benchtop CNC stays composed because a benchtop CNC genuinely is three slides and a spindle.
 
 /** Stations that stay stand-ins but carry the library's own tools on their bench, because the tools *are* drawn even
  *  where the bench is not. A blind judge's complaint was that every station was an anonymous grey box; a bench with a
@@ -379,9 +382,18 @@ let standing: WorksRoom | null = null;
 /** The works turned to whoever is looking, each frame. */
 export const worksStep = (cam: THREE.Object3D): void => standing?.update(cam);
 
+/** Where a station stands in the world, metres, read off the drawing itself. The layout's numbers are the room's
+ *  own corner-to-corner ones and the room stands wherever it was put, so working a camera out from them by hand gets
+ *  a shot of the wrong end of the shop — which is three rounds in a row now. Asking the thing where it is costs one
+ *  line and never goes stale. */
+export const worksWhere = (id: string): [number, number, number] | null => {
+  const o = standing?.group.getObjectByName(id);
+  return o ? (o.getWorldPosition(new THREE.Vector3()).toArray() as [number, number, number]) : null;
+};
+
 /** What is standing, for a test to read: the layout's own numbers and which stations are drawn as themselves. */
-export const worksStood = (): { at: [number, number]; room: [number, number]; drawn: Record<string, string>; stood: { id: string; at: [number, number]; size: [number, number]; wall: boolean }[]; inScene: boolean } | null =>
-  (standing ? { at: WORKS_AT, room: standing.floor.room, drawn: standing.drawn, stood: standing.floor.stood.map((s) => ({ id: s.id, at: s.at, size: s.size, wall: s.wall })), inScene: !!standing.group.parent } : null);
+export const worksStood = (): { at: [number, number]; where: typeof worksWhere; room: [number, number]; drawn: Record<string, string>; stood: { id: string; at: [number, number]; size: [number, number]; wall: boolean }[]; inScene: boolean } | null =>
+  (standing ? { at: WORKS_AT, where: worksWhere, room: standing.floor.room, drawn: standing.drawn, stood: standing.floor.stood.map((s) => ({ id: s.id, at: s.at, size: s.size, wall: s.wall })), inScene: !!standing.group.parent } : null);
 
 /** "show me the works", "stand the works up under $1500", "put away the works": the whole works built on its own
  *  ground and you taken to its door, or taken away again. */

@@ -9,6 +9,11 @@ import { PKG_DENSITY } from '../boards/packages';
 
 /** Densities, kg/m³ (typical values). */
 export const DENSITY: Record<string, number> = {
+  // the bills' own materials (works/builds.ts), each a typical figure for the thing a works actually buys: a
+  // high-carbon bar weighs what a low-carbon one does (ASM: carbon steels 7.85), PLA is Prusament's 1.24, a plastic
+  // throwing body about 1.9, a clay-graphite crucible about 1.8, dense refractory castable about 2.2, ceramic fibre
+  // blanket the 8 lb/ft³ grade this works buys, SRBP phenolic laminate about 1.4, and set plaster about 1.18
+  'steel-high': 7850, pla: 1240, clay: 1900, graphite: 1800, castable: 2200, 'fibre-blanket': 128, phenolic: 1400, gypsum: 1180,
   'steel-low': 7850, 'steel-tool': 7850, 'steel-spring': 7850, 'steel-alloy': 7850, 'stainless-304': 8000, 'cast-iron': 7200, 'al-6061': 2700, 'al-6063': 2700, copper: 8960,
   wood: 500, oak: 750, glass: 2500, brick: 1900, concrete: 2400, granite: 2700, rubber: 1150, abs: 1050, pp: 905, pc: 1200, pmma: 1190, nylon: 1140,
   cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,

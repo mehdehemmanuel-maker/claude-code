@@ -28,9 +28,9 @@ export const ALWAYS_BOUGHT: { what: RegExp; unless?: RegExp; why: string }[] = [
   { what: /\bspring\b/i, unless: /washer|mount|seat\b|housing|guide/i, why: 'coiled from hard-drawn or music wire on a former and stress-relieved: the wire is the part, and nothing here draws wire' },
   { what: /welding cable|\bcable,|\bcable\b.*\bawg\b|\bmm\u00b2\b.*cable/i, why: 'stranded and insulated by the kilometre: bought by the length and cut here' },
   { what: /\bmagnet\b|ndfeb|neodymium|samarium|\bferrite\b/i, unless: /holder|mount|bracket|seat\b|keeper/i, why: 'pressed from powder in an aligning field, sintered, ground to size and plated: the field is what makes it a magnet and no process here applies one' },
-  { what: /bearing/i, unless: /housing|carrier|cap\b|block\b|puller|\bbore\b|\bseat\b|journal|pocket|mount/i, why: 'its raceways are ground and its balls graded to a micron and sorted by size; the grinder that does it costs more than the whole works' },
+  { what: /bearing/i, unless: /housing|carrier|cap\b|block\b|puller|\bbore\b|\bseat\b|journal|pocket|mount|plate\b|\bshim/i, why: 'its raceways are ground and its balls graded to a micron and sorted by size; the grinder that does it costs more than the whole works' },
   { what: /linear (rail|guide|bearing|shaft)|guide ?rail|guideway|\bmgn\d|\bhgr\d|ball ?screw|lead ?screw|\bsbr\d/i, why: 'ground and preloaded over its whole length: the bearing\'s problem again, on something a metre long' },
-  { what: /\bmotor\b|stepper|\bservo\b|solenoid|outrunner|\bnema\s?\d/i, unless: /mount|bracket|plate|adapter|coupler|pulley|boss/i, why: 'sintered magnets, stamped and insulated laminations and a machine-wound coil: three processes, none of them in a small works' },
+  { what: /\bmotor\b|stepper|\bservo\b|solenoid|outrunner|\bnema\s?\d/i, unless: /mount|bracket|plate|adapter|coupler|pulley|boss|\bboard\b|driver|controller|\bcable\b|\blead\b/i, why: 'sintered magnets, stamped and insulated laminations and a machine-wound coil: three processes, none of them in a small works' },
   { what: /\bbelt\b|timing belt/i, unless: /tension|clamp|guide/i, why: 'moulded onto its steel or glass cords in a heated press, to a pitch held over its whole length' },
   // (found 2026-10-11 by throwing an invented machine at the works: a toothed pulley came out turned on a mini lathe
   //  and a $3 coupling came out forged. A GT2 tooth form is hobbed or moulded to the same pitch as its belt, and
@@ -81,7 +81,11 @@ export function classOf(mat: string): MatClass | null {
   // a phenolic laminate (SRBP, Tufnol, Micarta) is paper or cotton in a thermoset: a composite, sawn and drilled
   // here like one, and not a circuit board however much it looks like one
   if (/^(cfrp|fibreglass|gfrp|carbon|composite|phenolic|srbp|tufnol|micarta)$/.test(mat)) return 'composite';
-  if (/^(glass|firebrick|csi|kbr|quartz|borosilicate)/.test(mat)) return 'glass';
+  // a bagged or fired mineral is bought and placed by hand — a brick laid dry, a castable poured, a blanket cut with
+  // a knife, a plaster mixed and poured onto a wheel head. None of them is worked by a process here, and a firebrick
+  // read as glass (which this line did) would have offered it to one.
+  if (/^(refractory|castable|fibre-blanket|firebrick|gypsum|plaster|portland|lime)/.test(mat)) return null;
+  if (/^(glass|csi|kbr|quartz|borosilicate)/.test(mat)) return 'glass';
   if (/^(wood|oak|paper|pine|birch|ply)/.test(mat)) return 'wood';
   if (/^(clay|stoneware|porcelain|earthenware|terracotta|glaze)/.test(mat)) return 'clay';
   if (/^(concrete|brick|tile|render|mortar|cement)/.test(mat)) return 'concrete';

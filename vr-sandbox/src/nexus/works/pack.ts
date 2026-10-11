@@ -17,7 +17,7 @@ import { BUILDS } from './builds';
 
 /** Which build makes which station, where this works keeps a bill of materials for it. Where a station has none, its
  *  self-build is still described (its own `how`), and a bill for it is the next thing to write. */
-export const BUILT_BY: Record<string, string> = { brake: 'brake-sheet', foundry: 'furnace-crucible', bench: 'workbench', forge: 'forge-propane', 'kiln-small': 'kiln-brick', 'spot-welder': 'spot-welder-mot' };
+export const BUILT_BY: Record<string, string> = { brake: 'brake-sheet', foundry: 'furnace-crucible', bench: 'workbench', forge: 'forge-propane', 'kiln-small': 'kiln-brick', 'spot-welder': 'spot-welder-mot', wheel: 'wheel-potters' };
 import { worksUnder } from './budget';
 
 /** One station, as it is come by: bought from a named seller, bought used, or made here from the job that makes it. */

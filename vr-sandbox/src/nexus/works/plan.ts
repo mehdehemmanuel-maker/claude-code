@@ -117,9 +117,9 @@ export function planJob(what: string, lines: PartLine[], ids: string[], joins: J
     // a refractory is never made here whatever the line is called: fired brick, castable, blanket or a piece sawn off
     // one. Matching the name alone made "wall brick" a purchase and "wall offcut, sawn to 50 \u00d7 114 \u00d7 64" an
     // impossibility, which is the same brick twice.
-    if (!cls && line.mat === 'refractory') {
+    if (!cls && /^(refractory|castable|fibre-blanket|firebrick|gypsum|plaster|portland|lime)/.test(line.mat)) {
       const c = priceOfLine(line);
-      buy.push({ line, why: 'fired or cast to a published service temperature and a published density: bought by the brick or the bag, then sawn with a hand saw (insulating firebrick cuts like chalk), laid dry or poured into place \u2014 there is no process here that makes a refractory, and none is needed', usd: c ? c.usd : null });
+      buy.push({ line, why: 'ground, calcined or fired to a published strength and set with its own water: bought by the bag or the brick, then sawn with a hand saw (insulating firebrick cuts like chalk), laid dry, or mixed and poured into place \u2014 there is no process here that makes a refractory or a plaster, and none is needed: a wheel head is faced by pouring plaster onto it and turning it true as it turns', usd: c ? c.usd : null });
       continue;
     }
     if (!cls) { gaps.push({ line, why: `${line.mat} is not a material any process here works, and nothing in the price book sells it` }); continue; }
@@ -203,7 +203,9 @@ export function planJob(what: string, lines: PartLine[], ids: string[], joins: J
         ? `${refusals.join('; and ')}${refusals.length > 1 ? ', and no other process here makes it either' : ''}`
         : `${v.why}${v.buy ? `; the cheapest station that would is ${v.buy.station.name} at ${money(v.buy.usd)}` : ''}`;
       if (c) buy.push({ line, why: `${said}, so it is bought instead`, usd: c.usd });
-      else gaps.push({ line, why: refusals.length ? said : `${said}, and nothing in the price book sells it ready-made. It wants \u00b1${tol} mm because ${want.fit ? `it is ${want.fit}` : want.why}` });
+      // a part that locates nothing has no tolerance, so there is nothing to say about one: printing ±Infinity was
+      // the fault a round found in this sentence and fixed in the number but not in the words
+      else gaps.push({ line, why: refusals.length ? said : `${said}, and nothing in the price book sells it ready-made. ${Number.isFinite(tol) ? `It wants \u00b1${tol} mm because ${want.fit ? `it is ${want.fit}` : want.why}` : 'It locates nothing, so it is held to no tolerance \u2014 the works simply has no station big enough.'}` });
       continue;
     }
     const p = v.by!.process, s = v.by!.station, owed = FINISH.filter((f) => f.when(cls, p.id));

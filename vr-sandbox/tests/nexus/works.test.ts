@@ -8,8 +8,7 @@ import {
   makes, planJob, priceOfLine, processById, programsText, runMinutes, sawPart, scheduleOf, shapeOf, stationById,
   stationCost, stationUsd, throwAt, tolOf, worksOf, worksText, worksUnder, worksUnderText, worksWords, worthMaking,
   BUILT_BY, builtParts, layRot, sectionOf,
-  type Job, type PartLine,
-} from '../../src/nexus/works';
+  type Job, type PartLine, designAll, designFaults, editBuild, lineKg, materialIn, weighBuild, statedThickness } from '../../src/nexus/works';
 import * as THREE from 'three';
 import { linkFor, linesOf } from '../../src/nexus/machines/link';
 
@@ -781,5 +780,53 @@ describe('a bill of a real machine, routed on its own sizes', () => {
       expect(b.share, `${m}`).toBeLessThan(40);           // and no more: a printer is mostly bought fasteners and rails
       expect(b.made.by['fused filament printing'] ?? 0, `${m}: its printed parts`).toBeGreaterThan(10);
     }
+  });
+});
+
+describe('a bill whose numbers are derived and not typed', () => {
+  // Every build is checked by the designer (src/nexus/works/designer.ts), which computes each line's volume from the
+  // same section, cylinder and bore the drawing is made of. The four lines that once carried a tenth of their own
+  // steel were found by a script written for one round and thrown away; this is that, kept and run over everything.
+  it('no build claims a volume its own geometry does not give it', () => {
+    const bad = designAll().filter((f) => f.kind === 'volume');
+    expect(bad.map((f) => `${f.build}/${f.line}: ${f.says}`)).toEqual([]);
+  });
+  it('every line is made of a material the library can weigh and a process can be offered', () => {
+    expect(designAll().filter((f) => f.kind === 'material').map((f) => f.says)).toEqual([]);
+  });
+  it('every lay places a line of its own bill, and no more of them than the bill buys', () => {
+    expect(designAll().filter((f) => f.kind === 'place').map((f) => `${f.build}: ${f.says}`)).toEqual([]);
+  });
+  it('where the library already draws the part, the bill agrees with the library about its size', () => {
+    expect(designAll().filter((f) => f.kind === 'library').map((f) => f.says)).toEqual([]);
+  });
+  it('the lines with no price only ever get fewer', () => {
+    // a ratchet, as tidy.test.ts has: this is the work the standing ask names ("prices for the lines that still have
+    // none"), and a new build may not quietly add to it. Lower the number when lines are priced; never raise it.
+    expect(designAll().filter((f) => f.kind === 'price').length).toBeLessThanOrEqual(98);
+  });
+  it('a build weighs what a person would lift', () => {
+    const bench = BUILDS.find((b) => b.id === 'workbench')!;
+    const w = weighBuild(bench);
+    expect(w.kg, 'a 1.5 m welded bench with a double ply top').toBeGreaterThan(30);
+    expect(w.kg).toBeLessThan(90);
+    expect(lineKg({ name: 'leg, 40 × 40 × 2 box section', n: 1, mat: 'steel-low', size: [40, 40, 844], cm3: 257 }))
+      .toBeCloseTo(2.017, 2);                                     // 257 cm³ of steel is 2 kg, not 2 tonnes
+  });
+  it('a size changed re-derives every volume that came from it', () => {
+    const wheel = BUILDS.find((b) => b.id === 'wheel-potters')!;
+    const taller = editBuild(wheel, [{ line: 'frame leg', size: [40, 40, 900] }]);
+    const leg = taller.lines.find((l) => l.name.startsWith('frame leg'))!;
+    expect(leg.size![2]).toBe(900);
+    expect(leg.cm3, '900 mm of 304 mm² section').toBeCloseTo(273.6, 1);
+    expect(designFaults(taller).filter((f) => f.kind === 'volume')).toEqual([]);
+    expect(wheel.lines.find((l) => l.name.startsWith('frame leg'))!.size![2], 'the original is untouched').toBe(600);
+    expect(taller.src).toMatch(/edited/);
+  });
+  it('a section volume is the section, and a formed part is bounded by its box', () => {
+    expect(materialIn({ name: 'x, 40 × 40 × 2 box section', n: 1, mat: 'steel-low', size: [40, 40, 1000] })).toBeCloseTo(304, 0);
+    expect(materialIn({ name: 'x, 25 mm round bar', n: 1, mat: 'steel-low', size: [25, 25, 100], shape: 'round' })).toBeCloseTo(49.1, 1);
+    expect(statedThickness('top, 25 mm birch ply')).toBe(25);
+    expect(materialIn({ name: 'x', n: 1, mat: 'steel-low' })).toBe(null);
   });
 });

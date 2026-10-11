@@ -155,7 +155,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
 | The robot that runs the works: the rails it rides (one rail serves the two rows facing its aisle and no more, so the number of rails a shop wants is what says whether a rail or a floor robot is the cheap answer), which stations each puts within its arm's reach, the edge between what an operation needs of a pair of hands and what this robot's hands are (a port and a grip load a machine, start it and take the part out; they do not strike an arc, pour 700 °C metal or throw clay — each refused with the reason, which is what names the next tool to buy), the basket for everything the plan says to buy (each line the cheapest real offer with its seller, its page, the figure it showed and the day it was seen, split by seller because shipping is), and the division of a job into the robot's minutes and yours. It says plainly that it cannot pay for anything | `src/nexus/works/tend.ts` (`tendWorks`, `aislesOf`, `offRail`, `tends` returning a `Tended` verdict that says *what kind* of why it is, `TOOL_FOR`, `orderFor`, `runWorks`, `runText`, `tendWords`), `npm run works -- tend [build]` |
-| Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (fifteen files: `plan.ts` routes, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
+| Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (seventeen files: `plan.ts` routes, `designer.ts` checks a bill against its own geometry, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
+| Every build's own numbers derived from its own geometry rather than typed, and a build edited: a line's volume from the same section, cylinder and bore the drawing is made of (`materialIn`), its mass (`lineKg`), a size changed with every volume re-derived from it (`editBuild`), and every build's faults at once — a volume its geometry does not give it, a material nothing can weigh or work, a lay placing more than the bill buys, a size the library disagrees with, a line with no price | `src/nexus/works/designer.ts` (`designFaults`, `designAll`, `designText`, `weighBuild`, `solidToItsBox`), `npm run works -- design` |
 | The works as a thing to order: every station in the order to come by it (which is not by price — the welder comes before the forge because the forge is welded), its seller's own listing where one sells it, the used market where that is the cheap path, and where the cheapest way is to make it, the job that makes it routed through the works *as it stood at that moment* | `src/nexus/works/pack.ts` (`worksPack`, `worksPackText`, `BUILT_BY`), `npm run pack -- works <folder>` |
 | The wire out: the program a machine is sent and the transport that carries it (Marlin's line protocol with its checksum and resends, down a 20-byte BLE pipe to the Nordic UART service; Moonraker over wifi where the machine is Klipper; the steps where there is no port) | `src/nexus/machines/link.ts` (`Streamer`, `gcodeFor`, `printStart`, `kilnProgram`, `LINKS`), the binding in `works/programs.ts`, the browser half in `src/nexus/view/ble.ts` |
 | The Bluetooth bridge as a thing you can order and build: what it is made of (a XIAO ESP32C3, a BSS138 level converter only where the controller's logic is 5 V, three jumper leads), the UART-to-NUS sketch it runs, the pins it uses and why they are not the ones marked TX and RX (the ESP32-C3's boot ROM prints on U0TXD at every reset, so the machine is kept off that pin), and the wiring as steps with a check at each one — which the room, the lesson and the build pack all read, so none of them is a second copy | `src/nexus/machines/link.ts` (`BRIDGE`, `BRIDGE_PINS`, `bridgeSketch`, `bridgeSteps`), the lesson `bridge-ble` in `src/nexus/teach/lessons.ts`, the pack's `bridge` flag in `src/nexus/teach/buildpack.ts` (which ships `bridge.ino` in its zip), `wiring()` in `src/nexus/view/ble.ts` |
@@ -253,7 +254,7 @@ the root.
 | `parts/` | the parts library and the geometry a part is made of: every part designed once from its standard, the shapes it is drawn from (lofts, bent tubes, turned profiles, NURBS surfaces), where its pieces end up in space and which of them touch, its mass and what it costs |
 | `boards/` | single-board computers, their parts, and the photo-measured data files |
 | `machines/` | real machines from their makers' figures, and the wire out to them (`link.ts`). Not geometry: a loft, a surface and an oriented box are `parts/`, because a body is not a machine |
-| `works/` | any build routed to real machines, and the robot that runs them: fifteen files, one concern each (see `works/index.ts`) |
+| `works/` | any build routed to real machines, and the robot that runs them: seventeen files, one concern each (see `works/index.ts`) |
 | `teach/` | teaching a build by hand: edges, lessons, the soldering bench, the build pack |
 | `world/` | places, creatures, games, people |
 | `make/` | the make pipeline: conditions, detail, critic, in rounds |
@@ -1366,12 +1367,67 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    and carry no size); there is no stock, no swarf, no bins, no stools, no PPE and nothing half-finished anywhere; the
    cards are "the loudest thing in the room" and occlude what they describe; the floor markings have no wear, no oil
    and no striping; the ceiling fittings are bare bars with no housing and cast no pool.
-   Next: the composed-machine faults above (a mini lathe is a bought machine with a known form and the inventor cannot
-   make that form — so it should not claim to; a potter's wheel has its own bill in its station and should be built
-   from it like the other six), a vice on the bench, the rest of the stations, the brake's own stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
-   height (0.9 m) already contradicts — the room's bare walls, a blind judge on the works as it now stands, prices
-   for the lines that still have none, working the three ratchets down by cause, and the older Now items (robot
-   benches, likeness, life graph).
+   Then the designer (2026-10-11), which is the user's next word: *"obviously you can use components like all the good
+   components and create a designer agent or something so everything can be 100% accurate while you invent one thing at
+   a time make everything editable go around the whole thing once you've circled iterate make the whole thing cheaper
+   better make yourself faster think outside the box"*.
+   `works/designer.ts` is the arithmetic over a bill that nobody was doing. `builds.ts` owns what a thing is made of
+   and where each piece sits; this owns the numbers over that, and it exists because the bills were *typed*: four lines
+   once carried a tenth of their own steel, a copper arm was rounded past its own envelope, and each was caught by a
+   script written for that one round and then thrown away. Now `materialIn` computes a line's volume from the same
+   section, cylinder and bore the drawing is made of, so the drawing and the bill cannot disagree about how much metal
+   is in a part; `lineKg` weighs it; `editBuild` changes a size and re-derives every volume that came from it, which is
+   what "make everything editable" has to mean (a bill you can edit is a bill whose numbers are derived); and
+   `npm run works -- design` prints every build's faults at once, which is the "make yourself faster" half: one command
+   where the last four rounds each wrote a throwaway probe.
+   Run over twelve builds it found 149 faults. Four of them were the designer's own and are the reason to write the
+   checker before trusting it: a density is kg/m³ and a bill is in cm³, so the first run said a welded bench weighs
+   54 tonnes; a part's box is its *material* only for stock cut to length (a section, a round bar), never for a 2 mm
+   sheet folded into a 520 × 520 × 90 splash pan or a thrown mug or a shelled casting, so a solid-to-its-box check faulted
+   six honest lines; a bare "pulley" looked up in the library takes its family's first example, and the bill's V pulley
+   is not a GT2 one; and reading the word "shaft" out of "pulley, 240 mm V on the head shaft" held a webbed pulley to a
+   solid billet's volume — only the head noun says what a line *is*, and what follows says where it goes.
+   What the other 51 were, each fixed at its cause:
+   • **One material name cannot be 128 and 2,200 kg/m³.** Every refractory line said `refractory`, and a ceramic fibre
+     blanket, a dense castable and a K23 firebrick are three different materials with three densities. They are now
+     `fibre-blanket`, `castable` and `firebrick-insulating`, and the eight materials the bills name that the library
+     could not weigh at all (`steel-high`, `pla`, `clay`, `graphite`, `phenolic`, `gypsum` and those two) have their
+     figures in `parts/mass.ts`. A bagged or fired mineral is its own case in `classOf`: no process here works one, so
+     the plan buys it by material and hands place it — and a firebrick read as *glass* before this, which would have
+     offered it to a glass process.
+   • **A lay named its line by the first match, so the bearings were drawn as plates.** A place that says "bearing"
+     matched the line "bearing plate, 6 mm steel sheet" because it came first in the bill. `lineFor` now takes the line
+     the words name as a whole head noun, and the shortest line they begin otherwise.
+   • **Three router faults, all the same shape: a word deeper in a line is not what the line is.** "bearing plate" was
+     refused as a ground raceway, "speed board for the motor" as a wound coil, and a 10 mm plaster facing was declared
+     unmakeable when plaster is a bag you buy and pour.
+   • **A 20 L steel pail is 0.5 mm steel.** Its bill charged 420 cm³ where its own bore leaves 200, which is the 1.6 kg a
+     pail weighs.
+   • **±Infinity in a gap's sentence**, which a round had fixed in the number and not in the words: a part that locates
+     nothing has no tolerance, so there is nothing to say about one.
+   The potter's wheel is the eighth build (`wheel-potters`), written from its station's own `selfBuild` sentence: a
+   welded 40 × 40 × 2 frame, a 25 mm shaft in two 6205s, a 300 mm plywood head faced with 10 mm of plaster, a splash
+   pan, a salvaged washing-machine motor and its speed board, 60 mm on the motor to 240 on the head — 4:1, so a
+   1,425 rpm motor gives 356 rpm at the head wide open and the board takes it down from there, where centring wants
+   100–200. Thrown at the works it had one gap: a 240 mm aluminium pulley is past every station here. The answer is the
+   one a wheel builder reaches for and it is cheaper — cut the pulley from the same sheet as the head and run the belt
+   in a groove routed in its rim — which is what "anything that cuts price will be done" means in a single line.
+   And two machines stopped claiming to be composed: a mini lathe is a bought machine with a known form (a cast bed, a
+   headstock, a tailstock) and the inventor makes gantries and turning tables out of extrusion and NEMA 17s, so it
+   cannot make that form and should not claim to; the wheel has its own bill now. A benchtop CNC stays composed because
+   a benchtop CNC genuinely is three slides and a spindle. The room stands 1 from a maker's model, 1 composed, 8 built
+   from their own bills, 3 kitted and 3 stand-ins.
+   The room also says where its stations are (`worksWhere`): working a camera out of the layout's own numbers by hand
+   shot the wrong end of the shop three rounds running, and asking the drawing where a thing is costs one line and
+   never goes stale.
+   What the designer still reports, and it is the standing ask: **98 lines have no price**. They are listed by name now
+   rather than discovered one at a time, and a test holds the number so a new build cannot quietly add to it. Most are
+   stock priced by the metre, the kilo or the sheet, and the sellers' own size tables are rendered in JavaScript this
+   network cannot run — so that round needs either a page that serves its prices as text or the user widening the
+   network, and it is said here rather than guessed at.
+   Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
+   drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
+   and the older Now items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);
