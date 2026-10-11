@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { boltedJoint, use } from './components';
 import { CLEAR } from './fab';
 import { METRIC, NEMA_FACE } from './families';
+import { layout } from './space';
 import type { Part, Port, V3 } from './kits';
 
 const TOL = 0.0002;
@@ -235,8 +236,8 @@ export function unnamedHoles(p: Part): { at: V3; r: number; depth: number }[] {
 // drilled hole is a bore about its own. With these an `Iface` can be located, which is what it would take for the two
 // systems to become one.
 
-/** A round feature of a part, in the part's own frame: a bore for something to go in. */
-export interface Axis { kind: 'bore'; of: string; at: V3; dir: V3; d: number; len: number }
+/** A round feature of a part, in the part's own frame: a bore for something to go in, or a shaft to go in something. */
+export interface Axis { kind: 'bore' | 'shaft'; of: string; at: V3; dir: V3; d: number; len: number }
 
 /** Every bore this part's own solids make: a drilled `Cut`, and the hole up the middle of a turned profile - which is
  *  where the bores that matter actually live. A bearing's 25 mm bore, a pulley's 5 mm bore and a tube's inside are all
@@ -294,4 +295,60 @@ export function seats(bore: Axis, shaftMm: number): { mm: number; clearance: num
   if (clearance < -0.001) return `a \u2300${shaftMm} shaft does not enter ${bore.of}'s \u2300${mm} bore: ${-clearance} mm too big`;
   if (clearance > 0.2) return `a \u2300${shaftMm} shaft is ${clearance} mm loose in ${bore.of}'s \u2300${mm} bore: not a seat`;
   return { mm, clearance, says: `a \u2300${shaftMm} shaft seats in ${bore.of}'s \u2300${mm} bore, ${clearance === 0 ? 'nominally the same size as drawn' : `${clearance} mm apart as drawn`}; which fit it is held to is what the seat is for, not what the drawing says` };
+}
+
+/** Every shaft of this part that is free to enter something else: a cylinder with at least one end out in the open.
+ *
+ *  The distinction is the whole point, and the round before this one got it wrong by leaving it out: a cylinder is not
+ *  a shaft merely because it is a cylinder. Read naively, a 6205's cage came out as eight shafts of 1.78 mm and a
+ *  stepper's as twelve, because every nested cylinder in the tree looks alike from its own solid. What separates a
+ *  motor's output shaft from a cage pin is not its shape but whether anything is in front of it, so that is what is
+ *  asked: a point a third of a millimetre past each end face, against the oriented boxes `parts/space.ts` already
+ *  lays out for the whole tree. An end with nothing of this part's own in front of it is an end that can go into
+ *  something; a pin buried in its own bearing has neither.
+ *
+ *  Its own ancestors are not counted, because a group's box encloses its children by construction and would bury
+ *  every shaft in the tree. */
+export function shaftsFrom(p: Part): Axis[] {
+  const nodes = layout(p), solids = nodes.filter((n) => n.p.shape && n.box);
+  const ancestors = (n: typeof nodes[number]) => { const out = new Set<unknown>(); for (let q = n.parent; q; q = q.parent) out.add(q); return out; };
+  const out: Axis[] = [];
+  const EPS = 0.0003; // a third of a millimetre: past the face, not out into the room
+  for (const n of nodes) {
+    const sh = n.p.shape; if (!sh || !n.box) continue;
+    // A round thing standing along its own y: a plain cylinder, or a turned profile, whose diameter at each end is the
+    // radius its profile has there. Reading only `cyl` found nothing at all - a stepper's output shaft is stepped, so
+    // it is turned, which is the same lesson the bores taught one layer down.
+    const ends: { half: number; r: number; len: number }[] = [];
+    if ('cyl' in sh) { const [r, h] = sh.cyl; ends.push({ half: h / 2, r, len: h }, { half: -h / 2, r, len: h }); }
+    else if ('lathe' in sh) {
+      const pts = sh.lathe as [number, number][]; if (!pts.length) continue;
+      const ys = pts.map((x) => x[1]), lo = Math.min(...ys), hi = Math.max(...ys), mid = (lo + hi) / 2;
+      for (const y of [hi, lo]) {
+        const r = Math.max(...pts.filter((x) => Math.abs(x[1] - y) < 1e-9).map((x) => x[0]));
+        if (r <= 1e-6) continue; // a profile that closes to a point at that end is a cone, not a shaft end
+        // how far the diameter stays what it is there: that is the length of this spigot
+        const near = pts.filter((x) => Math.abs(x[0] - r) <= r * 0.05).map((x) => x[1]);
+        ends.push({ half: y - mid, r, len: Math.max(...near) - Math.min(...near) || 0 });
+      }
+    } else continue;
+    const up = ancestors(n), rot = new THREE.Matrix4().extractRotation(n.m);
+    const dir = new THREE.Vector3(0, 1, 0).applyMatrix4(rot).normalize();
+    const mid = new THREE.Vector3().setFromMatrixPosition(n.m);
+    for (const e of ends) {
+      if (e.len <= 0) continue;
+      const sign = Math.sign(e.half) || 1;
+      const end = mid.clone().add(dir.clone().multiplyScalar(e.half));
+      const probe = end.clone().add(dir.clone().multiplyScalar(sign * EPS));
+      if (solids.some((m) => m !== n && !up.has(m) && m.box!.containsPoint(probe))) continue;
+      const way = dir.clone().multiplyScalar(sign);
+      out.push({ kind: 'shaft', of: n.p.name, at: [end.x, end.y, end.z], dir: [way.x, way.y, way.z], d: +(2 * e.r).toFixed(6), len: e.len });
+    }
+  }
+  return out;
+}
+
+/** The shaft a part is meant to be held or driven by: the longest of its free ends. A motor has one, a cage pin none. */
+export function spindle(p: Part): Axis | null {
+  return shaftsFrom(p).reduce<Axis | null>((best, a) => (!best || a.len > best.len ? a : best), null);
 }

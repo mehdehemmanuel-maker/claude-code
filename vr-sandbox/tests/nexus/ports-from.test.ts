@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { use } from '../../src/nexus/parts/components';
-import { axesFrom, fit, portsFrom, seat, seats, unnamedHoles } from '../../src/nexus/parts/mate';
+import { axesFrom, fit, portsFrom, seat, seats, shaftsFrom, spindle, unnamedHoles } from '../../src/nexus/parts/mate';
 import type { Port } from '../../src/nexus/parts/kits';
 
 const mirror = (p: Port): Port => ({ ...p, sex: p.sex === 'holes' ? 'threads' : 'holes', n: [-p.n[0], -p.n[1], -p.n[2]], pattern: p.pattern.map(([x, y]) => [-x, y] as [number, number]) });
@@ -80,5 +80,41 @@ describe('bores read off a part\'s own turned profiles', () => {
     const all = axesFrom(use('bearing 6205'));
     expect(Math.max(...all.map((a) => a.d * 1000))).toBeGreaterThan(40); // the raceway is still found
     expect(seat(use('bearing 6205'))!.d * 1000).toBeCloseTo(25, 1); // and is not mistaken for the seat
+  }, 60000);
+});
+
+describe('shafts, but only the ends that are free to enter something', () => {
+  it('names the shaft a part is driven or held by, at the size it is sold by', () => {
+    // Both of these are unambiguous in the catalogue: a NEMA 17 turns a 5 mm shaft, and an M5 screw's shank is 5 mm.
+    const motor = spindle(use('stepper nema17 34'));
+    expect(motor, 'a NEMA 17 has an output shaft').not.toBeNull();
+    expect(+(motor!.d * 1000).toFixed(2)).toBeCloseTo(5, 1);
+    expect(motor!.of).toMatch(/shaft/);
+
+    const screw = spindle(use('screw M5x20'));
+    expect(+(screw!.d * 1000).toFixed(2)).toBeCloseTo(5, 1); // a screw's shank is a shaft
+  }, 60000);
+
+  it('a bearing\'s outside is a cylinder that seats in a housing, at its catalogue outside diameter', () => {
+    // 6205 is 25 x 52 x 15. Drawn with its chamfers the outer ring reads a touch under 52, which is the drawing being
+    // honest about a chamfer rather than the reader being wrong.
+    const biggest = shaftsFrom(use('bearing 6205')).reduce((a, b) => (a.d > b.d ? a : b));
+    expect(biggest.d * 1000).toBeGreaterThan(50);
+    expect(biggest.d * 1000).toBeLessThanOrEqual(52);
+  }, 60000);
+
+  it('a cylinder buried in its own part is not a shaft', () => {
+    // The round before this read every nested cylinder as one, so a 6205's cage came out as eight shafts of 1.78 mm
+    // and a stepper's as twelve. Nothing that small is free in either.
+    for (const words of ['bearing 6205', 'stepper nema17 34']) {
+      const tiny = shaftsFrom(use(words)).filter((a) => a.d * 1000 < 2.5);
+      expect(tiny, `${words}: a cage element is not a shaft`).toEqual([]);
+    }
+  }, 60000);
+
+  it('a shaft it finds seats in a bore of its own size', () => {
+    const motor = spindle(use('stepper nema17 34'))!, pulley = seat(use('pulley GT2 20T B5'))!;
+    // the pulley this motor drives: a GT2 with a 5 mm bore onto a 5 mm shaft, which is the whole point of the pair
+    expect(seats(pulley, +(motor.d * 1000).toFixed(3))).toMatchObject({ mm: 5, clearance: 0 });
   }, 60000);
 });
