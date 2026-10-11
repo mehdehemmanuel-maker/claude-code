@@ -43,7 +43,7 @@
 // machine can work one material is `processor.ts`. This owns which machines to have, and what they do on Tuesday.
 //
 // This file is the package's one door: everything that was once `works.ts` is re-exported here, so no caller had to
-// change when it was split. The split itself is the point — twelve files, one concern each, in the order the work
+// change when it was split. The split itself is the point — thirteen files, one concern each, in the order the work
 // happens:
 //
 //   families.ts   the six families and the process table          — what making is
@@ -57,6 +57,7 @@
 //   programs.ts   the program each operation sends (binds to link.ts)
 //   builds.ts     builds to throw at it, and the bootstrap share
 //   economics.ts  make or buy, and when an arm pays
+//   pack.ts       the works as a thing to go and buy, in the order to buy it in
 //   text.ts       all of it said for a person, and the words that reach it
 
 export * from './families';
@@ -70,4 +71,5 @@ export * from './programs';
 export * from './plan';
 export * from './builds';
 export * from './economics';
+export * from './pack';
 export * from './text';

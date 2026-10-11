@@ -95,6 +95,38 @@ export const BUILDS: Build[] = [
       { name: 'M6 × 20 screw', n: 16, mat: 'steel-low' },
     ],
     joins: [{ how: 'fasten', n: 16, says: 'the cover screwed to the housing on a gasket: a gearbox is opened again, so it is never welded shut' }] },
+  // the two stations this works makes for itself whose figures are given fully enough to route: a bill of materials
+  // for each, so a self-build is a job on the works as it stands and not a paragraph of advice (src/nexus/works/pack.ts)
+  { id: 'brake-sheet', what: 'a sheet-metal brake, 600 mm, made here',
+    src: 'the station\u2019s own self-build (src/nexus/works/stations.ts): two 600 mm lengths of 50 \u00d7 50 \u00d7 6 angle on a hinge line with a bending leaf and a handle, which bends 1.6 mm steel and 2 mm aluminium over 600 mm. The volumes are the angle\u2019s own section ((50 + 50 \u2212 6) \u00d7 6 = 564 mm\u00b2) over its length',
+    lines: [
+      { name: 'bed angle, 50 \u00d7 50 \u00d7 6', n: 1, mat: 'steel-low', size: [50, 50, 600], cm3: 338 },
+      { name: 'clamp angle, 50 \u00d7 50 \u00d7 6', n: 1, mat: 'steel-low', size: [50, 50, 600], cm3: 338 },
+      { name: 'bending leaf angle, 50 \u00d7 50 \u00d7 6', n: 1, mat: 'steel-low', size: [50, 50, 600], cm3: 338 },
+      { name: 'hinge lug, 60 \u00d7 40 \u00d7 6 plate', n: 4, mat: 'steel-low', size: [60, 40, 6], feature: 10, cm3: 14 },
+      { name: 'hinge pin, 10 mm round bar', n: 2, mat: 'steel-low', size: [10, 10, 70], cm3: 5, shape: 'round' },
+      { name: 'handle, 20 \u00d7 2 tube', n: 1, mat: 'steel-low', size: [20, 20, 400], cm3: 45 },
+      { name: 'M10 \u00d7 60 bolt and nut', n: 6, mat: 'steel-low' },
+    ],
+    joins: [
+      { how: 'weld-mig', n: 8, mm: 60, says: 'the four hinge lugs welded to the bed and the leaf, two beads each: the hinge line is the whole accuracy of the machine, so it is welded and then the pin holes are drilled through both lugs together' },
+      { how: 'fasten', n: 6, says: 'the clamp angle bolted, not welded, because its grip has to be adjustable to the thickness being bent' },
+    ] },
+  { id: 'furnace-crucible', what: 'a crucible furnace, made here',
+    src: 'the station\u2019s own self-build: the forge\u2019s burner in a steel pail lined with 50 mm of refractory, with the tongs, the lifting ring and the flask made and the crucible bought. The lining\u2019s volume is the pail\u2019s shell less its bore (a 300 mm pail, 350 mm deep, bored 200 \u00d7 250)',
+    lines: [
+      { name: 'lining, 50 mm refractory castable', n: 1, mat: 'refractory', size: [300, 300, 350], cm3: 16800 },
+      { name: 'shell, steel pail', n: 1, mat: 'steel-low', size: [300, 300, 350], cm3: 420 },
+      { name: 'crucible, #6 clay-graphite', n: 1, mat: 'graphite' },
+      { name: 'lifting ring, 10 mm round bar', n: 1, mat: 'steel-low', size: [10, 10, 900], cm3: 71, shape: 'round' },
+      { name: 'tong arm, 12 mm round bar', n: 2, mat: 'steel-low', size: [12, 12, 600], cm3: 68, shape: 'round' },
+      { name: 'flask, 200 \u00d7 2 tube', n: 1, mat: 'steel-low', size: [200, 200, 250], cm3: 311 },
+      { name: 'M8 \u00d7 30 bolt and nut', n: 4, mat: 'steel-low' },
+    ],
+    joins: [
+      { how: 'weld-mig', n: 4, mm: 50, says: 'the tongs\u2019 pivot and the ring\u2019s ends welded; the lining is cast in place and held by nothing but its own shape, which is why the pail is a pail and not a sheet rolled here' },
+      { how: 'fasten', n: 4, says: 'the burner\u2019s mount bolted to the shell, so the same burner goes back to the forge' },
+    ] },
   { id: 'wall', what: 'a garden wall, 6 m long and 1.2 m high',
     src: 'thrown at it on purpose: nothing below the plant touches concrete, so this is where the engine has to say so rather than make something up',
     lines: [

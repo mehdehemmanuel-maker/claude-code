@@ -153,7 +153,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
 | How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
-| Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (twelve files: `plan.ts` routes, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it) |
+| Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (thirteen files: `plan.ts` routes, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
+| The works as a thing to order: every station in the order to come by it (which is not by price — the welder comes before the forge because the forge is welded), its seller's own listing where one sells it, the used market where that is the cheap path, and where the cheapest way is to make it, the job that makes it routed through the works *as it stood at that moment* | `src/nexus/works/pack.ts` (`worksPack`, `worksPackText`, `BUILT_BY`), `npm run pack -- works <folder>` |
 | The wire out: the program a machine is sent and the transport that carries it (Marlin's line protocol with its checksum and resends, down a 20-byte BLE pipe to the Nordic UART service; Moonraker over wifi where the machine is Klipper; the steps where there is no port) | `src/nexus/machines/link.ts` (`Streamer`, `gcodeFor`, `printStart`, `kilnProgram`, `LINKS`), the binding in `works/programs.ts`, the browser half in `src/nexus/view/ble.ts` |
 | The Bluetooth bridge as a thing you can order and build: what it is made of (a XIAO ESP32C3, a BSS138 level converter only where the controller's logic is 5 V, three jumper leads), the UART-to-NUS sketch it runs, the pins it uses and why they are not the ones marked TX and RX (the ESP32-C3's boot ROM prints on U0TXD at every reset, so the machine is kept off that pin), and the wiring as steps with a check at each one — which the room, the lesson and the build pack all read, so none of them is a second copy | `src/nexus/machines/link.ts` (`BRIDGE`, `BRIDGE_PINS`, `bridgeSketch`, `bridgeSteps`), the lesson `bridge-ble` in `src/nexus/teach/lessons.ts`, the pack's `bridge` flag in `src/nexus/teach/buildpack.ts` (which ships `bridge.ino` in its zip), `wiring()` in `src/nexus/view/ble.ts` |
 | How close is close enough, and whether a machine can do it: ISO 286's grade table, the fits made from them (locating, sliding, a bearing seat, pressed), what a named feature's tolerance should therefore be, tolerance stack-up (worst case and root-sum-square), and process capability (Cp, Cpk, scrap in parts per million, and how many to start to keep n) | `src/nexus/parts/fits.ts` (`itBand`, `fitAt`, `tolFor`, `stackOf`, `capable`, `measured`) |
@@ -1050,8 +1051,27 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    `tests/nexus/make-every.test.ts`) and overlap instead of queueing: 106 s of the critical path becomes 64. The
    transform cache (`fsModuleCache`) is on too, which vitest itself had been suggesting on every run — a quarter of a
    short run was transforming modules that had not changed.
-   Next: the works as a build pack and standing in the forge room as real stations you walk between, working the three
-   ratchets down by cause, and the older Now items (robot benches, likeness, life graph).
+   Then the works as a thing to order (2026-10-11): `npm run pack -- works <folder>` writes the whole shop as sixteen
+   stations in the order to come by them, which is the part a list of machines cannot tell you — the welder is step 9
+   and the brake step 10 because the brake is two lengths of angle welded along a hinge line, and the forge comes
+   before the furnace because the furnace is the forge's burner in a lined pail. $2,589.95 and 48 hours against
+   $4,972.93 with everything bought new: the order itself saves $2,382.98. Each station carries its seller's own
+   listing where one sells it (the soldering iron is Adafruit's, as seen), the used market's figure where that is the
+   cheap path and said to be an estimate of a market, or — for the four made here — what it is made of. Two of those
+   four now have a bill of materials of their own (`BUILDS`: the 600 mm sheet brake, and the crucible furnace), so a
+   self-build is routed as a job *on the works as it stood when it was made*: the brake's 102 minutes run on the nine
+   stations bought before it and never on the finished shop, which is the whole reason the order matters.
+   Writing those two bills found four faults in the engine's own data, which is what throwing a new build at it is
+   for. A part named "bending leaf" was forged rather than cut, because the stock rules match words and that one did
+   not say "angle" (it does now, and it is one). A bought steel pail was forged too — a pail is deep-drawn in one hit
+   on a press of hundreds of tonnes, $8 finished, and is now in `ALWAYS_BOUGHT` with that reason, as is a
+   clay-graphite crucible, which fails with 3 kg of molten aluminium in it if you make your own. And a bag of
+   refractory castable was refused outright ("not a material any process here works") when the truth is that you buy
+   it by the bag and pour it by hand: stock of a material no process here works is now bought with its own reason
+   rather than called impossible, because saying "cannot be done here" of a $20 bag is the engine being wrong in the
+   most discouraging direction.
+   Next: the works standing in the forge room as real stations you walk between, working the three ratchets down by
+   cause, and the older Now items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);

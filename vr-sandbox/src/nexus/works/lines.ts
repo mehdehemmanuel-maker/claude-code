@@ -17,6 +17,8 @@ import type { MatClass, Shape } from './families';
  *  most useful thing in the file: the difference between a works that bootstraps and one that buys a lathe and still
  *  cannot make a printer. These are bought finished and never worked here. */
 export const ALWAYS_BOUGHT: { what: RegExp; unless?: RegExp; why: string }[] = [
+  { what: /crucible/i, unless: /tong|lifter|shank|ring\b/i, why: 'pressed from clay and graphite and fired to a temperature no small kiln reaches, and a home-made one fails with 3 kg of molten metal in it, which is the one failure in this building that cannot be swept up' },
+  { what: /\b(pail|bucket|drum)\b/i, unless: /lid|handle|mount/i, why: 'deep-drawn or spun from sheet in one hit on a press of hundreds of tonnes: $8 finished, and unmakeable here at any price' },
   { what: /bearing/i, unless: /housing|carrier|cap\b|block\b|puller|\bbore\b|\bseat\b|journal|pocket|mount/i, why: 'its raceways are ground and its balls graded to a micron and sorted by size; the grinder that does it costs more than the whole works' },
   { what: /linear (rail|guide|bearing|shaft)|guide ?rail|guideway|\bmgn\d|\bhgr\d|ball ?screw|lead ?screw|\bsbr\d/i, why: 'ground and preloaded over its whole length: the bearing\'s problem again, on something a metre long' },
   { what: /\bmotor\b|stepper|\bservo\b|solenoid|outrunner|\bnema\s?\d/i, unless: /mount|bracket|plate|adapter|coupler|pulley|boss/i, why: 'sintered magnets, stamped and insulated laminations and a machine-wound coil: three processes, none of them in a small works' },
@@ -43,6 +45,7 @@ export const STOCK: { what: RegExp; unless?: RegExp; why: string }[] = [
   { what: /\bsheet\b|\bplate\b|\bply\b|plywood|\bmdf\b|laminate/i, unless: /face ?plate|back ?plate/i, why: 'rolled or pressed flat to a thickness and a flatness no workshop reproduces: bought by the sheet, cut here' },
   { what: /\bbar\b|\brod\b|round stock|hex stock|\bangle\b|\bchannel\b|extrusion/i, unless: /bracket|corner|nut\b|roller/i, why: 'rolled or extruded to section and straightness: bought by the length, cut and machined here' },
   { what: /filament|\bresin\b|\bclay\b|concrete mix|\bsand\b|\bwire\b/i, unless: /holder|guide|spool ?holder|cutter|stripper/i, why: 'the feedstock itself: bought by the kilo, and everything downstream is the works\' own work' },
+  { what: /refractory|firebrick|castable|kaowool|ceramic ?(fibre|blanket)/i, why: 'fired or cast to a published service temperature and a published density: bought by the bag or the brick, then laid dry or poured into place by hand \u2014 there is no process here that makes a refractory, and none is needed' },
 ];
 
 /** The material class a material's name falls in. */

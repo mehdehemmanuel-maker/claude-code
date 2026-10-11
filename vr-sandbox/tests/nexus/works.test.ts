@@ -2,7 +2,8 @@
 // nothing is routed to a machine that could not do it, and that the money and the hours are the ones that were paid.
 import { describe, expect, it } from 'vitest';
 import {
-  ALWAYS_BOUGHT, BUILDS, FAMILIES, FINISH, PROCESSES, STATIONS, STOCK, TIERS, under3K, WANT_MACHINES,
+  ALWAYS_BOUGHT, BUILDS, FAMILIES, FINISH, PROCESSES, STATIONS, STOCK, TIERS, under3K, WANT_MACHINES, worksPack,
+  worksPackText,
   auditJob, boundOf, bootstrapOf, buildById, canMake, classOf, emptyState, handling, holdsOf, jobForModel, jobText,
   makes, planJob, priceOfLine, processById, programsText, runMinutes, sawPart, scheduleOf, shapeOf, stationById,
   stationCost, stationUsd, throwAt, tolOf, worksOf, worksText, worksUnder, worksUnderText, worksWords, worthMaking,
@@ -571,5 +572,69 @@ describe('tolerances and spares', () => {
       expect(cut.after).toContain(probe.id);
       expect(cut.setup).toBeLessThan(processById(cut.process).setup);
     }
+  });
+});
+
+describe('the works as a thing to go and buy', () => {
+  it('is every station in the order to come by it, with what it costs and why it is there', () => {
+    const w = worksPack(3000);
+    expect(w.stations.length).toBeGreaterThan(10);
+    expect(w.usd).toBeLessThanOrEqual(3000);
+    expect(w.usd).toBeLessThan(w.ifNew);                                 // the order is what saves the money
+    expect(w.saves).toBeCloseTo(+(w.ifNew - w.usd).toFixed(2), 2);
+    let run = 0;
+    for (const s of w.stations) { run += s.usd; expect(s.gain.length, s.id).toBeGreaterThan(20); expect(s.why.length, s.id).toBeGreaterThan(20); }
+    expect(+run.toFixed(2)).toBeCloseTo(w.usd, 1);
+    // the floor comes first: nothing is bought before the bench and the callipers
+    expect(w.stations[0]!.id).toBe('bench');
+    expect(w.stations.slice(0, 4).map((s) => s.id)).toContain('measuring');
+    // a hazardous station never arrives before the kit that makes it safe
+    const safety = w.stations.findIndex((s) => s.id === 'safety'), forge = w.stations.findIndex((s) => s.id === 'forge');
+    expect(safety).toBeGreaterThan(-1); expect(safety).toBeLessThan(forge);
+  });
+  it('a station made here says what it needs first, and is never made before it', () => {
+    const w = worksPack(3000);
+    const made = w.stations.filter((s) => s.as === 'build');
+    expect(made.length).toBeGreaterThan(0);
+    for (const s of made) {
+      expect(s.hours, s.id).toBeGreaterThan(0);
+      expect(s.how, s.id).toBeTruthy();
+      const at = w.stations.findIndex((x) => x.id === s.id);
+      for (const n of s.after) expect(w.stations.findIndex((x) => x.id === n), `${s.id} needs ${n}`).toBeLessThan(at);
+    }
+  });
+  it('a self-build with a bill of materials is routed on the works as it stood when it was made', () => {
+    const w = worksPack(3000);
+    const brake = w.stations.find((s) => s.id === 'brake')!;
+    expect(brake.as).toBe('build');
+    expect(brake.job, 'the brake has a bill, so it has a job').toBeTruthy();
+    // the job runs on what had been bought by then, not on the finished works
+    expect(brake.job!.works).not.toContain('brake');
+    expect(brake.job!.works).toContain('welder');
+    expect(brake.job!.works.length).toBeLessThan(w.stations.length);
+    expect(brake.job!.ops.some((o) => o.process === 'weld-mig')).toBe(true);
+    expect(brake.job!.gaps, 'a station this works is said to make must be makeable').toEqual([]);
+  });
+  it('the page says where every figure came from', () => {
+    const txt = worksPackText(worksPack(3000));
+    expect(txt).toMatch(/^# The works under \$3,000$/m);
+    expect(txt).toMatch(/## In this order/);
+    expect(txt).toMatch(/## What the money is/);
+    expect(txt).not.toMatch(/±Infinity/);                                 // a part that locates nothing carries no tolerance
+    expect(txt).not.toMatch(/at the a /);                                 // station names carry their own article
+    for (const s of worksPack(3000).stations) expect(txt).toContain(s.name);
+  });
+  it('the furnace and the brake are made of real stock, and what cannot be made here says so', () => {
+    const furnace = BUILDS.find((b) => b.id === 'furnace-crucible')!;
+    const j = throwAt(furnace, under3K().ids);
+    expect(j.gaps, 'everything in it is bought or made').toEqual([]);
+    // the crucible and the pail are bought, and each says why rather than being quietly made
+    const bought = j.buy.map((b) => b.line.name);
+    expect(bought).toContain('crucible, #6 clay-graphite');
+    expect(bought).toContain('shell, steel pail');
+    expect(j.buy.find((b) => /crucible/.test(b.line.name))!.why).toMatch(/molten metal/);
+    expect(j.buy.find((b) => /pail/.test(b.line.name))!.why).toMatch(/deep-drawn|spun/);
+    // a bag of refractory is bought, not refused: it is poured by hand and no process here works it
+    expect(j.buy.find((b) => /refractory/.test(b.line.name))!.why).toMatch(/bought by the bag|laid dry/);
   });
 });

@@ -109,6 +109,11 @@ export function planJob(what: string, lines: PartLine[], ids: string[], joins: J
       ?? (cls === 'board' ? { why: 'a wafer fab and a pick-and-place line' }
         : cls === 'live' ? { why: 'a living culture is grown, not made: it needs a source and a lab, not a machine' } : undefined);
     if (no) { const c = priceOfLine(line); buy.push({ line, why: no.why, usd: c ? c.usd : null }); continue; }
+    // stock of a material no process here works (a bag of refractory castable, a ceramic blanket) is still bought, and
+    // what happens to it afterwards is hands: laid dry, poured, cut with a knife. Saying "cannot be done here" of a
+    // thing you buy for $20 and pour into place is the engine being wrong in the most discouraging direction.
+    const bag = STOCK.find((r) => r.what.test(line.name) && !(r.unless?.test(line.name) ?? false));
+    if (!cls && bag) { const c = priceOfLine(line); buy.push({ line, why: bag.why, usd: c ? c.usd : null }); continue; }
     if (!cls) { gaps.push({ line, why: `${line.mat} is not a material any process here works, and nothing in the price book sells it` }); continue; }
 
     const size = line.size ?? [60, 60, 30], shape = shapeOf(line);
