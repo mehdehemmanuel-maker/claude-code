@@ -1577,6 +1577,25 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    The M10 bolts are priced too (Zoro, $0.61 each in a fifty-pack), which takes the unpriced lines from 98 to 95 and the
    ratchet with them. Still honest about what is left: its serrations, its casting's ribs and its thread are not drawn
    (the screw is a plain bar), and it has not been through a blind judge yet.
+   And a fourth time round, on the game the headset actually runs rather than on a sweep: table tennis cost 22 s of the
+   suite and its two robot tests were 20 of them. None of it is the engine's physics — it is `advance`, a thousand times
+   a second of play and hundreds of thousands of times for every shot the robot aims. Three causes, each measured
+   against a dump of every number the game makes (9,022 lines: every step of three flights, every point of four more,
+   seventy aimed shots, a whole 11–0 game and two hundred returns), which came back identical to the last bit after each
+   one:
+   • **The vectors were the cost, not the arithmetic.** `accel` made eight arrays a call and `advance` called it twice,
+     so one flight of 750 steps made twenty thousand of them and a quarter of a rally's run was the collector. It is
+     written in plain numbers into one triple now, in the order of operations the vector form had, and `advance` and
+     `bounce` work in the ball's own arrays instead of replacing them. The midpoint step was also working out where the
+     midpoint *would be* and throwing it away: only its speed is ever asked for.
+   • **A hundred aimed shots were flown only to be overwritten.** `serveShot` swept every speed from 3 to 9 m/s and kept
+     the last that served, which is to say the fastest; it comes down from the fastest now and stops at the first that
+     does. The same answer, a tenth of the work.
+   • **A flight is usually wanted for one of its points.** A shot aimed by halving flies seventy flights and reads how
+     far each got; a bat asked where to be reads one point out of a second and a half. `flight` takes `keep: false` and
+     hands back where it ended, and its `stop` is told what each step met, so `meetPoint` follows a flight as it goes
+     instead of keeping 750 points to throw 749 away.
+   22 s to 4.5, and those same three cuts are what a rally in the headset pays for every frame.
    Next: the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).

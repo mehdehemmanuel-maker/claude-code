@@ -18,6 +18,8 @@ export const TT = { L: 2.74, W: 1.525, top: 0.76, net: 0.1525, netOver: 0.1525, 
 const A = Math.PI * TT.r ** 2;
 
 export interface Ball { p: V3; v: V3; w: V3 }
+/** What a step of a flight met: the table, the net, the floor, the air past either, or nothing. */
+export type Met = 'table' | 'net' | 'floor' | 'out' | null;
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const mul = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
@@ -26,13 +28,26 @@ const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[
 const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
 const norm = (a: V3): V3 => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 
+const K = (0.5 * TT.rho * A) / TT.m;
+// The acceleration is worked out in plain numbers into this one triple rather than returned as a vector: a flight asks
+// for it twice a step and a lookahead is hundreds of steps, so the vectors each call would make are the cost, not the
+// arithmetic (a quarter of a rally's run was going to the collector). The order of every operation is the order the
+// vector form had, so the numbers are the same ones to the last bit.
+const aOf: [number, number, number] = [0, 0, 0], UP: V3 = [0, 1, 0];
+function accelOf(vx: number, vy: number, vz: number, wx: number, wy: number, wz: number, g: number): void {
+  const v = Math.hypot(vx, vy, vz), kd = -K * TT.Cd * v, wn = Math.hypot(wx, wy, wz);
+  let ax = vx * kd, ay = vy * kd, az = vz * kd;
+  if (wn > 1e-6 && v > 1e-6) { // the Magnus push, square to the spin and the motion
+    const CL = Math.min(0.3, 0.5 * ((TT.r * wn) / v)), m = K * CL * v * v;
+    const cx = wy * vz - wz * vy, cy = wz * vx - wx * vz, cz = wx * vy - wy * vx, l = Math.hypot(cx, cy, cz) || 1;
+    ax += (cx / l) * m; ay += (cy / l) * m; az += (cz / l) * m;
+  }
+  aOf[0] = ax; aOf[1] = ay - g; aOf[2] = az;
+}
 /** The ball's acceleration in flight: gravity, drag against its motion, the Magnus push square to its spin and motion. */
 export function accel(b: Ball, g: number = TT.g): V3 {
-  const v = len(b.v), k = (0.5 * TT.rho * A) / TT.m;
-  const drag = mul(b.v, -k * TT.Cd * v), wn = len(b.w);
-  let mag: V3 = [0, 0, 0];
-  if (wn > 1e-6 && v > 1e-6) { const S = (TT.r * wn) / v, CL = Math.min(0.3, 0.5 * S); mag = mul(norm(cross(b.w, b.v)), k * CL * v * v); }
-  return add(add(drag, mag), [0, -g, 0]);
+  accelOf(b.v[0], b.v[1], b.v[2], b.w[0], b.w[1], b.w[2], g);
+  return [aOf[0], aOf[1], aOf[2]];
 }
 /** The terminal speed of a falling ball (no spin): where drag meets its weight. */
 export const terminalSpeed = (g: number = TT.g) => Math.sqrt((2 * TT.m * g) / (TT.rho * TT.Cd * A));
@@ -41,18 +56,24 @@ export const terminalSpeed = (g: number = TT.g) => Math.sqrt((2 * TT.m * g) / (T
  *  speed along the surface and its spin traded by friction until the ball rolls (a hollow sphere) or the friction's
  *  impulse, μ times the normal one, runs out. */
 export function bounce(b: Ball, n: V3, e: number, mu: number, surf: V3 = [0, 0, 0]): void {
-  const vr = sub(b.v, surf), vn = dot(vr, n); if (vn >= 0) return;
+  const v = b.v, w = b.w, nx = n[0], ny = n[1], nz = n[2]; // in its place, as every step of a flight is
+  const rx = v[0] - surf[0], ry = v[1] - surf[1], rz = v[2] - surf[2], vn = rx * nx + ry * ny + rz * nz;
+  if (vn >= 0) return;
   const Jn = -(1 + e) * vn; // per unit mass
   // the contact point's slip: the ball's speed along the surface plus its spin's at the contact (r ω × (−n))
-  const vt = sub(vr, mul(n, vn)), slip = add(vt, cross(b.w, mul(n, -TT.r))), s = len(slip);
-  let dvt: V3 = [0, 0, 0];
+  const qx = -TT.r * nx, qy = -TT.r * ny, qz = -TT.r * nz;
+  const sx = rx - nx * vn + (w[1] * qz - w[2] * qy), sy = ry - ny * vn + (w[2] * qx - w[0] * qz), sz = rz - nz * vn + (w[0] * qy - w[1] * qx);
+  const s = Math.hypot(sx, sy, sz);
+  let dx = 0, dy = 0, dz = 0;
   if (s > 1e-9) {
     // to roll needs the slip gone: for a hollow sphere a tangential impulse J changes slip by J (1 + 3/2) = 2.5 J
-    const need = s / 2.5, J = Math.min(need, mu * Jn); dvt = mul(norm(slip), -J);
+    const J = Math.min(s / 2.5, mu * Jn), l = s || 1;
+    dx = (sx / l) * -J; dy = (sy / l) * -J; dz = (sz / l) * -J;
     // the spin changes by the torque of that impulse: Δω = (r × J) / I, with r = −r n and I/m = ⅔ r²
-    b.w = add(b.w, mul(cross(mul(n, -TT.r), dvt), 1 / ((2 / 3) * TT.r * TT.r)));
+    const i = 1 / ((2 / 3) * TT.r * TT.r);
+    w[0] += (qy * dz - qz * dy) * i; w[1] += (qz * dx - qx * dz) * i; w[2] += (qx * dy - qy * dx) * i;
   }
-  b.v = add(add(b.v, mul(n, Jn)), dvt);
+  v[0] = v[0] + nx * Jn + dx; v[1] = v[1] + ny * Jn + dy; v[2] = v[2] + nz * Jn + dz; // in the vector form's own order
 }
 
 // ---- a rally ----
@@ -70,17 +91,23 @@ export function newRally(skill = 1): Rally {
 
 /** The ball moved on by dt (a millisecond or so): its flight, and what it meets, the table (a bounce), the net (stopped
  *  dead, nearly), the floor. A midpoint step: the forces change fast on a ball this light. */
-export function advance(b: Ball, dt: number, g: number = TT.g): 'table' | 'net' | 'floor' | 'out' | null {
-  const was = b.p, a1 = accel(b, g), mid: Ball = { p: add(b.p, mul(b.v, dt / 2)), v: add(b.v, mul(a1, dt / 2)), w: b.w };
-  const a2 = accel(mid, g); b.p = add(b.p, mul(mid.v, dt)); b.v = add(b.v, mul(a2, dt)); b.w = mul(b.w, 1 - 0.05 * dt);
-  const onTable = Math.abs(b.p[0]) <= TT.L / 2 && Math.abs(b.p[2]) <= TT.W / 2;
-  if (onTable && b.p[1] - TT.r <= TT.top && b.v[1] < 0 && was[1] - TT.r >= TT.top - 0.01) { b.p = [b.p[0], TT.top + TT.r, b.p[2]]; bounce(b, [0, 1, 0], TT.eTable, TT.muTable); return 'table'; }
+export function advance(b: Ball, dt: number, g: number = TT.g): Met {
+  const p = b.p, v = b.v, w = b.w, wasx = p[0], wasy = p[1], half = dt / 2;
+  accelOf(v[0], v[1], v[2], w[0], w[1], w[2], g);
+  // the midpoint's speed is all the midpoint step asks for; where it would have been was worked out and thrown away
+  const mvx = v[0] + aOf[0] * half, mvy = v[1] + aOf[1] * half, mvz = v[2] + aOf[2] * half;
+  accelOf(mvx, mvy, mvz, w[0], w[1], w[2], g);
+  p[0] += mvx * dt; p[1] += mvy * dt; p[2] += mvz * dt;
+  v[0] += aOf[0] * dt; v[1] += aOf[1] * dt; v[2] += aOf[2] * dt;
+  const spun = 1 - 0.05 * dt; w[0] *= spun; w[1] *= spun; w[2] *= spun;
+  const onTable = Math.abs(p[0]) <= TT.L / 2 && Math.abs(p[2]) <= TT.W / 2;
+  if (onTable && p[1] - TT.r <= TT.top && v[1] < 0 && wasy - TT.r >= TT.top - 0.01) { p[1] = TT.top + TT.r; bounce(b, UP, TT.eTable, TT.muTable); return 'table'; }
   // the net: a thin wall across the middle 15.25 cm high, its posts 15.25 cm out past the sides
-  if (Math.sign(was[0]) !== Math.sign(b.p[0]) && b.p[1] - TT.r < TT.top + TT.net && Math.abs(b.p[2]) < TT.W / 2 + TT.netOver) {
-    b.p = [Math.sign(was[0]) * (TT.r + 0.002), b.p[1], b.p[2]]; b.v = [-b.v[0] * 0.15, b.v[1] * 0.5, b.v[2] * 0.5]; b.w = mul(b.w, 0.3); return 'net';
+  if (Math.sign(wasx) !== Math.sign(p[0]) && p[1] - TT.r < TT.top + TT.net && Math.abs(p[2]) < TT.W / 2 + TT.netOver) {
+    p[0] = Math.sign(wasx) * (TT.r + 0.002); v[0] = -v[0] * 0.15; v[1] = v[1] * 0.5; v[2] = v[2] * 0.5; w[0] *= 0.3; w[1] *= 0.3; w[2] *= 0.3; return 'net';
   }
-  if (b.p[1] < TT.r) return 'floor';
-  if (Math.abs(b.p[0]) > 6 || Math.abs(b.p[2]) > 5) return 'out';
+  if (p[1] < TT.r) return 'floor';
+  if (Math.abs(p[0]) > 6 || Math.abs(p[2]) > 5) return 'out';
   return null;
 }
 /** One step of a rally: the ball moved on, and who wins the point when it lands, bounces twice, or falls. */
@@ -89,15 +116,16 @@ export function stepBall(R: Rally, dt: number, g: number = TT.g): void {
   if (hitWhat === 'table') land(R, sideOf(R.ball.p[0]));
   else if (hitWhat === 'floor' || hitWhat === 'out') end(R, hitWhat === 'floor' ? 'the floor' : 'out');
 }
-/** A flight ahead, nothing hitting it: its points every few milliseconds, where it bounces, until the floor, a plane, or
- *  a time. */
-export function flight(b0: Ball, o: { g?: number; dt?: number; tMax?: number; stop?: (b: Ball) => boolean } = {}): { path: Ball[]; bounces: V3[]; net: boolean } {
-  const b: Ball = { p: [...b0.p], v: [...b0.v], w: [...b0.w] }, dt = o.dt ?? 0.002, path: Ball[] = [], bounces: V3[] = []; let net = false;
+/** A flight ahead, nothing hitting it: its points every few milliseconds, where it bounces, where it ended, until the
+ *  floor, a plane, or a time. A search that only asks where it got to passes `keep: false` and reads `end`: a shot aimed
+ *  by halving flies seventy of these, and keeping the hundreds of points of each is more work than flying it. */
+export function flight(b0: Ball, o: { g?: number; dt?: number; tMax?: number; keep?: boolean; stop?: (b: Ball, met: Met) => boolean } = {}): { path: Ball[]; bounces: V3[]; net: boolean; end: Ball } {
+  const b: Ball = { p: [...b0.p], v: [...b0.v], w: [...b0.w] }, dt = o.dt ?? 0.002, keep = o.keep !== false, path: Ball[] = [], bounces: V3[] = []; let net = false;
   for (let t = 0; t < (o.tMax ?? 3); t += dt) {
-    const e = advance(b, dt, o.g ?? TT.g); path.push({ p: [...b.p], v: [...b.v], w: [...b.w] });
-    if (e === 'table') bounces.push([...b.p]); if (e === 'net') net = true; if (e === 'floor' || e === 'out') break; if (o.stop?.(b)) break;
+    const e = advance(b, dt, o.g ?? TT.g); if (keep) path.push({ p: [...b.p], v: [...b.v], w: [...b.w] });
+    if (e === 'table') bounces.push([...b.p]); if (e === 'net') net = true; if (e === 'floor' || e === 'out') break; if (o.stop?.(b, e)) break;
   }
-  return { path, bounces, net };
+  return { path, bounces, net, end: b };
 }
 /** The ball lands on a side's half: whether that is fair, a fault, or the second bounce that ends the point. */
 function land(R: Rally, side: Who): void {
@@ -148,9 +176,9 @@ export function aimShot(from: V3, target: V3, speed: number, spin: number, g: nu
   const w = mul(norm(cross([0, 1, 0], dir)), spin * 2 * Math.PI);
   const fly = (el: number) => {
     const v: V3 = [dir[0] * Math.cos(el) * speed, Math.sin(el) * speed, dir[2] * Math.cos(el) * speed];
-    const f = flight({ p: from, v, w }, { g, tMax: 2, stop: (b) => b.p[1] < TT.top }), at = f.bounces[0], last = f.path[f.path.length - 1];
+    const f = flight({ p: from, v, w }, { g, tMax: 2, keep: false, stop: (b) => b.p[1] < TT.top }), at = f.bounces[0];
     // how far it got along the aim: where it first bounced, or (past the end, or short into the floor) where it ended
-    const reach = at ? dot(sub(at, from), dir) : last ? dot(sub(last.p, from), dir) : 0;
+    const reach = at ? dot(sub(at, from), dir) : dot(sub(f.end.p, from), dir);
     return { v, at, net: f.net, reach: f.net ? -1 : reach };
   };
   // reach rises with the launch angle and then falls: find the low, rising branch where it first passes the aim (a
@@ -167,10 +195,12 @@ export function aimShot(from: V3, target: V3, speed: number, spin: number, g: nu
  *  the receiver's half. */
 export function serveShot(from: V3, toward: number, spin: number, g: number = TT.g): { v: V3; w: V3; lands: V3 } | null {
   const own = Math.sign(from[0]); let best: { v: V3; w: V3; lands: V3 } | null = null;
-  for (let speed = 3; speed <= 9; speed += 0.25) {
+  // down from the fastest, stopping at the first speed that serves: what the whole sweep was for was the fastest one of
+  // them, so the speeds under it were flown (a hundred aimed shots of them) only to be overwritten
+  for (let speed = 9; speed >= 3 && !best; speed -= 0.25) {
     for (const first of [0.95, 0.8, 0.65, 0.5]) {
       const s = aimShot(from, [own * first, TT.top, from[2] + (toward - from[2]) * 0.3], speed, spin, g); if (!s) continue;
-      const f = flight({ p: from, v: s.v, w: s.w }, { g, tMax: 2 }), second = f.bounces[1];
+      const f = flight({ p: from, v: s.v, w: s.w }, { g, tMax: 2, keep: false }), second = f.bounces[1];
       if (f.net || !second || Math.sign(second[0]) === own || Math.abs(second[0]) < 0.35 || Math.abs(second[2]) > TT.W / 2 - 0.05) continue;
       best = { v: s.v, w: s.w, lands: second };
     }
@@ -234,10 +264,16 @@ export function meetPoint(R: Rally, side: Who, g: number = TT.g): V3 | null {
   if (!R.live) return null;
   if (R.hitBy === side && !R.served) return [b.p[0] - s * 0.03, Math.min(b.p[1], TT.top + 0.25), b.p[2]]; // the toss
   if (R.hitBy === side || Math.sign(b.v[0]) !== s) return null;
-  const f = flight(b, { g, tMax: 1.5 }), first = f.bounces.find((y) => Math.sign(y[0]) === s);
-  const i0 = first ? f.path.findIndex((x) => x.p[0] === first[0] && x.p[2] === first[2]) : R.bounces[side] >= 1 ? 0 : -1;
-  const q = i0 >= 0 ? f.path.slice(i0).find((x) => x.v[1] <= 0 || s * x.p[0] > TT.L / 2 + 0.1) : undefined;
-  return q ? [q.p[0] + s * 0.03, q.p[1], q.p[2]] : null;
+  // read as the flight goes rather than out of one kept: a bat is asked where to be every frame, and a second and a half
+  // of a flight is 750 points made to be thrown away for the one point that is wanted
+  const got: V3[] = []; let after = R.bounces[side] >= 1;
+  const look = (x: Ball): boolean => {
+    if (!after || !(x.v[1] <= 0 || s * x.p[0] > TT.L / 2 + 0.1)) return false;
+    got.push([x.p[0] + s * 0.03, x.p[1], x.p[2]]); return true;
+  };
+  const f = flight(b, { g, tMax: 1.5, keep: false, stop: (x, met) => { if (met === 'table' && Math.sign(x.p[0]) === s) after = true; return look(x); } });
+  if (!got.length) look(f.end); // the step that met the floor or the air past the table is not offered to `stop`
+  return got[0] ?? null;
 }
 /** A swing that meets the ball (within 12 cm of the bat's middle while the swing is on): struck back to where you aim,
  *  cleaner and faster the better the timing (best begun 0.12 s before the ball arrives: `left` is the swing's time left). */

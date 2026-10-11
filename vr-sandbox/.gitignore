@@ -13,3 +13,4 @@ dist-view-c/
 dist-view-survey/
 bench-out/
 __pycache__/
+.vitest/
