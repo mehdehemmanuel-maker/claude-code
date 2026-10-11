@@ -40,11 +40,16 @@ export interface Build {
  *  angle, because an angle has to be composed in the drawing's own order and twice now a beam laid along x by its
  *  author has come out drawn along z. A line with no `along` lies the way the library draws it: a box the way its
  *  size reads (x, y, then z), a round one standing up. */
+const PI = Math.PI;
+
 export interface Lay { line: string; at: V3[]; along?: V3; roll?: number;
   /** a belt or chain round the two pulleys its `at` names, each `wrap` its pitch radius in mm (`bent: 'loop'`) */
   wrap?: [number, number];
   /** a length of bar bent into a ring (a lifting ring, a hoop): drawn as the ring its own length makes, or `loop`,
-   *  a belt round two pulleys: two straight runs on the common tangents and the wrap round each */ bent?: 'ring' | 'loop' }
+   *  a belt round two pulleys: two straight runs on the common tangents and the wrap round each */ bent?: 'ring' | 'loop';
+  /** a part the library draws whole, turned about the room's up (radians): which way a bought thing faces is not a
+   *  direction its length runs, so `along` cannot say it — a vice faces the front of the bench it is bolted to */
+  turn?: number }
 
 /** The turn that points a part's length along `d` and rolls it by `roll` about that length, as the three angles
  *  `Part.rot` is applied with (three.js Euler XYZ). `from` is which of the part's own axes its length already runs
@@ -55,9 +60,14 @@ export function layRot(d: V3, roll = 0, from: 'y' | 'z' = 'z'): V3 {
   const unit = (v: V3): V3 => { const m = Math.hypot(...v) || 1; return [v[0] / m, v[1] / m, v[2] / m]; };
   const cr = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const z = unit(d);
-  // any vector not along the length does to start the frame from; up, unless the part is already standing up
-  const u: V3 = Math.abs(z[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
-  const a0 = unit(cr(u, z)), b0 = cr(z, a0), cs = Math.cos(roll), sn = Math.sin(roll);
+  // any vector not along the length does to start the frame from; up, unless the part is already standing up — and a
+  // part stood up keeps its own first axis along the room's x rather than having its axes cycled into z. A square
+  // section cannot tell the difference, which is why this was invisible until a sheet was laid flat: the bench's top
+  // is 1500 along the bench and 700 across, the cycled frame laid it the other way round, and the vice bolted to its
+  // own bench at x = −700 was then 350 mm off the end of a top that only reached ±350. A blind judge saw it before
+  // any check did ("it is not on the bench, it is hanging in mid-air"), which is what `floating` in designer.ts is for.
+  const up = Math.abs(z[1]) > 0.95, u: V3 = up ? [1, 0, 0] : [0, 1, 0];
+  const a0 = up ? u : unit(cr(u, z)), b0 = cr(z, a0), cs = Math.cos(roll), sn = Math.sin(roll);
   const a: V3 = [a0[0] * cs + b0[0] * sn, a0[1] * cs + b0[1] * sn, a0[2] * cs + b0[2] * sn], b = cr(z, a);
   // the frame's three columns, right-handed either way: (a, b, length) for a box, (a, length, -b) for a cylinder
   const [cx, cy, cz] = from === 'z' ? [a, b, z] : [a, z, [-b[0], -b[1], -b[2]] as V3];
@@ -86,13 +96,19 @@ export const BUILDS: Build[] = [
     // four legs at the corners of the rail frame (1420 = 1500 \u2212 two legs, 620 = 700 \u2212 two legs), a rail
     // frame under the top and another low down as a stretcher, a pad under each leg and the ply in two layers on top
     lay: [
-      { line: 'leg', at: [[-0.73, 0.428, -0.35], [0.73, 0.428, -0.35], [-0.73, 0.428, 0.35], [0.73, 0.428, 0.35]], along: [0, 1, 0] },
-      { line: 'long rail', at: [[0, 0.83, -0.35], [0, 0.83, 0.35], [0, 0.15, -0.35], [0, 0.15, 0.35]], along: [1, 0, 0] },
+      // the legs at the corners of the top's own 1500 × 700, so their outside faces are flush with its edges (±0.73,
+      // ±0.33 of centre for a 40 mm section) and the rails between them are what the bill says: 1500 − 80 = 1420
+      // along, 700 − 80 = 620 across. Before this the legs stood at ±0.35 and the short rails fell 20 mm short of
+      // them, which `floating` in designer.ts now refuses by name
+      { line: 'leg', at: [[-0.73, 0.428, -0.33], [0.73, 0.428, -0.33], [-0.73, 0.428, 0.33], [0.73, 0.428, 0.33]], along: [0, 1, 0] },
+      { line: 'long rail', at: [[0, 0.83, -0.33], [0, 0.83, 0.33], [0, 0.15, -0.33], [0, 0.15, 0.33]], along: [1, 0, 0] },
       { line: 'short rail', at: [[-0.73, 0.83, 0], [0.73, 0.83, 0], [-0.73, 0.15, 0], [0.73, 0.15, 0]], along: [0, 0, 1] },
-      { line: 'foot pad', at: [[-0.73, 0.003, -0.35], [0.73, 0.003, -0.35], [-0.73, 0.003, 0.35], [0.73, 0.003, 0.35]], along: [0, 1, 0] },
+      { line: 'foot pad', at: [[-0.73, 0.003, -0.33], [0.73, 0.003, -0.33], [-0.73, 0.003, 0.33], [0.73, 0.003, 0.33]], along: [0, 1, 0] },
       { line: 'top', at: [[0, 0.8625, 0], [0, 0.8875, 0]], along: [0, 1, 0] },
-      // the vice at the left end, its jaws a few millimetres past the edge, so long work hangs down past the bench
-      { line: 'bench vice', at: [[-0.7, 0.9, 0]] },
+      // the vice at the left front corner, over a leg (a vice mid-span rings the bench and walks it across the floor),
+      // turned a quarter so its jaws face the front and stand a little past the edge: long work then hangs down past
+      // the bench instead of fouling the top
+      { line: 'bench vice', at: [[-0.69, 0.9, 0.3]], turn: PI / 2 },
     ] },
   { id: 'gokart', what: 'a pedal go-kart frame with steered front wheels',
     src: 'a kart\'s own geometry: 25 mm square tube, a live rear axle in two bearings, stub axles on kingpins, a steel seat pan (typical; machines.ts holds the track kart)',
@@ -338,7 +354,7 @@ export const BUILDS: Build[] = [
       + 'belt and the pedal are bought; the frame, the head, the shaft\u2019s pulley and the splash pan are made here',
     lines: [
       { name: 'frame leg, 40 \u00d7 40 \u00d7 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 600], cm3: 182 },
-      { name: 'frame rail, 40 \u00d7 40 \u00d7 2 box section', n: 10, mat: 'steel-low', size: [40, 40, 420], cm3: 128 },
+      { name: 'frame rail, 40 \u00d7 40 \u00d7 2 box section', n: 11, mat: 'steel-low', size: [40, 40, 420], cm3: 128 },
       { name: 'bearing plate, 6 mm steel sheet', n: 2, mat: 'steel-low', size: [160, 160, 6], cm3: 153 },
       { name: 'shaft, 25 mm round bar', n: 1, mat: 'steel-high', size: [25, 25, 500], cm3: 245, shape: 'round' },
       { name: 'head, 300 mm 25 mm birch ply disc', n: 1, mat: 'wood', size: [300, 300, 25], cm3: 1767, shape: 'round' },
@@ -366,6 +382,10 @@ export const BUILDS: Build[] = [
       // the lower bearing plate needs something to be welded to: without these two it hung in mid-air under the
       // frame, which a blind judge read as "a stray flat panel connected to nothing"
       { line: 'frame rail', at: [[0, 0.30, -0.21], [0, 0.30, 0.21]], along: [1, 0, 0] },
+      // and one between the legs on the motor's side, under the motor: the belt fixes the motor's place 260 mm out
+      // from the shaft (so its loop clears the motor's body), which left it hanging outside the frame with nothing
+      // under it at all. The eleventh rail is what it is bolted down to, and `floating` in designer.ts found it
+      { line: 'frame rail', at: [[0.21, 0.16, 0]], along: [0, 0, 1] },
       { line: 'bearing plate', at: [[0, 0.58, 0], [0, 0.30, 0]], along: [0, 1, 0] },
       { line: 'shaft', at: [[0, 0.45, 0]], along: [0, 1, 0] },
       { line: 'bearing', at: [[0, 0.585, 0], [0, 0.305, 0]], along: [0, 1, 0] },
@@ -627,7 +647,7 @@ export function builtParts(b: Build): Part[] {
     if (line?.as) {
       const c = component(line.as);
       if (typeof c !== 'string') {
-        for (const at of place.at) out.push({ ...c.part, name: line.name.split(',')[0]!.trim(), at, says: `${line.name}, drawn whole by the component library, from this build's own bill of materials` });
+        for (const at of place.at) out.push({ ...c.part, name: line.name.split(',')[0]!.trim(), at, ...(place.turn ? { rot: [0, place.turn, 0] as V3 } : {}), says: `${line.name}, drawn whole by the component library, from this build's own bill of materials` });
         continue;
       }
     }

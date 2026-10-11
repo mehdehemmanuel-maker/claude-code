@@ -8,7 +8,7 @@ import {
   makes, planJob, priceOfLine, processById, programsText, runMinutes, sawPart, scheduleOf, shapeOf, stationById,
   stationCost, stationUsd, throwAt, tolOf, worksOf, worksText, worksUnder, worksUnderText, worksWords, worthMaking,
   BUILT_BY, builtParts, layRot, sectionOf,
-  type Job, type PartLine, designAll, designFaults, editBuild, lineKg, materialIn, weighBuild, statedThickness } from '../../src/nexus/works';
+  type Job, type PartLine, designAll, designFaults, editBuild, floating, lineKg, materialIn, weighBuild, statedThickness } from '../../src/nexus/works';
 import * as THREE from 'three';
 import { componentOf, missingIn } from '../../src/nexus/parts/components';
 import { resolve, type Item } from '../../src/nexus/parts/inventory';
@@ -896,6 +896,18 @@ describe('a bill whose numbers are derived and not typed', () => {
     expect(designFaults(taller).filter((f) => f.kind === 'volume')).toEqual([]);
     expect(wheel.lines.find((l) => l.name.startsWith('frame leg'))!.size![2], 'the original is untouched').toBe(600);
     expect(taller.src).toMatch(/edited/);
+  });
+
+  // Nothing a build lays may stand in mid-air. A bill says how many there are and a lay says where each one goes;
+  // neither says what holds it, so this is the only check that a drawing stood up from a bill is a thing and not a
+  // scatter. It is here because a blind judge walked up to the bench and its first words were that the vice "is not on
+  // the bench, it is hanging in mid-air" — with every number in the bill correct. Three faults were under it: the
+  // bench's top was laid across the bench instead of along it (a part stood up had its axes cycled, which a square
+  // section cannot show), the legs stood 20 mm outside the top's own edge so the short rails fell short of them, and
+  // the potter's wheel's motor hung outside its frame with nothing under it at all.
+  it('lays nothing in mid-air: every placed piece of every build touches another or stands on the floor', () => {
+    const adrift = BUILDS.flatMap((b) => floating(b).map((x) => `${b.id}: ${x.name} at ${(x.y * 1000).toFixed(0)} mm`));
+    expect(adrift).toEqual([]);
   });
   it('a belt is drawn as the loop it is, and four pieces weigh one belt', () => {
     // two unequal pulleys make a stadium, not a circle: a ring stood off both and passed through the motor between

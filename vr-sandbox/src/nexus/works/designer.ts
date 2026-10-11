@@ -15,7 +15,8 @@
 import { DENSITY } from '../parts/mass';
 import { component } from '../parts/components';
 import { findItem, INVENTORY } from '../parts/inventory';
-import { BUILDS, lineFor, sectionOf, type Build } from './builds';
+import { BUILDS, builtParts, lineFor, sectionOf, type Build } from './builds';
+import { layout } from '../parts/space';
 import { ALWAYS_BOUGHT, classOf, priceOfLine, STOCK, type PartLine } from './lines';
 
 /** Whether a bill line's own words carry a stored part's name inside them: "jet, 0.8 mm (0.035 in) MIG contact tip
@@ -28,6 +29,25 @@ export function namesAStoredPart(name: string): boolean {
     if (plain.length > 4 && said.includes(` ${plain} `)) return true;
   }
   return false;
+}
+
+/** A box in the world, as `layout` gives it. */
+interface Bounds { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }
+const touching = (a: Bounds, c: Bounds, tol: number): boolean =>
+  a.min.x - tol <= c.max.x && c.min.x - tol <= a.max.x && a.min.y - tol <= c.max.y && c.min.y - tol <= a.max.y && a.min.z - tol <= c.max.z && c.min.z - tol <= a.max.z;
+
+/** The pieces of a build's lay that touch nothing else and do not stand on the floor: they are in mid-air.
+ *
+ *  A bill says how much of a thing there is and a lay says where each one goes; neither says what holds it, so this is
+ *  the only check that a drawing stood up from a bill is a thing rather than a scatter. It exists because a blind judge
+ *  walked up to the welded bench and its first finding was that the vice "is not on the bench, it is hanging in
+ *  mid-air" — and it was right, where every number in the bill was also right. Four millimetres is the tolerance,
+ *  which is a weld's gap and a bolt's clearance; what rests on the floor is held by the floor. */
+export function floating(b: Build): { name: string; y: number }[] {
+  const laid = builtParts(b); if (laid.length < 2) return [];
+  const boxes = laid.map((q) => { const ns = layout(q), box = ns[0]!.sub ?? ns[0]!.box; return box ? { name: q.name, box: box as Bounds } : null; }).filter((x): x is { name: string; box: Bounds } => !!x);
+  const tol = 0.004;
+  return boxes.filter((x) => x.box.min.y > tol && !boxes.some((y) => y !== x && touching(x.box, y.box, tol))).map((x) => ({ name: x.name, y: x.box.min.y }));
 }
 
 /** Something the designer will not let a bill say. `line` is absent where the fault is the build's as a whole. */
@@ -143,6 +163,7 @@ export function designFaults(b: Build): Fault[] {
       const put = b.lay.filter((p) => lineFor(b, p.line) === line).reduce((s, p) => s + (p.bent === 'loop' ? 1 : p.at.length), 0);
       if (put > line.n) f('place', `${put} of them are placed and the bill buys ${line.n}`, line.name);
     }
+    for (const x of floating(b)) f('place', `it is laid ${(x.y * 1000).toFixed(0)} mm up touching nothing else in the build: nothing holds it there`, x.name);
   }
   return out;
 }
