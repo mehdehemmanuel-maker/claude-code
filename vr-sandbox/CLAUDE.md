@@ -1747,10 +1747,14 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    the test files are dealt into four shards by vitest's own `--shard`, measured even on this tree at 46, 30, 27 and
    43 s - summing to the gate's own 141-146 s, so the slowest shard is the wall clock. `fail-fast` is off so one red
    shard cannot hide the other three, and `cancel-in-progress` means a second push supersedes the first rather than
-   being paid for. Worth knowing before trusting it: no workflow run has been created in this repository since
-   2026-10-09 02:09 and four pushes on 10-11 created none, though a `workflow_dispatch` of the same workflow runs
-   normally - so pushes are not reaching the trigger for a reason not yet found, and `workflow_dispatch` is on the
-   workflow so a run can always be started by hand.
+   being paid for. Measured on GitHub's own runners: typecheck 3 s, tidy 1 s, the four
+   shards 74, 56, 49 and 58 s at once, the whole run 1 min 45 s end to end - each shard slower than this container's
+   46 s and all four at once, which is the point. One thing is worth recording because it cost a wrong diagnosis: four
+   pushes on 10-11 created no run at all while a `workflow_dispatch` of the same workflow ran normally, and the next
+   push ran. A repository creates no run when Actions is off and queues one when it is out of minutes, so creating
+   none looked like Actions being off - and it was not: the setting was on throughout. The lesson is the diagnosis,
+   not the cause, which is still unknown: a dispatch is the cheap test that separates a switched-off repository from a
+   trigger that is not firing, and `workflow_dispatch` is on the workflow so that test is always available.
 Next: the remaining stand-ins (the welder and the MSLA printer, each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).
