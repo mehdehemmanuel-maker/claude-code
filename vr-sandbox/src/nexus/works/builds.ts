@@ -187,6 +187,50 @@ export const BUILDS: Build[] = [
       { line: 'tong arm', at: [[0.3, 0.018, 0.06], [0.3, 0.018, -0.06]], along: [0, 0, 1] },
       { line: 'flask', at: [[-0.34, 0.125, 0]], along: [0, 1, 0] },
     ] },
+  { id: 'forge-propane', what: 'a propane forge, made here',
+    src: 'the station\u2019s own self-build, and the cheapest real one: a 20 lb propane tank is free or a few dollars '
+      + 'second-hand, and lined with 50 mm of ceramic fibre blanket it holds a 200 \u00d7 450 mm chamber that a single '
+      + '3/4 in naturally aspirated burner takes to forging heat (typical: 1,250 \u00b0C at the chamber wall). That burner '
+      + 'is the station\u2019s own words and the cheapest pattern there is: black iron fittings with a 0.035 in MIG contact '
+      + 'tip as the jet, which needs no blower and no electricity and costs about $50 against $60 for one bought. The tank '
+      + 'is filled with water and the valve removed before a blade goes anywhere near it \u2014 that step is a person\u2019s '
+      + 'and is in the plan as one. The blanket\u2019s volume is the shell\u2019s bore less the chamber, the coating is '
+      + '2 mm of rigidised refractory over the chamber wall, and the stand is the same 40 \u00d7 40 \u00d7 2 box section as '
+      + 'the bench. The burner, the blanket and the firebrick are bought; everything else is cut and welded here',
+    lines: [
+      { name: 'shell, 20 lb propane tank, purged and cut open', n: 1, mat: 'steel-low', size: [305, 305, 450], cm3: 750, shape: 'round', bore: [302, 448] },
+      { name: 'lining, 50 mm ceramic fibre blanket', n: 1, mat: 'refractory', size: [302, 302, 450], cm3: 17810, shape: 'round', bore: [202, 450] },
+      { name: 'chamber coating, 2 mm rigidised refractory', n: 1, mat: 'refractory', size: [202, 202, 450], cm3: 565, shape: 'round', bore: [198, 450] },
+      { name: 'floor, 230 \u00d7 114 \u00d7 32 firebrick split', n: 2, mat: 'refractory', size: [114, 32, 230], cm3: 839 },
+      { name: 'burner mixing tube, 3/4 in black iron pipe', n: 1, mat: 'steel-low', size: [27, 27, 230], cm3: 51, shape: 'round', bore: [21, 230] },
+      { name: 'burner tee, 3/4 in black iron', n: 1, mat: 'steel-low' },
+      { name: 'burner flare, 1 1/4 \u00d7 3/4 in black iron reducer', n: 1, mat: 'steel-low' },
+      { name: 'jet, 0.8 mm (0.035 in) MIG contact tip in a 1/8 in nipple', n: 1, mat: 'copper' },
+      { name: 'needle valve and hose, 1/8 in brass', n: 1, mat: 'brass' },
+      { name: 'regulator, 0\u201330 psi POL with its hose', n: 1, mat: 'steel-low' },
+      { name: 'burner mount, 32 NB tube', n: 1, mat: 'steel-low', size: [42, 42, 120], cm3: 44, shape: 'round', bore: [36, 120] },
+      { name: 'stand leg, 40 \u00d7 40 \u00d7 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 500], cm3: 152 },
+      { name: 'stand rail, 40 \u00d7 40 \u00d7 2 box section', n: 8, mat: 'steel-low', size: [40, 40, 320], cm3: 97 },
+      { name: 'cradle bearer, 40 \u00d7 4 flat bar', n: 2, mat: 'steel-low', size: [40, 4, 420], cm3: 67 },
+      { name: 'M8 \u00d7 25 bolt and nut', n: 8, mat: 'steel-low' },
+    ],
+    joins: [
+      { how: 'weld-mig', n: 16, mm: 160, says: 'the stand welded at every leg-to-rail corner, and the burner mount welded into the hole cut in the shell: the mount is what holds the burner at its own angle, so it is welded and not clamped' },
+      { how: 'fasten', n: 8, says: 'the cradle bearers bolted to the stand, so the shell lifts off it to be relined \u2014 a blanket lining is a consumable and gets replaced' },
+    ],
+    // a forge is a tube lying on its side on a stand, open at the front, with the burner down through the top: the
+    // bricks are loose in the bottom of the chamber because that is the surface that gets cut by flux and replaced
+    lay: [
+      { line: 'stand leg', at: [[-0.14, 0.25, -0.14], [0.14, 0.25, -0.14], [-0.14, 0.25, 0.14], [0.14, 0.25, 0.14]], along: [0, 1, 0] },
+      { line: 'stand rail', at: [[0, 0.48, -0.14], [0, 0.48, 0.14], [0, 0.08, -0.14], [0, 0.08, 0.14]], along: [1, 0, 0] },
+      { line: 'cradle bearer', at: [[0, 0.502, -0.12], [0, 0.502, 0.12]], along: [1, 0, 0] },
+      { line: 'shell', at: [[0, 0.657, 0]], along: [0, 0, 1] },
+      { line: 'lining', at: [[0, 0.657, 0]], along: [0, 0, 1] },
+      { line: 'chamber coating', at: [[0, 0.657, 0]], along: [0, 0, 1] },
+      { line: 'floor', at: [[0, 0.572, -0.113], [0, 0.572, 0.113]] },
+      { line: 'burner mount', at: [[0, 0.84, -0.09]], along: [0, 1, 0] },
+      { line: 'burner mixing tube', at: [[0, 0.95, -0.09]], along: [0, 1, 0] },
+    ] },
   { id: 'wall', what: 'a garden wall, 6 m long and 1.2 m high',
     src: 'thrown at it on purpose: nothing below the plant touches concrete, so this is where the engine has to say so rather than make something up',
     lines: [

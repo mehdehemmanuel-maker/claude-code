@@ -1267,8 +1267,17 @@ In order; each through the breakdown queue, rendered, compared with its photos a
      a length of bar as the ring its own length makes (900 mm of 10 mm bar → a 286 mm bail).
    • **The bench was 36 mm taller than its own label.** 880 mm of leg + 6 mm pad + two 25 mm sheets is 936, not the
      900 in its name; the leg is 844 now and a test adds the drawing's own parts up to the height on the label.
-   Next: the rest of the stations (a forge is a lined tube on a stand, a welder and a kiln each a small builder of its
-   own), the brake's own stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
+   The forge is the fourth (2026-10-11), and it went the other way round: the station already *said* in its own
+   `selfBuild` that it is "an empty 20 lb propane tank lined with 50 mm of ceramic wool … the burner is black-iron
+   pipe fittings with a 0.035 in MIG contact tip as the orifice", and `forge-propane` is that sentence as a bill —
+   fifteen lines, a 200 × 450 chamber, a stand of the same box section as the bench, $50 of fittings against $60 for
+   a burner bought finished. Throwing it at the works found two more router faults of the kind the last round found
+   four of: a propane tank and a venturi burner were both being *forged*, because a steel line with no size falls to
+   forging. Three `ALWAYS_BOUGHT` rules now name them — a hydrotested pressure vessel (and that cutting one open is
+   a hand operation on a purged tank, "never a job for a machine that cannot see whether it has been purged"), a
+   burner, and threaded black-iron fittings.
+   Next: the rest of the stations (a welder and a kiln each a small builder of its own; the spot welder from a
+   microwave transformer is the biggest price cut left on the list), the brake's own stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
    height (0.9 m) already contradicts — the room's bare walls, a blind judge on the works as it now stands, prices
    for the lines that still have none, working the three ratchets down by cause, and the older Now items (robot
    benches, likeness, life graph).
