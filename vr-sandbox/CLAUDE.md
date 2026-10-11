@@ -1508,6 +1508,33 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    two sweeps, every kit at three seeds (77 s) and every kit through the make pipeline (56 s), are each one `it` that
    cannot be split across workers. Sharding those two by kit is the next cut, and worth it only once something else is
    not cheaper.
+   Then the same loop again, since the first cut moved the whole suite's work from 731 s to 599 and left the two kit
+   sweeps a fifth of it. Three kits were 98 % of the kit sweep (a car park 51 s, a street 13.5, a car 9.9) where a
+   570-part semi truck cost 22 ms, so the cost was not the count of parts but the panelled body, and a sampled profile
+   of one car (`node:inspector`, started inside the test, since vitest's workers swallow `--cpu-prof`) put 53 % of it in
+   evaluating NURBS surfaces. Counting the calls said why, and the answer was the same shape as the physics one: work
+   charged to the whole for the sake of a part.
+   • **The whole body was made again to crown a lid.** `bodyPanels` made the body, measured whether its hood or deck
+     stood short of what is under it, and made the whole body again with the lid crowned more — three `makeBody` runs
+     for every car, four wheel liners and every panel twice over, to lift a hood three millimetres. Nothing but the lid
+     reads a `lift`, so the check belongs to the lid: the lids alone are crowned again now, in the same order with the
+     same lift, and the body is made once. One car's every number — 125,874 of them — agrees with the old body to
+     1.4 × 10⁻⁸ m, which is the only honest proof that a refactor of a creator changed nothing.
+   • **`uAt` halved a span thirty-two times** to invert x into u, each halving a point on the skin, and a body's panels
+     ask it tens of thousands of times: a quarter of a car. It reads the station the x falls in off a table of 64 kept
+     with the skin, then closes by false position in three or four points. That is a surface's own inverse, not a
+     panel's business, so it went to `parts/surface.ts` beside `pointAt` — which is also how `panels.ts` paid back the
+     lines this round added, since the tidy ratchet refuses a file that grows past its allowance and raising the number
+     is not allowed.
+   • **`lidY` scanned 7,500 points** of both lids on every call, from inside a four-step loop per liner point; the
+     points are binned 20 mm along the car now, and it reads the three bins that can hold the answer.
+   The kit sweep went 74.6 s to 43.6 (the car 9.9 to 4.7, the car park 51 to 30.6, the street 13.5 to 8.2), and a car in
+   the room is made twice as fast as it was, which is what the Quest will feel. Over both cuts the suite's own test time
+   is 731 s, then 599, then 570. The gate's wall clock is not the number to watch on this host: 227 s, 256 and 272 came
+   out of trees that differed only by work removed, four cores with other work on the machine, and single files move by
+   a tenth between runs. Test time is what to measure, and the tail is what is left: `make-every` (51 s) and
+   `kits-every` (47 s) are each one `it`, so neither can be spread over workers; sharding them by kit is the next cut,
+   and the car park alone would still hold a shard for 30 s.
    Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).
@@ -1520,9 +1547,10 @@ the user can widen it under the environment's Network access.
 
 - Gate: `npm run gate` (long; run it in the background and log to a file). Build the viewer:
   `npx vite build --config vite.view.config.ts --logLevel error`.
-- The gate is 228 s, and with four cores it is its tail, not its total, that sets that: the two sweeps, every kit at
-  three seeds (`tests/nexus/kits-every.test.ts`, 77 s) and every kit through the make pipeline
-  (`tests/nexus/make-every.test.ts`, 56 s), are each one `it`, so neither can be split across workers. They are in files of their own
+- The gate is around four minutes, and its wall clock swings by a sixth run to run on this host, so measure the suite's
+  own test time (`npx vitest run --reporter=json`, summed over files: 570 s now) rather than the clock. Its tail is the
+  two sweeps, every kit at three seeds (`tests/nexus/kits-every.test.ts`, 47 s) and every kit through the make pipeline
+  (`tests/nexus/make-every.test.ts`, 51 s), each one `it`, so neither can be split across workers. They are in files of their own
   because vitest runs files in parallel and a file's own tests in order: together in one file they cost the wall clock
   106 s, apart they cost 64. Keep them apart, and put a new long sweep in its own file for the same reason.
 - `npm run tidy` is the half-second part of the gate that checks the tree's own shape, and it is the thing to run
