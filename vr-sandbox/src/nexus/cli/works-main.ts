@@ -12,9 +12,12 @@
 //   npm run works -- ender3              a maker's own machine routed, with the bootstrap share
 //   npm run works -- fits 25             the fits and grades at a diameter
 //   npm run works -- builds              what there is to throw at it
+//   npm run works -- tend               the works with a robot on a rail in it: what it reaches, orders and does
+//   npm run works -- tend gokart        and a go-kart run through it
 
 import { BUILDS, TIERS, bootstrapOf, buildById, jobForModel, jobText, programsText, throwAt, under3K, worksText, worksUnderText } from '../works';
 import { fitsText } from '../parts/fits';
+import { runText, runWorks } from '../works';
 
 const args = process.argv.slice(2);
 const want = (re: RegExp) => args.find((a) => re.test(a));
@@ -28,6 +31,7 @@ const tierOf = (): { name: string; stations: string[] } => {
 };
 
 if (args[0] === 'fits') { console.log(fitsText(Number(args[1] ?? 25))); }
+else if (args[0] === 'tend') { console.log(runText(runWorks(args[1] ?? 'workbench', tierOf().stations))); }
 else if (args[0] === 'builds') {
   for (const b of BUILDS) console.log(`${b.id.padEnd(11)} ${b.lines.length} lines, ${(b.joins ?? []).length} kinds of joint — ${b.what}\n            ${b.src}`);
 }

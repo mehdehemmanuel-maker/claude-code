@@ -77,6 +77,7 @@ import '../world/creatures';
 import { perfect, sayMade, type Made as MadeThing } from '../make/pipeline';
 import { boardOfInvention, sayInvention, type Invention } from '../ask/invent';
 import { machineWords } from '../ask/machine';
+import { tendWords } from '../works/tend';
 import { routeMake } from '../ask/route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../parts/kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
@@ -2565,7 +2566,7 @@ async function converse(text: string): Promise<void> {
   { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = benchWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = worksRoomWords(text, { scene, camera, orbit, dolly, xr: () => renderer.xr.isPresenting, home: () => goPlace('table') }) ?? worksWords(text) ?? machineWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = worksRoomWords(text, { scene, camera, orbit, dolly, xr: () => renderer.xr.isPresenting, home: () => goPlace('table') }) ?? worksWords(text) ?? machineWords(text) ?? tendWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // (each asked in turn and the first that answers wins, which is what five identical if-blocks said at five times the length)
   { const said = barWords(text) ?? kitWords(text) ?? cellWords(text) ?? processWords(text) ?? robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { let said: string | null; try { said = personWords(text); } catch (e) { said = (e as Error).message; } if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }

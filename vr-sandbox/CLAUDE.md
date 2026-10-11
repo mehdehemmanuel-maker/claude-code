@@ -154,7 +154,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
 | How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
-| Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (thirteen files: `plan.ts` routes, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
+| The robot that runs the works: the rails it rides (one rail serves the two rows facing its aisle and no more, so the number of rails a shop wants is what says whether a rail or a floor robot is the cheap answer), which stations each puts within its arm's reach, the edge between what an operation needs of a pair of hands and what this robot's hands are (a port and a grip load a machine, start it and take the part out; they do not strike an arc, pour 700 °C metal or throw clay — each refused with the reason, which is what names the next tool to buy), the basket for everything the plan says to buy (each line the cheapest real offer with its seller, its page, the figure it showed and the day it was seen, split by seller because shipping is), and the division of a job into the robot's minutes and yours. It says plainly that it cannot pay for anything | `src/nexus/works/tend.ts` (`tendWorks`, `aislesOf`, `offRail`, `tends`, `orderFor`, `runWorks`, `runText`, `tendWords`), `npm run works -- tend [build]` |
+| Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (fifteen files: `plan.ts` routes, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
 | The works as a thing to order: every station in the order to come by it (which is not by price — the welder comes before the forge because the forge is welded), its seller's own listing where one sells it, the used market where that is the cheap path, and where the cheapest way is to make it, the job that makes it routed through the works *as it stood at that moment* | `src/nexus/works/pack.ts` (`worksPack`, `worksPackText`, `BUILT_BY`), `npm run pack -- works <folder>` |
 | The wire out: the program a machine is sent and the transport that carries it (Marlin's line protocol with its checksum and resends, down a 20-byte BLE pipe to the Nordic UART service; Moonraker over wifi where the machine is Klipper; the steps where there is no port) | `src/nexus/machines/link.ts` (`Streamer`, `gcodeFor`, `printStart`, `kilnProgram`, `LINKS`), the binding in `works/programs.ts`, the browser half in `src/nexus/view/ble.ts` |
 | The Bluetooth bridge as a thing you can order and build: what it is made of (a XIAO ESP32C3, a BSS138 level converter only where the controller's logic is 5 V, three jumper leads), the UART-to-NUS sketch it runs, the pins it uses and why they are not the ones marked TX and RX (the ESP32-C3's boot ROM prints on U0TXD at every reset, so the machine is kept off that pin), and the wiring as steps with a check at each one — which the room, the lesson and the build pack all read, so none of them is a second copy | `src/nexus/machines/link.ts` (`BRIDGE`, `BRIDGE_PINS`, `bridgeSketch`, `bridgeSteps`), the lesson `bridge-ble` in `src/nexus/teach/lessons.ts`, the pack's `bridge` flag in `src/nexus/teach/buildpack.ts` (which ships `bridge.ino` in its zip), `wiring()` in `src/nexus/view/ble.ts` |
@@ -251,7 +252,7 @@ the root.
 | `parts/` | the parts library and the geometry a part is made of: every part designed once from its standard, the shapes it is drawn from (lofts, bent tubes, turned profiles, NURBS surfaces), where its pieces end up in space and which of them touch, its mass and what it costs |
 | `boards/` | single-board computers, their parts, and the photo-measured data files |
 | `machines/` | real machines from their makers' figures, and the wire out to them (`link.ts`). Not geometry: a loft, a surface and an oriented box are `parts/`, because a body is not a machine |
-| `works/` | any build routed to real machines: twelve files, one concern each (see `works/index.ts`) |
+| `works/` | any build routed to real machines, and the robot that runs them: fifteen files, one concern each (see `works/index.ts`) |
 | `teach/` | teaching a build by hand: edges, lessons, the soldering bench, the build pack |
 | `world/` | places, creatures, games, people |
 | `make/` | the make pipeline: conditions, detail, critic, in rounds |
@@ -1134,6 +1135,35 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    ("along a wall 3000 mm", "reaches 600 mm") which the reader wanted two of and so defaulted to 300; a joint's load
    was a moment being printed as kilograms (a stage now says which it is in, and a test asserts one is never printed as
    the other); and a gripper refused on the arm path said "NO — undefined".
+   Then the user again, and further out: *"no you need to think of an assembly of things that already exist or things
+   that can be combined or whatever too be able too create almost anything like a robot that has a whole workshop that
+   it can build whatever it want or even use a computer to order parts"*. Every piece that needs was already here and
+   this round is the joining of it (`works/tend.ts`): `plan.ts` says which station does what, `floor.ts` says where
+   each station stands, `ask/machine.ts` composes the robot itself out of library parts and checks its joints against
+   the moment they hold, `link.ts` is the wire that carries a program to a machine, and `prices.ts` holds the seller
+   pages. Throw a build at a *tended* works and it says: which rails, what to order and from whom, who does each step,
+   and what one more thing would hand the robot.
+   The findings are the point, and they are all arithmetic over the real layout. A hand on a rail reaches 0.60 m off
+   it and an aisle is 0.9 m wide, so one rail serves the two rows facing its aisle **and no more** — which means a
+   sixteen-station works takes two rails ($378 and 53 kg of the same machine twice) and still leaves six stations out,
+   and at three rails or more a robot on a floor base that drives between the rows is the cheaper answer. That is a
+   decision a number makes rather than a preference. A 5-inch quadcopter comes out **94 % tended**: 247 machine-minutes
+   to the robot, 15 to a person (soldering, and two callipering steps at a surface plate no aisle faces). A welded
+   steel bench comes out 50 %, because sawing and twenty welds are hands whatever else is not. What it would take
+   next is named with the minutes it would save: a hand that can solder, 13 min; a hand that can calliper, 2 min.
+   Two things are said plainly rather than pretended, and both are tested. It cannot press a Buy button: it reaches a
+   basket — the cheapest real offer for every line, each with its seller, its page, the figure that page showed and
+   the day it was seen, split by seller because shipping is per seller and that is most of a small order — and then a
+   person pays. And it cannot do most of what a cheap works does: striking and holding an arc is a hand watching a
+   puddle through a shade-10 lens at a millimetre of stand-off, pouring molten aluminium is 700 °C in tongs, and
+   throwing clay is both hands on a moving wall of it. Each is refused with its reason rather than a shrug, because
+   the reason is what tells you which tool to buy.
+   Three faults found by running it: `works/floor.ts` had never been added to `works/index.ts`, so `layWorks` imported
+   as undefined from the barrel (the round that wrote it only ever imported it by path); an arm too short for the
+   layout had no rail to be "off", and reported 0 m rather than saying that a 0.30 m arm cannot tend a works whose
+   aisles are 0.9 m wide; and `machines/cell.ts` is not a second works after all — it is the *physics* of a machine
+   running (a Printer that really executes Marlin G-code with a trapezoidal profile, a Kiln, a Furnace, lost-PLA
+   casting), where `works/` decides which machine and when. That is the boundary, written down.
    Next: the room drawing every station from the library rather than as a stand-in (the Ender-3 is wired; the rest want
    their kinds, and the inventor's units are now the vocabulary to build them from), an invented machine stood in the
    room and judged blind, prices for the lines that still have none, working the three ratchets down by cause, and the

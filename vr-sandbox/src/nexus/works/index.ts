@@ -55,7 +55,9 @@
 //   schedule.ts   the operations on the machines, and the floor that judges it
 //   audit.ts      the engine checking its own answer
 //   programs.ts   the program each operation sends (binds to link.ts)
+//   floor.ts      where every station stands: the rows, the aisles and the room it all wants
 //   builds.ts     builds to throw at it, and the bootstrap share
+//   tend.ts       the robot that runs it: what it reaches, what it orders, what is left for a person
 //   economics.ts  make or buy, and when an arm pays
 //   pack.ts       the works as a thing to go and buy, in the order to buy it in
 //   text.ts       all of it said for a person, and the words that reach it
@@ -69,7 +71,9 @@ export * from './schedule';
 export * from './audit';
 export * from './programs';
 export * from './plan';
+export * from './floor';
 export * from './builds';
+export * from './tend';
 export * from './economics';
 export * from './pack';
 export * from './text';
