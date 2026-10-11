@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { use } from '../../src/nexus/parts/components';
-import { fit, portsFrom, unnamedHoles } from '../../src/nexus/parts/mate';
+import { axesFrom, fit, portsFrom, seat, seats, unnamedHoles } from '../../src/nexus/parts/mate';
 import type { Port } from '../../src/nexus/parts/kits';
 
 const mirror = (p: Port): Port => ({ ...p, sex: p.sex === 'holes' ? 'threads' : 'holes', n: [-p.n[0], -p.n[1], -p.n[2]], pattern: p.pattern.map(([x, y]) => [-x, y] as [number, number]) });
@@ -53,5 +53,32 @@ describe('ports read off a part\'s own drilled holes', () => {
 
   it('parts with no drilled pattern claim none', () => {
     for (const words of ['screw M5x20', 'nut M5', 'bolt M8x30']) expect(portsFrom(use(words)), words).toEqual([]);
+  }, 60000);
+});
+
+describe('bores read off a part\'s own turned profiles', () => {
+  it('the seat it derives is the bore the part is sold by', () => {
+    // The check that makes this worth having: a 6205 is sold as 25 x 52 x 15 and a GT2 B5 by its 5 mm bore, so the
+    // derived seat can be held against the catalogue rather than against anyone's opinion of the geometry.
+    for (const [words, mm] of [['bearing 6205', 25], ['bearing 625', 5], ['bearing 6204', 20], ['pulley GT2 20T B5', 5]] as [string, number][]) {
+      const s = seat(use(words));
+      expect(s, words).not.toBeNull();
+      expect(+(s!.d * 1000).toFixed(2), `${words} seat`).toBeCloseTo(mm, 1);
+    }
+  }, 60000);
+
+  it('a shaft of that size seats, and one too big is refused with the number', () => {
+    const s = seat(use('bearing 6205'))!;
+    expect(seats(s, 25)).toMatchObject({ mm: 25, clearance: 0 });
+    expect(seats(s, 30)).toMatch(/does not enter.*5 mm too big/);
+    expect(seats(s, 20)).toMatch(/loose.*not a seat/);
+  }, 60000);
+
+  it('a bearing\'s bore is the inner ring\'s, not its outer ring\'s raceway', () => {
+    // "the biggest bore" was the first rule and it named the 6205's 43.05 mm outer raceway, which is a real inner
+    // diameter and not the seat. The part's own axis, then the narrowest way through it, is what names the seat.
+    const all = axesFrom(use('bearing 6205'));
+    expect(Math.max(...all.map((a) => a.d * 1000))).toBeGreaterThan(40); // the raceway is still found
+    expect(seat(use('bearing 6205'))!.d * 1000).toBeCloseTo(25, 1); // and is not mistaken for the seat
   }, 60000);
 });

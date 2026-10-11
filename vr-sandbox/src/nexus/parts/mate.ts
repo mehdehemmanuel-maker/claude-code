@@ -226,3 +226,72 @@ export function unnamedHoles(p: Part): { at: V3; r: number; depth: number }[] {
   walk(p);
   return out;
 }
+
+// ---- bores and shafts read off the geometry ----------------------------------------------------------------------------
+// `Iface` (src/nexus/parts/kits.ts) has said since it was written that a hub needs a shaft of its bore, and the critic
+// checks exactly that where two parts touch. What it has never had is *where*: a kind, a role and a diameter place
+// nothing, which is why 36 declarations check and never assemble, while 28 ports assemble and never check. This is the
+// half that was missing, read off the solids rather than declared: a cylinder is a shaft about its own axis, and a
+// drilled hole is a bore about its own. With these an `Iface` can be located, which is what it would take for the two
+// systems to become one.
+
+/** A round feature of a part, in the part's own frame: a bore for something to go in. */
+export interface Axis { kind: 'bore'; of: string; at: V3; dir: V3; d: number; len: number }
+
+/** Every bore this part's own solids make: a drilled `Cut`, and the hole up the middle of a turned profile - which is
+ *  where the bores that matter actually live. A bearing's 25 mm bore, a pulley's 5 mm bore and a tube's inside are all
+ *  the inner radius of a `lathe` spun about its own y, not a drilled hole, so a reader that knows only `Cut` finds a
+ *  bearing's set screws and misses the seat the whole part exists for.
+ *
+ *  Shafts are deliberately not read yet, and the reason is worth keeping: a cylinder is not a shaft merely because it
+ *  is a cylinder. The first run of this read a 6205's cage elements as eight shafts of ⌀1.78 mm and a stepper's as
+ *  twelve, because every nested cylinder in the tree looked like one. A mating shaft is one that is *exposed* - free
+ *  at one end to enter something else - and deciding that needs the part's own envelope, not its solid list. Until
+ *  that is done this says nothing about shafts rather than saying twelve wrong things. */
+export function axesFrom(p: Part): Axis[] {
+  const out: Axis[] = [];
+  const walk = (q: Part, m: THREE.Matrix4): void => {
+    const mm = m.clone().multiply(matOf(q)), rot = new THREE.Matrix4().extractRotation(mm);
+    const o = new THREE.Vector3().setFromMatrixPosition(mm), s = q.shape;
+    if (s && 'lathe' in s) {
+      // a turned profile is [radius, height] spun about y: the hole up its middle is its least radius, through its span
+      const pts = s.lathe as [number, number][];
+      if (pts.length) {
+        const rmin = Math.min(...pts.map((x) => x[0])), ys = pts.map((x) => x[1]);
+        const len = Math.max(...ys) - Math.min(...ys), dir = new THREE.Vector3(0, 1, 0).applyMatrix4(rot).normalize();
+        if (rmin > 1e-6 && len > 0) out.push({ kind: 'bore', of: q.name, at: [o.x, o.y, o.z], dir: [dir.x, dir.y, dir.z], d: +(2 * rmin).toFixed(6), len });
+      }
+    }
+    for (const c of q.cuts ?? []) {
+      const at = v(c.at).applyMatrix4(mm), dir = v(c.dir).applyMatrix4(rot).normalize();
+      out.push({ kind: 'bore', of: q.name, at: [at.x, at.y, at.z], dir: [dir.x, dir.y, dir.z], d: +(2 * c.r).toFixed(6), len: c.depth });
+    }
+    for (const r of q.parts ?? []) walk(r, mm);
+  };
+  walk(p, new THREE.Matrix4());
+  return out;
+}
+
+/** The bore a hub, a bearing or a pulley exists to sit on: the *smallest* bore on the axis the part is built around.
+ *  Not the biggest, which was the first rule here and is wrong on the commonest case of all - a 6205's outer ring has
+ *  a 43.05 mm inner face and its inner ring has the 25 mm bore the bearing is sold by, so "biggest" names the raceway
+ *  and misses the seat. The part's own axis is the axis line its bores share the most length along, which keeps a
+ *  pulley's radial set screws out of the reckoning; the seat is then the narrowest way through on it. */
+export function seat(p: Part): Axis | null {
+  const all = axesFrom(p); if (!all.length) return null;
+  const line = (a: Axis) => { const d = v(a.dir), at = v(a.at); return `${d.toArray().map((x) => Math.abs(x).toFixed(2)).join(',')}|${at.clone().sub(d.clone().multiplyScalar(at.dot(d))).toArray().map((x) => x.toFixed(3)).join(',')}`; };
+  const by = new Map<string, Axis[]>();
+  for (const a of all) { const k = line(a); (by.get(k) ?? by.set(k, []).get(k)!).push(a); }
+  const main = [...by.values()].reduce((x, y) => (x.reduce((n, a) => n + a.len, 0) >= y.reduce((n, a) => n + a.len, 0) ? x : y));
+  return main.reduce((best, a) => (a.d < best.d ? a : best));
+}
+
+/** Whether a shaft of this diameter goes in this bore as drawn, and by how much. What it does *not* claim is the fit:
+ *  a drawn pair is nominal, and which of ISO 286's fits it is held to is a decision about what the feature does
+ *  (`tolFor` in src/nexus/parts/fits.ts owns that), not something a drawing says. */
+export function seats(bore: Axis, shaftMm: number): { mm: number; clearance: number; says: string } | string {
+  const mm = +(bore.d * 1000).toFixed(3), clearance = +(mm - shaftMm).toFixed(3);
+  if (clearance < -0.001) return `a \u2300${shaftMm} shaft does not enter ${bore.of}'s \u2300${mm} bore: ${-clearance} mm too big`;
+  if (clearance > 0.2) return `a \u2300${shaftMm} shaft is ${clearance} mm loose in ${bore.of}'s \u2300${mm} bore: not a seat`;
+  return { mm, clearance, says: `a \u2300${shaftMm} shaft seats in ${bore.of}'s \u2300${mm} bore, ${clearance === 0 ? 'nominally the same size as drawn' : `${clearance} mm apart as drawn`}; which fit it is held to is what the seat is for, not what the drawing says` };
+}
