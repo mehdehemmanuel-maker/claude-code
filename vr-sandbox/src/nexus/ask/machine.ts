@@ -197,13 +197,18 @@ export function baseFrame(w: number, d: number, h: number): Unit {
 
 /** One unit in a stack, with what it has to carry because of what is above it. */
 export interface Mounted {
-  unit: Unit; /** kg standing on its moving end */ carrying: number;
+  unit: Unit; /** kg standing on its moving end, or — on an arm's joint — the N·m it has to hold */ carrying: number;
+  /** what `carrying` is in: a stack is checked in kg and a joint in N·m, and printing one as the other is a lie */
+  inUnit?: 'kg' | 'N·m';
   /** what is above it, by name */ above: string[];
   ok: boolean; why?: string;
 }
 /** A machine composed from units: what it is, what it reaches, what it costs, and what it cannot do. */
 export interface Machine {
   asked: string; name: string; stages: Mounted[];
+  /** how it is put together, which the words also say */ arrange: Arrangement;
+  /** for an arm: the moment each joint has to hold straight out, against what it can be geared to */
+  joints?: { at: string; needs: number; holds: number; ratio: number }[];
   /** its envelope: how far it moves in each of the three ways it slides, mm */ reach: number[];
   kg: number; usd: number | null;
   /** lines with no price here, said rather than guessed */ unpriced: string[];
@@ -293,7 +298,7 @@ function liftCheck(stages: Mounted[]): string[] {
 /** What words ask for, as the affordances a machine must have and how big it must be. Nothing here is a machine's
  *  name: "a printer", "a router" and "a thing that picks parts off a belt and puts them in a box" all arrive as the
  *  same kind of answer — what it must do, over what, carrying what. */
-export function readMachine(words: string): { does: Does[]; mm: [number, number, number]; payload: number; name: string } {
+export function readMachine(words: string): { does: Does[]; mm: [number, number, number]; payload: number; name: string; arrange: Arrangement } {
   const t = words.toLowerCase();
   const does: Does[] = [];
   if (/print|extrude|deposit|fdm|fff|filament/.test(t)) does.push('deposit');
@@ -302,10 +307,21 @@ export function readMachine(words: string): { does: Does[]; mm: [number, number,
   if (/camera|see|scan|inspect|look|vision|photo/.test(t)) does.push('see');
   if (/turn|rotate|spin|wrist|turntable|lathe|wheel/.test(t)) does.push('turn');
   const size = /(\d{2,4})\s*(?:mm)?\s*[x×by]\s*(\d{2,4})\s*(?:mm)?(?:\s*[x×by]\s*(\d{2,4}))?/.exec(t);
-  const mm: [number, number, number] = size ? [Number(size[1]), Number(size[2]), Number(size[3] ?? size[2])] : [300, 300, 300];
   const kg = /(\d+(?:\.\d+)?)\s*kg/.exec(t);
-  const name = does.length ? `a machine that ${does.map((d) => ({ deposit: 'prints', cut: 'cuts', grip: 'picks things up', see: 'sees', turn: 'turns', slide: 'moves', think: 'is programmed', hold: 'holds' })[d]).join(', ')}` : 'a machine';
-  return { does, mm, payload: kg ? Number(kg[1]) : 0, name };
+  // the arrangement: a thing that travels along something is a rail, a thing that reaches is an arm, a thing that
+  // turns the work under a fixed tool is a table, and anything that has to get anywhere in a box is a gantry
+  const arrange: Arrangement =
+    /\b(along|travel|traverse|rail|track|overhead|up the wall|across the wall|gantry crane|moves along)\b/.test(t) ? 'rail'
+      : /\b(arm|reach(es|ing)?|elbow|shoulder|wrist|jointed|articulat)/.test(t) ? 'arm'
+        : /\b(lathe|potter|wheel|turntable|spin the work|turns the work|faceplate)\b/.test(t) ? 'table' : 'gantry';
+  // a gantry is a box and wants three numbers; a rail is a length and an arm is a reach, and each is given by one
+  // ("along a wall 3000 mm", "reaches 600 mm"), which the first run read as nothing and defaulted to 300
+  const one = /(?:^|[^\dx×])(\d{2,4})\s*mm\b/.exec(t.replace(/\d+\s*(?:mm)?\s*[x×by]\s*\d+/g, ''));
+  const mm: [number, number, number] = size ? [Number(size[1]), Number(size[2]), Number(size[3] ?? size[2])]
+    : one && (arrange === 'rail' || arrange === 'arm') ? [Number(one[1]), 300, 300]
+      : [300, 300, 300];
+  const name = does.length ? `a${arrange === 'arm' ? 'n arm' : arrange === 'rail' ? ' rail-mounted machine' : arrange === 'table' ? ' turning machine' : ' machine'} that ${does.map((d) => ({ deposit: 'prints', cut: 'cuts', grip: 'picks things up', see: 'sees', turn: 'turns', slide: 'moves', think: 'is programmed', hold: 'holds' })[d]).join(', ')}` : 'a machine';
+  return { does, mm, payload: kg ? Number(kg[1]) : 0, name, arrange };
 }
 
 /** Compose an ask into a machine: the tool its words call for, the slides that carry it over the size asked, the frame
@@ -318,33 +334,58 @@ export function composeMachine(words: string): Machine {
   if (want.does.includes('cut')) tools.push(SPINDLE);
   if (want.does.includes('grip')) tools.push(GRIPPER);
   if (want.does.includes('see')) tools.push(EYE);
-  if (want.does.includes('turn')) tools.push(turnAxis(3));
-  // the axes under the tool: across, in and up. A cut takes force sideways, so its across axes are screws too; a
-  // tool that only has to be put somewhere gets belts, which are five times as fast for the same motor.
+  if (want.does.includes('turn') && want.arrange !== 'arm' && want.arrange !== 'table') tools.push(turnAxis(3));
+  // a cut takes force sideways, so its across axes are screws too; a tool that only has to be put somewhere gets
+  // belts, which are five times as fast for the same motor
   const fast = !want.does.includes('cut');
-  const axes: Unit[] = [fast ? beltAxis(x) : screwAxis(x), fast ? beltAxis(y) : screwAxis(y), screwAxis(z)];
-  const fr = baseFrame(x + 200, y + 200, z + 350);
-  const st = stack(fr, axes, tools, want.payload);
-  const units = [fr, ...axes, ...tools, BRAIN];
+  const slide = (mm: number) => (fast ? beltAxis(mm) : screwAxis(mm));
+
+  let st: { stages: Mounted[]; kg: number; refusals: string[]; gaps: string[] };
+  let units: Unit[];
+  let joints: Machine['joints'];
+  if (want.arrange === 'arm') {
+    // reach is the first number, and an arm's check is the moment at each joint, not the mass on a rail
+    const a = armStack(x, tools, want.payload);
+    st = a; joints = a.joints;
+    units = [...a.stages.map((s) => s.unit), BRAIN];
+  } else if (want.arrange === 'rail') {
+    // one long slide bracketed to the wall, with a turn axis and the tool riding it: the rail *is* the mobility
+    const mount = railMount(x), travel = slide(x), wrist = turnAxis(5);
+    st = stack(mount, [travel], [wrist, ...tools], want.payload);
+    units = [mount, travel, wrist, ...tools, BRAIN];
+  } else if (want.arrange === 'table') {
+    // the work turns under a tool brought in on one slide: a lathe, a wheel, a turntable
+    const table = turnAxis(10), inFeed = screwAxis(y);
+    st = stack(baseFrame(x + 200, y + 200, z + 200), [inFeed], tools, want.payload);
+    st.stages.unshift({ unit: table, carrying: want.payload, above: ['the work on it'], ok: table.carries >= want.payload });
+    units = [table, inFeed, ...tools, BRAIN];
+  } else {
+    const fr = baseFrame(x + 200, y + 200, z + 350);
+    const axes = [slide(x), slide(y), screwAxis(z)];
+    st = stack(fr, axes, tools, want.payload);
+    units = [fr, ...axes, ...tools, BRAIN];
+  }
   const money = units.map((u) => unitUsd(u));
   const usd = +money.reduce((a, b) => a + b.usd, 0).toFixed(2);
-  const refusals = [...st.refusals, ...liftCheck(st.stages)];
+  const refusals = [...st.refusals, ...(want.arrange === 'gantry' ? liftCheck(st.stages) : [])];
   if (want.payload > 0 && !tools.some((u) => u.does === 'grip')) refusals.push(`it was asked to hold ${want.payload} kg and nothing on it grips: say "picks up" and a gripper is composed in`);
   if (!want.does.length) refusals.push('nothing in those words says what the machine must *do*: name a tool (print, cut, pick up, see, turn) and it is composed round it');
   return {
-    asked: words, name: want.name, stages: st.stages, reach: [x, y, z], kg: st.kg,
+    asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm, kg: st.kg,
     usd: usd || null, unpriced: money.flatMap((m) => m.unpriced), does: [...new Set(units.map((u) => u.does))],
-    refusals, gaps: st.gaps,
+    refusals, gaps: st.gaps, ...(joints ? { joints } : {}),
   };
 }
 
 /** A machine written out: what it is made of, stage by stage, with what each carries and what it costs. */
 export function machineText(m: Machine): string {
-  const out = [`${m.name}, ${m.reach.join(' × ')} mm of travel: ${m.stages.length + 1} units, ${m.kg} kg, ${m.usd == null ? 'nothing priced here' : `$${m.usd.toFixed(2)}`}.`];
-  out.push(`It was composed, not copied: ${m.does.join(', ')} are the words, and this is what they spell at that size.`);
+  const span = m.arrange === 'arm' ? `${m.reach[0]} mm of reach` : m.arrange === 'rail' ? `${m.reach[0]} mm of travel along it` : `${m.reach.join(' × ')} mm of travel`;
+  const out = [`${m.name}, ${span}: ${m.stages.length + 1} units, ${m.kg} kg, ${m.usd == null ? 'nothing priced here' : `$${m.usd.toFixed(2)}`}.`];
+  out.push(`It was composed, not copied: ${m.does.join(', ')} are the words, arranged as ${{ gantry: 'a gantry in a frame, because the tool has to get anywhere in a box', rail: 'one long rail, because what was asked for is travel along something', arm: 'a jointed arm, because what was asked for is reach', table: 'a turning table under a fixed tool' }[m.arrange]}.`);
+  if (m.joints) for (const j of m.joints) out.push(`  ${j.at} holds ${j.holds} N·m geared ${j.ratio}:1 and has to hold ${j.needs} N·m straight out: ${j.holds >= j.needs ? 'holds' : 'NO'}`);
   for (const s of m.stages) {
     out.push(`  ${s.unit.name} — ${s.unit.says}`);
-    out.push(`      carries ${s.carrying.toFixed(2)} kg${s.above.length ? ` (${s.above.join(', ')})` : ' (nothing above it)'}: ${s.ok ? 'holds' : `NO — ${s.why}`}`);
+    out.push(`      carries ${s.carrying.toFixed(2)} ${s.inUnit ?? 'kg'}${s.above.length ? ` (${s.above.join(', ')})` : ' (nothing above it)'}: ${s.ok ? 'holds' : `NO — ${s.why}`}`);
     const parts = [...s.unit.of.map((p) => `${p.n} × ${p.words}`), ...(s.unit.bought ?? []).map((b) => `${b.n} × ${b.what} (bought: ${b.why})`)];
     out.push(`      ${parts.join('; ')}`);
   }
@@ -374,4 +415,93 @@ export function machineParts(m: Machine, use: (words: string) => Part): Part[] {
     up += s.unit.box[1];
   }
   return out;
+}
+
+// ---- how it is arranged, which is also the words' to say ------------------------------------------------------------
+// The first run of this file always built the same thing: a frame with three slides stacked in it. That is a template
+// wearing a composer's clothes — every ask came out a gantry, whatever it asked for. The arrangement is as much a part
+// of what the words say as the tool is, and it changes which check even applies: a gantry is checked by *mass*, because
+// what fails is a rail carrying what stands on it; an arm is checked by *torque*, because what fails is a joint holding
+// a load out at the end of a link, and a joint that holds 1.2 N·m does not care that the load is only half a kilogram
+// if it is half a kilogram 400 mm away.
+
+/** How a machine is put together. Not a list of machines — a list of the shapes a stack can take. */
+export type Arrangement =
+  /** a frame with slides stacked in it: the tool goes anywhere in a box */ | 'gantry'
+  /** one long slide, bracketed to a wall or a floor, with the tool riding it: the rail is the mobility */ | 'rail'
+  /** a chain of turn axes with links between them: reach by angles, checked by torque */ | 'arm'
+  /** the work turns under a fixed tool: a lathe, a wheel, a turntable */ | 'table';
+
+/** A link between two joints of an arm: a length of 2020 extrusion with a plate at each end. */
+export function armLink(mm: number): Unit {
+  return {
+    id: `arm-link-${mm}`, name: `a ${mm} mm link`, does: 'hold', range: 0,
+    of: [{ words: `extrusion 2020 ${Math.round(mm / 50) * 50}`, n: 1 }, { words: 'motorplate nema17 t4 aluminium', n: 2 },
+      { words: 'slotnut slot6 M5 hammer', n: 8 }, { words: 'bolt M5x12', n: 8 }],
+    carries: 20, lifts: 0, speed: 0, limit: 'a 2020 section in bending over its own length, which is far more than any joint here can hold out at its end',
+    box: [mm, 40, 40], says: `${mm} mm of 2020 extrusion with a motor plate bolted at each end`,
+    src: 'the extrusion\'s own section from the library; it is never what fails on an arm this size, the joint is',
+  };
+}
+
+/** The bracket that holds a rail to a wall or a floor, every 400 mm along it. */
+export function railMount(mm: number): Unit {
+  const n = Math.max(2, Math.round(mm / 400) + 1);
+  return {
+    id: `rail-mount-${mm}`, name: `${n} brackets along ${mm} mm`, does: 'hold', range: 0,
+    of: [{ words: 'angle 40x4 steel 500mm', n }, { words: 'bolt M8x30', n: n * 2 }, { words: 'slotnut slot6 M5 hammer', n: n * 2 }, { words: 'bolt M5x12', n: n * 2 }],
+    carries: 150, lifts: 0, speed: 0,
+    limit: `${n} steel angle brackets at 400 mm centres into a wall: what holds is the wall and its fixings, which is not something this can know`,
+    box: [mm, 60, 80], says: `${n} lengths of 40 × 4 steel angle at 400 mm centres, bolted through the wall and into the beam's slots`,
+    src: 'the angle\'s own section from the library; its spacing is the usual 400 mm stud pitch, and what the wall itself holds is said rather than claimed',
+  };
+}
+
+/** The ratios a turn axis is geared at, cheapest first: a GT2 pair does 3:1 easily, 5:1 and 10:1 with a bigger wheel,
+ *  and past that it wants a second stage. The composer takes the first that holds, which is why nothing here asserts a
+ *  joint's torque — it is chosen against the moment it actually has to hold. */
+const RATIOS = [3, 5, 10, 20, 50];
+
+/** An arm checked the way an arm fails: the moment at each joint with the arm straight out, against what that joint can
+ *  be geared to hold. Fully extended and horizontal is the worst case and the one people build and then discover. */
+export function armStack(reach: number, tools: Unit[], payloadKg = 0): { stages: Mounted[]; kg: number; refusals: string[]; gaps: string[]; joints: { at: string; needs: number; holds: number; ratio: number }[] } {
+  const refusals: string[] = [], gaps: string[] = [], joints: { at: string; needs: number; holds: number; ratio: number }[] = [];
+  const weigh = (u: Unit) => { const r = unitKg(u); gaps.push(...r.gaps); return r.kg; };
+  // upper arm and forearm: the usual split, longer nearer the base where the moment is worst
+  const L = [Math.round(reach * 0.55), Math.round(reach * 0.45)] as const;
+  const links = L.map((mm) => armLink(mm)), linkKg = links.map(weigh);
+  const toolKg = tools.reduce((a, t) => a + weigh(t), 0);
+  const endKg = toolKg + payloadKg;
+  const stages: Mounted[] = [];
+  // the moment at each joint, in metres, with everything beyond it held straight out
+  const need = (i: number): number => {
+    let nm = 0;
+    for (let j = i; j < L.length; j++) {
+      const toMid = L.slice(i, j).reduce((a, b) => a + b, 0) + L[j]! / 2;
+      nm += linkKg[j]! * 9.80665 * (toMid / 1000);
+    }
+    return nm + endKg * 9.80665 * (L.slice(i).reduce((a, b) => a + b, 0) / 1000);
+  };
+  const NAMES = ['the shoulder', 'the elbow'];
+  for (let i = 0; i < L.length; i++) {
+    const nm = need(i);
+    const ratio = RATIOS.find((r) => turnAxis(r).carries >= 0 && NEMA17_NM * r * 0.95 >= nm);
+    const got = ratio ? NEMA17_NM * ratio * 0.95 : NEMA17_NM * RATIOS[RATIOS.length - 1]! * 0.95;
+    const j = turnAxis(ratio ?? RATIOS[RATIOS.length - 1]!);
+    joints.push({ at: NAMES[i] ?? `joint ${i + 1}`, needs: +nm.toFixed(2), holds: +got.toFixed(2), ratio: ratio ?? RATIOS[RATIOS.length - 1]! });
+    const s: Mounted = { unit: { ...j, name: `${NAMES[i] ?? `joint ${i + 1}`}, geared ${ratio ?? RATIOS[RATIOS.length - 1]}:1` }, carrying: +nm.toFixed(2), inUnit: 'N·m', above: [...links.slice(i).map((l) => l.name), ...tools.map((t) => t.name)], ok: !!ratio };
+    if (!ratio) {
+      s.why = `${NAMES[i] ?? `joint ${i + 1}`} has to hold ${nm.toFixed(2)} N·m with the arm straight out and a NEMA 17 geared 50:1 by belt holds ${got.toFixed(2)}: shorten the link, take the load off with a counterbalance spring, or put a worm or cycloidal reducer there instead of a belt (which is where a cheap arm stops being cheap)`;
+      refusals.push(s.why);
+    }
+    stages.push(s, { unit: links[i]!, carrying: 0, above: [], ok: true });
+  }
+  for (const u of tools) {
+    const held = u.does === 'grip' ? payloadKg : 0, ok = u.does !== 'grip' || u.lifts >= payloadKg;
+    const s: Mounted = { unit: u, carrying: held, above: held ? ['what it is holding'] : [], ok };
+    if (!ok) { s.why = `it grips ${u.lifts} kg and was asked to hold ${payloadKg} kg (${u.limit})`; refusals.push(`${u.name}: ${s.why}`); }
+    stages.push(s);
+  }
+  const kg = linkKg.reduce((a, b) => a + b, 0) + toolKg + joints.reduce((a, j) => a + unitKg(turnAxis(j.ratio)).kg, 0) + payloadKg;
+  return { stages, kg: +kg.toFixed(2), refusals, gaps, joints };
 }

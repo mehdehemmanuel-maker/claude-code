@@ -110,7 +110,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Words to wants, figures, questions; designs from laws | `src/nexus/ask/conceive.ts` |
 | Where a make ask goes (designed, invented, a kit by the thing's own name, a place, the inventory's own) and what of it was not done, said beside what was made | `src/nexus/ask/route.ts` (`routeMake`; the forge's `perform` carries it out) |
 | Inventing what turns one thing into another (waves into drinking water, a weight's fall into light, a flame into cold): a chain of real effects whose ports mate (power as effort × flow, a bond graph's rule; shafts of one kind but not one speed matched by as many gear stages as the ratio needs), sized by conservation from its source, under the floor of the laws, each effect made of inventory parts or said as a gap; on a board as steps | `src/nexus/ask/invent.ts` (`invent`, `boardOfInvention`) |
-| Inventing a *machine* rather than a flow: what each unit of machine affords (slide, turn, grip, deposit, cut, see, think, hold), each unit a real assembly of library parts with what it carries, what it raises, what it costs and where that figure came from; an ask read into the affordances it needs and the size it needs them over; the units stacked so every stage carries the mass above it and a payload is checked against the grip that holds it; refused with the number that refuses it | `src/nexus/ask/machine.ts` (`UNITS` as `screwAxis`, `beltAxis`, `turnAxis`, `HOT_END`, `SPINDLE`, `GRIPPER`, `EYE`, `BRAIN`, `baseFrame`; `stack`, `composeMachine`, `machineText`, `machineWords`, `machineParts`), `npm run machine`; its bill thrown at a works by `machineBuild` in `src/nexus/works/builds.ts` |
+| Inventing a *machine* rather than a flow: what each unit of machine affords (slide, turn, grip, deposit, cut, see, think, hold), each unit a real assembly of library parts with what it carries, what it raises, what it costs and where that figure came from; an ask read into the affordances it needs, the size it needs them over, **and how it is arranged** (a gantry in a frame, one long rail, a jointed arm, a turning table — which the words say as much as the tool does); then checked the way that arrangement fails — a gantry and a rail by mass, so every stage carries what stands on it, an arm by *torque*, so every joint is geared to the moment it has to hold with the arm straight out; refused with the number that refuses it and a way out | `src/nexus/ask/machine.ts` (`UNITS` as `screwAxis`, `beltAxis`, `turnAxis`, `HOT_END`, `SPINDLE`, `GRIPPER`, `EYE`, `BRAIN`, `baseFrame`; `armLink`, `railMount`; `stack` for a gantry or a rail and `armStack` for an arm, `composeMachine`, `machineText`, `machineWords`, `machineParts`), `npm run machine`; its bill thrown at a works by `machineBuild` in `src/nexus/works/builds.ts` |
 | Generated structure for any intent; its body in space | `src/nexus/ask/generate.ts`, `src/nexus/substrate/realize-space.ts` |
 | Machines as real hardware from generated elements | `src/nexus/embody/` (`any.ts`, `tree.ts` load path, `stock.ts`) |
 | Real products and what each contains, down to elements | `src/nexus/parts/inventory.ts` (about 1,500 items) |
@@ -1116,6 +1116,24 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    flexible coupling came out *forged on the propane forge*, a GT2 pulley came out turned on the mini lathe (a tooth
    form is hobbed or moulded to the belt's pitch; a lathe turns the blank and cannot cut the form), and the MK8 block,
    heat sink, nozzle and drive gear each failed for a different reason when all four are the same $5 answer.
+   Then the arrangement (2026-10-11, the same round), because the first run of the inventor was a template wearing a
+   composer's clothes: every ask came out a frame with three slides stacked in it, whatever it asked for. The user's
+   own example was the giveaway — *"rails could be mobility robotic hands"* — and a rail-mounted hand is not a gantry.
+   So the arrangement comes out of the words too: "along a wall" is a rail, "reaches" is an arm, "lathe" or "wheel" is
+   a turning table, and anything that has to get anywhere in a box is a gantry. That changes which check even applies.
+   A gantry and a rail are checked by *mass*, because what fails is a rail carrying what stands on it. An arm is
+   checked by *torque*, because what fails is a joint holding a load out at the end of a link — and a joint that holds
+   1.2 N·m does not care that the load is half a kilogram if it is half a kilogram 400 mm away. So each joint is geared
+   against the moment it actually has to hold with the arm straight out (the worst case, and the one people build and
+   then discover): a 300 mm arm holding 1 kg gets a 10:1 shoulder, a 600 mm one gets 20:1 and turns at half the speed,
+   and a 1200 mm arm holding 3 kg is refused — "the shoulder has to hold 40.88 N·m straight out and a NEMA 17 geared
+   50:1 by belt holds 19.95: shorten the link, take the load off with a counterbalance spring, or put a worm or
+   cycloidal reducer there instead of a belt (which is where a cheap arm stops being cheap)". Nothing in that is
+   written down; the ratio is chosen from a ladder against the moment, which is why it can refuse honestly.
+   Three more faults of its own found by running it: a rail's length and an arm's reach are given by one number
+   ("along a wall 3000 mm", "reaches 600 mm") which the reader wanted two of and so defaulted to 300; a joint's load
+   was a moment being printed as kilograms (a stage now says which it is in, and a test asserts one is never printed as
+   the other); and a gripper refused on the arm path said "NO — undefined".
    Next: the room drawing every station from the library rather than as a stand-in (the Ender-3 is wired; the rest want
    their kinds, and the inventor's units are now the vocabulary to build them from), an invented machine stood in the
    room and judged blind, prices for the lines that still have none, working the three ratchets down by cause, and the

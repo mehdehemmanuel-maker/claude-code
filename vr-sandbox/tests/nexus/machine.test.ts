@@ -146,3 +146,58 @@ describe('words in the room', () => {
     expect(machineWords('show me the works')).toBeNull();
   });
 });
+
+describe('the arrangement comes out of the words too, not out of a default', () => {
+  it('"along a wall" is a rail, "reaches" is an arm, "lathe" is a table, and anything else is a gantry', () => {
+    expect(readMachine('a hand that moves along a wall 3000 mm').arrange).toBe('rail');
+    expect(readMachine('an arm that reaches 600 mm').arrange).toBe('arm');
+    expect(readMachine('a lathe that cuts 200x100').arrange).toBe('table');
+    expect(readMachine('a machine that prints 300x300').arrange).toBe('gantry');
+  });
+  it('a rail and an arm are given by one number, which the first run read as nothing', () => {
+    expect(readMachine('a hand that moves along a wall 3000 mm').mm[0]).toBe(3000);
+    expect(readMachine('an arm that reaches 600 mm and picks up 1kg').mm[0]).toBe(600);
+    // and a gantry still wants its three
+    expect(readMachine('a machine that prints 250x210x200').mm).toEqual([250, 210, 200]);
+  });
+  it('a rail puts the tool on one long slide on brackets, with no frame around it', () => {
+    const m = composeMachine('a robotic hand that moves along a wall 2000 mm and picks up 1 kg');
+    expect(m.arrange).toBe('rail');
+    expect(m.stages.map((s) => s.unit.id).join(' ')).toMatch(/rail-mount-2000/);
+    expect(m.stages.filter((s) => s.unit.does === 'slide')).toHaveLength(1);
+    expect(m.refusals).toEqual([]);
+  });
+});
+
+describe('an arm is checked by torque, because that is how an arm fails', () => {
+  it('each joint is geared to the moment it actually has to hold, not to a number written down', () => {
+    const near = composeMachine('an arm that reaches 300 mm and picks up 1kg');
+    const far = composeMachine('an arm that reaches 600 mm and picks up 1kg');
+    expect(near.joints![0]!.ratio).toBeLessThan(far.joints![0]!.ratio);
+    expect(far.joints![0]!.needs).toBeGreaterThan(near.joints![0]!.needs * 1.5);
+    for (const m of [near, far]) for (const j of m.joints!) expect(j.holds).toBeGreaterThanOrEqual(j.needs);
+  });
+  it('a reach a belt-geared NEMA 17 cannot hold is refused with both numbers and a way out', () => {
+    const m = composeMachine('an arm that reaches 1200 mm and picks up 3 kg');
+    const said = m.refusals.join(' ');
+    expect(said).toMatch(/the shoulder has to hold 40\.\d+ N·m/);
+    expect(said).toMatch(/counterbalance spring|cycloidal/);
+    expect(m.joints![0]!.holds).toBeLessThan(m.joints![0]!.needs);
+  });
+  it('a joint\'s load is reported in N·m and a stack\'s in kg: one is never printed as the other', () => {
+    const m = composeMachine('an arm that reaches 600 mm and picks up 1kg');
+    const joint = m.stages.find((s) => s.unit.does === 'turn')!;
+    expect(joint.inUnit).toBe('N·m');
+    expect(machineText(m)).toMatch(/carries [\d.]+ N·m/);
+    expect(composeMachine('a machine that prints 300x300').stages[0]!.inUnit).toBeUndefined();
+  });
+  it('the shoulder always has more to hold than the elbow', () => {
+    const j = composeMachine('an arm that reaches 800 mm and picks up 1kg').joints!;
+    expect(j[0]!.needs).toBeGreaterThan(j[1]!.needs);
+  });
+  it('a gripper that cannot hold the load says so on an arm as well as on a gantry', () => {
+    const m = composeMachine('an arm that reaches 400 mm and picks up 5 kg');
+    expect(m.refusals.join(' ')).toMatch(/grips 1\.5 kg and was asked to hold 5 kg/);
+    expect(m.refusals.join(' ')).not.toMatch(/undefined/);
+  });
+});
