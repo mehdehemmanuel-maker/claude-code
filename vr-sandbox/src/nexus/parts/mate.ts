@@ -436,7 +436,7 @@ export function mates(a: Part, b: Part): { fits: Mate[]; nearly: string[] } {
 // boxes of the whole tree. A face with its own part in front of it is an inside surface and mates with nothing.
 
 /** A flat face of a part, in the part's own frame: where it is, which way it looks out, and how big it is. */
-export interface Face { of: string; at: V3; n: V3; w: number; h: number; area: number }
+export interface Face { of: string; at: V3; n: V3; w: number; h: number; area: number; /** a turned face is a ring, not a rectangle: its inside and outside radii, about `at` along `n` */ round?: [number, number] }
 
 /** Whether a point is inside this closed profile, by counting the crossings of a ray. It is what says which way a
  *  segment's face looks out: step off the segment and if you are still inside the section, you stepped the wrong way. */
@@ -455,8 +455,13 @@ function inside(pts: [number, number][], x: number, y: number): boolean {
  *  a bearing, because every one of those is a prism or a turned profile - the third time running that the feature
  *  lived in the richer shape and not in the primitive whose name suggests it.
  *
- *  A turned profile's faces are still not read: a `lathe`'s flat annulus is a real seating face (it is what a bearing
- *  sits against) but its curved runs are not, and telling them apart is its own piece of work. */
+ *  A turned profile's flat faces are its own: a `lathe` is a closed profile of [radius, height] spun about y, so a run
+ *  of it at one height sweeps a flat ring - which is what a bearing sits against - and a run at one radius sweeps a
+ *  cylinder's wall, which is no face at all. So the flat runs are taken and the rest left, and a ring is reported as
+ *  one (`Face.round`) rather than flattened into a rectangle, because two rings meet over the ring they share and a
+ *  bearing seated on a shoulder is exactly that case. A ring's `at` is on its own axis, where a part seating on it
+ *  goes; what is in front of it is asked at its mean radius, because the axis of a ring is the one place the face is
+ *  not. */
 export function facesFrom(p: Part): Face[] {
   const nodes = layout(p), solids = nodes.filter((n) => n.p.shape && n.box);
   const out: Face[] = [];
@@ -467,7 +472,7 @@ export function facesFrom(p: Part): Face[] {
     const rot = new THREE.Matrix4().extractRotation(n.m), mid = new THREE.Vector3().setFromMatrixPosition(n.m);
     const world = (lx: number, ly: number, lz: number) => new THREE.Vector3(lx, ly, lz).applyMatrix4(rot);
     // each candidate in the solid's own frame: where its middle is, which way it looks, how big it is
-    const cands: { at: [number, number, number]; n: [number, number, number]; w: number; h: number }[] = [];
+    const cands: { at: [number, number, number]; n: [number, number, number]; w: number; h: number; round?: [number, number]; probe?: [number, number, number] }[] = [];
     if ('box' in sh) {
       const half = [sh.box[0] / 2, sh.box[1] / 2, sh.box[2] / 2];
       for (let i = 0; i < 3; i++) for (const sign of [1, -1]) {
@@ -489,15 +494,47 @@ export function facesFrom(p: Part): Face[] {
         if (inside(pts, mx + nx * 1e-6, my + ny * 1e-6)) { nx = -nx; ny = -ny; } // looked inwards: turn it round
         cands.push({ at: [mx, my, 0], n: [nx, ny, 0], w: len, h: L });
       }
+    } else if ('lathe' in sh) {
+      // a profile of [radius, height] spun about y: every run of it at one height is a flat ring
+      const pts = sh.lathe as [number, number][]; if (pts.length < 3) continue;
+      for (let i = 0; i < pts.length; i++) {
+        const [r0, y0] = pts[i]!, [r1, y1] = pts[(i + 1) % pts.length]!;
+        if (Math.abs(y1 - y0) > 1e-6 || Math.abs(r1 - r0) < 1e-6) continue; // sloped or vertical: a cone or a wall
+        const ri = Math.min(r0, r1), ro = Math.max(r0, r1), rm = (ri + ro) / 2, y = (y0 + y1) / 2;
+        const sign = inside(pts, rm, y + 1e-6) ? -1 : 1; // the material is above it, so the face looks down
+        const area = Math.PI * (ro * ro - ri * ri), side = Math.sqrt(area);
+        cands.push({ at: [0, y, 0], probe: [rm, y, 0], n: [0, sign, 0], w: side, h: side, round: [ri, ro] });
+      }
     } else continue;
     for (const c of cands) {
       const nn = world(...c.n).normalize(), at = mid.clone().add(world(...c.at));
-      const probe = at.clone().add(nn.clone().multiplyScalar(EPS));
+      const from = c.probe ? mid.clone().add(world(...c.probe)) : at;
+      const probe = from.clone().add(nn.clone().multiplyScalar(EPS));
       if (solids.some((m) => m !== n && !up.has(m) && m.box!.containsPoint(probe))) continue;
-      out.push({ of: n.p.name, at: [at.x, at.y, at.z], n: [nn.x, nn.y, nn.z], w: c.w, h: c.h, area: +(c.w * c.h).toFixed(9) });
+      out.push({ of: n.p.name, at: [at.x, at.y, at.z], n: [nn.x, nn.y, nn.z], w: c.w, h: c.h, area: +(c.w * c.h).toFixed(9), ...(c.round ? { round: c.round } : {}) });
     }
   }
-  return out.sort((a, b) => b.area - a.area);
+  return out.filter((f) => !inAWell(f, out)).sort((a, b) => b.area - a.area);
+}
+
+/** Whether this ring is the bottom of a well: something of its own part stands proud of its plane and reaches further
+ *  out than it does, so anything laid flat against the part is held off by that and never touches this. It is the one
+ *  thing the exposure probe cannot see, because what blocks a recessed face stands *beside* it and not over it, and
+ *  the first thing it caught is the thing it was written for - a 6205's nitrile seal is drawn 0.217 mm inside its own
+ *  ring faces, which is where a real 2RS seal sits, and it was coming out as the bearing's largest seating face.
+ *  Material proud *inside* a ring is no bar at all: that is a shoulder, and what seats on a shoulder has a bore for
+ *  what stands through it. (Rings only. A pocket's floor in a box or a rolled section is the same fault and is not
+ *  read yet, because a rectangle's span does not say which way round it lies.) */
+function inAWell(f: Face, all: Face[]): boolean {
+  const ring = f.round; if (!ring) return false;
+  return all.some((g) => {
+    if (g === f || !g.round) return false;
+    if (g.n[0] * f.n[0] + g.n[1] * f.n[1] + g.n[2] * f.n[2] < 0.999) return false; // not looking the same way
+    const d = [g.at[0] - f.at[0], g.at[1] - f.at[1], g.at[2] - f.at[2]] as const;
+    const along = d[0] * f.n[0] + d[1] * f.n[1] + d[2] * f.n[2];
+    const off = Math.hypot(d[0] - along * f.n[0], d[1] - along * f.n[1], d[2] - along * f.n[2]);
+    return off < 1e-5 && along > 1e-6 && g.round[1] > ring[1] + 1e-6; // on the same axis, proud of it, and wider
+  });
 }
 
 /** Whether these two faces can be brought together: they must look at each other, and the smaller must have somewhere
@@ -506,7 +543,11 @@ export function facesFrom(p: Part): Face[] {
 export function rests(a: Face, b: Face): { area: number; says: string } | string {
   const dot = a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2];
   if (dot > -0.999) return `${a.of} and ${b.of} do not look at each other: their faces are ${Math.round((Math.acos(Math.max(-1, Math.min(1, dot))) * 180) / Math.PI)}° apart, not opposed`;
-  const shared = Math.min(a.w, b.w) * Math.min(a.h, b.h);
+  // (two turned faces share the ring they have in common, which is exact and is how a bearing sits on a shoulder; a
+  //  rectangle and anything else share the smaller of each span, which is as much as two spans can say)
+  const ring = a.round && b.round ? Math.PI * (Math.min(a.round[1], b.round[1]) ** 2 - Math.max(a.round[0], b.round[0]) ** 2) : null;
+  const shared = ring !== null ? Math.max(0, ring) : Math.min(a.w, b.w) * Math.min(a.h, b.h);
+  if (ring !== null && ring <= 0) return `${a.of} and ${b.of} are rings that miss each other: ${(a.round![0] * 2000).toFixed(1)}–${(a.round![1] * 2000).toFixed(1)} mm against ${(b.round![0] * 2000).toFixed(1)}–${(b.round![1] * 2000).toFixed(1)} mm`;
   if (shared < Math.min(a.area, b.area) * 0.25) return `${a.of} on ${b.of} would share only ${(shared * 1e6).toFixed(0)} mm²: a corner, not a seat`;
   return { area: +shared.toFixed(9), says: `${a.of} rests on ${b.of} over ${(shared * 1e6).toFixed(0)} mm²` };
 }

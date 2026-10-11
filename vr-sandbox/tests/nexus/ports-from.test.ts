@@ -168,10 +168,44 @@ describe('flat faces, which is what a coincident mate is made of', () => {
     expect(f[0]!.w * 1000).toBeLessThan(20); // a flat between slots, not the whole 20 mm side
   }, 60000);
 
-  it('a turned part claims no faces, and says so by having none', () => {
-    // A lathe's flat annulus is a real seating face and its curved runs are not; telling them apart is its own piece
-    // of work, so a bearing offers nothing here rather than something wrong.
-    expect(facesFrom(use('bearing 6205'))).toEqual([]);
+  it('a turned part\'s faces are its flat rings, and its walls are not faces at all', () => {
+    // A lathe is a profile spun about y, so a run of it at one height sweeps a flat ring - which is what a bearing
+    // actually sits against - and a run at one radius sweeps a cylinder's wall, which is no face. A 6205 claimed
+    // nothing at all before this, which is the fourth time the feature lived in the richer shape.
+    const f = facesFrom(use('bearing 6205 2RS'));
+    expect(f.every((x) => x.round)).toBe(true);
+    expect(f.every((x) => Math.abs(x.n[1]) > 0.999)).toBe(true); // every one looks along its own axis: no wall is a face
+    const d = (x: { round?: [number, number] }) => [+(x.round![0] * 2000).toFixed(2), +(x.round![1] * 2000).toFixed(2)];
+    expect(f.map(d)).toEqual([[26, 33.95], [26, 33.95], [46.63, 51], [46.63, 51]]); // both rings, both ends, and nothing else
+  }, 60000);
+
+  it('a ring in a well is not a seat: a bearing seats on its rings, never on its seal', () => {
+    // The first thing the well rule caught is the thing it was written for. A 6205's nitrile seal is drawn 0.217 mm
+    // inside its own ring faces, where a real 2RS seal sits, and at 802 mm² it was coming out as the bearing's
+    // largest seating face - so a bearing laid on a motor's end bell "rested on its seal". The exposure probe cannot
+    // see this, because what holds a recessed face off stands beside it, not over it.
+    const f = facesFrom(use('bearing 6205 2RS'));
+    expect(f.some((x) => /seal/.test(x.of))).toBe(false);
+    expect(facesFrom(use('bearing 625 ZZ')).some((x) => /shield/.test(x.of))).toBe(false); // a steel shield, same well
+    const on = mates(use('bearing 6205 2RS'), use('stepper nema17 40')).fits.filter((x) => x.how === 'resting');
+    expect(on.length).toBeGreaterThan(0);
+    expect(on.every((x) => !/seal/.test(x.says))).toBe(true);
+  }, 60000);
+
+  it('two rings meet over the ring they share, and rings that miss say so', () => {
+    // A rectangle's spans can only say the smaller of each; two turned faces share exactly the ring they have in
+    // common, which is how a bearing sits on a shoulder, so that is what is worked out.
+    const a = facesFrom(use('bearing 6205 2RS')), b = facesFrom(use('bearing 625 ZZ'));
+    const face = (f: typeof a[number]) => ({ ...f, n: [-f.n[0], -f.n[1], -f.n[2]] as [number, number, number] });
+    expect(rests(a[0]!, face(a[0]!))).toMatchObject({ area: a[0]!.area }); // a 6205 on a 6205: its own ring, exactly
+    expect(rests(a[0]!, face(b[0]!))).toMatch(/rings that miss each other: 26\.0–34\.0 mm against 6\.0–8\.6 mm/);
+    expect(mates(use('bearing 6205 2RS'), use('bearing 625 ZZ')).fits).toEqual([]); // and so nothing between them rests
+  }, 60000);
+
+  it('a nut rests on a screw\'s head as well as threading onto it', () => {
+    const r = mates(use('nut M5'), use('screw M5x20'));
+    expect(r.fits.some((x) => x.how === 'threaded')).toBe(true);
+    expect(r.fits.some((x) => x.how === 'resting' && /hex nut rests on/.test(x.says))).toBe(true);
   }, 60000);
 
   it('faces must look at each other, and share more than a corner', () => {

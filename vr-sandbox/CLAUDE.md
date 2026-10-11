@@ -156,7 +156,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A cutaway draws a solid's section flat and hatched in its own colour (a shell's inside as it is) | `src/nexus/view/look.ts` (`cut`) |
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
 | How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
-| Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library ; and a port **read off the geometry** instead of declared, because a drilled pattern is already in the solids: a `Cut` is a hole with a place, a direction, a radius and a depth, and a ring or row of equal holes drilled the same way into one face *is* a bolt pattern. Coaxial cuts are one hole (a counterbore is a seat and the hole through it, not two patterns), two holes are the fewest that fix a turn, and what a hole takes is physical - a through hole passes the largest screw it clears, a hole at a thread's own nominal diameter is tapped for it | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`, `portsFrom`, `axesFrom`, `seat`, `seats`, `shaftsFrom`, `spindle`, `facesFrom`, `rests`, `mates`, `unnamedHoles`; kit `part` with "a + b"); `tests/nexus/ports-from.test.ts` |
+| Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library ; and a port **read off the geometry** instead of declared, because a drilled pattern is already in the solids: a `Cut` is a hole with a place, a direction, a radius and a depth, and a ring or row of equal holes drilled the same way into one face *is* a bolt pattern. Coaxial cuts are one hole (a counterbore is a seat and the hole through it, not two patterns), two holes are the fewest that fix a turn, and what a hole takes is physical - a through hole passes the largest screw it clears, a hole at a thread's own nominal diameter is tapped for it. A seating face is read the same way: a box's six, a rolled section's own profile's, and a turned profile's flat rings, each one only where it is free, and a ring in a well is no seat because what stands proud around it is hit first | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`, `portsFrom`, `axesFrom`, `seat`, `seats`, `shaftsFrom`, `spindle`, `facesFrom`, `inAWell`, `rests`, `mates`, `unnamedHoles`; kit `part` with "a + b"); `tests/nexus/ports-from.test.ts` |
 | The robot that runs the works: the rails it rides (one rail serves the two rows facing its aisle and no more, so the number of rails a shop wants is what says whether a rail or a floor robot is the cheap answer), which stations each puts within its arm's reach, the edge between what an operation needs of a pair of hands and what this robot's hands are (a port and a grip load a machine, start it and take the part out; they do not strike an arc, pour 700 °C metal or throw clay — each refused with the reason, which is what names the next tool to buy), the basket for everything the plan says to buy (each line the cheapest real offer with its seller, its page, the figure it showed and the day it was seen, split by seller because shipping is), and the division of a job into the robot's minutes and yours. It says plainly that it cannot pay for anything | `src/nexus/works/tend.ts` (`tendWorks`, `aislesOf`, `offRail`, `tends` returning a `Tended` verdict that says *what kind* of why it is, `TOOL_FOR`, `orderFor`, `runWorks`, `runText`, `tendWords`), `npm run works -- tend [build]` |
 | Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (seventeen files: `plan.ts` routes, `designer.ts` checks a bill against its own geometry, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
 | An invention sketched before it is designed: labelled blocks (box, disc, can, bar, plate) and the component library's own parts where the plan knows which, pins between them for what drives, carries or feeds what, read from four kinds of text line; stood in the room and taken apart like anything else, weighed, its envelope said, and turned into a bill a works can route — where a block that says what fraction of itself is really there is an assembly and not yet a part | `src/nexus/ask/sketch.ts` (`sketchOf`, `sketchParts`, `sketchText`, `sketchWeighs`, `sketchSpan`, `planWords`), `billOfSketch` in `src/nexus/works/builds.ts`, `npm run plan` |
@@ -1848,8 +1848,27 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    square, and a 2040's faces are 13.8 mm wide, not 20, because a T-slot's outer surface is interrupted by its slots
    and each flat run is a face of its own. **Three rounds running the feature that mattered was in the richer shape
    and not in the primitive whose name suggests it** (bores in `lathe` not `Cut`, shafts in `lathe` not `cyl`, faces
-   in `prism` not `box`). A turned profile's faces are still not read and say so by their absence: a `lathe`'s flat
-   annulus is a real seating face and its curved runs are not, and telling them apart is its own piece of work.
+   in `prism` not `box`).
+   Turned faces, the fourth (2026-10-11), and the lesson a fourth time: a `lathe` is a profile of [radius, height]
+   spun about y, so a run of it at one height sweeps a flat ring - which is what a bearing actually sits against - and
+   a run at one radius sweeps a cylinder's wall, which is no face at all. A 6205 claimed *nothing* before this and now
+   claims exactly four: both ring faces at both ends, ⌀46.63-51 outside and ⌀26-33.95 inside, which is what a bearing
+   is clamped on. A ring is reported as a ring (`Face.round`) and not flattened into a rectangle, because two rings
+   meet over the ring they have in common and that is exact where two spans can only say the smaller of each: a 6205
+   on a 6205 shares its own 375 mm², and a 6205 on a 625 is refused with both diameters rather than given a number.
+   With them, a nut rests on a screw's head as well as threading onto it, and a bearing rests on a motor's end bell -
+   mates the library could not express a round ago.
+   And the fault it found is the general one, and the first thing the rule written for it caught: **a ring in a well
+   is not a seat.** A 6205's nitrile seal is drawn 0.217 mm inside its own ring faces, which is where a real 2RS seal
+   sits, and at 802 mm² it came out as the bearing's *largest* seating face - so a bearing laid on a motor's end bell
+   rested on its seal. The exposure probe cannot see this, because what holds a recessed face off stands *beside* it
+   and not over it, so nothing is in front of it to find. A face is therefore a seat only where nothing of its own
+   part stands proud of its plane and reaches further out than it does; material proud *inside* a ring is no bar at
+   all, because that is a shoulder, and what seats on a shoulder has a bore for what stands through it. A 625's steel
+   shield is 0.051 mm in and goes the same way, which is why the rule is geometric and not about what a seal is made
+   of. Still not read, and said by their absence: a pocket's floor in a box or a rolled section is the same fault
+   (a rectangle's span does not say which way round it lies), and a screw's head reads as a full disc because its hex
+   socket is a `Cut` and not part of the turned profile.
    One fault found and *not* fixed in that round, recorded because it is the kind this file exists for: **a glued
    parameter was silently ignored**. `use('rail MGN12 length 240')` is a 240 mm rail, but
    `use('rail MGN12 length240')` and `use('rail MGN12 L240')` were both the family's 400 mm default - the words asked
@@ -1883,10 +1902,10 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    family reads a width as "6mm") and `sheet aluminium t3` (as "2mm"). Teaching each family a second spelling of its
    own sizes is the per-family fiddling the one central rule exists to avoid, and a refusal that says how to write it
    is not a silent stand-in.
-   Next on this, in order: a `lathe`'s flat annulus as a seating face; the
-   degrees-of-freedom solver, after which concentric, tangent, gear, screw and slot are cheap additions to one
-   mechanism instead of twenty special cases; then `critic.ts` reading `mates`, so a contract is checked against the
-   geometry rather than against contact alone.
+   Next on this, in order: the degrees-of-freedom solver, after which concentric, tangent, gear, screw and slot are
+   cheap additions to one mechanism instead of twenty special cases; then `critic.ts` reading `mates`, so a contract
+   is checked against the geometry rather than against contact alone; and a pocket's floor in a box or a rolled
+   section judged by the same well rule the rings now get.
    What a parts API has that this did not, added as fields rather than waited for (2026-10-11). Going through Nexar's
    own part model against ours, six things it carries were genuinely missing and each changes a build pack: the maker
    and its own part number (a seller's product title is not an identity - two sellers write the same part three ways -
