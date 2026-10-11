@@ -21,7 +21,7 @@
 // Every panel is named by what it is for (the arch of the front left wheel, the hood), never by its place in a list,
 // so changing a figure re-makes the same panels: there is no naming to break when the shape changes.
 
-import { curvatures, curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from '../parts/surface';
+import { curvatures, curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, uAt, type Curve, type Patch, type Surface, type UV, type V3 } from '../parts/surface';
 import type { Part } from '../parts/kits';
 import type { Lines } from './machines';
 
@@ -196,10 +196,6 @@ function stationsOf(x0: number, x1: number, step: number, ends: { at0?: number; 
 }
 
 const unit3 = (d: V3): V3 => { const l = Math.hypot(d[0], d[1], d[2]) || 1; return [d[0] / l, d[1] / l, d[2] / l]; };
-/** The u at which a skin's line of constant v reaches x (its stations run along x, so x rises with u). */
-export function uAt(s: Surface, x: number, v = 0.5): number {
-  let lo = 0, hi = 1; for (let k = 0; k < 32; k++) { const m = (lo + hi) / 2; if (pointAt(s, m, v)[0] < x) lo = m; else hi = m; } return (lo + hi) / 2;
-}
 
 /** The body made: its skins, cut into panels. (The same figures under the same rules make the same body, so a car park
  *  of one model makes it once; each caller gets its own parts, the skins themselves shared, as they are never changed.) */
@@ -218,12 +214,9 @@ const merged = <T>(a: T, b: Deep<T> | undefined): T => { if (!b) return a; const
 export function bodyPanels(b0: BodyPlan, r0: BodyRules = BODY_RULES): Part[] {
   const r = trial ? merged(r0, trial.rules) : r0, b = trial?.lines ? { ...b0, lines: { ...b0.lines, ...trial.lines } } : b0;
   const key = JSON.stringify([{ ...b, color: 0 }, r]), kept = made.get(key); if (kept) return kept.map(copy(b.color));
-  // (then looked at as made: its hood or deck, crowned from the side's top edge, can stand a few millimetres short of what
-  // is under it near that edge, as a strut's tower; where it does, the lid alone is crowned more there, by what is
-  // missing over the share of its crown that reaches that far out (about 40%), and the body made again, up to three
-  // times: the creator's own check, as its liner's is; the side skin, and the doors on it, are not touched)
-  let b2: BodyPlan = { ...b, color: UNPAINTED }, out = makeBody(b2, r);
-  for (let k = 0; k < 3; k++) { const short = lidShort(out, b2); if (!short.some((d) => d > 0.001)) break; b2 = { ...b2, lift: [...(b2.lift ?? []), ...(b2.inside ?? []).flatMap((q, i) => (short[i]! > 0.001 ? [{ x0: q.min[0], x1: q.max[0], dy: (short[i]! + 0.004) / 0.4 }] : []))] }; out = makeBody(b2, r); }
+  // (the maker's own check on a lid short of what is under it is the body's own now: makeBody crowns the lid again, where
+  //  it used to be the whole body made again here)
+  const out = makeBody({ ...b, color: UNPAINTED }, r);
   if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy(b.color));
 }
 /** The nearest point on a ruled strip (a recess's wall: a degree-1 net of rows of two points), and how far: its quads
@@ -523,6 +516,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     out.push(seam('rear bumper shut line', 0, uB1, vAt(uMidT, yB), 'where its rear bumper cover meets the quarters (typical)'));
   }
   // ---- the hood and the deck lid: from the side's top edge to the middle, crowned ----
+  let lift = b.lift ?? [];
   const lid = (name: string, x0: number, x1: number, crown0: number, says: string, meets: string): Part | null => {
     if (x1 - x0 < 0.08) return null;
     // built on the side skin's own top edge, cut from it between its ends (so the two share their knots and meet along
@@ -536,18 +530,29 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
       // (its crown easing off toward the face it ends at, to 40% of it at the edge: a hood is crowned across, and flattens
       // to its leading edge rather than doming over it)
       // (and crowned more where its maker's check found it short over something under it, easing in and out over 150 mm)
-      const liftAt = (x: number) => (b.lift ?? []).reduce((a, l) => { const d = x < l.x0 ? l.x0 - x : x > l.x1 ? x - l.x1 : 0; return a + (d >= 0.15 ? 0 : l.dy * (0.5 + 0.5 * Math.cos((Math.PI * d) / 0.15))); }, 0);
+      const liftAt = (x: number) => lift.reduce((a, l) => { const d = x < l.x0 ? l.x0 - x : x > l.x1 ? x - l.x1 : 0; return a + (d >= 0.15 ? 0 : l.dy * (0.5 + 0.5 * Math.cos((Math.PI * d) / 0.15))); }, 0);
       const crown = crown0 * (1 - 0.6 * Math.max(ease(ln.xN - E[0], 0.35), ease(E[0] - ln.xT, 0.25))) + liftAt(E[0]);
       const t = unit3(d), P0: V3 = [E[0], E[1] + t[1] * r.gap, Math.max(0, E[2] + t[2] * r.gap)], zt = P0[2], y = P0[1], k = Math.min(2, (zt * 0.25) / (Math.hypot(...d) || 1), Math.max(0, crown * 0.8) / Math.max(1e-6, Math.abs(d[1]) || 1e-6));
       return [P0, [E[0], y + d[1] * k, zt + d[2] * k], [E[0], y + crown, zt * 0.5], [E[0], y + crown, zt * 0.16], [E[0], y + crown, 0]];
     }, { mirror: true });
     return paint(name, { s }, { says, meets: [{ part: meets, edge: 'b0', kind: 'G1', why: `a highlight runs off the ${meets}'s top onto the ${name} across their shut line` }, { part: name, edge: 'b1', kind: 'mirror', why: 'it crosses its middle in one tangent plane, or a ridge runs down it' }] });
   };
-  const hood = lid('hood', ln.xCowl + r.gap, ln.xN, r.crown.hood, 'its hood: pressed steel about 0.7 mm, crowned about 30 mm (typical), its edges in one tangent plane with the fenders\' tops', doors ? 'front fender' : 'body sides');
-  if (hood) out.push(hood);
-  if (deckLid) { const deck = lid('deck lid', ln.xT, xCab - r.gap, r.crown.deck, 'its deck lid (or tailgate): pressed steel (typical)', doors ? 'rear quarter panel' : 'body sides'); if (deck) out.push(deck); }
+  const lids = (): Part[] => [lid('hood', ln.xCowl + r.gap, ln.xN, r.crown.hood, 'its hood: pressed steel about 0.7 mm, crowned about 30 mm (typical), its edges in one tangent plane with the fenders\' tops', doors ? 'front fender' : 'body sides'),
+    deckLid ? lid('deck lid', ln.xT, xCab - r.gap, r.crown.deck, 'its deck lid (or tailgate): pressed steel (typical)', doors ? 'rear quarter panel' : 'body sides') : null].filter((p): p is Part => !!p);
+  // and looked at as made: a lid crowned from the side's top edge can stand a few millimetres short of what is under it
+  // (a strut's tower under a hood), and where it does it is crowned more there, by what is missing over the share of its
+  // crown that reaches that far out (about 40%), up to three times: the creator's own check. Nothing but a lid reads a
+  // lift, so nothing but the lids is made again; the whole body was, which made every car two bodies over
+  let lidParts = lids();
+  for (let k = 0; k < 3; k++) { const short = lidShort(lidParts, b); if (!short.some((d) => d > 0.001)) break;
+    lift = [...lift, ...(b.inside ?? []).flatMap((q, i) => (short[i]! > 0.001 ? [{ x0: q.min[0], x1: q.max[0], dy: (short[i]! + 0.004) / 0.4 }] : []))]; lidParts = lids(); }
+  out.push(...lidParts);
   // (the lids are made first, so a liner is held under them)
   const lidPts = out.filter((p) => (p.name === 'hood' || p.name === 'deck lid') && p.shape && 'surf' in p.shape).flatMap((p) => patchPoints((p.shape as { surf: Patch }).surf, 90, 40));
+  // (and in bins 20 mm wide along the car, so what a lid is at one x reads the three bins that can hold it rather than
+  //  every point of both lids: a tenth of the cost of making a car went on that scan)
+  const lidBins = new Map<number, V3[]>();
+  for (const q of lidPts) { const c = Math.floor(q[0] / 0.02), bn = lidBins.get(c); if (bn) bn.push(q); else lidBins.set(c, [q]); }
   // ---- each wheelhouse liner: from the arch's lip in past the tyre's inner face, as far out at each depth as the sweep is ----
   for (const a of arches) {
     const pts = a.line.filter((q) => q[1] > 0.0005).map((q) => pointAt(side, q[0], q[1])); if (pts.length < 4) continue;
@@ -575,7 +580,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     const skinOver = (x: number, z: number) => { const u = U(x); for (let j = 0; j <= 48; j++) { const v = 1 - j / 48, P = pointAt(side, u, v); if (P[1] < w.y) break; if (P[2] >= z + 0.004) return j === 0 ? edgeY(x) : P[1]; } return edgeY(x); };
     const capMemo = new Map<number, number>();
     // (and under the hood or the deck lid over it, which can dip under the skin's top edge where the skin rolls over)
-    const lidY = (x: number, z: number) => { let y = Infinity; for (const q of lidPts) if (Math.abs(q[0] - x) < 0.02 && Math.abs(Math.abs(q[2]) - Math.abs(z)) < 0.02 && q[1] < y) y = q[1]; return y; };
+    const lidY = (x: number, z: number) => { let y = Infinity; const c = Math.floor(x / 0.02); for (let d = -1; d <= 1; d++) for (const q of lidBins.get(c + d) ?? []) if (Math.abs(q[0] - x) < 0.02 && Math.abs(Math.abs(q[2]) - Math.abs(z)) < 0.02 && q[1] < y) y = q[1]; return y; };
     const capR = (n: number, k = 1) => { const id = n * K + k, c0 = capMemo.get(id); if (c0 !== undefined) return c0; const sn = Math.sin(ang[n]!), cs = Math.cos(ang[n]!); let r2 = Infinity;
       if (sn > 0.2) { r2 = (topY[n]! - 0.015 - w.y) / sn; for (let it = 0; it < 4; it++) { const x = w.x + cs * r2, z = k >= 2 ? zOf(n, k) : pts[n]![2], yc = Math.min(k >= 2 ? Math.min(edgeY(x), skinOver(x, z)) : edgeY(x), lidY(x, z)) - 0.015; r2 = (yc - w.y) / sn; } }
       capMemo.set(id, r2); return r2; }, radOf = (n: number, k: number) => Math.min(rad[n]![k]!, Math.max(rad[n]![0]!, capR(n, k)));

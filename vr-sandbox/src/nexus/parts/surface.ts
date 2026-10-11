@@ -100,6 +100,29 @@ export function pointAt(s: Surface, u: number, v: number): V3 {
   for (let a = 0; a <= k.p; a++) for (let b = 0; b <= k.q; b++) { const r = iu - k.p + a, c = iv - k.q + b, w = (s.w?.[r]?.[c] ?? 1) * Nu[a]! * Nv[b]!, P = s.net[r]![c]!; x += P[0] * w; y += P[1] * w; z += P[2] * w; W += w; }
   return [x / W, y / W, z / W];
 }
+/** Where a skin's line of constant v stands at each of 64 u's: its x rises with u, so this is the table its inverse is
+ *  read from, made once per skin and line and kept with the skin. */
+const stations = new WeakMap<Surface, Map<number, number[]>>();
+/** The u at which a skin's line of constant v reaches x (its stations run along x, so x rises with u). The station the x
+ *  falls between is found in that table, costing no surface at all, and the u inside it by false position, which closes
+ *  on it in three or four points where halving the span took thirty-two: a body's panels ask this of its skins tens of
+ *  thousands of times, and it was a quarter of the whole cost of making a car. */
+export function uAt(s: Surface, x: number, v = 0.5): number {
+  let byV = stations.get(s); if (!byV) stations.set(s, (byV = new Map()));
+  let xs = byV.get(v);
+  if (!xs) { xs = []; for (let i = 0; i <= 64; i++) xs.push(pointAt(s, i / 64, v)[0]); byV.set(v, xs); }
+  if (xs[0]! >= x) return 0; if (xs[64]! < x) return 1;
+  let i = 0, j = 64; while (j - i > 1) { const m = (i + j) >> 1; if (xs[m]! < x) i = m; else j = m; }
+  let a = i / 64, b = j / 64, fa = xs[i]! - x, fb = xs[j]! - x;
+  // (false position, with every third step the middle of the span, so the span always closes however the skin bends)
+  for (let k = 0; b - a > 1e-10; k++) {
+    const t = k % 3 === 2 || !(fa < fb) ? 0.5 : Math.min(0.9, Math.max(0.1, fa / (fa - fb)));
+    const m = a + (b - a) * t, fm = pointAt(s, m, v)[0] - x;
+    if (fm < 0) { a = m; fa = fm; } else { b = m; fb = fm; }
+  }
+  return (a + b) / 2;
+}
+
 /** Mean and Gaussian curvature at a point, from the first (E, F, G) and second (L, M, N) fundamental forms. */
 export function curvatures(sp: SurfacePoint): { H: number; K: number; k1: number; k2: number } {
   const E = dot(sp.du, sp.du), F = dot(sp.du, sp.dv), G = dot(sp.dv, sp.dv), L = dot(sp.duu, sp.n), M = dot(sp.duv, sp.n), N = dot(sp.dvv, sp.n), d = E * G - F * F || 1e-12;
