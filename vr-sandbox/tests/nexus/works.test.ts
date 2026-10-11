@@ -683,14 +683,17 @@ describe('a self-build drawn from its own bill', () => {
     for (const b of BUILDS) {
       if (!b.lay) continue;
       const parts = builtParts(b);
-      let n = 0;
+      let n = 0, drawn = 0;
       for (const place of b.lay) {
         const line = b.lines.find((l) => l.name.toLowerCase().startsWith(place.line.toLowerCase()));
         expect(line, `${b.id}: nothing in the bill is called "${place.line}"`).toBeDefined();
-        if (line?.size) n += place.at.length;
-        expect(place.at.length, `${b.id}: ${place.line} is placed more often than the bill has`).toBeLessThanOrEqual(line!.n);
+        // a loop's two places are the two pulleys of one belt, not two belts
+        const copies = place.bent === 'loop' ? 1 : place.at.length;
+        if (line?.size) { n += copies; drawn += place.bent === 'loop' ? 4 : copies; }   // a loop is one belt in four pieces
+        expect(copies, `${b.id}: ${place.line} is placed more often than the bill has`).toBeLessThanOrEqual(line!.n);
       }
-      expect(parts).toHaveLength(n);
+      expect(parts).toHaveLength(drawn);
+      expect(n, 'and every one of them is a copy the bill buys').toBeGreaterThan(0);
       for (const p of parts) expect(p.says).toMatch(/from this build's own bill of materials/);
     }
   });
@@ -822,6 +825,22 @@ describe('a bill whose numbers are derived and not typed', () => {
     expect(designFaults(taller).filter((f) => f.kind === 'volume')).toEqual([]);
     expect(wheel.lines.find((l) => l.name.startsWith('frame leg'))!.size![2], 'the original is untouched').toBe(600);
     expect(taller.src).toMatch(/edited/);
+  });
+  it('a belt is drawn as the loop it is, and four pieces weigh one belt', () => {
+    // two unequal pulleys make a stadium, not a circle: a ring stood off both and passed through the motor between
+    // them, which is what a blind judge saw as "a bucket whose hoop handle passes through its wall"
+    const b = BUILDS.find((x) => x.id === 'wheel-potters')!;
+    const belt = builtParts(b).filter((p) => /belt/.test(p.name));
+    expect(belt.length, 'two runs and the wrap round each pulley').toBe(4);
+    const kg = belt.reduce((s, p) => s + ((p as { kg?: number }).kg ?? 0), 0);
+    expect(kg, 'the bill buys one belt and the drawing weighs one belt').toBeCloseTo(lineKg(b.lines.find((l) => l.name.startsWith('belt'))!)!, 3);
+    const runs = belt.filter((p) => /run/.test(p.name));
+    for (const r of runs) {                                            // C = 260, R - r = 90: the tangent is 244 mm
+      expect((r.shape as { box: [number, number, number] }).box[2]).toBeCloseTo(0.244, 3);
+      expect(r.at![1], 'in the belt plane').toBeCloseTo(0.40, 3);
+    }
+    const rings = belt.filter((p) => /round the/.test(p.name));
+    expect(rings.map((r) => +r.at![0]!.toFixed(2)).sort(), 'one at each pulley').toEqual([0, 0.26]);
   });
   it('a section volume is the section, and a formed part is bounded by its box', () => {
     expect(materialIn({ name: 'x, 40 × 40 × 2 box section', n: 1, mat: 'steel-low', size: [40, 40, 1000] })).toBeCloseTo(304, 0);

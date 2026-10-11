@@ -105,7 +105,8 @@ export function designFaults(b: Build): Fault[] {
     }
     for (const line of b.lines) {
       if (!line.size) continue;
-      const put = b.lay.filter((p) => lineFor(b, p.line) === line).reduce((s, p) => s + p.at.length, 0);
+      // a loop's two places are the two pulleys one belt runs over, not two belts
+      const put = b.lay.filter((p) => lineFor(b, p.line) === line).reduce((s, p) => s + (p.bent === 'loop' ? 1 : p.at.length), 0);
       if (put > line.n) f('place', `${put} of them are placed and the bill buys ${line.n}`, line.name);
     }
   }

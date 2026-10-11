@@ -40,7 +40,10 @@ export interface Build {
  *  author has come out drawn along z. A line with no `along` lies the way the library draws it: a box the way its
  *  size reads (x, y, then z), a round one standing up. */
 export interface Lay { line: string; at: V3[]; along?: V3; roll?: number;
-  /** a length of bar bent into a ring (a lifting ring, a hoop): drawn as the ring its own length makes */ bent?: 'ring' }
+  /** a belt or chain round the two pulleys its `at` names, each `wrap` its pitch radius in mm (`bent: 'loop'`) */
+  wrap?: [number, number];
+  /** a length of bar bent into a ring (a lifting ring, a hoop): drawn as the ring its own length makes, or `loop`,
+   *  a belt round two pulleys: two straight runs on the common tangents and the wrap round each */ bent?: 'ring' | 'loop' }
 
 /** The turn that points a part's length along `d` and rolls it by `roll` about that length, as the three angles
  *  `Part.rot` is applied with (three.js Euler XYZ). `from` is which of the part's own axes its length already runs
@@ -366,7 +369,7 @@ export const BUILDS: Build[] = [
       { line: 'pulley, 240', at: [[0, 0.40, 0]], along: [0, 1, 0] },
       { line: 'motor', at: [[0.26, 0.28, 0]], along: [0, 1, 0] },
       { line: 'pulley, 60', at: [[0.26, 0.40, 0]], along: [0, 1, 0] },
-      { line: 'belt', at: [[0.13, 0.40, 0]], bent: 'ring', along: [0, 1, 0] },
+      { line: 'belt', at: [[0, 0.40, 0], [0.26, 0.40, 0]], bent: 'loop', wrap: [120, 30], along: [0, 1, 0] },
       // the head stands clear of the pan's rim, or the pan is a drum with a lid and not a trough you wash a hand in
       { line: 'splash pan', at: [[0, 0.645, 0]], along: [0, 1, 0] },
       { line: 'head', at: [[0, 0.7125, 0]], along: [0, 1, 0] },
@@ -522,6 +525,45 @@ export function sectionOf(line: PartLine): { prism: { pts: [number, number][]; h
   return null;
 }
 
+/** A belt (or chain) round two pulleys, drawn as what it is: two straight runs on the pulleys' common external
+ *  tangents and the arc each one wraps. A ring was the first drawing of it and it is wrong in the way that matters —
+ *  two unequal pulleys make a stadium, not a circle, so the ring stood off both pulleys and passed through whatever
+ *  sat between them (a blind judge read a wheel's motor as "a bucket whose hoop handle passes through its wall").
+ *
+ *  The arithmetic is the belt's own: sinα = (R−r)/C tilts the tangent, each run is √(C²−(R−r)²) long, and the big
+ *  pulley wraps π+2α while the small one wraps π−2α. The wrap is drawn as a whole ring at each pulley, because a
+ *  belt on a pulley is a ring where you can see it; each piece carries only its own share of the bill's material, so
+ *  four pieces still weigh one belt. */
+export function loopParts(line: PartLine, place: Lay, look: { color: number; finish?: string }): Part[] {
+  const mm = 0.001, [p1, p2] = place.at as [V3, V3], wrap = place.wrap ?? [60, 60];
+  const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const mul = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
+  const unit = (v: V3): V3 => { const m = Math.hypot(...v) || 1; return mul(v, 1 / m); };
+  const cr = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const C = Math.hypot(...sub(p2, p1)), u = unit(sub(p2, p1)), axis = unit(place.along ?? [0, 1, 0]);
+  const perp = unit(cr(axis, u)), R = Math.max(wrap[0], wrap[1]) * mm, r = Math.min(wrap[0], wrap[1]) * mm;
+  const big = wrap[0] >= wrap[1] ? p1 : p2, small = wrap[0] >= wrap[1] ? p2 : p1;
+  const al = Math.asin(Math.min(1, (R - r) / Math.max(C, 1e-6))), run = Math.sqrt(Math.max(0, C * C - (R - r) ** 2));
+  const belt = 2 * run + R * (Math.PI + 2 * al) + r * (Math.PI - 2 * al);
+  const [w, th] = [line.size![0] * mm, line.size![1] * mm];
+  const kgOf = (share: number): number => ((line.cm3 ?? 0) * 1e-6 * (DENSITY[line.mat] ?? 0)) * (share / Math.max(belt, 1e-6));
+  const out: Part[] = [];
+  for (const s of [1, -1]) {
+    const n = add(mul(perp, Math.cos(al) * s), mul(u, Math.sin(al) * (wrap[0] >= wrap[1] ? 1 : -1)));
+    const t1 = add(big, mul(n, R)), t2 = add(small, mul(n, r));
+    out.push({ name: `${line.name} (run ${s > 0 ? 1 : 2} of 2)`, shape: { box: [th, w, run] }, at: mul(add(t1, t2), 0.5),
+      rot: layRot(unit(sub(t2, t1)), 0, 'z'), mat: line.mat, color: look.color, finish: look.finish, kg: kgOf(run),
+      says: `${line.name}: one of its two straight runs, ${Math.round(run / mm)} mm on the common tangent of a ${Math.round(R / mm * 2)} and a ${Math.round(r / mm * 2)} mm pulley ${Math.round(C / mm)} mm apart — from this build's own bill of materials.` } as Part);
+  }
+  for (const [c, rad, wrapped] of [[big, R, R * (Math.PI + 2 * al)], [small, r, r * (Math.PI - 2 * al)]] as [V3, number, number][]) {
+    out.push({ name: `${line.name} (round the ${Math.round(rad / mm * 2)} mm pulley)`, shape: { torus: [rad, th / 2] }, at: c,
+      rot: layRot(axis, 0, 'z'), mat: line.mat, color: look.color, finish: look.finish, kg: kgOf(wrapped),
+      says: `${line.name}: the ${Math.round((wrapped / rad) * 57.3)}° it wraps round the ${Math.round(rad / mm * 2)} mm pulley, drawn as the ring it is where it touches — from this build's own bill of materials.` } as Part);
+  }
+  return out;
+}
+
 /** The line a lay's words name: the closest match, never the first in the bill. A place called "bearing" matched the line
  *  "bearing plate, 6 mm steel sheet" because it came first in the bill, so a wheel's two bearings were drawn as two
  *  more plates. The closest is the *shortest* line the words still begin, because a lay names its line as
@@ -544,6 +586,7 @@ export function builtParts(b: Build): Part[] {
     const line = lineFor(b, place.line);
     if (!line?.size) continue;
     const [a, c, L] = line.size, look = BILL_LOOK[line.mat] ?? BILL_LOOK['steel-low']!;
+    if (place.bent === 'loop' && place.at.length === 2) { out.push(...loopParts(line, place, look)); continue; }
     place.at.forEach((at, i) => {
       const round = line.shape === 'round', cut = sectionOf(line);
       // a ring is a length of bar bent round: its own circumference says how wide it comes out

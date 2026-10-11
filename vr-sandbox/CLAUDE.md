@@ -1437,9 +1437,13 @@ In order; each through the breakdown queue, rendered, compared with its photos a
      connected to nothing". Two more rails carry it, and the bill buys ten rather than eight.
    • **The head sat on the pan's rim**, so the pan was a drum with a lid: "no recessed trough, no raised rim, the
      head is not sunk into it". The pan is 110 deep and bored 460 across, and the head stands clear above it.
-   What that judge still has, and it is honest: the belt is drawn as a ring where a belt over two unequal pulleys is a
-   stadium (a loop round two places is a general thing the library should draw once, for this and for the hovercraft's
-   drive); there are no weld beads, no feet, no levelling pads and no fasteners on any built station (the bolts are in
+   And the belt is drawn as a belt (`loopParts`, `bent: 'loop'` with the two pulleys' pitch radii): two straight runs
+   on the common external tangents and the arc each pulley wraps, which is the belt's own arithmetic — sinα = (R−r)/C
+   tilts the tangent, each run is √(C²−(R−r)²), the big pulley wraps π+2α and the small one π−2α. Each of the four
+   pieces carries its own share of the bill's material, so four pieces weigh one belt. A loop round two places is a
+   general thing (the hovercraft's lift-fan drive is the next one to take it), and the ring it replaces is the shape
+   that put the loop through the motor.
+   What that judge still has, and it is honest: there are no weld beads, no feet, no levelling pads and no fasteners on any built station (the bolts are in
    every bill and carry no size, so nothing draws them); and the head has no hub, bat pins or bolts where it meets its
    shaft.
    Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
