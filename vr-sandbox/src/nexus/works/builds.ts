@@ -231,6 +231,52 @@ export const BUILDS: Build[] = [
       { line: 'burner mount', at: [[0, 0.84, -0.09]], along: [0, 1, 0] },
       { line: 'burner mixing tube', at: [[0, 0.95, -0.09]], along: [0, 1, 0] },
     ] },
+  { id: 'kiln-brick', what: 'a small test kiln, made here',
+    src: 'the station\u2019s own self-build (stations.ts): a box of K23 insulating firebrick laid dry in an angle-iron '
+      + 'frame, its element in a groove cut with a router bit, run by a PID controller, a solid-state relay and a '
+      + 'type-K thermocouple. Every piece comes off a 229 \u00d7 114 \u00d7 64 brick or it cannot be sawn from one, and that '
+      + 'is what sets the size: three bricks laid flat across and one laid long make a 342 \u00d7 343 floor, a pinwheel '
+      + 'of whole bricks on edge round it leaves a 214 \u00d7 215 chamber, and two courses make it 228 high \u2014 10.5 '
+      + 'litres, 0.37 ft\u00b3. The element is the one number that is not a size: 1.8 kW at 120 V is 8.0 \u03a9, and 16 AWG '
+      + '(1.29 mm) Kanthal A-1 at 1.45 \u00b5\u03a9\u00b7m is 1.11 \u03a9/m, so it is 7.2 m of wire, coiled and laid in the groove. '
+      + 'It is a real fire risk \u2014 1.8 kW inside a brick box \u2014 which is why the station will not be counted until the '
+      + 'safety kit is in, and why the mains side of it is a person\u2019s work and not the robot\u2019s',
+    lines: [
+      { name: 'wall brick, 229 \u00d7 114 \u00d7 64 K23 insulating firebrick', n: 8, mat: 'refractory', size: [229, 114, 64], cm3: 1672 },
+      { name: 'wall offcut, sawn to 50 \u00d7 114 \u00d7 64', n: 8, mat: 'refractory', size: [50, 114, 64], cm3: 365 },
+      { name: 'floor and lid brick, 229 \u00d7 114 \u00d7 64 K23', n: 6, mat: 'refractory', size: [229, 114, 64], cm3: 1672 },
+      { name: 'floor and lid packer, sawn to 114 \u00d7 114 \u00d7 64', n: 6, mat: 'refractory', size: [114, 114, 64], cm3: 832 },
+      { name: 'frame upright, 25 \u00d7 25 \u00d7 3 angle', n: 4, mat: 'steel-low', size: [25, 25, 330], cm3: 47 },
+      { name: 'frame rail, 25 \u00d7 25 \u00d7 3 angle', n: 8, mat: 'steel-low', size: [25, 25, 350], cm3: 49 },
+      { name: 'element, 16 AWG Kanthal A-1 resistance wire, coiled', n: 1, mat: 'steel-high', size: [1.29, 1.29, 7210], cm3: 9, shape: 'round' },
+      { name: 'controller, PID with a type-K input', n: 1, mat: 'abs' },
+      { name: 'solid-state relay, 25 A on its heatsink', n: 1, mat: 'al-6061' },
+      { name: 'thermocouple, type K mineral-insulated 300 mm', n: 1, mat: 'steel-high' },
+      { name: 'control box, 1.5 mm steel sheet', n: 1, mat: 'steel-low', size: [150, 100, 80], cm3: 105 },
+      { name: 'mains lead and plug, 3 core 1.5 mm\u00b2', n: 1, mat: 'copper' },
+      { name: 'element terminal, M4 stainless post and nuts', n: 2, mat: 'steel-high' },
+      { name: 'lid handle, 10 mm round bar', n: 1, mat: 'steel-low', size: [10, 10, 220], cm3: 17, shape: 'round' },
+    ],
+    joins: [
+      { how: 'weld-mig', n: 12, mm: 100, says: 'the angle-iron frame welded at its corners: it carries nothing but the bricks\u2019 own weight and keeps them from spreading, which is the whole job of a frame round a dry-laid box' },
+      { how: 'fasten', n: 6, says: 'the control box bolted to the frame and its two element terminals through the back wall: nothing in the box is welded, because everything in it is replaced' },
+    ],
+    // laid as it is built: the floor first, then two courses of whole bricks in a pinwheel (each course turned the
+    // other way, so no joint runs through), then the lid. The element is not drawn: it is in a groove inside the
+    // chamber wall, which is where it is.
+    lay: [
+      { line: 'floor and lid brick', at: [[-0.114, 0.032, -0.057], [0, 0.032, -0.057], [0.114, 0.032, -0.057], [-0.114, 0.324, -0.057], [0, 0.324, -0.057], [0.114, 0.324, -0.057]], along: [0, 1, 0] },
+      { line: 'floor and lid packer', at: [[-0.114, 0.032, 0.1145], [0, 0.032, 0.1145], [0.114, 0.032, 0.1145], [-0.114, 0.324, 0.1145], [0, 0.324, 0.1145], [0.114, 0.324, 0.1145]], along: [0, 1, 0] },
+      { line: 'wall brick', at: [[-0.0565, 0.121, -0.1395], [0.0565, 0.121, 0.1395], [0.0565, 0.235, -0.1395], [-0.0565, 0.235, 0.1395]] },
+      { line: 'wall brick', at: [[0.1395, 0.121, 0.007], [-0.1395, 0.121, -0.007], [0.1395, 0.235, -0.007], [-0.1395, 0.235, 0.007]], along: [1, 0, 0] },
+      { line: 'wall offcut', at: [[0.0825, 0.121, -0.1395], [-0.0825, 0.121, 0.1395], [-0.0825, 0.235, -0.1395], [0.0825, 0.235, 0.1395]] },
+      { line: 'wall offcut', at: [[0.1395, 0.121, 0.1465], [-0.1395, 0.121, -0.1465], [0.1395, 0.235, -0.1465], [-0.1395, 0.235, 0.1465]], along: [1, 0, 0] },
+      { line: 'frame upright', at: [[-0.1735, 0.165, -0.174], [0.1735, 0.165, -0.174], [-0.1735, 0.165, 0.174], [0.1735, 0.165, 0.174]], along: [0, 1, 0] },
+      { line: 'frame rail', at: [[0, 0.012, -0.174], [0, 0.012, 0.174], [0, 0.345, -0.174], [0, 0.345, 0.174]], along: [1, 0, 0] },
+      { line: 'frame rail', at: [[-0.1735, 0.012, 0], [0.1735, 0.012, 0], [-0.1735, 0.345, 0], [0.1735, 0.345, 0]], along: [0, 0, 1] },
+      { line: 'control box', at: [[0.248, 0.18, 0]] },
+      { line: 'lid handle', at: [[0, 0.361, 0]], along: [1, 0, 0] },
+    ] },
   { id: 'wall', what: 'a garden wall, 6 m long and 1.2 m high',
     src: 'thrown at it on purpose: nothing below the plant touches concrete, so this is where the engine has to say so rather than make something up',
     lines: [
@@ -250,10 +296,20 @@ const MODELS: Record<string, MakerModel> = { ender3: ENDER3, voron24: VORON24 };
 export function jobForModel(model: 'ender3' | 'voron24', ids: string[], state?: WorksState): Job {
   const m = MODELS[model]!, bill = billOf(m), lines: PartLine[] = [];
   for (const [words, n] of Object.entries(bill.words)) {
-    const mat = /extrusion/.test(words) ? 'al-6061' : /bearing|screw|nut|washer|rail|pulley|belt|stepper|spring/.test(words) ? 'steel-low' : 'al-6061';
-    lines.push({ name: words, n, mat });
+    // the library knows every one of these parts by these very words, so its own size, material and volume are what
+    // the line carries. Guessing the material from the spelling and leaving the size off meant the router worked on
+    // an invented 60 \u00d7 60 \u00d7 30 block for all hundred-odd lines, and every "share of a printer this works could
+    // make" ever printed was that fiction added up.
+    const g = component(words);
+    if (typeof g === 'string') { lines.push({ name: words, n, mat: /extrusion/.test(words) ? 'al-6061' : 'steel-low' }); continue; }
+    const of = madeOf(g.part), size = g.item?.size;
+    lines.push({ name: words, n, mat: of.mat, ...(size ? { size: [...size] as [number, number, number] } : {}), ...(of.cm3 > 0 ? { cm3: of.cm3 } : {}) });
   }
-  for (const [name, n] of Object.entries(bill.boxed)) lines.push({ name, n, mat: boxedAs(name).mat });
+  for (const [name, n] of Object.entries(bill.boxed)) {
+    // the model drew it, so its size is known even where its name is not a library word
+    const s = bill.size[name], b = boxedAs(name);
+    lines.push({ name, n, mat: b.mat, ...(s ? { size: s } : {}), ...(s && b.fill > 0 ? { cm3: +((s[0] * s[1] * s[2] * Math.min(1, b.fill)) / 1000).toFixed(1) } : {}) });
+  }
   const fasteners = Object.entries(bill.words).filter(([w]) => /screw|nut|bolt|washer/.test(w)).reduce((a, [, n]) => a + n, 0);
   return planJob(m.name, lines, ids, [{ how: 'fasten', n: Math.max(1, fasteners), says: 'a printer is almost entirely fasteners into extrusion and printed parts: that is what makes it buildable at a kitchen table' }], state);
 }

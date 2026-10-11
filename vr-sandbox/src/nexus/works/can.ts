@@ -58,6 +58,9 @@ export interface Want {
   /** the least Cpk worth starting: 1.0 is three sigma, 0.5 is about one part in seven scrapped. Default 0.5, because
    *  a cheap works does hold a tight tolerance by making spares and measuring every one, and refusing that outright
    *  was the engine being prissier than a real shop */ minCpk?: number;
+  /** processes not to offer: ones already asked and refused by their own rules (a pocket deeper than the
+   *  cutter's stickout). Without it, a part one process refuses is reported as impossible while another makes it. */
+  not?: string[];
 }
 export interface Verdict {
   ok: boolean; by?: { station: Station; process: Process }; minutes?: number;
@@ -71,7 +74,7 @@ const canMakeMemo = new Map<string, Verdict>();
 export function canMake(ids: string[], w: Want): Verdict {
   // memoised: planJob asks this once a line, worksUnder asks it never, but `worksUnder` scores a hundred candidate
   // sets and the tests throw six builds at five works, so the same question is asked thousands of times
-  const key = `${ids.join(',')}|${w.material}|${w.size.join('x')}|${w.tol ?? ''}|${w.feature ?? ''}|${w.family ?? ''}|${w.shape ?? ''}|${w.cm3 ?? ''}|${w.n ?? ''}|${w.anyRole ? 1 : 0}|${w.minCpk ?? ''}|${w.state ? JSON.stringify(w.state.seen) : ''}`;
+  const key = `${ids.join(',')}|${w.material}|${w.size.join('x')}|${w.tol ?? ''}|${w.feature ?? ''}|${w.family ?? ''}|${w.shape ?? ''}|${w.cm3 ?? ''}|${w.n ?? ''}|${w.not?.join('+') ?? ''}|${w.anyRole ? 1 : 0}|${w.minCpk ?? ''}|${w.state ? JSON.stringify(w.state.seen) : ''}`;
   const had = canMakeMemo.get(key); if (had) return had;
   const v = canMakeUncached(ids, w);
   if (canMakeMemo.size > 4000) canMakeMemo.clear();
@@ -81,6 +84,7 @@ export function canMake(ids: string[], w: Want): Verdict {
 function canMakeUncached(ids: string[], w: Want): Verdict {
   const want = { tol: Infinity, feature: 0, shape: 'solid' as Shape, n: 1, minCpk: 0.5, ...w };
   const fits = (s: Station, p: Process): string | null => {
+    if (want.not?.includes(p.id)) return 'refused';
     if (!want.anyRole && !makes(p)) return 'role';
     if (!p.on.includes(want.material)) return 'material';
     if (want.family && p.family !== want.family) return 'family';

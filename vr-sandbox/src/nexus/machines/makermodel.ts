@@ -209,10 +209,21 @@ export function lookAs(name: string, info?: ModelInfo): ReturnType<typeof boxedA
 }
 
 /** The model's bill of materials as the library has it: how many of each library part, and what is drawn as its box. */
-export function billOf(model: MakerModel): { words: Record<string, number>; boxed: Record<string, number> } {
-  const words: Record<string, number> = {}, boxed: Record<string, number> = {};
+export function billOf(model: MakerModel): { words: Record<string, number>; boxed: Record<string, number>; size: Record<string, [number, number, number]> } {
+  const words: Record<string, number> = {}, boxed: Record<string, number> = {}, size: Record<string, [number, number, number]> = {};
   // (a part drawn inside another, the screw's nut, counted in it)
   const within = (p: ModelPart) => DRAWN_IN.some((d) => d.name.test(baseName(p[0])) && model.parts.some((q) => d.in.test(baseName(q[0])) && libraryWords(q)));
-  for (const p of model.parts) { if (within(p)) continue; const w = libraryWords(p); if (w) words[w] = (words[w] ?? 0) + 1; else boxed[baseName(p[0])] = (boxed[baseName(p[0])] ?? 0) + 1; }
-  return { words, boxed };
+  for (const p of model.parts) {
+    if (within(p)) continue;
+    const w = libraryWords(p);
+    if (w) { words[w] = (words[w] ?? 0) + 1; continue; }
+    const name = baseName(p[0]);
+    boxed[name] = (boxed[name] ?? 0) + 1;
+    // a part the library has no word for is still drawn, so the model knows exactly how big it is. Handing that size
+    // on is what lets a works say whether it could make the thing, instead of being given a nameless line and
+    // inventing a block for it.
+    const e = extents(p).map((x) => +x.toFixed(1));
+    if (!size[name]) size[name] = [e[0]!, e[1]!, e[2]!];
+  }
+  return { words, boxed, size };
 }

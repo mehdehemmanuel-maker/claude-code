@@ -114,9 +114,28 @@ export function planJob(what: string, lines: PartLine[], ids: string[], joins: J
     // thing you buy for $20 and pour into place is the engine being wrong in the most discouraging direction.
     const bag = STOCK.find((r) => r.what.test(line.name) && !(r.unless?.test(line.name) ?? false));
     if (!cls && bag) { const c = priceOfLine(line); buy.push({ line, why: bag.why, usd: c ? c.usd : null }); continue; }
+    // a refractory is never made here whatever the line is called: fired brick, castable, blanket or a piece sawn off
+    // one. Matching the name alone made "wall brick" a purchase and "wall offcut, sawn to 50 \u00d7 114 \u00d7 64" an
+    // impossibility, which is the same brick twice.
+    if (!cls && line.mat === 'refractory') {
+      const c = priceOfLine(line);
+      buy.push({ line, why: 'fired or cast to a published service temperature and a published density: bought by the brick or the bag, then sawn with a hand saw (insulating firebrick cuts like chalk), laid dry or poured into place \u2014 there is no process here that makes a refractory, and none is needed', usd: c ? c.usd : null });
+      continue;
+    }
     if (!cls) { gaps.push({ line, why: `${line.mat} is not a material any process here works, and nothing in the price book sells it` }); continue; }
+    // a line with no size and no volume is not a shape: there is nothing to cut it from, nothing to hold and nothing
+    // to measure. It is a finished part the bill names and does not dimension, and it is bought as one. Routing it
+    // anyway is how a PID controller came to be turned on the mini lathe, a mains lead cast in the crucible furnace
+    // and a venturi burner forged on the anvil \u2014 the router had quietly invented a 60 \u00d7 60 \u00d7 30 block for each.
+    if (!line.size && line.cm3 == null) {
+      const c = priceOfLine(line);
+      buy.push({ line, why: 'the bill gives it no size and no volume, so there is nothing here to make: it is named as a finished part and bought as one', usd: c ? c.usd : null });
+      continue;
+    }
 
-    const size = line.size ?? [60, 60, 30], shape = shapeOf(line);
+    // where a line gives a volume and no size, the block it is worked from is the cube of that volume, not a guess
+    const cube = Math.cbrt((line.cm3 ?? 0) * 1000);
+    const size = line.size ?? [cube, cube, cube], shape = shapeOf(line);
     // the tolerance is derived from what the part is, not written down by feel (fits.ts)
     const want = tolOf(line), tol = want.tol;
     // stock: the material is bought, and cutting it to size is still this works' job — but only if this works can
@@ -148,36 +167,48 @@ export function planJob(what: string, lines: PartLine[], ids: string[], joins: J
       continue;
     }
 
-    // made here: the station and process that do it in the fewest minutes
-    const v = canMake(ids, { material: cls, size, tol, feature: line.feature, shape, cm3: line.cm3, n: line.n, state });
+    // made here: the station and process that do it in the fewest minutes. A process that is then refused by its own
+    // rules \u2014 a pocket deeper than the cutter can reach, a finish nothing here can give it \u2014 does not make the part
+    // impossible: the next-cheapest process is asked instead, and it is a gap only when every one has refused. Before
+    // this, a printed bracket was milled (milling is quicker), refused on stickout, and reported as unmakeable with
+    // the printer that prints it standing in the same room.
+    const want2 = { material: cls, size, tol, feature: line.feature, shape, cm3: line.cm3, n: line.n, state };
+    const refused: string[] = [], refusals: string[] = [];
+    let v = canMake(ids, want2);
+    for (let turn = 0; v.ok && turn < 8; turn++) {
+      const pp = v.by!.process, ss = v.by!.station;
+      // what is not finished when it is formed: if this works cannot finish it, this process cannot make it
+      const cannot = FINISH.filter((f) => f.when(cls, pp.id)).find((f) => !stationFor(f.process));
+      if (cannot) {
+        const could = STATIONS.filter((x) => x.does.includes(cannot.process)).sort((a, b) => stationUsd(a) - stationUsd(b))[0];
+        refusals.push(`${ss.name} would ${pp.name.replace(/ing\b/, '')} it, but nothing here finishes it: ${cannot.why}${could ? `. The cheapest station that would is ${could.name} at ${money(stationUsd(could))}` : ''}`);
+      } else if (pp.family === 'cut') {
+        // a cut that cannot be cut: the cutter's own rules, before the machine finds out (link.ts `cutRefuses`). Each
+        // rule belongs to one process and is only asked of that one \u2014 a lathe has no stickout, a mill no slenderness.
+        const cut = cutAt({ material: (cls in CUTTING ? cls : 'thermoplastic') as keyof typeof CUTTING, spindle: ss.kw * 1000 });
+        const sorted = [...size].sort((a, b) => a - b);
+        const no = cutRefuses({ cut,
+          ...(pp.id === 'mill' ? { depth: sorted[0], wall: line.wall } : {}),
+          ...(pp.id === 'drill' ? { holeD: line.feature, holeDepth: sorted[2] } : {}),
+          ...(pp.id === 'turn' ? { slender: { len: sorted[2]!, dia: line.feature ?? sorted[0]! } } : {}) });
+        if (!no.length) break;
+        refusals.push(`${ss.name} cannot cut it as drawn: ${no.join('; ')}`);
+      } else break;
+      refused.push(pp.id);
+      v = canMake(ids, { ...want2, not: [...refused] });
+    }
     if (!v.ok) {
       const c = priceOfLine(line);
-      if (c) buy.push({ line, why: `${v.why}, so it is bought instead`, usd: c.usd });
-      else gaps.push({ line, why: `${v.why}${v.buy ? `; the cheapest station that would is ${v.buy.station.name} at ${money(v.buy.usd)}` : ''}, and nothing in the price book sells it ready-made. It wants ±${tol} mm because ${want.fit ? `it is ${want.fit}` : want.why}` });
+      const said = refusals.length
+        ? `${refusals.join('; and ')}${refusals.length > 1 ? ', and no other process here makes it either' : ''}`
+        : `${v.why}${v.buy ? `; the cheapest station that would is ${v.buy.station.name} at ${money(v.buy.usd)}` : ''}`;
+      if (c) buy.push({ line, why: `${said}, so it is bought instead`, usd: c.usd });
+      else gaps.push({ line, why: refusals.length ? said : `${said}, and nothing in the price book sells it ready-made. It wants \u00b1${tol} mm because ${want.fit ? `it is ${want.fit}` : want.why}` });
       continue;
     }
-    const p = v.by!.process, s = v.by!.station;
-    // what is not finished when it is formed: if this works cannot finish it, it cannot make it, and says so
-    const owed = FINISH.filter((f) => f.when(cls, p.id));
-    const cannot = owed.find((f) => !stationFor(f.process));
-    if (cannot) {
-      const could = STATIONS.filter((x) => x.does.includes(cannot.process)).sort((a, b) => stationUsd(a) - stationUsd(b))[0];
-      gaps.push({ line, why: `${s.name} would ${p.name.replace(/ing\b/, '')} it, but nothing here finishes it: ${cannot.why}${could ? `. The cheapest station that would is ${could.name} at ${money(stationUsd(could))}` : ''}` });
-      continue;
-    }
+    const p = v.by!.process, s = v.by!.station, owed = FINISH.filter((f) => f.when(cls, p.id));
     const id = `op${++k}`, after: string[] = [];
     const start = v.fit ? v.fit.make(line.n) : line.n, spares = start - line.n;
-    // a cut that cannot be cut: the cutter's own rules, before the machine finds out (link.ts `cutRefuses`). Each
-    // rule belongs to one process and is only asked of that one — a lathe has no stickout, a mill no slenderness.
-    if (p.family === 'cut') {
-      const cut = cutAt({ material: (cls in CUTTING ? cls : 'thermoplastic') as keyof typeof CUTTING, spindle: s.kw * 1000 });
-      const sorted = [...size].sort((a, b) => a - b);
-      const no = cutRefuses({ cut,
-        ...(p.id === 'mill' ? { depth: sorted[0], wall: line.wall } : {}),
-        ...(p.id === 'drill' ? { holeD: line.feature, holeDepth: sorted[2] } : {}),
-        ...(p.id === 'turn' ? { slender: { len: sorted[2]!, dia: line.feature ?? sorted[0]! } } : {}) });
-      if (no.length) { gaps.push({ line, why: `${s.name} cannot cut it as drawn: ${no.join('; ')}` }); continue; }
-    }
     // a touch probe finds the part instead of the operator finding it, which is most of a setup
     if (tol < 0.1 && s.does.includes('probe')) {
       const pid = `op${++k}`;

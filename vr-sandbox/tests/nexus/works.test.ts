@@ -737,3 +737,49 @@ describe('a self-build drawn from its own bill', () => {
     }
   });
 });
+
+// ---- the router against the library's own words ---------------------------------------------------------------------
+// Every fault below was found on 2026-10-11 by handing the maker models' real sizes to the router for the first time.
+// Until then every line of a maker's bill arrived with no size at all and the router invented a 60 × 60 × 30 block
+// for each one, so "what share of a printer this works could make" was that invention added up.
+
+describe('a bill of a real machine, routed on its own sizes', () => {
+  const ids = under3K().ids;
+  it('every line of a maker\'s model carries the library\'s own size for that part', () => {
+    for (const m of ['ender3', 'voron24'] as const) {
+      const j = jobForModel(m, ids);
+      const lines = [...j.buy.map((b) => b.line), ...j.gaps.map((g) => g.line)];
+      const sized = lines.filter((l) => l.size || l.cm3 != null).length;
+      expect(sized / lines.length, `${m}: most of its lines have no size`).toBeGreaterThan(0.8);
+    }
+  });
+  it('nothing the library calls a fastener is ever made here, whichever vocabulary names it', () => {
+    const fastener = /screw|bolt|nut\b|washer|buttonhead|panhead|countersunk|caphead|grub|\bstud\b|rivet|circlip|\bdowel\b/i;
+    for (const m of ['ender3', 'voron24'] as const) {
+      for (const o of jobForModel(m, ids).ops) {
+        if (!/mill|turn|forge|cast|print|grind/.test(o.process)) continue;      // cutting stock to length is not making one
+        expect(fastener.test(o.part), `${m}: ${o.part} by ${o.process}`).toBe(false);
+      }
+    }
+  });
+  it('a line with no size and no volume is bought, because there is nothing there to make', () => {
+    const j = planJob('a nameless thing', [{ name: 'a thing nobody dimensioned', n: 1, mat: 'steel-low' }], ids);
+    expect(j.ops.filter((o) => /mill|turn|forge|cast/.test(o.process))).toEqual([]);
+    expect(j.buy[0]!.why).toMatch(/no size and no volume/);
+  });
+  it('a process that refuses a part hands it on, and only a part every process refuses is a gap', () => {
+    // a deep little printed bracket: the mill is quicker than the printer and then refuses it on stickout
+    const line: PartLine = { name: 'a printed bracket, 40 × 40 × 20', n: 2, mat: 'abs', size: [40, 40, 20], cm3: 12 };
+    const j = planJob('a bracket', [line], ids);
+    expect(j.gaps, 'the printer was standing right there').toEqual([]);
+    expect(j.ops.some((o) => o.process === 'fff')).toBe(true);
+  });
+  it('what share of a real printer this works could make is now a measured number, and a modest one', () => {
+    for (const m of ['ender3', 'voron24'] as const) {
+      const b = bootstrapOf(ids, m, 'build');
+      expect(b.share, `${m}`).toBeGreaterThan(10);        // the printed parts, the cut extrusion, a few turned spacers
+      expect(b.share, `${m}`).toBeLessThan(40);           // and no more: a printer is mostly bought fasteners and rails
+      expect(b.made.by['fused filament printing'] ?? 0, `${m}: its printed parts`).toBeGreaterThan(10);
+    }
+  });
+});
