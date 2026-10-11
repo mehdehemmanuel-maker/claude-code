@@ -10,6 +10,10 @@ import {
   BUILT_BY, builtParts, layRot, sectionOf,
   type Job, type PartLine, designAll, designFaults, editBuild, lineKg, materialIn, weighBuild, statedThickness } from '../../src/nexus/works';
 import * as THREE from 'three';
+import { componentOf, missingIn } from '../../src/nexus/parts/components';
+import { resolve, type Item } from '../../src/nexus/parts/inventory';
+import { massOf } from '../../src/nexus/parts/kits';
+import { layout } from '../../src/nexus/parts/space';
 import { linkFor, linesOf } from '../../src/nexus/machines/link';
 
 const SHOPS = [TIERS[1]!, TIERS[2]!, TIERS[3]!, TIERS[4]!];
@@ -689,7 +693,8 @@ describe('a self-build drawn from its own bill', () => {
         expect(line, `${b.id}: nothing in the bill is called "${place.line}"`).toBeDefined();
         // a loop's two places are the two pulleys of one belt, not two belts
         const copies = place.bent === 'loop' ? 1 : place.at.length;
-        if (line?.size) { n += copies; drawn += place.bent === 'loop' ? 4 : copies; }   // a loop is one belt in four pieces
+        // a loop is one belt in four pieces; a line the library draws whole (a bought vice) is one part per place
+        if (line?.size || line?.as) { n += copies; drawn += place.bent === 'loop' ? 4 : copies; }
         expect(copies, `${b.id}: ${place.line} is placed more often than the bill has`).toBeLessThanOrEqual(line!.n);
       }
       expect(parts).toHaveLength(drawn);
@@ -811,7 +816,31 @@ describe('a bill whose numbers are derived and not typed', () => {
   it('the lines with no price only ever get fewer', () => {
     // a ratchet, as tidy.test.ts has: this is the work the standing ask names ("prices for the lines that still have
     // none"), and a new build may not quietly add to it. Lower the number when lines are priced; never raise it.
-    expect(designAll().filter((f) => f.kind === 'price').length).toBeLessThanOrEqual(98);
+    expect(designAll().filter((f) => f.kind === 'price').length).toBeLessThanOrEqual(95);
+  });
+  it('the bench carries the vice it is named for, and that vice weighs what its maker says', () => {
+    // the bench's own words are "a bench, a vice and hand tools", and for three rounds it stood there without one.
+    // A bought part is drawn by the library now (PartLine.as), rather than skipped for having no section of its own.
+    const b = BUILDS.find((x) => x.id === 'workbench')!, vice = builtParts(b).find((p) => /vice/i.test(p.name));
+    expect(vice, 'no vice laid on the bench').toBeTruthy();
+    // on the top, its jaws past the left end, where long work hangs down
+    expect(vice!.at![1]).toBeCloseTo(0.9, 3); expect(vice!.at![0]).toBeLessThan(-0.6);
+    // the solids drawn weigh its maker's 5.4 kg to a per cent: a casting is a shell, and its wall thicknesses are what
+    // make that come out right, so this is the check that the drawing is not a solid lump of the right outline
+    expect(massOf(vice!)).toBeGreaterThan(5.3); expect(massOf(vice!)).toBeLessThan(5.5);
+    // and it comes apart into every piece its bill lists, down to the four screws that hold its jaw plates on
+    const r = resolve('benchvice jaw100 open30') as Item, c = componentOf(r.id)!;
+    expect(missingIn(c.part, r)).toEqual([]);
+    const names = (c.part.parts ?? []).map((q) => q.name).join(' | ');
+    for (const w of ['sliding jaw', 'jaw plate', 'main screw', 'screw nut', 'thrust collar', 'handle', 'plate screw']) expect(names, w).toContain(w);
+    // its jaws face each other across the opening its figures give: shut, the two plates touch; open, they stand its
+    // published 100 mm apart, which is the one number that says the drawing is a vice and not a model of one
+    const gap = (open: number) => {
+      const k = componentOf((resolve(`benchvice jaw100 open${open}`) as Item).id)!, ns = layout(k.part);
+      const fixed = ns.find((n) => /fixed jaw plate$/.test(n.p.name))!, slide = ns.find((n) => /sliding jaw plate$/.test(n.p.name))!;
+      return (fixed.sub ?? fixed.box)!.min.x - (slide.sub ?? slide.box)!.max.x;
+    };
+    expect(gap(0)).toBeCloseTo(0, 3); expect(gap(100)).toBeCloseTo(0.1, 3);
   });
   it('a build weighs what a person would lift', () => {
     const bench = BUILDS.find((b) => b.id === 'workbench')!;

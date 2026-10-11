@@ -74,11 +74,14 @@ export const BUILDS: Build[] = [
       { name: 'short rail, 40 × 40 × 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 620], cm3: 188 },
       { name: 'foot pad, 60 × 60 × 6 plate', n: 4, mat: 'steel-low', size: [60, 60, 6], cm3: 21 },
       { name: 'top, 25 mm birch ply', n: 2, mat: 'wood', size: [1500, 700, 25], cm3: 26250 },
-      { name: 'M10 × 40 bolt and nut', n: 16, mat: 'steel-low' },
+      { name: 'M10 × 40 bolt, nut and washer', n: 16, mat: 'steel-low' },
+      { name: 'bench vice, 100 mm jaw', n: 1, mat: 'cast-iron', as: 'benchvice jaw100 open30' },
+      { name: 'M10 × 50 bolt, nut and washer', n: 3, mat: 'steel-low' },
     ],
     joins: [
       { how: 'weld-mig', n: 20, mm: 160, says: 'every leg-to-rail corner welded all round: four sides of a 40 mm section is 160 mm of bead' },
       { how: 'fasten', n: 16, says: 'the ply top bolted down, so it can be replaced when it is worn out' },
+      { how: 'fasten', n: 3, says: 'the vice through the top into the rail under it: a vice bolted to ply alone pulls the ply up' },
     ],
     // four legs at the corners of the rail frame (1420 = 1500 \u2212 two legs, 620 = 700 \u2212 two legs), a rail
     // frame under the top and another low down as a stretcher, a pad under each leg and the ply in two layers on top
@@ -88,6 +91,8 @@ export const BUILDS: Build[] = [
       { line: 'short rail', at: [[-0.73, 0.83, 0], [0.73, 0.83, 0], [-0.73, 0.15, 0], [0.73, 0.15, 0]], along: [0, 0, 1] },
       { line: 'foot pad', at: [[-0.73, 0.003, -0.35], [0.73, 0.003, -0.35], [-0.73, 0.003, 0.35], [0.73, 0.003, 0.35]], along: [0, 1, 0] },
       { line: 'top', at: [[0, 0.8625, 0], [0, 0.8875, 0]], along: [0, 1, 0] },
+      // the vice at the left end, its jaws a few millimetres past the edge, so long work hangs down past the bench
+      { line: 'bench vice', at: [[-0.7, 0.9, 0]] },
     ] },
   { id: 'gokart', what: 'a pedal go-kart frame with steered front wheels',
     src: 'a kart\'s own geometry: 25 mm square tube, a live rear axle in two bearings, stub axles on kingpins, a steel seat pan (typical; machines.ts holds the track kart)',
@@ -617,6 +622,15 @@ export function builtParts(b: Build): Part[] {
   const mm = 0.001, out: Part[] = [];
   for (const place of b.lay) {
     const line = lineFor(b, place.line);
+    // a line that is a part the library draws whole (a bought vice, a bearing) is drawn by the library, in the words it
+    // answers to: it has no section of its own, and skipping it is how a bench named for its vice stood there without one
+    if (line?.as) {
+      const c = component(line.as);
+      if (typeof c !== 'string') {
+        for (const at of place.at) out.push({ ...c.part, name: line.name.split(',')[0]!.trim(), at, says: `${line.name}, drawn whole by the component library, from this build's own bill of materials` });
+        continue;
+      }
+    }
     if (!line?.size) continue;
     const [a, c, L] = line.size, look = BILL_LOOK[line.mat] ?? BILL_LOOK['steel-low']!;
     if (place.bent === 'loop' && place.at.length === 2) { out.push(...loopParts(line, place, look)); continue; }

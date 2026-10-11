@@ -120,6 +120,8 @@ export interface PartLine {
    *  tube drawn solid is a bar and a lining drawn solid hides the crucible standing in it. */
   bore?: [number, number];
   shape?: Shape;
+  /** the library's own words for a bought part ("benchvice jaw100 open30"), where the bill's English is not what a
+   *  family answers to: a line with these is drawn by the library rather than as a length of stock */ as?: string;
 }
 
 /** The tolerance a line is really held to: its own if it says one, else derived from what the part is. This is the

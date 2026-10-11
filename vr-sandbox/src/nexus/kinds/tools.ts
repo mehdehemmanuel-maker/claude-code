@@ -145,6 +145,14 @@ export const TOOLS: KindDef[] = [
     box: () => [150, 185, 90], g: () => 660 /* its estimated sizes' weight, its base most of it: its listings' weights disagree (Amazon's "0.27", TrueGether's "0.000625", neither in a unit that fits) */,
   },
   {
+    id: 'benchvice', look: 'box', name: 'bench vice', path: 'Tools/Bench/Vices', says: 'a cast-iron vice bolted to a bench: a fixed jaw, a sliding jaw on a tongue in the body\'s way, and a screw through a nut that draws the two together', std: 'the vice drawn here: a 100 mm fixed-base engineer\'s vice, Sealey\'s CV100E (its page: 100 mm jaw, 100 mm opening, 140 mm high, 5.4 kg, light-duty)',
+    axes: [ax('jaw', 'jaw width', 'mm', [100]), ax('open', 'opened to', 'mm', [0, 30, 60, 100])],
+    title: (p) => `${p.jaw} mm bench vice, opened ${p.open} mm`, of: () => 'vice-body vice-jaw-slide vice-jaw-plate*2 vice-screw vice-nut vice-collar vice-handle screw-m6*4', make: 'assemble',
+    how: 'its body and sliding jaw cast in grey iron and the ways machined; its screw and handle turned, its nut bored and tapped; its jaw plates ground, serrated and hardened, then screwed on; the castings painted',
+    spec: (p) => { const j = n(p, 'jaw'); return `${j} mm jaws opening to ${j} mm, ${j * 1.4} mm high over all, 5.4 kg (its maker\'s figures); its screw a 20 mm trapezoidal thread through a cast nut, which at a hand\'s 200 N on a 115 mm handle holds about ${Math.round((200 * 0.115 * 2 * Math.PI) / 0.004 / 1000)} kN between the jaws before friction (T = F p / 2π, half of it typically lost in the thread)`; },
+    box: (p) => [n(p, 'jaw') * 2.2 + n(p, 'open'), n(p, 'jaw') * 1.4, n(p, 'jaw')], g: () => 5400 /* its maker's own 5.4 kg; the solids drawn here weigh 5,434 g, 0.6 % over */,
+  },
+  {
     id: 'flushcutter', look: 'box', name: 'flush cutters', path: 'Tools/Hand tools/Cutters', says: 'side cutters whose jaws meet flush, to trim a lead level with its joint', std: 'the cutters drawn here: Hakko\'s CHP-170 (Hakko; Hisco\'s and Adafruit\'s listings)',
     axes: [bare('model', 'model', ['chp-170', 'chp-170-a'])], title: (p) => (p.model === 'chp-170-a' ? 'Hakko CHP-170-A flush cutters, with safety clip' : 'Hakko CHP-170 flush cutters'), of: (p) => `plier-jaw*2 plier-rivet handle-grip*2 spring-leaf${p.model === 'chp-170-a' ? ' cutter-clip' : ''}`, make: 'assemble',
     how: 'its two carbon-steel halves forged, ground to their flush edges and hardened to HRC 56, riveted, their handles dipped in their grips, its spring fitted (and on the -A its safety clip)',

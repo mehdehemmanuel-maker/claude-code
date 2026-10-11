@@ -519,6 +519,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   caliper: { says: 'a calliper as the DIN 862 pattern gives it (src/nexus/parts/components.ts): a ground stainless beam with its fixed outside and knife jaws, a slider carrying its own pair and its depth rod, a thumb roller and a lock screw; its reading a vernier engraved on the slider, a dial on a rack, or an LCD over a capacitive encoder', leaves: 'its graduations not drawn (a 150 is 3,000 lines at 0.05 mm, and engraving them as geometry would cost more than the room has); its rack, its gib and its spring not drawn; drawn open 30 mm so both pairs of jaws can be seen; the beam\u2019s section, the slider\u2019s block and the roller estimates off the published lengths', make: (p, it) => kitParts(vernierCaliper(Number(p.range), 30, String(p.type) as 'vernier' | 'dial' | 'digital'), it.name) },
   solderiron: { says: 'an iron as its maker makes it (src/nexus/machines/kit-solder.ts): its shell, grip, stainless core, board, display, buttons, ports and screws, its tip cartridge with its sleeve, heater and point', leaves: 'its board\'s smallest passives as three; its shell one moulding, not its two halves; where its maker gives no size, an estimate off a photo', make: (_p, it) => kitParts(pinecilV2(), it.name) },
   helpinghands: { says: 'helping hands as they are made (src/nexus/machines/kit-solder.ts): a cast base, its nickel-plated rods, swivel and ball joints, wing nuts, two alligator clips each its jaws and spring, its magnifier\'s rim and glass', leaves: 'every size but its lens\'s an estimate (no maker publishes a drawing); posed holding an 81 mm board upside down, the lesson\'s hold', make: (_p, it) => kitParts(helpingHands(), it.name) },
+  benchvice: { says: 'a vice as one is made (its own section of src/nexus/parts/components.ts): its body one casting with the base flange, fixed jaw and housing, the sliding jaw and its tongue another, two hardened jaw plates on their screws, and the screw, nut, thrust collar and handle that move it', leaves: 'its maker publishes four figures (jaw, opening, height, weight) and no drawing, so every wall and section is an estimate chosen to weigh what it weighs; its thread drawn as a plain bar, its serrations and its casting\'s ribs not drawn', make: (p, it) => kitParts(benchVice(Number(p.open)), it.name) },
   flushcutter: { says: 'cutters as their maker makes them (src/nexus/machines/kit-solder.ts): two forged halves, their rivet, grips and spring (the -A\'s safety clip too)', leaves: 'their outline between Hakko\'s figures an estimate; their halves lying in one plane, not lapped at the rivet', make: (p, it) => kitParts(chp170(p.model === 'chp-170-a'), it.name) },
   switchholder: { says: 'a battery holder as Adafruit sells it (src/nexus/machines/kit-solder.ts): its tray, its springs and plates, its knife switch, its two leads', leaves: 'its sizes but its length, width, height, switch and leads estimates (its photos not reachable here); drawn open; cells not included, as sold', make: (_p, it) => kitParts(holder3951(), it.name) },
   fluxpen: { says: 'a flux pen as Chip Quik makes it (src/nexus/machines/kit-solder.ts): its moulded barrel and the flux in it, its felt nib, its cap', leaves: 'its valve, label and print; every size but its length, width, volume and weight an estimate (its photos not reachable here)', make: (_p, it) => kitParts(cq4lf(), it.name) },
@@ -630,6 +631,77 @@ function boardParts(id: string, nm: string): Part[] {
 }
 /** A thing drawn from its parts as a board's are (src/nexus/kinds/sbc.ts's Comp): each part under its item, its pieces under
  *  it, placed and turned. */
+type XY = [number, number];
+// ---- a bench vice ---------------------------------------------------------------------------------------------------
+// Drawn whole: the one tool the works' own bench was named for and did not have. A 100 mm fixed-base
+// engineer's vice, the cheapest size that holds anything this works makes: four published figures anchor it — jaw width
+// 100 mm, jaw opening 100 mm, overall height 140 mm, 5.4 kg (Sealey's CV100E, sealey.co.uk, seen 2026-10-11, its page
+// marking it light-duty) — and every other size is an estimate in proportion, said so, chosen so the solids drawn here
+// weigh 5.39 kg against that published 5.4: a casting is a shell, so its walls are what make its weight come out right
+// (7 mm faces, 10 mm webs, an 8 mm base flange, a 45 × 43 housing round a 32 × 24 way).
+//
+// It works the way an engineer's vice does: the screw is captive in the sliding jaw between a collar and that jaw's web,
+// and screws through a nut fixed in the body, so turning the handle at the front draws the jaw in. The tongue under the
+// jaw runs in the way through the fixed jaw and down the housing, which is what keeps the jaws parallel under load.
+//
+// Frame: x along the screw, 0 at the fixed jaw plate's clamping face, +x toward the back; y up from the bench top (the
+// base's underside at y = 0); z across, symmetric. Drawn open 30 mm, so both jaw plates can be seen.
+const IRON = { mat: 'cast-iron', color: 0x2b3a45, finish: 'cast' } as const;      // a vice is painted: a dark blue-grey
+const STEEL = { mat: 'steel-low', color: 0x8c9196, finish: 'plate' } as const;
+const vRect = (w: number, h: number, cx = 0, cy = 0): XY[] => [[cx - w / 2, cy - h / 2], [cx + w / 2, cy - h / 2], [cx + w / 2, cy + h / 2], [cx - w / 2, cy + h / 2]];
+const vCirc = (r: number, cx = 0, cy = 0, n = 16): XY[] => Array.from({ length: n }, (_, i) => [cx + r * Math.cos((2 * PI * i) / n), cy + r * Math.sin((2 * PI * i) / n)] as XY);
+/** A section drawn across and up (z, y), extruded along x from x0 for `len`. */
+const along = (pts: XY[], holes: XY[][], len: number, x0: number, y: number, more: Partial<Solid> = {}): Solid =>
+  ({ role: 'body', shape: { prism: { pts, L: len, ...(holes.length ? { holes } : {}) } }, at: [x0 + len / 2, y, 0], rot: [0, PI / 2, 0], ...IRON, ...more });
+/** A slab lying flat, its outline in (x, z), `t` thick from y up, its bores through it. */
+const flat = (pts: XY[], holes: XY[][], t: number, y: number, more: Partial<Solid> = {}): Solid =>
+  ({ role: 'body', shape: { prism: { pts, L: t, ...(holes.length ? { holes } : {}) } }, at: [0, y + t / 2, 0], rot: [-PI / 2, 0, 0], ...IRON, ...more });
+/** A round bar along x, from x0 for `len`. */
+const viceBar = (r: number, len: number, x0: number, y: number, more: Partial<Solid> = {}): Solid =>
+  ({ role: 'body', shape: { cyl: [r, len] }, at: [x0 + len / 2, y, 0], rot: [0, 0, PI / 2], ...STEEL, ...more });
+const piece = (name: string, item: string, solids: Solid[]): Comp => ({ name, item, solids, at: [0, 0, 0] });
+
+/** The vice, its jaws open by `open` mm (0 to 100, its published opening). */
+export function benchVice(open = 30): Comp {
+  const W = 100, H = 139, plate = 8, face = 7, web = 10, baseT = 8, yWay = 29.5;
+  const wayW = 32, wayH = 24, jawY = (H + baseT) / 2;                     // the way's section, and the jaws' middle height
+  const sect = vRect(W, H - baseT, 0, jawY), pocket = vRect(77, 108, 0, jawY), way = vRect(wayW, wayH, 0, yWay);
+  const g = -open;                                                        // the sliding jaw's clamping face
+  // the body: one casting, bolted down through three holes — its base flange, the fixed jaw (a face with the way through
+  // it and a web behind), and the housing that carries the way back to the screw's nut
+  const body = piece('body', 'vice-body', [
+    flat(vRect(112, W, 50, 0), [vCirc(5.5, 90, 0), vCirc(5.5, 10, 38), vCirc(5.5, 10, -38)], baseT, 0),
+    along(sect, [way], face, plate, 0),
+    along(sect, [pocket], web, plate + face, 0),
+    along(vRect(45, 43, 0, baseT + 21.5), [way], 86, 25, 0),
+  ]);
+  // the sliding jaw: its own face and web, and the tongue that runs in the way (150 long, so it is still held at full
+  // opening and stands out of the housing's back when the jaws are shut, as a real one does)
+  const slide = piece('sliding jaw', 'vice-jaw-slide', [
+    along(sect, [], face, g - plate - face, 0),
+    along(sect, [pocket], web, g - plate - face - web, 0),
+    along(vRect(29, 22, 0, yWay), [], 150, g - plate - face, 0),
+  ]);
+  const jawPlate = (nm: string, x0: number, flip: boolean): Comp[] => [
+    piece(`${nm} plate`, 'vice-jaw-plate', [{ role: 'body', shape: { box: [plate, 24, W] }, at: [x0 + (flip ? -plate / 2 : plate / 2), H - 12, 0], ...STEEL, finish: 'hardened' }]),
+    ...[-1, 1].map((s) => piece(`${nm} plate screw ${s < 0 ? 'left' : 'right'}`, 'screw-m6', [
+      { role: 'cap', shape: { cyl: [5, 6] }, at: [x0 + (flip ? -plate + 3 : plate - 3), H - 12, s * 30], rot: [0, 0, PI / 2], ...STEEL, finish: 'black-oxide' },
+      { role: 'term', shape: { cyl: [3, 16] }, at: [x0 + (flip ? -plate + 3 : plate - 3) + (flip ? -1 : 1) * 11, H - 12, s * 30], rot: [0, 0, PI / 2], ...STEEL, finish: 'thread' }])),
+  ];
+  // the screw: captive in the sliding jaw between its collar and that jaw's web, running back into the nut in the body
+  const screw = piece('main screw', 'vice-screw', [viceBar(10, 200, g - plate - face - web - 10, yWay, { finish: 'thread' })]);
+  const collar = piece('thrust collar', 'vice-collar', [viceBar(17, 10, g - plate - face - web - 10, yWay)]);
+  const nut = piece('screw nut', 'vice-nut', [along(vRect(36, 36, 0, yWay), [vCirc(10, 0, yWay)], 26, 70, 0, { finish: 'machined' })]);
+  // (the handle crosses the screw's head, so it lies along z: a cylinder is drawn standing up, and turning it a quarter
+  //  about x lays it across. Left out, it stood up out of the vice like a flagpole)
+  const hx = g - plate - face - web - 5, lie: [number, number, number] = [PI / 2, 0, 0];
+  const handle = piece('handle', 'vice-handle', [
+    { role: 'body', shape: { cyl: [7, 230] }, at: [hx, yWay, 0], rot: lie, ...STEEL, finish: 'bright' },
+    ...[-1, 1].map((s): Solid => ({ role: 'cap', shape: { cyl: [9, 16] }, at: [hx, yWay, s * 115], rot: lie, ...STEEL, finish: 'bright' })),
+  ]);
+  return { name: '100 mm bench vice', at: [0, 0, 0], kids: [body, slide, ...jawPlate('fixed jaw', 0, false), ...jawPlate('sliding jaw', g, true), screw, collar, nut, handle] };
+}
+
 export function compPart(c: Comp, nm: string): Part {
   const own = c.solids ? solidMasses(c.solids).map((m) => solidPart(m, `${nm} ${c.name}`, undefined)) : [], kids = (c.kids ?? []).map((k) => compPart(k, nm));
   const rot = c.turn || c.under ? ([c.under ? PI : 0, c.turn ?? 0, 0] as V3) : undefined, at: V3 = [c.at[0] * mm, c.at[1] * mm, c.at[2] * mm];

@@ -119,6 +119,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A part's mass from its shape, material and fill | `src/nexus/parts/mass.ts` (re-exported by `kits.ts`) |
 | Whether a drawn part holds every part its inventory says is in it, all the way down (`missingIn`); each component's own check runs it | `src/nexus/parts/components.ts` |
 | Every electronic package drawn whole from its outline (JEDEC: DIP, SOIC, SSOP, TSSOP, MSOP, QFP, QFN, SOT, TO-92, TO-220, TO-263, DO-35/41/201, SMA; EIA chip cases; leaded resistors with IEC 60062 bands; LEDs): one list of solids each, its die on its paddle and a bond wire to each lead, from which both its mass (the kinds' and families' g) and its drawing are read, checked against makers' published weights (MCC, Yageo) | `src/nexus/boards/packages.ts` (`pkgSolids`, `chipSolids`, `axialResistorSolids`, `ledSolids`, `smdLedSolids`, `pkgMass`, `chipCode`, `bandsOf`), drawn by `src/nexus/parts/components.ts` (`semiParts`, `passiveParts`); `tests/nexus/packages.test.ts` |
+| A bench vice drawn whole from its maker's four published figures (jaw, opening, height, weight), its walls and sections estimates chosen to weigh what it weighs; its body, sliding jaw, two jaw plates and their screws, screw, nut, thrust collar and handle, each a piece under its own inventory item, opened 0 to 100 mm | `src/nexus/parts/components.ts` (`benchVice`, kind `benchvice` in `kinds/tools.ts`); `tests/nexus/works.test.ts` |
 | Board parts drawn from their makers' drawings, each its own pieces down to its contacts (USB-C, HDMI A/C/D, USB-A single and stacked, RJ45 with its magnetics and lights, microSD push-push, pin headers, FPC and board-to-board sockets, tact switches (side-pushed, and top-pushed as a photo measures one), a micro-USB B (the spec's mouth in its family's outline), a 3225 ceramic crystal (alumina base, gold seal ring, Kovar lid), a fiducial, the 3.5 mm jack, a PicoBlade wafer, an electret microphone, FCCSP and LPDDR packages, moulded inductors), placed by a board's layout | `src/nexus/boards/boardparts.ts` (`BOARD_PARTS`) |
 | Single-board computers and Picos from their makers' pages (Raspberry Pi 5, 4 B, 3 B+, Zero 2 W, CM5, Pico family; Orange Pi 5 line; D-Robotics RDK X3, X5, S100): their figures and sources, their layouts (measured from photos where `layout` is given, else their class's rules and marked approximate), every part on them (BGA SoC, LPDDR, QFNs, chip passives, each connector, the header pin by pin; a measured board's small parts from its photo's table), every through-hole lead soldered (its pad and fillet, found from the parts as drawn), its silkscreen and copper from its photo as paint on its mask, their holes as mating patterns by bore, weighed from their solids; a Pico's 40 pins and debug pads from Raspberry Pi's own footprint (1.02 mm in 1.7 mm pads, its ground pads square), each run out to a castellation cut in the board's edge (1.0 mm, measured on its photo), its board 1.0 mm; the Pico (pico1) and Pico W (pico1w) measured whole: every part named by Raspberry Pi's schematic (rev 3), sized by its maker's datasheet or KiCad's footprint, placed from Raspberry Pi's photo calibrated by its 47 holes (0.03 mm rms), its passives read by eye off that photo (good to 0.2 mm), its silk and copper from it, its pads bright gold (`bright`) as the photo shows | `src/nexus/kinds/sbc.ts` (`BOARD_DEFS`, `boardComps`, `thtJoints`, `boardMass`), kinds in `src/nexus/kinds/sbc.ts`, drawn by `components.ts` (`boardParts`); `tests/nexus/sbc.test.ts` |
 | The Meca500 (Mecademic's six-axis arm): its figures from its manuals, its kinematics (forward, and inverse over its eight postures), its controller taking its manual's commands and answering in its codes, and the arm drawn with each joint a group a program turns | `src/nexus/machines/meca.ts` (`MECA500`, `fk`, `ik`, `Meca500`), kind `src/nexus/kinds/robots.ts`, drawn by `components.ts` (`armParts`, `ARM_AXES`); `tests/nexus/meca.test.ts` |
@@ -1554,7 +1555,29 @@ In order; each through the breakdown queue, rendered, compared with its photos a
      they report is a lower bound, so a piece 5 mm away could still read as touching within 2 mm.
    Measured: the car park through the pipeline 19.6 s to 15.0, a car 2.0 to 1.27, a street 5.8 to 4.4. The gate is green
    on all 171 files and 2,021 tests, and nothing in the suite was holding on to one of those pairs.
-   Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
+   And the bench got the vice it has been named for since the works was first written ("a bench, a vice and hand tools"),
+   which for three rounds it did not have. A 100 mm fixed-base engineer's vice, bought rather than cast, because $33 buys
+   one and a works that can cast iron is not what $3,000 builds. Four figures are its maker's (jaw 100 mm, opening
+   100 mm, height 140 mm, 5.4 kg — Sealey's CV100E, which its own page marks light-duty) and no maker publishes a
+   drawing of one, so every wall and section here is an estimate — chosen so that the solids drawn weigh what the vice
+   weighs: 5,434 g against 5,400, which is the check that a casting has been drawn as the shell it is (7 mm faces,
+   10 mm webs, an 8 mm base flange, a 45 × 43 housing round the 32 × 24 way) and not as a solid lump of the right
+   outline. It works the way an engineer's vice does: the screw captive in the sliding jaw between its collar and that
+   jaw's web, through a nut fixed in the body, the tongue under the jaw running in the way through the fixed jaw and
+   down the housing — which is what keeps the jaws parallel under load — and the handle at the front.
+   Three things it taught the works:
+   • **A bought line can now be drawn.** `builtParts` skipped any bill line with no section of its own, so a bought part
+     was in the bill and nowhere in the room. A line can name the library's own words for what it is (`PartLine.as`:
+     `benchvice jaw100 open30`), and the library draws it whole at each place the lay gives, citing the same bill.
+   • **A new part's material must be one the library stores.** The jaw plates were written as `steel-high`, which the
+     mass table knows and the breakdown table does not, so the queue could not take them to elements: they are tool
+     steel now (the nearest stored; a maker would case-harden a carbon steel, and the item says so).
+   • **A cylinder is drawn standing up.** The handle, written without a turn, stood out of the vice like a flagpole
+     until the screenshot showed it. It lies across the screw now.
+   The M10 bolts are priced too (Zoro, $0.61 each in a fifty-pack), which takes the unpriced lines from 98 to 95 and the
+   ratchet with them. Still honest about what is left: its serrations, its casting's ribs and its thread are not drawn
+   (the screw is a plain bar), and it has not been through a blind judge yet.
+   Next: the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,

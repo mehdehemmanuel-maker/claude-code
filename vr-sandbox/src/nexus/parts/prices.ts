@@ -64,6 +64,11 @@ export const PRICES: Record<string, Price> = {
   'tip-cleaner': { what: 'tip cleaner', offers: [ada('Square 60mm x 60mm Soldering Sponge - 3 Pack', 2.5, 3540, { note: 'used damp' }), ada('Hakko Brass Sponge Solder Tip Cleaner', 10.95, 1172, { note: 'dry: cools the tip less than a wet sponge' })] },
   'iron-stand': { what: 'soldering iron stand', offers: [ada('Soldering iron stand', 10.95, 150)] },
   'battery-holder-knife': { what: '2 × AA battery holder with knife switch', item: 'switchholder-3951', offers: [ada('2 x AA Battery Holder with Knife Switch', 0.95, 3951)] },
+  'bolt-m10': { what: 'M10 bolts, nuts and washers, 40 to 50 mm, zinc-plated steel', offers: [
+    { name: 'ZORO SELECT M10-1.50 Socket Head Cap Screw, Zinc Plated Steel, 50 mm Length, 50 PK', usd: 30.39, per: 50, seller: 'Zoro', url: 'https://www.zoro.com/zoro-select-m10-150-socket-head-cap-screw-socket-zinc-plated-steel-50-mm-length-50-pk-m071601000050/i/G0410247/', seen: D3, note: 'read off a search listing, not the seller\'s own page: $0.61 each in a 50-pack. A socket head where the bills say hex, which is the nearest listed M10 × 50 fastener and costs the same; nuts are extra' }] },
+  'bench-vice': { what: 'a 100 mm (4 in) cast-iron bench vice', item: 'benchvice', offers: [
+    { name: 'SEBLAFF 4" Bench Vise with Anvil', usd: 32.89, seller: 'Walmart', url: 'https://www.walmart.com/', seen: D3, note: 'read off a search listing, not the seller\'s own page: the cheapest 100 mm vice seen. Sealey\'s own CV100E, the vice drawn in the library, lists at \u00a349.95 (about $63) and is the one whose four figures the drawing uses' },
+    { name: '4 in. cast iron bench vise (BV454)', usd: 57.38, seller: 'The Home Depot', url: 'https://www.homedepot.com/', seen: D3, note: 'read off a search listing, not the seller\'s own page' }] },
   'helping-hands': { what: 'helping hands with magnifier', offers: [ada('Helping Third Hand Magnifier W/Magnifying Glass Tool - MZ101', 6.95, 291)] },
   'solder-wick': { what: 'desoldering braid', offers: [ada('Solder wick - 1.5mm wide and 1.5m / 5 feet long', 3.5, 149)] },
   'flush-cutters': { what: 'flush cutters', item: 'pliers', offers: [ada('Flush diagonal cutters - CHP170', 7.25, 152)] },
