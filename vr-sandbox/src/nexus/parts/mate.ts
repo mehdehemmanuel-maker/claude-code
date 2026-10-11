@@ -237,7 +237,21 @@ export function unnamedHoles(p: Part): { at: V3; r: number; depth: number }[] {
 // systems to become one.
 
 /** A round feature of a part, in the part's own frame: a bore for something to go in, or a shaft to go in something. */
-export interface Axis { kind: 'bore' | 'shaft'; of: string; at: V3; dir: V3; d: number; len: number }
+export interface Axis { kind: 'bore' | 'shaft'; of: string; at: V3; dir: V3; d: number; len: number;
+  /** the thread it is cut for, where that can be known: a `Cut` that says so, or a turned bore drawn at a thread's
+   *  own root diameter, which is how a nut is drawn. Without it a nut on a bolt reads as 0.866 mm of interference
+   *  and is refused, which is the one mate nothing here could express before. */
+  thread?: string }
+
+/** The thread whose root diameter this is, to a hundredth of a millimetre. A nut is drawn at its thread's root, so
+ *  this is what tells a nut's bore from a plain hole of about that size. The match is deliberately tight: the figure
+ *  is one the library computes itself (`rootR`), so an exact hit means a thread and a near miss means a hole. */
+function rootThread(d: number): string | null {
+  // the pitch comes from the thread table (src/nexus/parts/threads.ts), not from a formula: a guess of nominal/8 put
+  // M5 at 0.625 where ISO 261's coarse pitch is 0.8, and so missed a nut's own bore by two tenths of a millimetre
+  for (const [t, m] of Object.entries(METRIC)) if (Math.abs(d * 1000 - (Number(t.slice(1)) - 1.0825 * m.p)) < 0.02) return t;
+  return null;
+}
 
 /** Every bore this part's own solids make: a drilled `Cut`, and the hole up the middle of a turned profile - which is
  *  where the bores that matter actually live. A bearing's 25 mm bore, a pulley's 5 mm bore and a tube's inside are all
@@ -260,12 +274,13 @@ export function axesFrom(p: Part): Axis[] {
       if (pts.length) {
         const rmin = Math.min(...pts.map((x) => x[0])), ys = pts.map((x) => x[1]);
         const len = Math.max(...ys) - Math.min(...ys), dir = new THREE.Vector3(0, 1, 0).applyMatrix4(rot).normalize();
-        if (rmin > 1e-6 && len > 0) out.push({ kind: 'bore', of: q.name, at: [o.x, o.y, o.z], dir: [dir.x, dir.y, dir.z], d: +(2 * rmin).toFixed(6), len });
+        if (rmin > 1e-6 && len > 0) out.push({ kind: 'bore', of: q.name, at: [o.x, o.y, o.z], dir: [dir.x, dir.y, dir.z], d: +(2 * rmin).toFixed(6), len, ...(rootThread(2 * rmin) ? { thread: rootThread(2 * rmin)! } : {}) });
       }
     }
     for (const c of q.cuts ?? []) {
       const at = v(c.at).applyMatrix4(mm), dir = v(c.dir).applyMatrix4(rot).normalize();
-      out.push({ kind: 'bore', of: q.name, at: [at.x, at.y, at.z], dir: [dir.x, dir.y, dir.z], d: +(2 * c.r).toFixed(6), len: c.depth });
+      const k = kindOf(c), th = c.thread ?? (k?.sex === 'threads' ? k.thread : rootThread(2 * c.r));
+      out.push({ kind: 'bore', of: q.name, at: [at.x, at.y, at.z], dir: [dir.x, dir.y, dir.z], d: +(2 * c.r).toFixed(6), len: c.depth, ...(th ? { thread: th } : {}) });
     }
     for (const r of q.parts ?? []) walk(r, mm);
   };
@@ -351,4 +366,55 @@ export function shaftsFrom(p: Part): Axis[] {
 /** The shaft a part is meant to be held or driven by: the longest of its free ends. A motor has one, a cage pin none. */
 export function spindle(p: Part): Axis | null {
   return shaftsFrom(p).reduce<Axis | null>((best, a) => (!best || a.len > best.len ? a : best), null);
+}
+
+// ---- how two parts can go together ------------------------------------------------------------------------------------
+// This is the merge the two systems needed, and it is a merge of *answers* rather than of type names. `Port` placed
+// parts and never checked them; `Iface` checked parts and never placed them, because it had no geometry. Both halves
+// have geometry now - a face from its pattern, a bore from its turned profile, a shaft from its free end - so one
+// question can be asked across both: given these two parts, what are all the ways they go together, and where they do
+// not, what is the number that says so. Renaming the two types into one would be a large diff and buy nothing that is
+// not here; the fleet's contract checks keep their own owner (src/nexus/make/critic.ts) and read the same geometry.
+
+export interface Mate {
+  how: 'bolted' | 'seated' | 'threaded';
+  /** the two features, named as their own parts name them */ a: string; b: string;
+  says: string;
+  /** bolted: the screw and how many of them */ thread?: string; holes?: number;
+  /** seated: the nominal and the gap as drawn, mm */ mm?: number; clearance?: number;
+}
+
+/** Every way these two parts go together, and the reason for each near miss. A part's declared ports are used beside
+ *  the ones read off its holes, because a declared one carries a standard's name and a derived one carries every size
+ *  a generator makes; alike features are counted once, so forty identical M3 holes on a rail are one answer and not
+ *  forty. */
+export function mates(a: Part, b: Part): { fits: Mate[]; nearly: string[] } {
+  const fits: Mate[] = [], nearly: string[] = [];
+  const once = <T>(xs: T[], key: (x: T) => string): T[] => { const seen = new Set<string>(); return xs.filter((x) => { const k = key(x); if (seen.has(k)) return false; seen.add(k); return true; }); };
+
+  const portsOf = (p: Part) => once([...(p.ports ?? []), ...portsFrom(p)], (q) => `${q.sex}|${q.thread}|${q.pattern.length}|${q.std ?? ''}`);
+  for (const pa of portsOf(a)) for (const pb of portsOf(b)) {
+    const r = fit(pa, pb);
+    if (typeof r === 'string') nearly.push(`${pa.name} onto ${pb.name}: ${r}`);
+    else fits.push({ how: 'bolted', a: pa.name, b: pb.name, thread: pa.thread, holes: pa.pattern.length,
+      says: `${pa.pattern.length} × ${pa.thread}: ${pa.name} bolts to ${pb.name}${pa.std ? ` (${pa.std})` : ''}` });
+  }
+
+  const d3 = (x: number) => (x * 1000).toFixed(3);
+  for (const [one, two] of [[a, b], [b, a]] as [Part, Part][]) {
+    const shafts = once(shaftsFrom(one), (s) => d3(s.d)), bores = once(axesFrom(two), (o) => d3(o.d));
+    for (const s of shafts) for (const o of bores) {
+      // threads interlock, so a threaded pair is *meant* to interfere: a plain clearance test refuses a nut on a bolt
+      if (o.thread && Math.abs(+d3(s.d) - Number(o.thread.slice(1))) < 0.1) {
+        fits.push({ how: 'threaded', a: s.of, b: o.of, thread: o.thread, mm: Number(o.thread.slice(1)),
+          says: `${s.of} threads into ${o.of}: both ${o.thread}` });
+        continue;
+      }
+      const r = seats(o, +d3(s.d));
+      if (typeof r === 'string') nearly.push(r);
+      else fits.push({ how: 'seated', a: s.of, b: o.of, mm: r.mm, clearance: r.clearance, says: r.says });
+    }
+  }
+  fits.sort((x, y) => (x.how < y.how ? -1 : x.how > y.how ? 1 : (y.mm ?? y.holes ?? 0) - (x.mm ?? x.holes ?? 0)));
+  return { fits, nearly: [...new Set(nearly)].sort() };
 }

@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { use } from '../../src/nexus/parts/components';
-import { axesFrom, fit, portsFrom, seat, seats, shaftsFrom, spindle, unnamedHoles } from '../../src/nexus/parts/mate';
+import { axesFrom, fit, mates, portsFrom, seat, seats, shaftsFrom, spindle, unnamedHoles } from '../../src/nexus/parts/mate';
 import type { Port } from '../../src/nexus/parts/kits';
 
 const mirror = (p: Port): Port => ({ ...p, sex: p.sex === 'holes' ? 'threads' : 'holes', n: [-p.n[0], -p.n[1], -p.n[2]], pattern: p.pattern.map(([x, y]) => [-x, y] as [number, number]) });
@@ -116,5 +116,36 @@ describe('shafts, but only the ends that are free to enter something', () => {
     const motor = spindle(use('stepper nema17 34'))!, pulley = seat(use('pulley GT2 20T B5'))!;
     // the pulley this motor drives: a GT2 with a 5 mm bore onto a 5 mm shaft, which is the whole point of the pair
     expect(seats(pulley, +(motor.d * 1000).toFixed(3))).toMatchObject({ mm: 5, clearance: 0 });
+  }, 60000);
+});
+
+describe('how two parts go together, over both kinds of connector at once', () => {
+  it('a nut threads onto a bolt', () => {
+    // The most ordinary mate there is, and neither system could express it: a nut's bore is drawn at its thread's root
+    // (4.134 for an M5) and a screw's shank is 5.00, so a plain clearance test refuses it as 0.866 mm of interference.
+    // Threads interlock; they are *meant* to interfere. Getting here also needed the real pitch table - a guessed
+    // nominal/8 put M5's pitch at 0.625 where ISO 261's coarse pitch is 0.8, and missed the nut's own bore.
+    const r = mates(use('nut M5'), use('screw M5x20'));
+    expect(r.fits.filter((f) => f.how === 'threaded')).toHaveLength(1);
+    expect(r.fits.find((f) => f.how === 'threaded')!.thread).toBe('M5');
+  }, 60000);
+
+  it('a motor and the pulley it drives find their own seat', () => {
+    const r = mates(use('stepper nema17 34'), use('pulley GT2 20T B5'));
+    const five = r.fits.find((f) => f.how === 'seated' && f.mm === 5);
+    expect(five, 'a 5 mm shaft in a 5 mm bore').toBeDefined();
+    expect(five!.clearance).toBe(0);
+  }, 60000);
+
+  it('parts that do not go together say so with the number', () => {
+    const r = mates(use('bearing 6205'), use('pulley GT2 20T B5'));
+    expect(r.fits).toEqual([]); // a 13 mm pulley flange is nothing a 25 mm bearing bore seats
+    expect(r.nearly.join(' ')).toMatch(/loose|too big/);
+  }, 60000);
+
+  it('alike features are counted once', () => {
+    // An MGN12 rail has forty bores of two sizes. Forty answers to one question is not an answer.
+    const r = mates(use('rail MGN12 L240'), use('screw M3x10'));
+    expect(r.fits.length + r.nearly.length).toBeLessThan(30);
   }, 60000);
 });
