@@ -1675,6 +1675,25 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    jaws face the front and stand a little past the edge (`Lay.turn`, because which way a bought thing faces is not a
    direction its length runs); a vice mid-span rings the bench and walks it across the floor. A test holds all of it:
    nothing any build lays may stand in mid-air.
+   And the vice itself, from that judge's list (2026-10-11). It gave fourteen findings and scored it 3/10; six were
+   real and are fixed at the cause, and the worst of them was one no judge could see, because it is inside the
+   casting: **the screw and the slide shared one place.** The tongue ran in the way at y 37-59 and the screw ran down
+   the middle of that same way, so two parts of the same vice passed through each other. On an engineer's vice the
+   slide is under the screw, and putting it there also lifts the screw to where a real one is — a quarter to a third
+   of the way up a 140 mm casting, not a fifth. The judge had this as "the screw and handle are set far too low: bolt
+   that to a bench and you cannot turn the handle", and it was right about the consequence: at y 29.5 the handle's own
+   ends came within 20 mm of whatever the vice is bolted to, and at 60 they clear it by 51. With it: a clearance bore
+   for the screw through the fixed jaw's face and the housing (it had been passing through solid iron), a base flange
+   120 mm wide with its three bolt holes in lugs that stand outside the body (a flange no wider than the casting is
+   not a flange, and it is the first thing a fitter looks for), an anvil pad behind the fixed jaw, and the jaw plates'
+   screws countersunk flush in the gripping face instead of standing proud on the outside of the sliding jaw. The
+   drawn mass is held at its maker's 5.4 kg throughout, which is what the walls are for: the web came down from 10 mm
+   to 9 and the face from 7 to 6.5 to pay for the flange and the anvil.
+   Of the rest of that judge's list: the serrations and the casting's ribs are still not drawn and the thread is still
+   a plain bar (said in the kind's own `leaves`); how wide the casting is across its jaws is an estimate, because no
+   maker publishes it, and the judge's 140 mm is a different vice's figure; and its 5.4 kg is Sealey's own for the
+   CV100E, which that page marks light-duty — a fitter's 100 mm vice is 11 to 13 kg, and this is the vice the works
+   actually buys for $33.
    Next: the remaining stand-ins (the welder and the MSLA printer, each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).

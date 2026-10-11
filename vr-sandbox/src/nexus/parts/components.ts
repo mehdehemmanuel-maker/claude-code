@@ -520,7 +520,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   caliper: { says: 'a calliper as the DIN 862 pattern gives it (src/nexus/parts/components.ts): a ground stainless beam with its fixed outside and knife jaws, a slider carrying its own pair and its depth rod, a thumb roller and a lock screw; its reading a vernier engraved on the slider, a dial on a rack, or an LCD over a capacitive encoder', leaves: 'its graduations not drawn (a 150 is 3,000 lines at 0.05 mm, and engraving them as geometry would cost more than the room has); its rack, its gib and its spring not drawn; drawn open 30 mm so both pairs of jaws can be seen; the beam\u2019s section, the slider\u2019s block and the roller estimates off the published lengths', make: (p, it) => kitParts(vernierCaliper(Number(p.range), 30, String(p.type) as 'vernier' | 'dial' | 'digital'), it.name) },
   solderiron: { says: 'an iron as its maker makes it (src/nexus/machines/kit-solder.ts): its shell, grip, stainless core, board, display, buttons, ports and screws, its tip cartridge with its sleeve, heater and point', leaves: 'its board\'s smallest passives as three; its shell one moulding, not its two halves; where its maker gives no size, an estimate off a photo', make: (_p, it) => kitParts(pinecilV2(), it.name) },
   helpinghands: { says: 'helping hands as they are made (src/nexus/machines/kit-solder.ts): a cast base, its nickel-plated rods, swivel and ball joints, wing nuts, two alligator clips each its jaws and spring, its magnifier\'s rim and glass', leaves: 'every size but its lens\'s an estimate (no maker publishes a drawing); posed holding an 81 mm board upside down, the lesson\'s hold', make: (_p, it) => kitParts(helpingHands(), it.name) },
-  benchvice: { says: 'a vice as one is made (its own section of src/nexus/parts/components.ts): its body one casting with the base flange, fixed jaw and housing, the sliding jaw and its tongue another, two hardened jaw plates on their screws, and the screw, nut, thrust collar and handle that move it', leaves: 'its maker publishes four figures (jaw, opening, height, weight) and no drawing, so every wall and section is an estimate chosen to weigh what it weighs; its thread drawn as a plain bar, its serrations and its casting\'s ribs not drawn', make: (p, it) => kitParts(benchVice(Number(p.open)), it.name) },
+  benchvice: { says: 'a vice as one is made (its own section of src/nexus/parts/components.ts): its body one casting with the base flange, fixed jaw and housing, the sliding jaw and its tongue another, two hardened jaw plates on their screws, and the screw, nut, thrust collar and handle that move it', leaves: 'its maker publishes four figures (jaw, opening, height, weight) and no drawing, so every wall and section, and how wide the casting is across its jaws, is an estimate chosen to weigh what it weighs; its thread drawn as a plain bar, its anvil a plain pad, its serrations and its casting\'s ribs not drawn', make: (p, it) => kitParts(benchVice(Number(p.open)), it.name) },
   safetykit: { says: 'the safety kit a works has to own before it owns a welder (src/nexus/parts/kit-safety.ts), laid out at its station: a 2 kg ABC powder extinguisher on its bracket, a BS 8599-1 first-aid kit with its lid up, ear defenders, leather gauntlets, a face shield on its ratchet headgear, and a 100 mm in-duct fan with 800 mm of flexible duct and the capture hood on the end of it', leaves: 'two of the six carry their maker\'s own weight (the extinguisher\'s 3.20 kg, the ear defenders\' 210 g) and 3M\'s for the shield alone (149 g); for the headgear, the gauntlets, the first-aid kit and the fan no maker publishes one, so those are the drawn solids\' figures. Left out: the extinguisher\'s valve thread and its valve\'s bores, the markings on shield and headgear, the gauntlets\' seams and lining, the first-aid contents drawn as one packed block rather than BS 8599-1\'s list one by one, and the fan\'s terminal block and ball bearings (drawn as the sintered bushes the library stores)', make: (_p, it) => safetyKitParts(it.name) },
   flushcutter: { says: 'cutters as their maker makes them (src/nexus/machines/kit-solder.ts): two forged halves, their rivet, grips and spring (the -A\'s safety clip too)', leaves: 'their outline between Hakko\'s figures an estimate; their halves lying in one plane, not lapped at the rivet', make: (p, it) => kitParts(chp170(p.model === 'chp-170-a'), it.name) },
   switchholder: { says: 'a battery holder as Adafruit sells it (src/nexus/machines/kit-solder.ts): its tray, its springs and plates, its knife switch, its two leads', leaves: 'its sizes but its length, width, height, switch and leads estimates (its photos not reachable here); drawn open; cells not included, as sold', make: (_p, it) => kitParts(holder3951(), it.name) },
@@ -665,17 +665,27 @@ const piece = (name: string, item: string, solids: Solid[]): Comp => ({ name, it
 
 /** The vice, its jaws open by `open` mm (0 to 100, its published opening). */
 export function benchVice(open = 30): Comp {
-  const W = 100, H = 139, plate = 8, face = 7, web = 10, baseT = 8, yWay = 29.5;
+  // Two numbers here are a round of their own, and both came from looking at the drawing rather than from the maker's
+  // four figures. The screw and the slide used to share one place: the tongue ran in the way at y 37–59 and the screw
+  // ran down the middle of that same way, so two parts of the same vice passed through each other where nobody could
+  // see it. On an engineer's vice the slide is under the screw, which is also what lifts the screw to where a real
+  // one is — a quarter to a third of the way up a 140 mm casting, not a fifth. At y 29.5 the handle's own ends came
+  // within 20 mm of whatever the vice is bolted to; at 60 it clears by 51, which is what lets you turn it.
+  const W = 100, H = 139, plate = 8, face = 6.5, web = 9, baseT = 7, yScrew = 60, yWay = 32;
   const wayW = 32, wayH = 24, jawY = (H + baseT) / 2;                     // the way's section, and the jaws' middle height
   const sect = vRect(W, H - baseT, 0, jawY), pocket = vRect(77, 108, 0, jawY), way = vRect(wayW, wayH, 0, yWay);
+  const bore = vCirc(11, 0, yScrew);                                      // the screw's clearance through face and housing
   const g = -open;                                                        // the sliding jaw's clamping face
-  // the body: one casting, bolted down through three holes — its base flange, the fixed jaw (a face with the way through
-  // it and a web behind), and the housing that carries the way back to the screw's nut
+  // the body: one casting, bolted down through three holes in a flange wider than itself — a flange no wider than the
+  // body is not a flange, and a fitter looks for the lugs before anything else — then the fixed jaw (a face with the
+  // way and the screw's bore through it and a web behind), the housing that carries the way and the nut back behind
+  // it, and the anvil pad behind the jaw that every vice of this pattern has
   const body = piece('body', 'vice-body', [
-    flat(vRect(112, W, 50, 0), [vCirc(5.5, 90, 0), vCirc(5.5, 10, 38), vCirc(5.5, 10, -38)], baseT, 0),
-    along(sect, [way], face, plate, 0),
+    flat(vRect(112, 120, 50, 0), [vCirc(5.5, 90, 0), vCirc(5.5, 10, 50), vCirc(5.5, 10, -50)], baseT, 0),
+    along(sect, [way, bore], face, plate, 0),
     along(sect, [pocket], web, plate + face, 0),
-    along(vRect(45, 43, 0, baseT + 21.5), [way], 86, 25, 0),
+    along(vRect(40, 62, 0, 49), [way, bore], 86, plate + face + web, 0),
+    along(vRect(40, 8, 0, H - 4), [], 40, plate + face + web, 0, { finish: 'machined' }),
   ]);
   // the sliding jaw: its own face and web, and the tongue that runs in the way (150 long, so it is still held at full
   // opening and stands out of the housing's back when the jaws are shut, as a real one does)
@@ -684,22 +694,24 @@ export function benchVice(open = 30): Comp {
     along(sect, [pocket], web, g - plate - face - web, 0),
     along(vRect(29, 22, 0, yWay), [], 150, g - plate - face, 0),
   ]);
+  // the jaw plates, each let into its jaw and screwed from the gripping face, as every vice of this pattern is: the
+  // heads are countersunk flush in the plate so nothing stands proud where the work goes, and nothing shows outside
   const jawPlate = (nm: string, x0: number, flip: boolean): Comp[] => [
     piece(`${nm} plate`, 'vice-jaw-plate', [{ role: 'body', shape: { box: [plate, 24, W] }, at: [x0 + (flip ? -plate / 2 : plate / 2), H - 12, 0], ...STEEL, finish: 'hardened' }]),
     ...[-1, 1].map((s) => piece(`${nm} plate screw ${s < 0 ? 'left' : 'right'}`, 'screw-m6', [
-      { role: 'cap', shape: { cyl: [5, 6] }, at: [x0 + (flip ? -plate + 3 : plate - 3), H - 12, s * 30], rot: [0, 0, PI / 2], ...STEEL, finish: 'black-oxide' },
-      { role: 'term', shape: { cyl: [3, 16] }, at: [x0 + (flip ? -plate + 3 : plate - 3) + (flip ? -1 : 1) * 11, H - 12, s * 30], rot: [0, 0, PI / 2], ...STEEL, finish: 'thread' }])),
+      { role: 'cap', shape: { lathe: [[0, 0], [5.5, 0], [3, 3.2], [0, 3.2]] }, at: [x0 + (flip ? -1.6 : 1.6), H - 12, s * 30], rot: [0, 0, flip ? -PI / 2 : PI / 2], ...STEEL, finish: 'black-oxide' },
+      { role: 'term', shape: { cyl: [3, 16] }, at: [x0 + (flip ? -11.2 : 11.2), H - 12, s * 30], rot: [0, 0, PI / 2], ...STEEL, finish: 'thread' }])),
   ];
   // the screw: captive in the sliding jaw between its collar and that jaw's web, running back into the nut in the body
-  const screw = piece('main screw', 'vice-screw', [viceBar(10, 200, g - plate - face - web - 10, yWay, { finish: 'thread' })]);
-  const collar = piece('thrust collar', 'vice-collar', [viceBar(17, 10, g - plate - face - web - 10, yWay)]);
-  const nut = piece('screw nut', 'vice-nut', [along(vRect(36, 36, 0, yWay), [vCirc(10, 0, yWay)], 26, 70, 0, { finish: 'machined' })]);
+  const screw = piece('main screw', 'vice-screw', [viceBar(10, 200, g - plate - face - web - 10, yScrew, { finish: 'thread' })]);
+  const collar = piece('thrust collar', 'vice-collar', [viceBar(17, 10, g - plate - face - web - 10, yScrew)]);
+  const nut = piece('screw nut', 'vice-nut', [along(vRect(32, 32, 0, yScrew), [vCirc(10, 0, yScrew)], 26, 70, 0, { finish: 'machined' })]);
   // (the handle crosses the screw's head, so it lies along z: a cylinder is drawn standing up, and turning it a quarter
   //  about x lays it across. Left out, it stood up out of the vice like a flagpole)
   const hx = g - plate - face - web - 5, lie: [number, number, number] = [PI / 2, 0, 0];
   const handle = piece('handle', 'vice-handle', [
-    { role: 'body', shape: { cyl: [7, 230] }, at: [hx, yWay, 0], rot: lie, ...STEEL, finish: 'bright' },
-    ...[-1, 1].map((s): Solid => ({ role: 'cap', shape: { cyl: [9, 16] }, at: [hx, yWay, s * 115], rot: lie, ...STEEL, finish: 'bright' })),
+    { role: 'body', shape: { cyl: [7, 230] }, at: [hx, yScrew, 0], rot: lie, ...STEEL, finish: 'bright' },
+    ...[-1, 1].map((s): Solid => ({ role: 'cap', shape: { cyl: [9, 16] }, at: [hx, yScrew, s * 115], rot: lie, ...STEEL, finish: 'bright' })),
   ]);
   return { name: '100 mm bench vice', at: [0, 0, 0], kids: [body, slide, ...jawPlate('fixed jaw', 0, false), ...jawPlate('sliding jaw', g, true), screw, collar, nut, handle] };
 }
