@@ -173,3 +173,37 @@ describe('kinds of bought part, as data', () => {
     expect(checked).toBeGreaterThan(5);
   });
 });
+
+// A size said with its number stuck to its own name. The kinds' own reader takes a tag and its number together
+// ("sheath6", "bore50") and refuses any word it cannot place; the families written by hand read a number by the
+// boundary before it, which a glued one has not got, so they used to draw their default size and say nothing.
+describe('a size stuck to its own name', () => {
+  it('is the size asked for, however it is written', () => {
+    const at = (w: string) => (callFamily(w) as Item).sized!.params;
+    expect(at('rail MGN12 length 240')).toMatchObject({ size: 12, length: 240 });
+    expect(at('rail MGN12 length240')).toMatchObject({ size: 12, length: 240 }); // was the family's 400 mm default
+    expect(at('rail MGN12 L240')).toMatchObject({ size: 12, length: 240 });
+    expect(at('extrusion 2040 length300')).toMatchObject({ series: '2040', length: 300 });
+    expect(at('rod d8 L500')).toMatchObject({ d: 8, length: 500 });
+    expect(at('stepper nema17 L48')).toMatchObject({ nema: '17', length: 48 });
+    expect(at('leadscrew T8 p2 s4 L400')).toMatchObject({ d: 8, pitch: 2, starts: 4, length: 400 });
+    expect(at('threadedrod M8x1500')).toMatchObject({ thread: 'M8', length: 1500 }); // a length by its thread, as a screw is
+  });
+  it('is refused with its own number where the family does not make it', () => {
+    expect(callFamily('fan size35')).toMatch(/"size35" asks for frame 35 mm and this fan comes out 40/);
+    expect(callFamily('belt GT2 1000 w9')).toMatch(/"w9" asks for width 9 mm and this belt comes out 6/);
+    expect(callFamily('sheet aluminium t3')).toMatch(/"t3" asks for thickness 3 mm and this sheet comes out 2/);
+  });
+  it('still meets the family\'s own rules, and the words it already read are undisturbed', () => {
+    expect(callFamily('rail MGN12 L40')).toMatch(/carriage is 45\.4 mm long: its rail must be longer/); // read apart, then refused by the rail
+    // (case is part of the words: a spring's d is its wire and its D its coil, a cylinder's D its bore and its d its rod)
+    expect((callFamily('spring d1 D10 L30 n8') as Item).sized!.params).toMatchObject({ d: 1, D: 10, L: 30, n: 8 });
+    expect((callFamily('hydrauliccylinder D25 d12 50mm') as Item).name).toBe('hydraulic cylinder 25/12 × 50 mm');
+    expect((callFamily('pulley GT2 20T B5') as Item).sized!.params).toMatchObject({ teeth: 20, bore: 5 });
+    expect((callFamily('key shaft 20 L30') as Item).sized!.params).toMatchObject({ length: 30 });
+    expect((callFamily('magnet 10x3 N52') as Item).sized!.params).toMatchObject({ d: 10, h: 3, grade: 'N52' });
+    expect((callFamily('resistor 4.7k') as Item).sized!.params).toMatchObject({ ohms: 4700 });
+    expect((callFamily('circlip 12mm') as Item).sized!.params).toMatchObject({ d: 12 });
+    expect((callFamily('wire 22AWG 2m') as Item).sized!.params).toMatchObject({ awg: 22, length: 2 });
+  });
+});

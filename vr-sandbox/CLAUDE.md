@@ -114,7 +114,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Generated structure for any intent; its body in space | `src/nexus/ask/generate.ts`, `src/nexus/substrate/realize-space.ts` |
 | Machines as real hardware from generated elements | `src/nexus/embody/` (`any.ts`, `tree.ts` load path, `stock.ts`) |
 | Real products and what each contains, down to elements | `src/nexus/parts/inventory.ts` (about 1,500 items) |
-| Parts made to any size by their standard | `src/nexus/works/families.ts`, `catalogue.ts`, `partspace.ts` |
+| Parts made to any size by their standard, and the words that ask for one (a family found by its own name, its sizes read by its own `read`, a size stuck to its name read apart, and a part that would come out another size refused) | `src/nexus/works/families.ts`, `catalogue.ts`, `partspace.ts`, `src/nexus/parts/families.ts` (`callFamily`, `paramNamed`, `numbered`), `src/nexus/kinds/core.ts` (`readKind`, for the kinds) |
 | Parts designed once in 3D from their standard, saved by name and category, used by every build (`use("bolt M8x30")`); assemblies of them (a bolted joint) | `src/nexus/parts/components.ts` (kit `part`; checked over every catalogue size in `tests/nexus/components.test.ts`) |
 | A part's mass from its shape, material and fill | `src/nexus/parts/mass.ts` (re-exported by `kits.ts`) |
 | Whether a drawn part holds every part its inventory says is in it, all the way down (`missingIn`); each component's own check runs it | `src/nexus/parts/components.ts` |
@@ -1850,13 +1850,40 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    and not in the primitive whose name suggests it** (bores in `lathe` not `Cut`, shafts in `lathe` not `cyl`, faces
    in `prism` not `box`). A turned profile's faces are still not read and say so by their absence: a `lathe`'s flat
    annulus is a real seating face and its curved runs are not, and telling them apart is its own piece of work.
-   One fault found and *not* fixed, recorded because it is the kind this file exists for: **a glued parameter is
-   silently ignored**. `use('rail MGN12 length 240')` is a 240 mm rail, but `use('rail MGN12 length240')` and
-   `use('rail MGN12 L240')` are both the family's 400 mm default - the words asked for one size and the part came out
-   another, with nothing said. The library's own rule is that it never silently draws a stand-in, and this breaks it.
-   It is left for its own round because the fix is in the words parser, glued forms may be in use elsewhere in the
-   tree, and refusing them blind could break callers that work today.
-   Next on this, in order: the glued-parameter refusal above; a `lathe`'s flat annulus as a seating face; the
+   One fault found and *not* fixed in that round, recorded because it is the kind this file exists for: **a glued
+   parameter was silently ignored**. `use('rail MGN12 length 240')` is a 240 mm rail, but
+   `use('rail MGN12 length240')` and `use('rail MGN12 L240')` were both the family's 400 mm default - the words asked
+   for one size and the part came out another, with nothing said, which breaks the library's own rule that it never
+   silently draws a stand-in.
+   Fixed (2026-10-11), and the fix is a rule the library already had in its other half. The cause is one character:
+   every hand-written family reads a trailing size by `\b(\d{2,4})\s*$`, and there is no word boundary between a
+   letter and the digits stuck to it, so `length240` and `L240` matched nothing and fell to the default. The *kinds*
+   have never had this fault, because `readKind` matches each word against its axes' tags, takes a tag with its number
+   together ("sheath6", "bore50", "D25"), and refuses any word left over by name ("I do not know …"). So the round is
+   that same rule for the families written by hand, in the one place that sees the words (`callFamily` in
+   `src/nexus/parts/families.ts`): a word of the form `<name><number>` names a parameter the family takes as a
+   *number* - by its own key, the first word of what it says, or an initial that is its alone - and where the first
+   reading did not come out at that number, the sizes are read again with those names said apart from their numbers.
+   If the part still comes out another size it is refused with both numbers and the spelling its own family does read.
+   Nothing in the library was relying on a glued form: `perf dump` is byte-identical across the change, so no part
+   already drawn moved, and the only words whose answer changed are the ones that were wrong.
+   Three faults came out of it, each found by measuring rather than by reading the code:
+   - **A threaded rod said as its thread by its length was a different length.** `threadedrod M8x1500` drew a 1000 mm
+     rod, because a screw, a bolt and a set screw all read `[x×]` and this one read only the trailing number. It reads
+     the `x` form now, as its relatives do.
+   - **Case is part of this library's own words.** A spring says its wire `d` and its coil `D`; a hydraulic cylinder
+     says its bore `D` and its rod `d`. The first rule lowercased a name, so `spring d1 D10 L30 n8` - the family's own
+     example - read `D10` as the wire and refused itself. A family that says two sizes by one letter is read by case.
+   - And the one the gate caught that no reading would have: **asking a kind twice asks the wrong half.** A kind's
+     axis whose sizes are computed from another axis (a cylinder's rod comes from its bore) carries no number of its
+     own, so it does not look like a size at all, and both `D25` and `d12` read as the bore - which turned the
+     catalogue's own line into "I do not know D 25 D 12" in six tests across three files. A kind's reader already does
+     both halves of this; it is left to it, and the glued reading is for the hand-written families only.
+   Two forms stay refused rather than read, and the refusal names the spelling that works: `belt GT2 1000 w9` (its
+   family reads a width as "6mm") and `sheet aluminium t3` (as "2mm"). Teaching each family a second spelling of its
+   own sizes is the per-family fiddling the one central rule exists to avoid, and a refusal that says how to write it
+   is not a silent stand-in.
+   Next on this, in order: a `lathe`'s flat annulus as a seating face; the
    degrees-of-freedom solver, after which concentric, tangent, gear, screw and slot are cheap additions to one
    mechanism instead of twenty special cases; then `critic.ts` reading `mates`, so a contract is checked against the
    geometry rather than against contact alone.

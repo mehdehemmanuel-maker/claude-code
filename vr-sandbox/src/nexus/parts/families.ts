@@ -343,7 +343,9 @@ const tube: Family = {
 const threadedrod: Family = {
   id: 'threadedrod', name: 'threaded rod', path: ['Hardware', 'Fasteners', 'Threaded rod'], says: 'any metric thread and length', params: [{ key: 'thread', says: 'thread', unit: '', values: Object.keys(METRIC), default: 'M8' }, { key: 'length', says: 'length', unit: 'mm', min: 10, max: 3000, default: 1000 }],
   examples: ['threadedrod M8 1000', 'threadedrod M5 300'],
-  read(w) { const t = thread(w); return t ? { thread: t, length: num(/\b(\d{2,4})\s*(?:mm)?\s*$/.exec(w.replace(/M\d+(\.\d)?/i, ''))?.[1]) || 1000 } : `Which thread? ${Object.keys(METRIC).join(', ')}.`; },
+  // ("M8x1500" is an M8 rod 1500 mm long, as "screw M5x20" is a screw: a length by its thread, which the trailing
+  //  reading below cannot see, because there is no boundary between the x and its digits)
+  read(w) { const t = thread(w); return t ? { thread: t, length: num(/[x\u00d7]\s*(\d+(?:\.\d+)?)/i.exec(w)?.[1] ?? /\b(\d{2,4})\s*(?:mm)?\s*$/.exec(w.replace(/M\d+(\.\d)?/i, ''))?.[1]) || 1000 } : `Which thread? ${Object.keys(METRIC).join(', ')}.`; },
   make(p) { const t = String(p.thread), d = num(t.slice(1)), L = Number(p.length); return item(`threadedrod-${t.toLowerCase()}-${L}`, `${t} threaded rod, ${L} mm`, 'Hardware/Fasteners/Threaded rod', 'product', 'roll-thread', 'steel-low zinc', 'steel rod threaded its whole length by rolling, zinc-plated', `${METRIC[t]!.p} mm pitch (ISO 261)`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L * 0.85, RHO.steel)); },
 };
 // ---- sheet by metal and thickness ------------------------------------------------------------------------------------
@@ -557,12 +559,57 @@ const coupling: Family = {
 export const HAND_FAMILIES: Family[] = [screw, nut, washer, bearing, gear, spring, wire, extrusion, resistor, stepper, cell, pulley, leadscrew, led, oring, dcmotor, servo, fan, rail, rod, tube, threadedrod, sheet, pack, capacitor, standoff, insert, belt, pcb, bolt, setscrew, dowel, circlip, key, chain, sprocket, linear, magnet, pipe, ibeam, jst, header, heater, thermistor, coupling];
 /** Every family: those by hand, then every kind of bought part made from its table. */
 export const FAMILIES: Family[] = [...HAND_FAMILIES, ...KINDS.map(familyOf)];
+/** A number stuck to its own name: "length240", "L240", "bore5", "d8mm". Only a parameter a family takes as a
+ *  *number* can be named this way, because only a number can be stuck to one, and the name is that parameter's own
+ *  key, the first word of what it says, or an initial that is its alone. */
+const NUMBERED = /^([A-Za-z]+)(\d+(?:\.\d+)?)(?:mm)?$/;
+const takesNumber = (q: Param) => q.min !== undefined || typeof q.default === 'number';
+function paramNamed(f: Family, name: string): Param | null {
+  const ns = f.params.filter(takesNumber);
+  // (case is part of this library's own words where a family says two sizes by one letter: a spring's d is its wire
+  //  and its D its coil, which its own reading tells apart by case, so a name of that family is read by case too)
+  const cased = ns.some((q) => ns.some((r) => r !== q && r.key.toLowerCase() === q.key.toLowerCase()));
+  const same = (a: string, b: string) => (cased ? a === b : a.toLowerCase() === b.toLowerCase());
+  const said = ns.find((q) => same(q.key, name) || same(q.says.split(/\s+/)[0]!, name));
+  if (said) return said;
+  const initial = ns.filter((q) => same(q.key[0]!, name));
+  return name.length === 1 && initial.length === 1 ? initial[0]! : null;
+}
+/** Every word of a family's sizes that is a parameter with its number stuck to it, and those words said apart. */
+function numbered(f: Family, w: string): { said: { word: string; q: Param; n: number }[]; apart: string } {
+  const said: { word: string; q: Param; n: number }[] = [];
+  const apart = w.split(/[\s,]+/).filter(Boolean).map((word) => {
+    const m = NUMBERED.exec(word), q = m ? paramNamed(f, m[1]!) : null;
+    if (!m || !q) return word;
+    said.push({ word, q, n: Number(m[2]) }); return `${q.key} ${m[2]}`;
+  }).join(' ');
+  return { said, apart };
+}
+
 /** A family called with its sizes, in words ("screw M4x20", "bearing 6201 2RS"): the item it gives, or why not. */
 export function callFamily(words: string): Item | string | null {
   const w = words.trim(), f = FAMILIES.find((x) => new RegExp(`^${x.id}s?\\b`, 'i').test(w)) ?? (/^M\d/i.test(w) && /x\d/i.test(w) ? screw : null);
   if (!f) return null;
   if (f.kind && !w.replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim()) return null;
-  const p = f.read(w.replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim() || w); if (typeof p === 'string') return p;
+  const sizes = w.replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim() || w;
+  let p = f.read(sizes); if (typeof p === 'string') return p;
+  // A name with its number stuck to it is still that parameter asked for: "rail MGN12 L240" is a 240 mm rail. The
+  // hand-written readings want a boundary before the digits (`\b(\d{2,4})$`), which "length240" has not got, so the
+  // sizes are read again with every such name said apart from its number — and if the part still comes out another
+  // size, refused, because the words asked for one size and a part drawn at another is the silent stand-in this
+  // library does not draw. A kind's own reader does both already — it takes a tag with its number stuck to it and
+  // refuses any word it could not place — so this is that same rule for the families written by hand, and a kind is
+  // left to it. (Asking a kind twice broke one: a hydraulic cylinder says its bore D and its rod d, and an axis whose
+  // sizes are computed from another carries no number to tell them apart by, so both words read as the bore.)
+  if (!f.kind) {
+    const { said, apart } = numbered(f, sizes), missed = (q: Record<string, string | number>) => said.find((g) => Number(q[g.q.key]) !== g.n);
+    if (missed(p)) {
+      const q = f.read(apart); if (typeof q === 'string') return q;
+      const g = missed(q);
+      if (g) return `"${g.word}" asks for ${g.q.says} ${g.n}${g.q.unit ? ` ${g.q.unit}` : ''} and this ${f.id} comes out ${p[g.q.key]}: its sizes are said as "${f.id} ${f.examples[0]?.replace(new RegExp(`^${f.id}s?\\s*`, 'i'), '') ?? ''}".`;
+      p = q;
+    }
+  }
   for (const q of f.params) if (q.min !== undefined && typeof p[q.key] === 'number' && ((p[q.key] as number) < q.min || (p[q.key] as number) > q.max!)) return `${q.says} must be ${q.min}–${q.max} ${q.unit}.`;
   return { ...f.make(p), sized: { family: f.id, params: p } };
 }
