@@ -45,6 +45,11 @@ export default defineConfig({
     // every worker. The cache is keyed by content, so a file that has not changed is not transformed again: the gate
     // is run many times a round, and this is the cheapest time it will ever save.
     fsModuleCache: true,
+    // This host has four cores and vitest keeps one back by default, which left 545 s of test work on three workers:
+    // 180 s of wall clock at four against 191 at the default and 185 at six (measured, whole suite, one run each).
+    // Four is the number because the work is the tests' own arithmetic, not waiting: oversubscribing only adds
+    // switching. --no-isolate and --pool=threads were measured here too and bought nothing (see CLAUDE.md).
+    maxWorkers: 4,
     // inert unless PERF_PROFILE is set: `npm run perf -- profile <file>` turns it on (tests/perf-setup.ts)
     setupFiles: ['tests/perf-setup.ts'],
   },
