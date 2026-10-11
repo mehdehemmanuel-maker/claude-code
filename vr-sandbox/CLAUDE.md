@@ -1322,9 +1322,27 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    of the bench, which **this** plan buys used for $120. A station can be drawn from the bill the works would build
    it from and still be bought by the plan in front of you, so the room now asks `worksPack` and each card says which
    ("and this plan builds it", or "though this plan buys one used").
-   Next: the rest of the stations (a welder is bought; the measuring bench waits on the library drawing a calliper —
-   it is in the catalogue and "not drawn yet", which is the honest reason it is still a bare bench), the brake's own
-   stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
+   The measuring bench was the last one waiting on the library rather than on a bill, and now it is not: the library
+   draws a calliper (`src/nexus/parts/components.ts`, the DIN 862 pattern as Mitutoyo's 530 series gives it). It
+   is the right first instrument of that family — the cheapest thing that reads to 0.05 mm, no battery, no
+   electronics, every part of it a shape this library already draws — and the works itself calls measurement
+   "the loop closer, the one family everyone leaves out". The body is one instrument whichever way it is read; what
+   differs is the slider's reading, so that is the only part that differs in the drawing: a vernier engraved on the
+   slider, a dial on a rack under a crystal, or a board, an LCD and a cell.
+   Drawing it found three faults, each in something that was already written down:
+   × **A prism drawn solid is not the part.** The slider came out at 58 g, half as much again as a real one: a
+     slider is a hub that wraps the beam and a 2 mm face that carries the scale, with a window cut in it, not a
+     10 mm block. The whole instrument went from 292 g to 181 against the 171 its standard gives.
+   × **The section has to grow with the range.** A 300 drawn on a 150's 16 × 3.5 beam came out 41 % under its
+     makers' weight; a 300's beam is about 24 × 5, and with that it lands at 491 g against 475.
+   × **What is inside a thing depends on which thing it is.** The catalogue listed a gear train, a dial and a
+     crystal in *every* calliper, so a drawing of a vernier one was "incomplete" for want of parts a vernier
+     calliper does not have. `of` now answers by the reading, and so does its weight (a dial's works are about 25 g,
+     a digital's about 10).
+   Its micrometer, its indicator and its granite plate are in the catalogue and not drawn yet, so the bench carries
+   the calliper and its card still says the rest are not drawn — which is the whole point of the kit rule.
+   Next: the rest of the stations (a welder is bought; a micrometer and a dial indicator would finish the measuring
+   bench the same way the calliper started it), the brake's own stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
    height (0.9 m) already contradicts — the room's bare walls, a blind judge on the works as it now stands, prices
    for the lines that still have none, working the three ratchets down by cause, and the older Now items (robot
    benches, likeness, life graph).

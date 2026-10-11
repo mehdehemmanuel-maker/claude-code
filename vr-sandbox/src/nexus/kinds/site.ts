@@ -165,8 +165,17 @@ export const SITE: KindDef[] = [
   {
     id: 'caliper', look: 'sheet', name: 'caliper', path: 'Tools/Measuring/Calipers', says: 'a sliding jaw gauge: outside, inside and depth', std: 'the ranges and readings sold; accuracy typical of datasheets',
     axes: [bare('type', 'reading', ['vernier', 'dial', 'digital']), ax('range', 'range', 'mm', [150, 200, 300])],
-    title: (p) => `${p.range} mm ${p.type} caliper`, of: () => 'caliper-beam caliper-slider gear-train gauge-dial indicator-crystal', make: 'machine', how: 'a hardened stainless beam and slider ground true, its scale etched (or read by a dial or a capacitive sensor)',
-    spec: (p) => `reads ${p.type === 'digital' ? '0.01' : '0.02'} mm; within about ±${n(p, 'range') <= 200 ? '0.03' : '0.04'} mm (typical)`, box: (p) => [n(p, 'range') + 85, n(p, 'range') / 4 + 35, 16], g: (p) => 0.0045 * n(p, 'range') ** 2 + 70,
+    // what is inside it is what reads it: a vernier is engraved on the slider and has no works at all, a dial has a
+    // rack and a gear train under a crystal, a digital one has a capacitive scale, a board, an LCD and a cell.
+    // Listing a gear train and a dial in all three made the drawing of a vernier calliper "incomplete" for want of
+    // parts a vernier calliper does not have.
+    title: (p) => `${p.range} mm ${p.type} caliper`, make: 'machine',
+    of: (p) => (p.type === 'dial' ? 'caliper-beam caliper-slider gear-train gauge-dial indicator-crystal'
+      : p.type === 'digital' ? 'caliper-beam caliper-slider pcb-bare lcd-glass cell-cr2032' : 'caliper-beam caliper-slider'), how: 'a hardened stainless beam and slider ground true, its scale etched (or read by a dial or a capacitive sensor)',
+    spec: (p) => `reads ${p.type === 'digital' ? '0.01' : '0.02'} mm; within about ±${n(p, 'range') <= 200 ? '0.03' : '0.04'} mm (typical)`, box: (p) => [n(p, 'range') + 85, n(p, 'range') / 4 + 35, 16],
+    // its weight is its beam's section over its length, plus what does the reading: a dial's case, train and
+    // crystal are about 25 g and a digital's board, display and cell about 10, where a vernier's is engraved
+    g: (p) => 0.0045 * n(p, 'range') ** 2 + 70 + (p.type === 'dial' ? 25 : p.type === 'digital' ? 10 : 0),
   },
   {
     id: 'micrometer', name: 'micrometer', path: 'Tools/Measuring/Micrometers', says: 'a screw gauge: a fine thread turns a spindle onto the work', std: 'DIN 863 ranges; readings and accuracy typical of datasheets',

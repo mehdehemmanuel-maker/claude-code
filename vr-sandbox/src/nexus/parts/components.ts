@@ -516,6 +516,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     leaves: 'its reflector cup drawn as a block with a wall each side of its die, its rim\'s flat at the cathode cut to its lens\'s radius (an estimate), its lens diffused and tinted its colour (Adafruit\'s 299 the red one: a milky cherry red, its tint an estimate); its proportions typical of makers\' T-1 and T-1¾ drawings',
     make: (p, it) => { const c = String(p.colour); return passiveParts(ledSolids(Number(p.size), c === 'red' || c === 'yellow' ? 'algainp' : 'gan'), it.name, { lead: 'lead-frame', die: c === 'red' || c === 'yellow' ? 'led-die-algainp' : 'led-die-ingan', wire: 'bond-wire' }, '', undefined, LED_TINT[c]); },
   },
+  caliper: { says: 'a calliper as the DIN 862 pattern gives it (src/nexus/parts/components.ts): a ground stainless beam with its fixed outside and knife jaws, a slider carrying its own pair and its depth rod, a thumb roller and a lock screw; its reading a vernier engraved on the slider, a dial on a rack, or an LCD over a capacitive encoder', leaves: 'its graduations not drawn (a 150 is 3,000 lines at 0.05 mm, and engraving them as geometry would cost more than the room has); its rack, its gib and its spring not drawn; drawn open 30 mm so both pairs of jaws can be seen; the beam\u2019s section, the slider\u2019s block and the roller estimates off the published lengths', make: (p, it) => kitParts(vernierCaliper(Number(p.range), 30, String(p.type) as 'vernier' | 'dial' | 'digital'), it.name) },
   solderiron: { says: 'an iron as its maker makes it (src/nexus/machines/kit-solder.ts): its shell, grip, stainless core, board, display, buttons, ports and screws, its tip cartridge with its sleeve, heater and point', leaves: 'its board\'s smallest passives as three; its shell one moulding, not its two halves; where its maker gives no size, an estimate off a photo', make: (_p, it) => kitParts(pinecilV2(), it.name) },
   helpinghands: { says: 'helping hands as they are made (src/nexus/machines/kit-solder.ts): a cast base, its nickel-plated rods, swivel and ball joints, wing nuts, two alligator clips each its jaws and spring, its magnifier\'s rim and glass', leaves: 'every size but its lens\'s an estimate (no maker publishes a drawing); posed holding an 81 mm board upside down, the lesson\'s hold', make: (_p, it) => kitParts(helpingHands(), it.name) },
   flushcutter: { says: 'cutters as their maker makes them (src/nexus/machines/kit-solder.ts): two forged halves, their rivet, grips and spring (the -A\'s safety clip too)', leaves: 'their outline between Hakko\'s figures an estimate; their halves lying in one plane, not lapped at the rivet', make: (p, it) => kitParts(chp170(p.model === 'chp-170-a'), it.name) },
@@ -1286,4 +1287,100 @@ export function boltedJoint(thread: string, grip: number, o: { class?: string; l
     use(`washer ${thread}`, [0, -(T.h + grip + T.h) * mm, 0], { name: `${thread} washer under the nut`, passes: [bName], fixed: 'under its nut' }),
     use(nut, [0, -(T.h + grip + T.h) * mm, 0], { rot: [PI, 0, 0], passes: [bName], fixed: `run onto its bolt and torqued` }),
   ] };
+}
+
+// ---- the measuring kit ----------------------------------------------------------------------------------------------
+// The works calls measurement "the loop closer — the one family everyone leaves out and the one that decides whether
+// the other five ever improve", and its bench stood in the room as a bare box because the library knew a calliper
+// (Tools / Measuring / Calipers) and did not draw one. A vernier calliper is the right first one: the cheapest thing
+// that reads to 0.05 mm, no battery, no electronics, and every part of it a shape this library already draws.
+//
+// Sizes are the DIN 862 pattern as Mitutoyo's 530 series gives it (0–150 mm, 233 mm overall, 40 mm external jaws,
+// 16 mm knife jaws, about 171 g); the beam's section, the slider's block and the roller are estimates off those
+// figures. Its frame: along +x from the jaws' measuring faces (x 0) to the beam's back end, the beam's depth up (+y,
+// the jaws hanging below it), lying flat so its scale faces +z. It lives here and not under machines/ because it is a
+// part of the library, not a machine, and because a new file up there would tighten a knot the lint already calls debt.
+type CalPt = [number, number];
+/** A side-view silhouette in (x, y) extruded through `t` mm of thickness, its middle at z0. */
+const calFlat = (pts: CalPt[], holes: CalPt[][], t: number, z0: number, more: Partial<Solid> = {}): Solid =>
+  ({ role: 'body', shape: { prism: { pts, L: t, ...(holes.length ? { holes } : {}) } }, at: [0, 0, z0], mat: 'stainless-304', ...more });
+const calRect = (x0: number, y0: number, x1: number, y1: number): CalPt[] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+const calPiece = (name: string, item: string, solids: Solid[]): Comp => ({ name, item, solids, at: [0, 0, 0] });
+
+/** A CR2032 lithium coin cell, drawn as it is made: a crimped nickel-plated can with a pressed manganese-dioxide
+ *  pellet, a separator wet with electrolyte and a disc of lithium foil in it under its own insulating seal and cap.
+ *  20 \u00d7 3.2 mm, 3.1 g, about 225 mAh at 3 V (typical). Its axis is the drawing's z. */
+export function coinCell(name: string, at: [number, number, number]): Comp {
+  const d = (r: number, h: number, dz: number, mat: string, color: number, finish: string, role: 'body' | 'term' = 'body'): Solid =>
+    ({ role, shape: { cyl: [r, h] }, at: [at[0], at[1], at[2] + dz], rot: [PI / 2, 0, 0], mat, color, finish });
+  return { name, item: 'cell-cr2032', at: [0, 0, 0], solids: [], kids: [
+    { name: `${name} can`, item: 'battery-can', at: [0, 0, 0], solids: [d(10, 2.2, 0.5, 'steel-low', 0xc2c6ca, 'bright', 'term')] },
+    { name: `${name} cathode`, item: 'mno2-pellet', at: [0, 0, 0], solids: [d(9.2, 1.1, 1.0, 'graphite', 0x2c2c2e, 'texture')] },
+    { name: `${name} separator`, item: 'cell-separator', at: [0, 0, 0], solids: [d(9.4, 0.12, 0.35, 'pp', 0xf2f2ef, 'texture')] },
+    { name: `${name} anode`, item: 'lithium-anode', at: [0, 0, 0], solids: [d(8.8, 0.45, 0.0, 'lithium', 0xd9dde0, 'mill')] },
+    { name: `${name} electrolyte`, item: 'electrolyte-li', at: [0, 0, 0], solids: [d(9.4, 0.1, 0.22, 'water', 0xdad6c0, 'bright')] },
+    { name: `${name} seal`, item: 'cell-seal', at: [0, 0, 0], solids: [{ role: 'body', shape: { lathe: [[9.5, 0], [10, 0], [10, 2.6], [9.5, 2.6], [9.5, 0]] }, at: [at[0], at[1], at[2] - 0.8], rot: [PI / 2, 0, 0], mat: 'nylon', color: 0x1e1e20, finish: 'moulded' }] },
+    { name: `${name} cap`, item: 'negative-cap', at: [0, 0, 0], solids: [d(9.4, 0.5, -1.3, 'steel-low', 0xcbcfd2, 'bright', 'term')] },
+    { name: `${name} label`, item: 'battery-label', at: [0, 0, 0], solids: [{ role: 'body', shape: { lathe: [[9.98, 0], [10.04, 0], [10.04, 2.2], [9.98, 2.2], [9.98, 0]] }, at: [at[0], at[1], at[2] - 0.6], rot: [PI / 2, 0, 0], mat: 'pet', color: 0x9aa3ab, finish: 'print' }] },
+  ] };
+}
+
+/** A calliper of `range` mm (150, 200 or 300), opened `open` mm so both pairs of jaws can be seen. The body is the
+ *  same instrument whichever way it is read — a ground stainless beam and a slider on it — and what changes is how the
+ *  slider says where it is: a vernier engraved on it, a dial on a rack under a crystal, or a board, an LCD and a cell.
+ *  So that is the only part of the drawing that differs, and the catalogue now answers the same way. */
+export function vernierCaliper(range = 150, open = 30, reading: 'vernier' | 'dial' | 'digital' = 'vernier'): Comp {
+  // the pattern scales off its range: a 150 is 233 long with 40 mm jaws, a 300 is 410 with 62 (its makers' tables),
+  // and the beam's own section grows with it (16 × 3.5 to 24 × 5) — a 300 drawn on a 150's beam came out 41 %
+  // under the weight its makers list, which was the section and nothing else
+  const over = range + 83, jaw = Math.round(40 + (range - 150) * 0.073), knife = Math.round(16 + (range - 150) * 0.027);
+  const beamH = +(16 + (range - 150) * 0.053).toFixed(1), beamT = +(3.5 + (range - 150) * 0.01).toFixed(2);
+  const bright = { color: 0xc6cacd, finish: 'ground' }, dark = { color: 0xb0b4b8, finish: 'bright' };
+  // the beam, with the external jaw hanging below it at zero and the knife jaw above, both tapering to their faces
+  const beam = calPiece('calliper beam', 'caliper-beam', [
+    calFlat(calRect(0, 0, over, beamH), [], beamT, 0, bright),
+    calFlat([[0, 0], [7, 0], [7, -jaw + 14], [3.5, -jaw], [0, -jaw]], [], beamT, 0, bright),
+    calFlat([[0, beamH], [6, beamH], [2.6, beamH + knife], [0, beamH + knife]], [], 3, 0, bright),
+  ]);
+  // the slider is a frame, not a block: a hub that wraps the beam and a 2 mm face that carries the scale, with the
+  // window its reading is seen through cut in it. Drawn as one 10 mm block it weighed 58 g, half as much again as a
+  // real one, and the whole instrument came out at 292 g against its standard's 171.
+  const x = open, sl = 45;
+  const hub: CalPt[] = [[x - 7, -6], [x + sl - 7, -6], [x + sl - 7, beamH + 2], [x - 7, beamH + 2]];
+  const face: CalPt[] = [[x - 7, beamH], [x + sl - 7, beamH], [x + sl - 7, beamH + 6], [x + 20, beamH + 6], [x + 14, beamH + 18], [x - 7, beamH + 18]];
+  const slider = calPiece('calliper slider', 'caliper-slider', [
+    calFlat(hub, [calRect(x - 2, 0.15, x + sl - 12, beamH - 0.15)], 8, 0, dark),
+    calFlat(face, [calRect(x + 2, beamH + 2.5, x + 26, beamH + 14)], 2, 0, dark),
+    calFlat([[x, 0], [x - 7, 0], [x - 7, -jaw], [x - 3.5, -jaw], [x, -jaw + 14]], [], beamT, 0, bright),
+    calFlat([[x, beamH], [x - 6, beamH], [x - 2.6, beamH + knife], [x, beamH + knife]], [], 3, 0, bright),
+    // the thumb roller on its side and the lock screw on top: the two things a hand touches
+    { role: 'term', shape: { cyl: [6, 7] }, at: [x + 30, 2, 0], rot: [PI / 2, 0, 0], mat: 'stainless-304', color: 0x9aa0a5, finish: 'knurl' },
+    { role: 'term', shape: { cyl: [3.5, 3] }, at: [x + 6, beamH + 19.5, 0], mat: 'stainless-304', color: 0x9aa0a5, finish: 'knurl' },
+  ]);
+  const rod = calPiece('calliper depth rod', 'caliper-slider', [
+    { role: 'body', shape: { box: [over - 20, 4, 2] }, at: [(over - 20) / 2 + open, beamH / 2, beamT / 2 + 1], mat: 'stainless-304', color: 0xbcc0c4, finish: 'ground' },
+  ]);
+  const read = reading === 'dial'
+    ? [calPiece('calliper dial case', 'caliper-slider', [
+        // a bezel and a back, not a puck: drawn solid the case alone weighed a third of the instrument
+        { role: 'term', shape: { lathe: [[16, 0], [19, 0], [19, 7], [16, 7], [16, 0]] }, at: [x + 30, beamH + 6, 0], rot: [PI / 2, 0, 0], mat: 'stainless-304', color: 0xd6dadd, finish: 'bright' },
+        { role: 'term', shape: { cyl: [19, 0.8] }, at: [x + 30, beamH + 6, -3.1], mat: 'stainless-304', color: 0xc8ccd0, finish: 'bright' }]),
+      calPiece('calliper gear train', 'gear-train', [
+        { role: 'term', shape: { cyl: [3.5, 3] }, at: [x + 30, beamH + 6, 1.5], mat: 'stainless-304', color: 0xa8adb2, finish: 'bright' },
+        { role: 'term', shape: { cyl: [14, 1.6] }, at: [x + 30, beamH + 6, 0.2], mat: 'brass', color: 0xb08d57, finish: 'mill' }]),
+      calPiece('calliper dial face', 'gauge-dial', [
+        { role: 'term', shape: { cyl: [16.5, 0.6] }, at: [x + 30, beamH + 6, 3.2], mat: 'abs', color: 0xf4f4f0, finish: 'moulded' }]),
+      calPiece('calliper crystal', 'indicator-crystal', [
+        { role: 'term', shape: { cyl: [17, 1.2] }, at: [x + 30, beamH + 6, 4.2], mat: 'pmma', color: 0xdfe6ea, finish: 'bright' }])]
+    : reading === 'digital'
+      ? [calPiece('calliper housing', 'caliper-slider', [
+          { role: 'term', shape: { box: [46, 26, 9] }, at: [x + 30, beamH + 13, 0], mat: 'abs', color: 0x2b2d31, finish: 'moulded' }]),
+        calPiece('calliper board', 'pcb-bare', [
+          { role: 'term', shape: { box: [40, 20, 1.2] }, at: [x + 30, beamH + 13, -2.5], mat: 'fr4', color: 0x1f4d2e, finish: 'texture' }]),
+        calPiece('calliper display', 'lcd-glass', [
+          { role: 'term', shape: { box: [34, 13, 1.4] }, at: [x + 30, beamH + 14, 4.6], mat: 'glass', color: 0x9aa89a, finish: 'bright' }]),
+        coinCell('calliper cell', [x + 30, beamH + 6, -5])]
+      : [];
+  const how = reading === 'vernier' ? 'vernier' : reading;
+  return { name: `${range} mm ${how} calliper`, item: `caliper-${how}-${range}`, at: [0, 0, 0], kids: [beam, slider, rod, ...read] };
 }

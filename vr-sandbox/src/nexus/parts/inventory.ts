@@ -778,6 +778,8 @@ e('lithium-anode', 'lithium anode', 'Electrical/Power/Cell parts', 'part', 'roll
 e('nimh-positive', 'nickel hydroxide electrode', 'Electrical/Power/Cell parts', 'part', 'coat', 'nickel', 'nickel hydroxide pasted in a nickel foam');
 e('nimh-negative', 'metal hydride electrode', 'Electrical/Power/Cell parts', 'part', 'coat', 'lani5 nickel', 'a hydrogen-storing alloy pasted on a perforated nickel strip');
 e('silver-oxide-pellet', 'silver oxide cathode', 'Electrical/Power/Cell parts', 'part', 'sinter', 'ag2o graphite', 'a pressed pellet of silver oxide and graphite');
+e('mno2-pellet', 'manganese dioxide cathode', 'Electrical/Power/Cell parts', 'part', 'sinter', 'mno2 graphite', 'a pressed pellet of manganese dioxide and graphite, the positive electrode of a lithium coin cell');
+e('cell-cr2032', 'lithium coin cell CR2032', 'Electrical/Power/Cells', 'product', 'assemble', 'battery-can mno2-pellet cell-separator lithium-anode electrolyte-li cell-seal negative-cap battery-label', 'a lithium foil anode and a manganese-dioxide pellet either side of a separator in a crimped can', '20 \u00d7 3.2 mm; 3 V, about 225 mAh (typical)', { g: 3.1 });
 e('battery-label', 'label', 'Electrical/Power/Cell parts', 'part', 'laminate', 'pet', 'the printed shrink sleeve round the can');
 e('plate-positive', 'positive plate', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead pbo2', 'a cast lead-alloy grid pasted with lead dioxide');
 e('plate-negative', 'negative plate', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead', 'a cast lead-alloy grid pasted with sponge lead');

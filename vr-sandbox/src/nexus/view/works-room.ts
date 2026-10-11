@@ -50,6 +50,10 @@ export const COMPOSED: Record<string, string> = {
 export const KIT_ON: Record<string, string[]> = {
   soldering: ['ironstand s-11', 'solderiron pinecil-v2', 'tipcleaner 599b', 'solderreel ts-635050', 'flushcutter chp-170', 'helpinghands mz101', 'breadboard 170pts', 'fluxpen cq4lf'],
   computer: ['xiao ESP32C3', 'permaproto half'],
+  // the loop closer, now that the library draws one: the calliper the station's own line names. Its micrometer,
+  // its indicator and its granite plate are in the catalogue and not drawn yet, so the bench says so rather than
+  // standing a box on itself and calling it a micrometer.
+  measuring: ['caliper digital range150'],
 };
 
 export interface WorksRoom {
