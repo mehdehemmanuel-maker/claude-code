@@ -228,4 +228,24 @@ export const SITE: KindDef[] = [
     spec: (p) => { const [K, W] = ROPE[s(p, 'build')]!, d = n(p, 'd'), F = (K * d * d * 1770) / 1000; return `grade 1770: breaks at ${F.toFixed(1)} kN (EN 12385-4: K d² R / 1000, K = ${K}); ${((W * d * d)).toFixed(1)} kg per 100 m; works at ${(F / 5).toFixed(1)} kN at 5 : 1 (a common factor)`; },
     box: (p) => (n(p, 'L') >= 20 ? [400, 400, 150] : [250, 250, 80]), g: (p) => ROPE[s(p, 'build')]![1] * n(p, 'd') ** 2 * n(p, 'L') * 10, look: (p) => `coil w${p.d}`,
   },
+  {
+    // The safety kit is not a machine and it buys no capability, which is why it was the last station in the works to
+    // be drawn and why it is the one that cannot be left out: half the processes in a works take an eye, a lung or a
+    // house. It is a *set* of bought things rather than one product, so its own figures are the six makers' figures
+    // added up, and `of` names each of them so the breakdown queue takes every one of them down to its elements.
+    // Drawn by src/nexus/parts/kit-safety.ts.
+    id: 'safetykit', look: 'case', name: 'safety kit and extraction', path: 'Tools/Safety/Kits',
+    says: 'what a works has to own before it owns a welder: an extinguisher, a face shield, gauntlets, ear defenders, a first-aid kit, and a fan with its duct and hood to take fume off the work',
+    std: 'each item its own maker’s or standard’s figures: RS’s PSP2000 data sheet, 3M’s WP96 and H520A, EN 12477, BS 8599-1, Manrose’s MF100T',
+    axes: [bare('set', 'set', ['works'])],
+    title: () => 'the works’ safety kit and extraction',
+    of: () => 'extinguisher-2kg faceshield-wp96 eardefender-h520a weldglove-pair firstaid-small fumefan-100 duct-flex-100 fume-hood', make: 'assemble',
+    how: 'nothing in it is made here: every one of the six is bought, and the kit is the set laid out at the station it serves',
+    spec: () => '2 kg of ABC powder rated 13A/55B; a face shield that stops a 120 m/s particle and molten metal (EN 166 2C-12 1 B 3 9); gauntlets 350 mm long to EN 12477; SNR 31 dB of hearing protection (EN 352); a BS 8599-1 small workplace first-aid kit; 68 l/s (245 m³/h) of extraction through 100 mm duct. Two of its weights are its makers’ (the extinguisher’s 3.20 kg, the ear defenders’ 210 g) and one is 3M’s for the shield alone (149 g); for the headgear, the gauntlets, the first-aid kit and the fan no maker publishes one, so those are the drawn solids’ own figures and say so',
+    // 3,200 + 213 + 210 + 302 + 672 + 1,388 + 78 + 137 g: the sum of the eight entries' own masses in the inventory.
+    // The solids drawn for it weigh 6,127 g, 1.1 % under, because the extinguisher's bracket is drawn as its wire and
+    // not its nylon coat and wall fixings. Its box is the span of that drawing, laid out two rows deep on its own
+    // footprint (1.48 × 0.67 m from src/nexus/works/floor.ts), with the duct's bend reaching over it.
+    box: () => [1225, 610, 540], g: () => 6200,
+  },
 ];

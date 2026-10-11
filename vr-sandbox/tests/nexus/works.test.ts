@@ -15,6 +15,7 @@ import { resolve, type Item } from '../../src/nexus/parts/inventory';
 import { massOf } from '../../src/nexus/parts/kits';
 import { layout } from '../../src/nexus/parts/space';
 import { linkFor, linesOf } from '../../src/nexus/machines/link';
+import { DRAWN } from '../../src/nexus/view/works-room';
 
 const SHOPS = [TIERS[1]!, TIERS[2]!, TIERS[3]!, TIERS[4]!];
 
@@ -841,6 +842,42 @@ describe('a bill whose numbers are derived and not typed', () => {
       return (fixed.sub ?? fixed.box)!.min.x - (slide.sub ?? slide.box)!.max.x;
     };
     expect(gap(0)).toBeCloseTo(0, 3); expect(gap(100)).toBeCloseTo(0.1, 3);
+  });
+  it('the safety station stands as the kit it is, and each item of it weighs what its maker says', () => {
+    // the station the works will not cut, and the last of its stand-ins that every item of was a bought thing with
+    // published figures. It is wired in by `DRAWN` in src/nexus/view/works-room.ts, so the room draws the kit rather
+    // than a board with a card saying "not drawn yet": the check that it is wired in is that the station's own words
+    // resolve to a drawn component at all.
+    expect(DRAWN['safety']).toBe('safetykit works');
+    const r = resolve(DRAWN['safety']!) as Item, c = componentOf(r.id)!;
+    expect(c, 'the safety kit is not drawn').toBeTruthy();
+    expect(c.faults, 'its own check').toEqual([]);
+    // nothing its bill lists is missing from the drawing, all the way down: the kit's six things, the extinguisher's
+    // eleven parts, the gauge's six, and the fan's motor down to its rotor's own core and shaft
+    expect(missingIn(c.part, r)).toEqual([]);
+    const of = (id: string) => (c.part.parts ?? []).find((q) => q.item === id)!;
+    const g = (id: string) => massOf(of(id)) * 1000;
+    // the three figures a maker publishes, each within 3 % of what the solids drawn for it weigh. The extinguisher's
+    // is the one that says a pressure vessel has been drawn as the shell it is: 2.0 kg of its 3.20 is powder, and its
+    // cylinder's 1.7 mm wall is what makes the other 1.0 kg come out right
+    expect(g('extinguisher-2kg')).toBeGreaterThan(3100); expect(g('extinguisher-2kg')).toBeLessThan(3200);
+    expect(g('eardefender-h520a')).toBeGreaterThan(204); expect(g('eardefender-h520a')).toBeLessThan(211);
+    const window = (of('faceshield-wp96').parts ?? []).find((q) => q.item === 'shield-window')!;
+    // its wrap is the one arc that is both 3M's 263 mm across and heavy enough for 3M's 149 g at 1.8 mm, so this is
+    // the check that the derivation still holds and the window is not a flat sheet (which weighs 130 g)
+    expect(massOf(window) * 1000, '3M gives the WP96 149 g').toBeGreaterThan(148);
+    expect(massOf(window) * 1000).toBeLessThan(149.5);
+    // and the whole kit against the eight entries its own inventory list adds up to
+    expect(massOf(c.part) * 1000).toBeGreaterThan(r.g! * 0.95); expect(massOf(c.part) * 1000).toBeLessThan(r.g! * 1.02);
+    // it comes apart into every one of the six things it is, each its own item, as the vice does
+    const names = (c.part.parts ?? []).map((q) => q.name).join(' | ');
+    for (const w of ['fire extinguisher', 'first-aid kit', 'ear defenders', 'welding gauntlets', 'face shield', 'fume extraction', 'capture hood'])
+      expect(names, w).toContain(w);
+    // and it stands on the floor of its own footprint rather than through it or beyond it
+    const ns = layout(c.part);
+    const span = (k: 'x' | 'y' | 'z'): [number, number] => ns.reduce<[number, number]>((a, n) => { const b = (n.sub ?? n.box)!; return [Math.min(a[0], b.min[k]), Math.max(a[1], b.max[k])]; }, [9, -9]);
+    expect(span('y')[0], 'nothing below the floor').toBeGreaterThan(-0.001);
+    expect(Math.max(-span('x')[0], span('x')[1]), 'inside the 1.48 m its station is given').toBeLessThan(0.74);
   });
   it('a build weighs what a person would lift', () => {
     const bench = BUILDS.find((b) => b.id === 'workbench')!;

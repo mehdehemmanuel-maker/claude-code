@@ -33,6 +33,9 @@ export const DENSITY: Record<string, number> = {
   mgo: 3580, nichrome: 8400, 'ferrite-hard': 4900, 'ntc-ceramic': 5000,
   // (neoprene, a timing belt's body: 1.23 g/cm³, typical)
   neoprene: 1230,
+  // (monoammonium phosphate, an ABC extinguisher's charge: 1.803 g/cm³ as crystal, and about half that packed, which
+  //  is what the drawing's `fill` says rather than a second density for the same substance)
+  'abc-powder': 1803,
   // (carbon fibre in epoxy, a woven laminate or a pultruded tube: 1.6 g/cm³, typical of 60 % fibre by volume)
   cfrp: 1600,
   // (silver, a switch's contacts: 10.49 g/cm³)

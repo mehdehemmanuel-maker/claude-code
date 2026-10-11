@@ -133,6 +133,11 @@ export const MATERIALS: Record<string, Spec> = {
   'al-laminate': { blend: [['al-foil', 40], ['nylon', 25], ['pp', 35]], says: 'nylon, aluminium foil and polypropylene' },
   'ruthenium-oxide': { formula: 'RuO2', says: 'ruthenium dioxide' }, 'silicone-alumina': { blend: [['silicone', 35], ['alumina', 65]], says: 'silicone filled with alumina, typical shares' }, 'fibre-gasket-sheet': { blend: [['fibreglass', 55], ['aramid', 15], ['nbr', 30]], says: 'glass and aramid fibre in nitrile, typical shares' }, 'cotton-fabric': { formula: 'C6H10O5', says: 'cellulose' }, aramid: { formula: 'C14H10N2O2', says: 'poly-paraphenylene terephthalamide' },
   'silver-paste': { blend: [['silver', 80], ['glass', 5], ['C10H18O', 15]], says: 'silver powder and glass frit in terpineol' },
+  // (a welding glove's hide and an extinguisher's charge: the two materials the works' safety kit needed and the
+  //  library did not store. Chrome-tanned leather is collagen with its bound water and the chromium the tannage
+  //  leaves in it, about 3 % of the hide; ABC powder is monoammonium phosphate, exactly from its formula)
+  leather: { blend: [['collagen', 85], ['water', 12], ['chromium', 3]], says: 'chrome-tanned cowhide: collagen, its bound water and the chromium of the tannage; typical shares' },
+  'abc-powder': { formula: 'NH4H2PO4', says: 'monoammonium phosphate, the extinguishant of ABC dry powder' },
   // the materials of the kinds of bought part (src/nexus/kinds)
   'stainless-316': { alloy: { Cr: 17, Ni: 12, Mo: 2.5, Mn: 1.5, Si: 0.5, C: 0.05, Fe: 'bal' }, grade: 'AISI 316, nominal' },
   'stainless-440c': { alloy: { Cr: 17, C: 1.1, Mo: 0.6, Mn: 0.8, Si: 0.8, Fe: 'bal' }, grade: 'AISI 440C, nominal' },

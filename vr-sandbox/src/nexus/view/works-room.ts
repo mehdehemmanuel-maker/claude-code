@@ -25,8 +25,12 @@ import type { Part } from '../parts/kits';
 import { kitView, type KitView } from './kit3d';
 import { worksUnder } from '../works/budget';
 
-/** The machines the library draws whole, by station: the station *is* that machine, not a stand-in for it. */
-const DRAWN: Record<string, string> = { 'printer-fff': 'printer3d Ender-3' };
+/** The machines and sets the library draws whole, by station: the station *is* that thing, not a stand-in for it.
+ *
+ *  The safety station is not a machine but a *set* of six bought things, and the library draws every one of them from
+ *  its own maker's or standard's figures now (src/nexus/parts/kit-safety.ts), so it stands here as the kit it is
+ *  rather than as a board with a card saying "not drawn yet". */
+export const DRAWN: Record<string, string> = { 'printer-fff': 'printer3d Ender-3', safety: 'safetykit works' };
 
 /** Stations the library has no kind for but the *inventor* can compose out of parts it does draw
  *  (src/nexus/ask/machine.ts), each at that station's own envelope from `works/stations.ts`. This is the answer to
@@ -131,6 +135,7 @@ function standIn(s: Stood): THREE.Group {
     legs(w * 0.5, d * 0.7, 0.22, DARK);
     cyl(0.055, 0.8, DARK, w * 0.26, 0.4, -d * 0.2);                                   // the gas bottle, or the wire stand
     box(0.26, 0.2, 0.03, DARK, -w * 0.18, cab + 0.3, d * 0.3);                        // its face
+    // (the safety station is drawn whole now — this is what is left if its component ever fails to be made)
   } else if (/safety/.test(id)) {
     box(w * 0.8, 0.06, d * 0.8, DARK, 0, 1.0, 0);                                     // the board it hangs on
     legs(w * 0.8, d * 0.8, 1.0, DARK);
@@ -455,5 +460,7 @@ export function worksRoomWords(text: string, r: RoomHandles): string | null {
   const kinds = Object.values(standing.drawn);
   const modelled = kinds.filter((x) => x.startsWith('drawn')).length, built = kinds.filter((x) => x.startsWith('composed')).length;
   const kitted = kinds.filter((x) => x.startsWith('kit')).length, selfmade = kinds.filter((x) => x.startsWith('built')).length;
-  return `${standing.floor.says} Walk into it: the ones in brown are against the outside wall because they burn or fume. ${modelled} ${modelled === 1 ? 'is' : 'are'} drawn from a maker's own model${built ? `, ${built} ${built === 1 ? 'is' : 'are'} composed out of library parts by the inventor (a benchtop CNC is three slides and a spindle, so it is built rather than boxed)` : ''}${selfmade ? `, ${selfmade} ${selfmade === 1 ? 'is' : 'are'} drawn from the bill of materials the works would build it from` : ''}${kitted ? `, ${kitted} ${kitted === 1 ? 'is' : 'are'} a bench carrying the library's own tools drawn whole` : ''}, and the other ${kinds.length - modelled - built - kitted - selfmade} stand as a stand-in at their own size. Each card says which it is: a stand-in labelled as one is honest, and a box pretending to be a lathe is not.`;
+  // ("a maker's own model" was true while the Ender-3 was the only one: the safety kit is drawn from six makers'
+  //  published figures and no model of it exists, so the sentence says what is true of both)
+  return `${standing.floor.says} Walk into it: the ones in brown are against the outside wall because they burn or fume. ${modelled} ${modelled === 1 ? 'is drawn whole by the library from its maker\'s own figures' : 'are drawn whole by the library from their makers\' own figures'}${built ? `, ${built} ${built === 1 ? 'is' : 'are'} composed out of library parts by the inventor (a benchtop CNC is three slides and a spindle, so it is built rather than boxed)` : ''}${selfmade ? `, ${selfmade} ${selfmade === 1 ? 'is' : 'are'} drawn from the bill of materials the works would build it from` : ''}${kitted ? `, ${kitted} ${kitted === 1 ? 'is' : 'are'} a bench carrying the library's own tools drawn whole` : ''}, and the other ${kinds.length - modelled - built - kitted - selfmade} stand as a stand-in at their own size. Each card says which it is: a stand-in labelled as one is honest, and a box pretending to be a lathe is not.`;
 }
