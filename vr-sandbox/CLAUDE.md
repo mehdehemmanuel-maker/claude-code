@@ -110,7 +110,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Words to wants, figures, questions; designs from laws | `src/nexus/ask/conceive.ts` |
 | Where a make ask goes (designed, invented, a kit by the thing's own name, a place, the inventory's own) and what of it was not done, said beside what was made | `src/nexus/ask/route.ts` (`routeMake`; the forge's `perform` carries it out) |
 | Inventing what turns one thing into another (waves into drinking water, a weight's fall into light, a flame into cold): a chain of real effects whose ports mate (power as effort × flow, a bond graph's rule; shafts of one kind but not one speed matched by as many gear stages as the ratio needs), sized by conservation from its source, under the floor of the laws, each effect made of inventory parts or said as a gap; on a board as steps | `src/nexus/ask/invent.ts` (`invent`, `boardOfInvention`) |
-| Inventing a *machine* rather than a flow: what each unit of machine affords (slide, turn, grip, deposit, cut, see, think, hold), each unit a real assembly of library parts with what it carries, what it raises, what it costs and where that figure came from; an ask read into the affordances it needs, the size it needs them over, **and how it is arranged** (a gantry in a frame, one long rail, a jointed arm, a turning table — which the words say as much as the tool does); then checked the way that arrangement fails — a gantry and a rail by mass, so every stage carries what stands on it, an arm by *torque*, so every joint is geared to the moment it has to hold with the arm straight out; refused with the number that refuses it and a way out | `src/nexus/ask/machine.ts` (`UNITS` as `screwAxis`, `beltAxis`, `turnAxis`, `HOT_END`, `SPINDLE`, `GRIPPER`, `EYE`, `BRAIN`, `baseFrame`; `armLink`, `railMount`, `SOLDER_HEAD`; `stack` for a gantry or a rail and `armStack` for an arm, `composeMachine`, `machineText`, `machineWords`, `machineParts`), `npm run machine`; its bill thrown at a works by `machineBuild` in `src/nexus/works/builds.ts` |
+| Inventing a *machine* rather than a flow: what each unit of machine affords (slide, turn, grip, deposit, cut, see, think, hold), each unit a real assembly of library parts with what it carries, what it raises, what it costs and where that figure came from; an ask read into the affordances it needs, the size it needs them over, **and how it is arranged** (a gantry in a frame, one long rail, a jointed arm, a turning table — which the words say as much as the tool does); then checked the way that arrangement fails — a gantry and a rail by mass, so every stage carries what stands on it, an arm by *torque*, so every joint is geared to the moment it has to hold with the arm straight out; refused with the number that refuses it and a way out | `src/nexus/ask/machine.ts` (`UNITS` as `screwAxis`, `beltAxis`, `turnAxis`, `HOT_END`, `SPINDLE`, `GRIPPER`, `EYE`, `BRAIN`, `baseFrame`; `armLink`, `railMount`, `SOLDER_HEAD`; `layUnit` and `machineParts`, which draw it; `stack` for a gantry or a rail and `armStack` for an arm, `composeMachine`, `machineText`, `machineWords`, `machineParts`), `npm run machine`; its bill thrown at a works by `machineBuild` in `src/nexus/works/builds.ts` |
 | Generated structure for any intent; its body in space | `src/nexus/ask/generate.ts`, `src/nexus/substrate/realize-space.ts` |
 | Machines as real hardware from generated elements | `src/nexus/embody/` (`any.ts`, `tree.ts` load path, `stock.ts`) |
 | Real products and what each contains, down to elements | `src/nexus/parts/inventory.ts` (about 1,500 items) |
@@ -1181,6 +1181,20 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    classified it by matching its own prose and "out of every rail's reach" did not match the pattern looking for it.
    `never` is kept for what nothing composed here reaches at all (an arc, a pour, throwing clay, a hand brake's
    lever), and it is never offered as something to build, which is tested.
+   And then it was drawn (2026-10-11, the same round), because a machine that is only a list of parts is the fault the
+   user named in the first place. `layUnit` gives each unit its own layout — a slide is a beam along its travel with
+   the rail on its top face, the carriage at mid-span, the motor hung off one end and the screw or belt between them;
+   a turn axis is the motor under its bearing pair with the pulleys between; a frame is twelve lengths on the edges of
+   its own box — and `machineParts` places the units: a gantry stacks them and turns every second slide across the
+   first (which is what a gantry *is*), an arm marches its joints along its own links. The first run of it laid every
+   part on a 60 mm lattice, which is what a bill of materials looks like when you pretend it is a machine.
+   `machineWords` now takes `stand` and `use` as plain functions, so `ask/` draws into the room without knowing
+   anything about the viewer, and "a machine that prints 300x300x400" stands one in front of you. Rendered and looked
+   at: it reads as a 2040 frame with a gantry in it, which is exactly what it is. Two faults from looking: it opened
+   *exploded*, so a thing nobody has seen before was shown as its pieces before it was shown as the thing
+   (`showPart` now takes `apart`), and the room's own "9,403 g drawn" sat next to a composed 10.92 kg — not a bug but
+   two numbers disagreeing on one screen, so it now says which is which and names the bought lines that have a
+   listing's mass and no drawing.
    Next: the room drawing every station from the library rather than as a stand-in (the Ender-3 is wired; the rest want
    their kinds, and the inventor's units are now the vocabulary to build them from), an invented machine stood in the
    room and judged blind, prices for the lines that still have none, working the three ratchets down by cause, and the

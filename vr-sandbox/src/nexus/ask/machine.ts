@@ -20,7 +20,7 @@
 
 import { component } from '../parts/components';
 import { massOf } from '../parts/mass';
-import type { Part } from '../parts/kits';
+import type { Part, V3 } from '../parts/kits';
 import { cheapest } from '../parts/prices';
 
 /** What a unit affords: the one thing it adds to whatever is bolted on top of it. */
@@ -414,24 +414,111 @@ export function machineText(m: Machine): string {
   return out.join('\n');
 }
 
-/** Words in the room: "invent me a machine that prints 300 x 300", "a machine that picks up 2 kg and sees". */
-export function machineWords(text: string): string | null {
-  const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
-  if (!/^(invent|compose|design|make|build) (me )?(a |an )?(machine|rig|thing)\b/.test(t) && !/^what would a machine that /.test(t)) return null;
-  return machineText(composeMachine(t));
+/** A composed machine as one part, its units where the stack puts them: what to stand in the room. */
+export function machinePart(m: Machine, use: (words: string) => Part): Part {
+  return { name: m.name, at: [0, 0, 0], says: `${m.name}, ${m.reach.join(' × ')} mm. ${m.stages.map((s) => s.unit.says).join(' ')}`, parts: machineParts(m, use) };
 }
 
-/** The machine drawn from the library: every unit's parts where the stack puts them, so what is composed can be stood
- *  in the room and taken apart like anything else. */
+/** Words in the room: "invent me a machine that prints 300 x 300", "an arm that reaches 600 mm and picks up 1 kg".
+ *
+ *  `stand` is how it gets drawn without this file knowing anything about the viewer: the room passes a way to put a
+ *  part in front of you and a way to draw one from the library, and both are plain functions. A machine that is only
+ *  a list of parts is the fault the user named — "why does everything look bogus" — so where the room can stand it,
+ *  it stands. */
+export function machineWords(text: string, o: { stand?: (p: Part, m: Machine) => string; use?: (words: string) => Part } = {}): string | null {
+  const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
+  const asked = /^(invent|compose|design|make|build|stand|show) (me )?(a |an )?(machine|rig|thing|arm|hand|gantry|robotic hand)\b/.test(t)
+    || /^(a|an) (machine|arm|rig|robotic hand) that /.test(t) || /^what would a machine that /.test(t);
+  if (!asked) return null;
+  const m = composeMachine(t);
+  const said = machineText(m);
+  if (!o.stand || !o.use) return said;
+  try {
+    const part = machinePart(m, o.use), drawn = massOf(part);
+    // what is drawn is not what it weighs: a line bought whole (the spindle, the servo, the supply, the lead screw)
+    // has a listing's mass and no drawing, so the room's own figure is always the lighter one. Say which is which
+    // rather than let two numbers disagree on the same screen.
+    const short = m.kg - drawn;
+    return `${o.stand(part, m)}${short > 0.05 ? ` Standing: ${drawn.toFixed(2)} kg of it is drawn and ${short.toFixed(2)} kg is bought whole and has no drawing here (${m.stages.flatMap((s) => s.unit.bought ?? []).map((b) => b.what).join(', ') || 'its bought lines'}).` : ''}\n\n${said}`;
+  } catch (e) { return `${said}\n\n(It is not standing in the room: ${(e as Error).message})`; }
+}
+
+/** A unit drawn as the thing it is, not as a heap of its parts in a grid.
+ *
+ *  The first run of this laid every part on a 60 mm lattice, which is what a bill of materials looks like when you
+ *  pretend it is a machine: recognisable to nobody, and the exact fault the user named about the works room. A unit
+ *  knows its own shape, so it places its own parts — a slide is a beam along its travel with the rail on top of it, the
+ *  carriage at mid-span, the motor hung off one end and the screw or belt running between them; a turn axis is the
+ *  motor under its bearing pair with the pulleys between; a frame is twelve lengths on the edges of its own box.
+ *  Nothing here is per-machine: it is per *shape*, and there are five shapes. */
+export function layUnit(u: Unit, use: (words: string) => Part): Part[] {
+  const out: Part[] = [], mm = 0.001;
+  const got = (words: string): Part | null => { try { return use(words); } catch { return null; } };
+  const put = (words: string, at: V3, rot?: V3) => { const p = got(words); if (p) out.push({ ...p, at, ...(rot ? { rot } : {}) }); };
+  const [W, H, D] = u.box.map((x) => x * mm) as V3;
+  const words = (re: RegExp) => u.of.find((o) => re.test(o.words))?.words;
+
+  if (u.does === 'hold' && u.id.startsWith('frame')) {
+    // twelve lengths on the edges of its own box: four uprights, four along, four across
+    const up = words(/extrusion .* (\d+)$/) ?? u.of[2]?.words, along = u.of[0]?.words, across = u.of[1]?.words;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (up) put(up, [sx * W / 2, H / 2, sz * D / 2]);
+    for (const y of [0.02, H - 0.02]) for (const sz of [-1, 1]) if (along) put(along, [0, y, sz * D / 2], [0, 0, Math.PI / 2]);
+    for (const y of [0.02, H - 0.02]) for (const sx of [-1, 1]) if (across) put(across, [sx * W / 2, y, 0], [Math.PI / 2, 0, Math.PI / 2]);
+    return out;
+  }
+  if (u.does === 'hold') {   // an arm's link, or a rail's brackets: along its own length
+    for (const o of u.of) for (let i = 0; i < Math.min(o.n, 6); i++) put(o.words, [((i / Math.max(1, o.n - 1)) - 0.5) * W, 0, 0], [0, 0, Math.PI / 2]);
+    return out;
+  }
+  if (u.does === 'slide') {
+    const beam = words(/^extrusion/), rail = words(/^rail/), motor = words(/^stepper/), plate = words(/^motorplate/);
+    if (beam) put(beam, [0, 0, 0], [0, 0, Math.PI / 2]);                    // the beam along the travel
+    if (rail) put(rail, [0, 0.021, 0], [0, 0, 0]);                          // its rail on the beam's top face
+    if (plate) put(plate, [-W / 2 - 0.004, 0.02, 0], [0, Math.PI / 2, 0]);  // the motor plate on the far end
+    if (motor) put(motor, [-W / 2 - 0.03, 0.02, 0], [0, 0, Math.PI / 2]);   // the motor behind it
+    // the drive down the middle: a screw's bearings at each end, a belt's pulley and idlers
+    const bear = words(/^bearing/), pul = words(/^pulley/), idl = words(/^idler/);
+    if (bear) for (const sx of [-1, 1]) put(bear, [sx * (W / 2 - 0.01), 0.02, 0], [0, 0, Math.PI / 2]);
+    if (pul) put(pul, [-W / 2 + 0.02, 0.02, 0], [0, 0, Math.PI / 2]);
+    if (idl) for (const sx of [-1, 1]) put(idl, [sx * (W / 2 - 0.015), 0.02, 0.012]);
+    return out;
+  }
+  if (u.does === 'turn') {
+    const motor = words(/^stepper/), plate = words(/^motorplate/), bear = words(/^bearing/), small = u.of.find((o) => /^pulley GT2 20/.test(o.words))?.words, big = u.of.find((o) => /^pulley GT2 (?!20)/.test(o.words))?.words;
+    if (motor) put(motor, [-0.035, 0, 0], [0, 0, 0]);
+    if (plate) put(plate, [-0.035, 0.022, 0], [0, 0, 0]);
+    if (small) put(small, [-0.035, 0.03, 0]);
+    if (big) put(big, [0.02, 0.03, 0]);
+    if (bear) for (const y of [0.045, 0.062]) put(bear, [0.02, y, 0]);
+    return out;
+  }
+  // a tool: its pieces stacked down from the mount, which is how every one of them really hangs
+  let down = 0;
+  for (const o of u.of) for (let i = 0; i < Math.min(o.n, 4); i++) { put(o.words, [i * 0.018 - 0.01, -down, 0]); down += 0.012; }
+  return out;
+}
+
+/** The machine drawn from the library: every unit where the stack puts it, each unit laying out its own parts, so what
+ *  was composed can be stood in the room and taken apart like anything else. A gantry stacks up its frame, a rail hangs
+ *  from its brackets, and an arm is laid out along its own links. */
 export function machineParts(m: Machine, use: (words: string) => Part): Part[] {
-  const out: Part[] = []; let up = 0;
-  for (const s of m.stages) {
-    const parts: Part[] = [];
-    for (const { words, n } of s.unit.of) for (let i = 0; i < n; i++) {
-      try { parts.push({ ...use(words), at: [((i % 4) - 1.5) * 0.06, up * 0.001, Math.floor(i / 4) * 0.06] }); } catch { /* the gap is already said in m.gaps */ }
+  const out: Part[] = [], mm = 0.001;
+  if (m.arrange === 'arm') {
+    // along the arm: each joint at the end of the link before it, which is what makes it read as an arm
+    let x = 0, y = 0.1;
+    for (const s of m.stages) {
+      out.push({ name: s.unit.name, at: [x, y, 0], says: s.unit.says, parts: layUnit(s.unit, use) });
+      if (s.unit.does === 'hold') { x += s.unit.box[0] * mm; y += 0.02; } else y += 0.05;
     }
-    out.push({ name: s.unit.name, at: [0, up * 0.001, 0], says: s.unit.says, parts });
-    up += s.unit.box[1];
+    return out;
+  }
+  let up = 0;
+  for (const s of m.stages) {
+    // a slide axis is turned a quarter about the stack as it goes up, so the second one runs across the first — which
+    // is what a gantry *is*, and laying them all the same way is how the first drawing of this read as a pile of beams
+    const across = m.arrange === 'gantry' && s.unit.does === 'slide' && out.filter((p) => /axis/.test(p.name)).length % 2 === 1;
+    out.push({ name: s.unit.name, at: [0, up * mm, 0], ...(across ? { rot: [0, Math.PI / 2, 0] as V3 } : {}), says: s.unit.says, parts: layUnit(s.unit, use) });
+    up += s.unit.does === 'hold' && s.unit.id.startsWith('frame') ? 40 : s.unit.box[1];
   }
   return out;
 }

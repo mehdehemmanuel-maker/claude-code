@@ -207,7 +207,9 @@ export class Exploded {
   }
   /** A part as the library draws it, whole, then its pieces parted as the viewer's explode parts them (each out from the
    *  middle of what holds it, those at the middle along its length), every piece of one name under that name. */
-  showPart(part: Part, id: string, now: number, fresh = true): string {
+  /** `apart` false shows it whole first: a thing that has never been seen before should be seen as the thing before
+   *  it is seen as its pieces, which an invented machine opening exploded got exactly backwards. */
+  showPart(part: Part, id: string, now: number, fresh = true, apart = true): string {
     this.clearStage(); this.plan = null; this.build = null; this.source = null;
     if (fresh) this.trail = [];
     this.trail.push({ id, name: part.name, part });
@@ -244,7 +246,7 @@ export class Exploded {
       s.tag = label(text.length > 44 ? `${text.slice(0, 42)}…` : text, 0.017); s.tag.visible = false; this.group.add(s.tag);
     }
     this.tree = { part, id, view, byId, scale: k };
-    this.mode = this.shown.length > 1 ? 'apart' : 'whole'; this.t0 = now; this.group.visible = true; this.drawInfo();
+    this.mode = apart && this.shown.length > 1 ? 'apart' : 'whole'; this.t0 = now; this.group.visible = true; this.drawInfo();
     const c0 = componentOf(id), g = massOf(part) * 1000;
     return `${part.name}: drawn ${piecesOf(part) > 1 ? `in ${piecesOf(part)} pieces` : 'in one piece'}, ${grams(g)}${c0?.item.g ? ` (its standard's ${grams(c0.item.g)})` : ''}. Point at a piece to open it.`;
   }

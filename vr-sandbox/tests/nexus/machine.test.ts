@@ -9,8 +9,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   BRAIN, EYE, GRIPPER, HOT_END, SPINDLE, beltAxis, composeMachine, baseFrame, machineText, machineWords,
-  readMachine, screwAxis, stack, turnAxis, unitKg, unitUsd, type Unit,
+  readMachine, screwAxis, stack, turnAxis, unitKg, unitUsd, armLink, layUnit, machineParts, machinePart, type Unit,
 } from '../../src/nexus/ask/machine';
+import { component } from '../../src/nexus/parts/components';
 import { machineBuild, throwAt, under3K } from '../../src/nexus/works';
 
 const ALL: Unit[] = [baseFrame(500, 500, 650), screwAxis(300), beltAxis(300), turnAxis(3), HOT_END, SPINDLE, GRIPPER, EYE, BRAIN];
@@ -199,5 +200,52 @@ describe('an arm is checked by torque, because that is how an arm fails', () => 
     const m = composeMachine('an arm that reaches 400 mm and picks up 5 kg');
     expect(m.refusals.join(' ')).toMatch(/grips 1\.5 kg and was asked to hold 5 kg/);
     expect(m.refusals.join(' ')).not.toMatch(/undefined/);
+  });
+});
+
+describe('a composed machine is real geometry, not a heap of its parts', () => {
+  const use = (w: string) => { const c = component(w); if (typeof c === 'string') throw new Error(c); return structuredClone(c.part); };
+  it('every unit lays out its own parts, and none of them is left at the origin in a pile', () => {
+    for (const u of [screwAxis(300), beltAxis(300), turnAxis(3), baseFrame(500, 500, 650), armLink(300)]) {
+      const parts = layUnit(u, use);
+      expect(parts.length, u.id).toBeGreaterThan(2);
+      const atOrigin = parts.filter((p) => p.at![0] === 0 && p.at![1] === 0 && p.at![2] === 0);
+      expect(atOrigin.length, `${u.id} leaves ${atOrigin.length} parts stacked at 0,0,0`).toBeLessThanOrEqual(1);
+    }
+  });
+  it('a slide puts its rail above its beam and its motor off one end, which is what a slide is', () => {
+    const parts = layUnit(screwAxis(300), use);
+    const beam = parts.find((p) => /extrusion/i.test(p.name))!, rail = parts.find((p) => /rail|MGN/i.test(p.name))!;
+    const motor = parts.find((p) => /stepper|NEMA/i.test(p.name))!;
+    expect(rail.at![1]).toBeGreaterThan(beam.at![1]);           // the rail sits on the beam
+    expect(Math.abs(motor.at![0])).toBeGreaterThan(0.1);        // the motor is off the end, not in the middle
+  });
+  it('a frame puts four uprights at its corners', () => {
+    const parts = layUnit(baseFrame(600, 400, 500), use);
+    const corners = parts.filter((p) => Math.abs(p.at![0]) > 0.25 && Math.abs(p.at![2]) > 0.15);
+    expect(corners.length).toBeGreaterThanOrEqual(4);
+  });
+  it('a gantry turns its second slide across its first, because that is what a gantry is', () => {
+    const m = composeMachine('a machine that prints 300x300x400');
+    const slides = machineParts(m, use).filter((p) => /axis/.test(p.name));
+    expect(slides.length).toBe(3);
+    expect(slides[0]!.rot).toBeUndefined();
+    expect(slides[1]!.rot?.[1]).toBeCloseTo(Math.PI / 2, 3);     // the second runs across the first
+  });
+  it('an arm marches its joints along its own links instead of stacking them', () => {
+    const m = composeMachine('an arm that reaches 600 mm and picks up 1kg');
+    const laid = machineParts(m, use);
+    const xs = laid.map((p) => p.at![0]);
+    expect(Math.max(...xs)).toBeGreaterThan(0.3);                // it reaches out, it does not pile up
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));           // and each one is further out than the last
+  });
+  it('the whole thing is one part with its units inside it, and it says what it is', () => {
+    const p = machinePart(composeMachine('a machine that cuts 400x300x80'), use);
+    expect(p.parts!.length).toBeGreaterThan(3);
+    expect(p.says).toMatch(/400 × 300 × 80 mm/);
+  });
+  it('a part the library cannot draw is left out rather than faked, and the machine still stands', () => {
+    const p = machinePart(composeMachine('a machine that prints 300x300'), () => { throw new Error('nope'); });
+    expect(p.parts!.every((u) => (u.parts ?? []).length === 0)).toBe(true);   // nothing invented to fill the hole
   });
 });
