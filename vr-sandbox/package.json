@@ -23,7 +23,9 @@
     "works": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/works.mjs",
     "machine": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/machine.mjs",
     "plan": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/plan.mjs",
-    "shot": "node tools/shot.mjs"
+    "shot": "node tools/shot.mjs",
+    "perf": "node tools/perf.mjs",
+    "quick": "tsc --noEmit -p . && vitest run tests/nexus/tidy.test.ts && vitest run --changed HEAD"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

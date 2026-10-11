@@ -45,5 +45,7 @@ export default defineConfig({
     // every worker. The cache is keyed by content, so a file that has not changed is not transformed again: the gate
     // is run many times a round, and this is the cheapest time it will ever save.
     fsModuleCache: true,
+    // inert unless PERF_PROFILE is set: `npm run perf -- profile <file>` turns it on (tests/perf-setup.ts)
+    setupFiles: ['tests/perf-setup.ts'],
   },
 });

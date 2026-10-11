@@ -431,6 +431,15 @@ When a step takes working out by hand twice, it becomes a tool here, and a line 
   `npm run works`: the alternative was a probe test that prints what the engine says and is then deleted.
 - `npm run plan -- <file> works`: an invention sketched as labelled blocks and pins, printed, weighed and thrown
   at the works before anything in it is designed (`src/nexus/ask/sketch.ts`).
+- `npm run perf`: the measuring and proving tool, which is the fifth probe-test-and-delete in one day made into a tool.
+  `perf time` is every test file's own time, longest first, and the ten slowest tests; `perf profile <test file>` is a
+  sampled profile from inside the worker (vitest's workers swallow `--cpu-prof`, which profiles the runner and comes out
+  96 % idle in module loading), printed by self time; `perf bench [case]` runs a fixed workload three times and keeps
+  the least, because this host's wall clock swings a fifth run to run and the least of several is the only number worth
+  quoting; `perf dump [case]` prints every number a generator makes as one hash a case, which is the proof a refactor
+  changed nothing — run it, change the code, run it again, and no line may differ; `perf dump <case> --full` prints the
+  numbers themselves, to find which one moved. `src/nexus/cli/perf-main.ts` holds the benches and the dumps,
+  `tools/perf.mjs` the two halves that run vitest, `tests/perf-setup.ts` the profiler (inert unless asked for).
 - `npm run works`: a plan, a budget or a build printed from the command line. Four rounds in a row opened by writing a probe
   test whose only job was to print what the engine says, and then deleting it; this is that, kept.
 
@@ -1627,12 +1636,23 @@ the user can widen it under the environment's Network access.
 
 - Gate: `npm run gate` (long; run it in the background and log to a file). Build the viewer:
   `npx vite build --config vite.view.config.ts --logLevel error`.
-- The gate is around four minutes, and its wall clock swings by a sixth run to run on this host, so measure the suite's
-  own test time (`npx vitest run --reporter=json`, summed over files: 570 s now) rather than the clock. Its tail is the
-  two sweeps, every kit at three seeds (`tests/nexus/kits-every.test.ts`, 47 s) and every kit through the make pipeline
-  (`tests/nexus/make-every.test.ts`, 51 s), each one `it`, so neither can be split across workers. They are in files of their own
-  because vitest runs files in parallel and a file's own tests in order: together in one file they cost the wall clock
-  106 s, apart they cost 64. Keep them apart, and put a new long sweep in its own file for the same reason.
+- The gate is around three minutes, and its wall clock swings by a sixth run to run on this host, so measure the suite's
+  own test time (`npm run perf -- time`) rather than the clock. Its two long sweeps — every kit at three seeds and every
+  kit through the make pipeline — are dealt over three files each (`tests/nexus/kits-every-*.test.ts`,
+  `tests/nexus/make-every-*.test.ts`, which take their shard from `tests/nexus/sweep.ts`), because vitest runs files in
+  parallel and a file's own tests in order, so one `it` over every kit is a shard no worker can split. Which kits are
+  heavy is measured, not guessed (`PERF_SWEEP=<file>` writes what each one cost): of the thirty, the car park is 21.7 s
+  of the 30.9 that making them all costs, the street 6.0 and the car 2.9, and the other twenty-seven are 0.19 s
+  together — so the three are dealt apart and the car park sets the longest shard. Put a new long sweep in its own file
+  for the same reason, and a test asserts the shards are the whole catalogue with no kit twice.
+- Two tiers, because the full gate is 190 s and an inner iteration does not need it: `npm run quick` is
+  `tsc --noEmit`, `tidy`, and `vitest run --changed HEAD` — only the test files whose module graph holds something that
+  changed (10 files and 193 tests in 28 s, against 175 files and 190 s). It can miss a test that depends on a *data*
+  file it does not import, so nothing is pushed without the full `npm run gate`.
+- What the gate's wall clock is *not* bound by, each measured rather than assumed: `--no-isolate` (191 s against 191,
+  and it breaks `pieces.test.ts`, which is the cross-file state leak that option risks), `--pool=threads` (190 s), and
+  the two long sweeps' tails (sharding them left the wall where it was). The suite is bound by its own work spread over
+  the workers there are, and 545 s of test time over 190 s of wall is 2.9 of this host's 4 cores.
 - `npm run tidy` is the half-second part of the gate that checks the tree's own shape, and it is the thing to run
   before and after moving anything. Its three ratchets (oversize files, name clashes, imports up a layer) hold the
   present debt to the number: they fail on a new one by name, and they fail on a fixed one until its line is
