@@ -329,12 +329,12 @@ export const BUILDS: Build[] = [
       + 'belt and the pedal are bought; the frame, the head, the shaft\u2019s pulley and the splash pan are made here',
     lines: [
       { name: 'frame leg, 40 \u00d7 40 \u00d7 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 600], cm3: 182 },
-      { name: 'frame rail, 40 \u00d7 40 \u00d7 2 box section', n: 8, mat: 'steel-low', size: [40, 40, 420], cm3: 128 },
+      { name: 'frame rail, 40 \u00d7 40 \u00d7 2 box section', n: 10, mat: 'steel-low', size: [40, 40, 420], cm3: 128 },
       { name: 'bearing plate, 6 mm steel sheet', n: 2, mat: 'steel-low', size: [160, 160, 6], cm3: 153 },
       { name: 'shaft, 25 mm round bar', n: 1, mat: 'steel-high', size: [25, 25, 500], cm3: 245, shape: 'round' },
       { name: 'head, 300 mm 25 mm birch ply disc', n: 1, mat: 'wood', size: [300, 300, 25], cm3: 1767, shape: 'round' },
       { name: 'head facing, 10 mm plaster', n: 1, mat: 'gypsum', size: [300, 300, 10], cm3: 707, shape: 'round' },
-      { name: 'splash pan, 2 mm sheet', n: 1, mat: 'steel-low', size: [520, 520, 90], cm3: 560, shape: 'round', bore: [320, 88] },
+      { name: 'splash pan, 2 mm sheet', n: 1, mat: 'steel-low', size: [520, 520, 110], cm3: 620, shape: 'round', bore: [460, 108] },
       { name: 'bearing, 6205-2RS', n: 2, mat: 'steel-high', size: [52, 52, 15], cm3: 17, shape: 'round', bore: [25, 15] },
       { name: 'motor, washing-machine induction motor', n: 1, mat: 'steel-high', size: [180, 180, 200], cm3: 637, shape: 'round' },
       { name: 'pulley, 60 mm V on the motor', n: 1, mat: 'al-6061', size: [60, 60, 20], cm3: 45, shape: 'round' },
@@ -354,14 +354,21 @@ export const BUILDS: Build[] = [
       { line: 'frame leg', at: [[-0.21, 0.3, -0.21], [0.21, 0.3, -0.21], [-0.21, 0.3, 0.21], [0.21, 0.3, 0.21]], along: [0, 1, 0] },
       { line: 'frame rail', at: [[0, 0.58, -0.21], [0, 0.58, 0.21], [0, 0.08, -0.21], [0, 0.08, 0.21]], along: [1, 0, 0] },
       { line: 'frame rail', at: [[-0.21, 0.58, 0], [0.21, 0.58, 0], [-0.21, 0.08, 0], [0.21, 0.08, 0]], along: [0, 0, 1] },
+      // the lower bearing plate needs something to be welded to: without these two it hung in mid-air under the
+      // frame, which a blind judge read as "a stray flat panel connected to nothing"
+      { line: 'frame rail', at: [[0, 0.30, -0.21], [0, 0.30, 0.21]], along: [1, 0, 0] },
       { line: 'bearing plate', at: [[0, 0.58, 0], [0, 0.30, 0]], along: [0, 1, 0] },
       { line: 'shaft', at: [[0, 0.45, 0]], along: [0, 1, 0] },
       { line: 'bearing', at: [[0, 0.585, 0], [0, 0.305, 0]], along: [0, 1, 0] },
-      { line: 'pulley, 240', at: [[0, 0.44, 0]], along: [0, 1, 0] },
-      { line: 'motor', at: [[0.15, 0.36, 0]], along: [0, 1, 0] },
-      { line: 'pulley, 60', at: [[0.15, 0.44, 0]], along: [0, 1, 0] },
-      { line: 'belt', at: [[0.075, 0.44, 0]], bent: 'ring', along: [0, 1, 0] },
-      { line: 'splash pan', at: [[0, 0.655, 0]], along: [0, 1, 0] },
+      // the belt sets the motor's place, not the other way round: a 1,000 mm A-section over a 240 and a 60 runs at
+      // 260 mm centres (L = 2C + \u03c0(D+d)/2 + (D\u2212d)\u00b2/4C), and at the 150 the first lay guessed, the belt's own loop
+      // passed clean through the motor's body \u2014 which read as a bucket with a handle through it
+      { line: 'pulley, 240', at: [[0, 0.40, 0]], along: [0, 1, 0] },
+      { line: 'motor', at: [[0.26, 0.28, 0]], along: [0, 1, 0] },
+      { line: 'pulley, 60', at: [[0.26, 0.40, 0]], along: [0, 1, 0] },
+      { line: 'belt', at: [[0.13, 0.40, 0]], bent: 'ring', along: [0, 1, 0] },
+      // the head stands clear of the pan's rim, or the pan is a drum with a lid and not a trough you wash a hand in
+      { line: 'splash pan', at: [[0, 0.645, 0]], along: [0, 1, 0] },
       { line: 'head', at: [[0, 0.7125, 0]], along: [0, 1, 0] },
       { line: 'head facing', at: [[0, 0.73, 0]], along: [0, 1, 0] },
     ] },

@@ -1425,6 +1425,23 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    stock priced by the metre, the kilo or the sheet, and the sellers' own size tables are rendered in JavaScript this
    network cannot run — so that round needs either a page that serves its prices as text or the user widening the
    network, and it is said here rather than guessed at.
+   The wheel judged blind by a designer agent (2026-10-11), which is the other half of what the user asked for: **3/10,
+   "a potter's wheel, 55% confident — the read is driven by context (a round head, a pan, a stand) and nothing on the
+   object confirms it"**. Its first finding was the right one and it was mine: *there is no drive of any kind, so nothing
+   in the model could ever turn the head*. The drive was drawn — and that is worse, because it means it did not read
+   as one. Three causes, each fixed in the lay:
+   • **The belt set the motor's place and I had guessed it.** A 1,000 mm A-section belt over a 240 and a 60 runs at
+     260 mm centres (L = 2C + π(D+d)/2 + (D−d)²/4C); at the 150 mm the first lay guessed, the belt's own loop passed
+     clean through the motor's body, which the judge read as "a bucket whose hoop handle passes through its wall".
+   • **The lower bearing plate hung in mid-air**, because nothing in the frame reached it: "a stray flat panel
+     connected to nothing". Two more rails carry it, and the bill buys ten rather than eight.
+   • **The head sat on the pan's rim**, so the pan was a drum with a lid: "no recessed trough, no raised rim, the
+     head is not sunk into it". The pan is 110 deep and bored 460 across, and the head stands clear above it.
+   What that judge still has, and it is honest: the belt is drawn as a ring where a belt over two unequal pulleys is a
+   stadium (a loop round two places is a general thing the library should draw once, for this and for the hovercraft's
+   drive); there are no weld beads, no feet, no levelling pads and no fasteners on any built station (the bolts are in
+   every bill and carry no size, so nothing draws them); and the head has no hub, bat pins or bolts where it meets its
+   shaft.
    Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).
