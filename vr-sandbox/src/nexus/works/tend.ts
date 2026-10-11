@@ -22,7 +22,7 @@
 //    between what it needs and what the robot has, and the ones it cannot do are named with the reason — which is how
 //    you find out that a works is 60 % tended and which $200 of tooling would make it 80 %.
 
-import { composeMachine, type Machine } from '../ask/machine';
+import { SOLDER_HEAD, composeMachine, unitKg, unitUsd, type Does, type Machine } from '../ask/machine';
 import { cheapest, priceKeyOf, usd as money, type Offer } from '../parts/prices';
 import { layWorks, type Floor, type Stood } from './floor';
 import { stationById } from './stations';
@@ -69,11 +69,12 @@ export const offRail = (s: Stood, z: number): number => +Math.max(0, Math.abs(s.
 /** A works with a robot on a rail down its busiest aisle: what it reaches, what it costs, what it weighs. The arm is
  *  not asserted — it is composed by the inventor at the reach asked for, so its shoulder is geared to the moment it
  *  actually has to hold and a reach it cannot manage is refused there rather than here. */
-export function tendWorks(ids: string[], o: { reach?: number; aisle?: number } = {}): Tender {
+export function tendWorks(ids: string[], o: { reach?: number; aisle?: number; /** the tools to fit beyond the gripper and the eye it always has */ tools?: Does[] } = {}): Tender {
   const floor = layWorks(ids);
   const reach = o.reach ?? 600;
   const mm = Math.round(floor.room[0] * 1000);
-  const machine = composeMachine(`a robotic hand that moves along a wall ${mm} mm and picks up 1 kg and sees`);
+  const extra = (o.tools ?? []).map((d) => ({ solder: 'solders', deposit: 'prints', cut: 'cuts', turn: 'turns', grip: '', see: '', slide: '', think: '', hold: '' })[d]).filter(Boolean).join(' and ');
+  const machine = composeMachine(`a robotic hand that moves along a wall ${mm} mm and picks up 1 kg and sees${extra ? ` and ${extra}` : ''}`);
   const within = (z: number) => floor.stood.filter((s) => offRail(s, z) * 1000 <= reach);
   // One rail serves the two rows that face its aisle and no more. So take aisles greedily until everything is served,
   // and say how many it came to: a works that wants four rails wants a robot on a floor base instead, and that is a
@@ -113,32 +114,55 @@ export function tendWorks(ids: string[], o: { reach?: number; aisle?: number } =
 // An edge, read from both ends: what the operation needs of a pair of hands, and what this robot's hands are. Written
 // as the reason and not as a yes or no, because the reason is what tells you which tool to buy next.
 
-/** What a robot with a gripper, a camera and a rail can and cannot be asked to do at a station. */
-const TENDS: { process: RegExp; by: 'robot' | 'person'; why: string }[] = [
-  { process: /^(fff|msla|cure|kiln|sinter|pbf)$/, by: 'robot', why: 'a machine with a port on it: the robot clears the bed, starts the program over the wire and lifts the part off when it is cold' },
-  { process: /^(mill|drill|turn|probe|laser)/, by: 'robot', why: 'the blank is set in the vice or the chuck, the program is sent over the wire, and the part comes out — the cutting is the machine\'s, not the hands\'' },
-  { process: /^(calliper|indicate|weigh)$/, by: 'robot', why: 'the camera sees the reading and the gripper puts the part on the plate: measuring is the one thing a robot does better than a person, because it does it every time' },
-  { process: /^(fasten|bond)$/, by: 'robot', why: 'a gripper drives a screw into a T-slot nut, slowly, and a camera checks it went in square' },
-  { process: /^(weld-mig|spot-weld|braze)$/, by: 'person', why: 'striking and holding an arc is a hand watching a puddle through a shade-10 lens, at 1 mm of stand-off: a $6 servo and a $25 camera are not that, and getting it wrong burns through the work' },
-  { process: /^(forge|heat-treat)$/, by: 'person', why: 'a forging is judged by its colour and struck while it is that colour: there is no port and no second chance' },
-  { process: /^cast$/, by: 'person', why: 'pouring molten aluminium is 700 °C in a crucible held in tongs: a gripper that drops it sets the shop on fire, which is why the safety kit is the line the works will not cut' },
-  { process: /^throw$/, by: 'person', why: 'throwing clay is both hands on a moving wall of it, by feel' },
-  { process: /^(bend|press|shear)$/, by: 'person', why: 'a bench brake is a lever pulled by a person leaning on it: there is no motor to take a program' },
-  { process: /^(saw|cut-manual|file|finish)/, by: 'person', why: 'hand work at the bench, which is most of what a cheap works is' },
-  { process: /^solder$/, by: 'person', why: 'the robot can be taught to solder (src/nexus/view/robot-bench.ts does the LED lesson by the bench\'s own steps) but that is a second arm at a fixed bench, not this one on a rail' },
+/** What an operation needs of a pair of hands, and what it is about this works' hands that does or does not meet it.
+ *  `needs` is read against the robot's own affordances (src/nexus/ask/machine.ts), so adding a tool to the robot
+ *  changes what it can be asked to do without a line of this table changing — which is the whole point, and is how
+ *  `growTender` below can cost the next tool instead of guessing at it. `never` is for what no tool composed here
+ *  reaches at all, and says so rather than implying a purchase would fix it. */
+const TENDS: { process: RegExp; needs: Does[]; why: string; whyNot?: string; never?: true }[] = [
+  { process: /^(fff|msla|cure|kiln|sinter|pbf)$/, needs: ['grip'], why: 'a machine with a port on it: the robot clears the bed, starts the program over the wire and lifts the part off when it is cold', whyNot: 'it has nothing to clear the bed or lift the part with: a gripper' },
+  { process: /^(mill|drill|turn|probe|laser)/, needs: ['grip'], why: 'the blank is set in the vice or the chuck, the program is sent over the wire, and the part comes out — the cutting is the machine\'s, not the hands\'', whyNot: 'it has nothing to set the blank with: a gripper' },
+  { process: /^(calliper|indicate|weigh)$/, needs: ['grip', 'see'], why: 'the camera sees the reading and the gripper puts the part on the plate: measuring is the one thing a robot does better than a person, because it does it every time', whyNot: 'measuring wants both a hand to place the part and an eye to read the dial' },
+  { process: /^(fasten|bond)$/, needs: ['grip'], why: 'a gripper drives a screw into a T-slot nut, slowly, and a camera checks it went in square', whyNot: 'it has no hand to turn a screw with' },
+  { process: /^solder$/, needs: ['solder'], why: 'the iron is held on the moving end at 50° to the work and the wire is fed by its own stepper, to the joint model the lessons already use (src/nexus/teach/solder-joint.ts)', whyNot: 'nothing on it holds an iron — and a soldering head is the library\'s own Pinecil, reel and extruder drive, so this is a tool the works can build rather than a thing it lacks' },
+  { process: /^(weld-mig|spot-weld|braze)$/, needs: [], never: true, why: '', whyNot: 'striking and holding an arc is a hand watching a puddle through a shade-10 lens, at 1 mm of stand-off, correcting at the speed the puddle moves: nothing composed out of this library is that, and getting it wrong burns through the work' },
+  { process: /^(forge|heat-treat)$/, needs: [], never: true, why: '', whyNot: 'a forging is judged by its colour and struck while it is that colour: there is no port and no second chance' },
+  { process: /^cast$/, needs: [], never: true, why: '', whyNot: 'pouring molten aluminium is 700 °C in a crucible held in tongs: a gripper that drops it sets the shop on fire, which is why the safety kit is the line the works will not cut' },
+  { process: /^throw$/, needs: [], never: true, why: '', whyNot: 'throwing clay is both hands on a moving wall of it, by feel' },
+  { process: /^(bend|press|shear)$/, needs: [], never: true, why: '', whyNot: 'a bench brake is a lever pulled by a person leaning on it: there is no motor to take a program, and motorising it is a different machine, not a hand' },
+  { process: /^(saw|cut-manual|file|finish)/, needs: [], never: true, why: '', whyNot: 'hand work at the bench, which is most of what a cheap works is' },
 ];
 
-/** Who does an operation, and why. An operation the robot could do but at a station it cannot reach is a person's. */
-export function tends(op: Op, t: Tender): { by: 'robot' | 'person'; why: string } {
+/** Who does an operation and why, with *what kind* of why it is: a tool it has not got (and the tool is named), a
+ *  place it cannot reach, something nothing here can do at all, or a process nobody has written a rule for. The kind
+ *  is a field and not a phrase, because the first run of this file classified it by matching its own prose and
+ *  "out of every rail's reach" did not match the pattern looking for it. */
+export interface Tended {
+  by: 'robot' | 'person'; why: string;
+  because?: 'tool' | 'place' | 'never' | 'unwritten';
+  /** the affordance it wants and has not got */ wants?: Does;
+}
+
+/** Who does an operation, and why. Three ways it can fall to a person: the robot has no tool for it (and the tool is
+ *  named, because it is composable), nothing here reaches it at all, or the station is out of every rail's reach. */
+export function tends(op: Op, t: Tender): Tended {
   const near = t.serves.some((s) => s.id === op.station);
   const rule = TENDS.find((r) => r.process.test(op.process));
-  if (!rule) return { by: 'person', why: `nothing is written down about tending ${op.process}, so it is a person's until it is` };
-  if (rule.by === 'robot' && !near) {
+  if (!rule) return { by: 'person', because: 'unwritten', why: `nothing is written down about tending ${op.process}, so it is a person's until it is` };
+  if (rule.never) return { by: 'person', because: 'never', why: rule.whyNot! };
+  const missing = rule.needs.find((d) => !t.machine.does.includes(d));
+  if (missing) return { by: 'person', because: 'tool', wants: missing, why: `${rule.whyNot ?? `it has no ${missing}`}. Give it one and this becomes the robot's: ${rule.why}` };
+  if (!near) {
     const out = t.cannot.find((c) => c.id === op.station);
-    return { by: 'person', why: `the robot could do this (${rule.why}) but ${out?.name ?? op.station} is out of every rail's reach: ${out?.why ?? 'it stands in a row no aisle faces'}` };
+    return { by: 'person', because: 'place', why: `the robot could do this (${rule.why}) but ${out?.name ?? op.station} is out of every rail's reach: ${out?.why ?? 'it stands in a row no aisle faces'}` };
   }
-  return rule;
+  return { by: 'robot', why: rule.why };
 }
+
+/** The unit that affords each thing a tender might want, so a gap in what the robot can do names a tool that really
+ *  exists and really costs what it says. Only the ones a works can actually build are here: there is no welding head,
+ *  and `TENDS` says why rather than leaving a hole for one. */
+const TOOL_FOR: Partial<Record<Does, typeof SOLDER_HEAD>> = { solder: SOLDER_HEAD };
 
 // ---- ordering --------------------------------------------------------------------------------------------------------
 
@@ -196,7 +220,7 @@ function guessKey(name: string): string | null {
 /** A want run through a tended works: the plan, the order, and who does each step. */
 export interface Run {
   what: string; tender: Tender; job: Job; order: Order;
-  steps: { op: Op; by: 'robot' | 'person'; why: string }[];
+  steps: (Tended & { op: Op })[];
   /** minutes, split by whose they are */ robotMin: number; personMin: number;
   /** the share of the machine time the robot takes, 0 to 1 */ tended: number;
   /** what one more thing would hand the robot, cheapest first: the next $200 of tooling */
@@ -204,7 +228,7 @@ export interface Run {
 }
 
 /** Throw a build at a tended works: what it costs to order, what the robot does, what is left for you. */
-export function runWorks(build: Build | string, ids: string[], had: string[] = [], o: { reach?: number } = {}): Run {
+export function runWorks(build: Build | string, ids: string[], had: string[] = [], o: { reach?: number; tools?: Does[] } = {}): Run {
   const tender = tendWorks(ids, o);
   const job = throwAt(build, ids);
   const order = orderFor(job, had);
@@ -215,13 +239,23 @@ export function runWorks(build: Build | string, ids: string[], had: string[] = [
   // nothing it has can do, each with the minutes it would take off a person
   const next: Run['next'] = [];
   for (const out of tender.cannot) {
-    const mins = steps.filter((s) => s.op.station === out.id && s.by === 'person' && /out of (its |every )?reach/.test(s.why)).reduce((a, s) => a + s.op.setup + s.op.run, 0);
+    const mins = steps.filter((s) => s.op.station === out.id && s.because === 'place').reduce((a, s) => a + s.op.setup + s.op.run, 0);
     if (mins > 0) next.push({ buy: `getting ${out.name} onto a row an aisle faces`, wouldTake: +mins.toFixed(1), why: out.why });
   }
+  const byWant = new Map<Does, number>();
+  for (const s of steps) if (s.wants) byWant.set(s.wants, (byWant.get(s.wants) ?? 0) + s.op.setup + s.op.run);
+  for (const [d, mins] of [...byWant].sort((a, b) => b[1] - a[1])) {
+    const u = TOOL_FOR[d];
+    next.push({
+      buy: u ? `${u.name} on the robot — ${money(unitUsd(u).usd)} of parts, ${unitKg(u).kg} kg` : `a hand that can ${d}`,
+      wouldTake: +mins.toFixed(1),
+      why: u ? `${u.says}. Every part of it is already in the library, so the works builds this rather than buying it: ${u.src}` : `nothing composed here affords ${d} yet`,
+    });
+  }
   const byProcess = new Map<string, number>();
-  for (const s of steps) if (s.by === 'person' && !/out of its reach/.test(s.why)) byProcess.set(s.op.process, (byProcess.get(s.op.process) ?? 0) + s.op.setup + s.op.run);
-  for (const [p, mins] of [...byProcess].sort((a, b) => b[1] - a[1]).slice(0, 3)) {
-    next.push({ buy: `a hand that can ${p}`, wouldTake: +mins.toFixed(1), why: TENDS.find((r) => r.process.test(p))?.why ?? `nothing is written down about tending ${p}` });
+  for (const s of steps) if (s.because === 'never' || s.because === 'unwritten') byProcess.set(s.op.process, (byProcess.get(s.op.process) ?? 0) + s.op.setup + s.op.run);
+  for (const [p, mins] of [...byProcess].sort((a, b) => b[1] - a[1]).slice(0, 2)) {
+    next.push({ buy: `your own hands at ${p}`, wouldTake: +mins.toFixed(1), why: TENDS.find((r) => r.process.test(p))?.whyNot ?? `nothing is written down about tending ${p}` });
   }
   return { what: job.what, tender, job, order, steps, robotMin, personMin, tended: +(robotMin / Math.max(1, robotMin + personMin)).toFixed(2), next: next.sort((a, b) => b.wouldTake - a.wouldTake) };
 }

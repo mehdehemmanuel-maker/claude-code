@@ -67,6 +67,7 @@ describe('what the robot can and cannot be asked to do', () => {
       const v = tends(op, t);
       expect(v.by).toBe('person');
       expect(v.why).toMatch(/arc|700 °C|both hands/);
+      expect(v.because).toBe('never');       // no tool composed here reaches it, so it is not named as a purchase
     }
   });
   it('an operation the robot could do at a station it cannot reach is a person\'s, and says which of the two it is', () => {
@@ -77,10 +78,11 @@ describe('what the robot can and cannot be asked to do', () => {
       expect(v.by).toBe('person');
       expect(v.why).toMatch(/could do this/);
       expect(v.why).toMatch(/out of every rail's reach/);
+      expect(v.because).toBe('place');
     }
   });
   it('a process nobody has written a rule for is a person\'s until somebody does', () => {
-    expect(tends({ ...job.ops[0]!, process: 'telekinesis' }, t)).toEqual({ by: 'person', why: expect.stringMatching(/nothing is written down about tending telekinesis/) });
+    expect(tends({ ...job.ops[0]!, process: 'telekinesis' }, t)).toEqual({ by: 'person', because: 'unwritten', why: expect.stringMatching(/nothing is written down about tending telekinesis/) });
   });
 });
 
@@ -148,5 +150,45 @@ describe('a want run through a tended works', () => {
     expect(tendWords('let the robot run the works')).toMatch(/==== the work/);
     expect(tendWords('what is the weather')).toBeNull();
     expect(tendWords('show me the works')).toBeNull();
+  });
+});
+
+describe('the works builds its own next hand', () => {
+  it('soldering falls to a person for want of a tool, and the tool is named rather than wished for', () => {
+    const t = tendWorks(IDS);
+    const op = { ...throwAt('quadcopter', IDS).ops[0]!, process: 'solder', station: t.serves[0]?.id ?? 'soldering' };
+    const v = tends(op, t);
+    expect(v.by).toBe('person');
+    expect(v.because).toBe('tool');
+    expect(v.wants).toBe('solder');
+    expect(v.why).toMatch(/the library's own Pinecil/);
+  });
+  it('fitting the head it named takes the soldering off you, and the share goes up', () => {
+    const without = runWorks('quadcopter', IDS);
+    const with_ = runWorks('quadcopter', IDS, [], { tools: ['solder'] });
+    expect(with_.tended).toBeGreaterThan(without.tended);
+    expect(with_.personMin).toBeLessThan(without.personMin);
+    expect(with_.steps.some((s) => s.op.process === 'solder' && s.by === 'robot')).toBe(true);
+  });
+  it('what it says to build next is costed off its own parts, not guessed at', () => {
+    const r = runWorks('quadcopter', IDS);
+    const head = r.next.find((n) => /soldering head/.test(n.buy));
+    expect(head).toBeDefined();
+    expect(head!.buy).toMatch(/\$\d+\.\d\d of parts/);        // its own units' prices
+    expect(head!.why).toMatch(/already in the library/);
+    expect(head!.wouldTake).toBeGreaterThan(0);
+  });
+  it('a reach problem is named as a reach problem, never as a missing tool', () => {
+    const r = runWorks('quadcopter', IDS);
+    const place = r.steps.find((s) => s.because === 'place');
+    if (place) {
+      expect(place.wants).toBeUndefined();
+      expect(r.next.some((n) => /onto a row an aisle faces/.test(n.buy))).toBe(true);
+    }
+  });
+  it('an arc is never offered as a tool to build, because nothing here is a welder\'s hand', () => {
+    const r = runWorks('workbench', IDS);
+    expect(r.steps.some((s) => s.op.process === 'weld-mig' && s.because === 'never')).toBe(true);
+    expect(r.next.filter((n) => /weld/.test(n.buy)).every((n) => /your own hands/.test(n.buy))).toBe(true);
   });
 });

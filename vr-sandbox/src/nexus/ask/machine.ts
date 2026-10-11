@@ -24,7 +24,7 @@ import type { Part } from '../parts/kits';
 import { cheapest } from '../parts/prices';
 
 /** What a unit affords: the one thing it adds to whatever is bolted on top of it. */
-export type Does = 'slide' | 'turn' | 'grip' | 'deposit' | 'cut' | 'see' | 'think' | 'hold';
+export type Does = 'slide' | 'turn' | 'grip' | 'deposit' | 'cut' | 'solder' | 'see' | 'think' | 'hold';
 
 /** A unit of machine: an assembly of library parts that gives one affordance, carries what is bolted to its moving end,
  *  and costs what its parts cost. Its figures are worked out from its own parts, never asserted. */
@@ -156,6 +156,23 @@ export const GRIPPER: Unit = {
   box: [90, 120, 60],
   says: 'two printed fingers on 3 mm dowels in 625 bearings, closed by an MG996R servo: 60 mm open, about 1.5 kg held',
   src: 'the servo\'s 11 kg·cm is its own listing; the grip is that torque over a 35 mm finger with half of it kept against slip (an estimate)',
+};
+
+/** A soldering head: the Pinecil the library already draws, held on the moving end, with the reel fed by its own
+ *  stepper. This is the unit that exists because the works' own robot asked for it — `works/tend.ts` costed the
+ *  soldering it could not do, and the answer was not to buy a hand but to compose one out of what is already drawn. */
+export const SOLDER_HEAD: Unit = {
+  id: 'solder-head', name: 'a soldering head', does: 'solder', range: 0,
+  of: [{ words: 'solderiron pinecil-v2', n: 1, price: 'soldering-iron' }, { words: 'solderreel ts-635050', n: 1, price: 'solder-leaded' },
+    { words: NEMA17, n: 1, price: 'nema17' }, { words: 'drivegear mk8', n: 1, price: 'extruder' },
+    { words: 'bowden od4 id2 L500', n: 1 }, { words: 'motorplate nema17 t4 aluminium', n: 1 }, { words: 'bolt M5x12', n: 4 }],
+  bought: [{ what: 'a 20 V USB-C PD supply for the iron', n: 1, why: 'a potted switcher with a USB-C PD controller in it', price: 'usbc-pd-65w', kg: 0.12 },
+    { what: 'a printed cradle that holds the iron at 50° to the work', n: 1, why: 'printed on the works\' own FFF printer, which is the line that makes this head cost $50 instead of $500', usd: 2, kg: 0.03 }],
+  carries: 0, lifts: 0, speed: 0,
+  limit: 'nothing stands on it: it is a tool at the top of the stack. What limits it is the iron — 400 °C and 64 W at 20 V, which is a through-hole joint in about a second and nothing like a ground plane',
+  box: [60, 180, 50],
+  says: 'a Pinecil V2 in a printed cradle on the moving end, its 0.5 mm 63/37 fed from its own reel by an MK8 gear on a NEMA 17 down a PTFE tube — the same drive an extruder is, because feeding solder wire and feeding filament are the same problem',
+  src: 'the iron, the reel, the gear and the tube are the library\'s own (src/nexus/machines/kit-solder.ts); that solder feeds like filament is this file\'s own reading, and the joint model it would work to is src/nexus/teach/solder-joint.ts',
 };
 
 /** An eye: the Camera Module 3, which the library already draws, on whatever moves. */
@@ -303,6 +320,7 @@ export function readMachine(words: string): { does: Does[]; mm: [number, number,
   const does: Does[] = [];
   if (/print|extrude|deposit|fdm|fff|filament/.test(t)) does.push('deposit');
   if (/mill|rout|cut|carve|engrave|spindle/.test(t)) does.push('cut');
+  if (/solder|tin |reflow/.test(t)) does.push('solder');
   if (/pick|place|grab|grip|hand|hold.*part|sort/.test(t)) does.push('grip');
   if (/camera|see|scan|inspect|look|vision|photo/.test(t)) does.push('see');
   if (/turn|rotate|spin|wrist|turntable|lathe|wheel/.test(t)) does.push('turn');
@@ -320,7 +338,7 @@ export function readMachine(words: string): { does: Does[]; mm: [number, number,
   const mm: [number, number, number] = size ? [Number(size[1]), Number(size[2]), Number(size[3] ?? size[2])]
     : one && (arrange === 'rail' || arrange === 'arm') ? [Number(one[1]), 300, 300]
       : [300, 300, 300];
-  const name = does.length ? `a${arrange === 'arm' ? 'n arm' : arrange === 'rail' ? ' rail-mounted machine' : arrange === 'table' ? ' turning machine' : ' machine'} that ${does.map((d) => ({ deposit: 'prints', cut: 'cuts', grip: 'picks things up', see: 'sees', turn: 'turns', slide: 'moves', think: 'is programmed', hold: 'holds' })[d]).join(', ')}` : 'a machine';
+  const name = does.length ? `a${arrange === 'arm' ? 'n arm' : arrange === 'rail' ? ' rail-mounted machine' : arrange === 'table' ? ' turning machine' : ' machine'} that ${does.map((d) => ({ deposit: 'prints', cut: 'cuts', solder: 'solders', grip: 'picks things up', see: 'sees', turn: 'turns', slide: 'moves', think: 'is programmed', hold: 'holds' })[d]).join(', ')}` : 'a machine';
   return { does, mm, payload: kg ? Number(kg[1]) : 0, name, arrange };
 }
 
@@ -332,6 +350,7 @@ export function composeMachine(words: string): Machine {
   const tools: Unit[] = [];
   if (want.does.includes('deposit')) tools.push(HOT_END);
   if (want.does.includes('cut')) tools.push(SPINDLE);
+  if (want.does.includes('solder')) tools.push(SOLDER_HEAD);
   if (want.does.includes('grip')) tools.push(GRIPPER);
   if (want.does.includes('see')) tools.push(EYE);
   if (want.does.includes('turn') && want.arrange !== 'arm' && want.arrange !== 'table') tools.push(turnAxis(3));
@@ -369,7 +388,7 @@ export function composeMachine(words: string): Machine {
   const usd = +money.reduce((a, b) => a + b.usd, 0).toFixed(2);
   const refusals = [...st.refusals, ...(want.arrange === 'gantry' ? liftCheck(st.stages) : [])];
   if (want.payload > 0 && !tools.some((u) => u.does === 'grip')) refusals.push(`it was asked to hold ${want.payload} kg and nothing on it grips: say "picks up" and a gripper is composed in`);
-  if (!want.does.length) refusals.push('nothing in those words says what the machine must *do*: name a tool (print, cut, pick up, see, turn) and it is composed round it');
+  if (!want.does.length) refusals.push('nothing in those words says what the machine must *do*: name a tool (print, cut, solder, pick up, see, turn) and it is composed round it');
   return {
     asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm, kg: st.kg,
     usd: usd || null, unpriced: money.flatMap((m) => m.unpriced), does: [...new Set(units.map((u) => u.does))],

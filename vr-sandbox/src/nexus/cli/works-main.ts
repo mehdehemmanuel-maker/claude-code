@@ -14,6 +14,7 @@
 //   npm run works -- builds              what there is to throw at it
 //   npm run works -- tend               the works with a robot on a rail in it: what it reaches, orders and does
 //   npm run works -- tend gokart        and a go-kart run through it
+//   npm run works -- tend gokart solder with a soldering head fitted to the robot, which it built itself
 
 import { BUILDS, TIERS, bootstrapOf, buildById, jobForModel, jobText, programsText, throwAt, under3K, worksText, worksUnderText } from '../works';
 import { fitsText } from '../parts/fits';
@@ -31,7 +32,7 @@ const tierOf = (): { name: string; stations: string[] } => {
 };
 
 if (args[0] === 'fits') { console.log(fitsText(Number(args[1] ?? 25))); }
-else if (args[0] === 'tend') { console.log(runText(runWorks(args[1] ?? 'workbench', tierOf().stations))); }
+else if (args[0] === 'tend') { console.log(runText(runWorks(args[1] ?? 'workbench', tierOf().stations, [], args.includes('solder') ? { tools: ['solder'] } : {}))); }
 else if (args[0] === 'builds') {
   for (const b of BUILDS) console.log(`${b.id.padEnd(11)} ${b.lines.length} lines, ${(b.joins ?? []).length} kinds of joint — ${b.what}\n            ${b.src}`);
 }
