@@ -1535,6 +1535,25 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    a tenth between runs. Test time is what to measure, and the tail is what is left: `make-every` (51 s) and
    `kits-every` (47 s) are each one `it`, so neither can be spread over workers; sharding them by kit is the next cut,
    and the car park alone would still hold a shard for 30 s.
+   And a third time round, on the other sweep: every kit through the make pipeline. The car park spent 19.6 s in
+   `perfect()` and asked the separating-axis test **fourteen million times**, a quarter of the whole pipeline sitting in
+   the garbage collector. Three causes, all in `parts/space.ts`:
+   • `sat` built a `Vector3` for each of its fifteen axes, every call: fourteen million calls times twenty vectors is
+     where the collector's quarter came from. The fifteen axes are numbers now, in the same order with the same
+     arithmetic, so the axis it picks and the depth it reports are what they were.
+   • A pair's tolerance (the larger of 2 mm and 1 % of the smaller's least side) read both boxes' least sides for every
+     candidate pair; each part's own is worked out once now, and a pair's is the smaller of the two, which is the same
+     number.
+   • And the real one: **a pair of covering pieces that the world's own axes hold more than the tolerance apart was
+     still asked the fifteen axes.** That is the same test the loop had just made of the two parts' bounds, so it is
+     now made of the pieces too, each piece's span kept with it. Fourteen million calls became a fraction of that, and
+     29 of the 30 kits come out identical to the last digit. The thirtieth is the go-kart, and the difference is the
+     honest kind: two of its 198 joints are now sized from the pieces that really meet (an M6 and an M10 where both
+     were M8), because the old loop could choose, as the deepest of a part pair's pieces, a pair the world's axes held
+     further apart than the tolerance — the fifteen axes decide *whether* two boxes are apart exactly, but the depth
+     they report is a lower bound, so a piece 5 mm away could still read as touching within 2 mm.
+   Measured: the car park through the pipeline 19.6 s to 15.0, a car 2.0 to 1.27, a street 5.8 to 4.4. The gate is green
+   on all 171 files and 2,021 tests, and nothing in the suite was holding on to one of those pairs.
    Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).

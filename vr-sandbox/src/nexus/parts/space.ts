@@ -59,21 +59,43 @@ export function layout(root: Part, at = new THREE.Matrix4()): Node[] {
   return out;
 }
 
+/** A covering piece's world-aligned span (min x, y, z then max x, y, z), worked out once and kept with the piece: the
+ *  support of an oriented box along each world axis is its middle plus the sum of its half sides along that axis. */
+const spans = new WeakMap<OBB, number[]>();
+const spanOf = (o: OBB): number[] => {
+  let v = spans.get(o);
+  if (!v) { const rx = o.h[0] * Math.abs(o.u[0].x) + o.h[1] * Math.abs(o.u[1].x) + o.h[2] * Math.abs(o.u[2].x);
+    const ry = o.h[0] * Math.abs(o.u[0].y) + o.h[1] * Math.abs(o.u[1].y) + o.h[2] * Math.abs(o.u[2].y);
+    const rz = o.h[0] * Math.abs(o.u[0].z) + o.h[1] * Math.abs(o.u[1].z) + o.h[2] * Math.abs(o.u[2].z);
+    spans.set(o, (v = [o.c.x - rx, o.c.y - ry, o.c.z - rz, o.c.x + rx, o.c.y + ry, o.c.z + rz])); }
+  return v;
+};
 export const least = (b: THREE.Box3) => { const s = b.getSize(new THREE.Vector3()); return Math.min(s.x, s.y, s.z); };
 const leastH = (o: OBB) => 2 * Math.min(...o.h);
 /** The separating-axis test of two oriented boxes: null if apart by more than tol, else the axis of least overlap and how
  *  far they press into each other along it (negative: a gap within tol). */
+// The fifteen axes in order, as numbers: the six of the two boxes, then the nine cross products, each tried as it is
+// found. Written without a vector of its own because a thing of thousands of parts asks this millions of times (a car
+// park: fourteen million), and a Vector3 for every axis of every pair spent a quarter of the whole pipeline in the
+// garbage collector. The arithmetic and the order are what they were, so the axis it picks is too.
 export function sat(A: OBB, B: OBB, tol: number): { normal: THREE.Vector3; depth: number } | null {
-  const T = B.c.clone().sub(A.c), axes: THREE.Vector3[] = [...A.u, ...B.u];
-  for (const a of A.u) for (const b of B.u) { const x = new THREE.Vector3().crossVectors(a, b); if (x.lengthSq() > 1e-10) axes.push(x.normalize()); }
-  let best: { normal: THREE.Vector3; depth: number } | null = null;
-  for (const L of axes) {
-    const ra = A.h[0] * Math.abs(A.u[0].dot(L)) + A.h[1] * Math.abs(A.u[1].dot(L)) + A.h[2] * Math.abs(A.u[2].dot(L));
-    const rb = B.h[0] * Math.abs(B.u[0].dot(L)) + B.h[1] * Math.abs(B.u[1].dot(L)) + B.h[2] * Math.abs(B.u[2].dot(L)), d = Math.abs(T.dot(L)), pen = ra + rb - d;
-    if (pen < -tol) return null;
-    if (!best || pen < best.depth) best = { normal: L.clone().multiplyScalar(T.dot(L) >= 0 ? 1 : -1), depth: pen };
+  const [a0, a1, a2] = A.u, [b0, b1, b2] = B.u, [ah0, ah1, ah2] = A.h, [bh0, bh1, bh2] = B.h;
+  const tx = B.c.x - A.c.x, ty = B.c.y - A.c.y, tz = B.c.z - A.c.z;
+  let bd = Infinity, bx = 0, by = 0, bz = 0, apart = false;
+  const on = (lx: number, ly: number, lz: number): void => {
+    const ra = ah0 * Math.abs(a0.x * lx + a0.y * ly + a0.z * lz) + ah1 * Math.abs(a1.x * lx + a1.y * ly + a1.z * lz) + ah2 * Math.abs(a2.x * lx + a2.y * ly + a2.z * lz);
+    const rb = bh0 * Math.abs(b0.x * lx + b0.y * ly + b0.z * lz) + bh1 * Math.abs(b1.x * lx + b1.y * ly + b1.z * lz) + bh2 * Math.abs(b2.x * lx + b2.y * ly + b2.z * lz);
+    const t = tx * lx + ty * ly + tz * lz, pen = ra + rb - Math.abs(t);
+    if (pen < -tol) { apart = true; return; }
+    if (pen < bd) { const sg = t >= 0 ? 1 : -1; bd = pen; bx = lx * sg; by = ly * sg; bz = lz * sg; }
+  };
+  for (const u of [a0, a1, a2, b0, b1, b2]) { on(u.x, u.y, u.z); if (apart) return null; }
+  for (const a of [a0, a1, a2]) for (const b of [b0, b1, b2]) {
+    const cx = a.y * b.z - a.z * b.y, cy = a.z * b.x - a.x * b.z, cz = a.x * b.y - a.y * b.x, l2 = cx * cx + cy * cy + cz * cz;
+    if (l2 <= 1e-10) continue;
+    const l = Math.sqrt(l2); on(cx / l, cy / l, cz / l); if (apart) return null;
   }
-  return best;
+  return bd === Infinity ? null : { normal: new THREE.Vector3(bx, by, bz), depth: bd };
 }
 /** Whether one oriented box lies wholly inside another (all its corners within it). */
 export function within(inner: OBB, outer: OBB, tol = 1e-4): boolean {
@@ -88,15 +110,24 @@ export function within(inner: OBB, outer: OBB, tol = 1e-4): boolean {
  *  does not hold it (an engine inside a car's shell) is inside it, not joined to it. */
 export function contacts(nodes: Node[], keep: (n: Node) => boolean = () => true): Contact[] {
   const solid = nodes.filter((n) => n.obb && keep(n)).sort((a, b) => a.box!.min.x - b.box!.min.x), out: Contact[] = [];
+  // (each part's own tolerance once: a pair's is the smaller of the two, which is what the larger of 2 mm and 1 % of the
+  //  smaller's least side comes to, and it was read off both boxes for every candidate pair)
+  const tolOf = solid.map((n) => Math.max(0.002, 0.01 * leastH(n.obb!)));
   for (let i = 0; i < solid.length; i++) {
     const a = solid[i]!, A = a.box!;
     for (let j = i + 1; j < solid.length; j++) {
-      const b = solid[j]!, B = b.box!, tol = Math.max(0.002, 0.01 * Math.min(leastH(a.obb!), leastH(b.obb!)));
+      const b = solid[j]!, B = b.box!, tol = Math.min(tolOf[i]!, tolOf[j]!);
       if (B.min.x > A.max.x + tol) break;
       if (B.min.y > A.max.y + tol || B.max.y < A.min.y - tol || B.min.z > A.max.z + tol || B.max.z < A.min.z - tol) continue;
-      // (between their covering pieces: a part inside a kart's frame touches the tubes it meets, not the frame's bounds)
+      // (between their covering pieces: a part inside a kart's frame touches the tubes it meets, not the frame's bounds;
+      //  and a pair of pieces the world's own axes hold more than the tolerance apart is not asked the fifteen, which is
+      //  the same test this loop just made of the two parts' bounds, now made of the pieces that cover them: a car park
+      //  asked the fifteen axes fourteen million times, and most of those pairs were already apart)
       let s: { normal: THREE.Vector3; depth: number } | null = null, pa = a.obb!, pb = b.obb!;
-      for (const x of a.pieces) for (const y of b.pieces) { const t = sat(x, y, tol); if (t && (!s || t.depth > s.depth)) { s = t; pa = x; pb = y; } }
+      for (const x of a.pieces) { const bx = spanOf(x);
+        for (const y of b.pieces) { const by = spanOf(y);
+          if (bx[0]! > by[3]! + tol || by[0]! > bx[3]! + tol || bx[1]! > by[4]! + tol || by[1]! > bx[4]! + tol || bx[2]! > by[5]! + tol || by[2]! > bx[5]! + tol) continue;
+          const t = sat(x, y, tol); if (t && (!s || t.depth > s.depth)) { s = t; pa = x; pb = y; } } }
       if (!s) continue;
       if (b.parent !== a && a.parent !== b && a.pieces.length === 1 && b.pieces.length === 1 && ((within(a.obb!, b.obb!) && !seated(b, a)) || (within(b.obb!, a.obb!) && !seated(a, b)))) continue;
       out.push({ a, b, normal: s.normal, depth: s.depth, mid: pa.c.clone().add(pb.c).multiplyScalar(0.5), pa, pb });
