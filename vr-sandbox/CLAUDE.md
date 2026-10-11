@@ -1478,6 +1478,11 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    opto dies, a clevis and split pin, a momentary foot switch, and the phase-angle speed board that turns a salvaged
    washing-machine motor into a potter's wheel. The queue takes them (67,057 items, nothing missing from the table),
    and a test holds the count at zero so a new build cannot add one.
+   And a station opens (`openStation`, `WorksRoom.partOf`): "open the forge" lifts it out of the works and stands it
+   in front of you whole — "drawn in 17 pieces, 20,143 g; point at a piece to open it" — and each piece opens into
+   its own, down to what it is made of, which is the viewer's own explode doing what it has always done. Until this
+   the room's stations were the one thing in the app you could walk up to and not open. A stand-in says so rather
+   than opening into nothing.
    Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).

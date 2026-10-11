@@ -63,6 +63,9 @@ export interface WorksRoom {
   group: THREE.Group; floor: Floor;
   /** which stations are drawn as the machine they are, and what each stand-in says it is */ drawn: Record<string, string>;
   /** the standing things, so the room can be pointed at and asked about */ at(id: string): THREE.Object3D | null;
+  /** what a station was drawn as, so it can be taken apart: its own model, its composition, or the parts of the bill
+   *  the works would build it from. A thing you can walk up to and cannot open is a picture of a machine. */
+  partOf(id: string): Part | null;
   /** the cards turned to whoever is looking: a card read edge-on is a card that says nothing */ update(cam: THREE.Object3D): void;
   dispose(): void;
 }
@@ -265,6 +268,7 @@ export function worksRoom(ids: string[], o: { width?: number; cap?: number } = {
   const wallSign = label(`outside wall — ${floor.services.join(', ')}`, 0.12);
   wallSign.position.set(W / 2, 2.2, -0.28); group.add(wallSign);
 
+  const parts = new Map<string, Part>();
   for (const s of floor.stood) {
     const stand = new THREE.Group(); stand.position.set(s.at[0], 0, s.at[1]); stand.name = s.id;
     // its own floor area, marked out as it is in a real shop: a painted rectangle you do not put anything else in
@@ -294,6 +298,8 @@ export function worksRoom(ids: string[], o: { width?: number; cap?: number } = {
           + (as === 'build' ? ', and this plan builds it' : as ? `, though this plan buys one ${as}` : '');
       }
     }
+    const whole = comp ? comp.part : made;
+    if (whole) parts.set(s.id, whole);
     drawn[s.id] = comp ? `drawn: ${comp.part.name}`
       : made ? (how === 'built'
         ? `built: ${made.name} — drawn from the bill of materials the works builds it from${ofBill} (src/nexus/works/builds.ts)`
@@ -347,6 +353,7 @@ export function worksRoom(ids: string[], o: { width?: number; cap?: number } = {
   return {
     group, floor, drawn,
     at: (id: string) => by.get(id) ?? null,
+    partOf: (id: string) => parts.get(id) ?? null,
     // a card is turned to whoever is looking, and shown only where it can be read: closer than about a metre it is a
     // wall across the view, and further than ten it is three pixels of mush that still costs a draw. The name label is
     // a sprite and stays whatever the distance.
@@ -373,6 +380,23 @@ export interface RoomHandles {
   dolly: THREE.Object3D;
   /** whether a headset is presenting, so the walk-in is the dolly's and not the camera's */ xr: () => boolean;
   /** put the viewer back where they were when the works is put away */ home: () => void;
+  /** stand a part in front of the viewer, apart: how a station is opened (src/nexus/view/explode.ts) */
+  apart?: (p: Part) => string;
+}
+
+/** "open the forge", "take apart the kiln": the station's own parts stood in front of you and parted, each opening
+ *  into its own, which is the whole point of drawing a station from its bill rather than as a box. */
+export function openStation(words: string, r: RoomHandles): string | null {
+  const m = /^(?:open|take apart|explode|show me inside)\s+(?:the\s+)?(.+?)$/i.exec(words.trim().replace(/[.!?]+$/, ''));
+  if (!m || !standing) return null;
+  const want = m[1]!.toLowerCase();
+  const hit = standing.floor.stood.find((s) => s.id === want || s.id.replace(/-/g, ' ') === want
+    || stationById(s.id).name.toLowerCase().includes(want));
+  if (!hit) return null;
+  const p = standing.partOf(hit.id);
+  if (!p) return `${stationById(hit.id).name} stands as a stand-in at its own size: there is nothing inside it to open yet, and its card says so.`;
+  if (!r.apart) return `${p.name}: ${(p.parts ?? []).length} parts.`;
+  return r.apart(p);
 }
 
 /** Where the works stands: its own patch of ground, away from the table (0, 0), the warehouse and the workshop corner. */
@@ -399,6 +423,8 @@ export const worksStood = (): { at: [number, number]; where: typeof worksWhere; 
  *  ground and you taken to its door, or taken away again. */
 export function worksRoomWords(text: string, r: RoomHandles): string | null {
   const t = text.trim().toLowerCase().replace(/[.!?]+$/, '');
+  const opened = openStation(text, r);
+  if (opened) return opened;
   if (/^(put away|close|clear) (the )?works( room)?$/.test(t)) {
     if (!standing) return null;
     r.scene.remove(standing.group); standing.dispose(); standing = null; r.orbit.maxDistance = 5; r.home();
