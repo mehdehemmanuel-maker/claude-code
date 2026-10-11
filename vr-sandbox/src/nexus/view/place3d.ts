@@ -4,6 +4,7 @@
 // group: taken down whole when you leave.
 
 import * as THREE from 'three';
+import { DARTBOARD } from '../world/games';
 import { terminal, wavePeriod, type Place, type Prop } from '../world/places';
 
 export interface PlaceView { group: THREE.Group; update(dt: number, you: THREE.Vector3): void; dispose(): void; sun: THREE.DirectionalLight; torch: THREE.SpotLight | null }
@@ -196,10 +197,6 @@ export function poolTable(): THREE.Group {
   const cue = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), new THREE.MeshStandardMaterial({ color: 0xf8f6f0, roughness: 0.15 })); cue.position.set(-L / 4, top + r, 0); cue.name = 'cue ball'; g.add(cue);
   return g;
 }
-/** A dartboard as the WDF has it: 451 mm across, the bull 12.7 mm and the outer bull 31.8 mm across, the treble ring 8 mm
- *  wide with its outside 107 mm from the middle, the double ring's outside 170 mm; twenty numbered segments, 20 at the top.
- *  Hung with the bull 1.73 m up. */
-export const DARTBOARD = { r: 0.2255, bull: 0.00635, outerBull: 0.0159, trebleOut: 0.107, doubleOut: 0.17, ring: 0.008, height: 1.73, line: 2.37, order: [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5] };
 export function dartboard(): THREE.Group {
   const g = new THREE.Group(), D = DARTBOARD, cv = document.createElement('canvas'); cv.width = cv.height = 1024;
   const c = cv.getContext('2d')!, px = 512 / D.r, C = 512;
@@ -216,13 +213,5 @@ export function dartboard(): THREE.Group {
   const face = new THREE.Mesh(new THREE.CircleGeometry(D.r, 64), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })); face.position.set(0, D.height, 0.04); g.add(face);
   const back = new THREE.Mesh(new THREE.CylinderGeometry(D.r, D.r, 0.04, 48), new THREE.MeshStandardMaterial({ color: 0x1a1410 })); back.rotation.x = Math.PI / 2; back.position.set(0, D.height, 0.02); g.add(back);
   return g;
-}
-/** What a dart scores where it sticks, by the board's rings and segments (x right, y up from the bull, metres). */
-export function dartScore(x: number, y: number): { score: number; says: string } {
-  const D = DARTBOARD, r = Math.hypot(x, y);
-  if (r <= D.bull) return { score: 50, says: 'bull, 50' }; if (r <= D.outerBull) return { score: 25, says: 'outer bull, 25' }; if (r > D.doubleOut) return { score: 0, says: 'off the board' };
-  const a = ((90 - Math.atan2(y, x) * 180 / Math.PI) + 9 + 360) % 360, n = D.order[Math.floor(a / 18) % 20]!;
-  if (r > D.doubleOut - D.ring) return { score: 2 * n, says: `double ${n}, ${2 * n}` }; if (r > D.trebleOut - D.ring && r <= D.trebleOut) return { score: 3 * n, says: `treble ${n}, ${3 * n}` };
-  return { score: n, says: String(n) };
 }
 export { wavePeriod };

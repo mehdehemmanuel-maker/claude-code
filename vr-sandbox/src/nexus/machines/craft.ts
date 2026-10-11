@@ -15,15 +15,19 @@
 //
 // Owner of: how a craft holds itself up and what that costs, and the craft drawn from it.
 
+import { CONST } from '../book/constants';
 import type { Part, V3 as Vec } from '../parts/kits';
 import { massOf } from '../parts/mass';
 
-/** Air at ISA sea level, kg/m³ (ISO 2533). */
-export const AIR = 1.225;
+/** Air at ISA sea level, kg/m³ (ISO 2533) — which is the condition every thrust and cushion figure here is quoted at.
+ *  The engine's own `AIR` (src/nexus/substrate/sizing.ts) is air at 20 °C, 1.204, with its viscosity: a different
+ *  condition for a different job, which is why these are two names and not one. */
+export const AIR_ISA = 1.225;
 /** Sea water, kg/m³ (typical of the open ocean at the surface; fresh water is 1000). */
 export const SEAWATER = 1025;
-/** Standard gravity, m/s² (ISO 80000-3). */
-export const G = 9.80665;
+/** Standard gravity on Earth, m/s², from the book, which fixes it (ISO 80000-3). `G` in src/nexus/world/places.ts is
+ *  gravity by body (the Moon, Mars), which is the other question. */
+export const G_EARTH = CONST.g.value!;
 
 // ---- rotors: a drone, a lift fan, anything that hovers by throwing air down --------------------------------------
 
@@ -47,8 +51,8 @@ export interface Hover {
  * gives); its motor and controller together pass about 80 % (an estimate typical of a hobby drive).
  */
 export function hover(kg: number, D: number, n: number, o: { rho?: number; fm?: number; drive?: number } = {}): Hover {
-  const rho = o.rho ?? AIR, fm = o.fm ?? 0.7, drive = o.drive ?? 0.8;
-  const A = (Math.PI * D * D) / 4, T = (kg * G) / n, vi = Math.sqrt(T / (2 * rho * A));
+  const rho = o.rho ?? AIR_ISA, fm = o.fm ?? 0.7, drive = o.drive ?? 0.8;
+  const A = (Math.PI * D * D) / 4, T = (kg * G_EARTH) / n, vi = Math.sqrt(T / (2 * rho * A));
   const ideal = T * vi, shaft = ideal / fm, watts = shaft / drive;
   return { T, A, disc: T / A, vi, ideal, shaft, watts, shaftAll: shaft * n, wattsAll: watts * n,
     says: `${n} rotors ${(D * 1000).toFixed(0)} mm across hold ${kg} kg: ${T.toFixed(1)} N each over ${A.toFixed(3)} m² of disc (${(T / A).toFixed(0)} N/m²), the air leaving at ${vi.toFixed(1)} m/s. The least power that can do it is ${ideal.toFixed(0)} W a rotor; at a figure of merit of ${fm} the shafts take ${(shaft * n).toFixed(0)} W and at ${drive} through the motors and their controllers the battery gives ${(watts * n).toFixed(0)} W` };
@@ -63,11 +67,11 @@ export function endurance(watts: number, Wh: number, usable = 0.8): { minutes: n
  *  thrust.ideal-static): what is left over its weight is what it can lift or accelerate with. */
 export function lift(watts: number, D: number, n: number, o: { rho?: number; fm?: number; drive?: number } = {}): { T: number; kg: number; says: string } {
   // (`watts` is what one rotor's drive draws, as `hover().watts` is: n of them together make n times the thrust)
-  const rho = o.rho ?? AIR, fm = o.fm ?? 0.7, drive = o.drive ?? 0.8, A = (Math.PI * D * D) / 4;
+  const rho = o.rho ?? AIR_ISA, fm = o.fm ?? 0.7, drive = o.drive ?? 0.8, A = (Math.PI * D * D) / 4;
   // (the figure of merit is the ideal power over the real one for the same thrust, so the thrust a real shaft
   //  power makes is the ideal thrust of fm times that power: fm^(2/3) times the ideal of the power itself)
   const shaft = watts * drive, T = Math.pow(fm, 2 / 3) * Math.cbrt(2 * rho * A * shaft * shaft) * n;
-  return { T, kg: T / G, says: `${n} rotors ${(D * 1000).toFixed(0)} mm across on ${watts.toFixed(0)} W push ${T.toFixed(0)} N, which holds up ${(T / G).toFixed(2)} kg` };
+  return { T, kg: T / G_EARTH, says: `${n} rotors ${(D * 1000).toFixed(0)} mm across on ${watts.toFixed(0)} W push ${T.toFixed(0)} N, which holds up ${(T / G_EARTH).toFixed(2)} kg` };
 }
 
 // ---- jets: a jet suit, a thrust fan, anything that throws its own mass out ---------------------------------------
@@ -86,9 +90,9 @@ export function burn(T: number, tsfc = 0.17, kgFuel = 0): { kgPerHour: number; m
 /** Whether a set of engines holds a craft up, and with how much to spare. Under 1 it does not leave the ground; a
  *  craft a person flies needs margin enough to climb and to correct, not just to hover. */
 export function hovers(kg: number, perEngine: number, n: number): { ratio: number; ok: boolean; says: string } {
-  const T = perEngine * n, W = kg * G, ratio = T / W;
+  const T = perEngine * n, W = kg * G_EARTH, ratio = T / W;
   return { ratio, ok: ratio > 1,
-    says: ratio <= 1 ? `${n} × ${perEngine} N is ${T} N against ${W.toFixed(0)} N of weight: it does not leave the ground` : `${n} × ${perEngine} N is ${T} N against ${W.toFixed(0)} N of weight, a thrust-to-weight of ${ratio.toFixed(2)}: ${((ratio - 1) * G).toFixed(1)} m/s² to climb and to correct with` };
+    says: ratio <= 1 ? `${n} × ${perEngine} N is ${T} N against ${W.toFixed(0)} N of weight: it does not leave the ground` : `${n} × ${perEngine} N is ${T} N against ${W.toFixed(0)} N of weight, a thrust-to-weight of ${ratio.toFixed(2)}: ${((ratio - 1) * G_EARTH).toFixed(1)} m/s² to climb and to correct with` };
 }
 
 // ---- an air cushion: a hovercraft --------------------------------------------------------------------------------
@@ -109,17 +113,17 @@ export interface Cushion {
  * climbing its own bow wave and needs most power.
  */
 export function cushion(kg: number, area: number, perimeter: number, gap = 0.02, o: { rho?: number; cd?: number; eta?: number; L?: number } = {}): Cushion {
-  const rho = o.rho ?? AIR, cd = o.cd ?? 0.53, eta = o.eta ?? 0.6;
-  const p = (kg * G) / area, v = Math.sqrt((2 * p) / rho), Q = cd * perimeter * gap * v, watts = (Q * p) / eta;
-  const hump = Math.sqrt(G * (o.L ?? Math.sqrt(area)));
+  const rho = o.rho ?? AIR_ISA, cd = o.cd ?? 0.53, eta = o.eta ?? 0.6;
+  const p = (kg * G_EARTH) / area, v = Math.sqrt((2 * p) / rho), Q = cd * perimeter * gap * v, watts = (Q * p) / eta;
+  const hump = Math.sqrt(G_EARTH * (o.L ?? Math.sqrt(area)));
   return { p, v, Q, watts, hump,
     says: `${kg} kg on ${area} m² of cushion is ${p.toFixed(0)} Pa — ${((p / 101325) * 100).toFixed(2)} % of an atmosphere. Through a ${(gap * 1000).toFixed(0)} mm gap round ${perimeter} m of skirt that air leaves at ${v.toFixed(1)} m/s, ${Q.toFixed(2)} m³/s, which the lift fan puts back on ${(watts / 1000).toFixed(1)} kW at ${(eta * 100).toFixed(0)} % efficient. Its hump speed is ${hump.toFixed(1)} m/s (${(hump * 1.944).toFixed(1)} knots): below that it is climbing its own bow wave and needs most of its thrust` };
 }
 /** What a hovercraft may climb: a cushion holds its pressure over a slope until its skirt loses the seal, so the
  *  gradient it takes is what its thrust can push it up, not what its cushion can hold. */
 export const climb = (kg: number, thrust: number): { grade: number; says: string } => {
-  const grade = thrust / (kg * G);
-  return { grade, says: `${thrust} N against ${(kg * G).toFixed(0)} N of weight climbs a slope of ${(grade * 100).toFixed(0)} % while its skirt keeps the seal; a cushion has no grip, so a slope it cannot climb it slides back down` };
+  const grade = thrust / (kg * G_EARTH);
+  return { grade, says: `${thrust} N against ${(kg * G_EARTH).toFixed(0)} N of weight climbs a slope of ${(grade * 100).toFixed(0)} % while its skirt keeps the seal; a cushion has no grip, so a slope it cannot climb it slides back down` };
 };
 
 // ---- a hull in water: a submarine ---------------------------------------------------------------------------------
@@ -142,15 +146,15 @@ export interface Hull {
  */
 export function hull(depth: number, D: number, t: number, Lh: number, o: { E?: number; sy?: number; rho?: number } = {}): Hull {
   const E = o.E ?? 200e9, sy = o.sy ?? 350e6, rho = o.rho ?? SEAWATER;
-  const p = rho * G * depth;
+  const p = rho * G_EARTH * depth;
   const buckle = (2.6 * E * Math.pow(t / D, 2.5)) / (Lh / D - 0.45 * Math.sqrt(t / D));
   const squash = (2 * sy * t) / D, collapse = Math.min(buckle, squash);
-  return { p, buckle, squash, collapse, crush: collapse / (rho * G), margin: collapse / p,
-    says: `at ${depth} m the sea presses ${(p / 1e5).toFixed(1)} bar on it. A ${(D * 1000).toFixed(0)} mm hull of ${(t * 1000).toFixed(1)} mm plate, ${Lh} m between its frames, buckles at ${(buckle / 1e5).toFixed(1)} bar and yields at ${(squash / 1e5).toFixed(1)} bar, so it goes ${buckle < squash ? 'by buckling' : 'by yielding'} at ${(collapse / 1e5).toFixed(1)} bar — ${(collapse / (rho * G)).toFixed(0)} m down, ${(collapse / p).toFixed(2)} times the depth asked` };
+  return { p, buckle, squash, collapse, crush: collapse / (rho * G_EARTH), margin: collapse / p,
+    says: `at ${depth} m the sea presses ${(p / 1e5).toFixed(1)} bar on it. A ${(D * 1000).toFixed(0)} mm hull of ${(t * 1000).toFixed(1)} mm plate, ${Lh} m between its frames, buckles at ${(buckle / 1e5).toFixed(1)} bar and yields at ${(squash / 1e5).toFixed(1)} bar, so it goes ${buckle < squash ? 'by buckling' : 'by yielding'} at ${(collapse / 1e5).toFixed(1)} bar — ${(collapse / (rho * G_EARTH)).toFixed(0)} m down, ${(collapse / p).toFixed(2)} times the depth asked` };
 }
 /** The plate a hull needs for a depth, found by walking the thickness up until its collapse pressure is the safety
  *  factor times the pressure there (0.5 mm steps, as plate is sold). */
-export function plateFor(depth: number, D: number, Lh: number, safety = 1.5, o: { E?: number; sy?: number; rho?: number } = {}): { t: number; hull: Hull; says: string } {
+export function hullPlate(depth: number, D: number, Lh: number, safety = 1.5, o: { E?: number; sy?: number; rho?: number } = {}): { t: number; hull: Hull; says: string } {
   for (let t = 0.001; t <= 0.2; t += 0.0005) {
     const h = hull(depth, D, +t.toFixed(4), Lh, o);
     if (h.margin >= safety) return { t: +t.toFixed(4), hull: h, says: `${(t * 1000).toFixed(1)} mm of plate takes a ${(D * 1000).toFixed(0)} mm hull to ${depth} m with ${safety} times the margin: ${h.says}` };
@@ -446,7 +450,7 @@ export function hovercraftParts(nm: string, L: number, seats: number): Part[] {
   parts.push(B(`${nm} windscreen`, [0.005, 0.44, W * 0.6], [L * 0.345, deck + 0.52, 0], { mat: 'pmma', color: 0xaebfcc, finish: 'polished', rot: [0, 0, 0.22] as Vec, fixed: 'bolted down the console\'s front edge' }));
   for (const [i, [dy, dz, ly, lz]] of ([[0.23, 0, 0.03, W * 0.62], [-0.23, 0, 0.03, W * 0.62], [0, W * 0.3, 0.46, 0.03], [0, -W * 0.3, 0.46, 0.03]] as [number, number, number, number][]).entries())
     parts.push(B(`${nm} screen frame ${i + 1}`, [0.03, ly, lz], [L * 0.352 - dy * 0.22, deck + 0.52 + dy, dz], { mat: 'al-6061', color: 0x8f949a, finish: 'anodised', rot: [0, 0, 0.22] as Vec, shell: 0.0025, says: i < 2 ? 'the rail along its top and bottom edge' : 'the stile up its side' }));
-  return [group(nm, [0, 0, 0], parts, { says: `${c.says}. ${climb(kg, kg * G * 0.25).says}` })];
+  return [group(nm, [0, 0, 0], parts, { says: `${c.says}. ${climb(kg, kg * G_EARTH * 0.25).says}` })];
 }
 /** What a hovercraft of that length weighs on its own, kg. There is no standard light hovercraft to look the figure up
  *  in, so it is worked out from what one is made of, as the drawing above is: a glass hull skin and a foam-cored deck
@@ -557,7 +561,7 @@ export const jetFuelKg = (engines: number, perEngine: number): number => +((engi
  *  a shrouded propeller with its planes and rudder. Bow at +x, the hull's axis along x. */
 export function submarineParts(nm: string, depth: number, D: number): Part[] {
   const frame = D * 1.7, body = frame * 2.4, R = D / 2;
-  const t = plateFor(depth, D, frame).t;
+  const t = hullPlate(depth, D, frame).t;
   // (the hull: a hemisphere at the bow, the cylinder the people are in, and a cone drawn away to the stern so the
   //  propeller and its planes work in water that is going somewhere, not in the hull's own wake)
   const tail = R * 1.9, nose = R;
@@ -613,7 +617,7 @@ export function submarineParts(nm: string, depth: number, D: number): Part[] {
  *  because at 50 m the plate is 6 mm and at 500 it is 29. A two-person 100 m boat comes out at 2.8 t, against about
  *  2.5 t for a U-Boat Worx NEMO of that rating. */
 export function subKg(depth: number, D: number): number {
-  const frame = D * 1.7, body = frame * 2.4, t = plateFor(depth, D, frame).t;
+  const frame = D * 1.7, body = frame * 2.4, t = hullPlate(depth, D, frame).t;
   const area = PI * D * body + 4 * PI * (D / 2) ** 2;
   return +(area * t * 7850 + 700 * Math.pow(D, 2.4)).toFixed(0);
 }

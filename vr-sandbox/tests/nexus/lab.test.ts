@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BSC_A2, C5425, C5425_RADIUS, MINISUB, POWERPAC, RESEARCH_PLUS, SAFE_IMAGER, T100, cabinetAir, cycleTime, gelRun, meltingPoint, pipetteError, rcf, rpmFor, spin, type CycleProgram } from '../../src/nexus/machines/lab';
+import { BSC_A2, C5425, C5425_RADIUS, MINISUB, POWERPAC, RESEARCH_PLUS, SAFE_IMAGER, T100, cabinetAir, cycleTime, gelRun, strandMelting, pipetteError, rcf, rpmFor, spin, type CycleProgram } from '../../src/nexus/machines/lab';
 import { componentOf } from '../../src/nexus/parts/components';
 import { resolve } from '../../src/nexus/parts/inventory';
 import { massOf } from '../../src/nexus/parts/mass';
@@ -29,9 +29,9 @@ describe('the bench instruments by their makers\' figures', () => {
     expect(gelRun(300, 150).refused.length).toBe(2);
   });
   it('gives a short strand\'s melting point, by Wallace under 14 bases and by the G + C rule above', () => {
-    expect(meltingPoint('ACGTACGTACGT')).toBe(2 * 6 + 4 * 6);
-    expect(meltingPoint('ACGTACGTACGTACGTACGT')).toBeCloseTo(64.9 + (41 * (10 - 16.4)) / 20, 6);
-    expect(Number.isNaN(meltingPoint(''))).toBe(true);
+    expect(strandMelting('ACGTACGTACGT')).toBe(2 * 6 + 4 * 6);
+    expect(strandMelting('ACGTACGTACGTACGTACGT')).toBeCloseTo(64.9 + (41 * (10 - 16.4)) / 20, 6);
+    expect(Number.isNaN(strandMelting(''))).toBe(true);
   });
   it('reads a pipette\'s allowed error off its maker\'s table, and says when a volume is off it', () => {
     expect(pipetteError(1000).systematic).toBeCloseTo(6, 6); expect(pipetteError(1000).random).toBeCloseTo(2, 6);

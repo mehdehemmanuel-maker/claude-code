@@ -4,6 +4,8 @@
 // catalogue's lines (every standard size), and blocks of the part space (every size it can be made to order in). So
 // adding a kind of part is adding its table; nothing else is written for it.
 
+/** The E series are the standard's, one owner for the whole tree (src/nexus/parts/series.ts). */
+export { E6, E12, E24, E96 } from '../parts/series';
 import type { Family, Param } from '../parts/families';
 import type { Item, Process } from '../parts/inventory';
 
@@ -178,8 +180,6 @@ export const r20 = (lo: number, hi: number) => [0.1, 1, 10, 100, 1000, 10000].fl
 /** ISO preferred lengths, mm. */
 export const PREF = [2, 2.5, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 30, 32, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 90, 100, 110, 120, 130, 140, 150, 160, 180, 200, 220, 240, 260, 280, 300];
 export const pref = (lo: number, hi: number) => PREF.filter((x) => x >= lo && x <= hi);
-export const E12 = [1, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2];
-export const E24 = [1, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2, 2.2, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1];
 export const decades = (series: number[], lo: number, hi: number) => [1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7].flatMap((d) => series.map((x) => +(x * d).toPrecision(3))).filter((x) => x >= lo * 0.999 && x <= hi * 1.001);
 /** A value with an SI prefix: 4700 → "4.7k", 2.2e-6 → "2.2µ". */
 export const si = (x: number) => { const ps: [number, string][] = [[1e9, 'G'], [1e6, 'M'], [1e3, 'k'], [1, ''], [1e-3, 'm'], [1e-6, 'µ'], [1e-9, 'n'], [1e-12, 'p']]; const [m, s] = ps.find(([m]) => Math.abs(x) >= m * 0.9999) ?? [1e-12, 'p']; return `${+(x / m).toPrecision(6)}${s}`; };

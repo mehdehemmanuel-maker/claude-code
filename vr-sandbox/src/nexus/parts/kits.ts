@@ -11,20 +11,20 @@
 import { VEHICLE_KITS, useMass } from '../machines/machines';
 import { DESIGNED, boltedJoint, exampleOf, partWords, use } from './components';
 import { assemble } from './mate';
-import { layout } from '../make/space';
-import type { Lathe, Loft, Prism, Tube } from '../machines/form';
-import type { Patch } from '../machines/surface';
+import { layout } from './space';
+import type { Lathe, Loft, Prism, Tube } from './form';
+import type { Patch } from './surface';
 import { DENSITY, massOf } from './mass';
 
 export type V3 = [number, number, number];
 export type Shape =
   | { box: V3 } | { cyl: [r: number, h: number, r2?: number] } | { sphere: number } | { cone: [r: number, h: number] }
   | { torus: [R: number, r: number] } | { capsule: [r: number, h: number] }
-  /** a body through cross-sections along x (src/nexus/machines/form.ts) */ | { loft: Loft }
+  /** a body through cross-sections along x (src/nexus/parts/form.ts) */ | { loft: Loft }
   /** a round tube along a path, bent round at its corners */ | { tube: Tube }
   /** a profile of [radius, height] spun about y */ | { lathe: Lathe }
   /** a section of [x, y] points drawn along z, its length L (a rolled or extruded bar, angle, channel, beam) */ | { prism: Prism }
-  /** a freeform skin (a NURBS surface, or a part of one: src/nexus/machines/surface.ts), its wall its shell */ | { surf: Patch }
+  /** a freeform skin (a NURBS surface, or a part of one: src/nexus/parts/surface.ts), its wall its shell */ | { surf: Patch }
   | { stars: { n: number; arms: number; pitch: number; radius: number; bulge: number; kind: 'spiral' | 'barred' | 'elliptical' | 'lenticular' | 'irregular'; flat: number; tint: number; seed: number } }
   | { field: { size: number; relief: number; kind: string; water: number; seed: number; color: number } }
   /** a heap of like things: so many, each its size, piled in a cone so wide and high (drawn as up to 20,000 of them) */

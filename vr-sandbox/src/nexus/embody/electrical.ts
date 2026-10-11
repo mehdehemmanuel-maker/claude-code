@@ -20,6 +20,7 @@
 // (./breadboard): only what the board's clips can carry goes on it, every lead in a hole, and the board is checked to
 // join exactly those nets. What it cannot carry is the controller's heater channel.
 
+import { E24, preferred } from '../parts/series';
 import { part, type Assembly, type Flaw, type Part, type V3, type Value } from './part';
 import { conductorOf as conductorName, holeAt, layOut, type Component, type Layout } from './breadboard';
 import { AWG_SIZES, awgDiameter, BREADBOARD, CABLE_CARRIERS, CABLE_H, COLOURS, CONNECTORS, COPPER, FUSE_RATINGS, IEC_60062, INSULATIONS, PSU_24V } from './stock';
@@ -35,9 +36,8 @@ export interface Cable {
 }
 export interface Electrical extends Assembly { cables: Cable[]; psu: { id: string; W: number; load: number }; fuse: number; mainsI: number; divider: { R25: number; B: number; Rfixed: number; sensitivity: number; resolutionK: number } | null; mosfet: { Vds: number; Id: number; RdsOn: number; loss: number } | null; breadboard: Part[]; flaws: Flaw[] }
 
-const E24 = [1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1];
-/** The nearest preferred value of the E24 series (IEC 60063). */
-export const e24 = (x: number) => { const dec = 10 ** Math.floor(Math.log10(x)); return E24.map((m) => m * dec).concat([10 * dec]).reduce((a, b) => (Math.abs(Math.log(b / x)) < Math.abs(Math.log(a / x)) ? b : a)); };
+/** The nearest preferred value of the E24 series (IEC 60063), by the series' own owner. */
+export const e24 = (x: number) => preferred(E24, x);
 
 /** The temperature a conductor of gauge `awg` with insulation `ins` settles at carrying `I` in air at `Tair`: I² R'(T) = h π D (T − T_air). */
 export function conductorTemperature(awg: number, ins: (typeof INSULATIONS)[number], I: number, Tair: number): number {

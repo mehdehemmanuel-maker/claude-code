@@ -12,6 +12,7 @@
 // - deep-water waves go at ω² = g k (Airy): a 20 m wave has a period of 3.6 s;
 // - a blizzard sees under 400 m (the US National Weather Service: a quarter mile); heavy rain is over 7.6 mm/h (AMS).
 
+import { CONST } from '../book/constants';
 import { makeTrack, topSpeed } from './karting';
 import { makeCoaster, sayCoaster } from './coaster';
 import { pingSkillSaid } from './pingpong';
@@ -38,7 +39,9 @@ export interface Place {
   /** what was asked that this place does not have yet */ missing: string[];
 }
 
-export const G = { earth: 9.80665, moon: 1.62, mars: 3.71, jupiter: 24.79, none: 0 } as const;
+/** Gravity by body, m/s²: Earth's is the book's own standard gravity (ISO 80000-3), the rest each body's measured
+ *  surface value (NASA planetary fact sheets, rounded to three figures). */
+export const G = { earth: CONST.g.value!, moon: 1.62, mars: 3.71, jupiter: 24.79, none: 0 } as const;
 const AIR = 1.225;
 
 /** A falling thing's terminal speed in still air: where drag, ½ ρ C_d A v², has grown to its weight m g. */

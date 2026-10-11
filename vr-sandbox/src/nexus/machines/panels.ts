@@ -1,6 +1,6 @@
 // Panelled bodies drawn as their designers draw them: lines first, then skins stretched through sections across them,
 // then the skins cut into panels along their shut lines. One way for any body that wraps what it carries (a car, a van,
-// a cab; next a hull, a fuselage). The tools are src/nexus/machines/surface.ts's; the figures each body's own (its length,
+// a cab; next a hull, a fuselage). The tools are src/nexus/parts/surface.ts's; the figures each body's own (its length,
 // width, height, its lines as shares of them, its wheels).
 //
 // What is drawn:
@@ -21,7 +21,7 @@
 // Every panel is named by what it is for (the arch of the front left wheel, the hood), never by its place in a list,
 // so changing a figure re-makes the same panels: there is no naming to break when the shape changes.
 
-import { curvatures, curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
+import { curvatures, curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from '../parts/surface';
 import type { Part } from '../parts/kits';
 import type { Lines } from './machines';
 

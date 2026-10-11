@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { KITS, makeKit, massOf, type Part } from '../../src/nexus/parts/kits';
 import { MACHINES, makeMachine, tyreOf } from '../../src/nexus/machines/machines';
 import { perfect } from '../../src/nexus/make/pipeline';
-import { layout } from '../../src/nexus/make/space';
+import { layout } from '../../src/nexus/parts/space';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 const kit = (id: string, words: string) => makeKit(KITS.find((k) => k.id === id)!, words, 1).part;

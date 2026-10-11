@@ -20,7 +20,7 @@ export const atomsPerCell = (lattice: Crystal['lattice']) => SITES[lattice].redu
 export const atomicVolume = (c: Crystal) => c.a ** 3 / atomsPerCell(c.lattice);
 
 /** Density from the atoms and their arrangement, kg/m³. */
-export const densityOf = (c: Crystal) => c.mass / atomicVolume(c);
+export const crystalDensity = (c: Crystal) => c.mass / atomicVolume(c);
 
 /** The binding over the room: cohesive energy over the volume per atom, Pa. */
 export const bindingPressure = (c: Crystal) => c.cohesive / atomicVolume(c);

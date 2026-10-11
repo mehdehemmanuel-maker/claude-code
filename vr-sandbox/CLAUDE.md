@@ -168,13 +168,13 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Conditions on loads, holds and reach | `src/nexus/ask/conditions.ts` |
 | Conditions on how a made thing is (age, setting, material, size) | `src/nexus/make/conditions.ts` |
 | Edges as made (radius by material and process) | `src/nexus/parts/finish.ts` |
-| Oriented-box layout and contacts of a placed tree | `src/nexus/make/space.ts` |
+| Oriented-box layout and contacts of a placed tree | `src/nexus/parts/space.ts` |
 | Attention to detail (joints, fasteners, seals, finishes, wear) | `src/nexus/make/detail.ts` |
 | Critic (room to move, held up, walls, through, standing) | `src/nexus/make/critic.ts` |
 | The make pipeline (conditions, detail, critic, in rounds) | `src/nexus/make/pipeline.ts` |
 | Wheeled machines of every kind, from their published figures | `src/nexus/machines/machines.ts` (cars, karts, ATVs, motorcycles, forklifts, trucks, lawn tractors) |
-| Lofts, bent tubes, turned profiles: mass, bounds, covering boxes | `src/nexus/machines/form.ts` |
-| Freeform surfaces: NURBS curves and skins, interpolation, regions and trims, fairness, zebra, draft, seams | `src/nexus/machines/surface.ts` |
+| Lofts, bent tubes, turned profiles: mass, bounds, covering boxes | `src/nexus/parts/form.ts` |
+| Freeform surfaces: NURBS curves and skins, interpolation, regions and trims, fairness, zebra, draft, seams | `src/nexus/parts/surface.ts` |
 | Panelled bodies on curve networks (side skin, hood, deck, cabin; arches from the wheels' sweep; keep-outs) | `src/nexus/machines/panels.ts` (rules in `BODY_RULES`, their history in `RULE_UPDATES`) |
 | Vehicles as points in a want-space (not a maker) | `src/nexus/machines/vehicle.ts` |
 | Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/parts/kits.ts`, checked in `src/nexus/make/critic.ts` |
@@ -245,9 +245,9 @@ the root.
 | --- | --- |
 | `substrate/` | the Nexus engine: terms, domains, laws, places, couplings, and the loop that evolves them |
 | `ask/` | words in, wants out: how an ask becomes something to make (`conceive`, `route`, `generate`, `invent`, `spec`) |
-| `parts/` | the parts library: every part designed once from its standard, its mass, and what it costs |
+| `parts/` | the parts library and the geometry a part is made of: every part designed once from its standard, the shapes it is drawn from (lofts, bent tubes, turned profiles, NURBS surfaces), where its pieces end up in space and which of them touch, its mass and what it costs |
 | `boards/` | single-board computers, their parts, and the photo-measured data files |
-| `machines/` | real machines from their makers' figures, and the wire out to them (`link.ts`) |
+| `machines/` | real machines from their makers' figures, and the wire out to them (`link.ts`). Not geometry: a loft, a surface and an oriented box are `parts/`, because a body is not a machine |
 | `works/` | any build routed to real machines: twelve files, one concern each (see `works/index.ts`) |
 | `teach/` | teaching a build by hand: edges, lessons, the soldering bench, the build pack |
 | `world/` | places, creatures, games, people |

@@ -5,10 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import { CRYSTALS } from '../../src/data/species';
 import { MATERIALS } from '../../src/data/materials';
-import { atomsPerCell, bulkFrom, densityOf, stiffnessRatio } from '../../src/nexus/substrate/solid';
+import { atomsPerCell, bulkFrom, crystalDensity, stiffnessRatio } from '../../src/nexus/substrate/solid';
 
 const crystal = (el: string) => CRYSTALS.find((c) => c.element === el)!;
-const off = (c: (typeof CRYSTALS)[number]) => densityOf(c) / c.measured.density - 1;
+const off = (c: (typeof CRYSTALS)[number]) => crystalDensity(c) / c.measured.density - 1;
 
 describe('density from the atoms and their arrangement', () => {
   it('a cell holds what its sites hold over the cells that share them: four in a face-centred cube, two in a body-centred one', () => {
@@ -29,7 +29,7 @@ describe('density from the atoms and their arrangement', () => {
   it('the kernel\'s steel, aluminium and copper are, in density, the crystals of iron, aluminium and copper, within one and a half per cent', () => {
     for (const [id, el] of [['steel.a36', 'Fe'], ['aluminum.6061-t6', 'Al'], ['copper.c110', 'Cu']] as const) {
       const m = MATERIALS.find((x) => x.id === id)!;
-      expect(Math.abs(m.density / densityOf(crystal(el)) - 1), id).toBeLessThan(0.015);
+      expect(Math.abs(m.density / crystalDensity(crystal(el)) - 1), id).toBeLessThan(0.015);
     }
   });
 });

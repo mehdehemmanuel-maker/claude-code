@@ -5,6 +5,7 @@
 // Steps are from the sources each lesson names; a figure that is a rule of thumb is marked typical.
 // Owner of: the lessons, and which a set of processes needs.
 
+import { E12 } from '../parts/series';
 import { BAND, bandsOf } from '../boards/packages';
 import { ADAFRUIT_GUIDE, buildOn, lessonOf, PERMA_PROTO_HALF, type Build, type PartHow, type Tool } from './edges';
 import { layProto, type Component, type Rails } from '../embody/breadboard';
@@ -13,7 +14,6 @@ export interface Step { do: string; /** how you can tell it is done */ check?: s
 export interface Lesson { id: string; title: string; why: string; tools: string[]; safety: string[]; steps: Step[]; src: string }
 
 /** E12, the series resistors are sold in (IEC 60063). */
-const E12 = [1, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2];
 /** The least standard resistor of at least R, Ω. */
 export function e12AtLeast(R: number): number { const d = 10 ** Math.floor(Math.log10(R)); const m = E12.find((x) => x * d >= R - 1e-9); return +(m ? m * d : 10 * d).toPrecision(3); }
 /** An LED's resistor from a pin: (supply − forward voltage) / current, the next standard value up, and the current it

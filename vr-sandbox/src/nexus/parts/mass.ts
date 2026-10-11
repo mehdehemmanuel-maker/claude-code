@@ -2,8 +2,8 @@
 // density and the share of it that is solid) and its parts'. Apart from the kits (src/nexus/parts/kits.ts re-exports it), so
 // whatever makes parts (the component library, the wheeled machines) can weigh them without loading every kit.
 
-import { latheArea, latheVolume, loftArea, loftVolume, prismArea, prismVolume, tubeLength, tubeVolume } from '../machines/form';
-import { surfaceArea } from '../machines/surface';
+import { latheArea, latheVolume, loftArea, loftVolume, prismArea, prismVolume, tubeLength, tubeVolume } from './form';
+import { surfaceArea } from './surface';
 import type { Part, Shape } from './kits';
 import { PKG_DENSITY } from '../boards/packages';
 

@@ -3,6 +3,7 @@
 // long a cell lasts, how far a beam bends, a magnet's field, a thermistor's curve … Every law is named and every
 // number not exact says what it is: a standard's, a handbook's, or typical.
 
+import { E12 } from '../parts/series';
 import type { Item } from '../parts/inventory';
 import { CHAINS, IPE, JST, METRIC, NDFEB, NPS40 } from '../parts/families';
 
@@ -38,7 +39,6 @@ export function given(words: string): Given {
 
 export interface Behaviour { law: string; lines: string[]; values: Record<string, number> }
 const f = (x: number, d = 2) => (Math.abs(x) >= 1000 ? Math.round(x).toLocaleString('en-GB') : Math.abs(x) >= 100 ? x.toFixed(0) : x.toFixed(d).replace(/\.?0+$/, ''));
-const E12 = [1, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2];
 /** The next E12 value at or above r. */
 export const e12Up = (r: number): number => { const dec = 10 ** Math.floor(Math.log10(r)); for (const k of [...E12, 10]) if (k * dec >= r * 0.9999) return +(k * dec).toPrecision(3); return 10 * dec; };
 /** Proof stress, MPa, by strength class (ISO 898-1 table 3; A2/A4-70 the 0.2 % stress of ISO 3506-1). */

@@ -4,6 +4,7 @@
 // 60127 fuse ratings, IEC 60063 E-series, IEC 60086 cell sizes, IEC 60584 thermocouples, IEC 60751 RTDs, BS 7671
 // flexible cord ratings); parts named by their makers' part numbers carry those numbers' datasheet ratings.
 
+import { E96 } from '../parts/series';
 import { ax, bare, cyl, decades, E12, E24, gOf, range, ring, si, unit, type KindDef, type P } from './core';
 import { chipSolids, pkgBox, pkgMakeup, pkgMass, pkgOf, smdLedDies, smdLedSolids, solidsMass } from '../boards/packages';
 
@@ -11,7 +12,6 @@ const n = (p: P, k: string) => Number(p[k]);
 const s = (p: P, k: string) => String(p[k]);
 /** IEC 60127 rated currents (the R10 series), A. */
 const R10A = [0.05, 0.063, 0.08, 0.1, 0.125, 0.16, 0.2, 0.25, 0.315, 0.4, 0.5, 0.63, 0.8, 1, 1.25, 1.6, 2, 2.5, 3.15, 4, 5, 6.3, 8, 10, 12.5, 16, 20];
-const E96 = Array.from({ length: 96 }, (_, k) => +(10 ** (k / 96)).toPrecision(3));
 /** Chip resistor packages: length, width, height (mm) and their usual power (W). */
 const CHIP: Record<string, [number, number, number, number]> = { '0201': [0.6, 0.3, 0.23, 0.05], '0402': [1, 0.5, 0.35, 0.0625], '0603': [1.6, 0.8, 0.45, 0.1], '0805': [2, 1.25, 0.5, 0.125], '1206': [3.2, 1.6, 0.55, 0.25], '2010': [5, 2.5, 0.55, 0.5], '2512': [6.3, 3.2, 0.55, 1] };
 /** Diodes by part number: kind, reverse volts, forward amps, forward volts at that current, package. */

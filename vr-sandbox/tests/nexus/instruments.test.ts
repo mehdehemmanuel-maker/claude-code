@@ -13,7 +13,7 @@ import { lawById } from '../../src/nexus/book';
 import { ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
 import { apply } from '../../src/nexus/substrate/law';
 import { leaf } from '../../src/nexus/substrate/term';
-import { layout } from '../../src/nexus/make/space';
+import { layout } from '../../src/nexus/parts/space';
 
 /** The kind a word names, drawn. */
 function drawn(words: string) {

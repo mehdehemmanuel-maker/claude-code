@@ -3,7 +3,7 @@
 // at the depth it is rated to. Every spec here is that arithmetic run, not a figure looked up.
 
 import { ax, bare, type KindDef, type P } from './core';
-import { HAZARDS, burn, cushion, droneKg, droneWh, endurance, hover, hovers, hoverAllUp, hoverKg, hull, jetFuelKg, jetKg, plateFor, subKg } from '../machines/craft';
+import { HAZARDS, burn, cushion, droneKg, droneWh, endurance, hover, hovers, hoverAllUp, hoverKg, hull, jetFuelKg, jetKg, hullPlate, subKg } from '../machines/craft';
 
 
 const n = (p: P, k: string): number => Number(p[k]);
@@ -66,7 +66,7 @@ export const CRAFT_KINDS: KindDef[] = [
     of: () => 'pressure-shell steel-alloy pmma fibreglass bronze stainless-316 brass abs pu steel-low',
     make: 'weld',
     how: 'a rolled and welded steel cylinder with a hemisphere at each end and ring frames inside it, an acrylic sphere at the bow, saddle tanks either side and a shrouded propeller at the stern',
-    spec: (p) => { const depth = n(p, 'depth'), D = n(p, 'D') / 1000, frame = D * 1.7, t = plateFor(depth, D, frame).t;
+    spec: (p) => { const depth = n(p, 'depth'), D = n(p, 'D') / 1000, frame = D * 1.7, t = hullPlate(depth, D, frame).t;
       return `${hull(depth, D, t, frame).says}. Its ring frames are ${frame.toFixed(2)} m apart, which is what that plate was worked out over. ${HAZARDS.submarine!.join('. ')}`; },
     box: (p) => { const D = n(p, 'D'), frame = D * 1.7, body = frame * 2.4; return [body + D, D * 1.9, D + D * 0.6]; },
     g: (p) => subKg(n(p, 'depth'), n(p, 'D') / 1000) * 1000,

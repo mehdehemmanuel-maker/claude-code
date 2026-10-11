@@ -40,7 +40,7 @@ import { perfect } from '../make/pipeline';
 import { frame, held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
 import { tryBody } from '../machines/panels';
 import { kitView } from './kit3d';
-import { draft } from '../machines/surface';
+import { draft } from '../parts/surface';
 
 const q = new URLSearchParams(location.search), kit = KITS.find((k) => k.id === (q.get('kit') ?? 'car')) ?? KITS[0]!, words = q.get('words') ?? kit.name, seed = Number(q.get('seed') ?? 7);
 const num3 = (s: string | null) => (s ? (s.split(',').map(Number) as [number, number, number]) : null);

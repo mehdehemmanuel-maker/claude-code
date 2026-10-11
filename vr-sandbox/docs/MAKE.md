@@ -64,7 +64,7 @@ its published dimensions, tyres, wheelbase, track, mass, engine and part list, a
 
 ## Panelled bodies
 
-A car's body is made by `src/nexus/machines/panels.ts` on the freeform surface tools of `src/nexus/machines/surface.ts` (NURBS curves and
+A car's body is made by `src/nexus/machines/panels.ts` on the freeform surface tools of `src/nexus/parts/surface.ts` (NURBS curves and
 skins, fitting, knot insertion, regions and trims, fairness, zebra, draft, closest points):
 
 - **One side skin,** nose to tail, each section a convex control polygon, so no line on it ripples. Its arches are the

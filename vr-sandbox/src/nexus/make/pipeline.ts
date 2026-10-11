@@ -14,7 +14,7 @@ import { countParts, massOf, type Part } from '../parts/kits';
 import { applyConditions, readConditions, type Conditions } from './conditions';
 import { addDetails, RULES, stripDetails } from './detail';
 import { contracts, critique, type Contract, type Finding } from './critic';
-import { layout } from './space';
+import { layout } from '../parts/space';
 
 export interface Made { part: Part; conditions: Conditions; stages: { stage: string; did: string[] }[]; findings: Finding[]; rounds: number; details: Record<string, number>; /** kg each rule added */ detailKg: Record<string, number>; /** its interfaces, each checked */ contracts: Contract[]; parts: [before: number, after: number]; kg: [before: number, after: number] }
 

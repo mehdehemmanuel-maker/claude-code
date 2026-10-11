@@ -6,6 +6,7 @@
 // like any other: its sizes, its make-up down to the elements, how it is made, and what it does by its law.
 // Where a series is not a standard's but a grid of the common sizes makers sell (springs, heaters, fans), it says so.
 
+import { E6, E24 } from './series';
 import { BEARINGS, CHAINS, CIRCLIPS, IPE, KEYS, LM, METRIC, NPS40, callFamily } from './families';
 import type { Item } from './inventory';
 import { KINDS } from '../kinds';
@@ -18,9 +19,9 @@ const within = (lo: number, hi: number) => PREF.filter((x) => x >= lo && x <= hi
 const SOCKET: Record<string, [number, number]> = { 'M1.6': [3, 16], M2: [3, 20], 'M2.5': [4, 25], M3: [5, 30], M4: [6, 40], M5: [8, 50], M6: [10, 60], M8: [12, 80], M10: [16, 100], M12: [20, 120], M14: [25, 140], M16: [25, 160], M20: [30, 200], M24: [40, 200] };
 const HEX: Record<string, [number, number]> = { M3: [6, 30], M4: [8, 40], M5: [10, 50], M6: [12, 60], M8: [16, 80], M10: [20, 100], M12: [25, 120], M14: [30, 140], M16: [30, 150], M20: [40, 200], M24: [50, 200] };
 const SET: Record<string, [number, number]> = { M2: [2, 10], 'M2.5': [2.5, 12], M3: [3, 16], M4: [4, 20], M5: [5, 25], M6: [6, 30], M8: [8, 40], M10: [10, 50], M12: [12, 60] };
-/** The E series of preferred values (IEC 60063): E24 for resistors, E6 for capacitors. */
-export const E24 = [1, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2, 2.2, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1];
-export const E6 = [1, 1.5, 2.2, 3.3, 4.7, 6.8];
+/** The E series of preferred values are their own owner's (src/nexus/parts/series.ts): E24 for resistors, E6 for
+ *  capacitors. Re-exported because the part space and the kinds read them through here. */
+export { E6, E24 } from './series';
 const ohms = (v: number) => (v >= 1e6 ? `${+(v / 1e6).toPrecision(3)}M` : v >= 1e3 ? `${+(v / 1e3).toPrecision(3)}k` : `${+v.toPrecision(3)}R`);
 const farads = (v: number) => (v >= 1e-6 ? `${+(v / 1e-6).toPrecision(3)}uF` : v >= 1e-9 ? `${+(v / 1e-9).toPrecision(3)}nF` : `${+(v / 1e-12).toPrecision(3)}pF`);
 const cross = <A, B>(as: A[], bs: B[]): [A, B][] => as.flatMap((a) => bs.map((b): [A, B] => [a, b]));

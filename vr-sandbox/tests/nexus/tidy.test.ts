@@ -78,9 +78,24 @@ const DEBT: { file: string; max: number; into: string }[] = [
  *
  *  The set is asserted exactly: a new clash fails with its name, and a fixed one fails until its line is deleted.
  */
+/** The one narrowing: a type alias written identically in every file whose right-hand side is a tuple or union of
+ *  primitives is *notation*, not a concern with an owner. `type V3 = [number, number, number]` is declared thirteen
+ *  times here, and TypeScript makes them the same type: giving them one owner would add thirteen imports and buy
+ *  nothing, because the thing cannot drift without every boundary that uses it failing to compile. A clash that is
+ *  the same *data* written twice is the opposite case and is a fault — the E series (IEC 60063) was written out in
+ *  eight files, which is how a list of preferred values gets edited in one place and not the others. */
+const NOTATION = /^=\s*(readonly\s*)?(\[[\w\s,|'"-]*\]|[\w\s|'"-]+);?$/;
+
+/** What the rule above cannot see, kept by hand so the knowledge is not lost: a *type* exported from two files in
+ *  different directories, where the two really are one concern. The rule skips those by design, because across a
+ *  boundary a shared English word is usually two different things (an x-ray `Tube` and a bent `Tube`), and flagging
+ *  them all would bury the real ones in sixty false positives. A line here is deleted when it is fixed. */
+const ALSO: { name: string; files: string; why: string }[] = [
+  { name: 'Station', files: 'machines/cell.ts works/stations.ts', why: 'both mean a machine you take work to, and there are two models of a shop in this tree: the forge room\u2019s workshop corner (which simulates its printer, kiln and furnace) and the works (which routes a job to a station and prices it). Merging them is its own job, and until then this is two owners for one idea' },
+];
+
 const CLASHES: string[] = [
   'ABILITIES :: ask/abilities.ts machines/fleet.ts',
-  'AIR :: machines/craft.ts substrate/sizing.ts',
   'Address :: substrate/journal.ts substrate/space.ts',
   'Arm :: machines/cell.ts machines/robot.ts view/robot.ts',
   'Boundary :: substrate/clock.ts substrate/tuner.ts',
@@ -93,11 +108,9 @@ const CLASHES: string[] = [
   'Crossing :: substrate/scale.ts substrate/tuner.ts',
   'Derived :: substrate/boards.ts substrate/space.ts',
   'Domain :: substrate/atlas.ts substrate/domain.ts',
-  'E24 :: kinds/core.ts parts/catalogue.ts',
   'ELECTRICAL :: book/electrical.ts kinds/electrical.ts',
   'FAMILIES :: parts/families.ts works/families.ts',
   'Frame :: machines/machines.ts machines/meca.ts make/critic.ts substrate/field.ts substrate/frame.ts',
-  'G :: machines/craft.ts world/places.ts',
   'Gap :: substrate/manifold.ts substrate/runtime.ts',
   'Group :: substrate/abduce.ts substrate/sizing.ts',
   'HANDS :: machines/kit-solder.ts machines/robot.ts',
@@ -127,7 +140,6 @@ const CLASHES: string[] = [
   'STOCK :: kinds/stock.ts works/lines.ts',
   'Shape :: embody/part.ts parts/kits.ts substrate/realize-space.ts substrate/shape.ts works/families.ts',
   'Space :: substrate/realize-space.ts substrate/space.ts',
-  'Station :: machines/cell.ts machines/form.ts works/stations.ts',
   'Step :: embody/embody.ts machines/processor.ts substrate/attempt.ts substrate/depth.ts substrate/flows.ts substrate/tune.ts teach/lessons.ts teach/solder-lesson.ts',
   'Structure :: substrate/manifold.ts substrate/tuner.ts',
   'TOOLS :: kinds/tools.ts machines/robot.ts',
@@ -135,9 +147,7 @@ const CLASHES: string[] = [
   'Term :: substrate/atlas.ts substrate/term.ts substrate/understand.ts',
   'Thing :: substrate/realize-space.ts teach/edges.ts teach/solder-lesson.ts',
   'Track :: world/coaster.ts world/karting.ts',
-  'Tube :: machines/form.ts machines/instruments.ts',
   'UNIVERSAL :: book/universal.ts substrate/carrier.ts',
-  'V3 :: ask/generate.ts embody/part.ts machines/form.ts machines/surface.ts parts/kits.ts parts/pieces.ts substrate/adapt.ts substrate/foldtree.ts teach/solder-lesson.ts world/anatomy.ts world/coaster.ts world/games.ts world/pingpong.ts',
   'Verdict :: ask/abilities.ts substrate/attempt.ts substrate/observe.ts works/can.ts',
   'View :: substrate/boards.ts substrate/contact.ts view/phone.ts',
   'Want :: ask/conceive.ts ask/want.ts works/can.ts',
@@ -147,11 +157,9 @@ const CLASHES: string[] = [
   'buildSteps :: embody/tree.ts teach/solder-lesson.ts',
   'canDo :: ask/abilities.ts machines/robot.ts',
   'choose :: parts/kits.ts substrate/study.ts',
-  'classOf :: make/detail.ts works/lines.ts',
   'compare :: ask/outputs.ts substrate/observe.ts substrate/pipe.ts',
   'component :: machines/cell.ts parts/components.ts',
-  'contacts :: embody/tree.ts make/space.ts',
-  'densityOf :: substrate/derive.ts substrate/solid.ts',
+  'contacts :: embody/tree.ts parts/space.ts',
   'derive :: substrate/boards.ts substrate/space.ts',
   'describe :: substrate/manifold.ts view/brain.ts',
   'evaluate :: substrate/evaluate.ts substrate/flows.ts',
@@ -165,17 +173,15 @@ const CLASHES: string[] = [
   'inside :: embody/inside.ts substrate/domain.ts',
   'lattice :: substrate/adapt.ts substrate/domain.ts',
   'layOut :: embody/breadboard.ts world/anatomy.ts',
-  'layout :: make/space.ts substrate/boards.ts',
+  'layout :: parts/space.ts substrate/boards.ts',
   'leavesUnder :: substrate/lawgraph.ts substrate/why.ts',
   'linesOf :: kinds/core.ts machines/link.ts',
   'massOf :: ask/outputs.ts parts/mass.ts substrate/derive.ts',
   'matOf :: ask/generate.ts kinds/core.ts',
   'matterOf :: ask/generate.ts embody/inside.ts',
   'measured :: parts/fits.ts substrate/lawgraph.ts',
-  'meltingPoint :: machines/lab.ts substrate/melt.ts',
   'observe :: substrate/scale.ts substrate/study.ts',
   'plan :: parts/inventory.ts substrate/clock.ts',
-  'plateFor :: machines/craft.ts parts/fab.ts',
   'principlesOf :: embody/taxonomy.ts substrate/lawgraph.ts',
   'profileFaults :: parts/fab.ts substrate/derive.ts',
   'project :: substrate/channel-text.ts substrate/project.ts',
@@ -198,8 +204,16 @@ const CLASHES: string[] = [
  *  should depend on it, which is a cycle as soon as anything answers back. Every one is written down below. */
 const LAYERS = ['book', 'substrate', 'parts', 'boards', 'machines', 'models', 'kinds', 'ask', 'embody', 'make', 'life', 'world', 'teach', 'works', 'view', 'cli', '(root)'];
 
-/** Where the tree reaches back up today, with the count as a ceiling. These are 23 lines, not 23 problems: four
- *  causes account for 63 of the 108 imports, and each has a named fix.
+/** Where the tree reaches back up today, with the count as a ceiling. These are 20 lines, not 20 problems: three
+ *  causes account for 55 of the 100 imports, and each has a named fix.
+ *
+ *  Three are already fixed, and they are what fixing one of these looks like. `world -> view`: the dartboard's own
+ *  figures and what a dart scores sat in the viewer, and a game's rules belong to the world, so they moved and the
+ *  viewer reads them. `parts -> make` and `machines -> make` were both one thing: `space.ts` — where every part of a
+ *  made thing is and which parts touch — is geometry, not a stage of the make pipeline, and it had dragged
+ *  `machines/form.ts` (lofts, bent tubes, turned profiles) and `machines/surface.ts` (NURBS) along with it, neither of
+ *  which is a machine either. All three are now in `parts/`, beside the placed tree they are about, which also took
+ *  `parts -> machines` from 20 imports to 15.
  *
  *  Three of them are the same mistake — a *vocabulary* (a type everyone speaks in) living inside one of the two
  *  layers that speak it. `Term`, `Law` and `evaluate` live in the engine, so the book of laws has to import the
@@ -212,7 +226,7 @@ const LAYERS = ['book', 'substrate', 'parts', 'boards', 'machines', 'models', 'k
  *  and that one change settles `parts -> machines`, `parts -> kinds`, `parts -> boards` and `parts -> models` at once. */
 const REACHES_BACK: { edge: string; imports: number; why: string }[] = [
   { edge: 'book -> substrate', imports: 21, why: "the laws are written in the engine's own vocabulary (Term, Law, evaluate), which belongs below both" },
-  { edge: 'parts -> machines', imports: 20, why: 'components.ts draws every kind, so it imports every drawer: a registry inside the library it registers' },
+  { edge: 'parts -> machines', imports: 15, why: 'components.ts draws every kind, so it imports every drawer: a registry inside the library it registers' },
   { edge: 'parts -> kinds', imports: 16, why: 'the same registry, reaching up for each kind’s own figures' },
   { edge: 'substrate -> ask', imports: 14, why: "the engine speaks in ask/want's Want, which is vocabulary and belongs below both" },
   { edge: 'parts -> boards', imports: 6, why: 'the same registry, reaching up for a board and its packages' },
@@ -223,17 +237,14 @@ const REACHES_BACK: { edge: string; imports: number; why: string }[] = [
   { edge: 'machines -> kinds', imports: 2, why: "machines.ts and makermodel.ts read a fastener's and a wheel's catalogue figures" },
   { edge: 'machines -> teach', imports: 2, why: "robot.ts says a robot's soldering in the lessons' own steps" },
   { edge: 'parts -> life', imports: 2, why: 'the elements and the inventory reach into molecules' },
-  { edge: 'parts -> make', imports: 2, why: "kits and the registry lay out by make/space's oriented boxes: a geometry primitive in the wrong directory" },
   { edge: 'substrate -> life', imports: 2, why: 'derive reads molecules and lifetimes' },
   { edge: 'ask -> world', imports: 1, why: 'route sends an ask for a place to world/places' },
   { edge: 'boards -> kinds', imports: 1, why: "sbc reads a chip case's figures from kinds/electrical" },
   { edge: 'machines -> ask', imports: 1, why: "vehicle.ts says a vehicle's wants in ask/want's words" },
-  { edge: 'machines -> make', imports: 1, why: 'machines.ts lays its panels out by make/space: the same primitive in the wrong directory' },
   { edge: 'machines -> models', imports: 1, why: 'franka.ts reads its own measured sections' },
   { edge: 'parts -> embody', imports: 1, why: "the registry reads embody/stock's cells" },
   { edge: 'parts -> world', imports: 1, why: 'pieces.ts reaches into the anatomy' },
   { edge: 'substrate -> teach', imports: 1, why: 'flows.ts names the languages a step can be written in' },
-  { edge: 'world -> view', imports: 1, why: "games.ts takes the dartboard and its scoring out of the viewer, and a game's rules are the world's: this one is simply the wrong way round" },
 ];
 
 describe('the tree keeps its shape', () => {
@@ -332,11 +343,11 @@ describe('no file quietly becomes six concerns', () => {
 
 describe('one owner per name', () => {
   it('the set of name clashes is exactly the set written down', () => {
-    const where = new Map<string, { file: string; kind: string }[]>();
+    const where = new Map<string, { file: string; kind: string; body: string }[]>();
     for (const f of FILES) {
-      for (const m of read(f).matchAll(/^export\s+(?:async\s+)?(const|let|var|function|class|enum|interface|type)\s+([A-Za-z_$][\w$]*)/gm)) {
+      for (const m of read(f).matchAll(/^export\s+(?:async\s+)?(const|let|var|function|class|enum|interface|type)\s+([A-Za-z_$][\w$]*)([^\n]*)/gm)) {
         const at = relative(NEXUS, f).replace(/\\/g, '/');
-        where.set(m[2]!, [...(where.get(m[2]!) ?? []), { file: at, kind: m[1]! }]);
+        where.set(m[2]!, [...(where.get(m[2]!) ?? []), { file: at, kind: m[1]!, body: m[3]!.trim() }]);
       }
     }
     const found: string[] = [];
@@ -346,13 +357,24 @@ describe('one owner per name', () => {
       const dirs = files.map((f) => (f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '(root)'));
       const sameDir = dirs.some((d, i) => dirs.indexOf(d) !== i);
       const isValue = all.some((a) => a.kind !== 'interface' && a.kind !== 'type');
-      if (sameDir || isValue) found.push(`${name} :: ${files.join(' ')}`);
+      const sameNotation = all.every((a) => a.kind === 'type' && a.body === all[0]!.body && NOTATION.test(a.body));
+      if ((sameDir || isValue) && !sameNotation) found.push(`${name} :: ${files.join(' ')}`);
     }
     const known = new Set(CLASHES), now = new Set(found);
     const added = [...now].filter((c) => !known.has(c)).sort();
     const gone = [...known].filter((c) => !now.has(c)).sort();
     expect(added, 'a new name in two places: find the one owner and import it, or give one of them the name of what it actually is').toEqual([]);
     expect(gone, 'these clashes are fixed — delete their lines from CLASHES so the list keeps shrinking').toEqual([]);
+  });
+
+  it('every name the rule cannot see is still declared in both places it names', () => {
+    for (const a of ALSO) {
+      const files = a.files.split(' ');
+      for (const f of files) expect(existsSync(join(NEXUS, f)), `ALSO names ${f}, which does not exist`).toBe(true);
+      const found = files.filter((f) => new RegExp(`^export\\s+(type|interface|const|function|class|enum)\\s+${a.name}\\b`, 'm').test(read(join(NEXUS, f))));
+      expect(found, `${a.name} is no longer declared in all of ${a.files} \u2014 delete its line from ALSO`).toEqual(files);
+      expect(a.why.length, `${a.name}'s line gives no reason`).toBeGreaterThan(40);
+    }
   });
 
   it('no name clashes inside one file-pair twice over (every CLASHES line is well formed)', () => {

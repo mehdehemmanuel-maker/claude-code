@@ -7,6 +7,7 @@
 // is wanted. Each is then a part like any other: its family makes it from its standard, with what is in it, down to the
 // elements, and what it does by its law.
 
+import { E96 } from './series';
 import { BEARINGS, CHAINS, CIRCLIPS, IPE, JST, KEYS, LM, METRIC, NDFEB, NPS40, callFamily } from './families';
 import type { Item } from './inventory';
 import { E24, catalogue } from './catalogue';
@@ -33,7 +34,6 @@ for (const m of ['steel', 'stainless', 'brass', 'copper']) SHEET_T[m] = SHEET_T.
 const WALLS = [0.3, 0.5, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
 const MODULES = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.5, 4, 4.5, 5];
 /** E96 (IEC 60063): 10^(k/96) to three figures. */
-const E96 = Array.from({ length: 96 }, (_, k) => +(10 ** (k / 96)).toPrecision(3));
 const ohmsW = (v: number) => (v >= 1e6 ? `${+(v / 1e6).toPrecision(3)}M` : v >= 1e3 ? `${+(v / 1e3).toPrecision(3)}k` : `${+v.toPrecision(3)}R`);
 const faradsW = (v: number) => (v >= 1e-6 ? `${+(v / 1e-6).toPrecision(3)}uF` : v >= 1e-9 ? `${+(v / 1e-9).toPrecision(3)}nF` : `${+(v / 1e-12).toPrecision(3)}pF`);
 const THREADS = Object.keys(METRIC);

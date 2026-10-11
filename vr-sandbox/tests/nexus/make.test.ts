@@ -5,7 +5,7 @@ import { applyConditions, readConditions } from '../../src/nexus/make/conditions
 import { critique, meshClashes, turning, type TriMesh } from '../../src/nexus/make/critic';
 import { RULES } from '../../src/nexus/make/detail';
 import { perfect } from '../../src/nexus/make/pipeline';
-import { contacts, layout } from '../../src/nexus/make/space';
+import { contacts, layout } from '../../src/nexus/parts/space';
 
 const kit = (id: string, words = id, seed = 7) => makeKit(KITS.find((k) => k.id === id)!, words, seed).part;
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];

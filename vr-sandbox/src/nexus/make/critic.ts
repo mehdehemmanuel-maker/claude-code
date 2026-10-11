@@ -24,14 +24,14 @@ import * as THREE from 'three';
 import { DENSITY, massOf, type Part } from '../parts/kits';
 import { loadPath } from '../embody/tree';
 import type { Part as EPart } from '../embody/part';
-import { classOf, onePiece, sealedIn } from './detail';
-import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from './space';
-import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../machines/form';
+import { detailClassOf, onePiece, sealedIn } from './detail';
+import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from '../parts/space';
+import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../parts/form';
 import { inSweep } from '../machines/panels';
 /** How wide a turned part is along its axis: a tyre's width at its sidewalls' widest, from its section (its covering
  *  boxes stand a few millimetres proud of it, which is room for them, not for it). */
 const latheWidth = (l: Lathe) => Math.max(...l.map((q) => q[1])) - Math.min(...l.map((q) => q[1]));
-import { closestOn, draft, fairness, patchAt, patchPoints, type Patch, type V3 as SV3 } from '../machines/surface';
+import { closestOn, draft, fairness, patchAt, patchPoints, type Patch, type V3 as SV3 } from '../parts/surface';
 
 export interface Finding { check: string; part: string; says: string; fixed: boolean }
 
@@ -117,7 +117,7 @@ export function critique(root: Part): Finding[] {
     const ringIn = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.p.shape && ('torus' in x.p.shape || 'lathe' in x.p.shape)).map((x) => 'torus' in x.p.shape! ? x.p.shape.torus[0] - x.p.shape.torus[1] : Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
     // (inside its rim's barrel is free for what does not turn, 10 mm clear of the barrel's well, typical of a caliper's
     // room to its wheel: measured from the rim where it is drawn, else 30 mm in from the tyre's bead)
-    const rimIn = nodes.filter((x) => isUnder(x, m) && /\brim\b/i.test(x.p.name) && classOf(x.p.mat ?? '') === 'metal' && x.p.shape && 'lathe' in x.p.shape).map((x) => Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
+    const rimIn = nodes.filter((x) => isUnder(x, m) && /\brim\b/i.test(x.p.name) && detailClassOf(x.p.mat ?? '') === 'metal' && x.p.shape && 'lathe' in x.p.shape).map((x) => Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
     const bore = rimIn.length ? Math.max(0, Math.min(...rimIn) - 0.01) : ringIn.length ? Math.max(0, Math.min(...ringIn) - 0.03) : 0;
     const roundish = nodes.some((x) => isUnder(x, m) && x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && !x.p.detail), ext = box.getSize(new THREE.Vector3());
     const sweep = roundish ? Math.max(...[0, 1, 2].map((i) => (ext.getComponent(i) / 2) * Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)))) : Math.max(...corners(box).map((q) => q.clone().sub(ctr).sub(ax.clone().multiplyScalar(q.clone().sub(ctr).dot(ax))).length())), along = Math.max(...corners(box).map((q) => Math.abs(q.clone().sub(ctr).dot(ax))));
@@ -137,7 +137,7 @@ export function critique(root: Part): Finding[] {
       if (blocked.has(f.path)) continue; // an interface (its axle in its hub), not in its way
       // (what is carried with it, steered and risen with it as a knuckle is with its wheel, is never in its way)
       if ([f, ...ancestors(f)].some((a) => a.p.movesWith === m.p.name)) continue;
-      if (f === m || !f.obb || f.p.detail || isUnder(f, m) || isUnder(m, f) || turning(f.p) || ancestors(f).some((a) => turning(a.p)) || !f.p.mat || classOf(f.p.mat) === 'soft' || classOf(f.p.mat) === 'organic') continue;
+      if (f === m || !f.obb || f.p.detail || isUnder(f, m) || isUnder(m, f) || turning(f.p) || ancestors(f).some((a) => turning(a.p)) || !f.p.mat || detailClassOf(f.p.mat) === 'soft' || detailClassOf(f.p.mat) === 'organic') continue;
       if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
       // (and then exactly: within the cylinder it sweeps, not merely that cylinder's box)
       if (!f.pieces.some((pc) => hitsCylinder(pc, ctr, ax, sweep + need.clearance, along + sideRoom, bore))) continue;
@@ -205,7 +205,7 @@ export function critique(root: Part): Finding[] {
   nodes = layout(root);
   // (what grew, a tree's twigs on its branches, is held by growing, not by resting)
   const alive = grownOf(nodes);
-  const solid = nodes.filter((n) => n.obb && n.p.mat && classOf(n.p.mat) !== 'organic' && !n.p.detail && !alive(n)), touch = contacts(nodes, (n) => solid.includes(n));
+  const solid = nodes.filter((n) => n.obb && n.p.mat && detailClassOf(n.p.mat) !== 'organic' && !n.p.detail && !alive(n)), touch = contacts(nodes, (n) => solid.includes(n));
   const id = (n: Node) => `p${n.path}`, map = new Map<string, Set<string>>([['ground', new Set()], ...solid.map((n) => [id(n), new Set<string>()] as [string, Set<string>])]);
   for (const t of touch) { map.get(id(t.a))!.add(id(t.b)); map.get(id(t.b))!.add(id(t.a)); }
   // an interface holds what it joins (a sprocket on its shaft), touching or not
@@ -237,7 +237,7 @@ export function critique(root: Part): Finding[] {
   // ---- through: one thing passing into another (a car into a house): within one thing, parts set into each
   // other (a pole into its base, a blade into its guard) are how it is built ----
   for (const t of touch) {
-    if (thingOf(t.a) === thingOf(t.b) || alive(t.a) || alive(t.b) || t.a.p.shell || t.b.p.shell || isUnder(t.a, t.b) || isUnder(t.b, t.a) || classOf(t.a.p.mat) === 'soft' || classOf(t.b.p.mat) === 'soft') continue;
+    if (thingOf(t.a) === thingOf(t.b) || alive(t.a) || alive(t.b) || t.a.p.shell || t.b.p.shell || isUnder(t.a, t.b) || isUnder(t.b, t.a) || detailClassOf(t.a.p.mat) === 'soft' || detailClassOf(t.b.p.mat) === 'soft') continue;
     const small = Math.min(least(t.a.box!), least(t.b.box!)); if (t.depth > Math.max(0.01, 0.3 * small)) say('through', t.a.p.name, `it passes ${(t.depth * 1000).toFixed(0)} mm into the ${t.b.p.name}`, false);
   }
   // ---- interfaces: each pair that meets checked, a failed one said with its numbers ----
@@ -343,7 +343,7 @@ function skinChecks(nodes: Node[], say: (check: string, part: string, says: stri
       if (gap > 0.008) say('continuity', n.p.name, `it is to meet the ${m.part} (${m.why}), but stands ${(gap * 1000).toFixed(0)} mm from it`, false);
       else if (m.kind === 'G1' && angle > 3) say('continuity', n.p.name, `it meets the ${m.part} at ${angle.toFixed(1)}°, not in one tangent plane (${m.why})`, false);
     }
-    const pressed = n.p.make === 'pressed' || (classOf(n.p.mat) === 'polymer' && !!n.p.shell);
+    const pressed = n.p.make === 'pressed' || (detailClassOf(n.p.mat) === 'polymer' && !!n.p.shell);
     if (!pressed) continue;
     let f = formed.get(pt); if (!f) { const d = draft(pt, undefined, 16, 10), fr = fairness(pt, 24, 12); f = { least: d.least, pull: d.pull, rmin: fr.rmin, rminAt: fr.rminAt }; formed.set(pt, f); }
     if (f.least < -0.5 * (Math.PI / 180)) say('draft', n.p.name, `it would lock in its die: an undercut of ${(-deg(f.least)).toFixed(1)}° however the press is set (its best, along ${f.pull.map((v) => v.toFixed(2)).join(', ')})`, false);
@@ -789,7 +789,7 @@ export function frame(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes))
   // (each meeting, by what it is: structure (welded, bonded, bolted, cast as one, with nothing that gives between),
   // an isolator (rubber, a mount, a bush, a spring), a moving joint, a cover, or nothing that holds)
   const FASTENER = /\b(bolt|nut|stud|screw|rivet|washer)\b/i;
-  const classOf = (c: Clash): 'structure' | 'isolator' | 'kinematic' | 'cover' | 'none' => {
+  const clashKind = (c: Clash): 'structure' | 'isolator' | 'kinematic' | 'cover' | 'none' => {
     const a = meshOf(c, 0), b = meshOf(c, 1); if (a.joint === 'cover' || b.joint === 'cover') return 'cover';
     if (sunk(c) || c.span < 0.005) return 'none';
     const joints = [a.joint, b.joint].filter(Boolean) as string[];
@@ -798,7 +798,7 @@ export function frame(meshes: TriMesh[], clashes: Clash[] = meshClashes(meshes))
     if (c.kind === 'fused' || c.kind === 'joined' || c.kind === 'fitted' || FASTENER.test(a.name) || FASTENER.test(b.name)) return 'structure';
     return joints.length ? 'kinematic' : 'none';
   };
-  const cls = clashes.map(classOf);
+  const cls = clashes.map(clashKind);
   const uf = () => { const par = new Map<string, string>(), find = (k: string): string => { const q = par.get(k) ?? k; if (q === k) return k; const r = find(q); par.set(k, r); return r; }; return { find, join: (a: string, b: string) => { const ra = find(a), rb = find(b); if (ra !== rb) par.set(ra, rb); } }; };
   const METALS = /^(steel|al-|aluminium|iron|cast-iron|stainless)/;
   // (the body-in-white: the frame's own steel sheet, with nothing that gives between its pieces)

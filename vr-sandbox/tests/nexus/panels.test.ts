@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'vitest';
 import { bodyPlanOf, MACHINES, makeMachine, styledCar, travelOf, tyreOf, tyreSection } from '../../src/nexus/machines/machines';
 import { BODY_RULES, bodyScore, bodyPanels, inSweep, lineBy, practise } from '../../src/nexus/machines/panels';
-import { closestOn, comb, patchAt, patchPoints, type Patch } from '../../src/nexus/machines/surface';
+import { closestOn, comb, patchAt, patchPoints, type Patch } from '../../src/nexus/parts/surface';
 import type { Part } from '../../src/nexus/parts/kits';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AIR, G, SEAWATER, HAZARDS, ballast, burn, climb, cushion, droneKg, endurance, hover, hoverAllUp, hoverKg, hovers, hull, jet, jetFuelKg, jetKg, lift, plateFor, subKg } from '../../src/nexus/machines/craft';
+import { AIR_ISA, G_EARTH, SEAWATER, HAZARDS, ballast, burn, climb, cushion, droneKg, endurance, hover, hoverAllUp, hoverKg, hovers, hull, jet, jetFuelKg, jetKg, lift, hullPlate, subKg } from '../../src/nexus/machines/craft';
 import { componentOf } from '../../src/nexus/parts/components';
 import { resolve } from '../../src/nexus/parts/inventory';
 import { massOf } from '../../src/nexus/parts/mass';
@@ -30,7 +30,7 @@ describe('a rotor holding something up: momentum theory', () => {
     // (hover() works the power out from the thrust; thrust.ideal-static works the thrust out from the power. Put one
     //  into the other and the thrust comes back, which is the only check that matters)
     const h = hover(0.9, 0.24, 4);
-    expect(run('thrust.ideal-static', { rho: AIR, A: h.A, P: h.ideal })).toBeCloseTo(h.T, 6);
+    expect(run('thrust.ideal-static', { rho: AIR_ISA, A: h.A, P: h.ideal })).toBeCloseTo(h.T, 6);
   });
   it('costs less power over a bigger disc, for the same weight', () => {
     const small = hover(2, 0.2, 4), big = hover(2, 0.4, 4);
@@ -40,7 +40,7 @@ describe('a rotor holding something up: momentum theory', () => {
   });
   it('throws the air down faster the harder its disc is loaded', () => {
     const h = hover(2, 0.3, 4);
-    expect(h.vi).toBeCloseTo(Math.sqrt(h.disc / (2 * AIR)), 9);
+    expect(h.vi).toBeCloseTo(Math.sqrt(h.disc / (2 * AIR_ISA)), 9);
   });
   it('lift() is hover() inverted: the power a rotor draws is the power that holds its share up', () => {
     const h = hover(1.4, 0.28, 4);
@@ -79,15 +79,15 @@ describe('an air cushion: a hovercraft floats on a hundredth of an atmosphere', 
     expect(c.p / 101325).toBeLessThan(0.02);
   });
   it('loses the air its own pressure drives out under the skirt, and the fan puts it back', () => {
-    expect(c.Q).toBeCloseTo(run('cushion.escape', { Cd: 0.53, Lp: 20, h: 0.02, p: c.p, rho: AIR }), 6);
+    expect(c.Q).toBeCloseTo(run('cushion.escape', { Cd: 0.53, Lp: 20, h: 0.02, p: c.p, rho: AIR_ISA }), 6);
     expect(c.watts).toBeCloseTo((c.Q * c.p) / 0.6, 6);
   });
   it('has a hump speed to get over, from the wave its own depression makes', () => {
-    expect(c.hump).toBeCloseTo(Math.sqrt(G * 5), 9);
+    expect(c.hump).toBeCloseTo(Math.sqrt(G_EARTH * 5), 9);
   });
   it('climbs only what its thrust climbs, because a cushion has no grip', () => {
     const g = climb(1000, 2000);
-    expect(g.grade).toBeCloseTo(2000 / (1000 * G), 9);
+    expect(g.grade).toBeCloseTo(2000 / (1000 * G_EARTH), 9);
     expect(g.says).toContain('no grip');
   });
 });
@@ -102,11 +102,11 @@ describe('a hull in water: how deep it may go, and what floats it', () => {
     expect(hull(100, 1.2, 0.08, 2).squash).toBeLessThan(hull(100, 1.2, 0.08, 2).buckle);
   });
   it('wants more plate for more depth, and more again for a wider hull', () => {
-    expect(plateFor(300, 1.2, 2).t).toBeGreaterThan(plateFor(100, 1.2, 2).t);
-    expect(plateFor(100, 2.0, 2).t).toBeGreaterThan(plateFor(100, 1.2, 2).t);
+    expect(hullPlate(300, 1.2, 2).t).toBeGreaterThan(hullPlate(100, 1.2, 2).t);
+    expect(hullPlate(100, 2.0, 2).t).toBeGreaterThan(hullPlate(100, 1.2, 2).t);
   });
   it('finds a plate whose margin is the factor asked for, and no more than it must', () => {
-    const f = plateFor(100, 1.2, 2, 1.5);
+    const f = hullPlate(100, 1.2, 2, 1.5);
     expect(f.hull.margin).toBeGreaterThanOrEqual(1.5);
     expect(hull(100, 1.2, f.t - 0.0005, 2).margin).toBeLessThan(1.5);
   });

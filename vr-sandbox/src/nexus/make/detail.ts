@@ -27,13 +27,16 @@ import { use } from '../parts/components';
 import { METRIC } from '../parts/threads';
 import type { Conditions } from './conditions';
 import { edgeRadius } from '../parts/finish';
-import { insideBy, stationAt, surfaceZ } from '../machines/form';
-import { patchAt, patchPoints, type V3 } from '../machines/surface';
-import { contacts, dirToLocal, grownOf, layout, least, patchIn, sat, toLocal, type Contact, type Node, type OBB } from './space';
+import { insideBy, stationAt, surfaceZ } from '../parts/form';
+import { patchAt, patchPoints, type V3 } from '../parts/surface';
+import { contacts, dirToLocal, grownOf, layout, least, patchIn, sat, toLocal, type Contact, type Node, type OBB } from '../parts/space';
 
-export type MatClass = 'metal' | 'wood' | 'polymer' | 'rubber' | 'glass' | 'masonry' | 'soft' | 'organic';
-export const classOf = (m?: string): MatClass | null => !m ? null : /steel|stainless|al-|copper|cast-iron|titanium|gold|silver|brass|bronze|ndfeb|magnet-wire|zinc|nickel|^tin$/.test(m) ? 'metal' : /wood|oak|bamboo|cardboard/.test(m) ? 'wood' : /abs|pp|pc|pmma|nylon|carbon|^pe$|^pu$|fibreglass|^pom$|ptfe|^pvc$|fr4|epoxy/.test(m) ? 'polymer' : m === 'rubber' || m === 'nbr' ? 'rubber' : m === 'glass' || m === 'ice' ? 'glass' : /brick|concrete|granite|tile|render|marble|asphalt/.test(m) ? 'masonry' : /cotton|silk|leather|foam/.test(m) ? 'soft' : 'organic';
-const engineered = (n: Node) => { const c = classOf(n.p.mat); return !!c && c !== 'organic' && !n.p.detail; };
+/** What the detail rules need to know a material is: an edge's radius, a finish and a wear mark all follow from this
+ *  and nothing finer. The works' own `DetailClass` (src/nexus/works/families.ts) classifies the same materials for a different
+ *  job — which process can work them — so the two lists are deliberately not the same list. */
+export type DetailClass = 'metal' | 'wood' | 'polymer' | 'rubber' | 'glass' | 'masonry' | 'soft' | 'organic';
+export const detailClassOf = (m?: string): DetailClass | null => !m ? null : /steel|stainless|al-|copper|cast-iron|titanium|gold|silver|brass|bronze|ndfeb|magnet-wire|zinc|nickel|^tin$/.test(m) ? 'metal' : /wood|oak|bamboo|cardboard/.test(m) ? 'wood' : /abs|pp|pc|pmma|nylon|carbon|^pe$|^pu$|fibreglass|^pom$|ptfe|^pvc$|fr4|epoxy/.test(m) ? 'polymer' : m === 'rubber' || m === 'nbr' ? 'rubber' : m === 'glass' || m === 'ice' ? 'glass' : /brick|concrete|granite|tile|render|marble|asphalt/.test(m) ? 'masonry' : /cotton|silk|leather|foam/.test(m) ? 'soft' : 'organic';
+const engineered = (n: Node) => { const c = detailClassOf(n.p.mat); return !!c && c !== 'organic' && !n.p.detail; };
 
 export interface Ctx { root: Part; nodes: Node[]; touch: Contact[]; cond: Conditions; centre: THREE.Vector3; size: number; mass: number; doors: number[]; joined: Set<string>; /** in a living thing: what grew is not joined */ living: (n: Node) => boolean }
 export interface DetailRule { id: string; family: 'joints' | 'edges' | 'finishes' | 'supports' | 'access' | 'lights' | 'the road' | 'machines' | 'wear'; says: string; source: string; on: boolean; run(c: Ctx): number }
@@ -129,7 +132,7 @@ function screwAt(to: Node, at: THREE.Vector3, k: number, sk: number, dmm: number
 // ---- the rules ----
 /** How a pair of materials is joined (typical practice). */
 export function jointFor(a: Node, b: Node): 'weld' | 'bolts' | 'screws' | 'seal' | 'valve' | 'none' {
-  const ca = classOf(a.p.mat), cb = classOf(b.p.mat), has = (c: MatClass) => ca === c || cb === c;
+  const ca = detailClassOf(a.p.mat), cb = detailClassOf(b.p.mat), has = (c: DetailClass) => ca === c || cb === c;
   if (has('glass')) return 'seal';
   if (has('rubber')) return (a.p.mat === 'rubber' && ringed(a)) || (b.p.mat === 'rubber' && ringed(b)) ? 'valve' : 'none';
   if (has('soft') || has('organic')) return 'none';
@@ -185,7 +188,7 @@ export const RULES: DetailRule[] = [
       let n = 0; const placed: OBB[] = [];
       for (const t of c.touch) {
         const key = `${t.a.path}|${t.b.path}`; if (c.joined.has(key)) continue; c.joined.add(key);
-        if ((c.living(t.a) || c.living(t.b)) && (classOf(t.a.p.mat) === 'wood' || classOf(t.b.p.mat) === 'wood')) continue; // grown, not joined
+        if ((c.living(t.a) || c.living(t.b)) && (detailClassOf(t.a.p.mat) === 'wood' || detailClassOf(t.b.p.mat) === 'wood')) continue; // grown, not joined
         // a skinned panel (src/nexus/machines/panels.ts) meets its neighbours at shut lines, not joints: how it is fixed (hinged,
         // bolted along its flanges, bonded) is its maker's, said with it
         if ((t.a.p.shape && 'surf' in t.a.p.shape) || (t.b.p.shape && 'surf' in t.b.p.shape)) continue;
@@ -205,7 +208,7 @@ export const RULES: DetailRule[] = [
         if (how === 'bolts' && (fastenedOwn(t.a) || fastenedOwn(t.b))) continue;
         // fastened from the side you can reach: the part whose face looks furthest out from the thing along the joint's axis
         const out = t.normal.clone().multiplyScalar(Math.sign(t.mid.clone().sub(c.centre).dot(t.normal)) || 1), reach = (x: Node) => { const o = x.obb!; return o.c.dot(out) + o.h[0] * Math.abs(o.u[0].dot(out)) + o.h[1] * Math.abs(o.u[1].dot(out)) + o.h[2] * Math.abs(o.u[2].dot(out)); };
-        let host = how === 'seal' ? (classOf(t.a.p.mat) === 'glass' ? t.a : t.b) : how === 'valve' ? (classOf(t.a.p.mat) === 'metal' ? t.a : t.b) : reach(t.a) >= reach(t.b) ? t.a : t.b, other = host === t.a ? t.b : t.a;
+        let host = how === 'seal' ? (detailClassOf(t.a.p.mat) === 'glass' ? t.a : t.b) : how === 'valve' ? (detailClassOf(t.a.p.mat) === 'metal' ? t.a : t.b) : reach(t.a) >= reach(t.b) ? t.a : t.b, other = host === t.a ? t.b : t.a;
         // a bent tube or a swept body has no one face to lay a joint on: what is fixed to it is fastened from its own side;
         // two of them (two tubes of a frame) are welded round where they meet, a bead as thick as the thinner wall
         if (host.pieces.length > 1 && other.pieces.length === 1 && how !== 'valve' && how !== 'seal') [host, other] = [other, host];
@@ -270,7 +273,7 @@ export const RULES: DetailRule[] = [
       let n = 0;
       for (const x of c.nodes) {
         const p = x.p, m = p.mat; if (!m || p.detail || p.finish) continue;
-        const f = m === 'wood' || m === 'oak' || m === 'bamboo' ? 'grain' : m === 'brick' ? 'brick' : m === 'concrete' || m === 'render' ? 'concrete' : m === 'tile' ? 'tiles' : m === 'asphalt' ? 'asphalt' : m === 'rubber' ? ('torus' in (p.shape ?? {}) ? 'tread' : 'rubber') : m === 'cotton' || m === 'silk' || m === 'foam' ? 'weave' : m === 'leather' ? 'leather' : m === 'cast-iron' ? 'cast' : /^al-/.test(m) && !p.make ? 'brushed' : classOf(m) === 'metal' ? 'paint' : m === 'granite' || m === 'marble' ? 'stone' : classOf(m) === 'polymer' && m !== 'pc' && m !== 'pmma' ? 'texture' : null;
+        const f = m === 'wood' || m === 'oak' || m === 'bamboo' ? 'grain' : m === 'brick' ? 'brick' : m === 'concrete' || m === 'render' ? 'concrete' : m === 'tile' ? 'tiles' : m === 'asphalt' ? 'asphalt' : m === 'rubber' ? ('torus' in (p.shape ?? {}) ? 'tread' : 'rubber') : m === 'cotton' || m === 'silk' || m === 'foam' ? 'weave' : m === 'leather' ? 'leather' : m === 'cast-iron' ? 'cast' : /^al-/.test(m) && !p.make ? 'brushed' : detailClassOf(m) === 'metal' ? 'paint' : m === 'granite' || m === 'marble' ? 'stone' : detailClassOf(m) === 'polymer' && m !== 'pc' && m !== 'pmma' ? 'texture' : null;
         if (f) { p.finish = f; n++; }
       }
       return n;
@@ -280,7 +283,7 @@ export const RULES: DetailRule[] = [
     id: 'feet', family: 'supports', on: true, source: 'typical', says: 'a free-standing thing indoors stands on four pads (30 mm across, 8 mm deep), not on its bare base',
     run(c) {
       if (c.mass > 400 || c.cond.env === 'outdoor' || c.cond.env === 'marine' || hasWheels(c)) return 0;
-      const ground = c.nodes.filter((x) => x.box && engineered(x) && x.box.min.y < 0.02 && classOf(x.p.mat) !== 'soft');
+      const ground = c.nodes.filter((x) => x.box && engineered(x) && x.box.min.y < 0.02 && detailClassOf(x.p.mat) !== 'soft');
       if (!ground.length || ground.some((x) => x.p.detail === 'feet')) return 0;
       const fp = new THREE.Box3(); for (const x of ground) fp.union(x.box!); const s = fp.getSize(new THREE.Vector3()); if (s.x < 0.15 || s.z < 0.15) return 0;
       const base = ground.reduce((a, x) => (x.box!.getSize(new THREE.Vector3()).x * x.box!.getSize(new THREE.Vector3()).z > a.box!.getSize(new THREE.Vector3()).x * a.box!.getSize(new THREE.Vector3()).z ? x : a));
@@ -294,7 +297,7 @@ export const RULES: DetailRule[] = [
     run(c) {
       let n = 0;
       for (const x of c.nodes) {
-        if (!x.box || !engineered(x) || x.box.min.y > 0.05 || classOf(x.p.mat) !== 'metal') continue;
+        if (!x.box || !engineered(x) || x.box.min.y > 0.05 || detailClassOf(x.p.mat) !== 'metal') continue;
         const s = x.box.getSize(new THREE.Vector3()), w = Math.max(s.x, s.z); if (s.y < 1.5 || s.y < 6 * w) continue;
         const plate = Math.max(0.2, 2.5 * w), t = 0.02, ctr = new THREE.Vector3((x.box.min.x + x.box.max.x) / 2, t / 2, (x.box.min.z + x.box.max.z) / 2);
         const bp = attach(x, 'base plates', { name: 'base plate', shape: { box: [plate, t, plate] }, mat: x.p.mat, color: x.p.color, finish: 'paint' }, ctr);
@@ -314,7 +317,7 @@ export const RULES: DetailRule[] = [
       const pos = (x: Node) => new THREE.Vector3().setFromMatrixPosition(x.m);
       // (a cabin people sit inside: a shell round every seat, wide enough to sit in and rising well above the cushions; an
       // ATV's fenders, a forklift's hood or a motorcycle's tank are not)
-      const shell = c.nodes.filter((x) => x.box && x.p.shell && !x.p.detail && classOf(x.p.mat) === 'metal' && x.box.max.z - x.box.min.z > 1.2 && seats.every((s) => { const q = pos(s); return x.box!.containsPoint(q) && x.box!.max.y > q.y + 0.3; }))[0];
+      const shell = c.nodes.filter((x) => x.box && x.p.shell && !x.p.detail && detailClassOf(x.p.mat) === 'metal' && x.box.max.z - x.box.min.z > 1.2 && seats.every((s) => { const q = pos(s); return x.box!.containsPoint(q) && x.box!.max.y > q.y + 0.3; }))[0];
       if (!shell) return 0;
       const B = shell.box!, rows = [...new Set(seats.map((s) => Math.round(pos(s).x * 4) / 4))].sort((a, b) => b - a), len = Math.min(1.15, (B.max.x - B.min.x) / (rows.length + 1.2));
       let n = 0; c.doors = [];
@@ -359,7 +362,7 @@ export const RULES: DetailRule[] = [
       for (const g of c.nodes) {
         // (a box of glass: a lofted glasshouse is made with its own roof and pillars, as its body's lines lay them)
         if (!g.box || g.p.mat !== 'glass' || g.p.detail || !g.p.shape || !('box' in g.p.shape)) continue; const s = g.box.getSize(new THREE.Vector3()); if (s.y < 0.3 || s.x * s.z < 0.4) continue;
-        const under = c.nodes.find((x) => x.box && x !== g && x.p.shell && classOf(x.p.mat) === 'metal' && Math.abs(x.box.max.y - g.box!.min.y) < 0.05); if (!under) continue;
+        const under = c.nodes.find((x) => x.box && x !== g && x.p.shell && detailClassOf(x.p.mat) === 'metal' && Math.abs(x.box.max.y - g.box!.min.y) < 0.05); if (!under) continue;
         const col = under.p.color ?? 0x888888, t = 0.035;
         attach(g, 'framing', { name: 'roof panel', shape: { box: [s.x + 0.02, t, s.z + 0.02] }, mat: under.p.mat, color: col, make: 'pressed', shell: under.p.shell, finish: 'paint' }, new THREE.Vector3((g.box.min.x + g.box.max.x) / 2, g.box.max.y + t / 2 - 0.005, (g.box.min.z + g.box.max.z) / 2)); n++;
         const xs = [g.box.min.x + 0.03, g.box.max.x - 0.03, ...c.doors.filter((x) => x > g.box!.min.x + 0.1 && x < g.box!.max.x - 0.1)];
@@ -413,7 +416,7 @@ export const RULES: DetailRule[] = [
         const lb = new THREE.Box3(); for (const x of under) for (const q of corners(x)) lb.expandByPoint(toLocal(T, q));
         // (its body: its skin where it has one (src/nexus/machines/panels.ts), not its floor, which is a painted metal shell too and
         // often the longest part)
-        const shells = under.filter((x) => x.p.shell && classOf(x.p.mat) === 'metal'), skins = shells.filter((x) => x.p.shape && 'surf' in x.p.shape), body = (skins.length ? skins : shells).sort((a, b) => b.box!.getSize(new THREE.Vector3()).length() - a.box!.getSize(new THREE.Vector3()).length())[0];
+        const shells = under.filter((x) => x.p.shell && detailClassOf(x.p.mat) === 'metal'), skins = shells.filter((x) => x.p.shape && 'surf' in x.p.shape), body = (skins.length ? skins : shells).sort((a, b) => b.box!.getSize(new THREE.Vector3()).length() - a.box!.getSize(new THREE.Vector3()).length())[0];
         const belt = body ? Math.max(...corners(body).map((q) => toLocal(T, q).y)) : lb.min.y + (lb.max.y - lb.min.y) * 0.6, yp = Math.min(0.55, lb.min.y + (belt - lb.min.y) * 0.45);
         // on a skinned body (src/nexus/machines/panels.ts) a plate sits on the skin itself, where it is at the plate's height and
         // width, and a mirror stands just off the skin at the side glass's front; else at the thing's bounds
@@ -482,7 +485,7 @@ export const RULES: DetailRule[] = [
     run(c) {
       const outside = c.cond.env && c.cond.env !== 'indoor' && c.cond.env !== 'space' ? 0.25 : 0; let n = 0;
       for (const x of c.nodes) {
-        const cl = classOf(x.p.mat); if (!cl || cl === 'organic' || (c.living(x) && cl === 'wood')) continue;
+        const cl = detailClassOf(x.p.mat); if (!cl || cl === 'organic' || (c.living(x) && cl === 'wood')) continue;
         const w = Math.min(1, c.cond.age + (cl === 'metal' ? outside : outside / 2)); if (w >= 0.3) { x.p.wear = +w.toFixed(2); n++; }
       }
       return n;

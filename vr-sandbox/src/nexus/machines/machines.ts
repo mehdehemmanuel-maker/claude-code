@@ -15,11 +15,11 @@ import { use } from '../parts/components';
 import { WHEEL } from '../kinds/fasteners';
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from '../parts/kits';
 import { bodyPanels, insideOf, roofOf, tailOf, type BodyPlan, type KeepOut, type WheelAt } from './panels';
-import { patchPoints, type Patch } from './surface';
+import { patchPoints, type Patch } from '../parts/surface';
 import { getMaterial } from '../../data/materials';
-import type { Station } from './form';
+import type { Station } from '../parts/form';
 import * as THREE from 'three';
-import { layout, sat, type OBB } from '../make/space';
+import { layout, sat, type OBB } from '../parts/space';
 
 const IN = 0.0254, LB = 0.45359237, PI = Math.PI;
 

@@ -4,7 +4,7 @@ import { FR3, FRANKA_HAND } from '../../src/nexus/machines/franka';
 import { massOf } from '../../src/nexus/parts/mass';
 import * as THREE from 'three';
 import { componentOf, robotPart, ROBOT_CELL } from '../../src/nexus/parts/components';
-import { contacts, layout, type Node } from '../../src/nexus/make/space';
+import { contacts, layout, type Node } from '../../src/nexus/parts/space';
 import { pixelsAcross, robotFor, robotTasks, SENSORS, TASKS } from '../../src/nexus/machines/robot';
 import { resolve } from '../../src/nexus/parts/inventory';
 

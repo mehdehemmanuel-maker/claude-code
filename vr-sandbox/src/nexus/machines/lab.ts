@@ -84,7 +84,7 @@ export function cycleTime(p: CycleProgram, cycler = T100): { s: number; ramps: n
 /** A short DNA strand's melting point (°C): 64.9 + 41 (G + C − 16.4) / N for 14 bases or more, else 2 (A + T) +
  *  4 (G + C) (Wallace). Both are rules of thumb, good to a few degrees: salt and strand concentration move the real
  *  one, which is why an annealing temperature is set a little under it and then tried. */
-export function meltingPoint(seq: string): number {
+export function strandMelting(seq: string): number {
   const s = seq.toUpperCase().replace(/[^ACGT]/g, ''), gc = (s.match(/[GC]/g) ?? []).length, at = s.length - gc;
   if (!s.length) return NaN;
   return s.length < 14 ? 2 * at + 4 * gc : 64.9 + (41 * (gc - 16.4)) / s.length;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { modelPart, use } from '../../src/nexus/parts/components';
-import { layout } from '../../src/nexus/make/space';
+import { layout } from '../../src/nexus/parts/space';
 import { baseName, billOf, frameOf, libraryWords } from '../../src/nexus/machines/makermodel';
 import { ENDER3 } from '../../src/nexus/models/ender3';
 import { VORON24 } from '../../src/nexus/models/voron24';
