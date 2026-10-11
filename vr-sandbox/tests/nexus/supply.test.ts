@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { PRICES } from '../../src/nexus/parts/prices';
-import { byFault, newestSeen, noPageOfItsOwn, sightings, STALE_DAYS, supplyText, weak } from '../../src/nexus/parts/supply';
+import { byFault, gaps, newestSeen, noPageOfItsOwn, sightings, STALE_DAYS, supplyText, weak } from '../../src/nexus/parts/supply';
 
 describe('the supply index', () => {
   it('grades every offer in the table', () => {
@@ -37,6 +37,16 @@ describe('the supply index', () => {
     // Offered secondhand, which is an estimate of a market rather than a sale.
     expect(f['asked, not sold']).toBeLessThanOrEqual(4);
     expect(f['out of stock']).toBeLessThanOrEqual(9);
+  });
+
+  it('the parts without an identity only ever get fewer', () => {
+    // What a parts API would have given us and the table never had: the maker's own number, which is the only field by
+    // which an offer here and an offer anywhere else are known to be the same thing. 123 of 128 keys lack it today.
+    const g = gaps();
+    expect(g.filter((x) => x.gaps.includes("no maker's part number")).length).toBeLessThanOrEqual(123);
+    expect(g.filter((x) => x.gaps.includes("no maker's sheet")).length).toBeLessThanOrEqual(128);
+    // Nothing may be in a build pack that is out of production: this one is driven to zero and kept there.
+    expect(g.filter((x) => x.gaps.includes('out of production'))).toEqual([]);
   });
 
   it('ranks what to re-read worst first, and says where', () => {

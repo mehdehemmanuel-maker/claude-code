@@ -27,6 +27,12 @@ export type Fault = 'search listing' | 'no page of its own' | 'asked, not sold' 
 
 const WEIGHT: Record<Fault, number> = { 'search listing': 4, 'no page of its own': 3, 'asked, not sold': 2, 'out of stock': 1, stale: 1 };
 
+/** What is missing about the *part*, as against what is wrong with a *figure*. The distinction is worth keeping
+ *  separate: a fault says this number may not be this part's price, a gap says we cannot say which part it is or
+ *  whether it can still be bought. Lumping them put a near-universal gap on every sighting and left one of 158
+ *  "firm", which ranks nothing. */
+export type PartGap = "no maker's part number" | 'out of production' | 'no maker\'s sheet';
+
 /** Past this many days a sighting is re-read before it is quoted. Three months is chosen, not measured: Raspberry Pi
  *  moved every LPDDR4 board twice in 2026 and steel moves with the mills' own quarters, so a quarter is the coarsest
  *  period over which a price here has stayed true. */
@@ -77,8 +83,23 @@ export function weak(asOf: string = newestSeen()): Sighting[] {
 
 /** How many sightings carry each fault. */
 export function byFault(asOf: string = newestSeen()): Record<Fault, number> {
-  const out = { 'search listing': 0, 'no page of its own': 0, 'asked, not sold': 0, 'out of stock': 0, stale: 0 };
+  const out: Record<Fault, number> = { 'search listing': 0, 'no page of its own': 0, 'asked, not sold': 0, 'out of stock': 0, stale: 0 };
   for (const s of sightings(asOf)) for (const f of s.faults) out[f]++;
+  return out;
+}
+
+/** What is missing about each part: the maker's own number (without which an offer here and an offer anywhere else
+ *  cannot be known to be the same thing), whether it is still made, and where its figures come from. This is the gap
+ *  a parts API would fill and the one worth filling by hand, because the identity is what every later round needs. */
+export function gaps(): { key: string; what: string; gaps: PartGap[] }[] {
+  const out: { key: string; what: string; gaps: PartGap[] }[] = [];
+  for (const [key, p] of Object.entries(PRICES)) {
+    const g: PartGap[] = [];
+    if (!p.maker || !p.mpn) g.push("no maker's part number");
+    if (p.life === 'obsolete') g.push('out of production');
+    if (!p.datasheet) g.push("no maker's sheet");
+    if (g.length) out.push({ key, what: p.what, gaps: g });
+  }
   return out;
 }
 
@@ -94,7 +115,9 @@ export function ages(asOf: string = newestSeen()): { seen: string; n: number; da
 export function supplyText(asOf: string = newestSeen(), top = 12): string {
   const all = sightings(asOf), bad = weak(asOf), f = byFault(asOf);
   const out = [`The supply index as of ${asOf}: ${all.length} sightings over ${Object.keys(PRICES).length} keys, ${all.length - bad.length} of them firm.`, ''];
-  out.push(`Faults: ${(Object.keys(f) as Fault[]).filter((k) => f[k]).map((k) => `${f[k]} ${k}`).join(', ') || 'none'}`, '');
+  out.push(`Faults in the figures: ${(Object.keys(f) as Fault[]).filter((k) => f[k]).map((k) => `${f[k]} ${k}`).join(', ') || 'none'}`);
+  const g = gaps(), named = Object.keys(PRICES).length - g.filter((x) => x.gaps.includes("no maker's part number")).length;
+  out.push(`Gaps in the parts: ${named} of ${Object.keys(PRICES).length} keys carry their maker's own part number; ${g.filter((x) => x.gaps.includes("no maker's sheet")).length} have no maker's sheet; ${g.filter((x) => x.gaps.includes('out of production')).length} are out of production.`, '');
   out.push(`Ages: ${ages(asOf).map((a) => `${a.n} seen ${a.seen}${a.days ? ` (${a.days} d)` : ''}`).join(', ')}`, '');
   if (bad.length) {
     out.push(`To re-read, worst first:`);

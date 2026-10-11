@@ -1742,6 +1742,27 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    anything but a browser - which is the same wall this file already records for the sellers' size tables. One sighting
    with no page of its own is left (the $32.89 Walmart vice, the cheapest 100 mm one seen), and it is visible debt now
    rather than invisible.
+   What a parts API has that this did not, added as fields rather than waited for (2026-10-11). Going through Nexar's
+   own part model against ours, six things it carries were genuinely missing and each changes a build pack: the maker
+   and its own part number (a seller's product title is not an identity - two sellers write the same part three ways -
+   so this is the only field by which an offer here and an offer anywhere else are the same thing); the seller's own
+   sku, which is what you type in to order the same thing twice; stock as a number rather than the word in or out; the
+   working days it takes from the factory; the seller's own quantity break table, because a price at one quantity is
+   not a price curve and a bill that buys a hundred of something is charged the wrong figure without it; and where the
+   part is in its life, because being told to buy what is out of production wastes an order where having no price only
+   wastes a decision. A maker's sheet and the keys that would do instead went in with them. All are optional, so
+   nothing already written had to change.
+   Measured straight away, which is the point of making it a field: **5 of 128 keys carry their maker's own part
+   number** and 128 have no maker's sheet. The five are the ones whose maker was already written in their own name or
+   note (a WEN BV454, Harbor Freight's item 57861, a Timken 6204-2RS, an SKF 6205-2RS, TEMCo's Kanthal A-1) - lifting
+   prose into a field, which is the same move as grading the prices themselves. The rest are a ratchet in
+   `tests/nexus/supply.test.ts` and are worked down by hand.
+   Two faults of my own in doing it. The gaps were first written as per-sighting faults, which put a near-universal
+   gap on every offer and left 1 of 158 "firm" - a ranking that ranks nothing. What is wrong with a *figure* (read off
+   a search result, no page, stale) and what is missing about a *part* (no identity, out of production) are different
+   kinds of thing and are now counted separately (`Fault` and `PartGap`). And the type was first called `Gap`, which
+   `substrate/manifold.ts` and `substrate/runtime.ts` already own: the tidy ratchet failed the gate by name, which is
+   exactly the fault it exists to catch, and the fix was to rename mine rather than raise its number.
    And the gate runs off this container (2026-10-11): `.github/workflows/vr-sandbox-ci.yml` was one job running
    `npm run typecheck && npm test`, the whole gate unsharded. The typecheck and the tidy lint are their own jobs now and
    the test files are dealt into four shards by vitest's own `--shard`, measured even on this tree at 46, 30, 27 and

@@ -13,9 +13,27 @@ export interface Offer {
   /** in or out of stock where the seller's page said so */ stock?: 'in' | 'out';
   /** sold used, or only asked for (a listing, not a sale) */ cond?: 'used';
   /** what else must be had for it to work, by key (a Pinecil wants a USB-C PD supply) */ needs?: string[];
+  /** the seller's own number for it, which is what you type into their site to order the same thing twice */ sku?: string;
+  /** how many the seller's page said were on the shelf, where it said a number rather than a word */ onHand?: number;
+  /** working days the seller says it takes to come from the factory, where it says */ leadDays?: number;
+  /** the seller's own break table: what it costs at other quantities. A price at one quantity is not a price curve,
+   *  and a bill that buys 100 of something is charged the wrong figure without this. */
+  breaks?: { n: number; usd: number }[];
   note?: string;
 }
-export interface Price { /** what it is, plainly */ what: string; /** the inventory item it is, where the library keeps one */ item?: string; offers: Offer[] }
+export interface Price {
+  /** what it is, plainly */ what: string;
+  /** the inventory item it is, where the library keeps one */ item?: string;
+  offers: Offer[];
+  /** the maker and its own part number. A seller's product title is not an identity - two sellers write the same part
+   *  three ways - so this is the only field by which an offer here and an offer anywhere else are the same thing. */
+  maker?: string; mpn?: string;
+  /** the maker's own sheet, where the figures come from */ datasheet?: string;
+  /** where it is in its life. Being told to buy a part that is out of production is worse than being told it has no
+   *  price: the first wastes an order, the second only wastes a decision. */
+  life?: 'active' | 'new' | 'not-recommended' | 'obsolete';
+  /** other keys here that do the same job, if this one cannot be had */ instead?: string[];
+}
 
 const D = '2026-10-09', D2 = '2026-10-10', D3 = '2026-10-11';
 const pishop = (name: string, usd: number, path: string, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'PiShop.us (official Raspberry Pi reseller)', url: `https://www.pishop.us/product/${path}/`, seen: D, ...o });
@@ -89,7 +107,7 @@ export const PRICES: Record<string, Price> = {
   m10: { what: 'M10 bolts, nuts and washers, 40 to 60 mm, zinc-plated steel', offers: [
     zoro('ZORO SELECT M10-1.50 Socket Head Cap Screw, Zinc Plated Steel, 40 mm Length, 50 PK', 13.39, 'zoro-select-m10-150-socket-head-cap-screw-socket-zinc-plated-steel-40-mm-length-50-pk-m071601000040/i/G1941838/', { per: 50, note: `${SEARCHED}: $0.27 each in a 50-pack, and the length the bench's sixteen top bolts are` }),
     zoro('ZORO SELECT M10-1.50 Socket Head Cap Screw, Zinc Plated Steel, 50 mm Length, 50 PK', 30.39, 'zoro-select-m10-150-socket-head-cap-screw-socket-zinc-plated-steel-50-mm-length-50-pk-m071601000050/i/G0410247/', { per: 50, note: `${SEARCHED}: $0.61 each in a 50-pack. A socket head where the bills say hex, which is the nearest listed M10 × 50 fastener and costs the same; nuts are extra. No zinc-plated M10 × 60 was listed at all — the brake's six are charged the 40 mm figure above, and the only 60 mm this seller showed is a 316 stainless one at $33.29 each` })] },
-  'bench-vice': { what: 'a 100 mm (4 in) cast-iron bench vice', item: 'benchvice', offers: [
+  'bench-vice': { what: 'a 100 mm (4 in) cast-iron bench vice', item: 'benchvice', maker: 'WEN', mpn: 'BV454', life: 'active', offers: [
     { name: 'SEBLAFF 4" Bench Vise with Anvil', usd: 32.89, seller: 'Walmart', url: 'https://www.walmart.com/', seen: D3, note: 'read off a search listing, not the seller\'s own page: the cheapest 100 mm vice seen. Sealey\'s own CV100E, the vice drawn in the library, lists at \u00a349.95 (about $63) and is the one whose four figures the drawing uses' },
     { name: 'WEN 4 in. Heavy-Duty Cast Iron Bench Vise with Swivel Base (BV454)', usd: 46.23, seller: 'The Home Depot', url: 'https://www.homedepot.com/p/WEN-4-in-Heavy-Duty-Cast-Iron-Bench-Vise-with-Swivel-Base-BV454/321729726', seen: D3, note: 'the maker is WEN and the model BV454, on its own product page; 2,440 lb (10.9 kN) clamping force and a swivel base. The $57.38 this line carried was read off a search listing and was wrong by $11.15, which is what finding it a page of its own was for' }] },
   'helping-hands': { what: 'helping hands with magnifier', offers: [ada('Helping Third Hand Magnifier W/Magnifying Glass Tool - MZ101', 6.95, 291)] },
@@ -160,7 +178,7 @@ export const PRICES: Record<string, Price> = {
   'cnc-benchtop': { what: 'benchtop CNC router/mill', offers: [
     { name: 'Genmitsu 3018-PRO Desktop CNC Router DIY Kit', usd: 149, seller: 'SainSmart', url: 'https://www.sainsmart.com/products/sainsmart-genmitsu-cnc-router-3018-pro-diy-kit', seen: D2, note: '300 × 180 × 45 mm; wood, acrylic and soft aluminium in light cuts. The cheapest way to hold a flat face and a bored hole, which no printer does' },
     { name: 'Genmitsu 3018-PROVer V2, semi-assembled', usd: 269, seller: 'SainSmart', url: 'https://www.sainsmart.com/products/genmitsu-3018-prover-v2-upgraded-semi-assembled-cnc-router-kit', seen: D2, note: 'the same envelope in a stiffer frame with limit switches and an emergency stop' }] },
-  'welder-fluxcore': { what: 'flux-core/MIG welder', offers: [
+  'welder-fluxcore': { what: 'flux-core/MIG welder', maker: 'Harbor Freight (TITANIUM)', mpn: '57861', life: 'active', offers: [
     { name: 'TITANIUM 125 Amp Easy Flux-Core Inverter Welder, 120V', usd: 149.99, seller: 'Harbor Freight', url: 'https://www.harborfreight.com/125-amp-easy-flux-core-welder-57861.html', seen: D3, note: '120 V, up to 3/16 in, 15 lb; item 57861. Its own product page renders its price in JavaScript and reads empty to anything but a browser, so the figure is the one Harbor Freight\'s own flux-welders category page shows. Flux core needs no gas bottle, which is what makes it the cheapest way to join steel' }] },
   'lathe-mini': { what: 'benchtop metal lathe', offers: [
     { name: 'CENTRAL MACHINERY 7 in. x 10 in. Precision Benchtop Mini Lathe (93212)', usd: 729.99, seller: 'Harbor Freight', url: 'https://www.harborfreight.com/7-inch-x-10-inch-precision-mini-lathe-93212.html', seen: D2, stock: 'in', note: 'read off its own listing and the lathes category page; 180 mm swing over the bed, 250 mm between centres, 2500 rev/min, 120 V. The cheapest new machine that makes a round part a bearing will sit on, and the only station in a cheap works that does' }] },
@@ -241,7 +259,7 @@ export const PRICES: Record<string, Price> = {
     { name: 'Inkbird ITC-106VH PID Temperature Controller with K sensor', usd: 29.99, seller: 'Inkbird', url: 'https://inkbird.com/products/itc-106-ksensor', seen: D3, note: `${SEARCHED}: the kit as this seller sells it is the controller, a 25 A solid-state relay on its heat sink and a K-type probe — the kiln's three electrical lines in one purchase, so pricing its relay and its thermocouple again would count this twice` }] },
   thermocouple: { what: 'type K thermocouple probe, 300 mm', offers: [
     { name: 'uxcell K-Type Ceramic Kiln Furnace Probe Thermocouple Sensor, 3 × 300 mm', usd: 16.89, seller: 'Walmart', url: 'https://www.walmart.com/ip/K-Type-Ceramic-Kiln-Furnace-Probe-Thermocouple-Sensor-Muffle-Furnace-Oven-High-Temperature-3x300mm/5334209392', seen: D3, stock: 'out', note: `${SEARCHED}, and shown out of stock: 3 × 300 mm rated to 1,100 °C, which is the kiln's length and over its cone-6 firing. Its sheath is ceramic where the bill says mineral-insulated — that is the kiln-rated form of the same probe; the 100 mm one is $14.59` }] },
-  kanthal: { what: 'Kanthal A-1 resistance wire, 16 AWG', offers: [
+  kanthal: { what: 'Kanthal A-1 resistance wire, 16 AWG', maker: 'TEMCo', mpn: 'Kanthal A-1 16 AWG', offers: [
     { name: 'TEMCo Kanthal A-1 Round Resistance Wire, 16 AWG, 50 ft', usd: 17.5, seller: 'TEMCo Industrial', url: 'https://temcoindustrial.com/electrical/wire/resistance-wire/', seen: D3, stock: 'out', note: `${SEARCHED}, off its resistance-wire category page, and shown out of stock: $15.75 on its own account. 50 ft (15.2 m) is the smallest spool listed in this gauge and the kiln's element is 7.2 m of it, so half a spool, charged whole` }] },
   // the 25 A solid-state relay and the spot welder's timer board are left unpriced on purpose: the only figures found
   // for a bare SSR were marketplace lots from outside the US, and pricing it from the Inkbird kit above would count
@@ -258,9 +276,9 @@ export const PRICES: Record<string, Price> = {
     { name: 'TEMCo 1/0 Gauge AWG Welding Cable, 20 ft, black', usd: 64.68, seller: 'TEMCo Industrial', url: 'https://temcoindustrial.com/electrical/wire/welding-cable/', seen: D3, note: `${SEARCHED}, off its welding-cable category page: the sale figure for the shortest length listed, about $3.23 a foot. The welder's secondary is two turns, 600 mm of it, and is charged the 20 ft length because that is what is sold` }] },
   pneumatic: { what: 'pneumatic wheel, 10 in (4.10/3.50-4)', offers: [
     hd('Marathon 10 in. Pneumatic Universal Hand Truck Wheels, 2-pack', 28.97, 'Marathon-10-in-Pneumatic-Universal-Hand-Truck-Wheels-2-Pack-02310/205228244', { per: 2, note: `${SEARCHED}: $14.49 a wheel, 4.10/3.50-4 on a steel rim with a 5/8 in bore — the size the kart's bill names. A flat-free pair was listed at $55.88` })] },
-  '6204': { what: 'ball bearing 6204-2RS (20 × 47 × 14)', offers: [
+  '6204': { what: 'ball bearing 6204-2RS (20 × 47 × 14)', maker: 'Timken', mpn: '6204-2RS', offers: [
     { name: 'Timken 6204-2RS Double Rubber Deep Groove Ball Bearing, 2-pack', usd: 11.92, per: 2, seller: 'an eBay seller', url: 'https://www.ebay.com/p/28046081013', seen: D3, note: `${SEARCHED}: $5.96 a bearing in a pair, free shipping, a US seller. Ten-packs of the same Timken bearing were listed at $6.00 and $6.50 each and a 100-pack at $1.78` }] },
-  '6205': { what: 'ball bearing 6205-2RS (25 × 52 × 15)', offers: [
+  '6205': { what: 'ball bearing 6205-2RS (25 × 52 × 15)', maker: 'SKF', mpn: '6205-2RS', offers: [
     { name: 'SKF 6205-2RS C3 Rubber Seal Ball Bearing, 25x52x15', usd: 15.6, seller: 'Walmart', url: 'https://www.walmart.com/ip/6205-2RS-C3-SKF-Brand-Rubber-Seal-Ball-Bearing-25x52x15-6205-2RS-6205RS/5173968737', seen: D3, note: `${SEARCHED}: an SKF bearing from a marketplace seller. VXB's open 6205 was listed at $9.95 and a sealed no-name at $6.99; this is the one with a maker's name on it` }] },
   // a V-belt and the pulley it runs on: the bill's own words are "A-section V-belt 1000 mm" and "pulley, 60 mm V on
   // the motor", and until now the first of those was priced as a length of GT2 printer belt
