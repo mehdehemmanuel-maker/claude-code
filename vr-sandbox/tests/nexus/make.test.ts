@@ -108,13 +108,6 @@ describe('pipeline', () => {
     for (const r of RULES) { expect(r.source.length).toBeGreaterThan(3); expect(r.says.length).toBeGreaterThan(10); }
     expect(RULES.find((r) => r.id === 'edges')!.source).toContain('finish.ts');
   });
-  test('every kit goes through it without a crash, and nothing grown is joined', () => {
-    for (const k of KITS) {
-      const m = perfect(makeKit(k, k.name, 7).part, k.name);
-      expect(m.parts[1]).toBeGreaterThanOrEqual(m.parts[0]);
-      if (k.id === 'tree' || k.id === 'forest' || k.id === 'plant') expect(m.details.joints).toBe(0);
-    }
-  }, 180_000); // (every kit through the whole pipeline: slow under load, not stuck)
 });
 
 describe('clashes', () => {

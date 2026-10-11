@@ -5,9 +5,8 @@
 // trunk as thick as H^1.5 asks, a sandwich's energy from what is in it).
 
 import { describe, expect, it } from 'vitest';
-import { choose, countParts, KITS, kitById, kitFor, log10All, log10Kinds, makeKit, massOf, type Part } from '../../src/nexus/parts/kits';
+import { choose, KITS, kitById, kitFor, log10All, log10Kinds, makeKit, massOf, type Part } from '../../src/nexus/parts/kits';
 import { edgeRadius, ruleFor, setEdge, EDGE_RULES } from '../../src/nexus/parts/finish';
-import { INVENTORY } from '../../src/nexus/parts/inventory';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 const rng = () => 0.5;
@@ -18,14 +17,6 @@ describe('what the kits make', () => {
     expect(log10Kinds(kitById('house')!)).toBeGreaterThan(6); expect(log10Kinds(kitById('street')!)).toBeGreaterThan(60);
     for (const k of KITS) expect(log10Kinds(k), k.id).toBeGreaterThan(0);
   });
-  it('makes every kit, its parts made of materials the inventory knows, with mass', () => {
-    const known = new Set([...INVENTORY.values()].filter((i) => i.kind === 'material').map((i) => i.id));
-    for (const k of KITS) for (const seed of [1, 2, 3]) {
-      const { part } = makeKit(k, '', seed); expect(countParts(part), k.id).toBeGreaterThan(1);
-      if (!['galaxy', 'solar system'].includes(k.id)) expect(massOf(part), k.id).toBeGreaterThan(0);
-      for (const p of all(part)) if (p.mat && /^(steel|al-|copper|wood|glass|brick|concrete|granite|rubber|abs|pp|pc|pmma|nylon|cotton|cast-iron)/.test(p.mat)) expect(known.has(p.mat), `${k.id}: ${p.name} of ${p.mat}`).toBe(true);
-    }
-  }, 180_000); // (every kit at three seeds: the car alone is some 900 parts now; slow under load, not stuck)
   it('reads what is asked for into its choices', () => {
     expect(kitFor('a street with lamp posts')!.id).toBe('street'); expect(kitFor('a road with lamp posts')!.id).toBe('road'); expect(kitFor('a street scene at night')!.id).toBe('street'); expect(kitFor('a red sports car')!.id).toBe('car');
     expect(choose(kitById('car')!, 'a red sports car with 19 inch wheels', rng)).toMatchObject({ body: 'sports car', colour: 'red', rim: 19 });

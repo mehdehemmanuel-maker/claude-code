@@ -307,3 +307,121 @@ export function kilnProgram(segments: { rate: number; to: number; hold: number }
     ...segments.map((s, i) => `SEG ${i + 1}  RA ${s.rate} °C/h   °C ${s.to}   HLD ${String(Math.floor(s.hold / 60)).padStart(2, '0')}:${String(s.hold % 60).padStart(2, '0')}`),
     `; the last segment holds; end it with a controlled cool, not by opening the lid`].join('\n');
 }
+
+// ---- the bridge: the part that makes a serial port reachable from a browser --------------------------------------
+// Web Bluetooth is BLE only. Every HC-05 and HC-06 on every maker's shelf is Bluetooth Classic SPP, which a browser
+// cannot open at all, so the cheapest honest bridge is a BLE module that speaks the Nordic UART service — and the
+// cheapest of those with a USB socket to flash it over is a $4.99 XIAO ESP32C3 (Seeed's own price, priced in
+// src/nexus/parts/prices.ts). It is three wires and a sketch, and it does not change the machine: Marlin goes on
+// answering `ok` to a serial port, not knowing the port is now a radio.
+
+/** A part of the bridge, by its price key, with what it is for and whether it has to be soldered. */
+export interface BridgePart { key: string; what: string; why: string; n: number; solder?: boolean }
+
+/** What a bridge is, as parts anyone can order. The level shifter is not optional on a 5 V board and is not a
+ *  precaution: an ESP32-C3 pin is rated 3.6 V absolute maximum, so 5 V on it is a dead board, not a flaky one. On a
+ *  3.3 V board (every 32-bit printer board: SKR, Octopus, the Ender-3 V2's own) it is left out and the two boards'
+ *  pins go straight to each other. */
+export const BRIDGE: BridgePart[] = [
+  { key: 'xiao-esp32c3', what: 'XIAO ESP32C3', why: 'the bridge itself: BLE 5 and a USB-C socket to flash it through, 21 × 17.5 mm, so it cable-ties to the printer’s own frame', n: 1, solder: true },
+  { key: 'level-shifter', what: 'BSS138 4-channel level converter', why: 'only if the controller’s logic is 5 V (an 8-bit board: a RAMPS, a Melzi, a stock Ender-3 v1 board). A 32-bit board is already 3.3 V and wants none', n: 1, solder: true },
+  { key: 'jumper-wires-ff', what: 'female-to-female jumper leads', why: 'three of them: TX, RX and ground, onto the controller’s serial header', n: 1 },
+];
+
+/** The pins the sketch below uses, and why they are not the ones marked TX and RX. D6 and D7 are U0TXD and U0RXD on
+ *  the ESP32-C3 (Seeed's own pinout), and the chip's boot ROM prints its log on U0TXD at every reset — straight into
+ *  the machine's RX, which answers it with an unknown-command echo. UART1 on D2 and D3 carries no boot log, so the
+ *  machine never sees anything the bridge did not send. */
+export const BRIDGE_PINS = { tx: { d: 'D2', gpio: 4 }, rx: { d: 'D3', gpio: 5 } } as const;
+
+/** The bridge's sketch: a UART-to-NUS pipe, which is the whole program. What is written to the RX characteristic goes
+ *  out of the UART; whatever comes back in is notified on the TX characteristic, in writes no larger than the
+ *  connection's own payload. Written for the ESP32 Arduino core (Seeed's board package, board "XIAO_ESP32C3"), and
+ *  never compiled here: there is no radio in the gate, so this is said to be untested rather than claimed to work. */
+export function bridgeSketch(o: { baud?: number; name?: string } = {}): string {
+  const baud = o.baud ?? 115200, name = o.name ?? 'nexus-bridge';
+  return `// ${name}: a BLE-UART bridge for a machine's serial port (Nordic UART service), for a XIAO ESP32C3.
+// Arduino IDE: Boards Manager "esp32" by Espressif, board "XIAO_ESP32C3", then Upload. Nothing else is needed:
+// BLEDevice comes with the core.
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+
+#define SERVICE_UUID "${NUS.service}"
+#define RX_UUID      "${NUS.rx}"   // the browser writes here; it goes out of TX_PIN
+#define TX_UUID      "${NUS.tx}"   // what comes in on RX_PIN is notified here
+
+static const int TX_PIN = ${BRIDGE_PINS.tx.gpio};   // ${BRIDGE_PINS.tx.d}, to the controller's RX
+static const int RX_PIN = ${BRIDGE_PINS.rx.gpio};   // ${BRIDGE_PINS.rx.d}, from the controller's TX
+static const uint32_t BAUD = ${baud};
+
+static BLECharacteristic *txChar = nullptr;
+static volatile bool connected = false;
+// (the negotiated payload, less the 3 bytes of ATT header; 20 until the central asks for more)
+static size_t payload = ${BLE_CHUNK};
+
+class Conn : public BLEServerCallbacks {
+  void onConnect(BLEServer *s) override { connected = true; }
+  void onDisconnect(BLEServer *s) override { connected = false; s->getAdvertising()->start(); }
+};
+class FromBrowser : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic *c) override {
+    std::string v = c->getValue();
+    if (!v.empty()) Serial1.write(reinterpret_cast<const uint8_t *>(v.data()), v.size());
+  }
+};
+
+void setup() {
+  Serial1.begin(BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
+  BLEDevice::init("${name}");
+  BLEDevice::setMTU(247);                       // ask for more than 23; a browser may refuse and keep 23
+  BLEServer *server = BLEDevice::createServer();
+  server->setCallbacks(new Conn());
+  BLEService *svc = server->createService(SERVICE_UUID);
+  txChar = svc->createCharacteristic(TX_UUID, BLECharacteristic::PROPERTY_NOTIFY);
+  txChar->addDescriptor(new BLE2902());
+  BLECharacteristic *rx = svc->createCharacteristic(RX_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+  rx->setCallbacks(new FromBrowser());
+  svc->start();
+  BLEAdvertising *adv = BLEDevice::getAdvertising();
+  adv->addServiceUUID(SERVICE_UUID);            // so the browser's own filter finds it
+  adv->setScanResponse(true);
+  adv->start();
+}
+
+void loop() {
+  // (whatever the machine said, out in one notify per payload: Marlin's lines are short, so this is almost always one)
+  static uint8_t buf[256];
+  size_t n = 0;
+  while (Serial1.available() && n < sizeof(buf)) buf[n++] = (uint8_t) Serial1.read();
+  if (n && connected && txChar) {
+    for (size_t i = 0; i < n; i += payload) {
+      size_t take = (n - i < payload) ? n - i : payload;
+      txChar->setValue(buf + i, take);
+      txChar->notify();
+      delay(4);                                 // (one connection interval; without it a notify is dropped)
+    }
+  }
+  delay(2);
+}
+`;
+}
+
+/** Putting a bridge on a machine, step by step, each step with something you can see when it is done. Generated from
+ *  the link's own figures (its baud, the service's UUIDs, the payload) rather than written out, so a change to the
+ *  protocol changes the lesson. `l` is the link it is for; a link that is not BLE says so instead, because the honest
+ *  answer for most stations is that there is no port to bridge. */
+export function bridgeSteps(l: Link): { do: string; check?: string }[] {
+  if (l.transport !== 'ble-uart') return [{ do: `${l.station} is not reached over Bluetooth: ${l.says}`, check: 'nothing to wire' }];
+  const baud = l.baud ?? 115200;
+  return [
+    { do: `Find the controller's serial header. On a 32-bit board it is a 4-pin 2.54 mm header marked TX, RX, GND and 5 V or 3.3 V; on an 8-bit board it is often the spare pins of its USB chip. ${l.fit}`, check: 'you can name which pin is TX and which is RX, from the board’s own silkscreen or its wiring diagram' },
+    { do: 'Measure the logic voltage: probe TX against GND with the printer on and nothing printing. 3.3 V means no level shifter; 5 V means the shifter goes in, and the XIAO’s 3V3 pin feeds its low side while the board’s 5 V feeds its high side.', check: `a number: 3.3 or 5. Not a guess — an ESP32-C3 pin is rated 3.6 V absolute maximum, so this measurement is the one that decides whether the ${BRIDGE[0]!.what} survives` },
+    { do: `Flash the bridge first, with nothing else wired: plug the XIAO into the computer by USB-C, open the sketch (the pack ships it as bridge.ino), pick the board "XIAO_ESP32C3" and upload.`, check: 'the IDE says the upload finished, and a Bluetooth scanner on your phone (nRF Connect, or any BLE scanner) now shows a device advertising the Nordic UART service' },
+    { do: `Wire it with both boards off: XIAO ${BRIDGE_PINS.tx.d} (GPIO ${BRIDGE_PINS.tx.gpio}) to the controller's RX, XIAO ${BRIDGE_PINS.rx.d} (GPIO ${BRIDGE_PINS.rx.gpio}) to the controller's TX, and ground to ground. TX goes to RX: the two cross, and getting that wrong is the commonest reason a bridge does nothing at all.`, check: 'three wires, each one traced end to end with a finger before power goes on; grounds tied' },
+    { do: `Set the firmware's baud to ${baud} if it is not there already (Marlin's BAUDRATE in Configuration.h, GRBL's $$ setting), because the sketch opens the port at ${baud}.`, check: `the machine's own console at ${baud} shows readable text, not rubbish` },
+    { do: 'Power the printer, then open this page over https and press Connect. The browser shows its own device list; pick the bridge. The page never sees a device you did not pick.', check: 'the page says connected, and M115 comes back with the firmware’s name' },
+    { do: `Send one line and watch for its \`ok\`: that is the flow control, and the page waits for it before the next line. Every write is ${BLE_CHUNK} bytes until the connection negotiates more, so a line of G-code is two or three writes.`, check: 'a jog (G91, G1 X10 F600, G90) moves the axis once, and the page counts one `ok`' },
+  ];
+}

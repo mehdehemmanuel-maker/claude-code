@@ -21,7 +21,7 @@
 // Owner of: asking for the device, the two characteristics, the notification handler, and a run loop that drives a
 // `Streamer`. It owns no protocol and no timing policy.
 
-import { BLE_CHUNK, NUS, Streamer, type Link } from '../machines/link';
+import { BLE_CHUNK, NUS, Streamer, bridgeSteps, type Link } from '../machines/link';
 
 /** What a connected machine looks like from here. */
 export interface Radio {
@@ -124,18 +124,15 @@ interface BleDevice {
   addEventListener(t: string, f: () => void): void;
 }
 
-/** What a person has to do to put a machine on this link, for the station they are standing at. The honest answer
- *  for most of them is "nothing, there is no port", and saying that is better than a connect button that fails. */
+/** What a person has to do to put a machine on this link, for the station they are standing at. The steps of a BLE
+ *  bridge are the lesson's own (src/nexus/teach/lessons.ts `bridge-ble`, generated from the link's figures in
+ *  src/nexus/machines/link.ts), so the room and the build pack say the same thing and neither is a second copy of it.
+ *  For most stations the honest answer is "nothing, there is no port", and saying that beats a Connect button that
+ *  fails. */
 export function wiring(l: Link): string[] {
   if (l.transport === 'hand') return [`${l.fit}.`, l.says];
   if (l.transport === 'ws-moonraker') return [`On the machine: ${l.fit}.`, `It is reached over wifi, not Bluetooth: ${l.says}`, 'Nothing is paired; the page talks to its host over the network.'];
   if (l.transport === 'serial') return [`On the machine: ${l.fit}.`, l.says, 'A cable, not a radio: Web Serial, or the same bridge board with its USB side plugged into the host.'];
-  return [
-    `On the machine: ${l.fit}.`,
-    `Flash the bridge with a UART-to-NUS sketch: it advertises the Nordic UART service ${NUS.service}, takes what is written to ${NUS.rx} out of its TX pin, and notifies on ${NUS.tx} whatever comes in on its RX pin.`,
-    `Set its serial to ${l.baud ?? 115200} baud, the same as the controller's firmware.`,
-    'Tie the grounds together. If the controller is 5 V and the bridge is 3.3 V, put a level shifter on both lines — a 3.3 V input fed 5 V is a dead bridge, not a flaky one.',
-    'Serve this page over https, then press Connect and pick the bridge from the browser\'s own list. The page never sees a device you did not pick.',
-    `Every write is ${BLE_CHUNK} bytes, so a line of G-code is two or three of them; the machine's own \`ok\` is the flow control and the page waits for it.`,
-  ];
+  return bridgeSteps(l).map((s) => (s.check ? `${s.do} \u2014 done when ${s.check}.` : s.do));
 }
+

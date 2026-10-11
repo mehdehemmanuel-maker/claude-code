@@ -17,7 +17,7 @@ export interface Offer {
 }
 export interface Price { /** what it is, plainly */ what: string; /** the inventory item it is, where the library keeps one */ item?: string; offers: Offer[] }
 
-const D = '2026-10-09', D2 = '2026-10-10';
+const D = '2026-10-09', D2 = '2026-10-10', D3 = '2026-10-11';
 const pishop = (name: string, usd: number, path: string, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'PiShop.us (official Raspberry Pi reseller)', url: `https://www.pishop.us/product/${path}/`, seen: D, ...o });
 const ada = (name: string, usd: number, pid: number, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'Adafruit', url: `https://www.adafruit.com/product/${pid}`, seen: D, ...o });
 const lcsc = (name: string, usd: number, c: string, min: number, o: Partial<Offer> = {}): Offer => ({ name, usd, min, seller: 'LCSC', url: `https://www.lcsc.com/product-detail/${c}.html`, seen: D, note: `the price at ${min}+ pieces; it falls with more`, ...o });
@@ -138,6 +138,8 @@ export const PRICES: Record<string, Price> = {
     { name: 'CENTRAL MACHINERY 7 in. x 10 in. Precision Benchtop Mini Lathe (93212)', usd: 729.99, seller: 'Harbor Freight', url: 'https://www.harborfreight.com/7-inch-x-10-inch-precision-mini-lathe-93212.html', seen: D2, stock: 'in', note: 'read off its own listing and the lathes category page; 180 mm swing over the bed, 250 mm between centres, 2500 rev/min, 120 V. The cheapest new machine that makes a round part a bearing will sit on, and the only station in a cheap works that does' }] },
   'xiao-esp32c3': { what: 'BLE-UART bridge board', offers: [
     { name: 'Seeed Studio XIAO ESP32C3', usd: 4.99, seller: 'Seeed Studio', url: 'https://www.seeedstudio.com/Seeed-XIAO-ESP32C3-p-5431.html', seen: D2, stock: 'in', note: 'Seeed\'s own price; $13.49 for three, so $4.50 each. 2.4 GHz wifi and Bluetooth LE on a 21 \u00d7 17.5 mm board: this is the part that turns a printer\'s serial header into the Nordic UART service a browser can reach (link.ts)' }] },
+  'level-shifter': { what: 'logic level converter, 3.3 V to 5 V', offers: [
+    { name: '4-channel I2C-safe Bi-directional Logic Level Converter - BSS138', usd: 3.95, seller: 'Adafruit', url: 'https://www.adafruit.com/product/757', seen: D3, stock: 'in', note: 'read off Adafruit\u2019s own category pages (Breakout Boards, Raspberry Pi); four channels, open-drain with 10k pull-ups, so it carries a UART as well as I\u00b2C. Needed only where the controller\u2019s logic is 5 V' }] },
   'rc-receiver': { what: 'radio receiver', offers: [
     { name: 'RadioMaster DBR4 Dual-band Xross Gemini ExpressLRS Receiver', usd: 38.99, seller: 'Pyrodrone', url: 'https://pyrodrone.com/collections/receivers', seen: D2, note: 'read off its receivers page; ExpressLRS, so it binds to any ELRS handset' }] },
 };

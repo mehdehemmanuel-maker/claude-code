@@ -16,6 +16,7 @@
 // Owner of: a build's parts list, its prices and totals, its bench, its custom parts and its lessons, as one pack.
 
 import { strToU8, zipSync } from 'fflate';
+import { BRIDGE, bridgeSketch } from '../machines/link';
 import { component } from '../parts/components';
 import type { Part, V3 } from '../parts/kits';
 import { fabPack, plateFor, type Profile, type Route } from '../parts/fab';
@@ -86,8 +87,9 @@ export function findThing(words: string): Item | null {
 }
 
 /** What one piece of the ask is, as the library's words, its count and anything said about it. */
-function read(chunk: string): { n: number; words?: string; flag?: 'plate' | 'bench' | 'computer' | 'phone'; note?: string } {
+function read(chunk: string): { n: number; words?: string; flag?: 'plate' | 'bench' | 'computer' | 'phone' | 'bridge'; note?: string } {
   const m = /^(\d+)\s*(?:x|×|of)?\s+(.+)$/i.exec(chunk.trim()), n = m ? Number(m[1]) : 1, t = (m ? m[2]! : chunk).trim();
+  if (/\b(bluetooth|ble)\b|\bble-?uart\b|\b(wireless|radio|bluetooth) (link|bridge)\b|\bbridge (board|for)\b/i.test(t)) return { n, flag: 'bridge' };
   if (/\b(plate|mount(ing)?( plate)?|base ?plate|bracket for)\b/i.test(t)) return { n, flag: 'plate' };
   if (/\b(solder(ing)? (kit|iron|station|setup)|bench|tools?)\b/i.test(t)) return { n, flag: 'bench' };
   if (/^(a |my )?(computer|laptop|pc)\b/i.test(t)) return { n, flag: 'computer' };
@@ -130,7 +132,11 @@ export function pack(asked0: string, have0: Have = {}): Pack {
     const was = lines.find((l) => l.key === key);
     if (was) {
       if (!was.why.includes(why)) was.why += `; ${why}`;
-      if (was.offer && was.section !== 'have') { was.n += n; const c0 = cheapest(key, was.n, has); if (c0) Object.assign(was, { offer: c0.offer, packs: c0.packs, usd: c0.usd, needs: c0.needs, others: c0.others }); }
+      // (a part asked for twice is wanted twice over; a tool is not. Two steps that both want a multimeter want the
+      //  same multimeter, so a line already in the bench or the nice-to-haves takes the larger count, never the sum)
+      const tool = was.section === 'bench' || was.section === 'helps';
+      const want = tool ? Math.max(was.n, n) : was.n + n;
+      if (was.offer && was.section !== 'have' && want !== was.n) { was.n = want; const c0 = cheapest(key, was.n, has); if (c0) Object.assign(was, { offer: c0.offer, packs: c0.packs, usd: c0.usd, needs: c0.needs, others: c0.others }); }
       return was;
     }
     if (has(key)) { const l: Line = { key, what: p.what, n, section: 'have', offer: null, packs: 0, usd: 0, why: `${why} (you have it)`, others: [], needs: [] }; lines.push(l); return l; }
@@ -183,10 +189,10 @@ export function pack(asked0: string, have0: Have = {}): Pack {
   // what was asked for
   // (split on "with" only where it adds a thing: "with no electricity", "with only sunlight" say how, and stay with it)
   const chunks = asked.split(/\s*(?:,|;|\+|\band\b(?!\s+(?:no|without|only)\b)|\bwith\b(?!\s+(?:no|nothing|only|out)\b)|\bplus\b)\s*/i).filter((s) => s.trim());
-  const flags = new Set<string>(), boards: { id: string; n: number; line: Line | null; header?: boolean }[] = [];
+  const flags = new Set<string>(), flagN = new Map<string, number>(), boards: { id: string; n: number; line: Line | null; header?: boolean }[] = [];
   for (const ch of chunks) {
     const r = read(ch); if (r.note) notes.push(r.note);
-    if (r.flag) { flags.add(r.flag); continue; }
+    if (r.flag) { flags.add(r.flag); flagN.set(r.flag, Math.max(flagN.get(r.flag) ?? 0, r.n)); continue; }
     const c = component(r.words!);
     if (typeof c === 'string') {
       // not a part the library draws: a thing the inventory keeps, named as it is (a 3D printer), else an invention for
@@ -230,6 +236,16 @@ export function pack(asked0: string, have0: Have = {}): Pack {
     add('breadboard', 1, 'buy', 'to wire the LED without soldering');
     add('jumper-wires', 1, 'buy', 'to wire the breadboard');
     if (boards.some((b) => boardDef(b.id).cls !== 'pico' && boardDef(b.id).header === 'pins')) add('jumper-wires-ff', 1, 'buy', 'female ends for the Pi\'s header pins', (o) => /Extension/.test(o.name));
+  }
+  // the Bluetooth bridge: asked for by name, or because a machine was asked for that has a serial port to reach
+  if (flags.has('bridge')) {
+    const bridges = flagN.get('bridge') ?? 1;   // "two bluetooth bridges" is two of each of its parts
+    for (const b of BRIDGE) add(b.key, b.n * bridges, b.key === 'level-shifter' ? 'helps' : 'buy', b.why);
+    add('multimeter', 1, 'bench', 'to measure the controller\u2019s logic voltage before anything is wired: this is the measurement that decides whether the bridge survives');
+    processes.push('bridge-ble');
+    // its parts come with their headers loose, so the bench the lesson names is the bench the pack buys
+    if (BRIDGE.some((b) => b.solder)) processes.push('solder-joint');
+    notes.push('the bridge ships with its sketch (bridge.ino) and the Nordic UART service it advertises; Web Bluetooth is BLE only, so an HC-05 or HC-06 cannot be used at all \u2014 a browser cannot open Bluetooth Classic');
   }
   if (flags.has('bench')) processes.push('solder-joint');
   if (processes.some((p) => p.startsWith('solder'))) {
@@ -314,6 +330,8 @@ export function packPart(p: Pack): Part | null {
 export function packZip(p: Pack): Uint8Array {
   const files: Record<string, Uint8Array> = { 'pack.md': strToU8(packText(p)) };
   p.made.forEach((m, i) => { for (const [n, d] of Object.entries(m.files)) files[p.made.length > 1 ? `part-${i + 1}/${n}` : n] = typeof d === 'string' ? strToU8(d) : d; });
+  // a pack whose lesson is the bridge ships the bridge's own sketch, so there is nothing to copy out of a page
+  if (p.lessons.some((l) => l.id === 'bridge-ble')) files['bridge.ino'] = strToU8(bridgeSketch());
   return zipSync(files, { level: 6 });
 }
 

@@ -3,9 +3,10 @@
 // feedrate is a job cut ten times too slowly with no error anywhere.
 import { describe, expect, it } from 'vitest';
 import {
-  BLE_CHUNK, CUTTING, LINKS, NUS, Streamer, checksum, chunksOf, gcodeFor, kilnProgram, linesOf, linkFor, numbered,
-  printStart,
+  BLE_CHUNK, BRIDGE, BRIDGE_PINS, CUTTING, LINKS, NUS, Streamer, bridgeSketch, bridgeSteps, checksum, chunksOf,
+  gcodeFor, kilnProgram, linesOf, linkFor, numbered, printStart,
 } from '../../src/nexus/machines/link';
+import { PRICES } from '../../src/nexus/parts/prices';
 import { STATIONS } from '../../src/nexus/works';
 import { plateFor } from '../../src/nexus/parts/fab';
 
@@ -228,5 +229,46 @@ describe('the programs', () => {
     expect(segs[2]).toMatch(/HLD 00:10/);
     expect(g).toMatch(/a bisque/);
     expect(g).toMatch(/controlled cool/);
+  });
+});
+
+describe('the bridge: the part that makes a serial port reachable from a browser', () => {
+  it('is three orderable parts, each of them priced', () => {
+    expect(BRIDGE.map((b) => b.key)).toEqual(['xiao-esp32c3', 'level-shifter', 'jumper-wires-ff']);
+    for (const b of BRIDGE) { expect(PRICES[b.key], b.key).toBeDefined(); expect(b.why.length, b.key).toBeGreaterThan(20); }
+  });
+  it('keeps the machine off the chip\u2019s boot-log pins', () => {
+    // D6/D7 are U0TXD/U0RXD on the ESP32-C3 (Seeed's pinout) and the boot ROM prints on U0TXD at every reset: a
+    // machine wired there sees a line it did not ask for, every time the bridge is powered.
+    expect([BRIDGE_PINS.tx.d, BRIDGE_PINS.rx.d]).toEqual(['D2', 'D3']);
+    expect([BRIDGE_PINS.tx.gpio, BRIDGE_PINS.rx.gpio]).toEqual([4, 5]);
+    const ino = bridgeSketch();
+    expect(ino).not.toMatch(/\b(D6|D7)\b/);
+    expect(ino).toMatch(/TX_PIN = 4\b/); expect(ino).toMatch(/RX_PIN = 5\b/);
+  });
+  it('is a sketch that advertises the service a browser filters on, and pipes both ways', () => {
+    const ino = bridgeSketch({ baud: 250000, name: 'ender' });
+    expect(ino).toContain(NUS.service); expect(ino).toContain(NUS.rx); expect(ino).toContain(NUS.tx);
+    expect(ino).toMatch(/addServiceUUID\(SERVICE_UUID\)/);                 // else the browser's own filter never sees it
+    expect(ino).toMatch(/Serial1\.begin\(BAUD, SERIAL_8N1, RX_PIN, TX_PIN\)/);
+    expect(ino).toMatch(/BAUD = 250000/); expect(ino).toMatch(/BLEDevice::init\("ender"\)/);
+    expect(ino).toMatch(/Serial1\.write/);                                  // what the browser wrote, out of the UART
+    expect(ino).toMatch(/txChar->notify\(\)/);                              // what the machine said, back to the browser
+    expect(ino).toMatch(new RegExp(`payload = ${BLE_CHUNK}`));              // 20 until the connection negotiates more
+  });
+  it('is steps with something you can see at each one, from the link\u2019s own figures', () => {
+    const steps = bridgeSteps(linkFor('printer-fff', 'ble-uart')!);
+    expect(steps.length).toBe(7);
+    for (const s of steps) { expect(s.do.length).toBeGreaterThan(40); expect(s.check, s.do.slice(0, 40)).toBeTruthy(); }
+    expect(steps.some((s) => /TX goes to RX/.test(s.do))).toBe(true);        // the commonest reason a bridge does nothing
+    expect(steps.some((s) => /3\.6 V absolute maximum/.test(s.check!))).toBe(true);
+    expect(steps.some((s) => s.do.includes('115200'))).toBe(true);           // the link's own baud, not a number typed here
+    expect(steps.some((s) => s.do.includes(`${BLE_CHUNK} bytes`))).toBe(true);
+  });
+  it('says there is nothing to wire where there is no port', () => {
+    const kiln = bridgeSteps(linkFor('kiln')!);
+    expect(kiln.length).toBe(1);
+    expect(kiln[0]!.do).toMatch(/not reached over Bluetooth/);
+    expect(kiln[0]!.check).toBe('nothing to wire');
   });
 });

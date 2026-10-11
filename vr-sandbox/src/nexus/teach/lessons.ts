@@ -6,6 +6,7 @@
 // Owner of: the lessons, and which a set of processes needs.
 
 import { E12 } from '../parts/series';
+import { BRIDGE, BRIDGE_PINS, bridgeSteps, linkFor } from '../machines/link';
 import { BAND, bandsOf } from '../boards/packages';
 import { ADAFRUIT_GUIDE, buildOn, lessonOf, PERMA_PROTO_HALF, type Build, type PartHow, type Tool } from './edges';
 import { layProto, type Component, type Rails } from '../embody/breadboard';
@@ -260,6 +261,18 @@ export const LESSONS: Record<string, Lesson> = {
       { do: 'Ask Claude to change it ("blink twice as fast", "read a button on GP15").', check: 'the program changes, and runs here' },
       { do: 'Open For real and do its steps on the board.', check: 'the real board does what it did here' },
     ], src: 'the Computer app (src/nexus/teach/codesim.ts)',
+  },
+  'bridge-ble': {
+    id: 'bridge-ble', title: 'Put a Bluetooth bridge on a machine', why: 'this is the step that makes the room real: with it, a program worked out here runs on the machine in front of you, and without it every plan ends at a file',
+    tools: ['xiao-esp32c3', 'level-shifter', 'jumper-wires-ff', 'multimeter', 'soldering-iron', 'solder-leaded'],
+    safety: [
+      'Wire it with both boards off, and check the three wires before power goes on.',
+      `An ESP32-C3 pin is rated 3.6 V absolute maximum: 5 V logic straight onto it kills the ${BRIDGE[0]!.what}. Measure the controller's TX against ground before you wire anything, and put the level converter in if it reads 5 V.`,
+      'A printer\u2019s power supply is mains on its input side: do the wiring with it unplugged, not just switched off.',
+      'Nothing here goes near the heater or the bed wiring; if a bridge makes you move those, stop and wire the bridge somewhere else.',
+    ],
+    steps: bridgeSteps(linkFor('printer-fff', 'ble-uart')!),
+    src: `src/nexus/machines/link.ts (the Nordic UART service, the payload and the baud), Seeed's own XIAO ESP32C3 pinout for ${BRIDGE_PINS.tx.d} and ${BRIDGE_PINS.rx.d}, and the sketch the pack ships as bridge.ino`,
   },
 };
 

@@ -41,5 +41,9 @@ export default defineConfig({
   test: {
     include: ['tests/{unit,golden,conformance,codec,nexus}/**/*.test.ts'],
     testTimeout: 60_000,
+    // Transforming the modules is about a quarter of a short run and was being redone from scratch every time, in
+    // every worker. The cache is keyed by content, so a file that has not changed is not transformed again: the gate
+    // is run many times a round, and this is the cheapest time it will ever save.
+    fsModuleCache: true,
   },
 });

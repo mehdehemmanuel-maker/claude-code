@@ -155,6 +155,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
 | Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (twelve files: `plan.ts` routes, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it) |
 | The wire out: the program a machine is sent and the transport that carries it (Marlin's line protocol with its checksum and resends, down a 20-byte BLE pipe to the Nordic UART service; Moonraker over wifi where the machine is Klipper; the steps where there is no port) | `src/nexus/machines/link.ts` (`Streamer`, `gcodeFor`, `printStart`, `kilnProgram`, `LINKS`), the binding in `works/programs.ts`, the browser half in `src/nexus/view/ble.ts` |
+| The Bluetooth bridge as a thing you can order and build: what it is made of (a XIAO ESP32C3, a BSS138 level converter only where the controller's logic is 5 V, three jumper leads), the UART-to-NUS sketch it runs, the pins it uses and why they are not the ones marked TX and RX (the ESP32-C3's boot ROM prints on U0TXD at every reset, so the machine is kept off that pin), and the wiring as steps with a check at each one — which the room, the lesson and the build pack all read, so none of them is a second copy | `src/nexus/machines/link.ts` (`BRIDGE`, `BRIDGE_PINS`, `bridgeSketch`, `bridgeSteps`), the lesson `bridge-ble` in `src/nexus/teach/lessons.ts`, the pack's `bridge` flag in `src/nexus/teach/buildpack.ts` (which ships `bridge.ino` in its zip), `wiring()` in `src/nexus/view/ble.ts` |
 | How close is close enough, and whether a machine can do it: ISO 286's grade table, the fits made from them (locating, sliding, a bearing seat, pressed), what a named feature's tolerance should therefore be, tolerance stack-up (worst case and root-sum-square), and process capability (Cp, Cpk, scrap in parts per million, and how many to start to keep n) | `src/nexus/parts/fits.ts` (`itBand`, `fitAt`, `tolFor`, `stackOf`, `capable`, `measured`) |
 | What a cutter actually does in a material (surface speed, chip load, material removal, spindle power, the stickout that chatters, the smallest inside corner it can leave) and what a cut refuses before the machine finds out | `src/nexus/machines/link.ts` (`cutAt`, `cutRefuses`, `CUTTING`, `KC`) |
 | The burr a cut leaves: which side it stands on, how tall, what takes it off, and why it matters under a mating face | `src/nexus/parts/finish.ts` (`burrOf`) |
@@ -1022,9 +1023,35 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    It found three faults as soon as it ran: `src/nexus/index.ts` had no header at all (it is the door, and now says
    so), and two files named a path that was never real — the illustration `src/nexus/<name>.ts`, which is now
    written so it cannot be mistaken for one.
-   Next: the Bluetooth bridge drawn and priced as a part of the build pack, the works standing in the forge room as
-   real stations you walk between, working the three ratchets down by cause, and the older Now items (robot benches,
-   likeness, life graph).
+   Then the bridge itself (2026-10-11), which is the part of the wire out that has to exist in the user's hands and not
+   only in the file: *"whatever you build in there I'm gonna build in real life and connect whatever program you do
+   into it via Bluetooth"*. It is three orderable parts — a XIAO ESP32C3 ($4.99, Seeed's own price), three
+   female-to-female jumper leads ($1.95 for twenty, Adafruit 1950) and, only where the controller's logic is 5 V, a
+   BSS138 level converter ($3.95, Adafruit 757, seen 2026-10-11) — plus the bench the steps need. $56.14 with an iron
+   and a meter bought, $6.94 with them owned. It carries its own sketch: `bridgeSketch()` writes the whole
+   UART-to-NUS pipe for the ESP32 Arduino core, and the pack ships it as `bridge.ino` so there is nothing to copy out
+   of a page. Two numbers in it are decisions and not defaults: the pins are D2 and D3, not the ones marked TX and RX,
+   because D6 is U0TXD and the chip's boot ROM prints its log there at every reset — straight into the machine's RX,
+   which answers with an unknown-command echo every time the bridge is powered; and the sketch asks for a 247-byte
+   MTU but keeps writing 20 bytes until the connection grants more, because a browser never reports what it
+   negotiated. The wiring is now seven steps with something you can see at each one, generated from the link's own
+   figures (its baud, the service's UUIDs, the payload) rather than written out, so the room (`wiring()`), the lesson
+   (`bridge-ble`) and the build pack say the same thing and none of them is a copy. The step that matters is the
+   second: measure the controller's TX against ground before anything is wired, because an ESP32-C3 pin is rated
+   3.6 V absolute maximum and 5 V on it is a dead board, not a flaky one. Two faults in the pack came out of building
+   it: a tool wanted by two steps was bought twice (the bridge wants a multimeter to measure the logic voltage and
+   the soldering steps want one to check joints — it is the same meter, so a line already in the bench or the
+   nice-to-haves now takes the larger count and never the sum), and a flag dropped its count, so "two bluetooth
+   bridges" bought one.
+   And the gate, measured rather than guessed at (2026-10-11): 568 s of test time over 165 files, 228 s of wall clock,
+   and half of that wall was two sweeps sharing nowhere to run — every kit at three seeds (64 s) and every kit through
+   the make pipeline (42 s) were the longest tests in two files that each had other work to do. vitest runs files in
+   parallel and a file's own tests in order, so they are now files of their own (`tests/nexus/kits-every.test.ts`,
+   `tests/nexus/make-every.test.ts`) and overlap instead of queueing: 106 s of the critical path becomes 64. The
+   transform cache (`fsModuleCache`) is on too, which vitest itself had been suggesting on every run — a quarter of a
+   short run was transforming modules that had not changed.
+   Next: the works as a build pack and standing in the forge room as real stations you walk between, working the three
+   ratchets down by cause, and the older Now items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);
@@ -1034,6 +1061,10 @@ the user can widen it under the environment's Network access.
 
 - Gate: `npm run gate` (long; run it in the background and log to a file). Build the viewer:
   `npx vite build --config vite.view.config.ts --logLevel error`.
+- The gate is 228 s, and two sweeps are half of it: every kit at three seeds (`tests/nexus/kits-every.test.ts`, 64 s)
+  and every kit through the make pipeline (`tests/nexus/make-every.test.ts`, 42 s). They are in files of their own
+  because vitest runs files in parallel and a file's own tests in order: together in one file they cost the wall clock
+  106 s, apart they cost 64. Keep them apart, and put a new long sweep in its own file for the same reason.
 - `npm run tidy` is the half-second part of the gate that checks the tree's own shape, and it is the thing to run
   before and after moving anything. Its three ratchets (oversize files, name clashes, imports up a layer) hold the
   present debt to the number: they fail on a new one by name, and they fail on a fixed one until its line is

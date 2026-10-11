@@ -129,3 +129,36 @@ describe('lessons', () => {
     for (const l of Object.values(LESSONS)) { expect(l.steps.length, l.id).toBeGreaterThan(0); expect(l.src, l.id).not.toBe(''); for (const t of l.tools) expect(PRICES[t], `${l.id}: ${t}`).toBeDefined(); }
   });
 });
+
+describe('the Bluetooth bridge as a pack', () => {
+  it('asked for in words, it comes out as parts, a bench, lessons and its own sketch', () => {
+    const p = pack('a bluetooth bridge for my printer');
+    const keys = p.lines.map((l) => l.key);
+    expect(keys).toContain('xiao-esp32c3');          // the bridge itself
+    expect(keys).toContain('jumper-wires-ff');       // TX, RX, ground
+    expect(keys).toContain('level-shifter');
+    expect(p.lines.find((l) => l.key === 'level-shifter')!.section).toBe('helps');   // only if the board is 5 V
+    expect(p.lines.find((l) => l.key === 'multimeter')!.section).toBe('bench');      // the measurement that decides it
+    expect(p.lessons.map((l) => l.id)).toContain('bridge-ble');
+    expect(p.unknown).toEqual([]);
+    for (const l of p.lines) if (l.section === 'buy') expect(l.usd, l.key).not.toBeNull();  // nothing in it unpriced
+    expect(p.total.all[1]).toBeLessThan(70);
+    const z = unzipSync(packZip(p));
+    expect(Object.keys(z)).toContain('bridge.ino');
+    expect(strFromU8(z['bridge.ino']!)).toContain('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+  });
+  it('two steps that want one tool buy one tool', () => {
+    // (the bridge wants a multimeter to measure the logic voltage and the soldering steps want one to check joints:
+    //  the same meter. A part asked for twice is still wanted twice; a tool is not)
+    const p = pack('a bluetooth bridge for my printer');
+    expect(p.lines.find((l) => l.key === 'multimeter')!.n).toBe(1);
+    expect(pack('2 bluetooth bridges').lines.find((l) => l.key === 'xiao-esp32c3')!.n).toBe(2);
+  });
+  it('the bridge\u2019s lesson names tools that are all priced, and dangers before steps', () => {
+    const l = LESSONS['bridge-ble']!;
+    for (const k of l.tools) expect(PRICES[k], k).toBeDefined();
+    expect(l.safety.length).toBeGreaterThan(2);
+    expect(l.safety.join(' ')).toMatch(/3\.6 V absolute maximum/);
+    expect(l.steps.every((s) => !!s.check)).toBe(true);
+  });
+});
