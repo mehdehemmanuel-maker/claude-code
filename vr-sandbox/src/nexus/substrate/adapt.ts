@@ -96,16 +96,20 @@ function pcg(apply: (x: Float64Array, out: Float64Array) => void, precond: (r: F
 }
 
 /** Solves K x = b outright for K symmetric and positive definite, its entries added by fill (Cholesky). */
-function cholesky(m: number, fill: (put: (i: number, j: number, v: number) => void) => void, b: Float64Array): Float64Array {
+function cholesky(m: number, fill: (put: (i: number, j: number, v: number) => void) => void, b: Float64Array): { x: Float64Array; ok: boolean } {
   const K = new Float64Array(m * m); fill((i, j, v) => { K[i * m + j]! += v; });
+  // `ok` is false where a pivot is not positive: the matrix is not positive definite, which for a frame is a joint
+  // nothing holds in some direction (a mechanism). What comes back is then not an answer, and the caller says so
+  let ok = true;
   for (let j = 0; j < m; j++) {
     let d = K[j * m + j]!; for (let k = 0; k < j; k++) d -= K[j * m + k]! ** 2;
+    if (!(d > 0)) ok = false;
     const L = Math.sqrt(Math.max(d, 1e-300)); K[j * m + j] = L;
     for (let i = j + 1; i < m; i++) { let s = K[i * m + j]!; for (let k = 0; k < j; k++) s -= K[i * m + k]! * K[j * m + k]!; K[i * m + j] = s / L; }
   }
   const y = new Float64Array(m); for (let i = 0; i < m; i++) { let s = b[i]!; for (let k = 0; k < i; k++) s -= K[i * m + k]! * y[k]!; y[i] = s / K[i * m + i]!; }
   const x = new Float64Array(m); for (let i = m - 1; i >= 0; i--) { let s = y[i]!; for (let k = i + 1; k < m; k++) s -= K[k * m + i]! * x[k]!; x[i] = s / K[i * m + i]!; }
-  return x;
+  return { x, ok };
 }
 
 // ---- a scalar carrier: Kirchhoff's laws over conductances ----------------------------------------------------------
@@ -125,7 +129,8 @@ export function flowScalar(G: Graph, g: number[], fixed: Map<number, number>, in
   const apply = (x: Float64Array, out: Float64Array) => { out.fill(0); for (let e = 0; e < ne; e++) { const fa = EA[e]!, fc = EC[e]!, ge = GE[e]!; const xa = fa >= 0 ? x[fa]! : 0, xc = fc >= 0 ? x[fc]! : 0; if (fa >= 0) out[fa]! += ge * (xa - xc); if (fc >= 0) out[fc]! += ge * (xc - xa); } };
   // a network of a few hundred joints is solved outright (Cholesky), whatever its conductances; a larger one by
   // conjugate gradients
-  const { x, converged } = m <= 800 ? { x: cholesky(m, (put) => G.edges.forEach(([a, c], e) => { const fa = free[a]!, fc = free[c]!, ge = g[e]!; if (fa >= 0) put(fa, fa, ge); if (fc >= 0) put(fc, fc, ge); if (fa >= 0 && fc >= 0) { put(fa, fc, -ge); put(fc, fa, -ge); } }), b), converged: true } : pcg(apply, (r, z) => { for (let i = 0; i < m; i++) z[i] = diag[i]! > 0 ? r[i]! / diag[i]! : r[i]!; }, b);
+  const direct = m <= 800 ? cholesky(m, (put) => G.edges.forEach(([a, c], e) => { const fa = free[a]!, fc = free[c]!, ge = g[e]!; if (fa >= 0) put(fa, fa, ge); if (fc >= 0) put(fc, fc, ge); if (fa >= 0 && fc >= 0) { put(fa, fc, -ge); put(fc, fa, -ge); } }), b) : null;
+  const { x, converged } = direct ? { x: direct.x, converged: direct.ok } : pcg(apply, (r, z) => { for (let i = 0; i < m; i++) z[i] = diag[i]! > 0 ? r[i]! / diag[i]! : r[i]!; }, b);
   const p = Array.from({ length: n }, (_, i) => (free[i]! >= 0 ? x[free[i]!]! : fixed.get(i)!));
   return { p, Q: G.edges.map(([a, c], e) => g[e]! * (p[a]! - p[c]!)), converged };
 }
@@ -181,23 +186,38 @@ export function truss(G: Graph, A: number[], E: number, held: Set<number>, load:
   const n = G.nodes.length, idx = new Int32Array(n).fill(-1); let m = 0; for (let i = 0; i < n; i++) if (!held.has(i) || slides?.has(i)) idx[i] = m++;
   // a joint that slides is free the way it slides and held the others: those of its freedoms are kept at nothing
   const mask = new Uint8Array(m * 3); if (slides) for (const [j, ax] of slides) { const f = idx[j]!; if (f >= 0) for (let r = 0; r < 3; r++) if (r !== ax) mask[f * 3 + r] = 1; }
-  const dir = G.edges.map(([a, c], e) => { const d = sub(G.nodes[c]!, G.nodes[a]!), L = G.len[e]!; return [d[0] / L, d[1] / L, d[2] / L] as V3; });
-  const k = G.edges.map((_, e) => (E * A[e]!) / G.len[e]!);
+  // the struts' ways and stiffnesses, and each free joint's own block, in plain numbers in one pass: growing one frame
+  // asks for tens of thousands of these solves (32,662 for the 5 m tower), so a vector made for each of a thousand
+  // struts, and an array for each joint's inverse, is what the growing costs. The arithmetic is the vector form's own.
+  const ne = G.edges.length, EA = new Int32Array(ne), EC = new Int32Array(ne), D = new Float64Array(ne * 3), K = new Float64Array(ne);
   const blocks = new Float64Array(m * 9);
-  G.edges.forEach(([a, c], e) => { const d = dir[e]!; for (const j of [a, c]) { const f = idx[j]!; if (f < 0) continue; for (let r = 0; r < 3; r++) for (let s = 0; s < 3; s++) blocks[f * 9 + r * 3 + s]! += k[e]! * d[r]! * d[s]!; } });
+  const spread = (f: number, ke: number, d0: number, d1: number, d2: number): void => {
+    if (f < 0) return; const o = f * 9;
+    blocks[o]! += ke * d0 * d0; blocks[o + 1]! += ke * d0 * d1; blocks[o + 2]! += ke * d0 * d2;
+    blocks[o + 3]! += ke * d1 * d0; blocks[o + 4]! += ke * d1 * d1; blocks[o + 5]! += ke * d1 * d2;
+    blocks[o + 6]! += ke * d2 * d0; blocks[o + 7]! += ke * d2 * d1; blocks[o + 8]! += ke * d2 * d2;
+  };
+  for (let e = 0; e < ne; e++) {
+    const [a, c] = G.edges[e]!, L = G.len[e]!, pa = G.nodes[a]!, pc = G.nodes[c]!;
+    const d0 = (pc[0] - pa[0]) / L, d1 = (pc[1] - pa[1]) / L, d2 = (pc[2] - pa[2]) / L, ke = (E * A[e]!) / L;
+    EA[e] = idx[a]!; EC[e] = idx[c]!; D[e * 3] = d0; D[e * 3 + 1] = d1; D[e * 3 + 2] = d2; K[e] = ke;
+    spread(idx[a]!, ke, d0, d1, d2); spread(idx[c]!, ke, d0, d1, d2);
+  }
   // each joint's own 3 × 3 block inverted (a joint no strut holds in some direction is held there by a little, so it
   // does not leave the solve singular; a joint so held is a mechanism, found by the count, not here)
-  const inv = new Float64Array(m * 9);
+  const inv = new Float64Array(m * 9), B = new Float64Array(9);
   for (let f = 0; f < m; f++) {
-    const B = Array.from({ length: 9 }, (_, i) => blocks[f * 9 + i]!), tr = B[0]! + B[4]! + B[8]!, eps = 1e-9 * (tr || 1); B[0]! += eps; B[4]! += eps; B[8]! += eps;
+    for (let q = 0; q < 9; q++) B[q] = blocks[f * 9 + q]!;
+    const tr = B[0]! + B[4]! + B[8]!, eps = 1e-9 * (tr || 1); B[0]! += eps; B[4]! += eps; B[8]! += eps;
     for (let r = 0; r < 3; r++) if (mask[f * 3 + r]) for (let q = 0; q < 3; q++) { B[r * 3 + q] = r === q ? 1 : 0; B[q * 3 + r] = r === q ? 1 : 0; }
-    const [a, b, c, d, e, g, h, i, j] = B as [number, number, number, number, number, number, number, number, number], det = a * (e * j - g * i) - b * (d * j - g * h) + c * (d * i - e * h);
-    const I = [e * j - g * i, c * i - b * j, b * g - c * e, g * h - d * j, a * j - c * h, c * d - a * g, d * i - e * h, b * h - a * i, a * e - b * d].map((x) => x / det);
-    for (let q = 0; q < 9; q++) inv[f * 9 + q] = I[q]!;
+    const b0 = B[0]!, b1 = B[1]!, b2 = B[2]!, b3 = B[3]!, b4 = B[4]!, b5 = B[5]!, b6 = B[6]!, b7 = B[7]!, b8 = B[8]!;
+    const det = b0 * (b4 * b8 - b5 * b7) - b1 * (b3 * b8 - b5 * b6) + b2 * (b3 * b7 - b4 * b6), o = f * 9;
+    inv[o] = (b4 * b8 - b5 * b7) / det; inv[o + 1] = (b2 * b7 - b1 * b8) / det; inv[o + 2] = (b1 * b5 - b2 * b4) / det;
+    inv[o + 3] = (b5 * b6 - b3 * b8) / det; inv[o + 4] = (b0 * b8 - b2 * b6) / det; inv[o + 5] = (b2 * b3 - b0 * b5) / det;
+    inv[o + 6] = (b3 * b7 - b4 * b6) / det; inv[o + 7] = (b1 * b6 - b0 * b7) / det; inv[o + 8] = (b0 * b4 - b1 * b3) / det;
   }
-  const ne = G.edges.length, EA = new Int32Array(ne), EC = new Int32Array(ne), D = new Float64Array(ne * 3), K = Float64Array.from(k);
-  G.edges.forEach(([a, c], e) => { EA[e] = idx[a]!; EC[e] = idx[c]!; D[e * 3] = dir[e]![0]; D[e * 3 + 1] = dir[e]![1]; D[e * 3 + 2] = dir[e]![2]; });
-  const masked = [...mask.keys()].filter((q) => mask[q]);
+  let nmask = 0; for (let q = 0; q < m * 3; q++) if (mask[q]) nmask++;
+  const masked = new Int32Array(nmask); for (let q = 0, i = 0; q < m * 3; q++) if (mask[q]) masked[i++] = q;
   const apply = (x: Float64Array, out: Float64Array) => {
     out.fill(0);
     for (let e = 0; e < ne; e++) {
@@ -212,9 +232,20 @@ export function truss(G: Graph, A: number[], E: number, held: Set<number>, load:
   };
   const b = new Float64Array(m * 3); for (let i = 0; i < n; i++) if (idx[i]! >= 0) for (let r = 0; r < 3; r++) b[idx[i]! * 3 + r] = mask[idx[i]! * 3 + r] ? 0 : load[i]?.[r] ?? 0;
   let x0: Float64Array | undefined; if (guess) { x0 = new Float64Array(m * 3); for (let i = 0; i < n; i++) if (idx[i]! >= 0) for (let r = 0; r < 3; r++) x0[idx[i]! * 3 + r] = guess[i]?.[r] ?? 0; }
+  // Tried and measured, and not taken: a frame's own system is small while its ground is not (the 5 m tower's thirteen
+  // loose joints are 39 freedoms against 267 struts), and growing one frame asks for 32,662 solves, so factorising the
+  // matrix outright each time (as the scalar carrier above does) looked like three times less work than the fourteen
+  // passes of gradients a cold solve takes. On a frame-sized system — 27 freedoms, 113 struts, 20,000 solves — it came
+  // out at 912 ms against 761 for the gradients, for the same forces to nine figures: assembling that matrix is 36
+  // writes a strut every solve, while the gradients, warm-started from the last round's answer, take two or three
+  // passes rather than fourteen.
   const { x, converged } = pcg(apply, (r, z) => { for (let f = 0; f < m; f++) for (let a = 0; a < 3; a++) { let s = 0; for (let c = 0; c < 3; c++) s += inv[f * 9 + a * 3 + c]! * r[f * 3 + c]!; z[f * 3 + a] = s; } }, b, 1e-9, 40000, x0);
   const u: V3[] = Array.from({ length: n }, (_, i) => (idx[i]! >= 0 ? [x[idx[i]! * 3]!, x[idx[i]! * 3 + 1]!, x[idx[i]! * 3 + 2]!] : [0, 0, 0]));
-  const N = G.edges.map(([a, c], e) => k[e]! * dot(dir[e]!, sub(u[c]!, u[a]!)));
+  const N = new Array<number>(ne);
+  for (let e = 0; e < ne; e++) {
+    const [a, c] = G.edges[e]!, ua = u[a]!, uc = u[c]!;
+    N[e] = K[e]! * (D[e * 3]! * (uc[0] - ua[0]) + D[e * 3 + 1]! * (uc[1] - ua[1]) + D[e * 3 + 2]! * (uc[2] - ua[2]));
+  }
   return { u, N, converged };
 }
 

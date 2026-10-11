@@ -1596,6 +1596,25 @@ In order; each through the breakdown queue, rendered, compared with its photos a
      hands back where it ended, and its `stop` is told what each step met, so `meetPoint` follows a flight as it goes
      instead of keeping 750 points to throw 749 away.
    22 s to 4.5, and those same three cuts are what a rally in the headset pays for every frame.
+   And a fifth time round, on the next file the profile named: growing a frame. `grown.test.ts` was 33 s, and a sampled
+   profile put 60 % of it in `substrate/adapt.ts` — not in the physics at all, which is where the last two rounds would
+   have had me look. Counting said why: growing the 5 m tower asks for **32,662 truss solves**, each of a system of 39
+   freedoms (its thirteen loose joints) over a ground of up to 804 struts, and each one was making a vector for every
+   strut's direction, two arrays for every joint's own 3 × 3 inverse, and a fresh list of its held freedoms. The
+   directions, stiffnesses and joint blocks are worked out in plain numbers in one pass now, and the pulls read back
+   the same way: 20,000 solves of a frame-sized system (27 freedoms, 113 struts) went from 689 ms to 277 (2.5 ×), and
+   every number of four grown frames — the wall bracket, the 10 m tower, the bird-watching tower and the microscope arm
+   — came back identical to the last bit (the dump that the car refactor's own rule asks for).
+   One thing measured and *not* taken, which is worth as much: the system is small while its ground is not, so
+   factorising it outright each solve — the rule the scalar carrier in the same file already follows — should have beaten
+   the fourteen passes of conjugate gradients a cold solve takes. On the frame-sized case it came out 912 ms against
+   761, for the same forces to nine figures, because assembling that matrix is 36 writes a strut while the gradients,
+   warm-started from the last round's answer, take two or three passes and not fourteen. That is written at the line in
+   the file where the code would have gone, so the next round does not try it again. (The Cholesky does say now whether
+   it factorised at all, so the scalar carrier no longer reports a singular network as converged.)
+   On the wall clock those four frames went 29.0 s to 22.9, but a rerun of the same tree gave 27.4: ±20 % on this host
+   with three agents working on it. The 20,000-solve bench is the number to trust, which is why it is the one written
+   down.
    Next: the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).
