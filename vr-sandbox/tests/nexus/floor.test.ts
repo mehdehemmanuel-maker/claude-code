@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { footprint, layWorks } from '../../src/nexus/works/floor';
 import { under3K } from '../../src/nexus/works/budget';
 import { stationById, STATIONS } from '../../src/nexus/works/stations';
+import type { Stood } from '../../src/nexus/works/floor';
+import { COMPOSED, stationCard } from '../../src/nexus/view/works-room';
+import { composeMachine } from '../../src/nexus/ask/machine';
 
 describe('the works on the floor', () => {
   it('every station stands on its own floor area, wider than deep and never a corridor', () => {
@@ -57,5 +60,32 @@ describe('the works on the floor', () => {
     expect(tight.faults.some((x) => /surface plate/.test(x)), tight.faults.join(' | ') || 'no faults').toBe(true);
     // and it does not fire in the works as laid out, because the wall rule has already separated them
     expect(layWorks(under3K().ids).faults).toEqual([]);
+  });
+});
+
+describe('what the room stands, and what it admits it has not got', () => {
+  // (the room said "1 of them is drawn… the rest stand as a stand-in" while four were real. A sentence that goes stale
+  //  the moment the room gets better at its job has to be derived from what is standing, and a card that says "not
+  //  drawn yet" over a composed machine is the same fault one level down.)
+  it('each card says which of the three it is, and never the wrong one', () => {
+    const s: Stood = { id: 'cnc-benchtop', name: 'a benchtop CNC', at: [1, 1], size: [1.4, 1.4], h: 1.35, wall: false, needs: ['power'], row: 0 };
+    expect(stationCard(s, 'model').join(' ')).not.toMatch(/not drawn yet|composed here/);
+    expect(stationCard(s, 'composed').join(' ')).toMatch(/composed here out of library parts/);
+    expect(stationCard(s, 'composed').join(' ')).not.toMatch(/not drawn yet/);
+    expect(stationCard(s, 'stand-in').join(' ')).toMatch(/not drawn yet/);
+  });
+  it('every station the room composes really composes, with no part the library cannot draw', () => {
+    for (const [id, words] of Object.entries(COMPOSED)) {
+      const m = composeMachine(words);
+      expect(m.gaps, `${id}: ${words}`).toEqual([]);
+      expect(m.stages.length, id).toBeGreaterThan(2);
+    }
+  });
+  it('a composed station is sized from that station\'s own envelope, not from a guess', () => {
+    for (const [id, words] of Object.entries(COMPOSED)) {
+      const st = stationById(id), m = composeMachine(words);
+      if (!st.envelope) continue;
+      expect(m.reach[0], id).toBe(st.envelope[0]);
+    }
   });
 });

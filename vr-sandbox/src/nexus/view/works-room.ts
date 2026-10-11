@@ -16,12 +16,26 @@ import { stationById } from '../works/stations';
 import { linkFor } from '../machines/link';
 import { processById } from '../works/families';
 import { card, label } from './holo';
-import { component } from '../parts/components';
+import { component, use } from '../parts/components';
+import { composeMachine, machinePart } from '../ask/machine';
+import type { Part } from '../parts/kits';
 import { kitView, type KitView } from './kit3d';
 import { worksUnder } from '../works/budget';
 
 /** The machines the library draws whole, by station: the station *is* that machine, not a stand-in for it. */
 const DRAWN: Record<string, string> = { 'printer-fff': 'printer3d Ender-3' };
+
+/** Stations the library has no kind for but the *inventor* can compose out of parts it does draw
+ *  (src/nexus/ask/machine.ts), each at that station's own envelope from `works/stations.ts`. This is the answer to
+ *  "why does everything look bogus": a benchtop CNC is three slides and a spindle, and the composer already makes
+ *  exactly that, so the room draws it rather than drawing a box in its shape. Where no composition is honest — a
+ *  resin printer is a vat and a lift, not a gantry; a forge is a lined tube — the station stays a stand-in and its
+ *  card says so, because a wrong machine is worse than an admitted placeholder. */
+export const COMPOSED: Record<string, string> = {
+  'cnc-benchtop': 'a machine that cuts 300x180x45',
+  'lathe-mini': 'a turning machine that cuts 250x90x90',
+  wheel: 'a turning machine that turns 350x350x400',
+};
 
 export interface WorksRoom {
   group: THREE.Group; floor: Floor;
@@ -108,7 +122,7 @@ function standIn(s: Stood): THREE.Group {
 }
 
 /** What a station's card says: what it does, what it cost and how, what it draws, and how a program reaches it. */
-export function stationCard(s: Stood, drawn: boolean): string[] {
+export function stationCard(s: Stood, drawn: 'model' | 'composed' | 'stand-in'): string[] {
   const st = stationById(s.id);
   const does = st.does.map((d) => processById(d).name ?? d);
   const link = linkFor(s.id);
@@ -118,7 +132,7 @@ export function stationCard(s: Stood, drawn: boolean): string[] {
     does.length ? short(does.join(', ')) : short(st.why),
     `${s.size[0]} × ${s.size[1]} m${st.kw ? `, ${st.kw} kW` : ''}${st.needs.length ? `, needs ${st.needs.join(', ')}` : ''}`,
     link && link.transport !== 'hand' ? `a program can be sent: ${link.transport}` : 'no port: its program is steps with a check at each one',
-    drawn ? '' : 'not drawn yet: it stands as its own floor area',
+    { model: '', composed: 'composed here out of library parts, not a model of a named machine', 'stand-in': 'not drawn yet: it stands as its own floor area' }[drawn],
   ].filter(Boolean);
 }
 
@@ -167,12 +181,21 @@ export function worksRoom(ids: string[], o: { width?: number } = {}): WorksRoom 
 
     const drawnAs = DRAWN[s.id], got = drawnAs ? component(drawnAs) : null;
     const comp = got && typeof got !== 'string' ? got : null;
-    drawn[s.id] = comp ? `drawn: ${comp.part.name}` : drawnAs ? `box: ${typeof got === 'string' ? got : 'no component'}` : 'box: the library does not draw this kind yet';
-    if (comp) {
-      const v = kitView(comp.part); views.push(v);
-      // the library draws in millimetres about the part's own origin; the room is metres, and the machine stands on
-      // the floor whatever its model's origin is, so its own box is what puts its feet down
-      v.group.scale.setScalar(0.001);
+    // a station with no kind but an honest composition: the inventor builds it out of parts the library does draw
+    let made: Part | null = null;
+    if (!comp && COMPOSED[s.id]) {
+      try { const m = composeMachine(COMPOSED[s.id]!); made = machinePart(m, (w) => use(w)); } catch { made = null; }
+    }
+    drawn[s.id] = comp ? `drawn: ${comp.part.name}`
+      : made ? `composed: ${made.name} — not a model of a named machine, but every part of it real (src/nexus/ask/machine.ts)`
+        : drawnAs ? `box: ${typeof got === 'string' ? got : 'no component'}` : 'box: the library does not draw this kind yet';
+    if (comp || made) {
+      const v = kitView(comp ? comp.part : made!); views.push(v);
+      // a maker's model is measured in millimetres and a composed machine is laid out in metres, so the one rule that
+      // is right for both is to ask the drawing how big it came out: nothing in a workshop is 20 m across, so a box
+      // that says it is was drawn in millimetres
+      const raw = new THREE.Box3().setFromObject(v.group), span = Math.max(...raw.getSize(new THREE.Vector3()).toArray());
+      v.group.scale.setScalar(span > 20 ? 0.001 : 1);
       const box = new THREE.Box3().setFromObject(v.group);
       v.group.position.set(-(box.min.x + box.max.x) / 2, 0.012 - box.min.y, -(box.min.z + box.max.z) / 2);
       v.group.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -184,7 +207,7 @@ export function worksRoom(ids: string[], o: { width?: number } = {}): WorksRoom 
     }
 
     const c = card(CARD_W, CARD_H);
-    const lines = stationCard(s, !!comp);
+    const lines = stationCard(s, comp ? 'model' : made ? 'composed' : 'stand-in');
     c.draw(lines[0]!, lines.slice(1).map((text) => ({ text })), s.wall ? "#c08a4a" : "#4dd0e1");
     c.mesh.position.set(0, s.h + 0.55, 0); c.mesh.userData['faces'] = true; stand.add(c.mesh);
     group.add(stand); by.set(s.id, stand);
@@ -261,6 +284,10 @@ export function worksRoomWords(text: string, r: RoomHandles): string | null {
   r.camera.position.set(WORKS_AT[0] + W * 0.22, 2.4, WORKS_AT[1] + D - 0.9);
   r.orbit.update();
   if (r.xr()) { r.dolly.position.set(WORKS_AT[0], 0, WORKS_AT[1] + D + 1.2); r.dolly.rotation.set(0, Math.PI, 0); }
-  const drawn = Object.values(standing.drawn).filter((x) => x.startsWith('drawn')).length;
-  return `${standing.floor.says} Walk into it: the ones in brown are against the outside wall because they burn or fume. ${drawn} of them is drawn as the machine it is (the Ender-3); the rest stand as a stand-in at their own size, and each card says so — a stand-in labelled as one is honest, and a box pretending to be a lathe is not.`;
+  // what is really standing: a maker's own model, a machine composed out of library parts, or an admitted stand-in.
+  // (this counted only the models and said "1 of them is drawn, the rest stand as a stand-in" while four were real:
+  //  a sentence that goes stale the moment the room gets better at its job has to be derived, not written)
+  const kinds = Object.values(standing.drawn);
+  const modelled = kinds.filter((x) => x.startsWith('drawn')).length, built = kinds.filter((x) => x.startsWith('composed')).length;
+  return `${standing.floor.says} Walk into it: the ones in brown are against the outside wall because they burn or fume. ${modelled} ${modelled === 1 ? 'is' : 'are'} drawn from a maker's own model${built ? `, ${built} ${built === 1 ? 'is' : 'are'} composed out of library parts by the inventor (a benchtop CNC is three slides and a spindle, so it is built rather than boxed)` : ''}, and the other ${kinds.length - modelled - built} stand as a stand-in at their own size. Each card says which it is: a stand-in labelled as one is honest, and a box pretending to be a lathe is not.`;
 }

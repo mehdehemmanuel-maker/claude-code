@@ -1195,10 +1195,24 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    (`showPart` now takes `apart`), and the room's own "9,403 g drawn" sat next to a composed 10.92 kg — not a bug but
    two numbers disagreeing on one screen, so it now says which is which and names the bought lines that have a
    listing's mass and no drawing.
-   Next: the room drawing every station from the library rather than as a stand-in (the Ender-3 is wired; the rest want
-   their kinds, and the inventor's units are now the vocabulary to build them from), an invented machine stood in the
-   room and judged blind, prices for the lines that still have none, working the three ratchets down by cause, and the
-   older Now items (robot benches, likeness, life graph).
+   Then the room stopped being bogus (2026-10-11, the same round), which is where this all started. A benchtop CNC
+   *is* three slides and a spindle, and a mini lathe *is* a turning table with a tool brought in on a slide, and the
+   inventor already makes exactly those. So `view/works-room.ts` has a `COMPOSED` map beside its `DRAWN` one: a
+   station with no kind in the library is composed out of parts the library does draw, at that station's own envelope
+   from `works/stations.ts`. The works room now stands 1 machine from a maker's own model (the Ender-3), 3 composed,
+   and 12 stand-ins — and where no composition is honest (a resin printer is a vat and a lift, not a gantry; a forge
+   is a lined tube) the station stays a stand-in, because a wrong machine is worse than an admitted placeholder.
+   One rule covers both sources: a maker's model is measured in millimetres and a composed machine is laid out in
+   metres, so the room asks the drawing how big it came out — nothing in a workshop is 20 m across, so a box that
+   says it is was drawn in millimetres.
+   Two faults from looking at it, and they are the same fault twice: the room *said* "1 of them is drawn as the
+   machine it is; the rest stand as a stand-in" while four were real, and each composed station's card still read
+   "not drawn yet". A sentence that goes stale the moment the room gets better at its job has to be derived from what
+   is standing, so both now are, and a test asserts the counts in the sentence are the counts of what stands.
+   Next: the rest of the stations (a forge is a lined tube on a stand, a brake is two lengths of angle on a hinge:
+   each is a small builder of its own), the room's light and its bare walls, a blind judge on the works as it now
+   stands, prices for the lines that still have none, working the three ratchets down by cause, and the older Now
+   items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);
