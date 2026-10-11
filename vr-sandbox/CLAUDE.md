@@ -1483,6 +1483,31 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    its own, down to what it is made of, which is the viewer's own explode doing what it has always done. Until this
    the room's stations were the one thing in the app you could walk up to and not open. A stand-in says so rather
    than opening into nothing.
+   And the round the user asked for next was speed: *"keep going increase efficency"*. Measured first: the whole gate is
+   171 files, 731 s of test time over 233 s of wall clock on four cores, and its longest single file was `conceive.test.ts`
+   at 93 s. Of that file's 87 s, 69 were inside `simulate` and all but 1 s of those inside `jolt.Step` — 335 µs for every
+   1/960 s of a six-body design, where the same scene built straight onto Jolt costs 12. Cutting the collision sub-steps
+   from four to one moved it by 7 % (35.5 s to 33.1), which is what named the cause: not collision work, which sub-steps
+   divide, but the island's solver, which they do not. Every joint set `mNumVelocityStepsOverride = 120` and
+   `mNumPositionStepsOverride = 40`, and Jolt takes the *maximum* over an island, so one hinge made every body and every
+   contact touching it solve ten times the iterations — a rule written for one real fault (a light part held to a heavy
+   one by its hinge alone giving under the load) and charged to every design in the app.
+   So the thing to measure was what those steps buy. A loaded deck carried by four light wheels, each held by its hinge
+   alone, settles into them by 0.001 mm at a mass ratio of 20:1, 0.028 mm at 100:1 and 0.183 mm at 800:1 with twelve
+   velocity steps — every one of them inside the half millimetre a *contact* is already allowed — while 120/40 bought a
+   tenth of that for four to eight times the run. A joint's steps now follow the mass ratio it holds across (12 and 4 for
+   each 100:1, capped at the old 120/40), and a joint onto a fixed part of the build counts as 1:1, because an immovable
+   anchor is the well-conditioned case, not the hard one. The deck is a test now (`joints.test.ts`), written against the
+   requirement (the hinge holds its line to a tenth of a millimetre) rather than against the step count, so the number is
+   free to change and the fault it was there for cannot come back. `conceive.test.ts` is 31 s from 86, `wave6` 9 s from
+   27, and the gate is green on all 171 files and 2,021 tests.
+   Two other suspects were measured and are innocent, so neither is worth touching: the engine's own build (the
+   single-file `wasm-compat` against the separate-wasm `wasm`: 383 ms against 377 on the same scene) and continuous
+   collision (`EMotionQuality_LinearCast`, free to within the noise). The gate's wall clock only fell from 233 s to 228,
+   because with four cores it is no longer limited by its total work (now near 160 s of core time) but by its tail: the
+   two sweeps, every kit at three seeds (77 s) and every kit through the make pipeline (56 s), are each one `it` that
+   cannot be split across workers. Sharding those two by kit is the next cut, and worth it only once something else is
+   not cheaper.
    Next: a vice on the bench, the remaining stand-ins (welder, MSLA printer, safety — each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).
@@ -1495,8 +1520,9 @@ the user can widen it under the environment's Network access.
 
 - Gate: `npm run gate` (long; run it in the background and log to a file). Build the viewer:
   `npx vite build --config vite.view.config.ts --logLevel error`.
-- The gate is 228 s, and two sweeps are half of it: every kit at three seeds (`tests/nexus/kits-every.test.ts`, 64 s)
-  and every kit through the make pipeline (`tests/nexus/make-every.test.ts`, 42 s). They are in files of their own
+- The gate is 228 s, and with four cores it is its tail, not its total, that sets that: the two sweeps, every kit at
+  three seeds (`tests/nexus/kits-every.test.ts`, 77 s) and every kit through the make pipeline
+  (`tests/nexus/make-every.test.ts`, 56 s), are each one `it`, so neither can be split across workers. They are in files of their own
   because vitest runs files in parallel and a file's own tests in order: together in one file they cost the wall clock
   106 s, apart they cost 64. Keep them apart, and put a new long sweep in its own file for the same reason.
 - `npm run tidy` is the half-second part of the gate that checks the tree's own shape, and it is the thing to run

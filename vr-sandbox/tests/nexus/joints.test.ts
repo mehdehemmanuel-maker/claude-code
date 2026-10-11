@@ -38,6 +38,16 @@ describe('hinges: where they touch, and they swing as a pendulum does', () => {
     const far = room(); far.run('place plate named flap at 0, 0.1 m, 60 mm size 200 x 80 x 10 mm');
     expect(() => far.run('hinge flap to rail')).toThrow(/do not touch \(10 mm apart\): a hinge connects only what touches/);
   });
+  it('a loaded deck carried by four light wheels, each held by its hinge alone, does not settle into them', () => {
+    // what the solver steps on a joint are for: 600 kg of deck on 11 kg wheels, the hinges carrying all of it
+    const w = room(); w.run('place plate named deck at 0, 350 mm, 0 size 1100 x 700 x 100 mm');
+    const corners: [string, number, number][] = [['wa', -400, -250], ['wb', 400, -250], ['wc', -400, 250], ['wd', 400, 250]];
+    for (const [n, x, z] of corners) { w.run(`place disc named ${n} at ${x} mm, 150 mm, ${z} mm size 300 x 20 mm along z`); w.run(`hinge ${n} to deck`); }
+    w.run('simulate 2 s');
+    // the hinge holds where it was made, the top of each wheel: the deck sits on that line, not in it
+    for (const [n] of corners) expect(Math.abs(w.value('deck.bottom') - w.value(`${n}.top`))).toBeLessThan(1e-4);
+    expect(w.value('deck.y')).toBeGreaterThan(0.349);
+  });
   it('a wheel that goes into the base of the piece it would turn on is refused: a hinge lets the two pass through each other', () => {
     const w = room(); w.run('place plate named base at 2 m, 0.05 m, 0 size 400 x 400 x 100 mm'); w.run('place motor named m on base'); w.run('join m and base as stand');
     w.run('place disc named wheel right of m by 0 size 100 x 10 mm along x');
