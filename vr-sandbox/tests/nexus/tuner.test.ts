@@ -4,8 +4,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { CONST } from '../../src/nexus/book/constants';
-import { ofLeaf } from '../../src/nexus/substrate/evaluate';
-import { leaf } from '../../src/nexus/substrate/term';
+import { ofLeaf } from '../../src/nexus/lang/evaluate';
+import { leaf } from '../../src/nexus/lang/term';
 import { axes, ladder, reach, regimeAt, universe, type Q } from '../../src/nexus/substrate/tuner';
 
 const eV = 1.602176634e-19;

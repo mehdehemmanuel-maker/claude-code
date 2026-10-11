@@ -6,7 +6,7 @@
 // is an estimate with its grounds.
 
 import type { Intent, Region, Want } from './want';
-import { leaf, type Leaf } from '../substrate/term';
+import { leaf, type Leaf } from '../lang/term';
 
 const person = 'the person';
 const given = (name: string, v: number, unit: string, grounds: string): Leaf => leaf(name, v, unit, { class: 'given', by: person, grounds });

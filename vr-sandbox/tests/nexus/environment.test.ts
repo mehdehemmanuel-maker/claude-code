@@ -5,9 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
 import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type Slice } from '../../src/nexus/substrate/beam';
-import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { ofLeaf } from '../../src/nexus/lang/evaluate';
 import { flatGround, groundField, type Ground, type Frame } from '../../src/nexus/substrate/field';
-import { add, and, ge, le, leaf, mul, sub } from '../../src/nexus/substrate/term';
+import { add, and, ge, le, leaf, mul, sub } from '../../src/nexus/lang/term';
 import { cites, leavesUnder } from '../../src/nexus/substrate/why';
 
 const by = 'the person';

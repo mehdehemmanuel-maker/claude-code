@@ -7,7 +7,7 @@
 // want true is for the language to derive.
 
 import type { Field } from '../substrate/domain';
-import type { Leaf } from '../substrate/term';
+import type { Leaf } from '../lang/term';
 
 export interface Region {
   id: string;

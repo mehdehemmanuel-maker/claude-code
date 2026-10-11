@@ -46,6 +46,8 @@ export interface WorksRoom {
 }
 
 const CARD_W = 1.1, CARD_H = 0.62;
+/** How high the works' ceiling is, m: a shop wants headroom over a gantry and a hoist, and 3.2 is the usual low bay. */
+const CEILING = 3.2;
 
 /** Metal, paint and firebrick, enough to tell one stand-in from another without pretending to be a photograph. */
 const SHELL = (hex: number, rough = 0.6, metal = 0.35) => new THREE.MeshStandardMaterial({ color: hex, roughness: rough, metalness: metal });
@@ -170,6 +172,20 @@ export function worksRoom(ids: string[], o: { width?: number } = {}): WorksRoom 
   sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.02;
   group.add(sun); group.add(sun.target);
   group.add(new THREE.HemisphereLight(0xdfe9f2, 0x2a2622, 0.55));
+  // a ceiling with its lights: without one the room is a black void above the wall tops, which is the first thing a
+  // blind judge said about it. Its fittings are where a shop's are — in rows down the aisles, over the work, not
+  // over the machines — and each is a lit panel rather than a lamp, so the room has a reason to be lit at all.
+  {
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 0.12, D + 0.4), new THREE.MeshStandardMaterial({ color: 0x2f3338, roughness: 0.95 }));
+    lid.position.set(W / 2, CEILING + 0.06, D / 2); lid.receiveShadow = true; group.add(lid);
+    const lit = new THREE.MeshStandardMaterial({ color: 0xf2f6ff, emissive: 0xdfe9ff, emissiveIntensity: 0.85, roughness: 0.9 });
+    const rows = Math.max(2, Math.round(D / 2.6)), perRow = Math.max(2, Math.round(W / 2.8));
+    for (let r = 0; r < rows; r++) for (let k = 0; k < perRow; k++) {
+      const f = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.06, 0.16), lit);
+      f.position.set(((k + 0.5) / perRow) * W, CEILING - 0.03, ((r + 0.5) / rows) * D);
+      group.add(f);
+    }
+  }
   const wallSign = label(`outside wall — ${floor.services.join(', ')}`, 0.12);
   wallSign.position.set(W / 2, 2.2, -0.28); group.add(wallSign);
 

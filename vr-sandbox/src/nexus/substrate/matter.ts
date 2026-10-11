@@ -7,7 +7,7 @@
 // the knowledge, not in the language, and is reported as such.
 
 import { MATERIALS } from '../../data/materials';
-import { leaf, type Leaf } from './term';
+import { leaf, type Leaf } from '../lang/term';
 import type { MatterRole, Region } from '../ask/want';
 
 export interface Property { carrier: string; role: MatterRole; leaf: Leaf }

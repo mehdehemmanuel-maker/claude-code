@@ -7,12 +7,12 @@
 // support cell, uncertain by its variation across the cell, and refused when the resolution lies outside the
 // field's scale bands.
 
-import { evaluate, ofLeaf, withUncertainty, type Derivation, type Env } from './evaluate';
+import { evaluate, ofLeaf, withUncertainty, type Derivation, type Env } from '../lang/evaluate';
 import type { Frame } from './field';
-import { hashOf } from './identity';
-import type { Law } from './law';
-import { add, and, div, ge, k, le, mul, neg, substitute, unknown, variable, varsOf, type Term, type Var } from './term';
-import { sameDim } from './dimension';
+import { hashOf } from '../lang/identity';
+import type { Law } from '../lang/law';
+import { add, and, div, ge, k, le, mul, neg, substitute, unknown, variable, varsOf, type Term, type Var } from '../lang/term';
+import { sameDim } from '../lang/dimension';
 
 export interface Interval { lo: Derivation; hi: Derivation }
 

@@ -14,8 +14,8 @@
 
 import { WEIGHT } from '../book';
 import { address, type Address, type Contribution } from './journal';
-import { abs, add, div, k, mul, pow, sub, variable, type Leaf, type Term } from './term';
-import { hashOf } from './identity';
+import { abs, add, div, k, mul, pow, sub, variable, type Leaf, type Term } from '../lang/term';
+import { hashOf } from '../lang/identity';
 
 /** The domain's own quantities: gravity's magnitude and its direction, a unit vector in the domain's coordinates. */
 export const DOMAIN = 'the domain';

@@ -241,13 +241,14 @@ Known gaps (from the 2026-10-08 audit, still open):
 
 ## Where the code lives
 
-`src/nexus/` is fifteen directories and two files, not 183 files. Each directory's boundary is one sentence; if a new
+`src/nexus/` is sixteen directories and two files, not 183 files. Each directory's boundary is one sentence; if a new
 file does not clearly belong to one, that is the signal that its concern is not understood yet, not that it belongs at
 the root.
 
 | Directory | What is in it |
 | --- | --- |
-| `substrate/` | the Nexus engine: terms, domains, laws, places, couplings, and the loop that evolves them |
+| `lang/` | the vocabulary both the law book and the engine speak, and nothing else: a dimension, an identity, a status, a `Term` and the arithmetic over it, `evaluate`, and a `Law`. It imports nothing in `src/nexus`, which is the point — it used to live in `substrate/`, so the book reached *up* into the engine 21 times to write a law in the only words there are for one |
+| `substrate/` | the Nexus engine: domains, places, couplings, and the loop that evolves them, over `lang/`'s terms and laws |
 | `ask/` | words in, wants out: how an ask becomes something to make (`conceive`, `route`, `generate`, `invent` for flows, `machine` for mechanisms, `spec`) |
 | `parts/` | the parts library and the geometry a part is made of: every part designed once from its standard, the shapes it is drawn from (lofts, bent tubes, turned profiles, NURBS surfaces), where its pieces end up in space and which of them touch, its mass and what it costs |
 | `boards/` | single-board computers, their parts, and the photo-measured data files |
@@ -1209,6 +1210,28 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    machine it is; the rest stand as a stand-in" while four were real, and each composed station's card still read
    "not drawn yet". A sentence that goes stale the moment the room gets better at its job has to be derived from what
    is standing, so both now are, and a test asserts the counts in the sentence are the counts of what stands.
+   Judged blind (2026-10-11), and it is the worst score anything here has had: **1/10**, read as "a low-poly floor-plan
+   mock-up — a space-planning visualisation, not an attempt at a real workshop", with under 10 % confidence it could
+   name any individual machine from its geometry. Three of its findings were real and are fixed at the cause.
+   The first is the one it led with, and it was not a rendering taste: *"not one bench leg casts a shadow on the floor,
+   so the whole room reads as hovering."* Every light in the works sets `castShadow` and every mesh in it sets
+   `castShadow`/`receiveShadow`, and none of it did anything — because `view/forge.ts` never switched the renderer's
+   shadow map on at all. One line, and sixteen stations are planted on the floor. (Soft PCF: a shop is lit by a
+   ceiling of diffuse fittings, not a point source.)
+   The second: *"no ceiling — above the wall tops is pure black void."* True, and worse than it sounds, because the
+   room was lit by nothing you could see. It has a ceiling now, with its fittings in rows down the aisles where a
+   shop's are, each a lit panel rather than a lamp, so the light has a reason.
+   The third was my own bug and the judge found it without knowing the code: *"the benchtop CNC is a spidery frame of
+   members at the wrong scale, half of it hanging off the bench with its uprights terminating in empty space."* A
+   prism — every length of extrusion, angle and bar the library draws — runs along **z** with its section in x-y
+   (`parts/kits.ts` says so in its own type), and `layUnit` had laid every beam as though it ran along x. So a frame
+   came out as twelve beams all lying the same way. There are exactly three ways to point one and they are now named
+   constants in that file.
+   Still open from that judge, and all fair: the walls are bare taupe with no outlets, conduit, isolators, extraction
+   duct or compressed-air line, on a wall the room itself labels "outside wall — power, extraction"; no door; no
+   stools, stock racks, chip bins or swarf; every material is one flat colour with the same shader, so steel, cast
+   iron, MDF and clay look alike; no chamfer on any slab edge; the floor markings are zero-thickness decals that clip
+   their benches; and the twelve stand-ins are still interchangeable grey boxes that only their cards tell apart.
    Next: the rest of the stations (a forge is a lined tube on a stand, a brake is two lengths of angle on a hinge:
    each is a small builder of its own), the room's light and its bare walls, a blind judge on the works as it now
    stands, prices for the lines that still have none, working the three ratchets down by cause, and the older Now

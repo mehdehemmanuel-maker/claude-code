@@ -2,9 +2,9 @@
 // force and a boundary height; its placement equation is the coupling's solution, so a coordinate is a derivation
 // and never a number written by hand. The ledger is the conservation check across the couplings.
 
-import { evaluate, type Derivation } from './evaluate';
+import { evaluate, type Derivation } from '../lang/evaluate';
 import type { Frame } from './field';
-import { add, div, k, min, sub, variable, type Term } from './term';
+import { add, div, k, min, sub, variable, type Term } from '../lang/term';
 
 /** A rectangular body in the semantics: its extents and its material leaves; its centre once placed. */
 export interface Prism {

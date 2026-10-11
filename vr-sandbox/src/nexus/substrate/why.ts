@@ -2,8 +2,8 @@
 // origin, or the walk throws. IMPACT finds every record that rests on a hash (a law, a leaf, a record). A changed
 // law marks exactly the records that cite it, transitively.
 
-import type { Derivation } from './evaluate';
-import { leavesOf, type Leaf } from './term';
+import type { Derivation } from '../lang/evaluate';
+import { leavesOf, type Leaf } from '../lang/term';
 
 export interface WhyNode {
   name: string;

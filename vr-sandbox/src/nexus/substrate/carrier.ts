@@ -8,9 +8,9 @@
 // flux in proportion to the potential difference across it, a region stores content in proportion to its
 // potential, and where potential times flux is power, power, dissipation and stored energy follow by the binder.
 
-import { dimOf, dimText, divDim, mulDim, sameDim, type Dim } from './dimension';
-import { law, type Law } from './law';
-import { cells, div, integral, k, mul, pow, variable } from './term';
+import { dimOf, dimText, divDim, mulDim, sameDim, type Dim } from '../lang/dimension';
+import { law, type Law } from '../lang/law';
+import { cells, div, integral, k, mul, pow, variable } from '../lang/term';
 import { CONST } from '../book/constants';
 
 export interface Carrier {

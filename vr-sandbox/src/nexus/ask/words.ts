@@ -9,7 +9,7 @@
 import { DIMS, findQuantities, sameDim, type Dim, type Said } from '../../ganglia/units';
 import { car, house, printer } from './asked';
 import { specOf, type AskSpec } from './spec';
-import { leaf, type Leaf } from '../substrate/term';
+import { leaf, type Leaf } from '../lang/term';
 import { vehicle, type Medium, type Source } from '../machines/vehicle';
 import type { Intent } from './want';
 

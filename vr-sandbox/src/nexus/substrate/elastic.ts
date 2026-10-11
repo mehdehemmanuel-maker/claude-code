@@ -4,9 +4,9 @@
 // It observes the sag the rigid-body kernel cannot; it does not realize contact, settling or fracture, and says so.
 
 import { resolution, type Resolution } from './domain';
-import { evaluate, measurement, ofLeaf, type Derivation, type Window } from './evaluate';
+import { evaluate, measurement, ofLeaf, type Derivation, type Window } from '../lang/evaluate';
 import type { Frame } from './field';
-import { div, leaf, variable, type Leaf } from './term';
+import { div, leaf, variable, type Leaf } from '../lang/term';
 
 export interface ElasticContract {
   name: string;

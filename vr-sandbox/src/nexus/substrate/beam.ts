@@ -9,16 +9,16 @@ import { materialLeaves, type MaterialLeaves } from '../parts/stock';
 import { BENDING_STRESS, EXTENT_FROM_MASS, FIRST_PERIOD, LINE_WEIGHT, NDS, PATCH_MOMENT, PATCH_SAG, RECT_AREA, RECT_I, RECT_MODULUS, SELF_MOMENT, SELF_SAG, TWO_SUPPORTS, WEIGHT } from '../book';
 import { coarse, coverage, domain, field, type Field } from './domain';
 import { coordinate, ledger, postTo, restOn, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
 import { declareFrame, flatGround, gravity, observer, rigidDomain, type Frame, type Ground, type Observer, type RigidDomain } from './field';
-import { apply, law, type Law } from './law';
+import { apply, law, type Law } from '../lang/law';
 import { compare, type Comparison } from './observe';
 import { Journal } from './journal';
 import { realizeRigid, rigidContract, type Jolt, type Realization, type RigidContract } from './realize';
 import { elasticContract, realizeElastic, type ElasticRealization } from './elastic';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';
 import { Language, type Judgement } from './abduce';
-import { abs, add, div, ge, k, le, leaf, min, mul, neg, variable, type Leaf } from './term';
+import { abs, add, div, ge, k, le, leaf, min, mul, neg, variable, type Leaf } from '../lang/term';
 
 export interface BeamIntent {
   by: string;

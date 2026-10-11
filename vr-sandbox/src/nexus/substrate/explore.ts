@@ -8,10 +8,10 @@
 
 import { candidates, promote, validate, type Language, type Observation, type Relation } from './abduce';
 import type { Point } from './domain';
-import type { Law } from './law';
+import type { Law } from '../lang/law';
 import { choose } from './study';
 import { derive, type Derived, type Space } from './space';
-import type { Derivation } from './evaluate';
+import type { Derivation } from '../lang/evaluate';
 
 export interface Round {
   derived: Derived;

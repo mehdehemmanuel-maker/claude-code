@@ -8,8 +8,8 @@
 
 import { INVENTORY, countIn, gramsOfItem } from '../parts/inventory';
 import { estimate, fixed, measured, setting, solve, step, valueIn } from '../substrate/lawgraph';
-import { ofLeaf, type Derivation } from '../substrate/evaluate';
-import { leaf } from '../substrate/term';
+import { ofLeaf, type Derivation } from '../lang/evaluate';
+import { leaf } from '../lang/term';
 import { LIFESPAN, wattsOf } from './time';
 
 /** A count or mass read off the body's tree, as a record: where it is from is the tree. */

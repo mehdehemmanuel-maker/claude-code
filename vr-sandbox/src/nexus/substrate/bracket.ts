@@ -9,16 +9,16 @@ import { BENDING_STRESS, CANTILEVER_MOMENT, CANTILEVER_SHEAR, CANTILEVER_TIP_SAG
 import { admitBy, leastMaterial, lumberCatalogue, materialLeaves, type MaterialLeaves } from './beam';
 import { Language, type Judgement } from './abduce';
 import { coordinate, ledger, restOn, restStability, standOn, topOf, type Prism, type RestCoupling, type RestStability } from './coupling';
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
 import { declareFrame, flatGround, gravity, observer, type Frame, type Ground, type Observer } from './field';
-import { apply, law, type Law } from './law';
+import { apply, law, type Law } from '../lang/law';
 import { compare, type Comparison } from './observe';
 import { Journal } from './journal';
 import { realizeBracket, type JointRealization, type JointSpec } from './realize-joint';
 import { rigidContract, type Jolt, type RigidContract } from './realize';
 import { elasticContract, realizeCantilever, type CantileverRealization } from './elastic';
 import { search, solve, type Choice, type Option, type Solution, type System } from './solve';
-import { add, div, intentLeaf, k, le, leaf, max, min, mul, neg, sub, variable, type Leaf } from './term';
+import { add, div, intentLeaf, k, le, leaf, max, min, mul, neg, sub, variable, type Leaf } from '../lang/term';
 
 export interface BracketIntent {
   by: string;

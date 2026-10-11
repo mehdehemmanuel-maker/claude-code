@@ -5,14 +5,14 @@
 // angle, the mass, gravity and the pivot distance.
 
 import { candidates, discriminates, observation, promote, validate, Language, type Candidate, type Observation, type Relation } from './abduce';
-import { evaluate, measurement, ofLeaf, type Derivation } from './evaluate';
+import { evaluate, measurement, ofLeaf, type Derivation } from '../lang/evaluate';
 import { anomalyOf, type Failure } from './failure';
 import type { Jolt } from './realize';
 import { choose } from './study';
 import { barOnHinge, swingIntent, swingMaterial, type SwingIntent, type SwingSlice } from './swing';
 import { tune, type Tuning } from './tune';
 import { MAX_SUBSTEPS } from '../../physics/world';
-import { k, leaf, type Leaf } from './term';
+import { k, leaf, type Leaf } from '../lang/term';
 import { TICK } from '../../physics/protocol';
 
 export interface SwingCase { release: number; friction: number; pivotFromEnd?: number }

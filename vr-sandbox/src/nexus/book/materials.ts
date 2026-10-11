@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST, est } from './constants';
-import { add, sub, mul, div, pow, sqrt, min, max, le, ge, lt, gt, and, acos, k, PI } from '../substrate/term';
+import { add, sub, mul, div, pow, sqrt, min, max, le, ge, lt, gt, and, acos, k, PI } from '../lang/term';
 
 export const MATERIALS = [
   L({

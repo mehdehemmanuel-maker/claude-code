@@ -6,9 +6,9 @@
 import { TICK } from '../../physics/protocol';
 import { STANDARD_GRAVITY } from '../../data/materials';
 import { BAR_WAVE_SPEED } from '../book';
-import { evaluate, ofLeaf, type Derivation, type Window } from './evaluate';
-import { apply } from './law';
-import { div, le, leaf, variable, type Term, type Var } from './term';
+import { evaluate, ofLeaf, type Derivation, type Window } from '../lang/evaluate';
+import { apply } from '../lang/law';
+import { div, le, leaf, variable, type Term, type Var } from '../lang/term';
 import { domain, field, sample, type Field } from './domain';
 
 export interface Frame {

@@ -11,9 +11,9 @@ import type { Part } from '../../doc/types';
 import { CONTACT_TOLERANCE } from '../../ganglia/tree/gate';
 import { PhysicsWorld } from '../../physics/world';
 import type { Prism } from './coupling';
-import { evaluate, measurement, ofLeaf, unobserved, type Derivation, type Window } from './evaluate';
+import { evaluate, measurement, ofLeaf, unobserved, type Derivation, type Window } from '../lang/evaluate';
 import type { Ground, Observer } from './field';
-import { add, and, div, k, leaf, mul, sub, variable, type Leaf } from './term';
+import { add, and, div, k, leaf, mul, sub, variable, type Leaf } from '../lang/term';
 import { resolution, type Resolution } from './domain';
 
 export type Jolt = Awaited<ReturnType<typeof initJolt>>;

@@ -10,7 +10,7 @@ import { lumberCatalogue } from './beam';
 import { anomalyOf, type Failure } from './failure';
 import type { Jolt } from './realize';
 import { choose } from './study';
-import { leaf } from './term';
+import { leaf } from '../lang/term';
 import type { Option } from './solve';
 
 export interface JointCase { mass: number; reach: number; bolt: string; count: number; patch?: number; across?: number; postSide?: number }

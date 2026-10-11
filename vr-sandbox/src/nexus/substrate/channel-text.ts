@@ -20,15 +20,15 @@
 //   {"why": "place/quantity"}        {"gaps": true} (or "all")        {"state": true}
 
 import { lawByHash, lawById } from '../book';
-import type { Derivation } from './evaluate';
+import type { Derivation } from '../lang/evaluate';
 import type { Contribution } from './journal';
 import { bound, instance, type Change, type Gap, type Runtime } from './runtime';
-import { leaf } from './term';
+import { leaf } from '../lang/term';
 import { GRAVITY, gravityAxis } from './place';
 import { explain } from './why';
 import { copyAt, regimeAt, type Regime } from './tuner';
 import { descend, explain as explainByDepth, heat, motion, potential, type Descent, type Explanation } from './depth';
-import { dimOf, sameDim } from './dimension';
+import { dimOf, sameDim } from '../lang/dimension';
 
 const fmt = (v: number | null) => (v === null ? '–' : Math.abs(v) >= 1e5 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(4) : String(Number(v.toPrecision(6))));
 

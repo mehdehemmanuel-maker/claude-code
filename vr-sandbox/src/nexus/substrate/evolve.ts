@@ -15,7 +15,7 @@ import type { Contribution } from './journal';
 import { GRAVITY, gravityAxis, placeAt } from './place';
 import { rigidContract, watchStill, type Jolt, type RigidContract } from './realize';
 import type { Runtime } from './runtime';
-import { leaf, type Leaf } from './term';
+import { leaf, type Leaf } from '../lang/term';
 import { contactAt } from './contact';
 
 /** What the evolver promises beyond the kernel's own contract: the surface it assumes, since the state holds none. */

@@ -3,9 +3,9 @@
 // variable free that the intent did not leave free; a measurement arrives with a dimension no variable of the
 // system carries. Each is a record with a hash, citing what it rests on, never a log line.
 
-import { dimText, sameDim } from './dimension';
-import type { Derivation } from './evaluate';
-import { hashOf } from './identity';
+import { dimText, sameDim } from '../lang/dimension';
+import type { Derivation } from '../lang/evaluate';
+import { hashOf } from '../lang/identity';
 import type { Comparison } from './observe';
 import type { Solution, System } from './solve';
 
@@ -42,5 +42,5 @@ export function unplaced(system: System, m: Derivation): Failure | null {
   return { kind: 'unplaced', says: `${system.name}: the measurement ${m.name} is ${dimText(m.dim)} and no variable of the system has that dimension`, measurement: m, cites: [m.hash], hash: hashOf({ failure: 'unplaced', measurement: m.hash, system: system.name }) };
 }
 
-import { dimOf } from './dimension';
+import { dimOf } from '../lang/dimension';
 const variableDim = (unit: string) => dimOf(unit);

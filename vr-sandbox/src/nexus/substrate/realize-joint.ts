@@ -8,10 +8,10 @@ import { axisAngle } from '../../doc/math';
 import { METRIC_COARSE } from '../../engineering/threads';
 import type { Prism } from './coupling';
 import { resolution, type Resolution } from './domain';
-import { evaluate, measurement, ofLeaf, unobserved, type Derivation, type Window } from './evaluate';
+import { evaluate, measurement, ofLeaf, unobserved, type Derivation, type Window } from '../lang/evaluate';
 import type { Ground, Observer } from './field';
 import { extentsOf, openWorld, placePrism, timeSample, watchStill, type BodyBinding, type Jolt, type RigidContract } from './realize';
-import { add, and, k, leaf, mul, sub, variable, type Leaf } from './term';
+import { add, and, k, leaf, mul, sub, variable, type Leaf } from '../lang/term';
 
 export interface JointSpec {
   /** Where the joint sits in each body's own frame: coupling solutions. */

@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
 import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type Slice } from '../../src/nexus/substrate/beam';
 import { elasticContract, realizeCantilever, realizeElastic } from '../../src/nexus/substrate/elastic';
-import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { ofLeaf } from '../../src/nexus/lang/evaluate';
 import { declareFrame } from '../../src/nexus/substrate/field';
-import { leaf } from '../../src/nexus/substrate/term';
+import { leaf } from '../../src/nexus/lang/term';
 import { leavesUnder, why } from '../../src/nexus/substrate/why';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));

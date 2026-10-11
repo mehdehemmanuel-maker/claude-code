@@ -30,7 +30,7 @@ import { carrierById, coupling, family, reaction, roleOf, type Carrier, type Rol
 import { gravity } from './field';
 import { CONST } from '../book/constants';
 import { phaseAt, vapourPressure } from './phase';
-import { dimOf, sameDim } from './dimension';
+import { dimOf, sameDim } from '../lang/dimension';
 import { regimeAt, type Regime } from './tuner';
 import { descend, heat, hottestOf, motion, potential, DEFAULT_TOLERANCE, type Descent, type GapKind, type Process } from './depth';
 import { toSI } from '../../ganglia/units';
@@ -41,8 +41,8 @@ import { barForces, carries, count, loadOn } from './network';
 import { solveFrame } from './frame';
 import { leastHeatedLength } from './transport';
 import { dressedMatters, lumberCatalogue } from '../parts/stock';
-import { ofLeaf } from './evaluate';
-import { leaf, type Leaf } from './term';
+import { ofLeaf } from '../lang/evaluate';
+import { leaf, type Leaf } from '../lang/term';
 import { regionOf, touches, type Intent, type Region, type Want } from '../ask/want';
 
 export type Kind = 'boundary' | 'path' | 'store' | 'conversion' | 'region' | 'observer' | 'modulation' | 'contact' | 'bound';

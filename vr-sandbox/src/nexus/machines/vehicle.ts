@@ -4,7 +4,7 @@
 // thresholds, its density and viscosity), never by a kind of vehicle.
 
 import type { Intent, Region, Want } from '../ask/want';
-import { leaf, type Leaf } from '../substrate/term';
+import { leaf, type Leaf } from '../lang/term';
 
 export type Medium = 'road' | 'rails' | 'ice' | 'water' | 'under water' | 'air' | 'vacuum';
 export type Source = 'charge at the start' | 'fuel at the start' | 'sunlight' | 'a person aboard' | 'wind';

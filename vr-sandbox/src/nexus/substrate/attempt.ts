@@ -5,8 +5,8 @@
 // do it reports, mechanically, by what stopped it; the classification is a count, not an opinion.
 
 import { BOOK } from '../book';
-import { dimOf, sameDim, type Dim } from './dimension';
-import type { Law } from './law';
+import { dimOf, sameDim, type Dim } from '../lang/dimension';
+import type { Law } from '../lang/law';
 import { touches, type Intent, type Want } from '../ask/want';
 
 export interface Given { region: string; sym: string; name: string; dim: Dim; environment: boolean }

@@ -4,13 +4,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { MATERIALS } from '../../src/data/materials';
-import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { ofLeaf } from '../../src/nexus/lang/evaluate';
 import { generate } from '../../src/nexus/substrate/manifold';
 import { shapeOf } from '../../src/nexus/substrate/shape';
 import { routeAcross, sizeByDropAlone, sizeConductor, sizeMembers } from '../../src/nexus/substrate/size';
 import { lumberCatalogue, materialLeaves } from '../../src/nexus/substrate/beam';
 import { gravity } from '../../src/nexus/substrate/field';
-import { leaf } from '../../src/nexus/substrate/term';
+import { leaf } from '../../src/nexus/lang/term';
 import { house } from './inventions';
 
 const i = house();

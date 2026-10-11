@@ -19,10 +19,10 @@
 // bends along (the kept law). Nothing here knows a beam, a support, a floor, a shelf or a ladder.
 
 import { BENDING_STRESS } from '../book';
-import { hashOf } from './identity';
+import { hashOf } from '../lang/identity';
 import { address, type Address, type Contribution } from './journal';
 import { axis, dot, gravityAxis, placeAt, sectionRelations } from './place';
-import { abs, add, and, div, freeVars, ge, gt, k, le, leaf, lt, max, min, mul, or, pow, sub, variable, zero, type Leaf, type Term } from './term';
+import { abs, add, and, div, freeVars, ge, gt, k, le, leaf, lt, max, min, mul, or, pow, sub, variable, zero, type Leaf, type Term } from '../lang/term';
 
 /** Two surfaces this close touch, where nothing finer is known of the places: an assumption, with grounds. */
 export const CONTACT_TOLERANCE: Leaf = leaf('distance at which two faces touch', 1e-3, 'm', { class: 'assumed', by: 'the generator', grounds: 'faces placed by hand or measured by a headset are not exact; a millimetre is within both' });

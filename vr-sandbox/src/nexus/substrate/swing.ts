@@ -8,16 +8,16 @@ import { Language, type Judgement } from './abduce';
 import { admitBy, materialLeaves, type MaterialLeaves } from './beam';
 import { coordinate, type Prism } from './coupling';
 import { coarse, domain, field, type Field } from './domain';
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
 import { declareFrame, flatGround, gravity, observer, rigidDomain, RIGID_BOUND, type Frame, type Ground, type Observer, type RigidDomain } from './field';
 import type { Series } from './perceive';
-import { apply } from './law';
+import { apply } from '../lang/law';
 import { compare, type Comparison } from './observe';
 import { Journal } from './journal';
 import { realizeSwing, type HingeSpec, type SwingRealization } from './realize-hinge';
 import { rigidContract, type Jolt, type RigidContract } from './realize';
 import { solve, type Solution, type System } from './solve';
-import { add, cos, div, ge, gt, intentLeaf, k, leaf, mul, neg, sin, sub, variable, type Leaf, PI } from './term';
+import { add, cos, div, ge, gt, intentLeaf, k, leaf, mul, neg, sin, sub, variable, type Leaf, PI } from '../lang/term';
 
 export interface SwingIntent {
   by: string;

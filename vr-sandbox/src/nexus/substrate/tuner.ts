@@ -29,9 +29,9 @@
 // spend to resolve that size. Factors of order one that the dimensions cannot see (2π, ½) are not claimed.
 
 import { CONST } from '../book/constants';
-import { dimText, integerNullSpace, type Dim } from './dimension';
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { app, div, k, leaf, mul, pow, variable, type Term } from './term';
+import { dimText, integerNullSpace, type Dim } from '../lang/dimension';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
+import { app, div, k, leaf, mul, pow, variable, type Term } from '../lang/term';
 import { boundState } from './eigen';
 
 /** What a quantity does in an energy relation: the role is declared once per quantity, never per size or per regime. */

@@ -41,10 +41,10 @@
 // Every stop is one of three: explained, sufficient, or a gap of a stated kind.
 
 import { CONST } from '../book/constants';
-import { dimOf, scaleOf } from './dimension';
+import { dimOf, scaleOf } from '../lang/dimension';
 import { ladderAt, reached0, type Crossing, type Q } from './tuner';
-import { ofLeaf, type Derivation } from './evaluate';
-import { leaf } from './term';
+import { ofLeaf, type Derivation } from '../lang/evaluate';
+import { leaf } from '../lang/term';
 import { BONDS, BONDS_SOURCE, CRYSTALS, ELEMENTS, MOLECULES } from '../../data/species';
 import { atomicVolume } from './solid';
 import { conductionDensity, fermiEnergy, thermalShare } from './fermi';

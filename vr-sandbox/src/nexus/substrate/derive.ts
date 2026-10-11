@@ -8,9 +8,9 @@ import { INVENTORY, gramsOfItem, type Item } from '../parts/inventory';
 import { MOLECULES } from '../life/molecules';
 import { wattsOf } from '../life/time';
 import { breakdown, estimate, fixed, measured, says, solve, step, valueIn } from './lawgraph';
-import { leaf } from './term';
+import { leaf } from '../lang/term';
 import { boxShape } from './boxfill';
-import { ofLeaf, type Derivation } from './evaluate';
+import { ofLeaf, type Derivation } from '../lang/evaluate';
 
 /** A density, kg/m³, with where it is from: for what is dissolved or packed in a cell, its partial specific volume's
  *  inverse (the volume a gram of it adds to water), which is what adds. */

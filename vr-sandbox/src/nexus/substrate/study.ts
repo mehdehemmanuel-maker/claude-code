@@ -5,10 +5,10 @@
 
 import { candidates, discriminates, observation, promote, validate, Language, type Candidate, type Observation, type Relation } from './abduce';
 import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV, type BeamIntent, type Slice } from './beam';
-import { ofLeaf, type Derivation } from './evaluate';
+import { ofLeaf, type Derivation } from '../lang/evaluate';
 import { anomalyOf, type Failure } from './failure';
 import type { Jolt } from './realize';
-import { leaf } from './term';
+import { leaf } from '../lang/term';
 
 export interface RestCase { patch: number; across: number }
 

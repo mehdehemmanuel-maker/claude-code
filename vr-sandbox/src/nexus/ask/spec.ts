@@ -5,7 +5,7 @@
 // are the generator's and the embodiment's to find. Built into an intent here, each number checked as it is made.
 
 import { fromSI } from '../../ganglia/units';
-import { leaf, type Leaf } from '../substrate/term';
+import { leaf, type Leaf } from '../lang/term';
 import type { Intent, MatterRole, Region, Want } from './want';
 
 /** A number with its unit and who stands behind it: the person, the site, or an estimate on stated grounds. */

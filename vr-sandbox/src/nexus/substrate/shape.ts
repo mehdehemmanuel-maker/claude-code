@@ -7,11 +7,11 @@
 // stated takes the plan with the least boundary, because it loses least of every carrier it holds and needs the
 // least material to enclose (the isoperimetric principle), and the space derives that it is square.
 
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { law, type Law } from './law';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
+import { law, type Law } from '../lang/law';
 import { solve, type System } from './solve';
 import { derive, spaceOf } from './space';
-import { add, div, k, leaf, mul, variable } from './term';
+import { add, div, k, leaf, mul, variable } from '../lang/term';
 import type { Region } from '../ask/want';
 
 export type Face = 'up' | 'down' | 'side';

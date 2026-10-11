@@ -4,9 +4,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { coordinate, ledger, restOn, standOn, topOf, type Prism } from '../../src/nexus/substrate/coupling';
-import { ofLeaf } from '../../src/nexus/substrate/evaluate';
+import { ofLeaf } from '../../src/nexus/lang/evaluate';
 import { declareFrame, flatGround, gravity, observer, RIGID_BOUND, rigidDomain } from '../../src/nexus/substrate/field';
-import { abs, div, ge, k, leaf, mul, neg, variable } from '../../src/nexus/substrate/term';
+import { abs, div, ge, k, leaf, mul, neg, variable } from '../../src/nexus/lang/term';
 import { cites, leavesUnder, why } from '../../src/nexus/substrate/why';
 import { coarse, coverage, domain, field, fieldOf, lattice, resolution, resolves, sample } from '../../src/nexus/substrate/domain';
 import { PATCH_MOMENT } from '../../src/nexus/book';

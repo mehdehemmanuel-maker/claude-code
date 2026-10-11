@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
 import { swingStudy, type SwingCase, type SwingStudy } from '../../src/nexus/substrate/study-swing';
-import { varsOf } from '../../src/nexus/substrate/term';
+import { varsOf } from '../../src/nexus/lang/term';
 
 const cases: SwingCase[] = [
   { release: 5, friction: 0.0015 },

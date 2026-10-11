@@ -144,7 +144,7 @@ const CLASHES: string[] = [
   'Structure :: substrate/manifold.ts substrate/tuner.ts',
   'TOOLS :: kinds/tools.ts machines/robot.ts',
   'Task :: machines/fleet.ts machines/robot.ts',
-  'Term :: substrate/atlas.ts substrate/term.ts substrate/understand.ts',
+  'Term :: lang/term.ts substrate/atlas.ts substrate/understand.ts',
   'Thing :: substrate/realize-space.ts teach/edges.ts teach/solder-lesson.ts',
   'Track :: world/coaster.ts world/karting.ts',
   'UNIVERSAL :: book/universal.ts substrate/carrier.ts',
@@ -162,7 +162,7 @@ const CLASHES: string[] = [
   'contacts :: embody/tree.ts parts/space.ts',
   'derive :: substrate/boards.ts substrate/space.ts',
   'describe :: substrate/manifold.ts view/brain.ts',
-  'evaluate :: substrate/evaluate.ts substrate/flows.ts',
+  'evaluate :: lang/evaluate.ts substrate/flows.ts',
   'explain :: embody/execution.ts substrate/depth.ts substrate/why.ts',
   'extentOf :: embody/part.ts world/anatomy.ts',
   'factName :: machines/fleet.ts world/person.ts',
@@ -185,7 +185,7 @@ const CLASHES: string[] = [
   'principlesOf :: embody/taxonomy.ts substrate/lawgraph.ts',
   'profileFaults :: parts/fab.ts substrate/derive.ts',
   'project :: substrate/channel-text.ts substrate/project.ts',
-  'rank :: substrate/network.ts substrate/status.ts',
+  'rank :: lang/status.ts substrate/network.ts',
   'reach :: substrate/atlas.ts substrate/tuner.ts',
   'readConditions :: ask/conditions.ts make/conditions.ts',
   'resolve :: parts/inventory.ts substrate/understand.ts',
@@ -202,7 +202,7 @@ const CLASHES: string[] = [
  *  then the boards and machines made of parts, then the catalogues of them, then what reads an ask, what makes,
  *  simulates and teaches, and last what draws. An import that runs the other way is a layer reaching up into one that
  *  should depend on it, which is a cycle as soon as anything answers back. Every one is written down below. */
-const LAYERS = ['book', 'substrate', 'parts', 'boards', 'machines', 'models', 'kinds', 'ask', 'embody', 'make', 'life', 'world', 'teach', 'works', 'view', 'cli', '(root)'];
+const LAYERS = ['lang', 'book', 'substrate', 'parts', 'boards', 'machines', 'models', 'kinds', 'ask', 'embody', 'make', 'life', 'world', 'teach', 'works', 'view', 'cli', '(root)'];
 
 /** Where the tree reaches back up today, with the count as a ceiling. These are 20 lines, not 20 problems: three
  *  causes account for 55 of the 100 imports, and each has a named fix.
@@ -225,7 +225,6 @@ const LAYERS = ['book', 'substrate', 'parts', 'boards', 'machines', 'models', 'k
  *  library it lives in. A registry belongs above what it registers (or the drawers register themselves into it),
  *  and that one change settles `parts -> machines`, `parts -> kinds`, `parts -> boards` and `parts -> models` at once. */
 const REACHES_BACK: { edge: string; imports: number; why: string }[] = [
-  { edge: 'book -> substrate', imports: 21, why: "the laws are written in the engine's own vocabulary (Term, Law, evaluate), which belongs below both" },
   { edge: 'parts -> machines', imports: 15, why: 'components.ts draws every kind, so it imports every drawer: a registry inside the library it registers' },
   { edge: 'parts -> kinds', imports: 16, why: 'the same registry, reaching up for each kind’s own figures' },
   { edge: 'substrate -> ask', imports: 14, why: "the engine speaks in ask/want's Want, which is vocabulary and belongs below both" },

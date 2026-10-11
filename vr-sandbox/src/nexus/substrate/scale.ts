@@ -12,9 +12,9 @@
 // information crosses L sooner than L / c, so a mechanism faster than that cannot be seen as one state across L.
 
 import { CONST } from '../book/constants';
-import { dimText, type Dim } from './dimension';
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { app, variable, type Term } from './term';
+import { dimText, type Dim } from '../lang/dimension';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
+import { app, variable, type Term } from '../lang/term';
 
 /** A quantity a mechanism is made from, and where it comes from: one molecule's quantities describe a body of the molecule's size. */
 export interface Quantity { d: Derivation; of: string; molecular?: boolean }

@@ -23,7 +23,7 @@
 import type { Element, Gap, Structure } from './manifold';
 import type { Intent } from '../ask/want';
 import { toSI } from '../../ganglia/units';
-import { dimOf } from './dimension';
+import { dimOf } from '../lang/dimension';
 
 export type Shape = 'volume' | 'medium' | 'reservoir' | 'rail' | 'device' | 'tube' | 'plate' | 'fins' | 'shell' | 'sensor' | 'valve' | 'vessel' | 'pad' | 'marker';
 export interface Thing {

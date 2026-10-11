@@ -2,9 +2,9 @@
 // realization's contract and the window allow: within, an anomaly naming the contract, or unobserved when the
 // realization declares it cannot see the variable.
 
-import { evaluate, type Derivation } from './evaluate';
-import { hashOf } from './identity';
-import { abs, add, mul, sub, variable } from './term';
+import { evaluate, type Derivation } from '../lang/evaluate';
+import { hashOf } from '../lang/identity';
+import { abs, add, mul, sub, variable } from '../lang/term';
 
 export type Verdict =
   | { kind: 'within'; error: number; tolerance: number }

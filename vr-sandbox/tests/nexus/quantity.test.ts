@@ -2,8 +2,8 @@
 // set of quantities are found from their dimensions alone.
 
 import { describe, expect, it } from 'vitest';
-import { DimensionError, dimOf, dimText, piGroups } from '../../src/nexus/substrate/dimension';
-import { add, div, leaf, mul, variable } from '../../src/nexus/substrate/term';
+import { DimensionError, dimOf, dimText, piGroups } from '../../src/nexus/lang/dimension';
+import { add, div, leaf, mul, variable } from '../../src/nexus/lang/term';
 
 const given = (name: string, v: number, unit: string) => leaf(name, v, unit, { class: 'given', by: 'test' });
 

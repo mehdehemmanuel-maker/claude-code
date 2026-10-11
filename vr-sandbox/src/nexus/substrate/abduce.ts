@@ -5,10 +5,10 @@
 // instance; its generality is the count of systems it changes; it is validated on held-out observations and
 // promoted with provenance "abduced from observations h1…hn". Nothing here holds a vocabulary of hypotheses.
 
-import { dimText, isDimless, type Dim } from './dimension';
-import { evaluate, ofLeaf, unresolved, type Derivation } from './evaluate';
-import { hashOf } from './identity';
-import { app, k, leaf, variable, type Term } from './term';
+import { dimText, isDimless, type Dim } from '../lang/dimension';
+import { evaluate, ofLeaf, unresolved, type Derivation } from '../lang/evaluate';
+import { hashOf } from '../lang/identity';
+import { app, k, leaf, variable, type Term } from '../lang/term';
 
 /** One observation: the quantities a coupling and its window carry, and what was observed of it (1 or 0). */
 export interface Observation {

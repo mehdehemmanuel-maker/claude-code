@@ -10,10 +10,10 @@
 // carry something units cannot know (Kleiber's ¾ from a network's geometry, Basquin's exponent from a metal).
 
 import { BOOK, lawById, lawByHash } from '../book';
-import { dimOf, integerNullSpace, sameDim, type Dim } from './dimension';
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { apply, invert, type Law } from './law';
-import { div, leaf, mul, OPERATORS, pow, substitute, variable, type Term } from './term';
+import { dimOf, integerNullSpace, sameDim, type Dim } from '../lang/dimension';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
+import { apply, invert, type Law } from '../lang/law';
+import { div, leaf, mul, OPERATORS, pow, substitute, variable, type Term } from '../lang/term';
 import { fromSI, parseUnit } from '../../ganglia/units';
 
 // ---- records ----------------------------------------------------------------------------------------------------------

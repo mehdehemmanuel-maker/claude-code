@@ -10,7 +10,7 @@
 // in chemistry, from the bonds broken and made.
 
 import { CONST } from '../book/constants';
-import { integerNullSpace, integerNullVectors } from './dimension';
+import { integerNullSpace, integerNullVectors } from '../lang/dimension';
 import { BONDS, ELEMENTS, type Species } from '../../data/species';
 
 /** The identities a level of energy keeps. */

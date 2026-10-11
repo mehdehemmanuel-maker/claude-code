@@ -5,10 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import { drawIntent, knownSpans } from '../../src/nexus/substrate/draw';
 import { parseUnit } from '../../src/ganglia/units';
-import { dimText } from '../../src/nexus/substrate/dimension';
+import { dimText } from '../../src/nexus/lang/dimension';
 import { runRound } from '../../src/nexus/substrate/round';
 import { generate } from '../../src/nexus/substrate/manifold';
-import { scaleOf } from '../../src/nexus/substrate/dimension';
+import { scaleOf } from '../../src/nexus/lang/dimension';
 import { reach } from '../../src/nexus/substrate/tuner';
 
 describe('a round draws its own intents', () => {

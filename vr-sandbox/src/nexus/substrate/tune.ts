@@ -11,7 +11,7 @@
 // can reach is refused, with its reason. Every step taken is kept, so the path can be walked back or refined again.
 
 import type { Language, Relation } from './abduce';
-import type { Derivation } from './evaluate';
+import type { Derivation } from '../lang/evaluate';
 
 /** The representation the tuner chooses along: a quantity the language may speak of, and the values available, coarsest first. */
 export interface Axis { sym: string; values: Derivation[] }

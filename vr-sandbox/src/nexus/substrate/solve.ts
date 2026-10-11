@@ -4,10 +4,10 @@
 // here that gives a free variable a value. A search over declared options (a catalogue) with a declared preference
 // is the only way a free variable is filled, and it is reported as that choice.
 
-import { contradiction, evaluate, isDerivation, type Derivation } from './evaluate';
-import { apply, type Law } from './law';
-import { ofLeaf } from './evaluate';
-import { substitute, variable, varsOf, type Leaf, type Term } from './term';
+import { contradiction, evaluate, isDerivation, type Derivation } from '../lang/evaluate';
+import { apply, type Law } from '../lang/law';
+import { ofLeaf } from '../lang/evaluate';
+import { substitute, variable, varsOf, type Leaf, type Term } from '../lang/term';
 
 export interface Variable { sym: string; unit: string; name: string }
 

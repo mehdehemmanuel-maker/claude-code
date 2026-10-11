@@ -4,7 +4,7 @@
 // distinction the language lacks, never a fix for one of them.
 
 import type { Intent, Region, Want } from '../../src/nexus/ask/want';
-import { leaf, type Leaf } from '../../src/nexus/substrate/term';
+import { leaf, type Leaf } from '../../src/nexus/lang/term';
 import { printer } from './inventions';
 
 const person = 'the person';

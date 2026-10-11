@@ -19,9 +19,9 @@
 
 import { CONST } from '../book/constants';
 import type { Crystal } from '../../data/species';
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
 import { atomsPerCell } from './solid';
-import { div, k, leaf, mul, pow, variable } from './term';
+import { div, k, leaf, mul, pow, variable } from '../lang/term';
 
 const hbar = () => CONST.h.value! / (2 * Math.PI);
 

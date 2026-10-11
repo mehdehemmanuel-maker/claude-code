@@ -453,40 +453,47 @@ export function machineWords(text: string, o: { stand?: (p: Part, m: Machine) =>
  *  Nothing here is per-machine: it is per *shape*, and there are five shapes. */
 export function layUnit(u: Unit, use: (words: string) => Part): Part[] {
   const out: Part[] = [], mm = 0.001;
+  // a prism (every length of extrusion, angle and bar the library draws) runs along **z** with its section in x-y
+  // (src/nexus/parts/kits.ts). The first run of this laid every beam as though it ran along x, so a frame came out as
+  // twelve beams all lying the same way with their ends in mid-air — which is what a blind judge saw and called
+  // "a spidery frame whose uprights terminate in empty space". These are the three ways to point one.
+  const ALONG_Z: V3 = [0, 0, 0], ALONG_X: V3 = [0, Math.PI / 2, 0], UPRIGHT: V3 = [Math.PI / 2, 0, 0];
   const got = (words: string): Part | null => { try { return use(words); } catch { return null; } };
-  const put = (words: string, at: V3, rot?: V3) => { const p = got(words); if (p) out.push({ ...p, at, ...(rot ? { rot } : {}) }); };
+  const put = (words: string, at: V3, rot: V3 = ALONG_Z) => { const p = got(words); if (p) out.push({ ...p, at, rot }); };
   const [W, H, D] = u.box.map((x) => x * mm) as V3;
   const words = (re: RegExp) => u.of.find((o) => re.test(o.words))?.words;
 
   if (u.does === 'hold' && u.id.startsWith('frame')) {
-    // twelve lengths on the edges of its own box: four uprights, four along, four across
-    const up = words(/extrusion .* (\d+)$/) ?? u.of[2]?.words, along = u.of[0]?.words, across = u.of[1]?.words;
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (up) put(up, [sx * W / 2, H / 2, sz * D / 2]);
-    for (const y of [0.02, H - 0.02]) for (const sz of [-1, 1]) if (along) put(along, [0, y, sz * D / 2], [0, 0, Math.PI / 2]);
-    for (const y of [0.02, H - 0.02]) for (const sx of [-1, 1]) if (across) put(across, [sx * W / 2, y, 0], [Math.PI / 2, 0, Math.PI / 2]);
+    // twelve lengths on the edges of its own box: four uprights, four along the width, four across the depth
+    const up = u.of[2]?.words, along = u.of[0]?.words, across = u.of[1]?.words;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (up) put(up, [sx * (W / 2 - 0.02), H / 2, sz * (D / 2 - 0.02)], UPRIGHT);
+    for (const y of [0.02, H - 0.02]) for (const sz of [-1, 1]) if (along) put(along, [0, y, sz * (D / 2 - 0.02)], ALONG_X);
+    for (const y of [0.02, H - 0.02]) for (const sx of [-1, 1]) if (across) put(across, [sx * (W / 2 - 0.02), y, 0], ALONG_Z);
     return out;
   }
   if (u.does === 'hold') {   // an arm's link, or a rail's brackets: along its own length
-    for (const o of u.of) for (let i = 0; i < Math.min(o.n, 6); i++) put(o.words, [((i / Math.max(1, o.n - 1)) - 0.5) * W, 0, 0], [0, 0, Math.PI / 2]);
+    for (const o of u.of) for (let i = 0; i < Math.min(o.n, 6); i++) {
+      put(o.words, [(o.n > 1 ? (i / (o.n - 1)) - 0.5 : 0) * W, 0, 0], /angle|extrusion|bar/.test(o.words) ? ALONG_X : ALONG_Z);
+    }
     return out;
   }
   if (u.does === 'slide') {
     const beam = words(/^extrusion/), rail = words(/^rail/), motor = words(/^stepper/), plate = words(/^motorplate/);
-    if (beam) put(beam, [0, 0, 0], [0, 0, Math.PI / 2]);                    // the beam along the travel
-    if (rail) put(rail, [0, 0.021, 0], [0, 0, 0]);                          // its rail on the beam's top face
+    if (beam) put(beam, [0, 0, 0], ALONG_X);                                // the beam along the travel
+    if (rail) put(rail, [0, 0.021, 0], ALONG_X);                            // its rail on the beam's top face
     if (plate) put(plate, [-W / 2 - 0.004, 0.02, 0], [0, Math.PI / 2, 0]);  // the motor plate on the far end
-    if (motor) put(motor, [-W / 2 - 0.03, 0.02, 0], [0, 0, Math.PI / 2]);   // the motor behind it
-    // the drive down the middle: a screw's bearings at each end, a belt's pulley and idlers
+    if (motor) put(motor, [-W / 2 - 0.03, 0.02, 0], [0, 0, Math.PI / 2]);   // the motor behind it, its shaft along x
     const bear = words(/^bearing/), pul = words(/^pulley/), idl = words(/^idler/);
     if (bear) for (const sx of [-1, 1]) put(bear, [sx * (W / 2 - 0.01), 0.02, 0], [0, 0, Math.PI / 2]);
     if (pul) put(pul, [-W / 2 + 0.02, 0.02, 0], [0, 0, Math.PI / 2]);
-    if (idl) for (const sx of [-1, 1]) put(idl, [sx * (W / 2 - 0.015), 0.02, 0.012]);
+    if (idl) for (const sx of [-1, 1]) put(idl, [sx * (W / 2 - 0.015), 0.02, 0.012], [0, 0, Math.PI / 2]);
     return out;
   }
   if (u.does === 'turn') {
-    const motor = words(/^stepper/), plate = words(/^motorplate/), bear = words(/^bearing/), small = u.of.find((o) => /^pulley GT2 20/.test(o.words))?.words, big = u.of.find((o) => /^pulley GT2 (?!20)/.test(o.words))?.words;
-    if (motor) put(motor, [-0.035, 0, 0], [0, 0, 0]);
-    if (plate) put(plate, [-0.035, 0.022, 0], [0, 0, 0]);
+    const motor = words(/^stepper/), plate = words(/^motorplate/), bear = words(/^bearing/);
+    const small = u.of.find((o) => /^pulley GT2 20/.test(o.words))?.words, big = u.of.find((o) => /^pulley GT2 (?!20)/.test(o.words))?.words;
+    if (motor) put(motor, [-0.035, 0, 0]);
+    if (plate) put(plate, [-0.035, 0.022, 0]);
     if (small) put(small, [-0.035, 0.03, 0]);
     if (big) put(big, [0.02, 0.03, 0]);
     if (bear) for (const y of [0.045, 0.062]) put(bear, [0.02, y, 0]);

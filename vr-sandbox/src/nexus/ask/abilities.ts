@@ -6,8 +6,8 @@
 // numbers (its mass, its thickness, its wings, its eye), so a new one is a new handful, and what it can do follows.
 
 import { estimate, fixed, lawsUnder, measured, setting, solve, step, valueIn } from '../substrate/lawgraph';
-import type { Derivation } from '../substrate/evaluate';
-import type { Law } from '../substrate/law';
+import type { Derivation } from '../lang/evaluate';
+import type { Law } from '../lang/law';
 
 /** A creature, as the laws need it. Every number says where it is from. */
 export interface Creature {

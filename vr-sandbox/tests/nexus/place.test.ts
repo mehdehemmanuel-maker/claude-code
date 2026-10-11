@@ -3,14 +3,14 @@
 // The kept section laws are the evidence the generated integrals are checked against; nothing names a breadth or a depth.
 
 import { describe, expect, it } from 'vitest';
-import { apply } from '../../src/nexus/substrate/law';
+import { apply } from '../../src/nexus/lang/law';
 import { RECT_I, RECT_MODULUS } from '../../src/nexus/book/slice';
 import { lawById } from '../../src/nexus/book';
 import { MemorySink } from '../../src/nexus/substrate/journal';
 import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/substrate/place';
 import { Runtime } from '../../src/nexus/substrate/runtime';
-import { ofLeaf } from '../../src/nexus/substrate/evaluate';
-import { leaf, type Leaf } from '../../src/nexus/substrate/term';
+import { ofLeaf } from '../../src/nexus/lang/evaluate';
+import { leaf, type Leaf } from '../../src/nexus/lang/term';
 
 const person = 'the person';
 const given = (name: string, v: number, unit: string): Leaf => leaf(name, v, unit, { class: 'given', by: person, grounds: 'what the person said' });

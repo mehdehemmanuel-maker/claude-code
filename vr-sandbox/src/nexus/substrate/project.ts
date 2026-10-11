@@ -4,8 +4,8 @@
 // is a consumer of this and decides nothing.
 
 import type { Prism } from './coupling';
-import type { Derivation } from './evaluate';
-import { hashOf } from './identity';
+import type { Derivation } from '../lang/evaluate';
+import { hashOf } from '../lang/identity';
 
 export interface Projected { value: number; record: string }
 export interface SceneBody {

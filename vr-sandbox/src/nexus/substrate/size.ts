@@ -8,10 +8,10 @@
 // least conductance over the route it takes, and it must not run hotter than its insulation allows, carrying the
 // current the element's power and drop give.
 
-import { law, type Law } from './law';
+import { law, type Law } from '../lang/law';
 import { search, type Choice, type Option, type System } from './solve';
-import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { add, div, ge, k, le, leaf, ln, min, mul, pow, PI, variable, type Leaf } from './term';
+import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
+import { add, div, ge, k, le, leaf, ln, min, mul, pow, PI, variable, type Leaf } from '../lang/term';
 import type { Element } from './manifold';
 import type { Network } from './network';
 import { PVC, SECTIONS_MM2, SECTIONS_SOURCE, STILL_AIR_SURFACE } from '../../data/conductors';

@@ -4,9 +4,9 @@ import { componentOf } from '../../src/nexus/parts/components';
 import { resolve } from '../../src/nexus/parts/inventory';
 import { massOf } from '../../src/nexus/parts/mass';
 import { lawById } from '../../src/nexus/book';
-import { ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
-import { apply } from '../../src/nexus/substrate/law';
-import { leaf } from '../../src/nexus/substrate/term';
+import { ofLeaf, type Derivation } from '../../src/nexus/lang/evaluate';
+import { apply } from '../../src/nexus/lang/law';
+import { leaf } from '../../src/nexus/lang/term';
 
 /** The kind a word names, drawn. */
 function drawn(words: string) {

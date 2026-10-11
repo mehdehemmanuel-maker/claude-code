@@ -6,12 +6,12 @@
 // space, and what was visited is the history. A catalogue is not the space: it is an availability set inside it.
 
 import type { Language } from './abduce';
-import { evaluate, ofLeaf, type Derivation, type Env } from './evaluate';
+import { evaluate, ofLeaf, type Derivation, type Env } from '../lang/evaluate';
 import { domain, fieldOf, inside, lattice, sample, type Domain, type Field, type Interval, type Point } from './domain';
-import { hashOf } from './identity';
-import type { Law } from './law';
+import { hashOf } from '../lang/identity';
+import type { Law } from '../lang/law';
 import { solve, type Option, type Solution, type System } from './solve';
-import { add, div, gt, k, le, leaf, mul, substitute, variable, varsOf, type Term, type Var } from './term';
+import { add, div, gt, k, le, leaf, mul, substitute, variable, varsOf, type Term, type Var } from '../lang/term';
 
 /** A part of the region: a predicate field, 1 where it holds. */
 export interface RegionPart { says: string; role: 'design' | 'validity'; source: string; field: Field }

@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { est } from './constants';
-import { sub, mul, div, pow, sqrt, le, lt, k, PI } from '../substrate/term';
+import { sub, mul, div, pow, sqrt, le, lt, k, PI } from '../lang/term';
 
 export const STRUCTURES = [
   L({

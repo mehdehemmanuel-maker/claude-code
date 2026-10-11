@@ -8,7 +8,7 @@ import { evolve, evolverContract, notAtRest } from '../../src/nexus/substrate/ev
 import { MemorySink } from '../../src/nexus/substrate/journal';
 import { GRAVITY, gravityAxis, placeAt } from '../../src/nexus/substrate/place';
 import { Runtime } from '../../src/nexus/substrate/runtime';
-import { leaf, type Leaf } from '../../src/nexus/substrate/term';
+import { leaf, type Leaf } from '../../src/nexus/lang/term';
 
 const person = 'the person';
 const given = (name: string, v: number, unit: string): Leaf => leaf(name, v, unit, { class: 'given', by: person, grounds: 'placed' });

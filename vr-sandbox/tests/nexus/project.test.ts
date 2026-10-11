@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { beamOnTwoSupports, lumberCatalogue, materialLeaves, partXXV } from '../../src/nexus/substrate/beam';
 import { project } from '../../src/nexus/substrate/project';
-import { leaf } from '../../src/nexus/substrate/term';
+import { leaf } from '../../src/nexus/lang/term';
 
 describe('projection', () => {
   const slice = () => beamOnTwoSupports(partXXV('the person'), materialLeaves('wood.douglas-fir'), lumberCatalogue());

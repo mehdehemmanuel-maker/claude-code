@@ -8,14 +8,14 @@
 // cannot be decided, two bindings that disagree, a measurement that disagrees with its derivation, a relation outside
 // its law's domain, a cycle that propagation cannot settle. A gap is never a sentence to be read back.
 
-import { contradiction, evaluate, ofLeaf, type Derivation, type Env } from './evaluate';
-import { dimText } from './dimension';
+import { contradiction, evaluate, ofLeaf, type Derivation, type Env } from '../lang/evaluate';
+import { dimText } from '../lang/dimension';
 import { Journal, type Address, type Contribution, type Sink } from './journal';
-import { ge, le, leaf, variable, type Leaf, type Term } from './term';
-import { hashOf } from './identity';
+import { ge, le, leaf, variable, type Leaf, type Term } from '../lang/term';
+import { hashOf } from '../lang/identity';
 import { placeAt, placeLeaves, placeRelations } from './place';
 import { contactAt, contactStructure } from './contact';
-import type { Law } from './law';
+import type { Law } from '../lang/law';
 import { why, type WhyNode } from './why';
 
 type RelationC = Extract<Contribution, { kind: 'relation' }>;

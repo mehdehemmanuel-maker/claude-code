@@ -11,9 +11,9 @@
 
 import { parseUnit } from '../../ganglia/units';
 import { BOOK } from '../book';
-import { dimText } from './dimension';
+import { dimText } from '../lang/dimension';
 import { keptMatters } from './matter';
-import { leaf, leavesOf, type Leaf } from './term';
+import { leaf, leavesOf, type Leaf } from '../lang/term';
 import { reach } from './tuner';
 import { CRYSTALS, MOLECULES } from '../../data/species';
 import type { Intent, Region, Want } from '../ask/want';

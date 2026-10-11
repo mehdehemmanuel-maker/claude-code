@@ -7,7 +7,7 @@ import { jolt } from '../conformance/helpers';
 import { candidates, discriminates } from '../../src/nexus/substrate/abduce';
 import { choose } from '../../src/nexus/substrate/study';
 import { jointStudy, type JointCase, type JointStudy } from '../../src/nexus/substrate/study-joint';
-import { varsOf } from '../../src/nexus/substrate/term';
+import { varsOf } from '../../src/nexus/lang/term';
 
 const heavy = { patch: 0.1, across: 0.5 };
 const cases: JointCase[] = [

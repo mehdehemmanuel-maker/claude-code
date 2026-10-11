@@ -20,7 +20,7 @@ import type { Jolt } from './realize';
 import { MemorySink } from './journal';
 import { Runtime } from './runtime';
 import { ladderAt, reached0 } from './tuner';
-import { leaf, type Leaf } from './term';
+import { leaf, type Leaf } from '../lang/term';
 
 export interface World {
   made: string;

@@ -3,9 +3,9 @@
 
 import { getMaterial } from '../../data/materials';
 import { DRESSED_SOURCE, DRESSED_SPECIES, LUMBER, LUMBER_SOURCE } from '../../data/lumber';
-import { ofLeaf, type Derivation } from '../substrate/evaluate';
+import { ofLeaf, type Derivation } from '../lang/evaluate';
 import type { Option } from '../substrate/solve';
-import { leaf } from '../substrate/term';
+import { leaf } from '../lang/term';
 
 export interface MaterialLeaves { id: string; density: Derivation; E: Derivation; strength: Derivation }
 

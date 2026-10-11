@@ -4,9 +4,9 @@
 // (src/nexus/substrate/scale.ts) makes the mechanisms from these alone; nothing here names a regime, a number or a level.
 
 import { CONST } from '../../src/nexus/book/constants';
-import { evaluate, ofLeaf, type Derivation } from '../../src/nexus/substrate/evaluate';
+import { evaluate, ofLeaf, type Derivation } from '../../src/nexus/lang/evaluate';
 import { causal, type Quantity } from '../../src/nexus/substrate/scale';
-import { div, k, leaf, mul, pow, variable } from '../../src/nexus/substrate/term';
+import { div, k, leaf, mul, pow, variable } from '../../src/nexus/lang/term';
 
 const measured = (name: string, v: number, unit: string, source: string): Derivation => ofLeaf(leaf(name, v, unit, { class: 'measured', source }));
 const estimated = (name: string, v: number, unit: string, grounds: string): Derivation => ofLeaf(leaf(name, v, unit, { class: 'estimated', grounds }));

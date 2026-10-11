@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST, est } from './constants';
-import { sub, mul, div, pow, neg, le, ge, lt, gt, and, exp, ln, k } from '../substrate/term';
+import { sub, mul, div, pow, neg, le, ge, lt, gt, and, exp, ln, k } from '../lang/term';
 
 export const THERMAL = [
   L({

@@ -7,10 +7,10 @@ import { makeConnection } from '../../doc/commands';
 import { axisAngle, rotate } from '../../doc/math';
 import type { Prism } from './coupling';
 import { resolution, type Resolution } from './domain';
-import { evaluate, measurement, ofLeaf, type Derivation, type Window } from './evaluate';
+import { evaluate, measurement, ofLeaf, type Derivation, type Window } from '../lang/evaluate';
 import type { Ground, Observer } from './field';
 import { extentsOf, openWorld, placePrism, type BodyBinding, type Jolt, type RigidContract } from './realize';
-import { k, leaf, mul, variable, type Leaf } from './term';
+import { k, leaf, mul, variable, type Leaf } from '../lang/term';
 
 export interface HingeSpec {
   onPivot: { x: Derivation; y: Derivation; z: Derivation };

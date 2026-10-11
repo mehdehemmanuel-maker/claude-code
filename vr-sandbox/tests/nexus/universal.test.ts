@@ -12,8 +12,8 @@ import { flowsOf } from '../../src/nexus/life/flows';
 import { INVENTORY, countIn, gramsOfItem } from '../../src/nexus/parts/inventory';
 import { MOLECULES } from '../../src/nexus/life';
 import { GLAND_KINDS } from '../../src/nexus/life/glands';
-import { ofLeaf } from '../../src/nexus/substrate/evaluate';
-import { leaf } from '../../src/nexus/substrate/term';
+import { ofLeaf } from '../../src/nexus/lang/evaluate';
+import { leaf } from '../../src/nexus/lang/term';
 import { holding } from '../../src/nexus/substrate/boxfill';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));

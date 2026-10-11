@@ -3,7 +3,7 @@
 // conserved quantity, and for every matter an intent names), by couplings between them, by the binder and by the
 // reaction family, and the book's laws are the instances they are checked against.
 
-import type { Law } from '../substrate/law';
+import type { Law } from '../lang/law';
 import { CHEMISTRY } from './chemistry';
 import { ELECTRICAL } from './electrical';
 import { FLUIDS } from './fluids';

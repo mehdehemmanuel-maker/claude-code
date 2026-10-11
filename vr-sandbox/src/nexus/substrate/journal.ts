@@ -8,8 +8,8 @@
 // Those are recomputable and are not persisted.
 
 import type { Comparison } from './observe';
-import type { Derivation } from './evaluate';
-import { app, integral, leafHashOf, variable, type Leaf, type Term } from './term';
+import type { Derivation } from '../lang/evaluate';
+import { app, integral, leafHashOf, variable, type Leaf, type Term } from '../lang/term';
 
 /**
  * Where a quantity is: a place and the quantity there, as `place/quantity`. The place is opaque until the domain

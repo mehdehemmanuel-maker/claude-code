@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST } from './constants';
-import { mul, div, sin, asin, exp, neg, pow, k } from '../substrate/term';
+import { mul, div, sin, asin, exp, neg, pow, k } from '../lang/term';
 
 export const OPTICS = [
   L({

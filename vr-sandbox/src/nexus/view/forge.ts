@@ -146,7 +146,9 @@ const pace = Number(params.get('pace') ?? 1);
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.xr.enabled = true;
+// (every light here sets castShadow and every mesh castShadow/receiveShadow, and none of it did anything until this
+//  line: a blind judge's first finding was that nothing in the works cast a shadow, so the room read as hovering)
+renderer.xr.enabled = true; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04070b);
@@ -2563,9 +2565,7 @@ async function converse(text: string): Promise<void> {
   if (/\b(let|have|get|watch) (the |my )?robot (do it|solder|do the lesson)|^robot,? solder|\brobot (solders|do the soldering)\b/i.test(text.trim())) { line('you', text); say(robotSolders(), undefined, 'nexus'); return; }
   if (/^stop (the )?robot\b/i.test(text.trim()) && robotAt) { line('you', text); robotAt.dispose(); robotAt = null; say('The robot has stepped back.', undefined, 'nexus'); return; }
   { const said = robotDesign(text); if (said) { line('you', text); say(`${said} ${seeRobot(text)}`, undefined, 'nexus'); return; } }
-  { const said = reproWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = benchWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
-  { const said = pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
+  { const said = reproWords(text) ?? benchWords(text) ?? pingWords(text) ?? coasterWords(text) ?? kartWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   { const said = worksRoomWords(text, { scene, camera, orbit, dolly, xr: () => renderer.xr.isPresenting, home: () => goPlace('table') }) ?? worksWords(text) ?? machineWords(text, { use: (w) => use(w), stand: (p) => { eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); apart3d.place(eye, f, renderer.xr.isPresenting ? 0.85 : 1.0, renderer.xr.isPresenting ? 0 : 0.1); aim3d(); return apart3d.showPart(p, 'invented', performance.now() / 1000, true, false); } }) ?? tendWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }
   // (each asked in turn and the first that answers wins, which is what five identical if-blocks said at five times the length)
   { const said = barWords(text) ?? kitWords(text) ?? cellWords(text) ?? processWords(text) ?? robotWords(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }

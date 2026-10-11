@@ -11,7 +11,7 @@ import { LINE_WEIGHT, RECT_AREA, RECT_I, RECT_MODULUS } from '../../src/nexus/bo
 import { address, MemorySink } from '../../src/nexus/substrate/journal';
 import { bound, instance, Runtime } from '../../src/nexus/substrate/runtime';
 import { FileSink } from '../../src/nexus/substrate/sink-file';
-import { leaf } from '../../src/nexus/substrate/term';
+import { leaf } from '../../src/nexus/lang/term';
 import { explain } from '../../src/nexus/substrate/why';
 
 const person = 'the person';

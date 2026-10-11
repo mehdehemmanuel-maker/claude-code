@@ -1,7 +1,7 @@
 // The constants the book uses, each a leaf with its fixing source. Exact constants of the 2019 SI are fundamental;
 // measured constants carry CODATA 2018's uncertainty; fitted constants are empirical and name their fit.
 
-import { leaf, type Leaf } from '../substrate/term';
+import { leaf, type Leaf } from '../lang/term';
 
 const fundamental = (name: string, value: number, unit: string, source: string): Leaf => leaf(name, value, unit, { class: 'fundamental', source });
 const measured = (name: string, value: number, unit: string, source: string, uncertainty?: number): Leaf => leaf(name, value, unit, { class: 'measured', source }, uncertainty);

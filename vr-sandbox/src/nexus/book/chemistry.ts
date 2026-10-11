@@ -3,7 +3,7 @@
 
 import { L } from './define';
 import { CONST } from './constants';
-import { add, sub, mul, div, neg, exp, ln } from '../substrate/term';
+import { add, sub, mul, div, neg, exp, ln } from '../lang/term';
 
 export const CHEMISTRY = [
   L({

@@ -6,10 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { jolt } from '../conformance/helpers';
 import { AMPLITUDE_FACTOR, PHYSICAL_PENDULUM, lawById } from '../../src/nexus/book';
 import { coarse, resolution, resolves } from '../../src/nexus/substrate/domain';
-import { ofLeaf } from '../../src/nexus/substrate/evaluate';
-import { apply } from '../../src/nexus/substrate/law';
+import { ofLeaf } from '../../src/nexus/lang/evaluate';
+import { apply } from '../../src/nexus/lang/law';
 import { barOnHinge, swingIntent, swingMaterial, type SwingSlice } from '../../src/nexus/substrate/swing';
-import { leaf } from '../../src/nexus/substrate/term';
+import { leaf } from '../../src/nexus/lang/term';
 import { cites, leavesUnder, why } from '../../src/nexus/substrate/why';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));

@@ -2,7 +2,7 @@
 // one changed leaf moves exactly the hashes that rest on it.
 
 import { describe, expect, it } from 'vitest';
-import { add, k, leaf, mul, show, substitute, variable, varsOf } from '../../src/nexus/substrate/term';
+import { add, k, leaf, mul, show, substitute, variable, varsOf } from '../../src/nexus/lang/term';
 
 const given = (name: string, v: number, unit: string) => leaf(name, v, unit, { class: 'given', by: 'test' });
 
