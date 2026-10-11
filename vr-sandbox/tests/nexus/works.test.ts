@@ -816,7 +816,7 @@ describe('a bill whose numbers are derived and not typed', () => {
   it('the lines with no price only ever get fewer', () => {
     // a ratchet, as tidy.test.ts has: this is the work the standing ask names ("prices for the lines that still have
     // none"), and a new build may not quietly add to it. Lower the number when lines are priced; never raise it.
-    expect(designAll().filter((f) => f.kind === 'price').length).toBeLessThanOrEqual(95);
+    expect(designAll().filter((f) => f.kind === 'price').length).toBeLessThanOrEqual(19);
   });
   it('the bench carries the vice it is named for, and that vice weighs what its maker says', () => {
     // the bench's own words are "a bench, a vice and hand tools", and for three rounds it stood there without one.
