@@ -377,7 +377,7 @@ export function spindle(p: Part): Axis | null {
 // not here; the fleet's contract checks keep their own owner (src/nexus/make/critic.ts) and read the same geometry.
 
 export interface Mate {
-  how: 'bolted' | 'seated' | 'threaded';
+  how: 'bolted' | 'seated' | 'threaded' | 'resting';
   /** the two features, named as their own parts name them */ a: string; b: string;
   says: string;
   /** bolted: the screw and how many of them */ thread?: string; holes?: number;
@@ -415,6 +415,98 @@ export function mates(a: Part, b: Part): { fits: Mate[]; nearly: string[] } {
       else fits.push({ how: 'seated', a: s.of, b: o.of, mm: r.mm, clearance: r.clearance, says: r.says });
     }
   }
+  // and the third connector: a flat face on a flat face. Only the biggest few of each, because a T-slot section has
+  // fifty-odd flats and the ones a thing is bolted to are the broad ones.
+  const faces = (q: Part) => once(facesFrom(q), (f) => `${f.area.toFixed(9)}|${f.n.map((x) => x.toFixed(2)).join(',')}`).slice(0, 6);
+  for (const fa of faces(a)) for (const fb of faces(b)) {
+    const r = rests(fa, fb);
+    if (typeof r === 'string') nearly.push(r);
+    else fits.push({ how: 'resting', a: fa.of, b: fb.of, mm: +(r.area * 1e6).toFixed(0), says: r.says });
+  }
+
   fits.sort((x, y) => (x.how < y.how ? -1 : x.how > y.how ? 1 : (y.mm ?? y.holes ?? 0) - (x.mm ?? x.holes ?? 0)));
   return { fits, nearly: [...new Set(nearly)].sort() };
+}
+
+// ---- flat faces read off the geometry ----------------------------------------------------------------------------------
+// The third connector, and the one a coincident mate is made of: a plate sits on a plate, a bracket on a beam, a motor
+// on its mount. `mate` already brings two faces together where a bolt pattern names them, so what is missing is the
+// face itself as a thing a part has - which is what lets something rest on another without a pattern to find it by.
+// Only outward faces count, by the same question the shafts are asked: a point just off the face, against the oriented
+// boxes of the whole tree. A face with its own part in front of it is an inside surface and mates with nothing.
+
+/** A flat face of a part, in the part's own frame: where it is, which way it looks out, and how big it is. */
+export interface Face { of: string; at: V3; n: V3; w: number; h: number; area: number }
+
+/** Whether a point is inside this closed profile, by counting the crossings of a ray. It is what says which way a
+ *  segment's face looks out: step off the segment and if you are still inside the section, you stepped the wrong way. */
+function inside(pts: [number, number][], x: number, y: number): boolean {
+  let n = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i]!, [xj, yj] = pts[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) n = !n;
+  }
+  return n;
+}
+
+/** Every outward flat face this part's solids make: a box's six, and a rolled or extruded section's own - its two ends
+ *  and one face for each straight run of its profile, which is where the faces that matter actually are. Boxes alone
+ *  found four faces of 1 mm² on a stepper (its plug's contacts) and *none at all* on a 2040 extrusion, an MGN rail or
+ *  a bearing, because every one of those is a prism or a turned profile - the third time running that the feature
+ *  lived in the richer shape and not in the primitive whose name suggests it.
+ *
+ *  A turned profile's faces are still not read: a `lathe`'s flat annulus is a real seating face (it is what a bearing
+ *  sits against) but its curved runs are not, and telling them apart is its own piece of work. */
+export function facesFrom(p: Part): Face[] {
+  const nodes = layout(p), solids = nodes.filter((n) => n.p.shape && n.box);
+  const out: Face[] = [];
+  const EPS = 0.0003;
+  for (const n of nodes) {
+    const sh = n.p.shape; if (!sh || !n.box) continue;
+    const up = new Set<unknown>(); for (let q = n.parent; q; q = q.parent) up.add(q);
+    const rot = new THREE.Matrix4().extractRotation(n.m), mid = new THREE.Vector3().setFromMatrixPosition(n.m);
+    const world = (lx: number, ly: number, lz: number) => new THREE.Vector3(lx, ly, lz).applyMatrix4(rot);
+    // each candidate in the solid's own frame: where its middle is, which way it looks, how big it is
+    const cands: { at: [number, number, number]; n: [number, number, number]; w: number; h: number }[] = [];
+    if ('box' in sh) {
+      const half = [sh.box[0] / 2, sh.box[1] / 2, sh.box[2] / 2];
+      for (let i = 0; i < 3; i++) for (const sign of [1, -1]) {
+        const nn: [number, number, number] = [0, 0, 0]; nn[i] = sign;
+        const at: [number, number, number] = [0, 0, 0]; at[i] = sign * half[i]!;
+        cands.push({ at, n: nn, w: half[(i + 1) % 3]! * 2, h: half[(i + 2) % 3]! * 2 });
+      }
+    } else if ('prism' in sh) {
+      // a section of [x, y] points drawn along z: its two ends, and a face for every straight run of its outline
+      const pts = sh.prism.pts as [number, number][], L = sh.prism.L; if (pts.length < 3) continue;
+      const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+      const bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys);
+      for (const sign of [1, -1]) cands.push({ at: [0, 0, (sign * L) / 2], n: [0, 0, sign], w: bw, h: bh });
+      for (let i = 0; i < pts.length; i++) {
+        const [x0, y0] = pts[i]!, [x1, y1] = pts[(i + 1) % pts.length]!;
+        const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy); if (len < 1e-6) continue;
+        const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+        let nx = dy / len, ny = -dx / len;
+        if (inside(pts, mx + nx * 1e-6, my + ny * 1e-6)) { nx = -nx; ny = -ny; } // looked inwards: turn it round
+        cands.push({ at: [mx, my, 0], n: [nx, ny, 0], w: len, h: L });
+      }
+    } else continue;
+    for (const c of cands) {
+      const nn = world(...c.n).normalize(), at = mid.clone().add(world(...c.at));
+      const probe = at.clone().add(nn.clone().multiplyScalar(EPS));
+      if (solids.some((m) => m !== n && !up.has(m) && m.box!.containsPoint(probe))) continue;
+      out.push({ of: n.p.name, at: [at.x, at.y, at.z], n: [nn.x, nn.y, nn.z], w: c.w, h: c.h, area: +(c.w * c.h).toFixed(9) });
+    }
+  }
+  return out.sort((a, b) => b.area - a.area);
+}
+
+/** Whether these two faces can be brought together: they must look at each other, and the smaller must have somewhere
+ *  to sit on the larger. What it reports is the area they would share, which is what says whether a thing is resting
+ *  on something or merely touching it at a corner. */
+export function rests(a: Face, b: Face): { area: number; says: string } | string {
+  const dot = a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2];
+  if (dot > -0.999) return `${a.of} and ${b.of} do not look at each other: their faces are ${Math.round((Math.acos(Math.max(-1, Math.min(1, dot))) * 180) / Math.PI)}° apart, not opposed`;
+  const shared = Math.min(a.w, b.w) * Math.min(a.h, b.h);
+  if (shared < Math.min(a.area, b.area) * 0.25) return `${a.of} on ${b.of} would share only ${(shared * 1e6).toFixed(0)} mm²: a corner, not a seat`;
+  return { area: +shared.toFixed(9), says: `${a.of} rests on ${b.of} over ${(shared * 1e6).toFixed(0)} mm²` };
 }

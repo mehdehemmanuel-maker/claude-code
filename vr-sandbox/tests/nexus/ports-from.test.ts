@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { use } from '../../src/nexus/parts/components';
-import { axesFrom, fit, mates, portsFrom, seat, seats, shaftsFrom, spindle, unnamedHoles } from '../../src/nexus/parts/mate';
+import { axesFrom, facesFrom, fit, mates, portsFrom, rests, seat, seats, shaftsFrom, spindle, unnamedHoles } from '../../src/nexus/parts/mate';
 import type { Port } from '../../src/nexus/parts/kits';
 
 const mirror = (p: Port): Port => ({ ...p, sex: p.sex === 'holes' ? 'threads' : 'holes', n: [-p.n[0], -p.n[1], -p.n[2]], pattern: p.pattern.map(([x, y]) => [-x, y] as [number, number]) });
@@ -147,5 +147,42 @@ describe('how two parts go together, over both kinds of connector at once', () =
     // An MGN12 rail has forty bores of two sizes. Forty answers to one question is not an answer.
     const r = mates(use('rail MGN12 L240'), use('screw M3x10'));
     expect(r.fits.length + r.nearly.length).toBeLessThan(30);
+  }, 60000);
+});
+
+describe('flat faces, which is what a coincident mate is made of', () => {
+  it('a NEMA 17\'s biggest face is its own mounting face', () => {
+    // A NEMA 17 is 42.3 mm square by its standard, and that face is what it bolts to the world by.
+    const f = facesFrom(use('stepper nema17 34'))[0]!;
+    expect(f.w * 1000).toBeCloseTo(42.3, 0);
+    expect(f.h * 1000).toBeCloseTo(42.3, 0);
+  }, 60000);
+
+  it('a rolled section\'s faces are its own profile\'s, and as long as the section is', () => {
+    // Boxes alone found none at all on any of these - every one is a prism - which is the third time running that the
+    // feature lived in the richer shape. A T-slot's outer surface is interrupted by its slots, so each flat run is a
+    // face of its own: 13.8 mm on a 2040, not 20.
+    const f = facesFrom(use('extrusion 2040 length 300'));
+    expect(f.length).toBeGreaterThan(10);
+    expect(f[0]!.h * 1000).toBeCloseTo(300, 0); // as long as it was asked for
+    expect(f[0]!.w * 1000).toBeLessThan(20); // a flat between slots, not the whole 20 mm side
+  }, 60000);
+
+  it('a turned part claims no faces, and says so by having none', () => {
+    // A lathe's flat annulus is a real seating face and its curved runs are not; telling them apart is its own piece
+    // of work, so a bearing offers nothing here rather than something wrong.
+    expect(facesFrom(use('bearing 6205'))).toEqual([]);
+  }, 60000);
+
+  it('faces must look at each other, and share more than a corner', () => {
+    const f = facesFrom(use('heatblock mk8'));
+    const up = f.find((x) => x.n[1] > 0.9)!, down = f.find((x) => x.n[1] < -0.9)!, side = f.find((x) => x.n[0] > 0.9)!;
+    expect(rests(up, down)).toMatchObject({ area: expect.any(Number) });
+    expect(rests(up, side)).toMatch(/90° apart, not opposed/);
+  }, 60000);
+
+  it('resting is a mate like any other', () => {
+    const r = mates(use('heatblock mk8'), use('heatblock mk8'));
+    expect(r.fits.some((x) => x.how === 'resting')).toBe(true);
   }, 60000);
 });
