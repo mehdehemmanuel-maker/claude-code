@@ -1767,10 +1767,22 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    rather than clever (a through hole passes the largest screw it clears; a hole at a thread's own nominal is tapped
    for it), where a generator uses the root form the derived thread is one size small, the port a part *declares* is
    the authority there, and the fix is one convention in the library rather than a third guess.
-   Next on this, in order: give tapped holes one convention; merge `Port` and `Iface` into one connector that both
-   places and checks (a bore accepts a shaft *and* carries a torque limit, and today those are two unrelated
-   declarations); derive bores and faces as well as patterns; then the degrees-of-freedom solver, after which
-   concentric, tangent, gear, screw and slot are cheap additions to one mechanism instead of twenty special cases.
+   And then the convention, which came out the other way round from how it was first framed (2026-10-11, same round).
+   Forcing one drawn diameter for every tapped hole is checkable - a thread's major diameter collides with no
+   clearance size by less than 0.1 mm, against the 0.08 this reader allows - but it is the wrong trade, because the
+   drawn radius is also what a part *weighs*: `kinds/plant.ts` takes the hot end's mass by subtracting π·rootR²·h, so
+   moving the hole to its major diameter moves a published mass to suit a reader. A radius is a fact about the solid
+   and should not be bent to carry a second meaning. So the thread is *said* instead: `Cut.thread` (`parts/kits.ts`),
+   which `portsFrom` believes over the radius, with the physical rule as the fallback where nothing is said. The two
+   root-drawn holes in the library (the hot end's nozzle thread and the heat sink's heat break, both M6) now say so,
+   and `unnamedHoles` lists every hole nothing can name - the list a round works down, while leaving alone the holes
+   that are genuinely not for a screw (a heater cartridge bore, a thermistor well, a shaft bore are not faults).
+   That is the general lesson and it is worth keeping: where a drawing cannot carry a fact, add the field rather than
+   change the drawing.
+   Next on this, in order: merge `Port` and `Iface` into one connector that both places and checks (a bore accepts a
+   shaft *and* carries a torque limit, and today those are two unrelated declarations in two systems that do not
+   talk); derive bores and flat faces as well as patterns; then the degrees-of-freedom solver, after which concentric,
+   tangent, gear, screw and slot are cheap additions to one mechanism instead of twenty special cases.
    What a parts API has that this did not, added as fields rather than waited for (2026-10-11). Going through Nexar's
    own part model against ours, six things it carries were genuinely missing and each changes a build pack: the maker
    and its own part number (a seller's product title is not an identity - two sellers write the same part three ways -

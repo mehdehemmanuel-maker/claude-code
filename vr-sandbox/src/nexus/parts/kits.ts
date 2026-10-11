@@ -55,7 +55,15 @@ export interface Iface {
 /** A hole drilled into a part, in its own frame (m): round (or n-sided: a hex socket, a tapped hole drawn at its major
  *  diameter), r across, from `at` on its face along `dir` (a unit vector into it) for `depth`. It is cut from what is
  *  drawn, so the clash finder and every view see it, and its volume leaves the part's mass. */
-export interface Cut { r: number; depth: number; at: V3; dir: V3; n?: number }
+export interface Cut {
+  r: number; depth: number; at: V3; dir: V3; n?: number;
+  /** the thread it is cut for (M3, M6), where it is cut for one. A radius cannot say this: this library draws tapped
+   *  holes at the clearance size, at the thread's major diameter and at its root diameter depending on the generator,
+   *  and those interleave - an M3 at its root is 2.459 mm where an M2.5 at its nominal is 2.5. So the thread is said
+   *  rather than inferred, and `portsFrom` (src/nexus/parts/mate.ts) believes it over the radius. Left off, the hole
+   *  is read physically: it passes the largest screw it clears. */
+  thread?: string;
+}
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
   /** holes drilled into it (its own frame) */ cuts?: Cut[];

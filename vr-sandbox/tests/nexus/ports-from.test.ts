@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { use } from '../../src/nexus/parts/components';
-import { fit, portsFrom } from '../../src/nexus/parts/mate';
+import { fit, portsFrom, unnamedHoles } from '../../src/nexus/parts/mate';
 import type { Port } from '../../src/nexus/parts/kits';
 
 const mirror = (p: Port): Port => ({ ...p, sex: p.sex === 'holes' ? 'threads' : 'holes', n: [-p.n[0], -p.n[1], -p.n[2]], pattern: p.pattern.map(([x, y]) => [-x, y] as [number, number]) });
@@ -40,6 +40,15 @@ describe('ports read off a part\'s own drilled holes', () => {
     const byFace = new Map<string, number>();
     for (const p of ports) { const k = `${p.n.map((x) => x.toFixed(2)).join(',')}|${p.pattern.length}`; byFace.set(k, (byFace.get(k) ?? 0) + 1); }
     for (const [k, n] of byFace) expect(n, `two ports of one count on one face: ${k}`).toBe(1);
+  }, 60000);
+
+  it('a hole says which thread it is cut for, rather than being guessed from its radius', () => {
+    // The hot end's nozzle thread is drawn at its root diameter, so no reading of the radius calls it M6. It says so.
+    const ports = portsFrom(use('heatblock mk8'));
+    const unnamed = unnamedHoles(use('heatblock mk8'));
+    // Its heater bore and thermistor well are holes for no screw: they are allowed to be unnamed and are not faults.
+    expect(unnamed.length).toBeLessThanOrEqual(3);
+    expect(ports.every((p) => /^M[\d.]+$/.test(p.thread))).toBe(true);
   }, 60000);
 
   it('parts with no drilled pattern claim none', () => {

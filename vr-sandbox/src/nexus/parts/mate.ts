@@ -147,6 +147,16 @@ function holeOf(r: number): { thread: string; sex: 'holes' | 'threads' } | null 
   return best ? { thread: best, sex: 'holes' } : null;
 }
 
+/** What a hole is for: what it says, where it says (`Cut.thread`), and only otherwise what its radius can bear. A
+ *  declared thread is believed over the geometry because the geometry genuinely cannot tell - which is the whole
+ *  reason the field exists. Its sex still comes from the radius: a hole drawn at or over its thread's clearance size
+ *  is one a screw passes, anything tighter is one a screw threads into. */
+function kindOf(h: { r: number; thread?: string }): { thread: string; sex: 'holes' | 'threads' } | null {
+  if (!h.thread) return holeOf(h.r);
+  const clear = CLEAR[h.thread];
+  return { thread: h.thread, sex: clear !== undefined && h.r * 2000 >= clear - 0.05 ? 'holes' : 'threads' };
+}
+
 /** A unit vector across `n`, chosen from the world axis least along it, so the frame is the same every run. */
 function across(n: THREE.Vector3): THREE.Vector3 {
   const ax = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
@@ -158,11 +168,11 @@ function across(n: THREE.Vector3): THREE.Vector3 {
  *  one face, gathered into the pattern they are. A port that was declared is not replaced - this is what a part has
  *  *as well*, and `assemble` may use either. */
 export function portsFrom(p: Part): Port[] {
-  interface Hole { at: THREE.Vector3; dir: THREE.Vector3; r: number; depth: number; seat?: number }
+  interface Hole { at: THREE.Vector3; dir: THREE.Vector3; r: number; depth: number; seat?: number; thread?: string }
   let holes: Hole[] = [];
   const walk = (q: Part, m: THREE.Matrix4): void => {
     const mm = m.clone().multiply(matOf(q)), rot = new THREE.Matrix4().extractRotation(mm);
-    for (const c of q.cuts ?? []) holes.push({ at: v(c.at).applyMatrix4(mm), dir: v(c.dir).applyMatrix4(rot).normalize(), r: c.r, depth: c.depth });
+    for (const c of q.cuts ?? []) holes.push({ at: v(c.at).applyMatrix4(mm), dir: v(c.dir).applyMatrix4(rot).normalize(), r: c.r, depth: c.depth, ...(c.thread ? { thread: c.thread } : {}) });
     for (const r of q.parts ?? []) walk(r, mm);
   };
   walk(p, new THREE.Matrix4());
@@ -175,7 +185,8 @@ export function portsFrom(p: Part): Port[] {
   for (const h of holes) { const k = axis(h); (coax.get(k) ?? coax.set(k, []).get(k)!).push(h); }
   holes = [...coax.values()].map((g) => {
     const thin = g.reduce((a, b) => (a.r <= b.r ? a : b)), wide = g.reduce((a, b) => (a.r >= b.r ? a : b));
-    return { ...thin, depth: Math.max(...g.map((x) => x.depth)), ...(wide.r > thin.r ? { seat: wide.r } : {}) };
+    const said = g.find((x) => x.thread)?.thread;
+    return { ...thin, depth: Math.max(...g.map((x) => x.depth)), ...(wide.r > thin.r ? { seat: wide.r } : {}), ...(said ? { thread: said } : {}) };
   });
 
   // one group a (direction, size, face): the face is where along the drilling direction the holes start.
@@ -186,7 +197,7 @@ export function portsFrom(p: Part): Port[] {
   const out: Port[] = [];
   for (const [, g] of [...groups].sort(([a], [b]) => (a < b ? -1 : 1))) {
     if (g.length < 2) continue; // two holes are the fewest that can fix a turn; a lone one is a bore, not a pattern
-    const kind = holeOf(g[0]!.r); if (!kind) continue;
+    const kind = kindOf(g[0]!); if (!kind) continue;
     const dir = g[0]!.dir, n = dir.clone().negate(), u = across(n), w = n.clone().cross(u);
     const o = g.reduce((a, h) => a.add(h.at), new THREE.Vector3()).divideScalar(g.length);
     const pattern = g.map((h) => { const d = h.at.clone().sub(o); return [+d.dot(u).toFixed(6), +d.dot(w).toFixed(6)] as [number, number]; })
@@ -199,5 +210,19 @@ export function portsFrom(p: Part): Port[] {
       sex: kind.sex, thread: kind.thread, pattern, at: [o.x, o.y, o.z], n: [n.x, n.y, n.z], u: [u.x, u.y, u.z],
       t: Math.max(...g.map((h) => h.depth)), ...(std ? { std } : {}) });
   }
+  return out;
+}
+
+/** Every drilled hole in this part that nothing can name: it says no thread and its radius is near no metric size. A
+ *  hole nobody can name is a hole no part can be bolted to, so this is the list a round works down - by saying the
+ *  thread where there is one, and by leaving it alone where the hole is genuinely not for a screw (a heater cartridge
+ *  bore, a thermistor well, a shaft bore all belong here and are not faults). */
+export function unnamedHoles(p: Part): { at: V3; r: number; depth: number }[] {
+  const out: { at: V3; r: number; depth: number }[] = [];
+  const walk = (q: Part): void => {
+    for (const c of q.cuts ?? []) if (!kindOf(c)) out.push({ at: c.at, r: c.r, depth: c.depth });
+    for (const r of q.parts ?? []) walk(r);
+  };
+  walk(p);
   return out;
 }

@@ -253,7 +253,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   heatblock: {
     says: 'the MK8 heater block as Creality\'s model has it: tapped M6 through for the nozzle below and the heat break above, bored 6 mm through for the heater and 2.2 mm in from its side for the thermistor', leaves: 'its heater\'s clamp slot and screw not drawn; its holes\' threads drawn at their root',
     make: (_p, it) => { const b = HOTEND.block, al = { mat: 'al-6061', color: 0xc9cdd1, finish: 'cast' as const };
-      return [P(it.name, { box: [b.w * mm, b.h * mm, b.d * mm] }, { ...al, cuts: [{ r: rootR(6, 1) * mm, depth: b.h * mm, at: [0, (b.h / 2) * mm, b.nozzle * mm], dir: [0, -1, 0] }, { r: 3 * mm, depth: b.w * mm, at: [(b.w / 2) * mm, 0, b.heater * mm], dir: [-1, 0, 0] }, { r: 1.1 * mm, depth: 8 * mm, at: [(-b.w / 2) * mm, b.therm[1] * mm, b.therm[0] * mm], dir: [1, 0, 0] }] })]; },
+      return [P(it.name, { box: [b.w * mm, b.h * mm, b.d * mm] }, { ...al, cuts: [{ r: rootR(6, 1) * mm, thread: 'M6', depth: b.h * mm, at: [0, (b.h / 2) * mm, b.nozzle * mm], dir: [0, -1, 0] }, { r: 3 * mm, depth: b.w * mm, at: [(b.w / 2) * mm, 0, b.heater * mm], dir: [-1, 0, 0] }, { r: 1.1 * mm, depth: 8 * mm, at: [(-b.w / 2) * mm, b.therm[1] * mm, b.therm[0] * mm], dir: [1, 0, 0] }] })]; },
   },
   heatbreak: {
     says: 'an M6 heat break: a stainless tube threaded its length, bored through; PTFE-lined, its liner 4 × 2 mm inside it', leaves: 'its thread drawn at its major diameter',
@@ -265,7 +265,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     says: 'the Ender-3\'s heat sink as Creality\'s model sizes it: a plate below tapped M6 for the heat break, a plate above tapped M10 × 1 for the coupler, a column between them bored for the filament, eight fins either side', leaves: 'its fins\', column\'s and plates\' thicknesses typical; its mounting holes not drawn',
     make: (_p, it) => { const s = HOTEND.sink, al = { mat: 'al-6061', color: 0xc9cdd1, finish: 'cast' as const }, colH = s.h - 2 * s.plate, pitch = colH / s.fins, fx = (s.finX[0] + s.finX[1]) / 2;
       // (its bottom at y = 0)
-      return [P(it.name, { box: [s.w * mm, s.plate * mm, s.d * mm] }, { ...al, at: [0, (s.plate / 2) * mm, 0], cuts: [{ r: rootR(6, 1) * mm, depth: s.plate * mm, at: [0, (-s.plate / 2) * mm, 0], dir: [0, 1, 0] }] }),
+      return [P(it.name, { box: [s.w * mm, s.plate * mm, s.d * mm] }, { ...al, at: [0, (s.plate / 2) * mm, 0], cuts: [{ r: rootR(6, 1) * mm, thread: 'M6', depth: s.plate * mm, at: [0, (-s.plate / 2) * mm, 0], dir: [0, 1, 0] }] }),
         P(`${it.name} top`, { box: [s.w * mm, s.plate * mm, s.d * mm] }, { ...al, at: [0, (s.h - s.plate / 2) * mm, 0], cuts: [{ r: rootR(10, 1) * mm, depth: s.plate * mm, at: [0, (s.plate / 2) * mm, 0], dir: [0, -1, 0] }] }),
         P(`${it.name} column`, lathe([[rootR(6, 1), s.plate], [s.col, s.plate], [s.col, s.h - s.plate], [rootR(6, 1), s.h - s.plate], [rootR(6, 1), s.plate]]), al),
         ...Array.from({ length: s.fins }, (_, k) => [-1, 1].map((e) => P(`${it.name} fin ${k + 1}${e < 0 ? 'a' : 'b'}`, { box: [(s.finX[1] - s.finX[0]) * mm, s.fin * mm, s.d * mm] }, { ...al, at: [e * fx * mm, (s.plate + (k + 0.5) * pitch) * mm, 0] }))).flat()]; },
