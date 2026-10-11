@@ -277,6 +277,49 @@ export const BUILDS: Build[] = [
       { line: 'control box', at: [[0.248, 0.18, 0]] },
       { line: 'lid handle', at: [[0, 0.361, 0]], along: [1, 0, 0] },
     ] },
+  { id: 'spot-welder-mot', what: 'a resistance spot welder, made here',
+    src: 'the cheapest station in the building and the one that is only ever built: a microwave oven transformer is '
+      + 'free out of a dead microwave, and the whole machine is that transformer with its high-voltage secondary cut '
+      + 'out and two turns of welding cable put in its place. The transformer EMF equation sizes it: V per turn is '
+      + '4.44 f B A, and at 60 Hz, 1.6 T and a 30 \u00d7 50 mm core limb that is 0.64 V a turn, so two turns is 1.3 V. '
+      + 'The loop is a milliohm or two of cable, arms and electrodes, which is 500\u20131,600 A \u2014 the kiloamp a spot weld '
+      + 'wants, and enough for 0.8 mm steel and the nickel strip a battery pack is made of (typical: the range is wide '
+      + 'because it is all loop resistance). What it is NOT is safe to improvise: the primary side is mains, a cut '
+      + 'secondary leaves two live ends, and the works\u2019 own rule is that mains work is a person\u2019s, never the '
+      + 'robot\u2019s. The station needs the safety kit before the engine will count it',
+    lines: [
+      { name: 'transformer, salvaged microwave oven transformer with its secondary cut out', n: 1, mat: 'steel-high', size: [95, 85, 75] },
+      { name: 'secondary, 2 turns of 50 mm\u00b2 (1/0 AWG) welding cable', n: 1, mat: 'copper', size: [13, 13, 600], cm3: 80, shape: 'round' },
+      { name: 'electrode, 10 mm copper rod', n: 2, mat: 'copper', size: [10, 10, 80], cm3: 6, shape: 'round' },
+      { name: 'arm, 20 \u00d7 6 copper bar', n: 2, mat: 'copper', size: [20, 6, 180], cm3: 21.6 },
+      { name: 'arm pivot, 8 mm clevis pin and split pin', n: 1, mat: 'steel-low' },
+      { name: 'frame, 25 \u00d7 25 \u00d7 3 angle', n: 4, mat: 'steel-low', size: [25, 25, 220], cm3: 31 },
+      { name: 'base plate, 3 mm steel sheet', n: 1, mat: 'steel-low', size: [200, 150, 3], cm3: 90 },
+      { name: 'lever, 20 \u00d7 20 \u00d7 2 box section', n: 1, mat: 'steel-low', size: [20, 20, 300], cm3: 43 },
+      { name: 'insulator, 6 mm phenolic sheet', n: 2, mat: 'phenolic', size: [120, 60, 6], cm3: 43 },
+      { name: 'return spring, extension', n: 1, mat: 'steel-high' },
+      { name: 'timer, a microcontroller board and a mains solid-state relay', n: 1, mat: 'abs' },
+      { name: 'foot switch, momentary', n: 1, mat: 'abs' },
+      { name: 'enclosure, 1.5 mm steel sheet', n: 1, mat: 'steel-low', size: [220, 180, 160], cm3: 311 },
+      { name: 'M8 \u00d7 40 bolt and nut', n: 4, mat: 'steel-low' },
+    ],
+    joins: [
+      { how: 'weld-mig', n: 10, mm: 100, says: 'the frame welded, and the transformer\u2019s own core clamped to it rather than welded: a weld across the laminations shorts them together and the core heats instead of the work' },
+      { how: 'fasten', n: 8, says: 'the cable ends bolted to the copper arms through the phenolic insulators, which is the joint that carries a thousand amps: it is bolted and faced flat, because a loose joint there is the whole loop resistance' },
+    ],
+    // a transformer on a plate with two arms over it, the top one on a pivot under a lever: the electrodes meet where
+    // the work goes, and the enclosure stands behind, because the mains side is not something hands go near
+    lay: [
+      { line: 'base plate', at: [[0, 0.0015, 0]], along: [0, 1, 0] },
+      { line: 'transformer', at: [[-0.03, 0.041, 0]] },
+      { line: 'frame', at: [[-0.085, 0.113, -0.06], [-0.085, 0.113, 0.06], [0.085, 0.113, -0.06], [0.085, 0.113, 0.06]], along: [0, 1, 0] },
+      { line: 'arm', at: [[0.08, 0.1, 0], [0.08, 0.16, 0]], along: [1, 0, 0] },
+      { line: 'electrode', at: [[0.155, 0.11, 0], [0.155, 0.15, 0]], along: [0, 1, 0] },
+      { line: 'arm pivot', at: [[0.02, 0.16, 0]], along: [0, 0, 1] },
+      { line: 'lever', at: [[-0.06, 0.21, 0]], along: [1, 0, 0.35] },
+      { line: 'insulator', at: [[0.02, 0.13, 0]], along: [1, 0, 0] },
+      { line: 'enclosure', at: [[-0.12, 0.08, 0.16]] },
+    ] },
   { id: 'wall', what: 'a garden wall, 6 m long and 1.2 m high',
     src: 'thrown at it on purpose: nothing below the plant touches concrete, so this is where the engine has to say so rather than make something up',
     lines: [

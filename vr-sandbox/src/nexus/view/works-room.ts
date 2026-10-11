@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { layWorks, type Floor, type Stood } from '../works/floor';
+import { worksPack } from '../works/pack';
 import { stationById } from '../works/stations';
 import { linkFor } from '../machines/link';
 import { processById } from '../works/families';
@@ -153,8 +154,13 @@ export function stationCard(s: Stood, drawn: 'model' | 'composed' | 'built' | 'k
 }
 
 /** The works built in the room: its floor, its outside wall, every station on its own footprint, each with its card. */
-export function worksRoom(ids: string[], o: { width?: number } = {}): WorksRoom {
+export function worksRoom(ids: string[], o: { width?: number; cap?: number } = {}): WorksRoom {
   const floor = layWorks(ids, o);
+  // how this plan comes by each station, where a budget was named: a station can be drawn from the bill the works
+  // would build it from and still be *bought* by this plan (a used bench is $120 against six hours), and a card that
+  // says "the bill the plan routes" of one the plan buys is the same overstatement this file keeps finding.
+  const comesBy = new Map<string, string>();
+  if (o.cap != null) { try { for (const s of worksPack(o.cap).stations) comesBy.set(s.id, s.as); } catch { /* said as nothing below */ } }
   const group = new THREE.Group(); group.name = 'the works';
   const views: KitView[] = [];
   const by = new Map<string, THREE.Object3D>();
@@ -227,12 +233,14 @@ export function worksRoom(ids: string[], o: { width?: number } = {}): WorksRoom 
         made = { name: b.what, at: [0, 0, 0], says: `${b.what}. ${b.src}`, parts: pieces }; how = 'built';
         // a drawing that quietly leaves out half a bill is the same lie as a box: how much of it is standing here
         const kinds = new Set(pieces.map((x) => x.name.replace(/ \(\d+ of \d+\)$/, '')));
-        ofBill = `, ${kinds.size} of its ${b.lines.length} lines (the rest are bought in and carry no size)`;
+        const as = comesBy.get(s.id);
+        ofBill = `, ${kinds.size} of its ${b.lines.length} lines (the rest are bought in and carry no size)`
+          + (as === 'build' ? ', and this plan builds it' : as ? `, though this plan buys one ${as}` : '');
       }
     }
     drawn[s.id] = comp ? `drawn: ${comp.part.name}`
       : made ? (how === 'built'
-        ? `built: ${made.name} — drawn from the very bill of materials the plan routes${ofBill} (src/nexus/works/builds.ts)`
+        ? `built: ${made.name} — drawn from the bill of materials the works builds it from${ofBill} (src/nexus/works/builds.ts)`
         : `composed: ${made.name} — not a model of a named machine, but every part of it real (src/nexus/ask/machine.ts)`)
         : drawnAs ? `box: ${typeof got === 'string' ? got : 'no component'}` : 'box: the library does not draw this kind yet';
     if (comp || made) {
@@ -336,7 +344,7 @@ export function worksRoomWords(text: string, r: RoomHandles): string | null {
   if (!m) return null;
   if (standing) { r.scene.remove(standing.group); standing.dispose(); }
   const cap = m[1] ? Number(m[1].replace(/,/g, '')) : 3000;
-  standing = worksRoom(worksUnder(cap).ids);
+  standing = worksRoom(worksUnder(cap).ids, { cap });
   const [W, D] = standing.floor.room;
   // its own ground: a works is a building you go to, not a thing on a bench, and standing it among the furniture puts
   // a lathe through a wall

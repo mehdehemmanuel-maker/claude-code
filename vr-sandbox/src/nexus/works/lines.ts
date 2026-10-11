@@ -23,6 +23,10 @@ export const ALWAYS_BOUGHT: { what: RegExp; unless?: RegExp; why: string }[] = [
   { what: /black iron|pipe fitting|\b(nipple|elbow|reducer|bell|tee|union|coupler),? ?[\d/]+ ?(in|mm)?\b|\btubefit\b|\bpush ?fit\b|\bcontact tip\b|needle valve|\bregulator,/i, why: 'malleable cast iron or brass, threaded on a machine that cuts a tapered thread to a gauge: twenty cents to a few dollars a fitting, and a sealing taper thread is the one thread nothing here can cut' },
   { what: /\bburner\b|\bventuri\b|\bnozzle,? (gas|forge)\b/i, unless: /mount|holder|bracket|shield|tube\b/i, why: 'a machined mixing tube, a jet drilled to a few tenths and a cast or spun flare, sold for $60 and sized by a curve nobody here has measured: the one part of a forge worth buying finished' },
   { what: /ceramic fibre|ceramic wool|kaowool|blanket, \d+ ?mm|rigidiser|rigidizer/i, why: 'spun from a melt at 1,500 \u00b0C and needled into a blanket: bought by the roll, cut with a knife and laid in by hand (wear the respirator the safety kit is for \u2014 it is a respirable fibre until it is rigidised)' },
+  { what: /\btransformer\b|\bchoke\b|\binductor\b|\bsolenoid coil\b/i, unless: /mount|bracket|clamp|frame\b/i, why: 'a stack of insulated steel laminations and a machine-wound coil, impregnated and tested to a safety standard: a works does not wind one, and a dead microwave gives one away' },
+  { what: /\bsolid-?state relay\b|\bssr\b|\bmicrocontroller\b|\btimer,|\bcontroller,|\bthermocouple\b|\bfoot ?switch\b|\bswitch,|\brelay\b/i, why: 'an electronic assembly on a board: a wafer fab, a reflow line and a safety approval stand behind it, and it costs a few dollars' },
+  { what: /\bspring\b/i, unless: /washer|mount|seat\b|housing|guide/i, why: 'coiled from hard-drawn or music wire on a former and stress-relieved: the wire is the part, and nothing here draws wire' },
+  { what: /welding cable|\bcable,|\bcable\b.*\bawg\b|\bmm\u00b2\b.*cable/i, why: 'stranded and insulated by the kilometre: bought by the length and cut here' },
   { what: /\bmagnet\b|ndfeb|neodymium|samarium|\bferrite\b/i, unless: /holder|mount|bracket|seat\b|keeper/i, why: 'pressed from powder in an aligning field, sintered, ground to size and plated: the field is what makes it a magnet and no process here applies one' },
   { what: /bearing/i, unless: /housing|carrier|cap\b|block\b|puller|\bbore\b|\bseat\b|journal|pocket|mount/i, why: 'its raceways are ground and its balls graded to a micron and sorted by size; the grinder that does it costs more than the whole works' },
   { what: /linear (rail|guide|bearing|shaft)|guide ?rail|guideway|\bmgn\d|\bhgr\d|ball ?screw|lead ?screw|\bsbr\d/i, why: 'ground and preloaded over its whole length: the bearing\'s problem again, on something a metre long' },
@@ -41,7 +45,7 @@ export const ALWAYS_BOUGHT: { what: RegExp; unless?: RegExp; why: string }[] = [
   // the library's own words for these are not the bill's: a bill says "M8 × 25 bolt and nut" and a maker's model
   // says "buttonhead M5x10" and "slotnut slot6 M3 hammer". Matching only the first vocabulary had this works
   // forging 90 screws for a Voron (found 2026-10-11, the moment the models' real sizes reached the router).
-  { what: /screw|bolt|nut\b|washer|fastener|t-slot|\binsert\b|rivet|\bstud\b|buttonhead|panhead|caphead|cheesehead|sockethead|countersunk|\bcsk\b|grub ?screw|set ?screw|\bdowel\b|circlip|\bcirc ?clip\b|heat ?set/i, unless: /\bboss\b|plate\b|housing|lead ?screw/i, why: 'cold-headed and thread-rolled by the thousand at a few cents each; a lathe cuts one in twenty minutes and it is weaker, because a rolled thread\'s grain follows the form and a cut one\'s is severed' },
+  { what: /screw|bolt|nut\b|washer|fastener|t-slot|\binsert\b|rivet|\bstud\b|clevis pin|split pin|\bcotter\b|buttonhead|panhead|caphead|cheesehead|sockethead|countersunk|\bcsk\b|grub ?screw|set ?screw|\bdowel\b|circlip|\bcirc ?clip\b|heat ?set/i, unless: /\bboss\b|plate\b|housing|lead ?screw/i, why: 'cold-headed and thread-rolled by the thousand at a few cents each; a lathe cuts one in twenty minutes and it is weaker, because a rolled thread\'s grain follows the form and a cut one\'s is severed' },
   { what: /\bboard\b|\bpcb\b|electronic|display|\blcd\b|\bpsu\b|power supply|\bchip\b|sensor|thermistor|endstop|\bswitch\b|camera|receiver|transmitter|\besc\b|flight controller|antenna/i,
     unless: /cradle|mount|bracket|holder|housing|\bcase\b|cover|clamp|shroud|stand\b|plate\b|tray/i, why: 'a wafer fab and a pick-and-place line' },
   { what: /batter|lipo|li-ion|\bcell\b|\bpack\b|accumulator/i, unless: /holder|tray|mount|bracket|strap|cradle|box\b/i, why: 'wound or stacked electrodes, a separator a few microns thick and a sealed, dry fill: a cell made badly is a fire, and none of it is a workshop process' },
@@ -74,7 +78,9 @@ export function classOf(mat: string): MatClass | null {
   if (/^(steel|stainless|cast-iron|iron|tungsten|molybdenum|kovar|nickel|kanthal|titanium)/.test(mat)) return 'metal-hard';
   if (/^(rubber|nbr|neoprene|pu|foam|silicone|leather|epdm|viton)/.test(mat)) return 'elastomer';
   if (/^(fr4|pcb|kapton)/.test(mat)) return 'board';
-  if (/^(cfrp|fibreglass|gfrp|carbon|composite)$/.test(mat)) return 'composite';
+  // a phenolic laminate (SRBP, Tufnol, Micarta) is paper or cotton in a thermoset: a composite, sawn and drilled
+  // here like one, and not a circuit board however much it looks like one
+  if (/^(cfrp|fibreglass|gfrp|carbon|composite|phenolic|srbp|tufnol|micarta)$/.test(mat)) return 'composite';
   if (/^(glass|firebrick|csi|kbr|quartz|borosilicate)/.test(mat)) return 'glass';
   if (/^(wood|oak|paper|pine|birch|ply)/.test(mat)) return 'wood';
   if (/^(clay|stoneware|porcelain|earthenware|terracotta|glaze)/.test(mat)) return 'clay';

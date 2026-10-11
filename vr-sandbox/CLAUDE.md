@@ -1278,13 +1278,13 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    burner, and threaded black-iron fittings.
    The kiln is the fifth (2026-10-11), the same way: its station already said "a box of insulating firebrick laid dry
    in an angle-iron frame, with Kanthal A1 element wire in grooves cut with a router bit", and `kiln-brick` is that as
-   fourteen lines. The size is not chosen, it is what the brick gives: every piece has to come off a 229 \u00d7 114 \u00d7 64
-   K23 brick, so three laid flat across and one laid long make a 342 \u00d7 343 floor, a pinwheel of whole bricks on edge
-   round it leaves a 214 \u00d7 215 chamber, and two courses make it 228 high \u2014 10.5 litres. The one number that is not a
-   size is the element: 1.8 kW at 120 V is 8.0 \u03a9, and 16 AWG Kanthal A-1 at 1.45 \u00b5\u03a9\u00b7m is 1.11 \u03a9/m, so it is 7.2 m
+   fourteen lines. The size is not chosen, it is what the brick gives: every piece has to come off a 229 × 114 × 64
+   K23 brick, so three laid flat across and one laid long make a 342 × 343 floor, a pinwheel of whole bricks on edge
+   round it leaves a 214 × 215 chamber, and two courses make it 228 high — 10.5 litres. The one number that is not a
+   size is the element: 1.8 kW at 120 V is 8.0 Ω, and 16 AWG Kanthal A-1 at 1.45 µΩ·m is 1.11 Ω/m, so it is 7.2 m
    of wire. It is not drawn, because it is inside the brick.
    Throwing the kiln at the works found the deepest router fault yet, and it was not the kiln's: **the router was
-   making parts it had no size for.** `planJob` did `const size = line.size ?? [60, 60, 30]` \u2014 so a PID controller
+   making parts it had no size for.** `planJob` did `const size = line.size ?? [60, 60, 30]` — so a PID controller
    was turned on the mini lathe, a mains lead cast in the crucible furnace and a venturi burner forged on the anvil,
    each costing invented minutes. A line with no size and no volume is not a shape: there is nothing to cut it from,
    nothing to hold and nothing to measure, so it is a finished part the bill names and does not dimension, and it is
@@ -1295,23 +1295,36 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    every one of those parts by the very words the model names them with, and the model itself drew the rest, so
    `jobForModel` now takes each line's size, material and volume from the library (`madeOf`) and `billOf` hands on the
    model's own box for a part the library has no word for. Three more faults fell out of the real sizes:
-   \u2022 **Two vocabularies for one thing.** `ALWAYS_BOUGHT` was written in bill-English ("M8 \u00d7 25 bolt and nut") and the
+   • **Two vocabularies for one thing.** `ALWAYS_BOUGHT` was written in bill-English ("M8 × 25 bolt and nut") and the
      maker models speak library-word ("buttonhead M5x10", "slotnut slot6 M3 hammer", "printnozzle MK8 d0.4 brass").
      The works was forging 90 screws for a Voron. The rules know both vocabularies now, and a test throws both models
      at the works and fails if anything the library calls a fastener is made here.
-   \u2022 **A process that refuses a part was making it impossible.** The mill is quicker than the printer, so a printed
+   • **A process that refuses a part was making it impossible.** The mill is quicker than the printer, so a printed
      bracket was routed to the mill, refused on cutter stickout, and reported as unmakeable with the printer that
      prints it standing in the same room. `canMake` takes a `not` list now and `planJob` asks again without the
      process that refused; it is a gap only when every one has refused. The Ender-3 went from 8 gaps to none.
-   \u2022 **A refractory is never made here** whatever the line is called, and matching on the name alone made "wall
-     brick" a purchase and "wall offcut, sawn to 50 \u00d7 114 \u00d7 64" an impossibility \u2014 the same brick twice.
+   • **A refractory is never made here** whatever the line is called, and matching on the name alone made "wall
+     brick" a purchase and "wall offcut, sawn to 50 × 114 × 64" an impossibility — the same brick twice.
    The honest numbers, measured rather than invented: this works could make **22.4 % of an Ender-3** and **20.5 % of a
-   Voron 2.4** \u2014 its printed parts (181 on the Voron), its cut extrusion, a few turned spacers and pulleys \u2014 and
-   what it cannot make it now refuses with the number: a 384 \u00d7 404 panel ("nothing here takes a part that big; the
-   cheapest station that would is a CO\u2082 laser cutter"), a 370 mm DIN rail, a pocket deeper than the cutter reaches.
-   Next: the rest of the stations (a welder is bought, but the spot welder from a microwave transformer is the
-   biggest price cut left on the list, and the measuring bench waits on the library drawing a calliper \u2014 it is in
-   the catalogue and "not drawn yet"), the brake's own stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
+   Voron 2.4** — its printed parts (181 on the Voron), its cut extrusion, a few turned spacers and pulleys — and
+   what it cannot make it now refuses with the number: a 384 × 404 panel ("nothing here takes a part that big; the
+   cheapest station that would is a CO₂ laser cutter"), a 370 mm DIN rail, a pocket deeper than the cutter reaches.
+   The spot welder is the sixth, and the only station here that is **only ever built**, because the part that costs
+   the money is free: a microwave oven transformer out of a dead microwave, its high-voltage secondary cut out and
+   two turns of 50 mm² welding cable put through the window in its place. The sizing is the transformer EMF equation
+   and nothing else: V per turn = 4.44 f B A, so 0.64 V a turn at 60 Hz on a 30 × 50 mm limb, two turns is 1.3 V, and
+   a loop of a milliohm or two is 500-1,600 A — 0.8 mm steel and the nickel strip a battery pack is made of. $55
+   of parts against $250 for the bench machine, and the works' bill is now $2,395 for sixteen stations where buying
+   them all new is $4,973. It is written down with its hazard in plain words: the primary side is mains, a cut
+   secondary leaves two live ends, it needs the safety kit before the engine counts it, and the mains work is a
+   person's, never the robot's.
+   One more honesty fix came out of it: the room was saying "drawn from the very bill of materials the plan routes"
+   of the bench, which **this** plan buys used for $120. A station can be drawn from the bill the works would build
+   it from and still be bought by the plan in front of you, so the room now asks `worksPack` and each card says which
+   ("and this plan builds it", or "though this plan buys one used").
+   Next: the rest of the stations (a welder is bought; the measuring bench waits on the library drawing a calliper —
+   it is in the catalogue and "not drawn yet", which is the honest reason it is still a bare bench), the brake's own
+   stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
    height (0.9 m) already contradicts — the room's bare walls, a blind judge on the works as it now stands, prices
    for the lines that still have none, working the three ratchets down by cause, and the older Now items (robot
    benches, likeness, life graph).
