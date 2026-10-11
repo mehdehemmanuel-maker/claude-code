@@ -1694,6 +1694,29 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    maker publishes it, and the judge's 140 mm is a different vice's figure; and its 5.4 kg is Sealey's own for the
    CV100E, which that page marks light-duty — a fitter's 100 mm vice is 11 to 13 kg, and this is the vice the works
    actually buys for $33.
+   Judged blind again (2026-10-11, round 2): **2/10, down from 3**, and taking it apart is the useful part, because
+   the score fell for two different reasons and only one of them was the vice.
+   • **Three findings were mine and are fixed.** The anvil pad was drawn with a machined finish, so it read as bright
+     steel: the judge took it for the jaw plate lying flat on top of the jaw, measured the vice by it, and four of its
+     numbers follow from that one wrong finish (it is cast with the body now). The slide's tongue was 150 mm where the
+     housing's back is at 111, so it never showed: it is 185 now and stands 60 mm out of the back, which is what the
+     comment beside it had been claiming for two rounds. And the four countersunk heads stood 1.6 mm *proud* of the
+     gripping face — a lathed profile grows from its base, not its middle, so the turn's sign had sunk them the wrong
+     way. That one is now a test, because a head above a jaw face marks every piece of work put in it.
+   • **Two were my camera, not the drawing.** It measured the handle 30 mm off the screw's axis and the jaw plate at
+     41 % of the jaw width. The boxes say the handle and the screw are both at y 70, dead coaxial, and both plates are
+     the full 100 mm. I had rendered the vice from its *back* and called the view the front, so the near end of the
+     screw projected lower than the far handle and the plates were hidden behind the casting. This is the same fault
+     the quadcopter round found (a quad-X's arms foreshorten into one slab in `view=three`): **the view is part of the
+     evidence, and a bad one invents faults as readily as it hides them.** A side elevation (`view=side&ortho=1`) is
+     the fitter's view of a vice, and it is what the next judge gets.
+   • **The rest it named are true and known**: no thread form, no cast fillets, draft or parting line, no boss round
+     the bore, one flat colour a material, steel clipping to white, and 16-sided circles (now 32). The first five are
+     the renderer-wide round that is still queued and that every judge since the Seeed boards has asked for; they cost
+     every part in the library two or three points before any geometry is touched.
+   The screw also came up from y 60 to 70 (3.45 screw diameters below the jaw line, against a real 2.5-3) and the
+   housing with it, the base is 8 mm, and the drawn mass is still its maker's 5.4 kg — the face 6.5 to 5 and the web 9
+   to 8.5 paid for it.
    Next: the remaining stand-ins (the welder and the MSLA printer, each blocked on a library
    drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).

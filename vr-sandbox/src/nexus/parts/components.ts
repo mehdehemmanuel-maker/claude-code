@@ -651,7 +651,7 @@ type XY = [number, number];
 const IRON = { mat: 'cast-iron', color: 0x2b3a45, finish: 'cast' } as const;      // a vice is painted: a dark blue-grey
 const STEEL = { mat: 'steel-low', color: 0x8c9196, finish: 'plate' } as const;
 const vRect = (w: number, h: number, cx = 0, cy = 0): XY[] => [[cx - w / 2, cy - h / 2], [cx + w / 2, cy - h / 2], [cx + w / 2, cy + h / 2], [cx - w / 2, cy + h / 2]];
-const vCirc = (r: number, cx = 0, cy = 0, n = 16): XY[] => Array.from({ length: n }, (_, i) => [cx + r * Math.cos((2 * PI * i) / n), cy + r * Math.sin((2 * PI * i) / n)] as XY);
+const vCirc = (r: number, cx = 0, cy = 0, n = 32): XY[] => Array.from({ length: n }, (_, i) => [cx + r * Math.cos((2 * PI * i) / n), cy + r * Math.sin((2 * PI * i) / n)] as XY);
 /** A section drawn across and up (z, y), extruded along x from x0 for `len`. */
 const along = (pts: XY[], holes: XY[][], len: number, x0: number, y: number, more: Partial<Solid> = {}): Solid =>
   ({ role: 'body', shape: { prism: { pts, L: len, ...(holes.length ? { holes } : {}) } }, at: [x0 + len / 2, y, 0], rot: [0, PI / 2, 0], ...IRON, ...more });
@@ -671,9 +671,9 @@ export function benchVice(open = 30): Comp {
   // see it. On an engineer's vice the slide is under the screw, which is also what lifts the screw to where a real
   // one is — a quarter to a third of the way up a 140 mm casting, not a fifth. At y 29.5 the handle's own ends came
   // within 20 mm of whatever the vice is bolted to; at 60 it clears by 51, which is what lets you turn it.
-  const W = 100, H = 139, plate = 8, face = 6.5, web = 9, baseT = 7, yScrew = 60, yWay = 32;
+  const W = 100, H = 139, plate = 8, face = 5, web = 8.5, baseT = 8, yScrew = 70, yWay = 34;
   const wayW = 32, wayH = 24, jawY = (H + baseT) / 2;                     // the way's section, and the jaws' middle height
-  const sect = vRect(W, H - baseT, 0, jawY), pocket = vRect(77, 108, 0, jawY), way = vRect(wayW, wayH, 0, yWay);
+  const sect = vRect(W, H - baseT, 0, jawY), pocket = vRect(82, 115, 0, jawY), way = vRect(wayW, wayH, 0, yWay);
   const bore = vCirc(11, 0, yScrew);                                      // the screw's clearance through face and housing
   const g = -open;                                                        // the sliding jaw's clamping face
   // the body: one casting, bolted down through three holes in a flange wider than itself — a flange no wider than the
@@ -684,28 +684,33 @@ export function benchVice(open = 30): Comp {
     flat(vRect(112, 120, 50, 0), [vCirc(5.5, 90, 0), vCirc(5.5, 10, 50), vCirc(5.5, 10, -50)], baseT, 0),
     along(sect, [way, bore], face, plate, 0),
     along(sect, [pocket], web, plate + face, 0),
-    along(vRect(40, 62, 0, 49), [way, bore], 86, plate + face + web, 0),
-    along(vRect(40, 8, 0, H - 4), [], 40, plate + face + web, 0, { finish: 'machined' }),
+    along(vRect(44, 74, 0, 56), [way, bore], 60, plate + face + web, 0),
+    // the anvil is cast with the body, not a plate laid on it: drawn bright, a fitter read it as the jaw plate lying
+    // flat on top of the jaw and measured the vice by it, which is how one finish turned four of a judge's findings
+    along(vRect(40, 8, 0, H - 4), [], 40, plate + face + web, 0),
   ]);
   // the sliding jaw: its own face and web, and the tongue that runs in the way (150 long, so it is still held at full
   // opening and stands out of the housing's back when the jaws are shut, as a real one does)
   const slide = piece('sliding jaw', 'vice-jaw-slide', [
     along(sect, [], face, g - plate - face, 0),
     along(sect, [pocket], web, g - plate - face - web, 0),
-    along(vRect(29, 22, 0, yWay), [], 150, g - plate - face, 0),
+    along(vRect(29, 22, 0, yWay), [], 185, g - plate - face, 0),
   ]);
   // the jaw plates, each let into its jaw and screwed from the gripping face, as every vice of this pattern is: the
-  // heads are countersunk flush in the plate so nothing stands proud where the work goes, and nothing shows outside
+  // heads are countersunk flush in the plate so nothing stands proud where the work goes, and nothing shows outside.
+  // A lathed profile grows from its own base, not from its middle, so the first version of this put all four heads
+  // 1.6 mm *out* of the gripping face — proud, which is the one thing a jaw plate screw must never be, and which a
+  // fitter spotted in a render before the boxes said it. The turn's sign is what sinks them into the plate
   const jawPlate = (nm: string, x0: number, flip: boolean): Comp[] => [
     piece(`${nm} plate`, 'vice-jaw-plate', [{ role: 'body', shape: { box: [plate, 24, W] }, at: [x0 + (flip ? -plate / 2 : plate / 2), H - 12, 0], ...STEEL, finish: 'hardened' }]),
     ...[-1, 1].map((s) => piece(`${nm} plate screw ${s < 0 ? 'left' : 'right'}`, 'screw-m6', [
-      { role: 'cap', shape: { lathe: [[0, 0], [5.5, 0], [3, 3.2], [0, 3.2]] }, at: [x0 + (flip ? -1.6 : 1.6), H - 12, s * 30], rot: [0, 0, flip ? -PI / 2 : PI / 2], ...STEEL, finish: 'black-oxide' },
+      { role: 'cap', shape: { lathe: [[0, 0], [5.5, 0], [3, 3.2], [0, 3.2]] }, at: [x0 + (flip ? -1.6 : 1.6), H - 12, s * 30], rot: [0, 0, flip ? PI / 2 : -PI / 2], ...STEEL, finish: 'black-oxide' },
       { role: 'term', shape: { cyl: [3, 16] }, at: [x0 + (flip ? -11.2 : 11.2), H - 12, s * 30], rot: [0, 0, PI / 2], ...STEEL, finish: 'thread' }])),
   ];
   // the screw: captive in the sliding jaw between its collar and that jaw's web, running back into the nut in the body
   const screw = piece('main screw', 'vice-screw', [viceBar(10, 200, g - plate - face - web - 10, yScrew, { finish: 'thread' })]);
   const collar = piece('thrust collar', 'vice-collar', [viceBar(17, 10, g - plate - face - web - 10, yScrew)]);
-  const nut = piece('screw nut', 'vice-nut', [along(vRect(32, 32, 0, yScrew), [vCirc(10, 0, yScrew)], 26, 70, 0, { finish: 'machined' })]);
+  const nut = piece('screw nut', 'vice-nut', [along(vRect(32, 32, 0, yScrew), [vCirc(10, 0, yScrew)], 26, 50, 0, { finish: 'machined' })]);
   // (the handle crosses the screw's head, so it lies along z: a cylinder is drawn standing up, and turning it a quarter
   //  about x lays it across. Left out, it stood up out of the vice like a flagpole)
   const hx = g - plate - face - web - 5, lie: [number, number, number] = [PI / 2, 0, 0];

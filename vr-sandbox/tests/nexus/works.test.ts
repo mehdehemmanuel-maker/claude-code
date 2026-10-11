@@ -842,6 +842,16 @@ describe('a bill whose numbers are derived and not typed', () => {
       return (fixed.sub ?? fixed.box)!.min.x - (slide.sub ?? slide.box)!.max.x;
     };
     expect(gap(0)).toBeCloseTo(0, 3); expect(gap(100)).toBeCloseTo(0.1, 3);
+    // nothing on a gripping face may stand proud of it: a jaw plate's screws are countersunk because a head above the
+    // face marks every piece of work and is mashed the first time anything is nipped up. They stood 1.6 mm proud for a
+    // round — a lathed profile grows from its base, not its middle — and a fitter caught it in a render before the
+    // boxes did, which is why the measurement is kept here
+    const ns = layout(c.part), faceOf = (re: RegExp) => ns.find((n) => re.test(n.p.name))!;
+    const fixed = faceOf(/fixed jaw plate$/), slide = faceOf(/sliding jaw plate$/);
+    for (const n of ns) {
+      if (/fixed jaw plate screw/.test(n.p.name)) expect((n.sub ?? n.box)!.min.x, n.p.name).toBeGreaterThanOrEqual((fixed.sub ?? fixed.box)!.min.x - 1e-9);
+      if (/sliding jaw plate screw/.test(n.p.name)) expect((n.sub ?? n.box)!.max.x, n.p.name).toBeLessThanOrEqual((slide.sub ?? slide.box)!.max.x + 1e-9);
+    }
   });
   it('the safety station stands as the kit it is, and each item of it weighs what its maker says', () => {
     // the station the works will not cut, and the last of its stand-ins that every item of was a bought thing with
