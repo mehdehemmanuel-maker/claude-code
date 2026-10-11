@@ -7,8 +7,10 @@ import {
   auditJob, boundOf, bootstrapOf, buildById, canMake, classOf, emptyState, handling, holdsOf, jobForModel, jobText,
   makes, planJob, priceOfLine, processById, programsText, runMinutes, sawPart, scheduleOf, shapeOf, stationById,
   stationCost, stationUsd, throwAt, tolOf, worksOf, worksText, worksUnder, worksUnderText, worksWords, worthMaking,
+  BUILT_BY, builtParts, layRot, sectionOf,
   type Job, type PartLine,
 } from '../../src/nexus/works';
+import * as THREE from 'three';
 import { linkFor, linesOf } from '../../src/nexus/machines/link';
 
 const SHOPS = [TIERS[1]!, TIERS[2]!, TIERS[3]!, TIERS[4]!];
@@ -636,5 +638,102 @@ describe('the works as a thing to go and buy', () => {
     expect(j.buy.find((b) => /pail/.test(b.line.name))!.why).toMatch(/deep-drawn|spun/);
     // a bag of refractory is bought, not refused: it is poured by hand and no process here works it
     expect(j.buy.find((b) => /refractory/.test(b.line.name))!.why).toMatch(/bought by the bag|laid dry/);
+  });
+});
+
+// ---- a bill that agrees with its own sections, and a drawing taken from it ------------------------------------------
+// Both of these are here because of faults this file did not catch: four box-section lines carried a tenth of the
+// material they are made of (mm³ divided by 10⁴ instead of 10³), and a laid part came out drawn down the one axis
+// its author had not meant.
+
+describe('a bill that agrees with its own sections', () => {
+  it('nothing holds more material than its envelope, and a section the name states is the volume the line carries', () => {
+    for (const b of BUILDS) for (const l of b.lines) {
+      if (!l.size || l.cm3 == null) continue;
+      const env = (l.size[0] * l.size[1] * l.size[2]) / 1000;                       // mm³ to cm³
+      expect(l.cm3, `${b.id}: ${l.name} claims more than the box it is cut from`).toBeLessThanOrEqual(env * 1.001);
+      const m = /(\d+(?:\.\d+)?) × (\d+(?:\.\d+)?) × (\d+(?:\.\d+)?)/.exec(l.name);
+      if (!/box section|tube/.test(l.name) || !m) continue;                          // a square section with its wall
+      const [a, c, w] = [Number(m[1]), Number(m[2]), Number(m[3])];
+      const hollow = ((a * c - (a - 2 * w) * (c - 2 * w)) * l.size[2]) / 1000;
+      expect(l.cm3 / hollow, `${b.id}: ${l.name} is ${(hollow / l.cm3).toFixed(1)}× off its own section`).toBeCloseTo(1, 1);
+    }
+  });
+});
+
+describe('a self-build drawn from its own bill', () => {
+  // what a part's length ends up pointing at: a box's own z, or a cylinder's own y, turned the way the lay turns it
+  const turn = (d: [number, number, number], roll = 0, from: 'y' | 'z' = 'z'): THREE.Vector3 =>
+    new THREE.Vector3(...(from === 'z' ? [0, 0, 1] : [0, 1, 0])).applyEuler(new THREE.Euler(...layRot(d, roll, from)));
+  it('a length laid along an axis is drawn along that axis, and a line that says nothing lies along z', () => {
+    expect(turn([1, 0, 0]).toArray().map((x) => +x.toFixed(6))).toEqual([1, 0, 0]);
+    expect(turn([0, 1, 0]).toArray().map((x) => +x.toFixed(6))).toEqual([0, 1, 0]);
+    expect(turn([0, 0, 1]).toArray().map((x) => +x.toFixed(6))).toEqual([0, 0, 1]);
+    expect(turn([0, 0.2, 1]).angleTo(new THREE.Vector3(0, 0.2, 1))).toBeLessThan(1e-6);
+  });
+  it('a roll turns a part about its own length and leaves the length where it was: a leaf opens on its hinge', () => {
+    for (const roll of [0.35, 1.2, -0.8]) expect(turn([1, 0, 0], roll).angleTo(new THREE.Vector3(1, 0, 0))).toBeLessThan(1e-6);
+  });
+  it('a round part is drawn standing up, so its length is its own y, and the same words point it the same way', () => {
+    for (const d of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0.2, 1], [0, Math.cos(0.9), -Math.sin(0.9)]] as [number, number, number][]) {
+      expect(turn(d, 0, 'y').angleTo(new THREE.Vector3(...d)), `a round part laid along ${d}`).toBeLessThan(1e-6);
+      expect(turn(d, 0.7, 'y').angleTo(new THREE.Vector3(...d))).toBeLessThan(1e-6);          // rolled about itself
+    }
+  });
+  it('every place in a lay names a line of the same bill, and every copy of it is drawn', () => {
+    for (const b of BUILDS) {
+      if (!b.lay) continue;
+      const parts = builtParts(b);
+      let n = 0;
+      for (const place of b.lay) {
+        const line = b.lines.find((l) => l.name.toLowerCase().startsWith(place.line.toLowerCase()));
+        expect(line, `${b.id}: nothing in the bill is called "${place.line}"`).toBeDefined();
+        if (line?.size) n += place.at.length;
+        expect(place.at.length, `${b.id}: ${place.line} is placed more often than the bill has`).toBeLessThanOrEqual(line!.n);
+      }
+      expect(parts).toHaveLength(n);
+      for (const p of parts) expect(p.says).toMatch(/from this build's own bill of materials/);
+    }
+  });
+  it('a bored line is drawn with the hole in it, so a tube is a tube and a lining does not hide the crucible', () => {
+    const f = BUILDS.find((b) => b.id === 'furnace-crucible')!, parts = builtParts(f);
+    const lining = parts.find((p) => /^lining/.test(p.name))!;
+    expect(lining.cuts![0]!.r).toBeCloseTo(0.1, 3);                                  // bored 200 mm
+    expect(lining.cuts![0]!.depth).toBeCloseTo(0.25, 3);
+    expect(lining.cuts![0]!.dir).toEqual([0, -1, 0]);                                // down the pail, not across it
+    expect(lining.cuts![0]!.at[1]).toBeCloseTo(0.175, 3);                            // in at the top of it
+    expect(parts.find((p) => /^shell/.test(p.name))!.cuts).toBeDefined();            // a pail is not a billet
+    expect(parts.find((p) => /^lifting ring/.test(p.name))!.cuts).toBeUndefined();   // a bar is
+  });
+  it('a section drawn from a name holds exactly the material the same bill charges for', () => {
+    const area = (pts: [number, number][]): number =>                                  // shoelace, m²
+      Math.abs(pts.reduce((s, [x, y], i) => { const [u, v] = pts[(i + 1) % pts.length]!; return s + (x * v - u * y); }, 0)) / 2;
+    let seen = 0;
+    for (const b of BUILDS) for (const l of b.lines) {
+      const s = sectionOf(l);
+      if (!s || l.cm3 == null) continue;
+      seen++;
+      const a = area(s.prism.pts) - (s.prism.holes ?? []).reduce((n, h) => n + area(h), 0);
+      expect(a * s.prism.L * 1e6 / l.cm3, `${b.id}: ${l.name} is drawn holding a different amount from what the bill charges`).toBeCloseTo(1, 1);
+    }
+    expect(seen, 'no bill line states a section any more').toBeGreaterThan(4);
+  });
+  it('the bench the works builds for itself is as tall as its own name says', () => {
+    const b = BUILDS.find((x) => x.id === 'workbench')!, parts = builtParts(b);
+    const top = Math.max(...parts.map((p) => {
+      const s = p.shape && 'box' in p.shape ? (p.shape as { box: [number, number, number] }).box : null;
+      if (!s) return 0;
+      // how tall the box stands once it is turned the way the lay turns it: the row of its frame that points up
+      const m = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))).elements;
+      return p.at![1] + (Math.abs(m[1]!) * s[0] + Math.abs(m[5]!) * s[1] + Math.abs(m[9]!) * s[2]) / 2;
+    }));
+    expect(top).toBeCloseTo(0.9, 2);
+  });
+  it('every station the works builds for itself is drawn from its build, or says plainly that it is not', () => {
+    for (const [station, build] of Object.entries(BUILT_BY)) {
+      const b = BUILDS.find((x) => x.id === build);
+      expect(b, `${station} is built by ${build}, which is not a build`).toBeDefined();
+      expect(builtParts(b!).length, `${station}: ${build} has a lay but draws nothing`).toBeGreaterThan(b!.lay ? 0 : -1);
+    }
   });
 });

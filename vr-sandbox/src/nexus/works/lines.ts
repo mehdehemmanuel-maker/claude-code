@@ -97,6 +97,10 @@ export interface PartLine {
   tol?: number;
   /** the size the tolerance is on, mm (a bore's diameter), where it is not the smallest of `size` */ feature?: number;
   /** the thinnest standing wall in it, mm: a cutter pushes over anything under a third of its diameter */ wall?: number;
+  /** a hole down its length: how far across, and how deep from one end, mm. A tube is bored through, a pail's bore
+   *  stops at its floor. The bill's cm³ already counts the hole; this is so the drawing counts it too, because a
+   *  tube drawn solid is a bar and a lining drawn solid hides the crucible standing in it. */
+  bore?: [number, number];
   shape?: Shape;
 }
 

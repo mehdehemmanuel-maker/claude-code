@@ -1241,10 +1241,37 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    on a bench and calling it a micrometer is the exact fault this is fixing. Those benches stay bare, their cards say
    "not drawn yet", and a kitted one says "its tools are drawn whole; the bench under them is not yet". The room's own
    sentence counts all four kinds now: 1 modelled, 3 composed, 2 kitted, 10 stand-ins.
-   Next: the rest of the stations (a forge is a lined tube on a stand, a brake is two lengths of angle on a hinge:
-   each is a small builder of its own), the room's light and its bare walls, a blind judge on the works as it now
-   stands, prices for the lines that still have none, working the three ratchets down by cause, and the older Now
-   items (robot benches, likeness, life graph).
+   Three stations now draw themselves from the bill the plan already routes (2026-10-11): the welded bench, the
+   sheet-metal brake and the crucible furnace. Nothing about them is new data — `works/builds.ts` already held every
+   line, its size, its volume and its material, and `pack.ts` already said which build makes which station. Only the
+   *places* are new (`Build.lay`), because a drawing beside a bill is a second owner of the same fact, and a drawing
+   derived from it cannot drift from it. The fifth kind is `built`, and it had to exist: the first run labelled both
+   "composed … (src/nexus/ask/machine.ts)", crediting the inventor for something it had not touched — the third time
+   this round that a sentence about the room went stale because it was written rather than derived.
+   What that drawing found, which is the point of drawing a thing you have only ever added up:
+   • **A bill says how long a part is, never which way it lies.** The first furnace came out as two cylinders lying
+     on their sides inside each other. Writing the turn as three Euler angles is what caused the `layUnit` bug a day
+     earlier, so a lay now says a *direction* (`along`, with `roll` about its own length) and `layRot` composes the
+     frame and reads the angles back out. It also takes which of the part's own axes its length already runs along,
+     because the library draws a box x‑y‑z (length along z) and a cylinder standing up (length along y), and
+     assuming one convention for both is the same bug a third time.
+   • **Four bill lines carried a tenth of their own material.** 40 × 40 × 2 box section is 304 mm² of steel, so
+     844 mm of leg is 257 cm³ — the bill said 27, and the two rails and the kart's frame tube were wrong the same
+     way (mm³ divided by 10⁴ instead of 10³, one slip made four times). The bench's steel went from 2.8 kg to
+     28 kg, which is what a 1.5 m welded bench weighs. A test now checks every line against its envelope and against
+     the section its own name states.
+   • **A bill's name already states its section**, so the drawing uses it: `sectionOf` turns "50 × 50 × 6" on a
+     600 mm angle into a real L and "40 × 40 × 2 box section" into a square tube with its bore, and a test checks
+     that the section drawn holds exactly the cm³ the same bill charges for. A `bore` on a line bores it down its
+     length, so a pail is a pail and the lining does not hide the crucible standing in it; a `bent: 'ring'` lay draws
+     a length of bar as the ring its own length makes (900 mm of 10 mm bar → a 286 mm bail).
+   • **The bench was 36 mm taller than its own label.** 880 mm of leg + 6 mm pad + two 25 mm sheets is 936, not the
+     900 in its name; the leg is 844 now and a test adds the drawing's own parts up to the height on the label.
+   Next: the rest of the stations (a forge is a lined tube on a stand, a welder and a kiln each a small builder of its
+   own), the brake's own stand — it is a benchtop machine and it is drawn lying on the floor, which its station's own
+   height (0.9 m) already contradicts — the room's bare walls, a blind judge on the works as it now stands, prices
+   for the lines that still have none, working the three ratchets down by cause, and the older Now items (robot
+   benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);

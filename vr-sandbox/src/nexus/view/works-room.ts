@@ -18,6 +18,8 @@ import { processById } from '../works/families';
 import { card, label } from './holo';
 import { component, use } from '../parts/components';
 import { composeMachine, machinePart } from '../ask/machine';
+import { BUILDS, builtParts } from '../works/builds';
+import { BUILT_BY } from '../works/pack';
 import type { Part } from '../parts/kits';
 import { kitView, type KitView } from './kit3d';
 import { worksUnder } from '../works/budget';
@@ -136,7 +138,7 @@ function standIn(s: Stood): THREE.Group {
 }
 
 /** What a station's card says: what it does, what it cost and how, what it draws, and how a program reaches it. */
-export function stationCard(s: Stood, drawn: 'model' | 'composed' | 'kit' | 'stand-in'): string[] {
+export function stationCard(s: Stood, drawn: 'model' | 'composed' | 'built' | 'kit' | 'stand-in'): string[] {
   const st = stationById(s.id);
   const does = st.does.map((d) => processById(d).name ?? d);
   const link = linkFor(s.id);
@@ -146,7 +148,7 @@ export function stationCard(s: Stood, drawn: 'model' | 'composed' | 'kit' | 'sta
     does.length ? short(does.join(', ')) : short(st.why),
     `${s.size[0]} × ${s.size[1]} m${st.kw ? `, ${st.kw} kW` : ''}${st.needs.length ? `, needs ${st.needs.join(', ')}` : ''}`,
     link && link.transport !== 'hand' ? `a program can be sent: ${link.transport}` : 'no port: its program is steps with a check at each one',
-    { model: '', composed: 'composed here out of library parts, not a model of a named machine', kit: 'its tools are drawn whole; the bench under them is not yet', 'stand-in': 'not drawn yet: it stands as its own floor area' }[drawn],
+    { model: '', composed: 'composed here out of library parts, not a model of a named machine', built: 'drawn from its own bill of materials: this is the thing the works makes for itself', kit: 'its tools are drawn whole; the bench under them is not yet', 'stand-in': 'not drawn yet: it stands as its own floor area' }[drawn],
   ].filter(Boolean);
 }
 
@@ -210,12 +212,28 @@ export function worksRoom(ids: string[], o: { width?: number } = {}): WorksRoom 
     const drawnAs = DRAWN[s.id], got = drawnAs ? component(drawnAs) : null;
     const comp = got && typeof got !== 'string' ? got : null;
     // a station with no kind but an honest composition: the inventor builds it out of parts the library does draw
-    let made: Part | null = null;
+    let made: Part | null = null, how: 'composed' | 'built' = 'composed';
     if (!comp && COMPOSED[s.id]) {
       try { const m = composeMachine(COMPOSED[s.id]!); made = machinePart(m, (w) => use(w)); } catch { made = null; }
     }
+    // or a station the works makes for itself, drawn from the very bill of materials the plan routes: `BUILT_BY`
+    // already owns which build makes which station (src/nexus/works/pack.ts), so this asks it rather than keeping a
+    // second list of the same fact
+    let ofBill = '';
+    if (!comp && !made && BUILT_BY[s.id]) {
+      const b = BUILDS.find((x) => x.id === BUILT_BY[s.id]);
+      const pieces = b ? builtParts(b) : [];
+      if (b && pieces.length) {
+        made = { name: b.what, at: [0, 0, 0], says: `${b.what}. ${b.src}`, parts: pieces }; how = 'built';
+        // a drawing that quietly leaves out half a bill is the same lie as a box: how much of it is standing here
+        const kinds = new Set(pieces.map((x) => x.name.replace(/ \(\d+ of \d+\)$/, '')));
+        ofBill = `, ${kinds.size} of its ${b.lines.length} lines (the rest are bought in and carry no size)`;
+      }
+    }
     drawn[s.id] = comp ? `drawn: ${comp.part.name}`
-      : made ? `composed: ${made.name} — not a model of a named machine, but every part of it real (src/nexus/ask/machine.ts)`
+      : made ? (how === 'built'
+        ? `built: ${made.name} — drawn from the very bill of materials the plan routes${ofBill} (src/nexus/works/builds.ts)`
+        : `composed: ${made.name} — not a model of a named machine, but every part of it real (src/nexus/ask/machine.ts)`)
         : drawnAs ? `box: ${typeof got === 'string' ? got : 'no component'}` : 'box: the library does not draw this kind yet';
     if (comp || made) {
       const v = kitView(comp ? comp.part : made!); views.push(v);
@@ -255,7 +273,7 @@ export function worksRoom(ids: string[], o: { width?: number } = {}): WorksRoom 
     }
 
     const c = card(CARD_W, CARD_H);
-    const lines = stationCard(s, comp ? 'model' : made ? 'composed' : drawn[s.id]?.startsWith('kit') ? 'kit' : 'stand-in');
+    const lines = stationCard(s, comp ? 'model' : made ? how : drawn[s.id]?.startsWith('kit') ? 'kit' : 'stand-in');
     c.draw(lines[0]!, lines.slice(1).map((text) => ({ text })), s.wall ? "#c08a4a" : "#4dd0e1");
     c.mesh.position.set(0, s.h + 0.55, 0); c.mesh.userData['faces'] = true; stand.add(c.mesh);
     group.add(stand); by.set(s.id, stand);
@@ -337,6 +355,6 @@ export function worksRoomWords(text: string, r: RoomHandles): string | null {
   //  a sentence that goes stale the moment the room gets better at its job has to be derived, not written)
   const kinds = Object.values(standing.drawn);
   const modelled = kinds.filter((x) => x.startsWith('drawn')).length, built = kinds.filter((x) => x.startsWith('composed')).length;
-  const kitted = kinds.filter((x) => x.startsWith('kit')).length;
-  return `${standing.floor.says} Walk into it: the ones in brown are against the outside wall because they burn or fume. ${modelled} ${modelled === 1 ? 'is' : 'are'} drawn from a maker's own model${built ? `, ${built} ${built === 1 ? 'is' : 'are'} composed out of library parts by the inventor (a benchtop CNC is three slides and a spindle, so it is built rather than boxed)` : ''}${kitted ? `, ${kitted} ${kitted === 1 ? 'is' : 'are'} a bench carrying the library's own tools drawn whole` : ''}, and the other ${kinds.length - modelled - built - kitted} stand as a stand-in at their own size. Each card says which it is: a stand-in labelled as one is honest, and a box pretending to be a lathe is not.`;
+  const kitted = kinds.filter((x) => x.startsWith('kit')).length, selfmade = kinds.filter((x) => x.startsWith('built')).length;
+  return `${standing.floor.says} Walk into it: the ones in brown are against the outside wall because they burn or fume. ${modelled} ${modelled === 1 ? 'is' : 'are'} drawn from a maker's own model${built ? `, ${built} ${built === 1 ? 'is' : 'are'} composed out of library parts by the inventor (a benchtop CNC is three slides and a spindle, so it is built rather than boxed)` : ''}${selfmade ? `, ${selfmade} ${selfmade === 1 ? 'is' : 'are'} drawn from the bill of materials the works would build it from` : ''}${kitted ? `, ${kitted} ${kitted === 1 ? 'is' : 'are'} a bench carrying the library's own tools drawn whole` : ''}, and the other ${kinds.length - modelled - built - kitted - selfmade} stand as a stand-in at their own size. Each card says which it is: a stand-in labelled as one is honest, and a box pretending to be a lathe is not.`;
 }

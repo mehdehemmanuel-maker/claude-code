@@ -14,11 +14,11 @@ import { processById } from './families';
 import { stationById, stationCost, type Buying } from './stations';
 import { worksOf } from './stations';
 import type { Join, PartLine } from './lines';
+import type { Part, V3 } from '../parts/kits';
 import type { WorksState } from './can';
 import { planJob, type Job } from './plan';
 import { component } from '../parts/components';
 import { massOf, DENSITY } from '../parts/mass';
-import type { Part } from '../parts/kits';
 import type { Machine } from '../ask/machine';
 
 // ---- builds to throw at it -----------------------------------------------------------------------------------------
@@ -27,14 +27,47 @@ import type { Machine } from '../ask/machine';
 // real bill with real sizes and its own joints. Throw any of them at any works and it says what happens: which
 // machine, in what order, what gets bought and why, and what this works cannot do at all.
 
-export interface Build { id: string; what: string; lines: PartLine[]; joins?: Join[]; src: string }
+export interface Build {
+  id: string; what: string; lines: PartLine[]; joins?: Join[]; src: string;
+  /** where each line of it sits, when it is a thing that gets stood up rather than only planned. The sizes are not
+   *  repeated here — they are the bill's own, and a drawing that carried its own copy of them would be the second
+   *  owner this file exists to prevent. Only the places are new. */
+  lay?: Lay[];
+}
+/** One line of a bill, placed: which line, where each of its copies goes, which way its length runs and how far it is
+ *  rolled about that length (a bending leaf opens about the hinge line it lies along). `along` is a direction, not an
+ *  angle, because an angle has to be composed in the drawing's own order and twice now a beam laid along x by its
+ *  author has come out drawn along z. A line with no `along` lies the way the library draws it: a box the way its
+ *  size reads (x, y, then z), a round one standing up. */
+export interface Lay { line: string; at: V3[]; along?: V3; roll?: number;
+  /** a length of bar bent into a ring (a lifting ring, a hoop): drawn as the ring its own length makes */ bent?: 'ring' }
+
+/** The turn that points a part's length along `d` and rolls it by `roll` about that length, as the three angles
+ *  `Part.rot` is applied with (three.js Euler XYZ). `from` is which of the part's own axes its length already runs
+ *  along before it is turned: a box is drawn x, y, z so its length is its z, and a cylinder is drawn standing up so
+ *  its length is its y. Composed as a frame and read back out, because adding angles slot by slot is only right when
+ *  they share an axis \u2014 and getting this wrong is how twelve beams of a frame came out all lying the same way. */
+export function layRot(d: V3, roll = 0, from: 'y' | 'z' = 'z'): V3 {
+  const unit = (v: V3): V3 => { const m = Math.hypot(...v) || 1; return [v[0] / m, v[1] / m, v[2] / m]; };
+  const cr = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const z = unit(d);
+  // any vector not along the length does to start the frame from; up, unless the part is already standing up
+  const u: V3 = Math.abs(z[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
+  const a0 = unit(cr(u, z)), b0 = cr(z, a0), cs = Math.cos(roll), sn = Math.sin(roll);
+  const a: V3 = [a0[0] * cs + b0[0] * sn, a0[1] * cs + b0[1] * sn, a0[2] * cs + b0[2] * sn], b = cr(z, a);
+  // the frame's three columns, right-handed either way: (a, b, length) for a box, (a, length, -b) for a cylinder
+  const [cx, cy, cz] = from === 'z' ? [a, b, z] : [a, z, [-b[0], -b[1], -b[2]] as V3];
+  const m13 = cz[0], lim = 0.9999999;                                      // read as an XYZ Euler the way three does it
+  if (Math.abs(m13) < lim) return [Math.atan2(-cz[1], cz[2]), Math.asin(m13), Math.atan2(-cy[0], cx[0])];
+  return [Math.atan2(cy[2], cy[1]), Math.asin(Math.max(-1, Math.min(1, m13))), 0];
+}
 export const BUILDS: Build[] = [
   { id: 'workbench', what: 'a welded steel workbench, 1500 × 700 × 900 mm',
-    src: 'sizes from a bench a person stands at: 900 mm is a working height for hands, and 40 × 40 × 2 box section carries 500 kg over 1.5 m without a mid rail (typical)',
+    src: 'sizes from a bench a person stands at: 900 mm is a working height for hands, so the leg is what is left of it under two sheets of ply and a foot pad (844 + 6 + 2 × 25 = 900), and 40 × 40 × 2 box section carries 500 kg over 1.5 m without a mid rail (typical). The steel volumes are the section\u2019s own ((40\u00b2 \u2212 36\u00b2) = 304 mm\u00b2) over each length',
     lines: [
-      { name: 'leg, 40 × 40 × 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 880], cm3: 27 },
-      { name: 'long rail, 40 × 40 × 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 1420], cm3: 44 },
-      { name: 'short rail, 40 × 40 × 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 620], cm3: 19 },
+      { name: 'leg, 40 × 40 × 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 844], cm3: 257 },
+      { name: 'long rail, 40 × 40 × 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 1420], cm3: 432 },
+      { name: 'short rail, 40 × 40 × 2 box section', n: 4, mat: 'steel-low', size: [40, 40, 620], cm3: 188 },
       { name: 'foot pad, 60 × 60 × 6 plate', n: 4, mat: 'steel-low', size: [60, 60, 6], cm3: 21 },
       { name: 'top, 25 mm birch ply', n: 2, mat: 'wood', size: [1500, 700, 25], cm3: 26250 },
       { name: 'M10 × 40 bolt and nut', n: 16, mat: 'steel-low' },
@@ -42,11 +75,20 @@ export const BUILDS: Build[] = [
     joins: [
       { how: 'weld-mig', n: 20, mm: 160, says: 'every leg-to-rail corner welded all round: four sides of a 40 mm section is 160 mm of bead' },
       { how: 'fasten', n: 16, says: 'the ply top bolted down, so it can be replaced when it is worn out' },
+    ],
+    // four legs at the corners of the rail frame (1420 = 1500 \u2212 two legs, 620 = 700 \u2212 two legs), a rail
+    // frame under the top and another low down as a stretcher, a pad under each leg and the ply in two layers on top
+    lay: [
+      { line: 'leg', at: [[-0.73, 0.428, -0.35], [0.73, 0.428, -0.35], [-0.73, 0.428, 0.35], [0.73, 0.428, 0.35]], along: [0, 1, 0] },
+      { line: 'long rail', at: [[0, 0.83, -0.35], [0, 0.83, 0.35], [0, 0.15, -0.35], [0, 0.15, 0.35]], along: [1, 0, 0] },
+      { line: 'short rail', at: [[-0.73, 0.83, 0], [0.73, 0.83, 0], [-0.73, 0.15, 0], [0.73, 0.15, 0]], along: [0, 0, 1] },
+      { line: 'foot pad', at: [[-0.73, 0.003, -0.35], [0.73, 0.003, -0.35], [-0.73, 0.003, 0.35], [0.73, 0.003, 0.35]], along: [0, 1, 0] },
+      { line: 'top', at: [[0, 0.8625, 0], [0, 0.8875, 0]], along: [0, 1, 0] },
     ] },
   { id: 'gokart', what: 'a pedal go-kart frame with steered front wheels',
     src: 'a kart\'s own geometry: 25 mm square tube, a live rear axle in two bearings, stub axles on kingpins, a steel seat pan (typical; machines.ts holds the track kart)',
     lines: [
-      { name: 'frame tube, 25 × 25 × 2', n: 8, mat: 'steel-low', size: [25, 25, 900], cm3: 16 },
+      { name: 'frame tube, 25 × 25 × 2', n: 8, mat: 'steel-low', size: [25, 25, 900], cm3: 166 },
       { name: 'stub axle spindle, its wheel bearing seat', n: 2, mat: 'steel-low', size: [20, 20, 90], feature: 20, cm3: 12, shape: 'round' },
       { name: 'kingpin bush housing', n: 2, mat: 'steel-low', size: [30, 30, 50], feature: 16, cm3: 18, shape: 'round' },
       { name: 'seat pan, 2 mm sheet', n: 1, mat: 'steel-low', size: [420, 380, 2], cm3: 319 },
@@ -103,27 +145,47 @@ export const BUILDS: Build[] = [
       { name: 'bending leaf angle, 50 \u00d7 50 \u00d7 6', n: 1, mat: 'steel-low', size: [50, 50, 600], cm3: 338 },
       { name: 'hinge lug, 60 \u00d7 40 \u00d7 6 plate', n: 4, mat: 'steel-low', size: [60, 40, 6], feature: 10, cm3: 14 },
       { name: 'hinge pin, 10 mm round bar', n: 2, mat: 'steel-low', size: [10, 10, 70], cm3: 5, shape: 'round' },
-      { name: 'handle, 20 \u00d7 2 tube', n: 1, mat: 'steel-low', size: [20, 20, 400], cm3: 45 },
+      { name: 'handle, 20 \u00d7 2 tube', n: 1, mat: 'steel-low', size: [20, 20, 400], cm3: 45, shape: 'round', bore: [16, 400] },
       { name: 'M10 \u00d7 60 bolt and nut', n: 6, mat: 'steel-low' },
     ],
     joins: [
       { how: 'weld-mig', n: 8, mm: 60, says: 'the four hinge lugs welded to the bed and the leaf, two beads each: the hinge line is the whole accuracy of the machine, so it is welded and then the pin holes are drilled through both lugs together' },
       { how: 'fasten', n: 6, says: 'the clamp angle bolted, not welded, because its grip has to be adjustable to the thickness being bent' },
+    ],
+    // the bed lies flat along the hinge line, the clamp sits on top of it, the leaf hangs off the hinge at the back,
+    // and the handle stands off the leaf: three angles, two pins and a lever, which is the whole machine
+    lay: [
+      { line: 'bed angle', at: [[0, 0.025, 0]], along: [1, 0, 0] },
+      { line: 'clamp angle', at: [[0, 0.075, -0.012]], along: [1, 0, 0] },
+      { line: 'bending leaf', at: [[0, 0.025, -0.055]], along: [1, 0, 0], roll: 0.35 },
+      { line: 'hinge lug', at: [[-0.26, 0.05, -0.03], [-0.09, 0.05, -0.03], [0.09, 0.05, -0.03], [0.26, 0.05, -0.03]] },
+      { line: 'hinge pin', at: [[-0.175, 0.05, -0.03], [0.175, 0.05, -0.03]], along: [1, 0, 0] },
+      { line: 'handle', at: [[0.26, 0.17, -0.2]], along: [0, Math.cos(0.9), -Math.sin(0.9)] },
     ] },
   { id: 'furnace-crucible', what: 'a crucible furnace, made here',
-    src: 'the station\u2019s own self-build: the forge\u2019s burner in a steel pail lined with 50 mm of refractory, with the tongs, the lifting ring and the flask made and the crucible bought. The lining\u2019s volume is the pail\u2019s shell less its bore (a 300 mm pail, 350 mm deep, bored 200 \u00d7 250)',
+    src: 'the station\u2019s own self-build: the forge\u2019s burner in a steel pail lined with 50 mm of refractory, with the tongs, the lifting ring and the flask made and the crucible bought. The lining is cast inside the pail, so it is the pail\u2019s bore across (298) and its volume is that cylinder less its own bore (a 300 mm pail, 350 mm deep, bored 200 \u00d7 250)',
     lines: [
-      { name: 'lining, 50 mm refractory castable', n: 1, mat: 'refractory', size: [300, 300, 350], cm3: 16800 },
-      { name: 'shell, steel pail', n: 1, mat: 'steel-low', size: [300, 300, 350], cm3: 420 },
+      { name: 'lining, 50 mm refractory castable', n: 1, mat: 'refractory', size: [298, 298, 349], cm3: 16490, shape: 'round', bore: [200, 250] },
+      { name: 'shell, steel pail', n: 1, mat: 'steel-low', size: [300, 300, 350], cm3: 420, shape: 'round', bore: [298, 349] },
       { name: 'crucible, #6 clay-graphite', n: 1, mat: 'graphite' },
       { name: 'lifting ring, 10 mm round bar', n: 1, mat: 'steel-low', size: [10, 10, 900], cm3: 71, shape: 'round' },
       { name: 'tong arm, 12 mm round bar', n: 2, mat: 'steel-low', size: [12, 12, 600], cm3: 68, shape: 'round' },
-      { name: 'flask, 200 \u00d7 2 tube', n: 1, mat: 'steel-low', size: [200, 200, 250], cm3: 311 },
+      { name: 'flask, 200 \u00d7 2 tube', n: 1, mat: 'steel-low', size: [200, 200, 250], cm3: 311, shape: 'round', bore: [196, 250] },
       { name: 'M8 \u00d7 30 bolt and nut', n: 4, mat: 'steel-low' },
     ],
     joins: [
       { how: 'weld-mig', n: 4, mm: 50, says: 'the tongs\u2019 pivot and the ring\u2019s ends welded; the lining is cast in place and held by nothing but its own shape, which is why the pail is a pail and not a sheet rolled here' },
       { how: 'fasten', n: 4, says: 'the burner\u2019s mount bolted to the shell, so the same burner goes back to the forge' },
+    ],
+    // the shell stands on the floor, the lining is cast inside it, the crucible sits in the bore, and the tongs and
+    // the flask stand beside it where they are left: a furnace is a bucket you do not pick up by its sides
+    lay: [
+      { line: 'shell', at: [[0, 0.175, 0]], along: [0, 1, 0] },
+      { line: 'lining', at: [[0, 0.175, 0]], along: [0, 1, 0] },
+      { line: 'crucible', at: [[0, 0.21, 0]], along: [0, 1, 0] },
+      { line: 'lifting ring', at: [[0, 0.36, 0]], bent: 'ring' },
+      { line: 'tong arm', at: [[0.3, 0.018, 0.06], [0.3, 0.018, -0.06]], along: [0, 0, 1] },
+      { line: 'flask', at: [[-0.34, 0.125, 0]], along: [0, 1, 0] },
     ] },
   { id: 'wall', what: 'a garden wall, 6 m long and 1.2 m high',
     src: 'thrown at it on purpose: nothing below the plant touches concrete, so this is where the engine has to say so rather than make something up',
@@ -219,4 +281,80 @@ export function machineBuild(m: Machine): Build {
     lines,
     joins: [{ how: 'fasten', n: lines.filter((l) => /bolt|screw|nut/i.test(l.name)).reduce((a, l) => a + l.n, 0), says: 'every bolt into a T-slot nut or a tapped plate: the whole machine comes apart again, which is what extrusion is for' }],
   };
+}
+
+// ---- a self-build drawn from its own bill ---------------------------------------------------------------------------
+// The bill is the one owner of what a thing is made of, so the drawing is derived from it rather than written beside
+// it: a second copy of "50 × 50 × 6 angle, 600 long" in a drawing file is exactly the fault the owners table exists to
+// prevent, and it goes stale the first time the bill changes. Only the *places* are new, and they live on the build
+// (`Build.lay`) beside the sizes they place.
+//
+// What this cannot do is make a section out of a box: an angle is drawn as its bounding prism, not as an L. That is
+// said on every part it draws, because a drawing that quietly rounds a section up to a solid is how a 6 mm angle comes
+// out weighing like a 50 mm bar.
+
+/** How each material in a bill is drawn. Nothing here is a claim about the material — the bill's own `mat` is — only
+ *  about how it looks, which the library's own density table does not say. */
+const BILL_LOOK: Record<string, { color: number; finish: string }> = {
+  'steel-low': { color: 0x8c9199, finish: 'mill' },
+  refractory: { color: 0xd9cdb4, finish: 'texture' },
+  graphite: { color: 0x3a3a3c, finish: 'texture' },
+  wood: { color: 0xc0a378, finish: 'sanded' },
+  'al-6061': { color: 0xadb2b8, finish: 'mill' },
+};
+
+/** The section a bill line states in its own name, as the library's own prism: "50 × 50 × 6" on a 600 mm angle is an
+ *  L of two 50 mm legs 6 mm thick, and "40 × 40 × 2 box section" is a square tube with its bore. It is a section and
+ *  not a size when the first two numbers are the line's own width and depth and the third is not its length — which
+ *  is also how the bill's cm³ was worked out, so the drawing, the name and the volume now say the same thing.
+ *  Anything else (a plate, a bar, a sheet) is already the box it says it is. */
+export function sectionOf(line: PartLine): { prism: { pts: [number, number][]; holes?: [number, number][][]; L: number } } | null {
+  if (line.shape === 'round' || !line.size) return null;
+  const m = /(\d+(?:\.\d+)?) × (\d+(?:\.\d+)?) × (\d+(?:\.\d+)?)/.exec(line.name);
+  if (!m) return null;
+  const mm = 0.001, a = Number(m[1]), c = Number(m[2]), w = Number(m[3]), [sa, sc, L] = line.size;
+  if (a !== sa || c !== sc || w === L) return null;
+  const P = (x: number, y: number): [number, number] => [x * mm, y * mm];
+  if (/\bangle\b/.test(line.name)) {
+    // an L stood on its own corner: the leg along x, the leg up y, both w thick
+    return { prism: { L: L * mm, pts: [P(-a / 2, -c / 2), P(a / 2, -c / 2), P(a / 2, -c / 2 + w), P(-a / 2 + w, -c / 2 + w), P(-a / 2 + w, c / 2), P(-a / 2, c / 2)] } };
+  }
+  if (/box section|\btube\b|\bbox\b/.test(line.name)) {
+    const i = [a / 2 - w, c / 2 - w];
+    return { prism: { L: L * mm, pts: [P(-a / 2, -c / 2), P(a / 2, -c / 2), P(a / 2, c / 2), P(-a / 2, c / 2)],
+      holes: [[P(-i[0]!, -i[1]!), P(i[0]!, -i[1]!), P(i[0]!, i[1]!), P(-i[0]!, i[1]!)]] } };
+  }
+  return null;
+}
+
+/** A self-build as a drawn part: every line of its bill at the place the build gives it, at the bill's own size. A
+ *  line the build does not place is left out rather than dropped somewhere, and `says` names how many of each. */
+export function builtParts(b: Build): Part[] {
+  if (!b.lay) return [];
+  const mm = 0.001, out: Part[] = [];
+  for (const place of b.lay) {
+    const line = b.lines.find((l) => l.name.toLowerCase().startsWith(place.line.toLowerCase()));
+    if (!line?.size) continue;
+    const [a, c, L] = line.size, look = BILL_LOOK[line.mat] ?? BILL_LOOK['steel-low']!;
+    place.at.forEach((at, i) => {
+      const round = line.shape === 'round', cut = sectionOf(line);
+      // a ring is a length of bar bent round: its own circumference says how wide it comes out
+      const shape = place.bent === 'ring' ? { torus: [L * mm / (2 * Math.PI), (a / 2) * mm] as [number, number] }
+        : cut ? cut
+          : round ? { cyl: [(a / 2) * mm, L * mm] as [number, number] } : { box: [a * mm, c * mm, L * mm] as V3 };
+      // a tube drawn solid is a bar, and a pail drawn solid hides everything cast inside it: the bore the bill states
+      // is cut down the part's own length from the end it is bored from
+      const cuts = line.bore
+        ? [{ r: (line.bore[0] / 2) * mm, depth: line.bore[1] * mm,
+            at: (round ? [0, (L / 2) * mm, 0] : [0, 0, (L / 2) * mm]) as V3, dir: (round ? [0, -1, 0] : [0, 0, -1]) as V3 }]
+        : undefined;
+      out.push({
+        name: place.at.length > 1 ? `${line.name} (${i + 1} of ${place.at.length})` : line.name,
+        shape, at, ...(place.along || place.roll ? { rot: layRot(place.along ?? (round && !cut ? [0, 1, 0] : [0, 0, 1]), place.roll ?? 0, round && !cut && place.bent !== 'ring' ? 'y' : 'z') } : {}), ...(cuts ? { cuts } : {}),
+        mat: line.mat, color: look.color, finish: look.finish,
+        says: `${line.name}: ${line.size!.join(' × ')} mm${line.bore ? `, bored ${line.bore[0]} mm, ${line.bore[1]} mm deep` : ''}${line.cm3 ? `, ${line.cm3} cm³ of ${line.mat}` : ''} \u2014 from this build's own bill of materials${cut ? ', drawn as the section its name states' : place.bent === 'ring' ? `, bent into a ring of ${Math.round(L / Math.PI)} mm` : line.bore ? ', bored down its length' : ''}.`,
+      } as Part);
+    });
+  }
+  return out;
 }
