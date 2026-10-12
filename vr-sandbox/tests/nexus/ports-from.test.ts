@@ -4,7 +4,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { use } from '../../src/nexus/parts/components';
-import { axesFrom, facesFrom, fit, mates, portsFrom, rests, seat, seats, shaftsFrom, spindle, unnamedHoles } from '../../src/nexus/parts/mate';
+import { axesFrom, declared, facesFrom, fit, mates, portsFrom, rests, misdeclared, seat, seats, shaftsFrom, spindle, unnamedHoles } from '../../src/nexus/parts/mate';
+import { KINDS } from '../../src/nexus/kinds';
+import { linesOf } from '../../src/nexus/kinds/core';
+import { HAND_FAMILIES } from '../../src/nexus/parts/families';
+import { KITS, makeKit } from '../../src/nexus/parts/kits';
 import type { Port } from '../../src/nexus/parts/kits';
 
 const mirror = (p: Port): Port => ({ ...p, sex: p.sex === 'holes' ? 'threads' : 'holes', n: [-p.n[0], -p.n[1], -p.n[2]], pattern: p.pattern.map(([x, y]) => [-x, y] as [number, number]) });
@@ -95,12 +99,17 @@ describe('shafts, but only the ends that are free to enter something', () => {
     expect(+(screw!.d * 1000).toFixed(2)).toBeCloseTo(5, 1); // a screw's shank is a shaft
   }, 60000);
 
-  it('a bearing\'s outside is a cylinder that seats in a housing, at its catalogue outside diameter', () => {
-    // 6205 is 25 x 52 x 15. Drawn with its chamfers the outer ring reads a touch under 52, which is the drawing being
-    // honest about a chamfer rather than the reader being wrong.
-    const biggest = shaftsFrom(use('bearing 6205')).reduce((a, b) => (a.d > b.d ? a : b));
-    expect(biggest.d * 1000).toBeGreaterThan(50);
-    expect(biggest.d * 1000).toBeLessThanOrEqual(52);
+  it('a bearing\'s outside seats in a housing at its catalogue outside diameter, exactly', () => {
+    // It read ⌀51 against the catalogue's 52 and that was recorded as the drawing being honest about its chamfers.
+    // It was not: the reader was reading the chamfer. A chamfer is a *tool's* feature and its absolute size does not
+    // shrink with the part — a lead-in is allowed max(0.35 r, 0.5 mm) — and the widest cylindrical run within that of
+    // the end is the shaft. With it, three bearings land on their catalogue figures and a ⌀4 dowel is found at all,
+    // where before the reader took its chamfer's own flat (⌀2.8) over a run of zero length.
+    for (const [words, od] of [['bearing 6205', 52], ['bearing 625', 16], ['bearing 6204', 47]] as const) {
+      const biggest = shaftsFrom(use(words)).reduce((a, b) => (a.d > b.d ? a : b));
+      expect(+(biggest.d * 1000).toFixed(2), words).toBe(od);
+    }
+    expect(+(spindle(use('dowel 4x20'))!.d * 1000).toFixed(2)).toBe(4);
   }, 60000);
 
   it('a cylinder buried in its own part is not a shaft', () => {
@@ -219,4 +228,67 @@ describe('flat faces, which is what a coincident mate is made of', () => {
     const r = mates(use('heatblock mk8'), use('heatblock mk8'));
     expect(r.fits.some((x) => x.how === 'resting')).toBe(true);
   }, 60000);
+});
+
+// What a part *promises* against what it *draws*. `contracts()` in make/critic.ts pairs two declarations with each
+// other — a declared ⌀8 bore meeting a declared ⌀8 shaft passes even if the solid is ⌀10 — and says nothing about
+// whether either agrees with its own part. This is that second question, and the answer is held at zero over the
+// library the components file draws, because a declaration is the one fact here a drawing can silently contradict.
+describe('a declaration against its own drawing', () => {
+  it('holds over every part the library draws', () => {
+    const words = new Set<string>();
+    for (const k of KINDS) { const ls = linesOf(k); for (const i of [0, Math.floor(ls.length / 2), ls.length - 1]) if (ls[i]) words.add(ls[i]!); }
+    for (const f of HAND_FAMILIES) for (const e of f.examples) words.add(e);
+    let drawn = 0, said = 0; const bad: string[] = [];
+    for (const w of [...words].sort()) {
+      let p; try { p = use(w); } catch { continue; } // not drawn yet: 833 of 1,118 words, which is its own list
+      drawn++; said += declared(p).length;
+      for (const m of misdeclared(p)) bad.push(`${w}: ${m.says}`);
+    }
+    expect(drawn).toBeGreaterThan(250);
+    expect(said).toBeGreaterThan(900); // 969 declarations carry a diameter
+    expect(bad).toEqual([]);
+  }, 120000);
+
+  it('holds a declaration against its own part and not against the assembly', () => {
+    // The first run compared every declaration against the whole tree's geometry, so an M8 arm screw matched a chip's
+    // 25 µm bond wire two metres away and the robot came back with twelve findings. Whether an M8 screw provides an
+    // M8 stud is a fact about the screw, not about where it was put.
+    expect(misdeclared(use('robot jarvis'))).toEqual([]);
+    const tiny = Math.min(...declared(use('robot jarvis')).map((s) => s.said));
+    expect(tiny).toBeGreaterThan(1); // nothing in it is answered by a bond wire
+  }, 120000);
+
+  it('answers a studs provider with the studs it passes, not with its own bore', () => {
+    // A part that provides studs provides a pattern of studs standing out of it, and a stud is its own part pressed
+    // through its flange — so its own rounds are its bore, and holding it to those called a hub's M12 studs ⌀24.
+    const car = makeKit(KITS.find((k) => k.name === 'car')!, 'car', 1).part;
+    const studs = declared(car).filter((s) => s.kind === 'studs');
+    expect(studs.length).toBeGreaterThan(0);
+    for (const s of studs) expect(s, s.says).toMatchObject({ ok: true });
+  }, 120000);
+
+  it('never compares a chain\'s pitch as a diameter', () => {
+    // A chain declares ISO 606's pitch, which is a length along the chain and not a diameter of anything drawn.
+    const kart = makeKit(KITS.find((k) => k.name === 'go-kart')!, 'go-kart', 1).part;
+    expect(declared(kart).some((s) => s.kind === 'chain')).toBe(false);
+  }, 120000);
+
+  it('reads a bent tube\'s own round, so a drive shaft draws a shaft', () => {
+    // The feature lives in the richer shape and not in the primitive whose name suggests it, a fifth time: a drive
+    // shaft and a stub spindle are both drawn as bent tubes, and reading `cyl` alone said they drew no shaft at all.
+    const car = makeKit(KITS.find((k) => k.name === 'car')!, 'car', 1).part;
+    for (const s of misdeclared(car)) expect(s.says, s.says).not.toMatch(/draws no shaft at all/);
+  }, 120000);
+
+  it('reports the fleet\'s hand-drawn declarations, held to the number', () => {
+    // Four causes, all in machines.ts's hand-drawn suspension and drive, and this is the ratchet that keeps them from
+    // growing: a hub and its axle both take a shaft diameter as 12 % of the *rim* (55 mm on an 18 in wheel, where a
+    // real drive shaft is 28), a hub on a fixed spindle draws no bore at all, a sprocket is drawn as a solid disc,
+    // and an engine's output shaft is declared and never drawn. Each is a round of its own; none may be added to.
+    const car = makeKit(KITS.find((k) => k.name === 'car')!, 'car', 1).part;
+    const ms = misdeclared(car);
+    expect(ms.length).toBeLessThanOrEqual(8);
+    for (const m of ms) expect(m.says, m.says).toMatch(/⌀54\.864/); // one formula, written twice, declared by four parts
+  }, 120000);
 });

@@ -50,6 +50,25 @@ describe('critic', () => {
     expect(turning({ name: 'turbine rim' })!.clearance).toBe(0.03);
     expect(turning({ name: 'auger flight' })!.clearance).toBeCloseTo(0.006);
   });
+  test('a contract is checked against the drawing and not only against the other declaration', () => {
+    // `contracts()` pairs two declarations with each other, so a declared ⌀8 bore meeting a declared ⌀8 shaft passes
+    // even where the solid is ⌀10. That is the gap: a drawing can silently contradict its own promise, and nothing
+    // asked it to. Here the shaft says ⌀8 and draws ⌀10, and its own part is what answers for it.
+    const root: Part = { name: 'rig', parts: [
+      { name: 'shaft', shape: { cyl: [0.005, 0.1] }, at: [0, 0.05, 0], mat: 'steel-alloy',
+        iface: [{ kind: 'shaft', role: 'provides', d: 0.008 }] },
+      { name: 'hub', shape: { lathe: [[0.005, 0], [0.02, 0], [0.02, 0.03], [0.005, 0.03], [0.005, 0]] }, at: [0, 0.05, 0], mat: 'steel-low',
+        iface: [{ kind: 'shaft', role: 'requires', d: 0.008 }] },
+    ] };
+    const said = critique(root).filter((x) => x.check === 'declared');
+    expect(said.map((x) => x.part).sort()).toEqual(['hub', 'shaft']);
+    expect(said.find((x) => x.part === 'shaft')!.says).toMatch(/says ⌀8 and the nearest it draws is ⌀10, 2 mm out/);
+    expect(said.find((x) => x.part === 'hub')!.says).toMatch(/wanted shaft says ⌀8 and the nearest it draws is ⌀10/);
+    // and the same two declarations, honest about the solid, say nothing
+    const ok = structuredClone(root);
+    for (const q of ok.parts!) q.iface![0]!.d = 0.01;
+    expect(critique(ok).filter((x) => x.check === 'declared')).toEqual([]);
+  });
   test('a wheel turning inside a shell: the shell opened round it, flush with its side, the opening weighing nothing', () => {
     const root: Part = { name: 'cart', parts: [
       { name: 'body', shape: { box: [2, 0.6, 1.2] }, at: [0, 0.6, 0], mat: 'steel-low', shell: 0.0015 },

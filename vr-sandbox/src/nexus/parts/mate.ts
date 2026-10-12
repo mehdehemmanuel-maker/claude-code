@@ -14,7 +14,7 @@ import { CLEAR } from './fab';
 import type { Joint, JointKind } from './mechanism';
 import { METRIC, NEMA_FACE } from './families';
 import { layout } from './space';
-import type { Part, Port, V3 } from './kits';
+import type { Iface, Part, Port, V3 } from './kits';
 
 const TOL = 0.0002;
 /** The standards' patterns, centres in metres: a NEMA motor's face (NEMA ICS 16: the four tapped holes on a square, the
@@ -325,6 +325,18 @@ export function seats(bore: Axis, shaftMm: number): { mm: number; clearance: num
  *
  *  Its own ancestors are not counted, because a group's box encloses its children by construction and would bury
  *  every shaft in the tree. */
+/** The runs of one radius in a turned profile: the cylindrical lengths a shaft is made of, each with where it holds
+ *  from and to along the axis. A chamfer, a cone and a dome are not among them, which is the point. */
+function cylinders(pts: [number, number][]): { r: number; lo: number; hi: number }[] {
+  const out: { r: number; lo: number; hi: number }[] = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [r0, y0] = pts[i]!, [r1, y1] = pts[i + 1]!;
+    if (r0 <= 1e-6 || Math.abs(r1 - r0) > Math.max(1e-9, r0 * 0.02) || Math.abs(y1 - y0) <= 1e-9) continue;
+    out.push({ r: (r0 + r1) / 2, lo: Math.min(y0, y1), hi: Math.max(y0, y1) });
+  }
+  return out;
+}
+
 export function shaftsFrom(p: Part): Axis[] {
   const nodes = layout(p), solids = nodes.filter((n) => n.p.shape && n.box);
   const ancestors = (n: typeof nodes[number]) => { const out = new Set<unknown>(); for (let q = n.parent; q; q = q.parent) out.add(q); return out; };
@@ -338,14 +350,26 @@ export function shaftsFrom(p: Part): Axis[] {
     const ends: { half: number; r: number; len: number }[] = [];
     if ('cyl' in sh) { const [r, h] = sh.cyl; ends.push({ half: h / 2, r, len: h }, { half: -h / 2, r, len: h }); }
     else if ('lathe' in sh) {
-      const pts = sh.lathe as [number, number][]; if (!pts.length) continue;
+      const pts = sh.lathe as [number, number][]; if (pts.length < 2) continue;
       const ys = pts.map((x) => x[1]), lo = Math.min(...ys), hi = Math.max(...ys), mid = (lo + hi) / 2;
+      // The diameter at an end is *not* the radius at the extreme height, because a real shaft end is chamfered —
+      // ISO 8734 says so in the dowel's own words — and reading the chamfer's own flat gave a ⌀4 dowel as ⌀2.8 over
+      // a run of no length at all, so it was dropped and a part that declares a ⌀4 shaft claimed none. It is the
+      // cylindrical run the chamfer leads into, and two things decide which: the lead-in must be short enough to be
+      // a chamfer or a dome rather than a taper (at most about a third of the radius it stands on — ISO 8734's own
+      // is 0.3 and a bearing's is near it — or half a millimetre, whichever is more, because a chamfer is cut by a
+      // tool and so does not shrink with the part: an M1.6 screw's 0.35 mm lead-in is 0.44 of its radius where an
+      // M3's 0.5 mm is 0.33 of its, and the proportion alone threw away the small screw's whole shank. A nail's
+      // point is three radii and is refused by either), and of the runs that
+      // qualify the **widest** is the shaft, because a bore's inner wall is a cylindrical run too and is not the
+      // outside of anything — reading the nearest instead gave an M5 nut's own thread root as its shaft.
+      const runs = cylinders(pts);
       for (const y of [hi, lo]) {
-        const r = Math.max(...pts.filter((x) => Math.abs(x[1] - y) < 1e-9).map((x) => x[0]));
-        if (r <= 1e-6) continue; // a profile that closes to a point at that end is a cone, not a shaft end
-        // how far the diameter stays what it is there: that is the length of this spigot
-        const near = pts.filter((x) => Math.abs(x[0] - r) <= r * 0.05).map((x) => x[1]);
-        ends.push({ half: y - mid, r, len: Math.max(...near) - Math.min(...near) || 0 });
+        const sign = y === hi ? 1 : -1;
+        const near = runs.map((r) => ({ ...r, gap: sign > 0 ? y - r.hi : r.lo - y }))
+          .filter((r) => r.gap >= -1e-9 && r.gap <= Math.max(0.35 * r.r, 0.0005)).sort((a, b) => b.r - a.r || a.gap - b.gap)[0];
+        if (!near) continue; // nothing cylindrical near that end: a cone, or a profile that closes to a point
+        ends.push({ half: y - mid, r: near.r, len: near.hi - near.lo });
       }
     } else continue;
     const up = ancestors(n), rot = new THREE.Matrix4().extractRotation(n.m);
@@ -567,3 +591,72 @@ export function rests(a: Face, b: Face): { area: number; says: string } | string
   if (shared < Math.min(a.area, b.area) * 0.25) return `${a.of} on ${b.of} would share only ${(shared * 1e6).toFixed(0)} mm²: a corner, not a seat`;
   return { area: +shared.toFixed(9), says: `${a.of} rests on ${b.of} over ${(shared * 1e6).toFixed(0)} mm²` };
 }
+
+// ---- a declaration checked against its own drawing -------------------------------------------------------------------
+// `Iface` is a promise about a solid — "I provide a ⌀5 shaft", "I need a ⌀25 bore" — and until this nothing checked it
+// against the solid. `critic.ts` pairs a `requires` with a `provides` and compares the two *declarations* with each
+// other, so a declared ⌀8 bore meeting a declared ⌀8 shaft passes however the two are actually drawn, and a part that
+// declares nothing is checked by nothing at all. Both halves now have geometry, so a declaration can be held to it.
+
+/** A declaration beside what its own part draws. `drawn` is absent where the geometry offers no figure to compare. */
+export interface Said { of: string; kind: Iface['kind']; role: Iface['role']; said: number; drawn?: number; ok: boolean; says: string }
+
+const d3 = (x: number) => +(x * 1000).toFixed(3);
+/** Every round diameter a part draws, free or buried: a declaration is about whether the drawing *has* the feature,
+ *  and whether it is reachable is a different question, which `mates` owns. A wheel stud's shank is pressed into its
+ *  hub at one end and under its nut at the other, so it has no free end at all and is still a ⌀12 stud.
+ *  A bent tube is round along its whole path, so its own diameter counts: a drive shaft and a stub spindle are both
+ *  drawn as tubes, and reading `cyl` alone said they drew no shaft at all — the same lesson a fifth time, that the
+ *  feature lives in the richer shape and not in the primitive whose name suggests it. */
+function roundsIn(p: Part): { d: number }[] {
+  const out: { d: number }[] = [];
+  for (const n of layout(p)) {
+    const sh = n.p.shape; if (!sh) continue;
+    if ('cyl' in sh) out.push({ d: 2 * sh.cyl[0] });
+    else if ('tube' in sh) out.push({ d: 2 * sh.tube.r });
+    else if ('lathe' in sh) for (const r of cylinders(sh.lathe as [number, number][])) out.push({ d: 2 * r.r });
+  }
+  return out;
+}
+/** Every diameter a part declares, beside the one its drawing gives, and whether they agree to a tenth of a
+ *  millimetre. A `studs` pair is a thread, so where the bore says which thread it carries that is what is compared:
+ *  an M5 nut's bore is drawn at its root (4.134 mm) and comparing a root against a nominal refuses the most ordinary
+ *  mate in engineering. A `drive` and a `mount` carry no diameter at all, and a `chain`'s is its *pitch* (ISO 606's
+ *  12.7 mm half-inch), which is a length along the chain and not a diameter of anything drawn — so none is compared. */
+export function declared(p: Part): Said[] {
+  const out: Said[] = [];
+  // A declaration belongs to the part that makes it, so it is held against *that* part's own drawing and not against
+  // the assembly's. Comparing against the whole tree put the robot's M8 arm screws against a chip's 25 µm bond wire
+  // two metres away, because a screw down a hole has no free end where it stands — and whether an M8 screw provides
+  // an M8 stud is a fact about the screw, not about where it was put.
+  const own = new Map<Part, { bores: Axis[]; shafts: { d: number }[] }>();
+  const geom = (q: Part) => { let g = own.get(q); if (!g) own.set(q, (g = { bores: axesFrom(q), shafts: roundsIn(q) })); return g; };
+  const near = (xs: { d: number }[], mm: number) => xs.map((x) => d3(x.d)).sort((a, b) => Math.abs(a - mm) - Math.abs(b - mm))[0];
+  // A part that *provides* studs provides a pattern of studs standing out of it, and a stud is its own part pressed
+  // through its flange — so what answers that declaration is the studs, which the part itself names (`passes`). A hub
+  // holding its own drawing to it said "its thread says ⌀12 and the nearest it draws is ⌀24", which is its bore.
+  const byName = new Map<string, Part>();
+  for (const n of layout(p)) if (!byName.has(n.p.name)) byName.set(n.p.name, n.p);
+  const passed = (q: Part) => (q.passes ?? []).flatMap((nm) => { const r = byName.get(nm); return r ? roundsIn(r) : []; });
+  for (const n of layout(p)) for (const i of n.p.iface ?? []) {
+    const { bores, shafts } = geom(n.p);
+    if (i.d === undefined || i.kind === 'chain') continue;
+    const mm = d3(i.d), what = `${n.p.name}'s ${i.role === 'provides' ? '' : 'wanted '}${i.kind === 'studs' ? 'thread' : i.kind}`;
+    // what the drawing should answer it with: a provider draws the thing, a requirer draws the hole it goes in
+    const isHole = i.role === 'requires';
+    if (i.kind === 'studs' && isHole) { // a tapped or threaded bore: compared by the thread it says it carries
+      const threads = bores.filter((b) => b.thread), hit = threads.some((b) => Math.abs(Number(b.thread!.slice(1)) - mm) < 0.01);
+      out.push({ of: n.p.name, kind: i.kind, role: i.role, said: mm, ...(threads.length ? { drawn: Number(threads[0]!.thread!.slice(1)) } : {}), ok: hit || !threads.length,
+        says: threads.length ? `${what} M${mm}: its own bore is drawn ${threads.map((b) => b.thread).join(', ')}` : `${what} M${mm}: nothing it draws says which thread it carries` });
+      continue;
+    }
+    const drawn = near(isHole ? bores : i.kind === 'studs' ? [...passed(n.p), ...shafts] : shafts, mm);
+    if (drawn === undefined) { out.push({ of: n.p.name, kind: i.kind, role: i.role, said: mm, ok: false, says: `${what} says ⌀${mm} and it draws no ${isHole ? 'bore' : 'shaft'} at all` }); continue; }
+    const ok = Math.abs(drawn - mm) <= 0.1;
+    out.push({ of: n.p.name, kind: i.kind, role: i.role, said: mm, drawn, ok,
+      says: ok ? `${what} ⌀${mm} is drawn ⌀${drawn}` : `${what} says ⌀${mm} and the nearest it draws is ⌀${drawn}, ${+Math.abs(drawn - mm).toFixed(3)} mm out` });
+  }
+  return out;
+}
+/** The declarations a part's own drawing disagrees with: the list a round works down. */
+export const misdeclared = (p: Part): Said[] => declared(p).filter((s) => !s.ok);

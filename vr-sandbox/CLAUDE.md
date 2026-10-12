@@ -157,7 +157,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
 | How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
 | How many ways a set of jointed parts can still move, and which ways they are: each joint written by *what it leaves free* (the lower pairs — fixed, revolute, prismatic, screw, cylindrical, planar, spherical, and a gear pair's ratio), every kind of it rows of one matrix rather than a case of its own, and the count the **rank** of those rows and never Grübler's formula, which is wrong for exactly the assemblies people build (a flat four-bar has one freedom and the formula says minus two). What the rank cannot hold is the mechanism's freedoms, each said as the screw it is — a slide along a direction, or a turn about an axis through a point, carrying so much along it a turn — and what it holds twice is reported too, because a redundant constraint is what binds a real assembly unless it is given tolerance and is the number a fitter feels and a drawing never shows | `src/nexus/parts/mechanism.ts` (`mobility`, `rowsOf`, `Joint`, `JointKind`, `Body`, `Motion`), fed from the geometry by `asJoint` in `src/nexus/parts/mate.ts`; `tests/nexus/mechanism.test.ts` |
-| Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library ; and a port **read off the geometry** instead of declared, because a drilled pattern is already in the solids: a `Cut` is a hole with a place, a direction, a radius and a depth, and a ring or row of equal holes drilled the same way into one face *is* a bolt pattern. Coaxial cuts are one hole (a counterbore is a seat and the hole through it, not two patterns), two holes are the fewest that fix a turn, and what a hole takes is physical - a through hole passes the largest screw it clears, a hole at a thread's own nominal diameter is tapped for it. A seating face is read the same way: a box's six, a rolled section's own profile's, and a turned profile's flat rings, each one only where it is free, and a ring in a well is no seat because what stands proud around it is hit first | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`, `portsFrom`, `axesFrom`, `seat`, `seats`, `shaftsFrom`, `spindle`, `facesFrom`, `inAWell`, `rests`, `mates`, `unnamedHoles`; kit `part` with "a + b"); `tests/nexus/ports-from.test.ts` |
+| Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library ; and a port **read off the geometry** instead of declared, because a drilled pattern is already in the solids: a `Cut` is a hole with a place, a direction, a radius and a depth, and a ring or row of equal holes drilled the same way into one face *is* a bolt pattern. Coaxial cuts are one hole (a counterbore is a seat and the hole through it, not two patterns), two holes are the fewest that fix a turn, and what a hole takes is physical - a through hole passes the largest screw it clears, a hole at a thread's own nominal diameter is tapped for it. A seating face is read the same way: a box's six, a rolled section's own profile's, and a turned profile's flat rings, each one only where it is free, and a ring in a well is no seat because what stands proud around it is hit first | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`, `portsFrom`, `axesFrom`, `seat`, `seats`, `shaftsFrom`, `spindle`, `facesFrom`, `inAWell`, `rests`, `mates`, `unnamedHoles`, `declared`, `misdeclared`; kit `part` with "a + b"); `tests/nexus/ports-from.test.ts` |
 | The robot that runs the works: the rails it rides (one rail serves the two rows facing its aisle and no more, so the number of rails a shop wants is what says whether a rail or a floor robot is the cheap answer), which stations each puts within its arm's reach, the edge between what an operation needs of a pair of hands and what this robot's hands are (a port and a grip load a machine, start it and take the part out; they do not strike an arc, pour 700 °C metal or throw clay — each refused with the reason, which is what names the next tool to buy), the basket for everything the plan says to buy (each line the cheapest real offer with its seller, its page, the figure it showed and the day it was seen, split by seller because shipping is), and the division of a job into the robot's minutes and yours. It says plainly that it cannot pay for anything | `src/nexus/works/tend.ts` (`tendWorks`, `aislesOf`, `offRail`, `tends` returning a `Tended` verdict that says *what kind* of why it is, `TOOL_FOR`, `orderFor`, `runWorks`, `runText`, `tendWords`), `npm run works -- tend [build]` |
 | Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (seventeen files: `plan.ts` routes, `designer.ts` checks a bill against its own geometry, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
 | An invention sketched before it is designed: labelled blocks (box, disc, can, bar, plate) and the component library's own parts where the plan knows which, pins between them for what drives, carries or feeds what, read from four kinds of text line; stood in the room and taken apart like anything else, weighed, its envelope said, and turned into a bill a works can route — where a block that says what fraction of itself is really there is an assembly and not yet a part | `src/nexus/ask/sketch.ts` (`sketchOf`, `sketchParts`, `sketchText`, `sketchWeighs`, `sketchSpan`, `planWords`), `billOfSketch` in `src/nexus/works/builds.ts`, `npm run plan` |
@@ -188,6 +188,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Panelled bodies on curve networks (side skin, hood, deck, cabin; arches from the wheels' sweep; keep-outs) | `src/nexus/machines/panels.ts` (rules in `BODY_RULES`, their history in `RULE_UPDATES`) |
 | Vehicles as points in a want-space (not a maker) | `src/nexus/machines/vehicle.ts` |
 | Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/parts/kits.ts`, checked in `src/nexus/make/critic.ts` |
+| What a part **promises against what it draws**: every declaration that carries a diameter held against its *own* part's geometry — a provider by the rounds it draws, a requirer by its bores, to a tenth of a millimetre — because `contracts()` pairs two declarations with each other and a declared ⌀8 bore meeting a declared ⌀8 shaft passes even where the solid is ⌀10. A declaration belongs to the part that makes it, not to the assembly (held against the whole tree, an M8 screw matched a chip's bond wire two metres away); what answers it is every round the part draws, free or buried, because a wheel stud pressed in at both ends has no free end and is still a ⌀12 stud; a studs *provider* is answered by the studs it names in `passes`, and a chain's `d` is a pitch and is never compared | `declared`, `misdeclared` in `src/nexus/parts/mate.ts`, said as a `declared` finding by `src/nexus/make/critic.ts`; held at zero over the drawn library and to the number over the fleet in `tests/nexus/ports-from.test.ts` |
 | A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
 | Places, rides and games | `places.ts`, `karting.ts`, `coaster.ts`, `pingpong.ts` |
 | Whether the tree is still clean: nothing loose at the root, every file saying what it owns, no file quietly grown into six concerns, no name with two owners, no path in prose that has gone stale, and no layer importing one that should depend on it — the last three as ratchets whose declared numbers may shrink and never grow | `tests/nexus/tidy.test.ts` (`npm run tidy`, and inside `npm run gate` for free) |
@@ -1813,8 +1814,9 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    not in the primitive the name suggests.
    Held against the catalogue again, which is the only check worth having: a NEMA 17 turns a 5 mm shaft and that is
    what comes out (⌀5.00 × 55 mm, named "shaft"), an M5 screw's shank is 5 mm and that is what comes out, and a
-   6205's outer ring reads ⌀51 against its catalogue 52 - the drawing being honest about its chamfers rather than the
-   reader being wrong. A bearing's outside being called a shaft is right and not a slip: an outer ring is an external
+   6205's outer ring reads ⌀51 against its catalogue 52 - which this file recorded as the drawing being honest about
+   its chamfers rather than the reader being wrong, and that was wrong: the reader was reading the chamfer, and it
+   reads ⌀52 exactly since the round that fixed it (see "a declaration against its own drawing" below). A bearing's outside being called a shaft is right and not a slip: an outer ring is an external
    cylinder that seats in a housing bore, which is the same relation the other way round. Nothing under 2.5 mm is
    free in a 6205 or a NEMA 17 any more, which is the cage fault held shut by a test.
    The pair that makes the point: the motor's derived 5 mm shaft seats in a GT2 B5's derived 5 mm bore at zero
@@ -1941,10 +1943,52 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    The tidy ratchet earned its keep again: `jointOf` was already `teach/edges.ts`'s name for a *soldered* joint's
    shape, and the gate failed by name on the clash rather than letting a second owner be written. Renamed `asJoint`,
    as `Gap` became `PartGap` the round before.
-   Next on this, in order: `critic.ts` reading `mates`, so a contract is checked against the geometry rather than
-   against contact alone; a pocket's floor in a box or a rolled section judged by the same well rule the rings now
-   get; and the mates of a whole assembly chosen rather than listed, which is what would let a drawn machine be asked
-   how it moves instead of a pair of parts.
+   A declaration against its own drawing (2026-10-12), which is the critic reading the geometry rather than reading a
+   second declaration. The gap was sharp: `contracts()` pairs two `Iface` declarations with each other, so a declared
+   ⌀8 bore meeting a declared ⌀8 shaft passes even where the solid is ⌀10 — the one fact in this library that a
+   drawing can silently contradict with nothing to say so. `declared(p)` asks the other question of every declaration
+   that carries a diameter: a provider is answered by the rounds its own part draws, a requirer by its own bores, to a
+   tenth of a millimetre; `misdeclared(p)` is the list a round works down, and `critique` says each one as a
+   `declared` finding. Over the whole drawn library — 1,118 words, 285 drawn, **969 declarations with a diameter** —
+   **none** disagrees with its own drawing, and that is a test, held at zero, in 3 s.
+   The scope is the round's one real decision and it was got wrong first: the first run compared each declaration
+   against the *assembly's* geometry, so an M8 arm screw on `robot jarvis` matched a chip's 25 µm bond wire two metres
+   away and the robot came back with twelve findings where it has one. **A declaration belongs to the part that makes
+   it**, so it is held against that part's own drawing: whether an M8 screw provides an M8 stud is a fact about the
+   screw and not about where it was put. 13 disagreements became 1. And what answers it is every round the part draws,
+   free or buried, not only the free ones — a wheel stud is pressed into its hub at one end and under its nut at the
+   other, so it has no free end at all and is still a ⌀12 stud; whether a feature is *reachable* is the different
+   question `mates` owns.
+   The chamfer fix that went in with it is the general one, and it corrects a claim this file made two rounds ago.
+   A ⌀4 dowel was being dropped entirely and three bearings read a millimetre under their catalogue ODs, which had
+   been written down here as "the drawing being honest about its chamfers rather than the reader being wrong". It was
+   the reader reading the chamfer. **A chamfer is a tool's feature and its absolute size does not shrink with the
+   part** — an M1.6 screw's lead-in is 0.44 of its radius — so the allowance is max(0.35 r, 0.5 mm) and the shaft is
+   the *widest* cylindrical run within that of the end, not the nearest. With it the 6205 reads ⌀52, the 625 ⌀16
+   and the 6204 ⌀47, exactly their catalogue figures, a socket head cap screw's head lands on ISO 4762's ⌀8.5, and
+   the dowel is found at all where before the reader took its chamfer's own flat (⌀2.8) over a run of zero length.
+   Three faults in the check itself, each the same shape as the rounds before it. A bent tube's round was not read, so
+   a drive shaft and a stub spindle — both drawn as tubes — "drew no shaft at all": **the feature lives in the richer
+   shape and not in the primitive whose name suggests it**, a fifth time. A part that *provides* studs provides a
+   pattern of studs standing out of it, and a stud is its own part pressed through its flange, so holding a hub to its
+   own rounds called its five M12 studs ⌀24, which is its bore — a studs provider is answered by the studs it itself
+   names (`passes`). And a chain's `d` is ISO 606's *pitch*, a length along the chain and not a diameter of anything
+   drawn: this file's own comment said so and the code compared it anyway. Those three took the fleet from 132
+   findings to 124.
+   What is left is real and is the fleet's hand-drawn debt, four causes, held to the number by a ratchet rather than
+   hidden: a hub and its axle both take their shaft diameter as **12 % of the rim** (`Math.max(0.03, t.rim * 0.12)`,
+   one formula written twice in `machines.ts`), which is 54.864 mm on an 18 in wheel where the hub bores ⌀24, the
+   drive shaft draws ⌀28 and the stub spindle ⌀38.4 — and all four parts declare that same number, so they agree
+   with *each other* and `contracts()` has always passed them, which is precisely the gap this round exists to close.
+   The other three: a hub on a fixed spindle draws no bore at all, a sprocket is drawn as a solid disc with no bore,
+   and an engine's output shaft is declared and never drawn. The car carries 8, the whole fleet 124. Fixing the first
+   is not a one-line change and is a round of its own, because making the four declarations honest exposes that the
+   hub's ⌀24 bore cannot turn on a ⌀38.4 spindle — a geometry fault, not a declaration one.
+   Measured before trusting it: 14 ms on a car, 24 ms on a street, and `perf dump` byte-identical across the round.
+   Next on this, in order: the fleet's ⌀54.864 (one formula, written twice, declared by four parts and drawn by
+   none) and the three causes beside it; a pocket's floor in a box or a rolled section judged by the same well rule
+   the rings now get; and the mates of a whole assembly chosen rather than listed, which is what would let a drawn
+   machine be asked how it moves instead of a pair of parts.
    What a parts API has that this did not, added as fields rather than waited for (2026-10-11). Going through Nexar's
    own part model against ours, six things it carries were genuinely missing and each changes a build pack: the maker
    and its own part number (a seller's product title is not an identity - two sellers write the same part three ways -

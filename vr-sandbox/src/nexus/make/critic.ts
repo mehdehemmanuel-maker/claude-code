@@ -24,6 +24,7 @@ import * as THREE from 'three';
 import { DENSITY, massOf, type Part } from '../parts/kits';
 import { loadPath } from '../embody/tree';
 import type { Part as EPart } from '../embody/part';
+import { misdeclared } from '../parts/mate';
 import { detailClassOf, onePiece, sealedIn } from './detail';
 import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from '../parts/space';
 import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../parts/form';
@@ -100,6 +101,9 @@ function paired(nodes: Node[], touch: ReturnType<typeof contacts>): Set<string> 
 export function critique(root: Part): Finding[] {
   const out: Finding[] = [], say = (check: string, part: string, says: string, fixed: boolean) => out.push({ check, part, says, fixed });
   let nodes = layout(root);
+  // ---- what a part promises against what it draws: an `Iface` is a promise about a solid, and pairing two
+  // declarations with each other says nothing about whether either agrees with its own part (parts/mate.ts) ----
+  for (const s of misdeclared(root)) say('declared', s.of, s.says, false);
   // ---- room to move: each turning thing (the outermost of what turns together) against the fixed parts near it ----
   const movers = nodes.filter((n) => turning(n.p) && n.sub && !n.p.detail && !sealedIn(n) && !ancestors(n).some((a) => turning(a.p)));
   const pairs = paired(nodes, contacts(nodes, (n) => !!n.p.iface?.length));
