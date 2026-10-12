@@ -1985,10 +1985,53 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    is not a one-line change and is a round of its own, because making the four declarations honest exposes that the
    hub's ⌀24 bore cannot turn on a ⌀38.4 spindle — a geometry fault, not a declaration one.
    Measured before trusting it: 14 ms on a car, 24 ms on a street, and `perf dump` byte-identical across the round.
-   Next on this, in order: the fleet's ⌀54.864 (one formula, written twice, declared by four parts and drawn by
-   none) and the three causes beside it; a pocket's floor in a box or a rolled section judged by the same well rule
-   the rings now get; and the mates of a whole assembly chosen rather than listed, which is what would let a drawn
-   machine be asked how it moves instead of a pair of parts.
+   The fleet's ⌀54.864, and the three causes beside it (2026-10-12): **132 findings to 0**, each fixed at its cause
+   rather than by dropping a declaration. The first is the one the round before named: a hub, its axle, its drive
+   shaft and its stub spindle all declared `Math.max(0.03, t.rim * 0.12)` — 12 % of the *rim*, one formula written
+   three times — so they agreed with each other and `contracts()` had always passed them while the drawing said
+   ⌀24, ⌀28 and ⌀38.4. The fix is the rule the check exists to enforce: **each part declares the round it
+   draws.** The drive shaft declares its own tube, the stub spindle its own, and the hub asks for the bore it is
+   drawn with. And the fleet's drawing turned out to be internally right all along — a hub bores ⌀24 and the CV
+   joint's splined stub is drawn ⌀24, a beam hub bores ⌀58.1 for a bearing whose own bore is ⌀34.1 and whose
+   spindle is drawn ⌀34.1 — so only the declarations were ever wrong, which is the cleanest possible outcome and
+   is why one formula could be deleted without moving a solid.
+   The second cause was the reader's, and it is the "pocket's floor" this file had queued: `axesFrom` took the least
+   radius over a whole turned profile, which finds a *through* bore and nothing else, so 18 hubs closed across their
+   front — a profile that dips to r = 0 at one end — read as drawing no bore at all. A blind bore is the common case
+   in a casting, so a bore is now **every cylindrical run with the part's own material outward of it**, and which
+   side the metal is on is decided exactly: spun about y, the profile is solid between its crossings of a height
+   taken in pairs, so a radius is an inner surface where it *opens* one of those pairs and an outer one where it
+   closes it. No reading of the radii alone can do that — a bore and a stepped shaft's smaller diameter both have a
+   larger radius beside them.
+   The third and fourth were things declared and never drawn, and both are drawn now: a sprocket asked for a shaft
+   and was a solid disc, so it is bored for the shaft it asks for; and a small engine's output shaft had been
+   declared since this builder was written and never drawn, so nothing it drives had anything to sit on.
+   Then the gate found two faults the declarations had been hiding, which is the round's real dividend — both are
+   *missing links in the interface chain*, and neither could be seen while every part declared the same wrong number:
+   • **A hub's bore takes its bearing, not the spindle.** With honest numbers the Corolla read "58.1 mm bore,
+     34.1 mm shaft", because `contracts()` paired the hub straight with the stub spindle and the 24 mm between them
+     is a wheel bearing. The bearing was drawn and declared nothing, so it now provides its outer race (which seats
+     in the hub's barrel, a shaft's relation the other way round) and asks for its own bore, and the hub names it
+     (`to: 'wheel bearing'`). The chain hub → bearing → spindle is whole.
+   • **The same link was missing on the driven side**, which showed as an ATV and then a forklift with *no contracts
+     at all*: the CV joint's splined stub sits in a driven hub's bore and declared nothing, and a wheel on a rigid
+     axle was bored for nothing. Both say so now, off the same two constants (`CV_STUB`, and the axle's own `d`).
+   Two more came out of giving a hub a bore it had not had, and both are the same mistake — **a flag that means one
+   architecture used as though it meant another**. `onPlate` draws a twist beam's trailing-arm carrier and its dust
+   shield, and its condition was `!knuckle && !!bore`, which caught a motorcycle and a rigid axle too: the carrier
+   landed in the fork leg. It is the `axle` option that says a twist beam, and that is what it reads now. And the
+   axle nut, which runs on a fixed stub against a hub's spigot, was drawn wherever there was a bore and no bearing —
+   a rigid axle's wheel bolts to a flange and has none, so it is scoped to a knuckle's hub.
+   One case is left and it is written down rather than hidden: **a single-track hub is still drawn solid** with its
+   axle passing through it. Giving it the car hub's bore brings a car's corner with it — a spigot, an axle nut, a
+   carrier and 38 mm more barrel, all of which stand in the fork leg — and a motorcycle hub bored for an axle that
+   passes clean through to its fork is a corner of its own. So it draws no bore, declares nothing (which is honest
+   about its drawing), and it is the *clash* check that still reports it, which is the right check for a drawing
+   fault. Drawing that corner is the next round on this.
+   Next on this, in order: a single-track hub's own corner (bored for its axle, no spigot, no nut, no carrier); a
+   pocket's floor in a *box* or a rolled section, which is the same well rule the rings and now the turned bores
+   get; and the mates of a whole assembly chosen rather than listed, which is what would let a drawn machine be
+   asked how it moves instead of a pair of parts.
    What a parts API has that this did not, added as fields rather than waited for (2026-10-11). Going through Nexar's
    own part model against ours, six things it carries were genuinely missing and each changes a build pack: the maker
    and its own part number (a seller's product title is not an identity - two sellers write the same part three ways -

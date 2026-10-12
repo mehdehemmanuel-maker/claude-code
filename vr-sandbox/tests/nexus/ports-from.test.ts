@@ -281,14 +281,16 @@ describe('a declaration against its own drawing', () => {
     for (const s of misdeclared(car)) expect(s.says, s.says).not.toMatch(/draws no shaft at all/);
   }, 120000);
 
-  it('reports the fleet\'s hand-drawn declarations, held to the number', () => {
-    // Four causes, all in machines.ts's hand-drawn suspension and drive, and this is the ratchet that keeps them from
-    // growing: a hub and its axle both take a shaft diameter as 12 % of the *rim* (55 mm on an 18 in wheel, where a
-    // real drive shaft is 28), a hub on a fixed spindle draws no bore at all, a sprocket is drawn as a solid disc,
-    // and an engine's output shaft is declared and never drawn. Each is a round of its own; none may be added to.
-    const car = makeKit(KITS.find((k) => k.name === 'car')!, 'car', 1).part;
-    const ms = misdeclared(car);
-    expect(ms.length).toBeLessThanOrEqual(8);
-    for (const m of ms) expect(m.says, m.says).toMatch(/⌀54\.864/); // one formula, written twice, declared by four parts
-  }, 120000);
+  it('holds over every machine in the fleet', () => {
+    // 132 findings when this check was first run, from four causes in machines.ts, every one now fixed at its cause:
+    // a hub and its axle took their shaft diameter as 12 % of the *rim* (54.864 mm on an 18 in wheel, where the hub
+    // bores ⌀24 for its drive shaft's splined stub), so each part now declares the round it draws; a hub closed
+    // across its front read as drawing no bore at all, which was the reader taking the least radius over the whole
+    // profile and missing a blind one; a sprocket asked for a shaft and was drawn as a solid disc, so it is bored;
+    // and a small engine's output shaft was declared since this builder was written and never drawn, so it is.
+    for (const k of KITS) {
+      const { part } = makeKit(k, k.name, 1);
+      expect(misdeclared(part).map((m) => m.says), k.name).toEqual([]);
+    }
+  }, 300000);
 });

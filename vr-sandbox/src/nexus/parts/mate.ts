@@ -270,13 +270,13 @@ export function axesFrom(p: Part): Axis[] {
     const mm = m.clone().multiply(matOf(q)), rot = new THREE.Matrix4().extractRotation(mm);
     const o = new THREE.Vector3().setFromMatrixPosition(mm), s = q.shape;
     if (s && 'lathe' in s) {
-      // a turned profile is [radius, height] spun about y: the hole up its middle is its least radius, through its span
+      // Every cylindrical run of a turned profile that has the part's own material *outward* of it. Taking the least
+      // radius over the whole profile reads a through bore and nothing else, so a hub closed across its front — a
+      // profile that dips to r = 0 at one end — drew "no bore at all" where it bores ⌀24 for its drive shaft's stub.
+      // A blind bore is the common case in a casting, so which side the metal is on is what decides it, exactly.
       const pts = s.lathe as [number, number][];
-      if (pts.length) {
-        const rmin = Math.min(...pts.map((x) => x[0])), ys = pts.map((x) => x[1]);
-        const len = Math.max(...ys) - Math.min(...ys), dir = new THREE.Vector3(0, 1, 0).applyMatrix4(rot).normalize();
-        if (rmin > 1e-6 && len > 0) out.push({ kind: 'bore', of: q.name, at: [o.x, o.y, o.z], dir: [dir.x, dir.y, dir.z], d: +(2 * rmin).toFixed(6), len, ...(rootThread(2 * rmin) ? { thread: rootThread(2 * rmin)! } : {}) });
-      }
+      const dir = new THREE.Vector3(0, 1, 0).applyMatrix4(rot).normalize();
+      for (const b of boresIn(pts)) out.push({ kind: 'bore', of: q.name, at: [o.x, o.y, o.z], dir: [dir.x, dir.y, dir.z], d: +(2 * b.r).toFixed(6), len: b.hi - b.lo, ...(rootThread(2 * b.r) ? { thread: rootThread(2 * b.r)! } : {}) });
     }
     for (const c of q.cuts ?? []) {
       const at = v(c.at).applyMatrix4(mm), dir = v(c.dir).applyMatrix4(rot).normalize();
@@ -327,6 +327,26 @@ export function seats(bore: Axis, shaftMm: number): { mm: number; clearance: num
  *  every shaft in the tree. */
 /** The runs of one radius in a turned profile: the cylindrical lengths a shaft is made of, each with where it holds
  *  from and to along the axis. A chamfer, a cone and a dome are not among them, which is the point. */
+/** Whether a turned profile holds its own material outward of radius `r` at height `y`: the profile, spun about y, is
+ *  solid between its crossings of that height taken in pairs, so `r` is an inner surface where it opens one of those
+ *  pairs and an outer one where it closes it. That is what tells a bore from a stepped shaft's own smaller diameter,
+ *  which no reading of the radii alone can do — both have a larger radius beside them. */
+function outwardOf(pts: [number, number][], r: number, y: number): boolean {
+  const xs: number[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const [r0, y0] = pts[i]!, [r1, y1] = pts[(i + 1) % pts.length]!;
+    if (Math.abs(y1 - y0) < 1e-12) continue;
+    const t = (y - y0) / (y1 - y0);
+    if (t > 0 && t <= 1) xs.push(r0 + t * (r1 - r0));
+  }
+  xs.sort((a, b) => a - b);
+  for (let i = 0; i + 1 < xs.length; i += 2) if (Math.abs(xs[i]! - r) < 1e-9) return true; // it opens a solid span
+  return false;
+}
+/** Every bore a turned profile holds: a cylindrical run with the part's own material outward of it. */
+function boresIn(pts: [number, number][]): { r: number; lo: number; hi: number }[] {
+  return cylinders(pts).filter((c) => c.r > 1e-6 && outwardOf(pts, c.r, (c.lo + c.hi) / 2));
+}
 function cylinders(pts: [number, number][]): { r: number; lo: number; hi: number }[] {
   const out: { r: number; lo: number; hi: number }[] = [];
   for (let i = 0; i + 1 < pts.length; i++) {
