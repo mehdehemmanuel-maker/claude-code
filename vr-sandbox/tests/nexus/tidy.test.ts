@@ -47,6 +47,13 @@ const dirOf = (p: string) => {
   return d.endsWith('.ts') ? '(root)' : d;
 };
 
+/** The prose that is read as instruction, and is therefore held to the same standard as the code: a path it names
+ *  must exist and an `npm run` it names must be a real script. CLAUDE.md was one 2,166-line file until the round that
+ *  split it, four fifths of it a round log, which is an anchor too long to read before a round. Splitting it would
+ *  have quietly dropped three quarters of what this check covers, so the check follows the prose instead. Every entry
+ *  is asserted to exist, so a rename fails here rather than silently un-checking a file. */
+const PROSE = ['CLAUDE.md', 'docs/OWNERS.md', 'docs/ROUNDS.md', 'docs/TOOLS.md'];
+
 /** Files a tool in `tools/measure/` wrote from a maker's own model or photo. They are data: long because the thing
  *  is, and their header carries the command that regenerates them instead of prose about a concern. */
 const GENERATED = /^src\/nexus\/(models\/|boards\/sbc-)/;
@@ -393,7 +400,7 @@ describe('one owner per name', () => {
 describe('what the prose says is true', () => {
   it('every src/nexus path named anywhere in the repo exists', () => {
     const bad: string[] = [];
-    const sources = [...FILES, join(ROOT, 'CLAUDE.md'), ...walk(join(ROOT, 'tests'))];
+    const sources = [...FILES, ...PROSE.map((f) => join(ROOT, f)), ...walk(join(ROOT, 'tests'))];
     for (const f of sources) {
       if (!existsSync(f)) continue;
       for (const m of read(f).matchAll(/src\/nexus\/[\w./-]*\.ts/g)) {
@@ -404,10 +411,14 @@ describe('what the prose says is true', () => {
     expect([...new Set(bad)].sort(), 'a path in prose goes stale the moment a file moves, and nothing else catches it').toEqual([]);
   });
 
-  it('every npm script CLAUDE.md names is in package.json', () => {
+  it('every file in PROSE exists, so a rename cannot drop these checks', () => {
+    for (const f of PROSE) expect(existsSync(join(ROOT, f)), `PROSE names ${f}, which does not exist: either restore it or take its line out`).toBe(true);
+  });
+
+  it('every npm script the prose names is in package.json', () => {
     const pkg = JSON.parse(read(join(ROOT, 'package.json'))) as { scripts: Record<string, string> };
-    const named = [...read(join(ROOT, 'CLAUDE.md')).matchAll(/`npm run ([\w:-]+)/g)].map((m) => m[1]!);
-    for (const s of [...new Set(named)].sort()) expect(Object.keys(pkg.scripts), `CLAUDE.md names \`npm run ${s}\`, which package.json does not have`).toContain(s);
+    const named = PROSE.flatMap((f) => [...read(join(ROOT, f)).matchAll(/`npm run ([\w:-]+)/g)].map((m) => m[1]!));
+    for (const s of [...new Set(named)].sort()) expect(Object.keys(pkg.scripts), `the prose names \`npm run ${s}\`, which package.json does not have`).toContain(s);
   });
 });
 
