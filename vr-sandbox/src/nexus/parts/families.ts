@@ -7,9 +7,9 @@
 
 import { BAND, axialBody, axialResistorSolids, bandsOf, ledSolids, solidsMass } from '../boards/packages';
 import type { Item, Process } from './inventory';
-import { METRIC, PAN, SETSCREW_KEY } from './threads';
+import { METRIC, PAN, SETSCREW_KEY, setscrewSocket } from './threads';
 import { KINDS } from '../kinds';
-import { CLEAR, NEMA, NEMA_FACE } from '../kinds/motion';
+import { CLEAR, GT2_LOOP_D, NEMA, NEMA_FACE } from '../kinds/motion';
 export { NEMA, NEMA_FACE };
 import { familyOf, partsOf, useFamilies } from '../kinds/core';
 
@@ -106,11 +106,15 @@ const spring: Family = {
     const y = p.coat === 'yellow'; return item(`spring-d${d}-D${D}-L${L}-n${n}${y ? '-yellow' : ''}`, `compression spring ${d} × ${D} × ${L} mm, ${n} coils${y ? ', yellow' : ''}`, 'Mechanical/Springs/Compression', 'product', 'coil', 'steel-spring', `music wire coiled on a mandrel, its ends closed and ground, stress-relieved${y ? ', painted yellow' : ''}`, `rate ${k.toFixed(2)} N/mm (G = 79 GPa); solid at about ${solid.toFixed(1)} mm; spring index D/d = ${(D / d).toFixed(1)}${D / d < 4 ? ' (too tight to coil well)' : D / d > 12 ? ' (loose: it may buckle or tangle)' : ''}`, [D + d, D + d, L], mm3g(v, RHO.steel)); },
 };
 // ---- wire by gauge (AWG: d = 0.127 × 92^((36 − n)/39) mm) ---------------------------------------------------------------
+/** A wire's diameter in mm at an AWG gauge, by the definition the gauge is: 36 AWG is 0.005 in and 0000 is 0.46 in,
+ *  so a gauge is 92^(1/39) of its neighbour (ASTM B258). Its one owner — `world/behave.ts` says a wire's resistance
+ *  from the same number, and wrote the formula out a second time until this was exported. */
+export const awgD = (n: number): number => 0.127 * 92 ** ((36 - n) / 39);
 const wire: Family = {
   id: 'wire', name: 'hook-up wire', path: ['Electrical', 'Wiring and connectors', 'Wire'], says: 'any AWG gauge and length: its diameter from the AWG formula and its resistance from copper\'s', params: [{ key: 'awg', says: 'gauge', unit: 'AWG', min: 10, max: 32, default: 22 }, { key: 'length', says: 'length', unit: 'm', min: 0.05, max: 100, default: 1 }],
   examples: ['wire 22AWG 2m', 'wire 18AWG 0.5m', 'wire 28AWG 1m'],
   read(w) { const g = num(/(\d+)\s*awg/i.exec(w)?.[1]) || 22, L = num(/(\d+(?:\.\d+)?)\s*m\b/i.exec(w)?.[1]) || 1; return { awg: g, length: L }; },
-  make(p) { const n = Number(p.awg), L = Number(p.length), d = 0.127 * 92 ** ((36 - n) / 39), A = Math.PI * (d / 2) ** 2, R = (1.72e-8 * L) / (A * 1e-6);
+  make(p) { const n = Number(p.awg), L = Number(p.length), d = awgD(n), A = Math.PI * (d / 2) ** 2, R = (1.72e-8 * L) / (A * 1e-6);
     return item(`wire-${n}awg-${L}m`, `${n} AWG hook-up wire, ${L} m`, 'Electrical/Wiring and connectors/Wire', 'product', 'extrude', 'conductor-strand wire-insulation', 'copper strands in PVC insulation', `${d.toFixed(3)} mm copper (${A.toFixed(3)} mm²); ${(R * 1000).toFixed(1)} mΩ over ${L} m at 20 °C (ρ 1.72 × 10⁻⁸ Ω·m)`, [d + 1.2, d + 1.2, L * 1000], mm3g(A * L * 1000, RHO.copper) + mm3g(Math.PI * (((d + 1.2) / 2) ** 2 - (d / 2) ** 2) * L * 1000, 1.4)); },
 };
 // ---- aluminium extrusions by series and length ---------------------------------------------------------------------------
@@ -389,7 +393,7 @@ const belt: Family = {
   id: 'belt', name: 'GT2 timing belt', path: ['Mechanical', 'Linear motion', 'Belts and pulleys'], says: 'open by the metre, or closed loops of any length, 6 or 10 mm wide', params: [{ key: 'length', says: 'length', unit: 'mm', min: 50, max: 10000, default: 1000 }, { key: 'width', says: 'width', unit: 'mm', values: [6, 9, 10, 15], default: 6 }, { key: 'loop', says: 'closed loop', unit: '', values: ['no', 'yes'], default: 'no' }, { key: 'd', says: 'loop\'s ends across', unit: 'mm', min: 6, max: 200, default: 12.73 }],
   examples: ['belt GT2 1000 6mm', 'belt GT2 loop 200 6mm', 'belt GT2 2000 10mm'],
   read(w) { const L = num(/\b(\d{2,5})\b(?!\s*mm)/.exec(w.replace(/gt2/i, '').replace(/\d+\s*mm/i, ''))?.[1]) || 1000, W = num(/(\d+)\s*mm/i.exec(w)?.[1]) || 6; return { length: L, width: W, loop: /loop|closed/i.test(w) ? 'yes' : 'no', d: num(/\bd\s*(\d+(?:\.\d+)?)/.exec(w)?.[1]) || 12.73 }; },
-  make(p) { const L = Number(p.length), W = Number(p.width), loop = p.loop === 'yes', d = Number(p.d ?? 12.73); return item(`belt-gt2-${L}-${W}${loop ? '-loop' : ''}${loop && Math.abs(d - 12.73) > 0.01 ? `-d${d}` : ''}`, `GT2 belt ${W} mm, ${L} mm${loop ? ' loop' : ''}`, 'Mechanical/Linear motion/Belts and pulleys', 'product', 'mould', 'timing-belt-body tension-cord-glass', 'a toothed belt of neoprene round glass-fibre cords', `2 mm pitch${loop ? `, ${L / 2} teeth round` : ''}; ${W} mm wide`, [W, 1.4, L], mm3g(W * 1.4 * L, 1.3)); },
+  make(p) { const L = Number(p.length), W = Number(p.width), loop = p.loop === 'yes', d = Number(p.d ?? GT2_LOOP_D); return item(`belt-gt2-${L}-${W}${loop ? '-loop' : ''}${loop && Math.abs(d - GT2_LOOP_D) > 0.01 ? `-d${d}` : ''}`, `GT2 belt ${W} mm, ${L} mm${loop ? ' loop' : ''}`, 'Mechanical/Linear motion/Belts and pulleys', 'product', 'mould', 'timing-belt-body tension-cord-glass', 'a toothed belt of neoprene round glass-fibre cords', `2 mm pitch${loop ? `, ${L / 2} teeth round` : ''}; ${W} mm wide`, [W, 1.4, L], mm3g(W * 1.4 * L, 1.3)); },
 };
 const pcb: Family = {
   id: 'pcb', name: 'circuit board', path: ['Electrical', 'Boards and controllers', 'Circuit boards'], says: 'any size, layer count and thickness', params: [{ key: 'w', says: 'width', unit: 'mm', min: 5, max: 500, default: 50 }, { key: 'h', says: 'height', unit: 'mm', min: 5, max: 500, default: 50 }, { key: 'layers', says: 'copper layers', unit: '', values: [1, 2, 4, 6, 8], default: 2 }, { key: 't', says: 'thickness', unit: 'mm', values: [0.8, 1.0, 1.2, 1.6, 2.0], default: 1.6 }],
@@ -424,7 +428,7 @@ const setscrew: Family = {
   params: [{ key: 'thread', says: 'thread size', unit: '', values: Object.keys(METRIC), default: 'M4' }, { key: 'length', says: 'length', unit: 'mm', min: 2, max: 60, default: 6 }],
   examples: ['setscrew M3x4', 'setscrew M4x6', 'setscrew M8x10'],
   read(w) { const t = thread(w); if (!t || !METRIC[t]) return threadAsk; return { thread: t, length: lengthIn(w, 6) }; },
-  make(p) { const t = String(p.thread), L = Number(p.length), d = num(t.slice(1)), T = METRIC[t]!; return item(`setscrew-${t.toLowerCase()}x${L}`, `${t} × ${L} set screw, cup point`, 'Hardware/Fasteners/Set screws', 'product', 'roll-thread', 'steel-alloy', 'cold-formed with its socket, thread-rolled and hardened to class 45H', `${T.p} mm pitch; cup point (ISO 4029); hardness class 45H; a ${SETSCREW_KEY[t] ?? 0.5 * d} mm key`, [d, d, L], mm3g((Math.PI / 4) * (d - 0.6495 * T.p) ** 2 * L - (Math.sqrt(3) / 2) * (SETSCREW_KEY[t] ?? 0.5 * d) ** 2 * Math.min(0.45 * d, 0.6 * L) - (Math.PI / 4) * (0.5 * d) ** 2 * 0.15 * d, RHO.steel)); },
+  make(p) { const t = String(p.thread), L = Number(p.length), d = num(t.slice(1)), T = METRIC[t]!; return item(`setscrew-${t.toLowerCase()}x${L}`, `${t} × ${L} set screw, cup point`, 'Hardware/Fasteners/Set screws', 'product', 'roll-thread', 'steel-alloy', 'cold-formed with its socket, thread-rolled and hardened to class 45H', `${T.p} mm pitch; cup point (ISO 4029); hardness class 45H; a ${SETSCREW_KEY[t] ?? 0.5 * d} mm key`, [d, d, L], mm3g((Math.PI / 4) * (d - 0.6495 * T.p) ** 2 * L - (Math.sqrt(3) / 2) * (SETSCREW_KEY[t] ?? 0.5 * d) ** 2 * setscrewSocket(d, L) - (Math.PI / 4) * (0.5 * d) ** 2 * 0.15 * d, RHO.steel)); },
 };
 const dowel: Family = {
   id: 'dowel', name: 'dowel pin', path: ['Hardware', 'Fasteners', 'Pins'], says: 'a hardened, ground dowel pin of any diameter and length (ISO 8734), to locate one part on another',

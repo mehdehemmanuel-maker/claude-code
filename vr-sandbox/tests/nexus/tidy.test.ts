@@ -10,10 +10,14 @@
 //      exists to prevent, and a clash inside one directory is that fault with no excuse left.
 //   4. **A path in prose that no longer exists.** Moving 180 files left 135 of them naming `src/nexus/<name>.ts` in their
 //      own comments; the geometry taxonomy happened to assert its own paths, which is the only reason it was caught.
-//   5. **A layer that reaches back up.** `world/` importing `view/` once puts the whole viewer inside a cycle with
+//   5. **The same code written twice.** A hub and its axle both took a shaft diameter as `Math.max(0.03, t.rim *
+//      0.12)`, written three times in one file, and all three were wrong together; the AWG formula was written out in
+//      two directories. This is the name-clash fault with no name to clash: the second copy is written because the
+//      first was out of sight, so the only thing that catches it is a reader that does not rely on remembering.
+//   6. **A layer that reaches back up.** `world/` importing `view/` once puts the whole viewer inside a cycle with
 //      everything the world touches, and nothing in the build complains.
 //
-// Three of the five are ratchets, not pass/fail gates, because this tree already carries the debt and a gate that
+// Four of the six are ratchets, not pass/fail gates, because this tree already carries the debt and a gate that
 // fails on day one gets switched off by the next round. A ratchet writes the debt down to the number and refuses to
 // let it grow: a new oversize file, a new name clash or one more import up a layer fails here with its own name in
 // the message. Shrinking it fails too, with "delete this line" -- so the lists only ever get shorter, and each line
@@ -404,5 +408,104 @@ describe('what the prose says is true', () => {
     const pkg = JSON.parse(read(join(ROOT, 'package.json'))) as { scripts: Record<string, string> };
     const named = [...read(join(ROOT, 'CLAUDE.md')).matchAll(/`npm run ([\w:-]+)/g)].map((m) => m[1]!);
     for (const s of [...new Set(named)].sort()) expect(Object.keys(pkg.scripts), `CLAUDE.md names \`npm run ${s}\`, which package.json does not have`).toContain(s);
+  });
+});
+
+/** A fragment of code written in two places, which is the name-clash fault with no name to clash: nothing declares a
+ *  second owner, so nothing but a reader can see it. The reader is deliberately narrow, because a clone detector that
+ *  reports everything is switched off within a day:
+ *
+ *  - it compares *code*, so a fragment that starts inside a string or a comment is not one. Prose repeats itself
+ *    honestly ("about 0.8 mm (typical)" belongs beside every part it is typical of), and string arguments are kept
+ *    *in* the comparison, because they are what makes `unit('L', 'length', …)` and `unit('V', 'voltage', …)` two
+ *    rows of a table rather than one rule written twice.
+ *  - it wants a measured number in the fragment (a decimal point). `parts.push(P(name, shape, at))` is the shape of
+ *    every drawing in this tree and repeating it is the point; `Math.max(0.6, 0.07 * D)` is a *rule*, and a rule has
+ *    one owner.
+ *  - it wants arithmetic on that number, or twenty more characters without it, so `mat('aluminum.6061-t6')` — a
+ *    lookup by name, which is already one owner — is not a clone of itself.
+ *  - and it wants the two in different files, because a run of `it(...)` cases or a table's rows inside one file is
+ *    how a table is written.
+ */
+function inText(raw: string): boolean[] {
+  const flag = new Array<boolean>(raw.length).fill(false);
+  let q = '';
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i]!;
+    if (q) { flag[i] = true; if (c === '\\') { flag[++i] = true; continue; } if (c === q) q = ''; continue; }
+    if (c === '/' && raw[i + 1] === '/') { for (let j = i; j < raw.length; j++) flag[j] = true; break; }
+    if (c === "'" || c === '"' || c === '`') { q = c; flag[i] = true; }
+  }
+  return flag;
+}
+
+/** Every balanced-bracket fragment of a line that starts in code, as the doc comment above describes it. */
+function fragments(raw: string): string[] {
+  const text = inText(raw), out: string[] = [];
+  for (let s = 0; s < raw.length; s++) {
+    if (text[s] || !/[A-Za-z_(]/.test(raw[s]!)) continue;
+    if (s > 0 && /[A-Za-z0-9_.$]/.test(raw[s - 1]!)) continue;
+    let depth = 0, end = -1;
+    for (let j = s; j < raw.length; j++) {
+      if (text[j]) continue;
+      if (raw[j] === '(') depth++;
+      else if (raw[j] === ')') { depth--; if (depth === 0) { end = j; break; } if (depth < 0) break; }
+    }
+    if (end < 0) continue;
+    const frag = raw.slice(s, end + 1).trim().replace(/\s+/g, ' ');
+    if (frag.length < 22 || frag.length > 120 || !/\d*\.\d/.test(frag)) continue;
+    if (frag.length < 42 && !/[*/]|\*\*| [+-] /.test(frag)) continue;
+    out.push(frag);
+  }
+  return out;
+}
+
+/** The fragments written in more than one file today, each with where, so a new one fails by name and a fixed one
+ *  fails until its line is deleted. Worked down by giving the rule one owner and importing it, never by widening the
+ *  reader above: four went that way the round this was written (the AWG formula to `parts/families.ts`, a flanged
+ *  bearing's flange and a GT2 loop's default diameter to `kinds/motion.ts`, a set screw's socket depth to
+ *  `parts/threads.ts`). What is left is mostly `view/`, where two games and two rooms each wrote their own
+ *  `std(…)` material helper, and `boards/`, where one solder-ball drawing is written in two files. */
+const DUPES: string[] = [
+  "M: fixed('molar mass of water', 0.018015, 'kg/mol', 'IUPAC') :: life/decay.ts:219 life/flows.ts:42 life/flows.ts:43 life/flows.ts:47",
+  "Math.abs(Math.sin(t * 5.3)) :: view/forge.ts:577 view/jarvis.ts:172",
+  "box('die', [4, 0.6, 4], [0, 0.4, 0], 'silicon') :: boards/boardparts.ts:606 boards/sbc.ts:572",
+  "box('lead', [a * 0.94, ball, a * 0.94], [0, ball / 2, 0], 'solder', { inBody: 0, share, color: 0xb8bcc0 }) :: boards/boardparts.ts:634 boards/boardparts.ts:643 boards/sbc.ts:348",
+  "const std = (c: number, rough = 0.6, metal = 0, more: THREE.MeshStandardMaterialParameters = {}) :: view/coaster3d.ts:13 view/pingpong3d.ts:13",
+  "const std = (color: number, metalness = 0.4, roughness = 0.55) :: view/cell-view.ts:14 view/warehouse.ts:14",
+  "fill: Math.max(0.03, Math.min(1, left / solid)) :: machines/headset.ts:121 machines/headset.ts:153 machines/lab.ts:143",
+  "lines.forEach((l, i) => g.fillText(l, pad, pad + i * font * 1.25)) :: view/holo.ts:18 view/main.ts:58",
+  "measured('skin area', 1.9, 'm^2', 'ICRP 89') :: life/decay.ts:199 life/flows.ts:48",
+  "this.acc = Math.min(this.acc + dt, 0.1) :: world/games.ts:85 world/person.ts:412",
+  "unit('L', 'length', 'm', [1, 3, 6], [0.1, 6, 0.01]) :: kinds/goods.ts:192 kinds/plant.ts:55",
+  "unit('L', 'length', 'm', [1, 5, 10, 25], [0.01, 100, 0.01]) :: kinds/fluid.ts:50 kinds/stock.ts:134",
+  "unit('L', 'length', 'm', [1, 5, 10], [0.01, 100, 0.01]) :: kinds/electrical.ts:253 kinds/fluid.ts:104",
+];
+
+describe('nothing is written twice', () => {
+  it('the set of repeated code fragments is exactly the set written down', () => {
+    const where = new Map<string, string[]>();
+    for (const f of FILES) {
+      read(f).split('\n').forEach((raw, i) => {
+        for (const frag of fragments(raw)) {
+          if (!where.has(frag)) where.set(frag, []);
+          where.get(frag)!.push(`${relative(NEXUS, f).replace(/\\/g, '/')}:${i + 1}`);
+        }
+      });
+    }
+    let found = [...where].filter(([, w]) => new Set(w.map((x) => x.split(':')[0])).size >= 2);
+    // only the longest of a nest: `d = Number(p.d ?? 12.73)` inside `loop = …, d = Number(p.d ?? 12.73)` is one fault
+    found = found.filter(([k, w]) => !found.some(([k2, w2]) => k2 !== k && k2.includes(k) && w2.length >= w.length));
+    const said = found.map(([k, w]) => `${k} :: ${w.join(' ')}`).sort();
+    expect(said, 'a fragment in two files is one rule with two owners: give it one and import it, and never widen the reader to make this pass').toEqual([...DUPES].sort());
+  });
+
+  it('every line written down is well formed, so a stale one cannot hide', () => {
+    for (const d of DUPES) {
+      const [frag, w] = d.split(' :: ');
+      expect(frag, `${d} has no fragment`).toBeTruthy();
+      for (const at of w!.split(' ')) expect(existsSync(join(NEXUS, at.split(':')[0]!)), `DUPES names ${at}, whose file does not exist`).toBe(true);
+    }
+    expect(new Set(DUPES).size, 'DUPES has a duplicate line').toBe(DUPES.length);
   });
 });

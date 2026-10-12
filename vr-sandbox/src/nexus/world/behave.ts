@@ -5,7 +5,7 @@
 
 import { E12 } from '../parts/series';
 import type { Item } from '../parts/inventory';
-import { CHAINS, IPE, JST, METRIC, NDFEB, NPS40 } from '../parts/families';
+import { CHAINS, IPE, JST, METRIC, NDFEB, NPS40, awgD } from '../parts/families';
 
 /** Numbers given in words, in SI: "at 5 mm", "2 A", "12 V", "load 2 kN", "span 3 m", "at 1000 rpm", "60 °C", "with z40". */
 export interface Given {
@@ -98,7 +98,7 @@ const RULES: Record<string, Rule> = {
     return { law: 'stepper (360° / 1.8° = 200 steps)', lines, values };
   },
   wire(p, g): Behaviour | string {
-    const n = Number(p.awg), d = 0.127 * 92 ** ((36 - n) / 39), A = (Math.PI * d * d) / 4, rpm = 1.7241e-8 / (A * 1e-6), L = g.length ?? Number(p.length ?? 1), run = (g.loop ? 2 : 1) * L, R = rpm * run;
+    const n = Number(p.awg), d = awgD(n), A = (Math.PI * d * d) / 4, rpm = 1.7241e-8 / (A * 1e-6), L = g.length ?? Number(p.length ?? 1), run = (g.loop ? 2 : 1) * L, R = rpm * run;
     const lines = [`${f(d, 3)} mm, ${f(A, 3)} mm² (the AWG formula); ${f(rpm * 1000)} mΩ a metre (annealed copper, 1.7241 × 10⁻⁸ Ω·m at 20 °C: the IACS standard wire tables use).`, `${f(run)} m of it${g.loop ? ', there and back' : ''}: ${f(R * 1000)} mΩ.`];
     const values: Record<string, number> = { d_mm: d, area_mm2: A, ohm_per_m: rpm, ohm: R };
     if (g.current) { const V = g.current * R; lines.push(`At ${f(g.current)} A: ${f(V)} V lost, ${f(g.current ** 2 * R)} W as heat, ${f(g.current / A)} A/mm² in the copper.`); values.drop_V = V; values.loss_W = g.current ** 2 * R; }

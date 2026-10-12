@@ -22,3 +22,7 @@ export const BUTTON: Record<string, { dk: number; k: number; s: number; t: numbe
 };
 /** ISO 4029 set screws (cup point): the hex key s across flats (mm). */
 export const SETSCREW_KEY: Record<string, number> = { 'M1.6': 0.7, M2: 0.9, 'M2.5': 1.3, M3: 1.5, M4: 2, M5: 2.5, M6: 3, M8: 4, M10: 5, M12: 6, M16: 8, M20: 10, M24: 12 };
+/** How deep a set screw's hex socket is cut, mm: 0.45 of its thread diameter, or 0.6 of the screw where it is too
+ *  short for that (typical). Read by both halves of the screw — `components.ts` cuts the socket this deep and
+ *  `families.ts` takes the same cone out of its mass. */
+export const setscrewSocket = (d: number, L: number): number => Math.min(0.45 * d, 0.6 * L);

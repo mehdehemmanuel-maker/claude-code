@@ -191,7 +191,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | What a part **promises against what it draws**: every declaration that carries a diameter held against its *own* part's geometry — a provider by the rounds it draws, a requirer by its bores, to a tenth of a millimetre — because `contracts()` pairs two declarations with each other and a declared ⌀8 bore meeting a declared ⌀8 shaft passes even where the solid is ⌀10. A declaration belongs to the part that makes it, not to the assembly (held against the whole tree, an M8 screw matched a chip's bond wire two metres away); what answers it is every round the part draws, free or buried, because a wheel stud pressed in at both ends has no free end and is still a ⌀12 stud; a studs *provider* is answered by the studs it names in `passes`, and a chain's `d` is a pitch and is never compared | `declared`, `misdeclared` in `src/nexus/parts/mate.ts`, said as a `declared` finding by `src/nexus/make/critic.ts`; held at zero over the drawn library and to the number over the fleet in `tests/nexus/ports-from.test.ts` |
 | A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
 | Places, rides and games | `places.ts`, `karting.ts`, `coaster.ts`, `pingpong.ts` |
-| Whether the tree is still clean: nothing loose at the root, every file saying what it owns, no file quietly grown into six concerns, no name with two owners, no path in prose that has gone stale, and no layer importing one that should depend on it — the last three as ratchets whose declared numbers may shrink and never grow | `tests/nexus/tidy.test.ts` (`npm run tidy`, and inside `npm run gate` for free) |
+| Whether the tree is still clean: nothing loose at the root, every file saying what it owns, no file quietly grown into six concerns, no name with two owners, no path in prose that has gone stale, no layer importing one that should depend on it, and no rule written out twice in two files — the last four as ratchets whose declared numbers may shrink and never grow | `tests/nexus/tidy.test.ts` (`npm run tidy`, and inside `npm run gate` for free) |
 
 ## The organising principle: interfaces, envelopes, one graph
 
@@ -2086,8 +2086,39 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    none looked like Actions being off - and it was not: the setting was on throughout. The lesson is the diagnosis,
    not the cause, which is still unknown: a dispatch is the cheap test that separates a switched-off repository from a
    trigger that is not firing, and `workflow_dispatch` is on the workflow so that test is always available.
+   A rule written twice, caught by a reader rather than by remembering (2026-10-12). The user, on the shape of the
+   work rather than on any part of it: *"you've had to delete so many files because they were duplicates because the
+   context of one got buried and you have had to be told exactly what to do step by step … it's as complex as you
+   make it, you can make tools for your tools."* That is one fault with one cause, and this file has the evidence: a
+   hub and its axle both took a shaft diameter as `Math.max(0.03, t.rim * 0.12)`, **written three times in one
+   file**, and all three were wrong together — which `contracts()` passed for months because they agreed with each
+   other. The second copy is written because the first is out of sight, so remembering is exactly the wrong tool, and
+   `tidy.test.ts` already catches the five other forms of it. This is the sixth: **nothing is written twice.**
+   It reads code and not prose, which is what makes it usable rather than noisy. A fragment that *starts* inside a
+   string or a comment is not code (prose repeats itself honestly — "about 0.8 mm (typical)" belongs beside every part
+   it is typical of), while string *arguments* stay in the comparison, because they are what makes
+   `unit('L', 'length', …)` and `unit('V', 'voltage', …)` two rows of a table rather than one rule written twice.
+   It wants a measured number with arithmetic on it, so `parts.push(P(name, shape, at))` — the shape of every drawing
+   here, and the point — is not a clone, and `Math.max(0.6, 0.07 * D)` is. And it wants the two in different files,
+   because a table's rows inside one file are how a table is written. Getting those three filters right took three
+   passes over the tree: the first reported 61 fragments, mostly prose; the second 36, with distinct table rows
+   collapsed into false positives by blanking their strings; the third 24, all real.
+   Four of the 24 had a legal owner already imported by both sides and are now written once: the **AWG formula**
+   (`d = 0.127 × 92^((36−n)/39)`, ASTM B258's own definition) in `parts/families.ts`, which `world/behave.ts` had
+   written out again to say a wire's resistance; a **flanged bearing's flange thickness** and the **GT2 loop's
+   default pitch diameter** (a 20-tooth pulley's own 12.73 mm) in `kinds/motion.ts`, read by both a part's mass and
+   its drawing; and a **set screw's socket depth** in `parts/threads.ts`, beside the key sizes both halves already
+   read. All four are pure extractions and `perf dump` is byte-identical across every case, which is the only honest
+   proof that nothing drawn moved.
+   The 13 left are the ratchet, each a real second owner and each a piece of work someone can pick up: a molar mass
+   and a skin area written in two `life/` files, one solder-ball and one die drawing written in two `boards/` files,
+   two pairs of `view/` rooms that each wrote their own `std(…)` material helper, a fixed-timestep accumulator clamp
+   in two `world/` files, and three length axes declared identically across two `kinds/` files each. Worked down by
+   giving the rule one owner — never by widening the reader, which is this file's standing rule about ratchets in the
+   one form that would be easiest to break.
+
 Next: the remaining stand-ins (the welder and the MSLA printer, each blocked on a library
-   drawing), the brake's own stand, the room's bare walls, prices for the 98, working the three ratchets down by cause,
+   drawing), the brake's own stand, the room's bare walls, prices for the 98, working the four ratchets down by cause,
    and the older Now items (robot benches, likeness, life graph).
 The network allows GitHub and package registries only: makers' sites and datasheets come through search snippets,
 Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits are low) or GitHub (KiCad's libraries,
@@ -2116,8 +2147,20 @@ the user can widen it under the environment's Network access.
   the two long sweeps' tails (sharding them left the wall where it was). The suite is bound by its own work spread over
   the workers there are, and 545 s of test time over 190 s of wall is 2.9 of this host's 4 cores.
 - `npm run tidy` is the half-second part of the gate that checks the tree's own shape, and it is the thing to run
-  before and after moving anything. Its three ratchets (oversize files, name clashes, imports up a layer) hold the
+  before and after moving anything. Its four ratchets (oversize files, name clashes, imports up a layer, a rule written twice) hold the
   present debt to the number: they fail on a new one by name, and they fail on a fixed one until its line is
   deleted, so the lists only ever get shorter. Never raise a number to make it pass.
 - Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing.
 - Never put API keys in the repo or in client code.
+
+## Last line
+
+The user, 2026-10-12, on why a round that has to be told what to do step by step is the fault and not the task:
+*"it's as complex as you make it you can make a tools for your tools you make pipelines for your pipelines you can
+make codes for your codes you can make inventions for your inventions you can make anything"*. Every fault this file
+records came back because it lived in someone's memory instead of in something that runs: duplicated files because
+the first was out of sight, stale prose, a number nobody checked. So when something here is hard, slow, or keeps
+going wrong, the answer is never that it cannot be done — it is a tool, a check or a loop that makes it ordinary,
+and that tool goes in the list above, so the next round is not told again.
+
+**"Don't take impossible as an answer" — always find a way.**

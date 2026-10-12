@@ -30,12 +30,12 @@ import { alongZ, bmeParts, camModuleParts, changerParts, depthCamParts, earNoseP
 import { FAMILIES, callFamily } from './families';
 import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, fanDims, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
-import { CLEAR, FB, VWHEEL, idlerDims } from '../kinds/motion';
+import { CLEAR, FB, GT2_LOOP_D, VWHEEL, fbFlangeT, idlerDims } from '../kinds/motion';
 import { RIBS, capDims } from '../kinds/fasteners';
 import { SNAP, tcOf } from '../kinds/electrical';
 import { HOTEND, rootR } from '../kinds/plant';
 import { SOCKET_HEAD } from '../embody/stock';
-import { BUTTON, PAN, SETSCREW_KEY } from './threads';
+import { BUTTON, PAN, SETSCREW_KEY, setscrewSocket } from './threads';
 import { UPN } from '../kinds/stock';
 import { WHEEL } from '../kinds/fasteners';
 import { itemOf, type Item } from './inventory';
@@ -131,7 +131,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   flangebearing: {
     says: 'a flanged miniature ball bearing: a deep-groove bearing (its rings, balls, cage and shields or seals) whose outer ring is turned with a flange at one face, so it seats itself in a plate\'s hole',
     leaves: 'its flange 0.07 of its outside across thick (typical of the F6xx and F69x tables), its balls counted by the Conrad rule; its cage\'s halves drawn flat beside the balls; its grease not drawn',
-    make: (p, it) => { const [d, D, B, F] = FB[String(p.number)]!; return bearingParts(p, it.name, [d, D, B], [F, Math.max(0.6, 0.07 * D)]); },
+    make: (p, it) => { const [d, D, B, F] = FB[String(p.number)]!; return bearingParts(p, it.name, [d, D, B], [F, fbFlangeT(D)]); },
     iface: (p) => [{ kind: 'shaft', role: 'requires', d: FB[String(p.number)]![0] * mm }],
   },
   idler: {
@@ -195,7 +195,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     says: 'ISO 4029: a headless screw with a hex socket in its top and a cup point at its end', leaves: 'its thread its major cylinder; its socket\'s depth and cup typical (0.45 d deep, the cup 0.5 d across)',
     make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.length), mat = matIn(it), at = { mat, ...looks(it, mat), finish: 'thread', fill: threadFill(d, P0) }, s = SETSCREW_KEY[String(p.thread)] ?? 0.5 * d, c = 0.1 * d, cup = 0.25 * d;
       // (its top at y = 0, chamfered; its end cupped)
-      return [P(it.name, lathe([[0, 0], [d / 2 - c, 0], [d / 2, -c], [d / 2, -L + c], [d / 2 - c, -L], [cup, -L], [0.7 * cup, -L + 0.15 * d], [0, -L + 0.15 * d]]), { ...at, cuts: [socket(s * mm, Math.min(0.45 * d, 0.6 * L) * mm, 0)] })]; },
+      return [P(it.name, lathe([[0, 0], [d / 2 - c, 0], [d / 2, -c], [d / 2, -L + c], [d / 2 - c, -L], [cup, -L], [0.7 * cup, -L + 0.15 * d], [0, -L + 0.15 * d]]), { ...at, cuts: [socket(s * mm, setscrewSocket(d, L) * mm, 0)] })]; },
   },
   pulley: {
     says: 'a GT2 timing pulley: its teeth on their pitch circle (2 mm a tooth), a flange each side, its hub with its set screws in tapped holes, bored for its shaft',
@@ -310,7 +310,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   belt: {
     says: 'a GT2 belt: its neoprene body and teeth, the glass cords that carry its load wound in it at its pitch line; open, a strip its length; a loop, two runs and their turns round its ends (a 20-tooth pulley\'s 12.73 mm unless said)', leaves: 'its teeth not drawn (its body 1.2 mm thick their band, its cords a 0.2 mm layer in it); a loop drawn as an oval, its path round idlers and clamps not traced',
-    make: (p, it) => { const L = Number(p.length), W = Number(p.width), loop = p.loop === 'yes', d = Number(p.d ?? 12.73), neo = { mat: 'neoprene', color: 0x1a1b1d, finish: 'moulded' as const }, glass = { mat: 'fibreglass', color: 0x1a1b1d, finish: 'moulded' as const }; // (its cords inside its body: unseen, drawn its colour)
+    make: (p, it) => { const L = Number(p.length), W = Number(p.width), loop = p.loop === 'yes', d = Number(p.d ?? GT2_LOOP_D), neo = { mat: 'neoprene', color: 0x1a1b1d, finish: 'moulded' as const }, glass = { mat: 'fibreglass', color: 0x1a1b1d, finish: 'moulded' as const }; // (its cords inside its body: unseen, drawn its colour)
       if (!loop) return [P(it.name, { box: [W * mm, 1.2 * mm, L * mm] }, { ...neo, item: 'timing-belt-body', at: [0, 0.1 * mm, 0] }), P(`${it.name} cords`, { box: [(W - 1) * mm, 0.2 * mm, L * mm] }, { ...glass, item: 'tension-cord-glass', at: [0, -0.6 * mm, 0] })];
       const run = Math.max(0, (L - PI * d) / 2);
       // (a band of thickness t whose middle is r from each end's centre: its two runs and two half-turns, in x and y, its width along z)

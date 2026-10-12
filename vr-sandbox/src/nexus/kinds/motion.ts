@@ -24,6 +24,13 @@ const T511: Record<string, [number, number, number]> = { '51100': [10, 24, 9], '
 /** Drawn-cup needle roller bearings (ISO 3245), HK: bore, outside, width. */
 const HK: Record<string, [number, number, number]> = { HK0408: [4, 8, 8], HK0509: [5, 9, 9], HK0608: [6, 10, 8], HK0810: [8, 12, 10], HK1010: [10, 14, 10], HK1210: [12, 18, 10], HK1412: [14, 20, 12], HK1512: [15, 21, 12], HK2016: [20, 26, 16], HK2520: [25, 32, 20], HK3020: [30, 37, 20] };
 /** Flanged miniature bearings: bore, outside, width, flange diameter. */
+/** A flanged bearing's flange, mm thick: 0.07 of its outside diameter and never under 0.6 (typical of the F6xx and
+ *  F69x tables). One owner because two read it — this file for its mass, `parts/components.ts` for its drawing. */
+export const fbFlangeT = (D: number): number => Math.max(0.6, 0.07 * D);
+/** The pitch diameter a GT2 belt loop is drawn round when its words do not say, mm: a 20-tooth pulley's own
+ *  (20 teeth × 2 mm / π). Read by both halves of the belt — its mass in `parts/families.ts`, its drawing in
+ *  `parts/components.ts`. */
+export const GT2_LOOP_D = 12.73;
 export const FB: Record<string, [number, number, number, number]> = { F623: [3, 10, 4, 11.5], F624: [4, 13, 5, 15], F625: [5, 16, 5, 18], F626: [6, 19, 6, 22], F608: [8, 22, 7, 25], F688: [8, 16, 5, 18], F695: [5, 13, 4, 15], F693: [3, 8, 4, 9.5] };
 /** UC insert bearings in housings: bore. */
 const UC: Record<string, number> = { '201': 12, '202': 15, '203': 17, '204': 20, '205': 25, '206': 30, '207': 35, '208': 40, '209': 45, '210': 50 };
@@ -106,7 +113,7 @@ export const MOTION: KindDef[] = [
     id: 'flangebearing', name: 'flanged miniature ball bearing', path: 'Mechanical/Bearings/Ball bearings', says: 'a small ball bearing with a flange on its outer ring, so it locates itself in a plate', std: 'F6xx and F69x miniature series (makers\' tables)',
     axes: [bare('number', 'bearing number', Object.keys(FB)), bare('seal', 'shields or seals', ['ZZ', '2RS'])],
     title: (p) => { const [d, D, B] = FB[String(p.number)]!; return `flanged bearing ${p.number}${p.seal} (${d} × ${D} × ${B})`; }, of: (p) => { const [d, D] = FB[String(p.number)]!; return `bearing-ring*2 bearing-ball*${ballsOf(d, D).z} bearing-cage ${p.seal === '2RS' ? 'nbr*2' : 'bearing-shield*2'} grease`; }, make: 'assemble', how: 'a deep-groove bearing whose outer ring is turned with a flange',
-    spec: (p) => { const [d, D, B, F] = FB[String(p.number)]!; return `${d} mm bore, ${D} mm outside, ${B} mm wide, flange ${F} mm`; }, box: (p) => { const [, , B, F] = FB[String(p.number)]!; return [F, F, B]; }, g: (p) => { const [d, D, B, F] = FB[String(p.number)]!; return gOf(ring(D, d, B) * 0.68 + ring(F, D, Math.max(0.6, 0.07 * D)), 7.83); },
+    spec: (p) => { const [d, D, B, F] = FB[String(p.number)]!; return `${d} mm bore, ${D} mm outside, ${B} mm wide, flange ${F} mm`; }, box: (p) => { const [, , B, F] = FB[String(p.number)]!; return [F, F, B]; }, g: (p) => { const [d, D, B, F] = FB[String(p.number)]!; return gOf(ring(D, d, B) * 0.68 + ring(F, D, fbFlangeT(D)), 7.83); },
   },
   {
     id: 'pillowblock', name: 'pillow block bearing', path: 'Mechanical/Bearings/Mounted bearings', says: 'a self-aligning insert bearing in a cast-iron housing that bolts down beside the shaft', std: 'UCP 201–210 (bores 12–50 mm), housings from makers\' tables (typical)',
