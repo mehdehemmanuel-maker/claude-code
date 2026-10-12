@@ -156,6 +156,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A cutaway draws a solid's section flat and hatched in its own colour (a shell's inside as it is) | `src/nexus/view/look.ts` (`cut`) |
 | Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
 | How a picture is lit: a part alone in a light tent, as a maker's product photograph is taken (white walls, a softbox overhead and in front, a lit sweep under it, so metal mirrors white: a Pi 5's shells and pins read their photo's), exposed as for a grey card so a colour reads as itself, on Khronos' PBR Neutral curve so a colour keeps its hue (a Pi 5's mask reads its photo's), a vehicle in the softbox studio; an underside lit from below, as a board is turned over to photograph it; the forge room the same way (a room for metal to mirror, its light exposed for a grey card, `forge.ts`) | `src/nexus/view/look.ts`, `src/nexus/view/forge.ts` |
+| How many ways a set of jointed parts can still move, and which ways they are: each joint written by *what it leaves free* (the lower pairs — fixed, revolute, prismatic, screw, cylindrical, planar, spherical, and a gear pair's ratio), every kind of it rows of one matrix rather than a case of its own, and the count the **rank** of those rows and never Grübler's formula, which is wrong for exactly the assemblies people build (a flat four-bar has one freedom and the formula says minus two). What the rank cannot hold is the mechanism's freedoms, each said as the screw it is — a slide along a direction, or a turn about an axis through a point, carrying so much along it a turn — and what it holds twice is reported too, because a redundant constraint is what binds a real assembly unless it is given tolerance and is the number a fitter feels and a drawing never shows | `src/nexus/parts/mechanism.ts` (`mobility`, `rowsOf`, `Joint`, `JointKind`, `Body`, `Motion`), fed from the geometry by `asJoint` in `src/nexus/parts/mate.ts`; `tests/nexus/mechanism.test.ts` |
 | Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library ; and a port **read off the geometry** instead of declared, because a drilled pattern is already in the solids: a `Cut` is a hole with a place, a direction, a radius and a depth, and a ring or row of equal holes drilled the same way into one face *is* a bolt pattern. Coaxial cuts are one hole (a counterbore is a seat and the hole through it, not two patterns), two holes are the fewest that fix a turn, and what a hole takes is physical - a through hole passes the largest screw it clears, a hole at a thread's own nominal diameter is tapped for it. A seating face is read the same way: a box's six, a rolled section's own profile's, and a turned profile's flat rings, each one only where it is free, and a ring in a well is no seat because what stands proud around it is hit first | `src/nexus/parts/mate.ts` (`fit`, `mate`, `assemble`, `portsFrom`, `axesFrom`, `seat`, `seats`, `shaftsFrom`, `spindle`, `facesFrom`, `inAWell`, `rests`, `mates`, `unnamedHoles`; kit `part` with "a + b"); `tests/nexus/ports-from.test.ts` |
 | The robot that runs the works: the rails it rides (one rail serves the two rows facing its aisle and no more, so the number of rails a shop wants is what says whether a rail or a floor robot is the cheap answer), which stations each puts within its arm's reach, the edge between what an operation needs of a pair of hands and what this robot's hands are (a port and a grip load a machine, start it and take the part out; they do not strike an arc, pour 700 °C metal or throw clay — each refused with the reason, which is what names the next tool to buy), the basket for everything the plan says to buy (each line the cheapest real offer with its seller, its page, the figure it showed and the day it was seen, split by seller because shipping is), and the division of a job into the robot's minutes and yours. It says plainly that it cannot pay for anything | `src/nexus/works/tend.ts` (`tendWorks`, `aislesOf`, `offRail`, `tends` returning a `Tended` verdict that says *what kind* of why it is, `TOOL_FOR`, `orderFor`, `runWorks`, `runText`, `tendWords`), `npm run works -- tend [build]` |
 | Any build thrown at a real works: six families of making, the stations that do them, every line routed to a machine or bought with the reason, the operations scheduled across the machines there are, what is not finished when it is formed (clay fired, resin cured, bound metal sintered), and the most capable works a budget buys | `src/nexus/works/` (seventeen files: `plan.ts` routes, `designer.ts` checks a bill against its own geometry, `can.ts` decides, `audit.ts` checks the plan, `schedule.ts` lays it on the machines and says what the floor is, `budget.ts` spends a budget, `builds.ts` holds what to throw at it, `pack.ts` turns it into what to go and buy) |
@@ -1902,10 +1903,48 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    family reads a width as "6mm") and `sheet aluminium t3` (as "2mm"). Teaching each family a second spelling of its
    own sizes is the per-family fiddling the one central rule exists to avoid, and a refusal that says how to write it
    is not a silent stand-in.
-   Next on this, in order: the degrees-of-freedom solver, after which concentric, tangent, gear, screw and slot are
-   cheap additions to one mechanism instead of twenty special cases; then `critic.ts` reading `mates`, so a contract
-   is checked against the geometry rather than against contact alone; and a pocket's floor in a box or a rolled
-   section judged by the same well rule the rings now get.
+   The degrees-of-freedom solver (2026-10-12), which is what "no degrees-of-freedom count at all" meant, and the
+   piece that turns four kinds of mate into one mechanism. `mate.ts` says how two parts go together one pair at a
+   time, and that is a constraint and not an answer: a shaft in one bearing turns and slides, the same shaft in two
+   bearings still turns and slides, and the same shaft bolted at one end does neither - and nothing here knew that.
+   `parts/mechanism.ts` writes each joint by *what it leaves free*, which is the lower-pair vocabulary every assembly
+   solver has, so every kind becomes rows of one matrix instead of a case of its own: that is why concentric, a
+   screw, a slot and a gear pair cost a handful of lines each here rather than twenty special cases somewhere else.
+   **The count is the rank of those rows and never the formula**, and the four-bar is why: four links on four
+   parallel hinges have one degree of freedom, and Grübler's 6(n−1) − Σ(6 − f) says minus two, because three of its
+   twenty-six constraints repeat what the others already say. The rank knows that (23 of 26), and the difference is
+   itself worth reporting: a redundant constraint is what makes a real assembly bind unless it is given tolerance,
+   and it is the number a fitter feels and a drawing never shows. Both figures are returned so the two can be seen to
+   disagree.
+   Checked against the textbook and nothing else, which is the only honest check on such a solver: a free part 6 and
+   two free parts 12, a bolted part 0, a shaft in one bearing 2 and in two bearings still 2 with 4 said twice, a door
+   on two hinges 1 with 5 said twice, a ball joint 3, a plate on a plate 3, a carriage on its rail 1, an M5 nut on an
+   M5 screw 1 - and the motion it reports for that last one carries **0.80 mm along its axis a turn**, which is ISO
+   261's own coarse pitch arrived at through the geometry rather than written down in the test. Two gears on their
+   own shafts at 3:1 leave one freedom and turn opposite ways at exactly three to one.
+   What a freedom *is* is said as the screw it is (Chasles): a slide along a direction, or a turn about an axis
+   through a point, with its pitch where it has one. That is where the one real fault was, and it took a textbook
+   number to find it: the axis was being reported through the offset from the body's own point rather than through the
+   point itself, so a door's hinge line came out 400 mm from where it is. With it fixed, the four-bar's coupler turns
+   about [0.2, 0.2, 0] - which is exactly the instant centre Kennedy's theorem puts where the two cranks' lines
+   cross, derived and nowhere written. One other thing had to be got right for a rank to mean anything: a metre and a
+   radian are not the same number, so every row's turning columns are divided by the mechanism's own size and every
+   entry is a displacement, which is why a 1 µm mechanism and a 1 km one have the same freedoms.
+   And it is fed from the geometry rather than being a library nothing calls: a `Mate` now carries where it acts and
+   the axis or face normal it acts about (it had only names and sizes, which is a sentence and not a constraint), and
+   `asJoint` turns one into a joint - bolted into `fixed`, seated into `cylindrical`, threaded into `screw` with its
+   own lead, resting into `planar`. One mate makes one joint and the caller says which hold, because `mates` hands
+   back every way two parts *could* go together and those are alternatives, not simultaneous constraints. So the
+   NEMA 17's derived ⌀5 shaft in the GT2 pulley's derived ⌀5 bore is a cylindrical joint on the motor's own axis with
+   two freedoms left - which is true, and is why a pulley needs its set screw; that the set screw makes it one is a
+   fact about the fit and not about the geometry.
+   The tidy ratchet earned its keep again: `jointOf` was already `teach/edges.ts`'s name for a *soldered* joint's
+   shape, and the gate failed by name on the clash rather than letting a second owner be written. Renamed `asJoint`,
+   as `Gap` became `PartGap` the round before.
+   Next on this, in order: `critic.ts` reading `mates`, so a contract is checked against the geometry rather than
+   against contact alone; a pocket's floor in a box or a rolled section judged by the same well rule the rings now
+   get; and the mates of a whole assembly chosen rather than listed, which is what would let a drawn machine be asked
+   how it moves instead of a pair of parts.
    What a parts API has that this did not, added as fields rather than waited for (2026-10-11). Going through Nexar's
    own part model against ours, six things it carries were genuinely missing and each changes a build pack: the maker
    and its own part number (a seller's product title is not an identity - two sellers write the same part three ways -

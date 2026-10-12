@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { boltedJoint, use } from './components';
 import { CLEAR } from './fab';
+import type { Joint, JointKind } from './mechanism';
 import { METRIC, NEMA_FACE } from './families';
 import { layout } from './space';
 import type { Part, Port, V3 } from './kits';
@@ -382,6 +383,21 @@ export interface Mate {
   says: string;
   /** bolted: the screw and how many of them */ thread?: string; holes?: number;
   /** seated: the nominal and the gap as drawn, mm */ mm?: number; clearance?: number;
+  /** where it acts and the axis or face normal it acts about, in the part's own frame: what a mate is *as a
+   *  constraint*, which is what `mechanism.ts` counts the freedoms of. Without these a mate is a sentence. */
+  at?: V3; axis?: V3;
+  /** threaded: how far one turn carries it along its axis, m (its pitch, single start) */ lead?: number;
+}
+
+/** This mate as a joint between two bodies, by what it leaves free. A bolted pattern once fastened holds all six; a
+ *  shaft in a bore turns and slides, and what makes it less than that is a key or a press fit, which is a fact about
+ *  the fit and not about the geometry; a thread turns and is carried along by its lead; two flat faces laid together
+ *  slide two ways and turn about their normal. One mate makes one joint: `mates` hands back every way two parts
+ *  *could* go together, and those are alternatives, so which of them hold is the caller's to say. */
+export function asJoint(m: Mate, a: number, b: number): Joint | null {
+  if (!m.at || !m.axis) return null;
+  const kind: JointKind = m.how === 'bolted' ? 'fixed' : m.how === 'seated' ? 'cylindrical' : m.how === 'threaded' ? 'screw' : 'planar';
+  return { kind, a, b, at: m.at, axis: m.axis, ...(kind === 'screw' ? { lead: m.lead ?? 0 } : {}), says: m.says };
 }
 
 /** Every way these two parts go together, and the reason for each near miss. A part's declared ports are used beside
@@ -396,7 +412,7 @@ export function mates(a: Part, b: Part): { fits: Mate[]; nearly: string[] } {
   for (const pa of portsOf(a)) for (const pb of portsOf(b)) {
     const r = fit(pa, pb);
     if (typeof r === 'string') nearly.push(`${pa.name} onto ${pb.name}: ${r}`);
-    else fits.push({ how: 'bolted', a: pa.name, b: pb.name, thread: pa.thread, holes: pa.pattern.length,
+    else fits.push({ how: 'bolted', a: pa.name, b: pb.name, thread: pa.thread, holes: pa.pattern.length, at: pa.at, axis: pa.n,
       says: `${pa.pattern.length} × ${pa.thread}: ${pa.name} bolts to ${pb.name}${pa.std ? ` (${pa.std})` : ''}` });
   }
 
@@ -406,13 +422,13 @@ export function mates(a: Part, b: Part): { fits: Mate[]; nearly: string[] } {
     for (const s of shafts) for (const o of bores) {
       // threads interlock, so a threaded pair is *meant* to interfere: a plain clearance test refuses a nut on a bolt
       if (o.thread && Math.abs(+d3(s.d) - Number(o.thread.slice(1))) < 0.1) {
-        fits.push({ how: 'threaded', a: s.of, b: o.of, thread: o.thread, mm: Number(o.thread.slice(1)),
-          says: `${s.of} threads into ${o.of}: both ${o.thread}` });
+        fits.push({ how: 'threaded', a: s.of, b: o.of, thread: o.thread, mm: Number(o.thread.slice(1)), at: o.at, axis: o.dir,
+          lead: (METRIC[o.thread]?.p ?? 0) / 1000, says: `${s.of} threads into ${o.of}: both ${o.thread}` });
         continue;
       }
       const r = seats(o, +d3(s.d));
       if (typeof r === 'string') nearly.push(r);
-      else fits.push({ how: 'seated', a: s.of, b: o.of, mm: r.mm, clearance: r.clearance, says: r.says });
+      else fits.push({ how: 'seated', a: s.of, b: o.of, mm: r.mm, clearance: r.clearance, at: o.at, axis: o.dir, says: r.says });
     }
   }
   // and the third connector: a flat face on a flat face. Only the biggest few of each, because a T-slot section has
@@ -421,7 +437,7 @@ export function mates(a: Part, b: Part): { fits: Mate[]; nearly: string[] } {
   for (const fa of faces(a)) for (const fb of faces(b)) {
     const r = rests(fa, fb);
     if (typeof r === 'string') nearly.push(r);
-    else fits.push({ how: 'resting', a: fa.of, b: fb.of, mm: +(r.area * 1e6).toFixed(0), says: r.says });
+    else fits.push({ how: 'resting', a: fa.of, b: fb.of, mm: +(r.area * 1e6).toFixed(0), at: fa.at, axis: fa.n, says: r.says });
   }
 
   fits.sort((x, y) => (x.how < y.how ? -1 : x.how > y.how ? 1 : (y.mm ?? y.holes ?? 0) - (x.mm ?? x.holes ?? 0)));
