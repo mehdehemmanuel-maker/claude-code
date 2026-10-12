@@ -2028,10 +2028,30 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    passes clean through to its fork is a corner of its own. So it draws no bore, declares nothing (which is honest
    about its drawing), and it is the *clash* check that still reports it, which is the right check for a drawing
    fault. Drawing that corner is the next round on this.
-   Next on this, in order: a single-track hub's own corner (bored for its axle, no spigot, no nut, no carrier); a
-   pocket's floor in a *box* or a rolled section, which is the same well rule the rings and now the turned bores
-   get; and the mates of a whole assembly chosen rather than listed, which is what would let a drawn machine be
-   asked how it moves instead of a pair of parts.
+   A single-track hub's own corner (2026-10-12), which is the one case the round before left drawn solid. A
+   motorcycle hub is not a car's with the spigot taken off: it is a barrel bored clean through, **two** bearings at
+   its ends with a steel spacer holding them apart, and nothing else — the axle goes on through to the fork and
+   clamps the pair through that spacer, which is why neither bearing needs a nut on the hub. Drawn, it is the chain
+   the car's beam corner already has, one link longer: the barrel is bored at the bearings' *outsides* and only the
+   bearings bore for the axle, so hub ⌀ 41.8 ← bearing → ⌀ 22 axle, and the bearing's radial thickness is the same
+   `race` figure the car's sealed unit uses. A test holds all of it, including that no axle nut, carrier or dust
+   shield is drawn on one.
+   And the round's real find is in the critic, not the hub: **a wheel's clearance was measured against its own hub.**
+   `turning` asks 15 mm beside a wheel's sidewall, and the envelope was built from the whole wheel *group's* box —
+   so the room was demanded beside whatever of the hub stood out past the tyre, which on a motorcycle is the very
+   part the fork grips. The comment above it had claimed the right rule for three rounds ("a wheel sweeps a ring:
+   inside its rim, behind its face, is where its knuckle, brake and strut foot live") and the code honoured it
+   radially and not along the axle. It is the ring's own half-width now, **about the ring's own mid-plane**: a hub
+   standing out one side pulls the group's centre off that plane, so a tyre symmetric about its own middle was being
+   measured from 26 mm to one side of it and read 56 mm of half-width where it has 40. Every wheel in the fleet had
+   been given clearance against its own hub; it only showed when a fork came close enough to care.
+   Two things paid for honestly rather than waved through. The hub's own bore had to be the bearings' outside and
+   not the axle's, which my first test asserted the wrong way round — the contract check caught it, and the chain is
+   what the test asserts now. And `critic.ts` went nine lines over its tidy allowance: the number was not raised,
+   the nine lines were paid back out of this round's own comments and two `const` statements that were always one.
+   Next on this, in order: a pocket's floor in a *box* or a rolled section, which is the same well rule the rings
+   and now the turned bores get; and the mates of a whole assembly chosen rather than listed, which is what would
+   let a drawn machine be asked how it moves instead of a pair of parts.
    What a parts API has that this did not, added as fields rather than waited for (2026-10-11). Going through Nexar's
    own part model against ours, six things it carries were genuinely missing and each changes a build pack: the maker
    and its own part number (a seller's product title is not an identity - two sellers write the same part three ways -

@@ -101,8 +101,7 @@ function paired(nodes: Node[], touch: ReturnType<typeof contacts>): Set<string> 
 export function critique(root: Part): Finding[] {
   const out: Finding[] = [], say = (check: string, part: string, says: string, fixed: boolean) => out.push({ check, part, says, fixed });
   let nodes = layout(root);
-  // ---- what a part promises against what it draws: an `Iface` is a promise about a solid, and pairing two
-  // declarations with each other says nothing about whether either agrees with its own part (parts/mate.ts) ----
+  // ---- a part's promise against what it draws: pairing two declarations says nothing about either's own solid ----
   for (const s of misdeclared(root)) say('declared', s.of, s.says, false);
   // ---- room to move: each turning thing (the outermost of what turns together) against the fixed parts near it ----
   const movers = nodes.filter((n) => turning(n.p) && n.sub && !n.p.detail && !sealedIn(n) && !ancestors(n).some((a) => turning(a.p)));
@@ -121,11 +120,14 @@ export function critique(root: Part): Finding[] {
     const ringIn = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.p.shape && ('torus' in x.p.shape || 'lathe' in x.p.shape)).map((x) => 'torus' in x.p.shape! ? x.p.shape.torus[0] - x.p.shape.torus[1] : Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
     // (inside its rim's barrel is free for what does not turn, 10 mm clear of the barrel's well, typical of a caliper's
     // room to its wheel: measured from the rim where it is drawn, else 30 mm in from the tyre's bead)
-    const rimIn = nodes.filter((x) => isUnder(x, m) && /\brim\b/i.test(x.p.name) && detailClassOf(x.p.mat ?? '') === 'metal' && x.p.shape && 'lathe' in x.p.shape).map((x) => Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
-    const bore = rimIn.length ? Math.max(0, Math.min(...rimIn) - 0.01) : ringIn.length ? Math.max(0, Math.min(...ringIn) - 0.03) : 0;
+    const rimIn = nodes.filter((x) => isUnder(x, m) && /\brim\b/i.test(x.p.name) && detailClassOf(x.p.mat ?? '') === 'metal' && x.p.shape && 'lathe' in x.p.shape).map((x) => Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r))),
+      bore = rimIn.length ? Math.max(0, Math.min(...rimIn) - 0.01) : ringIn.length ? Math.max(0, Math.min(...ringIn) - 0.03) : 0;
     const roundish = nodes.some((x) => isUnder(x, m) && x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && !x.p.detail), ext = box.getSize(new THREE.Vector3());
     const sweep = roundish ? Math.max(...[0, 1, 2].map((i) => (ext.getComponent(i) / 2) * Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)))) : Math.max(...corners(box).map((q) => q.clone().sub(ctr).sub(ax.clone().multiplyScalar(q.clone().sub(ctr).dot(ax))).length())), along = Math.max(...corners(box).map((q) => Math.abs(q.clone().sub(ctr).dot(ax))));
-    const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(ctr, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (along + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
+    // (along its axle the same: beside the *tyre's* sidewall, about the ring's own mid-plane, and not beside the hub)
+    const ring = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.p.shape && ('torus' in x.p.shape || 'lathe' in x.p.shape) && x.box).flatMap((x) => corners(x.box!).map((q) => q.clone().sub(ctr).dot(ax))),
+      alongRing = ring.length ? (Math.max(...ring) - Math.min(...ring)) / 2 : along, hub = ring.length ? ctr.clone().addScaledVector(ax, (Math.max(...ring) + Math.min(...ring)) / 2) : ctr;
+    const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(hub, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (alongRing + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
     // turning inside its own housing (a mower's blades in their deck, a fan in its duct, an auger in its trough): its tip
     // kept the room asked inside the housing's walls
     const blocked = new Set(nodes.filter((x) => isUnder(x, m)).flatMap((x) => pairedTo.get(x.path) ?? []));

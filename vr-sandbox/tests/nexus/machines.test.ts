@@ -6,6 +6,7 @@ import { KITS, makeKit, massOf, type Part } from '../../src/nexus/parts/kits';
 import { MACHINES, makeMachine, tyreOf } from '../../src/nexus/machines/machines';
 import { perfect } from '../../src/nexus/make/pipeline';
 import { layout } from '../../src/nexus/parts/space';
+import { misdeclared, seat } from '../../src/nexus/parts/mate';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 const kit = (id: string, words: string) => makeKit(KITS.find((k) => k.id === id)!, words, 1).part;
@@ -57,6 +58,29 @@ describe('machines by their published figures', () => {
       const r = perfect(makeMachine(m), m.name);
       expect(r.findings.filter((f) => f.check === 'room to move' && !f.fixed && / wheel$/.test(f.part)), m.name).toHaveLength(0);
       expect(all(r.part).some((p) => /hanger|strut|arm|leaf|pivot|swingarm|fork leg|air spring/.test(p.name)), m.name).toBe(true);
+    }
+  });
+
+  test('a single-track hub is bored for its axle, on two bearings with a spacer between', () => {
+    // A motorcycle hub is a corner of its own: a barrel bored clean through for an axle that goes on to its fork, two
+    // bearings at the barrel's ends with a steel spacer holding them apart, and — unlike a car's — no spigot, no axle
+    // nut on the hub and no carrier. Running it through the corner written for a car put all three in the fork leg.
+    for (const m of MACHINES.filter((q) => q.axles.every((a) => a.track === 0))) {
+      const r = makeMachine(m), ps = all(r);
+      const hub = ps.find((p) => p.name === 'hub')!, axle = ps.find((p) => / axle$/.test(p.name))!;
+      const d = (axle.shape as { cyl: [number, number] }).cyl[0] * 2;
+      // the chain is hub → bearing → axle: the barrel is bored for the bearings' outsides and only they bore for the
+      // axle, so the hub's own seat is the bearing's OD and never the axle's ⌀22
+      const brgOD = seat(hub)!.d;
+      expect(brgOD, m.name).toBeGreaterThan(d);
+      expect(seat(ps.find((p) => /^wheel bearing/.test(p.name))!)!.d, m.name).toBeCloseTo(d, 6);
+      expect(ps.filter((p) => /^wheel bearing/.test(p.name)).length, m.name).toBeGreaterThanOrEqual(4); // two a wheel
+      expect(ps.some((p) => p.name === 'wheel spacer'), m.name).toBe(true);
+      for (const no of ['axle nut', 'axle carrier', 'brake dust shield']) expect(ps.some((p) => p.name === no), `${m.name}: no ${no} on a single-track hub`).toBe(false);
+      // and the bearing is the link between them: the hub takes its outer race, its own bore takes the axle
+      const brg = ps.find((p) => /^wheel bearing/.test(p.name))!;
+      expect(brg.iface!.find((i) => i.role === 'requires')!.d).toBeCloseTo(d, 6);
+      expect(misdeclared(r), m.name).toEqual([]);
     }
   });
 });
