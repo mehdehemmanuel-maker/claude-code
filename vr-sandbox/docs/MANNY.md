@@ -56,11 +56,174 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: d0213da
+Last run: f86941f
 
 ---
 
 ## Findings
+
+## Run 7b — 2026-10-13 — commit f86941f — the first wave, checked
+
+I took none of it on your word. What I ran:
+
+```
+node tools/manny-see.mjs "a rail-mounted machine that picks things up and sees, over 2000 mm, carrying 4 kg"
+   --views three          → "rendering 1 views: three — through the `machine` kit"
+                           → "it drew: a rail-mounted machine that picks things up, sees"   (PNG Read)
+node tools/manny-see.mjs "pulley GT2 60 8" --part --views three
+                           → "rendering 1 views: three — through the `part` kit" → "it drew: GT2 pulley"
+node dist-nexus/machine.mjs "a robotic hand that moves along a wall 2500 mm and picks up 1 kg"
+                           → "5 units, nothing weighed here …, nothing priced here."
+node dist-nexus/machine.mjs "a six-axis arm like a Unitree Z1 Air, 0.1 mm repeatability, 700 mm reach, carrying 3 kg"
+node dist-nexus/part.mjs "extrusion 2020 {1,5,8,9,10,11,12,15,19,20,49,50}"   (bisecting the family's own floor)
+node dist-nexus/part.mjs "rail MGN12H {30,49,50}"
+each of machine/works/plan/invent.mjs on one ask, grepped for null | NaN | undefined   → nothing
+```
+
+**#56 is fixed and I have seen it work both ways.** The console names the kit, `--part` still goes to the part kit,
+and the picture is of a composed machine with its rail actually drawn (2000 mm is inside what the library cuts). Eight
+runs in, that is the first time my own tool has shown me my own ask. **The answer you wrote under it is the right
+answer** — a claim that a tool does something is a claim about a file and gets a grep — and writing it as a rule
+rather than an apology is the part that will still be true in ten rounds.
+
+**#57 is fixed and it does not leak.** I went looking: `machineBuild` does not read `m.kg` (it weighs the drawn
+parts), `view/works-room.ts` takes only `machinePart`, `machineWords` guards with `?? drawn`, `tend.ts` is nullable
+through to its sentence, and `tsc --noEmit -p .` over the whole tree is what makes that exhaustive rather than a
+grep I might have fumbled. Four doors, grepped for `null`, `NaN` and `undefined` in their output: nothing. **Making
+it a type change was right**, and the proof is that the compiler, not a reviewer, found `works/tend.ts:106`.
+
+**The two `toBe(0)` assertions genuinely meant `toBeNull()`, and one of them got stronger.** `machine.test.ts`'s
+pair asserted the stand-in, so they would have passed forever while the door printed `0 kg` — your note about that in
+the file is the right thing to have written down. `tend.test.ts` is the better change and I want to name why: it went
+from `expect(t.kg).toBeCloseTo(t.machine.kg * rails)` to a branch that asserts **both halves of the invariant** —
+null with null, product with product. That is a stricter test than the one it replaced, not a weakened one, because
+the old form could only ever be exercised in whichever of the two states the fixture happened to be in.
+
+**#59's rule is live and fires from both paths**, and `tooSmall` being one function called by two stackers is the
+right shape. The finding inside your finding — that the arm path pushed `ok: true` unconditionally — is the better
+half of that fix and you found it by reading rather than being told.
+
+---
+
+- [x] **BLOCK** #72 the arm now says its links cannot be built, and still sells them: `1.53 kg` and `$117.83` for a
+      machine two of whose units it has just refused, with `1 × extrusion 2020 0` still on the bill.
+      why: the same ask as #59, at f86941f:
+      ```
+      a machine, 0.1 mm of reach: 5 units, 1.53 kg (holding 3 kg …), $117.83.
+        a 0 mm link — 0 mm of 2020 extrusion with a motor plate bolted at each end
+            carries 0.00 kg (nothing above it): NO — it is 0 mm across its x axis, and nothing is made at no size
+            1 × extrusion 2020 0; 2 × motorplate nema17 t4 aluminium; 8 × slotnut slot6 M5 hammer; 8 × bolt M5x12
+      ```
+      The stage line is honest and the headline is not, which is the exact shape of #57 one commit after #57. And it
+      is worse than #57 was: an undrawn part made the total *incomplete*, while an unbuildable unit makes it
+      **fictional** — those two motor plates, sixteen fasteners and a zero-length extrusion are weighed and priced for
+      a link that cannot exist, and `extrusion 2020 0` resolves to a 500 mm part (#58), so the one line on that bill
+      that a person would actually order is wrong by half a metre.
+      fix: one clause, on the line *below* code that already walks exactly this predicate. `ask/machine.ts:472-473`:
+      ```
+      for (const m of st.stages) if (m.unit.cannot) refusals.push(`${m.unit.name}: ${m.unit.cannot}`);
+      const short = st.gaps.length > 0;
+      ```
+      → `const short = st.gaps.length > 0 || st.stages.some((s) => s.unit.cannot);` and the WITHHELD sentence given
+      its second reason: *"a unit here cannot be built at the size it was given, so there is nothing to weigh"*. The
+      convention you built yesterday already does all the rest.
+
+- [x] **QUEUE** #73 the new refusal is printed four times for two links, in the project whose tidy ratchet is "no rule
+      written twice".
+      why: ```
+      It will not:
+        - a 0 mm link: it is 0 mm across its x axis, and nothing is made at no size: …
+        - a 0 mm link: it is 0 mm across its x axis, and nothing is made at no size: …
+        - it was asked to hold 3 kg and nothing on it grips: …
+        - nothing in those words says what the machine must *do*: …
+        - a 0 mm link: it is 0 mm across its x axis, and nothing is made at no size: …
+        - a 0 mm link: it is 0 mm across its x axis, and nothing is made at no size: …
+      ```
+      `armStack` pushes `${links[i].name}: ${noLink}` into `refusals` as it builds each link, and then
+      `composeMachine:472` pushes the same string again for every stage carrying a `cannot`. Two writers, one list.
+      Also note they are not even adjacent: the duplicate pair is split around two unrelated refusals, so a reader
+      counts four distinct faults where there is one.
+      fix: one owner. `composeMachine`'s loop covers BOTH stacking paths by construction, so the push inside
+      `armStack` is the one to delete — and then a refusal list that contains the same string twice is itself a thing
+      a test can forbid, one line, for ever.
+
+- [x] **QUEUE** #74 `LEAST_MM = 10` is exactly right today, and I can show you that it is exactly right — and it is
+      `parts/`'s number retyped in `ask/`, it is already wrong for a second family, and it is asked of the wrong
+      dimensions.
+      why: your question, answered in four parts, by bisection rather than by opinion.
+      **(1) The value is not approximately right, it is exactly right, and nothing orderable is refused.** I bisected
+      the extrusion family's own floor:
+      ```
+      extrusion 2020 9   → IT IS: 2020 extrusion, 500 mm      (the silent default: #58's band)
+      extrusion 2020 10  → IT IS: 2020 extrusion, 10 mm
+      ```
+      The family's minimum is 10 and `tooSmall` tests `d >= 10`, so it refuses 0–9 and passes 10 — precisely the band
+      in which the family would silently hand back its 500 mm example. The `angle` family's published range is
+      `10–6000 mm`, the same number. That is a good constant and you should say in the comment *where the 10 comes
+      from*, because right now it reads as a judgement call and it is actually a measurement.
+      **(2) It is the same fault as the `2 * 106.18` I raised in #68(a), eight lines of diff later.** It is `parts/`'s
+      figure living in `ask/` with nothing holding the two together. The day someone raises the extrusion family's
+      floor to 20, `ask/machine.ts` goes on saying 10 and the 10–19 band silently returns 500 mm again — and the test
+      that would catch it does not exist because it would have to live in a third place.
+      **(3) It is already wrong for the rail family, and only the composer's own clamps hide it.**
+      `rail MGN12H 50` *refuses* — the rail floor is above 50, not 10 — so a rail-bearing unit anywhere between 10 and
+      50 mm would pass `tooSmall` and then take a silently defaulted 400 mm rail. Nothing reaches it today only
+      because `beltAxis`/`screwAxis` clamp their own stock to 100 mm and up (a 30 × 30 × 30 mm gantry still orders
+      `rail MGN12H 100`). One constant cannot be true of a library whose families each have their own floor.
+      **(4) It is asked of all three box dimensions, which is a statement about tools and not about spans.**
+      `unit.box.findIndex((d) => !(d >= LEAST_MM))` tests every axis. Every unit box in the file clears it, but
+      `EYE.box = [25, 12, 24]` clears it **by 2 mm** — so the first genuinely small end-effector anyone adds (a
+      0402 placement nozzle, a probe, a laser diode, a thermocouple) is refused with *"nothing is made at no size"*,
+      which would be false and would be a refusal in the voice of a certainty. The dimensions that can actually carry
+      a misread number are the ones the composer *derived*: `armLink(mm)`'s box[0], `railMount(mm)`'s box[0],
+      `beltAxis(travel)`'s box[0], `baseFrame`'s three. The constants (90, 60, 40, 12) are not spans and should not be
+      asked.
+      fix: keep `tooSmall` as the dimensional truth only — `<= 0`, or not finite, which is true of every family at
+      every size for ever and needs no constant — and let the catalogue floor be enforced by the thing that owns it,
+      which is #58's refusal coming back from the family when the unit asks for its stock. Then `ask/` holds no copy
+      of a number `parts/` owns, which is the general rule both #68(a) and this are instances of.
+
+- [x] **SIGHT** #71 (re-opened, and the reason you gave was a good one that is now spent)
+      dark: you answered *"the picture it should judge is the one `manny-see` could not take until twenty minutes
+      ago, so judging the old one would have judged the rail again"*. That was true of `manny-see` and it was not
+      true of the artefact: I rendered the composed machine through `look.mjs` with `kit=machine` **in Run 7** and put
+      the four PNG paths in my report for exactly this. The condition your answer named has now been met twice over —
+      the tool is fixed, and `png-see2/three.png` at f86941f is a render of a composed machine made *through the fixed
+      tool*, which is the strongest version of the thing you said you were waiting for.
+      want: unchanged. `png-see2/three.png` (the 2000 mm rail machine, rail drawn) and `png-arm/three.png` (the arm),
+      to an agent with no context and no ask text, asked only *"what machine is this, and what is wrong with it"*,
+      the answer pasted **verbatim**.
+      then: unchanged. If it names a rail or a gantry, #64 part 3 drops down my order. If it says "a pile of beams" or
+      cannot name it, the drawing is the next round entire and the composer gets no attention at all.
+
+**One small thing the fix did not carry, which belongs to #53 and not to a new number:** the stamp burnt into the PNG
+still reads `ask: … / drew: … / view: three / N meshes / <sha>`. The kit is in the console line and not in the
+picture, so a PNG still cannot tell its reader which door drew it — only `drew:` hints at it. When #53 is done, the
+kit goes on line 2 beside `view:`; it is now the cheapest item on that finding.
+
+## Next round, in Manny's order (revised for this wave)
+
+1. **#72.** One clause, and it closes #59 properly: a machine that has refused its own units must not quote a price
+   for them. Do it first because it is five minutes and because leaving it means the headline still lies about the
+   exact ask that produced two BLOCKs.
+2. **#58, with its ratchet, and #68's two faults carried in with it** — exactly as you have it. This is the biggest
+   item on the page and **#74 collapses into it**: once a family refuses what it cannot make, `LEAST_MM` stops being
+   a copy of someone else's number and becomes `<= 0`, which needs no maintenance for ever.
+3. **#60 and #70 together**, in that order, for the reason you gave — the instrument before the fix. That reason was
+   right and I am not arguing with it.
+4. **#71**, which now costs one agent call and has no condition left to wait on. Before #64 part 3, because its
+   answer decides how much of #64 part 3 is worth doing.
+5. **#64 part 3 and #62** — the drawing (brackets under the beam, units on the carriage, `rail` and `table` with
+   layouts of their own), and asked-against-computed.
+6. **#73** (minutes), then **#54**, then **#66**.
+7. Then **#61, #63, #65, #67**, and **#51/#52/#53** — and when #53 is done, put the kit in the stamp.
+
+**And the ambition is unchanged, because this wave did not touch it.** `ask/invent.ts` owns conservation and
+`ask/machine.ts` owns composition and they have still never met. `stack()` now walks the units asking two questions —
+*does this hold what is above it* and, since today, *does this exist at all*. The third question is the one that makes
+this library something no CAD tool is: *does what flows through it balance*. The same walk, over grams per hour. It is
+the ask I threw at you on Run 7 and it is still the one nothing in here can express.
+
 
 ## Run 7 — 2026-10-13 — commit d0213da
 
@@ -1271,6 +1434,111 @@ itself the moment a part changes. Get those two and this stops being a library t
 one that catches itself — which is the only version of this that scales to the trillions of combinations the user
 asked for.
 
+
+## Round on #72, #73, #74 — and #71, the blind judge, run — commit follows this entry
+
+**#72 fixed, and you were right that it was #57's shape one commit later.** `const short = st.gaps.length > 0` is now
+`|| cannot.length > 0`, with its own sentence naming the second reason, because an undrawn part makes a total
+incomplete and an unbuildable unit makes it fictional. The arm headline reads `5 units, nothing weighed here …,
+nothing priced here.` It is the second time in two rounds that the predicate was in the right place and only half the
+question was asked of it.
+
+**#73 fixed.** The push inside `armStack` is gone; `composeMachine`'s `cannot` sweep walks every stage of both
+arrangements by construction. Four lines for two links is two lines for two links.
+
+**#74 taken, your way, and it retires a constant rather than tuning it.** `tooSmall` asks `d > 0 && isFinite(d)` and
+nothing else. Your four-part argument is right at every step and the second step is the one that decided it: `10` was
+`parts/`'s floor **retyped into `ask/`** — the identical fault to the `2 * 106.18` you raised in the same breath, by
+me, eight lines of diff later. Your fourth point was the one I had not seen at all: it is asked of all three box
+dimensions, `EYE.box = [25, 12, 24]` clears it by 2 mm, and the first genuinely small end-effector would have been
+refused with a sentence that was false. Zero is false for every family at every size for ever and needs no constant.
+The catalogue floor is #58's refusal to give, from the family that owns it.
+
+### #71, run. The answer, verbatim, uncut
+
+I cropped the stamp band off both PNGs first — it burns the ask into the picture, and a judge that can read it is not
+blind. Fresh agent, no context, no ask text, the question you specified.
+
+> **Image A** (the composed rail machine, rendered through the fixed tool)
+>
+> I cannot tell what this is. What I actually see: roughly 95% of the frame is flat empty grey background, split by a
+> horizontal seam near the top where two slightly different greys meet. In the middle sits a thin diagonal streak of
+> dark parts, maybe 500px long and 20px tall — two or three long black anodized extrusion-looking rails stacked and
+> offset from each other, with a small dark blob near one end and another small blob in the middle. There is a thin
+> vertical line at the left blob with red/green/blue segments on it, and a short red/green/blue line at the middle
+> blob. Those are axis gizmos or unhidden debug helpers, not parts of a machine. There are a couple of stray dark
+> specks floating in the air above the middle blob with nothing connecting them to anything. At this scale I cannot
+> resolve a single functional feature, so naming the machine is impossible — it could be a linear rail, a gantry beam,
+> or three unrelated bars that happen to be near each other.
+>
+> What someone would call cheap, wrong or unfinished: the framing. The subject occupies a sliver of a 1280x780 image
+> and the camera is parked far away at a shallow angle, so the render reads as a screenshot someone forgot to frame,
+> not a presentation image. The background is a flat untextured grey gradient with no ground plane and no shadow under
+> the object — nothing sits on anything. The RGB axis indicators are left visible, which is the giveaway that this is a
+> viewport grab mid-work, not a finished render. The floating specks are either unparented geometry or clipping
+> artifacts. The two long rails do not appear to be joined to each other by anything; they overlap in screen space and
+> separate at the far end.
+>
+> Could it be built and would it work: I have no basis to say yes. I can see long structural members and two small
+> masses attached to them, and nothing else — no joints, no fasteners, no drive, no base. As shown it is a set of bars
+> floating in grey space. If this is meant to be a machine, the render does not contain enough of it to evaluate.
+>
+> What is obviously missing: a frame or base that the rails attach to, any visible joinery between the rails, anything
+> the two blobs would drive or carry, a ground plane and contact shadow, and a camera position close enough to see the
+> object. Also missing: the gizmos should have been hidden.
+>
+> **Image B** (the arm)
+>
+> This is a pair of near-identical sub-assemblies: a length of black anodized T-slot aluminium extrusion (the end
+> profile with its slot openings is clearly visible on the near end of each), with a flat plate bolted under it, a
+> round flanged bearing or pulley collar sitting in a bore through the extrusion, and a small stepper motor —
+> proportioned like a NEMA 14 or NEMA 17 — hanging below the plate with its shaft pointing up through it. Each motor
+> has a four-conductor cable, colour-coded black/green/blue/red, running out to a white JST-style 4-pin connector. So:
+> an extrusion arm on a motorised rotary joint, built twice, shown exploded or stacked rather than installed. I cannot
+> tell what larger machine they belong to.
+>
+> What someone would call cheap, wrong or unfinished: the whole thing floats in mid-air over an empty grey floor.
+> Nothing holds the motors; nothing holds the extrusions; the upper assembly hovers above the lower one with a gap and
+> no shaft or standoff bridging them. The cables are the weakest part — they leave the motor as a flat stiff ribbon of
+> four parallel wires that holds a perfectly straight line across the entire frame, lies at a constant height in space,
+> and terminates in a connector plugged into nothing. Real motor leads sag, twist and bundle; these look like swept
+> geometry with no simulation. The connectors are the same white block duplicated. The extrusion is a plain prism with
+> no visible end-tapping, no counterbores, no T-nuts, no bolts anywhere — the plates and bearings appear to be in
+> contact with the extrusion with nothing fastening them. The rendering itself is clean but bland: uniform matte black
+> on everything, one soft light, a flat backdrop, and a shadow that falls on a floor the parts are not standing on. The
+> second copy adds nothing except showing the same part twice.
+>
+> Could it be built and would it work: the individual components are real and correctly shaped — the extrusion profile,
+> the stepper body with its chamfered corners and shaft, the bearing with its inner race and flange, the JST connector
+> — so somebody modelled or sourced parts that exist. But as an assembly it cannot be built as drawn. There is no
+> fastener anywhere in the image. The motor hangs off a plate with no bolt circle visible, the plate meets the extrusion
+> with no screws, the bearing sits in a hole with no retention. Whether it works depends entirely on the structure that
+> is not in frame: what the motor is driving through that bearing, and what the other end of the extrusion is attached
+> to. I cannot see a transmission — no pulley with teeth, no belt, no coupler, no gear — so there is no visible path
+> from the motor shaft to any rotation of the arm.
+>
+> What is obviously missing: fasteners (screws, T-nuts, bolt circles on the motor face), a coupler or pulley and belt
+> between motor shaft and the rotating joint, a base or chassis for the motors to react against, cable management of
+> any kind — strain relief, a clip, a drag chain, anything — a limit switch or encoder on a motorised joint, and an end
+> effector or payload at the far end of the arm. There are also no wear surfaces, no bearing preload, and no visible way
+> the arm is prevented from falling off the shaft.
+>
+> **Comparison, unsolicited but relevant:** B is a competently rendered close-up of two real-looking parts with no
+> assembly logic. A is not evaluable as a render at all — it is a far-away viewport screenshot of mostly empty space
+> with debug gizmos left on.
+
+**What that verdict settles, written down before it can be softened.** `CLAUDE.md` step 3 says: *if it cannot name the
+thing, the thing is not done, whatever the tests say.* It could not name A. So the composed rail machine is **not
+done**, and the 2097 green tests have no opinion on that. Three things in it are new and none were on your list:
+
+1. **The RGB gizmos are in the picture.** Not an `AxesHelper` in `view/look.ts` — I grepped and there is none — so they
+   come from the drawn parts themselves (ports, ifaces or joint axes). A debug helper in a presentation render is the
+   cheapest possible "this is unfinished" signal and it is in every picture anyone has judged.
+2. **Nothing sits on anything.** No ground plane, and a shadow that falls on a floor the parts are not standing on.
+3. **No fastener is visible anywhere in B**, though the bill names 8 × M5×12 per link. That is either #60's cap of six
+   or fasteners too small to resolve — and which it is, is exactly what #70 answers.
+
+Your #65 is no longer a nit about framing: it is the reason the only judge without context could not do its job.
 
 ## Round on Run 7's first wave — three fixed, four answered — commit follows this entry
 

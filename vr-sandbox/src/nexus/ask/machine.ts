@@ -353,10 +353,18 @@ export function unitUsd(u: Unit): { usd: number; unpriced: string[] } {
 /** Why a unit cannot be built at the size it was given, or null. Below the shortest length of stock the library will
  *  cut, so nothing orderable is refused. There are two stacking paths in this file — a frame with axes, and an arm of
  *  joints and links — and this is one rule called by both, because the fault it catches was that only one of them
- *  asked anything at all and the other pushed its links with `ok: true` unconditionally. */
-const LEAST_MM = 10;
+ *  asked anything at all and the other pushed its links with `ok: true` unconditionally.
+ *
+ *  It asks only whether the thing HAS a size, not whether the catalogue sells one that small, and the difference is
+ *  the point. The first version read `d >= 10`, which is the stock families' own floor retyped into `ask/` — the same
+ *  fault as a bearing's mass copied out of the library into another file — and it was already wrong for a second
+ *  family, since MGN rail refuses at 50. Worse, it is asked of all three dimensions, so `EYE.box = [25, 12, 24]`
+ *  cleared it by 2 mm and the first genuinely small end-effector (a probe, a 0402 nozzle, a laser diode) would have
+ *  been refused with "nothing is made at no size", which would be a lie. Zero is false for every family at every size
+ *  for ever and needs no constant; a size the catalogue cannot cut is the family's own refusal to give, and that is
+ *  #58's work, not this function's (docs/MANNY.md #74). */
 export function tooSmall(unit: Unit): string | null {
-  const thin = unit.box.findIndex((d) => !(d >= LEAST_MM));
+  const thin = unit.box.findIndex((d) => !(d > 0) || !Number.isFinite(d));
   return thin < 0 ? null
     : `it is ${unit.box[thin]} mm across its ${'xyz'[thin]} axis, and nothing is made at no size: the ask gave it no span to be built at, so this is a refusal and not a small machine`;
 }
@@ -470,8 +478,15 @@ export function composeMachine(words: string): Machine {
   // rather than reporting the sum of what happened to be drawable.
   // a unit that says it cannot be built says so where the refusals are read, not only in its own sentence
   for (const m of st.stages) if (m.unit.cannot) refusals.push(`${m.unit.name}: ${m.unit.cannot}`);
-  const short = st.gaps.length > 0;
-  if (short) refusals.push(`its mass and price are WITHHELD, not computed: ${st.gaps.length} part${st.gaps.length === 1 ? ' is' : 's are'} not drawn by the library (above), so any total here would be the weight of what was drawable and not of the machine. Size those parts within what the library makes, or take the refusal as the answer`);
+  // WITHHELD for two reasons now, not one. A part the library does not draw makes a total INCOMPLETE; a unit that
+  // cannot be built at all makes it FICTIONAL — and the arm went on reporting 1.53 kg and $117.83 for two motor
+  // plates and sixteen fasteners belonging to a link whose own stage line said it could not exist. That is #57's
+  // shape one commit after #57, which is the argument for asking the question where the predicate already is rather
+  // than at each place that prints (docs/MANNY.md #72).
+  const cannot = st.stages.filter((s) => s.unit.cannot);
+  const short = st.gaps.length > 0 || cannot.length > 0;
+  if (cannot.length) refusals.push(`its mass and price are WITHHELD, not computed: ${cannot.length} unit${cannot.length === 1 ? '' : 's'} here cannot be built at the size the ask gave (above), so a total would be the weight and price of parts for a thing that cannot exist`);
+  if (st.gaps.length) refusals.push(`its mass and price are WITHHELD, not computed: ${st.gaps.length} part${st.gaps.length === 1 ? ' is' : 's are'} not drawn by the library (above), so any total here would be the weight of what was drawable and not of the machine. Size those parts within what the library makes, or take the refusal as the answer`);
   return {
     asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm,
     kg: short ? null : st.kg, holding: st.holding,
@@ -606,8 +621,11 @@ export function armStack(reach: number, tools: Unit[], payloadKg = 0): { stages:
       s.why = `${NAMES[i] ?? `joint ${i + 1}`} has to hold ${nm.toFixed(2)} N·m with the arm straight out and a NEMA 17 geared 50:1 by belt holds ${got.toFixed(2)}: shorten the link, take the load off with a counterbalance spring, or put a worm or cycloidal reducer there instead of a belt (which is where a cheap arm stops being cheap)`;
       refusals.push(s.why);
     }
+    // (the refusal itself is pushed once, by the `cannot` sweep in `composeMachine`, which walks every stage of both
+    //  arrangements. Pushing it here too printed it twice per link — four lines for two links, split around two
+    //  unrelated refusals, so a reader counted four faults where there was one: two writers on one list, in the file
+    //  whose own lint forbids a rule written twice. docs/MANNY.md #73.)
     const noLink = tooSmall(links[i]!);
-    if (noLink) refusals.push(`${links[i]!.name}: ${noLink}`);
     stages.push(s, { unit: noLink ? { ...links[i]!, cannot: noLink } : links[i]!, carrying: 0, above: [], ok: !noLink, ...(noLink ? { why: noLink } : {}) });
   }
   for (const u of tools) {
