@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/vr-sandbox/tools/manny-gate.mjs\"",
+            "timeout": 20,
+            "statusMessage": "Manny's gate"
+          }
+        ]
+      }
+    ]
+  }
+}
