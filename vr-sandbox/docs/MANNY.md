@@ -56,11 +56,65 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 1bac521
+Last run: 21aae48
 
 ---
 
 ## Findings
+
+## Run 7p — 2026-10-13 — commit 21aae48 — record pass
+
+No order of work. Two answers, one of them a BLOCK that is not in the test files.
+
+- [ ] **BLOCK** #104 `npm run quick` now FAILS on a clean tree, which is its normal path.
+      why: run just now, on this head, nothing changed in `src/`:
+      ```
+      npm run quick
+        QUICK: FAIL (exit 0 but nothing ran: 0 of 0 tests passed, the rest skipped) — 5.9s     (exit 1)
+      ```
+      The chain is `tsc --noEmit -p . -- vitest run tests/nexus/tidy.test.ts -- vitest run --changed HEAD`, and only
+      the **last** command writes the `--ran` artefact. `--changed HEAD` selecting nothing is not a fault, it is the
+      documented purpose of `quick` (*"only the test files whose module graph holds something that changed"*) — so the
+      verdict now contradicts two checks that really did run and pass, and reports FAIL for the case the command
+      exists to make cheap. This is #40's shape: an alarm that fires on the ordinary path teaches its reader to ignore
+      it, and the first casualty will be the verdict line itself, which is the thing worth protecting here.
+      It is a BLOCK and not a queue only because of when: work is paused, nobody is acting on anything else, and the
+      inner-loop command of every future round is red on a clean tree. It is one line.
+      fix: "ran nothing" is a failure where work was **expected**, and `--changed` is the one command for which zero is
+      a legitimate answer. Either `quick` drops `--ran`, or the wrapper gains a way to say that a command may
+      legitimately select nothing, or the count is taken over the chain rather than over its last writer. Whichever —
+      the distinction to keep is *ran nothing because it was not asked to do anything* against *ran nothing because
+      something is broken*, and only the second is a FAIL.
+
+**2. Yes — one of the six passes for the wrong reason, and it is the one that matters most.** The zero-run case
+(`verdict.test.ts:58`) writes the artefact **by hand**:
+```
+node -e "require('fs').writeFileSync(f, JSON.stringify({ numTotalTests: 16, numPassedTests: 0 }))"
+```
+So it proves the wrapper's arithmetic over a mock of the thing it integrates with — and the integration is precisely
+what has already bitten twice: the first fix read `numTotalTests`, which counts skipped tests, and printed
+`PASS (0 of 16 ran)` on the very run it was built to catch. The test now encodes the *corrected* key against a
+hand-written file, so **it can never catch that class again**. If a vitest upgrade renames or restructures the report,
+all six cases stay green.
+To its credit this errs loud rather than silent — a missing key means no count means `FAIL (passed, but wrote no
+count)` — so it is a note and not a BLOCK. The cheap closure is one case that runs a real `vitest run` of one small
+file through the wrapper and asserts the count is non-zero, which pins the key names to the real artefact instead of
+to a belief about it.
+
+A second, smaller one in the same test: the `SILENT` sub-case claims it *"also covers the stale-file case, since the
+wrapper deletes the artefact before the run"* — and it only covers it because `SOME` ran first in the same `it` and
+left a file behind. Split the three into separate `it`s, or reorder them, and the stale-file coverage disappears while
+everything stays green. The dependency is real and undeclared.
+
+**1. Nothing else in the two files is a BLOCK.** The other five cases are honest: a killed child, a missing command,
+the status passed through, and the chain stopping at the first failure each fail for the right reason if the wrapper
+regresses. Pinning the wrapper's own four behaviours was the right call and I would not change them.
+
+**On the drift you named:** you are right and I will not add to it. You established 7 of 9 by looking against 2 by
+rules, then spent two rounds on a rule. The two things that follow from your own measurement — every judge printing
+its verdict where a person meets it without asking, and the prediction-with-the-mismatch — are both still unbuilt, and
+naming that yourself is worth more than my saying it again.
+
 
 ## Run 7n — 2026-10-13 — commit 1bac521 — the verdict line, attacked
 
