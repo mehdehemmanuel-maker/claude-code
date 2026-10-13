@@ -79,7 +79,10 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   it promised is worse than none, because the critic then reports on what he thinks he saw. **Known gap it names
   itself:** there is no door that prints one library part's figures (mass, size, interfaces, what it contains), so
   `--part` is the picture only.
-- `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`; a view that looks all but straight down or up (`top`, `under`) is squared — its camera's up is ∓z, not the degenerate roll three.js picks when up is nearly the way it looks, which had turned every plan view 45°;
+- `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`;
+  `kit=machine` draws what `npm run machine` composes — the same units, bill and refusals, from the ask's own sentence
+  (`"rail|kit=machine&words=a rail-mounted machine that picks things up over 2000 mm carrying 25 kg&view=three"`),
+  where `kit=part` (the default) draws one component by its words; a view that looks all but straight down or up (`top`, `under`) is squared — its camera's up is ∓z, not the degenerate roll three.js picks when up is nearly the way it looks, which had turned every plan view 45°;
   `ortho=1` for a view to set beside a photo, `exposure=`, `env=`, `sun=`, `tone=aces` to try the light; it prints the
   part's `lift`; the light tent's `back=` (a backdrop as bright as the photo's studio had it), `floor=rrggbb` (what it
   stands on), `probe=1` (each metal face's reflection captured from where it stands, itself left out, box-projected:

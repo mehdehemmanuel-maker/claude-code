@@ -44,6 +44,25 @@ const obbOf = (local: THREE.Box3, m: THREE.Matrix4): OBB => {
   m.extractBasis(x, y, z); return { c, u: [x.normalize(), y.normalize(), z.normalize()], h: [s.x, s.y, s.z] };
 };
 
+/** The turn that lays a drawn part's longest side along an axis (0 x, 1 y, 2 z), measured from how the part is
+ *  ACTUALLY drawn rather than from how its stock is declared. The two differ, and the difference was a bug nobody
+ *  could see: a length of extrusion is declared z-long (`npm run part -- "extrusion 2040 2000"` says 20 x 40 x 2000),
+ *  but the part `components.ts` hands back has already been stood upright by a `rot` on a child of its own. A caller
+ *  that then turned it again by a remembered constant turned it TWICE - so in `ask/machine.ts` the four members meant
+ *  to be a frame's uprights cancelled to flat and the four meant to lie across stood up, and a 2000 mm rail's beam was
+ *  drawn standing on end. A near-cube frame survives that permutation looking like a frame, which is why it went six
+ *  rounds unseen (docs/MANNY.md #46). Measuring leaves nothing to remember. */
+export function layAlong(p: Part, axis: 0 | 1 | 2): [number, number, number] {
+  let b: THREE.Box3 | null = null;
+  for (const n of layout({ ...p, at: [0, 0, 0], rot: [0, 0, 0] })) if (n.box) b = b ? b.union(n.box) : n.box.clone();
+  if (!b) return [0, 0, 0];
+  const s = b.getSize(new THREE.Vector3()), from = s.x >= s.y && s.x >= s.z ? 0 : s.y >= s.z ? 1 : 2;
+  if (from === axis) return [0, 0, 0];
+  const v = (i: number) => new THREE.Vector3(+(i === 0), +(i === 1), +(i === 2));
+  const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(v(from), v(axis)));
+  return [e.x, e.y, e.z];
+}
+
 /** The thing laid out: every part with its turn and place in the world, its oriented box, its bounds, and the bounds of
  *  all it holds. */
 export function layout(root: Part, at = new THREE.Matrix4()): Node[] {

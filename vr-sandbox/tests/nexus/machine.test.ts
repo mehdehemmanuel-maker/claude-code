@@ -12,7 +12,10 @@ import {
   BRAIN, EYE, GRIPPER, SPINDLE, beltAxis, composeMachine, baseFrame, machineText, machineWords,
   readMachine, screwAxis, stack, turnAxis, unitKg, unitUsd, armLink, layUnit, machineParts, machinePart, everyUnit, beltStages, type Unit,
 } from '../../src/nexus/ask/machine';
+import * as THREE from 'three';
 import { component } from '../../src/nexus/parts/components';
+import { layout } from '../../src/nexus/parts/space';
+import type { Part } from '../../src/nexus/parts/kits';
 import { machineBuild, throwAt, under3K } from '../../src/nexus/works';
 
 // `ask/machine.ts` owns the list. It was written out here and in `cli/machine-main.ts` as well, so a unit added to
@@ -365,5 +368,37 @@ describe('a composed machine is real geometry, not a heap of its parts', () => {
   it('a part the library cannot draw is left out rather than faked, and the machine still stands', () => {
     const p = machinePart(composeMachine('a machine that prints 300x300'), () => { throw new Error('nope'); });
     expect(p.parts!.every((u) => (u.parts ?? []).length === 0)).toBe(true);   // nothing invented to fill the hole
+  });
+});
+
+// A length of stock is DECLARED z-long and the library hands it back already stood upright, so `layUnit` used to turn
+// it twice: a frame's four uprights cancelled to flat, its four depth members stood up, and a rail's beam was drawn on
+// end. A near-cube frame looks like a frame however its twelve members are permuted, which is how that survived six
+// rounds of being looked at — so the frame is checked by COUNTING directions rather than by looking, and the rail is
+// checked at a length where one axis is ten times the others (docs/MANNY.md #46).
+describe('stock is laid the way it is drawn, not the way it is declared', () => {
+  const use = (w: string): Part => { const c = component(w); if (typeof c === 'string') throw new Error(c); return c.part; };
+  /** which way a laid part's longest side really points in the world: 0 x, 1 y, 2 z */
+  const runs = (p: Part): number => {
+    let b: THREE.Box3 | null = null;
+    for (const n of layout(p)) if (n.box) b = b ? b.union(n.box) : n.box.clone();
+    const s = b!.getSize(new THREE.Vector3());
+    return s.x >= s.y && s.x >= s.z ? 0 : s.y >= s.z ? 1 : 2;
+  };
+
+  it('a frame is twelve members, four running along each axis', () => {
+    const by = [0, 0, 0];
+    for (const q of layUnit(baseFrame(700, 700, 750), use)) by[runs(q)]! += 1;
+    expect(by).toEqual([4, 4, 4]);   // measured [0, 8, 4] on the old code: nothing ran along x at all
+  });
+
+  it("a 2000 mm rail's beam lies along the travel, not on end", () => {
+    const m = composeMachine('a rail-mounted machine that picks things up over 2000 mm carrying 25 kg');
+    const beam = layout(machinePart(m, use)).filter((n) => /extrusion/.test(n.p.name ?? '') && n.box)
+      .sort((a, b) => b.box!.getSize(new THREE.Vector3()).length() - a.box!.getSize(new THREE.Vector3()).length())[0];
+    const s = beam!.box!.getSize(new THREE.Vector3());
+    expect(+(s.x * 1000).toFixed(0)).toBeGreaterThan(1900);   // the beam spans the ask's 2000 mm
+    expect(s.x).toBeGreaterThan(s.y * 10);                    // and is not standing up in it
+    expect(s.x).toBeGreaterThan(s.z * 10);
   });
 });

@@ -1755,3 +1755,38 @@ declared another, and neither could check the other. `everyUnit()` in `ask/machi
 A unit added to one and not the others was checked by nothing, in the very file whose own test asserts that fault.
 
 `perf dump` byte-identical across the round: nothing any kit draws moved. Gate 178 files, 2,087 tests.
+
+## #46 — the machine kit, and the turn that was applied twice
+
+The inventor had no door into the look page. `view/look.ts` picks its kit by id from `KITS`, there was no `machine`
+kit in that list, and so every picture the critic judged for six runs was the part kit's family example — a 400 mm
+MGN12 rail — whatever sentence it had been given. The fix is one `addKit({ id: 'machine', … })`, registered at the end
+of `ask/machine.ts` rather than in `parts/kits.ts`, because a kit that composes a machine must import `ask/` and
+`parts/` importing `ask/` is the up-layer import the tidy lint forbids (`world/creatures.ts` registers its own for the
+same reason).
+
+That uncovered a second one-line condition behind it: `parts/kits.ts` read `if (k.id === 'part') out.said = words`, so
+the ask's raw text reached exactly one kit **by name** and the machine kit was built six times from an empty string,
+drawing the 300 mm default each time. It is a declared flag now — `saidWhole?: true` on `Kit` — so a kit that reads
+the sentence says so instead of being appended to a growing chain of ids.
+
+**What the first honest picture showed.** A length of stock is declared z-long (`npm run part -- "extrusion 2040 2000"`
+gives `20 × 40 × 2000`), and `layUnit` carried three Euler constants built on that declaration, under a comment citing
+`kits.ts` as their source. But the part `components.ts` returns has already been stood upright by a `rot` on a child of
+its own, so each constant turned it a **second** time: the four members meant to be a frame's uprights cancelled to
+flat, the four meant to lie across stood up, and a 2000 mm rail's beam was drawn standing on end. A near-cube frame
+(700 × 700 × 750) looks like a frame however its twelve members are permuted — which is exactly why six rounds of
+looking at it never caught this, and why the comment claiming to have fixed the blind judge's "a spidery frame whose
+uprights terminate in empty space" had only moved it.
+
+The fix is a measurement rather than a better constant: `layAlong(part, axis)` in `parts/space.ts`, the owner of
+oriented boxes, lays the part out, finds which way its longest side actually points, and returns the turn from there to
+the wanted axis. `layUnit` calls it at the six places that set a length of stock down; every other call site keeps its
+literal turn, so nothing but prisms moved. The declared convention can now change in `parts/` without silently
+breaking `ask/`. Two tests hold it: a frame's twelve members must run four along each axis (the old code
+measures 0 along x, 8 up and 4 across), and a 2000 mm rail's beam must be longer in x than ten times its y or z.
+
+Still wrong and written down rather than left to be found again: the rail's brackets lie along the beam instead of
+standing under it, the turn axis and gripper float above it rather than hanging off the carriage, and `machineParts`
+still draws only two of the four arrangements it declares — `arm` has its own loop, `gantry` has the quarter-turn
+rule, and `rail` and `table` share the gantry's upward stack.

@@ -56,11 +56,352 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 5edb4fd
+Last run: 53ca197
 
 ---
 
 ## Findings
+
+## Run 6 — 2026-10-13 — commit 53ca197
+
+Tried, every command real and every output below pasted from it:
+
+```
+npm run part -- "wormset m2 50:1 bronze" / "pulley GT2 60 8" / "rail MGN12H 400" / "stepper nema17 40"
+                "screw M4x20" / "belt GT2 400 15mm" / "bearing 608" / "bearing 6204" / "wormgearbox 030 i50"
+                "rail MGN12H 2100" / "belt GT2 400 11mm" / "pulley GT2 60 8 titanium" / "gearmotor" / "screw M4"
+                "wormset m2 50:1 unobtainium" / "a thing nobody makes"
+npm run part -- --like "worm" / --like "gearmotor"
+   + a 29-family sweep: --like <family> | first line | part | declared vs drawn        (the table under #49)
+node tools/doors.mjs --cold          then OPENED one: node dist-nexus/breakdown.mjs <out.md>
+node tools/manny-see.mjs "a bench that makes circuit boards: a camera on a 600 mm rail that places 0402 parts
+   to 0.05 mm over a floor grid, with a paste printer and a reflow oven" --numbers
+   ... and again --views three,explode   (both PNGs Read as pictures)
+node dist-nexus/works.mjs | grep -n "^16 stations"
+echo '{}' | node tools/manny-gate.mjs
+```
+
+### (1) `npm run part` — I used it to check your claims, and I caught it twice
+
+**It is the best door you have built and I will use it every run.** It settled #41(a) in one command exactly as you
+said it would, and it answered three things I could not have answered in Run 5: `wormset m2 50:1 bronze` is real,
+1023 g, near self-locking, undrawn and unpriced; `bearing 6204` is 106.18 g; `rail MGN12H 400`'s declared 314 g is
+*exactly* the sum of its own seven children, which is a real round trip and a pleasure to see. The refusals are honest
+where the family owns its vocabulary: `rail MGN12H 2100` → *"length must be 50–2000 mm"*, `wormset m2 50:1
+unobtainium` → *"I do not know 'unobtainium'"* with every axis and its values listed. That is the right shape.
+
+**But its headline claim is not true, and I caught it with its own output.** The file header says the two masses are
+printed *"(the two disagreeing is the finding)"*. Three times out of four they cannot disagree. See **#49**.
+
+**And it tells the same kind of lie #41(a) told, one commit after you fixed #41(a).** See **#51**.
+
+**And the first family I checked outside the ones you had already checked is wrong by a factor of six, from its own
+parts list.** See **#50**. That one matters because it is the family your own next round is about to order.
+
+### (2) The cold door I opened: `npm run breakdown`
+
+`doors.mjs --cold` named eight. I took `npm run breakdown`, because `CLAUDE.md`'s own round checklist item 8 says every
+round must run it — so a door that is cold is a standing rule that is not being kept. It ran clean on the three counts
+that matter and I am recording that as a pass, not a finding:
+
+```
+67116 taken, 66623 broken down, 0 made, 37 waiting.   Deepest chain of things in things: 12.
+## Not in the table (0)            ## Nothing in it listed (0)       ## Several materials in one shaping (0)
+## Only its materials listed (37 in 37 families and entries)
+```
+
+The tool was worth building: I would not have opened this otherwise, and the 37 are not noise — they are a ranked list
+of where the bottom-up rule stops, and **the top two lines of it are the ones that matter most to this project**:
+
+```
+- joint-drive: robot joint drive: listed as steel-electrical magnet-wire ndfeb steel-alloy (assemble)
+- joint-torque-sensor: joint torque sensor: listed as steel-alloy constantan (assemble)
+```
+
+A Unitree Z1 joint — the thing the user names by name — is a frameless BLDC, a harmonic or planetary reducer, a
+cross-roller bearing, two encoders, a brake and a driver board. Here it is four materials in a bag, and it is used
+seven times in the FR3 (`dharm.test.ts:48` asserts exactly that: `joint-drive` ×7). **#54.**
+
+### (3) The stamp — read, and judged
+
+Read both PNGs as pictures. The stamp is **right, legible and out of the way**: 11 px mono, bottom-left, 82 % white,
+two lines, on empty background in both views; it did not hide one feature of the subject. And it does the thing you
+built it for, with no log and no context:
+
+```
+ask: a bench that makes circuit boards: a camera on a 600 mm rail that places 0402 parts to 0.05 mm over a floor grid, with a paste printer and a reflow oven
+drew: MGN12H rail   view: three   84 meshes   53ca197
+```
+
+Anyone can see from the picture alone that it is not a picture of the ask. That is #32 done.
+
+**Three things it does not say, and one of them is the loud one.** The console screamed
+`*** THE RENDER IS NOT OF YOUR ASK ***` in five lines; **the picture — the thing that travels — says nothing.** The
+alarm is the one sentence that should be burnt in and is the only one that is not. It also carries no **size** (and
+`lookReady.size` is already in the object the stamp reads from), so a 400 mm rail and a 2 m rail make the same picture
+with the same stamp; and `view:` is the *name* manny-see gave the shot, not the query, so two PNGs of different
+`explode`/`cut`/`seed` can carry the same stamp. **#53.** None of that undoes the win.
+
+(Sixth run, sixth picture of a 400 mm MGN12H rail. **#46** is still one array entry. There is no `id: 'machine'`
+anywhere in `src/nexus` — I grepped the whole tree, not just `look.ts`.)
+
+### (4) The retreat on #40 — judged hardest, as asked
+
+**Withdrawing it was right. Shipping zero was not. And there was a fourth rule you did not try that costs nothing.**
+
+Right, and I will defend it: an alarm in `says` that fires on 22.3 % of the library reaches the user, the look page and
+every bill, and teaches its reader to ignore it — which costs the true ones too. You wrote the three counts into
+`families.ts` where the code stood, so the next round starts from a measurement instead of an idea, and you reopened
+your own closed finding rather than letting it sit closed. That is the opposite of a dodge and I am not going to
+pretend otherwise.
+
+**Where it was timid.** *"A forty-family change written at the tail of a long turn is how the first one shipped"* is a
+true reason not to do forty. It is not a reason to do **none**. Your own tidy lint is the pattern you needed and did
+not use: *"the ratchets hold the present debt to the number: they fail on a new one by name, and they fail on a fixed
+one until its line is deleted, so the lists only ever get shorter."* One family converted — `chipresistor`, which is
+**5,887 of the 14,179 on its own** — with `read` returning what it consumed and `callFamily` warning only for families
+that report, is a round that ends with the alarm alive, correct, and 42 % smaller, and a number that can only fall.
+You shipped a round that ends with it dead.
+
+**The fourth rule, which is not about token shapes at all.** All three rules you tried ask *"what does this token look
+like"*. The question that works is **who is asking**. Your 22.3 % is measured over the catalogue's own 63,696 lines —
+machine-written strings that are fully placed by construction. The case the alarm exists for is a *human sentence* at a
+part door. Those are two different populations and your code already separates them at one line:
+`catalogue.ts:108`'s `catalogueItem()` is the only machine path into `callFamily`, and `components.ts:1318` and
+`cli/part-main.ts` are the human ones. `callFamily(words, { strict })` — loud for human words, silent for generated
+lines — keeps 100 % of the value at ~0 % of the false alarms, with no family touched. The blast radius was the
+problem; the rule was fine.
+
+**And here is what the withdrawal cost, measured on the door you shipped in the same turn:**
+
+```
+npm run part -- "pulley GT2 60 8 titanium"
+  IT IS: GT2 pulley, 60 teeth, 8 mm bore ... sizes teeth 60, bore 8
+  says   an aluminium pulley for a 2 mm pitch belt ...
+```
+
+`titanium` was thrown away without a word, by the door whose entire reason for existing is *"what does this library
+make of these words, **and can I believe it**"*. That is #35 in its most visible possible form, at the newest door.
+
+---
+
+- [ ] **BLOCK** #49 `npm run part` prints two masses and calls their disagreement the finding; for three quarters of
+      the library there is only one of them, and for much of the rest the second is derived from the first and the
+      door prints `0.0 %` — which reads as the strongest possible pass.
+      why: three separate things, each measured.
+      **(a) 22 of 29 families I sampled are not drawn at all**, so the check is silent on them. One line per family,
+      taken as `--like <family>` → first line → `npm run part`:
+      ```
+      acmotor 100L 3kW 2P B3      29000 g   not drawn        centrifuge 5425       15600 g   15600 g   ( 0.0 %)
+      ballscrew 1204 300mm          353 g   not drawn        drone 4 span250         500 g     500 g   ( 0.0 %)
+      bevelgear m1 1:1 z15 pom     1.79 g   not drawn        headset Quest-3         515 g     515 g   ( 0.0 %)
+      carbattery 36Ah EFB          9000 g   not drawn        ftsensor Nano17        9.07 g       9 g   (-0.8 %)
+      planetarygearbox frame42 i3   445 g   not drawn        chip LM35 TO-92        0.21 g     0.2 g   (-4.8 %)
+      wormgearbox 030 i5            243 g   not drawn        stepper nema8 28      46.53 g    52.8 g   (13.5 %)
+      servo micro / lipo / lidar …  (22 of 29 "not drawn by the library")   kiln Skutt-KM1027  -13.7 %
+      ```
+      To the door's credit it says `it is not drawn by the library` plainly. What it does not say is that this is the
+      common case, so "no disagreement reported" is not evidence of anything for most of the library.
+      **(b) Where it reports `0.0 %`, the two numbers are one number.** `parts/mass.ts:90` is
+      `const own = p.kg !== undefined ? p.kg : <from shape, material and fill>` — a drawing that declares its mass has
+      its mass echoed back. Worse, where the drawing does *not* declare it, the **fill is solved backwards from the
+      published mass**, in at least five places:
+      ```
+      machines/franka.ts:106   const fill = Math.max(0.05, Math.min(1, (FR3.kg[k]! - less) / solid));
+      machines/franka.ts:71    { ...shell, fill: … (FRANKA_HAND.kg - rest) / solid }
+      machines/headset.ts:120  const solid = massOf({ ...visor, fill: 1 }), left = QUEST3.kg - inner.reduce(…)
+      machines/lab.ts:143      return { ...shell, fill: Math.max(0.03, Math.min(1, left / solid)) };
+      machines/lab.ts:318      fill = Math.max(0.03, Math.min(1, (BSC_A2.kg - rest) / solid));
+      ```
+      Solving a hollow casting's fill from its published mass is a **legitimate and good** modelling choice. Printing
+      the result back as an independent second opinion is not. `CLAUDE.md` says `mass.ts` owns *"a part's mass from
+      shape, material and fill"*; here fill comes from mass, and the arrow is reversed with nothing saying so.
+      **(c) Two tests are comparing a number to itself inside a clamp.** `headset.test.ts:37`
+      `expect(Math.abs(massOf(c!.part) - kg) / kg).toBeLessThan(0.2)` — under a test named *"weighing what Meta says"* —
+      and `dharm.test.ts:51` `expect(Math.abs(massOf(c.part) - (FR3.kg.reduce(…) + …))).toBeLessThan(0.1)`. I will be
+      exact rather than rhetorical: these are **not** dead, because `Math.max(0.03, Math.min(1, …))` saturates, so they
+      do catch a published mass that no fill between 3 % and 100 % can reach. That is a 33× window, asserted at 20 %
+      and 0.1 kg. The assertion is 33× looser than it reads, and nothing says so.
+      This is a BLOCK and not a QUEUE for one reason only: it is the instrument you built *for me*, I will check every
+      future claim of yours through it, and it is the same fault as #39 — a comparison that cannot fail, with a
+      reasoned sentence above it — one commit after #39 was fixed. I would rather find it now than trust it for five
+      runs.
+      fix: provenance, not a new number. `massOf` returns *why* alongside *what*: `summed from its solids` /
+      `declared on the drawing (p.kg)` / `its fill solved back from a published mass, so this is that figure again`.
+      `npm run part` prints that line under `drawn`, and withholds the percentage in the third case the way
+      `composeMachine` withholds kg for an undrawn part (#20 — your own precedent). Then the two tests say what they
+      actually check: *"the published mass is reachable with this envelope at a fill between 3 % and 100 %"*, which is
+      a real and useful claim, honestly stated. Prove it the project's way: set `QUEST3.kg` to 5.15 on purpose and show
+      me the red, and show me the test still green at 0.515 — that difference is the whole of what it checks.
+
+- [ ] **BLOCK** #50 the `wormgearbox` family's mass is a fabricated cube law that the library's own parts list
+      contradicts by a factor of eight, it is not labelled typical or an estimate, and it is the family your next round
+      is about to order into every arm joint.
+      why: `kinds/industrial.ts:164` — `g: (p) => (Number(p.size) / 10) ** 3 * 9`. A magic 9 and a cube, no shape, no
+      density, no source. Check it against **the library's own figures**, no web page needed:
+      ```
+      npm run part -- "wormgearbox 030 i50"
+        declared  243 g      box 78 × 78 × 66 mm
+        WHAT IT IS MADE OF   2 × bearing-6204zz   1 × al-a380   1 × steel-alloy   1 × bronze   1 × oil
+      npm run part -- "bearing 6204"
+        declared  106.18 g     (right: a real 6204 is about 0.11 kg)
+      ```
+      **2 × 106.18 = 212.4 g of the declared 243 g.** That leaves **31 g** for a die-cast aluminium case 78 mm across,
+      a hardened steel worm, a bronze wheel and a charge of oil. The library states both numbers and never compares
+      them. From its own `box` and its own `DENSITY['al-a380'] = 2710`, a 4 mm-walled case of that size is ~355 g by
+      itself — more than the whole gearbox is declared to weigh. Externally: a retailer lists the **NMRV 030 at 1.600
+      kg** (motiondynamics.com.au, via search snippet, read 2026-10-13; the page itself is DNS-blocked from this
+      network, so take it as a snippet and not as a page I opened). So the figure is ~6.6× light, and the same law
+      gives 11.979 kg for an NMRV 110 that is sold at around 35 kg.
+      The `std` string labels the *efficiencies* typical and says nothing about the mass, so this is a bare number from
+      nowhere, which theme 9 forbids outright. `planetarygearbox` immediately above it is the same shape
+      (`(frame/10)**3 * (i<=10 ? 6 : 8)`).
+      This is a BLOCK because of *when* it is: **#41's fix is to make `turnAxis` order a worm**, and every composed arm
+      in this project would then carry this mass and this price. A wrong refusal costs capability; a wrong mass shipped
+      into every arm costs the user money and a machine that does not stand up.
+      fix: two things, and the second is worth more than the first. (1) Give the family a mass it can defend —
+      summing what its own `of` says it contains plus a cased-volume estimate, labelled, is already better than the
+      cube law and needs no page. (2) **The general rule: nothing may declare a mass lighter than the parts it says it
+      contains.** The library already carries two independent estimates for most products — the declared `g`, and the
+      sum of the children `of` names — and nothing has ever compared them. `npm run part` prints both lists on the same
+      screen and still does not add the children up. One line in the door and one test over the inventory
+      (`Σ children ≤ declared`, for every item whose children all resolve) catches this family and every one like it,
+      for ever. That is the same shape as the catalogue round trip and it is the ratchet I would most like to see next.
+
+- [ ] **QUEUE** #51 `npm run part` tells the same lie #41(a) told, one commit after you fixed #41(a), in the door built
+      for honesty.
+      why: ```
+      npm run part -- "gearmotor"
+        No family makes this. Nothing here is called "gearmotor".
+      npm run part -- --like "gearmotor"
+        40 catalogue lines near "gearmotor":
+          gearmotor N20 10:1 3V     N20 gear motor, 10:1, 3 V, 9.54 g
+          gearmotor N20 30:1 6V     …
+      ```
+      `kinds/motion.ts:335` is `id: 'gearmotor'`. The family exists, the catalogue has 67 lines of it, and the door
+      says nothing here is called that. `cli/part-main.ts:50`. The true sentence is *"the `gearmotor` family is here
+      and needs its sizes; here are its lines"*. The same run also showed me `--like "worm"` printing a whole
+      **`wormgearbox`** family — seven NMRV sizes × twelve ratios — that neither of us had mentioned across two rounds
+      of arguing about whether a worm reducer is in this library. A tool that makes you type a second command to find
+      out that the first one was wrong is a tool that will be believed.
+      fix: when `callFamily` returns null, call `searchCatalogue` **in the same breath** and print the nearest lines;
+      only say "nothing here is called X" when that search comes back empty. Five lines, and it turns the commonest
+      failure (I do not know the spelling) from a dead end into the answer.
+
+- [ ] **QUEUE** #52 `npm run works` prints its entire summary twice, and `manny-see` claims to run it against the ask
+      when it takes no words at all.
+      why: ```
+      node dist-nexus/works.mjs | grep -n "^16 stations"
+        41:16 stations, $2,395 and 56 h of your own work …
+        62:16 stations, $2,395 and 56 h of your own work …
+      ```
+      `cli/works-main.ts:57` — `console.log(worksUnderText(3000)); console.log(`\n${worksText(under3K().ids, 'build')}`);`
+      — and `worksUnderText` already ends with what `worksText` prints. Two functions, one output, 21 duplicated lines
+      including the full station list. In a project whose own commit title is *"a word written twice is not two
+      words"* and whose tidy ratchet is *"no rule written twice"*, this is the same fault at the output layer where the
+      lint cannot see it. And it is 76 lines of identical constant in every `manny-see` run, under a header that says
+      *"every door the project has, run against the same words"* — `works.mjs` takes no words and answers the same
+      thing whatever I ask. That is a claim in a tool's own prose that is not true.
+      fix: one of the two calls goes; `manny-see` labels that section *"(constant: the $3,000 works, not an answer to
+      your ask)"* or drops it to one headline line with a pointer.
+
+- [ ] **QUEUE** #53 the stamp should carry the alarm and the size; it carries neither, and `view:` is a nickname.
+      why: the console printed five lines of `*** THE RENDER IS NOT OF YOUR ASK ***` and the PNG says nothing about
+      it — and the PNG is the half that travels, which is the entire argument you used to build the stamp. `look.ts:422`
+      already puts `size` in `lookReady`, three keys from `name` and `meshes` which the stamp reads, so the picture
+      could carry its own scale for free; without it a 400 mm rail and a 2 m rail are the same picture with the same
+      caption. And `view: ${n}` is the *name* `manny-see` passed, not the query, so two shots at different
+      `explode`/`cut`/`seed`/`kit` carry identical stamps.
+      fix: add `size` and the query to line 2; and when the drawn name did not come from the ask, a third line in red:
+      `THIS IS NOT YOUR ASK — the library drew its family's example part`. Then the loudest thing the tool knows is in
+      the artefact that outlives it.
+
+- [ ] **QUEUE** #54 the parts a Unitree Z1 is made of are a bag of four materials, and they are first and second on the
+      breakdown queue's own waiting list.
+      why: `npm run breakdown` (the cold door I opened) is clean on "not in the table", "nothing in it listed" and
+      "several materials in one shaping" — all nought — and its 37 remaining lines open with:
+      ```
+      - joint-drive: robot joint drive: listed as steel-electrical magnet-wire ndfeb steel-alloy (assemble)
+      - joint-torque-sensor: joint torque sensor: listed as steel-alloy constantan (assemble)
+      ```
+      `dharm.test.ts:48` asserts the FR3 contains seven of each. The user's own words are *"design each sub component
+      the motor and other parts but also you first need to design the sub components of that"* and *"don't forget
+      bearings have sub components as well"*, and the machines he names first are two precision arms. A real joint
+      module is a frameless BLDC (stator stack, windings, magnet ring), a harmonic drive or planetary stage, a
+      cross-roller bearing, an output and an input encoder, a brake, and a driver board — every one of which this
+      library already draws somewhere else. This is not a new capability; it is an assembly of parts you own.
+      fix: break out `joint-drive` from the parts already in `components.ts`, then `joint-torque-sensor` (a strain-gauge
+      spoke wheel: `constantan` is already the right material). Those two are worth more than the other 35 together,
+      because every arm in the project is seven of them.
+
+- [ ] **SIGHT** #55 I cannot see how much of the library the two-mass check can actually check, so I cannot tell
+      whether #49 is a labelling nit or the project's main instrument fault.
+      dark: I sampled by hand — `--like <family>` → first line → `npm run part`, 29 families, a shell loop pasted under
+      #49. It gave me 22/29 undrawn and four exact `0.0 %`, which is enough to raise the finding and **not** enough to
+      size it. There is no door that answers it: `npm run part` takes one ask, `npm run breakdown` counts materials not
+      masses, `tools/doors.mjs` lists doors, and `catalogue.test.ts` walks all 63,696 lines and asserts the id round
+      trip only. I cannot write the sweep myself — I do not edit this tree, and bundling `src/` with esbuild in a
+      scratch directory is the exact thing #48 existed to end.
+      want: `npm run part -- --audit` (or a column on whatever sweep already walks the library). Over every inventory
+      item and every family's example line, four counts and the worst offenders ranked: **not drawn** / **drawn and
+      summed from its solids** (a real check) / **drawn but the drawing declares `p.kg`** (the same number twice) /
+      **drawn with its fill solved back from a published mass** (the same number twice, hidden). Plus, in the same
+      pass and nearly free, the #50 column: every item where the declared `g` is **less than the sum of the children
+      its own `of` names**, worst ratio first.
+      then: I would check whether `0.0 %` is the exception or the rule. **If the third and fourth classes together are
+      under ~20 items, #49 softens to a QUEUE about one printed line and I will rewrite it as that and say so.** If
+      most drawn products are in them, #49 is the biggest instrument fault on this page and goes above everything but
+      #46. And the #50 column decides the same question for the worm gearbox: one bad family, or forty — which is the
+      difference between a fix and a ratchet.
+
+## Next round, in Manny's order
+
+**My Run 5 order does not hold, and here is the one change: #46 goes first, and two of this run's findings go in above
+the rest of it.** Everything else keeps its place and its reasons.
+
+1. **#46. One array entry. Six runs.** It was fourth on my last list and that was my mistake, not yours. It is the
+   cheapest line on this page by an order of magnitude and it is upstream of every judgement either of us makes
+   through `manny-see`: six runs, six pictures of a 400 mm rail, and I have still never seen a composed machine. There
+   is no `id: 'machine'` anywhere in `src/nexus` — I grepped the tree. Do it before you read item 2.
+2. **#49, because it is the instrument you built for me and I cannot trust it yet.** Provenance on `massOf`, the line
+   under `drawn`, the percentage withheld where the two numbers are one number, and the two tests restated to the
+   claim they actually make. Break `QUEST3.kg` on purpose and show me both colours. **#55** falls out of the same
+   work — if you are already threading provenance through `massOf`, the audit sweep is the same afternoon.
+3. **#50, and it must land before #41(1).** You are about to order a worm into every arm joint. Do not order a part
+   whose declared mass is lighter than the two bearings it says it contains. Then take the general rule with it —
+   *nothing declares a mass lighter than what it says it is made of* — as one test over the inventory, because that is
+   the ratchet, and the family fix is only one line of it.
+4. **#41, (b) (c) (d), in the order already written there.** Measured again this run and all three still live: the
+   composed PCB bench above reported `8 units, 6.97 kg, $505.51` with a turn axis inside it that **cannot be built**,
+   and that unit still contributed `2 × belt GT2 400 15mm`, `4 × bearing 6805` and its weight to the headline. (a) is
+   genuinely fixed and the new sentence is good — I read it in the output.
+5. **#35, one family, not forty — and with `strict` scoping, not a new token rule.** `chipresistor` alone is 5,887 of
+   the 14,179. Convert it, add the ratchet so the number can only fall, and make `callFamily(words, { strict })` loud
+   for human words and silent for `catalogueItem`'s generated ones. That is the round that ends with the alarm alive
+   and correct instead of dead.
+6. **#42's quantity-to-noun binding**, unchanged and still third in substance. This run gave it a new witness worth
+   having: `0.05 mm` in the PCB ask reached `notDone` and died there — *"was read, and is 0.00005 in SI, and nothing in
+   this machine uses it"*. A placement tolerance is the single most load-bearing number in the user's two named
+   machines (a Z1 Air's 0.1 mm, a 0402 part's 0.05) and there is an owner for it, `parts/fits.ts`, that `machine.ts`
+   never calls. Binding the quantity to its noun is what lets `0.05 mm` find `places` instead of finding `over`.
+7. **#25**, sixth run on this list, still the 20-line wiring job, still with your own `composeMachine` precedent.
+8. Then **#51, #52, #53, #54** — #51 and #52 are minutes each, #53 is two lines in `look.mjs`, and #54 is the one that
+   makes an arm an arm.
+
+**How to push it.** Last run I asked for two ratchets and you built one of them (the catalogue id round trip — it is
+real and I checked it). Here is the third, and it is the same idea aimed at the thing I now believe is this project's
+softest number: **make the library weigh itself twice and refuse to disagree.** Every product carries a declared `g`
+and an `of` list naming what it contains; most drawn ones carry a third figure summed from their solids; a handful
+carry a maker's published figure. Today nothing compares any pair of them, which is how an NMRV 030 comes to weigh less
+than its own two bearings and how a Franka link comes to "agree" with a figure its fill was solved from. A **mass
+ratchet** — every item, every pair of figures it has, each disagreement over a threshold listed by name and the list
+only ever shorter — is one test, it would have caught #50 before the commit, and it makes a whole class of silent
+fault unwritable instead of fixed. Pair it with the thing no CAD system does: **print the provenance beside every
+number you show a person.** Onshape, Fusion and SolidWorks all hand you a mass to four decimals and none of them tells
+you whether it came from the geometry, from a material override, or from a density somebody typed to make it match.
+This library could say it on every line it prints. That is not catching up with the best tools — that is the branch
+none of them took, and it costs you one return type.
+
 
 ## The three sight requests, and #35's answer
 
@@ -452,7 +793,7 @@ judged for four runs is a 400 mm rail is a missing entry in an array, not a miss
       moment any part in the drive changes**, which a spreadsheet cannot do. It is the same shape as #28's error
       budget and should be built as its first instance.
 
-- [ ] **QUEUE** #46 #5 is a missing entry in an array, not an architecture round, and I have been wrong about that for
+- [x] **QUEUE** #46 #5 is a missing entry in an array, not an architecture round, and I have been wrong about that for
       four runs.
       why: `ask/machine.ts:484` `machinePart(m, use)` already turns a composed machine into placed parts, and
       `view/works-room.ts:288` already calls it — `const m = composeMachine(COMPOSED[s.id]); made = machinePart(m, (w)
@@ -533,6 +874,61 @@ itself the moment a part changes. Get those two and this stops being a library t
 one that catches itself — which is the only version of this that scales to the trillions of combinations the user
 asked for.
 
+
+## Round on #46 — the kit entry, and what it showed the moment it could be seen — commit follows this entry
+
+You were right that it was one array entry, and right that you had been wrong about it for four runs. It was two
+one-line conditions, not one, and the second was invisible until the first was gone.
+
+**The entry.** `addKit({ id: 'machine', … })` at the end of `src/nexus/ask/machine.ts`, not in `parts/kits.ts`, because
+a kit that composes a machine must import `ask/`, and `parts/` importing `ask/` is the up-layer import the tidy lint
+forbids. `world/creatures.ts` registers its own for the same reason, so this follows an existing rule rather than
+inventing one. `view/look.ts` imports it for the side effect. Six asks now draw six different machines.
+
+**The second condition.** With the kit registered, every ask still drew the same 300 mm default, because
+`parts/kits.ts:618` read `if (k.id === 'part') out.said = words.trim();` — the raw words reached exactly one kit by
+name. That is the same fault as the missing entry, one layer down: a general capability spelled as a condition on one
+id. It is now a declared flag, `saidWhole?: true` on `Kit`, which the `part` and `machine` kits set. A third kit that
+wants the sentence declares it instead of being added to a growing `||` chain.
+
+**What the first honest picture showed.** The render worked and the drawing was wrong, and this is the part worth
+your attention. `npm run part -- "extrusion 2040 2000"` says the stock is `20 × 40 × 2000` — z-long. `layUnit` in
+`machine.ts` had three constants built on that declaration (`ALONG_X = [0, π/2, 0]`, `UPRIGHT = [π/2, 0, 0]`), with a
+careful comment citing `kits.ts` as their source. But the part `components.ts` hands back has **already** been stood
+upright by a `rot` on a child of its own, so every one of those constants turned it a second time:
+
+| meant to be | turn applied | what it did |
+| --- | --- | --- |
+| four uprights | `[π/2,0,0]` on an already-upright part | cancelled — they lay flat along z |
+| four across the depth | `[0,0,0]` | inherited the inner turn — they stood up |
+| four along the width | `[0,π/2,0]` | compounded — also stood up |
+| the rail's 2000 mm beam | `[0,π/2,0]` | the same, so a 2000 mm beam measured 40 mm along its travel |
+
+Measured on the old code rather than reasoned: the twelve members run **0 along x, 8 up, 4 across**. Not one of them
+ran the long way of the frame.
+
+The frame was inside-out. A near-cube frame (700 × 700 × 750) looks like a frame however its twelve members are
+permuted, which is exactly why it survived every round of being looked at — and the 400 mm rail you kept being shown
+was too short for the same error to read as wrong. At 2000 mm on one axis it is unmissable: seven posts in a row and
+no beam. **The comment above those constants claims to have fixed the blind judge's "a spidery frame whose uprights
+terminate in empty space". It had not. It had moved it.**
+
+**The fix is a measurement, not a better constant.** `layAlong(part, axis)` in `parts/space.ts` — the owner of
+oriented boxes — lays out the part, finds which way its longest side actually points, and returns the turn from there
+to the wanted axis. `layUnit` calls it at the six places that put a length of stock down; every other call site keeps
+its literal turn, so the change is scoped to prisms and nothing else moved. The convention can now change in `parts/`
+without silently breaking `ask/`, which is the same class as your own framing: *the distinction is declared in one
+owner and every consumer re-derives it.* This was a consumer re-deriving it from a comment.
+
+Evidence: `tests/nexus/machine.test.ts` gains a test that the frame's twelve members run in three directions, four
+each, and that a 2000 mm rail's beam is longer in x than in y or z — it fails on the old code. Pictures: the gantry's
+frame now closes at eight corners where its members used to end in mid-air, and the 2000 mm rail reads as a beam with
+its MGN rail, brackets and carriage along it.
+
+**What is still wrong in that picture, named rather than left for you to find:** the rail's six brackets lie along the
+beam instead of standing under it (`railMount` has no stand-off), the turn axis and gripper float above the beam
+rather than hanging off the carriage, and the rail arrangement still has no placement rule of its own — it shares the
+gantry's upward stack in `machineParts`, where `arm` has its own loop. Two arrangements of four are actually drawn.
 
 ## Round on #17 — the belt is the ceiling — commit follows this entry
 

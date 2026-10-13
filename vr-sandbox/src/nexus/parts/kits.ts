@@ -136,6 +136,12 @@ export interface Kit {
   moves?: (c: Pick) => { kind: 'walk' | 'waddle' | 'swim' | 'fly'; speed: number; freq: number; height: number; says: string };
   /** what it does when nothing else is asked: follows you, wanders, swims past */
   does?: 'follow' | 'wander' | 'swim past' | 'hover';
+  /** it is asked by its own words, not by choices: the ask's whole text arrives at `build` as `c.said`. A kit that
+   *  reads the sentence itself (a part named by its standard, a machine composed from what the sentence asks it to do)
+   *  declares this; every other kit is picked by its words and then built from its choices alone. It is declared
+   *  BECAUSE it was a condition on one id: `if (k.id === 'part')`, which is why the `machine` kit was built six times
+   *  from an empty string and drew the 300 mm default each time while the ask said 2000 (docs/MANNY.md #46). */
+  saidWhole?: true;
 }
 
 export { DENSITY, massOf } from './mass';
@@ -271,7 +277,7 @@ useMass(massOf);
 // ---- a part on its own: any component the library draws (src/nexus/parts/components.ts), by its words, its sizes in them
 // ("bolt M8x30", "angle 40x4 steel 1000mm", "bolted joint M10 22"), so it can be looked at, taken apart and checked alone
 kit({
-  id: 'part', name: 'part', get words() { return partWords(); }, get choices() { return [{ key: 'family', name: 'kind of part', options: DESIGNED }]; },
+  id: 'part', name: 'part', saidWhole: true, get words() { return partWords(); }, get choices() { return [{ key: 'family', name: 'kind of part', options: DESIGNED }]; },
   says: 'a part from the component library: designed once from its standard, by its words (its family\'s first example where only its family is said)',
   // (parts said with "+" between them are assembled by their mates: "stepper nema17 40 + motorplate nema17 t4 aluminium")
   // (and shown standing on its lowest point, as a part set down on a bench is)
@@ -614,8 +620,8 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
   if (k.id === 'sword' && /\bsaber\b/.test(t)) out.type = 'sabre';
   if (k.id === 'dragon' && /\b(saddle|ride|rider|riding|fly on|mount)\b/.test(t)) out.rider = 'yes';
   if (k.id === 'dog' && /\bpupp/.test(t)) out.age = 'puppy';
-  // (a part is called by its own words, its sizes in them: "bolt M8x30")
-  if (k.id === 'part') out.said = words.trim();
+  // (a kit called by its own words, its sizes in them: "bolt M8x30", "a rail that carries 25 kg over 2000 mm")
+  if (k.saidWhole) out.said = words.trim();
   return out;
 }
 /** A thing made by a kit from words: its choices, its parts, its mass. */

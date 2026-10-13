@@ -18,14 +18,15 @@
 // composed (a spindle motor, a servo) says so, because pretending to compose a part that is really a purchase is the
 // way a bill of materials quietly becomes fiction.
 
-import { component } from '../parts/components';
+import { component, use } from '../parts/components';
 import { massOf } from '../parts/mass';
-import type { Part, V3 } from '../parts/kits';
+import { addKit, type Part } from '../parts/kits';
 import { cheapest } from '../parts/prices';
 import { GT2_PULL_6, GT2_WIDTHS, beltFor, beltPull, gt2Pitch } from '../kinds/motion';
 // the reader lives in its own file now (ask/machine-read.ts); re-exported here so every existing door goes on
 // meaning what it meant, which is the same reason index.ts and works.ts sit at the root
 import { readMachine } from './machine-read';
+import { machinePart } from './machine-draw';
 export { readMachine, type MachineWant } from './machine-read';
 
 /** What a unit affords: the one thing it adds to whatever is bolted on top of it. */
@@ -480,11 +481,6 @@ export function machineText(m: Machine): string {
   return out.join('\n');
 }
 
-/** A composed machine as one part, its units where the stack puts them: what to stand in the room. */
-export function machinePart(m: Machine, use: (words: string) => Part): Part {
-  return { name: m.name, at: [0, 0, 0], says: `${m.name}, ${m.reach.join(' × ')} mm. ${m.stages.map((s) => s.unit.says).join(' ')}`, parts: machineParts(m, use) };
-}
-
 /** Words in the room: "invent me a machine that prints 300 x 300", "an arm that reaches 600 mm and picks up 1 kg".
  *
  *  `stand` is how it gets drawn without this file knowing anything about the viewer: the room passes a way to put a
@@ -507,93 +503,6 @@ export function machineWords(text: string, o: { stand?: (p: Part, m: Machine) =>
     const short = m.kg - drawn;
     return `${o.stand(part, m)}${short > 0.05 ? ` Standing: ${drawn.toFixed(2)} kg of it is drawn and ${short.toFixed(2)} kg is bought whole and has no drawing here (${m.stages.flatMap((s) => s.unit.bought ?? []).map((b) => b.what).join(', ') || 'its bought lines'}).` : ''}\n\n${said}`;
   } catch (e) { return `${said}\n\n(It is not standing in the room: ${(e as Error).message})`; }
-}
-
-/** A unit drawn as the thing it is, not as a heap of its parts in a grid.
- *
- *  The first run of this laid every part on a 60 mm lattice, which is what a bill of materials looks like when you
- *  pretend it is a machine: recognisable to nobody, and the exact fault the user named about the works room. A unit
- *  knows its own shape, so it places its own parts — a slide is a beam along its travel with the rail on top of it, the
- *  carriage at mid-span, the motor hung off one end and the screw or belt running between them; a turn axis is the
- *  motor under its bearing pair with the pulleys between; a frame is twelve lengths on the edges of its own box.
- *  Nothing here is per-machine: it is per *shape*, and there are five shapes. */
-export function layUnit(u: Unit, use: (words: string) => Part): Part[] {
-  const out: Part[] = [], mm = 0.001;
-  // a prism (every length of extrusion, angle and bar the library draws) runs along **z** with its section in x-y
-  // (src/nexus/parts/kits.ts). The first run of this laid every beam as though it ran along x, so a frame came out as
-  // twelve beams all lying the same way with their ends in mid-air — which is what a blind judge saw and called
-  // "a spidery frame whose uprights terminate in empty space". These are the three ways to point one.
-  const ALONG_Z: V3 = [0, 0, 0], ALONG_X: V3 = [0, Math.PI / 2, 0], UPRIGHT: V3 = [Math.PI / 2, 0, 0];
-  const got = (words: string): Part | null => { try { return use(words); } catch { return null; } };
-  const put = (words: string, at: V3, rot: V3 = ALONG_Z) => { const p = got(words); if (p) out.push({ ...p, at, rot }); };
-  const [W, H, D] = u.box.map((x) => x * mm) as V3;
-  const words = (re: RegExp) => u.of.find((o) => re.test(o.words))?.words;
-
-  if (u.does === 'hold' && u.id.startsWith('frame')) {
-    // twelve lengths on the edges of its own box: four uprights, four along the width, four across the depth
-    const up = u.of[2]?.words, along = u.of[0]?.words, across = u.of[1]?.words;
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (up) put(up, [sx * (W / 2 - 0.02), H / 2, sz * (D / 2 - 0.02)], UPRIGHT);
-    for (const y of [0.02, H - 0.02]) for (const sz of [-1, 1]) if (along) put(along, [0, y, sz * (D / 2 - 0.02)], ALONG_X);
-    for (const y of [0.02, H - 0.02]) for (const sx of [-1, 1]) if (across) put(across, [sx * (W / 2 - 0.02), y, 0], ALONG_Z);
-    return out;
-  }
-  if (u.does === 'hold') {   // an arm's link, or a rail's brackets: along its own length
-    for (const o of u.of) for (let i = 0; i < Math.min(o.n, 6); i++) {
-      put(o.words, [(o.n > 1 ? (i / (o.n - 1)) - 0.5 : 0) * W, 0, 0], /angle|extrusion|bar/.test(o.words) ? ALONG_X : ALONG_Z);
-    }
-    return out;
-  }
-  if (u.does === 'slide') {
-    const beam = words(/^extrusion/), rail = words(/^rail/), motor = words(/^stepper/), plate = words(/^motorplate/);
-    if (beam) put(beam, [0, 0, 0], ALONG_X);                                // the beam along the travel
-    if (rail) put(rail, [0, 0.021, 0], ALONG_X);                            // its rail on the beam's top face
-    if (plate) put(plate, [-W / 2 - 0.004, 0.02, 0], [0, Math.PI / 2, 0]);  // the motor plate on the far end
-    if (motor) put(motor, [-W / 2 - 0.03, 0.02, 0], [0, 0, Math.PI / 2]);   // the motor behind it, its shaft along x
-    const bear = words(/^bearing/), pul = words(/^pulley/), idl = words(/^idler/);
-    if (bear) for (const sx of [-1, 1]) put(bear, [sx * (W / 2 - 0.01), 0.02, 0], [0, 0, Math.PI / 2]);
-    if (pul) put(pul, [-W / 2 + 0.02, 0.02, 0], [0, 0, Math.PI / 2]);
-    if (idl) for (const sx of [-1, 1]) put(idl, [sx * (W / 2 - 0.015), 0.02, 0.012], [0, 0, Math.PI / 2]);
-    return out;
-  }
-  if (u.does === 'turn') {
-    const motor = words(/^stepper/), plate = words(/^motorplate/), bear = words(/^bearing/);
-    const small = u.of.find((o) => /^pulley GT2 20/.test(o.words))?.words, big = u.of.find((o) => /^pulley GT2 (?!20)/.test(o.words))?.words;
-    if (motor) put(motor, [-0.035, 0, 0]);
-    if (plate) put(plate, [-0.035, 0.022, 0]);
-    if (small) put(small, [-0.035, 0.03, 0]);
-    if (big) put(big, [0.02, 0.03, 0]);
-    if (bear) for (const y of [0.045, 0.062]) put(bear, [0.02, y, 0]);
-    return out;
-  }
-  // a tool: its pieces stacked down from the mount, which is how every one of them really hangs
-  let down = 0;
-  for (const o of u.of) for (let i = 0; i < Math.min(o.n, 4); i++) { put(o.words, [i * 0.018 - 0.01, -down, 0]); down += 0.012; }
-  return out;
-}
-
-/** The machine drawn from the library: every unit where the stack puts it, each unit laying out its own parts, so what
- *  was composed can be stood in the room and taken apart like anything else. A gantry stacks up its frame, a rail hangs
- *  from its brackets, and an arm is laid out along its own links. */
-export function machineParts(m: Machine, use: (words: string) => Part): Part[] {
-  const out: Part[] = [], mm = 0.001;
-  if (m.arrange === 'arm') {
-    // along the arm: each joint at the end of the link before it, which is what makes it read as an arm
-    let x = 0, y = 0.1;
-    for (const s of m.stages) {
-      out.push({ name: s.unit.name, at: [x, y, 0], says: s.unit.says, parts: layUnit(s.unit, use) });
-      if (s.unit.does === 'hold') { x += s.unit.box[0] * mm; y += 0.02; } else y += 0.05;
-    }
-    return out;
-  }
-  let up = 0;
-  for (const s of m.stages) {
-    // a slide axis is turned a quarter about the stack as it goes up, so the second one runs across the first — which
-    // is what a gantry *is*, and laying them all the same way is how the first drawing of this read as a pile of beams
-    const across = m.arrange === 'gantry' && s.unit.does === 'slide' && out.filter((p) => /axis/.test(p.name)).length % 2 === 1;
-    out.push({ name: s.unit.name, at: [0, up * mm, 0], ...(across ? { rot: [0, Math.PI / 2, 0] as V3 } : {}), says: s.unit.says, parts: layUnit(s.unit, use) });
-    up += s.unit.does === 'hold' && s.unit.id.startsWith('frame') ? 40 : s.unit.box[1];
-  }
-  return out;
 }
 
 // ---- how it is arranged, which is also the words' to say ------------------------------------------------------------
@@ -689,3 +598,32 @@ export function armStack(reach: number, tools: Unit[], payloadKg = 0): { stages:
   const kg = linkKg.reduce((a, b) => a + b, 0) + toolKg + joints.reduce((a, j) => a + unitKg(turnAxis(j.ratio)).kg, 0);
   return { stages, kg: +kg.toFixed(2), holding: +payloadKg.toFixed(2), refusals, gaps, joints };
 }
+
+// `layUnit`, `machineParts` and `machinePart` moved to `./machine-draw` (drawing is not composing); re-exported
+// here so every caller that had them from this file still does.
+export { layUnit, machineParts } from './machine-draw';
+export { machinePart };
+
+// ---- the machine as a kit, so a composed machine can be LOOKED AT ------------------------------------------------
+// This is one array entry, and its absence is why six rounds of review judged a picture of a 400 mm rail. Everything
+// else was already here: `machinePart` turns a composed machine into placed parts and `view/works-room.ts` calls it.
+// But `view/look.ts` picks its kit by id out of `KITS`, there was no `machine` id, so every ask fell through to the
+// `part` kit - whose words-to-part lookup answers a sentence with its family's example. The numbers half of
+// `manny-see` was reading `composeMachine` and the picture half was drawing an end cap, and nothing said so.
+// Registered from here rather than from `parts/kits.ts` because a kit that composes a machine has to import `ask/`,
+// and `parts/` importing `ask/` is the up-layer import the tidy lint forbids - the same reason `world/creatures.ts`
+// registers its own. `view/look.ts` imports this module for the side effect, as it already does for creatures.
+addKit({
+  id: 'machine', name: 'machine', words: /\b(machine|gantry|arm|rail|robot|printer|router|mill|lathe|press|winder|feeder|conveyor|plotter|pick and place)\b/i,
+  choices: [], saidWhole: true,
+  says: 'a machine composed from the component library by what each unit affords, as `npm run machine` composes it: the same units, the same bill, the same refusals - drawn',
+  build(c) {
+    const words = String(c.said ?? '').trim();
+    const m = composeMachine(words || 'a machine that picks things up');
+    const p = machinePart(m, use);
+    // What the composer REFUSED travels with the drawing, so a picture of a machine that cannot be built says so in
+    // the same place `manny-see` and the look page already read (`lookReady.says`, and the stamp burnt into the PNG).
+    const bad = [...m.refusals, ...m.gaps.map((g) => `not drawn: ${g}`)];
+    return { ...p, says: `${bad.length ? `THIS MACHINE DOES NOT HOLD: ${bad[0]}${bad.length > 1 ? ` (and ${bad.length - 1} more)` : ''}. ` : ''}${p.says}` };
+  },
+});

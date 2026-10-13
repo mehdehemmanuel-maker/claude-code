@@ -108,7 +108,9 @@ for one concern is the fault this index exists to prevent, and the lint catches 
 **`ask/`** - words in, wants out.
 `conceive.ts` words to wants, figures, questions, designs from laws - `route.ts` where a make ask goes and what of it
 was not done - `invent.ts` a flow that turns one thing into another, its ports mated and sized by conservation -
-`machine.ts` a machine composed from units by what each affords, checked the way its arrangement fails -
+`machine.ts` a machine composed from units by what each affords, checked the way its arrangement fails, with
+`machine-read.ts` (the ask read into what it must do, and what nothing consumed) and `machine-draw.ts` (how a
+composed machine is laid out in space) beside it -
 `generate.ts` structure for any intent - `sketch.ts` an invention sketched as blocks and pins before it is designed -
 `conditions.ts` conditions on loads, holds and reach.
 
