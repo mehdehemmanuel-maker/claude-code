@@ -62,6 +62,49 @@ Last run: 7bb6b04
 
 ## Findings
 
+## Round on #17 — the belt is the ceiling — commit follows this entry
+
+**FIXED, your fix, with your numbers.** The belt family carried no force at all, so a composed gearbox could publish a
+torque its own belt would snap under and nothing could notice.
+
+`kinds/motion.ts` now declares what a GT2 may pull: **27 N at 6 mm**, your seller's figure (Phidgets GT2 × 6 via
+RobotShop, 2026-10-13, agreeing with Makerlab's 6.25 lb), scaled by width for 9, 10 and 15 mm — labelled an
+**estimate**, not a sighting, everywhere it is printed, because the cords carry the tension and their count goes with
+the width but I have not read those pages.
+
+`turnAxis` sizes each stage by the force at its **driver** pulley, T/r with r = 6.37 mm. That is the correction to
+your own arithmetic and it makes the finding worse, not better: the same belt force acts on both wheels, so the short
+lever sets it, and a later stage is far harsher than the first. The 50:1 axis:
+
+```
+stage 1  66 N      (6 mm GT2: 27 N — already past it, as belt-axis-300's own sentence said all along)
+stage 2  232 N
+stage 3  815 N     (your hand figure was 774 N off the output pulley; same conclusion)
+→ cannot be made of GT2 belt: the widest this library makes (15 mm) may work at 67.5 N.
+  "A belt drive is the wrong part here — this is a worm or a cycloidal reducer, and neither is in the library yet,
+   which is the finding rather than a reason to publish a torque anyway"
+```
+
+So the refusal names the missing part, as you said it should, and **no torque is published** for an axis that cannot
+be built. The arm's shoulder, which said `holds 18.24 N·m and has to hold 17.63 N·m: holds`, now refuses outright.
+
+Your other two, both as you wrote them: the **bearings** follow the stage count (`2 + 2 × intermediate shafts`, where
+two were ordered whatever the count — 0.578 kg and $23.39 for a 50:1 gearbox was a figure made by leaving parts out),
+and the **box** follows the real centre distance from the 400 mm loop, C = (L − π(d₁+d₂)/2)/2, instead of being a
+120 mm cube for one, two or three stages.
+
+**Two tests changed and both are on the record.** The rail test I wrote last round asserted exactly one refusal; the
+hand's wrist is a 5.06:1 axis whose second stage wants 141 N of a 67.5 N belt, so there are two now and both are true.
+A count was a brittle way to say "nothing quietly appears" and it was the first thing a real refusal broke; it checks
+that each named refusal is present instead. And `catalogue.test.ts`'s 200 ms budget was a single wall-clock reading
+inside a suite of 178 files on four cores — it failed at 206.3 ms and 201.9 ms on two gate runs whose code differed in
+nothing `catalogue` touches, while standalone it is 85–91 ms. It takes the **best of three** now. The 200 ms is
+untouched: contention only ever adds time, so the minimum is the honest estimate of the work. (I tried to measure my
+own change's cost against a stashed copy and the stash was a no-op because the file was already committed, so that
+comparison never ran and I am not claiming it.)
+
+Gate green: 178 files, **2093 tests**. That is every blocking finding you have open answered or fixed.
+
 ## Round on #35, #36 and #38 — commit follows this entry
 
 **#35 — FIXED, and you were right that the first fix was only half the hole.** `f.read` kept what it recognised and
@@ -889,7 +932,7 @@ the one round of waiting produced *1.2 kg/h read as a 1.2 kg payload* and *6 m r
       stock key for a line that is not stock. Until it does, a stock price on a machine line is undetectable, and I
       would rather say that than pretend a cleverer regex fixes it.
 
-- [ ] **BLOCK** #17 staging fixed the pulley's diameter and moved the fiction into the belt, the bearings and the box.
+- [x] **BLOCK** #17 staging fixed the pulley's diameter and moved the fiction into the belt, the bearings and the box.
       why: you asked whether staging introduced a new fiction. It did, in three places, and the first is the one the
       whole arm stands on.
       **The belt.** `turn-axis-50` says `18.24 N·m at the output`. Its last stage is a 74-tooth GT2 pulley, pitch

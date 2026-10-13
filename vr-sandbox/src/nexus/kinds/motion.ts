@@ -31,6 +31,24 @@ export const fbFlangeT = (D: number): number => Math.max(0.6, 0.07 * D);
  *  (20 teeth × 2 mm / π). Read by both halves of the belt — its mass in `parts/families.ts`, its drawing in
  *  `parts/components.ts`. */
 export const GT2_LOOP_D = 12.73;
+
+// What a GT2 belt may PULL, by width, in newtons. The library had no such number at all: the belt family carried no
+// force, its only mention of tension was the material name `tension-cord-glass`, and so a composed gearbox could
+// publish a torque its belt would snap under and nothing could notice. A turn axis geared 50:1 came out at 18.24 N·m
+// on a 74-tooth output pulley - 774 N in the belt, past even the ~550 N at which a 6 mm GT2 BREAKS.
+//
+// The 6 mm figure is a seller's own: 27 N working tension (and about 56 kg ≈ 550 N breaking), the Phidgets GT2 × 6 mm
+// listing via RobotShop, read 2026-10-13; Makerlab's generic GT2-6 gives 124 lb breaking and 6.25 lb (27.8 N) working,
+// which agrees. The wider belts are that figure SCALED BY WIDTH - the tension cords carry it and their count goes with
+// the width, so it is linear to a first order. That is an ESTIMATE, not a sighting, and is labelled as one wherever it
+// is printed: a width whose own page has been read should replace it here.
+export const GT2_PULL_6 = 27;
+export const GT2_WIDTHS = [6, 9, 10, 15] as const;
+export const beltPull = (widthMm: number): number => +(GT2_PULL_6 * (widthMm / 6)).toFixed(1);
+/** The narrowest GT2 width that may pull this force, or null when the family has none that can. */
+export const beltFor = (newtons: number): number | null => GT2_WIDTHS.find((w) => beltPull(w) >= newtons) ?? null;
+/** A GT2 pulley's pitch diameter, mm: its teeth at 2 mm pitch round a circle. */
+export const gt2Pitch = (teeth: number): number => (teeth * 2) / Math.PI;
 export const FB: Record<string, [number, number, number, number]> = { F623: [3, 10, 4, 11.5], F624: [4, 13, 5, 15], F625: [5, 16, 5, 18], F626: [6, 19, 6, 22], F608: [8, 22, 7, 25], F688: [8, 16, 5, 18], F695: [5, 13, 4, 15], F693: [3, 8, 4, 9.5] };
 /** UC insert bearings in housings: bore. */
 const UC: Record<string, number> = { '201': 12, '202': 15, '203': 17, '204': 20, '205': 25, '206': 30, '207': 35, '208': 40, '209': 45, '210': 50 };

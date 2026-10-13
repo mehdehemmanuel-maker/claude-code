@@ -6,6 +6,7 @@
 // both are kept as tests so they cannot come back: tools were stacked on each other, so a camera beside a gripper was
 // asked to hold the gripper's load; and a payload was added to every stage alike.
 
+import { beltFor, beltPull } from '../../src/nexus/kinds/motion';
 import { describe, expect, it } from 'vitest';
 import {
   BRAIN, EYE, GRIPPER, SPINDLE, beltAxis, composeMachine, baseFrame, machineText, machineWords,
@@ -203,6 +204,26 @@ describe('the arrangement comes out of the words too, not out of a default', () 
     // and a gantry still wants its three
     expect(readMachine('a machine that prints 250x210x200').mm).toEqual([250, 210, 200]);
   });
+  it('the belt is the ceiling, not the tooth count: a reduction no GT2 width can pull is refused', () => {
+    // staging capped the ratio a pair of pulleys can give and moved the fiction into the belt. A 50:1 axis published
+    // 18.24 N·m on a 74-tooth output - 774 N in a belt that BREAKS near 550 N and is rated to work at 27 - and
+    // nothing could notice, because the belt family carried no force at all.
+    expect(beltPull(6), "a 6 mm GT2's working tension, a seller's own figure").toBe(27);
+    expect(beltFor(20), 'a light pull takes the narrowest belt there is').toBe(6);
+    expect(beltFor(60), 'a harder one takes a wider belt before it takes another stage').toBe(15);
+    expect(beltFor(800), 'and past the widest in the family the honest answer is none').toBeNull();
+    const deep = turnAxis(50);
+    expect(deep.cannot, 'a 50:1 belt reduction cannot be built of GT2 and must say so').toBeTruthy();
+    expect(deep.cannot).toMatch(/worm|cycloidal/);
+    expect(deep.says, 'and it must not publish a torque it cannot hold').not.toMatch(/N·m at the output/);
+    // the bearings follow the stage count: an intermediate shaft wants its own pair, and two were ordered whatever
+    const two = turnAxis(10), three = turnAxis(50);
+    const bearings = (u: ReturnType<typeof turnAxis>) => u.of.find((o) => /bearing 6805/.test(o.words))!.n;
+    expect(bearings(three)).toBeGreaterThan(bearings(two));
+    // and the box follows the real centre distance rather than being 120 mm whatever the stage count
+    expect(turnAxis(50).box[2]).toBeGreaterThan(turnAxis(3).box[2]);
+  });
+
   it('a number is read by its dimension, so a speed is never a length and a rate is never a payload', () => {
     // the reader used to be two regexes that knew `mm` and `kg`. They could not tell a length from a speed that
     // contains one, so `300 mm/s` was 300 mm of travel and `1.2 kg/h` a 1.2 kg payload; and any other unit was
@@ -256,8 +277,12 @@ describe('the arrangement comes out of the words too, not out of a default', () 
     // is now fatal to the figures that rest on it, so the refusal below is the correct answer and its absence was the
     // fault (docs/MANNY.md #20). What is still checked is that there is exactly ONE refusal and it is that one: a rail
     // must not quietly acquire others.
-    expect(m.refusals).toHaveLength(1);
-    expect(m.refusals[0]).toMatch(/WITHHELD, not computed/);
+    // (this asserted exactly one refusal until the belt learned what it may pull: the hand's wrist is a 5.06:1 turn
+    // axis whose second stage wants 141 N of a 67.5 N belt, so there are two now and both are real. The check is
+    // that each named one is PRESENT, not that no other may appear - a count is a brittle way to say "nothing
+    // quietly appears" and it was the first thing to break when a true refusal was added.)
+    expect(m.refusals.join(' ')).toMatch(/WITHHELD, not computed/);
+    expect(m.refusals.join(' '), 'the wrist cannot be belted and must say so').toMatch(/cannot be made of GT2 belt/);
     expect(m.kg, 'a withheld mass is not a quiet zero dressed as a weight').toBe(0);
     expect(m.usd).toBeNull();
   });

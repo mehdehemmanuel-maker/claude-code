@@ -22,6 +22,7 @@ import { component } from '../parts/components';
 import { massOf } from '../parts/mass';
 import type { Part, V3 } from '../parts/kits';
 import { cheapest } from '../parts/prices';
+import { GT2_PULL_6, GT2_WIDTHS, beltFor, beltPull, gt2Pitch } from '../kinds/motion';
 // the reader lives in its own file now (ask/machine-read.ts); re-exported here so every existing door goes on
 // meaning what it meant, which is the same reason index.ts and works.ts sit at the root
 import { readMachine } from './machine-read';
@@ -47,6 +48,9 @@ export interface Unit {
   /** how much it can *raise*, kg — what the drive makes against gravity. A horizontal axis never asks this, which is
    *  why a Z axis and an X axis of the same parts are not the same machine */
   lifts: number;
+  /** why no part in the library can be this unit, where that is so: a unit that cannot be built says it HERE, with
+   *  the number that refuses it, rather than composing anyway and publishing a figure its parts would not survive */
+  cannot?: string;
   /** how fast its moving end goes, mm/s or °/s */ speed: number;
   /** what limits `carries`, named, so a refusal can say what to change */ limit: string;
   /** its own box, mm, and how far its base must be from what it moves over */ box: [number, number, number];
@@ -132,18 +136,54 @@ export function turnAxis(ratio = 3): Unit {
   const nm = NEMA17_NM * real * 0.95 ** Math.max(1, stages.length);       // 5 % a stage, not 5 % whatever the ratio
   const degS = +((360 / (real || 1)) * (300 / 60)).toFixed(0);
   const said = stages.length > 1 ? `${real.toFixed(2)}:1 in ${stages.length} belt stages` : `${real.toFixed(2)}:1`;
+
+  // THE BELT IS THE CEILING, NOT THE TOOTH COUNT. Staging capped the ratio a pair of pulleys can give and moved the
+  // fiction into the belt: a 50:1 axis published 18.24 N·m on a 74-tooth output, which is 774 N in a belt that BREAKS
+  // near 550 N and is rated to work at 27. Nothing could notice, because the belt family carried no force at all.
+  // The tension in a stage is set by the SMALL pulley it drives off — the same belt force acts on both wheels, and the
+  // driver's radius is the short lever — so each stage is sized by the torque going INTO it, not by the torque coming
+  // out of the whole train. That is why a second stage is far harsher than the first, and why the answer to "not
+  // enough" is a wider belt before it is another stage.
+  const rDriver = gt2Pitch(BELT_DRIVER_T) / 2 / 1000;                      // m
+  const perStage = stages.map((st, i) => {
+    const into = NEMA17_NM * stages.slice(0, i).reduce((a, x) => a * (x.driven / x.driver), 1) * 0.95 ** i;
+    const pull = into / rDriver;                                           // N in this stage's belt
+    return { st, into, pull, width: beltFor(pull) };
+  });
+  const top = GT2_WIDTHS[GT2_WIDTHS.length - 1]!;
+  const widest = perStage.reduce((a, x) => Math.max(a, x.width ?? top), 6);
+  const beaten = perStage.filter((x) => x.width === null);
+  const cannot = beaten.length
+    ? `this reduction cannot be made of GT2 belt: stage${beaten.length === 1 ? '' : 's'} ${beaten.map((x) => perStage.indexOf(x) + 1).join(', ')} want${beaten.length === 1 ? 's' : ''} ${beaten.map((x) => `${x.pull.toFixed(0)} N`).join(', ')} in the belt, and the widest GT2 this library makes (${top} mm) may work at ${beltPull(top)} N. A belt drive is the wrong part here — this is a worm or a cycloidal reducer, and neither is in the library yet, which is the finding rather than a reason to publish a torque anyway`
+    : undefined;
+
+  // The bearings and the shafts follow the STAGE COUNT. Two bearings were ordered whatever the stage count, so a
+  // three-stage reduction — which has two intermediate shafts, each wanting a pair — was ordered one pair and no
+  // shafts at all: 0.578 kg and $23.39 for a 50:1 gearbox, a figure made by leaving parts out.
+  const inter = Math.max(0, stages.length - 1);
+  // The box follows the real centre distance, not a constant. A 400 mm loop over a 20T and a 74T pulley puts the shaft
+  // centres about 155 mm apart, and the box said 120 mm whatever the stage count — and that box is what `machineParts`
+  // places by and what the works routes against, so it is not cosmetic. C = (L − π(d₁+d₂)/2)/2, the usual
+  // approximation for two wheels of a similar size.
+  const beltMm = 400;
+  const centre = stages.length ? Math.max(40, (beltMm - (Math.PI * (gt2Pitch(BELT_DRIVER_T) + gt2Pitch(stages[0]!.driven))) / 2) / 2) : 0;
+  const span = Math.round(centre * stages.length + gt2Pitch(stages[0]?.driven ?? BELT_DRIVER_T) + 40);
+  const across = Math.round(gt2Pitch(stages[0]?.driven ?? BELT_DRIVER_T) + 46);
+
   return {
     id: `turn-axis-${ratio}`, name: `a turn axis geared ${said}`, does: 'turn', range: 360,
-    of: [{ words: NEMA17, n: 1, price: 'nema17' }, { words: 'motorplate nema17 t4 aluminium', n: 1 }, { words: 'bearing 6805', n: 2 },
+    of: [{ words: NEMA17, n: 1, price: 'nema17' }, { words: 'motorplate nema17 t4 aluminium', n: 1 },
+      { words: 'bearing 6805', n: 2 + 2 * inter },
       { words: `pulley GT2 ${BELT_DRIVER_T} 5`, n: stages.length || 1, price: 'pulley-gt2-20t-5' },
       ...(stages.length ? [{ words: `pulley GT2 ${stages[0]!.driven} 8`, n: stages.length }] : []),
-      { words: 'belt GT2 6 400', n: stages.length || 1, price: 'gt2-belt' },
+      { words: `belt GT2 ${beltMm} ${widest}mm`, n: stages.length || 1, price: 'gt2-belt' },
       { words: 'bolt M5x12', n: 8 }],
     carries: 40, lifts: 0, speed: degS,
-    limit: 'the 6805 thin-section bearing pair, which takes the moment of whatever stands on it',
-    box: [120, 90, 120],
-    says: `a NEMA 17 geared ${said} by GT2 into a pair of 6805 bearings: ${nm.toFixed(2)} N·m at the output, turning at ${degS}°/s`,
-    src: `the output torque from the NEMA 17's 0.42 N·m times what the pulley pairs really give (${stages.map((x) => `${x.driven}/${x.driver}`).join(' × ') || '1'}), less 5 % a stage (an estimate); the bearing pair chosen for its moment, not its load`,
+    limit: cannot ? 'the belt, pulled past what any GT2 width in this library may take' : `the ${widest} mm GT2 belt, pulled ${Math.max(...perStage.map((x) => x.pull), 0).toFixed(0)} N at its hardest stage against the ${beltPull(widest)} N it may work at`,
+    box: [across, 90, span],
+    ...(cannot ? { cannot } : {}),
+    says: `a NEMA 17 geared ${said} by ${widest} mm GT2 into ${1 + inter} pair${inter ? 's' : ''} of 6805 bearings: ${cannot ? 'NO TORQUE IS PUBLISHED, because it cannot be built of these parts' : `${nm.toFixed(2)} N·m at the output`}, turning at ${degS}°/s`,
+    src: `the output torque from the NEMA 17's 0.42 N·m times what the pulley pairs really give (${stages.map((x) => `${x.driven}/${x.driver}`).join(' × ') || '1'}), less 5 % a stage (an estimate). Each stage's belt is sized by the force at its DRIVER pulley, T/r with r = ${(rDriver * 1000).toFixed(2)} mm: ${perStage.map((x, i) => `stage ${i + 1} ${x.pull.toFixed(0)} N`).join(', ') || 'none'}, against a GT2's ${GT2_PULL_6} N a 6 mm (a seller's own figure, 2026-10-13) scaled by width (an estimate). Shaft centres about ${centre.toFixed(0)} mm apart, from the ${beltMm} mm loop`,
   };
 }
 
@@ -406,6 +446,8 @@ export function composeMachine(words: string): Machine {
   // That is a made-up figure wearing a sourced one's clothes, which theme 9 forbids outright. So where a part is not
   // drawn, the mass and the price it would have contributed are not known, and `kg`/`usd` say they are not known
   // rather than reporting the sum of what happened to be drawable.
+  // a unit that says it cannot be built says so where the refusals are read, not only in its own sentence
+  for (const m of st.stages) if (m.unit.cannot) refusals.push(`${m.unit.name}: ${m.unit.cannot}`);
   const short = st.gaps.length > 0;
   if (short) refusals.push(`its mass and price are WITHHELD, not computed: ${st.gaps.length} part${st.gaps.length === 1 ? ' is' : 's are'} not drawn by the library (above), so any total here would be the weight of what was drawable and not of the machine. Size those parts within what the library makes, or take the refusal as the answer`);
   return {
