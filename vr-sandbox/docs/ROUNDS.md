@@ -2098,3 +2098,74 @@ project's own rule, *coincidence by construction, not by checking*.
   and the same suppression means the drone's *real* rotors are not being checked either.
 - **`rotates: false` has one declaration in the tree** and the test that holds it uses a `Part` literal. Deleting the
   real one would fail only the hatchback's `toBe(6)`, and not say why.
+
+## Run 7m — the edges I proposed would have caught almost nothing, measured
+
+The user's diagnosis: *the reason things get missed, or take too long, is a lack of edges that make a class of mistake
+impossible — only habits — and too few tools that make the work precise.* The diagnosis is right. **The four edges I
+proposed in answer to it were mostly wrong, and Manny broke three of them with claims I verified rather than adopted.**
+
+| My candidate | Verdict | Checked |
+|---|---|---|
+| a hook rejecting `npm run gate\|tidy` piped into anything | **forbids a syntax, not the cause** — `npm run tidy > /tmp/x; tail -3 /tmp/x` has no pipe, keeps `$?`, and fails the same way if nobody reads it | by inspection |
+| every optional field on `Part` must have a read site outside its own file | **defeated by its own motivating example**: `if (p.rotates === false \|\| p.rotates?.within)` in `critic.ts` *is* a read of `.within` outside `kits.ts`. The rule passes it, and it had a passing test | `git show 316ea63` |
+| a claim about code in the ledger must carry a `file.ts:line` | **institutionalises a citation that rots.** Three cited lines, all written this week, all already wrong — and a line-number rule marks all three compliant | all three read at head |
+| a `why` door (not built, so not named as a script) — findings grouped by check and attributed to source | **survives.** It claims nothing, so there is nothing in it to be wrong | — |
+
+The three rotted citations, read at `97d3e66`:
+
+```
+cited  critic.ts:246   as the `through` skip        → today: "// ---- held up: the embodiment's load path …"
+cited  critic.ts:182   as the exact cylinder test   → today: the BOX test (env.intersectsBox … sat)
+cited  view/look.ts:100 as the line that binned it  → today: a comment header
+```
+
+The second is the sharpest: it now points at *the other clause of the `&&`* — the precise confusion Run 7l existed to
+correct. A citation that decays into pointing at the opposite thing is worse than none.
+
+### The count that decides the direction
+
+Of the nine faults in this session's log, **what found each**:
+
+```
+rules    2   critic.ts over its line ratchet (4 crossings, 4 catches) · the gate catching the `tail -3` consequence
+looking  7   Manny running the tool I described wrongly · me re-running with the right kit · Manny reading the `fixed`
+             flag · Manny reading the test a park could pass · Manny finding the unread field · Manny deriving the
+             algebra I had adopted · the blind judge naming two faults in one picture
+```
+
+**Rules caught two. Looking caught seven, and five of those were Manny or the blind judge.** So the shortest path is
+not a fifth lint. It is that **every judge already in the tree prints its verdict where a person sees it without
+asking** — which is the wire this week kept finding missing: the critic's verdict at `look.ts`, `contracts` on
+`lookReady`, the `Looked` census. Three built, by hand, one at a time.
+
+### The one edge on the table that makes a mistake impossible, and it was not mine
+
+**Every check prints its verdict as its last line** — `TIDY: PASS`, `TIDY: FAIL (1 rule: critic.ts 864 > 860)`. Then
+`tail -3` is *correct*, `tail -1` is correct, a log read a week later is correct, and a future tool that truncates is
+correct. It removes the cause instead of banning one spelling of it, and it survives `tee`, scripts and re-quoting.
+Not built this round; it is the next one.
+
+### And the fifth edge, which is a habit with teeth rather than a lint
+
+Run 7h wrote its predicted numbers before the change: `59 → 49`, `16 → 6`, and got both. **The valuable part was that
+the attribution was wrong** — the prediction blamed the spindles for 10 of 16; they were 2. Unexamined, "most of this
+comes from the spindles" becomes a false sentence in this file that the next round builds on. So: a round that changes
+behaviour records predicted-against-measured **including what did not match**, and every fault fixed carries one line —
+*the guard that now makes this impossible: `<name>`*, or *none, because `<reason>`*. Eight of nine had no guard. That
+turns the eight into a list with a count that can only fall, and makes "fixed without a guard" a visible choice.
+
+### And the best evidence in the whole argument arrived while writing this entry
+
+The first draft of the table above named the surviving candidate as a runnable script. `npm run tidy` refused the commit:
+
+```
+every npm script the prose names is in package.json
+the prose names `npm run <a script>`, which package.json does not have
+```
+
+**One of the two claim-checking rules that already exist caught me naming an unbuilt tool as though it were real, in
+the paragraph arguing that such rules are what is missing, within a minute of writing it.** Nothing else in the loop
+would have caught it: it would have shipped, and a later reader — or a later me — would have run it and
+found nothing. That is what the user's "edges that don't allow failure" means, working, and it is the strongest
+argument for extending that one family rather than inventing new ones: it does not depend on anybody remembering.

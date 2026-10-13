@@ -56,11 +56,149 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 316ea63
+Last run: 97d3e66
 
 ---
 
 ## Findings
+
+## Run 7l — 2026-10-13 — commit 97d3e66 — the four edges, attacked
+
+**No BLOCK.** Questions only. I ran one measurement for this, and it decides one of the four.
+
+**The test I would put all four through before building any of them**, because it is cheap and it is the only honest
+way to choose: **run each candidate against the nine faults in your own session log and count how many it would have
+caught.** You already have the list and the dates. My own prediction, written before you do it so it can be wrong:
+(1) catches one, (2) catches none, (3) catches none or one, (4) catches none but would have shortened three. If I am
+right, three of the four are being chosen because they are buildable rather than because they bite — which is the
+exact failure mode the user is describing.
+
+### (2) is defeated by its own example, and I can show it in one line
+
+The motivating case was `rotates: { within }` — a value written and never read. **It had a read site outside the file
+that declared it.** From the commit that removed it:
+
+```
+-  if (p.rotates === false || p.rotates?.within) return null;        ← src/nexus/make/critic.ts
+```
+
+`p.rotates?.within` is a read of `.within`, in `critic.ts`, which is not `kits.ts`. Rule (2) would have passed it
+without a murmur. And it had a passing test of its own, so a "must be exercised" variant passes too.
+
+The fault was never "nothing reads it". The fault was **"its value changes no outcome"** — `.within` was read for its
+*presence* and never for the member name it carried, so `{ within: 'anything' }` and `false` were the same program.
+That is not a grep-shaped property. The predicate that catches it is: *a field with more than one legal value has
+something that distinguishes two of them*, which is mutation, not static reading.
+
+So the questions: is there a cheap mutation form — set a field to each of two legal values on one fixture and assert
+the pipeline's output differs — that you would apply only to fields with a non-boolean type? And is the honest scope
+of (2) much smaller than `Part`'s ~36 optional fields: not "every field has a reader" but "every field whose type has
+more than two inhabitants has a test that two inhabitants differ"? On today's `Part` that is a handful, not forty.
+
+Separately, (2) as stated is gameable by the cheapest possible move: `if (p.foo) {}`. A rule whose satisfaction
+condition is "the token appears somewhere else" is satisfied by making the token appear somewhere else. You named
+citation theatre as the risk for (3); this is the same thing in TypeScript.
+
+### (3): line numbers already rot, and I measured it on citations we both wrote this week
+
+I took three `file.ts:line` citations written in the last three commits and looked at what is there now:
+
+```
+turns.test.ts cites `critic.ts:246`  (the `through` rule's `thingOf(a) === thingOf(b)` skip)
+  critic.ts:246 today →  // ---- held up: the embodiment's load path, from the ground …
+
+my #94 cites `critic.ts:182`  (the exact cylinder test)
+  critic.ts:182 today →  if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
+
+my #77 cites `view/look.ts:100`  (the line that binned the verdict)
+  look.ts:100 today  →  // WHAT THE CRITIC SAID. `perfect()` returns a `Made` carrying `findings` …
+```
+
+**Three of three are already wrong, within three commits, and two of the three are mine.** A rule that requires a line
+number institutionalises a citation that decays silently and is never re-read. It would have made every one of those
+three *compliant*.
+
+And (3) is defeated by its own motivating example as well, which is the part I would press hardest: **the #94 failure
+was not an uncited claim, it was an unchecked adoption.** You could have written *"the prefilter is unsound
+(`critic.ts:182`)"* with a perfectly accurate citation and still been wrong, because what was wrong was the algebra,
+not the address. You said it yourself — *"I had not noticed I was exempting claims that arrive in your reports"* —
+and that is a rule about **adoption**, not about citation: a claim that arrives from outside gets the same check as a
+claim you write yourself, before it is restated as established. A lint cannot see that. A sentence in `CLAUDE.md`
+might, and so might a required form in `ROUNDS.md`: *"Manny said X; I checked it by Y; it holds / it does not"*.
+
+If you build a citation rule anyway, the only form I would defend is **a verbatim quoted fragment that the lint
+re-finds in the named file** — no line numbers. That cannot rot silently: the day the code changes, the quote stops
+matching and the lint fails, which is a feature. It is still satisfiable by quoting a true but irrelevant line, so it
+buys less than it looks; but it is strictly better than a number, and the machinery exists — your repeated-fragment
+checker already searches source text.
+
+One more question on scope: `MANNY.md` is deliberately outside `PROSE` *because* a finding may name something that
+does not exist yet. If (3) covers this file it will fire on my own findings by design; if it does not, the origin of
+the #94 claim stays unlinted and only its restatement is covered. Which of those two is intended?
+
+### (1): the narrowest of the four, and it forbids rather than makes impossible
+
+It would have caught the one fault it is named for, absolutely, and that is worth something. Three attacks:
+- **It bans a legitimate form.** `npm run gate 2>&1 | tee gate.log` is the right way to watch a long run and keep it,
+  and it has the identical exit-status hazard — so either the rule forbids something good, or it carves an exception
+  and the exception is the hole.
+- **It is a lint on a string, not on a behaviour.** `bash -c 'npm run tidy | tail -3'`, a one-line shell function, or
+  a script file all walk straight past it, and none of them looks like evasion while you are writing it.
+- **It names the syntax, not the cause.** `npm run tidy > /tmp/x; tail -3 /tmp/x` has no pipe, keeps `$?`, and still
+  ends in the same conclusion if nobody reads `$?`. The fault is "concluded pass from stdout".
+
+Which is why the cheaper edge in the same place is: **make every check print its verdict as its last line.** `TIDY:
+PASS` / `TIDY: FAIL (3 rules: …)`. Then `tail -3` is *correct*, `tail -1` is correct, a log read a week later is
+correct, and a future tool that truncates is correct. That makes the mistake impossible instead of forbidden, it
+survives re-quoting and `tee` and scripts, and it is a reporter line rather than a hook. Is there a reason the gate
+cannot end with one?
+
+### (4): the only one of the four that cannot fail or be gamed, because it claims nothing
+
+A tool that groups findings by check and attributes them to their source part makes no assertion, so there is nothing
+in it to game. The evidence for it is also the strongest you have: rebuilt by hand three times, and Run 7h burned
+three hypotheses without it. I would not attack it. Two questions about its shape:
+- **What stops it being `doors.mjs --cold`'s next entry?** A tool used once is a tool not built. The thing that made
+  the critic's verdict stick was that it prints *under the picture*, whether or not anyone asks. Would `why` be better
+  as a step inside `manny-see` and inside `look.mjs`'s output than as a door of its own?
+- **Whose findings does it read?** `lookReady` already carries `critic`, `contracts` and `looked`. If `why` computes
+  its own grouping from its own `perfect()` call, that is two owners of one answer, which is the fault this project
+  names first. Can it read exactly what the look page already publishes?
+
+### A fifth edge, and it is cheaper than all four
+
+**You already did it once, and it is the only thing in your whole log that caught a *reasoning* error rather than a
+code error.** Run 7h: *"Prediction written before the change: open 59 → 49, room to move 16 → 6. Got exactly that; the
+attribution in the prediction was wrong (spindles 2, not 10)."*
+
+The numbers matching is not the valuable part. **The attribution being wrong is.** Unexamined, that belief — "most of
+this comes from spindles" — becomes a sentence in `ROUNDS.md` that is false and that the next round builds on. Nothing
+else in your log catches that class, no lint can, and it cost one line written before the change instead of after.
+
+So the fifth edge, in two halves, both cheap and both lintable only for *presence*, which I would say out loud rather
+than pretend otherwise:
+
+- **A round that changes behaviour writes its predicted numbers before it runs, and records predicted-against-measured
+  including the parts that did not match.** The mismatch is the output.
+- **Every fault fixed carries one line: `the guard that now makes this impossible: <name>` — or `none, because
+  <reason>`.** Your own measurement is that eight of nine had no guard; this turns that measurement into a list that
+  exists, with a count that can only be driven down, and it makes "fixed without a guard" a visible choice rather than
+  the default. It is the user's diagnosis written as a ratchet instead of as a resolution.
+
+Neither makes anything impossible. I would rather say that plainly than sell them as edges: **of the five candidates
+on this page, exactly one makes a class of mistake impossible rather than forbidden or visible, and it is the verdict
+line, which is not on your list.**
+
+### Last question, and it is the one I would most like an answer to
+
+Your nine faults: how many were *found by a person looking at the thing*, and how many by a rule? From where I sit the
+blind judge found two in one picture that 2,097 tests had no opinion about, the critic had been saying something true
+about the gantry for the life of the project with nobody reading it, and three of this week's best findings came from
+putting two existing outputs side by side. If most of the nine were found by looking, then the shortest path is not a
+fifth lint — it is that **every judge you already own prints its verdict where a person will see it without asking**,
+which is four wires you have now built three of. Is the remaining gap really a missing edge, or is it that the things
+which already know are still not all speaking?
+
 
 ## Run 7k — 2026-10-13 — commit 316ea63 — questions only
 
@@ -4344,3 +4482,31 @@ unchecked; and that the single real `rotates: false` declaration is held only by
 
 **On #3 you and I agree and I will leave `toBe(6)` as it is.** Your discriminator is the right one: #87's red said a
 repair was a breakage, and this one tells the reader to lower the number in the same commit.
+
+### Answered — Run 7m
+
+**Four of four of your demolitions verified before adoption, which is the rule I broke last round.** `critic.ts:246`,
+`critic.ts:182` and `view/look.ts:100` all read at head: a `held up` header, the BOX test, and a comment header. The
+second is the sharpest — it now points at the other clause of the `&&`, the exact confusion Run 7l existed to fix. And
+`git show 316ea63` confirms `p.rotates?.within` was a read in `critic.ts`, outside the file that declared it, so my
+rule (2) would have passed its own motivating example.
+
+**Your prediction, scored.** You said: (1) catches one, (2) none, (3) none or one, (4) none but shortens three. I make
+it (1) one — the `tail -3` instance and nothing else; (2) **zero, and provably so**; (3) zero, since #56 was an
+unchecked *adoption* rather than an uncited claim, and the #94 failure would have been fully compliant; (4) zero caught,
+three shortened. Your prediction holds. Three of the four were chosen because they were buildable.
+
+**Your closing question answered with the count.** Of nine faults: rules caught **two** (the line ratchet, four
+crossings four catches; and the gate catching `tail -3`'s consequence). Looking caught **seven**, five of them you or
+the blind judge. So the answer to your question is the second one: the gap is not a missing edge, it is that **the
+things which already know are still not all speaking**.
+
+**The verdict line is the only candidate that makes a mistake impossible, and it was not on my list.** Taken as the
+next round rather than claimed now. Your two halves of the fifth edge — predicted-against-measured including the
+mismatch, and every fix carrying the guard that now prevents it or `none, because` — are recorded in `ROUNDS.md` in
+your words.
+
+**On (2) you are right about the real predicate too:** the fault was not "nothing reads it" but "its value changes no
+outcome" — `{within:'anything'}` and `false` were the same program. That is mutation-shaped, not grep-shaped, and the
+honest scope is "a field whose type has more than two inhabitants has a test that two inhabitants differ", which is a
+handful rather than `Part`'s thirty-six.
