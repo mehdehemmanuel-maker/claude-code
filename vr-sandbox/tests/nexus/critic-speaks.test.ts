@@ -21,9 +21,22 @@ const EVERY = ['continuity', 'declared', 'density', 'draft', 'held up', 'interfa
 // the cheapest kits that between them exercise eight of the twelve: a car (bodywork and suspension), a bed (wall
 // thickness), a street (things set into the ground), a park (standing over its own footprint), a composed machine (a
 // carriage with something in its travel)
-const FIXTURES: [kit: string, words: string][] = [
-  ['car', 'a small hatchback'], ['bed', 'a bed'], ['street', 'a street'], ['park', 'a park'],
-  ['machine', 'a gantry that prints 2000 x 1000 x 600'],
+//
+// EACH FIXTURE NAMES THE CHECKS IT MUST PRODUCE, which is the difference between this file working and this file
+// looking like it works. The first version collected one `Set` across all five and asked only that each check fired
+// SOMEWHERE — so `standing` was satisfied by a park and `through` by a street, and **a composed machine could emit
+// nothing but `room to slide` for ever while this stayed green**. That is exactly the fault the file exists to
+// catch, in the file that catches it (docs/MANNY.md #83). The union is still asserted below, as a backstop.
+const FIXTURES: [kit: string, words: string, mustFire: string[]][] = [
+  ['car', 'a small hatchback', ['continuity', 'declared', 'radius', 'room to move', 'walls']],
+  ['bed', 'a bed', ['held up', 'walls']],
+  ['street', 'a street', ['continuity', 'held up', 'radius', 'room to move', 'through']],
+  ['park', 'a park', ['held up', 'standing']],
+  // A composed machine produces ONE check today, and that is the finding rather than the fixture: `standing` cannot
+  // fire because nothing in `machine-draw.ts` declares a foot, and `through` cannot because a machine is one thing
+  // and `critic.ts:246` skips parts within one thing on purpose. When #78 and #79 land, both names come in here and
+  // this line is what stops them regressing to true-on-the-day.
+  ['machine', 'a gantry that prints 2000 x 1000 x 600', ['room to slide']],
 ];
 
 // Checks with no fixture yet, with why. THIS LIST MAY ONLY SHRINK — it is asserted exactly, so quietly adding a name
@@ -38,13 +51,15 @@ const NO_FIXTURE = [
 
 describe('the critic says something, and the suite notices when it stops', () => {
   const spoke = new Set<string>();
-  for (const [id, words] of FIXTURES) {
+  for (const [id, words, mustFire] of FIXTURES) {
     const k = KITS.find((x) => x.id === id);
-    it(`${id} gives the critic something to say`, () => {
+    it(`${id}: the critic says ${mustFire.join(', ')}`, () => {
       expect(k, `no kit \`${id}\``).toBeTruthy();
       const r = perfect(makeKit(k!, words, 1).part, words);
       expect(r.findings.length, `${id}: the critic said nothing at all about it`).toBeGreaterThan(0);
       for (const f of r.findings) spoke.add(f.check);
+      const said = new Set(r.findings.map((f) => f.check));
+      expect(mustFire.filter((c) => !said.has(c)), `${id}: these checks went quiet ON THIS FIXTURE`).toEqual([]);
     });
   }
 

@@ -56,11 +56,162 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 792563f
+Last run: aec76f9
 
 ---
 
 ## Findings
+
+## Run 7e — 2026-10-13 — commit aec76f9 — breaking the test that was built to catch a silent judge
+
+```
+npx vitest run tests/nexus/critic-speaks.test.ts     → 1 file, 6 tests, green, 27.08 s
+npm run tidy                                          → 15 tests, green, 1.98 s
+wc -l src/nexus/ask/machine.ts                        → 698
+and the per-kit map of which checks actually fire, extracted from Run 7d's own sweep output
+```
+
+```
+car          ['walls']                                   bricks    []
+street       ['held up', 'radius', 'room to move']        sword     []
+bed          ['held up', 'walls']                         house     []
+road         ['held up', 'through']                       tree      []
+treehouse    ['held up']
+machine      ['room to slide']            ← the only check a composed machine has ever produced
+```
+(first twelve findings per kit, which is what `look.mjs` prints; indicative, not exhaustive)
+
+**#82 is a real instrument and much better than what it replaces.** Asserting `NO_FIXTURE` *exactly* rather than as a
+minimum is the right instinct and it is rarer than it sounds — it is a two-way ratchet, and it caught you on its first
+run by failing on `declared`, which is the best possible evidence that it bites. #80 and #81 are done and I checked
+`machine.ts` at 698 lines with `tidy` green, so the oversize ratchet was respected rather than renegotiated.
+
+Now here is how I would defeat it, and I did not need to edit anything to show you — **it is already defeated, today,
+green.**
+
+### 1. It asserts the union over five fixtures, not the fixture. A check can go silent for a whole CLASS and pass.
+
+`spoke` is one `Set` filled by all five fixtures and then checked once. So the claim the file makes is *"each of these
+nine checks fires on at least one of five things"*. The claim nobody is making is *"this check fires on the thing we
+are judging"*. And that second claim is the one that failed: the fault this file was built for was a composed machine
+standing in mid-air with bolts through solid aluminium, and **that is still invisible to it**:
+
+- `standing` and `through` are in `want`, so they must fire — and they fire on a road and a park.
+- On every composed machine I have rendered, the critic emits **`room to slide` and nothing else**; the 2000 mm rail
+  machine and the Z1-class arm emit **nothing at all** (Run 7d, `look.mjs` on both).
+- So `standing` can go on never firing for any machine, for ever, and this file stays green — which is exactly the
+  state it is in at this commit.
+
+That is not a hypothetical defeat, it is the current reading. **The fix is small and it turns this file into the thing
+that holds #78 and #79 fixed for ever:** make the expectation per fixture.
+```
+const FIXTURES: [kit: string, words: string, mustFire: string[]][] = [
+  ['machine', 'a gantry that prints 2000 x 1000 x 600', ['room to slide']],   // today
+  …                                                                           // and after #78/#79:
+  ['machine', …, ['room to slide', 'standing', 'through']],
+];
+```
+Keep the union as the backstop; add the per-fixture list as the claim. Then "the critic has gone quiet about machines"
+is a failing test by name, and #78/#79 cannot silently regress once they land.
+
+- [x] **QUEUE** #83 `critic-speaks.test.ts` asserts the union over its fixtures, so a check that goes silent for an
+      entire class of object passes — and that is the state it is in now, for the class this project is about.
+      why: section 1 above. `spoke` is one set across five fixtures; a composed machine emits only `room to slide`;
+      the rail machine and the arm emit nothing; `standing` and `through` are asserted and are satisfied by a road and
+      a park. The failure the file was written for is the failure it cannot see.
+      fix: `mustFire` per fixture, the union kept as a backstop, and the machine fixture gaining `standing` and
+      `through` on the commit that makes them fire. Three lines, and it is the difference between "a judge speaks
+      somewhere" and "a judge speaks about this".
+
+- [ ] **QUEUE** #84 `EVERY` is hand-copied from `critic.ts` and only checked in one direction, so a check that is dead
+      on arrival is invisible.
+      why: line 53 asserts nothing fired that is not in `EVERY` — it catches a NEW check that fires and is unlisted.
+      It cannot catch a new `say('wear', …)` added to `critic.ts` that never fires at all: `EVERY` does not know
+      about it, `NO_FIXTURE` does not list it, and nothing compares the list to the file. The twelve names match the
+      source today — I checked, `grep -on "say('[a-z A-Z]*'" src/nexus/make/critic.ts` gives exactly those twelve —
+      so this is about the day after tomorrow, not today.
+      fix: derive it. Read `critic.ts`'s own source in the test and assert `EVERY` equals the set of `say('…')`
+      literals in it. This project already does exactly this shape twice — `tidy.test.ts` reads the tree, and the
+      sweep test asserts the shards are the whole catalogue with no kit twice — so it is an idiom here, not an
+      invention. Then a check cannot be born silent.
+
+- [ ] **QUEUE** #85 the `NO_FIXTURE` assertion's failure message tells the reader to loosen the test, in the one case
+      where it has found a real regression.
+      why: line 55, `'these now fire: delete them from NO_FIXTURE'`. There are two ways a name in that list starts
+      firing: a fixture now covers it (delete the line — progress), or **something regressed** so that the car's
+      materials now have a density outside what that material is (fix the bug — a fault). The message names only the
+      first, and it names it as an instruction. A test whose red says "delete me" will eventually be deleted.
+      fix: *"a check with no fixture has started firing. Either a fixture now covers it — delete its line — or
+      something regressed and this is the bug report. Look at the finding before you touch this list."* Words only.
+
+- [ ] **QUEUE** #86 the whole fixture design assumes a check must be exercised through a KIT, and it does not — which
+      is also the real answer to whether the gate should wear the car park's 21.7 s.
+      why: `critique(root: Part)` takes a `Part`. It does not take a kit, a seed or an ask. Three of the twelve checks
+      are excused for want of a fixture — `density`, `draft` and `interfaces` — and every one of them is a property of
+      a few fields on a part: a `mat` with a density outside its class, a moulded face with no draft, and an `Iface`
+      pair whose numbers do not meet. Each is a hand-written `Part` literal of five lines and a millisecond, and it
+      tests the check *at the check*, where a failure names the rule rather than the hatchback.
+      And it costs nothing: this file is **27 s** right now, because three of its five fixtures (car, street, park)
+      are the expensive kits `CLAUDE.md` names by name. Replace four of the five with literals and the file is about
+      three seconds **and** covers twelve checks instead of nine.
+      fix: a `Part` literal per check, with the kit fixtures kept only where a check genuinely needs a whole assembly
+      (`room to move`, `room to slide`). `NO_FIXTURE` goes to empty, and the ratchet has nothing left to excuse.
+
+### 2. Is excluding `interfaces` defensible? No — but the cost is not the reason, and you do not have to pay it.
+
+Twenty-one seconds would be a defensible price for most checks and `interfaces` is the worst one to drop. It is the
+check that implements this project's own organising principle — *"Parts declare what they provide and require
+(`Iface`) … The critic pairs and checks every one with numbers"* — and it is the check that would have caught the
+blind judge's *"there is no fastener anywhere in the image … the motor hangs off a plate with no bolt circle visible,
+the bearing sits in a hole with no retention"*. Leaving the central rule of the architecture as the one with no
+fixture, on grounds of seconds, is the trade I would argue hardest against.
+
+But the premise is wrong before the trade is: **you do not need the car park.** See #86. A hub with a 10 mm bore and a
+12 mm shaft is an `interfaces` fixture, it is five lines, and it runs in a millisecond. The 21.7 s was never the price
+of testing `interfaces`; it was the price of testing it through a kit that happens to contain one.
+
+### 3. The gantry's `room to slide` — no, do not open it as a BLOCK, and here is the condition I would put on it
+
+It is real, it is unfixed, and it is a genuine mechanical fault: the carriage cannot complete its travel because the
+idler is in the path. But it is **already visible** (it prints under its own picture now), **already reproduced** (in
+your own fixture), and **already scheduled** (#78/#79's round touches the same file and the same picture). A BLOCK is
+for something that would otherwise go unseen or unsaid, and this is neither. Opening one here would spend the
+mechanism on a thing that is already on the list, which is the misuse my own contract warns about.
+
+The condition I would attach instead: when #78/#79 land, the machine fixture asserts that the gantry's `room to
+slide` findings go to **zero** — not that the critic says something, but that it stops saying this. `#83`'s
+`mustFire` has a twin, `mustNotFire`, and this is its first entry. Otherwise "fixed" is a claim nobody checks, which
+is the family of fault this whole week has been about.
+
+## Next round, in Manny's order
+
+1. **#58**, unchanged and still first — the families that substitute made to refuse, the ratchet over all 395 × every
+   numeric axis, and #68's two (the retyped `2 * 106.18`, the bound with no test).
+2. **#83 and #86 together, and they are one afternoon.** Per-fixture `mustFire`, `Part` literals for `density`,
+   `draft` and `interfaces`, `NO_FIXTURE` emptied, the file down from 27 s to about 3. Do it before #78/#79, because
+   #83 is what makes #78/#79 permanent rather than true-on-the-day. Take **#84** (derive `EVERY` from the source) and
+   **#85** (the message) in the same sitting; they are minutes each.
+3. **#78 + #79 + #64 part 3 as one round**, with the gantry's `room to slide` falling to zero asserted as the first
+   `mustNotFire`. The `through` premise narrowed by declared interfaces, the base declared grounded, the machine set
+   down on the floor it is already rendered over, the fasteners off the centreline, the brackets under the beam.
+4. **#60 and #70 together**, instrument first.
+5. **#76**'s note into `ROUNDS.md`, then **#61** — the brain counted, weighed, priced, never drawn, and the reason
+   every motor in every picture trails 317 mm of wire to nowhere.
+6. **#35**, which retires `wrongPart`'s regex and closes #81's two latent holes properly, then **#62**, **#54**, **#66**.
+7. Then **#63, #65, #67**, **#51/#52/#53**, and the kit in the stamp.
+
+**What this week has actually been about, now that it has a shape.** Four rounds ago this project had a composer whose
+pictures nobody could see, a mass check that could not fail, and a critic nobody read. It now has an eye that renders
+what it was asked, two numbers that withhold when they are not known, a judge whose verdict prints under its own
+picture, and a test that fails when that judge goes quiet. **Every one of those is a wire between a thing that knows
+and a thing that decides** — and every fault I have raised since Run 1 has been a missing wire, not a missing idea.
+The ideas were all here: `missingIn` already compares a bill to a drawing, `critique` already owns standing and
+interference, `fits.ts` already owns tolerance, `invent.ts` already owns conservation. What is missing is that they
+are not connected to the thing being made. So the ambition is unchanged and is now cheaper than it looked: **run every
+judge you already own against the composed machine, and print what each says under its own picture.** When that is
+true, the next thing the user asks for will be answered by a machine that can tell him why it will not work — which
+is the only thing a Jarvis is actually for.
+
 
 ## Run 7d — 2026-10-13 — commit 792563f — the critic is not silent, and I can name what gated it
 
@@ -1834,6 +1985,39 @@ itself the moment a part changes. Get those two and this stops being a library t
 one that catches itself — which is the only version of this that scales to the trillions of combinations the user
 asked for.
 
+
+## Round on #83 — the test I shipped could be defeated, green, at the commit I shipped it
+
+Taken immediately rather than queued, because a check that cannot fail is the fault this whole week has been about and
+I had just written one. You are right in every particular: `spoke` was one `Set` filled by five fixtures and asserted
+once, so the claim was *"each check fires on at least one of five things"* and never *"on the thing being judged"* —
+`standing` satisfied by a park, `through` by a street, and **a composed machine free to emit nothing but
+`room to slide` for ever while the file stayed green.**
+
+Each fixture now names the checks it must produce, measured rather than assumed:
+
+```
+car     continuity, declared, radius, room to move, walls
+bed     held up, walls
+street  continuity, held up, radius, room to move, through
+park    held up, standing
+machine room to slide                      ← one, and that is the finding, not the fixture
+```
+
+Proved by breaking it the way it would really break: adding `standing` to the machine's list fails with
+`machine: these checks went quiet ON THIS FIXTURE: expected [ 'standing' ] to deeply equal []`, where the union
+version passed because a park supplied it. The union is kept as a backstop, and the machine's line carries a comment
+saying that `standing` and `through` come into it on the commit that makes them fire — which is your point that #83
+is what makes #78/#79 permanent rather than true-on-the-day.
+
+**#84, #85 and #86 stand, unargued, in your order.** #86 is the one I want to flag back: you are right that
+`critique` takes a `Part` and not a kit, that the three excused checks are each a five-line literal, and therefore
+that the 21.7 s was never the price of testing `interfaces` — it was the price of testing it through a kit that
+happens to contain one. That reasoning retires my own justification for the exclusion, and the file gets faster and
+more complete at once. It goes with #83's sitting, before #78/#79.
+
+**On the gantry's `room to slide`:** agreed, no BLOCK, and I am taking your `mustNotFire` twin as part of that round
+rather than as a note — a "fixed" that nothing asserts is the same family as a check whose only assertion is silence.
 
 ## Round on #82, #80, #81 — and I was wrong about the critic, in the way I had just fixed
 
