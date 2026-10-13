@@ -97,7 +97,15 @@ const sun = new THREE.DirectionalLight(0xffffff, Number(q.get('sun') ?? (tentOn 
 scene.add(sun, new THREE.HemisphereLight(0xdfe8f2, 0x6a645c, 0.3));
 // (&floor=rrggbb: the surface it stands on, as the photograph's studio had it: a white sweep, a grey bench)
 const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ color: q.get('floor') ? Number('0x' + q.get('floor')) : 0xb8bbbf, roughness: 0.95 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-const made = makeKit(kit, words, seed), part = q.get('perfect') === '0' ? made.part : perfect(made.part, words).part, view = kitView(part, { maxLights: 0 });
+// WHAT THE CRITIC SAID. `perfect()` returns a `Made` carrying `findings` — `make/critic.ts` owns "room to move, held
+// up, walls, through, standing" and `make/pipeline.ts` runs `critique(part)` every round — and this line used to read
+// `perfect(made.part, words).part`, taking the geometry and binning the verdict. So the critic has looked at every
+// picture this project has ever made, and nobody has ever seen what it said about one: a blind judge had to tell us
+// the machine floats above its floor and the bolts are inside the beam, both of which are findings this already has
+// words for. It goes on `lookReady`, which `look.mjs --list` prints and `manny-see` carries (docs/MANNY.md #77).
+const made = makeKit(kit, words, seed);
+const judged = q.get('perfect') === '0' ? null : perfect(made.part, words);
+const part = judged ? judged.part : made.part, view = kitView(part, { maxLights: 0 });
 scene.add(view.group);
 // (exploded, the whole set back on the floor: what moved down is lifted with the rest, not sunk under it)
 if (q.get('explode')) { view.explode(Number(q.get('explode'))); const b0 = new THREE.Box3().setFromObject(view.group); if (!b0.isEmpty() && b0.min.y < 0) view.group.position.y -= b0.min.y; }
@@ -420,4 +428,4 @@ if (q.get('zebra') === '1') {
 }
 // (lift: how far the thing was stood up so its lowest point sits on the floor, its own frame's height in the room: a board's
 // top is there, for laying a photograph's camera over it, photo.py camera --top)
-(window as unknown as { lookReady: unknown }).lookReady = { name: part.name, says: part.says, parts: view.group.children.length, meshes: meshes.length, size: size.toArray().map((x) => +x.toFixed(2)), camera: r3(camera.position), aim: r3(c), lift: +((part.parts?.[0]?.at?.[1] ?? 0) * 1000).toFixed(3), ...(holeStats ? { holes: holeStats } : {}), ...(zebraStats ? { zebra: zebraStats } : {}) };
+(window as unknown as { lookReady: unknown }).lookReady = { name: part.name, says: part.says, parts: view.group.children.length, meshes: meshes.length, size: size.toArray().map((x) => +x.toFixed(2)), camera: r3(camera.position), aim: r3(c), lift: +((part.parts?.[0]?.at?.[1] ?? 0) * 1000).toFixed(3), critic: judged?.findings ?? null, ...(holeStats ? { holes: holeStats } : {}), ...(zebraStats ? { zebra: zebraStats } : {}) };

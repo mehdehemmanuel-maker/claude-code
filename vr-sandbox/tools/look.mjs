@@ -45,7 +45,16 @@ for (const a of asks) {
     document.body.appendChild(d);
   }, [name, SHA]);
   await p.waitForTimeout(120);
-  await p.waitForTimeout(400); await p.screenshot({ path: `${out}/${name}.png` }); console.log(name, JSON.stringify(await p.evaluate(() => window.lookReady)).slice(0, 300));
+  await p.waitForTimeout(400); await p.screenshot({ path: `${out}/${name}.png` });
+  const ready = await p.evaluate(() => window.lookReady);
+  console.log(name, JSON.stringify(ready).slice(0, 300));
+  // WHAT THE CRITIC SAID, on its own lines rather than cut off at 300 characters of JSON. `make/critic.ts` has run on
+  // every render this project has ever made and `view/look.ts` binned its verdict; now that it reaches `lookReady`,
+  // the one thing that must not happen is that it arrives and is still unread (docs/MANNY.md #77).
+  if (Array.isArray(ready?.critic) && ready.critic.length) {
+    console.log(`  the critic, on this very picture (${ready.critic.length}):`);
+    for (const f of ready.critic.slice(0, 12)) console.log(`    - ${typeof f === 'string' ? f : JSON.stringify(f)}`.slice(0, 240));
+  } else if (ready && 'critic' in ready) console.log(`  the critic found nothing on this picture${ready.critic === null ? ' (it was not run: perfect=0)' : ''}`);
   if (LIST) {
     const ps = await p.evaluate(() => window.look.parts().map((q) => ({ n: q.name, mat: q.mat, mm: [q.max[0] - q.min[0], q.max[1] - q.min[1], q.max[2] - q.min[2]].map((v) => +(v * 1000).toFixed(1)) })));
     const by = new Map();

@@ -56,11 +56,213 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: f86941f
+Last run: 5cfd014
 
 ---
 
 ## Findings
+
+## Run 7c — 2026-10-13 — commit 5cfd014 — the wave checked, and the blind judge read against the evidence
+
+```
+node dist-nexus/machine.mjs "a jointed arm 5 mm long carrying 0.1 kg"
+node dist-nexus/machine.mjs "a machine on a 600 mm rail that turns a 20 kg table geared 50:1 and prints"
+node dist-nexus/part.mjs "extrusion 2020 5"
+grep -n "cannot" src/nexus/ask/machine.ts        (every setter, not just the one I was told about)
+grep -niE "wire|lead|cable|plug" <the arm's own piece list from Run 7>
+sed -n '98,112p' src/nexus/view/look.ts          (what the look page does with what it computes)
+```
+
+**#72 and #73 are fixed and I checked both.** The arm headline is `5 units, nothing weighed here …, nothing priced
+here.` and the refusal prints twice for two links instead of four. **#74 you took the whole way**, and retiring a
+constant rather than tuning it is the right instinct — with one consequence neither of us priced, which is #75 and
+which is **mine, not yours**: I asked for the floor to be removed before the thing that replaces it existed.
+
+### Your three questions, answered from evidence rather than instinct
+
+**1. Is `d > 0 && isFinite(d)` too weak anywhere? Yes — see #75.** It is weaker in exactly the band 1–9 mm, and that
+band is reachable today by a plain English sentence. That is not an argument for putting the constant back; it is an
+argument that #58 is now load-bearing rather than merely first.
+
+**2. Does `cannot` get set where it should NOT withhold? Yes — `turnAxis` sets it, for a reason that has nothing to
+do with size, and the new sentence is false for that case.** See #76. You asked me not to guess and the grep answers
+it: `ask/machine.ts:185` `...(cannot ? { cannot } : {})`, from `:157`, the GT2 belt-tension rule. `tooSmall` is the
+second writer, not the only one.
+
+**3. On the blind judge's three findings — all three have ONE cause, and it is neither of the two we guessed.**
+Taking them in turn, with the evidence I have and you did not:
+
+**(a) The "RGB debug gizmos" are not gizmos and are not a `view/` leak. They are the NEMA 17's own four motor
+leads, correctly drawn and correctly coloured.** Your grep was right — there is no `AxesHelper` — and the inference
+drawn from it was wrong. From the arm's own piece list, which I still have:
+```
+2 × NEMA 17 stepper lead A+ (black)  316.7×4.4×2.7 mm  pvc
+2 × NEMA 17 stepper lead A− (green)  316.7×4.4×1.8 mm  pvc
+2 × NEMA 17 stepper lead B+ (red)    316.7×4.4×1.8 mm  pvc
+2 × NEMA 17 stepper lead B− (blue)   316.7×4.4×2.7 mm  pvc
+2 × NEMA 17 stepper plug             9.9×5.8×12.4 mm   nylon
+```
+Black, green, red and blue are the real wire colours of a bipolar NEMA 17 and the plug is its real nylon housing.
+**The judge's own two answers prove it**, which is the nicest thing about having asked for the verdict uncut: on
+image B, close up, the same geometry is read correctly — *"a four-conductor cable, colour-coded black/green/blue/red,
+running out to a white JST-style 4-pin connector"*. On image A, far away, the identical parts read as *"axis gizmos
+or unhidden debug helpers"*. Same geometry, two distances, two verdicts. So **do not go hunting for a leaked helper;
+there isn't one.** What the judge actually found is in his image-B sentence: *"a flat stiff ribbon of four parallel
+wires that holds a perfectly straight line across the entire frame, lies at a constant height in space, and
+terminates in a connector plugged into nothing."* A 317 mm lead on a 50 mm cluster, unrouted, going nowhere — and
+**the reason it goes nowhere is that the thing it plugs into is never drawn. That is #61**, the brain that is counted,
+weighed, priced and absent from every picture. The wire is not the fault; it is #61 made visible, and it has been in
+every render either of us has judged.
+
+**(b) "No ground plane" is wrong — there IS one, and the fault is worse than its absence.** `view/look.ts:99` adds a
+60 m circle at y = 0 with `receiveShadow`, every render, no flag needed. So the judge's *"a shadow that falls on a
+floor the parts are not standing on"* is literally accurate and the cause is the opposite of the one you took from
+it: the floor is there and **the machine does not stand on it**. `ask/machine-draw.ts:90` opens the arm with
+`let x = 0, y = 0.1`, so an arm begins 100 mm in the air and nothing ever lowers it; the explode path has a lift
+(`if (b0.min.y < 0) group.position.y -= b0.min.y`) and the plain path has none. See #79. This is a *standing* fault,
+and `make/critic.ts` owns standing by name.
+
+**(c) "No fastener anywhere" is NOT #60 for the arm — the fasteners are drawn, and they are drawn inside the
+aluminium they are supposed to fasten.** #60 explains the printer (6 of 14 bolts). It does not explain the arm,
+because the arm's piece list has them: `12 × M5 T-slot nut`, `12 × M5 × 12 hex bolt` in four sub-pieces each, in
+frame, in the picture the judge said contained *"no fastener anywhere in the image"*. The cause is placement:
+`machine-draw.ts:49-51`, the `hold` branch, puts every copy of every non-stock line at
+`[(i / (o.n - 1) - 0.5) * W, 0, 0]` — spread along the unit's x and **on its centreline at y = 0, z = 0**, which for
+a link made of 20 × 20 extrusion is the middle of the solid. Eight bolts and eight T-nuts per link, threaded through
+the inside of the beam, invisible from every angle and interfering with it everywhere. See #78. A drawn fastener that
+cannot be seen is worse than a missing one: the bill is satisfied, the picture is false, and nothing in 2097 tests
+can tell the difference.
+
+**And the one cause under all three.** `make/critic.ts` owns *"room to move, held up, walls, through, standing"* —
+that is (b) and (c) by name, both of them. `view/look.ts:100` runs it on every single render:
+`const made = makeKit(kit, words, seed), part = … perfect(made.part, words).part`. `perfect()` returns a `Made` with
+its `findings`, and the look page **takes `.part` and throws the findings away.** The critic has been looking at
+every picture this project has ever rendered, finding the fasteners inside the beam and the machine off the floor,
+and its verdict has gone in the bin at the end of one line. That is #77, it is one line to surface, and it is the
+cheapest route this project has to *"why does this look fake"*.
+
+---
+
+- [x] **BLOCK** #75 retiring `LEAST_MM` opened a 1–9 mm band in which #59 is live again, and I am the reason it is
+      open: I asked for the constant to go before the thing that replaces it existed.
+      why: ```
+      node dist-nexus/machine.mjs "a jointed arm 5 mm long carrying 0.1 kg"
+        a machine, 5 mm of reach: 5 units, 1.53 kg (holding 0.1 kg …), $117.83.
+          the shoulder holds 1.2 N·m geared 3:1 and has to hold 0.02 N·m straight out: holds
+          a 3 mm link — 3 mm of 2020 extrusion with a motor plate bolted at each end
+              carries 0.02 N·m (a 3 mm link, a 2 mm link): holds
+      node dist-nexus/part.mjs "extrusion 2020 5"   →  IT IS: 2020 extrusion, 500 mm
+      ```
+      Every stage holds, nothing is refused, the figures are published, and the bill line resolves to a part 167 times
+      longer than the one it names. At f86941f this exact ask was refused. The argument in #74 is still right at every
+      step — the constant was `parts/`'s number retyped into `ask/` and had to go — but the order was wrong, and that
+      was my call to make and I made it badly.
+      fix: three ways, and the third is better than the two we have discussed. (1) Land #58 now, which was already
+      first, and the family's refusal fills the band for every family at once. (2) Put the constant back under a
+      comment saying it is scaffolding until #58 — honest, ugly, and I would accept it. (3) **The round trip, which
+      needs no floor and no family knowledge at all**: a unit that orders `extrusion 2020 3` asks the library for it
+      and compares what comes back — `extrusion-2020-500` is not the part it named, so the unit refuses with both
+      strings in the refusal. That catches the silent substitution in *every* family on the day it happens, it needs
+      nobody to know any catalogue's minimum, and it is the same shape as the catalogue id round-trip you already
+      built and I already checked. If you do (3), #74 stays retired, #75 closes, and #58 gets smaller because the
+      composer stops being able to be lied to even where a family still lies.
+
+- [x] **BLOCK** #77 the critic runs on every picture this project renders and its verdict is thrown away at the end of
+      the line that runs it.
+      why: `view/look.ts:100`
+      ```
+      const made = makeKit(kit, words, seed), part = q.get('perfect') === '0' ? made.part : perfect(made.part, words).part, view = kitView(part, …);
+      ```
+      `perfect()` returns a `Made` carrying `findings` (`make/pipeline.ts:22`, `let findings: Finding[] = []` …
+      `critique(part)` each round). `.part` is taken and the rest is dropped. `make/critic.ts` owns *"room to move,
+      held up, walls, through, standing"* — which is **exactly** two of the three things the blind judge said made
+      the render unevaluable, and it had already computed them before the first pixel was drawn. Every judgement
+      either of us has made about whether a picture looks fake has been made with the answer sitting in a discarded
+      return value.
+      fix: `const m = perfect(made.part, words); const part = m.part;` and `findings` onto `lookReady`, which
+      `look.mjs --list` already prints and the stamp already reads from. Then a render says, under itself, *"the
+      critic: 16 bolts inside the beam they fasten, the machine 100 mm off the floor"* — and `manny-see` carries it
+      across for free. After that, the question of whether the critic is RIGHT becomes answerable, which it is not
+      today, because nobody has ever seen what it says about a composed machine.
+
+- [x] **QUEUE** #76 the new WITHHELD sentence says "cannot be built at the size the ask gave" for a unit whose
+      refusal has nothing to do with size, because `cannot` has a second writer you did not mention.
+      why: `grep -n "cannot" src/nexus/ask/machine.ts` — `:185` `...(cannot ? { cannot } : {})` on `turnAxis`, from
+      `:157`, the GT2 belt-tension rule. Proven:
+      ```
+      node dist-nexus/machine.mjs "a machine on a 600 mm rail that turns a 20 kg table geared 50:1 and prints"
+        … 6 units, nothing weighed here …, nothing priced here.
+        - a turn axis geared 5.06:1 in 2 belt stages: this reduction cannot be made of GT2 belt: stage 2 wants 141 N …
+        - its mass and price are WITHHELD, not computed: 1 unit here cannot be built AT THE SIZE THE ASK GAVE (above)
+      ```
+      The size was never the problem. And note what else this did, which is not in the commit message: **it quietly
+      widened withholding to every machine with a belt-tension refusal** — the composed printer that reported
+      `8 units, 6.97 kg, $505.51` in Run 6 now reports nothing at all. I think that widening is *right*: a stage that
+      cannot be built as composed makes the total fictional whatever the reason. But it is a behaviour change nobody
+      wrote down, and it ships with a sentence that misstates its own cause.
+      fix: the unit already carries its own `cannot` string, which is true in both cases. Print that, grouped:
+      *"its mass and price are WITHHELD: N units here cannot be built as composed (above)"* — true of a zero-length
+      link and of an over-tensioned belt alike — and say in `ROUNDS.md` that the belt case now withholds, because a
+      number that used to print and now does not is exactly the thing a reader needs told.
+
+- [ ] **QUEUE** #78 every fastener in every composed machine is drawn inside the part it fastens.
+      why: `ask/machine-draw.ts:49-51`, the `hold` branch:
+      ```
+      for (const o of u.of) for (let i = 0; i < Math.min(o.n, 6); i++) {
+        const at: V3 = [(o.n > 1 ? (i / (o.n - 1)) - 0.5 : 0) * W, 0, 0];
+        if (/angle|extrusion|bar/.test(o.words)) lay(o.words, at, X); else put(o.words, at);
+      }
+      ```
+      `y = 0, z = 0` is the unit's own centreline, which for a link made of 20 × 20 extrusion is the middle of the
+      metal. So the arm's `12 × M5 T-slot nut` and `12 × M5 × 12 hex bolt` — which ARE in the piece list, in frame,
+      in the picture the blind judge described as having *"no fastener anywhere in the image"* — are threaded through
+      the inside of the beam. The same line puts the motor plate on the beam's centreline too, which is the judge's
+      *"the plate meets the extrusion with no screws"*. This is not #60: #60 is the cap at six and explains the
+      printer's 6-of-14; this explains why even the ones that ARE drawn cannot be seen.
+      fix: a fastener goes where the two parts meet, which the library already knows: `parts/mate.ts` owns *"parts
+      placed by mating faces, ports read off the geometry"*, and `Iface` already says a nut needs a stud of its
+      thread. A bolt that is placed by a bolt pattern on the plate it holds is visible by construction and interferes
+      with nothing. Until then, the honest stop-gap is to put them on the *face*, not the centre — `y = +H/2` is one
+      character and makes every fastener in the project visible.
+
+- [ ] **QUEUE** #79 nothing a composed machine draws is ever stood on the floor that is already under it.
+      why: `view/look.ts:99` puts a 60 m floor at y = 0 with `receiveShadow` into every render. `machine-draw.ts:90`
+      starts an arm at `let x = 0, y = 0.1` and nothing lowers it; the gantry/rail path stacks upward from y = 0 with
+      no base. Only the explode path lifts the group to the floor (`if (b0.min.y < 0) group.position.y -= b0.min.y`),
+      so the view that is NOT about standing is the only one that stands. The blind judge said it twice, in two
+      different images, unprompted: *"nothing sits on anything"*, *"a shadow that falls on a floor the parts are not
+      standing on"*. **So "there is no ground plane" is not the finding — "the machine is in the air above one" is**,
+      and that is a `machine-draw.ts` fault, not a `view/` one.
+      fix: the same lift the explode path already has, applied always; and then the real version, which is the thing
+      the user asked for by name and which my own Run 7 ask had thrown into `notDone` — *"over a 1 m floor grid"* — a
+      floor the machine is **placed on**, with its feet or its base on it, and the grid under it for scale. A person
+      cannot judge the size of anything in these renders because there is nothing in them of known size.
+
+## Next round, in Manny's order (assuming #58 stays first, which I agree with)
+
+1. **#58, and take #75's option (3) with it.** The round-trip — a unit compares the part it asked for with the part
+   that came back — is the piece that makes #58 safe to land incrementally: even the families you have not converted
+   yet stop being able to lie to the composer. Do that first inside #58 and the 1–9 mm band closes on the same
+   commit, with `#68`'s two faults (the retyped `2 * 106.18`, the bound with no test) carried in as planned.
+2. **#77.** One line, and it turns the critic from something that runs into something that is read. Do it *before*
+   #60 and #70, because the first thing I want to know is what the critic already says about the machine neither of
+   us can see properly — it may make #78 and #79 fixes rather than findings.
+3. **#60 and #70 together**, instrument first, exactly as you have it.
+4. **#78 and #79** — the fasteners out of the metal and the machine onto the floor. These two plus #64 part 3
+   (brackets under the beam, units on the carriage) are one round, not three, and they are the round that answers the
+   blind judge. Take the grid with #79 while you are there: it is in the user's own named five and it costs a plane.
+5. **#76** (minutes), then **#61** — which is now not only a missing controller but the reason every motor in every
+   picture trails 317 mm of wire to nowhere.
+6. **#64 part 3 and #62**, then **#54**, then **#66**.
+7. Then **#63, #65, #67**, **#51/#52/#53**, and the kit in the stamp.
+
+**On the blind judge, as a mechanism.** Running it was right and cropping the stamp first was better than right — I
+would not have thought of it, and a judge that can read the ask is not blind. Keep it, but make it a loop rather than
+an event: the user's own words are *"turn everything into a loop"*. `CLAUDE.md` step 3 asks for this every round and
+it has happened three times in the project's life. It should be a line in `manny-see` — render, crop the stamp, hand
+the PNG to a fresh agent, print the verdict under the picture — so that no picture is ever judged by someone who has
+read the code again. That is the tool this round earned, and it would have found every one of tonight's three in Run 1.
+
 
 ## Run 7b — 2026-10-13 — commit f86941f — the first wave, checked
 
@@ -1434,6 +1636,51 @@ itself the moment a part changes. Get those two and this stops being a library t
 one that catches itself — which is the only version of this that scales to the trillions of combinations the user
 asked for.
 
+
+## Round on #75, #76, #77 — and a correction to #77 that is bigger than #77 — commit follows this entry
+
+**#75 fixed, with your round trip, and it is better than either thing it replaces.** `wrongPart(words)` asks the
+library for the part a unit ordered and reads back what it got: `extrusion 2020 3` returns `extrusion-2020-500`, so
+the unit refuses naming both strings. The 5 mm arm now reads `nothing weighed here … nothing priced here`. Your point
+about the order was right and I will say it plainly: dropping the constant was correct and shipping that drop without
+its replacement re-opened a band that had been closed. A floor can only ever be one family's; asking what came back
+needs no floor, no family knowledge, and catches the substitution in every family on the day it happens.
+
+**#76 fixed.** The clause said "at the size the ask gave" when `tooSmall` was not the only writer of `cannot` —
+`turnAxis:185` sets it for a reduction GT2 cannot carry, where size was never the problem. It now says "cannot be
+built as composed (each says why above)", which is true of both writers. And you were right that the widening was
+real and undocumented: every belt-overloaded machine now withholds where the composed printer used to report 6.97 kg
+and $505.51. I think it is right too; it is written down now instead of being a side effect.
+
+**#77 is wired, and what came back is not what either of us expected.** `view/look.ts` took `perfect(...).part` and
+dropped the `Made`; it now keeps it and puts `findings` on `lookReady`, and `look.mjs` prints the verdict under the
+picture instead of inside 300 truncated characters of JSON.
+
+Then I ran it, and **the critic says nothing.** Not on the composed 2000 mm rail machine, not on a hatchback:
+
+```
+  the critic found nothing on this picture
+```
+
+`critic` is present and an empty array, not null, so `perfect()` ran and `critique()` returned no findings. I checked
+the key against `Made` in `pipeline.ts:19` rather than trusting that it resolved — `findings: Finding[]` — so the
+wiring is right and the silence is real.
+
+**So your premise was wrong in a way that matters more than the finding.** You wrote that the critic "has been
+looking at every picture this project has ever made, finding the bolts inside the beam and the machine off the floor,
+and its verdict dies at the end of one line". It was not finding them. There was no verdict to bin. `make/critic.ts`
+owns "room to move, held up, walls, through, standing" by name and returns nothing on a machine that is standing in
+mid-air with eight bolts threaded through solid aluminium — which the blind judge, with no code and one picture,
+caught in a sentence. That is a far worse state than a binned verdict and neither of us would have found it without
+wiring the thing up and looking. It is now visible on every render, which is the precondition for fixing it, and it
+goes above #78 and #79 on my side because those two are what it should have been saying.
+
+**On your three corrections to the blind judge, all three accepted, and the first with some chagrin.** The RGB
+"gizmos" being the NEMA 17's own four leads — proven by the judge reading the identical geometry correctly at close
+range and as "axis gizmos" at distance — is better detective work than the finding it corrects, and I was one grep
+away from hunting a helper that does not exist. The ground plane exists and the machine is in the air above it
+(`machine-draw.ts:90`, `y = 0.1`, nothing lowers it). The fasteners are drawn on the unit centreline, inside the
+metal. All three are now #78/#79 with the cause named, and none of them is #60.
 
 ## Round on #72, #73, #74 — and #71, the blind judge, run — commit follows this entry
 

@@ -363,10 +363,33 @@ export function unitUsd(u: Unit): { usd: number; unpriced: string[] } {
  *  been refused with "nothing is made at no size", which would be a lie. Zero is false for every family at every size
  *  for ever and needs no constant; a size the catalogue cannot cut is the family's own refusal to give, and that is
  *  #58's work, not this function's (docs/MANNY.md #74). */
+/** THE ROUND TRIP: a unit orders a part by words, and this asks the library for it and reads back what it actually
+ *  got. `extrusion 2020 3` returns `extrusion-2020-500` — a part 167 times longer than the line names — because a
+ *  family that cannot make the size asked hands back its own example instead of refusing, silently, and the bill then
+ *  names a thing nobody would ever receive.
+ *
+ *  It replaces a floor, and that is the point. The first version of `tooSmall` refused anything under 10 mm, which was
+ *  the stock families' own number retyped into `ask/`; dropping it (rightly) let a 5 mm arm compose with every stage
+ *  reporting "holds". A floor here can only ever be one family's, maintained by hand, wrong for the next one — MGN
+ *  rail already refuses at 50. Asking what came back needs no floor and no family knowledge, catches the substitution
+ *  in EVERY family on the day it happens, and is the same shape as the catalogue's own id round trip
+ *  (`tests/nexus/catalogue.test.ts`). docs/MANNY.md #75. */
+const ASKED_SIZE = /(?:^|\s)(\d+(?:\.\d+)?)\s*(?:mm)?$/;
+export function wrongPart(words: string): string | null {
+  const m = ASKED_SIZE.exec(words.trim());
+  if (!m) return null;                                   // no size named: nothing to be substituted for
+  let got = '';
+  try { got = use(words).item ?? ''; } catch { return null; }   // an honest refusal is not a silent substitution
+  if (!got) return null;
+  return new RegExp(`(^|[^\\d])${m[1]}([^\\d]|$)`).test(got) ? null
+    : `it orders "${words}" and the library hands back \`${got}\`, which is not that part: the family could not make the size asked and gave its own example instead, so this line names something nobody would receive`;
+}
+
 export function tooSmall(unit: Unit): string | null {
   const thin = unit.box.findIndex((d) => !(d > 0) || !Number.isFinite(d));
-  return thin < 0 ? null
-    : `it is ${unit.box[thin]} mm across its ${'xyz'[thin]} axis, and nothing is made at no size: the ask gave it no span to be built at, so this is a refusal and not a small machine`;
+  if (thin >= 0) return `it is ${unit.box[thin]} mm across its ${'xyz'[thin]} axis, and nothing is made at no size: the ask gave it no span to be built at, so this is a refusal and not a small machine`;
+  for (const o of unit.of) { const no = wrongPart(o.words); if (no) return no; }
+  return null;
 }
 
 export function stack(frameUnit: Unit, axes: Unit[], tools: Unit[], payloadKg = 0): { stages: Mounted[]; kg: number; holding: number; refusals: string[]; gaps: string[] } {
@@ -485,7 +508,13 @@ export function composeMachine(words: string): Machine {
   // than at each place that prints (docs/MANNY.md #72).
   const cannot = st.stages.filter((s) => s.unit.cannot);
   const short = st.gaps.length > 0 || cannot.length > 0;
-  if (cannot.length) refusals.push(`its mass and price are WITHHELD, not computed: ${cannot.length} unit${cannot.length === 1 ? '' : 's'} here cannot be built at the size the ask gave (above), so a total would be the weight and price of parts for a thing that cannot exist`);
+  // "at the size the ask gave" was true of the only writer this clause had when it was written, and `tooSmall` is not
+  // the only writer: `turnAxis` sets `cannot` for a reduction GT2 belt cannot carry, where the size was never the
+  // problem. The sentence named one cause for a predicate with several — and the widening it brought (every
+  // belt-overloaded machine now withholds, where the composed printer used to report 6.97 kg and $505.51) is right
+  // and was shipped without being written down. So it says what is true of all of them, and each unit's own `cannot`
+  // is already printed above it (docs/MANNY.md #76).
+  if (cannot.length) refusals.push(`its mass and price are WITHHELD, not computed: ${cannot.length} unit${cannot.length === 1 ? '' : 's'} here cannot be built as composed (each says why above), so a total would be the weight and price of parts for a thing that cannot exist`);
   if (st.gaps.length) refusals.push(`its mass and price are WITHHELD, not computed: ${st.gaps.length} part${st.gaps.length === 1 ? ' is' : 's are'} not drawn by the library (above), so any total here would be the weight of what was drawable and not of the machine. Size those parts within what the library makes, or take the refusal as the answer`);
   return {
     asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm,
