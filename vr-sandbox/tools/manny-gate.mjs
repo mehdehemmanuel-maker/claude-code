@@ -4,9 +4,12 @@
 // a rule in CLAUDE.md, a line in a checklist - depends on Claude reading it and choosing to comply, and every
 // drift in docs/ROUNDS.md happened with the rule already written down.
 //
-// It refuses to let a turn end when either is true:
+// It refuses to let a turn end when any is true:
 //   1. docs/MANNY.md holds an OPEN **BLOCK** finding. Fix it, or answer it in writing (mark it [~]).
-//   2. src/ or tests/ changed since the commit Manny last ran on. He has not seen the current code.
+//   2. docs/MANNY.md holds an OPEN **SIGHT** request: a thing the critic could not see, and asked to be given eyes
+//      for. Build it, or write why it cannot exist. A critic who can only report what he happens to be able to see
+//      grades the easy half of the work, so asking for sight has to cost something or it does not get asked.
+//   3. src/ or tests/ changed since the commit Manny last ran on. He has not seen the current code.
 //
 // It never blocks for a QUEUE finding - that is the user's own split: hard interrupt vs queue, by importance.
 //
@@ -36,11 +39,14 @@ if (!existsSync(LEDGER)) pass();
 const text = readFileSync(LEDGER, 'utf8');
 if (/^Gate:\s*off\b/im.test(text)) pass();
 
-// ---- 1. open blocking findings ----
-const open = [];
+// ---- 1. open blocking findings and sight requests ----
+const open = [], sight = [];
 for (const line of text.split('\n')) {
-  const m = /^\s*-\s*\[( |x|~)\]\s*\*{0,2}(BLOCK|QUEUE)\*{0,2}\s*(.*)$/i.exec(line);
-  if (m && m[1] === ' ' && m[2].toUpperCase() === 'BLOCK') open.push(m[3].trim());
+  const m = /^\s*-\s*\[( |x|~)\]\s*\*{0,2}(BLOCK|QUEUE|SIGHT)\*{0,2}\s*(.*)$/i.exec(line);
+  if (!m || m[1] !== ' ') continue;
+  const kind = m[2].toUpperCase();
+  if (kind === 'BLOCK') open.push(m[3].trim());
+  else if (kind === 'SIGHT') sight.push(m[3].trim());
 }
 if (open.length) {
   block(
@@ -50,6 +56,20 @@ if (open.length) {
       `ANSWERED IN WRITING (mark it [~] and write, under the finding, why it stands as it is - "already fixed", ` +
       `"does not reproduce", "out of scope because ...", "Manny is wrong because ..."). Answering is a real option ` +
       `and Manny can be wrong; what is not an option is leaving it silent.`,
+  );
+}
+if (sight.length) {
+  block(
+    `Manny asked to be able to SEE ${sight.length} thing${sight.length === 1 ? '' : 's'} and cannot yet ` +
+      `(vr-sandbox/docs/MANNY.md):\n\n` +
+      sight.map((o, i) => `  ${i + 1}. ${o}`).join('\n') +
+      `\n\nA critic judges what he can see, so what he cannot see is the part of the work nobody is checking. ` +
+      `This turn cannot end until each request is either BUILT - a tool, a view, a dump, a command, a number the ` +
+      `library did not carry; add it to vr-sandbox/docs/TOOLS.md, then mark the request [x] naming what was built ` +
+      `and how he runs it - or ANSWERED: mark it [~] and write why that sight cannot exist here (no photo of that ` +
+      `face is reachable, the figure is the maker's unpublished CAD, this network cannot run the page). ` +
+      `"Not now" is not an answer; "here is the command" and "here is why it is impossible" both are. ` +
+      `If it is real work rather than a tool, build the smallest thing that lets him look, and say what is still dark.`,
   );
 }
 

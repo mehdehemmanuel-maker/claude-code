@@ -15,17 +15,36 @@ halves that must not be confused —
 
 ## The contract
 
-The gate refuses to let a turn end when either is true:
+The gate refuses to let a turn end when any is true:
 
 1. **An open `BLOCK` finding below.** Claude must either **fix** it (mark `[x]`, name the commit) or **answer it in
    writing** (mark `[~]`, and write underneath why it stands — already fixed, does not reproduce, out of scope
    because…, or Manny is wrong because…). Answering is a real option: Manny can be wrong, and is not owed obedience.
    What is not an option is leaving it silent.
-2. **`src/` or `tests/` changed since the commit Manny last ran on.** He has not seen the current code, so he is run
+2. **An open `SIGHT` request below.** A thing Manny could not see, and asked to be given eyes for. Claude must either
+   **build** it (mark `[x]`, naming the command he now runs, and add it to `docs/TOOLS.md`) or **answer** it (mark
+   `[~]`, and write why that sight cannot exist here — no photo of that face is reachable, the figure is the maker's
+   unpublished CAD, this network cannot run that page). *"Not now"* is not an answer; *"here is the command"* and
+   *"here is why it is impossible"* both are.
+3. **`src/` or `tests/` changed since the commit Manny last ran on.** He has not seen the current code, so he is run
    before the turn ends.
 
 A `QUEUE` finding never blocks. That split is the user's own: *"have him be able to hard interrupt or queue depending
 on importance."*
+
+### Why `SIGHT` has teeth at all
+
+A critic grades what he can see, so **what he cannot see is the part of the work nobody is checking** — and the
+cheapest way for a round to look good is to be judged only on its visible half. The user asked for this directly:
+*"add to manny the ability for him to ask what he cant see, like the ability for him to tell you to give him more
+sight, or just anything that would help him understand deeper."* A request with no cost gets dropped by a busy round,
+so it costs: the hook holds the turn open until the instrument exists or is proved impossible.
+
+**Sight is not only pictures.** It is any instrument that would let him understand deeper — a number the library does
+not carry, a dump of every mate on an assembly, a render beside the real machine at the same scale, a blind agent's
+verdict on a screenshot, the history of one function, a page from the web, or a list of what he has never once looked
+at. His own eyes come first though: `node tools/manny-see.mjs "<words>"` gives him the numbers and the picture
+together, and `Read` on a PNG shows it to him as a picture. A `SIGHT` request is for after he has looked, not instead.
 
 **Severity is Manny's call, and misusing it costs him the mechanism.** A `BLOCK` on a nit teaches everyone to resent
 the gate; a `QUEUE` on something rotten wastes the one tool that can stop a bad round.

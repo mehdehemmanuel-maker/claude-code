@@ -332,6 +332,12 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
 
 ## Working here
 
+- **Before saying "I could not see it": `node tools/manny-see.mjs "<words>"`.** One command, the numbers and the
+  picture together — every door that takes words, run on the same ask with its refusals kept, then the look page from
+  the views that expose fakery (`three`, `explode`, `cut`) — and `Read` on a PNG shows it as a picture. `--numbers`
+  skips the browser. It is Manny's, but it is the fastest way for any round to look at what it just made.
+  What it cannot show, say so and ask for it: a `SIGHT` request in `docs/MANNY.md` holds the turn open until the
+  instrument exists or is proved impossible (`docs/MANNY.md`'s contract).
 - Gate: `npm run gate` (long; run it in the background and log to a file). Build the viewer:
   `npx vite build --config vite.view.config.ts --logLevel error`.
 - The gate is around three minutes, and its wall clock swings by a sixth run to run on this host, so measure the suite's

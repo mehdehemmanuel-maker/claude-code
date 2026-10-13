@@ -44,6 +44,22 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   reads alike: read features against the face's own edges, and the camera's error at a known hole near it.
 - `step.py`: a maker's STEP model read with gmsh: `boxes` (every solid's box on the board's drawing frame, top or under)
   and `check` (each drawn part against the solid it should be, coverage both ways).
+- `tools/manny-see.mjs`: **the critic's eyes**, and the first thing to reach for when a round is about to say "I could
+  not see it". One command gives the two halves a judgement needs, together: the NUMBERS (every door that really takes
+  words, run on the same ask — `machine.mjs` composed from the library, `invent.mjs` for what the intent pipeline heard
+  and what it could not use, `plan.mjs` fed the words as a sketch — each one's refusals kept rather than swallowed) and
+  the PICTURE (the viewer built, the look page opened from the views that expose fakery rather than flatter: `three`
+  what a person sees first, `explode` whether it comes apart into real parts or is one lump wearing a name, `cut`
+  whether it is hollow). It prints the PNG paths, and **the `Read` tool shows a PNG as a picture**, so they are really
+  looked at.
+  `node tools/manny-see.mjs "<words>"` · `--numbers` (figures only, no browser) · `--part` (the words name a library
+  part) · `--views three,top,explode,cut` · `--out <dir>` (default `/tmp/manny-see`).
+  It only hands a door the input that door takes — `works.mjs` wants a build id, `plan.mjs` a sketch on stdin — and
+  says so where it skipped one, because a stack trace reads like a refusal and is not one. Everything it could not do
+  (a build that failed, a view that did not render) it says as the failure it was: a tool that quietly shows less than
+  it promised is worse than none, because the critic then reports on what he thinks he saw. **Known gap it names
+  itself:** there is no door that prints one library part's figures (mass, size, interfaces, what it contains), so
+  `--part` is the picture only.
 - `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`; a view that looks all but straight down or up (`top`, `under`) is squared — its camera's up is ∓z, not the degenerate roll three.js picks when up is nearly the way it looks, which had turned every plan view 45°;
   `ortho=1` for a view to set beside a photo, `exposure=`, `env=`, `sun=`, `tone=aces` to try the light; it prints the
   part's `lift`; the light tent's `back=` (a backdrop as bright as the photo's studio had it), `floor=rrggbb` (what it
