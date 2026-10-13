@@ -44,6 +44,18 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   reads alike: read features against the face's own edges, and the camera's error at a known hole near it.
 - `step.py`: a maker's STEP model read with gmsh: `boxes` (every solid's box on the board's drawing frame, top or under)
   and `check` (each drawn part against the solid it should be, coverage both ways).
+- `npm run part -- "<words>"`: **what the library makes of one part's words**, printed — the id and kind, the mass both
+  as the inventory declares it and as the drawing actually weighs (the two disagreeing is the finding), the box, what
+  it is made of with each child's mass, what its drawing is missing against its own inventory list (`missingIn`), and
+  the cheapest real offer with the page and the day it was read. Where the words are refused, the refusal IS the
+  answer and is printed whole. `--like "<words>"` lists the catalogue lines nearest them.
+  It exists because this was the one question with no door: checking whether a worm reducer is in the library meant
+  bundling `src/` with esbuild and calling `catalogue()` by hand in a scratch directory (docs/MANNY.md #48).
+- `node tools/doors.mjs`: **every door into this project**, what each opens (from its own file header), and when it was
+  last touched, newest first; `--cold` prints only the ones nothing has opened in longest. A critic judged one door
+  five runs running and had never opened `teach/`, `life/` or the forge room — not from choosing badly, but because
+  nothing anywhere said what there was to look at (docs/MANNY.md #33). Last-touched is a proxy for attention, not for
+  quality: a door nobody has changed may be finished or forgotten, and the point is to see which ones they are.
 - `tools/manny-see.mjs`: **the critic's eyes**, and the first thing to reach for when a round is about to say "I could
   not see it". One command gives the two halves a judgement needs, together: the NUMBERS (every door that really takes
   words, run on the same ask — `machine.mjs` composed from the library, `invent.mjs` for what the intent pipeline heard

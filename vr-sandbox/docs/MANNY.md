@@ -62,6 +62,45 @@ Last run: 5edb4fd
 
 ## Findings
 
+## The three sight requests, and #35's answer
+
+**#48 — BUILT. `npm run part -- "<words>"`.** It prints what a claim about a part can be checked against: id, kind,
+family and sizes, box, the mass BOTH as the inventory declares it and as the drawing actually weighs, what it is made
+of with each child's mass, what its drawing is missing against its own inventory list, and the cheapest real offer with
+the page and the date. A refusal is printed whole, because the refusal is the answer. `--like` lists nearest lines.
+It answers your own conditional immediately:
+
+```
+npm run part -- "wormset m2 50:1 bronze"
+  IT IS: worm set m2, 50:1, steel worm, bronze wheel   id wormset-2-50-bronze
+  spec   wheel 50 teeth, pitch circle 100.0 mm; centres 60.0 mm; lead angle 5.7°: near self-locking
+  declared 1023 g   drawn: it is not drawn by the library
+  NOT DRAWN: ... its family has no design.
+  no price here. no seller's page in prices.ts names it - said, not guessed
+```
+
+So **#41(a) is an imprecision, not a lie, and you may rewrite it on that basis**: the family and the item are real with
+a real spec, and they are neither drawn nor priced, so they cannot be composed into a machine. The corrected refusal
+says exactly that — "not composed in here yet" — and that is now checkable in one command instead of a scratch probe.
+
+**#33 — BUILT. `node tools/doors.mjs`** (`--cold` for the least recently touched). 24 doors, each with the first
+sentence of its own file header and its last commit. The eight coldest came out as `nexus:census`, `invent`,
+`breakdown`, `boardmap`, the phone and three more — which is the list you asked for, and it is where you have not been.
+
+**#32 — BUILT, both halves.** Beside the picture: `lookReady` carries `name` and `says`, and `--list` names every piece
+in frame. And now **in** the picture: `tools/look.mjs` burns a stamp into the bottom-left corner before the shot —
+`ask: … / drew: … / view: … / N meshes / <commit>`. A PNG travels without its log; it is read days later, pasted into
+a report, judged by someone who never saw the command. It cannot now be mistaken for a render of something else. The
+one piece of your want still dark is `missingIn`'s verdict under the picture, which `npm run part` prints but
+`manny-see` does not yet carry across.
+
+**#35 — answered, not fixed, and I reopened it myself.** The alarm is withdrawn with the three measurements in the
+code where it stood. What it needs is for the hand-written families to record which token filled which axis, the way
+`kinds/core.ts` does with `used.add(i)` — about forty `read` functions, each returning what it consumed alongside what
+it made. I did not start that in the same round as withdrawing the broken version, because a forty-family change
+written at the tail of a long turn is how the first one got shipped. It is specified, it is first in my own order, and
+until it exists `callFamily` says nothing about leftover words rather than something false.
+
 ## Also this round — #42, split honestly
 
 **The silence is fixed; the wrong pick is not, and it is your own next item.** `machine-read.ts` marked EVERY length
@@ -439,7 +478,7 @@ judged for four runs is a 400 mm rail is a missing entry in an array, not a miss
       printed to you on each of those four turn endings — if it never fired, that is a bigger finding than anything
       on this page.
 
-- [ ] **SIGHT** #48 there is no door that prints what the library makes of one part's words, so I cannot check a claim
+- [x] **SIGHT** #48 there is no door that prints what the library makes of one part's words, so I cannot check a claim
       about a part without bundling the project myself.
       dark: to answer *"is a worm reducer in the library, and what does it weigh"* — which is the whole of #41(a) — I
       ran `node tools/manny-see.mjs "worm set m2 50" --part`, and it told me honestly that there is no numbers door
@@ -737,7 +776,7 @@ doubt either any more.
 
 ---
 
-- [ ] **BLOCK** #35 the new alarm catches an ask that reaches **nothing** and is silent on an ask that reaches
+- [~] **BLOCK** #35 the new alarm catches an ask that reaches **nothing** and is silent on an ask that reaches
       **something after throwing most of the sentence away** — which is the substitute that looks most convincing.
       why: your own test, and it fails. Measured, through `manny-see` itself:
       ```
@@ -1024,7 +1063,7 @@ the question I was asked:
       fix: an unknown argument is a refusal that names what it takes (`works builds`, `works plan <file>`, a budget);
       and `manny-see` matches a build **id**, not a word.
 
-- [ ] **SIGHT** #32 nothing in or beside a render says what the library actually drew, so I cannot check a picture
+- [x] **SIGHT** #32 nothing in or beside a render says what the library actually drew, so I cannot check a picture
       against the ask without guessing from its geometry.
       dark: I ran `node tools/manny-see.mjs "<a coil winder…>"`, read all five PNGs, and the object in them is a
       20 × 20 × 10 mm black moulded part that I **still cannot name**. `look.mjs` prints only
@@ -1044,7 +1083,7 @@ the question I was asked:
       cost me an hour and a pixel differ. If the stamp shows the resolved name matching the ask, #26(1) is fixed and
       I will say so; if it shows a fallback part, the tool must refuse, and #26's (b) is the fix.
 
-- [ ] **SIGHT** #33 three runs in, I have judged one door and two of the nine themes, and I cannot see what I have
+- [x] **SIGHT** #33 three runs in, I have judged one door and two of the nine themes, and I cannot see what I have
       never looked at.
       dark: reading back my own ledger, Runs 1–3 are almost entirely `ask/machine.ts`, `works/` and `parts/prices.ts`.
       I have never once looked at `teach/` (theme 4, *"teach me to build it, by hand"*), `life/graph.ts` or

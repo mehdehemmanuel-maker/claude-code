@@ -6,12 +6,14 @@
 //
 // Each ask is a name and the look page's query (kit=part is added; view=top|three|front|side|rear|under, or dir=x,y,z;
 // zoom, explode, only, hide, hi, cut, ortho=1: see src/nexus/view/look.ts). Prints what each look reports, and errors.
+import { execSync } from 'node:child_process';
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 // --list: after each view, print the pieces actually in the picture, counted by name with their sizes. The page has
 // exposed `window.look.parts()` (name, path, material, says, box, triangles) all along and nothing ever called it, so
 // a reader of the PNG could see a thing come apart and still not name one piece of it - which means they could not
 // tell a complete explode from one missing half its parts. (docs/MANNY.md SIGHT #38)
 const LIST = process.argv.includes('--list');
+const SHA = (() => { try { return execSync('git rev-parse --short HEAD', { cwd: new URL('..', import.meta.url).pathname }).toString().trim(); } catch { return 'no commit'; } })();
 const [rootArg, outArg, ...asks] = process.argv.slice(2).filter((a) => a !== '--list');
 if (!rootArg || !outArg || !asks.length) { console.log('node tools/look.mjs <viewer dir> <out dir> "name|query" …'); process.exit(1); }
 const root = path.resolve(rootArg), out = path.resolve(outArg); fs.mkdirSync(out, { recursive: true });
@@ -32,6 +34,17 @@ for (const a of asks) {
   const url = `http://localhost:${port}/look.html?${/(^|&)kit=/.test(query) ? '' : 'kit=part&'}${query}`;
   await p.goto(url, { waitUntil: 'commit' });
   try { await p.waitForFunction(() => window.lookReady, null, { timeout: Number(process.env.LOOK_WAIT ?? 90000), polling: 1000 }); } catch { console.log(name, 'NOT READY', errs.slice(-3).join(' | ')); continue; }
+  // BURNED INTO THE IMAGE. A PNG travels without its log: it is read days later, pasted into a report, judged by
+  // someone who never saw the command. So the ask, what the library actually resolved it to, the view and the commit
+  // go in the corner of the picture itself — then a render cannot be mistaken for a render of something else, which
+  // is the whole of docs/MANNY.md #32 and the fault that made every alarm necessary.
+  await p.evaluate(([n, sha]) => {
+    const r = window.lookReady ?? {}; const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;left:0;bottom:0;z-index:99999;font:11px/1.45 ui-monospace,monospace;color:#111;background:rgba(255,255,255,.82);padding:5px 8px;max-width:100%;white-space:pre-wrap;word-break:break-word';
+    d.textContent = `ask: ${decodeURIComponent(new URLSearchParams(location.search).get('words') ?? '(none)')}\ndrew: ${r.name ?? '?'}   view: ${n}   ${r.meshes ?? '?'} meshes   ${sha}`;
+    document.body.appendChild(d);
+  }, [name, SHA]);
+  await p.waitForTimeout(120);
   await p.waitForTimeout(400); await p.screenshot({ path: `${out}/${name}.png` }); console.log(name, JSON.stringify(await p.evaluate(() => window.lookReady)).slice(0, 300));
   if (LIST) {
     const ps = await p.evaluate(() => window.look.parts().map((q) => ({ n: q.name, mat: q.mat, mm: [q.max[0] - q.min[0], q.max[1] - q.min[1], q.max[2] - q.min[2]].map((v) => +(v * 1000).toFixed(1)) })));
