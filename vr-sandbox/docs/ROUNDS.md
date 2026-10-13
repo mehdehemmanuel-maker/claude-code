@@ -1985,3 +1985,66 @@ it may fall as the bodywork is fixed, never rise.
 `declared` is now 78% of what remains — 38 findings on 12 parts, every one of the form *"it says ⌀24 and the nearest
 it draws is ⌀14.4"*. That is the same shape as this round's fault one level in: a number stated in one place and
 drawn in another, with nothing making the two agree. It is the next root, not the next patch.
+
+## Run 7j — the critic's own review, acted on in the same sitting
+
+Manny returned no BLOCK on 7g/7h and four questions worth more than a verdict. Three were taken immediately because he
+was right and each was small:
+
+- **A field written and never read, inside the fix for exactly that fault.** `rotates` shipped as
+  `false | { within?: string }` — the named MOVES_WITHIN edge — and `turning()` returned `null` for both, so the
+  member's name was carried and nothing read it. `Part.rotates` is `false` only now, and the comment says the named
+  form comes back when `contracts` reads it. *Within the hour of writing "nothing is carried across a boundary without
+  something that reads it" into the ledger.*
+- **A cap dressed as a ratchet.** `toBeLessThanOrEqual(6)` stays at six after two of the six are fixed and permits
+  them back. `CLAUDE.md` asks a ratchet to fail on a new one by name **and** on a fixed one until its line is deleted;
+  `<=` does only the first. Now `toBe(6)`, with "measured, not chosen" and the breakdown in the file. The two-way form
+  had been written two commits earlier and then not reached for.
+- **The prefilter: containment, not magnitude.** I had looked at the 1 mm difference and left it. The question is
+  whether the box *contains* the cylinder it filters for, and the two were the wrong way round — the box was the
+  tyre's ring (`hub`, `alongRing`), the exact test the whole group (`ctr`, `along`), so where the ring sits outboard
+  enough part of the exact envelope falls outside the box, the `continue` fires, and a part the cylinder would have
+  caught is never tested. Fixing it by making the box the group threw away the ring distinction the comment asks for;
+  the right shape is box = group (which contains the ring), exact = ring. Hatchback findings unchanged at 6.
+
+### The census he asked for, run once, and it found something bigger than the casting
+
+He asked: how do you find the next `reduction gear and differential` without another round of grouping findings by
+cause? Answer: list every part the name list calls a rotor that declares nothing and has nothing round under it.
+
+```
+4-rotor drone battery · camera · foot 1–4 · flight controller · radio receiver
+· speed controller 1–4 · top plate · bottom plate · motor mount 1–4 · arm clamp 1–4
+```
+
+**`TURNS` contains `rotors?` and the thing is called "4-rotor drone", so every part of it matches.** A battery is a
+rotor. A foot is a rotor. A radio receiver is a rotor. They raise no findings today only because `movers` keeps the
+outermost of what turns and the drone's own root matches too — the whole aircraft reads as one rotor and its three
+hundred parts as its insides. So the name list is not merely answering for parts that say nothing: on this kit it
+matches **the product's name**, three words from the part's own identity, and the silence is an accident of which
+match happens to be outermost.
+
+The census is the right instrument and wants `movers`' own filter (outermost, not detail, not sealed) before it earns
+a place in the gate. Not built this round.
+
+### Deferred, with the reason written down
+
+`declared` at 38 is next and **not** by fixing twelve parts. Three reasons to doubt the instrument first, all his:
+`roundsIn` pushes a tube's **outer** diameter so a walled tube's bore is invisible to it; `axesFrom` may read no
+prism `holes` branch, making every bore through a rolled section invisible too; and the `studs` comparison is
+asymmetric — thread **labels** for a `requires` (under a comment explaining why root-against-nominal is wrong) and a
+raw diameter against nominal for a `provides` eight lines later. Two experiments decide it before any part moves: run
+`declared()` over catalogue parts drawn from published standards (clean there and dirty on the car means the car is
+lying), and group the 38 by sign and by branch. And a property of the check itself: `near()` takes the closest
+diameter anywhere under the part, so strictness **falls** as a part gets more detailed.
+
+Three of his doubts stand unacted: no check owns *"nothing is below what it stands on"* (the machine's PTFE tube at
+−24 mm); refuted hypotheses live in prose where no future round would look for them; and the three-seed result is a
+sentence rather than a thing that runs.
+
+**A process slip in this round worth more than its cost.** `critic.ts` crossed its 860 ratchet again on the comment
+explaining the prefilter fix, and I "verified" tidy with `npm run tidy 2>&1 | tail -3` — which prints the duration and
+cuts off the failure summary, so it passed while the gate failed on it four minutes later. A check piped through
+`tail -3` is a check that cannot fail, which is the fault this whole week has been about, committed against my own
+tooling. Verify with a filter that would show the failure (`grep -E "Tests|lines, allowed"`), not one that shows the
+last three lines.

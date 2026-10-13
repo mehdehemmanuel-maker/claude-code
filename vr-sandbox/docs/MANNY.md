@@ -56,11 +56,172 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 35695e6
+Last run: 63ec8cc
 
 ---
 
 ## Findings
+
+## Run 7i — 2026-10-13 — commit 63ec8cc — questions only
+
+**No BLOCK this round, and I say that plainly rather than leaving it to be inferred.** Nothing below must stop a turn.
+What follows is doubts, holes, and four questions answered as directly as I can answer them. The ordering of work is
+yours; I am not writing one.
+
+**First, a thing of mine that was wrong.** I wrote in #79 that `standing` could not fire on a composed machine
+"because nothing in `machine-draw.ts` declares a foot". I read `if (!all.isEmpty() && grounded.length)` and inferred
+the second half; I did not measure it. You measured seven grounded parts. That inference is the same move I have
+criticised four times this week — reading a gate and assuming which side of it something falls — and it went into the
+ledger as a finding with a line number, which makes it worse rather than better. The correction is yours and I have
+taken it.
+
+### 1. Is `rotates` the right edge, or a declaration where a derivation existed?
+
+**Half of what you shipped is the wire, and that half is unambiguously right.** `JOURNALLED` reads `p.joint`, which
+the model already carried and the predicate never asked. `stub spindle` had `joint: 'bearing'` written on it all
+along. That is a missing wire found and connected, and it is the better half of the round.
+
+**The other half I would put a question to.** For the casting itself, the model may already have been able to answer,
+in the same function, twenty lines below the predicate:
+
+```
+critic.ts:125   const roundish = nodes.some((x) => isUnder(x, m) && x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && !x.p.detail)
+```
+
+`reduction gear and differential` is `{ box: [0.42, 0.32, …] }` with no children — **nothing round under it at all**.
+`roundish` is already computed for every mover, to decide how its sweep is measured, and it is not consulted to decide
+whether there is a sweep. A thing with no round geometry anywhere inside it does not turn; a wheel, a rim, a disc and
+a fan all are round. Did you try `!roundish → not a rotor` before adding the field, and what did it cost on the other
+four kits? That is the question. I am not asserting it would have worked — a post is a cylinder and does not turn, so
+geometry alone cannot be the *only* answer — but it would have caught this case with no new declaration, and it is
+sitting in the same function.
+
+Two more I would want ruled out before accepting that no derivation existed:
+- **`fixed`.** That casting carries `fixed: 'bolted to the side of its gear and differential housing'` on its
+  neighbours, and the motor and inverter say they are bolted to *it*. A part that two other parts declare themselves
+  bolted to is a frame member, not a rotor. Is `fixed` readable here?
+- **`iface`.** You ask whether `{ kind: 'drive' }` could have answered. From `mate.ts`'s own code, a `drive` carries
+  no diameter and is excluded from `declared()`, so it exists as a kind — but the casting declares no iface at all, so
+  it could not have answered *this* case. The more interesting version of your question is the reverse: **should a
+  rotor be required to declare what drives it?** A turning thing with no drive interface anywhere is either a rotor
+  nobody turns or a part misread as one, and that is a check rather than a field.
+
+And the part of the shape I would keep questioning whatever the answer: **the last resort is still twenty-two words in
+a regular expression.** You have moved from "name decides" to "declaration, then joint, then name", which is strictly
+better, and the name list is now third rather than first. But it is still the thing that answers for everything that
+says nothing, which is almost everything. How would you find the *next* `reduction gear and differential` — the next
+part whose name contains a rotor word and which does not turn — other than by another round of grouping findings by
+cause? Is there a cheap census (every part the name list calls a rotor, that declares nothing and has no round
+geometry) that would list them all at once rather than one per round?
+
+### 2. Is `turns.test.ts`'s ≤ 6 a ratchet or a floor in disguise?
+
+**You have both in the file and you asked about the weaker one.** Line 49 is the real instrument and it is in this
+project's own idiom:
+
+```
+expect([...new Set(rtm.map((f) => f.part))].sort(), 'something that is not a wheel is asking for room to turn')
+  .toEqual(['front left wheel', 'front right wheel', 'rear left wheel', 'rear right wheel']);
+```
+
+That fails **by name** on any new non-wheel asking for room. It is the thing that catches the next casting, and it is
+worth more than the count beside it.
+
+Line 50, `toBeLessThanOrEqual(6)`, is a cap, and it has the one hole every cap has: after someone fixes two of the
+six, the cap stays at six and permits them to come back. Nothing makes it fall, and nobody will remember to lower it —
+`CLAUDE.md`'s own description of a ratchet is *"they fail on a new one by name, and they fail on a fixed one until its
+line is deleted, so the lists only ever get shorter"*, and a `<=` fails only in one of those two cases. **You wrote
+the two-way form yourself two commits ago** — `NO_FIXTURE` is asserted exactly, so a check that starts firing fails
+and forces the list to shrink. Why is that the right shape for `NO_FIXTURE` and not for this number? If `toBe(6)` is
+too brittle because the bodywork is about to move, that is worth saying in the file, because the reader of a `<=` has
+no way to know whether 6 is measured or chosen.
+
+### 3. The prefilter/exact mismatch you left because it measured 1 mm
+
+**I think the magnitude is the wrong question, and the right one is answerable without any measurement: in which
+direction can it err?**
+
+```
+critic.ts:182   if (!f.pieces.some((pc) => hitsCylinder(pc, ctr, ax, sweep + need.clearance, along + sideRoom, bore))) continue;
+                exact:  env built from `hub` (ctr shifted along the axis to the ring's mid-plane) and `alongRing`
+```
+
+A prefilter is sound if and only if it is a **superset** of the exact region. If `hitsCylinder`'s cylinder always
+contains `env`, then a disagreement costs a few wasted exact tests and nothing else, and leaving it is not merely
+defensible, it is correct — write the word "conservative" in the comment and never think about it again. But `hub` is
+`ctr` displaced along the axis, and the prefilter's half-length is `along + sideRoom` while the exact one's is
+`alongRing + sideRoom`. If the displacement ever exceeds `along − alongRing`, part of the exact envelope lies outside
+the prefilter, the `continue` fires, and **the exact test is never run on a part that it would have caught** — a
+silent false negative in the check that produces the most findings in the project.
+
+So: can the displacement exceed that difference? On a wheel whose tyre ring is offset outboard of its hub's box
+centre, it looks to me as though it can. One millimetre on a hatchback tells you nothing about that, because the
+question is not how far apart they are on this car but whether one is guaranteed to contain the other on any car.
+
+**Is it the same mistake as #75?** No, and I will not let that one be over-applied: #75 removed a guard that was
+working and shipped the gap. This leaves an existing latent thing untouched, which is not a regression. But it is the
+same mistake as **#74(2)** — one quantity computed twice by two formulas with nothing holding them equal — and the
+deciding question there was not the size of the difference either.
+
+### 4. `declared` at 38 of 49: the model lying, or the measurement wrong?
+
+**Do not fix twelve parts until this is separated, and it can be separated in one command.** Three specific reasons to
+doubt the measurement, and two experiments that decide it.
+
+**(a) The instrument cannot see a bore drawn as a tube's wall.** `mate.ts`'s `roundsIn` pushes `2 * sh.tube.r` — the
+**outer** diameter — and `axesFrom` reads lathe bores and `cuts`. `Tube` is `{ r, wall?, … }` (`form.ts:19`), so a
+walled tube has an inner diameter of `2 * (r - wall)` that **neither function reports**. And `roundsIn`'s own comment
+says *"a drive shaft and a stub spindle are both drawn as tubes"*. A hollow shaft's or sleeve's bore is therefore
+invisible to a check whose whole job is to find bores. Does the hub's ⌀24 live in a tube's wall?
+**(b) Does `axesFrom` read a prism's `holes`?** `form.ts:24` defines `Prism.holes` as *"openings through it along its
+length (a box section's bore, an extrusion's centre hole)"*. I read the lathe and `cuts` branches of `axesFrom` and
+did not see a prism branch. If there is none, every bore through an extruded or rolled section is invisible too.
+**(c) The `studs` comparison is asymmetric, and its own sibling branch already knows better.** For a *requires*,
+`declared()` compares thread **labels** (`b.thread`), under a comment that says exactly why: *"an M5 nut's bore is
+drawn at its root (4.134 mm) and comparing a root against a nominal refuses the most ordinary mate in engineering."*
+For a *provides*, eight lines later, it compares a raw diameter against the nominal. If a stud's thread is drawn as a
+thread rather than as a ⌀12 cylinder, the provides branch cannot pass, for the precise reason the requires branch was
+written to avoid. Your stud draws ⌀15.12 — bigger, not smaller — so this may be a knurl or a head rather than a
+thread form, but the asymmetry is real and is worth settling before the model is changed.
+
+**The two experiments.**
+- **Validate the instrument where the truth is published.** Run `declared()` over the catalogue parts drawn from
+  standards — a 608 (⌀22 / ⌀8 / 7 mm), `bolt M5x12`, an MGN12H rail, a 6204 — where the right answer is in an ISO
+  table and the drawings are already trusted. If it is clean on fifty of those and dirty on the car, the car is
+  lying and you can fix twelve parts with confidence. If it fires there too, it is the instrument. `--audit` already
+  walks both populations, so the sweep exists.
+- **The signs.** Your two examples err in **opposite directions** — the hub draws *smaller* than it says, the stud
+  *larger*. A systematic instrument fault usually has one sign (comparing a root to a nominal is always small). Two
+  signs is weak evidence that at least one of them is a real model fault. Grouping the 38 by sign, and by which branch
+  of `declared()` produced them (bore / shaft / thread-label / "draws no bore at all"), would probably split them into
+  two piles before you touch a single part — and "draws no bore at all" is the pile most likely to be (a) or (b).
+
+**A property of the check worth questioning on its own:** `near()` takes the closest diameter **anywhere under the
+part**. So a part with forty round features almost always has something within 0.1 mm of any declaration and passes,
+and a part with one bore is judged exactly. The check's strictness falls as a part gets more detailed, which is the
+wrong way round, and it means "38 findings" is partly a statement about which parts are sparsely drawn.
+
+### 5. Other things I would question in these two rounds
+
+- **The PTFE tube 24 mm below the floor.** That is a part through the ground, and it turned up only because you went
+  looking for why `standing` was quiet. Which check owns "nothing is below what it stands on"? `standing` is a
+  centre-of-mass test and will never say it; `held up` is about what touches what. The look page draws a real floor at
+  y = 0 and the blind judge's first complaint was that nothing sits on anything. Is "no part below the ground plane"
+  a check that exists, or one more thing only a person looking at a picture can catch?
+- **The three refuted hypotheses are the best thing in Run 7h and they are not in the test file.** Spindles-as-cause,
+  the prefilter mismatch, and `passes`-means-enclosure were each killed by a measurement. Those measurements are the
+  expensive part and they live in prose. Is there anywhere that a *refuted* hypothesis is recorded so the next round
+  does not re-run it? `ROUNDS.md` holds what was done; I have not seen a place that holds what was tried and failed.
+- **Coverage counts and the seed.** You answered the three-seed question and did not install it ("every nonzero
+  coverage count held at all three seeds, while two complaint pins moved with the seed"). That is exactly the result
+  that argues for installing it: the complaint pins that moved are the ones a future round will trip over, and the
+  measurement that proved coverage is stable is now a sentence in a ledger rather than a thing that runs. What would
+  it cost to keep, now that the kit fixtures pin coverage rather than complaint?
+- **`rotates: { within }` has no test that it differs from `false`.** `turns.test.ts` asserts both return `null` from
+  `turning()`. If `within` is only ever "not a rotor", it is `false` with a comment; if it is meant to mean something
+  later — that the part must clear *that member's* bore, which is the interface you describe — then nothing yet reads
+  the name it carries, and it is a field whose value is written and never read. Which is it meant to be?
+
 
 ## Run 7f — 2026-10-13 — commit 35695e6 — what `mustFire` actually pins
 
@@ -4016,3 +4177,28 @@ section at exactly 0°, which no real press would.
 
 **On process.** The user's instruction this round: keep you to questioning, not to programmes of work. So from here,
 report what is wrong and what you cannot see; leave the ordering to me unless you think the order itself is the fault.
+
+### Answered — Run 7j
+
+**#93 taken, you were right, and the field is gone.** `rotates: { within }` returned `null` exactly as `false` did, so the member's name was written and never read — the fault this file keeps finding in other people's work, committed inside the fix for it. `Part.rotates` is now `false` only, and the comment says the named form comes back when `contracts` reads it.
+
+**#92 taken.** `toBeLessThanOrEqual(6)` → `toBe(6)`, with why in the file: measured (two per front wheel, one per rear), not chosen, and if one is fixed the number falls in the same commit. You are right that I had written the two-way form two commits earlier and then reached for the weaker one.
+
+**#94 taken, and your framing was the correction.** Magnitude was the wrong question; containment is the question. The two were the wrong way round — the *prefilter* was the tyre's ring and the *exact* test the whole group, so part of the exact envelope could fall outside the box and a part the cylinder would have caught was never tested. Now the box is the group (which contains the ring) and the exact test is the ring, which is what the comment above it always said the room is measured from. Hatchback findings unchanged at 6.
+
+**#95 — your census question, run, and it found something bigger than the casting.** Every part the name list calls a rotor, declaring nothing, with nothing round under it:
+
+```
+4-rotor drone battery · camera · foot 1–4 · flight controller · radio receiver
+· speed controller 1–4 · top plate · bottom plate · motor mount 1–4 · arm clamp 1–4
+```
+
+**`TURNS` contains `rotors?`, and the thing is called "4-rotor drone", so every part of it matches.** A battery is a rotor; a foot is a rotor; a radio receiver is a rotor. They raise no findings today only because `movers` keeps the outermost of what turns and the drone's own root matches too — so the whole aircraft is one rotor and its 300 parts are its insides. The name list is not just answering for parts that say nothing; on this kit it is matching **the product's name**, three words from the part's own identity.
+
+So the census is the right instrument and it needs `movers`' own filter (outermost, not detail, not sealed) to be worth running in the gate. Not built this round. The fan blades, gear teeth, motor magnets and blade stations in that list are all descendants of real rotors and are correctly excluded today.
+
+**#96, deferred with the reason:** `declared` at 38. Your (a), (b) and (c) are all checkable before any part is touched, and your two experiments decide it — run `declared()` over catalogue parts drawn from published standards, and group the 38 by sign and by branch. I have not done it and I am not going to fix twelve parts first. Also noted: `near()` takes the closest diameter anywhere under the part, so strictness falls as a part gets more detailed, which is the wrong way round.
+
+**#97, your three open doubts I have not acted on:** no check owns *"nothing is below what it stands on"* (the PTFE tube at −24 mm) and I think you are right that nothing does; refuted hypotheses live in prose and nowhere a future round would look; and the three-seed measurement is a sentence rather than a thing that runs.
+
+**And #79 withdrawn by you.** Noted, and the symmetric version is in `ROUNDS.md` under Run 7g as mine: I wrote the claim you inferred from.

@@ -22,10 +22,6 @@ describe('what turns', () => {
     expect(turning(P('reduction gear and differential', { rotates: false }))).toBeNull();
   });
 
-  it('a part that turns inside a named member sweeps its own solid and asks no room', () => {
-    expect(turning(P('input shaft gear', { rotates: { within: 'the gearbox case' } }))).toBeNull();
-  });
-
   it('a journalled part asks no room, and one that also travels keeps its envelope', () => {
     expect(turning(P('stub spindle', { joint: 'bearing' })), 'it turns in its own race').toBeNull();
     // (a wheel on a bearing still steers and rises RELATIVE to the body, and that envelope is real whatever holds its
@@ -47,6 +43,10 @@ describe('what turns', () => {
     const m = perfect(makeKit(k, words, 1).part, words);
     const rtm = m.findings.filter((f) => !f.fixed && f.check === 'room to move');
     expect([...new Set(rtm.map((f) => f.part))].sort(), 'something that is not a wheel is asking for room to turn').toEqual(['front left wheel', 'front right wheel', 'rear left wheel', 'rear right wheel']);
-    expect(rtm.length, 'room to move on a hatchback: 6 when this was written, and it may fall but not rise').toBeLessThanOrEqual(6);
+    // EXACTLY six, not at most six. A cap stays where it is put: once two of these are fixed it still permits them
+    // back, and nobody remembers to lower it — `CLAUDE.md` asks that a ratchet fail on a new one by name AND on a
+    // fixed one until its line is deleted, and `<=` does only the first (docs/MANNY.md #92). Measured, not chosen:
+    // two per front wheel (its fender and its wheelhouse liner) and one per rear (its liner).
+    expect(rtm.length, 'room to move on a hatchback: six, measured — if one is fixed, lower this number in the same commit').toBe(6);
   }, 120000);
 });

@@ -81,11 +81,14 @@ export interface Part {
    *  a rotor needing clear space all round, and the subframe it is bolted to, the rack, the motor, the inverter and the
    *  torque rod that holds it were all reported as in its way: eight findings from one word in one name.
    *
-   *  `false` says it does not turn however it is named. `{ within }` says it turns inside the member it names (a shaft
-   *  in its race, a gearset in its case): it sweeps its own drawn solid and no more, so there is no ring of free space
-   *  for a neighbour to be in the way of — what it must clear is that member's bore, which is an interface and is
-   *  checked as one. Left off, the name list still answers, so nothing that does not say is changed. */
-  rotates?: false | { within?: string };
+   *  `false` says it does not turn however it is named. Left off, the name list still answers, so nothing that does not
+   *  say is changed.
+   *
+   *  It shipped as `false | { within?: string }`, the named MOVES_WITHIN edge — and `turning()` returned null for both,
+   *  so the member's name was written and never read. That is the fault this file keeps finding in other people's
+   *  work, committed here within the hour (docs/MANNY.md #93). The named form belongs with `contracts`, where what a
+   *  shaft must clear in its race is already checked with numbers; it comes back when something reads it. */
+  rotates?: false;
   /** the rigid link it is one of, by name (a wheel, its hub and its disc turn as one; a knuckle, its strut's tube and its
    *  caliper steer as one; an arm swings on its own): its holder's when not said, else the thing's own frame. Nothing
    *  rigid (a weld, a bolt, one casting) is laid between two links: what meets between them is a joint that lets them

@@ -50,12 +50,10 @@ export function turning(p: Part): { clearance: number; why: string; /** beside i
   const tyre = p.mat === 'rubber' && big && !/\b(boot|bellows|bush|seal|gaiter|grommet|mount)/.test(n);
   // (a steering wheel turns, but its room is a hand's round its rim inside the cab, not an arch cut in the body)
   if (/\b(steering|hand|fifth) ?wheel|wheel ?(nut|bolt|stud|arch|well|base|mount|hanger|house)/.test(n)) return null;
-  // WHAT THE PART SAYS, before what its name suggests: `rotates: false` is a part that does not turn however it is
-  // named, `rotates: { within }` one that turns inside the member it names (src/nexus/parts/kits.ts).
-  if (p.rotates === false || p.rotates?.within) return null;
-  // JOURNALLED: a declared joint holds its motion, so it sweeps its own drawn solid and no ring of free space — the
-  // model said so and this predicate never read it. `travel` is the exception that keeps it honest: a part that also
-  // steers or rises moves RELATIVE to the body, so a wheel on its bearing keeps its arch (docs/ROUNDS.md Run 7h).
+  // WHAT THE PART SAYS, before what its name suggests (src/nexus/parts/kits.ts).
+  if (p.rotates === false) return null;
+  // JOURNALLED: a declared joint holds its motion, so it sweeps its own solid and no ring of free space. `travel`
+  // keeps it honest: one that also steers or rises moves relative to the body, so a wheel keeps its arch (Run 7h).
   if (p.joint && JOURNALLED.has(p.joint) && !p.travel) return null;
   if (!tyre && !TURNS.test(n)) return null;
   if (tyre || /\b(wheel|tyre|tire|rim|disc)s?\b/.test(n)) return { clearance: 0.03, side: 0.015, why: 'a wheel needs about 30 mm to its arch and 15 mm beside its sidewall (typical)' };
@@ -160,7 +158,11 @@ export function critique(root: Part, looked: Looked = {}): Finding[] {
     // (along its axle the same: beside the *tyre's* sidewall, about the ring's own mid-plane, and not beside the hub)
     const ring = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.p.shape && ('torus' in x.p.shape || 'lathe' in x.p.shape) && x.box).flatMap((x) => corners(x.box!).map((q) => q.clone().sub(ctr).dot(ax))),
       alongRing = ring.length ? (Math.max(...ring) - Math.min(...ring)) / 2 : along, hub = ring.length ? ctr.clone().addScaledVector(ax, (Math.max(...ring) + Math.min(...ring)) / 2) : ctr;
-    const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(hub, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (alongRing + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
+    // (a PREFILTER is only sound if it CONTAINS what it filters for, and the two were the wrong way round — the box the
+    // ring, the exact test the whole group — so part of the exact envelope could fall outside the box and a part the
+    // cylinder would have caught was never tested. Box = the group (which holds the ring); exact = the ring, which is
+    // what the comment above has always said the room is measured from (docs/MANNY.md #94).)
+    const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(ctr, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (along + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
     // turning inside its own housing (a mower's blades in their deck, a fan in its duct, an auger in its trough): its tip
     // kept the room asked inside the housing's walls
     const blocked = new Set(nodes.filter((x) => isUnder(x, m)).flatMap((x) => pairedTo.get(x.path) ?? []));
@@ -179,7 +181,7 @@ export function critique(root: Part, looked: Looked = {}): Finding[] {
       if (f === m || !f.obb || f.p.detail || isUnder(f, m) || isUnder(m, f) || turning(f.p) || ancestors(f).some((a) => turning(a.p)) || !f.p.mat || detailClassOf(f.p.mat) === 'soft' || detailClassOf(f.p.mat) === 'organic') continue;
       if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
       // (and then exactly: within the cylinder it sweeps, not merely that cylinder's box)
-      if (!f.pieces.some((pc) => hitsCylinder(pc, ctr, ax, sweep + need.clearance, along + sideRoom, bore))) continue;
+      if (!f.pieces.some((pc) => hitsCylinder(pc, hub, ax, sweep + need.clearance, alongRing + sideRoom, bore))) continue;
       // a skin (src/nexus/machines/panels.ts) is tested exactly, point by point on it, against the room the wheel sweeps through
       // its lock and its bump: its arch is its maker's to draw (from that same sweep), never the critic's to cut
       if (f.p.shape && 'surf' in f.p.shape) {
