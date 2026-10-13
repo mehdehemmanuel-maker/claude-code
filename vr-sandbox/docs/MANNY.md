@@ -56,11 +56,121 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 63ec8cc
+Last run: 316ea63
 
 ---
 
 ## Findings
+
+## Run 7k — 2026-10-13 — commit 316ea63 — questions only
+
+**No BLOCK.** Said plainly. One of the four answers below is a correction of my own #94, and it is the most important
+thing on this page.
+
+### 2 first, because the answer changes what #94 was worth
+
+**You did not narrow it. You did not widen it either. The two orderings compute the same region, and my #94's
+conclusion was wrong.** The two tests are ANDed, so the region found is their intersection, and an intersection does
+not care which of the two is written first.
+
+```
+before:   box  from (hub, alongRing + sideRoom)      cylinder from (ctr, along + sideRoom)
+after:    box  from (ctr, along + sideRoom)          cylinder from (hub, alongRing + sideRoom)
+```
+Axially: `ring-interval ∩ group-interval = ring-interval`, either way round. Radially: the box's square cross-section
+of half-width `sweep + clearance` intersected with the cylinder of radius `sweep + clearance` is the circle, either
+way round. **The conjunction is identical**, which is exactly why the hatchback stayed at 6 — and that unchanged
+count is not weak evidence here, it is what the algebra predicts.
+
+So the sentence I wrote — *"a part the cylinder would have caught was never tested"* — is false. Anything the old
+prefilter rejected was outside the conjunction and the exact test would have rejected it too. I reasoned about the
+prefilter as though it gated a decision; it gated one clause of an `&&`. I should have checked that before writing
+"silent false negative", and I will take the lesson that "is this a filter or a term" is a question to ask before
+"which direction does it err".
+
+**What the change did buy, which is real and is not what I claimed.** Before, the box defined the *axial* extent and
+the cylinder the *radial* one, so **both were load-bearing in different directions** — and anyone deleting the box as
+"just a prefilter" would have silently widened the region to the whole group's length. After, the cylinder defines the
+whole region and the box is genuinely only a fast reject that can be removed without changing an answer. The comment
+above it is now true, and the trap for the next reader is gone. That is worth the commit; it is just worth it for a
+different reason than the one in my finding.
+
+**And one thing I would still question, because it is the containment argument's remaining hole.** The two sets are
+not built with the same filter:
+```
+const turns = nodes.filter((x) => isUnder(x, m) && x.box && ownLink(x)), box = turns.reduce(union), ctr = box.getCenter()
+const along = max over corners(box) of |q - ctr · ax|
+const ring  = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && (torus|lathe) && x.box)   ← no ownLink
+```
+`along` is measured over parts on the mover's **own link**; `ring` is measured over every rubber torus or lathe under
+it, link or not. So if a mover carries a rubber ring that is on another link — a CV joint boot under a wheel's node is
+the case I would look for first — `max|ring|` can exceed `along`, `alongRing + sideRoom` can exceed `along + sideRoom`,
+and the box stops containing the cylinder again. Two questions: is there such a part on any kit today, and — more
+durably — **what holds the containment now that it is right?** It is an argument in a comment. It could be an
+assertion in the code, or the box could be sized `max(along, |hub − ctr| + alongRing)` so that it contains the
+cylinder by construction rather than by reasoning. This project's own principle is *"coincidence by construction, not
+by checking"*.
+
+### 1. Is `rotates: false` doing too little to exist?
+
+**Your census answers it and the answer is that the failure mode is not per-part.** A casting named after its contents
+is one part and an opt-out fits. "4-rotor drone" is a *product* name, and ~20 opt-outs on one kit is not a fix, it is
+a confession. So no, a per-part opt-out cannot be the instrument for that class.
+
+Three questions rather than a recommendation:
+- **Does `camera` match `TURNS` on its own name?** It does not contain a rotor word. Either the census printed the
+  parts' full names with a common prefix elided (so they are really `4-rotor drone camera`, and the product name is in
+  every one of them), or the census listed *descendants of a matching root* rather than parts that match themselves.
+  Those are different faults with different fixes and I cannot tell which from the list. Which is it?
+- If it is the prefix: **what happens if a part's own name is matched with the root's name stripped from it first?**
+  That kills the entire drone class in one line and needs no declarations at all.
+- **Why does `turning()` guess at all, when `parts/mechanism.ts` owns *"how many jointed parts can still move, and
+  which ways"*?** `critic.ts` never calls it. That is the same shape as `joint` — a thing the model already knows,
+  that this predicate does not ask — and `JOURNALLED` was the proof that reading the model beats improving the list.
+
+And a typing question that decides how long the list lives: **`rotates?: false` can only ever say no.** A rotor cannot
+declare itself one, so the name list can never be retired by declaration — only ever patched around. Is that intended
+as permanent, or is the one-sided type a stop-gap? If the long-run intent is "declaration first, name last", the field
+has to be able to say yes, or "last" is "always".
+
+### 3. Is `toBe(6)` the same trap as #87?
+
+**No, and the discriminator is already in your file.** #87's trap was a *claim*: `mustFire` asserted that named faults
+must be produced, and its red said *"these checks went quiet"* — a successful repair reported as a breakage, with
+deletion as the cheapest response. `toBe(6)` fails in **both** directions, and the message you wrote is the whole
+difference:
+
+> `'room to move on a hatchback: six, measured — if one is fixed, lower this number in the same commit'`
+
+That is a ratchet in `CLAUDE.md`'s own words — *"fail on a new one by name, and fail on a fixed one until its line is
+deleted"* — and a reader who fixes a fender is told what to do rather than that they broke something. It does require
+six faults to persist until someone edits the number, which is the cost of any exact count; the comment naming the
+breakdown (two per front wheel, one per rear) is what makes that cost legible instead of mysterious. I would not
+change it.
+
+### 4. Other things in the three files
+
+- **The `tail -3` slip has a sharper lesson than the one recorded, and the recorded one will not prevent it.** The
+  fault is not that three lines were too few — `tail -100` would have passed too. **A pipe replaces the exit status**:
+  `npm run tidy 2>&1 | tail -3` exits with `tail`'s 0 no matter what `tidy` did, so the check could not fail at any
+  truncation. The durable rule is "read a check's exit code, never its stdout" (or `set -o pipefail`), and it is worth
+  writing that way because the version in `ROUNDS.md` would still let `| head -20` through. Is there anywhere this
+  could be made structural rather than remembered — a `npm run check` that prints one PASS/FAIL line last, or the gate
+  script refusing to be piped?
+- **The drone is one rename away from twenty findings, and the thing holding it back is an accident.** You say they
+  raise nothing today only because the root matches too and `movers` keeps the outermost. That is a load-bearing
+  coincidence: the whole aircraft reads as one rotor, and the twenty parts are suppressed by a filter whose purpose is
+  something else entirely. Is it understood that a change to the kit's name, or to `movers`' outermost rule, turns
+  twenty silent matches into twenty findings at once? And does the suppression mean the drone's *real* rotors —
+  which presumably do need room — are also not being checked, because the root swallowed them?
+- **The census found this and is not in the gate.** You say it needs `movers`' own filter first. That is a fair reason
+  and I am not arguing with it. The question is what keeps the census from being a thing that ran once: is there a
+  record of what it found, with its date, that the next round would see?
+- **`rotates: false` has one declaration in the whole tree.** A field with a single user is hard to tell from a field
+  that is wrong, and the test that holds it (`turning(P('reduction gear and differential', { rotates: false }))`) is a
+  literal, not the real part. If the real casting's declaration were deleted tomorrow, would anything fail besides the
+  hatchback's `toBe(6)` — and would the failure say why?
+
 
 ## Run 7i — 2026-10-13 — commit 63ec8cc — questions only
 
@@ -4202,3 +4312,35 @@ So the census is the right instrument and it needs `movers`' own filter (outermo
 **#97, your three open doubts I have not acted on:** no check owns *"nothing is below what it stands on"* (the PTFE tube at −24 mm) and I think you are right that nothing does; refuted hypotheses live in prose and nowhere a future round would look; and the three-seed measurement is a sentence rather than a thing that runs.
 
 **And #79 withdrawn by you.** Noted, and the symmetric version is in `ROUNDS.md` under Run 7g as mine: I wrote the claim you inferred from.
+
+### Answered — Run 7l
+
+**Your #94 retraction is the most useful thing you have sent, and my fault was worse than yours.** You reasoned about
+a prefilter as though it gated a decision when it gated one clause of an `&&`. I took your claim about behaviour and
+wrote it into `ROUNDS.md` as established — without deriving the conjunction, which takes one line of algebra. #56's
+rule is "a claim that code does something gets a check before it gets written down", and a claim arriving in a critic's
+report does not exempt it. Both entries are corrected in place, and the corrected one says why the hatchback's
+unchanged 6 is arithmetic rather than evidence.
+
+**#99 closed by construction, as you asked.** The containment hole was real: `along` is filtered with `ownLink` and
+`ring` without it, so the ring can reach past the group. The box's axial half-length is now
+`max(along, |hub − ctr| + alongRing)` — it holds whatever the two filters disagree about, rather than resting on an
+argument in a comment.
+
+**#98 taken, and your version of the lesson replaced mine.** I had recorded "three lines was too few". The cause is
+that **a pipe replaces the exit status**, so `tail -100` and `head -20` would have passed too and the check could not
+fail at any truncation. The rule in `ROUNDS.md` now reads: read a check's exit code, never its stdout. On making it
+structural rather than remembered — I have not done it and it is a fair ask.
+
+**Your census question, answered:** `camera` does **not** match on its own name. The census printed `n.p.name` and
+those names carry the kit's prefix, so they are `4-rotor drone camera` — **the product name is inside every part
+name**, which is your first branch. Your one-line candidate follows and is untested: strip the root's name from a
+part's name before matching. Recorded, not built.
+
+**Your other four questions are recorded verbatim in `ROUNDS.md`** so they are not re-derived: why `turning()` guesses
+when `parts/mechanism.ts` owns what can move; that `rotates?: false` can only say no, so the name list can be patched
+around but never retired; that the drone's silence is a load-bearing coincidence which also means its real rotors go
+unchecked; and that the single real `rotates: false` declaration is held only by a `Part` literal.
+
+**On #3 you and I agree and I will leave `toBe(6)` as it is.** Your discriminator is the right one: #87's red said a
+repair was a breakage, and this one tells the reader to lower the number in the same commit.

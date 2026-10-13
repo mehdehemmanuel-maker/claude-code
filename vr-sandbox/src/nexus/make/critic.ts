@@ -158,11 +158,11 @@ export function critique(root: Part, looked: Looked = {}): Finding[] {
     // (along its axle the same: beside the *tyre's* sidewall, about the ring's own mid-plane, and not beside the hub)
     const ring = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.p.shape && ('torus' in x.p.shape || 'lathe' in x.p.shape) && x.box).flatMap((x) => corners(x.box!).map((q) => q.clone().sub(ctr).dot(ax))),
       alongRing = ring.length ? (Math.max(...ring) - Math.min(...ring)) / 2 : along, hub = ring.length ? ctr.clone().addScaledVector(ax, (Math.max(...ring) + Math.min(...ring)) / 2) : ctr;
-    // (a PREFILTER is only sound if it CONTAINS what it filters for, and the two were the wrong way round — the box the
-    // ring, the exact test the whole group — so part of the exact envelope could fall outside the box and a part the
-    // cylinder would have caught was never tested. Box = the group (which holds the ring); exact = the ring, which is
-    // what the comment above has always said the room is measured from (docs/MANNY.md #94).)
-    const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(ctr, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (along + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
+    // (box ∧ cylinder: the cylinder is the region, the box a removable fast-reject. It used to set the AXIAL extent
+    // while the cylinder set the radial one — both load-bearing, so deleting "just the prefilter" would have widened
+    // the region to the group's length. `reach` makes the box CONTAIN the cylinder by construction, since `ring` is
+    // filtered without `ownLink` where `along` is filtered with it (#99).
+    const sideRoom = need.side ?? need.clearance, reach = Math.max(along, Math.abs(hub.clone().sub(ctr).dot(ax)) + alongRing), env = new THREE.Box3().setFromCenterAndSize(ctr, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (reach + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
     // turning inside its own housing (a mower's blades in their deck, a fan in its duct, an auger in its trough): its tip
     // kept the room asked inside the housing's walls
     const blocked = new Set(nodes.filter((x) => isUnder(x, m)).flatMap((x) => pairedTo.get(x.path) ?? []));

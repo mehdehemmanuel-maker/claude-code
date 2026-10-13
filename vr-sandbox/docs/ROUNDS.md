@@ -2000,12 +2000,11 @@ was right and each was small:
   them back. `CLAUDE.md` asks a ratchet to fail on a new one by name **and** on a fixed one until its line is deleted;
   `<=` does only the first. Now `toBe(6)`, with "measured, not chosen" and the breakdown in the file. The two-way form
   had been written two commits earlier and then not reached for.
-- **The prefilter: containment, not magnitude.** I had looked at the 1 mm difference and left it. The question is
-  whether the box *contains* the cylinder it filters for, and the two were the wrong way round — the box was the
-  tyre's ring (`hub`, `alongRing`), the exact test the whole group (`ctr`, `along`), so where the ring sits outboard
-  enough part of the exact envelope falls outside the box, the `continue` fires, and a part the cylinder would have
-  caught is never tested. Fixing it by making the box the group threw away the ring distinction the comment asks for;
-  the right shape is box = group (which contains the ring), exact = ring. Hatchback findings unchanged at 6.
+- **The prefilter: containment, not magnitude** — *and the conclusion below was wrong, corrected in Run 7l.* I had
+  looked at the 1 mm difference and left it, which was the wrong question; the right one is whether the box *contains*
+  the cylinder. The two were the wrong way round (box = the tyre's ring, exact = the whole group), so the shape
+  shipped is box = group, exact = ring. Hatchback findings unchanged at 6 — **and that is what the algebra predicts,
+  not weak evidence**: see Run 7l.
 
 ### The census he asked for, run once, and it found something bigger than the casting
 
@@ -2042,9 +2041,60 @@ Three of his doubts stand unacted: no check owns *"nothing is below what it stan
 −24 mm); refuted hypotheses live in prose where no future round would look for them; and the three-seed result is a
 sentence rather than a thing that runs.
 
-**A process slip in this round worth more than its cost.** `critic.ts` crossed its 860 ratchet again on the comment
-explaining the prefilter fix, and I "verified" tidy with `npm run tidy 2>&1 | tail -3` — which prints the duration and
-cuts off the failure summary, so it passed while the gate failed on it four minutes later. A check piped through
-`tail -3` is a check that cannot fail, which is the fault this whole week has been about, committed against my own
-tooling. Verify with a filter that would show the failure (`grep -E "Tests|lines, allowed"`), not one that shows the
-last three lines.
+**A process slip in this round worth more than its cost — and the lesson I first wrote for it was the wrong one.**
+`critic.ts` crossed its 860 ratchet again on the comment explaining the prefilter fix, and I "verified" tidy with
+`npm run tidy 2>&1 | tail -3`, which passed while the gate failed on it four minutes later. I recorded the cause as
+"three lines was too few, use a filter that would show the failure". **That is not the cause.** `tail -100` would have
+passed too, and so would `| head -20`: **a pipe replaces the exit status**, so the command exits with `tail`'s 0
+whatever `tidy` did. The check could not fail at *any* truncation. The durable rule is **read a check's exit code,
+never its stdout** — or `set -o pipefail` before piping one. A lesson that names the wrong cause is worse than none,
+because it feels learned (docs/MANNY.md #98).
+
+## Run 7l — the critic corrects himself, and I had repeated his error as fact
+
+Manny returned no BLOCK on 7j and the most valuable item on his page was a retraction of his own #94, which I had
+already shipped and written into this file as established.
+
+**The two tests are ANDed, so swapping which quantity each uses did not change the region at all.**
+
+```
+before:  box (hub, alongRing + sideRoom)  ∧  cylinder (ctr, along + sideRoom)
+after:   box (ctr, along + sideRoom)      ∧  cylinder (hub, alongRing + sideRoom)
+```
+
+Axially, ring-interval ∩ group-interval = the ring either way; radially, the square of half-width `sweep + clearance`
+∩ the circle of that radius = the circle either way. **The conjunction is identical** — which is why the hatchback
+stayed at 6, and that count was not weak evidence, it was the arithmetic. So the sentence *"a part the cylinder would
+have caught was never tested"*, his and then mine, is **false**: anything the old box rejected was outside the
+conjunction and the cylinder would have rejected it too. His own diagnosis of the mistake: *ask whether a thing is a
+filter or a term before asking which direction it errs.* Mine is worse than his, because I took a claim about
+behaviour from a report and put it in the ledger without deriving it.
+
+**What the commit actually bought, which is real.** Before, the box set the *axial* extent and the cylinder the
+*radial* one — **both load-bearing in different directions** — so anyone deleting the box as "just a prefilter" would
+have silently widened the region to the group's whole length. Now the cylinder is the region and the box is a genuinely
+removable fast-reject. Worth the commit, for a different reason than the finding gave.
+
+**And his remaining hole, closed by construction.** `along` is measured over nodes filtered with `ownLink`; `ring` is
+filtered **without** it, so a mover carrying a rubber ring on another link can reach past the group and the box stops
+containing the cylinder. The containment was an argument in a comment. It is now arithmetic: the box's axial
+half-length is `max(along, |hub − ctr| + alongRing)`, so it holds whatever the two filters disagree about — the
+project's own rule, *coincidence by construction, not by checking*.
+
+### Standing questions of his I have not answered, recorded so they are not re-derived
+
+- **Does `camera` match `TURNS` on its own name?** No — the census printed `n.p.name` and the names carry the kit's
+  prefix, so they are `4-rotor drone camera` and the **product name is inside every part name**. His one-line
+  candidate follows from that and is untested: match a part's name with its root's name stripped from it first, which
+  would kill the whole drone class with no declarations at all.
+- **Why does `turning()` guess when `parts/mechanism.ts` owns "how many jointed parts can still move, and which
+  ways", and `critic.ts` never calls it?** Same shape as `joint` was, and `JOURNALLED` is the proof that reading the
+  model beats improving the list.
+- **`rotates?: false` can only ever say no.** A rotor cannot declare itself one, so the name list can be patched
+  around but never retired. If the intent is "declaration first, name last", the field has to be able to say yes,
+  or "last" means "always".
+- **The drone's silence is a load-bearing coincidence.** Twenty matches are suppressed only because the root matches
+  too and `movers` keeps the outermost. A rename, or a change to that rule, turns them into twenty findings at once —
+  and the same suppression means the drone's *real* rotors are not being checked either.
+- **`rotates: false` has one declaration in the tree** and the test that holds it uses a `Part` literal. Deleting the
+  real one would fail only the hatchback's `toBe(6)`, and not say why.
