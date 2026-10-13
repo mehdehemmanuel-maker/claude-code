@@ -114,3 +114,10 @@ export function searchCatalogue(q: string, n = 20): string[] {
   for (const l of catalogue()) { const low = l.toLowerCase(); let s = 0, whole = 0; for (const w of ws) if (low.includes(w)) { s += w.length; if (toks(l).some((t) => t === w || t.startsWith(w))) whole += w.length; } if (s >= ws.join('').length * 0.75) scored.push([l, s + whole - low.length / 100]); }
   return scored.sort((a, b) => b[1] - a[1]).slice(0, n).map(([l]) => l);
 }
+
+/** Forget EVERY cache the catalogue keeps, so the next call builds it from nothing. For a timing test only.
+ *  `catalogue()` memoises the whole list in `lines` AND each family's in `byFamily`, so a reading taken after any
+ *  earlier call measured a map lookup: three readings came out 98.176, 0.005, 0.001 ms, and `best < 200` could not
+ *  fail at any speed. Clearing `lines` alone was not enough either - the rebuild came out at 2.9 ms, because every
+ *  family was still cached - which is the same dodge wearing a smaller number (docs/MANNY.md #39). */
+export const forgetCatalogue = (): void => { lines = null; byFamily.clear(); made.clear(); };

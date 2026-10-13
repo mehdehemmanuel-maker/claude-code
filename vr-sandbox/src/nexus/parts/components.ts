@@ -1319,14 +1319,6 @@ export function component(words: string): Component | string {
   if (!r || typeof r === 'string') out = r ?? `"${words}" is not a part any family makes.`;
   else if (!r.sized || !DESIGNS[r.sized.family]) out = `${r.name} is known (${r.path.join(' / ')}) but not drawn yet: its family has no design.`;
   else out = byItem.get(r.id) ?? designed(r, words);
-  // Words the family could not place travel with the WORDS, not with the item: "rail MGN12 400" and
-  // "rail MGN12 400 that carries two Unitree Z1 Air arms" resolve to the same 400 mm rail and the same component,
-  // and only the second asked for something it did not get. `designed` builds `says` from the item, so the warning
-  // `callFamily` now writes was being dropped here - the part drew, said nothing, and every tool downstream reported
-  // a successful draw of an ask eleven words of which had been discarded. So it is put back on a COPY, keyed by the
-  // words in `kept`, leaving the shared per-item component clean.
-  const warn = typeof r !== 'string' && r?.says?.startsWith('NOT ALL THE WORDS ASKED') ? r.says.slice(0, r.says.indexOf('. ') + 1) : '';
-  if (warn && typeof out !== 'string') out = { ...out, part: { ...out.part, says: `${warn} ${out.part.says}` } };
   kept.set(k, out); return out;
 }
 /** The component an item is drawn as, by its id (an item made to sizes by a family the library draws, in the inventory or

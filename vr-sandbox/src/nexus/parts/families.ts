@@ -632,22 +632,24 @@ export function callFamily(words: string): Item | string | null {
   // This SAYS rather than refuses, which is deliberate: a refusal here would change what thousands of catalogue calls
   // return, and the fault being fixed is silence, not leniency. The sentence goes at the front of `says`, where the
   // renderer, the look page and `manny-see` already carry it to whoever is looking at the picture.
-  const placed = new Set<string>();
-  for (const v of Object.values(p)) placed.add(String(v).toLowerCase());
-  const unplaced = sizes.split(/[\s,]+/).filter(Boolean).filter((w) => {
-    const l = w.toLowerCase().replace(/[^\w.\-/]+$/, '');
-    if (!l || placed.has(l)) return false;
-    // a token carrying a number the reading used is placed by it ("m8x30" against 8 and 30, "l240" against 240)
-    const ns = l.match(/\d+(?:\.\d+)?/g) ?? [];
-    if (ns.length && ns.every((n) => placed.has(String(Number(n))))) return false;
-    return !/^(?:mm|cm|m|in|inch|inches|x|by|\u00d7|of|the|a|an|and|with|its)$/.test(l);
-  });
-  const made = f.make(p);
-  return {
-    ...made,
-    ...(unplaced.length ? { says: `NOT ALL THE WORDS ASKED: I could not place "${unplaced.join(' ')}". ${made.says}` } : {}),
-    sized: { family: f.id, params: p },
-  };
+  // WORDS THE READING COULD NOT PLACE: tried, measured, and taken out again. `f.read` keeps what it recognises and
+  // says nothing about the rest, so a sentence arriving at a part door ("rail MGN12 400 that carries two Unitree Z1
+  // Air arms over a 6 m span") resolves to a 400 mm rail with eleven words discarded in silence. A warning for that
+  // was written here and withdrawn, because three rules for "which words did the reader use" each failed for a
+  // DIFFERENT structural reason, and the count of the catalogue's own lines it cried wolf on is the measurement:
+  //   - comparing whole tokens against whole param values  -> 14,179 of 63,696 (22.3 %): `4` is not `m4`, so every
+  //     `screw M4x20` was flagged, and so was `belt GT2 400 15mm`, the string the machine composer itself orders;
+  //   - stripping the used values out of each token          -> 50,891: a designation's letters ARE the standard's
+  //     name wrapped round a placed number (`LM3UU`, `gear … z12 b5`), and no rule about a token's shape sees that;
+  //   - reading the words again without each token           -> 2,426 even once the claim was limited to a phrase of
+  //     three or more: a token whose value equals the reader's DEFAULT looks unused, so `belt GT2 1000 6mm` reported
+  //     it could not place `1000`.
+  // The information needed is which token filled which axis, and only the reader knows it. `kinds/core.ts` records it
+  // structurally (`used.add(i)`) and refuses the leftovers correctly; the hand-written families do not record it, and
+  // nothing downstream can reconstruct it. So the honest fix is to make the families record it, not to guess from
+  // outside — docs/MANNY.md #35. An alarm that fires on a fifth of the library teaches its reader to ignore it, which
+  // costs the real ones too, and that is worse than no alarm at all.
+  return { ...f.make(p), sized: { family: f.id, params: p } };
 }
 // a kind's parts made to their own sizes are called by their families' words
 useFamilies(callFamily);

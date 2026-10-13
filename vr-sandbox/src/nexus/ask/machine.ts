@@ -154,7 +154,7 @@ export function turnAxis(ratio = 3): Unit {
   const widest = perStage.reduce((a, x) => Math.max(a, x.width ?? top), 6);
   const beaten = perStage.filter((x) => x.width === null);
   const cannot = beaten.length
-    ? `this reduction cannot be made of GT2 belt: stage${beaten.length === 1 ? '' : 's'} ${beaten.map((x) => perStage.indexOf(x) + 1).join(', ')} want${beaten.length === 1 ? 's' : ''} ${beaten.map((x) => `${x.pull.toFixed(0)} N`).join(', ')} in the belt, and the widest GT2 this library makes (${top} mm) may work at ${beltPull(top)} N. A belt drive is the wrong part here — this is a worm or a cycloidal reducer, and neither is in the library yet, which is the finding rather than a reason to publish a torque anyway`
+    ? `this reduction cannot be made of GT2 belt: stage${beaten.length === 1 ? '' : 's'} ${beaten.map((x) => perStage.indexOf(x) + 1).join(', ')} want${beaten.length === 1 ? 's' : ''} ${beaten.map((x) => `${x.pull.toFixed(0)} N`).join(', ')} in the belt, and the widest GT2 this library makes (${top} mm) may work at ${beltPull(top)} N. A belt drive is the wrong part here: a worm set does this in ONE pair and is already in the library (kinds/motion.ts, the wormset family - "wormset m2 50:1 bronze" is a real line), so the honest answer is to order that instead of stacking belts. It is not composed in here yet, and that is the next round rather than a reason to publish a torque anyway`
     : undefined;
 
   // The bearings and the shafts follow the STAGE COUNT. Two bearings were ordered whatever the stage count, so a

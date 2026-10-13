@@ -48,18 +48,22 @@ for (const line of text.split('\n')) {
   if (kind === 'BLOCK') open.push(m[3].trim());
   else if (kind === 'SIGHT') sight.push(m[3].trim());
 }
+// BLOCK and SIGHT are reported TOGETHER. They were two `block()` calls in order, and `block()` exits, so while any
+// blocking finding was open the sight requests were never printed at all - they sat open across three commits and the
+// turn ending that did fire named four BLOCKs and said nothing about them. A gate that hides half of what it holds
+// teaches its reader that the other half does not exist (docs/MANNY.md #47).
+const parts = [];
 if (open.length) {
-  block(
+  parts.push(
     `Manny is holding ${open.length} blocking finding${open.length === 1 ? '' : 's'} open in vr-sandbox/docs/MANNY.md:\n\n` +
       open.map((o, i) => `  ${i + 1}. ${o}`).join('\n') +
       `\n\nThis turn cannot end until each one is either FIXED (then mark it [x] with the commit that fixed it) or ` +
       `ANSWERED IN WRITING (mark it [~] and write, under the finding, why it stands as it is - "already fixed", ` +
       `"does not reproduce", "out of scope because ...", "Manny is wrong because ..."). Answering is a real option ` +
-      `and Manny can be wrong; what is not an option is leaving it silent.`,
-  );
+      `and Manny can be wrong; what is not an option is leaving it silent.`);
 }
 if (sight.length) {
-  block(
+  parts.push(
     `Manny asked to be able to SEE ${sight.length} thing${sight.length === 1 ? '' : 's'} and cannot yet ` +
       `(vr-sandbox/docs/MANNY.md):\n\n` +
       sight.map((o, i) => `  ${i + 1}. ${o}`).join('\n') +
@@ -69,9 +73,9 @@ if (sight.length) {
       `and how he runs it - or ANSWERED: mark it [~] and write why that sight cannot exist here (no photo of that ` +
       `face is reachable, the figure is the maker's unpublished CAD, this network cannot run the page). ` +
       `"Not now" is not an answer; "here is the command" and "here is why it is impossible" both are. ` +
-      `If it is real work rather than a tool, build the smallest thing that lets him look, and say what is still dark.`,
-  );
+      `If it is real work rather than a tool, build the smallest thing that lets him look, and say what is still dark.`);
 }
+if (parts.length) block(parts.join('\n\n----------------------------------------------------------------\n\n'));
 
 // ---- 2. has Manny seen the current code? ----
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();

@@ -78,13 +78,23 @@ export function readMachine(words: string): MachineWant {
   // one; that shape is still the commonest way a working volume is said, so it is read here and marked as read.
   const triple = /(\d{2,4})\s*(?:mm)?\s*[x×by]\s*(\d{2,4})\s*(?:mm)?(?:\s*[x×by]\s*(\d{2,4}))?/.exec(mine);
   const lengths = ours.filter((q) => same(q.dim, LENGTH));
-  for (const q of lengths) used.add(q);
-  const masses = ours.filter((q) => same(q.dim, MASS));
+  // A RATE SAID IN WORDS is still a rate. `findQuantities` reads the unit written on the number, so "1.2 kg/h" is
+  // caught by its dimension and "1.2 kg per hour" is not - the words are three tokens apart and the quantity is a
+  // plain mass. One word of English was the whole of the difference between a rate and a payload on a carriage, and
+  // `ask/conceive.ts` has read "per hour" for a long time while this door did not.
+  const RATED = /^\s*(?:per|an?|each|every)\s+(?:hour|hr|h|minute|min|second|sec|s|day)\b/i;
+  const rate = (q: Said) => RATED.test(words.slice(q.at + q.text.length, q.at + q.text.length + 16));
+  const masses = ours.filter((q) => same(q.dim, MASS) && !rate(q));
+  // Only the lengths this machine is actually SIZED BY are marked used. Every length was marked before, which
+  // pre-blinded the set difference in the one dimension most likely to be dropped: "1.75 mm PLA on a 3 m rail" took
+  // the 1.75 mm as its travel, beat an explicit 3 m with it, and said nothing in `notDone` - because the 3 m had been
+  // crossed off as consumed by a line that consumed nothing. A check that marks its own homework is not a check.
   const mm: [number, number, number] = triple ? [Number(triple[1]), Number(triple[2]), Number(triple[3] ?? triple[2])]
     : lengths.length >= 3 ? [lengths[0]!.si * 1000, lengths[1]!.si * 1000, lengths[2]!.si * 1000]
       : lengths.length && (arrange === 'rail' || arrange === 'arm') ? [lengths[0]!.si * 1000, 300, 300]
         : lengths.length ? [lengths[0]!.si * 1000, lengths[0]!.si * 1000, lengths[0]!.si * 1000]
           : [300, 300, 300];
+  if (!triple) for (const q of lengths.slice(0, lengths.length >= 3 ? 3 : 1)) used.add(q);
   const payload = take(masses[0])?.si ?? 0;
 
   // ---- what the ask said that nothing here consumed --------------------------------------------------------------

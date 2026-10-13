@@ -183,16 +183,11 @@ const drew = [...reported.matchAll(/"name":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[
 // two different silences, both of which used to end in a confident picture: the library made NOTHING of the words
 // and drew its family's example, or it made SOMETHING and threw the rest of the sentence away.
 const faked = /NOT THE WORDS ASKED/.test(reported);
-const partial = /NOT ALL THE WORDS ASKED/.test(reported);
 if (drew.length) say(`\nit drew: ${[...new Set(drew)].join(' | ')}`);
 if (faked) say(`\n*** THE RENDER IS NOT OF YOUR ASK ***
 The library could not make "${words}" and drew its family's EXAMPLE PART instead. Every picture below is of that
 example, not of what you asked for. Do not judge the look of this ask from them, and do not report that you saw it.
 That the words do not reach a drawable thing is itself the finding, and a bigger one than anything in the picture.`);
-if (partial) say(`\n*** THE RENDER IS OF PART OF YOUR ASK ***
-The library made something of these words and could not place the rest - the names it dropped are in the \`says\`
-above, after "NOT ALL THE WORDS ASKED". What is drawn is the part it did resolve, at the size IT chose, which may
-contradict a size you asked for. Judge the piece in the picture, not the ask.`);
 if (!r.ok) say(`\n[look.mjs failed: ${r.why}. Any view missing below was not rendered, and you did not see it]`);
 
 const pngs = existsSync(out) ? readdirSync(out).filter((f) => f.endsWith('.png')).sort() : [];
