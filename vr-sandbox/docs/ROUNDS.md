@@ -2209,3 +2209,61 @@ expected 'vitest run tests/nexus/tidy.test.ts' to match /^node tools\/verdict\.m
 So the next check added without a verdict fails by name, which is the difference between this and a resolution.
 
 Gate: `GATE: PASS — 182.9s`, 180 files, 2116 tests.
+
+## Run 7o — the verdict line was half finished, and the half missing was a pass that could not fail
+
+Manny ran one command against the thing I had just shipped as "the edge that removes the mistake":
+
+```
+vitest run tests/nexus/tidy.test.ts -t "zzzz_no_such_test_name"
+   Test Files  1 skipped (1)
+        Tests  16 skipped (16)                exit 0   →   TIDY: PASS — 0.2s
+```
+
+**Sixteen skipped, nothing run, exit 0, and a pass with my name on it.** Same family as #39, #49 and #82: a verdict
+taken from the exit status alone cannot fail when the child does nothing. Verified before adopting.
+
+His distinction is the one I had missed and it is the whole fix: **what must never come from the child's own words is
+the VERDICT. A count is not a verdict, it is evidence** — and evidence may come from a structured artefact written to
+a path the wrapper chooses. So `verdict.mjs` now passes `--reporter=json --outputFile=<f>`, deletes `<f>` first so a
+stale count cannot be read as this run's, and says `PASS (2123 of 2123 ran)`. A test run that wrote no count is a
+FAIL, not a pass. `tsc` is asked for no count because it has no test to count, and the line says so —
+`TYPECHECK: PASS (no work counted)` — an honest hedge instead of a bare PASS.
+
+**And my first attempt at the count was the same fault again.** I read `numTotalTests`, which counts **skipped** tests,
+so the fix printed `PASS (0 of 16 ran)` on the exact run it was written to catch. What skipping cannot fake is a test
+that *passed*. Measured both ways afterwards:
+
+```
+all skipped →  FAIL (exit 0 but nothing ran: 0 of 16 tests passed, the rest skipped)   exit 1
+a real run  →  PASS (16 of 16 ran)                                                     exit 0
+```
+
+### The name list I had written straight back in
+
+The rule holding the verdict listed four script names — *which is the fault two rounds were spent taking out of
+`turning()`*. A fifth check under a new name passed it. It is now a property of the command: **a script is a check if
+it runs a verifier** (`vitest run`, `tsc --noEmit`). It caught `typecheck` on its first run — a fifth check I had
+missed while hand-listing four — and it leaves `test:watch` alone, which is `vitest` without `run`, a watcher rather
+than a check, something a name list gets right only by luck.
+
+### The bypass I built and then mandated
+
+`gate:run` held the real command, had no verdict, sat one keystroke from `npm run gate` under tab completion, **and the
+ratchet required it to exist**. The twins existed only because the commands are chains and a nested `npm run` of the twin
+was how to get a chain into one argv. `verdict.mjs` now takes several commands separated by `--`, runs them in order
+and stops at the first failure — no shell, no twin, and the clause of the lint that mandated the bypass is gone with
+it.
+
+### And nothing checked the thing every check now speaks through
+
+`tests/nexus/verdict.test.ts`, six cases: PASS, FAIL **with the child's own status passed through** (so `&&` and
+`set -e` still work), a killed child, a command that is not there, a chain stopping at the first failure, and the
+zero-run case in both directions. Each is silent when broken, because every one only shows up on a day when something
+else is already going wrong.
+
+**One residual, written down because the convention has to live where a reader meets it:** `tail` is safe now, `head`
+is not. A log cut from the top, a killed run or a crashed wrapper prints **no verdict line at all** — and *no verdict
+line is not a pass, it is no answer*. That sentence is in `tools/verdict.mjs`'s own header.
+
+Gate: `GATE: PASS (2123 of 2123 ran) — 182.3s`, 181 files.

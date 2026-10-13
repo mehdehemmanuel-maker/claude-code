@@ -1,31 +1,52 @@
-// EVERY CHECK SAYS PASS OR FAIL AS ITS LAST LINE, FROM ITS EXIT CODE.
+// EVERY CHECK SAYS PASS OR FAIL AS ITS LAST LINE — and says how much work it did, because an exit code alone cannot.
 //
-// `npm run tidy` was once "verified" in this project with `npm run tidy 2>&1 | tail -3`, which passed while the gate
-// failed on the same rule four minutes later. The lesson first written down was "three lines was too few" — and that
-// lesson is wrong: `tail -100` would have passed too, and so would `head -20`, because **a pipe replaces the exit
-// status**. The command exits with `tail`'s 0 whatever the check did, so it could not fail at any truncation
-// (docs/ROUNDS.md Run 7j–7m, docs/MANNY.md #98).
+// `npm run tidy 2>&1 | tail -3` once "verified" this project while the gate failed on the same rule, because **a pipe
+// replaces the exit status**: the command exits with `tail`'s 0 whatever the check did, so it could not fail at any
+// truncation. `tail -100` would have passed too. Banning the pipe bans a spelling — `npm run tidy > /tmp/x;
+// tail -3 /tmp/x` has none and fails the same way — so instead the mistake is removed: the last line is the answer.
 //
-// A hook forbidding the pipe was the obvious answer and the wrong one: it bans a spelling, not the cause —
-// `npm run tidy > /tmp/x; tail -3 /tmp/x` has no pipe, keeps `$?`, and ends in the same false conclusion. So instead
-// the mistake is REMOVED: a check's last line is its verdict, taken from the exit code and nothing else. Then
-// `tail -3` is correct. `tail -1` is correct. A log read a week later is correct. A future tool that truncates is
-// correct. It survives `tee`, a shell function, a script, and being re-quoted by someone who never read this file.
+// THE VERDICT COMES FROM THE EXIT STATUS, never from the child's own words, because a check that reports on itself is
+// the fault one level up. But an exit status alone is a check that cannot fail:
 //
-// The verdict is never parsed out of the child's own output, because that would be the same fault one level up: a
-// check that reports on itself. The only input is the exit status, which is also passed through unchanged, so
-// `&&`, `set -e` and CI keep working exactly as before.
+//     vitest run tests/nexus/tidy.test.ts -t "no_such_name"  →  16 skipped, 0 run, exit 0  →  "TIDY: PASS"
+//
+// sixteen skipped, nothing run, and a pass with my name on it (docs/MANNY.md #100). So a COUNT is carried too — and a
+// count is evidence, not a verdict, so it may come from a structured artefact the child writes to a path THIS tool
+// chooses. `0 ran` is a FAIL whatever the status said. With no `--ran`, the verdict says so rather than implying work.
+//
+// NO VERDICT LINE IS NOT A PASS, IT IS NO ANSWER. A log cut from the top, a killed run, a crashed wrapper: none of
+// them print one. A reader who does not find the line has not been told the check passed.
 import { spawn } from 'node:child_process';
+import { readFileSync, rmSync } from 'node:fs';
 
-const [name, ...cmd] = process.argv.slice(2);
-if (!name || !cmd.length) { console.log('node tools/verdict.mjs <NAME> <command> [args…]'); process.exit(2); }
+const argv = process.argv.slice(2), name = argv.shift();
+let ran = null;
+if (argv[0] === '--ran') { argv.shift(); ran = argv.shift(); }
+// (several commands, separated by `--`, run in order and stopped at the first failure: a chain without a shell, so
+//  there is no second script holding the real command for someone to run instead — docs/MANNY.md #102)
+const cmds = argv.reduce((a, t) => (t === '--' ? [...a, []] : [...a.slice(0, -1), [...a[a.length - 1], t]]), [[]]).filter((c) => c.length);
+if (!name || !cmds.length) { console.log('node tools/verdict.mjs <NAME> [--ran <file.json>] <command> [args…] [-- <command> …]'); process.exit(2); }
+
 const t0 = Date.now();
 const say = (verdict) => console.log(`${name}: ${verdict} — ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-const kid = spawn(cmd[0], cmd.slice(1), { stdio: 'inherit' });
-kid.on('error', (e) => { say(`FAIL (could not run \`${cmd.join(' ')}\`: ${e.message})`); process.exit(127); });
-kid.on('exit', (code, signal) => {
-  // (a signal is a failure however it arrived: a killed check has not passed)
+/** How many tests actually RAN, from the artefact the child was told to write. Unreadable means unknown, not zero.
+ *  `numTotalTests` is not the figure: it counts skipped tests, so the first version of this printed
+ *  `PASS (0 of 16 ran)` on the exact run it was built to catch. A test that PASSED cannot be faked by skipping. */
+const counted = () => { if (!ran) return null; try { const j = JSON.parse(readFileSync(ran, 'utf8')); return typeof j.numTotalTests === 'number' ? { total: j.numTotalTests, passed: j.numPassedTests ?? 0 } : null; } catch { return null; } };
+const done = (code, signal) => {
   if (signal) { say(`FAIL (killed by ${signal})`); process.exit(1); }
-  say(code === 0 ? 'PASS' : `FAIL (exit ${code})`);
-  process.exit(code ?? 1);
-});
+  if (code !== 0) { say(`FAIL (exit ${code})`); process.exit(code ?? 1); }
+  const c = counted();
+  if (!ran) say('PASS (no work counted)');
+  else if (!c) say('FAIL (passed, but wrote no count of what it ran, so the pass is unverified)'), process.exit(1);
+  else if (c.passed === 0) say(`FAIL (exit 0 but nothing ran: 0 of ${c.total} tests passed, the rest skipped)`), process.exit(1);
+  else say(`PASS (${c.passed} of ${c.total} ran)`);
+  process.exit(0);
+};
+if (ran) try { rmSync(ran, { force: true }); } catch { /* a stale count must not be read as this run's */ }
+const step = (i) => {
+  const kid = spawn(cmds[i][0], cmds[i].slice(1), { stdio: 'inherit' });
+  kid.on('error', (e) => { say(`FAIL (could not run \`${cmds[i].join(' ')}\`: ${e.message})`); process.exit(127); });
+  kid.on('exit', (code, signal) => (code === 0 && !signal && i + 1 < cmds.length ? step(i + 1) : done(code, signal)));
+};
+step(0);

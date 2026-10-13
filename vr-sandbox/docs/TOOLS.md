@@ -87,12 +87,17 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   exists because a critic could sample 29 families by hand and raise a finding, and nobody could size it: the answer
   is 92.1 % of items and 70.6 % of families not drawn at all (docs/MANNY.md SIGHT #55). Asking by id alone misses a
   drawing a maker file registers only when asked by words, so it tries both and prints how many the second door found.
-- `tools/verdict.mjs`: wraps a check so its LAST LINE is its verdict, from the exit status alone —
-  `TIDY: PASS — 2.1s`, `GATE: FAIL (exit 1) — 182.9s`. `test`, `tidy`, `gate` and `quick` run through it, each with a
-  `:run` twin holding the real command. It exists because `npm run tidy 2>&1 | tail -3` once reported a pass while the
-  gate failed on the same rule: a pipe replaces the exit status, so the check could not fail at any truncation. Banning
-  the pipe would ban a spelling (`> file; tail file` has none and fails the same way); this removes the cause, so
-  truncating the output is never a lie. `tidy` asserts the wrapping, so a new check cannot be added without one.
+- `tools/verdict.mjs`: wraps a check so its LAST LINE is its verdict — `TIDY: PASS (16 of 16 ran) — 1.8s`,
+  `GATE: FAIL (exit 1) — 182.3s`, `TYPECHECK: PASS (no work counted) — 3.3s`. The VERDICT comes from the exit status
+  alone, never from the child's own words; the COUNT comes from a JSON report written to a path the wrapper names and
+  deletes first, so a stale count cannot be read as this run's. Takes several commands separated by `--` and stops at
+  the first failure, so a chain needs no shell and no second script holding the real command.
+  It exists because `npm run tidy 2>&1 | tail -3` once reported a pass while the gate failed on the same rule: a pipe
+  replaces the exit status, so the check could not fail at any truncation. Banning the pipe would ban a spelling
+  (`> file; tail file` has none and fails the same way); this removes the cause. **No verdict line is not a pass, it is
+  no answer** — a log cut from the top, a killed run or a crashed wrapper prints none.
+  `tidy` asserts that every script running a verifier is wrapped and that every test run carries a count;
+  `tests/nexus/verdict.test.ts` pins the wrapper's own six behaviours, since every check now speaks through it.
 - `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`;
   `kit=machine` draws what `npm run machine` composes — the same units, bill and refusals, from the ask's own sentence
   (`"rail|kit=machine&words=a rail-mounted machine that picks things up over 2000 mm carrying 25 kg&view=three"`),

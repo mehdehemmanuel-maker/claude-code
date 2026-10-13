@@ -5,14 +5,11 @@
   "type": "module",
   "description": "Physics-real VR creative sandbox (WebXR, Quest 3S target, desktop fallback)",
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test:run": "vitest run",
-    "test": "node tools/verdict.mjs TEST npm run --silent test:run",
-    "tidy:run": "vitest run tests/nexus/tidy.test.ts",
-    "tidy": "node tools/verdict.mjs TIDY npm run --silent tidy:run",
+    "typecheck": "node tools/verdict.mjs TYPECHECK tsc --noEmit",
+    "test": "node tools/verdict.mjs TEST --ran node_modules/.verdict-test.json vitest run --reporter=default --reporter=json --outputFile=node_modules/.verdict-test.json",
+    "tidy": "node tools/verdict.mjs TIDY --ran node_modules/.verdict-tidy.json vitest run tests/nexus/tidy.test.ts --reporter=default --reporter=json --outputFile=node_modules/.verdict-tidy.json",
     "test:watch": "vitest",
-    "gate:run": "tsc --noEmit -p . && vitest run",
-    "gate": "node tools/verdict.mjs GATE npm run --silent gate:run",
+    "gate": "node tools/verdict.mjs GATE --ran node_modules/.verdict-gate.json tsc --noEmit -p . -- vitest run --reporter=default --reporter=json --outputFile=node_modules/.verdict-gate.json",
     "nexus:build": "vite build --config vite.nexus.config.ts",
     "nexus": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/nexus.mjs",
     "nexus:round": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/round.mjs",
@@ -29,8 +26,7 @@
     "part": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/part.mjs",
     "shot": "node tools/shot.mjs",
     "perf": "node tools/perf.mjs",
-    "quick:run": "tsc --noEmit -p . && vitest run tests/nexus/tidy.test.ts && vitest run --changed HEAD",
-    "quick": "node tools/verdict.mjs QUICK npm run --silent quick:run"
+    "quick": "node tools/verdict.mjs QUICK --ran node_modules/.verdict-quick.json tsc --noEmit -p . -- vitest run tests/nexus/tidy.test.ts -- vitest run --changed HEAD --reporter=default --reporter=json --outputFile=node_modules/.verdict-quick.json"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

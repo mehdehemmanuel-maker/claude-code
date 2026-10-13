@@ -417,15 +417,24 @@ describe('what the prose says is true', () => {
 
   // EVERY CHECK ENDS IN ITS OWN VERDICT, so reading its output is never ambiguous and truncating it is never a lie.
   // `npm run tidy 2>&1 | tail -3` once "verified" this file while the gate failed on the same rule, because a pipe
-  // replaces the exit status — and `tail -100` would have passed too (docs/ROUNDS.md Run 7j–7n). Banning the pipe
-  // bans a spelling; `tools/verdict.mjs` removes the cause by making the last line the answer. This rule is what
-  // stops the next check being added without one.
-  it('every check runs through tools/verdict.mjs, so its last line is its verdict', () => {
+  // replaces the exit status — and `tail -100` would have passed too (docs/ROUNDS.md Run 7n–7o). Banning the pipe bans
+  // a spelling; `tools/verdict.mjs` removes the cause by making the last line the answer.
+  //
+  // A SCRIPT IS A CHECK BY WHAT IT RUNS, NOT BY ITS NAME. The first version of this rule listed four names — which is
+  // the fault two rounds were spent taking out of `turning()`, written straight back in: a fifth check under a new name
+  // passed it (docs/MANNY.md #101). A verifier in the command is the property, so `test:watch` (`vitest` with no `run`,
+  // a watcher) is correctly not a check, and anything calling vitest or tsc tomorrow is caught whatever it is called.
+  const VERIFIERS = [/\bvitest run\b/, /\btsc --noEmit\b/];
+  it('every script that runs a verifier says PASS or FAIL as its last line', () => {
     const pkg = JSON.parse(read(join(ROOT, 'package.json'))) as { scripts: Record<string, string> };
-    for (const c of ['test', 'tidy', 'gate', 'quick']) {
-      expect(pkg.scripts[c], `package.json has no \`${c}\` script: either restore it or take it out of this list`).toBeTruthy();
-      expect(pkg.scripts[c], `\`npm run ${c}\` does not go through tools/verdict.mjs, so its output can be truncated into a lie`).toMatch(/^node tools\/verdict\.mjs [A-Z]+ /);
-      expect(pkg.scripts[`${c}:run`], `\`${c}\` is wrapped but \`${c}:run\` is missing, so the wrapper runs nothing`).toBeTruthy();
+    const checks = Object.entries(pkg.scripts).filter(([, v]) => VERIFIERS.some((re) => re.test(v)));
+    expect(checks.length, 'no script runs a verifier: either the checks are gone or VERIFIERS has stopped matching them').toBeGreaterThan(0);
+    for (const [k, v] of checks) {
+      expect(v, `\`npm run ${k}\` runs a verifier without \`tools/verdict.mjs\`, so its output can be truncated into a lie`).toMatch(/^node tools\/verdict\.mjs [A-Z]+ /);
+      // (and a test run with no count is a pass that cannot fail: 16 skipped, 0 run, exit 0 — docs/MANNY.md #100.
+      //  `tsc` is asked for no count because it has no test to count; `verdict.mjs` then says so rather than implying
+      //  work it cannot see.)
+      if (/\bvitest run\b/.test(v)) expect(v, `\`npm run ${k}\` runs tests with no \`--ran\`, so it would report PASS on a run that executed nothing`).toMatch(/--ran \S+/);
     }
   });
 

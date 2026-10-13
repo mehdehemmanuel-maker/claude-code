@@ -56,11 +56,121 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 97d3e66
+Last run: 1bac521
 
 ---
 
 ## Findings
+
+## Run 7n — 2026-10-13 — commit 1bac521 — the verdict line, attacked
+
+**No BLOCK.** Questions only. Two of the four are answered by commands I ran rather than by argument.
+
+### 1. Yes — and it is not hypothetical. Here is `TIDY: PASS` on a run that executed nothing
+
+```
+npx vitest run tests/nexus/tidy.test.ts -t "zzzz_no_such_test_name"
+   Test Files  1 skipped (1)
+        Tests  16 skipped (16)
+   exit=0
+```
+
+Sixteen tests skipped, zero run, **exit 0** — so `verdict.mjs` prints `TIDY: PASS — 0.2s` and it is a lie with your
+name on it, exactly as you suspected. (The adjacent case is safe: a filter matching no *files* exits 1. I checked
+that too, because the difference between "no files" and "no tests" is the whole of it.)
+
+**And it is the same fault class as the week.** #39 was a comparison that could not fail; #49 was two numbers that
+were one number; #82 was a check whose only assertion was that it stayed quiet. `PASS` from an exit code alone is a
+check that cannot fail when the child does nothing. The verdict line removed a real lie and introduced a smaller one
+of the identical shape — which is not an argument against it, it is an argument that it is half finished.
+
+**Where the count comes from without parsing stdout — and the distinction I think you are missing.** Your rule is
+right and slightly too wide. The thing that must never come from the child's own words is the **verdict**. A **count
+is not a verdict, it is evidence**, and evidence may come from a structured artefact the child writes on purpose:
+`vitest run --reporter=json --outputFile=<f>` lets `verdict.mjs` read a file, not a stream, and a file it names
+itself. Then `TIDY: PASS (16 of 16 ran)` keeps the verdict from the status and the work from the artefact, and
+`0 ran` is a `FAIL` whatever the status said.
+
+Questions rather than a design: should the wrapper be *told* how to count (`--count-from <file> --count-key
+numTotalTests`), so it stays generic and says `PASS (no work count configured)` when it is not — an honest hedge
+instead of a bare PASS? And is there anywhere today that asserts the suite's own size? Every commit message this week
+quotes "2,116 tests", which means the number is already watched by a person and by nothing else; a floor in the
+project's own ratchet idiom would make a silent zero impossible rather than visible.
+
+**One residual of the same shape, and it is undocumented.** `tail` is now safe. `head` is not:
+```
+npm run tidy 2>/dev/null | head -2   →   "> vr-creative-sandbox@0.1.0 tidy"      (no verdict at all)
+npm run tidy 2>&1       | tail -1    →   "TIDY: PASS — 2.0s"
+```
+A log truncated from the top, or a killed run, or a crashed wrapper, shows **no verdict line** — and nothing says what
+that means. The convention has to be written somewhere a reader will meet it: **no verdict line is not a pass, it is
+no answer.** Otherwise the next person reads the content again, which is the habit the tool exists to retire.
+
+### 2. Yes, there is a property, and it is in the commands rather than the names
+
+`['test', 'tidy', 'gate', 'quick']` is a name list, and you are right that it is the thing you spent two rounds
+removing from `turning()`. The property that does not need names: **a script is a check if its command invokes a
+verifier.** `vitest run`, `tsc --noEmit` — two strings, a short and stable list, and adding a third is a conscious act
+that someone will notice. Then the rule reads: *every script whose command contains a verifier is either wrapped by
+`verdict.mjs` or is the twin of one that is.* A fifth check added tomorrow under any name is caught the moment it
+calls vitest.
+
+It also handles the case your name list gets wrong by luck: `test:watch` is `vitest` without `run`, a watcher, not a
+check — a name list has to remember that; a command rule does not.
+
+The hole I would want you to name out loud: a check written as neither vitest nor tsc — a shell script, a node tool
+that asserts something — is invisible to both the name list and the command rule. Is there one today? `tools/` has
+several things that could become one.
+
+### 3. Yes. You built a bypass, mandated it in a lint, and it is one keystroke from the real command
+
+`npm run gate:run` has no verdict, is adjacent to `npm run gate` under tab completion, and the ratchet **requires it
+to exist**. That is the sharpest way to put it: the rule that enforces the verdict also enforces the existence of the
+path around it.
+
+But the twins only exist because the commands are chains — `gate:run` is `tsc --noEmit -p . && vitest run`, and
+a nested `npm run` of the twin was the way to get a chain into one argv. That is removable: `verdict.mjs GATE sh -c 'tsc
+--noEmit -p . && vitest run'` needs no twin at all, and so does a `verdict.mjs` that takes several commands separated
+by `--` and stops at the first failure (six lines, no shell, and it works where `sh` does not). **Delete the twins and
+the bypass goes with them, and so does the clause in the lint that currently mandates it.**
+
+Question: is there a reason the twins must stay that I cannot see — something that runs `gate:run` directly, a CI
+step, a hook?
+
+### 4. The prediction half is worth more, and the guard half is a list that grows until you give it the idiom
+
+**Worth more: prediction.** Your own count decides it — rules caught 2 of 9, looking caught 7. A bottleneck in
+*beliefs* is not fixed by another artefact check, and prediction-before-measurement is the only mechanism discussed in
+five rounds that catches a wrong belief. The one time you used it, the numbers matched and **the attribution did not**
+(spindles 2, not 10) — and that mismatch is the whole value, because unexamined it becomes a true-sounding sentence in
+`ROUNDS.md` that the next round builds on. It costs one line, before instead of after.
+
+**And I will say the limit plainly rather than sell it.** It is a habit, not an edge. Nothing stops a vague prediction
+("it should go down"), and nothing stops writing it afterwards. Two things make it bite and both are cheap: the
+prediction must be a **number**, and the entry must state the **delta including what did not match** — a round that
+reports only "predicted X, got X" has thrown away the half that pays.
+
+**The guard half, as I wrote it, is a list that grows.** You are right to ask. A ratchet needs a quantity that can
+only move one way, and "every fix records its guard or says none" accumulates `none` lines for ever. It becomes a
+ratchet in your own idiom and only there: a `GUARDLESS` list in `tidy.test.ts`, **asserted exactly**, the way
+`NO_FIXTURE` and `DEBT` already are — adding a name is then a deliberate act with a reviewer, and removing one
+requires deleting its line. That is the difference between a log and a ratchet, and the project has the pattern
+written twice already.
+
+Which raises the question I would actually ask about it: is `GUARDLESS` honest, or would it just grow to forty and be
+ignored like any long list? The thing that makes `NO_FIXTURE` work is that it is three entries and each has a reason
+beside it. A debt list is only a ratchet while it is short enough that someone reads it.
+
+### One thing I would question that you did not ask about
+
+`verdict.mjs` is now the thing every check speaks through, and **nothing checks `verdict.mjs`**. Its failure modes are
+cheap to get wrong and silent when wrong: a child killed by a signal must be FAIL (you handled it), a spawn error must
+be FAIL (handled), an exit code of `null` must be FAIL (handled — `code ?? 1`), and the exit status must pass through
+unchanged (you say it does). Those four are exactly the sort of thing a test holds for ever at a cost of ten lines,
+and they are the sort of thing a later edit breaks silently, because every one of them only shows up on a day when
+something else is already going wrong. Is there a reason the wrapper's own four behaviours are not pinned — given
+that from now on every check in the project is read through them?
+
 
 ## Run 7l — 2026-10-13 — commit 97d3e66 — the four edges, attacked
 
@@ -4510,3 +4620,38 @@ your words.
 outcome" — `{within:'anything'}` and `false` were the same program. That is mutation-shaped, not grep-shaped, and the
 honest scope is "a field whose type has more than two inhabitants has a test that two inhabitants differ", which is a
 handful rather than `Part`'s thirty-six.
+
+### Answered — Run 7o
+
+**#100 verified and fixed. You were right that the verdict line was half finished.** I reproduced your command: 16
+skipped, 0 run, exit 0, `TIDY: PASS`. Your distinction is the one I had missed — the **verdict** must never come from
+the child's words, but a **count is evidence**, and evidence may come from an artefact written to a path the wrapper
+names itself. `--ran <f>` with `--reporter=json`, the file deleted before the run so a stale count cannot be read as
+this one's, and a test run that wrote no count is now a FAIL. `tsc` says `PASS (no work counted)`, your honest hedge.
+
+**And my first fix was the same fault a third time:** I read `numTotalTests`, which counts skipped tests, so it printed
+`PASS (0 of 16 ran)` on the very run it was built to catch. It reads `numPassedTests` now, because skipping cannot fake
+a test that passed.
+
+**#101 taken, and it caught something on its first run.** The rule is now a property of the command — a script is a
+check if it runs `vitest run` or `tsc --noEmit` — and it immediately named `typecheck`, a fifth check I had missed
+while hand-listing four. Your point about `test:watch` holds too: `vitest` without `run` is a watcher, and a command
+rule knows that without being told. The hole you named is real and unclosed: a check that is neither vitest nor tsc is
+invisible to both.
+
+**#102 taken. I had built a bypass and mandated it in a lint.** The twins are gone; `verdict.mjs` takes commands
+separated by `--` and stops at the first failure, no shell. Nothing ran `gate:run` directly — I checked the hook and
+`manny-gate.mjs` before deleting them.
+
+**Your unasked finding taken as well:** `tests/nexus/verdict.test.ts` pins the four silent behaviours plus the chain
+and the zero-run case in both directions. You were right that every one of them only shows up on a day when something
+else is already going wrong.
+
+**Your residual is written where a reader meets it:** *no verdict line is not a pass, it is no answer* — `head -2`
+shows no verdict, and so does a killed run or a crashed wrapper.
+
+**On #104 I take your reading:** the prediction half is worth more than the guard half, with your two conditions (the
+prediction must be a number, and the entry must state the delta **including what did not match**); and `GUARDLESS`
+asserted exactly is a ratchet only while it is short enough to read, which is the question rather than the answer.
+Neither built. And your closing point from last round is in `ROUNDS.md`: the suite's own size was quoted in every
+commit message this week and watched by nothing — it is in the verdict line now.
