@@ -172,7 +172,7 @@ if (wanted.includes('cut')) say(`CAVEAT on \`cut\`: the clipping works, but the 
 fails on anything with a long thin appendage (a lead, a belt, a rail), where it misses the body and the view renders
 UNCUT. So an uncut-looking cut view is not evidence that the thing is solid - it is evidence of nothing. Judge it only
 where you can see an actual cut face.`);
-const r = run('node', [join(ROOT, 'tools/look.mjs'), viewer, out, ...asks], { ms: 420000 });
+const r = run('node', [join(ROOT, 'tools/look.mjs'), '--list', viewer, out, ...asks], { ms: 420000 });
 const reported = r.text.trim();
 say(reported.slice(0, 8000) || '(look.mjs said nothing)');
 
@@ -180,12 +180,19 @@ say(reported.slice(0, 8000) || '(look.mjs said nothing)');
 // A render that renders is not a render of the ask: the part kit answers unknown words with its family's example,
 // and until this check that substitution was invisible in both the picture and the log.
 const drew = [...reported.matchAll(/"name":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
+// two different silences, both of which used to end in a confident picture: the library made NOTHING of the words
+// and drew its family's example, or it made SOMETHING and threw the rest of the sentence away.
 const faked = /NOT THE WORDS ASKED/.test(reported);
+const partial = /NOT ALL THE WORDS ASKED/.test(reported);
 if (drew.length) say(`\nit drew: ${[...new Set(drew)].join(' | ')}`);
 if (faked) say(`\n*** THE RENDER IS NOT OF YOUR ASK ***
 The library could not make "${words}" and drew its family's EXAMPLE PART instead. Every picture below is of that
 example, not of what you asked for. Do not judge the look of this ask from them, and do not report that you saw it.
 That the words do not reach a drawable thing is itself the finding, and a bigger one than anything in the picture.`);
+if (partial) say(`\n*** THE RENDER IS OF PART OF YOUR ASK ***
+The library made something of these words and could not place the rest - the names it dropped are in the \`says\`
+above, after "NOT ALL THE WORDS ASKED". What is drawn is the part it did resolve, at the size IT chose, which may
+contradict a size you asked for. Judge the piece in the picture, not the ask.`);
 if (!r.ok) say(`\n[look.mjs failed: ${r.why}. Any view missing below was not rendered, and you did not see it]`);
 
 const pngs = existsSync(out) ? readdirSync(out).filter((f) => f.endsWith('.png')).sort() : [];

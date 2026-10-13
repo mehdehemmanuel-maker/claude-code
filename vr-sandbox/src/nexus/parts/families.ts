@@ -625,7 +625,29 @@ export function callFamily(words: string): Item | string | null {
     }
   }
   for (const q of f.params) if (q.min !== undefined && typeof p[q.key] === 'number' && ((p[q.key] as number) < q.min || (p[q.key] as number) > q.max!)) return `${q.says} must be ${q.min}–${q.max} ${q.unit}.`;
-  return { ...f.make(p), sized: { family: f.id, params: p } };
+  // WORDS THE READING COULD NOT PLACE. `f.read` keeps what it recognises and used to drop the rest without a word, so
+  // "rail MGN12 400 that carries two Unitree Z1 Air arms over a 6 m span" resolved to a 400 mm rail, eleven words were
+  // discarded in silence - including a conflicting 6 m - and every tool downstream reported a successful draw. A kind
+  // has refused this for a long time (`kinds/core.ts`: `I do not know "<left>"`); the hand-written families did not.
+  // This SAYS rather than refuses, which is deliberate: a refusal here would change what thousands of catalogue calls
+  // return, and the fault being fixed is silence, not leniency. The sentence goes at the front of `says`, where the
+  // renderer, the look page and `manny-see` already carry it to whoever is looking at the picture.
+  const placed = new Set<string>();
+  for (const v of Object.values(p)) placed.add(String(v).toLowerCase());
+  const unplaced = sizes.split(/[\s,]+/).filter(Boolean).filter((w) => {
+    const l = w.toLowerCase().replace(/[^\w.\-/]+$/, '');
+    if (!l || placed.has(l)) return false;
+    // a token carrying a number the reading used is placed by it ("m8x30" against 8 and 30, "l240" against 240)
+    const ns = l.match(/\d+(?:\.\d+)?/g) ?? [];
+    if (ns.length && ns.every((n) => placed.has(String(Number(n))))) return false;
+    return !/^(?:mm|cm|m|in|inch|inches|x|by|\u00d7|of|the|a|an|and|with|its)$/.test(l);
+  });
+  const made = f.make(p);
+  return {
+    ...made,
+    ...(unplaced.length ? { says: `NOT ALL THE WORDS ASKED: I could not place "${unplaced.join(' ')}". ${made.says}` } : {}),
+    sized: { family: f.id, params: p },
+  };
 }
 // a kind's parts made to their own sizes are called by their families' words
 useFamilies(callFamily);

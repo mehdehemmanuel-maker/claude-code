@@ -7,7 +7,12 @@
 // Each ask is a name and the look page's query (kit=part is added; view=top|three|front|side|rear|under, or dir=x,y,z;
 // zoom, explode, only, hide, hi, cut, ortho=1: see src/nexus/view/look.ts). Prints what each look reports, and errors.
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
-const [rootArg, outArg, ...asks] = process.argv.slice(2);
+// --list: after each view, print the pieces actually in the picture, counted by name with their sizes. The page has
+// exposed `window.look.parts()` (name, path, material, says, box, triangles) all along and nothing ever called it, so
+// a reader of the PNG could see a thing come apart and still not name one piece of it - which means they could not
+// tell a complete explode from one missing half its parts. (docs/MANNY.md SIGHT #38)
+const LIST = process.argv.includes('--list');
+const [rootArg, outArg, ...asks] = process.argv.slice(2).filter((a) => a !== '--list');
 if (!rootArg || !outArg || !asks.length) { console.log('node tools/look.mjs <viewer dir> <out dir> "name|query" …'); process.exit(1); }
 const root = path.resolve(rootArg), out = path.resolve(outArg); fs.mkdirSync(out, { recursive: true });
 let pw; try { pw = await import('playwright'); } catch { pw = await import('/opt/node22/lib/node_modules/playwright/index.mjs'); }
@@ -28,6 +33,13 @@ for (const a of asks) {
   await p.goto(url, { waitUntil: 'commit' });
   try { await p.waitForFunction(() => window.lookReady, null, { timeout: Number(process.env.LOOK_WAIT ?? 90000), polling: 1000 }); } catch { console.log(name, 'NOT READY', errs.slice(-3).join(' | ')); continue; }
   await p.waitForTimeout(400); await p.screenshot({ path: `${out}/${name}.png` }); console.log(name, JSON.stringify(await p.evaluate(() => window.lookReady)).slice(0, 300));
+  if (LIST) {
+    const ps = await p.evaluate(() => window.look.parts().map((q) => ({ n: q.name, mat: q.mat, mm: [q.max[0] - q.min[0], q.max[1] - q.min[1], q.max[2] - q.min[2]].map((v) => +(v * 1000).toFixed(1)) })));
+    const by = new Map();
+    for (const q of ps) { const k = `${q.n}|${q.mm.join('×')}|${q.mat ?? ''}`; by.set(k, (by.get(k) ?? 0) + 1); }
+    console.log(`  ${ps.length} pieces in frame:`);
+    for (const [k, n] of [...by].sort((a, b) => b[1] - a[1])) { const [nm, mm, mat] = k.split('|'); console.log(`    ${String(n).padStart(3)} × ${nm}  ${mm} mm${mat ? `  ${mat}` : ''}`); }
+  }
 }
 console.log('errors:', errs.slice(0, 5).join(' | ') || 'none');
 await b.close(); server.close();

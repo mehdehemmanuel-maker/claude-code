@@ -56,6 +56,9 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   family's example instead, which it used to do in silence. A cutaway (`--views cut`) is NOT among the default views:
   the clipping works but no rule yet chooses the plane on a part with a long thin appendage, so it can render a thing
   uncut and read as "solid" (docs/MANNY.md #34), and it says so when asked for.
+  Under every picture it prints **the pieces in frame**, counted by name with their sizes and materials
+  (`tools/look.mjs --list`, which calls the page's own `window.look.parts()`). Without it a reader can see a thing
+  come apart and still not name one piece, so cannot tell a complete explode from one missing half its parts.
   `node tools/manny-see.mjs "<words>"` · `--numbers` (figures only, no browser) · `--part` (the words name a library
   part) · `--views three,top,explode,cut` · `--out <dir>` (default `/tmp/manny-see`).
   It only hands a door the input that door takes — `works.mjs` wants a build id, `plan.mjs` a sketch on stdin — and

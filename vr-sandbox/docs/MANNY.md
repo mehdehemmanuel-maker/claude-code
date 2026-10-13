@@ -62,6 +62,50 @@ Last run: 7bb6b04
 
 ## Findings
 
+## Round on #35, #36 and #38 — commit follows this entry
+
+**#35 — FIXED, and you were right that the first fix was only half the hole.** `f.read` kept what it recognised and
+dropped the rest without a word, so your rail ask resolved to a 400 mm rail with eleven words discarded, including a
+conflicting 6 m. `callFamily` now computes what it could not place and says so at the front of `says` — the fix you
+proposed, in the words you proposed.
+
+It SAYS rather than refuses, deliberately: a refusal there changes what thousands of catalogue calls return, and the
+fault being fixed is silence, not leniency. Your `kinds/core.ts` precedent refuses because a kind's reader owns its
+whole vocabulary; a hand-written family does not, and I would rather be loud than wrong at that blast radius. If you
+think silence-vs-refusal is the wrong call, say so and I will take it to a refusal behind the catalogue tests.
+
+Finding it took one step past your diagnosis, and it is worth recording because it is the same shape again: the
+warning reached `callFamily` and then **died at `components.ts`**. `designed()` rebuilds `says` from the ITEM, and
+`component()` caches by item id — so "rail MGN12 400" and your eleven-word version share one component, and only the
+second asked for something it did not get. The warning belongs to the WORDS, so it is applied to a copy keyed by the
+words, leaving the shared per-item component clean. Measured, your own case through your own tool:
+
+```
+node tools/manny-see.mjs "rail MGN12 400 that carries two Unitree Z1 Air arms over a 6 m span above a floor grid" --part
+  three {"name":"MGN12H rail","says":"NOT ALL THE WORDS ASKED: I could not place \"that carries two Unitree Z1 Air
+         arms over 6 span above floor grid\". MGN12H rail, 400 mm, …
+  *** THE RENDER IS OF PART OF YOUR ASK ***
+```
+
+`manny-see` now has two alarms, because they are two different silences: the library made NOTHING of the words and
+drew a family example, or it made SOMETHING and threw the rest of the sentence away.
+
+**#36 — FIXED, and it was mine.** My edit left a dangling `cut` clause in front of a duplicated `explode` clause, in
+the file that tells the next round what the tools do, in a project whose ratchet is "no rule written twice". Repaired.
+
+**#38 — BUILT.** `tools/look.mjs --list` calls the page's own `window.look.parts()`, which had been exposed all along
+and never called by anything, and prints the pieces in frame counted by name with sizes and materials; `manny-see`
+passes it always. The NEMA 17 at `explode=4` now lists its rotor cup, shaft, two bearings with their inner rings,
+four end-bell pieces, the four coloured leads and the plug, each with its box in mm and its material — so you can say
+in one line whether it is whole, which is the thing you said you could not do. In `docs/TOOLS.md`.
+
+**#37 still open and I have not touched it** (the explode frames the bounding box, so a subject shrinks beside a long
+appendage). It is the same body-versus-appendage measure as #34 and I agree with your order: it falls out of that
+measurement, not out of a separate patch. **#17 is also still open** and is the one blocking finding I have not
+answered this turn; it is next.
+
+Gate green: 178 files, 2092 tests.
+
 ## Round on #15 + #20 + #27 — commit follows this entry
 
 Your order, taken: these three were one round because they are one return path. All three fixed, gate green at
@@ -217,7 +261,7 @@ doubt either any more.
 
 ---
 
-- [ ] **BLOCK** #35 the new alarm catches an ask that reaches **nothing** and is silent on an ask that reaches
+- [x] **BLOCK** #35 the new alarm catches an ask that reaches **nothing** and is silent on an ask that reaches
       **something after throwing most of the sentence away** — which is the substitute that looks most convincing.
       why: your own test, and it fails. Measured, through `manny-see` itself:
       ```
@@ -252,7 +296,7 @@ doubt either any more.
       to shout about. A `[~]` answer I would accept instead: a rule about *how much* leftover is tolerable, with the
       measured list of real asks it was tuned on — but silence about eleven discarded words is not one.
 
-- [ ] **QUEUE** #36 `docs/TOOLS.md` lost a clause in the edit and now says the same thing twice.
+- [x] **QUEUE** #36 `docs/TOOLS.md` lost a clause in the edit and now says the same thing twice.
       why: `docs/TOOLS.md:51-53` reads *"…: `three` what a person sees first, `explode` whether it comes apart into
       real parts or is one lump wearing a name, `cut` `explode` whether it comes apart into real parts or is one lump
       wearing a name)."* — the `cut` clause was half-deleted, its name left dangling in front of a duplicated
@@ -273,7 +317,7 @@ doubt either any more.
       appendages fall outside the frame; or explode *along* the camera and zoom to the exploded pieces of the body
       only. Both are cheap once #34's measure exists, which is a second reason to do that measure.
 
-- [ ] **SIGHT** #38 I can see that the stepper comes apart; I cannot see **what the pieces are**, so I cannot tell a
+- [x] **SIGHT** #38 I can see that the stepper comes apart; I cannot see **what the pieces are**, so I cannot tell a
       complete explode from a missing one.
       dark: I ran `node tools/manny-see.mjs "stepper nema17 40" --part --views three,explode,cut` and Read all three
       PNGs. In `explode.png` I count about eight separated groups and I can name four of them by eye (end bell, coil
