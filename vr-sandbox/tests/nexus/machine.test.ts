@@ -265,7 +265,10 @@ describe('the arrangement comes out of the words too, not out of a default', () 
     const m = composeMachine('a robotic hand that moves along a wall 2000 mm and picks up 1 kg');
     expect(m.gaps.length, 'a 2100 mm MGN12H rail is past the 2000 mm the library draws').toBeGreaterThan(0);
     expect(m.usd, 'no price is honest here').toBeNull();
-    expect(m.kg).toBe(0);
+    // null, not 0. This assertion read `toBe(0)` and so encoded the stand-in as the signal: the round that wrote it
+    // withheld the price properly and left the mass a number, and `0 kg` then printed in the headline of the main
+    // door for a machine nobody had weighed. The two now withhold the same way (docs/MANNY.md #57).
+    expect(m.kg, 'no mass is honest here either').toBeNull();
     expect(m.refusals.join(' ')).toMatch(/WITHHELD/);
   });
 
@@ -286,7 +289,7 @@ describe('the arrangement comes out of the words too, not out of a default', () 
     // quietly appears" and it was the first thing to break when a true refusal was added.)
     expect(m.refusals.join(' ')).toMatch(/WITHHELD, not computed/);
     expect(m.refusals.join(' '), 'the wrist cannot be belted and must say so').toMatch(/cannot be made of GT2 belt/);
-    expect(m.kg, 'a withheld mass is not a quiet zero dressed as a weight').toBe(0);
+    expect(m.kg, 'a withheld mass is not a quiet zero dressed as a weight — it is nothing at all').toBeNull();
     expect(m.usd).toBeNull();
   });
 });

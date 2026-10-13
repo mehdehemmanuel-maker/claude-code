@@ -44,7 +44,8 @@ export interface Tender {
   /** the stations it can serve, with how far off the rail each one's near edge is, m */
   serves: { id: string; name: string; off: number }[];
   /** the stations out of reach, and what it would take */ cannot: { id: string; name: string; off: number; why: string }[];
-  kg: number; usd: number | null;
+  /** null where the machine's own mass is withheld, as `usd` is null where it is unpriced (docs/MANNY.md #57) */
+  kg: number | null; usd: number | null;
   says: string;
 }
 
@@ -103,10 +104,12 @@ export function tendWorks(ids: string[], o: { reach?: number; aisle?: number; /*
         : `no aisle in this layout comes within ${(reach / 1000).toFixed(2)} m of any station (the nearest is ${off.toFixed(2)} m away), so an arm this short cannot tend this works at all: the aisles are ${(aisles.length ? aisles.join(' and ') : 'none')} m in and the arm has to reach half an aisle plus the row's own depth` });
   }
   // every rail is the same machine again, so the cost of tending the whole shop is the cost of one times the rails
-  const each = machine.usd ?? 0, kg = machine.kg * rails.length;
+  // the mass withholds the same way the price does: a machine with an undrawn part has no mass to multiply, and a
+  // shop-wide total built on a stand-in zero is worse than no total (docs/MANNY.md #57)
+  const each = machine.usd ?? 0, kg = machine.kg == null ? null : machine.kg * rails.length;
   return {
-    machine, rails, reach, floor, serves, cannot, kg: +kg.toFixed(2), usd: machine.usd == null ? null : +(each * rails.length).toFixed(2),
-    says: `${rails.length === 0 ? `No rail can be laid for a ${(reach / 1000).toFixed(2)} m arm in this layout: ${cannot[0]?.why ?? 'no aisle comes near a station'}. ` : ''}A hand on a ${(mm / 1000).toFixed(1)} m rail reaches ${(reach / 1000).toFixed(2)} m off it and serves the two rows facing its aisle. ${rails.length === 1 ? 'One rail' : `${rails.length} rails, at ${rails.map((r) => `${r.z} m`).join(', ')} into the room,`} put ${serves.length} of ${floor.stood.length} stations in reach${cannot.length ? ` and leave ${cannot.length} out` : ''}: ${money(each)} and ${machine.kg} kg each, ${rails.length > 1 ? `${money(each * rails.length)} and ${kg.toFixed(1)} kg in all` : 'all in'}.${rails.length > 2 ? ' At three rails or more a robot on a floor base that drives between the rows is the cheaper answer, and this is the number that says so.' : ''}${machine.refusals.length ? ` It will not: ${machine.refusals.join('; ')}.` : ''}`,
+    machine, rails, reach, floor, serves, cannot, kg: kg == null ? null : +kg.toFixed(2), usd: machine.usd == null ? null : +(each * rails.length).toFixed(2),
+    says: `${rails.length === 0 ? `No rail can be laid for a ${(reach / 1000).toFixed(2)} m arm in this layout: ${cannot[0]?.why ?? 'no aisle comes near a station'}. ` : ''}A hand on a ${(mm / 1000).toFixed(1)} m rail reaches ${(reach / 1000).toFixed(2)} m off it and serves the two rows facing its aisle. ${rails.length === 1 ? 'One rail' : `${rails.length} rails, at ${rails.map((r) => `${r.z} m`).join(', ')} into the room,`} put ${serves.length} of ${floor.stood.length} stations in reach${cannot.length ? ` and leave ${cannot.length} out` : ''}: ${money(each)} and ${machine.kg == null ? 'an unweighed mass' : `${machine.kg} kg`} each, ${rails.length > 1 ? `${money(each * rails.length)} and ${kg == null ? 'no total mass' : `${kg.toFixed(1)} kg`} in all` : 'all in'}.${rails.length > 2 ? ' At three rails or more a robot on a floor base that drives between the rows is the cheaper answer, and this is the number that says so.' : ''}${machine.refusals.length ? ` It will not: ${machine.refusals.join('; ')}.` : ''}`,
   };
 }
 

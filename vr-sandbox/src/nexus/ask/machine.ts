@@ -296,7 +296,8 @@ export interface Machine {
   /** for an arm: the moment each joint has to hold straight out, against what it can be geared to */
   joints?: { at: string; needs: number; holds: number; ratio: number }[];
   /** its envelope: how far it moves in each of the three ways it slides, mm */ reach: number[];
-  kg: number; holding: number; usd: number | null;
+  /** its mass, kg — or **null** where a part is not drawn, exactly as `usd` is null when a part is not priced: a
+   *  machine whose bill is short has no mass to report, and 0 is not that (docs/MANNY.md #57) */ kg: number | null; holding: number; usd: number | null;
   /** lines with no price here, said rather than guessed */ unpriced: string[];
   /** what it affords, in the order the stack gives them */ does: Does[];
   /** what it will not do, each with the number that refuses it */ refusals: string[];
@@ -349,6 +350,17 @@ export function unitUsd(u: Unit): { usd: number; unpriced: string[] } {
  *  gripper's load; and a payload was added to every stage alike, so the camera was carrying the 2 kg the gripper was
  *  holding. A payload hangs from whatever grips it, is checked against that grip, and is then carried by everything
  *  below it and by nothing above. */
+/** Why a unit cannot be built at the size it was given, or null. Below the shortest length of stock the library will
+ *  cut, so nothing orderable is refused. There are two stacking paths in this file — a frame with axes, and an arm of
+ *  joints and links — and this is one rule called by both, because the fault it catches was that only one of them
+ *  asked anything at all and the other pushed its links with `ok: true` unconditionally. */
+const LEAST_MM = 10;
+export function tooSmall(unit: Unit): string | null {
+  const thin = unit.box.findIndex((d) => !(d >= LEAST_MM));
+  return thin < 0 ? null
+    : `it is ${unit.box[thin]} mm across its ${'xyz'[thin]} axis, and nothing is made at no size: the ask gave it no span to be built at, so this is a refusal and not a small machine`;
+}
+
 export function stack(frameUnit: Unit, axes: Unit[], tools: Unit[], payloadKg = 0): { stages: Mounted[]; kg: number; holding: number; refusals: string[]; gaps: string[] } {
   const refusals: string[] = [], gaps: string[] = [];
   const weigh = (u: Unit) => { const r = unitKg(u); gaps.push(...r.gaps); return r.kg; };
@@ -360,7 +372,16 @@ export function stack(frameUnit: Unit, axes: Unit[], tools: Unit[], payloadKg = 
   // Every stage still carries the payload, because that is what a stage has to hold up; only the total differs.
   const own = frameKg + axisKg.reduce((a, b) => a + b, 0) + toolsKg;
   const all = own + payloadKg;                 // the frame: everything stands on it, the load included
+  // NOTHING MAY BE BUILT AT NO SIZE. A six-axis arm asked with "0.1 mm repeatability, 700 mm reach" read the
+  // repeatability as the reach and composed two joints with two 0 mm links between them, ordered `extrusion 2020 0`,
+  // reported "holds" at every stage because a zero load is held by anything, and priced the result $117.83. Every
+  // check in this file asks whether a unit holds what is above it; not one asked whether the unit EXISTS. A span of
+  // zero is not a small machine, it is a refusal, and it is caught here rather than in whatever read the words,
+  // because the reading can be wrong in ways nobody has thought of yet and a part of no length is wrong always
+  // (docs/MANNY.md #59).
   const push = (unit: Unit, carrying: number, above: string[]) => {
+    const no = tooSmall(unit);
+    if (no) { refusals.push(`${unit.name}: ${no}`); stages.push({ unit: { ...unit, cannot: no }, carrying: +carrying.toFixed(3), above, ok: false, why: no }); return; }
     const holds = unit.does === 'hold' || unit.carries >= carrying;
     const s: Mounted = { unit, carrying: +carrying.toFixed(3), above, ok: holds };
     if (!holds) { s.why = `it holds ${unit.carries} kg and ${carrying.toFixed(2)} kg stands on it (${unit.limit})`; refusals.push(`${unit.name}: ${s.why}`); }
@@ -453,7 +474,7 @@ export function composeMachine(words: string): Machine {
   if (short) refusals.push(`its mass and price are WITHHELD, not computed: ${st.gaps.length} part${st.gaps.length === 1 ? ' is' : 's are'} not drawn by the library (above), so any total here would be the weight of what was drawable and not of the machine. Size those parts within what the library makes, or take the refusal as the answer`);
   return {
     asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm,
-    kg: short ? 0 : st.kg, holding: st.holding,
+    kg: short ? null : st.kg, holding: st.holding,
     usd: short ? null : (usd || null), unpriced: money.flatMap((m) => m.unpriced), does: [...new Set(units.map((u) => u.does))],
     refusals, gaps: st.gaps, notDone: want.notDone, ...(joints ? { joints } : {}),
   };
@@ -462,7 +483,7 @@ export function composeMachine(words: string): Machine {
 /** A machine written out: what it is made of, stage by stage, with what each carries and what it costs. */
 export function machineText(m: Machine): string {
   const span = m.arrange === 'arm' ? `${m.reach[0]} mm of reach` : m.arrange === 'rail' ? `${m.reach[0]} mm of travel along it` : `${m.reach.join(' × ')} mm of travel`;
-  const out = [`${m.name}, ${span}: ${m.stages.length + 1} units, ${m.kg} kg${m.holding ? ` (holding ${m.holding} kg, which is a load and not part of it)` : ''}, ${m.usd == null ? 'nothing priced here' : `$${m.usd.toFixed(2)}`}.`];
+  const out = [`${m.name}, ${span}: ${m.stages.length + 1} units, ${m.kg == null ? 'nothing weighed here' : `${m.kg} kg`}${m.holding ? ` (holding ${m.holding} kg, which is a load and not part of it)` : ''}, ${m.usd == null ? 'nothing priced here' : `$${m.usd.toFixed(2)}`}.`];
   out.push(`It was composed, not copied: ${m.does.join(', ')} are the words, arranged as ${{ gantry: 'a gantry in a frame, because the tool has to get anywhere in a box', rail: 'one long rail, because what was asked for is travel along something', arm: 'a jointed arm, because what was asked for is reach', table: 'a turning table under a fixed tool' }[m.arrange]}.`);
   if (m.joints) for (const j of m.joints) out.push(`  ${j.at} holds ${j.holds} N·m geared ${j.ratio}:1 and has to hold ${j.needs} N·m straight out: ${j.holds >= j.needs ? 'holds' : 'NO'}`);
   for (const s of m.stages) {
@@ -500,7 +521,7 @@ export function machineWords(text: string, o: { stand?: (p: Part, m: Machine) =>
     // what is drawn is not what it weighs: a line bought whole (the spindle, the servo, the supply, the lead screw)
     // has a listing's mass and no drawing, so the room's own figure is always the lighter one. Say which is which
     // rather than let two numbers disagree on the same screen.
-    const short = m.kg - drawn;
+    const short = (m.kg ?? drawn) - drawn;
     return `${o.stand(part, m)}${short > 0.05 ? ` Standing: ${drawn.toFixed(2)} kg of it is drawn and ${short.toFixed(2)} kg is bought whole and has no drawing here (${m.stages.flatMap((s) => s.unit.bought ?? []).map((b) => b.what).join(', ') || 'its bought lines'}).` : ''}\n\n${said}`;
   } catch (e) { return `${said}\n\n(It is not standing in the room: ${(e as Error).message})`; }
 }
@@ -585,7 +606,9 @@ export function armStack(reach: number, tools: Unit[], payloadKg = 0): { stages:
       s.why = `${NAMES[i] ?? `joint ${i + 1}`} has to hold ${nm.toFixed(2)} N·m with the arm straight out and a NEMA 17 geared 50:1 by belt holds ${got.toFixed(2)}: shorten the link, take the load off with a counterbalance spring, or put a worm or cycloidal reducer there instead of a belt (which is where a cheap arm stops being cheap)`;
       refusals.push(s.why);
     }
-    stages.push(s, { unit: links[i]!, carrying: 0, above: [], ok: true });
+    const noLink = tooSmall(links[i]!);
+    if (noLink) refusals.push(`${links[i]!.name}: ${noLink}`);
+    stages.push(s, { unit: noLink ? { ...links[i]!, cannot: noLink } : links[i]!, carrying: 0, above: [], ok: !noLink, ...(noLink ? { why: noLink } : {}) });
   }
   for (const u of tools) {
     const held = u.does === 'grip' ? payloadKg : 0, ok = u.does !== 'grip' || u.lifts >= payloadKg;

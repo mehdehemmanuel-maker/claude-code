@@ -159,15 +159,22 @@ const wanted = views.length ? views : DEFAULT;
 // `cut` and `explode` take VALUES, not flags. They were sent `=1` and both were inert: look.ts parses cut as
 // /^([xyz])([<>])(-?[\d.]+)$/, which "1" never matches, and explode=1 is one level, which on a 78-mesh stepper moved
 // 7 pixels of a million. Both views were the plain three-quarter view wearing another name.
+// WHICH KIT the look page draws with, which is the whole difference between a picture of your ask and a picture of
+// something else. `--part` already meant "these words name a library part, not a machine ask" and the numbers half
+// has obeyed it since this tool was written; the picture half never passed it on, so every render went through the
+// part kit, whose words-to-part lookup falls back to a family's example — and seven runs of seven were judged on a
+// 400 mm MGN12H rail. The `machine` kit existed from the commit before last and this file was not changed with it,
+// which is how a tool can be told it works and not work (docs/MANNY.md #56).
+const kit = has('part') ? 'part' : 'machine';
 const q = (v) => {
-  const w = `words=${encodeURIComponent(words)}`;
+  const w = `kit=${kit}&words=${encodeURIComponent(words)}`;
   if (v === 'explode') return `${w}&view=three&explode=4`;    // four levels deep: does it come apart into real parts?
   if (v === 'cut') return `${w}&view=three&cut=z`;            // sliced through the middle of what was drawn: is it hollow, or solid where it should not be?
   return `${w}&view=${encodeURIComponent(v)}`;
 };
 const asks = wanted.map((v) => `${v}|${q(v)}`);
 
-say(`rendering ${asks.length} views: ${wanted.join(', ')}`);
+say(`rendering ${asks.length} views: ${wanted.join(', ')} — through the \`${kit}\` kit${kit === 'machine' ? ' (pass --part for a library part by its words)' : ''}`);
 if (wanted.includes('cut')) say(`CAVEAT on \`cut\`: the clipping works, but the PLANE is chosen by a heuristic that
 fails on anything with a long thin appendage (a lead, a belt, a rail), where it misses the body and the view renders
 UNCUT. So an uncut-looking cut view is not evidence that the thing is solid - it is evidence of nothing. Judge it only

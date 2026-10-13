@@ -33,7 +33,10 @@ describe('where the robot can get to', () => {
     const t = tendWorks(IDS);
     expect(t.machine.arrange).toBe('rail');
     expect(t.usd).toBeCloseTo((t.machine.usd ?? 0) * t.rails.length, 1);
-    expect(t.kg).toBeCloseTo(t.machine.kg * t.rails.length, 1);
+    // the mass withholds with the machine's: either both are numbers and multiply, or both are null. A test that
+    // read a stand-in zero here would have passed while the tool printed "0 kg" for a thing it had not weighed.
+    if (t.machine.kg == null) expect(t.kg).toBeNull();
+    else expect(t.kg).toBeCloseTo(t.machine.kg * t.rails.length, 1);
   });
   it('a station out of reach says how far and what it would take, never just "no"', () => {
     const t = tendWorks(IDS, { reach: 1200 });
