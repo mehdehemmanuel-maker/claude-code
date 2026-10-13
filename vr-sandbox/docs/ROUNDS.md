@@ -607,7 +607,7 @@ In order; each through the breakdown queue, rendered, compared with its photos a
    layers that speak it, which is fixed by moving the vocabulary below both. The fourth is `parts/components.ts`,
    the registry that draws every kind: it imports every machine's, board's and catalogue's drawer, so 45 of those
    imports are one file reaching up out of the library it lives in. A registry belongs above what it registers.
-   It found three faults as soon as it ran: `src/nexus/index.ts` had no header at all (it is the door, and now says
+   It found three faults as soon as it ran: the root barrel `index.ts` (deleted in Run 7s) had no header at all (it was the door, and then said
    so), and two files named a path that was never real — the illustration `src/nexus/<name>.ts`, which is now
    written so it cannot be mistaken for one.
    Then the bridge itself (2026-10-11), which is the part of the wire out that has to exist in the user's hands and not
@@ -2389,3 +2389,73 @@ verdict unasked beside the critic's.
 
 **The count this round adds to Run 7m's:** of the four things built, three were wires to finished work nobody could
 reach, and the fourth was a general rule. Nothing new was computed. The whole round was *delivery*.
+
+## Run 7s — merge, reattach, or delete: what was built and could not be reached
+
+Run 7r found `mobility()` by accident. This round built the measurement that finds the rest of them, and then acted
+on its answer under the user's own rule for it: **merge, reattach, or delete**.
+
+`node tools/unwired.mjs` walks the module graph from the real entry points — `src/nexus/cli/*.ts` and
+`src/nexus/view/*.ts`, the only places execution starts — and reports what no running path arrives at. The first
+honest answer:
+
+```
+2064 exported functions, consts and classes; 196 of 219 files reached from 44 doors
+153 exports named by nothing but tests/ — finished work with no door
+ 89 exports named nowhere at all, tests included
+ 22 whole files not reached from any door          ← 2,750 lines, behind a green gate
+```
+
+**A passing test is indistinguishable from a working feature when the test is the only caller.** Nothing in the gate
+can tell them apart, which is how a rank-based degrees-of-freedom solver sat unreachable for the whole session.
+
+### The tool got its own answer wrong three times, and each error was a known fault of mine
+
+It would have been very easy to publish the first number. It was wrong, and so were the next two:
+
+1. **`makeMachine` reported unreachable.** Nothing outside `machines.ts` names it — and `VEHICLE_KITS`, in that same
+   file, calls it on every car the kit route builds. "No caller outside its own file" is not "unreachable". Fixed by
+   classifying *live (internal)* separately.
+2. **`mobility` reported live, citing `ask/conceive.ts`.** That file has `'mobility'` as a `NeedKind` string and in
+   nine comments, and calls nothing. A word-boundary regex counts string literals, type members and prose as callers.
+   Fixed by counting **imports**, resolved against the module graph — exact, and the same question the graph already
+   answers.
+3. **`world/creatures.ts` reported unreachable.** `view/look.ts:38` has `import '../world/creatures';` — a
+   side-effect import, which has no `from` clause for the walk to see, and `ask/machine.ts:684` says in plain words
+   that this is how it runs.
+
+All three were found by checking the tool's answer against a case whose answer was already known. A census earns
+belief no other way, and two of the three were the exact faults — the guessed shape, the word taken for a use — that
+this session has been removing from other code all day.
+
+### Then the rule, applied
+
+- **`src/nexus/index.ts` → deleted.** A barrel re-exporting fifteen directories: a second owner for every name in
+  the tree, named by nothing in `src/` and by no test. The lint caught the deletion twice (its root-file list and a
+  stale path in this very document), which is the lint doing its job.
+- **`src/nexus/ask/rules.ts` → deleted** with its 3 tests. IFS, THENS, `due()` and a robot's rule list: the
+  superseded first version of robot rules. `view/forge.ts:3327` makes each robot's rules a pipeline on the boards
+  instead. Two owners for one concern is what `docs/OWNERS.md` exists to prevent, so the older owner went.
+- **The three Nexus slices → reattached.** `npm run substrate` runs the beam on two supports, the bracket on a post
+  and the bar on a free hinge, and prints each one's verdict. Eleven `substrate/` files became reachable.
+
+```
+the beam on two supports — a load at rest on a span, its section left free
+  its system: 24 symbols bound, 17 left free (b, h, q); 3 constraints: a constraint CANNOT BE DECIDED
+  its choice: 5 of 16 admissible → one picked
+```
+
+The door's own first draft printed `0 bound, 0 left free` for every slice, because `Solution.bound` is a Record and
+the free list is `free`, not `unbound`. **Third guessed shape of the session** — after `{ cyl: { r, h } }` and
+`{ sph: { r } }` in `moves.ts`. The pattern is exact and worth naming: *writing a field name from memory instead of
+reading the type produces a confident zero, and a confident zero reads as good news.*
+
+After all of it: **119 test-only, 63 dead, 11 unreached files** — from 153 / 89 / 22.
+
+### What is left, named rather than quietly dropped
+
+The 11 remaining are all `substrate/`: `attempt`, `clock`, `compose`, `explore`, `hold`, `project`, `rate`, `scale`,
+`study-joint`, `study-swing`, `tune` (978 lines). Three of them need Jolt, which lives in `tests/conformance/helpers`
+and not in `src/`, so a door cannot start one yet. The other eight need their types read before they can be called
+correctly — and after being wrong about a field name three times today, writing eight more calls from memory is the
+one thing this round has earned the right not to do. They are reattach-or-delete next, each on its own merits.

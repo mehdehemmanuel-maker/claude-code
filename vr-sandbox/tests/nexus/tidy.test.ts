@@ -260,7 +260,9 @@ const REACHES_BACK: { edge: string; imports: number; why: string }[] = [
 describe('the tree keeps its shape', () => {
   it('nothing loose at the root: every file is inside a boundary', () => {
     const loose = readdirSync(NEXUS).filter((n) => n.endsWith('.ts')).sort();
-    expect(loose, 'a new file at the root means its concern has no home yet — give it one').toEqual(['index.ts', 'works.ts']);
+    // `index.ts` was a barrel re-exporting fifteen directories: a second owner for every name in the tree, named by
+    // nothing in src/ and by no test, deleted in Run 7s when `tools/unwired.mjs` found it unreachable from every door.
+    expect(loose, 'a new file at the root means its concern has no home yet — give it one').toEqual(['works.ts']);
   });
 
   it('every directory is named in LAYERS, and every directory holds more than one file', () => {

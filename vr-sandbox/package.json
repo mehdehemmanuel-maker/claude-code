@@ -26,6 +26,7 @@
     "part": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/part.mjs",
     "why": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/why.mjs",
     "moves": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/moves.mjs",
+    "substrate": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/substrate.mjs",
     "shot": "node tools/shot.mjs",
     "perf": "node tools/perf.mjs",
     "quick": "node tools/verdict.mjs QUICK --ran node_modules/.verdict-quick.json tsc --noEmit -p . -- vitest run tests/nexus/tidy.test.ts --reporter=default --reporter=json --outputFile=node_modules/.verdict-quick.json -- vitest run --changed HEAD"

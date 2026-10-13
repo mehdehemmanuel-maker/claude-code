@@ -192,3 +192,24 @@ one-line version of the same thing unasked.
 
 Its coverage is ratcheted by `tests/nexus/moves.test.ts`: a car declares 38 joints, 23 are usable, 15 are not, and
 each of those is a part that does not say which way its joint acts or does not name anything across it.
+
+## `node tools/unwired.mjs` — what is built and cannot be reached
+
+```
+node tools/unwired.mjs              the census
+node tools/unwired.mjs mobility     one export, or one file
+```
+
+Walks the module graph from the real entry points — `src/nexus/cli/*.ts` and `src/nexus/view/*.ts` — and reports
+every export no running path arrives at: **test-only** (named by nothing but `tests/`, which is finished work with no
+door) and **dead** (named nowhere at all), plus whole files no door reaches.
+
+It is the measurement that would have found `mobility()` four rounds before Run 7r did. A passing test is
+indistinguishable from a working feature when the test is the only caller, and nothing in the gate can tell them
+apart — so the gate stayed green over a degrees-of-freedom solver nothing could run.
+
+It counts **imports, not words**, and walks side-effect imports (`import '../world/creatures'`) as well as `from`
+ones. Both of those were faults in its own first drafts, each found by checking its answer against a case whose
+answer was already known: it called `mobility` live on the strength of the string `'mobility'` in a comment, and
+called `world/creatures.ts` unreachable because the import that runs it has no `from` clause. A census only earns
+belief by being checked against what is already certain.

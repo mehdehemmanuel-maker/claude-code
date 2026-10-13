@@ -1,41 +1,18 @@
-// What makes the forge alive: rules that start on what happens, the weather it reads, a robot that feels, moves as a
-// machine moves and practises; and nodes that may be duplicated.
+// What makes the forge alive: the weather it reads, a robot that feels, moves as a machine moves and practises; and
+// nodes that may be duplicated.
+//
+// It also held 'if this, then that' over `ask/rules.ts` — IFS, THENS, `due()` and a robot's rule list. That file was
+// the superseded first version of robot rules: `view/forge.ts:3327` makes each robot's rules a pipeline on the
+// boards instead, and `tools/unwired.mjs` found nothing but this test could reach the old one. Two owners for one
+// concern is what the owners table exists to prevent, so the older owner and its tests went (docs/ROUNDS.md 7s).
 
 import { describe, expect, it } from 'vitest';
-import { due, newRule, ROBOT_RULES, ruleSays, COOLDOWN, DEEPEST, type Rule } from '../../src/nexus/ask/rules';
 import { feel, feeling, newMind, pass, expression, thought } from '../../src/nexus/world/emotions';
 import { Servo, QServo, wheelSpeeds, pitchOf } from '../../src/nexus/substrate/motion';
 import { bestOf, learn, lessons, newPractice, nextTry, trialOf, variants } from '../../src/nexus/teach/practice';
 import { EDITS0, type PipeRun } from '../../src/nexus/substrate/pipe';
 import { compass, readWeather, sayWeather, skyOf, weatherFacts, fetchWeather, findPlace } from '../../src/nexus/world/weather';
 import { duplicateNode, freeName, edgesOf, nodesOf, type Board } from '../../src/nexus/substrate/boards';
-
-describe('if this, then that', () => {
-  it('a rule starts on its event, at most once a minute, and no deeper than three rules set off by rules', () => {
-    const r = newRule('run-fails', 'rerun-seed'), rules = [r];
-    expect(ruleSays(r)).toBe('IF a pipeline run fails THEN run the pipeline again, next seed');
-    expect(due(rules, { kind: 'run', held: true }, {}, 0)).toEqual([]);
-    expect(due(rules, { kind: 'run', held: false }, {}, 0)).toEqual([r]);
-    expect(due(rules, { kind: 'run', held: false }, {}, COOLDOWN - 1)).toEqual([]);
-    expect(due(rules, { kind: 'run', held: false }, {}, COOLDOWN + 1, DEEPEST)).toEqual([]);
-    expect(due(rules, { kind: 'run', held: false }, {}, COOLDOWN + 1, DEEPEST - 1)).toEqual([r]);
-    expect(r.fired).toBe(2);
-  });
-  it('a weather rule starts the moment its condition turns true, not again while it stays true', () => {
-    const r = newRule('wind-over-30', 'say-weather'), rules = [r];
-    expect(due(rules, { kind: 'weather' }, { wind: 20 }, 0)).toEqual([]);
-    expect(due(rules, { kind: 'weather' }, { wind: 35 }, 1)).toEqual([r]);
-    expect(due(rules, { kind: 'weather' }, { wind: 40 }, 2 * COOLDOWN)).toEqual([]);
-    expect(due(rules, { kind: 'weather' }, { wind: 10 }, 3 * COOLDOWN)).toEqual([]);
-    expect(due(rules, { kind: 'weather' }, { wind: 31 }, 4 * COOLDOWN)).toEqual([r]);
-  });
-  it('a rule turned off does nothing; the robot\'s own rules practise when it is bored', () => {
-    const r: Rule = { ...newRule('every-10', 'next-test'), on: false };
-    expect(due([r], { kind: 'tick', minutes: 10 }, {}, 0)).toEqual([]);
-    const mine = ROBOT_RULES.map((x) => ({ ...x }));
-    expect(due(mine, { kind: 'mood', label: 'bored' }, {}, 0).map((x) => x.then)).toEqual(['practice']);
-  });
-});
 
 describe('a robot that feels', () => {
   it('feels what happens: a held run pleases it, two failures frustrate it, praise lifts it, and it says why', () => {
