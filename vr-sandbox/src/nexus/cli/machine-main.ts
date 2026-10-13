@@ -13,11 +13,11 @@
 //   npm run machine -- "..." works                         and what the $3,000 works has to do to build it
 
 import { jobText, machineBuild, throwAt, under3K } from '../works';
-import { BRAIN, EYE, GRIPPER, HOT_END, SPINDLE, beltAxis, composeMachine, baseFrame, machineText, screwAxis, turnAxis, unitKg, unitUsd, type Unit } from '../ask/machine';
+import { composeMachine, everyUnit, machineText, unitKg, unitUsd, type Unit } from '../ask/machine';
 
 const args = process.argv.slice(2);
 if (args[0] === 'units') {
-  const all: Unit[] = [baseFrame(500, 500, 650), screwAxis(300), beltAxis(300), turnAxis(3), HOT_END, SPINDLE, GRIPPER, EYE, BRAIN];
+  const all: Unit[] = everyUnit();   // one list, in ask/machine.ts, which the gate also checks
   for (const u of all) {
     const { kg, gaps } = unitKg(u), { usd, unpriced } = unitUsd(u);
     console.log(`${u.id}  (${u.does})  ${kg} kg  $${usd.toFixed(2)}`);

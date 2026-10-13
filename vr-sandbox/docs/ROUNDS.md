@@ -1726,3 +1726,32 @@ nothing (`composeMachine` needs the `notDone` return path `ask/route.ts` already
 invented machine at all**, so this file's own round step 2 — render it, look at it — has never once been possible for
 that door. That is why the other faults survived, and it is why nothing said about how a composed machine *looks* is
 evidence. Both next, together, because a `notDone` nobody can see is worth little.
+
+## The fault hiding behind the pulley, and the check that would have caught both (2026-10-13)
+
+Fixing the pulley's silent default exposed the fault it had been covering, which is the better half of the story.
+`turnAxis(ratio)` orders its driven wheel as `pulley GT2 ${20 * ratio} 8` — 100 teeth at 5:1, 1000 at 50:1. **No
+pulley has 1000 teeth.** While the family silently returned its 20-tooth default, every one of those resolved and a
+50:1 shoulder was drawn as 20 teeth driven by 20 teeth: 1:1. With the family now refusing honestly, the arm would
+have ordered a part that does not exist — so the two had to be fixed together, and the second is the real engineering
+fault. **One GT2 stage cannot reduce more than the pulleys it is made of**: 20 teeth is the smallest driver worth
+making and 80 the family's largest wheel, so 4:1 is a real ceiling and not a table's opinion. A ratio is staged now
+(`beltStages`): 4:1 in one stage, 16:1 in two, 64:1 in three, and beyond that a belt is simply the wrong machine and
+is refused — which is what the arm's own refusal text has said all along ("put a worm or cycloidal reducer there
+instead of a belt, which is where a cheap arm stops being cheap"). What the stages *deliver* is what the torque is
+taken from, not what was asked for, and each stage costs its own 5 % rather than 5 % of any ratio. `RATIOS` is
+filtered by what a belt can really give, so the ladder cannot offer a fiction again.
+
+**The check, because a judge costs a round and a check is paid once.** The completeness test next to it could not see
+any of this: the pulley *resolved*, it was simply the wrong part. **Resolving is not agreeing.** So every unit the
+inventor affords is now asked for each of its parts by the words it orders them with, and every number in those words
+must appear in the part that comes back. Verified to bite rather than assumed: re-breaking the pulley read fails it by
+name, and restoring it passes. That is the words↔part half of the triangle Manny named — Onshape holds a
+configuration to its drawing, `mate.ts` holds a drawing to its declaration, and nothing held either to the words that
+asked.
+
+And the list of units existed in **three** places — `cli/machine-main.ts` printed its own copy, `tests/nexus/machine.test.ts`
+declared another, and neither could check the other. `everyUnit()` in `ask/machine.ts` is the one list; both read it.
+A unit added to one and not the others was checked by nothing, in the very file whose own test asserts that fault.
+
+`perf dump` byte-identical across the round: nothing any kit draws moved. Gate 178 files, 2,087 tests.

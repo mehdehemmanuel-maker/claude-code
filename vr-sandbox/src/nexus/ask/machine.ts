@@ -104,18 +104,42 @@ export function beltAxis(travel: number): Unit {
 
 /** A turn axis: a NEMA 17 geared down 3:1 by GT2, turning in two bearings. What a wrist, a turntable, a spindle of a
  *  potter's wheel and the shoulder of a light arm are all made of. */
+/** One GT2 belt stage cannot reduce more than the pulley family makes. Its smallest sensible driver is 20 teeth and
+ *  its largest wheel is 80, so **4:1 is a real ceiling**, not a table's opinion. This unit used to order a wheel of
+ *  `20 × ratio` teeth - 1000 of them at 50:1 - and the family drew every one of those as its 20-tooth default, so a
+ *  50:1 shoulder was a 1:1 shoulder and every torque figure resting on it was fiction. (The pulley's own silent
+ *  default is fixed in `parts/families.ts`; this is the fault that was hiding behind it, and the two had to be
+ *  fixed together or the arm would now order a part that is refused.) A ratio is staged now, each stage a real pair,
+ *  and what the stages actually deliver is reported rather than what was asked for. */
+const BELT_DRIVER_T = 20, BELT_MAX_T = 80, BELT_STAGE_MAX = BELT_MAX_T / BELT_DRIVER_T, BELT_STAGES_MAX = 3;
+
+/** The belt stages a ratio really needs, or null where a belt is simply the wrong machine for it. */
+export function beltStages(ratio: number): { driver: number; driven: number }[] | null {
+  if (!(ratio > 1)) return [];
+  const n = Math.ceil(Math.log(ratio) / Math.log(BELT_STAGE_MAX));
+  if (n > BELT_STAGES_MAX) return null;
+  const per = ratio ** (1 / n), driven = Math.min(BELT_MAX_T, Math.max(BELT_DRIVER_T + 1, Math.round(BELT_DRIVER_T * per)));
+  return Array.from({ length: n }, () => ({ driver: BELT_DRIVER_T, driven }));
+}
+
 export function turnAxis(ratio = 3): Unit {
-  const nm = NEMA17_NM * ratio * 0.95;
+  const stages = beltStages(ratio) ?? [];
+  const real = stages.reduce((a, s) => a * (s.driven / s.driver), 1);      // what the pulleys on it actually give
+  const nm = NEMA17_NM * real * 0.95 ** Math.max(1, stages.length);       // 5 % a stage, not 5 % whatever the ratio
+  const degS = +((360 / (real || 1)) * (300 / 60)).toFixed(0);
+  const said = stages.length > 1 ? `${real.toFixed(2)}:1 in ${stages.length} belt stages` : `${real.toFixed(2)}:1`;
   return {
-    id: `turn-axis-${ratio}`, name: `a turn axis geared ${ratio}:1`, does: 'turn', range: 360,
+    id: `turn-axis-${ratio}`, name: `a turn axis geared ${said}`, does: 'turn', range: 360,
     of: [{ words: NEMA17, n: 1, price: 'nema17' }, { words: 'motorplate nema17 t4 aluminium', n: 1 }, { words: 'bearing 6805', n: 2 },
-      { words: 'pulley GT2 20 5', n: 1, price: 'pulley-gt2-20t-5' }, { words: `pulley GT2 ${20 * ratio} 8`, n: 1 }, { words: 'belt GT2 6 400', n: 1, price: 'gt2-belt' },
+      { words: `pulley GT2 ${BELT_DRIVER_T} 5`, n: stages.length || 1, price: 'pulley-gt2-20t-5' },
+      ...(stages.length ? [{ words: `pulley GT2 ${stages[0]!.driven} 8`, n: stages.length }] : []),
+      { words: 'belt GT2 6 400', n: stages.length || 1, price: 'gt2-belt' },
       { words: 'bolt M5x12', n: 8 }],
-    carries: 40, lifts: 0, speed: +((360 / ratio) * (300 / 60)).toFixed(0),
+    carries: 40, lifts: 0, speed: degS,
     limit: 'the 6805 thin-section bearing pair, which takes the moment of whatever stands on it',
     box: [120, 90, 120],
-    says: `a NEMA 17 geared ${ratio}:1 by GT2 into a pair of 6805 bearings: ${nm.toFixed(2)} N·m at the output, turning at ${((360 / ratio) * (300 / 60)).toFixed(0)}°/s`,
-    src: 'the output torque from the NEMA 17\'s 0.42 N·m times the ratio, less 5 % for the belt (an estimate); the bearing pair chosen for its moment, not its load',
+    says: `a NEMA 17 geared ${said} by GT2 into a pair of 6805 bearings: ${nm.toFixed(2)} N·m at the output, turning at ${degS}°/s`,
+    src: `the output torque from the NEMA 17's 0.42 N·m times what the pulley pairs really give (${stages.map((x) => `${x.driven}/${x.driver}`).join(' × ') || '1'}), less 5 % a stage (an estimate); the bearing pair chosen for its moment, not its load`,
   };
 }
 
@@ -236,6 +260,13 @@ export interface Machine {
 
 /** What a unit weighs: the sum of its drawn parts, kg. Parts bought whole are weighed where a price page gives one and
  *  otherwise left out of the sum and said — a mass that quietly invents the heavy half of a machine is worse than none. */
+/** Every unit the library affords, at one representative size each, so that one list is the only list. `npm run
+ *  machine -- units` printed its own copy of this and the gate had no way to check any of them; a unit added to one
+ *  and not the other is the two-owners fault with nothing to catch it. */
+export function everyUnit(): Unit[] {
+  return [baseFrame(500, 500, 650), screwAxis(300), beltAxis(300), ...RATIOS.map((r) => turnAxis(r)), HOT_END, SPINDLE, GRIPPER, EYE, BRAIN];
+}
+
 export function unitKg(u: Unit): { kg: number; gaps: string[] } {
   let kg = 0; const gaps: string[] = [];
   for (const { words, n } of u.of) {
@@ -576,7 +607,9 @@ export function railMount(mm: number): Unit {
 /** The ratios a turn axis is geared at, cheapest first: a GT2 pair does 3:1 easily, 5:1 and 10:1 with a bigger wheel,
  *  and past that it wants a second stage. The composer takes the first that holds, which is why nothing here asserts a
  *  joint's torque — it is chosen against the moment it actually has to hold. */
-const RATIOS = [3, 5, 10, 20, 50];
+// Only ratios a belt can really give, in stages: 4:1 one stage, 16:1 two, 64:1 three. The old ladder went to 50:1
+// on a single pair, which is a 1000-tooth pulley nobody makes.
+const RATIOS = [3, 5, 10, 20, 50].filter((r) => beltStages(r) !== null);
 
 /** An arm checked the way an arm fails: the moment at each joint with the arm straight out, against what that joint can
  *  be geared to hold. Fully extended and horizontal is the worst case and the one people build and then discover. */
@@ -601,8 +634,9 @@ export function armStack(reach: number, tools: Unit[], payloadKg = 0): { stages:
   const NAMES = ['the shoulder', 'the elbow'];
   for (let i = 0; i < L.length; i++) {
     const nm = need(i);
-    const ratio = RATIOS.find((r) => turnAxis(r).carries >= 0 && NEMA17_NM * r * 0.95 >= nm);
-    const got = ratio ? NEMA17_NM * ratio * 0.95 : NEMA17_NM * RATIOS[RATIOS.length - 1]! * 0.95;
+    const delivers = (r: number) => { const st = beltStages(r); if (!st) return 0; return NEMA17_NM * st.reduce((a, x) => a * (x.driven / x.driver), 1) * 0.95 ** Math.max(1, st.length); };
+    const ratio = RATIOS.find((r) => delivers(r) >= nm);
+    const got = delivers(ratio ?? RATIOS[RATIOS.length - 1]!);
     const j = turnAxis(ratio ?? RATIOS[RATIOS.length - 1]!);
     joints.push({ at: NAMES[i] ?? `joint ${i + 1}`, needs: +nm.toFixed(2), holds: +got.toFixed(2), ratio: ratio ?? RATIOS[RATIOS.length - 1]! });
     const s: Mounted = { unit: { ...j, name: `${NAMES[i] ?? `joint ${i + 1}`}, geared ${ratio ?? RATIOS[RATIOS.length - 1]}:1` }, carrying: +nm.toFixed(2), inUnit: 'N·m', above: [...links.slice(i).map((l) => l.name), ...tools.map((t) => t.name)], ok: !!ratio };

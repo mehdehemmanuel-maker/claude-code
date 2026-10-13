@@ -8,13 +8,15 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  BRAIN, EYE, GRIPPER, HOT_END, SPINDLE, beltAxis, composeMachine, baseFrame, machineText, machineWords,
-  readMachine, screwAxis, stack, turnAxis, unitKg, unitUsd, armLink, layUnit, machineParts, machinePart, type Unit,
+  BRAIN, EYE, GRIPPER, SPINDLE, beltAxis, composeMachine, baseFrame, machineText, machineWords,
+  readMachine, screwAxis, stack, turnAxis, unitKg, unitUsd, armLink, layUnit, machineParts, machinePart, everyUnit, beltStages, type Unit,
 } from '../../src/nexus/ask/machine';
 import { component } from '../../src/nexus/parts/components';
 import { machineBuild, throwAt, under3K } from '../../src/nexus/works';
 
-const ALL: Unit[] = [baseFrame(500, 500, 650), screwAxis(300), beltAxis(300), turnAxis(3), HOT_END, SPINDLE, GRIPPER, EYE, BRAIN];
+// `ask/machine.ts` owns the list. It was written out here and in `cli/machine-main.ts` as well, so a unit added to
+// one and not the others was checked by nothing - the two-owners fault, in the file whose own test asserts it.
+const ALL: Unit[] = everyUnit();
 
 describe('every unit is made of parts the library really draws', () => {
   it('no unit names a part the component library cannot make', () => {
@@ -32,6 +34,46 @@ describe('every unit is made of parts the library really draws', () => {
     const { usd, unpriced } = unitUsd(screwAxis(300));
     expect(usd).toBeGreaterThan(40);                     // its rail, motor and bearings are all sourced
     expect(unpriced.join(' ')).toMatch(/extrusion/);     // its extrusion is not, and is named rather than guessed at
+  });
+});
+
+describe('a part comes back at the size it was asked for', () => {
+  // The fault this exists for: `ask/machine.ts` orders `pulley GT2 <teeth> <bore>`, and the pulley family read teeth
+  // only from "60t" and a bore only from "8mm", so those words matched neither and it returned its 20-tooth, 5 mm
+  // default *silently*. Every pulley every composed machine ordered was that part whatever the bill said, and a
+  // pulley is the gear ratio, so every arm's torque table was arithmetic over a ratio the drawing did not have. The
+  // completeness check above could not see it: the part resolved, it was simply the wrong one. Resolving is not
+  // agreeing, and this is the check for the difference.
+  it('every number in the words a unit orders a part by is in the part it gets', () => {
+    const wrong: string[] = [];
+    for (const u of ALL) {
+      for (const { words } of u.of) {
+        const c = component(words);
+        if (typeof c === 'string') continue;                       // a gap, which the test above owns
+        const got = `${c.part.name ?? ''} ${JSON.stringify(c.part).slice(0, 400)}`;
+        for (const n of words.match(/(?<![\w.])\d{2,4}(?![\w.])/g) ?? []) {
+          if (!got.includes(n)) wrong.push(`${u.id} asked "${words}" and ${n} is nowhere in what came back`);
+        }
+      }
+    }
+    expect([...new Set(wrong)]).toEqual([]);
+  });
+
+  it('a belt stage cannot reduce more than the pulleys it is made of', () => {
+    // 20 teeth is the smallest driver worth making and 80 the family's largest wheel, so 4:1 is a real ceiling.
+    // Asking one pair for 50:1 is a 1000-tooth pulley: it is staged, or a belt is the wrong machine for it.
+    expect(beltStages(4)).toHaveLength(1);
+    expect(beltStages(5)).toHaveLength(2);                          // 4:1 is the most one pair gives
+    expect(beltStages(50)).toHaveLength(3);
+    expect(beltStages(100)).toBeNull();                             // and then say so, rather than draw a fiction
+    for (const r of [3, 5, 10, 20, 50]) {
+      const st = beltStages(r)!;
+      for (const x of st) expect(x.driven, `${r}:1`).toBeLessThanOrEqual(80);
+      // what the pulleys give is within a quarter of what was asked, and it is that figure the torque is taken from
+      const real = st.reduce((a, x) => a * (x.driven / x.driver), 1);
+      expect(Math.abs(real - r) / r, `${r}:1 delivers ${real.toFixed(2)}`).toBeLessThan(0.25);
+      expect(turnAxis(r).says).toContain(real.toFixed(2));
+    }
   });
 });
 
