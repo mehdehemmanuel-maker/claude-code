@@ -415,6 +415,20 @@ describe('what the prose says is true', () => {
     for (const f of PROSE) expect(existsSync(join(ROOT, f)), `PROSE names ${f}, which does not exist: either restore it or take its line out`).toBe(true);
   });
 
+  // EVERY CHECK ENDS IN ITS OWN VERDICT, so reading its output is never ambiguous and truncating it is never a lie.
+  // `npm run tidy 2>&1 | tail -3` once "verified" this file while the gate failed on the same rule, because a pipe
+  // replaces the exit status — and `tail -100` would have passed too (docs/ROUNDS.md Run 7j–7n). Banning the pipe
+  // bans a spelling; `tools/verdict.mjs` removes the cause by making the last line the answer. This rule is what
+  // stops the next check being added without one.
+  it('every check runs through tools/verdict.mjs, so its last line is its verdict', () => {
+    const pkg = JSON.parse(read(join(ROOT, 'package.json'))) as { scripts: Record<string, string> };
+    for (const c of ['test', 'tidy', 'gate', 'quick']) {
+      expect(pkg.scripts[c], `package.json has no \`${c}\` script: either restore it or take it out of this list`).toBeTruthy();
+      expect(pkg.scripts[c], `\`npm run ${c}\` does not go through tools/verdict.mjs, so its output can be truncated into a lie`).toMatch(/^node tools\/verdict\.mjs [A-Z]+ /);
+      expect(pkg.scripts[`${c}:run`], `\`${c}\` is wrapped but \`${c}:run\` is missing, so the wrapper runs nothing`).toBeTruthy();
+    }
+  });
+
   it('every npm script the prose names is in package.json', () => {
     const pkg = JSON.parse(read(join(ROOT, 'package.json'))) as { scripts: Record<string, string> };
     const named = PROSE.flatMap((f) => [...read(join(ROOT, f)).matchAll(/`npm run ([\w:-]+)/g)].map((m) => m[1]!));

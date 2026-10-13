@@ -6,10 +6,13 @@
   "description": "Physics-real VR creative sandbox (WebXR, Quest 3S target, desktop fallback)",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "tidy": "vitest run tests/nexus/tidy.test.ts",
+    "test:run": "vitest run",
+    "test": "node tools/verdict.mjs TEST npm run --silent test:run",
+    "tidy:run": "vitest run tests/nexus/tidy.test.ts",
+    "tidy": "node tools/verdict.mjs TIDY npm run --silent tidy:run",
     "test:watch": "vitest",
-    "gate": "tsc --noEmit -p . && vitest run",
+    "gate:run": "tsc --noEmit -p . && vitest run",
+    "gate": "node tools/verdict.mjs GATE npm run --silent gate:run",
     "nexus:build": "vite build --config vite.nexus.config.ts",
     "nexus": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/nexus.mjs",
     "nexus:round": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/round.mjs",
@@ -26,7 +29,8 @@
     "part": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/part.mjs",
     "shot": "node tools/shot.mjs",
     "perf": "node tools/perf.mjs",
-    "quick": "tsc --noEmit -p . && vitest run tests/nexus/tidy.test.ts && vitest run --changed HEAD"
+    "quick:run": "tsc --noEmit -p . && vitest run tests/nexus/tidy.test.ts && vitest run --changed HEAD",
+    "quick": "node tools/verdict.mjs QUICK npm run --silent quick:run"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

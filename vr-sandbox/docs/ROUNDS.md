@@ -2169,3 +2169,43 @@ the paragraph arguing that such rules are what is missing, within a minute of wr
 would have caught it: it would have shipped, and a later reader — or a later me — would have run it and
 found nothing. That is what the user's "edges that don't allow failure" means, working, and it is the strongest
 argument for extending that one family rather than inventing new ones: it does not depend on anybody remembering.
+
+## Run 7n — the verdict line: the one edge that removes the mistake instead of forbidding it
+
+Built. `tools/verdict.mjs` runs a check and prints, as its **last line**, `TIDY: PASS — 2.1s` or
+`TIDY: FAIL (exit 1) — 2.3s`, taken from the **exit status and nothing else** — never parsed out of the child's own
+output, which would be the same fault one level up. The status is passed through unchanged, so `&&`, `set -e` and CI
+behave exactly as before. `test`, `tidy`, `gate` and `quick` go through it; each keeps a `:run` twin with the real
+command.
+
+**Demonstrated on the exact command that lied.** With the line ratchet deliberately broken:
+
+```
+$ npm run tidy 2>&1 | tail -3
+   Duration  1.58s …
+TIDY: FAIL (exit 1) — 2.3s        ← the lie is now the truth
+
+$ npm run tidy 2>&1 | tail -3 >/dev/null ; echo $?     → 0      (the pipe still eats the status)
+$ npm run tidy >/dev/null 2>&1    ; echo $?            → 1      (unpiped, unchanged)
+```
+
+The pipe still swallows `$?` — that cannot be fixed from inside a program. What changed is that **the status is no
+longer the only place the answer lives**, so reading the output is now sufficient however it is truncated. `tail -1`
+is correct, `tail -100` is correct, a log read next week is correct, and a future tool that truncates is correct. It
+survives `tee`, a shell function, a script, and being re-quoted by someone who never reads the file.
+
+Why this and not the hook that bans the pipe: **a ban addresses a spelling.** `npm run tidy > /tmp/x; tail -3 /tmp/x`
+has no pipe, keeps `$?`, and ends in the same false conclusion if nobody reads it. This removes the condition under
+which the mistake is possible, which is what "an edge that does not allow failure" has to mean.
+
+**And it is held by a ratchet, not by memory.** `tidy` now asserts that each of the four checks matches
+`^node tools/verdict.mjs [A-Z]+ ` and has its `:run` twin. Proved by unwrapping `tidy` and watching the rule name it:
+
+```
+`npm run tidy` does not go through tools/verdict.mjs, so its output can be truncated into a lie:
+expected 'vitest run tests/nexus/tidy.test.ts' to match /^node tools\/verdict\.mjs [A-Z]+ /
+```
+
+So the next check added without a verdict fails by name, which is the difference between this and a resolution.
+
+Gate: `GATE: PASS — 182.9s`, 180 files, 2116 tests.
