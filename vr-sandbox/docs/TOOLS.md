@@ -50,8 +50,12 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   and what it could not use, `plan.mjs` fed the words as a sketch — each one's refusals kept rather than swallowed) and
   the PICTURE (the viewer built, the look page opened from the views that expose fakery rather than flatter: `three`
   what a person sees first, `explode` whether it comes apart into real parts or is one lump wearing a name, `cut`
-  whether it is hollow). It prints the PNG paths, and **the `Read` tool shows a PNG as a picture**, so they are really
-  looked at.
+  `explode` whether it comes apart into real parts or is one lump wearing a name). It prints the PNG paths, and
+  **the `Read` tool shows a PNG as a picture**, so they are really looked at — and it prints `it drew: <name>` beside
+  them, raising `*** THE RENDER IS NOT OF YOUR ASK ***` when the library could not make the words and drew its
+  family's example instead, which it used to do in silence. A cutaway (`--views cut`) is NOT among the default views:
+  the clipping works but no rule yet chooses the plane on a part with a long thin appendage, so it can render a thing
+  uncut and read as "solid" (docs/MANNY.md #34), and it says so when asked for.
   `node tools/manny-see.mjs "<words>"` · `--numbers` (figures only, no browser) · `--part` (the words name a library
   part) · `--views three,top,explode,cut` · `--out <dir>` (default `/tmp/manny-see`).
   It only hands a door the input that door takes — `works.mjs` wants a build id, `plan.mjs` a sketch on stdin — and

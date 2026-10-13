@@ -276,7 +276,10 @@ kit({
   // (parts said with "+" between them are assembled by their mates: "stepper nema17 40 + motorplate nema17 t4 aluminium")
   // (and shown standing on its lowest point, as a part set down on a bench is)
   build(c) { const w = String(c.said ?? ''), j = /bolted joint\s+(M[\d.]+)\s+(\d+(?:\.\d+)?)/i.exec(w);
-    const made = w.includes('+') ? ((a) => ({ ...a.part, says: `${a.part.says}${a.unplaced.length ? `; not placed: ${a.unplaced.join('; ')}` : ''}` }))(assemble(w, w.split('+').map((x) => use(x.trim())))) : j ? boltedJoint(j[1]!.toUpperCase(), Number(j[2])) : (() => { if (/\d/.test(w) || /\s/.test(w.trim())) try { return use(w); } catch { /* (not a part's words: its family's example) */ } return use(exampleOf(String(c.family))); })();
+    const made = w.includes('+') ? ((a) => ({ ...a.part, says: `${a.part.says}${a.unplaced.length ? `; not placed: ${a.unplaced.join('; ')}` : ''}` }))(assemble(w, w.split('+').map((x) => use(x.trim())))) : j ? boltedJoint(j[1]!.toUpperCase(), Number(j[2])) : (() => { if (/\d/.test(w) || /\s/.test(w.trim())) try { return use(w); } catch { /* (not a part's words: its family's example) */ } // It said so SILENTLY until now, and that made a liar of every tool that renders this kit: `manny-see` drew
+      // this 20 × 20 × 10 mm example for a coil winder, a circuit-board machine and "qqq zzz nonsense wobble" alike,
+      // reported `errors: none`, and the critic judged the picture as if it were the ask. Resolving is not agreeing.
+      return ((ex) => ({ ...ex, says: `NOT THE WORDS ASKED ("${w}"): the ${c.family} family's example. ${ex.says}` }))(use(exampleOf(String(c.family)))); })();
     const lo = Math.min(...layout(made).filter((n) => n.box).map((n) => n.box!.min.y)); return { name: made.name, at: [0, 0, 0], says: made.says, parts: [{ ...made, at: [0, Number.isFinite(lo) ? -lo : 0, 0] }] }; },
 });
 

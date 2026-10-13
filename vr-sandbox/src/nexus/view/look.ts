@@ -153,10 +153,23 @@ if (his.length || q.get('ghost') === '1') {
 // (the floor stays, flat grey: the ground seen under the car or through a wheel is the ground, not a gap; a gap is the
 // sky seen through it)
 if (holes) { (floor as THREE.Mesh).material = new THREE.MeshBasicMaterial({ color: 0x777777 }) as unknown as THREE.MeshStandardMaterial; for (const m of meshes) { let h = 0; for (const ch of m.name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; m.material = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL((h % 360) / 360, 0.35, 0.35 + ((h >> 9) % 30) / 100), side: THREE.DoubleSide }); } }
-// a cutaway
-const cut = (q.get('cut') ?? '').match(/^([xyz])([<>])(-?[\d.]+)$/);
+// a cutaway. `cut=z>0.004` names the plane outright; `cut=z` (an axis alone, with an optional < or >) cuts through
+// the MIDDLE OF WHAT WAS DRAWN, which is the only form a caller can write without already knowing the thing's size.
+// Without it every general tool had to guess a number: `cut=z>0` is the world origin, and a part whose lead runs out
+// along the floor is nowhere near centred on it, so the plane shaved a corner and the view read as uncut.
+const cut = (q.get('cut') ?? '').match(/^([xyz])([<>])?(-?[\d.]+)?$/);
 if (cut) {
-  const ax = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) }[cut[1] as 'x' | 'y' | 'z'], v = Number(cut[3]), keepBelow = cut[2] === '<';
+  const ax = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) }[cut[1] as 'x' | 'y' | 'z'];
+  // through the middle of the BIGGEST solid drawn, not of the whole bounding box. A stepper's 500 mm lead lying on the
+  // floor owns most of that box, so its centre is half a metre from the motor and the plane missed the body entirely -
+  // the view then looks uncut, which is the same lie as not cutting at all. The biggest mesh is the thing being asked
+  // about; its own middle is where a draughtsman puts the section.
+  const mid = (() => {
+    let best = null, vol = -1;
+    for (const m of meshes) { if (!m.visible) continue; const b = new THREE.Box3().setFromObject(m), sz = b.getSize(new THREE.Vector3()), v = sz.x * sz.y * sz.z; if (v > vol) { vol = v; best = b; } }
+    return best ? best.getCenter(new THREE.Vector3()).dot(ax) : 0;
+  })();
+  const v = cut[3] === undefined ? mid : Number(cut[3]), keepBelow = cut[2] === '<';
   renderer.clippingPlanes = [new THREE.Plane(keepBelow ? ax.clone().negate() : ax.clone(), keepBelow ? v : -v)];
   // (a solid cut open shows its section as a draughtsman draws one: flat in its own colour, hatched at 45°, so material
   // reads as material and a hollow as a hollow; a shell, a panel, shows its inside face as it is; a section a hair nearer
@@ -406,4 +419,4 @@ if (q.get('zebra') === '1') {
 }
 // (lift: how far the thing was stood up so its lowest point sits on the floor, its own frame's height in the room: a board's
 // top is there, for laying a photograph's camera over it, photo.py camera --top)
-(window as unknown as { lookReady: unknown }).lookReady = { parts: view.group.children.length, meshes: meshes.length, size: size.toArray().map((x) => +x.toFixed(2)), camera: r3(camera.position), aim: r3(c), lift: +((part.parts?.[0]?.at?.[1] ?? 0) * 1000).toFixed(3), ...(holeStats ? { holes: holeStats } : {}), ...(zebraStats ? { zebra: zebraStats } : {}) };
+(window as unknown as { lookReady: unknown }).lookReady = { name: part.name, says: part.says, parts: view.group.children.length, meshes: meshes.length, size: size.toArray().map((x) => +x.toFixed(2)), camera: r3(camera.position), aim: r3(c), lift: +((part.parts?.[0]?.at?.[1] ?? 0) * 1000).toFixed(3), ...(holeStats ? { holes: holeStats } : {}), ...(zebraStats ? { zebra: zebraStats } : {}) };

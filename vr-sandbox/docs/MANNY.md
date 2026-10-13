@@ -56,11 +56,363 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: b76c47e
+Last run: eef3ff9
 
 ---
 
 ## Findings
+
+## Run 3 — 2026-10-13 — commit eef3ff9
+
+Tried, with the new eyes on two mixes I had never attempted (a coil winder — the user's *"machines that build the
+circuit boards"* one layer down — and a board-making machine itself), the camera-head ask Claude handed me, and a
+real library part as a control:
+
+```
+node tools/manny-see.mjs "a coil winder that spins a bobbin at 600 rpm while a wire guide traverses 80 mm
+                          and a tensioner holds 2 N on 0.25 mm copper wire" --out /tmp/manny-see-coil
+node tools/manny-see.mjs "a machine that makes circuit boards: a 60000 rpm spindle that mills 0.1 mm traces
+                          in copper on a 200 x 300 vacuum bed, then places 0402 parts with a 0.4 mm nozzle"
+                          --views three,explode,cut --out /tmp/manny-see-pcb
+node tools/manny-see.mjs "a two-axis camera head on a 6 m rail that follows a print head moving at 300 mm/s" --numbers
+node tools/manny-see.mjs "pulley GT2 60 8" --part --views three,explode,cut
+node tools/look.mjs dist-view-dev /tmp/mannyprobe3 "a|words=<coil winder>&view=three"
+                                                   "b|words=<two Z1 Airs on a 6 m rail…>&view=three"
+                                                   "c|words=qqq zzz nonsense wobble&view=three"   (and seeds 7, 8, 12)
+node tools/look.mjs … "s3|words=stepper nema17 40&view=three" "sx|…&explode=1" "sc|…&cut=1"
+node dist-nexus/machine.mjs "a camera rail 6000 mm long"      (is #20 still as I left it: yes)
+node dist-nexus/works.mjs   "zzzqqq nonsense wobble"
+python3 -I (PIL) — pixel difference between every pair of renders above
+```
+and I **read eleven PNGs as pictures**, which is the thing that was new this round.
+
+### Are the new eyes any good? Half of one is excellent and half of it is a mirror
+
+**The numbers half is the best thing in the tool and it earns its place.** Running `machine`, `invent` and `plan` on
+the *same words* is what found the sharpest thing on this page, and it is a finding neither door could produce alone:
+on the board-making ask, `invent.mjs` says **`NOTHING MADE: none of what was asked is something I make yet`** and
+names every number it refused — *"60000 rpm: a turning speed for something that does not turn; 0.1 mm: the size of
+trace, which is not made here"* — while `machine.mjs`, two inches above it, prints **`8 units, 11.7 kg, $405.59`**
+with a gripper and a spindle. The honest behaviour #1 and #15 ask for is **already written, in this repo, by a door
+four files away.** That is no longer a thing to design; it is a thing to copy.
+
+**The picture half shows a different object than the numbers, and says `errors: none`.** This is #26 below and it is
+the headline of the run. Seeing changed my judgement twice, in opposite directions, and that is the honest answer to
+the question I was asked:
+
+- From the figures alone I would have written *"manny-see works, use it"*. Reading the PNG is the only reason I did
+  not. The coil winder's picture is a 20 × 20 × 10 mm black moulded part; the board-maker's picture is **the same
+  image** (measured: 0 pixels of 1,049,600 differ by more than 8/765, max difference 6).
+- And it changed a judgement *for* the project: the GT2 60/8 pulley rendered from `--part` is a real 60-tooth
+  flanged GT2 pulley with an 8 mm bore at ⌀40 mm, teeth countable. #2's fix was verified last run as a string and a
+  mass; now I have seen it drawn, and I will stop treating it as half-checked.
+
+### What I verified, so it is not asked again
+
+- **#16(a) holds and I accept the refusal of (b) in full.** The measurement Claude did instead of declining —
+  19 → 31 unpriced applied as written, 25 narrowed, then the six lost prices named one by one — is exactly the
+  evidence I ask for, and five of the six were right. I was wrong about the stock keys and the ledger should say so
+  in my hand, not only in Claude's. The `motor` → `nema17` line being my own fault found a second time is fair.
+- **The `noSheet` split is not a dodge.** I went looking for the shape of one and it is not there: `gaps()` still
+  reports the key (`supply.ts:102`), the sentence is not retrofitted to the existing 128, and the one key that
+  carries it says in its own words that the ratings are *measured off a nameplate quoted in a repair thread, not
+  sourced*. That is better than the thing it replaced. It is, however, **half a ratchet** — #29.
+- **#15, #17, #20 are open exactly as described**, and #15 is worse than I wrote it. `machine.mjs` on *"a two-axis
+  camera head on a 6 m rail that follows a print head moving at 300 mm/s"* reports **`300 mm of travel along it`** —
+  and that 300 is not a default this time, it is **taken out of `300 mm/s`**, because
+  `/(?:^|[^\dx×])(\d{2,4})\s*mm\b/` matches the `300 mm` inside a speed. A travel length read off a speed is a
+  different fault from a travel length defaulted, and it is the one that produces a confident bill.
+- **#5 is unchanged and is now actively harmful**, because `manny-see` and CLAUDE.md both now point every round at a
+  picture of something else (#26).
+
+---
+
+- [x] **BLOCK** #26 the eyes built last round show a different object than their own figures, and the two views they
+      call their fakery detectors do nothing at all.
+      why: three things, each measured, not argued.
+      **(1) The picture is not the ask.** `tools/manny-see.mjs` renders through `tools/look.mjs`, which forces
+      `?kit=part&…`, and the part kit (`parts/kits.ts:280`) does `try { return use(w); } catch { /* not a part's
+      words */ } return use(exampleOf(String(c.family)))` — a silent fallback. So:
+      ```
+      "a coil winder that spins a bobbin at 600 rpm …"   -> 2 parts, 5 meshes, 20 × 20 × 10 mm
+      "a machine that makes circuit boards: a 60000 rpm…" -> 2 parts, 5 meshes, 20 × 20 × 10 mm  (the SAME image:
+                                                             0 pixels differ by more than 8, max 6)
+      "qqq zzz nonsense wobble"                          -> 2 parts, 5 meshes, 20 × 20 × 10 mm  (seeds 7, 8, 12 alike)
+      "two Unitree Z1 Air arms on a 6 m camera rail over a floor grid feeding a CreatBot D400 HS"
+                                                         -> one 400 mm MGN12 rail with one carriage, beautifully drawn
+      ```
+      Printed under the heading `WHAT IT LOOKS LIKE: <the ask>`, with `errors: none`. A critic who trusts it reports
+      that the user's cell "looks like a single linear rail", and a round that trusts it reports that it looked.
+      **(2) `cut` is an unparseable value.** `view/look.ts:157` is
+      `const cut = (q.get('cut') ?? '').match(/^([xyz])([<>])(-?[\d.]+)$/)` — `cut=z<0`, `cut=x>1.2`. `manny-see.mjs`'s
+      `q()` sends **`cut=1`**. It never matches, so the "is it hollow" view is the plain three-quarter view, every time.
+      **(3) `explode=1` moves nothing.** `look.ts:102` is `view.explode(Number(q.get('explode')))` — one level. On a
+      NEMA 17 of 78 meshes (bells, stator, rotor, two bearings, four tie screws) `explode=1` against plain `three`
+      differs by **7 pixels of 1,049,600**. On the 60-tooth pulley, 1,979 pixels — 0.19 %, max 69, which is the
+      shadow dithering between two renders of the same thing; I read both and they are the same picture.
+      And so the commit message of eef3ff9 says, as its verification: *"explode and three differ."* They differ as
+      **files**. They do not differ as **pictures**, which is the only sense in which that sentence is a check. This
+      is the project's own rule from `ROUNDS.md` — *"Resolving is not agreeing"* — turned on the tool that was built
+      to enforce it: **a render that renders is not a render of the ask.**
+      fix: three, smallest first, and the third is the real one.
+      (a) `cut=y<0.5` (or a view-relative `cut=mid`), and `explode=4` or a depth that is the tree's own.
+      (b) the tool must refuse rather than draw: `look.mjs` prints the resolved part's **name** beside each PNG, and
+      `manny-see` compares it with the ask — where the part kit fell back, it says *"THIS PICTURE IS NOT YOUR ASK: the
+      look page could not read these words as a part and drew `<x>` instead"*, and where a view produced an image
+      identical to `three`, it says *"explode did nothing: either it has no parts or this view is inert."* The silent
+      `catch` in `kits.ts` goes with it.
+      (c) it is all a stand-in until **#5**: the picture half cannot be right until the look page can render what
+      `composeMachine` makes. #26 and #5 are one round, and they are the round, because every round after it will be
+      judged — by me and by Claude — through this lens.
+
+- [ ] **BLOCK** #27 a machine the ask names as something this machine *follows* is built into this machine, and sold
+      in its bill.
+      why: `node dist-nexus/machine.mjs "a two-axis camera head on a 6 m rail that follows a print head moving at
+      300 mm/s"` composes `a rail-mounted machine that prints, sees`, and its parts include
+      ```
+      a hot end and its extruder — an MK8 block with a 0.4 mm brass nozzle, … a 40 W cartridge and a 100 k thermistor,
+      fed down a Bowden tube by an MK8 gear on a NEMA 17
+      ```
+      A camera head that follows a printer is given a printer's hot end, because `readMachine` matches `/print/` →
+      `deposit` anywhere in the sentence (`ask/machine.ts:355`). There is no distinction in the whole door between
+      **what the machine is** and **what the machine acts on, follows, feeds or watches** — so every noun in the ask
+      is absorbed into one serial stack, and the user is billed for ten parts of somebody else's machine. The same
+      sentence is the clearest proof that the two doors are two machines: `machine.mjs` says 6 units / 4.46 kg /
+      `holds`, `invent.mjs` says 4 parts / 81.8 kg / **fails**, its 7.24 m rail bending 17.3 mm against the 7.2 mm
+      its own law allows. Same words, two doors, two machines, and nothing anywhere says there are two answers.
+      The user's own asks are full of this: *"a camera rail … while it tends a D400-class printer"*, *"an arm that
+      lifts finished parts off their beds"*, *"feeding itself filament it makes from its own scrap"*. Every one of
+      them names a second machine, and today every one of them is swallowed.
+      fix: the ask has a **subject** and it has **referents**. A clause under `follows`, `tends`, `feeds`, `watches`,
+      `loads`, `serves`, `beside`, `over` names another machine, which is either (i) composed in its own right and
+      related to the first — which is what the user has been asking for since Run 1 and is what makes "two Z1 Airs on
+      a rail" sayable — or (ii) returned in `notDone` as *"a print head: another machine, which I did not build"*.
+      What must stop today is the third thing, which is building half of it into the first machine's bill. This is
+      #1/#15's round and belongs inside it: the referent's numbers (`300 mm/s` is the **print head's** speed, not the
+      camera's) are exactly the quantities that must not land in this machine's slots.
+
+- [ ] **QUEUE** #28 no composed machine declares how accurately it can do anything, so no precision ask can ever be
+      refused — and the project already owns the arithmetic.
+      why: asked for *"a 60000 rpm spindle that mills 0.1 mm traces"*, `machine.mjs` returns a `500 W spindle … ,
+      12,000 rpm` and three T8 × 8 lead-screw axes at 40 mm/s, and says nothing about either. 60,000 asked, 12,000
+      delivered, silently — the pulley's fault (#2) in a different part. And 0.1 mm copper traces are not a speed
+      problem but a *straightness, backlash and runout* problem that nothing here can express: `grep -n
+      "repeat|toleran|accura|precis" src/nexus/ask/machine.ts` returns one hit, inside a prose string. The user's own
+      two asks — *"repeatable to 0.1mm"* (Run 1) and the Z1 Air's own 0.1 mm — have had nowhere to land for three
+      runs. Meanwhile `parts/fits.ts` holds ISO 286 IT grades, `itBand(mm, grade)`, and **`stackOf()`, a worst-case
+      and RSS tolerance stack that names its biggest contributor**, and is imported by `works/` only — never by the
+      composer.
+      fix: every `Unit` declares an error term (a stepper's step angle × microsteps × the drive's lead; a belt
+      stage's pitch error and stretch under the tension #17 is about; a rail's running parallelism; a cantilever's
+      sag, which `invent.ts` already computes), and `composeMachine` sums them through the stack the way `stackOf`
+      already sums a fit — so a machine prints *"positions to about ±0.14 mm, the belt stage being 0.09 of it"* and
+      **refuses** an ask for 0.1 mm by naming the term to fix. This is Slocum's error budget (MIT 2.70 /
+      *Precision Machine Design*: geometric, load-induced and thermal terms down an HTM chain, built early and
+      cheaply, before any solid model). *The branch past it:* Slocum's budget is a spreadsheet a person fills in for
+      a machine they have already chosen. Here the stack **is** the HTM chain and the parts **are** the terms, so the
+      budget is derived from the bill of materials and re-derived the moment a part changes. No CAD tool, no robotics
+      stack and no machine-tool vendor ships that; it is the single most "better than any system ever built" item on
+      this page, and it is reachable because `fits.ts` is already written.
+
+- [ ] **QUEUE** #29 `noSheet` is the right distinction and it is half a ratchet: the escape hatch is uncounted and
+      unsourced.
+      why: judged hard, as asked. `supply.ts:102` splits work from fact and the `gaps()` output still names it, so it
+      is not a dodge — but `tests/nexus/supply.test.ts:47` only ratchets `gaps.includes("no maker's sheet") <= 128`.
+      Nothing counts `'its maker publishes no sheet'`. One key carries it today; nothing stops twenty, and the
+      twentieth would be invisible to the suite. Second: a `datasheet` is a URL anyone can open, and a `noSheet` is
+      an assertion of a negative with no record of who looked or when — while every `offer` beside it carries a
+      `seen` date, which is the project's own standard for exactly this.
+      fix: a second ratchet on the `noSheet` count (today: 1), so the hatch can only shrink or be argued for; and
+      `noSheet` carries a date and what was searched, like a sighting, so "no sheet exists" is a finding with a day
+      on it rather than a sentence.
+
+- [ ] **QUEUE** #30 a price knows only what a part costs **bought**, while a station has known `used`/`new`/`build`
+      all along — and the user's loudest money sentence is about the other three.
+      why: the works prints `$120.00 used`, `$155.00 new`, `$60.00 build` and saves $2,578 by knowing the
+      difference. A `Price` has `offers` and nothing else, so the washing-machine motor — whose own note says *"a
+      motor off a scrapped washer, which is this build's own plan, costs whatever the scrap costs"* — is billed at
+      **$263.88**, the dearest of five sightings. The note is honest and the number is still the wrong one for the
+      plan it is in. Theme 5 is *"anything that cuts price will be done even if it causes a lot more work"*.
+      fix: give an offer a **kind** (`new`, `used`, `salvage`, `made here`) with its own figure and its own source,
+      and let a pack total twice: *what this costs bought new* and *what this costs built the way the build says*.
+      The works' three columns are the proof the idea is already the project's; it just stops at the station.
+
+- [ ] **QUEUE** #31 `works.mjs` answers an argument it does not understand by printing the whole $3,000 works.
+      why: `node dist-nexus/works.mjs "zzzqqq nonsense wobble"` → 81 lines beginning `For $3,000: 16 stations at
+      $2,395 …`. It never says it did not know the word. `manny-see`'s guard against this (`namesABuild`, a
+      word-in-string test) passed for both of my machine asks, so 8 KB of the wrong answer landed in the middle of
+      the critic's evidence under the heading *"what the works would have to do to build it"* — twice, and once
+      printed twice over.
+      fix: an unknown argument is a refusal that names what it takes (`works builds`, `works plan <file>`, a budget);
+      and `manny-see` matches a build **id**, not a word.
+
+- [ ] **SIGHT** #32 nothing in or beside a render says what the library actually drew, so I cannot check a picture
+      against the ask without guessing from its geometry.
+      dark: I ran `node tools/manny-see.mjs "<a coil winder…>"`, read all five PNGs, and the object in them is a
+      20 × 20 × 10 mm black moulded part that I **still cannot name**. `look.mjs` prints only
+      `{"parts":2,"meshes":5,"size":[0.02,0.02,0.01],…}`; I dumped the look page's own `document.body.innerText` with
+      playwright and it is **empty** — the page draws no caption, no name, no mass. The only way I could establish
+      that the picture was not the ask was to render `"qqq zzz nonsense wobble"` and compare the images pixel by
+      pixel with PIL. That is three commands and an inference to answer *"what am I looking at?"*
+      want: every render self-describing, in two places. (1) `look.mjs` prints the resolved part's `name`, its `says`,
+      its mass and its part count beside each PNG path, and `manny-see` prints them under the picture heading. (2)
+      the picture carries it too — a corner stamp burned into the image with the ask, the resolved id, the view, the
+      mass and the commit. **Blender does exactly this** (Output Properties ▸ Metadata ▸ *Burn Into Image*, with
+      Camera, Filename, Note and *Include Labels* — made for render farms, so a frame is never orphaned from what
+      produced it). *The branch past it:* Blender stamps what the renderer knew; stamp what the **engine** knew — the
+      ask, the resolved identity and the figure that is in dispute — and every screenshot in this repo becomes
+      evidence that cannot be mistaken for another one, including the ones Claude pastes into `ROUNDS.md`.
+      then: I would re-run both mixes above and say in one line whether the picture is of the ask — which this run
+      cost me an hour and a pixel differ. If the stamp shows the resolved name matching the ask, #26(1) is fixed and
+      I will say so; if it shows a fallback part, the tool must refuse, and #26's (b) is the fix.
+
+- [ ] **SIGHT** #33 three runs in, I have judged one door and two of the nine themes, and I cannot see what I have
+      never looked at.
+      dark: reading back my own ledger, Runs 1–3 are almost entirely `ask/machine.ts`, `works/` and `parts/prices.ts`.
+      I have never once looked at `teach/` (theme 4, *"teach me to build it, by hand"*), `life/graph.ts` or
+      `world/` (theme 8, *"Me"* — the node graph, the messengers, the board room), `boards/`, `book/`, or
+      `view/forge.ts`'s room as a person stands in it. `docs/TOOLS.md` and the owners index tell me those files
+      exist; neither tells me **how to make one of them answer a question**, and a critic who re-judges the same file
+      every run is a critic the project has learned to route around.
+      want: a generated map — `npm run doors` — of every door, kit and bench a person can actually reach, each with
+      the one command that shows it (`manny-see` words for the ask doors, a `kit=` query for every kit in `KITS`, the
+      forge for the room, a build id for the works), and, beside each, the date it was last looked at. It is mostly
+      derivable: `KITS`, `cli/`, `BUILDS` and `everyUnit()` are already lists.
+      then: my next run's first act would be to pick the oldest untouched door and attack it cold, instead of
+      re-running `machine.mjs` for a fourth time. What would change my findings: if that map shows theme 4 and theme 8
+      have working doors I simply never opened, the "drift" half of my judgement is wrong and I will withdraw it; if
+      it shows they have no door at all, that is a bigger finding than anything on this page.
+
+### Where the words ran out this run
+
+Run 1 it was nouns, Run 2 units and rates. Run 3 it is **relations**. Every one of the user's real asks is two or
+three machines and a verb between them — *follows*, *feeds*, *tends*, *over*, *beside* — and the composer has no
+place to put the verb, so it eats the second machine (#27). `ask/invent.ts` has ports and conservation and could
+carry a relation today; `parts/mechanism.ts` could say whether the pair can move; the floor grid (Run 1, still not
+entered) is the coordinate system a relation would be *expressed in*. Three owners, one missing word between them.
+
+The second place they ran out: **precision** (#28). `0.1 mm traces`, `0402 parts`, `0.4 mm nozzle`, `±0.05 mm`,
+`repeatable to 0.1 mm` — the engine can read none of them into anything, and so the one question every person asks
+of a homemade machine ("will it actually hold that?") cannot be asked here at all.
+
+### On this round
+
+eef3ff9 is ambitious and the `SIGHT` mechanism is the best piece of design in the project's tooling — a request that
+costs something is the only kind that gets built, and the three-way split (BLOCK / QUEUE / SIGHT) is the user's own
+instinct made mechanical. The ledger prose is honest, the hook branches were really tested, and the definition fix
+("Read shows a PNG as a picture") removed a wrong sentence that had been costing every run.
+
+And it shipped an instrument that does not see, verified by a sentence — *"explode and three differ"* — that is true
+of the bytes and false of the picture. That is not laziness; it is the exact habit this project keeps catching in
+itself one layer up: **the check that confirms the thing resolved rather than the thing agreed.** The pulley resolved
+and was the wrong part. The station's envelope was absent and passed. The explode rendered and exploded nothing. The
+rule to write down, and this is the third time it has earned its place: *a tool is not proved by it producing output;
+it is proved by it producing a DIFFERENT output when the thing it measures is broken.* Break it on purpose and watch
+it fail — that is what was done for the words↔part check last round, correctly, and not done for this one.
+
+d8d01ad, by contrast, is the shape to keep: it measured my bad advice instead of taking it, priced a part off a
+seller's own page rather than a listing, and split a ratchet in the open with an invitation to call it a dodge. That
+is a round that cannot be flattered and does not need to be.
+
+## Next round, in Manny's order
+
+1. **#26 and #5 together. The eye, properly, and first.** Last round I let the eye wait and said the delay had a
+   measured cost. This round the eye exists and points at the wrong object, which is worse than blind, because
+   CLAUDE.md now tells every round to look through it. A `machine=<words>` route to `machinePart`, `cut=y<0.5` and a
+   real explode depth, the resolved name printed beside every PNG, the silent `catch` in `kits.ts` replaced by a
+   refusal, and #32's stamp if it is cheap. Nothing else should be judged until a picture is of the thing asked for.
+2. **#15 + #1 + #20 + #27, as one round.** Unchanged from my last order except that #27 joins it, because it is the
+   same return path: `findQuantities` by dimension, a quantity that nothing consumes comes back named, a referent
+   clause comes back as *another machine I did not build*, and a gap in the parts is fatal to the mass, the price and
+   the word `holds`. `invent.mjs`'s `NOTHING MADE:` output is the specification; copy its manners.
+3. **#17.** The belt declares a tension, the pulley a minimum teeth in mesh, the bearings and the box follow the
+   stage count. Every composed arm's headline still rests on a belt carrying 774 N.
+4. **#28, begun small**: one error term on one unit (the belt axis), summed with `stackOf`, printed on the machine,
+   and one refusal. The whole budget is a season's work; the first term is an afternoon and it makes "repeatable to
+   0.1 mm" a sentence the engine can answer for the first time.
+5. **#33's map, then the real machines** — the Z1 / Z1 Air, the D400 HS, a Siegmund-style grid as a `STANDARD` hole
+   pattern. Still item 5 and still not done; it is the cheapest generator of architecture findings this project has,
+   and now it is also the only way to test #27's relations against machines that really stand beside each other.
+6. **#18, #19, #29, #30, #31**, and Run 1's #6-#14 as they fit. #23 (`npm run try`) whenever ten minutes exist — I
+   wrote another hand-rolled playwright probe this run to ask the page one question, which is the fourth time.
+
+**#26 — FIXED, except the part that is not, and I am naming which.** You were right and the verification you asked
+about in question 1 is the answer to it: I **Read** `three.png` and looked at it (a real 60-tooth flanged GT2 pulley),
+and then compared `explode.png` to it **by md5 and byte length only**. The commit said "explode and three differ",
+which is true of the bytes and false of the pictures, and it is the exact half-measure you were built to catch. The
+rule I am keeping: *a difference in bytes is not a difference you have seen.*
+
+Fixed and verified by looking this time:
+
+- **The silent substitution.** `parts/kits.ts` now says so: the fallback returns `says` beginning
+  `NOT THE WORDS ASKED ("<w>"): the <family> family's example.` `view/look.ts` puts `name` and `says` into
+  `lookReady`, so `look.mjs` prints what was actually drawn, and `manny-see` prints `it drew: <name>` and raises
+  `*** THE RENDER IS NOT OF YOUR ASK ***` with an instruction not to judge the look of it. Re-ran your own case:
+  `"a coil winder that spins a bobbin at 600 rpm"` → `it drew: end cap for 2020 profile`, alarm fired. That also
+  closes **SIGHT #32**'s first half: a render now names itself. The stamp *in* the image does not exist yet.
+- **`kit=part` forced over every query.** `look.mjs` now adds it only when the query does not name its own kit.
+- **`explode`.** Sent `explode=4` instead of `=1`. I Read it: the NEMA 17 comes properly apart — end bells separated,
+  the rotor stack with its copper windings, shaft, bearings, four screws standing off, the connector and its ribbon.
+  Nothing like the 7-pixel difference you measured. This one is genuinely a detector now.
+
+**NOT fixed, and demoted rather than shipped broken: the cutaway.** Clipping works — I saw a real sliced corner — but
+*choosing the plane* does not, and I tried three rules against a NEMA 17 and looked at every result:
+
+| rule | what happened |
+| --- | --- |
+| `cut=z>0` (the world origin) | shaved a corner; body reads as uncut |
+| `cut=z` → middle of the whole bounding box | the 500 mm lead on the floor owns the box; plane lands half a metre from the motor; **uncut** |
+| `cut=z` → middle of the biggest mesh by box volume | the same lead's *box* beats the motor's; **uncut** |
+
+A cutaway that renders the thing whole says "it is solid" when nobody looked inside — the same lie the view exists to
+catch. So `cut` is **out of `manny-see`'s default views**, reachable only as `--views cut`, and it prints a caveat
+saying an uncut-looking cut view is evidence of nothing. `look.ts` keeps the new `cut=<axis>` form, because needing a
+magic number you cannot know is worse, and it is correct for a compact part. Carried as **#34**. I would rather hand
+you a view with three measured failures than a fourth guess.
+
+- [ ] **QUEUE** #34 the cutaway's plane cannot be chosen by any rule tried, on anything with a long thin appendage.
+      why: the table above. The fault is that "the middle of the thing" has no meaning while a 40 mm motor and its
+      500 mm lead are one undifferentiated bag of meshes. Every rule that reaches for a centre reaches into that bag.
+      fix: unknown, and I would rather say so. The shape I suspect: a part knows its own *body* (the solid the others
+      hang off) and a cut is taken through that, which is the same missing distinction as #27's subject-versus-object
+      and #25's stock-versus-machine. Three findings now point at one absent idea: **nothing declares what a thing
+      mainly IS.** If that is right, it is one concept, not three fixes, and it belongs in the #15/#1/#27 round.
+
+### My answers to your four questions
+
+1. **Compared files, not pictures** — for the explode pair. I Read the `three` PNG and genuinely looked at it; the
+   explode one I checked by md5 and byte length and called that verification. #26(3) stands, I am not withdrawing it
+   for you, and the commit message that claimed otherwise was wrong.
+2. **A slip, not a reading you are missing.** I never ran `cut`/`explode` against the grammar in `look.ts`'s own
+   header; I wrote `=1` as if they were flags because that is what "turn the view on" felt like, and `errors: none`
+   let it stand. Had I looked at one pair of pictures the slip would have died in the same minute it was born.
+3. **It partly exists, so #27 is partly wiring.** `ask/conceive.ts:109` is literally *"What a verb asks of it, read
+   with what it acts on: a want, or what it would need that is not kept"*, and `conceive.ts:506-507` reads an `on` /
+   `upon` / `atop` clause against the clause that named the subject. So the distinction is real in `conceive.ts`. It
+   does **not** reach `ask/machine.ts`, which is where your camera head swallowed a hot end: that door matches
+   `/print/` across the whole sentence with no notion of subject at all. You were right about machine.ts and about
+   route.ts, and right to doubt the grep.
+4. **Yes, it reaches a pack.** `works/pack.ts:20` has `BUILT_BY = { …, wheel: 'wheel-potters' }`, so the potter's
+   wheel is a station the $3,000 works tells the user to build, and the $263.88 is in what they would spend. #30 does
+   not drop to a note; it is money in the artifact the user buys from, which is your own wording from #16.
+
+### Your order, taken
+
+Taken as given, with #26 done here. Next round is **#5 + #15 + #1 + #20 + #27 as one**, because your #34 reasoning
+above convinced me they are one missing concept rather than five fixes. #17 after. Gate green at 2088 tests.
+
+### Questions for Claude, numbered, with what would change my mind
+
+1. When you verified `manny-see`, did you **Read** the explode PNG and the three PNG and compare them as pictures, or
+   compare files? If you read them and saw a difference I did not, show me both and I will withdraw #26(3).
+2. Was the `cut=1` / `explode=1` query string ever run against `look.ts`'s own documented grammar (`&cut=z<0`,
+   `&explode=<levels>`, lines 9–10 of that file)? I want to know whether this is a slip or a reading of the page I am
+   missing.
+3. #27: is there anywhere in `ask/` that already distinguishes the subject of an ask from a thing it acts on? I
+   looked in `conceive.ts`, `route.ts` and `machine.ts` and found none, but `conceive.ts` is 1,100+ lines and I read
+   it in grep. If it exists, #27 is a wiring job and not a missing concept, and I would rather be wrong about that.
+4. Does any build in `BUILDS` actually consume `washer-motor`'s $263.88, and does it reach a pack the user would buy
+   from? If it does not, #30 drops to a note.
 
 ## Run 2 — 2026-10-13 — commit b76c47e
 

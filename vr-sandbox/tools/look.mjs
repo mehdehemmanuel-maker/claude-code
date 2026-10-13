@@ -21,7 +21,11 @@ const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console',
 for (const a of asks) {
   const [name, query] = a.split('|');
   // (a page that works long before it is ready, its reflection probes on software GL: waited on past its load, LOOK_WAIT ms)
-  await p.goto(`http://localhost:${port}/look.html?kit=part&${query}`, { waitUntil: 'commit' });
+  // kit=part is the default, not an override: a query that names its own kit keeps it. Forcing it sent every ask
+  // through the part kit, whose words-to-part lookup falls back to the family's example, so a machine ask drew a
+  // 20 mm example and said nothing about it.
+  const url = `http://localhost:${port}/look.html?${/(^|&)kit=/.test(query) ? '' : 'kit=part&'}${query}`;
+  await p.goto(url, { waitUntil: 'commit' });
   try { await p.waitForFunction(() => window.lookReady, null, { timeout: Number(process.env.LOOK_WAIT ?? 90000), polling: 1000 }); } catch { console.log(name, 'NOT READY', errs.slice(-3).join(' | ')); continue; }
   await p.waitForTimeout(400); await p.screenshot({ path: `${out}/${name}.png` }); console.log(name, JSON.stringify(await p.evaluate(() => window.lookReady)).slice(0, 300));
 }

@@ -145,20 +145,47 @@ if (!v.ok) {
 }
 
 // The views that expose fakery, not the ones that flatter it.
-const DEFAULT = ['three', 'top', 'front', 'explode', 'cut'];
+// `cut` is NOT in this list, and that is a measured decision rather than an oversight. Three plane rules were tried
+// against a NEMA 17 and every one left the motor whole: the world origin (z>0) shaved a corner, the bounding box's
+// middle sits half a metre out along the 500 mm lead lying on the floor, and the biggest mesh by box volume is that
+// same lead, because a long curved wire's BOX is bigger than the motor it hangs off. Clipping itself works - the
+// corner really was sliced - so the fault is only in choosing the plane, and the honest answer is that no rule tried
+// chooses it on a part with a long thin appendage. A cutaway that renders the thing uncut tells you it is solid when
+// nobody looked inside, which is the exact lie this view exists to catch. It stays reachable as `--views cut`, with
+// the caveat printed, and is not offered as a detector until it detects.
+const DEFAULT = ['three', 'top', 'front', 'explode'];
 const views = (flag('views') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const wanted = views.length ? views : DEFAULT;
+// `cut` and `explode` take VALUES, not flags. They were sent `=1` and both were inert: look.ts parses cut as
+// /^([xyz])([<>])(-?[\d.]+)$/, which "1" never matches, and explode=1 is one level, which on a 78-mesh stepper moved
+// 7 pixels of a million. Both views were the plain three-quarter view wearing another name.
 const q = (v) => {
   const w = `words=${encodeURIComponent(words)}`;
-  if (v === 'explode') return `${w}&view=three&explode=1`;   // does it come apart into parts, or is it one lump?
-  if (v === 'cut') return `${w}&view=three&cut=1`;            // is it hollow where it should be solid, or solid where it should be hollow?
+  if (v === 'explode') return `${w}&view=three&explode=4`;    // four levels deep: does it come apart into real parts?
+  if (v === 'cut') return `${w}&view=three&cut=z`;            // sliced through the middle of what was drawn: is it hollow, or solid where it should not be?
   return `${w}&view=${encodeURIComponent(v)}`;
 };
 const asks = wanted.map((v) => `${v}|${q(v)}`);
 
 say(`rendering ${asks.length} views: ${wanted.join(', ')}`);
+if (wanted.includes('cut')) say(`CAVEAT on \`cut\`: the clipping works, but the PLANE is chosen by a heuristic that
+fails on anything with a long thin appendage (a lead, a belt, a rail), where it misses the body and the view renders
+UNCUT. So an uncut-looking cut view is not evidence that the thing is solid - it is evidence of nothing. Judge it only
+where you can see an actual cut face.`);
 const r = run('node', [join(ROOT, 'tools/look.mjs'), viewer, out, ...asks], { ms: 420000 });
-say(r.text.trim().slice(0, 8000) || '(look.mjs said nothing)');
+const reported = r.text.trim();
+say(reported.slice(0, 8000) || '(look.mjs said nothing)');
+
+// WHAT WAS ACTUALLY DRAWN. look.mjs prints each view's `lookReady`, which now carries the resolved name and says.
+// A render that renders is not a render of the ask: the part kit answers unknown words with its family's example,
+// and until this check that substitution was invisible in both the picture and the log.
+const drew = [...reported.matchAll(/"name":"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
+const faked = /NOT THE WORDS ASKED/.test(reported);
+if (drew.length) say(`\nit drew: ${[...new Set(drew)].join(' | ')}`);
+if (faked) say(`\n*** THE RENDER IS NOT OF YOUR ASK ***
+The library could not make "${words}" and drew its family's EXAMPLE PART instead. Every picture below is of that
+example, not of what you asked for. Do not judge the look of this ask from them, and do not report that you saw it.
+That the words do not reach a drawable thing is itself the finding, and a bigger one than anything in the picture.`);
 if (!r.ok) say(`\n[look.mjs failed: ${r.why}. Any view missing below was not rendered, and you did not see it]`);
 
 const pngs = existsSync(out) ? readdirSync(out).filter((f) => f.endsWith('.png')).sort() : [];
