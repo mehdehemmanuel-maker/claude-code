@@ -83,6 +83,7 @@ exists to prevent.
 | Attention to detail (joints, fasteners, seals, finishes, wear) | `src/nexus/make/detail.ts` |
 | Critic (room to move, held up, walls, through, standing, density, declared, interfaces) | `src/nexus/make/critic.ts` |
 | Critic, skins (continuity across a seam, draft from its die, bend radius) | `src/nexus/make/critic-skin.ts` |
+| Whether a part turns in service, and what holds it where something does (`Part.rotates`, the MOVES_WITHIN edge): said by the part, with `joint` then its name as fallbacks | `src/nexus/parts/kits.ts`, read by `src/nexus/make/critic.ts` (`turning`) |
 | Which of the critic's checks LOOKED at a thing, as against what they said about it (`Looked`) | `src/nexus/make/critic.ts`, carried on `Made.looked` by `src/nexus/make/pipeline.ts` |
 | The make pipeline (conditions, detail, critic, in rounds) | `src/nexus/make/pipeline.ts` |
 | Wheeled machines of every kind, from their published figures | `src/nexus/machines/machines.ts` (cars, karts, ATVs, motorcycles, forklifts, trucks, lawn tractors) |

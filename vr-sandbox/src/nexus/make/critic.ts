@@ -39,6 +39,9 @@ export interface Finding { check: string; part: string; says: string; fixed: boo
 
 // what turns: by the kind of part it is (a wheel's group turns as one: its tyre, rim and disc with it)
 const TURNS = /\b(wheels?|tyres?|tires?|rims?|rotors?|propellers?|fans?|augers?|screw conveyors?|gears?|pulleys?|sprockets?|(?:brake )?discs?|saw blades?|fan blades?|rotor blades?|mower blades?|cutting blades?|drums?|turbines?|impellers?|flywheels?|spindles?)\b/i;
+/** The joints that HOLD a part's motion: it moves within the member it runs in (a shaft in its race, an arm on its
+ *  bush, a rod in its tube, a shaft through its CV or Cardan joint, a stud in its socket), not through free space. */
+const JOURNALLED = new Set(['bearing', 'bush', 'slide', 'cv', 'universal', 'ball']);
 /** Whether a part turns, and the room it needs past its ring, m. */
 export function turning(p: Part): { clearance: number; why: string; /** beside it, along its axle, where that differs */ side?: number } | null {
   // (a tyre: a rubber ring round an axle big enough to hold air, as detail.ts's ringed is; a joint's boot, a rack's
@@ -47,6 +50,13 @@ export function turning(p: Part): { clearance: number; why: string; /** beside i
   const tyre = p.mat === 'rubber' && big && !/\b(boot|bellows|bush|seal|gaiter|grommet|mount)/.test(n);
   // (a steering wheel turns, but its room is a hand's round its rim inside the cab, not an arch cut in the body)
   if (/\b(steering|hand|fifth) ?wheel|wheel ?(nut|bolt|stud|arch|well|base|mount|hanger|house)/.test(n)) return null;
+  // WHAT THE PART SAYS, before what its name suggests: `rotates: false` is a part that does not turn however it is
+  // named, `rotates: { within }` one that turns inside the member it names (src/nexus/parts/kits.ts).
+  if (p.rotates === false || p.rotates?.within) return null;
+  // JOURNALLED: a declared joint holds its motion, so it sweeps its own drawn solid and no ring of free space — the
+  // model said so and this predicate never read it. `travel` is the exception that keeps it honest: a part that also
+  // steers or rises moves RELATIVE to the body, so a wheel on its bearing keeps its arch (docs/ROUNDS.md Run 7h).
+  if (p.joint && JOURNALLED.has(p.joint) && !p.travel) return null;
   if (!tyre && !TURNS.test(n)) return null;
   if (tyre || /\b(wheel|tyre|tire|rim|disc)s?\b/.test(n)) return { clearance: 0.03, side: 0.015, why: 'a wheel needs about 30 mm to its arch and 15 mm beside its sidewall (typical)' };
   if (/\b(fan|propeller|rotor|turbine|impeller)/.test(n)) return { clearance: 0.005, why: "a fan's or propeller's tip about 1.5 % of its diameter, at least 5 mm (typical)" };

@@ -73,6 +73,19 @@ export interface Part {
   /** what passes through an opening in it (a dashboard's for the steering column): fitted there, not one through the other */ passes?: string[];
   /** the moving part it is carried with, by name (a knuckle and its strut's tube steer and rise with their wheel): no room
    *  is kept between them, and a pose of that part moves it too */ movesWith?: string;
+  /** WHETHER IT TURNS IN SERVICE, and what holds it where something does — said by the part, not guessed from its name.
+   *
+   *  `src/nexus/make/critic.ts`'s `turning()` decided this by matching the name against a list of twenty-two words
+   *  (wheel, gear, disc, spindle, drum…) with a hand-kept list of name exceptions beside it. So a cast housing named
+   *  `reduction gear and differential` — which is the CASING round the gears, the only part of it that is drawn — was
+   *  a rotor needing clear space all round, and the subframe it is bolted to, the rack, the motor, the inverter and the
+   *  torque rod that holds it were all reported as in its way: eight findings from one word in one name.
+   *
+   *  `false` says it does not turn however it is named. `{ within }` says it turns inside the member it names (a shaft
+   *  in its race, a gearset in its case): it sweeps its own drawn solid and no more, so there is no ring of free space
+   *  for a neighbour to be in the way of — what it must clear is that member's bore, which is an interface and is
+   *  checked as one. Left off, the name list still answers, so nothing that does not say is changed. */
+  rotates?: false | { within?: string };
   /** the rigid link it is one of, by name (a wheel, its hub and its disc turn as one; a knuckle, its strut's tube and its
    *  caliper steer as one; an arm swings on its own): its holder's when not said, else the thing's own frame. Nothing
    *  rigid (a weld, a bolt, one casting) is laid between two links: what meets between them is a joint that lets them

@@ -677,7 +677,7 @@ export const EDU = { gb: [-0.08, 0.08] as [number, number], half: 0.36 };
 function driveUnit(p: Power): Part {
   const iron = { mat: 'al-a380', color: 0x8c8e90, finish: 'cast' } as const;
   return P('electric drive unit', undefined, [p.x, p.y ?? 0.4, p.z ?? 0], { says: p.says, parts: [
-    P('reduction gear and differential', { box: [0.42, 0.32, EDU.gb[1] - EDU.gb[0]] }, [0.12, 0.06, 0], { ...iron, kg: 30, fill: 0.35, passes: ['drive shaft left', 'drive shaft right', 'inner joint boot'], says: 'a cast housing round its reduction gears (about 9 to 1, typical) and its differential, the drive shafts out of its faces' }),
+    P('reduction gear and differential', { box: [0.42, 0.32, EDU.gb[1] - EDU.gb[0]] }, [0.12, 0.06, 0], { ...iron, kg: 30, fill: 0.35, rotates: false, passes: ['drive shaft left', 'drive shaft right', 'inner joint boot'], says: 'a cast housing round its reduction gears (about 9 to 1, typical) and its differential, the drive shafts out of its faces' }),
     P(`electric motor (${p.kW} kW)`, { cyl: [0.12, EDU.half + EDU.gb[0]] }, [0.2, 0.1, (EDU.gb[0] - EDU.half) / 2], { rot: [PI / 2, 0, 0], mat: 'steel-low', color: 0x8a8a90, kg: 45, fill: 0.55, fixed: 'bolted to the side of its gear and differential housing', says: `its motor: ${p.kW} kW, its end bolted to the housing, its shaft into the reduction gears (typical)` }),
     P('inverter', { box: [0.26, 0.16, EDU.half - EDU.gb[1]] }, [0.15, 0.14, (EDU.gb[1] + EDU.half) / 2], { mat: 'al-a380', color: 0x9a9ca0, kg: 12, fill: 0.4, finish: 'cast', fixed: 'bolted to the side of its gear and differential housing', says: 'its inverter, turning the pack\'s direct current into the motor\'s three phases, on the unit over the right drive shaft (typical)' })] });
 }

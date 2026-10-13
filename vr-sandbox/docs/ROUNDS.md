@@ -1904,3 +1904,84 @@ wrong, 47 put right**, with the hub bore 9.6 mm out of what it declares and the 
 is supposed to meet.
 
 Gate green. `critic.ts` 847 lines, `critic-skin.ts` 68.
+
+## Run 7h — what turns is what says it turns
+
+The user's instruction was the right one: *"don't fix the car, give yourself the right tools to accurately regenerate
+the car."* So the car's 59 open findings were grouped by cause before anything was touched, and the grouping is the
+whole round:
+
+```
+declared      38     a part states a feature size its own solid does not draw
+room to move  16     something sweeping into something else
+radius         3     a panel bending tighter than its sheet is pressed
+continuity     2     the hood standing 411 mm from the fender it is to meet
+```
+
+`room to move` was taken first, and it took **three wrong hypotheses before a right one**, each refuted by a
+measurement rather than by argument. That sequence is worth more than the fix:
+
+1. **"The stub spindles are the cause — they declare `joint: 'bearing'` and the critic ignores it."** Half right: the
+   declaration *was* being ignored, and `turning()` now reads it. But it was worth only **2 of 16** findings.
+2. **"The exact test uses the whole group's axial extent where the prefilter uses the tyre's ring."** True of the code
+   and irrelevant here: measured, `along` = 66 mm against `alongRing` = 65 mm, and the parts complained of lie
+   240–670 mm inboard of either.
+3. **"A part that other parts `passes` through is the enclosure, not the thing enclosed."** False. Across five kits,
+   rims (`passes: [tyre valve]`) and brake discs (`passes: [wheel stud 1…5]`) genuinely turn and genuinely declare it.
+
+The measurement that ended it was the one that should have come first: **attribute each finding to its mover**, which
+the finding already names.
+
+```
+4 wheels                        6 findings   the fender and the wheelhouse liners over them
+reduction gear and differential 8 findings   inner joint housing, subframe cross member, rack,
+                                             rack housing, motor, inverter, torque rod
+```
+
+**Eight of sixteen came from one part, and its own `says` gives the cause: "a cast housing round its reduction gears
+… and its differential".** The drawn solid is the *casing*. `turning()` called it a rotor because its **name contains
+the word "gear"** — and so the subframe it is bolted to, the rack beside it, the motor and inverter it sits between,
+and the torque rod that holds it were all reported as being in the way of a casting that does not move.
+
+### The root, and the tool
+
+`turning()` — the predicate behind every `room to move` finding — asked the part's **name**: a regex of twenty-two
+words with a hand-kept list of name exceptions beside it (`steering|hand|fifth ?wheel|wheel ?(nut|bolt|stud|arch|…)`).
+That is this session's recurring fault in the critic's most load-bearing predicate: *a general rule written as a
+condition on names*, maintained by adding names.
+
+Nothing in the model said whether a part rotates. Everything else about motion was declarable and declared —
+`travel` (range of motion: steer, bump, slide from–to), `swing`, `link` (moves as one), `movesWith` (carried with,
+by name), `joint` (the kind of joint), `iface {kind:'drive', torque, to}` (what drives what, with numbers) — but not
+the one fact the predicate needed. So `Part.rotates` now exists:
+
+```ts
+rotates?: false | { within?: string };
+```
+
+`false` says it does not turn however it is named. `{ within }` says it turns inside the member it names — it sweeps
+its own drawn solid and no more, and what it must clear is that member's bore, which is an interface and is checked
+as one. Left off, the name list still answers, so nothing that does not say is changed. `turning()` reads the
+declaration first, the joint second, the name last.
+
+### Measured, against a prediction written beforehand
+
+```
+                 predicted   got
+open findings     59 → 49    49
+room to move      16 → 6     6
+```
+
+The numbers were right and the attribution in the prediction was wrong (it blamed the spindles for 10 of the 16; they
+were 2, and the casing was 8). `room to move` on the hatchback is now its four wheels against the bodywork over them
+and nothing else — a real question, and a small one. `tests/nexus/turns.test.ts` holds the three answers apart (what
+the part declares, what its joint implies, the name list for what says nothing) and ratchets the hatchback's count:
+it may fall as the bodywork is fixed, never rise.
+
+`critic.ts` reached 863 against its 860 ratchet. The number was not raised; my own comment was cut to 857.
+
+### What is left, in order of size
+
+`declared` is now 78% of what remains — 38 findings on 12 parts, every one of the form *"it says ⌀24 and the nearest
+it draws is ⌀14.4"*. That is the same shape as this round's fault one level in: a number stated in one place and
+drawn in another, with nothing making the two agree. It is the next root, not the next patch.
