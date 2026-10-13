@@ -87,6 +87,15 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   exists because a critic could sample 29 families by hand and raise a finding, and nobody could size it: the answer
   is 92.1 % of items and 70.6 % of families not drawn at all (docs/MANNY.md SIGHT #55). Asking by id alone misses a
   drawing a maker file registers only when asked by words, so it tries both and prints how many the second door found.
+- `npm run why -- --kit <id> "<words>"`: every finding on what those words make, grouped by cause and attributed to
+  the part that owns it — each check with its share, the parts under it, the distinct things they say, the exact
+  **drawn / declared ratios** where a finding compares a stated figure with a drawn one, and last the checks that
+  looked at NOTHING. It exists because the same throwaway probe was written by hand five times in one session; those
+  probes found that 92 % of a car's findings were two checks, that eight of sixteen came from one cast housing, and
+  that thirty-eight `declared` findings fall on exactly three ratios (1.26, 0.6, 1.2) — one sizing bug, not
+  thirty-eight broken parts. A repeated ratio is one bug; a spread of them is many.
+  **It refuses to guess a kit**: no kit named in the words means no answer, because that default is how "the critic is
+  silent" was reported twice, and the first run of this very door drew an end cap for a 2020 profile.
 - `tools/verdict.mjs`: wraps a check so its LAST LINE is its verdict — `TIDY: PASS (16 of 16 ran) — 1.8s`,
   `GATE: FAIL (exit 1) — 182.3s`, `TYPECHECK: PASS (no work counted) — 3.3s`. The VERDICT comes from the exit status
   alone, never from the child's own words; the COUNT comes from a JSON report written to a path the wrapper names and

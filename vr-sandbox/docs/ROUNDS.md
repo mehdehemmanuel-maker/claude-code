@@ -2267,3 +2267,50 @@ is not. A log cut from the top, a killed run or a crashed wrapper prints **no ve
 line is not a pass, it is no answer*. That sentence is in `tools/verdict.mjs`'s own header.
 
 Gate: `GATE: PASS (2123 of 2123 ran) — 182.3s`, 181 files.
+
+## Run 7q — the tool I had written five times by hand
+
+The user, cutting through two rounds of mine: *"fuck the car ... that's not the point forget the car fix your tools."*
+Right, and the measurement was already on the page: **of nine faults this session, looking caught seven and rules
+caught two** — and the thing looking cost was that every look had to be rebuilt first.
+
+**Five throwaway `zz_probe_*` tests in one session, each deleted before committing, each asking the same question of a
+different thing:** findings grouped by check; which mover owns each; which obstacle each names; the ratio between what
+a part declares and what it draws; whether the instrument is clean where the truth is published. Between them they
+found that 92 % of a car's findings were two checks, that eight of sixteen came from one cast housing, that three
+hypotheses about the cause were wrong, and that thirty-eight `declared` findings fall on **exactly three ratios —
+1.26 ×20, 0.6 ×14, 1.2 ×4**, which is a sizing bug rather than twelve broken parts.
+
+Every one of those was one pass over `perfect()`'s own output. Having to rebuild the pass each time is *why three
+hypotheses got formed before the first measurement*: reasoning was cheap and looking was expensive. That is the whole
+of what `npm run why` changes.
+
+```
+why: "a small hatchback"   kit=car  seed=1  →  hatchback
+49 still wrong, 40 put right, 2 rounds
+
+declared  —  38 of 49 (78%)
+  12 parts: hub ×8, wheel stud 1 ×4, wheel stud 2 ×4, …
+  drawn / declared = 1.2600  ×20   e.g. wheel stud 1: ⌀12 → ⌀15.12
+  drawn / declared = 0.6000  ×14   e.g. hub: ⌀24 → ⌀14.4
+  drawn / declared = 1.2000  ×4    e.g. hub: ⌀12 → ⌀14.4
+…
+10 of the critic's 12 checks looked at this; these looked at NOTHING: room to slide, through
+```
+
+**A repeated ratio is one bug; a spread of them is many.** That line is the door's reason for existing: it turns
+thirty-eight findings on twelve parts into three constants, and three constants into one question instead of twelve.
+
+### And the fault reproduced itself inside the tool built to stop it
+
+The first run printed `kit=part → end cap for 2020 profile` and `0 still wrong`, because I had given it the same
+guess-a-kit fallback `look.mjs` has — the default that twice turned a measurement of the critic into "the critic is
+silent". **So it no longer guesses:** no kit named in the words, no answer, and it prints what it would take instead.
+Three instances of one fault, the third inside its own fix, is the clearest case this log has for why a convenience
+default is a liability in an instrument.
+
+Gate: `GATE: PASS (2123 of 2123 ran) — 174.9s`.
+
+**Still unbuilt, and still the thing my own count points at:** every judge printing its verdict where a person meets
+it without asking. Three of those wires exist (the critic under the picture, `contracts`, the census) and each was
+built by hand after the fault it would have caught.
