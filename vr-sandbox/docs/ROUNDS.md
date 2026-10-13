@@ -1831,3 +1831,13 @@ rate-limiting) — a network limit, stated rather than papered over with a secon
 and the cause was one id: `families.ts` gave every servo a 130-size can, 20 mm across, including the micro. There is a
 `motor-micro` now and the family picks by its own mass, as `gearmotor` already did for the N20. Offenders 2 → 0, and
 the test fails by name when `motor-130` is put back.
+
+## The default that lies: two instances in two rounds
+
+`tools/look.mjs` adds `kit=part` when a query does not name a kit. That default is why the critic's eyes showed a
+400 mm rail for seven runs (#56) — and then, one commit after it was fixed, why a measurement of the critic's output
+on "a small hatchback" came back empty and got written up as "the critic is silent". With `kit=car` the same ask
+gives a hundred findings. Both times the tool answered a question nobody had asked it, and both times the answer was
+confident. The pattern is worth more than either instance: **a default that makes a tool convenient is the one that
+makes its output a lie when you forget it**, and the defence is that the tool says which door it took — `look.mjs`
+and `manny-see` both name the kit now, in the line they print.

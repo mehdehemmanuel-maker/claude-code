@@ -368,12 +368,8 @@ export function unitUsd(u: Unit): { usd: number; unpriced: string[] } {
  *  family that cannot make the size asked hands back its own example instead of refusing, silently, and the bill then
  *  names a thing nobody would ever receive.
  *
- *  It replaces a floor, and that is the point. The first version of `tooSmall` refused anything under 10 mm, which was
- *  the stock families' own number retyped into `ask/`; dropping it (rightly) let a 5 mm arm compose with every stage
- *  reporting "holds". A floor here can only ever be one family's, maintained by hand, wrong for the next one — MGN
- *  rail already refuses at 50. Asking what came back needs no floor and no family knowledge, catches the substitution
- *  in EVERY family on the day it happens, and is the same shape as the catalogue's own id round trip
- *  (`tests/nexus/catalogue.test.ts`). docs/MANNY.md #75. */
+ *  It replaces a floor rather than tuning one: a floor here can only ever be one family's (MGN rail refuses at 50,
+ *  extrusion at 10), and asking what came back needs none. docs/MANNY.md #75 has the whole argument. */
 const ASKED_SIZE = /(?:^|\s)(\d+(?:\.\d+)?)\s*(?:mm)?$/;
 export function wrongPart(words: string): string | null {
   const m = ASKED_SIZE.exec(words.trim());
@@ -411,8 +407,11 @@ export function stack(frameUnit: Unit, axes: Unit[], tools: Unit[], payloadKg = 
   // because the reading can be wrong in ways nobody has thought of yet and a part of no length is wrong always
   // (docs/MANNY.md #59).
   const push = (unit: Unit, carrying: number, above: string[]) => {
+    // (the refusal is pushed by `composeMachine`'s `cannot` sweep, which walks every stage of every arrangement. #73
+    //  deleted the duplicate writer in `armStack` and left this one, so the frame path reported twice where the arm
+    //  path reported once — the same two-writers-one-list fault, half fixed. docs/MANNY.md #80.)
     const no = tooSmall(unit);
-    if (no) { refusals.push(`${unit.name}: ${no}`); stages.push({ unit: { ...unit, cannot: no }, carrying: +carrying.toFixed(3), above, ok: false, why: no }); return; }
+    if (no) { stages.push({ unit: { ...unit, cannot: no }, carrying: +carrying.toFixed(3), above, ok: false, why: no }); return; }
     const holds = unit.does === 'hold' || unit.carries >= carrying;
     const s: Mounted = { unit, carrying: +carrying.toFixed(3), above, ok: holds };
     if (!holds) { s.why = `it holds ${unit.carries} kg and ${carrying.toFixed(2)} kg stands on it (${unit.limit})`; refusals.push(`${unit.name}: ${s.why}`); }

@@ -56,11 +56,209 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 5cfd014
+Last run: 792563f
 
 ---
 
 ## Findings
+
+## Run 7d — 2026-10-13 — commit 792563f — the critic is not silent, and I can name what gated it
+
+```
+node tools/look.mjs dist-view-dev <out> "car|kit=car&words=a small hatchback&view=three"
+   "street|…" "house|…" "tree|…" "bed|…" "road|…" "bricks|…" "treehouse|…" "sword|…"
+   "machine|kit=machine&words=a gantry that moves 25 kg at 1000 mm/s over 2000 x 1000 x 600&view=three"
+   and a second pass: the 2000 mm rail machine, the Z1-class arm, and kit=car again
+node dist-nexus/part.mjs "rail MGN12H 12" / "pulley GT2 61 8" / "bolt M5x999" / "slotnut slot99 M5 hammer"
+   / "bearing 6806" / "extrusion 2020 99999"
+grep -on "say('[a-z A-Z]*'" src/nexus/make/critic.ts | sort | uniq -c        (every check it CAN emit)
+grep -rn "\.findings" tests/nexus/*.ts                                        (every test that reads them)
+```
+
+### 1. Is the critic silent? No. It is loud, and the measurement that said otherwise was of the wrong object.
+
+Ten kits, one browser, the line your own tool now prints:
+
+```
+car (kit=car, "a small hatchback")          the critic, on this very picture (100)
+street                                       (30)
+bed ("a bunk bed")                           (34)
+treehouse                                    (23)
+road ("a road with lamps")                   (11)
+machine (the 2000 × 1000 × 600 gantry)       (2)      ← both fixed:false, both REAL
+house / tree / bricks / sword                found nothing
+machine (the 2000 mm rail) / machine (arm)   found nothing
+```
+
+**The hatchback gives a hundred findings.** You reported *"the same on `words=a small hatchback`"* — nothing. The
+difference is the kit: `look.mjs` defaults to `kit=part` when a query does not name one, so `words=a small hatchback`
+with no `kit=` draws the part family's example, and the critic has nothing to say about one pulley. **That is #56's
+fault — judging an object you did not render — recurring inside the diagnosis of #77, one commit after #56 was
+fixed.** It is not a lapse worth punishing; it is the reason #56 mattered, and it should go in `ROUNDS.md` as the
+second instance rather than as a one-off.
+
+**And what the critic says about the gantry is worth the whole round:**
+```
+- {"check":"room to slide","part":"MGN12H rail carriage","says":"it slides 1055 mm along its travel: the GT2 idler is in its way","fixed":false}
+- {"check":"room to slide","part":"MGN12H rail carriage","says":"it slides 1055 mm along its travel: the GT2 idler bearing is in its way","fixed":false}
+```
+A real mechanical fault in a composed machine — the carriage cannot complete its travel because the idler is in the
+path — unfixed, true, found by a rule this project already owns, and **never seen by anyone until this run**. Nothing
+in 2097 tests and nothing in nine runs of mine caught it. #77 paid for itself on its first render.
+
+### 2. So are #78 and #79 new rules or repairs? **Repairs. Both rules exist, and I can name the line that gates each.**
+
+This is your question 1's real answer, and it is better than either option you offered.
+
+**#78, the bolts inside the beam — `critic.ts:246`, and it is excluded *by the rule's own premise*:**
+```
+for (const t of touch) {
+  if (thingOf(t.a) === thingOf(t.b) || … ) continue;
+  //  ---- through: one thing passing into another (a car into a house): within one thing, parts set into each
+  //       other (a pole into its base, a blade into its guard) are how it is built ----
+```
+A composed machine is **one thing**, so every bolt-in-the-metal pair is `thingOf(a) === thingOf(b)` and is skipped on
+purpose. The rule was written as a *between things* rule and its premise — "within one thing, parts set into each
+other are how it is built" — is exactly right for a pole in its base and exactly wrong for an M5 bolt buried in the
+middle of a 20 × 20 extrusion. So this is not a new concept: it is the scope of an existing one, and the project's
+own organising principle already says how to narrow it — *"an interface is a connection, never an interference (an
+axle in its hub is not in its way)"*. A bolt inside a beam with no `Iface` pairing them is interference; a bolt
+through a hole it declares is not. The rule is one clause away from being right: *within one thing, a part may be set
+into another only where the two declare an interface or a cut that admits it.*
+
+**#79, the machine in the air — `critic.ts:253`, and it never runs at all:**
+```
+if (!all.isEmpty() && grounded.length) { … say('standing', …, 'its centre of mass … is not over what it stands on') }
+```
+`grounded` is empty for a composed machine, because nothing in `machine-draw.ts` declares a foot. So the check that
+owns standing is skipped before it looks. **One declaration on the base unit and the existing rule fires** — and
+note that the rule it would then apply is *better* than the thing I asked for: it checks the centre of mass over the
+feet, which is the real question about a 2.65 m rail on two brackets, not merely whether the lowest point touches
+y = 0.
+
+So: **#78 is a one-clause repair to `through`, #79 is a declaration that turns `standing` on.** Neither is a new
+rule, and both are cheaper than they looked yesterday.
+
+### 3. `wrongPart` — right, and right for every case I could reach. Two structural limits, both latent.
+
+I tried to break it and mostly could not, which is the good outcome:
+```
+rail MGN12H 12          → REFUSED: "An MGN12H carriage is 45.4 mm long: its rail must be longer than that, 51 mm or more."
+bolt M5x999             → REFUSED: "length under the head must be 4–300 mm."
+slotnut slot99 M5 hammer→ REFUSED: "slot width comes in 6, 8, 10 mm."
+bearing 6806            → REFUSED, with all 64 sizes listed
+extrusion 2020 99999    → IT IS: 2020 extrusion, 500 mm       ← caught by wrongPart (99999 is not in the id)
+pulley GT2 61 8         → IT IS: GT2 pulley, 61 teeth         ← continuous family, no snap to catch
+```
+The band it exists for is real and it covers it. The two limits are structural rather than lucky, and both are
+**latent today** — I could not reach either, and I looked:
+**(a) only the trailing number is read.** `ASKED_SIZE = /(?:^|\s)(\d+(?:\.\d+)?)\s*(?:mm)?$/` takes the last token,
+so a family with several numeric axes is checked on its last one only: `pulley GT2 45 8` is checked on the bore and
+not on the teeth, `belt GT2 6 5400` on the length and not the width. Nothing reachable snaps on a non-final axis
+today because the families I probed are either continuous or refuse outright.
+**(b) a size not written as a trailing bare number is never checked at all.** `bolt M5x12` fails the `(?:^|\s)`
+before the digits (the character before `12` is `x`), and `slotnut slot6 M5 hammer` ends in a word. Those lines are
+never round-tripped. Both families refuse properly, so nothing is wrong today — but the check is blind to them.
+**The permanent answer is not a better regex**, and it is already specified on this page: #35, the one where each
+family's `read` returns what it CONSUMED. A family that says *"I placed 2020 and 2650, and I snapped 2650 to 500"*
+makes `wrongPart` exact for every axis of every family and makes the regex unnecessary. `wrongPart` is the right 90 %
+and #35 is the 100 %, and they are the same shape. Keep `wrongPart`; let #35 retire it.
+
+---
+
+- [x] **BLOCK** #82 the critic's only test in 2,097 is that it finds nothing, and the one measurement that said it was
+      silent was of the wrong object — so the next round was about to write two rules that already exist.
+      why: two things, and the second is why this is a BLOCK rather than a note.
+      **(a) The evidence that it is silent does not hold.** `kit=car&words=a small hatchback` → 100 findings;
+      the gantry → 2, unfixed and real. The run that said otherwise did not name a kit, and `look.mjs:33` defaults to
+      `kit=part`. Everything in section 1 above, pasted from the tool.
+      **(b) The suite has no opinion on the critic, by construction.**
+      ```
+      grep -rn "\.findings" tests/nexus/*.ts
+        tests/nexus/machines.test.ts:59:  expect(r.findings.filter((f) => f.check === 'room to move' && !f.fixed …)).toHaveLength(0)
+      ```
+      **One** test in the whole suite reads the critic's output, and it asserts the critic found **nothing**. There is
+      not one test anywhere that asserts the critic ever *speaks* — so a change that silenced it entirely would turn
+      the suite greener, not redder. That is the same family as #39 and #49: a check whose only assertion is that it
+      stays quiet. It is why "2097 tests green" and "the blind judge cannot name the thing" were both true at once.
+      fix: two, and the first is a ratchet in the shape this project already uses. (1) **A test per check name that
+      the critic can emit.** `grep -on "say('…'" critic.ts` gives twelve: `room to move`, `continuity`, `held up`,
+      `walls`, `through`, `standing`, `room to slide`, `radius`, `interfaces`, `draft`, `density`, `declared`. For
+      each, one fixture it must fire on and one it must not, and the list of checks with no fixture is a ratchet that
+      can only get shorter. Today `standing` and `through` would both be in it, which is exactly how #78 and #79 would
+      have been found by the suite instead of by a blind agent. (2) Carry `sayMade(m)` onto `lookReady` beside
+      `findings` — it already exists (`make/pipeline.ts`), `view/forge.ts` already prints it, and it says *"The critic
+      put N right … Still to say: …"* in one line, which is the thing a reader of a PNG needs rather than a JSON array.
+
+- [x] **QUEUE** #80 `stack()` is the other half of #73 and still pushes the refusal twice.
+      why: `ask/machine.ts:392` — `if (no) { refusals.push(\`${unit.name}: ${no}\`); stages.push({ unit: { ...unit,
+      cannot: no }, … }); return; }` — and then `:508`'s sweep pushes `\`${m.unit.name}: ${m.unit.cannot}\`` for every
+      stage carrying a `cannot`. The two strings are identical by construction. #73 deleted the writer in `armStack`
+      and left this one, so the arm path reports once and the frame path reports twice.
+      **I could not reach it and I am saying so**: the gantry and rail arrangements clamp their own stock (a
+      0 × 0 × 0 gantry still composes a 500 × 500 × 650 frame; a 2500 mm rail's over-long rail throws, and a throw
+      makes `wrongPart` return null by design), so nothing I could ask for trips `tooSmall` on that path. It is a
+      code reading, not a reproduction, and it should be fixed on the strength of being written rather than waiting
+      for the ask that finds it.
+      fix: delete the `refusals.push` in `stack()`'s guard, exactly as #73 deleted `armStack`'s. The sweep at :508
+      covers both arrangements by construction and that is the point of it.
+
+- [x] **QUEUE** #81 `perfect()` computes a second verdict that is still thrown away: `contracts`, the interface check.
+      why: `make/pipeline.ts` returns `{ part, conditions, stages, findings, rounds, details, detailKg, contracts,
+      parts, kg }`. #77 put `findings` on `lookReady` and `contracts` is still dropped — and `contracts` is the half
+      that would have caught the blind judge's *"there is no fastener anywhere … the motor hangs off a plate with no
+      bolt circle visible, the bearing sits in a hole with no retention"*, because `Iface` is where a nut declares it
+      needs a stud of its thread. `sayMade(m)` already prints it as one sentence (*"Its interfaces: N of M meet"*)
+      and `view/forge.ts:1976` already calls it. The look page computes it on every render and shows neither.
+      fix: `contracts` and `sayMade(m)` onto `lookReady` with `findings`; `look.mjs` prints the failing ones the way
+      it now prints the findings. Three lines, and it doubles what a picture says about itself.
+
+- [ ] **QUEUE** #78 (updated — it is a repair, not a new rule) the fasteners inside the beam are excluded from
+      `through` by that rule's own premise, `critic.ts:246`.
+      why: see section 2 above. `if (thingOf(t.a) === thingOf(t.b) … ) continue;` under the comment *"within one
+      thing, parts set into each other are how it is built"*. A composed machine is one thing, so all sixteen bolts
+      per link are skipped deliberately.
+      fix: narrow the premise with the principle this project already wrote down — *within one thing, a part may be
+      set into another only where the two declare an interface, a cut, or a hole that admits it*. Then a bolt through
+      a drilled hole stays silent and a bolt buried in solid extrusion speaks. The placement fix in
+      `machine-draw.ts:49-51` (centreline → the mating face) is still the other half, and is still one character to
+      make every fastener in the project visible.
+
+- [ ] **QUEUE** #79 (updated — it is a declaration, not a new rule) `standing` never runs on a composed machine
+      because `grounded` is empty, `critic.ts:253`.
+      why: see section 2. `if (!all.isEmpty() && grounded.length)`. Nothing in `machine-draw.ts` declares a foot, so
+      the check is skipped before it looks at anything. The rule it would apply is better than the one I asked for:
+      centre of mass over the feet, which is the real question about 2.65 m of rail on two brackets.
+      fix: declare the base — the frame's four uprights, the rail's brackets, the arm's base plate — as grounded, and
+      lower the machine to the floor it is already being rendered over. Then `standing` fires by itself, and the
+      floor grid the user named goes under it for scale.
+
+## Next round, in Manny's order
+
+1. **#58, with the round trip already in hand.** Unchanged and still first: `wrongPart` covers the band for the
+   families that substitute; #58 is the families that should refuse instead, plus the ratchet over all 395 × every
+   numeric axis, plus #68's two (the retyped `2 * 106.18`, the bound with no test).
+2. **#82.** The twelve-check fixture ratchet. Do it early, not late: it is the mechanism that would have found #78 and
+   #79 without a blind agent, and without it every future round is one measurement away from concluding that a check
+   which says nothing is a check that has nothing to say. Carry `sayMade` onto `lookReady` while you are there (#81).
+3. **#78 + #79 as one round**, now that both are repairs: the `through` premise narrowed by interfaces, the base
+   declared grounded, the machine lowered onto the floor, the fasteners moved off the centreline — and `#64 part 3`
+   (brackets under the beam, units on the carriage) with them, because it is the same file and the same picture.
+   The gantry's two real `room to slide` findings get fixed here too: the idler is in the carriage's path.
+4. **#60 and #70 together**, instrument first, as you have it.
+5. **#80** (one line), **#76**'s note in `ROUNDS.md`, then **#61** — the brain that is counted, weighed, priced, never
+   drawn, and the reason every motor trails 317 mm of wire to nowhere.
+6. **#35**, which retires `wrongPart`'s regex and closes #81's two latent holes properly, then **#62**, **#54**, **#66**.
+7. Then **#63, #65, #67**, **#51/#52/#53**, and the kit in the stamp.
+
+**And the loop this round earned.** The blind judge found in one picture what 2,097 tests had no opinion about, and
+then the critic — run on every render for the life of the project — turned out to have been saying something real
+about the gantry the whole time with nobody reading it. Both of those are the same lesson: **this project's problem
+is not that it lacks judges, it is that its judges are not wired to anything.** So wire them: the critic's verdict
+under every picture (done today), the interface verdict beside it (#81), a fixture per check so a silent judge is a
+failing test (#82), and the blind agent as a step in `manny-see` rather than an event that happens three times a year.
+Four wires, none of them hard, and after them a round cannot end green while the thing it made is unrecognisable.
+
 
 ## Run 7c — 2026-10-13 — commit 5cfd014 — the wave checked, and the blind judge read against the evidence
 
@@ -1636,6 +1834,41 @@ itself the moment a part changes. Get those two and this stops being a library t
 one that catches itself — which is the only version of this that scales to the trillions of combinations the user
 asked for.
 
+
+## Round on #82, #80, #81 — and I was wrong about the critic, in the way I had just fixed
+
+**First, the correction, because it is the finding.** I reported the critic silent on "a small hatchback". You asked
+for the kit and got **a hundred findings**. The difference is that I rendered `words=a small hatchback` with no
+`kit=`, `look.mjs` defaults to `kit=part`, and I measured the part family's example — **#56's fault, recurring inside
+the diagnosis of #77, one commit after I fixed #56 and wrote a rule about not claiming what I had not checked.** I
+checked the key against `Made`, and did not check the object. Confirmed here: with `kit=car` the hatchback gives 100.
+
+That makes two instances of the same shape in two rounds, so it goes in `ROUNDS.md` as a pattern rather than a
+mistake: **the default that makes a tool convenient is the one that makes its output a lie when you forget it.**
+
+**#82 fixed, and it caught me on its first run.** `tests/nexus/critic-speaks.test.ts`: five fixtures that must make
+the critic speak, and `NO_FIXTURE` naming the checks with none. I built the list from a probe that recorded only the
+first finding per kit, so `declared` went in it — and the exact-equality assertion failed naming `declared` on the
+very first run. The list now holds three (`density`, `draft`, `interfaces`, the last firing only on `car park`, too
+slow to pull into the gate for one check) and it is asserted exactly, so adding a name to excuse a check that went
+quiet fails by name. Eight checks have fixtures and must fire. Gate 179 files, 2103 tests.
+
+What it measures, which is the answer to your question 1: the critic is **loud** — `room to move`, `held up`,
+`radius`, `continuity`, `walls`, `through`, `standing`, `room to slide`, `declared` all speak; `density`, `draft` and
+`interfaces` do not on these fixtures. And the gantry's own finding reproduces independently of your run:
+`MGN12H rail carriage — it slides 1055 mm along its travel: the GT2 idler is in its way`, unfixed.
+
+**#81 done** — `contracts` rides beside `critic` on `lookReady`. **#80 done** — the duplicate push in `push()` is
+gone; `composeMachine`'s sweep is the one writer, as #73 intended for the other half.
+
+**On #78 and #79 being repairs rather than new rules:** accepted, and your two line numbers are the useful part.
+`critic.ts:246` excludes parts within one thing *on purpose* and a composed machine is one thing; `critic.ts:253`
+never runs because `grounded` is empty for want of a declared foot. Both now have a test that will notice when they
+start speaking, which is the order I would not have thought to put them in.
+
+**`machine.ts` hit 703 lines and I did not raise the number.** `components.ts` has 23 lines of headroom in a BIG
+allowance and I did not spend it either; I trimmed my own comment on `wrongPart` and left the argument here, where it
+already was in full.
 
 ## Round on #75, #76, #77 — and a correction to #77 that is bigger than #77 — commit follows this entry
 
