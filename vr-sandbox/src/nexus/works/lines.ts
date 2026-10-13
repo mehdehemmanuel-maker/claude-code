@@ -158,10 +158,16 @@ export function priceOfLine(line: PartLine): { usd: number; key: string } | null
     if (key) { const c = cheapest(key, line.n); if (c) return { usd: +c.usd.toFixed(2), key }; }
   }
   // a looser match only where the entry shares two of the line's real words: one shared word prices a LiPo pack off a
-  // battery holder, and a made-up price is worse than no price
+  // battery holder, and a made-up price is worse than no price.
+  // Two *distinct* words, which is what that has always meant: `words` was not deduped, so **one word written twice
+  // satisfied the guard**, and `npm run plan` names every line "<id>, <label>", which is where a word gets repeated.
+  // It cost two invented prices in this project's own bills: "the barrel" had no price and "the barrel barrel" had a
+  // $34.95 crimping plier's (open-BARREL contacts), and "motor, washing-machine induction MOTOR" was charged $9.95 as
+  // a NEMA 17 stepper. A word said twice is still one word.
+  const said = [...new Set(words)];
   const hit = Object.entries(PRICES).find(([, v]) => {
     const text = `${v.what} ${v.item ?? ''}`.toLowerCase();
-    return words.filter((w) => w.length > 3 && text.includes(w)).length >= 2;
+    return said.filter((w) => w.length > 3 && text.includes(w)).length >= 2;
   });
   if (hit) { const c = cheapest(hit[0], line.n); if (c) return { usd: +c.usd.toFixed(2), key: hit[0] }; }
   return null;

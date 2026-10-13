@@ -31,7 +31,7 @@ const WEIGHT: Record<Fault, number> = { 'search listing': 4, 'no page of its own
  *  separate: a fault says this number may not be this part's price, a gap says we cannot say which part it is or
  *  whether it can still be bought. Lumping them put a near-universal gap on every sighting and left one of 158
  *  "firm", which ranks nothing. */
-export type PartGap = "no maker's part number" | 'out of production' | 'no maker\'s sheet';
+export type PartGap = "no maker's part number" | 'out of production' | 'no maker\'s sheet' | 'its maker publishes no sheet';
 
 /** Past this many days a sighting is re-read before it is quoted. Three months is chosen, not measured: Raspberry Pi
  *  moved every LPDDR4 board twice in 2026 and steel moves with the mills' own quarters, so a quarter is the coarsest
@@ -97,7 +97,9 @@ export function gaps(): { key: string; what: string; gaps: PartGap[] }[] {
     const g: PartGap[] = [];
     if (!p.maker || !p.mpn) g.push("no maker's part number");
     if (p.life === 'obsolete') g.push('out of production');
-    if (!p.datasheet) g.push("no maker's sheet");
+    // a sheet that was not found is work; a sheet that does not exist is a fact. Both are said, and only the first is
+    // counted as debt - otherwise the count measures how big the table is, and can never reach zero.
+    if (!p.datasheet) g.push(p.noSheet ? 'its maker publishes no sheet' : "no maker's sheet");
     if (g.length) out.push({ key, what: p.what, gaps: g });
   }
   return out;

@@ -29,13 +29,18 @@ export interface Price {
    *  three ways - so this is the only field by which an offer here and an offer anywhere else are the same thing. */
   maker?: string; mpn?: string;
   /** the maker's own sheet, where the figures come from */ datasheet?: string;
+  /** why there is no maker's sheet, where none exists to be found: a length of hot-rolled angle, a sheet of birch
+   *  ply and an appliance spare are not published parts, and no round will ever find a sheet for them. Set it only
+   *  where one was looked for and does not exist, and say where the figures came from instead. It is the difference
+   *  between a gap that is work and a gap that is a fact; `gaps` counts the two apart, and still names both. */
+  noSheet?: string;
   /** where it is in its life. Being told to buy a part that is out of production is worse than being told it has no
    *  price: the first wastes an order, the second only wastes a decision. */
   life?: 'active' | 'new' | 'not-recommended' | 'obsolete';
   /** other keys here that do the same job, if this one cannot be had */ instead?: string[];
 }
 
-const D = '2026-10-09', D2 = '2026-10-10', D3 = '2026-10-11';
+const D = '2026-10-09', D2 = '2026-10-10', D3 = '2026-10-11', D4 = '2026-10-13';
 const pishop = (name: string, usd: number, path: string, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'PiShop.us (official Raspberry Pi reseller)', url: `https://www.pishop.us/product/${path}/`, seen: D, ...o });
 const ada = (name: string, usd: number, pid: number, o: Partial<Offer> = {}): Offer => ({ name, usd, seller: 'Adafruit', url: `https://www.adafruit.com/product/${pid}`, seen: D, ...o });
 const lcsc = (name: string, usd: number, c: string, min: number, o: Partial<Offer> = {}): Offer => ({ name, usd, min, seller: 'LCSC', url: `https://www.lcsc.com/product-detail/${c}.html`, seen: D, note: `the price at ${min}+ pieces; it falls with more`, ...o });
@@ -226,6 +231,18 @@ export const PRICES: Record<string, Price> = {
   copper: { what: 'copper bar and rod, C110: a spot welder\'s arms and its electrodes', offers: [
     sm('3/8" Rd CA 110 Copper, 12 in', 10.07, 'p-2941-38-rd-ca-110-copper.aspx', { note: `${SEARCHED}: 9.53 mm for the bills' 10 mm electrode rod, and one 12 in length makes both of the welder's 80 mm electrodes with plenty over. The 36 in is listed at $24.17. A line whose only copper word is "copper" (an Ender's copper hot-end cover) is charged this rod and is not it` }),
     sm('1/4" x 3/4" CA 110 Copper Flat, 12 in', 22.8, 'p-2883-14-x-34-ca-110-copper.aspx', { note: `${SEARCHED}: 6.35 × 19.05 mm for the bills' 20 × 6 arm bar, one 12 in length an arm (the welder's is 180 mm). \`cheapest\` takes the rod above, so the two arms are charged it; this is their own figure, and the 24 in is $38.40` })] },
+
+  // The potter's wheel's motor. It had a price before this and the price was a lie: the line reads "motor,
+  // washing-machine induction motor", the word "motor" is in it TWICE, and the looser match in works/lines.ts counted
+  // one repeated word as two - so a 180 × 180 × 200 mm mains induction motor was charged $9.95 as a NEMA 17 stepper,
+  // a part a sixth its size. The dedup closed that hole; this is the figure that replaces it.
+  // What the build actually wants is a SALVAGED motor - inventory.ts says so of its speed board, "which is what makes
+  // a salvaged motor into a potter's wheel" - and a motor out of a scrapped washer has no seller and no price. So the
+  // figure here is what the same motor costs bought new, which overstates this line rather than understating it.
+  'washer-motor': { what: 'washing-machine drive motor: the mains induction motor a potter\'s wheel is built on, out of a direct-drive top loader', maker: 'Whirlpool', mpn: 'W10006415',
+    noSheet: 'an appliance spare, which no maker publishes a sheet for. Its ratings are off the motor\'s own nameplate as quoted in a repair thread, not a sheet, and are therefore MEASURED, not sourced: 1/2 HP, 120 V, 60 Hz, 9.8/8.8/9.0 A, 1725/1140/850 rpm, two shafts, 3.7 kg. The 1,725 rpm is the figure the wheel\'s belt ratio is taken from, and it wants checking against the nameplate of whatever motor is actually salvaged',
+    offers: [
+      { name: 'Drive Motor #W10006415, for a Whirlpool WTW4800XQ2 top loader', usd: 263.88, seller: 'RepairClinic', url: 'https://www.repairclinic.com/Repair-Library/Part-Replacement/906/Whirlpool-Top-Load-Washer-Drive-Motor-W10006415', seen: D4, note: 'off RepairClinic\'s own part page, which showed the figure itself. It is the dearest of the sightings and the only one read from a seller\'s own page, so it is the one offered: cheaper ones were all listings, and a listing is what was asked, not what was paid. Those, for a reader who wants the range: Whirlpool\'s own store listed a direct-drive motor at $174.67, Walmart the OEM W10677715 at $132.10 and a second at $155.41, and an eBay seller had a new genuine W10006415/WPW10006415 at $70.00 "or Best Offer". RepairClinic\'s own drive-motor category ran $112.28 to $272.78. A motor off a scrapped washer, which is this build\'s own plan, costs whatever the scrap costs' }] },
 
   // ---- what a forge, a furnace and a kiln are lined and fired with --------------------------------------------------
   firebrick: { what: 'K23 insulating firebrick, 229 × 114 × 64 mm, whole or sawn: a kiln\'s wall, its offcut, its floor and lid packer, a forge\'s floor split', offers: [

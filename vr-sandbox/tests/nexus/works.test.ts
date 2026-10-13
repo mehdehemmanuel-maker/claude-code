@@ -84,6 +84,23 @@ describe('what is bought and what is made', () => {
     expect(priceOfLine({ name: 'bldc-outrunner motor 2207', n: 4, mat: 'steel-low' })?.usd).toBeGreaterThan(50);
     expect(priceOfLine({ name: 'a thing nobody sells', n: 1, mat: 'steel-low' })).toBeNull();
   });
+  it('a word written twice is still one word, so repeating it cannot price a line', () => {
+    // the looser match asks for two of the line's words in a seller's own description, because one shared word prices
+    // a LiPo pack off a battery holder. It did not ask for two DISTINCT words, and `npm run plan` names every line
+    // "<id>, <label>", which is exactly where a word gets said twice. So repetition bought a price:
+    const line = (name: string) => priceOfLine({ name, n: 1, mat: 'steel-low' });
+    expect(line('the barrel'), 'nothing here is a barrel').toBeNull();
+    // ...and this one came back $34.95 as a crimping plier for small open-BARREL contacts
+    expect(line('the barrel barrel'), 'one word said twice bought a price').toBeNull();
+    // the same fault in this project's own bill: the potter's wheel's mains induction motor, whose label says "motor"
+    // twice, was charged $9.95 as a NEMA 17 stepper - a part a sixth its size. It has a real sighting now.
+    const m = line('motor, washing-machine induction motor');
+    expect(m?.key, 'the wheel motor is priced as a washing-machine motor or not at all').toBe('washer-motor');
+    expect(m!.usd).toBeGreaterThan(100);
+    // and the guard still lets two real words through, which is what the branch is for: the bench's vice is found by
+    // "bench" and "vice" in the bench vice's own description, and that is a right answer, not a lucky one.
+    expect(line('bench vice, 100 mm jaw')?.key).toBe('bench-vice');
+  });
 });
 
 describe('routing: a machine is only given what it could do', () => {
