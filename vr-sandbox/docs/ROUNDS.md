@@ -2314,3 +2314,78 @@ Gate: `GATE: PASS (2123 of 2123 ran) — 174.9s`.
 **Still unbuilt, and still the thing my own count points at:** every judge printing its verdict where a person meets
 it without asking. Three of those wires exist (the critic under the picture, `contracts`, the census) and each was
 built by hand after the fault it would have caught.
+
+## Run 7r — the judges that had no caller, and the solver that had no caller
+
+Four things were built, and all four were wires to work that already existed and never reached a person.
+
+**1. Three judges on the look page spoke for the first time.** `view/look.ts` has exposed `held()`, `frame()` and
+`clash()` on `window.look` for four rounds. Nothing in `tools/` ever called one. `tools/look.mjs` now prints all
+three under every picture, and the first run on a hatchback said:
+
+```
+held: 13 groups held by nothing, 0 joints with something rigid laid across, 8 links that rub
+  worst float: 195 parts, 36.4 kg — 21 in steel rim, tyre 275/35R21, wheel disc
+frame: its sheet is 9 pieces joined by structure alone, the largest 35 parts / 32.4 kg
+clashes: 1177 touching pairs, 16 where one passes into another — worst: tunnel top into battery by 54.0 mm
+```
+
+None of that was being reported anywhere. A 54 mm interpenetration had been in every render for rounds.
+
+**2. A rule so the next one cannot happen quietly.** `tidy.test.ts` now reads the page's API and requires every member
+to be read by something in `tools/`, or to carry its reason on its own line. It is a condition on the API's members,
+not on three names, so a new member is caught by *being new* — and it is two-way: an excuse fails once a tool reads
+that member. It found two more on its first run (`project`, `unproject`), and both halves were mutation-tested:
+adding a `probe:` member failed it, and making a tool mention an excused member failed the other half.
+
+**3. `mobility()` was called only by its own unit test.** A rank-based degrees-of-freedom solver — joints written by
+what they leave free, redundant constraints reported, Grübler's formula deliberately not used — sat in
+`parts/mechanism.ts` for the whole session with **no caller in the make pipeline at all**. So no made thing had ever
+been asked how many ways it could move.
+
+**4. `npm run moves`** — the motion graph, from what parts already declare. The edges are the ones a mechanism has:
+`CONNECTED_TO` (joins), `MOVES_WITHIN` (what passes through what), `CONSTRAINED_BY` (its joint and what that leaves
+free), `RANGE_OF_MOTION` (travel), `REQUIRES_CLEARANCE` (the envelope that sweep needs), `TRANSFERS_FORCE_TO` (a
+provided interface met by a required one). Each from a declaration, never from a name.
+
+### Three faults in the new tool, found by running it
+
+- **`⌀NaN swept`** on every arm, bush and ball joint: I had written `{ cyl: { r, h } }` and `{ sph: { r } }`, and the
+  real shapes are `{ cyl: [r, h, r2?] }` and `{ sphere: n }`. An unknown shape now returns `null` and is *said* to be
+  unknown, because a zero half-size is a part that needs no room, which is a lie.
+- **"turns about its own axis"** printed for coil springs and damper rods, because the draft asked whether a part had
+  a joint rather than whether that joint leaves a *turn*. A `slide` and a `spring` leave it prismatic.
+- **Every wheel on every car reported as moving with nothing saying how** — an artefact of where the declaration
+  lives: travel is on the wheel and the bearing is on the hub beside it, both of one rigid link. The question is
+  whether anything *in its link* says what holds it.
+
+### The one that matters: a DOF number over axes I had made up
+
+The first wire into `mobility()` guessed each joint's axis — `/slide|rod|damper/` in the name meant up, anything else
+sideways — and printed **"43 degrees of freedom"** for a hatchback. That is the exact fault two rounds of this session
+were spent removing from `turning()`, rebuilt inside the tool meant to replace guessing with measurement, and it
+produces something worse than no answer: a confident wrong number with no way to tell it from a right one.
+
+So the axis is now **derived or refused**. A declared slide direction is the axis; a solid of revolution has exactly
+one axis by construction (`lathe`, `cyl`, `cone`, `torus`, `capsule` are all spun about y in `kits.ts`'s own words,
+and a `prism` is drawn along z), carried round by the part's own `rot`. Anything else is **left out of the mechanism
+and counted**, and what was left out is printed before what was computed:
+
+```
+its mechanism: 18 rigid bodies (its own frame the ground), 23 joints it could use of 38 declared
+  15 left out, so the count below is of what is left:
+    stub spindle left: nothing says which way its bearing acts: no slide direction declared and its shape has no axis
+    rack bush left: both ends are the same link (the frame), so it joins nothing
+```
+
+Reading only `cyl` and `cone` had dropped every bearing, race and spindle in the car — a bearing is *lathed* — which
+is why the honest first count was 61 and meaningless. With the declarations read properly it is 23 of 38, and the 15
+left out are **two named data gaps, not tool bugs**: a part whose shape cannot say which way its joint acts, and a
+part whose `joins` names nothing across the joint. Both were silently un-fixable before the number existed.
+
+`tests/nexus/moves.test.ts` ratchets that coverage both ways — 38 declared pinned exactly, 23 usable a floor, 15
+dropped a ceiling — so coverage cannot fall without the gate saying so, and `npm run why` now prints the motion
+verdict unasked beside the critic's.
+
+**The count this round adds to Run 7m's:** of the four things built, three were wires to finished work nobody could
+reach, and the fourth was a general rule. Nothing new was computed. The whole round was *delivery*.

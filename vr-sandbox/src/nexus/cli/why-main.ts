@@ -23,6 +23,7 @@
 // which is the difference between "it is fine" and "nobody asked" (`Looked`, src/nexus/make/critic.ts).
 import { KITS, makeKit } from '../parts/kits';
 import { perfect } from '../make/pipeline';
+import { howItMoves } from '../make/moves';
 import type { Finding } from '../make/critic';
 
 const argv = process.argv.slice(2);
@@ -79,3 +80,14 @@ console.log(`${Object.keys(m.looked).length - dead.length} of the critic's ${Obj
 if (!m.contracts.length) console.log('no interface was checked: nothing in it declares one');
 else console.log(`${m.contracts.length} interfaces checked, ${m.contracts.filter((c) => !c.ok).length} fail`);
 console.log(`WHY: ${open.length} open`);
+
+// AND THE MOTION, UNASKED. The census line below it says which checks looked at nothing; this says the same thing for
+// movement, which no check covers at all: how many parts move, how many of their joints the mechanism could use, and
+// how many move with nothing saying how. `npm run moves` gives the detail; nobody has to know to ask for the verdict.
+const mv = howItMoves(made.part);
+console.log('');
+console.log(`its motion: ${mv.from.length} parts move, ${mv.joints} of ${mv.joints + mv.dropped.length} declared joints usable, ${mv.m.dof} degrees of freedom left`);
+if (mv.dropped.length) console.log(`  ${mv.dropped.length} joint${mv.dropped.length === 1 ? '' : 's'} left out of the count: ${[...new Set(mv.dropped.map((d) => d.why.replace(/\(.*\)/, '')))].join(' / ')}`);
+const nosay = mv.from.filter((x) => x.unsaid);
+if (nosay.length) console.log(`  ${nosay.length} move${nosay.length === 1 ? 's' : ''} and nothing says how: ${nosay.slice(0, 4).map((x) => x.part).join(', ')}${nosay.length > 4 ? ` (+${nosay.length - 4})` : ''}`);
+console.log(`  npm run moves -- --kit ${named.id} "${words}"   for each mover's range, sweep and edges`);

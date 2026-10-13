@@ -173,3 +173,22 @@ When a step takes working out by hand twice, it becomes a tool here, and a line 
 - `npm run works`: a plan, a budget or a build printed from the command line. Four rounds in a row opened by writing a probe
   test whose only job was to print what the engine says, and then deleting it; this is that, kept.
 
+## `npm run moves` — what moves, how far, and what its sweep needs
+
+```
+npm run moves -- --kit car "a small hatchback"
+npm run moves -- --kit car --part "wheel|damper" "a small hatchback"
+```
+
+Every moving part with its range of motion and the edges round it: what it is connected to, what it moves within,
+what constrains it, what force it passes on, and the envelope its sweep needs kept clear of anything not carried with
+it. Then the whole mechanism through `mobility()` (`src/nexus/parts/mechanism.ts`), which before this door had no
+caller outside its own unit test.
+
+It will not give a degrees-of-freedom number over an axis it made up. A joint's axis comes from a declared slide
+direction, or from the one axis a solid of revolution has by construction; anything else is left out of the count and
+listed, with the count of what was left out printed *before* the count of what was computed. `npm run why` prints the
+one-line version of the same thing unasked.
+
+Its coverage is ratcheted by `tests/nexus/moves.test.ts`: a car declares 38 joints, 23 are usable, 15 are not, and
+each of those is a part that does not say which way its joint acts or does not name anything across it.

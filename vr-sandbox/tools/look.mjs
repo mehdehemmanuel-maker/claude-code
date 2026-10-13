@@ -74,6 +74,22 @@ for (const a of asks) {
     console.log(`  its interfaces (${ready.contracts.length} checked, ${ready.contracts.length - bad.length} meet, ${bad.length} fail):`);
     for (const c of bad.slice(0, 8)) console.log(`    - ${c.requirer} on the ${c.provider}: ${c.rows.filter((r) => !r.ok).map((r) => `${r.what} needs ${r.required}, has ${r.provided}`).join('; ')}`.slice(0, 240));
   } else if (ready && 'contracts' in ready) console.log(`  no interface was checked on this picture${ready.contracts === null ? ' (the critic was not run: perfect=0)' : ': nothing in it declares one'}`);
+  // THE JUDGES THAT WERE ALREADY ON THE PAGE AND HAD NO CALLER. `window.look.held`, `.frame` and `.clash` have been
+  // exposed by `view/look.ts` all along — three judges, nothing reading any of them, in a session whose own count was
+  // that seven of nine faults were found by looking and two by rules (docs/ROUNDS.md Run 7m). The blind judge's
+  // "nothing sits on anything" and "no bolt circle, the bearing in a hole with no retention" are sentences `held` can
+  // write itself. Each prints its verdict and its worst case, under the picture, whether or not anyone asks.
+  const judge = async (name, fn) => { try { return await p.evaluate(fn); } catch (e) { console.log(`  ${name}: could not run (${String(e).slice(0, 80)})`); return null; } };
+  const h = await judge('held', () => { const r = window.look.held(); return { floats: r.floats.length, worstFloat: r.floats[0] ? { parts: r.floats[0].parts.slice(0, 3), n: r.floats[0].n, kg: +r.floats[0].kg.toFixed(1), via: r.floats[0].via.slice(0, 2) } : null, blocks: r.blocks.length, worstBlock: r.blocks[0] ?? null, rubs: (r.rubs ?? []).length }; });
+  if (h) {
+    console.log(`  held: ${h.floats} group${h.floats === 1 ? '' : 's'} held by nothing, ${h.blocks} joint${h.blocks === 1 ? '' : 's'} with something rigid laid across, ${h.rubs} link${h.rubs === 1 ? '' : 's'} that rub`);
+    if (h.worstFloat) console.log(`    worst float: ${h.worstFloat.n} parts, ${h.worstFloat.kg} kg — ${h.worstFloat.parts.join(', ')}${h.worstFloat.via.length ? ` (touches ${h.worstFloat.via.join(', ')} without being held by it)` : ''}`);
+    if (h.worstBlock) console.log(`    worst block: the ${h.worstBlock.by} laid across ${h.worstBlock.links?.join(' / ') ?? '?'}`);
+  }
+  const fr = await judge('frame', () => { const r = window.look.frame(); return { biw: r.biw.length, big: r.biw[0] ? { n: r.biw[0].n, kg: +r.biw[0].kg.toFixed(1), cut: r.biw[0].cut.slice(0, 2) } : null, structure: r.structure ? { n: r.structure.n, kg: +r.structure.kg.toFixed(1) } : null }; });
+  if (fr) console.log(`  frame: its sheet is ${fr.biw} piece${fr.biw === 1 ? '' : 's'} joined by structure alone${fr.big ? `, the largest ${fr.big.n} parts / ${fr.big.kg} kg${fr.big.cut.length ? ` (cut from the rest at ${fr.big.cut.join(', ')})` : ''}` : ''}${fr.structure ? `; its structure ${fr.structure.n} parts / ${fr.structure.kg} kg` : ''}`);
+  const cl = await judge('clash', () => { const r = window.look.clash(); const bad = r.filter((c) => c.kind === 'through' || c.kind === 'into'); return { n: r.length, bad: bad.length, worst: bad.sort((a, b) => (b.depth ?? 0) - (a.depth ?? 0))[0] ?? null }; });
+  if (cl) console.log(`  clashes: ${cl.n} touching pairs, ${cl.bad} where one passes into another${cl.worst ? ` — worst: ${cl.worst.pa} into ${cl.worst.pb} by ${((cl.worst.depth ?? 0) * 1000).toFixed(1)} mm` : ''}`);
   // WHICH CHECKS LOOKED AT NOTHING, which is the difference between "it is fine" and "nobody asked"
   // (src/nexus/make/critic.ts's `Looked`, docs/MANNY.md #87).
   if (ready?.looked) {

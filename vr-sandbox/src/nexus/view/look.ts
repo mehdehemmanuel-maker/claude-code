@@ -317,8 +317,12 @@ const look = {
   pick: (x: number, y: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera); const hit = ray.intersectObjects(meshes.filter((m) => m.visible), false)[0]; if (!hit) return null; const p = (hit.object.userData.part ?? {}) as { says?: string; mat?: string }; return { name: hit.object.name, path: pathOf(hit.object), at: r3(hit.point), distance: +hit.distance.toFixed(3), mat: p.mat, says: p.says }; },
   clash: (touch = 0.001) => meshClashes(meshes.filter((m) => m.visible).map(worldTris), { touch }),
   // where points of the thing fall in the picture (CSS pixels), and where a pixel falls on a plane z = const (the side
-  // the camera looks at), for laying a photograph over it (the bench's ref:)
+  // the camera looks at), for laying a photograph over it by hand.
+  // (`ref:` fits its own camera to the photograph and projects with that one, tools/bench.mjs projectCam, which is a
+  // different camera from the one the page is drawing with; this is left for working the page by hand)
+  // nobody calls this: it answers about points you name, so it has no verdict to print unasked.
   project: (pts: [number, number, number][]) => pts.map((p) => { const v = new THREE.Vector3(...p).project(camera); return [+(((v.x + 1) / 2) * innerWidth).toFixed(2), +(((1 - v.y) / 2) * innerHeight).toFixed(2)]; }),
+  // nobody calls this: the inverse of `project`, and unused for the same reason.
   unproject: (px: number, py: number, z: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((px / innerWidth) * 2 - 1, -(py / innerHeight) * 2 + 1), camera); const t = (z - ray.ray.origin.z) / ray.ray.direction.z; return r3(ray.ray.origin.clone().addScaledVector(ray.ray.direction, t)); },
   // its landmarks on one side (+1 its right, as it faces forward, or -1 its left), from its parts as drawn
   landmarks: (side = 1) => landmarksOf(side),

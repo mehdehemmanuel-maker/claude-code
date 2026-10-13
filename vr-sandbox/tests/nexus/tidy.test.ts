@@ -516,6 +516,38 @@ const DUPES: string[] = [
   "unit('L', 'length', 'm', [1, 5, 10], [0.01, 100, 0.01]) :: kinds/electrical.ts:253 kinds/fluid.ts:104",
 ];
 
+// EVERY JUDGE THE PICTURE OWNS SPEAKS. `view/look.ts` exposed `held()`, `frame()` and `clash()` on the page for four
+// rounds and no tool ever called one: three judges that could not fail because nothing ran them. The fault family of
+// this session is a check that cannot fail, and a judge with no caller is its purest form — the work of writing it is
+// done, the wire is there, and the verdict never reaches a person. So each member of the page's API is either read by
+// something in `tools/`, or says on its own line why nothing reads it. Written as a condition on the API's members
+// rather than on three names, so the next one added is caught by being new (docs/ROUNDS.md Run 7r).
+const lookApi = () => {
+  const s = read(join(NEXUS, 'view/look.ts')), at = s.indexOf('const look = {');
+  const lit = s.slice(at, at + s.slice(at).indexOf('\n};\n'));
+  const names = [...lit.matchAll(/^  ([a-z][A-Za-z]*): [(<]/gm)].map((m) => ({ name: m[1]!, at: m.index! }));
+  // (the one line immediately above it, so one member's excuse cannot silently cover the member under it)
+  const over = (i: number) => lit.slice(lit.lastIndexOf('\n', i - 2), i - 1);
+  const out = names.map((n) => ({ name: n.name, excused: /nobody calls/.test(over(n.at)) }));
+  for (const m of s.matchAll(/Object\.assign\(look, \{([^}]*)\}\)/g)) for (const t of m[1]!.split(',')) { const nm = t.trim().split(':')[0]!.trim(); if (nm) out.push({ name: nm, excused: false }); }
+  return out;
+};
+
+describe('every judge the picture owns speaks', () => {
+  const TOOLS = readdirSync(join(ROOT, 'tools')).filter((f) => /\.mjs$/.test(f)).map((f) => read(join(ROOT, 'tools', f))).join('\n');
+  it('every member of window.look is read by a tool, or says why nothing reads it', () => {
+    const api = lookApi();
+    expect(api.length, 'the page API could not be read, so this check would pass on an empty list').toBeGreaterThan(8);
+    for (const { name, excused } of api) {
+      if (excused) continue;
+      expect(TOOLS, `window.look.${name}() is on the page and no tool in tools/ calls it: a judge nobody runs cannot fail. Either print its verdict from a tool, or write "nobody calls" above it with the reason.`).toContain(`look.${name}(`);
+    }
+  });
+  it('nothing is excused that a tool now reads, so an excuse cannot outlive its reason', () => {
+    for (const { name, excused } of lookApi()) if (excused) expect(TOOLS, `window.look.${name}() says nobody calls it, but a tool does: delete the excuse.`).not.toContain(`look.${name}(`);
+  });
+});
+
 describe('nothing is written twice', () => {
   it('the set of repeated code fragments is exactly the set written down', () => {
     const where = new Map<string, string[]>();
