@@ -81,7 +81,9 @@ exists to prevent.
 | Edges as made (radius by material and process) | `src/nexus/parts/finish.ts` |
 | Oriented-box layout and contacts of a placed tree | `src/nexus/parts/space.ts` |
 | Attention to detail (joints, fasteners, seals, finishes, wear) | `src/nexus/make/detail.ts` |
-| Critic (room to move, held up, walls, through, standing) | `src/nexus/make/critic.ts` |
+| Critic (room to move, held up, walls, through, standing, density, declared, interfaces) | `src/nexus/make/critic.ts` |
+| Critic, skins (continuity across a seam, draft from its die, bend radius) | `src/nexus/make/critic-skin.ts` |
+| Which of the critic's checks LOOKED at a thing, as against what they said about it (`Looked`) | `src/nexus/make/critic.ts`, carried on `Made.looked` by `src/nexus/make/pipeline.ts` |
 | The make pipeline (conditions, detail, critic, in rounds) | `src/nexus/make/pipeline.ts` |
 | Wheeled machines of every kind, from their published figures | `src/nexus/machines/machines.ts` (cars, karts, ATVs, motorcycles, forklifts, trucks, lawn tractors) |
 | Lofts, bent tubes, turned profiles: mass, bounds, covering boxes | `src/nexus/parts/form.ts` |

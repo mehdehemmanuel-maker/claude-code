@@ -98,6 +98,10 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   millimetre or less) its own, a shield bent round a part sharing its part's; a board in about 90 s on software GL:
   `LOOK_WAIT=` ms for longer); `ao=` mm, screen-space occlusion, does not darken
   a mouth yet and drops the sun's shadow: not to be trusted); `npm run boardmap -- <id> <out.json>` writes a board's drawn outlines for `photo.py overlay`.
+  Under each picture it prints what the critic said (open defects first, at most three per check, since the first
+  version printed twelve identical `walls … thickened` lines and a reader never reached a real fault), the
+  interface verdict (`contracts`), and **which checks looked at nothing in it** — the difference between "it is
+  fine" and "nobody asked" (src/nexus/make/critic.ts's `Looked`).
 - `tools/forge-run.mjs`: a script of moves played in the forge with screenshots along it (`js:` an expression in the page,
   awaited; `say:` words; `wait:`; `shot:`; `view:`; `png:name|expr` a picture the page makes, as `phonePeek('life',
   'map')` gives any phone app's screen; each answer printed to 400 characters, `FORGE_OUT=` for more, `FORGE_SHOT_MS=`

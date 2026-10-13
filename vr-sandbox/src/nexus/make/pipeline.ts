@@ -13,10 +13,12 @@
 import { countParts, massOf, type Part } from '../parts/kits';
 import { applyConditions, readConditions, type Conditions } from './conditions';
 import { addDetails, RULES, stripDetails } from './detail';
-import { contracts, critique, type Contract, type Finding } from './critic';
+import { contracts, critique, type Contract, type Finding, type Looked } from './critic';
 import { layout } from '../parts/space';
 
-export interface Made { part: Part; conditions: Conditions; stages: { stage: string; did: string[] }[]; findings: Finding[]; rounds: number; details: Record<string, number>; /** kg each rule added */ detailKg: Record<string, number>; /** its interfaces, each checked */ contracts: Contract[]; parts: [before: number, after: number]; kg: [before: number, after: number] }
+export interface Made { part: Part; conditions: Conditions; stages: { stage: string; did: string[] }[]; findings: Finding[]; rounds: number; details: Record<string, number>; /** kg each rule added */ detailKg: Record<string, number>; /** its interfaces, each checked */ contracts: Contract[];
+  /** how many candidates each of the critic's checks looked at on the LAST round, zero included: a check that looked
+   *  at nothing is dead whatever its silence says (src/nexus/make/critic.ts's `Looked`) */ looked: Looked; parts: [before: number, after: number]; kg: [before: number, after: number] }
 
 /** A thing taken through the whole pipeline (the thing given is not changed). */
 export function perfect(made: Part, words: string | Conditions = '', o: { rules?: (id: string) => boolean; rounds?: number } = {}): Made {
@@ -26,11 +28,11 @@ export function perfect(made: Part, words: string | Conditions = '', o: { rules?
   const clone = (p: Part): Part => { const { shape, parts, ...rest } = p; return { ...structuredClone(rest), ...(shape ? { shape: 'surf' in shape ? shape : structuredClone(shape) } : {}), ...(parts ? { parts: parts.map(clone) } : {}) } as Part; };
   const applied = applyConditions(clone(made), cond); let part = applied.part;
   stages.push({ stage: 'conditions', did: [...cond.said, ...applied.did] });
-  let findings: Finding[] = [], counts: Record<string, number> = {}, kg: Record<string, number> = {}, rounds = 0;
+  let findings: Finding[] = [], counts: Record<string, number> = {}, kg: Record<string, number> = {}, rounds = 0, looked: Looked = {};
   for (; rounds < (o.rounds ?? 3); rounds++) {
     part = stripDetails(part);
     ({ counts, kg } = addDetails(part, cond, (r) => (o.rules ? o.rules(r.id) : r.on)));
-    const f = critique(part); findings = rounds === 0 ? f : [...findings.filter((x) => x.fixed), ...f];
+    looked = {}; const f = critique(part, looked); findings = rounds === 0 ? f : [...findings.filter((x) => x.fixed), ...f];
     if (!f.some((x) => x.fixed)) break; // nothing more put right: done
   }
   stages.push({ stage: 'detail', did: Object.entries(counts).filter(([, n]) => n > 0).map(([id, n]) => `${RULES.find((r) => r.id === id)!.family}: ${n} from "${id}" (${(kg[id] ?? 0) >= 0.5 ? `${(kg[id] ?? 0).toFixed(0)} kg` : 'no mass to speak of'})`) });
@@ -41,7 +43,7 @@ export function perfect(made: Part, words: string | Conditions = '', o: { rules?
   settle(part);
   const ct = contracts(layout(part).filter((n) => !n.p.detail));
   stages.push({ stage: 'interfaces', did: ct.map((c) => `${c.ok ? 'meets' : 'FAILS'} — ${c.requirer} on the ${c.provider}: ${c.rows.map((r) => `${r.what}: needs ${r.required}, has ${r.provided}${r.ok ? '' : ' ✗'}`).join('; ')}`) });
-  return { part, conditions: cond, stages, findings, rounds: Math.min(rounds + 1, o.rounds ?? 3), details: counts, detailKg: kg, contracts: ct, parts: [before[0], countParts(part)], kg: [before[1], massOf(part)] };
+  return { part, conditions: cond, stages, findings, rounds: Math.min(rounds + 1, o.rounds ?? 3), details: counts, detailKg: kg, contracts: ct, looked, parts: [before[0], countParts(part)], kg: [before[1], massOf(part)] };
 }
 
 /** What the pipeline did, said in a line or two. */

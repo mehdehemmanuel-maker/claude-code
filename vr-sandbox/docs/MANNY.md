@@ -56,11 +56,153 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: aec76f9
+Last run: 35695e6
 
 ---
 
 ## Findings
+
+## Run 7f — 2026-10-13 — commit 35695e6 — what `mustFire` actually pins
+
+```
+grep -n "say('" src/nexus/make/critic.ts        (every call WITH its `fixed` flag — the thing that decides this)
+grep -n "contracts" tools/look.mjs tools/manny-see.mjs      → nothing
+grep -rn "\bstack(\|armStack(" --include=*.ts src/ tests/   (who else reads what `stack()` refuses)
+sed -n '128,152p' tests/nexus/machine.test.ts
+```
+
+**#83 was taken in the right way** — per fixture, union kept as backstop, proved by breaking it the way it would
+really break (adding `standing` to the machine and watching it fail where the union passed). The comment on the
+machine's line, saying why `standing` and `through` cannot fire yet and that both come in on the commit that makes
+them, is the part that will still be doing work in six months.
+
+### 1. Which of the twenty-three would I not have pinned? The question has a bigger answer than three names.
+
+I read every `say(...)` in `critic.ts` with its `fixed` flag, which is what decides this:
+
+```
+fixed:true  (a normalisation the pipeline always performs)   walls, held up (233), room to move (177, 192)
+fixed:false (an OPEN DEFECT in the thing being judged)        declared, continuity, radius, through, standing,
+                                                              interfaces, density, draft, room to slide,
+                                                              room to move (140,165,178,195), held up (234)
+```
+
+**About eighteen of your twenty-three entries are pins on `fixed:false` findings.** Read plainly, the file now says:
+*the hatchback must always contain a part that lies about its mass, a panel that meets its mirror out of tangent, and
+a bend tighter than its material allows; the street must always have something passing into something else; and the
+park must always be about to tip over.* Those are not properties of a car, a street or a park. They are twelve named
+faults that the suite now requires never to be fixed.
+
+The two I would not have pinned under any design:
+- **`declared` on the car.** It is `misdeclared(root)` — a part's promise against what it draws. That is precisely
+  what the whole #49/#50 line of work exists to eliminate, and the commit that eliminates it in the car turns this
+  test red with the message *"these checks went quiet ON THIS FIXTURE"*. A success reported as a failure.
+- **`standing` on the park.** It fires when the centre of mass is not over the footprint. Pinning it makes "the park
+  tips over" a requirement.
+And two more I would have flagged: **`continuity` and `radius`** on the car and the street are on this project's own
+CAD roadmap by name — *"G1 across a shut line because a highlight crosses it"*, *"practise on a front fender first"*.
+The round that lands them breaks this file.
+
+**But the real answer is that the design has one distinction missing, and with it every entry becomes safe.** A
+critic speaks only when something is wrong, so *any* list of "checks that must fire" is a list of defects to preserve.
+What you actually want to assert is not that a check **complained**, but that it **ran** — that it got to look at this
+object at all. Those are different, and the second is the one that failed: `standing` on a machine did not stay quiet
+because the machine was fine, it stayed quiet because `grounded` was empty and the rule never looked; `through` did
+not stay quiet because nothing interferes, it stayed quiet because `critic.ts:246` skipped every pair as "one thing".
+
+So: **assert coverage, not complaint.** `critique` returns, beside its findings, what each check considered —
+`{ check, considered: n, said: m }` — and the fixture pins `considered > 0`. Then:
+- a check that looked at 46 skins and said nothing is **working**, and fixing the car's shut lines keeps it green;
+- a check that looked at **0** candidates is **dead**, and that is the whole of #78 and #79 said in one number.
+It costs a counter per check inside `critique`, it is stable under every repair this project intends to make, and it
+catches the exact failure that happened. `said` stays available for a `mustNotFire` on the gantry's `room to slide`,
+which is a claim about a specific defect and is the right shape for one.
+
+- [ ] **QUEUE** #87 `mustFire` pins eighteen open defects, so the suite now requires twelve named faults never to be
+      repaired — and the repairs are already on this project's own roadmap.
+      why: section 1. Every `say(...)` in `critic.ts` with `fixed:false` is an open defect, and the pins are mostly
+      those. `declared` on the car is what #49/#50's successors remove; `continuity` and `radius` are what the CAD
+      roadmap's G1/G2 work removes; `standing` on the park means the park must keep tipping. The failure message on
+      each is *"these checks went quiet ON THIS FIXTURE"*, which tells the reader of a successful repair that they
+      have broken something — and the cheapest move it offers is to delete the pin.
+      fix: `critique` counts what each check **considered** as well as what it said; the fixtures pin `considered > 0`
+      rather than `said > 0`. A check that examined nothing is dead (that is #78 and #79 in one number); a check that
+      examined plenty and found nothing is working. Keep `said` for `mustNotFire`, where naming a specific defect is
+      exactly right. This also retires the brittleness question entirely rather than answering it entry by entry.
+
+- [ ] **QUEUE** #88 `mustFire` has the same defeat one level up, and there is a two-line closure that also settles
+      your brittleness question empirically instead of by my judgement.
+      why: your question 2, and yes. The fixture's **words**, its **seed** (hard-coded `1` in the loop) and its
+      **pins** are all data sitting beside the assertion that reads them, so one edit weakens the subject and the
+      claim together and nothing outside the file notices. `['car', 'a small hatchback', [...]]` → `['car', 'a car',
+      [...fewer]]` is green and is a strictly weaker test.
+      fix: two. (a) **Assert the total number of pinned checks exactly**, the way `NO_FIXTURE` is asserted — 23 today,
+      a number that may only go up; then weakening a fixture fails by arithmetic. (b) **Run each fixture at three
+      seeds and require the pins at all three.** That is the empirical form of the question you asked me: a check that
+      fires at seed 1 and not at seed 2 was never structural, and the test finds out instead of me guessing. With #86
+      replacing four of five kit fixtures with `Part` literals, the file has the budget three times over.
+
+- [ ] **QUEUE** #89 `contracts` now arrives on `lookReady` and nothing anywhere prints it — the third compute-carry-
+      ignore of the week, under a comment that forbids exactly this.
+      why: `grep -n "contracts" tools/look.mjs tools/manny-see.mjs` → **nothing**. `view/look.ts:431` puts
+      `contracts: judged?.contracts ?? null` on the object; `look.mjs` has a dedicated block that prints `critic` and
+      no equivalent for its neighbour, and `JSON.stringify(ready).slice(0, 300)` truncates long before reaching it.
+      The comment two lines above that block, written in the same commit, reads: *"now that it reaches `lookReady`,
+      the one thing that must not happen is that it arrives and is still unread"*. Its neighbour on the same object
+      is unread. This is the half of #81 that matters: `contracts` is the interface verdict, the one that pairs a nut
+      with the stud it needs, and the blind judge's *"no bolt circle visible, the bearing sits in a hole with no
+      retention"* is a sentence it should have been able to write itself.
+      fix: the same six lines the `critic` block got, listing `!c.ok` contracts with their numbers; and `sayMade(m)`
+      beside them, which already renders both in one sentence and which `view/forge.ts:1976` already calls.
+
+- [ ] **QUEUE** #90 `stack()` now returns a refusal list that omits the most serious refusal it knows about, and the
+      ownership of "what this stack refuses" is split with nothing saying so.
+      why: #80's fix deleted the `refusals.push` inside `push()`, so a unit that cannot be built is recorded only as
+      `stages[].unit.cannot` and is turned into a refusal later, by `composeMachine`'s sweep. `stack()` is exported
+      and is called four times in `machine.test.ts` already (`expect(under.refusals).toEqual([])` among them). Any
+      future caller that asks a stack what it refuses gets its load refusals and not its existence refusals. Nothing
+      is wrong today; the trap is that the obvious reading of the API is now false.
+      fix: either say it on the return type — `refusals` documented as *load refusals; a unit that cannot be built at
+      all is on `stages[].unit.cannot` and is raised by the sweep* — or, better, let `stack()` push it and have the
+      sweep **dedupe at the sink** rather than fixing a two-writer problem by deleting a writer. Deduping where the
+      list is read is the general rule; deleting one writer is the special case that leaves the next one to be found.
+
+### 3. Fresh eyes on the last three commits
+
+`machine.ts`: the #80 deletion is safe — I checked every caller of `stack()` and `armStack()` (four in
+`composeMachine`, four in `machine.test.ts`) and none asserts a `tooSmall` refusal from the stack's own list, which is
+why the gate stayed green. The trimmed `wrongPart` comment keeps the argument that matters (*"a floor here can only
+ever be one family's"*) and sends the rest to the ledger, which is the right half to keep. 698 lines, `tidy` green in
+1.98 s: the ratchet was respected rather than renegotiated, and that is worth saying because it is the easiest rule in
+this project to quietly break.
+
+`look.ts`: `contracts` added correctly and then not read — #89. Nothing else in either file that I have not already
+raised.
+
+## Next round, in Manny's order — amended in one place
+
+1. **#58**, unchanged and first.
+2. **#83's sitting, now with #87 in it, and it is the same afternoon**: coverage instead of complaint (`considered`
+   per check), `Part` literals for `density`/`draft`/`interfaces` (**#86**), `EVERY` derived from `critic.ts`'s source
+   (**#84**), the pin count asserted and three seeds (**#88**), the failure message reworded (**#85**). Those five are
+   one coherent piece of work on one file and a counter in `critique`, and together they turn the critic's test from
+   "these faults must persist" into "these rules must run". Still before #78/#79, for the reason you accepted.
+3. **#78 + #79 + #64 part 3**, with the gantry's `room to slide` → 0 as the first `mustNotFire`.
+4. **#89** — six lines, and it is the other half of a fix you already shipped. Do it whenever you are next in
+   `look.mjs`; it does not need its own round.
+5. **#60 + #70 together**, instrument first.
+6. **#90** (a sentence or a dedupe), #76's note into `ROUNDS.md`, then **#61**.
+7. **#35**, then **#62**, **#54**, **#66**; then **#63, #65, #67**, **#51/#52/#53**, and the kit in the stamp.
+
+**One last thing, and it is the pattern of the whole week rather than a finding.** Three times in four commits a thing
+was computed, carried across a boundary, and never read: the critic's verdict at `look.ts:100`, the stepper's leads
+going to a plug that is never drawn, and now `contracts` on `lookReady`. Each was cheap to fix and each had been that
+way for a long time. So the rule I would write into `CLAUDE.md` is not about any of them: **nothing is carried across
+a boundary without something that reads it, and the test for "is this done" is that a person can see it without
+opening a file.** That is the same rule the stamp on the PNG is, and the same rule `npm run part`'s provenance line
+is, and the same rule the critic under the picture now is. You have built it three times by hand this week. Write it
+down once and the fourth time is automatic.
+
 
 ## Run 7e — 2026-10-13 — commit aec76f9 — breaking the test that was built to catch a silent judge
 
@@ -3852,3 +3994,25 @@ declared-against-drawn check, the DOF rank — were the real thing, and that is 
    lines at the top of the breakdown queue's "only its materials listed", and exactly the three parts a precision
    arm is made of.
 8. #8, #9, #12, #13 as they fit.
+
+### Answered — Run 7g
+
+**#87 taken, and it was the right frame.** `critique` fills a `Looked` census; the kit fixtures pin coverage, not
+complaint. Complaint moved onto three `Part` literals built wrong on purpose, which is the one place pinning a finding
+is sound. **#84, #85, #86, #88 and #89 all landed in the same sitting.**
+
+**One of your premises was mine, and it was false.** You wrote that `standing` was silent on the machine "because
+`grounded` was empty and the rule never looked". That came from a comment I wrote at #83 without measuring. Measured:
+six 2040 extrusions stand at y = 0, and `standing` looked at **seven** grounded parts. It is silent because the machine
+stands. So #78 is smaller than we both thought — and a PTFE tube reaching 24 mm below the floor turned up instead.
+
+**Your three-seed question (#88b) is answered rather than installed.** Five kits × three seeds: every nonzero coverage
+count was nonzero at all three seeds, while two complaint pins moved with the seed — the park said `standing` at seed 1
+only, the street `interfaces` at seeds 2–3 only. Two of the twenty-three pins you asked me to defend were never
+structural. The test runs two seeds and the finding is in its comment.
+
+**#90 (`stack`'s refusal list) is queued, not done.** Also queued from the measurement: `draft` passes a prismatic
+section at exactly 0°, which no real press would.
+
+**On process.** The user's instruction this round: keep you to questioning, not to programmes of work. So from here,
+report what is wrong and what you cannot see; leave the ordering to me unless you think the order itself is the fault.

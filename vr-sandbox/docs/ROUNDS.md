@@ -1841,3 +1841,66 @@ gives a hundred findings. Both times the tool answered a question nobody had ask
 confident. The pattern is worth more than either instance: **a default that makes a tool convenient is the one that
 makes its output a lie when you forget it**, and the defence is that the tool says which door it took — `look.mjs`
 and `manny-see` both name the kit now, in the line they print.
+
+## Run 7g — coverage, not complaint: the critic's test stops requiring the car to stay broken
+
+`tests/nexus/critic-speaks.test.ts` was built to catch a check that cannot fail, and the first two versions of it were
+that fault in a new shape. #83 was one `Set` across five fixtures, so `standing` was satisfied by a park. #87 is worse
+and was invisible until Manny read the `fixed` flag on every finding the pins stood on: **eighteen of the twenty-three
+pins were `fixed: false` findings — open defects.** Read plainly, the file required a hatchback to go on misdeclaring
+its own bores, a panel to go on meeting its mirror out of tangent, and a park to go on being about to tip. The commit
+that fixed any of them would have turned the test red saying *"these checks went quiet"*.
+
+What the file was reaching for is whether the rule **ran**, and the two come apart exactly where it matters. So
+`critique` now fills a `Looked` census — how many candidates each check considered, zero included — and the kit
+fixtures pin coverage. A check that looked at 46 skins and said nothing is working, and fairing those skins keeps the
+test green; a check that looked at **0** is dead, and that is #78 and #79 said in one number. Complaint is still
+asserted, but on three `Part` literals built wrong on purpose (a cubic metre weighing half a kilo, a bowl taken past
+its equator so no die can part it, a ⌀20 bore on a ⌀25 shaft), where pinning the finding is sound because nobody will
+ever want to fix the fixture.
+
+**The measurement answered the question I had asked Manny.** Across five kits × three seeds, every coverage count that
+was nonzero was nonzero at all three seeds — while two of the old complaint pins moved with the seed: the park said
+`standing` at seed 1 only, the street said `interfaces` at seeds 2–3 only. So the old file passed or failed on the luck
+of a seed, and two of the pins I had asked about were never structural. That is written into the test's own comment, so
+the next reader does not have to re-run it.
+
+### Three faults of my own this round, each found by measuring instead of asserting
+
+1. **"`standing` cannot fire on the machine because nothing declares a foot."** I wrote that in the test file at #83 and
+   never measured it; Manny then repeated it back as established fact. It is false — **six 2040 extrusions stand at
+   y = 0** and `standing` looked at seven grounded parts. This is #56's rule again (*a claim that code does something is
+   a claim about a file, and it gets a check before it gets written down*), and the new thing it shows is the cost of
+   getting it wrong in a shared document: the critic inherits the error and hands it back with his authority on it.
+2. **`critic.ts` crossed its 860-line ratchet** (to 900) under this round's additions. The number was not raised. The
+   three skin checks and their four caches went to `critic-skin.ts` (68 lines), which is what the ratchet's own message
+   asks for — one rule per file — and `critic.ts` came back to 847.
+3. **The split silently broke the thing I had just built.** #84 derived `EVERY` by reading `say('…')` out of
+   `critic.ts`; the split moved `continuity`, `draft` and `radius` into `critic-skin.ts`, so the derived list would have
+   **shrunk from twelve to nine and every assertion below it would have gone on passing**. Measured, not guessed:
+   `critic.ts` alone yields 9 names, both files yield 12. It now reads every `critic*.ts` in the directory. *A list
+   derived from one file is a list a refactor can empty* — the same fault as a check that cannot fire, committed inside
+   the fix for it, twenty minutes later.
+
+### Proved by breaking it, both halves
+
+```
+saw('room to slide', 0)        → machine: these checks LOOKED AT NOTHING on this fixture … expected ['room to slide']
+draft threshold −0.5° → −50°   → draft: a defect built for it, and it said nothing: expected [] to include 'draft'
+```
+
+### What the picture tool now says (#89, and two faults in my own #77)
+
+`contracts` reached `lookReady` in the same commit as `critic` and no tool printed it — the comment three lines above it
+reads *"the one thing that must not happen is that it arrives and is still unread"*, and its own author broke it in the
+same sitting. `look.mjs` now prints the interface verdict, and the census line: *"10 of the critic's checks looked at
+this picture; these looked at nothing in it: room to slide, through"*.
+
+Two more faults showed up the moment it was run rather than grepped. The critic's twelve printed lines were the **least
+interesting twelve** — `slice(0, 12)` in emission order, which is twelve identical `walls … thickened` normalisations,
+so a reader never reached one open defect. Open defects now come first; and then the twelve were all `declared` about
+the same five wheel studs, so it is capped at three per check. The car reads honestly for the first time: **53 still
+wrong, 47 put right**, with the hub bore 9.6 mm out of what it declares and the hood standing 394 mm from the fender it
+is supposed to meet.
+
+Gate green. `critic.ts` 847 lines, `critic-skin.ts` 68.

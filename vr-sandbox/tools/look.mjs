@@ -52,9 +52,34 @@ for (const a of asks) {
   // every render this project has ever made and `view/look.ts` binned its verdict; now that it reaches `lookReady`,
   // the one thing that must not happen is that it arrives and is still unread (docs/MANNY.md #77).
   if (Array.isArray(ready?.critic) && ready.critic.length) {
-    console.log(`  the critic, on this very picture (${ready.critic.length}):`);
-    for (const f of ready.critic.slice(0, 12)) console.log(`    - ${typeof f === 'string' ? f : JSON.stringify(f)}`.slice(0, 240));
+    // OPEN DEFECTS FIRST. Shipped as `slice(0, 12)` of the findings in the order the critic emits them, which puts
+    // `walls` first — so the car's twelve printed lines were twelve identical "thickened" normalisations and a reader
+    // never reached one thing that is actually wrong. A list cut to twelve is a choice of which twelve.
+    const open = ready.critic.filter((f) => typeof f !== 'string' && !f.fixed), fixed = ready.critic.filter((f) => typeof f === 'string' || f.fixed);
+    console.log(`  the critic, on this very picture (${open.length} still wrong, ${fixed.length} put right):`);
+    // and AT MOST THREE PER CHECK, because one check floods the list: open defects first still gave twelve lines of
+    // `declared` about the same five wheel studs, and a reader of the car learned about one check out of ten.
+    const per = new Map(), pick = [];
+    for (const f of [...open, ...fixed]) { const k = typeof f === 'string' ? '' : f.check, n = per.get(k) ?? 0; if (n < 3) { per.set(k, n + 1); pick.push(f); } }
+    for (const f of pick.slice(0, 14)) console.log(`    - ${typeof f === 'string' ? f : `${f.fixed ? 'put right' : 'STILL WRONG'} — ${f.check}: ${f.part}: ${f.says}`}`.slice(0, 240));
+    const more = [...per].filter(([, n]) => n >= 3).map(([k]) => k).filter(Boolean);
+    if (more.length) console.log(`    (three shown of each; ${more.join(', ')} said more)`);
   } else if (ready && 'critic' in ready) console.log(`  the critic found nothing on this picture${ready.critic === null ? ' (it was not run: perfect=0)' : ''}`);
+  // ITS INTERFACES, the same way. `contracts` arrived on `lookReady` in the same commit as `critic` above and no tool
+  // printed it — the comment two lines up was written and then broken by its own author, three lines later
+  // (docs/MANNY.md #89). It is the verdict that pairs a nut with the stud it needs, so "no bolt circle, the bearing
+  // sits in a hole with no retention" is a sentence this line can write instead of a blind judge.
+  if (Array.isArray(ready?.contracts) && ready.contracts.length) {
+    const bad = ready.contracts.filter((c) => !c.ok);
+    console.log(`  its interfaces (${ready.contracts.length} checked, ${ready.contracts.length - bad.length} meet, ${bad.length} fail):`);
+    for (const c of bad.slice(0, 8)) console.log(`    - ${c.requirer} on the ${c.provider}: ${c.rows.filter((r) => !r.ok).map((r) => `${r.what} needs ${r.required}, has ${r.provided}`).join('; ')}`.slice(0, 240));
+  } else if (ready && 'contracts' in ready) console.log(`  no interface was checked on this picture${ready.contracts === null ? ' (the critic was not run: perfect=0)' : ': nothing in it declares one'}`);
+  // WHICH CHECKS LOOKED AT NOTHING, which is the difference between "it is fine" and "nobody asked"
+  // (src/nexus/make/critic.ts's `Looked`, docs/MANNY.md #87).
+  if (ready?.looked) {
+    const dead = Object.entries(ready.looked).filter(([, n]) => !n).map(([c]) => c);
+    console.log(`  ${Object.keys(ready.looked).length - dead.length} of the critic's checks looked at this picture${dead.length ? `; these looked at nothing in it: ${dead.join(', ')}` : ''}`);
+  }
   if (LIST) {
     const ps = await p.evaluate(() => window.look.parts().map((q) => ({ n: q.name, mat: q.mat, mm: [q.max[0] - q.min[0], q.max[1] - q.min[1], q.max[2] - q.min[2]].map((v) => +(v * 1000).toFixed(1)) })));
     const by = new Map();

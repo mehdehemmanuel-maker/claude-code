@@ -24,15 +24,16 @@ import * as THREE from 'three';
 import { DENSITY, massOf, type Part } from '../parts/kits';
 import { loadPath } from '../embody/tree';
 import type { Part as EPart } from '../embody/part';
-import { misdeclared } from '../parts/mate';
+import { declared } from '../parts/mate';
 import { detailClassOf, onePiece, sealedIn } from './detail';
 import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from '../parts/space';
 import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../parts/form';
 import { inSweep } from '../machines/panels';
+import { skinChecks } from './critic-skin';
 /** How wide a turned part is along its axis: a tyre's width at its sidewalls' widest, from its section (its covering
  *  boxes stand a few millimetres proud of it, which is room for them, not for it). */
 const latheWidth = (l: Lathe) => Math.max(...l.map((q) => q[1])) - Math.min(...l.map((q) => q[1]));
-import { closestOn, draft, fairness, patchAt, patchPoints, type Patch, type V3 as SV3 } from '../parts/surface';
+import { patchPoints, type Patch } from '../parts/surface';
 
 export interface Finding { check: string; part: string; says: string; fixed: boolean }
 
@@ -97,14 +98,36 @@ function paired(nodes: Node[], touch: ReturnType<typeof contacts>): Set<string> 
   return out;
 }
 
-/** What is wrong with a thing, and what was put right (the thing is changed in place). */
-export function critique(root: Part): Finding[] {
+/** How many candidates each check LOOKED AT, by check: a census of what ran, not of what was wrong.
+ *
+ *  A critic speaks only where something IS wrong, so a list of what it said is a list of defects — and a test written
+ *  to require a check to speak requires that defect never to be fixed. That is what the first version of
+ *  `tests/nexus/critic-speaks.test.ts` did: it pinned twelve `fixed: false` findings on five kits, so the commit that
+ *  stopped a hatchback misdeclaring its own bores would have turned it red saying "these checks went quiet"
+ *  (docs/MANNY.md #87).
+ *
+ *  What that test wanted to know is whether the rule RAN, and the two come apart exactly where it matters. `standing`
+ *  was silent on the composed machine not because the machine stood but because nothing in it was grounded and the
+ *  rule never looked. `through` was silent not because nothing interfered but because every pair was within one thing
+ *  and was skipped on purpose. A check that looked at 46 skins and said nothing is working; a check that looked at 0
+ *  is dead — and the findings cannot tell those two apart, because both are the empty list.
+ *
+ *  So every check counts its candidates here, zero included, whatever it goes on to say about them. */
+export type Looked = Record<string, number>;
+
+/** What is wrong with a thing, and what was put right (the thing is changed in place). `looked`, where given, is
+ *  filled with how many candidates each check considered — see `Looked`, and note that it is ADDED to, so a caller
+ *  that runs several rounds passes a fresh one per round. */
+export function critique(root: Part, looked: Looked = {}): Finding[] {
   const out: Finding[] = [], say = (check: string, part: string, says: string, fixed: boolean) => out.push({ check, part, says, fixed });
+  const saw = (check: string, n: number) => { looked[check] = (looked[check] ?? 0) + n; };
   let nodes = layout(root);
   // ---- a part's promise against what it draws: pairing two declarations says nothing about either's own solid ----
-  for (const s of misdeclared(root)) say('declared', s.of, s.says, false);
+  const says = declared(root); saw('declared', says.length);
+  for (const s of says) if (!s.ok) say('declared', s.of, s.says, false);
   // ---- room to move: each turning thing (the outermost of what turns together) against the fixed parts near it ----
   const movers = nodes.filter((n) => turning(n.p) && n.sub && !n.p.detail && !sealedIn(n) && !ancestors(n).some((a) => turning(a.p)));
+  saw('room to move', movers.length);
   const pairs = paired(nodes, contacts(nodes, (n) => !!n.p.iface?.length));
   const pairedTo = new Map<string, string[]>(); for (const k of pairs) { const [a, b] = k.split('|') as [string, string]; (pairedTo.get(a) ?? pairedTo.set(a, []).get(a)!).push(b); }
   let dirty = false;
@@ -199,7 +222,8 @@ export function critique(root: Part): Finding[] {
   // with everything on its link, swept from one end of its travel to the other against the fixed parts near it: one
   // clear of it where it is drawn but inside that sweep is in its way ----
   const linkAt = (x: Node): string | undefined => { for (let y: Node | null = x; y; y = y.parent) if (y.p.link !== undefined) return y.p.link; return undefined; };
-  for (const s0 of nodes.filter((n) => n.p.travel?.slide && !n.p.detail)) {
+  const sliders = nodes.filter((n) => n.p.travel?.slide && !n.p.detail); saw('room to slide', sliders.length);
+  for (const s0 of sliders) {
     const sl = s0.p.travel!.slide!, link = linkAt(s0), dir = new THREE.Vector3(...sl.dir).transformDirection(s0.m).normalize();
     const mine = nodes.filter((x) => x.box && (isUnder(x, s0) || (link !== undefined && linkAt(x) === link)));
     if (!mine.length) continue;
@@ -212,6 +236,7 @@ export function critique(root: Part): Finding[] {
   // (what grew, a tree's twigs on its branches, is held by growing, not by resting)
   const alive = grownOf(nodes);
   const solid = nodes.filter((n) => n.obb && n.p.mat && detailClassOf(n.p.mat) !== 'organic' && !n.p.detail && !alive(n)), touch = contacts(nodes, (n) => solid.includes(n));
+  saw('held up', solid.length);
   const id = (n: Node) => `p${n.path}`, map = new Map<string, Set<string>>([['ground', new Set()], ...solid.map((n) => [id(n), new Set<string>()] as [string, Set<string>])]);
   for (const t of touch) { map.get(id(t.a))!.add(id(t.b)); map.get(id(t.b))!.add(id(t.a)); }
   // an interface holds what it joins (a sprocket on its shaft), touching or not
@@ -234,29 +259,41 @@ export function critique(root: Part): Finding[] {
     else say('held up', n.p.name, `nothing holds it up${best ? ` (the nearest, the ${best.to.p.name}, is ${(Math.max(0, best.d) * 1000).toFixed(0)} mm away)` : ''}`, false);
   }
   // ---- walls ----
+  let walled = 0;
   for (const n of nodes) {
     const p = n.p; if (!p.shell || !p.mat || p.detail) continue; const w = WALL.find(([re]) => re.test(p.mat!));
-    if (w && p.shell < w[1] - 1e-9) { say('walls', p.name, `its ${(p.shell * 1000).toFixed(1)} mm wall is thinner than ${w[2]} is made (${(w[1] * 1000).toFixed(1)} mm): thickened`, true); p.shell = w[1]; }
+    if (!w) continue; walled++;
+    if (p.shell < w[1] - 1e-9) { say('walls', p.name, `its ${(p.shell * 1000).toFixed(1)} mm wall is thinner than ${w[2]} is made (${(w[1] * 1000).toFixed(1)} mm): thickened`, true); p.shell = w[1]; }
   }
+  saw('walls', walled);
   // ---- skins: how each meets its neighbours (as its maker says, and why), whether it parts from its die, how tight it bends ----
-  skinChecks(nodes, say);
+  skinChecks(nodes, say, saw);
   // ---- through: one thing passing into another (a car into a house): within one thing, parts set into each
   // other (a pole into its base, a blade into its guard) are how it is built ----
+  let pierceable = 0;
   for (const t of touch) {
     if (thingOf(t.a) === thingOf(t.b) || alive(t.a) || alive(t.b) || t.a.p.shell || t.b.p.shell || isUnder(t.a, t.b) || isUnder(t.b, t.a) || detailClassOf(t.a.p.mat) === 'soft' || detailClassOf(t.b.p.mat) === 'soft') continue;
+    pierceable++;
     const small = Math.min(least(t.a.box!), least(t.b.box!)); if (t.depth > Math.max(0.01, 0.3 * small)) say('through', t.a.p.name, `it passes ${(t.depth * 1000).toFixed(0)} mm into the ${t.b.p.name}`, false);
   }
+  saw('through', pierceable);
   // ---- interfaces: each pair that meets checked, a failed one said with its numbers ----
-  for (const c of contracts(nodes.filter((n) => !n.p.detail))) if (!c.ok) say('interfaces', c.requirer, `on the ${c.provider}: ${c.rows.filter((r) => !r.ok).map((r) => `${r.what} needs ${r.required}, has ${r.provided}`).join('; ')}`, false);
+  const checked = contracts(nodes.filter((n) => !n.p.detail)); saw('interfaces', checked.length);
+  for (const c of checked) if (!c.ok) say('interfaces', c.requirer, `on the ${c.provider}: ${c.rows.filter((r) => !r.ok).map((r) => `${r.what} needs ${r.required}, has ${r.provided}`).join('; ')}`, false);
   // ---- standing and density ----
   const all = new THREE.Box3(); for (const n of nodes) if (n.box) all.union(n.box);
-  if (!all.isEmpty() && grounded.length) {
-    const M = massOf(root), com = centreOfMass(nodes), feet = new THREE.Box3(); for (const n of grounded) feet.union(n.box!);
-    if (M > 0 && (com.x < feet.min.x - 1e-3 || com.x > feet.max.x + 1e-3 || com.z < feet.min.z - 1e-3 || com.z > feet.max.z + 1e-3)) say('standing', root.name, `its centre of mass (${com.x.toFixed(2)}, ${com.z.toFixed(2)} m) is not over what it stands on (${feet.min.x.toFixed(2)}…${feet.max.x.toFixed(2)}, ${feet.min.z.toFixed(2)}…${feet.max.z.toFixed(2)}): it would tip`, false);
+  const M = massOf(root), weighs = !all.isEmpty() && M > 0;
+  // (what it stands on IS what this rule looks at: no feet is nothing looked at, which is how a composed machine
+  //  floating above its own floor read as "standing checked, nothing wrong" — docs/MANNY.md #87)
+  saw('standing', weighs ? grounded.length : 0);
+  if (weighs && grounded.length) {
+    const com = centreOfMass(nodes), feet = new THREE.Box3(); for (const n of grounded) feet.union(n.box!);
+    if (com.x < feet.min.x - 1e-3 || com.x > feet.max.x + 1e-3 || com.z < feet.min.z - 1e-3 || com.z > feet.max.z + 1e-3) say('standing', root.name, `its centre of mass (${com.x.toFixed(2)}, ${com.z.toFixed(2)} m) is not over what it stands on (${feet.min.x.toFixed(2)}…${feet.max.x.toFixed(2)}, ${feet.min.z.toFixed(2)}…${feet.max.z.toFixed(2)}): it would tip`, false);
   }
-  if (!all.isEmpty()) {
-    const M = massOf(root), V = all.getSize(new THREE.Vector3()), rho = M / Math.max(1e-9, V.x * V.y * V.z);
-    if (M > 0 && ((rho < 1.2 && !nodes.some((n) => n.p.mat === 'foliage' || n.p.mat === 'leaf')) || rho > (DENSITY.gold ?? 19300))) say('density', root.name, `as a whole ${rho.toFixed(1)} kg/m³ over its bounds: ${rho < 1.2 ? 'lighter than air' : 'heavier than gold'}`, false);
+  saw('density', weighs ? 1 : 0);
+  if (weighs) {
+    const V = all.getSize(new THREE.Vector3()), rho = M / Math.max(1e-9, V.x * V.y * V.z);
+    if ((rho < 1.2 && !nodes.some((n) => n.p.mat === 'foliage' || n.p.mat === 'leaf')) || rho > (DENSITY.gold ?? 19300)) say('density', root.name, `as a whole ${rho.toFixed(1)} kg/m³ over its bounds: ${rho < 1.2 ? 'lighter than air' : 'heavier than gold'}`, false);
   }
   return out;
 }
@@ -307,55 +344,6 @@ function moveBy(n: Node, world: THREE.Vector3): void {
   const at = n.p.at ?? [0, 0, 0]; n.p.at = [at[0] + d.x, at[1] + d.y, at[2] + d.z];
 }
 
-// ---- skins (src/nexus/machines/panels.ts): each checked once, its own results kept with it ----------------------------------
-const formed = new WeakMap<Patch, { least: number; pull: SV3; rmin: number; rminAt: [number, number] }>(), grids = new WeakMap<Patch, { a: number; b: number; at: SV3 }[]>();
-const met = new WeakMap<Patch, Map<string, { gap: number; angle: number }>>(), ids = new WeakMap<Patch, number>(); let nextId = 0;
-const idOf = (pt: Patch) => { let i = ids.get(pt); if (i === undefined) { i = nextId++; ids.set(pt, i); } return i; };
-const gridOf = (pt: Patch) => { let g = grids.get(pt); if (!g) { g = []; for (let i = 0; i <= 40; i++) for (let j = 0; j <= 16; j++) g.push({ a: i / 40, b: j / 16, at: patchAt(pt, i / 40, j / 16).at }); grids.set(pt, g); } return g; };
-const deg = (r: number) => (r * 180) / Math.PI;
-/** A skin's meetings with its neighbours checked against what its maker said of them: across a mirror, its normal with no
- *  part across the mirror (within 1°); in one tangent plane with a neighbour (G1: within 8 mm and 3°); a crease, within
- *  8 mm. A pressed or moulded skin is pulled from its die from the best direction there is (the die tipped as a stamping
- *  engineer sets it), and said where it would still lock in; and its tightest radius is said where it is under three
- *  times its sheet's thickness (tighter than an outer panel is pressed without splitting, typical). */
-function skinChecks(nodes: Node[], say: (check: string, part: string, says: string, fixed: boolean) => void): void {
-  const skins = nodes.filter((n) => n.p.shape && 'surf' in n.p.shape && !n.p.detail);
-  for (const n of skins) {
-    const pt = (n.p.shape as { surf: Patch }).surf;
-    for (const m of n.p.meets ?? []) {
-      const ts = Array.from({ length: 19 }, (_, k) => 0.05 + (0.9 * k) / 18), ab = (t: number): [number, number] => (m.edge === 'a0' ? [0, t] : m.edge === 'a1' ? [1, t] : m.edge === 'b0' ? [t, 0] : [t, 1]);
-      if (m.kind === 'mirror') {
-        let worst = 0; for (const t of ts) { const q = patchAt(pt, ...ab(t)); if (Math.abs(q.at[2]) < 2e-3) worst = Math.max(worst, deg(Math.asin(Math.min(1, Math.abs(q.n[2]))))); }
-        if (worst > 1) say('continuity', n.p.name, `it meets its own mirror at ${worst.toFixed(1)}°, not in one tangent plane (${m.why})`, false);
-        continue;
-      }
-      const other = skins.find((x) => x.p.name === m.part); if (!other) { say('continuity', n.p.name, `it is to meet the ${m.part}, which is not there`, false); continue; }
-      // (each point of this edge taken into the neighbour's frame, the point of the neighbour nearest it found, and the
-      // two normals compared there)
-      const opt = (other.p.shape as { surf: Patch }).surf, into = new THREE.Matrix4().copy(other.m).invert().multiply(n.m), rot = new THREE.Matrix3().setFromMatrix4(into), og = gridOf(opt);
-      // (what two skins' meeting is depends only on them, the edge, and where one stands from the other: kept, so a car
-      // park of one model, or the critic's next round, does not work it out again)
-      let seen = met.get(pt); if (!seen) { seen = new Map(); met.set(pt, seen); }
-      const mk = `${idOf(opt)}|${m.edge}|${into.elements.map((v) => v.toFixed(4)).join(',')}`; let got = seen.get(mk);
-      if (!got) {
-        let g2 = 0, a2 = 0;
-        for (const t of ts) {
-          const q = patchAt(pt, ...ab(t)), P = new THREE.Vector3(...q.at).applyMatrix4(into), c = closestOn(opt, [P.x, P.y, P.z], og), on = patchAt(opt, c.a, c.b).n;
-          g2 = Math.max(g2, c.d); a2 = Math.max(a2, deg(Math.acos(Math.min(1, Math.abs(new THREE.Vector3(...q.n).applyMatrix3(rot).normalize().dot(new THREE.Vector3(...on)))))));
-        }
-        got = { gap: g2, angle: a2 }; seen.set(mk, got);
-      }
-      const { gap, angle } = got;
-      if (gap > 0.008) say('continuity', n.p.name, `it is to meet the ${m.part} (${m.why}), but stands ${(gap * 1000).toFixed(0)} mm from it`, false);
-      else if (m.kind === 'G1' && angle > 3) say('continuity', n.p.name, `it meets the ${m.part} at ${angle.toFixed(1)}°, not in one tangent plane (${m.why})`, false);
-    }
-    const pressed = n.p.make === 'pressed' || (detailClassOf(n.p.mat) === 'polymer' && !!n.p.shell);
-    if (!pressed) continue;
-    let f = formed.get(pt); if (!f) { const d = draft(pt, undefined, 16, 10), fr = fairness(pt, 24, 12); f = { least: d.least, pull: d.pull, rmin: fr.rmin, rminAt: fr.rminAt }; formed.set(pt, f); }
-    if (f.least < -0.5 * (Math.PI / 180)) say('draft', n.p.name, `it would lock in its die: an undercut of ${(-deg(f.least)).toFixed(1)}° however the press is set (its best, along ${f.pull.map((v) => v.toFixed(2)).join(', ')})`, false);
-    if (n.p.shell && n.p.make === 'pressed' && f.rmin < 3 * n.p.shell) say('radius', n.p.name, `it bends to a ${(f.rmin * 1000).toFixed(1)} mm radius (at ${f.rminAt.map((v) => v.toFixed(2)).join(', ')} on it), tighter than ${(n.p.shell * 1000).toFixed(1)} mm sheet is pressed (about three times its thickness, typical)`, false);
-  }
-}
 
 // ---- clashes: every triangle of every part against every other part's ----
 // A box says two parts might meet; only their surfaces say whether they do. What a person sees as wrong at a glance up
