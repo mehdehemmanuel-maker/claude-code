@@ -49,8 +49,8 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   words, run on the same ask — `machine.mjs` composed from the library, `invent.mjs` for what the intent pipeline heard
   and what it could not use, `plan.mjs` fed the words as a sketch — each one's refusals kept rather than swallowed) and
   the PICTURE (the viewer built, the look page opened from the views that expose fakery rather than flatter: `three`
-  what a person sees first, `explode` whether it comes apart into real parts or is one lump wearing a name, `cut`
-  `explode` whether it comes apart into real parts or is one lump wearing a name). It prints the PNG paths, and
+  what a person sees first, and `explode` whether it comes apart into real parts or is one lump wearing a name).
+  It prints the PNG paths, and
   **the `Read` tool shows a PNG as a picture**, so they are really looked at — and it prints `it drew: <name>` beside
   them, raising `*** THE RENDER IS NOT OF YOUR ASK ***` when the library could not make the words and drew its
   family's example instead, which it used to do in silence. A cutaway (`--views cut`) is NOT among the default views:

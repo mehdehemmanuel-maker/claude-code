@@ -22,6 +22,10 @@ import { component } from '../parts/components';
 import { massOf } from '../parts/mass';
 import type { Part, V3 } from '../parts/kits';
 import { cheapest } from '../parts/prices';
+// the reader lives in its own file now (ask/machine-read.ts); re-exported here so every existing door goes on
+// meaning what it meant, which is the same reason index.ts and works.ts sit at the root
+import { readMachine } from './machine-read';
+export { readMachine, type MachineWant } from './machine-read';
 
 /** What a unit affords: the one thing it adds to whatever is bolted on top of it. */
 export type Does = 'slide' | 'turn' | 'grip' | 'deposit' | 'cut' | 'solder' | 'see' | 'think' | 'hold';
@@ -256,6 +260,9 @@ export interface Machine {
   /** what it affords, in the order the stack gives them */ does: Does[];
   /** what it will not do, each with the number that refuses it */ refusals: string[];
   /** parts the library does not draw by those words: a gap, never a stand-in */ gaps: string[];
+  /** what the words said that nothing here consumed - the computed difference between the quantities in the ask and
+   *  the quantities a part was sized by. Never a remembered list: a number dropped in silence puts itself here. */
+  notDone: string[];
 }
 
 /** What a unit weighs: the sum of its drawn parts, kg. Parts bought whole are weighed where a price page gives one and
@@ -346,36 +353,6 @@ function liftCheck(stages: Mounted[]): string[] {
     : [`${up.unit.name} raises ${up.unit.lifts} kg and would have to raise ${up.carrying.toFixed(2)} kg: give it a finer lead (a T8 × 2 raises four times as much at a quarter the speed) or a second motor`];
 }
 
-/** What words ask for, as the affordances a machine must have and how big it must be. Nothing here is a machine's
- *  name: "a printer", "a router" and "a thing that picks parts off a belt and puts them in a box" all arrive as the
- *  same kind of answer — what it must do, over what, carrying what. */
-export function readMachine(words: string): { does: Does[]; mm: [number, number, number]; payload: number; name: string; arrange: Arrangement } {
-  const t = words.toLowerCase();
-  const does: Does[] = [];
-  if (/print|extrude|deposit|fdm|fff|filament/.test(t)) does.push('deposit');
-  if (/mill|rout|cut|carve|engrave|spindle/.test(t)) does.push('cut');
-  if (/solder|tin |reflow/.test(t)) does.push('solder');
-  if (/pick|place|grab|grip|hand|hold.*part|sort/.test(t)) does.push('grip');
-  if (/camera|see|scan|inspect|look|vision|photo/.test(t)) does.push('see');
-  if (/turn|rotate|spin|wrist|turntable|lathe|wheel/.test(t)) does.push('turn');
-  const size = /(\d{2,4})\s*(?:mm)?\s*[x×by]\s*(\d{2,4})\s*(?:mm)?(?:\s*[x×by]\s*(\d{2,4}))?/.exec(t);
-  const kg = /(\d+(?:\.\d+)?)\s*kg/.exec(t);
-  // the arrangement: a thing that travels along something is a rail, a thing that reaches is an arm, a thing that
-  // turns the work under a fixed tool is a table, and anything that has to get anywhere in a box is a gantry
-  const arrange: Arrangement =
-    /\b(along|travel|traverse|rail|track|overhead|up the wall|across the wall|gantry crane|moves along)\b/.test(t) ? 'rail'
-      : /\b(arm|reach(es|ing)?|elbow|shoulder|wrist|jointed|articulat)/.test(t) ? 'arm'
-        : /\b(lathe|potter|wheel|turntable|spin the work|turns the work|faceplate)\b/.test(t) ? 'table' : 'gantry';
-  // a gantry is a box and wants three numbers; a rail is a length and an arm is a reach, and each is given by one
-  // ("along a wall 3000 mm", "reaches 600 mm"), which the first run read as nothing and defaulted to 300
-  const one = /(?:^|[^\dx×])(\d{2,4})\s*mm\b/.exec(t.replace(/\d+\s*(?:mm)?\s*[x×by]\s*\d+/g, ''));
-  const mm: [number, number, number] = size ? [Number(size[1]), Number(size[2]), Number(size[3] ?? size[2])]
-    : one && (arrange === 'rail' || arrange === 'arm') ? [Number(one[1]), 300, 300]
-      : [300, 300, 300];
-  const name = does.length ? `a${arrange === 'arm' ? 'n arm' : arrange === 'rail' ? ' rail-mounted machine' : arrange === 'table' ? ' turning machine' : ' machine'} that ${does.map((d) => ({ deposit: 'prints', cut: 'cuts', solder: 'solders', grip: 'picks things up', see: 'sees', turn: 'turns', slide: 'moves', think: 'is programmed', hold: 'holds' })[d]).join(', ')}` : 'a machine';
-  return { does, mm, payload: kg ? Number(kg[1]) : 0, name, arrange };
-}
-
 /** Compose an ask into a machine: the tool its words call for, the slides that carry it over the size asked, the frame
  *  under them and the brain beside them — then every stage checked against what stands on it. */
 export function composeMachine(words: string): Machine {
@@ -423,10 +400,19 @@ export function composeMachine(words: string): Machine {
   const refusals = [...st.refusals, ...(want.arrange === 'gantry' ? liftCheck(st.stages) : [])];
   if (want.payload > 0 && !tools.some((u) => u.does === 'grip')) refusals.push(`it was asked to hold ${want.payload} kg and nothing on it grips: say "picks up" and a gripper is composed in`);
   if (!want.does.length) refusals.push('nothing in those words says what the machine must *do*: name a tool (print, cut, solder, pick up, see, turn) and it is composed round it');
+  // A GAP IS FATAL TO THE FIGURES THAT REST ON IT. A machine whose beam or rail the library refuses to draw used to
+  // report a mass, a price and a bill of materials anyway, as confidently as one it had drawn - the refusal printed a
+  // line and the numbers printed beside it, and nothing said the numbers were short by the very part that was missing.
+  // That is a made-up figure wearing a sourced one's clothes, which theme 9 forbids outright. So where a part is not
+  // drawn, the mass and the price it would have contributed are not known, and `kg`/`usd` say they are not known
+  // rather than reporting the sum of what happened to be drawable.
+  const short = st.gaps.length > 0;
+  if (short) refusals.push(`its mass and price are WITHHELD, not computed: ${st.gaps.length} part${st.gaps.length === 1 ? ' is' : 's are'} not drawn by the library (above), so any total here would be the weight of what was drawable and not of the machine. Size those parts within what the library makes, or take the refusal as the answer`);
   return {
-    asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm, kg: st.kg, holding: st.holding,
-    usd: usd || null, unpriced: money.flatMap((m) => m.unpriced), does: [...new Set(units.map((u) => u.does))],
-    refusals, gaps: st.gaps, ...(joints ? { joints } : {}),
+    asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm,
+    kg: short ? 0 : st.kg, holding: st.holding,
+    usd: short ? null : (usd || null), unpriced: money.flatMap((m) => m.unpriced), does: [...new Set(units.map((u) => u.does))],
+    refusals, gaps: st.gaps, notDone: want.notDone, ...(joints ? { joints } : {}),
   };
 }
 
@@ -445,6 +431,10 @@ export function machineText(m: Machine): string {
   if (m.unpriced.length) out.push(`No price here for: ${[...new Set(m.unpriced)].join(', ')}.`);
   if (m.gaps.length) out.push(`The library does not draw: ${[...new Set(m.gaps)].join('; ')}.`);
   if (m.refusals.length) out.push(`It will not:\n${m.refusals.map((r) => `  - ${r}`).join('\n')}`);
+  // what the words said and nothing here used. Printed beside the refusals rather than under them, because a number
+  // that was read and then dropped is a different fault from a number that refuses the machine, and the two were
+  // indistinguishable while one of them was silent.
+  if (m.notDone.length) out.push(`Said in the ask and NOT done here:\n${m.notDone.map((r) => `  - ${r}`).join('\n')}`);
   return out.join('\n');
 }
 

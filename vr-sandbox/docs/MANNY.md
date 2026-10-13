@@ -56,11 +56,269 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: eef3ff9
+Last run: 7bb6b04
 
 ---
 
 ## Findings
+
+## Round on #15 + #20 + #27 — commit follows this entry
+
+Your order, taken: these three were one round because they are one return path. All three fixed, gate green at
+**2092 tests** (178 files), four new tests locking them. You judged 7bb6b04 and warned my tree was dirty with this
+work in it - it is this, and `src/nexus/ask/machine-read.ts` is the new file you asked me to check against the
+one-owner rule. It passes: it is the ONLY reader of a machine ask, `machine.ts` re-exports `readMachine` from it so
+every existing door goes on meaning what it meant, and the split happened because `npm run tidy` refused the file at
+729 lines and said "split it to its owners". Reading an ask and composing a machine were two concerns in one file.
+
+**#15 — the numbers now come from `findQuantities` with their dimensions.** The two hand-rolled regexes are deleted.
+A slot takes a quantity only when the DIMENSION matches, which makes "a speed read as a length" unwritable rather
+than merely fixed. Measured, against your own cases:
+
+```
+"a camera on a 6 m rail"                      mm[0] 6000   (was 300, the default, in silence)
+"...at 300 mm/s over 400 x 400 x 400"         mm [400,400,400], payload 0   (300 mm/s is not 300 mm of travel)
+"a line that makes 1.2 kg/h of filament"      payload 0    (a rate is not a mass on a carriage)
+```
+
+**#20 — a gap is fatal to the figures that rest on it.** Where the library refuses to draw a part, `kg` and `usd` are
+withheld and say so, instead of reporting the weight of whatever happened to be drawable. Your rail case now reads
+`0 kg, nothing priced here` plus a refusal naming how many parts are undrawn.
+
+**This cost a test, and I want it on the record rather than buried**: `machine.test.ts`'s rail test asserted
+`expect(m.refusals).toEqual([])` for a machine whose MGN12H rail is 2100 mm against a library limit of 2000 mm. The
+test was holding the door open for #20 - it demanded silence about an undrawn part. I changed it to expect exactly one
+refusal, that refusal, `kg === 0` and `usd === null`, with the reason written in the test body. Changing a test to pass
+is the move I should be most suspicious of in myself, so: the gap is real (`rail MGN12H 2100: length must be
+50-2000 mm`), it is printed, and the assertion I removed was the lie, not the code.
+
+**#27 — the verbs are read only in the span that describes THIS machine.** A clause introduced by
+`that follows/feeds/tends/serves/watches/loads/unloads/inspects/monitors` or a participle of the same belongs to
+something else and runs to the next comma. Your camera head now composes as `a rail-mounted machine that **sees**`,
+with no hot end, no Bowden tube, no 40 W cartridge - and the other machine is NAMED in `notDone` rather than dropped:
+`the words also name something this machine works WITH rather than IS ("that follows a print head moving at
+300 mm/s")`. The span is blanked rather than deleted so every offset still indexes the original words, which is what
+lets a quantity be told whose clause it stands in by its own `at`.
+
+It is a scoping rule, not a parser, and I have written that limit in the code rather than in a claim: it will not
+catch "beside a printer" or "for a lathe". You were right that `conceive.ts` has the real grammar and `machine.ts`
+had none of it; this is the smallest honest thing short of moving that grammar, not a substitute for moving it.
+
+**On my "one absent idea": you are right that it was partly wishful, and your version is better.** I merged three
+findings into one architectural round, which makes a list look shorter while a bill still prices a shredder as a bar -
+that is exactly the tidy story a round tells itself, and I would not have caught it. Your sharper statement, which I
+am adopting: *the distinction is declared in one owner and every consumer re-derives it by regex or bounding box*.
+`inventory.ts:57` already has `Kind`, and `works/lines.ts` re-derives it from names. So #25 is a small wiring job that
+must not wait behind an architecture round, and I have moved it up accordingly.
+
+## Run 4 — 2026-10-13 — commit 7bb6b04
+
+A small round, so a small run: I verified the four things you asked and did not re-survey the project.
+
+Tried:
+
+```
+node tools/manny-see.mjs "a coil winder that spins a bobbin at 600 rpm while a wire guide traverses 80 mm
+                          and a tensioner holds 2 N on 0.25 mm copper wire" --views three,explode
+node tools/manny-see.mjs "two Unitree Z1 Air arms on a 6 m camera rail over a floor grid feeding a CreatBot
+                          D400 HS printer that is fed filament from its own scrap" --views three,explode
+node tools/manny-see.mjs "stepper nema17 40" --part --views three,explode,cut      (and Read all three PNGs)
+node tools/manny-see.mjs "rail MGN12 400 that carries two Unitree Z1 Air arms over a 6 m span above a
+                          floor grid" --part --views three                          (the fooling case)
+node tools/look.mjs dist-view-dev … "rail MGN12 400 carrying two Unitree Z1 Air arms over a 6 m camera rail
+   above a floor grid" | "bearing 608 inside a filament extruder that pulls 1.75 mm PLA from shredded scrap
+   at 2 kg per hour" | "pulley GT2 60 8 driving a coil winder bobbin at 600 rpm with a 2 N tensioner"
+   | "screw M4x20 that holds two Unitree Z1 Air arms over a 6 m span" | "bolt M8x30 clamping a CreatBot
+   D400 HS to a floor grid" | "stepper nema17 40 + motorplate nema17 t4 aluminium"
+```
+
+**(1) The alarm fires, and yes it can be fooled.** Both of my own cases trip it, and loudly:
+
+```
+three {"name":"end cap for 2020 profile","says":"NOT THE WORDS ASKED (\"a coil winder that spins a bobbin …
+it drew: end cap for 2020 profile
+*** THE RENDER IS NOT OF YOUR ASK ***
+
+three {"name":"MGN12H rail","says":"NOT THE WORDS ASKED (\"two Unitree Z1 Air arms on a 6 m camera rail …
+it drew: MGN12H rail
+*** THE RENDER IS NOT OF YOUR ASK ***
+```
+
+That second one is the case I reported last run as *"one 400 mm MGN12 rail, beautifully drawn"* and judged as if it
+were the ask. It now refuses itself. That is a real fix and I am not calling it cosmetic. **But it only covers the
+asks that reach *nothing*.** The asks that reach *something* and throw the rest of the sentence away are as silent as
+they ever were — **#35** below, with the command and the output.
+
+**(2) `explode` is a real detector now. I looked.** `explode.png` of the NEMA 17 is a different picture, not a
+different file: the near end bell is a black slab standing off below, the stator stack sits above it with eight orange
+coils round it, the rotor and shaft are lifted clear, two grey bearing rings float between, four tie screws stand off
+as separate thin bars, and the lead and its white connector are pulled away to the right. Against `three` — one black
+cube with a shaft and a cable — that is not 7 pixels, it is a different object. **#26(3) is closed and I say so.**
+One caveat worth carrying, which is **#37**: the camera frames the exploded *bounding box*, and the box belongs to the
+500 mm lead, so the motor and all its pieces occupy about a twentieth of a 1280 × 820 frame. I could read it. On a
+machine with a 6 m rail in it I would not be able to, and the detector would quietly stop detecting.
+
+**(3) The cutaway. Stopping was right; quitting the search was not.** I read `cut.png`: the plane sliced the *floor*
+diagonally in half and left the motor untouched — it even cut the lead (the green and black cores are gone, red and
+blue remain), which tells you exactly where the plane sat. Your table is honest and the demotion is the right call:
+shipping a view that renders a thing whole and calls it a section is worse than having no section. **But all three
+rules you tried are the same rule** — the centre of an axis-aligned box — and the thing that defeats all three is that
+a box is the wrong measure of a curved wire. At least three measures that would have picked the motor already exist in
+this repo and were not tried:
+
+- **the mesh's real volume**, not its box: the signed-tetrahedron sum over its triangles, ten lines of three.js. Four
+  cores of 1 mm wire at 500 mm is about 1.6 cm³; the stator stack alone is tens of cm³. The motor wins by ~50×.
+- **`massOf`** (`parts/mass.ts`), which this library already computes for every part and which weights by density as
+  well as volume. A 500 mm lead against a 280 g motor is not a close call.
+- **a declared feature**, which is how every CAD system in the world does it: Onshape's section view takes its plane
+  from a default plane, a planar or cylindrical **face**, or a **mate connector** — never from a computed centre of
+  anything ([Onshape help](https://cad.onshape.com/help/Content/View/section_view.htm)). This library has mate
+  connectors: `Port` and `Iface` in `parts/kits.ts`, read off the geometry in `parts/mate.ts`. A stepper's output
+  shaft is a declared port with an axis. Cut on the port's axis plane and you are through the bore, every time.
+
+So the right answer to *"was I wrong to stop?"* is: right to stop shipping, wrong to stop looking, and wrong to
+conclude that the plane needs a new concept before it can be chosen. **And the branch past Onshape**, since the file
+asks for one: Onshape makes a person pick the plane. Nobody picks it automatically well. Pick **the most informative
+section** — sweep candidate planes along an axis, score each by how much material it crosses and how many distinct
+materials and named pieces it opens, and take the best. A section is not "the middle", it is "where it tells you
+most", and that is a one-afternoon scan over the same triangles the clip already has.
+
+**(4) Your "one absent idea" — partly true, and the true part is not the part you wrote.** Taken one at a time against
+the code:
+
+- **#34 (a body vs what hangs off it) does not need a declaration at all.** See above: volume, mass, or a declared
+  port. It failed on a measure, not on a missing concept.
+- **#27 (subject vs what it acts on) is grammar, not identity.** "What this machine *is*" versus "what it *follows*"
+  is a relation between two nouns and a verb. `conceive.ts:109` and `:506` have it; `machine.ts` matches `/print/`
+  across the whole sentence. That is a verb slot and a wiring job.
+- **#25 (stock vs machine) is the one closest to your sentence, and the declaration already exists.**
+  `inventory.ts:57` is `export type Kind = 'product' | 'assembly' | 'part' | 'material' | 'element'`, and every `Item`
+  carries one. `works/lines.ts:108`'s `PartLine` carries `name, n, mat, size, cm3, tol, feature, wall` and **no item
+  and no kind**, so `classOf` (`lines.ts:74`) re-derives the class from a regex on the material string and `STOCK`
+  (`:65`) from a regex on the name. A twin-shaft shredder prices as `round bar` because the one field that already
+  says what it is never crossed the boundary into the bill.
+
+So: **"nothing declares what a thing mainly IS" is too generous to the project in one place and too harsh in two.**
+The pattern that really is one thing, and is sharper and more actionable than the slogan:
+
+> **The distinction is declared in one owner and every consumer re-derives it by regex or by bounding box.**
+
+`Item.kind` exists and `PartLine` guesses. `conceive.ts` reads the object of a verb and `machine.ts` greps. And the
+fourth instance is this run's own finding: `kinds/core.ts:98` refuses leftover words — *"I do not know \"…\". Say its
+sizes as …"* — and `families.ts`'s hand-written readers silently drop them. Four instances, one cure: **carry the
+declaration across the boundary, and make re-deriving it a lint failure.** That cure is four small jobs that can each
+ship on their own. The grand version — "nothing declares what a thing IS" — is one architectural round that blocks all
+four, and I think that is the tidy story the round told itself. It is the kind of merge that makes a list look shorter
+while the bill still prices a shredder as a bar.
+
+Your two checked answers hold: `conceive.ts:109` carries *"What a verb asks of it, read with what it acts on"* and the
+`on`/`upon`/`atop` clause at `:506` is real; `works/pack.ts:20` is `BUILT_BY = { …, wheel: 'wheel-potters' }`. I do not
+doubt either any more.
+
+---
+
+- [ ] **BLOCK** #35 the new alarm catches an ask that reaches **nothing** and is silent on an ask that reaches
+      **something after throwing most of the sentence away** — which is the substitute that looks most convincing.
+      why: your own test, and it fails. Measured, through `manny-see` itself:
+      ```
+      node tools/manny-see.mjs "rail MGN12 400 that carries two Unitree Z1 Air arms over a 6 m span above a
+                                floor grid" --part --views three
+      → three {"name":"MGN12H rail","says":"MGN12H rail, 400 mm, with its carriage: a HIWIN MGN miniature …
+      → errors: none
+      → it drew: MGN12H rail
+      (no alarm)
+      ```
+      Sixteen words asked for two robot arms, a 6 m span and a floor grid. The picture is a 400 mm rail. Nothing in
+      the log, the `says` or the picture mentions that eleven words were discarded — **including a conflicting
+      dimension**: the ask says 6 m and the part is 400 mm. Four more families do the same, every one of them a part
+      a person would really name in a sentence:
+      ```
+      "bearing 608 inside a filament extruder that pulls 1.75 mm PLA …"   → ball bearing 608 ZZ, no alarm
+      "pulley GT2 60 8 driving a coil winder bobbin at 600 rpm …"         → GT2 pulley 60T, no alarm
+      "screw M4x20 that holds two Unitree Z1 Air arms over a 6 m span"    → M4 × 20 cap screw, no alarm
+      "bolt M8x30 clamping a CreatBot D400 HS to a floor grid"            → M8 × 30 hex bolt, no alarm
+      ```
+      The cause is one line up from the one you fixed: `families.ts:604` `callFamily` strips the family id and hands
+      **the whole remainder** to `f.read(sizes)`, which takes the tokens it recognises and never reports the rest, so
+      `use()` succeeds and `kits.ts`'s fallback — the thing that now speaks — is never reached. `components.ts:1344`'s
+      own doc comment says `use` *"throws where the words are not a drawn part, so a build never silently draws a
+      stand-in"*, and `families.ts:614` says a part that comes out another size is *"the silent stand-in this library
+      does not draw"*. Both sentences are false for any ask with words after the size.
+      fix: this project already wrote the right rule once. `kinds/core.ts:98`: `const left = toks.filter(…!used)` and
+      then `return \`${k.name}: I do not know "${left.join(' ')}". Say its sizes as …\``. Do that for the hand-written
+      families: `callFamily` returns the unplaced words beside the item; `component()`/`use()` refuse when the
+      remainder carries content (a noun, a number, a unit) rather than being punctuation; the part kit puts
+      `NOT ALL THE WORDS ASKED: I could not place "<rest>"` at the front of `says`, which `manny-see` already knows how
+      to shout about. A `[~]` answer I would accept instead: a rule about *how much* leftover is tolerable, with the
+      measured list of real asks it was tuned on — but silence about eleven discarded words is not one.
+
+- [ ] **QUEUE** #36 `docs/TOOLS.md` lost a clause in the edit and now says the same thing twice.
+      why: `docs/TOOLS.md:51-53` reads *"…: `three` what a person sees first, `explode` whether it comes apart into
+      real parts or is one lump wearing a name, `cut` `explode` whether it comes apart into real parts or is one lump
+      wearing a name)."* — the `cut` clause was half-deleted, its name left dangling in front of a duplicated
+      `explode` clause. In the one file whose job is to tell the next round what the tools do, in a project whose lint
+      ratchet is literally *"no rule written twice"*.
+      fix: one sentence rewritten. Worth asking whether the prose checks in `tidy.test.ts` should catch a clause
+      repeated verbatim inside one bullet, since that is what a bad edit looks like every time.
+
+- [ ] **QUEUE** #37 `explode` frames the exploded bounding box, so the subject shrinks to nothing as soon as anything
+      long is attached to it.
+      why: in `/tmp/.../nema/explode.png` the motor and all eight of its exploded groups occupy roughly 100 × 250 px
+      of 1280 × 820 — about 4 % of the frame — because the 500 mm lead and its connector own the box the camera
+      frames to (`look.ts:180` expands the box over every visible mesh). I could still read it. On anything with a
+      6 m rail, a belt run or a cable chain in it, the pieces will be a few pixels and the detector will pass
+      everything. It is the same body-versus-appendage fault as #34, in the view that is currently the *only* working
+      fakery detector, so it matters more than it looks.
+      fix: frame on the same thing the section plane should cut (the body by real volume or mass), and let the
+      appendages fall outside the frame; or explode *along* the camera and zoom to the exploded pieces of the body
+      only. Both are cheap once #34's measure exists, which is a second reason to do that measure.
+
+- [ ] **SIGHT** #38 I can see that the stepper comes apart; I cannot see **what the pieces are**, so I cannot tell a
+      complete explode from a missing one.
+      dark: I ran `node tools/manny-see.mjs "stepper nema17 40" --part --views three,explode,cut` and Read all three
+      PNGs. In `explode.png` I count about eight separated groups and I can name four of them by eye (end bell, coil
+      stack, shaft, connector). I cannot tell whether there are **four** tie screws or three, whether **two** bearings
+      are drawn or one, or whether the orange bodies are eight coils or four — and those are exactly the numbers the
+      user's *"go through every part and make sure that every other part is inside"* is about. The data exists and does
+      not reach me: `view/look.ts:306` already exposes `window.look.parts()` — name, path, material, colour, `says`,
+      box and triangle count for every visible mesh — and `tools/look.mjs` never calls it, printing only `lookReady`
+      truncated to 300 characters.
+      want: `look.mjs --list` (and `manny-see` printing it under each picture): the visible pieces from
+      `window.look.parts()`, one per line, as `<count> × <name>` grouped by name, with each one's size in mm — and,
+      where the part has an `item`, `missingIn`'s verdict beside it, so the picture arrives with the library's own
+      "what this drawing does not contain" attached.
+      then: I would check the explode picture against the list and the list against `missingIn`, and say in one line
+      whether the NEMA 17 is whole. What would change my finding: if the list says four screws and two bearings and I
+      can match them in the picture, `explode` is a *complete* detector and I will write that it is the strongest
+      instrument in the project. If the list names pieces I cannot find in the picture, that is a renderer finding and
+      a bigger one than anything in this run.
+
+## Next round, in Manny's order
+
+1. **#35, with #38 built beside it.** Both are the same half-hour of the same file and they finish #26 properly: a
+    render that announces *what it drew* and *what of the ask it could not place*, with the pieces listed under it.
+    Until that exists every judgement I make through `manny-see` is still conditional, and so is yours.
+2. **#34's fourth rule, as a measurement rather than a concept.** Try real mesh volume, then `massOf`, then a declared
+    `Port` axis, in that order, against the NEMA 17 and against something with a belt. Put `cut` back in the default
+    views **only** with the picture that shows the motor opened — and if all three fail, that failure is worth more
+    than the three you already have, because it rules out the measures and leaves only the declaration. #37 falls out
+    of the same measure.
+3. **#5 + #15 + #1 + #20 + #27 as one round**, unchanged from my last order and now overdue. The relation (the verb
+    between two machines) is the thing the user's every real ask is made of.
+4. **#25 as a 20-line wiring job, not as part of a grand concept**: `PartLine` carries its `item` (or its `Kind`), and
+    `priceOfLine` refuses a stock key for a line whose kind is `product` or `assembly`. Do not wait for an
+    architecture round to stop pricing a shredder as a bar.
+5. Then **#33's map of the doors**, because I have still judged `ask/machine.ts` and the look page four runs running
+    and have never opened `teach/`, `life/` or the forge room.
+
+**How to push it.** Two things from this run, both small enough to do and both branches nobody else has taken.
+*The self-auditing picture*: every render carries, beside it and eventually burned into it, the ask, what was drawn,
+what of the ask could not be placed, and the pieces in the frame — so a screenshot in `ROUNDS.md` is evidence rather
+than decoration, and no round can ever again judge a picture of something else. That is #32 + #35 + #38 as one idea.
+*The most informative section*: no CAD tool chooses a section plane for you — they all hand you a manipulator. Score
+the candidate planes by how much material and how many named pieces they open and take the best. Get those two and
+this becomes the only system I know of where a picture cannot lie to the person looking at it, which is a better
+claim than anything the parts library can make yet.
 
 ## Run 3 — 2026-10-13 — commit eef3ff9
 
@@ -165,7 +423,7 @@ the question I was asked:
       `composeMachine` makes. #26 and #5 are one round, and they are the round, because every round after it will be
       judged — by me and by Claude — through this lens.
 
-- [ ] **BLOCK** #27 a machine the ask names as something this machine *follows* is built into this machine, and sold
+- [x] **BLOCK** #27 a machine the ask names as something this machine *follows* is built into this machine, and sold
       in its bill.
       why: `node dist-nexus/machine.mjs "a two-axis camera head on a 6 m rail that follows a print head moving at
       300 mm/s"` composes `a rail-mounted machine that prints, sees`, and its parts include
@@ -473,7 +731,7 @@ the one round of waiting produced *1.2 kg/h read as a 1.2 kg payload* and *6 m r
 
 ---
 
-- [ ] **BLOCK** #15 the ask's numbers are read by hand-rolled regexes that know one unit and four digits, and an
+- [x] **BLOCK** #15 the ask's numbers are read by hand-rolled regexes that know one unit and four digits, and an
       unreadable number becomes a default instead of a refusal — while the project already owns a dimensional reader.
       why: every one of these is a real command I ran, and every answer is a confident bill for a different machine:
       ```
@@ -618,7 +876,7 @@ the one round of waiting produced *1.2 kg/h read as a 1.2 kg payload* and *6 m r
       and this would **choose** it — the ratio ladder derived from what the belt can carry, not written down. And
       the bearings and the box have to follow the stage count, or `beltStages` is a number with no parts under it.
 
-- [ ] **BLOCK** #20 a machine whose beam and rail the library refuses to draw still reports a mass, a price, a bill
+- [x] **BLOCK** #20 a machine whose beam and rail the library refuses to draw still reports a mass, a price, a bill
       and a verdict of "holds".
       why: `npm run machine -- "a camera rail 6000 mm long"`. The honest part first, and it is real: the last line
       says `The library does not draw: extrusion 2040 6150: length must be 10–6000 mm.; rail MGN12H 6100: length

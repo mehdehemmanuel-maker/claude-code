@@ -203,12 +203,63 @@ describe('the arrangement comes out of the words too, not out of a default', () 
     // and a gantry still wants its three
     expect(readMachine('a machine that prints 250x210x200').mm).toEqual([250, 210, 200]);
   });
+  it('a number is read by its dimension, so a speed is never a length and a rate is never a payload', () => {
+    // the reader used to be two regexes that knew `mm` and `kg`. They could not tell a length from a speed that
+    // contains one, so `300 mm/s` was 300 mm of travel and `1.2 kg/h` a 1.2 kg payload; and any other unit was
+    // unseen, so `6 m` silently became the 300 mm default. Quantities come from `findQuantities` with dimensions now.
+    expect(readMachine('a camera on a 6 m rail').mm[0], 'six metres is 6000 mm, not the 300 mm default').toBe(6000);
+    const fast = readMachine('a gantry that moves a tool at 300 mm/s over 400 x 400 x 400');
+    expect(fast.mm, 'a speed is not a travel, whatever digits it holds').toEqual([400, 400, 400]);
+    expect(fast.payload, 'nothing here weighs anything').toBe(0);
+    const rate = readMachine('a line that makes 1.2 kg/h of filament');
+    expect(rate.payload, 'kg per hour is a rate, and a rate is not a mass on a carriage').toBe(0);
+    expect(readMachine('an arm that picks up 3 kg').payload).toBe(3);
+  });
+
+  it('what the words said and nothing used is computed, not remembered', () => {
+    // `notDone` is a set difference: the quantities in the ask minus the quantities a part was sized by. A number the
+    // machine ignores can no longer be dropped in silence, because dropping it is exactly what puts it in this list.
+    const m = composeMachine('a gantry that moves 25 kg at 1000 mm/s over 2000 x 1000 x 600');
+    expect(m.notDone.join(' '), 'the asked speed is met by nothing here and must say so').toMatch(/1000 mm\/s/);
+    expect(composeMachine('an arm that reaches 540 mm and picks up 3 kg').notDone.join(' '))
+      .not.toMatch(/540|3 kg/);
+  });
+
+  it('a machine the ask says this one FOLLOWS is not built into this one, or sold with it', () => {
+    // "a camera head ... that follows a print head" gave the camera a hot end, a Bowden tube and a 40 W cartridge,
+    // because /print/ matched anywhere in the sentence. Two machines are named and only one is being built.
+    const m = composeMachine('a two-axis camera head on a 6 m rail that follows a print head moving at 300 mm/s');
+    expect(m.does, 'it sees; it does not print').toContain('see');
+    expect(m.does, "the print head is what it follows, not what it is").not.toContain('deposit');
+    expect(m.stages.map((s) => s.unit.id).join(' ')).not.toMatch(/hot.?end/i);
+    expect(m.notDone.join(' '), 'and the other machine is named as not built, rather than silently dropped').toMatch(/follows a print head/);
+  });
+
+  it('a part the library will not draw is fatal to the mass and the price that rest on it', () => {
+    // it used to print a mass, a price and a bill beside the refusal, which is the weight of what happened to be
+    // drawable wearing the name of the machine.
+    const m = composeMachine('a robotic hand that moves along a wall 2000 mm and picks up 1 kg');
+    expect(m.gaps.length, 'a 2100 mm MGN12H rail is past the 2000 mm the library draws').toBeGreaterThan(0);
+    expect(m.usd, 'no price is honest here').toBeNull();
+    expect(m.kg).toBe(0);
+    expect(m.refusals.join(' ')).toMatch(/WITHHELD/);
+  });
+
   it('a rail puts the tool on one long slide on brackets, with no frame around it', () => {
     const m = composeMachine('a robotic hand that moves along a wall 2000 mm and picks up 1 kg');
     expect(m.arrange).toBe('rail');
     expect(m.stages.map((s) => s.unit.id).join(' ')).toMatch(/rail-mount-2000/);
     expect(m.stages.filter((s) => s.unit.does === 'slide')).toHaveLength(1);
-    expect(m.refusals).toEqual([]);
+    // This line used to read `expect(m.refusals).toEqual([])`, and it was asserting a lie. A 2000 mm travel wants a
+    // 2100 mm rail, and the library refuses to draw one: `rail MGN12H 2100: length must be 50-2000 mm`. The machine
+    // reported a mass, a price and a bill anyway, and the test held the door open for it by demanding silence. A gap
+    // is now fatal to the figures that rest on it, so the refusal below is the correct answer and its absence was the
+    // fault (docs/MANNY.md #20). What is still checked is that there is exactly ONE refusal and it is that one: a rail
+    // must not quietly acquire others.
+    expect(m.refusals).toHaveLength(1);
+    expect(m.refusals[0]).toMatch(/WITHHELD, not computed/);
+    expect(m.kg, 'a withheld mass is not a quiet zero dressed as a weight').toBe(0);
+    expect(m.usd).toBeNull();
   });
 });
 
