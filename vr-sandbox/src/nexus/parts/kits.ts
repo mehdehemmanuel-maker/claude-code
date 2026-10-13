@@ -100,6 +100,11 @@ export interface Part {
   travel?: { steer?: number; bump?: number; slide?: { dir: V3; from: number; to: number } };
   /** a limb that swings as it moves: about which axis, how far (radians), at what point in the stride (0–1) */ swing?: { axis: 'x' | 'z'; amp: number; phase: number };
   /** its mass taken as typical where its shape does not say it (a car's wiring, its fluids), kg */ kg?: number;
+  /** where its `fill` came from, when the fill was SOLVED BACKWARDS out of a published mass rather than designed:
+   *  "Franka's published 4.0 kg". Solving a hollow casting's fill from its maker's mass is a good modelling choice;
+   *  what it is not is an independent second opinion, because the sum must then reproduce the figure it came from.
+   *  Saying so here is what lets `massWhy` tell that case from a mass really summed from solids, and what lets
+   *  `npm run part` withhold a percentage that cannot fail (docs/MANNY.md #49). */ fillFrom?: string;
   /** how it is made where its material alone does not say (a car's pressed panels, round as they are styled) */ make?: 'pressed';
   /** it gives light: lumens, and the colour of it */ light?: { lm: number; color: number };
   /** it goes round its holder's middle once in so many seconds (an orbit) */ spin?: number;

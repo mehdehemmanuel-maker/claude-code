@@ -253,7 +253,7 @@ const servo: Family = {
   id: 'servo', name: 'hobby servo', path: ['Electrical', 'Motors and actuators', 'Servos'], says: 'micro (SG90 size) or standard (MG996R size)', params: [{ key: 'size', says: 'size', unit: '', values: Object.keys(SERVOS), default: 'micro' }],
   examples: ['servo micro', 'servo standard'],
   read(w) { return { size: /standard|mg996|large/i.test(w) ? 'standard' : 'micro' }; },
-  make(p) { const k = String(p.size), S = SERVOS[k]!; return item(`servo-${k}`, `${k} servo`, 'Electrical/Motors and actuators/Servos', 'product', 'assemble', `servo-case motor-130 ${S.gears} potentiometer servo-board wire-hookup*3`, 'a DC motor through a gear train to an output shaft, a potentiometer on it for feedback, a control board, in a case', `${S.box.join(' × ')} mm, ${S.g} g; stall ${S.torque}`, S.box, S.g); },
+  make(p) { const k = String(p.size), S = SERVOS[k]!; return item(`servo-${k}`, `${k} servo`, 'Electrical/Motors and actuators/Servos', 'product', 'assemble', `servo-case ${S.g < 20 ? 'motor-micro' : 'motor-130'} ${S.gears} potentiometer servo-board wire-hookup*3`, 'a DC motor through a gear train to an output shaft, a potentiometer on it for feedback, a control board, in a case', `${S.box.join(' × ')} mm, ${S.g} g; stall ${S.torque}`, S.box, S.g); },
 };
 // ---- axial fans by frame and voltage --------------------------------------------------------------------------------------
 /** An axial fan's proportions, mm (all typical): its throat 0.95 of its frame across; its hub 6 mm + a third of its frame

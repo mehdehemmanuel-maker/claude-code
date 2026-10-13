@@ -1790,3 +1790,44 @@ Still wrong and written down rather than left to be found again: the rail's brac
 standing under it, the turn axis and gripper float above it rather than hanging off the carriage, and `machineParts`
 still draws only two of the four arrangements it declares — `arm` has its own loop, `gantry` has the quarter-turn
 rule, and `rail` and `table` share the gantry's upward stack.
+
+## #55, #49, #50 — the two-mass check measured, then mended
+
+**The instrument, measured (#55).** `npm run part -- --audit` walks both populations and splits every mass by where it
+came from. The split needed something that did not exist: `parts/mass.ts` returned one number whatever its source, so
+a mass a drawing DECLARES and a mass summed from solids came back indistinguishable, and `npm run part` printed the
+two against each other as independent opinions. It now has `ownKg` extracted (one rule used by both, rather than the
+arithmetic written twice) and `massWhy`, which splits a total into declared / solved-back / summed; `Part` gained
+`fillFrom`, and the five places that solve a hollow casting's fill out of a published mass say what they solved from.
+Without that marker the fourth class cannot be told from the second at all.
+
+The answer: **2214 of 2404 inventory items (92.1 %) and 279 of 395 catalogue families (70.6 %) are not drawn**, so for
+nine things in ten "no disagreement reported" is evidence of nothing. Of what IS drawn, nothing is wholly declared or
+wholly solved; 23 figures (5 items, 18 families) are part summed and part not, and those are the ones where a `0.0 %`
+meant arithmetic rather than agreement. `npm run part` now prints which it is and withholds the percentage where the
+two numbers are one number.
+
+Three faults in the audit itself, found before quoting any number from it: it asked for drawings by id only, and a
+maker file registers its drawing when asked BY WORDS, so 28 drawn items read as undrawn — including the Quest 3, the
+item that raised the finding; it counted "equal" as "lighter" on float noise; and it let a part-summed figure print a
+percentage. A sweep that silently misses a class is the fault being audited.
+
+**The tests that could not fail (#49c).** `headset.test.ts` is renamed to what it checks — the published mass is
+*reachable with this envelope* — and asserts the summed share separately. It also turned out the two items in that
+loop are not the same claim: the headset's shell has its fill solved back, so 20 % is a reachability bound, while the
+controller is summed throughout, so for it the same 20 % is a real agreement. The test now states which, per item.
+Proved by breaking it: `QUEST3.kg` at 5.15 → red, back at 0.515 → green.
+
+**The fabricated mass (#50).** `(size / 10) ** 3 * 9` gave an NMRV 030 243 g while the same family's own `of` named
+two 6204 bearings the library weighs at 106.18 g each — 212 g of the 243 g was bearings. It is summed from its own
+declared parts now, each term shape × density: a die-cast shell over the envelope, the bronze wheel, the steel worm,
+the two bearings, the oil. 030 → 986 g, 110 → 25.6 kg, and `std` labels it a **lower bound**: a published NMRV 030 is
+1.6 kg, so this is 62 % of it and the rest is ribs, feet, flanges and the output boss the envelope does not draw. A
+maker's weight table is still wanted and could not be reached from this container (Firecrawl credits low, Tavily
+rate-limiting) — a network limit, stated rather than papered over with a second invented law.
+
+**The check that would have caught it.** `inventory.test.ts`: no item may declare a mass less than the parts its own
+`of` names. It found two more — `servo-micro` (9 g containing an 18 g `motor-130`) and `n20-motor` (10 g, the same) —
+and the cause was one id: `families.ts` gave every servo a 130-size can, 20 mm across, including the micro. There is a
+`motor-micro` now and the family picks by its own mass, as `gearmotor` already did for the N20. Offenders 2 → 0, and
+the test fails by name when `motor-130` is put back.

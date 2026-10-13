@@ -68,7 +68,7 @@ export function frankaHandParts(nm = 'Franka Hand', open = 20): Part[] {
   const plug = [B(`${nm} connector plug`, [11.4, 43.3, 11.5], [0, -67.2, -20.2], { mat: 'abs', color: DARK, finish: 'moulded', fixed: 'in the arm\'s end-effector connector' }), B(`${nm} connector plate`, [4, 22.9, 40.9], [0, -92.5, -1.8], { mat: 'abs', color: DARK, finish: 'moulded' })];
   const shell = P(`${nm} housing`, H.shape, { mat: 'pc', color: 0xf3f4f7, finish: 'moulded', rot: H.rot, item: 'gripper-housing' });
   const solid = massOf({ ...shell, fill: 1 }), rest = [...inside, plate, ...plug].reduce((a, b) => a + massOf(b), 0);
-  const housing = { ...shell, fill: Math.max(0.05, Math.min(1, (FRANKA_HAND.kg - rest) / solid)) };
+  const housing = { ...shell, fill: Math.max(0.05, Math.min(1, (FRANKA_HAND.kg - rest) / solid)), fillFrom: `Franka's published ${FRANKA_HAND.kg} kg for the hand` };
   const finger = (side: 1 | -1): Part => {
     const al = { mat: 'al-6061', color: PALE, finish: 'anodised' } as const;
     const body = [B(`${nm} finger screw mount`, [22, 15, 20], [0, 18.5, 11], { ...al, item: 'finger-link' }), B(`${nm} finger sledge`, [22, 8.8, 3.8], [0, 6.8, 2.2], al), B(`${nm} finger`, [17.5, 7, 23.5], [0, 15.9, 28.35], { ...al, rot: [PI / 6, 0, 0] })];
@@ -104,7 +104,7 @@ export function fr3Parts(nm = FR3.name, q: number[] = FR3.home!, tool?: Part[]):
   const casting = (k: number, body: Part[], less: number): Part[] => {
     // (its share of metal: what Franka's model says the link weighs, less what else is in it, over its body solid)
     const solid = body.reduce((s, b) => s + massOf({ ...b, fill: 1 }), 0), fill = Math.max(0.05, Math.min(1, (FR3.kg[k]! - less) / solid));
-    return body.map((b) => ({ ...b, fill }));
+    return body.map((b) => ({ ...b, fill, fillFrom: `Franka's published ${FR3.kg[k]} kg for this link` }));
   };
   const al = { mat: 'al-6061', color: WHITE, finish: 'paint', item: 'arm-casting' } as const;
   // (each link its measured pieces: its white body (and its base's foot), and its dark ones where Franka's model colours

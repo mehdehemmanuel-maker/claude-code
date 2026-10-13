@@ -185,7 +185,7 @@ make of these words, **and can I believe it**"*. That is #35 in its most visible
 
 ---
 
-- [ ] **BLOCK** #49 `npm run part` prints two masses and calls their disagreement the finding; for three quarters of
+- [x] **BLOCK** #49 `npm run part` prints two masses and calls their disagreement the finding; for three quarters of
       the library there is only one of them, and for much of the rest the second is derived from the first and the
       door prints `0.0 %` — which reads as the strongest possible pass.
       why: three separate things, each measured.
@@ -234,7 +234,7 @@ make of these words, **and can I believe it**"*. That is #35 in its most visible
       a real and useful claim, honestly stated. Prove it the project's way: set `QUEST3.kg` to 5.15 on purpose and show
       me the red, and show me the test still green at 0.515 — that difference is the whole of what it checks.
 
-- [ ] **BLOCK** #50 the `wormgearbox` family's mass is a fabricated cube law that the library's own parts list
+- [x] **BLOCK** #50 the `wormgearbox` family's mass is a fabricated cube law that the library's own parts list
       contradicts by a factor of eight, it is not labelled typical or an estimate, and it is the family your next round
       is about to order into every arm joint.
       why: `kinds/industrial.ts:164` — `g: (p) => (Number(p.size) / 10) ** 3 * 9`. A magic 9 and a cube, no shape, no
@@ -334,7 +334,7 @@ make of these words, **and can I believe it**"*. That is #35 in its most visible
       spoke wheel: `constantan` is already the right material). Those two are worth more than the other 35 together,
       because every arm in the project is seven of them.
 
-- [ ] **SIGHT** #55 I cannot see how much of the library the two-mass check can actually check, so I cannot tell
+- [x] **SIGHT** #55 I cannot see how much of the library the two-mass check can actually check, so I cannot tell
       whether #49 is a labelling nit or the project's main instrument fault.
       dark: I sampled by hand — `--like <family>` → first line → `npm run part`, 29 families, a shell loop pasted under
       #49. It gave me 22/29 undrawn and four exact `0.0 %`, which is enough to raise the finding and **not** enough to
@@ -874,6 +874,73 @@ itself the moment a part changes. Get those two and this stops being a library t
 one that catches itself — which is the only version of this that scales to the trillions of combinations the user
 asked for.
 
+
+## Round on #55, #49 and #50 — the instrument measured, then mended — commit follows this entry
+
+**#55 is built: `npm run part -- --audit`** (in `docs/TOOLS.md`). It walks both populations, because your examples and
+my first sweep were not in the same one — the Quest 3, the centrifuge and the drone are catalogue FAMILIES, not
+inventory items, and a sweep over `INVENTORY` alone reported none of them. Three faults in my own instrument, found
+and fixed before any number from it is quoted: it asked for drawings by id only (a maker file registers its drawing
+when asked BY WORDS, so 28 drawn items read as undrawn); it counted "equal" as "lighter" on float noise; and it let a
+`mixed` figure print a percentage.
+
+```
+over all 2404 inventory items          over the 395 catalogue families, one example line each
+  2214  92.1 %  NOT DRAWN                279  70.6 %  NOT DRAWN
+   185   7.7 %  summed from solids         98  24.8 %  summed from solids
+     0   0.0 %  declares its mass           0   0.0 %  declares its mass
+     0   0.0 %  fill solved back            0   0.0 %  fill solved back
+     5   0.2 %  part summed, part not      18   4.6 %  part summed, part not
+```
+
+**Your (a) is confirmed and larger than you measured.** You sampled 22 of 29 families undrawn; it is 279 of 395
+(70.6 %) of families and 2214 of 2404 (92.1 %) of items. "No disagreement reported" is evidence of nothing for nine
+items in ten.
+
+**Your threshold, answered honestly rather than flatteringly.** You said: *if the third and fourth classes together
+are under ~20 items, #49 softens to a QUEUE.* Strictly those two classes are **0** — almost nothing in the library is
+wholly declared or wholly solved. But that is a technicality in my favour and I will not take it: the class your
+examples actually fall in is the fifth, part summed and part not, and that is **5 items + 18 families = 23**. Just
+over your line. So by your own rule it is borderline, and I have treated it as a real fault rather than argue the
+boundary — the fix below is the one you specified, and the blast radius is 23, not most of the library.
+
+**#49 fixed, as provenance.** `parts/mass.ts` now has `ownKg` extracted (one rule, used by both, instead of the
+arithmetic twice) and `massWhy(part)`, which splits a mass into *declared* / *solved back* / *summed from solids*, and
+`whySaid` for printing. `Part` gained `fillFrom`, and the five sites you listed now say what they solved from. Without
+that marker the fourth class could not be told from the second at all, so it is the thing that made the audit
+possible rather than a decoration. `npm run part` prints the line under `drawn`, and **withholds the percentage**
+wherever the two numbers are not two numbers, saying so — the #20 precedent, as you asked:
+
+```
+  declared  515 g
+  drawn     515 g
+  which is  63 % summed from solids, the rest declared or solved back: only that share is an independent check
+  NO PERCENTAGE IS PRINTED: these are not two figures to compare…
+```
+
+**Your (c), and a thing you did not know.** `headset.test.ts` is renamed to what it checks — *"its published mass is
+reachable with this envelope"* — and now asserts the summed share separately, because that share is the whole of the
+check. It also turned out the two items in that loop are **not the same claim**: the headset's shell has its fill
+solved back, so 20 % is a reachability bound; the **controller is summed throughout**, so for it the same 20 % is a
+real agreement between independent numbers. The test now says which it is for each, and fails if an item changes
+category. Proof as you demanded: `QUEST3.kg` set to 5.15 → red; back at 0.515 → green, 7 passed.
+
+**#50 fixed, and I could not source what I wanted — saying so.** The cube law is gone. The mass is now summed from
+the parts the family itself declares, each term shape × density: a die-cast shell over its envelope, the bronze wheel,
+the steel worm, the two 6204s its own `of` names, and the oil. NMRV 030 goes 243 g → **986 g**; NMRV 110 → 25.6 kg. It
+is labelled in `std` as a **lower bound**, not a maker's figure: a published NMRV 030 is 1.6 kg, so this is 62 % of it
+and the difference is the ribs, feet, flanges and output boss the envelope does not draw. I tried for a real weight
+table — Motovario publishes one — and could not reach it: Firecrawl credits are low and Tavily is rate-limiting this
+container. Rather than replace one invented law with another I made it a bound that its own parts list cannot
+contradict, and this is the honest limit: **the sourced table is still wanted, and that is a network problem, not a
+modelling one.**
+
+**And the check you said would have caught it.** `tests/nexus/inventory.test.ts`: no item may declare a mass less than
+the parts its own `of` names. It found two more besides the gearbox — `servo-micro` (9 g containing an 18 g
+`motor-130`) and `n20-motor` (10 g, same) — and the cause was one id: `families.ts` gave **every** servo a 130-size
+can, 20 mm across, including the micro. There is a `motor-micro` now and the family picks by its own mass, the way
+`gearmotor` already picked for the N20. Offenders: 2 → 0. Proved to bite by putting `motor-130` back: it fails naming
+`servo-micro`.
 
 ## Round on #46 — the kit entry, and what it showed the moment it could be seen — commit follows this entry
 

@@ -81,14 +81,65 @@ const area = (s: Shape): number => {
   if ('surf' in s) return surfaceArea(s.surf);
   return 0;
 };
-/** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
-export function massOf(p: Part): number {
+/** One part's OWN mass, kg, without what it holds: its declared figure where it has one, else its shape, material and
+ *  fill. It is a function rather than a line inside `massOf` because `massWhy` must weigh exactly the same thing by
+ *  exactly the same rule - two copies of this arithmetic is the two-owners fault in the file that owns mass. */
+function ownKg(p: Part): number {
+  if (p.kg !== undefined) return p.kg;
+  if (!(p.shape && p.mat && DENSITY[p.mat])) return 0;
   // (a round shape drawn with flat sides, a nut's six, is that polygon round its axis, not the circle through its corners)
-  const flats = p.facets && p.shape && ('cyl' in p.shape || 'lathe' in p.shape) ? (p.facets * Math.sin((2 * Math.PI) / p.facets)) / (2 * Math.PI) : 1;
+  const flats = p.facets && ('cyl' in p.shape || 'lathe' in p.shape) ? (p.facets * Math.sin((2 * Math.PI) / p.facets)) / (2 * Math.PI) : 1;
   // (less what is drilled out of it: each hole its own cylinder, or its n-sided prism)
   const holes = (p.cuts ?? []).reduce((v, c) => v + (c.n ? (c.n / 2) * Math.sin((2 * Math.PI) / c.n) : Math.PI) * c.r * c.r * c.depth, 0);
-  const own = p.kg !== undefined ? p.kg : p.shape && p.mat && DENSITY[p.mat] ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * DENSITY[p.mat]! * (p.fill ?? 1) : 0;
-  return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
+  return (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * DENSITY[p.mat]! * (p.fill ?? 1);
 }
+
+/** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
+export function massOf(p: Part): number {
+  return ownKg(p) + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
+}
+
+/** WHERE a part's mass came from, which is a different question from what it is, and the one a check needs.
+ *
+ *  `massOf` returns one number whatever its source, so a drawing that DECLARES `kg` and a drawing SUMMED from its
+ *  solids come back indistinguishable. `npm run part` printed the two against each other as though they were
+ *  independent opinions, and for much of the library they are one figure printed twice: a declared `kg` echoed back,
+ *  or a `fill` that was solved backwards out of a published mass so that the sum must reproduce it. Both are
+ *  legitimate modelling; printing either as a second opinion is not (docs/MANNY.md #49).
+ *
+ *  So this splits the total by where each gram came from, and a caller that was about to compare two numbers can ask
+ *  first whether it has two. `fillFrom` is how a part says its fill was solved rather than designed. */
+export interface MassWhy {
+  kg: number;
+  /** of that, the kilograms a part simply declared (`p.kg`) */ declared: number;
+  /** the kilograms whose fill was solved back from a published mass (`p.fillFrom`) */ solved: number;
+  /** the kilograms that really are shape x density */ summed: number;
+  from: 'declared' | 'solved' | 'summed' | 'mixed';
+  /** what each solved part says it was solved from, for printing */ notes: string[];
+}
+export function massWhy(p: Part): MassWhy {
+  let declared = 0, solved = 0, summed = 0; const notes: string[] = [];
+  const walk = (q: Part): void => {
+    const own = ownKg(q);
+    if (q.kg !== undefined) declared += own;
+    else if (q.fillFrom) { solved += own; if (!notes.includes(q.fillFrom)) notes.push(q.fillFrom); }
+    else summed += own;
+    for (const r of q.parts ?? []) walk(r);
+  };
+  walk(p);
+  const kg = declared + solved + summed, share = (v: number) => (kg > 0 ? v / kg : 0);
+  // "declared" and "solved" are claims about whether a comparison can fail, so they are read generously: a figure that
+  // is nearly all echoed is echoed. 1 % is the room left for a drawn screw beside a declared casting.
+  const from = share(declared) >= 0.99 ? 'declared' : share(declared) + share(solved) >= 0.99 && solved > 0 ? 'solved'
+    : share(summed) >= 0.99 ? 'summed' : 'mixed';
+  return { kg, declared, solved, summed, from, notes };
+}
+
+/** Said in one line under a `drawn` figure: what that figure actually is. */
+export const whySaid = (w: MassWhy): string =>
+  w.from === 'declared' ? 'the drawing DECLARES this mass (p.kg): it is the same number as the one above, not a second opinion'
+    : w.from === 'solved' ? `its fill was SOLVED BACK from a published mass (${w.notes.join('; ')}), so the sum must reproduce it: not a second opinion`
+      : w.from === 'summed' ? 'summed from its solids: shape x material x fill, worked out independently of the declared figure'
+        : `${Math.round((w.summed / (w.kg || 1)) * 100)} % summed from solids, the rest declared or solved back: only that share is an independent check`;
 /** A mass to read, from grams: "1,240 g", "12 g", "0.50 g", "2.17 mg", "0.42 mg" (a chip's parts weigh milligrams). */
 export const grams = (g: number): string => (g >= 100 ? `${Math.round(g).toLocaleString('en')} g` : g >= 10 ? `${g.toFixed(0)} g` : g >= 0.1 ? `${g.toFixed(2)} g` : `${+(g * 1000).toPrecision(3)} mg`);

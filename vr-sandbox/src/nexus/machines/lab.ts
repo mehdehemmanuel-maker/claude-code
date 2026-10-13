@@ -140,7 +140,7 @@ const toWeigh = (shell: Part, kg: number, rest: Part[], massOf: (p: Part) => num
   // (where its walls alone cannot weigh what its maker says, the rest is its chassis, its fasteners and its wiring,
   // which are not drawn apart: said as the part's own mass)
   if (left > solid) return { ...shell, shell: undefined, fill: undefined, kg: left, says: `${(left - solid).toFixed(2)} kg of it its chassis, fasteners and wiring, not drawn apart` };
-  return { ...shell, fill: Math.max(0.03, Math.min(1, left / solid)) };
+  return { ...shell, fill: Math.max(0.03, Math.min(1, left / solid)), fillFrom: `this instrument's published mass` };
 };
 const CASE = { mat: 'abs', finish: 'moulded' } as const, STEEL = { mat: 'steel-low', color: 0xb9bcc0, finish: 'paint' } as const;
 /** The fan the cycler pulls air through its sink with: the library's own 60 mm one. */
@@ -316,5 +316,5 @@ export function cabinetParts(nm = BSC_A2.name, massOf: (p: Part) => number = () 
   const steel = inner.filter((p) => p.item === 'bsc-panel' || p.item === 'bsc-stand');
   const rest = inner.filter((p) => !steel.includes(p)).reduce((a, b) => a + massOf(b), 0);
   const solid = steel.reduce((a, b) => a + massOf({ ...b, fill: 1, shell: undefined }), 0), fill = Math.max(0.03, Math.min(1, (BSC_A2.kg - rest) / solid));
-  return [{ name: nm, at: [0, 0, 0], parts: inner.map((p) => (steel.includes(p) ? { ...p, shell: undefined, fill } : p)) } as Part];
+  return [{ name: nm, at: [0, 0, 0], parts: inner.map((p) => (steel.includes(p) ? { ...p, shell: undefined, fill, fillFrom: `the cabinet's published ${BSC_A2.kg} kg` } : p)) } as Part];
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { QUEST3, fitsIpd, frameBudget, pixelAt, pixelsPerDegree, runtime } from '../../src/nexus/machines/headset';
 import { componentOf } from '../../src/nexus/parts/components';
 import { resolve } from '../../src/nexus/parts/inventory';
-import { massOf } from '../../src/nexus/parts/mass';
+import { massOf, massWhy } from '../../src/nexus/parts/mass';
 
 describe('a headset by its maker\'s figures', () => {
   it('gives how many pixels fall on a degree, from its own pixels and its own field', () => {
@@ -31,10 +31,24 @@ describe('a headset by its maker\'s figures', () => {
     expect(runtime().frames).toBe(120 * 3600);
   });
   for (const [w, kg] of [['headset Quest-3', QUEST3.kg], ['vrcontroller Touch-Plus', QUEST3.controller.kg]] as [string, number][]) {
-    it(`draws ${w} with every part its inventory lists, weighing what Meta says`, () => {
+    // NOT "it weighs what Meta says". The shell's fill is SOLVED BACK from Meta's published figure, clamped to
+    // [0.03, 1], so for any envelope that can reach the figure at some fill the sum reproduces it and the comparison
+    // cannot fail. What the clamp does still catch is an envelope that CANNOT reach it at any fill in a 33x window -
+    // a real claim, worth keeping, and nothing said so (docs/MANNY.md #49c). So it is named for what it checks, and
+    // the share of the mass that is genuinely summed is asserted separately, because that share IS the check.
+    it(`draws ${w} with every part its inventory lists, and its published mass is reachable with this envelope`, () => {
       const it0 = resolve(w); if (!it0 || typeof it0 === 'string') throw new Error(`${w}: ${String(it0)}`);
       const c = componentOf(it0.id); expect(c, w).toBeTruthy(); expect(c!.faults, w).toEqual([]);
       expect(Math.abs(massOf(c!.part) - kg) / kg, w).toBeLessThan(0.2);
+      // and the test says which of the two things it just did. These two items are NOT the same claim, and flattening
+      // them was the fault: the headset's shell has its fill solved back from Meta's 515 g, so 20 % only says the
+      // envelope can reach that figure within the clamp; the controller is summed from its solids throughout, so the
+      // same 20 % is a real agreement between two independent numbers. Whichever it is, the share genuinely summed is
+      // asserted, because that share is the whole of what is being checked.
+      const why = massWhy(c!.part);
+      expect(why.summed / why.kg, `${w}: the share summed from solids independently of the published figure`).toBeGreaterThan(0.3);
+      if (why.solved > 0) expect(why.from, `${w} has a solved-back fill, so 20 % is a reachability claim`).toBe('mixed');
+      else expect(why.from, `${w} is summed throughout, so 20 % is a real agreement`).toBe('summed');
     });
   }
   it('draws its optics on the slide its IPD wheel moves, and its six cameras and depth sensor on its face', () => {

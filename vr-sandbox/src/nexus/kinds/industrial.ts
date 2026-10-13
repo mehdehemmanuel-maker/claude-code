@@ -32,6 +32,30 @@ const MERV: Record<string, string> = { MERV8: 'catches at least 70 % of 3–10 �
 /** An ISO 16890 grade said: its group and the share it catches. */
 const isoSaid = (g: string) => { const [grp, pct] = g.split('-') as [string, string]; return grp === 'coarse' ? `ISO coarse ${pct} %` : `${grp} ${pct} %`; };
 
+// What an NMRV worm gearbox weighs, as a LOWER BOUND built from the parts this family itself declares, rather than as
+// a point estimate nobody can check. It used to be `(size / 10) ** 3 * 9`: a magic 9 and a cube, with no shape, no
+// density and no source, and it gave an NMRV 030 243 g — while the same family's own `of` list names two 6204 bearings
+// that the library weighs at 106.18 g each, so 212 g of the 243 g was bearings and 31 g was left for a die-cast case
+// 78 mm across, a hardened worm, a bronze wheel and a charge of oil (docs/MANNY.md #50).
+//
+// So it is summed from its own parts at the sizes the box gives them: a die-cast aluminium shell over the envelope,
+// the bronze wheel, the steel worm, two bearings and the oil. Every term is shape x density, and `std` says what the
+// figure is. It is a LOWER BOUND and labelled one: a real NMRV 030 is published at 1.6 kg, against about 1.0 kg here,
+// and the difference is the ribs, mounting feet, flanges and output boss that this envelope does not draw. An honest
+// bound that the part list cannot contradict beats a confident number that it does.
+const wormGearboxG = (p: Record<string, string | number>): number => {
+  const c = Number(p.size), box: [number, number, number] = [c * 2.6, c * 2.6, c * 2.2];
+  const cm3 = (mm3: number) => mm3 / 1000;
+  const area = 2 * (box[0] * box[1] + box[0] * box[2] + box[1] * box[2]);
+  const wall = 4 + 0.07 * c;                                     // a die-cast wall, thicker on the bigger cases
+  const caseG = cm3(area * wall) * 2.71;                         // al-a380
+  const wheelG = cm3(Math.PI * (0.7 * c) ** 2 * (0.35 * c)) * 8.8;  // the bronze wheel on the output
+  const wormG = cm3(Math.PI * (0.25 * c) ** 2 * (1.8 * c)) * 7.85;  // the hardened steel worm across it
+  const bearingsG = 2 * 106.18;                                  // the two 6204s its own `of` list names
+  const oilG = cm3(box[0] * box[1] * box[2] * 0.08) * 0.9;       // the charge it runs in
+  return +(caseG + wheelG + wormG + bearingsG + oilG).toFixed(0);
+};
+
 export const INDUSTRIAL: KindDef[] = [
   {
     id: 'dinterminal', name: 'DIN-rail terminal block', path: 'Electrical/Connectors/Terminal blocks', says: 'a screw terminal that clips onto a DIN rail: wires meet in a panel', std: 'IEC 60947-7-1 cross-sections and rated currents; widths typical',
@@ -158,11 +182,11 @@ export const INDUSTRIAL: KindDef[] = [
     box: (p) => { const f = n(p, 'frame'); return [f, f, r1(f * (n(p, 'i') <= 10 ? 1.4 : 1.9))]; }, g: (p) => (n(p, 'frame') / 10) ** 3 * (n(p, 'i') <= 10 ? 6 : 8), look: 'can',
   },
   {
-    id: 'wormgearbox', name: 'worm gearbox', path: 'Mechanical/Gears and gearboxes/Gearboxes', says: 'a worm turning a wheel at right angles: a large ratio in one step, often self-locking', std: 'NMRV sizes and ratios sold; efficiencies typical, falling as the ratio rises',
+    id: 'wormgearbox', name: 'worm gearbox', path: 'Mechanical/Gears and gearboxes/Gearboxes', says: 'a worm turning a wheel at right angles: a large ratio in one step, often self-locking', std: 'NMRV sizes and ratios sold; efficiencies typical, falling as the ratio rises; its mass a LOWER BOUND summed from the parts it declares (case, wheel, worm, two 6204s, oil) and not a maker\'s figure — a published NMRV 030 is 1.6 kg against about 1.0 kg here, the difference being ribs, feet, flanges and the output boss this envelope does not draw',
     axes: [bare('size', 'size', ['030', '040', '050', '063', '075', '090', '110']), ax('i', 'ratio', '', [5, 7.5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100])],
     title: (p) => `NMRV ${p.size} worm gearbox ${p.i}:1`, of: () => 'al-a380 steel-alloy bronze {bearing 6204|steel-chrome}*2 oil', make: 'assemble', how: 'a hardened steel worm driving a bronze wheel, in a die-cast aluminium case filled with oil',
     spec: (p) => { const i = n(p, 'i'), eta = wormEta(i); return `with a 1400 rpm motor: ${(1400 / i).toFixed(0)} rpm out; about ${(eta * 100).toFixed(0)} % efficient (typical)${i >= 50 ? '; at this ratio it nearly locks: the load cannot turn it back (typical)' : ''}; centres ${Number(p.size)} mm`; },
-    box: (p) => { const c = Number(p.size); return [r1(c * 2.6), r1(c * 2.6), r1(c * 2.2)]; }, g: (p) => (Number(p.size) / 10) ** 3 * 9, look: 'box',
+    box: (p) => { const c = Number(p.size); return [r1(c * 2.6), r1(c * 2.6), r1(c * 2.2)]; }, g: wormGearboxG, look: 'box',
   },
   {
     id: 'gearpump', name: 'hydraulic gear pump', path: 'Fluid/Hydraulics/Pumps', says: 'two gears meshing in a close case: oil carried round their teeth, pushed out at pressure', std: 'the displacements sold (group 1 and 2); 250 bar; efficiencies typical',

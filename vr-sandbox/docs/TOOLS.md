@@ -79,6 +79,14 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   it promised is worse than none, because the critic then reports on what he thinks he saw. **Known gap it names
   itself:** there is no door that prints one library part's figures (mass, size, interfaces, what it contains), so
   `--part` is the picture only.
+- `npm run part -- --audit`: how much of the library the two-mass check can actually check, over BOTH populations —
+  every inventory item and every catalogue family at one example line — in four classes: not drawn (the check is
+  silent), summed from its solids (a real check), the drawing declares its mass, and its fill solved back from a
+  published mass (the last two being the same number printed twice). It ranks the least independent figures and, in
+  the same pass, every item whose declared mass is less than the parts its own `of` names, worst ratio first. It
+  exists because a critic could sample 29 families by hand and raise a finding, and nobody could size it: the answer
+  is 92.1 % of items and 70.6 % of families not drawn at all (docs/MANNY.md SIGHT #55). Asking by id alone misses a
+  drawing a maker file registers only when asked by words, so it tries both and prints how many the second door found.
 - `tools/look.mjs`: render any ask from named views (`node tools/look.mjs <viewer dir> <out dir> "name|words=…&view=…"`;
   `kit=machine` draws what `npm run machine` composes — the same units, bill and refusals, from the ask's own sentence
   (`"rail|kit=machine&words=a rail-mounted machine that picks things up over 2000 mm carrying 25 kg&view=three"`),

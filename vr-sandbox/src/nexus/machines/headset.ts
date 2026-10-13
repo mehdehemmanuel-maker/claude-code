@@ -118,7 +118,7 @@ export function quest3Parts(nm = QUEST3.name, massOf: (p: Part) => number = () =
   const inner = [...pods, eye(1), eye(-1), ipdWheel, board, soc, shield, battery, ...sound, usb, ...buttons, face, strap];
   // (what its shell weighs is what is left of Meta's 515 g once what is in it is counted)
   const solid = massOf({ ...visor, fill: 1 }), left = QUEST3.kg - inner.reduce((a, b) => a + massOf(b), 0);
-  const shell = { ...visor, fill: Math.max(0.03, Math.min(1, left / solid)) };
+  const shell = { ...visor, fill: Math.max(0.03, Math.min(1, left / solid)), fillFrom: `Meta's published ${QUEST3.kg} kg for the headset` };
   return [{ name: nm, at: [0, 0, 0], parts: [shell, ...inner] } as Part];
 }
 

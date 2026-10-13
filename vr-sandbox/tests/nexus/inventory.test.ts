@@ -78,3 +78,22 @@ describe('as boards', () => {
     const m = makeBoard('mg996r')!; expect(triggersOf(m)).toHaveLength(1); expect(Object.values(m.nodes).map((n) => n.step?.what)).toContain('inventory make potentiometer');
   });
 });
+
+// A thing cannot weigh less than what it says is inside it. This is one line of arithmetic over two numbers the
+// library already states, and it would have caught a worm gearbox declaring 243 g while its own `of` named two 6204
+// bearings the library weighs at 106.18 g each — a magic cube law contradicted by the library's own figures, found by
+// a critic rather than by a check (docs/MANNY.md #50). It is a ratchet in the tidy sense: a new offender fails by
+// name, and the only honest ways to pass are to weigh the thing properly or to stop claiming it contains that part.
+describe('nothing declares itself lighter than its own contents', () => {
+  it('every item that states a mass and a parts list is at least as heavy as the parts it names', () => {
+    const over: string[] = [];
+    for (const [id, it] of INVENTORY) {
+      if (!it.of?.length || !it.g) continue;
+      let sum = 0; const named: string[] = [];
+      for (const c of it.of) { const ci = INVENTORY.get(c.id); if (ci?.g) { sum += ci.g * c.n; named.push(`${c.n} × ${c.id} at ${ci.g} g`); } }
+      // 1 % of room, because a sum over a billion cells of an organ carries its own float noise
+      if (sum > it.g * 1.01) over.push(`${id} declares ${it.g} g and names ${Math.round(sum)} g of parts (${named.join(', ')})`);
+    }
+    expect(over).toEqual([]);
+  });
+});
