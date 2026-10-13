@@ -89,8 +89,13 @@ function canMakeUncached(ids: string[], w: Want): Verdict {
     if (!p.on.includes(want.material)) return 'material';
     if (want.family && p.family !== want.family) return 'family';
     if (p.shape && p.shape !== want.shape) return 'shape';
+    // A station with no declared envelope used to *pass* this check, which is the opposite of honest: a 710 x 630 x
+    // 1100 mm printer frame routed to "forging on a propane forge" in 42 minutes, and the plan then said the schedule
+    // could not be beaten. A forge whose own prose calls itself a 200 mm tube cannot take a part of any size, and a
+    // station that does not say how big its work area is has not earned a yes. Unknown is a refusal, not a pass.
     const e = s.envelope;
-    if (e) { const part = [...want.size].sort((a, b) => a - b), box = [...e].sort((a, b) => a - b); if (part.some((x, i) => x > box[i]!)) return 'size'; }
+    if (!e) return 'size';
+    { const part = [...want.size].sort((a, b) => a - b), box = [...e].sort((a, b) => a - b); if (part.some((x, i) => x > box[i]!)) return 'size'; }
     // the tolerance is no longer a cliff: a process is eligible while its capability is above the floor, and the
     // scrap it costs comes back in the verdict so the plan can make the spares
     if (Number.isFinite(want.tol)) { const h = holdsOf(s, p.id, want.state).tol; if (capable({ holds: h, wanted: want.tol }).cpk < want.minCpk) return 'tolerance'; }

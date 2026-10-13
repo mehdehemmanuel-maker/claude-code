@@ -1686,3 +1686,43 @@ Tavily's extract (it returned Würth's datasheet text), Firecrawl (its credits a
 makers' documentation repos: ask for each with add_repo first, then a blobless clone and fetch only the files needed);
 the user can widen it under the environment's Network access.
 
+
+## Manny's first findings, fixed by cause (2026-10-13)
+
+The critic built the round before found five blocking faults on his first cold pass, by attempting the user's own
+named mix (a Unitree Z1 Air, a CreatBot D400 HS, a filament line, camera rails, a floor grid) rather than by reading
+the code. Three were verified in the source before being accepted and are fixed here; two are answered in writing and
+are the next round. The ledger is `docs/MANNY.md`.
+
+**A pulley's size was read by one door and not the other.** The pulley family's `read` took teeth only from `60t` or
+`60 teeth` and a bore only from `8mm`, so `pulley GT2 60 8` matched neither and fell to its 20-tooth, 5 mm defaults
+**silently** — which is what every composed machine ordered, whatever its bill said. The same family asked in its own
+grammar (`pulley 1000t 8mm`) refused honestly: one door told the truth and the other did not. It now reads the tagged
+forms first and then the bare numbers nobody tagged, in the order written, so both doors arrive at the family's own
+range check. `pulley GT2 60 8` was `pulley-gt2-20t-5` and is `pulley-gt2-60t-8`; `pulley GT2 1000 8` was that same
+silent default and is now refused by name. The general lesson is the one this file keeps relearning: **two
+vocabularies for one thing, and the lenient one wins silently.** And the reason it survived a round that was
+*specifically about* declarations against drawings: `mate.ts` holds the drawing to the declaration and the
+declaration to nothing, so `misdeclared()` returned 0 the whole time. A pulley *is* the gear ratio, so every arm's
+torque table was arithmetic over a ratio the drawing did not have.
+
+**An unknown work envelope passed.** `works/can.ts` guarded the size check with `if (e)`, so a station that never
+said how big its work area is was never refused — which routed a 710 × 630 × 1100 mm frame to "forging on a propane
+forge", 42 minutes, and then said the schedule could not be beaten, while correctly refusing a 400 × 300 × 8 bed.
+The smaller part failed and the metre-long one passed. Unknown is a refusal now, and the four stations that *make*
+and declared nothing — forge, welder, spot welder, soldering — declare one, each an estimate of what limits the work
+rather than the machine's own outside, and each saying so.
+
+**A machine's mass included what it was holding.** `stack` and `armStack` both added `payloadKg` into the mass they
+returned, so a 1.39 kg arm holding a 3 kg brick reported 4.39 kg and the forge then attributed 3.17 kg to a 55 g
+servo. `kg` is the machine's own now and `holding` is said separately. Every stage still carries the payload in its
+own check and every joint's moment still includes it — that was never wrong; only the total was.
+
+Found while fixing the first of those, and logged rather than lost: the pulley family makes one belt profile and
+silently substitutes it, so `pulley HTD5 30 12` comes back as a GT2.
+
+The two answered rather than fixed, with the reason written down: the inventor throws most of an ask away and says
+nothing (`composeMachine` needs the `notDone` return path `ask/route.ts` already has), and **no tool can render an
+invented machine at all**, so this file's own round step 2 — render it, look at it — has never once been possible for
+that door. That is why the other faults survived, and it is why nothing said about how a composed machine *looks* is
+evidence. Both next, together, because a `notDone` nobody can see is worth little.

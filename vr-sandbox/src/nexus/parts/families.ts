@@ -203,7 +203,17 @@ export function gt2Dims(p: Record<string, string | number>) {
 const pulley: Family = {
   id: 'pulley', name: 'GT2 pulley', path: ['Mechanical', 'Linear motion', 'Belts and pulleys'], says: 'any number of teeth: 2 mm of belt a tooth; pitch diameter teeth × 2 / π', params: [{ key: 'teeth', says: 'teeth', unit: '', min: 12, max: 80, default: 20 }, { key: 'bore', says: 'bore', unit: 'mm', min: 3, max: 12, default: 5 }],
   examples: ['pulley 20t 5mm', 'pulley 16t 5mm', 'pulley 60t 8mm'],
-  read(w) { const t = num(/(\d+)\s*t\b/i.exec(w)?.[1] ?? /(\d+)\s*teeth/i.exec(w)?.[1]) || 20, b = num(/(\d+)\s*mm/i.exec(w)?.[1]) || 5; return { teeth: t, bore: b }; },
+  // Tagged first ("60t", "8mm"), then the bare numbers nobody tagged, in the order written: "pulley GT2 60 8" is
+  // 60 teeth on an 8 mm bore. Without that second half this read matched neither pattern in "pulley GT2 1000 8" and
+  // silently returned its 20-tooth, 5 mm default - so every pulley every composed machine ordered was that part
+  // whatever its bill said, and a pulley *is* the gear ratio, which made every arm's torque table arithmetic over a
+  // ratio the drawing did not have. The same family asked in its own grammar ("pulley 1000t 8mm") refused honestly;
+  // one door told the truth and the other did not. Now both go to the range check below, which refuses by name.
+  read(w) {
+    const tagT = num(/(\d+)\s*t\b/i.exec(w)?.[1] ?? /(\d+)\s*teeth/i.exec(w)?.[1]), tagB = num(/(\d+)\s*mm\b/i.exec(w)?.[1]);
+    const bare = [...w.matchAll(/(?<![\w.])(\d+)(?![\w.])/g)].map((m) => num(m[1])).filter((n) => n !== tagT && n !== tagB);
+    return { teeth: tagT || bare.shift() || 20, bore: tagB || bare.shift() || 5 };
+  },
   make(p) {
     const d = gt2Dims(p), t = d.teeth, b = d.bore, n = d.angles.length, { of: screws, inner } = partsOf(`{setscrew M${d.ss}x${d.sL}}*${n}`), sg = inner[0]?.g ?? 0;
     return { ...item(`pulley-gt2-${t}t-${b}`, `GT2 pulley, ${t} teeth, ${b} mm bore`, 'Mechanical/Linear motion/Belts and pulleys', 'product', 'machine', 'al-6061', `an aluminium pulley for a 2 mm pitch belt, held on its shaft by ${n === 1 ? 'a set screw' : 'two set screws at 90°'}`, `pitch diameter ${d.PD.toFixed(2)} mm, outside ${(2 * d.Ro).toFixed(2)} mm (PowerDrive); ${2 * t} mm of belt a turn; ${d.L} mm long, flanges ${(2 * d.Rf).toFixed(1)} mm (typical)`, [2 * d.Rf, 2 * d.Rf, d.L], +(mm3g(d.vol, RHO.aluminium) + n * sg).toFixed(2), 'print'), of: [{ id: 'al-6061', n: 1 }, ...screws], inner };

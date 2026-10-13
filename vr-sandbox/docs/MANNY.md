@@ -75,7 +75,15 @@ drawing here" without being asked. `npm run works` reads like an engineer wrote 
 
 What is in question is the one door the user actually asks through.
 
-- [ ] **BLOCK** #1 `npm run machine` throws most of the ask away and never says so.
+- [~] **BLOCK** #1 `npm run machine` throws most of the ask away and never says so.
+      **ANSWERED, not fixed, and it is the next round.** Manny is right and this is the user's own first complaint,
+      so it is not out of scope - it is bigger than the other four and is being done properly rather than patched.
+      What the other four were: a wrong number shipping today, each contained. This one is a missing *return path*:
+      `readMachine` has to report what it recognised and what it did not, `composeMachine` has to carry that out as
+      `notDone` the way `ask/route.ts` already does, and the words it cannot say at all (a second arm, a
+      repeatability figure, a named product, "grid", "rail", "camera") have to be told apart from the words it
+      silently ignores. Shipping half of that would be the exact half-measure Manny was built to catch. Next round,
+      with his order respected: the eye (#5) and this together, because a `notDone` nobody can see is worth little.
       why: asked for *"a machine that grinds printed scrap into pellets, melts them and pulls 1.75mm filament
       through a water bath onto a spool"*, it printed:
       `a machine that prints, 300 × 300 × 300 mm of travel: 6 units, 10.39 kg, $413.77.` —
@@ -94,7 +102,15 @@ What is in question is the one door the user actually asks through.
       ("six axes") or an unknown noun ("grinder", "water bath", "spool", "floor grid") comes back named. A silent
       drop should be impossible to write, not merely discouraged.
 
-- [ ] **BLOCK** #2 every pulley in every composed machine is a 20-tooth, 5 mm-bore pulley, whatever the bill says.
+- [x] **BLOCK** #2 every pulley in every composed machine is a 20-tooth, 5 mm-bore pulley, whatever the bill says.
+      **FIXED** in `parts/families.ts` (the pulley family's `read`). The cause was exactly as Manny found it: the
+      read matched teeth only from `60t`/`60 teeth` and bore only from `8mm`, so `pulley GT2 60 8` matched neither
+      and fell to the defaults *silently*. It now takes the tagged forms first and then the bare numbers nobody
+      tagged, in the order written, so both doors reach the family's own range check. Proved, not claimed:
+      `pulley GT2 60 8` was `pulley-gt2-20t-5` and is now `pulley-gt2-60t-8`; `pulley GT2 1000 8` was that same
+      silent 20T/5 and is now `REFUSED: teeth must be 12-80`; `pulley 20t 5mm` and `pulley 60t 8mm` unchanged.
+      **One remainder, logged as #14 rather than called closed:** `pulley HTD5 30 12` now returns the right 30/12
+      but still names it GT2. The family makes one belt profile and silently substitutes it for another.
       why: `ask/machine.ts` orders pulleys by the words `pulley GT2 <teeth> <bore>`. No family reads those words,
       so `component()` falls through to the hand-drawn design's defaults — silently. Probe, run against
       `src/nexus/parts/components.ts`:
@@ -131,7 +147,14 @@ What is in question is the one door the user actually asks through.
       `filament` already does ("I do not know \"winder\"") and `bearing` already does ("Which bearing? …").
       A default is a stand-in with better manners.
 
-- [ ] **BLOCK** #3 four making stations have no work envelope, so the works accepts a part of any size on them.
+- [x] **BLOCK** #3 four making stations have no work envelope, so the works accepts a part of any size on them.
+      **FIXED** at both ends. `works/can.ts` had `const e = s.envelope; if (e) {...}`, so an undeclared envelope
+      *passed* - the opposite of honest, and the reason a 710 x 630 x 1100 mm printer frame routed to "forging on a
+      propane forge" in 42 minutes and was told the schedule could not be beaten. Unknown is now a refusal, so the
+      fault cannot come back by adding a station. And the four that make - `forge`, `welder`, `spot-welder`,
+      `soldering` - now declare one, with `measuring` too: the forge 180 x 180 x 440 (its own self-build prose says
+      a 200 mm tube lined with 50 mm of wool), the welder its bench, the spot welder its throat, the soldering bench
+      its board area. Each is an estimate of what limits the *work* rather than the machine's outside, and says so.
       why: `src/nexus/works/can.ts`, in `fits()`: `const e = s.envelope; if (e) { … }` — a station with no
       `envelope` passes the size test unconditionally, and `envelope?:` is optional in `works/stations.ts`.
       `measuring`, `welder`, `spot-welder`, `soldering` and **`forge`** declare none. Result, from
@@ -152,7 +175,12 @@ What is in question is the one door the user actually asks through.
       throat (~100 mm reach), welder by the bench it stands on. A test that every making station declares one is
       four lines and makes the class impossible.
 
-- [ ] **BLOCK** #4 a composed machine's stated mass includes the payload it is holding.
+- [x] **BLOCK** #4 a composed machine's stated mass includes the payload it is holding.
+      **FIXED** in `ask/machine.ts`: both `stack` and `armStack` added `payloadKg` into the mass they returned. A
+      machine's mass is the machine; what it holds is a load. `kg` is now the machine's own and `holding` is a
+      separate number that `machineText` says in those words. Every stage still carries the payload in its own
+      check, and every joint's moment still includes it - that is the number that decides its gearing, and it was
+      never wrong. Only the total was.
       why: `stack()` — `const all = frameKg + axisKg… + toolsKg + payloadKg;` returned as `kg` — and `armStack()`
       — `const kg = linkKg… + toolKg + joints… + payloadKg;`. So:
       ```
@@ -168,7 +196,15 @@ What is in question is the one door the user actually asks through.
       ("1.39 kg, holding 3.00 kg"). The stage-by-stage `carrying` numbers are already right; only the headline
       is wrong, which is the worst place for it to be.
 
-- [ ] **BLOCK** #5 no tool can render an invented machine, so no invented machine has ever been looked at.
+- [~] **BLOCK** #5 no tool can render an invented machine, so no invented machine has ever been looked at.
+      **ANSWERED, not fixed, and it is the next round with #1.** Manny put this first and his reason is right - it
+      is why the other four survived, and CLAUDE.md's own round step 2 has been impossible for this door. It is not
+      fixed today because it is a new door into the viewer, not a patched number, and the three fixed above were
+      each a wrong figure shipping to the user right now. The mechanism is identified so the next round is short:
+      `machineParts` already returns a placed part tree, and `view/look.ts` already renders one from the look page's
+      query - what is missing is the route from an *invented* name to that tree, which `see3d` refuses because it
+      searches the inventory. The honest statement meanwhile: **no composed machine in this repo has ever been
+      looked at, so nothing said about how one looks is evidence.**
       why: `tools/forge-look.mjs` — the tool whose header says it stands a thing "in the room it will be seen in" —
       goes through the page's `see3d`, and `see3d` does not reach `machineWords`:
       ```
@@ -291,6 +327,12 @@ What is in question is the one door the user actually asks through.
       minutes of an invention", a default that makes every plan absurd is the wrong default.
       fix: read the first line as the title (or document that it is not one); default `fill` by form — a `box`
       named frame/case ~0.05, a `plate` 1, a `can` ~0.1 — and say which default it used.
+
+- [ ] **QUEUE** #14 the pulley family makes one belt profile and silently substitutes it for any other.
+      why: found while fixing #2. `pulley HTD5 30 12` returns `pulley-gt2-30t-12` - the right teeth and bore on the
+      wrong tooth form. HTD 5M, T5 and GT3 are different pitches and different profiles; a belt will not run on the
+      wrong one. Claude's finding, not Manny's, recorded here so it is not lost.
+      fix: the family reads a profile word and refuses one it does not make, as the extrusion family must for #11.
 
 - [ ] **QUEUE** #13 the build pack prints its price date blank.
       why: `teach/buildpack.ts:344` — ``Prices as seen ${[…seen].join(', ')}, US dollars before tax`` renders as

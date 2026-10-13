@@ -227,7 +227,7 @@ export interface Machine {
   /** for an arm: the moment each joint has to hold straight out, against what it can be geared to */
   joints?: { at: string; needs: number; holds: number; ratio: number }[];
   /** its envelope: how far it moves in each of the three ways it slides, mm */ reach: number[];
-  kg: number; usd: number | null;
+  kg: number; holding: number; usd: number | null;
   /** lines with no price here, said rather than guessed */ unpriced: string[];
   /** what it affords, in the order the stack gives them */ does: Does[];
   /** what it will not do, each with the number that refuses it */ refusals: string[];
@@ -270,14 +270,17 @@ export function unitUsd(u: Unit): { usd: number; unpriced: string[] } {
  *  gripper's load; and a payload was added to every stage alike, so the camera was carrying the 2 kg the gripper was
  *  holding. A payload hangs from whatever grips it, is checked against that grip, and is then carried by everything
  *  below it and by nothing above. */
-export function stack(frameUnit: Unit, axes: Unit[], tools: Unit[], payloadKg = 0): { stages: Mounted[]; kg: number; refusals: string[]; gaps: string[] } {
+export function stack(frameUnit: Unit, axes: Unit[], tools: Unit[], payloadKg = 0): { stages: Mounted[]; kg: number; holding: number; refusals: string[]; gaps: string[] } {
   const refusals: string[] = [], gaps: string[] = [];
   const weigh = (u: Unit) => { const r = unitKg(u); gaps.push(...r.gaps); return r.kg; };
   const frameKg = weigh(frameUnit), axisKg = axes.map(weigh), toolKg = tools.map(weigh);
   const toolsKg = toolKg.reduce((a, b) => a + b, 0);
   const stages: Mounted[] = [];
-  // the frame: everything stands on it
-  const all = frameKg + axisKg.reduce((a, b) => a + b, 0) + toolsKg + payloadKg;
+  // A machine's mass is the machine. What it is holding is a *load*, not a part of it, and adding the two gave a
+  // 1.39 kg arm holding a 3 kg brick a stated mass of 4.39 kg - which the forge then attributed to its 55 g servo.
+  // Every stage still carries the payload, because that is what a stage has to hold up; only the total differs.
+  const own = frameKg + axisKg.reduce((a, b) => a + b, 0) + toolsKg;
+  const all = own + payloadKg;                 // the frame: everything stands on it, the load included
   const push = (unit: Unit, carrying: number, above: string[]) => {
     const holds = unit.does === 'hold' || unit.carries >= carrying;
     const s: Mounted = { unit, carrying: +carrying.toFixed(3), above, ok: holds };
@@ -300,7 +303,7 @@ export function stack(frameUnit: Unit, axes: Unit[], tools: Unit[], payloadKg = 
       stages.push(s);
     } else push(u, 0, []);
   }
-  return { stages, kg: +all.toFixed(2), refusals, gaps };
+  return { stages, kg: +own.toFixed(2), holding: +payloadKg.toFixed(2), refusals, gaps };
 }
 
 /** Which way a slide in a stack of this many runs: the last slide is up, the rest across. A stack's vertical axis is
@@ -359,7 +362,7 @@ export function composeMachine(words: string): Machine {
   const fast = !want.does.includes('cut');
   const slide = (mm: number) => (fast ? beltAxis(mm) : screwAxis(mm));
 
-  let st: { stages: Mounted[]; kg: number; refusals: string[]; gaps: string[] };
+  let st: { stages: Mounted[]; kg: number; holding: number; refusals: string[]; gaps: string[] };
   let units: Unit[];
   let joints: Machine['joints'];
   if (want.arrange === 'arm') {
@@ -390,7 +393,7 @@ export function composeMachine(words: string): Machine {
   if (want.payload > 0 && !tools.some((u) => u.does === 'grip')) refusals.push(`it was asked to hold ${want.payload} kg and nothing on it grips: say "picks up" and a gripper is composed in`);
   if (!want.does.length) refusals.push('nothing in those words says what the machine must *do*: name a tool (print, cut, solder, pick up, see, turn) and it is composed round it');
   return {
-    asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm, kg: st.kg,
+    asked: words, name: want.name, arrange: want.arrange, stages: st.stages, reach: want.mm, kg: st.kg, holding: st.holding,
     usd: usd || null, unpriced: money.flatMap((m) => m.unpriced), does: [...new Set(units.map((u) => u.does))],
     refusals, gaps: st.gaps, ...(joints ? { joints } : {}),
   };
@@ -399,7 +402,7 @@ export function composeMachine(words: string): Machine {
 /** A machine written out: what it is made of, stage by stage, with what each carries and what it costs. */
 export function machineText(m: Machine): string {
   const span = m.arrange === 'arm' ? `${m.reach[0]} mm of reach` : m.arrange === 'rail' ? `${m.reach[0]} mm of travel along it` : `${m.reach.join(' × ')} mm of travel`;
-  const out = [`${m.name}, ${span}: ${m.stages.length + 1} units, ${m.kg} kg, ${m.usd == null ? 'nothing priced here' : `$${m.usd.toFixed(2)}`}.`];
+  const out = [`${m.name}, ${span}: ${m.stages.length + 1} units, ${m.kg} kg${m.holding ? ` (holding ${m.holding} kg, which is a load and not part of it)` : ''}, ${m.usd == null ? 'nothing priced here' : `$${m.usd.toFixed(2)}`}.`];
   out.push(`It was composed, not copied: ${m.does.join(', ')} are the words, arranged as ${{ gantry: 'a gantry in a frame, because the tool has to get anywhere in a box', rail: 'one long rail, because what was asked for is travel along something', arm: 'a jointed arm, because what was asked for is reach', table: 'a turning table under a fixed tool' }[m.arrange]}.`);
   if (m.joints) for (const j of m.joints) out.push(`  ${j.at} holds ${j.holds} N·m geared ${j.ratio}:1 and has to hold ${j.needs} N·m straight out: ${j.holds >= j.needs ? 'holds' : 'NO'}`);
   for (const s of m.stages) {
@@ -577,7 +580,7 @@ const RATIOS = [3, 5, 10, 20, 50];
 
 /** An arm checked the way an arm fails: the moment at each joint with the arm straight out, against what that joint can
  *  be geared to hold. Fully extended and horizontal is the worst case and the one people build and then discover. */
-export function armStack(reach: number, tools: Unit[], payloadKg = 0): { stages: Mounted[]; kg: number; refusals: string[]; gaps: string[]; joints: { at: string; needs: number; holds: number; ratio: number }[] } {
+export function armStack(reach: number, tools: Unit[], payloadKg = 0): { stages: Mounted[]; kg: number; holding: number; refusals: string[]; gaps: string[]; joints: { at: string; needs: number; holds: number; ratio: number }[] } {
   const refusals: string[] = [], gaps: string[] = [], joints: { at: string; needs: number; holds: number; ratio: number }[] = [];
   const weigh = (u: Unit) => { const r = unitKg(u); gaps.push(...r.gaps); return r.kg; };
   // upper arm and forearm: the usual split, longer nearer the base where the moment is worst
@@ -615,6 +618,8 @@ export function armStack(reach: number, tools: Unit[], payloadKg = 0): { stages:
     if (!ok) { s.why = `it grips ${u.lifts} kg and was asked to hold ${payloadKg} kg (${u.limit})`; refusals.push(`${u.name}: ${s.why}`); }
     stages.push(s);
   }
-  const kg = linkKg.reduce((a, b) => a + b, 0) + toolKg + joints.reduce((a, j) => a + unitKg(turnAxis(j.ratio)).kg, 0) + payloadKg;
-  return { stages, kg: +kg.toFixed(2), refusals, gaps, joints };
+  // the arm's own mass; what it holds is `holding` and is never added in (see the note in `stack`). Each joint's
+  // moment above still includes the payload, which is the number that decides its gearing.
+  const kg = linkKg.reduce((a, b) => a + b, 0) + toolKg + joints.reduce((a, j) => a + unitKg(turnAxis(j.ratio)).kg, 0);
+  return { stages, kg: +kg.toFixed(2), holding: +payloadKg.toFixed(2), refusals, gaps, joints };
 }
