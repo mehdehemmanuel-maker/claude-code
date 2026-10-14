@@ -2319,8 +2319,15 @@ built by hand after the fault it would have caught.
 
 Four things were built, and all four were wires to work that already existed and never reached a person.
 
-**1. Three judges on the look page spoke for the first time.** `view/look.ts` has exposed `held()`, `frame()` and
-`clash()` on `window.look` for four rounds. Nothing in `tools/` ever called one. `tools/look.mjs` now prints all
+**1. Three judges on the look page spoke under every picture for the first time.** `view/look.ts` has exposed
+`held()`, `frame()` and `clash()` on `window.look` for four rounds, and no tool printed one **unasked**.
+
+> **Correction, written the same day (docs/MANNY.md #105).** This round first claimed they had *zero callers in
+> `tools/`*, and that was false: `tools/bench.mjs` has had `held:` and `frame:` subcommands since the commits that
+> added the judges, and called `clash` before that. The measurement behind the claim grepped two of the eight tools
+> and I wrote "zero" from two — the word-for-a-use fault, in my own evidence, in the round whose subject was tools
+> that lie. The true statement is the narrower one above, and it is still worth the round: a verdict behind a
+> subcommand is a verdict you must already suspect you need. `tools/look.mjs` now prints all
 three under every picture, and the first run on a hatchback said:
 
 ```
@@ -2332,8 +2339,11 @@ clashes: 1177 touching pairs, 16 where one passes into another — worst: tunnel
 
 None of that was being reported anywhere. A 54 mm interpenetration had been in every render for rounds.
 
-**2. A rule so the next one cannot happen quietly.** `tidy.test.ts` now reads the page's API and requires every member
-to be read by something in `tools/`, or to carry its reason on its own line. It is a condition on the API's members,
+**2. A rule so the next one cannot happen quietly.** `tidy.test.ts` now reads the page's API and requires every
+member to be printed by `tools/look.mjs` — the door that speaks under every picture without being asked — or to
+carry its reason on its own comment line. (As first written it asked only that *some* tool name the member, which
+`bench.mjs` already did, so the rule passed on the very case that motivated it; corrected with #105, along with
+seven member spellings it could not see and a `prev()` off-by-one that let one member's excuse cover its neighbour.) It is a condition on the API's members,
 not on three names, so a new member is caught by *being new* — and it is two-way: an excuse fails once a tool reads
 that member. It found two more on its first run (`project`, `unproject`), and both halves were mutation-tested:
 adding a `probe:` member failed it, and making a tool mention an excused member failed the other half.
@@ -2430,10 +2440,10 @@ this session has been removing from other code all day.
 
 ### Then the rule, applied
 
-- **`src/nexus/index.ts` → deleted.** A barrel re-exporting fifteen directories: a second owner for every name in
+- **The root barrel `index.ts` → deleted.** A barrel re-exporting fifteen directories: a second owner for every name in
   the tree, named by nothing in `src/` and by no test. The lint caught the deletion twice (its root-file list and a
   stale path in this very document), which is the lint doing its job.
-- **`src/nexus/ask/rules.ts` → deleted** with its 3 tests. IFS, THENS, `due()` and a robot's rule list: the
+- **`ask/rules.ts` (under `src/nexus/`) → deleted** with its 3 tests. IFS, THENS, `due()` and a robot's rule list: the
   superseded first version of robot rules. `view/forge.ts:3327` makes each robot's rules a pipeline on the boards
   instead. Two owners for one concern is what `docs/OWNERS.md` exists to prevent, so the older owner went.
 - **The three Nexus slices → reattached.** `npm run substrate` runs the beam on two supports, the bracket on a post
@@ -2459,3 +2469,61 @@ The 11 remaining are all `substrate/`: `attempt`, `clock`, `compose`, `explore`,
 and not in `src/`, so a door cannot start one yet. The other eight need their types read before they can be called
 correctly — and after being wrong about a field name three times today, writing eight more calls from memory is the
 one thing this round has earned the right not to do. They are reattach-or-delete next, each on its own merits.
+
+## Run 7t — Manny was right four times, and the worst of it was mine
+
+Four BLOCK findings on Run 7r, all upheld, all fixed. The round that was about tools that lie shipped four of them.
+
+**#105 — "zero callers in `tools/`" was false.** `tools/bench.mjs` has called `look.held()` and `look.frame()` since
+the commits that added them. My evidence grepped `look.mjs` and `manny-see.mjs` — two of eight tools — and I wrote
+*zero*. That is the word-for-a-use fault from Run 7s's own census, committed in my own measurement, in a round whose
+subject was instruments that overstate. Worse: the rule written "so the next one cannot happen quietly" asked only
+that *some* tool name the member, which `bench.mjs` already did, so **it would have passed on the case that
+motivated it** — proved by running the reader against `bench.mjs` alone.
+
+Now the rule holds the property that is true and worth holding: printed by `tools/look.mjs`, the door that speaks
+under every picture without being asked. It reads seven member spellings it was blind to, excludes JavaScript's
+keywords by name, resolves an `Object.assign` member's excuse at its own definition, and `prev()` reads the line
+above the member instead of the line above *that* — which had been letting a one-line member's trailing excuse cover
+its neighbour. First run caught seven more members. `mass` and `lint` now print under every picture, and `lint`
+immediately reported **9 faults on a hatchback** — eight paper-thin walls and one part hidden inside another — that
+nothing in the tree had been saying.
+
+**#108 — the degrees-of-freedom number was fabricated, and the ledger blamed the data for it.** When nothing across a
+joint named a link, `mechanismOf` attached the joint to the thing's own frame. Not an edge case: **56 of 56**. Every
+joint that reached `mobility()` had been grounded by that line, so the engine, the rack and the anti-roll bar were
+welded to the shell — which is why an engine mount "joins nothing". Run 7r called this "two named data gaps rather
+than tool bugs"; one of the two *was* the tool's default. And the lookup was narrow on top of being wrong: it
+resolved the far end against movers only, so a rail — which declares no joint and is still what a carriage slides
+along — could never be found. Both fixed: the far end is derived against every part's link, and an underivable end
+is **dropped with its reason**, never grounded.
+
+**The honest number is `0 of 56 joints usable`, not 23.** The 46 degrees of freedom were entirely this line's doing.
+
+**#106 — a body no joint touches is not a degree of freedom, it is a missing joint.** 21 of the car's bodies floated,
+carrying six freedoms each into a total printed as the mechanism's mobility. Both doors now name the floats *before*
+any total, and with no usable joint there is no mobility at all: `npm run moves` prints `NO DOF (no usable joint)`
+and `npm run why` prints no number. A kit with one declared joint and none usable had been reporting twelve.
+
+**#107 — keyed by name, so 348 of 605 parts never entered the graph.** `damper tube` ×4 collapsed to one. Keyed by
+path: 46 movers → 66, "38 declared" → its real 56. The left/right asymmetry on a symmetric car is gone.
+
+### The pins were a floor, and a floor cannot catch a number wrong in the admissible direction
+
+`moves.test.ts` asserted `joints >= 23` and `dropped <= 15`. Both passed while both measured a fabrication. Every
+number in it is now pinned **exactly** — 56 declared, 0 usable, 21 floating, 66 movers — each to be moved by hand
+with a ledger line saying why. That is the same lesson as `toBeLessThanOrEqual(6)` in Run 7h, re-learnt: a ratchet
+that only resists one direction is blind to being wrong in the other.
+
+**#104 — `npm run quick` failed on its own ordinary path**, because `vitest run --changed HEAD` exits 1 when it
+selects nothing and selecting nothing is the point of `quick`. `--passWithNoTests`. An alarm that fires on the
+normal path teaches its reader to ignore the alarm, and the first casualty would have been the verdict line.
+
+Five more findings (#109–#113) are answered in writing rather than fixed: `half()` duplicating `space.ts:shapeBox()`,
+three rotation faults including a ZYX/XYZ Euler mismatch that is a trap rather than a wound today, the shared-`''`
+link bucket silencing `unsaid`, and one missing import that hides the `machine` kit from both new doors. Each says
+why it waits — mostly that this turn re-pinned the car's numbers twice already, and changing the envelope maths in
+the same pass would leave no way to tell which change moved which number.
+
+**The count for this round: of nine findings, I had already written four of them into a ledger as facts.** The gate
+was green for every one.

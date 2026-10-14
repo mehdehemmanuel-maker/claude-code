@@ -518,35 +518,56 @@ const DUPES: string[] = [
   "unit('L', 'length', 'm', [1, 5, 10], [0.01, 100, 0.01]) :: kinds/electrical.ts:253 kinds/fluid.ts:104",
 ];
 
-// EVERY JUDGE THE PICTURE OWNS SPEAKS. `view/look.ts` exposed `held()`, `frame()` and `clash()` on the page for four
-// rounds and no tool ever called one: three judges that could not fail because nothing ran them. The fault family of
-// this session is a check that cannot fail, and a judge with no caller is its purest form — the work of writing it is
-// done, the wire is there, and the verdict never reaches a person. So each member of the page's API is either read by
-// something in `tools/`, or says on its own line why nothing reads it. Written as a condition on the API's members
-// rather than on three names, so the next one added is caught by being new (docs/ROUNDS.md Run 7r).
+// EVERY JUDGE THE PICTURE OWNS SPEAKS WHERE A PERSON MEETS IT. The first version of this block asserted that each
+// member of the page's API is "read by a tool", and the round that wrote it claimed `held`, `frame` and `clash` had
+// **zero callers in tools/**. That claim was false: `tools/bench.mjs` has had `held:` and `frame:` subcommands since
+// the commits that added the judges, and `clash` since before. So the rule as written PASSED on the exact case that
+// motivated it — measured three ways, including against `bench.mjs` alone (docs/MANNY.md #105).
+//
+// The true statement, and the one worth a rule, is narrower: no tool printed them **unasked**. A verdict behind a
+// subcommand is a verdict you must already suspect you need. So the property is membership of the door that speaks
+// without being asked — `tools/look.mjs`, which prints under every picture — and `bench.mjs` answering when asked
+// does not satisfy it. An excuse must sit on a comment line of its own, because an excuse at the end of a one-line
+// member's own line was silently excusing the member BELOW it.
+const UNASKED = 'tools/look.mjs';
 const lookApi = () => {
   const s = read(join(NEXUS, 'view/look.ts')), at = s.indexOf('const look = {');
   const lit = s.slice(at, at + s.slice(at).indexOf('\n};\n'));
-  const names = [...lit.matchAll(/^  ([a-z][A-Za-z]*): [(<]/gm)].map((m) => ({ name: m[1]!, at: m.index! }));
-  // (the one line immediately above it, so one member's excuse cannot silently cover the member under it)
-  const over = (i: number) => lit.slice(lit.lastIndexOf('\n', i - 2), i - 1);
-  const out = names.map((n) => ({ name: n.name, excused: /nobody calls/.test(over(n.at)) }));
-  for (const m of s.matchAll(/Object\.assign\(look, \{([^}]*)\}\)/g)) for (const t of m[1]!.split(',')) { const nm = t.trim().split(':')[0]!.trim(); if (nm) out.push({ name: nm, excused: false }); }
+  // every spelling an object member can take: `name: (`, `: async`, `: function`, `: <T>`, shorthand `name(`, and a
+  // getter. Seven of eight spellings were invisible to the first version, which only matched `^  name: [(<]`.
+  const re = /^[ \t]*(?:get[ \t]+)?([A-Za-z_$][\w$]*)[ \t]*(?::[ \t]*(?:async[ \t]+)?(?:function\b|[(<])|\()/gm;
+  // a broadened reader matches `if (`, `for (` and `switch (` inside a member's own body, so the words a call can
+  // never be are excluded by name — the one place a list is the right shape, because this is JavaScript's list.
+  const KEYWORD = new Set(['if', 'for', 'while', 'switch', 'catch', 'return', 'function', 'new', 'typeof', 'await', 'do', 'else', 'of', 'in', 'yield', 'void', 'delete', 'throw']);
+  const names = [...lit.matchAll(re)].map((m) => ({ name: m[1]!, at: m.index! })).filter((n) => !KEYWORD.has(n.name));
+  // the whole line immediately above the member, and only that one: an excuse at the end of a one-line member's
+  // own line was silently excusing the member BELOW it (docs/MANNY.md #105)
+  const prev = (i: number) => { const nl = lit.lastIndexOf('\n', i - 2); return nl < 0 ? '' : lit.slice(nl + 1, i - 1); };
+  const out = names.map((n) => ({ name: n.name, excused: /^\s*\/\/.*nobody calls/.test(prev(n.at)) }));
+  // a member added by `Object.assign(look, { … })` is defined on its own somewhere above, so its excuse lives there
+  for (const m of s.matchAll(/Object\.assign\(look,\s*\{([\s\S]*?)\}\s*\)/g)) for (const tk of m[1]!.split(',')) {
+    const nm = tk.trim().split(':')[0]!.trim();
+    if (!/^[A-Za-z_$][\w$]*$/.test(nm)) continue;
+    const def = new RegExp(`(^|\\n)(// [^\\n]*\\n)?(const|function) ${tk.trim().split(':').pop()!.trim()}\\b`).exec(s);
+    out.push({ name: nm, excused: !!def && /nobody calls/.test(def[2] ?? '') });
+  }
   return out;
 };
 
-describe('every judge the picture owns speaks', () => {
-  const TOOLS = readdirSync(join(ROOT, 'tools')).filter((f) => /\.mjs$/.test(f)).map((f) => read(join(ROOT, 'tools', f))).join('\n');
-  it('every member of window.look is read by a tool, or says why nothing reads it', () => {
+describe('every judge the picture owns speaks where a person meets it', () => {
+  const unasked = read(join(ROOT, UNASKED));
+  const asked = readdirSync(join(ROOT, 'tools')).filter((f) => /\.mjs$/.test(f) && f !== 'look.mjs').map((f) => read(join(ROOT, 'tools', f))).join('\n');
+  it('every member of the page API is printed by the door that speaks unasked, or says why not', () => {
     const api = lookApi();
-    expect(api.length, 'the page API could not be read, so this check would pass on an empty list').toBeGreaterThan(8);
+    expect(api.length, 'the page API could not be read, so this check would pass on an empty list').toBeGreaterThan(10);
+    expect(api.map((a) => a.name), 'the member spellings the reader must see').toContain('landmarks');
     for (const { name, excused } of api) {
       if (excused) continue;
-      expect(TOOLS, `window.look.${name}() is on the page and no tool in tools/ calls it: a judge nobody runs cannot fail. Either print its verdict from a tool, or write "nobody calls" above it with the reason.`).toContain(`look.${name}(`);
+      expect(unasked, `window.look.${name}() is on the page and ${UNASKED} never prints it: a verdict only reached by asking for it is a verdict nobody asks for. Print it there, or write "nobody calls" on its own comment line above it with the reason.${new RegExp(`look\\.${name}\\s*\\(`).test(asked) ? ` (another tool calls it on request, which is not the same thing.)` : ''}`).toContain(`look.${name}(`);
     }
   });
-  it('nothing is excused that a tool now reads, so an excuse cannot outlive its reason', () => {
-    for (const { name, excused } of lookApi()) if (excused) expect(TOOLS, `window.look.${name}() says nobody calls it, but a tool does: delete the excuse.`).not.toContain(`look.${name}(`);
+  it('nothing is excused that the unasked door now prints, so an excuse cannot outlive its reason', () => {
+    for (const { name, excused } of lookApi()) if (excused) expect(unasked, `window.look.${name}() says nobody calls it, but ${UNASKED} prints it: delete the excuse.`).not.toContain(`look.${name}(`);
   });
 });
 

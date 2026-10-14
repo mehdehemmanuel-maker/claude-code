@@ -7,6 +7,10 @@
 // repository is inside its own unit test, so a car with a floating knuckle, a hinge that is secretly rigid, or a
 // slider jointed to nothing was never once asked how many ways it could move (docs/ROUNDS.md Run 7r).
 //
+// (The same round claimed the look page's three judges had *no caller in `tools/`*, which was false — `bench.mjs`
+// called them on request; what no tool did was print them unasked. `mobility()` is the stronger case and holds as
+// written: nothing outside its own test called it at all. Corrected in docs/MANNY.md #105.)
+//
 // So this file is the wire, and the edges are the ones a mechanism actually has:
 //
 //   CONNECTED_TO        `joins` — the parts it meets face to face
@@ -95,23 +99,28 @@ export const axisOf = (p: Part, leaves: JointKind): V3 | null => {
 /** Every part of `root` that moves, with the edges of its motion and what its sweep needs. */
 export function moving(root: Part): Moving[] {
   const out: Moving[] = [];
-  // every part by name, and who holds whom, so an edge can name the part at its other end
-  const all = new Map<string, { p: Part; path: string; at: V3; holder?: Part }>();
+  // EVERY PART, KEYED BY ITS PATH. Keyed by name, `damper tube` ×4, `wheel bearing` ×2 and `outer joint` ×2 collapsed
+  // onto one entry and 348 of a car's 605 parts were never looked at — which is why a symmetric car reported its left
+  // and right corners differently and why a 4,443-part car park reported the same 23 joints as one car (docs/MANNY.md
+  // #107). Names are kept only to resolve the edges, because `joins` and `passes` are written as names.
+  const all: { p: Part; path: string; at: V3; holder?: Part }[] = [];
   const walk = (p: Part, path: string, at: V3, holder?: Part) => {
     const here: V3 = [at[0] + (p.at?.[0] ?? 0), at[1] + (p.at?.[1] ?? 0), at[2] + (p.at?.[2] ?? 0)];
-    if (!all.has(p.name)) all.set(p.name, { p, path, at: here, holder });
+    all.push({ p, path, at: here, holder });
     for (const q of p.parts ?? []) walk(q, `${path}/${q.name}`, here, p);
   };
   walk(root, root.name, [0, 0, 0]);
+  const byName = new Map<string, typeof all[number]>();
+  for (const e of all) if (!byName.has(e.p.name)) byName.set(e.p.name, e);
 
   // what each part provides, so a `requires` can be met by name rather than by guess
   const provides = new Map<string, string[]>();
-  for (const { p } of all.values()) for (const i of p.iface ?? []) if (i.role === 'provides') provides.set(i.kind, [...(provides.get(i.kind) ?? []), p.name]);
+  for (const { p } of all) for (const i of p.iface ?? []) if (i.role === 'provides') provides.set(i.kind, [...(provides.get(i.kind) ?? []), p.name]);
   // what names each part as passing through it, which is the MOVES_WITHIN edge said from the other side
   const through = new Map<string, string[]>();
-  for (const { p } of all.values()) for (const t of p.passes ?? []) through.set(t, [...(through.get(t) ?? []), p.name]);
+  for (const { p } of all) for (const t of p.passes ?? []) through.set(t, [...(through.get(t) ?? []), p.name]);
 
-  for (const { p, path, at, holder } of all.values()) {
+  for (const { p, path, at, holder } of all) {
     const leaves = p.joint ? LEAVES[p.joint] : null;
     const slid = p.travel?.slide, goes = !!p.travel || !!p.movesWith;
     if (!p.joint && !goes) continue;              // it says nothing about moving, so it is not a mover
@@ -125,7 +134,7 @@ export function moving(root: Part): Moving[] {
     if (p.joint && leaves) add(m.constrainedBy, `its ${p.joint}, which leaves it ${leaves}`);
     if (p.movesWith) add(m.constrainedBy, `carried with ${p.movesWith}`);
     for (const i of p.iface ?? []) if (i.role === 'requires') add(m.transfersForceTo, (provides.get(i.kind) ?? []).filter((n) => n !== p.name));
-    for (const i of p.iface ?? []) if (i.role === 'provides') add(m.transfersForceTo, [...all.values()].filter(({ p: q }) => q.name !== p.name && q.iface?.some((j) => j.role === 'requires' && j.kind === i.kind)).map(({ p: q }) => q.name));
+    for (const i of p.iface ?? []) if (i.role === 'provides') add(m.transfersForceTo, all.filter(({ p: q }) => q.name !== p.name && q.iface?.some((j) => j.role === 'requires' && j.kind === i.kind)).map(({ p: q }) => q.name));
 
     // RANGE, and the envelope that range needs. A steer is about the upright through it and a bump is straight up, so
     // the room a steered, rising wheel needs is its own size grown by the arc of the steer and the height of the bump.
@@ -143,7 +152,7 @@ export function moving(root: Part): Moving[] {
     // does not say how far", or "this is jointed and nothing says what to".
     if (p.travel && !p.joint && !p.movesWith) m.unsaid = 'travel';  // decided below, once every link's joints are known
     else if (p.joint && leaves && !m.connectedTo.length && !p.fixed && !holder) m.unsaid = `it is a ${p.joint} and names nothing it joins, so its ${leaves} axis is against nothing`;
-    else if (p.movesWith && !all.has(p.movesWith)) m.unsaid = `it is carried with "${p.movesWith}", and no part of this is called that`;
+    else if (p.movesWith && !byName.has(p.movesWith)) m.unsaid = `it is carried with "${p.movesWith}", and no part of this is called that`;
     out.push(m);
   }
   // A WHEEL IS NOT UNHELD BECAUSE ITS BEARING IS A SIBLING. Travel is declared on the wheel and the bearing sits on
@@ -161,14 +170,32 @@ export function moving(root: Part): Moving[] {
 export function mechanismOf(root: Part): { bodies: Body[]; joints: Joint[]; from: Moving[]; dropped: { part: string; why: string }[] } {
   const from = moving(root), bodies: Body[] = [{ name: `${root.name} (its own frame)`, at: [0, 0, 0], fixed: true }];
   const idx = new Map<string, number>([['', 0]]);
+  // EVERY PART'S LINK, NOT EVERY MOVER'S. A joint's other end need not move: a rail is what a carriage slides along
+  // and declares no joint of its own, so resolving the far end against the movers alone found nothing and the joint
+  // was dropped as undeclared — the tool blaming the data for its own narrow lookup.
+  const linkOf = new Map<string, string>();
+  const walkLinks = (p: Part, inherited: string) => {
+    const l = p.link ?? inherited;
+    if (!linkOf.has(p.name)) linkOf.set(p.name, l);
+    for (const q of p.parts ?? []) walkLinks(q, l);
+  };
+  walkLinks(root, '');
   for (const m of from) if (m.link && !idx.has(m.link)) { idx.set(m.link, bodies.length); bodies.push({ name: m.link, at: m.at }); }
+  for (const m of from) for (const n of m.connectedTo) { const l = linkOf.get(n); if (l && !idx.has(l)) { idx.set(l, bodies.length); bodies.push({ name: l, at: m.at }); } }
   const joints: Joint[] = [], dropped: { part: string; why: string }[] = [];
   for (const m of from) {
     if (!m.leaves) continue;
     const a = idx.get(m.link) ?? 0;
     // what it is jointed TO: the first thing it joins that is a link of its own, else the ground
-    const to = m.connectedTo.map((n) => from.find((x) => x.part === n)?.link).find((l) => l !== undefined && l !== m.link && idx.has(l));
-    const b = to === undefined ? 0 : idx.get(to)!;
+    // THE OTHER END IS DERIVED OR THE JOINT IS DROPPED. This fell back to body 0 — the thing's own frame — whenever
+    // nothing it joins named a link, and that was not an edge case: **38 of 38** of a car's jointed parts took the
+    // fallback, 35 of them with `joins: []`. So every joint that reached `mobility()` had been grounded by this line,
+    // silently, which makes the engine, the rack and the anti-roll bar welded to the shell and is why an engine mount
+    // "joins nothing". The same missing data was being *announced* when the part's own link was also undeclared, so
+    // the tool reported one half of its own default as a data gap and hid the other (docs/MANNY.md #108).
+    const to = m.connectedTo.map((n) => linkOf.get(n)).find((l) => l !== undefined && l !== m.link && idx.has(l));
+    if (to === undefined) { dropped.push({ part: m.part, why: `nothing it joins names a link of its own, so what its ${m.joint} acts against is not said${m.connectedTo.length ? '' : ' (it names nothing it joins at all)'}` }); continue; }
+    const b = idx.get(to)!;
     if (a === b) { dropped.push({ part: m.part, why: `both ends are the same link (${m.link || 'the frame'}), so it joins nothing` }); continue; }
     const axis = axisOf(m.src, m.leaves);
     if (!axis) { dropped.push({ part: m.part, why: `nothing says which way its ${m.joint} acts: no slide direction declared and its shape has no axis` }); continue; }
@@ -178,7 +205,15 @@ export function mechanismOf(root: Part): { bodies: Body[]; joints: Joint[]; from
 }
 
 /** How many ways what moves can still move, and what that says. `mobility()`'s own verdict, carried out to a reader. */
-export function howItMoves(root: Part): { m: Mobility; bodies: number; joints: number; from: Moving[]; dropped: { part: string; why: string }[] } {
+export function howItMoves(root: Part): { m: Mobility | null; bodies: number; joints: number; from: Moving[]; dropped: { part: string; why: string }[]; floating: string[]; why?: string } {
   const { bodies, joints, from, dropped } = mechanismOf(root);
-  return { m: mobility(bodies, joints), bodies: bodies.length, joints: joints.length, from, dropped };
+  // A BODY NO JOINT TOUCHES IS NOT A DEGREE OF FREEDOM, IT IS A MISSING JOINT. `mobility()` is right to give a free
+  // body six freedoms — that is what its rank means — but reporting their sum as "the mechanism has 46 degrees of
+  // freedom" states a fact about a car that is really a fact about absent data: 4 of 18 bodies floated and 24 of the
+  // 46 were theirs. And a kit with ONE declared joint, none of it usable, reported twelve. So the floats are named
+  // first, and with no usable joint there is no mobility to report at all (docs/MANNY.md #106).
+  const touched = new Set(joints.flatMap((j) => [j.a, j.b]));
+  const floating = bodies.map((b, i) => (touched.has(i) || b.fixed ? null : b.name)).filter((n): n is string => n !== null);
+  if (!joints.length) return { m: null, bodies: bodies.length, joints: 0, from, dropped, floating, why: `${bodies.length - 1} rigid ${bodies.length === 2 ? 'body' : 'bodies'} and not one usable joint between them, so there is no mechanism to count the freedoms of` };
+  return { m: mobility(bodies, joints), bodies: bodies.length, joints: joints.length, from, dropped, floating };
 }

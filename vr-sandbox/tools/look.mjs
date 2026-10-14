@@ -90,6 +90,20 @@ for (const a of asks) {
   if (fr) console.log(`  frame: its sheet is ${fr.biw} piece${fr.biw === 1 ? '' : 's'} joined by structure alone${fr.big ? `, the largest ${fr.big.n} parts / ${fr.big.kg} kg${fr.big.cut.length ? ` (cut from the rest at ${fr.big.cut.join(', ')})` : ''}` : ''}${fr.structure ? `; its structure ${fr.structure.n} parts / ${fr.structure.kg} kg` : ''}`);
   const cl = await judge('clash', () => { const r = window.look.clash(); const bad = r.filter((c) => c.kind === 'through' || c.kind === 'into'); return { n: r.length, bad: bad.length, worst: bad.sort((a, b) => (b.depth ?? 0) - (a.depth ?? 0))[0] ?? null }; });
   if (cl) console.log(`  clashes: ${cl.n} touching pairs, ${cl.bad} where one passes into another${cl.worst ? ` — worst: ${cl.worst.pa} into ${cl.worst.pb} by ${((cl.worst.depth ?? 0) * 1000).toFixed(1)} mm` : ''}`);
+  // THE THREE THAT JUDGED THE WHOLE PICTURE AND WERE REACHABLE ONLY BY ASKING. `facts`, `mass` and `lint` each take
+  // no argument and judge everything in frame. `lint` in particular is a paper-thin-wall and floating-part check
+  // whose verdict reached a person only if that person already suspected they needed it (docs/MANNY.md #105).
+  // `mass` returns `parts`, not `rows` (view/look.ts:373) - read from the source, after three shapes guessed wrong
+  // from memory in one day each printed a confident zero.
+  const fx = await judge('facts', () => window.look.facts());
+  if (fx) console.log(`  it says: ${fx.says ?? fx.name}${fx.size ? ` - ${fx.size.map((v) => (v * 1000).toFixed(0)).join(' x ')} mm over ${fx.parts} meshes` : ''}`);
+  const ms = await judge('mass', () => { const r = window.look.mass(); return { kg: r.kg, published: r.published, frontShare: r.frontShare, n: (r.parts ?? []).length, top: (r.parts ?? []).slice(0, 3).map((q) => `${q.name} ${q.kg} kg`) }; });
+  if (ms) console.log(`  its mass: ${ms.kg} kg over ${ms.n} parts that carry any of their own${ms.published ? `, against ${ms.published} kg published (${((ms.kg / ms.published - 1) * 100).toFixed(1)}%)` : ''}${ms.frontShare !== undefined ? `, ${(ms.frontShare * 100).toFixed(0)}% of it on the front axle` : ''} - heaviest: ${ms.top.join(', ')}`);
+  const lt = await judge('lint', () => { const r = window.look.lint(), by = {}; for (const q of r) by[q.rule] = (by[q.rule] ?? 0) + 1; return { n: r.length, by, first: r.slice(0, 2).map((q) => `${q.rule}: ${q.part} - ${q.says}`) }; });
+  if (lt) {
+    console.log(`  the drawing's own lint: ${lt.n} fault${lt.n === 1 ? '' : 's'}${lt.n ? ` (${Object.entries(lt.by).map(([k, v]) => `${k} x${v}`).join(', ')})` : ''}`);
+    for (const line of lt.first) console.log(`    ${line}`);
+  }
   // WHICH CHECKS LOOKED AT NOTHING, which is the difference between "it is fine" and "nobody asked"
   // (src/nexus/make/critic.ts's `Looked`, docs/MANNY.md #87).
   if (ready?.looked) {

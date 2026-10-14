@@ -77,20 +77,27 @@ describe('what moves, and what it needs', () => {
   });
 });
 
-describe("a real car's mechanism, ratcheted", () => {
+describe("a real car's mechanism, pinned exactly", () => {
   const car = KITS.find((k) => k.id === 'car')!;
-  const { m, joints, dropped, from } = howItMoves(makeKit(car, 'a small hatchback', 1).part);
-  it('the graph uses at least as many of its joints as it did when this was written', () => {
-    // 23 of 38 when written. It may only go up: each one left out is a part that does not say which way its joint
-    // acts, or whose `joins` names nothing across it — both fixable in the data, and both silently un-fixable before
-    // this number existed. A cap dressed as a ratchet is the fault of Run 7h, so the drop count is pinned both ways.
-    expect(joints + dropped.length, 'the car declares 38 joints; if this changes, say so in the ledger').toBe(38);
-    expect(joints, 'coverage fell: a joint the graph could use before is now left out').toBeGreaterThanOrEqual(23);
-    expect(dropped.length, 'dropped rose, so some part stopped saying how its joint acts').toBeLessThanOrEqual(15);
+  const { m, joints, dropped, from, floating, why } = howItMoves(makeKit(car, 'a small hatchback', 1).part);
+  it('every number is pinned exactly, because a floor here hid a fabricated answer for a whole round', () => {
+    // First written as `joints >= 23` with `dropped <= 15`. Both passed, and both were measuring a lie: the graph was
+    // keyed by part NAME, so 348 of the car's 605 parts were never looked at (hence "38 declared" for a car that
+    // declares 56), and every joint whose other end was undeclared was silently attached to the car's own frame —
+    // **56 of 56** — which is where the "46 degrees of freedom" came from. A floor cannot catch a number that is
+    // wrong in the admissible direction. So these are exact: each one must be re-pinned by hand, with the ledger
+    // entry that says why it moved (docs/MANNY.md #106–#108).
+    expect(joints + dropped.length, 'the car declares this many joints').toBe(56);
+    expect(joints, 'NONE is usable yet: no part names a link across its joint. Raising this is the next real step').toBe(0);
+    expect(floating.length, 'rigid bodies no joint touches — absent joints, not motion').toBe(21);
+    expect(from.length, 'moving parts').toBe(66);
   });
-  it('it reports a mobility over what it could use, and says it in words', () => {
-    expect(m.dof).toBeGreaterThan(0);
-    expect(m.says).toMatch(/degree/);
-    expect(from.length, 'a hatchback has dozens of moving parts').toBeGreaterThan(30);
+  it('with no usable joint it reports no mobility at all, and says why', () => {
+    expect(m, 'a mechanism with no joint has no freedoms to count; printing a number anyway is the fault this guards').toBe(null);
+    expect(why).toMatch(/not one usable joint/);
+  });
+  it('every dropped joint says what is missing, and none is silently grounded', () => {
+    expect(dropped.length).toBe(56);
+    for (const d of dropped) expect(d.why, `${d.part} was dropped with no reason`).toMatch(/nothing (says which way|it joins names)|both ends are the same link/);
   });
 });

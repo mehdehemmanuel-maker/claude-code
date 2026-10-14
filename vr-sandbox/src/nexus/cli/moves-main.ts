@@ -33,7 +33,7 @@ if (!named) {
 }
 
 const { part } = makeKit(named, words, seed);
-const { m, bodies, joints, from, dropped } = howItMoves(part);
+const { m, bodies, joints, from, dropped, floating, why } = howItMoves(part);
 const shown = only ? from.filter((x) => new RegExp(only, 'i').test(x.part)) : from;
 
 console.log(`moves: ${part.name} (kit=${named.id}, seed=${seed})`);
@@ -61,7 +61,16 @@ if (dropped.length) {
   for (const d of dropped.slice(0, 6)) console.log(`    ${d.part}: ${d.why}`);
   if (dropped.length > 6) console.log(`    … ${dropped.length - 6} more`);
 }
-console.log(`  ${m.says.length > 600 ? `${m.says.slice(0, 600)}…` : m.says}`);
-if (m.redundant) console.log(`  (Grübler's formula would say ${m.grubler}; the rank says ${m.dof}, which is why the formula is not used)`);
+// WHAT NOTHING HOLDS, BEFORE WHAT MOVES. A body no joint touches has six freedoms and they are not the mechanism's:
+// they are a joint that was never declared. Summed into one total they read as a car that can move 46 ways.
+if (floating.length) {
+  console.log(`  ${floating.length} rigid ${floating.length === 1 ? 'body is' : 'bodies are'} touched by no joint at all, so nothing in this says what holds ${floating.length === 1 ? 'it' : 'them'}: ${floating.slice(0, 6).join(', ')}${floating.length > 6 ? ` (+${floating.length - 6})` : ''}`);
+  console.log(`    (each of those carries six freedoms of its own into the count below, which is absent data and not motion)`);
+}
+if (!m) console.log(`  ${why}`);
+else {
+  console.log(`  ${m.says.length > 600 ? `${m.says.slice(0, 600)}…` : m.says}`);
+  if (m.redundant) console.log(`  (Grübler's formula would say ${m.grubler}; the rank says ${m.dof}, which is why the formula is not used)`);
+}
 console.log(`  ${unsaid.length} part${unsaid.length === 1 ? '' : 's'} move${unsaid.length === 1 ? 's' : ''} and nothing says how${unsaid.length ? `: ${unsaid.slice(0, 5).map((x) => x.part).join(', ')}` : ''}`);
-console.log(`MOVES: ${from.length} movers, ${m.dof} DOF over ${joints} of ${joints + dropped.length} joints, ${unsaid.length} unsaid`);
+console.log(`MOVES: ${from.length} movers, ${m ? `${m.dof} DOF` : 'NO DOF (no usable joint)'} over ${joints} of ${joints + dropped.length} joints, ${floating.length} bodies held by nothing, ${unsaid.length} unsaid`);

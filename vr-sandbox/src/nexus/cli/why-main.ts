@@ -86,7 +86,11 @@ console.log(`WHY: ${open.length} open`);
 // how many move with nothing saying how. `npm run moves` gives the detail; nobody has to know to ask for the verdict.
 const mv = howItMoves(made.part);
 console.log('');
-console.log(`its motion: ${mv.from.length} parts move, ${mv.joints} of ${mv.joints + mv.dropped.length} declared joints usable, ${mv.m.dof} degrees of freedom left`);
+console.log(`its motion: ${mv.from.length} parts move, ${mv.joints} of ${mv.joints + mv.dropped.length} declared joints usable${mv.m ? `, ${mv.m.dof} degrees of freedom left` : ''}`);
+// no usable joint means no mechanism, and a degrees-of-freedom number printed anyway would be this door telling every
+// future round something false about every build, unasked — which is the worst place for it (docs/MANNY.md #106)
+if (!mv.m) console.log(`  ${mv.why}`);
+if (mv.floating.length) console.log(`  ${mv.floating.length} rigid ${mv.floating.length === 1 ? 'body is' : 'bodies are'} touched by no joint: ${mv.floating.slice(0, 4).join(', ')}${mv.floating.length > 4 ? ` (+${mv.floating.length - 4})` : ''} — absent joints, not motion`);
 if (mv.dropped.length) console.log(`  ${mv.dropped.length} joint${mv.dropped.length === 1 ? '' : 's'} left out of the count: ${[...new Set(mv.dropped.map((d) => d.why.replace(/\(.*\)/, '')))].join(' / ')}`);
 const nosay = mv.from.filter((x) => x.unsaid);
 if (nosay.length) console.log(`  ${nosay.length} move${nosay.length === 1 ? 's' : ''} and nothing says how: ${nosay.slice(0, 4).map((x) => x.part).join(', ')}${nosay.length > 4 ? ` (+${nosay.length - 4})` : ''}`);

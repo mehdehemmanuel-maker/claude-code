@@ -314,6 +314,7 @@ function landmarksOf(side: number): Record<string, number[]> {
 const look = {
   parts: () => meshes.filter((m) => m.visible).map((m) => { const p = (m.userData.part ?? {}) as { mat?: string; finish?: string; says?: string; shell?: number }, b = new THREE.Box3().setFromObject(m); return { name: m.name, path: pathOf(m), mat: p.mat, finish: p.finish, color: hex(m), says: p.says, shell: p.shell, link: linkOfObj(m) || undefined, joint: (p as Part).joint, min: r3(b.min), max: r3(b.max), tris: (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position').count) / 3 }; }),
   facts: () => ({ name: part.name, says: (part as { says?: string }).says, size: r3(size), parts: meshes.length, made: (made as { says?: string }).says }),
+  // nobody calls this unasked: it answers about one pixel the asker names, so it has no verdict of its own to print.
   pick: (x: number, y: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera); const hit = ray.intersectObjects(meshes.filter((m) => m.visible), false)[0]; if (!hit) return null; const p = (hit.object.userData.part ?? {}) as { says?: string; mat?: string }; return { name: hit.object.name, path: pathOf(hit.object), at: r3(hit.point), distance: +hit.distance.toFixed(3), mat: p.mat, says: p.says }; },
   clash: (touch = 0.001) => meshClashes(meshes.filter((m) => m.visible).map(worldTris), { touch }),
   // where points of the thing fall in the picture (CSS pixels), and where a pixel falls on a plane z = const (the side
@@ -325,11 +326,13 @@ const look = {
   // nobody calls this: the inverse of `project`, and unused for the same reason.
   unproject: (px: number, py: number, z: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((px / innerWidth) * 2 - 1, -(py / innerHeight) * 2 + 1), camera); const t = (z - ray.ray.origin.z) / ray.ray.direction.z; return r3(ray.ray.origin.clone().addScaledVector(ray.ray.direction, t)); },
   // its landmarks on one side (+1 its right, as it faces forward, or -1 its left), from its parts as drawn
+  // nobody calls this unasked: it returns one side's coordinates for laying a photograph over the picture: data for a tool, not a verdict for a reader.
   landmarks: (side = 1) => landmarksOf(side),
   // what holds what: groups held by nothing, joints across which something rigid is laid, links that rub (critic.ts)
   held: () => { const ts = meshes.filter((m) => m.visible).map(worldTris); return held(ts, meshClashes(ts, { touch: 0.001 })); },
   // what a frame is built of: its body-in-white by structure alone, where loads come into it, each link's joints (critic.ts)
   frame: () => { const ts = meshes.filter((m) => m.visible).map(worldTris); return frame(ts, meshClashes(ts, { touch: 0.001 })); },
+  // nobody calls this unasked: it answers about two parts the asker names, so there is nothing to print until someone names them.
   gap: (a: string, b: string) => {
     // (the least distance between the parts so named, measured as the clash finder measures, so the two agree; the pairs
     // nearest by their boxes first, and given up on, said, after 20 s)
@@ -345,6 +348,7 @@ const look = {
 };
 // (each part cut by a plane: where each of its triangles crosses it, a segment, in the plane's two other axes, mm)
 const AX = { x: 0, y: 1, z: 2 } as const;
+// nobody calls this unasked: it cuts where the asker says, so it has no default plane of its own to print.
 const section = (axis: 'x' | 'y' | 'z', at: number) => {
   // (seen as a draughtsman draws it: across a car's section, z across and y up; along it, x across and y up; from above, x
   // across and z up)

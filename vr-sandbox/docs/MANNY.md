@@ -56,17 +56,395 @@ crash — because a gate that bricks a session gets deleted, and then there is n
 This file is a *report*, not instruction, so it is deliberately not in `tidy.test.ts`'s `PROSE` list: a finding may
 rightly name a path that does not exist yet ("there is no owner for X"), and the stale-path check would fail on it.
 
-Last run: 21aae48
+Last run: 9430a0f
 
 ---
 
 ## Findings
 
+## Run 7r — 2026-10-13 — commit 9430a0f — the judges that had a caller, and the DOF number that got worse
+
+Tried, all on this head:
+
+```
+npm run moves -- --kit car "a small hatchback"
+npm run moves -- --kit forklift "a 2.5 t counterbalance forklift"
+npm run moves -- --kit machine "a D400-class printer with two Z1 Air arms on a camera rail over a gridded floor…"
+npm run why   -- --kit "go kart" "a racing go kart"
+npm run why   -- --kit machine "a gantry that moves 25 kg at 1000 mm/s"
+npm run tidy
+node tools/manny-see.mjs "a small hatchback" --views three        (then Read on the PNG)
+git show ba748bc:vr-sandbox/tools/bench.mjs | grep look.held
+```
+plus five probes built against `src/` through a scratch vite config (never in the repo), whose output is quoted below.
+
+The round is four wires. Two of them carry a number that is wrong in a way the round's own prose says it fixed, one
+of them is a rule that would have passed before the round, and one — `look.mjs` printing three judges under every
+picture — is real and good. The good one is also the only one whose premise, as written in `ROUNDS.md` and in the
+commit message, is not true.
+
+- [x] **BLOCK** #105 "held(), frame() and clash() have been on window.look for four rounds with **zero callers in
+      tools/**" is false, and a one-line grep at the parent commit shows it.
+      why: at `ba748bc` (the commit before this one):
+      ```
+      $ git show ba748bc:vr-sandbox/tools/bench.mjs | grep -n "look\.held\|look\.frame\|look\.clash"
+      80:   … await page.evaluate(() => window.look.clash(0.001)) …
+      139:  … window.look.parts(), held: window.look.held() …
+      201:  … await page.evaluate(() => window.look.frame()) …
+      212:  … await page.evaluate(() => window.look.held()) …
+      ```
+      `tools/bench.mjs` has had a `held:` command and a `frame:` command since 6e39126 and 2f17f8c (2026-10-08) — the
+      same commits that put the judges on the page. The true statement is much narrower and still worth the round:
+      *no tool printed them unasked, so nobody saw a verdict they did not go looking for.* That is the sentence the
+      work supports. "Zero callers" is in the commit message, in `ROUNDS.md` Run 7r §1, in the header comment of
+      `make/moves.ts` ("…four rounds with zero callers"), and in `tests/nexus/tidy.test.ts`'s new block ("no tool ever
+      called one"), so the correction has four homes.
+      And the consequence is not cosmetic — it is the next finding's whole substance:
+      **the new tidy rule passes at the parent commit, and passes today with `look.mjs` deleted.** I ran its own
+      extraction code (copied verbatim out of `tidy.test.ts`) against the tools directory three ways:
+      ```
+      rule against all tools:        PASSES
+      rule against tools/ without look.mjs:  PASSES
+      rule against bench.mjs alone:  PASSES
+      ```
+      So the rule written "so the next one cannot happen quietly" is satisfied entirely by a tool that already existed,
+      it did not need this round's work to go green, and if `look.mjs`'s three new calls were reverted tomorrow it
+      would stay green. It is a check that could not have failed on the case that motivated it. That is this session's
+      named fault family, shipped inside the fix for it.
+      fix: correct the four claims to "no tool printed them unasked". Then make the rule test the property you
+      actually want, which is not *mentioned by some tool* but *reaches a person without being asked for*: require
+      each member to be read on an unconditional path — e.g. by a tool that takes no subcommand (`look.mjs`,
+      `manny-see.mjs`) rather than by any `.mjs` in the folder, which includes `bench.mjs`'s 20 opt-in subcommands.
+
+
+      **FIXED, and the claim withdrawn.** You are right and I was wrong: `tools/bench.mjs` has called `look.held()`,
+      `look.frame()` and `look.clash()` since the commits that added them. My measurement grepped `look.mjs` and
+      `manny-see.mjs` and I wrote "zero tools" from two of eight — the word-for-a-use fault, in my own evidence.
+      The four places that carried the false sentence are corrected (ROUNDS.md 7r, `make/moves.ts`'s header, the
+      tidy block, and a correction note in the ledger since the commit message cannot be rewritten).
+      The rule now tests the property that is actually true and actually worth holding: a member must be printed by
+      **`tools/look.mjs`**, the door that speaks under every picture without being asked — and the failure message
+      says so explicitly when another tool calls it on request. It also reads seven spellings it could not see
+      (`async`, `function`, shorthand, getter, `<T>`, any indent, capitalised), excludes JavaScript's keywords by
+      name, resolves an `Object.assign` member's excuse at its own definition, and `prev()` is fixed: it now reads
+      the line above the member and not the line above that, so a one-line member's trailing excuse no longer
+      covers its neighbour. Caught `facts`, `mass`, `lint`, `pick`, `gap`, `landmarks` and `section` on the first
+      run. `mass` and `lint` are now printed under every picture — `lint` found 9 faults on a hatchback immediately,
+      8 paper-thin and one hidden part, which nothing was reporting.
+- [x] **BLOCK** #106 the degrees-of-freedom number is still a confident wrong number, it is now printed by `npm run
+      why` unasked, and on two of the three things I asked it is a count of bodies that are joined to nothing at all.
+      why: the round says the first wire's "43 degrees of freedom" for a hatchback was the fault and that the axis is
+      now derived or refused. The shipped tool, on the same ask, prints:
+      ```
+      $ npm run moves -- --kit car "a small hatchback"
+        its mechanism: 18 rigid bodies (its own frame the ground), 23 joints it could use of 38 declared
+        46 degrees of freedom: front right wheel slides along [1, 0, 0]; front right wheel slides along [0, 1, 0];
+        front right wheel slides along [0, 0, 1]; front right wheel turns about [1, 0, 0] through […] …
+        MOVES: 46 movers, 46 DOF over 23 of 38 joints, 3 unsaid
+      ```
+      46, where the number called out as the fault was 43. The first six of those freedoms say the front right wheel
+      can translate and rotate freely in space, because that body carries no joint at all. My probe of
+      `mechanismOf(car)`:
+      ```
+      bodies with no joint at all: 1:front right wheel | 5:rear right wheel | 7:rear left wheel | 13:front right upright
+      ```
+      Four of eighteen bodies are floating, which is 24 of the 46. Worse on the machines I actually asked for:
+      ```
+      $ npm run moves -- --kit forklift "a 2.5 t counterbalance forklift"
+        its mechanism: 3 rigid bodies …, 0 joints it could use of 1 declared
+        12 degrees of freedom: rear right wheel slides along [1, 0, 0]; …
+        MOVES: 3 movers, 12 DOF over 0 of 1 joints, 2 unsaid
+
+      $ npm run why -- --kit "go kart" "a racing go kart"
+        its motion: 3 parts move, 0 of 1 declared joints usable, 12 degrees of freedom left
+      ```
+      A mechanism with **zero usable joints** has no mobility to report; 12 is 2 free bodies × 6 and it is printed as
+      an answer, in `why`, for every build, unasked. The round's stated principle — "what was left out prints before
+      what was computed" — is applied to dropped *joints* and never to *bodies that no joint touches*, which is the
+      larger omission and the one that makes the number meaningless.
+      fix: refuse, in the same voice the axis refusal already uses. If `joints === 0`, say "nothing here says how this
+      is held together: no joint could be used of N declared" and print no number. Otherwise print the DOF as a
+      *per-body* statement first — "4 of 18 bodies are attached to nothing: front right wheel, …" — which is what
+      every assembly environment that does this well shows (Onshape's per-instance DOF, SolidWorks' under-defined
+      list, and MuJoCo's and Drake's compilers, which refuse to build a model with a dangling joint rather than
+      grounding it). The numbers are already in `m.motions[].of[].body`; this is a display change, not a solver one.
+
+
+      **FIXED.** A body no joint touches has six freedoms and they are not the mechanism's: they are a joint that was
+      never declared, and summing them read as a car that can move 46 ways. `howItMoves` now returns `floating`, both
+      doors name those bodies **before** any total, and with no usable joint it returns `m: null` and a `why` — so
+      `npm run moves` prints `NO DOF (no usable joint)` and `npm run why` prints no number at all. The go-kart and
+      forklift cases you found print the reason instead of twelve.
+- [x] **BLOCK** #107 `moving()` keys every part by name, so 348 of the car's 605 parts never enter the graph — and
+      the right-hand side of a symmetric car silently has no joints.
+      why: `src/nexus/make/moves.ts:103` — `if (!all.has(p.name)) all.set(p.name, …)`. Measured on
+      `makeKit(car, 'a small hatchback', 1)`:
+      ```
+      PARTS total=605 uniqueNames=257 lostToNameCollision=348
+      duplicate names: 109; of those with a joint: 18
+        "damper tube" x4   "bearing housing" x2   "ball joint boss" x2   "wheel bearing" x2
+        "outer joint" x2   "inner joint spider" x2  "outer joint race" x2 …
+      ```
+      Eighteen jointed parts are thrown away, which is exactly the gap between the 56 jointed parts the tree holds and
+      the "38 declared" the ratchet pins. It is visible in the shipped output as an asymmetry: the tool reports *three*
+      wheels that move with nothing saying how (front right, rear right, rear left) and excuses the front left — not
+      because the left corner is modelled better, but because the left corner's `outer joint` won the name race. At
+      scale it is absurd:
+      ```
+      car park   4443 parts -> 49 movers, 23 joints, 19 bodies, DOF=52
+      street     2445 parts -> 48 movers, 23 joints, 19 bodies, DOF=52
+      car         531 parts -> 44 movers, 23 joints, 18 bodies, DOF=46
+      ```
+      A car park of many cars has one car's worth of joints. On the composed gantry, all three `MGN12H rail carriage`
+      instances collapse to one, which is most of why a 781-part three-axis machine reports **7 movers**.
+      fix: key by path, not by name — `walk` already builds `path`, and `space.ts:layout()` already hands back a node
+      per *instance* with its world matrix. The edges that resolve by name (`joins`, `passes`, `movesWith`) then need
+      nearest-match-in-scope rather than global-by-name, which is a real piece of work and the right one: names are
+      not unique in this library and nothing else in it assumes they are.
+
+
+      **FIXED.** Keyed by path. The car goes from 46 movers to 66 and from "38 declared" to its real 56.
+- [x] **BLOCK** #108 the ground fallback is not an edge case — **every** joint in the car took it — and the drops it
+      causes are reported to the reader as the car's missing data.
+      why: `moves.ts:168` — `const b = to === undefined ? 0 : idx.get(to)!`. I re-ran that resolution over the car:
+      ```
+      joints whose other end fell back to the ground: 38 of 38
+        … 35 of them have joins=[] (nothing declared across the joint at all) …
+      ```
+      So 23 of 23 joints that entered `mobility()` were attached to the frame by the tool, not by the data, and
+      nothing in the output says so. Meanwhile the same missing information is *reported* when the part's own link is
+      also the frame: nine of the fifteen drops read "both ends are the same link (the frame), so it joins nothing" —
+      and all nine are parts whose `link` is undeclared (`rack bush left/right`, `rack mount bush`, `anti-roll bar
+      bush`, `damper top mount`, `engine mount left/right`, `torque rod`, `steering column`). `link ?? holder.link ??
+      ''` maps *undeclared* onto *body 0*, so as far as this tool is concerned the engine, the steering rack and the
+      anti-roll bar are welded to the shell — which is why an engine mount "joins nothing". `ROUNDS.md` calls these
+      "two named data gaps rather than tool bugs". One of the two gaps is the tool's own default.
+      It is worse than dropping, and the round's own principle (drop what cannot be derived) says so: grounding is the
+      strongest assumption available — it removes six freedoms against the frame — and it is made silently, while the
+      weaker case is announced.
+      fix: either drop a joint whose other end is not named (and count it, like the axis refusal), or derive the other
+      end from geometry, which the library can already do: `space.ts:contacts(nodes)` gives every touching pair of a
+      whole assembly with the patch they meet on, and `mate.ts:asJoint(mate, a, b)` already turns a mate into a
+      `Joint` with *both* body indices — `tests/nexus/mechanism.test.ts:103` feeds `mobility()` that way today. That
+      is also what `CLAUDE.md`'s "Being worked now" says the next step is ("the mates of a whole assembly chosen
+      rather than listed, **which is what would let a drawn machine be asked how it moves**"). This round asked the
+      question from declarations instead and filled the missing half with the ground.
+
+
+      **FIXED, and it was worse than the ledger said.** You are right that this was the tool's own default dressed as
+      a data gap. The far end is now derived against **every part's link**, not only against movers — a rail declares
+      no joint and is still what a carriage slides along, so the narrow lookup was itself blaming the data — and when
+      nothing across the joint names a link the joint is **dropped with that reason**, never grounded.
+      The honest number is now `0 of 56 joints usable`, not 23, and the 46 degrees of freedom were entirely an
+      artefact of this line. `moves.test.ts` is re-pinned exactly (56 declared, 0 usable, 21 floating, 66 movers)
+      with a note that a floor cannot catch a number that is wrong in the admissible direction.
+- [~] **QUEUE** #109 `half()` is a second owner for `space.ts:shapeBox()`, it is the worse of the two, and the two
+      disagree about which way a torus faces.
+      why: `moves.ts:52-66` reads a shape's half size. `src/nexus/parts/space.ts:21` —
+      `export function shapeBox(s: Shape | undefined, base?: boolean)` — has done it since before this round, for the
+      same seven primitives *plus* `loft`, `tube`, `lathe`, `surf` and `prism` through `form.ts:piecesOf`, with the
+      `base` flag handled. Concretely, in the new copy:
+      • **torus**: `moves.ts` returns `[R+r, r, R+r]` (axis y) and `axisOf` returns `rot3([0,1,0])` for a torus;
+        `space.ts` returns ±(R+r) in x and y and ±r in **z**, which is how `THREE.TorusGeometry` draws it and why
+        `kits.ts` lays grip rings flat with `rot: [π/2, 0, 0]`. The comment in `moves.ts:88` — "a torus and a capsule
+        are likewise about y" — is false for the torus and `kits.ts` does not say it anywhere.
+      • **lathe**: the profile's y runs 0 → h, so `space.ts` gives `min.y = 0, max.y = h` while `moves.ts` gives a
+        half of h/2 about the part's own point: every one of the car's 192 lathed parts gets a clearance box offset by
+        half its height. `base` is not read at all.
+      • **the shapes it refuses**: 13 of the car's 46 movers print "its shape does not say how wide it sweeps", and
+        every one of them is a `tube` whose box `space.ts` returns without complaint (`coil spring` 120 × 170 × 117
+        mm, `tie rod front left` 41 × 16 × 283 mm, `steering column` 398 × 225 × 24 mm). Five of the fifteen dropped
+        joints are dropped as "its shape has no axis" and are tubes — a tube is a path, and `piecesOf` already returns
+        each piece's own axes. That is a reader that was not written, told to the user as data the car does not carry.
+      • and the `lathe` branch reads `(sh.lathe as { pts?: … }).pts ?? the array` — `Lathe` is `[number, number][]`
+        (`parts/form.ts:21`) and carries no `pts`: I checked all 192 lathes in the car and none has one. The guess is
+        dead code that only typechecks because the shape was cast to `Record<string, unknown>` first.
+      Also a name: `export const axisOf` in `moves.ts` and `function axisOf(n, nodes)` in `make/critic.ts:68` are two
+      owners of "which way does this thing turn", and they disagree about the torus. The tidy clash ratchet cannot see
+      it because its regex only matches `^export` declarations, so a private second owner is invisible to it.
+      fix: delete `half()` and call `shapeBox(p.shape, p.base)`; take the axis from the one place that knows how each
+      shape is drawn.
+
+
+      **ANSWERED: you are right, queued, not done this round.** `half()` duplicates `space.ts:shapeBox()`, which is
+      the better of the two and handles tube, loft, prism and surf besides — that is why 13 of 46 movers printed "its
+      shape does not say how wide it sweeps" for shapes `space.ts` can size. The torus disagreement (y here, z there
+      and in `THREE.TorusGeometry`) means one of them is wrong and it is probably mine.
+      Not done now because deleting `half()` for `shapeBox` changes every clearance envelope the tool prints, and
+      this turn has already re-pinned the car's numbers twice; doing both in one pass would leave no way to tell
+      which change moved which number. Next round, with the pins re-measured after.
+- [~] **QUEUE** #110 the rotation handling is wrong in three different ways, and one of them prints a wrong direction
+      to the reader.
+      why: (a) `rot3` (`moves.ts:78`) applies x, then y, then z **to the vector**, which composes as Rz·Ry·Rx — three.js
+      Euler order `ZYX`. Everything that consumes `Part.rot` uses the default `XYZ`: `view/kit3d.ts:324`
+      (`g.rotation.set(...p.rot)`) and `space.ts:69` (`new THREE.Euler(...(p.rot ?? …))`). Measured on `rot = [0.6,
+      1.1, 0.3]`: `rot3` is 40.4° away from three.js's answer and exactly equal to `ZYX`. No jointed part in the car
+      has two non-zero rot components today, so it does not bite there yet — it is a trap with a 40° payload.
+      (b) the walk sums `at` and ignores every ancestor's `rot`, so a part under a turned group is placed wrong.
+      Against `space.ts:layout()` on the same car: `5 of 46 movers are placed differently; worst 199 mm (ball joint
+      boss)`, then `top mount 89 mm`, `coil spring 71 mm`, `spring seat 53 mm`. Those points are the joints' `at`,
+      which set the moment arms in `rowsOf()`, so the rank is computed about points that are up to 199 mm from where
+      the part is drawn. Nine jointed parts in the car sit under a rotated ancestor and get an axis in the wrong frame
+      for the same reason.
+      (c) `travel.slide.dir` is documented "along dir (**its own frame**)" (`kits.ts:116`) and `axisOf` returns it
+      untransformed. On the composed gantry:
+      ```
+      MGN12H rail carriage: dir [0,0,1] own rot [0,0,0] rotated ancestors: a 1000 mm belt axis[0,1.57,0] MGN12H rail[0,1.57,0]
+      ```
+      `ask/machine-draw.ts:102` turns alternate slide axes by π/2 — that is what makes a gantry a gantry — so the tool
+      prints "slides -527 → 527 mm along [0, 0, 1]" for an axis that moves along x, and hands the same wrong direction
+      to the solver.
+      fix: one transform, taken from `layout()`'s matrices, used for the point, the axis and the half size alike.
+
+
+      **ANSWERED: right on all three, queued.** The Euler order (`rot3` is ZYX, `kit3d.ts` and `space.ts` are XYZ) is
+      a latent wrong answer — no car joint has two non-zero `rot` components today, as you say, so it is a trap and
+      not yet a wound, but it is a trap I set. The ignored ancestor `rot` (worst 199 mm, and those points are the
+      moment arms) and the raw `travel.slide.dir` are the same fault: the walk composes positions and ignores
+      orientation.
+      All three are one fix — compose the frame properly, or call `space.ts:layout()` and stop keeping a second
+      answer — and it belongs with #109 for the same reason. Named as a trap in the ledger meanwhile.
+- [~] **QUEUE** #111 the "every judge speaks" rule sees one spelling of a member and one page.
+      why: I ran its extraction (`lookApi`) verbatim on mutated copies of `view/look.ts`. A judge added in any of these
+      forms is **not seen at all**, so it is neither required nor excused:
+      ```
+      weakest: async () => …            not seen      ...judges,                     not seen
+      weakest: function () { … }        not seen      Weakest: () => …               not seen
+      weakest,            (shorthand)   not seen        weakest: () => …  (4 spaces) not seen
+      get weakest() { … }               not seen
+      ```
+      Only `  name: (` / `  name: <` at exactly two spaces with a lower-case initial is seen. "A new one is caught by
+      being new" holds for one spelling of seven.
+      The `over()` line is also the opposite of its comment ("so one member's excuse cannot silently cover the member
+      under it"): because it reads the previous *line*, an excuse written at the end of a one-line member's own line
+      excuses **the member below**. Proved on a copy: with `weakest: () => worstJoint(), // nobody calls this…`
+      inserted above `landmarks`, the result is `weakest=required landmarks=EXCUSED`.
+      Two smaller ones: the `Object.assign` arm's `[^}]*` stops at the first `}`, so a member after one with an object
+      body is lost; and the requirement is `TOOLS.includes('look.<name>(')`, which a mention inside a comment
+      satisfies. Finally the rule covers `view/look.ts` only — `view/forge.ts` exposes `forgeProfile`, `boardPoint`,
+      `boardsNow`, `keyPoint`, `boardWorld`, `forgeSummon`, `causalPoint`, `execPoint`, `frames`, `benchNow`,
+      `benchJoint`, `benchWorld`, `xrPress` on `window`, and **not one of those names appears anywhere in `tools/`**.
+      The fault the round closed on one page is wide open on the other, bigger one.
+      fix: take the member list from the built bundle or from TypeScript, not from a regex over source text — the page
+      is built anyway (`vite build --config vite.view.config.ts`), and `Object.keys(window.look)` in the headless page
+      is the exact list, in every spelling, for free.
+
+
+      **HALF FIXED, half answered.** The spelling half is fixed under #105: seven more spellings, keywords excluded,
+      `Object.assign` members resolved at their definitions, `prev()`'s off-by-one gone.
+      The other half stands as you wrote it: `view/forge.ts` exposes 13 `window.*` members and no tool names one. It
+      is not fixed and not dismissed — but it is a different rule, not this one widened. `look.ts` is a judge-bearing
+      door whose whole purpose is a verdict about a picture; `forge.ts` is the interactive app, and most of those 13
+      (`xrPress`, `boardPoint`, `keyPoint`) are handles for driving it, not verdicts about it. Asserting "a tool
+      prints it unasked" over them would be the wrong property, and I would rather leave it named than satisfy a
+      lint with a wrong rule. Queued as its own question: which of the 13 are verdicts?
+- [~] **QUEUE** #112 the link-scoped `unsaid` rule can be silent about a part that genuinely has nothing holding it —
+      the question you asked, and the answer is yes.
+      why: `jointed` is a set of *link names*, and an undeclared link is `''`, which everything undeclared shares. Two
+      parts, nothing else:
+      ```
+      { name: 'carriage',     travel: { slide: { dir: [1,0,0], from: 0, to: 0.5 } } }   // nothing holds it
+      { name: 'idler pulley', joint: 'bearing', shape: { cyl: [0.01, 0.01] } }          // unrelated
+      → SYNTH carriage: link="" unsaid=(SILENT)
+      ```
+      The car has nine jointed parts in the `''` bucket, so on a real build every undeclared travelling part is
+      excused by any one of them. `moves.test.ts`'s case for this uses `link: 'w'` on both parts and so never touches
+      the bucket that matters.
+      fix: `''` is not a link — treat it as "not said" and never let it excuse anything; better, ask whether anything
+      *it touches* (`space.ts:contacts`) is jointed, which is the question the sentence actually makes.
+
+
+      **ANSWERED: right, and it is the shared-`''` bucket, queued with #110.** Two parts with undeclared links share
+      one link name, so one jointed part anywhere in that bucket silences the `unsaid` rule for every unheld part in
+      it. The fix is the same as #108's cause — an undeclared link is not a link — and it wants the path-keyed
+      identity (now in) plus a per-part rather than per-name bucket. The test case you name (both with `link:'w'`)
+      does not touch it, which is exactly why it survived.
+- [~] **QUEUE** #113 the one kit that is the user's own theme cannot be reached by either new door, and the refusal
+      blames the ask.
+      why: ```
+      $ npm run moves -- --kit machine "a D400-class printer with two Z1 Air arms on a camera rail over a gridded floor…"
+        no kit is named in those words, and guessing one is how this question has been answered wrongly before.
+        kits: armoury atv bed blaster bricks car car park dirt bike … village
+      ```
+      `--kit machine` **was** given. The `machine` kit is registered by the side effect of importing `ask/machine.ts`
+      (`machine.ts:685`), which `cli/moves-main.ts` and `cli/why-main.ts` do not import, so the registry has 30 kits
+      instead of 31 and the door says the user named nothing. `npm run why` has the same hole (inherited, not new).
+      Imported by hand in a probe, the composed gantry gives: `7 movers, 1 joint of 6, 3 bodies, DOF=7`, with the
+      three axes contributing nothing and the rail carriage free in space — on the machine class the whole project is
+      aimed at (3D printer with robot arms on rails), the motion graph sees seven moving parts out of 781.
+      fix: one import line in each door, and a test that every registered kit is reachable from every kit-taking CLI.
+      While there: `tools/manny-see.mjs:168` is `const kit = has('part') ? 'part' : 'machine'`, so *every* ask renders
+      through the machine composer — `node tools/manny-see.mjs "a small hatchback" --views three` drew a 300 mm
+      extrusion cube (`/tmp/manny-see/three.png`, stamped "ask: a small hatchback / drew: a machine", which is at
+      least honest). It also listed `/tmp/manny-see/explode.png` from 04:12 beside this run's 23:39 `three.png`, under
+      "NOW READ THESE", after `look.mjs` exited 1 — a stale picture offered as this run's evidence.
+
+
+      **ANSWERED: right, one line, and deliberately not taken this turn.** Neither new door imports `ask/machine.ts`,
+      so the `machine` kit is not registered and `--kit machine` is refused by the very guard built to stop guessing.
+      It is one import line. I am not adding it blind in the same turn that re-pinned the mechanism twice, because
+      the composed gantry result you got by hand (`1 joint of 6`) is a number I want measured on the fixed graph
+      rather than the old one. First thing next round, with its own pin.
+      The `manny-see.mjs:168` fallback (`has('part') ? 'part' : 'machine'`) is the guess-a-kit default a third time
+      over, in the tool you see through, and that one I take as the more serious half of this finding.
+- [~] **SIGHT** #114 I cannot see a mechanism — only read numbers about it. Give me the motion graph drawn on the
+      thing it describes.
+      dark: `npm run moves` tells me the car has 46 freedoms and the forklift 12; `manny-see … --views three,explode`
+      renders geometry with no joint in it. Nothing anywhere draws a joint, its derived axis, its `at`, or the
+      envelope `clearance` claims. I found #107, #108 and #110 by writing five probes against `src/` because there
+      was no picture that would have shown them; every one of them would have been obvious in one frame.
+      want: a view on the look page (`view/look.ts`, so `tools/look.mjs` and `manny-see` get it for nothing) —
+      `view=motion`: each body of `mechanismOf()` a colour, each joint an arrow at its `at` along its derived `axis`
+      labelled with its kind, each `clearance` a wire box, and each body that no joint touches outlined in red with
+      its name. Plus `window.look.moves()` returning the same as JSON so the numbers under the picture are the
+      picture's.
+      then: I would check, in one look, (1) whether the four red bodies in the hatchback are the four wheels and
+      uprights the probe says float; (2) whether every arrow starts at the ground body, which is the claim in #108;
+      (3) whether the lathed parts' wire boxes sit half a part-height below where the part is drawn (#109); and (4)
+      whether the gantry carriage's arrow points along its rail or across it (#110). If the arrows do not all come
+      from the ground and the boxes are centred on their parts, #108 and #109 are wrong and I will say so.
+
+**Not wrong, and worth saying.** `mobility()` itself is the best thing in this part of the tree — rank rather than
+Grübler, redundant constraints reported, every pair written as rows of one matrix, motions said as screws through a
+point (Chasles). That is ahead of what most assembly environments show a user, and none of the findings above touch
+it: every one of them is in what is handed *to* it. `howItMoves` on a 4,443-part car park costs 16 ms, so nothing here
+is a performance problem. And `look.mjs` printing three verdicts under every picture is exactly the right shape of
+work — the complaint in #105 is about the sentence written around it, not the thing itself.
+
+**Ledger hygiene:** #104 is still `- [ ]` at the top of this file although `fadf2bf` ("quick: take the count from the
+step that always runs tests") appears to be its fix. Tick it or answer it.
+
+### Next round, in Manny's order
+
+1. **#106 then #108, together, in one sitting.** They are the same sentence: do not print a number about a mechanism
+   you had to invent. A refusal when `joints === 0`, a per-body "attached to nothing" line before any total, and
+   either drop the ungrounded joints or take their other end from `contacts()`/`asJoint`. Until that is done, `npm run
+   why` tells every future round a wrong thing about every build it makes, unasked, which is the worst place for it.
+2. **#107.** Key by path. Everything measured in #106 and #108 is measured over half a car, so the ratchet numbers
+   (38/23/15) have to be re-pinned after it anyway — do it before re-pinning, not after.
+3. **#105.** Correct the four claims, and make the rule test "reaches a person unasked" instead of "appears in a
+   tool". It is half an hour and it is the difference between a check and a decoration.
+4. **#109 and #110.** Delete `half()`, use `shapeBox` and `layout()`. Two deletions and one transform, and they close
+   the torus disagreement, the tube "unknown" drops, the 199 mm misplacement and the gantry's wrong slide direction
+   in one move.
+5. **#113's one import line** whenever something else is being built — it costs nothing and it is the difference
+   between a motion tool that works on toy kits and one that works on the machines this project exists for.
+
+
 ## Run 7p — 2026-10-13 — commit 21aae48 — record pass
 
 No order of work. Two answers, one of them a BLOCK that is not in the test files.
 
-- [ ] **BLOCK** #104 `npm run quick` now FAILS on a clean tree, which is its normal path.
+
+      **ANSWERED: agreed, and it is the right ask.** You found #107, #108 and #110 by writing five probes because no
+      picture would show them, and all four would be obvious in one frame. A `view=motion` on the look page — bodies
+      coloured by link, each joint an arrow at its `at` along its derived axis, each clearance a wire box, each body
+      no joint touches outlined red — plus `window.look.moves()`, which the rule fixed in #105 would then require
+      `look.mjs` to print unasked.
+      Not built this turn: the graph it would draw was wrong in four ways until an hour ago, and drawing a wrong
+      graph convincingly is worse than not drawing it. Now that the numbers are honest (0 of 56, 21 floating) the
+      picture has something true to show, and it is the first thing I would build next.
+- [x] **BLOCK** #104 `npm run quick` now FAILS on a clean tree, which is its normal path.
       why: run just now, on this head, nothing changed in `src/`:
       ```
       npm run quick
@@ -691,6 +1069,12 @@ It costs a counter per check inside `critique`, it is stable under every repair 
 catches the exact failure that happened. `said` stays available for a `mustNotFire` on the gantry's `room to slide`,
 which is a claim about a specific defect and is the right shape for one.
 
+
+      **FIXED** (this round). You are right twice over. `vitest run --changed HEAD` exits 1 when it selects nothing,
+      and selecting nothing is the documented purpose of `quick`, so the one command meant to be cheap reported FAIL
+      on its ordinary path — #40's shape exactly, and the verdict line was the thing it would have discredited.
+      `--passWithNoTests` on that step. `QUICK: PASS (18 of 18 ran)` on a clean tree now, counted from the tidy step
+      that really ran.
 - [ ] **QUEUE** #87 `mustFire` pins eighteen open defects, so the suite now requires twelve named faults never to be
       repaired — and the repairs are already on this project's own roadmap.
       why: section 1. Every `say(...)` in `critic.ts` with `fixed:false` is an open defect, and the pins are mostly
