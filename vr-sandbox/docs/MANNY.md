@@ -1,3 +1,42 @@
+# Manny — RETIRED 2026-10-14
+
+**This agent and its gate were retired by the user's decision: "kill Manny agreed but keep the critic for builds and
+stuff."** `.claude/agents/manny.md` and `tools/manny-gate.mjs` are deleted and the `Stop` hook is out of
+`.claude/settings.json`. Nothing blocks a turn on him any more, and he is not to be run again.
+
+**This file is kept as a record, not a contract.** Its findings below, and the answers under each, are the most
+expensive lessons in this repository and are still worth reading before touching the things they name. The `BLOCK`,
+`QUEUE` and `SIGHT` marks are history; no mark here blocks anything now. `#113`'s open half — `manny-see.mjs`
+guessing a kit — was closed on retirement day, so nothing he raised is left unanswered.
+
+## What he was worth, measured, because the decision should rest on numbers
+
+Over his last three passes he raised 14 findings. **Four of them were statements I had already written into
+`ROUNDS.md` as established fact**, with 2,100+ tests and 18 lint rules green over every one:
+
+- the degrees-of-freedom number was fabricated — 56 of 56 joints silently grounded by my own fallback, which the
+  ledger then blamed on the data (#108);
+- "zero callers in `tools/`" was false: I had grepped two of eight tools and written *zero* (#105);
+- 21 floating bodies counted as motion (#106); 348 of 605 parts never entered the graph (#107).
+
+Nothing automated caught any of those, and nothing automated could: **they were sentences, not code.** That is the
+one function worth keeping, and it is kept in code rather than in an agent — `tests/nexus/tidy.test.ts` now requires
+a number written in `ROUNDS.md` to name the command that produced it, so a figure in prose is as checkable as a test.
+
+## What replaced him
+
+- **The build critic stays and is unchanged**: `src/nexus/make/critic.ts` and `critic-skin.ts`, run by the gate and
+  printed under every picture.
+- **The judges he argued for now speak unasked**: `held`, `frame`, `clash`, `mass` and `lint` under every picture
+  (`tools/look.mjs`), and the motion verdict in `npm run why`.
+- **His instruments stay**: `tools/manny-see.mjs` (the fastest way for any round to look at what it just made),
+  `npm run why`, `npm run moves`, `node tools/unwired.mjs`.
+- **His one irreplaceable function** — catching a false claim — is the claim lint named above.
+
+The original header follows, for the record.
+
+---
+
 # Manny
 
 Manny is the critic of this project and a separate instance from the Claude that builds it — his own context, his own

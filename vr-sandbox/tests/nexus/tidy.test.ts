@@ -571,6 +571,77 @@ describe('every judge the picture owns speaks where a person meets it', () => {
   });
 });
 
+// A FIGURE QUOTED IN THE LEDGER NAMES THE COMMAND THAT PRODUCED IT. This is the one thing the retired critic agent
+// did that nothing else could, kept as a rule instead of as an agent (docs/MANNY.md's retirement note).
+//
+// Over his last three passes he raised 14 findings, and **four were statements already written into ROUNDS.md as
+// established fact** with 2,100 tests and 18 lint rules green over every one: a degrees-of-freedom number that was
+// entirely an artefact of my own fallback and that the ledger then blamed on the data; "zero callers in tools/",
+// written from a grep of two of eight tools; 21 floating bodies counted as motion; 348 of 605 parts never entering
+// the graph. None of those is code. **They were sentences, and nothing in this tree read sentences.**
+//
+// A count cannot be verified statically — but a pasted block of numbers can be required to say where it came from,
+// which is what makes it re-runnable by the next reader instead of quotable on trust. The faults this catches are
+// already recorded: `npm run why` named in prose before it existed, `npm run --silent` quoted as if run, and three
+// rounds whose output blocks nobody could reproduce without guessing the invocation.
+//
+// It is a RATCHET, like the other four, because the ledger already carries blocks that are hand-made tables rather
+// than tool output (a predicted-against-measured column, a tally of what rules caught against what looking caught).
+// Those are listed; the list may only shrink, and a new bare block fails by name.
+const LEDGER_CODE = /=>|^\s*(?:const|function|export|import|it\(|expect\()/m;
+const LEDGER_CMD = /\b(?:npm run [a-z:]+|node tools\/[\w.-]+|npx vitest|npx tsc|vitest run)\b/;
+/** Blocks of figures in ROUNDS.md that name no command: hand-made tables, not tool output. Only ever shorter. */
+const UNSOURCED: string[] = [
+  "saw('room to slide', 0)",
+  'declared      38     a part states a feature size',
+  '4 wheels                        6 findings',
+  'predicted   got',
+  '4-rotor drone battery · camera · foot 1–4',
+  'cited  critic.ts:246   as the `through` skip',
+  'rules    2   critic.ts over its line ratchet',
+  'all skipped →  FAIL (exit 0 but nothing ran',
+];
+
+describe('a figure quoted in the ledger says where it came from', () => {
+  const ROUNDS = read(join(ROOT, 'docs/ROUNDS.md'));
+  const blocks = () => {
+    const lines = ROUNDS.split('\n'), out: { at: number; body: string; above: string; first: string }[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^\s*```/.test(lines[i]!)) continue;
+      let j = i + 1;
+      while (j < lines.length && !/^\s*```\s*$/.test(lines[j]!)) j++;
+      const body = lines.slice(i + 1, j);
+      out.push({ at: i + 1, body: body.join('\n'), above: lines.slice(Math.max(0, i - 6), i).join('\n'), first: (body[0] ?? '').trim() });
+      i = j;
+    }
+    return out;
+  };
+  /** a block of figures: at least two lines carrying a number, and not a code sample */
+  const figures = () => blocks().filter((b) => b.body.split('\n').filter((l) => /\d/.test(l)).length >= 2 && !LEDGER_CODE.test(b.body));
+
+  it('every block of figures in ROUNDS.md names the command that produced it, or is on the list', () => {
+    const all = figures();
+    expect(all.length, 'no blocks of figures found at all, so this check would pass on nothing').toBeGreaterThan(8);
+    const bare = all.filter((b) => !LEDGER_CMD.test(b.body) && !LEDGER_CMD.test(b.above));
+    const unlisted = bare.filter((b) => !UNSOURCED.some((u) => b.first.startsWith(u)));
+    expect(unlisted.map((b) => `docs/ROUNDS.md:${b.at}  ${b.first.slice(0, 60)}`), 'a pasted block of figures with no command beside it cannot be re-run by the next reader, which is how four wrong numbers survived three rounds and a green gate. Name the command, or add it to UNSOURCED with the reason it is not tool output.').toEqual([]);
+  });
+  it('every UNSOURCED line still matches a bare block, so a fixed one cannot linger on the list', () => {
+    const bare = figures().filter((b) => !LEDGER_CMD.test(b.body) && !LEDGER_CMD.test(b.above));
+    for (const u of UNSOURCED) expect(bare.some((b) => b.first.startsWith(u)), `UNSOURCED names "${u}" and no bare block in ROUNDS.md starts with it: delete the line`).toBe(true);
+  });
+  it('every command a ledger block cites can actually be run', () => {
+    const pkg = JSON.parse(read(join(ROOT, 'package.json'))) as { scripts: Record<string, string> };
+    const named = new Set<string>();
+    for (const b of blocks()) for (const m of `${b.above}\n${b.body}`.matchAll(/\bnpm run ([a-z:]+)|\bnode (tools\/[\w.-]+)/g)) named.add(m[1] ? `script:${m[1]}` : `file:${m[2]}`);
+    expect(named.size, 'the reader found no commands, so it is checking nothing').toBeGreaterThan(2);
+    for (const n of [...named].sort()) {
+      if (n.startsWith('script:')) expect(Object.keys(pkg.scripts), `docs/ROUNDS.md cites \`npm run ${n.slice(7)}\`, which is not a script: a command named in prose and never run is how "npm run why" got quoted before it existed`).toContain(n.slice(7));
+      else expect(existsSync(join(ROOT, n.slice(5))), `docs/ROUNDS.md cites \`node ${n.slice(5)}\`, which does not exist`).toBe(true);
+    }
+  });
+});
+
 describe('nothing is written twice', () => {
   it('the set of repeated code fragments is exactly the set written down', () => {
     const where = new Map<string, string[]>();

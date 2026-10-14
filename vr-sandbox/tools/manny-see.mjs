@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // one pass, so a word that happens to equal an earlier one does not get eaten as a flag's value
-const TAKES = new Set(['views', 'out']);
+const TAKES = new Set(['views', 'out', 'kit']);
 const flags = new Map(); const rest = [];
 for (let i = 0, a = process.argv.slice(2); i < a.length; i++) {
   if (!a[i].startsWith('--')) { rest.push(a[i]); continue; }
@@ -165,7 +165,18 @@ const wanted = views.length ? views : DEFAULT;
 // part kit, whose words-to-part lookup falls back to a family's example — and seven runs of seven were judged on a
 // 400 mm MGN12H rail. The `machine` kit existed from the commit before last and this file was not changed with it,
 // which is how a tool can be told it works and not work (docs/MANNY.md #56).
-const kit = has('part') ? 'part' : 'machine';
+// AND IT NO LONGER GUESSES SILENTLY. `has('part') ? 'part' : 'machine'` made `machine` the answer whenever the words
+// named no kit, so "a small hatchback" drew a 300 mm extrusion cube and the run was judged on it — the third
+// instance of the default that lies, in the one tool a round looks through (docs/MANNY.md #113). `--kit <id>` now
+// says which, and with none given it still draws with `machine` (this tool's job is to LOOK, so refusing outright
+// would leave nothing to see) but says on its own line that the kit was a guess and what to pass instead.
+const kit = flag('kit') || (has('part') ? 'part' : 'machine');
+const guessedKit = !flag('kit') && !has('part');
+if (guessedKit) {
+  console.log(`kit: none named in those words, so the picture is drawn with the \`machine\` kit — that is a GUESS.`);
+  console.log(`     pass --kit <id> to choose (npm run why -- "<words>" lists every kit when it refuses to guess).`);
+  console.log('');
+}
 const q = (v) => {
   const w = `kit=${kit}&words=${encodeURIComponent(words)}`;
   if (v === 'explode') return `${w}&view=three&explode=4`;    // four levels deep: does it come apart into real parts?

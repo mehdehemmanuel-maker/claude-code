@@ -2331,6 +2331,7 @@ Four things were built, and all four were wires to work that already existed and
 three under every picture, and the first run on a hatchback said:
 
 ```
+$ node tools/look.mjs dist-view-dev <out> "hatch|kit=car&words=a%20small%20hatchback&view=three"
 held: 13 groups held by nothing, 0 joints with something rigid laid across, 8 links that rub
   worst float: 195 parts, 36.4 kg — 21 in steel rim, tyre 275/35R21, wheel disc
 frame: its sheet is 9 pieces joined by structure alone, the largest 35 parts / 32.4 kg
@@ -2382,6 +2383,7 @@ and a `prism` is drawn along z), carried round by the part's own `rot`. Anything
 and counted**, and what was left out is printed before what was computed:
 
 ```
+$ npm run moves -- --kit car "a small hatchback"      (this run's numbers; Run 7t and 7u changed them)
 its mechanism: 18 rigid bodies (its own frame the ground), 23 joints it could use of 38 declared
   15 left out, so the count below is of what is left:
     stub spindle left: nothing says which way its bearing acts: no slide direction declared and its shape has no axis
@@ -2450,6 +2452,7 @@ this session has been removing from other code all day.
   and the bar on a free hinge, and prints each one's verdict. Eleven `substrate/` files became reachable.
 
 ```
+$ npm run substrate
 the beam on two supports — a load at rest on a span, its section left free
   its system: 24 symbols bound, 17 left free (b, h, q); 3 constraints: a constraint CANNOT BE DECIDED
   its choice: 5 of 16 admissible → one picked
@@ -2572,3 +2575,52 @@ serious half of that finding: `manny-see.mjs` still guesses a kit, which is the 
 lies, in the tool the critic sees through.
 
 Gate: `GATE: PASS (2138 of 2138 ran) — 190.3s`.
+
+## Run 7v — the critic agent retired, and the one thing it did kept as a rule
+
+The user's decision, in their words: *"kill Manny agreed but keep the critic for builds and stuff."* So the two were
+separated, which they should have been from the start.
+
+**Gone:** the agent (`.claude/agents/manny.md`), its turn-blocking `Stop` hook (`tools/manny-gate.mjs`, and the hook
+entry out of `.claude/settings.json`), and the `BLOCK`/`QUEUE`/`SIGHT` contract that let a critic hold a turn open
+until a *feature* was built. That last power was the clearest mistake: the user had already said he was *"supposed to
+question thing and then ye"*, and a critic who can demand a build is setting the roadmap.
+
+**Kept, untouched:** the critic that judges builds — `make/critic.ts` and `critic-skin.ts`, running in the gate and
+printed under every picture — plus the judges this session made speak unasked (`held`, `frame`, `clash`, `mass`,
+`lint`) and the instruments (`npm run why`, `npm run moves`, `node tools/unwired.mjs`, `tools/manny-see.mjs`).
+
+### The measurement the decision rests on, and what had to replace him
+
+Over his last three passes he raised 14 findings, and **four were sentences already written into this file as
+established fact**, with 2,100+ tests and 18 lint rules green over every one: a degrees-of-freedom number that was
+entirely an artefact of my own silent fallback and that this ledger blamed on the data; *"zero callers in `tools/`"*,
+written from a grep of two of eight tools; 21 floating bodies counted as motion; 348 of 605 parts never entering the
+graph.
+
+**Nothing automated caught any of them, and nothing automated could: they were prose, and nothing in this tree read
+prose.** Retiring him without replacing that would have thrown away the only thing he did that the gate cannot.
+
+So `tidy.test.ts` gained the rule, as a fifth ratchet: **a block of figures in `ROUNDS.md` names the command that
+produced it**, in the block or within six lines above it, and **every command a ledger block cites must exist** — a
+script in `package.json`, a file on disk. A count still cannot be verified statically, but a pasted figure can be
+made re-runnable by the next reader instead of quotable on trust.
+
+Its first run found **15 blocks of figures in this file and 10 with no command beside them.** Three were genuinely
+tool output and got their commands (the `held`/`frame`/`clash` block, the mechanism block, the substrate block); the
+other eight are hand-made tables — a predicted-against-measured column, the tally of what rules caught against what
+looking caught — and are listed in `UNSOURCED`, which may only shrink, with a second test that fails when a listed
+line stops matching so a fixed one cannot linger. Both halves were mutation-tested: a bare block of figures fails by
+line number, and a block citing a script that package.json does not have fails by name — which the older
+`every npm script the prose names` rule then proved on this very entry, where the example was first written out in
+full and caught as a script that does not exist. The lint reading the lint's own write-up is the shape this file keeps
+asking for.
+
+**And the last thing he raised was closed on the way out.** `manny-see.mjs` chose its kit with
+`has('part') ? 'part' : 'machine'`, so words naming no kit drew with `machine` — which is how *"a small hatchback"*
+was once judged on a 300 mm extrusion cube. It takes `--kit <id>` now, and without one it still draws (the tool's job
+is to look, so refusing outright would leave nothing to see) but says on its own line that the kit was a **guess**
+and what to pass instead. That was the third instance of the default that lies, in the one tool a round looks through.
+
+Nothing he raised is left unanswered. `docs/MANNY.md` keeps every finding as a record, with a header saying it is no
+longer a contract and that no mark in it blocks anything.
