@@ -213,3 +213,19 @@ ones. Both of those were faults in its own first drafts, each found by checking 
 answer was already known: it called `mobility` live on the strength of the string `'mobility'` in a comment, and
 called `world/creatures.ts` unreachable because the import that runs it has no `from` clause. A census only earns
 belief by being checked against what is already certain.
+
+## `npm run substrate` — the Nexus engine's only door
+
+```
+npm run substrate                  every slice: the beam, the bracket, the swinging bar
+npm run substrate -- beam          one of them
+```
+
+Runs each slice of `src/nexus/substrate/` end to end and prints its verdict: how many symbols its system bound, how
+many it left free, whether every constraint holds or one cannot be decided, and what its choice came to out of the
+catalogue. Before this existed, **no entry point reached any of those twenty files** — `node tools/unwired.mjs` found
+the whole directory unreachable, so every export in it was finished work only its own test could run.
+
+It starts no Jolt (that lives in `tests/conformance/helpers`), so a realization is reported as not attempted rather
+than as absent. Eleven `substrate/` files are reachable through it; eleven more are not, and they are named in
+`docs/ROUNDS.md` Run 7s rather than quietly left out.
