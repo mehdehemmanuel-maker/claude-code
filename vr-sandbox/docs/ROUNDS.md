@@ -2645,7 +2645,7 @@ data. The result:
 
 ```
 $ npm run moves -- --kit car "a small hatchback"
-its mechanism: 19 rigid bodies (its own frame the ground), 43 joints it could use of 56 declared
+its mechanism: 24 rigid bodies (its own frame the ground), 43 joints it could use of 56 declared
   of those, 0 had the thing across them NAMED by the part, and 43 were found by what the part is drawn TOUCHING
   46 degrees of freedom: front left wheel turns about [0, 0, 1] through [1.407, 0.334, -0.762]; front left inner
   joint turns about [0, 0, 1] …; front left drive shaft turns about [0, 0, 1] …
@@ -2669,3 +2669,58 @@ the part's own centre wins. That is a regression case now, along with one provin
 labelled `declared`, and one proving a part touching nothing in another link is still dropped with its reason.
 
 Pins re-measured and exact: 56 declared, 43 usable, 53 from touching, 3 floating, 66 movers, 13 dropped.
+
+**Correction, by `node tools/cite.mjs` (Run 7x), an hour after this was written:** the block above first said *19*
+rigid bodies. The real number is 24. I had typed a figure into a block presented as command output, and the claim
+lint accepted it because a command was named — which is exactly the hole I flagged when I built that lint, proved on
+myself in the first entry written after it.
+
+## Run 7x — the citation checked, and a cost I assumed that was not there
+
+Two tool questions this round, and the first answer was "do nothing", which is the point of measuring.
+
+### The cost I was about to optimise does not exist
+
+Every door rebuilds the bundle before it runs, and I was going to cache that. Measured first:
+
+```
+$ node tools/cite.mjs --list        (and three timed runs of the build and the door)
+cold build:          1932 ms
+rebuild, no change:  1083 ms
+run built door:      2057 ms
+```
+
+The build is **one second** of a three-second command, and the door's own work is the larger half. A cache would have
+saved a third of a second and added a staleness bug to every tool. **Not built.** I had carried "30–60 s" in my head
+from nothing, and the only reason it did not become a day's work is that timing it took ninety seconds.
+
+### The hole I flagged in my own lint, closed
+
+Run 7v's claim rule makes a block of figures name its command. I said plainly at the time that it catches a *missing*
+citation and not a *wrong* one. That hole was then proved on me inside the hour: Run 7w's first draft cited
+`node tools/unwired.mjs` for numbers a deleted probe had produced, and the lint accepted it.
+
+`npm run cite` re-runs them. It takes the figures out of each cited block (two digits or more, so a version or a line
+number is not mistaken for a measurement), runs the command, and reports whether those figures are still in its
+output. A block the ledger marks historical reads as `historic` rather than drift, because an old round's numbers are
+supposed to have moved — without that it would fire on its ordinary path, which is the fault that teaches a reader to
+ignore the alarm (Run 7o). It is a door, not a gate: the gate keeps the cheap half (a command is named and exists),
+this is the expensive half, run when a round wants its figures trusted.
+
+**Its first run found one.** Run 7w's own block said **19 rigid bodies**; the command says **24**. A figure typed into
+a block presented as command output — in the first ledger entry written after the lint built to stop exactly that.
+Corrected above, with a note at the entry saying what caught it.
+
+```
+$ npm run cite
+holds    :2454  npm run substrate   (3 figures still in its output)
+historic :2385  npm run moves -- --kit car "a small hatchback"
+           2 of 4 figures have moved on, as the ledger says they did
+holds    :2646  npm run moves -- --kit car "a small hatchback"   (7 figures still in its output)
+CITE: 2 hold, 1 historical, 0 DRIFTED, 0 would not run, 3 skipped, of 6 citations
+```
+
+**The pattern worth keeping from both halves:** the lint that checks prose caught the write-up of the lint that
+checks prose, and the tool that checks citations caught its own round's citation. Each rule's first real catch has
+been the round that built it. That is not luck — it is that a new rule is written at the moment its author is least
+able to see the fault, and the only cure is a rule that does not depend on seeing it.

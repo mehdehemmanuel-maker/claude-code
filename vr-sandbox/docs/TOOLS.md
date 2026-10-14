@@ -240,3 +240,33 @@ the whole directory unreachable, so every export in it was finished work only it
 It starts no Jolt (that lives in `tests/conformance/helpers`), so a realization is reported as not attempted rather
 than as absent. Eleven `substrate/` files are reachable through it; eleven more are not, and they are named in
 `docs/ROUNDS.md` Run 7s rather than quietly left out.
+
+## `npm run cite` — re-runs what the ledger cites, and checks its figures still come out
+
+```
+npm run cite              every citation it can run
+npm run cite -- --list    what it would run, and what it cannot
+npm run cite -- moves     only citations whose command matches /moves/
+```
+
+`tidy`'s claim rule makes a block of figures in `ROUNDS.md` name the command that produced it. That catches a
+**missing** citation. It does not catch a **wrong** one — and that hole was proved on its author within the hour:
+Run 7w's first draft cited `node tools/unwired.mjs` for numbers a deleted probe had produced, and the lint accepted
+it because a command was present.
+
+So this runs them. For each cited block it takes out the figures (two digits or more — a version or a line number is
+not a measurement), runs the command, and says whether those figures are still in its output: `holds`,
+`DRIFTED` with the figures that are gone, or `SKIP` with the reason (a placeholder only a person can fill, a probe
+the ledger says was deleted, nothing of two digits to check).
+
+**A block the ledger itself marks historical is not drift.** An old round's numbers are *supposed* to differ from
+today's — that is what a ledger is for — so a note like *"Run 7t and 7u changed them"* reads as `historic`. Without
+that it would cry on its ordinary path, which is the fault that teaches a reader to ignore the tool.
+
+It is a **door and not a gate**: these take minutes and one needs a browser, so in `npm run gate` it would make the
+gate unusable and the rule would be deleted inside a week. The gate holds the cheap half (a command is named, and it
+exists); this holds the expensive half, run when a round quotes figures it wants trusted.
+
+Its first run found a real one: Run 7w's own block said **19** rigid bodies where the command says **24** — a figure
+typed into a block presented as output, in the first entry written after the lint that was supposed to stop exactly
+that.
