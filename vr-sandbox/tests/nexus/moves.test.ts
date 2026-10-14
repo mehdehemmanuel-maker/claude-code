@@ -110,27 +110,60 @@ describe('what moves, and what it needs', () => {
   });
 });
 
+describe('a far end the part does not name is read off what it touches', () => {
+  it('the NEAREST contact in another link wins, not the first', () => {
+    // Taking the first touching part in another link married a right-hand CV spider to the LEFT-hand drive shaft:
+    // "first" over a car is an accident of iteration order. A joint acts against what it meets where it is, so the
+    // contact whose middle is closest to the part's own centre is the one taken (docs/ROUNDS.md Run 7w).
+    const root: Part = { name: 'rig', parts: [
+      P('near plate', { link: 'near', shape: { box: [0.04, 0.04, 0.04] }, at: [0.03, 0, 0] }),
+      P('pin', { link: 'shaft', joint: 'bearing', shape: { cyl: [0.01, 0.04] }, rot: [0, 0, Math.PI / 2] }),
+      P('far plate', { link: 'far', shape: { box: [0.04, 0.04, 0.04] }, at: [-0.03, 0, 0] }),
+    ] };
+    const { joints, bodies, from } = mechanismOf(root);
+    const pin = from.find((x) => x.part === 'pin')!;
+    expect(pin.farFrom, 'it names nothing it joins, so the far end comes from the drawing').toBe('touching');
+    expect(joints, 'one usable joint').toHaveLength(1);
+    // both plates touch the pin; the joint must land on one of them and not on the frame
+    const other = bodies[joints[0]!.a === bodies.findIndex((b) => b.name === 'shaft') ? joints[0]!.b : joints[0]!.a]!;
+    expect(['near', 'far'], 'the far end must be a plate, not the thing own frame').toContain(other.name);
+  });
+  it('a part that names its far end is still labelled as having named it', () => {
+    const root: Part = { name: 'rig', parts: [
+      P('block', { link: 'carriage', joint: 'bearing', joins: ['rail'], shape: { cyl: [0.02, 0.05] } }),
+      P('rail', { link: 'bed' }),
+    ] };
+    expect(mechanismOf(root).from.find((x) => x.part === 'block')?.farFrom).toBe('declared');
+  });
+  it('a jointed part touching nothing in another link is still dropped, with the reason', () => {
+    const root: Part = { name: 'rig', parts: [P('lonely', { link: 'a', joint: 'bearing', shape: { cyl: [0.01, 0.02] }, at: [5, 5, 5] })] };
+    const { joints, dropped } = mechanismOf(root);
+    expect(joints).toHaveLength(0);
+    expect(dropped[0]!.why).toMatch(/drawn touching nothing in another link/);
+  });
+});
+
 describe("a real car's mechanism, pinned exactly", () => {
   const car = KITS.find((k) => k.id === 'car')!;
-  const { m, joints, dropped, from, floating, why } = howItMoves(makeKit(car, 'a small hatchback', 1).part);
+  const { m, joints, dropped, from, floating, said, touched } = howItMoves(makeKit(car, 'a small hatchback', 1).part);
   it('every number is pinned exactly, because a floor here hid a fabricated answer for a whole round', () => {
-    // First written as `joints >= 23` with `dropped <= 15`. Both passed, and both were measuring a lie: the graph was
-    // keyed by part NAME, so 348 of the car's 605 parts were never looked at (hence "38 declared" for a car that
-    // declares 56), and every joint whose other end was undeclared was silently attached to the car's own frame —
-    // **56 of 56** — which is where the "46 degrees of freedom" came from. A floor cannot catch a number that is
-    // wrong in the admissible direction. So these are exact: each one must be re-pinned by hand, with the ledger
-    // entry that says why it moved (docs/MANNY.md #106–#108).
+    // A floor cannot catch a number wrong in the admissible direction: `joints >= 23` passed while the real answer
+    // was 0 and the 23 were my own fallback grounding every joint to the shell (docs/MANNY.md #106-#108). Exact, and
+    // moved by hand with a ledger line saying why.
     expect(joints + dropped.length, 'the car declares this many joints').toBe(56);
-    expect(joints, 'NONE is usable yet: no part names a link across its joint. Raising this is the next real step').toBe(0);
-    expect(floating.length, 'rigid bodies no joint touches — absent joints, not motion').toBe(21);
+    expect(joints, 'usable: 0 before the far end was read off the drawing, 43 after').toBe(43);
+    expect(said, 'not one of the 56 names a link across its joint — the whole reason the geometry is read').toBe(0);
+    expect(touched, 'far ends the drawing supplied').toBe(53);
+    expect(floating.length, 'rigid bodies no joint touches: 21 before, 3 after').toBe(3);
     expect(from.length, 'moving parts').toBe(66);
   });
-  it('with no usable joint it reports no mobility at all, and says why', () => {
-    expect(m, 'a mechanism with no joint has no freedoms to count; printing a number anyway is the fault this guards').toBe(null);
-    expect(why).toMatch(/not one usable joint/);
+  it('it reports a real mobility now, and says it in words', () => {
+    expect(m, 'with 43 usable joints there is a mechanism to count').not.toBe(null);
+    expect(m!.dof).toBeGreaterThan(0);
+    expect(m!.says).toMatch(/degree/);
   });
   it('every dropped joint says what is missing, and none is silently grounded', () => {
-    expect(dropped.length).toBe(56);
-    for (const d of dropped) expect(d.why, `${d.part} was dropped with no reason`).toMatch(/nothing (says which way|it joins names)|both ends are the same link/);
+    expect(dropped.length).toBe(13);
+    for (const d of dropped) expect(d.why, `${d.part} was dropped with no reason`).toMatch(/nothing says which way|cannot be found|both ends are the same link/);
   });
 });

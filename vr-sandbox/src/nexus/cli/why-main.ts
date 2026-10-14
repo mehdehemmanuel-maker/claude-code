@@ -91,7 +91,7 @@ console.log(`WHY: ${open.length} open`);
 // how many move with nothing saying how. `npm run moves` gives the detail; nobody has to know to ask for the verdict.
 const mv = howItMoves(made.part);
 console.log('');
-console.log(`its motion: ${mv.from.length} parts move, ${mv.joints} of ${mv.joints + mv.dropped.length} declared joints usable${mv.m ? `, ${mv.m.dof} degrees of freedom left` : ''}`);
+console.log(`its motion: ${mv.from.length} parts move, ${mv.joints} of ${mv.joints + mv.dropped.length} declared joints usable (${mv.said} named across, ${mv.touched} read off what they touch)${mv.m ? `, ${mv.m.dof} degrees of freedom left` : ''}`);
 // no usable joint means no mechanism, and a degrees-of-freedom number printed anyway would be this door telling every
 // future round something false about every build, unasked — which is the worst place for it (docs/MANNY.md #106)
 if (!mv.m) console.log(`  ${mv.why}`);

@@ -190,8 +190,19 @@ direction, or from the one axis a solid of revolution has by construction; anyth
 listed, with the count of what was left out printed *before* the count of what was computed. `npm run why` prints the
 one-line version of the same thing unasked.
 
-Its coverage is ratcheted by `tests/nexus/moves.test.ts`: a car declares 38 joints, 23 are usable, 15 are not, and
-each of those is a part that does not say which way its joint acts or does not name anything across it.
+**It reads the far end off the drawing when the part does not name one.** `joins` is written by hand and mostly is
+not: of a car's 56 jointed parts, **none** names a link across its joint, so on declarations alone the tool could
+build no mechanism at all — honest, and useless. `space.ts:contacts()` finds what meets what over the layout this
+already walks (605 nodes, 1,324 contacts, 58 ms), and a bearing's far end is the thing it MEETS in another link.
+That took the car from **0 usable joints to 43 of 56**, and its floating bodies from 21 to 3.
+
+Each joint says which of the two gave it its far end — `43 of 56 joints (0 named, 53 from touching)` — because a
+joint whose other end the part itself names is worth more than one read off geometry, and a reader who cannot tell
+them apart cannot weigh the count. The contact taken is the **nearest** one, not the first: taking the first
+touching part in another link married a right-hand CV spider to the left-hand drive shaft.
+
+Its numbers are pinned exactly by `tests/nexus/moves.test.ts` — 56 declared, 43 usable, 53 from touching, 3 floating,
+66 movers — and moved by hand with a ledger line, because a floor once hid a fabricated answer for a whole round.
 
 ## `node tools/unwired.mjs` — what is built and cannot be reached
 

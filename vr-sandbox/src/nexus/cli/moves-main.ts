@@ -38,7 +38,7 @@ if (!named) {
 }
 
 const { part } = makeKit(named, words, seed);
-const { m, bodies, joints, from, dropped, floating, why } = howItMoves(part);
+const { m, bodies, joints, from, dropped, floating, said, touched, why } = howItMoves(part);
 const shown = only ? from.filter((x) => new RegExp(only, 'i').test(x.part)) : from;
 
 console.log(`moves: ${part.name} (kit=${named.id}, seed=${seed})`);
@@ -59,6 +59,9 @@ if (shown.length > Number(process.env.MOVES_MAX ?? 24)) console.log(`  … ${sho
 const unsaid = from.filter((x) => x.unsaid);
 console.log('');
 console.log(`its mechanism: ${bodies} rigid ${bodies === 1 ? 'body' : 'bodies'} (its own frame the ground), ${joints} joint${joints === 1 ? '' : 's'} it could use of ${joints + dropped.length} declared`);
+// WHERE EACH FAR END CAME FROM, kept apart on purpose: a joint whose other end the part itself names is worth more
+// than one read off what it is drawn touching, and a reader who cannot tell them apart cannot weigh the count.
+console.log(`  of those, ${said} had the thing across them NAMED by the part, and ${touched} were found by what the part is drawn TOUCHING (${joints ? ((touched / joints) * 100).toFixed(0) : 0}% from the drawing rather than the data)`);
 if (dropped.length) {
   // NOT SILENTLY: a DOF count over the joints that happened to be usable, printed as if it were the mechanism's, is
   // the confident wrong number this whole session is about. What was left out is said before what was computed.
@@ -78,4 +81,4 @@ else {
   if (m.redundant) console.log(`  (Grübler's formula would say ${m.grubler}; the rank says ${m.dof}, which is why the formula is not used)`);
 }
 console.log(`  ${unsaid.length} part${unsaid.length === 1 ? '' : 's'} move${unsaid.length === 1 ? 's' : ''} and nothing says how${unsaid.length ? `: ${unsaid.slice(0, 5).map((x) => x.part).join(', ')}` : ''}`);
-console.log(`MOVES: ${from.length} movers, ${m ? `${m.dof} DOF` : 'NO DOF (no usable joint)'} over ${joints} of ${joints + dropped.length} joints, ${floating.length} bodies held by nothing, ${unsaid.length} unsaid`);
+console.log(`MOVES: ${from.length} movers, ${m ? `${m.dof} DOF` : 'NO DOF (no usable joint)'} over ${joints} of ${joints + dropped.length} joints (${said} named, ${touched} from touching), ${floating.length} bodies held by nothing, ${unsaid.length} unsaid`);

@@ -2624,3 +2624,48 @@ and what to pass instead. That was the third instance of the default that lies, 
 
 Nothing he raised is left unanswered. `docs/MANNY.md` keeps every finding as a record, with a header saying it is no
 longer a contract and that no mark in it blocks anything.
+
+## Run 7w — the motion tool stops refusing: the far end read off the drawing
+
+`npm run moves` was honest and useless. On declarations alone it reported **0 of 56 joints usable** for a car,
+because `joins` is hand-written and not one of the 56 jointed parts names a link across its joint. A tool that can
+only say "I cannot" is not superior to one that lies; it is just safer.
+
+**The drawing knows what the data does not.** `space.ts:contacts()` finds what meets what, over the very layout
+`moves.ts` already walks. Measured before building anything:
+
+```
+$ npx vitest run tests/nexus/zz_probe_contacts.test.ts     (a probe, deleted after measuring, as probes are)
+605 nodes, 1324 contacts in 58 ms
+jointed parts: 56   far end declared: 0   far end from TOUCHING: 53   still none: 3
+```
+
+So a bearing's far end is **the thing it meets in another link** — a derivation from the geometry, not a guess at the
+data. The result:
+
+```
+$ npm run moves -- --kit car "a small hatchback"
+its mechanism: 19 rigid bodies (its own frame the ground), 43 joints it could use of 56 declared
+  of those, 0 had the thing across them NAMED by the part, and 43 were found by what the part is drawn TOUCHING
+  46 degrees of freedom: front left wheel turns about [0, 0, 1] through [1.407, 0.334, -0.762]; front left inner
+  joint turns about [0, 0, 1] …; front left drive shaft turns about [0, 0, 1] …
+  3 rigid bodies are touched by no joint at all: rear right wheel, rear left wheel, front anti-roll bar
+```
+
+**0 → 43 usable joints. 21 → 3 floating bodies.** And the motions now read as a mechanism rather than a list of free
+bodies: a wheel turning on its own axis, a drive shaft and its inner joint turning together.
+
+### Two things kept it honest
+
+**The two sources are never merged into one number.** Every line says `0 named, 53 from touching`, because a joint
+whose other end the part itself declares is stronger evidence than one read off geometry, and a count that hides the
+difference cannot be weighed. The ledger's own figure above is the proof: the interesting fact about this car is not
+the 43, it is that **zero** of its parts say what their joints act against.
+
+**The nearest contact, not the first.** The probe caught it before it shipped: taking the first touching part in
+another link married a right-hand CV spider to the **left**-hand drive shaft, because "first" over 605 parts is an
+accident of iteration order. A joint acts against what it meets *where it is*, so the contact whose middle is nearest
+the part's own centre wins. That is a regression case now, along with one proving a declared far end is still
+labelled `declared`, and one proving a part touching nothing in another link is still dropped with its reason.
+
+Pins re-measured and exact: 56 declared, 43 usable, 53 from touching, 3 floating, 66 movers, 13 dropped.

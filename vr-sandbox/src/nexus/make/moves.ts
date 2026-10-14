@@ -25,7 +25,7 @@
 // is reported as exactly that, which is the finding worth having.
 import * as THREE from 'three';
 import type { Part, V3 } from '../parts/kits';
-import { layout, type Node } from '../parts/space';
+import { layout, contacts, type Node } from '../parts/space';
 import { mobility, type Body, type Joint, type JointKind, type Mobility } from '../parts/mechanism';
 
 /** What a joint leaves free. A bearing or a hinge turns; a bush and a rubber mount are compliant but located, so they
@@ -49,6 +49,7 @@ export interface Moving {
   /** the envelope its sweep needs kept clear: a half-size about its own point, m */ clearance?: { about: V3; half: V3; says: string };
   /** nothing says how this moves, and that is the finding */ unsaid?: string;
   /** its placed node, so a later pass derives from the one layout instead of recomposing the frame by hand */ node: Node;
+  /** how the thing across its joint was found: what it declares, or what it is drawn touching */ farFrom?: 'declared' | 'touching';
 }
 
 const add = (s: string[], v?: string | string[]) => { for (const t of Array.isArray(v) ? v : v ? [v] : []) if (!s.includes(t)) s.push(t); };
@@ -204,8 +205,38 @@ export function mechanismOf(root: Part): { bodies: Body[]; joints: Joint[]; from
     for (const q of p.parts ?? []) walkLinks(q, l);
   };
   walkLinks(root, '');
+
+  // WHAT IT IS DRAWN TOUCHING, WHEN IT DECLARES NOTHING. `joins` is written by hand and mostly is not: of a car's 56
+  // jointed parts, **0** named a link across their joint, so every joint was dropped and the tool could report no
+  // mechanism at all — honest, and useless. The drawing knows: `space.ts:contacts()` finds what meets what over the
+  // same layout this file already walks (605 nodes, 1,324 contacts, 58 ms), and a bearing's far end is the thing it
+  // MEETS in another link. That is a derivation from the geometry, not a guess at the data, and every joint says
+  // which of the two gave it its far end so a reader can tell them apart.
+  //
+  // It is the NEAREST contact, not the first. Taking the first touching part in another link married a right-hand
+  // CV spider to the left-hand drive shaft, because "first" over a car is an accident of iteration order. A joint
+  // acts against what it meets *where it is*, so the contact whose middle is closest to the part's own centre wins.
+  const nodes = layout(root), met = new Map<string, { to: string; d2: number }[]>();
+  for (const c of contacts(nodes)) {
+    for (const [one, two] of [[c.a, c.b], [c.b, c.a]] as const) {
+      const ctr = one.box?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3().setFromMatrixPosition(one.m);
+      const d2 = ctr.distanceToSquared(c.mid);
+      const list = met.get(one.p.name) ?? [];
+      list.push({ to: two.p.name, d2 });
+      met.set(one.p.name, list);
+    }
+  }
+  for (const list of met.values()) list.sort((x, y) => x.d2 - y.d2);
+  const touching = (part: string, mine: string): string | undefined =>
+    (met.get(part) ?? []).map((x) => linkOf.get(x.to)).find((l) => l !== undefined && l !== mine);
+
   for (const m of from) if (m.link && !idx.has(m.link)) { idx.set(m.link, bodies.length); bodies.push({ name: m.link, at: m.at }); }
-  for (const m of from) for (const n of m.connectedTo) { const l = linkOf.get(n); if (l && !idx.has(l)) { idx.set(l, bodies.length); bodies.push({ name: l, at: m.at }); } }
+  for (const m of from) {
+    for (const n of m.connectedTo) { const l = linkOf.get(n); if (l !== undefined && !idx.has(l)) { idx.set(l, bodies.length); bodies.push({ name: l, at: m.at }); } }
+    if (!m.leaves) continue;
+    const t = touching(m.part, m.link);
+    if (t !== undefined && !idx.has(t)) { idx.set(t, bodies.length); bodies.push({ name: t, at: m.at }); }
+  }
   const joints: Joint[] = [], dropped: { part: string; why: string }[] = [];
   for (const m of from) {
     if (!m.leaves) continue;
@@ -217,8 +248,10 @@ export function mechanismOf(root: Part): { bodies: Body[]; joints: Joint[]; from
     // silently, which makes the engine, the rack and the anti-roll bar welded to the shell and is why an engine mount
     // "joins nothing". The same missing data was being *announced* when the part's own link was also undeclared, so
     // the tool reported one half of its own default as a data gap and hid the other (docs/MANNY.md #108).
-    const to = m.connectedTo.map((n) => linkOf.get(n)).find((l) => l !== undefined && l !== m.link && idx.has(l));
-    if (to === undefined) { dropped.push({ part: m.part, why: `nothing it joins names a link of its own, so what its ${m.joint} acts against is not said${m.connectedTo.length ? '' : ' (it names nothing it joins at all)'}` }); continue; }
+    const said = m.connectedTo.map((n) => linkOf.get(n)).find((l) => l !== undefined && l !== m.link && idx.has(l));
+    const to = said ?? touching(m.part, m.link);
+    if (to === undefined) { dropped.push({ part: m.part, why: `nothing it joins names a link of its own and it is drawn touching nothing in another link, so what its ${m.joint} acts against cannot be found${m.connectedTo.length ? '' : ' (it names nothing it joins at all)'}` }); continue; }
+    m.farFrom = said !== undefined ? 'declared' : 'touching';
     const b = idx.get(to)!;
     if (a === b) { dropped.push({ part: m.part, why: `both ends are the same link (${m.link || 'the frame'}), so it joins nothing` }); continue; }
     const axis = jointAxis(m.node, m.leaves);
@@ -229,7 +262,7 @@ export function mechanismOf(root: Part): { bodies: Body[]; joints: Joint[]; from
 }
 
 /** How many ways what moves can still move, and what that says. `mobility()`'s own verdict, carried out to a reader. */
-export function howItMoves(root: Part): { m: Mobility | null; bodies: number; joints: number; from: Moving[]; dropped: { part: string; why: string }[]; floating: string[]; why?: string } {
+export function howItMoves(root: Part): { m: Mobility | null; bodies: number; joints: number; from: Moving[]; dropped: { part: string; why: string }[]; floating: string[]; said: number; touched: number; why?: string } {
   const { bodies, joints, from, dropped } = mechanismOf(root);
   // A BODY NO JOINT TOUCHES IS NOT A DEGREE OF FREEDOM, IT IS A MISSING JOINT. `mobility()` is right to give a free
   // body six freedoms — that is what its rank means — but reporting their sum as "the mechanism has 46 degrees of
@@ -238,6 +271,7 @@ export function howItMoves(root: Part): { m: Mobility | null; bodies: number; jo
   // first, and with no usable joint there is no mobility to report at all (docs/MANNY.md #106).
   const touched = new Set(joints.flatMap((j) => [j.a, j.b]));
   const floating = bodies.map((b, i) => (touched.has(i) || b.fixed ? null : b.name)).filter((n): n is string => n !== null);
-  if (!joints.length) return { m: null, bodies: bodies.length, joints: 0, from, dropped, floating, why: `${bodies.length - 1} rigid ${bodies.length === 2 ? 'body' : 'bodies'} and not one usable joint between them, so there is no mechanism to count the freedoms of` };
-  return { m: mobility(bodies, joints), bodies: bodies.length, joints: joints.length, from, dropped, floating };
+  const said = from.filter((x) => x.farFrom === 'declared').length, fromTouch = from.filter((x) => x.farFrom === 'touching').length;
+  if (!joints.length) return { m: null, bodies: bodies.length, joints: 0, from, dropped, floating, said, touched: fromTouch, why: `${bodies.length - 1} rigid ${bodies.length === 2 ? 'body' : 'bodies'} and not one usable joint between them, so there is no mechanism to count the freedoms of` };
+  return { m: mobility(bodies, joints), bodies: bodies.length, joints: joints.length, from, dropped, floating, said, touched: fromTouch };
 }
