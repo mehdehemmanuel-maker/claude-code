@@ -22,6 +22,11 @@
 // because a repeated ratio is one bug and a spread of them is many; and last, the checks that looked at NOTHING,
 // which is the difference between "it is fine" and "nobody asked" (`Looked`, src/nexus/make/critic.ts).
 import { KITS, makeKit } from '../parts/kits';
+// the kits that register themselves on import, which `view/look.ts` and `view/forge.ts` already pull in for the same
+// reason: without these two the `machine` kit does not exist and `--kit machine` is refused by the very guard built
+// to stop a door guessing — the user's own composed-machine theme, unreachable from both new doors (docs/MANNY.md #113)
+import '../world/creatures';
+import '../ask/machine';
 import { perfect } from '../make/pipeline';
 import { howItMoves } from '../make/moves';
 import type { Finding } from '../make/critic';

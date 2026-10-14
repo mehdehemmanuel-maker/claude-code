@@ -23,7 +23,9 @@
 // Each is derived from a declaration, never from a name: the name list is the fault two rounds of this session were
 // spent removing from `critic.ts`'s `turning()`. A part that moves and says nothing about how is not guessed at — it
 // is reported as exactly that, which is the finding worth having.
+import * as THREE from 'three';
 import type { Part, V3 } from '../parts/kits';
+import { layout, type Node } from '../parts/space';
 import { mobility, type Body, type Joint, type JointKind, type Mobility } from '../parts/mechanism';
 
 /** What a joint leaves free. A bearing or a hinge turns; a bush and a rubber mount are compliant but located, so they
@@ -46,7 +48,7 @@ export interface Moving {
   /** how far it goes, in the units it is said in */ range: string[];
   /** the envelope its sweep needs kept clear: a half-size about its own point, m */ clearance?: { about: V3; half: V3; says: string };
   /** nothing says how this moves, and that is the finding */ unsaid?: string;
-  /** the part itself, so a later pass derives from declarations instead of re-guessing from the name */ src: Part;
+  /** its placed node, so a later pass derives from the one layout instead of recomposing the frame by hand */ node: Node;
 }
 
 const add = (s: string[], v?: string | string[]) => { for (const t of Array.isArray(v) ? v : v ? [v] : []) if (!s.includes(t)) s.push(t); };
@@ -55,44 +57,45 @@ const add = (s: string[], v?: string | string[]) => { for (const t of Array.isAr
 // so every arm, bush and ball joint printed "⌀NaN swept" on the first run. A shape it does not know returns null, and
 // a null is said as not known rather than drawn as zero: a zero half-size is a part that needs no room, which is a
 // lie, and `Math.max` of an undefined is the NaN that made it visible.
-const half = (p: Part): V3 | null => {
+// ITS HALF-SIZE AND ITS AXIS, FROM THE ONE OWNER OF BOTH. This file first wrote its own `half()` over the shape
+// kinds and its own `rot3()` over Euler angles, and both were wrong: `half()` read `{ cyl: { r, h } }` and
+// `{ sph: { r } }`, neither of which exists, so every bush and ball joint printed "NaN"; and when that was fixed it
+// still could not size a `tube`, a `loft`, a `prism` or a `surf`, so 13 of a car's 46 movers said "its shape does
+// not say how wide it sweeps" about shapes `space.ts` sizes exactly. `rot3` composed Rz·Ry·Rx — three.js's `ZYX` —
+// while `space.ts:layout()` and the renderer both use the default `XYZ`: 40° apart on a part turned about two axes,
+// a trap waiting for the first joint with two non-zero `rot` components. And neither looked at an ANCESTOR's
+// rotation at all, so 5 of 46 movers were placed up to 199 mm from where they are drawn — and those points are the
+// joints' `at`, which is to say the moment arms the solver works from (docs/MANNY.md #109, #110).
+//
+// `space.ts` already owned all of it: `shapeBox` for every shape kind in its own frame, `layout` for the composed
+// world matrix of every part under every ancestor. So this file keeps no second answer. A joint's axis is the local
+// axis the shape declares, carried into the world by that matrix — which is the whole of what "derived, not guessed"
+// was supposed to mean, and was not, while the carrying was written here by hand.
+const LOCAL_AXIS: Record<string, V3> = { y: [0, 1, 0], z: [0, 0, 1] };
+
+/** The axis a joint turns or slides about, in world, DERIVED and never guessed: a declared slide direction carried
+ *  out of the part's own frame, or the one axis a solid of revolution has by construction. Null when the shape
+ *  cannot say, and a null is reported rather than replaced. */
+/** Which of its own axes the shape declares its joint about: 'y' for anything spun or drawn along y, 'z' for a torus
+ *  or a prism, null when the shape cannot say. Separate from `jointAxis` because a sweep is measured ACROSS the axis
+ *  in the part's own frame, where its two other half-sizes are, and not across a world box that holds its length. */
+export const localAxisOf = (p: Part): 'y' | 'z' | null => {
   const sh = p.shape as Record<string, unknown> | undefined;
   if (!sh) return null;
-  if ('box' in sh) return (sh.box as V3).map((v) => v / 2) as V3;
-  if ('cyl' in sh) { const [r, h, r2] = sh.cyl as [number, number, number?]; const R = Math.max(r, r2 ?? r); return [R, h / 2, R]; }
-  if ('cone' in sh) { const [r, h] = sh.cone as [number, number]; return [r, h / 2, r]; }
-  if ('sphere' in sh) { const r = sh.sphere as number; return [r, r, r]; }
-  if ('capsule' in sh) { const [r, h] = sh.capsule as [number, number]; return [r, h / 2 + r, r]; }
-  if ('torus' in sh) { const [R, r] = sh.torus as [number, number]; return [R + r, r, R + r]; }
-  // a lathe is a profile of [radius, height] spun about y: its half-size is its widest radius and its height
-  if ('lathe' in sh) { const pr = (sh.lathe as { pts?: [number, number][] }).pts ?? (sh.lathe as unknown as [number, number][]); if (!Array.isArray(pr) || !pr.length) return null; const R = Math.max(...pr.map((q) => Math.abs(q[0]))), ys = pr.map((q) => q[1]); return [R, (Math.max(...ys) - Math.min(...ys)) / 2, R]; }
+  if ('cyl' in sh || 'cone' in sh || 'lathe' in sh || 'capsule' in sh) return 'y';
+  if ('torus' in sh || 'prism' in sh) return 'z';
   return null;
 };
 
-/** The axis a joint turns or slides about, DERIVED and never guessed. A slide's is the direction its travel declares;
- *  a turning part's is its own cylinder's axis (local +y) carried round by its `rot`. Anything else returns null and
- *  its joint is left out of the mechanism and counted, because a degrees-of-freedom number computed about made-up
- *  axes is worse than no number: it is a confident wrong one, and this session's whole fault family is checks that
- *  cannot fail. What the count then reports is the measured gap — how many joints could not say which way they act. */
-const rot3 = (v: V3, r?: V3): V3 => {
-  if (!r) return v;
-  const [a, b, c] = r, C = Math.cos, S = Math.sin;
-  let [x, y, z] = v;
-  [y, z] = [y * C(a) - z * S(a), y * S(a) + z * C(a)];
-  [x, z] = [x * C(b) + z * S(b), -x * S(b) + z * C(b)];
-  [x, y] = [x * C(c) - y * S(c), x * S(c) + y * C(c)];
-  return [x, y, z];
-};
-export const axisOf = (p: Part, leaves: JointKind): V3 | null => {
-  if (leaves === 'spherical') return [0, 1, 0];                       // a ball turns any way: its rows do not use one
-  if (p.travel?.slide) return p.travel.slide.dir;
-  const sh = p.shape as Record<string, unknown> | undefined;
-  // every shape here states its own axis in `kits.ts`'s own words: a lathe is "a profile of [radius, height] spun
-  // about y", a torus and a capsule are likewise about y, a prism is "drawn along z". A bearing is lathed — it is a
-  // solid of revolution, which has exactly one axis by construction — so reading only `cyl` and `cone` dropped every
-  // bearing, race and spindle in the car: 22 of 38 joints, which is why the first DOF count was 61 and meaningless.
-  if (sh && ('cyl' in sh || 'cone' in sh || 'lathe' in sh || 'torus' in sh || 'capsule' in sh)) return rot3([0, 1, 0], p.rot);
-  if (sh && 'prism' in sh) return rot3([0, 0, 1], p.rot);
+export const jointAxis = (n: Node, leaves: JointKind): V3 | null => {
+  const dir = (v: V3): V3 => { const w = new THREE.Vector3(...v).transformDirection(n.m); return [w.x, w.y, w.z]; };
+  if (leaves === 'spherical') return dir(LOCAL_AXIS.y!);         // a ball turns any way: its rows do not use one
+  if (n.p.travel?.slide) return dir(n.p.travel.slide.dir);        // declared in its own frame, so carried out of it
+  const sh = n.p.shape as Record<string, unknown> | undefined;
+  // each of these states its own axis in kits.ts's and space.ts's own words: a lathe is "a profile of [radius,
+  // height] spun about y"; a cylinder, cone and capsule are along y; a torus is round z; a prism is drawn along z
+  if (sh && ('cyl' in sh || 'cone' in sh || 'lathe' in sh || 'capsule' in sh)) return dir(LOCAL_AXIS.y!);
+  if (sh && ('torus' in sh || 'prism' in sh)) return dir(LOCAL_AXIS.z!);
   return null;
 };
 
@@ -103,13 +106,15 @@ export function moving(root: Part): Moving[] {
   // onto one entry and 348 of a car's 605 parts were never looked at — which is why a symmetric car reported its left
   // and right corners differently and why a 4,443-part car park reported the same 23 joints as one car (docs/MANNY.md
   // #107). Names are kept only to resolve the edges, because `joins` and `passes` are written as names.
-  const all: { p: Part; path: string; at: V3; holder?: Part }[] = [];
-  const walk = (p: Part, path: string, at: V3, holder?: Part) => {
-    const here: V3 = [at[0] + (p.at?.[0] ?? 0), at[1] + (p.at?.[1] ?? 0), at[2] + (p.at?.[2] ?? 0)];
-    all.push({ p, path, at: here, holder });
-    for (const q of p.parts ?? []) walk(q, `${path}/${q.name}`, here, p);
-  };
-  walk(root, root.name, [0, 0, 0]);
+  // `space.ts:layout()` composes every part's world matrix under every ancestor and boxes its shape, so this file
+  // keeps no walk of its own. The hand-written walk it replaces summed `at` down the tree and ignored every
+  // ancestor's `rot`, which put 5 of a car's 46 movers up to 199 mm from where they are drawn — and those points
+  // are the joints' `at`, the moment arms the solver works from (docs/MANNY.md #110).
+  const all = layout(root).map((n) => {
+    const ctr = n.box ? n.box.getCenter(new THREE.Vector3()) : new THREE.Vector3().setFromMatrixPosition(n.m);
+    const names: string[] = []; for (let o: Node | null = n; o; o = o.parent) names.unshift(o.p.name);
+    return { n, p: n.p, path: names.join('/'), at: [ctr.x, ctr.y, ctr.z] as V3, holder: n.parent?.p };
+  });
   const byName = new Map<string, typeof all[number]>();
   for (const e of all) if (!byName.has(e.p.name)) byName.set(e.p.name, e);
 
@@ -120,13 +125,13 @@ export function moving(root: Part): Moving[] {
   const through = new Map<string, string[]>();
   for (const { p } of all) for (const t of p.passes ?? []) through.set(t, [...(through.get(t) ?? []), p.name]);
 
-  for (const { p, path, at, holder } of all) {
+  for (const { n, p, path, at, holder } of all) {
     const leaves = p.joint ? LEAVES[p.joint] : null;
     const slid = p.travel?.slide, goes = !!p.travel || !!p.movesWith;
     if (!p.joint && !goes) continue;              // it says nothing about moving, so it is not a mover
     if (p.joint === 'cover' && !goes) continue;   // a bellows follows what it covers and joins nothing
 
-    const m: Moving = { src: p, part: p.name, path, at, joint: p.joint, leaves: leaves ?? undefined, link: p.link ?? holder?.link ?? '', connectedTo: [], movesWithin: [], constrainedBy: [], transfersForceTo: [], range: [] };
+    const m: Moving = { node: n, part: p.name, path, at, joint: p.joint, leaves: leaves ?? undefined, link: p.link ?? holder?.link ?? '', connectedTo: [], movesWithin: [], constrainedBy: [], transfersForceTo: [], range: [] };
     add(m.connectedTo, p.joins);
     add(m.movesWithin, through.get(p.name));
     if (holder) add(m.movesWithin, holder.name);
@@ -141,11 +146,26 @@ export function moving(root: Part): Moving[] {
     // A `slide` and a `spring` leave it PRISMATIC and do not turn: the first draft printed "turns about its own axis"
     // for every jointed part, damper rods and coil springs included, because it asked whether the part had a joint
     // rather than whether that joint leaves a turn.
-    const h = half(p), sweep: V3 | null = h ? ([...h] as V3) : null;
+    // its half-size in WORLD, from the box `layout` already built for it: oriented by every ancestor, and sized for
+    // tubes, lofts, prisms and surfaces that this file's own `half()` could not size at all
+    const hv = n.box ? n.box.getSize(new THREE.Vector3()).multiplyScalar(0.5) : null;
+    const h: V3 | null = hv ? [hv.x, hv.y, hv.z] : null, sweep: V3 | null = h ? ([...h] as V3) : null;
     if (p.travel?.steer) { m.range.push(`steered ±${((p.travel.steer * 180) / Math.PI).toFixed(1)}°`); if (h && sweep) { const reach = Math.hypot(h[0], h[2]); sweep[0] = Math.max(sweep[0], reach); sweep[2] = Math.max(sweep[2], reach); } }
     if (p.travel?.bump) { m.range.push(`risen ±${(p.travel.bump * 1000).toFixed(0)} mm in bump`); if (sweep) sweep[1] += p.travel.bump; }
-    if (slid) { const d = slid.to - slid.from; m.range.push(`slides ${(slid.from * 1000).toFixed(0)} → ${(slid.to * 1000).toFixed(0)} mm along [${slid.dir.join(', ')}]`); if (sweep) for (let c = 0; c < 3; c++) sweep[c]! += Math.abs(slid.dir[c]! * d) / 2; }
-    if (TURNS_FREE.has(leaves ?? 'fixed') && !p.travel) { if (h && sweep) { const r = Math.max(h[0], h[2]); m.range.push(`turns about its own axis (⌀${(r * 2000).toFixed(1)} swept)`); sweep[0] = r; sweep[2] = r; } else m.range.push('turns about its own axis (its shape does not say how wide it sweeps)'); }
+    // `travel.slide.dir` is declared in the part's OWN frame, and was being printed raw: on a composed gantry whose
+    // carriage sits under ancestors turned a quarter turn, the tool said "slides along [0,0,1]" for an axis that
+    // moves along x. It is carried into the world here, by the same matrix as the joint's axis.
+    if (slid) { const d = slid.to - slid.from, wd = jointAxis(n, 'prismatic') ?? slid.dir; m.range.push(`slides ${(slid.from * 1000).toFixed(0)} → ${(slid.to * 1000).toFixed(0)} mm along [${wd.map((v) => +v.toFixed(3)).join(', ')}]`); if (sweep) for (let c = 0; c < 3; c++) sweep[c]! += Math.abs(wd[c]! * d) / 2; }
+    // A TURN SWEEPS ACROSS ITS AXIS, NOT ACROSS THE WORLD BOX. Taking the world box's x and z gave a steering column
+    // a 398 mm swept diameter, which is its LENGTH: the column lies along x, so its own length became the circle it
+    // turns. The radius is the larger of the two half-sizes PERPENDICULAR to its axis, measured in the part's own
+    // frame, which is where `space.ts:shapeBox` puts them.
+    const la = localAxisOf(p), lb = n.local;
+    if (TURNS_FREE.has(leaves ?? 'fixed') && !p.travel) {
+      const perp = la && lb ? (la === 'y' ? [lb.max.x - lb.min.x, lb.max.z - lb.min.z] : [lb.max.x - lb.min.x, lb.max.y - lb.min.y]) : null;
+      if (perp) { const r = Math.max(...perp) / 2; m.range.push(`turns about its own axis (⌀${(r * 2000).toFixed(1)} swept)`); if (sweep && h) { const across = la === 'y' ? [0, 2] : [0, 1]; for (const c of across) sweep[c] = Math.max(sweep[c]!, r); } }
+      else m.range.push('turns about its own axis (its shape does not say which axis, so how wide it sweeps is not said)');
+    }
     if (h && sweep && sweep.some((v, i) => v > h[i]!)) m.clearance = { about: at, half: sweep, says: `${m.range.join(', ')}: ${sweep.map((v) => (v * 2000).toFixed(0)).join(' × ')} mm must stay clear of anything not carried with it` };
 
     // THE FINDING WORTH HAVING. Not "this looks like it moves", which is the name list; but "this says it moves and
@@ -159,8 +179,12 @@ export function moving(root: Part): Moving[] {
   // the hub beside it, both of one rigid link, so asking the part alone called every wheel on every car unheld — four
   // findings that were an artefact of where the declaration lives. The question is whether anything in its own link
   // says what holds it, which is the same question asked at the right scale.
-  const jointed = new Set(out.filter((x) => x.leaves).map((x) => x.link));
-  for (const m of out) if (m.unsaid === 'travel') m.unsaid = jointed.has(m.link) ? undefined : `it declares travel and nothing in its link${m.link ? ` (${m.link})` : ''} says what holds it while it travels`;
+  // AN UNDECLARED LINK IS NOT A LINK. Every part that declares none shares the name `''`, so one jointed part
+  // anywhere in that bucket silenced this rule for every unheld part in it — a carriage with nothing holding it went
+  // unreported because an unrelated idler pulley happened to be jointed (docs/MANNY.md #112). Only a DECLARED link
+  // can vouch for a part, and a part with none is answered on its own.
+  const jointed = new Set(out.filter((x) => x.leaves && x.link).map((x) => x.link));
+  for (const m of out) if (m.unsaid === 'travel') m.unsaid = m.link && jointed.has(m.link) ? undefined : `it declares travel and nothing${m.link ? ` in its link (${m.link})` : ' it declares'} says what holds it while it travels${m.link ? '' : ', and it declares no link either'}`;
   return out;
 }
 
@@ -197,7 +221,7 @@ export function mechanismOf(root: Part): { bodies: Body[]; joints: Joint[]; from
     if (to === undefined) { dropped.push({ part: m.part, why: `nothing it joins names a link of its own, so what its ${m.joint} acts against is not said${m.connectedTo.length ? '' : ' (it names nothing it joins at all)'}` }); continue; }
     const b = idx.get(to)!;
     if (a === b) { dropped.push({ part: m.part, why: `both ends are the same link (${m.link || 'the frame'}), so it joins nothing` }); continue; }
-    const axis = axisOf(m.src, m.leaves);
+    const axis = jointAxis(m.node, m.leaves);
     if (!axis) { dropped.push({ part: m.part, why: `nothing says which way its ${m.joint} acts: no slide direction declared and its shape has no axis` }); continue; }
     joints.push({ kind: m.leaves, a, b, at: m.at, axis, says: `${m.part}: ${m.joint}` });
   }

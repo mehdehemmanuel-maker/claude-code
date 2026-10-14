@@ -238,7 +238,7 @@ commit message, is not true.
       The honest number is now `0 of 56 joints usable`, not 23, and the 46 degrees of freedom were entirely an
       artefact of this line. `moves.test.ts` is re-pinned exactly (56 declared, 0 usable, 21 floating, 66 movers)
       with a note that a floor cannot catch a number that is wrong in the admissible direction.
-- [~] **QUEUE** #109 `half()` is a second owner for `space.ts:shapeBox()`, it is the worse of the two, and the two
+- [x] **QUEUE** #109 `half()` is a second owner for `space.ts:shapeBox()`, it is the worse of the two, and the two
       disagree about which way a torus faces.
       why: `moves.ts:52-66` reads a shape's half size. `src/nexus/parts/space.ts:21` —
       `export function shapeBox(s: Shape | undefined, base?: boolean)` — has done it since before this round, for the
@@ -273,7 +273,15 @@ commit message, is not true.
       Not done now because deleting `half()` for `shapeBox` changes every clearance envelope the tool prints, and
       this turn has already re-pinned the car's numbers twice; doing both in one pass would leave no way to tell
       which change moved which number. Next round, with the pins re-measured after.
-- [~] **QUEUE** #110 the rotation handling is wrong in three different ways, and one of them prints a wrong direction
+
+      **FIXED (Run 7u).** `half()` is gone. `shapeBox` and `layout` are the only owners: every mover's box and world
+      matrix now come from `space.ts`, so the torus disagreement is settled in its favour (it was mine that was
+      wrong) and the 13 movers that said "its shape does not say how wide it sweeps" are **0** — tubes, lofts,
+      prisms and surfaces all size exactly now. One more fault surfaced the moment the boxes were right: a steering
+      column reported a **398 mm swept diameter**, which is its length, because a world box holds a part's length
+      along whichever axis it lies. A turn sweeps ACROSS its axis, so the radius is now the larger of the two
+      half-sizes perpendicular to it, measured in the part's own frame. A hub bearing reads ⌀60.3 mm.
+- [x] **QUEUE** #110 the rotation handling is wrong in three different ways, and one of them prints a wrong direction
       to the reader.
       why: (a) `rot3` (`moves.ts:78`) applies x, then y, then z **to the vector**, which composes as Rz·Ry·Rx — three.js
       Euler order `ZYX`. Everything that consumes `Part.rot` uses the default `XYZ`: `view/kit3d.ts:324`
@@ -304,6 +312,14 @@ commit message, is not true.
       orientation.
       All three are one fix — compose the frame properly, or call `space.ts:layout()` and stop keeping a second
       answer — and it belongs with #109 for the same reason. Named as a trap in the ledger meanwhile.
+
+      **FIXED (Run 7u), all three.** `rot3` is gone with `half()`: the axis is the local axis the shape declares,
+      carried into the world by `layout`'s composed matrix — so the Euler order is three.js's own by construction
+      rather than by my agreeing with it, every ancestor's rotation counts, and `travel.slide.dir` is carried out of
+      the part's frame instead of printed raw. Three regression cases pin exactly what was wrong: a carriage under a
+      quarter-turned gantry (its own +z must read as world +x), and a part turned about `[0.6, 1.1, 0.3]` asserted
+      against `new THREE.Vector3(0,1,0).applyEuler(...)` — the renderer's own answer, so the order cannot drift
+      apart again without the gate saying so.
 - [~] **QUEUE** #111 the "every judge speaks" rule sees one spelling of a member and one page.
       why: I ran its extraction (`lookApi`) verbatim on mutated copies of `view/look.ts`. A judge added in any of these
       forms is **not seen at all**, so it is neither required nor excused:
@@ -338,7 +354,7 @@ commit message, is not true.
       (`xrPress`, `boardPoint`, `keyPoint`) are handles for driving it, not verdicts about it. Asserting "a tool
       prints it unasked" over them would be the wrong property, and I would rather leave it named than satisfy a
       lint with a wrong rule. Queued as its own question: which of the 13 are verdicts?
-- [~] **QUEUE** #112 the link-scoped `unsaid` rule can be silent about a part that genuinely has nothing holding it —
+- [x] **QUEUE** #112 the link-scoped `unsaid` rule can be silent about a part that genuinely has nothing holding it —
       the question you asked, and the answer is yes.
       why: `jointed` is a set of *link names*, and an undeclared link is `''`, which everything undeclared shares. Two
       parts, nothing else:
@@ -359,7 +375,11 @@ commit message, is not true.
       it. The fix is the same as #108's cause — an undeclared link is not a link — and it wants the path-keyed
       identity (now in) plus a per-part rather than per-name bucket. The test case you name (both with `link:'w'`)
       does not touch it, which is exactly why it survived.
-- [~] **QUEUE** #113 the one kit that is the user's own theme cannot be reached by either new door, and the refusal
+
+      **FIXED (Run 7u).** Only a DECLARED link can vouch for a part now; a part with none is answered on its own and
+      says so (`and it declares no link either`). Your two-part synthetic is the test case, near enough verbatim:
+      a carriage with travel and no link, beside an unrelated jointed idler pulley.
+- [x] **QUEUE** #113 the one kit that is the user's own theme cannot be reached by either new door, and the refusal
       blames the ask.
       why: ```
       $ npm run moves -- --kit machine "a D400-class printer with two Z1 Air arms on a camera rail over a gridded floor…"
@@ -387,6 +407,14 @@ commit message, is not true.
       rather than the old one. First thing next round, with its own pin.
       The `manny-see.mjs:168` fallback (`has('part') ? 'part' : 'machine'`) is the guess-a-kit default a third time
       over, in the tool you see through, and that one I take as the more serious half of this finding.
+
+      **FIXED (Run 7u).** Both doors now import `../world/creatures` and `../ask/machine` for their side effect, as
+      `view/look.ts` and `view/forge.ts` already did. `npm run moves -- --kit machine "…"` works: 198 movers, 197
+      declared joints, **0 usable**, 2 bodies held by nothing. Your hand-wired `1 joint of 6` was on the old graph;
+      on the fixed one the honest answer is none, for the same reason as the car's.
+      `manny-see.mjs:168`'s `has('part') ? 'part' : 'machine'` — the guess-a-kit default a third time, in the tool
+      you see through — is NOT fixed and is now the open half of this finding. You were right that it is the more
+      serious half.
 - [~] **SIGHT** #114 I cannot see a mechanism — only read numbers about it. Give me the motion graph drawn on the
       thing it describes.
       dark: `npm run moves` tells me the car has 46 freedoms and the forklift 12; `manny-see … --views three,explode`

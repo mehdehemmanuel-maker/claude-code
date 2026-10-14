@@ -2527,3 +2527,48 @@ the same pass would leave no way to tell which change moved which number.
 
 **The count for this round: of nine findings, I had already written four of them into a ledger as facts.** The gate
 was green for every one.
+
+## Run 7u — one owner for the geometry, and the second answer deleted
+
+Manny's four queued findings, done in the order he set. All of them were one fault wearing four faces: **this file
+kept its own answer for geometry that `parts/space.ts` already owned.**
+
+`half()` is deleted. `rot3()` is deleted. `moving()` no longer walks the tree: it walks `space.ts:layout()`, which
+composes every part's world matrix under every ancestor and boxes its shape with `shapeBox`. What that removed:
+
+- **13 of 46 movers said "its shape does not say how wide it sweeps"** about tubes, lofts, prisms and surfaces that
+  `shapeBox` sizes exactly. Now **0**.
+- **The Euler order is right by construction, not by my agreeing with it.** `rot3` composed Rz·Ry·Rx — three.js's
+  `ZYX` — against the `XYZ` the renderer and `space.ts` use: 40° apart on a part turned about two axes. No car joint
+  had two non-zero `rot` components, so it was a trap rather than a wound, and it was a trap I set.
+- **Ancestors' rotations count.** The hand walk summed `at` down the tree and ignored every ancestor's `rot`, putting
+  5 of 46 movers up to 199 mm from where they are drawn — and those points are the joints' `at`, which is to say the
+  moment arms the solver works from.
+- **A declared slide direction is carried out of its own frame.** On a composed gantry the tool had said "slides along
+  [0,0,1]" for an axis that moves along x.
+- **The torus disagreement is settled against me**: `space.ts` and `THREE.TorusGeometry` say z, this file said y.
+
+Three regression cases pin the rotation work so it cannot drift back, and one of them asserts against the renderer's
+own answer — `new THREE.Vector3(0,1,0).applyEuler(new THREE.Euler(...rot))` — rather than against a number I wrote
+down, so the two cannot diverge silently again.
+
+### Right boxes exposed the next wrong number immediately
+
+With the sizes correct, a steering column reported a **397.7 mm swept diameter**. That is its *length*: a world box
+holds a part's length along whichever axis it lies along, and the sweep was being read off x and z. **A turn sweeps
+across its axis**, so the radius is now the larger of the two half-sizes perpendicular to the axis, taken in the
+part's own frame where `shapeBox` puts them. A hub bearing reads ⌀60.3 mm, which is its size.
+
+This is the shape of the whole round: each fix made the next fault visible, and none of them was visible while two
+owners disagreed quietly.
+
+**#112:** an undeclared link is not a link. Every part declaring none shared the name `''`, so one jointed part
+anywhere in that bucket silenced the unheld-part rule for all of them. Only a declared link vouches for a part now.
+
+**#113:** both doors import `world/creatures` and `ask/machine` for their side effect, as the two pages already did,
+so the user's own composed-machine theme is reachable: `npm run moves -- --kit machine` gives 198 movers and 197
+declared joints, of which — honestly, on the fixed graph — **none** is usable. Still open, and named as the more
+serious half of that finding: `manny-see.mjs` still guesses a kit, which is the third instance of the default that
+lies, in the tool the critic sees through.
+
+Gate: `GATE: PASS (2138 of 2138 ran) — 190.3s`.

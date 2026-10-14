@@ -13,6 +13,11 @@
 // It also runs `mobility()` (src/nexus/parts/mechanism.ts) on what it finds, which until now was a tested solver with
 // no caller outside its own unit test: a rank-based degrees-of-freedom count, redundant constraints and all.
 import { KITS, makeKit } from '../parts/kits';
+// the kits that register themselves on import, which `view/look.ts` and `view/forge.ts` already pull in for the same
+// reason: without these two the `machine` kit does not exist and `--kit machine` is refused by the very guard built
+// to stop a door guessing — the user's own composed-machine theme, unreachable from both new doors (docs/MANNY.md #113)
+import '../world/creatures';
+import '../ask/machine';
 import { howItMoves } from '../make/moves';
 
 const argv = process.argv.slice(2);
