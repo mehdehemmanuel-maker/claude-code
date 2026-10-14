@@ -305,6 +305,34 @@ describe('the tree keeps its shape', () => {
   });
 });
 
+describe("the bundle's inputs stay enumerable", () => {
+  // `tools/bundle.mjs` skips the door build when nothing it is built from changed, and its key is the hash of every
+  // file under src/ plus the config and the lockfile. That key is the whole truth only while the module graph under
+  // src/ stays inside src/: one relative import reaching out of it (a data file in models/, a helper in tools/)
+  // would put a file in the bundle that the key does not hash, and the cache would serve a stale bundle with no
+  // window in which anyone could notice. Run 7x declined to build that cache because it feared exactly this; the
+  // cache is honest BECAUSE this holds, so it is checked rather than remembered.
+  it('no relative import under src/ reaches outside src/', () => {
+    const out: string[] = [];
+    for (const f of FILES) {
+      for (const m of read(f).matchAll(/from\s+'(\.[^']+)'/g)) {
+        const target = resolve(f, '..', m[1]!);
+        if (!target.startsWith(join(ROOT, 'src'))) out.push(`${relative(ROOT, f)} imports ${m[1]} — outside src/, so tools/bundle.mjs would not hash it`);
+      }
+    }
+    expect(out).toEqual([]);
+  });
+
+  it('every file tools/bundle.mjs hashes beside src/ is a file that exists', () => {
+    const named = [...readFileSync(join(ROOT, "tools/bundle.mjs"), 'utf8').matchAll(/'([\w.-]+\.(?:ts|json|mjs))'/g)].map((m) => m[1]!);
+    expect(named.length, 'bundle.mjs no longer names the files it hashes beside src/ — the list below is read from it').toBeGreaterThan(3);
+    for (const n of named) {
+      if (n === 'tsconfig.json' && !existsSync(join(ROOT, n))) continue; // bundle.mjs skips a missing one by design
+      expect(existsSync(join(ROOT, n)), `tools/bundle.mjs hashes ${n}, which is not there: either it moved and the cache is blind to it, or the line is dead`).toBe(true);
+    }
+  });
+});
+
 describe('every file says what it owns', () => {
   it('a header comment long enough to be a sentence about the concern', () => {
     const bare: string[] = [];

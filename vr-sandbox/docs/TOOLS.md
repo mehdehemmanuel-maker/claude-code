@@ -270,3 +270,52 @@ exists); this holds the expensive half, run when a round quotes figures it wants
 Its first run found a real one: Run 7w's own block said **19** rigid bodies where the command says **24** — a figure
 typed into a block presented as output, in the first entry written after the lint that was supposed to stop exactly
 that.
+
+## `node tools/cost.mjs` — what a door actually costs, in three legs
+
+```
+node tools/cost.mjs                                 the moves door on the car
+node tools/cost.mjs --door why --words "a drone"    any door, any ask
+node tools/cost.mjs --runs 3                        median of n runs per leg
+```
+
+Run 7x nearly spent a day caching the bundle every door rebuilds, on a figure ("30–60 s") carried in its author's
+head from nothing. Timing it took ninety seconds. So the timing is a command now, and it reads the door's **own npm
+script** rather than a command typed into the tool — split on `&&`, the last leg is the door's work and the rest is
+what it pays to get there — so it goes on measuring the truth after the scripts change.
+
+It prints the cold build, the rebuild with nothing changed, the door's own run, the build's share of a second run,
+and what skipping the build could save, against the **10% floor** it judges by: under that, the saving is inside this
+host's run-to-run swing. Stating the floor is the point — Run 7x's "not worth it" was a feeling about a saving, and
+once the floor was written down the same measurement said 36% and the opposite answer.
+
+Every figure it prints is a wall clock and will differ run to run, which is why its ledger block is marked a wall
+clock and `cite` holds it to the checkable claim (the command still runs, and still prints timings) instead of
+demanding the same milliseconds back.
+
+## `node tools/bundle.mjs` — builds the doors, and only when an input changed
+
+```
+node tools/bundle.mjs            build if needed   (every `npm run <door>` goes through this)
+node tools/bundle.mjs --force    build regardless
+node tools/bundle.mjs --why      what it would do, and what changed
+```
+
+The sixteen door scripts were `vite build && node dist-nexus/<door>.mjs`, so every round paid a 1.07 s rebuild on
+every door run, almost always to emit a byte-identical bundle. This skips it. A repeat door run went **2946 ms →
+2108 ms** (`node tools/cost.mjs`), and the build fell from 36% of it to 5%.
+
+A build cache goes stale when its key is a **proxy** for the inputs — a timestamp, a marker file, a directory list
+someone has to remember to update. This key *is* the inputs: the SHA-256 of all 403 files under `src/`, plus the
+vite config, `package.json`, the lockfile, the tsconfig and the tool itself. Change a byte of any of them and vite
+runs. Two things hold it honest, both checked rather than remembered:
+
+- **`npm run tidy`** asserts no relative import under `src/` reaches outside `src/` — the one way a file could enter
+  the bundle unhashed — and that every file named beside `src/` exists.
+Not `tools/doors.mjs`, which is the **map** of the doors. This one only builds them — and its first draft was
+written straight over that map, because the name was never checked (ROUNDS 7y).
+
+- **The stamp records the bundles it emitted, by name**, and every one must still be on disk. The first version
+  counted them and asked for more than zero; deleting `moves.mjs` left fifteen, the count passed, and the tool said
+  "up to date" with the door's own bundle missing. A floor cannot catch a number wrong in the admissible direction —
+  the same shape as `joints >= 23` two rounds earlier, rebuilt inside an hour by the same hand.

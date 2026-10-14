@@ -2684,15 +2684,23 @@ Two tool questions this round, and the first answer was "do nothing", which is t
 Every door rebuilds the bundle before it runs, and I was going to cache that. Measured first:
 
 ```
-$ node tools/cite.mjs --list        (and three timed runs of the build and the door)
-cold build:          1932 ms
-rebuild, no change:  1083 ms
-run built door:      2057 ms
+$ node tools/cost.mjs        (a wall clock, so these figures differ every run)
+cold build            1679 ms
+rebuild, no change    1069 ms
+run built door        1877 ms
 ```
 
-The build is **one second** of a three-second command, and the door's own work is the larger half. A cache would have
-saved a third of a second and added a staleness bug to every tool. **Not built.** I had carried "30–60 s" in my head
-from nothing, and the only reason it did not become a day's work is that timing it took ninety seconds.
+The build is **one second** of a three-second command, and the door's own work is the larger half. I had carried
+"30–60 s" in my head from nothing, and the only reason it did not become a day's work is that timing it took ninety
+seconds.
+
+> **Two corrections, by Run 7y, which built the tool this block now cites.** As first written, this block had no such
+> tool: its figures were timed by hand and the citation read `node tools/cite.mjs --list`, a command that has never
+> printed a millisecond. `npm run cite` caught it — the second wrong citation it found, in the entry about wrong
+> citations. And the conclusion it carried, *"a cache would have saved a third of a second and added a staleness bug
+> to every tool. Not built."*, was wrong: 1069 ms of a 2946 ms command is 36% of it, and the floor I believed I was
+> judging against turned out, once written down, to be 10%. The saving was never the issue; the staleness was, and a
+> cache keyed on the hash of its inputs cannot go stale. Run 7y built it. See that entry.
 
 ### The hole I flagged in my own lint, closed
 
@@ -2724,3 +2732,89 @@ CITE: 2 hold, 1 historical, 0 DRIFTED, 0 would not run, 3 skipped, of 6 citation
 checks prose, and the tool that checks citations caught its own round's citation. Each rule's first real catch has
 been the round that built it. That is not luck — it is that a new rule is written at the moment its author is least
 able to see the fault, and the only cure is a rule that does not depend on seeing it.
+
+## Run 7y — the citation that caught the conclusion
+
+Run 7x ended with `npm run cite` reporting one DRIFTED, and the drifted block was its own. That is the third round
+running whose new rule's first real catch was the round that wrote it, and this one caught more than a citation.
+
+### The citation was wrong, and so was what it said
+
+The block citing `node tools/cite.mjs --list` for three millisecond figures: that command has never printed a
+millisecond. The figures were timed by hand in a shell and typed in under the nearest command that happened to be in
+the paragraph. Two faults in one block — a citation nobody can re-run, and a measurement that exists nowhere but in
+prose.
+
+So the measurement became a command, `node tools/cost.mjs`, which times a door's three legs. It reads the legs out of
+the door's **own npm script** rather than from a command typed into it (split on `&&`: the last leg is the door's
+work, the rest is what it pays to get there), because a tool that holds a command it believes is right goes on
+reporting that after the scripts change. It prints the build's share of a second run and what skipping the build could
+save, against the floor it judges by.
+
+**Writing the floor down reversed the answer.** Run 7x's conclusion was *"a cache would have saved a third of a second
+and added a staleness bug to every tool. Not built."* The tool, run once: 1069 ms of a 2946 ms command is **36%**, and
+the floor is 10%. A third of a second was never the question — a third *of the command* was, and I had compared the
+saving against nothing and called it small. The staleness fear was the real argument and it was about a cache I had
+not designed.
+
+### A cache that cannot go stale, because its key is not a proxy
+
+A build cache goes stale when its key stands in for the inputs: a timestamp, a marker file, a list of directories
+someone must remember to extend. `tools/bundle.mjs` keys on the inputs themselves — the SHA-256 of all 403 files under
+`src/`, plus the vite config, `package.json`, the lockfile, the tsconfig and the tool's own source. There is no window
+in which the key matches and the output is wrong. All sixteen door scripts now go through it.
+
+```
+$ node tools/cost.mjs        (a wall clock, so these figures differ every run)
+cold build            1900 ms
+rebuild, no change      96 ms
+run built door        2013 ms
+```
+
+A repeat door run: **2946 ms → 2108 ms**, the build from 36% of it to 5%, and the same tool now says there is nothing
+left to win. Two checks hold the key honest, neither of them a memory:
+
+- **`npm run tidy` rule 22** (new): no relative import under `src/` reaches outside `src/`. That is the single way a
+  file could enter the bundle without being hashed, and it was *true when I looked* — which is exactly the standard
+  this session keeps finding insufficient. Rule 23 checks that every file `doors.mjs` names beside `src/` exists, so
+  a moved config cannot make the cache quietly blind to it.
+- **The stamp records the bundles it emitted, by name.**
+
+### And the name was already taken
+
+The first draft of that cache was written to `tools/doors.mjs`, straight over a 70-line tool of that name — the map
+of every door into the project, what each one opens and when it was last touched, built three rounds ago and listed
+in `docs/TOOLS.md`. Nothing complained: the file was overwritten, the gate passed, and it surfaced only because
+`git status` showed the file as *modified* where I expected *new*. CLAUDE.md's rule is one line long — *"Before
+writing a file, check that it does not already exist"* — and it is there because this has happened before
+(`vehicle.ts`, overwritten after `ls | head` hid it). I wrote a tool whose whole purpose is to know what is already
+there, and did not look. Restored from git, and the cache is `tools/bundle.mjs`.
+
+### The floor, rebuilt by the hand that had just removed it
+
+The first version of that second check counted the bundles and asked for more than zero. Deleting `dist-nexus/moves.mjs`
+left fifteen others, the count passed, and `--why` reported **"up to date"** with the door's own bundle missing. A floor
+cannot catch a number wrong in the admissible direction — written down as fault #37 two rounds ago, when `joints >= 23`
+passed while the real answer was 0, and rebuilt here inside the hour by the same hand, in the correctness check of a
+cache whose whole defence is that it cannot be wrong. It only surfaced because I probed the four cases instead of the
+one I expected to pass.
+
+### A wall clock is not drift
+
+`cite` would have failed this block every run: a timing never reproduces, and a check that always fails is deleted as
+fast as one that never can. A block the ledger marks a **wall clock** is now held to the claim that is actually
+checkable — the command still runs, and still prints as many figures as the block quotes — which catches the command
+gone, renamed, or no longer timing anything, and does not pretend to catch what nothing can. The note must say so; an
+unmarked timing block drifts like any other.
+
+```
+$ npm run cite
+clocked  :2686  node tools/cost.mjs
+           a wall clock, so its 3 figures are not expected back; the command still prints 5
+```
+
+**The fault, named:** a figure in prose is a measurement nobody can repeat, so the round that wrote it is the last
+round that knows whether it is true. Three faults this round were one fault wearing different clothes — the hand-timed
+citation, the floor compared against nothing, and the count that passed while the bundle was gone — and each was a
+judgement held in a head rather than in something that runs. The fix is never to judge more carefully; it is to write
+the threshold down, where a tool can disagree with it.

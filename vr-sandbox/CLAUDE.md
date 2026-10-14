@@ -360,6 +360,12 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   and it breaks `pieces.test.ts`, which is the cross-file state leak that option risks), `--pool=threads` (190 s), and
   the two long sweeps' tails (sharding them left the wall where it was). The suite is bound by its own work spread over
   the workers there are, and 545 s of test time over 190 s of wall is 2.9 of this host's 4 cores.
+- **Every door builds through `node tools/bundle.mjs`, never a raw `vite build`.** It skips the build when nothing
+  it is built from changed (the hash of every file under `src/` plus the config and lockfile), which takes a repeat
+  door run from 2946 ms to 2108 ms. A door script with its own `vite build` in it pays the second again, and two
+  tidy rules hold the key honest — among them that no relative import under `src/` may leave `src/`, which is what
+  makes the key the whole truth. `node tools/cost.mjs` is how any such cost is argued: it prints the legs and the
+  floor it judges by, because Run 7x's "not worth it" was a feeling about a saving and the floor reversed it.
 - `npm run tidy` is the half-second part of the gate that checks the tree's own shape, and it is the thing to run
   before and after moving anything. Its four ratchets (oversize files, name clashes, imports up a layer, a rule written twice) hold the
   present debt to the number: they fail on a new one by name, and they fail on a fixed one until its line is

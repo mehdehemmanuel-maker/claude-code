@@ -13,6 +13,7 @@
 //   node tools/cite.mjs              every citation it can run
 //   node tools/cite.mjs moves        only citations whose command matches /moves/
 //   node tools/cite.mjs --list       what it would run, and what it cannot
+//   node tools/cite.mjs cost         (any pattern matches against the cited command)
 //
 // It is a DOOR and not a gate: some of these take minutes and one needs a browser, so putting it in `npm run gate`
 // would make the gate unusable and the rule would be deleted within a week. The gate holds the cheap half (a command
@@ -61,6 +62,13 @@ const runnable = (b) => !PLACEHOLDER.test(b.cmd) && !/delet|removed|since gone/i
 // record. Without this the tool would cry on its ordinary path, which is the fault that teaches a reader to ignore
 // the tool (docs/ROUNDS.md Run 7o, #40).
 const historical = (b) => /changed them|changed it|this run's numbers|at the time|before Run|superseded/i.test(b.note);
+// A WALL CLOCK NEVER REPRODUCES, AND THAT IS NOT DRIFT. A timing block's figures are true measurements that cannot
+// come back: demanding equality from one would fail it every run, and a check that always fails is deleted as fast
+// as one that never can. So a block the ledger marks a wall clock is held to the weaker claim that is actually
+// checkable — its command still RUNS and still PRODUCES as many figures as the block quotes. That catches the
+// things worth catching (the command gone, renamed, or no longer printing timings at all) and does not pretend to
+// catch what nothing can. The note must say it: an unmarked timing block is drift like any other.
+const clocked = (b) => /wall clock/i.test(b.note);
 const wanted = blocks.filter((b) => !only || new RegExp(only, 'i').test(b.cmd));
 
 if (list) {
@@ -69,7 +77,7 @@ if (list) {
   process.exit(0);
 }
 
-let ok = 0, drifted = 0, skipped = 0, broke = 0, historic = 0;
+let ok = 0, drifted = 0, skipped = 0, broke = 0, historic = 0, timed = 0;
 for (const b of wanted) {
   const want = figuresOf(b.body);
   if (!runnable(b)) { console.log(`SKIP     :${b.at}  ${b.cmd}\n           ${b.note ? `the ledger says: ${b.note}` : 'its command has a placeholder in it, so only a person can run it'}`); skipped++; continue; }
@@ -80,8 +88,13 @@ for (const b of wanted) {
   const gone = want.filter((n) => !out.includes(n));
   if (!gone.length) { console.log(`holds    :${b.at}  ${b.cmd}   (${want.length} figures still in its output)`); ok++; }
   else if (historical(b)) { console.log(`historic :${b.at}  ${b.cmd}\n           ${gone.length} of ${want.length} figures have moved on, as the ledger says they did: ${b.note}`); historic++; }
+  else if (clocked(b)) {
+    const got = figuresOf(out);
+    if (got.length >= want.length) { console.log(`clocked  :${b.at}  ${b.cmd}\n           a wall clock, so its ${want.length} figures are not expected back; the command still prints ${got.length}`); timed++; }
+    else { console.log(`DRIFTED  :${b.at}  ${b.cmd}\n           marked a wall clock, but the command now prints ${got.length} figures where the block quotes ${want.length}: it has stopped measuring what it measured`); drifted++; }
+  }
   else { console.log(`DRIFTED  :${b.at}  ${b.cmd}\n           ${gone.length} of ${want.length} figures are no longer in its output: ${gone.slice(0, 8).join(', ')}`); drifted++; }
 }
 console.log('');
-console.log(`CITE: ${ok} hold, ${historic} historical, ${drifted} DRIFTED, ${broke} would not run, ${skipped} skipped, of ${wanted.length} citations`);
+console.log(`CITE: ${ok} hold, ${timed} clocked, ${historic} historical, ${drifted} DRIFTED, ${broke} would not run, ${skipped} skipped, of ${wanted.length} citations`);
 process.exit(drifted || broke ? 1 : 0);
