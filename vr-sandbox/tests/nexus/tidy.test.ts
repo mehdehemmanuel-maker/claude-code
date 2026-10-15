@@ -71,7 +71,7 @@ const BIG: { file: string; max: number; why: string }[] = [
 /** Logic that is too long, with the ceiling set at what it measures today so it cannot grow while it waits its turn.
  *  Every line names what it should be split into: that is the work, not the number. */
 const DEBT: { file: string; max: number; into: string }[] = [
-  { file: 'src/nexus/view/forge.ts', max: 4046, into: 'the room, the asking, the phone, the benches and the pipeline player are five concerns in one file; the benches and the lighting have moved out, the rest have not' },
+  { file: 'src/nexus/view/forge.ts', max: 4045, into: 'the room, the asking, the phone, the benches and the pipeline player are five concerns in one file; the benches and the lighting have moved out, the rest have not' },
   { file: 'src/nexus/ask/conceive.ts', max: 3890, into: 'reading words into wants, the figures each want needs, and designing from laws are three files' },
   { file: 'src/nexus/ask/generate.ts', max: 1670, into: 'placing, repeating and turning shapes is one concern; sizing by law is another' },
   { file: 'src/nexus/substrate/manifold.ts', max: 1280, into: 'deriving structure from wants, and the balances that check it' },
@@ -532,7 +532,7 @@ function fragments(raw: string): string[] {
  *  `std(…)` material helper, and `boards/`, where one solder-ball drawing is written in two files. */
 const DUPES: string[] = [
   "M: fixed('molar mass of water', 0.018015, 'kg/mol', 'IUPAC') :: life/decay.ts:219 life/flows.ts:42 life/flows.ts:43 life/flows.ts:47",
-  "Math.abs(Math.sin(t * 5.3)) :: view/forge.ts:577 view/jarvis.ts:172",
+  "Math.abs(Math.sin(t * 5.3)) :: view/forge.ts:578 view/jarvis.ts:172",
   "box('die', [4, 0.6, 4], [0, 0.4, 0], 'silicon') :: boards/boardparts.ts:606 boards/sbc.ts:572",
   "box('lead', [a * 0.94, ball, a * 0.94], [0, ball / 2, 0], 'solder', { inBody: 0, share, color: 0xb8bcc0 }) :: boards/boardparts.ts:634 boards/boardparts.ts:643 boards/sbc.ts:348",
   "const std = (c: number, rough = 0.6, metal = 0, more: THREE.MeshStandardMaterialParameters = {}) :: view/coaster3d.ts:13 view/pingpong3d.ts:13",

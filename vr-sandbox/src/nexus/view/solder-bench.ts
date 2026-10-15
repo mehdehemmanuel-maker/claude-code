@@ -230,6 +230,28 @@ export class SolderBench {
    *  taken into that hand, held as it is held (the iron as a pen, its tip 7 cm ahead of the fist and 30° below where the
    *  hand points; the solder's wire out of the fingers, forward and down toward the work; a header or the Pico as it
    *  was). What it did, said; null where nothing is near. */
+  /** WHERE IT STANDS: its top at a standing bench's height under your eyes, 42 cm before you, its near side
+   *  toward you. The bench's own measurement, like the gear bench's, and not the room's. */
+  setOut(eye: THREE.Vector3, forward: THREE.Vector3): { eye: THREE.Vector3; at: THREE.Vector3 } {
+    const f = forward.clone(); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
+    const at = eye.clone().addScaledVector(f, 0.42); at.y = Math.max(0.75, eye.y - 0.6);
+    this.place(at, Math.atan2(-f.x, -f.z), 0);
+    return { eye: at.clone().add(new THREE.Vector3(0, 0.32, 0).addScaledVector(f, -0.3)), at: at.clone().addScaledVector(f, 0.02) };
+  }
+
+  /** WHAT IT SAYS WHEN IT IS SET OUT: what is on it, how many steps and joints, and how to work it by hand or by
+   *  word. These lines lived in `view/forge.ts`, which is how a room file comes to be five concerns — a bench's
+   *  vocabulary belongs to the bench. Moved here when the gear bench's words were, for the same reason and in the
+   *  same round (docs/ROUNDS.md Run 7z). */
+  greeting(inVR: boolean, steps: number, first: string, parts?: string): string {
+    if (this.plan === 'proto') {
+      const hands = inVR ? 'Grip with either hand to take a part, the board or (right) the iron or the flush cutters; let a part go over its holes and it goes in. Pull the right trigger with the cutters round a lead to cut it; grip with your left for the solder, its trigger for more wire.' : `On a screen, say the moves: ${parts ?? ''} (or "place all"), "board in the hands", "take the iron", "take the solder", "tin the tip", "heat joint 1", "feed joint 1", "lift", "wipe", "take the cutters", "cut lead 1 at 1.5", "iron down".`;
+      return `A soldering bench before you: Adafruit's Perma-Proto half-sized board, ${parts ? '' : ''}the MZ101 helping hands, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner, a reel of 63/37 solder and Hakko's CHP-170 flush cutters. ${steps} steps, ${this.bench.joints.length} joints. ${hands} First: ${first}`;
+    }
+    const hands = inVR ? 'Grip with your right hand to take a header, the Pico or the iron (held as a pen, its tip ahead of your fist); grip with your left to take the solder, and pull its trigger for more wire.' : 'On a screen, say the moves: "place the headers", "place the pico", "take the iron", "take the solder", "tin the tip", "heat pin 1", "feed pin 1", "lift", "wipe", "iron down".';
+    return `A soldering bench before you: a Raspberry Pi Pico, two 20-pin headers, a breadboard, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner and a reel of 63/37 solder. ${hands} First: ${first}`;
+  }
+
   grab(hand: 'right' | 'left', grip: THREE.Object3D, ray: THREE.Object3D = grip): string | null {
     const at = grip.getWorldPosition(new THREE.Vector3()), parts: Thing[] = this.plan === 'pico' ? ['header-a', 'header-b', 'pico'] : ['proto', ...(this.build?.things.map((t) => t.id) ?? [])];
     const can: Thing[] = hand === 'right' ? ['iron', ...(this.plan === 'proto' ? ['cutters' as const] : []), ...parts] : ['solder', ...parts];

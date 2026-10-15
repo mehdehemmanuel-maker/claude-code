@@ -23,7 +23,7 @@
 
 import { processWords } from '../machines/processor';
 import { robotFor, robotTasks, robotWords as robotDesign } from '../machines/robot';
-import { RobotAtBench } from './robot-bench';
+import { RobotAtBench, robotToBench } from './robot-bench';
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -82,6 +82,7 @@ import { routeMake } from '../ask/route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../parts/kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { SolderBench } from './solder-bench';
+import { closeGears, gearBench, openGears, openSolder, type Room } from './benches';
 import { worksStep, worksStood, worksRoomWords } from './works-room';
 import { lightRoom } from './light';
 import { worksWords } from '../works/text';
@@ -2291,30 +2292,21 @@ window.addEventListener('keydown', (e) => { const tag = (e.target as HTMLElement
 // your own hands, the iron in your right as a pen, the solder in your left; each joint heated and fed where your hands
 // put the tip and the wire, and judged as it is made. On a screen the same moves are said ("heat pin 3", "feed pin 3") ----
 let bench: SolderBench | null = null, robotAt: RobotAtBench | null = null;
+/** The room as a bench needs it (src/nexus/view/benches.ts owns the setting out). */
+const asRoom = (): Room => ({ scene, camera, orbit, inVR: renderer.xr.isPresenting, named, eye: () => (eyeOf(eye), eye), forward: () => { const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); return f; } });
 function startBench(plan: PlanId = 'pico', build: Build = PROTO_BUILD): string {
   if (bench && bench.plan === plan && (plan === 'pico' || bench.bench.build === build)) { robotAt?.dispose(); robotAt = null; bench.reset(); return `The bench is set out again. ${stepsOf(bench.bench)[0]!.do}`; }
-  robotAt?.dispose(); robotAt = null;
-  if (bench) { bench.dispose(); bench = null; }
-  bench = new SolderBench(plan, build); scene.add(bench.group); named(bench.group, 'the soldering bench');
-  eyeOf(eye); const f = new THREE.Vector3(); (renderer.xr.isPresenting ? renderer.xr.getCamera() : camera).getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
-  // (its top at a standing bench's height under your eyes, 42 cm before you, its near side toward you)
-  const at = eye.clone().addScaledVector(f, 0.42); at.y = Math.max(0.75, eye.y - 0.6); bench.place(at, Math.atan2(-f.x, -f.z), 0);
-  if (!renderer.xr.isPresenting) { camera.position.copy(at).add(new THREE.Vector3(0, 0.32, 0).addScaledVector(f, -0.3)); orbit.target.copy(at).addScaledVector(f, 0.02); orbit.update(); }
-  const first = stepsOf(bench.bench)[0]!.do;
-  if (plan === 'proto') {
-    const places = build.things.filter((t) => !t.hangs).map((t) => `"place ${t.name.toLowerCase()}"`).join(', ');
-    const hands = renderer.xr.isPresenting ? 'Grip with either hand to take a part, the board or (right) the iron or the flush cutters; let a part go over its holes and it goes in. Pull the right trigger with the cutters round a lead to cut it; grip with your left for the solder, its trigger for more wire.' : `On a screen, say the moves: ${places} (or "place all"), "board in the hands", "take the iron", "take the solder", "tin the tip", "heat joint 1", "feed joint 1", "lift", "wipe", "take the cutters", "cut lead 1 at 1.5", "iron down".`;
-    return `A soldering bench before you: Adafruit's Perma-Proto half-sized board, ${partsSaid(build)}, the MZ101 helping hands, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner, a reel of 63/37 solder and Hakko's CHP-170 flush cutters. ${stepsOf(bench.bench).length} steps, ${bench.bench.joints.length} joints. ${hands} First: ${first}`;
-  }
-  const hands = renderer.xr.isPresenting ? 'Grip with your right hand to take a header, the Pico or the iron (held as a pen, its tip ahead of your fist); grip with your left to take the solder, and pull its trigger for more wire.' : 'On a screen, say the moves: "place the headers", "place the pico", "take the iron", "take the solder", "tin the tip", "heat pin 1", "feed pin 1", "lift", "wipe", "iron down".';
-  return `A soldering bench before you: a Raspberry Pi Pico, two 20-pin headers, a breadboard, PINE64's Pinecil in Atten's stand heating to 330 °C, Hakko's brass cleaner and a reel of 63/37 solder. ${hands} First: ${first}`;
+  robotAt?.dispose(); robotAt = null; if (bench) { bench.dispose(); bench = null; }
+  bench = new SolderBench(plan, build);
+  const places = plan === 'proto' ? build.things.filter((t) => !t.hangs).map((t) => `"place ${t.name.toLowerCase()}"`).join(', ') : undefined;
+  const said = openSolder(bench, asRoom(), places, stepsOf(bench.bench).length, stepsOf(bench.bench)[0]!.do);
+  return plan === 'proto' ? said.replace('half-sized board, ', `half-sized board, ${partsSaid(build)}, `) : said;
 }
 /** "Let the robot solder it", "robot, solder the LED": the LED lesson's bench set out on the robot's own table, and the
  *  robot doing it by the bench's words, its arms following where the iron, the wire and the cutters go. */
 function robotSolders(): string {
   startBench('proto', bench?.plan === 'proto' && bench.bench.build ? bench.bench.build : PROTO_BUILD);
-  // (its table stands on the floor: the bench's things at its 750 mm top)
-  const at0 = bench!.group.position.clone(); at0.y = ROBOT_CELL.top / 1000; bench!.place(at0, bench!.group.rotation.y, 0); robotAt = new RobotAtBench(bench!);
+  robotAt = robotToBench(bench!, ROBOT_CELL.top);   // its table stands on the floor: the bench's things at its 750 mm top
   if (!renderer.xr.isPresenting) { const at = bench!.group.getWorldPosition(new THREE.Vector3()), f = new THREE.Vector3(0, 0, -1).applyQuaternion(bench!.group.quaternion); camera.position.copy(at).add(new THREE.Vector3(0, 0.55, 0)).addScaledVector(f, -0.9); orbit.target.copy(at).add(new THREE.Vector3(0, 0.15, 0)).addScaledVector(f, 0.15); orbit.update(); }
   return `The robot stands at the bench, its things on its table: it does the lesson by the bench's own words, ${robotAt.said.length ? '' : 'step by step, '}its right hand on the iron and the cutters, its left on the solder. Watch it, or say "stop the robot".`;
 }
@@ -2327,6 +2319,9 @@ function benchWords(text: string): string | null {
   // (the second lesson first: its words begin as the first's do)
   if (/^((teach me (to|how to) )?solder (an? |the )?(led|resistor)\b|(the )?(second|led|perma-?proto) (soldering )?lesson|(teach me (to|how to) )?solder (on|onto) (a |the )?perma-?proto|solder (the |a )?perma-?proto|trim(ming)? leads lesson)/.test(t)) return startBench('proto');
   if (/^(teach me (to|how to) solder|(a |the )?solder(ing)? lesson|learn to solder|let me solder|i want to solder|solder (the )?pico('s)?( pins| headers)?|(start|open|set up) (the |a )?(soldering )?bench)\b/.test(t)) return startBench();
+  // the gear bench: a plate of shaft holes and gears that mesh because of WHERE you put them (view/benches.ts)
+  if (/^((open|start|set up|show me|give me) (the |a )?)?gear (bench|board)\b|^gears?$|^(let me )?(play|mess about) with gears\b/.test(t)) return openGears(asRoom());
+  const gearWords = closeGears(asRoom(), t) ?? gearBench()?.act(t) ?? null; if (gearWords) return gearWords;
   if (!bench) return null;
   if (/^(close|end|stop|put away) (the )?(soldering )?(bench|lesson)/.test(t)) { bench.dispose(); bench = null; return 'The bench put away.'; }
   if (/^(place|take|tin|wipe|heat|feed|lift|away|more solder|pull more|iron (down|back)|put the (iron|board|cutters|battery|holder)|board|clip|mount|unclip|cut|trim|snip|cutters?|battery|holder|(close|open) (the )?(knife )?switch|switch (it )?(on|off)|turn (it )?(on|off))\b/.test(t)) return bench.act(t);
@@ -3818,6 +3813,7 @@ for (let i = 0; i < 2; i++) {
   // or anywhere on it) to carry it; let go to leave it there. The left hand's grip pauses, as it did.
   ctl.addEventListener('squeezestart', () => {
     // a thing of the soldering bench within reach of either hand is taken by it
+    { const said = gearBench()?.grab(handOf[i] === 'left' ? 'left' : 'right', renderer.xr.getControllerGrip(i)); if (said) { say(said, undefined, 'nexus'); return; } }
     if (bench) { const said = bench.grab(handOf[i] === 'left' ? 'left' : 'right', renderer.xr.getControllerGrip(i), ctl); if (said) { say(said, undefined, 'nexus'); return; } }
     // a person within reach of either hand is held by it
     { const said = gripPerson(i); if (said) { say(said, undefined, 'nexus'); return; } }
@@ -3831,7 +3827,10 @@ for (let i = 0; i < 2; i++) {
     if (onBoard < Infinity && onBoard <= onWin + 1e-3 && boards!.down(ray, 'grab')) { boardHand = i; boardBy = 'squeeze'; return; }
     if (onWin < Infinity && windows.grabAt(ray)) { winHand = i; winBy = 'squeeze'; }
   });
-  ctl.addEventListener('squeezeend', () => { if (bench) { const said = bench.release(handOf[i] === 'left' ? 'left' : 'right'); if (said) say(said, undefined, 'nexus'); } });
+  ctl.addEventListener('squeezeend', () => {
+    const said = gearBench()?.release(handOf[i] === 'left' ? 'left' : 'right') ?? bench?.release(handOf[i] === 'left' ? 'left' : 'right');
+    if (said) say(said, undefined, 'nexus');
+  });
   ctl.addEventListener('squeezeend', () => { ungripPerson(i); if (gripHeld3d === i) { apart3d.release(); gripHeld3d = -1; } });
   ctl.addEventListener('squeezeend', () => { if (boardHand === i && boardBy === 'squeeze') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'squeeze') { winHand = -1; windows.release(); } });
 }
@@ -3936,7 +3935,7 @@ async function boot() {
     keyFollow(renderer.xr.isPresenting ? dolly.getWorldPosition(new THREE.Vector3()) : orbit.target);
     T('room', () => tick()); T('playback', () => { stepPlay(now); stepBuild(now); stepGrow(now); });
     guarded('the warehouse', () => T('warehouse', () => { fleet.step(dt); warehouse.update(dt); })); guarded('the workshop', () => T('workshop', () => { cell.step(dt); cellView.update(dt); }));
-    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('the bench', () => T('bench', () => bench?.update(dt))); guarded('the works', () => worksStep(camera)); guarded('the robot at the bench', () => robotAt?.update(dt)); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
+    guarded('the devices', () => T('devices', () => stepDevices(dt))); guarded('the people', () => T('people', () => stepPeople(dt))); guarded('the place', () => T('place', () => stepPlace(dt))); guarded('the kits', () => T('kits', () => stepKits(dt))); guarded('the bench', () => T('bench', () => bench?.update(dt))); guarded('the gear bench', () => T('gears', () => { const g = gearBench(); if (g) { if (renderer.xr.isPresenting) for (let i = 0; i < 2; i++) g.carry(handOf[i] === 'left' ? 'left' : 'right', renderer.xr.getControllerGrip(i)); g.tick(dt); } })); guarded('the works', () => worksStep(camera)); guarded('the robot at the bench', () => robotAt?.update(dt)); guarded('a screen', () => T('screens', () => { stepDrag(); holos.update(dt); }));
     for (const o of spinners) o.rotateOnAxis(o.userData.axis as THREE.Vector3, (o.userData.spin as number) * dt);
     T('phone', () => phone.render(renderer, scene)); T('render', () => renderer.render(scene, camera));
   });

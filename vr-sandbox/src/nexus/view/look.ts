@@ -37,13 +37,25 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { KITS, makeKit, massOf, type Part } from '../parts/kits';
 import '../world/creatures';
 import '../ask/machine';   // registers the `machine` kit, so a composed machine can be drawn (docs/MANNY.md #46)
+import '../parts/gears';   // registers the `gears` kit, so a gear train can be drawn
 import { perfect } from '../make/pipeline';
 import { frame, held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
 import { tryBody } from '../machines/panels';
 import { kitView } from './kit3d';
 import { draft } from '../parts/surface';
 
-const q = new URLSearchParams(location.search), kit = KITS.find((k) => k.id === (q.get('kit') ?? 'car')) ?? KITS[0]!, words = q.get('words') ?? kit.name, seed = Number(q.get('seed') ?? 7);
+const q = new URLSearchParams(location.search), asked = q.get('kit') ?? 'car';
+// A KIT NOBODY REGISTERED IS NOT THE FIRST KIT IN THE LIST. `?? KITS[0]` sent every ask for a kit that had not
+// been imported to whatever happened to be first — which is the tree — so asking for `kit=gears` rendered a
+// 28-metre autumn pine and printed its trunk diameter with a straight face. A picture of the wrong thing is worse
+// than no picture, because the numbers under it are real and belong to something else entirely.
+const kit = KITS.find((k) => k.id === asked);
+if (!kit) { document.body.innerHTML = `<pre style="color:#fff;background:#111;padding:2rem;font:14px system-ui">There is no kit called "${asked}".
+
+The kits that are registered here: ${KITS.map((k) => k.id).sort().join(', ')}.
+
+A kit only registers if something imports it — if you expected this one, the look page is missing its import.</pre>`; throw new Error(`no kit "${asked}": the look page has ${KITS.map((k) => k.id).join(', ')}`); }
+const words = q.get('words') ?? kit.name, seed = Number(q.get('seed') ?? 7);
 const num3 = (s: string | null) => (s ? (s.split(',').map(Number) as [number, number, number]) : null);
 // (a trial of rules or lines, before anything is made)
 if (q.get('rules') || q.get('lines')) tryBody({ rules: q.get('rules') ? JSON.parse(q.get('rules')!) : undefined, lines: q.get('lines') ? JSON.parse(q.get('lines')!) : undefined });

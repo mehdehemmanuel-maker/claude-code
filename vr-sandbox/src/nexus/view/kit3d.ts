@@ -191,7 +191,9 @@ function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string): THREE.BufferG
   }
   const out = a.geometry; drilled.set(key, out); return out;
 }
-function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
+/** A shape as geometry. Exported because `view/gear-bench.ts` builds its own group of meshes it has to turn one by
+ *  one each frame, which `kitView` does not hand back — and the alternative was a second extruder for prisms. */
+export function geometryOf(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
   if ('surf' in s) return surfGeometry(s.surf);
   if ('loft' in s) return loftGeometry(s.loft);
   if ('tube' in s) return tubeGeometry(s.tube);
@@ -326,7 +328,7 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
       if ('stars' in p.shape) { const gx = galaxy(p.shape.stars); g.add(gx.obj); turners.push(gx.turn); }
       else if ('field' in p.shape) g.add(land(p.shape.field));
       else if ('heap' in p.shape) g.add(heap(p.shape.heap));
-      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, shaded(matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape), p.shade))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+      else { const geo = geometryOf(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, shaded(matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape), p.shade))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
     }
     else if (p.item && !p.parts?.length) {
       // a part that is an item of the inventory and has no shape of its own: drawn as that item looks, at its size (not

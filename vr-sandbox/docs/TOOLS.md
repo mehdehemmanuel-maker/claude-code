@@ -319,3 +319,25 @@ written straight over that map, because the name was never checked (ROUNDS 7y).
   counted them and asked for more than zero; deleting `moves.mjs` left fifteen, the count passed, and the tool said
   "up to date" with the door's own bundle missing. A floor cannot catch a number wrong in the admissible direction —
   the same shape as `joints >= 23` two rounds earlier, rebuilt inside an hour by the same hand.
+
+## `npm run gears` — the gear bench from the command line
+
+```
+npm run gears                                    how to say a placement, and what is on the stock rail
+npm run gears -- 20@0,0 40@60,0                  a 20-tooth driving a 40-tooth: 2 to 1, the other way round
+npm run gears -- 20@0,0 60@80,0 20@80,0 60@160,0 --key 60T-2,20T-3     a compound 9 to 1
+npm run gears -- 20@0,0 15@35,0 20@70,0          an idler: same ratio, same direction
+npm run gears -- 20@0,0 rack@0,-20               a rack and pinion
+npm run gears -- 20@0,0 40@55,0                  refused, with the interference measured in millimetres
+```
+
+Say where each gear goes in millimetres and it says what that arrangement does — the ratio, the speed and torque at
+every shaft, the teeth in contact, the backlash — or **why it does not work**. It runs the same `GearBench` the forge
+room uses, so the numbers here and the numbers in the room cannot drift apart.
+
+It refuses to invent a placement: with no arguments it says how to say one. A board that builds itself teaches
+nothing about centre distances, which are the whole skill.
+
+After the readout it **turns the train one whole revolution in twelve steps and prints where every gear stands**,
+because a ratio printed is a claim and a train that runs is the evidence: a phase that is wrong shows up as a gear
+that jumps, a gear nothing drives shows up as one that never moves, and a rack's column is how far it has travelled.

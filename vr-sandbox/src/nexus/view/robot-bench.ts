@@ -18,6 +18,15 @@ type Side = 'left' | 'right';
 interface Step { words: string; done: (s: SolderBench, t: number) => boolean; skip?: (s: SolderBench) => boolean }
 const after = (sec: number) => (_s: SolderBench, t: number) => t >= sec;
 
+/** THE ROBOT AT A BENCH, set out: the bench dropped onto the robot's own table and the robot put to it. This lived
+ *  in `view/forge.ts`, where it was one of the five concerns that file's size ratchet is written against — a robot
+ *  doing a lesson is this file's business, and the room's only part in it is where to point the camera. */
+export function robotToBench(bench: { group: { position: { clone(): { y: number } }; rotation: { y: number } }; place(at: unknown, yaw: number, t: number): void }, topMM: number): RobotAtBench {
+  const at0 = bench.group.position.clone(); at0.y = topMM / 1000;
+  bench.place(at0, bench.group.rotation.y, 0);
+  return new RobotAtBench(bench as never);
+}
+
 export class RobotAtBench {
   readonly group: THREE.Group;
   /** what it did, step by step: its words and the bench's answer */

@@ -2818,3 +2818,107 @@ round that knows whether it is true. Three faults this round were one fault wear
 citation, the floor compared against nothing, and the count that passed while the bundle was gone — and each was a
 judgement held in a head rather than in something that runs. The fix is never to judge more carefully; it is to write
 the threshold down, where a tool can disagree with it.
+
+## Run 7z — gears, and the test that could tell a mesh from a picture of one
+
+The ask: *"make a working gears system i wanna see it and i wanna be able to make thing out of gears personally i
+wanna be able to place them an make stuff no mock shit or press builds"*.
+
+### What was there
+
+Gears were **data and never a shape**. `parts/families.ts` made a `gear-m1-z20-b8-pla` with the right pitch circle
+and the right centre-distance sentence; `parts/inventory.ts` listed a spur gear; nothing anywhere drew one. The only
+code that tried said so in its own comment — `ask/outputs.ts` emitted a cylinder at the root circle with `z` little
+eight-sided cylinders stuck round it, labelled *"a sketch of the involute: print it from the slicer's shape"*. A gear
+drawn that way cannot mesh, cannot be checked and cannot be placed next to another one, because the thing that makes
+a gear a gear is the curve.
+
+### The curve, and the test that decides
+
+`parts/gears.ts` is the involute: the flank sampled by pressure angle from the base circle to the tip, the ISO 53 /
+DIN 867 proportions, the root as a circular fillet (labelled as the approximation it is — a hobbed root is a
+trochoid, and the difference lies below the base circle where no contact happens). Drawn as a `prism`, so the
+existing extruder draws it and `parts/form.ts` weighs it with no new code anywhere.
+
+The test that matters is not a ratio assertion. **Two placed gears are turned through a whole tooth in twenty-four
+steps, and every tooth polygon of one is tested against every tooth polygon of the other for overlap.** A phase
+formula wrong by half a tooth passes every ratio assertion ever written and fails that one. It found four things:
+
+- **The interference condition, before I had coded it.** A 9-tooth pinion against a 60-tooth wheel really does
+  overlap: the big gear's 62.00 mm tip passes the 61.12 mm limit √(rb² + (a·sin α)²) set by the pinion, so its tip
+  arrives where the pinion has no involute left and digs into the root. That is why a 20° pinion wants about 18
+  teeth, and `meshing()` now refuses the pair in those words. 12 × 12 is marginal and refused too — correctly: the
+  limit misses by 54 µm.
+- **The tooth thickness, 0.2% fat.** Every sampled point sits exactly on the involute, but the chords between them
+  do not, and measured at the pitch circle the drawn tooth came out thicker than π·m/2 — a gear fatter than the real
+  one, which jams a mesh in the viewer that turns freely in steel. The pitch radius is now pinned as a sample point,
+  so thickness is exact where thickness is defined.
+- **The ring gear was a solid disc with teeth pointing inward**, so the pinion sat inside metal. A ring is a rim with
+  a toothed BORE. It drew exactly twelve overlaps at every phase, every tooth count and every addendum — and a count
+  that does not move when the geometry moves is the signature of a systematic error rather than an interference.
+- **The ring's flank started at the base circle instead of the root**, spanning 56.4 → 58 mm on a gear whose pitch
+  circle is at 60, so it never crossed the pitch circle at all and its tooth measured 2.32 mm where the standard says
+  3.14. A wrong shape reads exactly like a wrong phase until the shape is measured.
+
+### What is proved, and what is refused
+
+External spur pairs and the rack are proved. An internal pair is **refused**, because it still fails the overlap test
+by about 0.2 mm at the pitch circle and a phase scan over a whole tooth is symmetric about the derived value — so the
+timing is right and the proportions are not. The ring's own shape passes every shape test. Saying "they mesh" would
+be the mock this file was written to delete, so it says what is wrong instead. A planetary waits on that.
+
+### Placing them
+
+`view/gear-bench.ts` is a plate of shaft holes. **The hole pitch is half a module**, because every meshing centre
+distance m(z₁+z₂)/2 is a whole multiple of that and almost nothing else is: a grid at any other pitch would look
+usable and nothing would ever quite mesh. Pick a gear off the rail, carry it, let it go — it drops on the nearest
+hole and the board says what it meshes with, or why it does not. It never nudges anything into mesh. Thirteen tests,
+all headless.
+
+One of them had to be rewritten because **I was wrong about what should happen**: a gear dropped a millimetre off
+still meshes. That is the involute's whole point — the ratio survives a centre-distance error — and what changes is
+the play: 2·Δa·tan α = 0.728 mm of backlash. The test now asserts that instead.
+
+```
+$ npm run gears -- 20@0,0 60@80,0 20@80,0 60@160,0 --key 60T-2,20T-3
+4 gears on the board, 2 pairs in mesh, turned at 20T-1 (60 rpm, 1.00 N·m).
+9.000 to 1 reduction at 60T-4: 6.7 rpm, 8.64 N·m, turning the same way as the driver.
+20T-1 × 60T-2: 80.0 mm centres (cut for 80.0), 1.67 teeth in contact, 0.000 mm backlash.
+```
+
+```
+$ npm run gears -- 20@0,0 40@55,0
+20T-1 and 40T-2 do not mesh — at 55.00 mm centres the tip of one stands 4.50 mm inside the root of the other:
+they are cut for 60.00 mm and would jam
+```
+
+### Three more faults, each found by a check rather than by reading
+
+- **The 9:1 the designer produced was refused by its own clash check**, because I had put every stage in one plane
+  and two 54-tooth wheels one centre distance apart are inside each other. A compound gearbox is **layered**: each
+  stage runs in its own plane up the shafts. A `layer` on a placed gear now says which, and only gears in one layer
+  can mesh.
+- **The look page drew a pine tree for `kit=gears`.** `KITS.find(...) ?? KITS[0]` sent every ask for an unregistered
+  kit to whatever was first in the list, and printed its trunk diameter with a straight face. A picture of the wrong
+  thing is worse than no picture, because the numbers under it are real and belong to something else. It now refuses
+  and names the kits it has.
+- **The plate was sized from the gear centres and not their tips**, so a 54-tooth wheel hung 56 mm over an edge drawn
+  30 mm from its shaft: a gearbox resting on a stamp.
+
+### The room would not take it, and that was right
+
+Wiring the bench into `view/forge.ts` pushed that file past the size its own ratchet allows. The rule is never to
+raise the number, and the ratchet's own note said where to go: *"the benches and the lighting have moved out, the
+rest have not."* The rest was the mounting. Each bench now owns its working height and its vocabulary
+(`SolderBench.setOut`/`greeting`, `GearBench.setOut`/`greeting`/`act`), `view/benches.ts` owns setting one out, and
+the robot-at-the-bench routine went to the file that owns the robot. **`forge.ts` came out 4044 lines against the
+4046 it started at** — the round added a whole bench and left the room file smaller, and the ceiling is lowered to
+hold it.
+
+**The fault, named:** a mesh and a picture of a mesh differ only in a test that can tell them apart. Every real fault
+this round came from a check that compared the thing against itself — a ratio against a ratio, a phase against the
+formula that produced it — and every one of them was caught the moment something compared the geometry against other
+geometry. Four of my own numbers were wrong on the way (1.64, then 1.5574, then 1.55666 for one contact ratio, and a
+148 g gear I had bounded at 80 g), all of them from arithmetic I was sure of.
+
+GATE: PASS (2183 of 2183) — 181.0s · TIDY: PASS (23 of 23) · 37 new tests

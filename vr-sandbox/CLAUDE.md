@@ -120,6 +120,7 @@ standard, and whether a drawing holds all its inventory lists (`missingIn`) - `f
 `partspace.ts` parts made to any size by their standard and the words that ask for one - `kits.ts` a placed tree, a
 `Cut`, a `Port`, an `Iface` - `mate.ts` parts placed by mating faces, ports read off the geometry, and what a part
 promises against what it draws - `mechanism.ts` how many ways jointed parts can still move, and which ways -
+`gears.ts` the involute: a gear's real teeth, what meshes with what, and what a train does when one is turned -
 `mass.ts` a part's mass from shape, material and fill - `space.ts` oriented-box layout and contacts -
 `form.ts` lofts, bent tubes, turned profiles - `surface.ts` NURBS curves, skins, fairness, zebra, draft -
 `fits.ts` how close is close enough, and whether a machine can hold it - `finish.ts` edges as made, and the burr -
@@ -154,7 +155,8 @@ process - `link.ts` the wire out, the Bluetooth bridge, and what a cutter does i
 **`make/`** - the pipeline. `pipeline.ts` the rounds - `conditions.ts` how a made thing is - `detail.ts` joints,
 fasteners, seals, finishes, wear - `critic.ts` room to move, held up, walls, through, standing, declared.
 
-**`view/`** - everything drawn. `forge.ts` the room - `look.ts` the look page, how a picture is lit, cutaways -
+**`view/`** - everything drawn. `forge.ts` the room - `benches.ts` setting a bench out in it - `gear-bench.ts` the
+plate you put gears on by hand - `look.ts` the look page, how a picture is lit, cutaways -
 `kit3d.ts` how a drawn part comes apart, and drilling - `explode.ts` an item seen in 3D - `apps.ts` the phone -
 `solder-bench.ts` + `robot-bench.ts` the benches - `light.ts` the lighting.
 
@@ -321,6 +323,13 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
 - The life graph: the other messengers' rhythms where a study gives one, regions drawn as shapes, the 3D brain.
 - The printers: the most advanced one by the same builder; the Voron's Stealthburner is still a rounded block.
 - The four tidy ratchets, worked down by cause.
+- **Internal (ring) gears are refused, not drawn turning.** `parts/gears.ts` proves the external pair and the rack
+  geometrically — two placed gears are turned through a whole tooth and every tooth polygon is tested against every
+  other for overlap — and an internal pair does not pass it: the pinion's teeth overlap the ring's by about 0.2 mm
+  at the pitch circle, and a scan of the phase over a whole tooth is SYMMETRIC about the derived value, so the
+  timing is right and something in the pair's proportions is not. The ring's own shape is checked and correct. Next
+  step: the three internal interference conditions, worked through against that overlap test. Until then a planetary
+  cannot be built here, and `meshing()` says so in those words rather than reporting a ratio.
 
 **Known gaps in the architecture**
 - The inventory knows what is *in* a product; the kits know *where*. Joining them is the merge that ends "two
