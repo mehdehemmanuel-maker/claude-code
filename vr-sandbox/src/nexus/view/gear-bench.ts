@@ -66,7 +66,7 @@ export class GearBench {
     const pts: number[] = [];
     for (let x = -PLATE.x / 2 + this.pitch; x < PLATE.x / 2; x += this.pitch) for (let z = -PLATE.z / 2 + this.pitch; z < PLATE.z / 2; z += this.pitch) pts.push(x, 0.0006, z);
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    const dots = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x6d7580, size: 0.0007 }));
+    const dots = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x9aa4b0, size: 0.0016, sizeAttenuation: true }));
     dots.name = 'the shaft holes'; this.plate.add(dots);
     for (const [x, z, w] of [[0, -PLATE.z / 2, PLATE.x], [0, PLATE.z / 2, PLATE.x]] as const) {
       const rail = new THREE.Mesh(new THREE.BoxGeometry(w, 0.006, 0.008), new THREE.MeshStandardMaterial({ color: 0x2b2f35, roughness: 0.7, metalness: 0.4 }));
@@ -75,12 +75,18 @@ export class GearBench {
   }
 
   private buildStock(): void {
-    // the blanks laid out along the back rail, each drawn as the real gear it is
+    // THE RAIL THE BLANKS STAND ON. Without it they hang in the air off the back edge of the plate, which is what
+    // the first picture of this bench showed: nine gears floating in a row with nothing under them.
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(PLATE.x + 0.06, 0.01, 0.055), new THREE.MeshStandardMaterial({ color: 0x2b2f35, roughness: 0.65, metalness: 0.45 }));
+    rail.position.set(0, -0.005, -PLATE.z / 2 - 0.05); rail.receiveShadow = true; rail.name = 'the stock rail';
+    this.stockGroup.add(rail);
+    // the blanks laid out along it, each drawn as the real gear it is
     let x = -PLATE.x / 2 + 0.03;
     for (const s of GEAR_STOCK) {
       const cut = this.cutFor(s.z, s.kind);
       const mesh = this.meshFor(cut, 0x8a8f98);
       const holder = new THREE.Group(); holder.add(mesh);
+      holder.rotation.x = -Math.PI / 2;
       holder.position.set(x, 0.001, -PLATE.z / 2 - 0.05);
       holder.userData.stock = s;
       holder.name = `stock ${s.label}`;
@@ -102,8 +108,6 @@ export class GearBench {
     const geo = geometryOf(part.shape!, part.mat);
     const mesh = new THREE.Mesh(geo ?? new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: colour, roughness: 0.42, metalness: 0.78 }));
     mesh.castShadow = true; mesh.receiveShadow = true;
-    // the section is drawn in the plate's plane and extruded along its own z, so it is laid flat here
-    mesh.rotation.x = -Math.PI / 2;
     mesh.name = sayGear(cut);
     return mesh;
   }
@@ -120,6 +124,10 @@ export class GearBench {
     const cut = this.cutFor(z, kind);
     const id = `${kind === 'rack' ? 'rack' : `${z}T`}-${++this.n}`;
     const holder = new THREE.Group(), spin = new THREE.Group();
+    // LAID FLAT ON THE HOLDER, NOT ON THE MESH. Turning the mesh itself left the spin group above it turning about
+    // world Z, so the gears stood on edge and rotated like wheels — right ratio, wrong axis, and only a picture
+    // shows it. With the quarter-turn here, `spin.rotation.z` is the plate's own normal.
+    holder.rotation.x = -Math.PI / 2;
     spin.add(this.meshFor(cut, COLOURS[this.n % COLOURS.length]!));
     holder.add(spin);
     const [x, y] = this.snap(at);
@@ -288,7 +296,8 @@ export class GearBench {
     const f = forward.clone(); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
     const at = eye.clone().addScaledVector(f, 0.5); at.y = Math.max(0.75, eye.y - 0.55);
     this.group.position.copy(at); this.group.rotation.y = Math.atan2(-f.x, -f.z);
-    return { eye: at.clone().add(new THREE.Vector3(0, 0.42, 0)).addScaledVector(f, -0.42), at };
+    // A BOARD IS LOOKED DOWN AT. Set back as far as it was raised, it is seen edge-on and reads as a grey quad.
+    return { eye: at.clone().add(new THREE.Vector3(0, 0.62, 0)).addScaledVector(f, -0.26), at };
   }
 
   /** What to say when it is first set out: what is on the rail, and the one rule that makes the board work. */
@@ -305,7 +314,7 @@ export class GearBench {
    *  has become — none of them reports a ratio without re-solving. */
   act(t: string): string | null {
     let m: RegExpExecArray | null;
-    if ((m = /^(?:put|place|add)\s+(?:an?\s+)?(\d+|rack)\s*t?(?:\s*(?:on|down))?(?:\s*(?:at|@)\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?))?/i.exec(t))) {
+    if ((m = /^(?:put|place|add)\s+(?:an?\s+)?(\d+|rack)\s*t?\b(?:\s*(?:on|down))?(?:\s*(?:at|@)\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?))?/i.exec(t))) {
       const rack = /rack/i.test(m[1]!), z = rack ? 30 : Number(m[1]);
       const g = this.place(z, [Number(m[2] ?? 0) / 1000, Number(m[3] ?? 0) / 1000], rack ? 'rack' : undefined);
       const said = this.say();

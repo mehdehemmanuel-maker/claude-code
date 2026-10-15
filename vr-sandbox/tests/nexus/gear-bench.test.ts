@@ -3,6 +3,7 @@
 // so every one of these runs headless, and a hand is just an object at a position.
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
+import { readFileSync } from 'node:fs';
 import { GearBench, GEAR_STOCK, benchParts, benchFaults } from '../../src/nexus/view/gear-bench';
 
 const hand = (x: number, y: number, z: number): THREE.Object3D => { const o = new THREE.Object3D(); o.position.set(x, y, z); o.updateMatrixWorld(true); return o; };
@@ -151,5 +152,34 @@ describe('a board you put gears on', () => {
     const bad = new GearBench(0.002);
     bad.place(5, [0, 0]);
     expect(benchFaults(bad).join(' ')).toMatch(/not a gear/);
+  });
+});
+
+describe('the words a person actually types at it', () => {
+  // THE ROOM-FACING PATH HAD NO TEST, and a bug lived in it: a `\b` written into the placement regex by a patch
+  // script came out as a literal backspace character (0x08), so "put a 20 on at 0,0" could never match and the
+  // room answered 'I do not know the shape "a"' instead. Every test above drives `place()` directly, which is the
+  // mechanism — this drives `act()`, which is the product.
+  it('places, keys, drives and reads back, all by typed words', () => {
+    const b = new GearBench(0.002);
+    expect(b.act('put a 20 on at 0,0')).toMatch(/20T-1 on the hole at 0, 0 mm/);
+    expect(b.act('put a 40 on at 60,0')).toMatch(/2\.000 to 1 reduction/);
+    expect(b.act('what does it do')).toMatch(/2 gears on the board, 1 pair in mesh/);
+    expect(b.act('faster')).toMatch(/90 rpm/);
+    expect(b.act('stop')).toMatch(/held still/);
+    expect(b.act('go')).toMatch(/Turning/);
+    expect(b.act('drive 40T-2')).toMatch(/40T-2 is the one being turned/);
+    expect(b.act('take off 40T-2')).toMatch(/off the board/);
+    expect(b.act('take off 40T-2')).toMatch(/There is no 40T-2/);
+    expect(b.act('put a rack on at 0,-20')).toMatch(/rack-3/);
+    expect(b.act('make me a sandwich')).toBeNull();   // not its words: it says nothing rather than guessing
+  });
+
+  it('every regex in it is free of control characters', () => {
+    // the cause, not the symptom: a patch script writing \b, \t or \f into a pattern string silently emits the
+    // control character instead, and the pattern then matches nothing at all
+    const src = readFileSync(new URL('../../src/nexus/view/gear-bench.ts', import.meta.url), 'utf8');
+    const bad = [...src.matchAll(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g)].map((m) => m.index);
+    expect(bad, `control characters at ${bad.join(', ')}`).toEqual([]);
   });
 });

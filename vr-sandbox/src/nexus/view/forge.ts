@@ -82,7 +82,7 @@ import { routeMake } from '../ask/route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../parts/kits';
 import { filletCyl, kitView, type KitView } from './kit3d';
 import { SolderBench } from './solder-bench';
-import { closeGears, gearBench, openGears, openSolder, type Room } from './benches';
+import { benchHeard, closeGears, gearBench, openGears, openSolder, type Room } from './benches';
 import { worksStep, worksStood, worksRoomWords } from './works-room';
 import { lightRoom } from './light';
 import { worksWords } from '../works/text';
@@ -2319,9 +2319,8 @@ function benchWords(text: string): string | null {
   // (the second lesson first: its words begin as the first's do)
   if (/^((teach me (to|how to) )?solder (an? |the )?(led|resistor)\b|(the )?(second|led|perma-?proto) (soldering )?lesson|(teach me (to|how to) )?solder (on|onto) (a |the )?perma-?proto|solder (the |a )?perma-?proto|trim(ming)? leads lesson)/.test(t)) return startBench('proto');
   if (/^(teach me (to|how to) solder|(a |the )?solder(ing)? lesson|learn to solder|let me solder|i want to solder|solder (the )?pico('s)?( pins| headers)?|(start|open|set up) (the |a )?(soldering )?bench)\b/.test(t)) return startBench();
-  // the gear bench: a plate of shaft holes and gears that mesh because of WHERE you put them (view/benches.ts)
-  if (/^((open|start|set up|show me|give me) (the |a )?)?gear (bench|board)\b|^gears?$|^(let me )?(play|mess about) with gears\b/.test(t)) return openGears(asRoom());
-  const gearWords = closeGears(asRoom(), t) ?? gearBench()?.act(t) ?? null; if (gearWords) return gearWords;
+  // the gear bench (view/benches.ts): a plate of shaft holes and gears that mesh because of WHERE you put them
+  { const g = /^((open|start|set up|show me|give me) (the |a )?)?gear (bench|board)\b|^gears?$|^(let me )?(play|mess about) with gears\b/.test(t) ? openGears(asRoom()) : closeGears(asRoom(), t); if (g) return g; }
   if (!bench) return null;
   if (/^(close|end|stop|put away) (the )?(soldering )?(bench|lesson)/.test(t)) { bench.dispose(); bench = null; return 'The bench put away.'; }
   if (/^(place|take|tin|wipe|heat|feed|lift|away|more solder|pull more|iron (down|back)|put the (iron|board|cutters|battery|holder)|board|clip|mount|unclip|cut|trim|snip|cutters?|battery|holder|(close|open) (the )?(knife )?switch|switch (it )?(on|off)|turn (it )?(on|off))\b/.test(t)) return bench.act(t);
@@ -2544,6 +2543,7 @@ function removeAsked(what: string): string {
 }
 async function converse(text: string): Promise<void> {
   boards?.event({ kind: 'said', text }); heardFeeling(text);
+  { const said = benchHeard(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }  // a bench that is out owns its own words first
   // an answer to what the intent pipeline asked, or a word to it about what it made: done here, offline
   if (RESET_WORDS.test(text.trim())) { line('you', text); say(resetBuild(), undefined, 'nexus'); return; }
   if (/^(store|keep|shelve) (it|this|the build|that)( in the warehouse)?[.!]?$|^put (it|this|the build) in the warehouse[.!]?$/i.test(text.trim())) { line('you', text); say(storeBuild(), undefined, 'nexus'); return; }
@@ -3813,8 +3813,7 @@ for (let i = 0; i < 2; i++) {
   // or anywhere on it) to carry it; let go to leave it there. The left hand's grip pauses, as it did.
   ctl.addEventListener('squeezestart', () => {
     // a thing of the soldering bench within reach of either hand is taken by it
-    { const said = gearBench()?.grab(handOf[i] === 'left' ? 'left' : 'right', renderer.xr.getControllerGrip(i)); if (said) { say(said, undefined, 'nexus'); return; } }
-    if (bench) { const said = bench.grab(handOf[i] === 'left' ? 'left' : 'right', renderer.xr.getControllerGrip(i), ctl); if (said) { say(said, undefined, 'nexus'); return; } }
+    { const h = handOf[i] === 'left' ? 'left' : 'right', said = gearBench()?.grab(h, renderer.xr.getControllerGrip(i)) ?? bench?.grab(h, renderer.xr.getControllerGrip(i), ctl); if (said) { say(said, undefined, 'nexus'); return; } }
     // a person within reach of either hand is held by it
     { const said = gripPerson(i); if (said) { say(said, undefined, 'nexus'); return; } }
     if (handOf[i] !== 'right') { togglePause(); return; }
@@ -3974,6 +3973,7 @@ async function boot() {
   // the windows and the phone, for a test: where a bar's part or a phone button is on the screen (or in the room), and what is open
   const toScreen = (w: THREE.Vector3 | null): [number, number] | null => { if (!w) return null; const q = w.clone().project(camera); return [((q.x + 1) / 2) * window.innerWidth, ((1 - q.y) / 2) * window.innerHeight]; };
   Object.assign(window as object, {
+    tell: async (text: string) => { await converse(text); return true; },   // say something to the room, as a person types it (tools/forge-look.mjs "say:…")
     winPoint: (id: string, act: 'move' | 'min' | 'close') => toScreen(windows.pointOf(id, act)),
     // the works as it stands: where the camera is, where the room is, and what is on its floor (a test hook, so a
     // screenshot can be framed from the layout's own numbers rather than by guessing at them)

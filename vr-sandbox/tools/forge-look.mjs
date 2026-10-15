@@ -20,7 +20,15 @@ let at = null;
 for (const a of asks) {
   const [name, words, query = ''] = a.split('|');
   if (at !== query) { at = query; await p.goto(`http://localhost:${port}/forge.html${query ? `?${query}` : ''}`); await p.waitForFunction(() => window.ready === true && typeof window.see3d === 'function', null, { timeout: 120000 }); }
-  const said = await p.evaluate((w) => window.see3d(`${w}`), words);
+  // A NAME PREFIXED `say:` is a thing to TELL the room, not a part to stand in front of you: the benches, the
+  // places and everything else that has to be asked for. Without it a screenshot could only ever show what the
+  // library draws on its own — "gear bench" went to the inventory and came back as a single 20-tooth spur gear.
+  const said = words.startsWith('say:')
+    ? (await p.evaluate((w) => window.tell(`${w}`), words.slice(4).trim()),
+       // what the room SAID back, read off the page: a screenshot shows whether it looks right, this shows whether
+       // it WORKED, and the second is the one worth having in the terminal
+       await p.evaluate(() => (document.body.innerText.match(/Nexus:[^\n]*/g) ?? []).slice(-1)[0] ?? '(no reply)'))
+    : await p.evaluate((w) => window.see3d(`${w}`), words);
   await p.waitForTimeout(2500); await p.screenshot({ path: `${out}/${name}.png` }); console.log(name, String(said).slice(0, 200));
 }
 console.log('errors:', errs.slice(0, 5).join(' | ') || 'none');

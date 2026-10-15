@@ -42,6 +42,12 @@ export function openGears(room: Room, m = 0.002): string {
   return gears.greeting(room.inVR);
 }
 
+/** WHAT A BENCH THAT IS OUT HEARS FIRST. "put a 20 on at 0,0" is a gear on a plate, but the room's generic shape
+ *  placer matched it first and answered 'I do not know the shape "a"', so the gear bench's words were unreachable
+ *  in the room — which only showed when the bench was driven rather than built and photographed. A bench that is
+ *  out owns its own vocabulary, and the room asks here before it asks anything else. */
+export const benchHeard = (text: string): string | null => gears?.act(text.trim()) ?? null;
+
 /** Put it away, if the words ask for that. */
 export function closeGears(room: Room, t: string): string | null {
   if (!gears || !/^(close|put away|clear) (the )?gear(s| bench)?/.test(t)) return null;
