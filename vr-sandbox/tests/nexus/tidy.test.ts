@@ -52,7 +52,7 @@ const dirOf = (p: string) => {
  *  split it, four fifths of it a round log, which is an anchor too long to read before a round. Splitting it would
  *  have quietly dropped three quarters of what this check covers, so the check follows the prose instead. Every entry
  *  is asserted to exist, so a rename fails here rather than silently un-checking a file. */
-const PROSE = ['CLAUDE.md', 'docs/OWNERS.md', 'docs/ROUNDS.md', 'docs/TOOLS.md'];
+const PROSE = ['CLAUDE.md', 'docs/OWNERS.md', 'docs/ROUNDS.md', 'docs/TOOLS.md', 'docs/rounds/archive-1.md', 'docs/rounds/archive-2.md'];
 
 /** Files a tool in `tools/measure/` wrote from a maker's own model or photo. They are data: long because the thing
  *  is, and their header carries the command that regenerates them instead of prose about a concern. */
@@ -650,7 +650,11 @@ const UNSOURCED: string[] = [
 ];
 
 describe('a figure quoted in the ledger says where it came from', () => {
-  const ROUNDS = read(join(ROOT, 'docs/ROUNDS.md'));
+  // THE LOG IS NOW SEVERAL FILES (Run 8g: ROUNDS.md was 3,181 lines, over half of it one stale section). The
+  // citation discipline follows the content rather than the filename — splitting a file must not be a way to
+  // escape the rule that every block of figures names the command that produced it.
+  const ROUNDS = ['docs/ROUNDS.md', ...readdirSync(join(ROOT, 'docs/rounds')).sort().map((n) => `docs/rounds/${n}`)]
+    .map((p) => read(join(ROOT, p))).join('\n');
   const blocks = () => {
     const lines = ROUNDS.split('\n'), out: { at: number; body: string; above: string; first: string }[] = [];
     for (let i = 0; i < lines.length; i++) {

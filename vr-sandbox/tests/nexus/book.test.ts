@@ -5,7 +5,15 @@ import { describe, expect, it } from 'vitest';
 import { BOOK, CANTILEVER_TIP_SAG, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, SLICE, UNIVERSAL as UNIVERSAL_LAWS, WEIGHT, lawById } from '../../src/nexus/book';
 import { ofLeaf, type Derivation } from '../../src/nexus/lang/evaluate';
 import { apply, invert, law } from '../../src/nexus/lang/law';
-import { LAWS } from '../../src/ganglia/laws';
+// THE KEPT BOOK, FROZEN AS DATA (Run 8g). This was `import { LAWS } from '../../src/ganglia/laws'` — 1,310 lines
+// of live code holding the same 155 laws the book holds, with its own eval functions and its own imports, none of
+// it reached from any door. A guard must not be a second implementation: the transcription is still checked, law
+// by law, against exactly what it was transcribed from, and what it is checked against is now data that cannot
+// drift, cannot be imported by mistake, and brings nothing else with it.
+import KEPT_LAWS from './kept-laws.json';
+type KeptLaw = { id: string; statement: string; inputs: [string, string][]; output: [string, string]; cite: string;
+  example: { inputs: Record<string, number>; output: number; rel?: number }; hasDomain: boolean; exampleInsideDomain: boolean | null };
+const LAWS = KEPT_LAWS as unknown as KeptLaw[];
 import { parseUnit } from '../../src/ganglia/units';
 import { leaf, mul, variable } from '../../src/nexus/lang/term';
 import { leavesUnder } from '../../src/nexus/substrate/why';
@@ -39,25 +47,25 @@ describe('the kept book as terms: every law, by its own example', () => {
     expect([...ids].sort()).toEqual(LAWS.map((l) => l.id).sort());
     for (const id of ids) {
       const t = lawById(id), k = kept[id]!;
-      expect(t.inputs.map((p) => [p.sym, p.unit]), id).toEqual(k.inputs.map((p) => [p.sym, p.unit]));
-      expect([t.output.sym, t.output.unit], id).toEqual([k.output.sym, k.output.unit]);
+      expect(t.inputs.map((p) => [p.sym, p.unit]), id).toEqual(k.inputs);
+      expect([t.output.sym, t.output.unit], id).toEqual(k.output);
       expect(t.statement).toBe(k.statement);
-      expect(t.source.cite).toBe(k.source.cite);
+      expect(t.source.cite).toBe(k.cite);
     }
   });
   for (const k of LAWS) {
-    it(`${k.id}: the term reproduces the kept example in SI${k.outside ? ', and the domain is a predicate' : ''}`, () => {
+    it(`${k.id}: the term reproduces the kept example in SI${k.hasDomain ? ', and the domain is a predicate' : ''}`, () => {
       const t = lawById(k.id);
       const d = apply(t, env(t, k.example.inputs));
-      const expected = inSI(k.example.output, k.output.unit);
+      const expected = inSI(k.example.output, k.output[1]);
       expect(d.status, `${k.id}: ${d.refusal?.domain ?? d.because ?? ''}`).not.toBe('outside-validity');
       expect(d.value).not.toBeNull();
       const rel = Math.max(k.example.rel ?? 0, 1e-9);
       expect(Math.abs(d.value! - expected), `${k.id}: ${d.value} vs ${expected}`).toBeLessThanOrEqual(rel * Math.max(Math.abs(expected), 1e-300));
       // the kept validity function and the term's domain predicates agree on the example
-      expect(t.domain.length > 0).toBe(!!k.outside);
-      if (k.outside) {
-        expect(k.outside(k.example.inputs)).toBeNull();
+      expect(t.domain.length > 0).toBe(k.hasDomain);
+      if (k.hasDomain) {
+        expect(k.exampleInsideDomain, `${k.id}: its own example must sit inside its domain`).toBe(true);
         for (const dc of t.domain) expect(dc.says.length).toBeGreaterThan(8);
       }
       // every constant the term holds is a leaf with its source

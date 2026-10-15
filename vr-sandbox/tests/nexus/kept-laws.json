@@ -1,0 +1,4870 @@
+[
+ {
+  "id": "newton.second",
+  "statement": "The net force on a body is its mass times its acceleration.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "a",
+    "m/s^2"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "m": 2,
+    "a": 3
+   },
+   "output": 6
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "weight",
+  "statement": "A mass weighs its mass times the local acceleration of gravity.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "g",
+    "m/s^2"
+   ]
+  ],
+  "output": [
+   "W",
+   "N"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "m": 10,
+    "g": 9.80665
+   },
+   "output": 98.0665
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "friction.coulomb",
+  "statement": "Dry friction holds up to the friction coefficient times the normal force, and slides at about that force once moving.",
+  "inputs": [
+   [
+    "mu",
+    "-"
+   ],
+   [
+    "N",
+    "N"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "mu": 0.4,
+    "N": 500
+   },
+   "output": 200
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "rolling.resistance",
+  "statement": "A rolling wheel is held back by a force proportional to the load on it: the rolling resistance coefficient times the normal force.",
+  "inputs": [
+   [
+    "Crr",
+    "-"
+   ],
+   [
+    "N",
+    "N"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance",
+  "example": {
+   "inputs": {
+    "Crr": 0.015,
+    "N": 1176.798
+   },
+   "output": 17.65197
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "grade.force",
+  "statement": "On a slope, the part of the weight along it pulls a vehicle back.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "theta",
+    "rad"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance",
+  "example": {
+   "inputs": {
+    "m": 120,
+    "theta": 0.049958395721942765
+   },
+   "output": 58.7664877443385
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "drag.aero",
+  "statement": "Air pushes back on a moving body with half the air density times its drag coefficient, frontal area and speed squared.",
+  "inputs": [
+   [
+    "rho",
+    "kg/m^3"
+   ],
+   [
+    "Cd",
+    "-"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "v",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Hoerner, Fluid-Dynamic Drag, 1965",
+  "example": {
+   "inputs": {
+    "rho": 1.204,
+    "Cd": 0.9,
+    "A": 0.5,
+    "v": 10
+   },
+   "output": 27.09
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "power.linear",
+  "statement": "A force moving its point at a speed does work at force times speed.",
+  "inputs": [
+   [
+    "F",
+    "N"
+   ],
+   [
+    "v",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "P",
+   "W"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "F": 100,
+    "v": 3
+   },
+   "output": 300
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "power.rotary",
+  "statement": "A torque turning at a speed does work at torque times angular speed.",
+  "inputs": [
+   [
+    "T",
+    "N m"
+   ],
+   [
+    "w",
+    "rad/s"
+   ]
+  ],
+  "output": [
+   "P",
+   "W"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "T": 5,
+    "w": 100
+   },
+   "output": 500
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "wheel.torque",
+  "statement": "A wheel pushing with a force at its rim needs that force times its radius at its axle.",
+  "inputs": [
+   [
+    "F",
+    "N"
+   ],
+   [
+    "r",
+    "m"
+   ]
+  ],
+  "output": [
+   "T",
+   "N m"
+  ],
+  "cite": "Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance",
+  "example": {
+   "inputs": {
+    "F": 93.3,
+    "r": 0.125
+   },
+   "output": 11.6625
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "traction.limit",
+  "statement": "Driven wheels can push no harder than the tyre's friction coefficient times the weight on them; past that they spin.",
+  "inputs": [
+   [
+    "mu",
+    "-"
+   ],
+   [
+    "N",
+    "N"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance",
+  "example": {
+   "inputs": {
+    "mu": 0.8,
+    "N": 600
+   },
+   "output": 480
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "energy.kinetic",
+  "statement": "A moving mass holds half its mass times its speed squared.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "v",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "m": 120,
+    "v": 2.2
+   },
+   "output": 290.4
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "energy.potential",
+  "statement": "A raised mass holds its weight times its height.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "h",
+    "m"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "m": 10,
+    "h": 2
+   },
+   "output": 196.133
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "braking.distance",
+  "statement": "Braking steadily, a body stops in its speed squared over twice its deceleration.",
+  "inputs": [
+   [
+    "v",
+    "m/s"
+   ],
+   [
+    "a",
+    "m/s^2"
+   ]
+  ],
+  "output": [
+   "d",
+   "m"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "v": 10,
+    "a": 5
+   },
+   "output": 10
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "cornering.limit",
+  "statement": "Round a flat bend a vehicle slides past the speed whose centripetal need equals its grip.",
+  "inputs": [
+   [
+    "mu",
+    "-"
+   ],
+   [
+    "R",
+    "m"
+   ]
+  ],
+  "output": [
+   "v",
+   "m/s"
+  ],
+  "cite": "Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance",
+  "example": {
+   "inputs": {
+    "mu": 0.8,
+    "R": 5
+   },
+   "output": 6.2631142413339385
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "pendulum.period",
+  "statement": "A simple pendulum swings with period two pi root of its length over gravity.",
+  "inputs": [
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "T",
+   "s"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "L": 1
+   },
+   "output": 2.0064092925890407
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "stress.axial",
+  "statement": "A bar pulled or pushed along its length carries the force spread over its section.",
+  "inputs": [
+   [
+    "F",
+    "N"
+   ],
+   [
+    "A",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "sigma",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "F": 10000,
+    "A": 0.00007853981633974483
+   },
+   "output": 127323954.47351627
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "hooke",
+  "statement": "Below yield, stress is the elastic modulus times strain.",
+  "inputs": [
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "eps",
+    "-"
+   ]
+  ],
+  "output": [
+   "sigma",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "E": 200000000000,
+    "eps": 0.001
+   },
+   "output": 200000000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "stress.bending",
+  "statement": "A beam bent by a moment is stressed most at its outer fibre: the moment over its section modulus.",
+  "inputs": [
+   [
+    "M",
+    "N m"
+   ],
+   [
+    "S",
+    "m^3"
+   ]
+  ],
+  "output": [
+   "sigma",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "M": 100,
+    "S": 0.0000053333333333333345
+   },
+   "output": 18750000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "beam.simply-supported.udl",
+  "statement": "A beam resting on supports at its ends, loaded evenly, sags most at mid-span by 5 w L^4 over 384 E I (w per metre).",
+  "inputs": [
+   [
+    "w",
+    "N/m"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "I",
+    "m^4"
+   ]
+  ],
+  "output": [
+   "d",
+   "m"
+  ],
+  "cite": "Young & Budynas, Roark's Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002",
+  "example": {
+   "inputs": {
+    "w": 1000,
+    "L": 2,
+    "E": 200000000000,
+    "I": 1.0666666666666668e-7
+   },
+   "output": 0.009765625
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "beam.simply-supported.point",
+  "statement": "A load at mid-span of a simply supported beam sags it by P L^3 over 48 E I.",
+  "inputs": [
+   [
+    "P",
+    "N"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "I",
+    "m^4"
+   ]
+  ],
+  "output": [
+   "d",
+   "m"
+  ],
+  "cite": "Young & Budynas, Roark's Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002",
+  "example": {
+   "inputs": {
+    "P": 1000,
+    "L": 2,
+    "E": 200000000000,
+    "I": 1.0666666666666668e-7
+   },
+   "output": 0.0078125
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "beam.cantilever.point",
+  "statement": "A beam fixed at one end and loaded at the other bends there by P L^3 over 3 E I.",
+  "inputs": [
+   [
+    "P",
+    "N"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "I",
+    "m^4"
+   ]
+  ],
+  "output": [
+   "d",
+   "m"
+  ],
+  "cite": "Young & Budynas, Roark's Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002",
+  "example": {
+   "inputs": {
+    "P": 1000,
+    "L": 1,
+    "E": 200000000000,
+    "I": 1.0666666666666668e-7
+   },
+   "output": 0.015625
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "buckling.euler",
+  "statement": "A slender strut pushed end to end bows out sideways and collapses at π^2 E I over (K L)^2, K set by how its ends are held.",
+  "inputs": [
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "I",
+    "m^4"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "K",
+    "-"
+   ]
+  ],
+  "output": [
+   "P",
+   "N"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "E": 200000000000,
+    "I": 7.853981633974483e-9,
+    "L": 1,
+    "K": 1
+   },
+   "output": 15503.138340149908
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "torsion.solid",
+  "statement": "A solid round shaft carrying a torque is sheared most at its surface: 16 T over π d^3.",
+  "inputs": [
+   [
+    "T",
+    "N m"
+   ],
+   [
+    "d",
+    "m"
+   ]
+  ],
+  "output": [
+   "tau",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "T": 50,
+    "d": 0.02
+   },
+   "output": 31830988.61837906
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "torsion.twist",
+  "statement": "A shaft twists by its torque times its length over its shear modulus times its polar moment.",
+  "inputs": [
+   [
+    "T",
+    "N m"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "G",
+    "Pa"
+   ],
+   [
+    "J",
+    "m^4"
+   ]
+  ],
+  "output": [
+   "theta",
+   "rad"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "T": 50,
+    "L": 1,
+    "G": 79300000000,
+    "J": 1.5707963267948965e-8
+   },
+   "output": 0.040139960426707526
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "stress.von-mises",
+  "statement": "A ductile metal under bending and twisting together yields when root(σ^2 + 3 τ^2) reaches its yield strength.",
+  "inputs": [
+   [
+    "sigma",
+    "Pa"
+   ],
+   [
+    "tau",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "s",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "sigma": 100000000,
+    "tau": 50000000
+   },
+   "output": 132287565.55322953
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "shaft.diameter.static",
+  "statement": "A solid shaft carrying moment M and torque T needs a diameter of [16 n / (π S_y) · root(4 M^2 + 3 T^2)]^(1/3) for a safety factor n against yield.",
+  "inputs": [
+   [
+    "M",
+    "N m"
+   ],
+   [
+    "T",
+    "N m"
+   ],
+   [
+    "n",
+    "-"
+   ],
+   [
+    "Sy",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "d",
+   "m"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "M": 30,
+    "T": 20,
+    "n": 2,
+    "Sy": 370000000
+   },
+   "output": 0.012401465232986781
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "thermal.expansion",
+  "statement": "A part grows by its expansion coefficient times its length times its temperature rise.",
+  "inputs": [
+   [
+    "alpha",
+    "1/K"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "dT",
+    "K"
+   ]
+  ],
+  "output": [
+   "dL",
+   "m"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "alpha": 0.0000236,
+    "L": 1,
+    "dT": 50
+   },
+   "output": 0.00118
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "fatigue.endurance.steel",
+  "statement": "A polished steel test bar survives endless reversed bending below about half its tensile strength (700 MPa at most).",
+  "inputs": [
+   [
+    "Sut",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "Se",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "Sut": 440000000
+   },
+   "output": 220000000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "bearing.life.l10",
+  "statement": "Ninety per cent of a group of identical bearings outlast (C/P)^p million revolutions: p = 3 for ball bearings, 10/3 for roller bearings.",
+  "inputs": [
+   [
+    "C",
+    "N"
+   ],
+   [
+    "P",
+    "N"
+   ],
+   [
+    "p",
+    "-"
+   ]
+  ],
+  "output": [
+   "L",
+   "rev"
+  ],
+  "cite": "ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life",
+  "example": {
+   "inputs": {
+    "C": 14.8,
+    "P": 1,
+    "p": 3
+   },
+   "output": 3241792000
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "bearing.life.hours",
+  "statement": "A rating life in revolutions, turned at n rpm, lasts L10 / (60 n) hours.",
+  "inputs": [
+   [
+    "L",
+    "rev"
+   ],
+   [
+    "n",
+    "rpm"
+   ]
+  ],
+  "output": [
+   "h",
+   "h"
+  ],
+  "cite": "ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life",
+  "example": {
+   "inputs": {
+    "L": 3241792000,
+    "n": 600
+   },
+   "output": 90049.7777777778
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "spring.rate",
+  "statement": "A coil spring's rate is G d^4 over 8 D^3 n: wire diameter d, coil diameter D, n active coils.",
+  "inputs": [
+   [
+    "G",
+    "Pa"
+   ],
+   [
+    "d",
+    "m"
+   ],
+   [
+    "D",
+    "m"
+   ],
+   [
+    "n",
+    "-"
+   ]
+  ],
+  "output": [
+   "k",
+   "N/m"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "G": 79300000000,
+    "d": 0.005,
+    "D": 0.04,
+    "n": 8
+   },
+   "output": 12100.219726562498
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "capstan",
+  "statement": "A rope or belt wrapped round a drum holds a tension ratio of e^(μ θ) between its ends before slipping.",
+  "inputs": [
+   [
+    "mu",
+    "-"
+   ],
+   [
+    "theta",
+    "rad"
+   ]
+  ],
+  "output": [
+   "r",
+   "-"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "mu": 0.3,
+    "theta": 3.141592653589793
+   },
+   "output": 2.566332395208135
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "chain.speed",
+  "statement": "A chain moves at the sprocket's teeth times the pitch times its revolutions per second.",
+  "inputs": [
+   [
+    "z",
+    "-"
+   ],
+   [
+    "p",
+    "m"
+   ],
+   [
+    "n",
+    "rpm"
+   ]
+  ],
+  "output": [
+   "v",
+   "m/s"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "z": 12,
+    "p": 0.0127,
+    "n": 1000
+   },
+   "output": 2.54
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "chain.pull",
+  "statement": "A chain carrying power P at speed v is pulled at P over v on its tight side.",
+  "inputs": [
+   [
+    "P",
+    "W"
+   ],
+   [
+    "v",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "P": 150,
+    "v": 2.54
+   },
+   "output": 59.05511811023623
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "gear.output.torque",
+  "statement": "A gear train multiplies torque by its ratio, less its losses.",
+  "inputs": [
+   [
+    "T",
+    "N m"
+   ],
+   [
+    "i",
+    "-"
+   ],
+   [
+    "eta",
+    "-"
+   ]
+  ],
+  "output": [
+   "Tout",
+   "N m"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "T": 0.6,
+    "i": 12,
+    "eta": 0.81
+   },
+   "output": 5.832
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "ohm",
+  "statement": "The voltage across a resistance is the current through it times the resistance.",
+  "inputs": [
+   [
+    "I",
+    "A"
+   ],
+   [
+    "R",
+    "ohm"
+   ]
+  ],
+  "output": [
+   "V",
+   "V"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "I": 20,
+    "R": 0.3
+   },
+   "output": 6
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "joule",
+  "statement": "Current through a resistance heats it at the current squared times the resistance.",
+  "inputs": [
+   [
+    "I",
+    "A"
+   ],
+   [
+    "R",
+    "ohm"
+   ]
+  ],
+  "output": [
+   "P",
+   "W"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "I": 20,
+    "R": 0.3
+   },
+   "output": 120
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "wire.resistance",
+  "statement": "A wire's resistance is its resistivity times its length over its cross-section.",
+  "inputs": [
+   [
+    "rho",
+    "ohm m"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "A",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "R",
+   "ohm"
+  ],
+  "cite": "IEC 60028:1925 International standard of resistance for copper",
+  "example": {
+   "inputs": {
+    "rho": 1.724e-8,
+    "L": 1,
+    "A": 0.00000208
+   },
+   "output": 0.00828846153846154
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "copper.tempco",
+  "statement": "Copper grows 0.393% more resistive per kelvin.",
+  "inputs": [
+   [
+    "R0",
+    "ohm"
+   ],
+   [
+    "T",
+    "degC"
+   ],
+   [
+    "T0",
+    "degC"
+   ]
+  ],
+  "output": [
+   "R",
+   "ohm"
+  ],
+  "cite": "IEC 60028",
+  "example": {
+   "inputs": {
+    "R0": 0.317,
+    "T": 100,
+    "T0": 25
+   },
+   "output": 0.41043575
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "wire.drop",
+  "statement": "A current out and back along two conductors drops I times twice the run times the resistance per metre.",
+  "inputs": [
+   [
+    "I",
+    "A"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "Rm",
+    "ohm/m"
+   ]
+  ],
+  "output": [
+   "dV",
+   "V"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "I": 20,
+    "L": 1,
+    "Rm": 0.008286
+   },
+   "output": 0.33144
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "motor.torque",
+  "statement": "A permanent-magnet DC motor's torque is its torque constant times its current.",
+  "inputs": [
+   [
+    "Kt",
+    "N m/A"
+   ],
+   [
+    "I",
+    "A"
+   ]
+  ],
+  "output": [
+   "T",
+   "N m"
+  ],
+  "cite": "maxon, The selection of high-precision microdrives; Hughes, Electric Motors and Drives, 4th ed.",
+  "example": {
+   "inputs": {
+    "Kt": 0.0302,
+    "I": 20
+   },
+   "output": 0.604
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "motor.back-emf",
+  "statement": "A turning DC motor makes a voltage against its supply: its speed constant times its speed (K_e = K_t in SI).",
+  "inputs": [
+   [
+    "Ke",
+    "V s/rad"
+   ],
+   [
+    "w",
+    "rad/s"
+   ]
+  ],
+  "output": [
+   "E",
+   "V"
+  ],
+  "cite": "Hughes, Electric Motors and Drives, 4th ed.",
+  "example": {
+   "inputs": {
+    "Ke": 0.0302,
+    "w": 500
+   },
+   "output": 15.1
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "motor.current",
+  "statement": "A motor draws what the applied voltage less its back-EMF drives through its winding.",
+  "inputs": [
+   [
+    "V",
+    "V"
+   ],
+   [
+    "Ke",
+    "V s/rad"
+   ],
+   [
+    "w",
+    "rad/s"
+   ],
+   [
+    "R",
+    "ohm"
+   ]
+  ],
+  "output": [
+   "I",
+   "A"
+  ],
+  "cite": "Hughes, Electric Motors and Drives, 4th ed.",
+  "example": {
+   "inputs": {
+    "V": 24,
+    "Ke": 0.0302,
+    "w": 500,
+    "R": 0.299
+   },
+   "output": 29.765886287625413
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "motor.time-constant",
+  "statement": "An unloaded motor reaches 63% of its no-load speed in R J over K_t^2.",
+  "inputs": [
+   [
+    "R",
+    "ohm"
+   ],
+   [
+    "J",
+    "kg m^2"
+   ],
+   [
+    "Kt",
+    "N m/A"
+   ]
+  ],
+  "output": [
+   "tau",
+   "s"
+  ],
+  "cite": "maxon, Key information on motor data (mechanical time constant)",
+  "example": {
+   "inputs": {
+    "R": 0.299,
+    "J": 0.0000142,
+    "Kt": 0.0302
+   },
+   "output": 0.004655278277268541
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "lead-acid.ocv",
+  "statement": "A lead-acid cell rests at about 0.85 V plus its acid's specific gravity.",
+  "inputs": [
+   [
+    "SG",
+    "-"
+   ]
+  ],
+  "output": [
+   "V",
+   "V"
+  ],
+  "cite": "Linden & Reddy, Handbook of Batteries, 3rd ed., ch. 23 (lead-acid)",
+  "example": {
+   "inputs": {
+    "SG": 1.28
+   },
+   "output": 2.13
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "energy.electric",
+  "statement": "Energy delivered is voltage times current times time.",
+  "inputs": [
+   [
+    "V",
+    "V"
+   ],
+   [
+    "I",
+    "A"
+   ],
+   [
+    "t",
+    "s"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "V": 24,
+    "I": 10,
+    "t": 3600
+   },
+   "output": 864000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "convection",
+  "statement": "A surface loses heat to a fluid at its heat transfer coefficient times its area times its temperature excess.",
+  "inputs": [
+   [
+    "h",
+    "W/m^2 K"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "dT",
+    "K"
+   ]
+  ],
+  "output": [
+   "q",
+   "W"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011",
+  "example": {
+   "inputs": {
+    "h": 10,
+    "A": 0.1,
+    "dT": 50
+   },
+   "output": 50
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "conduction",
+  "statement": "Heat conducts through a wall at its conductivity times its area times the temperature difference over its thickness.",
+  "inputs": [
+   [
+    "k",
+    "W/m K"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "dT",
+    "K"
+   ],
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "q",
+   "W"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011",
+  "example": {
+   "inputs": {
+    "k": 200,
+    "A": 0.01,
+    "dT": 50,
+    "L": 0.1
+   },
+   "output": 1000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "convection.natural",
+  "statement": "A surface in still air loses heat at a coefficient that rises with the fourth root of its temperature excess over its size: hotter and smaller things shed heat faster per area, so a thing twice the size cools more than twice as slowly.",
+  "inputs": [
+   [
+    "dT",
+    "K"
+   ],
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "h",
+   "W/m^2 K"
+  ],
+  "cite": "Holman, Heat Transfer, 10th ed., McGraw-Hill 2010, table 7-2 (simplified equations for free convection in air)",
+  "example": {
+   "inputs": {
+    "dT": 50,
+    "L": 0.1
+   },
+   "output": 6.7147654239225485
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "radiation",
+  "statement": "A surface radiates at its emissivity times σ times its area times the fourth powers of absolute temperature, less what it receives.",
+  "inputs": [
+   [
+    "eps",
+    "-"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "T",
+    "K"
+   ],
+   [
+    "Tinf",
+    "K"
+   ]
+  ],
+  "output": [
+   "q",
+   "W"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011",
+  "example": {
+   "inputs": {
+    "eps": 0.9,
+    "A": 0.1,
+    "T": 373.15,
+    "Tinf": 293.15
+   },
+   "output": 61.25474056958109
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "heat.capacity",
+  "statement": "Warming a mass takes its specific heat times its mass times the temperature rise.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "c",
+    "J/kg K"
+   ],
+   [
+    "dT",
+    "K"
+   ]
+  ],
+  "output": [
+   "Q",
+   "J"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011",
+  "example": {
+   "inputs": {
+    "m": 1,
+    "c": 460,
+    "dT": 10
+   },
+   "output": 4600
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "lumped.time-constant",
+  "statement": "A small, well-conducting body cools toward its surroundings with time constant m c over h A.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "c",
+    "J/kg K"
+   ],
+   [
+    "h",
+    "W/m^2 K"
+   ],
+   [
+    "A",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "tau",
+   "s"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011",
+  "example": {
+   "inputs": {
+    "m": 1,
+    "c": 460,
+    "h": 10,
+    "A": 0.1
+   },
+   "output": 460
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "rc.time-constant",
+  "statement": "A capacitor charges or discharges through a resistance toward its final voltage with time constant R C: 63 % of the way in one, 95 % in three.",
+  "inputs": [
+   [
+    "R",
+    "ohm"
+   ],
+   [
+    "C",
+    "F"
+   ]
+  ],
+  "output": [
+   "tau",
+   "s"
+  ],
+  "cite": "Horowitz & Hill, The Art of Electronics, 3rd ed., Cambridge 2015",
+  "example": {
+   "inputs": {
+    "R": 10000,
+    "C": 0.0001
+   },
+   "output": 1
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "lift.aero",
+  "statement": "A surface moved through a fluid is pushed across the flow by half the fluid density times its lift coefficient, planform area and speed squared; the coefficient grows with the angle of attack up to the stall.",
+  "inputs": [
+   [
+    "rho",
+    "kg/m^3"
+   ],
+   [
+    "CL",
+    "-"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "v",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "L",
+   "N"
+  ],
+  "cite": "Anderson, Introduction to Flight, 8th ed., McGraw-Hill 2016",
+  "example": {
+   "inputs": {
+    "rho": 1.225,
+    "CL": 1,
+    "A": 10,
+    "v": 50
+   },
+   "output": 15312.5
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "thermal.network",
+  "statement": "A steady loss flowing through resistances in series raises the temperature by the loss times their sum.",
+  "inputs": [
+   [
+    "P",
+    "W"
+   ],
+   [
+    "R",
+    "K/W"
+   ]
+  ],
+  "output": [
+   "dT",
+   "K"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011",
+  "example": {
+   "inputs": {
+    "P": 10,
+    "R": 6.58
+   },
+   "output": 65.8
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "buckling.johnson",
+  "statement": "A strut too short for Euler's formula (stockier than the transition slenderness) fails by yielding and bowing together: A [S_y − (S_y K L / r)² / (4π² E)].",
+  "inputs": [
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "Sy",
+    "Pa"
+   ],
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "K",
+    "-"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "r",
+    "m"
+   ]
+  ],
+  "output": [
+   "P",
+   "N"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "A": 0.000050265482457436686,
+    "Sy": 370000000,
+    "E": 200000000000,
+    "K": 1,
+    "L": 0.15,
+    "r": 0.002
+   },
+   "output": 13695.858374663472
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "slenderness.transition",
+  "statement": "Struts more slender than √(2π² E/S_y) buckle elastically (Euler); stockier ones yield first (Johnson).",
+  "inputs": [
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "Sy",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "s",
+   "-"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "E": 200000000000,
+    "Sy": 370000000
+   },
+   "output": 103.29493015522243
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "natural.frequency",
+  "statement": "A mass on a spring rings at one over two pi of the root of stiffness over mass.",
+  "inputs": [
+   [
+    "k",
+    "N/m"
+   ],
+   [
+    "m",
+    "kg"
+   ]
+  ],
+  "output": [
+   "f",
+   "Hz"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "k": 10000,
+    "m": 2
+   },
+   "output": 11.253953951963828
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "centripetal",
+  "statement": "Moving round a circle takes a force toward its centre of mass times speed squared over radius.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "v",
+    "m/s"
+   ],
+   [
+    "r",
+    "m"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "m": 120,
+    "v": 5,
+    "r": 10
+   },
+   "output": 300
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "inertia.disc",
+  "statement": "A solid disc or cylinder turning about its axis has half its mass times its radius squared.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "r",
+    "m"
+   ]
+  ],
+  "output": [
+   "I",
+   "kg m^2"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "m": 3,
+    "r": 0.125
+   },
+   "output": 0.0234375
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "inertia.rod-end",
+  "statement": "A slender rod swung about one end has a third of its mass times its length squared.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "I",
+   "kg m^2"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "m": 2,
+    "L": 1
+   },
+   "output": 0.6666666666666666
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "parallel-axis",
+  "statement": "About an axis a distance d from the centre of mass, the inertia is the central one plus mass times d squared.",
+  "inputs": [
+   [
+    "Icm",
+    "kg m^2"
+   ],
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "d",
+    "m"
+   ]
+  ],
+  "output": [
+   "I",
+   "kg m^2"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "Icm": 0.01,
+    "m": 2,
+    "d": 0.3
+   },
+   "output": 0.19
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "energy.rotational",
+  "statement": "A spinning body holds half its moment of inertia times its angular speed squared.",
+  "inputs": [
+   [
+    "I",
+    "kg m^2"
+   ],
+   [
+    "w",
+    "rad/s"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "I": 0.002,
+    "w": 100
+   },
+   "output": 10
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "free-fall.speed",
+  "statement": "Dropped from rest through a height, a body arrives at the root of twice gravity times the height.",
+  "inputs": [
+   [
+    "h",
+    "m"
+   ]
+  ],
+  "output": [
+   "v",
+   "m/s"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "h": 1.5
+   },
+   "output": 5.424016039799293
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "flywheel.specific-energy",
+  "statement": "A rotor's energy per unit mass is bounded by its material's allowable stress over its density, times a shape factor: 0.606 for a constant-thickness solid disc, 0.5 for a thin rim, 1 for a constant-stress disc.",
+  "inputs": [
+   [
+    "K",
+    "-"
+   ],
+   [
+    "sigma",
+    "Pa"
+   ],
+   [
+    "rho",
+    "kg/m^3"
+   ]
+  ],
+  "output": [
+   "e",
+   "J/kg"
+  ],
+  "cite": "Genta, Kinetic Energy Storage: Theory and Practice of Advanced Flywheel Systems, Butterworths 1985, ch. 2",
+  "example": {
+   "inputs": {
+    "K": 0.606,
+    "sigma": 185000000,
+    "rho": 7870
+   },
+   "output": 14245.23506988564,
+   "rel": 1e-9
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "gas.isothermal-work",
+  "statement": "A volume of gas at pressure p, let down slowly enough to stay at its temperature, does work of p V ln(p / p0) expanding to p0.",
+  "inputs": [
+   [
+    "p",
+    "Pa"
+   ],
+   [
+    "V",
+    "m^3"
+   ],
+   [
+    "p0",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "W",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "p": 2000000,
+    "V": 0.01,
+    "p0": 100000
+   },
+   "output": 59914.64547107982,
+   "rel": 1e-9
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "spring.energy",
+  "statement": "A spring stretched or squeezed from rest holds half its rate times the stretch squared.",
+  "inputs": [
+   [
+    "k",
+    "N/m"
+   ],
+   [
+    "x",
+    "m"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "k": 12100,
+    "x": 0.02
+   },
+   "output": 2.42
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "capacitor.energy",
+  "statement": "A charged capacitor holds half its capacitance times the voltage across it squared.",
+  "inputs": [
+   [
+    "C",
+    "F"
+   ],
+   [
+    "V",
+    "V"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "C": 0.0001,
+    "V": 12
+   },
+   "output": 0.0072
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "inductor.energy",
+  "statement": "A current-carrying inductor holds half its inductance times the current squared.",
+  "inputs": [
+   [
+    "L",
+    "H"
+   ],
+   [
+    "I",
+    "A"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "L": 0.01,
+    "I": 2
+   },
+   "output": 0.02
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "stress.hoop",
+  "statement": "Pressure inside a thin tube pulls its wall round the circumference at pressure times radius over wall thickness.",
+  "inputs": [
+   [
+    "p",
+    "Pa"
+   ],
+   [
+    "r",
+    "m"
+   ],
+   [
+    "t",
+    "m"
+   ]
+  ],
+  "output": [
+   "sigma",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "p": 1000000,
+    "r": 0.05,
+    "t": 0.002
+   },
+   "output": 25000000
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "weld.fillet.shear",
+  "statement": "A fillet weld carries its load as shear on its throat: 0.707 of its leg times its length.",
+  "inputs": [
+   [
+    "F",
+    "N"
+   ],
+   [
+    "a",
+    "m"
+   ],
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "tau",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "F": 10000,
+    "a": 0.005,
+    "L": 0.1
+   },
+   "output": 28288543.140028287
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "bolt.torque.nut-factor",
+  "statement": "Tightening a bolt to a preload takes about a nut factor (0.2 dry steel) times the preload times its diameter.",
+  "inputs": [
+   [
+    "K",
+    "-"
+   ],
+   [
+    "F",
+    "N"
+   ],
+   [
+    "d",
+    "m"
+   ]
+  ],
+  "output": [
+   "T",
+   "N m"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "K": 0.2,
+    "F": 10000,
+    "d": 0.008
+   },
+   "output": 16
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "power.electric",
+  "statement": "Power is voltage times current.",
+  "inputs": [
+   [
+    "V",
+    "V"
+   ],
+   [
+    "I",
+    "A"
+   ]
+  ],
+  "output": [
+   "P",
+   "W"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "V": 24,
+    "I": 10
+   },
+   "output": 240
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "belt.speed",
+  "statement": "A pulley's rim moves at pi times its diameter times its revolutions per second.",
+  "inputs": [
+   [
+    "D",
+    "m"
+   ],
+   [
+    "n",
+    "rpm"
+   ]
+  ],
+  "output": [
+   "v",
+   "m/s"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "D": 0.1,
+    "n": 1500
+   },
+   "output": 7.853981633974483
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "reynolds",
+  "statement": "Flow is smooth (laminar) or churning (turbulent) by the ratio of inertia to viscosity: density times speed times size over viscosity.",
+  "inputs": [
+   [
+    "rho",
+    "kg/m^3"
+   ],
+   [
+    "v",
+    "m/s"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "mu",
+    "Pa s"
+   ]
+  ],
+  "output": [
+   "Re",
+   "-"
+  ],
+  "cite": "White, Fluid Mechanics, 8th ed., McGraw-Hill 2016",
+  "example": {
+   "inputs": {
+    "rho": 1000,
+    "v": 2,
+    "L": 0.05,
+    "mu": 0.001
+   },
+   "output": 100000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "darcy-weisbach",
+  "statement": "Flow down a pipe loses pressure by its friction factor times length over diameter times the dynamic pressure.",
+  "inputs": [
+   [
+    "f",
+    "-"
+   ],
+   [
+    "L",
+    "m"
+   ],
+   [
+    "D",
+    "m"
+   ],
+   [
+    "rho",
+    "kg/m^3"
+   ],
+   [
+    "v",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "dp",
+   "Pa"
+  ],
+  "cite": "White, Fluid Mechanics, 8th ed., McGraw-Hill 2016",
+  "example": {
+   "inputs": {
+    "f": 0.02,
+    "L": 10,
+    "D": 0.05,
+    "rho": 1000,
+    "v": 2
+   },
+   "output": 8000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "thermal.resistance.conduction",
+  "statement": "A wall resists heat by its thickness over its conductivity times its area.",
+  "inputs": [
+   [
+    "L",
+    "m"
+   ],
+   [
+    "k",
+    "W/m K"
+   ],
+   [
+    "A",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "R",
+   "K/W"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011",
+  "example": {
+   "inputs": {
+    "L": 0.1,
+    "k": 200,
+    "A": 0.01
+   },
+   "output": 0.05
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "composite.rule-of-mixtures",
+  "statement": "Loaded along its fibres, a composite is as stiff as its fibre and matrix in proportion to how much of each it holds.",
+  "inputs": [
+   [
+    "Vf",
+    "-"
+   ],
+   [
+    "Ef",
+    "Pa"
+   ],
+   [
+    "Em",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "E",
+   "Pa"
+  ],
+  "cite": "Hull & Clyne, An Introduction to Composite Materials, 2nd ed., Cambridge 1996",
+  "example": {
+   "inputs": {
+    "Vf": 0.3,
+    "Ef": 60000000000,
+    "Em": 2400000000
+   },
+   "output": 19680000000
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "composite.transverse",
+  "statement": "Loaded across its fibres, a composite is barely stiffer than its matrix: fibre and matrix act in series.",
+  "inputs": [
+   [
+    "Vf",
+    "-"
+   ],
+   [
+    "Ef",
+    "Pa"
+   ],
+   [
+    "Em",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "E",
+   "Pa"
+  ],
+  "cite": "Hull & Clyne, An Introduction to Composite Materials, 2nd ed., Cambridge 1996",
+  "example": {
+   "inputs": {
+    "Vf": 0.3,
+    "Ef": 60000000000,
+    "Em": 2400000000
+   },
+   "output": 3370786516.853933
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "sinter.scale",
+  "statement": "A part that shrinks by a fraction s as it sinters is printed 1/(1 − s) times its final size.",
+  "inputs": [
+   [
+    "s",
+    "-"
+   ]
+  ],
+  "output": [
+   "k",
+   "-"
+  ],
+  "cite": "German, Sintering: From Empirical Observations to Scientific Principles, Elsevier 2014",
+  "example": {
+   "inputs": {
+    "s": 0.167
+   },
+   "output": 1.2004801920768309
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "buoyancy",
+  "statement": "A body in a fluid is pushed up by the weight of the fluid it displaces.",
+  "inputs": [
+   [
+    "rho",
+    "kg/m^3"
+   ],
+   [
+    "V",
+    "m^3"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "rho": 1000,
+    "V": 0.001
+   },
+   "output": 9.80665
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "hydrostatic",
+  "statement": "Pressure in a still liquid rises with depth by its density times gravity times the depth.",
+  "inputs": [
+   [
+    "rho",
+    "kg/m^3"
+   ],
+   [
+    "h",
+    "m"
+   ]
+  ],
+  "output": [
+   "p",
+   "Pa"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "rho": 1000,
+    "h": 2
+   },
+   "output": 19613.3
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "lorentz.force",
+  "statement": "A conductor carrying current across a magnetic field is pushed sideways by the flux density times the current times the length in the field: how every motor, rotary or linear, makes force.",
+  "inputs": [
+   [
+    "B",
+    "T"
+   ],
+   [
+    "I",
+    "A"
+   ],
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "B": 1,
+    "I": 10,
+    "L": 0.5
+   },
+   "output": 5
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "magnetic.pull",
+  "statement": "A magnetic field crossing a gap between iron faces pulls them together by the flux density squared times the area over twice the permeability of free space: how solenoids, relays and electromagnets pull.",
+  "inputs": [
+   [
+    "B",
+    "T"
+   ],
+   [
+    "A",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Hughes, Electric Motors and Drives, 4th ed., Newnes 2013, ch. 1 (force on iron)",
+  "example": {
+   "inputs": {
+    "B": 1,
+    "A": 0.0001
+   },
+   "output": 39.788735751313816
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "electrostatic.pull",
+  "statement": "Two plates at different voltages pull together by the permittivity times the area times the voltage squared over twice the gap squared: strong only across tiny gaps (MEMS, electroadhesion).",
+  "inputs": [
+   [
+    "er",
+    "-"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "V",
+    "V"
+   ],
+   [
+    "d",
+    "m"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "er": 1,
+    "A": 0.01,
+    "V": 100,
+    "d": 0.0001
+   },
+   "output": 0.04427093906400001
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "piezo.stroke",
+  "statement": "A stack of piezoelectric layers grows by the number of layers times its charge constant times the voltage on each: micrometres, with great force.",
+  "inputs": [
+   [
+    "n",
+    "-"
+   ],
+   [
+    "d33",
+    "m/V"
+   ],
+   [
+    "V",
+    "V"
+   ]
+  ],
+  "output": [
+   "dL",
+   "m"
+  ],
+  "cite": "Uchino, Piezoelectric Actuators and Ultrasonic Motors, Kluwer 1997",
+  "example": {
+   "inputs": {
+    "n": 100,
+    "d33": 5e-10,
+    "V": 100
+   },
+   "output": 0.000005
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "thrust.ideal-static",
+  "statement": "A propeller or rotor of disc area A, putting power P into still fluid of density ρ, can at most push (2 ρ A P²)^⅓: a bigger disc gives more thrust per watt.",
+  "inputs": [
+   [
+    "rho",
+    "kg/m^3"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "P",
+    "W"
+   ]
+  ],
+  "output": [
+   "T",
+   "N"
+  ],
+  "cite": "Leishman, Principles of Helicopter Aerodynamics, 2nd ed., Cambridge 2006, ch. 2 (momentum theory)",
+  "example": {
+   "inputs": {
+    "rho": 1.225,
+    "A": 0.07068583470577035,
+    "P": 100
+   },
+   "output": 12.008796675640253
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "thrust.jet",
+  "statement": "An engine that takes in air and throws it out faster pushes forward by its mass flow times the gain in speed: a jet pack's turbine throws a few kilograms a second out at hundreds of metres a second.",
+  "inputs": [
+   [
+    "mdot",
+    "kg/s"
+   ],
+   [
+    "ve",
+    "m/s"
+   ],
+   [
+    "v0",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "T",
+   "N"
+  ],
+  "cite": "Hill & Peterson, Mechanics and Thermodynamics of Propulsion, 2nd ed., Addison-Wesley 1992, ch. 5",
+  "example": {
+   "inputs": {
+    "mdot": 2,
+    "ve": 500,
+    "v0": 0
+   },
+   "output": 1000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "cushion.pressure",
+  "statement": "A hovercraft floats on air no harder to make than its own weight spread over the area it sits on: a tonne on ten square metres is a thousandth of an atmosphere.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ],
+   [
+    "A",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "p",
+   "Pa"
+  ],
+  "cite": "Yun & Bliault, Theory and Design of Air Cushion Craft, Butterworth-Heinemann 2000, ch. 2",
+  "example": {
+   "inputs": {
+    "m": 1000,
+    "A": 10
+   },
+   "output": 980.665
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "cushion.escape",
+  "statement": "The air under a cushion runs out through the gap round its skirt at the speed its own pressure gives it, so the lift fan must put back the gap times the perimeter times that speed.",
+  "inputs": [
+   [
+    "Cd",
+    "-"
+   ],
+   [
+    "Lp",
+    "m"
+   ],
+   [
+    "h",
+    "m"
+   ],
+   [
+    "p",
+    "Pa"
+   ],
+   [
+    "rho",
+    "kg/m^3"
+   ]
+  ],
+  "output": [
+   "Q",
+   "m^3/s"
+  ],
+  "cite": "Yun & Bliault, Theory and Design of Air Cushion Craft, Butterworth-Heinemann 2000, ch. 3",
+  "example": {
+   "inputs": {
+    "Cd": 0.53,
+    "Lp": 20,
+    "h": 0.02,
+    "p": 980.665,
+    "rho": 1.204
+   },
+   "output": 8.556535432326053
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "hull.collapse",
+  "statement": "A tube squeezed from outside does not crush, it buckles into lobes, at a pressure that falls off as the cube and a half of how thin it is: a hull twice as deep needs more than twice the plate.",
+  "inputs": [
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "t",
+    "m"
+   ],
+   [
+    "D",
+    "m"
+   ],
+   [
+    "Lh",
+    "m"
+   ]
+  ],
+  "output": [
+   "p",
+   "Pa"
+  ],
+  "cite": "Windenburg & Trilling, Collapse by instability of thin cylindrical shells under external pressure, Trans. ASME 56 (1934) 819",
+  "example": {
+   "inputs": {
+    "E": 200000000000,
+    "t": 0.02,
+    "D": 2,
+    "Lh": 2
+   },
+   "output": 5445026.178010471
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "screw.force",
+  "statement": "A screw turned with a torque pushes its nut along by 2π times its efficiency times the torque over its lead.",
+  "inputs": [
+   [
+    "T",
+    "N m"
+   ],
+   [
+    "eta",
+    "-"
+   ],
+   [
+    "l",
+    "m"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "T": 1,
+    "eta": 0.3,
+    "l": 0.002
+   },
+   "output": 942.4777960769379
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "landauer",
+  "statement": "Erasing one bit of information, in anything that computes, releases at least Boltzmann's constant times the temperature times ln 2 as heat: the floor under every computer.",
+  "inputs": [
+   [
+    "T",
+    "K"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Landauer, Irreversibility and heat generation in the computing process, IBM J. Res. Dev. 5(3), 1961",
+  "example": {
+   "inputs": {
+    "T": 300
+   },
+   "output": 2.870978885078724e-21
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "cmos.dynamic",
+  "statement": "Logic gates draw power each time they switch: the fraction switching, times the capacitance they charge, times the supply voltage squared, times the clock rate.",
+  "inputs": [
+   [
+    "alpha",
+    "-"
+   ],
+   [
+    "C",
+    "F"
+   ],
+   [
+    "V",
+    "V"
+   ],
+   [
+    "f",
+    "Hz"
+   ]
+  ],
+  "output": [
+   "P",
+   "W"
+  ],
+  "cite": "Weste & Harris, CMOS VLSI Design, 4th ed., Addison-Wesley 2010 (power)",
+  "example": {
+   "inputs": {
+    "alpha": 0.1,
+    "C": 1e-9,
+    "V": 1,
+    "f": 1000000000
+   },
+   "output": 0.10000000000000002
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "information.choices",
+  "statement": "Picking one of N equally likely things takes the base-2 logarithm of N bits: no code can say which in fewer (Shannon).",
+  "inputs": [
+   [
+    "N",
+    "-"
+   ]
+  ],
+  "output": [
+   "H",
+   "-"
+  ],
+  "cite": "Shannon, A Mathematical Theory of Communication, Bell System Technical Journal 27, 1948",
+  "example": {
+   "inputs": {
+    "N": 1024
+   },
+   "output": 10
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "carnot",
+  "statement": "Heat flowing from a hot place to a cold one can be turned into work at most by one minus the cold over the hot absolute temperature: the ceiling on every heat engine.",
+  "inputs": [
+   [
+    "Tc",
+    "K"
+   ],
+   [
+    "Th",
+    "K"
+   ]
+  ],
+  "output": [
+   "eta",
+   "-"
+  ],
+  "cite": "Çengel & Boles, Thermodynamics: An Engineering Approach, 9th ed., McGraw-Hill 2019",
+  "example": {
+   "inputs": {
+    "Tc": 300,
+    "Th": 600
+   },
+   "output": 0.5
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "seebeck",
+  "statement": "Two different metals joined at a hot and a cold end make a voltage of their Seebeck coefficient times the temperature difference: how thermocouples sense heat and thermoelectric generators make power.",
+  "inputs": [
+   [
+    "S",
+    "V/K"
+   ],
+   [
+    "dT",
+    "K"
+   ]
+  ],
+  "output": [
+   "V",
+   "V"
+  ],
+  "cite": "ASTM E230 / IEC 60584 (thermocouples); Rowe (ed.), CRC Handbook of Thermoelectrics, 1995",
+  "example": {
+   "inputs": {
+    "S": 0.000041,
+    "dT": 100
+   },
+   "output": 0.0041
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "strain.gauge",
+  "statement": "A foil gauge stuck to a part changes its resistance by its gauge factor times the strain times its resistance: how load cells and scales sense force.",
+  "inputs": [
+   [
+    "GF",
+    "-"
+   ],
+   [
+    "eps",
+    "-"
+   ],
+   [
+    "R",
+    "ohm"
+   ]
+  ],
+  "output": [
+   "dR",
+   "ohm"
+  ],
+  "cite": "Window (ed.), Strain Gauge Technology, 2nd ed., Elsevier 1992",
+  "example": {
+   "inputs": {
+    "GF": 2,
+    "eps": 0.001,
+    "R": 350
+   },
+   "output": 0.7000000000000001
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "pv.power",
+  "statement": "A solar panel gives its efficiency times the sunlight falling on it per square metre times its area.",
+  "inputs": [
+   [
+    "eta",
+    "-"
+   ],
+   [
+    "G",
+    "W/m^2"
+   ],
+   [
+    "A",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "P",
+   "W"
+  ],
+  "cite": "IEC 61215 / IEC 60904 (photovoltaic modules, standard test conditions)",
+  "example": {
+   "inputs": {
+    "eta": 0.2,
+    "G": 1000,
+    "A": 1.6
+   },
+   "output": 320
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "rayleigh.resolution",
+  "statement": "The smallest half-pitch a projection lens can print is a process factor k₁ times the wavelength over the numerical aperture: why lithography went to 13.5 nm light and to wider apertures.",
+  "inputs": [
+   [
+    "k1",
+    "-"
+   ],
+   [
+    "lambda",
+    "m"
+   ],
+   [
+    "NA",
+    "-"
+   ]
+  ],
+  "output": [
+   "CD",
+   "m"
+  ],
+  "cite": "Mack, Fundamental Principles of Optical Lithography, Wiley 2007",
+  "example": {
+   "inputs": {
+    "k1": 0.32,
+    "lambda": 1.35e-8,
+    "NA": 0.33
+   },
+   "output": 1.3090909090909092e-8
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "beam.plastic-moment",
+  "statement": "A ductile beam bent until its whole section yields carries its plastic section modulus times its yield stress: the moment at which a plastic hinge forms and it folds.",
+  "inputs": [
+   [
+    "Z",
+    "m^3"
+   ],
+   [
+    "Sy",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "Mp",
+   "N m"
+  ],
+  "cite": "AISC 360-16, Specification for Structural Steel Buildings, F2 (Mp = Fy Zx)",
+  "example": {
+   "inputs": {
+    "Z": 0.00001,
+    "Sy": 250000000
+   },
+   "output": 2500
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "gear.lewis",
+  "statement": "A gear tooth, a cantilever loaded at its tip by the force between the gears, is stressed at its root by that tangential force over its face width, its module and its Lewis form factor.",
+  "inputs": [
+   [
+    "Wt",
+    "N"
+   ],
+   [
+    "b",
+    "m"
+   ],
+   [
+    "m",
+    "m"
+   ],
+   [
+    "Y",
+    "-"
+   ]
+  ],
+  "output": [
+   "sigma",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "Wt": 1000,
+    "b": 0.02,
+    "m": 0.002,
+    "Y": 0.322
+   },
+   "output": 77639751.55279502
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "skin.depth",
+  "statement": "An alternating field or current reaches into a conductor only about one skin depth, shrinking with frequency and conductivity: why an eddy-current brake works at the surface, and thick copper buys nothing at high frequency.",
+  "inputs": [
+   [
+    "f",
+    "Hz"
+   ],
+   [
+    "sigma",
+    "S/m"
+   ]
+  ],
+  "output": [
+   "delta",
+   "m"
+  ],
+  "cite": "Griffiths, Introduction to Electrodynamics, 4th ed., Cambridge 2017 (skin depth)",
+  "example": {
+   "inputs": {
+    "f": 50,
+    "sigma": 58000000
+   },
+   "output": 0.009345900061927292
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "spring.torsion.rate",
+  "statement": "A helical torsion spring's rate is its wire diameter to the fourth times its modulus over 10.8 times its coil diameter times its turns, per turn; per radian, over 2π more.",
+  "inputs": [
+   [
+    "d",
+    "m"
+   ],
+   [
+    "D",
+    "m"
+   ],
+   [
+    "N",
+    "-"
+   ],
+   [
+    "E",
+    "Pa"
+   ]
+  ],
+  "output": [
+   "k",
+   "N m/rad"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "d": 0.002,
+    "D": 0.02,
+    "N": 5,
+    "E": 200000000000
+   },
+   "output": 0.471570201753764
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "weld.heat-input",
+  "statement": "An arc puts into the joint its efficiency times its volts times its amps over its travel speed, per metre of weld: too little and it doesn't fuse, too much and it burns through thin plate.",
+  "inputs": [
+   [
+    "eta",
+    "-"
+   ],
+   [
+    "V",
+    "V"
+   ],
+   [
+    "I",
+    "A"
+   ],
+   [
+    "v",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "Q",
+   "J/m"
+  ],
+  "cite": "EN 1011-1 (welding: heat input and thermal efficiency factors)",
+  "example": {
+   "inputs": {
+    "eta": 0.8,
+    "V": 20,
+    "I": 150,
+    "v": 0.005
+   },
+   "output": 480000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "time.dilation.gravity",
+  "statement": "A clock deep in a gravity well runs slow against one far away, by √(1 − 2GM/(r c²)): only near a black hole is the difference large.",
+  "inputs": [
+   [
+    "M",
+    "kg"
+   ],
+   [
+    "r",
+    "m"
+   ]
+  ],
+  "output": [
+   "k",
+   "-"
+  ],
+  "cite": "Misner, Thorne & Wheeler, Gravitation, Freeman 1973 (Schwarzschild metric)",
+  "example": {
+   "inputs": {
+    "M": 5.972e+24,
+    "r": 6371000
+   },
+   "output": 0.9999999993038922
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "arrhenius",
+  "statement": "A reaction, ageing a battery or spoiling food, runs at a rate that falls exponentially as the temperature drops but never reaches zero above absolute zero.",
+  "inputs": [
+   [
+    "A",
+    "1/s"
+   ],
+   [
+    "Ea",
+    "J/mol"
+   ],
+   [
+    "T",
+    "K"
+   ]
+  ],
+  "output": [
+   "k",
+   "1/s"
+  ],
+  "cite": "Atkins & de Paula, Physical Chemistry, 11th ed., Oxford 2018",
+  "example": {
+   "inputs": {
+    "A": 10000000000000,
+    "Ea": 50000,
+    "T": 298
+   },
+   "output": 17217.4875757281
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "young.contact",
+  "statement": "A drop on a flat surface settles at the angle where its surface tensions balance: water beads (above 90°) only on surfaces of low energy.",
+  "inputs": [
+   [
+    "gsv",
+    "J/m^2"
+   ],
+   [
+    "gsl",
+    "J/m^2"
+   ],
+   [
+    "glv",
+    "J/m^2"
+   ]
+  ],
+  "output": [
+   "theta",
+   "rad"
+  ],
+  "cite": "de Gennes, Brochard-Wyart & Quéré, Capillarity and Wetting Phenomena, Springer 2004",
+  "example": {
+   "inputs": {
+    "gsv": 0.02,
+    "gsl": 0.04,
+    "glv": 0.072
+   },
+   "output": 1.8522764000257415
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "carbonation.capacity",
+  "statement": "Calcium oxide takes up carbon dioxide to become calcium carbonate, one molecule for one: at most the ratio of their molar masses, 0.785 kg of CO₂ per kg of lime, and then no more.",
+  "inputs": [
+   [
+    "m",
+    "kg"
+   ]
+  ],
+  "output": [
+   "mCO2",
+   "kg"
+  ],
+  "cite": "CaO + CO₂ → CaCO₃ (stoichiometry; IUPAC atomic weights)",
+  "example": {
+   "inputs": {
+    "m": 1
+   },
+   "output": 0.7847959056297591
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "absorbed.solar",
+  "statement": "A surface absorbs the sunlight it doesn't reflect: one minus its albedo, times the sunlight on it, times its area.",
+  "inputs": [
+   [
+    "a",
+    "-"
+   ],
+   [
+    "G",
+    "W/m^2"
+   ],
+   [
+    "A",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "P",
+   "W"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed. (radiation balance)",
+  "example": {
+   "inputs": {
+    "a": 0.9,
+    "G": 1000,
+    "A": 1
+   },
+   "output": 99.99999999999997
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "diffraction.limit",
+  "statement": "No lens or eye of diameter D can see detail finer than about 1.22 λ / D radians: long waves need huge apertures to make any image at all.",
+  "inputs": [
+   [
+    "lambda",
+    "m"
+   ],
+   [
+    "D",
+    "m"
+   ]
+  ],
+  "output": [
+   "theta",
+   "rad"
+  ],
+  "cite": "Hecht, Optics, 5th ed., Pearson 2017 (the eye: green light through a 5 mm pupil)",
+  "example": {
+   "inputs": {
+    "lambda": 5.5e-7,
+    "D": 0.005
+   },
+   "output": 0.0001342
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "acoustic.mass-law",
+  "statement": "A wall stops airborne sound mainly by its mass: about 20 log₁₀ of its mass per area times the frequency, less 47 dB. Low notes and light layers pass through.",
+  "inputs": [
+   [
+    "m",
+    "kg/m^2"
+   ],
+   [
+    "f",
+    "Hz"
+   ]
+  ],
+  "output": [
+   "TL",
+   "dB"
+  ],
+  "cite": "Long, Architectural Acoustics, 2nd ed., Academic Press 2014 (mass law)",
+  "example": {
+   "inputs": {
+    "m": 460,
+    "f": 100
+   },
+   "output": 46.25515663363147
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "diffusion.time",
+  "statement": "A molecule wandering by diffusion alone covers a distance in a time that grows with its square: microns in moments, a metre in hours. Anything faster is carried by a flow.",
+  "inputs": [
+   [
+    "x",
+    "m"
+   ],
+   [
+    "D",
+    "m^2/s"
+   ]
+  ],
+  "output": [
+   "t",
+   "s"
+  ],
+  "cite": "Berg, Random Walks in Biology, Princeton 1993, ch. 1",
+  "example": {
+   "inputs": {
+    "x": 1,
+    "D": 0.00001
+   },
+   "output": 50000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "separation.work",
+  "statement": "Taking a substance out of a mixture costs at least R T ln(1/x) a mole, where x is how much is left: each tenfold cleaner costs as much again, and taking out the very last of it would cost without end.",
+  "inputs": [
+   [
+    "T",
+    "K"
+   ],
+   [
+    "x",
+    "-"
+   ]
+  ],
+  "output": [
+   "W",
+   "J/mol"
+  ],
+  "cite": "Çengel & Boles, Thermodynamics: An Engineering Approach, 9th ed., McGraw-Hill 2019, ch. 16 (minimum separation work)",
+  "example": {
+   "inputs": {
+    "T": 298,
+    "x": 0.000001
+   },
+   "output": 34230.82673266793
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "screw.efficiency",
+  "statement": "A screw's thread is a ramp wrapped round it: the steeper the ramp against its friction, the more of the torque becomes push. Below about half, it holds its load without a brake.",
+  "inputs": [
+   [
+    "l",
+    "m"
+   ],
+   [
+    "d2",
+    "m"
+   ],
+   [
+    "mu",
+    "-"
+   ],
+   [
+    "alpha",
+    "rad"
+   ]
+  ],
+  "output": [
+   "eta",
+   "-"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, §8-2 (power screws)",
+  "example": {
+   "inputs": {
+    "l": 0.004,
+    "d2": 0.014,
+    "mu": 0.1,
+    "alpha": 0.2617993877991494
+   },
+   "output": 0.46324813129085995
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "griffith",
+  "statement": "A crack grows when the energy released exceeds the surface energy made: brittle strength falls with the square root of flaw size.",
+  "inputs": [
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "gamma",
+    "J/m^2"
+   ],
+   [
+    "a",
+    "m"
+   ]
+  ],
+  "output": [
+   "sigma",
+   "Pa"
+  ],
+  "cite": "Callister & Rethwisch, Materials Science and Engineering: An Introduction, 10th ed., Wiley 2018",
+  "example": {
+   "inputs": {
+    "E": 70000000000,
+    "gamma": 1,
+    "a": 0.000001
+   },
+   "output": 211100412.28223762
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "fick.diffusion",
+  "statement": "Flux is proportional to the concentration gradient; a distance L takes a time of order L²/D.",
+  "inputs": [
+   [
+    "D",
+    "m^2/s"
+   ],
+   [
+    "dC",
+    "mol/m^3"
+   ],
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "J",
+   "mol/m^2 s"
+  ],
+  "cite": "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018",
+  "example": {
+   "inputs": {
+    "D": 1e-9,
+    "dC": 100,
+    "L": 0.001
+   },
+   "output": 0.0001
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "bernoulli",
+  "statement": "Along a streamline of an ideal fluid, pressure plus kinetic plus potential energy per volume is constant: where it speeds up, the pressure falls.",
+  "inputs": [
+   [
+    "p1",
+    "Pa"
+   ],
+   [
+    "rho",
+    "kg/m^3"
+   ],
+   [
+    "v1",
+    "m/s"
+   ],
+   [
+    "v2",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "p2",
+   "Pa"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "p1": 101325,
+    "rho": 1000,
+    "v1": 1,
+    "v2": 3
+   },
+   "output": 97325
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "nernst",
+  "statement": "An electrode's potential shifts from its standard value by (RT/zF) ln of the reaction quotient: cell voltages, membrane potentials, corrosion.",
+  "inputs": [
+   [
+    "E0",
+    "V"
+   ],
+   [
+    "T",
+    "K"
+   ],
+   [
+    "z",
+    "-"
+   ],
+   [
+    "Q",
+    "-"
+   ]
+  ],
+  "output": [
+   "E",
+   "V"
+  ],
+  "cite": "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018",
+  "example": {
+   "inputs": {
+    "E0": 1.1,
+    "T": 298.15,
+    "z": 2,
+    "Q": 10
+   },
+   "output": 1.0704203251571394
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "ampere.law",
+  "statement": "A current makes a magnetic field round it; inside a long coil the field is μ₀ times the turns per length times the current.",
+  "inputs": [
+   [
+    "N",
+    "-"
+   ],
+   [
+    "I",
+    "A"
+   ],
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "B",
+   "T"
+  ],
+  "cite": "Griffiths, Introduction to Electrodynamics, 4th ed., Cambridge 2017",
+  "example": {
+   "inputs": {
+    "N": 100,
+    "I": 2,
+    "L": 0.1
+   },
+   "output": 0.0025132741228718345
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "hertz.contact",
+  "statement": "Two curved elastic bodies pressed together touch over a small area with a peak pressure that rises as the cube root of the load.",
+  "inputs": [
+   [
+    "F",
+    "N"
+   ],
+   [
+    "Estar",
+    "Pa"
+   ],
+   [
+    "R",
+    "m"
+   ]
+  ],
+  "output": [
+   "p0",
+   "Pa"
+  ],
+  "cite": "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015",
+  "example": {
+   "inputs": {
+    "F": 100,
+    "Estar": 110000000000,
+    "R": 0.005
+   },
+   "output": 2107895117.920457
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "coulomb.law",
+  "statement": "Charges attract or repel with a force proportional to their product over the distance squared.",
+  "inputs": [
+   [
+    "q1",
+    "C"
+   ],
+   [
+    "q2",
+    "C"
+   ],
+   [
+    "r",
+    "m"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "q1": 0.000001,
+    "q2": 0.000001,
+    "r": 0.1
+   },
+   "output": 0.8987551792299996
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "gibbs.energy",
+  "statement": "A reaction goes forward when G falls: enthalpy minus temperature times entropy; its minimum is equilibrium.",
+  "inputs": [
+   [
+    "dH",
+    "J/mol"
+   ],
+   [
+    "T",
+    "K"
+   ],
+   [
+    "dS",
+    "J/mol K"
+   ]
+  ],
+  "output": [
+   "dG",
+   "J/mol"
+  ],
+  "cite": "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018",
+  "example": {
+   "inputs": {
+    "dH": -92000,
+    "T": 298.15,
+    "dS": -199
+   },
+   "output": -32668.15
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "ideal.gas",
+  "statement": "The pressure of a dilute gas is its amount times the gas constant times its temperature over its volume.",
+  "inputs": [
+   [
+    "n",
+    "mol"
+   ],
+   [
+    "T",
+    "K"
+   ],
+   [
+    "V",
+    "m^3"
+   ]
+  ],
+  "output": [
+   "p",
+   "Pa"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "n": 1,
+    "T": 273.15,
+    "V": 0.0224
+   },
+   "output": 101388.19036190625
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "michaelis-menten",
+  "statement": "An enzyme's rate rises with substrate and saturates at its maximum; at the Michaelis constant it runs at half.",
+  "inputs": [
+   [
+    "Vmax",
+    "mol/m^3 s"
+   ],
+   [
+    "S",
+    "mol/m^3"
+   ],
+   [
+    "Km",
+    "mol/m^3"
+   ]
+  ],
+  "output": [
+   "v",
+   "mol/m^3 s"
+  ],
+  "cite": "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018",
+  "example": {
+   "inputs": {
+    "Vmax": 1,
+    "S": 2,
+    "Km": 1
+   },
+   "output": 0.6666666666666666
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "hall-petch",
+  "statement": "Yield strength rises with the inverse square root of grain size: fine grains are strong.",
+  "inputs": [
+   [
+    "sigma0",
+    "Pa"
+   ],
+   [
+    "ky",
+    "Pa m^0.5"
+   ],
+   [
+    "d",
+    "m"
+   ]
+  ],
+  "output": [
+   "sigma",
+   "Pa"
+  ],
+  "cite": "Callister & Rethwisch, Materials Science and Engineering: An Introduction, 10th ed., Wiley 2018",
+  "example": {
+   "inputs": {
+    "sigma0": 70000000,
+    "ky": 740000,
+    "d": 0.000025
+   },
+   "output": 218000000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "planck.energy",
+  "statement": "A photon's energy is Planck's constant times the speed of light over its wavelength: colour is energy.",
+  "inputs": [
+   [
+    "lambda",
+    "m"
+   ]
+  ],
+  "output": [
+   "E",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "lambda": 5e-7
+   },
+   "output": 3.972891714297857e-19
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "shannon.capacity",
+  "statement": "A channel carries at most its bandwidth times log₂(1 + signal to noise) bits a second, whatever the code.",
+  "inputs": [
+   [
+    "B",
+    "Hz"
+   ],
+   [
+    "snr",
+    "-"
+   ]
+  ],
+  "output": [
+   "C",
+   "Hz"
+  ],
+  "cite": "Cover & Thomas, Elements of Information Theory, 2nd ed., Wiley 2006",
+  "example": {
+   "inputs": {
+    "B": 1000000,
+    "snr": 1000
+   },
+   "output": 9967226.258835994
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "snell.law",
+  "statement": "Light bends at an interface by the ratio of refractive indices: lenses, fibres, the eye.",
+  "inputs": [
+   [
+    "n1",
+    "-"
+   ],
+   [
+    "n2",
+    "-"
+   ],
+   [
+    "theta1",
+    "rad"
+   ]
+  ],
+  "output": [
+   "theta2",
+   "rad"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "n1": 1,
+    "n2": 1.5,
+    "theta1": 0.5
+   },
+   "output": 0.32532528522279924
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "faraday.induction",
+  "statement": "A changing magnetic flux through a loop induces a voltage round it equal to the rate of change, times the turns: generators, transformers, inductors.",
+  "inputs": [
+   [
+    "N",
+    "-"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "dBdt",
+    "T/s"
+   ]
+  ],
+  "output": [
+   "V",
+   "V"
+  ],
+  "cite": "Griffiths, Introduction to Electrodynamics, 4th ed., Cambridge 2017",
+  "example": {
+   "inputs": {
+    "N": 100,
+    "A": 0.001,
+    "dBdt": 10
+   },
+   "output": 1
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "faraday.electrolysis",
+  "statement": "The mass deposited or dissolved is the charge passed times the molar mass over the electrons per ion and the Faraday constant: plating, refining, batteries.",
+  "inputs": [
+   [
+    "M",
+    "kg/mol"
+   ],
+   [
+    "I",
+    "A"
+   ],
+   [
+    "t",
+    "s"
+   ],
+   [
+    "z",
+    "-"
+   ]
+  ],
+  "output": [
+   "m",
+   "kg"
+  ],
+  "cite": "Bard & Faulkner, Electrochemical Methods, 2nd ed., Wiley 2001",
+  "example": {
+   "inputs": {
+    "M": 0.06355,
+    "I": 2,
+    "t": 3600,
+    "z": 2
+   },
+   "output": 0.0023711376120410035
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "shockley.diode",
+  "statement": "A junction's current rises exponentially with its forward voltage, by n times the thermal voltage kT/q (25.85 mV at 300 K) per e-fold.",
+  "inputs": [
+   [
+    "Is",
+    "A"
+   ],
+   [
+    "V",
+    "V"
+   ],
+   [
+    "n",
+    "-"
+   ],
+   [
+    "Vt",
+    "V"
+   ]
+  ],
+  "output": [
+   "I",
+   "A"
+  ],
+  "cite": "Kittel, Introduction to Solid State Physics, 8th ed., Wiley 2005",
+  "example": {
+   "inputs": {
+    "Is": 1e-12,
+    "V": 0.6,
+    "n": 1,
+    "Vt": 0.025851999786435535
+   },
+   "output": 0.01201036955312849
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "shannon.sampling",
+  "statement": "A signal sampled above twice its highest frequency is recovered exactly; below that, higher frequencies alias into lower ones.",
+  "inputs": [
+   [
+    "fmax",
+    "Hz"
+   ]
+  ],
+  "output": [
+   "fs",
+   "Hz"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "fmax": 20000
+   },
+   "output": 40000
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "sound.speed",
+  "statement": "A push travels along a thin bar at the root of its modulus over its density: about 5 km/s in steel, 40 m/s in soft rubber. Nothing in a solid knows of a push sooner.",
+  "inputs": [
+   [
+    "E",
+    "Pa"
+   ],
+   [
+    "rho",
+    "kg/m^3"
+   ]
+  ],
+  "output": [
+   "c",
+   "m/s"
+  ],
+  "cite": "Kinsler, Frey, Coppens & Sanders, Fundamentals of Acoustics, 4th ed., Wiley 2000, ch. 3 (longitudinal waves in a bar)",
+  "example": {
+   "inputs": {
+    "E": 200000000000,
+    "rho": 7850
+   },
+   "output": 5047.544651250688
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "wave.speed.electromagnetic",
+  "statement": "An electromagnetic wave travels at the inverse root of the product of the medium's permeability and permittivity: in vacuum, c.",
+  "inputs": [
+   [
+    "mu",
+    "N/A^2"
+   ],
+   [
+    "eps",
+    "F/m"
+   ]
+  ],
+  "output": [
+   "v",
+   "m/s"
+  ],
+  "cite": "Griffiths, Introduction to Electrodynamics, 4th ed., Cambridge 2017",
+  "example": {
+   "inputs": {
+    "mu": 0.00000125663706212,
+    "eps": 8.8541878128e-12
+   },
+   "output": 299792458,
+   "rel": 1e-9
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "conservation.momentum",
+  "statement": "The momentum of a closed system is constant: two bodies that collide and stick move on together at the momentum-weighted mean of their speeds.",
+  "inputs": [
+   [
+    "m1",
+    "kg"
+   ],
+   [
+    "v1",
+    "m/s"
+   ],
+   [
+    "m2",
+    "kg"
+   ],
+   [
+    "v2",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "v",
+   "m/s"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "m1": 2,
+    "v1": 3,
+    "m2": 1,
+    "v2": 0
+   },
+   "output": 2
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "continuity",
+  "statement": "Mass flow in equals mass flow out of a steady volume: a pipe narrowing speeds its flow by the ratio of areas.",
+  "inputs": [
+   [
+    "v1",
+    "m/s"
+   ],
+   [
+    "A1",
+    "m^2"
+   ],
+   [
+    "A2",
+    "m^2"
+   ]
+  ],
+  "output": [
+   "v2",
+   "m/s"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "v1": 1,
+    "A1": 0.01,
+    "A2": 0.0025
+   },
+   "output": 4
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "clausius-clapeyron",
+  "statement": "A phase boundary's pressure rises with temperature by the latent heat over the temperature times the change of specific volume.",
+  "inputs": [
+   [
+    "L",
+    "J/kg"
+   ],
+   [
+    "T",
+    "K"
+   ],
+   [
+    "dv",
+    "m^3/kg"
+   ]
+  ],
+  "output": [
+   "dpdT",
+   "Pa/K"
+  ],
+  "cite": "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018",
+  "example": {
+   "inputs": {
+    "L": 2260000,
+    "T": 373.15,
+    "dv": 1.672
+   },
+   "output": 3622.335900169705
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "hill.muscle",
+  "statement": "A muscle's force falls with its shortening speed along a hyperbola, (F + a)(v + b) = (F₀ + a) b; its power peaks near a third of its maximum speed.",
+  "inputs": [
+   [
+    "F0",
+    "N"
+   ],
+   [
+    "a",
+    "N"
+   ],
+   [
+    "b",
+    "m/s"
+   ],
+   [
+    "v",
+    "m/s"
+   ]
+  ],
+  "output": [
+   "F",
+   "N"
+  ],
+  "cite": "McMahon, Muscles, Reflexes, and Locomotion, Princeton 1984 (Hill's equation, the Froude number of gait)",
+  "example": {
+   "inputs": {
+    "F0": 100,
+    "a": 25,
+    "b": 0.25,
+    "v": 0.5
+   },
+   "output": 16.666666666666664
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "grubler",
+  "statement": "A planar mechanism's degrees of freedom are three per moving link less two per full joint and one per half joint.",
+  "inputs": [
+   [
+    "n",
+    "-"
+   ],
+   [
+    "j1",
+    "-"
+   ],
+   [
+    "j2",
+    "-"
+   ]
+  ],
+  "output": [
+   "M",
+   "-"
+  ],
+  "cite": "Norton, Design of Machinery, 6th ed., McGraw-Hill 2020 (Gruebler's equation)",
+  "example": {
+   "inputs": {
+    "n": 4,
+    "j1": 4,
+    "j2": 0
+   },
+   "output": 1
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "boltzmann.distribution",
+  "statement": "The probability of a state falls as exp(−E/kT) with its energy: carrier populations, reaction rates, the folding of proteins.",
+  "inputs": [
+   [
+    "dE",
+    "J"
+   ],
+   [
+    "T",
+    "K"
+   ]
+  ],
+  "output": [
+   "ratio",
+   "-"
+  ],
+  "cite": "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018",
+  "example": {
+   "inputs": {
+    "dE": 1.602176634e-20,
+    "T": 300
+   },
+   "output": 0.020896518618090255
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "queueing",
+  "statement": "The items in a steady system equal their arrival rate times the time each spends in it: a queue, a network, a shop floor.",
+  "inputs": [
+   [
+    "lambda",
+    "1/s"
+   ],
+   [
+    "W",
+    "s"
+   ]
+  ],
+  "output": [
+   "L",
+   "-"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "lambda": 10,
+    "W": 0.5
+   },
+   "output": 5
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "first.law",
+  "statement": "Energy is conserved: heat in minus work out is the change in internal energy.",
+  "inputs": [
+   [
+    "Q",
+    "J"
+   ],
+   [
+    "W",
+    "J"
+   ]
+  ],
+  "output": [
+   "dU",
+   "J"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "Q": 1000,
+    "W": 300
+   },
+   "output": 700
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "froude",
+  "statement": "Speed squared over gravity times leg length: animals of every size change gait at the same Froude number, walking to running near one half.",
+  "inputs": [
+   [
+    "v",
+    "m/s"
+   ],
+   [
+    "L",
+    "m"
+   ]
+  ],
+  "output": [
+   "Fr",
+   "-"
+  ],
+  "cite": "McMahon, Muscles, Reflexes, and Locomotion, Princeton 1984 (Hill's equation, the Froude number of gait)",
+  "example": {
+   "inputs": {
+    "v": 1.5,
+    "L": 0.9
+   },
+   "output": 0.25492905324448206
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "butler-volmer",
+  "statement": "Electrode current rises exponentially with overpotential in both directions, by the transfer coefficients over the thermal voltage R T / F (25.7 mV at 25 °C): why a cell's voltage sags under load.",
+  "inputs": [
+   [
+    "i0",
+    "A/m^2"
+   ],
+   [
+    "eta",
+    "V"
+   ],
+   [
+    "Vt",
+    "V"
+   ],
+   [
+    "alphaA",
+    "-"
+   ],
+   [
+    "alphaC",
+    "-"
+   ]
+  ],
+  "output": [
+   "i",
+   "A/m^2"
+  ],
+  "cite": "Bard & Faulkner, Electrochemical Methods, 2nd ed., Wiley 2001",
+  "example": {
+   "inputs": {
+    "i0": 1,
+    "eta": 0.1,
+    "Vt": 0.025692579121493725,
+    "alphaA": 0.5,
+    "alphaC": 0.5
+   },
+   "output": 6.85840779126327
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "tsiolkovsky",
+  "statement": "Velocity gained is the exhaust speed times the log of the initial over the final mass.",
+  "inputs": [
+   [
+    "ve",
+    "m/s"
+   ],
+   [
+    "m0",
+    "kg"
+   ],
+   [
+    "m1",
+    "kg"
+   ]
+  ],
+  "output": [
+   "dv",
+   "m/s"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "ve": 3000,
+    "m0": 10,
+    "m1": 1
+   },
+   "output": 6907.7552789821375
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "xray.cutoff",
+  "statement": "An x-ray tube makes nothing shorter than the wavelength one whole electron's energy would be: the tube's voltage sets the hardest photon it can make, and nothing above it.",
+  "inputs": [
+   [
+    "V",
+    "V"
+   ]
+  ],
+  "output": [
+   "lambda",
+   "m"
+  ],
+  "cite": "Attix, Introduction to Radiological Physics and Radiation Dosimetry, Wiley 1986, ch. 9",
+  "example": {
+   "inputs": {
+    "V": 100000
+   },
+   "output": 1.2398419843320027e-11
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "xray.efficiency",
+  "statement": "Almost all of an x-ray tube's power becomes heat: the share that leaves as x-rays is about a billionth of the target's atomic number times the volts, which at 100 kV into tungsten is under one per cent.",
+  "inputs": [
+   [
+    "Z",
+    "-"
+   ],
+   [
+    "V",
+    "V"
+   ]
+  ],
+  "output": [
+   "eta",
+   "-"
+  ],
+  "cite": "Bushberg, Seibert, Leidholdt & Boone, The Essential Physics of Medical Imaging, 3rd ed., Lippincott 2011, ch. 6",
+  "example": {
+   "inputs": {
+    "Z": 74,
+    "V": 100000
+   },
+   "output": 0.00814
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "attenuation.exponential",
+  "statement": "A beam of photons through matter loses the same share in every equal layer, so what is left falls off exponentially with thickness: what an x-ray image is made of.",
+  "inputs": [
+   [
+    "I0",
+    "W/m^2"
+   ],
+   [
+    "mu",
+    "1/m"
+   ],
+   [
+    "x",
+    "m"
+   ]
+  ],
+  "output": [
+   "I",
+   "W/m^2"
+  ],
+  "cite": "Attix, Introduction to Radiological Physics and Radiation Dosimetry, Wiley 1986, ch. 3",
+  "example": {
+   "inputs": {
+    "I0": 1,
+    "mu": 17.07,
+    "x": 0.1
+   },
+   "output": 0.18140920470554706
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "lidar.time-of-flight",
+  "statement": "A pulse's echo comes back in twice the range over the speed of light: a lidar is a clock, and a nanosecond is 150 mm.",
+  "inputs": [
+   [
+    "t",
+    "s"
+   ]
+  ],
+  "output": [
+   "R",
+   "m"
+  ],
+  "cite": "Richmond & Cain, Direct-Detection LADAR Systems, SPIE Press 2010, ch. 2",
+  "example": {
+   "inputs": {
+    "t": 0.000001
+   },
+   "output": 149.896229
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "lidar.return",
+  "statement": "What comes back from a scattering surface is the transmitted power times its reflectance times the share of a hemisphere the receiver's aperture fills: it falls as the square of the range, so doubling the range asks four times the power.",
+  "inputs": [
+   [
+    "Pt",
+    "W"
+   ],
+   [
+    "rho",
+    "-"
+   ],
+   [
+    "A",
+    "m^2"
+   ],
+   [
+    "eta",
+    "-"
+   ],
+   [
+    "R",
+    "m"
+   ]
+  ],
+  "output": [
+   "Pr",
+   "W"
+  ],
+  "cite": "Richmond & Cain, Direct-Detection LADAR Systems, SPIE Press 2010, ch. 2",
+  "example": {
+   "inputs": {
+    "Pt": 25,
+    "rho": 0.1,
+    "A": 0.00028,
+    "eta": 0.9,
+    "R": 100
+   },
+   "output": 2.005352282957881e-8
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "ftir.resolution",
+  "statement": "An interferometer tells apart wavenumbers no closer than one over the path difference its mirror travels: to see 1 cm⁻¹ apart the mirror must move a centimetre.",
+  "inputs": [
+   [
+    "opd",
+    "m"
+   ]
+  ],
+  "output": [
+   "dnu",
+   "1/m"
+  ],
+  "cite": "Griffiths & de Haseth, Fourier Transform Infrared Spectrometry, 2nd ed., Wiley 2007, ch. 2",
+  "example": {
+   "inputs": {
+    "opd": 0.01
+   },
+   "output": 100
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "wien.displacement",
+  "statement": "The wavelength a body radiates most at is Wien's constant over its temperature: a room at 300 K peaks near 10 µm, which is the band a thermal camera is built for, and a filament at 3000 K peaks at 1 µm, which is why it looks yellow.",
+  "inputs": [
+   [
+    "T",
+    "K"
+   ]
+  ],
+  "output": [
+   "lambda",
+   "m"
+  ],
+  "cite": "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011, ch. 12",
+  "example": {
+   "inputs": {
+    "T": 300
+   },
+   "output": 0.00000965923985
+  },
+  "hasDomain": true,
+  "exampleInsideDomain": true
+ },
+ {
+  "id": "bragg.law",
+  "statement": "Waves reflect from crystal planes only at angles where the path difference between planes is whole wavelengths: how structure is seen.",
+  "inputs": [
+   [
+    "d",
+    "m"
+   ],
+   [
+    "theta",
+    "rad"
+   ],
+   [
+    "n",
+    "-"
+   ]
+  ],
+  "output": [
+   "lambda",
+   "m"
+  ],
+  "cite": "Kittel, Introduction to Solid State Physics, 8th ed., Wiley 2005",
+  "example": {
+   "inputs": {
+    "d": 2.5e-10,
+    "theta": 0.3,
+    "n": 1
+   },
+   "output": 1.4776010333066977e-10
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ },
+ {
+  "id": "cable.equation",
+  "statement": "A leaky conductor's steady signal decays with distance over a length constant, the root of the membrane resistance per length over the inner resistance per length: the axon, the undersea cable.",
+  "inputs": [
+   [
+    "rm",
+    "ohm m"
+   ],
+   [
+    "ri",
+    "ohm/m"
+   ]
+  ],
+  "output": [
+   "lambda",
+   "m"
+  ],
+  "cite": "Young & Freedman, University Physics, 15th ed., Pearson 2019",
+  "example": {
+   "inputs": {
+    "rm": 1,
+    "ri": 0.5
+   },
+   "output": 1.4142135623730951
+  },
+  "hasDomain": false,
+  "exampleInsideDomain": null
+ }
+]

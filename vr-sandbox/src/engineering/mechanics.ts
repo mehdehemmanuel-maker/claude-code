@@ -1,5 +1,7 @@
 // Assorted mechanical relations: bearings, motors, drag, rubber, eddy brakes, gears, belts, cables.
 
+import { lewisY } from './gears';
+
 /** Rolling bearing friction torque, SKF simplified model: M = 0.5 mu P d. */
 export const bearingFrictionTorque = (mu: number, load: number, boreDiameter: number) => 0.5 * mu * load * boreDiameter;
 
@@ -69,23 +71,14 @@ export function skinDepth(f: number, sigma: number, mu0 = 4e-7 * Math.PI) {
   return 1 / Math.sqrt(Math.PI * Math.max(f, 1e-6) * mu0 * sigma);
 }
 
-/** Lewis form factor Y for 20 deg full-depth teeth (Shigley Table 14-2), interpolated by tooth count. */
-const LEWIS_TABLE: [number, number][] = [
-  [12, 0.245], [13, 0.261], [14, 0.277], [15, 0.29], [16, 0.296], [17, 0.303], [18, 0.309], [19, 0.314],
-  [20, 0.322], [21, 0.328], [22, 0.331], [24, 0.337], [26, 0.346], [28, 0.353], [30, 0.359], [34, 0.371],
-  [38, 0.384], [43, 0.397], [50, 0.409], [60, 0.422], [75, 0.435], [100, 0.447], [150, 0.46], [300, 0.472],
-  [400, 0.48], [1e9, 0.485],
-];
-
-export function lewisFormFactor(teeth: number) {
-  if (teeth <= LEWIS_TABLE[0]![0]) return LEWIS_TABLE[0]![1];
-  for (let i = 1; i < LEWIS_TABLE.length; i++) {
-    const [z1, y1] = LEWIS_TABLE[i]!;
-    const [z0, y0] = LEWIS_TABLE[i - 1]!;
-    if (teeth <= z1) return y0 + ((y1 - y0) * (teeth - z0)) / (z1 - z0);
-  }
-  return 0.485;
-}
+/** Lewis form factor Y for 20° full-depth teeth (Shigley Table 14-2).
+ *
+ *  ONE TABLE, NOT TWO. This file held its own copy of the 26-row table beside the one in engineering/gears.ts —
+ *  the same figures from the same table in the same book, in two places, where an edit to one would silently
+ *  disagree with the other. `parts/drive.ts` judges a gear tooth through gears.ts, so that is the owner, and this
+ *  keeps the name this file has always exported. (A third copy, in ganglia/laws.ts, went with that file in the
+ *  same round.) */
+export const lewisFormFactor = (teeth: number): number => lewisY(teeth);
 
 /** Lewis bending stress sigma = W_t / (b m Y) (metric form). */
 export const lewisStress = (Wt: number, faceWidth: number, module: number, Y: number) => Wt / (faceWidth * module * Y);
