@@ -229,6 +229,63 @@ and until it is done the reframe is demonstrated rather than adopted. Also absen
 metric is flat here), and any coupling between a worldline's proper time and the existing `clock.ts` local clocks,
 which already advance each region at its own time and are the natural place for this to land.
 
+## Run 8k — the universal law observation table, and three more things the book was answering wrongly
+
+*"all of these things need to be observably connected to physical things in the environment — create a universal law
+observation table where every law is represented by something physical or maybe just two things — also keep
+upgrading it and branching"*.
+
+**DERIVED, NOT ASSERTED** (`substrate/witness.ts`, `npm run substrate -- observe`). Nothing in it says "Newton's
+second law is about a hammer" because someone typed that. A law is observably connected to a thing when the thing
+HAS the quantities the law reads, and `know` already answers that — so the table is computed from the inventory and
+the book, and **it upgrades itself**: a part added or a law added changes it with nothing rewritten.
+
+**WHAT A WITNESS ACTUALLY IS, which the first attempt got wrong.** Measured: a law whose every port is answered by a
+thing just sitting there is rare — **31 of 252**. Newton's second law needs an acceleration and a gear on a bench
+has not got one. So a witness is never an object alone; it is **an object and what you do to it**, and the table
+says which is which:
+
+```
+newton.second  Newton's second law
+   on time's tree: time → time^-2 → kg m s^-2 → product of powers → newton.second
+   ◆ coil bobbin (50% of its ports)
+       has  mass = 0.00684 kg — mass.prism (Mass of a rectangular prism)
+       you  acceleration (m/s^2) — nothing about it answers this
+       read net force in N  (time^-2)
+```
+
+The `you` lines ARE the recipe. **129 of 252 laws have a physical witness here; 123 have none** — and a law with no
+witness is the honest finding, not a hole to paper over: it is in the book and nothing in this environment shows it.
+Of the 48 wholly observable, only **24** rest on properties a thing really has.
+
+**AND IT MUST NOT SAY "HAS" FOR WHAT A LAW ONLY SAYS A THING WOULD HAVE.** A bobbin's mass comes out of its size and
+its material: it has that. A bobbin's *speed* comes out of `free-fall.speed` reading its own height as a drop
+height — true arithmetic about a question nobody asked. The table now prints `WOULD` and names the law, so a
+counterfactual cannot pass as a property; `energy.kinetic` reads "wholly observable on coil bobbin — but only by
+taking what a law says it WOULD be for a property it has".
+
+Three faults found by building it, each fixed by cause — and all three are the same fault, which is the point:
+
+1. **THE DIMENSION CHECK WAS VACUOUS, and I wrote it that way in 8j.** `answersTo` called
+   `portFit(quantity, port, dim, dim)` — the same dimension on both sides — so the dimensional half of the test
+   could never fail. Asked for a bobbin's `angular speed` (a 1/s) it answered **0.54 m/s**; asked for its `modulus`
+   (a Pa) it answered a SECTION modulus (an m^3). The asked quantity is a NAME and carries no dimension, so the fix
+   is to hold the name to what the book says that kind is written in — which is exactly what the derived vocabulary
+   is for.
+2. **`stated` matched the word "length" inside "leak resistance of a unit length"** and answered a cable's leakage
+   (an ohm m) with a bobbin's 20 mm. A name matched and nothing checked what it was a name FOR. Every route in
+   `routesTo` — the inventory's own data included, not just the laws — is now held to the asked kind's dimension,
+   in one place.
+3. Both ride on the `speed` and `modulus` homonyms Run 8j measured and did not split. **Still not split.**
+
+**The lesson across 8j and 8k: a name is not a quantity either.** 8j fixed binding a law's PORTS by dimension and
+left the other direction — asking for a quantity BY NAME — unguarded. Both halves now go through
+`book/quantities.ts`, and that file is the only thing that decides what counts as the same quantity.
+
+`pointable` was moved into `substrate/derive.ts`, which already owns the parts↔laws boundary, because `tidy` caught
+`witness.ts` reaching into `parts/` and tightening a knot it already counts as debt: "substrate -> parts is now 5
+imports, was 4". 6 new tests; gate 2,298 across 189 files.
+
 ## Run 8j — a dimension is not a quantity, and five of the eleven engine files wired
 
 *"how would you define quantity ain't that the same thing as density anyways figure out 1 and 2"* — the two things

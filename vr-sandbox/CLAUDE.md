@@ -364,6 +364,14 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   ways must agree**: `clashes()` reports both routes and both numbers where they do not, which is what makes the
   structure load-bearing — it caught `gear-small`'s volume 48% apart (bounding box vs ellipsoid) and its height 70%
   apart on the first run. A clash is a fault in the DATA, not in the world.
+- **THE UNIVERSAL LAW OBSERVATION TABLE** (`substrate/witness.ts`, `npm run substrate -- observe`). Every law and
+  the physical thing you can watch it on, DERIVED: a law is connected to a thing when the thing has the quantities
+  the law reads (`know`), so the table upgrades itself as the inventory or the book grows. A witness is never an
+  object alone — only **31 of 252** laws have every port answered by a thing sitting there — it is an object AND
+  what you do to it, so each row splits into what the thing `has`, what `you` must supply (that list is the recipe),
+  and what you then `read`. **129 of 252 have a witness here, 123 have none**, and a law with no witness is the
+  honest finding rather than a hole to paper over. A value some law merely says a thing WOULD have is printed as
+  `WOULD`, never as `has`: a bobbin's "speed" out of `free-fall.speed` is a counterfactual, not a property.
 - **A DIMENSION IS NOT A QUANTITY** (`book/quantities.ts`, derived from the book's own 572 port names). Three
   things, kept apart: a DIMENSION is algebra (`kg m^-3`); a KIND OF QUANTITY is a named sort (density, torque,
   length); a QUANTITY is that kind of a specific thing. 115 kinds share the dimensionless `1`, 78 share `m`, and 27

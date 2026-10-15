@@ -9,7 +9,7 @@ import { MOLECULES } from '../life/molecules';
 import { wattsOf } from '../life/time';
 import { breakdown, estimate, fixed, measured, readable, says, solve, step, valueIn } from './record';
 import { inTime } from './time';
-import { portFit } from '../book/quantities';
+import { QUANTITY_KINDS, plain, portFit } from '../book/quantities';
 import { BOOK } from '../book';
 import { dimOf, dimText, type Dim } from '../lang/dimension';
 import { fromSI } from '../../ganglia/units';
@@ -231,9 +231,17 @@ const knowMemo = new Map<string, Fact | null>();
 const clashLog = new Map<string, Clash>();
 
 /** Does this law's output answer to the quantity asked for? By KIND — `book/quantities.ts` owns the judgement.
- *  `exact` or `kin` is the same quantity under a qualifier; a bare dimensional match is NOT the same quantity and
- *  is refused here, because a law giving a torque must not answer a question about kinetic energy. */
+ *  `exact` or `kin` is the same quantity under a qualifier; a bare dimensional match is NOT the same quantity, so a
+ *  law giving a torque cannot answer a question about kinetic energy.
+ *
+ *  THE ASKED QUANTITY CARRIES NO DIMENSION — it is a name — and passing the port's own dimension for both sides,
+ *  which this did, makes the dimensional half of the test vacuously true. The consequence was not subtle: asked for
+ *  a bobbin's `angular speed` (a 1/s) it answered `0.54 m/s`, and asked for its `modulus` (a Pa) it answered a
+ *  SECTION modulus (an m^3), because the names are kin and nothing checked the dimensions. The vocabulary derived
+ *  from the book knows what dimension each kind is written in, so that is what the asked name is held to. */
 const answersTo = (quantity: string, port: { name: string; sym: string }, dim: Dim) => {
+  const kind = QUANTITY_KINDS.get(plain(quantity));
+  if (kind && !kind.dims.includes(dimText(dim))) return false;   // the book says this kind is not that dimension
   const g = portFit(quantity, port, dim, dim);
   return g === 'exact' || g === 'kin';
 };
@@ -277,8 +285,15 @@ function stated(id: string, quantity: string): { value: number; unit: string; ho
  *  and whose every input is itself knowable about the same thing. Recursion is depth-capped and cycle-guarded. */
 function routesTo(id: string, quantity: string, seen: ReadonlySet<string>, depth: number): { how: string; value: number; unit: string; d: Derivation }[] {
   const out: { how: string; value: number; unit: string; d: Derivation }[] = [];
+  // EVERY ROUTE IS HELD TO THE ASKED KIND'S OWN DIMENSION, and this is the one place to do it. Without it,
+  // `stated` matched the word "length" inside "leak resistance of a unit length" and answered a cable's leakage
+  // (an ohm m) with a bobbin's 20 mm — a name matched and nothing checked what it was a name FOR. The vocabulary
+  // derived from the book knows what dimension each kind is written in; a route in any other dimension is not an
+  // answer to the question asked.
+  const asked = QUANTITY_KINDS.get(plain(quantity));
+  const rightDim = (unit: string) => !asked || asked.dims.includes(dimText(dimOf(unit)));
   const own = stated(id, quantity);
-  if (own) out.push(own);
+  if (own && rightDim(own.unit)) out.push(own);
   if (depth <= 0) return out;
   for (const l of BOOK) {
     if (!answersTo(quantity, l.output, dimOf(l.output.unit))) continue;
@@ -292,7 +307,7 @@ function routesTo(id: string, quantity: string, seen: ReadonlySet<string>, depth
     if (!ok) continue;
     let d: Derivation;
     try { d = step(l.id, env); } catch { continue; }
-    if (d.value === null) continue;
+    if (d.value === null || !rightDim(l.output.unit)) continue;
     out.push({ how: `${l.id} (${l.name})`, value: d.value, unit: l.output.unit, d });
   }
   return out;
@@ -334,3 +349,17 @@ export const clashes = (): Clash[] => [...clashLog.values()].sort((a, b) => b.sp
 
 /** Where an answer sits on time's own tree, for any quantity this resolver returned. */
 export const onTimesTree = (f: Fact): string[] => ['time', `time^${f.power}`, dimText(dimOf(f.unit)), f.quantity];
+
+/** THE THINGS WORTH POINTING AT: something with a size or a mass, made of something, that you could pick up and
+ *  hold. This lives here, with the rest of the parts↔laws boundary, so `witness.ts` can build the observation table
+ *  without reaching into `parts/` itself — a knot `tidy` already counts as debt and will not have tied tighter. */
+export function pointable(most = 24): { id: string; name: string }[] {
+  const out: { id: string; name: string }[] = [];
+  for (const i of INVENTORY.values()) {
+    if (!(i.kind === 'part' || i.kind === 'product' || i.kind === 'assembly' || i.kind === 'material')) continue;
+    if (!i.size && !i.g) continue;
+    out.push({ id: i.id, name: i.name });
+    if (out.length >= most) break;
+  }
+  return out;
+}

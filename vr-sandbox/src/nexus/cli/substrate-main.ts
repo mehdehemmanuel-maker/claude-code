@@ -116,6 +116,34 @@ if (want[0] === 'time') {
   process.exit(0);
 }
 
+// `npm run substrate -- observe [law …]` — THE UNIVERSAL LAW OBSERVATION TABLE.
+//
+// Every law, and the physical thing in the environment you can watch it on. Derived, never asserted: a law is
+// connected to a thing when the thing HAS the quantities the law reads, which `know` answers. So it upgrades itself
+// — a part added to the inventory or a law added to the book changes the table with nothing rewritten.
+if (want[0] === 'observe') {
+  const { observationTable, tableLines, showsIt, pointable } = await import('../substrate/witness');
+  const things = pointable(Number(process.env.WITNESSES ?? 12));
+  if (want.length > 1) {
+    for (const id of want.slice(1)) {
+      console.log(id);
+      const lines = showsIt(id, things);
+      if (!lines.length) console.log('  nothing in the environment answers even one of its ports.');
+      for (const l of lines) console.log(`  \u25C6 ${l}`);
+      console.log('');
+    }
+    console.log('SUBSTRATE: the observation table');
+    process.exit(0);
+  }
+  for (const l of tableLines(observationTable(undefined, things), 12)) console.log(l);
+  console.log('');
+  console.log('A LAW WITH NO WITNESS IS THE HONEST FINDING: it is in the book and nothing here shows it. Add the thing');
+  console.log('that does \u2014 a thermometer, a cell, a spring \u2014 and it enters the table by itself.');
+  console.log('');
+  console.log('SUBSTRATE: the observation table');
+  process.exit(0);
+}
+
 // `npm run substrate -- engine` — THE ENGINE'S OWN PARTS, RUN.
 //
 // Eleven files of `substrate/` were reachable from no door at all: the engine advertised as whole with pieces still
