@@ -92,6 +92,16 @@ const importsOf = (f) => {
     const names = [...clause.matchAll(/(\w+)(?:\s+as\s+(\w+))?/g)].map((x) => x[1]).filter((n) => n && !['type', 'as', 'default'].includes(n));
     out.push({ from, names, ns });
   }
+  // DYNAMIC IMPORTS COUNT. Every CLI door loads its modules as `const { a, b } = await import('../x')`, and a regex
+  // for static imports alone cannot see them — so each one's exports read as test-only or dead and each module it
+  // alone reaches reads as unreached. Found in Run 8i, when the CLI's own `asTime` and `bookInTime` were reported
+  // test-only while `npm run substrate -- time` was printing them. The census was wrong about its own doors.
+  for (const m of s.matchAll(/(?:(?:const|let|var)\s*({[^}]*}|\w+)\s*=\s*)?\bawait\s+import\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+    const from = resolveSpec(f, m[2]), clause = m[1] ?? '';
+    const ns = /^\s*(\w+)\s*$/.exec(clause)?.[1] ?? null;
+    const names = [...clause.matchAll(/(\w+)(?:\s*:\s*(\w+))?/g)].map((x) => x[1]).filter((n) => n && n !== 'default');
+    out.push({ from, names, ns });
+  }
   return out;
 };
 const IMPORTS = new Map([...SRC, ...TESTS].map((f) => [f, importsOf(f)]));

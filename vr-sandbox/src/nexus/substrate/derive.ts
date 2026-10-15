@@ -7,7 +7,11 @@
 import { INVENTORY, gramsOfItem, type Item } from '../parts/inventory';
 import { MOLECULES } from '../life/molecules';
 import { wattsOf } from '../life/time';
-import { breakdown, estimate, fixed, measured, says, solve, step, valueIn } from './lawgraph';
+import { breakdown, estimate, fixed, measured, readable, says, solve, step, valueIn } from './record';
+import { inTime, answersToPort } from './time';
+import { BOOK } from '../book';
+import { dimOf, dimText } from '../lang/dimension';
+import { fromSI } from '../../ganglia/units';
 import { leaf } from '../lang/term';
 import { boxShape } from './boxfill';
 import { ofLeaf, type Derivation } from '../lang/evaluate';
@@ -78,7 +82,22 @@ export function densityShares(id: string, seen = new Set<string>()): Map<Dens, n
       const parts: [string, number][] = [];
       for (const c of i.of) { const ci = INVENTORY.get(c.id); if (!ci) continue; const g = i.mass?.[c.id] ?? (gramsOfItem(ci) ?? NaN) * c.n; if (g > 0) parts.push([c.id, g]); }
       const all = parts.reduce((a, [, g]) => a + g, 0);
-      for (const [cid, g] of parts) { const sub = densityShares(cid, s2); if (sub) add(sub, g / all); }
+      if (all > 0) for (const [cid, g] of parts) { const sub = densityShares(cid, s2); if (sub) add(sub, g / all); }
+      else {
+        // NO MASSES KNOWN, and that used to end the matter: the shares came out NaN and the whole density went
+        // null — so a brass gear reported no density at all while brass sat right there at 8500 kg/m^3. Two cases
+        // need no masses to be exact, and both are taken rather than refused:
+        //   ONE CONSTITUENT      its density IS the thing's density; there is nothing to weight.
+        //   ALL THE SAME DENSITY  the mixing law returns that density whatever the shares are.
+        // Anything else — several materials, unknown proportions — stays unknown, because a guess at the shares
+        // would be a guess at the answer, and `know` reporting "must be measured" is the honest result.
+        const subs = i.of.map((c) => densityShares(c.id, s2)).filter(Boolean) as Map<Dens, number>[];
+        if (subs.length === 1 && i.of.length === 1) add(subs[0]!, 1);
+        else if (subs.length === i.of.length && subs.length > 1) {
+          const kgs = new Set(subs.flatMap((m) => [...m.keys()].map((d) => d.kg)));
+          if (kgs.size === 1) add(subs[0]!, 1);
+        }
+      }
     }
   }
   const total = [...out.values()].reduce((a, b) => a + b, 0);
@@ -160,3 +179,153 @@ export function profileFaults(ids: Iterable<string> = INVENTORY.keys()): { id: s
   return out;
 }
 export type { Item };
+
+/* ───────────────── the one hierarchy: a part, its quantities, the laws that give them, and time ───────────────── */
+//
+// THE USER'S STRUCTURE, in their words (2026-10-15): "the law system should follow the same system as parts the sub
+// system all system all the way down to the core and then look they both would meet at time", and: "everything
+// exists on the graph all possibilities exist just like a calculator all the laws are there but it only gets
+// calculated when typed".
+//
+// Both halves of this project are the same shape, and until now they were two:
+//
+//   A PART decomposes into sub-parts, down and down, until it bottoms out at a material.
+//   A QUANTITY decomposes into the quantities its law needs, down and down, until it bottoms out at a measurement.
+//
+// They are one tree, and they MEET AT TIME: a part's property is a quantity, a quantity is given by a law, and every
+// law reduces to a power of time (`substrate/time.ts`). So `know` below is one recursive resolver over one tree, and
+// `placeOf` says where on time's own tree any answer it gives sits.
+//
+// NOTHING IS COMPUTED UNTIL IT IS ASKED FOR. There is no sweep and no pass that fills anything in: every quantity of
+// every part is already a node here by virtue of the laws and the inventory existing, and asking is what evaluates
+// one — memoised, so asking twice costs nothing, and cycle-guarded, so a quantity that would need itself is refused
+// rather than recursed into.
+//
+// AND A QUANTITY REACHED TWO WAYS MUST AGREE. This is the part that makes the structure load-bearing instead of
+// decorative. A bearing's density can be had from the mixing law over what it is made of, and again from its mass
+// over its volume. Physics does not permit those to differ. Where they do, the DATA is wrong — and `clashes` says so
+// with both routes and both numbers, rather than quietly taking whichever was computed first.
+
+/** What is known about one quantity of one thing, and how. */
+export interface Fact {
+  thing: string; quantity: string;
+  value: number; unit: string;
+  /** where this answer sits on time's tree */ power: number;
+  /** the route: a law, the inventory, or a decomposition over its parts */ how: string;
+  /** the full tree down to every measurement; `breakdown` reads it */ d: Derivation;
+  /** other routes that reached the same answer, and agreed */ alsoBy: { how: string; value: number }[];
+  says: string;
+}
+
+/** Two routes to one quantity that do NOT agree: a fact about the data, not about the world. */
+export interface Clash {
+  thing: string; quantity: string; unit: string;
+  routes: { how: string; value: number }[];
+  /** the spread as a fraction of the larger */ spread: number;
+  says: string;
+}
+
+const AGREE = 0.02;                                  // two routes agree inside 2%: tighter than the data deserves
+const knowMemo = new Map<string, Fact | null>();
+const clashLog = new Map<string, Clash>();
+
+/** Does this law's output answer to the quantity being asked for? One name test, owned by `time.ts`. */
+const answersTo = (quantity: string, port: { name: string; sym: string }) =>
+  answersToPort({ name: quantity, d: { name: quantity } }, port);
+
+/** The leaves: what the inventory itself states about a thing, with no law involved. */
+function stated(id: string, quantity: string): { value: number; unit: string; how: string; d: Derivation } | null {
+  const i = INVENTORY.get(id); if (!i) return null;
+  const q = quantity.toLowerCase();
+  if (/^mass$|^weight$/.test(q)) {
+    const m = massOf(id);
+    return m ? { value: m.value!, unit: m.unit, how: 'the inventory (its own mass, or the sum of its parts)', d: m } : null;
+  }
+  if (/densit/.test(q)) {
+    const dd = densityOf(id);
+    return dd ? { value: dd.value!, unit: dd.unit, how: 'the mixing law over what it is made of, down to materials', d: dd } : null;
+  }
+  if (/^volume$/.test(q) && i.size) {
+    // A BOUNDING BOX IS NOT A VOLUME, and saying so is the point. This is an upper bound on a solid part and a wild
+    // one on a bracket, which is exactly why it is recorded as an estimate with its grounds — and why the density
+    // it implies will disagree with the density from its materials, and `clashes` will say so.
+    const [x, y, z] = i.size;
+    return { value: (x / 1000) * (y / 1000) * (z / 1000), unit: 'm^3',
+      how: 'its overall size, as a box: an UPPER BOUND, not the solid volume',
+      d: estimate(`volume of ${i.name}`, (x / 1000) * (y / 1000) * (z / 1000), 'm^3',
+        `its stated size ${x}×${y}×${z} mm taken as a box, so a solid part is over-stated and an open one wildly so`) };
+  }
+  if (/extent|length|breadth|width|depth|height|diameter/.test(q) && i.size) {
+    // WHICH extent. `extent y` and `extent z` both used to fall through to the first one, so `mass.prism` was fed
+    // 10×10×10 for a 10×10×3 gear and came out 8.5 g against the true 2.55 g — a 3.3× error that looked like a
+    // working answer. An axis answersToPort in the quantity wins; failing that, breadth/width is the second and
+    // depth/height the third, which is how the book's own prism laws name them.
+    const k = /\bx\b/.test(q) ? 0 : /\by\b/.test(q) ? 1 : /\bz\b/.test(q) ? 2
+      : /breadth|width/.test(q) ? 1 : /depth|height|thick/.test(q) ? 2 : 0;
+    return { value: i.size[k]! / 1000, unit: 'm', how: `its stated size (${['first', 'second', 'third'][k]} extent)`,
+      d: measured(`${quantity} of ${i.name}`, i.size[k]! / 1000, 'm', 'the inventory (its stated size, mm)') };
+  }
+  return null;
+}
+
+/** EVERY ROUTE to one quantity of one thing: what the inventory states, and every law whose output is that quantity
+ *  and whose every input is itself knowable about the same thing. Recursion is depth-capped and cycle-guarded. */
+function routesTo(id: string, quantity: string, seen: ReadonlySet<string>, depth: number): { how: string; value: number; unit: string; d: Derivation }[] {
+  const out: { how: string; value: number; unit: string; d: Derivation }[] = [];
+  const own = stated(id, quantity);
+  if (own) out.push(own);
+  if (depth <= 0) return out;
+  for (const l of BOOK) {
+    if (!answersTo(quantity, l.output)) continue;
+    const env: Record<string, Derivation> = {};
+    let ok = true;
+    for (const p of l.inputs) {
+      const sub = know(id, p.name, seen, depth - 1);          // the law's input is itself a quantity OF THIS THING
+      if (!sub) { ok = false; break; }
+      env[p.sym] = sub.d;
+      }
+    if (!ok) continue;
+    let d: Derivation;
+    try { d = step(l.id, env); } catch { continue; }
+    if (d.value === null) continue;
+    out.push({ how: `${l.id} (${l.name})`, value: d.value, unit: l.output.unit, d });
+  }
+  return out;
+}
+
+/** WHAT IS KNOWN about one quantity of one thing — resolved on demand, never before. Returns null where the book
+ *  and the inventory together cannot reach it, which is an answer: it says the quantity must be measured. */
+export function know(thing: string, quantity: string, seen: ReadonlySet<string> = new Set(), depth = 3): Fact | null {
+  const key = `${thing}|${quantity.toLowerCase()}|${depth}`;
+  if (knowMemo.has(key)) return knowMemo.get(key)!;
+  const guard = `${thing}|${quantity.toLowerCase()}`;
+  if (seen.has(guard)) return null;                            // it would need itself: refuse, do not recurse
+  knowMemo.set(key, null);                                     // claim it first, so a cycle through another name stops
+  const routes = routesTo(thing, quantity, new Set(seen).add(guard), depth);
+  if (!routes.length) { knowMemo.set(key, null); return null; }
+
+  // every route is in the same unit by construction (the laws' output units), so compare in SI
+  const best = routes[0]!;
+  const others = routes.slice(1);
+  const spread = routes.length < 2 ? 0
+    : (Math.max(...routes.map((r) => Math.abs(r.value))) - Math.min(...routes.map((r) => Math.abs(r.value))))
+      / Math.max(...routes.map((r) => Math.abs(r.value)) ) || 0;
+  if (routes.length > 1 && spread > AGREE) {
+    const clash: Clash = { thing, quantity, unit: best.unit, spread,
+      routes: routes.map((r) => ({ how: r.how, value: r.value })),
+      says: `${thing}'s ${quantity} comes out ${(spread * 100).toFixed(0)}% apart by different routes — ${routes.map((r) => `${readable(fromSI(r.value, best.unit))} ${best.unit} by ${r.how}`).join(' · ')}. Physics does not allow that, so one of the inputs is wrong.` };
+    clashLog.set(`${thing}|${quantity}`, clash);
+  }
+  const fact: Fact = { thing, quantity, value: best.value, unit: best.unit,
+    power: inTime(dimOf(best.unit)), how: best.how, d: best.d,
+    alsoBy: others.filter((o) => Math.abs(o.value - best.value) <= AGREE * Math.max(Math.abs(o.value), Math.abs(best.value))).map((o) => ({ how: o.how, value: o.value })),
+    says: `${quantity} of ${thing} = ${readable(fromSI(best.value, best.unit))} ${best.unit}  [time^${inTime(dimOf(best.unit))}, by ${best.how}]` };
+  knowMemo.set(key, fact);
+  return fact;
+}
+
+/** Every disagreement found while resolving: ask for things first, then read this. A clash is a flaw in the DATA. */
+export const clashes = (): Clash[] => [...clashLog.values()].sort((a, b) => b.spread - a.spread);
+
+/** Where an answer sits on time's own tree, for any quantity this resolver returned. */
+export const onTimesTree = (f: Fact): string[] => ['time', `time^${f.power}`, dimText(dimOf(f.unit)), f.quantity];

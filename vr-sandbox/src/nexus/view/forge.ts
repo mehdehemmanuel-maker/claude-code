@@ -125,7 +125,7 @@ import { aged, clockOf, turnover } from '../life/time';
 import { LASTING, lifetimeLines, lifetimeOf, yearsSays } from '../life/decay';
 import { flowLines, flowsOf } from '../life/flows';
 import { CREATURES, abilityLines, type Creature } from '../ask/abilities';
-import { discover, graphSummary } from '../substrate/lawgraph';
+import { discover, graphSummary } from '../substrate/time';
 import { profileLines } from '../substrate/derive';
 import { LOCI, childOf, earwax, phenotype, possibilities, randomGenome, type Genome } from '../life/genome';
 import { PY_PRELUDE, readPy, runMeca, type Ran, type Target as CodeTarget } from '../teach/codesim';

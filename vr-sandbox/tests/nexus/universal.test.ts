@@ -6,7 +6,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { BOOK, UNIVERSAL, lawById } from '../../src/nexus/book';
-import { breakdown, discover, families, forcedByUnits, graphSummary, leavesUnder, lawsUnder, measured, principlesOf, solve, step, valueIn } from '../../src/nexus/substrate/lawgraph';
+import { breakdown, families, leavesUnder, lawsUnder, measured, solve, step, valueIn } from '../../src/nexus/substrate/record';
+import { discover, forcedByUnits, graphSummary } from '../../src/nexus/substrate/time';
+import { principlesOf } from '../../src/nexus/book/principles';
 import { densityOf, profile, profileFaults } from '../../src/nexus/substrate/derive';
 import { flowsOf } from '../../src/nexus/life/flows';
 import { INVENTORY, countIn, gramsOfItem } from '../../src/nexus/parts/inventory';

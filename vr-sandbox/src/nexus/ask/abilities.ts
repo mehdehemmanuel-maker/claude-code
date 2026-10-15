@@ -5,7 +5,7 @@
 // cannot; a flatworm lives without vessels because it is flat; the bacterium cannot coast. A creature is a handful of
 // numbers (its mass, its thickness, its wings, its eye), so a new one is a new handful, and what it can do follows.
 
-import { estimate, fixed, lawsUnder, measured, setting, solve, step, valueIn } from '../substrate/lawgraph';
+import { estimate, fixed, lawsUnder, measured, setting, solve, step, valueIn } from '../substrate/record';
 import type { Derivation } from '../lang/evaluate';
 import type { Law } from '../lang/law';
 

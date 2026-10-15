@@ -229,6 +229,73 @@ and until it is done the reframe is demonstrated rather than adopted. Also absen
 metric is flat here), and any coupling between a worldline's proper time and the existing `clock.ts` local clocks,
 which already advance each region at its own time and are the natural place for this to land.
 
+## Run 8i — one hierarchy: a part, its quantities, the laws that give them, and time at the root
+
+*"merge all systems delete the others all make all sensors map to time these are not to be seperate systems"* — then
+*"the law system should follow the same system as parts the sub system all system all the way down to the core and
+then look they both would meet at time"* — and, correcting a design of mine mid-round: *"no don't write observe I'm
+saying everything exists on the graph all possibilities exist just like a calculator all the laws are there but it
+only gets calculated when typed"*.
+
+**The user was right about `observe` and it was deleted.** I had written a sweep: a function that marches through
+the book firing every law it can. Their structure is better and it is the one built: every quantity of every part is
+ALREADY a node, by virtue of the laws and the inventory existing, and asking is what evaluates one. No pass, no
+batch, no fill-in.
+
+**ONE SYSTEM, and `substrate/lawgraph.ts` is deleted.** `unwired.mjs path substrate/lawgraph substrate/time` used
+to answer *"Neither reaches the other. They are two islands"*. The graph half merged into `substrate/time.ts`; the
+value-applying half (a different verb) went to `substrate/record.ts`; the two tables units cannot derive went to
+`book/principles.ts`. Nothing of it was left beside anything.
+
+**THE TREE, four derived levels under the root** (`npm run substrate -- time`): time → the power of time → the SI
+dimension that power came from → the shape of the math → the law. 252 sensors, **9 trunks, 34 limbs, 67 twigs**, and
+not one written-down category: a law added to the book places itself, and `placeOf` gives any law's path. The one
+honest limit is named rather than hidden — **14 laws carry a mole**, and a mole is a count, so no constant reduces it.
+
+**THE FEED GRAPH, derived: 7,949 edges** against the 27 that were written by hand — and `kinshipFeeds` keeps the two
+relations apart, because only 11 of those 27 are feeds at all. The rest are *"this law BECOMES that law"*, which is
+knowledge, not arithmetic, and stays in `book/principles.ts` by hand.
+
+**THE HIERARCHY, ASKED** (`npm run substrate -- know gear-small`, `substrate/derive.ts`). A part decomposes into
+sub-parts down to a material; a quantity decomposes into the quantities its law needs down to a measurement; they
+are the same shape and they meet at time. `know(thing, quantity)` resolves on demand, memoised and cycle-guarded,
+and every answer carries its place on time's tree. A brass gear, asked: **density 8500 kg/m³** from its material
+through the mixing law, **volume** from its stated size, and **mass 2.55 g derived through `mass.prism`** — nothing
+states that mass, and two independent routes (`mass.prism` and `mass.volume`) agree on it.
+
+**AND A QUANTITY REACHED TWO WAYS MUST AGREE.** This is what makes it load-bearing rather than decorative, and it
+immediately caught real faults in the sample data: `gear-small`'s volume is **48% apart** between its bounding box
+and `volume.ellipsoid`, and its height **70% apart** between its stated 3 mm and what `extent.from-mass` infers.
+`clashes()` reports both routes and both numbers rather than silently taking whichever was computed first.
+
+Five faults found by RUNNING it, each fixed by cause rather than worked around:
+
+1. **Density was unreachable for almost every part, and the cause was the weighting.** `densityShares` weighted a
+   part's constituents BY MASS IN GRAMS — but a material has no grams, so the weights came out `NaN` and the whole
+   density went null. A brass gear reported no density while brass sat in the table at 8500. Two cases need no
+   masses and are now taken: one constituent (its density IS the thing's), and several of equal density (the mixing
+   law returns it whatever the shares). Several materials in unknown proportions still returns unknown, because
+   guessing the shares is guessing the answer.
+2. **`extent y` and `extent z` both bound to the FIRST extent**, so a 10×10×3 gear was costed as 10×10×10 and its
+   mass came out 8.5 g against the true 2.55 g — wrong by 3.3× and looking like a working answer.
+3. **Dimension is not identity.** `calculate` bound a chain pitch to a pendulum length (both `m`) and returned an
+   "impact speed" for a sprocket. Three answers, none a guess: a dimensionless port (every ratio in the book is `-`)
+   binds only to something NAMED for it; a binding whose names agree is preferred; and every port filled under a
+   different name is reported in `stretched`. A stretched number is not wrong, it is unverified, and the caller is
+   told which binding to check.
+4. **I rewrote `forcedByUnits` from memory during the merge** instead of carrying the original across, dropping its
+   check of a law's actual exponents and its constants-with-units. The gate caught it. Restored verbatim.
+5. **The census could not see dynamic imports.** Every CLI door loads its modules with `await import`, so each
+   one's exports read as test-only and each module it alone reaches read as unreached. `tools/unwired.mjs` now
+   counts them: **test-only 203 → 194.** Third round running in which the instrument itself was the fault.
+
+Three name clashes were fixed rather than permitted (`num`→`readable`, `Held`→`Pooled`, `named`→`answersToPort`),
+and the `LINKS` clash that Run 8h found on tidy's *allow-list* is gone with the rename to `KINSHIP`. 46 new tests.
+
+Still open, named so it cannot be claimed later: **a quantity has no identity of its own** — only a dimension and a
+name — so finding 3 is mitigation, not a cure; the real fix gives the book a vocabulary of named quantities that
+ports bind against. `substrate/` still has 11 of its 78 files unreachable from any door.
+
 ## Run 8h — the graph joined to time, and a census that hid its own answer
 
 *"finish connecting all the laws(sensorys) to time mathmatically then cross connect all the laws with equations or

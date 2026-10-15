@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ENVS, LASTING, arrhenius, fatigueCycles, lifetimeLines, lifetimeOf, woodMoisture, yearsSays } from '../../src/nexus/life/decay';
-import { lawsUnder, valueIn } from '../../src/nexus/substrate/lawgraph';
+import { lawsUnder, valueIn } from '../../src/nexus/substrate/record';
 import { INVENTORY } from '../../src/nexus/parts/inventory';
 
 const yrs = (id: string, env: string) => lifetimeOf(id, env)!.years;

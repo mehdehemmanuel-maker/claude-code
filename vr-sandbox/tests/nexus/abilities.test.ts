@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ABILITIES, CREATURES, canDo, restingPower } from '../../src/nexus/ask/abilities';
-import { valueIn } from '../../src/nexus/substrate/lawgraph';
+import { valueIn } from '../../src/nexus/substrate/record';
 
 const c = (id: string) => CREATURES.find((x) => x.id === id)!;
 const can = (id: string, ability: string) => canDo(c(id)).find((v) => v.ability === ABILITIES.find((a) => a.id === ability)!.name)?.ok;

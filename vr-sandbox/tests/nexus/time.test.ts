@@ -9,8 +9,12 @@ import {
   type Worldline,
 } from '../../src/nexus/substrate/time';
 import { BOOK, lawById } from '../../src/nexus/book';
-import { branches, routeInTime, routes, timePower, timeSpectrum } from '../../src/nexus/substrate/lawgraph';
-import { dimOf, sameDim } from '../../src/nexus/lang/dimension';
+import {
+  branches, feedEdges, feeds, graphSummary, kinshipFeeds, molesOf, placeOf, calculate, timePower, timeTree, timeTreeLines,
+} from '../../src/nexus/substrate/time';
+import { breakdown, measured } from '../../src/nexus/substrate/record';
+import { KINSHIP } from '../../src/nexus/book/principles';
+import { dimOf, dimText, sameDim } from '../../src/nexus/lang/dimension';
 
 const at = (id: string, v: [number, number, number] = [0, 0, 0]): Worldline => ({ id, tau: 0, at: [0, 0, 0], through: v });
 
@@ -163,50 +167,182 @@ describe('a law demoted to a sensor', () => {
   });
 });
 
-// ── the graph in time, and the branches that are not there ─────────────────────────────────────────────────────────
+
+// ── one system: the tree rooted in time, the derived feed graph, and the calculator ───────────────────────────────
 //
-// `lawgraph.ts` and `time.ts` were two islands: the graph could say what the book HAS and never what it LACKS, and it
-// did not know a law's power of time. These check the join. The point of `branches()` is that its findings are FACTS
-// about the graph — a hole it reports is a dimension no law produces, which is checkable here directly — and not an
-// opinion about what a book of laws ought to contain.
-describe('the law graph in time', () => {
+// Run 8i merged `substrate/lawgraph.ts` into this file's subject and deleted it. These tests hold the merge honest.
+// The theme throughout: every level of the tree and every edge of the graph is DERIVED, so each test re-derives the
+// thing independently and checks the system agrees — rather than checking the sentence the system prints.
+describe('the tree rooted in time', () => {
   it('a law that gives a speed sits at time^0, because a speed is dimensionless in natural units', () => {
     const anySpeed = BOOK.filter((l) => sameDim(dimOf(l.output.unit), dimOf('m/s')));
     expect(anySpeed.length, 'the book has laws that give a speed').toBeGreaterThan(0);
     for (const l of anySpeed) expect(timePower(l), `${l.id} gives ${l.output.unit}`).toBe(0);
   });
 
-  it('the spectrum covers every power the book reaches, highest first, and loses no law', () => {
-    const spec = timeSpectrum();
-    const powers = spec.map((s) => s.power);
-    expect(powers, 'the spectrum runs downward with no power skipped').toEqual(
-      [...powers].sort((a, b) => b - a));
-    for (let i = 1; i < powers.length; i++) expect(powers[i - 1]! - powers[i]!).toBe(1);
-    expect(spec.reduce((n, s) => n + s.laws.length, 0), 'every law lands at exactly one power').toBe(BOOK.length);
-  });
-
-  it('a route reads as a walk through the spectrum, each step carrying its power', () => {
-    const chain = routes('N', ['kg', 'm/s^2'])[0];
-    expect(chain, 'the book can make a force from a mass and an acceleration').toBeTruthy();
-    const walk = routeInTime(chain!);
-    expect(walk.length).toBe(chain!.length);
-    for (const s of walk) {
-      expect(s.power, `${s.id} has an integer power of time`).toBe(Math.round(s.power));
-      expect(s.says).toContain(`time^${s.power}`);
+  it('every law lands on exactly one leaf, and the trunks descend one power at a time', () => {
+    const t = timeTree();
+    const seen = t.trunks.flatMap((tr) => tr.limbs.flatMap((f) => f.twigs.flatMap((w) => w.laws.map((l) => l.id))));
+    expect(seen.length, 'no law is dropped and none is counted twice').toBe(BOOK.length);
+    expect(new Set(seen).size).toBe(BOOK.length);
+    const powers = t.trunks.map((x) => x.power);
+    expect(powers, 'the trunks run downward').toEqual([...powers].sort((a, b) => b - a));
+    for (let i = 1; i < powers.length; i++) expect(powers[i - 1]! - powers[i]!, 'no power skipped').toBe(1);
+    for (const tr of t.trunks) {
+      expect(tr.laws).toBe(tr.limbs.reduce((n, f) => n + f.laws, 0));
+      for (const f of tr.limbs) {
+        expect(f.twigs.length, `${tr.power}/${f.si} has at least one shape of math`).toBeGreaterThan(0);
+        // the face IS the dimension, so every law on it must actually have that dimension and that power
+        for (const w of f.twigs) for (const l of w.laws) {
+          expect(dimText(dimOf(l.unit))).toBe(f.si);
+          expect(inTime(dimOf(l.unit))).toBe(tr.power);
+        }
+      }
     }
   });
 
+  it('the mole is named as the reduction’s one limit, never quietly absorbed', () => {
+    const t = timeTree();
+    // c, h-bar and k_B convert between physical dimensions. A mole is a COUNT, and Avogadro's number is a
+    // definition, not a conversion — so a law carrying moles reduces only up to that count. Every one is listed.
+    const carries = BOOK.filter((l) => molesOf(l.output.unit) !== 0).map((l) => l.id);
+    expect([...t.carriesACount].sort()).toEqual([...carries].sort());
+    expect(t.says.join(' ')).toContain('mole is a count');
+  });
+
+  it('placeOf gives the path from time down to one law, and it agrees with the tree', () => {
+    for (const id of ['stress.axial', 'newton.second', 'arrhenius', 'inertia.disc']) {
+      const l = lawById(id), p = placeOf(l);
+      expect(p.path[0]).toBe('time');
+      expect(p.path[1]).toBe(`time^${timePower(l)}`);
+      expect(p.path[2]).toBe(dimText(dimOf(l.output.unit)));
+      expect(p.path[4]).toBe(id);
+      const trunk = timeTree().trunks.find((t) => t.power === p.power)!;
+      const face = trunk.limbs.find((f) => f.si === p.path[2])!;
+      expect(face.twigs.some((w) => w.laws.some((x) => x.id === id)), `${id} is on the twig its path names`).toBe(true);
+    }
+  });
+
+  it('the tree prints with time at the root', () => {
+    const lines = timeTreeLines();
+    expect(lines[0]).toBe('TIME — the one law');
+    for (const tr of timeTree().trunks) expect(lines.some((l) => l.startsWith(`time^${tr.power} ·`))).toBe(true);
+  });
+});
+
+describe('the feed graph, derived', () => {
+  it('a feed is exactly a port of the right dimension, and the edge names that port', () => {
+    const edges = feedEdges();
+    expect(edges.length, 'the dimensions support far more edges than anyone wrote by hand').toBeGreaterThan(1000);
+    for (const e of edges.slice(0, 200)) {
+      const a = lawById(e.from), b = lawById(e.to);
+      const port = b.inputs.find((p) => p.sym === e.port)!;
+      expect(port, `${e.to} has a port ${e.port}`).toBeTruthy();
+      expect(sameDim(dimOf(port.unit), dimOf(a.output.unit)), `${e.from} → ${e.to}`).toBe(true);
+      expect(e.power).toBe(inTime(dimOf(a.output.unit)));
+    }
+  });
+
+  it('no law feeds itself, and feeds() agrees with the edge list', () => {
+    for (const l of BOOK.slice(0, 40)) expect(feeds(l, l)).toBeNull();
+    const edges = feedEdges();
+    const pairs = new Set(edges.map((e) => `${e.from}>${e.to}`));
+    for (const a of BOOK.slice(0, 25)) for (const b of BOOK.slice(0, 25)) {
+      if (a.id === b.id) continue;
+      expect(!!feeds(a, b), `${a.id} → ${b.id}`).toBe(pairs.has(`${a.id}>${b.id}`));
+    }
+  });
+
+  it('kinship is a DIFFERENT relation from feeding, and the check says which edges are both', () => {
+    const k = kinshipFeeds();
+    expect(k.length).toBe(KINSHIP.length);
+    // This is the Run 8h finding, kept as a test so the two relations cannot be merged again by accident: most of
+    // the written kinship is NOT a port-feed. `fick.diffusion → diffusion.erf` is "Fick's law, conserved
+    // everywhere, BECOMES this law" — a derivation, not a hand-off of a value.
+    const both = k.filter((x) => x.alsoFeeds);
+    expect(both.length, 'some kinship edges do also feed').toBeGreaterThan(0);
+    expect(both.length, 'but most do not: they are derivations, which is why they are written by hand').toBeLessThan(k.length);
+    for (const x of k) {
+      expect(x.alsoFeeds).toBe(!!feeds(lawById(x.from), lawById(x.to)));
+      expect(x.says).toContain(x.alsoFeeds ? 'the dimensions agree' : 'kinship only');
+    }
+  });
+});
+
+describe('the law calculator', () => {
+  it('runs a chain and returns a record whose breakdown reaches the measurements', () => {
+    const r = calculate('N', { mass: measured('mass', 2, 'kg', 'a scale'), accel: measured('acceleration', 3, 'm/s^2', 'a rig') });
+    expect(r.refused).toBeNull();
+    expect(r.got, 'it computed, not merely found a route').toBeTruthy();
+    expect(r.got!.value).toBeCloseTo(6, 10);
+    expect(r.chain.map((c) => c.law)).toContain('newton.second');
+    const tree = breakdown(r.got!).join('\n');
+    expect(tree, 'the record carries what it rests on').toContain('a scale');
+    expect(tree).toContain('a rig');
+  });
+
+  it('computes a real chain-drive speed, checkable by hand', () => {
+    // 38 teeth at 12.7 mm pitch = 0.4826 m a revolution; 1500 rpm = 25 rev/s; 0.4826 x 25 = 12.065 m/s.
+    const r = calculate('m/s', {
+      z: measured('sprocket teeth', 38, '-', 'the sprocket'),
+      pitch: measured('pitch', 0.0127, 'm', 'ISO 606'),
+      rpm: measured('speed', 1500, 'rpm', 'a tacho'),
+    }, undefined, 3);
+    expect(r.chain.map((c) => c.law)).toEqual(['chain.speed']);
+    expect(r.got!.value).toBeCloseTo(12.065, 3);
+    expect(r.stretched, 'every port was filled by something named for it').toEqual([]);
+  });
+
+  it('will NOT bind a dimensionless port by dimension: a Froude number is not a count of teeth', () => {
+    // The fault this fixes, found by running it: every ratio in the book is `-`, so binding dimensionless ports by
+    // dimension matches all of them to all of them. Offered a Froude number where teeth are wanted, the chain-speed
+    // law must not fire — and what DOES fire must report the port it stretched.
+    const r = calculate('m/s', {
+      froude: measured('Froude number', 0.5, '-', 'a gait'),
+      pitch: measured('pitch', 0.0127, 'm', 'ISO 606'),
+      rpm: measured('speed', 1500, 'rpm', 'a tacho'),
+    }, undefined, 3);
+    expect(r.chain.map((c) => c.law), 'the ratio was not read as a tooth count').not.toContain('chain.speed');
+    if (r.got) expect(r.stretched.length, 'whatever it did instead, it says what it stretched').toBeGreaterThan(0);
+  });
+
+  it('reports what it bound to what, so a dimensional coincidence cannot pass as a result', () => {
+    const r = calculate('m/s', { pitch: measured('pitch', 0.0127, 'm', 'ISO 606'), rpm: measured('speed', 1500, 'rpm', 'a tacho') }, undefined, 2);
+    for (const c of r.chain) {
+      expect(c.bound.length, `${c.law} records a binding for every port`).toBe(lawById(c.law).inputs.length);
+      for (const b of c.bound) expect(typeof b.byName).toBe('boolean');
+    }
+    // anything bound under a different name appears in `stretched`, verbatim, and in what it says
+    for (const s of r.stretched) expect(r.says).toContain(s);
+  });
+
+  it('refuses to guess between two records that could fill one port and disagree', () => {
+    const r = calculate('Pa', {
+      T1: measured('temperature', 300, 'K', 'a probe'),
+      T2: measured('temperature', 900, 'K', 'another probe'),
+      n: measured('amount', 2, 'mol', 'a balance'),
+      V: measured('volume', 0.01, 'm^3', 'a flask'),
+    });
+    expect(r.got).toBeNull();
+    expect(r.refused).toContain('Name which one, rather than have it pick');
+    expect(r.refused).toMatch(/T1|T2/);
+  });
+
+  it('says plainly when no chain exists, and does not blame an unrelated ambiguity for it', () => {
+    const r = calculate('kg', { x: measured('a length', 2, 'm', 'a ruler') }, undefined, 3);
+    expect(r.got).toBeNull();
+    expect(r.refused, 'the real reason leads').toMatch(/^no chain of at most 3 laws/);
+  });
+});
+
+describe('what the book lacks', () => {
   it("every 'needs what nothing gives' is exactly that: no law in the book produces that dimension", () => {
     const holes = branches().filter((b) => b.kind === 'needs what nothing gives');
     expect(holes.length, 'the book does have quantities it only ever measures').toBeGreaterThan(0);
     for (const h of holes) {
       const d = dimOf(h.at);
-      const makers = BOOK.filter((l) => sameDim(dimOf(l.output.unit), d));
-      expect(makers.map((l) => l.id), `${h.at}: ${h.says}`).toEqual([]);
-      for (const id of h.laws) {
-        const l = lawById(id);
-        expect(l.inputs.some((p) => sameDim(dimOf(p.unit), d)), `${id} is listed as reading a ${h.at}`).toBe(true);
-      }
+      expect(BOOK.filter((l) => sameDim(dimOf(l.output.unit), d)).map((l) => l.id), h.says).toEqual([]);
+      for (const id of h.laws) expect(lawById(id).inputs.some((p) => sameDim(dimOf(p.unit), d)), `${id} reads a ${h.at}`).toBe(true);
     }
   });
 
@@ -227,13 +363,22 @@ describe('the law graph in time', () => {
     }
   });
 
-  it('a hole in the spectrum is a power with no law between two that have them', () => {
-    const spec = timeSpectrum(), empty = spec.filter((s) => !s.laws.length);
-    const reported = branches().filter((b) => b.kind === 'no power of time');
-    expect(reported.length, 'one finding per empty power').toBe(empty.length);
-    for (const s of empty) {
-      expect(spec.some((o) => o.power > s.power && o.laws.length), `the book reaches above time^${s.power}`).toBe(true);
-      expect(spec.some((o) => o.power < s.power && o.laws.length), `and below time^${s.power}`).toBe(true);
+  it("an 'alone' finding means the derived graph really does not touch that law", () => {
+    for (const b of branches().filter((x) => x.kind === 'alone')) {
+      const l = lawById(b.at);
+      expect(BOOK.some((o) => feeds(o, l)), `${b.at} is fed by nothing`).toBe(false);
+      expect(BOOK.some((o) => feeds(l, o)), `${b.at} feeds nothing`).toBe(false);
     }
+  });
+
+  it('the summary agrees with the tree and the graph it summarises', () => {
+    const g = graphSummary(), t = timeTree();
+    expect(g.laws).toBe(BOOK.length);
+    expect(g.trunks).toBe(t.trunks.length);
+    expect(g.limbs).toBe(t.trunks.reduce((n, x) => n + x.limbs.length, 0));
+    expect(g.derivedEdges).toBe(feedEdges().length);
+    expect(g.writtenKinship).toBe(KINSHIP.length);
+    expect(g.kinshipAlsoFeeds).toBe(kinshipFeeds().filter((x) => x.alsoFeeds).length);
+    expect(g.derivedEdges, 'the derived graph is orders of magnitude bigger than what was written').toBeGreaterThan(g.writtenKinship * 100);
   });
 });

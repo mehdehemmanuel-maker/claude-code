@@ -7,7 +7,7 @@
 // work that only its own test could run (docs/ROUNDS.md Run 7s).
 //
 // That is the same fault as `mobility()` and as the look page's three silent judges, at the scale of a whole
-// directory: 2,300 lines behind a green gate with nothing to reach it by. The user's rule for it was three words —
+// directory: 2,300 lines behind a green gate with nothing to calculate it by. The user's rule for it was three words —
 // merge, reattach, or delete. This is the reattachment: one door that runs each slice end to end and prints its
 // verdict, so the engine can be worked rather than only tested.
 //
@@ -31,7 +31,9 @@ const want = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 // explains behaviour without governing it. This prints both halves: what proper time does, and what the book's 252
 // laws turn into once c, ħ, k_B and the Coulomb constant are taken as one, which is a power of time each.
 if (want[0] === 'time') {
-  const { LIGHT, CONVERSIONS, asTime, apart, bookInTime, elapse, rate, sense, spacetimeSplit } = await import('../substrate/time');
+  const { LIGHT, CONVERSIONS, asTime, apart, bookInTime, branches, downstream, elapse, graphSummary, kinshipFeeds,
+    placeOf, rate, calculate, sense, spacetimeSplit, timeTreeLines, upstream } = await import('../substrate/time');
+  const { measured, says } = await import('../substrate/record');
   const { lawById } = await import('../book');
   const pc = (b: number) => `${(b * 100).toString().padStart(5)}% of c`;
   console.log('THE ONE LAW   d\u03C4/dt = \u221A(1 \u2212 v\u00B2/c\u00B2)      c = ' + LIGHT + ' m/s, exact by definition');
@@ -64,6 +66,44 @@ if (want[0] === 'time') {
     console.log(`  time^${String(g.power).padEnd(3)} ${String(g.laws.length).padStart(3)} laws   ${names}${g.laws.length > 4 ? `, \u2026 (+${g.laws.length - 4})` : ''}`);
   }
   console.log('');
+  console.log('THE WHOLE TREE \u2014 five levels, every one of them derived: the root, the power of time, the SI dimension that');
+  console.log('power came from, the shape of the math, the law. Nothing here is a written-down category.');
+  console.log('');
+  for (const l of timeTreeLines()) console.log(`  ${l}`);
+  console.log('');
+  console.log('ONE SENSOR\u2019S PLACE ON IT');
+  for (const id of ['stress.axial', 'newton.second', 'arrhenius', 'inertia.disc', 'carnot']) console.log(`  ${placeOf(lawById(id)).says}`);
+  console.log('');
+  const g = graphSummary();
+  console.log('ACROSS THE TREE, NOT DOWN IT \u2014 who can feed whom, derived from the dimensions');
+  console.log(`  ${g.derivedEdges} edges over ${g.laws} laws: law A gives something law B takes. None of them written by hand.`);
+  console.log(`  Against that, ${g.writtenKinship} edges of KINSHIP are written by hand in book/principles.ts \u2014 "this law`);
+  console.log(`  BECOMES that law" \u2014 and only ${g.kinshipAlsoFeeds} of them are also feeds. They are two different relations,`);
+  console.log('  and one name used to do both jobs:');
+  for (const k of kinshipFeeds().filter((x) => !x.alsoFeeds).slice(0, 3)) console.log(`    ${k.says}`);
+  console.log('');
+  for (const id of ['newton.second', 'carnot']) {
+    const up = upstream(id), down = downstream(id);
+    console.log(`  ${id}: ${up.length} laws can feed it, it can feed ${down.length}`);
+    console.log(`    fed by   ${up.slice(0, 5).join(', ')}${up.length > 5 ? `, \u2026` : ''}`);
+    console.log(`    feeds    ${down.slice(0, 5).join(', ')}${down.length > 5 ? `, \u2026` : ''}`);
+  }
+  console.log('');
+  console.log('THE CALCULATOR \u2014 it does not just find a chain, it runs it');
+  const chain = calculate('m/s', { z: measured('sprocket teeth', 38, '-', 'the sprocket'),
+    pitch: measured('pitch', 0.0127, 'm', 'ISO 606'), rpm: measured('speed', 1500, 'rpm', 'a tacho') }, undefined, 3);
+  console.log(`  asked for a m/s, given a sprocket: ${chain.says}`);
+  if (chain.got) console.log(`    ${says(chain.got)}   (38 \u00D7 12.7 mm = 0.4826 m a turn, \u00D7 25 turns a second)`);
+  const refuse = calculate('Pa', { T1: measured('temperature', 300, 'K', 'a probe'),
+    T2: measured('temperature', 900, 'K', 'another probe'), n: measured('amount', 2, 'mol', 'a balance'),
+    V: measured('volume', 0.01, 'm^3', 'a flask') });
+  console.log(`  and where it would have to guess, it stops: ${refuse.refused}`);
+  console.log('');
+  const b = branches(), kinds = [...new Set(b.map((x) => x.kind))];
+  console.log('THE BRANCHES THAT ARE NOT THERE');
+  for (const k of kinds) console.log(`  ${String(b.filter((x) => x.kind === k).length).padStart(3)} \u00D7 ${k}`);
+  for (const x of b.filter((y) => y.forced).slice(0, 2)) console.log(`    ${x.says}`);
+  console.log('');
   const r = sense(lawById('newton.second'), { m: 2, a: 3 }, 41.5);
   console.log('A LAW DEMOTED TO A SENSOR');
   console.log(`  ${r.says}`);
@@ -73,6 +113,42 @@ if (want[0] === 'time') {
   console.log('  every instrument in the book is run over a state and the state is unchanged.');
   console.log('');
   console.log('SUBSTRATE: the one law');
+  process.exit(0);
+}
+
+// `npm run substrate -- know <part> [quantity …]` — THE ONE HIERARCHY, ASKED.
+//
+// A part decomposes into sub-parts down to a material; a quantity decomposes into the quantities its law needs down
+// to a measurement. The same shape, meeting at time. Nothing is computed until it is asked for here.
+if (want[0] === 'know') {
+  const { know, clashes, onTimesTree } = await import('../substrate/derive');
+  const { breakdown } = await import('../substrate/record');
+  const { INVENTORY } = await import('../parts/inventory');
+  const thing = want[1] ?? 'gear-small';
+  const asked = want.length > 2 ? want.slice(2) : ['density', 'volume', 'mass', 'height', 'breadth'];
+  const i = INVENTORY.get(thing);
+  if (!i) { console.log(`no part called ${thing}. Try: gear-small, gear-plastic, bearing-ring, bearing-625`); process.exit(1); }
+  console.log(`${i.name}  (${thing})`);
+  console.log(`  made of: ${i.of.map((c) => `${c.id}${c.n > 1 ? ` x${c.n}` : ''}`).join(', ') || 'nothing — it is a material'}`);
+  console.log(`  stated size: ${i.size ? i.size.join(' x ') + ' mm' : 'none'}`);
+  console.log('');
+  for (const q of asked) {
+    const f = know(thing, q);
+    if (!f) { console.log(`  ${q.padEnd(10)} not reachable from the book and the inventory: it must be measured.`); continue; }
+    console.log(`  ${q.padEnd(10)} ${f.says.replace(`${q} of ${thing} = `, '')}`);
+    console.log(`  ${''.padEnd(10)} on time's tree: ${onTimesTree(f).join(' \u2192 ')}`);
+    if (f.alsoBy.length) console.log(`  ${''.padEnd(10)} also by, agreeing: ${f.alsoBy.map((a) => a.how).join('; ')}`);
+    for (const l of breakdown(f.d).slice(0, 6)) console.log(`  ${''.padEnd(12)}${l}`);
+  }
+  const c = clashes();
+  console.log('');
+  if (!c.length) console.log('NO CLASHES: every quantity reached more than one way came out the same.');
+  else {
+    console.log('CLASHES \u2014 a quantity reached two ways that disagree. Physics does not allow it, so the DATA is wrong:');
+    for (const x of c) console.log(`  * ${x.says}`);
+  }
+  console.log('');
+  console.log('SUBSTRATE: the one hierarchy, asked');
   process.exit(0);
 }
 
@@ -146,7 +222,7 @@ if (run('bracket')) {
   ran++;
   const b: BracketSlice = bracketOnPost(bracketIntent(), bracketMaterial(), bracketCatalogue());
   console.log('');
-  console.log('the bracket on a post — an arm bolted to a side, carrying a load at a reach');
+  console.log('the bracket on a post — an arm bolted to a side, carrying a load at a calculate');
   console.log(`  its system: ${saySolution(b.open)}`);
   console.log(`  its choice: ${sayChoice(b.choice as never)}`);
   console.log(`  its configuration: ${b.configuration ? 'derived' : 'NOT derived — nothing admissible to configure'}`);

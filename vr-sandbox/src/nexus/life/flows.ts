@@ -7,7 +7,7 @@
 // so where the laws and the measurements disagree it shows.
 
 import { INVENTORY, countIn, gramsOfItem } from '../parts/inventory';
-import { estimate, fixed, measured, setting, solve, step, valueIn } from '../substrate/lawgraph';
+import { estimate, fixed, measured, setting, solve, step, valueIn } from '../substrate/record';
 import { ofLeaf, type Derivation } from '../lang/evaluate';
 import { leaf } from '../lang/term';
 import { LIFESPAN, wattsOf } from './time';

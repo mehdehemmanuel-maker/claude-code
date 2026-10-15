@@ -210,7 +210,7 @@ the root.
 | Directory | What is in it |
 | --- | --- |
 | `lang/` | the vocabulary both the law book and the engine speak, and nothing else: a dimension, an identity, a status, a `Term` and the arithmetic over it, `evaluate`, and a `Law`. It imports nothing in `src/nexus`, which is the point — it used to live in `substrate/`, so the book reached *up* into the engine 21 times to write a law in the only words there are for one |
-| `substrate/` | the Nexus engine: domains, places, couplings, and the loop that evolves them, over `lang/`'s terms and laws |
+| `substrate/` | the Nexus engine: domains, places, couplings, and the loop that evolves them, over `lang/`'s terms and laws. Its root is `time.ts` — **one system, one law**: proper time, the reduction of every dimension to a power of time, the five-level tree every sensor hangs from, the derived feed graph (7,949 edges) and `calculate`, which runs a chain of laws rather than only finding one. `record.ts` is the other verb, applying a law to numbers (`step`, `solve`, `breakdown`). Run 8i merged `lawgraph.ts` into these two and deleted it |
 | `ask/` | words in, wants out: how an ask becomes something to make (`conceive`, `route`, `generate`, `invent` for flows, `machine` for mechanisms, `spec`) |
 | `parts/` | the parts library and the geometry a part is made of: every part designed once from its standard, the shapes it is drawn from (lofts, bent tubes, turned profiles, NURBS surfaces), where its pieces end up in space and which of them touch, its mass and what it costs |
 | `boards/` | single-board computers, their parts, and the photo-measured data files |
@@ -222,7 +222,7 @@ the root.
 | `view/` | everything drawn: the forge room, the look page, the phone, the benches |
 | `kinds/` | the catalogue of kinds, by trade |
 | `models/` | generated data files from makers' own CAD |
-| `book/`, `life/`, `embody/` | the law book, the life graph, embodiment |
+| `book/`, `life/`, `embody/` | the law book, the life graph, embodiment. `book/principles.ts` holds the two things about the laws that units CANNOT derive, and nothing else: what each law rests on (`RESTS`) and which law becomes which (`KINSHIP`) |
 | `cli/` | every command-line entry point (`npm run nexus`, `works`, `breakdown`, `pack`, …) |
 | `index.ts`, `works.ts` | the two doors kept at the root so existing imports go on meaning what they meant; both own nothing but `export *` lines |
 ## Before writing a new file or function
@@ -344,11 +344,35 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   decisive test runs every instrument over a state and asserts the state is unchanged. With c, ħ, k_B and 4πε₀
   set to one, every dimension is a power of time: a metre is time¹, a speed is **time⁰ (dimensionless — there is
   no such thing as a speed, only a fraction of c)**, action is time⁰, and each of the 252 lands on an integer
-  between −4 and +4. **STILL A KERNEL BESIDE THE ENGINE, NOT THE ENGINE**: `substrate/`'s relations still bind
+  between −4 and +4. Run 8i made it ONE SYSTEM rather than a kernel beside a graph: `lawgraph.ts` is deleted, and
+  `time.ts` now carries the whole tree — **time → the power of time → the SI dimension that power came from → the
+  shape of the math → the law**, four derived levels, no written-down categories, so a law added to the book places
+  itself (`placeOf` gives any law's path). Across the tree rather than down it, the FEED GRAPH is derived from the
+  dimensions: 7,949 edges against the 27 that were written by hand, and `calculate` walks it and actually RUNS the
+  chain through `step`, which is what `routes` never did.
+  **STILL A KERNEL BESIDE THE ENGINE, NOT THE ENGINE**: `substrate/`'s relations still bind
   addresses, so the state is still defined by laws rather than by time. Making the evolver the only writer is the
   large job this opens. Absent with it: the action principle as the generator (δS = 0, from which the 252 would be
   *derived* rather than reduced), gravity (the metric is flat), and the join to `clock.ts`, which already advances
   each region at its own time and is where this belongs.
+- **ONE HIERARCHY, ASKED, NOT SWEPT** (`substrate/derive.ts`, `npm run substrate -- know <part>`). A part
+  decomposes into sub-parts down to a material; a quantity decomposes into the quantities its law needs down to a
+  measurement. The same shape, and they MEET AT TIME. `know(thing, quantity)` resolves on demand — memoised,
+  cycle-guarded — and every answer carries its place on time's tree. The user rejected the first design (a function
+  that marched through the book firing laws) in favour of this one: *"everything exists on the graph all
+  possibilities exist just like a calculator ... it only gets calculated when typed"*. **And a quantity reached two
+  ways must agree**: `clashes()` reports both routes and both numbers where they do not, which is what makes the
+  structure load-bearing — it caught `gear-small`'s volume 48% apart (bounding box vs ellipsoid) and its height 70%
+  apart on the first run. A clash is a fault in the DATA, not in the world.
+- **DIMENSION IS NOT IDENTITY, and `calculate` is where that bites.** A chain pitch and a pendulum length are both
+  `m`, so a search that binds a law's ports by dimension alone will read one as the other and hand back an "impact
+  speed" computed from a sprocket — which it did, on the first run. Three things answer it, none a guess: a
+  dimensionless port (every ratio in the book is `-`) binds ONLY to something named for it; a binding whose names
+  agree is preferred, so the sensible chain beats the dimensional coincidence; and every port filled under a
+  different name is listed in `stretched` and named in what it says. A number whose chain stretched something is
+  not wrong, it is unverified, and the caller is told which binding to check. **What is still absent: a quantity
+  has no identity of its own** — only a dimension and a name — so this is mitigation, not a cure. A real fix gives
+  the book a vocabulary of named quantities that ports bind against.
 - **Connectedness is a command, not an opinion — and the command is `node tools/unwired.mjs`, which already
   existed.** Run 8d wrote a second one (`tools/wired.mjs`) without listing `tools/` first, quoted its worse
   answer, and only found the duplicate by reading an unrelated file header. The two are merged: `unwired.mjs`

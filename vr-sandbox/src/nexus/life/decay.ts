@@ -15,7 +15,7 @@
 //     its want of oxygen, its dose of radiation, and its ageing by the Gompertz–Makeham law's integral.
 //   a tardigrade: dried into a tun it stops its clock; it still has a dose it cannot outlast.
 
-import { breakdown, estimate, fixed, lawsUnder, measured, setting, solve, step } from '../substrate/lawgraph';
+import { breakdown, estimate, fixed, lawsUnder, measured, setting, solve, step } from '../substrate/record';
 import type { Derivation } from '../lang/evaluate';
 import { INVENTORY, gramsOfItem } from '../parts/inventory';
 import { wattsOf } from './time';
