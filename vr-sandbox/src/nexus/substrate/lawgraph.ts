@@ -10,7 +10,8 @@
 // carry something units cannot know (Kleiber's ¾ from a network's geometry, Basquin's exponent from a metal).
 
 import { BOOK, lawById, lawByHash } from '../book';
-import { dimOf, integerNullSpace, sameDim, type Dim } from '../lang/dimension';
+import { dimOf, dimText, integerNullSpace, sameDim, type Dim } from '../lang/dimension';
+import { inTime } from './time';
 import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
 import { apply, invert, type Law } from '../lang/law';
 import { div, leaf, mul, OPERATORS, pow, substitute, variable, type Term } from '../lang/term';
@@ -291,4 +292,101 @@ export function graphSummary(laws: readonly Law[] = BOOK) {
     const f = forcedByUnits(l).verdict; (units[f] ??= []).push(l.id);
   }
   return { laws: laws.length, byPrinciple, byShape, units, families: families(laws), links: LINKS.length };
+}
+
+/* ─────────────────────────────── the graph in time, and the branches that are not there ──────────────────────── */
+//
+// Two things this graph could not do until now. First, it did not know about time: `substrate/time.ts` reduces any
+// dimension to a power of time (c, ħ, k_B and 4πε₀ taken as one) and the two files could not see each other at all.
+// Second, it could say what the book HAS and not what it LACKS — and a book of laws is most interesting where it
+// stops. `discover` has been able to write a law from its quantities' units since it was written; it was never
+// pointed at the gaps.
+
+/** The power of time a law gives: its output reduced through c, ħ, k_B and 4πε₀. A speed is 0 — dimensionless. */
+export const timePower = (l: Law): number => inTime(dimOf(l.output.unit));
+
+/** The book laid out by the power of time it gives, with the principles that live at each. A power with few laws is
+ *  not automatically a gap — but a power with NONE, between two that have them, is a hole in the spectrum. */
+export function timeSpectrum(laws: readonly Law[] = BOOK): { power: number; laws: string[]; principles: string[] }[] {
+  const by = new Map<number, Law[]>();
+  for (const l of laws) { const p = timePower(l); (by.get(p) ?? by.set(p, []).get(p)!).push(l); }
+  const lo = Math.min(...by.keys()), hi = Math.max(...by.keys());
+  const out: { power: number; laws: string[]; principles: string[] }[] = [];
+  for (let p = hi; p >= lo; p--) {
+    const ls = by.get(p) ?? [];
+    const ps = new Set<string>();
+    for (const l of ls) { const x = principlesOf(l); if (x !== 'unplaced') for (const n of x) ps.add(n); }
+    out.push({ power: p, laws: ls.map((l) => l.id), principles: [...ps].sort() });
+  }
+  return out;
+}
+
+/** A chain of laws with the power of time at every step, so a route can be read as a walk through the spectrum
+ *  rather than a list of names. The running power is what the chain has produced by that step. */
+export function routeInTime(chain: readonly string[]): { id: string; name: string; gives: string; power: number; says: string }[] {
+  return chain.map((id) => {
+    const l = lawById(id), p = timePower(l);
+    return { id, name: l.name, gives: l.output.unit, power: p,
+      says: `${l.name} gives ${l.output.name} (${l.output.unit}) — time^${p}` };
+  });
+}
+
+export interface Branch {
+  kind: 'needs what nothing gives' | 'gives what nothing needs' | 'no power of time' | 'alone';
+  /** the unit or the law the finding is about */ at: string;
+  /** who is affected */ laws: string[];
+  /** where units alone can write the missing law, the law they force */ forced?: string;
+  says: string;
+}
+
+/** THE BRANCHES THAT ARE NOT THERE. Four kinds, each a fact about the graph rather than an opinion about it:
+ *
+ *   needs what nothing gives   a law reads a dimension no law in the book produces. It can only ever be measured,
+ *                              never derived — which is right for a material property and wrong for a quantity
+ *                              that has a law somewhere in the world.
+ *   gives what nothing needs   a law produces a dimension no other law consumes. The book stops there.
+ *   no power of time           a power between the lowest and the highest with no law at all: a hole in the spectrum.
+ *   alone                      a law whose output feeds nothing and whose inputs are fed by nothing.
+ *
+ * Where a gap is an output nothing gives, `discover` is asked whether the book's own quantities force a law for it
+ * by units alone (Rayleigh, Buckingham π). When they do, the missing law is written out rather than only named. */
+export function branches(laws: readonly Law[] = BOOK): Branch[] {
+  const out: Branch[] = [];
+  const gives = (d: Dim) => laws.filter((l) => sameDim(dimOf(l.output.unit), d));
+  const needs = (d: Dim) => laws.filter((l) => l.inputs.some((p) => sameDim(dimOf(p.unit), d)));
+
+  const seenIn = new Map<string, { unit: string; dim: Dim; by: string[] }>();
+  const seenOut = new Map<string, { unit: string; dim: Dim; by: string[] }>();
+  for (const l of laws) {
+    for (const p of l.inputs) { const k = dimText(dimOf(p.unit)); (seenIn.get(k) ?? seenIn.set(k, { unit: p.unit, dim: dimOf(p.unit), by: [] }).get(k)!).by.push(l.id); }
+    const k = dimText(dimOf(l.output.unit)); (seenOut.get(k) ?? seenOut.set(k, { unit: l.output.unit, dim: dimOf(l.output.unit), by: [] }).get(k)!).by.push(l.id);
+  }
+
+  for (const [k, v] of seenIn) {
+    if (gives(v.dim).length) continue;
+    // can units alone write it? ask with the quantities the laws that WANT it already have beside it
+    const wanters = v.by.slice(0, 4).map((id) => lawById(id));
+    const beside = new Map<string, [string, string]>();
+    for (const w of wanters) for (const p of w.inputs) if (!sameDim(dimOf(p.unit), v.dim)) beside.set(p.unit, [p.name, p.unit]);
+    const pool = [...beside.values()].slice(0, 5);
+    let forced: string | undefined;
+    if (pool.length >= 2) { const d = discover([v.unit, v.unit], pool); if (d.forced) forced = d.says; }
+    out.push({ kind: 'needs what nothing gives', at: v.unit, laws: v.by, ...(forced ? { forced } : {}),
+      says: `${v.by.length} ${v.by.length === 1 ? 'law reads' : 'laws read'} a ${k} (${v.unit}) and no law in the book produces one: it can only be measured.${forced ? ` Units alone force a candidate: ${forced}` : ''}` });
+  }
+  for (const [k, v] of seenOut) {
+    if (needs(v.dim).length) continue;
+    out.push({ kind: 'gives what nothing needs', at: v.unit, laws: v.by,
+      says: `${v.by.length} ${v.by.length === 1 ? 'law gives' : 'laws give'} a ${k} (${v.unit}) and nothing in the book reads one: the chain ends there.` });
+  }
+  const spec = timeSpectrum(laws);
+  for (const s of spec) if (!s.laws.length) out.push({ kind: 'no power of time', at: `time^${s.power}`, laws: [],
+    says: `no law gives a time^${s.power}, though the book reaches past it on both sides: a hole in the spectrum.` });
+  for (const l of laws) {
+    const fedBy = laws.some((o) => o !== l && l.inputs.some((p) => sameDim(dimOf(p.unit), dimOf(o.output.unit))));
+    const feeds = laws.some((o) => o !== l && o.inputs.some((p) => sameDim(dimOf(p.unit), dimOf(l.output.unit))));
+    if (!fedBy && !feeds) out.push({ kind: 'alone', at: l.id, laws: [l.id],
+      says: `${l.name} takes nothing any law gives and gives nothing any law takes: it stands alone in the graph.` });
+  }
+  return out;
 }

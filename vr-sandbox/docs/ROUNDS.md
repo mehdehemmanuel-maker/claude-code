@@ -229,6 +229,54 @@ and until it is done the reframe is demonstrated rather than adopted. Also absen
 metric is flat here), and any coupling between a worldline's proper time and the existing `clock.ts` local clocks,
 which already advance each region at its own time and are the natural place for this to land.
 
+## Run 8h — the graph joined to time, and a census that hid its own answer
+
+*"finish connecting all the laws(sensorys) to time mathmatically then cross connect all the laws with equations or
+some form of law calculator find missing laws missing branches"* — and, partway through, the fair challenge:
+*"it seems like you're doing this round what you said you did last round and now I'm wondering if you did anything
+this round"*.
+
+**That challenge was right, and it is recorded because it was right.** At the moment it was asked this round held 99
+uncommitted lines in one file. What follows is what the round actually closed.
+
+**The two islands joined.** `node tools/unwired.mjs path substrate/lawgraph substrate/time` said *"Neither reaches
+the other"* before this round: the graph could not reduce a law to its power of time, and `time.ts` could not see the
+graph. Now `timePower` (a law's output through c, ħ, k_B and 4πε₀), `timeSpectrum` (the book laid out by that power,
+every law landing at exactly one) and `routeInTime` (a chain read as a walk through the spectrum) — and the path tool
+reports one hop.
+
+**`branches()`: what the book LACKS, as four facts rather than an opinion.** A hole (a dimension read by some law and
+produced by none — it can only be measured), a dead end (produced and read by nothing), an empty power of time
+between two that have laws, and a law alone in the graph. Where the gap is an output nothing gives, `discover`
+(Rayleigh, Buckingham π) is asked whether the book's own quantities force the missing law by units alone, and when
+they do the finding carries the law instead of only naming the gap. On the real book: **26 holes, 1 dead end, no
+empty power** — the spectrum is dense, which is itself a result.
+
+Three faults found by measuring rather than by reading:
+
+1. **The cross-connections were never derived.** `LINKS` holds **27** edges written by hand; the dimensions support
+   **7,949** (A's output fills one of B's ports). Nobody has to write those.
+2. **`LINKS` is two relations under one name.** Of its 27 edges, **16 are not port-feeds at all** —
+   `fick.diffusion → diffusion.erf` is "Fick's law, conserved everywhere, *becomes* this law", derivational kinship,
+   which units cannot derive and which is real knowledge. The feed graph is computable; the kinship is not. One name
+   over two ideas, and `tidy`'s CLASHES list had it **permitted** rather than fixed. Not yet split — named here so it
+   is not lost.
+3. **`tools/unwired.mjs` was hiding its own answer.** It printed 12 of the 28 unreached files and closed with
+   `… 16 more`. The sixteen it hid included **eleven files of `substrate/`** — the engine. A census must not shorten
+   its own list quietly: 28 shown as 12 reads as a smaller problem than it is. Fixed with `--all`, documented in
+   `docs/TOOLS.md`. **This is the same fault family as Run 8e's duplicate tool: the instrument itself was wrong, and
+   nothing was checking the instrument.**
+
+**The whole tree, measured and drawn** for the user to read on paper: 403 files, 95,960 lines, 58 doors, 375 files
+reached and **28 not**; of 2,615 exports, 1,557 live across modules, 711 live inside one file, **201 test-only, 146
+dead**. The engine is the worst of it — `substrate/` is 78 files and 14,276 lines with **11 unreachable from any
+door** (`clock`, `scale`, `compose`, `rate`, `attempt`, `explore`, `hold`, `project`, `tune`, two studies). Those get
+wired, not deleted.
+
+Still open, and named so it cannot be claimed later: **the law calculator is not written.** `routes()` finds a chain
+and `step()` runs one law; nothing joins them, so a chain is still found and never evaluated. And the 11 unplugged
+engine files are the system's biggest untruth — the engine is described as whole and is not.
+
 ## Run 8g — the whole-tree audit, and the first four cuts
 
 *"what needs deleted what needs redone what needs edited I mean all code every single price and also check for

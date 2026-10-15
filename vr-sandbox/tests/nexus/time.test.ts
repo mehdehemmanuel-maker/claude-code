@@ -9,7 +9,8 @@ import {
   type Worldline,
 } from '../../src/nexus/substrate/time';
 import { BOOK, lawById } from '../../src/nexus/book';
-import { dimOf } from '../../src/nexus/lang/dimension';
+import { branches, routeInTime, routes, timePower, timeSpectrum } from '../../src/nexus/substrate/lawgraph';
+import { dimOf, sameDim } from '../../src/nexus/lang/dimension';
 
 const at = (id: string, v: [number, number, number] = [0, 0, 0]): Worldline => ({ id, tau: 0, at: [0, 0, 0], through: v });
 
@@ -159,5 +160,80 @@ describe('a law demoted to a sensor', () => {
 
   it('every reading carries the time it was taken at, because a number with no clock is not a measurement', () => {
     for (const r of readAll({ m: 2, a: 3 }, 12.25)) expect(r.tau).toBe(12.25);
+  });
+});
+
+// ── the graph in time, and the branches that are not there ─────────────────────────────────────────────────────────
+//
+// `lawgraph.ts` and `time.ts` were two islands: the graph could say what the book HAS and never what it LACKS, and it
+// did not know a law's power of time. These check the join. The point of `branches()` is that its findings are FACTS
+// about the graph — a hole it reports is a dimension no law produces, which is checkable here directly — and not an
+// opinion about what a book of laws ought to contain.
+describe('the law graph in time', () => {
+  it('a law that gives a speed sits at time^0, because a speed is dimensionless in natural units', () => {
+    const anySpeed = BOOK.filter((l) => sameDim(dimOf(l.output.unit), dimOf('m/s')));
+    expect(anySpeed.length, 'the book has laws that give a speed').toBeGreaterThan(0);
+    for (const l of anySpeed) expect(timePower(l), `${l.id} gives ${l.output.unit}`).toBe(0);
+  });
+
+  it('the spectrum covers every power the book reaches, highest first, and loses no law', () => {
+    const spec = timeSpectrum();
+    const powers = spec.map((s) => s.power);
+    expect(powers, 'the spectrum runs downward with no power skipped').toEqual(
+      [...powers].sort((a, b) => b - a));
+    for (let i = 1; i < powers.length; i++) expect(powers[i - 1]! - powers[i]!).toBe(1);
+    expect(spec.reduce((n, s) => n + s.laws.length, 0), 'every law lands at exactly one power').toBe(BOOK.length);
+  });
+
+  it('a route reads as a walk through the spectrum, each step carrying its power', () => {
+    const chain = routes('N', ['kg', 'm/s^2'])[0];
+    expect(chain, 'the book can make a force from a mass and an acceleration').toBeTruthy();
+    const walk = routeInTime(chain!);
+    expect(walk.length).toBe(chain!.length);
+    for (const s of walk) {
+      expect(s.power, `${s.id} has an integer power of time`).toBe(Math.round(s.power));
+      expect(s.says).toContain(`time^${s.power}`);
+    }
+  });
+
+  it("every 'needs what nothing gives' is exactly that: no law in the book produces that dimension", () => {
+    const holes = branches().filter((b) => b.kind === 'needs what nothing gives');
+    expect(holes.length, 'the book does have quantities it only ever measures').toBeGreaterThan(0);
+    for (const h of holes) {
+      const d = dimOf(h.at);
+      const makers = BOOK.filter((l) => sameDim(dimOf(l.output.unit), d));
+      expect(makers.map((l) => l.id), `${h.at}: ${h.says}`).toEqual([]);
+      for (const id of h.laws) {
+        const l = lawById(id);
+        expect(l.inputs.some((p) => sameDim(dimOf(p.unit), d)), `${id} is listed as reading a ${h.at}`).toBe(true);
+      }
+    }
+  });
+
+  it("every 'gives what nothing needs' is a real dead end, and the law named does give it", () => {
+    for (const b of branches().filter((x) => x.kind === 'gives what nothing needs')) {
+      const d = dimOf(b.at);
+      expect(BOOK.filter((l) => l.inputs.some((p) => sameDim(dimOf(p.unit), d))).map((l) => l.id)).toEqual([]);
+      for (const id of b.laws) expect(sameDim(dimOf(lawById(id).output.unit), d), `${id} gives a ${b.at}`).toBe(true);
+    }
+  });
+
+  it('where units alone force the missing law, the finding carries it instead of only naming the gap', () => {
+    const forced = branches().filter((b) => b.kind === 'needs what nothing gives' && b.forced);
+    expect(forced.length, 'at least one gap is closed by Rayleigh from the book’s own quantities').toBeGreaterThan(0);
+    for (const f of forced) {
+      expect(f.forced).toMatch(/∝/);
+      expect(f.says).toContain('Units alone force a candidate');
+    }
+  });
+
+  it('a hole in the spectrum is a power with no law between two that have them', () => {
+    const spec = timeSpectrum(), empty = spec.filter((s) => !s.laws.length);
+    const reported = branches().filter((b) => b.kind === 'no power of time');
+    expect(reported.length, 'one finding per empty power').toBe(empty.length);
+    for (const s of empty) {
+      expect(spec.some((o) => o.power > s.power && o.laws.length), `the book reaches above time^${s.power}`).toBe(true);
+      expect(spec.some((o) => o.power < s.power && o.laws.length), `and below time^${s.power}`).toBe(true);
+    }
   });
 });

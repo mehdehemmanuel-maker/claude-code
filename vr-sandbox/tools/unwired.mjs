@@ -170,18 +170,21 @@ if (process.argv[2] === 'path') {
 }
 
 const unreachedModules = SRC.filter((f) => !REACHED.has(f));
+// `--all` prints every list whole. The caps below keep the default readable, but a capped list is the one thing a
+// census must not do silently: 28 unreached files shown as 12 reads as a smaller problem than it is.
+const ALL = argv.includes('--all'), cap = (n) => (ALL ? Infinity : n);
 console.log(`unwired: ${EXPORTS.length} exported functions, consts and classes across ${SRC.length} files; ${REACHED.size} of those files are reached from the ${DOORS.length} doors (src/nexus/cli, src/nexus/view)`);
 console.log('');
 console.log(`${of('test-only').length} exports are named by nothing but tests/ — finished work with no door:`);
-for (const [file, names] of group(of('test-only')).slice(0, 14)) console.log(`  ${file}  ${names.slice(0, 9).join(', ')}${names.length > 9 ? ` (+${names.length - 9})` : ''}`);
-if (group(of('test-only')).length > 14) console.log(`  … ${group(of('test-only')).length - 14} more files`);
+for (const [file, names] of group(of('test-only')).slice(0, cap(14))) console.log(`  ${file}  ${names.slice(0, 9).join(', ')}${names.length > 9 ? ` (+${names.length - 9})` : ''}`);
+if (group(of('test-only')).length > cap(14)) console.log(`  … ${group(of('test-only')).length - 14} more files (--all for every one)`);
 console.log('');
 console.log(`${of('dead').length} exports are named nowhere at all, tests included:`);
-for (const [file, names] of group(of('dead')).slice(0, 10)) console.log(`  ${file}  ${names.slice(0, 9).join(', ')}${names.length > 9 ? ` (+${names.length - 9})` : ''}`);
+for (const [file, names] of group(of('dead')).slice(0, cap(10))) console.log(`  ${file}  ${names.slice(0, 9).join(', ')}${names.length > 9 ? ` (+${names.length - 9})` : ''}`);
 console.log('');
 console.log(`${unreachedModules.length} whole files are not reached from any door${unreachedModules.length ? ':' : '.'}`);
-for (const f of unreachedModules.slice(0, 12)) console.log(`  ${rel(f)}`);
-if (unreachedModules.length > 12) console.log(`  … ${unreachedModules.length - 12} more`);
+for (const f of unreachedModules.slice(0, cap(12))) console.log(`  ${rel(f)}`);
+if (unreachedModules.length > cap(12)) console.log(`  … ${unreachedModules.length - 12} more (--all for every one)`);
 console.log('');
 console.log(`live: ${of('live').length} called across modules, ${of('live (internal)').length} only inside their own reached file, ${of('live (a tool calls it)').length} by a tool`);
 console.log(`UNWIRED: ${of('test-only').length} test-only, ${of('dead').length} dead, ${unreachedModules.length} unreached files, of ${EXPORTS.length} exports`);

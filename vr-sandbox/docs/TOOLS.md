@@ -210,7 +210,13 @@ Its numbers are pinned exactly by `tests/nexus/moves.test.ts` — 56 declared, 4
 node tools/unwired.mjs                              the census
 node tools/unwired.mjs mobility                     one export, or one file
 node tools/unwired.mjs path parts/gears dcmotor     is there ANY chain of imports between these two, and what is it
+node tools/unwired.mjs --all                        the census with no list cut short
 ```
+
+`--all` was added in Run 8h for a reason worth keeping: the census printed **12** of its 28 unreached files and closed
+with `… 16 more`. A capped list is the one thing a census must not do quietly — 28 shown as 12 reads as a smaller
+problem than it is, and the sixteen it hid were eleven files of `substrate/`, the engine itself. The caps still apply
+by default to keep the output readable; `--all` prints every list whole.
 
 `path` is the second question, added in Run 8d when a duplicate of this tool was written and deleted: reachability
 from the doors says whether anything can run a thing, and `path` says whether two parts of the tree know about each
