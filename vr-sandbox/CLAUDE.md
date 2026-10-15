@@ -337,6 +337,18 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   what lets a pair be cut for centres it was not designed for.
 
 **Known gaps in the architecture**
+- **One law, and the rest demoted to sensors** (`substrate/time.ts`, `npm run substrate -- time`). The user's
+  reframe: nothing should be kept stable by a pile of laws; one thing advances the state (time) and everything
+  else only reads it. Built as the kernel: proper time, the four-velocity invariant (v² + (c·dτ/dt)² = c², exact
+  at every speed), and `sense()`, which turns any of the book's 252 into a `Reading` with no address — the
+  decisive test runs every instrument over a state and asserts the state is unchanged. With c, ħ, k_B and 4πε₀
+  set to one, every dimension is a power of time: a metre is time¹, a speed is **time⁰ (dimensionless — there is
+  no such thing as a speed, only a fraction of c)**, action is time⁰, and each of the 252 lands on an integer
+  between −4 and +4. **STILL A KERNEL BESIDE THE ENGINE, NOT THE ENGINE**: `substrate/`'s relations still bind
+  addresses, so the state is still defined by laws rather than by time. Making the evolver the only writer is the
+  large job this opens. Absent with it: the action principle as the generator (δS = 0, from which the 252 would be
+  *derived* rather than reduced), gravity (the metric is flat), and the join to `clock.ts`, which already advances
+  each region at its own time and is where this belongs.
 - **Connectedness is a command, not an opinion — and the command is `node tools/unwired.mjs`, which already
   existed.** Run 8d wrote a second one (`tools/wired.mjs`) without listing `tools/` first, quoted its worse
   answer, and only found the duplicate by reading an unrelated file header. The two are merged: `unwired.mjs`

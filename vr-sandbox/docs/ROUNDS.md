@@ -3122,3 +3122,60 @@ facts about the wiring; **the third is a prompt, not a verdict.**
 (`half: [Leaf,Leaf,Leaf]`, `volume = 8h₀h₁h₂`), so the essay's sphere is not representable; there are no rotational
 quantities and no mesh coupling; and `parts/drive.ts` still hand-codes `power.rotary` and `inertia.disc`, which the
 book already holds with sources and validity domains — the same two-owners fault one level down.
+
+## Run 8f — one law, and 252 instruments
+
+The user, 2026-10-15: *"there should be no laws just sensors ... one universal law that governs the environment
+through the whole system ... the universal law is time, everything is time interacting with itself ... all the
+'laws' you made need to be turned into math that functionally branches up to time."*
+
+**The architectural claim is right and is implementable.** What `substrate/` does today is backwards by this
+reading: a `relation` BINDS an address, so the state is *defined by* the laws. The reframe says one thing should
+advance the state and everything else should only read it. That is a real inversion with a testable consequence,
+and `substrate/time.ts` is its kernel.
+
+**What was built as established physics, not as a position:**
+- c is the conversion between a metre and a second, exact by definition since SI 2019. `rate(v) = √(1 − v²/c²)`.
+- Proper time is the one invariant: two observers disagree on t and x and agree on τ.
+- **Everything moves through spacetime at exactly c**: v² + (c·dτ/dt)² = c², a Pythagoras, tested at nine speeds
+  from 0 to c and totalling 1.000000 c at every one. A thing at rest is not still — it is going through time at
+  light speed, and going fast spends some of that motion on space *instead*.
+- At c, proper time is exactly 0, not nearly: `rate(c) === 0`, and a photon crossing 10⁶ light-seconds ages by
+  nothing. Past c there is no worldline, so `rate` throws rather than returning a number.
+- The twin case comes out at the textbook figure: 100 s of the domain's clock is 80 s for a traveller at 0.6c.
+
+**What is the user's axiom and is labelled as such in the file**: that time is the single generative thing and
+space, matter and self are modes of it. Relativity makes space and time one manifold but not the same thing — the
+minus sign in dτ² is why a timelike interval cannot rotate into a spacelike one, and causality rests on that sign.
+The file keeps the sign and takes time as the one coordinate, which is theirs.
+
+**"Everything branches up to time" is computable, and was computed from the book's own 252 laws.** Four constants
+set to one, each a statement that two units measure the same thing — c (a metre is a second), ħ (a kilogram is an
+inverse second), k_B (a kelvin is an inverse second), 4πε₀ (an ampere is an inverse second). Then
+`inTime = −kg + m + s − A − K`, and:
+
+- a metre is **time¹**, a kilogram **time⁻¹**, an energy **time⁻¹** (E = ħω: an energy IS a frequency)
+- **a speed is time⁰ — dimensionless.** There is no such thing as a speed, only a fraction of c: an angle in
+  spacetime. This is the user's "speed is time", and it is exact.
+- **action is time⁰ too** — a count of ħ. Which is why the one law of physics is about action being *stationary*:
+  a pure number being extremal, with no unit to be extremal in.
+- every one of the 252 lands on an integer power between −4 and +4, and the commonest (54 laws) is time⁻¹, which
+  is energy — time's own conserved quantity by Noether.
+
+**The demotion.** `sense(law, at, tau)` turns any of the 252 into a `Reading`: the same maths and the same
+citation, with no address. The decisive test is one line — every instrument in the book is run over a state and
+**the state is byte-identical afterwards**. A relation binds; a reading only looks. An instrument outside its
+domain reports that about *itself* ("a fact about the instrument's range, not about the world"), and one with a
+missing input says it had nothing to read rather than returning zero.
+
+One fault found by the language layer rather than by me: passing a missing input as NaN threw, correctly — a leaf
+must be a number or declare itself to have none. A missing reading is an absence (`class: 'unknown'`), not a zero.
+
+`npm run substrate -- time`. 18 tests. GATE: PASS (2250 of 2250) — 200.9s.
+
+**NOT DONE.** This is the kernel beside the engine, not the engine rebuilt on it. `substrate/`'s relations still
+bind addresses; making the time evolver the only writer across the whole substrate is the large job this opens,
+and until it is done the reframe is demonstrated rather than adopted. Also absent: the action principle itself
+(δS = 0 as the generator the 252 would be *derived* from, rather than reduced to powers of time), gravity (the
+metric is flat here), and any coupling between a worldline's proper time and the existing `clock.ts` local clocks,
+which already advance each region at its own time and are the natural place for this to land.

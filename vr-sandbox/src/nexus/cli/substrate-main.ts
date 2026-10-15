@@ -25,6 +25,57 @@ import type { Solution } from '../substrate/solve';
 
 const want = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 
+// `npm run substrate -- time` — THE ONE LAW, AND THE BOOK BESIDE IT.
+//
+// The reframe of 2026-10-15: one universal law (time), and every other "law" demoted to a sensor — something that
+// explains behaviour without governing it. This prints both halves: what proper time does, and what the book's 252
+// laws turn into once c, ħ, k_B and the Coulomb constant are taken as one, which is a power of time each.
+if (want[0] === 'time') {
+  const { LIGHT, CONVERSIONS, asTime, apart, bookInTime, elapse, rate, sense, spacetimeSplit } = await import('../substrate/time');
+  const { lawById } = await import('../book');
+  const pc = (b: number) => `${(b * 100).toString().padStart(5)}% of c`;
+  console.log('THE ONE LAW   d\u03C4/dt = \u221A(1 \u2212 v\u00B2/c\u00B2)      c = ' + LIGHT + ' m/s, exact by definition');
+  console.log('');
+  console.log('      speed        through time     through space     total        a year of the world is');
+  for (const b of [0, 0.1, 0.5, 0.6, 0.9, 0.99, 0.999, 1]) {
+    const s = spacetimeSplit({ id: 'x', tau: 0, at: [0, 0, 0], through: [b * LIGHT, 0, 0] });
+    console.log(`  ${pc(b)}   ${(s.throughTime / LIGHT * 100).toFixed(4).padStart(9)}% c   ${(s.throughSpace / LIGHT * 100).toFixed(4).padStart(9)}% c   ${(s.magnitude / LIGHT).toFixed(6)} c      ${(rate(b * LIGHT) * 365.25).toFixed(3).padStart(8)} days to you`);
+  }
+  console.log('');
+  console.log('  Every row totals exactly c. A thing at rest is not still: it is going through time at light speed,');
+  console.log('  and going fast spends some of that motion on space INSTEAD. At c there is none left for the clock.');
+  console.log('');
+  const [home, away] = elapse([{ id: 'home', tau: 0, at: [0, 0, 0], through: [0, 0, 0] }, { id: 'away', tau: 0, at: [0, 0, 0], through: [0.6 * LIGHT, 0, 0] }], 100);
+  console.log(`  Over 100 s of the domain's clock: ${apart(home!, away!).says}`);
+  console.log('');
+  console.log('EVERYTHING AS A POWER OF TIME \u2014 four constants set to one, each of them a statement that two units');
+  console.log('measure the same thing:');
+  for (const c of CONVERSIONS) console.log(`  ${c.by.padEnd(5)} ${c.sets.padEnd(34)} ${c.src}`);
+  console.log('');
+  for (const u of ['s', 'm', 'kg', 'K', 'm/s', 'J', 'J s', 'N', 'W', 'Pa']) console.log(`  ${asTime(u).says}`);
+  console.log('');
+  console.log('  A SPEED HAS NO UNITS. There is no such thing as a speed \u2014 only a fraction of c, which is an angle');
+  console.log('  in spacetime. Action has none either: it is a count of \u0127, which is why the one law of physics is');
+  console.log('  about action being stationary \u2014 a pure number being extremal, with no unit to be extremal in.');
+  console.log('');
+  console.log('THE BOOK, BY THE POWER OF TIME IT GIVES');
+  for (const g of bookInTime()) {
+    const names = g.laws.slice(0, 4).map((l) => l.name).join(', ');
+    console.log(`  time^${String(g.power).padEnd(3)} ${String(g.laws.length).padStart(3)} laws   ${names}${g.laws.length > 4 ? `, \u2026 (+${g.laws.length - 4})` : ''}`);
+  }
+  console.log('');
+  const r = sense(lawById('newton.second'), { m: 2, a: 3 }, 41.5);
+  console.log('A LAW DEMOTED TO A SENSOR');
+  console.log(`  ${r.says}`);
+  console.log(`  cites ${r.cites}`);
+  console.log('  It has no address. There is nowhere for it to put anything, so it explains the state and cannot');
+  console.log('  govern it \u2014 which is the whole of the reframe, and tests/nexus/time.test.ts asserts it directly:');
+  console.log('  every instrument in the book is run over a state and the state is unchanged.');
+  console.log('');
+  console.log('SUBSTRATE: the one law');
+  process.exit(0);
+}
+
 // `npm run substrate -- unaccounted` — WHAT THIS WORLD DOES NOT ACCOUNT FOR.
 //
 // Every other verdict here says whether what was derived holds. This one says what was never derived at all, which
