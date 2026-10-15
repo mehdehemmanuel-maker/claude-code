@@ -265,6 +265,25 @@ describe('the tree keeps its shape', () => {
     expect(loose, 'a new file at the root means its concern has no home yet — give it one').toEqual(['works.ts']);
   });
 
+  // RULE 24. Every tool is named in docs/TOOLS.md.
+  //
+  // This rule exists because of a specific failure, in the same session that was lecturing about it. `tools/wired.mjs`
+  // was written to answer "what is connected to what" — the question `tools/unwired.mjs` had already answered since
+  // Run 7s, documented in docs/TOOLS.md under a heading two screens long. Nothing caught it: the name-clash ratchet
+  // reads `src/` only, so a second owner of one concern in `tools/` costs nothing and fails nothing. Two tools gave
+  // two different answers about the same tree, and the worse one was the one being quoted.
+  //
+  // The fix is not a cleverer clash detector; it is making the duplicate impossible to write without reading the
+  // list. A new tool has to be added to TOOLS.md to pass, and adding it means opening the file where its twin
+  // already sits. The two were merged (unwired.mjs gained `path`, and its walk widened from src/nexus to all of
+  // src/, which is what had hidden engineering/gears.ts from it), and wired.mjs was deleted.
+  it('every tool is named in docs/TOOLS.md, so a second one cannot be written without meeting the first', () => {
+    const tools = readdirSync(join(ROOT, 'tools')).filter((n) => /\.(mjs|js)$/.test(n)).sort();
+    const doc = readFileSync(join(ROOT, 'docs/TOOLS.md'), 'utf8');
+    const missing = tools.filter((t) => !doc.includes(`tools/${t}`));
+    expect(missing, 'a tool nothing documents is a tool the next round writes again: add it to docs/TOOLS.md, and read what is already there while you are in the file').toEqual([]);
+  });
+
   it('every directory is named in LAYERS, and every directory holds more than one file', () => {
     for (const d of readdirSync(NEXUS)) {
       const p = join(NEXUS, d);

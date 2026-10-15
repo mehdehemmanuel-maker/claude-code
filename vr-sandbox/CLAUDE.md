@@ -337,12 +337,28 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   what lets a pair be cut for centres it was not designed for.
 
 **Known gaps in the architecture**
-- **Connectedness is now a command, not an opinion**: `node tools/wired.mjs islands` names every module nothing
-  under `src/` imports. It was 28 on its first run and found `engineering/gears.ts` — the Lewis bending equation
-  and a mesh loss derived from the real tooth counts, unreached, while `parts/drive.ts` went without both. Wiring
-  it in made 27. Run it before claiming anything is joined up, and note that `wired.mjs path` is the honest half:
-  `parts/gears` "reached" `engineering/dcmotor` in seven hops through `inventory` before `drive.ts` existed, which
-  is not a connection.
+- **Connectedness is a command, not an opinion — and the command is `node tools/unwired.mjs`, which already
+  existed.** Run 8d wrote a second one (`tools/wired.mjs`) without listing `tools/` first, quoted its worse
+  answer, and only found the duplicate by reading an unrelated file header. The two are merged: `unwired.mjs`
+  keeps its census (every export no door reaches: test-only, dead, whole unreached files) and gained `path <a>
+  <b>`, which says whether any chain of imports joins two modules and prints it — `parts/gears` "reached"
+  `engineering/dcmotor` in seven hops through `inventory`, which is not a connection, and only the printed chain
+  makes that obvious. Its walk also widened from `src/nexus` to all of `src/`, the scoping that had hidden
+  `engineering/gears.ts` (the Lewis bending equation, unreached while `parts/drive.ts` went without it).
+  **Tidy rule 24 is the causal fix**: every tool must be named in `docs/TOOLS.md`, so a second one cannot be
+  written without opening the file where its twin already sits.
+- **What a world does NOT account for is also a command**: `npm run substrate -- unaccounted`
+  (`substrate/holes.ts`). `Runtime.gaps()` reports evaluations that could not finish; an absent law raises no gap
+  at all — it raises nothing, runs clean and looks finished. Three findings: a **hole** (something reads an
+  address nothing produces), a **dead end** (something produces one nothing reads — which is exactly how
+  `parts/drive.ts` computes a mesh's friction loss in watts and drops it), and an **unapplied law** (one in the
+  book whose every input is bindable here and which nothing instances). The first two are facts about the wiring;
+  the third is a prompt, not a verdict — binding is by dimension plus a shared word, which is enough to be useful
+  and not enough to be right. Its first run on a bare steel cube found one hole (`what bears it` — a lone place
+  has nothing holding it up), nine dead ends (every place works out its section areas, second moments and moduli
+  and nothing reads them until something bends it), and named `Moment of inertia of a rectangular prism about its
+  centre` as applicable and unapplied, which is the rotational quantity the substrate lacks and `drive.ts`
+  hand-codes.
 - **`parts/drive.ts` joins torque only, and only on one shaft line.** A motor, a hand-placed train and a load now
   find their own operating point and spin-up, with the tooth strength and the shaft-into-bore fit checked. What has
   no equivalent yet: anything LINEAR (a leadscrew, a cylinder, a rack driving a load — the rack is drawn and

@@ -28,12 +28,17 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const walk = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : /\.(ts|mjs|js)$/.test(p) ? [p] : []; });
-const SRC = walk(join(ROOT, 'src/nexus')).filter((p) => !/\.d\.ts$/.test(p));
+// THE WALK IS ALL OF src/, NOT ONLY src/nexus. Scoped to src/nexus this tool could not see
+// src/engineering/gears.ts — the Lewis bending equation and a real mesh loss, reached by nothing but its own
+// test while parts/drive.ts went without both (Run 8d). A census that cannot see a directory reports it as
+// absent rather than as unreached, which is the one answer worse than no answer.
+const SRC = walk(join(ROOT, 'src')).filter((p) => !/\.d\.ts$/.test(p));
 const TESTS = walk(join(ROOT, 'tests'));
 const TOOLS = walk(join(ROOT, 'tools')).filter((p) => !/unwired\.mjs$/.test(p));
 const read = (p) => readFileSync(p, 'utf8');
 const rel = (p) => relative(ROOT, p);
-const only = process.argv.slice(2).find((a) => !a.startsWith('--'));
+const argv = process.argv.slice(2);
+const only = argv[0] === 'path' ? undefined : argv.find((a) => !a.startsWith('--'));
 
 // 1. THE DOORS
 const DOORS = SRC.filter((p) => /\/(cli|view)\/[^/]+\.ts$/.test(p));
@@ -120,6 +125,47 @@ if (only) {
   console.log(`unwired: ${hits.length} export${hits.length === 1 ? '' : 's'} matching /${only}/i`);
   for (const r of hits) console.log(`  ${r.verdict.padEnd(22)} ${r.name}  ${rel(r.file)}:${r.decl}${r.outside.length ? `  ← ${r.outside.slice(0, 3).map(rel).join(', ')}` : r.inTests.length ? `  ← only ${r.inTests.map(rel).join(', ')}` : ''}`);
   console.log(`UNWIRED: ${hits.filter((h) => h.verdict === 'test-only' || h.verdict === 'dead').length} of ${hits.length} shown are unreachable`);
+  process.exit(0);
+}
+
+// `node tools/unwired.mjs path <a> <b>` — IS THERE ANY CHAIN OF IMPORTS FROM a TO b, AND WHAT IS IT.
+//
+// Reachability from the doors answers "can anything run this". This answers the different question "do these two
+// parts of the tree know about each other", which is the one that matters when two halves of one machine have been
+// built apart. It earns its place by showing the chain rather than a yes: asked whether parts/gears reached
+// engineering/dcmotor before parts/drive.ts existed, the honest answer was yes — in SEVEN hops, through kits,
+// components, inventory, substrate/boards, substrate/flows and ask/generate. That is not a connection, and only
+// the printed chain makes that obvious.
+if (process.argv[2] === 'path') {
+  const find = (name) => {
+    const hits = SRC.filter((p) => rel(p).replace(/\.tsx?$/, '').endsWith(name.replace(/\.tsx?$/, '')) || rel(p).includes(name));
+    if (!hits.length) { console.log(`nothing under src/ is called "${name}"`); process.exit(1); }
+    return hits.sort((a, b) => rel(a).length - rel(b).length)[0];
+  };
+  const [a, b] = [find(process.argv[3] ?? ''), find(process.argv[4] ?? '')];
+  const chainTo = (from, to) => {
+    const prev = new Map([[from, null]]), q = [from];
+    // importsOf returns {from, names, ns} records, not paths: reading them AS paths made every pair look like two
+    // islands, which is a confident wrong answer of exactly the kind the rest of this file was written to prevent.
+    while (q.length) {
+      const c = q.shift();
+      if (c === to) break;
+      for (const im of IMPORTS.get(c) ?? importsOf(c)) { const n = im.from; if (n && SRC.includes(n) && !prev.has(n)) { prev.set(n, c); q.push(n); } }
+    }
+    if (!prev.has(to)) return null;
+    const out = []; for (let c = to; c; c = prev.get(c)) out.unshift(rel(c));
+    return out;
+  };
+  const fwd = chainTo(a, b);
+  if (fwd) {
+    console.log(`${rel(a)} reaches ${rel(b)} in ${fwd.length - 1} ${fwd.length === 2 ? 'hop' : 'hops'}:`);
+    console.log(`  ${fwd.join('\n    \u2192 ')}`);
+    if (fwd.length - 1 > 3) console.log(`\n  ${fwd.length - 1} hops through ${fwd.slice(1, -1).length} unrelated modules is not a connection. Read it as two islands with a long accidental path between them.`);
+  } else {
+    console.log(`${rel(a)} cannot see ${rel(b)}: no chain of imports gets there.`);
+    const back = chainTo(b, a);
+    console.log(back ? `It goes the OTHER way: ${rel(b)} reaches ${rel(a)} in ${back.length - 1}.` : `Neither reaches the other. They are two islands, and something has to join them.`);
+  }
   process.exit(0);
 }
 

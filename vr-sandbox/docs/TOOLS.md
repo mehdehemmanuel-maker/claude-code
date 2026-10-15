@@ -204,12 +204,25 @@ touching part in another link married a right-hand CV spider to the left-hand dr
 Its numbers are pinned exactly by `tests/nexus/moves.test.ts` — 56 declared, 43 usable, 53 from touching, 3 floating,
 66 movers — and moved by hand with a ledger line, because a floor once hid a fabricated answer for a whole round.
 
-## `node tools/unwired.mjs` — what is built and cannot be reached
+## `node tools/unwired.mjs` — what is built and cannot be reached, and whether two parts know each other
 
 ```
-node tools/unwired.mjs              the census
-node tools/unwired.mjs mobility     one export, or one file
+node tools/unwired.mjs                              the census
+node tools/unwired.mjs mobility                     one export, or one file
+node tools/unwired.mjs path parts/gears dcmotor     is there ANY chain of imports between these two, and what is it
 ```
+
+`path` is the second question, added in Run 8d when a duplicate of this tool was written and deleted: reachability
+from the doors says whether anything can run a thing, and `path` says whether two parts of the tree know about each
+other, which is what matters when two halves of one machine have been built apart. It earns its place by printing
+the chain rather than a yes — `parts/gears` reaches `engineering/dcmotor` in **seven hops**, through kits,
+components, inventory, substrate/boards, substrate/flows and ask/generate. That is not a connection, and the tool
+says so in as many words when a chain runs past three hops.
+
+The walk covers all of `src/`, not only `src/nexus`. Scoped to `src/nexus` it could not see `src/engineering/gears.ts`
+— the Lewis bending equation and a mesh loss derived from the real tooth counts, reached by nothing but its own test
+while `parts/drive.ts` went without both. A census that cannot see a directory reports it as absent rather than as
+unreached, which is the one answer worse than no answer.
 
 Walks the module graph from the real entry points — `src/nexus/cli/*.ts` and `src/nexus/view/*.ts` — and reports
 every export no running path arrives at: **test-only** (named by nothing but `tests/`, which is finished work with no
@@ -371,28 +384,6 @@ The solid is inscribed in the true tip circle — at most a micron under, never 
 section is sampled in, because a gear printed fatter than nominal binds in a mesh the real one turns freely in.
 `stlOfSection` in `src/nexus/parts/fab.ts` does this for any extruded section, not only gears.
 
-### `node tools/wired.mjs` — what is actually connected to what
-
-"Are all the systems merged together?" was answered by opinion three times before this existed, and opinion is what
-drifts: a file can know everything about its own half of a machine and still be an island, and nothing about reading
-it says so. This reads every relative import under `src/` and answers it as a fact.
-
-```
-node tools/wired.mjs                 every module, with how many import it and how many it imports
-node tools/wired.mjs islands         the modules nothing reaches — where the drift collects
-node tools/wired.mjs <name>          one module: who reaches it, what it reaches, what it cannot see
-node tools/wired.mjs path <a> <b>    whether any chain of imports joins two modules, and the chain
-```
-
-It earned itself on its first run: `islands` found **`src/engineering/gears.ts`** — a second gears file nothing
-under `src/` imported, holding the Lewis bending equation and a mesh loss derived from the real tooth counts, both
-of which `parts/drive.ts` was otherwise doing without. Not a duplicate to delete: the strength half of the one
-owner, unreached. Wiring it in took the island count from 28 to 27.
-
-`path` is the honest one. Asked whether `parts/gears` reached `engineering/dcmotor` before `drive.ts` existed, it
-answered yes — in seven hops, through `kits → components → inventory → substrate/boards → substrate/flows →
-ask/generate`. That is not a connection, and seeing the chain is what makes that obvious.
-
 ### `npm run gears -- … --motor <id>`
 
 Bolts a real catalogue motor to whatever is on the board and lets the three of them find their own answer.
@@ -411,3 +402,57 @@ from the real tooth counts instead of the typical 2%. `--seconds` shows it comin
 
 Nothing on that page is typed in: the ratio is where the gears were put, the inertia their own sections, the torque
 the motor's published constants, the speed where those three cross. Change one tooth count and all of it moves.
+
+## `node tools/bench.mjs` — a headless browser a critic can look through
+
+Opens any page the repo serves in a headless browser so a critic — a person, or an agent told nothing of how the thing
+was made — can see what is actually on screen rather than what the code says should be. The instrument behind the
+round's "what does a person see first?" step.
+
+## `node tools/cite.mjs` — re-runs what a claim cites and checks the number still holds
+
+Every figure in the ledger names the command that produced it. This re-runs them and reports any that no longer come
+out the same, so a number cannot quietly rot after the code under it changes. Its `clocked` verdict marks a figure
+that is a wall-clock measurement rather than a count, because those legitimately drift and must say so.
+
+## `node tools/shot.mjs` — render a page and save the picture
+
+Brings a page up, waits for it to settle, screenshots it and writes the PNG, so `Read` on the file shows it as an
+image. The smallest step of the round's look-at-it rule, split out so `manny-see.mjs` and the lessons can both use it.
+
+
+## `npm run substrate -- unaccounted` — what a world does NOT account for
+
+```
+npm run substrate -- unaccounted
+```
+
+`Runtime.gaps()` reports evaluations that could not finish: a relation waiting, a law refused, a constraint unmet.
+Every one is about a computation that started. **An absent law raises no gap** — it raises nothing, runs clean, and
+looks finished. A world with no thermal law in it does not report a thermal gap.
+
+Three findings, in rising order of how hard they are to see by reading the code:
+
+| | |
+| --- | --- |
+| **hole** | something reads an address nothing produces: the world needs a number it has no way to get |
+| **dead end** | something produces one nothing reads: the world works a number out and drops it |
+| **unapplied** | a law in the book whose every input is bindable here, which nothing instances |
+
+The dead end is the one that motivated it: `parts/drive.ts` computes a gear mesh's friction loss in watts and
+**drops the number** — nothing reads it, no temperature rises, and the drive reports "it will cook" as a string
+rather than a kelvin, under a gate passing 2,225 tests. A dead end can be marked `asked`, because an answer
+somebody wanted is produced and read by nobody and that is what an answer is.
+
+The first two findings are facts about the wiring. **The third is a prompt, not a verdict**: binding is by
+dimension plus a shared word in the names, which is enough to be useful and not enough to be right — "specific
+gravity" and "the direction of gravity" share a word and nothing else, so a lead-acid cell's voltage law is still
+offered over a steel cube. Read it as "look at this". Two tightenings already came out of its own first run: a port
+must share a word with its address (65 findings → 14) and distinct ports must take distinct addresses (14 → 12,
+after it bound x, y and z all to one half-extent, and both a mass and a molar mass to the same kilogram).
+
+On a bare 100 mm steel cube it reports one hole (`what bears it` — a lone place has nothing holding it up), nine
+dead ends (every place works out its section areas, second moments and section moduli, and nothing reads them until
+something bends it), and twelve unapplied laws — among them **Moment of inertia of a rectangular prism about its
+centre**, which is the rotational quantity the substrate lacks and `drive.ts` hand-codes. It named the next piece of
+work by itself.

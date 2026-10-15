@@ -24,6 +24,41 @@ import { restIntent, toppleStudy } from '../substrate/study';
 import type { Solution } from '../substrate/solve';
 
 const want = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+
+// `npm run substrate -- unaccounted` — WHAT THIS WORLD DOES NOT ACCOUNT FOR.
+//
+// Every other verdict here says whether what was derived holds. This one says what was never derived at all, which
+// is the question no gap can raise: an absent law raises nothing, runs clean and looks finished. It builds the
+// plainest real world the engine has — a place, its matter, and a domain with measured gravity — and reports its
+// holes, its dead ends, and the laws out of the book whose inputs are all present and which nothing applies.
+if (want[0] === 'unaccounted' || want[0] === 'holes') {
+  const { Runtime } = await import('../substrate/runtime');
+  const { unaccounted, unaccountedLines, represents } = await import('../substrate/holes');
+  const { GRAVITY, gravityAxis, placeAt } = await import('../substrate/place');
+  const { leaf } = await import('../lang/term');
+  const given = (v: number, u: string, w: string) => leaf(w, v, u, { class: 'configuration' as const, source: w });
+  const rt = Runtime.open();
+  rt.admit({ kind: 'leaf', at: GRAVITY, leaf: given(9.80665, 'm/s^2', 'standard gravity') });
+  for (const j of [0, 1, 2]) rt.admit({ kind: 'leaf', at: gravityAxis(j), leaf: given(j === 1 ? -1 : 0, '1', 'gravity points down the second axis') });
+  rt.admit({ kind: 'place', id: 'block',
+    centre: [0, 0, 0].map((v) => given(v, 'm', 'at the origin')) as never,
+    turn: [0, 0, 0, 1].map((v) => given(v, '1', 'not turned')) as never,
+    half: [0.05, 0.05, 0.05].map((v) => given(v, 'm', 'as cut')) as never });
+  rt.admit({ kind: 'leaf', at: placeAt.density('block'), leaf: given(7850, 'kg/m^3', 'mild steel (ASM: carbon steels 7.85)') });
+
+  console.log('A 100 mm steel cube in a domain with measured gravity — nothing else said about it.');
+  console.log('');
+  console.log(`  mass    ${rt.binding(placeAt.mass('block'))?.value?.toFixed(3)} kg      (nobody gave it a mass: it came from the shape and the density)`);
+  console.log(`  weight  ${rt.binding(placeAt.weight('block'))?.value?.toFixed(2)} N      (nobody enabled gravity: the kept law's ports bound here)`);
+  console.log('');
+  for (const line of unaccountedLines(unaccounted(rt))) console.log(line);
+  console.log('Is each phenomenon represented at all?');
+  for (const [u, what] of [['kg', 'mass'], ['N', 'force'], ['K', 'temperature'], ['C', 'charge'], ['rad/s', 'rotation']] as const)
+    console.log(`  ${what.padEnd(12)} ${represents(rt, u) ? 'yes' : 'NO — no address in this world carries one, so no law about it can bind'}`);
+  console.log('');
+  console.log('SUBSTRATE: the unaccounted census');
+  process.exit(0);
+}
 const run = (name: string) => !want.length || want.some((w) => name.includes(w));
 
 // what a choice came to: how many candidates the catalogue offered, how many the constraints admitted, which was

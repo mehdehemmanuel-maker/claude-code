@@ -3055,3 +3055,70 @@ quantity, neither checked against the formula that produced it.
 
 Still unjoined, named in CLAUDE.md: anything linear, more than one source on a shaft, the winding temperature
 (`motorrun.ts` steps it but takes a constant load), the battery, `JointKind.gear`, and the bench in the room.
+
+## Run 8e — the ledger of what is not modelled, and a duplicate of my own tool
+
+Two things came out of the architecture essay: a question (*what is the smallest thing that should exist?*) and an
+instruction (*the most effective path; don't be lazy, rewrite each and everything that needs rewrote*).
+
+**What was measured first.** The essay describes a physics-native environment where gravity is a consequence rather
+than a feature. That architecture **already exists here** — `lang/` (dimension, Term, Law) and 76 files of
+`substrate/`, built over tasks 84–106 — and `place.ts`'s own header states the principle better than the essay:
+*"rules that hold for every place, never for a kind of place… which length is a breadth and which a depth is a
+consequence of the direction of the load, never a name."* It works: admitting a place generates the relations its
+geometry implies, and a 100 mm steel cube comes out at 7.850 kg and 76.98 N with nobody enabling gravity — the kept
+WEIGHT law's ports bound to this place's mass and the domain's gravity.
+
+And **the layer that makes things never touches it.** `substrate/place`, `matter`, `observe`, `field`, `solid`,
+`space`, `journal`: **0 importers outside `substrate/`**. `parts/` imports exactly two substrate modules, neither
+of them state. Forty of 76 substrate files *are* reached — by `ask/` and the CLI doors, not by the making.
+
+**MY OWN FAULT, FIRST.** I wrote `tools/wired.mjs` to answer "what is connected to what" and quoted it for a whole
+reply. `tools/unwired.mjs` has answered that since Run 7s, documented in `docs/TOOLS.md` under a heading two screens
+long. I never listed `tools/`. CLAUDE.md says, in as many words, to check that a file does not already exist; the
+name-clash ratchet reads `src/` only, so nothing failed. Worse, the duplicate was the **weaker** instrument: per
+file rather than per export, "imported by nothing" rather than reachable from the doors.
+
+Merged, not discarded, because they did complement: `unwired.mjs` keeps its census and gained `path <a> <b>`, and
+its walk widened from `src/nexus` to all of `src/` — the scoping that had hidden `engineering/gears.ts` from it.
+`wired.mjs` is deleted. **Tidy rule 24 is the fix by cause**: every tool must be named in `docs/TOOLS.md`, so the
+next duplicate cannot be written without opening the file where its twin sits. It found three undocumented tools
+on its first run (`bench.mjs`, `cite.mjs`, `shot.mjs`), now written up.
+
+A second clash followed and the ratchet caught this one: `substrate/coupling.ts` has owned the word `ledger` since
+it was written (the conservation residual). Mine is `unaccounted`.
+
+**`substrate/holes.ts` — what a world does not account for.** `Runtime.gaps()` reports evaluations that could not
+finish. An absent law raises no gap: it raises nothing, runs clean and looks finished. Three findings — a **hole**
+(read, nothing produces it), a **dead end** (produced, nothing reads it), an **unapplied law** (every input
+bindable, nothing instances it). It needed three new accessors on `Runtime`, because what reads what was private:
+every gap there is about how an evaluation went, and these say what the wiring *is*.
+
+The dead end is the motivating case: `parts/drive.ts` works out a mesh's friction loss in watts and **drops the
+number**, under a gate passing 2,225 tests. A test now builds that exact shape, watches the finding appear, wires
+the watts to a temperature, and watches it go.
+
+Its own first run on a bare steel cube, all three findings real:
+- one **hole**: `block/what bears it` — a lone place in a domain with gravity has nothing holding it up, and the
+  substrate knows to ask. Admitting `{kind:'held'}` closes it.
+- nine **dead ends**: every place works out its section areas, second moments and section moduli and nothing reads
+  them until something bends it. Not a fault to fix by deleting them — the point is that the world says which of
+  its own numbers go nowhere instead of leaving it to be noticed.
+- and among the unapplied laws, **Moment of inertia of a rectangular prism about its centre** — the rotational
+  quantity the substrate lacks and `drive.ts` hand-codes. The instrument named the next piece of work itself.
+
+Two tightenings came out of that run, both from reading the output rather than from a test:
+- 65 unapplied → **14**. Dimension alone offered Coulomb friction with `mu ← direction of gravity x` and a radius
+  as `r ← centre x`: dimensionally valid, semantically nonsense, and a census full of nonsense trains the reader to
+  skim. A port must now also share a word with its address's name.
+- 14 → **12**. Distinct ports must take distinct addresses: it had bound x, y and z all to one half-extent, and
+  both a mass and a molar mass to the same kilogram.
+
+What is left is honest residue and says so in the code: "specific gravity" and "the direction of gravity" share a
+word and nothing else, so a lead-acid cell's voltage is still offered over a steel cube. The first two findings are
+facts about the wiring; **the third is a prompt, not a verdict.**
+
+**NOT DONE, and not to be read as done:** the drive line is not ported onto the substrate. A `Place` is a box
+(`half: [Leaf,Leaf,Leaf]`, `volume = 8h₀h₁h₂`), so the essay's sphere is not representable; there are no rotational
+quantities and no mesh coupling; and `parts/drive.ts` still hand-codes `power.rotary` and `inertia.disc`, which the
+book already holds with sources and validity domains — the same two-owners fault one level down.

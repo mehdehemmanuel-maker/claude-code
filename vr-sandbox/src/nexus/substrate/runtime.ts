@@ -185,6 +185,33 @@ export class Runtime {
   /** Whether a relation or a constraint was generated from the present values, rather than contributed. */
   generated(id: string): boolean { return this.structure.has(id); }
 
+  /** WHAT READS WHAT, for the ledger of what is not modelled (holes.ts). A relation's output is only half a
+   *  connection: an address that nothing reads is a quantity the world computes and then drops, which is how
+   *  friction heat went nowhere in parts/drive.ts, and no gap in `gaps()` has ever been able to say so, because
+   *  every gap here is about an evaluation that could not finish. These say what the wiring IS, not how it went. */
+  readersOf(a: Address): string[] { return [...(this.readers.get(a) ?? [])]; }
+  producersOf(a: Address): string[] { return [...(this.producers.get(a) ?? [])]; }
+  /** Every address anything mentions: bound, read or produced — not only the ones that resolved to a value. */
+  mentioned(): Address[] {
+    const all = new Set<Address>([...this.bindings.keys(), ...this.leaves.keys(), ...this.readers.keys(), ...this.producers.keys()]);
+    for (const r of this.relations.values()) { all.add(r.out); for (const p of Object.values(r.ports)) all.add(p); }
+    for (const c of this.constraints.values()) for (const p of Object.values(c.ports)) all.add(p);
+    return [...all];
+  }
+  /** What a relation is, by id: where it writes, what it reads, and whose law it is. */
+  relationAt(id: string): { out: Address; ports: Record<string, Address>; name: string; unit: string; law: string } | undefined {
+    const r = this.relations.get(id);
+    return r ? { out: r.out, ports: { ...r.ports }, name: r.name, unit: r.unit, law: r.law } : undefined;
+  }
+  relationIds(): string[] { return [...this.relations.keys()]; }
+  /** The unit at an address, from whatever put it there: a leaf's own, or the relation that writes it. */
+  unitAt(a: Address): string | undefined {
+    const l = this.leaves.get(a);
+    if (l) return l.unit;
+    for (const id of this.producers.get(a) ?? []) { const r = this.relations.get(id); if (r) return r.unit; }
+    return this.bindings.get(a)?.unit;
+  }
+
   /** The unit a relation or a constraint reads at an address it waits on, from the variable at that port. */
   unitRead(id: string, a: Address): string | undefined {
     const g = this.relations.get(id) ?? this.constraints.get(id);
