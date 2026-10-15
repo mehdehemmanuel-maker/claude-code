@@ -163,7 +163,7 @@ describe('a gear is the involute, or it is a cylinder with bumps', () => {
 
 // ─── The proof that the mesh is a mesh ───────────────────────────────────────────────────────────────────────────
 
-import { contactRatio, meshing, phaseOf, teethOutline, train, type Placed } from '../../src/nexus/parts/gears';
+import { contactRatio, meshing, phaseOf, planetary, teethOutline, train, type Placed, type Planetary } from '../../src/nexus/parts/gears';
 
 /** A placed gear's outline in the plate's own coordinates, turned to `angle`. */
 function outline(p: Placed, angle: number): [number, number][] {
@@ -178,6 +178,16 @@ function metalInMetal(A: [number, number][], B: [number, number][], mid: [number
   let n = 0;
   for (const [a1, a2] of sa) for (const [b1, b2] of sb) if (crosses(a1, a2, b1, b2)) n++;
   return n;
+}
+
+/** Is a point inside a closed polygon? For an internal pair this is the only valid test of metal in metal. */
+function inside(pt: [number, number], poly: [number, number][]): boolean {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]!, [xj, yj] = poly[j]!;
+    if (((yi > pt[1]) !== (yj > pt[1])) && pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
 }
 
 describe('two gears placed next to each other actually mesh', () => {
@@ -229,16 +239,56 @@ describe('two gears placed next to each other actually mesh', () => {
     expect(x.ra + y.ra - centres).toBeCloseTo(2 * 0.002, 9);
   });
 
-  it('an internal pair is refused, because it is not proved — and says so instead of turning', () => {
-    // The honest state of this: the ring's own geometry passes every shape test below, but the PAIR does not pass
-    // the overlap test, and a phase scan over a whole tooth is symmetric about the derived phase — so the timing
-    // is right and the proportions are not. A gear train that reports a ratio while its teeth overlap is exactly
-    // the thing this file was written to delete, so the pair refuses until the overlap test passes.
+  it('a ring gear carries its pinion round the same way, and never through it', () => {
+    // Run 7z refused this pair, having found a 0.2 mm overlap it could not explain and a phase scan symmetric
+    // about the derived phase. The phase was right. What was wrong was one sign in the ring's flank: for an
+    // internal pair the line of action is the tangent touching both base circles on the SAME side, so the ring's
+    // flank is concave where the pinion's is convex and the involute runs the other way round the tooth. With the
+    // sign right the overlap reads zero at every tooth count and every addendum tried.
     const { ga, gb, centres } = pair(20, 60, 'ring');
-    expect(centres).toBeCloseTo(0.04, 12); // (60 − 20) × 2 / 2 = 40 mm, which is the right centre distance
+    expect(centres).toBeCloseTo(0.04, 12);  // (60 − 20) × 2 / 2 = 40 mm
     const m = meshing(ga, gb, centres);
-    expect('refused' in m).toBe(true);
-    expect((m as { refused: string }).refused).toMatch(/not proved/);
+    expect('refused' in m, 'refused' in m ? (m as { refused: string }).refused : '').toBe(false);
+    if ('refused' in m) return;
+    expect(m.kind).toBe('internal');
+    expect(m.ratio).toBeCloseTo(3, 9);                 // THE SAME WAY ROUND: that is what an internal mesh is for
+    expect(m.clearance).toBeCloseTo(0.25 * 0.002, 9);  // the standard 0.25·m, both ways round
+    expect(m.contact).toBeGreaterThan(1.8);            // an internal pair carries more teeth than an external one
+    expect(m.contact).toBeLessThan(2.2);
+  });
+
+  it('NO TOOTH PASSES THROUGH ANOTHER on an internal pair either, at any tooth count or addendum', () => {
+    for (const [zp, zr, ha] of [[20, 60, 1], [30, 80, 1], [40, 80, 1], [20, 32, 1], [20, 60, 0.6], [24, 64, 0.8]] as const) {
+      const m = 0.002, jn = 0.04 * m;
+      const pin: GearCut = { m, z: zp, b: 0.008, bore: 0.006, jn };
+      const ring: GearCut = { m, z: zr, b: 0.008, jn, kind: 'ring', ha };
+      const a = ((zr - zp) * m) / 2;
+      const A: Placed = { id: 'a', gear: pin, at: [0, 0] }, B: Placed = { id: 'b', gear: ring, at: [a, 0] };
+      // the pinion runs INSIDE the ring, so metal in metal means a pinion point has got OUT of the ring's bore:
+      // crossing that bore's outline is what meshing into a hole looks like and proves nothing by itself.
+      let worst = 0;
+      for (let i = 0; i <= 20; i++) {
+        const thA = ((2 * Math.PI) / zp) * (i / 20), thB = phaseOf(zp, zr, 'internal', 0, thA);
+        const bore = outline(B, thB), teeth = outline(A, thA);
+        for (const q of teeth) {
+          if (Math.hypot(q[0] + sizesOf(pin).r, q[1]) > 6 * m) continue;
+          if (!inside(q, bore)) worst = Math.max(worst, 1);
+        }
+      }
+      expect(worst, `${zp} in ${zr} at ${ha}·m addendum: the pinion's teeth are inside the ring's rim`).toBe(0);
+    }
+  });
+
+  it('and it says when the ring tip outruns the pinion\'s involute, without refusing the pair', () => {
+    // z_pinion ≥ 2·ha/(1 − cos α) = 34 at 20° full depth: below it the ring's tip lands inside the pinion's base
+    // circle, where there is no involute to roll on. The drawn pair still clears, so this is a note and not a bar.
+    const small = meshing({ m: 0.002, z: 20, b: 0.008 }, { m: 0.002, z: 60, b: 0.008, kind: 'ring' }, 0.04);
+    expect('refused' in small).toBe(false);
+    if ('refused' in small) return;
+    expect(small.notes?.join(' ')).toMatch(/no involute left/);
+    expect(small.notes?.join(' ')).toMatch(/wants 34 teeth/);
+    const big = meshing({ m: 0.002, z: 40, b: 0.008 }, { m: 0.002, z: 80, b: 0.008, kind: 'ring' }, 0.04);
+    expect('refused' in big ? [] : big.notes ?? []).toEqual([]);
   });
 
   it("but the ring's own shape is right, which is why only the pair is in question", () => {
@@ -355,5 +405,94 @@ describe('a train of them does what a train of them does', () => {
     expect(t.meshes[0]!.kind).toBe('rack');
     // one turn of a 20-tooth pinion at module 2 moves the rack 20 × π × 2 = 125.66 mm
     expect(2 * Math.PI * sizesOf(g(20)).r * 1000).toBeCloseTo(125.66, 2);
+  });
+});
+
+describe('a planetary set, which is what an internal gear is for', () => {
+  const m = 0.002;
+
+  it('the ring\'s teeth are not a choice: z_ring = z_sun + 2·z_planet', () => {
+    const p = planetary(24, 16, 4, m);
+    expect('refused' in p).toBe(false);
+    if ('refused' in p) return;
+    expect(p.ring.z).toBe(24 + 2 * 16);         // 56
+    expect(p.carrier).toBeCloseTo(((24 + 16) * m) / 2, 12);  // 40 mm: the planets' axes stand there
+  });
+
+  it('one set gives three ratios, each Willis with a different member held', () => {
+    const p = planetary(24, 16, 4, m) as Planetary;
+    expect(p.ratios.ringHeld).toBeCloseTo(1 + 56 / 24, 9);       // 3.333 — sun in, carrier out
+    expect(p.ratios.carrierHeld).toBeCloseTo(-(56 / 24), 9);     // −2.333 — and it reverses
+    expect(p.ratios.sunHeld).toBeCloseTo(1 + 24 / 56, 9);        // 1.429 — ring in, carrier out
+  });
+
+  it('THE PLANETS GO IN, OR THEY DO NOT — and that is a phase, not a formula', () => {
+    // The assembly condition is usually quoted as "(z_sun + z_ring) / n must be whole". Here it is checked the way
+    // a fitter checks it: work out each planet's angle from its mesh with the sun, then ask the ring what angle it
+    // would have to stand at for THAT planet. All n answers must be the same ring, or the last planet's teeth land
+    // between the ring's and it will not drop in.
+    const ringAngles = (zs: number, zp: number, n: number): number[] => {
+      const zr = zs + 2 * zp, out: number[] = [];
+      for (let k = 0; k < n; k++) {
+        const phi = (2 * Math.PI * k) / n;
+        const thPlanet = phaseOf(zs, zp, 'external', phi, 0);            // from the sun, with the sun at 0
+        const thRing = phaseOf(zp, zr, 'internal', phi + Math.PI, thPlanet); // what the ring must then be
+        out.push(((thRing % ((2 * Math.PI) / zr)) + (2 * Math.PI) / zr) % ((2 * Math.PI) / zr));
+      }
+      return out;
+    };
+    // 24 : 16 : 56 with 4 planets — (24 + 56)/4 = 20, whole
+    const good = ringAngles(24, 16, 4), pitch = (2 * Math.PI) / 56;
+    for (const a of good) expect(Math.min(Math.abs(a - good[0]!), pitch - Math.abs(a - good[0]!))).toBeLessThan(1e-9);
+    // 25 : 16 : 57 with 4 planets — (25 + 57)/4 = 20.5, not whole: the ring cannot be in two places at once
+    const bad = ringAngles(25, 16, 4), p2 = (2 * Math.PI) / 57;
+    const worst = Math.max(...bad.map((a) => Math.min(Math.abs(a - bad[0]!), p2 - Math.abs(a - bad[0]!))));
+    expect(worst, 'the phases should disagree by half a tooth, which is why it will not go together').toBeGreaterThan(p2 * 0.4);
+    // and the maker refuses it in those words rather than drawing it
+    expect((planetary(25, 16, 4, m) as { refused: string }).refused).toMatch(/will not drop in/);
+  });
+
+  it('planets that would touch each other are refused, with the overlap measured', () => {
+    // six big planets round a small sun: their tips run into one another before the ring is reached
+    const bad = planetary(12, 24, 6, m);
+    expect('refused' in bad).toBe(true);
+    expect((bad as { refused: string }).refused).toMatch(/tips overlap by/);
+  });
+
+  it('every mesh in the set is a real mesh, judged where the geometry puts it', () => {
+    const p = planetary(24, 16, 4, m) as Planetary;
+    expect(p.places.length).toBe(1 + 4 + 1);
+    const sunToPlanet = meshing(p.sun, p.planet, p.carrier);
+    const planetToRing = meshing(p.planet, p.ring, p.carrier);
+    expect('refused' in sunToPlanet).toBe(false);
+    expect('refused' in planetToRing).toBe(false);
+    if ('refused' in sunToPlanet || 'refused' in planetToRing) return;
+    expect(sunToPlanet.ratio).toBeCloseTo(-16 / 24, 9);   // the sun turns a planet the other way
+    expect(planetToRing.ratio).toBeCloseTo(56 / 16, 9);   // and the planet carries the ring the same way
+    expect(sunToPlanet.contact).toBeGreaterThan(1.4);
+    expect(planetToRing.contact).toBeGreaterThan(1.8);
+  });
+
+  it('and no tooth passes through another anywhere in the set', () => {
+    const p = planetary(24, 16, 4, m) as Planetary;
+    const sun = p.places[0]!, ring = p.places.at(-1)!;
+    for (let k = 1; k <= 4; k++) {
+      const planet = p.places[k]!;
+      const phi = Math.atan2(planet.at[1], planet.at[0]);
+      for (let i = 0; i <= 12; i++) {
+        const thSun = ((2 * Math.PI) / 24) * (i / 12);
+        const thPlanet = phaseOf(24, 16, 'external', phi, thSun);
+        const thRing = phaseOf(16, 56, 'internal', phi + Math.PI, thPlanet);
+        // the sun against this planet: two external gears, so a crossing of their outlines is metal in metal
+        const mid: [number, number] = [sun.at[0] + sizesOf(p.sun).r * Math.cos(phi), sun.at[1] + sizesOf(p.sun).r * Math.sin(phi)];
+        expect(metalInMetal(outline(sun, thSun), outline(planet, thPlanet), mid, 4 * m), `sun × planet ${k}`).toBe(0);
+        // the planet inside the ring: it must stay within the ring's bore
+        const bore = outline(ring, thRing);
+        for (const q of outline(planet, thPlanet)) {
+          if (Math.hypot(q[0], q[1]) < p.carrier) continue;   // only the outward half, where the ring is
+          expect(inside(q, bore), `planet ${k} is inside the ring's rim`).toBe(true);
+        }
+      }
+    }
   });
 });

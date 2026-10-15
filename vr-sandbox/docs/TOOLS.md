@@ -341,3 +341,16 @@ nothing about centre distances, which are the whole skill.
 After the readout it **turns the train one whole revolution in twelve steps and prints where every gear stands**,
 because a ratio printed is a claim and a train that runs is the evidence: a phase that is wrong shows up as a gear
 that jumps, a gear nothing drives shows up as one that never moves, and a rack's column is how far it has travelled.
+
+### `npm run gears -- --planetary`
+
+```
+npm run gears -- --planetary 5        a set that comes to 5 to 1 with the ring held
+npm run gears -- --planetary 24:16:4  a 24-tooth sun, 16-tooth planets, four of them
+```
+
+A planetary is not a placement on the plate — its planets ride a carrier, so their axes move and the fixed-axis
+solver cannot describe it. It is asked for by what it is and answered by **Willis**: one set gives three ratios
+depending on which member is held still, and the middle one reverses. It prints all three, every mesh judged where
+the geometry puts it, and the two things that decide whether it can be assembled at all: `(z_sun + z_ring)` must
+divide by the number of planets, or the last one will not drop in; and the planets' tips must clear each other.

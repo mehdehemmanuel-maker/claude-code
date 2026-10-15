@@ -120,7 +120,8 @@ standard, and whether a drawing holds all its inventory lists (`missingIn`) - `f
 `partspace.ts` parts made to any size by their standard and the words that ask for one - `kits.ts` a placed tree, a
 `Cut`, a `Port`, an `Iface` - `mate.ts` parts placed by mating faces, ports read off the geometry, and what a part
 promises against what it draws - `mechanism.ts` how many ways jointed parts can still move, and which ways -
-`gears.ts` the involute: a gear's real teeth, what meshes with what, and what a train does when one is turned -
+`gears.ts` the involute: a gear's real teeth, what meshes with what, what a train does when one is turned, and a
+planetary set from its counts -
 `mass.ts` a part's mass from shape, material and fill - `space.ts` oriented-box layout and contacts -
 `form.ts` lofts, bent tubes, turned profiles - `surface.ts` NURBS curves, skins, fairness, zebra, draft -
 `fits.ts` how close is close enough, and whether a machine can hold it - `finish.ts` edges as made, and the burr -
@@ -323,13 +324,15 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
 - The life graph: the other messengers' rhythms where a study gives one, regions drawn as shapes, the 3D brain.
 - The printers: the most advanced one by the same builder; the Voron's Stealthburner is still a rounded block.
 - The four tidy ratchets, worked down by cause.
-- **Internal (ring) gears are refused, not drawn turning.** `parts/gears.ts` proves the external pair and the rack
-  geometrically — two placed gears are turned through a whole tooth and every tooth polygon is tested against every
-  other for overlap — and an internal pair does not pass it: the pinion's teeth overlap the ring's by about 0.2 mm
-  at the pitch circle, and a scan of the phase over a whole tooth is SYMMETRIC about the derived value, so the
-  timing is right and something in the pair's proportions is not. The ring's own shape is checked and correct. Next
-  step: the three internal interference conditions, worked through against that overlap test. Until then a planetary
-  cannot be built here, and `meshing()` says so in those words rather than reporting a ratio.
+- **Internal gears and planetary sets now hold**, and what remains is the small-pinion case. Run 7z refused an
+  internal pair over a 0.2 mm overlap it could not explain; Run 8a found it was one sign in the ring's flank (for
+  an internal pair the line of action is the tangent touching both base circles on the SAME side, so the ring's
+  flank is concave and its involute runs the other way round the tooth). The overlap test now reads zero at every
+  tooth count and addendum tried, and a planetary set is built, drawn and proved. STILL OPEN: at 20° full depth a
+  pinion wants 34 teeth or the ring's tip lands inside its base circle, where there is no involute to roll on —
+  `meshing()` says so as a note rather than refusing, because the drawn pair still clears. The fixes are stub
+  teeth or profile shift, neither of which this library does yet, and profile shift is the bigger prize: it is
+  what lets a pair be cut for centres it was not designed for.
 
 **Known gaps in the architecture**
 - The inventory knows what is *in* a product; the kits know *where*. Joining them is the merge that ends "two

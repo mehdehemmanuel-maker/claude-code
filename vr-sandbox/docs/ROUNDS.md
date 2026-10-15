@@ -2922,3 +2922,78 @@ geometry. Four of my own numbers were wrong on the way (1.64, then 1.5574, then 
 148 g gear I had bounded at 80 g), all of them from arithmetic I was sure of.
 
 GATE: PASS (2183 of 2183) — 181.0s · TIDY: PASS (23 of 23) · 37 new tests
+
+## Run 8a — the internal gear was one sign, and then a planetary
+
+Run 7z refused internal pairs. Its reasoning was right as far as it went: the overlap was about 0.2 mm at the pitch
+circle, and a phase scan over a whole tooth was **symmetric** about the derived phase, so the timing was right and
+the proportions were not. It did not find which proportion, and said so.
+
+### Chasing the wrong condition first
+
+The overlap sat on the ring's tip circle, which pointed at the classical internal interference condition: the
+ring's tooth tip, brought onto the line of centres, lands at pinion radius ra_ring − a, and below the pinion's base
+circle there is no involute for it to roll on. Rearranged that is a tooth count:
+
+```
+  ra_ring − a ≥ rb_pinion   ⇒   z_pinion ≥ 2·ha / (1 − cos α)   =   33.16 at 20° full depth
+```
+
+A good condition, and real — but **it did not predict the measurement**. Overlap came out 0.72 mm at 20 teeth and
+0.73 mm at 50, where the rule says one interferes and the other does not; and it tracked the ring's **addendum**
+(1·m → 0.72, 0.6·m → 0.42, 0.5·m → 0.34), which no tooth-count rule explains. A number that does not move when the
+thing it is supposed to depend on moves is measuring something else.
+
+### What it actually was
+
+One sign. For two external gears the line of action is the tangent to both base circles that **crosses** between
+them, and both flanks are convex. For an internal pair the line of action is the tangent that touches both circles
+on the **same side**, because one is inside the other — the ring's flank is concave where the pinion's is convex,
+and the involute runs the other way round the tooth:
+
+```ts
+g.kind === 'ring' ? g.half - inv(g.alpha) + inv(a) : g.half + inv(g.alpha) - inv(a)
+```
+
+With it the overlap test reads **0.0000 mm** at every tooth count and every addendum tried. The ring's tooth
+thickness at its pitch circle was π·m/2 before and after — which is why it took a test that compares one gear's
+geometry against another's, rather than either against its own definition.
+
+The tooth-count condition is kept as a **note** rather than a refusal: the drawn pair clears (the fillet is cut back
+from the involute) but the conjugate action is lost at that tip, and a shaper-cut pair of those proportions would
+foul. It names the fix — 34 teeth, a stub addendum, or a profile shift.
+
+### A planetary, which is what an internal gear is for
+
+`planetary()` takes a sun and a planet count and derives everything else: z_ring = z_sun + 2·z_planet, the carrier
+radius, and the three Willis ratios. It refuses two things that cannot be rounded away — the planets must divide
+`(z_sun + z_ring)` exactly or the last one will not drop in, and their tips must clear each other.
+
+The assembly condition is tested the way a fitter tests it, not as the formula it is usually quoted as: **work out
+each planet's angle from its mesh with the sun, then ask the ring what angle it would have to stand at for that
+planet.** All n answers must be the same ring. For 24 : 16 : 56 with four planets they agree to 1e-9; for
+25 : 16 : 57 they disagree by half a tooth, which is exactly why it will not go together.
+
+```
+$ npm run gears -- --planetary 5
+A planetary set: 18 sun, 3 × 27 planets, 72 ring, module 2 mm.
+  ring held      sun in, carrier out   5.0000 to 1, the same way round
+  carrier held   sun in, ring out      4.0000 to 1, REVERSING
+  sun held       ring in, carrier out  1.2500 to 1, the same way round
+```
+
+### Two more, both found by looking
+
+- **The sun and the ring were reported as a refused pair**, at 0.00 mm centres, in the middle of a set where every
+  real mesh had just been found. Two gears on one axis are concentric, not a pair.
+- **The first drawing was titled "gear train, 4.000 to 1, reversing" over a 5 to 1 gearbox.** The name came from
+  the fixed-axis solver walking sun → planet → ring with every axis held still — which is one of the three things a
+  planetary does (the carrier held) and not the one anybody means. A true number answering a question nobody asked.
+
+### And the file was one line from a wall
+
+`parts/gears.ts` finished at **699 lines of the 700** the size lint allows — passing, and leaving the next round no
+room at all. The kit that reads an ask and lays out the answer is a different concern from the involute, so it is
+`parts/gear-kit.ts` now: 604 and 101 lines, and the next round has somewhere to put things.
+
+GATE: PASS (2191 of 2191) — 191.4s · TIDY: PASS (23 of 23) · 8 new tests

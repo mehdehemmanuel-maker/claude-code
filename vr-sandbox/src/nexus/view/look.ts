@@ -37,7 +37,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { KITS, makeKit, massOf, type Part } from '../parts/kits';
 import '../world/creatures';
 import '../ask/machine';   // registers the `machine` kit, so a composed machine can be drawn (docs/MANNY.md #46)
-import '../parts/gears';   // registers the `gears` kit, so a gear train can be drawn
+import '../parts/gear-kit'; // registers the `gears` kit, so a gear train can be drawn
 import { perfect } from '../make/pipeline';
 import { frame, held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
 import { tryBody } from '../machines/panels';
