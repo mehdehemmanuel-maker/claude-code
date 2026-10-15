@@ -9,7 +9,7 @@ export const CHEMISTRY = [
   L({
     id: "fick.diffusion", name: "Fick's law of diffusion", statement: "Flux is proportional to the concentration gradient; a distance L takes a time of order L²/D.", formula: "J = D ΔC / L",
     valid: "Steady, dilute, one dimension; D of ions in water about 10^-9 m²/s, of carbon in hot iron 10^-11.",
-    inputs: [["D", "m^2/s", "diffusivity"], ["dC", "mol/m^3", "concentration difference"], ["L", "m", "distance"]], output: ["J", "mol/m^2 s", "flux"],
+    inputs: [["D", "m^2/s", "diffusivity"], ["dC", "mol/m^3", "concentration difference"], ["L", "m", "distance"]], output: ["J", "mol/m^2 s", "molar flux"],
     term: (v) => div(mul(v.D, v.dC), v.L),
     source: { cite: "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018", kind: "textbook" }, example: { inputs: {"D":1e-9,"dC":100,"L":0.001}, output: 0.0001 },
   }),
@@ -30,7 +30,7 @@ export const CHEMISTRY = [
   L({
     id: "michaelis-menten", name: "Michaelis-Menten kinetics", statement: "An enzyme's rate rises with substrate and saturates at its maximum; at the Michaelis constant it runs at half.", formula: "v = V_max S / (K_m + S)",
     valid: "A single substrate, steady state, enzyme far below substrate.",
-    inputs: [["Vmax", "mol/m^3 s", "maximum rate"], ["S", "mol/m^3", "substrate concentration"], ["Km", "mol/m^3", "Michaelis constant"]], output: ["v", "mol/m^3 s", "rate"],
+    inputs: [["Vmax", "mol/m^3 s", "maximum rate"], ["S", "mol/m^3", "substrate concentration"], ["Km", "mol/m^3", "Michaelis constant"]], output: ["v", "mol/m^3 s", "enzyme rate"],
     term: (v) => div(mul(v.Vmax, v.S), add(v.Km, v.S)),
     source: { cite: "Atkins, de Paula & Keeler, Atkins' Physical Chemistry, 11th ed., Oxford 2018", kind: "textbook" }, example: { inputs: {"Vmax":1,"S":2,"Km":1}, output: 0.6666666666666666 },
   }),

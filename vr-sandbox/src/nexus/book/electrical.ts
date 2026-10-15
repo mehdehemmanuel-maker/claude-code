@@ -16,7 +16,7 @@ export const ELECTRICAL = [
   L({
     id: "joule", name: "Joule heating", statement: "Current through a resistance heats it at the current squared times the resistance.", formula: "P = I² R",
     valid: "Any conductor.",
-    inputs: [["I", "A", "current"], ["R", "ohm", "resistance"]], output: ["P", "W", "heat"],
+    inputs: [["I", "A", "current"], ["R", "ohm", "resistance"]], output: ["P", "W", "heat flow"],
     term: (v) => mul(pow(v.I, 2), v.R),
     source: { cite: "Young & Freedman, University Physics, 15th ed., Pearson 2019", kind: "textbook" }, example: { inputs: {"I":20,"R":0.3}, output: 120 },
   }),
@@ -52,14 +52,14 @@ export const ELECTRICAL = [
   L({
     id: "motor.back-emf", name: "Back-EMF", statement: "A turning DC motor makes a voltage against its supply: its speed constant times its speed (K_e = K_t in SI).", formula: "E = K_e ω",
     valid: "Any PMDC motor; K_e in V s/rad equals K_t in N m/A.",
-    inputs: [["Ke", "V s/rad", "back-EMF constant"], ["w", "rad/s", "speed"]], output: ["E", "V", "back-EMF"],
+    inputs: [["Ke", "V s/rad", "back-EMF constant"], ["w", "rad/s", "angular speed"]], output: ["E", "V", "back-EMF"],
     term: (v) => mul(v.Ke, v.w),
     source: { cite: "Hughes, Electric Motors and Drives, 4th ed.", kind: "textbook" }, example: { inputs: {"Ke":0.0302,"w":500}, output: 15.1 },
   }),
   L({
     id: "motor.current", name: "DC motor current", statement: "A motor draws what the applied voltage less its back-EMF drives through its winding.", formula: "I = (V − K_e ω) / R",
     valid: "Steady state (the winding's inductance only delays it, by L/R).",
-    inputs: [["V", "V", "applied voltage"], ["Ke", "V s/rad", "back-EMF constant"], ["w", "rad/s", "speed"], ["R", "ohm", "winding resistance"]], output: ["I", "A", "current"],
+    inputs: [["V", "V", "applied voltage"], ["Ke", "V s/rad", "back-EMF constant"], ["w", "rad/s", "angular speed"], ["R", "ohm", "winding resistance"]], output: ["I", "A", "current"],
     term: (v) => div(sub(v.V, mul(v.Ke, v.w)), v.R),
     domain: (v) => [{ says: 'turning no faster than its no-load speed at this voltage: it draws rather than generates', holds: le(mul(v.Ke, v.w), v.V) }],
     source: { cite: "Hughes, Electric Motors and Drives, 4th ed.", kind: "textbook" }, example: { inputs: {"V":24,"Ke":0.0302,"w":500,"R":0.299}, output: 29.765886287625413 },

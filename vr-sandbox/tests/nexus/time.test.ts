@@ -11,7 +11,7 @@ import {
 import { BOOK, lawById } from '../../src/nexus/book';
 import {
   advanceByOwnClocks, branches, feedEdges, feeds, graphSummary, kinshipFeeds, molesOf, ownTime, ownTimeOfSphere,
-  placeOf, calculate, timePower, timeTree, timeTreeLines,
+  placeOf, calculate, signature, signatureOf, timePower, timeTree, timeTreeLines,
 } from '../../src/nexus/substrate/time';
 import { breakdown, measured } from '../../src/nexus/substrate/record';
 import { KINSHIP } from '../../src/nexus/book/principles';
@@ -214,13 +214,16 @@ describe('the tree rooted in time', () => {
   it('placeOf gives the path from time down to one law, and it agrees with the tree', () => {
     for (const id of ['stress.axial', 'newton.second', 'arrhenius', 'inertia.disc']) {
       const l = lawById(id), p = placeOf(l);
+      // SIX levels since space was recovered: time -> the power of time -> the space/duration split that power is
+      // MADE of -> the SI dimension it happens to be written in -> the shape of the math -> the law.
       expect(p.path[0]).toBe('time');
       expect(p.path[1]).toBe(`time^${timePower(l)}`);
-      expect(p.path[2]).toBe(dimText(dimOf(l.output.unit)));
-      expect(p.path[4]).toBe(id);
+      expect(p.path[2]).toBe(`space^${p.signature.space} duration^${p.signature.duration}`);
+      expect(p.path[3]).toBe(dimText(dimOf(l.output.unit)));
+      expect(p.path[5]).toBe(id);
       const trunk = timeTree().trunks.find((t) => t.power === p.power)!;
-      const face = trunk.limbs.find((f) => f.si === p.path[2])!;
-      expect(face.twigs.some((w) => w.laws.some((x) => x.id === id)), `${id} is on the twig its path names`).toBe(true);
+      const limb = trunk.limbs.find((f) => f.si === p.path[3])!;
+      expect(limb.twigs.some((w) => w.laws.some((x) => x.id === id)), `${id} is on the twig its path names`).toBe(true);
     }
   });
 
@@ -434,5 +437,55 @@ describe('each region on its own clock', () => {
   it('and it costs less than putting the whole world on the finest clock', () => {
     const a = advanceByOwnClocks(regions(), bounds, 0.4, 60);
     expect(a.steps, 'fewer region-steps than one common clock would need').toBeLessThan(a.onOneClock);
+  });
+});
+
+// ── space: what the reduction to a power of time throws away ──────────────────────────────────────────────────────
+//
+// `inTime` adds the exponents up, so a metre and a second both come out time^1 and a length cannot be told from a
+// duration on that trunk. Worse: a speed (m/s) and an action (J s) are both time^0, which says they are the same
+// kind of nothing. Relativity does not lose the distinction — dτ² = dt² − dx²/c² has a SIGN — so neither does this.
+describe('space on the tree', () => {
+  it('a metre and a second are both time^1 and are NOT the same: one is space, one is duration', () => {
+    const m = signature(dimOf('m')), s = signature(dimOf('s'));
+    expect(m.power).toBe(1);
+    expect(s.power).toBe(1);
+    expect([m.space, m.duration]).toEqual([1, 0]);
+    expect([s.space, s.duration]).toEqual([0, 1]);
+    expect(m.character).toBe('spacelike');
+    expect(s.character).toBe('timelike');
+  });
+
+  it('a speed and an action are both time^0 and are told apart', () => {
+    const v = signature(dimOf('m/s')), a = signature(dimOf('J s'));
+    expect(v.power).toBe(0);
+    expect(a.power).toBe(0);
+    expect(v).not.toEqual(a);
+    expect([v.space, v.duration]).toEqual([1, -1]);
+    expect([a.space, a.duration, a.mass]).toEqual([2, -1, 1]);
+  });
+
+  it('the parts always add back up to the power the tree branches on', () => {
+    // −mass + space + duration − current − temperature = inTime, for every law in the book, by construction.
+    for (const l of BOOK) {
+      const g = signatureOf(l);
+      expect(-g.mass + g.space + g.duration - g.current - g.temperature, l.id).toBe(g.power);
+      expect(g.power).toBe(inTime(dimOf(l.output.unit)));
+      expect(g.says).toContain(`space^${g.space}`);
+    }
+  });
+
+  it("every law's path now says space as well as time, and the whole book is characterised", () => {
+    for (const id of ['stress.axial', 'newton.second', 'distance.speed-time', 'inertia.disc']) {
+      const p = placeOf(lawById(id));
+      expect(p.path[0]).toBe('time');
+      expect(p.path[1]).toBe(`time^${p.power}`);
+      expect(p.path[2]).toBe(`space^${p.signature.space} duration^${p.signature.duration}`);
+      expect(p.path[p.path.length - 1]).toBe(id);
+    }
+    const t = timeTree();
+    expect(t.says.join(' ')).toMatch(/by character: \d+ spacelike, \d+ timelike/);
+    // and every limb of the tree carries the split, not just the total
+    for (const tr of t.trunks) for (const lb of tr.limbs) expect(lb.signature.power).toBe(tr.power);
   });
 });

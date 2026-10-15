@@ -363,3 +363,134 @@ export function pointable(most = 24): { id: string; name: string }[] {
   }
   return out;
 }
+
+/* ──────────────────────── the packet: every quantity a thing has, none of them computed ──────────────────────── */
+//
+// The user's words (2026-10-15): "when something is made it needs to be like a packet on every part or thing that
+// gets filled out of all its geometry material and whatever and these should all have math and however that math
+// interact with the time tree is what derives how it acts and interacts like it litterly cant break physics and
+// automatically has infinite calculations attached to it but none being computed just like a calculator".
+//
+// A PACKET IS WHAT A THING IS, LAWFULLY. Three things are true of it at once, and the third is the hard one:
+//
+//   EVERYTHING IS ATTACHED.  `could` lists every kind of quantity the book can speak of — 585 of them — because any
+//                            of them might be askable of this thing. Listing names costs nothing.
+//   NOTHING IS COMPUTED.     Not one of them is evaluated until `at` is called for it, and then it is memoised. A
+//                            packet is not a record with the fields filled in; it is the calculator with the keys
+//                            already on it.
+//   IT CANNOT CONTRADICT ITSELF. Every quantity reached two ways must agree, or `clashes` reports both routes and
+//                            both numbers. A packet whose mass over its volume disagrees with its material's
+//                            density is not an unlucky packet, it is a wrong one, and it says so.
+//
+// AND IT MEETS TIME. Every answer carries the power of time its unit reduces to, so `byTime` arranges a thing's
+// whole lawful self on the one tree: what it is at time^-4, at time^-1, at time^3. That is the join the user keeps
+// asking for, from the side of the thing rather than the side of the law.
+
+/** A field of a packet that no law can fill: it is measured, or set, or the packet stays incomplete. */
+export interface Blank {
+  quantity: string; unit: string;
+  /** do we have it for this thing? */ filled: boolean;
+  value?: number; from?: string;
+  /** how many laws become runnable once it is filled: the abilities this one field unlocks */ unlocks: number;
+  laws: string[];
+  says: string;
+}
+
+export interface Packet {
+  /** A MATERIAL is a form to fill in; a PART is calculated from the material it is made of and its geometry. */
+  kind: 'material' | 'part';
+  thing: string; name: string;
+  /** what it is made of, as the inventory states it */ of: string[];
+  /** the facts it was MADE with — geometry and material — and nothing derived from them */
+  given: { quantity: string; value: number; unit: string; from: string }[];
+  /** every kind of quantity that could be asked of it. NAMES ONLY: nothing here has been computed. */
+  could: string[];
+  /** THE FORM. The quantities no law can derive — the ones a material is measured for and a condition is set for —
+   *  each saying whether this thing has it and how many laws filling it would unlock. For a MATERIAL this is its
+   *  datasheet: fill it in. For a PART most of it arrives through the material it is made of. */
+  requires: Blank[];
+  /** a part only: what it was calculated FROM, which is all a part ever needs to be given */
+  from: { material: string[]; geometry: { quantity: string; value: number; unit: string }[] } | null;
+  /** ask for one. Computed on access, memoised, with its chain and its place on time's tree. */
+  at(quantity: string): Fact | null;
+  /** what it is at each power of time, for the quantities asked for so far */
+  byTime(): { power: number; facts: Fact[] }[];
+  /** two routes to one of its quantities that disagree: it cannot break physics and this is the proof */
+  clashes(): Clash[];
+  says: string[];
+}
+
+/** THE PACKET OF A THING: every quantity attached, none computed. */
+export function packet(thing: string): Packet | null {
+  const i = INVENTORY.get(thing);
+  if (!i) return null;
+  const asked = new Map<string, Fact | null>();
+
+  // what it was MADE with: its stated geometry and what its material gives it. Not derived — given.
+  const given: Packet['given'] = [];
+  for (const q of ['extent x', 'extent y', 'extent z', 'density', 'mass']) {
+    const f = know(thing, q, undefined, 1);
+    if (f && /inventory|mixing law|stated size|overall size/.test(f.how)) {
+      given.push({ quantity: q, value: f.value, unit: f.unit, from: f.how });
+    }
+  }
+
+  const at = (quantity: string): Fact | null => {
+    const k = plain(quantity);
+    if (asked.has(k)) return asked.get(k)!;
+    const f = know(thing, quantity);
+    asked.set(k, f);
+    return f;
+  };
+
+  // THE PRIMITIVES: quantities some law READS and no law PRODUCES. These are exactly the things that cannot be
+  // derived however much maths is attached — they are measured, or they are set, and until one is there every law
+  // that reads it is out of reach. Derived from the book, so a law added changes the form with nothing rewritten.
+  const produced = new Set<string>();
+  for (const l of BOOK) produced.add(dimText(dimOf(l.output.unit)));
+  const prim = new Map<string, { unit: string; laws: Set<string> }>();
+  for (const l of BOOK) for (const p of l.inputs) {
+    if (produced.has(dimText(dimOf(p.unit)))) continue;
+    const k = plain(p.name);
+    (prim.get(k) ?? prim.set(k, { unit: p.unit, laws: new Set() }).get(k)!).laws.add(l.id);
+  }
+  const requires: Blank[] = [...prim.entries()].map(([quantity, v]) => {
+    const f = know(thing, quantity, undefined, 1);
+    return { quantity, unit: v.unit, filled: !!f, ...(f ? { value: f.value, from: f.how } : {}),
+      unlocks: v.laws.size, laws: [...v.laws],
+      says: f
+        ? `${quantity} = ${readable(f.value)} ${v.unit} — already known, from ${f.how}`
+        : `${quantity} (${v.unit}) — NOT KNOWN. Measure or set it and ${v.laws.size} law${v.laws.size === 1 ? '' : 's'} can run: ${[...v.laws].slice(0, 3).join(', ')}${v.laws.size > 3 ? ', …' : ''}` };
+  }).sort((a, b) => Number(a.filled) - Number(b.filled) || b.unlocks - a.unlocks);
+
+  const kind: 'material' | 'part' = i.kind === 'material' || i.kind === 'element' ? 'material' : 'part';
+  const geometry = given.filter((g) => /extent|height|breadth|depth|diameter/.test(g.quantity))
+    .map((g) => ({ quantity: g.quantity, value: g.value, unit: g.unit }));
+
+  return {
+    kind, thing, name: i.name, of: i.of.map((c) => c.id), given, requires,
+    from: kind === 'part' ? { material: i.of.map((c) => c.id), geometry } : null,
+    could: [...QUANTITY_KINDS.keys()].sort(),
+    at,
+    byTime: () => {
+      const by = new Map<number, Fact[]>();
+      for (const f of asked.values()) if (f) by.set(f.power, [...(by.get(f.power) ?? []), f]);
+      return [...by.entries()].sort((a, b) => b[0] - a[0]).map(([power, facts]) => ({ power, facts }));
+    },
+    clashes: () => clashes().filter((c) => c.thing === thing),
+    says: [
+      kind === 'material'
+        ? `${i.name} is a MATERIAL, so its packet is a form: ${requires.filter((f) => f.filled).length} of its ${requires.length} measured properties are known, and the rest are blank until someone measures them.`
+        : `${i.name} is a PART: choose its material (${i.of.map((c) => c.id).join(', ') || 'none stated'}) and its geometry (${i.size ? i.size.join(' × ') + ' mm' : 'none stated'}), and everything else is calculated.`,
+      `${given.length} facts it was made with; ${QUANTITY_KINDS.size} kinds of quantity attached to it, and none of them computed until asked.`,
+      // NAMED, NOT HIDDEN: the form is derived from what no law produces, and that set mixes two different things.
+      // A thermal conductivity is a property of the STUFF and belongs on brass's datasheet. A gravity is a property
+      // of the SETTING and does not: it is the same for a brass gear and a nylon one. Both come out of the book the
+      // same way — read by a law, produced by none — so nothing here can yet tell them apart, and the form lists
+      // gravity among brass's fields. Telling them apart needs the material tables to carry more than density, so
+      // that "is this the sort of thing a material is measured for" is a question the data can answer.
+      `the form mixes a material's OWN properties (thermal conductivity, specific heat, viscosity) with the SETTING's conditions (gravity, temperature). Both are read by laws and produced by none, so the derivation cannot yet separate them: ${requires.filter((f) => !f.filled).length} blank fields, some of which belong to the world rather than to this.`,
+      `${[...asked.values()].filter(Boolean).length} asked for so far. Every one carries the chain it rests on and the power of time it reduces to.`,
+    ],
+  };
+}

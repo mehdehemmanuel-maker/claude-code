@@ -140,6 +140,51 @@ export const CONVERSIONS = [
  *  Dim is [kg, m, s, A, K], so this is −kg + m + s − A − K. */
 export const inTime = (d: Dim): number => -d[0] + d[1] + d[2] - d[3] - d[4];
 
+/* ─────────────────────────────── where that power of time comes FROM: space, and the rest ─────────────────────── */
+//
+// THE REDUCTION DISCARDS SOMETHING, and this is what recovers it. `inTime` adds the exponents up: a metre and a
+// second both come out time^1, so a LENGTH and a DURATION land on the same trunk and cannot be told apart there.
+// Worse, a speed (m/s) and an action (J s) both come out time^0 — the reduction says they are the same kind of
+// nothing, when one is a motion through spacetime and the other a count of ħ.
+//
+// Relativity does not lose that distinction, and neither does this: the interval dτ² = dt² − dx²/c² has a SIGN, and
+// the minus sign is why a timelike interval cannot be rotated into a spacelike one. So every dimension carries two
+// numbers, not one — how much of its power of time is carried by SPACE and how much by DURATION — and their sum is
+// the power the tree branches on. A speed is time^0 as (space +1, duration −1): all motion, no scale. An action is
+// time^0 as (space +2, duration −1) against a mass of −1: a different nothing entirely.
+//
+// This adds no physics. It stops throwing away physics that was already there.
+
+export interface Signature {
+  /** the metre exponent: the spacelike part */ space: number;
+  /** the second exponent: the timelike part */ duration: number;
+  mass: number; current: number; temperature: number;
+  /** what the tree branches on: −mass + space + duration − current − temperature */ power: number;
+  /** timelike where duration dominates, spacelike where space does, still where neither */
+  character: 'spacelike' | 'timelike' | 'balanced' | 'neither';
+  says: string;
+}
+
+/** The spacelike part of a dimension: its metre exponent. A metre is time^1 BY WAY OF SPACE. */
+export const inSpace = (d: Dim): number => d[1];
+/** The timelike part: its second exponent. A second is time^1 by way of duration. */
+export const inDuration = (d: Dim): number => d[2];
+
+/** WHERE A DIMENSION'S POWER OF TIME COMES FROM. The sum is `inTime`; the parts are what `inTime` forgets. */
+export function signature(d: Dim): Signature {
+  const space = inSpace(d), duration = inDuration(d);
+  const power = inTime(d);
+  const character = space === 0 && duration === 0 ? 'neither'
+    : space > 0 && duration < 0 ? 'spacelike'
+    : duration > 0 && space <= 0 ? 'timelike'
+    : space + duration === 0 ? 'balanced' : (Math.abs(space) > Math.abs(duration) ? 'spacelike' : 'timelike');
+  return { space, duration, mass: d[0], current: d[3], temperature: d[4], power, character,
+    says: `time^${power}, and it gets there as space^${space} · duration^${duration}${d[0] ? ` · mass^${d[0]}` : ''}${d[3] ? ` · current^${d[3]}` : ''}${d[4] ? ` · temperature^${d[4]}` : ''} — ${character}` };
+}
+
+/** A law's signature: the same, from its output. Two laws on one trunk with different signatures are NOT alike. */
+export const signatureOf = (l: Law): Signature => signature(dimOf(l.output.unit));
+
 /** A unit said as what it is in time, with the check anyone can do by hand. */
 export function asTime(unit: string): { power: number; si: string; says: string } {
   const d = dimOf(unit), p = inTime(d);
@@ -246,7 +291,8 @@ export function powerName(p: number): string {
 }
 
 export interface Twig { shape: string; laws: { id: string; name: string; unit: string }[] }
-export interface Limb { si: string; units: string[]; moles: number; twigs: Twig[]; laws: number }
+export interface Limb { si: string; units: string[]; moles: number; twigs: Twig[]; laws: number;
+  /** where this limb's power of time comes from: the split `inTime` adds away */ signature: Signature }
 export interface Trunk { power: number; name: string; limbs: Limb[]; laws: number }
 export interface Tree {
   root: 'time'; laws: number; trunks: Trunk[];
@@ -272,7 +318,7 @@ export function timeTree(laws: readonly Law[] = BOOK): Tree {
   }
   const trunks: Trunk[] = [...byPower.entries()].sort((a, b) => b[0] - a[0]).map(([power, limbs]) => {
     const fs: Limb[] = [...limbs.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([si, f]) => ({
-      si, units: [...f.units].sort(), moles: f.moles,
+      si, units: [...f.units].sort(), moles: f.moles, signature: signature(dimOf([...f.units][0]!)),
       twigs: [...f.byShape.entries()].sort((a, b) => b[1].length - a[1].length).map(([shape, ls]) => ({
         shape, laws: ls.map((l) => ({ id: l.id, name: l.name, unit: l.output.unit })).sort((a, b) => a.id.localeCompare(b.id)) })),
       laws: [...f.byShape.values()].reduce((n, ls) => n + ls.length, 0) }));
@@ -283,6 +329,7 @@ export function timeTree(laws: readonly Law[] = BOOK): Tree {
     says: [
       `${laws.length} sensors on one root. Every one reduces to a power of time between ${lo} and ${hi}, by c, ħ, k_B and 4πε₀ alone.`,
       `${trunks.length} trunks (powers of time), ${trunks.reduce((n, t) => n + t.limbs.length, 0)} limbs (SI dimensions), ${trunks.reduce((n, t) => n + t.limbs.reduce((m, f) => m + f.twigs.length, 0), 0)} twigs (shapes of math).`,
+      `by character: ${['spacelike', 'timelike', 'balanced', 'neither'].map((c) => `${laws.filter((l) => signatureOf(l).character === c).length} ${c}`).join(', ')} — a speed and an action are both time^0 and are not the same thing.`,
       carriesACount.length
         ? `${carriesACount.length} carry a mole, so they reduce only up to a count of particles: a mole is a count, not a dimension, and no constant converts it.`
         : 'No law carries a mole: the reduction is total.',
@@ -290,10 +337,11 @@ export function timeTree(laws: readonly Law[] = BOOK): Tree {
 }
 
 /** Where ONE law sits: the path from time down to it, which is the answer to "how does this sensor map to time". */
-export function placeOf(l: Law): { path: string[]; power: number; says: string } {
+export function placeOf(l: Law): { path: string[]; power: number; signature: Signature; says: string } {
   const p = timePower(l), si = dimText(dimOf(l.output.unit)), sh = shapeOf(l), m = molesOf(l.output.unit);
-  const path = ['time', `time^${p}`, si, sh, l.id];
-  return { path, power: p,
+  const g = signatureOf(l);
+  const path = ['time', `time^${p}`, `space^${g.space} duration^${g.duration}`, si, sh, l.id];
+  return { path, power: p, signature: g,
     says: `${path.join(' → ')}${m !== 0 ? `  (and a count of ${m > 0 ? '' : '1/'}mol^${Math.abs(m)}, which time cannot absorb)` : ''}` };
 }
 
@@ -378,14 +426,23 @@ export function feeds(a: Law, b: Law): Port | null {
   return b.inputs.find((p) => sameDim(dimOf(p.unit), d)) ?? null;
 }
 
-export interface Edge { from: string; to: string; port: string; unit: string; power: number }
+export interface Edge {
+  from: string; to: string;
+  /** the port of `to` that `from`'s output fills */ port: string;
+  unit: string;
+  /** the power of time that travels along the edge */ power: number;
+  /** THE EQUATION ON THE EDGE: what `from` computes, and what `to` computes with it. An edge that says only
+   *  "these two can be joined" is a claim about shape; an edge that carries both formulae is the arithmetic. */
+  gives: string; feeds: string;
+}
 
 /** THE FEED GRAPH. Every derived edge, with the port it lands on and the power of time that travels along it. */
 export function feedEdges(laws: readonly Law[] = BOOK): Edge[] {
   const out: Edge[] = [];
   for (const a of laws) for (const b of laws) {
     const p = feeds(a, b);
-    if (p) out.push({ from: a.id, to: b.id, port: p.sym, unit: a.output.unit, power: inTime(dimOf(a.output.unit)) });
+    if (p) out.push({ from: a.id, to: b.id, port: p.sym, unit: a.output.unit,
+      power: inTime(dimOf(a.output.unit)), gives: a.formula, feeds: b.formula });
   }
   return out;
 }

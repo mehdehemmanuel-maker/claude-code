@@ -38,21 +38,31 @@ describe('the vocabulary, derived from the book', () => {
     expect(byHead().get('radius')!.length, 'the book names several radii').toBeGreaterThan(1);
   });
 
-  it('reports where the BOOK itself uses one name for two dimensions', () => {
+  it('NO NAME IN THE BOOK IS USED FOR TWO DIMENSIONS \u2014 the guard that closes this fault family', () => {
+    // THIS IS THE POINT OF THE FILE. Three rounds running, the same fault came back wearing different clothes:
+    //   8j  a law's PORTS were bound by dimension, so a torque could fill a kinetic-energy port.
+    //   8k  a quantity asked for BY NAME had no dimension to check against, so a bobbin's `angular speed` (a 1/s)
+    //       came back as 0.54 m/s and its `modulus` (a Pa) as a section modulus (an m^3).
+    //   8k  `stated` matched the word "length" inside "leak resistance of a unit length".
+    // Each was patched where it surfaced. The CAUSE was underneath all three: the book used one name for two
+    // different kinds of quantity, so no amount of care at the call sites could make name-matching sound. Ten names
+    // did it — `speed` for both a m/s and a 1/s, `conductivity` for the thermal and the electrical one, `rate` for
+    // four dimensions, and `the other` for five. They are split at the source now, and this test is what stops the
+    // eleventh: a law added with a name already used at another dimension fails here, not three rounds later.
     const h = homonyms();
-    expect(h.length, 'the book does contain such faults').toBeGreaterThan(0);
-    for (const x of h) {
-      expect(x.dims.length).toBeGreaterThan(1);
-      // each really is used at every dimension it claims
-      const used = new Set<string>();
-      for (const id of x.laws) {
-        const l = BOOK.find((y) => y.id === id)!;
-        for (const p of [...l.inputs, l.output]) if (plain(p.name) === x.name) used.add(dimText(dimOf(p.unit)));
+    expect(h.map((x) => `${x.name} :: ${x.dims.join(' | ')} (in ${x.laws.slice(0, 3).join(', ')})`),
+      'one name, two dimensions: that is two kinds of quantity wearing one name, and nothing downstream can tell them apart. Give each the name of what it actually is.').toEqual([]);
+    // and every kind really does have exactly one dimension, checked against the book rather than against the report
+    for (const k of QUANTITY_KINDS.values()) {
+      expect(k.dims.length, `${k.name} is written in ${k.dims.length} dimensions`).toBe(1);
+      for (const id of [...k.takenBy, ...k.givenBy]) {
+        const l = BOOK.find((x) => x.id === id)!;
+        for (const port of [...l.inputs, l.output]) {
+          if (plain(port.name) !== k.name) continue;
+          expect(dimText(dimOf(port.unit)), `${id}'s ${port.name}`).toBe(k.dims[0]);
+        }
       }
-      for (const d of x.dims) expect(used, `${x.name} at ${d}`).toContain(d);
     }
-    // the one that matters most: a linear speed and an angular one under one word
-    expect(h.map((x) => x.name)).toContain('speed');
   });
 
   it('measures how badly dimension-binding alone would do', () => {

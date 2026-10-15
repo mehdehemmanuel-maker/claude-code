@@ -212,7 +212,7 @@ if (want[0] === 'engine') {
 // A part decomposes into sub-parts down to a material; a quantity decomposes into the quantities its law needs down
 // to a measurement. The same shape, meeting at time. Nothing is computed until it is asked for here.
 if (want[0] === 'know') {
-  const { know, clashes, onTimesTree } = await import('../substrate/derive');
+  const { know, clashes, onTimesTree, packet } = await import('../substrate/derive');
   const { breakdown } = await import('../substrate/record');
   const { INVENTORY } = await import('../parts/inventory');
   const thing = want[1] ?? 'gear-small';
@@ -230,6 +230,16 @@ if (want[0] === 'know') {
     console.log(`  ${''.padEnd(10)} on time's tree: ${onTimesTree(f).join(' \u2192 ')}`);
     if (f.alsoBy.length) console.log(`  ${''.padEnd(10)} also by, agreeing: ${f.alsoBy.map((a) => a.how).join('; ')}`);
     for (const l of breakdown(f.d).slice(0, 6)) console.log(`  ${''.padEnd(12)}${l}`);
+  }
+  const pk = packet(thing);
+  if (pk) {
+    console.log('');
+    console.log('ITS PACKET \u2014 everything attached, nothing computed until asked');
+    for (const l of pk.says) console.log(`  ${l}`);
+    console.log(`  made with: ${pk.given.map((g) => `${g.quantity} = ${g.value.toPrecision(4)} ${g.unit}`).join(' \u00B7 ')}`);
+    for (const q of asked) pk.at(q);
+    console.log('  what it is, on the one tree:');
+    for (const b of pk.byTime()) console.log(`    time^${String(b.power).padEnd(4)} ${b.facts.map((f) => `${f.quantity} = ${f.value.toPrecision(4)} ${f.unit}`).join(' \u00B7 ')}`);
   }
   const c = clashes();
   console.log('');

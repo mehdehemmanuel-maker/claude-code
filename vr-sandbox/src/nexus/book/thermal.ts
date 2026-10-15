@@ -17,7 +17,7 @@ export const THERMAL = [
   L({
     id: "conduction", name: "Fourier's law", statement: "Heat conducts through a wall at its conductivity times its area times the temperature difference over its thickness.", formula: "q = k A ΔT / L",
     valid: "Steady, one-dimensional.",
-    inputs: [["k", "W/m K", "conductivity"], ["A", "m^2", "area"], ["dT", "K", "temperature difference"], ["L", "m", "thickness"]], output: ["q", "W", "heat flow"],
+    inputs: [["k", "W/m K", "thermal conductivity"], ["A", "m^2", "area"], ["dT", "K", "temperature difference"], ["L", "m", "thickness"]], output: ["q", "W", "heat flow"],
     term: (v) => div(mul(v.k, v.A, v.dT), v.L),
     source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"k":200,"A":0.01,"dT":50,"L":0.1}, output: 1000 },
   }),
@@ -60,7 +60,7 @@ export const THERMAL = [
   L({
     id: "thermal.resistance.conduction", name: "Thermal resistance of a wall", statement: "A wall resists heat by its thickness over its conductivity times its area.", formula: "R_th = L / (k A)",
     valid: "Steady, one-dimensional.",
-    inputs: [["L", "m", "thickness"], ["k", "W/m K", "conductivity"], ["A", "m^2", "area"]], output: ["R", "K/W", "thermal resistance"],
+    inputs: [["L", "m", "thickness"], ["k", "W/m K", "thermal conductivity"], ["A", "m^2", "area"]], output: ["R", "K/W", "thermal resistance"],
     term: (v) => div(v.L, mul(v.k, v.A)),
     source: { cite: "Bergman, Lavine, Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, 7th ed., Wiley 2011", kind: "textbook" }, example: { inputs: {"L":0.1,"k":200,"A":0.01}, output: 0.05 },
   }),
@@ -82,7 +82,7 @@ export const THERMAL = [
   L({
     id: "arrhenius", name: "Arrhenius rate", statement: "A reaction, ageing a battery or spoiling food, runs at a rate that falls exponentially as the temperature drops but never reaches zero above absolute zero.", formula: "k = A e^(−E_a / R T)",
     valid: "One rate-limiting step; real ageing is several in parallel, each with its own Ea.",
-    inputs: [["A", "1/s", "pre-exponential factor"], ["Ea", "J/mol", "activation energy"], ["T", "K", "temperature"]], output: ["k", "1/s", "rate"],
+    inputs: [["A", "1/s", "pre-exponential factor"], ["Ea", "J/mol", "activation energy"], ["T", "K", "temperature"]], output: ["k", "1/s", "rate constant"],
     term: (v) => mul(v.A, exp(neg(div(v.Ea, mul(CONST.R, v.T))))),
     source: { cite: "Atkins & de Paula, Physical Chemistry, 11th ed., Oxford 2018", kind: "textbook" }, example: { inputs: {"A":10000000000000,"Ea":50000,"T":298}, output: 17217.4875757281 },
   }),

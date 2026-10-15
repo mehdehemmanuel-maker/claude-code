@@ -43,7 +43,7 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'residence.stock', name: 'Stock, flow and residence time', statement: 'What a steady system holds is what flows through it times how long each part stays (Little\'s law for a continuum): the fluid round a brain, the water in a lake, the stock on a shelf.', formula: 'V = Q τ',
     valid: 'Steady state, any mixing.',
-    inputs: [['Q', 'm^3/s', 'flow through'], ['tau', 's', 'residence time']], output: ['V', 'm^3', 'volume held'],
+    inputs: [['Q', 'm^3/s', 'volume flow through'], ['tau', 's', 'residence time']], output: ['V', 'm^3', 'volume held'],
     term: (v) => mul(v.Q, v.tau),
     source: { cite: 'Little 1961, Operations Research 9:383; the same balance for a continuum, Bird, Stewart & Lightfoot 2002', kind: 'paper' }, example: { inputs: { Q: 0.35e-6 / 60, tau: 25714.2857142857 }, output: 1.5e-4 },
   }),
@@ -57,7 +57,7 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'junction.sum', name: 'Flows meeting at a junction', statement: 'Mass is conserved where flows meet, so they add: two veins into one, a day\'s saliva from its resting and eating flows, Kirchhoff\'s currents.', formula: 'Q = Q₁ + Q₂',
     valid: 'Incompressible, steady.',
-    inputs: [['Q1', 'm^3/s', 'one flow'], ['Q2', 'm^3/s', 'the other']], output: ['Q', 'm^3/s', 'flow together'],
+    inputs: [['Q1', 'm^3/s', 'one flow'], ['Q2', 'm^3/s', 'the other flow']], output: ['Q', 'm^3/s', 'flow together'],
     term: (v) => add(v.Q1, v.Q2),
     source: MASS, example: { inputs: { Q1: 1e-6, Q2: 2e-6 }, output: 3e-6 },
   }),
@@ -71,14 +71,14 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'concentration.difference', name: 'Difference of two concentrations', statement: 'What drives diffusion, or what a flow carries away, is the difference between the concentration where it goes and where it came from.', formula: 'Δc = c₁ − c₂',
     valid: 'The same substance in both.',
-    inputs: [['c1', 'mol/m^3', 'one concentration'], ['c2', 'mol/m^3', 'the other']], output: ['dc', 'mol/m^3', 'difference'],
+    inputs: [['c1', 'mol/m^3', 'one concentration'], ['c2', 'mol/m^3', 'the other concentration']], output: ['dc', 'mol/m^3', 'difference'],
     term: (v) => sub(v.c1, v.c2),
     source: ATKINS, example: { inputs: { c1: 2.2, c2: 0.43 }, output: 1.7700000000000002 },
   }),
   U({
     id: 'flux.area', name: 'A flux over an area', statement: 'What crosses a surface is its flux a square metre times the area: water through skin, heat through a wall, light onto a leaf.', formula: 'ṁ = J A',
     valid: 'A uniform flux (else integrate over the area).',
-    inputs: [['J', 'kg/m^2 s', 'flux'], ['A', 'm^2', 'area']], output: ['m', 'kg/s', 'mass crossing'],
+    inputs: [['J', 'kg/m^2 s', 'mass flux'], ['A', 'm^2', 'area']], output: ['m', 'kg/s', 'mass crossing'],
     term: (v) => mul(v.J, v.A),
     source: MASS, example: { inputs: { J: 7e-3 / 3600, A: 1.9 }, output: 3.694444444444444e-6 },
   }),
@@ -127,7 +127,7 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'residence.mass', name: 'A stock of mass and its turnover', statement: 'A steady stock of a substance is its outflow times how long it stays: the bile acid pool and its loss a day, the carbon in a forest and its yearly fall.', formula: 'm = ṁ τ',
     valid: 'Steady state.',
-    inputs: [['mdot', 'kg/s', 'flow through'], ['tau', 's', 'residence time']], output: ['m', 'kg', 'stock'],
+    inputs: [['mdot', 'kg/s', 'mass flow through'], ['tau', 's', 'residence time']], output: ['m', 'kg', 'stock'],
     term: (v) => mul(v.mdot, v.tau),
     source: { cite: 'Little 1961, Operations Research 9:383, for a stock of mass', kind: 'paper' }, example: { inputs: { mdot: 0.5e-3 / 86400, tau: 6 * 86400 }, output: 0.0029999999999999996 },
   }),
@@ -141,7 +141,7 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'power.molar', name: 'Power of a flow of moles', statement: 'Moles moving or reacting at a rate, each costing or giving an energy, make a power: an acid pump against its gradient, a fire by its fuel, a cell by its ATP.', formula: 'P = ṅ E',
     valid: 'E the energy a mole at the conditions it runs at.',
-    inputs: [['n', 'mol/s', 'rate'], ['E', 'J/mol', 'energy a mole']], output: ['P', 'W', 'power'],
+    inputs: [['n', 'mol/s', 'molar rate'], ['E', 'J/mol', 'energy a mole']], output: ['P', 'W', 'power'],
     term: (v) => mul(v.n, v.E),
     source: { cite: 'The first law, for a reaction or a transport at a rate', kind: 'derivation' }, example: { inputs: { n: 25e-3 / 3600, E: 38595 }, output: 0.2680208333333333 },
   }),
@@ -327,7 +327,7 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'free-energy.gradient', name: 'The free energy of a gradient', statement: 'Moving a mole up a concentration ratio and across a voltage costs R T ln(ratio) + z F ψ: what a pump must pay to make stomach acid, a nerve to hold its potassium, a mitochondrion to store its protons.', formula: 'ΔG = R T ln(c₂/c₁) + z F Δψ',
     valid: 'Ideal solutions (activities as concentrations); at equilibrium ΔG = 0, which is the Nernst equation.',
-    inputs: [['T', 'K', 'temperature'], ['ratio', '-', 'concentration ratio, to over from'], ['z', '-', 'charge'], ['psi', 'V', 'voltage, to less from']], output: ['dG', 'J/mol', 'free energy a mole'],
+    inputs: [['T', 'K', 'temperature'], ['ratio', '-', 'concentration ratio, to over from'], ['z', '-', 'charge number'], ['psi', 'V', 'voltage, to less from']], output: ['dG', 'J/mol', 'free energy a mole'],
     term: (v) => add(mul(CONST.R, v.T, ln(v.ratio)), mul(v.z, CONST.F, v.psi)), domain: (v) => [positive(v.ratio, 'the ratio')],
     source: ATKINS, example: { inputs: { T: 310.15, ratio: 10 ** 6.5, z: 1, psi: 0 }, output: 38595.35286487149 },
   }),
@@ -441,7 +441,7 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'conductance.parallel', name: 'Paths in parallel', statement: 'Heat leaving by two paths side by side meets the sum of their conductances: convection and radiation from skin, two wires in parallel.', formula: 'h = h₁ + h₂',
     valid: 'Paths at the same temperatures.',
-    inputs: [['h1', 'W/m^2 K', 'one path'], ['h2', 'W/m^2 K', 'the other']], output: ['h', 'W/m^2 K', 'both'],
+    inputs: [['h1', 'W/m^2 K', 'one path'], ['h2', 'W/m^2 K', 'the other conductance']], output: ['h', 'W/m^2 K', 'both'],
     term: (v) => add(v.h1, v.h2),
     source: HEAT, example: { inputs: { h1: 3, h2: 5.9 }, output: 8.9 },
   }),
@@ -455,7 +455,7 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'power.sum', name: 'Powers together', statement: 'Energy is conserved: heat coming in by two ways comes in at their sum.', formula: 'P = P₁ + P₂',
     valid: 'Any system.',
-    inputs: [['P1', 'W', 'one'], ['P2', 'W', 'the other']], output: ['P', 'W', 'together'],
+    inputs: [['P1', 'W', 'one'], ['P2', 'W', 'the other power']], output: ['P', 'W', 'power together'],
     term: (v) => add(v.P1, v.P2),
     source: PHYS, example: { inputs: { P1: 57, P2: 95 }, output: 152 },
   }),
@@ -490,7 +490,7 @@ export const UNIVERSAL: Law[] = [
   U({
     id: 'rates.add', name: 'Independent rates add', statement: 'Independent ways of a thing happening add their rates: hazards of dying of different causes, decays by two paths, two taps filling one tank.', formula: 'r = r₁ + r₂',
     valid: 'Independent processes (competing risks).',
-    inputs: [['r1', '1/s', 'one rate'], ['r2', '1/s', 'the other']], output: ['r', '1/s', 'together'],
+    inputs: [['r1', '1/s', 'one rate'], ['r2', '1/s', 'the other rate']], output: ['r', '1/s', 'rate together'],
     term: (v) => add(v.r1, v.r2),
     source: { cite: 'Competing risks: independent hazards add (Kalbfleisch & Prentice, The Statistical Analysis of Failure Time Data, 2nd ed., Wiley 2002)', kind: 'textbook' }, example: { inputs: { r1: 3e-4, r2: 5e-5 }, output: 0.00035 },
   }),

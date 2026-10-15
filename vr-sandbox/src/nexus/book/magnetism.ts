@@ -25,7 +25,7 @@ export const MAGNETISM = [
   L({
     id: "skin.depth", name: "Skin depth", statement: "An alternating field or current reaches into a conductor only about one skin depth, shrinking with frequency and conductivity: why an eddy-current brake works at the surface, and thick copper buys nothing at high frequency.", formula: "δ = 1 / √(π f μ₀ σ)",
     valid: "Non-magnetic conductors (μr = 1); in iron it is thinner by √μr.",
-    inputs: [["f", "Hz", "frequency"], ["sigma", "S/m", "conductivity"]], output: ["delta", "m", "skin depth"],
+    inputs: [["f", "Hz", "frequency"], ["sigma", "S/m", "electrical conductivity"]], output: ["delta", "m", "skin depth"],
     term: (v) => div(k(1), sqrt(mul(PI(), v.f, CONST.mu0, v.sigma))),
     source: { cite: "Griffiths, Introduction to Electrodynamics, 4th ed., Cambridge 2017 (skin depth)", kind: "textbook" }, example: { inputs: {"f":50,"sigma":58000000}, output: 0.009345900061927292 },
   }),

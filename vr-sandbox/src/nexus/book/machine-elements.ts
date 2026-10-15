@@ -16,7 +16,7 @@ export const MACHINE_ELEMENTS = [
   L({
     id: "bearing.life.l10", name: "Bearing rating life (L10)", statement: "Ninety per cent of a group of identical bearings outlast (C/P)^p million revolutions: p = 3 for ball bearings, 10/3 for roller bearings.", formula: "L10 = (C / P)^p × 10⁶ rev",
     valid: "Clean, well-lubricated bearings at normal temperature (ISO 281 basic rating life; a modified life a_ISO adjusts it).",
-    inputs: [["C", "N", "basic dynamic load rating"], ["P", "N", "equivalent dynamic load"], ["p", "-", "life exponent"]], output: ["L", "rev", "rating life"],
+    inputs: [["C", "N", "basic dynamic load rating"], ["P", "N", "equivalent dynamic load"], ["p", "-", "life exponent"]], output: ["L", "rev", "rating life in revolutions"],
     term: (v) => mul(exp(mul(v.p, ln(div(v.C, v.P)))), k(1e6), CONST.REV),
     domain: (v) => [{ says: 'the load is within half the dynamic rating, where rating life is used', holds: le(v.P, mul(k(0.5), v.C)) }],
     source: { cite: "ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life", kind: "standard" }, example: { inputs: {"C":14.8,"P":1,"p":3}, output: 3241792000 },
@@ -24,14 +24,14 @@ export const MACHINE_ELEMENTS = [
   L({
     id: "bearing.life.hours", name: "Bearing life in hours", statement: "A rating life in revolutions, turned at n rpm, lasts L10 / (60 n) hours.", formula: "L10h = L10 / (60 n)",
     valid: "Constant speed.",
-    inputs: [["L", "rev", "rating life"], ["n", "rpm", "speed"]], output: ["h", "h", "rating life"],
+    inputs: [["L", "rev", "rating life in revolutions"], ["n", "rpm", "rotational speed"]], output: ["h", "h", "rating life in hours"],
     term: (v) => div(v.L, v.n),
     source: { cite: "ISO 281:2007 Rolling bearings — Dynamic load ratings and rating life", kind: "standard" }, example: { inputs: {"L":3241792000,"n":600}, output: 90049.7777777778 },
   }),
   L({
     id: "spring.rate", name: "Helical spring rate", statement: "A coil spring's rate is G d^4 over 8 D^3 n: wire diameter d, coil diameter D, n active coils.", formula: "k = G d⁴ / (8 D³ n)",
     valid: "Close-coiled helical springs, spring index 4 to 12.",
-    inputs: [["G", "Pa", "shear modulus"], ["d", "m", "wire diameter"], ["D", "m", "mean coil diameter"], ["n", "-", "active coils"]], output: ["k", "N/m", "rate"],
+    inputs: [["G", "Pa", "shear modulus"], ["d", "m", "wire diameter"], ["D", "m", "mean coil diameter"], ["n", "-", "active coils"]], output: ["k", "N/m", "spring rate"],
     term: (v) => div(mul(v.G, pow(v.d, 4)), mul(k(8), pow(v.D, 3), v.n)),
     domain: (v) => [{ says: 'a spring index D/d between 4 and 12: below it a coil is hard to wind, above it the spring buckles and tangles', holds: and(ge(div(v.D, v.d), est('least spring index', 4, '1', 'below it a coil is hard to wind')), le(div(v.D, v.d), est('greatest spring index', 12, '1', 'above it the spring buckles and tangles'))) }],
     source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015", kind: "textbook" }, example: { inputs: {"G":79300000000,"d":0.005,"D":0.04,"n":8}, output: 12100.219726562498 },
@@ -46,7 +46,7 @@ export const MACHINE_ELEMENTS = [
   L({
     id: "chain.speed", name: "Chain speed", statement: "A chain moves at the sprocket's teeth times the pitch times its revolutions per second.", formula: "v = z p n / 60",
     valid: "Average speed (it varies by chordal action, more with few teeth).",
-    inputs: [["z", "-", "sprocket teeth"], ["p", "m", "pitch"], ["n", "rpm", "speed"]], output: ["v", "m/s", "chain speed"],
+    inputs: [["z", "-", "sprocket teeth"], ["p", "m", "pitch"], ["n", "rpm", "rotational speed"]], output: ["v", "m/s", "chain speed"],
     term: (v) => div(mul(v.z, v.p, v.n), mul(k(2), PI())),
     source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015", kind: "textbook" }, example: { inputs: {"z":12,"p":0.0127,"n":1000}, output: 2.54 },
   }),
@@ -75,7 +75,7 @@ export const MACHINE_ELEMENTS = [
   L({
     id: "belt.speed", name: "Belt or rim speed", statement: "A pulley's rim moves at pi times its diameter times its revolutions per second.", formula: "v = π D n / 60",
     valid: "No slip.",
-    inputs: [["D", "m", "diameter"], ["n", "rpm", "speed"]], output: ["v", "m/s", "rim speed"],
+    inputs: [["D", "m", "diameter"], ["n", "rpm", "rotational speed"]], output: ["v", "m/s", "rim speed"],
     term: (v) => div(mul(v.D, v.n), k(2)),
     source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015", kind: "textbook" }, example: { inputs: {"D":0.1,"n":1500}, output: 7.853981633974483 },
   }),
@@ -98,7 +98,7 @@ export const MACHINE_ELEMENTS = [
   L({
     id: "spring.torsion.rate", name: "Helical torsion spring rate", statement: "A helical torsion spring's rate is its wire diameter to the fourth times its modulus over 10.8 times its coil diameter times its turns, per turn; per radian, over 2π more.", formula: "k' = d⁴ E / (10.8 D N) per turn",
     valid: "Shigley eq. 10-51: 10.8 in place of the ideal 10.2 for friction between the coils.",
-    inputs: [["d", "m", "wire diameter"], ["D", "m", "mean coil diameter"], ["N", "-", "active turns"], ["E", "Pa", "modulus"]], output: ["k", "N m/rad", "rate"],
+    inputs: [["d", "m", "wire diameter"], ["D", "m", "mean coil diameter"], ["N", "-", "active turns"], ["E", "Pa", "modulus"]], output: ["k", "N m/rad", "torsion rate"],
     term: (v) => div(mul(pow(v.d, 4), v.E), mul(k(10.8, '10.8: Shigley eq. 10-51, in place of the ideal 10.2, for friction between the coils'), v.D, v.N, k(2), PI())),
     source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015", kind: "textbook" }, example: { inputs: {"d":0.002,"D":0.02,"N":5,"E":200000000000}, output: 0.471570201753764 },
   }),

@@ -229,6 +229,70 @@ and until it is done the reframe is demonstrated rather than adopted. Also absen
 metric is flat here), and any coupling between a worldline's proper time and the existing `clock.ts` local clocks,
 which already advance each region at its own time and are the natural place for this to land.
 
+## Run 8l — the ten homonyms split at the source, the packet, and space recovered
+
+*"go smarter not harder"* — then *"there needs to be edge/math packets/connections on each part or anything in the
+whole system"*, *"if you choose material you would have a packet that requires you to fill in density... but if
+you're creating a part then you can just choose material and the dimensions"*, and *"add space to the law thing"*.
+
+**THE FAULT FAMILY IS CLOSED, not patched a fourth time.** Three rounds running the same fault came back wearing
+different clothes — 8j bound a law's PORTS by dimension, 8k left asking BY NAME unguarded, 8k again had `stated`
+matching "length" inside "leak resistance of a unit length". Each was fixed where it surfaced. The CAUSE was
+underneath all three: **the book used one name for two kinds of quantity**, so no care at the call sites could make
+name-matching sound. Ten names did it. All ten are split at the source, and the guard is in `quantities.test.ts`:
+
+| was | now |
+|---|---|
+| `speed` for both m/s and 1/s | `speed` · `rotational speed` · `angular speed` |
+| `conductivity` for thermal and electrical | `thermal conductivity` · `electrical conductivity` |
+| `rate` for four dimensions | `spring rate` · `torsion rate` · `rate constant` · `enzyme rate` · `molar rate` |
+| `the other` for five | `the other flow` · `concentration` · `conductance` · `power` · `rate` |
+| `heat` for W and J | `heat flow` · `heat` |
+| `flux`, `flow through`, `charge`, `rating life`, `together` | each split by its dimension |
+
+`homonyms()` now returns **zero**, and the test asserts it must stay zero: a law added with a name already used at
+another dimension fails the gate, not three rounds later. Every ambiguous answer is now honestly unreachable rather
+than wrong — a bobbin's `angular speed` was **0.54 m/s**, its `modulus` a SECTION modulus; both now say "must be
+measured". The table's witnesses fell 129 → 126, which is the point: three were resting on a wrong-kind match.
+
+**EVERY EDGE CARRIES ITS EQUATION.** A feed edge said which port and which unit; it did not say the arithmetic.
+`$ npm run substrate -- time` — 7,949 edges, each now with both formulae:
+`newton.second [F = m a] → friction.coulomb.N [F ≤ μ N]`.
+
+**THE PACKET** (`packet(thing)` in `substrate/derive.ts`, shown by `npm run substrate -- know <part>`). Three things
+true at once, and the third is the hard one: **everything is attached** (585 kinds of quantity, by name), **nothing
+is computed** until asked for and then memoised, and **it cannot contradict itself** — any quantity reached two ways
+must agree or `clashes` reports both routes. It meets time from the side of the thing: a brass gear is `time^3`
+volume, `time^2` section area, `time^1` moment of inertia, `time^-1` mass, `time^-4` density.
+
+**A MATERIAL IS A FORM; A PART IS CALCULATED.** Derived, not declared: the fields are the primitives — quantities
+some law READS and no law PRODUCES — so `brass` comes up as a datasheet with 34 blanks, each saying how many laws
+filling it would unlock (thermal conductivity → 2, specific heat → 2, viscosity → 2), while `gear-small` says
+*"choose its material (brass) and its geometry (10 × 10 × 3 mm), and everything else is calculated"* — and it is.
+**Owned up to in the packet itself**: the form cannot yet tell a material's own property from the setting's
+condition, so `gravity` sits among brass's fields. Separating them needs the material tables to carry more than
+density, which is the next real job and is named rather than hidden.
+
+**SPACE RECOVERED** (`signature`, and a sixth level on the tree). `inTime` ADDS the exponents, so a metre and a
+second both came out `time^1` and a length could not be told from a duration — and a speed and an action were both
+`time^0`, as if they were the same kind of nothing. Relativity keeps them apart by the sign in dτ² = dt² − dx²/c²,
+and now so does this: every dimension carries how much of its power of time is space and how much is duration.
+
+```
+$ npm run substrate -- time
+m      time^1, and it gets there as space^1 · duration^0 — spacelike
+s      time^1, and it gets there as space^0 · duration^1 — timelike
+m/s    time^0, and it gets there as space^1 · duration^-1 — spacelike
+J s    time^0, and it gets there as space^2 · duration^-1 · mass^1 — spacelike
+```
+
+A law's path is six levels now: `time → time^-2 → space^1 duration^-2 → kg m s^-2 → product of powers →
+newton.second`. The book is **151 spacelike, 58 timelike, 43 neither**. This adds no physics; it stops throwing away
+physics that was already there, and the parts are asserted to add back to the power for all 252 laws.
+
+One clash fixed rather than permitted: `Field` → `Blank` (`substrate/domain.ts` owns Field: a field over a domain).
+23 new tests; gate 2,311 across 189 files.
+
 ## Run 8k — the universal law observation table, and three more things the book was answering wrongly
 
 *"all of these things need to be observably connected to physical things in the environment — create a universal law
@@ -246,6 +310,7 @@ has not got one. So a witness is never an object alone; it is **an object and wh
 says which is which:
 
 ```
+$ npm run substrate -- observe newton.second
 newton.second  Newton's second law
    on time's tree: time → time^-2 → kg m s^-2 → product of powers → newton.second
    ◆ coil bobbin (50% of its ports)

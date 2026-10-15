@@ -167,7 +167,7 @@ export const MECHANICS = [
   L({
     id: "spring.energy", name: "Energy in a spring", statement: "A spring stretched or squeezed from rest holds half its rate times the stretch squared.", formula: "E = ½ k x²",
     valid: "Linear spring, below its solid length and its yield.",
-    inputs: [["k", "N/m", "rate"], ["x", "m", "deflection"]], output: ["E", "J", "stored energy"],
+    inputs: [["k", "N/m", "spring rate"], ["x", "m", "deflection"]], output: ["E", "J", "stored energy"],
     term: (v) => mul(k(0.5), v.k, pow(v.x, 2)),
     source: { cite: "Young & Freedman, University Physics, 15th ed., Pearson 2019", kind: "textbook" }, example: { inputs: {"k":12100,"x":0.02}, output: 2.42 },
   }),
