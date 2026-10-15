@@ -5,7 +5,9 @@
 // It refuses to invent a placement. With no arguments it says how to say one and what is on the stock rail — it
 // does not build a gearbox for you, because a board that builds itself teaches nothing about centre distances.
 import { GearBench, GEAR_STOCK } from '../view/gear-bench';
-import { planetary, planetaryFor, type Planetary } from '../parts/gears';
+import { planetary, planetaryFor, section, sizesOf, type Planetary } from '../parts/gears';
+import { stlOfSection } from '../parts/fab';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const argv = process.argv.slice(2);
 const flag = (name: string, dflt: number): number => { const i = argv.indexOf(`--${name}`); return i < 0 ? dflt : Number(argv[i + 1]); };
@@ -50,6 +52,7 @@ if (!places.length) {
   --m 2            the module, in millimetres (every gear on one bench shares it)
   --rpm 60         turns a minute at the driver        --torque 1      N·m at the driver
   --drive <id>     which gear is turned (the first placed, by default)
+  --stl <dir>      write a printable STL for every gear on the board, in millimetres
   --key a,b        two gears keyed to one shaft, so they turn as one piece
 
 On the stock rail: ${GEAR_STOCK.map((s) => s.label).join(', ')}.
@@ -84,6 +87,21 @@ for (const line of bench.say()) console.log(line);
 // AND THEN TURN IT, because a ratio printed is a claim and a train that runs is the evidence. One full turn of the
 // driver, in twelve steps, printing where each gear stands — so a phase that is wrong shows up as a gear that
 // jumps, and a gear nothing drives shows up as one that never moves.
+// PRINT WHAT YOU PUT ON THE BOARD. The same section the viewer draws and the mesh test checks, extruded to an STL
+// per gear — so a train that works on the plate is a set of files a printer takes, with nothing redrawn in between.
+const stlDir = str('stl');
+if (stlDir) {
+  mkdirSync(stlDir, { recursive: true });
+  for (const g of bench.gears) {
+    const sec = section(g.cut, 14);
+    const file = `${stlDir}/${g.id}.stl`;
+    writeFileSync(file, stlOfSection(sec.pts, sec.holes ?? [], g.cut.b, g.id));
+    const sz = g.cut.kind === 'rack' ? `${(g.cut.z * Math.PI * g.cut.m * 1000).toFixed(1)} mm long` : `⌀${(sizesOf(g.cut).ra * 2000).toFixed(1)} mm`;
+    console.log(`  ${file}  ${sz}, ${(g.cut.b * 1000).toFixed(0)} mm thick, module ${g.cut.m * 1000}`);
+  }
+  console.log('');
+}
+
 console.log('');
 console.log('One turn of the driver, in twelve steps (degrees at each gear):');
 const ids = bench.gears.map((g) => g.id);

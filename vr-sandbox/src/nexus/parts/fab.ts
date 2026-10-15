@@ -171,3 +171,38 @@ export function fabPack(p: Profile, has: { printer?: boolean } = {}): { routes: 
     ...routes.flatMap((r) => [`- ${r.who}: ${r.how}. ${r.lo == null ? 'price from its quote' : r.lo === r.hi ? `$${r.lo.toFixed(2)}` : `$${r.lo.toFixed(2)}-${r.hi!.toFixed(2)}`} for ${r.n}. ${r.note}.`, `  (${r.src})`, ...quoteInputs(p, r).map((q) => `  · ${q}`)])];
   return { routes, best, faults: profileFaults(p), files: { 'plate.dxf': dxf(p), 'plate.stl': stl(p, 3), 'plate-gerbers.zip': zipOf(g), 'README.txt': `${readme.join('\n')}\n` } };
 }
+
+// ─── Any extruded section as a printable solid, not only a rounded rectangle ──────────────────────────────────────
+
+/** THE STL OF AN ARBITRARY SECTION, extruded. `stl()` above writes a `Profile` — an outline that is a rounded
+ *  rectangle with round holes in it — which is what a mounting plate is and what this file was written for. A gear
+ *  is the same KIND of thing (a closed section, extruded, with holes through it) and none of that shape fits in a
+ *  Profile: its outline is several hundred points of involute.
+ *
+ *  So the triangulation is left to the same extruder the viewer draws with, and this only writes what comes out.
+ *  That matters for more than tidiness: a part that is PRINTED from a different triangulation than the one on the
+ *  screen is a part that can pass every check in the room and come out of the printer a different shape.
+ *
+ *  Millimetres, as every printer expects, from a section given in metres. */
+export function stlOfSection(pts: [number, number][], holes: [number, number][][], thickness: number, name = 'part'): string {
+  const shape = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x * 1000, y * 1000)));
+  for (const h of holes) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x * 1000, y * 1000))));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness * 1000, bevelEnabled: false, curveSegments: 1 });
+  const pos = geo.getAttribute('position'), idx = geo.getIndex();
+  const n = idx ? idx.count / 3 : pos.count / 3;
+  const out: string[] = [`solid ${name}`];
+  const v = (i: number): [number, number, number] => { const k = idx ? idx.getX(i) : i; return [pos.getX(k), pos.getY(k), pos.getZ(k)]; };
+  for (let t = 0; t < n; t++) {
+    const a = v(t * 3), b = v(t * 3 + 1), c = v(t * 3 + 2);
+    // the facet's own normal, from the winding, so a slicer does not have to guess which side is solid
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const nx = u[1]! * w[2]! - u[2]! * w[1]!, ny = u[2]! * w[0]! - u[0]! * w[2]!, nz = u[0]! * w[1]! - u[1]! * w[0]!;
+    const L = Math.hypot(nx, ny, nz) || 1;
+    out.push(`facet normal ${(nx / L).toFixed(6)} ${(ny / L).toFixed(6)} ${(nz / L).toFixed(6)}`, '  outer loop');
+    for (const p of [a, b, c]) out.push(`    vertex ${p[0]!.toFixed(4)} ${p[1]!.toFixed(4)} ${p[2]!.toFixed(4)}`);
+    out.push('  endloop', 'endfacet');
+  }
+  out.push(`endsolid ${name}`);
+  geo.dispose();
+  return out.join('\n');
+}

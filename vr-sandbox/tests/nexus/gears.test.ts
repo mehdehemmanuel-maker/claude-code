@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { RACK, faults, gearPart, inv, section, sizesOf, type GearCut } from '../../src/nexus/parts/gears';
 import { prismVolume } from '../../src/nexus/parts/form';
+import { stlOfSection } from '../../src/nexus/parts/fab';
 
 const M2_Z20: GearCut = { m: 0.002, z: 20, b: 0.008, bore: 0.006 };
 const deg = (d: number) => (d * Math.PI) / 180;
@@ -494,5 +495,44 @@ describe('a planetary set, which is what an internal gear is for', () => {
         }
       }
     }
+  });
+});
+
+describe('what you put on the board is what a printer gets', () => {
+  // Learned from `act()`: test the thing a person USES, not only the thing underneath it. The section is proved
+  // above; this proves the file that comes out of it, because a part printed from a different triangulation than
+  // the one on the screen can pass every check in the room and come out of the printer a different shape.
+  it('a gear writes an STL whose solid is exactly the gear', () => {
+    const c: GearCut = { m: 0.002, z: 20, b: 0.008, bore: 0.006 };
+    const s = section(c, 14), g = sizesOf(c);
+    const text = stlOfSection(s.pts, s.holes ?? [], c.b, '20T');
+    expect(text.startsWith('solid 20T')).toBe(true);
+    expect(text.trimEnd().endsWith('endsolid 20T')).toBe(true);
+    expect(text.toLowerCase()).not.toMatch(/nan|infinity/);
+    const facets = (text.match(/facet normal/g) ?? []).length;
+    const verts = [...text.matchAll(/vertex (\S+) (\S+) (\S+)/g)].map((m) => [Number(m[1]), Number(m[2]), Number(m[3])] as const);
+    expect(facets).toBeGreaterThan(100);
+    expect(verts.length, 'every facet is one triangle of three vertices').toBe(facets * 3);
+    // IN MILLIMETRES, and NEVER BIGGER THAN THE REAL GEAR. The outline is a polygon inscribed in the true tip
+    // circle, so the printed part comes out at most a micron or two under and never over — the same safe direction
+    // the section itself is sampled in, because a gear printed fatter than nominal binds in a mesh that the real
+    // one turns freely in. Measured here at 21.9988 mm against a 22.000 mm tip radius.
+    const xs = verts.map((v) => v[0]), ys = verts.map((v) => v[1]), zs = verts.map((v) => v[2]);
+    const tip = g.ra * 1000;
+    for (const [lo, hi] of [[Math.min(...xs), Math.max(...xs)], [Math.min(...ys), Math.max(...ys)]] as const) {
+      expect(hi).toBeLessThanOrEqual(tip);
+      expect(hi).toBeGreaterThan(tip - 0.01);
+      expect(lo).toBeGreaterThanOrEqual(-tip);
+      expect(lo).toBeLessThan(-tip + 0.01);
+    }
+    expect(Math.min(...zs)).toBe(0);
+    expect(Math.max(...zs)).toBeCloseTo(c.b * 1000, 6);
+    // and the bore is really a hole: no vertex sits inside it
+    // A MICRON, because the extruder keeps its vertices as float32 and the bore's own points land a few parts in
+    // ten million inside their own radius. Asked for a nanometre, this flagged 42 vertices all sitting at exactly
+    // 3.0000 mm — the bore radius — which is the test being wrong about what a float is, not a hole being filled.
+    // A filled bore puts vertices at radius 0, so a micron still catches it by a factor of three thousand.
+    const inBore = verts.filter((v) => Math.hypot(v[0], v[1]) < (c.bore! / 2) * 1000 - 1e-3);
+    expect(inBore.length, `inside the bore at radii ${[...new Set(inBore.map((v) => Math.hypot(v[0], v[1]).toFixed(4)))].join(', ')}`).toBe(0);
   });
 });

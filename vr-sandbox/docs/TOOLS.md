@@ -354,3 +354,19 @@ solver cannot describe it. It is asked for by what it is and answered by **Willi
 depending on which member is held still, and the middle one reverses. It prints all three, every mesh judged where
 the geometry puts it, and the two things that decide whether it can be assembled at all: `(z_sun + z_ring)` must
 divide by the number of planets, or the last one will not drop in; and the planets' tips must clear each other.
+
+### `npm run gears -- … --stl <dir>`
+
+Writes a printable STL for every gear on the board, in millimetres, from the **same section** the viewer draws and
+the mesh test checks — nothing is redrawn in between, because a part printed from a different triangulation than the
+one on the screen can pass every check in the room and come out of the printer a different shape.
+
+```
+npm run gears -- 20@0,0 40@60,0 --stl ./out
+  ./out/20T-1.stl  ⌀44.0 mm, 8 mm thick, module 2
+  ./out/40T-2.stl  ⌀84.0 mm, 8 mm thick, module 2
+```
+
+The solid is inscribed in the true tip circle — at most a micron under, never over — the same safe direction the
+section is sampled in, because a gear printed fatter than nominal binds in a mesh the real one turns freely in.
+`stlOfSection` in `src/nexus/parts/fab.ts` does this for any extruded section, not only gears.
