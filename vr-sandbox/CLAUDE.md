@@ -121,7 +121,9 @@ standard, and whether a drawing holds all its inventory lists (`missingIn`) - `f
 `Cut`, a `Port`, an `Iface` - `mate.ts` parts placed by mating faces, ports read off the geometry, and what a part
 promises against what it draws - `mechanism.ts` how many ways jointed parts can still move, and which ways -
 `gears.ts` the involute: a gear's real teeth, what meshes with what, what a train does when one is turned, and a
-planetary set from its counts -
+planetary set from its counts - `drive.ts` a shaft line: what spins, what drives it, what loads it, and the speed the
+whole thing settles at - the one place a torque source, a transmission and a load meet, and deliberately not about
+gears (a source is anything with a torque at a speed) -
 `mass.ts` a part's mass from shape, material and fill - `space.ts` oriented-box layout and contacts -
 `form.ts` lofts, bent tubes, turned profiles - `surface.ts` NURBS curves, skins, fairness, zebra, draft -
 `fits.ts` how close is close enough, and whether a machine can hold it - `finish.ts` edges as made, and the burr -
@@ -335,6 +337,25 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   what lets a pair be cut for centres it was not designed for.
 
 **Known gaps in the architecture**
+- **Connectedness is now a command, not an opinion**: `node tools/wired.mjs islands` names every module nothing
+  under `src/` imports. It was 28 on its first run and found `engineering/gears.ts` — the Lewis bending equation
+  and a mesh loss derived from the real tooth counts, unreached, while `parts/drive.ts` went without both. Wiring
+  it in made 27. Run it before claiming anything is joined up, and note that `wired.mjs path` is the honest half:
+  `parts/gears` "reached" `engineering/dcmotor` in seven hops through `inventory` before `drive.ts` existed, which
+  is not a connection.
+- **`parts/drive.ts` joins torque only, and only on one shaft line.** A motor, a hand-placed train and a load now
+  find their own operating point and spin-up, with the tooth strength and the shaft-into-bore fit checked. What has
+  no equivalent yet: anything LINEAR (a leadscrew, a cylinder, a rack driving a load — the rack is drawn and
+  meshes, but a drive line cannot end in one), more than one source on a shaft, a branching tree rather than a
+  path, and the whole electrical and thermal side. Specifically: `motorrun.ts` already steps a winding's
+  temperature over time but takes a constant load, so the next joint is feeding the drive's referred load into it
+  and the drive's "it will cook" becoming a temperature instead of a warning; and the battery (task 52) is not in
+  the loop, so the motor still assumes an ideal voltage source.
+- **`mechanism.ts`'s `JointKind` has had `'gear'` in it since it was written and nothing produces one**, so the
+  degree-of-freedom counter does not know a gear train exists. `drive.ts` solves the dynamics without it; the
+  kinematics are still unjoined.
+- The drive is reachable from `npm run gears`, not from the bench in the room: `view/gear-bench.ts` draws and
+  turns the gears but does not yet show a motor on them.
 - The inventory knows what is *in* a product; the kits know *where*. Joining them is the merge that ends "two
   generators". Begun: `parts/components.ts` draws 9,074 catalogue sizes, and most machines' brackets, springs, hinges
   and wiring are still drawn inline by their makers - each is next to become a component, commonest first.

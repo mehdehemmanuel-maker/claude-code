@@ -170,7 +170,9 @@ export class GearBench {
   }
 
   // ─── what it does ───────────────────────────────────────────────────────────────────────────────────────────────
-  private placed(): Placed[] { return this.gears.map((g) => ({ id: g.id, gear: g.cut, at: g.at, shaft: g.shaft })); }
+  /** What is on the board, as the gear library sees it — public because a drive line (parts/drive.ts) has to read
+   *  the same placement the solver does, rather than being handed a copy that can drift from it. */
+  placed(): Placed[] { return this.gears.map((g) => ({ id: g.id, gear: g.cut, at: g.at, shaft: g.shaft })); }
 
   /** What this arrangement is, worked out from where the gears were put. Re-solved when the board changes. */
   solve(): Train | null {

@@ -2997,3 +2997,61 @@ room at all. The kit that reads an ask and lays out the answer is a different co
 `parts/gear-kit.ts` now: 604 and 101 lines, and the next round has somewhere to put things.
 
 GATE: PASS (2191 of 2191) — 191.4s · TIDY: PASS (23 of 23) · 8 new tests
+
+## Run 8d — one shaft line, and the island the tool found
+
+The ask: *"are all systems merged together... can user create or spawn a motor that's completely unrelated to gears
+and make them work together to produce a emergent behavior... it saves compute and it saves multiple headaches in
+exchange for 1 headache"*.
+
+**The honest answer was no, and the measurement is what said so.** Three files each knew their own half of a drive:
+
+| | knew | and took as a made-up number |
+| --- | --- | --- |
+| `parts/gears.ts` | the real involute, what meshes, what a train does | `train(…, torque = 1, rpm = 60)` — **default arguments** |
+| `engineering/dcmotor.ts` + `motorrun.ts` | Kt, Ke, R, rotor inertia, winding heat | `runMotor(…, { load })` — a **constant**, and a gearbox as a catalogue ratio scalar |
+| `parts/mate.ts` + `mechanism.ts` | shafts, bores, what seats in what | `JointKind` has had `'gear'` in it the whole time and nothing ever produced one |
+
+So a motor could not be loaded by a real train and a real train could not be driven by a motor. Both halves ran on
+numbers somebody typed.
+
+**The one headache: a shaft.** `parts/drive.ts` says everything that spins sits on one, named, and three roles meet
+there — a `Source` (torque at a speed), a `Gearing` (ratio, efficiency, inertia), a `Load` (torque it demands).
+Deliberately not about gears: a test drives a fan with a hand crank, and nothing in the file knows what a motor is.
+
+What is emergent, and the reason it is not plumbing: nothing computes the answer. The settling speed is where the
+motor's torque curve crosses the load referred back through the geometry someone placed by hand; the spin-up time
+is the gears' own inertia, taken from the same sections the viewer draws and the printer gets.
+
+**Four faults, each found by looking rather than by a test passing:**
+
+1. **The reciprocal.** `turn[].ratio` in gears.ts is the TORQUE multiplication — its own comment says so and its rpm
+   divides by it. Read as a speed ratio, a 20T→60T pair came out a "3:1 overdrive" and the 60T wheel's inertia was
+   multiplied by nine where it should have divided. Every number looked plausible alone; the drive simply took 70
+   times too long to spin up.
+2. **A second owner of 0.98.** gears.ts applies a mesh loss in its own walk and drive.ts had written its own. Moved
+   to `MESH_EFFICIENCY` in gears.ts, beside the teeth, and imported.
+3. **A fixed time step.** `spin` stepped `seconds/steps`. A hand crank on a fan, time constant a fifth of a
+   millisecond, overshot to 2000 rad/s on the first 25 ms step and sat at zero for ten seconds reporting that the
+   drive never span up. The sample grid is what the caller wants to SEE; the step is what the rig's own stiffness
+   allows. `motorrun.ts` already knew this and paced itself by the motor's time constant.
+4. **A reduction is not free** — an assertion written the wrong way round until the numbers disagreed. A deeper
+   reduction refers the LOAD's inertia down by the square of the ratio, but the gears it needs are bigger and
+   inertia goes as the fourth power of radius: a 90T wheel through 5:1 is harder to accelerate than a whole 30/40
+   pair through 1.33:1. Which wins is a question only the real geometry answers.
+
+**`node tools/wired.mjs`** was built because the ask had been answered by opinion three times. On its first run,
+`islands` named 28 modules nothing under `src/` imports — among them **`engineering/gears.ts`**, holding the Lewis
+bending equation and a mesh loss derived from the real tooth counts, both of which drive.ts was doing without. Not
+a duplicate to delete: the strength half of the one owner, unreached. Wired in, 28 → 27, and a drive now reports
+whether each tooth survives the stall torque that is really on it (a thin-faced pair settles at a perfectly sensible
+speed and strips getting there, which no speed, current or ratio says). Its `path` command is the honest half:
+`parts/gears` "reached" `engineering/dcmotor` in seven hops through `inventory` before any of this, which is not a
+connection, and seeing the chain is what makes that obvious.
+
+31 tests, written so the fault they catch is DISAGREEMENT: the output torque gears.ts works out by walking its mesh
+tree is compared against the one drive.ts gets from the motor's curve and the path's efficiency — two routes to one
+quantity, neither checked against the formula that produced it.
+
+Still unjoined, named in CLAUDE.md: anything linear, more than one source on a shaft, the winding temperature
+(`motorrun.ts` steps it but takes a constant load), the battery, `JointKind.gear`, and the bench in the room.

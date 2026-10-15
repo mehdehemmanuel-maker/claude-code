@@ -7,6 +7,8 @@
 import { GearBench, GEAR_STOCK } from '../view/gear-bench';
 import { planetary, planetaryFor, section, sizesOf, type Planetary } from '../parts/gears';
 import { stlOfSection } from '../parts/fab';
+import { driveLine, fanLoad, inertialLoad, steadyLoad, spinUp, type Load } from '../parts/drive';
+import { MOTORS } from '../../data/motors';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 const argv = process.argv.slice(2);
@@ -53,6 +55,12 @@ if (!places.length) {
   --rpm 60         turns a minute at the driver        --torque 1      N·m at the driver
   --drive <id>     which gear is turned (the first placed, by default)
   --stl <dir>      write a printable STL for every gear on the board, in millimetres
+  --motor <id>     bolt a real catalogue motor to the driver and let the whole thing find its own speed
+                   (bare --motor lists what there is).  --volts V overrides its nominal voltage
+  --load <what>    what the output is turning: a number of N·m, fan:<k> for a k·w^2 fan law,
+                   or flywheel:<kg·m^2>.  --out <id> is the gear it hangs on (the last placed, by default)
+  --seconds <s>    show it spinning up over this long (default 1)
+  --mu <0.05>      friction on the teeth, so the mesh loss is derived from the real tooth counts rather than typical
   --key a,b        two gears keyed to one shaft, so they turn as one piece
 
 On the stock rail: ${GEAR_STOCK.map((s) => s.label).join(', ')}.
@@ -100,6 +108,48 @@ if (stlDir) {
     console.log(`  ${file}  ${sz}, ${(g.cut.b * 1000).toFixed(0)} mm thick, module ${g.cut.m * 1000}`);
   }
   console.log('');
+}
+
+// ─── A REAL MOTOR ON THE BOARD ──────────────────────────────────────────────────────────────────────────────────
+// Nothing here is typed in: the ratio comes from where the gears were put, the inertia from their own sections,
+// the torque from the motor's published constants, and the speed from where those three cross.
+const motorArg = str('motor');
+if (motorArg !== null) {
+  const mot = MOTORS[motorArg] ?? Object.values(MOTORS).find((x) => x.id.includes(motorArg));
+  if (!mot) {
+    console.log(`\nNo motor called "${motorArg}". There are these:`);
+    for (const x of Object.values(MOTORS)) console.log(`  ${x.id}\n    ${x.label}`);
+  } else {
+    const ids2 = bench.gears.map((g) => g.id);
+    const outId = str('out') ?? ids2[ids2.length - 1]!;
+    const loadArg = str('load') ?? '0.1';
+    let load: Load;
+    if (loadArg.startsWith('fan:')) load = fanLoad(outId, Number(loadArg.slice(4)));
+    else if (loadArg.startsWith('flywheel:')) load = inertialLoad(outId, Number(loadArg.slice(9)));
+    else load = steadyLoad(outId, Number(loadArg));
+
+    const driverId = driver ?? ids2[0]!;
+    const d = driveLine({ motor: mot, V: str('volts') ? flag('volts', mot.V) : undefined, places: bench.placed(), driver: driverId, out: outId, load, mu: str('mu') ? flag('mu', 0.05) : undefined });
+    console.log('');
+    console.log(`The motor: ${d.rig.source.says}`);
+    if (d.fit) console.log(`On the shaft: ${d.fit}`);
+    if (d.gearing) console.log(`Through the gears: ${d.gearing.says}`);
+    for (const v of d.teeth) console.log(`Strength: ${v.says}`);
+    console.log(`Turning: ${load.says} at ${outId}`);
+    for (const f of d.rig.faults) console.log(`  REFUSED: ${f}`);
+    console.log('');
+    console.log(`  ${d.settled.says}`);
+    if (!d.settled.stalled) {
+      const seconds = flag('seconds', 1), s = spinUp(d.rig, seconds, 12);
+      console.log('');
+      console.log(`Coming up to speed over ${seconds} s (${(s.rise * 1000).toFixed(0)} ms to 63% of it):`);
+      console.log(`      time        ${driverId.padStart(10)} ${outId.padStart(10)}        amps`);
+      for (let i = 0; i <= 12; i++)
+        console.log(`  ${`${s.t[i]!.toFixed(3)}s`.padStart(8)}   ${`${s.rpm[i]!.toFixed(0)} rpm`.padStart(12)} ${`${s.outRpm[i]!.toFixed(0)} rpm`.padStart(12)}  ${s.current[i] === null ? '' : `${s.current[i]!.toFixed(2)} A`.padStart(10)}`);
+      console.log('');
+      console.log(`Nothing above was typed in: change one tooth count and every number on this page moves.`);
+    }
+  }
 }
 
 console.log('');

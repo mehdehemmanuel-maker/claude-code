@@ -370,3 +370,44 @@ npm run gears -- 20@0,0 40@60,0 --stl ./out
 The solid is inscribed in the true tip circle — at most a micron under, never over — the same safe direction the
 section is sampled in, because a gear printed fatter than nominal binds in a mesh the real one turns freely in.
 `stlOfSection` in `src/nexus/parts/fab.ts` does this for any extruded section, not only gears.
+
+### `node tools/wired.mjs` — what is actually connected to what
+
+"Are all the systems merged together?" was answered by opinion three times before this existed, and opinion is what
+drifts: a file can know everything about its own half of a machine and still be an island, and nothing about reading
+it says so. This reads every relative import under `src/` and answers it as a fact.
+
+```
+node tools/wired.mjs                 every module, with how many import it and how many it imports
+node tools/wired.mjs islands         the modules nothing reaches — where the drift collects
+node tools/wired.mjs <name>          one module: who reaches it, what it reaches, what it cannot see
+node tools/wired.mjs path <a> <b>    whether any chain of imports joins two modules, and the chain
+```
+
+It earned itself on its first run: `islands` found **`src/engineering/gears.ts`** — a second gears file nothing
+under `src/` imported, holding the Lewis bending equation and a mesh loss derived from the real tooth counts, both
+of which `parts/drive.ts` was otherwise doing without. Not a duplicate to delete: the strength half of the one
+owner, unreached. Wiring it in took the island count from 28 to 27.
+
+`path` is the honest one. Asked whether `parts/gears` reached `engineering/dcmotor` before `drive.ts` existed, it
+answered yes — in seven hops, through `kits → components → inventory → substrate/boards → substrate/flows →
+ask/generate`. That is not a connection, and seeing the chain is what makes that obvious.
+
+### `npm run gears -- … --motor <id>`
+
+Bolts a real catalogue motor to whatever is on the board and lets the three of them find their own answer.
+
+```
+npm run gears -- 20@0,0 60@80,0 --motor coreless --load 0.3 --mu 0.05
+  The motor: Coreless brushed DC, Ø40 mm, 150 W — 30.2 mN·m/A, 0.299 Ω, free at 7576 rpm, stalling at 2.420 N·m
+  Through the gears: 1 mesh, 3.000:1 reduction, reversing, 99.0% through the teeth, 1.415e-4 kg·m² referred
+  Strength: 20T holds: its teeth carry 25.760 N·m against the 2.424 N·m on them — 10.6x over
+  REFUSED: a ⌀6 mm shaft does not enter a ⌀5 mm bore: 1.000 mm too big
+  it settles at 7260 rpm at the source and -2419.8 rpm at the load, on 3.48 A, 76.8 W in and 76.0 W out
+```
+
+`--load` takes a number of N·m, `fan:<k>` for a k·ω² fan law, or `flywheel:<kg·m²>`. `--mu` derives the mesh loss
+from the real tooth counts instead of the typical 2%. `--seconds` shows it coming up to speed.
+
+Nothing on that page is typed in: the ratio is where the gears were put, the inertia their own sections, the torque
+the motor's published constants, the speed where those three cross. Change one tooth count and all of it moves.

@@ -33,6 +33,13 @@ import type { Part, V3 } from './kits';
 import type { Prism } from './form';
 
 /** The ISO 53 / DIN 867 basic rack: what an off-the-shelf spur gear is cut to, as multiples of the module. */
+/** A spur mesh's power loss is mostly tooth friction and churning whatever oil is on it, so a single figure is a
+ *  typical one and says so: 0.98 is the value every gearing text gives for a cut, lubricated spur pair. Exported
+ *  because a train loses it once per mesh and a drive line (parts/drive.ts) has to count the same loss down the
+ *  path power takes — written twice, the two would drift. */
+export const MESH_EFFICIENCY = 0.98;
+export const MESH_EFFICIENCY_SRC = 'typical for a cut, lubricated spur mesh (0.97-0.99 in every gearing text); not a measurement of a particular pair';
+
 export const RACK = { alpha: (20 * Math.PI) / 180, ha: 1, hf: 1.25, fillet: 0.38 } as const;
 
 /** inv(α) = tan α − α, the involute function: the angle the string has swept when it leaves at pressure angle α. */
@@ -460,7 +467,7 @@ export function train(parts: Placed[], driver: string, theta = 0, torque = 1, rp
     for (const { to, mesh } of near.get(id) ?? []) {
       const q = by.get(to)!, phi = Math.atan2(q.at[1] - p.at[1], q.at[0] - p.at[0]);
       const angle = mesh.kind === 'rack' ? me.angle : phaseOf(p.gear.z, q.gear.z, mesh.kind, phi, me.angle);
-      steps.push({ to, ratio: mesh.ratio, angle, eff: 0.98 });
+      steps.push({ to, ratio: mesh.ratio, angle, eff: MESH_EFFICIENCY });
     }
     for (const s of steps) {
       if (seen.has(s.to)) {
