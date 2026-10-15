@@ -10,7 +10,8 @@ import {
 } from '../../src/nexus/substrate/time';
 import { BOOK, lawById } from '../../src/nexus/book';
 import {
-  branches, feedEdges, feeds, graphSummary, kinshipFeeds, molesOf, placeOf, calculate, timePower, timeTree, timeTreeLines,
+  advanceByOwnClocks, branches, feedEdges, feeds, graphSummary, kinshipFeeds, molesOf, ownTime, ownTimeOfSphere,
+  placeOf, calculate, timePower, timeTree, timeTreeLines,
 } from '../../src/nexus/substrate/time';
 import { breakdown, measured } from '../../src/nexus/substrate/record';
 import { KINSHIP } from '../../src/nexus/book/principles';
@@ -310,7 +311,7 @@ describe('the law calculator', () => {
     const r = calculate('m/s', { pitch: measured('pitch', 0.0127, 'm', 'ISO 606'), rpm: measured('speed', 1500, 'rpm', 'a tacho') }, undefined, 2);
     for (const c of r.chain) {
       expect(c.bound.length, `${c.law} records a binding for every port`).toBe(lawById(c.law).inputs.length);
-      for (const b of c.bound) expect(typeof b.byName).toBe('boolean');
+      for (const b of c.bound) expect(['exact', 'kin', 'stretched']).toContain(b.portFit);
     }
     // anything bound under a different name appears in `stretched`, verbatim, and in what it says
     for (const s of r.stretched) expect(r.says).toContain(s);
@@ -380,5 +381,58 @@ describe('what the book lacks', () => {
     expect(g.writtenKinship).toBe(KINSHIP.length);
     expect(g.kinshipAlsoFeeds).toBe(kinshipFeeds().filter((x) => x.alsoFeeds).length);
     expect(g.derivedEdges, 'the derived graph is orders of magnitude bigger than what was written').toBeGreaterThan(g.writtenKinship * 100);
+  });
+});
+
+// ── each thing at its own time: the mechanistic twin of proper time ───────────────────────────────────────────────
+//
+// `substrate/clock.ts` and `substrate/hold.ts` were reachable from no door before Run 8j — two of eleven engine
+// files left in the box. They are not wired with a token import but joined at the idea: the one law says nothing
+// advances on a common clock, and that is true whether a thing's clock is set by how fast it moves (dτ/dt, above)
+// or by what it is made of (C/G, here). One definition of "its own time", two ways of arriving at the numbers.
+describe('each region on its own clock', () => {
+  const regions = () => [
+    { name: 'a thin fin', C: 2, T0: 400 },
+    { name: 'the block', C: 900, T0: 300 },
+    { name: 'the room', C: 1e9, T0: 293 },
+  ];
+  const bounds = [{ a: 0, b: 1, G: 4 }, { a: 1, b: 2, G: 0.8 }];
+
+  it("a thing's own time is its capacity over its conductance, and it is a TIME on the tree", () => {
+    const t = ownTime('a block', 900, 4.8);
+    expect(t.value).toBeCloseTo(187.5, 9);
+    expect(t.unit).toBe('s');
+    expect(inTime(dimOf(t.unit)), 'a time is time^1, which is the whole point of the join').toBe(1);
+    expect(ownTime('nothing conducts', 900, 0).value, 'no conductance is no answer, not infinity').toBeNull();
+  });
+
+  it("a sphere's own time scales as its radius squared, by its own geometry", () => {
+    // C goes as r^3 and the least conductance as r, so C/G goes as r^2: ten times the radius is a hundred times
+    // the time. This is hold.ts's 4π k r put through the one definition, not a second definition of its own.
+    const a = ownTimeOfSphere(0.01, 1000, 3500, 0.026)!.value!;
+    const b = ownTimeOfSphere(0.1, 1000, 3500, 0.026)!.value!;
+    expect(b / a).toBeCloseTo(100, 6);
+  });
+
+  it('giving every region a different clock neither makes nor loses content', () => {
+    const a = advanceByOwnClocks(regions(), bounds, 0.4, 60);
+    expect(a.conserved, a.says.join(' ')).toBe(true);
+    expect(a.end).toBeCloseTo(a.start + a.made, 3);
+  });
+
+  it('the clocks meet: every step is a whole power-of-two multiple of the finest', () => {
+    const a = advanceByOwnClocks(regions(), bounds, 0.4, 60);
+    const finest = Math.min(...a.clocks.map((c) => c.step));
+    for (const c of a.clocks) {
+      const n = c.step / finest;
+      expect(Math.abs(n - Math.round(n)), `${c.region} steps a whole number of the finest`).toBeLessThan(1e-9);
+      expect(Math.log2(Math.round(n)) % 1, `${c.region}'s multiple is a power of two`).toBe(0);
+      expect(c.step, `${c.region}'s step is under its own time, or it would not be stable`).toBeLessThan(c.own * 2);
+    }
+  });
+
+  it('and it costs less than putting the whole world on the finest clock', () => {
+    const a = advanceByOwnClocks(regions(), bounds, 0.4, 60);
+    expect(a.steps, 'fewer region-steps than one common clock would need').toBeLessThan(a.onOneClock);
   });
 });

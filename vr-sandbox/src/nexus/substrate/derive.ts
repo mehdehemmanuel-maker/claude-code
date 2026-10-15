@@ -8,9 +8,10 @@ import { INVENTORY, gramsOfItem, type Item } from '../parts/inventory';
 import { MOLECULES } from '../life/molecules';
 import { wattsOf } from '../life/time';
 import { breakdown, estimate, fixed, measured, readable, says, solve, step, valueIn } from './record';
-import { inTime, answersToPort } from './time';
+import { inTime } from './time';
+import { portFit } from '../book/quantities';
 import { BOOK } from '../book';
-import { dimOf, dimText } from '../lang/dimension';
+import { dimOf, dimText, type Dim } from '../lang/dimension';
 import { fromSI } from '../../ganglia/units';
 import { leaf } from '../lang/term';
 import { boxShape } from './boxfill';
@@ -229,9 +230,13 @@ const AGREE = 0.02;                                  // two routes agree inside 
 const knowMemo = new Map<string, Fact | null>();
 const clashLog = new Map<string, Clash>();
 
-/** Does this law's output answer to the quantity being asked for? One name test, owned by `time.ts`. */
-const answersTo = (quantity: string, port: { name: string; sym: string }) =>
-  answersToPort({ name: quantity, d: { name: quantity } }, port);
+/** Does this law's output answer to the quantity asked for? By KIND — `book/quantities.ts` owns the judgement.
+ *  `exact` or `kin` is the same quantity under a qualifier; a bare dimensional match is NOT the same quantity and
+ *  is refused here, because a law giving a torque must not answer a question about kinetic energy. */
+const answersTo = (quantity: string, port: { name: string; sym: string }, dim: Dim) => {
+  const g = portFit(quantity, port, dim, dim);
+  return g === 'exact' || g === 'kin';
+};
 
 /** The leaves: what the inventory itself states about a thing, with no law involved. */
 function stated(id: string, quantity: string): { value: number; unit: string; how: string; d: Derivation } | null {
@@ -276,7 +281,7 @@ function routesTo(id: string, quantity: string, seen: ReadonlySet<string>, depth
   if (own) out.push(own);
   if (depth <= 0) return out;
   for (const l of BOOK) {
-    if (!answersTo(quantity, l.output)) continue;
+    if (!answersTo(quantity, l.output, dimOf(l.output.unit))) continue;
     const env: Record<string, Derivation> = {};
     let ok = true;
     for (const p of l.inputs) {

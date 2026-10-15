@@ -60,6 +60,9 @@
 import { BOOK, lawById } from '../book';
 import { CONST } from '../book/constants';
 import { KINSHIP, principlesOf } from '../book/principles';
+import { portFit, type PortFit } from '../book/quantities';
+import { advance, plan, type Boundary, type Region } from './clock';
+import { sphereConductance, sphereMass } from './hold';
 import { DIMLESS, dimOf, dimText, integerNullSpace, sameDim, type Dim } from '../lang/dimension';
 import { evaluate, ofLeaf, type Derivation } from '../lang/evaluate';
 import type { Law, Port } from '../lang/law';
@@ -154,6 +157,72 @@ export function molesOf(unit: string): number {
   return count(top ?? '') - under.reduce((a, s) => a + count(s), 0);
 }
 const dim6 = (unit: string): number[] => [...dimOf(unit), molesOf(unit)];
+
+/* ────────────────────── each thing at its own time: the mechanistic twin of proper time ──────────────────────── */
+//
+// THE ONE LAW SAYS NOTHING ADVANCES ON A COMMON CLOCK, and that holds twice over, for two different reasons that are
+// the same statement:
+//
+//   RELATIVISTICALLY   a worldline's own time runs at dτ/dt = √(1 − v²/c²) — `rate` above. Its clock is set by how
+//                      fast it moves through space, because motion through space is motion NOT through time.
+//   MECHANISTICALLY    a region's own time is its capacity over its conductance, τ = C / G — the time it takes to
+//                      come to terms with its surroundings. Its clock is set by what it is made of.
+//
+// Both are a time, both land at time^1 on the tree below, and in neither case is there a clock the world keeps for
+// everything. `substrate/clock.ts` advances a set of regions each on its own step — steps as powers of two of the
+// finest, so the clocks meet and nothing is made or lost between them — and it was unreachable from any door until
+// this join, which is why it is here and not beside here: it is the same law, applied to a region instead of a
+// worldline.
+
+/** A REGION'S OWN TIME: τ = C / G, as a record that says where it came from. A time, so time^1 on the tree. */
+export function ownTime(name: string, C: number, G: number): Derivation {
+  if (!(G > 0)) return ofLeaf(leaf(`own time of ${name}`, null, 's', { class: 'unknown' }));
+  return ofLeaf(leaf(`own time of ${name}`, C / G, 's', { class: 'measured',
+    source: `its capacity ${C} J/K over its conductance ${G} W/K: the time it takes to come to terms with its surroundings` }));
+}
+
+/** A REAL BODY'S OWN TIME: a sphere of radius r, of a material, in a still medium. The capacity is its mass times
+ *  its specific heat; the least conductance is conduction alone, 4π k r (Carslaw & Jaeger). `substrate/hold.ts` owns
+ *  that geometry; this puts it through the one definition above, so there is one idea of "its own time" and not two. */
+export function ownTimeOfSphere(r: number, rho: number, cp: number, k: number): Derivation {
+  return ownTime(`a sphere of radius ${r} m`, sphereMass(r, rho) * cp, sphereConductance(r, k));
+}
+
+export interface Advanced {
+  /** each region's own time, and the step its clock was actually given */
+  clocks: { region: string; own: number; step: number; power: number; multiple: number }[];
+  /** content at the start, made during, and at the end — these must balance */
+  start: number; made: number; end: number; slip: number;
+  /** region-steps taken against what one common finest clock would have cost */ steps: number; onOneClock: number;
+  conserved: boolean;
+  says: string[];
+}
+
+/** ADVANCE A SET OF REGIONS, EACH ON ITS OWN CLOCK, and check the one thing that must hold: that giving every region
+ *  a different clock neither makes nor loses any content. A multi-rate integrator is only worth having if that is
+ *  true, so it is asserted here rather than hoped for — and the saving is reported beside it, because the whole
+ *  reason not to put the world on one clock is that the finest region would then set the cost of every other. */
+export function advanceByOwnClocks(regions: Region[], boundaries: Boundary[], fraction: number, duration: number): Advanced {
+  const p = plan(regions, boundaries, fraction);
+  const run = advance(regions, boundaries, p, duration);
+  const slip = Math.abs(run.end - (run.start + run.made));
+  const scale = Math.max(1e-12, Math.abs(run.start) + Math.abs(run.made));
+  const conserved = slip / scale < 1e-6;
+  const onOneClock = regions.length * Math.ceil(duration / p.finest);
+  return {
+    clocks: regions.map((r, i) => ({ region: r.name, own: p.own[i]!, step: p.step[i]!,
+      power: inTime(dimOf('s')), multiple: Math.round(p.step[i]! / p.finest) })),
+    start: run.start, made: run.made, end: run.end, slip,
+    steps: run.steps, onOneClock, conserved,
+    says: [
+      `${regions.length} regions, each on its own clock: ${p.groups.length} group${p.groups.length === 1 ? '' : 's'} that exchange anything, the finest step ${p.finest.toPrecision(3)} s.`,
+      ...regions.map((r, i) => `  ${r.name}: its own time is ${p.own[i]!.toPrecision(3)} s, so it steps every ${p.step[i]!.toPrecision(3)} s — ${Math.round(p.step[i]! / p.finest)}× the finest, and a whole number of it, so the clocks meet.`),
+      conserved
+        ? `Content balances: ${run.start.toPrecision(6)} J held, ${run.made.toPrecision(6)} J made, ${run.end.toPrecision(6)} J at the end — nothing was made or lost BETWEEN the clocks.`
+        : `CONTENT DOES NOT BALANCE: off by ${slip.toPrecision(3)} J. Giving regions different clocks has made or lost content, which is the one thing a multi-rate integrator may not do.`,
+      `${run.steps} region-steps against ${onOneClock} on one common clock: ${(onOneClock / Math.max(1, run.steps)).toFixed(1)}× less work, which is the whole reason the world does not keep one clock for everything.`,
+    ] };
+}
 
 /* ──────────────────────────────── the tree: time, and every sensor hanging from it ─────────────────────────── */
 
@@ -345,7 +414,7 @@ export function kinshipFeeds(): { from: string; to: string; how: string; alsoFee
 export interface Reached {
   got: Derivation | null;
   /** each law fired, in order, with what it gave and WHAT IT BOUND TO WHAT */
-  chain: { law: string; gives: string; unit: string; power: number; bound: { port: string; from: string; byName: boolean }[] }[];
+  chain: { law: string; gives: string; unit: string; power: number; bound: { port: string; from: string; portFit: PortFit }[] }[];
   /** why it stopped, when it did not get there */ refused: string | null;
   /** ports filled by something of the right dimension but the wrong name: read these before trusting the number */
   stretched: string[];
@@ -359,56 +428,37 @@ export interface Pooled { name: string; d: Derivation; steps: number }
  *  the rules about what may fill a port live in exactly one place. Returns the binding, or why it cannot be made. */
 function bindPorts(l: Law, pool: readonly Pooled[], stretch = true) {
   const env: Record<string, Derivation> = {};
-  const bound: { port: string; from: string; byName: boolean }[] = [];
+  const bound: { port: string; from: string; portFit: PortFit }[] = [];
   let steps = 0;
   for (const p of l.inputs) {
-    const bare = sameDim(dimOf(p.unit), DIMLESS) && molesOf(p.unit) === 0;
-    const sameDimension = pool.filter((x) => x.d.value !== null && sameDim(x.d.dim, dimOf(p.unit)));
-    const byName = sameDimension.filter((x) => answersToPort(x, p));
-    // `stretch` is what separates a targeted calculation from an observation. Asked for one specific quantity, a
-    // binding of the right dimension under another name is worth offering with a warning. Asked what can be known
-    // about a thing, it is worth nothing: 28 of 32 findings came back stretched on the first run — "read pitch as
-    // its wavelength", "read pitch as its height" — and the four real ones were buried in them.
-    const hits = bare || !stretch ? byName : (byName.length ? byName : sameDimension);
+    const pd = dimOf(p.unit);
+    // A DIMENSIONLESS PORT IS NEVER FILLED BY A STRETCH. 115 distinct kinds in the book share the dimensionless 1 —
+    // a friction coefficient, a Froude number, a count of teeth, an efficiency — so a dimensional match between two
+    // of them carries no information whatever.
+    const bare = sameDim(pd, DIMLESS) && molesOf(p.unit) === 0;
+    const graded = pool.filter((x) => x.d.value !== null)
+      .map((x) => ({ x, g: answersToPort(x, p, pd) })).filter((e) => e.g !== 'no');
+    const exact = graded.filter((e) => e.g === 'exact'), kin = graded.filter((e) => e.g === 'kin');
+    // exact beats kin beats stretched, always: the same KIND of quantity is preferred over the same dimension.
+    const hits = exact.length ? exact : kin.length ? kin : (bare || !stretch ? [] : graded);
     if (!hits.length) return { ok: false as const, why: null };
-    if (new Set(hits.map((h) => h.d.value)).size > 1) return { ok: false as const,
-      why: `${l.id} wants ${p.name} (${p.unit}) and ${hits.length} of what you have could be it — ${hits.map((h) => h.name).join(', ')} — with different values. Name which one, rather than have it pick.` };
-    env[p.sym] = hits[0]!.d;
-    steps = Math.max(steps, hits[0]!.steps);
-    bound.push({ port: p.name, from: hits[0]!.name, byName: answersToPort(hits[0]!, p) });
+    if (new Set(hits.map((h) => h.x.d.value)).size > 1) return { ok: false as const,
+      why: `${l.id} wants ${p.name} (${p.unit}) and ${hits.length} of what you have could be it — ${hits.map((h) => h.x.name).join(', ')} — with different values. Name which one, rather than have it pick.` };
+    env[p.sym] = hits[0]!.x.d;
+    steps = Math.max(steps, hits[0]!.x.steps);
+    bound.push({ port: p.name, from: hits[0]!.x.name, portFit: hits[0]!.g });
   }
-  return { ok: true as const, env, bound, steps, agree: bound.filter((b) => b.byName).length };
+  return { ok: true as const, env, bound, steps, agree: bound.filter((b) => b.portFit === 'exact').length };
 }
 
-/** Does this quantity answer to that port's name? The one name test, used by the binder and by the
- *  resolver in `derive.ts`, so what counts as "the same quantity" is decided in exactly one place. */
-export const answersToPort = (x: { name: string; d: { name: string } }, p: { name: string; sym: string }): boolean => {
-  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const a = norm(x.name), b = norm(p.name), sym = norm(p.sym);
-  return a === b || a === sym || norm(x.d.name) === b || b.includes(a) || a.includes(b);
+/** HOW WELL what is held answers to a port, by KIND and not by dimension. `book/quantities.ts` owns the judgement;
+ *  this only picks the better of the two names a record carries. */
+export const answersToPort = (x: { name: string; d: Derivation }, p: Port, portDim: Dim): PortFit => {
+  const a = portFit(x.name, p, x.d.dim, portDim), b = portFit(x.d.name, p, x.d.dim, portDim);
+  const rank = { exact: 3, kin: 2, stretched: 1, no: 0 } as const;
+  return rank[a] >= rank[b] ? a : b;
 };
 
-/** THE LAW CALCULATOR. Given what you have, as records, get what you want — by walking the derived feed graph and
- *  actually RUNNING each law through `step`, so the answer comes back as a Derivation whose `breakdown` reads the
- *  whole tree down to every measurement. This is the join that was missing: a chain used to be found and never
- *  evaluated.
- *
- *  DIMENSION IS NOT IDENTITY, and this is the thing to understand before trusting any number out of here. A chain
- *  pitch and a pendulum length are both `m`, so a search that binds by dimension alone will happily read one as the
- *  other and hand back an "impact speed" computed from a sprocket. The maths is right and the physics is nonsense.
- *  Three things are done about it, none of them a guess:
- *
- *    1. A DIMENSIONLESS PORT IS NEVER BOUND BY DIMENSION. Every ratio in the book is `-` — a Froude number, an
- *       efficiency, a count of teeth — and they are not interchangeable at all. Such a port binds only to something
- *       NAMED for it, and otherwise the law simply does not fire.
- *    2. A BINDING WHOSE NAMES AGREE IS PREFERRED. Where several laws could fire, the one whose ports are filled by
- *       quantities actually called that wins, so the sensible chain beats the dimensional coincidence.
- *    3. WHAT WAS STRETCHED IS REPORTED. Every port filled by the right dimension under a different name is listed in
- *       `stretched` and answersToPort in `says`. A number whose chain stretched something is not wrong, it is unverified,
- *       and the caller is told which binding to check rather than left to assume.
- *
- *  AND IT WILL NOT GUESS between two records that could both fill one port and disagree: it stops and names them.
- *  Binding the wrong temperature is exactly the silent error that poisons every number downstream of it. */
 export function calculate(target: string, given: Record<string, Derivation>, laws: readonly Law[] = BOOK, mostSteps = 6): Reached {
   const want = dimOf(target);
   const pool: Pooled[] = Object.entries(given).map(([name, d]) => ({ name, d, steps: 0 }));
@@ -423,7 +473,7 @@ export function calculate(target: string, given: Record<string, Derivation>, law
     // Every law that COULD fire this round, best binding first: one that reaches the target, then one whose names
     // agree most, then the simplest. Firing the first merely-dimensionally-valid law is how a sprocket became a
     // pendulum; ranking is what makes the sensible chain win when one exists.
-    const ready: { l: Law; env: Record<string, Derivation>; bound: { port: string; from: string; byName: boolean }[]; agree: number }[] = [];
+    const ready: { l: Law; env: Record<string, Derivation>; bound: { port: string; from: string; portFit: PortFit }[]; agree: number }[] = [];
     for (const l of laws) {
       if (fired.has(l.id)) continue;
       const b = bindPorts(l, pool);
@@ -449,7 +499,7 @@ export function calculate(target: string, given: Record<string, Derivation>, law
     if (!moved) break;
   }
 
-  const stretched = chain.flatMap((c) => c.bound.filter((b) => !b.byName).map((b) => `${c.law} read "${b.from}" as its ${b.port}`));
+  const stretched = chain.flatMap((c) => c.bound.filter((b) => b.portFit === 'stretched').map((b) => `${c.law} read "${b.from}" as its ${b.port}`));
   const there = done();
   if (there) {
     const how = chain.length

@@ -116,6 +116,69 @@ if (want[0] === 'time') {
   process.exit(0);
 }
 
+// `npm run substrate -- engine` — THE ENGINE'S OWN PARTS, RUN.
+//
+// Eleven files of `substrate/` were reachable from no door at all: the engine advertised as whole with pieces still
+// in the box. `clock.ts` and `hold.ts` were joined into the one law instead (each thing at its own time, whether
+// that time comes from its speed or from what it is made of). These four are reached here, and each one RUNS and
+// prints a number you can check by hand rather than merely being imported.
+if (want[0] === 'engine') {
+  const { attemptRate, changeTime, barrierFromViscosity } = await import('../substrate/rate');
+  const { halfIonized, ionizedFraction } = await import('../substrate/compose');
+  const { causal, generate, timeOf } = await import('../substrate/scale');
+  const { ownTimeOfSphere, advanceByOwnClocks, asTime } = await import('../substrate/time');
+  const { says } = await import('../substrate/record');
+
+  console.log('EACH THING AT ITS OWN TIME \u2014 substrate/clock.ts and substrate/hold.ts, joined into the one law');
+  const regions = [{ name: 'a thin fin', C: 2, T0: 400 }, { name: 'the block', C: 900, T0: 300 }, { name: 'the room', C: 1e9, T0: 293 }];
+  for (const l of advanceByOwnClocks(regions, [{ a: 0, b: 1, G: 4 }, { a: 1, b: 2, G: 0.8 }], 0.4, 60).says) console.log(`  ${l}`);
+  console.log(`  a 1 mm steel ball in still air: ${says(ownTimeOfSphere(0.001, 7850, 490, 0.026))}`);
+  console.log('');
+
+  console.log('WHAT HAPPENS DURING A CHANGE \u2014 substrate/rate.ts (Eyring, J. Chem. Phys. 3:107, 1935)');
+  console.log(`  the thermal attempt rate at 300 K is kT/h = ${attemptRate(300).toPrecision(5)} per second \u2014 ${asTime('1/s').says}`);
+  console.log(`  a 50 kJ/mol barrier at 300 K is crossed in ${changeTime(50000, 300).toPrecision(4)} s; at 400 K, ${changeTime(50000, 400).toPrecision(4)} s`);
+  console.log(`  water's viscosity at 300 K implies a barrier of ${(barrierFromViscosity(8.9e-4, 1.8e-5, 300) / 1000).toPrecision(3)} kJ/mol`);
+  console.log('');
+
+  console.log('WHAT MATTER IS MADE OF, AND WHEN IT COMES APART \u2014 substrate/compose.ts (Saha)');
+  console.log(`  hydrogen at 1e20 per m\u00B3 is half ionized at ${halfIonized(1e20).toPrecision(5)} K`);
+  for (const T of [5000, 9000, 15000]) console.log(`    at ${T} K it is ${(ionizedFraction(T, 1e20) * 100).toFixed(1)}% ionized`);
+  console.log('');
+
+  console.log('WHAT CAN BE RESOLVED OF A SYSTEM \u2014 substrate/scale.ts');
+  const g = generate({ c: causal() });
+  console.log(`  from the constants alone: ${g.mechanisms.length} mechanism(s), ${g.lengths.length} length(s)`);
+  for (const m of g.mechanisms.slice(0, 3)) console.log(`    ${m.text}: crossing 1 m takes ${timeOf(m, 1).toPrecision(4)} s`);
+  console.log('');
+
+  console.log('CHOOSING THE REPRESENTATION TO GENERATE IN \u2014 substrate/tune.ts');
+  // The tuner searches an axis for the coarsest value that still keeps its contract. Here the axis is a time step
+  // and the "manifold" is the error of an explicit Euler step on dy/dt = -y over one second, whose exact answer is
+  // e^-1: a real judgement with a real contract, so the search has something to find rather than a stub to agree with.
+  const { tune } = await import('../substrate/tune');
+  const { setting } = await import('../substrate/record');
+  const steps = [0.5, 0.25, 0.125, 0.0625, 0.03125].map((v) => setting(`a step of ${v} s`, v, 's', 'the tuner'));
+  const t = tune({ sym: 'dt', values: steps },
+    (v) => { const dt = v.value!; let y = 1; for (let i = 0; i < Math.round(1 / dt); i++) y += -y * dt; return { dt, y }; },
+    (m) => ({ refusedBy: [], kept: Math.abs(m.y - Math.exp(-1)) < 0.02, quantities: {} }));
+  for (const st of t.path) console.log(`  a step of ${st.value.value!.toPrecision(4)} s \u2192 ${st.kept ? 'within 2% of e\u207B\u00B9' : 'too coarse'}`);
+  console.log(`  the tuner's choice: ${t.chosen ? `${t.chosen.value.value!.toPrecision(4)} s \u2014 the coarsest step that still holds` : 'none of them held'}`);
+  console.log('');
+
+  console.log('STILL REACHED BY NO DOOR, and what each needs \u2014 named so it is not claimed as done:');
+  console.log('  attempt.ts      an Intent from ask/want, so the first manifolding of a want can be attempted');
+  console.log('  explore.ts      a Space factory, preference laws and an observer: the edge-of-the-language experiment');
+  console.log('  project.ts      a frame and its Prisms from substrate/coupling.ts, to project a scene for the renderer');
+  console.log('  study-joint.ts  a booted Jolt and a list of JointCases (mass, reach, bolt, count)');
+  console.log('  study-swing.ts  a booted Jolt and a list of SwingCases (release, friction)');
+  console.log('  The last two boot the physics kernel; the first three need the generative loop. Both are real work,');
+  console.log('  not a missing import, and neither is pretended here.');
+  console.log('');
+  console.log('SUBSTRATE: the engine\u2019s own parts');
+  process.exit(0);
+}
+
 // `npm run substrate -- know <part> [quantity …]` — THE ONE HIERARCHY, ASKED.
 //
 // A part decomposes into sub-parts down to a material; a quantity decomposes into the quantities its law needs down

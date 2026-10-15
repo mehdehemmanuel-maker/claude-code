@@ -5,7 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { BODY_TEMPERATURE, KLEIBER, MEDIA_CONDUCTIVITY, SMALLEST_MAMMAL, TISSUE } from '../../src/data/life';
-import { heldBy, leastMassToHold, ownTime, sphereMass } from '../../src/nexus/substrate/hold';
+import { heldBy, leastMassToHold, sphereMass } from '../../src/nexus/substrate/hold';
+// its own time is ONE idea and `substrate/time.ts` owns it, beside the relativistic twin: hold.ts owns the sphere.
+import { ownTimeOfSphere } from '../../src/nexus/substrate/time';
+const ownTime = (r: number, rho: number, cp: number, k: number) => ownTimeOfSphere(r, rho, cp, k).value!;
 
 const dT = BODY_TEMPERATURE - 288.15;
 const air = MEDIA_CONDUCTIVITY.air.k, water = MEDIA_CONDUCTIVITY.water.k;

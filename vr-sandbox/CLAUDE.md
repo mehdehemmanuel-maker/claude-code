@@ -364,6 +364,13 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   ways must agree**: `clashes()` reports both routes and both numbers where they do not, which is what makes the
   structure load-bearing — it caught `gear-small`'s volume 48% apart (bounding box vs ellipsoid) and its height 70%
   apart on the first run. A clash is a fault in the DATA, not in the world.
+- **A DIMENSION IS NOT A QUANTITY** (`book/quantities.ts`, derived from the book's own 572 port names). Three
+  things, kept apart: a DIMENSION is algebra (`kg m^-3`); a KIND OF QUANTITY is a named sort (density, torque,
+  length); a QUANTITY is that kind of a specific thing. 115 kinds share the dimensionless `1`, 78 share `m`, and 27
+  share `kg m^2 s^-2` — torque, kinetic energy and a bending moment among them. So a port takes a `portFit` in three
+  grades: **exact** (same kind), **kin** (same sort, same dimension — recorded), **stretched** (dimension only —
+  never silent, and refused outright for a dimensionless port). `homonyms()` reports the ten places the BOOK uses one
+  name for two dimensions (`speed` as both `m/s` and `1/s`); those are not yet split.
 - **DIMENSION IS NOT IDENTITY, and `calculate` is where that bites.** A chain pitch and a pendulum length are both
   `m`, so a search that binds a law's ports by dimension alone will read one as the other and hand back an "impact
   speed" computed from a sprocket — which it did, on the first run. Three things answer it, none a guess: a

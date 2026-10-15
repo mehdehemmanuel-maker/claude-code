@@ -229,6 +229,60 @@ and until it is done the reframe is demonstrated rather than adopted. Also absen
 metric is flat here), and any coupling between a worldline's proper time and the existing `clock.ts` local clocks,
 which already advance each region at its own time and are the natural place for this to land.
 
+## Run 8j — a dimension is not a quantity, and five of the eleven engine files wired
+
+*"how would you define quantity ain't that the same thing as density anyways figure out 1 and 2"* — the two things
+Run 8i named as open and did not fix.
+
+**No: density is A quantity, not the concept.** Metrology keeps three things apart and now so does the code — a
+DIMENSION is algebra (`kg m^-3`), a KIND OF QUANTITY is a named sort (density, torque, length), and a QUANTITY is
+that kind of a specific thing (this gear's density, which is what `know` returns). Torque and kinetic energy are
+different kinds sharing one dimension. That distinction was the whole of fault 1.
+
+**THE VOCABULARY IS DERIVED, NOT WRITTEN** (`book/quantities.ts`). The book already names every port of every law —
+**572 distinct names**, used in anger — and that IS the vocabulary. Measured from it, the case for the fix:
+
+| dimension | kinds sharing it |
+|---|---|
+| `1` (dimensionless) | **115** — friction coefficient, Froude number, shape factor, slope angle |
+| `m` | **78** — wheel radius, height, distance, bend radius, deflection |
+| `kg m^2 s^-2` | **27** — **torque, kinetic energy, bending moment** |
+
+A port now takes a `portFit` in three grades instead of a yes: **exact** (the same kind), **kin** (the same sort at
+the same dimension — a `wheel radius` offered for a `radius`, allowed and recorded), **stretched** (nothing but the
+dimension agrees — never silent, and refused outright for a dimensionless port, where a dimensional match carries no
+information at all). The cure is verified on the original fault: asked for a speed given a sprocket's pitch, it no
+longer answers with a pendulum's `impact speed`; named properly it finds `chain.speed` with all three bindings
+`exact`. `know` refuses a stretch entirely; `calculate` takes one only as a last resort and says so.
+
+**AND THE BOOK CONTRADICTS ITSELF IN TEN PLACES**, which `homonyms()` now reports: `speed` is used for both a `m/s`
+and a `1/s` (a linear speed and an angular one under one word), `conductivity` for both the thermal and the
+electrical, `rate` for four different dimensions. Each is two or more kinds wearing one name, and any binding that
+trusts the name is wrong about one of them. Reported, not yet split — named here so it is not claimed.
+
+**FIVE OF THE ELEVEN ENGINE FILES WIRED, and two of them joined rather than merely imported.** `substrate/` had 11 of
+its 78 files reachable from no door: the engine advertised as whole with pieces in the box.
+
+- **`clock.ts` and `hold.ts` joined into the one law.** The law says nothing advances on a common clock, and that is
+  true twice: RELATIVISTICALLY a worldline's own time is `dτ/dt = √(1−v²/c²)`, set by how fast it moves;
+  MECHANISTICALLY a region's own time is `C/G`, set by what it is made of. Both are a time, both land at `time^1`,
+  and `ownTime` is now ONE definition — `hold.ts` had a second one for spheres, which is deleted; it keeps the
+  geometry (4π k r, Carslaw & Jaeger) and `ownTimeOfSphere` puts the two together. `advanceByOwnClocks` runs a fin,
+  a block and a room on their own clocks (0.5 s, 188 s, 1.25e9 s), asserts the one thing a multi-rate integrator may
+  not do — **content balanced exactly, nothing made or lost between the clocks** — and does it in 303 region-steps
+  against 900 on one common clock.
+- **`rate.ts`, `compose.ts`, `scale.ts`, `tune.ts` reached through `npm run substrate -- engine`**, each RUNNING and
+  printing a number checkable by hand: `kT/h` at 300 K = 6.2510e12 /s; hydrogen at 1e20 m^-3 half ionized at 8999.5 K;
+  light crossing 1 m in 3.336 ns; and the tuner searching an explicit-Euler step for the coarsest that stays within
+  2% of e^-1, which it puts at 0.0625 s (by hand, `(1−h)^(1/h)`: 0.125 gives 0.3436, 6.6% off; 0.0625 gives 0.3561).
+
+**Unreached: 28 files → 22; `substrate/` 11 → 5.** The five left are `attempt.ts` (needs an Intent),
+`explore.ts` (a Space factory and preference laws), `project.ts` (a frame and its Prisms), and `study-joint.ts` /
+`study-swing.ts` (a booted Jolt and their case lists). The door prints exactly that, so the gap names itself.
+
+Three more name clashes fixed rather than permitted: `Kind`→`QuantityKind` (`kinds/` owns Kind: a trade's catalogue,
+a different idea), `KINDS`→`QUANTITY_KINDS`, `grade`→`portFit`. 23 new tests; gate 2,292 across 188 files.
+
 ## Run 8i — one hierarchy: a part, its quantities, the laws that give them, and time at the root
 
 *"merge all systems delete the others all make all sensors map to time these are not to be seperate systems"* — then
