@@ -1262,3 +1262,85 @@ wrong version can come back.
 GATE: PASS (2368 of 2368) — 180.5s, tidy 24/24, census 178 test-only / 141 dead / 22 unreached files, unchanged.
 (The first gate run FAILED, and the lint was right: the crash figures above were pasted with no command beside them,
 which is the rule written after four wrong numbers survived three rounds. Named, then green.)
+
+---
+
+## Run 8v — the lesson language says a second process
+
+The other half of *"the component library and more universal edges everything more interconnected and optimized"*,
+and the half that had the sharper number behind it.
+
+### The measurement that set the round
+
+`teach/edges.ts` calls itself *"the language every lesson is said in"*. Its edge kinds were `insert | hold | tin |
+solder | trim | power | rest` — **every one of them a step in soldering a through-hole board**, while
+`works/plan.ts` can route about twenty processes (drill, mill, turn, saw, cut, fasten, bond, weld-mig, weld-tig,
+spot-weld, solder, kiln, sinter, bisque, glaze, cure, program, measure, probe, transport). **The system could make
+twenty and teach one.** A language that says one process is not a language; it is a script with a general-sounding
+header.
+
+### The test: say a second process, and see what breaks
+
+Bolting, because the project already had every number for it and nothing in common with soldering — no tool, no
+material, no physics. `teach/bolt-joint.ts` (126 lines) is one bolted joint as physics, the way `solder-joint.ts` is
+one through-hole joint:
+
+- a bolt holds by being **stretched**, so every figure follows from that: stress area
+  `As = (π/4)(d − 0.9382p)²` (ISO 898-1 — 20.1 mm² for M6, which is the standard's own table value, computed not
+  quoted), proof stress by class (ISO 898-1 Table 3), preload at 0.75 of proof for a reusable joint, and
+  `T = K·d·F` for the torque that reaches it;
+- the three figures that are practice rather than measurement say so: the preload fraction, the nut factor
+  (K = 0.2 plain, **±25 % scatter, which is why a torque wrench sets a preload only roughly**), and the engagement
+  depths (0.8 d steel — what an ISO 4032 nut gives — 1.5 d cast iron, 2 d aluminium);
+- M6 × 25, 12 mm grip, class 8.8 comes out at **9,659 N of preload and 11.6 N·m**, against the 10–11.6 N·m
+  published tables give.
+
+### What it found
+
+**The `Said` shape generalised cleanly.** A bolted joint comes out as `align → fit → start → torque → rest`, every
+figure in the words from the joint, every refusal before anyone tries: a hole the shank will not pass, a hole over a
+millimetre loose, a grip no ISO 888 length reaches, too little thread for the material, a key without the size, a
+wrench whose range does not reach the torque. **And `rest` is reused unchanged** — the iron going back in its stand
+and a joint being re-checked after it beds in are the same kind of step. Two kinds of seven carried across.
+
+**One thing did not generalise, and the type system said so.** `solder-lesson.ts` holds
+`DONE: Record<EdgeKind, …>` — when each step is done **on the bench that watches you do it**. Widening `EdgeKind`
+broke it, which is the honest answer: a lesson in another process can be SAID in this language but this bench cannot
+WATCH it, because watching is what a bench knows and that bench knows solder. Split into `SolderKind` (what the
+bench watches) and `EdgeKind` (what the language says), with `buildSteps` throwing by name on a step it cannot
+watch rather than passing it silently. **A bolted bench is its own, and is not built.**
+
+### Three faults in my own work, each caught by something rather than by me
+
+1. **The tapped-hole stack.** I worked out the bolt length from grip + washers and checked the engagement
+   afterwards — so a 12 mm grip into a tapped hole picked a 16 mm bolt and then **refused its own choice** for
+   having 2.4 mm engaged. A tapped hole's engagement is part of the stack the bolt spans. Caught by the test.
+2. **Two name clashes**, `Grade` (`solder-joint.ts` already has one, for how good a joint came out) and `PROOF`
+   (`world/behave.ts`). Caught by `npm run tidy`, fixed as the lint asks — by giving mine the name of what it
+   actually is (`BoltClass`, `PROOF_STRESS`), not by an allow-list line.
+3. **Two prose faults**, "the screw, class 8.8 down through" and "one washer (1.6 mm each)". Caught by printing the
+   lesson and reading it, which is the only way prose is ever caught.
+
+### Still open
+
+- Nineteen processes still have no edges. Bolting proves the language carries; it does not carry them.
+- A bolted BENCH (watching, as `solder-lesson.ts` watches soldering) is not built, and the type now says so plainly.
+- `ENGAGE`'s cast-iron and aluminium figures are practice, not measurement, and are labelled so rather than sourced
+  to a standard.
+
+### A fourth fault, caught by the census at the end of the round
+
+I wrote "census unchanged" and then ran it: **179 test-only, up one.** `boltSteps` had NO DOOR — it existed only in
+its own test, which is precisely the fault `CLAUDE.md`'s drift gate names ("an instrument with no door is not a
+finding, it is bloat") and precisely what Run 8s had to fix for `clashcause.ts`. Fixed by giving it the door the
+question deserves, on the owner that already answers "what does the library make of these words":
+
+    npm run part -- --bolt M6 12                        an M6 through 12 mm of grip, into a nut
+    npm run part -- --bolt M6 12 1 tapped-aluminium-6   refused, and why
+
+The refusal path printed its reason twice (the hole being too shallow, and the thread engaged in it being short, are
+one fact said two ways); it says it once now.
+
+GATE: PASS (2380 of 2380) — 193.0s, tidy 24/24 with no allow-list line added (the two name clashes were fixed by
+renaming, not excusing). Census: 178 test-only, 141 dead, 22 unreached files — back to unchanged ONCE the door
+existed, which it did not when I first wrote this line.

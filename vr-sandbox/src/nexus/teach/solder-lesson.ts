@@ -10,7 +10,7 @@
 
 import { BB, HANDS } from '../machines/kit-solder';
 import { LEADED_TIP, LESSONS, PROTO_BUILD } from './lessons';
-import { jointOf, ledCurrents, lessonOf, PROTRUSION, type Build, type EdgeKind, type Thing as Part, type XZ } from './edges';
+import { jointOf, ledCurrents, lessonOf, PROTRUSION, type Build, type EdgeKind, type SolderKind, type Thing as Part, type XZ } from './edges';
 import { PICO_PIN_NAMES } from '../boards/sbc';
 import { ALLOYS, freshJoint, grade, idealVolume, PICO_PIN, step, timeToMelt, type Grade, type JointShape, type JointState } from './solder-joint';
 
@@ -163,8 +163,11 @@ export const STEPS: Step[] = [
 
 const good = (q: BenchJoint) => grade(q.j, q.shape).grade === 'good';
 /** When a step said from an edge is done on the bench, by the edge's kind: the thing in; the board in the hands; the tip
- *  hot and tinned; every joint of its things good; and trimmed to height; the circuit lit; the iron in its stand. */
-const DONE: Record<EdgeKind, (things: string[]) => (b: Bench) => boolean> = {
+ *  hot and tinned; every joint of its things good; and trimmed to height; the circuit lit; the iron in its stand.
+ *  Over `SolderKind`, not `EdgeKind`, and the difference is a finding rather than a convenience: a lesson in another
+ *  process can be SAID in this language (Run 8v said a bolted one) but this bench cannot WATCH it, because watching
+ *  is what a bench knows and this bench knows solder. A bolted bench is its own, and the type says so. */
+const DONE: Record<SolderKind, (things: string[]) => (b: Bench) => boolean> = {
   insert: (t) => (b) => b.placed[t[0]!] === true && !(thingOf(b, t[0]!)?.hangs && b.on),
   hold: () => (b) => b.placed.proto === true,
   tin: () => (b) => b.iron.T >= 300 && b.iron.tinned > 0,
@@ -179,7 +182,13 @@ const DONE: Record<EdgeKind, (things: string[]) => (b: Bench) => boolean> = {
 const stepsMade = new WeakMap<Build, Step[]>();
 export function buildSteps(build: Build): Step[] {
   let s = stepsMade.get(build); if (s) return s;
-  s = lessonOf(build).steps.map((q) => ({ do: q.do, ...(q.check ? { check: q.check } : {}), done: DONE[q.kind](q.things), src: `${q.kind} ${q.things.join(', ')}: ${q.src}` })); stepsMade.set(build, s); return s;
+  // A step this bench cannot watch is not quietly passed: `watchable` refuses it by name, so a lesson from another
+  // process reaching this bench is a loud failure rather than a step that is "done" the moment it is shown.
+  const watchable = (k: EdgeKind): k is SolderKind => k in DONE;
+  s = lessonOf(build).steps.map((q) => {
+    if (!watchable(q.kind)) throw new Error(`the soldering bench cannot watch a "${q.kind}" step: it knows ${Object.keys(DONE).join(', ')}`);
+    return { do: q.do, ...(q.check ? { check: q.check } : {}), done: DONE[q.kind](q.things), src: `${q.kind} ${q.things.join(', ')}: ${q.src}` };
+  }); stepsMade.set(build, s); return s;
 }
 /** The LED lesson's steps. */
 export const PROTO_STEPS: Step[] = buildSteps(PROTO_BUILD);

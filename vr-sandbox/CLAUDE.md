@@ -151,7 +151,8 @@ process - `link.ts` the wire out, the Bluetooth bridge, and what a cutter does i
 `builds.ts` what to throw at it - `pack.ts` the works as a thing to order - `floor.ts` where each station stands -
 `tend.ts` the robot that runs it - `families.ts` the MGN table.
 
-**`teach/`** - `edges.ts` the language every lesson is said in - `lessons.ts` a lesson per step of making something -
+**`teach/`** - `edges.ts` the language every lesson is said in, and `bolt-joint.ts` one bolted joint as physics (the
+second process it says: Run 8v, which found the language carries but the soldering BENCH does not) - `lessons.ts` a lesson per step of making something -
 `solder-lesson.ts` a lesson done by hand - `solder-joint.ts` one through-hole joint as physics -
 `buildpack.ts` what to buy, at its cheapest real offer - `codesim.ts` the computer in the room.
 

@@ -19,6 +19,10 @@
 // whole rather than summarised.
 
 import { FAMILIES, callFamily } from '../parts/families';
+import { boltFigures, refusedBolt } from '../teach/bolt-joint';
+import { boltSteps } from '../teach/edges';
+import { METRIC } from '../parts/threads';
+import { CLEAR } from '../parts/fab';
 import { catalogueItem, searchCatalogue } from '../parts/catalogue';
 import { component, componentOf, missingIn } from '../parts/components';
 import { INVENTORY, itemOf } from '../parts/inventory';
@@ -27,8 +31,37 @@ import { cheapest, priceKeyOf, usd } from '../parts/prices';
 
 const args = process.argv.slice(2);
 const like = args.includes('--like');
+const bolting = args.includes('--bolt');
 const audit = args.includes('--audit');
 const words = args.filter((a) => !a.startsWith('--')).join(' ').trim();
+
+// ---- --bolt: a bolted joint's figures and the lesson said from them --------------------------------------------------
+// The lesson language's second process (src/nexus/teach/bolt-joint.ts, Run 8v), and this is its door: a joint said
+// only in a test is an instrument nobody can run, which is the fault the anchor's drift gate names.
+//   npm run part -- --bolt M6 12            an M6 through 12 mm of grip, one washer, into a nut
+//   npm run part -- --bolt M8 20 2          two washers
+//   npm run part -- --bolt M6 12 1 tapped-aluminium-6    into a 6 mm hole tapped in aluminium: refused, and why
+if (bolting) {
+  const [thread = 'M6', grip = '12', washers = '1', far = ''] = args.filter((a) => !a.startsWith('--'));
+  const m = /^tapped-(steel|cast-iron|aluminium)-(\d+(?:\.\d+)?)$/.exec(far);
+  const into = m ? { kind: 'tapped' as const, matter: m[1]!.replace('-', ' ') as 'steel' | 'cast iron' | 'aluminium', depth: Number(m[2]) } : { kind: 'nut' as const };
+  const T = METRIC[thread.toUpperCase()];
+  const j = { thread: thread.toUpperCase(), grade: '8.8' as const, grip: Number(grip), washers: Number(washers), into, head: 'socket cap' as const, hole: T ? (CLEAR[thread.toUpperCase()] ?? Number(thread.slice(1)) + 0.6) : 0 };
+  const f = boltFigures(j);
+  console.log(`${j.thread} class ${j.grade}, ${j.grip} mm gripped, ${j.washers} washer(s), into ${into.kind === 'nut' ? 'a nut' : `${into.depth} mm tapped in ${into.matter}`}, through a ${j.hole} mm hole`);
+  console.log('');
+  if (refusedBolt(f)) { for (const r of f.refused) console.log(`  REFUSED: ${r}`); console.log(''); console.log('PART: the joint is refused'); process.exit(0); }
+  for (const line of f.says) console.log(`  ${line}`);
+  console.log('');
+  const kit = { key: { name: 'a metric hex key set', sizes: [1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 14, 17, 19], src: 'a full metric set' },
+    spanner: { name: 'a metric spanner set', sizes: [3.2, 4, 5, 5.5, 7, 8, 10, 13, 16, 18, 21, 24, 30, 36], src: 'a full metric set' },
+    wrench: { name: 'a click torque wrench', range: [1, 200] as [number, number], src: 'a wrench covering the range' } };
+  const { steps, refused } = boltSteps(j, ['the first part', 'the second part'], kit);
+  for (const r of refused) console.log(`  REFUSED: ${r}`);
+  for (const q of steps) { console.log(`  [${q.kind}] ${q.do}`); if (q.check) console.log(`      check: ${q.check}`); console.log(`      src:   ${q.src}`); console.log(''); }
+  console.log(`PART: ${steps.length} steps for one bolted joint`);
+  process.exit(0);
+}
 
 // ---- --audit: how much of the library the two-mass check can actually check -----------------------------------------
 // The two masses above are only a check when they are two numbers. For most of the library there is one (nothing is

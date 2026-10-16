@@ -15,6 +15,8 @@ import type { Hole, Layout } from '../embody/breadboard';
 import { PP, ppCol } from '../machines/kit-solder';
 import { axialBody } from '../boards/packages';
 import { ALLOYS, idealVolume, timeToMelt, type JointShape } from './solder-joint';
+import { boltFigures, refusedBolt, type BoltJoint } from './bolt-joint';
+import { METRIC } from '../parts/threads';
 
 export const ADAFRUIT_GUIDE = 'Adafruit Guide to Excellent Soldering (learn.adafruit.com/adafruit-guide-excellent-soldering)';
 /** How far a trimmed lead may stand out of its joint: its end seen in the solder, at most 2.5 mm (IPC-A-610's lead
@@ -106,7 +108,17 @@ export function ledCurrents(p: Power): { v: number; lamps: { id: string; name: s
 /** The first LED's current, its drop, and the cells' voltage. */
 export function ledCurrent(p: Power): { mA: number; v: number; vf: number } { const c = ledCurrents(p), l = c.lamps[0]; return { mA: l?.mA ?? 0, v: c.v, vf: l?.vf ?? 0 }; }
 
-export type EdgeKind = 'insert' | 'hold' | 'tin' | 'solder' | 'trim' | 'power' | 'rest';
+/** The kinds of step a lesson is said in. Up to Run 8v every one of these was a step in soldering a through-hole
+ *  board, while `works/plan.ts` can route about twenty processes — so the "language every lesson is said in" said
+ *  one. `align`, `fit`, `start` and `torque` are the second process (a bolted joint, ./bolt-joint.ts), added to
+ *  find out whether this is a language or a soldering script. `hold` and `rest` were already general and are
+ *  reused unchanged, which is the first evidence either way. */
+export type SolderKind = 'insert' | 'hold' | 'tin' | 'solder' | 'trim' | 'power' | 'rest';
+/** The second process's own kinds. `hold` and `rest` are NOT here: they were already general, and a bolted joint
+ *  reuses them unchanged. That is the first real evidence that this is a language — two kinds of seven carried over
+ *  to a process that shares no tool, no material and no physics with the first. */
+export type BoltKind = 'align' | 'fit' | 'start' | 'torque';
+export type EdgeKind = SolderKind | BoltKind;
 /** A step said from an edge (or from several alike): what to do, how you can tell it is done, the things it is on,
  *  its figures and sources. */
 export interface Said { kind: EdgeKind; things: string[]; do: string; check?: string; src: string }
@@ -207,5 +219,48 @@ export function lessonOf(build: Build): { steps: Said[]; refused: string[] } {
     steps.push({ kind: 'power', things: [p.source], do: one ? `Close ${p.closes}: the LED lights, about ${l[0]!.mA.toFixed(1)} mA (${lit.v.toFixed(2)} V from the cells, less the LED's ${l[0]!.vf.toFixed(2)} V, over the ${l[0]!.ohms} Ω).`
       : `Close ${p.closes}: the LEDs light, ${l.map((c) => `${c.name} about ${c.mA.toFixed(1)} mA (less its ${c.vf.toFixed(2)} V, over its ${c.ohms} Ω)`).join(', ')}, from the cells' ${lit.v.toFixed(2)} V.`, check: one ? 'the LED lit' : l.length === 2 ? 'both LEDs lit' : `all ${count(l.length)} LEDs lit`, src: p.src }); }
   const stand = tool(build, 'stand'); steps.push({ kind: 'rest', things: ['iron'], do: `Put the iron back in ${stand ? stand.name : 'its stand'}.`, check: 'the iron in its stand, the joints cooled', src: 'the safety rule: the iron in its stand every time it leaves your hand' });
+  return { steps, refused };
+}
+
+// ---- the second process: a bolted joint, said in the same language ---------------------------------------------
+/** What is at hand to make a bolted joint with. A joint needs something to turn the bolt and something to hold the
+ *  nut; a torque wrench is what turns a tightening into a figure rather than a feeling. */
+export interface Spanners { key?: { name: string; sizes: number[]; src: string }; spanner?: { name: string; sizes: number[]; src: string }; wrench?: { name: string; range: [number, number]; src: string } }
+
+/**
+ * A bolted joint as steps, from its own figures. The same shape as the soldered lesson: refused before anyone tries,
+ * with why, and every step's words made from the figures rather than written out. What a tool cannot do is a
+ * refusal too — a key that has not got the size, a wrench whose range does not reach the torque.
+ */
+export function boltSteps(j: BoltJoint, parts: [string, string], at: Spanners, o: { friction?: 'plain' | 'zinc' | 'lubricated'; use?: 'reusable' | 'permanent' } = {}): { steps: Said[]; refused: string[] } {
+  const f = boltFigures(j, o);
+  if (refusedBolt(f)) return { steps: [], refused: f.refused };
+  const refused: string[] = [];
+  const driver = f.driveBy === 'hex key' ? at.key : at.spanner;
+  if (!driver) refused.push(`nothing here turns a ${j.head} head: it wants ${f.driveBy === 'hex key' ? 'a hex key' : 'a spanner'}`);
+  else if (!driver.sizes.includes(f.drive)) refused.push(`${driver.name} has no ${mm(f.drive)} mm: the ${j.thread} ${j.head} takes one`);
+  if (j.into.kind === 'nut' && !at.spanner) refused.push('nothing here holds the nut while the bolt is turned');
+  else if (j.into.kind === 'nut' && at.spanner && !at.spanner.sizes.includes(METRIC[j.thread]!.s))
+    refused.push(`${at.spanner.name} has no ${mm(METRIC[j.thread]!.s)} mm: the ${j.thread} nut takes one`);
+  if (at.wrench && (f.torque < at.wrench.range[0] || f.torque > at.wrench.range[1]))
+    refused.push(`${f.torque.toFixed(1)} N·m is outside ${at.wrench.name}'s ${at.wrench.range[0]}–${at.wrench.range[1]} N·m: it cannot be set`);
+  if (refused.length) return { steps: [], refused };
+
+  const [a, b] = parts, bolt = `the ${j.thread} × ${f.length} ${j.head} screw (class ${j.grade})`;
+  const steps: Said[] = [
+    { kind: 'align', things: [a, b], do: `Hold ${a} against ${b} so their ${mm(j.hole)} mm holes line up, and keep them together: the bolt is not what stops them sliding, its clamp is.`,
+      check: 'daylight through both holes at once', src: 'ISO 273 clearance: a bolt in a clearance hole carries by friction, not by shear on its shank' },
+    { kind: 'fit', things: [a, b], do: `Put ${bolt} down through ${a} into ${b}${j.washers ? `, then ${count(j.washers)} ISO 7089 washer${j.washers > 1 ? `s (${mm(METRIC[j.thread]!.h)} mm each)` : ` (${mm(METRIC[j.thread]!.h)} mm)`} on the far end` : ''}${j.into.kind === 'nut' ? `, then the ${j.thread} nut.` : '.'}`,
+      check: j.into.kind === 'nut' ? `${mm(f.protrusion)} mm of thread standing past the nut, at least two pitches` : `it enters the tapped hole square, ${mm(f.engaged)} mm of thread to go in`,
+      src: `its length from the stack: ${mm(j.grip)} mm gripped${j.washers ? ` + ${mm(j.washers * METRIC[j.thread]!.h)} mm of washer` : ''}${j.into.kind === 'nut' ? ` + ${mm(METRIC[j.thread]!.m)} mm nut + ${mm(2 * f.pitch)} mm standing` : ''} = ${mm(f.needed)} mm, so ${f.length} mm off the ISO 888 lengths` },
+    { kind: 'start', things: [a, b], do: `Start it by hand, two or three turns, ${j.into.kind === 'nut' ? 'the nut on the bolt' : 'the bolt into its tapped hole'}. If it does not turn freely by hand, back it out: it is crossed, and forcing it cuts the thread away.`,
+      check: 'it turns freely with your fingers alone', src: 'the thread is cut to a form; a crossed start cuts a second one over it' },
+    { kind: 'torque', things: [a, b],
+      do: `Tighten to ${f.torque.toFixed(1)} N·m with ${at.wrench ? at.wrench.name : `${driver!.name} (${mm(f.drive)} mm)`}${j.into.kind === 'nut' ? `, holding the nut with ${at.spanner!.name} (${mm(METRIC[j.thread]!.s)} mm)` : ''}. That is what stretches it to ${Math.round(f.preload)} N, ${Math.round(f.fraction * 100)} % of its proof load.`,
+      check: at.wrench ? 'the wrench clicks once; no second pull' : `snug, then about a ${f.torque > 20 ? 'third' : 'sixth'} of a turn more — without a wrench the preload is a guess`,
+      src: `ISO 898-1 class ${j.grade} proof ${f.proof} MPa over ${f.stressArea.toFixed(1)} mm²; T = K d F with K = ${f.K} (typical, about ±25 %)${at.wrench ? `; ${at.wrench.src}` : ''}` },
+    { kind: 'rest', things: [a, b], do: 'Check the joint again after the first load: a new joint settles as its faces bed in, and loses some of its stretch.',
+      check: 'the wrench moves it no further at the same setting', src: 'embedment relaxation: a few per cent of preload in the first hours (Bickford)' },
+  ];
   return { steps, refused };
 }
