@@ -1344,3 +1344,64 @@ one fact said two ways); it says it once now.
 GATE: PASS (2380 of 2380) — 193.0s, tidy 24/24 with no allow-list line added (the two name clashes were fixed by
 renaming, not excusing). Census: 178 test-only, 141 dead, 22 unreached files — back to unchanged ONCE the door
 existed, which it did not when I first wrote this line.
+
+---
+
+## Run 8w — the lesson is read out of a real mate, and a wrong refusal is corrected
+
+Run 8v proved the lesson language carries a second process, but `boltSteps` took a HAND-MADE joint: nothing the
+library actually draws was being taught. This closes that, and in doing so the round's own instrument caught a
+refusal that was plainly wrong about the real world.
+
+### The chain, end to end
+
+`parts/mate.ts` already places two parts by matching their hole and thread patterns AND lays the fasteners, so a
+drawn assembly already HAS its bolted joints. `jointsOfMate` only reads them out: the thread is the port's, the grip
+is the parts' own thicknesses, how many is the pattern's length, and the far end is the other port's sex.
+
+    npm run part -- --mate "motorplate nema17 t3 aluminium" "motor face" "stepper NEMA 17 40" "front face" aluminium
+    → the NEMA 17 stepper's front face on the NEMA 17 motor plate's motor face (NEMA 17): 4 × M3
+
+Not one figure in that lesson was typed: four joints because the NEMA square has four holes, M3 because the port says
+so, 3 mm of grip because the plate is 3 mm, 4.5 mm of thread because that is how deep the stepper's face is tapped,
+M3 × 8 because that is what the stack needs off the ISO 888 list. Several alike are one step, which is the language's
+own rule (eight leads soldered alike are one step), and a pattern is pulled down **in a criss-cross and in stages**
+because tightening one bolt relaxes the ones beside it.
+
+### The wrong refusal, and what replaced it
+
+Run 8v's engagement rule refused this joint: a NEMA 17's face is M3 tapped 4.5 mm, 1.5 d, against the 2 d aluminium
+wants. **That refusal would refuse reality — every 3D printer ever built is bolted down through those holes.**
+
+The rule was not wrong; my use of it was. `ENGAGE` says what develops the BOLT's full strength, and falling short of
+it does not make a joint impossible — it makes **the thread, not the bolt, the thing that gives first**, and the
+joint is then taken to what the thread holds. So the refusal became a derating, and the lesson says which it is:
+
+> Tighten each of the four to **1.1 N·m** … That is what stretches it to 1811 N — **held down to that by the thread
+> in aluminium, not by the bolt, which would take more.**
+
+Only less than one full turn of thread is still refused, because that really does hold nothing.
+
+### Two routes to one number, and they disagree
+
+Working out the same thing a second way — the thread's shear area against the material's shear strength — gives
+**5,268 N against a 3,220 N proof load, so by that route 4.5 mm would be ENOUGH.** The two disagree, and this project
+reports a disagreement rather than picking a winner quietly: **the practice rule governs** (it is the conservative
+one) and the shear bound is printed beside it with why it is optimistic — its 0.6 factor ignores thread form,
+tolerance, and that the first turns of a thread carry far more load than the last.
+
+### Faults of my own this round
+
+1. **A washer on a tapped joint was put "on the far end"** — there is no far end; it goes under the head. Caught by
+   reading the printed lesson.
+2. **The torque step still said "75 % of its proof load"** when the thread was the limit. Caught the same way.
+3. **A test of mine encoded the wrong model** (asserting the aluminium case is refused). Replaced by tests that pin
+   the NEMA reality: a short thread derates rather than refuses, and the two routes' disagreement is reported.
+4. **`jointsOfMate` was test-only** — the same doorless fault as Run 8v's `boltSteps`, one round later. Caught by
+   the census BEFORE the round's notes were written this time, and given the `--mate` door above.
+5. The big wrench is refused for an M3 (1.1 N·m is below a 3/8 in wrench's 5 N·m), which is the tool check working
+   and is now a test of its own.
+
+GATE: PASS (2386 of 2386) — 333.0s (the wall clock swung; `npm run perf -- time` is the measure, not this). Tidy
+24/24. Census: 178 test-only, 141 dead, 22 unreached files, unchanged — once `--mate` existed, which it did not when
+the census first ran at 179.

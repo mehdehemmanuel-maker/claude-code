@@ -3,9 +3,11 @@
 // board while works/plan.ts could route about twenty processes, so "the language every lesson is said in" said one.
 
 import { describe, expect, it } from 'vitest';
-import { boltFigures, refusedBolt, ENGAGE, NUT_FACTOR, PRELOAD_FRACTION, type BoltJoint } from '../../src/nexus/teach/bolt-joint';
+import { boltFigures, refusedBolt, NUT_FACTOR, PRELOAD_FRACTION, stripForce, type BoltJoint } from '../../src/nexus/teach/bolt-joint';
 import { boltSteps, type Spanners } from '../../src/nexus/teach/edges';
 import { CAP_KEY, METRIC } from '../../src/nexus/parts/threads';
+import { jointsOfMate } from '../../src/nexus/teach/edges';
+import { component } from '../../src/nexus/parts/components';
 
 const M6: BoltJoint = { thread: 'M6', grade: '8.8', grip: 12, washers: 1, into: { kind: 'nut' }, head: 'socket cap', hole: 6.6 };
 const kit: Spanners = {
@@ -43,15 +45,34 @@ describe('a bolt holds by being stretched, not by filling a hole', () => {
 
 describe('what cannot be made is refused, with why, before anyone tries', () => {
   const why = (j: BoltJoint) => { const f = boltFigures(j); return refusedBolt(f) ? f.refused.join(' | ') : 'made'; };
+  const made = (j: BoltJoint) => { const f = boltFigures(j); if (refusedBolt(f)) throw new Error(f.refused.join('; ')); return f; };
 
   it('a hole the shank will not pass', () => expect(why({ ...M6, hole: 5 })).toMatch(/the hole is 5 mm and the M6 shank is 6 mm/));
   it('a hole so loose the parts shift before it is tight', () => expect(why({ ...M6, hole: 9 })).toMatch(/ISO 273 medium/));
-  it('too little thread in aluminium, where a nut\'s worth is not enough', () => {
-    // 6 mm deep is fine in steel (0.8 d = 4.8) and not in aluminium (2 d = 12)
-    expect(why({ ...M6, into: { kind: 'tapped', depth: 6, matter: 'steel' } })).toBe('made'); // 0.8 d = 4.8 mm, and 6 mm is there
-    expect(why({ ...M6, into: { kind: 'tapped', depth: 6, matter: 'aluminium' } })).toMatch(/the tapped hole is 6 mm deep and 12 mm of thread is needed in aluminium/);
-    expect(ENGAGE.aluminium).toBeGreaterThan(ENGAGE.steel);
+  it('a short thread is a WEAKER joint, not an impossible one', () => {
+    // This replaced a refusal, and the refusal was wrong. A NEMA 17 stepper's front face is M3 tapped 4.5 mm —
+    // 1.5 d, not the 2 d aluminium wants — and every 3D printer ever built is bolted down through it. ENGAGE says
+    // what develops the BOLT's full strength; falling short makes the THREAD what gives first, at its share.
+    const full = made({ ...M6, into: { kind: 'tapped', depth: 12, matter: 'aluminium' } });
+    const half = made({ ...M6, into: { kind: 'tapped', depth: 6, matter: 'aluminium' } });
+    expect(full.limitedBy).toBe('the bolt');
+    expect(half.limitedBy).toBe('the thread in aluminium');
+    expect(half.preload / full.preload).toBeCloseTo(6 / 12, 6); // its share of the engagement it wants
+    expect(half.torque).toBeLessThan(full.torque);
   });
+
+  it('and the two routes to that are reported where they disagree, rather than one quietly winning', () => {
+    // The practice rule (ENGAGE) and the shear bound (stripForce) do not agree; practice governs because the
+    // bound's 0.6 factor ignores thread form, tolerance, and that the first turns carry far more than the last.
+    const f = made({ ...M6, into: { kind: 'tapped', depth: 6, matter: 'aluminium' } });
+    expect(f.strips).toBeCloseTo(stripForce(6, 6, 'aluminium'), 6);
+    expect(f.says.join(' ')).toMatch(/the shear bound disagrees and is the optimistic one/);
+    expect(f.says.join(' ')).toMatch(/The practice rule governs here/);
+  });
+
+  it('less than one full turn of thread holds nothing, and that IS refused', () =>
+    expect(why({ ...M6, into: { kind: 'tapped', depth: 0.5, matter: 'steel' } })).toMatch(/less than one 1 mm pitch/));
+
   it('a grip no stocked bolt reaches', () => expect(why({ ...M6, grip: 400 })).toMatch(/ISO 888 stops at 200 mm/));
   it('a thread the tables do not hold', () => expect(why({ ...M6, thread: 'M7' })).toMatch(/there is no M7 in the metric thread tables/));
 });
@@ -85,5 +106,54 @@ describe('the lesson language says a second process', () => {
   it('without a torque wrench the lesson says the preload is a guess, rather than pretending', () => {
     const { steps } = boltSteps(M6, ['a', 'b'], { key: kit.key!, spanner: kit.spanner! });
     expect(steps.find((s) => s.kind === 'torque')!.check).toMatch(/the preload is a guess/);
+  });
+});
+
+describe('a real mate from the library, taught', () => {
+  // The whole chain: the library draws a NEMA 17 stepper and a motor plate, `parts/mate.ts` knows their ports match,
+  // and the lesson is read out of that geometry — no figure here was typed by anyone.
+  const parts = () => {
+    const a = component('motorplate nema17 t3 aluminium'), b = component('stepper NEMA 17 40');
+    if (typeof a === 'string' || typeof b === 'string') throw new Error(`${a} / ${b}`);
+    return [a.part, b.part] as const;
+  };
+
+  it('reads the joint out of the two parts rather than being told it', () => {
+    const [plate, motor] = parts();
+    const j = jointsOfMate(plate, 'motor face', motor, 'front face', 'aluminium');
+    if (typeof j === 'string') throw new Error(j);
+    expect(j.count).toBe(4);                       // the NEMA 17 square
+    expect(j.joint.thread).toBe('M3');             // the port's own thread
+    expect(j.joint.grip).toBeCloseTo(3, 6);        // the plate's own 3 mm
+    expect(j.joint.into).toEqual({ kind: 'tapped', depth: 4.5, matter: 'aluminium' });
+    expect(j.says).toContain('NEMA 17');
+  });
+
+  it('refuses to guess what a tapped part is made of, because the rule turns on it', () => {
+    const [plate, motor] = parts();
+    expect(String(jointsOfMate(plate, 'motor face', motor, 'front face'))).toMatch(/nothing says what it is tapped in/);
+  });
+
+  it('teaches it as four alike joints in one step, pulled down in a criss-cross', () => {
+    const [plate, motor] = parts();
+    const j = jointsOfMate(plate, 'motor face', motor, 'front face', 'aluminium');
+    if (typeof j === 'string') throw new Error(j);
+    // a small wrench, because the big one cannot set an M3's 1.1 N·m — which the tool check says for itself below
+    const small = { ...kit, wrench: { name: 'a 1/4 in torque wrench', range: [0.5, 6] as [number, number], src: 'a small click wrench' } };
+    const { steps, refused } = boltSteps(j.joint, ['the motor plate', 'the stepper'], small, { count: j.count });
+    expect(refused).toEqual([]);
+    const say = steps.map((s) => s.do).join(' ');
+    expect(say).toMatch(/all four pairs/);            // said once for all of them
+    expect(say).toMatch(/M3 × 8/);                    // the length from the stack, off the ISO 888 list
+    expect(say).toMatch(/criss-cross/);               // a pattern is pulled down in stages
+    expect(say).toMatch(/under its head/);            // a washer on a tapped joint is under the head, not the far end
+    expect(say).not.toMatch(/nut/);                   // there is no nut on a tapped joint
+  });
+
+  it('and the shop\'s big wrench is refused for it, because an M3 is below its range', () => {
+    const [plate, motor] = parts();
+    const j = jointsOfMate(plate, 'motor face', motor, 'front face', 'aluminium');
+    if (typeof j === 'string') throw new Error(j);
+    expect(boltSteps(j.joint, ['a', 'b'], kit, { count: j.count }).refused.join(' ')).toMatch(/outside the torque wrench's 5\u201360 N·m/);
   });
 });

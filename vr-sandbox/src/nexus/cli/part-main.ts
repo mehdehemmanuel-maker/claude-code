@@ -20,11 +20,11 @@
 
 import { FAMILIES, callFamily } from '../parts/families';
 import { boltFigures, refusedBolt } from '../teach/bolt-joint';
-import { boltSteps } from '../teach/edges';
+import { boltSteps, jointsOfMate } from '../teach/edges';
 import { METRIC } from '../parts/threads';
 import { CLEAR } from '../parts/fab';
 import { catalogueItem, searchCatalogue } from '../parts/catalogue';
-import { component, componentOf, missingIn } from '../parts/components';
+import { component, componentOf, missingIn, type Component } from '../parts/components';
 import { INVENTORY, itemOf } from '../parts/inventory';
 import { massOf, massWhy, whySaid } from '../parts/mass';
 import { cheapest, priceKeyOf, usd } from '../parts/prices';
@@ -32,8 +32,36 @@ import { cheapest, priceKeyOf, usd } from '../parts/prices';
 const args = process.argv.slice(2);
 const like = args.includes('--like');
 const bolting = args.includes('--bolt');
+const mating = args.includes('--mate');
 const audit = args.includes('--audit');
 const words = args.filter((a) => !a.startsWith('--')).join(' ').trim();
+
+// ---- --mate: the bolted joint TWO REAL LIBRARY PARTS make, and the lesson for it -------------------------------------
+// The whole chain in one command: the library draws both parts, parts/mate.ts knows their ports match, and the lesson
+// is read out of that geometry rather than typed. Nothing here is a figure anybody chose.
+//   npm run part -- --mate "motorplate nema17 t3 aluminium" "motor face" "stepper NEMA 17 40" "front face" aluminium
+if (mating) {
+  const [wa = '', pa = '', wb = '', pb = '', tapped = ''] = args.filter((a) => !a.startsWith('--'));
+  const A = component(wa), B = component(wb);
+  for (const [w, c] of [[wa, A], [wb, B]] as const) if (typeof c === 'string') { console.log(`"${w}": ${c}`); console.log('\nPART: the parts could not be made'); process.exit(0); }
+  const mt = tapped ? (tapped.replace('-', ' ') as 'steel' | 'cast iron' | 'aluminium') : undefined;
+  const j = jointsOfMate((A as Component).part, pa, (B as Component).part, pb, mt);
+  if (typeof j === 'string') { console.log(`  REFUSED: ${j}`); console.log('\nPART: no bolted joint there'); process.exit(0); }
+  console.log(j.says); console.log('');
+  const f = boltFigures(j.joint);
+  if (!refusedBolt(f)) for (const line of f.says) console.log(`  ${line}`);
+  console.log('');
+  // the wrench is chosen to reach the torque, because the shop's big one cannot set a small screw
+  const t = refusedBolt(f) ? 10 : f.torque;
+  const kit = { key: { name: 'a metric hex key set', sizes: [1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 14, 17, 19], src: 'a full metric set' },
+    spanner: { name: 'a metric spanner set', sizes: [3.2, 4, 5, 5.5, 7, 8, 10, 13, 16, 18, 21, 24, 30, 36], src: 'a full metric set' },
+    wrench: t < 6 ? { name: 'a 1/4 in torque wrench', range: [0.5, 6] as [number, number], src: 'a small click wrench' } : { name: 'a 3/8 in torque wrench', range: [5, 60] as [number, number], src: 'a click wrench' } };
+  const { steps, refused } = boltSteps(j.joint, [(A as Component).part.name, (B as Component).part.name], kit, { count: j.count });
+  for (const r of refused) console.log(`  REFUSED: ${r}`);
+  for (const q of steps) { console.log(`  [${q.kind}] ${q.do}`); if (q.check) console.log(`      check: ${q.check}`); console.log(`      src:   ${q.src}`); console.log(''); }
+  console.log(`PART: ${steps.length} steps for ${j.count} joint${j.count === 1 ? '' : 's'} alike`);
+  process.exit(0);
+}
 
 // ---- --bolt: a bolted joint's figures and the lesson said from them --------------------------------------------------
 // The lesson language's second process (src/nexus/teach/bolt-joint.ts, Run 8v), and this is its door: a joint said

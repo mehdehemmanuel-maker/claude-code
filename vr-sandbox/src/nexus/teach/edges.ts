@@ -16,6 +16,7 @@ import { PP, ppCol } from '../machines/kit-solder';
 import { axialBody } from '../boards/packages';
 import { ALLOYS, idealVolume, timeToMelt, type JointShape } from './solder-joint';
 import { boltFigures, refusedBolt, type BoltJoint } from './bolt-joint';
+import type { Part as Part3 } from '../parts/kits';
 import { METRIC } from '../parts/threads';
 
 export const ADAFRUIT_GUIDE = 'Adafruit Guide to Excellent Soldering (learn.adafruit.com/adafruit-guide-excellent-soldering)';
@@ -232,7 +233,8 @@ export interface Spanners { key?: { name: string; sizes: number[]; src: string }
  * with why, and every step's words made from the figures rather than written out. What a tool cannot do is a
  * refusal too — a key that has not got the size, a wrench whose range does not reach the torque.
  */
-export function boltSteps(j: BoltJoint, parts: [string, string], at: Spanners, o: { friction?: 'plain' | 'zinc' | 'lubricated'; use?: 'reusable' | 'permanent' } = {}): { steps: Said[]; refused: string[] } {
+export function boltSteps(j: BoltJoint, parts: [string, string], at: Spanners, o: { friction?: 'plain' | 'zinc' | 'lubricated'; use?: 'reusable' | 'permanent'; count?: number } = {}): { steps: Said[]; refused: string[] } {
+  const n = o.count ?? 1, each = alike(n); // several joints alike are one step, as eight leads soldered alike are
   const f = boltFigures(j, o);
   if (refusedBolt(f)) return { steps: [], refused: f.refused };
   const refused: string[] = [];
@@ -246,21 +248,55 @@ export function boltSteps(j: BoltJoint, parts: [string, string], at: Spanners, o
     refused.push(`${f.torque.toFixed(1)} N·m is outside ${at.wrench.name}'s ${at.wrench.range[0]}–${at.wrench.range[1]} N·m: it cannot be set`);
   if (refused.length) return { steps: [], refused };
 
-  const [a, b] = parts, bolt = `the ${j.thread} × ${f.length} ${j.head} screw (class ${j.grade})`;
+  // (a washer on a joint into a tapped hole goes under the HEAD, where it is put with the screw, not at the far end)
+  const [a, b] = parts, under = j.into.kind === 'tapped' && j.washers ? `, a ${mm(METRIC[j.thread]!.h)} mm ISO 7089 washer under its head,` : '';
+  const bolt = `the ${j.thread} × ${f.length} ${j.head} screw (class ${j.grade})${under}`;
   const steps: Said[] = [
-    { kind: 'align', things: [a, b], do: `Hold ${a} against ${b} so their ${mm(j.hole)} mm holes line up, and keep them together: the bolt is not what stops them sliding, its clamp is.`,
-      check: 'daylight through both holes at once', src: 'ISO 273 clearance: a bolt in a clearance hole carries by friction, not by shear on its shank' },
-    { kind: 'fit', things: [a, b], do: `Put ${bolt} down through ${a} into ${b}${j.washers ? `, then ${count(j.washers)} ISO 7089 washer${j.washers > 1 ? `s (${mm(METRIC[j.thread]!.h)} mm each)` : ` (${mm(METRIC[j.thread]!.h)} mm)`} on the far end` : ''}${j.into.kind === 'nut' ? `, then the ${j.thread} nut.` : '.'}`,
+    { kind: 'align', things: [a, b], do: `Hold ${a} against ${b} so ${n === 1 ? 'their' : `all ${count(n)} pairs of their`} ${mm(j.hole)} mm holes line up, and keep them together: the bolt is not what stops them sliding, its clamp is.`,
+      check: n === 1 ? 'daylight through both holes at once' : `daylight through all ${count(n)} pairs at once`, src: 'ISO 273 clearance: a bolt in a clearance hole carries by friction, not by shear on its shank' },
+    { kind: 'fit', things: [a, b], do: `Put ${n === 1 ? bolt : `${count(n)} of ${bolt}`} down through ${a} into ${b}${j.washers ? (j.into.kind === 'nut' ? `, then ${count(j.washers)} ISO 7089 washer${j.washers > 1 ? `s (${mm(METRIC[j.thread]!.h)} mm each)` : ` (${mm(METRIC[j.thread]!.h)} mm)`} on the far end` : '') : ''}${j.into.kind === 'nut' ? `, then the ${j.thread} nut.` : '.'}`,
       check: j.into.kind === 'nut' ? `${mm(f.protrusion)} mm of thread standing past the nut, at least two pitches` : `it enters the tapped hole square, ${mm(f.engaged)} mm of thread to go in`,
       src: `its length from the stack: ${mm(j.grip)} mm gripped${j.washers ? ` + ${mm(j.washers * METRIC[j.thread]!.h)} mm of washer` : ''}${j.into.kind === 'nut' ? ` + ${mm(METRIC[j.thread]!.m)} mm nut + ${mm(2 * f.pitch)} mm standing` : ''} = ${mm(f.needed)} mm, so ${f.length} mm off the ISO 888 lengths` },
-    { kind: 'start', things: [a, b], do: `Start it by hand, two or three turns, ${j.into.kind === 'nut' ? 'the nut on the bolt' : 'the bolt into its tapped hole'}. If it does not turn freely by hand, back it out: it is crossed, and forcing it cuts the thread away.`,
+    { kind: 'start', things: [a, b], do: `Start ${n === 1 ? 'it' : 'each'} by hand, two or three turns, ${j.into.kind === 'nut' ? 'the nut on the bolt' : 'the bolt into its tapped hole'}. If it does not turn freely by hand, back it out: it is crossed, and forcing it cuts the thread away.`,
       check: 'it turns freely with your fingers alone', src: 'the thread is cut to a form; a crossed start cuts a second one over it' },
     { kind: 'torque', things: [a, b],
-      do: `Tighten to ${f.torque.toFixed(1)} N·m with ${at.wrench ? at.wrench.name : `${driver!.name} (${mm(f.drive)} mm)`}${j.into.kind === 'nut' ? `, holding the nut with ${at.spanner!.name} (${mm(METRIC[j.thread]!.s)} mm)` : ''}. That is what stretches it to ${Math.round(f.preload)} N, ${Math.round(f.fraction * 100)} % of its proof load.`,
-      check: at.wrench ? 'the wrench clicks once; no second pull' : `snug, then about a ${f.torque > 20 ? 'third' : 'sixth'} of a turn more — without a wrench the preload is a guess`,
-      src: `ISO 898-1 class ${j.grade} proof ${f.proof} MPa over ${f.stressArea.toFixed(1)} mm²; T = K d F with K = ${f.K} (typical, about ±25 %)${at.wrench ? `; ${at.wrench.src}` : ''}` },
-    { kind: 'rest', things: [a, b], do: 'Check the joint again after the first load: a new joint settles as its faces bed in, and loses some of its stretch.',
+      do: `${n > 2 ? `Tighten in a criss-cross, a third of the torque at a time all the way round, then two thirds, then full: ` : ''}Tighten ${each}to ${f.torque.toFixed(1)} N·m with ${at.wrench ? at.wrench.name : `${driver!.name} (${mm(f.drive)} mm)`}${j.into.kind === 'nut' ? `, holding the nut with ${at.spanner!.name} (${mm(METRIC[j.thread]!.s)} mm)` : ''}. That is what stretches it to ${Math.round(f.preload)} N${f.limitedBy === 'the bolt' ? `, ${Math.round(f.fraction * 100)} % of its proof load` : ` — held down to that by ${f.limitedBy}, not by the bolt, which would take more`}.`,
+      check: at.wrench ? `the wrench clicks once on ${n === 1 ? 'it' : 'each'}; no second pull` : `snug, then about a ${f.torque > 20 ? 'third' : 'sixth'} of a turn more — without a wrench the preload is a guess`,
+      src: `ISO 898-1 class ${j.grade} proof ${f.proof} MPa over ${f.stressArea.toFixed(1)} mm²; T = K d F with K = ${f.K} (typical, about ±25 %)${n > 2 ? '; a pattern is pulled down in a criss-cross and in stages because tightening one bolt relaxes the ones beside it, so a single pass round leaves the first ones loose' : ''}${at.wrench ? `; ${at.wrench.src}` : ''}` },
+    { kind: 'rest', things: [a, b], do: `Check ${n === 1 ? 'the joint' : `all ${count(n)} joints`} again after the first load: a new joint settles as its faces bed in, and loses some of its stretch.`,
       check: 'the wrench moves it no further at the same setting', src: 'embedment relaxation: a few per cent of preload in the first hours (Bickford)' },
   ];
   return { steps, refused };
+}
+
+/** How many joints a step covers, when several alike are said once. */
+const alike = (n: number) => (n === 1 ? '' : `each of the ${count(n)} `);
+
+/**
+ * THE BOLTED JOINTS A REAL MATE MAKES, read out of the geometry rather than typed.
+ *
+ * `parts/mate.ts` places two parts by matching their hole and thread patterns and lays the fasteners, so a drawn
+ * assembly already HAS its bolted joints — the thread is the port's, the grip is the two parts' own thicknesses, how
+ * many is the pattern's length, and what the far end is comes from the other port's sex ('holes' means a bolt and a
+ * nut through both, 'threads' means into a tapped hole that deep). Nothing here is a figure anybody chose.
+ *
+ * The one thing the geometry does NOT say is what the tapped part is made of, and the engagement rule turns on it
+ * (0.8 d in steel against 2 d in aluminium). It is asked for rather than assumed, because assuming steel is how a
+ * lesson tells someone to put an M6 into 6 mm of aluminium and strip it.
+ */
+export function jointsOfMate(a: Part3, pa: string, b: Part3, pb: string, tapped?: 'steel' | 'cast iron' | 'aluminium'): { joint: BoltJoint; count: number; says: string } | string {
+  const qa = a.ports?.find((q) => q.name === pa), qb = b.ports?.find((q) => q.name === pb);
+  if (!qa || !qb) return `no port ${!qa ? `${pa} on the ${a.name}` : `${pb} on the ${b.name}`}`;
+  const holesB = qb.sex === 'holes', H = holesB ? qb : qa, other = holesB ? qa : qb;
+  if (H.sex !== 'holes') return `neither the ${pa} nor the ${pb} has holes to put a bolt through`;
+  const thread = H.thread.replace(/x.*/, '');
+  if (other.sex === 'pins') return `the ${other === qa ? pa : pb} is pins, not a bolted joint: it takes nuts run onto them`;
+  if (other.sex === 'threads' && !tapped) return `the ${other === qa ? pa : pb} is tapped and nothing says what it is tapped in: the thread needed is 0.8 d in steel and 2 d in aluminium, so it cannot be worked out`;
+  const into: BoltJoint['into'] = other.sex === 'threads' ? { kind: 'tapped', depth: other.t * 1000, matter: tapped! } : { kind: 'nut' };
+  const joint: BoltJoint = {
+    thread, grade: '8.8', grip: (holesB ? qb.t + (other.sex === 'threads' ? 0 : qa.t) : qa.t + (other.sex === 'threads' ? 0 : qb.t)) * 1000,
+    washers: into.kind === 'nut' ? 2 : 1, into, head: 'socket cap',
+    hole: METRIC[thread] ? METRIC[thread]!.d1 + 0.4 : Number(thread.slice(1)) + 0.6,
+  };
+  return { joint, count: H.pattern.length, says: `the ${b.name}'s ${pb} on the ${a.name}'s ${pa}${qa.std ? ` (${qa.std})` : ''}: ${H.pattern.length} × ${thread}` };
 }
