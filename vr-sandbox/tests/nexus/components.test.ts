@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { DESIGNED, boltedJoint, component, componentOf, library, use, type Component } from '../../src/nexus/parts/components';
 import { catalogue } from '../../src/nexus/parts/catalogue';
-import { FAMILIES } from '../../src/nexus/parts/families';
+import { callFamily, FAMILIES } from '../../src/nexus/parts/families';
 import { kitFor, makeKit, kitById, type Part } from '../../src/nexus/parts/kits';
 import { critique } from '../../src/nexus/make/critic';
 import { kitView } from '../../src/nexus/view/kit3d';
@@ -100,5 +100,32 @@ describe('taken apart', () => {
     const c = component('rail MGN12H 400') as Component;
     expect(componentOf(c.item.id)).toBe(c); expect(component('rail mgn12h 400')).toBe(c);
     expect(componentOf('no-such-part')).toBeNull();
+  });
+});
+
+describe('a designation\'s shape is not a designation that exists', () => {
+  // Found 2026-10-17 by a probe that asked every family for a part using the first size its own refusal offered: a
+  // regex bug handed it "M1" (the dot in "M1.6" ended the capture), and three families CRASHED on it instead of
+  // refusing. `M1` and `M7` are both well-formed and neither is in the coarse series this table carries; the bolt
+  // family checked and refused, while nut, washer and threaded rod parsed the shape, indexed METRIC, read undefined
+  // and threw. M7 is a real ISO thread, so this was reachable by asking for an ordinary part by name.
+  it('a thread the family does not make is refused, not crashed on, whichever family is asked', () => {
+    for (const w of ['nut M1', 'washer M1', 'threadedrod M1', 'bolt M1x10', 'nut M7', 'bolt M99x10']) {
+      const c = component(w);
+      expect(typeof c, `${w} must be refused in words`).toBe('string');
+      expect(String(c)).toMatch(/is not made in M[\d.x]+\. Which thread\?/);
+    }
+  });
+
+  it('and a thread they do hold still makes its part', () => {
+    for (const w of ['nut M1.6', 'washer M3', 'bolt M8x30']) expect(typeof component(w), w).not.toBe('string');
+  });
+
+  it('M1 is not always a thread: a module-1 gear is not refused', () => {
+    // The first guard was written over the words alone and refused the inventory's own seed, "gear m1 z60 b6 pom".
+    // It is scoped by the family's OWN declared parameters instead, so only a family that takes a thread is checked.
+    // (the gear is known but has no design yet, so `component` refuses it for THAT reason — never for its "m1")
+    expect(typeof callFamily('gear m1 z60 b6 pom'), 'the family must still read it').not.toBe('string');
+    expect(String(component('gear m1 z60 b6 pom'))).not.toMatch(/is not made in/);
   });
 });

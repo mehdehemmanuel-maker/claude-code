@@ -571,8 +571,14 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
 - The drive is reachable from `npm run gears`, not from the bench in the room: `view/gear-bench.ts` draws and
   turns the gears but does not yet show a motor on them.
 - The inventory knows what is *in* a product; the kits know *where*. Joining them is the merge that ends "two
-  generators". Begun: `parts/components.ts` draws 9,074 catalogue sizes, and most machines' brackets, springs, hinges
-  and wiring are still drawn inline by their makers - each is next to become a component, commonest first.
+  generators". `parts/components.ts` draws 9,074 catalogue sizes, and **every one of its 116 designs makes, with
+  nothing missing against its own inventory list** (Run 8u, measured by asking each family for its own example).
+  **This item used to say "most machines' brackets, springs, hinges and wiring are still drawn inline by their
+  makers". Measured, that is wrong**: of 371 inline drawing calls under 176 names across every maker, exactly 2 name
+  something the library already makes. The rest are `body` (73), `lead` (55), `term` (28), `die` (11) — sub-features
+  of parts the library owns whole, and product shapes, neither of which is a reusable standard component. The real
+  next step is therefore NOT moving brackets into the library; it is unnamed, and naming it needs a measurement of
+  what a build cannot yet get from the library at all.
 - `embodyAny` is still apart from `ask/route.ts`.
 - The go-kart on the track (`src/nexus/view/kart3d.ts`) is drawn by hand, apart from `machines.ts`.
 - Planes, jets, cranes and power tools are not in `machines.ts` yet: each is a new architecture, to be added as data on

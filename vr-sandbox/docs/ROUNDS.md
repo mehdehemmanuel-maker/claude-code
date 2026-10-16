@@ -1190,3 +1190,75 @@ GATE: PASS (2365 of 2365) — 186.0s, tidy 24/24 with no number raised (`forge.t
 ratchet by moving the concern out, not by widening the allowance). Census: 178 test-only (−1), 141 dead, 22
 unreached files — unchanged, so the new law and the new tool added no unreached code.
 Room: `node tools/room-census.mjs "gravity on" "time on"` — 0 meshes blank, 9 with gravity on, 9 with time on too.
+
+---
+
+## Run 8u — a designation's shape is not a designation that exists
+
+Aimed at the user's *"the component library and more universal edges everything more interconnected and optimized"*,
+which seven rounds had not touched. The round's result is two corrections and one fix, and the corrections are the
+larger part.
+
+### What the library actually is, measured
+
+A probe asked the library for every one of its 116 designs and ran `missingIn` on each: **116 made, 0 refused, 0
+missing lines.** Every design draws everything its own inventory lists. The library's own house is in order.
+
+**Correction 1, to my own first measurement.** My first run said "27 made, 88 refused — `flangebearing` is not a part
+any family makes". That was my error, not the library's: `DESIGNED` is keyed by FAMILY ID, and a family id is not a
+word you can ask for. `exampleOf(family)` exists for exactly this, and with each family's own example the number is
+116/116. I nearly reported a broken library; the measurement was broken.
+
+**Correction 2, to `CLAUDE.md`'s own open item**, which said *"most machines' brackets, springs, hinges and wiring
+are still drawn inline by their makers — each is next to become a component, commonest first."* Measured over every
+maker file: **371 inline drawing calls under 176 distinct names, and exactly 2 of them name something the library
+already makes** (a spring and a spring seat). The rest are `body` (73), `lead` (55), `term` (28), `die` (11), `core`,
+`film` — sub-features of parts the library already owns whole, and product shapes, neither of which is a reusable
+standard component. **The stated gap is not where it was said to be**, and a round spent "moving brackets into the
+library" would have been a round spent on almost nothing. The line in `CLAUDE.md` is corrected to the measurement.
+
+### The fix the probe found by accident
+
+The probe retried each refusal using the first size the refusal itself named. A regex bug handed it `M1` (the `.` in
+`M1.6` ended the capture) — and three families **crashed** on it (a throwaway probe over `component(words)`; the
+behaviour it recorded is now pinned by `npx vitest run tests/nexus/components.test.ts`, which fails if any of these
+throws again):
+
+```
+nut M1:         THREW — Cannot read properties of undefined (reading 's')
+washer M1:      THREW — Cannot read properties of undefined (reading 'd2')
+threadedrod M1: THREW — Cannot read properties of undefined (reading 'p')
+bolt M1x10:     REFUSED — Which thread? M1.6, M2, M2.5, …
+```
+
+**`M1` and `M7` are both well-formed and neither is in the coarse series.** `thread(w)` parses the SHAPE of a
+designation and never checked that one exists; the bolt family happened to check and three others did not, so they
+indexed their table, read `undefined` and threw. **M7 is a real ISO thread**, so `nut M7` — an ordinary part asked
+for by name — returned a stack trace.
+
+Fixed once, in `callFamily`, before any family sees the words, so a family added later cannot forget what it never
+had to remember. **Two wrong versions of that guard came first, and both were caught by the suite rather than by
+me:**
+
+1. Written over the words alone, it refused the inventory's own seed `gear m1 z60 b6 pom` — **`m1` there is module 1,
+   not a thread.**
+2. Scoped to families that declare a `thread` parameter, it refused `wheelnut M22x1.5` — **a wheel nut really is
+   M22×1.5**, a fine-pitch thread in its own table that the coarse series has never held.
+
+The rule that survives both is the one the project already lives by: **the data declares, the engine only holds the
+ask to it.** The check is made against the family's OWN declared `values` (the hex nut declares `Object.keys(METRIC)`,
+the wheel nut declares `M8x1.25 … M22x1.5`), and both readings of `x` are tried, because `M8x1.25` is a pitch and
+`M8x30` is a length.
+
+Kept as three tests in `components.test.ts`, including the module-1 gear and the fine-pitch wheel nut, so neither
+wrong version can come back.
+
+### Still open
+
+- The warehouse, the fleet and the hand-drawn robot are **hidden by Run 8t, not deleted** — 551 lines that still
+  compile. `machines/robot.ts` and `works/tend.ts` are NOT scenery and are deliberately untouched (Run 8t says why).
+- The universal edges (`teach/edges.ts`) are untouched: this round reached the library half of the ask only.
+
+GATE: PASS (2368 of 2368) — 180.5s, tidy 24/24, census 178 test-only / 141 dead / 22 unreached files, unchanged.
+(The first gate run FAILED, and the lint was right: the crash figures above were pasted with no command beside them,
+which is the rule written after four wrong numbers survived three rounds. Named, then green.)

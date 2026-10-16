@@ -610,6 +610,25 @@ export function callFamily(words: string): Item | string | null {
   if (!f) return null;
   if (f.kind && !w.replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim()) return null;
   const sizes = w.replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim() || w;
+  // A DESIGNATION'S SHAPE IS NOT A DESIGNATION THAT EXISTS. `M1` and `M7` are both well-formed and neither is in the
+  // coarse series the hex fasteners carry, so a family that parsed the shape and then indexed its table read
+  // `undefined` and THREW rather than refusing — `nut M7` gave a stack trace while `bolt M7x10` refused politely,
+  // because the bolt family happened to check and three others did not. The check belongs here, once, so a family
+  // added later cannot forget what it never had to remember.
+  // It is made against THE FAMILY'S OWN DECLARED VALUES, never against one table: the hex nut declares
+  // `Object.keys(METRIC)` and a wheel nut is M22x1.5, a fine-pitch thread in its own table that the coarse series has
+  // never held. A guard written over METRIC alone refused the wheel nut, and one written over the words alone refused
+  // `gear m1 z60` (module 1, not a thread). The family says what it takes; this only holds the ask to it.
+  const td = f.params.find((x) => x.key === 'thread'), takes = td?.values;
+  if (takes?.length) {
+    // Both forms are tried, because `x` after a diameter means two different things: `M8x1.25` is a PITCH (a wheel
+    // nut's own designation) and `M8x30` is a LENGTH (a bolt's). Whichever form the family declares is the one that
+    // matches, and only a diameter in neither form is refused.
+    const m = /\bM(\d+(?:\.\d+)?)(?:[x\u00d7](\d+(?:\.\d+)?))?/i.exec(sizes);
+    const forms = m ? [`M${m[1]}`, ...(m[2] ? [`M${m[1]}x${m[2]}`] : [])] : [];
+    if (forms.length && !takes.some((v) => forms.some((q) => String(v).toLowerCase() === q.toLowerCase())))
+      return `${f.name} is not made in ${forms.at(-1)}. Which thread? ${takes.join(', ')}.`;
+  }
   let p = f.read(sizes); if (typeof p === 'string') return p;
   // A name with its number stuck to it is still that parameter asked for: "rail MGN12 L240" is a 240 mm rail. The
   // hand-written readings want a boundary before the digits (`\b(\d{2,4})$`), which "length240" has not got, so the
