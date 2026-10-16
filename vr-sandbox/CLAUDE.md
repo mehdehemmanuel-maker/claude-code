@@ -380,6 +380,33 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   **The standing rule this sets**: a claim about the system's own foundations is tested in the system, with the
   numbers checked against something outside this code (CODATA, the Particle Data Group), and the result is reported
   whichever way it comes out. Never raise a number to make a thesis pass, including the user's and including mine.
+- **THE CASCADE CLOSES WHAT ONE POLE COULD NOT** (`cascade`, `cffFromCascade` in `substrate/perceive.ts`). Run 8o
+  refused to derive flicker fusion because one pole with the cone's measured 30 ms window gives 5.3 Hz against a
+  measured 60 Hz. The fix was not a better τ, it was more poles: a retina is a CHAIN of stages (Fourtes & Hodgkin
+  1964), and n identical stages give `h(t) = t^(n-1)e^(-t/τ)/(τ^n (n-1)!)`, `|H(f)| = (1+(2πfτ)²)^(-n/2)` and
+  `t_peak = (n-1)τ` exactly. Flicker fusion IS the frequency where a fully modulated signal is attenuated past what
+  the system can detect, so `|H(f)| = 1/S` and `f = √(S^(2/n) − 1)/(2πτ)`.
+  **Three numbers in, all measured elsewhere** — n = 10 from the cascade literature, 40 ms time-to-peak from macaque
+  cones, 250:1 contrast sensitivity from psychophysics — and it **predicts 50.9 Hz against a measured 60 Hz, 15%
+  out, with nothing fitted.** The answer holds from n = 4 to n = 20 (46–65 Hz), which is the test that it is a result
+  and not a fit. **And it explains the old failure**: one pole fails in BOTH directions at once, its corner 11× too
+  low and its tail so shallow it predicts 1326 Hz by the same criterion. No τ fixes both; only more poles can,
+  because a chain falls as 1/f^n and a pole only as 1/f. **The wrong shape, not a bad parameter.**
+- **THE SIZES WERE NEVER MISSING; THE HIERARCHY COULD NOT SEE THEM** (`sizeOf` in `substrate/derive.ts`). 688
+  inventory rows carried a material and no size, so a density and a conductivity were reachable and a mass, a volume
+  and a thickness were not. `parts/looks.ts` held 677 of those sizes all along and says so in its own first line.
+  One route closed it: **volume and thickness went from 52% to 99.4% of the non-material inventory**, mass to 75%.
+  Recorded as ESTIMATES, never as the inventory's own measurement, because LOOKS is explicit that its figures are
+  typical. **Two corrections I owe**: the figure was 1,144, which wrongly counted 456 materials and elements that
+  correctly have no size; and I reported "1 clash" when the true count with everything asked was 2,952 before this
+  change — I had filtered to a single part and read it as the total.
+  **What the merge cost, measured both ways**: clashes went 2,952 → 3,982, but over 1,261 → 1,938 checkable things,
+  so the rate per item FELL from 2.34 to 2.05. `clashCauses` then sorts them by the arithmetic of their ratio:
+  **3,417 (85.8%) are `shape`** — a bounding box against the solid in it, which `derive.ts` already documents as
+  intended, so not faults at all; **6 are `unit`**, sitting on an exact power of a thousand; and **559 (14%) are
+  `unexplained`, which is the list a round should actually read.** The worst of those is a bacterial flagellar motor
+  stated at 45 µm whose own 11 MDa mass puts it at 24 nm — a factor of a thousand, in a STATED size, so the drawn-
+  size guard cannot see it and only over-determination can. **559 unexplained clashes is the real open item here.**
 - **SEEING, TRACED BACK TO TIME** (`substrate/perceive.ts`, `npm run substrate -- seeing`). The constructive half
   of the clock thesis, and the half that holds. The user: *"add the time scale and human perception thing with math
   I meant the math of light and eyes and hz … all of it trace it back to time"*. `SEEING` is the whole chain as

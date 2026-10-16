@@ -800,3 +800,100 @@ are measured separately and reported separately. Deriving the cutoff needs the c
 own measured time constants — and that is the named next step.
 
 GATE: PASS (2333 of 2333) — 189.8s, 191 files, tidy 24/24
+
+## Run 8p — the cascade, and the sizes that were never missing
+
+Two asks: do the cascade, and fill the 1,144.
+
+### The cascade closes what one pole could not
+
+Run 8o refused to derive flicker fusion: one pole with the cone's measured 30 ms window gives 5.3 Hz against a
+measured 60 Hz, and the only way to agree was to invent a τ. **The fix was not a better parameter, it was more
+poles.** A retina is a CHAIN of stages (Fourtes & Hodgkin 1964, J Physiol 172:239, n = 10 on Limulus), and n
+identical stages of time constant τ give, exactly:
+
+```
+$ npm run substrate -- seeing
+h(t)   = t^(n-1) e^(-t/τ) / (τ^n (n-1)!)     the impulse response, unit area (checked: 1.000000)
+|H(f)| = (1 + (2π f τ)²)^(-n/2)
+t_peak = (n-1) τ                              which is the thing that is MEASURED
+```
+
+Flicker fusion is not the −3 dB point; it is where a fully modulated signal is attenuated past what the system can
+detect. So `|H(f)| = 1/S`, which solves: **f = √(S^(2/n) − 1)/(2πτ)**.
+
+**Three numbers in, every one measured somewhere else, and the answer held out:**
+
+| input | value | source |
+| --- | --- | --- |
+| n, stages | 10 | Fourtes & Hodgkin 1964; Watson 1986 uses 9 |
+| cone time-to-peak | 40 ms | Schnapf, Nunn, Meister & Baylor 1990, J Physiol 427:681 |
+| peak contrast sensitivity | 250 | de Lange 1958 JOSA 48:777; Kelly 1961 JOSA 51:422 |
+| **flicker fusion** | **60 Hz** | Hecht & Shlaer 1936 — **held OUT of the derivation** |
+
+> **Predicted 50.9 Hz against 60 Hz measured — 15% out, nothing fitted.**
+
+And it is **robust**: n = 4 → 45.9 Hz, n = 10 → 50.9, n = 20 → 64.9. A factor of five in n moves the answer by less
+than 1.5×, which is the test that the prediction lives in the structure and not the parameter. A fitted model goes
+wherever you push it.
+
+**Why one pole could never have worked, which is the useful part.** It fails in BOTH directions at once: its corner
+is 11× too low (5.3 against 60 Hz) and its tail is so shallow that by the same criterion it predicts **1326 Hz**,
+22× too high. No single τ is both that slow at the bottom and that sharp at the top. Only a chain can be, because a
+chain falls as 1/f^n and a pole only as 1/f. **The old failure was the wrong shape, not a bad number.**
+
+### The sizes were never missing
+
+The 1,144 figure was wrong and it was mine: **456 of them are materials and elements, which correctly have no size.**
+The real number was 688. And those were not missing either — `parts/looks.ts` held **677 of the 688**, and says so in
+its own first line: *"the typical size and shape of each entry of the inventory that was written out by hand without
+its size."* The drawing knew; the hierarchy could not see it. One route in `sizeOf` closed it:
+
+| | before | after |
+| --- | --- | --- |
+| can give a volume | 1,261 (52.4%) | **1,938 (99.4%)** |
+| can give a thickness | 1,261 (52.4%) | **1,938 (99.4%)** |
+| can give a mass | — | 1,461 (75.0%) |
+
+Recorded as **estimates**, never as the inventory's own measurement, because LOOKS is explicit that its figures are
+typical. Guarded by an aerogel bound: a box is an upper bound on volume, and the emptiest real solid runs ~1 kg/m³
+against steel's 8000, so a box implying more than 10⁴× the stated mass is a scale error and the drawn size is
+refused. **The guard catches nothing today** — exactly one row (`cell-cr2032`) is both drawn-only and self-weighing,
+and it has no density, so nothing is compared. It is a ratchet, and the test says so rather than implying it works.
+
+### The second correction I owe
+
+I reported **"1 clash"** last round. The true count, with everything asked, was **2,952 before this change** — I had
+filtered to a single part and read it as the total. After the merge it is 3,982, but over 1,938 checkable things
+instead of 1,261, so **the rate per item FELL from 2.34 to 2.05**: more of the data is now checkable, and the newly
+checkable part is slightly more consistent than what was already there.
+
+`clashCauses` then sorts them by the arithmetic of the ratio, so four thousand faults are fixed by cause:
+
+| cause | count | what it is |
+| --- | --- | --- |
+| `shape` | **3,417 (85.8%)** | a bounding box against the solid in it (1–6.5×) — which `derive.ts` already documents as intended, so **not faults** |
+| `unit` | 6 (0.2%) | sitting on an exact power of a thousand — a unit written wrong |
+| `unexplained` | **559 (14.0%)** | **the list a round should actually read** |
+
+The worst unexplained one names its own cause: `flagellar-motor` is stated at 0.045 mm cubed, but its stated mass
+(1.9e-17 g, right for an 11 MDa complex) over a protein density puts it at **24 nm** — the size is its real one times
+a thousand, in a STATED size, so the drawn-size guard cannot see it and only over-determination can.
+
+### Three faults the round found in itself
+
+1. **It added a 5th `substrate → parts` import and pushed `derive.ts` to 772 lines**, failing two tidy ratchets. Both
+   had one cause: a `parts/` concern written inside `substrate/`. **No number was raised.** `sizeOf` moved to
+   `parts/inventory.ts` — which owns the inventory and can import the import-free `looks.ts` with no cycle, so
+   `derive.ts` gets it through an import it already had — and `clashCauses` moved to `substrate/clashcause.ts`.
+   689 lines, 4 imports, tidy 24/24, no allow-list line added.
+2. **My own test timed out and took the gate from 190 s to 261 s.** It swept all 1,949 non-material items. It now
+   samples 400, runs in 6.8 s, and the full-inventory figures live here and in the door, which is where a
+   measurement belongs. CLAUDE.md already said it: put a long sweep in its own file, or do not make one.
+3. The guard above is **inert**, and that is stated in the test's own assertion rather than dressed up.
+
+**Still open:** 559 unexplained clashes, 11 sizes that exist nowhere (mostly named by their own standard — `18650`
+means 18 × 65 mm, `bearing-608` means 8 × 22 × 7 — so derivable from `threads.ts`/`families.ts` next), and 31 of
+brass's 34 form fields untested for want of measurements.
+
+GATE: PASS (2343 of 2343) — 191.1s, 191 files, tidy 24/24

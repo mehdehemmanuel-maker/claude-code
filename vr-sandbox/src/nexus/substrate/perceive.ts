@@ -333,3 +333,87 @@ export const FASTER_THAN_THE_ORBIT = [
   { instrument: 'one turn of the electron in hydrogen, for comparison', seconds: 1.5198e-16,
     source: 'computed by bohrPeriod(): 2πa₀/(αc), from CODATA a₀ and α' },
 ] as const;
+
+// ---- THE CASCADE: the shape a single pole could not have ----------------------------------------------------------
+//
+// `flickerFromWindow` above refused to derive flicker fusion, because one pole with the measured window gives 5.3 Hz
+// against a measured 60 Hz and the only way to agree was to invent a time constant. This closes it properly, and the
+// reason it can is that a retina is not one capacitor: it is a CHAIN of stages, each passing its output to the next,
+// and Fourtes & Hodgkin measured that in 1964. n identical stages of time constant τ give
+//
+//     h(t) = t^(n-1) e^(-t/τ) / (τ^n (n-1)!)        the impulse response, unit area, a gamma
+//     |H(f)| = (1 + (2π f τ)²)^(-n/2)               the amplitude response
+//     t_peak = (n-1) τ                              exact, and the thing that is MEASURED
+//
+// Three numbers go in and all three are measured somewhere else: n from the cascade literature, the time to peak
+// from primate cones, the contrast sensitivity from psychophysics. NOTHING IS FITTED — which is the whole point,
+// because the last round's failure was a fitted τ and this one has to be better than that or it is worth nothing.
+//
+// WHY ONE POLE COULD NEVER HAVE WORKED, and this is the useful part: a single pole fails in BOTH directions at once.
+// Its corner is 11× too low (5.3 against 60 Hz) AND its tail is far too shallow — falling as 1/f, it still passes a
+// 250th of its signal at 1.3 kHz, so by the same criterion it predicts a flicker fusion of 1326 Hz, 22× too HIGH.
+// A filter cannot be that slow at the bottom and that sharp at the top with one pole. Only a chain can, because a
+// chain falls as 1/f^n. The old failure was not a bad parameter; it was the wrong shape.
+
+/** A chain of n identical first-order stages, each of time constant τ. */
+export interface Cascade {
+  n: number; tau: number;
+  /** when its response to a flash peaks, s: exactly (n-1)τ */ timeToPeak: number;
+  /** the equivalent rectangular duration, s: its area over its peak */ integrationTime: number;
+  /** where it is down 3 dB, Hz */ halfPower: number;
+  /** the slope it settles to, dB per octave: n stages give -6n */ slopePerOctave: number;
+  /** its response to a flash at time t, s^-1 */ at(t: number): number;
+  /** how much of a sinusoid at f survives, 0..1 */ amplitudeAt(f: number): number;
+}
+
+const lnFactorial = (k: number): number => { let s = 0; for (let i = 2; i <= k; i++) s += Math.log(i); return s; };
+
+export function cascade(n: number, tau: number): Cascade {
+  const timeToPeak = (n - 1) * tau;
+  const at = (t: number): number => t <= 0 ? 0
+    : Math.exp((n - 1) * Math.log(t) - t / tau - n * Math.log(tau) - lnFactorial(n - 1));
+  return {
+    n, tau, timeToPeak,
+    // unit area over the peak value: the width of the rectangle that would pass the same total
+    integrationTime: 1 / at(timeToPeak),
+    halfPower: Math.sqrt(2 ** (1 / n) - 1) / (2 * Math.PI * tau),
+    slopePerOctave: -6.0206 * n,
+    at,
+    amplitudeAt: (f: number) => (1 + (2 * Math.PI * f * tau) ** 2) ** (-n / 2),
+  };
+}
+
+/** The chain whose response peaks when the measured one does: τ = t_peak/(n-1). The measurement sets τ, not a fit. */
+export const cascadeFromPeak = (timeToPeak: number, n: number): Cascade => cascade(n, timeToPeak / (n - 1));
+
+/** WHAT FLICKER FUSION ACTUALLY IS, and the criterion is the definition rather than a choice: the frequency at which
+ *  a fully modulated signal is attenuated past what the system can still detect. So |H(f)| = 1/S, where S is the
+ *  measured peak contrast sensitivity — and that solves exactly:
+ *      f = √(S^(2/n) − 1) / (2π τ)
+ *  With the cone's measured 40 ms time to peak, n = 10 from the cascade literature and S = 250 from psychophysics,
+ *  it predicts 50.9 Hz against a measured 60 Hz: 15% out, with no parameter fitted anywhere. The prediction holds
+ *  its shape over the whole plausible range of n (46 Hz at n = 4, 65 Hz at n = 20), which is the test that it is a
+ *  result and not a fit — a fitted model moves wherever you push it. */
+export function cffFromCascade(timeToPeak = 40e-3, n = 10, sensitivity = 250, measuredCFF = 60): {
+  cascade: Cascade; predicted: number; measured: number; offBy: number; attenuationAtMeasured: number;
+  onePolePredicted: number; says: string } {
+  const c = cascadeFromPeak(timeToPeak, n);
+  const predicted = Math.sqrt(sensitivity ** (2 / n) - 1) / (2 * Math.PI * c.tau);
+  // the same criterion on one pole fitted to the measured 30 ms window, for the contrast
+  const onePolePredicted = Math.sqrt(sensitivity ** 2 - 1) / (2 * Math.PI * 30e-3);
+  return { cascade: c, predicted, measured: measuredCFF, offBy: predicted / measuredCFF - 1,
+    attenuationAtMeasured: c.amplitudeAt(measuredCFF), onePolePredicted,
+    says: `${n} stages of ${(c.tau * 1e3).toFixed(2)} ms (from the measured ${(timeToPeak * 1e3).toFixed(0)} ms time to peak, τ = t_peak/(n−1)) attenuate ${measuredCFF} Hz by ${(1 / c.amplitudeAt(measuredCFF)).toFixed(0)}×. A system that detects ${sensitivity}:1 contrast therefore loses a fully modulated flicker at ${predicted.toFixed(1)} Hz, against ${measuredCFF} Hz measured — ${(Math.abs(predicted / measuredCFF - 1) * 100).toFixed(0)}% out, with nothing fitted. The same criterion on ONE pole gives ${onePolePredicted.toFixed(0)} Hz, ${(onePolePredicted / measuredCFF).toFixed(0)}× too high, while its corner sits 11× too low: one pole is the wrong shape, not a bad parameter, because a chain falls as 1/f^n and a pole only as 1/f.` };
+}
+
+/** The sources for the three numbers the cascade takes, so none of them can quietly become a knob. */
+export const CASCADE_INPUTS = [
+  { what: 'n, the number of stages', value: 10, fitted: false,
+    source: 'Fourtes & Hodgkin 1964, J Physiol 172:239 fitted n = 10 to Limulus; Watson 1986 (Handbook of Perception and Human Performance) uses 9 for the human excitatory stage' },
+  { what: 'the time to peak of a cone’s flash response, s', value: 40e-3, fitted: false,
+    source: 'Schnapf, Nunn, Meister & Baylor 1990, J Physiol 427:681 (macaque cones)' },
+  { what: 'peak temporal contrast sensitivity', value: 250, fitted: false,
+    source: 'de Lange 1958, J Opt Soc Am 48:777; Kelly 1961, J Opt Soc Am 51:422 — peak around 200–300 near 5–10 Hz' },
+  { what: 'critical flicker fusion, the thing being predicted', value: 60, fitted: false,
+    source: 'Hecht & Shlaer 1936, J Gen Physiol 19:965 — held OUT of the derivation and compared to it' },
+] as const;

@@ -4,7 +4,7 @@
 // whether it could live without vessels. Nothing here is said of one tissue: the same laws run for a cell, an organ, a
 // body, a steel bracket or a tree, and each number comes with the tree of laws and measurements it rests on.
 
-import { INVENTORY, gramsOfItem, type Item } from '../parts/inventory';
+import { INVENTORY, gramsOfItem, sizeOf, type Item } from '../parts/inventory';
 import { MOLECULES } from '../life/molecules';
 import { wattsOf } from '../life/time';
 import { breakdown, estimate, fixed, measured, readable, setting as settingOf, says, solve, step, valueIn } from './record';
@@ -343,11 +343,12 @@ function stated(id: string, quantity: string): { value: number; unit: string; ho
     const dd = densityOf(id);
     return dd ? { value: dd.value!, unit: dd.unit, how: 'the mixing law over what it is made of, down to materials', d: dd } : null;
   }
-  if (/^volume$/.test(q) && i.size) {
+  const sz = sizeOf(id, i, (x) => densityOf(x)?.value ?? null);
+  if (/^volume$/.test(q) && sz) {
     // A BOUNDING BOX IS NOT A VOLUME, and saying so is the point. This is an upper bound on a solid part and a wild
     // one on a bracket, which is exactly why it is recorded as an estimate with its grounds — and why the density
     // it implies will disagree with the density from its materials, and `clashes` will say so.
-    const [x, y, z] = i.size;
+    const [x, y, z] = sz.mm;
     return { value: (x / 1000) * (y / 1000) * (z / 1000), unit: 'm^3',
       how: 'its overall size, as a box: an UPPER BOUND, not the solid volume',
       d: estimate(`volume of ${i.name}`, (x / 1000) * (y / 1000) * (z / 1000), 'm^3',
@@ -362,15 +363,18 @@ function stated(id: string, quantity: string): { value: number; unit: string; ho
   // asked for its thickness — and `conduction` and `thermal.resistance.conduction` sat unreachable for want of a
   // figure the inventory states. A WALL thickness is refused on purpose: it is a feature of the section, not the
   // overall size, so answering it with the third extent would call a tube's outer size its wall.
-  if (/extent|length|breadth|width|depth|height|diameter|thick/.test(q) && !/wall/.test(q) && i.size) {
+  if (/extent|length|breadth|width|depth|height|diameter|thick/.test(q) && !/wall/.test(q) && sz) {
     // WHICH extent. `extent y` and `extent z` both used to fall through to the first one, so `mass.prism` was fed
     // 10×10×10 for a 10×10×3 gear and came out 8.5 g against the true 2.55 g — a 3.3× error that looked like a
     // working answer. An axis answersToPort in the quantity wins; failing that, breadth/width is the second and
     // depth/height the third, which is how the book's own prism laws name them.
     const k = /\bx\b/.test(q) ? 0 : /\by\b/.test(q) ? 1 : /\bz\b/.test(q) ? 2
       : /breadth|width/.test(q) ? 1 : /depth|height|thick/.test(q) ? 2 : 0;
-    return { value: i.size[k]! / 1000, unit: 'm', how: `its stated size (${['first', 'second', 'third'][k]} extent)`,
-      d: measured(`${quantity} of ${i.name}`, i.size[k]! / 1000, 'm', 'the inventory (its stated size, mm)') };
+    const mm = sz.mm[k]!;
+    return { value: mm / 1000, unit: 'm', how: `${sz.how} (${['first', 'second', 'third'][k]} extent)`,
+      d: sz.typical
+        ? estimate(`${quantity} of ${i.name}`, mm / 1000, 'm', `${sz.how}: ${sz.mm.join(' \u00d7 ')} mm`)
+        : measured(`${quantity} of ${i.name}`, mm / 1000, 'm', 'the inventory (its stated size, mm)') };
   }
   return null;
 }

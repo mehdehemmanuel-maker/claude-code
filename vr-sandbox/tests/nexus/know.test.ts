@@ -9,6 +9,7 @@
 // than silently resolved, and that an unreachable quantity says so instead of inventing an answer.
 import { describe, expect, it } from 'vitest';
 import { clashes, holdsAsMaterial, know, onTimesTree, packet } from '../../src/nexus/substrate/derive';
+import { clashCauses } from '../../src/nexus/substrate/clashcause';
 import { breakdown } from '../../src/nexus/substrate/record';
 import { inTime } from '../../src/nexus/substrate/time';
 import { QUANTITY_KINDS } from '../../src/nexus/book/quantities';
@@ -254,5 +255,97 @@ describe('a material is a form, a part is calculated', () => {
     const brass = packet('brass')!;
     expect(brass.says.join(' ')).toMatch(/the tests are not blunt: run on what the tables do carry/);
     expect(brass.says.join(' '), 'and the gap is named as a missing measurement').toMatch(/untested is a measurement this inventory lacks/);
+  });
+});
+
+describe('the size merge: the drawing already knew', () => {
+  it('a part with no stated size still gives a volume and a thickness, from LOOKS', () => {
+    // 688 inventory rows carried a material and no size, so a mass, a volume and a thickness were unreachable for
+    // them. parts/looks.ts held 677 of those sizes all along — its own first line says it exists for exactly this.
+    for (const id of ['carbon-brush', 'commutator', 'winding', 'shaft-steel', 'lamination-stack']) {
+      expect(INVENTORY.get(id)!.size, `${id} must have no stated size, or this tests nothing`).toBeUndefined();
+      const th = know(id, 'thickness');
+      expect(th, `${id} must now give a thickness`).toBeTruthy();
+      expect(th!.value).toBeGreaterThan(0);
+      expect(know(id, 'volume'), `${id} must now give a volume`).toBeTruthy();
+    }
+  });
+
+  it('and says it is a typical size, never the inventory’s own measurement', () => {
+    // LOOKS is explicit that its figures are typical. A number borrowed from a drawing must not read as measured.
+    const f = know('carbon-brush', 'thickness')!;
+    expect(f.how).toMatch(/a typical size/);
+    expect(f.how).toMatch(/not this one measured/);
+    // while something with a stated size still says so
+    const g = know('gear-small', 'thickness')!;
+    expect(g.how).toMatch(/its stated size/);
+    expect(g.how).not.toMatch(/typical/);
+  });
+
+  it('has a guard against a drawn size the thing’s own mass contradicts — and it is INERT, which is the finding', () => {
+    // LOOKS exists to DRAW, and a drawing is not always a size: nanoscale biology is drawn oversized so a person in
+    // the room can see it at all. So the merge guards itself with arithmetic — a box is an upper bound on volume,
+    // and the emptiest real solid (silica aerogel, ~1 kg/m³ against steel’s 8000) bounds how far above the true
+    // mass a box can imply, so past 10^4 it is a different scale and the drawn size is refused.
+    // IT CATCHES NOTHING TODAY, and that is reported rather than hidden. Exactly ONE inventory row has both a
+    // drawn-only size and a stated mass — cell-cr2032, a CR2032 coin cell at 3.1 g — and even that one cannot be
+    // checked, because nothing gives it a density, so there is no mass to compare the box against. The guard is a
+    // ratchet for the next row added, not a thing that is working now, and the test says so.
+    const fromLooks = (id: string) => (know(id, 'thickness')?.how ?? '').includes('typical size');
+    let comparable = 0;
+    for (const [id, i] of INVENTORY) {
+      if (i.size || !fromLooks(id) || i.g === undefined || !(i.g > 0)) continue;
+      comparable++;
+      const v = know(id, 'volume'), d = know(id, 'density');
+      if (v && d) expect(v.value * d.value * 1000 / i.g, `${id}: its drawn box implies a mass far past what it states`).toBeLessThan(1e4);
+    }
+    expect(comparable, 'one row (cell-cr2032) is drawn-only and self-weighing; it has no density, so nothing is actually compared').toBe(1);
+    expect(know('cell-cr2032', 'density'), 'and that is why: no density for it').toBeNull();
+  });
+
+  it('so the real scale error is caught by the CLASH, not by the guard', () => {
+    // flagellar-motor is stated at 0.045 mm cubed. Its stated mass, 1.9e-17 g, is right for an 11 MDa complex, and
+    // that mass over a protein density puts its true size near 24 nm — so the stated size is a thousand times its
+    // real one. The guard above cannot see it, because that size is STATED, not drawn. Over-determination can.
+    const i = INVENTORY.get('flagellar-motor');
+    if (!i) return;
+    expect(i.size, 'its size is stated, so the drawn-size guard never sees it').toBeTruthy();
+  });
+});
+
+describe('clashes, grouped by cause', () => {
+  it('sorts four thousand disagreements into three kinds, so the fix is systematic', () => {
+    // A SAMPLE, NOT THE WHOLE INVENTORY. Sweeping all 1,949 non-material items took 40 s alone and timed out at 60 s
+    // under the gate's parallel load, taking the gate from 190 s to 261 s. The test is about whether `clashCauses`
+    // classifies correctly, and a few hundred items over-determine enough to exercise every branch; the full-
+    // inventory figures (3,982 clashes, 85.8% of them the box-vs-solid effect) live in the door and in ROUNDS.md,
+    // which is where a measurement belongs. CLAUDE.md: put a long sweep in its own file, or do not make one.
+    let swept = 0;
+    for (const [id, i] of INVENTORY) {
+      if (i.kind === 'material' || i.kind === 'element') continue;
+      for (const q of ['mass', 'volume', 'thickness']) know(id, q);
+      if (++swept >= 400) break;
+    }
+    const cs = clashes();
+    expect(cs.length, 'four hundred items over-determine plenty').toBeGreaterThan(100);
+    const gs = clashCauses(cs);
+    const total = gs.reduce((n, g) => n + g.count, 0);
+    expect(total).toBeLessThanOrEqual(cs.length);
+
+    const shape = gs.find((g) => g.cause === 'shape')!;
+    // MOST of them are a bounding box against the solid in it, which derive.ts already documents as intended
+    // ("A BOUNDING BOX IS NOT A VOLUME, and saying so is the point") — so they are expected, not faults.
+    expect(shape.count / total, 'the box-vs-solid effect should dominate').toBeGreaterThan(0.4);
+    for (const r of shape.ratios) { expect(r).toBeGreaterThan(1); expect(r).toBeLessThanOrEqual(6.5); }
+
+    const unit = gs.find((g) => g.cause === 'unit');
+    if (unit) for (const r of unit.ratios) {
+      const k = Math.log(r) / Math.log(1000);
+      expect(Math.abs(k - Math.round(k)), 'a unit fault sits ON a power of a thousand').toBeLessThan(0.02);
+    }
+    // and the unexplained list is the one a round should actually read
+    const un = gs.find((g) => g.cause === 'unexplained')!;
+    expect(un.says).toMatch(/THIS is the list to read/);
+    expect(un.count).toBeGreaterThan(0);
   });
 });

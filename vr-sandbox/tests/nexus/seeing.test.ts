@@ -3,7 +3,8 @@
 // the important one — that where the trace STOPS working the code says so instead of fitting a parameter to hide it.
 import { describe, expect, it } from 'vitest';
 import { SEEING, EYE_CONE, EYE_ROD, HUMAN_EYE, whyLightIsAColour, cyclesAveraged, bohrPeriod,
-  flickerCutoff, flickerFromWindow, FASTER_THAN_THE_ORBIT, periodOf, meetRate, meetFlicker } from '../../src/nexus/substrate/perceive';
+  flickerCutoff, flickerFromWindow, FASTER_THAN_THE_ORBIT, periodOf, meetRate, meetFlicker,
+  cascade, cffFromCascade, CASCADE_INPUTS } from '../../src/nexus/substrate/perceive';
 import { inTime } from '../../src/nexus/substrate/time';
 import { dimOf } from '../../src/nexus/lang/dimension';
 
@@ -128,5 +129,56 @@ describe('the eye is an observer like any other', () => {
     expect(EYE_ROD.window).toBeGreaterThan(EYE_CONE.window);
     expect(EYE_ROD.least).toBeLessThan(EYE_CONE.least);
     expect(EYE_ROD.latency).toBeGreaterThan(EYE_CONE.latency);
+  });
+});
+
+describe('the cascade: the shape a single pole could not have', () => {
+  it('its identities are exact, not approximations', () => {
+    const c = cascade(10, 4.4444e-3);
+    expect(c.timeToPeak).toBeCloseTo(9 * 4.4444e-3, 12);   // t_peak = (n-1) tau, exactly
+    expect(c.slopePerOctave).toBeCloseTo(-60.206, 3);        // n stages give -6n dB/octave
+    expect(c.amplitudeAt(0)).toBe(1);                        // nothing lost at DC
+    // unit area: the impulse response integrates to 1, which is what makes amplitudeAt(0) = 1 meaningful
+    let area = 0; const dt = 1e-5; for (let t = 0; t < 2; t += dt) area += c.at(t) * dt;
+    expect(area).toBeCloseTo(1, 4);
+    expect(c.at(-1)).toBe(0);
+  });
+
+  it('PREDICTS flicker fusion from three numbers measured elsewhere, to 15%', () => {
+    // n = 10 from the cascade literature, 40 ms time-to-peak from macaque cones, 250:1 contrast sensitivity from
+    // psychophysics. The thing predicted — 60 Hz — is held out of the derivation entirely.
+    const r = cffFromCascade(40e-3, 10, 250, 60);
+    expect(r.cascade.timeToPeak).toBeCloseTo(40e-3, 9);
+    expect(r.predicted).toBeGreaterThan(45);
+    expect(r.predicted).toBeLessThan(55);
+    expect(Math.abs(r.offBy)).toBeLessThan(0.2);
+    // it attenuates the measured CFF by about 800x, which is what the sensitivity has to beat
+    expect(1 / r.attenuationAtMeasured).toBeGreaterThan(500);
+  });
+
+  it('and holds its answer across every plausible n, which a fitted model would not', () => {
+    const over = [4, 6, 9, 10, 12, 16, 20].map((n) => cffFromCascade(40e-3, n).predicted);
+    expect(Math.min(...over)).toBeGreaterThan(40);
+    expect(Math.max(...over)).toBeLessThan(70);
+    // a factor of 5 in n moves the answer by less than 50%: the prediction is in the structure, not the parameter
+    expect(Math.max(...over) / Math.min(...over)).toBeLessThan(1.5);
+  });
+
+  it('while ONE pole fails in both directions at once, which is why it was the wrong shape', () => {
+    const r = cffFromCascade();
+    // its corner is 11x too low (5.3 against 60 Hz) and its tail is so shallow it predicts 1326 Hz by the same
+    // criterion. No single value of tau can fix both; only more poles can.
+    expect(flickerFromWindow(EYE_CONE, 60).onePole).toBeCloseTo(5.3, 1);
+    expect(r.onePolePredicted).toBeGreaterThan(1000);
+    expect(r.onePolePredicted / 60).toBeGreaterThan(20);
+    expect(r.says).toMatch(/one pole is the wrong shape, not a bad parameter/);
+  });
+
+  it('every number it takes is sourced and none is marked fitted', () => {
+    for (const i of CASCADE_INPUTS) {
+      expect(i.fitted, `${i.what} must not be fitted`).toBe(false);
+      expect(i.source.length).toBeGreaterThan(20);
+    }
+    expect(CASCADE_INPUTS.find((i) => i.what.includes('critical flicker'))!.source).toMatch(/held OUT of the derivation/);
   });
 });

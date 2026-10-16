@@ -10,6 +10,7 @@
 // face). Counts and masses marked "about" or "typical" vary from maker to maker.
 
 import { billOf } from '../machines/makermodel';
+import { lookRow } from './looks';
 import { ENDER3 } from '../models/ender3';
 import { VORON24 } from '../models/voron24';
 import { shapes, type Section } from '../machines/cell';
@@ -1650,4 +1651,38 @@ export function makeBoard(id: string, at = Date.now()): Board | null {
   const b: Board = { title: `Make: ${i.name}`, kind: 'flow', about: `${i.says}. Each step makes (or buys, or takes from stock) one thing inside it, each of those made the same way all the way down; the last step ${r.bought ? 'takes it as bought' : r.why}.`, nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `inventory:${id}` };
   steps.forEach(([sid, label, step], k) => { b.nodes[sid] = { label, step }; if (k) b.edges[`e${k}`] = { from: steps[k - 1]![0], to: sid, rel: 'flows to' }; });
   return b;
+}
+
+/** THE SIZE OF A THING, FROM WHEREVER THE PROJECT ALREADY KNOWS IT. 688 inventory rows carry a material and no
+ *  size, so a density and a conductivity were reachable for them and a mass, a volume and a thickness were not —
+ *  every law needing geometry was dark for a quarter of the inventory. The sizes were NOT missing: `parts/looks.ts`
+ *  holds 684 of them and says so in its own first line ("the typical size and shape of each entry of the inventory
+ *  that was written out by hand without its size"). The drawing knew and the hierarchy could not see it, which is
+ *  the two-generators split this project keeps finding. One route closes 677 of the 688.
+ *  WHAT IT IS NOT: a measurement. `LOOKS` is explicit that its figures are typical, an estimate for each, so a size
+ *  from there is recorded as an ESTIMATE with that said in its grounds — never silently as the inventory's own. */
+export function sizeOf(id: string, i: Item, densityKgM3?: (id: string) => number | null): { mm: [number, number, number]; how: string; typical: boolean } | null {
+  if (i.size && i.size.length >= 3) {
+    return { mm: [i.size[0]!, i.size[1]!, i.size[2]!], how: 'its stated size', typical: false };
+  }
+  const r = lookRow(id);
+  if (!r || !r.size.every((v) => v > 0)) return null;
+  // AND IT IS CHECKED AGAINST WHAT THE THING ALREADY SAYS, because `LOOKS` exists to DRAW and a drawing is not
+  // always a size. Taking it as one raised the clash count from 1 to 3,982 on the first run, and the first row was
+  // a bacterial flagellar motor whose stated mass is 1.9e-17 g while its drawn box implies 1.2e-7 g — ten orders
+  // apart, because a 45 nm motor is drawn 45 mm across so that a person in the room can see it at all.
+  // THE TEST, and it is arithmetic rather than a list of which items to trust: a box is an UPPER BOUND on a solid's
+  // volume, so the mass its box implies can exceed the real mass but cannot fall far below it, and the margin above
+  // is bounded by how empty a real structure can be. The emptiest solid there is, silica aerogel, runs about
+  // 1 kg/m^3 against steel's 8000 — a fill fraction of 10^-4. So a box implying more than 10^4 times the stated
+  // mass is not a sparse shape, it is a different scale, and the drawn size is refused for that item.
+  const g = i.g;
+  if (g !== undefined && g > 0 && densityKgM3) {
+    const kg = densityKgM3(id);
+    if (kg) {
+      const mBox = (r.size[0] / 1000) * (r.size[1] / 1000) * (r.size[2] / 1000) * kg * 1000; // grams
+      if (mBox / g > 1e4) return null;
+    }
+  }
+  return { mm: r.size, how: `a typical size for a ${r.kind} of its sort (parts/looks.ts), not this one measured`, typical: true };
 }
