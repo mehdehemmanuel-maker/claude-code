@@ -1405,3 +1405,104 @@ tolerance, and that the first turns of a thread carry far more load than the las
 GATE: PASS (2386 of 2386) — 333.0s (the wall clock swung; `npm run perf -- time` is the measure, not this). Tidy
 24/24. Census: 178 test-only, 141 dead, 22 unreached files, unchanged — once `--mate` existed, which it did not when
 the census first ran at 179.
+
+## Run 8x — the works measured, and the composed machines stop being a pile of beams
+
+The drift gate sent this round out of `parts/`+`teach/` (three rounds running) and into **ask 5, the works**, which
+had a 3/10 verdict and had not been touched for many rounds.
+
+### What is actually standing in the works, as a count
+
+`CLAUDE.md` said "two stand-ins left"; task #277 said "the works' remaining 12 stand-ins". Neither had been run.
+The room derives the answer itself, so the command is the answer:
+
+```
+node tools/room-census.mjs "show me the works"
+```
+
+> 16 stations … 2 are drawn whole by the library from their makers' own figures, 1 is composed out of library parts
+> by the inventor, 7 are drawn from the bill of materials the works would build it from, 3 are a bench carrying the
+> library's own tools drawn whole, and the other 3 stand as a stand-in at their own size.
+
+**13 of 16 are real geometry. The three bare ones are the welder, the MSLA printer and the mini lathe.** Both
+written numbers were wrong in opposite directions, which is what a figure kept in prose does. CLAUDE.md now names
+the command instead of the number, and task #277 names the three.
+
+### The standing verdict, found in one line of code
+
+"The composed machines still read as lattices of posts and cubes" has been in `CLAUDE.md` for rounds. Rendering the
+benchtop CNC showed exactly that, and the cause was not the composer — it builds three axes, a frame and a spindle
+correctly — it was `machineParts`:
+
+```ts
+const across = m.arrange === 'gantry' && s.unit.does === 'slide' && out.filter((p) => /axis/.test(p.name)).length % 2 === 1;
+out.push({ name: s.unit.name, at: [0, up * mm, 0], ...(across ? { rot: [0, Math.PI / 2, 0] as V3 } : {}), says: s.unit.says, parts: layUnit(s.unit, use) });
+up += s.unit.does === 'hold' && s.unit.id.startsWith('frame') ? 40 : s.unit.box[1];
+```
+
+Every unit at x = 0, z = 0, going UP. So the three axes were three identical beams piled up the middle of the frame
+and the spindle sat on top of the pile, 310 mm up inside a 395 mm frame, pointing at nothing. A lattice of posts is
+what that draws, and no amount of work on the composer would have changed it.
+
+**A gantry is a chain, not a pile** (`gantryParts` in `ask/machine-draw.ts`): the beams hang from the top of the
+frame, each axis on the carriage of the one before it and running along its own travel, the last axis standing up
+as the column the tool rides, and the tool at the bottom of that column over the work. Which axis is the column is
+not a convention — it is the law `liftCheck` already checks by, *the last slide is the one that has to raise what is
+above it*, so the drawing and the checker now say the same thing.
+
+Three things fell out of it, each a fault of its own:
+
+1. **There was nothing under the tool.** A machine that cuts, prints or solders in a box does it ONTO something, and
+   the gantry had no work surface at all. `bedPlate` (`ask/machine-units.ts`) is an 18 mm plywood spoil board bolted
+   to the frame's base, cut to the travel plus 60 mm of clamp room each side, weighed and gapped like any other unit.
+2. **The frame's height was a constant.** `z + 350` gave 395 mm for a chain 648 mm long — the spindle was drawn
+   above the top rail because it could not have fitted inside. The frame is now as tall as what hangs in it (the
+   bottom rail, the bed, the tool's drop, the column and the beams over it), from the same five numbers the drawing
+   hangs them by, so the two cannot disagree.
+3. **Every NEMA 17 grew a 300 mm spike.** The library draws a stepper's flying leads running out of the rear bell
+   and away *along the ground*, which is where they lie on a bench; `layUnit` turned the motor so that run pointed
+   straight up, and two of them stood clear of the frame. A motor's spin about its own shaft is free, and it is not
+   arbitrary: turned the other way the shaft still faces the beam it drives and the leads hang down.
+
+Measured, by laying the machine out and asking each piece for its box against the frame's own height (the probe is
+`machinePart` + `layout` from `parts/space.ts`): **20 pieces outside the frame before, 4 after — and those four are
+the frame's own uprights, 650 mm of stock in a 648 mm frame.**
+
+### Written once, in the right owner
+
+- `layFlat` beside `layAlong` in `parts/space.ts`, which owns oriented boxes: `layAlong` turns a part's LONGEST side
+  to an axis, which is what a length of stock wants; a board wants the side it has LEAST of, or a spoil board is
+  drawn standing on edge like a windscreen. Both measure the drawing rather than remember a convention, and they
+  share one body (`turnSide`) because they differ in a single comparison.
+- `ask/machine.ts` hit 735 lines and the lint said so. **Not raised — split**: `ask/machine-units.ts` now owns the
+  units a machine is composed FROM (each a real assembly of library parts), and `machine.ts` owns stacking them,
+  checking each stage and pricing the result. 466 and 283 lines.
+
+### Faults of my own this round
+
+1. **I rendered a stale viewer and read it as the new code.** `tools/bundle.mjs` builds the DOORS (`dist-nexus`);
+   the viewer is `npx vite build --config vite.view.config.ts`. The bundle stamp correctly reported the doors up to
+   date, so nothing warned me — the only symptom was a screenshot identical to the previous one, and the figure
+   "5 pieces, 7,539 g" unchanged after adding a sixth. Written into CLAUDE.md's Working-here list, because this
+   will be someone's next hour otherwise.
+2. **I changed the gantry drawing and a test of the old drawing failed, correctly.** It asserted the first slide had
+   no rotation. Rewritten to assert what the chain actually claims — three directions, the last upright, each one
+   hanging below the one before, the tool over the bed and at the bottom of the column — which is a stronger test
+   than the one it replaced.
+3. **The works room was judged from the doorway first.** The room's own derived reply carried the count, so that
+   part was a measurement; but the close look at the CNC came from `open cnc-benchtop`, which EXPLODES the part, and
+   I nearly read an exploded view as an assembled one. Standing it with `invent a machine that cuts …` is the
+   assembled view.
+
+### Still open here
+
+- Three bare stand-ins (task #277), and the three KIT_ON benches stand on stand-in benches although the works
+  already builds a `workbench` from a 19-part bill: every bench station is the same bench, and that loop is not
+  closed.
+- A flying lead is drawn as a rigid run in the part's own frame, so it is right only for the pose the part was drawn
+  in. A lead should leave its gland and then fall, which needs the assembly's up direction — wire routing in an
+  assembly, which nothing here does yet.
+- `rail` and `table` arrangements are still drawn as piles; only `gantry` is a chain.
+
+GATE: PASS (2386 of 2386 ran) — 163.1s (`npm run gate`; the wall clock swings, `npm run perf -- time` is the measure).
+Tidy 24/24. Census (`node tools/unwired.mjs --all`): 178 test-only, 141 dead, 22 unreached files, unchanged.

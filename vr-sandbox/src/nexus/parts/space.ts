@@ -53,10 +53,27 @@ const obbOf = (local: THREE.Box3, m: THREE.Matrix4): OBB => {
  *  drawn standing on end. A near-cube frame survives that permutation looking like a frame, which is why it went six
  *  rounds unseen (docs/MANNY.md #46). Measuring leaves nothing to remember. */
 export function layAlong(p: Part, axis: 0 | 1 | 2): [number, number, number] {
+  return turnSide(p, axis, 'longest');
+}
+
+/** The turn that lays a drawn part's THINNEST side along an axis — a sheet, a plate or a board put down flat (the
+ *  default lays it on the ground, thickness up the y). It is `layAlong`'s other end, measured the same way and for
+ *  the same reason: what makes a length of stock a length is the side it has most of, and what makes a board a board
+ *  is the side it has least of, so a bed drawn by its longest side lands on edge. Both ask the drawing. */
+export function layFlat(p: Part, axis: 0 | 1 | 2 = 1): [number, number, number] {
+  return turnSide(p, axis, 'thinnest');
+}
+
+/** One measurement, one turn: the part's own drawn extents, the side asked for, and the rotation that takes that side
+ *  to the axis. Written once because `layAlong` and `layFlat` differ in a single comparison. */
+function turnSide(p: Part, axis: 0 | 1 | 2, pick: 'longest' | 'thinnest'): [number, number, number] {
   let b: THREE.Box3 | null = null;
   for (const n of layout({ ...p, at: [0, 0, 0], rot: [0, 0, 0] })) if (n.box) b = b ? b.union(n.box) : n.box.clone();
   if (!b) return [0, 0, 0];
-  const s = b.getSize(new THREE.Vector3()), from = s.x >= s.y && s.x >= s.z ? 0 : s.y >= s.z ? 1 : 2;
+  const s = b.getSize(new THREE.Vector3());
+  const from = pick === 'longest'
+    ? (s.x >= s.y && s.x >= s.z ? 0 : s.y >= s.z ? 1 : 2)
+    : (s.x <= s.y && s.x <= s.z ? 0 : s.y <= s.z ? 1 : 2);
   if (from === axis) return [0, 0, 0];
   const v = (i: number) => new THREE.Vector3(+(i === 0), +(i === 1), +(i === 2));
   const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(v(from), v(axis)));

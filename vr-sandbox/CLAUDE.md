@@ -109,8 +109,9 @@ for one concern is the fault this index exists to prevent, and the lint catches 
 `conceive.ts` words to wants, figures, questions, designs from laws - `route.ts` where a make ask goes and what of it
 was not done - `invent.ts` a flow that turns one thing into another, its ports mated and sized by conservation -
 `machine.ts` a machine composed from units by what each affords, checked the way its arrangement fails, with
-`machine-read.ts` (the ask read into what it must do, and what nothing consumed) and `machine-draw.ts` (how a
-composed machine is laid out in space) beside it -
+`machine-units.ts` (the units themselves, each a real assembly of library parts), `machine-read.ts` (the ask read
+into what it must do, and what nothing consumed) and `machine-draw.ts` (how a composed machine is laid out in
+space - a gantry as a CHAIN, each axis on the carriage of the one before) beside it -
 `generate.ts` structure for any intent - `sketch.ts` an invention sketched as blocks and pins before it is designed -
 `conditions.ts` conditions on loads, holds and reach.
 
@@ -340,8 +341,17 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   of that face is reachable here.
 
 **Open work, each with a named next step**
-- The works: 16 stations at $2,395, judged 3/10. Two stand-ins left (the welder, the MSLA printer), the brake's own
-  stand, bare walls, no stock or swarf, and the composed machines still read as lattices of posts and cubes.
+- The works: 16 stations at $2,395. **How many are real is a command, not a line here that goes stale**:
+  `node tools/room-census.mjs "show me the works"` prints the room's own derived sentence. Measured 2026-10-16:
+  7 built from the bill the works would make them from, 2 drawn whole by the library, 1 composed by the inventor,
+  3 benches carrying the library's own tools, and **3 bare stand-ins — the welder, the MSLA printer and the mini
+  lathe** (this file said two and task #277 said twelve; both were wrong, and neither had been run).
+  Still open: the brake's own stand, bare walls, no stock or swarf, and the three stand-ins. **"The composed
+  machines read as lattices of posts and cubes" is FIXED at the cause** (Run 8x): the drawing stacked every unit at
+  [0, up, 0], so a three-axis machine was three identical beams up the middle with the spindle cutting air above the
+  frame. A gantry is now drawn as a CHAIN — each axis on the carriage of the one before, running along its own
+  travel, the last one upright as the column the tool rides, the tool over a bed the composer now gives it — and the
+  frame is as tall as what hangs in it rather than `z + 350`.
 - Boards: the Pi 3B+, Zero 2 W, Pico 2 and 2 W are still their class's layout; measure them as the Pi 4B and Pico were.
 - The robot: its grips are not drawn (the pen grip round the iron); welding and typing on their own benches next.
 - Lessons: the Pico's headers on the same edges; parts of three leads and more; words in the room making the circuit.
@@ -615,6 +625,11 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   and it breaks `pieces.test.ts`, which is the cross-file state leak that option risks), `--pool=threads` (190 s), and
   the two long sweeps' tails (sharding them left the wall where it was). The suite is bound by its own work spread over
   the workers there are, and 545 s of test time over 190 s of wall is 2.9 of this host's 4 cores.
+- **`tools/bundle.mjs` builds the DOORS (`dist-nexus`), not the viewer (`dist-view`).** Run 8x changed `view/` and
+  `ask/`, ran `bundle.mjs`, rendered, and read a picture of the code as it was two rounds ago, because the stamp
+  correctly said the doors were up to date. Anything that renders — `forge-look.mjs`, `room-census.mjs`,
+  `manny-see.mjs` — wants `npx vite build --config vite.view.config.ts --logLevel error` FIRST. A screenshot that
+  looks exactly like the last one is the symptom.
 - **Every door builds through `node tools/bundle.mjs`, never a raw `vite build`.** It skips the build when nothing
   it is built from changed (the hash of every file under `src/` plus the config and lockfile), which takes a repeat
   door run from 2946 ms to 2108 ms. A door script with its own `vite build` in it pays the second again, and two

@@ -349,12 +349,25 @@ describe('a composed machine is real geometry, not a heap of its parts', () => {
     const corners = parts.filter((p) => Math.abs(p.at![0]) > 0.25 && Math.abs(p.at![2]) > 0.15);
     expect(corners.length).toBeGreaterThanOrEqual(4);
   });
-  it('a gantry turns its second slide across its first, because that is what a gantry is', () => {
+  it('a gantry hangs its axes in a chain from the frame, the last one upright, the tool over the bed', () => {
     const m = composeMachine('a machine that prints 300x300x400');
-    const slides = machineParts(m, use).filter((p) => /axis/.test(p.name));
+    const drawn = machineParts(m, use);
+    const slides = drawn.filter((p) => /axis/.test(p.name));
     expect(slides.length).toBe(3);
-    expect(slides[0]!.rot).toBeUndefined();
-    expect(slides[1]!.rot?.[1]).toBeCloseTo(Math.PI / 2, 3);     // the second runs across the first
+    expect(slides[0]!.rot?.[1]).toBeCloseTo(0, 3);               // the first runs across the width
+    expect(slides[1]!.rot?.[1]).toBeCloseTo(Math.PI / 2, 3);     // the second across the first, along the depth
+    expect(Math.abs(slides[2]!.rot![2])).toBeCloseTo(Math.PI / 2, 3);  // the last stands up: it is the column
+    // EACH ONE HANGS BELOW THE ONE BEFORE IT. This is the whole of the round-8x fix: they used to be stacked at
+    // [0, up, 0] going UP from the frame's floor, so the tool ended on top of the pile cutting the air above the
+    // top rail, and the machine read as a lattice of posts (ROUNDS 8x).
+    expect(slides[1]!.at![1]).toBeLessThan(slides[0]!.at![1]);
+    expect(slides[2]!.at![1]).toBeLessThan(slides[1]!.at![1]);
+    const frame = drawn.find((p) => /frame/.test(p.name))!, bed = drawn.find((p) => /bed/.test(p.name))!;
+    const tool = drawn.find((p) => !/axis|frame|bed/.test(p.name))!;
+    expect(slides[0]!.at![1]).toBeLessThan(m.stages[0]!.unit.box[1] / 1000);   // inside its own frame
+    expect(frame.at![1]).toBe(0);
+    expect(tool.at![1]).toBeGreaterThan(bed.at![1]);             // the tool is over the work, not under it
+    expect(tool.at![1]).toBeLessThan(slides[2]!.at![1]);         // and at the bottom of the column, not its top
   });
   it('an arm marches its joints along its own links instead of stacking them', () => {
     const m = composeMachine('an arm that reaches 600 mm and picks up 1kg');

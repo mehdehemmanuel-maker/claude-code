@@ -8,9 +8,9 @@
 // here now, by `layAlong` in `parts/space.ts`, which owns oriented boxes — so this file holds placement and borrows
 // every geometric judgement rather than remembering one.
 
-import { layAlong } from '../parts/space';
+import { layAlong, layFlat } from '../parts/space';
 import type { Part, V3 } from '../parts/kits';
-import type { Machine, Unit } from './machine';
+import { RAIL, type Machine, type Unit } from './machine';
 
 /** A unit drawn as the thing it is, not as a heap of its parts in a grid.
  *
@@ -45,6 +45,14 @@ export function layUnit(u: Unit, use: (words: string) => Part): Part[] {
     for (const y of [0.02, H - 0.02]) for (const sx of [-1, 1]) if (across) lay(across, [sx * (W / 2 - 0.02), y, 0], Z);
     return out;
   }
+  if (u.does === 'hold' && u.id === 'bed') {
+    // a board lies down. A sheet is drawn standing in its own plane, so laying it by its longest side (which is what
+    // every other length of stock here wants) stands a spoil board on edge like a windscreen; `layFlat` turns the
+    // side it has LEAST of to the vertical instead, measured off the drawing the same way.
+    const sheet = words(/^sheet/);
+    if (sheet) { const q = got(sheet); if (q) out.push({ ...q, at: [0, 0, 0], rot: layFlat(q, Y) }); }
+    return out;
+  }
   if (u.does === 'hold') {   // an arm's link, or a rail's brackets: along its own length
     for (const o of u.of) for (let i = 0; i < Math.min(o.n, 6); i++) {
       const at: V3 = [(o.n > 1 ? (i / (o.n - 1)) - 0.5 : 0) * W, 0, 0];
@@ -57,7 +65,12 @@ export function layUnit(u: Unit, use: (words: string) => Part): Part[] {
     if (beam) lay(beam, [0, 0, 0], X);                                      // the beam along the travel
     if (rail) lay(rail, [0, 0.021, 0], X);                                  // its rail on the beam's top face
     if (plate) put(plate, [-W / 2 - 0.004, 0.02, 0], [0, Math.PI / 2, 0]);  // the motor plate on the far end
-    if (motor) put(motor, [-W / 2 - 0.03, 0.02, 0], [0, 0, Math.PI / 2]);   // the motor behind it, its shaft along x
+    // the motor behind it, its shaft along x INTO the beam it drives. Which way it is spun about that shaft is free,
+    // and it is not arbitrary: a NEMA 17 is drawn with its 300 mm flying leads running out of the rear bell and away
+    // ALONG THE GROUND, which is where they lie on a bench — so turning it the other way stood that run on end and
+    // every motor on every composed machine grew a 300 mm spike out of its back, two of them clear of the frame's
+    // top rail. Spun this way the shaft still faces the beam and the leads hang down, which is where a lead hangs.
+    if (motor) put(motor, [-W / 2 - 0.03, 0.02, 0], [0, 0, -Math.PI / 2]);
     const bear = words(/^bearing/), pul = words(/^pulley/), idl = words(/^idler/);
     if (bear) for (const sx of [-1, 1]) put(bear, [sx * (W / 2 - 0.01), 0.02, 0], [0, 0, Math.PI / 2]);
     if (pul) put(pul, [-W / 2 + 0.02, 0.02, 0], [0, 0, Math.PI / 2]);
@@ -94,13 +107,53 @@ export function machineParts(m: Machine, use: (words: string) => Part): Part[] {
     }
     return out;
   }
+  if (m.arrange === 'gantry') return gantryParts(m, use);
   let up = 0;
   for (const s of m.stages) {
-    // a slide axis is turned a quarter about the stack as it goes up, so the second one runs across the first — which
-    // is what a gantry *is*, and laying them all the same way is how the first drawing of this read as a pile of beams
-    const across = m.arrange === 'gantry' && s.unit.does === 'slide' && out.filter((p) => /axis/.test(p.name)).length % 2 === 1;
+    // a slide axis is turned a quarter about the stack as it goes up, so the second one runs across the first
+    const across = s.unit.does === 'slide' && out.filter((p) => /axis/.test(p.name)).length % 2 === 1;
     out.push({ name: s.unit.name, at: [0, up * mm, 0], ...(across ? { rot: [0, Math.PI / 2, 0] as V3 } : {}), says: s.unit.says, parts: layUnit(s.unit, use) });
     up += s.unit.does === 'hold' && s.unit.id.startsWith('frame') ? 40 : s.unit.box[1];
+  }
+  return out;
+}
+
+/** A GANTRY IS A CHAIN, NOT A PILE. Every unit used to go at [0, up, 0] with `up` the height of the one before, so a
+ *  three-axis machine came out as three identical beams stacked up the middle of its frame with the spindle on top,
+ *  cutting the air above the top rail — the works room's standing verdict, "the composed machines still read as
+ *  lattices of posts and cubes", in one line of code.
+ *
+ *  What a gantry actually is: the beams hang from the top of the frame, each axis carried on the carriage of the one
+ *  before it and running along its own travel, the LAST axis standing up as the column the tool rides, and the tool
+ *  at the bottom of that column over the work. Nothing here is per-machine. Which axis is the column is not a
+ *  convention either: it is the same law `liftCheck` checks by — the last slide is the one that has to RAISE what is
+ *  above it, so it is the one drawn upright — and the others alternate across the width and along the depth, which is
+ *  the order the ask's own three travels are read in. */
+function gantryParts(m: Machine, use: (words: string) => Part): Part[] {
+  const out: Part[] = [], mm = 0.001;
+  const ACROSS: V3 = [0, 0, 0], ALONG: V3 = [0, Math.PI / 2, 0];
+  // +X up the column puts the motor plate at its TOP, where a Z motor really sits, and turns the rail to face the
+  // front, which is the side the tool rides on
+  const UPRIGHT: V3 = [0, 0, -Math.PI / 2];
+  const top = (m.stages.find((s) => s.unit.id.startsWith('frame'))?.unit.box[1] ?? 0) * mm;
+  const slides = m.stages.filter((s) => s.unit.does === 'slide').length;
+  let y = top, n = 0, face = 0;
+  for (const s of m.stages) {
+    const u = s.unit, parts = layUnit(u, use);
+    if (u.id.startsWith('frame')) { out.push({ name: u.name, at: [0, 0, 0], says: u.says, parts }); continue; }
+    if (u.id === 'bed') { out.push({ name: u.name, at: [0, (RAIL + u.box[1] / 2) * mm, 0], says: u.says, parts }); continue; }
+    if (u.does === 'slide') {
+      const column = n === slides - 1;
+      // a beam hangs by its section; the column hangs by its length, because it stands on end
+      const len = (column ? u.box[0] : u.box[1]) * mm;
+      y -= len / 2;
+      out.push({ name: u.name, at: [0, y, 0], rot: column ? UPRIGHT : n % 2 === 0 ? ACROSS : ALONG, says: u.says, parts });
+      if (column) face = 0.035;
+      y -= len / 2; n++;
+      continue;
+    }
+    // the tool on the column's carriage, hanging down the front of it at the bed
+    out.push({ name: u.name, at: [face, y, 0], says: u.says, parts });
   }
   return out;
 }
