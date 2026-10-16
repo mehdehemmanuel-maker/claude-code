@@ -647,3 +647,88 @@ next real job on this. The two tests will classify them the moment the numbers a
 are called.
 
 GATE: PASS (2250 of 2250) — 193.5s
+
+## Run 8n — the thesis tested instead of agreed with
+
+The user brought an essay, *The Illusion of Separation*, and asked for the math: that the 10³⁶ between the electric
+and the gravitational force between two protons is an artefact of the human second, that quantum superposition is a
+temporal blur, and that magnetism is gravity seen fast-forwarded. Then: *"Let's build the exact math to show how the
+10³⁶ 'human measurement' paradox evaporates."*
+
+Agreeing would have been the easy round and the dishonest one. The project already holds the instrument this needs —
+`time.ts` reduces every dimension to a power of time, and the book's dimension algebra refuses a wrong comparison —
+so the claim is **decidable here**. `substrate/invariant.ts` decides it. Every figure is checked against something
+outside this code (CODATA 2018, the Particle Data Group), never against the code's own output.
+
+**The one thing that settles it.** A dimensionless number is the same under every ruler and every clock. So:
+
+```
+$ npm run substrate -- invariant
+THE TEST: rescale the metre, the second, the kilogram and the coulomb all at once:
+  α:         7.297353e-3   before, 7.297353e-3   after … unmoved, as a pure number must be
+  α_G:       5.906149e-39  before, 5.906149e-39  after … unmoved, as a pure number must be
+  F_e / F_g: 1.235552e+36  before, 1.235552e+36  after … unmoved, as a pure number must be
+```
+
+The second is one of the four things rescaled, by **23 orders of magnitude**, and the ratio does not move a part in
+10⁹. The claim is not that this is unlikely; it is that it is arithmetically impossible, and the code carries the
+rescaling out rather than asserting it. Three unit systems are tried in the test, including one where c = m_p = e = 1.
+
+**Where the 10³⁶ comes from, as an identity rather than an opinion.** α_G = Gm_p²/ħc and (m_p/m_Planck)² come out the
+same number to one part in 10¹², so
+
+> **F_e/F_g = α (m_Planck/m_p)² = 1.2356 × 10³⁶**
+
+It is a mass ratio squared times a pure number. **Gravity is weak because the proton is 7.7 × 10⁻²⁰ of the Planck
+mass** — and why that is, nobody knows; it is the hierarchy problem, genuinely open. The user is asking a real
+question. There is simply no clock in the answer.
+
+**The clock construction fails twice over, and the second failure is the instructive one.**
+
+1. It misses. f_atom/f_galaxy = 8.939 × 10³⁰ against 1.236 × 10³⁶: **short by a factor of 138,219**. The essay calls
+   10³⁰ and 10³⁶ "the exact mathematical ballpark"; six orders of magnitude is the ratio between a gram and a tonne
+   squared.
+2. **It has a knob.** f_fast/f_slow = R_slow/R_fast is continuous and unbounded in R_slow, so it passes through every
+   positive number: `theKnob` returns the radius that hits any target you name. And the tuning is not hypothetical —
+   keep the Milky Way, swap the Bohr radius for the proton's, and the "match" moves from 8.9 × 10³⁰ to 5.6 × 10³⁵,
+   five orders of magnitude on a choice of which radius to call the atom's. **A quantity you can tune to any target
+   by choosing an input is not a derivation of that target.** The couplings have no such knob: every symbol in them
+   is a measured constant, which is exactly what makes them a result.
+
+**And the book's own dimension algebra refuses E_loop without being told.** Force × Distance / f_c is `kg m² s⁻¹` —
+dividing by a frequency multiplies by a time — so it is an **action (time⁰)**, not an energy (time⁻¹). On the one
+tree they sit at different powers of time. In units where ħ = 1 an action is a pure number, which is to say ħ already
+*is* "the action per loop"; it cannot normalise a coupling, because it is not a coupling's dimension.
+
+**Blur or wave: five observations, and all five decide against the blur.** The same shape as the law observation
+table — a claim tied to a physical thing you can watch:
+
+| watch | a blurred classical orbit must predict | measured |
+| --- | --- | --- |
+| the hydrogen spectrum | any radius allowed, so a smear | discrete 1/n² lines; Rydberg to twelve figures |
+| a 2p orbital | a spun wheel blurs to a FULL disk, never one with a gap | an **exact nodal plane**: zero, not small |
+| CHSH on entangled pairs | "too fast to see" is a LOCAL HIDDEN VARIABLE, so CHSH ≤ 2 | **2.697 ± 0.015**, loophole-free since 2015 |
+| whether hydrogen lasts | a circling charge radiates, so it collapses | stable 13.8 Gyr; `classicalFallTime()` = **1.556 × 10⁻¹¹ s** |
+| a neutron, and each force's sign | one mechanism at two rates must do both jobs | gravity attracts only; EM also repels; a neutron has mass and no charge |
+
+The CHSH row is the one that rules out the blur as a **class** rather than in detail: Bell's theorem makes "there is
+a definite trajectory we are too slow to resolve" a testable statement, and it is false. The Larmor row is the number
+that made quantum mechanics necessary in 1913, computed here rather than quoted: `t = 4π²ε₀²m²c³a₀³/e⁴`.
+
+**What survives, and it is worth more than the part that does not.** A coupling genuinely does change with scale —
+that is the renormalisation group, and it is measured. α is 1/137.036 at rest and **1/127.952 at the Z mass**. But it
+runs with the ENERGY of the probe, not with the observer's clock, and the move is a factor of **1.071 over eleven
+orders of magnitude**, against a gap of 10³⁶. The three gauge couplings really do nearly meet near 10¹⁶ GeV, which is
+the honest version of "the forces converge at scale"; gravity's does not join them, and that is the open problem.
+Also sound and already in the system: t = R/c is real and sets a system's dynamical rate, and the reduction of every
+dimension to a power of time (the project's own `inTime`) is the rigorous form of "everything is time".
+
+**The standing rule this sets**, now in `CLAUDE.md`: a claim about the system's own foundations gets tested in the
+system, against figures from outside this code, and the result is reported whichever way it comes out. *Never raise a
+number to make a thesis pass — including the user's, and including mine.*
+
+**The fault the round found in itself.** `Invariant` was already owned by `substrate/scale.ts` and `tuner.ts` (two
+mechanisms whose ratio holds across scale — a different idea). Tidy rule failed by name; the type was renamed
+`Coupling`, which is the correct physics term anyway. **No allow-list line was added.**
+
+GATE: PASS (2323 of 2323) — invariant.test.ts adds 10

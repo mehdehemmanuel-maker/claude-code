@@ -355,6 +355,31 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   large job this opens. Absent with it: the action principle as the generator (δS = 0, from which the 252 would be
   *derived* rather than reduced), gravity (the metric is flat), and the join to `clock.ts`, which already advances
   each region at its own time and is where this belongs.
+- **WHAT NO CHANGE OF CLOCK CAN CHANGE** (`substrate/invariant.ts`, `npm run substrate -- invariant`). The other
+  half of the reduction to time, and its limit. `time.ts` says every dimension is a power of time; this says which
+  numbers survive that, and the answer is the DIMENSIONLESS ones — those are the same under every ruler and every
+  clock, so any claim that a ratio is an artefact of the observer's units is decidable by running the rescaling.
+  Built because the user's own thesis deserved testing rather than agreement: that the 10³⁶ between the electric and
+  the gravitational force between two protons is an artefact of the human second. **The test says it is not.** α,
+  α_G and their ratio are recomputed, then the metre is multiplied by 10⁷, the second by 10⁻²³, the kilogram by
+  4.2 × 10¹¹ and the coulomb by 0.137 — and all three are unmoved to one part in 10⁹. The second is one of the four
+  things being rescaled, by 23 orders of magnitude, and the number does not budge.
+  **Where the 10³⁶ actually comes from, proved as an identity**: α_G = (m_p/m_Planck)² exactly, so F_e/F_g =
+  α(m_Planck/m_p)². It is a mass ratio squared times a pure number: gravity is weak because the proton is 7.7 × 10⁻²⁰
+  of the Planck mass, and why THAT is remains unexplained by anyone (the hierarchy problem). The clock plays no part.
+  **And the clock construction fails twice over**: f_atom/f_galaxy = 8.94 × 10³⁰ against a target of 1.236 × 10³⁶,
+  short by a factor of 138,219; and it has a KNOB — `theKnob` shows a radius exists for every target, and swapping
+  the Bohr radius for the proton's, with the same galaxy, moves the "match" by five orders of magnitude. A number
+  you can tune to any answer by choosing an input is not a derivation of that answer. `loopEnergy` adds that
+  Force × Distance / f_c is `kg m² s⁻¹` — an action (time⁰), not an energy (time⁻¹) — so the book's own dimension
+  algebra refuses it without being told.
+  **What survives, and it is the valuable part**: a coupling really does change with scale, and it is measured —
+  α is 1/137.036 at rest and 1/127.952 at the Z mass. That is a factor of 1.071 over eleven orders of magnitude in
+  ENERGY, not in clock rate, and the gap it would have to close is 10³⁶. The three gauge couplings do very nearly
+  meet near 10¹⁶ GeV; gravity's does not join them, and that is the open problem rather than a solved one.
+  **The standing rule this sets**: a claim about the system's own foundations is tested in the system, with the
+  numbers checked against something outside this code (CODATA, the Particle Data Group), and the result is reported
+  whichever way it comes out. Never raise a number to make a thesis pass, including the user's and including mine.
 - **ONE HIERARCHY, ASKED, NOT SWEPT** (`substrate/derive.ts`, `npm run substrate -- know <part>`). A part
   decomposes into sub-parts down to a material; a quantity decomposes into the quantities its law needs down to a
   measurement. The same shape, and they MEET AT TIME. `know(thing, quantity)` resolves on demand — memoised,

@@ -30,6 +30,8 @@ export const CONST = {
   MCaO: measured('molar mass of CaO', 56.077, 'g/mol', 'IUPAC atomic weights'),
   REV: fundamental('one revolution', 1, 'rev', 'mathematics: 2π rad'),
   me: measured('mass of the electron', 9.1093837015e-31, 'kg', 'CODATA 2018: 9.1093837015(28)e-31 kg', 2.8e-40),
+  mp: measured('mass of the proton', 1.67262192369e-27, 'kg', 'CODATA 2018: 1.67262192369(51)e-27 kg', 5.1e-37),
+  a0: measured('Bohr radius', 5.29177210903e-11, 'm', 'CODATA 2018: 5.29177210903(80)e-11 m', 8.0e-21),
   mu: measured('atomic mass constant: a twelfth of a carbon-12 atom, about one nucleon', 1.66053906660e-27, 'kg', 'CODATA 2018: 1.66053906660(50)e-27 kg', 5.0e-37),
   bWien: fundamental('Wien displacement constant', 2.897771955e-3, 'm K', 'CODATA 2018: b = hc/(4.965114231… k_B), exact from exact constants'),
   kXray: empirical('x-ray yield constant of a thick target', 1.1e-9, '1/V', 'Bushberg et al., The Essential Physics of Medical Imaging, 3rd ed.: η ≈ 1.1 × 10⁻⁹ Z V, fitted to thick-target measurements'),

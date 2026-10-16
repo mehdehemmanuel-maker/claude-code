@@ -263,6 +263,49 @@ if (want[0] === 'know') {
 // is the question no gap can raise: an absent law raises nothing, runs clean and looks finished. It builds the
 // plainest real world the engine has — a place, its matter, and a domain with measured gravity — and reports its
 // holes, its dead ends, and the laws out of the book whose inputs are all present and which nothing applies.
+// `npm run substrate -- invariant` — WHAT NO CHANGE OF CLOCK CAN CHANGE.
+// The other half of the reduction to time: `time.ts` says every dimension is a power of time, and this says which
+// numbers survive that. A ratio with no dimension is the same under every ruler and every clock, so a claim that
+// one is an artefact of the observer's units is decidable — and this door decides it by rescaling the units.
+if (want[0] === 'invariant' || want[0] === 'clock') {
+  const { couplings, whereTheRatioComesFrom, shifted, clockRatio, theKnob, loopEnergy, classicalFallTime,
+    BLUR_OR_WAVE, RUNS_WITH_SCALE } = await import('../substrate/invariant');
+  const A0 = 5.29177210903e-11, LY = 9.4607304725808e15;
+  console.log('WHAT NO CHANGE OF CLOCK CAN CHANGE');
+  console.log('');
+  console.log('THE COUPLINGS \u2014 a force\u2019s strength with no unit left in it:');
+  for (const c of couplings()) console.log(`  ${c.value.toExponential(5).padEnd(13)} ${c.formula.padEnd(24)} ${c.name}`);
+  console.log('');
+  const w = whereTheRatioComesFrom();
+  console.log(`WHERE THE 10^36 COMES FROM (identity holds: ${w.agree}):`);
+  console.log(`  ${w.says}`);
+  console.log('');
+  console.log('THE TEST: rescale the metre, the second, the kilogram and the coulomb all at once:');
+  for (const r of shifted({ metre: 1e7, second: 1e-23, kilogram: 4.2e11, coulomb: 0.137 })) console.log(`  ${r.says}`);
+  console.log('');
+  const target = couplings().find((c) => c.name.includes('electric over'))!.value;
+  const k = clockRatio(A0, 50000 * LY);
+  console.log('THE CLOCK CLAIM, COMPUTED (f = c/R, an atom against the Milky Way):');
+  console.log(`  f_atom ${k.fFast.toExponential(3)} Hz / f_galaxy ${k.fSlow.toExponential(3)} Hz = ${k.ratio.toExponential(3)}`);
+  console.log(`  against the target ${target.toExponential(3)}: SHORT BY A FACTOR OF ${(target / k.ratio).toExponential(3)}`);
+  console.log(`  and it has a knob \u2014 ${theKnob(target).says}`);
+  console.log(`  (the same galaxy with the proton\u2019s radius instead gives ${clockRatio(0.8414e-15, 50000 * LY).ratio.toExponential(3)}: five orders on a choice of input)`);
+  console.log('');
+  console.log(`DIMENSION OF "ENERGY PER LOOP": ${loopEnergy().says}`);
+  console.log('');
+  console.log(`A CLASSICAL ORBIT: ${classicalFallTime().says}`);
+  console.log('');
+  console.log('BLUR OR WAVE \u2014 what you can watch, and what it decides:');
+  for (const b of BLUR_OR_WAVE) console.log(`  [${b.decides.split(' \u2014 ')[0].padEnd(13)}] ${b.watch}: ${b.measured} (${b.source})`);
+  console.log('');
+  console.log('WHAT DOES RUN WITH SCALE, measured:');
+  for (const r of RUNS_WITH_SCALE) console.log(`  ${r.as.padEnd(11)} ${r.what} [${r.source}]`);
+  console.log(`  a factor of ${(RUNS_WITH_SCALE[1].value / RUNS_WITH_SCALE[0].value).toFixed(3)} over 11 orders of magnitude in energy; the gap to close is ${target.toExponential(2)}`);
+  console.log('');
+  console.log('SUBSTRATE: the dimensionless invariants');
+  process.exit(0);
+}
+
 if (want[0] === 'unaccounted' || want[0] === 'holes') {
   const { Runtime } = await import('../substrate/runtime');
   const { unaccounted, unaccountedLines, represents } = await import('../substrate/holes');
