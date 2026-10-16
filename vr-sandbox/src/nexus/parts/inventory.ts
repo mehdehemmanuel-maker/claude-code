@@ -11,6 +11,7 @@
 
 import { billOf } from '../machines/makermodel';
 import { lookRow } from './looks';
+import { denotedSize } from './designation';
 import { ENDER3 } from '../models/ender3';
 import { VORON24 } from '../models/voron24';
 import { shapes, type Section } from '../machines/cell';
@@ -1665,6 +1666,11 @@ export function sizeOf(id: string, i: Item, densityKgM3?: (id: string) => number
   if (i.size && i.size.length >= 3) {
     return { mm: [i.size[0]!, i.size[1]!, i.size[2]!], how: 'its stated size', typical: false };
   }
+  // A DESIGNATION BEATS A DRAWING, and it is tried first for that reason: `looks.ts` offers a typical size for the
+  // sort of thing, while a standard designation states THIS thing's size by definition. 18650 does not resemble a
+  // cell 18 mm across, it means one.
+  const d = denotedSize(id, i.name, i.path.join('/'));
+  if (d) return { mm: d.mm, how: d.how, typical: false };
   const r = lookRow(id);
   if (!r || !r.size.every((v) => v > 0)) return null;
   // AND IT IS CHECKED AGAINST WHAT THE THING ALREADY SAYS, because `LOOKS` exists to DRAW and a drawing is not

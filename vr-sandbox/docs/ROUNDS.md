@@ -897,3 +897,68 @@ means 18 × 65 mm, `bearing-608` means 8 × 22 × 7 — so derivable from `threa
 brass's 34 form fields untested for want of measurements.
 
 GATE: PASS (2343 of 2343) — 191.1s, 191 files, tidy 24/24
+
+## Run 8q — a designation is a definition
+
+Run 8p closed 677 of 688 missing sizes from `looks.ts` and left eleven. **Nine of those eleven are named by a
+standard**, and for a standard designation the name IS the size — so reading the name is reading the standard, not
+estimating. `18650` does not resemble a cell 18 mm across; under IEC 60086 it MEANS one.
+
+`parts/designation.ts`, tried BEFORE `looks.ts`, because a definition outranks a typical drawn figure. Three routes,
+each giving all three extents or returning nothing:
+
+```
+$ npm run substrate -- know cell-18650
+cell-18650    18 × 18 × 65 mm    its IEC 60086 cell code 18650: the first two digits are the diameter in mm (18)
+                                 and the rest the height in tenths (65 mm)
+bearing-608   22 × 22 × 7 mm     the three figures its own name states (8 × 22 × 7 mm), read as a ring: its
+                                 outside across twice, its width deep
+screw-m3      5.5 × 5.5 × 13 mm  its designation M3 × 10: ISO 4762 gives an M3 head 5.5 mm across and 3 mm high,
+                                 over a 10 mm shank
+screw-m6      10 × 10 × 22 mm    its designation M6 × 16 …
+```
+
+**One rule, not eleven typed rows** — and it covers every future part named the same way. Two details that are the
+whole difference between a rule and a hack:
+
+- **A ring is read as its outside, twice, by its width.** ISO 15 states a 608 bearing as 8 bore / 22 outside /
+  7 wide, and taking those three as the box would make the box *smaller than the part*. The bore is a hole.
+- **The cell rule is guarded by the item's own path**, not by my judgement: `6061` is an aluminium alloy, not a
+  60 mm cell 6.1 mm tall, and the rule only fires where the inventory already says the thing is a cell.
+- **A route that can supply only two extents is refused.** NEMA ICS 16 fixes a frame-17 face at 42.3 mm and says
+  nothing about the body length, which varies by model, so `nema17` stays unsized rather than be completed by a
+  guess.
+
+**The coverage, measured:**
+
+| | Run 8o | Run 8p | now |
+| --- | --- | --- | --- |
+| non-material rows with a geometry | 1,261 (52.4%) | 1,938 (99.4%) | **1,942 (99.6%)** |
+| by a stated size | 1,261 | 1,261 | 1,261 |
+| **by a designation** | — | — | **6** |
+| by a typical drawn size | — | 677 | 675 |
+| nothing anywhere | 688 | 11 | **7** |
+
+Clashes went 3,982 → 3,990 over 1,942 checkable things instead of 1,938: 2.054 per item against 2.051, unchanged.
+
+**All seven that are left are named, with what each needs:**
+
+- `motor-130`, `mg996r` — their sizes already exist, in `families.ts`'s `DCM` and `SERVOS` tables. **This is a merge
+  blocked by import direction, not missing data**: `families.ts` imports `inventory.ts`, so `inventory → families`
+  would be a cycle. Lifting those two tables into a file both can read is the next piece.
+- `motor-micro` (N10), `n20-motor` (N20) — trade size names, not dimensional codes. These need a maker's drawing.
+- `nema17`, `screw-m2` — incomplete designations (a face with no length; a thread with no shank).
+- `salivary-glands` — needs an anatomical figure.
+
+### Two faults the round found in itself
+
+1. **`\b` silently refused every coin cell.** The cell-code rule began `/\b(\d{2})…/`, and `R` and `2` are both word
+   characters, so there is no word boundary inside `CR2032` and the rule never fired on a coin cell. Found by writing
+   the test for CR2032, not by reading the code. Fixed with a digit lookbehind — bounded by "no digit either side",
+   which is what the code actually is.
+2. **The round made a previous round's test obsolete, in a good direction.** Run 8p asserted that exactly one row
+   (`cell-cr2032`) was both drawn-only and self-weighing, so the aerogel guard had one candidate it could not even
+   check. Giving CR2032 its designation removed it from that set: the count is now **zero**, and the guard is fully
+   inert. The test says so rather than being loosened to keep passing.
+
+GATE: PASS (2352 of 2352) — 189.7s, 192 files, tidy 24/24

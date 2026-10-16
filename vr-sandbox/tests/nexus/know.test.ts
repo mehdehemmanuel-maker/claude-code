@@ -287,10 +287,12 @@ describe('the size merge: the drawing already knew', () => {
     // the room can see it at all. So the merge guards itself with arithmetic — a box is an upper bound on volume,
     // and the emptiest real solid (silica aerogel, ~1 kg/m³ against steel’s 8000) bounds how far above the true
     // mass a box can imply, so past 10^4 it is a different scale and the drawn size is refused.
-    // IT CATCHES NOTHING TODAY, and that is reported rather than hidden. Exactly ONE inventory row has both a
-    // drawn-only size and a stated mass — cell-cr2032, a CR2032 coin cell at 3.1 g — and even that one cannot be
-    // checked, because nothing gives it a density, so there is no mass to compare the box against. The guard is a
-    // ratchet for the next row added, not a thing that is working now, and the test says so.
+    // IT CATCHES NOTHING TODAY, and that is reported rather than hidden. In Run 8p exactly ONE row was both
+    // drawn-only and self-weighing — cell-cr2032, a coin cell at 3.1 g — and even that could not be checked for
+    // want of a density. Run 8q then removed it from the set by giving it something better than a drawing: CR2032
+    // is an IEC 60086 designation, so its size is now DENOTED (20 × 20 × 3.2) rather than borrowed. So the count
+    // is zero: nothing in the inventory is drawn-only and self-weighing. The guard is a ratchet for the next row
+    // added, not a thing that is working now, and the test says so rather than implying otherwise.
     const fromLooks = (id: string) => (know(id, 'thickness')?.how ?? '').includes('typical size');
     let comparable = 0;
     for (const [id, i] of INVENTORY) {
@@ -299,8 +301,9 @@ describe('the size merge: the drawing already knew', () => {
       const v = know(id, 'volume'), d = know(id, 'density');
       if (v && d) expect(v.value * d.value * 1000 / i.g, `${id}: its drawn box implies a mass far past what it states`).toBeLessThan(1e4);
     }
-    expect(comparable, 'one row (cell-cr2032) is drawn-only and self-weighing; it has no density, so nothing is actually compared').toBe(1);
-    expect(know('cell-cr2032', 'density'), 'and that is why: no density for it').toBeNull();
+    expect(comparable, 'nothing is drawn-only and self-weighing any more: the guard is inert, not wrong').toBe(0);
+    // and the reason it left the set: its size is denoted by its own designation, which beats a drawing
+    expect(know('cell-cr2032', 'thickness')!.how, 'CR2032 is a designation, not a drawing').toMatch(/IEC 60086/);
   });
 
   it('so the real scale error is caught by the CLASH, not by the guard', () => {

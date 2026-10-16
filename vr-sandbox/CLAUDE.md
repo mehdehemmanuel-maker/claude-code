@@ -407,6 +407,22 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   `unexplained`, which is the list a round should actually read.** The worst of those is a bacterial flagellar motor
   stated at 45 µm whose own 11 MDa mass puts it at 24 nm — a factor of a thousand, in a STATED size, so the drawn-
   size guard cannot see it and only over-determination can. **559 unexplained clashes is the real open item here.**
+- **A DESIGNATION IS A DEFINITION, NOT AN ESTIMATE** (`parts/designation.ts`). Run 8p left 11 sizes that existed
+  nowhere; nine of them are named by a standard, and for a standard designation the name IS the size. `18650` does
+  not resemble a cell 18 mm across — under IEC 60086 it MEANS one (first two digits the diameter in mm, the rest the
+  height in tenths), and the same single rule gives CR2032 as 20 × 3.2. So `denotedSize` is tried BEFORE `looks.ts`,
+  because a definition outranks a typical drawn figure. Three routes, each giving all three extents or refusing:
+  figures the name states, a cell code, and a metric screw through ISO 4762 and `threads.ts`. **A route that can
+  supply only two is refused** — a NEMA frame fixes the 42.3 mm face and says nothing about the body length, so
+  `nema17` stays unsized rather than being completed with a guess.
+  **Non-material inventory rows with a geometry: 52.4% → 99.4% (Run 8p) → 99.6%.** Seven are left and all seven are
+  named: `motor-130` and `mg996r` have their sizes in `families.ts` (the `DCM` and `SERVOS` tables) but
+  `inventory.ts → families.ts` would be a cycle, so lifting those tables into a file both can read is the next
+  piece; `motor-micro` and `n20-motor` carry trade size names rather than dimensional codes; `nema17` and
+  `screw-m2` have incomplete designations; `salivary-glands` needs an anatomical figure.
+  **The fault this one found in itself**: the cell-code rule used `\b` at the front and so silently refused every
+  coin cell, because `R` and `2` are both word characters and there is no boundary between them. Found by writing
+  the test for CR2032, fixed with a digit lookbehind.
 - **SEEING, TRACED BACK TO TIME** (`substrate/perceive.ts`, `npm run substrate -- seeing`). The constructive half
   of the clock thesis, and the half that holds. The user: *"add the time scale and human perception thing with math
   I meant the math of light and eyes and hz … all of it trace it back to time"*. `SEEING` is the whole chain as
