@@ -15,7 +15,7 @@ import { descend, heat, levelsAt } from './depth';
 import { drawIntent, knownSpans } from './draw';
 import { evolve } from './evolve';
 import { generate } from './manifold';
-import { GRAVITY, gravityAxis, placeAt } from './place';
+import { domainLeaves, EARTH, placeAt } from './place';
 import type { Jolt } from './realize';
 import { MemorySink } from './journal';
 import { Runtime } from './runtime';
@@ -38,8 +38,7 @@ const measured = (name: string, v: number, unit: string, source: string): Leaf =
 /** A room: a floor the headset holds, two blocks and a board laid across them, the board's far support too far in. */
 function room(): Runtime {
   const rt = Runtime.open(new MemorySink());
-  rt.admit({ kind: 'leaf', at: GRAVITY, leaf: measured('gravity', 9.80665, 'm/s^2', 'standard gravity') });
-  [0, -1, 0].forEach((x, j) => rt.admit({ kind: 'leaf', at: gravityAxis(j), leaf: measured(`direction of gravity ${'xyz'[j]}`, x, '1', "the headset's floor estimate") }));
+  for (const c of domainLeaves(EARTH)) rt.admit(c); // the setting, switched on: with it blank the floor below would be implied by nothing
   const box = (id: string, c: number[], h: number[], q = [0, 0, 0, 1]) => rt.admit({ kind: 'place', id, centre: c.map((x, j) => given(`centre ${'xyz'[j]}`, x, 'm')) as [Leaf, Leaf, Leaf], turn: q.map((x, j) => given(`turn ${'xyzw'[j]}`, x, '1')) as [Leaf, Leaf, Leaf, Leaf], half: h.map((x, i) => given(`half-extent ${i + 1}`, x, 'm')) as [Leaf, Leaf, Leaf] });
   box('the floor', [0, -0.05, 0], [5, 0.05, 5]);
   rt.admit({ kind: 'held', place: 'the floor', by: 'the headset: what it measured as the floor is the ground' });

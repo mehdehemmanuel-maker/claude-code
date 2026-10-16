@@ -11,10 +11,15 @@
 // a term. A board on
 // edge and a board flat differ only by how they are turned: which length is a breadth and which a depth is a
 // consequence of the direction of the load, never a name.
+//
+// It also owns WHICH LAWS ARE ON (`Setting`), because the setting is the domain's own quantities and gravity is
+// already one of them. The room is derived from it, never drawn: with nothing switched on a thing stands in the air
+// where it is put, every law attached and none acting, and switching gravity on is what makes a surface under it
+// implied by anything at all.
 
 import { WEIGHT } from '../book';
 import { address, type Address, type Contribution } from './journal';
-import { abs, add, div, k, mul, pow, sub, variable, type Leaf, type Term } from '../lang/term';
+import { abs, add, div, k, leaf, mul, pow, sub, variable, type Leaf, type Term } from '../lang/term';
 import { hashOf } from '../lang/identity';
 
 /** The domain's own quantities: gravity's magnitude and its direction, a unit vector in the domain's coordinates. */
@@ -39,6 +44,90 @@ export const placeAt = {
   sectionI: (p: string, i: number) => address(p, `second moment of its section across its axis ${i + 1}, about the line gravity bends it around`),
   sectionS: (p: string, i: number) => address(p, `modulus of its section across its axis ${i + 1}, about the line gravity bends it around`),
 };
+
+/**
+ * WHICH LAWS ARE ON. The room is not drawn; it is what this implies.
+ *
+ * The user, 2026-10-16: *"it should just be in the air unless time and gravity apply then it when those are on it
+ * would start being g active or effected by environment"*. That is the packet's own shape applied to the room. A
+ * packet is a thing with all its math attached and nothing computed until asked; a setting is a thing standing in
+ * the air with every law attached and none of them acting until switched on. So a floor, a table, a bench and a
+ * building are not scenery to draw: each is a CONSEQUENCE of gravity being on, and with gravity off not one of them
+ * is implied by anything.
+ *
+ * GRAVITY OFF IS NOT GRAVITY UNKNOWN, and the difference is the whole load-bearing distinction here. Unknown is an
+ * absence: `evolve` refuses outright, because nothing can be realized from an unknown. Off is a MEASURED ZERO — a
+ * known number that every law reads and that makes every weight it feeds exactly zero. So nothing is special-cased
+ * for the blank room: `WEIGHT` still runs, `contact.ts` still works out what a place bears, and both answer 0 N
+ * because 0 × m = 0. The room goes inert by arithmetic, not by a branch.
+ */
+export interface Setting {
+  /** Is time running? Off is no clock at all, not a slow one, so nothing advances and the evolver is not run. */
+  time: boolean;
+  /** The acceleration of free fall here, m/s². ZERO IS A SETTING, not an absence (see above). */
+  gravity: number;
+  /** Which way gravity pulls, a unit vector in the domain's coordinates. Down is never named; it is measured. */
+  direction: [number, number, number];
+  /** Where these numbers come from. Every setting says, including the blank one. */
+  why: string;
+}
+
+/** THE DEFAULT. Nothing is on, so a thing stands in the air exactly where it is put, with all its math attached. */
+export const BLANK: Setting = {
+  time: false, gravity: 0, direction: [0, -1, 0],
+  why: 'a blank setting: no law is switched on, so every weight is 0 N and nothing advances',
+};
+
+/** One setting that is switched on, for comparison against the blank one. */
+export const EARTH: Setting = {
+  time: true, gravity: 9.80665, direction: [0, -1, 0],
+  why: "standard gravity at the Earth's surface (CGPM 1901, 3rd conference) — the setting's, not the stuff's: every material in it is given the same, which is what the Eötvös experiments measure",
+};
+
+/** A law switched on or off, as a new setting: the old one is never mutated, so a round can hold both and compare. */
+export function switched(s: Setting, law: 'time' | 'gravity', on: boolean): Setting {
+  if (law === 'time') return { ...s, time: on, why: `${s.why}; time switched ${on ? 'on' : 'off'}` };
+  const g = on ? EARTH.gravity : 0;
+  return { ...s, gravity: g, why: on ? EARTH.why : BLANK.why };
+}
+
+/** Whether anything in this setting can advance. Nothing to step is not a still world; it is no clock. */
+export const advances = (s: Setting): boolean => s.time;
+
+/** The setting's own leaves, at the domain's addresses: what a runtime must be given before any place is admitted. */
+export function domainLeaves(s: Setting): Contribution[] {
+  const o = { class: 'measured' as const, source: s.why, window: 'the setting' };
+  return [
+    { kind: 'leaf', at: GRAVITY, leaf: leaf('gravity', s.gravity, 'm/s^2', o) },
+    ...s.direction.map((x, j) => ({ kind: 'leaf' as const, at: gravityAxis(j), leaf: leaf(`direction of gravity ${'xyz'[j]}`, x, '1', o) })),
+  ];
+}
+
+/** What a mass weighs in this setting, and whether anything need bear it. The arithmetic IS the test: a weight of
+ *  0 N is borne by nothing because there is nothing to bear, so no surface under it is implied by any law. */
+export function borne(s: Setting, massKg: number): { newtons: number; needsBearing: boolean; says: string } {
+  const N = massKg * s.gravity;
+  return { newtons: N, needsBearing: N > 0,
+    says: N > 0
+      ? `${massKg.toFixed(3)} kg weighs ${N.toFixed(3)} N here, so something must bear it: a surface under it is implied by the law`
+      : `${massKg.toFixed(3)} kg weighs 0 N here, so nothing need bear it — it stays where it is put, and no floor, table or bench is implied by anything` };
+}
+
+/** THE ROOM, DERIVED. One implication per law, from its state alone: what the setting being this way forces the
+ *  room to have, and what it leaves with no ground. Nothing here is a list of furniture; a round reads it and the
+ *  room follows, which is the opposite of drawing a room and hoping the laws agree. */
+export function impliedRoom(s: Setting): { law: string; on: boolean; room: string }[] {
+  return [
+    { law: 'gravity', on: s.gravity > 0,
+      room: s.gravity > 0
+        ? `every thing has a weight of m × ${s.gravity} N, so anything at rest is borne by something and a surface under it is implied; what is not borne falls`
+        : 'nothing weighs anything, so nothing is borne, nothing falls and no surface is implied: a thing stands in the air where it is put' },
+    { law: 'time', on: s.time,
+      room: s.time
+        ? 'what is not in balance moves, and where it comes to rest is measured rather than asserted'
+        : 'nothing advances: every quantity is attached to every thing and not one of them is computed' },
+  ];
+}
 
 /** A place's numbers as leaf contributions, each at its address. */
 export function placeLeaves(p: PlaceSpec): Contribution[] {

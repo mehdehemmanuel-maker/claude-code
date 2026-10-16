@@ -128,6 +128,11 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   for a slow close view), `FORGE_Q=xr=quest3` for an emulated Quest 3 whose hands the hooks
   move and press: how the soldering lesson is played through by hand and checked.
 - `tools/forge-look.mjs`: the forge room as the user stands in it, what is asked stood before you as "3d <words>" does
+- `tools/room-census.mjs`: WHAT IS ACTUALLY IN THE ROOM, as a count rather than a glance. Every top-level group and
+  how many of its meshes are drawn, plus what the room says is switched on, and again after each thing you tell it
+  (`node tools/room-census.mjs "gravity on" "time on"`). Written 2026-10-16 because a screenshot of the forge from
+  the front showed an empty room while the whole warehouse stood behind the camera, and the user had to say so: a
+  room judged from one angle is not judged. Zero shown everywhere is the only thing that means blank.
   (`"name|words|key=…&sky=…&env=…&lamp=…"` to try its light): a part judged in the room it is seen in, not only on
   the look page's bench.
 - `xml3d.py`: a maker's 3D assembly in 3DXML (SOLIDWORKS and CATIA export it; Creality's Ender-3 is published so): `tree`,

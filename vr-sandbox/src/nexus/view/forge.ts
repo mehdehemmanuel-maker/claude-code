@@ -57,6 +57,7 @@ import { Boards3D } from './boards3d';
 import { claudeBoard, guessStep, type FlowApi } from '../substrate/flows';
 import { Workshop, type Made, type PartRef } from '../ask/generate';
 import { glow } from '../../engineering/thermal';
+import { HOVER, roomSetting, startingSetting, viewAsked, VIEWS } from './setting3d';
 import type { Jolt } from '../substrate/realize';
 import type { SimTrack } from '../substrate/sim';
 import { setTestPhysics } from '../substrate/calltest';
@@ -161,22 +162,25 @@ const camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerH
 // key 1.6, sky 0.9 and a lamp 1.4 a hand's length above it, and #36bd8b under these (tools/forge-look.mjs, its board
 // sampled); &env=, &sky=, &key=, &lamp= to try)
 const { keyFollow } = lightRoom(scene, renderer, params);
+// which laws are on, and the room derived from it rather than drawn (view/setting3d.ts); blank unless the query says
+const room = roomSetting({ start: startingSetting(params), stand: (ground) => machine.position.set(M.x, ground ? M.y + 0.015 : HOVER, M.z),
+  massNow: () => shop.all().made.reduce((kg, x) => kg + (x.mass ?? 0), 0), alsoApply: (s) => peopleWorld?.setGravity(s.gravity) });
+const roomPiece = room.piece;
 const floor = new THREE.Mesh(new THREE.CircleGeometry(10, 72), new THREE.MeshStandardMaterial({ color: 0x060b10, roughness: 0.7, metalness: 0.3 }));
-floor.rotation.x = -Math.PI / 2; scene.add(floor);
-const grid = new THREE.GridHelper(20, 40, 0x0f3a48, 0x0a1a24); scene.add(grid);
+floor.rotation.x = -Math.PI / 2; scene.add(roomPiece(floor, 'gravity'));
+const grid = new THREE.GridHelper(20, 40, 0x0f3a48, 0x0a1a24); scene.add(roomPiece(grid, 'gravity'));
 
 // the machine stands at full size on a pedestal in front of you
 const M = new THREE.Vector3(0, 0.5, -1.25);
 const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, M.y, 48), new THREE.MeshStandardMaterial({ color: 0x0b141c, metalness: 0.7, roughness: 0.35 }));
-pedestal.position.set(M.x, M.y / 2, M.z); scene.add(pedestal);
+pedestal.position.set(M.x, M.y / 2, M.z); scene.add(roomPiece(pedestal, 'gravity'));
 const rim = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.006, 8, 96), new THREE.MeshBasicMaterial({ color: 0x4dd0e1 }));
-rim.rotation.x = Math.PI / 2; rim.position.set(M.x, M.y + 0.002, M.z); scene.add(rim);
+rim.rotation.x = Math.PI / 2; rim.position.set(M.x, M.y + 0.002, M.z); scene.add(roomPiece(rim, 'gravity'));
 // the machine stands on its feet on the pedestal's top
-const machine = new THREE.Group(); machine.position.copy(M).add(new THREE.Vector3(0, 0.015, 0)); scene.add(machine);
+const machine = new THREE.Group(); machine.position.copy(M).add(new THREE.Vector3(0, 0.015, 0)); scene.add(machine); room.apply(); // the room starts as the setting says, which by default is blank
 if (params.get('lamp')) { const lamp = new THREE.PointLight(0xffffff, Number(params.get('lamp')), 2.5); lamp.position.set(0.3, 1.9, -0.6); scene.add(lamp); }
-
 // ---- the pipeline, above and behind it: shown while it runs, or when you ask for it ---------------------------------------
-const pipelineGroup = new THREE.Group(); scene.add(pipelineGroup);
+const pipelineGroup = new THREE.Group(); scene.add(roomPiece(pipelineGroup, 'nothing')); // a diagram, not a thing
 const STAGES = ['INTENT', 'GENERATE', 'HEAD', 'MOTORS', 'AXES', 'WIRING', 'CHECK', 'REMEDY'] as const;
 type Stage = (typeof STAGES)[number];
 const nodeAt = (i: number) => { const th = ((i / (STAGES.length - 1)) * 2 - 1) * 1.15; return new THREE.Vector3(M.x + Math.sin(th) * 1.55, 2.05 - 0.12 * Math.cos(th * 1.4), M.z - Math.cos(th) * 0.75 - 0.15); };
@@ -203,7 +207,7 @@ const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 12), new THREE.
 const pulseLight = new THREE.PointLight(0x80deea, 0.8, 0.6); pulse.add(pulseLight);
 
 // ---- cards ---------------------------------------------------------------------------------------------------------
-const facing = (m: THREE.Object3D, x: number, y: number, z: number) => { m.position.set(x, y, z); m.lookAt(0, 1.55, 0.7); scene.add(m); };
+const facing = (m: THREE.Object3D, x: number, y: number, z: number) => { m.position.set(x, y, z); m.lookAt(0, 1.55, 0.7); scene.add(roomPiece(m, 'nothing')); };
 const stepCard = card(0.66, 0.62); facing(stepCard.mesh, -0.78, 1.3, -0.95);
 const roundsCard = card(0.66, 0.62); facing(roundsCard.mesh, 0.78, 1.3, -0.95);
 const lawsCard = card(0.7, 0.86); facing(lawsCard.mesh, -1.35, 1.25, -0.3);
@@ -219,7 +223,7 @@ function drawGates(): void {
   ]) : [{ text: 'The printer decides by its remedies, round by round: see the rounds.', color: '#9fdfee', size: 0.9 }];
   gatesCard.draw(`LOGIC GATES · ${gs.length} decisions`, lines, '#b388ff');
 }
-const subtitle = card(1.1, 0.2, 1400); subtitle.mesh.position.set(0, 1.62, -1.15); subtitle.mesh.lookAt(0, 1.5, 0.6); scene.add(subtitle.mesh);
+const subtitle = card(1.1, 0.2, 1400); subtitle.mesh.position.set(0, 1.62, -1.15); subtitle.mesh.lookAt(0, 1.5, 0.6); scene.add(roomPiece(subtitle.mesh, 'nothing'));
 const title = label('NEXUS · the forge · live', 0.055, '#ffffff', 'rgba(0,0,0,0)'); title.position.set(0, 2.6, -1.7); pipelineGroup.add(title);
 // one voice, mine, above my head: the centre of your view stays the machine's
 subtitle.mesh.visible = false;
@@ -228,7 +232,7 @@ const partCard = card(0.34, 0.27, 900); scene.add(partCard.mesh); partCard.mesh.
 let partCardUntil = 0;
 
 // Claude, beside the machine
-const robot = new Robot(); scene.add(robot.root); for (const s of robot.senses) scene.add(s);
+const robot = new Robot(); scene.add(roomPiece(robot.root, 'nothing')); for (const s of robot.senses) scene.add(roomPiece(s, 'nothing'));
 /** What merging each built thing's still meshes saved (src/nexus/view/merge-static.ts): meshes before, after. */
 const merged: Record<string, { before: number; after: number }> = { Claude: mergeStatic(robot.root, held(robot)) };
 const nameplate = label('CLAUDE', 0.022, '#4dd0e1', 'rgba(0,0,0,0)'); nameplate.position.set(0, 1.42, 0); robot.root.add(nameplate);
@@ -236,7 +240,7 @@ const beam = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMater
 // the edge of your view: the time, the weather, and what I am doing
 const hud = new Hud(); scene.add(hud.group);
 // the parts bay beside the pedestal, where my arms take each part from when I build
-const bay = new THREE.Group(); scene.add(bay);
+const bay = new THREE.Group(); scene.add(roomPiece(bay, 'gravity')); // a table on legs: only where a weight is borne
 {
   const top = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.02, 0.3), new THREE.MeshStandardMaterial({ color: 0x0b141c, metalness: 0.7, roughness: 0.35 })); top.position.y = 0.55; bay.add(top);
   const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.55, 16), top.material); legs.position.y = 0.275; bay.add(legs);
@@ -2016,8 +2020,8 @@ function backToForge(): string {
   if (ping) { ping.bat.parent?.remove(ping.bat); ping = null; }
   if (karting || coaster) { karting = null; coaster = null; kartKeys.clear(); dolly.rotation.set(0, 0, 0); dolly.position.set(0, 0, 0); const f = VIEWS.front!; camera.position.set(f[0], f[1], f[2]); orbit.target.set(f[3], f[4], f[5]); }
   if (placeNow) { placeNow.v.torch?.parent?.remove(placeNow.v.torch); placeNow.v.dispose(); scene.remove(placeNow.v.group); placeNow = null; }
-  for (const o of forgeRoom()) o.visible = true; scene.background = new THREE.Color(0x04070b); scene.fog = new THREE.Fog(0x04070b, 6, 16);
-  camera.far = 50; camera.near = 0.01; camera.updateProjectionMatrix(); dolly.scale.setScalar(1); peopleWorld?.setGravity(GRAVITY.earth); flying = false;
+  for (const o of forgeRoom()) o.visible = true; room.apply(); scene.background = new THREE.Color(0x04070b); scene.fog = new THREE.Fog(0x04070b, 6, 16);
+  camera.far = 50; camera.near = 0.01; camera.updateProjectionMatrix(); dolly.scale.setScalar(1); peopleWorld?.setGravity(room.now().gravity); flying = room.now().gravity === 0;
   return 'Back in the forge: its own room, Earth\'s gravity, your own size.';
 }
 /** A place asked for in words: back to the forge, a place (changed from the one you are in when only its time, weather,
@@ -2545,6 +2549,7 @@ async function converse(text: string): Promise<void> {
   boards?.event({ kind: 'said', text }); heardFeeling(text);
   { const said = benchHeard(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }  // a bench that is out owns its own words first
   // an answer to what the intent pipeline asked, or a word to it about what it made: done here, offline
+  { const said = room.heard(text); if (said) { line('you', text); say(said, undefined, 'nexus'); return; } }  // which laws are on: the room follows
   if (RESET_WORDS.test(text.trim())) { line('you', text); say(resetBuild(), undefined, 'nexus'); return; }
   if (/^(store|keep|shelve) (it|this|the build|that)( in the warehouse)?[.!]?$|^put (it|this|the build) in the warehouse[.!]?$/i.test(text.trim())) { line('you', text); say(storeBuild(), undefined, 'nexus'); return; }
   if (/^(explode|take apart|open up|see|show)( me)? (the |this |that )?(build|it|whole thing)( apart| in 3d)?[.!]?$|^(take|pull) (the |this )?build apart[.!]?$/i.test(text.trim())) { line('you', text); say(seeBuild3d(), undefined, 'nexus'); return; }
@@ -3152,7 +3157,7 @@ const fleet = new Fleet({
 try { const saved = JSON.parse(localStorage.getItem(FLEET_KEY) ?? '{}') as Record<string, { name: string; abilities: AbilityId[] }>; for (const b of fleet.bots) { const c = saved[b.id]; if (c) { b.name = c.name; b.abilities = c.abilities.filter((a) => a in ABILITIES); } } } catch { /* as they started */ }
 const keepFleet = () => { try { localStorage.setItem(FLEET_KEY, JSON.stringify(Object.fromEntries(fleet.bots.map((b) => [b.id, { name: b.name, abilities: b.abilities }])))); } catch { /* kept for this visit */ } };
 for (const k of kept) { const s2 = fleet.floor.slots.find((x) => x.id === k.slot) ?? fleet.floor.slots.find((x) => !x.holds?.startsWith('build-')); if (s2) { s2.holds = k.id; k.slot = s2.id; } }
-const warehouse = new Warehouse(fleet); scene.add(warehouse.group); named(warehouse.group, 'the warehouse'); merged.warehouse = mergeStatic(warehouse.group, held(warehouse));
+const warehouse = new Warehouse(fleet); scene.add(roomPiece(warehouse.group, 'nothing')); named(warehouse.group, 'the warehouse'); merged.warehouse = mergeStatic(warehouse.group, held(warehouse));
 // the workshop corner to your left: the printer, the kiln and furnace, the two arms, the rack (src/nexus/machines/cell.ts)
 const cell = new Cell({ said: (t2) => line('system', `🔩 ${t2}`), made: (m2) => line('system', `🔩 Made: ${m2.name} (${m2.kind}, ${m2.g.toFixed(0)} g). ${m2.spec.join('; ')}`), released: (r) => setDown(r) });
 // what the workshop builds, set down in the room and running its program (src/nexus/kinds/devices.ts)
@@ -3220,7 +3225,7 @@ async function cellStep(t: string): Promise<string> {
   const said = cellWords(`cell ${w}`); if (said !== null) return said;
   throw new Error(`"cell ${w}"? Say cell print chassis, cell cast gear in zinc, cell take n20 2, cell wire rover, cell upload rover, cell release rover, cell build rover, cell gcode G28; M104 S210, cell speed 600, or cell stop. Recipes: ${RECIPES.map((r) => r.id).join(', ')}; metals: ${METALS.map((x) => x.id).join(', ')}.`);
 }
-const cellView = new CellView(cell); scene.add(cellView.group); named(cellView.group, 'the workshop'); merged.workshop = mergeStatic(cellView.group, held(cellView));
+const cellView = new CellView(cell); scene.add(roomPiece(cellView.group, 'nothing')); named(cellView.group, 'the workshop'); merged.workshop = mergeStatic(cellView.group, held(cellView));
 /** A part by its name or a recipe's, for words and pipeline steps: "gear", "frame", "chassis". */
 const partNamed = (w: string) => CellView.partOf(w.trim()) ?? null;
 /** The workshop's words, from the chat or a pipeline step: print, cast, build, G-code, speed, stop. */
@@ -3307,6 +3312,8 @@ function removeKept(id: string): string {
 let place: 'warehouse' | 'table' | 'workshop' = 'table';
 function goPlace(p: 'warehouse' | 'table' | 'workshop'): string {
   place = p;
+  // a fixture rests on no law, so it is in the room only while you are at it: asking for it by name is what puts it there
+  room.askFor(p === 'warehouse' ? warehouse.group : p === 'workshop' ? cellView.group : null);
   if (renderer.xr.isPresenting) { if (p === 'warehouse') { dolly.position.copy(Warehouse.VIEW.stand); dolly.rotation.set(0, Math.PI, 0); } else if (p === 'workshop') { dolly.position.copy(CellView.VIEW.stand); dolly.rotation.set(0, Math.PI / 2, 0); } else { dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0); } }
   else { framing = false; if (p === 'warehouse') { orbit.target.copy(Warehouse.VIEW.look); camera.position.set(0.9, 2.7, WZ - 2.2); } else if (p === 'workshop') { orbit.target.copy(CellView.VIEW.look); camera.position.set(-1.6, 2.0, -0.4); } else { orbit.target.set(view[3], view[4], view[5]); camera.position.set(view[0], view[1], view[2]); } orbit.update(); }
   if (p === 'workshop') return `At the workshop: the printer ${cell.printer.busy ? 'printing' : 'idle'}, the kiln ${cell.kiln.says()}, the furnace at ${Math.round(cell.furnace.t)} °C. The Workshop app runs it.`;
@@ -3885,14 +3892,7 @@ const backHeld = new Set<string>();
 let phoneHidden = false;
 
 // ---- views, start ---------------------------------------------------------------------------------------------------------
-const VIEWS: Record<string, [number, number, number, number, number, number]> = {
-  front: [0, 1.6, 0.45, 0, 1.3, -1.3],
-  close: [0.25, 1.25, -0.35, 0, 0.85, -1.25],
-  side: [1.2, 1.35, -0.2, 0, 0.9, -1.3],
-  pipeline: [0, 1.75, 0.3, 0, 1.95, -1.6],
-  wide: [0, 2.0, 1.9, 0, 1.2, -1.2],
-};
-const view = VIEWS[params.get('view') ?? 'front'] ?? VIEWS.front!;
+const view = viewAsked(params);
 camera.position.set(view[0], view[1], view[2]); camera.lookAt(view[3], view[4], view[5]);
 // on a screen: drag to look round it, scroll to come closer (the headset's own pose replaces this)
 const orbit = new OrbitControls(camera, renderer.domElement);

@@ -1096,3 +1096,97 @@ held (tidy 24/24, no allow-list line added in any round), and the two regression
 import (removed by putting the concern in the layer that owns it). The real bloat was the one unreached file.
 
 GATE: PASS (2357 of 2357) — 196.3s, 192 files, tidy 24/24, census back to 22 unreached
+
+---
+
+## Run 8t — the room is derived from which laws are on, not drawn
+
+The user, after two warnings about drift, gave the direction plainly: *"also blank the environments i don't like the
+table idea it should just be in the air unless time and gravity apply then it when those are on it would start being
+g active or effected by environment take out that bs warehouse the be robot and robots any other build because it
+flawed because your not at full potential"*.
+
+**What that is, read properly: their own thesis applied to the room.** The packet is a thing with all its math
+attached and nothing computed until asked. A setting is a thing standing in the air with every law attached and none
+of them acting until switched on. So a table presupposes gravity and contact, a bench presupposes a floor, a
+warehouse presupposes a building — 2,025 lines of scenery asserting conclusions no law here had reached. The answer
+was never to hand-delete on taste, which is the mirror image of hand-drawing on taste. It was to build the law and
+let the room follow.
+
+**The law (`Setting` in `substrate/place.ts`, `npm run substrate -- setting`).** `place.ts` already owned the
+domain's own quantities — `GRAVITY`, `gravityAxis`, the weight relation — so the setting is its concern and no new
+substrate file was written. The load-bearing distinction is that **gravity OFF is not gravity UNKNOWN**: unknown is
+an absence and `evolve` refuses it outright ("nothing is realized from an unknown"); off is a MEASURED ZERO, a known
+number every law reads. So nothing is special-cased for a blank room — `WEIGHT` still runs, `contact.ts` still works
+out what a place bears, and both answer 0 N because 0 × m = 0. **The room goes inert by arithmetic, not by a branch.**
+`borne(s, kg)` is that arithmetic: a weight of 0 N is borne by nothing, so no surface under it is implied by any law.
+
+**Proved on one block, one runtime, the setting the only difference** (`tests/nexus/setting.test.ts`, 8 tests): a
+steel block put in the air at 1.2 m keeps its mass (7.850 kg either way — a mass is of the stuff) and has a weight of
+0 N; the kernel runs and it does not move at all. Switch gravity on and the same block in the same room weighs
+76.982 N and falls 78.7 m, because nothing was drawn to catch it.
+
+**The room (`view/setting3d.ts`, new, 106 lines).** Every piece of the forge registers what it RESTS ON as it is
+made: `gravity` (the floor, the grid, the pedestal and its rim, the parts bay — each only means anything where a
+weight has to be borne) or `nothing` (the robot, the warehouse, the workshop corner, the pipeline diagram, the cards
+— fixtures resting on no law, which a blank setting therefore does not have, and which come back only when asked for
+by name). It is its own file because `forge.ts` is already five concerns and this is a sixth; `VIEWS` moved with it.
+
+### The fault the user had to catch, and the two faults under it
+
+I rendered the forge from the front, saw an empty room, and reported it blank. The user: *"The room isn't blank
+that's one as from one angle"*. They were right, and the back view shows it — the entire warehouse was still
+standing: racking, totes, painted lanes, a pick station and three named robots.
+
+1. **A piece took the setting only when `apply` was next called.** The robot, the warehouse and the workshop are
+   built hundreds of lines below where the setting is made, and nothing called `apply` again, so each kept the
+   visibility it was drawn with. Fixed at the cause: a piece takes the setting AS IT REGISTERS.
+2. **`view=` could not survey the room at all.** `forge-look.mjs` frames whatever part it stands before you, which
+   overrides the camera, so `front`, `back` and `left` returned the same picture. I could not have judged this by eye
+   however many angles I asked for.
+
+**So the judgement became a command: `node tools/room-census.mjs "gravity on"`** — every top-level group, how many of
+its meshes are actually drawn, and what the room says is switched on. Measured:
+
+| | meshes drawn | triangles | groups |
+| --- | --- | --- | --- |
+| as it opens (nothing switched on) | **0** | **0** | **0 — the room is empty** |
+| after "gravity on" | 9 | 1,937 | 6 (floor, grid, pedestal, rim, parts bay) |
+| after "time on" | 9 | 1,937 | 6 — unchanged, which is right: time adds no furniture |
+
+Zero shown everywhere is the only thing that means blank. "It looks blank" is not a measurement, and this round is
+the proof of that: I said it twice before it was true.
+
+### A correction I owe on my own plan
+
+Before the break I said the connectedness census (`tools/unwired.mjs`) would name which scenery had become
+contradictory, and that deletions would follow that evidence. **It cannot.** It measures connectedness, and the
+warehouse, the robot and the workshop are all reached from doors, so connectedness will never condemn them. The
+measurement that can is the one this round built.
+
+### What the dependency reading changed about the deletion
+
+The ask names "that bs warehouse the be robot and robots". Measured, those are not one thing:
+
+- **`view/warehouse.ts` (194) + `view/robot.ts` (241) + `view/robot-bench.ts` (116)** — scenery and a hand-drawn
+  avatar, reached only from `forge.ts` and `jarvis.ts`. Now absent from a blank room; deletable.
+- **`machines/robot.ts` (156)** — NOT scenery. `parts/components.ts:569` builds the robot *from library parts*: two
+  UR5e arms on their makers' bolt pattern, a QC-11 changer, an RH56DFX hand, a Nano17 at each fingertip, a Camera
+  Module 3, a D435. That is ask 3 (the component library), not a flawed build.
+- **`works/tend.ts` (286)** — the robot that runs the works, imported by `ask/machine.ts`, `works/index.ts`,
+  `parts/inventory.ts` and `cli/works-main.ts`. That is ask 5.
+
+Deleting on the name alone would have torn out the library and the works. Stated rather than quietly skipped.
+
+### Still open from this round
+
+- The files above are **hidden, not deleted** — 551 lines of scenery still compile and still answer "go to the
+  warehouse". Deleting them is a separate change, and the census is now the check that nothing else needs them.
+- `impliedRoom` gives one sentence per law. It does not yet DERIVE a ground: switching gravity on shows the floor
+  that was already drawn rather than generating a surface from the weight that needs bearing.
+- The component library and the universal edges, which is the rest of what the user asked for, are untouched.
+
+GATE: PASS (2365 of 2365) — 186.0s, tidy 24/24 with no number raised (`forge.ts` was taken back under its own
+ratchet by moving the concern out, not by widening the allowance). Census: 178 test-only (−1), 141 dead, 22
+unreached files — unchanged, so the new law and the new tool added no unreached code.
+Room: `node tools/room-census.mjs "gravity on" "time on"` — 0 meshes blank, 9 with gravity on, 9 with time on too.

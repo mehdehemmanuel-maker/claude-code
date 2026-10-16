@@ -358,15 +358,58 @@ if (want[0] === 'invariant' || want[0] === 'clock') {
   process.exit(0);
 }
 
+// `npm run substrate -- setting` — WHICH LAWS ARE ON, and the room derived from that rather than drawn.
+// The user: "it should just be in the air unless time and gravity apply then it when those are on it would start
+// being g active or effected by environment". One block, one runtime, the setting the only difference.
+if (want[0] === 'setting' || want[0] === 'room') {
+  const { Runtime } = await import('../substrate/runtime');
+  const { advances, BLANK, borne, domainLeaves, impliedRoom, placeAt, switched } = await import('../substrate/place');
+  const { evolve } = await import('../substrate/evolve');
+  const { leaf } = await import('../lang/term');
+  const joltFor = async () => (await import('jolt-physics/wasm-compat')).default() as Promise<Parameters<typeof evolve>[0]>;
+  const given = (v: number, u: string, w: string) => leaf(w, v, u, { class: 'configuration' as const, source: w });
+  const inTheAir = (s: ReturnType<typeof switched>) => {
+    const rt = Runtime.open();
+    for (const c of domainLeaves(s)) rt.admit(c);
+    rt.admit({ kind: 'place', id: 'a block',
+      centre: [0, 1.2, 0].map((v) => given(v, 'm', 'put there, 1.2 m up')) as never,
+      turn: [0, 0, 0, 1].map((v) => given(v, '1', 'not turned')) as never,
+      half: [0.05, 0.05, 0.05].map((v) => given(v, 'm', 'as cut')) as never });
+    rt.admit({ kind: 'leaf', at: placeAt.density('a block'), leaf: given(7850, 'kg/m^3', 'mild steel (ASM: carbon steels 7.85)') });
+    return rt;
+  };
+  console.log('A 100 mm steel block, put in the air 1.2 m up. NOTHING ELSE IS IN THE ROOM: no floor, no table, no bench.');
+  console.log('');
+  for (const s of [BLANK, switched(switched(BLANK, 'gravity', true), 'time', true)]) {
+    const rt = inTheAir(s);
+    const m = rt.binding(placeAt.mass('a block'))?.value ?? NaN;
+    console.log(`GRAVITY ${s.gravity > 0 ? `ON at ${s.gravity} m/s^2` : 'OFF (a measured zero, not an absence)'}`);
+    console.log(`  it has a mass of     ${m.toFixed(3)} kg   — the same either way: a mass is of the stuff`);
+    console.log(`  and a weight of      ${(rt.binding(placeAt.weight('a block'))?.value ?? NaN).toFixed(3)} N`);
+    console.log(`  ${borne(s, m).says}`);
+    for (const r of impliedRoom(s)) console.log(`  ${r.law.padEnd(8)} ${r.on ? 'on ' : 'off'}  ${r.room}`);
+    console.log(advances(s)
+      ? '  time is running, so it is stepped, and where it ends up is measured rather than asserted:'
+      : '  nothing is stepped, because time is off; and were it stepped anyway, zero gravity holds it where it is:');
+    const e = evolve(await joltFor(), rt);
+    console.log(`  the kernel: ${e.refused.length ? e.refused.map((r) => r.because).join('; ') : e.moved.length ? `it moved ${e.moved[0]!.distance.toFixed(3)} m — it fell, because nothing was drawn to catch it` : 'it did not move at all: it is still exactly where it was put'}`);
+    console.log('');
+  }
+  console.log('The room was never drawn. A floor, a table and a bench are each a CONSEQUENCE of gravity being on,');
+  console.log('and with it off not one of them is implied by anything.');
+  console.log('');
+  console.log('SUBSTRATE: which laws are on');
+  process.exit(0);
+}
+
 if (want[0] === 'unaccounted' || want[0] === 'holes') {
   const { Runtime } = await import('../substrate/runtime');
   const { unaccounted, unaccountedLines, represents } = await import('../substrate/holes');
-  const { GRAVITY, gravityAxis, placeAt } = await import('../substrate/place');
+  const { domainLeaves, EARTH, placeAt } = await import('../substrate/place');
   const { leaf } = await import('../lang/term');
   const given = (v: number, u: string, w: string) => leaf(w, v, u, { class: 'configuration' as const, source: w });
   const rt = Runtime.open();
-  rt.admit({ kind: 'leaf', at: GRAVITY, leaf: given(9.80665, 'm/s^2', 'standard gravity') });
-  for (const j of [0, 1, 2]) rt.admit({ kind: 'leaf', at: gravityAxis(j), leaf: given(j === 1 ? -1 : 0, '1', 'gravity points down the second axis') });
+  for (const c of domainLeaves(EARTH)) rt.admit(c);
   rt.admit({ kind: 'place', id: 'block',
     centre: [0, 0, 0].map((v) => given(v, 'm', 'at the origin')) as never,
     turn: [0, 0, 0, 1].map((v) => given(v, '1', 'not turned')) as never,

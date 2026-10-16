@@ -242,6 +242,14 @@ it out. Two checks catch this earlier, and both are commands rather than opinion
   `substrate/clashcause.ts`, Run 8r read its output, and a third round was queued on it — and the census called it
   an **unreached file** the whole time. An instrument with no door is not a finding, it is bloat. Unreached files
   had crept 22 → 23 and test-only exports 177 → 180 across rounds reported as progress.
+- **A room is never judged from one angle. `node tools/room-census.mjs` is the judgement.** 2026-10-16: the forge
+  was rendered from the front, read as an empty room, and reported blank — with the whole warehouse, three named
+  robots, the workshop corner and the pipeline diagram still standing behind the camera. The user had to say so,
+  twice. Two things made it worse than carelessness: `forge-look.mjs` frames whatever part it stands before you, so
+  `view=back` returns the same picture as `view=front` and no number of angles would have caught it; and a piece of
+  the room took the setting only when `apply` was next called, so everything built below that line kept the
+  visibility it was drawn with. **"It looks right" is not a measurement of a room.** The census counts, per group,
+  how many meshes are actually drawn, and zero everywhere is the only thing that means blank.
 - **When a round's obvious next step is inside the file the last round touched, that is the drift signal.** The
   substrate work feeds itself: each round closes one thing and uncovers two more next to it, so there is always an
   obvious next step and it is always in the same place. An obvious next step is not the most valuable one. Count how

@@ -550,7 +550,7 @@ function fragments(raw: string): string[] {
  *  `std(…)` material helper, and `boards/`, where one solder-ball drawing is written in two files. */
 const DUPES: string[] = [
   "M: fixed('molar mass of water', 0.018015, 'kg/mol', 'IUPAC') :: life/decay.ts:219 life/flows.ts:42 life/flows.ts:43 life/flows.ts:47",
-  "Math.abs(Math.sin(t * 5.3)) :: view/forge.ts:578 view/jarvis.ts:172",
+  "Math.abs(Math.sin(t * 5.3)) :: view/forge.ts:582 view/jarvis.ts:172",
   "box('die', [4, 0.6, 4], [0, 0.4, 0], 'silicon') :: boards/boardparts.ts:606 boards/sbc.ts:572",
   "box('lead', [a * 0.94, ball, a * 0.94], [0, ball / 2, 0], 'solder', { inBody: 0, share, color: 0xb8bcc0 }) :: boards/boardparts.ts:634 boards/boardparts.ts:643 boards/sbc.ts:348",
   "const std = (c: number, rough = 0.6, metal = 0, more: THREE.MeshStandardMaterialParameters = {}) :: view/coaster3d.ts:13 view/pingpong3d.ts:13",
