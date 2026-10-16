@@ -732,3 +732,71 @@ mechanisms whose ratio holds across scale — a different idea). Tidy rule faile
 `Coupling`, which is the correct physics term anyway. **No allow-list line was added.**
 
 GATE: PASS (2323 of 2323) — invariant.test.ts adds 10
+
+## Run 8o — seeing, traced back to time
+
+The user: *"add the time scale and human perception thing with math I meant the math of light and eyes and hz … all of
+it trace it back to time"*. Run 8n tested the half of the thesis that fails. This is the half that holds, and it holds
+all the way down. Extended into `substrate/perceive.ts`, which already owned observation as a physical projection —
+`Sense` already had a band, a window, a rate and a latency, and its comment already said *"an ear hears a pitch, an
+eye a colour"*. What was missing was the real eye and the trace.
+
+**Every step from a photon to a percept is a duration.** `npm run substrate -- seeing`, each row sourced:
+
+```
+  1.85e-15 s  5.40e+14 Hz [light ] one period of 555 nm light, the wavelength the light-adapted eye answers best
+  2.00e-13 s  5.00e+12 Hz [retina] rhodopsin twists: 11-cis to all-trans — the fastest reaction known in biology
+   1.00e-3 s   1.00e+3 Hz [nerve ] one action potential
+   1.50e-2 s   6.67e+1 Hz [nerve ] a neuron's membrane time constant R_m C_m
+   3.00e-2 s   3.33e+1 Hz [retina] the cone's critical duration (Bloch's law)
+   6.60e-2 s   1.52e+1 Hz [brain ] light reaches V1
+   1.00e-1 s   1.00e+1 Hz [brain ] one alpha cycle — the rate attention appears to sample at
+   3.00e-1 s   3.33e+0 Hz [brain ] you can say you saw it
+   1.00e+0 s   1.00e+0 Hz [body  ] one heartbeat
+```
+
+**15.4 orders of magnitude inside one organ**, and on the one tree every row is `time^1` and every rate `time^-1`.
+Nothing else appears in the chain — no new quantity, no new category. That is the user's "everything is time", and
+for perception it is literally true.
+
+**The blur is real, and it is IN THE EYE.** A cone averages over 30 ms, one period of green light is 1.851 fs, so
+
+> **1.620 × 10¹³ optical cycles go into one reading**, and `meetRate` answers **'a line'**, not 'followed'.
+
+That is what a colour *is*: a rate read as a quality, with no moment of it resolved. The same window covers
+**1.974 × 10¹⁴ turns of the electron in hydrogen** (`bohrPeriod()` = 152 attoseconds, from 2πa₀/αc). The bicycle
+wheel is exactly right — as a statement about eyes.
+
+**What it does not license, and this is evidence rather than argument.** The essay's thought experiment — give the
+observer a faster clock and the cloud crystallises — **has been performed.** The shortest pulse ever made is 43 as
+against a 152 as orbit: a shutter **3.5× faster than the thing it watches**. What those instruments see is
+wavepackets, interference and tunnelling. Two Nobel Prizes for looking (1999 femtochemistry, 2023 attosecond
+physics). The faster observer exists; the picture did not change.
+
+**Two faults the round found in itself, both by writing the tests.**
+
+1. **`meetRate` conflated a CARRIER with a MODULATION.** It takes one frequency and checks it against the band
+   first, so asking it about a 1 Hz flashing lamp answered *'out of band'* — true of 1 Hz radiation, nonsense about
+   a lamp. A light signal carries two rates: its colour (~5 × 10¹⁴ Hz, which must be in band) and its flicker
+   (1–100 Hz, which fuses above the window). `meetFlicker` splits them, and the payoff is that **flicker fusion and
+   colour come out as one law in two regimes** — the same averaging, at rates 10¹³ apart. A 30 Hz lamp is *followed*
+   by a cone and *fused* by a rod, which is the trade the dark-adapted eye makes for its sensitivity.
+
+2. **I turned the knob I had just refused.** I tried to DERIVE flicker fusion from the eye's integration window —
+   one pole cuts off at 1/(2πτ) — and used τ = 2.65 ms to make it land on 60 Hz. That number is not a measurement
+   of anything; it is 60 Hz run backwards through the formula. The same free parameter this project refused in the
+   user's essay one round earlier. `flickerFromWindow` now reports the honest failure:
+
+   > the cone's **measured** 30 ms window gives **5.3 Hz** against a measured **60 Hz — out by 11.3×** (the rod
+   > fails the same way, 9.4× out, so it is the model and not one row of data)
+
+   and names why: a critical duration is energy summation *at* threshold, a flicker cutoff is modulation transfer
+   *above* it, and the retina is a cascade of stages rather than one capacitor — which is also why the measured
+   cutoff climbs with luminance (Ferry–Porter) and a fixed τ cannot. **The rule cuts both ways or it is not a rule.**
+
+**So what is shown and what is not.** Shown: every step of seeing is a time, the chain is sourced end to end, and
+the perceptual blur is a computed ratio. Not shown: that the later times are *derivable* from the earlier ones. They
+are measured separately and reported separately. Deriving the cutoff needs the cascade — several poles with their
+own measured time constants — and that is the named next step.
+
+GATE: PASS (2333 of 2333) — 189.8s, 191 files, tidy 24/24

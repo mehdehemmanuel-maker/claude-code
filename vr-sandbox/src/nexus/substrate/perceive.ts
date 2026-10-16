@@ -147,3 +147,189 @@ export function receiveLevel(matter: string, concentration: number, sense: Sense
  * part of them.
  */
 export const pushOver = (sense: Sense, watch: number) => ((sense.shines ?? 0) / CONST.c.value!) * watch;
+
+// ---- THE HUMAN EYE, AND SEEING TRACED BACK TO TIME ----------------------------------------------------------------
+//
+// Everything above is written for any observer. This is the human one, filled in from measurements, and the point of
+// it is that EVERY STEP FROM THE PHOTON TO THE PERCEPT IS A TIME. A wavelength is a time (λ/c). A colour is a rate.
+// An isomerisation is a duration. An integration window is a duration. A flicker-fusion frequency is one over a
+// duration. A nerve's conduction delay, a saccade, the latency to report — durations. So the chain reduces, on the
+// one tree, to time^1 for every step and time^-1 for every rate, and nothing else appears in it.
+//
+// It also settles, with numbers instead of argument, why light looks like a steady colour rather than a wave: the
+// eye's window is 10^13 optical cycles long, so `meetRate` returns 'a line' and not 'followed'. That blur is REAL,
+// and it is in the eye. What it is not is a fact about the light — and the decisive evidence for that is at the
+// bottom of this block, in FASTER_THAN_THE_ORBIT: the thought experiment of giving the observer a faster clock has
+// actually been carried out, down past the orbital period itself, and the wave did not become a particle on a track.
+
+/** One beat in the chain from a photon to a percept: a duration, its rate, and where the number is from. */
+export interface Beat {
+  what: string;
+  /** the duration, s */ seconds: number;
+  /** its rate, Hz = 1/seconds */ hz: number;
+  /** where in the chain */ stage: 'light' | 'retina' | 'nerve' | 'brain' | 'body';
+  source: string;
+}
+const beat = (what: string, seconds: number, stage: Beat['stage'], source: string): Beat =>
+  ({ what, seconds, hz: 1 / seconds, stage, source });
+
+const C_ = CONST.c.value!;
+/** the wavelength the light-adapted eye is most sensitive to, as a time: one period of it */
+export const periodOf = (metres: number): number => metres / C_;
+
+/** EVERY STEP OF SEEING, AS A DURATION. Twelve orders of magnitude inside one organ, and every row a time. */
+export const SEEING: Beat[] = [
+  beat('one period of 555 nm light, the wavelength the light-adapted eye answers best', periodOf(555e-9), 'light',
+    'CIE V(λ) peaks at 555 nm; the period is λ/c'),
+  beat('one period of 507 nm light, where the dark-adapted eye answers best', periodOf(507e-9), 'light',
+    'CIE V′(λ) peaks at 507 nm; the period is λ/c'),
+  beat('rhodopsin twists: 11-cis retinal to all-trans, the first step in vision and the fastest reaction known in biology',
+    200e-15, 'retina', 'Schoenlein, Peteanu, Mathies & Shank 1991, Science 254:412'),
+  beat('a cone’s response to one photon reaches its peak', 40e-3, 'retina',
+    'Schnapf, Nunn, Meister & Baylor 1990, J Physiol 427:681 (macaque cones, ~40 ms)'),
+  beat('a rod’s response to one photon reaches its peak', 200e-3, 'retina',
+    'Baylor, Nunn & Schnapf 1984, J Physiol 357:575 (macaque rods, ~200 ms)'),
+  beat('the cone’s critical duration: below this only total energy counts, not how it is spread (Bloch’s law)', 30e-3, 'retina',
+    'Bloch’s law; cone critical duration about 30 ms (Graham & Kemp 1938; Barlow 1958)'),
+  beat('the rod’s critical duration', 100e-3, 'retina',
+    'Bloch’s law; rod critical duration about 100 ms (Barlow 1958, J Physiol 141:337)'),
+  beat('one action potential', 1e-3, 'nerve', 'Hodgkin & Huxley 1952, J Physiol 117:500: the spike is about 1 ms'),
+  beat('a neuron’s membrane time constant, R_m C_m — the capacitor that sets how long it adds up its input', 15e-3, 'nerve',
+    'Koch, Biophysics of Computation, OUP 1999: cortical τ_m typically 10–20 ms'),
+  beat('light reaches the first visual area of the cortex', 66e-3, 'brain',
+    'Schmolesky et al. 1998, J Neurophysiol 79:3272 (macaque V1 onset ~66 ms)'),
+  beat('a saccade: the eye is thrown to a new place and vision is suppressed while it flies', 50e-3, 'brain',
+    'Bahill, Clark & Stark 1975, Math Biosci 24:191 (the main sequence: 30–100 ms over normal amplitudes)'),
+  beat('the alpha rhythm, one cycle — the rate at which attention appears to sample', 100e-3, 'brain',
+    'Berger 1929; sampling at ~10 Hz: VanRullen & Koch 2003, Trends Cogn Sci 7:207'),
+  beat('you can say you saw it', 300e-3, 'brain',
+    'the P3b at about 300 ms (Dehaene & Changeux 2011, Neuron 70:200); Libet 1983 puts report later still'),
+  beat('one heartbeat', 1, 'body', 'about 60 beats a minute at rest'),
+  beat('one breath', 4, 'body', 'about 15 breaths a minute at rest'),
+];
+
+/** THE HUMAN EYE AS A `Sense`, so the same projection that serves a camera and a spectrometer serves it. Its window
+ *  is the cone's critical duration, which is what makes a colour a colour: see `whyLightIsAColour`. */
+export const EYE_CONE: Sense = {
+  name: 'a cone, light-adapted', carrier: 'light',
+  band: { lo: C_ / 780e-9, hi: C_ / 380e-9 },
+  least: 1e-2, most: 1e8, unit: 'cd/m^2',
+  window: 30e-3, every: 1 / 60,
+  resolution: { angle: 2.9e-4 },
+  latency: 66e-3,
+  sources: {
+    band: 'CIE: the visible range 380–780 nm, as frequencies',
+    window: 'Bloch’s law: the cone critical duration, about 30 ms',
+    every: 'photopic critical flicker fusion about 60 Hz (Hecht & Shlaer 1936, J Gen Physiol 19:965; the Ferry–Porter law makes it rise with luminance)',
+    resolution: '1 arcminute, the standard acuity limit: 2.9e-4 rad',
+    latency: 'to V1, about 66 ms (Schmolesky et al. 1998)',
+    least: 'the photopic range begins near 10^-2 cd/m^2',
+  },
+};
+export const EYE_ROD: Sense = {
+  name: 'a rod, dark-adapted', carrier: 'light',
+  band: { lo: C_ / 640e-9, hi: C_ / 400e-9 },
+  least: 1e-6, most: 1e-2, unit: 'cd/m^2',
+  window: 100e-3, every: 1 / 15,
+  resolution: { angle: 1.7e-3 },
+  latency: 200e-3,
+  sources: {
+    band: 'the scotopic response, roughly 400–640 nm, as frequencies',
+    window: 'Bloch’s law: the rod critical duration, about 100 ms',
+    every: 'scotopic critical flicker fusion about 15 Hz (Hecht & Shlaer 1936)',
+    resolution: 'about 6 arcminutes dark-adapted',
+    latency: 'the rod single-photon response peaks near 200 ms (Baylor, Nunn & Schnapf 1984)',
+    least: 'a few photons at the cornea; about 10^-6 cd/m^2 as a luminance',
+  },
+};
+export const HUMAN_EYE: Observer = { name: 'a human eye', senses: [EYE_CONE, EYE_ROD], acts: 300e-3 };
+
+/** WHY LIGHT IS A COLOUR AND NOT A WAVE YOU CAN WATCH, as a ratio of two times. The light's period against the eye's
+ *  window: the eye averages that many cycles into one reading, so `meetRate` answers 'a line' — the rate is read
+ *  though no moment of it is. This is the blur, it is real, and it is a property OF THE EYE. */
+export function whyLightIsAColour(nm = 555, sense: Sense = EYE_CONE): {
+  nm: number; period: number; frequency: number; window: number; cycles: number;
+  meets: ReturnType<typeof meetRate>; says: string } {
+  const period = periodOf(nm * 1e-9), frequency = 1 / period;
+  const cycles = sense.window / period;
+  const meets = meetRate(frequency, 'light', sense);
+  return { nm, period, frequency, window: sense.window, cycles, meets,
+    says: `${nm} nm light turns over every ${period.toExponential(3)} s (${frequency.toExponential(3)} Hz). ${sense.name} averages over ${sense.window} s, which is ${cycles.toExponential(3)} optical cycles in one reading, so meetRate says "${meets}": the rate is read, no moment of it is. That is what a colour IS — a frequency too fast to follow, reported as a quality. The blur is in the eye.` };
+}
+
+/** A CARRIER IS NOT A MODULATION, and `meetRate` above could not tell them apart — found by writing the flicker
+ *  test for this round. A light signal carries TWO rates: the carrier (its colour, about 5e14 Hz, which must fall
+ *  in the band or it is not seen at all) and the modulation (its flicker, 1–100 Hz, which must be slower than the
+ *  window or it fuses). `meetRate` takes one frequency and checks it against the band first, so asking it about a
+ *  1 Hz flashing light answered "out of band" — true of 1 Hz radiation, nonsense about a flashing lamp. The two
+ *  questions are physically different and now have one function each.
+ *  'unseen'   the colour is outside the band: no modulation of it matters.
+ *  'followed' the flicker is slower than the window: you see it flashing.
+ *  'fused'    the flicker is faster than the window: you see steady light. THIS IS FLICKER FUSION, and it is the
+ *             same mechanism that makes a colour a colour — only the rate differs. One law, two regimes. */
+export function meetFlicker(carrierHz: number, modulationHz: number, sense: Sense):
+  { verdict: 'unseen' | 'followed' | 'fused'; carrier: ReturnType<typeof meetRate>; cyclesPerWindow: number; says: string } {
+  const carrier = meetRate(carrierHz, 'light', sense);
+  const cyclesPerWindow = modulationHz * (sense.every ?? sense.window);
+  const verdict = carrier === 'out of band' || carrier === 'not answered' ? 'unseen'
+    : 1 / modulationHz >= 2 * (sense.every ?? sense.window) ? 'followed' : 'fused';
+  return { verdict, carrier, cyclesPerWindow,
+    says: verdict === 'unseen'
+      ? `a ${(3e8 / carrierHz * 1e9).toFixed(0)} nm carrier is outside ${sense.name}’s band, so nothing it does is seen`
+      : verdict === 'followed'
+      ? `${modulationHz} Hz is slower than twice ${sense.name}’s reading interval, so you see it flicker`
+      : `${modulationHz} Hz is faster than ${sense.name} reads, so it FUSES into steady light — the same averaging that turns a ${(3e8 / carrierHz * 1e9).toFixed(0)} nm carrier into a colour, at a rate ${(carrierHz / modulationHz).toExponential(2)} times lower` };
+}
+
+/** How many turns of anything get averaged into one reading. The general form of the bicycle-wheel argument. */
+export const cyclesAveraged = (period: number, window = EYE_CONE.window): number => window / period;
+
+/** ONE TURN OF AN ELECTRON IN HYDROGEN, as a time. The orbital speed is αc, so the period is 2πa₀/(αc) — which makes
+ *  the Bohr period a pure consequence of the fine-structure constant and the Bohr radius, both measured. */
+export function bohrPeriod(): number {
+  const alpha = CONST.e.value! ** 2 / (4 * Math.PI * CONST.eps0.value! * (CONST.h.value! / (2 * Math.PI)) * C_);
+  return (2 * Math.PI * CONST.a0.value!) / (alpha * C_);
+}
+
+/** A single pole's cutoff: something that integrates with time constant τ passes nothing above 1/(2πτ). */
+export function flickerCutoff(tau: number): number { return 1 / (2 * Math.PI * tau); }
+
+/** WHERE THE TRACE TO TIME STOPS WORKING, SAID PLAINLY RATHER THAN FITTED. The tempting next step is to DERIVE the
+ *  flicker-fusion frequency from the eye's own integration time: one pole with time constant τ cuts off at 1/(2πτ),
+ *  so put in the cone's measured critical duration and read off the frequency above which flicker fuses.
+ *  IT DOES NOT WORK. The measured critical duration is about 30 ms, which gives 5.3 Hz, and the measured flicker
+ *  fusion is about 60 Hz: the model is out by a factor of eleven.
+ *  You can make it agree by using τ = 2.65 ms instead — but that number is not a measurement of anything, it is
+ *  60 Hz run backwards through the formula. That is a knob, and this file refuses to turn it for the same reason
+ *  the clock-ratio construction in `invariant.ts` was refused: a parameter chosen to hit the target is not a
+ *  derivation of the target. (Run 8n held the user's thesis to that rule. Run 8o holds this round's to it.)
+ *  WHY it fails is the honest content: the two numbers measure different things. A critical duration is energy
+ *  summation at THRESHOLD — how long the eye adds photons up before deciding something is there. A flicker cutoff
+ *  is modulation transfer ABOVE threshold — how deep a ripple has to be before it stops being visible. And the
+ *  retina is a cascade of stages, not one capacitor, so its roll-off is steeper than a single pole can be; the
+ *  measured cutoff also climbs with luminance (the Ferry–Porter law), which a fixed τ cannot do at all.
+ *  So: every step of seeing IS a time, and the chain is real. What is NOT yet shown is that the later times are
+ *  derivable from the earlier ones. They are measured separately, and here they are reported separately. */
+export function flickerFromWindow(sense: Sense = EYE_CONE, measuredCFF = 60): {
+  window: number; onePole: number; measured: number; factorOut: number; backFitTau: number; works: boolean; says: string } {
+  const onePole = flickerCutoff(sense.window), factorOut = measuredCFF / onePole;
+  const backFitTau = 1 / (2 * Math.PI * measuredCFF);
+  return { window: sense.window, onePole, measured: measuredCFF, factorOut, backFitTau, works: factorOut < 1.5 && factorOut > 0.67,
+    says: `${sense.name}: its measured window is ${(sense.window * 1e3).toFixed(0)} ms, so one pole would cut off at ${onePole.toFixed(1)} Hz. Flicker fusion is measured at about ${measuredCFF} Hz — OUT BY A FACTOR OF ${factorOut.toFixed(1)}. Agreement would need τ = ${(backFitTau * 1e3).toFixed(2)} ms, which is the answer run backwards through the formula and not a measurement of anything. The model is refused rather than tuned: a critical duration is energy summation at threshold and a flicker cutoff is modulation transfer above it, and the retina is a cascade, not one capacitor.` };
+}
+
+/** THE THOUGHT EXPERIMENT, ALREADY PERFORMED. "Scale your clock down to the electron's and the cloud would
+ *  crystallise into a planet on a track" is testable, because we have built those clocks. A pulse shorter than the
+ *  orbital period is a faster shutter than the orbit, and we have had one since 2001; the record is 43 as against a
+ *  Bohr period of 152 as. What those instruments see is not a little planet. They see wavepackets, interference and
+ *  tunnelling — and two Nobel Prizes were given for looking. The faster observer exists; the picture did not change. */
+export const FASTER_THAN_THE_ORBIT = [
+  { instrument: 'a femtosecond laser pulse', seconds: 6e-15,
+    source: 'Zewail’s femtochemistry, Nobel Prize in Chemistry 1999: bonds watched as they break' },
+  { instrument: 'the first attosecond pulse train', seconds: 250e-18,
+    source: 'Paul et al. 2001, Science 292:1689; Hentschel et al. 2001, Nature 414:509' },
+  { instrument: 'the shortest pulse yet made', seconds: 43e-18,
+    source: 'Gaumnitz et al. 2017, Opt Express 25:27506' },
+  { instrument: 'one turn of the electron in hydrogen, for comparison', seconds: 1.5198e-16,
+    source: 'computed by bohrPeriod(): 2πa₀/(αc), from CODATA a₀ and α' },
+] as const;

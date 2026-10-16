@@ -380,6 +380,29 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   **The standing rule this sets**: a claim about the system's own foundations is tested in the system, with the
   numbers checked against something outside this code (CODATA, the Particle Data Group), and the result is reported
   whichever way it comes out. Never raise a number to make a thesis pass, including the user's and including mine.
+- **SEEING, TRACED BACK TO TIME** (`substrate/perceive.ts`, `npm run substrate -- seeing`). The constructive half
+  of the clock thesis, and the half that holds. The user: *"add the time scale and human perception thing with math
+  I meant the math of light and eyes and hz … all of it trace it back to time"*. `SEEING` is the whole chain as
+  durations, each sourced: one period of 555 nm light (1.85 fs), rhodopsin's 200 fs twist, the cone's 30 ms and the
+  rod's 100 ms critical durations, the 1 ms spike, the 15 ms membrane time constant, 66 ms to V1, the 100 ms alpha
+  cycle, 300 ms to say you saw it, the 1 s heartbeat. **15.4 orders of magnitude inside one organ**, every row
+  `time^1` and every rate `time^-1`, and nothing else in the chain.
+  **The blur is real, and it is in the EYE.** A cone averages **1.6 × 10¹³ optical cycles** into one reading, so
+  `meetRate` answers *'a line'* and not *'followed'* — the rate is read though no moment of it is, and that is what
+  a colour IS. The same averaging covers **1.97 × 10¹⁴ electron orbits** per instant of seeing. The bicycle wheel
+  is right as perception.
+  **What it does not license**, and the evidence is not an argument: the faster observer has been BUILT. A 43 as
+  pulse against a 152 as Bohr period is a shutter 3.5× faster than the orbit, and what those instruments see is
+  wavepackets, interference and tunnelling — two Nobel Prizes (1999 femtochemistry, 2023 attosecond physics). The
+  clock was scaled down past the orbit and the cloud did not crystallise.
+  **Two faults the round found in itself.** (1) `meetRate` conflated a CARRIER with a MODULATION: it checks its one
+  frequency against the band first, so a 1 Hz flashing lamp answered *'out of band'* — true of 1 Hz radiation,
+  nonsense about a lamp. `meetFlicker` splits them, and flicker fusion and colour come out as one law in two
+  regimes. (2) I tried to DERIVE flicker fusion from the integration window and quietly used τ = 2.65 ms to make it
+  fit. That is 60 Hz run backwards through the formula — the same knob this project had just refused in the user's
+  essay. `flickerFromWindow` now reports the honest failure: the measured 30 ms window gives 5.3 Hz against a
+  measured 60 Hz, **out by 11.3×**, because a threshold-summation time is not a modulation-transfer time and the
+  retina is a cascade, not one capacitor. **The rule cuts both ways or it is not a rule.**
 - **ONE HIERARCHY, ASKED, NOT SWEPT** (`substrate/derive.ts`, `npm run substrate -- know <part>`). A part
   decomposes into sub-parts down to a material; a quantity decomposes into the quantities its law needs down to a
   measurement. The same shape, and they MEET AT TIME. `know(thing, quantity)` resolves on demand — memoised,

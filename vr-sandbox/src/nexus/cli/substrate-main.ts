@@ -263,6 +263,53 @@ if (want[0] === 'know') {
 // is the question no gap can raise: an absent law raises nothing, runs clean and looks finished. It builds the
 // plainest real world the engine has — a place, its matter, and a domain with measured gravity — and reports its
 // holes, its dead ends, and the laws out of the book whose inputs are all present and which nothing applies.
+// `npm run substrate -- seeing` — EVERY STEP FROM A PHOTON TO A PERCEPT, AS A TIME.
+// The constructive half of the clock thesis, and the half that holds: perception really is a stack of durations,
+// and the blur really is there. It is in the EYE. The door prints the chain, the ratio that makes a colour, and the
+// one place the trace does not yet close.
+if (want[0] === 'seeing' || want[0] === 'eye') {
+  const { SEEING, EYE_CONE, EYE_ROD, whyLightIsAColour, cyclesAveraged, bohrPeriod, flickerFromWindow,
+    meetFlicker, FASTER_THAN_THE_ORBIT, periodOf } = await import('../substrate/perceive');
+  const { inTime } = await import('../substrate/time');
+  const { dimOf } = await import('../lang/dimension');
+  console.log(`SEEING, TRACED BACK TO TIME \u2014 a duration is time^${inTime(dimOf('s'))}, a rate time^${inTime(dimOf('Hz'))}`);
+  console.log('');
+  for (const b of [...SEEING].sort((x, y) => x.seconds - y.seconds)) {
+    console.log(`  ${b.seconds.toExponential(2).padStart(9)} s ${b.hz.toExponential(2).padStart(10)} Hz [${b.stage.padEnd(6)}] ${b.what}`);
+  }
+  const sp = Math.max(...SEEING.map((b) => b.seconds)) / Math.min(...SEEING.map((b) => b.seconds));
+  console.log(`\n  ${Math.log10(sp).toFixed(1)} orders of magnitude, in one organ, and every row a time.`);
+  console.log('');
+  console.log('WHY A COLOUR IS A COLOUR:');
+  console.log(`  ${whyLightIsAColour(555).says}`);
+  console.log('');
+  console.log('ONE LAW, TWO REGIMES \u2014 a colour and a flicker are the same averaging at different rates:');
+  const green = 1 / periodOf(555e-9);
+  for (const [hz, sense] of [[1, EYE_CONE], [30, EYE_CONE], [120, EYE_CONE], [30, EYE_ROD]] as const) {
+    const m = meetFlicker(green, hz, sense);
+    console.log(`  ${String(hz).padStart(4)} Hz on ${sense.name.padEnd(22)} -> ${m.verdict.toUpperCase().padEnd(9)} ${m.says.slice(0, 74)}`);
+  }
+  console.log('');
+  const orbit = bohrPeriod();
+  console.log('THE BICYCLE WHEEL, AS A NUMBER:');
+  console.log(`  one electron orbit in hydrogen   ${orbit.toExponential(4)} s (${(orbit * 1e18).toFixed(0)} attoseconds)`);
+  console.log(`  the eye averages                 ${cyclesAveraged(orbit).toExponential(3)} orbits into ONE instant of seeing`);
+  console.log(`  and of 555 nm light              ${cyclesAveraged(periodOf(555e-9)).toExponential(3)} cycles`);
+  console.log('');
+  console.log('BUT THE FASTER OBSERVER HAS BEEN BUILT \u2014 the thought experiment is done:');
+  for (const f of FASTER_THAN_THE_ORBIT) {
+    const r = f.seconds / orbit;
+    console.log(`  ${f.seconds.toExponential(2).padStart(9)} s  ${r < 1 ? `${(1 / r).toFixed(1)}x FASTER than one orbit` : `${r.toFixed(1)}x slower`.padEnd(26)}  ${f.instrument}`);
+  }
+  console.log('  and what those instruments see is wavepackets, interference and tunnelling \u2014 not a planet on a track.');
+  console.log('');
+  console.log('WHERE THE TRACE DOES NOT YET CLOSE (reported, not tuned):');
+  console.log(`  ${flickerFromWindow(EYE_CONE, 60).says}`);
+  console.log('');
+  console.log('SUBSTRATE: seeing, as time');
+  process.exit(0);
+}
+
 // `npm run substrate -- invariant` — WHAT NO CHANGE OF CLOCK CAN CHANGE.
 // The other half of the reduction to time: `time.ts` says every dimension is a power of time, and this says which
 // numbers survive that. A ratio with no dimension is the same under every ruler and every clock, so a claim that
