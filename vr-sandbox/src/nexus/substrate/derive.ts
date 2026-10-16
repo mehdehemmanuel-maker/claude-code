@@ -7,7 +7,7 @@
 import { INVENTORY, gramsOfItem, type Item } from '../parts/inventory';
 import { MOLECULES } from '../life/molecules';
 import { wattsOf } from '../life/time';
-import { breakdown, estimate, fixed, measured, readable, says, solve, step, valueIn } from './record';
+import { breakdown, estimate, fixed, measured, readable, setting as settingOf, says, solve, step, valueIn } from './record';
 import { inTime } from './time';
 import { QUANTITY_KINDS, plain, portFit } from '../book/quantities';
 import { BOOK } from '../book';
@@ -55,6 +55,91 @@ const ENGINEERED: Record<string, number> = {
   fr4: 1850, cfrp: 1600, fibreglass: 1900, glass: 2500, borosilicate: 2230, bk7: 2510, quartz: 2650, silicon: 2329, alumina: 3950, zirconia: 6000, sic: 3210, si3n4: 3200, mica: 2800, graphite: 2200, ndfeb: 7500, 'ferrite-hard': 4900, 'ferrite-soft': 4800,
   concrete: 2400, granite: 2700, marble: 2710, slate: 2800, brick: 1900, gypsum: 2320, wood: 600, 'wood-veneer': 650, paper: 800, oil: 870, grease: 900,
 };
+/** WHAT A MATERIAL IS MEASURED FOR, BEYOND ITS DENSITY. The form `packet` derives asks for these: a thermal
+ *  conductivity unlocks 2 laws and a specific heat 2 more, and until a material carries them those laws cannot run
+ *  for anything made of it. One row per material, `[thermal conductivity W/m K, specific heat J/kg K]`, at room
+ *  temperature. TYPICAL HANDBOOK VALUES, not measurements of a particular batch: a grade's conductivity moves with
+ *  its temper and its temperature, and the figure here is the one a handbook quotes for the grade (CRC Handbook of
+ *  Chemistry and Physics, 97th ed.; MatWeb for alloys and polymers; ASHRAE for the building materials). Good to
+ *  about a tenth, which is enough to size a heat path and not enough to certify one.
+ *  A part made of the material inherits both, which is what a material property MEANS and is why `holdsAsMaterial`
+ *  finds them invariant under geometry: for an inherited quantity that invariance is by construction, so the test
+ *  with teeth there is the other one — whether the numbers actually differ from material to material. They do. */
+const PROPS: Record<string, [number, number]> = {
+  'steel-low': [50, 490], 'steel-alloy': [42, 475], 'steel-spring': [46, 480], 'steel-chrome': [46, 475],
+  'steel-tool': [24, 460], 'steel-hss': [19, 420], 'steel-electrical': [25, 490], 'stainless-304': [16.2, 500],
+  'stainless-316': [16.3, 500], kovar: [17, 440], 'cast-iron': [53, 460], iron: [80.4, 449],
+  'al-6061': [167, 896], 'al-6063': [201, 900], 'al-7075': [130, 960], 'al-2024': [121, 875], 'al-5052': [138, 880],
+  'al-a380': [96, 963], 'al-foil': [237, 897], 'al-4043': [165, 900], 'al-5356': [116, 900],
+  copper: [401, 385], 'copper-foil': [401, 385], brass: [120, 380], bronze: [60, 380], 'phosphor-bronze': [69, 380],
+  nickel: [90.7, 445], tin: [66.6, 228], zinc: [116, 390], gold: [318, 129], silver: [429, 235], lead: [35.3, 128],
+  tungsten: [173, 134], 'ti-6al4v': [6.7, 526], platinum: [71.6, 133], chromium: [93.9, 449], lithium: [84.8, 3582],
+  zamak: [113, 419], 'tungsten-carbide': [85, 240],
+  pla: [0.13, 1800], abs: [0.17, 1400], nylon: [0.25, 1700], pom: [0.31, 1500], pc: [0.20, 1200], pbt: [0.29, 1300],
+  pp: [0.17, 1920], pe: [0.40, 2300], pvc: [0.17, 900], pmma: [0.19, 1470], ptfe: [0.25, 1000], peek: [0.25, 1340],
+  ps: [0.14, 1300], pet: [0.24, 1000], asa: [0.17, 1400], silicone: [0.20, 1300], rubber: [0.15, 1900],
+  nbr: [0.25, 1500], neoprene: [0.19, 1700], epdm: [0.25, 1900], fkm: [0.21, 1500], epoxy: [0.20, 1000],
+  phenolic: [0.25, 1400], pu: [0.20, 1800], eva: [0.34, 2300],
+  fr4: [0.30, 1100], cfrp: [7.0, 800], fibreglass: [0.30, 1000], glass: [1.0, 840], borosilicate: [1.14, 830],
+  bk7: [1.11, 858], quartz: [1.38, 740], silicon: [149, 705], alumina: [30, 880], zirconia: [2.0, 400],
+  sic: [120, 690], si3n4: [30, 700], mica: [0.71, 880], graphite: [120, 710], ndfeb: [9, 460],
+  'ferrite-hard': [4.0, 800], 'ferrite-soft': [4.0, 750],
+  concrete: [1.7, 880], granite: [2.8, 790], marble: [2.8, 880], slate: [2.0, 760], brick: [0.72, 840],
+  gypsum: [0.17, 1090], wood: [0.15, 1600], 'wood-veneer': [0.15, 1600], paper: [0.05, 1340], oil: [0.145, 1900],
+  grease: [0.16, 1900], water: [0.606, 4182],
+};
+/** these conduct differently along the fibre than across it, so one number cannot be read as isotropic */
+const ANISOTROPIC = new Set(['cfrp', 'graphite', 'wood', 'wood-veneer', 'fibreglass', 'fr4', 'paper', 'mica']);
+const COLUMNS: { match: RegExp; i: 0 | 1; unit: string; name: string }[] = [
+  { match: /^thermal conductivity$/, i: 0, unit: 'W/m K', name: 'thermal conductivity' },
+  { match: /^specific heat$/, i: 1, unit: 'J/kg K', name: 'specific heat' },
+];
+
+/** WHAT THE SETTING GIVES EVERY THING IN IT, the same number whatever the thing is made of.
+ *  This is NOT a human category asserted over a derivation. The sameness IS the measurement, and it is the
+ *  strongest one in physics: every material falls at the same rate, held to about one part in 10^15 by the Eötvös
+ *  torsion-balance experiments and their successors. So when `holdsAsMaterial` asks every material for its gravity
+ *  and all 22 answer 9.80665 m/s², test one returns `same for every material` — a quantity that cannot tell brass
+ *  from nylon tells you nothing about either, and on that ground, and only that ground, gravity is not a property
+ *  of the stuff here.
+ *  IT IS FALSIFIABLE, which is the point: let one material ever answer differently and gravity becomes a material
+ *  property in this system with not a line of code changed. (That would also be a Nobel Prize.) A quantity in this
+ *  table still sits on the form, because the form asks what laws read and no law produces, and gravity is read by
+ *  three and produced by none. Being of the setting rather than of the stuff does not take it off the form; it is
+ *  a separate fact about it, derived separately. */
+const SETTING: Record<string, { value: number; unit: string; why: string }> = {
+  gravity: { value: 9.80665, unit: 'm/s^2',
+    why: 'standard gravity at the Earth\'s surface (CGPM 1901, 3rd conference) — the setting\'s, not the stuff\'s: every material here is given the same, which is what the Eötvös experiments measure' },
+};
+/** What the setting gives this thing. Every thing in it gets the same, which is exactly what makes it testable. */
+function ofTheSetting(id: string, quantity: string): { value: number; unit: string; how: string; d: Derivation } | null {
+  const g = SETTING[plain(quantity)]; if (!g || !INVENTORY.has(id)) return null;
+  return { value: g.value, unit: g.unit, how: `the setting (${g.why})`,
+    d: settingOf(quantity, g.value, g.unit, g.why) };
+}
+
+/** A measured property of the stuff, for a material or for anything made of it. Intensive, so it does not add: one
+ *  constituent passes its value on, several of equal value likewise, and several that disagree answer nothing rather
+ *  than averaging a number nobody measured — the same rule the fixed density follows. */
+function measuredProperty(id: string, quantity: string): { value: number; unit: string; how: string; d: Derivation } | null {
+  const col = COLUMNS.find((c) => c.match.test(plain(quantity))); if (!col) return null;
+  const i = INVENTORY.get(id); if (!i) return null;
+  const direction = ANISOTROPIC.has(id) ? ', quoted along the fibre or in plane — it conducts differently across' : '';
+  const own = PROPS[id];
+  if (own) {
+    return { value: own[col.i], unit: col.unit, how: `the material tables (a typical handbook value for ${i.name}${direction})`,
+      d: measured(`${col.name} of ${i.name}`, own[col.i], col.unit, `a typical handbook value for ${i.name}${direction}`) };
+  }
+  if (!i.of.length) return null;
+  const from = i.of.map((c) => measuredProperty(c.id, quantity)).filter((x): x is NonNullable<typeof x> => !!x);
+  if (!from.length || from.length !== i.of.length) return null;
+  if (from.some((f) => !alike(f.value, from[0].value))) return null;
+  return { value: from[0].value, unit: col.unit,
+    how: `the material it is made of: ${col.name} is a property of the stuff, so the part has its material's`,
+    d: measured(`${col.name} of ${i.name}`, from[0].value, col.unit,
+      `${i.of.map((c) => c.id).join(' and ')}: a ${col.name} belongs to the stuff, so it passes to the part unchanged`) };
+}
+
 /** The density a material adds where it is, or nothing known. */
 export function densityOfMaterial(id: string): Dens | null {
   const b = BY_ID[id]; if (b) return b;
@@ -268,7 +353,16 @@ function stated(id: string, quantity: string): { value: number; unit: string; ho
       d: estimate(`volume of ${i.name}`, (x / 1000) * (y / 1000) * (z / 1000), 'm^3',
         `its stated size ${x}×${y}×${z} mm taken as a box, so a solid part is over-stated and an open one wildly so`) };
   }
-  if (/extent|length|breadth|width|depth|height|diameter/.test(q) && i.size) {
+  const mp = measuredProperty(id, quantity);
+  if (mp) return mp;
+  const sv = ofTheSetting(id, quantity);
+  if (sv) return sv;
+  // THICKNESS IS AN EXTENT and was not reachable: the axis picker below has read `thick` as the third extent since
+  // it was written, but the branch test never admitted the word, so a 10×10×3 gear answered nothing when a law
+  // asked for its thickness — and `conduction` and `thermal.resistance.conduction` sat unreachable for want of a
+  // figure the inventory states. A WALL thickness is refused on purpose: it is a feature of the section, not the
+  // overall size, so answering it with the third extent would call a tube's outer size its wall.
+  if (/extent|length|breadth|width|depth|height|diameter|thick/.test(q) && !/wall/.test(q) && i.size) {
     // WHICH extent. `extent y` and `extent z` both used to fall through to the first one, so `mass.prism` was fed
     // 10×10×10 for a 10×10×3 gear and came out 8.5 g against the true 2.55 g — a 3.3× error that looked like a
     // working answer. An axis answersToPort in the quantity wins; failing that, breadth/width is the second and
@@ -391,8 +485,10 @@ export interface Blank {
   quantity: string; unit: string;
   /** do we have it for this thing? */ filled: boolean;
   value?: number; from?: string;
-  /** how many laws become runnable once it is filled: the abilities this one field unlocks */ unlocks: number;
+  /** how many laws READ it, so how many are blocked on it. Not how many start working the moment it is filled:
+   *  a law needs every one of its ports, and the others may still be missing. */ unlocks: number;
   laws: string[];
+  /** what the two tests make of it: whether it holds as a property of the stuff. Derived, never named. */ holds: Holds;
   says: string;
 }
 
@@ -413,11 +509,95 @@ export interface Packet {
   from: { material: string[]; geometry: { quantity: string; value: number; unit: string }[] } | null;
   /** ask for one. Computed on access, memoised, with its chain and its place on time's tree. */
   at(quantity: string): Fact | null;
+  /** does that quantity hold as a property of the stuff? The two tests, with every number they rest on. */
+  holds(quantity: string): MaterialTest;
   /** what it is at each power of time, for the quantities asked for so far */
   byTime(): { power: number; facts: Fact[] }[];
   /** two routes to one of its quantities that disagree: it cannot break physics and this is the proof */
   clashes(): Clash[];
   says: string[];
+}
+
+/** THE MATHEMATICAL TEST OF A MATERIAL PROPERTY. Nothing is a property of the stuff because of what it is called.
+ *  Two properties decide it, and both are read off the data:
+ *  ONE — it DISCRIMINATES. Asked of two different materials it answers differently. A quantity with one value for
+ *  every material tells you nothing about the material, whatever its name.
+ *  TWO — it is INVARIANT UNDER GEOMETRY. Asked of two things of the SAME material at different sizes it answers the
+ *  same. A quantity that moves with the size is a property of the THING, not of the stuff.
+ *  Density passes both. Mass discriminates and scales, so it fails. A quantity too few things answer is reported as
+ *  untested, which is not a failure. Whatever these two say stands, including where they admit as a material property
+ *  something nobody would name one: the verdict is the arithmetic, and the arithmetic does not consult the vocabulary. */
+export type Holds = 'holds' | 'scales with the thing' | 'same for every material' | 'not enough measured';
+export interface MaterialTest {
+  quantity: string;
+  /** what the two tests make of it */ holds: Holds;
+  /** test one: different materials, and what each answered */ across: { thing: string; value: number }[];
+  /** test two: one material at two sizes, and what each answered */ atSizes: { thing: string; value: number }[];
+  says: string;
+}
+
+const alike = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b), 1e-30);
+const spread = (vs: number[]): number => vs.filter((v, i) => vs.findIndex((w) => alike(v, w)) === i).length;
+
+/** who to ask: materials for test one, and one material's two most differently sized parts for test two. */
+let bench: { materials: string[]; sized: string[] } | null = null;
+function benchmark(): { materials: string[]; sized: string[] } {
+  if (bench) return bench;
+  const materials: string[] = [];
+  const byMaterial = new Map<string, { id: string; vol: number }[]>();
+  for (const [id, i] of INVENTORY) {
+    if (i.kind === 'material' || i.kind === 'element') { materials.push(id); continue; }
+    if (i.of.length !== 1 || !i.size || i.size.length < 3) continue;
+    const vol = i.size[0] * i.size[1] * i.size[2];
+    if (!(vol > 0)) continue;
+    byMaterial.set(i.of[0].id, [...(byMaterial.get(i.of[0].id) ?? []), { id, vol }]);
+  }
+  let sized: string[] = [], widest = 1;
+  for (const parts of byMaterial.values()) {
+    if (parts.length < 2) continue;
+    const s = [...parts].sort((a, b) => a.vol - b.vol);
+    const ratio = s[s.length - 1].vol / s[0].vol;
+    if (ratio > widest) { widest = ratio; sized = [s[0].id, s[s.length - 1].id]; }
+  }
+  bench = { materials: materials.slice(0, 24), sized };
+  return bench;
+}
+
+const tested = new Map<string, MaterialTest>();
+/** Does this quantity hold as a property of the stuff? Asked of the data, never of the name. */
+export function holdsAsMaterial(quantity: string): MaterialTest {
+  const key = plain(quantity);
+  const got = tested.get(key); if (got) return got;
+  const { materials, sized } = benchmark();
+  const ask = (thing: string): number | null => { const f = know(thing, quantity, undefined, 1); return f ? f.value : null; };
+
+  const across: { thing: string; value: number }[] = [];
+  for (const m of materials) { const v = ask(m); if (v !== null) across.push({ thing: m, value: v }); }
+  const atSizes: { thing: string; value: number }[] = [];
+  for (const p of sized) { const v = ask(p); if (v !== null) atSizes.push({ thing: p, value: v }); }
+
+  const discriminates = across.length < 2 ? null : spread(across.map((a) => a.value)) > 1;
+  const invariant = atSizes.length < 2 ? null : spread(atSizes.map((a) => a.value)) === 1;
+
+  // the geometry failure is decisive: a quantity that moves with the size belongs to the thing however well it also
+  // tells one material from another, which is exactly the case of a mass.
+  const holds: Holds = invariant === false ? 'scales with the thing'
+    : discriminates === true ? 'holds'
+    : discriminates === false ? 'same for every material'
+    : 'not enough measured';
+  const both = (xs: { thing: string; value: number }[]) => xs.map((a) => `${a.thing} ${readable(a.value)}`).join(', ');
+  const says = holds === 'holds'
+    ? `${key} HOLDS as a material property: ${spread(across.map((a) => a.value))} different values over ${across.length} materials asked`
+      + (invariant === true ? `, and the same for ${both(atSizes)}, which differ in size. Both tests pass.`
+        : `. The geometry test did not run — nothing of one material answered it at two sizes — so test one alone carries this.`)
+    : holds === 'scales with the thing'
+    ? `${key} FAILS as a material property: it moves with the size (${both(atSizes)}), so it is a property of the thing, not of the stuff`
+    : holds === 'same for every material'
+    ? `${key} FAILS test one: all ${across.length} materials asked answer ${readable(across[0].value)}, so it does not tell one material from another`
+    : `${key} is UNTESTED: ${across.length} material${across.length === 1 ? '' : 's'} and ${atSizes.length} size${atSizes.length === 1 ? '' : 's'} answered, and each test needs two. Not a failure — nothing here has measured it`;
+  const t: MaterialTest = { quantity: key, holds, across, atSizes, says };
+  tested.set(key, t);
+  return t;
 }
 
 /** THE PACKET OF A THING: every quantity attached, none computed. */
@@ -456,11 +636,16 @@ export function packet(thing: string): Packet | null {
   }
   const requires: Blank[] = [...prim.entries()].map(([quantity, v]) => {
     const f = know(thing, quantity, undefined, 1);
+    const h = holdsAsMaterial(quantity).holds;
     return { quantity, unit: v.unit, filled: !!f, ...(f ? { value: f.value, from: f.how } : {}),
-      unlocks: v.laws.size, laws: [...v.laws],
-      says: f
+      unlocks: v.laws.size, laws: [...v.laws], holds: h,
+      says: (f
         ? `${quantity} = ${readable(f.value)} ${v.unit} — already known, from ${f.how}`
-        : `${quantity} (${v.unit}) — NOT KNOWN. Measure or set it and ${v.laws.size} law${v.laws.size === 1 ? '' : 's'} can run: ${[...v.laws].slice(0, 3).join(', ')}${v.laws.size > 3 ? ', …' : ''}` };
+        // WAITING ON, not "can run": a law needs EVERY port, so filling one field removes one blocker and may
+        // leave others. Filling brass's specific heat left `heat.capacity` wanting only a temperature rise, which
+        // is the setting's to give. Saying "2 laws can run" would have claimed a result this does not produce.
+        : `${quantity} (${v.unit}) — NOT KNOWN. ${v.laws.size} law${v.laws.size === 1 ? ' is' : 's are'} waiting on it: ${[...v.laws].slice(0, 3).join(', ')}${v.laws.size > 3 ? ', …' : ''}`)
+        + ` [as a material property: ${h}]` };
   }).sort((a, b) => Number(a.filled) - Number(b.filled) || b.unlocks - a.unlocks);
 
   const kind: 'material' | 'part' = i.kind === 'material' || i.kind === 'element' ? 'material' : 'part';
@@ -471,7 +656,7 @@ export function packet(thing: string): Packet | null {
     kind, thing, name: i.name, of: i.of.map((c) => c.id), given, requires,
     from: kind === 'part' ? { material: i.of.map((c) => c.id), geometry } : null,
     could: [...QUANTITY_KINDS.keys()].sort(),
-    at,
+    at, holds: holdsAsMaterial,
     byTime: () => {
       const by = new Map<number, Fact[]>();
       for (const f of asked.values()) if (f) by.set(f.power, [...(by.get(f.power) ?? []), f]);
@@ -483,13 +668,17 @@ export function packet(thing: string): Packet | null {
         ? `${i.name} is a MATERIAL, so its packet is a form: ${requires.filter((f) => f.filled).length} of its ${requires.length} measured properties are known, and the rest are blank until someone measures them.`
         : `${i.name} is a PART: choose its material (${i.of.map((c) => c.id).join(', ') || 'none stated'}) and its geometry (${i.size ? i.size.join(' × ') + ' mm' : 'none stated'}), and everything else is calculated.`,
       `${given.length} facts it was made with; ${QUANTITY_KINDS.size} kinds of quantity attached to it, and none of them computed until asked.`,
-      // NAMED, NOT HIDDEN: the form is derived from what no law produces, and that set mixes two different things.
-      // A thermal conductivity is a property of the STUFF and belongs on brass's datasheet. A gravity is a property
-      // of the SETTING and does not: it is the same for a brass gear and a nylon one. Both come out of the book the
-      // same way — read by a law, produced by none — so nothing here can yet tell them apart, and the form lists
-      // gravity among brass's fields. Telling them apart needs the material tables to carry more than density, so
-      // that "is this the sort of thing a material is measured for" is a question the data can answer.
-      `the form mixes a material's OWN properties (thermal conductivity, specific heat, viscosity) with the SETTING's conditions (gravity, temperature). Both are read by laws and produced by none, so the derivation cannot yet separate them: ${requires.filter((f) => !f.filled).length} blank fields, some of which belong to the world rather than to this.`,
+      // WHAT IS ON THE FORM IS DERIVED, AND SO IS THE SORT OF THING EACH FIELD IS. The form is every quantity some
+      // law READS and no law PRODUCES — that is the whole criterion, and a quantity satisfying it belongs on the
+      // form however it is named. Whether each field holds AS A PROPERTY OF THE STUFF is then its own question, and
+      // `holdsAsMaterial` answers it with two tests on the data rather than with a human category: does it tell one
+      // material from another, and does it stay put when the geometry changes. A field that passes both is of the
+      // stuff whatever we would call it; one that moves with the size is of the thing whatever we would call it.
+      `${requires.filter((h) => h.holds === 'holds').length} of the ${requires.length} fields HOLD as properties of the stuff under the two tests (they tell one material from another and do not move with the geometry); ${requires.filter((h) => h.holds === 'scales with the thing').length} move with the size, so they are of the thing; ${requires.filter((h) => h.holds === 'same for every material').length} answer the same for every material asked; ${requires.filter((h) => h.holds === 'not enough measured').length} are untested here, for want of two measurements. The verdicts are arithmetic, not vocabulary.`,
+      // THE CONTROL, so "untested" cannot be read as "the test cannot tell". Run on two quantities the tables DO
+      // carry, the two tests separate them: a density holds and a mass fails by moving with the size. An untested
+      // field is therefore a gap in the measurements, not a blunt instrument — and the gap is named, not excused.
+      `the tests are not blunt: ${holdsAsMaterial('density').holds === 'holds' && holdsAsMaterial('mass').holds === 'scales with the thing' ? 'run on what the tables do carry they separate a density (HOLDS) from a mass (SCALES WITH THE THING)' : 'CHECK — the control pair no longer separates'}. So a field reading untested is a measurement this inventory lacks, and the ${requires.filter((h) => h.holds === 'not enough measured').length} of them are exactly what filling the material tables would settle.`,
       `${[...asked.values()].filter(Boolean).length} asked for so far. Every one carries the chain it rests on and the power of time it reduces to.`,
     ],
   };

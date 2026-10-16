@@ -364,6 +364,25 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   ways must agree**: `clashes()` reports both routes and both numbers where they do not, which is what makes the
   structure load-bearing — it caught `gear-small`'s volume 48% apart (bounding box vs ellipsoid) and its height 70%
   apart on the first run. A clash is a fault in the DATA, not in the world.
+- **A CLASSIFICATION THE SYSTEM DERIVES OUTRANKS THE NAME A HUMAN WOULD GIVE IT** (`holdsAsMaterial` in
+  `substrate/derive.ts`). The user, 2026-10-16: *"human perception is limited therefore human knowledge follows that
+  and is flawed as well we don't know that gravity isn't material it possibly could be if this system mathematically
+  classifys something as something humans wouldn't call it it doesn't matter because it true unless it doesn't hold
+  mathematically as a material"*. A material's form is every quantity some law READS and no law PRODUCES — that is
+  the whole criterion, so `gravity` is on brass's form, and Run 8l wrongly apologised for it as a miscategorisation
+  rather than reporting a derivation. Whether a field holds AS A PROPERTY OF THE STUFF is a separate question, and
+  it is now answered by two tests on the data: does it tell one material from another, and does it stay put when the
+  geometry changes. Density passes both; mass discriminates and then moves with the size, so it fails. **The
+  standing rule: never overrule a derivation with a human category. Overrule it with arithmetic or leave it
+  standing**, and where the arithmetic cannot run yet, say "untested", which is not the same as "wrong".
+  Run 8m then made the arithmetic run: every thing is given the setting's gravity (9.80665 m/s², CGPM 1901), all 24
+  materials answer the same, and test one disqualifies gravity as a property of the stuff BY MEASUREMENT — the
+  Eötvös result as this system's own test, and falsifiable, because one material answering differently would make
+  gravity a material property here with no code changed. Gravity stays ON the form regardless: the form asks what
+  laws read and no law produces, which is a different question with a different answer.
+  **Still absent, and the next test:** a quantity of the SETTING varies with where a thing is, not with what it is
+  made of, and every thing here sits in one setting — so "of the setting" and "of nothing" are not yet separable.
+  Giving a thing a place and asking the same quantity in two places is the third test.
 - **THE UNIVERSAL LAW OBSERVATION TABLE** (`substrate/witness.ts`, `npm run substrate -- observe`). Every law and
   the physical thing you can watch it on, DERIVED: a law is connected to a thing when the thing has the quantities
   the law reads (`know`), so the table upgrades itself as the inventory or the book grows. A witness is never an

@@ -8,11 +8,11 @@
 // by hand, not against the code's own output), that a quantity reached two ways which disagree is REFUSED rather
 // than silently resolved, and that an unreachable quantity says so instead of inventing an answer.
 import { describe, expect, it } from 'vitest';
-import { clashes, know, onTimesTree, packet } from '../../src/nexus/substrate/derive';
+import { clashes, holdsAsMaterial, know, onTimesTree, packet } from '../../src/nexus/substrate/derive';
 import { breakdown } from '../../src/nexus/substrate/record';
 import { inTime } from '../../src/nexus/substrate/time';
 import { QUANTITY_KINDS } from '../../src/nexus/book/quantities';
-import { dimOf, sameDim } from '../../src/nexus/lang/dimension';
+import { dimOf, dimText, sameDim } from '../../src/nexus/lang/dimension';
 import { INVENTORY } from '../../src/nexus/parts/inventory';
 import { BOOK, lawById } from '../../src/nexus/book';
 import { plain } from '../../src/nexus/book/quantities';
@@ -199,11 +199,60 @@ describe('a material is a form, a part is calculated', () => {
     expect(p.at('volume')!.value).toBeCloseTo(3e-7, 12);
   });
 
-  it('owns up to the one thing the form cannot yet tell apart', () => {
-    // gravity is read by laws and produced by none, exactly like a thermal conductivity — so it lands among brass's
-    // fields though it belongs to the setting. The packet says this rather than letting the form read as correct.
+  it('puts on the form every quantity a law reads and none produces — that criterion and no other', () => {
+    // The form is derived, and the derivation is the whole criterion. gravity satisfies it exactly as a thermal
+    // conductivity does, so gravity is on brass's form. That is a RESULT, not a miscategorisation: nothing here
+    // classifies by what a human would call a material, and this test asserts the arithmetic rather than the naming.
     const m = packet('brass')!;
-    expect(m.requires.map((f) => f.quantity), 'the mixing really does happen').toContain('gravity');
-    expect(m.says.join(' ')).toMatch(/mixes a material's OWN properties.*with the SETTING's conditions/);
+    const produced = new Set(BOOK.map((l) => dimText(dimOf(l.output.unit))));
+    for (const f of m.requires) {
+      const readBy = BOOK.filter((l) => l.inputs.some((p) => plain(p.name) === f.quantity));
+      expect(readBy.length, `${f.quantity} is on the form, so some law must read it`).toBeGreaterThan(0);
+      expect(produced.has(dimText(dimOf(f.unit))), `${f.quantity} is on the form, so no law may produce its dimension`).toBe(false);
+    }
+    expect(m.requires.map((f) => f.quantity), 'and so gravity is on it, by that criterion alone').toContain('gravity');
+  });
+
+  it('decides whether a field holds as a material property by two tests on the data, not by its name', () => {
+    // THE CONTROL. Both quantities the tables actually carry go through the same two tests, and the tests separate
+    // them: a density tells one material from another and does not move with the size; a mass moves with the size,
+    // so it is of the thing. Neither verdict consults a list of what humans call a material property.
+    const d = holdsAsMaterial('density');
+    expect(d.holds, 'a density discriminates and is geometry-invariant').toBe('holds');
+    expect(d.across.length, 'asked of several materials').toBeGreaterThan(1);
+    expect(new Set(d.across.map((a) => a.value)).size, 'and they do not all answer the same').toBeGreaterThan(1);
+    expect(d.atSizes.length, 'and of one material at two sizes').toBe(2);
+    expect(d.atSizes[0].value).toBeCloseTo(d.atSizes[1].value, 9);
+
+    const m = holdsAsMaterial('mass');
+    expect(m.holds, 'a mass moves with the size, so it fails').toBe('scales with the thing');
+    expect(m.atSizes[0].value).not.toBeCloseTo(m.atSizes[1].value, 9);
+  });
+
+  it('disqualifies gravity as a material property by measurement, not by calling it a setting', () => {
+    // THE WHOLE POINT, AND IT IS FALSIFIABLE. Every material is asked its gravity and every one answers 9.80665,
+    // so gravity carries no information about the material and fails test one. That is not a human category: it is
+    // the Eötvös torsion-balance result (the equivalence principle, held to about 1 part in 10^15) arriving as this
+    // system's own arithmetic. Let ONE material ever answer differently and gravity becomes a material property
+    // here with no code changed — which is what makes this a test rather than an opinion.
+    const g = holdsAsMaterial('gravity');
+    expect(g.holds).toBe('same for every material');
+    expect(g.across.length, 'every material answers').toBeGreaterThan(1);
+    expect(new Set(g.across.map((a) => a.value)).size, 'and they all answer the SAME').toBe(1);
+    expect(g.across[0].value).toBeCloseTo(9.80665, 5);
+    expect(g.says).toMatch(/does not tell one material from another/);
+
+    // four quantities, all derived the same way, three different verdicts, and no list of names anywhere
+    expect(holdsAsMaterial('density').holds).toBe('holds');
+    expect(holdsAsMaterial('thermal conductivity').holds).toBe('holds');
+    expect(holdsAsMaterial('mass').holds).toBe('scales with the thing');
+
+    // and gravity STAYS on the form: the form asks what laws read and no law produces, which is a different question
+    expect(packet('brass')!.requires.map((f) => f.quantity)).toContain('gravity');
+
+    // the packet cites that control, so a reader cannot take "untested" for a blunt instrument
+    const brass = packet('brass')!;
+    expect(brass.says.join(' ')).toMatch(/the tests are not blunt: run on what the tables do carry/);
+    expect(brass.says.join(' '), 'and the gap is named as a missing measurement').toMatch(/untested is a measurement this inventory lacks/);
   });
 });

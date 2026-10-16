@@ -269,9 +269,8 @@ volume, `time^2` section area, `time^1` moment of inertia, `time^-1` mass, `time
 some law READS and no law PRODUCES — so `brass` comes up as a datasheet with 34 blanks, each saying how many laws
 filling it would unlock (thermal conductivity → 2, specific heat → 2, viscosity → 2), while `gear-small` says
 *"choose its material (brass) and its geometry (10 × 10 × 3 mm), and everything else is calculated"* — and it is.
-**Owned up to in the packet itself**: the form cannot yet tell a material's own property from the setting's
-condition, so `gravity` sits among brass's fields. Separating them needs the material tables to carry more than
-density, which is the next real job and is named rather than hidden.
+`gravity` sits among brass's fields because it satisfies that criterion — read by a law, produced by none — and
+Run 8m kept it there rather than overruling the derivation with a human category (see Run 8m).
 
 **SPACE RECOVERED** (`signature`, and a sixth level on the tree). `inTime` ADDS the exponents, so a metre and a
 second both came out `time^1` and a length could not be told from a duration — and a speed and an action were both
@@ -563,5 +562,88 @@ this container cannot run.
 deleted** — `clock.ts` in particular is where `substrate/time.ts` belongs. `docs/OWNERS.md` is still 61 KB over
 103 lines. The drive line is still not on the substrate, a `Place` is still a box, and `JointKind.gear` still
 produces nothing.
+
+## Run 8m — a derivation is not overruled by a human category
+
+The user, reading Run 8l's own self-criticism: *"listen don't make no human observational claim human perception is
+limited therefore human knowledge follows that and is flawed as well we don't know that gravity isn't material it
+possibly could be if this system mathematically classifys something as something humans wouldn't call it it doesn't
+matter because it true unless it doesn't hold mathematically as a material"*.
+
+They were right and the apology was the error. Run 8l derived a material's form correctly — every quantity some law
+READS and no law PRODUCES — and then wrote, in the packet's own words, that the form "mixes a material's OWN
+properties with the SETTING's conditions" and that `gravity` sitting among brass's fields was a limitation. That is
+a human taxonomy placed over a result. The criterion is the criterion; `gravity` satisfies it; the output stands.
+
+**What came out.** The apology, from `packet()`'s `says` and its comment, from this file's Run 8l entry, and the test
+that asserted it (`owns up to the one thing the form cannot yet tell apart`).
+
+**What went in: the two tests, on the data.** `holdsAsMaterial(quantity)` decides whether a field holds as a property
+of the stuff without consulting a name. ONE — does it DISCRIMINATE: asked of two different materials, does it answer
+differently? A quantity with one value for every material tells you nothing about the material. TWO — is it
+INVARIANT UNDER GEOMETRY: asked of two things of the same material at different sizes, does it answer the same? One
+that moves with the size is a property of the THING. The geometry failure is decisive, which is the case of a mass.
+
+**The control, so "untested" cannot be read as a blunt instrument.** Run on the two quantities the tables do carry,
+the tests separate them, and the packet prints that beside its verdicts:
+
+```
+$ npm run substrate -- know brass
+  2 of the 34 fields HOLD as properties of the stuff under the two tests … 32 are untested here, for want of two
+  measurements. The verdicts are arithmetic, not vocabulary.
+  the tests are not blunt: run on what the tables do carry they separate a density (HOLDS) from a mass (SCALES WITH
+  THE THING).
+    [not enough measured   ] gravity (m/s^2) → unlocks 3
+```
+
+- `density` → **holds**: 18 different values over 22 materials, and the same for `setscrew-m3x2` and
+  `pressure-shell`, which differ in size.
+- `mass` → **scales with the thing**: 6.0e-5 kg against 55390 kg across that same size change.
+- `gravity` → **same for every material**, and this is the one that matters. The user pushed on it directly: *"is air
+  a material or what is air a gas is helium a gas if helium floats up against gravity is helium lighter then gravity
+  so is gravity a gas,liquid,solid or is it all"*. On the first pass the system said `not enough measured`, because
+  no material carried a gravity — honest, but a dodge. So `SETTING` now gives every thing the same 9.80665 m/s²
+  (CGPM 1901), and **test one disqualifies gravity by measurement**: all 24 materials answer the same, so it tells
+  brass from nylon not at all, and a quantity that cannot discriminate carries no information about the material.
+  That is the Eötvös torsion-balance result — the equivalence principle, held to about one part in 10^15 — arriving
+  as this system's own arithmetic rather than as a human category. **And it is falsifiable: let one material ever
+  answer differently and gravity becomes a material property here with no code changed.**
+  Two things said in the same breath, because both are true. `helium` floats BECAUSE of gravity, not against it:
+  Archimedes puts g in both the up-force (ρ_air·V·g) and the down-force (ρ_He·V·g), so with gravity off a balloon
+  does not rise, it sits. And "lighter than gravity" is not a question this system can take: a density is `time^-4`
+  and an acceleration is `time^-1`, so the dimension guard refuses the comparison. Gravity is still not *nothing* —
+  its field carries energy, energy has mass, and so gravity gravitates, which is why Einstein's equations are
+  nonlinear — but it is not a property OF a material, and the reason is now a number and not a naming.
+  **The third test this opens, named rather than done:** gravity varies with WHERE a thing is, not with what it is
+  made of. Every material here sits in one setting, so the system cannot yet separate "of the setting" from "of
+  nothing". Giving a thing a place, and asking the same quantity in two places, is the test that would.
+
+**Then the form was given something to classify.** On the first run every one of the 34 fields read `not enough
+measured`, because the material tables carried density and nothing else — a classifier with nothing to chew on, which
+is the half-done version of this. `PROPS` in `derive.ts` now carries **thermal conductivity and specific heat for 90
+materials** (typical handbook values: CRC Handbook 97th ed., MatWeb for alloys and polymers, ASHRAE for the building
+materials; good to about a tenth, enough to size a heat path and not to certify one), routed through `stated` like
+density, and inherited by a part because that is what a material property MEANS. Both come out **holds**: 20 and 17
+distinct values over 22 materials. `gravity` stayed `not enough measured`. **Three identically-derived fields, three
+different verdicts, no human list anywhere** — which is the whole point.
+
+**Two faults the round found by running it.**
+
+1. **A thickness was not reachable, and two laws sat idle for it.** `stated`'s axis picker has read `thick` as the
+   third extent since it was written, but its branch test never admitted the word, so a 10×10×3 mm gear answered
+   nothing when a law asked its thickness. `thermal.resistance.conduction` and `conduction` were unreachable for
+   want of a figure the inventory states. Fixed at the regex, not the call site; `wall thickness` is refused on
+   purpose, because a tube's wall is a feature of its section and answering it with the overall size would call a
+   tube's outer diameter its wall. `thermal.resistance.conduction` now runs on the brass gear: **0.833 K/W**, which
+   is `t/(kA) = 0.003/(120 × 3e-5)` by hand.
+2. **`unlocks` overstated what filling a field does.** It said "Measure or set it and 2 laws can run". A law needs
+   EVERY port: filling brass's specific heat left `heat.capacity` wanting only a temperature rise, which is the
+   setting's to give, and `conduction` wanting a temperature difference. It now says **"2 laws are waiting on it"**,
+   and the field's own comment says why.
+
+**Still open, named rather than hidden.** 31 of brass's 34 fields are untested because nothing here has measured
+them — viscosity, resistivity, expansion coefficient, permittivity and the rest. Each is a column in `PROPS` and the
+next real job on this. The two tests will classify them the moment the numbers arrive, and will not ask what they
+are called.
 
 GATE: PASS (2250 of 2250) — 193.5s

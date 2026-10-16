@@ -237,6 +237,10 @@ if (want[0] === 'know') {
     console.log('ITS PACKET \u2014 everything attached, nothing computed until asked');
     for (const l of pk.says) console.log(`  ${l}`);
     console.log(`  made with: ${pk.given.map((g) => `${g.quantity} = ${g.value.toPrecision(4)} ${g.unit}`).join(' \u00B7 ')}`);
+    console.log(`  ITS FORM \u2014 ${pk.requires.length} fields, each with what the two tests make of it as a property of the stuff:`);
+    for (const b of pk.requires.slice(0, 8)) console.log(`    [${b.holds.padEnd(22)}] ${b.quantity} (${b.unit}) \u2192 unlocks ${b.unlocks}`);
+    if (pk.requires.length > 8) console.log(`    \u2026 and ${pk.requires.length - 8} more`);
+    console.log(`  the test in full, on one field: ${pk.holds(pk.requires[0].quantity).says}`);
     for (const q of asked) pk.at(q);
     console.log('  what it is, on the one tree:');
     for (const b of pk.byTime()) console.log(`    time^${String(b.power).padEnd(4)} ${b.facts.map((f) => `${f.quantity} = ${f.value.toPrecision(4)} ${f.unit}`).join(' \u00B7 ')}`);
