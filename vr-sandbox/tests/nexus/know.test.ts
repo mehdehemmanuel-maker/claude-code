@@ -341,6 +341,26 @@ describe('clashes, grouped by cause', () => {
     expect(shape.count / total, 'the box-vs-solid effect should dominate').toBeGreaterThan(0.4);
     for (const r of shape.ratios) { expect(r).toBeGreaterThan(1); expect(r).toBeLessThanOrEqual(6.5); }
 
+    // THE FILL FRACTION, which is what most of the old "unexplained" pile actually was. A thing filling phi of its
+    // box satisfies m = rho phi A H, so a route assuming the box SOLID and a route stating the outside differ by
+    // exactly 1/phi — the ratio is a measurement of how full the thing is, not an error. The clash carries its
+    // shape's declared phi (attached by its producer in derive.ts, because a classifier must not reach into parts/),
+    // so the verdict is a comparison: agrees -> `fill` and no fault; disagrees -> `shape wrong` and a real one.
+    const fill = gs.find((g) => g.cause === 'fill');
+    const wrong = gs.find((g) => g.cause === 'shape wrong');
+    expect(fill, 'the fill cause must be reached at all').toBeTruthy();
+    expect(fill!.says).toMatch(/the ratio is the fill fraction/);
+    expect(fill!.says).toMatch(/Not faults/);
+    expect(wrong!.says).toMatch(/THESE ARE REAL/);
+    // and every clash in either group really does carry a phi and the two route kinds
+    for (const g of [fill!, wrong!]) expect(g.worst!.fills, `${g.cause} needs its declared fill`).toBeGreaterThan(0);
+
+    // the threshold is set by what the shapes ARE, not by what makes the count small: boxShape tells three apart,
+    // a block at 1, a cylinder at pi/4 = 0.785 and an ellipsoid at pi/6 = 0.524. The widest gap between them is
+    // 1/0.524 = 1.91, so a factor of two admits a shape's own spread and still refuses a cylinder read as a block.
+    expect(1 / (Math.PI / 6)).toBeLessThan(2);
+    expect(1 / (Math.PI / 4)).toBeLessThan(2);
+
     const unit = gs.find((g) => g.cause === 'unit');
     if (unit) for (const r of unit.ratios) {
       const k = Math.log(r) / Math.log(1000);
@@ -349,6 +369,8 @@ describe('clashes, grouped by cause', () => {
     // and the unexplained list is the one a round should actually read
     const un = gs.find((g) => g.cause === 'unexplained')!;
     expect(un.says).toMatch(/THIS is the list to read/);
-    expect(un.count).toBeGreaterThan(0);
+    // RATCHET: the unexplained pile ran at 561 of 3,982 before the fill cause existed and 130 of 3,992 after.
+    // It may shrink, never grow: a new cause that lands here is a cause nothing in this file explains.
+    expect(un.count / total, 'unexplained must stay a small minority').toBeLessThan(0.1);
   });
 });

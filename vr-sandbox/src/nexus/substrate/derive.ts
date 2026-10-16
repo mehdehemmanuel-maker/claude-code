@@ -308,6 +308,12 @@ export interface Clash {
   thing: string; quantity: string; unit: string;
   routes: { how: string; value: number }[];
   /** the spread as a fraction of the larger */ spread: number;
+  /** THE FRACTION OF ITS BOX THE THING'S DECLARED SHAPE FILLS, attached here because only the producer knows it.
+   *  A classifier must not reach into `parts/` to look a thing up — that is the import ratchet — so the φ travels
+   *  with the clash. It is what tells a real disagreement from the box-against-the-solid effect: a route that
+   *  assumes the box is full of material and a route that states the outside differ by exactly 1/φ. */
+  fills?: number;
+  /** the shape that φ belongs to, as `boxShape` names it */ shape?: string;
   says: string;
 }
 
@@ -429,7 +435,10 @@ export function know(thing: string, quantity: string, seen: ReadonlySet<string> 
     : (Math.max(...routes.map((r) => Math.abs(r.value))) - Math.min(...routes.map((r) => Math.abs(r.value))))
       / Math.max(...routes.map((r) => Math.abs(r.value)) ) || 0;
   if (routes.length > 1 && spread > AGREE) {
+    const li = INVENTORY.get(thing);
+    const sh = li ? boxShape(li.look, sizeOf(thing, li)?.mm) : null;
     const clash: Clash = { thing, quantity, unit: best.unit, spread,
+      ...(sh ? { fills: sh.phi, shape: sh.name } : {}),
       routes: routes.map((r) => ({ how: r.how, value: r.value })),
       says: `${thing}'s ${quantity} comes out ${(spread * 100).toFixed(0)}% apart by different routes — ${routes.map((r) => `${readable(fromSI(r.value, best.unit))} ${best.unit} by ${r.how}`).join(' · ')}. Physics does not allow that, so one of the inputs is wrong.` };
     clashLog.set(`${thing}|${quantity}`, clash);

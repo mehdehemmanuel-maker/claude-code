@@ -234,6 +234,20 @@ the root.
    Per-product data (a real model's published figures) is fine; per-product code is a template.
 ## The drift gate: before spending a round on a fix
 
+**2026-10-16, learned the hard way.** Six rounds (8m–8s) ran almost entirely inside two of the nine asks (the
+general rule, and tools for the tools) while five others went untouched, and the user had to stop the work to point
+it out. Two checks catch this earlier, and both are commands rather than opinions:
+
+- **Run `node tools/unwired.mjs --all` at the END of a round, not only when hunting.** Run 8p wrote
+  `substrate/clashcause.ts`, Run 8r read its output, and a third round was queued on it — and the census called it
+  an **unreached file** the whole time. An instrument with no door is not a finding, it is bloat. Unreached files
+  had crept 22 → 23 and test-only exports 177 → 180 across rounds reported as progress.
+- **When a round's obvious next step is inside the file the last round touched, that is the drift signal.** The
+  substrate work feeds itself: each round closes one thing and uncovers two more next to it, so there is always an
+  obvious next step and it is always in the same place. An obvious next step is not the most valuable one. Count how
+  many rounds in a row have landed in one subsystem, and when it reaches three, re-read "What is wanted" and pick
+  from the list instead of from the file.
+
 Recursive work drifts toward the most efficient path for the measurement, not toward what was asked. The gate is
 the pause before a round where you ask whether this fix is still worth making. Pass it before tuning anything:
 

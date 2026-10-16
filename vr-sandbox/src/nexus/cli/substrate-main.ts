@@ -249,8 +249,13 @@ if (want[0] === 'know') {
   console.log('');
   if (!c.length) console.log('NO CLASHES: every quantity reached more than one way came out the same.');
   else {
-    console.log('CLASHES \u2014 a quantity reached two ways that disagree. Physics does not allow it, so the DATA is wrong:');
+    console.log('CLASHES \u2014 a quantity reached two ways that disagree:');
     for (const x of c) console.log(`  * ${x.says}`);
+    // AND WHY EACH ONE IS ONE, because a count is not a finding. `clashcause.ts` was written in Run 8p and sat
+    // UNREACHED until here: the census (node tools/unwired.mjs --all) named it an unreached file, which is the
+    // honest verdict on an instrument with no door. A disagreement is not a fault until its cause is known.
+    const { clashCauses } = await import('../substrate/clashcause');
+    for (const g of clashCauses(c)) console.log(`  [${g.cause}] ${g.says}`);
   }
   console.log('');
   console.log('SUBSTRATE: the one hierarchy, asked');
