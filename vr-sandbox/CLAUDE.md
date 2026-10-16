@@ -423,6 +423,21 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
   **The fault this one found in itself**: the cell-code rule used `\b` at the front and so silently refused every
   coin cell, because `R` and `2` are both word characters and there is no boundary between them. Found by writing
   the test for CR2032, fixed with a digit lookbehind.
+  Run 8r then broke the cycle that blocked the last two: `CAN_SIZES` and `SERVO_SIZES` (the motor-can and servo-frame
+  tables) moved out of `families.ts` into `designation.ts`, which imports only `threads.ts`, so `inventory.ts` can
+  read them without the cycle. One table, two readers, nothing written twice. **99.74% of non-material rows now have
+  a geometry**; the five left are `motor-micro` and `n20-motor` (trade size names, not codes — they need a drawing),
+  `nema17` and `screw-m2` (incomplete designations) and `salivary-glands` (needs an anatomical figure).
+- **WHAT THE UNEXPLAINED CLASHES ARE: A FILL FRACTION, NOT A FAULT** (the next piece, in `clashcause.ts`). Run 8r
+  read the 561 `unexplained` clashes instead of guessing: **431 of them (77%) are a height, and the two routes are a
+  stated size against `extent.from-mass`.** That law gives `H = m/(ρA)` — the height the thing would have if its box
+  were solid — so for anything filling φ of its box, `H_from_mass = φ · H_stated` and **the ratio IS φ**. A sheet, a
+  rod, a tube, a ring and a loop are mostly air, which is why they all appear and why the `shape` band stopping at
+  6.5× never caught them. `boxShape` already knows each shape's declared φ (a block 1, a cylinder π/4, an ellipsoid
+  π/6), so the fix is to compare the IMPLIED fill against the DECLARED one: equal means the routes agree once the
+  shape is accounted for, unequal means the shape or the mass is wrong. **The real fault count is far below 561 and
+  this round did not establish how far.** The φ must be attached to the clash by its producer in `derive.ts`, not
+  looked up by `clashcause.ts`, which must not reach into `parts/` — that is the ratchet Run 8p was failing.
 - **SEEING, TRACED BACK TO TIME** (`substrate/perceive.ts`, `npm run substrate -- seeing`). The constructive half
   of the clock thesis, and the half that holds. The user: *"add the time scale and human perception thing with math
   I meant the math of light and eyes and hz … all of it trace it back to time"*. `SEEING` is the whole chain as

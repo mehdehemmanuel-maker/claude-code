@@ -8,6 +8,7 @@
 import { BAND, axialBody, axialResistorSolids, bandsOf, ledSolids, solidsMass } from '../boards/packages';
 import type { Item, Process } from './inventory';
 import { METRIC, PAN, SETSCREW_KEY, setscrewSocket } from './threads';
+import { CAN_SIZES, SERVO_SIZES } from './designation';
 import { KINDS } from '../kinds';
 import { CLEAR, GT2_LOOP_D, NEMA, NEMA_FACE } from '../kinds/motion';
 export { NEMA, NEMA_FACE };
@@ -240,7 +241,8 @@ const oring: Family = {
   make(p) { const d1 = Number(p.id), d2 = Number(p.cs), D = d1 + d2, v = (Math.PI ** 2 * D * d2 ** 2) / 4; return item(`oring-${d1}x${d2}-${p.matter}`, `O-ring ${d1} × ${d2} mm, ${p.matter}`, 'Mechanical/Seals/O-rings', 'product', 'mould', p.matter === 'silicone' ? 'silicone' : 'nbr', 'a ring of rubber squeezed in a groove to seal', `${d1} mm inside, ${d2} mm section; groove depth about 0.75–0.8 × section for a static seal (typical)`, [D + d2, D + d2, d2], mm3g(v, 1.25)); },
 };
 // ---- brushed DC motors by can size ---------------------------------------------------------------------------------------
-const DCM: Record<string, [number, number, number]> = { '130': [20, 25, 18], '180': [20, 32, 25], '280': [24, 30, 35], '370': [24, 30, 40], '385': [28, 38, 60], '540': [36, 50, 160], '550': [36, 57, 190], '775': [42, 66, 330] };
+// the can-size table lives in `designation.ts`, so `inventory.ts` can read it too without a cycle
+const DCM = CAN_SIZES;
 const dcmotor: Family = {
   id: 'dcmotor', name: 'brushed DC motor', path: ['Electrical', 'Motors and actuators', 'DC motors'], says: 'any can size code (130, 280, 370, 540, 775, …) and voltage', params: [{ key: 'size', says: 'can size', unit: '', values: Object.keys(DCM), default: '130' }, { key: 'volts', says: 'voltage', unit: 'V', min: 1.5, max: 48, default: 6 }],
   examples: ['dcmotor 130 6V', 'dcmotor 540 12V', 'dcmotor 775 24V'],
@@ -248,7 +250,9 @@ const dcmotor: Family = {
   make(p) { const sz = String(p.size), [d, L, g] = DCM[sz]!; return item(`dcmotor-${sz}-${p.volts}v`, `brushed DC motor ${sz}, ${p.volts} V`, 'Electrical/Motors and actuators/DC motors', 'product', 'assemble', 'motor-can magnet-ferrite-arc*2 armature end-cap-motor carbon-brush*2 brush-spring*2 sleeve-bearing*2', 'a wound rotor in the field of ferrite magnets, its current switched by brushes on a commutator', `can about ${d} mm across, ${L} mm long, about ${g} g (typical of the ${sz} size); speed rises with volts, torque with current`, [d, d, L], g); },
 };
 // ---- hobby servos by size ---------------------------------------------------------------------------------------------
-const SERVOS: Record<string, { box: [number, number, number]; g: number; torque: string; gears: string }> = { micro: { box: [23, 12.2, 29], g: 9, torque: '1.8 kg·cm at 4.8 V (SG90)', gears: 'gear-plastic*4' }, standard: { box: [40.7, 19.7, 42.9], g: 55, torque: '9.4 kg·cm at 4.8 V (MG996R)', gears: 'gear-small*4' } };
+// the frames come from `designation.ts`; the torque and the gear train are this family's own
+const SERVO_EXTRA: Record<string, { torque: string; gears: string }> = { micro: { torque: '1.8 kg·cm at 4.8 V (SG90)', gears: 'gear-plastic*4' }, standard: { torque: '9.4 kg·cm at 4.8 V (MG996R)', gears: 'gear-small*4' } };
+const SERVOS: Record<string, { box: [number, number, number]; g: number; torque: string; gears: string }> = Object.fromEntries(Object.entries(SERVO_SIZES).map(([k, v]) => [k, { box: v.box, g: v.g, ...SERVO_EXTRA[k]! }]));
 const servo: Family = {
   id: 'servo', name: 'hobby servo', path: ['Electrical', 'Motors and actuators', 'Servos'], says: 'micro (SG90 size) or standard (MG996R size)', params: [{ key: 'size', says: 'size', unit: '', values: Object.keys(SERVOS), default: 'micro' }],
   examples: ['servo micro', 'servo standard'],

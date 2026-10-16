@@ -1,7 +1,8 @@
 // The size a standard designation denotes. These are not measurements to check against a datasheet; they are
 // DEFINITIONS, so the test is that the rule reads the standard correctly and refuses anything it cannot complete.
 import { describe, expect, it } from 'vitest';
-import { denotedSize } from '../../src/nexus/parts/designation';
+import { CAN_SIZES, SERVO_SIZES, denotedSize } from '../../src/nexus/parts/designation';
+import { lookRow } from '../../src/nexus/parts/looks';
 import { INVENTORY, sizeOf } from '../../src/nexus/parts/inventory';
 import { METRIC } from '../../src/nexus/parts/threads';
 
@@ -75,14 +76,68 @@ describe('and the inventory uses it ahead of the drawing', () => {
     expect(s.mm).toEqual([18, 18, 65]);
   });
 
-  it('and every non-material item now has a geometry, or is one of the seven that is named', () => {
-    let without = 0;
+  it('and all but a handful of non-material rows now have a geometry', () => {
+    let with_ = 0, total = 0;
     for (const [id, i] of INVENTORY) {
       if (i.kind === 'material' || i.kind === 'element') continue;
-      if (!sizeOf(id, i)) without++;
+      total++;
+      if (sizeOf(id, i)) with_++;
     }
-    // 1,949 non-material rows: 1,261 state a size, 6 are denoted by a designation, 675 take a typical size from
-    // looks.ts, and SEVEN have nothing anywhere. Those seven are named in ROUNDS.md rather than invented.
-    expect(without).toBe(7);
+    // 1,949 non-material rows, and the coverage ran 52.4% (Run 8o) -> 99.4% (8p) -> 99.7% here. WHICH rows are
+    // left is asserted by name further down, so this one only holds the ratchet: it may rise, never fall.
+    expect(with_ / total).toBeGreaterThan(0.997);
+  });
+});
+
+describe('a trade designation whose size is tabulated, held once', () => {
+  it('a motor can size and a servo part number give their published frames', () => {
+    // CAN_SIZES is the hobby trade's own code table: 130 means a 20 mm can 25 mm long.
+    expect(CAN_SIZES['130']).toEqual([20, 25, 18]);
+    const m = denotedSize('motor-130', 'brushed DC motor (130 size)', 'Electrical/Motors and actuators/DC motors')!;
+    expect(m.mm).toEqual([20, 20, 25]);
+    expect(m.how).toMatch(/can size 130/);
+    const s = denotedSize('mg996r', 'MG996R servo', 'Electrical/Motors and actuators/Servos')!;
+    expect(s.mm).toEqual(SERVO_SIZES['standard']!.box);
+    expect(s.how).toMatch(/part number MG996R/);
+  });
+
+  it('and the can route needs the word, not just the digits', () => {
+    // "550" alone could be anything; the route asks for a motor or a can beside it.
+    expect(denotedSize('x', 'a 550 ohm resistor', 'Electrical/Passives')).toBeNull();
+    expect(denotedSize('x', 'brushed DC motor 550', 'Electrical/Motors and actuators')!.mm).toEqual([36, 36, 57]);
+  });
+
+  it('THE TABLES ARE DEFINED ONCE, which was the point of moving them', () => {
+    // These lived inside families.ts, where only the family maker could read them, so inventory.ts could not size
+    // its own motor-130 and mg996r rows — and it could not import them, because families.ts imports inventory.ts
+    // and the other direction is a cycle. They now live in designation.ts, which imports only threads.ts, and
+    // families.ts reads them from here. One table, two readers, no cycle, and no figure written twice.
+    expect(Object.keys(CAN_SIZES).length).toBe(8);
+    expect(Object.keys(SERVO_SIZES)).toEqual(['micro', 'standard']);
+    for (const [, v] of Object.entries(SERVO_SIZES)) {
+      expect(v.part, 'each servo frame names the part it is measured from').toBeTruthy();
+      expect(v.box.every((x) => x > 0)).toBe(true);
+    }
+  });
+
+  it('the table and the drawing agree where both have a figure, which is a free cross-check', () => {
+    // dcmotor-550 is drawn by looks.ts as 'motor 36 36 57' AND denoted by its can size as 36 × 36 × 57. Two
+    // independent sources landing on the same three numbers is worth asserting: if one drifts, this fails.
+    const d = denotedSize('dcmotor-550', 'brushed DC motor 550', 'Electrical/Motors and actuators')!;
+    expect(d.mm).toEqual([36, 36, 57]);
+    const l = lookRow('dcmotor-550');
+    if (l) expect(l.size).toEqual(d.mm);
+  });
+
+  it('five rows still have no geometry anywhere, and all five are named', () => {
+    const without: string[] = [];
+    for (const [id, i] of INVENTORY) {
+      if (i.kind === 'material' || i.kind === 'element') continue;
+      if (!sizeOf(id, i)) without.push(id);
+    }
+    // motor-micro (N10) and n20-motor carry trade size NAMES, not dimensional codes, so they need a drawing;
+    // nema17 and screw-m2 have incomplete designations (a face with no length, a thread with no shank); and
+    // salivary-glands needs an anatomical figure. Named in ROUNDS.md rather than invented.
+    expect(without.sort()).toEqual(['motor-micro', 'n20-motor', 'nema17', 'salivary-glands', 'screw-m2'].sort());
   });
 });

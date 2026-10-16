@@ -962,3 +962,66 @@ Clashes went 3,982 → 3,990 over 1,942 checkable things instead of 1,938: 2.054
    inert. The test says so rather than being loosened to keep passing.
 
 GATE: PASS (2352 of 2352) — 189.7s, 192 files, tidy 24/24
+
+## Run 8r — the cycle broken, and what the 561 unexplained clashes actually are
+
+### The cycle broken: two tables, one home
+
+Run 8q named `motor-130` and `mg996r` as a merge **blocked by import direction**: their sizes already existed, in
+`families.ts`'s `DCM` and `SERVOS` tables, and `inventory.ts` could not read them because `families.ts` imports
+`inventory.ts` and the other way round would be a cycle. Both tables now live in `designation.ts`, which imports only
+`threads.ts`, as `CAN_SIZES` and `SERVO_SIZES`. **One table, two readers, no cycle, and no figure written twice** —
+`families.ts` keeps only what is its own (the torque and the gear train) and reads the frames from here.
+
+A fourth route in `denotedSize` reads them: a motor can size, or a servo by its part number. It reaches four rows and
+every one is right:
+
+```
+$ npm run substrate -- know motor-130
+motor-130         20 × 20 × 25         its can size 130: the trade code for a 20 mm can 25 mm long
+mg996r            40.7 × 19.7 × 42.9   its part number MG996R, from its maker's drawing
+dcmotor-550       36 × 36 × 57         its can size 550
+dcmotor-385-12v   28 × 28 × 38         its can size 385
+```
+
+**And it bought a free cross-check**: `dcmotor-550` is *also* drawn by `looks.ts` as `motor 36 36 57`. Two
+independent sources landing on the same three numbers, now asserted — if either drifts, the test fails.
+
+The can route needs the word and not just the digits (`a 550 ohm resistor` is refused), which is the guard that keeps
+it a rule rather than a string match.
+
+**Coverage: 1,944 of 1,949 non-material rows have a geometry (99.74%).** Five left, each named with what it needs:
+`motor-micro` (N10) and `n20-motor` carry trade size *names* rather than dimensional codes, so they need a drawing;
+`nema17` and `screw-m2` have incomplete designations; `salivary-glands` needs an anatomical figure.
+
+### What the 561 unexplained clashes actually are
+
+Read rather than guessed at, and the answer is one thing:
+
+```
+$ npm run substrate -- know <every item>   (the sweep behind clashCauses)
+unexplained: 561
+  by quantity:   431 height · 130 mass
+  by which two routes disagree:
+    281  extent.from-mass  VS  its stated size
+    130  mass.prism  VS  mass.volume  VS  the inventory
+     44  a typical size for a sheet of its sort  VS  extent.from-mass
+     30  a typical size for a rod …   18 tube …   15 ring …   10 loop …   10 box …
+```
+
+**431 of 561 (77%) are a height, and the two routes are a stated size against `extent.from-mass`.** That law gives
+`H = m/(ρA)`, which is the height the thing would have *if its box were solid metal*. A sheet, a rod, a tube, a ring
+and a loop are mostly air. So the ratio between the two is not an error — **it IS the fill fraction**, because
+`H_from_mass = φ · H_stated` for a thing filling φ of its box.
+
+Which means these were never "unexplained"; the classifier's `shape` band just stopped at 6.5×, and a ring or a loop
+fills far less than a sixth of its box. `derive.ts` already knows each shape's own φ (`boxShape`: a block 1, a
+cylinder π/4, an ellipsoid π/6), so the honest classification is to compare the IMPLIED fill against the DECLARED
+one: equal means the two routes agree once the shape is accounted for, and unequal means the declared shape or the
+mass is wrong. That is the next piece, and it needs the φ attached to the clash by its producer rather than looked up
+by the classifier — `clashcause.ts` must not reach into `parts/`, which is the ratchet Run 8p was failing.
+
+**So the honest count of real faults is far below 561**, and this round did not get to say how far. What it did was
+find the cause, which is the part that was actually missing.
+
+GATE: PASS (2357 of 2357) — 204.3s, 192 files, tidy 24/24

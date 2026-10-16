@@ -59,7 +59,45 @@ function metricScrew(name: string): Denoted | null {
     how: `its designation M${m[1]} × ${m[2]}: ISO 4762 gives an M${m[1]} head ${row.dk} mm across and ${row.k} mm high, over a ${L} mm shank` };
 }
 
+
+// ---- TRADE DESIGNATIONS WITH A TABULATED SIZE --------------------------------------------------------------------
+//
+// Not every designation encodes its size the way 18650 does. A motor can size ("130", "540") and a servo part number
+// (SG90, MG996R) are names whose size is published rather than computed, so they need a table — and these two tables
+// ALREADY EXISTED, inside `families.ts`, where only the family maker could see them. `inventory.ts` could not read
+// them to size its own `motor-130` and `mg996r` rows, because `families.ts` imports `inventory.ts` and the other
+// direction would be a cycle. So they live here, in the file that owns what a designation denotes and imports only
+// `threads.ts`: one table, two readers, no cycle. `families.ts` now reads them instead of holding its own.
+// Each is [across, along] in millimetres with the grams beside it, as its trade data gives it.
+
+/** Brushed DC motor can sizes: the hobby trade's own codes, [can diameter mm, can length mm, typical grams]. */
+export const CAN_SIZES: Record<string, [number, number, number]> = {
+  '130': [20, 25, 18], '180': [20, 32, 25], '280': [24, 30, 35], '370': [24, 30, 40],
+  '385': [28, 38, 60], '540': [36, 50, 160], '550': [36, 57, 190], '775': [42, 66, 330],
+};
+
+/** Hobby servo frames by the part number that names them, from each maker's own drawing. */
+export const SERVO_SIZES: Record<string, { box: [number, number, number]; g: number; part: string }> = {
+  micro: { box: [23, 12.2, 29], g: 9, part: 'SG90' },
+  standard: { box: [40.7, 19.7, 42.9], g: 55, part: 'MG996R' },
+};
+
+/** A trade designation the tables above name: a motor can size, or a servo by its part number. */
+function tradeCode(id: string, name: string): Denoted | null {
+  const can = /\b(130|180|280|370|385|540|550|775)\b/.exec(`${id} ${name}`);
+  if (can && /motor|can/i.test(`${id} ${name}`)) {
+    const [d, L] = CAN_SIZES[can[1]!]!;
+    return { mm: [d, d, L], how: `its can size ${can[1]}: the trade code for a ${d} mm can ${L} mm long` };
+  }
+  for (const [, v] of Object.entries(SERVO_SIZES)) {
+    if (new RegExp(`\\b${v.part}\\b`, 'i').test(`${id} ${name}`)) {
+      return { mm: v.box, how: `its part number ${v.part}: ${v.box.join(' \u00d7 ')} mm from its maker's drawing` };
+    }
+  }
+  return null;
+}
+
 /** The size the item's own designation denotes, or nothing. Tried most specific first. */
 export function denotedSize(id: string, name: string, path = ''): Denoted | null {
-  return stated(name) ?? cellCode(id, name, path) ?? metricScrew(name);
+  return stated(name) ?? cellCode(id, name, path) ?? metricScrew(name) ?? tradeCode(id, name);
 }
