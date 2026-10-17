@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // An image from words, generated here: no model, no service, no key. The words are read into a scene (the time of day,
 // the weather, the ground, what stands on it and how many), the scene is painted pixel by pixel (sky, sun or moon and
-// stars, clouds, ranges of mountains fading into the air, water with a reflection, grass with tufts and flowers, sand
-// in dunes, snow, a road that drifts (asphalt, or dirt with ruts), trees in their season's colours, houses,
-// buildings, a car, a boat, birds, rain and snow in three depths, snow settling on every top edge, wet on every
-// surface, fog thickening with depth, grain), and the pixels are written as a PNG by this file's
-// own encoder. Things stand in metres through a camera 1.6 m up (a 4.5 m car on a two-lane road, a 6 m cabin, a 15-25 m
+// stars, clouds, ranges of mountains fading into the air, water, ground, trees in their season's colours, houses,
+// buildings, a car, a boat, birds, weather, grain), and the pixels are written as a PNG by this file's own encoder.
+// The ground: grass with tufts and flowers, sand in dunes with lit crests and shadowed lees, snow, rolling swells when
+// hills are named, a road that drifts (grey asphalt, or dirt with ruts) and rises with them, wet on every surface.
+// The water: a shoreline that wanders with a foam line and wet sand, mirroring the sky, the ranges and the far bank
+// and what stands at its edge or on it, whitecaps and no glitter in a storm, flat ice when frozen, a river between
+// two banks; rain and snow fall in three depths, snow settles on every top edge, fog thickens with depth.
+// Things stand in metres through a camera 1.6 m up (a 4.5 m car on a two-lane road, a 6 m cabin, a 15-25 m
 // pine), with anti-aliased edges and a shadow thrown by the sun or the moon at the hour's height; the sun a small
 // warm disc by day and a deep orange ball when low, the moon by its phase, the mountains lit on the sun's side. A
 // style can finish the whole (pixel art, a poster, a sketch, a watercolour, mono, sepia, vintage) and a caption can be

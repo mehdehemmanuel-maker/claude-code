@@ -640,25 +640,55 @@ const MEADOW = /^(meadows?|fields?)$/; // the words that bring flowers with them
 const VERGE = 0.12; // the dusty verge outside each kerb, as a share of the road's width
 const RUT = { at: 1.65, half: 0.22 }; // a dirt road's wheel ruts: metres from the centre, half their width
 const TUFT_DENSITY = 0.028; // tufts per pixel of grass at the foot of the picture, before the clumps
-const DUNE = { cell: 16, tall: 4, key: 43 }; // dunes: the noise's lattice in metres, their height in metres
-const HILL = { across: 2.5, rise: 0.25, key: 47 }; // named hills: swells across the width, their rise as a share
-// of the ground band at the horizon
+const DUNE = { cell: 16, tall: 7, key: 43 }; // dunes: the noise's lattice in metres, their height in metres
+// Named hills: long swells lying across the view (HILL.down of them down the frame, wandering slowly across it, a
+// ridge's shape not a blob's), their rise as a share of the ground band at the horizon
+const HILL = { across: 0.8, down: 3.2, rise: 0.25, key: 47 };
+// The relief (dunes, hills) is evaluated every grid pixels along a row and interpolated between: 4 px at 540 rows,
+// 6 at 1080 (the dune lattice is 16 m: 27 px a kilometre away at 1080p, thousands near the foot)
+const gridStep = (scale) => Math.max(4, Math.round(4 * scale));
 
 /** The fields this section adds to the ground row: once per picture here, per row in landRow(). */
 export function landFields(ctx) {
-  const { scene } = ctx;
+  const { W, scene } = ctx;
   const named = words(scene.prompt ?? '');
+  const land = scene.ground === 'water' ? scene.land : scene.ground;
+  const hills = scene.instances?.some((i) => i.kind === 'hills' && i.count > 0) ?? false, step = gridStep(ctx.scale);
+  const relief = hills || (land === 'sand' && scene.ground !== 'water');
   return {
     landTint: seasonLand(scene),
-    hills: scene.instances?.some((i) => i.kind === 'hills' && i.count > 0) ?? false,
+    hills,
     flowers: 'flowers' in scene.things || named.some((w) => MEADOW.test(w)),
     rc: 0, vergeHalf: 0, rutAt: 0, rutHalf: 0, relief: 0, tuft: 0, flowerCell: 1,
+    // the relief samples [height, shade, rise], one per `step` px, at two knots down the frame (grid at knot kA,
+    // gridB at kB, a row between them reads at gridT): the named hills' swell, or dunes on sand with no water (a
+    // beach's sand lies flat to the waterline); rip holds the dunes' fine ripples for the row itself. The dunes'
+    // samples are spaced in metres (extA, extB px per metre: the farther knot's own scale), so a row between the
+    // knots reads each pixel's own metre, and the field slides with the perspective instead of fading between two
+    // copies of itself a few pixels apart (which stepped every lee's edge)
+    grid: relief ? new Float32Array((W / step + 3 | 0) * 3) : null,
+    gridB: relief ? new Float32Array((W / step + 3 | 0) * 3) : null,
+    rip: relief && !hills ? new Float32Array(W / step + 3 | 0) : null,
+    step, gridN: Math.ceil(W / step) + 2, half: W / 2 - 0.5, kA: 0, kB: -Infinity, gridT: 0, extA: 0, extB: 0,
   };
 }
 
-/** The per-row values: the road's centre, verge and ruts in pixels, the relief's strength, the tufts' density. */
+// The relief knots: a key that grows down the frame (hills: near; dunes: -ln depth), one knot per KNOT of it, and
+// the samples between two knots read by lerp, so the dunes are evaluated at some 80 depths of a 1080p frame instead
+// of 454 rows (5% of depth apart: half a metre ten metres out, nothing against a 16 m lattice).
+const KNOT = { hills: 0.02, dunes: Math.log(1 / 0.95) };
+
+/**
+ * The per-row values: the road's centre, verge and ruts in pixels, the relief's strength, the tufts' density, and
+ * the relief grid: dunes (on sand) or the named hills' swell, sampled every `step` pixels along the row with fewer
+ * noise octaves far away, where the lattice is pixels wide, each sample shaded there (the light on its slopes, the
+ * form of its lee) so a pixel only reads between two samples; a row whose depth is within 1% of the last sampled
+ * row's keeps that row's samples (the near rows are centimetres apart). Where hills swell under a road, the road's
+ * centre and width are those of the depth the swell shows under its centre column, so the road rises and falls with
+ * the ground.
+ */
 export function landRow(ctx, row) {
-  const { W, gloom, scale } = ctx, { near, ppm } = row;
+  const { W, H, hy, gloom, scale, camera, sun } = ctx, { y, near, ppm, zm } = row;
   row.rc = W * (0.5 + roadDrift(near));
   row.vergeHalf = row.roadHalf * (1 + VERGE * 2);
   row.rutAt = RUT.at * ppm;
@@ -667,6 +697,104 @@ export function landRow(ctx, row) {
   row.relief = clamp(ppm * 4) * (0.6 + 0.4 * gloom);
   row.tuft = smooth(0.35, 0.65, near) * TUFT_DENSITY;
   row.flowerCell = Math.max(1, Math.round(2 * scale));
+  const grid = row.grid, step = row.step;
+  if (!grid || row.relief <= 0) return;
+  if (row.hills && ctx.scene.road) { // the road at the depth the swell shows under its centre: no stain across it
+    hillAt(0.5, near, H - hy, REL);
+    const zd = camera.groundZ(y + 0.5 - REL[3]);
+    if (zd > 0 && zd < FAR_GROUND) {
+      const ppd = camera.focal / zd, nearD = ctx.foot(y + 0.5 - REL[3]);
+      row.rc = W * (0.5 + roadDrift(nearD));
+      row.roadHalf = SIZES.lane * SIZES.lanes / 2 * ppd;
+      row.lineHalf = SIZES.centreLine / 2 * ppd;
+      row.dash = zd % SIZES.dash.period < SIZES.dash.on;
+      row.vergeHalf = row.roadHalf * (1 + VERGE * 2);
+      row.rutAt = RUT.at * ppd;
+      row.rutHalf = RUT.half * ppd;
+    }
+  }
+  const n = row.gridN, hills = row.hills, span = hills ? KNOT.hills : KNOT.dunes;
+  const key = hills ? near : -Math.log(zm);
+  if (key > row.kB) { // past the knot ahead: it becomes the one behind, or both are set afresh when far past it
+    if (key > row.kB + span) { // (the first row too: kB starts at -Infinity)
+      row.kA = key;
+      row.extA = camera.focal * Math.exp(key); // the dunes' metre scale at this knot (hills: unused)
+      knot(ctx, row, grid, n, row.kA, row.extA);
+    } else {
+      row.kA = row.kB;
+      row.extA = row.extB;
+      row.grid = row.gridB;
+      row.gridB = grid;
+    }
+    row.kB = row.kA + span;
+    row.extB = row.extA; // the nearer knot is sampled over the farther one's metres: every row between is covered
+    knot(ctx, row, row.gridB, n, row.kB, row.extB);
+  }
+  row.gridT = (key - row.kA) / span;
+  if (hills) return;
+  const rip = smooth(0.5, 0.7, near) * row.grain; // the fine ripples near the foot: too fine for the knots, per row
+  for (let k = 0; k < n; k++) {
+    const xk = (k * step - row.half) / ppm;
+    row.rip[k] = rip > 0 ? (fbm(xk * 0.35 + zm * 0.08, zm * 5, 44, 2) - 0.5) * 0.14 * rip : 0;
+  }
+}
+
+/**
+ * The relief's samples along a row at one knot: `g` gets [height, shade, rise] per `step` pixels. Hills: the swell at
+ * the knot's `near`, shaded (a flank rising toward the sun's side is lit; the far side of a swell, falling away from
+ * the viewer, is darkened whatever the sun does, from the crest on, a crisp edge there, so each crest reads as a
+ * crest; the side rising toward the viewer is lit a little; the crests paler, the hollows deeper). Dunes: the field
+ * at the knot's depth, with fewer noise octaves far away (the lattice is 16 m: its fine octaves are under a pixel
+ * there), shaded by the sun's term (reliefShade) and the dune's own form whatever the sun's height (duneForm), the
+ * samples `step` px apart at `ext` px per metre (the farther knot's scale: see landFields).
+ */
+function knot(ctx, row, g, n, k, ext) {
+  const { W, H, hy, sun, camera } = ctx, { step, relief } = row;
+  if (row.hills) {
+    for (let i = 0; i < n; i++) {
+      hillAt((i * step) / W, k, H - hy, REL);
+      const facing = REL[1] * (sun.left ? 0.3 : -0.3), away = smooth(0.1, -0.35, REL[2]);
+      const toward = smooth(0, 0.6, REL[2]);
+      g[i * 3] = REL[0];
+      g[i * 3 + 1] = (1 + 0.3 * clamp(facing, -1, 1) * relief) * (1 - FORM.hill * away * relief) *
+        (1 + 0.12 * toward * relief) * (0.84 + 0.32 * REL[0]);
+      g[i * 3 + 2] = REL[3];
+    }
+    return;
+  }
+  const zm = Math.exp(-k), ppm = camera.focal / zm, oct = ppm > 2 ? 4 : ppm > 0.5 ? 3 : 2;
+  for (let i = 0; i < n; i++) {
+    duneAt((i * step - row.half) / ext, zm, REL, oct);
+    g[i * 3] = REL[0];
+    g[i * 3 + 1] = reliefShade(sun.dir, REL[1], REL[2], 0.4, relief) * (0.88 + 0.24 * REL[0]) *
+      (1 - (1 - duneForm(sun, REL[1], REL[2])) * relief);
+    g[i * 3 + 2] = 0;
+  }
+}
+
+/**
+ * The row's relief at a pixel, read between its two samples along the row and between the row's two knots down the
+ * frame, into REL: height, shade, rise (hills) or the row's ripple (dunes). The hills' knots are in screen columns;
+ * the dunes' in metres, read where the pixel's own metre falls in each (the row is nearer than both knots' scale,
+ * so it is always inside them).
+ */
+function reliefAt(row, x) {
+  const a = row.grid, b = row.gridB, s = row.gridT, step = row.step, top = row.gridN - 2, u = x / step;
+  const xm = row.hills ? 0 : (x - row.half) / row.ppm;
+  const ua = row.hills ? u : clamp((xm * row.extA + row.half) / step, 0, top);
+  const ub = row.hills ? u : clamp((xm * row.extB + row.half) / step, 0, top);
+  const ka = ua | 0, ta = ua - ka, i = ka * 3, kb = ub | 0, tb = ub - kb, j = kb * 3;
+  const h0 = a[i] + (a[i + 3] - a[i]) * ta, h1 = b[j] + (b[j + 3] - b[j]) * tb;
+  const s0 = a[i + 1] + (a[i + 4] - a[i + 1]) * ta, s1 = b[j + 1] + (b[j + 4] - b[j + 1]) * tb;
+  REL[0] = h0 + (h1 - h0) * s;
+  REL[1] = s0 + (s1 - s0) * s;
+  if (row.hills) {
+    const r0 = a[i + 2] + (a[i + 5] - a[i + 2]) * ta, r1 = b[j + 2] + (b[j + 5] - b[j + 2]) * tb;
+    REL[2] = r0 + (r1 - r0) * s;
+  } else {
+    const k = u | 0, t = u - k;
+    REL[2] = row.rip[k] + (row.rip[k + 1] - row.rip[k]) * t;
+  }
 }
 
 /**
@@ -680,30 +808,49 @@ export function reliefShade(dir, hx, hz, amp, k = 1) {
   return 1 + amp * clamp(ratio * 5, -1, 1) * k;
 }
 
-/** A dune's profile from noise: a sharp crest where the noise crosses its middle, long flanks either side. */
-const crest = (n) => 1 - Math.abs(2 * clamp(0.5 + (n - 0.5) * 2.2) - 1) ** 1.3;
+/** A dune's profile from noise: a sharp crest (a cusp, exponent under 1) where the noise crosses its middle. */
+const crest = (n) => 1 - Math.abs(2 * clamp(0.5 + (n - 0.5) * 2.2) - 1) ** 0.85;
 
-/** A dune field in metres: out = [height 0..1, slope across, slope away]; the slopes in metres per metre. */
-export function duneAt(xm, zm, out) {
+/**
+ * A dune field in metres: out = [height 0..1, slope across, slope away, 0]; the slopes in metres per metre, `oct`
+ * the noise octaves (fewer far away).
+ */
+export function duneAt(xm, zm, out, oct = 4) {
   const u = xm / DUNE.cell, v = zm / DUNE.cell, e = 0.02, rise = DUNE.tall / DUNE.cell / e;
-  const d0 = crest(fbm(u * 0.6, v * 0.3, DUNE.key, 4));
+  const d0 = crest(fbm(u * 0.6, v * 0.3, DUNE.key, oct));
   out[0] = d0;
-  out[1] = (crest(fbm((u + e) * 0.6, v * 0.3, DUNE.key, 4)) - d0) * rise;
-  out[2] = (crest(fbm(u * 0.6, (v + e) * 0.3, DUNE.key, 4)) - d0) * rise;
+  out[1] = (crest(fbm((u + e) * 0.6, v * 0.3, DUNE.key, oct)) - d0) * rise;
+  out[2] = (crest(fbm(u * 0.6, (v + e) * 0.3, DUNE.key, oct)) - d0) * rise;
+  out[3] = 0;
   return out;
+}
+
+const FORM = { dune: 0.55, slope: 0.4, hill: 0.38 }; // the lee's darkening by slope, independent of the sun's height
+
+/**
+ * A dune's form, whatever the sun's height: the lee flank (falling away from the sun's side of the frame, and the
+ * flank falling away from the viewer) darkened by its steepness, a slip face of FORM.slope m/m taking the full
+ * FORM.dune; so a crest reads at noon, when the sun's own term (reliefShade) is nearly flat.
+ */
+function duneForm(sun, hx, hz) {
+  const lee = Math.max(0, sun.left ? -hx : hx) + Math.max(0, -hz) * 0.6;
+  return 1 - FORM.dune * clamp(lee / FORM.slope);
 }
 
 /**
  * The swell of named hills, in the frame: the ground's rise at (u across, near down), as rows of displacement of
- * the y mapping (a crest shows nearer ground than the flat plane would, a hollow farther), with its slopes across
- * the frame and down it, per unit of u and of near. The rise fades to nothing at the foot, so the near grass is calm.
+ * the y mapping (a crest lifts farther ground into the row than the flat plane would show, a hollow nearer), with
+ * its slopes across the frame and down it, per unit of u and of near. The rise fades to nothing at the foot, so the
+ * near grass is calm. The ground plane the things stand on stays flat: the swell is shading and texture, not height
+ * (a height field the drawers could ask belongs with placement).
  */
 export function hillAt(u, near, band, out) {
-  const e = 0.01, v = near * 2 + 0.3, amp = band * HILL.rise * (1 - near);
+  const e = 0.01, v = near * HILL.down + 0.3, amp = band * HILL.rise * (1 - near);
   const h0 = fbm(u * HILL.across, v, HILL.key, 3);
   out[0] = h0;
   out[1] = (fbm((u + e) * HILL.across, v, HILL.key, 3) - h0) / e; // rising to the right when positive
-  out[2] = (fbm(u * HILL.across, v + e * 2, HILL.key, 3) - h0) / (e * 2); // rising toward the viewer when positive
+  // rising toward the viewer when positive, per unit of near
+  out[2] = (fbm(u * HILL.across, v + e * HILL.down, HILL.key, 3) - h0) / e;
   out[3] = (h0 - 0.5) * amp;
   return out;
 }
@@ -731,28 +878,25 @@ const TUFTTONE = [0.55, 0.72, 0.55], REL = [0, 0, 0, 0], FL = [0, 0, 0];
 
 /** Grass, sand, snow or pavement from noise, with its relief, its sheen when wet, and the road where there is one. */
 function landPixel(ctx, row, x, xm, c) {
-  const { W, H, hy, scene, sun, getSky, lit, litGround } = ctx;
-  const { y, near, here, wet, landTint } = row;
+  const { scene, getSky, lit, litGround } = ctx;
+  const { y, near, here, wet, landTint } = row, relief = row.grid ? row.relief : 0;
   let { zm } = row, shade = 1;
-  if (row.hills && row.relief > 0) { // named hills: the y mapping displaced by the swell, lit by its slopes
-    hillAt(x / W, near, H - hy, REL);
-    const zd = ctx.groundZ(y + 0.5 + REL[3]); // the depth this pixel shows, up a crest or down a hollow
+  if (row.hills && relief > 0) { // named hills: the y mapping displaced by the swell, shaded by its slopes (landRow)
+    reliefAt(row, x);
+    const zd = ctx.groundZ(y + 0.5 - REL[2]); // the depth this pixel shows: a crest lifts farther ground into it
     if (zd < FAR_GROUND && zd > 0) {
       xm *= zd / zm;
       zm = zd;
     }
-    // a flank rising toward the sun's side is lit, one rising toward the viewer faces away from a sun in front
-    const facing = REL[1] * (sun.left ? 0.3 : -0.3) - REL[2] * 0.15 * sun.dir[2];
-    shade = (1 + 0.35 * clamp(facing, -1, 1) * row.relief) * (0.86 + 0.28 * REL[0]); // crests drier and paler
+    shade = REL[1];
   }
   const n = fbm(xm * 0.3, zm * 0.3, 41, 4);
   const blades = here === 'grass' ? (h2(x, y, 3) - 0.5) * 0.25 * row.bladeK : 0;
   let tone = 0.82 + (n * 0.36 - 0.18) * row.grain + 0.18 + blades;
-  if (here === 'sand' && row.relief > 0) { // dunes: a lit crest, a shadowed lee, fine ripples near the foot
-    duneAt(xm, zm, REL);
-    shade *= reliefShade(sun.dir, REL[1], REL[2], 0.4, row.relief) * (0.88 + 0.24 * REL[0]);
-    const rip = smooth(0.5, 0.7, near) * row.grain;
-    if (rip > 0) tone += (fbm(xm * 0.35 + zm * 0.08, zm * 5, 44, 2) - 0.5) * 0.14 * rip;
+  if (here === 'sand' && relief > 0) { // dunes: a lit crest, a shadowed lee (landRow), fine ripples near the foot
+    reliefAt(row, x);
+    shade *= REL[1];
+    tone += REL[2];
   }
   tone *= shade;
   c[0] = landTint[0] * tone;
@@ -779,7 +923,7 @@ function landPixel(ctx, row, x, xm, c) {
     }
   }
   if (wet && here !== 'snow') mix(c, getSky(x, row.skyY, SKY), here === 'pavement' ? 0.25 : 0.15, c); // the sheen
-  if (scene.road) road(ctx, row, x, n, shade, c);
+  if (scene.road) road(ctx, row, x, n, row.grid ? 1 - (1 - shade) * 0.5 : shade, c); // a road is graded flatter
 }
 
 /**
@@ -826,7 +970,7 @@ function road(ctx, row, x, n, shade, c) {
  */
 export const FLOWERS = {
   id: 'flowers', match: /^(flowers?|wildflowers?|blossoms?|daisies|daisy|poppies|poppy|tulips?|buttercups?)$/,
-  usual: 1, depth: [6, 30], size: { w: 0.8, h: 0.4 },
+  usual: 1, band: [0.5, 0.92], size: { w: 0.8, h: 0.4 }, // a land band: the near grass, past any shore
   draw(ctx, inst) {
     const { W, disc, litGround } = ctx, s = ctx.camera.focal / inst.zm, x0 = inst.ux * W, fy = inst.fy;
     const r = Math.max(1, 0.06 * s), col = [0, 0, 0];
@@ -969,11 +1113,18 @@ export const RAIN_LAYERS = [
 export const SNOW_LAYERS = [
   { share: 0.5, r: 0.6, alpha: 0.35 }, { share: 0.3, r: 1.1, alpha: 0.5 }, { share: 0.2, r: 2.2, alpha: 0.65 },
 ];
-const FOG_PER_THING = 1.2; // how much the fog thickens the air's fade on a sprite, per unit of scene.fog
+// How much the fog thickens the air's fade on a sprite, per unit of scene.fog. The air (ctx.air) already thickens
+// with the fog (haze 0.55 + 0.6 fog), so this is the part over that; at 1.2 the header's foggy cabin was a white
+// cutout (its pines too): 0.25 and the band at half over the things keep its walls and roof (image-ground tests).
+const FOG_PER_THING = 0.25;
+const BAND_ON_THINGS = 0.5; // the fog band's share over a thing's own pixels: the rest it carries by its depth
 const WET_DARK = 0.12; // how much wet darkens everything below the horizon
 const RIM = 3; // the snow rim on a flat top edge, in px at 720 rows (2 px at 540, 4-5 at 1080)
 
-/** Before the things: the fog's thickness on every sprite, and the two far layers of rain or snow. */
+/**
+ * Before the things: the fog's thickness on every sprite, the two far layers of rain or snow, and (in fog) the frame
+ * as it stands before the things, so the fog band can tell their pixels apart (ctx.fogPlate).
+ */
 export function weatherFarPass(ctx) {
   const { scene } = ctx;
   ctx.fogK = 1 + scene.fog * FOG_PER_THING;
@@ -981,16 +1132,25 @@ export function weatherFarPass(ctx) {
     if (scene.rain > 0) rain(ctx, k);
     if (scene.snow > 0) snow(ctx, k);
   }
+  ctx.fogPlate = scene.fog > 0 ? Float32Array.from(ctx.data) : null;
 }
 
 /** Over everything: wet's darkening, settled snow on the tops, the fog's band, the near rain and snow. */
 export function weatherPass(ctx) {
   const { scene } = ctx;
+  const own = scene.fog > 0 && ctx.fogPlate ? thingPixels(ctx) : null; // before wet() moves every ground pixel
   if ((scene.wet || scene.rain > 0.3) && scene.land !== 'snow') wet(ctx);
   if (scene.land === 'snow') settle(ctx);
-  if (scene.fog > 0) fog(ctx);
+  if (scene.fog > 0) fog(ctx, own);
   if (scene.rain > 0) rain(ctx, 2);
   if (scene.snow > 0) snow(ctx, 2);
+}
+
+/** The pixels the things (and their mirrors) put, 1 where the frame differs from ctx.fogPlate. */
+function thingPixels(ctx) {
+  const { W, H, data, fogPlate } = ctx, own = new Uint8Array(W * H);
+  for (let p = 0, i = 0; p < W * H; p++, i += 3) if (differs(data, fogPlate, i)) own[p] = 1;
+  return own;
 }
 
 /** Wet darkens every surface below the horizon, eased in over a tenth of the height so nothing shows a seam. */
@@ -1032,13 +1192,21 @@ function settle(ctx) {
   });
 }
 
-function fog(ctx) {
+/**
+ * The fog band over the whole, thickest about the horizon. Over a thing's own pixels (`own`, from the plate taken
+ * before the things) it is BAND_ON_THINGS of itself: the thing already carries fog by its depth through ctx.fogK
+ * (ctx.sprite), so the band replaces rather than stacks, and the header's foggy cabin keeps its walls and roof.
+ */
+function fog(ctx, own) {
   const { W, H, hy, L, gloom, scene, put } = ctx;
   const bank = mix(L.horizon, [0.8, 0.8, 0.82], 0.5).map((v) => v * gloom), fogginess = scene.fog;
   for (let y = 0; y < H; y++) {
     const near = y > hy ? (y - hy) / (H - hy) : 0, band = Math.exp(-(((y - hy) / (H * 0.25)) ** 2));
     const thick = fogginess * (0.25 + band * 0.6 - near * 0.3);
-    for (let x = 0; x < W; x++) put(x, y, bank, clamp(thick + fbm(x / 150, y / 80, 61, 3) * fogginess * 0.25));
+    for (let x = 0; x < W; x++) {
+      const a = clamp(thick + fbm(x / 150, y / 80, 61, 3) * fogginess * 0.25);
+      put(x, y, bank, own && own[y * W + x] ? a * BAND_ON_THINGS : a);
+    }
   }
 }
 

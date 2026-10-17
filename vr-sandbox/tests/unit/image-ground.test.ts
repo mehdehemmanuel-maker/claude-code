@@ -9,6 +9,15 @@ import type { Ctx, Image, Scene } from '../../tools/image.mjs';
 import { families, paint, png, read, register } from '../../tools/image.mjs';
 import { RAIN_LAYERS, SNOW_LAYERS, duneAt, hillAt, reliefShade, roadDrift } from '../../tools/image/passes.mjs';
 
+/** FNV-1a over a string, as math.mjs's hash() (not typed for a direct import). */
+const hash = (str: string) => {
+  let h = 2166136261;
+  for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return h >>> 0;
+};
+/** The four header prompts' layout digests on the base, 90c157f (see 'keeps the four header compositions'). */
+const HEADER_LAYOUTS = [4066208242, 1804882092, 1348838543, 2106598091];
+
 const W = 640, H = 360;
 const lum = (d: Float32Array, i: number) => 0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!;
 const landscape = () => families.find((f) => f.id === 'landscape')!;
@@ -94,11 +103,13 @@ describe('the ground', () => {
     expect(stray).toBe(0);
   });
 
-  it('undulates the foreground when hills are named: the swell is a displacement across the frame, not a band', () => {
-    const o = [0, 0, 0, 0], rises: number[] = [];
-    for (let u = 0; u <= 1; u += 0.02) rises.push(hillAt(u, 0.4, 200, o)[3]!); // along one row, mid-ground
-    const spread = Math.max(...rises) - Math.min(...rises);
-    expect(spread).toBeGreaterThan(8); // rows of rise and fall along the row: a swell, not a constant
+  it('undulates the foreground when hills are named: long swells down the frame, wandering across it', () => {
+    const o = [0, 0, 0, 0], down: number[] = [], along: number[] = [];
+    for (let near = 0.05; near <= 0.6; near += 0.01) down.push(hillAt(0.3, near, 200, o)[3]!); // down one column
+    for (let u = 0; u <= 1; u += 0.02) along.push(hillAt(u, 0.4, 200, o)[3]!); // along one row, mid-ground
+    const spread = (a: number[]) => Math.max(...a) - Math.min(...a);
+    expect(spread(down)).toBeGreaterThan(4); // rows of rise and fall down the frame (measured 5.7): swells
+    expect(spread(along)).toBeGreaterThan(1); // a swell is not a straight band across: it wanders
     expect(Math.abs(hillAt(0.3, 1, 200, o)[3]!)).toBeLessThan(1e-9); // calm at the foot
     // In the picture: the ground's low-frequency luminance (blurred, each row's mean removed) varies more across the
     // frame with hills named than on the flat meadow (measured 0.035 against 0.010 at 960x540).
@@ -280,11 +291,85 @@ describe('the weather', () => {
 
   it('thickens the fog on every thing by its depth through ctx.fogK, and never past the frame', () => {
     const { ctx } = painted(read('a cabin in a foggy forest at dawn'));
-    expect(ctx.fogK).toBeCloseTo(1 + 0.6 * 1.2, 6);
+    expect(ctx.fogK).toBeCloseTo(1 + 0.6 * 0.25, 6);
     expect(painted(read('a cabin in a forest at dawn')).ctx.fogK).toBe(1);
   });
 
-  it('keeps the header compositions, the same bytes twice, and 960x540 under 1.5 s', () => {
+  it('fogs the header\'s cabin no more than the band alone did: its walls and roof still read', () => {
+    // The per-thing fog replaces the band over a thing's pixels (fog() at BAND_ON_THINGS). On the base (90c157f), at
+    // 960x540 seed 7, the house box's luminance sd is 0.0307 and its wall is 0.0315 darker than the ground beside it;
+    // stacked (fogK 1.72 over the full band) the house was a white cutout. Measured now: 0.0329 and 0.0319.
+    const img = paint(read('a cabin in a foggy forest at dawn, birds'), { width: 960, height: 540, seed: 7 });
+    const t = img.layout.things.find((o) => o.kind === 'house')!, box: number[] = [], wall: number[] = [];
+    const beside: number[] = [], y0 = Math.ceil(t.y + t.h * 0.45), y1 = Math.floor(t.y + t.h) - 1;
+    const at = (x: number, y: number) => lum(img.data, (y * 960 + x) * 3);
+    for (let y = Math.ceil(t.y); y <= y1; y++) for (let x = Math.ceil(t.x); x < t.x + t.w; x++) box.push(at(x, y));
+    for (let y = y0; y <= y1; y++) {
+      for (let x = Math.ceil(t.x + t.w * 0.2); x < t.x + t.w * 0.8; x++) wall.push(at(x, y));
+      for (const [a, b] of [[t.x - 0.3 * t.w, t.x - 0.05 * t.w], [t.x + 1.05 * t.w, t.x + 1.3 * t.w]]) {
+        for (let x = Math.max(0, Math.ceil(a!)); x < Math.min(960, b!); x++) beside.push(at(x, y));
+      }
+    }
+    const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+    const sd = Math.sqrt(mean(box.map((v) => (v - mean(box)) ** 2)));
+    expect(sd, 'the box\'s own contrast').toBeGreaterThan(0.9 * 0.0307);
+    expect(Math.abs(mean(wall) - mean(beside)), 'the wall against the ground').toBeGreaterThan(0.8 * 0.0315);
+  });
+
+  it('shows a crest at noon: the strongest 30 px span per mid-ground row exceeds 0.08 (base 0.017, now 0.097)', () => {
+    // The dunes' form shading (duneForm) is independent of the sun's height: the lee flank is darkened by its slope.
+    // Measured on a 5 px box blur of the luminance, rows 0.3-0.6 of the ground band, 960x540 seed 7.
+    const img = paint(read('a cactus in the desert at noon'), { width: 960, height: 540, seed: 7 });
+    const Wd = 960, Hd = 540, hy = img.layout.horizon * Hd, band = Hd - hy, L = new Float32Array(Wd * Hd);
+    for (let i = 0; i < Wd * Hd; i++) L[i] = lum(img.data, i * 3);
+    const blur = (x: number, y: number) => {
+      let s = 0, n = 0;
+      for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx >= 0 && xx < Wd && yy >= 0 && yy < Hd) {
+          s += L[yy * Wd + xx]!;
+          n++;
+        }
+      }
+      return s / n;
+    };
+    const rows: number[] = [];
+    for (let y = Math.round(hy + 0.3 * band); y < hy + 0.6 * band; y += 6) {
+      const f: number[] = [];
+      for (let x = 0; x < Wd; x += 2) f.push(blur(x, y));
+      let best = 0;
+      for (let k = 0; k + 15 <= f.length; k += 5) {
+        const win = f.slice(k, k + 15);
+        best = Math.max(best, Math.max(...win) - Math.min(...win));
+      }
+      rows.push(best);
+    }
+    rows.sort((a, b) => a - b);
+    expect(rows[rows.length >> 1]!, 'the median row\'s crest').toBeGreaterThan(0.08);
+  });
+
+  it('keeps the four header compositions as the base (90c157f) laid them out, at 960x540 with no seed', () => {
+    // A digest of each prompt's layout (horizon, sun and every thing's box as shares, 3 decimals): the FNV hash of
+    // its JSON. The ground, the weather and the water change no random draw before the things are placed, so the
+    // layouts are the base's to the pixel. When placement changes on purpose, print the JSON and update the digests.
+    const digests: Record<string, number> = {
+      'a red go-kart on a wet road at dusk, mountains behind': HEADER_LAYOUTS[0]!,
+      'three pine trees by a lake under a full moon, snow': HEADER_LAYOUTS[1]!,
+      'a city skyline at night in the rain': HEADER_LAYOUTS[2]!,
+      'a cabin in a foggy forest at dawn': HEADER_LAYOUTS[3]!,
+    };
+    for (const [p, want] of Object.entries(digests)) {
+      const L = paint(read(p), { width: 960, height: 540 }).layout;
+      const json = JSON.stringify({
+        horizon: +L.horizon.toFixed(4), sun: L.sun.map((v) => +v.toFixed(4)), shore: L.shore,
+        things: L.things.map((t) => [t.kind, +(t.x / 960).toFixed(3), +(t.y / 540).toFixed(3), +(t.w / 960).toFixed(3),
+          +(t.h / 540).toFixed(3)]),
+      });
+      expect(hash(json), `${p}: ${json}`).toBe(want);
+    }
+  });
+
+  it('paints the same bytes twice, keeps the things where they stood without the snow, and 960x540 under 1.5 s', () => {
     for (const p of ['a storm over the desert', 'a car in the snow', 'a city at night in the rain', 'rolling hills']) {
       const a = png(paint(read(p), { width: 160, height: 90 })), b = png(paint(read(p), { width: 160, height: 90 }));
       expect(a.equals(b), p).toBe(true);
