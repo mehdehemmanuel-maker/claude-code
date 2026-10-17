@@ -3,7 +3,9 @@
 // the weather, the ground, what stands on it and how many), the scene is painted pixel by pixel (sky, sun or moon and
 // stars, clouds, ranges of mountains fading into the air, water with a reflection, grass, sand, snow, a road, trees,
 // houses, buildings, a car, a boat, birds, rain, snow, fog, grain), and the pixels are written as a PNG by this file's
-// own encoder. Node 18+, nothing to install; usable from a shell or imported (`paint`, `read`, `png`, `generate`).
+// own encoder. Things stand in metres through a camera 1.6 m up (a 4.5 m car on a two-lane road, a 6 m cabin, a 15-25 m
+// pine), with anti-aliased edges and a shadow thrown by the sun or the moon at the hour's height.
+// Node 18+, nothing to install; usable from a shell or imported (`paint`, `read`, `png`, `generate`).
 // This file is the shell and the PNG encoder; the painting is tools/image/ (math, read, core, passes, things), which
 // has nothing of Node in it, so the same core paints in a browser (`toImageData`); core.mjs says what each file owns.
 //
