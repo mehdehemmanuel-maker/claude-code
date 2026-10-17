@@ -70,6 +70,7 @@ const SUBJECTS = 3; // an asked-for count up to this is placed as subjects, one 
 const TRIES = 20; // candidate positions tried before the first free gap in the depth band is taken
 const OVERLAP = 0.4; // the most of the smaller footprint another may cover, in world space
 const HIDE = 0.25; // the most of a subject's box a nearer thing may cover
+const HIDE_EXTRA = 0.6; // the most of an extra's or a crowd's box: the usual forest is not wasted behind the cabin
 const EDGE = 0.02; // a thing's box keeps this share of the width clear of the frame's sides
 const SHORE_MARGIN = 0.02; // a thing stands this share of the ground band off the waterline
 const READ = { asked: 0.12, extra: 0.05 }; // the least height a thing is placed at, as a share of the frame
@@ -185,8 +186,9 @@ const isSubject = (want) => want.asked && want.count <= SUBJECTS && !want.entry.
  * footprint and the box it will be drawn in. `gap` is a fixed (u, ux) from the free-gap scan.
  */
 function candidate(ctx, want, i, span, placed, gap = null) {
-  const { W, H, hy, scene, rand } = ctx, { entry, size } = want, [uMin, uMax] = span, subject = isSubject(want);
+  const { H, hy, scene, rand } = ctx, { entry, size } = want, [uMin, uMax] = span, subject = isSubject(want);
   const onRoad = entry.onRoad && scene.road, skyline = entry.id === 'building' && !want.asked;
+  const stagger = subject && !onRoad && want.count > 1 ? (i / (want.count - 1) - 0.5) * STAGGER : 0;
   let u, ux;
   if (gap) [u, ux] = gap;
   else {
@@ -198,26 +200,36 @@ function candidate(ctx, want, i, span, placed, gap = null) {
     } else if (skyline) ux = EDGE + (i + rand()) / want.count * (1 - 2 * EDGE); // a row along the horizon
     else ux = window[0] + rand() * (window[1] - window[0]);
     if (subject && !onRoad) { // a counted few are staggered in depth, so three pines are not one row
-      const stagger = want.count > 1 ? (i / (want.count - 1) - 0.5) * STAGGER : 0;
       u = clamp(SUBJECT_DEPTH[0] + rand() * (SUBJECT_DEPTH[1] - SUBJECT_DEPTH[0]) + stagger, uMin, uMax);
     } else u = uMin + rand() * (uMax - uMin); // a vehicle anywhere along the road, so two never share a row
   }
-  const fy = hy + (H - hy) * u, zm = ctx.groundZ(fy), s = ctx.camera.focal / zm;
-  let heading = 'side';
-  if (onRoad) heading = rand() < TOWARD ? 'toward' : 'away';
+  const heading = onRoad ? (rand() < TOWARD ? 'toward' : 'away') : 'side';
   const fp = footprintOf(entry, size, heading), sz = entry.size ?? { w: 1, h: 1 }; // the box is its width as it faces
-  const wPx = fp.w * s, hPx = sz.h * size * s, room = (1 - 2 * EDGE) / 2 - wPx / (2 * W) - 1e-3;
-  if (!onRoad && room >= 0) ux = clamp(ux, 0.5 - room, 0.5 + room); // a huge thing leaves its third for the middle
-  let xm = ctx.groundX(ux * W, fy);
-  if (onRoad) { // on the road: the first in the near lane going away up it, the next in the far lane, and so on
-    const lane = placed.filter((p) => p.entry.onRoad && p.heading !== 'side').length % 2 === 0 ? 1 : -1;
-    xm = roadCentre(ctx, fy) + lane * SIZES.lane / 2;
+  const lane = placed.filter((p) => p.entry.onRoad && p.heading !== 'side').length % 2 === 0 ? 1 : -1;
+  const c = { want, entry, ux, heading, fp, hm: sz.h * size, lane: onRoad ? lane : null };
+  stand(ctx, c, u);
+  ashore(ctx, c); // hook for water-reflections: dry feet on the wandering shore, judged before refusal() looks
+  // the shore's push stands every pine on one row: the stagger is given again past it, nearer only
+  if (c.u > u + 1e-9 && stagger) stand(ctx, c, Math.min(uMax, c.u + stagger + STAGGER / 2));
+  return c;
+}
+
+/**
+ * Stands a candidate at ground share u: its foot row, its depth, its metres off the axis (a vehicle in its lane of
+ * the road at that row, anything else under its column, a thing wider than its third pulled to the middle so it
+ * is whole) and the box it will be drawn in.
+ */
+function stand(ctx, c, u) {
+  const { W, H, hy } = ctx, fy = hy + (H - hy) * u, zm = ctx.groundZ(fy), s = ctx.camera.focal / zm;
+  const wPx = c.fp.w * s, hPx = c.hm * s, room = (1 - 2 * EDGE) / 2 - wPx / (2 * W) - 1e-3;
+  let xm;
+  if (c.lane !== null) xm = roadCentre(ctx, fy) + c.lane * SIZES.lane / 2; // on the road, in its lane
+  else {
+    if (room >= 0) c.ux = clamp(c.ux, 0.5 - room, 0.5 + room); // a huge thing leaves its third for the middle
+    xm = ctx.groundX(c.ux * W, fy);
   }
   const x0 = ctx.project(xm, zm).x;
-  const box = { x: x0 - wPx / 2, y: fy - hPx, w: wPx, h: hPx };
-  const c = { want, entry, u, ux: x0 / W, fy, zm, xm, heading, fp, box };
-  ashore(ctx, c); // hook for water-reflections: dry feet on the wandering shore, judged before refusal() looks
-  return c;
+  Object.assign(c, { u, fy, zm, xm, ux: x0 / W, box: { x: x0 - wPx / 2, y: fy - hPx, w: wPx, h: hPx } });
 }
 
 /** Whether a box covers the sun's or the moon's disc (the shares in layout), when one is drawn in the sky. */
@@ -235,13 +247,15 @@ function eclipses(ctx, box) {
 /**
  * Why a candidate is refused, or null when it may stand: cropped by the frame's side (a subject stays whole, an
  * extra keeps most of itself in), in front of the sun or the moon, in the road's corridor, over another footprint,
- * hiding a subject behind it, stacked on another vehicle, or hidden behind what is nearer (always for a thing the
- * words asked for, so a boat is never stood behind a pine; for an extra on the critic's retry). `lax` lets it
- * stand before the sun: the last resort of a thing too big to stand anywhere else (a huge cabin).
+ * hiding a subject behind it, stacked on another vehicle, or hidden behind what is nearer: by more than HIDE of
+ * its box for a subject (a boat is never stood behind a pine) or on the critic's retry, by more than HIDE_EXTRA for
+ * an extra or one of a counted crowd (the usual forest is not wasted behind the cabin; forty trees may overlap as
+ * a wood does). `lax` lets it stand before the sun: the last resort of a thing too big to stand anywhere else (a
+ * huge cabin).
  */
 function refusal(ctx, c, placed, retry = false, lax = false) {
   const { W, scene } = ctx, { entry, xm, zm, fp, box } = c, keep = isSubject(c.want) ? 1 - 1e-6 : 0.6;
-  const shown = retry || c.want.asked;
+  const hide = isSubject(c.want) || retry ? HIDE : HIDE_EXTRA; // a subject shows whole; a crowd or an extra mostly
   if (Math.min(box.x + box.w, W * (1 - EDGE)) - Math.max(box.x, W * EDGE) < keep * box.w) return 'cropped';
   if (!lax && eclipses(ctx, box)) return 'eclipses';
   if (scene.road && !entry.onRoad && Math.abs(xm - roadCentre(ctx, c.fy)) - fp.w / 2 < CORRIDOR) return 'road';
@@ -253,7 +267,7 @@ function refusal(ctx, c, placed, retry = false, lax = false) {
     const over = shared(box, p.box);
     if (p.entry.onRoad && entry.onRoad && over > STACK * Math.min(box.w * box.h, p.box.w * p.box.h)) return 'stacked';
     if (isSubject(p.want) && zm < p.zm && over / (p.box.w * p.box.h) > HIDE) return 'hides';
-    if (shown && p.zm < zm && over / (box.w * box.h) > HIDE) return 'hidden';
+    if (p.zm < zm && over / (box.w * box.h) > hide) return 'hidden';
   }
   return null;
 }
@@ -326,13 +340,7 @@ function ashore(ctx, p) {
     }
     const foot = deepest + (H - hy) * SHORE.margin;
     if (deepest >= H || p.fy >= foot) return;
-    p.fy = foot;
-    p.zm = ctx.groundZ(foot);
-    p.u = (foot - hy) / (H - hy);
-    if (entry.onRoad && scene.road) p.ux = ctx.project(p.xm, p.zm).x / W; // a vehicle keeps its lane
-    else p.xm = ctx.groundX(p.ux * W, foot);
-    const s = ctx.camera.focal / p.zm, hPx = size.h * (p.want.size ?? 1) * s;
-    p.box = { x: p.ux * W - p.fp.w * s / 2, y: foot - hPx, w: p.fp.w * s, h: hPx };
+    stand(ctx, p, (foot - hy) / (H - hy));
   }
 }
 
