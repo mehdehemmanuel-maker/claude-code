@@ -163,6 +163,7 @@ export function report(scene) {
   if (scene.style) bits.push(`style ${scene.style}`);
   if (scene.text) bits.push(`text "${scene.text}"`);
   const lines = [`read as: ${bits.join(', ')}`];
+  for (const n of scene.notes ?? []) lines.push(`note: ${n}`); // hook for scene-families: what a family says of itself
   const ignored = scene.ignored.join(', ');
   if (scene.ignored.length) lines.push(`not understood: ${ignored}`);
   if (scene.recognised === 0) {

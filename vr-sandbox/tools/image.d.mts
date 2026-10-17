@@ -367,3 +367,44 @@ export declare function thingFor(token: string): ThingEntry | undefined;
 export declare function thingByKey(key: string): ThingEntry | undefined;
 export declare function familyFor(token: string): FamilyEntry | undefined;
 export declare function styleNamed(token: string): StyleEntry | undefined;
+
+// ── scene-families (tools/image/families/{space,abstract,portrait,underwater,phenomena}.mjs and
+// tools/image/things/landforms.mjs, installed by core.mjs's hook) ──
+// The interfaces below merge into the ones above. A family beyond the landscape sets Layout.horizon to null (typed
+// number above: a family picture has none) and Layout.family to its id; the shell prints Scene.notes after the
+// 'read as' line. The families are found before the landscape (core.mjs moves it to the end of `families`).
+export interface Scene {
+  notes?: string[]; // what a family says of itself, for the shell: 'a stylised face, not a likeness of anyone'
+  space?: {
+    body: 'mars' | 'venus' | 'jupiter' | 'saturn' | 'earth' | 'moon' | 'planet' | null; orbit: boolean;
+    nebula: boolean; galaxy: boolean; asteroids: boolean; moons: boolean;
+  };
+  abstract?: { kinds: string[]; dropped: string[] }; // kinds: disc, tri, rect, stripes, gradient, mandala, mondrian…
+  portrait?: { words: string[]; dropped: string[] };
+  underwater?: { fish: number | null; diver: boolean; dropped: string[] };
+  erupting?: boolean; // the volcano's lava, from 'erupting'
+}
+export interface Layout {
+  family?: string;
+  planet?: { cx: number; cy: number; r: number; body: string; orbit: boolean; rings?: { tilt: number } | null } | null;
+  moons?: number; // small moons drawn about the body ('moons')
+  mandala?: { n: number; cx: number; cy: number; r: number }; // n-fold symmetry, 6..12
+  face?: { cx: number; cy: number; w: number; h: number; hair: string; style: string; hairColour: number[] };
+  seabed?: number; // share of the height
+  fish?: Array<{ x: number; y: number; len: number }>;
+  bubbles?: number; // columns
+  corals?: number;
+  palms?: number; // palms drawn (by the palm thing or a trees mention that said palm)
+}
+export interface Ctx {
+  /** The boxes phenomenaPass painted (rainbow, aurora, lightning), handed to the layout by the things' draw(). */
+  phenomena?: Record<string, Omit<ThingBox, 'kind'>>;
+}
+export interface ThingEntry { palmAware?: boolean } // the tree drawer wrapped by landforms.mjs
+/** Sizes in metres for the landforms, each typical for the kind (landforms.mjs's LANDFORMS). */
+export interface Landforms {
+  cactus: { h: [number, number]; d: number; arms: [number, number]; armOut: number; armUp: [number, number] };
+  palm: { h: [number, number]; d: number; fronds: [number, number]; frond: [number, number]; nut: number };
+  volcano: { h: number; base: number; crater: number; depth: [number, number] };
+  waterfall: { h: number; w: number; column: number; depth: [number, number] };
+}

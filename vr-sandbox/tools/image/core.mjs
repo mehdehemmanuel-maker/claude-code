@@ -57,6 +57,24 @@ register('families', {
   // water still reflects the clouded sky without the disc (cloudPass paints into the snapshot celestialPass takes).
   passes: [skyPass, celestialPass, cloudPass, landBehindPass, groundPass, thingsPass, weatherPass, finishPass],
 });
+// hook for scene-families: the families beyond the landscape (space, abstract, portrait, underwater), the landforms
+// (cactus, palm, volcano, waterfall) and the sky's phenomena (rainbow, aurora, lightning) register after the six
+// built-ins, so those keep their places; the landscape, whose detect() answers every scene, is moved to the end so
+// a family a word claimed is found first; the phenomena pass goes in right after cloudPass. Each install() is in
+// its own file under tools/image/families/ and tools/image/things/.
+import { installAbstract } from './families/abstract.mjs';
+import { installSpace } from './families/space.mjs';
+import { installPortrait } from './families/portrait.mjs';
+import { installUnderwater } from './families/underwater.mjs';
+import { installPhenomena, phenomenaPass } from './families/phenomena.mjs';
+import { installLandforms } from './things/landforms.mjs';
+for (const install of [installAbstract, installSpace, installPortrait, installUnderwater, installPhenomena]) install();
+installLandforms();
+{
+  const at = families.findIndex((f) => f.id === 'landscape'), [landscape] = families.splice(at, 1);
+  families.push(landscape);
+  landscape.passes.splice(landscape.passes.indexOf(cloudPass) + 1, 0, phenomenaPass);
+}
 
 // ── Painting ───────────────────────
 
