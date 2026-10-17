@@ -11,7 +11,7 @@ import { clamp, hash, lerp, mix, rng } from './math.mjs';
 import { COLOURS, words } from './read.mjs';
 import { celestialPass, cloudPass, finishPass, groundPass, landBehindPass, skyPass, weatherPass } from './passes.mjs';
 import { drawers, thingsPass } from './things.mjs';
-import { attach } from './draw.mjs';
+import { attach, frameCamera } from './draw.mjs';
 import { styleFor } from './styles.mjs';
 import { families, register, styles, things } from './registry.mjs';
 
@@ -23,8 +23,9 @@ export {
 // The painter's primitives, camera and sizes, for an importer that draws its own things (tools/image.d.mts types them).
 export {
   SIZES, ELEVATION, elevationAt, camera, sunlight, shadowLength, shadowPoints, hull, canvas, disc, ellipse, poly, quad,
-  tri, rect, line,
+  tri, rect, line, FIT, NEAR_SHARE, frameCamera,
 } from './draw.mjs';
+export { critic, place } from './things.mjs';
 
 // ── The palette by time of day ─────
 
@@ -87,6 +88,10 @@ export function paint(scene, { width = 1280, height = 720, seed, style, text } =
     style: styleId,
     text, // a caption from paint's options; scene.text (the reader's) wins over it
     things, styles,
+    // hook for placement-critic: the eye height that frames the subject (attach() builds ctx.camera from it) and
+    // the owner-id buffer every sprite writes where it paints solidly, so the critic can count what is visible
+    framing: frameCamera(scene, scene.instances, { W, H, horizon }),
+    owner: new Int32Array(W * H).fill(-1),
   };
   tools(ctx);
   attach(ctx); // the primitives, the camera in metres, the sun's direction, shadow() and sprite()

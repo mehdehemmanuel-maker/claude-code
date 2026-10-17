@@ -243,7 +243,7 @@ export interface Sizes {
 export declare const SIZES: Sizes;
 export declare const ELEVATION: { dawn: number; day: [number, number]; sunset: number; night: number };
 export declare function elevationAt(hour: number, noon: number): number;
-export declare function camera(W: number, H: number, hy: number, equiv?: number): Camera;
+export declare function camera(W: number, H: number, hy: number, equiv?: number, eye?: number): Camera;
 export declare function sunlight(
   scene: Scene, sun: { x: number; y: number }, L: Light, cam: Camera, W: number, horizon: number,
 ): Pick<SunLight, 'az' | 'el' | 'dir' | 'visible' | 'moon'>;
@@ -299,7 +299,7 @@ export interface Ctx {
 export interface ThingInstance { zm?: number } // metres away; a drawer reads it before groundZ(fy)
 export interface ThingEntry {
   depth?: [number, number]; // how far away it may stand, in metres (nearest, farthest); band is used when absent
-  size?: { w: number; h: number }; // its typical width and height in metres, so the shore can judge whether it fits
+  size?: { w: number; h: number; d?: number }; // its width, height and depth in metres (d: placement-critic)
 }
 
 // ── sky-light ──────────────────────
@@ -363,3 +363,79 @@ export declare function thingFor(token: string): ThingEntry | undefined;
 export declare function thingByKey(key: string): ThingEntry | undefined;
 export declare function familyFor(token: string): FamilyEntry | undefined;
 export declare function styleNamed(token: string): StyleEntry | undefined;
+
+// ── placement-critic: things.mjs place() and critic(), draw.mjs frameCamera() (merged into the above, not retyped)
+// The instance every drawer is handed carries the shared fields: colour ([r, g, b] in 0..1, or undefined when the
+// words gave none), size (a factor: tiny 0.5, huge 2), heading ('away' for a vehicle on a road seen from behind),
+// xm/zm (metres right of the lens axis and away) and instance (the reader's record). camera() takes the eye
+// frameCamera chose (declared above); ThingEntry.size gained d (above).
+export type Heading = 'away' | 'toward' | 'side';
+export interface ThingInstance {
+  colour?: number[];
+  size?: number;
+  heading?: Heading;
+  xm?: number;
+  instance?: Instance;
+}
+export interface ThingEntry { onRoad?: boolean } // stands on the road at a lane's centre, heading along it
+/** What frameCamera chose: the eye height in metres, the lens, the ground share the fit was made for, for what. */
+export interface Framing { eye: number; equiv: number; near: number; subject: string | null }
+export interface ThingBox {
+  xm?: number;
+  zm?: number;
+  heading?: Heading;
+  footprint?: Footprint; // metres on the ground, as it faces
+  crowded?: boolean; // placed over another after every try failed (a frame too small for what was asked)
+  visible?: boolean; // the critic saw it: pixels of its own, spanning at least 12 rows or columns at 720 rows
+  pixels?: number; // how many pixels are its own in the finished picture
+  replaced?: boolean; // the critic could not see it the first time and placed it again
+}
+export interface Layout { camera?: { eye: number; equiv: number; near: number | null } }
+export interface Scene { report?: { visible?: Record<string, [number, number]> } } // { trees: [seen, asked] }
+export interface Ctx {
+  framing?: Framing;
+  owner?: Int32Array; // per pixel, the id (index in layout.things) of the last thing painted solidly there, or -1
+  roadCentre?: (fy: number) => number; // metres right of the axis where the road's centre is at a row (optional)
+}
+/** How much of the frame the subject may take: its height of the rows, its width of the columns (by thing id). */
+export declare const FIT: { height: number; width: number; house: number; boat: number; [id: string]: number };
+/** Where the near subject stands, as a share of the ground band: mid-field, or the near shore of a water scene. */
+export declare const NEAR_SHARE: { land: number; water: number };
+/** The share of the columns one of n things of a kind may take: its kind's share over the square root of n. */
+export declare function fitWidth(id: string, n?: number): number;
+export declare function frameCamera(
+  scene: Scene, instances: Instance[] | undefined, opts?: { W?: number; H?: number; horizon?: number },
+): Framing;
+/** A want: one reader instance with a registered drawer, as place() takes it. */
+export interface Want {
+  entry: ThingEntry;
+  instance: Instance;
+  count: number;
+  size: number;
+  colour?: number[];
+  placement?: Instance['placement'];
+  asked: boolean; // by count or as a single thing, not the usual number
+}
+/** One placed copy: where it stands and the box it will be drawn in. */
+export interface Placed {
+  want: Want;
+  entry: ThingEntry;
+  u: number; // the ground share its foot is at
+  ux: number;
+  uy?: number;
+  fy: number;
+  zm: number;
+  xm: number;
+  heading: Heading;
+  fp: Footprint;
+  box: { x: number; y: number; w: number; h: number } | null;
+  farBank?: boolean;
+  crowded?: boolean;
+  replaced?: boolean;
+  seed?: number;
+  id?: number;
+}
+export declare function place(ctx: Ctx, want: Want, i: number, placed: Placed[], retry?: boolean): Placed | null;
+export declare function critic(
+  ctx: Ctx, placed: Placed[], list?: Want[],
+): { tally: Record<string, [number, number]>; again: Placed[] };
