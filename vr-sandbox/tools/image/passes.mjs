@@ -1,6 +1,6 @@
 // The passes, in the order the landscape family runs them: each paints one layer over the last, back to front, from
 // the shared ctx (see core.mjs). None allocates per pixel: the colour helpers write into scratch arrays.
-import { clamp, fbm, h2, lerp, mix, smooth } from './math.mjs';
+import { clamp, fbm, h2, lerp, mix, noise, smooth } from './math.mjs';
 import { SIZES } from './draw.mjs';
 import { shoreFor } from './things.mjs';
 import { words } from './read.mjs';
@@ -375,8 +375,12 @@ export function groundPass(ctx) {
     haze: 0, // how far this row is softened toward the sky at the horizon
     glitter: discVisible(ctx), // how much of the disc the water sees: none under a storm or behind a ridge
     waterColour: storm ? STORMWATER : GROUND.water, rippleK: storm ? 2.5 : 1,
-  };
+    ...landFields(ctx), // hook for ground-weather: the land's season tint, the road's drift, verge and ruts, the
+  }; // relief's strength, the tufts' density and the flowers (set per row by landRow)
+  ctx.roadX = (y) => W * (0.5 + roadDrift(ctx.foot(y))); // hook for ground-weather: the road's centre at a row
   const c = [0, 0, 0], focal = camera.focal, shoreLine = ctx.shoreLine, farLine = ctx.farLine;
+  // One horizon band for every ground pixel, water and land (the plan gave the land case to ground-weather; it is
+  // this one, so no second band is added): the first rows under the horizon soften toward the sky's colour there.
   const hazeK = Math.min(0.95, 0.35 + scene.fog + scene.clouds * 0.15 + (storm ? 0.45 : 0)), hazeW = 0.08 * H;
   for (let y = hy | 0; y < H; y++) {
     row.y = y;
@@ -391,6 +395,7 @@ export function groundPass(ctx) {
     row.dash = row.zm % SIZES.dash.period < SIZES.dash.on;
     row.bladeK = 0.3 + row.near;
     row.haze = y - hy < hazeW * 2.5 ? Math.exp(-(((y - hy) / hazeW) ** 2)) * hazeK : 0;
+    landRow(ctx, row); // hook for ground-weather: its per-row fields
     for (let x = 0; x < W; x++) {
       const xm = (x + 0.5 - W / 2) / row.ppm, shore = shoreLine[x]; // metres right of the lens axis
       row.water = water && y < shore && (!farLine || y >= farLine[x]);
@@ -593,41 +598,241 @@ function shoreEdge(ctx, row, x, shore, c) {
   }
 }
 
-const ASPHALT = [0.22, 0.22, 0.23], PAINT = [0.9, 0.85, 0.5], SKY = [0, 0, 0], ROAD = [0, 0, 0];
+// ── The land (ground-weather) ──────
+// What the ground plane is made of, pixel by pixel: the season's tint, dunes and ripples on sand, tufts and flowers
+// on grass, the swell of named hills, the wet sheen on every land but snow, and the road over it (asphalt or dirt,
+// drifting, with a verge). groundPass's row loop is water-reflections'; this section adds its fields to the row
+// through landFields() once and landRow() per row, and paints through landPixel().
 
-/** Grass, sand, snow or pavement from noise, and the road over it where there is one. */
+/** The land's colour by season: autumn's straw, spring's fresh green, summer's deep green; the rest as GROUND has. */
+export const SEASON = {
+  autumn: { land: [0.60, 0.52, 0.26], leaf: [[0.85, 0.45, 0.10], [0.62, 0.28, 0.10], [0.90, 0.65, 0.15]] },
+  spring: { land: [0.32, 0.56, 0.18], leaf: [[0.35, 0.62, 0.22], [0.55, 0.70, 0.25]] },
+  summer: { land: [0.26, 0.50, 0.14], leaf: [[0.16, 0.42, 0.12], [0.22, 0.48, 0.14]] },
+};
+const EVERGREEN = { autumn: [0.09, 0.28, 0.13], spring: [0.10, 0.34, 0.15], summer: [0.08, 0.30, 0.14] };
+
+/**
+ * The season's leaf colours for the tree drawer (core.mjs sets ctx.leaf from this): (pine, r) -> a colour, r in
+ * 0..1 picking one of the season's broadleaf tones (orange, rust or gold in autumn); a pine stays evergreen. Null
+ * when no season was named, so the drawer keeps its own PINE and BROADLEAF.
+ */
+export function seasonLeaf(scene) {
+  const s = SEASON[scene.season];
+  if (!s) return null;
+  return (pine, r) => (pine ? EVERGREEN[scene.season] : s.leaf[Math.min(s.leaf.length - 1, (r * s.leaf.length) | 0)]);
+}
+
+/** The land's colour in its season: grass turns to straw in autumn; sand, snow and pavement keep theirs. */
+export const seasonLand = (scene) => {
+  const land = scene.ground === 'water' ? scene.land : scene.ground;
+  return land === 'grass' && SEASON[scene.season] ? SEASON[scene.season].land : GROUND[land];
+};
+
+/** The road's centre drifts across the picture by its depth: a share of the width to add to 0.5. */
+export const roadDrift = (near) => (fbm(near * 1.5, 0.3, 51, 3) - 0.5) * 0.35 * (1 - clamp(near));
+
+const MEADOW = /^(meadows?|fields?)$/; // the words that bring flowers with them, besides the flowers thing
+const VERGE = 0.12; // the dusty verge outside each kerb, as a share of the road's width
+const RUT = { at: 1.65, half: 0.22 }; // a dirt road's wheel ruts: metres from the centre, half their width
+const TUFT_DENSITY = 0.028; // tufts per pixel of grass at the foot of the picture, before the clumps
+const DUNE = { cell: 16, tall: 4, key: 43 }; // dunes: the noise's lattice in metres, their height in metres
+const HILL = { across: 2.5, rise: 0.25, key: 47 }; // named hills: swells across the width, their rise as a share
+// of the ground band at the horizon
+
+/** The fields this section adds to the ground row: once per picture here, per row in landRow(). */
+export function landFields(ctx) {
+  const { scene } = ctx;
+  const named = words(scene.prompt ?? '');
+  return {
+    landTint: seasonLand(scene),
+    hills: scene.instances?.some((i) => i.kind === 'hills' && i.count > 0) ?? false,
+    flowers: 'flowers' in scene.things || named.some((w) => MEADOW.test(w)),
+    rc: 0, vergeHalf: 0, rutAt: 0, rutHalf: 0, relief: 0, tuft: 0, flowerCell: 1,
+  };
+}
+
+/** The per-row values: the road's centre, verge and ruts in pixels, the relief's strength, the tufts' density. */
+export function landRow(ctx, row) {
+  const { W, gloom, scale } = ctx, { near, ppm } = row;
+  row.rc = W * (0.5 + roadDrift(near));
+  row.vergeHalf = row.roadHalf * (1 + VERGE * 2);
+  row.rutAt = RUT.at * ppm;
+  row.rutHalf = RUT.half * ppm;
+  // Relief finer than a few pixels is noise, not shape; under a storm's gloom the shapes still read, a little softer.
+  row.relief = clamp(ppm * 4) * (0.6 + 0.4 * gloom);
+  row.tuft = smooth(0.35, 0.65, near) * TUFT_DENSITY;
+  row.flowerCell = Math.max(1, Math.round(2 * scale));
+}
+
+/**
+ * How a slope is lit: the ground's normal from its slopes (metres up per metre across and away) against the sun's
+ * direction, as a factor on the flat ground's light, 1 +- amp at most. Facing the sun brightens, the lee darkens.
+ */
+export function reliefShade(dir, hx, hz, amp, k = 1) {
+  const inv = 1 / Math.sqrt(1 + hx * hx + hz * hz);
+  const diffuse = (-hx * dir[0] + dir[1] - hz * dir[2]) * inv; // the normal against the light
+  const ratio = diffuse / Math.max(dir[1], 0.1) - 1; // 0 on flat ground
+  return 1 + amp * clamp(ratio * 5, -1, 1) * k;
+}
+
+/** A dune's profile from noise: a sharp crest where the noise crosses its middle, long flanks either side. */
+const crest = (n) => 1 - Math.abs(2 * clamp(0.5 + (n - 0.5) * 2.2) - 1) ** 1.3;
+
+/** A dune field in metres: out = [height 0..1, slope across, slope away]; the slopes in metres per metre. */
+export function duneAt(xm, zm, out) {
+  const u = xm / DUNE.cell, v = zm / DUNE.cell, e = 0.02, rise = DUNE.tall / DUNE.cell / e;
+  const d0 = crest(fbm(u * 0.6, v * 0.3, DUNE.key, 4));
+  out[0] = d0;
+  out[1] = (crest(fbm((u + e) * 0.6, v * 0.3, DUNE.key, 4)) - d0) * rise;
+  out[2] = (crest(fbm(u * 0.6, (v + e) * 0.3, DUNE.key, 4)) - d0) * rise;
+  return out;
+}
+
+/**
+ * The swell of named hills, in the frame: the ground's rise at (u across, near down), as rows of displacement of
+ * the y mapping (a crest shows nearer ground than the flat plane would, a hollow farther), with its slopes across
+ * the frame and down it, per unit of u and of near. The rise fades to nothing at the foot, so the near grass is calm.
+ */
+export function hillAt(u, near, band, out) {
+  const e = 0.01, v = near * 2 + 0.3, amp = band * HILL.rise * (1 - near);
+  const h0 = fbm(u * HILL.across, v, HILL.key, 3);
+  out[0] = h0;
+  out[1] = (fbm((u + e) * HILL.across, v, HILL.key, 3) - h0) / e; // rising to the right when positive
+  out[2] = (fbm(u * HILL.across, v + e * 2, HILL.key, 3) - h0) / (e * 2); // rising toward the viewer when positive
+  out[3] = (h0 - 0.5) * amp;
+  return out;
+}
+
+/**
+ * How much of a grass tuft stands at a pixel: a tuft is a vertical stroke 3-9 px tall (at 720 rows) rising from an
+ * anchor pixel, anchors scattered by h2 at the row's density, thicker in clumps; 1 at the foot, half at the tip.
+ */
+export function tuftAt(ctx, row, x, y, xm, zm) {
+  const { scale } = ctx, maxLen = Math.max(1, Math.round(9 * scale)), minLen = Math.max(1, Math.round(3 * scale));
+  const clump = 0.3 + 1.4 * noise(xm * 0.15, zm * 0.15, 45), density = row.tuft * clump;
+  for (let k = 0; k <= maxLen; k++) {
+    const ya = y + k;
+    if (h2(x, ya, 5) >= density) continue;
+    const len = minLen + Math.floor(h2(x, ya, 6) * (maxLen - minLen + 1));
+    if (k < len) return 1 - 0.5 * (k / len);
+  }
+  return 0;
+}
+
+const FLOWER = [[0.95, 0.85, 0.30], [0.92, 0.42, 0.62]]; // the two tones: buttercup and campion
+const ASPHALT = [0.38, 0.38, 0.40], ASPHALT_WET = [0.22, 0.22, 0.23], DIRT = [0.55, 0.45, 0.32];
+const DUST = [0.58, 0.52, 0.40], PAINT = [0.9, 0.85, 0.5], SKY = [0, 0, 0], ROAD = [0, 0, 0];
+const TUFTTONE = [0.55, 0.72, 0.55], REL = [0, 0, 0, 0], FL = [0, 0, 0];
+
+/** Grass, sand, snow or pavement from noise, with its relief, its sheen when wet, and the road where there is one. */
 function landPixel(ctx, row, x, xm, c) {
-  const { W, scene, getSky, lit, litGround } = ctx;
-  const { y, near, here, wet, zm } = row;
+  const { W, H, hy, scene, sun, getSky, lit, litGround } = ctx;
+  const { y, near, here, wet, landTint } = row;
+  let { zm } = row, shade = 1;
+  if (row.hills && row.relief > 0) { // named hills: the y mapping displaced by the swell, lit by its slopes
+    hillAt(x / W, near, H - hy, REL);
+    const zd = ctx.groundZ(y + 0.5 + REL[3]); // the depth this pixel shows, up a crest or down a hollow
+    if (zd < FAR_GROUND && zd > 0) {
+      xm *= zd / zm;
+      zm = zd;
+    }
+    // a flank rising toward the sun's side is lit, one rising toward the viewer faces away from a sun in front
+    const facing = REL[1] * (sun.left ? 0.3 : -0.3) - REL[2] * 0.15 * sun.dir[2];
+    shade = (1 + 0.35 * clamp(facing, -1, 1) * row.relief) * (0.86 + 0.28 * REL[0]); // crests drier and paler
+  }
   const n = fbm(xm * 0.3, zm * 0.3, 41, 4);
   const blades = here === 'grass' ? (h2(x, y, 3) - 0.5) * 0.25 * row.bladeK : 0;
-  const tone = 0.82 + (n * 0.36 - 0.18) * row.grain + 0.18 + blades;
-  c[0] = row.landColour[0] * tone;
-  c[1] = row.landColour[1] * tone;
-  c[2] = row.landColour[2] * tone;
+  let tone = 0.82 + (n * 0.36 - 0.18) * row.grain + 0.18 + blades;
+  if (here === 'sand' && row.relief > 0) { // dunes: a lit crest, a shadowed lee, fine ripples near the foot
+    duneAt(xm, zm, REL);
+    shade *= reliefShade(sun.dir, REL[1], REL[2], 0.4, row.relief) * (0.88 + 0.24 * REL[0]);
+    const rip = smooth(0.5, 0.7, near) * row.grain;
+    if (rip > 0) tone += (fbm(xm * 0.35 + zm * 0.08, zm * 5, 44, 2) - 0.5) * 0.14 * rip;
+  }
+  tone *= shade;
+  c[0] = landTint[0] * tone;
+  c[1] = landTint[1] * tone;
+  c[2] = landTint[2] * tone;
   litGround(c, 0.9 - near * 0.1, c); // the light mixed toward white: sunset tints the grass, not mud
   if (here === 'snow' && h2(x, y, 4) > 0.995) { // a glint off a crystal here and there
     c[0] += 0.1;
     c[1] += 0.1;
     c[2] += 0.1;
   }
-  if (scene.road) { // a road from the foot of the picture to the horizon, kerbed, with a dashed centre line
-    const off = Math.abs(x + 0.5 - W / 2), edge = row.roadHalf - off + 0.5; // straight up the middle, 2 lanes wide
-    if (edge > 0) {
-      const worn = 0.85 + n * 0.3;
-      ROAD[0] = ASPHALT[0] * worn;
-      ROAD[1] = ASPHALT[1] * worn;
-      ROAD[2] = ASPHALT[2] * worn;
-      let surface = ROAD;
-      if (wet) surface = mix(ROAD, getSky(x, row.skyY, SKY), 0.4, ROAD);
-      lit(surface, 1, ROAD);
-      const paint = row.dash ? clamp(row.lineHalf - off + 0.5) * clamp(row.lineHalf * 2) : 0; // a line thinner than a
-      if (paint > 0) mix(ROAD, PAINT, paint, ROAD); // pixel is a fainter pixel, not a brighter one
-      mix(c, ROAD, clamp(edge), c); // the kerb lands between pixels
+  if (here === 'grass' && row.tuft > 0) { // tufts in the foreground, in a darker tone of the land's own
+    const t = tuftAt(ctx, row, x, y, xm, zm);
+    if (t > 0) {
+      FL[0] = landTint[0] * TUFTTONE[0] * shade;
+      FL[1] = landTint[1] * TUFTTONE[1] * shade;
+      FL[2] = landTint[2] * TUFTTONE[2] * shade;
+      mix(c, litGround(FL, 0.8 - near * 0.1, FL), 0.75 * t, c);
+    }
+    if (row.flowers && near > 0.3) { // two-tone flower dots, in patches
+      const cell = row.flowerCell, cx = (x / cell) | 0, cy = (y / cell) | 0;
+      const patch = clamp((noise(xm * 0.08, zm * 0.08, 46) - 0.35) * 3) * smooth(0.3, 0.6, near);
+      if (h2(cx, cy, 71) < 0.03 * patch) mix(c, litGround(FLOWER[h2(cx, cy, 72) < 0.5 ? 0 : 1], 1, FL), 0.85, c);
     }
   }
-  if (wet && here !== 'snow' && !scene.road) mix(c, getSky(x, row.skyY, SKY), 0.15, c);
+  if (wet && here !== 'snow') mix(c, getSky(x, row.skyY, SKY), here === 'pavement' ? 0.25 : 0.15, c); // the sheen
+  if (scene.road) road(ctx, row, x, n, shade, c);
 }
+
+/**
+ * The road at a pixel: its centre drifting by depth (row.rc), two lanes wide from the metre scale, a dusty verge
+ * outside each kerb; asphalt grey by day and dark when wet, with the dashed centre line; a dirt road brown with two
+ * wheel ruts and no line. The kerb and the ruts land between pixels.
+ */
+function road(ctx, row, x, n, shade, c) {
+  const { scene, getSky, lit, litGround } = ctx;
+  const { wet } = row, off = Math.abs(x + 0.5 - row.rc), verge = row.vergeHalf - off + 0.5;
+  if (verge <= 0) return;
+  mix(DUST, row.landTint, 0.3, FL);
+  mix(c, litGround(FL, 0.85, FL), clamp(verge) * 0.75, c); // the verge, worn to dust
+  const edge = row.roadHalf - off + 0.5;
+  if (edge <= 0) return;
+  const dirt = scene.roadKind === 'dirt', base = dirt ? DIRT : wet ? ASPHALT_WET : ASPHALT, worn = 0.85 + n * 0.3;
+  ROAD[0] = base[0] * worn * shade;
+  ROAD[1] = base[1] * worn * shade;
+  ROAD[2] = base[2] * worn * shade;
+  if (dirt) { // the wheels' ruts, darker, where the tyres run
+    const rut = clamp(row.rutHalf - Math.abs(off - row.rutAt) + 0.5) * clamp(row.rutHalf * 2);
+    if (rut > 0) {
+      const k = 1 - 0.22 * rut;
+      ROAD[0] *= k;
+      ROAD[1] *= k;
+      ROAD[2] *= k;
+    }
+  }
+  if (wet) mix(ROAD, getSky(x, row.skyY, SKY), dirt ? 0.25 : 0.4, ROAD);
+  lit(ROAD, 1, ROAD);
+  if (!dirt && row.dash) { // a line thinner than a pixel is a fainter pixel, not a brighter one
+    const paint = clamp(row.lineHalf - off + 0.5) * clamp(row.lineHalf * 2);
+    if (paint > 0) mix(ROAD, PAINT, paint, ROAD);
+  }
+  mix(c, ROAD, clamp(edge), c);
+}
+
+/**
+ * Flowers are a flag on the land more than a thing: when the words name them (or a meadow or a field), landPixel
+ * sprinkles two-tone dots over the near grass. Registered as a thing so the reader knows the word and counts it
+ * ('a meadow with flowers' reads flowers 1, not 'not understood: flowers'); its drawer paints one small clump where
+ * each counted flower stands, so 'three flowers' are three clumps as well as the sprinkle. core.mjs registers it
+ * after the six built-ins.
+ */
+export const FLOWERS = {
+  id: 'flowers', match: /^(flowers?|wildflowers?|blossoms?|daisies|daisy|poppies|poppy|tulips?|buttercups?)$/,
+  usual: 1, depth: [6, 30], size: { w: 0.8, h: 0.4 },
+  draw(ctx, inst) {
+    const { W, disc, litGround } = ctx, s = ctx.camera.focal / inst.zm, x0 = inst.ux * W, fy = inst.fy;
+    const r = Math.max(1, 0.06 * s), col = [0, 0, 0];
+    for (let i = 0; i < 7; i++) {
+      const dx = (h2(i, 1, 73) - 0.5) * 0.8 * s, dy = -h2(i, 2, 73) * 0.3 * s;
+      disc(x0 + dx, fy + dy, r, litGround(FLOWER[i % 2], 1, col));
+    }
+    return { x: x0 - 0.4 * s, y: fy - 0.35 * s, w: 0.8 * s, h: 0.4 * s };
+  },
+};
 
 // ── Reflections ────────────────────
 
@@ -742,13 +947,84 @@ function smearLights(ctx, src, t, everywhere) {
 }
 
 // ── Weather and finish ─────────────
+// Weather on every surface (ground-weather): rain and snow fall in three layers sized by distance, the far two
+// painted before the things (weatherFarPass) so a near thing hides them, the near one over everything; wet darkens
+// every surface below the horizon; snow settles on every sprite's recorded top edges (ctx.tops: roofs, bonnets,
+// decks, ledges); fog thickens on every thing by its depth through ctx.fogK (read by ctx.sprite) and lies as a band
+// over the whole. The streaks and flakes are placed by h2 from a key the sun's place seeds, not by ctx.rand, so the
+// far layers consume no draws before the things are placed: the compositions stay as they were.
 
-/** Over everything: fog thickening toward the horizon, rain streaked by the wind, snow falling. */
+/** Rain's three layers, far to near: a share of the drops, their length in px at 720 rows, alpha, brightness. */
+export const RAIN_LAYERS = [
+  { share: 0.45, len: [5, 10], alpha: 0.22, bright: 0.2, width: 1 },
+  { share: 0.35, len: [10, 20], alpha: 0.38, bright: 0.35, width: 1 },
+  { share: 0.20, len: [18, 40], alpha: 0.55, bright: 0.5, width: 2 },
+];
+/** Snow's three layers, far to near: a share of the flakes, their radius in px at 720 rows, alpha. */
+export const SNOW_LAYERS = [
+  { share: 0.5, r: 0.6, alpha: 0.35 }, { share: 0.3, r: 1.1, alpha: 0.5 }, { share: 0.2, r: 2.2, alpha: 0.65 },
+];
+const FOG_PER_THING = 1.2; // how much the fog thickens the air's fade on a sprite, per unit of scene.fog
+const WET_DARK = 0.12; // how much wet darkens everything below the horizon
+const RIM = 3; // the snow rim on a flat top edge, in px at 720 rows (2 px at 540, 4-5 at 1080)
+
+/** Before the things: the fog's thickness on every sprite, and the two far layers of rain or snow. */
+export function weatherFarPass(ctx) {
+  const { scene } = ctx;
+  ctx.fogK = 1 + scene.fog * FOG_PER_THING;
+  for (const k of [0, 1]) {
+    if (scene.rain > 0) rain(ctx, k);
+    if (scene.snow > 0) snow(ctx, k);
+  }
+}
+
+/** Over everything: wet's darkening, settled snow on the tops, the fog's band, the near rain and snow. */
 export function weatherPass(ctx) {
   const { scene } = ctx;
+  if ((scene.wet || scene.rain > 0.3) && scene.land !== 'snow') wet(ctx);
+  if (scene.land === 'snow') settle(ctx);
   if (scene.fog > 0) fog(ctx);
-  if (scene.rain > 0) rain(ctx);
-  if (scene.snow > 0) snow(ctx);
+  if (scene.rain > 0) rain(ctx, 2);
+  if (scene.snow > 0) snow(ctx, 2);
+}
+
+/** Wet darkens every surface below the horizon, eased in over a tenth of the height so nothing shows a seam. */
+function wet(ctx) {
+  const { W, H, hy, data } = ctx;
+  for (let y = Math.max(0, Math.ceil(hy)); y < H; y++) {
+    const k = 1 - WET_DARK * smooth(hy, hy + 0.1 * H, y), row = y * W * 3;
+    for (let i = row; i < row + W * 3; i++) data[i] *= k;
+  }
+}
+
+const SNOWRIM = [0.97, 0.98, 1]; // fresh snow: brighter than the trodden ground's
+const SNOW_DEPTH = 0.06; // metres of snow lying on a flat top, for the rim's thickness at the thing's depth
+
+/**
+ * Snow on every top edge every sprite recorded (ctx.tops): a white rim 1-3 px thick where the edge is flat (an
+ * upward face: a roof, a bonnet, a deck, a ledge), thinning to nothing where it is steep (a wall's side, a pine's
+ * skirt, which carries its own); nothing on a thing in the sky; faded by the air at the thing's depth.
+ */
+function settle(ctx) {
+  const { W, layout, litGround, air, put, scale, camera } = ctx, least = Math.max(1, Math.round(RIM * scale));
+  const cap = litGround(SNOWRIM, 1), c = [0, 0, 0];
+  ctx.tops.forEach((tops, id) => {
+    const thing = layout.things[id], entry = thing && ctx.things.find((e) => e.id === thing.kind);
+    if (!tops || entry?.sky) return;
+    const foot = thing ? thing.y + thing.h : ctx.hy, zm = camera.groundZ(foot);
+    // a few centimetres of snow at the thing's depth, a pixel or two at the least, six at the most
+    const rim = clamp(Math.round(Math.max(least, SNOW_DEPTH * camera.focal / Math.min(zm, 1e6))), least, 8 * scale);
+    air(cap, (1 - clamp(ctx.foot(foot))) * 0.3, c); // fresh snow stays white in the air
+    for (let x = 1; x < W - 1; x++) {
+      const t = tops[x];
+      if (t < 0) continue;
+      const l = tops[x - 1] < 0 ? t : tops[x - 1], r = tops[x + 1] < 0 ? t : tops[x + 1];
+      const flat = clamp(1 - Math.abs(r - l) / 5); // rows per column across the edge: steep edges hold no snow
+      if (flat <= 0) continue;
+      const thick = Math.max(1, Math.round(rim * (0.5 + 0.5 * flat)));
+      for (let k = 0; k < thick; k++) put(x, t + k, c, 0.95 * flat * (1 - 0.5 * k / thick));
+    }
+  });
 }
 
 function fog(ctx) {
@@ -763,23 +1039,36 @@ function fog(ctx) {
 
 const RAINDROP = [0.85, 0.88, 0.95], SNOWFLAKE = [0.95, 0.96, 1];
 
-function rain(ctx) {
-  const { W, H, scene, rand, put, get, scale } = ctx;
-  const count = (W * H) / 1800 * scene.rain, slant = (rand() - 0.5) * 0.6;
+/** The weather's key: the sun's place is a seeded draw, so another seed moves the rain and snow too. */
+const weatherKey = (ctx, k) => 80 + k * 7 + ((ctx.sun.x * 997) | 0);
+
+/** One layer of rain: streaks slanted by the wind (one slant for all three layers), longer and brighter nearer. */
+function rain(ctx, k) {
+  const { W, H, scene, put, get, scale } = ctx, L = RAIN_LAYERS[k], key = weatherKey(ctx, k);
+  const count = Math.round((W * H) / 1800 * scene.rain * L.share), slant = (h2(1, 1, weatherKey(ctx, 0)) - 0.5) * 0.6;
+  const wide = L.width > 1 && scale >= 0.75, c = [0, 0, 0];
   for (let i = 0; i < count; i++) {
-    const x = rand() * W, y = rand() * H, len = (10 + rand() * 20) * scale;
-    const c = mix(get(x, y), RAINDROP, 0.35);
-    for (let t = 0; t < len; t++) put(x + t * slant, y + t, c, 0.5);
+    const x = h2(i, 2, key) * W, y = h2(i, 3, key) * H, len = lerp(L.len[0], L.len[1], h2(i, 4, key)) * scale;
+    mix(get(x, y, c), RAINDROP, L.bright, c);
+    for (let t = 0; t < len; t++) {
+      const px = x + t * slant, py = y + t;
+      put(px, py, c, L.alpha);
+      if (wide) put(px + 1, py, c, L.alpha * 0.5);
+    }
   }
 }
 
-function snow(ctx) {
-  const { W, H, scene, rand, put, scale } = ctx;
-  const count = (W * H) / 900 * scene.snow;
+/** One layer of snow: soft flakes, the far ones under a pixel (a faint dot), the near ones a few pixels across. */
+function snow(ctx, k) {
+  const { W, H, scene, put, scale } = ctx, L = SNOW_LAYERS[k], key = weatherKey(ctx, k);
+  const count = Math.round((W * H) / 900 * scene.snow * L.share), rr = L.r * scale, R = Math.ceil(rr);
   for (let i = 0; i < count; i++) {
-    const x = rand() * W, y = rand() * H, r = Math.max(1, Math.round((rand() < 0.2 ? 2 : 1) * scale)); // whole pixels
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) put(x + dx, y + dy, SNOWFLAKE, 0.6 * (1 - Math.hypot(dx, dy) / (r + 1)));
+    const x = h2(i, 2, key) * W, y = h2(i, 3, key) * H;
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        const a = L.alpha * clamp(1 - Math.hypot(dx, dy) / (rr + 0.5)) * Math.min(1, rr + 0.3);
+        if (a > 0.01) put(x + dx, y + dy, SNOWFLAKE, a);
+      }
     }
   }
 }

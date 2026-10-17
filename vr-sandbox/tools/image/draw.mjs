@@ -419,7 +419,8 @@ export function attach(ctx) {
   // column is kept in ctx.tops[id] (an Int16Array over x, -1 where it put nothing) for weather to settle on.
   ctx.tops = [];
   ctx.sprite = (zm, drawFn, id = ctx.tops.length) => {
-    const fy = cam.project(0, zm).y, fade = (1 - clamp(ctx.foot(fy))) * 0.6;
+    // hook for ground-weather: ctx.fogK (set by weatherFarPass) thickens the fog on every thing by its depth
+    const fy = cam.project(0, zm).y, fade = (1 - clamp(ctx.foot(fy))) * 0.6 * (ctx.fogK ?? 1);
     const tops = new Int16Array(W).fill(-1), base = ctx.put, seen = [0, 0, 0];
     ctx.tops[id] = tops;
     ctx.put = (x, y, c, a = 1) => {

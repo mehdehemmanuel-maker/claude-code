@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // An image from words, generated here: no model, no service, no key. The words are read into a scene (the time of day,
 // the weather, the ground, what stands on it and how many), the scene is painted pixel by pixel (sky, sun or moon and
-// stars, clouds, ranges of mountains fading into the air, water with a reflection, grass, sand, snow, a road, trees,
-// houses, buildings, a car, a boat, birds, rain, snow, fog, grain), and the pixels are written as a PNG by this file's
+// stars, clouds, ranges of mountains fading into the air, water with a reflection, grass with tufts and flowers, sand
+// in dunes, snow, a road that drifts (asphalt, or dirt with ruts), trees in their season's colours, houses,
+// buildings, a car, a boat, birds, rain and snow in three depths, snow settling on every top edge, wet on every
+// surface, fog thickening with depth, grain), and the pixels are written as a PNG by this file's
 // own encoder. Things stand in metres through a camera 1.6 m up (a 4.5 m car on a two-lane road, a 6 m cabin, a 15-25 m
 // pine), with anti-aliased edges and a shadow thrown by the sun or the moon at the hour's height; the sun a small
 // warm disc by day and a deep orange ball when low, the moon by its phase, the mountains lit on the sun's side. A
@@ -47,7 +49,8 @@
 // coast, river/stream/canal, harbour/port/marina, island/tropical/palm, beach/shore), things (mountains/peaks/mountain
 // range, hills, trees/forest/woods/pines/firs/oaks/palms, house/cabin/cottage/barn/hut/farmhouse/village, buildings/
 // city/town/skyline/cityscape/downtown/towers, car/kart/truck/van/jeep/taxi, boat/ship/sailboat/yacht/ferry/canoe,
-// birds/gulls/crows, sun, moon and its phase, stars) with counts ("three trees", "15 trees", "a hundred" is forty,
+// birds/gulls/crows, flowers/poppies/tulips/daisies (dots over the grass, as a meadow or a field has), sun, moon and
+// its phase, stars) with counts ("three trees", "15 trees", "a hundred" is forty,
 // "no trees"), colours and sizes before things ("red car", "tiny cabin", "huge mountains"), places (near, far, left,
 // right, centre), a style word (pixel art/8-bit, poster/flat/cartoon, minimalist, sketch/pencil/line art,
 // watercolour/painting, black and white/mono/greyscale, sepia, vintage/retro/old photo) and a text to write ("the
