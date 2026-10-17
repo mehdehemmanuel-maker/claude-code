@@ -251,6 +251,31 @@ describe('the shared instance fields', () => {
     expect(Math.abs(far.w - K.length * ctx.camera.focal / 60)).toBeLessThanOrEqual(1); // far off, the depth is one
   });
 
+  it('takes its lane from its heading: away in the right lane, toward in the oncoming one, over many seeds', () => {
+    let ctx: Ctx | null = null;
+    const fam = families.find((f) => f.id === 'landscape')!;
+    register('families', { ...fam, passes: [(c: Ctx) => { ctx = c; }, ...fam.passes] });
+    const seen = { away: 0, toward: 0 };
+    try {
+      for (let seed = 1; seed <= 24; seed++) {
+        const img = paint(read('a red car and a blue car on a road'), { width: 160, height: 90, seed });
+        const c = ctx! as Ctx;
+        for (const t of img.layout.things.filter((o) => o.kind === 'car')) {
+          const foot = t.y + t.h, centre = c.groundX(c.roadX!(foot), foot), side = t.xm! - centre;
+          expect(t.heading === 'toward' ? side < 0 : side > 0, `seed ${seed} ${t.heading} at ${side}`).toBe(true);
+          seen[t.heading as 'away' | 'toward']++;
+        }
+      }
+    } finally {
+      register('families', fam);
+    }
+    expect(seen.away).toBeGreaterThan(0);
+    expect(seen.toward).toBeGreaterThan(0); // both lanes were tried
+    // the usual number of cars is the registered entry's own: read.mjs's USUAL has no cars row
+    const car = things.find((t) => t.id === 'car')!;
+    expect(read('cars on a road').instances.find((i) => i.kind === 'cars')!.count).toBe(car.usual);
+  });
+
   it('stands on the road heading away by default, its box low and inside the frame, and in the layout', () => {
     const img = paint(read(KART), { width: 640, height: 360, seed: 7 });
     const kart = img.layout.things.find((t) => t.kind === 'kart')!;

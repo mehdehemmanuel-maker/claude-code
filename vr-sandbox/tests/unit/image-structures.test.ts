@@ -77,15 +77,42 @@ describe('the reader knows every structure by its words, keyed as before', () =>
     expect(houseKind('cabin')).toBe('cabin');
     expect(houseKind('log cabin')).toBe('cabin');
     expect(houseKind('farmhouse')).toBe('farmhouse');
-    expect(houseKind('cottage')).toBe('cottage');
+    expect(houseKind('cottage')).toBe('house'); // the cottage is drawn as the house (its thatch did not read)
     expect(houseKind('house')).toBe('house');
-    expect(['house', 'cottage']).toContain(houseKind('village', () => 0.9));
+    expect(houseKind('village')).toBe('house');
+    expect(Object.keys(HOUSES)).toEqual(['house', 'cabin', 'farmhouse']);
+  });
+
+  it('does not read a bare fire, pole, lamp, mill, rock or town as a structure; reads the two-word names', () => {
+    const none: [string, string[]][] = [
+      ['a forest fire at night', ['fire']], ['a house on fire', ['fire']], ['a lamp on a table', ['lamp', 'table']],
+      ['a paper mill', ['paper', 'mill']], ['a rock concert', ['rock', 'concert']],
+      ['a penguin at the north pole', ['penguin', 'north', 'pole']],
+    ];
+    const kinds = STRUCTURE_THINGS.map((e) => e.id);
+    for (const [prompt, ignored] of none) {
+      const s = read(prompt);
+      expect(s.ignored, prompt).toEqual(ignored);
+      expect(Object.keys(s.things).filter((k) => kinds.includes(k)), prompt).toEqual([]);
+    }
+    expect(read('telegraph poles along a road').things).toMatchObject({ pole: 0 });
+    expect(read('utility poles').things).toMatchObject({ pole: 0 });
+    expect(read('lamp posts in the fog').things).toMatchObject({ streetlamp: 0 });
+    const lamps = read('street lamps at night'); // the lamps, and the street they stand on
+    expect([lamps.things.streetlamp, lamps.things.buildings, lamps.road, lamps.ignored]).toEqual([0, 0, true, []]);
+    expect(read('a windmill').things.windmill).toBe(1);
+    expect(read('a bonfire on the beach').things.campfire).toBe(1);
+    expect(read('pylons across a field').things.pole).toBe(0);
+    const town = read('a small town in the hills at dusk'); // a town is the usual buildings, not a city's skyline
+    expect(town.things).toEqual({ buildings: 0, hills: 0 });
+    expect(citySkyline(town)).toBe(false);
+    expect(paint(town, { width: 160, height: 90, seed: 7 }).layout.skyline).toBeUndefined();
   });
 
   it('says a city when the buildings are the usual or a city word, not for a harbour\'s four', () => {
     expect(citySkyline(read(CITY))).toBe(true);
     expect(citySkyline(read('a busy street with cars'))).toBe(true);
-    expect(citySkyline(read('the town at dusk'))).toBe(true);
+    expect(citySkyline(read('the town at dusk'))).toBe(false); // a town: the usual eleven, no skyline
     expect(citySkyline(read('watercolour of a harbour'))).toBe(false);
     expect(citySkyline(read('four buildings'))).toBe(false);
     expect(citySkyline(read('a quiet meadow'))).toBe(false);
@@ -187,8 +214,38 @@ describe('the lighthouse', () => {
     const img = paint(read('a lighthouse on a rocky coast in a storm'), { width: 480, height: 270, seed: 7 });
     const t = img.layout.things.find((o) => o.kind === 'lighthouse')!;
     expect(t.visible).toBe(true);
-    expect(t.y + t.h).toBeLessThan(img.layout.shore! * 270); // its foot in the water, before the shore
     expect(t.h / 270).toBeGreaterThan(0.3); // a lighthouse one can see
+    // off the near shore at the end of a reef running out from it: the box reaches the shore's band, no farther
+    expect(img.layout.lighthouse!.headland).toBe(true);
+    expect(t.y + t.h).toBeGreaterThan(img.layout.horizon * 270 + 4);
+    expect(t.y + t.h).toBeLessThan((img.layout.shore! + 0.1) * 270 + 2);
+    const lake = paint(read('a lighthouse by a lake at noon'), { width: 480, height: 270, seed: 7 });
+    expect(lake.layout.shore).not.toBeNull(); // a lighthouse brings the lake a shore (of grass)
+    expect(lake.layout.lighthouse!.headland).toBe(true);
+    expect(STRUCTURES.lighthouse.rock.h).toBeGreaterThanOrEqual(5); // a rock mass that reads at 100 m and more
+  });
+
+  it('keeps the skyline\'s silhouettes under a named ridge, so the hills or mountains asked for show', () => {
+    const img = paint(read('a city in the mountains'), { width: 640, height: 360, seed: 7 });
+    const { skyline, ranges, horizon } = img.layout, hy = horizon * 360;
+    expect(skyline!.under).toBe('mountains');
+    const ridge = (x: number) => Math.min(hy, ...ranges!.map((g) => g.top[x]!));
+    for (const t of skyline!.towers) {
+      let low = 0;
+      for (let x = Math.max(0, t.x); x < Math.min(640, t.x + t.w); x++) low = Math.max(low, ridge(x));
+      expect(t.y, `tower at ${t.x}`).toBeGreaterThanOrEqual(low + 0.012 * 360 - 1.01);
+    }
+    expect(paint(read('a city'), { width: 320, height: 180, seed: 7 }).layout.skyline!.under).toBeNull();
+  });
+
+  it('counts a kerb tower seen when what the next one leaves of it still spans rows and columns', () => {
+    const img = paint(read('a busy street with cars'), { width: 640, height: 360, seed: 7 });
+    const [seen, asked] = img.layout.things.length ? img.layout.things[0]!.kind && (() => {
+      const t = img.layout.things.filter((o) => o.kind === 'building');
+      return [t.filter((o) => o.visible).length, t.length];
+    })() : [0, 0];
+    expect(asked).toBe(11);
+    expect(seen).toBeGreaterThanOrEqual(5); // six or more blocks are plainly in the picture; 2/11 was the old count
   });
 });
 

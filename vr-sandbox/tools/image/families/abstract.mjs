@@ -7,52 +7,16 @@
 // of rectangles with black bars and primaries, gradient is one smooth two-colour field, op-art a warped ring field.
 // Everything is drawn with the context's primitives from ctx.rand and the lattice noise, so the same words paint
 // the same picture.
-// This file also holds the helpers every family shares: note(), dropWord(), promptColours(), hsl().
+// This file also holds the helpers every family shares: promptColours(), hsl(), noteUndrawn(); note(), dropWord(),
+// undrop() and bare() are read.mjs's (the scene's honesty fields are the reader's), re-exported here as they were.
 import { clamp, fbm, lerp, mix, smooth } from '../math.mjs';
-import { COLOURS, COMPOUNDS, CONDITIONS, THINGS, knows, words } from '../read.mjs';
-import { register, thingFor } from '../registry.mjs';
+import { COLOURS, bare, dropWord, note, undrop, words } from '../read.mjs';
+import { register } from '../registry.mjs';
 import { finishPass } from '../passes.mjs';
 
+export { bare, dropWord, note, undrop };
+
 // ── Shared by the families ─────────
-
-/** A line for the shell's report (scene.notes), once. */
-export function note(scene, text) {
-  const notes = scene.notes ??= [];
-  if (!notes.includes(text)) notes.push(text);
-}
-
-/**
- * A claimed word put back among the ignored, in the prompt's order: the unknown words before it go in first, so
- * the honesty list reads as it would had the family never claimed it (the reader's own loop adds the rest after).
- */
-export function dropWord(scene, word) {
-  const ignored = scene.ignored;
-  if (ignored.includes(word)) return;
-  for (const w of words(scene.prompt)) {
-    if (w === word) break;
-    if (!knows(w) && !ignored.includes(w)) ignored.push(w);
-  }
-  ignored.push(word);
-}
-
-/** Takes words a family dropped back out of the ignored list, once the family is claimed after all. */
-export function undrop(scene, dropped) {
-  for (const w of dropped.splice(0)) {
-    const at = scene.ignored.indexOf(w);
-    if (at >= 0) scene.ignored.splice(at, 1);
-  }
-}
-
-/**
- * Whether the prompt names nothing of a landscape: no thing (built in or registered) and no condition word (a lake,
- * night, snow), read from the words themselves (a compound by its parts), since the reader's instances hold the
- * things alone. A bare shape or person word claims its family only in a bare prompt.
- */
-export function bare(scene) {
-  const landscape = (w) => Object.values(THINGS).some((re) => re.test(w)) || !!thingFor(w) ||
-    CONDITIONS.some((c) => c.match.test(w));
-  return !words(scene.prompt).some((w) => (COMPOUNDS[w] ?? [w]).some(landscape));
-}
 
 /** The colour words of the prompt, in order, once each. */
 export function promptColours(scene) {

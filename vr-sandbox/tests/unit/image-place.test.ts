@@ -245,9 +245,16 @@ describe('place', () => {
     const { img: cars, ctx } = painted(read('a red car and a blue car on a road'), 960, 540, 4);
     const both = cars.layout.things.filter((t) => t.kind === 'car');
     expect(both.length).toBe(2);
-    const tint = (t: ThingBox) => {
-      const i = (Math.round(t.y + t.h * 0.55) * 960 + Math.round(t.x + t.w * 0.5)) * 3;
-      return cars.data[i]! > cars.data[i + 2]! ? 'red' : 'blue';
+    const tint = (t: ThingBox) => { // the body's colour by a vote over its box (an oncoming car shows its grille)
+      let red = 0, blue = 0;
+      for (let y = Math.round(t.y); y < t.y + t.h; y++) {
+        for (let x = Math.round(t.x); x < t.x + t.w; x++) {
+          const i = (y * 960 + x) * 3, d = cars.data[i]! - cars.data[i + 2]!;
+          if (d > 0.2) red++;
+          else if (d < -0.2) blue++;
+        }
+      }
+      return red > blue ? 'red' : 'blue';
     };
     expect(both.map(tint).sort()).toEqual(['blue', 'red']);
     for (const c of both) { // each in a lane of the drifted road (its box ends at its near wheels, a row nearer)

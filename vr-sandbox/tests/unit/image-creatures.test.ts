@@ -105,6 +105,19 @@ describe('the reader knows every creature, person, flyer and swimmer by its word
     }],
     ['dolphins and a shark', (s) => expect(s.things).toMatchObject({ dolphins: 0, sharks: 1 })],
     ['fish in a lake', (s) => expect([s.things.fish, s.family]).toEqual([0, undefined])],
+    // review fixes: a collective noun binds to the creature after it or is ignored; a bare person word leaves the
+    // prompt as bare as it found it (the space family claims 'space'); a pose needs figures; a pose is a scene's
+    ['a flock of birds over the sea', (s) => expect([s.things, s.ignored]).toEqual([{ birds: 0 }, []])],
+    ['a flock of seagulls', (s) => expect([s.things.birds, s.things.sheep, s.ignored]).toEqual([0, undefined, []])],
+    ['a herd of elephant', (s) => expect([s.things.elephants, s.ignored]).toEqual([0, []])],
+    ['a flock at dusk', (s) => expect([s.ignored, s.recognised]).toEqual([['flock'], 1])],
+    ['a man in space', (s) => expect([s.family, s.ignored, s.things.people]).toEqual(['space', [], 1])],
+    ['people in space', (s) => expect([s.family, s.ignored]).toEqual(['space', []])],
+    ['a woman in space', (s) => expect(s.notes!.some((n) => n.startsWith('people not drawn'))).toBe(true)],
+    ['a man walking', (s) => expect([s.family, s.things.people, s.pose]).toEqual([undefined, 1, 'walking'])],
+    ['a man', (s) => expect(s.family).toBe('portrait')],
+    ['a sitting cat', (s) => expect([s.ignored, s.pose, s.recognised]).toEqual([['sitting'], undefined, 1])],
+    ['a dog running on a beach at sunset', (s) => expect([s.ignored, s.pose]).toEqual([['running'], undefined])],
     ['three fish on a coral reef', (s) => { // the underwater family keeps its own fish
       expect(s.family).toBe('underwater');
       expect(s.underwater!.fish).toBe(3);
@@ -263,7 +276,7 @@ describe('the birds and the flock', () => {
     expect(BIRDS.sparrow.span).toBeLessThan(BIRDS.gull.span / 4);
   });
 
-  it('spends no draw and changes no pixel of a picture without birds or creatures: the header kart as it was', () => {
+  it('leaves a picture without birds or creatures its own: the header kart\'s layout holds the kart alone', () => {
     const scene = read('a red go-kart on a wet road at dusk, mountains behind');
     expect(scene.instances.map((i) => i.kind)).toEqual(['karts', 'mountains']);
     const img = paint(scene, { width: 320, height: 180, seed: 7 });
@@ -276,6 +289,31 @@ describe('the look, the night, determinism and speed', () => {
     for (const words of ['a cat on a wall at night', 'a rocket launching at night']) {
       const img = paint(read(words), { width: 480, height: 270, seed: 7 });
       expect(mean(img), words).toBeLessThan(0.12);
+    }
+  });
+
+  it('ends a launch at the ground row, lights the helicopter by night, keeps the dragon in the sky', () => {
+    const rocket = paint(read('a rocket launching at night'), { width: 480, height: 270, seed: 7 });
+    const r = rocket.layout.things.find((t) => t.kind === 'rocket')!;
+    expect(r.launching).toBe(true);
+    expect(r.y + r.h).toBeLessThanOrEqual(r.ground! + 2);
+    const heli = paint(read('a helicopter over a city at night'), { width: 480, height: 270, seed: 7 });
+    const h = heli.layout.things.find((t) => t.kind === 'helicopter')!;
+    expect([h.lights, h.visible]).toEqual([true, true]);
+    expect(h.y).toBeGreaterThanOrEqual(0);
+    let bright = 0; // its lights and lit cabin: pixels brighter than the night sky inside its box
+    for (let y = Math.max(0, h.y | 0); y < Math.min(270, h.y + h.h); y++) {
+      for (let x = Math.max(0, h.x | 0); x < Math.min(480, h.x + h.w); x++) {
+        const i = (y * 480 + x) * 3;
+        if (Math.max(heli.data[i]!, heli.data[i + 1]!, heli.data[i + 2]!) > 0.6) bright++;
+      }
+    }
+    expect(bright).toBeGreaterThanOrEqual(4);
+    for (const seed of [7, 11, 23]) {
+      const img = paint(read('a dragon flying over a castle'), { width: 480, height: 270, seed });
+      const d = img.layout.things.find((t) => t.kind === 'dragon')!;
+      expect(d.y, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+      expect(d.y + d.h, `seed ${seed}`).toBeLessThanOrEqual(img.layout.horizon * 270 + 1);
     }
   });
 

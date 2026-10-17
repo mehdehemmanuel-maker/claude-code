@@ -596,7 +596,7 @@ export interface Landforms {
 // the built things (lighthouse, rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, pole,
 // bench), each from a table in metres with its source. The house and building rows (HOUSE_THING, BUILDING_THING)
 // are things.mjs's drawers now, keyed 'houses' and 'buildings' as before; the new kinds are keyed by their ids.
-export type HouseKind = 'house' | 'cabin' | 'cottage' | 'farmhouse';
+export type HouseKind = 'house' | 'cabin' | 'farmhouse'; // a cottage is drawn as the house (see structures.mjs)
 export interface HouseRow {
   L: number; // along the ridge, metres
   D: number; // across
@@ -605,7 +605,7 @@ export interface HouseRow {
   over: number; // the eaves' overhang
   colour: number[];
   roof: number[];
-  roofKind: 'tile' | 'shingle' | 'thatch' | 'corrugated';
+  roofKind: 'tile' | 'shingle' | 'corrugated';
   windows: number; // on a long wall
   logs?: number; // a log course's height: round logs
   boards?: number; // a board's width: a barn's red boards
@@ -613,6 +613,8 @@ export interface HouseRow {
   source: string;
 }
 export declare const HOUSES: Record<HouseKind, HouseRow>;
+/** Where the placement's foot is on a house: the near gable on land, the footprint's centre on a shore. */
+export declare const HOUSE_ANCHOR: { land: 'front' | 'centre'; water: 'front' | 'centre' };
 export interface ChurchRow {
   L: number; D: number; wall: number; rise: number; tower: number; towerH: number; spire: number; source: string;
 }
@@ -652,7 +654,7 @@ export declare const HOUSE_THING: ThingEntry;
 export declare const BUILDING_THING: ThingEntry;
 export declare const STRUCTURE_THINGS: ThingEntry[];
 /** The house kind a mention's word names (a village is houses and cottages by the seed). */
-export declare function houseKind(word: string, rand?: () => number): HouseKind;
+export declare function houseKind(word: string): HouseKind;
 /** Whether the words ask for a city: the usual buildings, or a city word. */
 export declare function citySkyline(scene: Scene): boolean;
 export declare function drawHouse(ctx: Ctx, inst: ThingInstance): Omit<ThingBox, 'kind'>;
@@ -666,10 +668,11 @@ export interface SkylineLayout {
   glow: boolean; // the warm horizon glow (night, and fainter at dusk)
   lamps: number; // street-level lamp points
   towers: Array<{ x: number; y: number; w: number; h: number }>; // each silhouette's pixels
+  under: 'hills' | 'mountains' | null; // the named ridge the silhouettes were kept under, when one capped them
 }
 export interface Layout {
   skyline?: SkylineLayout; // what skylinePass drew; absent when the words asked for no city
-  lighthouse?: { beam: boolean }; // whether the lighthouse's beam was drawn (night or storm)
+  lighthouse?: { beam: boolean; headland: boolean }; // its beam (night or storm); the reef drawn to the shore
 }
 export interface ThingBox {
   /**
@@ -742,9 +745,23 @@ export interface ThingBox {
   child?: boolean; // a figure drawn at the child's stature
   people?: number; // a crowd's figures
   launching?: boolean; // the rocket on its plume
+  ground?: number; // the rocket's pad row: nothing of a launch is painted below it
+  lights?: boolean; // the helicopter's nav lights and lit cabin (night)
   held?: boolean; // the kite on a line from a figure
   dive?: boolean; // the whale's flukes up
 }
+/** A thing or a condition registered with `figure` is no landscape's: read.mjs's bare() overlooks it. */
+export interface ThingEntry { figure?: boolean }
+export interface ConditionEntry { figure?: boolean }
+// The scene's honesty helpers, read.mjs's (re-exported by families/abstract.mjs as they were).
+/** A line for the shell's report (scene.notes), once. */
+export declare function note(scene: Scene, text: string): void;
+/** A claimed word put back among the ignored, in the prompt's order. */
+export declare function dropWord(scene: Scene, word: string): void;
+/** Takes words a family dropped back out of the ignored list. */
+export declare function undrop(scene: Scene, dropped: string[]): void;
+/** Whether the prompt names nothing of a landscape (a `figure` thing or condition is not one). */
+export declare function bare(scene: Scene): boolean;
 export interface Scene {
   pose?: 'standing' | 'walking' | 'sitting'; // the figures' pose, from 'standing', 'walking', 'sitting'
   launching?: boolean; // the rocket low on its plume, from 'launching', 'lift-off', 'blast-off'

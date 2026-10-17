@@ -183,6 +183,10 @@ function bounds(ctx, want, retry) {
 
 const isSubject = (want) => want.asked && want.count <= SUBJECTS && !want.entry.sky;
 
+const SKY_OVER = 0.15; // the share of the horizon a flyer hangs in when the usual buildings fill the skyline row
+/** Whether the usual buildings stand at the skyline row (their towers reach 0.85 of the way up the sky). */
+const skylineRow = (ctx) => (ctx.scene.instances ?? []).some((i) => i.kind === 'buildings' && i.usual && i.count > 0);
+
 /**
  * One candidate position for a want's i-th copy: its ground share u and its column ux by the rules (a subject at
  * a third line at mid depth, an extra anywhere in its band, the reader's window), then the world position, the
@@ -206,10 +210,16 @@ function candidate(ctx, want, i, span, placed, gap = null) {
       u = clamp(SUBJECT_DEPTH[0] + rand() * (SUBJECT_DEPTH[1] - SUBJECT_DEPTH[0]) + stagger, uMin, uMax);
     } else u = uMin + rand() * (uMax - uMin); // a vehicle anywhere along the road, so two never share a row
   }
-  const heading = onRoad ? (rand() < TOWARD ? 'toward' : 'away') : 'side';
+  let heading = onRoad ? (rand() < TOWARD ? 'toward' : 'away') : 'side';
+  // the lane follows the heading (right-hand traffic, as vehicles.mjs has it): away in the right lane, toward in
+  // the left, the oncoming one. A second vehicle whose lane is taken while the other is free turns about and takes
+  // the free one (two cars fill both lanes, as they did); with both lanes used it keeps its heading, apart in depth
+  const laneOf = (h) => (h === 'toward' ? -1 : 1), used = placed.filter((p) => p.lane !== null).map((p) => p.lane);
+  if (onRoad && used.includes(laneOf(heading)) && !used.includes(-laneOf(heading))) {
+    heading = heading === 'toward' ? 'away' : 'toward';
+  }
   const fp = footprintOf(entry, size, heading), sz = entry.size ?? { w: 1, h: 1 }; // the box is its width as it faces
-  const lane = placed.filter((p) => p.entry.onRoad && p.heading !== 'side').length % 2 === 0 ? 1 : -1;
-  const c = { want, entry, ux, heading, fp, hm: sz.h * size, lane: onRoad ? lane : null };
+  const c = { want, entry, ux, heading, fp, hm: sz.h * size, lane: onRoad ? laneOf(heading) : null };
   stand(ctx, c, u);
   ashore(ctx, c); // hook for water-reflections: dry feet on the wandering shore, judged before refusal() looks
   // the shore's push stands every pine on one row: the stagger is given again past it, nearer only
@@ -294,8 +304,9 @@ function farBank(ctx, want) {
  */
 export function place(ctx, want, i, placed, retry = false) {
   const { rand } = ctx, { entry } = want;
-  if (entry.sky) {
-    const ux = rand(), uy = rand() * ctx.horizon * 0.7, zm = depthIn(entry.depth ?? [25, 120], rand());
+  if (entry.sky) { // over the usual buildings' skyline row (its towers leave the top of the sky), a flyer keeps to it
+    const ux = rand(), uy = rand() * ctx.horizon * (skylineRow(ctx) ? SKY_OVER : 0.7);
+    const zm = depthIn(entry.depth ?? [25, 120], rand());
     const xm = (ux - 0.5) * ctx.W * zm / ctx.camera.focal;
     return { want, entry, ux, uy, zm, xm, heading: 'side', fp: { w: 0, d: 0 }, box: null, fy: 0, u: 0 };
   }
@@ -431,7 +442,12 @@ export function critic(ctx, placed, list = placed.map((p) => p.want)) {
     // hook for scene-families: a sky phenomenon (rainbow, aurora, lightning) is painted by its own pass behind the
     // land, nothing through the sprite; its draw() hands on the box that pass painted (no area when it did not)
     const byPass = p.entry.sky && alone === 0 && count[p.id] === 0;
-    const seen = byPass ? t.w >= least && t.h >= 1 : count[p.id] > 0 && count[p.id] >= SHOWING * alone && span >= least;
+    // a thing its drawer stood elsewhere (a tower at the kerb) is judged by the span of what is left of it, rows and
+    // columns both, since the next one along the street covers most of it by design
+    const rows = bottom[p.id] - top[p.id] + 1, cols = right[p.id] - left[p.id] + 1;
+    const stoodSeen = count[p.id] > 0 && rows >= least && cols >= least;
+    const seen = byPass ? t.w >= least && t.h >= 1
+      : t.stood ? stoodSeen : count[p.id] > 0 && count[p.id] >= SHOWING * alone && span >= least;
     t.visible = seen;
     t.pixels = count[p.id];
     t.painted = alone;

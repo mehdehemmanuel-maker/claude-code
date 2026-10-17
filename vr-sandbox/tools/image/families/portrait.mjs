@@ -22,6 +22,9 @@ export const WORDS = new RegExp(
   '|glasses)$',
 );
 const HEAD = /^(portrait|face|selfie|headshot)$/, PERSON = /^(woman|man|girl|boy)$/;
+/** The shell's note when this family paints: creatures-flyers hands a bare person word here with the same words. */
+export const PORTRAIT_NOTE =
+  'painted by the portrait family (no ground, no horizon): a stylised face, not a likeness of anyone';
 
 /**
  * Every word of the prompt is known and none names a landscape (a lake, night: bare()): nothing else is asked for,
@@ -42,7 +45,7 @@ function apply(scene, word) {
   if (scene.family !== 'portrait' && scene.instances.length === 0 && claim) {
     scene.family = 'portrait';
     undrop(scene, p.dropped);
-    note(scene, 'painted by the portrait family (no ground, no horizon): a stylised face, not a likeness of anyone');
+    note(scene, PORTRAIT_NOTE);
   }
   if (scene.family === 'portrait') p.words.push(word);
   else {

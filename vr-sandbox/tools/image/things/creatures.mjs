@@ -22,16 +22,18 @@
 // The reader: a registered thing is read by its match with no edit to read.mjs. Four conditions registered here keep
 // the words honest where the reader's rules cannot: the irregular plurals (people, children, men, women, sheep,
 // deer, cattle: the usual number, not one), 'fish' (the underwater family's when an underwater word is named, else a
-// leaping fish on the water), a sea creature's water, and the bare person words: woman, man, girl and boy are things
-// here, so the portrait family's own bare() test (families/abstract.mjs) can no longer claim them; when the prompt
-// is nothing but one of them and known words, this file hands the scene to the portrait family itself (the same
-// family, note and record), and when a landscape thing or condition is named the word is a figure. 'launching' sets
-// the rocket low on its plume, 'standing', 'walking' and 'sitting' pose the figures, and 'bats' turns an unsaid hour
-// to night (said in scene.overridden).
+// leaping fish on the water), a sea creature's water, a collective noun (a flock of birds, a herd of cattle: bound
+// to the creature word after it, else left among the ignored words), and the bare person words: woman, man, girl
+// and boy are things here, marked `figure` so read.mjs's bare() still counts a prompt with nothing else of a
+// landscape as bare ('a man in space' is the space family's); when the prompt is nothing but one of them and known
+// words, this file hands the scene to the portrait family itself (the same family, note and record), and when a
+// landscape thing or condition is named the word is a figure. 'launching' sets the rocket low on its plume,
+// 'standing', 'walking' and 'sitting' pose the figures when there are figures (else they stay ignored: a sitting
+// cat stands), and 'bats' turns an unsaid hour to night (said in scene.overridden).
 import { clamp, fbm, h2, lerp, mix, smooth } from '../math.mjs';
-import { COMPOUNDS, CONDITIONS, NUMBERS, THINGS, knows, words } from '../read.mjs';
-import { familyFor, register, thingFor } from '../registry.mjs';
-import { note } from '../families/abstract.mjs';
+import { COMPOUNDS, CONDITIONS, NUMBERS, bare, dropWord, knows, note, words } from '../read.mjs';
+import { familyFor, register } from '../registry.mjs';
+import { PORTRAIT_NOTE } from '../families/portrait.mjs';
 
 // ── The figures, in metres ─────────
 // shoulder: ground to the withers; body: point of chest to point of rump; depth: the body's depth (shoulder - leg);
@@ -262,7 +264,6 @@ export function creature(ctx, inst, kind = inst.instance?.kind) {
   const flank = (cx, cy, rx, ry) => (x, y) => { // a cylinder's light: the top lit, the belly in shade, the sun's side
     const up = clamp((cy - y) / ry, -1, 1), side = clamp((x - cx) / rx, -1, 1);
     let kk = 0.5 + 0.28 * up + 0.14 * side * toSun;
-    if (C.patches) kk *= 1; // the patches are in the colour, below
     const col = C.patches && !inst.colour ? patch(base, x, y, S) : base;
     return lit(col, clamp(kk, 0.25, 1), c);
   };
@@ -618,12 +619,22 @@ export function crowd(ctx, inst) {
 
 const FUSELAGE = [0.92, 0.92, 0.93], UNDERSIDE = [0.55, 0.57, 0.6], GLASS = [0.2, 0.28, 0.36], NAV = [1, 0.3, 0.25];
 const FLAME = [1, 0.62, 0.15], FLAME_CORE = [1, 0.95, 0.75], SMOKE = [0.62, 0.6, 0.58], DARKMETAL = [0.2, 0.2, 0.22];
-const BASKET = [0.45, 0.3, 0.14], TRAIL = [0.96, 0.97, 0.98];
+const BASKET = [0.45, 0.3, 0.14], TRAIL = [0.96, 0.97, 0.98], NAV_GREEN = [0.25, 1, 0.35];
+const CABIN_LIGHT = [1, 0.86, 0.55]; // a lit cabin window, painted as a light
 
-/** Where a flyer hangs: its screen place from placement's ux/uy, its scale from its depth. */
-function hang(ctx, inst, dir) {
+const SKY_TOP = 0.02; // the share of the height a flyer keeps under the frame's top
+
+/**
+ * Where a flyer hangs: its screen place from placement's ux/uy, its scale from its depth. `reach` (metres up and
+ * down from its origin) keeps it inside the sky band: its top under the frame's top, its underside over the horizon.
+ */
+function hang(ctx, inst, dir, reach = null) {
   const zm = inst.zm ?? 200, s = ctx.camera.focal / zm * sizeOf(inst), x0 = inst.ux * ctx.W;
-  const y0 = (inst.uy ?? 0.3) * ctx.H;
+  let y0 = (inst.uy ?? 0.3) * ctx.H;
+  if (reach) {
+    const top = SKY_TOP * ctx.H + reach.up * s, bottom = ctx.hy - 1 - reach.down * s;
+    y0 = bottom >= top ? clamp(y0, top, bottom) : (top + bottom) / 2;
+  }
   return { x0, y0, zm, s, at: (u, v) => [x0 + dir * u * s, y0 - v * s] };
 }
 
@@ -637,7 +648,8 @@ const LIVERY = [[0.75, 0.12, 0.12], [0.1, 0.3, 0.6], [0.9, 0.5, 0.1], [0.1, 0.45
  */
 function airliner(ctx, inst) {
   const A = FLYERS.airplane, { rand, lit, scene, poly, ellipse } = ctx, dir = rand() < 0.5 ? 1 : -1, ext = extent();
-  const { at, s } = hang(ctx, inst, dir), L = A.length, R = A.fuselageH / 2, night = scene.time === 'night';
+  const reach = { up: A.tailH, down: A.span * 0.21 }; // the fin's top, the near wing hanging below
+  const { at, s } = hang(ctx, inst, dir, reach), L = A.length, R = A.fuselageH / 2, night = scene.time === 'night';
   const livery = inst.colour ?? LIVERY[Math.floor(rand() * LIVERY.length)], c = [0, 0, 0];
   const body = (x, y) => lit(FUSELAGE, 0.95, c), belly = lit(UNDERSIDE, 0.7), fin = lit(livery, 0.85);
   if (!night && scene.clouds < 0.9) contrail(ctx, ext, at, L, R, s);
@@ -694,7 +706,8 @@ function contrail(ctx, ext, at, L, R, s) {
 /** The small plane: a high straight wing with its strut, a boxy cabin, the prop disc, a fin, fixed wheels. */
 function cessna(ctx, inst) {
   const A = FLYERS.cessna, { rand, lit, poly, ellipse } = ctx, dir = rand() < 0.5 ? 1 : -1, ext = extent();
-  const { at, s } = hang(ctx, inst, dir), L = A.length, H = A.fuselageH, base = inst.colour ?? FUSELAGE, c = [0, 0, 0];
+  const { at, s } = hang(ctx, inst, dir, { up: A.tailH + 0.5, down: 0.8 }); // the fin's top to the wheels
+  const L = A.length, H = A.fuselageH, base = inst.colour ?? FUSELAGE, c = [0, 0, 0];
   const stripe = inst.colour ? lit(mix(inst.colour, BLACK, 0.3), 0.8) : lit(LIVERY[Math.floor(rand() * 5)], 0.85);
   const body = lit(base, 0.9), shade = lit(base, 0.6);
   const belt = at(0, H * 0.45)[1];
@@ -728,14 +741,16 @@ function cessna(ctx, inst) {
 /** The helicopter: a rounded cabin with a glazed nose, a tapering boom to a fin and tail rotor, skids, the rotor's
  * thin disc on its mast above. */
 function helicopter(ctx, inst) {
-  const A = FLYERS.helicopter, { rand, lit, poly, ellipse } = ctx, dir = rand() < 0.5 ? 1 : -1, ext = extent();
-  const { at, s } = hang(ctx, inst, dir), paints = [[0.9, 0.9, 0.9], [0.9, 0.75, 0.1], [0.2, 0.3, 0.22]];
-  const base = inst.colour ?? paints[Math.floor(rand() * 3)];
+  const A = FLYERS.helicopter, { rand, lit, poly, ellipse, scene } = ctx, dir = rand() < 0.5 ? 1 : -1, ext = extent();
+  const { at, s } = hang(ctx, inst, dir, { up: A.height + 0.6, down: 0.2 }); // the rotor disc to the skids
+  const paints = [[0.9, 0.9, 0.9], [0.9, 0.75, 0.1], [0.2, 0.3, 0.22]];
+  const base = inst.colour ?? paints[Math.floor(rand() * 3)], night = scene.time === 'night';
   const body = lit(base, 0.85), shade = lit(base, 0.55), cabL = A.fuselage * 0.42, Hc = A.cabinH * 1.3;
   const boomV = Hc * 0.55; // the cabin's floor at v = 0.6 (the skids below), the boom from its back
   const mid = at(0, 0.6 + Hc * 0.5)[1];
   ellipse(...at(cabL * 0.5, 0.6 + Hc * 0.5), cabL * 0.5 * s, Hc * 0.5 * s, (x, y) => (y > mid ? shade : body));
-  ellipse(...at(cabL * 0.22, 0.6 + Hc * 0.6), cabL * 0.2 * s, Hc * 0.32 * s, lit(GLASS, 0.85)); // the glazed nose
+  // the glazed nose: by night the cabin is lit from inside, so the dark body reads against dark buildings
+  ellipse(...at(cabL * 0.22, 0.6 + Hc * 0.6), cabL * 0.2 * s, Hc * 0.32 * s, night ? CABIN_LIGHT : lit(GLASS, 0.85));
   ext.mark(...at(0, 0));
   ext.mark(...at(cabL, 0.6 + Hc));
   const bv = 0.6 + boomV, F = A.fuselage;
@@ -753,7 +768,13 @@ function helicopter(ctx, inst) {
     ctx.line(...at(u, 0.6), ...at(u + 0.2, 0.05), Math.max(0.8, 0.06 * s), DARKMETAL); // the skids' legs
   }
   ctx.line(...at(-0.3, 0.05), ...at(cabL + 0.3, 0.05), Math.max(0.8, 0.08 * s), DARKMETAL); // the skid
-  return { ...ext.box({ x: 0, y: 0, w: 1, h: 1 }), species: 'helicopter' };
+  if (night) { // the nav light of the side shown (red to port, green to starboard), the tail light, the beacon
+    const r = Math.max(1, 0.35 * s);
+    ctx.disc(...at(cabL * 0.55, 0.6 + Hc * 0.2), r, dir > 0 ? NAV : NAV_GREEN);
+    ctx.disc(...at(F + 0.3, bv + 1.75), r, [1, 1, 1]);
+    ctx.disc(...at(cabL * 0.5, A.height + 0.45), r, NAV);
+  }
+  return { ...ext.box({ x: 0, y: 0, w: 1, h: 1 }), species: 'helicopter', lights: night };
 }
 
 /**
@@ -762,7 +783,8 @@ function helicopter(ctx, inst) {
  * tiny basket a twelfth of the envelope's width below.
  */
 function balloon(ctx, inst) {
-  const B = FLYERS.balloon, { rand, lit, sun, poly } = ctx, ext = extent(), { at, s } = hang(ctx, inst, 1);
+  const B = FLYERS.balloon, { rand, lit, sun, poly } = ctx, ext = extent();
+  const { at, s } = hang(ctx, inst, 1, { up: B.total, down: 0.5 }); // the crown to the basket
   const main = inst.colour ?? LIVERY[Math.floor(rand() * LIVERY.length)];
   const second = LIVERY[Math.floor(rand() * LIVERY.length)], toSun = sun.left ? -1 : 1;
   const gores = [main, CREAM, inst.colour ? main : second, CREAM], D = B.envelopeD, Hh = B.envelopeH;
@@ -799,24 +821,29 @@ function rocket(ctx, inst) {
   const Rk = FLYERS.rocket, { lit, scene, poly, ellipse, disc } = ctx, ext = extent(), launching = !!scene.launching;
   const zm = inst.zm ?? 600, s = ctx.camera.focal / zm * sizeOf(inst), x0 = inst.ux * ctx.W;
   const ground = ctx.project(0, zm).y, aloft = (inst.uy ?? 0.3) * ctx.H + Rk.height * 0.5 * s;
-  const base = launching ? ground - 12 * s : aloft;
+  const flameL = launching ? Rk.plume * 0.75 : Rk.height * 0.5, fw = Rk.d * 0.7;
+  // launching: seconds off the pad, the rocket a plume's length up, so the flame ends over the ground row and the
+  // smoke pools on it; nothing of it is painted below the ground
+  const base = launching ? ground - (flameL + PAD_CLEAR) * s : aloft;
   const at = (u, v) => [x0 + u * s, base - v * s], r = Rk.d / 2, fr = Rk.fairingD / 2, Hh = Rk.height;
   const night = scene.time === 'night';
   const toSun = ctx.sun.left ? -1 : 1, c = [0, 0, 0];
   const body = (x) => lit(FUSELAGE, 0.55 + 0.4 * (0.5 + 0.5 * clamp((x - x0) / Math.max(1, r * s), -1, 1) * toSun), c);
-  if (launching) { // the smoke at the pad: billows spreading sideways, lit red by the flame at night
+  if (launching) { // the smoke at the pad: billows spreading sideways on the ground, lit red by the flame at night
     const n = 14, spread = 55;
     for (let i = 0; i < n; i++) {
-      const u = (h2(i, 1, 211) - 0.5) * 2 * spread, v = 2 + h2(i, 2, 211) * 14 * (1 - Math.abs(u) / spread * 0.6);
-      const rr = (8 + h2(i, 3, 211) * 10) * s, [px, py] = at(u, v);
+      const u = (h2(i, 1, 211) - 0.5) * 2 * spread, rm = 8 + h2(i, 3, 211) * 10, rr = rm * s;
+      const v = rm * 0.85 + h2(i, 2, 211) * 8 * (1 - Math.abs(u) / spread * 0.6), px = x0 + u * s, py = ground - v * s;
       const near = Math.exp(-((u / 18) ** 2));
       mix(lit(SMOKE, 0.75), FLAME, (night ? 0.45 : 0.25) * near, c);
-      const billow = (x, y) => 0.5 * (0.6 + 0.4 * fbm(x / 9, y / 9, 212, 2));
+      const billow = (x, y) => (y > ground ? 0 : 0.5 * (0.6 + 0.4 * fbm(x / 9, y / 9, 212, 2)));
       disc(px, py, rr, [c[0], c[1], c[2]], billow, Math.max(2, rr * 0.5));
-      ext.mark(px, py, rr);
+      ext.mark(px - rr, py);
+      ext.mark(px + rr, py);
+      ext.mark(px, py - rr);
+      ext.mark(px, Math.min(py + rr, ground));
     }
   }
-  const flameL = launching ? Rk.plume * 0.75 : Rk.height * 0.5, fw = r * 1.4;
   const flame = [...at(-fw, 0), ...at(fw, 0), ...at(fw * 0.4, -flameL * 0.55), ...at(0, -flameL),
     ...at(-fw * 0.4, -flameL * 0.55)];
   poly(flame, (x, y) => { // orange edge, white-yellow core: painted in its own colour, it is a light
@@ -836,11 +863,16 @@ function rocket(ctx, inst) {
   poly([...at(-fr, top), ...at(fr, top), ...at(fr, Hh - 4), ...at(0, Hh), ...at(-fr, Hh - 4)], body); // the fairing
   ext.mark(...at(-fr, Hh));
   ext.mark(...at(fr, 0));
-  if (launching) ellipse(x0, ground, 30 * s, Math.max(1, 1.5 * s), lit(SMOKE, 0.6), 0.5, 3); // smoke along the ground
-  return { ...ext.box({ x: 0, y: 0, w: 1, h: 1 }), species: 'rocket', launching };
+  if (launching) { // smoke along the ground, its lower half under the ground row left unpainted
+    ellipse(x0, ground, 30 * s, Math.max(1, 1.5 * s), lit(SMOKE, 0.6), (x, y) => (y > ground ? 0 : 0.5), 3);
+    ext.mark(x0 - 30 * s, ground);
+    ext.mark(x0 + 30 * s, ground);
+  }
+  return { ...ext.box({ x: 0, y: 0, w: 1, h: 1 }), species: 'rocket', launching, ground };
 }
 
-const DRAGONS = [[0.6, 0.12, 0.1], [0.2, 0.42, 0.18], [0.3, 0.22, 0.12]];
+const DRAGONS = [[0.72, 0.1, 0.08], [0.2, 0.42, 0.18], [0.3, 0.22, 0.12]]; // red by default, else green or bronze
+const PAD_CLEAR = 6; // metres the launching rocket's flame ends over the ground row
 
 /**
  * The dragon in flight: a horse-like body, the long S neck forward to a wedge head with swept horns, the legs
@@ -849,10 +881,13 @@ const DRAGONS = [[0.6, 0.12, 0.1], [0.2, 0.42, 0.18], [0.3, 0.22, 0.12]];
  */
 function dragon(ctx, inst) {
   const Dn = FLYERS.dragon, { rand, lit, poly, disc } = ctx, dir = rand() < 0.5 ? 1 : -1, ext = extent();
-  const { at, s } = hang(ctx, inst, dir), base = inst.colour ?? DRAGONS[Math.floor(rand() * DRAGONS.length)];
+  const base = inst.colour ?? (rand() < 0.7 ? DRAGONS[0] : DRAGONS[1 + Math.floor(rand() * 2)]); // mostly red
   const body = lit(base, 0.7), dark = lit(mix(base, BLACK, 0.35), 0.6);
   const membrane = lit(mix(base, [0.6, 0.4, 0.3], 0.3), 0.8);
   const phase = rand() < 0.5 ? 1 : -1, T = Dn.tail, B = Dn.body, u0 = T, shoulder = [u0 + B * 0.75, 1.0];
+  // its reach up and down from the body line: the wings' tips at the top or the bottom of their stroke
+  const reach = phase > 0 ? { up: Dn.span * 0.52, down: 2 } : { up: Dn.neck + 3.5, down: Dn.span * 0.38 };
+  const { at, s } = hang(ctx, inst, dir, reach);
   const wing = (k, col, sparC) => { // from the shoulder: the arm out and up, the fingers fanning, the edge back
     const span = Dn.span / 2 * k, lift = phase * span * 0.45;
     const wrist = [shoulder[0] + span * 0.25, shoulder[1] + lift * 0.5 + 1.5];
@@ -875,8 +910,10 @@ function dragon(ctx, inst) {
   // the tail, the body, the legs tucked, the neck and the head
   const tailPts = [[0, 1.6 - phase * 1.5], [T * 0.3, 1.0], [T * 0.65, 0.9], [u0, 1.1]];
   ribbon(ctx, ext, tailPts.map(([u, v]) => at(u, v)), 0.12 * s, 0.9 * s, dark);
-  const tip = 1.6 - phase * 1.5;
-  poly([...at(0, tip), ...at(-1.2, tip + 0.6), ...at(-0.8, tip - 0.6)], dark); // the spade
+  const tip = 1.6 - phase * 1.5; // the spade: a diamond a man's height across, so the tail reads as a dragon's
+  poly([...at(0.6, tip), ...at(-0.9, tip + 1.0), ...at(-2.2, tip), ...at(-0.9, tip - 1.0)], dark);
+  ext.mark(...at(-2.2, tip + 1.0));
+  ext.mark(...at(-2.2, tip - 1.0));
   const belly = at(0, 1.0)[1];
   const dm = Dn.depthM;
   ctx.ellipse(...at(u0 + B / 2, 1.0 + dm * 0.1), B / 2 * s, dm / 2 * s, (x, y) => (y > belly ? dark : body));
@@ -1133,7 +1170,7 @@ export function swimmer(ctx, inst, kind) {
 export const CREATURE_WORDS = {
   cat: /^(cats?|kittens?|kitty|tabby)$/, dog: /^(dogs?|pupp(y|ies)|hounds?|collies?|labradors?)$/,
   horse: /^(horses?|pon(y|ies)|mares?|stallions?|foals?)$/, deer: /^(deer|stags?|hinds?|reindeer|fawns?|elk)$/,
-  cow: /^(cows?|cattle|bulls?|calf|calves|oxen|ox|heifers?)$/, sheep: /^(sheep|lambs?|ewes?|rams?|flock)$/,
+  cow: /^(cows?|cattle|bulls?|calf|calves|oxen|ox|heifers?)$/, sheep: /^(sheep|lambs?|ewes?|rams?)$/,
   goat: /^(goats?|billy-goats?)$/, wolf: /^(wolf|wolves)$/, elephant: /^(elephants?)$/,
   camel: /^(camels?|dromedar(y|ies))$/,
 };
@@ -1143,8 +1180,7 @@ const PERSON_WORDS = new RegExp(
 );
 const PORTRAIT_WORDS = /^(woman|man|girl|boy)$/, PORTRAIT_HEAD = /^(portrait|face|selfie|headshot)$/;
 const SIDE = /^(cliffs?|rocks?|north|south|east|west|northern|southern|eastern|western)$/;
-const PORTRAIT_NOTE = // families/portrait.mjs's own words, repeated: the claim is made here (see the header)
-  'painted by the portrait family (no ground, no horizon): a stylised face, not a likeness of anyone';
+const COLLECTIVES = /^(flocks?|herds?|packs?|swarms?|shoals?|pods?)$/; // bound to the creature word after them
 const IRREGULAR = /^(people|children|men|women|sheep|deer|cattle|oxen|reindeer|elk|fishermen)$/;
 const UNDERWATER_HEAD = /^(underwater|undersea|corals?|reefs?|diving|divers?|scuba|seabed|aquarium)$/;
 const FISH_WORDS = /^(fish|fishes)$/;
@@ -1166,9 +1202,9 @@ const KEYS = { deer: 'deer', sheep: 'sheep', wolf: 'wolves' }; // the keys that 
 /** The registry entries: the creatures, the people, the flyers, the birds, the bats and the swimmers. */
 export const CREATURE_THINGS = [
   ...Object.keys(CREATURES).map((id) => ({ ...creatureEntry(id), word: KEYS[id] ?? `${id}s` })),
-  {
+  { // `figure`: a person word is no landscape's, for read.mjs's bare() (the space and portrait claims)
     id: 'person', word: 'people', match: PERSON_WORDS, usual: 4, band: null, size: { w: 0.6, h: 1.7, d: 0.5 },
-    draw: figure,
+    draw: figure, figure: true,
   },
   { id: 'crowd', word: 'crowds', match: /^crowds?$/, usual: 1, band: null, size: { w: 6, h: 1.8, d: 4 }, draw: crowd },
   {
@@ -1225,23 +1261,15 @@ export const CREATURE_THINGS = [
   },
 ];
 
-/** A thing registered here (the figure entry), for the aloneness test. */
-const own = (entry) => CREATURE_THINGS.includes(entry);
-
 /**
- * Whether the prompt is a bare person word and known words only: no landscape thing (built in or registered,
- * except this file's figure), no condition but this file's own, no family word but the portrait's. The portrait
- * family's bare() cannot judge it any more (the person words are things here), so this does, with the same
- * ingredients.
+ * Whether the prompt is a bare person word and known words only: read.mjs's bare() (which overlooks the figure
+ * entry and the `figure` conditions here), every word known, and no family word but the portrait's. A pose word
+ * (walking, sitting) is a scene's: 'a man walking' is a figure in a landscape, not a face.
  */
-function aloneWithFigure(scene, mine) {
+function aloneWithFigure(scene) {
   const ws = words(scene.prompt).flatMap((w) => COMPOUNDS[w] ?? [w]);
+  if (!ws.every(knows) || !bare(scene)) return false;
   return ws.every((w) => {
-    if (!knows(w)) return false;
-    if (Object.values(THINGS).some((re) => re.test(w))) return false;
-    const thing = thingFor(w);
-    if (thing && !(own(thing) && thing.id === 'person')) return false;
-    if (CONDITIONS.some((c) => !mine.includes(c) && c.match.test(w))) return false;
     const family = familyFor(w);
     return !family || family.id === 'portrait';
   });
@@ -1268,16 +1296,15 @@ function bringWater(s, g, w) {
 
 export function installCreatures() {
   for (const entry of CREATURE_THINGS) register('things', entry);
-  const mine = [];
-  const condition = (entry) => mine.push(register('conditions', entry));
+  const condition = (entry) => register('conditions', entry);
   condition({ // a bare person word is the portrait family's; in a scene it is a figure
-    id: 'figure-or-portrait', kind: 'weather', match: PORTRAIT_WORDS,
+    id: 'figure-or-portrait', kind: 'weather', match: PORTRAIT_WORDS, figure: true,
     apply: (s) => {
       const ws = words(s.prompt), sideFace = (w, i) => w === 'face' && i > 0 && SIDE.test(ws[i - 1]);
       const head = ws.some((w, i) => PORTRAIT_HEAD.test(w) && !sideFace(w, i));
       const figures = s.instances.filter((i) => i.kind === 'people');
       if (!figures.length || s.family) return;
-      const claim = head ? s.instances.length === figures.length : aloneWithFigure(s, mine);
+      const claim = head ? s.instances.length === figures.length : aloneWithFigure(s);
       if (!claim) return;
       s.instances = s.instances.filter((i) => !figures.includes(i));
       s.family = 'portrait';
@@ -1287,7 +1314,7 @@ export function installCreatures() {
     },
   });
   condition({ // the irregular plurals: the usual number when no number stands before the word
-    id: 'irregular-plurals', kind: 'weather', match: IRREGULAR,
+    id: 'irregular-plurals', kind: 'weather', match: IRREGULAR, figure: true,
     apply: (s) => {
       const ws = words(s.prompt);
       for (const inst of s.instances) {
@@ -1296,6 +1323,21 @@ export function installCreatures() {
         if (numberBefore(ws, ws.indexOf(last)) !== null) continue;
         const entry = CREATURE_THINGS.find((e) => (e.word ?? e.id) === inst.kind);
         inst.count = entry?.usual ?? 1;
+        inst.usual = true;
+      }
+    },
+  });
+  condition({ // a collective noun binds to the creature word within three words after it, else it is ignored
+    id: 'collective', kind: 'weather', match: COLLECTIVES,
+    apply: (s, g, w) => {
+      const ws = words(s.prompt), at = ws.indexOf(w), ours = CREATURE_THINGS.map((e) => e.word ?? e.id);
+      const inst = s.instances.find((i) => i.index > at && i.index <= at + 3 && ours.includes(i.kind));
+      if (!inst) {
+        dropWord(s, w);
+        return;
+      }
+      if (inst.count === 1 && !inst.usual) { // 'a herd of elephant': the usual number of them
+        inst.count = CREATURE_THINGS.find((e) => (e.word ?? e.id) === inst.kind)?.usual ?? 1;
         inst.usual = true;
       }
     },
@@ -1322,10 +1364,16 @@ export function installCreatures() {
     id: 'launching', kind: 'weather', match: /^(launching|launches|launch|lift-?off|liftoff|blast-?off|blastoff)$/,
     apply: (s) => { s.launching = true; },
   });
-  condition({
+  condition({ // a pose, when there are figures to take it; else the word goes back among the ignored
     id: 'pose', kind: 'weather',
     match: /^(standing|stands?|walking|walks?|strolling|running|runs?|sitting|seated|sits?)$/,
-    apply: (s, g, w) => { s.pose = /^s(tand|it)/.test(w) ? (/sit|seat/.test(w) ? 'sitting' : 'standing') : 'walking'; },
+    apply: (s, g, w) => {
+      if (!s.instances.some((i) => (i.kind === 'people' || i.kind === 'crowds') && i.count > 0)) {
+        dropWord(s, w);
+        return;
+      }
+      s.pose = /^s(tand|it)/.test(w) ? (/sit|seat/.test(w) ? 'sitting' : 'standing') : 'walking';
+    },
   });
   condition({ // bats fly at night: an unsaid hour is turned to night, and said
     id: 'bats-night', kind: 'weather', match: /^bats?$/,

@@ -5,7 +5,8 @@
 // the camera as the vehicles are: a frame at the thing's place and heading, faces projected point by point, the
 // faces that look at the camera kept, each lit by its normal (a painter's light: the wall toward the sun's side of
 // the frame bright, the one away from it in shade, a roof lit from above), and its detail (logs, boards, tiles,
-// thatch, windows, doors, a window grid) painted by unprojecting each pixel back onto the face. Every house kind is
+// windows, doors, a window grid) painted by unprojecting each pixel back onto the face (a cottage is drawn as the
+// house: its thatch did not read as thatch, so the kind is not claimed). Every house kind is
 // drawn to the cabin's eave and ridge (SIZES.cabin: 3 m + 1.8 m, typical), because the house entry's one size frames
 // the camera and the placement for the word 'house' (the image-place and image-draw tests hold it at 4.8 m); a
 // two-storey house (8 m) and a barn (8-10 m to the ridge) are taller than that in life: the footprints vary, the
@@ -37,11 +38,6 @@ export const HOUSES = {
     L: C.w, D: C.d, wall: C.wall, rise: C.rise, over: 0.4, colour: [0.48, 0.32, 0.17], roof: [0.30, 0.21, 0.14],
     roofKind: 'shingle', windows: 1, logs: 0.32, source: 'SIZES.cabin (typical); log course 0.3-0.35 m typical',
   },
-  // a thatched cottage: a lower eave (2.4 m) under a steep thatch to the same ridge, whitewashed walls: typical
-  cottage: {
-    L: 6, D: 4.5, wall: 2.4, rise: 2.4, over: 0.45, colour: [0.90, 0.88, 0.80], roof: [0.62, 0.54, 0.34],
-    roofKind: 'thatch', windows: 2, source: 'typical of a two-room thatched cottage (eave 2.2-2.6 m, pitch 45-50)',
-  },
   // a farmhouse or barn: wide (10 x 6 m, typical of a small barn's footprint), barn red boards with white trim, a
   // hay door in the gable over a double door; its ridge held to 4.8 m (a barn's is 8-10 m: see the header)
   farmhouse: {
@@ -57,7 +53,8 @@ export const STRUCTURES = {
   // gallery, the gallery rail projecting 0.8 m, a 3.5 m glazed lantern under a 1.7 m dome (typical; Portland Bill
   // 41 m and Beachy Head 43 m published, Trinity House); white with one red band: typical colours
   lighthouse: {
-    h: 30, base: 8, top: 5, rail: 0.8, lantern: { h: 3.5, d: 3.5, dome: 1.7 }, band: [11, 16], rock: { w: 16, h: 3 },
+    h: 30, base: 8, top: 5, rail: 0.8, lantern: { h: 3.5, d: 3.5, dome: 1.7 }, band: [11, 16], rock: { w: 18, h: 5 },
+    headland: { lumps: [14, 20], w: [6, 2.5], h: [2.5, 0.7], drift: 2 }, // a low reef from it to the shore: estimate
     source: 'figures sheet lighthouse: typical ranges; the example towers published (Trinity House, USCG)',
   },
   // shore rocks and boulders: lumps 1-3 m tall in a cluster 5 m across, dark wet rock: an estimate; a cliff word
@@ -313,15 +310,12 @@ const HOUSE_YAW = 18 * DEG; // the gable end faces the viewer, turned this much 
  */
 export const HOUSE_ANCHOR = { land: 'front', water: 'centre' };
 const HOUSE_WORDS = [
-  [/\b(cabins?|huts?|lodges?|chalets?)\b/, 'cabin'], [/\bcottages?\b/, 'cottage'],
-  [/\b(farmhouses?|barns?|farms?)\b/, 'farmhouse'],
+  [/\b(cabins?|huts?|lodges?|chalets?)\b/, 'cabin'], [/\b(farmhouses?|barns?|farms?)\b/, 'farmhouse'],
 ];
-const VILLAGE = /\b(villages?|hamlets?)\b/;
 
-/** The kind the word names: cabin, cottage, farmhouse, else a house; a village is houses and cottages by the seed. */
-export function houseKind(word, rand = () => 0) {
+/** The kind the word names: cabin, farmhouse, else a house (a cottage and a village's houses are houses). */
+export function houseKind(word) {
   for (const [re, kind] of HOUSE_WORDS) if (re.test(word)) return kind;
-  if (VILLAGE.test(word)) return rand() < 0.6 ? 'house' : 'cottage';
   return 'house';
 }
 
@@ -383,7 +377,7 @@ function wallPaint(ctx, S, colour, which, index) {
   };
 }
 
-/** A roof plane's paint: tile courses, staggered shingles, thatch strands, corrugated ribs; snow when it lies. */
+/** A roof plane's paint: tile courses, staggered shingles, corrugated ribs; snow when it lies. */
 function roofPaint(ctx, S, snowy) {
   const c = [0, 0, 0];
   return (a, b, k, out) => {
@@ -394,8 +388,7 @@ function roofPaint(ctx, S, snowy) {
     } else if (S.roofKind === 'shingle') {
       const row = Math.floor(b / 0.5), seam = ((a + row * 0.25) % 0.5 + 0.5) % 0.5 < 0.04;
       tone = ((b % 0.5) + 0.5) % 0.5 < 0.06 || seam ? 0.7 : 0.85 + 0.25 * fbm(a * 5, b * 0.5, 195, 2);
-    } else if (S.roofKind === 'thatch') tone = 0.8 + 0.35 * fbm(a * 7, b * 0.9, 196, 3);
-    else tone = ((a % 0.3) + 0.3) % 0.3 < 0.06 ? 0.8 : 1;
+    } else tone = ((a % 0.3) + 0.3) % 0.3 < 0.06 ? 0.8 : 1;
     return ctx.lit(scaled(S.roof, tone, c), k, out);
   };
 }
@@ -411,7 +404,7 @@ function roofPaint(ctx, S, snowy) {
  */
 export function drawHouse(ctx, inst) {
   const { scene, rand, hy } = ctx, word = inst.instance?.word ?? inst.word ?? '';
-  const kind = houseKind(word, rand), S = HOUSES[kind], index = (rand() * 1e6) | 0;
+  const kind = houseKind(word), S = HOUSES[kind], index = (rand() * 1e6) | 0;
   const wide = S.D * Math.cos(HOUSE_YAW) + S.L * Math.sin(HOUSE_YAW) + 2 * S.over;
   const st = stance(ctx, inst, wide), sx = ctx.sun.left ? -1 : 1, theta = frontToward(sx, HOUSE_YAW);
   const anchor = scene.ground === 'water' && inst.fy >= hy ? HOUSE_ANCHOR.water : HOUSE_ANCHOR.land;
@@ -520,12 +513,18 @@ export function drawBuilding(ctx, inst) {
 
 // ── The skyline ────────────────────
 
-const CITY = /^(city|cities|skyline|cityscape|metropolis|downtown|urban|towns?)$/;
-/** Whether the words ask for a city: the usual buildings, or a city word (a harbour's four towers are not one). */
+const CITY = /^(city|cities|skyline|cityscape|metropolis|downtown|urban)$/, TOWN = /^towns?$/;
+/**
+ * Whether the words ask for a city: the usual buildings or a city word; not a town's (the usual eleven, no
+ * skyline behind them) nor a harbour's four.
+ */
 export function citySkyline(scene) {
   if (scene.family) return false;
-  return (scene.instances ?? []).some((i) => i.kind === 'buildings' && i.count > 0 &&
-    (!!i.usual || String(i.word ?? '').split(' ').some((w) => CITY.test(w))));
+  return (scene.instances ?? []).some((i) => {
+    const ws = String(i.word ?? '').split(' ');
+    if (i.kind !== 'buildings' || !(i.count > 0) || ws.some((w) => TOWN.test(w))) return false;
+    return !!i.usual || ws.some((w) => CITY.test(w));
+  });
 }
 
 const SKYLINE_ROWS = [ // two rows of silhouettes: the far one taller and hazier, the near one over it
@@ -534,15 +533,17 @@ const SKYLINE_ROWS = [ // two rows of silhouettes: the far one taller and hazier
 ];
 const GLOW_SIGMA = 0.12; // the horizon glow's reach, as a share of the height
 const GLOW_SHARE = { night: 0.5, sunset: 0.2 };
+const UNDER_RIDGE = 0.012; // a silhouette's top keeps this share of the height under a named ridge over it
 
 /**
  * Before the ground, when the words ask for a city: a warm glow over the horizon at night (the sky mixed toward
  * GLOW by exp(-((hy - y) / (0.12 H))^2) * 0.5, dusk at 0.2), then 25-40 adjoining silhouettes across the full width
  * in two rows (heights from fbm over their order, a landmark spike here and there, far to near, lit windows by the
- * time of day), then a row of street-lamp points at their feet when the lamps are lit. Everything is painted into
- * the sky snapshot too (ctx.sky), so the water and the wet pavement mirror it. Keyed on the sun's place, not
- * ctx.rand: no draw is spent, so every scene without a city paints exactly as before. layout.skyline says what was
- * drawn.
+ * time of day), then a row of street-lamp points at their feet when the lamps are lit. Under a named ridge of hills
+ * or mountains (layout.ranges) each silhouette's top stays UNDER_RIDGE below the lowest ridge point over it, so the
+ * hills asked for are not hidden (layout.skyline.under names the ridge). Everything is painted into the sky
+ * snapshot too (ctx.sky), so the water and the wet pavement mirror it. Keyed on the sun's place, not ctx.rand: no
+ * draw is spent, so every scene without a city paints exactly as before. layout.skyline says what was drawn.
  */
 export function skylinePass(ctx) {
   const { W, H, hy, scene, layout, data, sky, scale, px } = ctx;
@@ -572,6 +573,8 @@ export function skylinePass(ctx) {
   const ww = Math.max(1, Math.round(scale)), wh = Math.max(1, Math.round(2 * scale)), win = [0, 0, 0];
   mix(LITWINDOW, ctx.L.horizon, 0.2, win);
   const glass = ctx.lit(mix(DARKWINDOW, ctx.L.horizon, 0.3), 0.6);
+  const ranges = layout.ranges ?? [], ridgeAt = (x) => Math.min(hy, ...ranges.map((g) => g.top[x]));
+  let under = null;
   let left = Math.floor(n * SKYLINE_ROWS[0].share);
   SKYLINE_ROWS.forEach((row, r) => {
     const count = r === 0 ? left : n - left, widths = [];
@@ -586,10 +589,18 @@ export function skylinePass(ctx) {
       const w = widths[i] / sum * 1.04 * W, u = fbm(i * 0.45 + r * 3.3, 0.5, key + 5 + r, 3);
       let tall = H * lerp(row.tall[0], row.tall[1], clamp((u - 0.3) * 2));
       if (h2(i, 2, key + r) > 0.88) tall = Math.min(tall * 1.5, 0.25 * H); // a landmark
+      const x0 = Math.max(0, Math.floor(x)), x1 = Math.min(W - 1, Math.ceil(x + w) - 1);
+      if (ranges.length) { // under the ridge: no taller than the lowest ridge point it spans, less a margin
+        let low = 0;
+        for (let xx = x0; xx <= x1; xx++) low = Math.max(low, ridgeAt(xx));
+        if (tall > hy - low - UNDER_RIDGE * H) {
+          tall = Math.max(2, hy - low - UNDER_RIDGE * H);
+          under = ranges[ranges.length - 1].kind;
+        }
+      }
       const tone = lerp(row.tone[0], row.tone[1], h2(i, 3, key + r)), top = hy - tall;
       const wall = ctx.air(ctx.lit([tone, tone, tone * 1.06], 0.55 - r * 0.1), depth, [0, 0, 0]);
       const roof = ctx.air(ctx.lit([tone, tone, tone * 1.06], 0.8), depth, [0, 0, 0]);
-      const x0 = Math.max(0, Math.floor(x)), x1 = Math.min(W - 1, Math.ceil(x + w) - 1);
       for (let yy = Math.max(0, Math.floor(top)); yy < Math.min(H, Math.ceil(hy)); yy++) {
         const edge = yy === Math.floor(top) ? Math.min(1, yy + 1 - top) : 1;
         for (let xx = x0; xx <= x1; xx++) {
@@ -614,7 +625,7 @@ export function skylinePass(ctx) {
       lamps++;
     }
   }
-  layout.skyline = { count: n, glow: glow > 0, lamps, towers };
+  layout.skyline = { count: n, glow: glow > 0, lamps, towers, under };
 }
 
 // ── Rocks ──────────────────────────
@@ -635,18 +646,7 @@ function rockMass(ctx, x0, fy, wPx, hPx, key, colour, lumps) {
     const t = h2(j, 1, key), cx = x0 + (t - 0.5) * wPx * 0.85, cy = lerp(fy, back, h2(j, 2, key) * 0.9);
     const depthK = Math.max(0.35, 1 - (fy - cy) / Math.max(1, fy - back) * 0.5); // the farther lumps smaller
     const rx = hPx * (0.35 + 0.4 * h2(j, 3, key)) * depthK, ry = rx * (0.6 + 0.35 * h2(j, 4, key));
-    const pts = [];
-    for (let i = 0; i < 16; i++) { // a boulder: a rounded top, a flat foot, its outline wandering slowly round
-      const th = (i / 16) * Math.PI * 2, rk = 0.82 + 0.36 * fbm(i * 0.4 + j * 7, key * 0.01, 197 + j, 2);
-      pts.push(cx + Math.cos(th) * rx * rk, cy - Math.abs(Math.sin(th)) * ry * rk * (Math.sin(th) < 0 ? 1 : 0.25));
-    }
-    poly(pts, (x, y) => { // lit from the sun's side and from above, the foot in shade, the grain and a few cracks
-      const side = (x - cx) / rx, up = clamp((cy - y) / ry), d = Math.hypot(side, 1 - up);
-      const grain = 0.82 + 0.36 * fbm(x / (5 * scale), y / (5 * scale), 198, 3);
-      const crack = fbm(x / (3 * scale), y / (9 * scale), 196, 2) < 0.3 ? 0.7 : 1;
-      const k = clamp(0.25 + 0.3 * side * sx + 0.55 * up + 0.2 * (1 - clamp(d)), 0.2, 1);
-      return lit(scaled(colour, grain * crack, c), k, c);
-    });
+    lump(ctx, cx, cy, rx, ry, key, j, colour);
     const x1 = Math.max(0, cx - rx) | 0, x2 = Math.min(W - 1, cx + rx);
     if (ashore && cy + 2 * scale >= shore - ry) { // foam along the lump where the water reaches it
       for (let x = x1; x <= x2; x++) {
@@ -664,6 +664,52 @@ function rockMass(ctx, x0, fy, wPx, hPx, key, colour, lumps) {
   }
 }
 
+/**
+ * One boulder: a rounded top, a flat foot at cy, its outline wandering slowly round; lit from the sun's side and
+ * from above, the foot in shade, with the rock's grain and a few cracks.
+ */
+function lump(ctx, cx, cy, rx, ry, key, j, colour) {
+  const { poly, sun, lit, scale } = ctx, sx = sun.left ? -1 : 1, c = [0, 0, 0], pts = [];
+  for (let i = 0; i < 16; i++) {
+    const th = (i / 16) * Math.PI * 2, rk = 0.82 + 0.36 * fbm(i * 0.4 + j * 7, key * 0.01, 197 + j, 2);
+    pts.push(cx + Math.cos(th) * rx * rk, cy - Math.abs(Math.sin(th)) * ry * rk * (Math.sin(th) < 0 ? 1 : 0.25));
+  }
+  poly(pts, (x, y) => {
+    const side = (x - cx) / rx, up = clamp((cy - y) / ry), d = Math.hypot(side, 1 - up);
+    const grain = 0.82 + 0.36 * fbm(x / (5 * scale), y / (5 * scale), 198, 3);
+    const crack = fbm(x / (3 * scale), y / (9 * scale), 196, 2) < 0.3 ? 0.7 : 1;
+    const k = clamp(0.25 + 0.3 * side * sx + 0.55 * up + 0.2 * (1 - clamp(d)), 0.2, 1);
+    return lit(scaled(colour, grain * crack, c), k, c);
+  });
+}
+
+/**
+ * The rocky point a lighthouse stands at the end of: lumps from the tower's foot down the tower's own column to
+ * the shore row (a spit running out from the shore straight toward the viewer), each at its own depth, the lumps
+ * lower and narrower toward the shore (a spit's foot is low rock; the near ones are big in pixels as it is),
+ * drifting a little across, foam where the water meets them. Reports the pixels it covered to the painter's box.
+ */
+function headland(ctx, P, st, shoreRow, key) {
+  const { W, H, put, scale, camera: { focal } } = ctx, Hd = STRUCTURES.lighthouse.headland;
+  const n = Hd.lumps[0] + Math.floor(h2(1, 9, key) * (Hd.lumps[1] - Hd.lumps[0] + 1)), foam = [0, 0, 0];
+  mix(FOAM, ctx.L.horizon, 0.2, foam);
+  for (let j = 0; j < n; j++) { // far to near, so the nearer lump covers the farther
+    const t = j / Math.max(1, n - 1), row = lerp(st.fy, shoreRow, t), zm = ctx.groundZ(row), s = focal / zm;
+    const cx = st.x0 + (h2(j, 5, key) - 0.5) * Hd.drift * st.k * s;
+    const rx = lerp(Hd.w[0], Hd.w[1], t) * (0.8 + 0.4 * h2(j, 6, key)) * st.k * s / 2;
+    const ry = lerp(Hd.h[0], Hd.h[1], t) * (0.8 + 0.4 * h2(j, 7, key)) * st.k * s;
+    lump(ctx, cx, row, rx, ry, key, j + 20, ROCK);
+    P.seen(clamp(cx - rx, 0, W - 1), clamp(row - ry, 0, H - 1));
+    P.seen(clamp(cx + rx, 0, W - 1), clamp(row + 1, 0, H - 1));
+    for (const side of [-1, 1]) { // foam along its waterline
+      for (let k = 0; k < 4; k++) {
+        const x = cx + side * rx * (0.55 + 0.15 * k), y = row - h2(j, 30 + k, key) * 2 * scale;
+        if (h2(x | 0, y | 0, 199) > 0.3) put(x, y, foam, 0.6 * (0.6 + 0.4 * ctx.gloom));
+      }
+    }
+  }
+}
+
 /** Rocks, boulders or a cliff: a cluster of lumps on the ground, along the shore with a foam line when water. */
 function drawRocks(ctx, inst) {
   const R = STRUCTURES.rocks, word = inst.instance?.word ?? inst.word ?? '', cliff = /cliff|crag/.test(word);
@@ -676,15 +722,42 @@ function drawRocks(ctx, inst) {
 
 // ── The lighthouse ─────────────────
 
+const OFF_SHORE = 0.12; // the lighthouse stands this share of the shore's band off the shore row, as the bridge does
+const TOWER_TOP = 0.03; // the share of the height its lantern keeps under the frame's top
+
 /**
  * A tapering white tower on a rock mass: one red band, a dark gallery with its rail, a glazed lantern under a dark
- * dome, lit with a two-stroke beam at night or in a storm (layout.lighthouse.beam says whether).
+ * dome, lit with a two-stroke beam at night or in a storm (layout.lighthouse.beam says whether). On a shore it
+ * stands just off the shore row, or as near as its height fits under the frame's top, at the end of a rocky point
+ * running out from the shore (the box records where it stood); on the far bank, as it was placed.
  */
 function drawLighthouse(ctx, inst) {
-  const { W, H, scene, scale, poly, line, disc, ellipse, lit } = ctx, T = STRUCTURES.lighthouse;
-  const st = stance(ctx, inst, T.rock.w), F = frameAt(st.xm, st.zm, 0, st.k), P = painter(ctx, F, st.dy, st.k);
+  const { W, H, hy, scene, scale, poly, line, disc, ellipse, lit, camera } = ctx, T = STRUCTURES.lighthouse;
+  let st = stance(ctx, inst, T.rock.w), stood, shoreRow = null;
+  const water = scene.ground === 'water' && !scene.frozen && typeof ctx.shoreAt === 'function';
+  if (water && inst.fy >= hy) { // off the near shore: the deepest shore row under the rock's span
+    let shore = 0;
+    const half = T.rock.w * st.k * st.s / 2;
+    for (let x = Math.max(0, st.x0 - half) | 0; x <= Math.min(W - 1, st.x0 + half); x++) {
+      shore = Math.max(shore, ctx.shoreAt(x));
+    }
+    if (shore < H - 1) {
+      const hgt = (T.h + T.lantern.h + T.lantern.dome + 1) * st.k;
+      const zmFit = camera.focal * Math.max(0, hgt - camera.eye) / Math.max(1, hy - TOWER_TOP * H);
+      const zm = Math.min(st.zm, Math.max(ctx.groundZ(shore - (shore - hy) * OFF_SHORE), zmFit));
+      const fy = ctx.project(0, zm).y;
+      if (fy > hy + 1 && zm !== st.zm) {
+        const s = camera.focal / zm, wide = Math.min(T.rock.w * st.k * s / 2, W / 2), x0 = clamp(st.x0, wide, W - wide);
+        st = { ...st, fy, zm, s, x0, xm: (x0 - W / 2) / s, dy: 0 };
+        stood = { xm: st.xm, zm };
+      }
+      if (shore > st.fy + 2 * scale) shoreRow = shore;
+    }
+  }
+  const F = frameAt(st.xm, st.zm, 0, st.k), P = painter(ctx, F, st.dy, st.k);
   const sx = P.sx, beam = scene.time === 'night' || !!scene.storm, key = (ctx.rand() * 1e6) | 0;
   st.shadow(st.xm, st.zm, { w: T.base * st.k, d: T.base * st.k }, (T.h + T.lantern.h) * st.k);
+  if (shoreRow !== null) headland(ctx, P, st, shoreRow, key);
   rockMass(ctx, st.x0, st.fy + st.dy, T.rock.w * st.k * st.s, T.rock.h * st.k * st.s, key, ROCK, 6);
   const r0 = T.base / 2, r1 = T.top / 2, c = [0, 0, 0];
   const across = (a, b) => (a - r0) / lerp(r0, r1, clamp(b / T.h)); // -1 at the left edge, 1 at the right
@@ -724,8 +797,9 @@ function drawLighthouse(ctx, inst) {
     disc(mid.x, mid.y, Math.max(2, lr * 2.2 * s), BEAM, 0.35, Math.max(2, lr * 2 * s));
     line(mid.x - lr * s, mid.y, mid.x + lr * s, mid.y, 1, BEAM, 0.2);
   }
-  ctx.layout.lighthouse = { beam };
-  return P.box() ?? { x: st.x0, y: st.fy, w: 1, h: 1 };
+  ctx.layout.lighthouse = { beam, headland: shoreRow !== null };
+  const box = P.box() ?? { x: st.x0, y: st.fy, w: 1, h: 1 };
+  return stood ? { ...box, stood } : box;
 }
 
 // ── The windmill ───────────────────
@@ -1220,9 +1294,9 @@ export const STRUCTURE_THINGS = [
   { id: 'lighthouse', match: /^lighthouses?$/, usual: 1, band: null, depth: [60, 400], onWater: true,
     size: { w: S.lighthouse.rock.w, h: S.lighthouse.h + S.lighthouse.lantern.h + 2, d: S.lighthouse.base },
     draw: drawLighthouse },
-  { id: 'rocks', match: /^(rocks?|rocky|cliffs?|boulders?|crags?)$/, usual: 4, band: null, depth: [8, 120],
+  { id: 'rocks', match: /^(rocks|rocky|cliffs?|boulders?|crags?)$/, usual: 4, band: null, depth: [8, 120],
     size: { w: S.rocks.w, h: S.rocks.h, d: S.rocks.d }, draw: drawRocks },
-  { id: 'windmill', match: /^(windmills?|mills?)$/, usual: 1, band: null, depth: [40, 300],
+  { id: 'windmill', match: /^windmills?$/, usual: 1, band: null, depth: [40, 300],
     size: { w: S.windmill.sail, h: S.windmill.tower - S.windmill.cap + 1.3 + S.windmill.sail / 2, d: S.windmill.base },
     draw: drawWindmill },
   { id: 'castle', match: /^(castles?|fortress|fortresses|citadels?)$/, usual: 1, band: null, depth: [80, 600],
@@ -1234,38 +1308,41 @@ export const STRUCTURE_THINGS = [
     draw: drawBridge },
   { id: 'tent', match: /^tents?$/, usual: 1, band: null, depth: [5, 40],
     size: { w: S.tent.L + 1, h: S.tent.h, d: S.tent.W }, draw: drawTent },
-  { id: 'campfire', match: /^(campfires?|bonfires?|fire)$/, usual: 1, band: null, depth: [4, 30],
+  { id: 'campfire', match: /^(campfires?|bonfires?)$/, usual: 1, band: null, depth: [4, 30],
     size: { w: 1.2, h: 1.0, d: 1.2 }, draw: drawCampfire },
   { id: 'fence', match: /^(fences?|fencing|railings?)$/, usual: 1, band: null, depth: [8, 60],
     size: { w: S.fence.run, h: S.fence.h, d: 0.3 }, draw: drawFence },
-  { id: 'streetlamp', match: /^(streetlamps?|street-?lamps?|lamp-?posts?|streetlights?|street-?lights?|lamps?)$/,
+  { id: 'streetlamp', match: /^(streetlamps?|street-?lamps?|lamp-?posts?|streetlights?|street-?lights?)$/,
     usual: 4, band: null, depth: [10, 120], size: { w: 1.4, h: S.streetlamp.h, d: 0.3 }, draw: drawStreetlamp },
-  { id: 'pole', match: /^(poles?|telegraph|telegraph-poles?|utility-poles?|pylons?)$/, usual: 5, band: null,
+  { id: 'pole', match: /^(telegraph-poles?|utility-poles?|pylons?)$/, usual: 5, band: null,
     depth: [10, 200], size: { w: S.pole.arm, h: S.pole.h, d: 0.3 }, draw: drawPole },
   { id: 'bench', match: /^(bench|benches)$/, usual: 1, band: null, depth: [4, 30],
     size: { w: S.bench.L, h: S.bench.back, d: S.bench.depth }, draw: drawBench },
 ];
 
 /**
- * Registers the new kinds and three readings that come with the words: a lighthouse brings a coast (water with a
- * shore, said in scene.overridden), a rock word beside water gives the water a shore to stand on, and a street
+ * Registers the new kinds and three readings that come with the words: a lighthouse brings a shore (and water when
+ * none is named, said in scene.overridden), a rock word beside water gives the water a shore to stand on, and a street
  * brings the usual streetlamps as it brings the usual buildings. The house and building rows are things.mjs's.
  */
 export function installStructures() {
   for (const entry of STRUCTURE_THINGS) register('things', entry);
   register('conditions', {
     id: 'lighthouse-coast', kind: 'water', match: /^lighthouses?$/,
-    apply: (s, g) => {
-      if (g.water || g.beach) return;
-      s.overridden.push({ what: 'ground', from: g.land ?? 'grass', to: 'water', because: 'lighthouse' });
-      g.water = true;
+    apply: (s, g) => { // a lighthouse stands on a shore: the water gets one (a lake's of grass), and water is
+      if (g.beach) return; // brought when none was named (said in scene.overridden; 'read as' names the shore)
+      if (!g.water) {
+        s.overridden.push({ what: 'ground', from: g.land ?? 'grass', to: 'water', because: 'lighthouse' });
+        g.water = true;
+        s.waterWord = s.waterWord ?? 'coast';
+        s.lake = false;
+      }
       g.beach = true;
-      s.waterWord = s.waterWord ?? 'coast';
-      s.lake = false;
+      if (s.lake) g.land = g.land ?? 'grass';
     },
   });
   register('conditions', {
-    id: 'rocky-shore', kind: 'water', match: /^(rocks?|rocky|cliffs?|boulders?|crags?)$/,
+    id: 'rocky-shore', kind: 'water', match: /^(rocks|rocky|cliffs?|boulders?|crags?)$/,
     apply: (s, g) => { if (g.water) g.beach = true; },
   });
   register('conditions', {

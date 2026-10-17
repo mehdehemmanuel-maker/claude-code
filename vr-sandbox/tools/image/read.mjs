@@ -52,8 +52,8 @@ export const COLLECTIVE = new RegExp(
 /** Things there is one of, however the word is spelt. */
 export const SINGLE = ['sun', 'moon', 'stars'];
 /** How many of a thing a plural names when no number does: the drawers' own defaults (things.mjs), and by word. */
-export const USUAL = {
-  trees: 9, buildings: 11, houses: 3, boats: 2, cars: 2, birds: 7, mountains: 3, hills: 2, sun: 1, moon: 1, stars: 1,
+export const USUAL = { // a registered thing's own `usual` is its one source (cars: vehicles.mjs, birds: creatures.mjs)
+  trees: 9, buildings: 11, houses: 3, boats: 2, mountains: 3, hills: 2, sun: 1, moon: 1, stars: 1,
 };
 export const USUAL_BY_WORD = { village: 6, villages: 6, hamlet: 6, hamlets: 6 };
 
@@ -100,6 +100,9 @@ export const PHRASES = [
   ['tractor', 'trailers'], // a cab is a taxi only after yellow or taxi; a tractor trailer is a semi
   ['northern', 'lights'], ['outer', 'space'], ['deep', 'space'], // hook for scene-families: the aurora; space's words
   ['propeller', 'plane'], ['propeller', 'planes'], ['light', 'aircraft'], // hook for creatures-flyers: the small plane
+  // hook for structures-skyline: the two-word names (a bare pole, lamp or light is not one of them)
+  ['telegraph', 'pole'], ['telegraph', 'poles'], ['utility', 'pole'], ['utility', 'poles'], ['lamp', 'post'],
+  ['lamp', 'posts'], ['street', 'lamp'], ['street', 'lamps'], ['street', 'light'], ['street', 'lights'],
 ];
 /** A bike is a motorcycle, unless the words also say bicycle, cycling or cyclist: then every bike is a bicycle. */
 const PEDALLED = /^(bicycles?|cycling|cyclists?)$/;
@@ -122,6 +125,9 @@ export const COMPOUNDS = {
   'line-art': ['sketch'], sunlit: ['sunny'],
   // hook for scene-families: 'northern lights' is the aurora (a bare 'northern' is not); outer or deep space is space
   'northern-lights': ['aurora'], 'outer-space': ['space'], 'deep-space': ['space'],
+  // hook for structures-skyline: street lamps are the lamps and the street both
+  'street-lamp': ['street', 'street-lamp'], 'street-lamps': ['street', 'street-lamps'],
+  'street-light': ['street', 'street-light'], 'street-lights': ['street', 'street-lights'],
 };
 
 const HOURS = {
@@ -312,6 +318,53 @@ function formsOf(w) {
     if (parts.some(knows)) return parts;
   }
   return [w];
+}
+
+// ── Shared by the families and the packages: the scene's honesty fields ──
+
+/** A line for the shell's report (scene.notes), once. */
+export function note(scene, text) {
+  const notes = scene.notes ??= [];
+  if (!notes.includes(text)) notes.push(text);
+}
+
+/**
+ * A claimed word put back among the ignored, in the prompt's order: the unknown words before it go in first, so
+ * the honesty list reads as it would had the word never been claimed (read()'s own loop adds the rest after).
+ */
+export function dropWord(scene, word) {
+  const ignored = scene.ignored;
+  if (ignored.includes(word)) return;
+  for (const w of words(scene.prompt)) {
+    if (w === word) break;
+    if (!knows(w) && !ignored.includes(w)) ignored.push(w);
+  }
+  ignored.push(word);
+}
+
+/** Takes words a family dropped back out of the ignored list, once the family is claimed after all. */
+export function undrop(scene, dropped) {
+  for (const w of dropped.splice(0)) {
+    const at = scene.ignored.indexOf(w);
+    if (at >= 0) scene.ignored.splice(at, 1);
+  }
+}
+
+/**
+ * Whether the prompt names nothing of a landscape: no thing (built in or registered) and no condition word (a lake,
+ * night, snow), read from the words themselves (a compound by its parts), since the reader's instances hold the
+ * things alone. A bare shape, space or person word claims its family only in a bare prompt. A thing or a condition
+ * registered with `figure: true` (creatures-flyers' person words and the readings that go with them) is no
+ * landscape's: 'a man in space' is as bare as 'space', and 'a man' alone is the portrait's.
+ */
+export function bare(scene) {
+  const landscape = (w) => {
+    if (Object.values(THINGS).some((re) => re.test(w))) return true;
+    const thing = thingFor(w);
+    if (thing && !thing.figure) return true;
+    return CONDITIONS.some((c) => !c.figure && c.match.test(w));
+  };
+  return !words(scene.prompt).some((w) => (COMPOUNDS[w] ?? [w]).some(landscape));
 }
 
 // ── Tokens ─────────────────────────
@@ -507,6 +560,7 @@ export function read(prompt) {
       }
       setBy[what] = c.id;
     }
+    if (hits.every((i) => s.ignored.includes(tokens[i].w))) continue; // apply() put its words back: not understood
     conditions++;
     for (const i of hits) spend(i);
   }
