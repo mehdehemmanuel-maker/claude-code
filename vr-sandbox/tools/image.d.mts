@@ -562,6 +562,7 @@ export interface Scene {
     nebula: boolean; galaxy: boolean; asteroids: boolean; moons: boolean;
   };
   abstract?: { kinds: string[]; dropped: string[] }; // kinds: disc, tri, rect, stripes, gradient, mandala, mondrian…
+  palette?: string[]; // the colour words a family paints with (the abstract family's), counted as recognised
   portrait?: { words: string[]; dropped: string[] };
   underwater?: { fish: number | null; diver: boolean; dropped: string[] };
   erupting?: boolean; // the volcano's lava, from 'erupting'

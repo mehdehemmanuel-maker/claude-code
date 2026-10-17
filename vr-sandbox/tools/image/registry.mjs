@@ -18,7 +18,9 @@
 //   conditions  the time, sky, weather and ground matchers read.mjs weighs, in its order: read.mjs fills this array
 //               with its CONDITIONS (the same array), so an entry registered here is weighed after them.
 //
-// register(kind, entry) adds an entry in order; one with the id of an entry already there takes its place.
+// register(kind, entry) adds an entry in order; one with the id of an entry already there takes its place. The
+// arrays are process-global and mutable: every importer in one process shares them, and the things' order is the
+// painter's order (thingsPass paints in it, each thing from ctx.rand), so re-registering changes the pictures.
 import { STYLES } from './styles.mjs';
 
 export const things = [];

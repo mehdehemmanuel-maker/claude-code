@@ -52,6 +52,12 @@ export const COLLECTIVE = new RegExp(
 );
 /** Things there is one of, however the word is spelt. */
 export const SINGLE = ['sun', 'moon', 'stars'];
+/** The least cloud under rain or falling snow: no moon or starfield shines through a downpour (a storm is 0.95). */
+export const RAIN_CLOUDS = 0.8;
+/** The most ranges and rows of hills the land pass draws (passes.mjs landBehindPass): a larger count is said. */
+export const MOST_ROWS = { mountains: 4, hills: 3 };
+/** A definite article before a kind already named is a re-mention of it ('a bridge ... beneath the bridge'). */
+const REMENTION = /^(the|that|this|same)$/;
 /** How many of a thing a plural names when no number does: the drawers' own defaults (things.mjs), and by word. */
 export const USUAL = { // a registered thing's own `usual` is its one source (cars: vehicles.mjs, birds: creatures.mjs)
   trees: 9, buildings: 11, houses: 3, boats: 2, mountains: 3, hills: 2, sun: 1, moon: 1, stars: 1,
@@ -179,8 +185,9 @@ CONDITIONS.push(
   { id: 'fog', kind: 'weather', match: /^(fog|foggy|mist|misty|haze|hazy|smog)$/, apply: (s) => { s.fog = 0.6; } },
   {
     id: 'rain', kind: 'weather', match: /^(rain|rainy|raining|drizzle|drizzly|showers?|downpour|rainfall)$/,
-    apply: (s) => { // a storm's rain is already heavier
+    apply: (s) => { // a storm's rain is already heavier; rain falls from cloud, so the sky is at least overcast
       s.rain = Math.max(s.rain, 0.6);
+      s.clouds = Math.max(s.clouds, RAIN_CLOUDS);
       s.wet = true;
     },
   },
@@ -191,8 +198,9 @@ CONDITIONS.push(
   },
   {
     id: 'snowing', kind: 'ground', match: /^(snowing|snowfall|blizzard|flurries|flurry)$/,
-    apply: (s, g) => {
+    apply: (s, g) => { // falling snow comes from cloud too
       s.snow = 0.7;
+      s.clouds = Math.max(s.clouds, RAIN_CLOUDS);
       g.land = 'snow';
     },
   },
@@ -475,6 +483,10 @@ export function read(prompt) {
   }
   for (const m of mentions) {
     for (let i = m.start; i <= m.end; i++) used[i] = true;
+    // 'the bridge' after 'a bridge' is the same bridge: a singular re-mention by its own word merges into it
+    const article = m.start > 0 ? tokens[m.start - 1].w : '', lastWord = tokens[m.end].w;
+    const before = s.instances.find((o) => o.kind === m.kind && o.word.split(' ').pop() === lastWord);
+    if (before && !m.plural && REMENTION.test(article)) continue;
     const inst = { kind: m.kind, count: 1, size: 1, modifiers: [], word: m.word, index: m.start };
     let number, none = false;
     let blocked = false; // a condition word between ("no clouds, trees"): a negation beyond it is not this thing's
@@ -569,10 +581,19 @@ export function read(prompt) {
     s.overridden.push({ what: 'rain', from: s.rain, to: 0, because: 'the sky was called clear' });
     s.rain = 0;
   }
+  // A vehicle needs land under it: beside water with no shore word it brings the near shore (a tree or a house
+  // would stand on the far bank; a bus drawn through the camera at the far bank's depth would stand in the lake).
+  const stander = s.instances.find((i) => i.count > 0 && thingByKey(i.kind)?.onRoad);
+  const shoreFor = (because) => {
+    if (s.beach || !stander) return;
+    s.beach = true;
+    s.overridden.push({ what: 'shore', from: 'none', to: 'near', because: `${stander.word} stands on land${because}` });
+  };
   if (g.water || g.beach) {
     s.ground = 'water';
     s.beach = g.beach || !!g.land || s.road;
     s.land = g.land ?? (g.beach ? 'sand' : 'grass');
+    shoreFor('');
   } else if (g.land) {
     s.ground = g.land;
     s.land = g.land;
@@ -608,6 +629,12 @@ export function read(prompt) {
     s.instances.push({ ...extra, size: 1, modifiers: [], index: tokens.findIndex((t) => t.w === extra.word) });
   }
 
+  for (const inst of s.instances) { // the land pass draws four ranges and three rows of hills at most: a larger
+    const most = MOST_ROWS[inst.kind]; // count would be a number the picture does not hold, so it is said
+    if (!most || inst.count <= most) continue;
+    s.overridden.push({ what: inst.kind, from: inst.count, to: most, because: `the land pass draws ${most} at most` });
+    inst.count = most;
+  }
   // The views the painter reads: things (the count painted, the usual number resolved) and one colour per kind (the
   // last named). A scene built by hand may still say 0 for the usual number (things.mjs, core.mjs).
   for (const inst of s.instances) {
@@ -620,6 +647,7 @@ export function read(prompt) {
     s.beach = s.ground !== 'grass' || s.road || 'houses' in s.things || 'trees' in s.things;
     s.land = s.ground;
     s.ground = 'water';
+    shoreFor(', the boats brought the water');
   }
   for (const sky of ['stars', 'moon']) {
     if (!(sky in s.things) || s.time !== 'day' || timeHits.length) continue;
@@ -647,7 +675,8 @@ export function read(prompt) {
     for (const p of tokens[i].parts) if (!s.ignored.includes(p)) s.ignored.push(p);
   }
   conditions += familyWords.filter((w) => !s.ignored.includes(w)).length; // a family word its family kept
-  s.recognised = s.instances.length + conditions + (s.style ? 1 : 0) + (s.text ? 1 : 0);
+  const palette = s.palette?.length ?? 0; // the colour words a family paints with (abstract.mjs sets scene.palette)
+  s.recognised = s.instances.length + conditions + (s.style ? 1 : 0) + (s.text ? 1 : 0) + palette;
   return s;
 }
 

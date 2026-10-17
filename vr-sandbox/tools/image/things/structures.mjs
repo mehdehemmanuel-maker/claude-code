@@ -560,10 +560,13 @@ export function skylinePass(ctx) {
     sky[i + 1] = lerp(sky[i + 1], col[1], a);
     sky[i + 2] = lerp(sky[i + 2], col[2], a);
   };
-  const glow = GLOW_SHARE[scene.time] ?? 0;
+  // low cloud throws a city's light back: from 0.6 cover (rain, overcast) the glow grows, to 1.8x as strong and
+  // twice as high at a storm's 0.95, as a rainy city's sky is lit from below
+  const back = clamp((scene.clouds - 0.6) / 0.35), sigma = GLOW_SIGMA * (1 + back);
+  const glow = (GLOW_SHARE[scene.time] ?? 0) * (1 + 0.8 * back);
   if (glow > 0) {
-    for (let y = Math.max(0, Math.floor(hy - 3 * GLOW_SIGMA * H)); y < Math.min(H, Math.ceil(hy)); y++) {
-      const a = Math.exp(-(((hy - y) / (GLOW_SIGMA * H)) ** 2)) * glow;
+    for (let y = Math.max(0, Math.floor(hy - 3 * sigma * H)); y < Math.min(H, Math.ceil(hy)); y++) {
+      const a = Math.exp(-(((hy - y) / (sigma * H)) ** 2)) * glow;
       for (let x = 0; x < W; x++) lay(x, y, GLOW, a);
     }
   }

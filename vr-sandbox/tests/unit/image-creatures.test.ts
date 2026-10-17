@@ -25,6 +25,12 @@ function ground(prompt: string, width = 320, height = 180, seed = 3) {
     register('families', land);
   }
 }
+/** The pixels a sprite id owns in the context's owner buffer: what the drawer painted solidly and still shows. */
+const owned = (ctx: Ctx, id: number) => {
+  let n = 0;
+  for (const v of ctx.owner!) if (v === id) n++;
+  return n;
+};
 const finiteBox = (box: { x: number; y: number; w: number; h: number }, label: string) => {
   expect([box.x, box.y, box.w, box.h].every(Number.isFinite), label).toBe(true);
   expect(box.w > 0 && box.h > 0, label).toBe(true);
@@ -158,9 +164,10 @@ describe('every row renders', () => {
           for (const near of [0.2, 0.5, 0.9]) {
             const fy = hy + near * (H - hy), zm = ctx.groundZ(fy);
             const inst = { ux: 0.5, fy, zm, xm: 0, pose, instance: { word: kind, kind: `${kind}s` } } as ThingInstance;
-            const box = ctx.sprite(zm, () => creature(ctx, inst, kind));
+            const id = ctx.tops.length, box = ctx.sprite(zm, () => creature(ctx, inst, kind));
             const label = `${kind} ${pose} near ${near} (${words})`;
             finiteBox(box, label);
+            expect(owned(ctx, id), `${label}: paints nothing`).toBeGreaterThan(0);
             const inFrame = box.x < W && box.x + box.w > 0 && box.y < H && box.y + box.h > 0;
             expect(inFrame, `${label}: in the frame`).toBe(true);
             expect(box.pose, label).toBe(pose);
@@ -188,8 +195,9 @@ describe('every row renders', () => {
       for (const zm of [zNear, (zNear + zFar) / 2, zFar]) {
         const word = id === 'bird' ? 'gulls' : id;
         const inst = { ux: 0.5, uy: 0.3, fy: 0, zm, instance: { word } } as ThingInstance;
-        const box = ctx.sprite(zm, () => entry.draw(ctx, inst));
+        const sprite = ctx.tops.length, box = ctx.sprite(zm, () => entry.draw(ctx, inst));
         finiteBox(box, `${id} at ${zm} m`);
+        expect(owned(ctx, sprite), `${id} at ${zm} m: paints nothing`).toBeGreaterThan(0);
         expect(box.x < W && box.x + box.w > 0 && box.y < H, `${id} at ${zm} m: in the frame`).toBe(true);
       }
     }
@@ -242,7 +250,7 @@ describe('a person is the scale a car is read against', () => {
     const img = paint(read('a busy street with people and cars'), { width: 640, height: 360, seed: 7 });
     const people = img.layout.things.filter((t) => t.kind === 'person');
     expect(people.length).toBe(4);
-    for (const p of people) expect(Math.abs(p.xm!)).toBeGreaterThan(SIZES.lane * SIZES.lanes);
+    for (const p of people) expect(Math.abs(p.xm!)).toBeGreaterThan(SIZES.lane * SIZES.lanes / 2 + 0.5); // off the road
     expect(read('a busy street with people and cars').report).toBeUndefined(); // the critic reports after painting
     const crowd = paint(read('a crowd in a city square'), { width: 640, height: 360, seed: 7 });
     const c = crowd.layout.things.find((t) => t.kind === 'crowd')!;

@@ -6,7 +6,7 @@ import {
   FIT, NEAR_SHARE, SIZES, camera, families, frameCamera, paint, read, register, report,
 } from '../../tools/image.mjs';
 
-const CORRIDOR = SIZES.lanes * SIZES.lane; // metres either side of the road's centre kept free of all but vehicles
+const CORRIDOR = SIZES.lanes * SIZES.lane / 2 + 0.5; // either side of the road's centre: its half width and some verge
 const ground = (img: Image) => img.layout.things.filter((t) => t.kind !== 'bird');
 /** How much of the smaller of two footprints the other covers, in world space. */
 function overlap(a: ThingBox, b: ThingBox) {
@@ -260,6 +260,51 @@ describe('place', () => {
     for (const c of both) { // each in a lane of the drifted road (its box ends at its near wheels, a row nearer)
       const fy = c.y + c.h, centre = ctx.groundX(ctx.roadX!(fy), fy);
       expect(Math.abs(Math.abs(c.xm! - centre) - SIZES.lane / 2)).toBeLessThan(0.3 * SIZES.lane);
+    }
+  });
+
+  it('stands a bus on the near shore of a lake it was named beside, never in the water (30 seeds)', () => {
+    // 'a bus by a lake' had no shore word: the whole ground was water and the bus, drawn through the camera at the
+    // far bank's depth, stood in the lake while the critic said 'buses 1/1'. The reader now brings the near shore
+    const scene = read('a bus by a lake');
+    expect(scene.beach).toBe(true);
+    for (let seed = 1; seed <= 30; seed++) {
+      const { img, ctx } = painted({ ...scene, report: undefined } as Scene, 320, 180, seed);
+      const bus = img.layout.things.find((t) => t.kind === 'bus')!;
+      expect(bus, `seed ${seed}: a bus`).toBeDefined();
+      const foot = bus.y + bus.h, shore = ctx.shoreLine!;
+      for (let x = Math.max(0, Math.ceil(bus.x)); x < Math.min(320, bus.x + bus.w); x++) {
+        expect(foot, `seed ${seed}: the bus's foot at column ${x} is below the waterline`)
+          .toBeGreaterThanOrEqual(shore[x]! - 1);
+      }
+    }
+  });
+
+  it('keeps three cows beside a farmhouse off the dirt road (30 seeds): the corridor is the road, not a field', () => {
+    // the corridor was the whole road's width either side of its centre (14 m), which within 20 m of the camera left
+    // nothing to stand on but the road, so the third cow was placed on it, crowded, and counted 3/3
+    const scene = read('a farmhouse by a dirt road, three cows');
+    for (let seed = 1; seed <= 30; seed++) {
+      const { img, ctx } = painted({ ...scene, report: undefined } as Scene, 320, 180, seed);
+      for (const cow of img.layout.things.filter((t) => t.kind === 'cow')) {
+        const fy = cow.y + cow.h, centre = ctx.groundX(ctx.roadX!(fy), fy);
+        expect(Math.abs(cow.xm! - centre) - cow.footprint!.w / 2, `seed ${seed}: a cow in the road`)
+          .toBeGreaterThanOrEqual(CORRIDOR - 1e-6);
+      }
+    }
+  });
+
+  it('hangs an airliner inside the frame and counts it seen only when it is (30 seeds)', () => {
+    // 'an airplane in the sky over the desert' once put a wing and part of the fuselage inside the right edge and
+    // said 'airplanes 1/1': a flyer's column is now kept in by its width, and a flyer under 70% in frame is not seen
+    for (let seed = 1; seed <= 30; seed++) {
+      const scene = read('an airplane in the sky over the desert');
+      const img = paint(scene, { width: 320, height: 180, seed });
+      const plane = img.layout.things.find((t) => t.kind === 'airplane')!;
+      const inside = Math.min(plane.x + plane.w, 320) - Math.max(plane.x, 0);
+      expect(inside / plane.w, `seed ${seed}: the airplane's box in the frame`).toBeGreaterThanOrEqual(0.95);
+      expect(plane.visible, `seed ${seed}: seen`).toBe(true);
+      expect(scene.report!.visible!.airplanes).toEqual([1, 1]);
     }
   });
 

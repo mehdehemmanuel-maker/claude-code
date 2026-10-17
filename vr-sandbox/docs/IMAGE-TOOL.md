@@ -278,6 +278,47 @@ for each, so the next person does not re-litigate them without the evidence.
 - **`things` carries the resolved count.** The reader used to write 0 for "the usual number" and the first JSON a
   reader opened said `mountains: 0` under a picture with three; now it writes the count painted and the instance
   keeps `usual: true`. The painter still takes 0 as the usual number from a hand-built scene.
+- **A re-mention is the same thing.** "a bridge over a river, a boat beneath the bridge" read two bridges and painted
+  two arches; a singular mention by its own word after the, that, this or same, of a kind already named, merges
+  into the earlier one ("a man and the woman" are two words, so two people).
+- **Rain and falling snow bring cloud, and an unnamed moon stays behind it.** A full moon and a starfield shone
+  through "heavy rain at night" (the critique's finding, lost on the way to "a moon at every night"). Rain and
+  snowing set the cloud cover to at least 0.8; from 0.8 the moon is drawn only when the words name it, the
+  starfield fades from 0.6 cover to none at a storm's 0.95, night clouds under a hidden moon are half as bright,
+  and a city's glow grows and reaches higher under low cloud, as a rainy city's sky is lit from below. The third
+  header picture (the city in the rain) changed with it: its moon went, and the towers moved since nothing is
+  refused for standing before a moon that is not there.
+- **A vehicle beside water brings the near shore.** "a bus by a lake" stood the bus in the lake (the far bank is a
+  foot row at the horizon with a visual depth of 20-400 m, and a vehicle drawn through the camera at that depth
+  stands in the water) while the critic said "buses 1/1". The reader now gives the water a near shore when a
+  vehicle is named with no shore word, says so in `overridden`, and a vehicle with no room on the shore is left
+  unplaced and counted 0/1 rather than sent to the far bank.
+- **The road's corridor is the road.** The strip kept free of all but vehicles was the road's whole width either
+  side of its centre (14 m), which within 20 m of the camera left nothing but the road to stand on, so the third cow
+  of a farm prompt was placed on it, crowded; it is the road's half width and half a metre of verge (4 m), and a
+  thing crowded after every try stands off the road when any try was.
+- **A flyer stays inside the frame, and a cropped one is not seen.** The airliner over the desert was a wing at the
+  right edge counted 1/1: a flyer's column is kept in by its own width (it hangs farther off when its band would
+  draw it wider than 0.4 of the frame), a flyer under 70 % inside the frame is not counted, and the airliner's box
+  is the aircraft, not its contrail.
+- **The ranges' count is said.** "five mountains" read 5 and painted 4 (the land pass draws four ranges and three
+  rows of hills at most); the reader clamps the count and says so in `overridden`.
+- **The abstract family's colour words are kept.** "abstract art in blue and gold" painted blue and gold and reported
+  colours {} and recognised 1; the family puts its palette words in `scene.palette` and the reader counts them.
+- **Stars are a constant count across sizes.** The plan's row (1080p has 2.25x the stars of 720p) is amended:
+  `skyPass` keeps the number of stars the same from 360 rows up (0.93 measured between the two), so a thumbnail
+  predicts the full render and is not speckled.
+- **No `--aa` flag.** Coverage anti-aliasing from the signed distance replaced the plan's supersample path; 960x540
+  stays under 0.6 s without it.
+- **The passes are under 70 lines, not 40.** Six functions in `passes.mjs` run 45-66 lines (range, groundPass,
+  landRow, landPixel, cloudPass, skyPass); their inner loops are the pass, and splitting them would name nothing.
+- **The pine is 5-8.3 cabin walls, not 2-4.** `SIZES` holds a pine at 15-25 m and a wall at 3 m; the test asserts
+  3-8.4 (a broadleaf is 3.3-4.7).
+- **`read()` lives in `read.mjs`; `core.mjs` re-exports it** with `words` and `COLOURS`, so the plan's single
+  core import gives a script the reader and the painter together.
+- **The lake-mirror test asserts all six seeds at 0.09.** Three seeds at 0.1 chose the ones that passed; 0.09 is the
+  share the mirror carries at every seed (0.096-0.113 measured).
+- **A man's portrait hair is short or curly.** The long style fell past the shoulders both sides and read as a hood.
 - **The font's descender letters sit on the x-line.** The 5x7 font keeps g, p, q and y inside the seven rows; drawn
   with a four-row bowl from row 1 the p was a P moved down one row ("Pixel", "sePia" in the gallery's labels).
   Their bowls now start at row 2 with the other lowercase bodies and their tails take the two rows under them.
@@ -287,7 +328,10 @@ for each, so the next person does not re-litigate them without the evidence.
 What a judge would still call thin, said plainly:
 
 - The things are flat-shaded boxes, cones and discs with anti-aliased edges: no texture on a wall, no bark, no cloth.
-  A pine is three cones; the kart at 400 px is two masses and four wheels.
+  A pine is three cones; the kart at 400 px is two masses, four wheels and the ring of its steering wheel: the
+  figures hold a seat shell, a steering column, a GX270 and pods (`vehicles.mjs`) that the drawer does not paint
+  (the owner's words: a red brick with a floating ring). A detail ladder by pixels per metre, the parts drawn when
+  they would be more than a few pixels, is the next package for every vehicle, the car's pillars and lamps with it.
 - The city is a skyline row of silhouettes and a few towers with window grids, not a street seen from its pavement:
   no ground floors, no traffic unless cars are named, and the eleven usual towers of "a city in the mountains" hide
   much of the ridge between them.
@@ -299,7 +343,7 @@ What a judge would still call thin, said plainly:
 - A helicopter at night is its lights (red and green by heading, a white tail light, a red beacon, a lit cabin) on a
   dark shape a few pixels across at its depth; it is in the frame and counted, not recognisable without them.
 - The speed budget in `image.test.ts` (640x360 under 400 ms, median of three) has held in every run so far, the full
-  gate's 154 test files in parallel included (2026-10-17: 1778 tests, 307 s); it is a budget for a quiet minute of
+  gate's 155 test files in parallel included (2026-10-17: 1793 tests, 295 s); it is a budget for a quiet minute of
   the machine, not a guarantee: the kitchen-sink prompt at 960x540 paints in 435-500 ms quiet and has taken 630 ms
   under the suite's load.
 - One lens, one level camera: no wide or portrait composition words, no looking up or down.
@@ -308,6 +352,33 @@ What a judge would still call thin, said plainly:
   however plain ("tarmac", "pond-side").
 - Weather and light are a few numbers (clouds, fog, rain, snow, storm, wet, an hour): no wind, no temperature, no
   season on anything but leaves and snow.
-- The critic counts what it painted and whether it can be seen; it does not judge whether it looks right.
+- The critic counts what it painted and whether it can be seen; it does not judge whether it looks right. The blind
+  check CLAUDE.md asks for (a context-free agent names the picture) was a judge round at the end, not a script in
+  the repo; `npm run image:blind` (a contact sheet of the header prompts for a stranger) is still to write.
+- A cow's neck is drawn long and raised, so a brown-and-white cow reads as a horse or a camel with patches; the
+  creatures are flat side elevations from a table, with no joints.
+- A counted few near the camera can stand one before another: the overlap rule is on footprints in metres, and the
+  critic counts each by its own pixels, so two cows half over each other are "cows 2/2". A screen-space overlap
+  rule is not written.
+- "by a lake" with no shore word keeps the camera in the water: a tent and a campfire by a lake at night are a strip
+  on the far bank. Only a vehicle brings the near shore (it cannot stand on the far bank); a house, a tree, a tent
+  or a person by water needs "shore", "beach", "lakeside" or a named land to stand on the near bank.
+- Relations and density words are read as plain nouns: "a castle on a hill" stands the castle on the flat with the
+  hills behind it (both blind namers called it "on a plain"), "forest" is nine trees spread across the frame (they
+  called it "a field"), and in, on, beneath, beside place nothing.
+- Actions and poses other than standing, walking and sitting are not read: jumping, lifting, parked, flying go among
+  the ignored words like any unknown noun, with no hint that they are verbs.
+- The forge's own words are unknown here: bearing, bolt, stepper motor, gear, robot arm, crane, excavator, train,
+  chainsaw, 3D printer paint the default meadow. `inventory.ts` (about 1,500 items) and `components.ts` are one
+  import away as a vocabulary that could say "known to the forge, not painted here"; drawing a library part
+  through `look.ts`'s light table into this tool's frame is the merge that would end the second generator.
+- Three of the eight styles are weak: sketch hatches the whole frame and buries the subject, watercolour washes a
+  pale sailboat out (one blind namer asked whether it was fog or a rendering mistake), poster quantises a blue noon
+  sky and green pines to violet and teal.
+- The camera frames the largest asked thing, so a person beside a pine is a 78 px figure under a 503 px tree; the
+  noon sun's disc sits a quarter of the way down a level 50 mm frame, where a 60 degree sun would be out of it, and
+  reads as a moon at times; the wet road mirrors the ranges nearly as a lake would.
+- 4K: 3840x2160 paints in about 6.2 s plus 1.1 s for the PNG at 473 MB RSS, against the plan's budget of 6 s and
+  250 MB (two Float32 frames, the Int32 owner buffer, level-9 deflate); 1080p takes about 2 s.
 - A PPM carries no reading; only the PNG does. There is no SVG, JPEG or GIF.
 - No preview page; the browser-safe core is exercised only by the tests.

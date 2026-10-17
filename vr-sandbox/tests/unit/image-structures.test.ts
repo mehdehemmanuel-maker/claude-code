@@ -156,8 +156,11 @@ describe('the drawers in the world', () => {
                 instance: { kind, count: 1, size: 1, modifiers: [], word, index: 0 },
               };
               const tag = `${kind} (${word}) in ${prompt} at ${u} ${heading}`;
-              const box = ctx.sprite(zm, () => entry.draw(ctx, inst));
+              const id = ctx.tops.length, box = ctx.sprite(zm, () => entry.draw(ctx, inst));
               expect(Number.isFinite(box.x) && Number.isFinite(box.y) && box.w > 0 && box.h > 0, tag).toBe(true);
+              let owned = 0; // the sprite wrote its id where it painted solidly: a drawer that paints nothing fails
+              for (const v of ctx.owner!) if (v === id) owned++;
+              if (u <= 0.5) expect(owned, `${tag}: paints nothing`).toBeGreaterThan(0); // 0.9 is inside the near plane
               // a thing that stands itself at the kerb of a road may stand outside a frame this near
               const inFrame = box.x < 320 && box.x + box.w > 0 && box.y < 180;
               if (!ctx.scene.road || !box.stood) expect(inFrame, tag).toBe(true);
@@ -266,15 +269,19 @@ describe('the skyline', () => {
     const img = paint(read(CITY), { width: 640, height: 360, seed: 7 }), hy = img.layout.horizon * 360;
     expect(img.layout.skyline!.glow).toBe(true);
     expect(img.layout.skyline!.lamps).toBeGreaterThan(20);
-    const row = (y: number) => {
-      let r = 0, g = 0, b = 0;
+    const open = (x: number, y: number) => !img.layout.things.some((t) => x >= t.x && x < t.x + t.w && y >= t.y);
+    const row = (y: number) => { // the open sky of the row: the towers (0.5 H tall here) are not the sky's glow
+      let r = 0, g = 0, b = 0, n = 0;
       for (let x = 0; x < 640; x++) {
+        if (!open(x, y)) continue;
         const i = (Math.round(y) * 640 + x) * 3;
         r += img.data[i]!;
         g += img.data[i + 1]!;
         b += img.data[i + 2]!;
+        n++;
       }
-      return [r / 640, g / 640, b / 640];
+      expect(n, `open sky columns at row ${y}`).toBeGreaterThan(20);
+      return [r / n, g / n, b / n];
     };
     const near = row(hy - 0.26 * 360), high = row(30); // just over the silhouettes, and the top of the sky
     expect(near[0]).toBeGreaterThan(high[0] + 0.03); // warmer and brighter than the sky above

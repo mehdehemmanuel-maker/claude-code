@@ -699,8 +699,8 @@ function contrail(ctx, ext, at, L, R, s) {
   for (const v of [-R * 0.1, -R * 0.9]) {
     const [x1, y1] = at(L * 0.6, v), [x2, y2] = at(L * 4.6, v + R * 0.4);
     ctx.line(x1, y1, x2, y2, w, TRAIL, (x) => 0.95 * (1 - clamp(Math.abs(x - x1) / reach)) ** 1.2, Math.max(2, w));
-    ext.mark(x2, y2, w);
   }
+  // the trail is not marked in the extent: the box is the aircraft's, which the critic judges inside the frame
 }
 
 /** The small plane: a high straight wing with its strut, a boxy cabin, the prop disc, a fin, fixed wheels. */

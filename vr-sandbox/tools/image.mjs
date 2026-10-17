@@ -84,9 +84,10 @@
 // borealis/northern lights at night; lightning/thunderbolt(s) under a storm) and the landforms (cactus/cacti/
 // cactuses/saguaro(s) on sand, palm-tree/palmtree/coconut-palm, volcano/volcanoes/volcanos with erupting/erupts/
 // eruption(s) for lava, waterfall(s)/cascade(s)). Structures in metres (houses by kind in three-quarter view, a
-// city's skyline, lighthouse, rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, pole, bench)
-// and creatures (cat, dog, horse, deer, cow, sheep, goat, wolf, elephant, camel, people and crowds; in the sky
-// airplane, cessna, helicopter, balloon, rocket, dragon, kite, birds by word, bats; whale, dolphin, shark, fish).
+// city's skyline, lighthouse, rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, telegraph
+// pole, bench) and creatures (cat, dog, horse, deer, cow, sheep, goat, wolf, elephant, camel, people and crowds; in
+// the sky airplane, cessna, helicopter, balloon, rocket, dragon, kite, birds by word, bats; whale, dolphin, shark,
+// fish).
 // Anything else in the words is ignored, and --describe shows exactly what was kept: every ignored word, every
 // silent change, and how much was recognised.
 // The longer read: README.md ("Pictures from words", a gallery tools/image-examples.mjs regenerates and checks) and

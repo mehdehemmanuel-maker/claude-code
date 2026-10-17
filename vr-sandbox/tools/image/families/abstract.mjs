@@ -68,6 +68,10 @@ function apply(scene, word) {
   }
   const kind = KIND[word];
   if (kind && !a.kinds.includes(kind)) a.kinds.push(kind);
+  // the colour words are the palette (palette() below): said in scene.palette, so --describe shows them kept and
+  // the reader counts them as recognised, where before 'blue and gold' were neither kept nor reported ignored
+  const named = promptColours(scene);
+  if (named.length) scene.palette = named;
 }
 
 // ── The palette ────────────────────

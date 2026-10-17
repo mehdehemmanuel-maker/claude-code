@@ -24,10 +24,10 @@ export function skyPass(ctx) {
   // Stars per pixel: a taller picture gets the same number of them; below 360 rows the count shrinks with the area
   // instead, so a thumbnail is not speckled.
   const rare = 0.0025 / Math.max(ctx.scale, 0.5) ** 2;
-  const starFactor = scene.things.stars ? 1 : 0.6;
+  const starFactor = (scene.things.stars ? 1 : 0.6) * starShare(scene.clouds); // fewer through heavy cloud
   // A flat sky (scene.flat, the minimalist style's ask) is the two-stop gradient alone: no glow round the sun or the
   // moon, which a posteriser would cut into rings. hook for sky-light: no glow where no moon is.
-  const flat = !!scene.flat, moonlit = noMoon(scene) || flat ? 0 : 1;
+  const flat = !!scene.flat, moonlit = moonHidden(scene) || flat ? 0 : 1;
   const base = [0, 0, 0];
   // All the rows, not only to the horizon: the water and the wet ground reflect the sky just below it, and the ground
   // paints over the rest.
@@ -73,6 +73,11 @@ const PHASES = { full: 1, half: 0.5, crescent: 0.2 };
 
 /** No moon tonight: the reader says 'moonless' or 'new' (undefined is today's behaviour, a moon). */
 const noMoon = (scene) => scene.moonPhase === 'moonless' || scene.moonPhase === 'new';
+const HEAVY = 0.8; // cloud cover (the reader's rain, falling snow, overcast) through which no unnamed moon shows
+/** No moon drawn: none tonight, or the sky is HEAVY with cloud and the words did not name one. */
+const moonHidden = (scene) => noMoon(scene) || (scene.clouds >= HEAVY && !scene.things.moon);
+/** How much of the starfield shows: all of it up to 0.6 cloud, none at a storm's 0.95. */
+export const starShare = (clouds) => clamp((0.95 - clouds) / 0.35);
 
 /** Whether the words set the hour: before 8 or from 17 the sun is low, else it is high (undefined: by the time). */
 const sunLow = (scene) => {
@@ -93,7 +98,7 @@ export function celestialPass(ctx) {
   const daytime = !L.sunk;
   if (scene.storm) return; // a storm hides both; the glow stays
   if (daytime) sunDisc(ctx, sunLow(scene)); // by day only: the words (things.sun) cannot raise a sun at night
-  if ((scene.things.moon || scene.time === 'night') && !noMoon(scene)) moonDisc(ctx, daytime);
+  if ((scene.things.moon || scene.time === 'night') && !moonHidden(scene)) moonDisc(ctx, daytime);
 }
 
 /** Runs shade(x, y, d) over the pixels within `reach` pixels of (cx, cy) (shares of W and H), above the horizon. */
@@ -181,8 +186,10 @@ export function cloudPass(ctx) {
   if (scene.clouds <= 0.05) return;
   const night = scene.time === 'night', warm = scene.time === 'sunset' || scene.time === 'dawn';
   const edge = scene.storm ? 0.25 : 0.72 - scene.clouds * 0.42, toSun = sun.left ? 0.2 : -0.2;
-  // An overcast day is a little duller; a storm at night keeps its decks as dark as its sky.
-  const dim = night && scene.storm ? 0.35 : night || scene.storm ? 1 : 0.7 + 0.3 * gloom;
+  // An overcast day is a little duller; a storm at night keeps its decks as dark as its sky, and a night whose moon
+  // is hidden by the cover (rain, overcast) has no moonlight on the decks: half as bright.
+  const dim = night && scene.storm ? 0.35 : night && moonHidden(scene) ? 0.5 : night || scene.storm ? 1
+    : 0.7 + 0.3 * gloom;
   const top = L.light, base = [0, 0, 0], col = [0, 0, 0], sky = ctx.sky;
   mix([L.light[0] * 0.85, L.light[1] * 0.85, L.light[2] * 0.85], L.horizon, warm ? 0.85 : 0.5, base);
   const lay = (x, y, c, a) => { // into the picture and into the sky the water reflects
@@ -893,7 +900,9 @@ function landPixel(ctx, row, x, xm, c) {
   const n = fbm(xm * 0.3, zm * 0.3, 41, 4);
   const blades = here === 'grass' ? (h2(x, y, 3) - 0.5) * 0.25 * row.bladeK : 0;
   let tone = 0.82 + (n * 0.36 - 0.18) * row.grain + 0.18 + blades;
-  if (here === 'sand' && relief > 0) { // dunes: a lit crest, a shadowed lee (landRow), fine ripples near the foot
+  // dunes: a lit crest, a shadowed lee (landRow), fine ripples near the foot. Not under named hills: the relief is
+  // then the hills' swell, read above (REL[2] is its rise in rows, which added to the tone blew the sand to black)
+  if (here === 'sand' && relief > 0 && !row.hills) {
     reliefAt(row, x);
     shade *= REL[1];
     tone += REL[2];

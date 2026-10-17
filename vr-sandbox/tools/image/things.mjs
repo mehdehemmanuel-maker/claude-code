@@ -79,7 +79,11 @@ const SHORE_MARGIN = 0.02; // a thing stands this share of the ground band off t
 const READ = { asked: 0.12, extra: 0.05 }; // the least height a thing is placed at, as a share of the frame
 const TINY = 12; // rows at 720 rows tall: a thing shorter than this in the frame does not read
 const SKYLINE = [0.01, 0.05]; // the usual buildings stand in this band at the horizon: a skyline row
-const CORRIDOR = SIZES.lanes * SIZES.lane; // metres either side of the road's centre kept free of all but vehicles
+// metres either side of the road's centre kept free of all but vehicles: the road's half width and half a metre of
+// its verge (the whole road width, as it was, left nothing but the road to stand on within 20 m of the camera)
+export const CORRIDOR = SIZES.lanes * SIZES.lane / 2 + 0.5;
+const IN_FRAME = 0.7; // the least of a flyer's box inside the frame for it to count as seen (nothing refuses a flyer)
+const FLYER_WIDTH = 0.4; // the most of the width a flyer spans: it hangs farther off when its band would draw it wider
 const TOWARD = 0.1; // the share of vehicles on a road that come toward the viewer
 const HINTS = { left: [0.1, 0.4], right: [0.6, 0.9], centre: [0.4, 0.6] }; // the reader's place words, as ux windows
 const DISC = 0.08; // share of the height round the sun's or the moon's centre no thing stands in front of
@@ -305,17 +309,25 @@ function farBank(ctx, want) {
 export function place(ctx, want, i, placed, retry = false) {
   const { rand } = ctx, { entry } = want;
   if (entry.sky) { // over the usual buildings' skyline row (its towers leave the top of the sky), a flyer keeps to it
-    const ux = rand(), uy = rand() * ctx.horizon * (skylineRow(ctx) ? SKY_OVER : 0.7);
-    const zm = depthIn(entry.depth ?? [25, 120], rand());
+    const r = rand(), uy = rand() * ctx.horizon * (skylineRow(ctx) ? SKY_OVER : 0.7), { focal } = ctx.camera;
+    const span = (entry.size?.w ?? 0) * focal / ctx.W; // metres of depth per share of the width it spans
+    const zm = Math.max(depthIn(entry.depth ?? [25, 120], rand()), span / FLYER_WIDTH);
+    // inside the frame by its own width (a drawer may run its length either way from ux), so no wing is cropped
+    const wide = span / zm + EDGE, ux = wide + r * (1 - 2 * wide);
     const xm = (ux - 0.5) * ctx.W * zm / ctx.camera.focal;
     return { want, entry, ux, uy, zm, xm, heading: 'side', fp: { w: 0, d: 0 }, box: null, fy: 0, u: 0 };
   }
   const span = bounds(ctx, want, retry);
-  if (!span) return ctx.scene.ground === 'water' && !entry.onWater ? farBank(ctx, want) : null;
-  let last = null;
+  // a vehicle is drawn through the camera at its depth, so it cannot stand on the far bank (the reader brings a
+  // near shore for it); with no room on the shore it is not placed, and the critic's tally says so
+  if (!span) return ctx.scene.ground === 'water' && !entry.onWater && !entry.onRoad ? farBank(ctx, want) : null;
+  // aside: the last candidate that passed the frame, the sun and the road and was refused for the company it kept
+  let last = null, aside = null;
+  const keep = (c, why) => { if (!['cropped', 'eclipses', 'road'].includes(why)) aside = c; };
   for (let t = 0; t < TRIES; t++) {
-    const c = candidate(ctx, want, i, span, placed);
-    if (!refusal(ctx, c, placed, retry)) return c;
+    const c = candidate(ctx, want, i, span, placed), why = refusal(ctx, c, placed, retry);
+    if (!why) return c;
+    keep(c, why);
     last = c;
   }
   const columns = []; // the free-gap scan: the columns nearest the one meant for it first, then outward
@@ -325,13 +337,15 @@ export function place(ctx, want, i, placed, retry = false) {
   for (const lax of [false, true]) {
     for (const u of rows) {
       for (const ux of columns) {
-        const c = candidate(ctx, want, i, span, placed, [u, ux]);
-        if (!refusal(ctx, c, placed, retry, lax)) return c;
+        const c = candidate(ctx, want, i, span, placed, [u, ux]), why = refusal(ctx, c, placed, retry, lax);
+        if (!why) return c;
+        keep(c, why);
       }
     }
   }
-  last.crowded = true;
-  return last;
+  const crowded = aside ?? last; // crowded, but off the road when any try was: the header's promise comes first
+  crowded.crowded = true;
+  return crowded;
 }
 
 /**
@@ -446,8 +460,11 @@ export function critic(ctx, placed, list = placed.map((p) => p.want)) {
     // columns both, since the next one along the street covers most of it by design
     const rows = bottom[p.id] - top[p.id] + 1, cols = right[p.id] - left[p.id] + 1;
     const stoodSeen = count[p.id] > 0 && rows >= least && cols >= least;
-    const seen = byPass ? t.w >= least && t.h >= 1
-      : t.stood ? stoodSeen : count[p.id] > 0 && count[p.id] >= SHOWING * alone && span >= least;
+    // a flyer cropped by the frame's side (nothing refuses a flyer's place) is not seen: a wing is not an airplane
+    const inFrame = t.w > 0 && t.h > 0 ? shared(t, { x: 0, y: 0, w: W, h: H }) / (t.w * t.h) : 1;
+    const whole = !p.entry.sky || byPass || inFrame >= IN_FRAME;
+    const seen = whole && (byPass ? t.w >= least && t.h >= 1
+      : t.stood ? stoodSeen : count[p.id] > 0 && count[p.id] >= SHOWING * alone && span >= least);
     t.visible = seen;
     t.pixels = count[p.id];
     t.painted = alone;

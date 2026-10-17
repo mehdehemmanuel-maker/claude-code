@@ -130,10 +130,10 @@ of red flags.
 <!-- image-leads: written by `npm run image:examples` from EXAMPLES in tools/image-examples.mjs -->
 ![a red go-kart on a wet road at dusk, mountains behind](docs/images/kart-dusk.png)
 
-*`a red go-kart on a wet road at dusk, mountains behind`* (seed 7) — The header's first example. The kart is 1.8 m
-long on a 3.5 m lane, seen from behind as it goes away down a road that drifts; the wet asphalt mirrors the dusk sky
-and the mountains fade into the air. In the JSON below, `things` carries the count painted ("mountains" named none, so
-the usual three) and the instance says `usual: true`.
+*`a red go-kart on a wet road at dusk, mountains behind`* (seed 7) — The header's first example. The kart is 1.85 m
+long (the rental-kart row in vehicles.mjs) on a 3.5 m lane, seen from behind and a little to the side as it goes away
+down the road; the wet asphalt mirrors the dusk sky and the mountains fade into the air. In the JSON below, `things`
+carries the count painted ("mountains" named none, so the usual three) and the instance says `usual: true`.
 
 <details><summary><code>--describe</code>: what the words were read as</summary>
 
@@ -284,10 +284,25 @@ shore, snow on every top edge, the full moon with its glow laid on the lake and 
 `tools/image.mjs` is a tool beside Nexus, not part of it: a line of words becomes a picture here, with no model, no
 service and no key. The words are read into a scene (the time of day, the weather, the ground, what stands on it and
 how many), the scene is painted pixel by pixel through a camera in metres, and the pixels are written as a PNG by the
-file's own encoder: one command, Node 18+, nothing to install, zero dependencies. The same words give the same bytes
-every time (`--seed` asks for another picture of the same reading), and what the tool did not understand it says:
-every ignored word and every silent change go to stderr, into `--describe`, and into the PNG itself as a tEXt chunk, so
-any picture can be traced to its words.
+file's own encoder: one command, Node 18+, nothing to install, zero dependencies. The tool is `tools/image.mjs` (the
+shell and the PNG writer) plus the `tools/image/` folder (the painter, about twenty files); run it from the repo root.
+The same words give the same bytes every time (`--seed` asks for another picture of the same reading), and what the
+tool did not understand it says: every ignored word and every silent change go to stderr, into `--describe`, and
+into the PNG itself as a tEXt chunk, so any picture can be traced to its words.
+
+What no preset tool gives you, in one list:
+
+- `--describe` prints the reading as JSON (the things with their counts, colours and sizes, the conditions, every
+  ignored word, every silent change) and paints nothing; the same JSON is folded under the four pictures below.
+- After every picture stderr says what was read, what was not understood, what was changed and what the critic could
+  see once painted (`visible: trees 3/3, houses 1/2`); `--strict` writes nothing and exits 3 when a word that looks
+  like a noun was not understood.
+- The same words give the same bytes, on any machine; `--seed` is the only other source of change.
+- Every PNG carries its reading in a `Comment` tEXt chunk beside a `Software` chunk, so a picture can be traced
+  to its words with a hex dump.
+- `npm run image:examples -- --check` repaints every picture in this section and fails on a byte of drift, so nothing
+  here is retouched or stale. A 960x540 picture takes about 0.6 s here (the tested budget is 640x360 under 0.4 s);
+  1080p about 2 s, 4K about 7 s.
 
 ```bash
 node tools/image.mjs "three pine trees by a lake under a full moon, snow" --out lake.png --size 960x540
@@ -312,7 +327,7 @@ windows, nearer towers, rain in three depths, wet pavement.
   "recognised": 4,
   "time": "night",
   "hour": 23,
-  "clouds": 0.35,
+  "clouds": 0.8,
   "fog": 0,
   "rain": 0.6,
   "snow": 0,
@@ -349,7 +364,7 @@ windows, nearer towers, rain in three depths, wet pavement.
   "report": {
     "visible": {
       "buildings": [
-        5,
+        8,
         11
       ]
     }
@@ -489,8 +504,8 @@ bubbles, the five fish counted, a diver.
 *`a red go-kart on a road`, `a blue pickup truck on a road`, `a white semi on a highway`, `a yellow forklift on a
 road`, `a bus on a road`, `a green jeep on a dirt road`* — Vehicles from a figures table
 (tools/image/things/vehicles.mjs: length, wheelbase, wheel sizes, cab and bed in metres, each with its source), seen
-from behind on the road. The kart has no roll hoop because the sourced rental kart has none; "jeep" draws the
-crossover the project holds.
+from behind and a little to the side on the road. The kart has no roll hoop because the sourced rental kart has none
+(the ring over its body is the steering wheel); "jeep" draws the crossover the project holds.
 
 ![a dragon over a castle, a wizard on the drawbridge](docs/images/honesty-dragon.png)
 
@@ -539,8 +554,8 @@ count). In a landscape: the sky's phenomena (rainbow(s) by day; aurora(s)/boreal
 lightning/thunderbolt(s) under a storm) and the landforms (cactus/cacti/cactuses/saguaro(s) on sand,
 palm-tree/palmtree/coconut-palm, volcano/volcanoes/volcanos with erupting/erupts/eruption(s) for lava,
 waterfall(s)/cascade(s)). Structures in metres (houses by kind in three-quarter view, a city's skyline, lighthouse,
-rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, pole, bench) and creatures (cat, dog,
-horse, deer, cow, sheep, goat, wolf, elephant, camel, people and crowds; in the sky airplane, cessna, helicopter,
+rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, telegraph pole, bench) and creatures (cat,
+dog, horse, deer, cow, sheep, goat, wolf, elephant, camel, people and crowds; in the sky airplane, cessna, helicopter,
 balloon, rocket, dragon, kite, birds by word, bats; whale, dolphin, shark, fish). Anything else in the words is
 ignored, and --describe shows exactly what was kept: every ignored word, every silent change, and how much was
 recognised.

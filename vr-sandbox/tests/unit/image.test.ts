@@ -1,7 +1,8 @@
 // The image tool (tools/image.mjs and tools/image/*): the same words paint the same picture, the PNG it writes is a
 // PNG, any size paints without a crash, the core has nothing of Node in it, the layout does not move with the size,
 // and it stays fast enough to use from a shell.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
@@ -60,11 +61,13 @@ describe('the image tool', () => {
   });
 
   it('keeps the core free of Node, so it can paint in a browser', async () => {
-    const files = ['core', 'read', 'passes', 'things', 'math', 'draw', 'styles', 'text', 'font', 'registry'];
+    const dir = fileURLToPath(new URL('../../tools/image/', import.meta.url)); // every file under it, subfolders too
+    const files = readdirSync(dir, { recursive: true }).map(String).filter((f) => f.endsWith('.mjs'));
+    expect(files.length).toBeGreaterThan(15);
     for (const name of files) {
-      const src = readFileSync(fileURLToPath(new URL(`../../tools/image/${name}.mjs`, import.meta.url)), 'utf8');
-      for (const banned of ['node:', 'Buffer', 'process.']) {
-        expect(src.includes(banned), `${name}.mjs has ${banned}`).toBe(false);
+      const src = readFileSync(join(dir, name), 'utf8');
+      for (const banned of ['node:', 'Buffer', 'process.', 'require(', 'Math.random', 'Date.now', 'new Date']) {
+        expect(src.includes(banned), `${name} has ${banned}`).toBe(false);
       }
     }
     const core = await import(/* @vite-ignore */ new URL('../../tools/image/core.mjs', import.meta.url).href);

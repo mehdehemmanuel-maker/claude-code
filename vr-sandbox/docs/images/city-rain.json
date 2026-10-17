@@ -3,7 +3,7 @@
   "recognised": 4,
   "time": "night",
   "hour": 23,
-  "clouds": 0.35,
+  "clouds": 0.8,
   "fog": 0,
   "rain": 0.6,
   "snow": 0,
@@ -40,7 +40,7 @@
   "report": {
     "visible": {
       "buildings": [
-        5,
+        8,
         11
       ]
     }

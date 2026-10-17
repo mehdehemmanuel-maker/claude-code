@@ -42,8 +42,9 @@ export const EXAMPLES = [
   {
     file: 'kart-dusk.png', prompt: 'a red go-kart on a wet road at dusk, mountains behind', size: LEAD, seed: 7,
     describe: true, lead: true,
-    caption: 'The header\'s first example. The kart is 1.8 m long on a 3.5 m lane, seen from behind as it goes ' +
-      'away down a road that drifts; the wet asphalt mirrors the dusk sky and the mountains fade into the air. ' +
+    caption: 'The header\'s first example. The kart is 1.85 m long (the rental-kart row in vehicles.mjs) on a ' +
+      '3.5 m lane, seen from behind and a little to the side as it goes away down the road; the wet asphalt ' +
+      'mirrors the dusk sky and the mountains fade into the air. ' +
       'In the JSON below, `things` carries the count painted ("mountains" named none, so the usual three) and ' +
       'the instance says `usual: true`.',
   },
@@ -105,8 +106,9 @@ export const EXAMPLES = [
       { prompt: 'a green jeep on a dirt road', seed: 7, label: 'jeep (a crossover)' },
     ],
     caption: 'Vehicles from a figures table (tools/image/things/vehicles.mjs: length, wheelbase, wheel sizes, cab ' +
-      'and bed in metres, each with its source), seen from behind on the road. The kart has no roll hoop because ' +
-      'the sourced rental kart has none; "jeep" draws the crossover the project holds.',
+      'and bed in metres, each with its source), seen from behind and a little to the side on the road. The kart ' +
+      'has no roll hoop because the sourced rental kart has none (the ring over its body is the steering wheel); ' +
+      '"jeep" draws the crossover the project holds.',
   },
   {
     file: 'honesty-dragon.png', prompt: 'a dragon over a castle, a wizard on the drawbridge', size: HALF, seed: 1,

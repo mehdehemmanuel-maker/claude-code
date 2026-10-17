@@ -46,6 +46,27 @@ describe('the reader', () => {
       expect(s.things.cars).toBe(2);
     }],
     ['3 trees', (s) => expect(s.things.trees).toBe(3)],
+    ['a bridge over a river, a boat beneath the bridge', (s) => { // 'the bridge' is the same bridge
+      expect(s.things).toEqual({ bridge: 1, boats: 1 });
+      expect(s.ignored).toEqual([]);
+    }],
+    ['a red car and the car', (s) => expect(s.things.cars).toBe(1)],
+    ['a man and the woman', (s) => expect(s.family).toBe('portrait')], // two words of one kind: not a re-mention
+    ['five mountains', (s) => { // the land pass draws four ranges at most, and the count says what is painted
+      expect(s.things.mountains).toBe(4);
+      const said = { what: 'mountains', from: 5, to: 4, because: 'the land pass draws 4 at most' };
+      expect(s.overridden).toContainEqual(said);
+    }],
+    ['a bus by a lake', (s) => { // a vehicle needs land under it: the lake gets a near shore, and it is said
+      expect([s.ground, s.beach, s.land]).toEqual(['water', true, 'grass']);
+      expect(s.overridden).toContainEqual({ what: 'shore', from: 'none', to: 'near', because: 'bus stands on land' });
+    }],
+    ['a cabin by a lake', (s) => expect(s.beach).toBe(false)], // a house stands on the far bank as before
+    ['a city at night in the rain', (s) => expect(s.clouds).toBe(0.8)], // rain falls from cloud
+    ['abstract art in blue and gold', (s) => { // the palette is kept and counted, not silently used
+      expect(s.palette).toEqual(['blue', 'gold']);
+      expect([s.recognised, s.ignored]).toEqual([3, []]);
+    }],
     ['fifteen trees', (s) => expect(s.things.trees).toBe(15)],
     ['a hundred trees', (s) => { expect(s.things.trees).toBe(MOST); expect(MOST).toBe(40); }],
     ['no trees', (s) => {

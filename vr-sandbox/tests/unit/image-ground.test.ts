@@ -18,9 +18,10 @@ const hash = (str: string) => {
 /**
  * The four header prompts' layout digests as placement-critic lays them out (see 'keeps the four header…').
  * hook for structures-skyline: the city's and the cabin's digests moved when the house and building drawers became
- * three-quarter views (the boxes grew; every thing's kind, xm, zm and heading stayed as they were).
+ * three-quarter views (the boxes grew; every thing's kind, xm, zm and heading stayed as they were). The city's
+ * moved again when rain brought heavy cloud and the unnamed moon went: nothing is refused for standing before it.
  */
-const HEADER_LAYOUTS = [2773148169, 606680554, 4044677687, 1437810280];
+const HEADER_LAYOUTS = [2773148169, 606680554, 2555568284, 1437810280];
 
 const W = 640, H = 360;
 const lum = (d: Float32Array, i: number) => 0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!;
@@ -292,7 +293,8 @@ describe('the weather', () => {
     expect(inside).toBeGreaterThan(500);
     expect(farChanged).toBe(0);
     expect(nearChanged).toBeGreaterThan(0);
-    expect(skyChanged).toBeGreaterThan(100);
+    // the two far layers put about 60 streaks over the frame; the towers of this layout cover most of the sky's share
+    expect(skyChanged).toBeGreaterThan(50);
   });
 
   it('thickens the fog on every thing by its depth through ctx.fogK, and never past the frame', () => {
@@ -393,5 +395,24 @@ describe('the weather', () => {
     });
     const median = t.sort((a, b) => a - b)[1]!;
     expect(median, `960x540 took ${median.toFixed(0)} ms`).toBeLessThan(1500);
+  });
+
+  it('keeps sand under named hills lit at a low sun: no black or blown ground', () => {
+    // 'a dirt bike on a hill in the desert at sunset' painted a quarter of its ground under 0.05 luminance: the dune
+    // branch of landPixel ran under the hills' relief too, adding the swell's rise in rows to the sand's tone
+    for (const p of ['a dirt bike on a hill in the desert at sunset', 'a cactus on the hills in the desert at noon']) {
+      const img = paint(read(p), { width: 320, height: 180 }), hy = Math.round(img.layout.horizon * 180);
+      let dark = 0, blown = 0, n = 0;
+      for (let y = hy + 2; y < 180; y++) {
+        for (let x = 0; x < 320; x++) {
+          const l = lum(img.data, (y * 320 + x) * 3);
+          n++;
+          if (l < 0.05) dark++;
+          if (l > 0.98) blown++;
+        }
+      }
+      expect(dark / n, `${p}: ground under 0.05 luminance`).toBeLessThan(0.01);
+      expect(blown / n, `${p}: ground over 0.98 luminance`).toBeLessThan(0.01);
+    }
   });
 });

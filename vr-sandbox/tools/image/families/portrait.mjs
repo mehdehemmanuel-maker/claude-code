@@ -92,7 +92,8 @@ function looks(ctx) {
     ws.find((w) => /^(blonde|blond|brunette|redhead)$/.test(w));
   const natural = Object.keys(HAIR), r = rand();
   const hair = hairWord ? HAIR_WORDS[hairWord] ?? COLOURS[hairWord] : HAIR[natural[Math.floor(r * natural.length)]];
-  const styles = feminine ? ['long', 'long', 'bun', 'curly'] : masculine ? ['short', 'short', 'curly', 'long']
+  // a man's hair is short or curly: long hair fell past the shoulders both sides and read as a hood
+  const styles = feminine ? ['long', 'long', 'bun', 'curly'] : masculine ? ['short', 'short', 'curly', 'short']
     : ['short', 'long', 'bun', 'curly'];
   const style = styles[Math.floor(rand() * styles.length)];
   const skin = SKIN[Math.floor(rand() * SKIN.length)];

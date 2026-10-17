@@ -24,6 +24,10 @@ export { // hook for creatures-flyers: the tables in metres and the drawers (ins
   swimmer,
 } from './things/creatures.mjs';
 
+// The reader, so one import of the core gives a script read() and the colour table beside paint() (the plan's
+// core export list; tools/image.mjs re-exports both modules, and the same binding twice is one export).
+export { COLOURS, read, words } from './read.mjs';
+
 // The registries, as registry.mjs holds them: the same arrays, so nothing importing them from here breaks.
 export {
   things, families, styles, conditions, register, keyOf, thingFor, thingByKey, familyFor, styleNamed,
@@ -138,7 +142,17 @@ export function paint(scene, { width = 1280, height = 720, seed, style, text } =
   return img;
 }
 
-/** The helpers every pass and drawer shares. The colour helpers take an `out` so a hot loop need not allocate. */
+/**
+ * The helpers every pass and drawer shares. The colour helpers take an `out` so a hot loop need not allocate.
+ * The context's short names, as every drawer destructures them (tools/image.d.mts Ctx types them):
+ *   W, H      the picture in pixels; hy the horizon row (ctx.horizon is its share of H); scale = H / 720
+ *   L         the palette for the hour (LIGHT): top, horizon, sun, light, ambient, sunk (the sun is down)
+ *   gloom     1 under a clear sky, less under cloud, fog and storm: dims the light and the sun's glow
+ *   rand      the seeded generator (each thing draws by its own seed); camera the lens in metres (focal, eye,
+ *             project, groundZ, groundX); sun its direction and side (sun.left, sun.dir)
+ * In a drawer: s = camera.focal / zm is pixels per metre at the thing's depth, k = inst.size the size word's factor,
+ * S = s * k the scale a figure in metres is drawn at; (inst.ux * W, inst.fy) is its foot on the ground.
+ */
 function tools(ctx) {
   const { W, H, hy, L, gloom, scene, data } = ctx;
   const px = (x, y) => (y * W + x) * 3;
