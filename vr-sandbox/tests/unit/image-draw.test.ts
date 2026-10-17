@@ -53,14 +53,18 @@ describe('the camera', () => {
     expect(cam.groundZ(100)).toBe(Infinity);
   });
 
-  it('agrees with the ground pass: a car on the road is 1.5 to 2.5 car lengths narrower than the two lanes', () => {
+  it('agrees with the ground pass: a car on the road, seen from behind, is 2 to 4 car widths inside the two lanes', () => {
+    // hook for vehicles: the car heads away down the road now (a rear three-quarter view), so its box across the
+    // picture is its 1.78 m width plus the flank it turns toward the viewer, not its 4.5 m length
     for (const seed of [1, 7, 23]) {
       const { img, ctx } = painted('a red car on a road at dusk', 640, 360, seed);
       const car = img.layout.things.find((t) => t.kind === 'car')!;
       const road = SIZES.lane * SIZES.lanes * ctx.camera.focal / ctx.camera.groundZ(car.y + car.h);
-      expect(road / car.w).toBeGreaterThan(1.5);
-      expect(road / car.w).toBeLessThan(2.5);
-      expect(car.w * ctx.camera.groundZ(car.y + car.h) / ctx.camera.focal).toBeCloseTo(SIZES.car.l, 0);
+      expect(road / car.w).toBeGreaterThan(1.8);
+      expect(road / car.w).toBeLessThan(4);
+      const across = car.w * ctx.camera.groundZ(car.y + car.h) / ctx.camera.focal;
+      expect(across).toBeGreaterThan(SIZES.car.w * 0.95);
+      expect(across).toBeLessThan(SIZES.car.w + SIZES.car.l * 0.4);
     }
   });
 

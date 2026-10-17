@@ -37,8 +37,7 @@ export const THINGS = {
   trees: /^(trees?|forests?|woods?|woodland|pines?|firs?|oaks?|palms?|spruces?|cedars?|birches?)$/,
   houses: /^(houses?|cabins?|cottages?|barns?|huts?|homes?|lodges?|chalets?|village|villages|hamlet|hamlets)$/,
   buildings: /^(buildings?|city|cities|towns?|skyline|skyscrapers?|towers?|cityscape|metropolis|downtown|urban)$/,
-  cars:
-    /^(cars?|karts?|go-?karts?|trucks?|vehicles?|buggy|buggies|jeeps?|sedans?|vans?|pickups?|lorry|lorries|taxis?)$/,
+  // hook for vehicles: the vehicle words (cars, karts, trucks…) are registered things (things/vehicles.mjs)
   boats: /^(boats?|ships?|sailboats?|yachts?|dinghy|dinghies|ferry|ferries|canoes?|kayaks?)$/,
   birds: /^(birds?|gulls?|seagulls?|crows?|ravens?|swallows?)$/,
   sun: /^sun$/, moon: /^moon$/, stars: /^(stars?|starry)$/,
@@ -93,6 +92,8 @@ export const PHRASES = [
   ['early', 'morning'], ['late', 'afternoon'], ['oil', 'painting'], ['line', 'art'], ['mountain', 'range'],
   ['mountain', 'ranges'], ['movie', 'star'], ['movie', 'stars'], ['film', 'star'], ['film', 'stars'], ['go', 'kart'],
   ['go', 'karts'], ['snow', 'capped'], ['night', 'time'], ['day', 'time'], ['old', 'photo'], ['old', 'photograph'],
+  ['dirt', 'bike'], ['dirt', 'bikes'], ['semi', 'truck'], ['semi', 'trucks'], ['four', 'wheeler'],
+  ['four', 'wheelers'], ['motor', 'bike'], ['motor', 'bikes'], // hook for vehicles: read as one word each
 ];
 /** Words that mean something only after another: 'track' is a road after race, dirt or train, else nothing. */
 const TRACK_AFTER = /^(race|racing|dirt|gravel|train|railway)$/;

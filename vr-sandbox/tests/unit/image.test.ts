@@ -71,7 +71,9 @@ describe('the image tool', () => {
     expect(Object.keys(core).sort()).toEqual(expect.arrayContaining([
       'LIGHT', 'conditions', 'families', 'paint', 'register', 'styles', 'things', 'toImageData', 'toRGBA8',
     ]));
-    expect(core.things.map((t: { id: string }) => t.id)).toEqual(['tree', 'building', 'house', 'boat', 'car', 'bird']);
+    const ids = core.things.map((t: { id: string }) => t.id); // hook for vehicles: the car is a vehicle thing now
+    expect(ids.slice(-5)).toEqual(['tree', 'building', 'house', 'boat', 'bird']);
+    expect(ids).toEqual(expect.arrayContaining(['car', 'kart', 'truck', 'semi', 'forklift', 'bus']));
     const rgba = core.toRGBA8(paint(read('a tree'), { width: 4, height: 3, seed: 1 }));
     expect(rgba.length).toBe(4 * 3 * 4);
     expect(rgba[3]).toBe(255);
