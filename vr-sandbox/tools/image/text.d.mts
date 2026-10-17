@@ -11,7 +11,9 @@ export declare function drawText(
   text: string,
   opts: TextOptions,
 ): { x: number; y: number; w: number; h: number };
-/** One line, two, or two with an ellipsis, none wider than maxWidth. */
-export declare function fitText(text: string, scale: number, maxWidth: number): { lines: string[]; truncated: boolean };
+/** One line, two, or two with an ellipsis, none wider than maxWidth; characters outside the font counted as '?'. */
+export declare function fitText(
+  text: string, scale: number, maxWidth: number,
+): { lines: string[]; truncated: boolean; substituted: number };
 /** Lays a caption out top- or bottom-centre away from the layout's things, paints it, records ctx.layout.text. */
 export declare function placeText(ctx: Pick<Ctx, 'W' | 'H' | 'put' | 'layout'>, text: string): TextLayout;

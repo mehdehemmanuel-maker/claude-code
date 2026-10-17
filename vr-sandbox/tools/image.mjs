@@ -23,9 +23,12 @@
 //   --size WxH       picture size, each side 1 to 8192 (default 1280x720)
 //   --seed <n>       the random choices, a whole number (default: from the words: the same words, the same picture)
 //   --style <name>   a finish over the whole: pixel, poster, minimalist, sketch, watercolour, mono, sepia, vintage
-//                    (the words can name one too: "a mountain lake, pixel art"; an unknown name lists these, exit 1)
+//                    (the words can name one too: "a mountain lake, pixel art"; the flag wins over the word and stderr
+//                    says so; an unknown name lists these, exit 1; minimalist also asks the scene for no clouds, no
+//                    fog and a flat sky)
 //   --text "..."     a caption in the 5x7 bitmap font, top- or bottom-centre away from the subject, two lines at
-//                    most: a longer one is cut with ... and stderr says so, as it says of characters not in the font
+//                    most: a longer one is cut with ... and stderr says so, as it says of characters not in the font;
+//                    the flag wins over a text in the words, and stderr says so
 //   --describe       print what the words were read as (JSON) and stop, no picture
 //   --strict         write nothing and exit 3 when nothing in the words is understood, or when an ignored word looks
 //                    like a noun (three letters or more, not ending in -ly: it cannot tell nouns from adjectives)
@@ -167,7 +170,8 @@ export function report(scene) {
     lines.push(`nothing in these words is understood${which}: painting the default day meadow`);
   }
   const changed = scene.overridden.filter((o) => o.what !== 'hills');
-  const changes = changed.map((o) => `${o.what} ${o.from} -> ${o.to} (${o.because})`);
+  const q = (o, v) => (o.what === 'text' ? JSON.stringify(v) : v); // a text in quotes: it may hold spaces
+  const changes = changed.map((o) => `${o.what} ${q(o, o.from)} -> ${q(o, o.to)} (${o.because})`);
   if (changes.length) lines.push(`changed: ${changes.join('; ')}`);
   return lines;
 }
@@ -250,6 +254,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       process.exit(2);
     }
     const scene = read(prompt);
+    for (const [what, flag] of [['style', '--style'], ['text', '--text']]) { // a flag over the words: said, not silent
+      if (o[what] !== undefined && scene[what] !== undefined && o[what] !== scene[what]) {
+        scene.overridden.push({ what, from: scene[what], to: o[what], because: flag });
+      }
+    }
     if (o.describe) {
       console.log(JSON.stringify(scene, null, 2));
       process.exit(0);

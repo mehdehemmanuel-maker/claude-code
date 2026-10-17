@@ -23,7 +23,9 @@ export function skyPass(ctx) {
   // instead, so a thumbnail is not speckled.
   const rare = 0.0025 / Math.max(ctx.scale, 0.5) ** 2;
   const starFactor = scene.things.stars ? 1 : 0.6;
-  const moonlit = noMoon(scene) ? 0 : 1; // hook for sky-light: no glow where no moon is
+  // A flat sky (scene.flat, the minimalist style's ask) is the two-stop gradient alone: no glow round the sun or the
+  // moon, which a posteriser would cut into rings. hook for sky-light: no glow where no moon is.
+  const flat = !!scene.flat, moonlit = noMoon(scene) || flat ? 0 : 1;
   const base = [0, 0, 0];
   // All the rows, not only to the horizon: the water and the wet ground reflect the sky just below it, and the ground
   // paints over the rest.
@@ -33,7 +35,7 @@ export function skyPass(ctx) {
     for (let x = 0; x < W; x++) {
       const dx = (x / W - sun.x) * aspect, d = Math.hypot(dx, dy);
       let r = base[0], g = base[1], b = base[2];
-      if (!L.sunk) {
+      if (!L.sunk && !flat) {
         const glow = 0.55 * Math.exp(-d * d * 18) * gloom;
         r = lerp(r, L.sun[0], glow);
         g = lerp(g, L.sun[1], glow);
@@ -88,7 +90,7 @@ export function celestialPass(ctx) {
   layout.moon = null;
   const daytime = !L.sunk;
   if (scene.storm) return; // a storm hides both; the glow stays
-  if ((daytime || scene.things.sun) && !L.sunk) sunDisc(ctx, sunLow(scene)); // no sun disc at night, whatever the words
+  if (daytime) sunDisc(ctx, sunLow(scene)); // by day only: the words (things.sun) cannot raise a sun at night
   if ((scene.things.moon || scene.time === 'night') && !noMoon(scene)) moonDisc(ctx, daytime);
 }
 
@@ -108,18 +110,18 @@ function around(ctx, cx, cy, reach, shade) {
 
 /**
  * The sun: a small disc by day, twice as wide when low, coloured from L.sun (15% white by day; none when low, where
- * it leans to a deep orange, deeper than its own glow in the sky), a soft edge, an inner halo over the sky's glow, and
- * the lower limb dissolving into the haze within a tenth of the height of the horizon.
+ * it leans to a deep orange, deeper than its own glow in the sky), a soft edge, an inner halo over the sky's glow (none
+ * on a flat sky, scene.flat: the disc alone), and the lower limb dissolving into the haze within a tenth of the height
+ * of the horizon.
  */
 function sunDisc(ctx, low) {
-  const { H, hy, L, gloom, sun, put } = ctx;
-  const r = (low ? 0.07 : 0.035) * H, strength = 0.6 + 0.4 * gloom, dissolve = 0.1 * H;
+  const { H, hy, L, gloom, sun, scene, put } = ctx;
+  const r = (low ? 0.07 : 0.035) * H, strength = 0.6 + 0.4 * gloom, dissolve = 0.1 * H, flat = !!scene.flat;
   // Low, the sky's own glow is as orange as L.sun, so the disc reads as a deeper ball inside a paler halo.
   const c = low ? mix(L.sun, DEEPORANGE, 0.75) : mix(L.sun, SUNWHITE, 0.15), col = [0, 0, 0];
   const glow = mix(L.sun, SUNWHITE, low ? 0.3 : 0.1);
   around(ctx, sun.x, sun.y, 3 * r, (x, y, d) => {
-    const halo = 0.5 * Math.exp(-((d / (1.8 * r)) ** 2));
-    put(x, y, glow, halo * strength);
+    if (!flat) put(x, y, glow, 0.5 * Math.exp(-((d / (1.8 * r)) ** 2)) * strength);
     if (d >= r) return;
     const haze = clamp(1 - (hy - y) / dissolve) ** 2; // 0 well above the horizon, 1 at it
     mix(c, L.horizon, haze * 0.5, col);
@@ -486,6 +488,6 @@ export function finishPass(ctx) {
   if (style?.grain !== false) grain(data, W, H, 0.03, 71);
   if (style?.vignette !== false && scene.time !== 'day') vignette(data, W, H, 0.12);
   if (style) style.apply(ctx.img, ctx);
-  const text = scene.text ?? ctx.text;
+  const text = ctx.text ?? scene.text; // paint's option (the shell's --text) over the words'; the shell says so
   if (text !== undefined && text !== null && text !== '') placeText(ctx, text);
 }

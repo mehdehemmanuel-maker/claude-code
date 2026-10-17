@@ -9,6 +9,7 @@ import { FONT, GLYPH_H, GLYPH_W, glyph, measure } from '../../tools/image/font.m
 import { HALO, drawText, fitText, placeText, textScale } from '../../tools/image/text.mjs';
 
 const LAKE = read('a mountain lake');
+const lum = (d: Float32Array, i: number) => 0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!;
 const inRange = (data: Float32Array) => {
   for (const v of data) if (!(v >= 0 && v <= 1)) return false; // NaN fails both comparisons
   return true;
@@ -81,6 +82,27 @@ describe('the styles registry', () => {
         expect(pix.data[i]).toBe(pix.data[j]);
       }
     }
+  });
+
+  it('minimalist cuts the luminance to five levels and keeps the hue; sketch draws the lake under a dawn sky', () => {
+    // Cut per channel, the posteriser turned the sun's glow into coloured rings and the rock's shadow into navy and
+    // black patches; now every pixel's luminance sits on a fifth level (0, 0.25, ...) and its chroma is its own.
+    const poster = paint(read('minimalist poster of a mountain'), { width: 320, height: 180, seed: 7 });
+    let on = 0;
+    for (let i = 0; i < poster.data.length; i += 3) {
+      const l = lum(poster.data, i);
+      if (Math.abs(l - Math.round(l * 4) / 4) < 0.01) on++;
+    }
+    expect(on / (320 * 180), 'pixels on a fifth luminance level').toBeGreaterThan(0.99);
+    // Lines from Sobel alone left 'a cabin by a lake at dawn' as a house on blank paper: no ink (luminance under 0.5)
+    // in any row under the horizon at 4104c0b. The tonal-band contours and the hatching ink 42 of the 60 rows
+    // between the horizon and 90% of the height at 320x180, seed 7.
+    const sk = paint(read('a cabin by a lake at dawn'), { width: 320, height: 180, seed: 7, style: 'sketch' });
+    const hy = Math.round(sk.layout.horizon * 180), rows = new Set<number>();
+    for (let y = hy + 3; y < 162; y++) {
+      for (let x = 0; x < 320; x++) if (lum(sk.data, (y * 320 + x) * 3) < 0.5) rows.add(y);
+    }
+    expect(rows.size / (162 - hy - 3), 'rows under the horizon with ink (4104c0b: none)').toBeGreaterThan(1 / 3);
   });
 
   it('throws for an unknown style, naming the styles there are', () => {
@@ -179,6 +201,11 @@ describe('the bitmap text', () => {
     expect(white).toBeGreaterThan(40); // the ink survived the style: drawn after it
     const fromScene = paint({ ...read('a lake'), text: 'Nexus' }, { width: 160, height: 90, seed: 1 });
     expect(fromScene.layout.text?.at).toBe('bottom');
+    const flagged = paint({ ...read('a lake'), text: 'OPEN', style: 'pixel' }, { // the options win over the words'
+      width: 160, height: 90, seed: 1, text: 'Nexus', style: 'mono',
+    });
+    expect(flagged.layout.text?.lines).toEqual(['Nexus']);
+    expect(flagged.data[0]).toBe(flagged.data[1]); // mono, not pixel
     expect(paint(read('a lake'), { width: 160, height: 90, seed: 1 }).layout.text).toBeUndefined();
   });
 });

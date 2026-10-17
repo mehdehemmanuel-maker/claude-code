@@ -152,6 +152,22 @@ describe('the sky, the sun and moon, and the light on the mountains', () => {
     expect(lum(img.data, i) - lum(img.data, i + Math.round(0.12 * H) * 3)).toBeGreaterThan(0.05); // pale, but there
   });
 
+  it('keeps the night dark: the far ground of a meadow at night stays under 0.2 luminance', () => {
+    // The first tenth of the rows under the horizon at 640x360, seed 7. fdb10a8 (before round C) gave 0.140; the
+    // round-C grass fix (the air's colour halved toward grey and the ground light lifted toward white, for every
+    // palette) gave 0.337, a night meadow lit like dusk; with the neutral the palette's own horizon at night and the
+    // lift by day only it is 0.146 (the rest of the gap to 0.140 is round C's lighter vignette, 0.35 -> 0.12).
+    const img = paint(read('a meadow at night'), { width: W, height: H, seed: 7 }), hy = img.layout.horizon * H;
+    let sum = 0, n = 0;
+    for (let y = Math.floor(hy); y < hy + (H - hy) * 0.1; y++) {
+      for (let x = 0; x < W; x++) {
+        sum += lum(img.data, (y * W + x) * 3);
+        n++;
+      }
+    }
+    expect(sum / n, 'far-ground luminance of a meadow at night (fdb10a8 0.140, round C 0.337)').toBeLessThan(0.2);
+  });
+
   it('paints as many ranges as the words count: one for a mountain, two for two, three for mountains', () => {
     const ranges = (p: string) => paint(read(p), { width: 160, height: 90 }).layout.ranges!.map((r) => r.kind);
     expect(ranges('a mountain by a lake')).toEqual(['mountains']);

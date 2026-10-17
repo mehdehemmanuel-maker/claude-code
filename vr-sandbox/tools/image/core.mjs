@@ -62,14 +62,15 @@ register('families', {
 
 /**
  * Paints a scene (from `read`) into { width, height, data: Float32Array rgb in 0..1, layout }. `style` names a
- * finish when the words did not (an unknown name is an Error listing the ids, before anything is painted) and `text`
- * a caption when the words did not; a style that asks something of the scene (minimalist: no clouds) has it first.
+ * finish and wins over one the words named (the shell says so; an unknown name is an Error listing the ids, before
+ * anything is painted); `text` a caption, over one the words named, the same way. A style that asks something of the
+ * scene (minimalist: no clouds, no fog, a flat sky) has it first.
  */
 export function paint(scene, { width = 1280, height = 720, seed, style, text } = {}) {
   const W = width, H = height;
   const data = new Float32Array(W * H * 3);
   const rand = rng(seed ?? hash(words(scene.prompt).join(' '))); // from the words, not their case or punctuation
-  const styleId = scene.style ?? style, entry = styleId ? styleFor(styleId, styles) : null;
+  const styleId = style ?? scene.style, entry = styleId ? styleFor(styleId, styles) : null;
   if (entry?.scene) scene = { ...scene, ...entry.scene };
   const L = LIGHT[scene.time];
   const gloom = scene.storm ? 0.45 : clamp(1 - scene.clouds * 0.45 - scene.fog * 0.2);
@@ -85,7 +86,7 @@ export function paint(scene, { width = 1280, height = 720, seed, style, text } =
     shoreY: H, // where the water ends and the land begins, set by groundPass
     scale: H / 720, // fixed-pixel detail (stars, birds, rain, snow, windows) is sized for 720 rows and scaled by this
     style: styleId,
-    text, // a caption from paint's options; scene.text (the reader's) wins over it
+    text, // a caption from paint's options: it wins over scene.text (the reader's), as the style option does
     things, styles,
   };
   tools(ctx);
@@ -99,12 +100,15 @@ export function paint(scene, { width = 1280, height = 720, seed, style, text } =
 function tools(ctx) {
   const { W, H, hy, L, gloom, scene, data } = ctx;
   const px = (x, y) => (y * W + x) * 3;
-  // The air's colour: the horizon's, greyed by fog, and halved toward a neutral grey, so a sunset's orange haze tints
-  // the far ground rather than turning it to mud (the grass stayed green under lit() and browned under air()).
-  const hazeColour = mix(mix(L.horizon, [0.75, 0.78, 0.82], scene.fog * 0.5), [0.8, 0.8, 0.8], 0.5);
+  // The air's colour: the horizon's, greyed by fog, and while the sun is up halved toward a neutral grey too, so a
+  // sunset's orange haze tints the far ground rather than turning it to mud (the grass stayed green under lit() and
+  // browned under air()). At night the air keeps the horizon's own dark blue: the grey lit the far ground 2.4x.
+  const fogged = mix(L.horizon, [0.75, 0.78, 0.82], scene.fog * 0.5);
+  const hazeColour = L.sunk ? fogged : mix(fogged, [0.8, 0.8, 0.8], 0.5);
   const haze = 0.55 + scene.fog * 0.6;
-  // The light on the ground is the scene's light mixed 35% toward white: a sunset tints the grass, it does not dye it.
-  const groundLight = L.light.map((v) => v + (1 - v) * 0.35);
+  // The light on the ground is the scene's light mixed 35% toward white while the sun is up: a sunset tints the
+  // grass, it does not dye it. The moon's light is left as it is, so the night ground stays dark.
+  const groundLight = L.sunk ? L.light : L.light.map((v) => v + (1 - v) * 0.35);
   ctx.px = px;
   ctx.put = (x, y, c, a = 1) => {
     if (x < 0 || y < 0 || x >= W || y >= H) return;

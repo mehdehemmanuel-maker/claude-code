@@ -62,6 +62,8 @@ export interface Ctx {
   get(x: number, y: number, out?: number[]): number[];
   getSky(x: number, y: number, out?: number[]): number[];
   lit(c: ArrayLike<number>, k: number, out?: number[]): number[];
+  /** lit() for the ground plane's own tones: by day the light is mixed 35% toward white, at night it is the light. */
+  litGround(c: ArrayLike<number>, k: number, out?: number[]): number[];
   air(c: ArrayLike<number>, depth: number, out?: number[]): number[];
   usual(thing: string, n: number): number;
   foot(fy: number): number;
@@ -345,12 +347,14 @@ export interface TextOptions {
   haloColour?: ArrayLike<number>;
 }
 export interface Layout { text?: TextLayout }
-export interface Scene { text?: string }
+/** `flat` is a style's ask (minimalist): a sky with no glow round the sun or the moon, a sun with no halo. */
+export interface Scene { text?: string; flat?: boolean }
+/** The style and text options win over the words' (the shell says so in its `changed:` line). */
 export interface PaintOptions { text?: string }
 export interface Ctx { text?: string }
 /**
  * A style may turn the default finish's grain or vignette off (both default to true) and ask something of the scene
- * before it is painted (minimalist: clouds 0.05, fog 0), laid over the scene by paint().
+ * before it is painted (minimalist: clouds 0.05, fog 0, flat true), laid over the scene by paint().
  */
 export interface StyleEntry { grain?: boolean; vignette?: boolean; scene?: Partial<Scene> }
 /** The shell's stderr notes on a caption: cut to two lines, characters drawn as '?'. */

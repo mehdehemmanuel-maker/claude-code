@@ -3,11 +3,12 @@
 // height and every value in [0, 1]. `match` is the one table of style words: the reader (read.mjs) sets scene.style
 // from it, so every id the reader can name is one the finish can paint, and the synonyms live here (pixel art, 8-bit;
 // cartoon as a poster; painting as a watercolour; black and white as mono; retro and an old photo as vintage).
-// `scene` is what a style asks of the picture before it is painted (minimalist: no clouds, no fog); paint() in
-// core.mjs lays it over the scene first. paint() resolves ctx.style through styleFor(), which throws an Error listing
-// the ids for an unknown one; finishPass in passes.mjs runs the default grain and vignette unless the entry turns
-// them off (grain: false, vignette: false), applies the style, then draws the text over it so it stays crisp. The
-// helpers (luma, sobel, boxBlur, posterise, grain, vignette) are exported for other passes and the tests.
+// `scene` is what a style asks of the picture before it is painted (minimalist: no clouds, no fog, and `flat`, a sky
+// with no glow round the sun or the moon and a sun with no halo); paint() in core.mjs lays it over the scene first.
+// paint() resolves ctx.style through styleFor(), which throws an Error listing the ids for an unknown one; finishPass
+// in passes.mjs runs the default grain and vignette unless the entry turns them off (grain: false, vignette: false),
+// applies the style, then draws the text over it so it stays crisp. The helpers (luma, sobel, boxBlur, posterise,
+// posteriseLuma, grain, vignette) are exported for other passes and the tests.
 import { clamp, h2, noise } from './math.mjs';
 
 // ── Helpers over the buffer ────────
@@ -67,6 +68,21 @@ export function boxBlur(data, W, H, r, ch = 3, out = new Float32Array(data.lengt
 export function posterise(data, levels) {
   const q = levels - 1;
   for (let i = 0; i < data.length; i++) data[i] = Math.round(data[i] * q) / q;
+}
+
+/**
+ * The luminance snapped to `levels` even steps, the chroma kept (every channel scaled alike), so a band keeps its hue:
+ * per channel, a dark blue-grey rock went navy where only its blue rounded up and black where all three rounded down.
+ */
+export function posteriseLuma(data, levels) {
+  const q = levels - 1;
+  for (let i = 0; i < data.length; i += 3) {
+    const l = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
+    const k = l > 1e-6 ? Math.round(l * q) / q / l : 0;
+    data[i] *= k;
+    data[i + 1] *= k;
+    data[i + 2] *= k;
+  }
 }
 
 /** Grain: the same small offset on the three channels of a pixel, from the lattice, so it never moves between runs. */
@@ -239,28 +255,41 @@ function poster({ width: W, height: H, data }) {
 }
 
 /**
- * Poster plus flat bands: the textures blurred away (a sixtieth of the height, so the near grass flattens too) before
- * the bands are cut; no grain, no vignette, no outline; and the scene asked to leave its clouds and fog out.
+ * Flat bands: the textures blurred away (a sixtieth of the height, so the near grass flattens too), then the
+ * luminance cut to five levels with the chroma kept (cut per channel, the sun's glow became coloured rings and the
+ * mountains' shadows navy and black patches); no grain, no vignette, no outline; and the scene asked to leave its
+ * clouds, its fog and the glow round the sun out (flat), so the sky is a two-stop gradient and the sun a plain disc.
  */
 function minimalist({ width: W, height: H, data }) {
   data.set(boxBlur(data, W, H, Math.max(1, Math.round(H / 60))));
-  posterise(data, 5);
+  posteriseLuma(data, 5);
 }
 
 // ── Sketch ─────────────────────────
 
 const PAPER = [0.94, 0.91, 0.84], INK = [0.13, 0.11, 0.10];
 
+/**
+ * Lines where the luminance steps (Sobel), and along the edges of its tonal bands (the luminance blurred, cut to five
+ * levels, Sobel again), so a horizon, a shoreline or a low sun at dawn, soft steps that leave no Sobel line, are
+ * drawn too; the fields hatched by band, sparse strokes in the mid tones (water under a bright sky), dense in the
+ * dark and crossed in the darkest, over a faint wash of the values on paper.
+ */
 function sketch({ width: W, height: H, data }) {
   const n = W * H, lum = boxBlur(luma(data, n), W, H, 1, 1), edge = sobel(lum, W, H);
-  const hatch = Math.max(2, Math.round(H / 180)) * 2; // diagonal strokes in the dark, spaced for the size
+  const soft = Math.max(2, Math.round(H / 180)), field = boxBlur(lum, W, H, soft, 1); // the broad tones, no blades
+  const bands = Float32Array.from(field);
+  posterise(bands, 5);
+  const contour = sobel(bands, W, H), hatch = soft * 2; // diagonal strokes, spaced for the size
   for (let y = 0; y < H; y++) {
     const row = y * W * 3;
     for (let x = 0; x < W; x++) {
-      const p = y * W + x, i = row + x * 3, l = lum[p];
+      const p = y * W + x, i = row + x * 3, l = lum[p], f = field[p];
       let tone = 0.74 + 0.26 * l; // a faint wash of the values, so the sky reads lighter than the ground
-      if (l < 0.4 && (x + y) % hatch === 0) tone -= 0.3 * (0.4 - l) / 0.4;
-      const line = clamp((edge[p] - 0.05) * 3) * 0.9;
+      if (f < 0.65 && (x + y) % (hatch * 2) === 0) tone -= 0.14; // the mid tones: sparse strokes
+      if (f < 0.4 && (x + y) % hatch === 0) tone -= 0.1 + 0.25 * (0.4 - f) / 0.4; // the dark: dense, and darker
+      if (f < 0.2 && (x - y + H) % hatch === 0) tone -= 0.2; // the darkest: crossed
+      const line = Math.max(clamp((edge[p] - 0.05) * 3), clamp((contour[p] - 0.04) * 3) * 0.6) * 0.9;
       data[i] = PAPER[0] * tone + (INK[0] - PAPER[0] * tone) * line;
       data[i + 1] = PAPER[1] * tone + (INK[1] - PAPER[1] * tone) * line;
       data[i + 2] = PAPER[2] * tone + (INK[2] - PAPER[2] * tone) * line;
@@ -347,7 +376,7 @@ export const STYLES = [
   entry('poster', /^(poster|posterised|posterized|screenprint|graphic|flat|cartoon|cartoony|comic|anime)$/, poster,
     { grain: false }),
   entry('minimalist', /^(minimal|minimalist|minimalism|minimalistic)$/, minimalist,
-    { grain: false, vignette: false, scene: { clouds: 0.05, fog: 0 } }),
+    { grain: false, vignette: false, scene: { clouds: 0.05, fog: 0, flat: true } }),
   entry('sketch', /^(sketch|sketched|sketchy|pencil|pencilled|drawing|drawn|ink|inked|charcoal|line-art)$/, sketch,
     { grain: false, vignette: false }),
   entry('watercolour',
