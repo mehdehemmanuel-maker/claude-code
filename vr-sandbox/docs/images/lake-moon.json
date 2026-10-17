@@ -1,0 +1,65 @@
+{
+  "prompt": "three pine trees by a lake under a full moon, snow",
+  "recognised": 4,
+  "time": "night",
+  "hour": 23,
+  "clouds": 0.35,
+  "fog": 0,
+  "rain": 0,
+  "snow": 0.7,
+  "storm": false,
+  "wet": false,
+  "season": null,
+  "moonPhase": "full",
+  "ground": "water",
+  "land": "snow",
+  "road": false,
+  "roadKind": null,
+  "beach": true,
+  "river": false,
+  "frozen": false,
+  "waterWord": "lake",
+  "lake": true,
+  "things": {
+    "trees": 3,
+    "moon": 1
+  },
+  "colours": {},
+  "instances": [
+    {
+      "kind": "trees",
+      "count": 3,
+      "size": 1,
+      "modifiers": [],
+      "word": "pine trees",
+      "index": 1
+    },
+    {
+      "kind": "moon",
+      "count": 1,
+      "size": 1,
+      "modifiers": [
+        "full"
+      ],
+      "word": "moon",
+      "index": 9
+    }
+  ],
+  "ignored": [],
+  "overridden": [
+    {
+      "what": "time",
+      "from": "day",
+      "to": "night",
+      "because": "moon"
+    }
+  ],
+  "report": {
+    "visible": {
+      "trees": [
+        3,
+        3
+      ]
+    }
+  }
+}
