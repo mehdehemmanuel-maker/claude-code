@@ -13,6 +13,9 @@ import { clamp, fbm, h2, lerp, mix, rng } from './math.mjs';
 import { COLOURS, THINGS } from './read.mjs';
 import { FIT, SIZES, fitWidth } from './draw.mjs';
 import { keyOf, thingByKey } from './registry.mjs';
+// hook for structures-skyline: the house and building drawers are things/structures.mjs's; their rows stay in the
+// drawers list below so the registry's order (tree, building, house, boat, bird) holds
+import { BUILDING_THING, HOUSE_THING } from './things/structures.mjs';
 
 const BAND = [0.1, 0.5]; // where a registered thing with neither size, depth nor band stands: the middle ground
 
@@ -529,54 +532,7 @@ function broadleafCrown(ctx, cx, fy, hgt, leaf) { // a ragged ball: a polygon wh
   });
 }
 
-const CREAM = [0.80, 0.72, 0.58], BRICK = [0.55, 0.30, 0.22], ROOF = [0.30, 0.18, 0.14], SNOWROOF = [0.92, 0.93, 0.96];
-const CHIMNEY = [0.35, 0.3, 0.3], DOOR = [0.25, 0.15, 0.1], LAMPLIGHT = [1, 0.8, 0.45], DAYGLASS = [0.35, 0.45, 0.55];
-
-function house(ctx, inst) { // a cabin: a box with a gabled roof, a door, windows lit at night, a chimney
-  const { W, scene, rand, lit, sun, rect, poly } = ctx, { fy, zm, shadow, k } = stance(ctx, inst), C = SIZES.cabin;
-  const s = stance(ctx, inst).s * k, w = C.w * s, hgt = C.wall * s, rise = C.rise * s; // a tiny cabin: half in all
-  const x0 = clamp(inst.ux * W, w * 0.6, W - w * 0.6), xm = (x0 - W / 2) * k / s;
-  const thrown = rand() < 0.5, wall = inst.colour ?? (thrown ? CREAM : BRICK); // the throw is made either way
-  const evening = scene.time === 'night' || scene.time === 'sunset', glow = evening ? LAMPLIGHT : DAYGLASS;
-  const bright = lit(wall, 0.9), dark = lit(wall, 0.5), snowy = scene.land === 'snow', c = [0, 0, 0];
-  shadow(xm, zm, { w: C.w * k, d: C.d * k }, (C.wall + C.rise * 0.5) * k);
-  rect(x0 - w / 2, fy - hgt, w, hgt, (x) => ((x < x0) === sun.left ? bright : dark));
-  const snowRoof = lit(SNOWROOF, 0.9), over = w * 0.06, eave = fy - hgt;
-  const roofShade = (x) => lit(ROOF, 0.6 + 0.3 * (sun.left ? -(x - x0) / w : (x - x0) / w), c);
-  poly([x0, eave - rise, x0 + w / 2 + over, eave, x0 - w / 2 - over, eave], snowy ? snowRoof : roofShade);
-  rect(x0 + w * 0.22, eave - rise * 0.9, C.chimney * s, rise * 0.63, lit(CHIMNEY, 0.7));
-  rect(x0 - C.door.w * s / 2, fy - C.door.h * s, C.door.w * s, C.door.h * s, lit(DOOR, 0.6));
-  const pane = scene.time === 'night' ? glow : lit(glow, 0.9), win = C.window * s;
-  for (const wx of [x0 - w * 0.3, x0 + w * 0.3]) rect(wx - win / 2, fy - (C.sill + C.window) * s, win, win, pane);
-  return { x: x0 - w * 0.56, y: eave - rise, w: w * 1.12, h: hgt + rise };
-}
-
-const LITWINDOW = [1, 0.85, 0.5], DARKWINDOW = [0.2, 0.28, 0.38];
-
-function building(ctx, inst) { // a tower of floors with windows, some lit
-  const { W, scene, rand, lit, sun, scale, rect, camera } = ctx, B = SIZES.building;
-  const { fy, zm, s, shadow, k } = stance(ctx, inst);
-  const wm = lerp(B.w[0], B.w[1], rand()) * k;
-  let storeys = Math.round(lerp(B.storeys[0], B.storeys[1], rand()) * k);
-  const roomAbove = Math.floor((camera.eye + 0.85 * ctx.hy / s) / SIZES.storey); // the storeys that leave some sky
-  storeys = Math.max(2, Math.min(storeys, roomAbove));
-  const w = wm * s, hgt = storeys * SIZES.storey * s;
-  const x0 = clamp(inst.ux * W, w * 0.5, W - w * 0.5), xm = (x0 - W / 2) / s;
-  const tone = 0.3 + rand() * 0.4, wall = inst.colour ?? [tone, tone, tone * 1.05];
-  const winW = Math.max(2 * scale, B.window.w * s), winH = Math.max(3 * scale, B.window.h * s); // 2x3 px at least
-  const stepX = winW * 2.2, stepY = winH * 2, left = x0 - w / 2;
-  const litShare = scene.time === 'night' ? 0.55 : scene.time === 'sunset' ? 0.35 : 0.08;
-  const bright = lit(wall, 0.85), dark = lit(wall, 0.5), unlit = lit(DARKWINDOW, 0.8);
-  shadow(xm, zm, { w: wm, d: wm * 0.8 }, storeys * SIZES.storey);
-  rect(left, fy - hgt, w, hgt, (x, y) => {
-    const gx = (x - left) % stepX, gy = (fy - y) % stepY;
-    if (gx > stepX * 0.3 && gx < stepX * 0.3 + winW && gy > stepY * 0.25 && gy < stepY * 0.25 + winH) {
-      return h2(Math.floor((x - x0) / stepX), Math.floor((fy - y) / stepY), 13) < litShare ? LITWINDOW : unlit;
-    }
-    return (x < x0) === sun.left ? bright : dark;
-  });
-  return { x: left, y: fy - hgt, w, h: hgt };
-}
+// hook for structures-skyline: house() and building() live in things/structures.mjs (3/4 houses by kind, towers)
 
 const HULL = [0.85, 0.85, 0.88], MAST = [0.3, 0.2, 0.15], SAIL = [0.95, 0.95, 0.93];
 
@@ -631,15 +587,7 @@ export const drawers = [
     id: 'tree', word: 'trees', match: THINGS.trees, usual: 9, band: [0.03, 0.1], depth: [75, 260],
     size: { w: 12, h: (SIZES.pine[0] + SIZES.pine[1]) / 2, d: 12 }, draw: tree,
   },
-  {
-    id: 'building', word: 'buildings', match: THINGS.buildings, usual: 11, band: [0.01, 0.05], depth: [150, 700],
-    size: { w: SIZES.building.w[1], h: SIZES.building.storeys[1] * SIZES.storey, d: SIZES.building.w[1] * 0.8 },
-    draw: building,
-  },
-  {
-    id: 'house', word: 'houses', match: THINGS.houses, usual: 3, band: [0.06, 0.3], depth: [25, 130],
-    size: { w: SIZES.cabin.w * 1.12, h: SIZES.cabin.wall + SIZES.cabin.rise, d: SIZES.cabin.d }, draw: house,
-  },
+  BUILDING_THING, HOUSE_THING, // hook for structures-skyline: the rows of things/structures.mjs, in their old places
   {
     id: 'boat', word: 'boats', match: THINGS.boats, usual: 2, band: [0.03, 0.2], depth: [40, 250], onWater: true,
     size: { w: SIZES.sailboat.hull, h: SIZES.sailboat.mast, d: SIZES.sailboat.beam }, draw: boat,

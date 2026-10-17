@@ -18,6 +18,7 @@ import { attach, frameCamera } from './draw.mjs';
 import { styleFor } from './styles.mjs';
 import { families, register, styles, things } from './registry.mjs';
 export * from './things/vehicles.mjs'; // hook for vehicles: registers kart, car, truck, semi… and exports VEHICLES
+export * from './things/structures.mjs'; // hook for structures-skyline: HOUSES, STRUCTURES, skylinePass…
 
 // The registries, as registry.mjs holds them: the same arrays, so nothing importing them from here breaks.
 export {
@@ -63,9 +64,9 @@ register('families', {
   // water still reflects the clouded sky without the disc (cloudPass paints into the snapshot celestialPass takes).
   // hook for ground-weather: the far rain and snow go on before the things, so near things hide them; hook for
   // water-reflections: reflectPass mirrors the things into the water after they are drawn, under the near weather.
-  passes: [
-    skyPass, celestialPass, cloudPass, landBehindPass, groundPass, weatherFarPass, thingsPass, reflectPass,
-    weatherPass, finishPass,
+  passes: [ // hook for structures-skyline: skylinePass before the ground, so the water's sky snapshot carries it
+    skyPass, celestialPass, cloudPass, landBehindPass, skylinePass, groundPass, weatherFarPass, thingsPass,
+    reflectPass, weatherPass, finishPass,
   ],
 });
 // hook for scene-families: the families beyond the landscape (space, abstract, portrait, underwater), the landforms
@@ -79,7 +80,9 @@ import { installPortrait } from './families/portrait.mjs';
 import { installUnderwater } from './families/underwater.mjs';
 import { installPhenomena, phenomenaPass } from './families/phenomena.mjs';
 import { installLandforms } from './things/landforms.mjs';
+import { installStructures, skylinePass } from './things/structures.mjs'; // hook for structures-skyline
 for (const install of [installAbstract, installSpace, installPortrait, installUnderwater, installPhenomena]) install();
+installStructures(); // hook for structures-skyline: lighthouse, rocks, windmill, castle, church, bridge, tent...
 installLandforms();
 {
   const at = families.findIndex((f) => f.id === 'landscape'), [landscape] = families.splice(at, 1);

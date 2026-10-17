@@ -77,7 +77,11 @@
 // seabed, aquarium; fish/fishes with a count). In a landscape: the sky's phenomena (rainbow(s) by day; aurora(s)/
 // borealis/northern lights at night; lightning/thunderbolt(s) under a storm) and the landforms (cactus/cacti/
 // cactuses/saguaro(s) on sand, palm-tree/palmtree/coconut-palm, volcano/volcanoes/volcanos with erupting/erupts/
-// eruption(s) for lava, waterfall(s)/cascade(s)). Anything else in the words is ignored, and --describe
+// eruption(s) for lava, waterfall(s)/cascade(s)). Structures (hook for structures-skyline): houses by their word
+// (cabin/hut/lodge/chalet, cottage, farmhouse/barn, else a house) in three-quarter view; a city's skyline;
+// lighthouse (brings a coast), rocks/rocky/cliffs/boulders/crags, windmill, castle (on the hills' ridge),
+// church/chapel, bridge, tent, campfire, fence, streetlamp (several on a street), telegraph poles, bench.
+// Anything else in the words is ignored, and --describe
 // shows exactly what was kept: every ignored word, every silent change, and how much was recognised.
 import fs from 'node:fs';
 import path from 'node:path';

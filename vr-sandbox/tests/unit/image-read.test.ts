@@ -102,7 +102,7 @@ describe('the reader', () => {
       expect(s.river).toBe(true);
       expect(s.ground).toBe('water');
       expect(s.season).toBe('autumn');
-      expect(s.ignored).toContain('bridge');
+      expect(s.things.bridge).toBe(1); // hook for structures-skyline: a bridge is a thing now, not ignored
     }],
     ['a cityscape at golden hour', (s) => {
       expect(s.things.buildings).toBe(0);
@@ -189,8 +189,8 @@ describe('the reader', () => {
 
   it('says what it ignored, what it changed, and how much it understood', () => {
     const dragon = read('a dragon over a castle');
-    expect(dragon.ignored).toEqual(['dragon', 'castle']);
-    expect(dragon.recognised).toBe(0);
+    expect(dragon.ignored).toEqual(['dragon']); // hook for structures-skyline: a castle is a thing now
+    expect(dragon.recognised).toBe(1); // hook for structures-skyline: the castle
     expect(dragon.overridden).toEqual([
       { what: 'hills', from: 'none', to: 'the usual', because: 'nothing else breaks the horizon' },
     ]);
@@ -263,8 +263,10 @@ describe('the honest shell', () => {
     const file = join(dir, 'dragon.png');
     const r = run('a dragon over a castle', '--out', file, '--size', '64x36');
     expect(r.status).toBe(0);
-    expect(r.err).toContain('not understood: dragon, castle');
-    expect(r.err).toContain('nothing in these words is understood (dragon, castle): painting the default day meadow');
+    expect(r.err).toContain('not understood: dragon'); // hook for structures-skyline: the castle is read
+    const nothing = run('a dragon over a wyvern', '--out', file, '--size', '64x36'); // hook for structures-skyline
+    expect(nothing.err).toContain('not understood: dragon, wyvern');
+    expect(nothing.err).toContain('nothing in these words is understood (dragon, wyvern): painting the default day');
     expect(existsSync(file)).toBe(true);
     const strict = run('a dragon over a castle', '--out', join(dir, 'strict.png'), '--size', '64x36', '--strict');
     expect(strict.status).toBe(3);
