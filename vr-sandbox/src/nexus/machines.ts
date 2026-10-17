@@ -27,7 +27,7 @@ const IN = 0.0254, LB = 0.45359237, PI = Math.PI;
 export interface Tyre { code: string; /** across, wide, its rim's diameter, m */ D: number; W: number; rim: number; says: string }
 /** A tyre from its size code, in any of the systems marked on sidewalls: ISO metric (205/55R16, 80/100-21,
  *  295/75R22.5), flotation inches (24x8-12, 10x4.50-5, a press-on 21x7x15), conventional truck (11R22.5) and
- *  bias-ply (6.50-10). */
+ *  bias-ply (6.50-10; a farm tyre's 13.6-28 with one decimal; 11-22.5 with none, on a half-inch rim). */
 export function tyreOf(code: string): Tyre | null {
   const c = code.trim().toUpperCase().replace(/\s+/g, '');
   let m = /^(?:P|LT)?(\d{2,3})\/(\d{2,3})(?:Z?R|-|B|D)(\d{1,2}(?:\.5)?)C?$/.exec(c);
@@ -36,7 +36,10 @@ export function tyreOf(code: string): Tyre | null {
   if (m) { const D = +m[1]! * IN, W = +m[2]! * IN, rim = +m[3]! * IN; return { code, D, W, rim, says: `${code}: ${m[1]} in across, ${m[2]} in wide, on a ${m[3]}-inch rim (flotation sizes)` }; }
   m = /^(\d{1,2}(?:\.\d+)?)R(\d{2}(?:\.5)?)$/.exec(c);
   if (m) { const W = +m[1]! * IN, rim = +m[2]! * IN; return { code, W, rim, D: rim + 2 * W * 0.875, says: `${code}: ${m[1]} in wide on a ${m[2]}-inch rim, its sidewall about 87.5 % of its width (typical of conventional truck sizes)` }; }
-  m = /^(\d{1,2}\.\d{2})-(\d{1,2})$/.exec(c);
+  // (its width in inches as the sidewall spells it, with two decimals, one or none: 6.50-10, 13.6-28, 11-22.5; its rim a
+  // whole or a half inch. One aspect for the whole family, typical of farm and industrial bias sizes: the low-section sizes
+  // on half-inch rims, a skid steer's 10-16.5 among them, run nearer 0.7 and come out some 10 % too tall here)
+  m = /^(\d{1,2}(?:\.\d{1,2})?)-(\d{1,2}(?:\.5)?)$/.exec(c);
   if (m) { const W = +m[1]! * IN, rim = +m[2]! * IN; return { code, W, rim, D: rim + 2 * W * 0.96, says: `${code}: ${m[1]} in wide on a ${m[2]}-inch rim, its sidewall about as tall as it is wide (typical of bias-ply sizes)` }; }
   return null;
 }
@@ -593,7 +596,8 @@ export function bodyPlanOf(m: Machine): BodyPlan {
 function body(m: Machine, ln: Lines): Part[] {
   const plan = bodyPlanOf(m), { L, W, wheels } = plan, c = m.clearance, out = bodyPanels(plan);
   const x = (f: number) => L / 2 - f * L;
-  // a pickup's bed: its floor over the rear tyres (with the room the tyres need), its sides the body's own skin
+  // a pickup's bed: its floor over the rear tyres (with the room the tyres need), its sides the body's own skin, so its
+  // depth is its belt's height over that floor (STYLE's pickup sets its belt for it)
   const rt = Math.max(...wheels.filter((w) => w.x < 0).map((w) => w.y + w.R + w.bump), c + 0.4);
   // (as wide as the skin is inside at its height, and as long, its tail end 20 mm inside the skin there: the bed's sides
   // and tail are the body's own skin, which leans in toward its foot and back toward its tail)
@@ -1291,8 +1295,13 @@ const STYLE: Record<string, { L: number; W: number; H: number; wb: number; lines
   sedan: { L: 4.8, W: 1.85, H: 1.45, wb: 2.85, seats: 5, lines: { cowl: 0.33, roofF: 0.45, roofR: 0.71, deck: 0.83, belt: 0.64, nose: 0.53, tail: 0.68, n: 5, face: { lamp: 0.1, grille: 0.08 } } },
   hatchback: { L: 4.3, W: 1.8, H: 1.47, wb: 2.65, seats: 5, lines: { cowl: 0.3, roofF: 0.42, roofR: 0.84, deck: 0.97, belt: 0.62, nose: 0.53, tail: 0.66, n: 5, face: { lamp: 0.1, grille: 0.08 } } },
   SUV: { tyre: [0.215, 0.7], clearance: 0.2, L: 4.8, W: 1.95, H: 1.75, wb: 2.85, seats: 7, lines: { cowl: 0.28, roofF: 0.38, roofR: 0.9, deck: 0.98, belt: 0.6, nose: 0.6, tail: 0.64, n: 6, face: { lamp: 0.12, grille: 0.22 } } },
-  // (a crew cab: two rows under its roof, its bed behind about 1.7 m long, a 5.5 ft box: typical)
-  pickup: { tyre: [0.245, 0.75], clearance: 0.23, L: 5.8, W: 2.0, H: 1.9, wb: 3.6, seats: 5, lines: { cowl: 0.27, roofF: 0.36, roofR: 0.67, deck: 0.71, belt: 0.6, nose: 0.62, tail: 0.55, n: 6, bed: true, face: { lamp: 0.16, grille: 0.34 } } },
+  // (a crew cab: two rows under its roof, its bed behind about 1.7 m long, a 5.5 ft box: typical. Its bed's sides are its
+  // own skin carried back at its belt (panels.ts lined: a bed's deck line is its belt, its tail line unused), over a floor
+  // body() lays just above its rear tyres at full bump, about 0.92 m up on 15-in rims; so its belt stands where a crew
+  // cab's bed rail does, about 1.45 m from the ground, 0.75 of its height, and its bed comes out about 0.5 m deep inside,
+  // as a crew cab's is: typical, the makers' sheets (as their dealers republish them) putting an F-150's 5.5 ft box at
+  // 21.4 in deep and a Silverado 1500's at 22.4. Its tail line is set the same, its tailgate's top being its rail's height)
+  pickup: { tyre: [0.245, 0.75], clearance: 0.23, L: 5.8, W: 2.0, H: 1.9, wb: 3.6, seats: 5, lines: { cowl: 0.27, roofF: 0.36, roofR: 0.67, deck: 0.71, belt: 0.75, nose: 0.62, tail: 0.75, n: 6, bed: true, face: { lamp: 0.16, grille: 0.34 } } },
   coupe: { tyre: [0.195, 0.6], clearance: 0.13, L: 4.6, W: 1.85, H: 1.35, wb: 2.75, seats: 4, lines: { cowl: 0.36, roofF: 0.49, roofR: 0.67, deck: 0.85, belt: 0.62, nose: 0.48, tail: 0.66, n: 5 , doors: 1 } },
   van: { tyre: [0.205, 0.7], clearance: 0.16, L: 5.3, W: 2.0, H: 2.0, wb: 3.3, seats: 8, lines: { cowl: 0.16, roofF: 0.24, roofR: 0.97, deck: 0.99, belt: 0.52, nose: 0.52, tail: 0.6, n: 7, face: { lamp: 0.14, grille: 0.16 } } },
   'sports car': { tyre: [0.205, 0.55], clearance: 0.12, L: 4.4, W: 1.9, H: 1.2, wb: 2.45, seats: 2, lines: { cowl: 0.4, roofF: 0.52, roofR: 0.68, deck: 0.86, belt: 0.6, nose: 0.42, tail: 0.64, n: 4.5 , doors: 1, face: { lamp: 0.08, grille: 0.05 } } },
