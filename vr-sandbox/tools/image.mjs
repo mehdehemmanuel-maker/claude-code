@@ -13,25 +13,46 @@
 //   node tools/image.mjs "a cabin in a foggy forest at dawn" --describe
 //
 //   --out <file>     where to save (default: images/<date>-<slug>.png)
-//   --size WxH       picture size (default 1280x720)
-//   --seed <n>       the random choices (default: from the words, so the same words give the same picture)
+//   --size WxH       picture size, each side 1 to 8192 (default 1280x720)
+//   --seed <n>       the random choices, a whole number (default: from the words: the same words, the same picture)
 //   --describe       print what the words were read as (JSON) and stop, no picture
+//   --strict         write nothing and exit 3 when nothing in the words is understood, or when an ignored word looks
+//                    like a noun (three letters or more, not ending in -ly: it cannot tell nouns from adjectives)
+//   --help           this text. `--` ends the options, so the words may begin with a dash.
 //
-// What is understood: time (dawn, day, sunset/dusk, night), weather (clear, cloudy, overcast, storm, fog/mist, rain,
-// snow), ground (grass/meadow, desert/sand, snow, sea/ocean/lake/water, beach, road/track/street, city), things
-// (mountains, hills, trees/forest/pines, house/cabin/barn, buildings/city/skyline, car/kart/truck, boat/ship, birds,
-// sun, moon, stars) with counts ("three trees", "two houses") and colours before things ("red car", "blue house").
-// Anything else in the words is ignored, and --describe shows exactly what was kept.
+// After every painting the shell says on stderr what it read (`read as: day, water with sand shore, boats 1`), what it
+// could not (`not understood: dragon, castle`), what it changed (`changed: ground sand -> water (boats)`), and when
+// nothing at all was understood it says so and paints the default day meadow. The PNG carries the same reading as a
+// tEXt chunk named Comment (the scene JSON) beside a Software chunk, so any picture can be traced to its words.
+//
+// What is understood: time (dawn/sunrise, morning, day, noon/midday, afternoon, golden hour, sunset/dusk/evening,
+// blue hour, night/midnight, moonlit, starlit), weather (clear/sunny, cloudy, overcast/grey, storm/thunderstorm/
+// lightning, fog/mist/haze, rain/drizzle/showers, wet, snowing/snowfall/blizzard/flurries, snow, snowy/snow-capped,
+// frozen/icy/ice, autumn/fall, spring, summer, winter), ground (grass/meadow/field, desert/sand/dunes, snow, pavement,
+// road/highway/lane/street/avenue, dirt/gravel, a track after race, dirt or train), water (sea/ocean/lake/pond/bay/
+// coast, river/stream/canal, harbour/port/marina, island/tropical/palm, beach/shore), things (mountains/peaks/mountain
+// range, hills, trees/forest/woods/pines/firs/oaks/palms, house/cabin/cottage/barn/hut/farmhouse/village, buildings/
+// city/town/skyline/cityscape/downtown/towers, car/kart/truck/van/jeep/taxi, boat/ship/sailboat/yacht/ferry/canoe,
+// birds/gulls/crows, sun, moon and its phase, stars) with counts ("three trees", "15 trees", "a hundred" is forty,
+// "no trees"), colours and sizes before things ("red car", "tiny cabin", "huge mountains"), places (near, far, left,
+// right, centre), a style word (pixel art, poster, minimalist, sketch, watercolour, painting, black and white,
+// vintage, sepia, cartoon: read now, painted by a later round) and a text to write ("the word HELLO", a quoted phrase:
+// read now, painted by a later round). "no" before a word cancels it (no clouds, no trees). Words that name the
+// picture itself (photo, scene, sky) are passed over. Anything else in the words is ignored, and --describe shows
+// exactly what was kept: every ignored word, every silent change, and how much was recognised.
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { clamp } from './image/math.mjs';
-import { read } from './image/read.mjs';
+import { nounLooking, read } from './image/read.mjs';
 import { paint } from './image/core.mjs';
 
 export * from './image/core.mjs';
 export * from './image/read.mjs';
+
+/** What the PNG's Software chunk says wrote it. */
+export const SOFTWARE = 'vr-sandbox image.mjs';
 
 // ── PNG ─────────────────────────────
 
@@ -53,9 +74,18 @@ function chunk(type, body) {
   crc.writeUInt32BE(crc32(typed));
   return Buffer.concat([len, typed, crc]);
 }
+/** A tEXt chunk: keyword, a zero, Latin-1 text (a character beyond Latin-1 is written as a JSON \uXXXX escape). */
+function tEXt(keyword, text) {
+  const latin = text.replace(/[^\x00-\xff]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  return chunk('tEXt', Buffer.concat([Buffer.from(keyword, 'latin1'), Buffer.alloc(1), Buffer.from(latin, 'latin1')]));
+}
 
-/** Encodes { width, height, data (rgb floats 0..1) } as a PNG (8-bit RGB, no filter, deflated). */
-export function png({ width, height, data }) {
+/**
+ * Encodes { width, height, data (rgb floats 0..1) } as a PNG (8-bit RGB, no filter, deflated). `text` adds a tEXt
+ * chunk per entry before the pixels: the shell writes Software and Comment (the scene JSON) so a picture keeps its
+ * reading; without it the file holds IHDR, IDAT and IEND only.
+ */
+export function png({ width, height, data }, { text } = {}) {
   const stride = width * 3 + 1, raw = Buffer.alloc(stride * height);
   for (let y = 0; y < height; y++) {
     const row = y * stride, from = y * width * 3;
@@ -68,19 +98,69 @@ export function png({ width, height, data }) {
   ihdr[8] = 8; // bit depth
   ihdr[9] = 2; // colour type: RGB (the compression, filter and interlace bytes stay 0)
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const texts = Object.entries(text ?? {}).map(([k, v]) => tEXt(k, v));
   const idat = chunk('IDAT', zlib.deflateSync(raw, { level: 9 }));
-  return Buffer.concat([signature, chunk('IHDR', ihdr), idat, chunk('IEND', Buffer.alloc(0))]);
+  return Buffer.concat([signature, chunk('IHDR', ihdr), ...texts, idat, chunk('IEND', Buffer.alloc(0))]);
 }
 
-/** Words to a PNG file. Returns the path written. */
-export function generate(prompt, { out, width, height, seed, style } = {}) {
-  const scene = read(prompt), image = paint(scene, { width, height, seed, style });
+/** Words to a PNG file, its reading in a tEXt chunk. Returns the path written. */
+export function generate(prompt, { out, width, height, seed, style, scene } = {}) {
+  const read_ = scene ?? read(prompt), image = paint(read_, { width, height, seed, style });
+  const { prompt: _, ...reading } = read_; // the words are the file's name and the caller's; the reading is new
   const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
   const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'image';
   const file = path.resolve(out ?? path.join('images', `${stamp}-${slug}.png`));
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, png(image));
+  fs.writeFileSync(file, png(image, { text: { Software: SOFTWARE, Comment: JSON.stringify(reading) } }));
   return file;
+}
+
+// ── The report ──────────────────────
+
+/** What the scene says in a line or three, for stderr: read as, not understood, nothing understood, changed. */
+export function report(scene) {
+  const bits = [scene.time];
+  if (scene.storm) bits.push('storm');
+  else if (scene.rain > 0) bits.push('rain');
+  if (scene.snow > 0) bits.push('snow falling');
+  if (scene.fog > 0) bits.push('fog');
+  if (scene.wet && !scene.rain && !scene.storm) bits.push('wet');
+  if (scene.clouds <= 0.05) bits.push('clear');
+  else if (scene.storm) { /* a storm's clouds go without saying */ }
+  else if (scene.clouds >= 0.9) bits.push('overcast');
+  else if (scene.clouds >= 0.6) bits.push('cloudy');
+  if (scene.season) bits.push(scene.season);
+  if (scene.frozen) bits.push('frozen');
+  bits.push((scene.river ? 'river' : scene.ground) + (scene.beach ? ` with ${scene.land} shore` : ''));
+  if (scene.road) bits.push(scene.roadKind === 'dirt' ? 'dirt road' : 'road');
+  for (const inst of scene.instances) {
+    if (inst.none) bits.push(`no ${inst.kind}`);
+    else {
+      const colour = inst.colour ? `${inst.colour} ` : '', usual = inst.usual ? ' (the usual)' : '';
+      bits.push(`${colour}${inst.kind} ${inst.count}${usual}`);
+    }
+  }
+  if (scene.overridden.some((o) => o.what === 'hills')) bits.push('hills (added to break the horizon)');
+  if (scene.style) bits.push(`style ${scene.style}`);
+  if (scene.text) bits.push(`text "${scene.text}"`);
+  const lines = [`read as: ${bits.join(', ')}`];
+  const ignored = scene.ignored.join(', ');
+  if (scene.ignored.length) lines.push(`not understood: ${ignored}`);
+  if (scene.recognised === 0) {
+    const which = ignored ? ` (${ignored})` : '';
+    lines.push(`nothing in these words is understood${which}: painting the default day meadow`);
+  }
+  const changed = scene.overridden.filter((o) => o.what !== 'hills');
+  const changes = changed.map((o) => `${o.what} ${o.from} -> ${o.to} (${o.because})`);
+  if (changes.length) lines.push(`changed: ${changes.join('; ')}`);
+  return lines;
+}
+
+/** Why --strict refuses a scene, or null when it would paint. */
+export function strictRefusal(scene) {
+  if (scene.recognised === 0) return 'nothing in the words is understood';
+  const nouns = scene.ignored.filter(nounLooking);
+  return nouns.length ? `noun-looking words not understood: ${nouns.join(', ')}` : null;
 }
 
 // ── The shell ───────────────────────
@@ -95,24 +175,36 @@ function usage() {
   return head.join('\n');
 }
 
-function parse(argv) {
+export function parse(argv) {
   const o = { words: [] };
+  let options = true;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => {
       if (i + 1 >= argv.length) throw new Error(`${a} needs a value`);
       return argv[++i];
     };
-    if (a === '--out' || a === '-o') o.out = next();
+    if (!options) o.words.push(a);
+    else if (a === '--') options = false;
+    else if (a === '--out' || a === '-o') o.out = next();
     else if (a === '--size' || a === '-s') {
-      const m = /^(\d+)x(\d+)$/.exec(next());
+      const v = next(), m = /^(\d+)[x×](\d+)$/i.exec(v);
       if (!m) throw new Error('--size wants WxH, e.g. 1280x720');
       o.width = +m[1];
       o.height = +m[2];
-    } else if (a === '--seed') o.seed = Number(next()) >>> 0;
-    else if (a === '--describe') o.describe = true;
+      if (o.width < 1 || o.height < 1 || o.width > 8192 || o.height > 8192) {
+        throw new Error(`--size ${v}: each side must be 1 to 8192 pixels`);
+      }
+    } else if (a === '--seed') {
+      const v = next();
+      if (!/^-?\d+$/.test(v)) throw new Error(`--seed wants a whole number, not ${v}`);
+      o.seed = Number(v) >>> 0;
+    } else if (a === '--describe') o.describe = true;
+    else if (a === '--strict') o.strict = true;
     else if (a === '--help' || a === '-h') return { ...o, help: true }; // whatever follows, the help is the answer
-    else if (a.startsWith('-') && a.length > 1) throw new Error(`unknown option ${a}`);
+    else if (a.startsWith('-') && a.length > 1) {
+      throw new Error(`unknown option ${a} (put -- before words with a dash)`);
+    }
     else o.words.push(a);
   }
   return o;
@@ -129,11 +221,18 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       console.log(usage());
       process.exit(2);
     }
+    const scene = read(prompt);
     if (o.describe) {
-      console.log(JSON.stringify(read(prompt), null, 2));
+      console.log(JSON.stringify(scene, null, 2));
       process.exit(0);
     }
-    const t = Date.now(), file = generate(prompt, o);
+    for (const line of report(scene)) process.stderr.write(`${line}\n`);
+    const refusal = o.strict && strictRefusal(scene);
+    if (refusal) {
+      process.stderr.write(`--strict: ${refusal}; nothing written\n`);
+      process.exit(3);
+    }
+    const t = Date.now(), file = generate(prompt, { ...o, scene });
     process.stderr.write(`${file} (${((Date.now() - t) / 1000).toFixed(1)} s)\n`);
     console.log(file);
   } catch (e) {
