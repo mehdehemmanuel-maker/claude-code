@@ -72,15 +72,21 @@ export interface Ctx {
 export interface ThingInstance { ux: number; fy?: number; uy?: number }
 export interface ThingEntry {
   id: string;
-  word: string;
-  match: RegExp;
+  word?: string; // the key in scene.things when not the id (the built-ins: trees, houses, …)
+  match: RegExp; // the reader tries it on every token: a registered thing is read without an edit to read.mjs
   usual: number;
-  band: [number, number] | null;
+  band?: [number, number] | null;
   onWater?: boolean;
   sky?: boolean;
   draw(ctx: Ctx, inst: ThingInstance): Omit<ThingBox, 'kind'>;
 }
-export interface FamilyEntry { id: string; detect(scene: Scene): boolean; passes: Array<(ctx: Ctx) => void> }
+export interface FamilyEntry {
+  id: string;
+  detect(scene: Scene): boolean;
+  passes: Array<(ctx: Ctx) => void>;
+  words?: RegExp; // the tokens the family claims in the reader
+  apply?(scene: Scene, word: string): void; // run on each claimed token; without it, scene.family = id
+}
 export interface StyleEntry { id: string; match: RegExp; apply(img: Image, ctx: Ctx): void }
 export interface GroundRead { land?: string; water: boolean; beach: boolean }
 export interface ConditionEntry {
@@ -100,7 +106,7 @@ export declare const CONDITIONS: ConditionEntry[];
 export declare function words(prompt: string): string[];
 export declare function read(prompt: string): Scene;
 
-// core.mjs
+// core.mjs (the registries are registry.mjs's arrays, re-exported, with its vocabulary helpers)
 export declare const LIGHT: Record<Time, Light>;
 export declare const things: ThingEntry[];
 export declare const families: FamilyEntry[];
@@ -143,6 +149,7 @@ export interface Scene {
   river: boolean;
   frozen: boolean;
   text?: string;
+  family?: string; // set by a registered family's words (registry.mjs)
   instances: Instance[];
   ignored: string[];
   overridden: Override[];
@@ -348,3 +355,11 @@ export interface Ctx { text?: string }
 export interface StyleEntry { grain?: boolean; vignette?: boolean; scene?: Partial<Scene> }
 /** The shell's stderr notes on a caption: cut to two lines, characters drawn as '?'. */
 export declare function textNotes(layout: Layout): string[];
+
+// ── vocabulary registry (tools/image/registry.mjs, re-exported by core.mjs) ──
+/** The key of a thing in scene.things: its word when it has one, else its id. */
+export declare function keyOf(entry: Pick<ThingEntry, 'id' | 'word'>): string;
+export declare function thingFor(token: string): ThingEntry | undefined;
+export declare function thingByKey(key: string): ThingEntry | undefined;
+export declare function familyFor(token: string): FamilyEntry | undefined;
+export declare function styleNamed(token: string): StyleEntry | undefined;

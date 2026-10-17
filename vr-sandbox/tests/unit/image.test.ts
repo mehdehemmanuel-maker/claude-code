@@ -60,7 +60,8 @@ describe('the image tool', () => {
   });
 
   it('keeps the core free of Node, so it can paint in a browser', async () => {
-    for (const name of ['core', 'read', 'passes', 'things', 'math', 'draw', 'styles', 'text', 'font']) {
+    const files = ['core', 'read', 'passes', 'things', 'math', 'draw', 'styles', 'text', 'font', 'registry'];
+    for (const name of files) {
       const src = readFileSync(fileURLToPath(new URL(`../../tools/image/${name}.mjs`, import.meta.url)), 'utf8');
       for (const banned of ['node:', 'Buffer', 'process.']) {
         expect(src.includes(banned), `${name}.mjs has ${banned}`).toBe(false);

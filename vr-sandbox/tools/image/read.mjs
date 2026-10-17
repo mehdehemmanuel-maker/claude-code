@@ -1,10 +1,12 @@
 // Words to a scene. Everything here is data a later reader can replace whole: the number words, the colour words,
 // the nouns that are things, the conditions (time, sky, weather, ground, water), the size and place words, the stop
-// words, and the compounds that are read as their parts; the style words are styles.mjs's own table (STYLES), so a
-// style the reader names is one the finish paints. read() turns a prompt into a scene and says what it did with
-// every token: each one is a thing, a condition, a number, a colour, a modifier, a style, a stop word, part of a
-// phrase, or it goes to scene.ignored; every silent choice goes to scene.overridden.
-import { STYLES } from './styles.mjs';
+// words, and the compounds that are read as their parts. The registries (registry.mjs) are consulted too: a thing a
+// package registered is read by its `match` and keyed by its word or id, a family's `words` are read and its apply()
+// run, and the style words are the styles' own `match` (styles.mjs), so a style the reader names is one the finish
+// paints. read() turns a prompt into a scene and says what it did with every token: each one is a thing, a
+// condition, a number, a colour, a modifier, a style, a family's word, a stop word, part of a phrase, or it goes to
+// scene.ignored; every silent choice goes to scene.overridden.
+import { conditions, families, familyFor, keyOf, styleNamed, thingByKey, thingFor } from './registry.mjs';
 //
 // The scene the painter reads (time, clouds, fog, rain, snow, storm, ground, road, beach, things, colours, land) keeps
 // its shape; things and colours are views over scene.instances, where each mention of a thing keeps its own count,
@@ -25,7 +27,11 @@ export const COLOURS = {
   gray: [0.5, 0.5, 0.52], pink: [0.95, 0.55, 0.70], purple: [0.50, 0.20, 0.65], brown: [0.45, 0.28, 0.15],
   silver: [0.75, 0.77, 0.80], gold: [0.85, 0.68, 0.20],
 };
-/** The nouns that are things, by the kind the painter draws. 'range' counts only after mountain(s), see PHRASES. */
+/**
+ * The nouns that are things, by the kind the painter draws: the one source of the built-ins' words (things.mjs's
+ * drawers point their `match` here); a package's things are read from the registry. 'range' counts only after
+ * mountain(s), see PHRASES.
+ */
 export const THINGS = {
   mountains: /^(mountains?|alps|peaks?|mountain-ranges?)$/, hills: /^(hills?|hillside|hillsides|hilltops?)$/,
   trees: /^(trees?|forests?|woods?|woodland|pines?|firs?|oaks?|palms?|spruces?|cedars?|birches?)$/,
@@ -121,7 +127,8 @@ const time = (name) => (s, g, w) => {
  * carries the land named beside water, whether water or a shore was named, whether the sky was called clear, and
  * the things a scene word brings with it (a harbour's boats), all settled after every condition is read.
  */
-export const CONDITIONS = [
+export const CONDITIONS = conditions; // the registry's array, filled here: an entry registered later is weighed last
+CONDITIONS.push(
   { id: 'night', kind: 'time', match: /^(night|midnight|nights|nighttime|nightfall)$/, apply: time('night') },
   {
     id: 'sunset', kind: 'time', match: /^(sunset|dusk|evening|sundown|twilight|golden-hour|blue-hour)$/,
@@ -240,7 +247,7 @@ export const CONDITIONS = [
     id: 'beach', kind: 'water', match: /^(beach|beaches|shore|shoreline|lakeside)$/,
     apply: (s, g) => { g.beach = true; },
   },
-];
+);
 /** What 'no X' does for a condition word: the opposite of X. */
 const NEGATE = {
   cloudy: (s) => { s.clouds = 0.05; },
@@ -264,7 +271,7 @@ export function knows(w) {
   if (SIZE_WORDS[w] || PLACEMENT[w]) return true;
   if (NEGATION.test(w) || w === 'moonless') return true; // a phase word (full, new) is known only by a moon
   if (Object.values(THINGS).some((re) => re.test(w)) || CONDITIONS.some((c) => c.match.test(w))) return true;
-  return STYLES.some((st) => st.match.test(w));
+  return !!(thingFor(w) || familyFor(w) || styleNamed(w));
 }
 
 /** The forms a token is matched by: itself, its compound's parts, or its hyphen-split parts when those are known. */
@@ -339,8 +346,11 @@ function tokenize(prompt) {
 
 // ── Reading ────────────────────────
 
-const kindOf = (f) => Object.keys(THINGS).find((k) => THINGS[k].test(f));
+/** The kind a form names: a built-in from THINGS, else a registered thing by its key (its word, or its id). */
+const kindOf = (f) => Object.keys(THINGS).find((k) => THINGS[k].test(f)) ?? keyOf(thingFor(f) ?? { id: undefined });
 const plural = (f, kind) => COLLECTIVE.test(f) || (!SINGLE.includes(kind) && /s$/.test(f));
+/** How many of a kind a bare plural names: the table here, else the registered thing's own usual. */
+const usualOf = (kind) => USUAL[kind] ?? thingByKey(kind)?.usual ?? 1;
 
 /** Reads words into a scene: what the picture is of. Every choice is from a word, or a default named here. */
 export function read(prompt) {
@@ -419,7 +429,7 @@ export function read(prompt) {
     } else if (SINGLE.includes(m.kind)) inst.count = 1;
     else if (number !== undefined && !m.collective) inst.count = Math.min(MOST, number);
     else if (m.plural) {
-      inst.count = USUAL_BY_WORD[m.word] ?? USUAL[m.kind];
+      inst.count = USUAL_BY_WORD[m.word] ?? usualOf(m.kind);
       inst.usual = true;
     }
     s.instances.push(inst);
@@ -481,10 +491,19 @@ export function read(prompt) {
   }
   if (s.road && !s.roadKind) s.roadKind = 'asphalt';
 
-  // The style (the first named, from the finish's own table), the moonless night, and the things a scene word brings
-  // with it when they were not named themselves.
+  // The words a registered family claims (its apply sets the scene: scene.family, or what it will), the style (the
+  // first named, from the finish's own table), the moonless night, and the things a scene word brings with it when
+  // they were not named themselves.
+  for (let i = 0; i < n; i++) {
+    if (used[i] || spent[i]) continue;
+    const w = forms[i].find(familyFor), family = w && familyFor(w);
+    if (!family) continue;
+    (family.apply ?? ((scene) => { scene.family = family.id; }))(s, w);
+    conditions++;
+    used[i] = true;
+  }
   for (let i = 0; i < n && !s.style; i++) {
-    const style = STYLES.find((st) => forms[i].some((f) => st.match.test(f)));
+    const style = forms[i].map(styleNamed).find(Boolean);
     if (!style) continue;
     s.style = style.id;
     used[i] = true;
@@ -503,7 +522,7 @@ export function read(prompt) {
   // The views the painter reads: things (0 is the usual number) and one colour per kind (the last named).
   for (const inst of s.instances) {
     const same = s.instances.filter((o) => o.kind === inst.kind), total = same.reduce((sum, o) => sum + o.count, 0);
-    if (same.every((o) => o.usual && o.count === USUAL[o.kind])) s.things[inst.kind] = 0;
+    if (same.every((o) => o.usual && o.count === usualOf(o.kind))) s.things[inst.kind] = 0;
     else if (total > 0 || !same.some((o) => o.none)) s.things[inst.kind] = total;
     if (inst.colour) s.colours[inst.kind] = inst.colour;
   }

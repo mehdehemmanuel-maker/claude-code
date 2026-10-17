@@ -9,9 +9,10 @@
 // style can finish the whole (pixel art, a poster, a sketch, a watercolour, mono, sepia, vintage) and a caption can be
 // written over it in the tool's own 5x7 bitmap font.
 // Node 18+, nothing to install; usable from a shell or imported (`paint`, `read`, `png`, `generate`).
-// This file is the shell and the PNG encoder; the painting is tools/image/ (math, read, core, passes, things, draw,
-// styles, text, font), which has nothing of Node in it, so the same core paints in a browser (`toImageData`);
-// core.mjs says what each file owns.
+// This file is the shell and the PNG encoder; the painting is tools/image/ (math, registry, read, core, passes,
+// things, draw, styles, text, font), which has nothing of Node in it, so the same core paints in a browser
+// (`toImageData`); core.mjs says what each file owns. A package extends the tool through `register` (things,
+// families, styles, conditions): a thing registered with its words is read and drawn with no edit here.
 //
 //   node tools/image.mjs "a red go-kart on a wet road at dusk, mountains behind"
 //   node tools/image.mjs "three pine trees by a lake under a full moon, snow"

@@ -5,6 +5,9 @@
 import { clamp, fbm, h2, lerp, mix } from './math.mjs';
 import { THINGS } from './read.mjs';
 import { SIZES } from './draw.mjs';
+import { keyOf } from './registry.mjs';
+
+const BAND = [0.1, 0.5]; // where a registered thing with neither depth nor band stands: the middle ground
 
 const FAR_BANK = [20, 400]; // how far across the water the far bank's things may stand, in metres
 const FAR_BANK_SHARE = [0.25, 0.4]; // how tall a far-bank thing is drawn, as a share of the frame, so it reads
@@ -31,7 +34,7 @@ export function shoreFor(ctx, shoreY) {
   const { H, hy, usual } = ctx, least = hy + (H - hy) * WATER_LEAST;
   let row = shoreY;
   for (const e of ctx.things) {
-    if (e.sky || e.onWater || !e.size || usual(e.word, e.usual) <= 0) continue;
+    if (e.sky || e.onWater || !e.size || usual(keyOf(e), e.usual) <= 0) continue;
     const own = ctx.project(0, nearest(ctx, e.size) * SHORE_STEP).y;
     if (own >= least) row = Math.min(row, own);
   }
@@ -47,7 +50,7 @@ export function place(ctx, entry, n, placed) {
       zm = depthIn(entry.depth, rand());
       fy = ctx.project(0, zm).y;
     } else { // an entry placed by screen band, as before the camera: its depth read back from its row
-      const [minNear, maxNear] = entry.band;
+      const [minNear, maxNear] = entry.band ?? BAND;
       fy = hy + (H - hy) * (minNear + rand() * (maxNear - minNear));
       zm = Math.min(ctx.groundZ(fy), FAR_BANK[1]);
     }
@@ -75,7 +78,7 @@ export function thingsPass(ctx) {
   const { rand, horizon, layout, usual } = ctx;
   const placed = [];
   for (const entry of ctx.things) {
-    if (!entry.sky) place(ctx, entry, usual(entry.word, entry.usual), placed);
+    if (!entry.sky) place(ctx, entry, usual(keyOf(entry), entry.usual), placed);
   }
   placed.sort((a, b) => a.fy - b.fy || b.zm - a.zm); // painter's order: the farthest first
   for (const { entry, fy, zm } of placed) {
@@ -85,8 +88,9 @@ export function thingsPass(ctx) {
   }
   for (const entry of ctx.things) {
     if (!entry.sky) continue;
-    for (let i = 0; i < usual(entry.word, entry.usual); i++) {
-      const ux = rand(), uy = rand() * horizon * 0.7, zm = depthIn(entry.depth, rand()), id = layout.things.length;
+    for (let i = 0; i < usual(keyOf(entry), entry.usual); i++) {
+      const ux = rand(), uy = rand() * horizon * 0.7, id = layout.things.length;
+      const zm = depthIn(entry.depth ?? [25, 120], rand());
       const box = ctx.sprite(zm, () => entry.draw(ctx, { ux, uy, zm }), id);
       layout.things.push({ kind: entry.id, ...box });
     }

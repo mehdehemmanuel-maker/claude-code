@@ -1,16 +1,24 @@
 // The core: a scene to pixels, with nothing of Node in it, so the same files paint in a browser. paint() builds the
-// context every pass shares and runs the chosen family's passes in order. The registries are ordered arrays a later
-// package extends with register(): things (what stands in a picture), families (which passes paint a kind of
-// picture), styles (a finish over the whole), conditions (the words that set time, weather and ground).
-// What each file owns: math.mjs the numbers (noise, hashes, the generator); read.mjs words to a scene; draw.mjs the
-// anti-aliased primitives, the camera in metres (SIZES, project), the sun's direction, shadows and the sprite wrapper;
-// passes.mjs the layers from the sky to the finish; things.mjs what stands in the picture; this file the context.
+// context every pass shares and runs the chosen family's passes in order. The registries (registry.mjs, re-exported
+// here) are ordered arrays a package extends with register(): things (what stands in a picture), families (which
+// passes paint a kind of picture), styles (a finish over the whole), conditions (the words that set time, weather and
+// ground); the reader consults the same arrays, so a registered thing or family word is read without an edit to it.
+// What each file owns: math.mjs the numbers (noise, hashes, the generator); registry.mjs the registries and the
+// vocabulary; read.mjs words to a scene; draw.mjs the anti-aliased primitives, the camera in metres (SIZES, project),
+// the sun's direction, shadows and the sprite wrapper; passes.mjs the layers from the sky to the finish; things.mjs
+// what stands in the picture; styles.mjs the finishes; text.mjs and font.mjs the caption; this file the context.
 import { clamp, hash, lerp, mix, rng } from './math.mjs';
-import { CONDITIONS, COLOURS, words } from './read.mjs';
+import { COLOURS, words } from './read.mjs';
 import { celestialPass, cloudPass, finishPass, groundPass, landBehindPass, skyPass, weatherPass } from './passes.mjs';
 import { drawers, thingsPass } from './things.mjs';
 import { attach } from './draw.mjs';
-import { STYLES, styleFor } from './styles.mjs';
+import { styleFor } from './styles.mjs';
+import { families, register, styles, things } from './registry.mjs';
+
+// The registries, as registry.mjs holds them: the same arrays, so nothing importing them from here breaks.
+export {
+  things, families, styles, conditions, register, keyOf, thingFor, thingByKey, familyFor, styleNamed,
+} from './registry.mjs';
 
 // The painter's primitives, camera and sizes, for an importer that draws its own things (tools/image.d.mts types them).
 export {
@@ -39,30 +47,9 @@ export const LIGHT = {
   },
 };
 
-// ── Registries ─────────────────────
-
-/** { id, word, match, usual, band: [minNear, maxNear], onWater?, sky?, draw(ctx, inst) }, in placing order. */
-export const things = [];
-/** { id, detect(scene), passes: [fn(ctx)…] }: the first whose detect() answers paints the scene; else the first. */
-export const families = [];
-/** { id, match, apply(img, ctx) }: a finish over the whole picture, chosen by scene.style or the paint option. */
-export const styles = [];
-/** The time, sky, weather and ground matchers, as read.mjs weighs them (the same array). */
-export const conditions = CONDITIONS;
-const REGISTRIES = { things, families, styles, conditions };
-
-/** Adds an entry to a registry, in order; one with the id of an entry already there takes its place. */
-export function register(kind, entry) {
-  const list = REGISTRIES[kind];
-  if (!list) throw new Error(`no registry named ${kind}`);
-  const at = list.findIndex((e) => e.id === entry.id);
-  if (at >= 0) list[at] = entry;
-  else list.push(entry);
-  return entry;
-}
+// ── The built-ins ──────────────────
 
 for (const drawer of drawers) register('things', drawer);
-for (const style of STYLES) register('styles', style);
 register('families', {
   id: 'landscape',
   detect: () => true,
