@@ -79,6 +79,11 @@
 // cactuses/saguaro(s) on sand, palm-tree/palmtree/coconut-palm, volcano/volcanoes/volcanos with erupting/erupts/
 // eruption(s) for lava, waterfall(s)/cascade(s)). Anything else in the words is ignored, and --describe
 // shows exactly what was kept: every ignored word, every silent change, and how much was recognised.
+// Creatures in metres from their figures (hook for creatures-flyers): cat, dog, horse, deer (antlers), cow, sheep,
+// goat, wolf, elephant, camel, standing or grazing; person/people/man/woman/child/crowd/hiker/farmer (1.7 m, a child
+// 1.2 m, standing/walking/sitting); in the sky airplane/plane/jet, propeller plane/cessna, helicopter, hot air
+// balloon(s), rocket (launching), dragon, kite (on a line from a person), birds by word (gull, crow, sparrow in a
+// loose V), bats at night; at the water's surface fish, whale (a spout), dolphin, shark (a sea creature brings water).
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';

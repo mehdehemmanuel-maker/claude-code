@@ -18,6 +18,10 @@ import { attach, frameCamera } from './draw.mjs';
 import { styleFor } from './styles.mjs';
 import { families, register, styles, things } from './registry.mjs';
 export * from './things/vehicles.mjs'; // hook for vehicles: registers kart, car, truck, semi… and exports VEHICLES
+export { // hook for creatures-flyers: the tables in metres and the drawers (installed below, after the six)
+  CREATURES, FIGURE, FLYERS, BIRDS, SWIMMERS, CREATURE_THINGS, CREATURE_WORDS, COATS, creature, figure, crowd, bird,
+  swimmer,
+} from './things/creatures.mjs';
 
 // The registries, as registry.mjs holds them: the same arrays, so nothing importing them from here breaks.
 export {
@@ -79,8 +83,10 @@ import { installPortrait } from './families/portrait.mjs';
 import { installUnderwater } from './families/underwater.mjs';
 import { installPhenomena, phenomenaPass } from './families/phenomena.mjs';
 import { installLandforms } from './things/landforms.mjs';
+import { installCreatures } from './things/creatures.mjs'; // hook for creatures-flyers: after the six and the landforms
 for (const install of [installAbstract, installSpace, installPortrait, installUnderwater, installPhenomena]) install();
 installLandforms();
+installCreatures(); // hook for creatures-flyers: animals, people, flyers, the birds, the swimmers and their conditions
 {
   const at = families.findIndex((f) => f.id === 'landscape'), [landscape] = families.splice(at, 1);
   families.push(landscape);

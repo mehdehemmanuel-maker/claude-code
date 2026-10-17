@@ -126,7 +126,7 @@ describe('the reader knows every vehicle by its words', () => {
     for (const kind of KINDS) expect(ids).toContain(kind);
     // then the five built-ins and ground-weather's flowers in a run; scene-families' landforms and phenomena follow
     const at = ids.indexOf('tree');
-    expect(ids.slice(at, at + 6)).toEqual(['tree', 'building', 'house', 'boat', 'bird', 'flowers']);
+    expect(ids.slice(at, at + 5)).toEqual(['tree', 'building', 'house', 'boat', 'flowers']); // creatures-flyers hook
     expect(ids.slice(0, at)).toEqual(expect.arrayContaining([...KINDS]));
     expect(ids).not.toContain('cars');
     for (const e of VEHICLE_THINGS) {
