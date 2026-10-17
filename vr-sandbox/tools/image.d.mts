@@ -228,6 +228,7 @@ export interface Sizes {
 }
 export declare const SIZES: Sizes;
 export declare const ELEVATION: { dawn: number; day: [number, number]; sunset: number; night: number };
+export declare function elevationAt(hour: number, noon: number): number;
 export declare function camera(W: number, H: number, hy: number, equiv?: number): Camera;
 export declare function sunlight(
   scene: Scene, sun: { x: number; y: number }, L: Light, cam: Camera, W: number, horizon: number,

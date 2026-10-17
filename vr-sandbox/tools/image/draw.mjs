@@ -66,19 +66,28 @@ export function camera(W, H, hy, equiv = 50) {
 /** The sun's elevation by time of day, in degrees; the day's runs with how high the disc was drawn. */
 export const ELEVATION = { dawn: 10, day: [55, 65], sunset: 8, night: 35 };
 const DEG = Math.PI / 180;
+const SUN_UP = 3; // degrees: lower than this by the clock, the time of day's own figure stands in for the hour's
+
+/** The sun's elevation at an hour of the clock: a sine over the twelve hours from six to eighteen, `noon` its top. */
+export const elevationAt = (hour, noon) => noon * Math.sin(Math.PI * (hour - 6) / 12);
 
 /**
  * The light's direction from the scene: the azimuth is where the disc is across the frame (atan of its offset over
  * the focal length, so a disc left of centre lights from the left and shadows lean right and toward the viewer),
- * the elevation is the time of day's. visible says whether a disc is in the sky to cast shadows at all.
+ * the elevation is the hour's when the reader gave one and the sun is up by it (morning 9 lower than noon, golden
+ * hour 17 low), else the time of day's (an unknown time counts as day). visible says whether a disc is in the sky
+ * to cast shadows at all.
  */
 export function sunlight(scene, sun, L, cam, W, horizon) {
-  const time = scene.time;
-  let el = ELEVATION[time];
-  if (Array.isArray(el)) { // by day the disc is drawn at half to all of the palette's height: the higher, the steeper
+  const time = scene.time, byTime = ELEVATION[time] ?? ELEVATION.day;
+  let el = byTime;
+  if (Array.isArray(byTime)) { // by day the disc is drawn at half to all of the palette's height: higher is steeper
     const share = L.height > 0 ? (horizon - sun.y) / (L.height * horizon) : 1;
-    el = el[0] + (el[1] - el[0]) * clamp((share - 0.5) * 2);
+    el = byTime[0] + (byTime[1] - byTime[0]) * clamp((share - 0.5) * 2);
   }
+  const noon = Array.isArray(byTime) ? el : (ELEVATION.day[0] + ELEVATION.day[1]) / 2;
+  const byHour = Number.isFinite(scene.hour) ? elevationAt(scene.hour, noon) : 0;
+  if (byHour >= SUN_UP) el = byHour;
   el *= DEG;
   const az = Math.atan((sun.x - 0.5) * W / cam.focal), moon = time === 'night';
   const dir = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];

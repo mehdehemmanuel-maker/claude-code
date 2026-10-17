@@ -1,25 +1,32 @@
 // primitives-world: the camera in metres, the sun's direction and shadows, the anti-aliased primitives, and the six
 // drawers converted to them (tools/image/draw.mjs, things.mjs, passes.mjs).
 import { describe, expect, it } from 'vitest';
-import type { Ctx } from '../../tools/image.mjs';
+import type { Ctx, Image, Scene } from '../../tools/image.mjs';
 import {
-  SIZES, camera, canvas, disc, ellipse, families, line, paint, poly, quad, read, rect, register, shadowLength,
-  shadowPoints, tri,
+  ELEVATION, LIGHT, SIZES, camera, canvas, disc, ellipse, elevationAt, families, line, paint, poly, quad, read, rect,
+  register, shadowLength, shadowPoints, sunlight, tri,
 } from '../../tools/image.mjs';
 
 const WHITE = [1, 1, 1];
 const DEG = Math.PI / 180;
 /** The sum of one channel over a canvas: the area covered when white is painted on black. */
-const covered = (c: { data: Float32Array }) => { let s = 0; for (let i = 0; i < c.data.length; i += 3) s += c.data[i]!; return s; };
+const covered = (c: { data: Float32Array }) => {
+  let s = 0;
+  for (let i = 0; i < c.data.length; i += 3) s += c.data[i]!;
+  return s;
+};
 /** Paints a scene and hands back the context it was painted with (the landscape family, with a tap in front). */
 function painted(prompt: string, width = 320, height = 180, seed = 7) {
   let ctx: Ctx | null = null;
   const land = families.find((f) => f.id === 'landscape')!;
-  const tap = { id: 'landscape', detect: land.detect, passes: [(c: Ctx) => { ctx = c; }, ...land.passes.filter((p) => p.name !== '')] };
+  const tap = { id: 'landscape', detect: land.detect, passes: [(c: Ctx) => { ctx = c; }, ...land.passes] };
   register('families', tap);
-  const img = paint(read(prompt), { width, height, seed });
-  register('families', land);
-  return { img, ctx: ctx! as Ctx };
+  try {
+    const img = paint(read(prompt), { width, height, seed });
+    return { img, ctx: ctx! as Ctx };
+  } finally {
+    register('families', land);
+  }
 }
 
 describe('the camera', () => {
@@ -62,13 +69,15 @@ describe('the camera', () => {
     for (const seed of [1, 3, 7, 11]) {
       const { img, ctx } = painted('a pine tree and a house', 640, 360, seed);
       const metres = (t: { y: number; h: number }) => t.h * ctx.camera.groundZ(t.y + t.h) / ctx.camera.focal;
-      const tree = img.layout.things.find((t) => t.kind === 'tree')!, cabin = img.layout.things.find((t) => t.kind === 'house')!;
+      const tree = img.layout.things.find((t) => t.kind === 'tree')!;
+      const cabin = img.layout.things.find((t) => t.kind === 'house')!;
       const cabinM = metres(cabin), treeM = metres(tree);
       expect(cabinM).toBeCloseTo(SIZES.cabin.wall + SIZES.cabin.rise, 1);
       const pine = treeM >= SIZES.pine[0] - 0.01 && treeM <= SIZES.pine[1] + 0.01;
       const broadleaf = treeM >= SIZES.broadleaf[0] - 0.01 && treeM <= SIZES.broadleaf[1] + 0.01;
       expect(pine || broadleaf, `tree of ${treeM.toFixed(2)} m`).toBe(true);
-      // The plan asks for 2-4 cabin walls; the table's own figures (pine 15-25 m, wall 3 m) give 5-8.3, broadleaf 3.3-4.7
+      // The plan asks for 2-4 cabin walls; the table's own figures (pine 15-25 m, wall 3 m) give 5-8.3, a broadleaf
+      // 3.3-4.7
       expect(treeM / SIZES.cabin.wall).toBeGreaterThan(3);
       expect(treeM / SIZES.cabin.wall).toBeLessThan(8.4);
     }
@@ -105,11 +114,26 @@ describe('the light', () => {
     }
   });
 
+  it('takes the elevation from the hour when the sun is up by it, and never a NaN from an unknown time', () => {
+    const noon = painted('a car on a road at noon').ctx, morning = painted('a car on a road in the morning').ctx;
+    const golden = painted('a car on a road at golden hour').ctx, dawn = painted('a car on a road at dawn').ctx;
+    expect(noon.light.el).toBeGreaterThan(morning.light.el);
+    expect(morning.light.el).toBeGreaterThan(golden.light.el);
+    expect(golden.light.el).toBeGreaterThan(dawn.light.el); // golden hour at 17 is a low sun, dawn's figure lower
+    expect(morning.light.el / DEG).toBeCloseTo(elevationAt(9, noon.light.el / DEG), 6);
+    expect(dawn.light.el / DEG).toBeCloseTo(ELEVATION.dawn, 6); // the sine is below the horizon at six: the table
+    const odd = { ...read('a car on a road'), time: 'twilight', hour: undefined } as unknown as Scene;
+    const light = sunlight(odd, { x: 0.3, y: 0.2 }, LIGHT.day, camera(64, 36, 20), 64, 0.56);
+    expect(Number.isFinite(light.el) && light.el > 0).toBe(true);
+    for (const d of light.dir) expect(Number.isFinite(d)).toBe(true);
+  });
+
   it('darkens the road under a car by day, far down the road at dusk, and not at all in a storm', () => {
     // How much darker each row of road below the car's foot is than the same row with no car (same seed, same road).
     const shade = (prompt: string) => {
       const { img, ctx } = painted(prompt, 640, 360, 3), car = img.layout.things.find((t) => t.kind === 'car')!;
-      const bare = paint(read(prompt.replace('a red car', 'a road').replace('a car', 'a road')), { width: 640, height: 360, seed: 3 });
+      const empty = read(prompt.replace('a red car', 'a road').replace('a car', 'a road'));
+      const bare = paint(empty, { width: 640, height: 360, seed: 3 });
       const fy = Math.round(car.y + car.h), x0 = Math.round(car.x + car.w * 0.3), x1 = Math.round(car.x + car.w * 0.7);
       const rows: number[] = [];
       for (let y = fy; y < Math.min(360, fy + 16); y++) {
@@ -119,7 +143,8 @@ describe('the light', () => {
       }
       return { rows, visible: ctx.light.visible };
     };
-    const day = shade('a car on a road'), dusk = shade('a red car on a road at dusk'), storm = shade('a car on a road in a storm');
+    const day = shade('a car on a road'), dusk = shade('a red car on a road at dusk');
+    const storm = shade('a car on a road in a storm');
     expect(Math.max(...day.rows)).toBeGreaterThan(0.02); // under it
     expect(Math.abs(day.rows[12]!)).toBeLessThan(0.005); // and short: gone a few rows down
     expect(dusk.rows[12]).toBeGreaterThan(0.01); // at dusk it is still there twelve rows nearer the viewer
@@ -218,10 +243,33 @@ describe('the drawers in the world', () => {
     for (let i = 1; i < feet.length; i++) expect(feet[i]!).toBeGreaterThanOrEqual(feet[i - 1]! - 1e-6);
   });
 
+  it('stand a house on the near sand of a beach, and keep far-bank things a readable share of the frame', () => {
+    const horizon = (img: Image) => img.layout.horizon * 360;
+    for (const seed of [1, 2, 3, 5, 7, 8, 11]) {
+      const beach = paint(read('a blue house on a beach, clear day'), { width: 640, height: 360, seed });
+      const house = beach.layout.things.find((t) => t.kind === 'house')!;
+      expect(house.y + house.h, `seed ${seed}: on the near sand`).toBeGreaterThan(beach.layout.shore! * 360);
+      expect(house.w / 640, `seed ${seed}: no wider than half the frame`).toBeLessThanOrEqual(0.5 + 1e-6);
+      const lake = paint(read('a house by a lake at sunset'), { width: 640, height: 360, seed });
+      const far = lake.layout.things.find((t) => t.kind === 'house')!;
+      expect(far.y + far.h, `seed ${seed}: across the lake`).toBeLessThan(horizon(lake));
+      expect(far.h / 360, `seed ${seed}: a house one can see`).toBeGreaterThanOrEqual(0.12);
+      const moonlit = read('three pine trees by a lake under a full moon, snow');
+      const pines = paint(moonlit, { width: 640, height: 360, seed });
+      const trees = pines.layout.things.filter((t) => t.kind === 'tree');
+      expect(trees.length).toBe(3);
+      for (const t of trees) expect(t.h / 360, `seed ${seed}: a pine that reads`).toBeGreaterThanOrEqual(0.18);
+    }
+  });
+
   it('stays fast: 960x540 under 1.5 s (median of 3 after a warm-up)', () => {
     const scene = read('a red car on a wet road at sunset, mountains, trees, a house, a boat, birds');
     paint(scene, { width: 960, height: 540, seed: 7 });
-    const t = [0, 1, 2].map(() => { const t0 = performance.now(); paint(scene, { width: 960, height: 540, seed: 7 }); return performance.now() - t0; });
+    const t = [0, 1, 2].map(() => {
+      const t0 = performance.now();
+      paint(scene, { width: 960, height: 540, seed: 7 });
+      return performance.now() - t0;
+    });
     const median = t.sort((a, b) => a - b)[1]!;
     expect(median, `960x540 took ${median.toFixed(0)} ms`).toBeLessThan(1500);
   });

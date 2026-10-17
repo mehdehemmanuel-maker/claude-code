@@ -13,8 +13,8 @@ import { attach } from './draw.mjs';
 
 // The painter's primitives, camera and sizes, for an importer that draws its own things (tools/image.d.mts types them).
 export {
-  SIZES, ELEVATION, camera, sunlight, shadowLength, shadowPoints, hull, canvas, disc, ellipse, poly, quad, tri, rect,
-  line,
+  SIZES, ELEVATION, elevationAt, camera, sunlight, shadowLength, shadowPoints, hull, canvas, disc, ellipse, poly, quad,
+  tri, rect, line,
 } from './draw.mjs';
 
 // ── The palette by time of day ─────

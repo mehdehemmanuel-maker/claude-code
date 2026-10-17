@@ -2,6 +2,7 @@
 // the shared ctx (see core.mjs). None allocates per pixel: the colour helpers write into scratch arrays.
 import { clamp, fbm, h2, lerp, mix, smooth } from './math.mjs';
 import { SIZES } from './draw.mjs';
+import { shoreFor } from './things.mjs';
 
 /** What the ground is made of, by name. */
 export const GROUND = {
@@ -171,7 +172,8 @@ const FAR_GROUND = 5000; // the rows at the horizon are this many metres away, n
  */
 export function groundPass(ctx) {
   const { W, H, hy, scene, rand, put, air, layout, camera } = ctx;
-  const shoreY = scene.beach ? hy + (H - hy) * (0.45 + rand() * 0.2) : H; // where the water ends and the land begins
+  // Where the water ends and the land begins: moved back for a thing that must stand on the near shore (things.mjs)
+  const shoreY = scene.beach ? shoreFor(ctx, hy + (H - hy) * (0.45 + rand() * 0.2)) : H;
   ctx.shoreY = shoreY;
   layout.shore = scene.beach ? shoreY / H : null;
   const water = scene.ground === 'water';

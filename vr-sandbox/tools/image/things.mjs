@@ -6,20 +6,41 @@ import { clamp, fbm, h2, lerp, mix } from './math.mjs';
 import { THINGS } from './read.mjs';
 import { SIZES } from './draw.mjs';
 
-const FAR_BANK = [120, 400]; // how far across the water the far bank's things stand, in metres
+const FAR_BANK = [20, 400]; // how far across the water the far bank's things may stand, in metres
+const FAR_BANK_SHARE = [0.25, 0.4]; // how tall a far-bank thing is drawn, as a share of the frame, so it reads
+const NEAR_WIDTH = 0.5; // the widest a thing may be on the near shore, as a share of the frame
 
 /** A depth from an entry's band in metres, `u` in 0..1 spread evenly over the screen rows between its two ends. */
 const depthIn = ([zNear, zFar], u) => 1 / (1 / zFar + u * (1 / zNear - 1 / zFar));
 
-/** Whether a thing `size` metres wide and tall, z metres away, is seen whole: under 0.4 W wide, its top in frame. */
-function fits(ctx, size, z) {
+/** The nearest a thing `size` metres wide and tall may stand and be seen whole: under NEAR_WIDTH, its top in frame. */
+function nearest(ctx, size) {
   const { focal, eye } = ctx.camera;
-  return size.w * focal / z < ctx.W * 0.4 && z >= focal * (size.h - eye) / Math.max(1, ctx.hy);
+  return Math.max(size.w * focal / (ctx.W * NEAR_WIDTH), focal * (size.h - eye) / Math.max(1, ctx.hy));
+}
+
+const WATER_LEAST = 0.3; // the water keeps at least this share of the ground band when the shore moves for a thing
+const SHORE_STEP = 1.01; // a thing the shore moved for stands this much short of the waterline, not on it
+
+/**
+ * The shore row the named land things ask for: moved toward the horizon until the widest of them that can stand on
+ * the near shore does (a house on a beach is on the beach), never leaving the water less than WATER_LEAST of the
+ * ground band; the row given when nothing needs it. A tree would push the shore to the horizon: it keeps the far bank.
+ */
+export function shoreFor(ctx, shoreY) {
+  const { H, hy, usual } = ctx, least = hy + (H - hy) * WATER_LEAST;
+  let row = shoreY;
+  for (const e of ctx.things) {
+    if (e.sky || e.onWater || !e.size || usual(e.word, e.usual) <= 0) continue;
+    const own = ctx.project(0, nearest(ctx, e.size) * SHORE_STEP).y;
+    if (own >= least) row = Math.min(row, own);
+  }
+  return row;
 }
 
 /** Where things stand: the far ones first, so the near ones are drawn over them. */
 export function place(ctx, entry, n, placed) {
-  const { H, hy, scene, rand } = ctx, water = scene.ground === 'water';
+  const { H, hy, scene, rand } = ctx, water = scene.ground === 'water', size = entry.size ?? { w: 1, h: 1 };
   for (let i = 0; i < n; i++) {
     let zm, fy;
     if (entry.depth) {
@@ -34,14 +55,15 @@ export function place(ctx, entry, n, placed) {
       zm = ctx.groundZ(ctx.shoreY) * (1.3 + rand());
       fy = ctx.project(0, zm).y;
     }
-    if (water && !entry.onWater && fy < ctx.shoreY) { // on land: the near shore when it fits there, else the far bank
-      const zShore = ctx.groundZ(ctx.shoreY), near = scene.beach && fits(ctx, entry.size ?? { w: 1, h: 1 }, zShore);
-      if (near && rand() < 0.7) {
-        zm = zShore * (0.85 + rand() * 0.15);
+    if (water && !entry.onWater && fy < ctx.shoreY) { // on land: the near shore whenever it fits, else the far bank
+      const zShore = ctx.groundZ(ctx.shoreY), zFit = nearest(ctx, size);
+      if (scene.beach && zFit <= zShore) {
+        zm = Math.max(zFit, zShore * (0.85 + rand() * 0.15));
         fy = ctx.project(0, zm).y;
-      } else {
-        zm = FAR_BANK[0] + rand() * (FAR_BANK[1] - FAR_BANK[0]);
-        fy = hy - 1; // its foot on the water's far edge; it is drawn at its depth's scale
+      } else { // its foot on the water's far edge, drawn at a depth that keeps it a readable share of the frame tall
+        const share = FAR_BANK_SHARE[0] + rand() * (FAR_BANK_SHARE[1] - FAR_BANK_SHARE[0]);
+        zm = clamp(size.h * ctx.camera.focal / (H * share), FAR_BANK[0], FAR_BANK[1]);
+        fy = hy - 1;
       }
     }
     placed.push({ entry, fy, zm });
@@ -259,13 +281,13 @@ function bird(ctx, inst) { // a gull's two strokes, far in the sky
 
 /**
  * The registry entries, in placing order. depth is how far away a thing may stand, in metres, chosen so it is seen
- * whole through the camera; size is its typical width and height in metres, for the shore to judge the same; band
- * is the older screen-row band, kept for readers of the shape.
+ * whole through the camera; size is its typical width and height in metres as drawn, for the shore to judge the
+ * same and for the far bank's depth; band is the older screen-row band, kept for readers of the shape.
  */
 export const drawers = [
   {
     id: 'tree', word: 'trees', match: THINGS.trees, usual: 9, band: [0.03, 0.1], depth: [75, 260],
-    size: { w: 12, h: SIZES.pine[1] }, draw: tree,
+    size: { w: 12, h: (SIZES.pine[0] + SIZES.pine[1]) / 2 }, draw: tree,
   },
   {
     id: 'building', word: 'buildings', match: THINGS.buildings, usual: 11, band: [0.01, 0.05], depth: [150, 700],
@@ -273,7 +295,7 @@ export const drawers = [
   },
   {
     id: 'house', word: 'houses', match: THINGS.houses, usual: 3, band: [0.06, 0.3], depth: [25, 130],
-    size: { w: SIZES.cabin.w, h: SIZES.cabin.wall + SIZES.cabin.rise }, draw: house,
+    size: { w: SIZES.cabin.w * 1.12, h: SIZES.cabin.wall + SIZES.cabin.rise }, draw: house, // the eaves hang over
   },
   {
     id: 'boat', word: 'boats', match: THINGS.boats, usual: 2, band: [0.03, 0.2], depth: [40, 250], onWater: true,
