@@ -11,6 +11,8 @@ import { conditions, families, familyFor, keyOf, styleNamed, thingByKey, thingFo
 // The scene the painter reads (time, clouds, fog, rain, snow, storm, ground, road, beach, things, colours, land) keeps
 // its shape; things and colours are views over scene.instances, where each mention of a thing keeps its own count,
 // colour, size and place ("a red car and a blue car" is two instances). In things, 0 still means "the usual number".
+// scene.waterWord is the word that brought the water (sea, lake, river, harbour, beach...), scene.lake whether it is a
+// still one, so no pass re-reads the prompt to know.
 
 export const NUMBERS = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
@@ -215,15 +217,19 @@ CONDITIONS.push(
   {
     id: 'water', kind: 'water',
     match: /^(seas?|ocean|lakes?|water|bay|coast|coastal|coastline|pond|lagoon|loch|fjord)$/,
-    apply: (s, g) => { g.water = true; },
+    apply: (s, g, w) => {
+      g.water = true;
+      waterWord(s, w);
+    },
   },
   {
     id: 'river', kind: 'water', match: /^(rivers?|streams?|canal|creek|brook|estuary)$/,
-    apply: (s, g) => { // water between two banks: the near bank is the shore, grass unless a land was named
+    apply: (s, g, w) => { // water between two banks: the near bank is the shore, grass unless a land was named
       g.water = true;
       g.beach = true;
       g.land = g.land ?? 'grass';
       s.river = true;
+      waterWord(s, w);
     },
   },
   {
@@ -233,21 +239,33 @@ CONDITIONS.push(
       g.beach = true;
       g.land = 'pavement';
       g.extra.push({ kind: 'boats', count: 3, word: w }, { kind: 'buildings', count: 4, word: w });
+      waterWord(s, w);
     },
   },
   {
     id: 'island', kind: 'water', match: /^(islands?|isle|atoll|tropical|tropics|palms?)$/,
-    apply: (s, g) => {
+    apply: (s, g, w) => {
       g.water = true;
       g.beach = true;
       g.land = g.land ?? 'sand';
+      waterWord(s, w);
     },
   },
   {
     id: 'beach', kind: 'water', match: /^(beach|beaches|shore|shoreline|lakeside)$/,
-    apply: (s, g) => { g.beach = true; },
+    apply: (s, g, w) => { // a shore word brings water too; it names the water only when no water word did
+      g.beach = true;
+      if (!s.waterWord) waterWord(s, w);
+    },
   },
 );
+/** The still waters: a lake has a far bank with trees, which the painter asks for by scene.lake. */
+const LAKE = /^(lakes?|pond|lagoon|loch|tarn|lakeside)$/;
+/** The word that brought the water, singular (seas -> sea), in scene.waterWord; scene.lake when it is a still one. */
+function waterWord(s, w) {
+  s.waterWord = w.replace(/s$/, '');
+  s.lake = LAKE.test(w);
+}
 /** What 'no X' does for a condition word: the opposite of X. */
 const NEGATE = {
   cloudy: (s) => { s.clouds = 0.05; },
@@ -362,7 +380,8 @@ export function read(prompt) {
   const s = {
     prompt, recognised: 0, time: 'day', hour: 12, clouds: 0.35, fog: 0, rain: 0, snow: 0, storm: false, wet: false,
     season: null, moonPhase: null, ground: 'grass', land: 'grass', road: false, roadKind: null, beach: false,
-    river: false, frozen: false, things: {}, colours: {}, instances: [], ignored: [], overridden: [],
+    river: false, frozen: false, waterWord: null, lake: false, things: {}, colours: {}, instances: [], ignored: [],
+    overridden: [],
   };
   if (text) s.text = text;
   const g = { land: undefined, water: false, beach: false, clear: false, extra: [] };

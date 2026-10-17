@@ -150,6 +150,10 @@ export interface Scene {
   roadKind: 'asphalt' | 'dirt' | null;
   river: boolean;
   frozen: boolean;
+  /** The word that brought the water, singular (sea, lake, river, harbour, beach, boats force none); null without. */
+  waterWord: string | null;
+  /** A still water (lake, pond, loch, lagoon, tarn, lakeside): the painter gives it a far bank. */
+  lake: boolean;
   text?: string;
   family?: string; // set by a registered family's words (registry.mjs)
   instances: Instance[];

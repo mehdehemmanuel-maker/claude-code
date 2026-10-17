@@ -113,7 +113,12 @@ describe('the reader', () => {
       expect(s.frozen).toBe(true);
       expect(s.ground).toBe('water');
       expect(s.land).toBe('snow');
+      expect([s.waterWord, s.lake]).toEqual(['lake', true]); // the painter asks scene.lake, not the prompt
     }],
+    ['two boats on the seas', (s) => { expect([s.waterWord, s.lake]).toEqual(['sea', false]); }],
+    ['a bridge over a river', (s) => { expect([s.waterWord, s.lake]).toEqual(['river', false]); }],
+    ['a house on the beach', (s) => { expect([s.waterWord, s.lake]).toEqual(['beach', false]); }],
+    ['two sailboats', (s) => { expect([s.waterWord, s.ground]).toEqual([null, 'water']); }],
     ['the word HELLO in big letters', (s) => {
       expect(s.text).toBe('HELLO');
       expect(s.recognised).toBeGreaterThan(0);

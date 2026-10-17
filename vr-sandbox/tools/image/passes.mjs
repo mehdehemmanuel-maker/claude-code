@@ -346,7 +346,6 @@ const SHORE_WANDER = 0.18; // the shoreline wanders by this share of the ground 
 const RIVER_FAR = 0.35; // a river's far bank stands this share of the way from the horizon to the near shore
 const FOAM = [0.93, 0.95, 0.96], WHITECAP = [0.85, 0.88, 0.9], STORMWATER = [0.17, 0.20, 0.23];
 const ICE = [0.80, 0.85, 0.90];
-const LAKE_WORD = /^(lakes?|ponds?|lochs?|lagoon|tarn|reservoir|mere)$/;
 
 /**
  * The plane from the horizon to the foot of the picture: water up to the shore, then one of the lands. Every row is
@@ -451,14 +450,15 @@ function horizonColour(ctx) {
 }
 
 /**
- * Whether far land shows at the horizon across the water: when a range or hills stand behind it, when the words say
- * lake, or when a land thing is named that cannot stand on the near shore (no shore at all, or one too shallow for
- * it: things.mjs puts it across the water with its foot at the horizon, so there must be land under it).
+ * Whether far land shows at the horizon across the water: when a range or hills stand behind it, when the reader
+ * found a lake (scene.lake: a still water has a far bank), or when a land thing is named that cannot stand on the
+ * near shore (no shore at all, or one too shallow for it: things.mjs puts it across the water with its foot at the
+ * horizon, so there must be land under it).
  */
 function wantsFarBank(ctx) {
   const { scene, layout, usual } = ctx;
   if (layout.ranges?.length) return true;
-  if (words(scene.prompt).some((w) => LAKE_WORD.test(w))) return true;
+  if (scene.lake) return true;
   const landThing = ctx.things.some((e) => !e.sky && !e.onWater && usual(keyOf(e), e.usual) > 0);
   return landThing && (!scene.beach || !!ctx.farBankNeeded);
 }
