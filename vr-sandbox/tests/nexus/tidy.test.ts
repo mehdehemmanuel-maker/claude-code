@@ -78,7 +78,6 @@ const DEBT: { file: string; max: number; into: string }[] = [
   { file: 'src/nexus/embody/any.ts', max: 880, into: 'one builder per element kind, as `machines/` has one per machine kind' },
   { file: 'src/nexus/make/critic.ts', max: 860, into: 'one rule per file would let a rule be read without reading the others' },
   { file: 'src/nexus/view/boards3d.ts', max: 850, into: 'the wall, the list beside it and the controls above it' },
-  { file: 'src/nexus/view/apps.ts', max: 810, into: 'one file per app on the phone' },
   { file: 'src/nexus/machines/panels.ts', max: 745, into: 'the body rules, and the skinning that applies them' },
 ];
 

@@ -1506,3 +1506,102 @@ the frame's own uprights, 650 mm of stock in a 648 mm frame.**
 
 GATE: PASS (2386 of 2386 ran) — 163.1s (`npm run gate`; the wall clock swings, `npm run perf -- time` is the measure).
 Tidy 24/24. Census (`node tools/unwired.mjs --all`): 178 test-only, 141 dead, 22 unreached files, unchanged.
+
+## Run 8y — the eleven messengers, each answered; and a silence is not an absence
+
+The drift gate: Runs 8u–8x all landed in asks 3, 4 and 5. **Ask 8 ("Me") had not been touched for many rounds**, and
+the user's own words on it are *"don't lose context, find time for it"*. The likeness is blocked on their photos; the
+messengers and the brain map are not. So this round went there.
+
+### What was measured first
+
+Of the **eleven** messengers the user named — dopamine, melatonin, oxytocin, adrenaline, cortisol, endorphins,
+serotonin, acetylcholine, noradrenaline, GABA, glutamate — exactly **two** had a daily curve (melatonin, cortisol).
+The other nine showed nothing at all, which on a screen reads as *nine jobs not done*. It is not: for most of them
+the honest answer was never going to be a curve, and saying nothing is the one answer that is wrong about all nine.
+
+### A rhythm is data now, not code
+
+`cosinor()` takes the three numbers chronobiology actually publishes a rhythm with — the MESOR, the amplitude and
+the acrophase — and makes the curve; `relTo: 'wake'` ties the acrophase to the person rather than to the sun, which
+is what a rhythm entrained to sleep needs. Adding a messenger is a row.
+
+`fromTwo()` goes further: **the measurement is the input.** A paper that sampled at two hours gives two points and
+no curve, and given when the rhythm peaks those two points fix the cosine exactly. So the numbers written down are
+the ones the paper printed, and the mesor and amplitude are worked out from them:
+
+```
+npx vitest run tests/nexus/rhythm.test.ts
+  ✓ the two-point fit reproduces the very samples it was built from
+```
+> 09:00 model 25.40 vs measured 25.4 pg/mL · 20:00 model 17.70 vs measured 17.7 pg/mL
+
+A degenerate pair — two samples at the same height either side of the peak — is **refused** rather than fitted,
+because it cannot tell amplitude from mesor and a number out of it would be invented.
+
+**Two new curves**, both tied to waking rather than to the clock:
+- **β-endorphin**, from Infante et al. 1998 (PMID 9748098): controls at 25.4 ± 1.7 pg/mL at 09:00 and 17.7 ± 1.1 at
+  20:00, p < 0.01, falling with ACTH and cortisol. Cut from the same POMC molecule as ACTH and let go with it, so
+  its peak is taken as ACTH's — half an hour after waking — and that assumption is written into the source line.
+- **Adrenaline**, from Dodt et al. 1997 (Hypertension 30(1):71–76, PMID 9231823): blood every 7 minutes from
+  9:30 p.m. to 8:30 a.m. with the subjects strictly horizontal, so posture could not confound it. Significantly
+  lower in sleep than in the waking hours either side, lower still in REM, climbing after waking. The shape and the
+  timing are measured; **the 32 ± 18 pg/mL is an estimate inside the 0–140 pg/mL reference range and the card on
+  the phone says so**, because the paper's own concentrations are behind a subscription this network cannot reach.
+
+### The seven with no curve, which is three different facts
+
+`WITHOUT` records why, with the source, so the absence is an answer:
+
+| why | who | what it says |
+| --- | --- | --- |
+| looked for and not there | noradrenaline, oxytocin | a study went and measured, and there is no rhythm |
+| measured, out of reach here | dopamine, serotonin | it has one; the figures are not reachable from this container |
+| no blood level to have one | acetylcholine, GABA, glutamate | a synaptic transmitter is cleared in a millisecond |
+
+**Noradrenaline is the one worth reading.** Everyone "knows" it falls at night. Dodt found that lying flat all
+night it is *not* significantly lower asleep than awake and is *not* raised by waking — but **standing up at the
+end of the night raises it 180 %, against adrenaline's 46 %.** So its apparent daily rhythm is mostly the day's
+POSTURE, and a curve drawn against the clock here would be a curve of when you happen to be upright. Linsell 1985
+says the same from the other side: the rhythm is significant, and noradrenaline is higher upright and higher awake.
+The two branches of one nerve supply come apart, and only the horizontal study could see it.
+
+And oxytocin's is the cleanest kind of refusal there is: Kagerbauer et al. looked in cerebrospinal fluid, blood and
+saliva **at once** and found no diurnal rhythm in any of them.
+
+### What a person sees
+
+Four screens, rendered and looked at (`node tools/…` — the shot script is in the round's scratch, the viewer built
+with `npx vite build --config vite.view.config.ts`):
+- the messengers list, which now states the set's own position: **"4 of 11 have a measured day; 7 say why not"**;
+- adrenaline's day, with the curve, the hour's value, and the whole Dodt citation including its own estimate flag;
+- noradrenaline, in gold: *"◷ no daily rhythm: it was looked for and is not there"*;
+- GABA: *"◷ nothing to draw a day of: it is a synaptic transmitter, not a level in blood"*.
+
+### Faults of my own this round
+
+1. **The reason first went beside the node's title, at the same height, and the title drew straight over it.** The
+   tests all passed; the screenshot showed it. It is under what the messenger *is* now. This is the whole argument
+   for step 2 of the round checklist: a test knows the string was produced, only a picture knows it was legible.
+2. **`dayOfEach` was a doorless instrument** — the census went 178 → 179 test-only the moment it was written, which
+   is the fault CLAUDE.md names, caught by running `node tools/unwired.mjs --all` before writing the notes rather
+   than after. Its door is the line at the top of the messengers list, which is where the user wants that number.
+3. **`view/apps.ts` went 5 lines over its allowance.** Not raised: its own debt line has said "one file per app on
+   the phone" since it was written, so the biggest app came out as `view/life-app.ts` (150 lines) and **apps.ts is
+   off the oversize ratchet altogether** at 678 — one of the four ratchets shorter by one line, worked down by
+   cause rather than by a number.
+4. **Moving the palette found it written twice.** `FONT` lived in both `view/phone.ts` and `view/apps.ts` with
+   identical values, which the "written twice" lint could not see because they are two plain constants. It lives in
+   `phone.ts` now, which owns the screen. Found by doing the split, not by the lint — worth saying, because it means
+   that lint has a blind spot for duplicated *data*.
+
+### Still open here
+
+- The brain map's regions are points on a schematic midline, not shapes, and there is no 3D brain.
+- Dopamine and serotonin have rhythms this network cannot fetch; widening the network (environment settings,
+  Network access) would close both, and the `fromTwo` route means each is then a row.
+- The rest of ask 8: the business/boardroom node tree (task #227) has never been started, and the likeness waits on
+  the user's photos.
+
+GATE: PASS (2395 of 2395 ran) — 179.9s (`npm run gate`). Tidy 24/24. Census (`node tools/unwired.mjs --all`): 178 test-only, 141 dead, 22
+unreached files, unchanged.

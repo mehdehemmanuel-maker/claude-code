@@ -11,7 +11,11 @@ import { EDITS0, noteFor, STAGES, type PipeEdits, type PipeRun, type StageId } f
 import { bestOf, variants } from '../teach/practice';
 import { TEST_ASKS } from '../ask/test-asks';
 
-const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
+/** The phone's face and ink, here because this file owns the screen. It was written out twice, here and in
+ *  `view/apps.ts`, with the same values — found when `view/life-app.ts` was split out and needed it; every app
+ *  drawn on this screen takes its palette from this one place now. */
+export const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
+export const INK = '#ffffff', INK2 = '#b2ebf2', INK3 = '#7fa9b5', RULE = 'rgba(255,255,255,0.14)';
 const PW = 0.074, PH = 0.152, SW = 0.068, SH = 0.144;
 const CW = 540, CH = Math.round((CW * SH) / SW);
 const RED = '#ff1744';

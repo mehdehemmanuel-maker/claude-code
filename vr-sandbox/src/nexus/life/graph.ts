@@ -20,7 +20,7 @@ export interface Node {
 export interface Link { a: string; b: string; how: string; src?: string; mine?: boolean }
 export interface Saved { nodes: Node[]; links: Link[]; day?: Day }
 
-import { clock, hourOf, RHYTHMS, TYPICAL_DAY, type Day } from './rhythm';
+import { clock, hourOf, RHYTHMS, WITHOUT, TYPICAL_DAY, type Day } from './rhythm';
 
 const K = 'Kandel et al., Principles of Neural Science, 6th ed. (2021), summarised', P = 'Purves et al., Neuroscience, 6th ed. (2018), summarised';
 const MAP = 'its place on the map schematic: a midline view, laid out by eye from the textbooks\' figures';
@@ -148,6 +148,17 @@ export class LifeGraph {
     if (node.kind === 'time' && hourOf(node.name) !== null) for (const r of Object.values(RHYTHMS)) { const m = this.nodes.get(r.id); if (m) linked.push({ node: m, how: at(node, r), out: true, mine: false, src: r.src }); }
     const r = RHYTHMS[id]; if (r) for (const t of this.ofKind('time')) if (hourOf(t.name) !== null) linked.push({ node: t, how: at(t, r), out: false, mine: false, src: r.src });
     return { node, linked };
+  }
+  /** Why a messenger has no day to show, where it has none: a measured absence, a measurement this container cannot
+   *  reach, or a thing with no blood level to have a day at all. A node that simply shows no curve and says nothing
+   *  reads as unfinished work for all seven of them, and only one of the three reasons is that. */
+  whyNoDay(id: string): { why: string; says: string; src: string } | null {
+    if (RHYTHMS[id]) return null;
+    const w = WITHOUT[id]; if (!w) return null;
+    const why = { 'looked-and-found-none': 'no daily rhythm: it was looked for and is not there',
+      'measured-elsewhere': 'it has a daily rhythm, and its figures are not reachable from here',
+      'no-blood-level-to-have-one': 'nothing to draw a day of: it is a synaptic transmitter, not a level in blood' }[w.why];
+    return { why, says: w.says, src: w.src };
   }
   /** The nodes of a kind, in a steady order (the user's newest first). */
   ofKind(kind: Kind): Node[] { return [...this.nodes.values()].filter((n) => n.kind === kind).sort((x, y) => (y.made ?? 0) - (x.made ?? 0)); }

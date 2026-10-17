@@ -104,7 +104,7 @@ import { Phone } from './phone';
 import { Fleet, boardOfBot, factName, renameOnBoard, WZ, ABILITIES, type AbilityId, type Bot } from '../machines/fleet';
 import { Warehouse } from './warehouse';
 import { HoloScreens } from './holo-screen';
-import { computerApp, dataApp, inventoryApp, libraryApp, lifeApp, packApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild } from './apps';
+import { computerApp, dataApp, inventoryApp, libraryApp, packApp, robotsApp, warehouseApp, weatherApp, workshopApp, type DataSection, type MiniPart, type StoredBuild , lifeApp } from './apps';
 import { LifeGraph, type Saved as LifeSaved } from '../life/graph';
 import { pack, packPart, packZip, type Pack } from '../teach/buildpack';
 import { usd } from '../parts/prices';

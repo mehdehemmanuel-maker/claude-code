@@ -162,7 +162,8 @@ fasteners, seals, finishes, wear - `critic.ts` room to move, held up, walls, thr
 
 **`view/`** - everything drawn. `forge.ts` the room - `benches.ts` setting a bench out in it - `gear-bench.ts` the
 plate you put gears on by hand - `look.ts` the look page, how a picture is lit, cutaways -
-`kit3d.ts` how a drawn part comes apart, and drilling - `explode.ts` an item seen in 3D - `apps.ts` the phone -
+`kit3d.ts` how a drawn part comes apart, and drilling - `explode.ts` an item seen in 3D - `apps.ts` the phone's
+apps, with `life-app.ts` (the life graph on it) split out and `phone.ts` owning the screen and its palette -
 `solder-bench.ts` + `robot-bench.ts` the benches - `light.ts` the lighting.
 
 **`world/`**, **`life/`**, **`embody/`**, **`kinds/`**, **`cli/`** - `world/places.ts`, `karting.ts`, `coaster.ts`,
@@ -356,7 +357,16 @@ chosen rather than listed, which is what would let a drawn machine be asked how 
 - The robot: its grips are not drawn (the pen grip round the iron); welding and typing on their own benches next.
 - Lessons: the Pico's headers on the same edges; parts of three leads and more; words in the room making the circuit.
 - The materials processor: milling and turning, refining, and a material's edges back to what it was.
-- The life graph: the other messengers' rhythms where a study gives one, regions drawn as shapes, the 3D brain.
+- The life graph: **all eleven messengers are now answered** (Run 8y) — 4 have a measured daily curve (melatonin,
+  cortisol, and now β-endorphin from Infante 1998's two points and adrenaline from Dodt 1997) and **7 carry a
+  sourced reason for having none**, which is three different facts and not one: a study looked and found none
+  (oxytocin; and noradrenaline, whose night-time fall is POSTURE — standing raises it 180 % against adrenaline's
+  46 %), a study measured one whose figures this network cannot reach (dopamine, serotonin), or the thing has no
+  blood level to have a day at all (acetylcholine, GABA, glutamate: a synaptic transmitter is cleared in a
+  millisecond). A rhythm is DATA now, not code: `cosinor()` takes the mesor, amplitude and acrophase chronobiology
+  publishes, and `fromTwo()` fits the cosine through a study's own two samples, so adding one is a row.
+  Still open here: regions drawn as shapes, the 3D brain, and the rest of ask 8 — the brain map in 3D, and the
+  business/boardroom node tree (task #227), which has never been started.
 - The printers: the most advanced one by the same builder; the Voron's Stealthburner is still a rounded block.
 - The four tidy ratchets, worked down by cause.
 - **Internal gears and planetary sets now hold**, and what remains is the small-pinion case. Run 7z refused an
