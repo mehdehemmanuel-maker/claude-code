@@ -39,8 +39,8 @@ describe('the reader knows every structure by its words, keyed as before', () =>
     expect(things.find((t) => t.id === 'house')).toBe(HOUSE_THING);
     expect(things.find((t) => t.id === 'building')).toBe(BUILDING_THING);
     const ids = things.map((t) => t.id), at = ids.indexOf('tree');
-    expect(ids.slice(at, at + 6)).toEqual(['tree', 'building', 'house', 'boat', 'bird', 'flowers']); // the order holds
-    for (const e of STRUCTURE_THINGS) expect(ids.indexOf(e.id), e.id).toBeGreaterThan(at + 5);
+    expect(ids.slice(at, at + 5)).toEqual(['tree', 'building', 'house', 'boat', 'flowers']); // the order holds
+    for (const e of STRUCTURE_THINGS) expect(ids.indexOf(e.id), e.id).toBeGreaterThan(at + 4); // the bird is creatures'
   });
 
   it('reads every new kind with nothing ignored', () => {
@@ -73,7 +73,7 @@ describe('the reader knows every structure by its words, keyed as before', () =>
     const street = read('a busy street with cars');
     expect(street.things).toEqual({ cars: 0, buildings: 0, streetlamp: 0 });
     expect(street.ignored).toEqual(['busy']);
-    expect(read('a dragon over a castle').ignored).toEqual(['dragon']);
+    expect(read('a dragon over a castle').ignored).toEqual([]); // the dragon is creatures-flyers'
     expect(houseKind('cabin')).toBe('cabin');
     expect(houseKind('log cabin')).toBe('cabin');
     expect(houseKind('farmhouse')).toBe('farmhouse');

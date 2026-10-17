@@ -91,9 +91,9 @@ describe('the families: the panel prompts, every size, determinism', () => {
     // the vehicles register first (core.mjs's hoisted `export *`), then the five built-ins and ground-weather's
     // flowers; the landforms and phenomena come after every one of those
     const at = thingIds.indexOf('tree');
-    expect(thingIds.slice(at, at + 6)).toEqual(['tree', 'building', 'house', 'boat', 'bird', 'flowers']);
+    expect(thingIds.slice(at, at + 5)).toEqual(['tree', 'building', 'house', 'boat', 'flowers']); // creatures-flyers
     for (const id of ['cactus', 'palm', 'volcano', 'waterfall', 'rainbow', 'aurora', 'lightning']) {
-      expect(thingIds.indexOf(id), id).toBeGreaterThan(at + 5);
+      expect(thingIds.indexOf(id), id).toBeGreaterThan(at + 4); // hook for creatures-flyers: the bird left the run
     }
     const landscape = families[families.length - 1]!, names = landscape.passes.map((p) => p.name);
     expect(names.indexOf('phenomenaPass')).toBe(names.indexOf('cloudPass') + 1);
@@ -107,16 +107,16 @@ describe('the reader with the families: honesty', () => {
     expect(woman.ignored).toEqual([]);
     expect(woman.notes?.some((n) => n.includes('a stylised face, not a likeness of anyone'))).toBe(true);
     expect(report(woman).some((l) => l.startsWith('note: ') && l.includes('not a likeness'))).toBe(true);
-    // 'person' is left to creatures-flyers: the reader's own test keeps it ignored beside a forklift (a vehicle now)
+    // hook for creatures-flyers: 'person' is a figure now, 'standing' its pose
     const forklift = read('a white forklift in a warehouse yard at noon, a person standing beside it');
-    expect(forklift.ignored).toEqual(['warehouse', 'yard', 'person', 'standing', 'beside']);
+    expect(forklift.ignored).toEqual(['warehouse', 'yard', 'beside']);
     expect(forklift.things.forklifts).toBe(1);
     expect(forklift.family).toBeUndefined();
-    expect(read('a man beside a forklift').ignored).toEqual(['man', 'beside']); // in the prompt's order
+    expect(read('a man beside a forklift').ignored).toEqual(['beside']); // hook for creatures-flyers: a figure
     expect(read('the north face of the mountain').family).toBeUndefined();
     expect(read('the north face of the mountain').ignored).toEqual(['north', 'face']);
     expect(read('a woman').family).toBe('portrait'); // alone, a person word is a portrait
-    expect(read('a woman by a lake')).toMatchObject({ ground: 'water', ignored: ['woman'] }); // a scene: not alone
+    expect(read('a woman by a lake')).toMatchObject({ ground: 'water', ignored: [] }); // creatures-flyers: a figure
     expect(read('portrait of a woman at night').family).toBe('portrait'); // a head word claims whatever the hour
     expect(read('circles over a lake')).toMatchObject({ ground: 'water', ignored: ['circles'] }); // a lake is a thing
     expect(read('a mandala over a lake').family).toBe('abstract'); // a head word claims whatever else is named
@@ -124,7 +124,7 @@ describe('the reader with the families: honesty', () => {
     expect(read('city lights at night').things.aurora).toBeUndefined();
     expect(read('the northern lights').ignored).toEqual([]);
     expect(read('the northern lights').things.aurora).toBe(1);
-    expect(read('fish in a lake').ignored).toEqual(['fish']); // fish proper belongs to creatures-flyers
+    expect(read('fish in a lake')).toMatchObject({ ignored: [], things: { fish: 0 } }); // creatures-flyers' fish
     expect(read('a reef with fish').underwater?.fish).toBe(6);
     expect(read('three fish on a reef')).toMatchObject({ family: 'underwater', ignored: [] });
     expect(read('three fish on a reef').underwater?.fish).toBe(3);
@@ -208,11 +208,11 @@ describe('the review of the package: what a word claims, what the report says, w
   });
 
   it('counts a family word as recognised only when its family kept it', () => {
-    expect(read('fish in a lake').recognised).toBe(read('a lake').recognised);
+    expect(read('a fishing lake').recognised).toBe(read('a lake').recognised); // creatures-flyers hook: fish is read
     expect(read('city lights at night').recognised).toBe(read('a city at night').recognised);
     expect(read('circles over a lake').recognised).toBe(read('a lake').recognised);
     expect(read('circles and triangles, abstract').recognised).toBe(3); // undropped once abstract claims them
-    expect(read('a woman by a lake').recognised).toBe(read('a lake').recognised);
+    expect(read('a lady by a lake').recognised).toBe(read('a lake').recognised); // creatures-flyers hook: woman is read
     expect(read('a woman').recognised).toBe(1);
   });
 

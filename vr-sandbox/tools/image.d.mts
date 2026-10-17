@@ -678,3 +678,84 @@ export interface ThingBox {
    */
   stood?: { xm: number; zm: number };
 }
+
+// ── creatures-flyers (tools/image/things/creatures.mjs, installed by core.mjs's hook) ──
+// Animals, people, flyers, the birds, bats and sea creatures, each from a table in metres with its source; the
+// interfaces below merge into the ones above. A creature's or a figure's box carries its pose, a bird's its wing
+// phase and species, a flyer's its species; Scene gains the reader's pose and 'launching'.
+export interface CreatureRow {
+  name: string;
+  source: string; // 'published', 'typical' or 'estimate', with the reference
+  shoulder: number; // ground to the withers, metres
+  body: number; // point of chest to point of rump
+  neck: { len: number; up: number; graze: number }; // length; angles standing and grazing, degrees from horizontal
+  head: { len: number; h: number; angle: number }; // skull to muzzle, its depth, the angle it hangs from the neck
+  leg: { len: number; thick: number }; // ground to the belly; the thickness at the top
+  tail: { len: number; kind: 'hair' | 'rope' | 'thin' | 'hang' | 'stub' | 'up' | 'straight' | 'sabre' | 'curl' };
+  ears: { kind: 'point' | 'drop' | 'oval' | 'side' | 'huge'; size: number };
+  muzzle: number; // the share of the head's length that is muzzle
+  colours: number[][]; // typical, by seed
+  usual: number; // how many a bare plural names
+  antlers?: { up: number; beam: number; spread: number; points: number };
+  horns?: number;
+  beard?: number;
+  hump?: number;
+  trunk?: number;
+  tusks?: number;
+  udder?: boolean;
+  fleece?: number;
+  patches?: boolean;
+  mane?: boolean;
+  rump?: number[];
+  [more: string]: unknown;
+}
+export type CreatureKind = 'cat' | 'dog' | 'horse' | 'deer' | 'cow' | 'sheep' | 'goat' | 'wolf' | 'elephant' | 'camel';
+export declare const CREATURES: Record<CreatureKind, CreatureRow>;
+export declare const CREATURE_WORDS: Record<CreatureKind, RegExp>;
+/** People as fractions of stature (Drillis & Contini, published), the child's typical; a crowd's spacing (Fruin). */
+export interface FigureRow {
+  h: number; head: number; headW: number; neck: number; shoulder: number; shoulderW: number; hip: number; hipW: number;
+  crotch: number; knee: number; upperArm: number; forearm: number; hand: number; foot: number; stride: number;
+  source: string;
+}
+export declare const FIGURE: {
+  adult: FigureRow; child: FigureRow;
+  crowd: { spacing: [number, number]; count: [number, number]; sd: number; children: number; source: string };
+};
+export declare const COATS: number[][];
+export interface FlyerRow {
+  name: string; source: string; depth: [number, number]; usual: number; [more: string]: unknown;
+}
+export type FlyerKind = 'airplane' | 'cessna' | 'helicopter' | 'balloon' | 'rocket' | 'dragon' | 'kite';
+export declare const FLYERS: Record<FlyerKind, FlyerRow>;
+export declare const BIRDS: Record<'gull' | 'crow' | 'sparrow' | 'bat', { span: number; match: RegExp; body: number }>;
+export type SwimmerKind = 'whale' | 'dolphin' | 'shark' | 'fish';
+export declare const SWIMMERS: Record<SwimmerKind, { len: number; usual: number; [more: string]: unknown }>;
+/** The registry entries: the ten creatures, person and crowd, the seven flyers, bird and bat, the four swimmers. */
+export declare const CREATURE_THINGS: ThingEntry[];
+export type Pose = 'standing' | 'walking' | 'sitting' | 'grazing';
+export interface ThingInstance { pose?: Pose } // a creature's or a figure's pose, when the caller fixes it
+export interface ThingBox {
+  pose?: Pose; // a creature's (standing, grazing) or a figure's (standing, walking, sitting)
+  species?: string; // a bird's (gull, crow, sparrow, bat), a creature's row, a flyer's, a swimmer's
+  phase?: number; // a bird's wing phase, 0..4; a dragon's stroke, 1 or -1
+  child?: boolean; // a figure drawn at the child's stature
+  people?: number; // a crowd's figures
+  launching?: boolean; // the rocket on its plume
+  held?: boolean; // the kite on a line from a figure
+  dive?: boolean; // the whale's flukes up
+}
+export interface Scene {
+  pose?: 'standing' | 'walking' | 'sitting'; // the figures' pose, from 'standing', 'walking', 'sitting'
+  launching?: boolean; // the rocket low on its plume, from 'launching', 'lift-off', 'blast-off'
+}
+export interface Ctx {
+  flocks?: { run: unknown; by: Record<string, { n: number; x0: number; y0: number; arm: number }> }; // the birds' V
+}
+/** A person standing in for the placement, for a crowd's member: its place, scale and stature. */
+export interface Person { x0: number; fy: number; s: number; h: number; pose: Pose; dir: number; child: boolean }
+export declare function creature(ctx: Ctx, inst: ThingInstance, kind?: CreatureKind): Omit<ThingBox, 'kind'>;
+export declare function figure(ctx: Ctx, inst: ThingInstance, person?: Person | null): Omit<ThingBox, 'kind'>;
+export declare function crowd(ctx: Ctx, inst: ThingInstance): Omit<ThingBox, 'kind'>;
+export declare function bird(ctx: Ctx, inst: ThingInstance): Omit<ThingBox, 'kind'>;
+export declare function swimmer(ctx: Ctx, inst: ThingInstance, kind: SwimmerKind): Omit<ThingBox, 'kind'>;

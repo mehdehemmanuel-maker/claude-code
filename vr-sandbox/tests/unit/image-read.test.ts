@@ -153,7 +153,7 @@ describe('the reader', () => {
       expect(s.things.houses).toBe(1);
       expect(s.ignored).toEqual(['sign']); // 'saying' introduced the quote and is spent with it
     }],
-    ['a gray wolf', (s) => { expect(s.clouds).toBe(0.35); expect(s.ignored).toEqual(['wolf']); }],
+    ['a gray wolf', (s) => { expect(s.clouds).toBe(0.35); expect(s.colours.wolves).toBe('gray'); }], // creatures-flyers
     ['a grey day', (s) => expect(s.clouds).toBe(0.9)],
     ['no clouds, trees', (s) => { expect(s.clouds).toBe(0.05); expect(s.things.trees).toBe(0); }],
     ['watercolour of a harbour', (s) => {
@@ -165,7 +165,7 @@ describe('the reader', () => {
     ['a busy street with people and cars', (s) => {
       expect(s.road).toBe(true);
       expect(s.things.buildings).toBe(0);
-      expect(s.ignored).toEqual(['busy', 'people']);
+      expect(s.ignored).toEqual(['busy']); // hook for creatures-flyers: people are figures now
     }],
     ['a palm tree on a tropical island', (s) => {
       expect(s.ground).toBe('water');
@@ -188,15 +188,17 @@ describe('the reader', () => {
   ])('reads %j', (prompt, check) => check(read(prompt)));
 
   it('says what it ignored, what it changed, and how much it understood', () => {
-    const dragon = read('a dragon over a castle');
-    expect(dragon.ignored).toEqual(['dragon']); // hook for structures-skyline: a castle is a thing now
-    expect(dragon.recognised).toBe(1); // hook for structures-skyline: the castle
+    // a dragon is creatures-flyers' and a castle structures-skyline's: the old 'a dragon over a castle' reads whole
+    expect(read('a dragon over a castle')).toMatchObject({ ignored: [], things: { dragons: 1, castle: 1 } });
+    const dragon = read('a griffin over a labyrinth'); // nothing the tool knows
+    expect(dragon.ignored).toEqual(['griffin', 'labyrinth']);
+    expect(dragon.recognised).toBe(0);
     expect(dragon.overridden).toEqual([
       { what: 'hills', from: 'none', to: 'the usual', because: 'nothing else breaks the horizon' },
     ]);
     const forklift = read('a white forklift in a warehouse yard at noon, a person standing beside it');
-    expect(forklift.ignored).toEqual(['warehouse', 'yard', 'person', 'standing', 'beside']); // hook for vehicles
-    expect(forklift.recognised).toBe(2); // noon, and the forklift
+    expect(forklift.ignored).toEqual(['warehouse', 'yard', 'beside']); // hook for creatures-flyers: a person, a pose
+    expect(forklift.recognised).toBe(4); // noon, the forklift, the person and 'standing' (creatures-flyers)
     expect(forklift.hour).toBe(12);
     const boat = read('a boat in the desert');
     expect(boat.overridden).toContainEqual({ what: 'ground', from: 'sand', to: 'water', because: 'boats' });
@@ -261,14 +263,13 @@ describe('the reader', () => {
 describe('the honest shell', () => {
   it('says what it did not understand, paints the default anyway, and refuses under --strict', () => {
     const file = join(dir, 'dragon.png');
-    const r = run('a dragon over a castle', '--out', file, '--size', '64x36');
+    // a dragon and a castle are both read now (creatures-flyers, structures-skyline): a griffin and a labyrinth are not
+    const r = run('a griffin over a labyrinth', '--out', file, '--size', '64x36');
     expect(r.status).toBe(0);
-    expect(r.err).toContain('not understood: dragon'); // hook for structures-skyline: the castle is read
-    const nothing = run('a dragon over a wyvern', '--out', file, '--size', '64x36'); // hook for structures-skyline
-    expect(nothing.err).toContain('not understood: dragon, wyvern');
-    expect(nothing.err).toContain('nothing in these words is understood (dragon, wyvern): painting the default day');
+    expect(r.err).toContain('not understood: griffin, labyrinth');
+    expect(r.err).toContain('nothing in these words is understood (griffin, labyrinth): painting the default day');
     expect(existsSync(file)).toBe(true);
-    const strict = run('a dragon over a castle', '--out', join(dir, 'strict.png'), '--size', '64x36', '--strict');
+    const strict = run('a griffin over a labyrinth', '--out', join(dir, 'strict.png'), '--size', '64x36', '--strict');
     expect(strict.status).toBe(3);
     expect(existsSync(join(dir, 'strict.png'))).toBe(false);
     expect(strictRefusal(read('a quiet meadow'))).toContain('quiet');
@@ -283,11 +284,11 @@ describe('the honest shell', () => {
   it('describes the reading as JSON with the honesty fields', () => {
     const forklift = 'a white forklift in a warehouse yard at noon, a person standing beside it';
     const j = JSON.parse(run(forklift, '--describe').out);
-    expect(j.ignored).toEqual(['warehouse', 'yard', 'person', 'standing', 'beside']); // hook for vehicles
+    expect(j.ignored).toEqual(['warehouse', 'yard', 'beside']); // hook for creatures-flyers: a person, a pose
     const keys = ['instances', 'ignored', 'overridden', 'recognised', 'hour', 'season', 'river', 'frozen', 'roadKind'];
     keys.push('wet');
     for (const key of keys) expect(key in j, key).toBe(true);
-    expect(j.recognised).toBe(2);
+    expect(j.recognised).toBe(4); // hook for creatures-flyers
     const hello = JSON.parse(run('the word HELLO in big letters, pixel art', '--describe').out);
     expect(hello).toMatchObject({ text: 'HELLO', style: 'pixel' });
   });

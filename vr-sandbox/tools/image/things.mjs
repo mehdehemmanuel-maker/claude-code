@@ -8,7 +8,7 @@
 // and scene.report.visible = { trees: [seen, asked] }, which the shell prints. Each drawer paints one thing with its
 // foot on the ground plane at (ux·W, fy), zm metres away, every size taken from SIZES in metres through the camera
 // (draw.mjs) times inst.size, in inst.colour when the words gave one, its shadow thrown first, and returns its box
-// in pixels for the layout. The birds go last, in the sky.
+// in pixels for the layout. The flyers (creatures.mjs) go last, in the sky.
 import { clamp, fbm, h2, lerp, mix, rng } from './math.mjs';
 import { COLOURS, THINGS } from './read.mjs';
 import { FIT, SIZES, fitWidth } from './draw.mjs';
@@ -559,22 +559,7 @@ function boat(ctx, inst) { // a hull and a sail, on the water, with a smear of r
   return { x: x0 - len / 2, y: deck - mastH, w: len, h: hh + mastH };
 }
 
-const NIGHTBIRD = [0.1, 0.1, 0.12], DAYBIRD = [0.12, 0.12, 0.14], WING_STEPS = 5;
-
-function bird(ctx, inst) { // a gull's two strokes, far in the sky
-  const { W, H, scene, rand, line } = ctx;
-  const x0 = inst.ux * W, y0 = inst.uy * H, s = ctx.camera.focal / (inst.zm ?? 60) * (inst.size || 1);
-  const span = SIZES.birdSpan * (0.8 + rand() * 0.4) * s, half = span / 2, lift = half * 0.25;
-  const c = inst.colour ?? (scene.time === 'night' ? NIGHTBIRD : DAYBIRD), width = Math.max(0.8, span * 0.04);
-  for (const dir of [-1, 1]) {
-    for (let k = 0; k < WING_STEPS; k++) {
-      const u0 = k / WING_STEPS, u1 = (k + 1) / WING_STEPS;
-      const ya = y0 - Math.sin(u0 * Math.PI) * lift, yb = y0 - Math.sin(u1 * Math.PI) * lift;
-      line(x0 + dir * u0 * half, ya, x0 + dir * u1 * half, yb, width, c, 0.9);
-    }
-  }
-  return { x: x0 - half, y: y0 - lift, w: span, h: lift };
-}
+// hook for creatures-flyers: the bird drawer is tools/image/things/creatures.mjs's now (gull, crow, sparrow, bat)
 
 /**
  * The registry entries, in placing order. size is a thing's typical width, height and depth in metres as drawn:
@@ -593,5 +578,5 @@ export const drawers = [
     size: { w: SIZES.sailboat.hull, h: SIZES.sailboat.mast, d: SIZES.sailboat.beam }, draw: boat,
   },
   // hook for vehicles: the car drawer is tools/image/things/vehicles.mjs's now, with every other vehicle
-  { id: 'bird', word: 'birds', match: THINGS.birds, usual: 7, band: null, depth: [25, 120], sky: true, draw: bird },
+  // hook for creatures-flyers: the bird row is creatures.mjs's now (the key stays 'birds')
 ];

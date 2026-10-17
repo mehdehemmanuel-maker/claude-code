@@ -41,7 +41,7 @@ export const THINGS = {
   // keyed 'houses' and 'buildings' as before
   // hook for vehicles: the vehicle words (cars, karts, trucks…) are registered things (things/vehicles.mjs)
   boats: /^(boats?|ships?|sailboats?|yachts?|dinghy|dinghies|ferry|ferries|canoes?|kayaks?)$/,
-  birds: /^(birds?|gulls?|seagulls?|crows?|ravens?|swallows?)$/,
+  // hook for creatures-flyers: the bird words (and every creature's) are registered things (things/creatures.mjs)
   sun: /^sun$/, moon: /^moon$/, stars: /^(stars?|starry)$/,
 };
 /** A noun that names many at once: no count is read from it, and no number before it. */
@@ -99,6 +99,7 @@ export const PHRASES = [
   ['yellow', 'cab'], ['yellow', 'cabs'], ['taxi', 'cab'], ['taxi', 'cabs'], ['tractor', 'trailer'],
   ['tractor', 'trailers'], // a cab is a taxi only after yellow or taxi; a tractor trailer is a semi
   ['northern', 'lights'], ['outer', 'space'], ['deep', 'space'], // hook for scene-families: the aurora; space's words
+  ['propeller', 'plane'], ['propeller', 'planes'], ['light', 'aircraft'], // hook for creatures-flyers: the small plane
 ];
 /** A bike is a motorcycle, unless the words also say bicycle, cycling or cyclist: then every bike is a bicycle. */
 const PEDALLED = /^(bicycles?|cycling|cyclists?)$/;

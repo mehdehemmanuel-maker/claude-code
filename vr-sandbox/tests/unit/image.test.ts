@@ -76,8 +76,8 @@ describe('the image tool', () => {
     const ids = core.things.map((t: { id: string }) => t.id);
     expect(ids).toEqual(expect.arrayContaining(['car', 'kart', 'truck', 'semi', 'forklift', 'bus']));
     expect(ids.indexOf('tree')).toBeGreaterThan(ids.indexOf('tractor'));
-    const five = ['tree', 'building', 'house', 'boat', 'bird'];
-    expect(ids.slice(ids.indexOf('tree'), ids.indexOf('tree') + 6)).toEqual([...five, 'flowers']);
+    const four = ['tree', 'building', 'house', 'boat']; // hook for creatures-flyers: the bird is creatures.mjs's now
+    expect(ids.slice(ids.indexOf('tree'), ids.indexOf('tree') + 5)).toEqual([...four, 'flowers']);
     expect(ids.slice(ids.indexOf('flowers') + 1)).toEqual(expect.arrayContaining(['cactus', 'volcano', 'rainbow']));
     const rgba = core.toRGBA8(paint(read('a tree'), { width: 4, height: 3, seed: 1 }));
     expect(rgba.length).toBe(4 * 3 * 4);
