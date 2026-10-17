@@ -117,3 +117,58 @@ export declare function toImageData(img: Image): ImageData | { width: number; he
 // image.mjs
 export declare function png(img: Pick<Image, 'width' | 'height' | 'data'>): Buffer;
 export declare function generate(prompt: string, opts?: PaintOptions & { out?: string }): string;
+
+// ── reader + honest-report ──────── (appended by that package: the reader's instances and honesty, the shell's report)
+export interface Instance {
+  kind: string;
+  count: number; // resolved: 'trees' is 9 (usual), 'no trees' 0 (none), 'a hundred trees' 40 (MOST)
+  size: number;
+  modifiers: string[];
+  word: string;
+  index: number; // the token the mention starts at
+  colour?: string;
+  placement?: 'near' | 'far' | 'left' | 'right' | 'centre';
+  usual?: true;
+  none?: true;
+}
+export interface Override { what: string; from: string | number; to: string | number; because: string }
+export interface Scene {
+  recognised: number;
+  hour: number;
+  wet: boolean;
+  season: string | null;
+  moonPhase: string | null;
+  roadKind: 'asphalt' | 'dirt' | null;
+  river: boolean;
+  frozen: boolean;
+  text?: string;
+  instances: Instance[];
+  ignored: string[];
+  overridden: Override[];
+}
+export interface GroundRead { clear: boolean; extra: Array<Pick<Instance, 'kind' | 'count' | 'word'> & { usual?: true }> }
+export interface ConditionEntry { apply(scene: Scene, ground: GroundRead, word: string): void }
+export declare const MOST: number;
+export declare const USUAL: Record<string, number>;
+export declare const USUAL_BY_WORD: Record<string, number>;
+export declare const SIZES: Record<string, number>;
+export declare const PLACEMENT: Record<string, string>;
+export declare const MOON_PHASES: RegExp;
+export declare const NEGATION: RegExp;
+export declare const STYLES: Array<{ id: string; match: RegExp }>;
+export declare const STOP: Set<string>;
+export declare const STOP_SCAN: Set<string>;
+export declare const PHRASES: string[][];
+export declare const COMPOUNDS: Record<string, string[]>;
+export declare const AFTER: Record<string, RegExp>;
+export declare function knows(word: string): boolean;
+export declare function nounLooking(word: string): boolean;
+export declare const SOFTWARE: string;
+export declare function png(img: Pick<Image, 'width' | 'height' | 'data'>, opts: { text?: Record<string, string> }): Buffer;
+export declare function generate(prompt: string, opts?: PaintOptions & { out?: string; scene?: Scene }): string;
+export declare function report(scene: Scene): string[];
+export declare function strictRefusal(scene: Scene): string | null;
+export declare function parse(argv: string[]): {
+  words: string[]; out?: string; width?: number; height?: number; seed?: number; describe?: boolean; strict?: boolean;
+  help?: boolean;
+};

@@ -166,7 +166,8 @@ export function groundPass(ctx) {
   const water = scene.ground === 'water';
   const row = {
     y: 0, near: 0, depth: 0, scale: 0, skyY: 0, roadWidth: 0, dash: false, bladeK: 0,
-    wet: scene.rain > 0.3, here: water ? scene.land : scene.ground, water: false,
+    wet: scene.rain > 0.3 || !!scene.wet, // hook for reader + honest-report: 'wet' is wetness, not rain
+    here: water ? scene.land : scene.ground, water: false,
     groundColour: GROUND[scene.ground], landColour: GROUND[water ? scene.land : scene.ground],
   };
   const c = [0, 0, 0];
