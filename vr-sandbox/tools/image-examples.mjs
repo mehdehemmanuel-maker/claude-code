@@ -9,8 +9,9 @@
 //                                       markers); prints each file with its size and the total
 //   npm run image:examples -- --check   paint each one again into memory and compare its sha256 with the committed
 //                                       file (and each README region with its text): 'same' or 'DRIFT' per file,
-//                                       exit 1 on any drift or missing file, so anyone can prove the pictures are
-//                                       what the tool paints today
+//                                       'EXTRA' for a file under docs/images/ no row makes; exit 1 on any drift,
+//                                       missing or extra file, so anyone can prove the pictures are what the tool
+//                                       paints today and nothing stale is shown
 //
 // A row of EXAMPLES: { file, prompt, size, seed, caption } paints one picture; `describe: true` also saves the
 // --describe JSON beside it (<file>.json) and folds it under the picture in the README; `strip: n` paints n seeds
@@ -42,27 +43,33 @@ export const EXAMPLES = [
     file: 'kart-dusk.png', prompt: 'a red go-kart on a wet road at dusk, mountains behind', size: LEAD, seed: 7,
     describe: true, lead: true,
     caption: 'The header\'s first example. The kart is 1.8 m long on a 3.5 m lane, seen from behind as it goes ' +
-      'away down a road that drifts; the wet asphalt mirrors the dusk sky and the mountains fade into the air.',
+      'away down a road that drifts; the wet asphalt mirrors the dusk sky and the mountains fade into the air. ' +
+      'In the JSON below, `things` carries the count painted ("mountains" named none, so the usual three) and ' +
+      'the instance says `usual: true`.',
   },
   {
     file: 'lake-moon.png', prompt: 'three pine trees by a lake under a full moon, snow', size: LEAD, seed: 3,
     describe: true, lead: true,
-    caption: 'Three pines counted and placed apart on the near shore, snow on every top edge, the full moon and the ' +
-      'ranges mirrored in the lake; "moon" turned the time to night and the tool said so (overridden, below).',
+    caption: 'Three pines counted and placed apart on the near shore, snow on every top edge, the full moon with ' +
+      'its glow laid on the lake and a far bank of small trees beyond it; "moon" turned the time to night and the ' +
+      'tool said so (overridden, below).',
   },
   {
     file: 'city-rain.png', prompt: 'a city skyline at night in the rain', size: HALF, seed: 5, pair: 'left',
-    caption: 'A skyline row at the horizon with lit windows, nearer towers, rain in three depths, wet pavement.',
+    describe: true,
+    caption: 'The header\'s third example: a skyline row at the horizon with lit windows, nearer towers, rain in ' +
+      'three depths, wet pavement.',
   },
   {
     file: 'cabin-fog.png', prompt: 'a cabin in a foggy forest at dawn', size: HALF, seed: 2, pair: 'right',
-    caption: 'Fog thickens with depth: the far trees go first, the ranges behind them are a band in the air, and the ' +
-      'cabin stands clear on the near grass with its shadow thrown by the low sun.',
+    describe: true,
+    caption: 'The header\'s fourth example. Fog thickens with depth: the far trees go first, the ranges behind them ' +
+      'are a band in the air, and the cabin stands clear on the near grass with its shadow thrown by the low sun.',
   },
   {
     file: 'sailboats-strip.png', prompt: 'two sailboats at sunset', size: [320, 180], seed: 1, strip: 6,
-    caption: 'One prompt, six seeds side by side (`--strip 6`): the boats, the sun, the clouds and the shore move; ' +
-      'the reading is the same. Each cell can be had alone with `--seed`.',
+    caption: 'One prompt, six seeds side by side (`--strip 6`): the boats and the sun move; the clouds are the same ' +
+      'field, and the reading is the same. Each cell can be had alone with `--seed`.',
   },
   {
     file: 'styles-grid.png', prompt: 'a mountain lake with a red cabin', size: CELL, seed: 4, styles: STYLES, cols: 4,
@@ -79,13 +86,13 @@ export const EXAMPLES = [
     caption: 'The abstract family: rotational symmetry from the seed, the palette from the colour words.',
   },
   {
-    file: 'portrait.png', prompt: 'a portrait of a smiling woman with red hair', size: HALF, seed: 6, pair: 'left',
-    caption: 'The portrait family: a stylised face in adult-head proportions, hair from the colour word; never a ' +
-      'likeness of anyone, and the picture\'s notes say so.',
+    file: 'portrait.png', prompt: 'a portrait of a woman with red hair and glasses', size: HALF, seed: 6, pair: 'left',
+    caption: 'The portrait family: a stylised face in adult-head proportions, the hair from the colour word, the ' +
+      'glasses from theirs; never a likeness of anyone, and the picture\'s notes say so.',
   },
   {
     file: 'reef.png', prompt: 'a coral reef with five fish and a diver', size: HALF, seed: 8, pair: 'right',
-    caption: 'The underwater family: light rays, caustics on the sand, coral, kelp, bubbles, counted fish, a diver.',
+    caption: 'The underwater family: light rays, caustics on the sand, coral, bubbles, the five fish counted, a diver.',
   },
   {
     file: 'vehicles-sheet.png', size: CELL, cols: 3,
@@ -104,9 +111,10 @@ export const EXAMPLES = [
   {
     file: 'honesty-dragon.png', prompt: 'a dragon over a castle, a wizard on the drawbridge', size: HALF, seed: 1,
     stderr: true,
-    caption: 'What the tool does when it does not understand: it says so on stderr (below, captured from the real ' +
-      'run), keeps the ignored words in the PNG\'s tEXt chunk, and paints what it did understand; with `--strict` ' +
-      'it writes nothing and exits 3 instead.',
+    caption: 'What the tool does with words it does not understand: it says so on stderr (below, captured from the ' +
+      'real run: the wizard and the drawbridge), keeps the ignored words in the PNG\'s tEXt chunk, and paints what ' +
+      'it did understand (the dragon and the castle, counted as visible); with `--strict` it writes nothing and ' +
+      'exits 3 instead.',
   },
 ];
 
@@ -219,28 +227,33 @@ const cite = (ex) => wrap(`*\`${ex.prompt}\`* (seed ${ex.seed}) — ${ex.caption
  */
 export function gallery(files, leads = false) {
   const parts = [], rows = EXAMPLES.filter((ex) => !!ex.lead === leads);
+  const folded = (ex) => { // the --describe JSON under a picture, folded; the real stderr, quoted
+    const out = [];
+    if (ex.describe) {
+      const json = files.get(ex.file.replace(/\.png$/, '.json')).toString('utf8').trimEnd();
+      out.push(`<details><summary><code>--describe</code>: what the words were read as</summary>`, '',
+        '```json', json, '```', '', '</details>', '');
+    }
+    if (ex.stderr) {
+      const text = files.get(ex.file.replace(/\.png$/, '.txt')).toString('utf8').trimEnd();
+      out.push('```', text, '```', '');
+    }
+    return out;
+  };
   for (let i = 0; i < rows.length; i++) {
     const ex = rows[i];
-    if (ex.pair === 'left') { // two half-size pictures side by side, their captions under them
+    if (ex.pair === 'left') { // two half-size pictures side by side, their captions (and JSON) under them
       const right = rows[i + 1];
       parts.push('<table><tr>', `<td width="50%">${img(ex, 640)}</td>`, `<td width="50%">${img(right, 640)}</td>`,
-        '</tr><tr><td valign="top">', '', cite(ex), '', '</td><td valign="top">', '', cite(right), '',
-        '</td></tr></table>', '');
+        '</tr><tr><td valign="top">', '', cite(ex), '', ...folded(ex), '</td><td valign="top">', '', cite(right), '',
+        ...folded(right), '</td></tr></table>', '');
       i++;
       continue;
     }
     parts.push(`![${ex.prompt ?? ex.file}](docs/images/${ex.file})`, '');
     if (ex.cells) parts.push(wrap(`*${ex.cells.map((c) => `\`${c.prompt}\``).join(', ')}* — ${ex.caption}`, 118), '');
     else parts.push(cite(ex), '');
-    if (ex.describe) {
-      const json = files.get(ex.file.replace(/\.png$/, '.json')).toString('utf8').trimEnd();
-      parts.push(`<details><summary><code>--describe</code>: what the words were read as</summary>`, '',
-        '```json', json, '```', '', '</details>', '');
-    }
-    if (ex.stderr) {
-      const text = files.get(ex.file.replace(/\.png$/, '.txt')).toString('utf8').trimEnd();
-      parts.push('```', text, '```', '');
-    }
+    parts.push(...folded(ex));
   }
   return parts.join('\n').trimEnd();
 }
@@ -284,9 +297,10 @@ function main(argv) {
       if (!same) drift++;
     }
     const stale = fs.existsSync(DIR) ? fs.readdirSync(DIR).filter((f) => !files.has(f)) : [];
-    for (const f of stale) console.log(`EXTRA  docs/images/${f} (not in EXAMPLES)`);
-    console.log(`${files.size} files, ${kb(total)} in all${drift ? `, ${drift} drifted` : ''}`);
-    return drift ? 1 : 0;
+    for (const f of stale) console.log(`EXTRA  docs/images/${f} (not in EXAMPLES: remove it, or add a row)`);
+    const bad = drift + stale.length;
+    console.log(`${files.size} files, ${kb(total)} in all${bad ? `, ${drift} drifted, ${stale.length} extra` : ''}`);
+    return bad ? 1 : 0;
   }
   fs.mkdirSync(DIR, { recursive: true });
   for (const [name, bytes] of files) {

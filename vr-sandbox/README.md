@@ -132,7 +132,8 @@ of red flags.
 
 *`a red go-kart on a wet road at dusk, mountains behind`* (seed 7) — The header's first example. The kart is 1.8 m
 long on a 3.5 m lane, seen from behind as it goes away down a road that drifts; the wet asphalt mirrors the dusk sky
-and the mountains fade into the air.
+and the mountains fade into the air. In the JSON below, `things` carries the count painted ("mountains" named none, so
+the usual three) and the instance says `usual: true`.
 
 <details><summary><code>--describe</code>: what the words were read as</summary>
 
@@ -161,7 +162,7 @@ and the mountains fade into the air.
   "lake": false,
   "things": {
     "karts": 1,
-    "mountains": 0
+    "mountains": 3
   },
   "colours": {
     "karts": "red"
@@ -204,8 +205,8 @@ and the mountains fade into the air.
 ![three pine trees by a lake under a full moon, snow](docs/images/lake-moon.png)
 
 *`three pine trees by a lake under a full moon, snow`* (seed 3) — Three pines counted and placed apart on the near
-shore, snow on every top edge, the full moon and the ranges mirrored in the lake; "moon" turned the time to night and
-the tool said so (overridden, below).
+shore, snow on every top edge, the full moon with its glow laid on the lake and a far bank of small trees beyond it;
+"moon" turned the time to night and the tool said so (overridden, below).
 
 <details><summary><code>--describe</code>: what the words were read as</summary>
 
@@ -300,20 +301,152 @@ node tools/image.mjs "two sailboats at sunset" --strip 6 --size 480x270     # si
 <td width="50%"><img src="docs/images/cabin-fog.png" alt="a cabin in a foggy forest at dawn" width="640"></td>
 </tr><tr><td valign="top">
 
-*`a city skyline at night in the rain`* (seed 5) — A skyline row at the horizon with lit windows, nearer towers, rain
-in three depths, wet pavement.
+*`a city skyline at night in the rain`* (seed 5) — The header's third example: a skyline row at the horizon with lit
+windows, nearer towers, rain in three depths, wet pavement.
+
+<details><summary><code>--describe</code>: what the words were read as</summary>
+
+```json
+{
+  "prompt": "a city skyline at night in the rain",
+  "recognised": 4,
+  "time": "night",
+  "hour": 23,
+  "clouds": 0.35,
+  "fog": 0,
+  "rain": 0.6,
+  "snow": 0,
+  "storm": false,
+  "wet": true,
+  "season": null,
+  "moonPhase": null,
+  "ground": "pavement",
+  "land": "pavement",
+  "road": false,
+  "roadKind": null,
+  "beach": false,
+  "river": false,
+  "frozen": false,
+  "waterWord": null,
+  "lake": false,
+  "things": {
+    "buildings": 11
+  },
+  "colours": {},
+  "instances": [
+    {
+      "kind": "buildings",
+      "count": 11,
+      "size": 1,
+      "modifiers": [],
+      "word": "city skyline",
+      "index": 1,
+      "usual": true
+    }
+  ],
+  "ignored": [],
+  "overridden": [],
+  "report": {
+    "visible": {
+      "buildings": [
+        5,
+        11
+      ]
+    }
+  }
+}
+```
+
+</details>
 
 </td><td valign="top">
 
-*`a cabin in a foggy forest at dawn`* (seed 2) — Fog thickens with depth: the far trees go first, the ranges behind
-them are a band in the air, and the cabin stands clear on the near grass with its shadow thrown by the low sun.
+*`a cabin in a foggy forest at dawn`* (seed 2) — The header's fourth example. Fog thickens with depth: the far trees
+go first, the ranges behind them are a band in the air, and the cabin stands clear on the near grass with its shadow
+thrown by the low sun.
+
+<details><summary><code>--describe</code>: what the words were read as</summary>
+
+```json
+{
+  "prompt": "a cabin in a foggy forest at dawn",
+  "recognised": 4,
+  "time": "dawn",
+  "hour": 6,
+  "clouds": 0.35,
+  "fog": 0.6,
+  "rain": 0,
+  "snow": 0,
+  "storm": false,
+  "wet": false,
+  "season": null,
+  "moonPhase": null,
+  "ground": "grass",
+  "land": "grass",
+  "road": false,
+  "roadKind": null,
+  "beach": false,
+  "river": false,
+  "frozen": false,
+  "waterWord": null,
+  "lake": false,
+  "things": {
+    "houses": 1,
+    "trees": 9,
+    "hills": 2
+  },
+  "colours": {},
+  "instances": [
+    {
+      "kind": "houses",
+      "count": 1,
+      "size": 1,
+      "modifiers": [],
+      "word": "cabin",
+      "index": 1
+    },
+    {
+      "kind": "trees",
+      "count": 9,
+      "size": 1,
+      "modifiers": [],
+      "word": "forest",
+      "index": 5,
+      "usual": true
+    }
+  ],
+  "ignored": [],
+  "overridden": [
+    {
+      "what": "hills",
+      "from": "none",
+      "to": "the usual",
+      "because": "nothing else breaks the horizon"
+    }
+  ],
+  "report": {
+    "visible": {
+      "houses": [
+        1,
+        1
+      ],
+      "trees": [
+        8,
+        9
+      ]
+    }
+  }
+}
+```
+
+</details>
 
 </td></tr></table>
 
 ![two sailboats at sunset](docs/images/sailboats-strip.png)
 
-*`two sailboats at sunset`* (seed 1) — One prompt, six seeds side by side (`--strip 6`): the boats, the sun, the
-clouds and the shore move; the reading is the same. Each cell can be had alone with `--seed`.
+*`two sailboats at sunset`* (seed 1) — One prompt, six seeds side by side (`--strip 6`): the boats and the sun move;
+the clouds are the same field, and the reading is the same. Each cell can be had alone with `--seed`.
 
 ![a mountain lake with a red cabin](docs/images/styles-grid.png)
 
@@ -336,17 +469,18 @@ colour words.
 </td></tr></table>
 
 <table><tr>
-<td width="50%"><img src="docs/images/portrait.png" alt="a portrait of a smiling woman with red hair" width="640"></td>
+<td width="50%"><img src="docs/images/portrait.png" alt="a portrait of a woman with red hair and glasses" width="640"></td>
 <td width="50%"><img src="docs/images/reef.png" alt="a coral reef with five fish and a diver" width="640"></td>
 </tr><tr><td valign="top">
 
-*`a portrait of a smiling woman with red hair`* (seed 6) — The portrait family: a stylised face in adult-head
-proportions, hair from the colour word; never a likeness of anyone, and the picture's notes say so.
+*`a portrait of a woman with red hair and glasses`* (seed 6) — The portrait family: a stylised face in adult-head
+proportions, the hair from the colour word, the glasses from theirs; never a likeness of anyone, and the picture's
+notes say so.
 
 </td><td valign="top">
 
 *`a coral reef with five fish and a diver`* (seed 8) — The underwater family: light rays, caustics on the sand, coral,
-kelp, bubbles, counted fish, a diver.
+bubbles, the five fish counted, a diver.
 
 </td></tr></table>
 
@@ -360,15 +494,16 @@ crossover the project holds.
 
 ![a dragon over a castle, a wizard on the drawbridge](docs/images/honesty-dragon.png)
 
-*`a dragon over a castle, a wizard on the drawbridge`* (seed 1) — What the tool does when it does not understand: it
-says so on stderr (below, captured from the real run), keeps the ignored words in the PNG's tEXt chunk, and paints
-what it did understand; with `--strict` it writes nothing and exits 3 instead.
+*`a dragon over a castle, a wizard on the drawbridge`* (seed 1) — What the tool does with words it does not
+understand: it says so on stderr (below, captured from the real run: the wizard and the drawbridge), keeps the ignored
+words in the PNG's tEXt chunk, and paints what it did understand (the dragon and the castle, counted as visible); with
+`--strict` it writes nothing and exits 3 instead.
 
 ```
 $ node tools/image.mjs "a dragon over a castle, a wizard on the drawbridge" --size 640x360 --seed 1
-read as: day, grass, hills (added to break the horizon)
-not understood: dragon, castle, wizard, drawbridge
-nothing in these words is understood (dragon, castle, wizard, drawbridge): painting the default day meadow
+read as: day, grass, dragons 1, castle 1, hills (added to break the horizon)
+not understood: wizard, drawbridge
+visible: dragons 1/1, castle 1/1
 ```
 <!-- /image-examples -->
 
@@ -403,8 +538,12 @@ underwater (underwater, undersea, coral(s), reef(s), diving, diver(s), scuba, se
 count). In a landscape: the sky's phenomena (rainbow(s) by day; aurora(s)/borealis/northern lights at night;
 lightning/thunderbolt(s) under a storm) and the landforms (cactus/cacti/cactuses/saguaro(s) on sand,
 palm-tree/palmtree/coconut-palm, volcano/volcanoes/volcanos with erupting/erupts/eruption(s) for lava,
-waterfall(s)/cascade(s)). Anything else in the words is ignored, and --describe shows exactly what was kept: every
-ignored word, every silent change, and how much was recognised.
+waterfall(s)/cascade(s)). Structures in metres (houses by kind in three-quarter view, a city's skyline, lighthouse,
+rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, pole, bench) and creatures (cat, dog,
+horse, deer, cow, sheep, goat, wolf, elephant, camel, people and crowds; in the sky airplane, cessna, helicopter,
+balloon, rocket, dragon, kite, birds by word, bats; whale, dolphin, shark, fish). Anything else in the words is
+ignored, and --describe shows exactly what was kept: every ignored word, every silent change, and how much was
+recognised.
 <!-- /image-vocabulary -->
 
 ### The flags

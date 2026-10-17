@@ -2,7 +2,9 @@
 // platform in it, for a painter that paints its own pixels (no canvas, no system fonts). The glyph shapes are original
 // work drawn pixel by pixel for this tool: on a 5×7 grid many letters can only be drawn one way, so they coincide with
 // the familiar dot-matrix forms; the deliberate choices are a pointed A, a round O against a dotted 0 (a centre pixel,
-// no slash), a barred G, descenders kept inside the seven rows, 2×2 dots for . and : so they survive a 1:1 render.
+// no slash), a barred G, 2×2 dots for . and : so they survive a 1:1 render, and the descender letters (g, p, q, y)
+// with their bowls on the x-line (row 2, where every lowercase body starts) and their tails inside the seven rows:
+// drawn a row higher they read as capitals (a p with a four-row bowl from row 1 is a P moved down one row).
 // text.mjs lays text out and paints it through this file; tests/unit/image-styles.test.ts checks the glyphs.
 //
 // PACKING FORMAT
@@ -53,10 +55,10 @@ export const FONT =
   '4631fc63138842108e1c4210a4c4654c525142108421f4775ac6314639ace313a318c62e' +
   '7a31f42103a318d64d7a31f52513e107043e7c842108446318c62e46318c5444631ad771' +
   '462a22a314631510847c222221f39084210e41082084138421084e11510000000000001f' +
-  '308200000000e0be2f4216cc63e000e8422e042d9c62f000e8fe0e1928e210801f18bc2e' +
+  '308200000000e0be2f4216cc63e000e8422e042d9c62f000e8fe0e1928e2108000f8bc2e' +
   '4216cc631100c2108e080610a4c4212a629230842108e001aad6310016cc631000e8c62e' +
-  '03d18fa1001f18bc210016cc210000f8383e211c4212600118c66d00118c54400118d6aa' +
-  '00115115102318bc2e001f1111f0884410821084210842084110880008a8800' +
+  '001e8fa10000f8bc210016cc210000f8383e211c4212600118c66d00118c54400118d6aa' +
+  '00115115100118bc2e001f1111f0884410821084210842084110880008a8800' +
   ''
   /*FONT-END*/;
 

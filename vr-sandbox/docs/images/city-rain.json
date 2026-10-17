@@ -1,0 +1,48 @@
+{
+  "prompt": "a city skyline at night in the rain",
+  "recognised": 4,
+  "time": "night",
+  "hour": 23,
+  "clouds": 0.35,
+  "fog": 0,
+  "rain": 0.6,
+  "snow": 0,
+  "storm": false,
+  "wet": true,
+  "season": null,
+  "moonPhase": null,
+  "ground": "pavement",
+  "land": "pavement",
+  "road": false,
+  "roadKind": null,
+  "beach": false,
+  "river": false,
+  "frozen": false,
+  "waterWord": null,
+  "lake": false,
+  "things": {
+    "buildings": 11
+  },
+  "colours": {},
+  "instances": [
+    {
+      "kind": "buildings",
+      "count": 11,
+      "size": 1,
+      "modifiers": [],
+      "word": "city skyline",
+      "index": 1,
+      "usual": true
+    }
+  ],
+  "ignored": [],
+  "overridden": [],
+  "report": {
+    "visible": {
+      "buildings": [
+        5,
+        11
+      ]
+    }
+  }
+}

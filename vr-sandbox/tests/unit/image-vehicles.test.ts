@@ -73,19 +73,19 @@ describe('the reader knows every vehicle by its words', () => {
   const inst = (s: Scene, kind: string) => s.instances.filter((i) => i.kind === kind);
   const cases: [string, (s: Scene) => void][] = [
     [KART, (s) => {
-      expect(s.things).toEqual({ karts: 1, mountains: 0 });
+      expect(s.things).toEqual({ karts: 1, mountains: 3 });
       expect(s.colours).toEqual({ karts: 'red' });
       expect([s.road, s.wet, s.time, s.ignored]).toEqual([true, true, 'sunset', []]);
     }],
     ['a semi truck on a highway', (s) => {
-      expect(s.things).toEqual({ semis: 1, hills: 0 });
+      expect(s.things).toEqual({ semis: 1, hills: 2 });
       expect(s.ignored).toEqual([]);
     }],
     ['an 18-wheeler', (s) => expect(s.things.semis).toBe(1)],
-    ['a dirt bike', (s) => { expect(s.things).toEqual({ dirtbikes: 1, hills: 0 }); expect(s.roadKind).toBeNull(); }],
+    ['a dirt bike', (s) => { expect(s.things).toEqual({ dirtbikes: 1, hills: 2 }); expect(s.roadKind).toBeNull(); }],
     ['a yellow taxi', (s) => expect([s.things.taxis, s.colours.taxis]).toEqual([1, 'yellow'])],
     ['a pickup truck', (s) => {
-      expect(s.things).toEqual({ trucks: 1, hills: 0 });
+      expect(s.things).toEqual({ trucks: 1, hills: 2 });
       expect(inst(s, 'trucks')[0]!.word).toBe('pickup truck');
       expect(vehicleRow('truck', 'pickup truck')).toBe(VEHICLES.pickup);
       expect(vehicleRow('truck', 'lorry')).toBe(VEHICLES.truck);
@@ -99,25 +99,25 @@ describe('the reader knows every vehicle by its words', () => {
       expect(inst(s, 'buses')[0]!.usual).toBeUndefined();
       expect(s.ignored).toEqual(['stop']);
     }],
-    ['a bike on a road', (s) => expect(s.things).toEqual({ motorcycles: 1, hills: 0 })], // a bike is a motorcycle
-    ['a bike and a bicycle', (s) => expect(s.things).toEqual({ bicycles: 2, hills: 0 })], // unless bicycles are about
+    ['a bike on a road', (s) => expect(s.things).toEqual({ motorcycles: 1, hills: 2 })], // a bike is a motorcycle
+    ['a bike and a bicycle', (s) => expect(s.things).toEqual({ bicycles: 2, hills: 2 })], // unless bicycles are about
     ['two bikes, a cyclist', (s) => { // the cyclist is drawn as a bicycle too: three
       expect(s.things.bicycles).toBe(3);
       expect(s.things.motorcycles).toBeUndefined();
     }],
-    ['a truck with a red cab', (s) => expect(s.things).toEqual({ trucks: 1, hills: 0 })], // a bare cab is no taxi
-    ['a yellow cab', (s) => expect(s.things).toEqual({ taxis: 1, hills: 0 })],
+    ['a truck with a red cab', (s) => expect(s.things).toEqual({ trucks: 1, hills: 2 })], // a bare cab is no taxi
+    ['a yellow cab', (s) => expect(s.things).toEqual({ taxis: 1, hills: 2 })],
     ['a taxi cab at night', (s) => expect(s.things.taxis).toBe(1)],
-    ['a tractor trailer on a highway', (s) => expect(s.things).toEqual({ semis: 1, hills: 0 })], // not a tractor
+    ['a tractor trailer on a highway', (s) => expect(s.things).toEqual({ semis: 1, hills: 2 })], // not a tractor
     ['a tractor-trailer', (s) => expect(s.things.semis).toBe(1)],
     ['a red car and a blue car', (s) => {
       expect(s.things.cars).toBe(2);
       expect(inst(s, 'cars').map((i) => i.colour)).toEqual(['red', 'blue']);
     }],
     ['a jeep, a van, a coach, a tractor, a quad', (s) => {
-      expect(s.things).toEqual({ suvs: 1, vans: 1, buses: 1, tractors: 1, atvs: 1, hills: 0 });
+      expect(s.things).toEqual({ suvs: 1, vans: 1, buses: 1, tractors: 1, atvs: 1, hills: 2 });
     }],
-    ['a race track with karts', (s) => { expect(s.things.karts).toBe(0); expect(s.road).toBe(true); }],
+    ['a race track with karts', (s) => { expect(s.things.karts).toBe(3); expect(s.road).toBe(true); }],
   ];
   it.each(cases)('%s', (prompt, check) => check(read(prompt)));
 

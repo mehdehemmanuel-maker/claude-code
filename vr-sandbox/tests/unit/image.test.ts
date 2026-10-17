@@ -99,7 +99,7 @@ describe('the image tool', () => {
     for (const t of large.things) {
       expect(t.w > 0 && t.h > 0 && Number.isFinite(t.x) && Number.isFinite(t.y), t.kind).toBe(true);
     }
-    expect(read(WORDS).things).toEqual({ cars: 1, mountains: 0, trees: 0, houses: 1, boats: 1, birds: 0 });
+    expect(read(WORDS).things).toEqual({ cars: 1, mountains: 3, trees: 9, houses: 1, boats: 1, birds: 7 });
   });
 
   it('stays fast: 640x360 under 400 ms and 1280x720 under 1.5 s (median of 3 after a warm-up)', () => {

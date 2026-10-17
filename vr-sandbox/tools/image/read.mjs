@@ -10,7 +10,8 @@ import { conditions, families, familyFor, keyOf, styleNamed, thingByKey, thingFo
 //
 // The scene the painter reads (time, clouds, fog, rain, snow, storm, ground, road, beach, things, colours, land) keeps
 // its shape; things and colours are views over scene.instances, where each mention of a thing keeps its own count,
-// colour, size and place ("a red car and a blue car" is two instances). In things, 0 still means "the usual number".
+// colour, size and place ("a red car and a blue car" is two instances). things carries the count the picture is
+// painted with, the usual number included (an instance says `usual: true` when the words gave none).
 // scene.waterWord is the word that brought the water (sea, lake, river, harbour, beach...), scene.lake whether it is a
 // still one, so no pass re-reads the prompt to know.
 
@@ -607,11 +608,11 @@ export function read(prompt) {
     s.instances.push({ ...extra, size: 1, modifiers: [], index: tokens.findIndex((t) => t.w === extra.word) });
   }
 
-  // The views the painter reads: things (0 is the usual number) and one colour per kind (the last named).
+  // The views the painter reads: things (the count painted, the usual number resolved) and one colour per kind (the
+  // last named). A scene built by hand may still say 0 for the usual number (things.mjs, core.mjs).
   for (const inst of s.instances) {
     const same = s.instances.filter((o) => o.kind === inst.kind), total = same.reduce((sum, o) => sum + o.count, 0);
-    if (same.every((o) => o.usual && o.count === usualOf(o.kind))) s.things[inst.kind] = 0;
-    else if (total > 0 || !same.some((o) => o.none)) s.things[inst.kind] = total;
+    if (total > 0 || !same.some((o) => o.none)) s.things[inst.kind] = total;
     if (inst.colour) s.colours[inst.kind] = inst.colour;
   }
   if ('boats' in s.things && s.ground !== 'water') { // a boat brings its water
@@ -636,7 +637,7 @@ export function read(prompt) {
   }
   const broken = 'mountains' in s.things || 'hills' in s.things || 'buildings' in s.things || s.ground === 'water';
   if (!broken && !s.family) { // something to break the horizon (a family picture has none to break)
-    s.things.hills = 0;
+    s.things.hills = USUAL.hills;
     s.overridden.push({ what: 'hills', from: 'none', to: 'the usual', because: 'nothing else breaks the horizon' });
   }
 

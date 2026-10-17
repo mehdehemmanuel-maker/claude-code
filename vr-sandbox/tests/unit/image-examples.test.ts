@@ -110,12 +110,15 @@ describe('the batch flags', () => {
 describe('the README', () => {
   const readme = readFileSync(README, 'utf8');
 
-  it('has the "Pictures from words" section with the gallery and the folded --describe JSON of the two leads', () => {
+  it('has the "Pictures from words" section, the gallery, the folded JSON of the four header prompts', () => {
     expect(readme).toContain('## Pictures from words');
     const leads = region(readme, MARK.leads), gallery = region(readme, MARK.gallery);
     expect(leads).not.toBeNull();
     expect(gallery).not.toBeNull();
     expect(leads!.match(/<details>/g)?.length).toBe(2);
+    expect(gallery!.match(/<details>/g)?.length).toBe(2); // the other two header prompts, in their paired cells
+    const cell = /<td valign="top">\n\n\*`a city skyline[^]*?<details>[^]*?"prompt": "a city skyline/;
+    expect(gallery).toMatch(cell);
     expect(leads).toMatch(/```json\n\{\n\s+"prompt": "a red go-kart/);
     for (const ex of EXAMPLES) {
       expect(`${leads}\n${gallery}`, ex.file).toContain(`docs/images/${ex.file}`);

@@ -59,15 +59,26 @@ and `--strip n` use seeds base, base+1, ... base+n-1, so the first is the plain 
   the camera and `frameCamera()`, the sun's direction, `shadow()`, `sprite()`, `attach()`.
 - `tools/image/passes.mjs`: The landscape's layers: sky, sun/moon/stars, clouds, ranges, ground (grass, sand, snow,
   pavement, water, the road, hills, dunes, tufts, flowers), far and near weather, reflections, the finish.
-- `tools/image/things.mjs`: `place()` in world space, `thingsPass()`, `critic()`, the six built-in drawers (tree,
-  building, house, boat, bird, and the flowers flag) and the shore logic for things at the water.
+- `tools/image/things.mjs`: `place()` in world space, `thingsPass()`, `critic()`, the built-in drawers (tree, boat,
+  the flowers flag; the house and building rows come from `structures.mjs`, the birds from `creatures.mjs`) and the
+  shore logic for things at the water.
 - `tools/image/things/vehicles.mjs`: `VEHICLES`: every kind's figures in metres with a source per row; one builder per
   silhouette family; `drawVehicle()` projects the parts through the camera.
 - `tools/image/things/landforms.mjs`: Cactus, palm, volcano, waterfall, each a registered thing with typical sizes.
+- `tools/image/things/structures.mjs`: `HOUSES` and `STRUCTURES` in metres (each row saying what is published,
+  typical or an estimate): houses by kind in three-quarter view (a cottage is drawn as the house), towers with their
+  window grids, `skylinePass` (the city's row of silhouettes at the horizon, kept under the ridge it spans), and the
+  lighthouse on its reef, rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, telegraph pole
+  and bench, each drawn through the camera as the vehicles are.
+- `tools/image/things/creatures.mjs`: `CREATURES` (ten animals side-on, standing or grazing), `FIGURE` (a person
+  standing, walking or sitting; a crowd), `FLYERS` (airliner, Cessna, helicopter, balloon, rocket, dragon, kite), the
+  birds by word and bats, the swimmers (whale, dolphin, shark, fish), each from a table in metres with its source
+  named and one drawing rule per family; and the reader's conditions for irregular plurals, collective nouns, poses
+  and a sea creature's water.
 - `tools/image/families/space.mjs`, `abstract.mjs`, `portrait.mjs`, `underwater.mjs`, `phenomena.mjs`: The families
   beyond the landscape (each claims its words and paints with its own pass) and the sky's phenomena (rainbow, aurora,
-  lightning) inside the landscape; `abstract.mjs` also holds the helpers the families share (`note`, `dropWord`,
-  `bare`, `promptColours`, `hsl`).
+  lightning) inside the landscape; the helpers the families share (`note`, `dropWord`, `undrop`, `bare`) live in
+  `read.mjs` and are re-exported by `abstract.mjs` beside `promptColours` and `hsl`.
 - `tools/image/styles.mjs`: The eight finishes and the buffer helpers (luma, sobel, box blur, posterise, grain,
   vignette).
 - `tools/image/text.mjs`, `font.mjs`: The caption: layout in the free third of the picture, wrapping to two lines; the
@@ -157,6 +168,10 @@ exactly what was kept. Concretely:
 
 - `scene.ignored`: every token that matched nothing (not a thing, condition, number, colour, modifier, style, family
   word, stop word or phrase part). Printed as `not understood: ...` after every painting.
+- `scene.things`: the count each kind is painted with, the usual number resolved (a bare "mountains" is
+  `mountains: 3`, "forest" is `trees: 9`); the instance under it says `usual: true` when the words gave no number,
+  so the JSON never shows a count the picture does not hold. (A scene built by hand, without instances, may still
+  say 0 for the usual number; the reader never writes one.)
 - `scene.overridden`: every silent choice, each `{ what, from, to, because }`: `ground grass -> water (boats)`, `time
   day -> night (moon)`, `style sketch -> poster (--style)`, the hills added to break an empty horizon. Printed as
   `changed: ...`.
@@ -172,8 +187,10 @@ exactly what was kept. Concretely:
   any picture can be traced to its reading with a hex dump or `python3 -c "from PIL import Image;
   print(Image.open(f).text)"`. A PPM has no text chunk, which the help says.
 - The gallery: `npm run image:examples -- --check` re-paints every committed picture into memory and compares its
-  sha256, so the README never shows a retouched or stale picture; `docs/images/honesty-dragon.txt` is the real stderr
-  of a prompt the tool does not understand.
+  sha256 (`DRIFT`), and names any file under `docs/images/` that no row makes (`EXTRA`); either fails it, so the
+  README never shows a retouched, stale or orphaned picture. `docs/images/honesty-dragon.txt` is the real stderr of
+  a prompt the tool understands only in part: the dragon and the castle are read and counted as visible, the wizard
+  and the drawbridge are said to be not understood.
 
 ## The tests, and how to run them
 
@@ -198,6 +215,11 @@ exactly what was kept. Concretely:
   vehicles, every asked count reported, a hidden subject never counted.
 - `image-families.test.ts`: The four families claim their words and only in company, paint with no horizon, and say
   what they are; the landforms and phenomena.
+- `image-structures.test.ts`: Every structure read by its words and keyed as before, the house kinds, the skyline
+  under its ridge, the lighthouse off the shore, each built thing drawn and seen by the critic.
+- `image-creatures.test.ts`: Every creature, person, flyer and swimmer read by its words (irregular plurals,
+  collectives, poses), drawn in metres, the flyers inside the sky band, the night kept dark around them.
+- `tests/nexus/image-figures.test.ts`: The `VEHICLES` table is one source of figures with `src/nexus/machines.ts`.
 - `image-examples.test.ts`: The gallery table paints, `--count`/`--strip`/`--format` parse and validate, the P6
   header, the README's vocabulary paragraph carries every word of the header's, the gallery's pictures are committed.
 
@@ -249,6 +271,16 @@ for each, so the next person does not re-litigate them without the evidence.
   two leads are 960x540 and the rest 640x360 or 320-400 px cells, which keeps `docs/images` under 6 MB.
 - **`--count` and `--strip` seeds are base + i - 1.** So the first cell is the plain picture and any cell can be had
   alone with `--seed`; the strip lists them in a `Seeds` tEXt chunk.
+- **The cloud field does not follow the seed.** `cloudPass` samples its noise at fixed offsets, so the header
+  prompts' default pictures keep their skies; a `--strip` moves the boats and the sun and not the clouds, and the
+  README's caption says so (the review of 2026-10-17 offered reseeding the field; the captions were made true
+  instead, so the four header pictures stay as they were).
+- **`things` carries the resolved count.** The reader used to write 0 for "the usual number" and the first JSON a
+  reader opened said `mountains: 0` under a picture with three; now it writes the count painted and the instance
+  keeps `usual: true`. The painter still takes 0 as the usual number from a hand-built scene.
+- **The font's descender letters sit on the x-line.** The 5x7 font keeps g, p, q and y inside the seven rows; drawn
+  with a four-row bowl from row 1 the p was a P moved down one row ("Pixel", "sePia" in the gallery's labels).
+  Their bowls now start at row 2 with the other lowercase bodies and their tails take the two rows under them.
 
 ## Known gaps
 
@@ -256,10 +288,18 @@ What a judge would still call thin, said plainly:
 
 - The things are flat-shaded boxes, cones and discs with anti-aliased edges: no texture on a wall, no bark, no cloth.
   A pine is three cones; the kart at 400 px is two masses and four wheels.
-- The city is a cluster of towers at the horizon with lit windows, not a street: no ground floor, no lamps, no
-  traffic.
-- No people and no animals until the creatures package lands; no lighthouse, bridge, windmill or castle until the
-  structures package lands. The honesty picture in the README exists because of that gap.
+- The city is a skyline row of silhouettes and a few towers with window grids, not a street seen from its pavement:
+  no ground floors, no traffic unless cars are named, and the eleven usual towers of "a city in the mountains" hide
+  much of the ridge between them.
+- The lighthouse stands on a rock mass and a reef drawn as grey lumps, not a rock face; "cliffs" paint as big lumps
+  too, not a face.
+- A cottage is drawn as the house: its thatch did not read as thatch, so the roof is the house's and the kind is not
+  claimed in the header.
+- The dragon reads as a pterodactyl: a long head, bat wings and a spade tail, no scales, no fire.
+- A helicopter at night is its lights (red and green by heading, a white tail light, a red beacon, a lit cabin) on a
+  dark shape a few pixels across at its depth; it is in the frame and counted, not recognisable without them.
+- The speed budget in `image.test.ts` (640x360 under 400 ms, median of three) holds on a quiet machine (435-500 ms
+  for the kitchen-sink prompt at 960x540); under the full gate's parallel workers the same paint has taken 630 ms.
 - One lens, one level camera: no wide or portrait composition words, no looking up or down.
 - The portrait reads "smiling" but the mouth barely changes; expressions are a line.
 - The vocabulary is finite (the header lists it); there are no learned synonyms, and a word outside it is ignored,

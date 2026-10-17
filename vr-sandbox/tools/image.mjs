@@ -87,8 +87,8 @@
 // city's skyline, lighthouse, rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, pole, bench)
 // and creatures (cat, dog, horse, deer, cow, sheep, goat, wolf, elephant, camel, people and crowds; in the sky
 // airplane, cessna, helicopter, balloon, rocket, dragon, kite, birds by word, bats; whale, dolphin, shark, fish).
-// Anything else in the words is ignored, and --describe
-// shows exactly what was kept: every ignored word, every silent change, and how much was recognised.
+// Anything else in the words is ignored, and --describe shows exactly what was kept: every ignored word, every
+// silent change, and how much was recognised.
 // The longer read: README.md ("Pictures from words", a gallery tools/image-examples.mjs regenerates and checks) and
 // docs/IMAGE-TOOL.md (the pipeline, the module map, how a thing, a family or a style is added, the decisions made).
 import fs from 'node:fs';

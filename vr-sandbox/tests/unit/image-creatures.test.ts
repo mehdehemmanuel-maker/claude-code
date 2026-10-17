@@ -42,14 +42,14 @@ const mean = (img: Image) => {
 describe('the reader knows every creature, person, flyer and swimmer by its words', () => {
   const cases: [string, (s: Scene) => void][] = [
     ['horses in a field at sunrise', (s) => {
-      expect(s.things.horses).toBe(0); // the usual three
+      expect(s.things.horses).toBe(3); // the usual three
       expect(s.instances.find((i) => i.kind === 'horses')!.count).toBe(3);
       expect([s.time, s.ignored]).toEqual(['dawn', []]);
     }],
-    ['a deer in a misty forest', (s) => expect([s.things.deer, s.things.trees, s.fog]).toEqual([1, 0, 0.6])],
+    ['a deer in a misty forest', (s) => expect([s.things.deer, s.things.trees, s.fog]).toEqual([1, 9, 0.6])],
     ['deer in a forest', (s) => expect(s.instances.find((i) => i.kind === 'deer')!.count).toBe(2)], // irregular
     ['a shepherd and his sheep on a hill', (s) => { // 'sheep' is the usual six, 'his' a stop word
-      expect(s.things).toEqual({ people: 1, sheep: 0, hills: 1 });
+      expect(s.things).toEqual({ people: 1, sheep: 6, hills: 1 });
       expect(s.instances.find((i) => i.kind === 'sheep')!.count).toBe(6);
       expect(s.ignored).toEqual([]);
     }],
@@ -61,7 +61,7 @@ describe('the reader knows every creature, person, flyer and swimmer by its word
     }],
     ['a cat on a wall at night', (s) => expect([s.things.cats, s.time, s.ignored]).toEqual([1, 'night', ['wall']])],
     ['a busy street with people and cars', (s) => { // people: the usual four, on the pavement
-      expect(s.things).toEqual({ people: 0, cars: 0, buildings: 0, streetlamp: 0 }); // structures: a street's lamps
+      expect(s.things).toEqual({ people: 4, cars: 2, buildings: 11, streetlamp: 4 }); // structures: a street's lamps
       expect(s.instances.find((i) => i.kind === 'people')!.count).toBe(4);
     }],
     ['a person standing beside a car', (s) => {
@@ -70,7 +70,7 @@ describe('the reader knows every creature, person, flyer and swimmer by its word
       expect(s.ignored).toEqual(['beside']);
     }],
     ['two women and a child sitting', (s) => expect([s.things.people, s.pose]).toEqual([3, 'sitting'])],
-    ['a crowd in a city square', (s) => expect(s.things).toMatchObject({ crowds: 1, buildings: 0 })],
+    ['a crowd in a city square', (s) => expect(s.things).toMatchObject({ crowds: 1, buildings: 11 })],
     ['a woman', (s) => expect([s.family, s.ignored]).toEqual(['portrait', []])], // alone: the portrait's
     ['a man', (s) => expect(s.family).toBe('portrait')],
     ['a woman by a lake', (s) => expect([s.family, s.things.people, s.ignored]).toEqual([undefined, 1, []])],
@@ -81,7 +81,7 @@ describe('the reader knows every creature, person, flyer and swimmer by its word
       expect(s.notes!.some((n) => n.includes('a stylised face, not a likeness of anyone'))).toBe(true);
     }],
     ['a man at the north face', (s) => expect([s.family, s.things.people]).toEqual([undefined, 1])],
-    ['an airplane in the sky', (s) => expect(s.things).toEqual({ airplanes: 1, hills: 0 })],
+    ['an airplane in the sky', (s) => expect(s.things).toEqual({ airplanes: 1, hills: 2 })],
     ['a jet and a propeller plane', (s) => expect(s.things).toMatchObject({ airplanes: 1, cessnas: 1 })],
     ['a helicopter over the city', (s) => expect(s.things).toMatchObject({ helicopters: 1 })],
     ['a hot air balloon over fields', (s) => expect(s.things).toMatchObject({ balloons: 1 })],
@@ -91,25 +91,25 @@ describe('the reader knows every creature, person, flyer and swimmer by its word
       expect([s.things.dragons, s.things.castle, s.ignored]).toEqual([1, 1, ['flying']]);
     }],
     ['a boy flying a kite on a beach', (s) => expect(s.things).toMatchObject({ people: 1, kites: 1 })],
-    ['seagulls over the sea', (s) => expect([s.things.birds, s.ground]).toEqual([0, 'water'])],
+    ['seagulls over the sea', (s) => expect([s.things.birds, s.ground]).toEqual([7, 'water'])],
     ['three crows', (s) => expect(s.things.birds).toBe(3)],
     ['bats', (s) => { // an unsaid hour turns to night, and is said
-      expect([s.things.bats, s.time]).toEqual([0, 'night']);
+      expect([s.things.bats, s.time]).toEqual([5, 'night']);
       expect(s.overridden.some((o) => o.what === 'time' && o.because === 'bats')).toBe(true);
     }],
     ['bats at noon', (s) => expect(s.time).toBe('day')],
-    ['whales in the ocean', (s) => expect([s.things.whales, s.ground, s.beach]).toEqual([0, 'water', false])],
+    ['whales in the ocean', (s) => expect([s.things.whales, s.ground, s.beach]).toEqual([2, 'water', false])],
     ['a whale', (s) => { // a sea creature brings its water
       expect([s.things.whales, s.ground]).toEqual([1, 'water']);
       expect(s.overridden.some((o) => o.what === 'ground' && o.because === 'whale')).toBe(true);
     }],
-    ['dolphins and a shark', (s) => expect(s.things).toMatchObject({ dolphins: 0, sharks: 1 })],
-    ['fish in a lake', (s) => expect([s.things.fish, s.family]).toEqual([0, undefined])],
+    ['dolphins and a shark', (s) => expect(s.things).toMatchObject({ dolphins: 3, sharks: 1 })],
+    ['fish in a lake', (s) => expect([s.things.fish, s.family]).toEqual([4, undefined])],
     // review fixes: a collective noun binds to the creature after it or is ignored; a bare person word leaves the
     // prompt as bare as it found it (the space family claims 'space'); a pose needs figures; a pose is a scene's
-    ['a flock of birds over the sea', (s) => expect([s.things, s.ignored]).toEqual([{ birds: 0 }, []])],
-    ['a flock of seagulls', (s) => expect([s.things.birds, s.things.sheep, s.ignored]).toEqual([0, undefined, []])],
-    ['a herd of elephant', (s) => expect([s.things.elephants, s.ignored]).toEqual([0, []])],
+    ['a flock of birds over the sea', (s) => expect([s.things, s.ignored]).toEqual([{ birds: 7 }, []])],
+    ['a flock of seagulls', (s) => expect([s.things.birds, s.things.sheep, s.ignored]).toEqual([7, undefined, []])],
+    ['a herd of elephant', (s) => expect([s.things.elephants, s.ignored]).toEqual([3, []])],
     ['a flock at dusk', (s) => expect([s.ignored, s.recognised]).toEqual([['flock'], 1])],
     ['a man in space', (s) => expect([s.family, s.ignored, s.things.people]).toEqual(['space', [], 1])],
     ['people in space', (s) => expect([s.family, s.ignored]).toEqual(['space', []])],

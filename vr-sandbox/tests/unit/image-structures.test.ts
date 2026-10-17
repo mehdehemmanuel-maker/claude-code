@@ -31,9 +31,9 @@ const lum = (d: Float32Array, i: number) => d[i]! * 0.2126 + d[i + 1]! * 0.7152 
 
 describe('the reader knows every structure by its words, keyed as before', () => {
   it('keeps houses and buildings as the keys in scene.things, through the registered rows', () => {
-    expect(read('a cabin in a foggy forest at dawn').things).toEqual({ houses: 1, trees: 0, hills: 0 });
+    expect(read('a cabin in a foggy forest at dawn').things).toEqual({ houses: 1, trees: 9, hills: 2 });
     expect(read('a farmhouse by a dirt road').instances[0]).toMatchObject({ kind: 'houses', word: 'farmhouse' });
-    expect(read(CITY).things).toEqual({ buildings: 0 });
+    expect(read(CITY).things).toEqual({ buildings: 11 });
     expect(read('four buildings').things).toEqual({ buildings: 4 });
     expect(read('a village at dusk').things.houses).toBe(6);
     expect(things.find((t) => t.id === 'house')).toBe(HOUSE_THING);
@@ -46,15 +46,15 @@ describe('the reader knows every structure by its words, keyed as before', () =>
   it('reads every new kind with nothing ignored', () => {
     const cases: [string, Record<string, number>][] = [
       ['a lighthouse on a rocky coast in a storm', { lighthouse: 1, rocks: 1 }],
-      ['a windmill in a tulip field', { windmill: 1, flowers: 1, hills: 0 }], // a tulip: the flowers thing, one
+      ['a windmill in a tulip field', { windmill: 1, flowers: 1, hills: 2 }], // a tulip: the flowers thing, one
       ['a castle on a hill', { castle: 1, hills: 1 }],
       ['a bridge over a river', { bridge: 1 }],
-      ['a campfire and a tent under the stars', { campfire: 1, tent: 1, stars: 1, hills: 0 }],
-      ['a church in a village at dusk', { church: 1, houses: 6, hills: 0 }],
-      ['a chapel', { church: 1, hills: 0 }],
-      ['a fence and a bench in a meadow, telegraph poles along a road', { fence: 1, bench: 1, pole: 0, hills: 0 }],
-      ['boulders in a meadow', { rocks: 0, hills: 0 }],
-      ['three streetlamps', { streetlamp: 3, hills: 0 }],
+      ['a campfire and a tent under the stars', { campfire: 1, tent: 1, stars: 1, hills: 2 }],
+      ['a church in a village at dusk', { church: 1, houses: 6, hills: 2 }],
+      ['a chapel', { church: 1, hills: 2 }],
+      ['a fence and a bench in a meadow, telegraph poles along a road', { fence: 1, bench: 1, pole: 5, hills: 2 }],
+      ['boulders in a meadow', { rocks: 4, hills: 2 }],
+      ['three streetlamps', { streetlamp: 3, hills: 2 }],
     ];
     for (const [prompt, want] of cases) {
       const s = read(prompt);
@@ -71,7 +71,7 @@ describe('the reader knows every structure by its words, keyed as before', () =>
     expect(alone.overridden).toContainEqual({ what: 'ground', from: 'grass', to: 'water', because: 'lighthouse' });
     expect(read('a lighthouse by a lake').overridden.some((o) => o.because === 'lighthouse')).toBe(false);
     const street = read('a busy street with cars');
-    expect(street.things).toEqual({ cars: 0, buildings: 0, streetlamp: 0 });
+    expect(street.things).toEqual({ cars: 2, buildings: 11, streetlamp: 4 });
     expect(street.ignored).toEqual(['busy']);
     expect(read('a dragon over a castle').ignored).toEqual([]); // the dragon is creatures-flyers'
     expect(houseKind('cabin')).toBe('cabin');
@@ -95,16 +95,16 @@ describe('the reader knows every structure by its words, keyed as before', () =>
       expect(s.ignored, prompt).toEqual(ignored);
       expect(Object.keys(s.things).filter((k) => kinds.includes(k)), prompt).toEqual([]);
     }
-    expect(read('telegraph poles along a road').things).toMatchObject({ pole: 0 });
-    expect(read('utility poles').things).toMatchObject({ pole: 0 });
-    expect(read('lamp posts in the fog').things).toMatchObject({ streetlamp: 0 });
+    expect(read('telegraph poles along a road').things).toMatchObject({ pole: 5 });
+    expect(read('utility poles').things).toMatchObject({ pole: 5 });
+    expect(read('lamp posts in the fog').things).toMatchObject({ streetlamp: 4 });
     const lamps = read('street lamps at night'); // the lamps, and the street they stand on
-    expect([lamps.things.streetlamp, lamps.things.buildings, lamps.road, lamps.ignored]).toEqual([0, 0, true, []]);
+    expect([lamps.things.streetlamp, lamps.things.buildings, lamps.road, lamps.ignored]).toEqual([4, 11, true, []]);
     expect(read('a windmill').things.windmill).toBe(1);
     expect(read('a bonfire on the beach').things.campfire).toBe(1);
-    expect(read('pylons across a field').things.pole).toBe(0);
+    expect(read('pylons across a field').things.pole).toBe(5);
     const town = read('a small town in the hills at dusk'); // a town is the usual buildings, not a city's skyline
-    expect(town.things).toEqual({ buildings: 0, hills: 0 });
+    expect(town.things).toEqual({ buildings: 11, hills: 2 });
     expect(citySkyline(town)).toBe(false);
     expect(paint(town, { width: 160, height: 90, seed: 7 }).layout.skyline).toBeUndefined();
   });

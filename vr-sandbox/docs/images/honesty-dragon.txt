@@ -1,4 +1,4 @@
 $ node tools/image.mjs "a dragon over a castle, a wizard on the drawbridge" --size 640x360 --seed 1
-read as: day, grass, hills (added to break the horizon)
-not understood: dragon, castle, wizard, drawbridge
-nothing in these words is understood (dragon, castle, wizard, drawbridge): painting the default day meadow
+read as: day, grass, dragons 1, castle 1, hills (added to break the horizon)
+not understood: wizard, drawbridge
+visible: dragons 1/1, castle 1/1

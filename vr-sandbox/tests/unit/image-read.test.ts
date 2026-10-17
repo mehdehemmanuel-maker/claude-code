@@ -53,7 +53,7 @@ describe('the reader', () => {
       expect('trees' in s.things).toBe(false); // nothing for the painter's usual default to fill
     }],
     ['a pine forest', (s) => {
-      expect(s.things.trees).toBe(0);
+      expect(s.things.trees).toBe(9);
       expect(inst(s, 'trees')[0]).toMatchObject({ usual: true, count: 9 });
     }],
     ['two mountains', (s) => { expect(s.things.mountains).toBe(2); expect(inst(s, 'mountains')[0]!.count).toBe(2); }],
@@ -80,7 +80,7 @@ describe('the reader', () => {
     ['a moonlit forest', (s) => {
       expect(s.time).toBe('night');
       expect(s.things.moon).toBe(1);
-      expect(s.things.trees).toBe(0);
+      expect(s.things.trees).toBe(9);
     }],
     ['a farmhouse by a dirt road', (s) => {
       expect(s.things.houses).toBe(1);
@@ -97,7 +97,7 @@ describe('the reader', () => {
       expect('mountains' in s.things).toBe(false);
       expect(s.ignored).toEqual(['kitchen', 'range']);
     }],
-    ['a mountain range at dawn', (s) => { expect(s.things.mountains).toBe(0); expect(s.ignored).toEqual([]); }],
+    ['a mountain range at dawn', (s) => { expect(s.things.mountains).toBe(3); expect(s.ignored).toEqual([]); }],
     ['a bridge over a river in autumn', (s) => {
       expect(s.river).toBe(true);
       expect(s.ground).toBe('water');
@@ -105,7 +105,7 @@ describe('the reader', () => {
       expect(s.things.bridge).toBe(1); // hook for structures-skyline: a bridge is a thing now, not ignored
     }],
     ['a cityscape at golden hour', (s) => {
-      expect(s.things.buildings).toBe(0);
+      expect(s.things.buildings).toBe(11);
       expect(s.time).toBe('sunset');
       expect(s.hour).toBe(17);
     }],
@@ -136,7 +136,7 @@ describe('the reader', () => {
     ['a train track', (s) => { expect(s.road).toBe(true); expect(s.ignored).toEqual([]); }], // train licensed track
     ['a race track with karts', (s) => {
       expect(s.road).toBe(true);
-      expect(s.things.karts).toBe(0); // hook for vehicles: karts are their own thing now
+      expect(s.things.karts).toBe(3); // hook for vehicles: karts are their own thing now
       expect(s.ignored).toEqual([]);
       expect(strictRefusal(s)).toBeNull();
     }],
@@ -155,7 +155,7 @@ describe('the reader', () => {
     }],
     ['a gray wolf', (s) => { expect(s.clouds).toBe(0.35); expect(s.colours.wolves).toBe('gray'); }], // creatures-flyers
     ['a grey day', (s) => expect(s.clouds).toBe(0.9)],
-    ['no clouds, trees', (s) => { expect(s.clouds).toBe(0.05); expect(s.things.trees).toBe(0); }],
+    ['no clouds, trees', (s) => { expect(s.clouds).toBe(0.05); expect(s.things.trees).toBe(9); }],
     ['watercolour of a harbour', (s) => {
       expect(s.style).toBe('watercolour');
       expect(s.things).toEqual({ boats: 3, buildings: 4 });
@@ -164,7 +164,7 @@ describe('the reader', () => {
     ['a village at dusk', (s) => { expect(s.things.houses).toBe(6); expect(s.time).toBe('sunset'); }],
     ['a busy street with people and cars', (s) => {
       expect(s.road).toBe(true);
-      expect(s.things.buildings).toBe(0);
+      expect(s.things.buildings).toBe(11);
       expect(s.ignored).toEqual(['busy']); // hook for creatures-flyers: people are figures now
     }],
     ['a palm tree on a tropical island', (s) => {
@@ -243,7 +243,7 @@ describe('the reader', () => {
   it('reads the four header prompts as before: the same things, time and ground', () => {
     const kart = read('a red go-kart on a wet road at dusk, mountains behind');
     expect([kart.things, kart.colours, kart.time, kart.ground, kart.road, kart.wet]).toEqual([
-      { karts: 1, mountains: 0 }, { karts: 'red' }, 'sunset', 'grass', true, true, // hook for vehicles: a kart
+      { karts: 1, mountains: 3 }, { karts: 'red' }, 'sunset', 'grass', true, true, // hook for vehicles: a kart
     ]);
     expect(kart.rain).toBe(0); // the one change: a wet road is wet, it is not raining
     const lake = read('three pine trees by a lake under a full moon, snow');
@@ -251,10 +251,10 @@ describe('the reader', () => {
       { trees: 3, moon: 1 }, 'night', 'water', 'snow', true, 0.7, 'full',
     ]);
     const city = read('a city skyline at night in the rain');
-    expect([city.things, city.time, city.ground, city.rain]).toEqual([{ buildings: 0 }, 'night', 'pavement', 0.6]);
+    expect([city.things, city.time, city.ground, city.rain]).toEqual([{ buildings: 11 }, 'night', 'pavement', 0.6]);
     const cabin = read('a cabin in a foggy forest at dawn');
     expect([cabin.things, cabin.time, cabin.ground, cabin.fog]).toEqual([
-      { houses: 1, trees: 0, hills: 0 }, 'dawn', 'grass', 0.6,
+      { houses: 1, trees: 9, hills: 2 }, 'dawn', 'grass', 0.6,
     ]);
     for (const s of [kart, lake, city, cabin]) expect(s.ignored).toEqual([]);
   });
@@ -328,7 +328,7 @@ describe('the honest shell', () => {
     const scene = JSON.parse(texts['Comment']!);
     for (const key of ['time', 'ground', 'things', 'ignored']) expect(key in scene, key).toBe(true);
     expect('prompt' in scene).toBe(false);
-    expect(scene.things).toEqual({ cars: 1, mountains: 0 });
+    expect(scene.things).toEqual({ cars: 1, mountains: 3 });
     const plain = png(paint(read('a tree'), { width: 4, height: 3, seed: 1 }));
     expect(chunks(plain).map((c) => c.type)).toEqual(['IHDR', 'IDAT', 'IEND']);
     const comment = { text: { Comment: JSON.stringify({ ignored: ['山と湖'] }) } };

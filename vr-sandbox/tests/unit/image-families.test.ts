@@ -124,7 +124,7 @@ describe('the reader with the families: honesty', () => {
     expect(read('city lights at night').things.aurora).toBeUndefined();
     expect(read('the northern lights').ignored).toEqual([]);
     expect(read('the northern lights').things.aurora).toBe(1);
-    expect(read('fish in a lake')).toMatchObject({ ignored: [], things: { fish: 0 } }); // creatures-flyers' fish
+    expect(read('fish in a lake')).toMatchObject({ ignored: [], things: { fish: 4 } }); // creatures' usual four
     expect(read('a reef with fish').underwater?.fish).toBe(6);
     expect(read('three fish on a reef')).toMatchObject({ family: 'underwater', ignored: [] });
     expect(read('three fish on a reef').underwater?.fish).toBe(3);
@@ -141,9 +141,9 @@ describe('the reader with the families: honesty', () => {
     expect(read('lightning over the sea in a storm')).toMatchObject({ storm: true, things: { lightning: 1 } });
     expect(read('a cactus in the desert at noon')).toMatchObject({ ground: 'sand', hour: 12, things: { cactus: 1 } });
     expect(read('a cactus').ground).toBe('sand'); // a cactus stands on sand unless a land is named
-    expect(read('cacti').things.cactus).toBe(0); // bare, the usual three (the reader's /s$/ test misses 'cacti')
+    expect(read('cacti').things.cactus).toBe(3); // bare, the usual three (the reader's /s$/ test misses 'cacti')
     expect(read('two cacti').things.cactus).toBe(2);
-    expect(read('cactuses').things.cactus).toBe(0);
+    expect(read('cactuses').things.cactus).toBe(3);
     expect(read('one cactus').things.cactus).toBe(1);
     expect(read('a cactus in a meadow').ground).toBe('grass');
     expect(read('a volcano erupting at night')).toMatchObject({ erupting: true, time: 'night', ignored: [] });
@@ -165,7 +165,7 @@ describe('the review of the package: what a word claims, what the report says, w
     expect(read('a northern town at noon').things.aurora).toBeUndefined();
     for (const p of ['the northern lights', 'northern-lights over the sea', 'the aurora', 'aurora borealis']) {
       expect(read(p), p).toMatchObject({ time: 'night', ignored: [] });
-      expect([0, 1], p).toContain(read(p).things.aurora); // 0 is the usual one ('aurora borealis': two mentions merged)
+      expect(read(p).things.aurora, p).toBe(1); // the usual one ('aurora borealis': two mentions, one count)
     }
   });
 
