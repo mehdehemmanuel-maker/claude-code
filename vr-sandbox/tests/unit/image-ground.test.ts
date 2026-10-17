@@ -16,7 +16,7 @@ const hash = (str: string) => {
   return h >>> 0;
 };
 /** The four header prompts' layout digests as placement-critic lays them out (see 'keeps the four header…'). */
-const HEADER_LAYOUTS = [2882075132, 2255982723, 2533846824, 1999445943];
+const HEADER_LAYOUTS = [550378359, 2255982723, 2533846824, 1999445943];
 
 const W = 640, H = 360;
 const lum = (d: Float32Array, i: number) => 0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!;
@@ -153,9 +153,11 @@ describe('the ground', () => {
     expect(dashes('a farmhouse by a dirt road').n).toBe(0);
     const { n, img, ctx } = dashes('a yellow truck on a desert highway at noon');
     expect(n).toBeGreaterThan(20);
-    // the asphalt at the foot of the picture, beside the centre line, is grey and not near-black (measured 0.37)
+    // the asphalt at the foot of the picture, beside the centre line, is grey and not near-black: 0.229 measured
+    // from placement's road eye (2.5 m, the foot row 12 m away; 0.289 from a standing eye), the bug it guards
+    // against (the knot grid asleep) gave 0.152
     const y = H - 4, rc = Math.round(ctx.roadX!(y)), i = (y * W + rc + 12) * 3;
-    expect(lum(img.data, i)).toBeGreaterThan(0.25);
+    expect(lum(img.data, i)).toBeGreaterThan(0.2);
     expect(Math.abs(img.data[i]! - img.data[i + 2]!)).toBeLessThan(0.08);
     // the centre drifts: not the same column at every depth
     const xs = [0.2, 0.4, 0.6, 0.8].map((near) => roadDrift(near));

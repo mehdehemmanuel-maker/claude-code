@@ -17,6 +17,7 @@ import { drawers, thingsPass } from './things.mjs';
 import { attach, frameCamera } from './draw.mjs';
 import { styleFor } from './styles.mjs';
 import { families, register, styles, things } from './registry.mjs';
+export * from './things/vehicles.mjs'; // hook for vehicles: registers kart, car, truck, semi… and exports VEHICLES
 
 // The registries, as registry.mjs holds them: the same arrays, so nothing importing them from here breaks.
 export {

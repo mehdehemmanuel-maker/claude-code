@@ -540,40 +540,6 @@ function building(ctx, inst) { // a tower of floors with windows, some lit
   return { x: left, y: fy - hgt, w, h: hgt };
 }
 
-const PAINTWORK = [0.75, 0.12, 0.10], GLASS = [0.3, 0.4, 0.5], HUB = [0.6, 0.6, 0.62], TYRE = [0.06, 0.06, 0.06];
-const HEADLAMP = [1, 0.95, 0.75];
-
-function car(ctx, inst) { // a body, a cabin, two wheels, lamps lit at night, seen from the side (vehicles redraws it)
-  const { W, L, scene, lit, sun, rect, poly, disc } = ctx, C = SIZES.car;
-  const { fy, zm, shadow, k } = stance(ctx, inst), s = stance(ctx, inst).s * k, len = C.l * s; // 4.5 m long
-  const x0 = scene.road ? inst.ux * W : clamp(inst.ux * W, len * 0.55, W - len * 0.55), xm = (x0 - W / 2) * k / s;
-  const body = inst.colour ?? PAINTWORK, r = C.wheel / 2 * s, c = [0, 0, 0]; // its own colour: a red car, a blue car
-  shadow(xm, zm, { w: C.l * k, d: C.w * k }, C.h * 0.85 * k);
-  const sill = fy - 0.3 * s, shoulder = fy - 0.95 * s, roof = fy - C.h * s, bodyH = sill - shoulder;
-  rect(x0 - len / 2, shoulder, len, bodyH, (x, y) => {
-    const side = (x - x0) / len, up = (sill - y) / bodyH;
-    return lit(body, 0.45 + 0.5 * up + 0.2 * (sun.left ? -side : side), c);
-  });
-  const glass = mix(lit(GLASS, 0.9), L.horizon, 0.35), top = lit(body, 0.8);
-  const cab = (inset, dy) => { // the cabin's trapezoid, pulled in by `inset` of the length and `dy` rows: the glass
-    const hb = len * 0.33 - inset, ht = len * 0.23 - inset, front = len * 0.05, yb = shoulder - dy, yt = roof + dy;
-    return [x0 - hb + front, yb, x0 + hb, yb, x0 + ht, yt, x0 - ht + front, yt];
-  };
-  poly(cab(0, 0), top);
-  poly(cab(len * 0.03, (shoulder - roof) * 0.1), glass);
-  const hub = lit(HUB, 0.9), tyre = lit(TYRE, 0.6);
-  for (const wx of [x0 - len * 0.31, x0 + len * 0.31]) {
-    disc(wx, fy - r, r, tyre);
-    disc(wx, fy - r, r * 0.55, hub);
-  }
-  if (scene.time === 'night' || scene.time === 'sunset') {
-    for (const lx of [x0 - len * 0.47, x0 + len * 0.47]) {
-      rect(lx - len * 0.02, fy - 0.85 * s, len * 0.04, 0.2 * s, HEADLAMP);
-    }
-  }
-  return { x: x0 - len / 2, y: roof, w: len, h: fy - roof };
-}
-
 const HULL = [0.85, 0.85, 0.88], MAST = [0.3, 0.2, 0.15], SAIL = [0.95, 0.95, 0.93];
 
 function boat(ctx, inst) { // a hull and a sail, on the water, with a smear of reflection under it
@@ -640,9 +606,6 @@ export const drawers = [
     id: 'boat', word: 'boats', match: THINGS.boats, usual: 2, band: [0.03, 0.2], depth: [40, 250], onWater: true,
     size: { w: SIZES.sailboat.hull, h: SIZES.sailboat.mast, d: SIZES.sailboat.beam }, draw: boat,
   },
-  {
-    id: 'car', word: 'cars', match: THINGS.cars, usual: 2, band: [0.12, 0.55], depth: [14, 60], onRoad: true,
-    size: { w: SIZES.car.l, h: SIZES.car.h, d: SIZES.car.w }, draw: car,
-  },
+  // hook for vehicles: the car drawer is tools/image/things/vehicles.mjs's now, with every other vehicle
   { id: 'bird', word: 'birds', match: THINGS.birds, usual: 7, band: null, depth: [25, 120], sky: true, draw: bird },
 ];

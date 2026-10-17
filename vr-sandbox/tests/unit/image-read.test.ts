@@ -136,7 +136,7 @@ describe('the reader', () => {
     ['a train track', (s) => { expect(s.road).toBe(true); expect(s.ignored).toEqual([]); }], // train licensed track
     ['a race track with karts', (s) => {
       expect(s.road).toBe(true);
-      expect(s.things.cars).toBe(0);
+      expect(s.things.karts).toBe(0); // hook for vehicles: karts are their own thing now
       expect(s.ignored).toEqual([]);
       expect(strictRefusal(s)).toBeNull();
     }],
@@ -195,8 +195,8 @@ describe('the reader', () => {
       { what: 'hills', from: 'none', to: 'the usual', because: 'nothing else breaks the horizon' },
     ]);
     const forklift = read('a white forklift in a warehouse yard at noon, a person standing beside it');
-    expect(forklift.ignored).toEqual(['forklift', 'warehouse', 'yard', 'person', 'standing', 'beside']);
-    expect(forklift.recognised).toBe(1); // noon
+    expect(forklift.ignored).toEqual(['warehouse', 'yard', 'person', 'standing', 'beside']); // hook for vehicles
+    expect(forklift.recognised).toBe(2); // noon, and the forklift
     expect(forklift.hour).toBe(12);
     const boat = read('a boat in the desert');
     expect(boat.overridden).toContainEqual({ what: 'ground', from: 'sand', to: 'water', because: 'boats' });
@@ -241,7 +241,7 @@ describe('the reader', () => {
   it('reads the four header prompts as before: the same things, time and ground', () => {
     const kart = read('a red go-kart on a wet road at dusk, mountains behind');
     expect([kart.things, kart.colours, kart.time, kart.ground, kart.road, kart.wet]).toEqual([
-      { cars: 1, mountains: 0 }, { cars: 'red' }, 'sunset', 'grass', true, true,
+      { karts: 1, mountains: 0 }, { karts: 'red' }, 'sunset', 'grass', true, true, // hook for vehicles: a kart
     ]);
     expect(kart.rain).toBe(0); // the one change: a wet road is wet, it is not raining
     const lake = read('three pine trees by a lake under a full moon, snow');
@@ -281,11 +281,11 @@ describe('the honest shell', () => {
   it('describes the reading as JSON with the honesty fields', () => {
     const forklift = 'a white forklift in a warehouse yard at noon, a person standing beside it';
     const j = JSON.parse(run(forklift, '--describe').out);
-    expect(j.ignored).toEqual(['forklift', 'warehouse', 'yard', 'person', 'standing', 'beside']);
+    expect(j.ignored).toEqual(['warehouse', 'yard', 'person', 'standing', 'beside']); // hook for vehicles
     const keys = ['instances', 'ignored', 'overridden', 'recognised', 'hour', 'season', 'river', 'frozen', 'roadKind'];
     keys.push('wet');
     for (const key of keys) expect(key in j, key).toBe(true);
-    expect(j.recognised).toBe(1);
+    expect(j.recognised).toBe(2);
     const hello = JSON.parse(run('the word HELLO in big letters, pixel art', '--describe').out);
     expect(hello).toMatchObject({ text: 'HELLO', style: 'pixel' });
   });

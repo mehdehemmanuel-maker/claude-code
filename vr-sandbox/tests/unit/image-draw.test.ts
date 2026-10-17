@@ -53,14 +53,18 @@ describe('the camera', () => {
     expect(cam.groundZ(100)).toBe(Infinity);
   });
 
-  it('agrees with the ground pass: a car on the road is 1.5 to 2.5 car lengths narrower than the two lanes', () => {
+  it('agrees with the ground pass: a car on the road, seen from behind, is 2 to 4 car widths in the two lanes', () => {
+    // hook for vehicles: the car heads away down the road now (a rear three-quarter view), so its box across the
+    // picture is its 1.78 m width plus the flank it turns toward the viewer, not its 4.5 m length
     for (const seed of [1, 7, 23]) {
       const { img, ctx } = painted('a red car on a road at dusk', 640, 360, seed);
       const car = img.layout.things.find((t) => t.kind === 'car')!;
       const road = SIZES.lane * SIZES.lanes * ctx.camera.focal / ctx.camera.groundZ(car.y + car.h);
-      expect(road / car.w).toBeGreaterThan(1.5);
-      expect(road / car.w).toBeLessThan(2.5);
-      expect(car.w * ctx.camera.groundZ(car.y + car.h) / ctx.camera.focal).toBeCloseTo(SIZES.car.l, 0);
+      expect(road / car.w).toBeGreaterThan(1.8);
+      expect(road / car.w).toBeLessThan(4);
+      const across = car.w * ctx.camera.groundZ(car.y + car.h) / ctx.camera.focal;
+      expect(across).toBeGreaterThan(SIZES.car.w * 0.95);
+      expect(across).toBeLessThan(SIZES.car.w + SIZES.car.l * 0.4);
     }
   });
 
@@ -146,7 +150,9 @@ describe('the light', () => {
     const day = shade('a car on a road'), dusk = shade('a red car on a road at dusk');
     const storm = shade('a car on a road in a storm');
     expect(Math.max(...day.rows)).toBeGreaterThan(0.02); // under it
-    expect(Math.abs(day.rows[12]!)).toBeLessThan(0.005); // and short: gone a few rows down
+    // and short: gone a few rows down. The car heads away now (vehicles), so its footprint reaches 0.99 m behind
+    // the rear axle its box ends at (8 rows at 640x360, zm 15 m) and the shadow leans nearer: gone at row 14 measured
+    expect(Math.abs(day.rows[15]!)).toBeLessThan(0.005);
     expect(dusk.rows[12]).toBeGreaterThan(0.01); // at dusk it is still there twelve rows nearer the viewer
     expect(storm.visible).toBe(false);
     expect(Math.max(...storm.rows.map(Math.abs))).toBeLessThan(0.005);

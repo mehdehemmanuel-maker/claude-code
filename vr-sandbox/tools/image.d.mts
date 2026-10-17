@@ -405,12 +405,15 @@ export interface Ctx {
 // xm/zm (metres right of the lens axis and away) and instance (the reader's record). camera() takes the eye
 // frameCamera chose (declared above); ThingEntry.size gained d (above).
 export type Heading = 'away' | 'toward' | 'side';
+/** The shared interface of the round, declared once: placement sets these, every drawer (vehicles too) reads them. */
 export interface ThingInstance {
-  colour?: number[];
-  size?: number;
-  heading?: Heading;
-  xm?: number;
-  instance?: Instance;
+  colour?: number[]; // [r, g, b] in 0..1 from the words, undefined when they gave none
+  size?: number; // a factor, 1 by default: tiny 0.5, huge 2
+  heading?: Heading; // 'away' for a vehicle on a road seen from behind
+  xm?: number; // metres right of the lens axis (zm, above, is the depth)
+  yaw?: number; // radians the nose turns from the heading; without it, on the road, a little toward the near side
+  instance?: Instance; // the reader's record
+  word?: string; // the word that named it, when no instance record is given
 }
 export interface ThingEntry { onRoad?: boolean } // stands on the road at a lane's centre, heading along it
 /** What frameCamera chose: the eye height in metres, the lens, the ground share the fit was made for, for what. */
@@ -474,3 +477,73 @@ export declare function place(ctx: Ctx, want: Want, i: number, placed: Placed[],
 export declare function critic(
   ctx: Ctx, placed: Placed[], list?: Want[],
 ): { tally: Record<string, [number, number]>; again: Placed[] };
+
+// ── vehicles (tools/image/things/vehicles.mjs, re-exported by core.mjs) ──
+// Every vehicle kind from one rule and a figures table in metres (each row cites src/nexus/machines.ts or says
+// 'typical'), drawn as projected prisms and wheels at the instance's heading. The shared ThingInstance fields it
+// reads (colour, size, heading, xm, yaw, instance, word) and ThingEntry.onRoad are declared once, above.
+
+export type Cab = 'none' | 'forward' | 'mid' | 'rear';
+/** An axle: u metres behind the nose, its tyre's radius and width, its track (0 for a single-track machine). */
+export interface VehicleAxle { u: number; r: number; w: number; track: number; dual?: boolean }
+export interface VehicleBox {
+  length: number; height: number; startsAt: number; floor?: number; rail?: number; width?: number;
+}
+export interface VehicleRow {
+  name: string;
+  shape: 'kart' | 'car' | 'pickup' | 'bus' | 'truck' | 'semi' | 'forklift' | 'atv' | 'bike' | 'bicycle' | 'tractor';
+  source: string; // what is published (with its machines.ts lines) and what is typical
+  length: number;
+  width: number;
+  height: number;
+  wheelbase: number;
+  overhangs: { front: number; rear: number };
+  wheelDiameter: { front: number; rear: number };
+  clearance: number;
+  bodyHeight: number | null;
+  cab: Cab;
+  cabLength: number | null;
+  cabHeight?: number;
+  hoodLength?: number;
+  tractorLength?: number; // the semi: its tractor alone (length is the combination)
+  bed: VehicleBox | null;
+  trailer: VehicleBox | null;
+  axles: VehicleAxle[];
+  openSeat: boolean;
+  rollHoop: boolean; // false on every row: none in machines.ts (a rental kart's seat shell to 0.5 m stands in)
+  mast: { u: [number, number]; width: number; height: number } | null;
+  roofSign: { u: [number, number]; w: number; h: [number, number] } | null;
+  lamps: { front: number | null; rear: number | null }; // heights, null where the machine carries none
+  lines?: {
+    nose: number; cowl: number; belt: number; roofF: number; roofR: number; roof: number; deck: number; tail: number;
+  };
+  guard?: { top: number; posts: number[] };
+  seat?: number;
+  rake?: number;
+  [more: string]: unknown;
+}
+export type VehicleKind =
+  | 'kart' | 'car' | 'hatchback' | 'pickup' | 'truck' | 'semi' | 'suv' | 'van' | 'bus' | 'taxi' | 'forklift'
+  | 'motorcycle' | 'dirtbike' | 'bicycle' | 'atv' | 'tractor';
+export declare const VEHICLES: Record<VehicleKind, VehicleRow>;
+/** The words each registered kind is read by (hatchback is a word of car, pickup of truck). */
+export declare const VEHICLE_WORDS: Record<string, RegExp>;
+/** Paintwork an uncoloured vehicle picks from by the seed. */
+export declare const PALETTE: number[][];
+export declare const VEHICLE_THINGS: ThingEntry[];
+/** A part in the vehicle's own frame (u from the nose, v right, h up, metres). */
+export interface VehiclePart {
+  kind: 'prism' | 'wheel' | 'tube' | 'ring' | 'disc' | 'lamp';
+  axis?: 'u' | 'v' | 'h';
+  u?: number;
+  v?: number;
+  h?: number;
+  r?: number;
+  w?: number;
+  [more: string]: unknown;
+}
+export declare function vehicleRow(kind: string, word?: string): VehicleRow;
+export declare function vehicleParts(
+  row: VehicleRow, colour: number[], glass?: number[], uncoloured?: boolean,
+): VehiclePart[];
+export declare function drawVehicle(ctx: Ctx, inst: ThingInstance, kind: string): Omit<ThingBox, 'kind'>;
