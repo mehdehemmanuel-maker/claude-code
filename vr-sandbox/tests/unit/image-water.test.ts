@@ -41,8 +41,9 @@ describe('water: the shoreline, the horizon and what the water reflects', () => 
   it('mirrors the snowy peaks in the lake: the lake under a white peak is lighter than under the open sky', () => {
     // The lake row that mirrors the sky row 0.17 H over the horizon (the water is foreshortened 0.9), the columns
     // sorted by what stands at that height (white: a snow peak; blue: open sky), the sun's glitter lane left out.
-    // The mirror carries about 65% of the source's own contrast: measured at seeds (none, 1, 2, 3, 5, 8) the source
-    // contrast is 0.137-0.161 and the mirror's 0.085-0.100; the base code (the snapshot before the ranges) gave 0.
+    // A mirror cannot exceed its source: the snow-sky contrast at that height is only 0.137-0.161 (seeds none, 1, 2,
+    // 3, 5, 8), and with the far water 90% sky (waterPixel) the mirror carries 69-80% of it, 0.096-0.113: the plan's
+    // 0.1 at five seeds of six (seed 5 gives 0.096; the base code, the snapshot before the ranges, gave 0).
     for (const seed of [undefined, 2, 8]) {
       const img = without(read('snowy mountains over a lake on a clear day'), ['finishPass'], seed);
       const hy = img.layout.horizon * H, shore = img.layout.shore! * H, sunX = img.layout.sun[0];
@@ -73,7 +74,31 @@ describe('water: the shoreline, the horizon and what the water reflects', () => 
       const source = mean(peakSrc) - mean(skySrc), mirror = mean(peak) - mean(sky);
       expect(source, `seed ${seed}: the peaks are lighter than the sky`).toBeGreaterThan(0.1);
       expect(mirror, `seed ${seed}: the lake under the peaks (source contrast ${source.toFixed(3)})`)
-        .toBeGreaterThan(Math.max(0.07, 0.6 * source));
+        .toBeGreaterThanOrEqual(0.1);
+    }
+  });
+
+  it('keeps the land things\' feet dry: the shore row under every column a thing spans is above the foot', () => {
+    // The shore wanders (shoreLine) about the row shoreFor moved it to; thingsPass (ashore) stands each land thing
+    // past the deepest shore row under it. Before: the beach house waded in 65-100% of its columns, by up to 12 px.
+    const prompts = ['a blue house on a beach, clear day', 'a car on the beach'];
+    prompts.push('a field of flowers by a lake at sunset'); // the flowers' land band keeps the clump off the shoreline
+    for (const p of prompts) {
+      for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+        const img = paint(read(p), { width: 960, height: 540, seed }), line = img.layout.shoreLine!;
+        const hy = img.layout.horizon * 540;
+        for (const t of img.layout.things) {
+          const foot = t.y + t.h;
+          if (t.kind === 'boat' || t.kind === 'bird' || foot < hy) continue;
+          let wet = 0;
+          for (let x = Math.max(0, Math.floor(t.x)); x <= Math.min(959, Math.ceil(t.x + t.w)); x++) {
+            if (line[x]! * 540 > foot) wet++;
+          }
+          expect(wet, `${p} seed ${seed}: ${t.kind} columns in the water`).toBe(0);
+          expect(foot - Math.max(...line.slice(Math.floor(t.x), Math.ceil(t.x + t.w))) * 540, `${p} seed ${seed}: dry`)
+            .toBeGreaterThan(0.02 * (540 - hy)); // a margin past the waterline, never on the shoreline
+        }
+      }
     }
   });
 

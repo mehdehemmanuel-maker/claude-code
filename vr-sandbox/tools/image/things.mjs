@@ -24,19 +24,28 @@ function nearest(ctx, size) {
 
 const WATER_LEAST = 0.3; // the water keeps at least this share of the ground band when the shore moves for a thing
 const SHORE_STEP = 1.01; // a thing the shore moved for stands this much short of the waterline, not on it
+/**
+ * The shore's geometry the placement and the ground pass agree on (water-reflections): the shoreline wanders by
+ * `wander` of the ground band about the shore row (groundPass's shoreline()), and a land thing stands `margin` of the
+ * band past the deepest shore row under it (ashore(), below).
+ */
+export const SHORE = { wander: 0.18, margin: 0.04 };
 
 /**
  * The shore row the named land things ask for: moved toward the horizon until the widest of them that can stand on
  * the near shore does (a house on a beach is on the beach), never leaving the water less than WATER_LEAST of the
  * ground band; the row given when nothing needs it. A tree would push the shore to the horizon: it keeps the far bank.
+ * The row is set back by the shore's wander and the margin, so the thing stood past the deepest wander is still no
+ * nearer than its own row (no wider than NEAR_WIDTH).
  */
 export function shoreFor(ctx, shoreY) {
   const { H, hy, usual } = ctx, least = hy + (H - hy) * WATER_LEAST;
+  const back = (H - hy) * (SHORE.wander / 2 + SHORE.margin);
   let row = shoreY;
   ctx.farBankNeeded = false; // a thing that keeps the far bank: groundPass paints land under it (water-reflections)
   for (const e of ctx.things) {
     if (e.sky || e.onWater || !e.size || usual(keyOf(e), e.usual) <= 0) continue;
-    const own = ctx.project(0, nearest(ctx, e.size) * SHORE_STEP).y;
+    const own = ctx.project(0, nearest(ctx, e.size) * SHORE_STEP).y - back;
     if (own >= least) row = Math.min(row, own);
     else ctx.farBankNeeded = true;
   }
@@ -75,6 +84,29 @@ export function place(ctx, entry, n, placed) {
   }
 }
 
+/**
+ * The shore wanders (ctx.shoreLine, from groundPass), so a land thing stood against the mean shore row would wade
+ * where the water reaches below it: its foot is moved down to SHORE.margin of the ground band past the deepest shore
+ * row under the columns it spans (its depth read back from the row, so it grows a little nearer; a second look
+ * covers the columns it grew into). Nothing on the far bank, on the water or in the sky moves, and no random draw is
+ * made, so every other composition stays. water-reflections' agreement between the shore and the placement.
+ */
+function ashore(ctx, entry, inst) {
+  const { W, H, hy, scene, shoreLine } = ctx, size = entry.size ?? { w: 1, h: 1 };
+  if (scene.ground !== 'water' || entry.onWater || entry.sky || !shoreLine || inst.fy < hy) return;
+  for (let look = 0; look < 2; look++) {
+    const half = size.w * ctx.camera.focal / inst.zm / 2, x0 = clamp(inst.ux * W, half * 1.2, W - half * 1.2);
+    let deepest = 0; // the drawers clamp their own x0 inside the frame and span about it: looked at a little wider
+    for (let x = Math.max(0, Math.floor(x0 - half * 1.3)); x <= Math.min(W - 1, Math.ceil(x0 + half * 1.3)); x++) {
+      if (shoreLine[x] > deepest) deepest = shoreLine[x];
+    }
+    const foot = deepest + (H - hy) * SHORE.margin;
+    if (deepest >= H || inst.fy >= foot) return;
+    inst.fy = foot;
+    inst.zm = ctx.groundZ(foot);
+  }
+}
+
 /** Places and draws every registered thing the scene names, far to near, then the flyers; fills layout.things. */
 export function thingsPass(ctx) {
   const { rand, horizon, layout, usual } = ctx;
@@ -85,7 +117,8 @@ export function thingsPass(ctx) {
   placed.sort((a, b) => a.fy - b.fy || b.zm - a.zm); // painter's order: the farthest first
   for (const { entry, fy, zm } of placed) {
     const inst = { ux: 0.05 + rand() * 0.9, fy, zm }, id = layout.things.length;
-    const box = ctx.sprite(zm, () => entry.draw(ctx, inst), id);
+    ashore(ctx, entry, inst); // hook for water-reflections: dry feet on the wandering shore
+    const box = ctx.sprite(inst.zm, () => entry.draw(ctx, inst), id);
     layout.things.push({ kind: entry.id, ...box });
   }
   for (const entry of ctx.things) {

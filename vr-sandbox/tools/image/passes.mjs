@@ -2,7 +2,7 @@
 // the shared ctx (see core.mjs). None allocates per pixel: the colour helpers write into scratch arrays.
 import { clamp, fbm, h2, lerp, mix, noise, smooth } from './math.mjs';
 import { SIZES } from './draw.mjs';
-import { shoreFor } from './things.mjs';
+import { SHORE, shoreFor } from './things.mjs';
 import { words } from './read.mjs';
 import { keyOf } from './registry.mjs';
 import { grain, styleFor, vignette } from './styles.mjs';
@@ -342,7 +342,7 @@ function range(ctx, r, mountain, ranges, rows) {
 // ── The ground ─────────────────────
 
 const FAR_GROUND = 5000; // the rows at the horizon are this many metres away, no farther: noise needs a number
-const SHORE_WANDER = 0.18; // the shoreline wanders by this share of the ground band about its row
+const SHORE_WANDER = SHORE.wander; // the shoreline wanders by this share of the ground band about its row
 const RIVER_FAR = 0.35; // a river's far bank stands this share of the way from the horizon to the near shore
 const FOAM = [0.93, 0.95, 0.96], WHITECAP = [0.85, 0.88, 0.9], STORMWATER = [0.17, 0.20, 0.23];
 const ICE = [0.80, 0.85, 0.90];
@@ -406,8 +406,10 @@ export function groundPass(ctx) {
       put(x, y, c);
     }
   }
-  // The frame as the ground left it, before the things: reflectPass tells a thing's pixels from it.
-  ctx.plate = water || row.wet ? Float32Array.from(ctx.data) : null;
+  // The frame as the ground left it, before the things: reflectPass tells a thing's pixels from it. Taken only when
+  // reflectPass will mirror (open water, or wet with a road or pavement to smear on): wet grass alone pays nothing.
+  const mirrors = (water && !scene.frozen) || (row.wet && (scene.road || row.here === 'pavement'));
+  ctx.plate = mirrors ? Float32Array.from(ctx.data) : null;
 }
 
 /**
@@ -535,12 +537,14 @@ function waterPixel(ctx, row, x, xm, c) {
   // In a storm the ripple is two and a half times as deep and its crests run across the picture (short along z)
   const ripple = (fbm(xm * 0.4 + 1, zm * 0.4 * (scene.storm ? 3 : 1), 31, 4) - 0.5) * 0.4 * row.grain * row.rippleK;
   getSky(x + ripple * 12, Math.max(0, hy - (y - hy) * 0.9 + ripple * 60 * near), c);
-  // Mostly the sky at the horizon, where the eye grazes the water, the water's own colour taking over nearer
-  mix(c, row.waterColour, 0.15 + near * 0.55 + ripple, c);
-  lit(c, 0.9, c);
-  c[0] *= 1.4;
-  c[1] *= 1.4;
-  c[2] *= 1.4;
+  // Mostly the sky at the horizon, where the eye grazes the water, the water's own colour taking over nearer: the
+  // far water keeps 90% of the sky, so a white peak's mirror holds most of its contrast against the sky's (the
+  // image-water test measures the share)
+  mix(c, row.waterColour, 0.1 + near * 0.5 + ripple, c);
+  lit(c, 1, c);
+  c[0] *= 1.35;
+  c[1] *= 1.35;
+  c[2] *= 1.35;
   if (scene.storm) {
     if (ripple > 0.12) { // a whitecap where the ripple crests, torn by a finer noise and broken by the hash
       const tear = clamp((fbm(xm * 2.5, zm * 7, 39, 3) - 0.38) * 4) * (h2(x, y, 36) > 0.35 ? 0.85 : 0.25);
@@ -579,8 +583,8 @@ function icePixel(ctx, row, x, xm, c) {
  */
 function shoreEdge(ctx, row, x, shore, c) {
   const { W, H, hy, scene, scale, getSky } = ctx, { y } = row;
+  if (scene.land === 'pavement') return; // no surf against a quay, and no wet sand on it
   if (row.water) {
-    if (scene.land === 'pavement') return; // no surf against a quay
     const d = shore - y, reach = (scene.storm ? 16 : 10) * scale;
     if (d >= reach) return;
     const width = (6 + 4 * fbm(x / W * 15, 3, 59, 2)) * scale * (scene.storm ? 1.6 : 1);
@@ -844,6 +848,8 @@ const FAR_GROUND_ROWS = 1.5; // a foot within this many rows above the horizon i
  * foot into the water, alpha 0.35 falling to nothing over its height, its columns pushed about by the water's own
  * ripple; so are the moon and a low sun's disc, about the horizon. Wet pavement and a wet road mirror the lit windows
  * and lamps as vertical smears. A thing's pixels are those that differ from ctx.plate, the ground before the things.
+ * A thing on the near shore has the water behind it, so its mirror would fall on the land in front of it, where no
+ * water is: it leaves none (the plan's 'shore houses' allowance was dead once the feet stayed dry, and is gone).
  */
 export function reflectPass(ctx) {
   const { H, hy, L, scene, layout, sun } = ctx;
@@ -856,7 +862,7 @@ export function reflectPass(ctx) {
   if (water) {
     for (const t of layout.things) {
       const fy = t.y + t.h, xc = t.x + t.w / 2;
-      if (fy < hy - FAR_GROUND_ROWS || fy >= ctx.shoreAt(xc) + 0.06 * H) continue;
+      if (fy < hy - FAR_GROUND_ROWS || fy > ctx.shoreAt(xc)) continue;
       mirrorRows(ctx, src, ctx.plate, t.x, t.x + t.w, fy, fy - t.h, fy);
     }
     if (layout.moon) {
@@ -927,7 +933,6 @@ function smearLights(ctx, src, t, everywhere) {
     const sy0 = Math.round(fy - (ry - fy) / FORESHORTEN), fall = 1 - (ry - fy) / span;
     const roadHalf = everywhere ? Infinity : SIZES.lane * SIZES.lanes / 2 * focal / camera.groundZ(ry + 0.5);
     for (let x = X0; x <= X1; x++) {
-      if (!scene.road && !everywhere) break;
       if (Math.abs(x + 0.5 - W / 2) > roadHalf) continue;
       const wave = fbm(x / (40 * scale), ry / (9 * scale), 38, 2) - 0.5;
       const sx = clamp(Math.round(x + wave * 6 * scale), 0, W - 1);
