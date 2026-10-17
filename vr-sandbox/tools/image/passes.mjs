@@ -3,6 +3,8 @@
 import { clamp, fbm, h2, lerp, mix, smooth } from './math.mjs';
 import { SIZES } from './draw.mjs';
 import { shoreFor } from './things.mjs';
+import { grain, styleFor, vignette } from './styles.mjs';
+import { placeText } from './text.mjs';
 
 /** What the ground is made of, by name. */
 export const GROUND = {
@@ -471,18 +473,16 @@ function snow(ctx) {
   }
 }
 
-/** Grain and a vignette over the whole, then the style, when one is named. */
+/**
+ * Grain against banding and a soft vignette (a twelfth at the corners, none by day) over the whole, unless the style
+ * named turns them off; then the style (an unknown id is an Error listing the ids); then the text, crisp over it.
+ */
 export function finishPass(ctx) {
-  const { W, H, data, styles } = ctx;
-  for (let y = 0; y < H; y++) {
-    const vy = (y / H - 0.5) ** 2, row = y * W * 3;
-    for (let x = 0; x < W; x++) {
-      const i = row + x * 3, g = (h2(x, y, 71) - 0.5) * 0.03, v = 1 - 0.35 * ((x / W - 0.5) ** 2 + vy) * 2;
-      data[i] = clamp((data[i] + g) * v);
-      data[i + 1] = clamp((data[i + 1] + g) * v);
-      data[i + 2] = clamp((data[i + 2] + g) * v);
-    }
-  }
-  const style = ctx.style && styles.find((s) => s.id === ctx.style);
+  const { W, H, data, styles, scene } = ctx;
+  const style = ctx.style ? styleFor(ctx.style, styles) : null;
+  if (style?.grain !== false) grain(data, W, H, 0.03, 71);
+  if (style?.vignette !== false && scene.time !== 'day') vignette(data, W, H, 0.12);
   if (style) style.apply(ctx.img, ctx);
+  const text = scene.text ?? ctx.text;
+  if (text !== undefined && text !== null && text !== '') placeText(ctx, text);
 }
