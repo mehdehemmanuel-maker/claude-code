@@ -26,7 +26,8 @@ const chunks = (file: Buffer) => { // every chunk: its type, its body, its store
   for (let at = 8; at < file.length;) {
     const len = file.readUInt32BE(at), type = file.subarray(at + 4, at + 8).toString('ascii');
     const body = file.subarray(at + 8, at + 8 + len);
-    out.push({ type, body, stored: file.readUInt32BE(at + 8 + len), actual: crc32(file.subarray(at + 4, at + 8 + len)) });
+    const stored = file.readUInt32BE(at + 8 + len), actual = crc32(file.subarray(at + 4, at + 8 + len));
+    out.push({ type, body, stored, actual });
     at += 12 + len;
   }
   return out;
@@ -36,7 +37,10 @@ const inst = (s: Scene, kind: string) => s.instances.filter((i) => i.kind === ki
 describe('the reader', () => {
   it.each<[string, (s: Scene) => void]>([
     ['blue sky, red car', (s) => { expect(s.colours).toEqual({ cars: 'red' }); expect(s.ignored).toEqual([]); }],
-    ['a red car and trees', (s) => { expect(s.colours).toEqual({ cars: 'red' }); expect(inst(s, 'trees')[0]!.colour).toBeUndefined(); }],
+    ['a red car and trees', (s) => {
+      expect(s.colours).toEqual({ cars: 'red' });
+      expect(inst(s, 'trees')[0]!.colour).toBeUndefined();
+    }],
     ['a red car and a blue car', (s) => {
       expect(inst(s, 'cars').map((i) => [i.count, i.colour])).toEqual([[1, 'red'], [1, 'blue']]);
       expect(s.things.cars).toBe(2);
@@ -48,21 +52,51 @@ describe('the reader', () => {
       expect(inst(s, 'trees')[0]).toMatchObject({ count: 0, none: true });
       expect('trees' in s.things).toBe(false); // nothing for the painter's usual default to fill
     }],
-    ['a pine forest', (s) => { expect(s.things.trees).toBe(0); expect(inst(s, 'trees')[0]).toMatchObject({ usual: true, count: 9 }); }],
+    ['a pine forest', (s) => {
+      expect(s.things.trees).toBe(0);
+      expect(inst(s, 'trees')[0]).toMatchObject({ usual: true, count: 9 });
+    }],
     ['two mountains', (s) => { expect(s.things.mountains).toBe(2); expect(inst(s, 'mountains')[0]!.count).toBe(2); }],
-    ['a grey car on a sunny day', (s) => { expect(s.clouds).toBe(0.05); expect(s.colours.cars).toBe('grey'); expect(s.time).toBe('day'); }],
-    ['a thunderstorm over the sea', (s) => { expect(s.storm).toBe(true); expect(s.ground).toBe('water'); expect(s.ignored).toEqual([]); }],
-    ['snow-capped mountains on a clear day', (s) => { expect(s.land).toBe('snow'); expect(s.snow).toBe(0); expect(s.clouds).toBe(0.05); }],
-    ['snow capped mountains on a clear day', (s) => { expect(s.land).toBe('snow'); expect(s.snow).toBe(0); expect(s.ignored).toEqual([]); }],
-    ['a moonlit forest', (s) => { expect(s.time).toBe('night'); expect(s.things.moon).toBe(1); expect(s.things.trees).toBe(0); }],
+    ['a grey car on a sunny day', (s) => {
+      expect(s.clouds).toBe(0.05);
+      expect(s.colours.cars).toBe('grey');
+      expect(s.time).toBe('day');
+    }],
+    ['a thunderstorm over the sea', (s) => {
+      expect(s.storm).toBe(true);
+      expect(s.ground).toBe('water');
+      expect(s.ignored).toEqual([]);
+    }],
+    ['snow-capped mountains on a clear day', (s) => {
+      expect(s.land).toBe('snow');
+      expect(s.snow).toBe(0);
+      expect(s.clouds).toBe(0.05);
+    }],
+    ['snow capped mountains on a clear day', (s) => {
+      expect(s.land).toBe('snow');
+      expect(s.snow).toBe(0);
+      expect(s.ignored).toEqual([]);
+    }],
+    ['a moonlit forest', (s) => {
+      expect(s.time).toBe('night');
+      expect(s.things.moon).toBe(1);
+      expect(s.things.trees).toBe(0);
+    }],
     ['a farmhouse by a dirt road', (s) => {
       expect(s.things.houses).toBe(1);
       expect(inst(s, 'houses')[0]!.word).toBe('farmhouse');
       expect(s.road).toBe(true);
       expect(s.roadKind).toBe('dirt');
     }],
-    ['a wet road after the rain, clear sky', (s) => { expect(s.wet).toBe(true); expect(s.rain).toBe(0); expect(s.road).toBe(true); }],
-    ['a kitchen range', (s) => { expect('mountains' in s.things).toBe(false); expect(s.ignored).toEqual(['kitchen', 'range']); }],
+    ['a wet road after the rain, clear sky', (s) => {
+      expect(s.wet).toBe(true);
+      expect(s.rain).toBe(0);
+      expect(s.road).toBe(true);
+    }],
+    ['a kitchen range', (s) => {
+      expect('mountains' in s.things).toBe(false);
+      expect(s.ignored).toEqual(['kitchen', 'range']);
+    }],
     ['a mountain range at dawn', (s) => { expect(s.things.mountains).toBe(0); expect(s.ignored).toEqual([]); }],
     ['a bridge over a river in autumn', (s) => {
       expect(s.river).toBe(true);
@@ -70,13 +104,50 @@ describe('the reader', () => {
       expect(s.season).toBe('autumn');
       expect(s.ignored).toContain('bridge');
     }],
-    ['a cityscape at golden hour', (s) => { expect(s.things.buildings).toBe(0); expect(s.time).toBe('sunset'); expect(s.hour).toBe(17); }],
-    ['a frozen lake', (s) => { expect(s.frozen).toBe(true); expect(s.ground).toBe('water'); expect(s.land).toBe('snow'); }],
-    ['the word HELLO in big letters', (s) => { expect(s.text).toBe('HELLO'); expect(s.recognised).toBeGreaterThan(0); }],
+    ['a cityscape at golden hour', (s) => {
+      expect(s.things.buildings).toBe(0);
+      expect(s.time).toBe('sunset');
+      expect(s.hour).toBe(17);
+    }],
+    ['a frozen lake', (s) => {
+      expect(s.frozen).toBe(true);
+      expect(s.ground).toBe('water');
+      expect(s.land).toBe('snow');
+    }],
+    ['the word HELLO in big letters', (s) => {
+      expect(s.text).toBe('HELLO');
+      expect(s.recognised).toBeGreaterThan(0);
+    }],
     ['"Nexus" over a lake', (s) => { expect(s.text).toBe('Nexus'); expect(s.ground).toBe('water'); }],
-    ['a tiny cabin, huge mountains', (s) => { expect(inst(s, 'houses')[0]!.size).toBe(0.5); expect(inst(s, 'mountains')[0]!.size).toBe(2); }],
-    ['a movie star', (s) => { expect('stars' in s.things).toBe(false); expect(s.time).toBe('day'); expect(s.ignored).toEqual(['movie', 'star']); }],
-    ['a train track', (s) => { expect(s.road).toBe(true); expect(s.ignored).toEqual(['train']); }],
+    ['a tiny cabin, huge mountains', (s) => {
+      expect(inst(s, 'houses')[0]!.size).toBe(0.5);
+      expect(inst(s, 'mountains')[0]!.size).toBe(2);
+    }],
+    ['a movie star', (s) => {
+      expect('stars' in s.things).toBe(false);
+      expect(s.time).toBe('day');
+      expect(s.ignored).toEqual(['movie', 'star']);
+    }],
+    ['a train track', (s) => { expect(s.road).toBe(true); expect(s.ignored).toEqual([]); }], // train licensed track
+    ['a race track with karts', (s) => {
+      expect(s.road).toBe(true);
+      expect(s.things.cars).toBe(0);
+      expect(s.ignored).toEqual([]);
+      expect(strictRefusal(s)).toBeNull();
+    }],
+    ['a storm, clear sky', (s) => {
+      expect(s.storm).toBe(true);
+      expect(s.overridden).toContainEqual({ what: 'clouds', from: 0.05, to: 0.95, because: 'storm outweighs clear' });
+    }],
+    ['a snowy desert', (s) => {
+      expect(s.land).toBe('sand');
+      expect(s.overridden).toContainEqual({ what: 'land', from: 'snow', to: 'sand', because: 'sand outweighs snowy' });
+    }],
+    ['a sign saying "OPEN" on a cabin', (s) => {
+      expect(s.text).toBe('OPEN');
+      expect(s.things.houses).toBe(1);
+      expect(s.ignored).toEqual(['sign']); // 'saying' introduced the quote and is spent with it
+    }],
     ['a gray wolf', (s) => { expect(s.clouds).toBe(0.35); expect(s.ignored).toEqual(['wolf']); }],
     ['a grey day', (s) => expect(s.clouds).toBe(0.9)],
     ['no clouds, trees', (s) => { expect(s.clouds).toBe(0.05); expect(s.things.trees).toBe(0); }],
@@ -86,21 +157,38 @@ describe('the reader', () => {
       expect(s.land).toBe('pavement');
     }],
     ['a village at dusk', (s) => { expect(s.things.houses).toBe(6); expect(s.time).toBe('sunset'); }],
-    ['a busy street with people and cars', (s) => { expect(s.road).toBe(true); expect(s.things.buildings).toBe(0); expect(s.ignored).toEqual(['busy', 'people']); }],
-    ['a palm tree on a tropical island', (s) => { expect(s.ground).toBe('water'); expect(s.land).toBe('sand'); expect(s.things.trees).toBe(1); }],
-    ['a crescent moon over the sea at noon', (s) => { expect(s.moonPhase).toBe('crescent'); expect(s.time).toBe('day'); expect(s.hour).toBe(12); }],
+    ['a busy street with people and cars', (s) => {
+      expect(s.road).toBe(true);
+      expect(s.things.buildings).toBe(0);
+      expect(s.ignored).toEqual(['busy', 'people']);
+    }],
+    ['a palm tree on a tropical island', (s) => {
+      expect(s.ground).toBe('water');
+      expect(s.land).toBe('sand');
+      expect(s.things.trees).toBe(1);
+    }],
+    ['a crescent moon over the sea at noon', (s) => {
+      expect(s.moonPhase).toBe('crescent');
+      expect(s.time).toBe('day');
+      expect(s.hour).toBe(12);
+    }],
     ['two mountains in the distance, a cabin on the left', (s) => {
       expect(inst(s, 'mountains')[0]!.placement).toBe('far');
       expect(inst(s, 'houses')[0]!.placement).toBe('left');
     }],
-    ['un café à Paris, 山と湖', (s) => { expect(s.ignored).toEqual(['un', 'café', 'à', 'paris', '山と湖']); expect(s.recognised).toBe(0); }],
+    ['un café à Paris, 山と湖', (s) => {
+      expect(s.ignored).toEqual(['un', 'café', 'à', 'paris', '山と湖']);
+      expect(s.recognised).toBe(0);
+    }],
   ])('reads %j', (prompt, check) => check(read(prompt)));
 
   it('says what it ignored, what it changed, and how much it understood', () => {
     const dragon = read('a dragon over a castle');
     expect(dragon.ignored).toEqual(['dragon', 'castle']);
     expect(dragon.recognised).toBe(0);
-    expect(dragon.overridden).toEqual([{ what: 'hills', from: 'none', to: 'the usual', because: 'nothing else breaks the horizon' }]);
+    expect(dragon.overridden).toEqual([
+      { what: 'hills', from: 'none', to: 'the usual', because: 'nothing else breaks the horizon' },
+    ]);
     const forklift = read('a white forklift in a warehouse yard at noon, a person standing beside it');
     expect(forklift.ignored).toEqual(['forklift', 'warehouse', 'yard', 'person', 'standing', 'beside']);
     expect(forklift.recognised).toBe(1); // noon
@@ -113,14 +201,18 @@ describe('the reader', () => {
     expect(empty.ignored).toEqual([]);
     expect(empty.recognised).toBe(0);
     expect(empty.instances).toEqual([]);
-    expect(read('a full moon over the sea').overridden).toContainEqual({ what: 'time', from: 'day', to: 'night', because: 'moon' });
-    expect(read('buildings').overridden).toContainEqual({ what: 'ground', from: 'grass', to: 'pavement', because: 'buildings' });
+    const moon = read('a full moon over the sea'), city = read('buildings');
+    expect(moon.overridden).toContainEqual({ what: 'time', from: 'day', to: 'night', because: 'moon' });
+    expect(city.overridden).toContainEqual({ what: 'ground', from: 'grass', to: 'pavement', because: 'buildings' });
   });
 
   it('never throws, keeps every count in 0..40, every colour in COLOURS, and ignores only words of the prompt', () => {
     const check = (prompt: string) => {
       const s = read(prompt);
-      for (const i of s.instances) expect(Number.isInteger(i.count) && i.count >= 0 && i.count <= 40, `${prompt}: ${i.kind} ${i.count}`).toBe(true);
+      for (const i of s.instances) {
+        const whole = Number.isInteger(i.count) && i.count >= 0 && i.count <= 40;
+        expect(whole, `${prompt}: ${i.kind} ${i.count}`).toBe(true);
+      }
       for (const [, c] of Object.entries(s.colours)) expect(c in COLOURS, `${prompt}: colour ${c}`).toBe(true);
       for (const i of s.instances) if (i.colour) expect(i.colour in COLOURS).toBe(true);
       expect(new Set(s.ignored).size).toBe(s.ignored.length);
@@ -132,9 +224,12 @@ describe('the reader', () => {
       for (const w of s.ignored) expect(lower.includes(w), `${JSON.stringify(prompt)} ignored ${w}`).toBe(true);
     }), { numRuns: 400 });
     fc.assert(fc.property(fc.string({ unit: 'grapheme' }), (prompt) => { check(prompt); }), { numRuns: 200 });
-    const vocabulary = fc.constantFrom('a', 'red', 'three', 'no', 'tiny', 'huge', 'cars', 'car', 'trees', 'forest', 'pine', 'and', 'on',
-      'wet', 'road', 'at', 'dusk', 'noon', 'grey', 'snow', 'clear', 'boat', 'lake', 'river', 'harbour', 'the', 'moon', 'full', 'dragon',
-      'street', 'village', 'in', 'autumn', 'hundred', '12', 'left', 'far', 'pixel', 'art', 'snow-capped', 'movie', 'star');
+    const vocabulary = fc.constantFrom(
+      'a', 'red', 'three', 'no', 'tiny', 'huge', 'cars', 'car', 'trees', 'forest', 'pine', 'and', 'on', 'wet', 'road',
+      'at', 'dusk', 'noon', 'grey', 'snow', 'clear', 'boat', 'lake', 'river', 'harbour', 'the', 'moon', 'full',
+      'dragon', 'street', 'village', 'in', 'autumn', 'hundred', '12', 'left', 'far', 'pixel', 'art', 'snow-capped',
+      'movie', 'star',
+    );
     fc.assert(fc.property(fc.array(vocabulary, { maxLength: 12 }), (ws) => { check(ws.join(' ')); }), { numRuns: 400 });
   });
 
@@ -151,7 +246,9 @@ describe('the reader', () => {
     const city = read('a city skyline at night in the rain');
     expect([city.things, city.time, city.ground, city.rain]).toEqual([{ buildings: 0 }, 'night', 'pavement', 0.6]);
     const cabin = read('a cabin in a foggy forest at dawn');
-    expect([cabin.things, cabin.time, cabin.ground, cabin.fog]).toEqual([{ houses: 1, trees: 0, hills: 0 }, 'dawn', 'grass', 0.6]);
+    expect([cabin.things, cabin.time, cabin.ground, cabin.fog]).toEqual([
+      { houses: 1, trees: 0, hills: 0 }, 'dawn', 'grass', 0.6,
+    ]);
     for (const s of [kart, lake, city, cabin]) expect(s.ignored).toEqual([]);
   });
 });
@@ -177,13 +274,15 @@ describe('the honest shell', () => {
   });
 
   it('describes the reading as JSON with the honesty fields', () => {
-    const j = JSON.parse(run('a white forklift in a warehouse yard at noon, a person standing beside it', '--describe').out);
+    const forklift = 'a white forklift in a warehouse yard at noon, a person standing beside it';
+    const j = JSON.parse(run(forklift, '--describe').out);
     expect(j.ignored).toEqual(['forklift', 'warehouse', 'yard', 'person', 'standing', 'beside']);
-    for (const key of ['instances', 'ignored', 'overridden', 'recognised', 'hour', 'season', 'river', 'frozen', 'roadKind', 'wet']) {
-      expect(key in j, key).toBe(true);
-    }
+    const keys = ['instances', 'ignored', 'overridden', 'recognised', 'hour', 'season', 'river', 'frozen', 'roadKind'];
+    keys.push('wet');
+    for (const key of keys) expect(key in j, key).toBe(true);
     expect(j.recognised).toBe(1);
-    expect(JSON.parse(run('the word HELLO in big letters, pixel art', '--describe').out)).toMatchObject({ text: 'HELLO', style: 'pixel' });
+    const hello = JSON.parse(run('the word HELLO in big letters, pixel art', '--describe').out);
+    expect(hello).toMatchObject({ text: 'HELLO', style: 'pixel' });
   });
 
   it('rejects nonsense sizes and seeds, writes nothing then, and takes -- before words that start with a dash', () => {
@@ -208,7 +307,8 @@ describe('the honest shell', () => {
   });
 
   it('writes the reading into the PNG as tEXt chunks before the pixels, every CRC good', () => {
-    const file = generate('a red car on a wet road at sunset, mountains', { out: join(dir, 'text.png'), width: 48, height: 27, seed: 3 });
+    const opts = { out: join(dir, 'text.png'), width: 48, height: 27, seed: 3 };
+    const file = generate('a red car on a wet road at sunset, mountains', opts);
     const parts = chunks(readFileSync(file));
     expect(parts.map((c) => c.type)).toEqual(['IHDR', 'tEXt', 'tEXt', 'IDAT', 'IEND']);
     for (const c of parts) expect(c.actual, `${c.type} crc`).toBe(c.stored);
@@ -223,7 +323,8 @@ describe('the honest shell', () => {
     expect(scene.things).toEqual({ cars: 1, mountains: 0 });
     const plain = png(paint(read('a tree'), { width: 4, height: 3, seed: 1 }));
     expect(chunks(plain).map((c) => c.type)).toEqual(['IHDR', 'IDAT', 'IEND']);
-    const foreign = png(paint(read('a tree'), { width: 4, height: 3, seed: 1 }), { text: { Comment: JSON.stringify({ ignored: ['山と湖'] }) } });
+    const comment = { text: { Comment: JSON.stringify({ ignored: ['山と湖'] }) } };
+    const foreign = png(paint(read('a tree'), { width: 4, height: 3, seed: 1 }), comment);
     const body = chunks(foreign)[1]!.body;
     expect(JSON.parse(body.subarray(body.indexOf(0) + 1).toString('latin1'))).toEqual({ ignored: ['山と湖'] });
   });

@@ -118,7 +118,8 @@ export declare function toImageData(img: Image): ImageData | { width: number; he
 export declare function png(img: Pick<Image, 'width' | 'height' | 'data'>): Buffer;
 export declare function generate(prompt: string, opts?: PaintOptions & { out?: string }): string;
 
-// ── reader + honest-report ──────── (appended by that package: the reader's instances and honesty, the shell's report)
+// ── reader + honest-report ──────── (appended by that package: the reader's instances and honesty,
+// the shell's report)
 export interface Instance {
   kind: string;
   count: number; // resolved: 'trees' is 9 (usual), 'no trees' 0 (none), 'a hundred trees' 40 (MOST)
@@ -146,7 +147,10 @@ export interface Scene {
   ignored: string[];
   overridden: Override[];
 }
-export interface GroundRead { clear: boolean; extra: Array<Pick<Instance, 'kind' | 'count' | 'word'> & { usual?: true }> }
+export interface GroundRead {
+  clear: boolean;
+  extra: Array<Pick<Instance, 'kind' | 'count' | 'word'> & { usual?: true }>;
+}
 export interface ConditionEntry { apply(scene: Scene, ground: GroundRead, word: string): void }
 export declare const MOST: number;
 export declare const USUAL: Record<string, number>;
@@ -164,7 +168,9 @@ export declare const AFTER: Record<string, RegExp>;
 export declare function knows(word: string): boolean;
 export declare function nounLooking(word: string): boolean;
 export declare const SOFTWARE: string;
-export declare function png(img: Pick<Image, 'width' | 'height' | 'data'>, opts: { text?: Record<string, string> }): Buffer;
+export declare function png(
+  img: Pick<Image, 'width' | 'height' | 'data'>, opts: { text?: Record<string, string> },
+): Buffer;
 export declare function generate(prompt: string, opts?: PaintOptions & { out?: string; scene?: Scene }): string;
 export declare function report(scene: Scene): string[];
 export declare function strictRefusal(scene: Scene): string | null;

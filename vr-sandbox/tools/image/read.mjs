@@ -296,9 +296,15 @@ const SAID =
   /\b(the words?|saying|titled|entitled|captioned|labell?ed|text)\s+(?!in\b|on\b|over\b)([^,.;:!?"“”]+)/i;
 const CUT = /\s+(in|on|over|above|under|across|with|at|by|below|behind|before|against|beside|near)\s+/i;
 
+const LEAD = /\b(the words?|saying|titled|entitled|captioned|labell?ed|text)\s*$/i; // what may introduce a quote
+
 function readText(prompt) {
   let m = QUOTED.exec(prompt);
-  if (m) return { text: m[1].trim(), rest: prompt.replace(m[0], ' ') };
+  if (m) { // the quote wins, and the word that introduced it ("saying") is spent with it
+    const before = prompt.slice(0, m.index), lead = LEAD.exec(before);
+    const rest = `${lead ? before.slice(0, lead.index) : before} ${prompt.slice(m.index + m[0].length)}`;
+    return { text: m[1].trim(), rest };
+  }
   m = SAID.exec(prompt);
   if (!m) return { text: null, rest: prompt };
   let said = m[2].split(CUT)[0].trim();
@@ -442,6 +448,12 @@ export function read(prompt) {
     conditions++;
     for (const hit of timeHits) used[hit.i] = true;
   }
+  const setBy = {}; // which condition last set each weighed field, so a later one that undoes it is said
+  const weighed = () => ({ clouds: s.clouds, rain: s.rain, snow: s.snow, fog: s.fog, storm: s.storm, land: g.land });
+  const spend = (i) => { // a word read, and the word that licensed it ('race' before 'track')
+    used[i] = true;
+    if (AFTER[tokens[i].w] && i > 0) used[i - 1] = true;
+  };
   for (const c of CONDITIONS) {
     if (c.kind === 'time') continue;
     let hits = matching(c);
@@ -449,13 +461,21 @@ export function read(prompt) {
       hits = hits.filter((i) => !/^(grey|gray)$/.test(tokens[i].w) || i + 1 >= n || forms[i + 1].some(knows));
     }
     if (!hits.length) continue;
-    const no = hits.filter(negated);
+    const no = hits.filter(negated), before = weighed();
     if (no.length && NEGATE[c.id]) {
       NEGATE[c.id](s);
       for (const i of no) used[i - 1] = true;
     } else c.apply(s, g, forms[hits[0]].find((f) => c.match.test(f)));
+    const after = weighed();
+    for (const what of Object.keys(after)) {
+      if (after[what] === before[what]) continue;
+      if (setBy[what] && setBy[what] !== c.id) {
+        s.overridden.push({ what, from: before[what], to: after[what], because: `${c.id} outweighs ${setBy[what]}` });
+      }
+      setBy[what] = c.id;
+    }
     conditions++;
-    for (const i of hits) used[i] = true;
+    for (const i of hits) spend(i);
   }
   if (g.clear && s.rain > 0 && !s.storm) { // "a wet road after the rain, clear sky": the rain is over
     s.overridden.push({ what: 'rain', from: s.rain, to: 0, because: 'the sky was called clear' });
