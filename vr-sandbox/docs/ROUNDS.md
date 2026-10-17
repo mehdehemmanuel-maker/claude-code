@@ -1605,3 +1605,52 @@ with `npx vite build --config vite.view.config.ts`):
 
 GATE: PASS (2395 of 2395 ran) — 179.9s (`npm run gate`). Tidy 24/24. Census (`node tools/unwired.mjs --all`): 178 test-only, 141 dead, 22
 unreached files, unchanged.
+
+## Run 8z — what "done" is, and the finding that writing it down produced
+
+**The ask.** *"think about what the overall end goal is when we would consider this app/tool done and reverse
+engineer it"*. 277 tasks had been opened and none of them said what finishing looks like.
+
+**What was written.** `docs/DONE.md`: the nine asks collapsed to one sentence, and the argument that a feature list
+cannot be the definition — three of the nine are infinite in the user's own words (*"trillions"*, *"infinite like
+anything I request"*, *"recursively upgrade every process"*), so "everything drawn" has no last item. **Coverage is
+a rate, not a state.** What is finite is the LOOP: heard → designed → real → orderable → teachable → made. Done is an
+ask drawn at RANDOM surviving it; drawn rather than chosen, because a chosen example is a template under another name.
+With it, the line between the two halves: the software is done at a priced, teachable pack plus the Bluetooth drive;
+the project is done when he has built one, which needs $2,395 and his hands. Conflating them is dishonest.
+
+**The tool, and the finding.** `tools/loop.mjs` asks every door the same question — which had never been done. One
+ask, *"a desk lamp with an arm that stays where you put it"*:
+
+```
+$ node tools/loop.mjs "a desk lamp with an arm that stays where you put it"
+part     0 parts named  — No family makes this.
+machine  7 parts named  — nothing in those words says what the machine must *do*
+pack     1 parts named  — "an arm that stays where you put it" is not a part any family makes
+LOOP     machine named 7, pack bought 1, 0 of them the same part — the doors do not feed each other
+```
+
+**THERE IS NO LOOP.** Three doors answer alone and share nothing. The pack bought a 25-pack of 5 mm LEDs for $12.50
+and called it a desk lamp; the machine composed a two-link arm on NEMA 17s, which is a robot arm. No test had
+noticed because no test had ever put one ask through two doors.
+
+**The deeper fault, under the machine's answer: a hold can be PASSIVE, and the composer does not know it.** It
+reached for steppers because the only way it knows to hold a position is to drive it there and keep the current on.
+An Anglepoise has held its position since 1932 with a spring and no power. The library has springs, friction and
+gears; the missing thing is the rule, which is ask 1 exactly — not a lamp template, a way of holding any ask can
+reach. "Stays where you put it" is four words and the engine answered them with two motors.
+
+**Measured the same day, each by its own command**: 67,117 parts taken and 37 waiting (`npm run breakdown`);
+178 test-only exports, 141 dead, 22 unreached files of 2,714 (`node tools/unwired.mjs --all`); the works at
+$2,394.95 with every line priced, and 2 of its 16 stations taking a job over Bluetooth (`npm run works`,
+`node tools/room-census.mjs`); a *build's* bill still carrying unpriced kinds (7 distinct on one small arm).
+
+**The gate's answer, said out loud.** The obvious next step was inside `parts/mate.ts`, where the last rounds were.
+It was not taken. Six rounds had already run inside two asks and the user had to stop the work to say so; this round
+asked instead what stands between the engine and a thing in his hands, and the answer was not in that file.
+
+**Open, in the order DONE.md derives**: join the doors into one route; passive equilibrium as a way to hold; price
+what a build's bill cannot (blocked on this network, and widening it unblocks the critical path to his half); a
+lesson that names the thing ("Put it together" is the generic instruction ask 4 forbids, shipped in every pack).
+GATE: PASS (2395 of 2395 ran) — 188.2s (`npm run gate`). Tidy 24/24. Census (`node tools/unwired.mjs --all`): 178 test-only, 141 dead, 22
+unreached files, unchanged: the new tool is a door, not an export.

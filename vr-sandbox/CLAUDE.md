@@ -11,11 +11,18 @@ only what every round needs:
 | Read | For |
 | --- | --- |
 | this file | what is wanted, who owns what, the rules every round passes, what is open |
+| `docs/DONE.md` | **what finishing looks like**, the loop an ask must survive, and the order to build it in |
 | `docs/OWNERS.md` | the full description of each owner. Read its row before touching a concern |
 | `docs/ROUNDS.md` | what each round did, and the fault it found. Read the rounds for what you are about to touch |
 | `docs/TOOLS.md` | every tool built for this work, and how to run it |
 
 A round appends to `docs/ROUNDS.md`. Only a *standing rule* or a change of what is open belongs here.
+
+**Standing rule, 2026-10-17: coverage is a rate, not a state.** Three of the nine asks are infinite in the user's own
+words, so "everything drawn" can never be reached and is not a done-condition. What finishes is the LOOP — heard,
+designed, real, orderable, teachable, made — holding for an ask drawn at RANDOM. Before a round is chosen, ask which
+stage of that loop it moves; a round that moves none of them is coverage, which is fine, but say so. `docs/DONE.md`
+holds the loop, the measured distance and the order. `node tools/loop.mjs "<ask>"` is the measurement.
 
 
 ## What is wanted (the user's own words, kept)
@@ -329,6 +336,14 @@ The tools each step uses are in `docs/TOOLS.md`. When a step takes working out b
 ## What is open
 
 The whole picture is in `docs/ROUNDS.md`; this is only what is not finished, with what blocks it.
+
+**The thing between here and the end** (new 2026-10-17, `docs/DONE.md`) - **the doors do not feed each other.**
+`node tools/loop.mjs "a desk lamp with an arm that stays where you put it"` puts one ask through `part`, `machine`
+and `pack`: three unrelated answers, 0 parts shared between what the machine designed and what the pack bought. The
+pack bought a 25-pack of 5 mm LEDs for $12.50 and called it a desk lamp. Nothing had noticed because nothing had
+ever asked two doors the same question. Joining them into one route - heard, designed, real, orderable, teachable -
+is the round that makes every later round mean something. With it, the finding underneath: **a hold can be passive**,
+and the composer does not know it, so "stays where you put it" became two NEMA 17s instead of a spring.
 
 **Being worked now** - mating and the geometry readers (`parts/mate.ts`). In order: a pocket's floor in a *box* or a
 rolled section, which is the same well rule the rings and turned bores already get; then the mates of a whole assembly

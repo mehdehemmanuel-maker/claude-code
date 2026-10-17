@@ -51,6 +51,14 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   answer and is printed whole. `--like "<words>"` lists the catalogue lines nearest them.
   It exists because this was the one question with no door: checking whether a worm reducer is in the library meant
   bundling `src/` with esbuild and calling `catalogue()` by hand in a scratch directory (docs/MANNY.md #48).
+- `node tools/loop.mjs "<what you want>"`: **one ask through every door, side by side** — does this project have a
+  loop or a pile of doors? Runs `part`, `machine` and `pack` on the SAME words and prints, per door, whether it
+  answered, what it said it could not do, how many parts it named, and how many of them the next door actually
+  bought. `--asks <file>` runs one a line; `--keep <folder>` writes every door's whole answer. It judges no quality:
+  the last line is the loop, and 0 parts shared means the doors do not feed each other. It exists because on
+  2026-10-17 the end goal was written down (`docs/DONE.md`), the end goal is a loop, and nothing in the tree had ever
+  put one ask through more than one door — so nothing had ever shown that they answer differently and separately.
+
 - `node tools/doors.mjs`: **every door into this project**, what each opens (from its own file header), and when it was
   last touched, newest first; `--cold` prints only the ones nothing has opened in longest. A critic judged one door
   five runs running and had never opened `teach/`, `life/` or the forge room — not from choosing badly, but because
