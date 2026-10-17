@@ -16,7 +16,7 @@ const hash = (str: string) => {
   return h >>> 0;
 };
 /** The four header prompts' layout digests as placement-critic lays them out (see 'keeps the four header…'). */
-const HEADER_LAYOUTS = [550378359, 2255982723, 2533846824, 1999445943];
+const HEADER_LAYOUTS = [2773148169, 2255982723, 4279287698, 2033230310];
 
 const W = 640, H = 360;
 const lum = (d: Float32Array, i: number) => 0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!;

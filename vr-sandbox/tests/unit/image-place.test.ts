@@ -1,8 +1,10 @@
 // placement-critic: things placed in world space (tools/image/things.mjs place()), the camera that frames the
 // subject (draw.mjs frameCamera()), and the critic that counts what is visible from the owner-id buffer.
 import { describe, expect, it } from 'vitest';
-import type { Image, Scene, ThingBox } from '../../tools/image.mjs';
-import { FIT, NEAR_SHARE, SIZES, camera, frameCamera, paint, read, report } from '../../tools/image.mjs';
+import type { Ctx, Image, Scene, ThingBox } from '../../tools/image.mjs';
+import {
+  FIT, NEAR_SHARE, SIZES, camera, families, frameCamera, paint, read, register, report,
+} from '../../tools/image.mjs';
 
 const CORRIDOR = SIZES.lanes * SIZES.lane; // metres either side of the road's centre kept free of all but vehicles
 const ground = (img: Image) => img.layout.things.filter((t) => t.kind !== 'bird');
@@ -18,6 +20,17 @@ function covers(a: ThingBox, b: ThingBox) {
   const dx = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
   const dy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
   return Math.max(0, dx) * Math.max(0, dy) / (b.w * b.h);
+}
+/** Paints with a tap on the context (the road's centre, the shore line), as image-ground's helper does. */
+function painted(scene: Scene, width: number, height: number, seed?: number) {
+  let ctx: Ctx | null = null;
+  const fam = families.find((f) => f.id === 'landscape')!;
+  register('families', { ...fam, passes: [(c: Ctx) => { ctx = c; }, ...fam.passes] });
+  try {
+    return { img: paint(scene, { width, height, seed }), ctx: ctx! as Ctx };
+  } finally {
+    register('families', fam);
+  }
 }
 const asked = (scene: Scene) => {
   const out: Record<string, number> = {};
@@ -40,6 +53,14 @@ describe('frameCamera', () => {
     expect(frameCamera(road, road.instances, { W, H }).eye).toBe(SIZES.eye);
     const city = read('a city skyline at night');
     expect(frameCamera(city, city.instances, { W, H }).eye).toBe(SIZES.eye); // the skyline row does not raise it
+    // the asked thing is the subject: the usual forest does not shrink the cabin (0.123 H when it set the eye)
+    const cabin = read('a cabin in a foggy forest at dawn'), fc = frameCamera(cabin, cabin.instances, { W, H });
+    expect(fc.subject).toBe('houses');
+    expect(fc.eye).toBeLessThan(2); // the cabin's own fit (1.79 m), not the forest's 7 m
+    const house = paint(cabin, { width: W, height: H }).layout.things.find((t) => t.kind === 'house')!;
+    expect(house.h / H).toBeGreaterThanOrEqual(0.18);
+    const forest = read('a foggy forest at dawn'); // nothing asked: framed for its largest usual kind
+    expect(frameCamera(forest, forest.instances, { W, H }).subject).toBe('trees');
   });
 
   it('shares the columns among a counted few: three beach houses take 0.4 / sqrt(3) of the width each', () => {
@@ -62,12 +83,12 @@ describe('place', () => {
     'a road through a forest', 'two sailboats at sunset', 'a tree and a house and a car and a boat and a bird',
   ];
 
-  it('keeps footprints apart, trees and houses off the road, reports every asked count: 5 prompts x 100 seeds', () => {
-    for (const prompt of PROMPTS) {
+  it('keeps footprints apart, trees and houses off the road, reports every asked count: 5 prompts x 200 seeds', () => {
+    for (const prompt of PROMPTS) { // 200 seeds: 7.3 s measured for the five at 160x90
       const scene = read(prompt), want = asked(scene);
-      for (let seed = 1; seed <= 100; seed++) {
+      for (let seed = 1; seed <= 200; seed++) {
         const fresh = { ...scene, report: undefined } as Scene;
-        const img = paint(fresh, { width: 160, height: 90, seed }), things = ground(img);
+        const { img, ctx } = painted(fresh, 160, 90, seed), things = ground(img);
         const tag = `${prompt} seed ${seed}`;
         for (let i = 0; i < things.length; i++) {
           const a = things[i]!;
@@ -79,9 +100,13 @@ describe('place', () => {
             expect(overlap(a, b), `${tag}: ${a.kind} over ${b.kind}`).toBeLessThanOrEqual(0.4 + 1e-9);
           }
           if (scene.road && (a.kind === 'tree' || a.kind === 'house' || a.kind === 'building')) {
-            const clear = Math.abs(a.xm!) - a.footprint!.w / 2;
-            expect(clear, `${tag}: ${a.kind} in the road`).toBeGreaterThanOrEqual(CORRIDOR);
+            const fy = a.y + a.h, centre = ctx.groundX(ctx.roadX!(fy), fy); // the drifted road's centre at its row
+            const clear = Math.abs(a.xm! - centre) - a.footprint!.w / 2;
+            expect(clear, `${tag}: ${a.kind} in the road`).toBeGreaterThanOrEqual(CORRIDOR - 1e-6);
           }
+        }
+        for (const t of img.layout.things) { // the critic: seen means at least half of what it painted is its own
+          if (t.visible) expect(t.pixels!, `${tag}: ${t.kind} a sliver`).toBeGreaterThanOrEqual(0.5 * t.painted!);
         }
         const visible = fresh.report!.visible!;
         for (const [kind, n] of Object.entries(want)) {
@@ -90,6 +115,33 @@ describe('place', () => {
           expect(visible[kind]![0], `${tag}: ${kind} seen`).toBeLessThanOrEqual(n);
         }
       }
+    }
+  });
+
+  it('never counts a subject hidden behind another as seen: the boat behind the pine (seeds 4, 8) stands clear', () => {
+    // the review's probe: before, 'five' seed 4 stood the sailboat wholly behind the tree with 8% of itself painted
+    // and said 'boats 1/1'. Now an asked thing is never stood where a nearer one covers more than HIDE of its box,
+    // and the critic wants half of what it painted
+    const probes = [['a tree and a house and a car and a boat and a bird', [4, 8]],
+      ['a boat and a house on the beach', [38]],
+      ['an oak tree and two pine trees in a meadow at noon', [3, 11]]] as const;
+    for (const [prompt, seeds] of probes) {
+      for (const seed of seeds) {
+        const img = paint(read(prompt), { width: 640, height: 360, seed });
+        for (const t of ground(img)) {
+          expect(t.visible, `${prompt} seed ${seed}: ${t.kind}`).toBe(true);
+          expect(t.pixels! / t.painted!, `${prompt} seed ${seed}: ${t.kind} showing`).toBeGreaterThanOrEqual(0.5);
+        }
+      }
+    }
+  });
+
+  it('stands a car in its lane on the drifted road: within 0.3 lane of ground-weather\'s roadX, seeds 1 to 5', () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const { img, ctx } = painted(read('a red car on a road at dusk'), 640, 360, seed);
+      const car = img.layout.things.find((t) => t.kind === 'car')!, fy = car.y + car.h;
+      const centre = ctx.groundX(ctx.roadX!(fy), fy); // the road's centre at the car's row, in metres
+      expect(Math.abs(Math.abs(car.xm! - centre) - SIZES.lane / 2), `seed ${seed}`).toBeLessThan(0.3 * SIZES.lane);
     }
   });
 
@@ -130,9 +182,10 @@ describe('place', () => {
         const overDoor = t.x < door && t.x + t.w > door && t.y + t.h > house.y + house.h * 0.5;
         expect(overDoor, `seed ${seed}: a tree in front of the door`).toBe(false);
       }
-      const road = paint(read('a road through a forest'), { width: 640, height: 360, seed });
-      for (const t of road.layout.things.filter((t) => t.kind === 'tree')) {
-        expect(Math.abs(t.xm!) - t.footprint!.w / 2).toBeGreaterThanOrEqual(CORRIDOR);
+      const road = painted(read('a road through a forest'), 640, 360, seed);
+      for (const t of road.img.layout.things.filter((t) => t.kind === 'tree')) {
+        const fy = t.y + t.h, centre = road.ctx.groundX(road.ctx.roadX!(fy), fy);
+        expect(Math.abs(t.xm! - centre) - t.footprint!.w / 2).toBeGreaterThanOrEqual(CORRIDOR - 1e-6);
       }
       const sea = paint(read('two sailboats at sunset'), { width: 640, height: 360, seed });
       const boats = sea.layout.things.filter((t) => t.kind === 'boat');
@@ -173,13 +226,23 @@ describe('place', () => {
     }
     const tiny = paint(read('a tiny cabin, huge mountains'), { width: 640, height: 360, seed: 7 });
     const big = paint(read('a cabin, huge mountains'), { width: 640, height: 360, seed: 7 });
+    const huge = paint(read('a huge cabin, huge mountains'), { width: 640, height: 360, seed: 7 });
+    const house = (img: Image) => img.layout.things.find((o) => o.kind === 'house')!;
     const metres = (img: Image) => {
-      const t = img.layout.things.find((o) => o.kind === 'house')!, eye = img.layout.camera!.eye;
+      const t = house(img), eye = img.layout.camera!.eye;
       return t.h * eye / (t.y + t.h - img.layout.horizon * 360); // height over the foot's drop below the horizon
     };
     expect(metres(tiny)).toBeCloseTo((SIZES.cabin.wall + SIZES.cabin.rise) / 2, 1);
     expect(metres(big)).toBeCloseTo(SIZES.cabin.wall + SIZES.cabin.rise, 1);
-    const cars = paint(read('a red car and a blue car on a road'), { width: 960, height: 540, seed: 4 });
+    // and on the screen: the camera is framed for the plain cabin, so tiny is half as tall (0.254 / 0.508 H) and
+    // huge taller, capped where its top meets the frame's top (0.625 H: a level camera with the horizon at 0.55 H
+    // cannot show a 9.6 m thing from 1.9 m up any larger with its top in the picture)
+    expect(house(tiny).h / house(big).h).toBeGreaterThan(0.4);
+    expect(house(tiny).h / house(big).h).toBeLessThan(0.6);
+    expect(house(huge).h / house(big).h).toBeGreaterThan(1.2);
+    expect(house(huge).y).toBeGreaterThanOrEqual(0);
+    expect(house(huge).h / 360).toBeLessThanOrEqual(0.96);
+    const { img: cars, ctx } = painted(read('a red car and a blue car on a road'), 960, 540, 4);
     const both = cars.layout.things.filter((t) => t.kind === 'car');
     expect(both.length).toBe(2);
     const tint = (t: ThingBox) => {
@@ -187,7 +250,10 @@ describe('place', () => {
       return cars.data[i]! > cars.data[i + 2]! ? 'red' : 'blue';
     };
     expect(both.map(tint).sort()).toEqual(['blue', 'red']);
-    for (const c of both) expect(Math.abs(Math.abs(c.xm!) - SIZES.lane / 2)).toBeLessThan(1e-6); // in a lane
+    for (const c of both) { // each in a lane of the drifted road (its box ends at its near wheels, a row nearer)
+      const fy = c.y + c.h, centre = ctx.groundX(ctx.roadX!(fy), fy);
+      expect(Math.abs(Math.abs(c.xm! - centre) - SIZES.lane / 2)).toBeLessThan(0.3 * SIZES.lane);
+    }
   });
 
   it('paints the same words into the same bytes, and the critic marks what it hid', () => {

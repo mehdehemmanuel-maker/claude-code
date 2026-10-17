@@ -424,8 +424,9 @@ export interface ThingBox {
   heading?: Heading;
   footprint?: Footprint; // metres on the ground, as it faces
   crowded?: boolean; // placed over another after every try failed (a frame too small for what was asked)
-  visible?: boolean; // the critic saw it: pixels of its own, spanning at least 12 rows or columns at 720 rows
+  visible?: boolean; // the critic saw it: half its painted pixels still its own, over 12 rows or columns at 720 rows
   pixels?: number; // how many pixels are its own in the finished picture
+  painted?: number; // how many it painted (what it would show alone): pixels / painted is how much of it shows
   replaced?: boolean; // the critic could not see it the first time and placed it again
 }
 export interface Layout { camera?: { eye: number; equiv: number; near: number | null } }
@@ -433,7 +434,8 @@ export interface Scene { report?: { visible?: Record<string, [number, number]> }
 export interface Ctx {
   framing?: Framing;
   owner?: Int32Array; // per pixel, the id (index in layout.things) of the last thing painted solidly there, or -1
-  roadCentre?: (fy: number) => number; // metres right of the axis where the road's centre is at a row (optional)
+  painted?: number[]; // per id, the pixels it painted solidly, covered since or not (what it would show alone)
+  // the road's centre in metres is read from ground-weather's ctx.roadX (above) through groundX: no field of its own
 }
 /** How much of the frame the subject may take: its height of the rows, its width of the columns (by thing id). */
 export declare const FIT: { height: number; width: number; house: number; boat: number; [id: string]: number };

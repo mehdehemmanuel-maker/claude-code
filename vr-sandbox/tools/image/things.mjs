@@ -82,8 +82,11 @@ const DISC = 0.08; // share of the height round the sun's or the moon's centre n
 const STACK = 0.25; // the most of one vehicle's box another may cover: they never stack in a picture
 const STAGGER = 0.1; // the depth a counted few subjects are spread over, as a share of the ground band (+-0.05)
 
-/** Where the road's centre is at a row, in metres right of the lens axis (ground-weather may set ctx.roadCentre). */
-const roadCentre = (ctx, fy) => (typeof ctx.roadCentre === 'function' ? ctx.roadCentre(fy) : 0);
+/**
+ * Where the road's centre is at a row, in metres right of the lens axis: ground-weather's ctx.roadX(y) is the drifted
+ * centre in pixels (groundPass sets it), read back to metres at that row; the axis when no road was painted.
+ */
+const roadCentre = (ctx, fy) => (typeof ctx.roadX === 'function' ? ctx.groundX(ctx.roadX(fy), fy) : 0);
 
 /**
  * What the words asked to stand in the picture, one want per reader instance with a registered drawer: its entry,
@@ -112,11 +115,17 @@ function wants(ctx) {
 /** The ground share a depth of zm metres is at: 0 at the horizon, 1 at the frame's foot. */
 const shareOf = (ctx, zm) => ctx.camera.eye * ctx.camera.focal / (zm * (ctx.H - ctx.hy));
 
+const FRAME = 0.95; // a thing drawn at its size factor keeps its top under the frame's top by the rest of this
+
 /**
  * Where a thing of this kind and size may stand, as [nearest, farthest] shares of the ground band: no nearer than
- * where it fits FIT.height of the rows and its kind's share of the columns, no farther than where it is still
- * READ tall (an asked-for thing larger than an extra). A registered thing without sizes keeps its depth in metres
- * or its row band, else the middle ground. The usual buildings take the skyline row.
+ * where its PLAIN size (factor 1) fits FIT.height of the rows and its kind's share of the columns, so a tiny
+ * thing is drawn half as tall as the plain one there and a huge one twice (the word shows), no nearer than where
+ * the sized one's top still clears the frame's top (a level camera: a thing taller than the eye climbs over the
+ * horizon as it nears, so a huge cabin's height is capped by the sky above the horizon, 1.23x the plain one at a
+ * 0.55 horizon) and its width FRAME of the columns, no farther than where it is still READ tall (an asked-for
+ * thing larger than an extra). A registered thing without sizes keeps its depth in metres or its row band, else
+ * the middle ground. The usual buildings take the skyline row.
  */
 function bandFor(ctx, want) {
   const { W, H, hy } = ctx, { entry, size } = want, eye = ctx.camera.eye, band = (H - hy) / H;
@@ -125,9 +134,11 @@ function bandFor(ctx, want) {
     if (!entry.depth) return entry.band ?? BAND;
     return [shareOf(ctx, entry.depth[1]), shareOf(ctx, entry.depth[0])].map((u) => clamp(u, 0.01, 0.95));
   }
-  const h = entry.size.h * size, w = entry.size.w * size, wide = fitWidth(entry.id, want.count);
-  const uMax = Math.min(0.95, FIT.height * eye / (h * band), wide * W * eye / (w * band * H));
-  const uMin = Math.max(0.02, (want.asked ? READ.asked : READ.extra) * eye / (h * band));
+  const { h, w } = entry.size, wide = fitWidth(entry.id, want.count), cols = W / (band * H), over = h * size / eye - 1;
+  const top = over > 0 ? (hy / H - (1 - FRAME)) / (band * over) : 0.95; // where the sized one's top meets the frame's
+  const uMax = Math.min(0.95, FIT.height * eye / (h * band), wide * cols * eye / w, top,
+    FRAME * cols * eye / (w * size));
+  const uMin = Math.max(0.02, (want.asked ? READ.asked : READ.extra) * eye / (h * size * band));
   return [Math.min(uMin, uMax), uMax];
 }
 
@@ -192,14 +203,17 @@ function candidate(ctx, want, i, span, placed, gap = null) {
     } else u = uMin + rand() * (uMax - uMin); // a vehicle anywhere along the road, so two never share a row
   }
   const fy = hy + (H - hy) * u, zm = ctx.groundZ(fy), s = ctx.camera.focal / zm;
-  let heading = 'side', xm = ctx.groundX(ux * W, fy);
+  let heading = 'side';
+  if (onRoad) heading = rand() < TOWARD ? 'toward' : 'away';
+  const fp = footprintOf(entry, size, heading), sz = entry.size ?? { w: 1, h: 1 }; // the box is its width as it faces
+  const wPx = fp.w * s, hPx = sz.h * size * s, room = (1 - 2 * EDGE) / 2 - wPx / (2 * W) - 1e-3;
+  if (!onRoad && room >= 0) ux = clamp(ux, 0.5 - room, 0.5 + room); // a huge thing leaves its third for the middle
+  let xm = ctx.groundX(ux * W, fy);
   if (onRoad) { // on the road: the first in the near lane going away up it, the next in the far lane, and so on
     const lane = placed.filter((p) => p.entry.onRoad && p.heading !== 'side').length % 2 === 0 ? 1 : -1;
-    heading = rand() < TOWARD ? 'toward' : 'away';
     xm = roadCentre(ctx, fy) + lane * SIZES.lane / 2;
   }
-  const fp = footprintOf(entry, size, heading), sz = entry.size ?? { w: 1, h: 1 }; // the box is its width as it faces
-  const wPx = fp.w * s, hPx = sz.h * size * s, x0 = ctx.project(xm, zm).x;
+  const x0 = ctx.project(xm, zm).x;
   const box = { x: x0 - wPx / 2, y: fy - hPx, w: wPx, h: hPx };
   const c = { want, entry, u, ux: x0 / W, fy, zm, xm, heading, fp, box };
   ashore(ctx, c); // hook for water-reflections: dry feet on the wandering shore, judged before refusal() looks
@@ -221,12 +235,15 @@ function eclipses(ctx, box) {
 /**
  * Why a candidate is refused, or null when it may stand: cropped by the frame's side (a subject stays whole, an
  * extra keeps most of itself in), in front of the sun or the moon, in the road's corridor, over another footprint,
- * hiding a subject behind it, stacked on another vehicle, or (on the critic's retry) hidden behind what is nearer.
+ * hiding a subject behind it, stacked on another vehicle, or hidden behind what is nearer (always for a thing the
+ * words asked for, so a boat is never stood behind a pine; for an extra on the critic's retry). `lax` lets it
+ * stand before the sun: the last resort of a thing too big to stand anywhere else (a huge cabin).
  */
-function refusal(ctx, c, placed, retry = false) {
+function refusal(ctx, c, placed, retry = false, lax = false) {
   const { W, scene } = ctx, { entry, xm, zm, fp, box } = c, keep = isSubject(c.want) ? 1 - 1e-6 : 0.6;
+  const shown = retry || c.want.asked;
   if (Math.min(box.x + box.w, W * (1 - EDGE)) - Math.max(box.x, W * EDGE) < keep * box.w) return 'cropped';
-  if (eclipses(ctx, box)) return 'eclipses';
+  if (!lax && eclipses(ctx, box)) return 'eclipses';
   if (scene.road && !entry.onRoad && Math.abs(xm - roadCentre(ctx, c.fy)) - fp.w / 2 < CORRIDOR) return 'road';
   const a = { x: xm - fp.w / 2, y: zm - fp.d / 2, w: fp.w, h: fp.d }, area = fp.w * fp.d;
   for (const p of placed) {
@@ -236,7 +253,7 @@ function refusal(ctx, c, placed, retry = false) {
     const over = shared(box, p.box);
     if (p.entry.onRoad && entry.onRoad && over > STACK * Math.min(box.w * box.h, p.box.w * p.box.h)) return 'stacked';
     if (isSubject(p.want) && zm < p.zm && over / (p.box.w * p.box.h) > HIDE) return 'hides';
-    if (retry && p.zm < zm && over / (box.w * box.h) > HIDE) return 'hidden';
+    if (shown && p.zm < zm && over / (box.w * box.h) > HIDE) return 'hidden';
   }
   return null;
 }
@@ -253,7 +270,8 @@ function farBank(ctx, want) {
 
 /**
  * Where one copy of a want stands: TRIES seeded candidates, the first that nothing refuses; then the first free
- * gap in a scan of the depth band (three rows of it, the columns across); then the last candidate, crowded. A land
+ * gap in a scan of the depth band (the row it wanted first, then five rows of the band, the columns across from
+ * the one meant for it), once more letting it stand before the sun; then the last candidate, crowded. A land
  * thing with no room on the near shore of a water scene stands on the far bank, as before; a flyer anywhere in
  * the sky. `retry` is the critic's second go for a thing it could not see.
  */
@@ -275,11 +293,13 @@ export function place(ctx, want, i, placed, retry = false) {
   const columns = []; // the free-gap scan: the columns nearest the one meant for it first, then outward
   for (let ux = EDGE + 0.04; ux <= 1 - EDGE - 0.04; ux += 0.04) columns.push(ux);
   columns.sort((a, b) => Math.abs(a - last.ux) - Math.abs(b - last.ux));
-  for (const k of [0.5, 0.75, 0.25, 0.9, 0.1]) {
-    const u = lerp(span[0], span[1], k);
-    for (const ux of columns) {
-      const c = candidate(ctx, want, i, span, placed, [u, ux]);
-      if (!refusal(ctx, c, placed, retry)) return c;
+  const rows = [last.u, ...[0.5, 0.75, 0.25, 0.9, 0.1].map((k) => lerp(span[0], span[1], k))];
+  for (const lax of [false, true]) {
+    for (const u of rows) {
+      for (const ux of columns) {
+        const c = candidate(ctx, want, i, span, placed, [u, ux]);
+        if (!refusal(ctx, c, placed, retry, lax)) return c;
+      }
     }
   }
   last.crowded = true;
@@ -347,6 +367,7 @@ function paintPlaced(ctx, placed) {
   layout.things.length = 0;
   ctx.tops.length = 0;
   ctx.owner?.fill(-1);
+  ctx.painted = []; // per id, the pixels it painted solidly, covered since or not (the sprite's put counts them)
   for (const [id, p] of placed.entries()) {
     p.id = id;
     ctx.rand = rng(p.seed); // each thing draws by its own seed, so moving one does not change the others' looks
@@ -360,14 +381,18 @@ function paintPlaced(ctx, placed) {
   }
 }
 
+const SHOWING = 0.5; // the least of the pixels a thing painted that must still be its own for it to count as seen
+
 /**
  * The critic: counts each placed thing's pixels in the owner-id buffer (a nearer thing painted over it took them)
- * and the rows they span, marks each visible or not in layout.things, and names the asked-for things that are
- * hidden or too short to read. Answers { tally, again }: the per-kind { trees: [seen, asked] } over every copy the
- * words asked for (placed or not) and the list to place again.
+ * and the rows they span, against the pixels it painted (ctx.painted, kept by the sprite: what it would show
+ * alone), marks each visible or not in layout.things (visible: at least SHOWING of its own pixels left AND a span of
+ * TINY rows or columns), and names the asked-for things that are hidden or too short to read. Answers { tally,
+ * again }: the per-kind { trees: [seen, asked] } over every copy the words asked for (placed or not) and the list to
+ * place again.
  */
 export function critic(ctx, placed, list = placed.map((p) => p.want)) {
-  const { W, H, owner, layout, scale } = ctx, n = placed.length, count = new Int32Array(n);
+  const { W, H, owner, layout, scale } = ctx, n = placed.length, count = new Int32Array(n), painted = ctx.painted;
   const top = new Int32Array(n).fill(H), bottom = new Int32Array(n).fill(-1);
   const left = new Int32Array(n).fill(W), right = new Int32Array(n).fill(-1);
   if (owner) {
@@ -391,9 +416,11 @@ export function critic(ctx, placed, list = placed.map((p) => p.want)) {
   }
   for (const p of placed) {
     const span = Math.max(bottom[p.id] - top[p.id], right[p.id] - left[p.id]) + 1; // a gull is wide, not tall
-    const seen = count[p.id] > 0 && span >= least, t = layout.things[p.id];
+    const alone = painted?.[p.id] ?? count[p.id], t = layout.things[p.id];
+    const seen = count[p.id] > 0 && count[p.id] >= SHOWING * alone && span >= least;
     t.visible = seen;
     t.pixels = count[p.id];
+    t.painted = alone;
     if (seen) tally[keyOf(p.entry)][0]++;
     else if (p.want.asked && !p.entry.sky && !p.replaced) again.push(p);
   }

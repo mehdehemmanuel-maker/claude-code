@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { Ctx, Heading, Scene, ThingInstance } from '../../tools/image.mjs';
+import type { Ctx, Heading, Image, Scene, ThingInstance } from '../../tools/image.mjs';
 import {
   COLOURS, VEHICLES, VEHICLE_THINGS, VEHICLE_WORDS, drawVehicle, families, paint, png, read, register, things,
   vehicleParts, vehicleRow,
@@ -94,11 +94,22 @@ describe('the reader knows every vehicle by its words', () => {
     ['a four wheeler', (s) => expect(s.things.atvs).toBe(1)],
     ['a white forklift', (s) => expect([s.things.forklifts, s.colours.forklifts]).toEqual([1, 'white'])],
     ['two bicycles and a motorbike', (s) => expect([s.things.bicycles, s.things.motorcycles]).toEqual([2, 1])],
-    ['a bus at a stop', (s) => { // 'bus' ends in s: the reader takes it for a plural and gives the usual, one
-      expect(s.things.buses).toBe(0);
-      expect(inst(s, 'buses')[0]!.count).toBe(1);
+    ['a bus at a stop', (s) => { // 'bus' ends in s and is one bus (SINGULAR_S), asked for, not the usual number
+      expect(s.things.buses).toBe(1);
+      expect(inst(s, 'buses')[0]!.usual).toBeUndefined();
       expect(s.ignored).toEqual(['stop']);
     }],
+    ['a bike on a road', (s) => expect(s.things).toEqual({ motorcycles: 1, hills: 0 })], // a bike is a motorcycle
+    ['a bike and a bicycle', (s) => expect(s.things).toEqual({ bicycles: 2, hills: 0 })], // unless bicycles are about
+    ['two bikes, a cyclist', (s) => { // the cyclist is drawn as a bicycle too: three
+      expect(s.things.bicycles).toBe(3);
+      expect(s.things.motorcycles).toBeUndefined();
+    }],
+    ['a truck with a red cab', (s) => expect(s.things).toEqual({ trucks: 1, hills: 0 })], // a bare cab is no taxi
+    ['a yellow cab', (s) => expect(s.things).toEqual({ taxis: 1, hills: 0 })],
+    ['a taxi cab at night', (s) => expect(s.things.taxis).toBe(1)],
+    ['a tractor trailer on a highway', (s) => expect(s.things).toEqual({ semis: 1, hills: 0 })], // not a tractor
+    ['a tractor-trailer', (s) => expect(s.things.semis).toBe(1)],
     ['a red car and a blue car', (s) => {
       expect(s.things.cars).toBe(2);
       expect(inst(s, 'cars').map((i) => i.colour)).toEqual(['red', 'blue']);
@@ -166,6 +177,33 @@ describe('every row renders', () => {
 });
 
 describe('the shared instance fields', () => {
+  it('paints the words\' colour through paint(): the header kart red, a yellow truck yellow, red and blue cars', () => {
+    const red = (r: number, g: number, b: number) => r > 1.8 * g && r > 1.8 * b && r > 0.12;
+    const share = (img: Image, t: Box, test: Test) => {
+      let n = 0, all = 0;
+      for (let y = Math.round(t.y); y < t.y + t.h; y++) {
+        for (let x = Math.round(t.x); x < t.x + t.w; x++) {
+          const i = (y * img.width + x) * 3;
+          all++;
+          if (test(img.data[i]!, img.data[i + 1]!, img.data[i + 2]!)) n++;
+        }
+      }
+      return n / all;
+    };
+    const kart = paint(read(KART), { width: 640, height: 360 });
+    expect(share(kart, kart.layout.things.find((t) => t.kind === 'kart')!, red)).toBeGreaterThan(0.15); // 0.3 seen
+    const truck = paint(read('a yellow truck on a desert highway at noon'), { width: 640, height: 360 });
+    const yellow = (r: number, g: number, b: number) => r > b + 0.2 && g > b + 0.15;
+    expect(share(truck, truck.layout.things.find((t) => t.kind === 'truck')!, yellow)).toBeGreaterThan(0.3);
+    const cars = paint(read('a red car and a blue car'), { width: 640, height: 360 });
+    const blue = (r: number, g: number, b: number) => b > r + 0.15;
+    const both = cars.layout.things.filter((t) => t.kind === 'car');
+    const shares = both.map((t) => [share(cars, t, red), share(cars, t, blue)]); // the glass is bluish on both
+    expect(shares.length).toBe(2);
+    expect(shares.some(([r, b]) => r > 0.3 && b < r / 3)).toBe(true); // 0.42 red, 0.10 blue seen
+    expect(shares.some(([r, b]) => b > 0.3 && r < 0.05)).toBe(true); // 0.54 blue, 0.03 red
+  });
+
   it('colours each instance from inst.colour: a red car and a blue car, side by side', () => {
     const { ctx } = ground('a meadow at noon', 480, 270);
     const zm = 16, fy = ctx.project(0, zm).y;

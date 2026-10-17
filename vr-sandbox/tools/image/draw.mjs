@@ -476,7 +476,13 @@ export function attach(ctx) {
       if (x < 0 || y < 0 || x >= W || y >= H) return;
       const xi = x | 0, yi = y | 0;
       if (a >= TOP_ALPHA && (tops[xi] < 0 || yi < tops[xi])) tops[xi] = yi;
-      if (owner && a >= OWN_ALPHA) owner[yi * W + xi] = id; // hook for placement-critic: the last painted here owns it
+      if (owner && a >= OWN_ALPHA) { // hook for placement-critic: the last painted here owns it; each counts its own
+        const i = yi * W + xi;
+        if (owner[i] !== id) {
+          owner[i] = id;
+          if (ctx.painted) ctx.painted[id] = (ctx.painted[id] ?? 0) + 1;
+        }
+      }
       base(xi, yi, fade > 0 ? ctx.air(c, fade, seen) : c, a);
     };
     try {

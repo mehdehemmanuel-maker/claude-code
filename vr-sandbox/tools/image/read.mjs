@@ -96,7 +96,13 @@ export const PHRASES = [
   ['go', 'karts'], ['snow', 'capped'], ['night', 'time'], ['day', 'time'], ['old', 'photo'], ['old', 'photograph'],
   ['dirt', 'bike'], ['dirt', 'bikes'], ['semi', 'truck'], ['semi', 'trucks'], ['four', 'wheeler'],
   ['four', 'wheelers'], ['motor', 'bike'], ['motor', 'bikes'], // hook for vehicles: read as one word each
+  ['yellow', 'cab'], ['yellow', 'cabs'], ['taxi', 'cab'], ['taxi', 'cabs'], ['tractor', 'trailer'],
+  ['tractor', 'trailers'], // a cab is a taxi only after yellow or taxi; a tractor trailer is a semi
 ];
+/** A bike is a motorcycle, unless the words also say bicycle, cycling or cyclist: then every bike is a bicycle. */
+const PEDALLED = /^(bicycles?|cycling|cyclists?)$/;
+/** Words that end in s and name one thing: 'a bus' is one bus, not the usual number of them. */
+const SINGULAR_S = /^(bus|minibus|gas|glass|grass|moss|cactus|campus|circus|octopus|walrus|chassis|bass)$/;
 /** Words that mean something only after another: 'track' is a road after race, dirt or train, else nothing. */
 const TRACK_AFTER = /^(race|racing|dirt|gravel|train|railway)$/;
 export const AFTER = { track: TRACK_AFTER, tracks: TRACK_AFTER };
@@ -360,6 +366,9 @@ function tokenize(prompt) {
       break;
     }
   }
+  if (out.some((t) => PEDALLED.test(t.w))) { // hook for vehicles: a bike among bicycles is a bicycle
+    for (const t of out) if (/^bikes?$/.test(t.w)) t.w = t.w.replace('bike', 'bicycle');
+  }
   return out;
 }
 
@@ -367,7 +376,7 @@ function tokenize(prompt) {
 
 /** The kind a form names: a built-in from THINGS, else a registered thing by its key (its word, or its id). */
 const kindOf = (f) => Object.keys(THINGS).find((k) => THINGS[k].test(f)) ?? keyOf(thingFor(f) ?? { id: undefined });
-const plural = (f, kind) => COLLECTIVE.test(f) || (!SINGLE.includes(kind) && /s$/.test(f));
+const plural = (f, kind) => COLLECTIVE.test(f) || (!SINGLE.includes(kind) && /s$/.test(f) && !SINGULAR_S.test(f));
 /** How many of a kind a bare plural names: the table here, else the registered thing's own usual. */
 const usualOf = (kind) => USUAL[kind] ?? thingByKey(kind)?.usual ?? 1;
 

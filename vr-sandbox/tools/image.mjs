@@ -2,14 +2,16 @@
 // An image from words, generated here: no model, no service, no key. The words are read into a scene (the time of day,
 // the weather, the ground, what stands on it and how many), the scene is painted pixel by pixel (sky, sun or moon and
 // stars, clouds, ranges of mountains fading into the air, water, ground, trees in their season's colours, houses,
-// buildings, a car, a boat, birds, weather, grain), and the pixels are written as a PNG by this file's own encoder.
+// buildings, vehicles, a boat, birds, weather, grain), and the pixels are written as a PNG by this file's own encoder.
 // The ground: grass with tufts and flowers, sand in dunes with lit crests and shadowed lees, snow, rolling swells when
 // hills are named, a road that drifts (grey asphalt, or dirt with ruts) and rises with them, wet on every surface.
 // The water: a shoreline that wanders with a foam line and wet sand, mirroring the sky, the ranges and the far bank
 // and what stands at its edge or on it, whitecaps and no glitter in a storm, flat ice when frozen, a river between
 // two banks; rain and snow fall in three depths, snow settles on every top edge, fog thickens with depth.
-// Things stand in metres through a camera 1.6 m up (a 4.5 m car on a two-lane road, a 6 m cabin, a 15-25 m
-// pine), with anti-aliased edges and a shadow thrown by the sun or the moon at the hour's height; the sun a small
+// Things stand in metres through a camera 1.6 m up that steps back and up to frame what was asked (a 4.6 m car on
+// a two-lane road, a 6 m cabin, a 15-25 m pine), placed in world space (a named subject near a third line, nothing
+// over another, nothing but vehicles on the road, boats on the water, a counted few staggered in depth), with
+// anti-aliased edges and a shadow thrown by the sun or the moon at the hour's height; the sun a small
 // warm disc by day and a deep orange ball when low, the moon by its phase, the mountains lit on the sun's side. A
 // style can finish the whole (pixel art, a poster, a sketch, a watercolour, mono, sepia, vintage) and a caption can be
 // written over it in the tool's own 5x7 bitmap font.
@@ -34,13 +36,16 @@
 //   --text "..."     a caption in the 5x7 bitmap font, top- or bottom-centre away from the subject, two lines at
 //                    most: a longer one is cut with ... and stderr says so, as it says of characters not in the font;
 //                    the flag wins over a text in the words, and stderr says so
-//   --describe       print what the words were read as (JSON) and stop, no picture
+//   --describe       print what the words were read as (JSON) and stop, no picture saved (the picture is painted,
+//                    at --size, so the critic's visible counts are in the JSON: about a second at 1280x720)
 //   --strict         write nothing and exit 3 when nothing in the words is understood, or when an ignored word looks
 //                    like a noun (three letters or more, not ending in -ly: it cannot tell nouns from adjectives)
 //   --help           this text. `--` ends the options, so the words may begin with a dash.
 //
 // After every painting the shell says on stderr what it read (`read as: day, water with sand shore, boats 1`), what it
-// could not (`not understood: dragon, castle`), what it changed (`changed: ground sand -> water (boats)`), and when
+// could not (`not understood: dragon, castle`), what it changed (`changed: ground sand -> water (boats)`), what the
+// critic could see once painted (`visible: trees 3/3, houses 1/2`: a thing hidden behind a nearer one or too small
+// to read is not counted), and when
 // nothing at all was understood it says so and paints the default day meadow. The PNG carries the same reading as a
 // tEXt chunk named Comment (the scene JSON) beside a Software chunk, so any picture can be traced to its words.
 //
@@ -51,7 +56,10 @@
 // road/highway/lane/street/avenue, dirt/gravel, a track after race, dirt or train), water (sea/ocean/lake/pond/bay/
 // coast, river/stream/canal, harbour/port/marina, island/tropical/palm, beach/shore), things (mountains/peaks/mountain
 // range, hills, trees/forest/woods/pines/firs/oaks/palms, house/cabin/cottage/barn/hut/farmhouse/village, buildings/
-// city/town/skyline/cityscape/downtown/towers, car/kart/truck/van/jeep/taxi, boat/ship/sailboat/yacht/ferry/canoe,
+// city/town/skyline/cityscape/downtown/towers, vehicles from their published or typical figures, seen from behind on
+// a road or side-on: car/sedan/hatchback, kart/go-kart, truck/pickup/lorry, semi/trailer/tractor-trailer/18-wheeler/
+// rig, jeep/suv/4x4, van, bus/coach, taxi/yellow cab, forklift, motorcycle/motorbike/bike, dirt bike, bicycle (and a
+// bike when cycling or a bicycle is named), atv/quad/four-wheeler, tractor/mower; boat/ship/sailboat/yacht/ferry/canoe,
 // birds/gulls/crows, flowers/poppies/tulips/daisies (dots over the grass, as a meadow or a field has), sun, moon and
 // its phase, stars) with counts ("three trees", "15 trees", "a hundred" is forty,
 // "no trees"), colours and sizes before things ("red car", "tiny cabin", "huge mountains"), places (near, far, left,

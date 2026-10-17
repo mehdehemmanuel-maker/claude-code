@@ -296,6 +296,7 @@ const PLATE = [0.9, 0.9, 0.85], TAIL = [1, 0.14, 0.08], TAIL_OFF = [0.5, 0.08, 0
 const HEAD_OFF = [0.72, 0.74, 0.76], SIGN = [0.98, 0.97, 0.9], SEAT = [0.11, 0.11, 0.12], BOX_WHITE = [0.9, 0.9, 0.88];
 const JD_GREEN = [0.21, 0.49, 0.17], TOYOTA_ORANGE = [0.85, 0.64, 0.10], CAB_YELLOW = [0.91, 0.76, 0.16];
 const GX_RED = [0.72, 0.1, 0.08]; // a Honda GX engine's fuel tank
+const SEAT_RIM = [0.34, 0.34, 0.37]; // the seat shell's rolled edge, lighter than its bucket
 /** Paintwork an uncoloured vehicle picks from, by the seed: white, silver, black, grey, red, blue, green, orange. */
 export const PALETTE = [
   [0.9, 0.9, 0.9], [0.72, 0.74, 0.77], [0.1, 0.1, 0.11], [0.35, 0.36, 0.4], [0.70, 0.12, 0.16], [0.12, 0.31, 0.66],
@@ -659,16 +660,20 @@ function kartParts(V, c) {
   parts.push(box(0.5, 1.1, -0.3, 0.3, V.clearance + 0.032, V.clearance + 0.04, DARK)); // the floor pan
   const nose = [[0.45, -0.5], [0.12, -0.45], [0, -0.25], [0, 0.25], [0.12, 0.45], [0.45, 0.5]];
   parts.push(prism('h', N.h[0], N.h[1], nose, c)); // the nose cone, in plan
-  parts.push(box(B.u[0], B.u[1], -half, half, B.h[0], B.h[1], c)); // the rear bumper across both rear wheels
+  // the rear bumper, as wide as the pods (machines.ts:1283: the extras are nose and pods), so the rear tyres stand
+  // proud of it on both sides and over it, and a kart from behind shows its four wheels
+  parts.push(box(B.u[0], B.u[1], -P.v[1], P.v[1], B.h[0], B.h[1], c));
   const back = [[1.22, 0.14], [1.3, 0.14], [1.44, V.seatBack], [1.36, V.seatBack]]; // the shell's back, leaning
+  const rim = (top) => (u, v, h) => (h > top - 0.05 ? SEAT_RIM : SEAT); // the shell's rolled edge
   parts.push(box(1.0, 1.32, -0.38, 0.02, 0.08, 0.16, SEAT)); // the seat's cushion, offset left (machines.ts:1281)
-  parts.push(prism('v', -0.38, 0.02, back, SEAT));
+  parts.push(prism('v', -0.38, 0.02, back, rim(V.seatBack)));
   for (const s of [-0.38, -0.04]) parts.push(prism('v', s, s + 0.06, [[1.0, 0.16], [1.3, 0.16], [1.36, 0.34],
-    [1.0, 0.3]], SEAT)); // its side bolsters
+    [1.0, 0.3]], rim(0.34))); // its side bolsters
   parts.push(tube([0.45, -0.18, 0.25], [0.7, -0.18, 0.5], 0.015, STEEL)); // the steering column and wheel
   parts.push(ring('u', 0.72, -0.18, 0.55, 0.13, 0.03, DARK));
-  // the GX270 at the rear right: a dark block, its red fuel tank on top, the silver recoil cover on its outer side
-  parts.push(box(E.u[0], E.u[1], E.v[0], E.v[1], E.h[0], E.h[1] - 0.12, DARK));
+  // the GX270 at the rear right: a steel block (not the seat's black: two masses), its red fuel tank on top, the
+  // silver recoil cover on its outer side
+  parts.push(box(E.u[0], E.u[1], E.v[0], E.v[1], E.h[0], E.h[1] - 0.12, STEEL));
   parts.push(box(E.u[0] + 0.03, E.u[1] - 0.1, E.v[0] + 0.04, E.v[1] - 0.04, E.h[1] - 0.12, E.h[1], GX_RED));
   parts.push(discPart('v', (E.u[0] + E.u[1]) / 2, E.v[1] + 0.005, E.h[0] + 0.16, 0.1, CHROME));
   return parts;
@@ -814,7 +819,8 @@ export function drawVehicle(ctx, inst, kind) {
     }
   }
   const pick = PALETTE[Math.floor(rand() * PALETTE.length)], own = OWN_COLOUR[kind];
-  const uncoloured = !inst.colour, colour = inst.colour ?? own ?? pick;
+  const named = inst.colour ?? ctx.col(KEY[kind], undefined); // placement's, else the reader's colour for the kind
+  const uncoloured = !named, colour = named ?? own ?? pick;
   const glass = mix(GLASS, L.horizon, 0.35), dim = L.ambient * gloom < AMBIENT_LAMPS;
   const fy = inst.fy ?? ctx.project(xm, zm).y;
   // On the road a vehicle turns a little toward its near side (away: the nose toward the road's middle; toward: away
@@ -991,15 +997,18 @@ export const VEHICLE_WORDS = {
   kart: /^(karts?|go-?karts?|gokarts?|karting|buggy|buggies)$/,
   car: /^(cars?|sedans?|saloons?|hatchbacks?|automobiles?|coupes?|convertibles?|vehicles?)$/,
   truck: /^(trucks?|pickups?|pick-?ups?|lorry|lorries|pickup-trucks?)$/,
-  semi: /^(semis?|semi-trucks?|semi-trailers?|trailers?|18-wheelers?|eighteen-wheelers?|rigs?|big-rigs?)$/,
+  semi: new RegExp(
+    '^(semis?|semi-trucks?|semi-trailers?|trailers?|tractor-trailers?|18-wheelers?|eighteen-wheelers?|rigs?|' +
+    'big-rigs?)$',
+  ),
   suv: /^(jeeps?|suvs?|4x4s?|4wd|crossovers?|land-rovers?)$/,
   van: /^(vans?|minivans?|minibus|minibuses|campervans?)$/,
   bus: /^(bus|buses|busses|coach|coaches|school-bus)$/,
-  taxi: /^(taxis?|taxicabs?|cabs?)$/,
+  taxi: /^(taxis?|taxicabs?|taxi-cabs?|yellow-cabs?)$/, // a bare cab is a truck's (read.mjs joins yellow cab)
   forklift: /^(forklifts?|fork-?lifts?|forktrucks?|fork-trucks?)$/,
-  motorcycle: /^(motorcycles?|motorbikes?|motor-?bikes?|choppers?)$/,
+  motorcycle: /^(motorcycles?|motorbikes?|motor-?bikes?|bikes?|choppers?)$/, // a bike is a motorcycle,
   dirtbike: /^(dirt-?bikes?|dirtbikes?|motocross|enduro)$/,
-  bicycle: /^(bicycles?|bikes?|cycling|cyclists?|push-?bikes?)$/,
+  bicycle: /^(bicycles?|cycling|cyclists?|push-?bikes?)$/, // unless bicycle, cycling or cyclist is said (read.mjs)
   atv: /^(atvs?|quads?|quad-?bikes?|four-wheelers?|4-wheelers?)$/,
   tractor: /^(tractors?|mowers?|lawn-?mowers?|lawn-?tractors?|lawnmowers?)$/,
 };
