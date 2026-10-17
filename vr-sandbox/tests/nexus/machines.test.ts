@@ -3,9 +3,11 @@
 import { describe, expect, test } from 'vitest';
 import * as THREE from 'three';
 import { KITS, makeKit, massOf, type Part } from '../../src/nexus/kits';
-import { MACHINES, makeMachine, tyreOf } from '../../src/nexus/machines';
+import { bodyPlanOf, MACHINES, makeMachine, styledCar, tyreOf } from '../../src/nexus/machines';
 import { perfect } from '../../src/nexus/make/pipeline';
 import { layout } from '../../src/nexus/make/space';
+import { bodyPanels } from '../../src/nexus/panels';
+import { patchPoints } from '../../src/nexus/surface';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 const kit = (id: string, words: string) => makeKit(KITS.find((k) => k.id === id)!, words, 1).part;
@@ -20,6 +22,39 @@ describe('tyres from their size codes', () => {
     expect(t('11R22.5').D).toBeCloseTo(22.5 * 0.0254 + 2 * 11 * 0.0254 * 0.875, 6);
     expect(t('6.50-10').W).toBeCloseTo(6.5 * 0.0254, 6);
     expect(tyreOf('a big tyre')).toBeNull();
+  });
+  test('each spelling on a sidewall gives the diameter its system\'s formula does', () => {
+    const D = (c: string) => tyreOf(c)!.D * 1000;
+    // ISO metric W/ARrD: D in × 25.4 + 2 × W × AR/100, mm
+    expect(D('205/55R16')).toBeCloseTo(406.4 + 225.5, 6); // 631.9 mm
+    expect(D('315/80R22.5')).toBeCloseTo(571.5 + 504, 6); // 1,075.5 mm
+    // conventional truck NRdd: the file takes its sidewall as 0.875 of its width (typical of the family, machines.ts tyreOf)
+    expect(D('11R22.5')).toBeCloseTo(571.5 + 2 * 279.4 * 0.875, 6); // 1,060.45 mm
+    // flotation NxW-D: the first figure is its overall diameter in inches
+    expect(tyreOf('15x6.00-6')).toMatchObject({ D: 15 * 0.0254, W: 6 * 0.0254, rim: 6 * 0.0254 }); // 381 mm across
+    // bias-ply S-D: S inches wide on a D-inch rim, its sidewall 0.96 of its width (the file's assumption, typical of
+    // bias-ply sizes: machines.ts tyreOf); a farm tyre spells its width with one decimal, a truck's with none
+    expect(D('13.6-28')).toBeCloseTo(711.2 + 2 * 345.44 * 0.96, 6); // 1,374.44 mm
+    expect(D('13.60-28')).toBeCloseTo(D('13.6-28'), 9); // the same tyre, spelt with two
+    expect(D('11-22.5')).toBeCloseTo(571.5 + 2 * 279.4 * 0.96, 6); // 1,107.95 mm
+    expect(tyreOf('6.50-10')!.D * 1000).toBeCloseTo(254 + 2 * 165.1 * 0.96, 6); // 571.0 mm
+    for (const bad of ['a big tyre', '13.6', '28-', '205/55', 'R16']) expect(tyreOf(bad), bad).toBeNull();
+  });
+});
+
+describe('body styles by their typical figures', () => {
+  test('a pickup\'s bed is about half a metre deep inside, its rail about 1.45 m up, as a crew cab\'s is (typical)', () => {
+    for (const rim of [15, 17]) {
+      const m = styledCar('pickup', { color: 0x888888, rim, rims: 'alloy', power: 'petrol', tint: 'dark' }), xDeck = m.L / 2 - m.lines!.deck * m.L, xT = -m.L / 2;
+      // its floor, laid over its rear tyres at full bump; its rail, the highest its skin stands over the bed between its
+      // tail and its cab's back
+      const floor = all(makeMachine(m)).find((p) => p.name === 'bed floor')!, floorTop = floor.at![1] + (floor.shape as { box: [number, number, number] }).box[1] / 2;
+      let rail = -Infinity;
+      for (const p of bodyPanels(bodyPlanOf(m))) if (p.shape && 'surf' in p.shape && p.finish === 'paint') for (const q of patchPoints(p.shape.surf, 40, 16)) if (q[0] > xT + 0.3 && q[0] < xDeck - 0.2) rail = Math.max(rail, q[1]);
+      expect(floorTop, `rim ${rim}: floor over the tyres`).toBeGreaterThan(0.85); expect(floorTop, `rim ${rim}`).toBeLessThan(1.0);
+      expect(rail, `rim ${rim}: rail`).toBeGreaterThan(1.4); expect(rail, `rim ${rim}: rail`).toBeLessThan(1.5);
+      expect(rail - floorTop, `rim ${rim}: bed depth`).toBeGreaterThan(0.45); expect(rail - floorTop, `rim ${rim}: bed depth`).toBeLessThan(0.55);
+    }
   });
 });
 
