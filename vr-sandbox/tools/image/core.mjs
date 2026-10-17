@@ -9,7 +9,10 @@
 // what stands in the picture; styles.mjs the finishes; text.mjs and font.mjs the caption; this file the context.
 import { clamp, hash, lerp, mix, rng } from './math.mjs';
 import { COLOURS, words } from './read.mjs';
-import { celestialPass, cloudPass, finishPass, groundPass, landBehindPass, skyPass, weatherPass } from './passes.mjs';
+import {
+  FLOWERS, celestialPass, cloudPass, finishPass, groundPass, landBehindPass, seasonLeaf, skyPass, weatherFarPass,
+  weatherPass,
+} from './passes.mjs';
 import { drawers, thingsPass } from './things.mjs';
 import { attach } from './draw.mjs';
 import { styleFor } from './styles.mjs';
@@ -50,12 +53,15 @@ export const LIGHT = {
 // ── The built-ins ──────────────────
 
 for (const drawer of drawers) register('things', drawer);
+register('things', FLOWERS); // hook for ground-weather: flowers, a flag on the land more than a thing, after the six
 register('families', {
   id: 'landscape',
   detect: () => true,
   // hook for sky-light: the sun's disc goes on before the clouds, so they cross it with their own lit edges; the
   // water still reflects the clouded sky without the disc (cloudPass paints into the snapshot celestialPass takes).
-  passes: [skyPass, celestialPass, cloudPass, landBehindPass, groundPass, thingsPass, weatherPass, finishPass],
+  passes: [ // hook for ground-weather: the far rain and snow go on before the things, so near things hide them
+    skyPass, celestialPass, cloudPass, landBehindPass, groundPass, weatherFarPass, thingsPass, weatherPass, finishPass,
+  ],
 });
 
 // ── Painting ───────────────────────
@@ -144,6 +150,7 @@ function tools(ctx) {
   ctx.foot = (fy) => (fy - hy) / (H - hy); // 0 at the horizon, 1 at the foot of the picture
   ctx.sizeAt = (fy) => 0.05 + ctx.foot(fy) * 0.95;
   ctx.col = (thing, fallback) => (scene.colours[thing] ? COLOURS[scene.colours[thing]] : fallback);
+  ctx.leaf = seasonLeaf(scene); // hook for ground-weather: the season's leaf colours, read by the tree drawer
 }
 
 // ── Out of the float buffer ────────

@@ -363,3 +363,14 @@ export declare function thingFor(token: string): ThingEntry | undefined;
 export declare function thingByKey(key: string): ThingEntry | undefined;
 export declare function familyFor(token: string): FamilyEntry | undefined;
 export declare function styleNamed(token: string): StyleEntry | undefined;
+
+// ── ground-weather (tools/image/passes.mjs: landPixel and the road, weatherFarPass and weatherPass; the helpers
+// are typed in tools/image/passes.d.mts for a direct import). Ctx merges with the interfaces above.
+export interface Ctx {
+  /** The season's leaf colours, (pine, r) -> colour, set by core.mjs's tools(); null when no season was named. */
+  leaf?: ((pine: boolean, r: number) => number[]) | null;
+  /** The fog's scale on every sprite's air fade (1 + fog * 1.2), set by weatherFarPass, read by ctx.sprite. */
+  fogK?: number;
+  /** The road's drifting centre at a row, in pixels (W * (0.5 + roadDrift(foot(y)))), set by groundPass. */
+  roadX?: (y: number) => number;
+}

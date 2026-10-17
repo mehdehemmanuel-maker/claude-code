@@ -71,7 +71,9 @@ describe('the image tool', () => {
     expect(Object.keys(core).sort()).toEqual(expect.arrayContaining([
       'LIGHT', 'conditions', 'families', 'paint', 'register', 'styles', 'things', 'toImageData', 'toRGBA8',
     ]));
-    expect(core.things.map((t: { id: string }) => t.id)).toEqual(['tree', 'building', 'house', 'boat', 'car', 'bird']);
+    const ids = core.things.map((t: { id: string }) => t.id); // the six built-ins first; packages register after them
+    expect(ids.slice(0, 6)).toEqual(['tree', 'building', 'house', 'boat', 'car', 'bird']);
+    expect(ids).toContain('flowers'); // ground-weather's flag on the land
     const rgba = core.toRGBA8(paint(read('a tree'), { width: 4, height: 3, seed: 1 }));
     expect(rgba.length).toBe(4 * 3 * 4);
     expect(rgba[3]).toBe(255);

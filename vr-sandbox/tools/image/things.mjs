@@ -117,7 +117,8 @@ function tree(ctx, inst) { // a pine: a trunk and three skirts of needles, or a 
   const grow = rand(), pine = scene.land === 'snow' || scene.things.mountains || rand() < 0.5;
   const [low, high] = pine ? SIZES.pine : SIZES.broadleaf, hm = lerp(low, high, grow);
   const { x0, fy, zm, s, xm, shadow } = stance(ctx, inst), hgt = hm * s;
-  const trunk = lit(TRUNK, 0.6), leaf = col('trees', pine ? PINE : BROADLEAF);
+  const trunk = lit(TRUNK, 0.6);
+  const leaf = col('trees', ctx.leaf ? ctx.leaf(pine, rand()) : pine ? PINE : BROADLEAF); // hook for ground-weather
   const crown = pine ? hm * 0.6 : hm * 0.736; // the crown's width in metres, as the skirts and the ball below draw it
   shadow(xm, zm, { w: crown * 0.6, d: crown * 0.6 }, hm * 0.9);
   rect(x0 - hgt * 0.025, fy - hgt * 0.3, hgt * 0.05, hgt * 0.3, trunk);
