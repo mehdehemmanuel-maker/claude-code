@@ -124,3 +124,309 @@ A dog, a motor, a table, a beach; a category, a family, a role, a kind; a constr
 a natural-language front end; the headset and the tablet; a renderer that is anything but a projection of bound terms;
 a second realization before the first has a measured contract. See docs/NEXUS-RESTART.md Part XXII for the full list
 of red flags.
+
+## Pictures from words
+
+<!-- image-leads: written by `npm run image:examples` from EXAMPLES in tools/image-examples.mjs -->
+![a red go-kart on a wet road at dusk, mountains behind](docs/images/kart-dusk.png)
+
+*`a red go-kart on a wet road at dusk, mountains behind`* (seed 7) — The header's first example. The kart is 1.8 m
+long on a 3.5 m lane, seen from behind as it goes away down a road that drifts; the wet asphalt mirrors the dusk sky
+and the mountains fade into the air.
+
+<details><summary><code>--describe</code>: what the words were read as</summary>
+
+```json
+{
+  "prompt": "a red go-kart on a wet road at dusk, mountains behind",
+  "recognised": 5,
+  "time": "sunset",
+  "hour": 18.5,
+  "clouds": 0.35,
+  "fog": 0,
+  "rain": 0,
+  "snow": 0,
+  "storm": false,
+  "wet": true,
+  "season": null,
+  "moonPhase": null,
+  "ground": "grass",
+  "land": "grass",
+  "road": true,
+  "roadKind": "asphalt",
+  "beach": false,
+  "river": false,
+  "frozen": false,
+  "waterWord": null,
+  "lake": false,
+  "things": {
+    "karts": 1,
+    "mountains": 0
+  },
+  "colours": {
+    "karts": "red"
+  },
+  "instances": [
+    {
+      "kind": "karts",
+      "count": 1,
+      "size": 1,
+      "modifiers": [],
+      "word": "go-kart",
+      "index": 2,
+      "colour": "red"
+    },
+    {
+      "kind": "mountains",
+      "count": 3,
+      "size": 1,
+      "modifiers": [],
+      "word": "mountains",
+      "index": 9,
+      "usual": true
+    }
+  ],
+  "ignored": [],
+  "overridden": [],
+  "report": {
+    "visible": {
+      "karts": [
+        1,
+        1
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+![three pine trees by a lake under a full moon, snow](docs/images/lake-moon.png)
+
+*`three pine trees by a lake under a full moon, snow`* (seed 3) — Three pines counted and placed apart on the near
+shore, snow on every top edge, the full moon and the ranges mirrored in the lake; "moon" turned the time to night and
+the tool said so (overridden, below).
+
+<details><summary><code>--describe</code>: what the words were read as</summary>
+
+```json
+{
+  "prompt": "three pine trees by a lake under a full moon, snow",
+  "recognised": 4,
+  "time": "night",
+  "hour": 23,
+  "clouds": 0.35,
+  "fog": 0,
+  "rain": 0,
+  "snow": 0.7,
+  "storm": false,
+  "wet": false,
+  "season": null,
+  "moonPhase": "full",
+  "ground": "water",
+  "land": "snow",
+  "road": false,
+  "roadKind": null,
+  "beach": true,
+  "river": false,
+  "frozen": false,
+  "waterWord": "lake",
+  "lake": true,
+  "things": {
+    "trees": 3,
+    "moon": 1
+  },
+  "colours": {},
+  "instances": [
+    {
+      "kind": "trees",
+      "count": 3,
+      "size": 1,
+      "modifiers": [],
+      "word": "pine trees",
+      "index": 1
+    },
+    {
+      "kind": "moon",
+      "count": 1,
+      "size": 1,
+      "modifiers": [
+        "full"
+      ],
+      "word": "moon",
+      "index": 9
+    }
+  ],
+  "ignored": [],
+  "overridden": [
+    {
+      "what": "time",
+      "from": "day",
+      "to": "night",
+      "because": "moon"
+    }
+  ],
+  "report": {
+    "visible": {
+      "trees": [
+        3,
+        3
+      ]
+    }
+  }
+}
+```
+
+</details>
+<!-- /image-leads -->
+
+`tools/image.mjs` is a tool beside Nexus, not part of it: a line of words becomes a picture here, with no model, no
+service and no key. The words are read into a scene (the time of day, the weather, the ground, what stands on it and
+how many), the scene is painted pixel by pixel through a camera in metres, and the pixels are written as a PNG by the
+file's own encoder: one command, Node 18+, nothing to install, zero dependencies. The same words give the same bytes
+every time (`--seed` asks for another picture of the same reading), and what the tool did not understand it says:
+every ignored word and every silent change go to stderr, into `--describe`, and into the PNG itself as a tEXt chunk, so
+any picture can be traced to its words.
+
+```bash
+node tools/image.mjs "three pine trees by a lake under a full moon, snow" --out lake.png --size 960x540
+node tools/image.mjs "a city skyline at night in the rain" --describe      # the reading as JSON, no picture
+node tools/image.mjs "two sailboats at sunset" --strip 6 --size 480x270     # six seeds in one wide picture
+```
+
+<!-- image-examples: written by `npm run image:examples` from EXAMPLES in tools/image-examples.mjs -->
+<table><tr>
+<td width="50%"><img src="docs/images/city-rain.png" alt="a city skyline at night in the rain" width="640"></td>
+<td width="50%"><img src="docs/images/cabin-fog.png" alt="a cabin in a foggy forest at dawn" width="640"></td>
+</tr><tr><td valign="top">
+
+*`a city skyline at night in the rain`* (seed 5) — A skyline row at the horizon with lit windows, nearer towers, rain
+in three depths, wet pavement.
+
+</td><td valign="top">
+
+*`a cabin in a foggy forest at dawn`* (seed 2) — Fog thickens with depth: the far trees go first, the ranges behind
+them are a band in the air, and the cabin stands clear on the near grass with its shadow thrown by the low sun.
+
+</td></tr></table>
+
+![two sailboats at sunset](docs/images/sailboats-strip.png)
+
+*`two sailboats at sunset`* (seed 1) — One prompt, six seeds side by side (`--strip 6`): the boats, the sun, the
+clouds and the shore move; the reading is the same. Each cell can be had alone with `--seed`.
+
+![a mountain lake with a red cabin](docs/images/styles-grid.png)
+
+*`a mountain lake with a red cabin`* (seed 4) — The eight finishes over one picture (`--style`, or the word in the
+prompt): pixel, poster, minimalist, sketch, watercolour, mono, sepia, vintage. The labels are the tool's own 5x7 font.
+
+<table><tr>
+<td width="50%"><img src="docs/images/mars-orbit.png" alt="mars from orbit" width="640"></td>
+<td width="50%"><img src="docs/images/mandala.png" alt="a blue and gold mandala" width="640"></td>
+</tr><tr><td valign="top">
+
+*`mars from orbit`* (seed 11) — The space family: a sphere shaded from the light's side, in Mars's known colours (not
+a photograph), the limb across the bottom third because "orbit" puts the eye low over it.
+
+</td><td valign="top">
+
+*`a blue and gold mandala`* (seed 9) — The abstract family: rotational symmetry from the seed, the palette from the
+colour words.
+
+</td></tr></table>
+
+<table><tr>
+<td width="50%"><img src="docs/images/portrait.png" alt="a portrait of a smiling woman with red hair" width="640"></td>
+<td width="50%"><img src="docs/images/reef.png" alt="a coral reef with five fish and a diver" width="640"></td>
+</tr><tr><td valign="top">
+
+*`a portrait of a smiling woman with red hair`* (seed 6) — The portrait family: a stylised face in adult-head
+proportions, hair from the colour word; never a likeness of anyone, and the picture's notes say so.
+
+</td><td valign="top">
+
+*`a coral reef with five fish and a diver`* (seed 8) — The underwater family: light rays, caustics on the sand, coral,
+kelp, bubbles, counted fish, a diver.
+
+</td></tr></table>
+
+![vehicles-sheet.png](docs/images/vehicles-sheet.png)
+
+*`a red go-kart on a road`, `a blue pickup truck on a road`, `a white semi on a highway`, `a yellow forklift on a
+road`, `a bus on a road`, `a green jeep on a dirt road`* — Vehicles from a figures table
+(tools/image/things/vehicles.mjs: length, wheelbase, wheel sizes, cab and bed in metres, each with its source), seen
+from behind on the road. The kart has no roll hoop because the sourced rental kart has none; "jeep" draws the
+crossover the project holds.
+
+![a dragon over a castle, a wizard on the drawbridge](docs/images/honesty-dragon.png)
+
+*`a dragon over a castle, a wizard on the drawbridge`* (seed 1) — What the tool does when it does not understand: it
+says so on stderr (below, captured from the real run), keeps the ignored words in the PNG's tEXt chunk, and paints
+what it did understand; with `--strict` it writes nothing and exits 3 instead.
+
+```
+$ node tools/image.mjs "a dragon over a castle, a wizard on the drawbridge" --size 640x360 --seed 1
+read as: day, grass, hills (added to break the horizon)
+not understood: dragon, castle, wizard, drawbridge
+nothing in these words is understood (dragon, castle, wizard, drawbridge): painting the default day meadow
+```
+<!-- /image-examples -->
+
+### What the words can say
+
+<!-- image-vocabulary: copied from the header of tools/image.mjs by `npm run image:examples` -->
+What is understood: time (dawn/sunrise, morning, day, noon/midday, afternoon, golden hour, sunset/dusk/evening, blue
+hour, night/midnight, moonlit, starlit), weather (clear/sunny, cloudy, overcast/grey, storm/thunderstorm/lightning,
+fog/mist/haze, rain/drizzle/showers, wet, snowing/snowfall/blizzard/flurries, snow, snowy/snow-capped, frozen/icy/ice,
+autumn/fall, spring, summer, winter), ground (grass/meadow/field, desert/sand/dunes, snow, pavement,
+road/highway/lane/street/avenue, dirt/gravel, a track after race, dirt or train), water
+(sea/ocean/lake/pond/bay/coast, river/stream/canal, harbour/port/marina, island/tropical/palm, beach/shore), things
+(mountains/peaks/mountain range, hills, trees/forest/woods/pines/firs/oaks/palms,
+house/cabin/cottage/barn/hut/farmhouse/village, buildings/city/town/skyline/cityscape/downtown/towers, vehicles from
+their published or typical figures, seen from behind on a road or side-on: car/sedan/hatchback, kart/go-kart,
+truck/pickup/lorry, semi/trailer/tractor-trailer/18-wheeler/rig, jeep/suv/4x4, van, bus/coach, taxi/yellow cab,
+forklift, motorcycle/motorbike/bike, dirt bike, bicycle (and a bike when cycling or a bicycle is named),
+atv/quad/four-wheeler, tractor/mower; boat/ship/sailboat/yacht/ferry/canoe, birds/gulls/crows,
+flowers/poppies/tulips/daisies (dots over the grass, as a meadow or a field has), sun, moon and its phase, stars) with
+counts ("three trees", "15 trees", "a hundred" is forty, "no trees"), colours and sizes before things ("red car",
+"tiny cabin", "huge mountains"), places (near, far, left, right, centre), a style word (pixel art/8-bit,
+poster/flat/cartoon, minimalist, sketch/pencil/line art, watercolour/painting, black and white/mono/greyscale, sepia,
+vintage/retro/old photo) and a text to write ("the word HELLO", a quoted phrase, "saying ..."). "no" before a word
+cancels it (no clouds, no trees). Words that name the picture itself (photo, scene, sky) are passed over. Families
+beyond the landscape (a family picture has no ground and no horizon; stderr says which family painted and what it is):
+space (mars, venus, jupiter, saturn, earth beside a space word, planet(s), orbit, moonscape, nebula, galaxy, space
+alone or outer/deep space, cosmos, asteroid(s), moons: a planet from its known colours, not a photograph), abstract
+(abstract, geometric/geometry, circle(s), triangle(s), square(s), shapes, pattern(s), gradient, mandala, stripes,
+bauhaus, mondrian, op-art), portrait (portrait, face, selfie, headshot; woman/man/girl/boy alone; hair, eyes, beard,
+glasses, smiling, blond/blonde, brunette, redhead as its details: a stylised face, not a likeness of anyone),
+underwater (underwater, undersea, coral(s), reef(s), diving, diver(s), scuba, seabed, aquarium; fish/fishes with a
+count). In a landscape: the sky's phenomena (rainbow(s) by day; aurora(s)/borealis/northern lights at night;
+lightning/thunderbolt(s) under a storm) and the landforms (cactus/cacti/cactuses/saguaro(s) on sand,
+palm-tree/palmtree/coconut-palm, volcano/volcanoes/volcanos with erupting/erupts/eruption(s) for lava,
+waterfall(s)/cascade(s)). Anything else in the words is ignored, and --describe shows exactly what was kept: every
+ignored word, every silent change, and how much was recognised.
+<!-- /image-vocabulary -->
+
+### The flags
+
+`--out <file>` where to save (default `images/<date>-<slug>.png`); `--size WxH` (default 1280x720, each side 1 to
+8192); `--seed <n>` the random choices (default: hashed from the words, so the same words give the same picture);
+`--style <name>` one of pixel, poster, minimalist, sketch, watercolour, mono, sepia, vintage; `--text "..."` a caption
+in the tool's 5x7 font; `--count <n>` n pictures from seeds seed, seed+1, ... seed+n-1 as `<out>-1.png` to
+`<out>-n.png`; `--strip <n>` the same n seeds side by side in one wide picture; `--format png|ppm` (a P6 PPM carries
+no text chunk); `--describe` print the reading as JSON and stop; `--strict` write nothing and exit 3 when a
+noun-looking word is not understood; `--help` the whole header. `--` ends the options, so the words may begin with a
+dash.
+
+### Limits
+
+The pictures are stylised, not photoreal: every thing is drawn from its published or typical figures in metres through
+a camera (a kart's wheelbase, a lane's width, a pine's height), and since a real product's exact surface is its
+maker's CAD and is not public (see CLAUDE.md, "What can honestly be promised"), a kart here is the shape of its
+figures, not a likeness of a make, and a portrait is a stylised face, never a likeness of anyone. What the tool does
+not know it says, on stderr and in the file, and `--strict` makes it refuse rather than paint around the gap.
+
+The longer read, for anyone extending it, is [docs/IMAGE-TOOL.md](docs/IMAGE-TOOL.md): the pipeline, the module map,
+how a thing, a family or a style is registered, the world under the paint, the honesty contract, the tests, and the
+decisions made during the build with their reasons. `npm run image:examples` regenerates this gallery from one table,
+and `npm run image:examples -- --check` proves the committed pictures are what the tool paints today.

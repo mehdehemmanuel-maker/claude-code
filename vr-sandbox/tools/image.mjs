@@ -36,6 +36,12 @@
 //   --text "..."     a caption in the 5x7 bitmap font, top- or bottom-centre away from the subject, two lines at
 //                    most: a longer one is cut with ... and stderr says so, as it says of characters not in the font;
 //                    the flag wins over a text in the words, and stderr says so
+//   --count <n>      n pictures, <out>-1.png to <out>-n.png (1 to 64), each from its own seed: the base seed (--seed,
+//                    or the words' own) plus i - 1, so -1 is the picture --seed alone gives, -2 is --seed <base+1>
+//   --strip <n>      one wide picture of n seeds side by side (1 to 64), each cell at --size, the seeds as --count
+//                    takes them and listed in a Seeds tEXt chunk; not together with --count
+//   --format <f>     png (the default), or ppm: a binary P6 file, which has no text chunk, so the reading is said on
+//                    stderr only
 //   --describe       print what the words were read as (JSON) and stop, no picture saved (the picture is painted,
 //                    at --size, so the critic's visible counts are in the JSON: about a second at 1280x720)
 //   --strict         write nothing and exit 3 when nothing in the words is understood, or when an ignored word looks
@@ -83,12 +89,14 @@
 // airplane, cessna, helicopter, balloon, rocket, dragon, kite, birds by word, bats; whale, dolphin, shark, fish).
 // Anything else in the words is ignored, and --describe
 // shows exactly what was kept: every ignored word, every silent change, and how much was recognised.
+// The longer read: README.md ("Pictures from words", a gallery tools/image-examples.mjs regenerates and checks) and
+// docs/IMAGE-TOOL.md (the pipeline, the module map, how a thing, a family or a style is added, the decisions made).
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { clamp } from './image/math.mjs';
-import { nounLooking, read } from './image/read.mjs';
+import { clamp, hash } from './image/math.mjs';
+import { nounLooking, read, words } from './image/read.mjs';
 import { paint } from './image/core.mjs';
 
 export * from './image/core.mjs';
@@ -146,20 +154,66 @@ export function png({ width, height, data }, { text } = {}) {
   return Buffer.concat([signature, chunk('IHDR', ihdr), ...texts, idat, chunk('IEND', Buffer.alloc(0))]);
 }
 
+/** Encodes the painting as a binary PPM: 'P6\n<w> <h>\n255\n' then w*h*3 bytes. The format has no text chunk. */
+export function ppm({ width, height, data }) {
+  const head = Buffer.from(`P6\n${width} ${height}\n255\n`, 'ascii'), body = Buffer.alloc(width * height * 3);
+  for (let i = 0; i < body.length; i++) body[i] = Math.round(clamp(data[i]) * 255);
+  return Buffer.concat([head, body]);
+}
+
+/** The formats the shell writes, by the --format word, each a function of the painting and the text chunks. */
+export const FORMATS = { png, ppm: (image) => ppm(image) };
+
 /**
- * Words to a PNG file, its reading in a tEXt chunk. Returns the path written. `style` and `text` stand in when the
- * words name none; `painted(image)` is called with the painting before it is written, for the shell's notes on the
- * caption (textNotes) or any other look at the layout.
+ * The file's bytes for a painting: a PNG with a Software chunk and a Comment chunk holding the scene's reading
+ * (without the prompt: the words are the caller's), plus any `text` given (a strip's Seeds), or a PPM, which
+ * carries no text. The gallery script encodes through this so its files are byte for byte the shell's.
  */
-export function generate(prompt, { out, width, height, seed, style, text, scene, painted } = {}) {
-  const read_ = scene ?? read(prompt), image = paint(read_, { width, height, seed, style, text });
-  painted?.(image);
-  const { prompt: _, ...reading } = read_; // the words are the file's name and the caller's; the reading is new
+export function encode(image, scene, { format = 'png', text } = {}) {
+  const writer = FORMATS[format];
+  if (!writer) throw new Error(`no format named ${format} (png or ppm)`);
+  const { prompt: _, ...reading } = scene;
+  return writer(image, { text: { Software: SOFTWARE, Comment: JSON.stringify(reading), ...text } });
+}
+
+/**
+ * Pictures of one size side by side in `cols` columns (one row when cols is their count: a --strip), the rest of a
+ * short last row left black; layout.cells gives each one's box. The images' own layouts are not carried over.
+ */
+export function compose(images, cols = images.length) {
+  const [first] = images, w = first.width, h = first.height, rows = Math.ceil(images.length / cols);
+  const width = w * cols, height = h * rows, data = new Float32Array(width * height * 3), cells = [];
+  images.forEach((img, i) => {
+    if (img.width !== w || img.height !== h) throw new Error('compose wants pictures of one size');
+    const cx = (i % cols) * w, cy = Math.floor(i / cols) * h;
+    for (let y = 0; y < h; y++) data.set(img.data.subarray(y * w * 3, (y + 1) * w * 3), ((cy + y) * width + cx) * 3);
+    cells.push({ x: cx, y: cy, w, h });
+  });
+  return { width, height, data, layout: { cells } };
+}
+
+/** Where a picture goes: `out`, or images/<date>-<slug>.<format>; resolved, its directory made. */
+export function outFile(prompt, out, format = 'png') {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
   const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'image';
-  const file = path.resolve(out ?? path.join('images', `${stamp}-${slug}.png`));
+  const file = path.resolve(out ?? path.join('images', `${stamp}-${slug}.${format}`));
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, png(image, { text: { Software: SOFTWARE, Comment: JSON.stringify(reading) } }));
+  return file;
+}
+
+/** The i-th of a --count: the file's name with -i before its extension (a.png -> a-1.png). */
+export const numbered = (file, i) => file.replace(/(\.[A-Za-z0-9]+)?$/, `-${i}$1`);
+
+/**
+ * Words to a PNG (or, by `format`, a PPM) file, its reading in a tEXt chunk. Returns the path written. `style` and
+ * `text` stand in when the words name none; `painted(image)` is called with the painting before it is written,
+ * for the shell's notes on the caption (textNotes) or any other look at the layout.
+ */
+export function generate(prompt, { out, width, height, seed, style, text, scene, painted, format = 'png' } = {}) {
+  const read_ = scene ?? read(prompt), image = paint(read_, { width, height, seed, style, text });
+  painted?.(image);
+  const file = outFile(prompt, out, format);
+  fs.writeFileSync(file, encode(image, read_, { format }));
   return file;
 }
 
@@ -266,6 +320,14 @@ export function parse(argv) {
       const v = next();
       if (!/^-?\d+$/.test(v)) throw new Error(`--seed wants a whole number, not ${v}`);
       o.seed = Number(v) >>> 0;
+    } else if (a === '--count' || a === '--strip') {
+      const v = next();
+      if (!/^\d+$/.test(v) || +v < 1 || +v > 64) throw new Error(`${a} wants a whole number from 1 to 64, not ${v}`);
+      o[a.slice(2)] = +v;
+    } else if (a === '--format') {
+      const v = next();
+      if (!(v in FORMATS)) throw new Error(`--format wants png or ppm, not ${v}`);
+      o.format = v;
     } else if (a === '--style') o.style = next();
     else if (a === '--text') o.text = next();
     else if (a === '--describe') o.describe = true;
@@ -276,6 +338,7 @@ export function parse(argv) {
     }
     else o.words.push(a);
   }
+  if (o.count && o.strip) throw new Error('--count and --strip together: n pictures, or one picture of n seeds');
   return o;
 }
 
@@ -308,13 +371,34 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       process.stderr.write(`--strict: ${refusal}; nothing written\n`);
       process.exit(3);
     }
-    const painted = (image) => {
-      for (const line of textNotes(image.layout)) process.stderr.write(`${line}\n`);
-      for (const line of report(scene).slice(early.length)) process.stderr.write(`${line}\n`); // the critic's line
+    // the seeds: the base is --seed or the words' own (what paint() hashes); picture i of a count or a strip is
+    // painted with base + i - 1, so the first is the plain picture and any cell can be had again with --seed
+    const base = o.seed ?? hash(words(prompt).join(' ')), n = o.count ?? o.strip ?? 1;
+    const seeds = Array.from({ length: n }, (_, i) => (base + i) >>> 0);
+    const painted = (seed) => (image) => {
+      const tag = n > 1 ? `seed ${seed}: ` : '';
+      for (const line of textNotes(image.layout)) process.stderr.write(`${tag}${line}\n`);
+      for (const line of report(scene).slice(early.length)) process.stderr.write(`${tag}${line}\n`); // the critic
     };
-    const t = Date.now(), file = generate(prompt, { ...o, scene, painted });
-    process.stderr.write(`${file} (${((Date.now() - t) / 1000).toFixed(1)} s)\n`);
-    console.log(file);
+    const t = Date.now(), files = [];
+    if (o.strip) {
+      const cells = seeds.map((seed) => {
+        const image = paint(scene, { ...o, seed });
+        painted(seed)(image);
+        return image;
+      });
+      const file = outFile(prompt, o.out, o.format);
+      fs.writeFileSync(file, encode(compose(cells), scene, { format: o.format, text: { Seeds: seeds.join(' ') } }));
+      files.push(file);
+    } else if (o.count) {
+      const file = outFile(prompt, o.out, o.format);
+      seeds.forEach((seed, i) => {
+        files.push(generate(prompt, { ...o, scene, seed, out: numbered(file, i + 1), painted: painted(seed) }));
+      });
+    } else files.push(generate(prompt, { ...o, scene, painted: painted(seeds[0]) }));
+    const took = `(${((Date.now() - t) / 1000).toFixed(1)} s)`;
+    process.stderr.write(`${files.length > 1 ? `${files.length} files, ${files.at(-1)}` : files[0]} ${took}\n`);
+    for (const file of files) console.log(file);
   } catch (e) {
     process.stderr.write(`Error: ${e.message}\n`);
     process.exit(1);

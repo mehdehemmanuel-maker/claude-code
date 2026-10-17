@@ -1,0 +1,60 @@
+{
+  "prompt": "a red go-kart on a wet road at dusk, mountains behind",
+  "recognised": 5,
+  "time": "sunset",
+  "hour": 18.5,
+  "clouds": 0.35,
+  "fog": 0,
+  "rain": 0,
+  "snow": 0,
+  "storm": false,
+  "wet": true,
+  "season": null,
+  "moonPhase": null,
+  "ground": "grass",
+  "land": "grass",
+  "road": true,
+  "roadKind": "asphalt",
+  "beach": false,
+  "river": false,
+  "frozen": false,
+  "waterWord": null,
+  "lake": false,
+  "things": {
+    "karts": 1,
+    "mountains": 0
+  },
+  "colours": {
+    "karts": "red"
+  },
+  "instances": [
+    {
+      "kind": "karts",
+      "count": 1,
+      "size": 1,
+      "modifiers": [],
+      "word": "go-kart",
+      "index": 2,
+      "colour": "red"
+    },
+    {
+      "kind": "mountains",
+      "count": 3,
+      "size": 1,
+      "modifiers": [],
+      "word": "mountains",
+      "index": 9,
+      "usual": true
+    }
+  ],
+  "ignored": [],
+  "overridden": [],
+  "report": {
+    "visible": {
+      "karts": [
+        1,
+        1
+      ]
+    }
+  }
+}

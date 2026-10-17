@@ -10,4 +10,4 @@ view/public/world.json
 dist-view-dev/
 dist-view-survey/
 bench-out/
-images/
+/images/

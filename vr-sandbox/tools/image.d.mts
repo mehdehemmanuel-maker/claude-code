@@ -776,3 +776,22 @@ export declare function figure(ctx: Ctx, inst: ThingInstance, person?: Person | 
 export declare function crowd(ctx: Ctx, inst: ThingInstance): Omit<ThingBox, 'kind'>;
 export declare function bird(ctx: Ctx, inst: ThingInstance): Omit<ThingBox, 'kind'>;
 export declare function swimmer(ctx: Ctx, inst: ThingInstance, kind: SwimmerKind): Omit<ThingBox, 'kind'>;
+
+// ── gallery-docs: the formats, the batch and the strip (tools/image.mjs) ──
+export interface Composed {
+  width: number; height: number; data: Float32Array; layout: { cells: Omit<ThingBox, 'kind'>[] };
+}
+/** A binary PPM: 'P6\n<w> <h>\n255\n' then w*h*3 bytes; the format has no text chunk. */
+export declare function ppm(img: Pick<Image, 'width' | 'height' | 'data'>): Buffer;
+export declare const FORMATS: Record<
+  'png' | 'ppm', (img: Pick<Image, 'width' | 'height' | 'data'>, opts?: { text?: Record<string, string> }) => Buffer
+>;
+/** The file's bytes as the shell writes them: a PNG with Software and Comment (the reading) chunks, or a PPM. */
+export declare function encode(
+  img: Pick<Image, 'width' | 'height' | 'data'>, scene: { prompt?: string } & Record<string, unknown>,
+  opts?: { format?: 'png' | 'ppm'; text?: Record<string, string> },
+): Buffer;
+/** Pictures of one size laid in `cols` columns (one row by default): a --strip, or a sheet. */
+export declare function compose(images: Pick<Image, 'width' | 'height' | 'data'>[], cols?: number): Composed;
+export declare function outFile(prompt: string, out?: string, format?: 'png' | 'ppm'): string;
+export declare function numbered(file: string, i: number): string;
