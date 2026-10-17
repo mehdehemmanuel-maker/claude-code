@@ -117,3 +117,24 @@ export declare function toImageData(img: Image): ImageData | { width: number; he
 // image.mjs
 export declare function png(img: Pick<Image, 'width' | 'height' | 'data'>): Buffer;
 export declare function generate(prompt: string, opts?: PaintOptions & { out?: string }): string;
+
+// ── sky-light ──────────────────────
+// celestialPass, cloudPass and landBehindPass (tools/image/passes.mjs): the moon and the ridges in the layout, the
+// words the reader may add for them, and a probe a test can hook in to read the face term of each ridge column.
+
+/** How much of the moon is lit, when the words said; undefined is a full moon, as before. */
+export type MoonPhase = 'full' | 'half' | 'crescent' | 'new' | 'moonless';
+export interface Scene {
+  moonPhase?: MoonPhase;
+  hour?: number; // 0..24, when the words gave one: before 8 or from 17 the sun is drawn low
+}
+/** One ridge of the land behind: its per-column top in pixels (rows from the top of the picture). */
+export interface RangeLine { kind: 'mountains' | 'hills'; depth: number; top: number[] }
+export interface Layout {
+  moon?: [number, number] | null; // shares of the width and height, null when no moon is drawn
+  ranges?: RangeLine[]; // far to near, set by landBehindPass
+}
+export interface Ctx {
+  /** Set by a test pass: called per ridge column as probe("face", range, x, face, slope). */
+  probe?: (name: 'face', range: number, x: number, face: number, slope: number) => void;
+}

@@ -54,8 +54,9 @@ for (const drawer of drawers) register('things', drawer);
 register('families', {
   id: 'landscape',
   detect: () => true,
-  // Clouds go on before the sun's disc, so the disc is never behind them and the water reflects the clouded sky.
-  passes: [skyPass, cloudPass, celestialPass, landBehindPass, groundPass, thingsPass, weatherPass, finishPass],
+  // hook for sky-light: the sun's disc goes on before the clouds, so they cross it with their own lit edges; the
+  // water still reflects the clouded sky without the disc (cloudPass paints into the snapshot celestialPass takes).
+  passes: [skyPass, celestialPass, cloudPass, landBehindPass, groundPass, thingsPass, weatherPass, finishPass],
 });
 
 // ── Painting ───────────────────────
