@@ -124,7 +124,10 @@ describe('the reader knows every vehicle by its words', () => {
   it('registers one thing per kind, on the road, with a depth band and a size, and keeps the five built-ins', () => {
     const ids = things.map((t) => t.id);
     for (const kind of KINDS) expect(ids).toContain(kind);
-    expect(ids.slice(-6)).toEqual(['tree', 'building', 'house', 'boat', 'bird', 'flowers']); // then ground-weather's
+    // then the five built-ins and ground-weather's flowers in a run; scene-families' landforms and phenomena follow
+    const at = ids.indexOf('tree');
+    expect(ids.slice(at, at + 6)).toEqual(['tree', 'building', 'house', 'boat', 'bird', 'flowers']);
+    expect(ids.slice(0, at)).toEqual(expect.arrayContaining([...KINDS]));
     expect(ids).not.toContain('cars');
     for (const e of VEHICLE_THINGS) {
       expect(e.onRoad).toBe(true);

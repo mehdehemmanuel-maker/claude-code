@@ -71,11 +71,14 @@ describe('the image tool', () => {
     expect(Object.keys(core).sort()).toEqual(expect.arrayContaining([
       'LIGHT', 'conditions', 'families', 'paint', 'register', 'styles', 'things', 'toImageData', 'toRGBA8',
     ]));
-    // the vehicles register first (core.mjs's export * hook), then the five built-ins, then ground-weather's flowers
+    // the vehicles register first (core.mjs's `export *` hook is an import, so it runs before core's body), then
+    // the five built-ins in their order, then ground-weather's flowers, then scene-families' landforms and phenomena
     const ids = core.things.map((t: { id: string }) => t.id);
     expect(ids).toEqual(expect.arrayContaining(['car', 'kart', 'truck', 'semi', 'forklift', 'bus']));
     expect(ids.indexOf('tree')).toBeGreaterThan(ids.indexOf('tractor'));
-    expect(ids.slice(ids.indexOf('tree'))).toEqual(['tree', 'building', 'house', 'boat', 'bird', 'flowers']);
+    const five = ['tree', 'building', 'house', 'boat', 'bird'];
+    expect(ids.slice(ids.indexOf('tree'), ids.indexOf('tree') + 6)).toEqual([...five, 'flowers']);
+    expect(ids.slice(ids.indexOf('flowers') + 1)).toEqual(expect.arrayContaining(['cactus', 'volcano', 'rainbow']));
     const rgba = core.toRGBA8(paint(read('a tree'), { width: 4, height: 3, seed: 1 }));
     expect(rgba.length).toBe(4 * 3 * 4);
     expect(rgba[3]).toBe(255);
