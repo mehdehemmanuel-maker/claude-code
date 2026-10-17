@@ -2,10 +2,20 @@
 // context every pass shares and runs the chosen family's passes in order. The registries are ordered arrays a later
 // package extends with register(): things (what stands in a picture), families (which passes paint a kind of
 // picture), styles (a finish over the whole), conditions (the words that set time, weather and ground).
+// What each file owns: math.mjs the numbers (noise, hashes, the generator); read.mjs words to a scene; draw.mjs the
+// anti-aliased primitives, the camera in metres (SIZES, project), the sun's direction, shadows and the sprite wrapper;
+// passes.mjs the layers from the sky to the finish; things.mjs what stands in the picture; this file the context.
 import { clamp, hash, lerp, mix, rng } from './math.mjs';
 import { CONDITIONS, COLOURS, words } from './read.mjs';
 import { celestialPass, cloudPass, finishPass, groundPass, landBehindPass, skyPass, weatherPass } from './passes.mjs';
 import { drawers, thingsPass } from './things.mjs';
+import { attach } from './draw.mjs';
+
+// The painter's primitives, camera and sizes, for an importer that draws its own things (tools/image.d.mts types them).
+export {
+  SIZES, ELEVATION, camera, sunlight, shadowLength, shadowPoints, hull, canvas, disc, ellipse, poly, quad, tri, rect,
+  line,
+} from './draw.mjs';
 
 // ── The palette by time of day ─────
 
@@ -82,6 +92,7 @@ export function paint(scene, { width = 1280, height = 720, seed, style } = {}) {
     things, styles,
   };
   tools(ctx);
+  attach(ctx); // the primitives, the camera in metres, the sun's direction, shadow() and sprite()
   const family = families.find((f) => f.detect(scene)) ?? families[0];
   for (const pass of family.passes) pass(ctx);
   return img;

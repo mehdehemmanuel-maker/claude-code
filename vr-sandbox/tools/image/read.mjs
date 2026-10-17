@@ -49,7 +49,7 @@ export const USUAL = {
 export const USUAL_BY_WORD = { village: 6, villages: 6, hamlet: 6, hamlets: 6 };
 
 /** Size words, as a multiplier on the thing they stand before. */
-export const SIZES = {
+export const SIZE_WORDS = {
   tiny: 0.5, small: 0.5, little: 0.5, miniature: 0.5, huge: 2, giant: 2, tall: 2, big: 2, enormous: 2, massive: 2,
   towering: 2, large: 1.5,
 };
@@ -270,7 +270,8 @@ export function words(prompt) {
 
 /** Whether any vocabulary here knows a word (so it is never reported as ignored). */
 export function knows(w) {
-  if (STOP.has(w) || NUMBERS[w] !== undefined || /^\d+$/.test(w) || COLOURS[w] || SIZES[w] || PLACEMENT[w]) return true;
+  if (STOP.has(w) || NUMBERS[w] !== undefined || /^\d+$/.test(w) || COLOURS[w]) return true;
+  if (SIZE_WORDS[w] || PLACEMENT[w]) return true;
   if (MOON_PHASES.test(w) || NEGATION.test(w) || w === 'moonless') return true;
   if (Object.values(THINGS).some((re) => re.test(w)) || CONDITIONS.some((c) => c.match.test(w))) return true;
   return STYLES.some((st) => st.match.test(w));
@@ -395,8 +396,8 @@ export function read(prompt) {
         if ((w === 'a' || w === 'an') && m.plural) continue; // "a hundred trees": the article is not the count
         number = /^\d+$/.test(w) ? +w : NUMBERS[w];
       } else if (!inst.colour && COLOURS[w]) inst.colour = w;
-      else if (SIZES[w] && inst.size === 1) {
-        inst.size = SIZES[w];
+      else if (SIZE_WORDS[w] && inst.size === 1) {
+        inst.size = SIZE_WORDS[w];
         inst.modifiers.push(w);
       } else if (PLACEMENT[w] && !inst.placement) {
         inst.placement = PLACEMENT[w];

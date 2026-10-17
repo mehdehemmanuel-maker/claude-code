@@ -151,7 +151,7 @@ export interface ConditionEntry { apply(scene: Scene, ground: GroundRead, word: 
 export declare const MOST: number;
 export declare const USUAL: Record<string, number>;
 export declare const USUAL_BY_WORD: Record<string, number>;
-export declare const SIZES: Record<string, number>;
+export declare const SIZE_WORDS: Record<string, number>;
 export declare const PLACEMENT: Record<string, string>;
 export declare const MOON_PHASES: RegExp;
 export declare const NEGATION: RegExp;
@@ -172,3 +172,117 @@ export declare function parse(argv: string[]): {
   words: string[]; out?: string; width?: number; height?: number; seed?: number; describe?: boolean; strict?: boolean;
   help?: boolean;
 };
+
+// -- primitives-world (tools/image/draw.mjs, re-exported by core.mjs) --------------------------------------------
+// Anti-aliased primitives, a camera in metres, the sun's direction, shadows and the sprite wrapper. Ctx, ThingEntry
+// and ThingInstance below merge with the interfaces above (declaration merging): new members only, nothing retyped.
+// ctx.sun gains az, el, dir, visible and moon at run time; they are typed on ctx.light, which is the same object.
+
+export type Colour = ArrayLike<number>;
+/** A colour, or a function of the pixel's centre giving one (null or undefined leaves the pixel as it is). */
+export type Shade = Colour | ((x: number, y: number) => Colour | null | undefined);
+/** An alpha, or a function of the pixel's centre giving one. */
+export type Alpha = number | ((x: number, y: number) => number);
+/** The least a primitive needs to paint on. */
+export interface Painter { W: number; H: number; put(x: number, y: number, c: Colour, a?: number): void }
+export interface Projected { x: number; y: number; scale: number }
+export interface Camera {
+  eye: number; // metres above the ground
+  horizon: number; // the row of the horizon
+  focal: number; // pixels
+  equiv: number; // the lens, in mm on a 24 mm-high frame
+  project(xm: number, zm: number, hm?: number): Projected;
+  groundZ(fy: number): number;
+  groundX(px: number, fy: number): number;
+}
+export interface SunLight {
+  x: number;
+  y: number;
+  left: boolean;
+  az: number; // radians right of the lens axis
+  el: number; // radians above the horizon
+  dir: [number, number, number];
+  visible: boolean; // a disc is in the sky to cast shadows
+  moon: boolean;
+}
+export interface Footprint { w: number; d: number }
+export interface Sizes {
+  eye: number;
+  person: number;
+  car: { l: number; w: number; h: number; wheel: number; wheelbase: number };
+  kart: { l: number; w: number; h: number };
+  lane: number;
+  lanes: number;
+  centreLine: number;
+  dash: { on: number; period: number };
+  pine: [number, number];
+  broadleaf: [number, number];
+  storey: number;
+  building: { w: [number, number]; storeys: [number, number]; window: { w: number; h: number } };
+  cabin: {
+    w: number; d: number; wall: number; rise: number; door: { w: number; h: number }; window: number; sill: number;
+    chimney: number;
+  };
+  sailboat: { hull: number; beam: number; freeboard: number; mast: number; boom: number; foot: number };
+  birdSpan: number;
+}
+export declare const SIZES: Sizes;
+export declare const ELEVATION: { dawn: number; day: [number, number]; sunset: number; night: number };
+export declare function camera(W: number, H: number, hy: number, equiv?: number): Camera;
+export declare function sunlight(
+  scene: Scene, sun: { x: number; y: number }, L: Light, cam: Camera, W: number, horizon: number,
+): Pick<SunLight, 'az' | 'el' | 'dir' | 'visible' | 'moon'>;
+export declare function shadowLength(h: number, el: number): number;
+export declare function shadowPoints(
+  az: number, el: number, xm: number, zm: number, fp: Footprint, h: number, lift?: number,
+): number[];
+export declare function hull(flat: ArrayLike<number>): number[];
+export declare function canvas(
+  W: number, H: number,
+): Painter & { data: Float32Array; get(x: number, y: number, out?: number[]): number[] };
+export declare function disc(
+  ctx: Painter, cx: number, cy: number, r: number, c: Shade, a?: Alpha, soft?: number,
+): void;
+export declare function ellipse(
+  ctx: Painter, cx: number, cy: number, rx: number, ry: number, c: Shade, a?: Alpha, soft?: number,
+): void;
+export declare function poly(ctx: Painter, pts: ArrayLike<number>, c: Shade, a?: Alpha, soft?: number): void;
+export declare function quad(
+  ctx: Painter, x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number,
+  c: Shade, a?: Alpha, soft?: number,
+): void;
+export declare function tri(
+  ctx: Painter, x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, c: Shade, a?: Alpha,
+  soft?: number,
+): void;
+export declare function rect(
+  ctx: Painter, x: number, y: number, w: number, h: number, c: Shade, a?: Alpha, soft?: number,
+): void;
+export declare function line(
+  ctx: Painter, x0: number, y0: number, x1: number, y1: number, width: number, c: Shade, a?: Alpha, soft?: number,
+): void;
+export interface Ctx {
+  camera: Camera;
+  light: SunLight;
+  tops: Int16Array[]; // per sprite id: the highest row it painted solidly in each column, -1 where none
+  project(xm: number, zm: number, hm?: number): Projected;
+  groundZ(fy: number): number;
+  groundX(px: number, fy: number): number;
+  shadow(xm: number, zm: number, fp: Footprint, h: number, lift?: number): void;
+  sprite<T>(zm: number, draw: () => T, id?: number): T;
+  disc(cx: number, cy: number, r: number, c: Shade, a?: Alpha, soft?: number): void;
+  ellipse(cx: number, cy: number, rx: number, ry: number, c: Shade, a?: Alpha, soft?: number): void;
+  poly(pts: ArrayLike<number>, c: Shade, a?: Alpha, soft?: number): void;
+  quad(
+    x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number,
+    c: Shade, a?: Alpha, soft?: number,
+  ): void;
+  tri(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, c: Shade, a?: Alpha, soft?: number): void;
+  rect(x: number, y: number, w: number, h: number, c: Shade, a?: Alpha, soft?: number): void;
+  line(x0: number, y0: number, x1: number, y1: number, width: number, c: Shade, a?: Alpha, soft?: number): void;
+}
+export interface ThingInstance { zm?: number } // metres away; a drawer reads it before groundZ(fy)
+export interface ThingEntry {
+  depth?: [number, number]; // how far away it may stand, in metres (nearest, farthest); band is used when absent
+  size?: { w: number; h: number }; // its typical width and height in metres, so the shore can judge whether it fits
+}
