@@ -138,7 +138,7 @@ export interface Scene {
   hour: number;
   wet: boolean;
   season: string | null;
-  moonPhase: string | null;
+  moonPhase: MoonPhase | null;
   roadKind: 'asphalt' | 'dirt' | null;
   river: boolean;
   frozen: boolean;
@@ -292,4 +292,25 @@ export interface ThingInstance { zm?: number } // metres away; a drawer reads it
 export interface ThingEntry {
   depth?: [number, number]; // how far away it may stand, in metres (nearest, farthest); band is used when absent
   size?: { w: number; h: number }; // its typical width and height in metres, so the shore can judge whether it fits
+}
+
+// ── sky-light ──────────────────────
+// celestialPass, cloudPass and landBehindPass (tools/image/passes.mjs): the moon and the ridges in the layout, the
+// moon's phase as the reader's Scene.moonPhase (declared above) carries it, and a probe a test can hook in to read
+// the face term of each ridge column. Scene.hour (above) is read too: before 8 or from 17 the sun is drawn low.
+
+/**
+ * The moon's phase, the reader's words (MOON_PHASES and 'moonless'); null is a full moon, as before. The painter
+ * draws full, half and crescent, and no moon for new or moonless; gibbous, waxing and waning are drawn full.
+ */
+export type MoonPhase = 'full' | 'half' | 'crescent' | 'new' | 'gibbous' | 'waxing' | 'waning' | 'moonless';
+/** One ridge of the land behind: its per-column top in pixels (rows from the top of the picture). */
+export interface RangeLine { kind: 'mountains' | 'hills'; depth: number; top: number[] }
+export interface Layout {
+  moon?: [number, number] | null; // shares of the width and height, null when no moon is drawn
+  ranges?: RangeLine[]; // far to near, set by landBehindPass
+}
+export interface Ctx {
+  /** Set by a test pass: called per ridge column as probe("face", range, x, face, slope). */
+  probe?: (name: 'face', range: number, x: number, face: number, slope: number) => void;
 }
