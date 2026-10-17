@@ -7,11 +7,11 @@
 // is green-violet vertical curtains over the stars at night. Lightning is a seeded jagged white fork with branches
 // and a brief glow on the clouds; the reader's storm condition already claims 'lightning', so the storm comes with
 // it. Two conditions keep the hour honest: an aurora turns the time to night and a rainbow turns a night to day,
-// each said in scene.overridden. 'northern lights': 'northern' is the aurora's word; 'lights' is claimed beside it
-// by a words-only family entry (never painted) and goes back among the ignored words otherwise.
+// each said in scene.overridden. 'northern lights' is one of the reader's phrases, read as 'aurora' (its COMPOUNDS
+// row); a bare 'northern' or a bare 'lights' is not the aurora: 'a northern forest at noon' stays a day forest and
+// both words go among the ignored.
 import { clamp, fbm, lerp, mix, smooth } from '../math.mjs';
 import { register } from '../registry.mjs';
-import { dropWord } from './abstract.mjs';
 
 const BANDS = [ // outside in: red to violet, as the primary bow lays them
   [1, 0.15, 0.1], [1, 0.55, 0.1], [1, 0.95, 0.2], [0.2, 0.85, 0.25], [0.15, 0.55, 1], [0.25, 0.2, 0.8], [0.6, 0.2, 0.8],
@@ -130,16 +130,10 @@ const phenomenon = (id, match) => ({
 
 export function installPhenomena() {
   register('things', phenomenon('rainbow', /^rainbows?$/));
-  register('things', phenomenon('aurora', /^(auroras?|borealis|northern)$/));
+  register('things', phenomenon('aurora', /^(auroras?|borealis)$/)); // 'northern lights' reads as aurora (read.mjs)
   register('things', phenomenon('lightning', /^(lightning|thunderbolts?)$/));
-  register('families', { // 'lights' beside the northern lights: claimed, never painted; elsewhere left as unknown
-    id: 'aurora-lights', detect: () => false, passes: [], words: /^lights$/,
-    apply: (scene, word) => {
-      if (!scene.instances.some((i) => i.kind === 'aurora')) dropWord(scene, word);
-    },
-  });
   register('conditions', {
-    id: 'aurora-night', kind: 'weather', match: /^(auroras?|borealis|northern)$/,
+    id: 'aurora-night', kind: 'weather', match: /^(auroras?|borealis)$/,
     apply: (s) => { // an aurora is seen at night: a daytime one is turned to night, and said
       if (s.time === 'night') return;
       s.overridden.push({ what: 'time', from: s.time, to: 'night', because: 'aurora' });

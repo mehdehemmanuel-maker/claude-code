@@ -98,6 +98,7 @@ export const PHRASES = [
   ['four', 'wheelers'], ['motor', 'bike'], ['motor', 'bikes'], // hook for vehicles: read as one word each
   ['yellow', 'cab'], ['yellow', 'cabs'], ['taxi', 'cab'], ['taxi', 'cabs'], ['tractor', 'trailer'],
   ['tractor', 'trailers'], // a cab is a taxi only after yellow or taxi; a tractor trailer is a semi
+  ['northern', 'lights'], ['outer', 'space'], ['deep', 'space'], // hook for scene-families: the aurora; space's words
 ];
 /** A bike is a motorcycle, unless the words also say bicycle, cycling or cyclist: then every bike is a bicycle. */
 const PEDALLED = /^(bicycles?|cycling|cyclists?)$/;
@@ -118,6 +119,8 @@ export const COMPOUNDS = {
   'ice-covered': ['frozen'], seaside: ['beach'], seashore: ['shore'], lakeshore: ['shore'], riverside: ['river'],
   riverbank: ['river'], 'pixel-art': ['pixel'], 'black-and-white': ['mono'], 'oil-painting': ['painting'],
   'line-art': ['sketch'], sunlit: ['sunny'],
+  // hook for scene-families: 'northern lights' is the aurora (a bare 'northern' is not); outer or deep space is space
+  'northern-lights': ['aurora'], 'outer-space': ['space'], 'deep-space': ['space'],
 };
 
 const HOURS = {
@@ -523,12 +526,13 @@ export function read(prompt) {
   // The words a registered family claims (its apply sets the scene: scene.family, or what it will), the style (the
   // first named, from the finish's own table), the moonless night, and the things a scene word brings with it when
   // they were not named themselves.
+  const familyWords = []; // counted as recognised at the end, when the family kept the word (not dropped to ignored)
   for (let i = 0; i < n; i++) {
     if (used[i] || spent[i]) continue;
     const w = forms[i].find(familyFor), family = w && familyFor(w);
     if (!family) continue;
     (family.apply ?? ((scene) => { scene.family = family.id; }))(s, w);
-    conditions++;
+    familyWords.push(w);
     used[i] = true;
   }
   for (let i = 0; i < n && !s.style; i++) {
@@ -576,7 +580,7 @@ export function read(prompt) {
     s.land = 'pavement';
   }
   const broken = 'mountains' in s.things || 'hills' in s.things || 'buildings' in s.things || s.ground === 'water';
-  if (!broken) { // something to break the horizon
+  if (!broken && !s.family) { // something to break the horizon (a family picture has none to break)
     s.things.hills = 0;
     s.overridden.push({ what: 'hills', from: 'none', to: 'the usual', because: 'nothing else breaks the horizon' });
   }
@@ -586,6 +590,7 @@ export function read(prompt) {
     if (used[i] || (forms[i].some(knows) && afterOk(i))) continue;
     for (const p of tokens[i].parts) if (!s.ignored.includes(p)) s.ignored.push(p);
   }
+  conditions += familyWords.filter((w) => !s.ignored.includes(w)).length; // a family word its family kept
   s.recognised = s.instances.length + conditions + (s.style ? 1 : 0) + (s.text ? 1 : 0);
   return s;
 }

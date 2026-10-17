@@ -3,9 +3,10 @@
 // with tails (creatures-flyers will own fish proper later: these are minimal and 'fish' is read only inside this
 // family), and a diver when the words say diving, diver or scuba. No horizon. Words: underwater, undersea, coral(s),
 // reef(s), diving, diver(s), scuba, seabed, aquarium claim the family; fish is its detail and goes back among the
-// ignored words when the family is not chosen.
+// ignored words when the family is not chosen. 'coral' before a colour word or a sky word (coral pink, a coral
+// sunset) is a colour, not the reef: it goes back among the ignored words unless another word claims the family.
 import { clamp, fbm, h2, lerp, mix, noise, smooth } from '../math.mjs';
-import { NUMBERS, words } from '../read.mjs';
+import { COLOURS, NUMBERS, words } from '../read.mjs';
 import { register } from '../registry.mjs';
 import { finishPass } from '../passes.mjs';
 import { dropWord, note, noteUndrawn, undrop } from './abstract.mjs';
@@ -23,8 +24,22 @@ function countBefore(scene, word) {
   return null;
 }
 
+/** The words a 'coral' colours when it comes before them: a sky, a sunset, a dusk or dawn. */
+const SKY = /^(sky|skies|sunsets?|sunrises?|dusk|dawn|clouds?|glow|light)$/;
+/** Whether 'coral' is a colour here: the word after it is a colour or a sky word ('coral pink', 'a coral sunset'). */
+function coralColour(scene, word) {
+  if (!/^corals?$/.test(word)) return false;
+  const ws = words(scene.prompt), next = ws[ws.indexOf(word) + 1];
+  return !!next && (!!COLOURS[next] || SKY.test(next));
+}
+
 function apply(scene, word) {
   const u = scene.underwater ??= { fish: null, diver: false, dropped: [] };
+  if (coralColour(scene, word) && scene.family !== 'underwater') {
+    u.dropped.push(word);
+    dropWord(scene, word);
+    return;
+  }
   if (HEAD.test(word) && scene.family !== 'underwater') {
     scene.family = 'underwater';
     undrop(scene, u.dropped);

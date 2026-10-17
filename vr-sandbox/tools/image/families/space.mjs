@@ -6,18 +6,38 @@
 // curve across the bottom third; 'moons' puts two to four small grey moons about the body. Every colour is a
 // painter's reading of the body, not a photograph, and the scene's notes say so. Words: mars, venus, jupiter, saturn,
 // planet(s), earth, orbit, moonscape, nebula, galaxy, space, cosmos, asteroid(s), moons ('moon' itself is the
-// reader's own word: in a space picture with no body named it is the body).
+// reader's own word: in a space picture with no body named it is the body). Two everyday words claim the family
+// only in company: 'earth' beside a space word (planet, orbit, space, from, moon, a body: 'the earth after rain' is
+// the ground, 'the earth from orbit' the planet), 'space' alone or beside outer, deep or stars ('a parking space' is
+// not the cosmos); otherwise each goes back among the ignored words.
 import { clamp, fbm, h2, mix, smooth } from '../math.mjs';
+import { knows, words } from '../read.mjs';
 import { register } from '../registry.mjs';
 import { finishPass } from '../passes.mjs';
-import { hsl, note, noteUndrawn } from './abstract.mjs';
+import { bare, dropWord, hsl, note, noteUndrawn } from './abstract.mjs';
 
 export const WORDS =
   /^(mars|venus|jupiter|saturn|planet|planets|earth|orbit|moonscape|nebula|galaxy|space|cosmos|asteroids?|moons)$/;
 const BODIES = /^(mars|venus|jupiter|saturn|earth)$/;
+/** What makes 'earth' the planet: a space word beside it (the other bodies, orbit, space, from, the moon). */
+const EARTH_COMPANY = /^(planets?|orbit|space|from|moons?|mars|venus|jupiter|saturn|cosmos|galaxy|nebula|asteroids?)$/;
+/** What makes 'space' the cosmos when it is not alone: outer or deep (the reader's phrases) or the stars. */
+const SPACE_COMPANY = /^(outer|deep|stars?|starry|planets?|galaxy|nebula|cosmos|asteroids?|mars|venus|jupiter|saturn)$/;
+
+/** Whether an everyday word (earth, space) is meant as the cosmos: in the company of a space word, or alone. */
+function cosmic(scene, word) {
+  const ws = words(scene.prompt).flatMap((w) => (w === 'outer-space' || w === 'deep-space' ? w.split('-') : [w]));
+  if (word === 'earth') return ws.some((w) => w !== 'earth' && EARTH_COMPANY.test(w));
+  if (word === 'space') return ws.some(SPACE_COMPANY.test, SPACE_COMPANY) || (ws.every(knows) && bare(scene));
+  return true;
+}
 
 function apply(scene, word) {
   const sp = scene.space ??= { body: null, orbit: false, nebula: false, galaxy: false, asteroids: false, moons: false };
+  if (scene.family !== 'space' && !cosmic(scene, word)) {
+    dropWord(scene, word);
+    return;
+  }
   if (scene.family !== 'space') {
     scene.family = 'space';
     noteUndrawn(scene, 'a space picture has no ground', ['stars', 'moon', 'sun']);

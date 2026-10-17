@@ -6,6 +6,8 @@
 // hold what the words asked (measured on the pixels), and the landscape family paints the four header prompts
 // exactly as it did before the package (layout and bytes).
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Image, Scene, ThingBox } from '../../tools/image.mjs';
 import { families, familyFor, paint, png, read, report, things } from '../../tools/image.mjs';
@@ -149,6 +151,120 @@ describe('the reader with the families: honesty', () => {
     expect(read('Saturn and Jupiter').space?.body).toBe('jupiter'); // the last named
     expect(read('a nebula and stars')).toMatchObject({ family: 'space', time: 'night' });
     expect(read('abstract art, circles and triangles, red and blue').abstract?.kinds).toEqual(['disc', 'tri']);
+  });
+});
+
+describe('the review of the package: what a word claims, what the report says, what the header lists', () => {
+  it("'northern' alone is not the aurora and does not force night: only 'northern lights', aurora or borealis", () => {
+    const forest = read('a cabin in the northern forest at noon');
+    expect(forest).toMatchObject({ time: 'day', hour: 12, ignored: ['northern'] });
+    expect(forest.things.aurora).toBeUndefined();
+    expect(forest.things.houses).toBe(1);
+    expect(forest.overridden.some((o) => o.because === 'aurora')).toBe(false);
+    expect(read('a northern forest at noon')).toMatchObject({ time: 'day', ignored: ['northern'] });
+    expect(read('a northern town at noon').things.aurora).toBeUndefined();
+    for (const p of ['the northern lights', 'northern-lights over the sea', 'the aurora', 'aurora borealis']) {
+      expect(read(p), p).toMatchObject({ time: 'night', ignored: [] });
+      expect([0, 1], p).toContain(read(p).things.aurora); // 0 is the usual one ('aurora borealis': two mentions merged)
+    }
+  });
+
+  it("a family picture's report claims no grass and no hills: 'no ground, no horizon' in their place", () => {
+    for (const p of ['Saturn', 'Mars seen from orbit', 'a mandala', 'portrait of a woman with red hair']) {
+      const scene = read(p), lines = report(scene), readAs = lines[0]!;
+      expect(scene.things.hills, p).toBeUndefined();
+      expect(scene.overridden.some((o) => o.what === 'hills'), p).toBe(false);
+      expect(readAs, p).not.toMatch(/grass|hills/);
+      expect(readAs, p).toContain(`${scene.family} family (no ground, no horizon)`);
+      expect(lines.join('\n'), p).not.toMatch(/grass|hills/);
+    }
+    expect(report(read('underwater coral reef with fish'))[0]).toContain('underwater family (no sky, no horizon)');
+    expect(report(read('a meadow'))[0]).toContain('hills (added to break the horizon)'); // a landscape still says so
+  });
+
+  it('everyday words claim a family only in company: earth, space, face, coral', () => {
+    expect(read('the earth after rain')).toMatchObject({ ignored: ['earth'], ground: 'grass' });
+    expect(read('the earth after rain').family).toBeUndefined();
+    expect(read('the earth after rain').rain).toBeGreaterThan(0);
+    expect(read('the earth from orbit')).toMatchObject({ family: 'space', ignored: [], space: { body: 'earth' } });
+    expect(read('planet earth')).toMatchObject({ family: 'space', space: { body: 'earth' } });
+    expect(read('Mars and the earth').space?.body).toBe('earth'); // the last body named
+    expect(read('a parking space')).toMatchObject({ ignored: ['parking', 'space'], recognised: 0 });
+    expect(read('a parking space').family).toBeUndefined();
+    for (const p of ['space', 'outer space', 'deep space', 'space and stars', 'deep-space']) {
+      expect(read(p), p).toMatchObject({ family: 'space', ignored: [] });
+    }
+    expect(read('a cliff face at sunset')).toMatchObject({ time: 'sunset', ignored: ['cliff', 'face'] });
+    expect(read('a cliff face at sunset').family).toBeUndefined();
+    expect(read('the rock face').family).toBeUndefined();
+    expect(read('a face').family).toBe('portrait');
+    expect(read('a coral sunset over the sea')).toMatchObject({ ground: 'water', time: 'sunset', ignored: ['coral'] });
+    expect(read('a coral sunset over the sea').family).toBeUndefined();
+    expect(read('coral pink sky at dusk')).toMatchObject({ ignored: ['coral'] });
+    expect(read('coral pink sky at dusk').family).toBeUndefined();
+    expect(read('a coral reef')).toMatchObject({ family: 'underwater', ignored: [] });
+    expect(read('a diver among coral')).toMatchObject({ family: 'underwater', ignored: [] });
+  });
+
+  it('counts a family word as recognised only when its family kept it', () => {
+    expect(read('fish in a lake').recognised).toBe(read('a lake').recognised);
+    expect(read('city lights at night').recognised).toBe(read('a city at night').recognised);
+    expect(read('circles over a lake').recognised).toBe(read('a lake').recognised);
+    expect(read('circles and triangles, abstract').recognised).toBe(3); // undropped once abstract claims them
+    expect(read('a woman by a lake').recognised).toBe(read('a lake').recognised);
+    expect(read('a woman').recognised).toBe(1);
+  });
+
+  it('the critic sees a phenomenon its pass painted (no sprite pixels), and not one the hour kept out', () => {
+    const bow = read('a rainbow over a meadow'), img = paint(bow, { width: 160, height: 90, seed: 7 });
+    expect(img.layout.things.find((t) => t.kind === 'rainbow')?.visible).toBe(true);
+    expect(bow.report?.visible?.rainbow).toEqual([1, 1]);
+    const lights = read('the northern lights over a frozen lake');
+    paint(lights, { width: 160, height: 90, seed: 7 });
+    expect(lights.report?.visible?.aurora).toEqual([1, 1]);
+  });
+
+  it('the waterfall sits in the land: a rock bank either side of its foot, not meadow up to the cliff', () => {
+    const W = 320, H = 180, img = paint(read('a waterfall'), { width: W, height: H, seed: 7 }), d = img.data;
+    const t = img.layout.things.find((t) => t.kind === 'waterfall')!;
+    const green = (x: number, y: number) => {
+      const i = ((y | 0) * W + (x | 0)) * 3;
+      return d[i + 1]! / (d[i]! + d[i + 1]! + d[i + 2]!);
+    };
+    const row = t.y + t.h - 3 - 0.03 * t.h; // just above the pool's foot
+    const meadow = Math.min(green(W * 0.03, row), green(W * 0.97, row)); // the grass at the frame's edges
+    expect(meadow).toBeGreaterThan(0.39); // grass: 0.40-0.43 green share
+    expect(green(t.x - 0.15 * t.w, row)).toBeLessThan(0.36); // the bank's rock: 0.335
+    expect(green(t.x + 1.15 * t.w, row)).toBeLessThan(0.36);
+    expect(t.visible).toBe(true);
+  });
+
+  it("the header (the --help text) lists every family word, every landform and phenomenon word", () => {
+    const src = readFileSync(fileURLToPath(new URL('../../tools/image.mjs', import.meta.url)), 'utf8');
+    const header = [];
+    for (const line of src.split('\n').slice(1)) {
+      if (!line.startsWith('//')) break;
+      header.push(line.slice(3));
+    }
+    const text = header.join('\n').toLowerCase().replace(/-/g, '');
+    expect(text).toContain('portrait');
+    expect(text).toContain('rainbow');
+    const alternatives = (re: RegExp) => re.source.replace(/^\^\(?/, '').replace(/\)?\$$/, '').split('|');
+    const listed = (alt: string) => {
+      const word = alt.replace(/[?()]/g, '').replace(/-/g, '');
+      return [word, word.replace(/s$/, ''), word.replace(/es$/, '')].some((w) => text.includes(w));
+    };
+    const missing: string[] = [];
+    for (const f of families) {
+      if (!(f.words instanceof RegExp)) continue;
+      for (const alt of alternatives(f.words)) if (!listed(alt)) missing.push(`${f.id}: ${alt}`);
+    }
+    const mine = ['cactus', 'palm', 'volcano', 'waterfall', 'rainbow', 'aurora', 'lightning'];
+    for (const t of things.filter((t) => mine.includes(t.id))) {
+      for (const alt of alternatives(t.match)) if (!listed(alt)) missing.push(`${t.id}: ${alt}`);
+    }
+    for (const w of ['erupting', 'northern lights', 'saguaro', 'coconut']) if (!text.includes(w)) missing.push(w);
+    expect(missing).toEqual([]);
   });
 });
 

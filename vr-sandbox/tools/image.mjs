@@ -66,7 +66,18 @@
 // right, centre), a style word (pixel art/8-bit, poster/flat/cartoon, minimalist, sketch/pencil/line art,
 // watercolour/painting, black and white/mono/greyscale, sepia, vintage/retro/old photo) and a text to write ("the
 // word HELLO", a quoted phrase, "saying ..."). "no" before a word cancels it (no clouds, no trees). Words that name
-// the picture itself (photo, scene, sky) are passed over. Anything else in the words is ignored, and --describe
+// the picture itself (photo, scene, sky) are passed over.
+// Families beyond the landscape (a family picture has no ground and no horizon; stderr says which family painted
+// and what it is): space (mars, venus, jupiter, saturn, earth beside a space word, planet(s), orbit, moonscape,
+// nebula, galaxy, space alone or outer/deep space, cosmos, asteroid(s), moons: a planet from its known colours, not
+// a photograph), abstract (abstract, geometric/geometry, circle(s), triangle(s), square(s), shapes, pattern(s),
+// gradient, mandala, stripes, bauhaus, mondrian, op-art), portrait (portrait, face, selfie, headshot; woman/man/
+// girl/boy alone; hair, eyes, beard, glasses, smiling, blond/blonde, brunette, redhead as its details: a stylised
+// face, not a likeness of anyone), underwater (underwater, undersea, coral(s), reef(s), diving, diver(s), scuba,
+// seabed, aquarium; fish/fishes with a count). In a landscape: the sky's phenomena (rainbow(s) by day; aurora(s)/
+// borealis/northern lights at night; lightning/thunderbolt(s) under a storm) and the landforms (cactus/cacti/
+// cactuses/saguaro(s) on sand, palm-tree/palmtree/coconut-palm, volcano/volcanoes/volcanos with erupting/erupts/
+// eruption(s) for lava, waterfall(s)/cascade(s)). Anything else in the words is ignored, and --describe
 // shows exactly what was kept: every ignored word, every silent change, and how much was recognised.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -164,8 +175,12 @@ export function report(scene) {
   else if (scene.clouds >= 0.6) bits.push('cloudy');
   if (scene.season) bits.push(scene.season);
   if (scene.frozen) bits.push('frozen');
-  bits.push((scene.river ? 'river' : scene.ground) + (scene.beach ? ` with ${scene.land} shore` : ''));
-  if (scene.road) bits.push(scene.roadKind === 'dirt' ? 'dirt road' : 'road');
+  if (scene.family) { // hook for scene-families: a family picture has no ground, no road and no horizon
+    bits.push(`${scene.family} family (${scene.family === 'underwater' ? 'no sky' : 'no ground'}, no horizon)`);
+  } else {
+    bits.push((scene.river ? 'river' : scene.ground) + (scene.beach ? ` with ${scene.land} shore` : ''));
+    if (scene.road) bits.push(scene.roadKind === 'dirt' ? 'dirt road' : 'road');
+  }
   for (const inst of scene.instances) {
     if (inst.none) bits.push(`no ${inst.kind}`);
     else {

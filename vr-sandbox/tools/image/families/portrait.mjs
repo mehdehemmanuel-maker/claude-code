@@ -5,7 +5,8 @@
 // the colour the words name before 'hair' (or a seeded natural one) in a style by seed (short, long, bun, curly as
 // clusters of blobs), eyes with iris and highlight, brows, the nose as a shadow stroke, a mouth, a skin tone from a
 // seeded set, a plain or gradient backdrop and a soft shadow. Words: portrait, face, selfie, headshot claim the
-// family when no landscape thing is named; woman, man, girl, boy when they stand alone (every other word known and
+// family when no landscape thing is named ('face' not after cliff, rock, north, south, east or west: a cliff face
+// is a landscape's); woman, man, girl, boy when they stand alone (every other word known and
 // none a landscape's: not 'a woman by a lake');
 // hair, eyes, beard, glasses, smiling, blonde, brunette, redhead are its details and go back among the ignored
 // words when the family is not chosen. 'person' is left to creatures-flyers: the reader's own tests keep it among the
@@ -27,10 +28,17 @@ const HEAD = /^(portrait|face|selfie|headshot)$/, PERSON = /^(woman|man|girl|boy
  * so a person word alone means a portrait; 'a woman by a lake' leaves the woman to creatures-flyers.
  */
 const alone = (scene) => words(scene.prompt).every(knows) && bare(scene);
+/** The words a 'face' follows when it is a landscape's side, not a person's: a cliff face, the north face. */
+const SIDE = /^(cliffs?|rocks?|north|south|east|west|northern|southern|eastern|western)$/;
+const sideFace = (scene, word) => {
+  if (word !== 'face') return false;
+  const ws = words(scene.prompt), at = ws.indexOf('face');
+  return at > 0 && SIDE.test(ws[at - 1]);
+};
 
 function apply(scene, word) {
   const p = scene.portrait ??= { words: [], dropped: [] };
-  const claim = HEAD.test(word) || (PERSON.test(word) && alone(scene));
+  const claim = (HEAD.test(word) && !sideFace(scene, word)) || (PERSON.test(word) && alone(scene));
   if (scene.family !== 'portrait' && scene.instances.length === 0 && claim) {
     scene.family = 'portrait';
     undrop(scene, p.dropped);

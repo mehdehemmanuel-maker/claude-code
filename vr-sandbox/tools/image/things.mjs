@@ -425,7 +425,10 @@ export function critic(ctx, placed, list = placed.map((p) => p.want)) {
   for (const p of placed) {
     const span = Math.max(bottom[p.id] - top[p.id], right[p.id] - left[p.id]) + 1; // a gull is wide, not tall
     const alone = painted?.[p.id] ?? count[p.id], t = layout.things[p.id];
-    const seen = count[p.id] > 0 && count[p.id] >= SHOWING * alone && span >= least;
+    // hook for scene-families: a sky phenomenon (rainbow, aurora, lightning) is painted by its own pass behind the
+    // land, nothing through the sprite; its draw() hands on the box that pass painted (no area when it did not)
+    const byPass = p.entry.sky && alone === 0 && count[p.id] === 0;
+    const seen = byPass ? t.w >= least && t.h >= 1 : count[p.id] > 0 && count[p.id] >= SHOWING * alone && span >= least;
     t.visible = seen;
     t.pixels = count[p.id];
     t.painted = alone;

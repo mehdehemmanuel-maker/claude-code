@@ -4,7 +4,8 @@
 // reads palm(s) as trees before any registered thing is tried, and 'palm tree' merges into one trees mention, so
 // the built-in tree drawer is wrapped through the registry (register() replaces an entry by its id, no edit to
 // things.mjs): a trees mention whose word says palm is drawn as a palm, in the share the mentions ask, and
-// 'palm-tree' / 'palmtree' is a thing of its own. The volcano stands at the horizon (7-14 km away) and is drawn at
+// 'palm-tree' / 'palmtree' is a thing of its own. The waterfall's cliff has a rock bank either side and a pool as
+// wide as itself, so it sits in the land. The volcano stands at the horizon (7-14 km away) and is drawn at
 // no less than its nearest depth whatever the shore logic asks; it has no cast shadow, which at that distance would
 // be half a pixel at the horizon. Two conditions come with the words: a cactus stands on sand unless a land is named
 // (and the count of a bare 'cactus' is one: the reader's plural test is /s$/, which takes the word for a plural and
@@ -195,37 +196,62 @@ function volcano(ctx, inst) {
 // ── The waterfall ──────────────────
 
 const CLIFF = [0.26, 0.23, 0.2], FALL = [0.88, 0.92, 0.95], POOL = [0.1, 0.26, 0.32], MIST = [0.9, 0.93, 0.95];
+const BANK_TURF = [0.36, 0.56, 0.24];
 
-/** A white column down a dark cliff into a pool, mist at the foot. */
+/**
+ * A white column down a dark cliff into a pool, mist at the foot. The cliff sits in the land, not on it: a low rock
+ * bank runs out from either flank (a cliff-width wide, a third of the cliff's height at the flank, falling to the
+ * ground, grassed on top) and the pool is as wide as the cliff, so on a bare meadow it reads as a rock face with
+ * a stream over it, not a standing stone. The cliff's outline is traced round (up the left flank, across the broken
+ * top, down the right flank, back along the ground), so the polygon never crosses itself.
+ */
 function waterfall(ctx, inst) {
   const { W, rand, lit, sun, poly, rect, ellipse, put, L, scale } = ctx, F = LANDFORMS.waterfall;
   const { fy, zm, s, shadow } = stance(ctx, inst), hgt = F.h * s, w = F.w * s, colW = F.column * s;
   const x0 = clamp(inst.ux * W, w * 0.55, W - w * 0.55), xm = (x0 - W / 2) / s, toSun = sun.left ? -1 : 1;
   const off = rand() * 10, top = fy - hgt, pts = [], c = [0, 0, 0];
   shadow(xm, zm, { w: F.w, d: 10 }, F.h);
-  const flank = (u, side) => // the cliff's side at height u (0 at the top): narrower at the top, broken by noise
+  const flank = (u, side) => // the cliff's side at height u (0 at the foot): narrower at the top, broken by noise
     x0 + side * (w / 2) * (0.55 + 0.45 * u) + (fbm(u * 5 + off + side, side, 181, 3) - 0.5) * w * 0.12;
-  for (let i = 0; i <= 8; i++) pts.push(flank(1 - i / 8, -1), fy + 1 - hgt * (1 - i / 8)); // up the left flank
+  const stratum = mix(CLIFF, [0.5, 0.42, 0.34], 0.5);
+  const rock = (x, y) => { // strata and cracks on a dark face, the lit flank toward the sun
+    const band = fbm(x / (w * 0.25), y / (hgt * 0.035), 176, 3), crack = fbm(x / (w * 0.06), y / (hgt * 0.3), 177, 2);
+    mix(CLIFF, stratum, smooth(0.5, 0.65, band), c);
+    return lit(c, clamp(0.3 + 0.5 * (0.5 + toSun * (x - x0) / w)) * (0.85 + 0.3 * band) * (crack < 0.35 ? 0.6 : 1), c);
+  };
+  // The banks: from a third of the way up each flank out to the ground a cliff-width away, the top edge broken by
+  // noise and easing out (a (1 - t)^1.5 fall), grassed where it faces up.
+  const bankUp = 0.34, bankW = w * 0.95;
+  for (const side of [-1, 1]) {
+    const edge = flank(bankUp, side), foot = flank(0, side), bank = [foot, fy + 1, edge, fy - hgt * bankUp];
+    const topAt = (t) => fy - hgt * bankUp * (1 - t) ** 1.5 * (0.85 + 0.3 * fbm(t * 4 + off, side * 2, 183, 3));
+    for (let j = 1; j <= 10; j++) bank.push(edge + side * bankW * (j / 10), j === 10 ? fy + 1 : topAt(j / 10));
+    poly(bank, (x, y) => {
+      const t = clamp(Math.abs(x - edge) / bankW), below = (y - topAt(t)) / Math.max(1, hgt * bankUp);
+      rock(x, y);
+      const turf = smooth(0.45, 0, below) * (0.6 + 0.4 * fbm(x / (w * 0.1), y / (w * 0.1), 184, 2));
+      return mix(c, lit(BANK_TURF, 0.7 + 0.4 * (0.5 + side * toSun * 0.5)), clamp(turf), c);
+    });
+  }
+  for (let i = 0; i <= 8; i++) pts.push(flank(i / 8, -1), fy + 1 - hgt * (i / 8)); // up the left flank
   for (let i = 0; i <= 16; i++) { // the cliff's broken top edge
     const u = i / 16, dip = smooth(0.3, 0.5, Math.abs(u - 0.5)) * hgt * 0.1; // lower where the column goes over
     const left = flank(1, -1), ridge = (fbm(u * 6 + off, 0.5, 175, 3) - 0.5) * hgt * 0.3;
     pts.push(left + (flank(1, 1) - left) * u, top + dip + ridge);
   }
   for (let i = 0; i <= 8; i++) pts.push(flank(1 - i / 8, 1), top + hgt * (i / 8)); // down the right flank
-  const stratum = mix(CLIFF, [0.5, 0.42, 0.34], 0.5);
-  poly(pts, (x, y) => { // strata and cracks on a dark face, the lit flank toward the sun
-    const band = fbm(x / (w * 0.25), y / (hgt * 0.035), 176, 3), crack = fbm(x / (w * 0.06), y / (hgt * 0.3), 177, 2);
-    mix(CLIFF, stratum, smooth(0.5, 0.65, band), c);
-    return lit(c, clamp(0.3 + 0.5 * (0.5 + toSun * (x - x0) / w)) * (0.85 + 0.3 * band) * (crack < 0.35 ? 0.6 : 1), c);
-  });
+  poly(pts, rock);
   for (const side of [-1, 1]) { // the fallen rocks at the foot
     const rx = x0 + side * colW * (1.1 + 0.4 * h2(side, 1, 182)), ry = fy - colW * 0.1, r = colW * 0.35;
     ellipse(rx, ry, r, r * 0.6, lit(CLIFF, side * toSun > 0 ? 0.8 : 0.45));
   }
-  const lip = top + hgt * 0.02, fall = mix(FALL, L.horizon, 0.2), poolY = fy, poolRx = colW * 2.2;
-  const pool = ctx.project(0, zm), nearer = ctx.project(0, Math.max(1, zm - F.column * 2)).y;
+  const lip = top + hgt * 0.02, fall = mix(FALL, L.horizon, 0.2), poolY = fy, poolRx = w * 0.5; // as wide as the cliff
+  const pool = ctx.project(0, zm), nearer = ctx.project(0, Math.max(1, zm - F.column * 3)).y;
   const poolRy = Math.max(1, (nearer - pool.y) * 0.5);
-  ellipse(x0, poolY, poolRx, poolRy, lit(POOL, 0.8));
+  ellipse(x0, poolY, poolRx, poolRy, (x, y) => { // darker under the cliff, a ring of foam where the column lands
+    const foam = smooth(colW * 1.3, colW * 0.6, Math.abs(x - x0)) * smooth(poolRy, 0, Math.abs(y - poolY)) * 0.5;
+    return mix(lit(POOL, 0.65 + 0.3 * (y - poolY + poolRy) / (2 * poolRy), c), fall, foam, c);
+  });
   rect(x0 - colW / 2, lip, colW, fy - lip, (x, y) => { // the column: vertical streaks, widening a little as it falls
     const down = (y - lip) / Math.max(1, fy - lip);
     const streak = fbm(x / Math.max(1, colW * 0.08), y / (hgt * 0.5) - down * 3, 178, 3);
