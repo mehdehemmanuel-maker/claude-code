@@ -102,7 +102,7 @@ describe('water: the shoreline, the horizon and what the water reflects', () => 
     }
   });
 
-  it('reflects the far-bank pines and the moon, the boats, and smears lit windows on wet pavement', () => {
+  it('reflects the moon over the lake (the pines on the near shore now), the boats; smears lit windows', () => {
     const changed = (p: string, below = false) => {
       const scene = read(p), a = paint(scene, { width: W, height: H }), b = without(scene, ['reflectPass']);
       const hy = a.layout.horizon * H;
@@ -118,14 +118,19 @@ describe('water: the shoreline, the horizon and what the water reflects', () => 
       }
       return { n, warm, a };
     };
+    const hyOf = (img: Image) => img.layout.horizon * H;
     const pines = changed('three pine trees by a lake under a full moon, snow');
     expect(pines.a.layout.things.filter((t) => t.kind === 'tree')).toHaveLength(3);
     expect(pines.a.layout.moon).not.toBeNull();
-    expect(pines.n, 'pines and moon mirrored').toBeGreaterThan(1000); // measured 2960
+    // placement-critic stands the three pines on the near snow shore (their feet on land), so the far bank carries
+    // no pines and the water mirrors the moon alone: measured 810 (2960 when the pines stood on the far bank)
+    for (const t of pines.a.layout.things) expect(t.y + t.h, 'a pine on the near shore').toBeGreaterThan(hyOf(pines.a));
+    expect(pines.n, 'the moon mirrored').toBeGreaterThan(500);
     expect(changed('two sailboats on the sea at sunset').n, 'boats mirrored').toBeGreaterThan(800); // measured 2419
     const city = changed('a city skyline at night in the rain', true);
     expect(city.n, 'smears under the towers').toBeGreaterThan(2000); // measured 7674
-    expect(city.warm, 'the smears are the windows\' warm light').toBeGreaterThan(1200); // measured 2688
+    // the usual towers stand in a skyline row at the horizon (placement-critic), smaller: 1144 measured, from 2688
+    expect(city.warm, 'the smears are the windows\' warm light').toBeGreaterThan(800);
     expect(changed('a cabin in a foggy forest at dawn').n, 'nothing to mirror on dry grass').toBe(0);
   });
 

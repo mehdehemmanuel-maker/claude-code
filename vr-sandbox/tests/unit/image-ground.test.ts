@@ -15,8 +15,8 @@ const hash = (str: string) => {
   for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   return h >>> 0;
 };
-/** The four header prompts' layout digests on the base, 90c157f (see 'keeps the four header compositions'). */
-const HEADER_LAYOUTS = [4066208242, 1804882092, 1348838543, 2106598091];
+/** The four header prompts' layout digests as placement-critic lays them out (see 'keeps the four header…'). */
+const HEADER_LAYOUTS = [2882075132, 2255982723, 2533846824, 1999445943];
 
 const W = 640, H = 360;
 const lum = (d: Float32Array, i: number) => 0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!;
@@ -348,10 +348,10 @@ describe('the weather', () => {
     expect(rows[rows.length >> 1]!, 'the median row\'s crest').toBeGreaterThan(0.08);
   });
 
-  it('keeps the four header compositions as the base (90c157f) laid them out, at 960x540 with no seed', () => {
+  it('keeps the four header compositions as placement-critic laid them out, at 960x540 with no seed', () => {
     // A digest of each prompt's layout (horizon, sun and every thing's box as shares, 3 decimals): the FNV hash of
     // its JSON. The ground, the weather and the water change no random draw before the things are placed, so the
-    // layouts are the base's to the pixel. When placement changes on purpose, print the JSON and update the digests.
+    // layouts stay to the pixel. When placement changes on purpose, print the JSON and update the digests.
     const digests: Record<string, number> = {
       'a red go-kart on a wet road at dusk, mountains behind': HEADER_LAYOUTS[0]!,
       'three pine trees by a lake under a full moon, snow': HEADER_LAYOUTS[1]!,

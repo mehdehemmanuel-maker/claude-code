@@ -179,6 +179,9 @@ export function report(scene) {
   const q = (o, v) => (o.what === 'text' ? JSON.stringify(v) : v); // a text in quotes: it may hold spaces
   const changes = changed.map((o) => `${o.what} ${q(o, o.from)} -> ${q(o, o.to)} (${o.because})`);
   if (changes.length) lines.push(`changed: ${changes.join('; ')}`);
+  const visible = scene.report?.visible; // hook for placement-critic: what the critic could see, once painted
+  const seen = Object.entries(visible ?? {}).map(([kind, [n, asked]]) => `${kind} ${n}/${asked}`);
+  if (seen.length) lines.push(`visible: ${seen.join(', ')}`);
   return lines;
 }
 
@@ -266,16 +269,21 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       }
     }
     if (o.describe) {
+      paint(scene, o); // hook for placement-critic: the critic's report (scene.report.visible) is known once painted
       console.log(JSON.stringify(scene, null, 2));
       process.exit(0);
     }
-    for (const line of report(scene)) process.stderr.write(`${line}\n`);
+    const early = report(scene);
+    for (const line of early) process.stderr.write(`${line}\n`);
     const refusal = o.strict && strictRefusal(scene);
     if (refusal) {
       process.stderr.write(`--strict: ${refusal}; nothing written\n`);
       process.exit(3);
     }
-    const painted = (image) => { for (const line of textNotes(image.layout)) process.stderr.write(`${line}\n`); };
+    const painted = (image) => {
+      for (const line of textNotes(image.layout)) process.stderr.write(`${line}\n`);
+      for (const line of report(scene).slice(early.length)) process.stderr.write(`${line}\n`); // the critic's line
+    };
     const t = Date.now(), file = generate(prompt, { ...o, scene, painted });
     process.stderr.write(`${file} (${((Date.now() - t) / 1000).toFixed(1)} s)\n`);
     console.log(file);

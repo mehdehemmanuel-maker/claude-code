@@ -13,6 +13,7 @@
 // elevation from the time of day); shadow() sweeps a footprint along it onto the ground; sprite() wraps a thing so
 // its colours fade with the air and its top edges are kept for the weather to settle on.
 import { clamp, lerp } from './math.mjs';
+import { thingByKey } from './registry.mjs';
 
 // ── Sizes, in metres ───────────────
 
@@ -45,13 +46,14 @@ const FRAME_MM = 24; // the height of a full 35 mm frame: what a "50 mm-equivale
 // ── The camera ─────────────────────
 
 /**
- * A camera `eye` metres up, looking level, its horizon on row `hy`, with an `equiv` mm lens on a 24 mm-high frame:
- * focal = H * equiv / 24 pixels. project(xm, zm, hm) is a point xm metres right of the lens axis, zm metres away,
- * hm metres above the ground; it answers its pixel and the pixels per metre at that depth. groundZ(fy) is the depth
- * of a ground pixel row (Infinity on and above the horizon); groundX(px, fy) the metres right of the axis there.
+ * A camera `eye` metres up (a standing person's by default), looking level, its horizon on row `hy`, with an `equiv`
+ * mm lens on a 24 mm-high frame: focal = H * equiv / 24 pixels. project(xm, zm, hm) is a point xm metres right of
+ * the lens axis, zm metres away, hm metres above the ground; it answers its pixel and the pixels per metre at that
+ * depth. groundZ(fy) is the depth of a ground pixel row (Infinity on and above the horizon); groundX(px, fy) the
+ * metres right of the axis there.
  */
-export function camera(W, H, hy, equiv = 50) {
-  const focal = H * equiv / FRAME_MM, eye = SIZES.eye;
+export function camera(W, H, hy, equiv = 50, eye = SIZES.eye) {
+  const focal = H * equiv / FRAME_MM;
   const project = (xm, zm, hm = 0) => {
     const z = zm > 0.01 ? zm : 0.01, scale = focal / z;
     return { x: W / 2 + xm * scale, y: hy + (eye - hm) * scale, scale };
@@ -59,6 +61,52 @@ export function camera(W, H, hy, equiv = 50) {
   const groundZ = (fy) => (fy > hy ? focal * eye / (fy - hy) : Infinity);
   const groundX = (px, fy) => (px === W / 2 ? 0 : (px - W / 2) * groundZ(fy) / focal);
   return { eye, horizon: hy, focal, equiv, project, groundZ, groundX };
+}
+
+/** How much of the frame the subject may take: its height of the rows, its width of the columns (by thing id). */
+export const FIT = { height: 0.6, width: 0.5, house: 0.4, boat: 0.12 };
+/** Where the near subject stands, as a share of the ground band below the horizon: mid-field, or the near shore. */
+export const NEAR_SHARE = { land: 0.45, water: 0.7 };
+/** The share of the columns one of `n` things of a kind may take: its kind's share over the square root of n. */
+export const fitWidth = (id, n = 1) => (FIT[id] ?? FIT.width) / Math.sqrt(Math.max(1, n));
+const EYE_MOST = 12; // metres: the highest the camera climbs (a hillside, a bridge), never a drone's view
+const EYE_ON_ROAD = 2.5; // on a road the photographer steps back along it, not up: a step-ladder at most
+
+/**
+ * The camera that frames the subject. A level camera draws a thing on the ground (fy - hy) / eye times its height
+ * whatever the lens (the focal length cancels: it only says how many metres away a row is), so a 20 m pine 8-18 m
+ * from a standing eye is three frames tall and the eye is the lever: a photographer steps back and up until the
+ * largest named thing that will stand on the near ground fits FIT.height of the rows and its kind's share of the
+ * columns at NEAR_SHARE of the ground band (the near shore of a water scene lies farther down the frame than the
+ * middle of a field). A counted few share the columns: each of n may take its kind's share over the square root
+ * of n (three beach houses at 0.23 of the width each, not three at 0.4 glued into a terrace). `instances` are the
+ * reader's; only the asked ones set the eye (the usual extras stand farther at whatever eye results; a scene with
+ * nothing asked is framed for its largest usual kind), at their plain size (a tiny or a huge thing is framed as
+ * the plain one and drawn at its factor, so the word shows); a kind with no registered drawer, a flyer, a boat on
+ * the water and the usual skyline of buildings never raise it. The horizon share is kept. Answers { eye, equiv,
+ * near, subject }: near the ground share the fit was made for, subject the kind it was made for (null: nothing
+ * asked).
+ */
+export function frameCamera(scene, instances, { W = 16, H = 9, horizon = 0.58 } = {}) {
+  const water = scene.ground === 'water' && scene.beach, near = water ? NEAR_SHARE.water : NEAR_SHARE.land;
+  const band = 1 - horizon; // the ground band's share of the rows
+  let eye = SIZES.eye, subject = null;
+  const fit = (inst) => {
+    const entry = thingByKey(inst.kind);
+    if (!(inst.count > 0) || !entry || entry.sky || entry.onWater || !entry.size) return;
+    if (inst.kind === 'buildings' && inst.usual) return; // the skyline row stands at the horizon
+    const h = entry.size.h, w = entry.size.w, wide = fitWidth(entry.id, inst.count); // at its plain size, k = 1
+    const need = Math.max(h * near * band / FIT.height, w * near * band * H / (wide * W));
+    if (need > eye) {
+      eye = need;
+      subject = inst.kind;
+    }
+  };
+  // the asked things are the subject: the usual extras take their band at whatever eye results (farther, not
+  // taller); only a scene with nothing asked is framed for its largest usual kind
+  const list = instances ?? [], asked = list.filter((inst) => !inst.usual);
+  for (const inst of asked.length ? asked : list) fit(inst);
+  return { eye: Math.min(eye, scene.road ? EYE_ON_ROAD : EYE_MOST), equiv: 50, near, subject };
 }
 
 // ── The light ──────────────────────
@@ -368,6 +416,7 @@ export function canvas(W, H) {
 
 const SHADE = [0.03, 0.03, 0.06]; // what a shadow is painted toward: the sky's blue, not black
 const TOP_ALPHA = 0.5; // a pixel put this solidly counts as the thing's own edge, not its shadow or a haze
+const OWN_ALPHA = 0.3; // a pixel put this solidly is the thing's own (a gull's one-pixel wing stroke counts)
 
 /**
  * Puts the primitives, the camera, the light, shadow() and sprite() on a paint context (core.mjs calls this once
@@ -383,7 +432,7 @@ export function attach(ctx) {
   ctx.rect = (x, y, w, h, c, a, soft) => rect(ctx, x, y, w, h, c, a, soft);
   ctx.line = (x0, y0, x1, y1, width, c, a, soft) => line(ctx, x0, y0, x1, y1, width, c, a, soft);
 
-  const cam = camera(W, H, hy);
+  const framing = ctx.framing, cam = camera(W, H, hy, framing?.equiv, framing?.eye); // frameCamera's choice
   ctx.camera = cam;
   ctx.project = cam.project;
   ctx.groundZ = cam.groundZ;
@@ -421,12 +470,13 @@ export function attach(ctx) {
   ctx.sprite = (zm, drawFn, id = ctx.tops.length) => {
     // hook for ground-weather: ctx.fogK (set by weatherFarPass) thickens the fog on every thing by its depth
     const fy = cam.project(0, zm).y, fade = (1 - clamp(ctx.foot(fy))) * 0.6 * (ctx.fogK ?? 1);
-    const tops = new Int16Array(W).fill(-1), base = ctx.put, seen = [0, 0, 0];
+    const tops = new Int16Array(W).fill(-1), base = ctx.put, seen = [0, 0, 0], owner = ctx.owner;
     ctx.tops[id] = tops;
     ctx.put = (x, y, c, a = 1) => {
       if (x < 0 || y < 0 || x >= W || y >= H) return;
       const xi = x | 0, yi = y | 0;
       if (a >= TOP_ALPHA && (tops[xi] < 0 || yi < tops[xi])) tops[xi] = yi;
+      if (owner && a >= OWN_ALPHA) owner[yi * W + xi] = id; // hook for placement-critic: the last painted here owns it
       base(xi, yi, fade > 0 ? ctx.air(c, fade, seen) : c, a);
     };
     try {
