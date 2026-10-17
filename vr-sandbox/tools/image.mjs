@@ -4,10 +4,14 @@
 // stars, clouds, ranges of mountains fading into the air, water with a reflection, grass, sand, snow, a road, trees,
 // houses, buildings, a car, a boat, birds, rain, snow, fog, grain), and the pixels are written as a PNG by this file's
 // own encoder. Things stand in metres through a camera 1.6 m up (a 4.5 m car on a two-lane road, a 6 m cabin, a 15-25 m
-// pine), with anti-aliased edges and a shadow thrown by the sun or the moon at the hour's height.
+// pine), with anti-aliased edges and a shadow thrown by the sun or the moon at the hour's height; the sun a small
+// warm disc by day and a deep orange ball when low, the moon by its phase, the mountains lit on the sun's side. A
+// style can finish the whole (pixel art, a poster, a sketch, a watercolour, mono, sepia, vintage) and a caption can be
+// written over it in the tool's own 5x7 bitmap font.
 // Node 18+, nothing to install; usable from a shell or imported (`paint`, `read`, `png`, `generate`).
-// This file is the shell and the PNG encoder; the painting is tools/image/ (math, read, core, passes, things), which
-// has nothing of Node in it, so the same core paints in a browser (`toImageData`); core.mjs says what each file owns.
+// This file is the shell and the PNG encoder; the painting is tools/image/ (math, read, core, passes, things, draw,
+// styles, text, font), which has nothing of Node in it, so the same core paints in a browser (`toImageData`);
+// core.mjs says what each file owns.
 //
 //   node tools/image.mjs "a red go-kart on a wet road at dusk, mountains behind"
 //   node tools/image.mjs "three pine trees by a lake under a full moon, snow"
@@ -17,6 +21,10 @@
 //   --out <file>     where to save (default: images/<date>-<slug>.png)
 //   --size WxH       picture size, each side 1 to 8192 (default 1280x720)
 //   --seed <n>       the random choices, a whole number (default: from the words: the same words, the same picture)
+//   --style <name>   a finish over the whole: pixel, poster, minimalist, sketch, watercolour, mono, sepia, vintage
+//                    (the words can name one too: "a mountain lake, pixel art"; an unknown name lists these, exit 1)
+//   --text "..."     a caption in the 5x7 bitmap font, top- or bottom-centre away from the subject, two lines at
+//                    most: a longer one is cut with ... and stderr says so, as it says of characters not in the font
 //   --describe       print what the words were read as (JSON) and stop, no picture
 //   --strict         write nothing and exit 3 when nothing in the words is understood, or when an ignored word looks
 //                    like a noun (three letters or more, not ending in -ly: it cannot tell nouns from adjectives)
@@ -37,11 +45,11 @@
 // city/town/skyline/cityscape/downtown/towers, car/kart/truck/van/jeep/taxi, boat/ship/sailboat/yacht/ferry/canoe,
 // birds/gulls/crows, sun, moon and its phase, stars) with counts ("three trees", "15 trees", "a hundred" is forty,
 // "no trees"), colours and sizes before things ("red car", "tiny cabin", "huge mountains"), places (near, far, left,
-// right, centre), a style word (pixel art, poster, minimalist, sketch, watercolour, painting, black and white,
-// vintage, sepia, cartoon: read now, painted by a later round) and a text to write ("the word HELLO", a quoted phrase:
-// read now, painted by a later round). "no" before a word cancels it (no clouds, no trees). Words that name the
-// picture itself (photo, scene, sky) are passed over. Anything else in the words is ignored, and --describe shows
-// exactly what was kept: every ignored word, every silent change, and how much was recognised.
+// right, centre), a style word (pixel art/8-bit, poster/flat/cartoon, minimalist, sketch/pencil/line art,
+// watercolour/painting, black and white/mono/greyscale, sepia, vintage/retro/old photo) and a text to write ("the
+// word HELLO", a quoted phrase, "saying ..."). "no" before a word cancels it (no clouds, no trees). Words that name
+// the picture itself (photo, scene, sky) are passed over. Anything else in the words is ignored, and --describe
+// shows exactly what was kept: every ignored word, every silent change, and how much was recognised.
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -105,9 +113,14 @@ export function png({ width, height, data }, { text } = {}) {
   return Buffer.concat([signature, chunk('IHDR', ihdr), ...texts, idat, chunk('IEND', Buffer.alloc(0))]);
 }
 
-/** Words to a PNG file, its reading in a tEXt chunk. Returns the path written. */
-export function generate(prompt, { out, width, height, seed, style, scene } = {}) {
-  const read_ = scene ?? read(prompt), image = paint(read_, { width, height, seed, style });
+/**
+ * Words to a PNG file, its reading in a tEXt chunk. Returns the path written. `style` and `text` stand in when the
+ * words name none; `painted(image)` is called with the painting before it is written, for the shell's notes on the
+ * caption (textNotes) or any other look at the layout.
+ */
+export function generate(prompt, { out, width, height, seed, style, text, scene, painted } = {}) {
+  const read_ = scene ?? read(prompt), image = paint(read_, { width, height, seed, style, text });
+  painted?.(image);
   const { prompt: _, ...reading } = read_; // the words are the file's name and the caller's; the reading is new
   const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
   const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'image';
@@ -158,6 +171,16 @@ export function report(scene) {
   return lines;
 }
 
+/** What the caption lost, for stderr: the second line it was cut to, the characters the font has no glyph for. */
+export function textNotes(layout) {
+  const t = layout.text, lines = [];
+  if (!t) return lines;
+  if (t.truncated && !t.lines.length) lines.push('text does not fit the picture: not drawn');
+  else if (t.truncated) lines.push(`text cut to two lines: "${t.lines[1]}"`);
+  if (t.substituted) lines.push(`text: ${t.substituted} characters outside the font drawn as ?`);
+  return lines;
+}
+
 /** Why --strict refuses a scene, or null when it would paint. */
 export function strictRefusal(scene) {
   if (scene.recognised === 0) return 'nothing in the words is understood';
@@ -201,7 +224,9 @@ export function parse(argv) {
       const v = next();
       if (!/^-?\d+$/.test(v)) throw new Error(`--seed wants a whole number, not ${v}`);
       o.seed = Number(v) >>> 0;
-    } else if (a === '--describe') o.describe = true;
+    } else if (a === '--style') o.style = next();
+    else if (a === '--text') o.text = next();
+    else if (a === '--describe') o.describe = true;
     else if (a === '--strict') o.strict = true;
     else if (a === '--help' || a === '-h') return { ...o, help: true }; // whatever follows, the help is the answer
     else if (a.startsWith('-') && a.length > 1) {
@@ -234,7 +259,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       process.stderr.write(`--strict: ${refusal}; nothing written\n`);
       process.exit(3);
     }
-    const t = Date.now(), file = generate(prompt, { ...o, scene });
+    const painted = (image) => { for (const line of textNotes(image.layout)) process.stderr.write(`${line}\n`); };
+    const t = Date.now(), file = generate(prompt, { ...o, scene, painted });
     process.stderr.write(`${file} (${((Date.now() - t) / 1000).toFixed(1)} s)\n`);
     console.log(file);
   } catch (e) {

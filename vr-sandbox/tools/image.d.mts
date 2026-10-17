@@ -159,7 +159,6 @@ export declare const SIZE_WORDS: Record<string, number>;
 export declare const PLACEMENT: Record<string, string>;
 export declare const MOON_PHASES: RegExp;
 export declare const NEGATION: RegExp;
-export declare const STYLES: Array<{ id: string; match: RegExp }>;
 export declare const STOP: Set<string>;
 export declare const STOP_SCAN: Set<string>;
 export declare const PHRASES: string[][];
@@ -171,12 +170,14 @@ export declare const SOFTWARE: string;
 export declare function png(
   img: Pick<Image, 'width' | 'height' | 'data'>, opts: { text?: Record<string, string> },
 ): Buffer;
-export declare function generate(prompt: string, opts?: PaintOptions & { out?: string; scene?: Scene }): string;
+export declare function generate(
+  prompt: string, opts?: PaintOptions & { out?: string; scene?: Scene; painted?: (image: Image) => void },
+): string;
 export declare function report(scene: Scene): string[];
 export declare function strictRefusal(scene: Scene): string | null;
 export declare function parse(argv: string[]): {
   words: string[]; out?: string; width?: number; height?: number; seed?: number; describe?: boolean; strict?: boolean;
-  help?: boolean;
+  help?: boolean; style?: string; text?: string;
 };
 
 // -- primitives-world (tools/image/draw.mjs, re-exported by core.mjs) --------------------------------------------
@@ -319,8 +320,9 @@ export interface Ctx {
 /** What placeText did with the caption, in Layout.text. */
 export interface TextLayout {
   text: string;
-  lines: string[]; // one or two, the second ending in '...' when truncated
+  lines: string[]; // one or two, the second ending in '...' when truncated; [] when nothing fits; as drawn ('?')
   truncated: boolean;
+  substituted: number; // characters outside the font (code points 32-126), drawn as '?'
   at: 'top' | 'bottom'; // the third of the picture it went in
   x: number; // the block's top-left corner and size in pixels
   y: number;
@@ -339,5 +341,10 @@ export interface Layout { text?: TextLayout }
 export interface Scene { text?: string }
 export interface PaintOptions { text?: string }
 export interface Ctx { text?: string }
-/** A style may turn the default finish's grain or vignette off (both default to true). */
-export interface StyleEntry { grain?: boolean; vignette?: boolean }
+/**
+ * A style may turn the default finish's grain or vignette off (both default to true) and ask something of the scene
+ * before it is painted (minimalist: clouds 0.05, fog 0), laid over the scene by paint().
+ */
+export interface StyleEntry { grain?: boolean; vignette?: boolean; scene?: Partial<Scene> }
+/** The shell's stderr notes on a caption: cut to two lines, characters drawn as '?'. */
+export declare function textNotes(layout: Layout): string[];

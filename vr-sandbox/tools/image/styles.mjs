@@ -1,9 +1,13 @@
-// The styles: a finish over the whole picture. Each entry { id, match, apply(img, ctx), grain?, vignette? } works on
-// the Float32 rgb buffer in place, from lattice noise only (no random, no clock), and keeps the width, the height and
-// every value in [0, 1]. core.mjs registers STYLES (its hook); finishPass in passes.mjs resolves ctx.style through
-// styleFor(), which throws an Error listing the ids for an unknown one, runs the default grain and vignette unless the
-// entry turns them off (grain: false, vignette: false), applies the style, then draws the text over it so it stays
-// crisp. The helpers (luma, sobel, boxBlur, posterise, grain, vignette) are exported for other passes and the tests.
+// The styles: a finish over the whole picture. Each entry { id, match, apply(img, ctx), grain?, vignette?, scene? }
+// works on the Float32 rgb buffer in place, from lattice noise only (no random, no clock), and keeps the width, the
+// height and every value in [0, 1]. `match` is the one table of style words: the reader (read.mjs) sets scene.style
+// from it, so every id the reader can name is one the finish can paint, and the synonyms live here (pixel art, 8-bit;
+// cartoon as a poster; painting as a watercolour; black and white as mono; retro and an old photo as vintage).
+// `scene` is what a style asks of the picture before it is painted (minimalist: no clouds, no fog); paint() in
+// core.mjs lays it over the scene first. paint() resolves ctx.style through styleFor(), which throws an Error listing
+// the ids for an unknown one; finishPass in passes.mjs runs the default grain and vignette unless the entry turns
+// them off (grain: false, vignette: false), applies the style, then draws the text over it so it stays crisp. The
+// helpers (luma, sobel, boxBlur, posterise, grain, vignette) are exported for other passes and the tests.
 import { clamp, h2, noise } from './math.mjs';
 
 // ── Helpers over the buffer ────────
@@ -234,9 +238,12 @@ function poster({ width: W, height: H, data }) {
   edgeDarken(data, edge, 0.08, 3, 0.55);
 }
 
-/** Poster plus flat bands: the textures blurred away before the bands are cut, no grain, no vignette, no outline. */
+/**
+ * Poster plus flat bands: the textures blurred away (a sixtieth of the height, so the near grass flattens too) before
+ * the bands are cut; no grain, no vignette, no outline; and the scene asked to leave its clouds and fog out.
+ */
 function minimalist({ width: W, height: H, data }) {
-  data.set(boxBlur(data, W, H, Math.max(1, Math.round(H / 120))));
+  data.set(boxBlur(data, W, H, Math.max(1, Math.round(H / 60))));
   posterise(data, 5);
 }
 
@@ -322,7 +329,7 @@ const vintage = ({ width: W, height: H, data }) => tone(data, W, H, 0.3, 0.4, 0.
 
 // ── The registry entries ───────────
 
-/** Each apply ends by clamping every value into [0, 1], whatever the style did. */
+/** Each apply ends by clamping every value into [0, 1], whatever the style did. `flags.scene` is the style's ask. */
 const entry = (id, match, fn, flags = {}) => ({
   id, match, grain: true, vignette: true, ...flags,
   apply(img, ctx) {
@@ -331,18 +338,25 @@ const entry = (id, match, fn, flags = {}) => ({
   },
 });
 
-/** The styles in the order they are registered; `match` is tested against single words (see read.mjs words()). */
+/**
+ * The styles in the order they are registered; `match` is tested against the reader's tokens (single lower-case words,
+ * phrases joined with '-': 'pixel-art', 'black-and-white', 'line-art', 'oil-painting', 'old-photo'; see read.mjs).
+ */
 export const STYLES = [
   entry('pixel', /^(pixel|pixels|pixelated|pixel-art|8-?bit|16-?bit)$/, pixel, { grain: false }),
-  entry('poster', /^(poster|posterised|posterized|screenprint|graphic)$/, poster, { grain: false }),
-  entry('minimalist', /^(minimal|minimalist|minimalism|minimalistic)$/, minimalist, { grain: false, vignette: false }),
-  entry('sketch', /^(sketch|sketched|sketchy|pencil|pencilled|drawing|drawn|ink|inked|charcoal)$/, sketch,
+  entry('poster', /^(poster|posterised|posterized|screenprint|graphic|flat|cartoon|cartoony|comic|anime)$/, poster,
+    { grain: false }),
+  entry('minimalist', /^(minimal|minimalist|minimalism|minimalistic)$/, minimalist,
+    { grain: false, vignette: false, scene: { clouds: 0.05, fog: 0 } }),
+  entry('sketch', /^(sketch|sketched|sketchy|pencil|pencilled|drawing|drawn|ink|inked|charcoal|line-art)$/, sketch,
     { grain: false, vignette: false }),
-  entry('watercolour', /^(watercolou?r|watercolou?rs|aquarelle|painted|painting|painterly)$/, watercolour,
-    { grain: false, vignette: false }),
+  entry('watercolour',
+    /^(watercolou?r|watercolou?rs|aquarelle|painted|painting|painterly|oil-painting|acrylic|impressionist)$/,
+    watercolour, { grain: false, vignette: false }),
   entry('mono', /^(mono|monochrome|black-and-white|b-?w|greyscale|grayscale|noir)$/, mono),
   entry('sepia', /^(sepia|sepia-toned)$/, sepia, { grain: false, vignette: false }),
-  entry('vintage', /^(vintage|retro|old-fashioned|faded|aged|antique)$/, vintage, { grain: false, vignette: false }),
+  entry('vintage', /^(vintage|retro|old-fashioned|old-photo|old-photograph|faded|aged|antique)$/, vintage,
+    { grain: false, vignette: false }),
 ];
 
 /** The style with this id out of `styles` (the registry), or an Error naming every id there is. */

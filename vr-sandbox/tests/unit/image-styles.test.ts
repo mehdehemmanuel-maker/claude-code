@@ -167,8 +167,8 @@ describe('the bitmap text', () => {
     expect(cut.lines.length).toBe(2);
     expect(cut.lines[1]!.endsWith('...')).toBe(true);
     expect(measure(cut.lines[1]!, textScale(H)).width).toBeLessThanOrEqual(0.9 * W);
-    expect(fitText('ab', 2, 5)).toEqual({ lines: [], truncated: true }); // nothing fits: say so, draw nothing
-    expect(fitText('   ', 2, 500)).toEqual({ lines: [], truncated: false });
+    expect(fitText('ab', 2, 5)).toEqual({ lines: [], truncated: true, substituted: 0 }); // nothing fits: say so
+    expect(fitText('   ', 2, 500)).toEqual({ lines: [], truncated: false, substituted: 0 });
   });
 
   it('paints the caption from paint() options or scene.text, after the style, and records it in the layout', () => {

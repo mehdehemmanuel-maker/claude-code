@@ -1,8 +1,10 @@
 // Words to a scene. Everything here is data a later reader can replace whole: the number words, the colour words,
-// the nouns that are things, the conditions (time, sky, weather, ground, water), the size and place words, the
-// styles, the stop words, and the compounds that are read as their parts. read() turns a prompt into a scene and
-// says what it did with every token: each one is a thing, a condition, a number, a colour, a modifier, a style, a
-// stop word, part of a phrase, or it goes to scene.ignored; every silent choice goes to scene.overridden.
+// the nouns that are things, the conditions (time, sky, weather, ground, water), the size and place words, the stop
+// words, and the compounds that are read as their parts; the style words are styles.mjs's own table (STYLES), so a
+// style the reader names is one the finish paints. read() turns a prompt into a scene and says what it did with
+// every token: each one is a thing, a condition, a number, a colour, a modifier, a style, a stop word, part of a
+// phrase, or it goes to scene.ignored; every silent choice goes to scene.overridden.
+import { STYLES } from './styles.mjs';
 //
 // The scene the painter reads (time, clouds, fog, rain, snow, storm, ground, road, beach, things, colours, land) keeps
 // its shape; things and colours are views over scene.instances, where each mention of a thing keeps its own count,
@@ -62,19 +64,6 @@ export const PLACEMENT = {
 export const MOON_PHASES = /^(full|crescent|half|new|gibbous|waxing|waning)$/;
 /** no/zero/without/not before a noun deletes it; before a condition word, cancels it. */
 export const NEGATION = /^(no|zero|without|not)$/;
-/** A style over the whole picture, read from the words; the first named wins. The finish is a later package's. */
-export const STYLES = [
-  { id: 'pixel', match: /^(pixel|pixels|pixel-art|pixelated|8-bit|16-bit)$/ },
-  { id: 'poster', match: /^(poster|posterised|posterized)$/ },
-  { id: 'minimalist', match: /^(minimalist|minimal|minimalism)$/ },
-  { id: 'sketch', match: /^(sketch|sketched|sketchy|drawing|pencil|ink|line-art)$/ },
-  { id: 'watercolour', match: /^(watercolou?rs?|aquarelle)$/ },
-  { id: 'painting', match: /^(painting|painted|oil-painting|acrylic|impressionist)$/ },
-  { id: 'mono', match: /^(mono|monochrome|black-and-white|greyscale|grayscale)$/ },
-  { id: 'vintage', match: /^(vintage|retro)$/ },
-  { id: 'sepia', match: /^sepia$/ },
-  { id: 'cartoon', match: /^(cartoon|cartoony|comic|anime)$/ },
-];
 
 /**
  * Words that carry no picture of their own: articles, prepositions, pronouns, and the words that name the picture
@@ -96,7 +85,7 @@ export const PHRASES = [
   ['black', 'and', 'white'], ['hot', 'air', 'balloon'], ['golden', 'hour'], ['blue', 'hour'], ['pixel', 'art'],
   ['early', 'morning'], ['late', 'afternoon'], ['oil', 'painting'], ['line', 'art'], ['mountain', 'range'],
   ['mountain', 'ranges'], ['movie', 'star'], ['movie', 'stars'], ['film', 'star'], ['film', 'stars'], ['go', 'kart'],
-  ['go', 'karts'], ['snow', 'capped'], ['night', 'time'], ['day', 'time'],
+  ['go', 'karts'], ['snow', 'capped'], ['night', 'time'], ['day', 'time'], ['old', 'photo'], ['old', 'photograph'],
 ];
 /** Words that mean something only after another: 'track' is a road after race, dirt or train, else nothing. */
 const TRACK_AFTER = /^(race|racing|dirt|gravel|train|railway)$/;
@@ -491,7 +480,8 @@ export function read(prompt) {
   }
   if (s.road && !s.roadKind) s.roadKind = 'asphalt';
 
-  // Styles, the moonless night, and the things a scene word brings with it when they were not named themselves.
+  // The style (the first named, from the finish's own table), the moonless night, and the things a scene word brings
+  // with it when they were not named themselves.
   for (let i = 0; i < n && !s.style; i++) {
     const style = STYLES.find((st) => forms[i].some((f) => st.match.test(f)));
     if (!style) continue;

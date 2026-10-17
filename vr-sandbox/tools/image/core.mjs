@@ -10,7 +10,7 @@ import { CONDITIONS, COLOURS, words } from './read.mjs';
 import { celestialPass, cloudPass, finishPass, groundPass, landBehindPass, skyPass, weatherPass } from './passes.mjs';
 import { drawers, thingsPass } from './things.mjs';
 import { attach } from './draw.mjs';
-import { STYLES } from './styles.mjs'; // hook for finish-styles-text
+import { STYLES, styleFor } from './styles.mjs';
 
 // The painter's primitives, camera and sizes, for an importer that draws its own things (tools/image.d.mts types them).
 export {
@@ -62,7 +62,7 @@ export function register(kind, entry) {
 }
 
 for (const drawer of drawers) register('things', drawer);
-for (const style of STYLES) register('styles', style); // hook for finish-styles-text
+for (const style of STYLES) register('styles', style);
 register('families', {
   id: 'landscape',
   detect: () => true,
@@ -73,11 +73,17 @@ register('families', {
 
 // ── Painting ───────────────────────
 
-/** Paints a scene (from `read`) into { width, height, data: Float32Array rgb in 0..1, layout }. */
-export function paint(scene, { width = 1280, height = 720, seed, style, text } = {}) { // text: finish-styles-text
+/**
+ * Paints a scene (from `read`) into { width, height, data: Float32Array rgb in 0..1, layout }. `style` names a
+ * finish when the words did not (an unknown name is an Error listing the ids, before anything is painted) and `text`
+ * a caption when the words did not; a style that asks something of the scene (minimalist: no clouds) has it first.
+ */
+export function paint(scene, { width = 1280, height = 720, seed, style, text } = {}) {
   const W = width, H = height;
   const data = new Float32Array(W * H * 3);
   const rand = rng(seed ?? hash(words(scene.prompt).join(' '))); // from the words, not their case or punctuation
+  const styleId = scene.style ?? style, entry = styleId ? styleFor(styleId, styles) : null;
+  if (entry?.scene) scene = { ...scene, ...entry.scene };
   const L = LIGHT[scene.time];
   const gloom = scene.storm ? 0.45 : clamp(1 - scene.clouds * 0.45 - scene.fog * 0.2);
   const horizon = 0.58 + (rand() - 0.5) * 0.06; // as a share of the height, from the top
@@ -91,8 +97,8 @@ export function paint(scene, { width = 1280, height = 720, seed, style, text } =
     sky: null, // the sky before the sun's disc, snapshotted by celestialPass: what water reflects
     shoreY: H, // where the water ends and the land begins, set by groundPass
     scale: H / 720, // fixed-pixel detail (stars, birds, rain, snow, windows) is sized for 720 rows and scaled by this
-    style: scene.style ?? style,
-    text, // a caption from paint's options; scene.text (the reader's) wins over it: hook for finish-styles-text
+    style: styleId,
+    text, // a caption from paint's options; scene.text (the reader's) wins over it
     things, styles,
   };
   tools(ctx);
