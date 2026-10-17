@@ -298,8 +298,10 @@ What a judge would still call thin, said plainly:
 - The dragon reads as a pterodactyl: a long head, bat wings and a spade tail, no scales, no fire.
 - A helicopter at night is its lights (red and green by heading, a white tail light, a red beacon, a lit cabin) on a
   dark shape a few pixels across at its depth; it is in the frame and counted, not recognisable without them.
-- The speed budget in `image.test.ts` (640x360 under 400 ms, median of three) holds on a quiet machine (435-500 ms
-  for the kitchen-sink prompt at 960x540); under the full gate's parallel workers the same paint has taken 630 ms.
+- The speed budget in `image.test.ts` (640x360 under 400 ms, median of three) has held in every run so far, the full
+  gate's 154 test files in parallel included (2026-10-17: 1778 tests, 307 s); it is a budget for a quiet minute of
+  the machine, not a guarantee: the kitchen-sink prompt at 960x540 paints in 435-500 ms quiet and has taken 630 ms
+  under the suite's load.
 - One lens, one level camera: no wide or portrait composition words, no looking up or down.
 - The portrait reads "smiling" but the mouth barely changes; expressions are a line.
 - The vocabulary is finite (the header lists it); there are no learned synonyms, and a word outside it is ignored,
