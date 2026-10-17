@@ -88,7 +88,7 @@ export function celestialPass(ctx) {
   layout.moon = null;
   const daytime = !L.sunk;
   if (scene.storm) return; // a storm hides both; the glow stays
-  if (daytime || scene.things.sun) sunDisc(ctx, sunLow(scene));
+  if ((daytime || scene.things.sun) && !L.sunk) sunDisc(ctx, sunLow(scene)); // no sun disc at night, whatever the words
   if ((scene.things.moon || scene.time === 'night') && !noMoon(scene)) moonDisc(ctx, daytime);
 }
 
@@ -220,10 +220,13 @@ export function cloudPass(ctx) {
   }
 }
 
-/** The storm's sky: the gradient repainted grey, in the picture and in the snapshot the water reflects. */
+/**
+ * The storm's sky: the gradient repainted grey, in the picture and in the snapshot the water reflects; at night dimmed
+ * to a little under half, so it still reads as cloud over the horizon's band and not as a void.
+ */
 function stormSky(ctx) {
   const { W, H, hy, scene, data, sky } = ctx;
-  const k = scene.time === 'night' ? 0.3 : 1, c = [0, 0, 0];
+  const k = scene.time === 'night' ? 0.45 : 1, c = [0, 0, 0];
   for (let y = 0; y < H; y++) {
     const t = clamp(y / hy), row = y * W * 3;
     mix(STORMTOP, STORMHORIZON, t * t, c);
@@ -398,7 +401,7 @@ const ASPHALT = [0.22, 0.22, 0.23], PAINT = [0.9, 0.85, 0.5], SKY = [0, 0, 0], R
 
 /** Grass, sand, snow or pavement from noise, and the road over it where there is one. */
 function landPixel(ctx, row, x, xm, c) {
-  const { W, scene, getSky, lit } = ctx;
+  const { W, scene, getSky, lit, litGround } = ctx;
   const { y, near, here, wet, zm } = row;
   const n = fbm(xm * 0.3, zm * 0.3, 41, 4);
   const blades = here === 'grass' ? (h2(x, y, 3) - 0.5) * 0.25 * row.bladeK : 0;
@@ -406,7 +409,7 @@ function landPixel(ctx, row, x, xm, c) {
   c[0] = row.landColour[0] * tone;
   c[1] = row.landColour[1] * tone;
   c[2] = row.landColour[2] * tone;
-  lit(c, 0.9 - near * 0.1, c);
+  litGround(c, 0.9 - near * 0.1, c); // the light mixed toward white: sunset tints the grass, not mud
   if (here === 'snow' && h2(x, y, 4) > 0.995) { // a glint off a crystal here and there
     c[0] += 0.1;
     c[1] += 0.1;

@@ -112,7 +112,12 @@ export function paint(scene, { width = 1280, height = 720, seed, style, text } =
 function tools(ctx) {
   const { W, H, hy, L, gloom, scene, data } = ctx;
   const px = (x, y) => (y * W + x) * 3;
-  const hazeColour = mix(L.horizon, [0.75, 0.78, 0.82], scene.fog * 0.5), haze = 0.55 + scene.fog * 0.6;
+  // The air's colour: the horizon's, greyed by fog, and halved toward a neutral grey, so a sunset's orange haze tints
+  // the far ground rather than turning it to mud (the grass stayed green under lit() and browned under air()).
+  const hazeColour = mix(mix(L.horizon, [0.75, 0.78, 0.82], scene.fog * 0.5), [0.8, 0.8, 0.8], 0.5);
+  const haze = 0.55 + scene.fog * 0.6;
+  // The light on the ground is the scene's light mixed 35% toward white: a sunset tints the grass, it does not dye it.
+  const groundLight = L.light.map((v) => v + (1 - v) * 0.35);
   ctx.px = px;
   ctx.put = (x, y, c, a = 1) => {
     if (x < 0 || y < 0 || x >= W || y >= H) return;
@@ -136,13 +141,15 @@ function tools(ctx) {
     return out;
   };
   // A colour under the scene's light: k is how much of it faces the sun (0 in shade, 1 full on).
-  ctx.lit = (c, k, out = [0, 0, 0]) => {
+  const under = (light) => (c, k, out = [0, 0, 0]) => {
     const exposure = L.ambient + k * (1 - L.ambient);
-    out[0] = c[0] * exposure * L.light[0] * gloom;
-    out[1] = c[1] * exposure * L.light[1] * gloom;
-    out[2] = c[2] * exposure * L.light[2] * gloom;
+    out[0] = c[0] * exposure * light[0] * gloom;
+    out[1] = c[1] * exposure * light[1] * gloom;
+    out[2] = c[2] * exposure * light[2] * gloom;
     return out;
   };
+  ctx.lit = under(L.light);
+  ctx.litGround = under(groundLight); // for the ground plane's own tones (grass, sand, snow, pavement)
   // A colour seen through the air: depth 0 is at hand, 1 at the horizon.
   ctx.air = (c, depth, out = [0, 0, 0]) => mix(c, hazeColour, clamp(depth * haze), out);
   const T = scene.things;

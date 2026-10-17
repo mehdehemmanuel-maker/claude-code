@@ -61,6 +61,7 @@ export const PLACEMENT = {
   background: 'far', faraway: 'far', left: 'left', right: 'right', centre: 'centre', center: 'centre',
   middle: 'centre', central: 'centre',
 };
+/** The moon's phase, read only before 'moon' (a full glass, a new car: 'full' and 'new' are ignored elsewhere). */
 export const MOON_PHASES = /^(full|crescent|half|new|gibbous|waxing|waning)$/;
 /** no/zero/without/not before a noun deletes it; before a condition word, cancels it. */
 export const NEGATION = /^(no|zero|without|not)$/;
@@ -261,7 +262,7 @@ export function words(prompt) {
 export function knows(w) {
   if (STOP.has(w) || NUMBERS[w] !== undefined || /^\d+$/.test(w) || COLOURS[w]) return true;
   if (SIZE_WORDS[w] || PLACEMENT[w]) return true;
-  if (MOON_PHASES.test(w) || NEGATION.test(w) || w === 'moonless') return true;
+  if (NEGATION.test(w) || w === 'moonless') return true; // a phase word (full, new) is known only by a moon
   if (Object.values(THINGS).some((re) => re.test(w)) || CONDITIONS.some((c) => c.match.test(w))) return true;
   return STYLES.some((st) => st.match.test(w));
 }
