@@ -205,7 +205,8 @@ describe('water: the shoreline, the horizon and what the water reflects', () => 
   });
 
   it('runs a river between two banks: land at the foot row and over the far bank, water between', () => {
-    const img = paint(read('a bridge over a river'), { width: W, height: H });
+    // hook for structures-skyline: a bridge is a thing now and stands in the river's band; the river alone is measured
+    const img = paint(read('a river'), { width: W, height: H });
     const { shore, farShore, horizon } = img.layout;
     expect(shore).not.toBeNull();
     expect(farShore).not.toBeNull();

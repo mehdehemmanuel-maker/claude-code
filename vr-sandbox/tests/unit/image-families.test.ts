@@ -194,7 +194,8 @@ describe('the review of the package: what a word claims, what the report says, w
     for (const p of ['space', 'outer space', 'deep space', 'space and stars', 'deep-space']) {
       expect(read(p), p).toMatchObject({ family: 'space', ignored: [] });
     }
-    expect(read('a cliff face at sunset')).toMatchObject({ time: 'sunset', ignored: ['cliff', 'face'] });
+    // hook for structures-skyline: a cliff is the rocks thing now; 'face' beside it is still no portrait
+    expect(read('a cliff face at sunset')).toMatchObject({ time: 'sunset', ignored: ['face'], things: { rocks: 1 } });
     expect(read('a cliff face at sunset').family).toBeUndefined();
     expect(read('the rock face').family).toBeUndefined();
     expect(read('a face').family).toBe('portrait');

@@ -37,8 +37,8 @@ export const COLOURS = {
 export const THINGS = {
   mountains: /^(mountains?|alps|peaks?|mountain-ranges?)$/, hills: /^(hills?|hillside|hillsides|hilltops?)$/,
   trees: /^(trees?|forests?|woods?|woodland|pines?|firs?|oaks?|palms?|spruces?|cedars?|birches?)$/,
-  houses: /^(houses?|cabins?|cottages?|barns?|huts?|homes?|lodges?|chalets?|village|villages|hamlet|hamlets)$/,
-  buildings: /^(buildings?|city|cities|towns?|skyline|skyscrapers?|towers?|cityscape|metropolis|downtown|urban)$/,
+  // hook for structures-skyline: the house and building words are registered things (things/structures.mjs),
+  // keyed 'houses' and 'buildings' as before
   // hook for vehicles: the vehicle words (cars, karts, trucks…) are registered things (things/vehicles.mjs)
   boats: /^(boats?|ships?|sailboats?|yachts?|dinghy|dinghies|ferry|ferries|canoes?|kayaks?)$/,
   birds: /^(birds?|gulls?|seagulls?|crows?|ravens?|swallows?)$/,

@@ -590,3 +590,91 @@ export interface Landforms {
   volcano: { h: number; base: number; crater: number; depth: [number, number] };
   waterfall: { h: number; w: number; column: number; depth: [number, number] };
 }
+
+// ── structures-skyline (tools/image/things/structures.mjs, re-exported by core.mjs) ──
+// Houses by kind in three-quarter view, towers with their window grids, the city's skyline before the ground, and
+// the built things (lighthouse, rocks, windmill, castle, church, bridge, tent, campfire, fence, streetlamp, pole,
+// bench), each from a table in metres with its source. The house and building rows (HOUSE_THING, BUILDING_THING)
+// are things.mjs's drawers now, keyed 'houses' and 'buildings' as before; the new kinds are keyed by their ids.
+export type HouseKind = 'house' | 'cabin' | 'cottage' | 'farmhouse';
+export interface HouseRow {
+  L: number; // along the ridge, metres
+  D: number; // across
+  wall: number; // to the eave
+  rise: number; // the ridge over the eave
+  over: number; // the eaves' overhang
+  colour: number[];
+  roof: number[];
+  roofKind: 'tile' | 'shingle' | 'thatch' | 'corrugated';
+  windows: number; // on a long wall
+  logs?: number; // a log course's height: round logs
+  boards?: number; // a board's width: a barn's red boards
+  barn?: boolean; // a double door and a hay door in the gable
+  source: string;
+}
+export declare const HOUSES: Record<HouseKind, HouseRow>;
+export interface ChurchRow {
+  L: number; D: number; wall: number; rise: number; tower: number; towerH: number; spire: number; source: string;
+}
+export interface Structures {
+  lighthouse: {
+    h: number; base: number; top: number; rail: number; lantern: { h: number; d: number; dome: number };
+    band: [number, number]; rock: { w: number; h: number }; source: string;
+  };
+  rocks: { w: number; h: number; d: number; cliff: number; source: string };
+  windmill: {
+    tower: number; cap: number; base: number; top: number; sail: number; sailWidth: number; lean: number;
+    tailPole: number; source: string;
+  };
+  castle: {
+    wall: { L: number; h: number; t: number }; merlon: { h: number; w: number; gap: number };
+    tower: { h: number; d: number }; keep: { h: number; w: number }; gate: { w: number; h: number }; source: string;
+  };
+  church: ChurchRow;
+  chapel: ChurchRow;
+  bridge: {
+    span: number; rise: number; ring: number; abutment: number; springing: number; deck: number; parapet: number;
+    source: string;
+  };
+  tent: { L: number; W: number; h: number; guy: number; source: string };
+  campfire: { ring: number; logs: number; flame: number; glow: number; smoke: number; source: string };
+  fence: { h: number; post: number; spacing: number; rails: number; rail: number; run: number; source: string };
+  streetlamp: {
+    h: number; base: number; top: number; arm: number; lantern: { l: number; t: number }; pool: number; source: string;
+  };
+  pole: { h: number; base: number; top: number; arm: number; wires: number; sag: number; source: string };
+  bench: { L: number; seat: number; back: number; depth: number; slats: number; source: string };
+}
+export declare const STRUCTURES: Structures;
+export declare const HOUSE_WORDS_RE: RegExp;
+export declare const BUILDING_WORDS_RE: RegExp;
+export declare const HOUSE_THING: ThingEntry;
+export declare const BUILDING_THING: ThingEntry;
+export declare const STRUCTURE_THINGS: ThingEntry[];
+/** The house kind a mention's word names (a village is houses and cottages by the seed). */
+export declare function houseKind(word: string, rand?: () => number): HouseKind;
+/** Whether the words ask for a city: the usual buildings, or a city word. */
+export declare function citySkyline(scene: Scene): boolean;
+export declare function drawHouse(ctx: Ctx, inst: ThingInstance): Omit<ThingBox, 'kind'>;
+export declare function drawBuilding(ctx: Ctx, inst: ThingInstance): Omit<ThingBox, 'kind'>;
+/** The skyline row, the glow and the lamps before the ground (in the landscape family's passes, after the land). */
+export declare function skylinePass(ctx: Ctx): void;
+/** Registers the new kinds and the readings that come with their words (a lighthouse's coast, a street's lamps). */
+export declare function installStructures(): void;
+export interface SkylineLayout {
+  count: number; // silhouettes drawn, 25 to 40
+  glow: boolean; // the warm horizon glow (night, and fainter at dusk)
+  lamps: number; // street-level lamp points
+  towers: Array<{ x: number; y: number; w: number; h: number }>; // each silhouette's pixels
+}
+export interface Layout {
+  skyline?: SkylineLayout; // what skylinePass drew; absent when the words asked for no city
+  lighthouse?: { beam: boolean }; // whether the lighthouse's beam was drawn (night or storm)
+}
+export interface ThingBox {
+  /**
+   * Where a drawer stood a thing away from its placement: a tower or a lamp at the kerb, a castle on the ridge, a
+   * bridge in the water (xm and zm above stay the placement's).
+   */
+  stood?: { xm: number; zm: number };
+}

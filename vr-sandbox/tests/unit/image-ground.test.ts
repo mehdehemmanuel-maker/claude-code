@@ -15,8 +15,12 @@ const hash = (str: string) => {
   for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   return h >>> 0;
 };
-/** The four header prompts' layout digests as placement-critic lays them out (see 'keeps the four header…'). */
-const HEADER_LAYOUTS = [2773148169, 606680554, 2258992174, 3303869394];
+/**
+ * The four header prompts' layout digests as placement-critic lays them out (see 'keeps the four header…').
+ * hook for structures-skyline: the city's and the cabin's digests moved when the house and building drawers became
+ * three-quarter views (the boxes grew; every thing's kind, xm, zm and heading stayed as they were).
+ */
+const HEADER_LAYOUTS = [2773148169, 606680554, 4044677687, 1437810280];
 
 const W = 640, H = 360;
 const lum = (d: Float32Array, i: number) => 0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!;
