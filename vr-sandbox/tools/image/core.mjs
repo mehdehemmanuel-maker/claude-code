@@ -6,6 +6,7 @@ import { clamp, hash, lerp, mix, rng } from './math.mjs';
 import { CONDITIONS, COLOURS, words } from './read.mjs';
 import { celestialPass, cloudPass, finishPass, groundPass, landBehindPass, skyPass, weatherPass } from './passes.mjs';
 import { drawers, thingsPass } from './things.mjs';
+import { STYLES } from './styles.mjs'; // hook for finish-styles-text
 
 // ── The palette by time of day ─────
 
@@ -51,6 +52,7 @@ export function register(kind, entry) {
 }
 
 for (const drawer of drawers) register('things', drawer);
+for (const style of STYLES) register('styles', style); // hook for finish-styles-text
 register('families', {
   id: 'landscape',
   detect: () => true,
@@ -61,7 +63,7 @@ register('families', {
 // ── Painting ───────────────────────
 
 /** Paints a scene (from `read`) into { width, height, data: Float32Array rgb in 0..1, layout }. */
-export function paint(scene, { width = 1280, height = 720, seed, style } = {}) {
+export function paint(scene, { width = 1280, height = 720, seed, style, text } = {}) { // text: finish-styles-text
   const W = width, H = height;
   const data = new Float32Array(W * H * 3);
   const rand = rng(seed ?? hash(words(scene.prompt).join(' '))); // from the words, not their case or punctuation
@@ -79,6 +81,7 @@ export function paint(scene, { width = 1280, height = 720, seed, style } = {}) {
     shoreY: H, // where the water ends and the land begins, set by groundPass
     scale: H / 720, // fixed-pixel detail (stars, birds, rain, snow, windows) is sized for 720 rows and scaled by this
     style: scene.style ?? style,
+    text, // a caption from paint's options; scene.text (the reader's) wins over it: hook for finish-styles-text
     things, styles,
   };
   tools(ctx);

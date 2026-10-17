@@ -117,3 +117,30 @@ export declare function toImageData(img: Image): ImageData | { width: number; he
 // image.mjs
 export declare function png(img: Pick<Image, 'width' | 'height' | 'data'>): Buffer;
 export declare function generate(prompt: string, opts?: PaintOptions & { out?: string }): string;
+
+// ── finish-styles-text: styles.mjs, text.mjs, font.mjs (the interfaces above are merged into, not redeclared)
+/** What placeText did with the caption, in Layout.text. */
+export interface TextLayout {
+  text: string;
+  lines: string[]; // one or two, the second ending in '...' when truncated
+  truncated: boolean;
+  at: 'top' | 'bottom'; // the third of the picture it went in
+  x: number; // the block's top-left corner and size in pixels
+  y: number;
+  w: number;
+  h: number;
+}
+export interface TextOptions {
+  x: number;
+  y: number;
+  scale?: number; // default textScale(H) = max(2, round(H / 180))
+  colour?: ArrayLike<number>;
+  halo?: boolean | number; // true: a ring half the scale thick (1 px at scales 1 and 2); a number: that many px
+  haloColour?: ArrayLike<number>;
+}
+export interface Layout { text?: TextLayout }
+export interface Scene { text?: string }
+export interface PaintOptions { text?: string }
+export interface Ctx { text?: string }
+/** A style may turn the default finish's grain or vignette off (both default to true). */
+export interface StyleEntry { grain?: boolean; vignette?: boolean }
