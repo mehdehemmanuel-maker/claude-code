@@ -33,10 +33,12 @@ const SHORE_STEP = 1.01; // a thing the shore moved for stands this much short o
 export function shoreFor(ctx, shoreY) {
   const { H, hy, usual } = ctx, least = hy + (H - hy) * WATER_LEAST;
   let row = shoreY;
+  ctx.farBankNeeded = false; // a thing that keeps the far bank: groundPass paints land under it (water-reflections)
   for (const e of ctx.things) {
     if (e.sky || e.onWater || !e.size || usual(keyOf(e), e.usual) <= 0) continue;
     const own = ctx.project(0, nearest(ctx, e.size) * SHORE_STEP).y;
     if (own >= least) row = Math.min(row, own);
+    else ctx.farBankNeeded = true;
   }
   return row;
 }

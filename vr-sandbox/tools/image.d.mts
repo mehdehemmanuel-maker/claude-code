@@ -363,3 +363,19 @@ export declare function thingFor(token: string): ThingEntry | undefined;
 export declare function thingByKey(key: string): ThingEntry | undefined;
 export declare function familyFor(token: string): FamilyEntry | undefined;
 export declare function styleNamed(token: string): StyleEntry | undefined;
+
+// ── water-reflections (tools/image/passes.mjs: groundPass's wandering shore, far bank, horizon haze and water;
+// reflectPass after thingsPass; things.mjs's shoreFor says when a thing keeps the far bank) ──
+export interface Layout {
+  shoreLine?: number[] | null; // per column, the row where the water ends as a share of the height; null: no shore
+  farShore?: number | null; // a river's far bank as a share of the height; null when the scene is not a river
+}
+export interface Ctx {
+  shoreLine?: Float32Array; // the shore row per column, in pixels (H where there is no shore)
+  shoreAt?(x: number): number;
+  farLine?: Float32Array | null; // a river's far bank per column, else null
+  farAt?: ((x: number) => number) | null;
+  bankTop?: Float32Array | null; // the far-bank strip's top per column, when one is painted
+  farBankNeeded?: boolean; // set by shoreFor: a land thing cannot stand on the near shore and keeps the far bank
+  plate?: Float32Array | null; // the frame as groundPass left it, before the things: what reflectPass mirrors against
+}

@@ -9,7 +9,9 @@
 // what stands in the picture; styles.mjs the finishes; text.mjs and font.mjs the caption; this file the context.
 import { clamp, hash, lerp, mix, rng } from './math.mjs';
 import { COLOURS, words } from './read.mjs';
-import { celestialPass, cloudPass, finishPass, groundPass, landBehindPass, skyPass, weatherPass } from './passes.mjs';
+import {
+  celestialPass, cloudPass, finishPass, groundPass, landBehindPass, reflectPass, skyPass, weatherPass,
+} from './passes.mjs';
 import { drawers, thingsPass } from './things.mjs';
 import { attach } from './draw.mjs';
 import { styleFor } from './styles.mjs';
@@ -55,7 +57,10 @@ register('families', {
   detect: () => true,
   // hook for sky-light: the sun's disc goes on before the clouds, so they cross it with their own lit edges; the
   // water still reflects the clouded sky without the disc (cloudPass paints into the snapshot celestialPass takes).
-  passes: [skyPass, celestialPass, cloudPass, landBehindPass, groundPass, thingsPass, weatherPass, finishPass],
+  // hook for water-reflections: reflectPass mirrors the things into the water after they are drawn
+  passes: [
+    skyPass, celestialPass, cloudPass, landBehindPass, groundPass, thingsPass, reflectPass, weatherPass, finishPass,
+  ],
 });
 
 // ── Painting ───────────────────────
