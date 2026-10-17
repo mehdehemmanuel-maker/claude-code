@@ -16,20 +16,22 @@ const chunks = (file: Buffer) => { // every chunk: its type, its body, its store
   for (let at = 8; at < file.length;) {
     const len = file.readUInt32BE(at), type = file.subarray(at + 4, at + 8).toString('ascii');
     const body = file.subarray(at + 8, at + 8 + len);
-    out.push({ type, body, stored: file.readUInt32BE(at + 8 + len), actual: crc32(file.subarray(at + 4, at + 8 + len)) });
+    const stored = file.readUInt32BE(at + 8 + len), actual = crc32(file.subarray(at + 4, at + 8 + len));
+    out.push({ type, body, stored, actual });
     at += 12 + len;
   }
   return out;
 };
 
 describe('the image tool', () => {
-  it('paints the same words into the same bytes, another seed into other bytes, and ignores case and punctuation', () => {
+  it('paints the same words into the same bytes, another seed into other bytes, and reads past case and stops', () => {
     expect(bytes(WORDS, 160, 90).equals(bytes(WORDS, 160, 90))).toBe(true);
     expect(bytes(WORDS, 160, 90, 1).equals(bytes(WORDS, 160, 90, 2))).toBe(false);
-    expect(bytes('a tree', 160, 90).equals(bytes('A Tree.', 160, 90))).toBe(true);
+    expect(read('A Tree.')).toEqual({ ...read('a tree'), prompt: 'A Tree.' }); // one scene; the seed is the typed words
+    expect(bytes('a tree', 160, 90, 5).equals(bytes('A Tree.', 160, 90, 5))).toBe(true);
   });
 
-  it('writes a valid PNG: signature, IHDR, every CRC, raw rows with a zero filter byte, and the pixels it painted', () => {
+  it('writes a valid PNG: signature, IHDR, every CRC, raw rows with a zero filter byte, the pixels it painted', () => {
     const img = paint(read('three pine trees by a lake under a full moon, snow'), { width: 97, height: 61, seed: 3 });
     const file = png(img);
     expect([...file.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -37,7 +39,8 @@ describe('the image tool', () => {
     expect(parts.map((c) => c.type)).toEqual(['IHDR', 'IDAT', 'IEND']);
     for (const c of parts) expect(c.actual, `${c.type} crc`).toBe(c.stored);
     const ihdr = parts[0]!.body;
-    expect([ihdr.readUInt32BE(0), ihdr.readUInt32BE(4), ihdr[8], ihdr[9], ihdr[10], ihdr[11], ihdr[12]]).toEqual([97, 61, 8, 2, 0, 0, 0]);
+    const fields = [ihdr.readUInt32BE(0), ihdr.readUInt32BE(4), ihdr[8], ihdr[9], ihdr[10], ihdr[11], ihdr[12]];
+    expect(fields).toEqual([97, 61, 8, 2, 0, 0, 0]);
     const raw = inflateSync(parts[1]!.body), stride = 97 * 3 + 1;
     expect(raw.length).toBe(stride * 61);
     for (let y = 0; y < 61; y++) expect(raw[y * stride], `filter byte of row ${y}`).toBe(0);
@@ -59,7 +62,9 @@ describe('the image tool', () => {
   it('keeps the core free of Node, so it can paint in a browser', async () => {
     for (const name of ['core', 'read', 'passes', 'things', 'math']) {
       const src = readFileSync(fileURLToPath(new URL(`../../tools/image/${name}.mjs`, import.meta.url)), 'utf8');
-      for (const banned of ['node:', 'Buffer', 'process.']) expect(src.includes(banned), `${name}.mjs has ${banned}`).toBe(false);
+      for (const banned of ['node:', 'Buffer', 'process.']) {
+        expect(src.includes(banned), `${name}.mjs has ${banned}`).toBe(false);
+      }
     }
     const core = await import(/* @vite-ignore */ new URL('../../tools/image/core.mjs', import.meta.url).href);
     expect(Object.keys(core).sort()).toEqual(expect.arrayContaining([
@@ -79,9 +84,13 @@ describe('the image tool', () => {
     expect(small.shore).toBe(large.shore);
     expect(large.shore).not.toBeNull();
     expect(large.things.length).toBe(small.things.length);
-    expect(large.things.map((t) => t.kind).sort()).toEqual(['bird', 'bird', 'bird', 'bird', 'bird', 'bird', 'bird', 'boat', 'car',
-      'house', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree']);
-    for (const t of large.things) expect(t.w > 0 && t.h > 0 && Number.isFinite(t.x) && Number.isFinite(t.y), t.kind).toBe(true);
+    expect(large.things.map((t) => t.kind).sort()).toEqual([
+      'bird', 'bird', 'bird', 'bird', 'bird', 'bird', 'bird', 'boat', 'car',
+      'house', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree', 'tree',
+    ]);
+    for (const t of large.things) {
+      expect(t.w > 0 && t.h > 0 && Number.isFinite(t.x) && Number.isFinite(t.y), t.kind).toBe(true);
+    }
     expect(read(WORDS).things).toEqual({ cars: 1, mountains: 0, trees: 0, houses: 1, boats: 1, birds: 0 });
   });
 
@@ -89,7 +98,11 @@ describe('the image tool', () => {
     const scene = read(WORDS);
     const median = (w: number, h: number) => {
       paint(scene, { width: w, height: h, seed: 7 });
-      const t = [0, 1, 2].map(() => { const t0 = performance.now(); paint(scene, { width: w, height: h, seed: 7 }); return performance.now() - t0; });
+      const t = [0, 1, 2].map(() => {
+        const t0 = performance.now();
+        paint(scene, { width: w, height: h, seed: 7 });
+        return performance.now() - t0;
+      });
       return t.sort((a, b) => a - b)[1]!;
     };
     const small = median(640, 360), large = median(1280, 720);

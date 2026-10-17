@@ -64,7 +64,7 @@ register('families', {
 export function paint(scene, { width = 1280, height = 720, seed, style } = {}) {
   const W = width, H = height;
   const data = new Float32Array(W * H * 3);
-  const rand = rng(seed ?? hash(words(scene.prompt).join(' '))); // from the words, so "A tree." is "a tree"
+  const rand = rng(seed ?? hash(words(scene.prompt).join(' '))); // from the words, not their case or punctuation
   const L = LIGHT[scene.time];
   const gloom = scene.storm ? 0.45 : clamp(1 - scene.clouds * 0.45 - scene.fog * 0.2);
   const horizon = 0.58 + (rand() - 0.5) * 0.06; // as a share of the height, from the top

@@ -73,8 +73,8 @@ export function png({ width, height, data }) {
 }
 
 /** Words to a PNG file. Returns the path written. */
-export function generate(prompt, { out, width, height, seed } = {}) {
-  const scene = read(prompt), image = paint(scene, { width, height, seed });
+export function generate(prompt, { out, width, height, seed, style } = {}) {
+  const scene = read(prompt), image = paint(scene, { width, height, seed, style });
   const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
   const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'image';
   const file = path.resolve(out ?? path.join('images', `${stamp}-${slug}.png`));
@@ -111,7 +111,7 @@ function parse(argv) {
       o.height = +m[2];
     } else if (a === '--seed') o.seed = Number(next()) >>> 0;
     else if (a === '--describe') o.describe = true;
-    else if (a === '--help' || a === '-h') o.help = true;
+    else if (a === '--help' || a === '-h') return { ...o, help: true }; // whatever follows, the help is the answer
     else if (a.startsWith('-') && a.length > 1) throw new Error(`unknown option ${a}`);
     else o.words.push(a);
   }

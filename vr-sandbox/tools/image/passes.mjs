@@ -15,10 +15,14 @@ const STAR = [0.9, 0.9, 1], MOONGLOW = [0.4, 0.45, 0.6], SUNCORE = [1, 1, 0.97];
 export function skyPass(ctx) {
   const { W, H, hy, L, gloom, sun, scene, data } = ctx;
   const aspect = W / H, dim = 0.75 + gloom * 0.25, night = scene.time === 'night';
-  const rare = 0.0025 / (ctx.scale * ctx.scale); // stars per pixel: a taller picture gets the same number of them
+  // Stars per pixel: a taller picture gets the same number of them; below 360 rows the count shrinks with the area
+  // instead, so a thumbnail is not speckled.
+  const rare = 0.0025 / Math.max(ctx.scale, 0.5) ** 2;
   const starFactor = scene.things.stars ? 1 : 0.6;
   const base = [0, 0, 0];
-  for (let y = 0; y < hy; y++) {
+  // All the rows, not only to the horizon: the water and the wet ground reflect the sky just below it, and the ground
+  // paints over the rest.
+  for (let y = 0; y < H; y++) {
     const t = clamp(y / hy), dy = y / H - sun.y, row = y * W * 3;
     mix(L.top, L.horizon, t * t, base);
     for (let x = 0; x < W; x++) {
@@ -275,7 +279,7 @@ function snow(ctx) {
   const { W, H, scene, rand, put, scale } = ctx;
   const count = (W * H) / 900 * scene.snow;
   for (let i = 0; i < count; i++) {
-    const x = rand() * W, y = rand() * H, r = (rand() < 0.2 ? 2 : 1) * scale;
+    const x = rand() * W, y = rand() * H, r = Math.max(1, Math.round((rand() < 0.2 ? 2 : 1) * scale)); // whole pixels
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) put(x + dx, y + dy, SNOWFLAKE, 0.6 * (1 - Math.hypot(dx, dy) / (r + 1)));
     }
