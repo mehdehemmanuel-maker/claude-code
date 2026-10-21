@@ -125,3 +125,63 @@ how many reach a bill a person could order and a lesson that names the thing.
 
 **Today: 0 of 2.** Not because the engine is poor — it holds 67,117 parts, 252 laws and a $2,395 works that costs
 $4,973 to buy — but because nothing joins them, and until this week nothing had ever measured whether anything did.
+
+---
+
+# The environment around the loop
+
+Added 2026-10-21, from the user's own statement of the big picture: *"a second reality — a digital universe where
+humans, artificial intelligence, software, machines, knowledge, and the physical world can exist and work
+together"*, resting on one principle: **"The environment is law. Everything exists within it, connects through it,
+and can be understood or interacted with through it."**
+
+This does not replace the loop above. It says what the loop is a circuit *inside*. The loop is still the first
+thing to close, because a reality that cannot take one ask to a built object is a browser with extra steps.
+
+## The seven pillars, measured against this tree
+
+Not graded by opinion. Each row names what exists and the command that shows it.
+
+| Pillar | State | Measured |
+| --- | --- | --- |
+| 3. Creation engine | **strongest** | 67,117 parts broken down, 9,074 catalogue sizes, machines composed from what units afford, not copied (`npm run breakdown`, `npm run machine`) |
+| 6. Knowledge engine | **real** | 252 laws with their sources and validity domains, every round's finding kept, every price a page and a date (`npm run substrate -- observe`, `docs/ROUNDS.md`) |
+| 4. Simulation engine | **partial** | Jolt physics, the evolver, the critic, drive lines that find their own operating point. Absent: electrical, thermal and fluid networks as first-class (`npm run moves`, `npm run why`) |
+| 5. Reality bridge | **partial, and the honest half is hardware** | photos calibrated to millimetres and parts read off them, makers' STEP read, one Bluetooth bridge priced and wired. Nothing has been built in a garage (`tools/measure/photo.py`, `machines/link.ts`) |
+| 7. Universal interface | **partial** | a room you walk in, a phone in it, boards you edit, voice words that route. Not gestures, not drawing into geometry (`node tools/room-census.mjs`) |
+| 1. Universal environment | **the claim the whole vision rests on, and the furthest from true** | see below |
+| 2. AI civilization | **absent in-world** | agents are sessions outside the environment holding it at arm's length. Nothing inside it reasons, and nothing persists between agents but files |
+
+## The finding: one environment is the claim, four identity spaces is the fact
+
+The vision says *"everything retains its identity and relationships"*. In this tree, identity is not one thing:
+
+- `parts/inventory.ts` — `Item.id`, 67,117 of them, a part/material/product tree
+- `life/graph.ts` — `Node.id`, kinds `time | person | place | memory | messenger | region | organ | state`
+- `substrate/place.ts` — `PlaceSpec.id`, places in a domain with geometry and couplings
+- `book/` — a law's identity, its ports bound by dimension and name
+
+**Nothing joins them.** Exactly one module imports two: `view/forge.ts` imports `life/graph` and hands it to the
+phone's Life app, saved under its own `localStorage` key. The two worlds stand in the same room and do not touch.
+A memory cannot be tied to a part; a part cannot be a place the evolver advances; a law cannot read either.
+
+**This is the same fault as Run 8z's, one level up.** There, three doors answered the same ask and shared nothing,
+and nothing had noticed because no test had ever asked two doors one question. Here, four graphs each model "everything"
+and share no identity, and nothing has noticed because nothing has ever asked two graphs about one thing.
+
+The fix has the same shape too, and it is NOT one giant table: it is **one id that any of them can mint and all of
+them can resolve**, plus a resolver that says which space answered. The loop probe's lesson applies — build the
+measurement first (`tools/loop.mjs` before the join), so the claim "it is one environment" is a command's answer.
+
+## What this adds to the order
+
+The order above (join the doors, passive holds, price by length, lessons that name the thing) is unchanged and
+still first: it closes the first circuit. After it, and before anything else from the seven pillars:
+
+5. **One identity across the graphs** — the census first, then the resolver. Pillar 1 is what every other pillar
+   plugs into; a second reality with four disconnected realities inside it is the drift, not the goal.
+6. **Agents inside the environment rather than above it** (pillar 2) — today every agent is a session that reads
+   files and writes files. An agent that holds a node, leaves a trace on it and is answerable to the same laws is a
+   different thing, and it is the pillar with the least in place.
+
+Everything else in the seven — richer simulation, more interface, more of the bridge — is coverage, which is a rate.

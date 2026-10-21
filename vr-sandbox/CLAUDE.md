@@ -24,6 +24,17 @@ designed, real, orderable, teachable, made — holding for an ask drawn at RANDO
 stage of that loop it moves; a round that moves none of them is coverage, which is fine, but say so. `docs/DONE.md`
 holds the loop, the measured distance and the order. `node tools/loop.mjs "<ask>"` is the measurement.
 
+**And the frame around it, 2026-10-21, the user's own words:** this is *"a second reality - a digital universe where
+humans, artificial intelligence, software, machines, knowledge, and the physical world can exist and work together"*,
+on one principle: **"The environment is law. Everything exists within it, connects through it, and can be understood
+or interacted with through it."** The loop is the first circuit INSIDE that, not a smaller substitute for it.
+`docs/DONE.md` now maps the seven pillars against this tree with the command that measures each. The finding that
+matters: **one environment is the claim and FOUR identity spaces are the fact** - `parts/inventory.ts`'s `Item.id`,
+`life/graph.ts`'s `Node.id`, `substrate/place.ts`'s `PlaceSpec.id` and a law's ports. Exactly one module imports two
+of them (`view/forge.ts`, which hands the life graph to the phone and saves it under its own key), and it joins
+nothing. A memory cannot be tied to a part; a part cannot be a place the evolver advances. Same fault as the doors,
+one level up, and the same fix: the census first, then one id any of them can mint and all of them can resolve.
+
 
 ## What is wanted (the user's own words, kept)
 
