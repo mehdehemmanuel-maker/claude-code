@@ -36,6 +36,28 @@ nothing. A memory cannot be tied to a part; a part cannot be a place the evolver
 one level up, and the same fix: the census first, then one id any of them can mint and all of them can resolve.
 
 
+**Standing rule, 2026-10-21: where a language model may and may not sit.** Asked about local open-weight models at
+$0 marginal cost. The boundary is not about which model — it is about what the engine is for.
+
+- **NEVER in the path of a number.** No sampled token may become a dimension, a mass, a price, a tolerance, a law's
+  value or a step in a lesson. The whole worth of this tree is ask 9 — no mocks, every number sourced — and a 4B
+  model asked for a bearing's bore answers confidently and wrongly with nothing downstream able to tell. The
+  breakdown queue, `prices.ts`, the book, the geometry: deterministic, checkable, and they stay that way.
+- **YES where the job is to CLASSIFY, and the engine computes.** The model picks from a vocabulary the engine
+  already owns (a verb from a closed list, a kind, which of the book's laws is meant) and every value is then
+  derived as it is now. Constrained decoding (llama.cpp GBNF, structured output) makes that a guarantee instead of
+  a hope, so **grammar support is the selection criterion here, not benchmark scores.**
+- **The measured case for it**: 7,274 characters of hand-written word-matching regex read English today, in three
+  files — `substrate/directive.ts` (3,669), `view/forge.ts` (2,926), `ask/generate.ts` (679). That is NLU done with
+  a pattern list, and it is why "a desk lamp with an arm that stays where you put it" fell through every door.
+- **The best use is the blind judge.** Round step 3 (a screenshot given to an agent with no context) costs a session
+  today, so it runs sometimes. At $0 it runs on every render, and its output is advisory — no number enters anything.
+- **What this container cannot do, measured 2026-10-21**: no GPU, 4 cores, 15 GB RAM, 5.4 GB writable left, and
+  `ollama.com`, `registry.ollama.ai`, `huggingface.co` and `cdn-lfs.huggingface.co` all refuse (the network allows
+  GitHub and package registries only). Nothing can be fetched or run here until that is widened. On the user's own
+  machine it is a different question, and "millions of continuous calls" is a GPU claim: a 4B at Q4 on four CPU
+  cores is roughly 5-15 tok/s (estimate, not benchmarked here), which is thousands of calls a day, not millions.
+
 ## What is wanted (the user's own words, kept)
 
 Grouped, because the asks repeat: nine things said many ways over many weeks.
