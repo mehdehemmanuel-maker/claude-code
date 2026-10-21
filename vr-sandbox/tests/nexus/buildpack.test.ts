@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
 import { composeMachine } from '../../src/nexus/ask/machine';
+import { byLength, cutFrom } from '../../src/nexus/parts/prices';
 import { catalogue } from '../../src/nexus/parts/catalogue';
 import { componentOf } from '../../src/nexus/parts/components';
 import { resolve } from '../../src/nexus/parts/inventory';
@@ -177,6 +178,34 @@ describe('the Bluetooth bridge as a pack', () => {
   it('an ask that names a part it knows still splits, so a mixed ask is not swallowed by the composer', () => {
     const p = pack('a pi 5 and a machine that cuts 400x300x80');
     expect(p.lines.some((l) => /pi.?5/i.test(l.key))).toBe(true);
+  });
+  // ---- cut to length, and figures with no seller (Run 9b) -------------------------------------------------------
+  it('a stick yields whole pieces: two of them take the longer stock, and nothing is welded from offcuts', () => {
+    // the rule a per-millimetre price gets wrong: you cut parts OUT of a stick, you do not join sticks
+    const one = cutFrom('flat', 420, 1)!, two = cutFrom('flat', 420, 2)!;
+    expect(one.sticks).toBe(1); expect(one.offer.lengthMm).toBe(610);
+    expect(two.sticks).toBe(1); expect(two.offer.lengthMm).toBe(914); expect(two.per).toBe(2);
+    expect(two.usd).toBeLessThan(2 * one.usd);                       // one 36 in beats two 24 in
+    expect(cutFrom('flat', 1200, 1)).toBeNull();                     // longer than any stock: refused, not joined
+    expect(cutFrom('bolt-m5x12', 12, 1)).toBeNull();                 // not stock sold by a length at all
+  });
+  it('an id that ends in its millimetres finds the family it is cut from, and one that does not stays null', () => {
+    expect(byLength('flat-420')).toEqual({ key: 'flat', mm: 420 });
+    expect(byLength('tube-20-400')).toEqual({ key: 'tube-20', mm: 400 });
+    expect(byLength('bolt-m5x12')).toBeNull();
+    expect(byLength('extrusion-2040-400')).toBeNull();               // the shape is right; no seller's length kept yet
+  });
+  it('a figure the design declares is carried, labelled, and never read as a seller\u2019s price', () => {
+    // Run 9a dropped these: the router's bill read $44.84 with a $90 spindle in it
+    const p = pack('a machine that cuts 400x300x80');
+    const spindle = p.lines.find((l) => /brushless spindle/.test(l.what))!;
+    expect(spindle.usd).toBe(90); expect(spindle.offer).toBeNull();
+    expect(p.total.all[0]).toBeGreaterThan(150);
+    expect(p.notes.join(' ')).toMatch(/figures are the design's own/);
+  });
+  it('unpriced lines that are one family say so, so one lookup closes them all', () => {
+    const p = pack('a machine that cuts 400x300x80');
+    expect(p.notes.join(' ')).toMatch(/sold by the length.*extrusion-2040 \(6 lines\)/);
   });
   it('the bridge\u2019s lesson names tools that are all priced, and dangers before steps', () => {
     const l = LESSONS['bridge-ble']!;

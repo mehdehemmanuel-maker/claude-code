@@ -19,6 +19,9 @@ export interface Offer {
   /** the seller's own break table: what it costs at other quantities. A price at one quantity is not a price curve,
    *  and a bill that buys 100 of something is charged the wrong figure without this. */
   breaks?: { n: number; usd: number }[];
+  /** Stock sold as a LENGTH rather than as a piece: how long one of this offer is, mm. A seller that lists the same
+   *  bar at 12, 24 and 36 inches is three offers, each with its own `lengthMm`, and `cutFrom` picks between them. */
+  lengthMm?: number;
   note?: string;
 }
 export interface Price {
@@ -221,16 +224,21 @@ export const PRICES: Record<string, Price> = {
   sheet: { what: 'mild steel sheet, 1.5 to 2 mm: a seat pan, a splash pan, a control box, an enclosure', offers: [
     om('14 Gauge (0.075") Carbon Steel Sheet ASTM A1011 Hot Rolled, 12 × 24 in', 19.93, 'carbon-steel/14-ga-0-075-carbon-steel-sheet-a569-astm-a1011-hot-rolled/pid/10272', { note: '1.9 mm for the bills\' 2 mm. The 12 × 24 in piece folds the kiln\'s control box and the welder\'s enclosure; the kart\'s 420 × 380 seat pan and the wheel\'s 520 mm splash pan want the 24 × 24 in at $33.81 on the same page, and are charged this. 16 gauge (1.5 mm) is the boxes\' own thickness: the same seller\'s part 9900' })] },
   flat: { what: 'flat bar, 40 × 4 mm: a forge cradle\'s bearer', offers: [
-    sm('3/16" x 1-1/2" Hot Rolled Commercial Quality Steel Flat, 24 in', 4.21, 'p-4030-316-x-1-12-hot-rolled-commercial-quality-steel.aspx', { note: `${SEARCHED}: 4.8 × 38.1 mm for the bills' 40 × 4. One 24 in (610 mm) length a bearer, which is the forge's own 420 mm with the cut; the 36 in is listed at $5.61 and by the inch at $0.16` })] },
+    sm('3/16" x 1-1/2" Hot Rolled Commercial Quality Steel Flat, 24 in', 4.21, 'p-4030-316-x-1-12-hot-rolled-commercial-quality-steel.aspx', { lengthMm: 610, note: `${SEARCHED}: 4.8 × 38.1 mm for the bills' 40 × 4. One 24 in (610 mm) length a bearer, which is the forge's own 420 mm with the cut; by the inch it is $0.16` }),
+    sm('3/16" x 1-1/2" Hot Rolled Commercial Quality Steel Flat, 36 in', 5.61, 'p-4030-316-x-1-12-hot-rolled-commercial-quality-steel.aspx', { lengthMm: 914, note: 'the same bar at 36 in off the same page: the length `cutFrom` takes when one piece is longer than 610 mm, or when two bearers come out of one stick' })] },
   'tube-20': { what: 'steel round tube, 20 mm by 2 mm wall: a brake leaf\'s handle', offers: [
-    sm('3/4" OD x .065" Wall DOM Steel Tube, 18 in', 18.56, 'p-3427-34-od-x-065-wall-dom-steel-tube.aspx', { note: `${SEARCHED}: 19.05 mm OD, 1.65 mm wall, for the bills' 20 × 2. One 18 in (457 mm) length is the brake's 400 mm handle; the 12 in is listed at $14.14 and the 24 in at $22.63` })] },
+    sm('3/4" OD x .065" Wall DOM Steel Tube, 12 in', 14.14, 'p-3427-34-od-x-065-wall-dom-steel-tube.aspx', { lengthMm: 305, note: `${SEARCHED}: 19.05 mm OD, 1.65 mm wall, for the bills' 20 × 2. The shortest of the three lengths the page lists` }),
+    sm('3/4" OD x .065" Wall DOM Steel Tube, 18 in', 18.56, 'p-3427-34-od-x-065-wall-dom-steel-tube.aspx', { lengthMm: 457, note: 'one 18 in (457 mm) length is the brake\u2019s 400 mm handle' }),
+    sm('3/4" OD x .065" Wall DOM Steel Tube, 24 in', 22.63, 'p-3427-34-od-x-065-wall-dom-steel-tube.aspx', { lengthMm: 610, note: 'the longest the page lists: two handles out of one stick, which is cheaper per handle than two 18 in' })] },
   birch: { what: 'birch plywood, 19 mm: a bench top, a wheel head, a ply pulley disc', offers: [
     hd('Falken Design 3/4 in. x 2 ft. x 4 ft. Birch Plywood Project Panel', 41.62, 'Falken-Design-3-4-in-x-2-ft-x-4-ft-Birch-Plywood-Project-Panel-FALKENDESIGN-PW-Birch-B3-3-4-2448/319137372', { note: `${SEARCHED}: 19 mm against the bills' 25 mm, which is the thickest birch panel this seller listed, and 610 × 1,220 mm. The wheel's 300 mm head and its 240 mm ply pulley come out of one panel each; the bench's 1,500 × 700 top does not — it is longer than the panel is wide and wants a full 4 × 8 ft sheet, whose figure the listing read did not show` })] },
   carbon: { what: 'carbon fibre plate, 2 to 4 mm: a quadcopter\'s unibody and its top deck', offers: [
     { name: 'DragonPlate EconomyPlate Carbon Fiber Sheet, 1/8" x 12" x 12" (texture/texture)', usd: 96.58, seller: 'DragonPlate', url: 'https://tools.dragonplate.com/category/18-economy-carbon-fiber-sheets', seen: D3, note: `${SEARCHED}, off its own 1/8 in category listing: 3.2 mm, between the bills' 4 mm unibody and 2 mm deck, and a 12 × 12 in sheet holds both (220 × 180 and 90 × 80). The matte face is $101.08 and the gloss $104.08; the 1/16 in and 5 mm sheets are the sizes either side` }] },
   copper: { what: 'copper bar and rod, C110: a spot welder\'s arms and its electrodes', offers: [
-    sm('3/8" Rd CA 110 Copper, 12 in', 10.07, 'p-2941-38-rd-ca-110-copper.aspx', { note: `${SEARCHED}: 9.53 mm for the bills' 10 mm electrode rod, and one 12 in length makes both of the welder's 80 mm electrodes with plenty over. The 36 in is listed at $24.17. A line whose only copper word is "copper" (an Ender's copper hot-end cover) is charged this rod and is not it` }),
-    sm('1/4" x 3/4" CA 110 Copper Flat, 12 in', 22.8, 'p-2883-14-x-34-ca-110-copper.aspx', { note: `${SEARCHED}: 6.35 × 19.05 mm for the bills' 20 × 6 arm bar, one 12 in length an arm (the welder's is 180 mm). \`cheapest\` takes the rod above, so the two arms are charged it; this is their own figure, and the 24 in is $38.40` })] },
+    sm('3/8" Rd CA 110 Copper, 12 in', 10.07, 'p-2941-38-rd-ca-110-copper.aspx', { lengthMm: 305, note: `${SEARCHED}: 9.53 mm for the bills' 10 mm electrode rod, and one 12 in length makes both of the welder's 80 mm electrodes with plenty over. A line whose only copper word is "copper" (an Ender's copper hot-end cover) is charged this rod and is not it` }),
+    sm('3/8" Rd CA 110 Copper, 36 in', 24.17, 'p-2941-38-rd-ca-110-copper.aspx', { lengthMm: 914, note: 'the same rod at 36 in off the same page: $0.0264/mm against the 12 in\u2019s $0.0330, so anything over 305 mm is cheaper here' }),
+    sm('1/4" x 3/4" CA 110 Copper Flat, 12 in', 22.8, 'p-2883-14-x-34-ca-110-copper.aspx', { lengthMm: 305, note: `${SEARCHED}: 6.35 × 19.05 mm for the bills' 20 × 6 arm bar, one 12 in length an arm (the welder's is 180 mm). \`cheapest\` takes the rod above, so the two arms are charged it; this is their own figure` }),
+    sm('1/4" x 3/4" CA 110 Copper Flat, 24 in', 38.4, 'p-2883-14-x-34-ca-110-copper.aspx', { lengthMm: 610, note: 'the same flat at 24 in off the same page: both of the welder\u2019s 180 mm arms out of one stick' })] },
 
   // The potter's wheel's motor. It had a price before this and the price was a lie: the line reads "motor,
   // washing-machine induction motor", the word "motor" is in it TWICE, and the looser match in works/lines.ts counted
@@ -330,6 +338,34 @@ export function cheapest(key: string, n = 1, has: (key: string) => boolean = () 
   const all = p.offers.map((o) => ({ o, ...costBy(o, n, has) })).sort((a, b) => rank(a.o) - rank(b.o) || a.usd - b.usd);
   const b = all[0]!;
   return { offer: b.o, packs: b.packs, usd: b.usd, needs: b.needs, others: all.slice(1).map((x) => x.o) };
+}
+
+/** HOW MANY STICKS, AND WHAT IS LEFT OVER. The cheapest way to get `n` pieces of `mm` each out of stock sold by the
+ *  length. The rule that makes it right, and that a per-millimetre figure would get wrong: **you cut parts out of a
+ *  stick, you do not weld sticks together.** A 550 mm beam cannot be had from two 250 mm offcuts, so a stock length
+ *  shorter than the piece is no use at any price; and one 1,000 mm stick yields ONE 550 mm beam, not 1.8 of them.
+ *  So: pieces per stick is `floor(length / mm)`, sticks is `ceil(n / that)`, and offers too short are refused.
+ *  Null where nothing under the key is sold by a length, which is the honest answer and not a price of zero. */
+export function cutFrom(key: string, mm: number, n = 1): { offer: Offer; sticks: number; usd: number; offcutMm: number; per: number } | null {
+  const p = PRICES[key]; if (!p || mm <= 0) return null;
+  const able = p.offers.filter((o) => o.lengthMm != null && o.lengthMm >= mm);
+  if (!able.length) return null;
+  const costed = able.map((o) => { const per = Math.floor(o.lengthMm! / mm), sticks = Math.ceil(n / per); return { offer: o, per, sticks, usd: +(sticks * o.usd).toFixed(2), offcutMm: sticks * o.lengthMm! - n * mm }; });
+  const rank = (o: Offer) => (o.stock === 'out' ? 2 : 0) + (o.cond === 'used' ? 1 : 0);
+  return costed.sort((a, b) => rank(a.offer) - rank(b.offer) || a.usd - b.usd || a.offcutMm - b.offcutMm)[0]!;
+}
+
+/** An item id that names a LENGTH of a family sold by the length (`flat-610`, `tube-20-400`): the family's price key
+ *  and the millimetres wanted. It is how a part cut to any size reaches a price kept for the stock it comes out of,
+ *  without a row per size — nineteen rows for nineteen lengths is the template this tree forbids (ask 1). */
+export function byLength(item: string): { key: string; mm: number } | null {
+  const m = /^(.*?)-(\d+(?:\.\d+)?)$/.exec(item); if (!m) return null;
+  const mm = Number(m[2]); if (!(mm > 0)) return null;
+  for (let k = m[1]!; k.length; k = k.replace(/-[^-]*$/, '')) {
+    if (PRICES[k]?.offers.some((o) => o.lengthMm != null)) return { key: k, mm };
+    if (!k.includes('-')) break;
+  }
+  return null;
 }
 
 /** The key a library item is priced under, if any (an item's own id, else the price that names it as its item). */

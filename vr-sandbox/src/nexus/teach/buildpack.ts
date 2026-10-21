@@ -24,7 +24,7 @@ import { invent } from '../ask/invent';
 import { composeMachine } from '../ask/machine';
 import { INVENTORY, type Item } from '../parts/inventory';
 import { lessonsFor, type Lesson } from './lessons';
-import { cheapest, PRICES, priceKeyOf, usd, type Offer } from '../parts/prices';
+import { byLength, cheapest, cutFrom, PRICES, priceKeyOf, usd, type Offer } from '../parts/prices';
 import { BOARD_DEFS, boardDef } from '../boards/sbc';
 
 export interface Have {
@@ -146,12 +146,34 @@ export function pack(asked0: string, have0: Have = {}): Pack {
     const l: Line = { key, what: p.what, n, section, offer: c?.offer ?? null, packs: c?.packs ?? 0, usd: c?.usd ?? null, why, others: c?.others ?? [], needs: c?.needs ?? [] };
     lines.push(l); return l;
   };
+  /** A line whose figure the thing that wanted it DECLARES, with no seller's page behind it: a unit in
+   *  `ask/machine-units.ts` says a 500 W spindle is $90 and cites what it is. Run 9a carried those lines across as
+   *  UNPRICED and the router's bill read $44.84 with a $90 spindle in it — a figure thrown away is worse than a hole,
+   *  because the total then looks complete. It is kept apart from a seller's offer in what it says, never merged. */
+  const addSaid = (id: string, what: string, n: number, usd: number, why: string): Line => {
+    const was = lines.find((l) => l.key === id);
+    if (was) { was.n += n; if (was.usd != null) was.usd = +(usd * was.n).toFixed(2); if (!was.why.includes(why)) was.why += `; ${why}`; return was; }
+    const l: Line = { key: id, what, n, section: has(id) ? 'have' : 'buy', offer: null, packs: 0, usd: has(id) ? 0 : +(usd * n).toFixed(2), why: has(id) ? `${why} (you have it)` : why, others: [], needs: [] };
+    lines.push(l); return l;
+  };
   // what is not priced yet: listed all the same, so nothing in it goes unseen
   const addUnpriced = (id: string, what: string, n: number, why: string): Line => {
     const was = lines.find((l) => l.key === id); if (was) { was.n += n; if (!was.why.includes(why)) was.why += `; ${why}`; return was; }
     const l: Line = { key: id, what, n, section: has(id) ? 'have' : 'buy', offer: null, packs: 0, usd: has(id) ? 0 : null, why: has(id) ? `${why} (you have it)` : why, others: [], needs: [] }; lines.push(l); return l;
   };
   const custom: Custom[] = [], invented: string[] = [];
+  /** CUT TO LENGTH, not looked up by size. A part whose id ends in its millimetres (`flat-420`, `tube-20-400`) is
+   *  priced from the stock family it comes out of: how many sticks, which length of stick, and the off-cut said.
+   *  Without it every size is its own row and nineteen lengths want nineteen prices — the template ask 1 forbids. */
+  const addCut = (id: string, what: string, n: number, why: string): Line | null => {
+    const at = byLength(id); if (!at) return null;
+    const got = cutFrom(at.key, at.mm, n); if (!got) return null;
+    const was = lines.find((l) => l.key === id);
+    if (was) { was.n += n; const re = cutFrom(at.key, at.mm, was.n); if (re) { was.usd = re.usd; was.packs = re.sticks; was.offer = re.offer; } if (!was.why.includes(why)) was.why += `; ${why}`; return was; }
+    const cut = `${got.sticks} × ${got.offer.name}${got.per > 1 ? `, ${got.per} per stick` : ''}, ${got.offcutMm.toFixed(0)} mm over`;
+    const l: Line = { key: id, what, n, section: has(id) ? 'have' : 'buy', offer: got.offer, packs: got.sticks, usd: has(id) ? 0 : got.usd, why: `${why} — ${cut}`, others: [], needs: [] };
+    lines.push(l); return l;
+  };
   /** One thing from the inventory as what you buy, have made and stock: the thing asked for itself opened one level; what
    *  is in it bought whole where sold whole, made where it is a shaped part of its own, bought as stock where a material. */
   const openItem = (it: Item, n: number, why: string, top: boolean): void => {
@@ -163,6 +185,7 @@ export function pack(asked0: string, have0: Have = {}): Pack {
         if (was) was.n += n; else custom.push({ id: it.id, name: it.name, n, process: it.make, ...(it.size ? { size: it.size } : {}), how: SHAPED[it.make]!, for: why });
         processes.push('order-custom'); return;
       }
+      if (addCut(it.id, it.name, n, why)) return;
       addUnpriced(it.id, it.name, n, it.kind === 'material' ? `${why}, as stock` : why); return;
     }
     if (it.make === 'solder') { addUnpriced(it.id, it.name, n, why); notes.push(`${it.name} is bought whole: making one is designing its circuit board, which is not done here yet`); return; }
@@ -174,7 +197,7 @@ export function pack(asked0: string, have0: Have = {}): Pack {
   /** Words for a part, as the library draws it, a thing the inventory keeps, or a board: bought or opened. */
   const openWords = (words: string, n: number, why: string, top: boolean): boolean => {
     const b = boardWords(words), c = component(b?.words ?? words);
-    if (typeof c !== 'string') { const key = priceKeyOf(c.item.id); if (key) add(key, n, 'buy', why); else addUnpriced(c.item.id, c.item.name, n, why); return true; }
+    if (typeof c !== 'string') { const key = priceKeyOf(c.item.id); if (key) add(key, n, 'buy', why); else if (!addCut(c.item.id, c.item.name, n, why)) addUnpriced(c.item.id, c.item.name, n, why); return true; }
     const it = findThing(words); if (it) { openItem(it, n, why, top); return true; }
     return false;
   };
@@ -212,6 +235,7 @@ export function pack(asked0: string, have0: Have = {}): Pack {
       for (const pt of st.unit.of) if (!openWords(pt.words, pt.n * n, why, false)) unknown.push(`${pt.words} (${why}): not kept yet`);
       for (const b of st.unit.bought ?? []) {
         if (b.price) add(b.price, b.n * n, 'buy', `${why}: ${b.why}`);
+        else if (b.usd != null) addSaid(`bought:${b.what}`, b.what, b.n * n, b.usd, `${why}: ${b.why}`);
         else addUnpriced(`bought:${b.what}`, b.what, b.n * n, `${why}: ${b.why}`);
       }
     }
@@ -325,6 +349,16 @@ export function pack(asked0: string, have0: Have = {}): Pack {
   const sum = (s: Line['section']) => +lines.filter((l) => l.section === s).reduce((a, l) => a + (l.usd ?? 0) + l.needs.reduce((x, y) => x + y.usd, 0), 0).toFixed(2);
   const b0 = sum('buy'), bench = sum('bench'), helps = sum('helps'), unpriced = lines.filter((l) => l.usd == null).length;
   if (unpriced) notes.push(`${unpriced} thing${unpriced === 1 ? ' has' : 's have'} no seller's price kept yet: the total leaves ${unpriced === 1 ? 'it' : 'them'} out`);
+  // STOCK SOLD BY THE LENGTH, WITH NO LENGTH'S FIGURE KEPT. An unpriced line whose id ends in its millimetres is one
+  // cut out of a family (`extrusion-2040-400` out of 2040 extrusion), and `cutFrom` already knows how to price it the
+  // moment ONE of that family's lengths has a seller. So these are not nineteen separate gaps: they are a handful of
+  // families, and the note says which, with how many lines each one closes. A gap that names its own fix is a job.
+  const byFam = new Map<string, number>();
+  for (const l of lines) { if (l.usd != null) continue; const m = /^(.*?)-\d+(?:\.\d+)?$/.exec(l.key); if (m?.[1]) byFam.set(m[1], (byFam.get(m[1]) ?? 0) + 1); }
+  const fams = [...byFam].filter(([, c]) => c > 1).sort((a, b) => b[1] - a[1]);
+  if (fams.length) notes.push(`sold by the length, and one seller's figure for each closes every size of it: ${fams.map(([f, c]) => `${f} (${c} lines)`).join(', ')}`);
+  const said = lines.filter((l) => !l.offer && l.usd != null && l.section !== 'have');
+  if (said.length) notes.push(`${said.length} figure${said.length === 1 ? ' is' : 's are'} the design's own, with no seller's page behind ${said.length === 1 ? 'it' : 'them'} (${said.map((l) => `${l.what} ${usd(l.usd!)}`).join('; ')}): shop ${said.length === 1 ? 'it' : 'them'} before ordering`);
   if (custom.length) notes.push(`${custom.length} part${custom.length === 1 ? '' : 's'} to have made from ${custom.length === 1 ? 'its drawing' : 'their drawings'}, not drawn here yet: no file or price for ${custom.length === 1 ? 'it' : 'them'} until ${custom.length === 1 ? 'it is' : 'they are'}`);
   const make: [number, number] | null = made.length && made.every((m) => m.best.lo != null) ? [made.reduce((a, m) => a + m.best.lo!, 0), made.reduce((a, m) => a + m.best.hi!, 0)] : null;
   const all: [number, number] = [+(b0 + bench + (make?.[0] ?? 0)).toFixed(2), +(b0 + bench + (make?.[1] ?? 0)).toFixed(2)];
@@ -382,7 +416,7 @@ export function packZip(p: Pack): Uint8Array {
 /** The pack as a page to read or print: what to buy, where, for how much; the bench; the part to have made and where;
  *  the lessons, step by step. */
 export function packText(p: Pack): string {
-  const row = (l: Line) => `| ${l.what}${l.n > 1 ? ` × ${l.n}` : ''} | ${l.offer ? `[${l.offer.name}](${l.offer.url})` : '—'} | ${l.offer?.seller ?? (l.section === 'have' ? 'you have it' : '')} | ${l.usd == null ? 'not priced' : usd(l.usd)}${l.needs.length ? ` + ${l.needs.map((x) => `${x.offer.name} ${usd(x.usd)}`).join(', ')}` : ''} | ${l.why} |`;
+  const row = (l: Line) => `| ${l.what}${l.n > 1 ? ` × ${l.n}` : ''} | ${l.offer ? `[${l.offer.name}](${l.offer.url})` : '—'} | ${l.offer?.seller ?? (l.section === 'have' ? 'you have it' : l.usd == null ? '' : 'the design\u2019s own figure')} | ${l.usd == null ? 'not priced' : usd(l.usd)}${l.needs.length ? ` + ${l.needs.map((x) => `${x.offer.name} ${usd(x.usd)}`).join(', ')}` : ''} | ${l.why} |`;
   const sec = (s: Line['section'], h: string) => { const ls = p.lines.filter((l) => l.section === s); return ls.length ? [`## ${h}`, '', '| what | buy | from | cost | why |', '| --- | --- | --- | --- | --- |', ...ls.map(row), ''] : []; };
   const range = (x: [number, number]) => (x[0] === x[1] ? usd(x[0]) : `${usd(x[0])}-${usd(x[1])}`);
   const out = [`# Build pack: ${p.asked}`, '', `Prices as seen ${[...new Set(p.lines.flatMap((l) => (l.offer ? [l.offer.seen] : [])))].join(', ')}, US dollars before tax. Total **${range(p.total.all)}**${p.made.length && !p.total.make ? ' plus the custom part its maker quotes' : ''}${p.budget != null ? `, against your ${usd(p.budget)}` : ''}${p.total.helps ? `; the nice-to-haves another ${usd(p.total.helps)}` : ''}. The total is what to buy, the bench, and the plate made (its shipping and tariff estimated); not tax, nor the shops' own shipping.${p.made.length ? ' Order the plate first: it is made, then shipped.' : ''}`, '',

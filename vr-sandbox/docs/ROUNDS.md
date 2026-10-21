@@ -1700,3 +1700,37 @@ rule that closes most of 19, and it is ask 1 ("never a template") rather than ni
 
 GATE: PASS (2398 of 2398 ran) — 197.5s (`npm run gate`), 3 new tests. Tidy 24/24. Census
 (`node tools/unwired.mjs --all`): 178 test-only, 141 dead, 22 unreached files, unchanged.
+
+## Run 9b — cut out of a stick, and the figure that was thrown away
+
+**Step 2 of `docs/DONE.md`'s order**: price by length. Run 9a's finding was "19 unpriced lines, and MGN12H at 400 mm
+is priced while the same rail at 500 mm is not, so the gap is a missing RULE". Reading the 19 instead of assuming
+split them into **three different faults**, only one of which was the rule.
+
+**FAULT 1, mine, and the worst: a figure thrown away is worse than a hole.** Run 9a carried a unit's `bought` lines
+across as unpriced whenever they had no price KEY — and most of them carry their own `usd`, which `machineText`
+has always used. So the router's bill read **$44.84 with a $90 spindle in it**. `addSaid` carries them now, the row
+says *the design's own figure* where a seller's name would be, and a note lists them with "shop them before
+ordering". The router is **$182.84**. A total that silently drops its biggest line is worse than one that says it
+does not know, because it looks finished.
+
+**FAULT 2, the rule: you cut parts OUT of a stick, you do not weld sticks together.** That one sentence is the whole
+of `cutFrom`, and it is what a price-per-millimetre would get wrong in both directions: a 550 mm beam cannot be had
+from two 250 mm offcuts at any price, and one 914 mm stick yields ONE 550 mm beam, not 1.66 of them. So pieces per
+stick is `floor(length / mm)`, sticks is `ceil(n / that)`, and a stock length shorter than the piece is refused
+rather than priced. Measured: one 420 mm bearer takes the 24 in bar at $4.21; **two take the 36 in at $5.61, not two
+24 in at $8.42**, because two fit in one stick; 1,200 mm is refused outright.
+
+**FAULT 3: the figures were never missing — the table could not read them.** `flat`'s own note said *"the 36 in is
+listed at $5.61"*, `tube-20`'s said *"the 12 in is $14.14 and the 24 in at $22.63"*, `copper`'s said *"the 36 in is
+listed at $24.17"*. Three sellers' other lengths, already sourced, already in the file, sitting in PROSE where no
+code could reach them. They are offers now, each with its `lengthMm`. Same shape as Run 8p's finding about sizes.
+
+**What is left, and it is now a shopping list rather than a fog.** 19 unpriced → **14**, and the note groups them:
+*"sold by the length, and one seller's figure for each closes every size of it: extrusion-2040 (6 lines),
+rail-mgn12h (2 lines)"*. **Eight of the fourteen are two lookups.** The remaining six are single parts (an M5 T-slot
+nut, an M5×12 bolt, an 18 mm ply sheet, a NEMA 17, its motor plate, a 625ZZ — and `bearing-625` IS priced at $1.19
+as the RS, so the ZZ is a seal away). The rule is built and tested; what it waits on is a seller's page, which this
+network refuses, so it goes on the user's own list rather than being guessed.
+
+GATE: PASS (2402 of 2402 ran) — 192.3s (`npm run gate`), 4 new tests. Tidy 24/24.
