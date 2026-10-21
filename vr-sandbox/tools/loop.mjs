@@ -60,11 +60,15 @@ for (const ask of asks) {
     const said = got[d.id].said.replace(/\s+/g, ' ').slice(0, 150);
     console.log(`  ${d.id.padEnd(8)} ${got[d.id].answered ? `${parts.size} parts named` : 'no answer'}${said ? `  — said: ${said}` : ''}`);
   }
-  // THE LOOP: a door feeds the next when what it named is what the next one worked from. Nothing shared is no loop.
-  const names = DOORS.map((d) => got[d.id].parts);
-  const shared = [...names[1]].filter((p) => names[2].has(p));
-  const all = new Set(names.flatMap((s) => [...s]));
-  console.log(`  LOOP     machine named ${names[1].size}, pack bought ${names[2].size}, ${shared.length} of them the same part`
-    + `${all.size && !shared.length ? '  — the doors do not feed each other' : ''}`);
+  // THE LOOP: the pack prices parts by the LIBRARY's name for them ("NEMA 17 stepper") while the machine orders them
+  // by the words that draw them ("stepper nema17 40"), so comparing those two lists of names answers nothing — it was
+  // the first version of this line and it said "the doors do not feed each other" on a bill that was entirely the
+  // machine's. What does answer it is the REASON the pack writes on each line, "for its <unit>": the question is
+  // whether the pack is buying the machine the composer designed, so it is how many composed units the bill accounts for.
+  const units = [...got.machine.text.matchAll(/^ {2}(\S.*?) — /gm)].map((m) => m[1].trim());
+  const covered = units.filter((u) => got.pack.text.includes(u));
+  if (!units.length) console.log('  LOOP     the composer afforded nothing for these words: nothing to carry');
+  else console.log(`  LOOP     ${covered.length} of ${units.length} composed units are in the bill`
+    + (covered.length === units.length ? '  — the design is what is being bought' : covered.length ? '  — partly carried' : '  — the doors do not feed each other'));
 }
 if (keep) console.log(`\nevery door's whole answer under ${keep}`);

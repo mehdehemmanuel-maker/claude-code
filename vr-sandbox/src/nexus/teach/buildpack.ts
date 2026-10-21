@@ -21,6 +21,7 @@ import { component } from '../parts/components';
 import type { Part, V3 } from '../parts/kits';
 import { fabPack, plateFor, type Profile, type Route } from '../parts/fab';
 import { invent } from '../ask/invent';
+import { composeMachine } from '../ask/machine';
 import { INVENTORY, type Item } from '../parts/inventory';
 import { lessonsFor, type Lesson } from './lessons';
 import { cheapest, PRICES, priceKeyOf, usd, type Offer } from '../parts/prices';
@@ -186,20 +187,63 @@ export function pack(asked0: string, have0: Have = {}): Pack {
     processes.push('assemble');
     return true;
   };
+  /** A MACHINE for words that ask for one (a thing that prints, cuts, picks up, sees, turns): composed from the units
+   *  the library affords, and then every part of every unit opened exactly as any other part is. Same shape as
+   *  `inventFor` above — something that explains what parts are wanted, each of them then bought or made.
+   *
+   *  It exists because the two doors answered the same ask separately and shared nothing: `npm run machine -- "a
+   *  machine that cuts 400x300x80"` named 16 parts while `npm run pack` on those words bought 0 of them and said the
+   *  ask "is not a part any family makes" (Run 8z, `node tools/loop.mjs`). The composer was never the problem; it was
+   *  that nothing carried its bill to the thing that prices bills. One composer, one bill.
+   *
+   *  A unit's `cannot` is carried through rather than swallowed: a pack that quietly prices a machine the composer
+   *  refused is the fiction this file exists not to write. */
+  const machineFor = (words: string, n: number): boolean => {
+    const m = composeMachine(words);
+    // NOT A MACHINE ASK, and the composer is the one who says so. With no verb it still composes — a frame and a bed
+    // for "what the words spell with nothing said" — so stages alone is not the test, and taking that as one had the
+    // pack composing a machine for "flux capacitor" (its own test caught it). Its refusal is the signal.
+    if (!m.stages.length || !m.does.length) return false;
+    if (m.refusals.some((r) => /nothing in those words says what the machine must/.test(r))) return false;
+    invented.push(`${words.trim()}: ${m.name}, composed from ${m.stages.length} unit${m.stages.length === 1 ? '' : 's'} — ${m.stages.map((st) => st.unit.name).join(', ')}`);
+    for (const st of m.stages) {
+      const why = `for its ${st.unit.name}`;
+      if (st.unit.cannot) { notes.push(`${st.unit.name}: ${st.unit.cannot}`); continue; }
+      for (const pt of st.unit.of) if (!openWords(pt.words, pt.n * n, why, false)) unknown.push(`${pt.words} (${why}): not kept yet`);
+      for (const b of st.unit.bought ?? []) {
+        if (b.price) add(b.price, b.n * n, 'buy', `${why}: ${b.why}`);
+        else addUnpriced(`bought:${b.what}`, b.what, b.n * n, `${why}: ${b.why}`);
+      }
+    }
+    for (const r of m.refusals) notes.push(`it will not: ${r}`);
+    for (const g of m.gaps) unknown.push(`${g}: the library does not draw it by those words`);
+    processes.push('assemble');
+    return true;
+  };
   // what was asked for
   // (split on "with" only where it adds a thing: "with no electricity", "with only sunlight" say how, and stay with it)
   const chunks = asked.split(/\s*(?:,|;|\+|\band\b(?!\s+(?:no|without|only)\b)|\bwith\b(?!\s+(?:no|nothing|only|out)\b)|\bplus\b)\s*/i).filter((s) => s.trim());
   const flags = new Set<string>(), flagN = new Map<string, number>(), boards: { id: string; n: number; line: Line | null; header?: boolean }[] = [];
+  // ONE SENTENCE, ONE MACHINE. The split above breaks an ask on "and" so that "a pico and an LED" buys both — but
+  // "a machine that picks up 2kg and sees 800x400" is ONE machine, and splitting it composed TWO: the bill carried a
+  // 1000 × 600 × 800 mm frame and a 500 × 500 × 808 mm one, for a machine the composer itself says is 1000 × 600 ×
+  // 908 mm (Run 9a, found by `node tools/loop.mjs`, which compares the two doors' answers to the same words).
+  // A composer that reads a whole sentence has to be offered the whole sentence. So where no chunk names something
+  // the library already knows, the ask goes to the composer whole; a mixed ask ("a pi 5 and a machine that cuts
+  // 400x300") still splits, because its first chunk does name one.
+  const namesAPart = chunks.some((ch) => { const r = read(ch), w = r.words; return !r.flag && Boolean(w) && (typeof component(w!) !== 'string' || Boolean(findThing(w!))); });
+  const whole = !namesAPart && chunks.length > 1 && machineFor(asked, 1);
   for (const ch of chunks) {
     const r = read(ch); if (r.note) notes.push(r.note);
     if (r.flag) { flags.add(r.flag); flagN.set(r.flag, Math.max(flagN.get(r.flag) ?? 0, r.n)); continue; }
+    if (whole) continue;   // the composer took the whole ask; the chunks are its clauses, not separate things to buy
     const c = component(r.words!);
     if (typeof c === 'string') {
       // not a part the library draws: a thing the inventory keeps, named as it is (a 3D printer), else an invention for
       // what the words ask it to do, else whatever kept thing the words hold
       const it = findThing(r.words!), named = it && r.words!.toLowerCase().split(/\s+/).length <= it.name.split(/\s+/).length + 1;
       if (it && named) openItem(it, r.n, 'you asked for it', true);
-      else if (!inventFor(r.words!, r.n)) { if (it) openItem(it, r.n, 'you asked for it', true); else unknown.push(`${ch.trim()}: ${c}`); }
+      else if (!inventFor(r.words!, r.n) && !machineFor(r.words!, r.n)) { if (it) openItem(it, r.n, 'you asked for it', true); else unknown.push(`${ch.trim()}: ${c}`); }
       continue;
     }
     const key = priceKeyOf(c.item.id);

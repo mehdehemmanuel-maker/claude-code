@@ -1654,3 +1654,49 @@ what a build's bill cannot (blocked on this network, and widening it unblocks th
 lesson that names the thing ("Put it together" is the generic instruction ask 4 forbids, shipped in every pack).
 GATE: PASS (2395 of 2395 ran) — 188.2s (`npm run gate`). Tidy 24/24. Census (`node tools/unwired.mjs --all`): 178 test-only, 141 dead, 22
 unreached files, unchanged: the new tool is a door, not an export.
+
+## Run 9a — the doors joined: what the composer designs is what the bill buys
+
+**Step 1 of `docs/DONE.md`'s order**, which Run 8z derived: join the doors into one route. Nothing downstream of a
+design is real until the design reaches the thing that prices it.
+
+**The join is one arm, not a second pipeline.** `teach/buildpack.ts` already had `inventFor` — an invention is
+something that explains what parts are wanted, and each of its parts goes through `openWords` to be bought or made.
+**A composed machine is exactly that shape**, so `machineFor` sits beside it and the dispatch reads
+`!inventFor(...) && !machineFor(...)`. An invention still wins where it answers, so no path that worked before
+changed. A unit's `cannot` is carried through as a note rather than swallowed: a pack that quietly prices a machine
+the composer refused is the fiction that file exists not to write.
+
+**Measured before and after, by the same command:**
+
+```
+$ node tools/loop.mjs "a machine that cuts 400x300x80"
+  before   machine 16 parts, pack 0 — "a machine that cuts 400x300x80" is not a part any family makes
+  after    6 of 6 composed units are in the bill — the design is what is being bought
+```
+
+The bill now names the unit every line is for: *2040 extrusion 600 mm × 4 — for its a 600 × 500 × 698 mm frame*,
+*MGN12H rail 400 mm — for its a 300 mm screw axis*, and so on, 21 lines for the router.
+
+**TWO FAULTS THE JOIN FOUND, both at the cause.**
+
+1. **One sentence is one machine.** The pack splits an ask on "and" so that "a pico and an LED" buys both — and
+   split *"a machine that picks up 2kg and sees 800x400"* into two, composing TWO machines: the bill carried a
+   1000 × 600 × **800** mm frame and a 500 × 500 × 808 mm one, for a machine the composer itself calls
+   1000 × 600 × **908** mm. A composer that reads a whole sentence has to be offered the whole sentence, so where no
+   chunk names something the library already knows, the ask goes to the composer whole. A mixed ask ("a pi 5 and a
+   machine that cuts 400x300x80") still splits, because its first chunk does name one — and a test holds that open.
+2. **Stages are not a verb, and the composer says so itself.** With no verb `composeMachine` still returns a frame
+   and a bed, so `stages.length` is not the test for "this is a machine ask" — and taking it as one had the pack
+   composing a machine for **"flux capacitor"**. Its own existing test caught that within the hour. The signal is the
+   composer's refusal, read rather than re-derived: *"nothing in those words says what the machine must do"*.
+
+**And what the join made visible, which is the next step in DONE.md's order**: the router's bill is 21 lines of which
+**19 have no price**, and they are not exotic — 2040 extrusion, M5 bolts and T-slot nuts, NEMA 17s, 625ZZ bearings,
+T8 lead screws, plywood. **MGN12H at 400 mm is priced at $35.99 and MGN12H at 500 mm and 150 mm are not**, which
+says the gap is not missing data but a missing RULE: stock is sold by the length and the table holds one offer per
+exact size, so a family priced at one size cannot price another. A price per mm against a cut length is the general
+rule that closes most of 19, and it is ask 1 ("never a template") rather than nineteen new rows.
+
+GATE: PASS (2398 of 2398 ran) — 197.5s (`npm run gate`), 3 new tests. Tidy 24/24. Census
+(`node tools/unwired.mjs --all`): 178 test-only, 141 dead, 22 unreached files, unchanged.

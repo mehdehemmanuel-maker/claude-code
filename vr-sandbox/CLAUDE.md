@@ -337,13 +337,19 @@ The tools each step uses are in `docs/TOOLS.md`. When a step takes working out b
 
 The whole picture is in `docs/ROUNDS.md`; this is only what is not finished, with what blocks it.
 
-**The thing between here and the end** (new 2026-10-17, `docs/DONE.md`) - **the doors do not feed each other.**
-`node tools/loop.mjs "a desk lamp with an arm that stays where you put it"` puts one ask through `part`, `machine`
-and `pack`: three unrelated answers, 0 parts shared between what the machine designed and what the pack bought. The
-pack bought a 25-pack of 5 mm LEDs for $12.50 and called it a desk lamp. Nothing had noticed because nothing had
-ever asked two doors the same question. Joining them into one route - heard, designed, real, orderable, teachable -
-is the round that makes every later round mean something. With it, the finding underneath: **a hold can be passive**,
-and the composer does not know it, so "stays where you put it" became two NEMA 17s instead of a spring.
+**The thing between here and the end** (`docs/DONE.md`, which holds the loop and the order to build it in).
+**The design and the bill are now one route** (Run 9a): a machine ask is composed and every unit of it is opened into
+the bill, so `node tools/loop.mjs "a machine that cuts 400x300x80"` reads *6 of 6 composed units are in the bill*
+where a week ago it read *machine 16 parts, pack 0*. Still open on that route, in order:
+- **A price per unit length, against a cut length.** The router's bill is 21 lines and 19 have no price, and they are
+  2040 extrusion, M5 bolts, NEMA 17s, 625ZZs, T8 screws, plywood. MGN12H at 400 mm IS priced and the same rail at
+  500 mm is not: the table holds one offer per exact size, so a family priced at one size cannot price another. Stock
+  is sold by the length — one rule closes most of the 19, and nineteen new rows would be the template ask 1 forbids.
+- **A hold can be PASSIVE, and the composer does not know it.** "An arm that stays where you put it" became two
+  NEMA 17s, because the only way it knows to hold a position is to drive it there and keep the current on. An
+  Anglepoise has held its since 1932 with a spring. Spring counterbalance, friction, over-centre, dead weight.
+- **A lesson that names the thing.** Every pack still ships a generic "Put it together", which is the generic
+  instruction ask 4 forbids by name (*"don't say solder here"*).
 
 **Being worked now** - mating and the geometry readers (`parts/mate.ts`). In order: a pocket's floor in a *box* or a
 rolled section, which is the same well rule the rings and turned bores already get; then the mates of a whole assembly

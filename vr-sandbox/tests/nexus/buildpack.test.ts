@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
+import { composeMachine } from '../../src/nexus/ask/machine';
 import { catalogue } from '../../src/nexus/parts/catalogue';
 import { componentOf } from '../../src/nexus/parts/components';
 import { resolve } from '../../src/nexus/parts/inventory';
@@ -153,6 +154,29 @@ describe('the Bluetooth bridge as a pack', () => {
     const p = pack('a bluetooth bridge for my printer');
     expect(p.lines.find((l) => l.key === 'multimeter')!.n).toBe(1);
     expect(pack('2 bluetooth bridges').lines.find((l) => l.key === 'xiao-esp32c3')!.n).toBe(2);
+  });
+  // ---- the join: what the composer designed is what the bill buys (Run 9a) -------------------------------------
+  it('a machine ask is composed, and every unit of it is on the bill', () => {
+    // the fault this holds shut: `npm run machine` named 16 parts for these words while `npm run pack` on the SAME
+    // words bought none of them and said the ask "is not a part any family makes" (`node tools/loop.mjs`)
+    const words = 'a machine that cuts 400x300x80';
+    const m = composeMachine(words), p = pack(words);
+    expect(m.stages.length).toBeGreaterThan(3);
+    for (const st of m.stages) expect(p.lines.some((l) => l.why.includes(st.unit.name)), st.unit.name).toBe(true);
+    expect(p.invented.join(' ')).toContain('composed from');
+  });
+  it('one sentence is one machine: an ask that reads as two clauses composes one frame, not two', () => {
+    // "picks up 2kg AND sees 800x400" used to split on the "and" and compose two machines, so the bill carried a
+    // 1000 x 600 x 800 mm frame and a 500 x 500 x 808 mm one for a machine the composer calls 1000 x 600 x 908 mm
+    const words = 'a machine that picks up 2kg and sees 800x400';
+    const m = composeMachine(words), p = pack(words);
+    const frames = new Set(p.lines.flatMap((l) => [...l.why.matchAll(/for its (a [\d ×x]+ mm frame)/g)].map((x) => x[1])));
+    expect(frames.size).toBe(1);
+    for (const st of m.stages) expect(p.lines.some((l) => l.why.includes(st.unit.name)), st.unit.name).toBe(true);
+  });
+  it('an ask that names a part it knows still splits, so a mixed ask is not swallowed by the composer', () => {
+    const p = pack('a pi 5 and a machine that cuts 400x300x80');
+    expect(p.lines.some((l) => /pi.?5/i.test(l.key))).toBe(true);
   });
   it('the bridge\u2019s lesson names tools that are all priced, and dangers before steps', () => {
     const l = LESSONS['bridge-ble']!;
