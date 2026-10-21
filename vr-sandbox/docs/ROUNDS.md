@@ -1734,3 +1734,55 @@ as the RS, so the ZZ is a seal away). The rule is built and tested; what it wait
 network refuses, so it goes on the user's own list rather than being guessed.
 
 GATE: PASS (2402 of 2402 ran) — 192.3s (`npm run gate`), 4 new tests. Tidy 24/24.
+
+## Run 9c — a hold that needs no power, and the screw every Z axis here backdrives on
+
+**Step 3 of `docs/DONE.md`.** The fault, from Run 8z: *"a desk lamp with an arm that stays where you put it"* was
+answered with TWO NEMA 17 STEPPERS. The sizing was never wrong — the steppers hold 1.2 N·m and the arm needs 0.47.
+What was wrong is that **"hold" had exactly one meaning in this tree: drive it there and keep the current on.**
+
+`ask/hold.ts` is the other five, each sized, each saying what staying costs:
+
+```
+$ npm run machine -- hold 0.8kg 400mm post=250 arm=120 face=18 swing=270
+0.8 kg at 400 mm is 3.14 N·m to hold.
+  ✓ a spring balance — no power      1.2 mm chrome-silicon, 12 mm coil, 111 turns: 105 N/m
+  ✓ a counterweight — no power       3.20 kg at 100 mm, and 1.3× the inertia to swing
+  ✓ a clamped joint — no power       2 faces at 18 mm, one M6 at 2.5 kN: holds 6.30 N·m
+  ~ a motor holding it — 10 W        and it falls the moment the power does
+  ✗ an over-centre catch             swings 270°, and a catch holds at one angle
+```
+
+**THE RESULT IT IS BUILT AROUND.** Anchor a spring `a` up the post and `b` along the arm. Its moment is
+`k·s·(a·b·sin θ / s) = k·a·b·sin θ` — **the length cancels** — and gravity's is `m·g·r·sin θ`, so both carry the same
+`sin θ` and the whole of balance is `k·a·b = m·g·r`, **with no angle in it**. That is why an Anglepoise holds
+everywhere in its range rather than at one sweet spot, and it is geometry, not tuning (Carwardine GB377739, 1932;
+Herder, TU Delft 2001, §3). Said honestly with it: no real spring has zero free length, so it is got by winding in
+initial tension or anchoring past the pivot, and a plain spring sags at the ends of the travel.
+
+**AND THE FAULT IT FOUND IN THIS TREE'S OWN MACHINES.** A screw holds with no power when its lead angle is inside
+its friction angle, `tan λ ≤ μ`. Run it on the lead screws every machine here is composed from:
+
+```
+$ npm run machine -- hold 5kg 50mm screw=8/7
+  ✗ lead angle 20.0° is outside the friction angle 9.1°: this screw backdrives, so the load falls
+    when the power goes off. A single-start screw of the same diameter is 5.2° and holds
+```
+
+**Every Z axis in this tree was a T8 × 8 — four starts — and it drops its gantry when the current goes.** Not a
+sizing error, a kind error, and it had been there since the axis was written. The composer now DERIVES the lead:
+`selfLockingLead(7)` asks what lead is inside the friction angle for a 7 mm mean T8 on brass and answers 2 mm, the
+single start. Measured on the router's Z: **528 N at the nut against 132, raising 53.8 kg against 13.5**, at 10 mm/s
+against 40. Four times the force, a quarter of the speed, and it holds with the power off — which is the trade real
+Z axes make and the reason they make it.
+
+**The check, not just the fix**: a gate test composes three machines and fails if any axis that LIFTS is ever put on
+a screw that backdrives again.
+
+**Two more things this round did.** `engineering/springs.ts` — Shigley chapter 10, 109 lines — was an UNREACHED FILE
+that nothing in the tree could call; the spring design here is its, so it has a door now and the census fell
+**23 → 21 unreached, 178 → 170 test-only, 150 → 147 dead**. And the tidy lint refused the first draft for calling
+its interface `Hold` when `ask/conditions.ts` owns that word for what holds a structure UP, and `momentOf` when
+`life/rhythm.ts` owns that for a moment in TIME. They are `Stay` and `gravityMoment`, which is what they are.
+
+GATE: PASS (2407 of 2407 ran) — 191.1s (`npm run gate`), 10 new tests. Tidy 24/24.

@@ -10,13 +10,28 @@
 //   npm run machine -- "a machine that cuts 400x300x80"    the same stack with a spindle on it: a router
 //   npm run machine -- "a machine that picks up 2kg and sees 800x400"
 //   npm run machine -- units                               every unit the library affords, and what each costs
+//   npm run machine -- hold 2kg 400mm                      every way to hold that moment with no power, sized
+//   npm run machine -- hold 2kg 400mm post=250 arm=120 face=20 screw=8/7 swing=270
 //   npm run machine -- "..." works                         and what the $3,000 works has to do to build it
 
 import { jobText, machineBuild, throwAt, under3K } from '../works';
 import { composeMachine, everyUnit, machineText, unitKg, unitUsd, type Unit } from '../ask/machine';
+import { holdText, type Joint } from '../ask/hold';
 
 const args = process.argv.slice(2);
-if (args[0] === 'units') {
+// WHAT HOLDS IT WITH THE POWER OFF. The door the composer did not have when it answered "an arm that stays where
+// you put it" with two steppers (Run 9c).
+if (args[0] === 'hold') {
+  const num = (re: RegExp, d = 0) => { const m = args.join(' ').match(re); return m ? Number(m[1]) : d; };
+  const screw = /screw=(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)/.exec(args.join(' '));
+  const j: Joint = {
+    kg: num(/(\d+(?:\.\d+)?)\s*kg/, 1), armMm: num(/(\d+(?:\.\d+)?)\s*mm/, 300),
+    postMm: num(/post=(\d+(?:\.\d+)?)/) || undefined, attachMm: num(/arm=(\d+(?:\.\d+)?)/) || undefined,
+    faceMm: num(/face=(\d+(?:\.\d+)?)/) || undefined, swingDeg: num(/swing=(\d+(?:\.\d+)?)/) || undefined,
+    ...(screw ? { screw: { leadMm: Number(screw[1]), meanMm: Number(screw[2]) } } : {}),
+  };
+  console.log(holdText(j));
+} else if (args[0] === 'units') {
   const all: Unit[] = everyUnit();   // one list, in ask/machine.ts, which the gate also checks
   for (const u of all) {
     const { kg, gaps } = unitKg(u), { usd, unpriced } = unitUsd(u);

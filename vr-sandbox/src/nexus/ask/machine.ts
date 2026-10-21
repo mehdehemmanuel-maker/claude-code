@@ -28,6 +28,7 @@ import { cheapest } from '../parts/prices';
 // meaning what it meant, which is the same reason index.ts and works.ts sit at the root
 import { readMachine } from './machine-read';
 import { machinePart } from './machine-draw';
+import { selfLockingLead } from './hold';
 export { readMachine, type MachineWant } from './machine-read';
 // the units themselves live in their own file now (ask/machine-units.ts); re-exported here for the same reason
 export { screwAxis, beltAxis, beltStages, turnAxis, baseFrame, bedPlate, RAIL, HOT_END, SPINDLE, GRIPPER, SOLDER_HEAD, EYE, BRAIN, type Does, type Unit } from './machine-units';
@@ -237,7 +238,12 @@ export function composeMachine(words: string): Machine {
     st.stages.unshift({ unit: table, carrying: want.payload, above: ['the work on it'], ok: table.carries >= want.payload });
     units = [table, inFeed, ...tools, BRAIN];
   } else {
-    const axes = [slide(x), slide(y), screwAxis(z)];
+    // THE AXIS THAT LIFTS MUST HOLD WITH THE POWER OFF, and the lead that does is derived rather than typed.
+    // Every Z axis here was a T8 × 8 — four starts, a 20.0° lead angle against a 9.1° friction angle — which
+    // BACKDRIVES: the gantry drops the moment the current goes (Run 9c, `npm run machine -- hold 5kg 50mm
+    // screw=8/7`). `selfLockingLead` asks what lead is inside the friction angle for a 7 mm mean T8 on brass and
+    // answers 2 mm, the single start. It costs a quarter of the speed and gives four times the force at the nut.
+    const axes = [slide(x), slide(y), screwAxis(z, selfLockingLead(7) ?? 2)];
     const bed = bedPlate(x, y);
     // THE FRAME IS AS TALL AS WHAT HANGS IN IT. `z + 350` was a constant, and a constant is a guess: at 300 × 180 ×
     // 45 it gave a 395 mm frame for a chain 648 mm long, so the drawing put the spindle above the frame's top rail
