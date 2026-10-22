@@ -20,6 +20,7 @@ import { makeBoardStore, type BoardStore } from './boards-store';
 import { SUGGEST, graphOf, orderFrom, runFlow, stepOf, triggersOf, type FlowRun, type Step, type StepKind } from '../substrate/flows';
 import { engineHands, runHtml } from './flow2d';
 import { mindBoxHtml, wireMindBox } from './mind-box';
+import { dragCard, wiresSvg } from './wires';
 
 const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const KINDS: StepKind[] = ['trigger', 'ai', 'action', 'check', 'repeat'];
@@ -29,11 +30,12 @@ const KIND_SAYS: Record<StepKind, string> = {
 };
 
 interface State {
-  store: BoardStore | null; at: string | null; view: 'graph' | 'pipeline';
+  store: BoardStore | null; at: string | null; view: 'wires' | 'pages' | 'pipeline';
+  /** how far in, and where the picture has been dragged to, in the wires view */ zoom: number; panX: number; panY: number;
   /** the node picked first, waiting for a second to connect to */ picked: string | null;
   rel: string; run: FlowRun | null; running: boolean; stop: AbortController | null; say: string;
 }
-const S: State = { store: null, at: null, view: 'graph', picked: null, rel: 'connects', run: null, running: false, stop: null, say: '' };
+const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, rel: 'connects', run: null, running: false, stop: null, say: '' };
 
 const board = (): Board | null => (S.at && S.store ? S.store.boards.get(S.at) ?? null : null);
 const put = (p: Parameters<BoardStore['write']>[1]) => { if (S.at && S.store) S.store.write(S.at, p); };
@@ -78,7 +80,17 @@ function nodeChip(b: Board, d: Derived, n: Live, pageId: string | null): string 
   </button>`;
 }
 
-function graphHtml(b: Board, d: Derived): string {
+/** THE BOARD AS WIRES, which is what a graph is for: you can see what branches from what. The bar above it is the
+ *  same one the list has, so picking and connecting work identically in both — only the drawing differs. */
+function wiresHtml(b: Board, d: Derived): string {
+  return `${topBar(b, d)}
+    <div class="wirewrap" id="wirewrap">${wiresSvg(b, d, { picked: S.picked, view: 'categories', zoom: S.zoom, panX: S.panX, panY: S.panY })}
+      <div class="zoom"><button data-zoom="-">−</button><button data-zoom="0">fit</button><button data-zoom="+">+</button></div>
+    </div>
+    ${S.picked ? linksHtml(b, d) : ''}`;
+}
+
+function topBar(b: Board, d: Derived): string {
   const pages = pagesOf(b, d);
   const picked = S.picked ? nodesOf(b).find((n) => n.id === S.picked) : null;
   const elsewhere = edgesOf(b).filter((e) => d.root.get(e.from) !== d.root.get(e.to)).length;
@@ -96,6 +108,12 @@ function graphHtml(b: Board, d: Derived): string {
       <button data-act="dup">duplicate</button>
       <button data-act="del" class="danger">delete</button>
     </div>` : `<div class="picked-bar hintbar">Click a node to pick it, then click another to connect them — on this page or any other.</div>`}
+  `;
+}
+
+function pagesHtml(b: Board, d: Derived): string {
+  const pages = pagesOf(b, d);
+  return `${topBar(b, d)}
   <div class="pages">
     ${pages.map((p) => {
       // what is ON the page: everything it was given, read off the board's own `contains` links rather than off the
@@ -183,11 +201,11 @@ function shell(): string {
   <main>
     ${b && d ? `<header>
       <input id="title" value="${esc(b.title)}" aria-label="this board's name">
-      <nav>${(['graph', 'pipeline'] as const).map((v) => `<button data-view="${v}" class="${S.view === v ? 'on' : ''}">${v === 'graph' ? 'Pages & nodes' : 'Pipeline'}</button>`).join('')}</nav>
+      <nav>${([['wires', 'Graph'], ['pages', 'Pages'], ['pipeline', 'Pipeline']] as const).map(([v, t]) => `<button data-view="${v}" class="${S.view === v ? 'on' : ''}">${t}</button>`).join('')}</nav>
       <button data-act="delboard" class="danger small">delete board</button>
     </header>
     ${S.say ? `<p class="said">${esc(S.say)}</p>` : ''}
-    ${S.view === 'graph' ? graphHtml(b, d) : pipelineHtml(b, d)}`
+    ${S.view === 'wires' ? wiresHtml(b, d) : S.view === 'pages' ? pagesHtml(b, d) : pipelineHtml(b, d)}`
     : `<header><h1>Boards</h1></header>
        <p class="none">Make a board to start. A board holds pages; a page holds nodes; any node can be connected to
          any other, and the same nodes run as a pipeline.</p>`}
@@ -213,9 +231,37 @@ export function mountBoards(el: HTMLElement): void {
     S.picked = null; draw();
   };
 
+  // dragging a card, and dragging the picture behind it. A press that does not move is left alone, so it lands as
+  // the click that picks a node — that is what lets one gesture both arrange the board and connect it.
+  el.addEventListener('pointerdown', (ev) => {
+    const svg = (ev.target as Element).closest?.('svg.wires') as SVGSVGElement | null;
+    if (!svg || ev.button !== 0) return;
+    const card = (ev.target as Element).closest?.('[data-node]') as SVGGElement | null;
+    if (card?.dataset.node) { dragCard(svg, card.dataset.node, ev, 'categories', S.zoom, put, draw); return; }
+    const sx = ev.clientX, sy = ev.clientY, px = S.panX, py = S.panY;
+    const box = svg.viewBox.baseVal, rect = svg.getBoundingClientRect();
+    const per = Math.max(box.width / rect.width, box.height / rect.height);
+    const inner = svg.querySelector('g'); if (!inner) return;
+    const move = (e: PointerEvent) => inner.setAttribute('transform', `translate(${(px + (e.clientX - sx) * per).toFixed(1)},${(py + (e.clientY - sy) * per).toFixed(1)}) scale(${S.zoom})`);
+    const up = (e: PointerEvent) => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      S.panX = px + (e.clientX - sx) * per; S.panY = py + (e.clientY - sy) * per;
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  });
+
+  el.addEventListener('wheel', (ev) => {
+    if (!(ev.target as Element).closest?.('.wirewrap')) return;
+    ev.preventDefault();
+    S.zoom = Math.max(0.3, Math.min(4, S.zoom * (ev.deltaY < 0 ? 1.1 : 0.9)));
+    draw();
+  }, { passive: false });
+
   el.addEventListener('click', (ev) => {
-    const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],#run,#stoprun') as HTMLElement | null;
+    const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],[data-zoom],#run,#stoprun') as HTMLElement | null;
     if (!t) return;
+    const z = t.dataset.zoom;
+    if (z) { S.zoom = z === '0' ? 1 : Math.max(0.3, Math.min(4, S.zoom * (z === '+' ? 1.25 : 0.8))); if (z === '0') { S.panX = 0; S.panY = 0; } return draw(); }
     const b = board();
     if (t.dataset.node) return pick(t.dataset.node);
     if (t.dataset.board) { S.at = t.dataset.board; S.picked = null; S.run = null; S.say = ''; return draw(); }
@@ -240,7 +286,7 @@ export function mountBoards(el: HTMLElement): void {
     const f = ev.target as HTMLFormElement, box = f.querySelector('input')!, words = box.value.trim();
     if (!words) return;
     if (f.id === 'newboard') {
-      const id = uid('b'); S.store!.write(id, freshBoard(words), true); S.at = id; S.view = 'graph'; S.picked = null;
+      const id = uid('b'); S.store!.write(id, freshBoard(words), true); S.at = id; S.view = 'wires'; S.picked = null;
       box.value = ''; return draw();
     }
     const b = board(); if (!b) return;
