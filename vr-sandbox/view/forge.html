@@ -8,11 +8,14 @@
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#000000" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
+  <!-- the 2D pages' own stylesheet, because the board that opens in here IS the board page (view/boards2d.ts),
+       not a second one drawn to look like it. The rule below re-asserts what the room needs after it. -->
+  <link rel="stylesheet" href="./app.css" />
   <style>
-    html, body { margin: 0; height: 100%; background: #04070b; color: #d8dee9; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+    html, body { margin: 0; padding: 0; height: 100%; background: #04070b; color: #d8dee9; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
   </style>
 </head>
-<body>
+<body class="forge">
   <script type="module" src="../src/nexus/view/forge.ts"></script>
 </body>
 </html>

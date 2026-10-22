@@ -20,6 +20,7 @@ import { makeBoardStore, type BoardStore } from './boards-store';
 import { CALLS } from '../substrate/calls';
 import { SUGGEST, TEMPLATES, boardOfTemplate, clipOf, graphOf, orderFrom, pasteOf, runFlow, stepOf, triggersOf, type FlowRun, type Step, type StepKind } from '../substrate/flows';
 import { engineHands, runHtml, type Trace, type Worked } from './flow2d';
+import type { FlowApi } from '../substrate/flows';
 import { mountScenes, showHtml } from './show';
 import { mindBoxHtml, wireMindBox } from './mind-box';
 import { dragCard, snap, wiresSvg } from './wires';
@@ -46,6 +47,19 @@ interface State {
   adding: { x: number; y: number; left: number; top: number } | null;
 }
 const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, linking: false, rel: 'connects', run: null, running: false, stop: null, say: '', worked: null, inside: new Map(), doing: null, picking: null, find: '', adding: null };
+
+/** WHOSE HANDS THIS BOARD RUNS ON.
+ *
+ *  The board is a projection of the engine, and so are its hands: give it the engine's and it runs on a laptop with
+ *  no room; give it the ROOM's (`view/forge.ts`'s `flowApi`, wrapped by `traced`) and the same board, from the same
+ *  store, runs the workshop cell, the robots, the devices and the languages as well. That is the whole of what used
+ *  to be two things — a page that could not reach the room, and a room with no board you could read.
+ *
+ *  `room: true` is not a label, it is what the hands can do: it decides whether the worked boards that drive the
+ *  room are offered as a ▶ Run or named with a way to get to one. */
+export interface BoardHands { make: () => FlowApi & { worked: Worked; trace: Trace[] }; room: boolean }
+const PAGE_HANDS: BoardHands = { make: () => engineHands(), room: false };
+let HANDS: BoardHands = PAGE_HANDS;
 
 const board = (): Board | null => (S.at && S.store ? S.store.boards.get(S.at) ?? null : null);
 const put = (p: Parameters<BoardStore['write']>[1]) => { if (S.at && S.store) S.store.write(S.at, p); };
@@ -334,16 +348,17 @@ function shell(): string {
       <b>${esc(x.title)}</b><span>${((k) => `${k} node${k === 1 ? '' : 's'}`)(Object.values(x.nodes).filter((n) => !n.deleted).length)}</span></button></li>`).join('')}</ul>
     <div class="learn">
       <h3>Start from a worked one</h3>
-      <p class="hint">Each one runs here, and every step of every one is proved to run before it is offered.
+      <p class="hint">${HANDS.room ? 'These run on the room\'s own hands, so every one of them works here — the ones that drive the cell, the robots and the devices included.'
+        : 'Each one runs here, and every step of every one is proved to run before it is offered.'}
         Open it, change the step it says to change, press ▶ Run. Then <b>copy</b> the whole board and change it again.</p>
-      <ul class="tpl">${TEMPLATES.filter((t) => (t.needs ?? 'nothing') === 'nothing').map((t) => `<li><button data-tpl="${t.id}"
-        title="${esc(t.about)}"><b>${esc(t.title)}</b><span>${esc(t.about.length > 96 ? `${t.about.slice(0, 95)}…` : t.about)}</span></button></li>`).join('')}</ul>
-      <h3>These need the room</h3>
+      <ul class="tpl">${TEMPLATES.filter((t) => HANDS.room || (t.needs ?? 'nothing') === 'nothing').map((t) => `<li><button data-tpl="${t.id}"
+        title="${esc(t.about)}"><b>${esc(t.title)}</b>${t.needs === 'the room' ? '<i>drives the room</i>' : ''}<span>${esc(t.about.length > 96 ? `${t.about.slice(0, 95)}…` : t.about)}</span></button></li>`).join('')}</ul>
+      ${HANDS.room ? '' : `<h3>These need the room</h3>
       <p class="hint">They drive the workshop cell, the robots, a device, the inventory being made, or code run in a
-        worker — which stand in the forge, not on this page. They are not offered as a ▶ Run that would refuse at
-        their first step. <a href="./forge.html">Open the forge</a> to run them.</p>
+        worker — none of which stands on this page. Open this same board <a href="./forge.html">in the forge</a>,
+        where it runs on the room's own hands and these work.</p>
       <ul class="tpl room">${TEMPLATES.filter((t) => t.needs === 'the room').map((t) => `<li><span
-        title="${esc(t.about)}"><b>${esc(t.title)}</b><span>${esc(t.about.length > 80 ? `${t.about.slice(0, 79)}…` : t.about)}</span></span></li>`).join('')}</ul>
+        title="${esc(t.about)}"><b>${esc(t.title)}</b><span>${esc(t.about.length > 80 ? `${t.about.slice(0, 79)}…` : t.about)}</span></span></li>`).join('')}</ul>`}
     </div>
     <p class="kept">${esc(S.store?.status() ?? '')}</p>
   </aside>
@@ -366,7 +381,8 @@ function shell(): string {
 
 // ---- what a click does -----------------------------------------------------------------------------------------
 
-export function mountBoards(el: HTMLElement): void {
+export function mountBoards(el: HTMLElement, hands: BoardHands = PAGE_HANDS): void {
+  HANDS = hands;
   const draw = () => {
     el.innerHTML = shell(); wireMindBox(el, draw); void mountScenes(el);
     // the box you name a new thing in takes the keyboard the moment it opens, so clicking the grid and typing is
@@ -618,7 +634,7 @@ export function mountBoards(el: HTMLElement): void {
     const { order } = runOrder(b, derive(b));
     S.running = true; S.stop = new AbortController(); S.run = null; S.say = ''; S.worked = null;
     S.inside = new Map(); S.doing = b.nodes[at]?.label ?? null; draw();
-    const hands = engineHands();
+    const hands = HANDS.make();
     try {
       // Each time a step finishes, everything the hands recorded since the last one belongs to THAT step. The
       // engine keeps no page state, so the matching is done here, by draining the trace as each step lands.

@@ -12,8 +12,8 @@
 // room must really have a step these hands cannot take — the mark cannot be used to excuse a plain bug.
 
 import { describe, expect, it } from 'vitest';
-import { TEMPLATES, boardOfTemplate, runFlow, stepOf, triggerOf } from '../../src/nexus/substrate/flows';
-import { engineHands, handsTake } from '../../src/nexus/view/flow2d';
+import { TEMPLATES, boardOfTemplate, runFlow, stepOf, triggerOf, type FlowApi } from '../../src/nexus/substrate/flows';
+import { engineHands, handsTake, traced } from '../../src/nexus/view/flow2d';
 import { nodesOf } from '../../src/nexus/substrate/boards';
 
 /** What the page's own hands can run: the room's templates, and the ones that ask a model, are not run here. */
@@ -60,6 +60,28 @@ describe('every template the page offers', () => {
   it("a template marked 'the room' really has a step these hands cannot take", () => {
     const wrongly = ROOM.filter((t) => t.steps.every((s) => s.step?.kind !== 'action' || handsTake(s.step.what))).map((t) => t.id);
     expect(wrongly).toEqual([]);
+  });
+
+  // THE TRANSFER ITSELF. `needs: 'the room'` says WHERE a board runs, not that it is withheld for good: the same
+  // board, from the same store, is mounted in the forge on the room's own hands (view/forge-bar.ts), and `traced`
+  // is what lets any hands carry the end-to-end picture the page's had. Proved here on a stand-in for the room
+  // rather than on forge.ts, which is a whole 3D room and cannot be loaded in a test.
+  it.each(ROOM.map((t) => [t.id, t] as const))('%s runs end to end on hands that have the room', async (_id, t) => {
+    const asked: string[] = [];
+    const room: FlowApi = {
+      act: async (what) => { asked.push(what); return `the room did: ${what}`; },
+      ai: async () => ({ text: 'pipeline new a test: when I press run -> say done', by: 'nexus' }),
+      facts: () => ({ cell_busy: 0, pipeline_failed: 0, failures: 0, flaws: 0, parts: 2, rounds: 1, shapes: 1, made: 1 }),
+    };
+    const hands = traced(room);
+    const b = boardOfTemplate(t);
+    const start = nodesOf(b).find((n) => stepOf(b, n.id)?.kind === 'trigger')?.id ?? nodesOf(b)[0]!.id;
+    const r = await runFlow(b, start, hands, 'the template test');
+    expect(r.steps.filter((x) => x.status === 'failed').map((x) => `${x.label}: ${x.output}`)).toEqual([]);
+    expect(asked.length).toBeGreaterThan(0);
+    // and the picture travelled with them: the call, what came back, and any numbers a check read
+    expect(hands.trace.some((x) => x.sort === 'call')).toBe(true);
+    expect(hands.trace.some((x) => x.sort === 'math')).toBe(true);
   });
 
   it('says how many of each, so the page cannot quietly fill with boards that do not run', () => {

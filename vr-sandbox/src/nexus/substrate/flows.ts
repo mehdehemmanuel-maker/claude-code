@@ -253,8 +253,12 @@ export function claudeBoard(ask: string, at = Date.now()): Board {
  *  the languages run in a worker, the build standing on the pedestal.
  *
  *  Eleven of these templates were written for the room and offered on the page, where every one of them refused at its
- *  first room step. A button that cannot work is worse than no button, so each says which hands it needs and the page
- *  offers the room's as a way into the forge instead of as a run it will fail.
+ *  first room step. A button that cannot work is worse than no button, so each says which hands it needs.
+ *
+ *  This is NOT a permanent withholding, and the first version of it nearly became one. The board is mounted in the
+ *  forge as well (`view/forge-bar.ts`'s `mountBoardPanel`), on the room's own hands, reading the same store — so a
+ *  board marked 'the room' runs there with nothing changed about it. `needs` says where a board will work, not what
+ *  a board is allowed to be.
  *  `tests/nexus/templates.test.ts` holds this honest: a template that says 'nothing' must run end to end here, and one
  *  that says 'the room' must really have a step these hands cannot take. */
 export type Needs = 'nothing' | 'the room';

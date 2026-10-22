@@ -15,6 +15,9 @@
 // Owner of: the forge page's on-screen ways in.
 
 import { DESIGNS } from '../ask/surprise';
+import { mountBoards } from './boards2d';
+import { traced } from './flow2d';
+import type { FlowApi } from '../substrate/flows';
 
 // ---- the page's own furniture: the strips the room's buttons are put in, and the button itself ---------------------
 
@@ -135,4 +138,45 @@ export function mountForgeWays(before: HTMLElement, chips: [string, () => void][
   el.append(head, makes, asks, more);
   before.parentElement?.insertBefore(el, before);
   return { el };
+}
+
+
+// ---- the board, in the room ----------------------------------------------------------------------------------------
+
+/** THE SAME BOARD, ON THE ROOM'S OWN HANDS.
+ *
+ *  I built the 2D board as a separate page, found that nine of its worked pipelines drive things that only exist in
+ *  the room, and marked them as withheld. That was the wrong fix and the user said so: a capability you cannot
+ *  transfer is not a reason to keep two of something, it is a reason to put the one thing where the capability
+ *  already is. So the board is mounted HERE too — the same `boards2d.ts`, reading the same IndexedDB store the 3D
+ *  wall reads, running on `view/forge.ts`'s own `flowApi` through `traced`, which gives the room's hands the same
+ *  end-to-end picture the engine's had. Nothing is withheld in here, because there is nothing to withhold from.
+ *
+ *  Three projections of one thing now, not two things: this panel, the wall in the headset, and the page for when
+ *  there is no room to open. */
+export function mountBoardPanel(api: FlowApi): void {
+  const panel = document.createElement('div');
+  panel.className = 'boards forgeboards';
+  panel.hidden = true;
+  const inner = document.createElement('div');
+  inner.className = 'shell';
+  const shut = document.createElement('button');
+  shut.type = 'button'; shut.textContent = '\u2715'; shut.title = 'close the board';
+  shut.style.cssText = `${CHIP};position:absolute;right:10px;top:10px;z-index:4`;
+  panel.append(inner, shut);
+  document.body.appendChild(panel);
+
+  let up = false;
+  const open = (): void => {
+    panel.hidden = false;
+    // mounted the first time it is opened, so the room is not slowed by a board nobody asked for
+    if (!up) { up = true; mountBoards(inner, { make: () => traced(api), room: true }); }
+  };
+  shut.onclick = () => { panel.hidden = true; };
+  // THE ROOM'S SHORTCUTS STAND DOWN WHILE THE BOARD IS UP. The forge listens on the window for space (pause), r (run
+  // again) and → (step); the board has buttons and selects you reach with a keyboard, and pressing one with the space
+  // bar would also have paused the room behind it. Stopped at the panel, so the board's own handlers (which sit
+  // inside it) still run and the room's, which sit on the window, do not.
+  panel.addEventListener('keydown', (e) => { e.stopPropagation(); });
+  button('\u25a6 Board', () => { if (panel.hidden) open(); else panel.hidden = true; });
 }

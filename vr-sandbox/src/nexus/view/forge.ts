@@ -78,7 +78,7 @@ import '../world/creatures';
 import { perfect, sayMade, type Made as MadeThing } from '../make/pipeline';
 import { boardOfInvention, sayInvention, type Invention } from '../ask/invent';
 import { machineWords } from '../ask/machine';
-import { BTN, button, forgeDoors, mountForgeWays, rowOf, tools } from './forge-bar';
+import { BTN, button, forgeDoors, mountBoardPanel, mountForgeWays, rowOf, tools } from './forge-bar';
 import { tendWords } from '../works/tend';
 import { routeMake } from '../ask/route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../parts/kits';
@@ -3516,6 +3516,7 @@ const CHIPS: [string, () => void][] = [
 // WHAT TO SAY, AND WHAT THE ROOM DOES, on the page. In a headset the chips below float over the dock and you point at
 // one; on a screen there was nothing but the box to type in, so the same two lists go in above it (view/forge-bar.ts).
 mountForgeWays(row, CHIPS, (t) => send(t));
+mountBoardPanel(flowApi);        // the same 2D board as the page, on the room's hands (view/forge-bar.ts)
 let pointerHand = 1;
 // the same menu, floating over the dock, for whoever keeps the dock
 const menu = chipGrid(CHIPS.map(([t2, act]): [string, () => void] => [t2, () => { act(); }]), 3, 0.11, 0.032, (i) => (i < 3 ? '#ffd740' : '#80deea'), 2.4);

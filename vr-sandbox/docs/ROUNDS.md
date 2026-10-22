@@ -1889,3 +1889,33 @@ way out of it but the browser's back button and nothing said the pages were one 
 room, so the page cannot run them. Lifting the ones that are pure computation — the inventory doors and the
 languages (`teach/languages.ts` already owns the reading; only the running is tangled) — into hands both the page
 and the room use is the next piece, and it is what would make the mark unnecessary.
+
+## Run 9f — a capability you cannot transfer is not a reason to keep two of something
+
+The user, on Run 9e's `needs: 'the room'` mark: *"why tf would you make a whole new page if you knew you couldn't
+transfer this reflectively"*. He is right, and the mark was the wrong fix. Nine worked pipelines drive the workshop
+cell, the robots, the devices, the inventory being made and code run in a worker. All of those stand in the forge.
+Rather than lift nine room doors out of a 4,000-line room and into a page, **the board is mounted in the room**.
+
+**One module, one store, three projections.** `view/boards2d.ts` now takes its hands rather than making them:
+`mountBoards(el, { make, room })`. The page passes the engine's; `view/forge-bar.ts`'s `mountBoardPanel` passes the
+forge's own `flowApi`. It is the same file, reading the same IndexedDB store the 3D wall reads — which is why the
+robots' own rule boards (Rex's, Juno's, Pip's, Claude's, the weather's) are sitting in the panel's rail the moment it
+opens, with nothing done to put them there.
+
+**What made that possible was moving the TRACE off the hands.** The end-to-end picture — the prompt as sent, the
+numbers a check read, the call made and what came back — was written inside `engineHands`, so only those hands had
+it. It is the view's business, not the hands', so `traced(api)` in `view/flow2d.ts` wraps ANY `FlowApi` and gives it
+the same picture. That one move is the whole transfer: the room's hands could always do more, they just could not be
+watched.
+
+**Measured, by driving the built forge:** the ▦ Board button opens the panel over the room; **19 of 19 templates
+offered, 0 withheld**, the nine marked ones badged *drives the room*; opening *Make any part from the inventory* and
+pressing ▶ Run ran `inventory make screw M4x20` — a call the page refuses — green in 8.7 s with its real answer
+(*0 made here, 1 bought, 0 from stock … thread-rolled*), the run and its trace drawn under the board as on the page.
+0 page errors; the room keeps its own margins (`body.forge`) with the 2D stylesheet loaded over it.
+
+`Template.needs` stays, and now means what it should: **where a board will work, not what a board is allowed to be.**
+On the page the nine say so and link into the forge; in the forge nothing is withheld. `tests/nexus/templates.test.ts`
+proves both halves — every page board runs on the engine's hands, and every room board runs end to end on hands that
+have the room, with the trace arriving.

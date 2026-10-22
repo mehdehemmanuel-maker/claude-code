@@ -422,3 +422,14 @@ button:active, .go:active, ul.tpl button:active, .calls li button:active{ transf
 .doors a{text-decoration:none;color:var(--blue);padding:4px 0}
 .doors a.back{color:var(--ink3)}
 .doors a:hover{color:var(--ink)}
+
+/* THE BOARD, IN THE ROOM. The same board as the page — same module, same store — laid over the forge's canvas
+   rather than drawn again. It runs on the room's hands, so nothing in it is withheld. */
+.forgeboards{position:fixed;inset:0;z-index:8;background:#07090de8;backdrop-filter:blur(3px);overflow:auto}
+.forgeboards>.shell{min-height:100%}
+.forgeboards .rail{background:#0b0e13f2}
+@media(min-width:900px){.forgeboards{inset:0 0 0 auto;width:min(68rem,82vw);border-left:1px solid var(--edge)}}
+.tpl i{display:block;font:500 10px var(--mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)}
+/* the forge's own body: the room is the page, so none of the reading page's margins apply to it. Written here with
+   a class rather than in the page's own <style>, because the bundler inlines that first and this sheet after it. */
+body.forge{padding:0;overflow:hidden}

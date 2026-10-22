@@ -70,6 +70,48 @@ export const handsTake = (what: string): boolean => {
   return Object.values(DOOR).some((r) => r.test(t)) || Workshop.handles(t);
 };
 
+/** ANY HANDS, WITH THE TRACE ROUND THEM.
+ *
+ *  A run's picture — the exact prompt sent, the exact numbers a check read, the exact call made and what came back —
+ *  is the VIEW's business, not the hands'. Keeping it inside `engineHands` was what made the board page a second
+ *  thing from the room: the room's hands (`view/forge.ts`'s `flowApi`) can do everything the engine's can AND drive
+ *  the workshop cell, the robots, the devices, the inventory and the languages, but they carried no trace, so the
+ *  board could not be run on them and nine templates had to be marked "needs the room" and withheld.
+ *
+ *  This wraps any `FlowApi` and gives it the same picture. So the board in the room runs on the room's hands, with
+ *  the same end-to-end view, and nothing has to be withheld. */
+export function traced(api: FlowApi, worked: Worked = {}): FlowApi & { worked: Worked; trace: Trace[] } {
+  const trace: Trace[] = [];
+  const log = (t: Omit<Trace, 'at'>) => { trace.push({ at: Date.now(), ...t }); };
+  return {
+    worked,
+    trace,
+    async act(what: string, input: string, signal?: AbortSignal, who?: string): Promise<string> {
+      const t = what.trim(), t0 = Date.now();
+      log({ sort: 'call', says: `the room is asked: ${t}`, detail: input ? `with what the step before it said:\n${input}` : undefined });
+      try {
+        const out = await api.act(t, input, signal, who);
+        log({ sort: 'math', says: `it answered in ${Date.now() - t0} ms`, detail: out, ms: Date.now() - t0 });
+        return out;
+      } catch (e) { log({ sort: 'refused', says: 'it refused', detail: (e as Error).message }); throw e; }
+    },
+    async ai(prompt: string, input: string, signal?: AbortSignal): Promise<{ text: string; by: 'claude' | 'nexus' }> {
+      const t0 = Date.now();
+      // the prompt AS SENT, after {input} has been filled in — not the words typed in the step, which are a template
+      log({ sort: 'prompt', says: 'sent to the model', detail: input.trim() ? `${prompt}\n\n${input}` : prompt });
+      const r = await api.ai(prompt, input, signal);
+      log({ sort: 'answer', says: `${r.by === 'claude' ? 'Claude' : 'Nexus'} answered in ${Date.now() - t0} ms`, detail: r.text, ms: Date.now() - t0 });
+      return r;
+    },
+    facts(): Record<string, number> {
+      const f = api.facts();
+      log({ sort: 'facts', says: 'a check read the room\'s numbers', detail: Object.entries(f).map(([k, v]) => `${k} = ${v}`).join('\n') });
+      return f;
+    },
+    ...(api.reader ? { reader: (): ReturnType<NonNullable<FlowApi['reader']>> => api.reader!() } : {}),
+  };
+}
+
 /** The hands. One instance per run, because what a step worked out is read by the steps after it. */
 export function engineHands(worked: Worked = {}, parts: PartRef[] = []): FlowApi & { worked: Worked; trace: Trace[]; shop: Workshop } {
   // THE PIPELINE'S OWN WORKSHOP. `ask/generate.ts`'s Workshop is what runs every call in the catalogue — values with
