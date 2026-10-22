@@ -1,7 +1,8 @@
 name: vr-sandbox Pages
 
-# Publishes the Nexus forge so it opens in the Meta Quest browser (WebXR needs HTTPS) and installs as an app.
-# The forge is the landing page; the scene room stays at scene.html and room.html.
+# Publishes Nexus so it opens anywhere: the 2D front door on a laptop or a phone, and the forge in the Meta Quest
+# browser (WebXR needs HTTPS), installable as an app. index.html is the home page; forge.html, make.html,
+# boards.html, claude.html, look.html and room.html are the doors it opens.
 # One-time setup: repository Settings -> Pages -> Source: GitHub Actions.
 on:
   push:
@@ -37,8 +38,10 @@ jobs:
       - run: npm ci
       - run: npm run gate
       - run: npm run nexus:view
-      - name: The forge as the landing page
-        run: mv dist-view/index.html dist-view/scene.html && cp dist-view/forge.html dist-view/index.html
+      # The landing page is view/index.html, the 2D front door, which opens on a laptop or a phone and links to
+      # the forge, the make page, the boards and the rest. It used to be overwritten here with forge.html, because
+      # the forge was the whole app and WebXR needs HTTPS; now the forge is one door of several and keeps its own
+      # name, which is what the home page links to.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: vr-sandbox/dist-view
