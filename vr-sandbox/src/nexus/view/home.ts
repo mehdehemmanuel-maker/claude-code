@@ -22,11 +22,12 @@ export interface Door {
   /** what it is: a page you read, a thing you drive, or a room you stand in */ kind: '2d' | '3d' | 'vr';
   /** which derived number makes it concrete, filled in when the engine that knows it has loaded */ fact?: FactKey;
 }
-export type FactKey = 'units' | 'works' | 'parts' | 'boards';
+export type FactKey = 'units' | 'works' | 'parts' | 'boards' | 'inbox';
 
 export const DOORS: Door[] = [
   { name: 'Make something', says: 'Say what you want in a sentence. It is composed from the library, checked, priced, and the holds worked out — in the page, with no headset.', href: './make.html', kind: '2d', fact: 'units' },
   { name: 'Boards', says: 'Make a page; put nodes on it; connect any node to any other, on this page or another. The same nodes run as a pipeline you build step by step and press ▶ on.', href: './boards.html', kind: '2d', fact: 'boards' },
+  { name: 'To Claude', says: 'Press ⇧C anywhere and a picture of what you are looking at lands here with what you want done about it. Or draw the thing on a blank page and send that.', href: './claude.html', kind: '2d', fact: 'inbox' },
   { name: 'The forge', says: 'The room: the works you walk between, the warehouse, the benches, the phone in your hand. Runs on a screen with the mouse, or in a headset.', href: './forge.html', kind: '3d', fact: 'works' },
   { name: 'One thing, lit', says: 'Any part or machine on its own, under daylight, framed so it can be seen whole — three-quarter, exploded, or cut through.', href: './look.html', kind: '3d', fact: 'parts' },
   { name: 'The room Nexus builds', says: 'What the engine generated, standing where it put it. The scene is read, not drawn by hand.', href: './room.html', kind: '3d' },
@@ -62,6 +63,15 @@ export function homeHtml(): string {
 
 const n = (x: number) => x.toLocaleString('en');
 
+/** How many things are waiting to be handed over, said in words — from the pile itself, never a stored count. */
+async function waitingSays(): Promise<string> {
+  try {
+    const { waiting } = await import('./inbox');
+    const w = await waiting();
+    return w ? `${w} waiting to be handed over` : 'nothing waiting yet';
+  } catch { return 'nothing waiting yet'; }
+}
+
 /** Every fact the page shows, each derived by the module that owns it, loaded only once the page is up. */
 export async function facts(): Promise<Partial<Record<FactKey | 'sub', string>>> {
   const [{ INVENTORY }, { PRICES }, { everyUnit }, { under3K }] = await Promise.all([
@@ -73,6 +83,7 @@ export async function facts(): Promise<Partial<Record<FactKey | 'sub', string>>>
     works: `${works.ids.length} stations, $${works.usd.toFixed(0)}`,
     parts: `${n(parts)} parts, ${n(priced)} priced`,
     boards: 'kept in this browser, and read by Claude where the page can share them',
+    inbox: await waitingSays(),
     sub: `${n(parts)} parts · ${works.ids.length} stations at $${works.usd.toFixed(0)} · no headset needed for the first two`,
   };
 }

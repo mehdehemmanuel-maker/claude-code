@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>To Claude · Nexus</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <div class="wrap" id="app"></div>
+  <script type="module">
+    import { mountClaude } from '../src/nexus/view/claude-page.ts';
+    import { wireCaptureKey } from '../src/nexus/view/inbox.ts';
+    mountClaude(document.getElementById('app'));
+    wireCaptureKey('To Claude');
+  </script>
+</body>
+</html>

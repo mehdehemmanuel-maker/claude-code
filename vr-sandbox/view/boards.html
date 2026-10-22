@@ -12,6 +12,8 @@
   <script type="module">
     import { mountBoards } from '../src/nexus/view/boards2d.ts';
     mountBoards(document.getElementById('app'));
+    import { wireCaptureKey } from '../src/nexus/view/inbox.ts';
+    wireCaptureKey('boards');
   </script>
 </body>
 </html>

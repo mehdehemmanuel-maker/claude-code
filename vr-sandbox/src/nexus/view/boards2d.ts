@@ -17,8 +17,9 @@ import {
   type Board, type Derived, type Live,
 } from '../substrate/boards';
 import { makeBoardStore, type BoardStore } from './boards-store';
-import { SUGGEST, graphOf, orderFrom, runFlow, stepOf, triggersOf, type FlowRun, type Step, type StepKind } from '../substrate/flows';
-import { engineHands, runHtml } from './flow2d';
+import { SUGGEST, TEMPLATES, boardOfTemplate, clipOf, graphOf, orderFrom, pasteOf, runFlow, stepOf, triggersOf, type FlowRun, type Step, type StepKind } from '../substrate/flows';
+import { engineHands, runHtml, type Worked } from './flow2d';
+import { mountScenes, showHtml } from './show';
 import { mindBoxHtml, wireMindBox } from './mind-box';
 import { dragCard, wiresSvg } from './wires';
 
@@ -34,8 +35,9 @@ interface State {
   /** how far in, and where the picture has been dragged to, in the wires view */ zoom: number; panX: number; panY: number;
   /** the node picked first, waiting for a second to connect to */ picked: string | null;
   rel: string; run: FlowRun | null; running: boolean; stop: AbortController | null; say: string;
+  /** what the last run worked out, which decides whether it is shown in 3D or as a line */ worked: Worked | null;
 }
-const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, rel: 'connects', run: null, running: false, stop: null, say: '' };
+const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, rel: 'connects', run: null, running: false, stop: null, say: '', worked: null };
 
 const board = (): Board | null => (S.at && S.store ? S.store.boards.get(S.at) ?? null : null);
 const put = (p: Parameters<BoardStore['write']>[1]) => { if (S.at && S.store) S.store.write(S.at, p); };
@@ -184,7 +186,7 @@ function pipelineHtml(b: Board, d: Derived): string {
     }).join('')}
   </ol>
   ${KINDS.map((k) => `<datalist id="sug-${k}">${(SUGGEST[k] ?? []).map(([w, why]) => `<option value="${esc(w)}">${esc(why)}</option>`).join('')}</datalist>`).join('')}
-  ${runHtml(S.run)}`;
+  ${S.worked ? showHtml(S.worked) : ''}${runHtml(S.run)}`;
 }
 
 function shell(): string {
@@ -194,6 +196,12 @@ function shell(): string {
   <aside class="rail">
     <a class="back" href="./index.html">← Nexus</a>
     <form id="newboard"><input placeholder="+ new board" autocomplete="off" aria-label="make a board"><button>+</button></form>
+    <details class="learn">
+      <summary>Start from a worked one</summary>
+      <p class="hint">Each is a pipeline that already does something. Open it, read what it says to change, change
+        that one step, and press ▶ Run. Then <b>copy</b> it and change it again — that is how you get your own.</p>
+      <ul class="tpl">${TEMPLATES.map((t) => `<li><button data-tpl="${t.id}"><b>${esc(t.title)}</b><span>${esc(t.about)}</span></button></li>`).join('')}</ul>
+    </details>
     <ul class="boards">${bs.map(([id, x]) => `<li><button class="${id === S.at ? 'on' : ''}" data-board="${id}">
       <b>${esc(x.title)}</b><span>${Object.values(x.nodes).filter((n) => !n.deleted).length} nodes</span></button></li>`).join('')}</ul>
     <p class="kept">${esc(S.store?.status() ?? '')}</p>
@@ -202,9 +210,11 @@ function shell(): string {
     ${b && d ? `<header>
       <input id="title" value="${esc(b.title)}" aria-label="this board's name">
       <nav>${([['wires', 'Graph'], ['pages', 'Pages'], ['pipeline', 'Pipeline']] as const).map(([v, t]) => `<button data-view="${v}" class="${S.view === v ? 'on' : ''}">${t}</button>`).join('')}</nav>
+      <button data-act="copyboard" class="small">copy</button>
       <button data-act="delboard" class="danger small">delete board</button>
     </header>
     ${S.say ? `<p class="said">${esc(S.say)}</p>` : ''}
+    ${b.about ? `<details class="learn open" open><summary>What this one does, and what to change</summary><p>${esc(b.about)}</p></details>` : ''}
     ${S.view === 'wires' ? wiresHtml(b, d) : S.view === 'pages' ? pagesHtml(b, d) : pipelineHtml(b, d)}`
     : `<header><h1>Boards</h1></header>
        <p class="none">Make a board to start. A board holds pages; a page holds nodes; any node can be connected to
@@ -216,7 +226,7 @@ function shell(): string {
 // ---- what a click does -----------------------------------------------------------------------------------------
 
 export function mountBoards(el: HTMLElement): void {
-  const draw = () => { el.innerHTML = shell(); wireMindBox(el, draw); };
+  const draw = () => { el.innerHTML = shell(); wireMindBox(el, draw); void mountScenes(el); };
 
   const pick = (id: string) => {
     const b = board(); if (!b) return;
@@ -258,13 +268,20 @@ export function mountBoards(el: HTMLElement): void {
   }, { passive: false });
 
   el.addEventListener('click', (ev) => {
-    const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],[data-zoom],#run,#stoprun') as HTMLElement | null;
+    const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],[data-zoom],[data-tpl],#run,#stoprun') as HTMLElement | null;
     if (!t) return;
     const z = t.dataset.zoom;
     if (z) { S.zoom = z === '0' ? 1 : Math.max(0.3, Math.min(4, S.zoom * (z === '+' ? 1.25 : 0.8))); if (z === '0') { S.panX = 0; S.panY = 0; } return draw(); }
     const b = board();
     if (t.dataset.node) return pick(t.dataset.node);
     if (t.dataset.board) { S.at = t.dataset.board; S.picked = null; S.run = null; S.say = ''; return draw(); }
+    if (t.dataset.tpl) {
+      const tpl = TEMPLATES.find((x) => x.id === t.dataset.tpl); if (!tpl) return;
+      const id = uid('b'); S.store!.write(id, boardOfTemplate(tpl), true);
+      S.at = id; S.view = 'pipeline'; S.picked = null; S.run = null;
+      S.say = `“${tpl.title}” is yours now — change what it says to change, then press ▶ Run`;
+      return draw();
+    }
     if (t.dataset.view) { S.view = t.dataset.view as State['view']; S.picked = null; return draw(); }
     if (t.dataset.sug && t.dataset.text) { put({ nodes: { [t.dataset.sug]: { step: { kind: stepOf(b!, t.dataset.sug)!.kind, what: t.dataset.text } } } }); return draw(); }
     if (t.id === 'run' && b) return start(b, null);
@@ -275,6 +292,18 @@ export function mountBoards(el: HTMLElement): void {
     if (act === 'unpick') { S.picked = null; return draw(); }
     if (act === 'del' && S.picked) { put(deleteNode(b, S.picked)); S.picked = null; S.say = 'deleted'; return draw(); }
     if (act === 'dup' && S.picked) { const dd = duplicateNode(b, S.picked); if (dd) { put(dd.patch); S.say = `copied as “${dd.label}”`; } S.picked = null; return draw(); }
+    // COPY THE WHOLE THING. `clipOf` takes a board's steps and the links between them, `pasteOf` lays them into a
+    // new one with fresh ids — the same pair the headset copies a pipeline with, so a board copied here opens there.
+    if (act === 'copyboard' && S.at && S.store) {
+      const clip = clipOf(b);
+      const id = uid('b');
+      const made: Board = { title: `${b.title} (a copy)`, about: b.about, nodes: {}, edges: {}, createdAt: Date.now(), updatedAt: Date.now() };
+      const { patch } = pasteOf(clip);
+      Object.assign(made.nodes, patch.nodes); Object.assign(made.edges, patch.edges);
+      S.store.write(id, made, true);
+      S.at = id; S.picked = null; S.run = null; S.say = 'copied — change anything on it without touching the first';
+      return draw();
+    }
     if (act === 'delboard' && S.at && S.store) {
       if (!confirmed(b.title)) return;
       S.store.remove(S.at); S.at = [...S.store.boards.keys()][0] ?? null; S.picked = null; return draw();
@@ -324,11 +353,12 @@ export function mountBoards(el: HTMLElement): void {
     const at = from ?? triggersOf(b)[0]?.id ?? derive(b).order[0];
     if (!at) { S.say = 'there is nothing to run'; return draw(); }
     void g;
-    S.running = true; S.stop = new AbortController(); S.run = null; S.say = ''; draw();
+    S.running = true; S.stop = new AbortController(); S.run = null; S.say = ''; S.worked = null; draw();
+    const hands = engineHands();
     try {
-      const r = await runFlow(b, at, engineHands(), from ? `pressed ▶ on “${b.nodes[at]?.label ?? at}”` : 'pressed ▶ Run',
+      const r = await runFlow(b, at, hands, from ? `pressed ▶ on “${b.nodes[at]?.label ?? at}”` : 'pressed ▶ Run',
         (live) => { S.run = live; draw(); }, S.stop.signal);
-      S.run = r;
+      S.run = r; S.worked = hands.worked;
       put({ runs: [...(b.runs ?? []).slice(-4), r] });
     } catch (e) { S.say = `the run stopped: ${(e as Error).message}`; }
     S.running = false; S.stop = null; draw();

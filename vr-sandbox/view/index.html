@@ -12,6 +12,8 @@
   <script type="module">
     import { mountHome } from '../src/nexus/view/home.ts';
     mountHome(document.getElementById('app'));
+    import { wireCaptureKey } from '../src/nexus/view/inbox.ts';
+    wireCaptureKey('home');
   </script>
 </body>
 </html>

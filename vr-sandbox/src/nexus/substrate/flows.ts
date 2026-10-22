@@ -248,6 +248,41 @@ export function claudeBoard(ask: string, at = Date.now()): Board {
 export interface Template { id: string; title: string; about: string; steps: { id: string; label: string; step?: Step }[]; links: [string, string, string?][] }
 export const TEMPLATES: Template[] = [
   {
+    id: 'a-sphere', title: 'Make a sphere (start here)',
+    about: 'The smallest whole pipeline: a trigger, a step that makes a shape, and a check that it got made. Press ▶ Run and the sphere appears under the run, in 3D, at the size the step says. Then change ONE thing — "5 spheres 40mm spaced 60mm", or box, or cylinder — and run it again. Copy the whole board and change it again: that is how you get your own.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 's', label: 'Make it', step: { kind: 'action', what: 'shape 1 sphere 60mm' } },
+      { id: 'c', label: 'Did it?', step: { kind: 'check', what: 'shapes > 0' } },
+      { id: 'n', label: 'Say so', step: { kind: 'action', what: 'say the shape is made — change the words above and run it again' } },
+    ],
+    links: [['t', 's'], ['s', 'c'], ['c', 'n']],
+  },
+  {
+    id: 'if-this-then-that', title: 'If this, then that',
+    about: 'The same shape step, with a fork: a check reads a number the engine worked out, and what happens next depends on it. Change "shapes > 3" to "shapes > 0" and run it again — the other branch takes it. A check never reads words a model wrote; it reads the engine\'s own facts, which is why a fork here cannot be talked into the wrong branch.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 's', label: 'Make some', step: { kind: 'action', what: 'shape 9 spheres 30mm spaced 45mm' } },
+      { id: 'c', label: 'More than three?', step: { kind: 'check', what: 'shapes > 3' } },
+      { id: 'y', label: 'Then: price it', step: { kind: 'action', what: 'buy a machine that picks up 2kg' } },
+      { id: 'n', label: 'Else: say so', step: { kind: 'action', what: 'say not enough of them to be worth pricing' } },
+    ],
+    links: [['t', 's'], ['s', 'c'], ['c', 'y'], ['c', 'n']],
+  },
+  {
+    id: 'a-loop', title: 'A loop that goes round',
+    about: 'A pipeline that repeats until a number says stop, and draws what it did round by round — flat, because nothing physical was made. Change "at most 8 times" to any number. This is the shape every growing or learning pipeline has: do a thing, count it, check, go again.',
+    steps: [
+      { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
+      { id: 'c', label: 'One more', step: { kind: 'action', what: 'count rounds' } },
+      { id: 'r', label: 'Again?', step: { kind: 'repeat', what: 'until rounds = 8, at most 8 times' } },
+      { id: 'd', label: 'Done', step: { kind: 'action', what: 'say it went round as many times as it said it would' } },
+    ],
+    links: [['t', 'c'], ['c', 'r'], ['r', 'c', 'feeds back to'], ['r', 'd']],
+  },
+
+  {
     id: 'meta-pipeline', title: 'Write a pipeline from words', about: 'A pipeline that makes pipelines: say what you want done (change the first step\'s words), Claude writes it as one line of the pipeline language, and that line is run: the new pipeline appears on the board, ready to run.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },

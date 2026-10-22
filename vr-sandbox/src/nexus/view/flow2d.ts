@@ -23,7 +23,35 @@ const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;',
 
 /** What the run has worked out so far, so a later step reads what an earlier one made and a check has numbers to
  *  compare. Nothing here is written by a model: every figure is put in by an engine call. */
-export interface Worked { words?: string; stages?: number; refusals?: number; lines?: number; unpriced?: number; usd?: number; stays?: number; free?: number }
+export interface Worked {
+  words?: string; stages?: number; refusals?: number; lines?: number; unpriced?: number; usd?: number; stays?: number; free?: number;
+  /** what a `shape` step made, so the run can SHOW it rather than only say it */ shapes?: Placed[];
+  /** what a `count` step counted, in the order it counted them, so a loop can be drawn as it goes */ series?: { of: string; at: number[] };
+}
+
+/** A shape a step made: what it is, how big, where, and how many. Every figure is a number the step was given or
+ *  worked out — never a sampled one, which is the rule a model may not cross (CLAUDE.md, 2026-10-21). */
+export interface Placed { of: 'sphere' | 'box' | 'cylinder' | 'cone'; mm: [number, number, number]; at: [number, number, number]; of_n: number; material?: string }
+
+/** `shape 5 spheres 40mm spaced 60mm` — the whole grammar, said once here so the page can show the same words.
+ *  It is deliberately small and deliberately NOT a language: a step says a shape, a size, a count and a spacing, and
+ *  anything else it is given is reported as not understood rather than guessed at. */
+export function readPlaced(words: string): { shapes: Placed[]; says: string } | { error: string } {
+  const t = words.toLowerCase();
+  const of = (['sphere', 'box', 'cylinder', 'cone'] as const).find((k) => new RegExp(`\\b${k}s?\\b`).test(t));
+  if (!of) return { error: `say which shape: a sphere, a box, a cylinder or a cone. "${words}" names none of them.` };
+  const n = Math.max(1, Math.min(400, Number(/\b(\d+)\s*(?:x\s*)?(?=\s*\w*\b(?:sphere|box|cylinder|cone))/.exec(t)?.[1] ?? 1)));
+  const size = Number(/(\d+(?:\.\d+)?)\s*mm\b/.exec(t)?.[1] ?? 40);
+  const gap = Number(/spac\w*\s+(\d+(?:\.\d+)?)\s*mm/.exec(t)?.[1] ?? size * 1.6);
+  const material = /\b(steel|aluminium|aluminum|brass|copper|abs|pla|nylon|glass)\b/.exec(t)?.[1];
+  const per = Math.max(1, Math.round(Math.sqrt(n)));               // a square-ish grid, so 25 is 5 × 5 and not a line
+  const shapes: Placed[] = [];
+  for (let i = 0; i < n; i++) {
+    const c = i % per, r = Math.floor(i / per);
+    shapes.push({ of, mm: [size, size, size], at: [(c - (per - 1) / 2) * gap, 0, (r - (Math.ceil(n / per) - 1) / 2) * gap], of_n: 1, material });
+  }
+  return { shapes, says: `${n} ${of}${n === 1 ? '' : 's'} of ${size} mm${n > 1 ? `, ${gap} mm apart in a ${per} × ${Math.ceil(n / per)} grid` : ''}${material ? `, ${material}` : ''}` };
+}
 
 const WANTS_ROOM = /^(place|move|rotate|flip|mirror|pattern|scatter|surface|material|operate|robot|cell|device|weather|reset|clear|show|expand|shrink|stretch|join|split|energy|seed)\b/i;
 
@@ -66,6 +94,19 @@ export function engineHands(worked: Worked = {}): FlowApi & { worked: Worked } {
         if (!hits.length) return `nothing in the library of ${INVENTORY.size.toLocaleString('en')} matches "${rest}"`;
         return hits.map((i) => `${i.id} — ${i.name} (${i.path.join(' › ')})${PRICES[i.id] ? ', priced' : ''}`).join('\n');
       }
+      if (/^(shape|place|draw|sphere|box|cylinder|cone)\b/i.test(low)) {
+        const got = readPlaced(t.replace(/^\s*(shape|place|draw)\s*/i, '') || input);
+        if ('error' in got) throw new Error(got.error);
+        worked.shapes = [...(worked.shapes ?? []), ...got.shapes];
+        return `made ${got.says}`;
+      }
+      if (/^count\b/i.test(low)) {
+        // a loop's step: count one more, and keep the run of them so the page can draw it going round
+        const of = rest || 'rounds';
+        const sr = worked.series && worked.series.of === of ? worked.series : { of, at: [] };
+        sr.at.push(sr.at.length + 1); worked.series = sr;
+        return `${of}: ${sr.at.length}`;
+      }
       if (/^(say|note|report|store|board|if|rule|calc|set)\b/i.test(low)) return rest || input || t;
       if (/^wait\b/i.test(low)) { const s = Number(t.match(/([\d.]+)\s*s/)?.[1] ?? 1); await new Promise((ok) => setTimeout(ok, Math.min(5, s) * 1000)); return `waited ${Math.min(5, s)} s`; }
       if (WANTS_ROOM.test(low)) throw new Error(`"${t}" is something done in the room — open The forge for it. Here a step can make, price, hold, look a part up, say, note or wait.`);
@@ -83,6 +124,7 @@ export function engineHands(worked: Worked = {}): FlowApi & { worked: Worked } {
         stages: worked.stages ?? 0, refusals: worked.refusals ?? 0, flaws: worked.refusals ?? 0,
         lines: worked.lines ?? 0, unpriced: worked.unpriced ?? 0, usd: Math.round(worked.usd ?? 0),
         mass: 0, stays: worked.stays ?? 0, free: worked.free ?? 0,
+        shapes: worked.shapes?.length ?? 0, rounds: worked.series?.at.length ?? 0,
       };
     },
   };
