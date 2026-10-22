@@ -35,16 +35,16 @@ export function mindAt(env: Record<string, string | undefined> = globalThis.proc
 
 /** The transport, injectable so the boundary can be TESTED against a model that misbehaves — which is the only way
  *  to know the filter holds, since a well-behaved model proves nothing about what happens when one is not. */
-export type Ask = (at: MindAt, prompt: string, ms: number) => Promise<string | null>;
+export type Ask = (at: MindAt, prompt: string, ms: number, /** ask for JSON back: true where the answer is a pick, false where it is prose */ json?: boolean) => Promise<string | null>;
 
 /** ollama's own endpoint. `format: json` asks for JSON; `temperature: 0` asks for the same answer twice. Neither is
  *  trusted — both only raise the odds that the filter below has something to keep. */
-export const askOllama: Ask = async (at, prompt, ms) => {
+export const askOllama: Ask = async (at, prompt, ms, json = true) => {
   const stop = new AbortController(), t = setTimeout(() => stop.abort(), ms);
   try {
     const r = await fetch(`${at.url}/api/generate`, {
       method: 'POST', signal: stop.signal, headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: at.model, prompt, stream: false, format: 'json', options: { temperature: 0, num_predict: 160 } }),
+      body: JSON.stringify({ model: at.model, prompt, stream: false, ...(json ? { format: 'json' } : {}), options: { temperature: json ? 0 : 0.4, num_predict: json ? 160 : 700 } }),
     });
     if (!r.ok) return null;
     const j = (await r.json()) as { response?: unknown };
@@ -118,4 +118,34 @@ export async function pickFromSaying<T extends string>(c: Choice<T>, at: MindAt 
   const t0 = Date.now();
   const pick = await pickFrom(c, at, ask);
   return { pick, by: at && pick.length ? 'model' : 'nothing', ms: Date.now() - t0, at };
+}
+
+// ---- free words, for the one job that is words ------------------------------------------------------------------
+
+/** WHAT A LOCAL MODEL MAY WRITE IN ITS OWN WORDS, and why this is not a hole in the rule above.
+ *
+ *  A pipeline's `ai` step produces PROSE — a note, a review, a summary of what the run found — and prose is the one
+ *  thing a sampled token legitimately is. The rule that matters is unchanged, and it is enforced downstream rather
+ *  than promised here: `substrate/flows.ts`'s `evaluate` reads a step's output ONLY as a substring test ("output
+ *  contains wheel"); every number a check compares comes from `api.facts()`, which the engine computes. So there is
+ *  no path from this text to a dimension, a mass or a price, and a model saying "the mass is 400 kg" cannot make the
+ *  mass 400 kg — it can only put those words on a card.
+ *
+ *  Returns null where there is no model, where it is unreachable, or where it answered nothing: the caller shows the
+ *  step as unanswered rather than inventing one. */
+export async function say(prompt: string, input: string, at: MindAt | null = mindAt(), ask: Ask = askOllama, ms = 120_000): Promise<string | null> {
+  if (!at) return null;
+  const said = await ask(at, input.trim() ? `${prompt.trim()}\n\n${input.trim()}` : prompt.trim(), ms, false);
+  const text = (said ?? '').trim();
+  if (!text) return null;
+  // Prose is asked for without `format: json`, but a model told to be helpful still sometimes wraps it in
+  // {"...": "..."} — unwrap it to the longest string it holds rather than showing the person a JSON object.
+  try {
+    const j: unknown = JSON.parse(text);
+    const flat = (v: unknown): string[] => typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(flat)
+      : v && typeof v === 'object' ? Object.values(v as Record<string, unknown>).flatMap(flat) : [];
+    const longest = flat(j).sort((a, b) => b.length - a.length)[0];
+    if (longest && longest.trim()) return longest.trim();
+  } catch { /* not JSON, which is the ordinary case for prose */ }
+  return text;
 }

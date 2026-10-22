@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Make something · Nexus</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <div class="wrap" id="app"></div>
+  <script type="module">
+    import { mountMake } from '../src/nexus/view/make2d.ts';
+    mountMake(document.getElementById('app'));
+  </script>
+</body>
+</html>
