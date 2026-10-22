@@ -93,7 +93,7 @@ export const TRY = [
 
 export function mountMake(el: HTMLElement): void {
   el.innerHTML = `
-    <header><a class="back" href="./index.html">← Nexus</a><h1>Make something</h1>
+    <header><nav class="doors"><a class="back" href="./index.html">← Nexus</a><a class="door" href="./boards.html">Boards</a><a class="door" href="./forge.html">Forge</a><a class="door" href="./look.html">Look</a><a class="door" href="./claude.html">To Claude</a></nav><h1>Make something</h1>
       <p class="lede">Say what it has to do. It is composed from the library, checked the way its arrangement
         fails, priced from sellers' pages, and its heaviest joint is asked how it can be held.</p></header>
     <form id="f"><input id="q" placeholder="a machine that cuts 400x300x80" autocomplete="off" spellcheck="false">

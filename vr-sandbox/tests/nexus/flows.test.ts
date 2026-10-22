@@ -163,7 +163,10 @@ describe('pipelines that make, offline', () => {
     const w = new Workshop({ parts: () => [bearing] }), api: FlowApi = { act: async (x) => w.run(x), ai: async () => ({ text: '', by: 'nexus' }), facts: () => w.facts(), reader: () => w.reader() };
     const b = boardOfTemplate(TEMPLATES.find((t) => t.id === 'cap')!);
     await runFlow(b, triggersOf(b)[0]!.id, api, 'pressed'); const r = await runFlow(b, triggersOf(b)[0]!.id, api, 'pressed');
-    expect(r.status).toBe('done'); expect(w.facts().made).toBe(1);
+    // two, and the same two after the second run: the bearing the template now places for itself (a 6204, so the
+    // board stands on its own anywhere rather than only where a bearing happens to be) and the cap on it. The point
+    // of the test is that running it twice does not leave four, or refuse on a name it made the first time.
+    expect(r.status).toBe('done'); expect(w.facts().made).toBe(2);
   });
   it('reads the new triggers, and a condition that starts it the moment it holds', () => {
     expect(triggerOf('when a shape is made')).toEqual({ kind: 'made' }); expect(triggerOf('when the forge opens')).toEqual({ kind: 'start' });

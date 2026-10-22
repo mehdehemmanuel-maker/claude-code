@@ -1826,3 +1826,66 @@ helps is to show both. With nothing configured it says so and exits 0: nothing i
 
 GATE: PASS (2418 of 2418 ran) — 213.0s (`npm run gate`), 11 new tests. Tidy 24/24. Census
 (`node tools/unwired.mjs --all`): 170 test-only, 147 dead, 21 unreached files — unchanged, both new files have doors.
+
+## Run 9e — the first button on the page did not work, and nothing could have told me
+
+The user, in his own words: *"boards I litterly said clean up UI but no there's no grid there no easy click to add
+button"*, and *"you cant actually build and run pipelines and click veiw 3d output there is nothing"*. Both are true.
+This round is the second of those, because the first was quick and the second was a fault with a cause.
+
+**THE BOARD HAS A GRID NOW, AND IT IS NOT WALLPAPER.** `GRID = 24` in `view/wires.ts`, and every position in the
+board goes through it: the automatic layout's columns and rows land on it, a card snaps to it as you drag (not only
+when you let go), and a card you make by clicking the board is made on the cell you clicked. An empty board is drawn
+as the grid with a line of text on it rather than a paragraph, because text is the one state with nothing to click.
+
+**CLICK THE BOARD, NAME IT, IT IS THERE.** A press that does not move is a click on the board, and a click on the
+board opens a box on that cell; what you type is made there and pinned there. `+ add` does the same thing in the
+middle of the view for anyone who has not been told. `tidy` hands the arrangement back to the links (`unpin`, the
+engine's own call, so the wall in the headset lays it out the same way afterwards).
+
+**A NEARLY EMPTY BOARD IS NO LONGER MAGNIFIED.** The picture is fitted to its element, so a board with one card had a
+viewBox 134 units wide stretched over 1280 px: one card filling the canvas, and no grid left to click. The view is
+never smaller than 1040 × 480 of the board's own units, so a card is the same readable size at one card or forty.
+
+**AND THE FAULT UNDER "nothing works": THE TEMPLATES WERE DATA NOBODY RAN.** Driving the page found the first button
+on it — *Make a sphere (start here)* — refusing: its step said `shape 1 sphere 60mm`, which is not a call, so the
+Workshop answered *I cannot do "shape 1 sphere 60mm"*, the check after it was skipped, nothing was made and the 3D
+view had nothing to draw. `tests/nexus/templates.test.ts` now runs EVERY template the way `calltest.ts` runs every
+call, and it found four separate things:
+
+| | |
+| --- | --- |
+| 3 teaching templates | written in a grammar the engine does not have (`shape 1 sphere 60mm`, `shape 9 spheres … spaced …`) |
+| 9 templates | written for the FORGE ROOM's hands and offered on the page, where there is no room: `inventory make`, `cell build`, `pipeline run`, `operate`, `flaws`, `ts:`/`python:`/`gcode:` |
+| `cap`, `shaft` | needed a bearing standing in the room; on the page there is no build, so both refused at their third step |
+| the hands themselves | `view/flow2d.ts`'s words door took `set`, `calc`, `if … then …`, `rule` and `report` — which ARE calls — so `set load = 200 N` was echoed as a sentence, nothing was set, and the step that sized a plate by that load refused for want of a number typed two steps earlier |
+
+Fixed by cause, not by case. The teaching templates say real calls (`place ball named o size 60 mm`). `cap` and
+`shaft` place their own 6204 (47 × 14 mm, 20 mm bore, as a tube — the bearing's own figures), so they stand anywhere.
+The words door now takes only what the engine has no call for (`say|note|store|board`). And `Template.needs` says
+which hands a board wants: the page offers the nine room ones by name with a link into the forge instead of as a
+▶ Run that would refuse at their first step. The test holds it honest BOTH ways — a template that says it needs
+nothing must run end to end here, and one that says it needs the room must really have a step these hands cannot
+take, so the mark cannot be used to excuse a plain bug.
+
+**Measured, by driving the built page** (not the source): grid 1 rect / 2 patterns; `+ add` present; clicking the
+grid opens a focused box; what it makes lands on the grid (`x % 24 === 0`); the first template runs **4 of 4 steps
+green**, makes `o`, 60 × 60 × 60 mm, Aluminium 6061-T6, **305.4 g** (its volume times its matter's density, not a
+figure anyone typed), and draws it in 3D — 1 canvas, 0 page errors.
+
+**THE FORGE HAD NO WAY IN FOR A MOUSE.** Same fault as the look page last round: the room's own 38 actions existed
+only as 3D chips over the dock, and what you can ASK for existed nowhere, so a person opening it saw a room and a
+blank line. `view/forge-bar.ts` puts both in the page, directly above the box you type in — six asks drawn from
+`ask/surprise.ts`'s own generator list (⟲ for six others), the room's verbs, and the 38 chips folded away — and it
+took the page's own furniture (`ui`, `button`, `tools`, `rowOf`) out of `forge.ts` with it, so that file is 4,040
+lines against its 4,045 allowance rather than over it. Measured: 126 buttons, 4 links, 0 errors, and pressing
+*show me the works* answers with 16 stations, 35.8 m² of floor, a room 7.6 × 9 m.
+
+**One strip of doors on every page** (`← Nexus · Boards · Make · Forge · Look · To Claude`), because the forge had no
+way out of it but the browser's back button and nothing said the pages were one thing seen several ways.
+
+**Still not done, and not claimed otherwise.** The nine room templates are marked, not fixed: `inventory`, `cell`,
+`pipeline`, `operate`, `flaws` and the language runners live inside `view/forge.ts` and are not liftable without the
+room, so the page cannot run them. Lifting the ones that are pure computation — the inventory doors and the
+languages (`teach/languages.ts` already owns the reading; only the running is tangled) — into hands both the page
+and the room use is the next piece, and it is what would make the mark unnecessary.

@@ -41,7 +41,7 @@ export function mountLookUi(): void {
   bar.className = 'lookbar';
   bar.innerHTML = `
     <div class="row">
-      <a class="back" href="./index.html">← Nexus</a>
+      <nav class="doors"><a class="back" href="./index.html">← Nexus</a><a class="door" href="./boards.html">Boards</a><a class="door" href="./make.html">Make</a><a class="door" href="./forge.html">Forge</a><a class="door" href="./claude.html">To Claude</a></nav>
       <label>look at
         <select id="lkkit">${[...KITS].sort((a, b) => a.name.localeCompare(b.name))
           .map((k) => `<option value="${esc(k.id)}" ${k.id === kit ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select>

@@ -13,8 +13,8 @@
 // Owner of: the 2D board page.
 
 import {
-  RELS, addNode, deleteNode, derive, duplicateNode, edgesOf, freeName, levelOf, nodesOf, toggleLink, uid,
-  type Board, type Derived, type Live,
+  RELS, addNode, deleteNode, derive, duplicateNode, edgesOf, freeName, levelOf, moveNode, nodesOf, toggleLink, uid,
+  unpin, type Board, type Derived, type Live,
 } from '../substrate/boards';
 import { makeBoardStore, type BoardStore } from './boards-store';
 import { CALLS } from '../substrate/calls';
@@ -22,7 +22,7 @@ import { SUGGEST, TEMPLATES, boardOfTemplate, clipOf, graphOf, orderFrom, pasteO
 import { engineHands, runHtml, type Trace, type Worked } from './flow2d';
 import { mountScenes, showHtml } from './show';
 import { mindBoxHtml, wireMindBox } from './mind-box';
-import { dragCard, wiresSvg } from './wires';
+import { dragCard, snap, wiresSvg } from './wires';
 
 const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const KINDS: StepKind[] = ['trigger', 'ai', 'action', 'check', 'repeat'];
@@ -41,8 +41,11 @@ interface State {
   /** what happened INSIDE each step, by its place in the run */ inside: Map<number, Trace[]>;
   /** the step the run is on right now, so the page can say so while it waits */ doing: string | null;
   /** the step whose call list is open, and what is being searched for in it */ picking: string | null; find: string;
+  /** CLICK THE BOARD, NAME IT, IT IS THERE: where the last click landed, in the board's own units and in pixels down
+   *  the canvas, so the box to type in opens on that cell and what you make is pinned to it. */
+  adding: { x: number; y: number; left: number; top: number } | null;
 }
-const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, linking: false, rel: 'connects', run: null, running: false, stop: null, say: '', worked: null, inside: new Map(), doing: null, picking: null, find: '' };
+const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, linking: false, rel: 'connects', run: null, running: false, stop: null, say: '', worked: null, inside: new Map(), doing: null, picking: null, find: '', adding: null };
 
 const board = (): Board | null => (S.at && S.store ? S.store.boards.get(S.at) ?? null : null);
 const put = (p: Parameters<BoardStore['write']>[1]) => { if (S.at && S.store) S.store.write(S.at, p); };
@@ -95,12 +98,31 @@ function nodeChip(b: Board, d: Derived, n: Live, pageId: string | null): string 
   </button>`;
 }
 
+/** WHAT SITS ON TOP OF THE CANVAS, in both the graph and the pipeline: how far in you are, a plain **+ add** button,
+ *  a way to hand the arrangement back to the layout — and, once you have clicked the board, the box you name the new
+ *  thing in, opened at the cell you clicked.
+ *
+ *  The + is there because a click on the grid is a shortcut, not a discovery: a person who has not been told it will
+ *  press a button that says add, and both land in the same place. */
+function canvasBits(what: string): string {
+  return `<div class="zoom">
+      <button data-add="mid" class="plus" title="add something to the middle of the board">+ add ${esc(what)}</button>
+      <button data-act="tidy" title="let go of everywhere you have dragged things, and lay it out from the links">tidy</button>
+      <button data-zoom="-" aria-label="further out">−</button><button data-zoom="0">fit</button><button data-zoom="+" aria-label="further in">+</button>
+    </div>
+    ${S.adding ? `<form class="here" data-here="1" style="left:${S.adding.left.toFixed(0)}px;top:${S.adding.top.toFixed(0)}px">
+      <input placeholder="name it, then ↵" aria-label="what to call it" autocomplete="off">
+      <button title="add it here">add</button>
+      <button type="button" data-act="nohere" title="never mind">✕</button>
+    </form>` : ''}`;
+}
+
 /** THE BOARD AS WIRES, which is what a graph is for: you can see what branches from what. The bar above it is the
  *  same one the list has, so picking and connecting work identically in both — only the drawing differs. */
 function wiresHtml(b: Board, d: Derived): string {
   return `${toolbar(b, d)}
     <div class="wirewrap" id="wirewrap">${wiresSvg(b, d, { picked: S.picked, view: 'categories', zoom: S.zoom, panX: S.panX, panY: S.panY })}
-      <div class="zoom"><button data-zoom="-">−</button><button data-zoom="0">fit</button><button data-zoom="+">+</button></div>
+      ${canvasBits('a node')}
     </div>
     ${inspector(b, d)}`;
 }
@@ -137,8 +159,9 @@ function toolbar(b: Board, d: Derived, extra = ''): string {
 function inspector(b: Board, d: Derived): string {
   const picked = S.picked ? nodesOf(b).find((n) => n.id === S.picked) : null;
   if (!picked) {
-    return `<div class="insp empty">Click a node to pick it. Then rename it, link it to another, duplicate it or
-      delete it — all here. Drag a node to move it; drag the board to pan; ⌘/Ctrl + wheel to zoom.</div>`;
+    return `<div class="insp empty"><b>Click the grid to add a node there</b> — or press + add. Click a node to pick
+      it: then rename it, link it to another, duplicate it or delete it, all here. Drag a node and it snaps to the
+      grid; drag the board to pan; ⌘/Ctrl + wheel to zoom.</div>`;
   }
   const isPage = b.nodes[picked.id]?.kind === 'page';
   const deg = d.deg.get(picked.id) ?? 0;
@@ -244,10 +267,10 @@ function pipelineHtml(b: Board, d: Derived): string {
     picked: S.picked, view: 'pipeline', zoom: S.zoom, panX: S.panX, panY: S.panY,
     flow: { order, step: (id) => stepOf(b, id), ran, doing },
   })}
-    <div class="zoom"><button data-zoom="-">−</button><button data-zoom="0">fit</button><button data-zoom="+">+</button></div>
+    ${canvasBits('a step')}
   </div>
-  ${picked ? stepPanel(b, g, picked, name) : `<div class="insp empty">Click a step on the board to change what it does.
-    Drag one to move it; drag the board to pan.</div>`}
+  ${picked ? stepPanel(b, g, picked, name) : `<div class="insp empty"><b>Click the grid to add a step there</b>, or
+    press + add. Click a step to change what it does. Drag one and it snaps to the grid; drag the board to pan.</div>`}
   ${S.worked ? showHtml(S.worked) : ''}${runHtml(S.run, S.inside, S.doing)}`;
 }
 
@@ -305,16 +328,22 @@ function shell(): string {
   const b = board(), d = b ? derive(b) : null;
   return `
   <aside class="rail">
-    <a class="back" href="./index.html">← Nexus</a>
+    <nav class="doors"><a class="back" href="./index.html">← Nexus</a><a class="door" href="./make.html">Make</a><a class="door" href="./forge.html">Forge</a><a class="door" href="./look.html">Look</a><a class="door" href="./claude.html">To Claude</a></nav>
     <form id="newboard"><input placeholder="+ new board" autocomplete="off" aria-label="make a board"><button>+</button></form>
     <ul class="boards">${bs.map(([id, x]) => `<li><button class="${id === S.at ? 'on' : ''}" data-board="${id}">
       <b>${esc(x.title)}</b><span>${((k) => `${k} node${k === 1 ? '' : 's'}`)(Object.values(x.nodes).filter((n) => !n.deleted).length)}</span></button></li>`).join('')}</ul>
     <div class="learn">
       <h3>Start from a worked one</h3>
-      <p class="hint">Each one already does something. Open it, change the step it says to change, press ▶ Run.
-        Then <b>copy</b> the whole board and change it again.</p>
-      <ul class="tpl">${TEMPLATES.map((t) => `<li><button data-tpl="${t.id}"
+      <p class="hint">Each one runs here, and every step of every one is proved to run before it is offered.
+        Open it, change the step it says to change, press ▶ Run. Then <b>copy</b> the whole board and change it again.</p>
+      <ul class="tpl">${TEMPLATES.filter((t) => (t.needs ?? 'nothing') === 'nothing').map((t) => `<li><button data-tpl="${t.id}"
         title="${esc(t.about)}"><b>${esc(t.title)}</b><span>${esc(t.about.length > 96 ? `${t.about.slice(0, 95)}…` : t.about)}</span></button></li>`).join('')}</ul>
+      <h3>These need the room</h3>
+      <p class="hint">They drive the workshop cell, the robots, a device, the inventory being made, or code run in a
+        worker — which stand in the forge, not on this page. They are not offered as a ▶ Run that would refuse at
+        their first step. <a href="./forge.html">Open the forge</a> to run them.</p>
+      <ul class="tpl room">${TEMPLATES.filter((t) => t.needs === 'the room').map((t) => `<li><span
+        title="${esc(t.about)}"><b>${esc(t.title)}</b><span>${esc(t.about.length > 80 ? `${t.about.slice(0, 79)}…` : t.about)}</span></span></li>`).join('')}</ul>
     </div>
     <p class="kept">${esc(S.store?.status() ?? '')}</p>
   </aside>
@@ -338,7 +367,27 @@ function shell(): string {
 // ---- what a click does -----------------------------------------------------------------------------------------
 
 export function mountBoards(el: HTMLElement): void {
-  const draw = () => { el.innerHTML = shell(); wireMindBox(el, draw); void mountScenes(el); };
+  const draw = () => {
+    el.innerHTML = shell(); wireMindBox(el, draw); void mountScenes(el);
+    // the box you name a new thing in takes the keyboard the moment it opens, so clicking the grid and typing is
+    // one gesture rather than click, then aim at a box, then type
+    el.querySelector<HTMLInputElement>('.here input')?.focus();
+  };
+
+  /** WHERE A CLICK LANDED, IN THE BOARD'S OWN UNITS. The canvas is a viewBox fitted into its element and then panned
+   *  and scaled, so screen pixels are not board units at any zoom. The group's own screen matrix knows all of it:
+   *  inverted, it takes a click straight to the cell under it. */
+  const boardPoint = (svg: SVGSVGElement, cx: number, cy: number): { x: number; y: number } | null => {
+    const g = svg.querySelector('g'); const m = g?.getScreenCTM();
+    if (!m) return null;
+    const p = new DOMPoint(cx, cy).matrixTransform(m.inverse());
+    return { x: snap(p.x), y: snap(p.y) };
+  };
+
+  /** Open the name box over a cell: `at` in board units, `from` where on screen it was asked for. */
+  const addHere = (at: { x: number; y: number }, from: { left: number; top: number }): void => {
+    S.adding = { ...at, ...from }; S.picked = null; S.say = ''; draw();
+  };
 
   // A CLICK ALWAYS PICKS. It used to pick the first node and CONNECT the second, which meant one click did two
   // different things depending on state you could not see: rename a node, click another, and instead of selecting it
@@ -389,7 +438,18 @@ export function mountBoards(el: HTMLElement): void {
     };
     const up = (e: PointerEvent) => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
-      if (!moving) return;
+      // A PRESS THAT DID NOT MOVE IS A CLICK ON THE BOARD, and a click on the board makes something there. This is
+      // the "easy click to add" the user asked for twice: nothing to find, no form at the top of the page, no
+      // guessing where the thing will end up — it appears on the cell you pressed, named by what you type.
+      if (!moving) {
+        const at = boardPoint(svg, e.clientX, e.clientY);
+        const wrap = svg.closest('.wirewrap') as HTMLElement | null;
+        if (at && wrap) {
+          const r = wrap.getBoundingClientRect();
+          addHere(at, { left: e.clientX - r.left, top: e.clientY - r.top });
+        }
+        return;
+      }
       S.panX = px + (e.clientX - sx) * per; S.panY = py + (e.clientY - sy) * per;
     };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
@@ -408,8 +468,18 @@ export function mountBoards(el: HTMLElement): void {
 
   el.addEventListener('click', (ev) => {
     if (dragged) { dragged = false; return; }        // that press was a drag, not a click
-    const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],[data-zoom],[data-tpl],[data-pick],#run,#stoprun') as HTMLElement | null;
+    const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],[data-zoom],[data-tpl],[data-pick],[data-add],#run,#stoprun') as HTMLElement | null;
     if (!t) return;
+    // + add: the same box the grid opens, over the middle of what is on screen
+    if (t.dataset.add) {
+      const svg = el.querySelector('svg.wires') as SVGSVGElement | null;
+      const wrap = el.querySelector('.wirewrap') as HTMLElement | null;
+      if (!svg || !wrap) return;
+      const r = wrap.getBoundingClientRect();
+      const at = boardPoint(svg, r.left + r.width / 2, r.top + r.height / 2);
+      if (at) addHere(at, { left: r.width / 2, top: r.height / 2 });
+      return;
+    }
     const z = t.dataset.zoom;
     if (z) { S.zoom = z === '0' ? 1 : Math.max(0.3, Math.min(4, S.zoom * (z === '+' ? 1.25 : 0.8))); if (z === '0') { S.panX = 0; S.panY = 0; } return draw(); }
     const b = board();
@@ -433,6 +503,16 @@ export function mountBoards(el: HTMLElement): void {
     if (act === 'unpick') { S.picked = null; S.linking = false; return draw(); }
     if (act === 'link') { S.linking = true; S.say = ''; return draw(); }
     if (act === 'nolink') { S.linking = false; return draw(); }
+    if (act === 'nohere') { S.adding = null; return draw(); }
+    // HAND THE ARRANGEMENT BACK. Everywhere you have dragged something is remembered, which is right until a board
+    // has been shoved about and you want the links to decide again. `unpin` is the engine's own call for it, so the
+    // wall in the headset lays the same board out the same way afterwards.
+    if (act === 'tidy') {
+      const u = unpin(b, S.view === 'pipeline' ? 'pipeline' : 'categories');
+      if (!u) { S.say = 'nothing has been dragged on this view — it is already laid out from the links'; return draw(); }
+      put(u); S.panX = 0; S.panY = 0; S.zoom = 1; S.say = 'laid out again from the links';
+      return draw();
+    }
     if (act === 'del' && S.picked) { put(deleteNode(b, S.picked)); S.picked = null; S.say = 'deleted'; return draw(); }
     if (act === 'dup' && S.picked) { const dd = duplicateNode(b, S.picked); if (dd) { put(dd.patch); S.say = `copied as “${dd.label}”`; } S.picked = null; return draw(); }
     // COPY THE WHOLE THING. `clipOf` takes a board's steps and the links between them, `pasteOf` lays them into a
@@ -459,6 +539,21 @@ export function mountBoards(el: HTMLElement): void {
     const f = ev.target as HTMLFormElement, box = f.querySelector('input')!, words = box.value.trim();
     if (!words) return;
     if (f.dataset.rn) { put({ nodes: { [f.dataset.rn]: { label: words } } }); S.say = `renamed to “${words}”`; return draw(); }
+    // MADE WHERE YOU CLICKED. It goes on the page you have open (the first one, if none is picked), and it is pinned
+    // to the cell, so it stays where you put it instead of being swept into the layout's next free row. On the
+    // pipeline it is made as a step straight away, because a node with no kind does nothing when the board is run.
+    if (f.dataset.here && S.adding) {
+      const bb = board(); if (!bb) return;
+      const onto = S.view === 'pipeline' ? undefined : pagesOf(bb, derive(bb))[0]?.id;
+      const a = addNode(freeName(bb, words), onto, uid('n'), 'contains');
+      if (!onto && S.view !== 'pipeline') a.patch.nodes![a.id]!.kind = 'page';
+      if (S.view === 'pipeline') a.patch.nodes![a.id]!.step = { kind: 'action', what: '' };
+      put(a.patch);
+      put(moveNode(a.id, S.view === 'pipeline' ? 'pipeline' : 'categories', S.adding.x, S.adding.y));
+      S.picked = a.id; S.adding = null; S.linking = false;
+      S.say = S.view === 'pipeline' ? `“${words}” is a step now — say what it does below` : `“${words}” added where you clicked`;
+      return draw();
+    }
     if (f.id === 'newboard') {
       const id = uid('b'); S.store!.write(id, freshBoard(words), true); S.at = id; S.view = 'wires'; S.picked = null;
       box.value = ''; return draw();
@@ -474,6 +569,12 @@ export function mountBoards(el: HTMLElement): void {
     S.picked = a.id; S.linking = false;        // what you just made is picked, ready to rename or link
     S.say = under ? `“${words}” added` : `page “${words}” made`;
     draw();
+  });
+
+  // Escape closes the name box, which is what every other canvas does
+  el.addEventListener('keydown', (ev) => {
+    if ((ev as KeyboardEvent).key !== 'Escape' || !S.adding) return;
+    S.adding = null; draw();
   });
 
   el.addEventListener('input', (ev) => {

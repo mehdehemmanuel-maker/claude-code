@@ -245,14 +245,27 @@ export function claudeBoard(ask: string, at = Date.now()): Board {
 }
 
 // ---- flows to start from --------------------------------------------------------------------------------------------
-export interface Template { id: string; title: string; about: string; steps: { id: string; label: string; step?: Step }[]; links: [string, string, string?][] }
+/** WHAT A TEMPLATE NEEDS TO RUN, because the hands are not the same everywhere.
+ *
+ *  A pipeline runs on whatever hands it is given. The page's hands (`view/flow2d.ts`) are the engine: values, matters,
+ *  shapes, places, joins, sizing by law, patterns, energy, the bill, the composer, the library. The forge room's hands
+ *  (`view/forge.ts`) are those AND the room — the robots, the workshop cell, the devices, the inventory being made,
+ *  the languages run in a worker, the build standing on the pedestal.
+ *
+ *  Eleven of these templates were written for the room and offered on the page, where every one of them refused at its
+ *  first room step. A button that cannot work is worse than no button, so each says which hands it needs and the page
+ *  offers the room's as a way into the forge instead of as a run it will fail.
+ *  `tests/nexus/templates.test.ts` holds this honest: a template that says 'nothing' must run end to end here, and one
+ *  that says 'the room' must really have a step these hands cannot take. */
+export type Needs = 'nothing' | 'the room';
+export interface Template { id: string; title: string; about: string; needs?: Needs; steps: { id: string; label: string; step?: Step }[]; links: [string, string, string?][] }
 export const TEMPLATES: Template[] = [
   {
     id: 'a-sphere', title: 'Make a sphere (start here)',
-    about: 'The smallest whole pipeline: a trigger, a step that makes a shape, and a check that it got made. Press ▶ Run and the sphere appears under the run, in 3D, at the size the step says. Then change ONE thing — "5 spheres 40mm spaced 60mm", or box, or cylinder — and run it again. Copy the whole board and change it again: that is how you get your own.',
+    about: 'The smallest whole pipeline: a trigger, a step that makes a shape, and a check that it got made. Press ▶ Run and the ball appears under the run, in 3D, at the size the step says. Then change ONE thing — the 60 to any size, "ball" to box, cube, cylinder, cone, ring or tube — and run it again. Press "every call" on the step to see the whole list. Copy the whole board and change it again: that is how you get your own.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
-      { id: 's', label: 'Make it', step: { kind: 'action', what: 'shape 1 sphere 60mm' } },
+      { id: 's', label: 'Make it', step: { kind: 'action', what: 'place ball named o size 60 mm' } },
       { id: 'c', label: 'Did it?', step: { kind: 'check', what: 'shapes > 0' } },
       { id: 'n', label: 'Say so', step: { kind: 'action', what: 'say the shape is made — change the words above and run it again' } },
     ],
@@ -260,15 +273,16 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: 'if-this-then-that', title: 'If this, then that',
-    about: 'The same shape step, with a fork: a check reads a number the engine worked out, and what happens next depends on it. Change "shapes > 3" to "shapes > 0" and run it again — the other branch takes it. A check never reads words a model wrote; it reads the engine\'s own facts, which is why a fork here cannot be talked into the wrong branch.',
+    about: 'The same shape step, patterned, with a fork: a check reads a number the engine worked out, and what happens next depends on it. Change the 9 in "pattern o 9 along x 45 mm" to 2 and run it again — the other branch takes it. A check never reads words a model wrote; it reads the engine\'s own facts, which is why a fork here cannot be talked into the wrong branch.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
-      { id: 's', label: 'Make some', step: { kind: 'action', what: 'shape 9 spheres 30mm spaced 45mm' } },
+      { id: 's', label: 'Make one', step: { kind: 'action', what: 'place ball named o size 30 mm' } },
+      { id: 'p', label: 'Then nine of it', step: { kind: 'action', what: 'pattern o 9 along x 45 mm' } },
       { id: 'c', label: 'More than three?', step: { kind: 'check', what: 'shapes > 3' } },
       { id: 'y', label: 'Then: price it', step: { kind: 'action', what: 'buy a machine that picks up 2kg' } },
       { id: 'n', label: 'Else: say so', step: { kind: 'action', what: 'say not enough of them to be worth pricing' } },
     ],
-    links: [['t', 's'], ['s', 'c'], ['c', 'y'], ['c', 'n']],
+    links: [['t', 's'], ['s', 'p'], ['p', 'c'], ['c', 'y'], ['c', 'n']],
   },
   {
     id: 'a-loop', title: 'A loop that goes round',
@@ -283,7 +297,7 @@ export const TEMPLATES: Template[] = [
   },
 
   {
-    id: 'meta-pipeline', title: 'Write a pipeline from words', about: 'A pipeline that makes pipelines: say what you want done (change the first step\'s words), Claude writes it as one line of the pipeline language, and that line is run: the new pipeline appears on the board, ready to run.',
+    id: 'meta-pipeline', needs: 'the room', title: 'Write a pipeline from words', about: 'A pipeline that makes pipelines: say what you want done (change the first step\'s words), Claude writes it as one line of the pipeline language, and that line is run: the new pipeline appears on the board, ready to run.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'w', label: 'What it should do', step: { kind: 'action', what: 'say a robot that patrols every 10 minutes and goes to charge when its battery is low' } },
@@ -305,7 +319,7 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'q'], ['q', 'p'], ['p', 'c'], ['c', 'b'], ['b', 'n']],
   },
   {
-    id: 'map-product', title: 'Map a product into the inventory', about: 'Name a product (change the first step); Claude maps it into its parts, every level down to materials, in the inventory\'s one-line format; they are checked and added, and its tree is shown.',
+    id: 'map-product', needs: 'the room', title: 'Map a product into the inventory', about: 'Name a product (change the first step); Claude maps it into its parts, every level down to materials, in the inventory\'s one-line format; they are checked and added, and its tree is shown.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'w', label: 'The product', step: { kind: 'action', what: 'say an electric toothbrush' } },
@@ -316,7 +330,7 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'w'], ['w', 'a'], ['a', 'f'], ['f', 'm']],
   },
   {
-    id: 'make-parts', title: 'Make any part from the inventory', about: 'Parts made in the workshop from the inventory: adjustable ones at the sizes said (a screw, a bearing), and a product made all the way down (what the workshop can make it makes; the rest is bought, and said so).',
+    id: 'make-parts', needs: 'the room', title: 'Make any part from the inventory', about: 'Parts made in the workshop from the inventory: adjustable ones at the sizes said (a screw, a bearing), and a product made all the way down (what the workshop can make it makes; the rest is bought, and said so).',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'a', label: 'An M4 × 20 screw', step: { kind: 'action', what: 'inventory make screw M4x20' } },
@@ -326,7 +340,7 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'a'], ['a', 'b'], ['b', 'c']],
   },
   {
-    id: 'languages', title: 'Code in many languages', about: 'One pipeline, a step in each language the forge runs: TypeScript, Python, C++ (Arduino), OpenSCAD, SQL over the inventory, maths with units, and G-code to the printer. Change any step\'s code.',
+    id: 'languages', needs: 'the room', title: 'Code in many languages', about: 'One pipeline, a step in each language the forge runs: TypeScript, Python, C++ (Arduino), OpenSCAD, SQL over the inventory, maths with units, and G-code to the printer. Change any step\'s code.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'ts', label: 'TypeScript', step: { kind: 'action', what: 'ts: const parts: number = facts.parts ?? 0; return `TypeScript: ${parts} parts on the table`' } },
@@ -340,7 +354,7 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'ts'], ['ts', 'cpp'], ['cpp', 'scad'], ['scad', 'sql'], ['sql', 'm'], ['m', 'g'], ['g', 'py']],
   },
   {
-    id: 'workshop-microscope', title: 'Make a microscope in the workshop', about: 'The workshop builds a digital microscope: its frame and stage printed, then the camera, lens, LED ring, stepper, lead screw, driver and computer taken off the rack and put together on the plate by the bench arm. Change "microscope" to another recipe: pan-tilt, weather, scale, rover, gear.',
+    id: 'workshop-microscope', needs: 'the room', title: 'Make a microscope in the workshop', about: 'The workshop builds a digital microscope: its frame and stage printed, then the camera, lens, LED ring, stepper, lead screw, driver and computer taken off the rack and put together on the plate by the bench arm. Change "microscope" to another recipe: pan-tilt, weather, scale, rover, gear.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'f', label: 'Workshop free?', step: { kind: 'check', what: 'cell_busy = 0' } },
@@ -349,7 +363,7 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'f'], ['f', 'b']],
   },
   {
-    id: 'workshop-cast', title: 'Cast a gear when the furnace is cold', about: 'Every 10 minutes: if the workshop is free, cast a 20-tooth gear in aluminium by lost-PLA: the pattern printed, invested, burnt out in the kiln, the metal melted and poured.',
+    id: 'workshop-cast', needs: 'the room', title: 'Cast a gear when the furnace is cold', about: 'Every 10 minutes: if the workshop is free, cast a 20-tooth gear in aluminium by lost-PLA: the pattern printed, invested, burnt out in the kiln, the metal melted and poured.',
     steps: [
       { id: 't', label: 'Every 10 minutes', step: { kind: 'trigger', what: 'every 10 minutes' } },
       { id: 'f', label: 'Workshop free?', step: { kind: 'check', what: 'cell_busy = 0' } },
@@ -358,7 +372,7 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'f'], ['f', 'c']],
   },
   {
-    id: 'claude-build', title: "Claude's build pipeline, until it holds", about: "Claude's own build pipeline as a step of yours: run the ask on the Pipeline app through it (read, conditions, grow, make, check, scale), and while any check fails, draw the next seed and run it again, at most 5 times. Change a step: \"pipeline matter steel\", \"pipeline physics off\", \"pipeline ask a shelf for 20 kg\", \"pipeline best\".",
+    id: 'claude-build', needs: 'the room', title: "Claude's build pipeline, until it holds", about: "Claude's own build pipeline as a step of yours: run the ask on the Pipeline app through it (read, conditions, grow, make, check, scale), and while any check fails, draw the next seed and run it again, at most 5 times. Change a step: \"pipeline matter steel\", \"pipeline physics off\", \"pipeline ask a shelf for 20 kg\", \"pipeline best\".",
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'p', label: "Claude's build pipeline", step: { kind: 'action', what: 'pipeline run' } },
@@ -369,7 +383,7 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'p'], ['p', 'c'], ['c', 's'], ['s', 'r'], ['r', 'p', 'feeds back to']],
   },
   {
-    id: 'improve', title: 'Improve it until it is clean', about: "Nexus's own loop as a pipeline: find the flaws, ask for the change that fixes the worst, build again with it, and go round until no flaw is left (at most 3 rounds).",
+    id: 'improve', needs: 'the room', title: 'Improve it until it is clean', about: "Nexus's own loop as a pipeline: find the flaws, ask for the change that fixes the worst, build again with it, and go round until no flaw is left (at most 3 rounds).",
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'f', label: 'List the flaws', step: { kind: 'action', what: 'flaws' } },
@@ -390,7 +404,7 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'a'], ['a', 's']],
   },
   {
-    id: 'watch', title: 'Operate it, and note what fails', about: 'Every 10 minutes: run the build through its duty; where anything fails, note it on the build for the next round of laws.',
+    id: 'watch', needs: 'the room', title: 'Operate it, and note what fails', about: 'Every 10 minutes: run the build through its duty; where anything fails, note it on the build for the next round of laws.',
     steps: [
       { id: 't', label: 'Every 10 minutes', step: { kind: 'trigger', what: 'every 10 minutes' } },
       { id: 'o', label: 'Operate', step: { kind: 'action', what: 'operate' } },
@@ -416,31 +430,33 @@ export const TEMPLATES: Template[] = [
     links: [['t', 'm'], ['m', 'b'], ['b', 'r'], ['r', 'c'], ['c', 'k'], ['k', 'p'], ['p', 'n'], ['n', 's'], ['s', 'w']],
   },
   {
-    id: 'cap', title: 'Cap the bearing, sized by its load', about: 'A plate on the bearing, of the matter the load calls for, as thick as its bending stress allows at half its yield, σ = 3 F L / (2 b h²). Set the load again and it sizes itself again.',
+    id: 'cap', title: 'Cap the bearing, sized by its load', about: 'A 6204 bearing (47 mm across, 14 wide, 20 bore — its own figures, as a tube) with a plate on it, of the matter the load calls for, as thick as its bending stress allows at half its yield, σ = 3 F L / (2 b h²). Set the load again and it sizes itself again.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'l', label: 'The load', step: { kind: 'action', what: 'set load = 200 N' } },
       { id: 'm', label: 'Matter by the load', step: { kind: 'action', what: 'if load > 500 N then material steel else material aluminium' } },
+      { id: 'b', label: 'The bearing', step: { kind: 'action', what: 'place tube named bearing size 47 x 14 x 13.5 mm' } },
       { id: 'p', label: 'Cap the bearing', step: { kind: 'action', what: 'place plate named cap on bearing' } },
       { id: 's', label: 'Size it to hold', step: { kind: 'action', what: 'size cap.h so 3 * load * cap.w / (2 * cap.d * cap.h^2) <= cap.yield / 2' } },
       { id: 'c', label: 'Light enough?', step: { kind: 'check', what: 'cap.mass under 50 g' } },
       { id: 'e', label: 'Energy to lift it', step: { kind: 'action', what: 'energy lift cap 1 m' } },
       { id: 'r', label: 'What was made', step: { kind: 'action', what: 'report' } },
     ],
-    links: [['t', 'l'], ['l', 'm'], ['m', 'p'], ['p', 's'], ['s', 'c'], ['c', 'e'], ['e', 'r']],
+    links: [['t', 'l'], ['l', 'm'], ['m', 'b'], ['b', 'p'], ['p', 's'], ['s', 'c'], ['c', 'e'], ['e', 'r']],
   },
   {
-    id: 'shaft', title: 'A shaft through the bearing, sized by its torque', about: 'A shaft takes the bearing\'s bore and lies along its axis; its diameter from τ = 16 T / (π d³) at a third of its yield, its matter by the torque, and the energy to spin it.',
+    id: 'shaft', title: 'A shaft through the bearing, sized by its torque', about: 'A 6204 bearing (47 × 14 mm, 20 mm bore, as a tube), and a shaft that takes its bore and lies along its axis; its diameter from τ = 16 T / (π d³) at a third of its yield, its matter by the torque, and the energy to spin it.',
     steps: [
       { id: 't', label: 'Run', step: { kind: 'trigger', what: 'when I press run' } },
       { id: 'q', label: 'The torque', step: { kind: 'action', what: 'set torque = 20 N·m' } },
       { id: 'm', label: 'Matter by the torque', step: { kind: 'action', what: 'if torque > 50 N·m then material steel else material aluminium' } },
+      { id: 'b', label: 'The bearing', step: { kind: 'action', what: 'place tube named bearing size 47 x 14 x 13.5 mm' } },
       { id: 'p', label: 'Shaft through it', step: { kind: 'action', what: 'place shaft named axle through bearing' } },
       { id: 's', label: 'Size it to the torque', step: { kind: 'action', what: 'size axle.D so 16 * torque / (pi * axle.D^3) <= axle.yield / 3' } },
       { id: 'e', label: 'Energy to spin it', step: { kind: 'action', what: 'energy spin axle 3000 rpm' } },
       { id: 'r', label: 'What was made', step: { kind: 'action', what: 'report' } },
     ],
-    links: [['t', 'q'], ['q', 'm'], ['m', 'p'], ['p', 's'], ['s', 'e'], ['e', 'r']],
+    links: [['t', 'q'], ['q', 'm'], ['m', 'b'], ['b', 'p'], ['p', 's'], ['s', 'e'], ['e', 'r']],
   },
   {
     id: 'walls', title: 'Two walls, joined into one', about: 'Two walls that meet at a corner, joined so they are one piece: moved, turned and stretched as one, where they meet counted once.',

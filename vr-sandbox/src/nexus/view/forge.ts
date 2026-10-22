@@ -78,6 +78,7 @@ import '../world/creatures';
 import { perfect, sayMade, type Made as MadeThing } from '../make/pipeline';
 import { boardOfInvention, sayInvention, type Invention } from '../ask/invent';
 import { machineWords } from '../ask/machine';
+import { BTN, button, forgeDoors, mountForgeWays, rowOf, tools } from './forge-bar';
 import { tendWords } from '../works/tend';
 import { routeMake } from '../ask/route';
 import { countParts, kitFor, KITS, log10All, log10Kinds, makeKit, massOf as kitMass, plural, sayKinds, type Part as KitPart } from '../parts/kits';
@@ -1424,7 +1425,7 @@ modeBar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
 const topLeft = document.createElement('div');
 topLeft.style.cssText = 'position:fixed;left:16px;top:calc(12px + env(safe-area-inset-top,0px));z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:max(18rem,calc(100vw - 640px))';
 hud.dom.style.position = 'static'; hud.dom.style.maxWidth = '100%';
-topLeft.append(hud.dom, modeBar, verdictBox);
+topLeft.append(forgeDoors(), hud.dom, modeBar, verdictBox);
 document.body.appendChild(topLeft);
 const modeStrip = new THREE.Group(); scene.add(modeStrip);
 let modeChips: { mesh: THREE.Mesh; act: () => void }[] = [], modeKey = '';
@@ -1592,17 +1593,9 @@ function drawDecide(): void {
 // ---- controls: the playback ---------------------------------------------------------------------------------------------
 const step = () => { if (current + 1 < beats.length) offset += starts[current + 1]! - (clock()); };
 const togglePause = () => { if (paused) { offset -= (performance.now() - pausedAt) / 1000; paused = false; } else { pausedAt = performance.now(); paused = true; } };
-const ui = document.createElement('div');
-ui.style.cssText = 'position:fixed;right:16px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;z-index:5;max-width:calc(100vw - 32px)';
-const BTN = 'font:600 13px system-ui;padding:8px 12px;border-radius:8px;border:1px solid #2e7d8c;background:#06141c;color:#bdefff;cursor:pointer';
-const button = (text: string, on: (b: HTMLButtonElement) => void, parent: HTMLElement = ui) => { const b = document.createElement('button'); b.textContent = text; b.style.cssText = BTN; b.onclick = () => on(b); parent.appendChild(b); return b; };
 // (the playback's buttons only while something is built to play: an empty table has nothing to pause)
 const playButtons = [button('Pause', (b) => { togglePause(); b.textContent = paused ? 'Play' : 'Pause'; }), button('Next', () => step()), button('Run again', () => say(world2.replay()))];
 button('Voice off', (b) => { voice = !voice; b.textContent = voice ? 'Voice on' : 'Voice off'; if (!voice) speechSynthesis.cancel(); });
-document.body.appendChild(ui);
-const tools = document.createElement('div');
-tools.style.cssText = 'position:fixed;right:16px;top:calc(60px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;align-items:flex-end;gap:6px;z-index:5;max-width:min(36rem,calc(100vw - 32px))';
-const rowOf = (title: string) => { const r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center'; const t2 = document.createElement('span'); t2.textContent = title; t2.style.cssText = 'font:600 11px system-ui;color:#7fb3c8;letter-spacing:.08em;text-transform:uppercase'; r.appendChild(t2); tools.appendChild(r); return r; };
 const showRow = rowOf('Show'), actRow = rowOf('Do'), seeRow = rowOf('Sight');
 // folded into one button until you want them, so the view is the room's, not the buttons'
 let toolsOpen = false;
@@ -3520,6 +3513,9 @@ const CHIPS: [string, () => void][] = [
   ['X-ray', () => { xray = !xray; }], ['Isolate', () => toggleIsolate()], ['Section', () => { section = section === 'off' ? 'depth' : section === 'depth' ? 'width' : 'off'; }],
   ['Reports', () => cycleReports()], ['Weather', () => { void weatherHere().then((w) => line('system', w)); }], ['🎤 Talk', () => listen()],
 ];
+// WHAT TO SAY, AND WHAT THE ROOM DOES, on the page. In a headset the chips below float over the dock and you point at
+// one; on a screen there was nothing but the box to type in, so the same two lists go in above it (view/forge-bar.ts).
+mountForgeWays(row, CHIPS, (t) => send(t));
 let pointerHand = 1;
 // the same menu, floating over the dock, for whoever keeps the dock
 const menu = chipGrid(CHIPS.map(([t2, act]): [string, () => void] => [t2, () => { act(); }]), 3, 0.11, 0.032, (i) => (i < 3 ? '#ffd740' : '#80deea'), 2.4);

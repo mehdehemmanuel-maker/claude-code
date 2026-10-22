@@ -14,6 +14,17 @@ import { BACK, HIER, UNDIRECTED, edgesOf, moveNode, nodesOf, type Board, type De
 const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export const CARD_H = 34;
+/** THE GRID THE BOARD IS DRAWN ON, and why a board needs one. Without it nothing lines up: a card dropped beside
+ *  another lands four pixels off it, the automatic layout's own columns sit at whatever width the widest word
+ *  happened to be, and the result reads as a scatter rather than an arrangement — which is exactly what the user
+ *  said twice ("everything's so randomly placed no thought into it", then "there's no grid there").
+ *
+ *  So the grid is not a wallpaper behind the cards: every position in here is a multiple of it. The layout's columns
+ *  and rows land on it, a card you drag snaps to it when you let go, and a card you make by clicking the board is
+ *  made at the cell you clicked. It is drawn inside the same group the cards are, so it pans and zooms with them and
+ *  a card stays on the same cell however far in you are. */
+export const GRID = 24;
+export const snap = (v: number): number => Math.round(v / GRID) * GRID;
 /** A step's card is taller and wider than a plain node, because it carries what it does as well as its name. */
 export const STEP_W = 210, STEP_H = 62;
 /** How wide a card is for its words: measured roughly, and the SAME function the layout is given, so what is drawn
@@ -25,6 +36,16 @@ const HUE = ['#78909c', '#80deea', '#69f0ae', '#ffd740', '#ff8a80', '#b388ff', '
 const hueOf = (d: Derived, id: string): string => HUE[d.hue.get(d.root.get(id) ?? id) ?? 0] ?? HUE[0]!;
 
 interface At { x: number; y: number; w: number; h: number }
+
+/** The grid as two patterns: a line every cell, and a heavier one every fifth, so a card's distance from another can
+ *  be read at a glance rather than guessed. `userSpaceOnUse` ties them to the board's own coordinates, which is what
+ *  makes a cell the same cell at every zoom. */
+const gridDefs = (): string => `
+  <pattern id="wgrid" width="${GRID}" height="${GRID}" patternUnits="userSpaceOnUse">
+    <path d="M${GRID},0 L0,0 0,${GRID}" fill="none" stroke="#1c2531" stroke-width="1"/></pattern>
+  <pattern id="wgrid5" width="${GRID * 5}" height="${GRID * 5}" patternUnits="userSpaceOnUse">
+    <rect width="${GRID * 5}" height="${GRID * 5}" fill="url(#wgrid)"/>
+    <path d="M${GRID * 5},0 L0,0 0,${GRID * 5}" fill="none" stroke="#2a3748" stroke-width="1.3"/></pattern>`;
 
 /** WHERE EVERY CARD GOES: a tree that branches left to right, each level its own column, each parent sitting level
  *  with the middle of what hangs off it.
@@ -48,10 +69,10 @@ export function placeCards(b: Board, d: Derived, _view: View): Map<string, At> {
   const colW: number[] = [];
   for (const n of live) { const k = depthOf(n.id); colW[k] = Math.max(colW[k] ?? 0, box(n.id).w); }
   const colX: number[] = []; let x = 0;
-  for (let k = 0; k < colW.length; k++) { colX[k] = x; x += (colW[k] ?? 0) + 76; }
+  for (let k = 0; k < colW.length; k++) { colX[k] = snap(x); x += snap((colW[k] ?? 0) + 76); }
 
   // leaves take the next row; a parent sits level with the middle of its children, so a branch reads as a branch
-  const ROW = CARD_H + 16;
+  const ROW = snap(CARD_H + 16);
   let row = 0;
   const yOf = new Map<string, number>();
   const walk = (id: string, seen: Set<string>): number => {
@@ -60,7 +81,7 @@ export function placeCards(b: Board, d: Derived, _view: View): Map<string, At> {
     const kids = (d.kids.get(id) ?? []).filter((k) => !seen.has(k));
     if (!kids.length) { const y = row * ROW; row += 1; yOf.set(id, y); return y; }
     const ys = kids.map((k) => walk(k, seen));
-    const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const y = snap((Math.min(...ys) + Math.max(...ys)) / 2);
     yOf.set(id, y); return y;
   };
   const seen = new Set<string>();
@@ -104,7 +125,8 @@ function placeSteps(b: Board, order: string[]): Map<string, At> {
   order.forEach((id, i) => {
     const n = live.get(id); if (!n) return;
     const col = i % PER, row = Math.floor(i / PER);
-    out.set(id, n.pin ? { ...n.pin, w: STEP_W, h: STEP_H } : { x: col * (STEP_W + 54), y: row * (STEP_H + 46), w: STEP_W, h: STEP_H });
+    out.set(id, n.pin ? { ...n.pin, w: STEP_W, h: STEP_H }
+      : { x: snap(col * (STEP_W + 54)), y: snap(row * (STEP_H + 46)), w: STEP_W, h: STEP_H });
   });
   return out;
 }
@@ -112,11 +134,32 @@ function placeSteps(b: Board, order: string[]): Map<string, At> {
 export function wiresSvg(b: Board, d: Derived, o: WireOpts): string {
   const at = o.flow ? placeSteps(b, o.flow.order) : placeCards(b, d, o.view);
   const live = o.flow ? o.flow.order.map((id) => nodesOf(b).find((n) => n.id === id)).filter((n): n is Live => !!n) : nodesOf(b, o.view);
-  if (!live.length) return `<p class="none">Nothing on this board yet. Add a page and put some nodes on it.</p>`;
+  // AN EMPTY BOARD IS STILL A BOARD. It used to be a sentence of text, which is the one state where there is
+  // nothing to click — so the way in (click the board, name it, it is there) was unreachable exactly when it was
+  // needed. The grid is drawn with nothing on it and it says what to do.
+  if (!live.length) {
+    return `<svg class="wires" viewBox="0 0 720 300" preserveAspectRatio="xMidYMid meet" style="--zoom:1"
+      data-w="720" data-h="300" data-minx="0" data-miny="0">
+      <defs>${gridDefs()}</defs>
+      <g transform="translate(0,0) scale(1)">
+        <rect class="gridbg" x="-2400" y="-2400" width="5520" height="5100" fill="url(#wgrid5)"/>
+        <text x="360" y="140" text-anchor="middle" fill="#8e9aab" font-size="15"
+          font-family="system-ui,-apple-system,sans-serif">Nothing on this board yet.</text>
+        <text x="360" y="168" text-anchor="middle" fill="#d9a441" font-size="14"
+          font-family="system-ui,-apple-system,sans-serif">Click anywhere on the grid to put something there.</text>
+      </g></svg>`;
+  }
   const xs = [...at.values()];
-  const minX = Math.min(...xs.map((p) => p.x)) - 30, minY = Math.min(...xs.map((p) => p.y)) - 30;
-  const maxX = Math.max(...xs.map((p) => p.x + p.w)) + 30, maxY = Math.max(...xs.map((p) => p.y + p.h)) + 30;
-  const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
+  const x0 = Math.min(...xs.map((p) => p.x)) - 30, y0 = Math.min(...xs.map((p) => p.y)) - 30;
+  const x1 = Math.max(...xs.map((p) => p.x + p.w)) + 30, y1 = Math.max(...xs.map((p) => p.y + p.h)) + 30;
+  // A NEARLY EMPTY BOARD IS NOT MAGNIFIED. The picture is fitted to its element, so a board with one card on it had a
+  // viewBox 134 units wide stretched across 1280 pixels: one card filling most of the canvas, its name in letters an
+  // inch tall, and no grid left to click on — the first thing a person sees, and it looked like a mistake. The view
+  // is never smaller than this, so a card is the same readable size whether there is one on the board or forty, and
+  // there is always board around it to put the next one on.
+  const MIN_W = 1040, MIN_H = 480;
+  const w = Math.max(MIN_W, x1 - x0), h = Math.max(MIN_H, y1 - y0);
+  const minX = x0 - Math.max(0, w - (x1 - x0)) / 2, minY = y0 - Math.max(0, h - (y1 - y0)) / 2;
 
   const chain = o.flow
     ? o.flow.order.slice(0, -1).map((from, i) => ({ from, to: o.flow!.order[i + 1]!, rel: 'then' }))
@@ -159,8 +202,11 @@ export function wiresSvg(b: Board, d: Derived, o: WireOpts): string {
 
   return `<svg class="wires" viewBox="${minX} ${minY} ${w} ${h}" preserveAspectRatio="xMidYMid meet"
     style="--zoom:${o.zoom}" data-w="${w.toFixed(0)}" data-h="${h.toFixed(0)}" data-minx="${minX.toFixed(0)}" data-miny="${minY.toFixed(0)}">
-    <defs>${tip('tip', '#2b3542', 0.9)}${tip('tip-soft', '#5d6878', 0.6)}${tip('tip-lit', '#d9a441', 1)}${tip('tip-done', '#6fbf84', 1)}</defs>
-    <g transform="translate(${o.panX.toFixed(1)},${o.panY.toFixed(1)}) scale(${o.zoom})">${wires}${cards}</g>
+    <defs>${gridDefs()}${tip('tip', '#2b3542', 0.9)}${tip('tip-soft', '#5d6878', 0.6)}${tip('tip-lit', '#d9a441', 1)}${tip('tip-done', '#6fbf84', 1)}</defs>
+    <g transform="translate(${o.panX.toFixed(1)},${o.panY.toFixed(1)}) scale(${o.zoom})">
+      <rect class="gridbg" x="${(minX - 2400).toFixed(0)}" y="${(minY - 2400).toFixed(0)}"
+        width="${(w + 4800).toFixed(0)}" height="${(h + 4800).toFixed(0)}" fill="url(#wgrid5)"/>
+      ${wires}${cards}</g>
   </svg>`;
 }
 
@@ -214,12 +260,14 @@ export function dragCard(
     const dx = (e.clientX - sx) * per, dy = (e.clientY - sy) * per;
     if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < 5) return;
     moved = true; onDrag();
-    g.setAttribute('transform', `translate(${(x0 + dx).toFixed(1)},${(y0 + dy).toFixed(1)})`);
+    // snapped as it moves, not only when it lands, so the grid is something you feel rather than find out about
+    g.setAttribute('transform', `translate(${snap(x0 + dx)},${snap(y0 + dy)})`);
   };
   const up = (e: PointerEvent) => {
     window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
     if (!moved) return;                                  // a press that did not move is a click, handled elsewhere
-    write(moveNode(id, view, x0 + (e.clientX - sx) * per, y0 + (e.clientY - sy) * per));
+    // ON THE GRID, not a pixel beside it: what you arrange by hand lines up with what the layout placed
+    write(moveNode(id, view, snap(x0 + (e.clientX - sx) * per), snap(y0 + (e.clientY - sy) * per)));
     redraw();
   };
   window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);

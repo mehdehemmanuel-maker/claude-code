@@ -44,6 +44,32 @@ export interface Trace {
   ms?: number;
 }
 
+/** THE DOORS THESE HANDS HAVE, in one place rather than seven inline patterns.
+ *
+ *  Written out because a step's words either land on one of them or go to the Workshop, and until this list existed
+ *  nothing could ASK whether a given line would be taken — which is how three teaching templates shipped with a step
+ *  (`shape 1 sphere 60mm`) that the engine refuses. `handsTake` is that question, and `tests/nexus/templates.test.ts`
+ *  puts every template's every step through it, the way `calltest.ts` puts every call through a real room. */
+const DOOR = {
+  make: /^(make|build|compose|design)\b/i,
+  buy: /^(buy|price|cost|pack|bill)\b/i,
+  hold: /^(hold|stay|balance)\b/i,
+  part: /^(part|look ?up|find)\b/i,
+  count: /^count\b/i,
+  // only the words the engine has no call for. `set`, `calc`, `if … then …`, `rule` and `report` ARE calls, and
+  // while they were listed here the door swallowed them: `set load = 200 N` was echoed back as a sentence, nothing
+  // was set, and the step after it that sized a plate by the load refused for want of a number that had been typed
+  // in two steps earlier. Found by running the templates (tests/nexus/templates.test.ts) rather than by reading.
+  words: /^(say|note|store|board)\b/i,
+  wait: /^wait\b/i,
+};
+/** Whether a pipeline step's words are something these hands can do at all: one of the doors above, or a call the
+ *  Workshop reads. False means the step would refuse the moment it ran. */
+export const handsTake = (what: string): boolean => {
+  const t = what.trim();
+  return Object.values(DOOR).some((r) => r.test(t)) || Workshop.handles(t);
+};
+
 /** The hands. One instance per run, because what a step worked out is read by the steps after it. */
 export function engineHands(worked: Worked = {}, parts: PartRef[] = []): FlowApi & { worked: Worked; trace: Trace[]; shop: Workshop } {
   // THE PIPELINE'S OWN WORKSHOP. `ask/generate.ts`'s Workshop is what runs every call in the catalogue — values with
@@ -68,14 +94,14 @@ export function engineHands(worked: Worked = {}, parts: PartRef[] = []): FlowApi
     },
     async did(t: string, low: string, input: string): Promise<string> {
       const rest = t.replace(/^\s*\S+\s*/, '').trim() || input.trim() || worked.words || '';
-      if (/^(make|build|compose|design)\b/i.test(low)) {
+      if (DOOR.make.test(low)) {
         if (!rest) throw new Error('say what to make: "make a machine that cuts 400x300x80"');
         const m = composeMachine(rest);
         worked.words = rest; worked.stages = m.stages.length; worked.refusals = m.refusals.length;
         if (!m.stages.length) return `nothing was composed from those words.${m.refusals.length ? ` It will not: ${m.refusals.join('; ')}` : ''}`;
         return machineText(m);
       }
-      if (/^(buy|price|cost|pack|bill)\b/i.test(low)) {
+      if (DOOR.buy.test(low)) {
         const words = rest || worked.words;
         if (!words) throw new Error('nothing has been made yet, and no words were given to price');
         const p = pack(words);
@@ -90,7 +116,7 @@ export function engineHands(worked: Worked = {}, parts: PartRef[] = []): FlowApi
         return `${lines.length} lines, ${worked.unpriced} with no seller's price, ${usd(p.total.all[0])}–${usd(p.total.all[1])}\n`
           + lines.slice(0, 12).map((l) => `  ${l.n} × ${l.what} — ${l.usd == null ? 'no price kept' : usd(l.usd)}`).join('\n');
       }
-      if (/^(hold|stay|balance)\b/i.test(low)) {
+      if (DOOR.hold.test(low)) {
         const words = rest || worked.words;
         if (!words) throw new Error('nothing has been made yet, so there is no joint to hold');
         const j = heaviestJoint(composeMachine(words));
@@ -105,22 +131,22 @@ export function engineHands(worked: Worked = {}, parts: PartRef[] = []): FlowApi
         worked.free = stays.filter((s) => !s.cannot && !s.watts).length;
         return holdText(j);
       }
-      if (/^(part|look ?up|find)\b/i.test(low)) {
+      if (DOOR.part.test(low)) {
         if (!rest) throw new Error('say which part');
         const q = rest.toLowerCase();
         const hits = [...INVENTORY.values()].filter((i) => i.id.includes(q) || i.name.toLowerCase().includes(q)).slice(0, 8);
         if (!hits.length) return `nothing in the library of ${INVENTORY.size.toLocaleString('en')} matches "${rest}"`;
         return hits.map((i) => `${i.id} — ${i.name} (${i.path.join(' › ')})${PRICES[i.id] ? ', priced' : ''}`).join('\n');
       }
-      if (/^count\b/i.test(low)) {
+      if (DOOR.count.test(low)) {
         // a loop's step: count one more, and keep the run of them so the page can draw it going round
         const of = rest || 'rounds';
         const sr = worked.series && worked.series.of === of ? worked.series : { of, at: [] };
         sr.at.push(sr.at.length + 1); worked.series = sr;
         return `${of}: ${sr.at.length}`;
       }
-      if (/^(say|note|report|store|board|if|rule|calc|set)\b/i.test(low)) return rest || input || t;
-      if (/^wait\b/i.test(low)) { const s = Number(t.match(/([\d.]+)\s*s/)?.[1] ?? 1); await new Promise((ok) => setTimeout(ok, Math.min(5, s) * 1000)); return `waited ${Math.min(5, s)} s`; }
+      if (DOOR.words.test(low)) return rest || input || t;
+      if (DOOR.wait.test(low)) { const s = Number(t.match(/([\d.]+)\s*s/)?.[1] ?? 1); await new Promise((ok) => setTimeout(ok, Math.min(5, s) * 1000)); return `waited ${Math.min(5, s)} s`; }
       // EVERYTHING ELSE GOES TO THE WORKSHOP, which is the whole call catalogue (`substrate/calls.ts`) rather than a
       // list I chose. A call it cannot read says so in its own words, which name what it could not read and why —
       // far better than a list of six verbs, and it grows whenever the catalogue does.

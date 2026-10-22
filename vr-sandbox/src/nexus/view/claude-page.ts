@@ -65,7 +65,7 @@ function shell(): string {
   const waiting = S.items.filter((i) => !i.sent).length;
   return `
   <header>
-    <a class="back" href="./index.html">← Nexus</a>
+    <nav class="doors"><a class="back" href="./index.html">← Nexus</a><a class="door" href="./boards.html">Boards</a><a class="door" href="./make.html">Make</a><a class="door" href="./forge.html">Forge</a><a class="door" href="./look.html">Look</a></nav>
     <h1>To Claude</h1>
     <p class="lede">A picture of what you were doing, a drawing, or words — with what you want done about it.
       Press <kbd>⇧C</kbd> anywhere in the app to add one, or paste a picture straight in.</p>
