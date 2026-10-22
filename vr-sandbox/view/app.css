@@ -18,17 +18,25 @@ header{margin-bottom:26px}
 .back{font:500 12px var(--mono);color:var(--ink3);text-decoration:none;display:inline-block;margin-bottom:10px}
 .back:hover{color:var(--blue)}
 
-/* home */
-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr));gap:12px}
-.door{display:block;background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:16px 17px;text-decoration:none;color:inherit;border-top-width:2px;transition:border-color .12s}
-.door:hover{border-color:var(--ink3)}
-.door.\32 d{border-top-color:var(--green)} .door.\33 d{border-top-color:var(--blue)} .door.vr{border-top-color:var(--gold)}
-.door .k{font:500 10px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
-.door h2{font:600 17px var(--sans);letter-spacing:0;text-transform:none;color:var(--ink);margin:3px 0 6px}
-.door p{margin:0;color:var(--ink2);font-size:13.5px}
-.door .fact{display:block;margin-top:9px;font:500 11px var(--mono);color:var(--gold)}
-footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--rule)}
-footer p{color:var(--ink3);font-size:13px;max-width:70ch;margin:0}
+/* home: buttons, not cards — a front door is a row of things to press */
+nav.doors{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr));gap:8px;align-items:stretch}
+.go{display:flex;flex-direction:column;gap:5px;background:var(--panel);border:1px solid var(--edge);border-left:3px solid var(--ink3);
+  border-radius:10px;padding:13px 15px;text-decoration:none;color:inherit;min-width:0;transition:border-color .12s,background .12s}
+.go:hover{background:#121821;border-color:var(--ink3)}
+.go.flat{border-left-color:var(--green)}
+.go.flat:hover{border-color:var(--green)}
+.go.deep{border-left-color:var(--blue)}
+.go.deep:hover{border-color:var(--blue)}
+.go b{font:600 16px var(--sans);color:var(--ink);letter-spacing:-.01em}
+.go .says{font-size:13px;color:var(--ink2);line-height:1.45}
+.go .feet{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+.go .fact{font:500 11px var(--mono);color:var(--gold)}
+.go .needs{font:500 10px var(--mono);color:var(--ink3);letter-spacing:.05em;text-transform:uppercase;margin-left:auto}
+footer{margin-top:30px;padding-top:15px;border-top:1px solid var(--rule)}
+footer p{color:var(--ink3);font-size:12.5px;max-width:72ch;margin:0 0 8px;line-height:1.55}
+footer p.small{font-size:12px;color:#4f5968}
+footer b{color:var(--ink2)}
+
 
 /* make */
 form{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}
