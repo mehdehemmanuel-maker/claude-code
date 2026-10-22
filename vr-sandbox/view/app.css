@@ -196,14 +196,17 @@ svg.wires .wire{pointer-events:stroke}
 .zoom button:hover{background:#1a212b;color:var(--ink)}
 
 /* starting from a worked pipeline, and what a board says to change */
-.learn{margin-top:14px;border-top:1px solid var(--rule);padding-top:10px}
+.learn{margin-top:16px;border-top:1px solid var(--rule);padding-top:12px}
+.learn h3{font:500 11.5px var(--mono);letter-spacing:.04em;color:var(--ink3);text-transform:uppercase;margin:0}
 .learn summary{font:500 11.5px var(--mono);letter-spacing:.04em;color:var(--ink3);cursor:pointer;text-transform:uppercase}
 .learn summary:hover{color:var(--blue)}
 .learn .hint{font-size:12px;color:var(--ink3);margin:8px 0;line-height:1.5}
 .learn.open{background:var(--panel);border:1px solid var(--edge);border-left:2px solid var(--blue);border-radius:9px;padding:9px 12px;margin:0 0 12px;max-width:52rem}
 .learn.open summary{color:var(--blue)}
 .learn.open p{font-size:13px;color:var(--ink2);margin:7px 0 0;max-width:72ch}
-ul.tpl{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+ul.tpl{list-style:none;margin:0;padding:0 2px 0 0;display:grid;gap:4px;max-height:17rem;overflow-y:auto}
+.rail{display:flex;flex-direction:column}
+.rail .boards{order:-1}
 ul.tpl button{display:block;width:100%;text-align:left;background:transparent;border:1px solid var(--edge);border-radius:8px;padding:8px 10px;color:var(--ink2)}
 ul.tpl button:hover{border-color:var(--blue)}
 ul.tpl b{display:block;font:600 12.5px var(--sans);color:var(--ink);margin-bottom:2px}
@@ -306,3 +309,16 @@ svg.wires .card.step.doing rect:first-of-type{filter:drop-shadow(0 0 10px rgba(2
 .steppanel .what.wide{display:block;width:100%;margin-top:8px;font:400 13.5px var(--mono);background:#0b0e13;padding:9px 11px}
 .steppanel .from{width:auto;padding:7px 12px;font-size:12px;margin:0}
 .steppanel .then{display:block;margin-top:8px;font:400 11px var(--mono);color:var(--ink3)}
+
+/* making things: the bar that is in every view, because creation cannot live inside one tab */
+.make{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px solid var(--edge);
+  border-radius:10px;padding:8px 10px;margin-bottom:12px}
+.make form.add{flex:1 1 11rem;min-width:0;max-width:22rem}
+.make form.add input{font-size:13px;padding:8px 10px}
+.make form.add button{padding:8px 12px;font-size:13px}
+.make form.rename{flex:1 1 11rem}
+.make form.rename input{border-color:var(--gold);background:#1d1a12}
+.make form.rename button{background:transparent;border:1px solid var(--gold);color:var(--gold);font-size:12px}
+.make .hint{font-size:12px;color:var(--ink3)}
+.picked-bar.linking{border-left-color:var(--green);background:#101a14}
+.picked-bar button[data-act="link"]{border-color:var(--blue);color:var(--blue)}

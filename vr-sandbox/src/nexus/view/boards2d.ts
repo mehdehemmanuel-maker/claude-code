@@ -34,14 +34,15 @@ const KIND_SAYS: Record<StepKind, string> = {
 interface State {
   store: BoardStore | null; at: string | null; view: 'wires' | 'pages' | 'pipeline';
   /** how far in, and where the picture has been dragged to, in the wires view */ zoom: number; panX: number; panY: number;
-  /** the node picked first, waiting for a second to connect to */ picked: string | null;
+  /** the node you have picked. A click ALWAYS picks — never connects */ picked: string | null;
+  /** you pressed "link to…", so the next node you click is linked to the picked one */ linking: boolean;
   rel: string; run: FlowRun | null; running: boolean; stop: AbortController | null; say: string;
   /** what the last run worked out, which decides whether it is shown in 3D or as a line */ worked: Worked | null;
   /** what happened INSIDE each step, by its place in the run */ inside: Map<number, Trace[]>;
   /** the step the run is on right now, so the page can say so while it waits */ doing: string | null;
   /** the step whose call list is open, and what is being searched for in it */ picking: string | null; find: string;
 }
-const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, rel: 'connects', run: null, running: false, stop: null, say: '', worked: null, inside: new Map(), doing: null, picking: null, find: '' };
+const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, linking: false, rel: 'connects', run: null, running: false, stop: null, say: '', worked: null, inside: new Map(), doing: null, picking: null, find: '' };
 
 const board = (): Board | null => (S.at && S.store ? S.store.boards.get(S.at) ?? null : null);
 const put = (p: Parameters<BoardStore['write']>[1]) => { if (S.at && S.store) S.store.write(S.at, p); };
@@ -97,11 +98,32 @@ function nodeChip(b: Board, d: Derived, n: Live, pageId: string | null): string 
 /** THE BOARD AS WIRES, which is what a graph is for: you can see what branches from what. The bar above it is the
  *  same one the list has, so picking and connecting work identically in both — only the drawing differs. */
 function wiresHtml(b: Board, d: Derived): string {
-  return `${topBar(b, d)}
+  return `${makeBar(b, d)}${topBar(b, d)}
     <div class="wirewrap" id="wirewrap">${wiresSvg(b, d, { picked: S.picked, view: 'categories', zoom: S.zoom, panX: S.panX, panY: S.panY })}
       <div class="zoom"><button data-zoom="-">−</button><button data-zoom="0">fit</button><button data-zoom="+">+</button></div>
     </div>
     ${S.picked ? linksHtml(b, d) : ''}`;
+}
+
+/** MAKING THINGS, IN EVERY VIEW. This used to live only inside the Pages tab, so a person landing on the board —
+ *  which opens on Graph — had no way to add a page, a node or a step at all. Measured on a fresh load: nought add
+ *  forms visible, nought of nineteen template buttons visible, one node on screen and nothing to do with it. The
+ *  fault was putting the only way to create something inside one of three tabs.
+ *
+ *  So it is a bar, above everything, in all three views: a box that adds a page, a box that adds a node (onto the
+ *  page you have picked, or the first page), and — when something is picked — its name, straight to type over. */
+function makeBar(b: Board, d: Derived): string {
+  const pages = pagesOf(b, d);
+  const picked = S.picked ? nodesOf(b).find((n) => n.id === S.picked) : null;
+  // a node goes onto the page you picked; pick a node that is not a page and it goes onto ITS page; else the first
+  const onto = picked ? (b.nodes[picked.id]?.kind === 'page' ? picked.id : d.root.get(picked.id) ?? pages[0]?.id) : pages[0]?.id;
+  const ontoName = onto ? nodesOf(b).find((n) => n.id === onto)?.label ?? '' : '';
+  return `<div class="make">
+    <form class="add" data-under=""><input placeholder="+ page" aria-label="add a page" autocomplete="off"><button title="add a page">+</button></form>
+    ${onto ? `<form class="add" data-under="${onto}"><input placeholder="+ node on ${esc(ontoName)}" aria-label="add a node" autocomplete="off"><button title="add a node">+</button></form>`
+      : '<span class="hint">make a page first, then you can put nodes on it</span>'}
+    ${picked ? `<form class="add rename" data-rn="${picked.id}"><input value="${esc(picked.label)}" aria-label="rename what is picked" autocomplete="off"><button title="rename it">rename</button></form>` : ''}
+  </div>`;
 }
 
 function topBar(b: Board, d: Derived): string {
@@ -110,24 +132,31 @@ function topBar(b: Board, d: Derived): string {
   const elsewhere = edgesOf(b).filter((e) => d.root.get(e.from) !== d.root.get(e.to)).length;
   return `
   <div class="bar">
-    <span class="says">${pages.length} page${pages.length === 1 ? '' : 's'} · ${nodesOf(b).length} nodes ·
+    <span class="says">${pages.length} page${pages.length === 1 ? '' : 's'} · ${nodesOf(b).length} node${nodesOf(b).length === 1 ? '' : 's'} ·
       ${edgesOf(b).length} link${edgesOf(b).length === 1 ? '' : 's'}${elsewhere ? `, ${elsewhere} across pages` : ''}</span>
     <label class="rel">link as
       <select id="rel">${RELS.map((r) => `<option ${r === S.rel ? 'selected' : ''}>${r}</option>`).join('')}</select>
     </label>
   </div>
-  ${picked ? `<div class="picked-bar">
-      <b>${esc(picked.label)}</b> is picked — click another node to <b>${esc(S.rel)}</b> it, or click it again to let go.
-      <button data-act="unpick">let go</button>
-      <button data-act="dup">duplicate</button>
-      <button data-act="del" class="danger">delete</button>
-    </div>` : `<div class="picked-bar hintbar">Click a node to pick it, then click another to connect them — on this page or any other.</div>`}
+  ${picked ? (S.linking
+    ? `<div class="picked-bar linking">
+        Now click the node to <b>${esc(S.rel)}</b> <b>${esc(picked.label)}</b> to — on this page or any other.
+        <button data-act="nolink">never mind</button>
+      </div>`
+    : `<div class="picked-bar">
+        <b>${esc(picked.label)}</b> is picked.
+        <button data-act="link">link to…</button>
+        <button data-act="dup">duplicate</button>
+        <button data-act="del" class="danger">delete</button>
+        <button data-act="unpick">let go</button>
+      </div>`)
+    : `<div class="picked-bar hintbar">Click any node to pick it. Then you can rename it above, link it to another, duplicate it or delete it.</div>`}
   `;
 }
 
 function pagesHtml(b: Board, d: Derived): string {
   const pages = pagesOf(b, d);
-  return `${topBar(b, d)}
+  return `${makeBar(b, d)}${topBar(b, d)}
   <div class="pages">
     ${pages.map((p) => {
       // what is ON the page: everything it was given, read off the board's own `contains` links rather than off the
@@ -196,6 +225,7 @@ function pipelineHtml(b: Board, d: Derived): string {
   const doing = S.running ? S.run?.steps.at(-1)?.node ?? order[0] ?? null : null;
   const picked = S.picked && order.includes(S.picked) ? S.picked : null;
   return `
+  ${makeBar(b, d)}
   <div class="bar">
     <span class="says">${order.length} step${order.length === 1 ? '' : 's'}, ${drawn ? 'in the order you linked them' : 'in the order you made them'}${trigs.length ? `, from “${esc(trigs[0]!.label)}”` : ', with no trigger yet'}</span>
     <button id="run" ${S.running ? 'disabled' : ''}>${S.running ? 'running…' : '▶ Run'}</button>
@@ -271,14 +301,15 @@ function shell(): string {
   <aside class="rail">
     <a class="back" href="./index.html">← Nexus</a>
     <form id="newboard"><input placeholder="+ new board" autocomplete="off" aria-label="make a board"><button>+</button></form>
-    <details class="learn">
-      <summary>Start from a worked one</summary>
-      <p class="hint">Each is a pipeline that already does something. Open it, read what it says to change, change
-        that one step, and press ▶ Run. Then <b>copy</b> it and change it again — that is how you get your own.</p>
-      <ul class="tpl">${TEMPLATES.map((t) => `<li><button data-tpl="${t.id}"><b>${esc(t.title)}</b><span>${esc(t.about)}</span></button></li>`).join('')}</ul>
-    </details>
+    <div class="learn">
+      <h3>Start from a worked one</h3>
+      <p class="hint">Each one already does something. Open it, change the step it says to change, press ▶ Run.
+        Then <b>copy</b> the whole board and change it again.</p>
+      <ul class="tpl">${TEMPLATES.map((t) => `<li><button data-tpl="${t.id}"
+        title="${esc(t.about)}"><b>${esc(t.title)}</b><span>${esc(t.about.length > 96 ? `${t.about.slice(0, 95)}…` : t.about)}</span></button></li>`).join('')}</ul>
+    </div>
     <ul class="boards">${bs.map(([id, x]) => `<li><button class="${id === S.at ? 'on' : ''}" data-board="${id}">
-      <b>${esc(x.title)}</b><span>${Object.values(x.nodes).filter((n) => !n.deleted).length} nodes</span></button></li>`).join('')}</ul>
+      <b>${esc(x.title)}</b><span>${((k) => `${k} node${k === 1 ? '' : 's'}`)(Object.values(x.nodes).filter((n) => !n.deleted).length)}</span></button></li>`).join('')}</ul>
     <p class="kept">${esc(S.store?.status() ?? '')}</p>
   </aside>
   <main>
@@ -303,19 +334,25 @@ function shell(): string {
 export function mountBoards(el: HTMLElement): void {
   const draw = () => { el.innerHTML = shell(); wireMindBox(el, draw); void mountScenes(el); };
 
+  // A CLICK ALWAYS PICKS. It used to pick the first node and CONNECT the second, which meant one click did two
+  // different things depending on state you could not see: rename a node, click another, and instead of selecting it
+  // you had silently linked them. Linking is its own mode now — press "link to…", then click the other node — so a
+  // click is never a surprise and the bar always says which of the two you are in.
   const pick = (id: string) => {
     const b = board(); if (!b) return;
-    // on the pipeline board a click OPENS a step; connecting is what the graph board is for
-    if (S.view === 'pipeline') { S.picked = S.picked === id ? null : id; S.picking = null; return draw(); }
-    if (!S.picked) { S.picked = id; S.say = ''; return draw(); }
-    if (S.picked === id) { S.picked = null; return draw(); }
-    const t = toggleLink(b, S.picked, id, S.rel);
-    if (t) {
-      put(t.patch);
-      const name = (x: string) => b.nodes[x]?.label ?? x;
-      S.say = t.linked ? `${name(S.picked)} → ${name(id)}: ${S.rel}` : `${name(S.picked)} and ${name(id)} are no longer joined`;
+    if (S.view === 'pipeline') { S.picked = S.picked === id ? null : id; S.picking = null; S.linking = false; return draw(); }
+    if (S.linking && S.picked && S.picked !== id) {
+      const t = toggleLink(b, S.picked, id, S.rel);
+      if (t) {
+        put(t.patch);
+        const name = (x: string) => b.nodes[x]?.label ?? x;
+        S.say = t.linked ? `${name(S.picked)} → ${name(id)}: ${S.rel}` : `${name(S.picked)} and ${name(id)} are no longer joined`;
+      }
+      S.linking = false; return draw();
     }
-    S.picked = null; draw();
+    S.picked = S.picked === id ? null : id;
+    S.linking = false; S.say = '';
+    draw();
   };
 
   // dragging a card, and dragging the picture behind it. A press that does not move is left alone, so it lands as
@@ -367,7 +404,9 @@ export function mountBoards(el: HTMLElement): void {
     if (t.dataset.from && b) return start(b, t.dataset.from);
     const act = t.dataset.act;
     if (!b || !act) return;
-    if (act === 'unpick') { S.picked = null; return draw(); }
+    if (act === 'unpick') { S.picked = null; S.linking = false; return draw(); }
+    if (act === 'link') { S.linking = true; S.say = ''; return draw(); }
+    if (act === 'nolink') { S.linking = false; return draw(); }
     if (act === 'del' && S.picked) { put(deleteNode(b, S.picked)); S.picked = null; S.say = 'deleted'; return draw(); }
     if (act === 'dup' && S.picked) { const dd = duplicateNode(b, S.picked); if (dd) { put(dd.patch); S.say = `copied as “${dd.label}”`; } S.picked = null; return draw(); }
     // COPY THE WHOLE THING. `clipOf` takes a board's steps and the links between them, `pasteOf` lays them into a
@@ -393,6 +432,7 @@ export function mountBoards(el: HTMLElement): void {
     ev.preventDefault();
     const f = ev.target as HTMLFormElement, box = f.querySelector('input')!, words = box.value.trim();
     if (!words) return;
+    if (f.dataset.rn) { put({ nodes: { [f.dataset.rn]: { label: words } } }); S.say = `renamed to “${words}”`; return draw(); }
     if (f.id === 'newboard') {
       const id = uid('b'); S.store!.write(id, freshBoard(words), true); S.at = id; S.view = 'wires'; S.picked = null;
       box.value = ''; return draw();
@@ -404,7 +444,9 @@ export function mountBoards(el: HTMLElement): void {
     const a = addNode(freeName(b, words), under, uid('n'), 'contains');
     // a page says it is one, so connecting things can never demote it (see pagesOf)
     if (!under) a.patch.nodes![a.id]!.kind = 'page';
-    put(a.patch); box.value = ''; S.say = under ? '' : `page “${words}” made`;
+    put(a.patch); box.value = '';
+    S.picked = a.id; S.linking = false;        // what you just made is picked, ready to rename or link
+    S.say = under ? `“${words}” added` : `page “${words}” made`;
     draw();
   });
 
