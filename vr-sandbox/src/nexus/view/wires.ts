@@ -200,7 +200,7 @@ function stepCard(n: Live, p: At, o: WireOpts, d: Derived): string {
  *  would nudge the first one. */
 export function dragCard(
   svg: SVGSVGElement, id: string, ev: PointerEvent, view: View, zoom: number,
-  write: (p: Patch) => void, redraw: () => void,
+  write: (p: Patch) => void, redraw: () => void, onDrag: () => void = () => undefined,
 ): void {
   const g = svg.querySelector<SVGGElement>(`[data-node="${CSS.escape(id)}"]`); if (!g) return;
   const box = svg.viewBox.baseVal, rect = svg.getBoundingClientRect();
@@ -212,8 +212,9 @@ export function dragCard(
   let moved = false;
   const move = (e: PointerEvent) => {
     const dx = (e.clientX - sx) * per, dy = (e.clientY - sy) * per;
-    if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < 4) return;
-    moved = true; g.setAttribute('transform', `translate(${(x0 + dx).toFixed(1)},${(y0 + dy).toFixed(1)})`);
+    if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < 5) return;
+    moved = true; onDrag();
+    g.setAttribute('transform', `translate(${(x0 + dx).toFixed(1)},${(y0 + dy).toFixed(1)})`);
   };
   const up = (e: PointerEvent) => {
     window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);

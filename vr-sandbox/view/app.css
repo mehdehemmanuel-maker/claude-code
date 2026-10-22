@@ -102,14 +102,8 @@ body.boards{padding:0;overflow:hidden}
 button.small{padding:7px 11px;font-size:12px}
 button.danger{background:transparent;border:1px solid var(--edge);color:var(--red)}
 button.danger:hover{border-color:var(--red)}
-.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
-.bar .says{font:500 11.5px var(--mono);color:var(--ink3);letter-spacing:.03em}
-.bar .rel,.bar label{font:500 11px var(--mono);color:var(--ink3);display:flex;gap:6px;align-items:center}
 select,.what,.lab{background:var(--panel);border:1px solid var(--edge);border-radius:7px;padding:6px 9px;color:var(--ink);font:400 13px var(--sans)}
 select:focus,input:focus{outline:none;border-color:var(--blue)}
-.picked-bar{background:#121821;border:1px solid var(--edge);border-left:2px solid var(--gold);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:13.5px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.picked-bar.hintbar{border-left-color:var(--ink3);color:var(--ink3);background:transparent}
-.picked-bar button{background:transparent;border:1px solid var(--edge);color:var(--ink2);padding:5px 10px;font-size:12px}
 .said{background:#101a14;border:1px solid #1e3326;border-radius:8px;padding:8px 12px;margin:0 0 12px;font:500 12.5px var(--mono);color:var(--green)}
 .pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr));gap:10px;align-items:start}
 .page{background:var(--panel);border:1px solid var(--edge);border-radius:11px;padding:11px;min-width:0}
@@ -148,11 +142,11 @@ form.add button{padding:6px 11px;font-size:13px;line-height:1}
 .flow .card .row{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
 .flow .card .what{flex:1;min-width:11rem}
 .flow .sug{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
-.flow .sug button{background:transparent;border:1px solid var(--rule);color:var(--ink3);border-radius:999px;padding:3px 8px;font:400 11px var(--sans)}
-.flow .sug button:hover{border-color:var(--blue);color:var(--blue)}
+.flow .sug button,.insp .sug button{background:transparent;border:1px solid var(--rule);color:var(--ink3);border-radius:999px;padding:3px 8px;font:400 11px var(--sans)}
+.flow .sug button:hover,.insp .sug button:hover{border-color:var(--blue);color:var(--blue)}
 .flow .then{display:block;margin-top:6px;font:400 11px var(--mono);color:var(--ink3)}
-.flow .from{background:transparent;border:1px solid var(--edge);color:var(--ink3);border-radius:7px;padding:8px 0;width:2rem;font-size:11px;margin-top:4px}
-.flow .from:hover{border-color:var(--green);color:var(--green)}
+.flow .from,.insp .from{background:transparent;border:1px solid var(--edge);color:var(--ink3);border-radius:7px;padding:8px 0;width:2rem;font-size:11px;margin-top:4px}
+.flow .from:hover,.insp .from:hover{border-color:var(--green);color:var(--green)}
 .k{font:500 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:2px 6px;background:#0b0e13;color:var(--ink3)}
 .k-trigger{color:var(--gold)} .k-ai{color:#b388ff} .k-action{color:var(--blue)} .k-check{color:var(--green)} .k-repeat{color:var(--red)}
 
@@ -205,8 +199,7 @@ svg.wires .wire{pointer-events:stroke}
 .learn.open summary{color:var(--blue)}
 .learn.open p{font-size:13px;color:var(--ink2);margin:7px 0 0;max-width:72ch}
 ul.tpl{list-style:none;margin:0;padding:0 2px 0 0;display:grid;gap:4px;max-height:17rem;overflow-y:auto}
-.rail{display:flex;flex-direction:column}
-.rail .boards{order:-1}
+
 ul.tpl button{display:block;width:100%;text-align:left;background:transparent;border:1px solid var(--edge);border-radius:8px;padding:8px 10px;color:var(--ink2)}
 ul.tpl button:hover{border-color:var(--blue)}
 ul.tpl b{display:block;font:600 12.5px var(--sans);color:var(--ink);margin-bottom:2px}
@@ -300,7 +293,6 @@ ul.made li.more{display:block;color:#4a5462}
 .flowwrap{height:min(46vh,420px)}
 svg.wires .card.step{cursor:pointer}
 svg.wires .card.step.doing rect:first-of-type{filter:drop-shadow(0 0 10px rgba(217,164,65,.55))}
-.steppanel{margin-top:12px;background:var(--panel);border:1px solid var(--edge);border-left:2px solid var(--ink3);border-radius:11px;padding:11px 13px;max-width:52rem}
 .steppanel.k-trigger{border-left-color:var(--gold)} .steppanel.k-ai{border-left-color:#b388ff}
 .steppanel.k-action{border-left-color:var(--blue)} .steppanel.k-check{border-left-color:var(--green)}
 .steppanel.k-repeat{border-left-color:var(--red)}
@@ -311,14 +303,42 @@ svg.wires .card.step.doing rect:first-of-type{filter:drop-shadow(0 0 10px rgba(2
 .steppanel .then{display:block;margin-top:8px;font:400 11px var(--mono);color:var(--ink3)}
 
 /* making things: the bar that is in every view, because creation cannot live inside one tab */
-.make{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px solid var(--edge);
-  border-radius:10px;padding:8px 10px;margin-bottom:12px}
-.make form.add{flex:1 1 11rem;min-width:0;max-width:22rem}
-.make form.add input{font-size:13px;padding:8px 10px}
-.make form.add button{padding:8px 12px;font-size:13px}
-.make form.rename{flex:1 1 11rem}
-.make form.rename input{border-color:var(--gold);background:#1d1a12}
-.make form.rename button{background:transparent;border:1px solid var(--gold);color:var(--gold);font-size:12px}
-.make .hint{font-size:12px;color:var(--ink3)}
-.picked-bar.linking{border-left-color:var(--green);background:#101a14}
-.picked-bar button[data-act="link"]{border-color:var(--blue);color:var(--blue)}
+
+/* ---- the board page: one frame. A header, one toolbar, the canvas, one inspector. Nothing floats in from a
+   round that happened to need somewhere to put a button. ------------------------------------------------------ */
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--panel);border:1px solid var(--edge);
+  border-radius:10px;padding:8px 10px;margin:0 0 10px}
+.tools form.add{display:flex;gap:4px;margin:0;flex:1 1 10rem;min-width:0;max-width:19rem}
+.tools form.add input{flex:1;min-width:0;background:#0b0e13;border:1px solid var(--edge);border-radius:7px;
+  padding:8px 10px;color:var(--ink);font:400 13px var(--sans)}
+.tools form.add button{padding:8px 12px;font-size:13px;line-height:1;flex:none}
+.tools #run{padding:8px 16px;font-size:13.5px}
+.tools .count{font:500 11px var(--mono);color:var(--ink3);letter-spacing:.03em;margin-left:auto;white-space:nowrap}
+.tools .hint{font-size:12px;color:var(--ink3)}
+.tools button.small{padding:7px 11px;font-size:12px;background:transparent;border:1px solid var(--edge);color:var(--ink2)}
+p.reads{font:500 11.5px var(--mono);color:var(--ink3);margin:0 0 8px;letter-spacing:.03em}
+
+.insp{margin-top:10px;background:var(--panel);border:1px solid var(--edge);border-left:2px solid var(--blue);
+  border-radius:10px;padding:11px 13px;max-width:52rem}
+.insp.empty{border-left-color:var(--rule);color:var(--ink3);font-size:12.5px;line-height:1.55;background:transparent}
+.insp.linking{border-left-color:var(--green);background:#101a14;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13.5px}
+.insp form.rename{display:flex;gap:6px;margin:0 0 8px}
+.insp form.rename input{flex:1;min-width:0;background:#0b0e13;border:1px solid var(--edge);border-radius:7px;
+  padding:8px 11px;color:var(--ink);font:600 15px var(--sans)}
+.insp form.rename button{padding:8px 13px;font-size:12.5px;background:transparent;border:1px solid var(--edge);color:var(--ink2)}
+.insp form.rename button:hover{border-color:var(--blue);color:var(--blue)}
+.insp .meta{font:500 10.5px var(--mono);color:var(--ink3);letter-spacing:.05em;text-transform:uppercase}
+.insp .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px}
+.insp .acts button{background:transparent;border:1px solid var(--edge);color:var(--ink2);padding:6px 11px;font-size:12.5px}
+.insp .acts button:hover{border-color:var(--blue);color:var(--blue)}
+.insp .acts button.danger{color:var(--red)} .insp .acts button.danger:hover{border-color:var(--red)}
+.insp .acts .rel{font:500 10.5px var(--mono);color:var(--ink3);display:flex;gap:6px;align-items:center;margin-right:auto}
+.insp.steppanel{border-left-width:2px}
+.insp.steppanel .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* the canvas: it scrolls the page like everything else, and only drags what you grab */
+.wirewrap{touch-action:pan-y}
+
+.insp .from{width:auto;padding:7px 13px;font-size:12.5px;margin:0}
+.insp .sug{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.insp .what.wide{font:400 13.5px var(--mono);text-transform:none;letter-spacing:0;color:var(--ink)}

@@ -98,65 +98,75 @@ function nodeChip(b: Board, d: Derived, n: Live, pageId: string | null): string 
 /** THE BOARD AS WIRES, which is what a graph is for: you can see what branches from what. The bar above it is the
  *  same one the list has, so picking and connecting work identically in both — only the drawing differs. */
 function wiresHtml(b: Board, d: Derived): string {
-  return `${makeBar(b, d)}${topBar(b, d)}
+  return `${toolbar(b, d)}
     <div class="wirewrap" id="wirewrap">${wiresSvg(b, d, { picked: S.picked, view: 'categories', zoom: S.zoom, panX: S.panX, panY: S.panY })}
       <div class="zoom"><button data-zoom="-">−</button><button data-zoom="0">fit</button><button data-zoom="+">+</button></div>
     </div>
-    ${S.picked ? linksHtml(b, d) : ''}`;
+    ${inspector(b, d)}`;
 }
 
-/** MAKING THINGS, IN EVERY VIEW. This used to live only inside the Pages tab, so a person landing on the board —
+/** THE TOOLBAR: one strip, same place, every view. Making things used to be one bar, the counts another, and what
+ *  was picked a third, each added in a different round and stacked in the order I happened to write them. Three
+ *  strips that are all "the controls" is not a layout. This is the controls.
+ *
+ *  MAKING THINGS, IN EVERY VIEW. This used to live only inside the Pages tab, so a person landing on the board —
  *  which opens on Graph — had no way to add a page, a node or a step at all. Measured on a fresh load: nought add
  *  forms visible, nought of nineteen template buttons visible, one node on screen and nothing to do with it. The
  *  fault was putting the only way to create something inside one of three tabs.
  *
  *  So it is a bar, above everything, in all three views: a box that adds a page, a box that adds a node (onto the
  *  page you have picked, or the first page), and — when something is picked — its name, straight to type over. */
-function makeBar(b: Board, d: Derived): string {
+function toolbar(b: Board, d: Derived, extra = ''): string {
   const pages = pagesOf(b, d);
   const picked = S.picked ? nodesOf(b).find((n) => n.id === S.picked) : null;
   // a node goes onto the page you picked; pick a node that is not a page and it goes onto ITS page; else the first
   const onto = picked ? (b.nodes[picked.id]?.kind === 'page' ? picked.id : d.root.get(picked.id) ?? pages[0]?.id) : pages[0]?.id;
   const ontoName = onto ? nodesOf(b).find((n) => n.id === onto)?.label ?? '' : '';
-  return `<div class="make">
+  const links = edgesOf(b).length;
+  return `<div class="tools">
     <form class="add" data-under=""><input placeholder="+ page" aria-label="add a page" autocomplete="off"><button title="add a page">+</button></form>
     ${onto ? `<form class="add" data-under="${onto}"><input placeholder="+ node on ${esc(ontoName)}" aria-label="add a node" autocomplete="off"><button title="add a node">+</button></form>`
-      : '<span class="hint">make a page first, then you can put nodes on it</span>'}
-    ${picked ? `<form class="add rename" data-rn="${picked.id}"><input value="${esc(picked.label)}" aria-label="rename what is picked" autocomplete="off"><button title="rename it">rename</button></form>` : ''}
+      : '<span class="hint">add a page first</span>'}
+    ${extra}
+    <span class="count">${pages.length} page${pages.length === 1 ? '' : 's'} · ${nodesOf(b).length} node${nodesOf(b).length === 1 ? '' : 's'} · ${links} link${links === 1 ? '' : 's'}</span>
   </div>`;
 }
 
-function topBar(b: Board, d: Derived): string {
-  const pages = pagesOf(b, d);
+/** THE INSPECTOR: one panel, under the canvas, about whatever is picked — and nothing when nothing is. Everything
+ *  you can do to a node is here, in one place, rather than appearing as a new strip above the board. */
+function inspector(b: Board, d: Derived): string {
   const picked = S.picked ? nodesOf(b).find((n) => n.id === S.picked) : null;
-  const elsewhere = edgesOf(b).filter((e) => d.root.get(e.from) !== d.root.get(e.to)).length;
-  return `
-  <div class="bar">
-    <span class="says">${pages.length} page${pages.length === 1 ? '' : 's'} · ${nodesOf(b).length} node${nodesOf(b).length === 1 ? '' : 's'} ·
-      ${edgesOf(b).length} link${edgesOf(b).length === 1 ? '' : 's'}${elsewhere ? `, ${elsewhere} across pages` : ''}</span>
-    <label class="rel">link as
-      <select id="rel">${RELS.map((r) => `<option ${r === S.rel ? 'selected' : ''}>${r}</option>`).join('')}</select>
-    </label>
-  </div>
-  ${picked ? (S.linking
-    ? `<div class="picked-bar linking">
-        Now click the node to <b>${esc(S.rel)}</b> <b>${esc(picked.label)}</b> to — on this page or any other.
-        <button data-act="nolink">never mind</button>
-      </div>`
-    : `<div class="picked-bar">
-        <b>${esc(picked.label)}</b> is picked.
-        <button data-act="link">link to…</button>
-        <button data-act="dup">duplicate</button>
-        <button data-act="del" class="danger">delete</button>
-        <button data-act="unpick">let go</button>
-      </div>`)
-    : `<div class="picked-bar hintbar">Click any node to pick it. Then you can rename it above, link it to another, duplicate it or delete it.</div>`}
-  `;
+  if (!picked) {
+    return `<div class="insp empty">Click a node to pick it. Then rename it, link it to another, duplicate it or
+      delete it — all here. Drag a node to move it; drag the board to pan; ⌘/Ctrl + wheel to zoom.</div>`;
+  }
+  const isPage = b.nodes[picked.id]?.kind === 'page';
+  const deg = d.deg.get(picked.id) ?? 0;
+  if (S.linking) {
+    return `<div class="insp linking">
+      <b>Click the node to ${esc(S.rel)} “${esc(picked.label)}” to.</b> Any node, on any page.
+      <button data-act="nolink">never mind</button></div>`;
+  }
+  return `<div class="insp">
+    <form class="add rename" data-rn="${picked.id}">
+      <input value="${esc(picked.label)}" aria-label="its name" autocomplete="off"><button>rename</button>
+    </form>
+    <span class="meta">${isPage ? 'a page' : 'a node'} · ${deg} link${deg === 1 ? '' : 's'}</span>
+    <div class="acts">
+      <label class="rel">link as <select id="rel">${RELS.map((r) => `<option ${r === S.rel ? 'selected' : ''}>${r}</option>`).join('')}</select></label>
+      <button data-act="link">link to…</button>
+      <button data-act="dup">duplicate</button>
+      <button data-act="del" class="danger">delete</button>
+      <button data-act="unpick">let go</button>
+    </div>
+    ${linksHtml(b, d)}
+  </div>`;
 }
+
 
 function pagesHtml(b: Board, d: Derived): string {
   const pages = pagesOf(b, d);
-  return `${makeBar(b, d)}${topBar(b, d)}
+  return `${toolbar(b, d)}
   <div class="pages">
     ${pages.map((p) => {
       // what is ON the page: everything it was given, read off the board's own `contains` links rather than off the
@@ -174,7 +184,7 @@ function pagesHtml(b: Board, d: Derived): string {
       <form class="add" data-under=""><input placeholder="+ new page" aria-label="add a page" autocomplete="off"><button>+</button></form>
     </section>
   </div>
-  ${S.picked ? linksHtml(b, d) : ''}`;
+  ${inspector(b, d)}`;
 }
 
 /** Everything the picked node is joined to, so a graph can be read and not only made. */
@@ -224,24 +234,20 @@ function pipelineHtml(b: Board, d: Derived): string {
   for (const x of S.run?.steps ?? []) ran.set(x.node, x.status);
   const doing = S.running ? S.run?.steps.at(-1)?.node ?? order[0] ?? null : null;
   const picked = S.picked && order.includes(S.picked) ? S.picked : null;
-  return `
-  ${makeBar(b, d)}
-  <div class="bar">
-    <span class="says">${order.length} step${order.length === 1 ? '' : 's'}, ${drawn ? 'in the order you linked them' : 'in the order you made them'}${trigs.length ? `, from “${esc(trigs[0]!.label)}”` : ', with no trigger yet'}</span>
-    <button id="run" ${S.running ? 'disabled' : ''}>${S.running ? 'running…' : '▶ Run'}</button>
+  const run = `<button id="run" ${S.running ? 'disabled' : ''}>${S.running ? 'running…' : '▶ Run'}</button>
     ${S.running ? '<button id="stoprun" class="danger">Stop</button>' : ''}
-    ${drawn || order.length < 2 ? '' : '<button data-act="chain" class="small">link them in this order</button>'}
-  </div>
-  ${trigs.length ? '' : `<div class="picked-bar hintbar">A pipeline starts at a <b>trigger</b>. Click a step below and give it the
-    kind “starts it” — “when I press run” is the plain one.</div>`}
+    ${drawn || order.length < 2 ? '' : '<button data-act="chain" class="small">link in this order</button>'}`;
+  return `
+  ${toolbar(b, d, run)}
+  <p class="reads">${order.length} step${order.length === 1 ? '' : 's'}, ${drawn ? 'in the order you linked them' : 'in the order you made them'}${trigs.length ? `, from “${esc(trigs[0]!.label)}”` : ' — no trigger yet, so give a step the kind “starts it”'}</p>
   <div class="wirewrap flowwrap" id="wirewrap">${wiresSvg(b, d, {
     picked: S.picked, view: 'pipeline', zoom: S.zoom, panX: S.panX, panY: S.panY,
     flow: { order, step: (id) => stepOf(b, id), ran, doing },
   })}
     <div class="zoom"><button data-zoom="-">−</button><button data-zoom="0">fit</button><button data-zoom="+">+</button></div>
   </div>
-  ${picked ? stepPanel(b, g, picked, name) : `<p class="none">Click a step on the board to change what it does. Drag one to move it;
-    drag the board to pan.</p>`}
+  ${picked ? stepPanel(b, g, picked, name) : `<div class="insp empty">Click a step on the board to change what it does.
+    Drag one to move it; drag the board to pan.</div>`}
   ${S.worked ? showHtml(S.worked) : ''}${runHtml(S.run, S.inside, S.doing)}`;
 }
 
@@ -252,7 +258,7 @@ function stepPanel(b: Board, g: ReturnType<typeof graphOf>, id: string, name: (i
   const st = stepOf(b, id);
   const kind = st?.kind ?? '';
   const after = (g.next.get(id) ?? []).map((x) => esc(name(x)));
-  return `<div class="steppanel k-${kind || 'plain'}">
+  return `<div class="insp steppanel k-${kind || 'plain'}">
     <div class="row">
       <input class="lab" data-rename="${id}" value="${esc(name(id))}" aria-label="this step's name">
       <select data-kind="${id}" aria-label="what kind of step">
@@ -301,6 +307,8 @@ function shell(): string {
   <aside class="rail">
     <a class="back" href="./index.html">← Nexus</a>
     <form id="newboard"><input placeholder="+ new board" autocomplete="off" aria-label="make a board"><button>+</button></form>
+    <ul class="boards">${bs.map(([id, x]) => `<li><button class="${id === S.at ? 'on' : ''}" data-board="${id}">
+      <b>${esc(x.title)}</b><span>${((k) => `${k} node${k === 1 ? '' : 's'}`)(Object.values(x.nodes).filter((n) => !n.deleted).length)}</span></button></li>`).join('')}</ul>
     <div class="learn">
       <h3>Start from a worked one</h3>
       <p class="hint">Each one already does something. Open it, change the step it says to change, press ▶ Run.
@@ -308,8 +316,6 @@ function shell(): string {
       <ul class="tpl">${TEMPLATES.map((t) => `<li><button data-tpl="${t.id}"
         title="${esc(t.about)}"><b>${esc(t.title)}</b><span>${esc(t.about.length > 96 ? `${t.about.slice(0, 95)}…` : t.about)}</span></button></li>`).join('')}</ul>
     </div>
-    <ul class="boards">${bs.map(([id, x]) => `<li><button class="${id === S.at ? 'on' : ''}" data-board="${id}">
-      <b>${esc(x.title)}</b><span>${((k) => `${k} node${k === 1 ? '' : 's'}`)(Object.values(x.nodes).filter((n) => !n.deleted).length)}</span></button></li>`).join('')}</ul>
     <p class="kept">${esc(S.store?.status() ?? '')}</p>
   </aside>
   <main>
@@ -357,31 +363,51 @@ export function mountBoards(el: HTMLElement): void {
 
   // dragging a card, and dragging the picture behind it. A press that does not move is left alone, so it lands as
   // the click that picks a node — that is what lets one gesture both arrange the board and connect it.
+  // DRAGGING, AND NOT DRAGGING BY ACCIDENT. The board was "very touchy": any press on a card began a drag, and the
+  // click fired as well, so a press that wandered two pixels both moved the node AND counted as picking it. Now a
+  // gesture is one thing or the other — nothing moves until the pointer has travelled past DEAD pixels, and a press
+  // that did move swallows the click that follows it.
+  const DEAD = 5;
+  let dragged = false;
   el.addEventListener('pointerdown', (ev) => {
     const svg = (ev.target as Element).closest?.('svg.wires') as SVGSVGElement | null;
     if (!svg || ev.button !== 0) return;
     const card = (ev.target as Element).closest?.('[data-node]') as SVGGElement | null;
-    if (card?.dataset.node) { dragCard(svg, card.dataset.node, ev, S.view === 'pipeline' ? 'pipeline' : 'categories', S.zoom, put, draw); return; }
+    if (card?.dataset.node) {
+      dragCard(svg, card.dataset.node, ev, S.view === 'pipeline' ? 'pipeline' : 'categories', S.zoom, put, draw, () => { dragged = true; });
+      return;
+    }
     const sx = ev.clientX, sy = ev.clientY, px = S.panX, py = S.panY;
     const box = svg.viewBox.baseVal, rect = svg.getBoundingClientRect();
     const per = Math.max(box.width / rect.width, box.height / rect.height);
     const inner = svg.querySelector('g'); if (!inner) return;
-    const move = (e: PointerEvent) => inner.setAttribute('transform', `translate(${(px + (e.clientX - sx) * per).toFixed(1)},${(py + (e.clientY - sy) * per).toFixed(1)}) scale(${S.zoom})`);
+    let moving = false;
+    const move = (e: PointerEvent) => {
+      if (!moving && Math.hypot(e.clientX - sx, e.clientY - sy) < DEAD) return;
+      moving = true; dragged = true;
+      inner.setAttribute('transform', `translate(${(px + (e.clientX - sx) * per).toFixed(1)},${(py + (e.clientY - sy) * per).toFixed(1)}) scale(${S.zoom})`);
+    };
     const up = (e: PointerEvent) => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      if (!moving) return;
       S.panX = px + (e.clientX - sx) * per; S.panY = py + (e.clientY - sy) * per;
     };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   });
 
+  // THE WHEEL SCROLLS THE PAGE. It used to zoom the board, so scrolling past it on the way down the page zoomed it
+  // instead and you lost your place — the single touchiest thing about it. Zoom is ⌘/Ctrl + wheel, which is what a
+  // canvas does everywhere else, and the two buttons under the board do it without a keyboard at all.
   el.addEventListener('wheel', (ev) => {
     if (!(ev.target as Element).closest?.('.wirewrap')) return;
+    if (!ev.ctrlKey && !ev.metaKey) return;          // a plain wheel scrolls the page, as it should
     ev.preventDefault();
     S.zoom = Math.max(0.3, Math.min(4, S.zoom * (ev.deltaY < 0 ? 1.1 : 0.9)));
     draw();
   }, { passive: false });
 
   el.addEventListener('click', (ev) => {
+    if (dragged) { dragged = false; return; }        // that press was a drag, not a click
     const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],[data-zoom],[data-tpl],[data-pick],#run,#stoprun') as HTMLElement | null;
     if (!t) return;
     const z = t.dataset.zoom;
