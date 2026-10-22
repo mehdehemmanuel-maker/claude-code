@@ -1786,3 +1786,43 @@ its interface `Hold` when `ask/conditions.ts` owns that word for what holds a st
 `life/rhythm.ts` owns that for a moment in TIME. They are `Stay` and `gravityMoment`, which is what they are.
 
 GATE: PASS (2407 of 2407 ran) — 191.1s (`npm run gate`), 10 new tests. Tidy 24/24.
+
+## Run 9d — a local model on the user's own hardware, allowed to do one job
+
+**The ask**: *"install a local llm that will run on users GPU and CPU"*. Two facts decide the shape, both measured
+again on the 22nd: **this container has no GPU**, and its network refuses `ollama.com`, `registry.ollama.ai` and
+`huggingface.co`. So nothing can be fetched here, and nothing fetched here would touch the user's card anyway — the
+GPU is on the user's machine. Per the user's standing instruction (*"build it anyways and wait for me to approve,
+aquire, setup... I would rather it exist and be ready when I'm ready"*), all three pieces are built and the only
+step left is the one command he runs.
+
+**`tools/local-llm.sh`** — looks at the hardware (NVIDIA / AMD / Apple silicon / CPU), works out what fits from
+**~0.6 GB per billion parameters at 4-bit with 1.5 GB held back**, installs ollama if absent, pulls the largest
+candidate that still pulls, serves it on loopback, and **proves it on the real job rather than on "hello"**: picking
+from a closed vocabulary. Two details that are the difference between working and a mystery: `OLLAMA_ORIGINS` must
+name the page's origin or the browser's request is refused and the page shows what looks exactly like a dead
+server; and the candidate list is tried in ORDER so a retired model name falls through instead of failing.
+
+**Why a browser page and a local server is the right pairing, and not a workaround**: the forge, the phone and the
+boards are a page that runs IN THE USER'S OWN BROWSER, on the same machine. A model at 127.0.0.1 is therefore
+reachable from it directly — no cloud, no key, no per-call cost, and it keeps working with the Wi-Fi off.
+
+**`src/nexus/ask/mind.ts`** is CLAUDE.md's standing rule written as CODE rather than prose. `pickFrom` takes a
+CLOSED list and `keepOnly` intersects whatever the model said with it, so **the result is a subset of the allowed
+answers by construction** — a guarantee from the filter, not a hope about the model, holding for a 1.5B as well as
+a 70B. There is no function in the file that returns a number and there must never be. Tested against a model that
+MISBEHAVES, which is the only test that means anything: invented words (`weld`, `sinter`) are dropped; numbers
+(`{"pick":[400,300,80]}`) yield nothing because no number is in the list; `cutter` does not count as `cut`; junk,
+empty and null all answer `[]` without throwing; and no model configured is an ordinary state, not an error.
+
+**The one cost, asserted rather than hidden**: the prose fallback (which exists so a small model answering *"it
+should cut and grip"* is not refused on formatting) cannot tell an ANSWER from an incidental use, so *"I think it
+should use a laser"* yields `think`. It is bounded — the worst case is a word FROM the list that the sentence did
+not mean, never an invented word and never a value — and a test asserts the false positive so it stays visible.
+
+**`npm run mind`** is the door, and it prints the model's answer BESIDE the pattern-matching reader's (`--both`),
+because 7,274 characters of regex is what reads English here today and the only honest way to know whether a model
+helps is to show both. With nothing configured it says so and exits 0: nothing in this tree requires a model.
+
+GATE: PASS (2418 of 2418 ran) — 213.0s (`npm run gate`), 11 new tests. Tidy 24/24. Census
+(`node tools/unwired.mjs --all`): 170 test-only, 147 dead, 21 unreached files — unchanged, both new files have doors.

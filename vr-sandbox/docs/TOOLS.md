@@ -59,6 +59,20 @@ The measuring tools live in `tools/measure/` (Python 3 with numpy, opencv-python
   2026-10-17 the end goal was written down (`docs/DONE.md`), the end goal is a loop, and nothing in the tree had ever
   put one ask through more than one door — so nothing had ever shown that they answer differently and separately.
 
+- `bash tools/local-llm.sh`: **a model on YOUR machine, serving the forge at no marginal cost.** Looks at the
+  hardware (NVIDIA / AMD / Apple silicon / CPU), works out what fits — about 0.6 GB per billion parameters at 4-bit,
+  with 1.5 GB kept back — installs ollama if it is absent, pulls the largest model that fits, serves it on loopback
+  with the origins the forge page needs, and then PROVES it on the real job: picking from a closed vocabulary, not
+  "hello". `--check` says what it would do and changes nothing; `--model X` overrides the pick; `--cpu` ignores the
+  GPU so CPU-only can be measured rather than guessed.
+  It is a script you run rather than something a session does, because both halves are measured facts: this
+  container has no GPU, and its network refuses ollama.com, registry.ollama.ai and huggingface.co. The user's GPU
+  is on the user's machine, so the model goes there. The forge, the phone and the boards are a page running in that
+  same machine's browser, so a model at 127.0.0.1 is reachable from it with no network at all.
+  What it feeds: `npm run mind` (`src/nexus/ask/mind.ts`), which is allowed to CHOOSE from vocabularies the engine
+  already owns and is allowed to supply no value at all — CLAUDE.md's standing rule of 2026-10-21, enforced by a
+  filter rather than trusted to the model.
+
 - `node tools/doors.mjs`: **every door into this project**, what each opens (from its own file header), and when it was
   last touched, newest first; `--cold` prints only the ones nothing has opened in longest. A critic judged one door
   five runs running and had never opened `teach/`, `life/` or the forge room — not from choosing badly, but because
