@@ -17,7 +17,7 @@ import { pack } from '../teach/buildpack';
 import { INVENTORY } from '../parts/inventory';
 import { PRICES, usd } from '../parts/prices';
 import { say } from '../ask/mind';
-import { mindFromBrowser } from './mind-box';
+import { askFor, mindFromBrowser } from './mind-box';
 import type { FlowApi, FlowRun, StepRun } from '../substrate/flows';
 
 const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -144,14 +144,15 @@ export function engineHands(worked: Worked = {}, parts: PartRef[] = []): FlowApi
     },
     async ai(prompt: string, input: string): Promise<{ text: string; by: 'claude' | 'nexus' }> {
       const at = mindFromBrowser();
+      const how = askFor(at);          // in this browser, or over the wire to ollama — one call either way
       const t0 = Date.now();
       // THE PROMPT AS SENT, after {input} has been filled in by the engine — not the words typed in the step, which
       // are a template. Seeing the difference is most of what makes a model's answer readable.
-      log({ sort: 'prompt', says: at ? `sent to ${at.model}` : 'would be sent, but no model is set up', to: at ? `${at.url} · ${at.model}` : undefined, detail: input.trim() ? `${prompt}\n\n${input}` : prompt });
-      const text = await say(prompt, input, at);
+      log({ sort: 'prompt', says: at ? `sent to ${at.model}` : 'would be sent, but no model is set up', to: at ? (at.url === 'in-this-browser' ? `${at.model}, in this browser` : `${at.url} · ${at.model}`) : undefined, detail: input.trim() ? `${prompt}\n\n${input}` : prompt });
+      const text = how ? await say(prompt, input, at, how) : await say(prompt, input, at);
       log({ sort: 'answer', says: text ? `answered in ${Date.now() - t0} ms` : 'nothing came back', detail: text ?? undefined, ms: Date.now() - t0 });
       if (text) return { text, by: 'claude' };
-      return { text: at ? `the model at ${at.url} did not answer` : 'no local model is set up, so this step was not answered — set one up under “Local model”', by: 'nexus' };
+      return { text: at ? `${at.model} did not answer` : 'no model is started, so this step was not answered — open “Local model” below and press Start it', by: 'nexus' };
     },
     facts(): Record<string, number> {
       const f = this.numbers();

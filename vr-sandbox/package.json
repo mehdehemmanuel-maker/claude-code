@@ -35,6 +35,7 @@
     "mind": "node tools/bundle.mjs && node dist-nexus/mind.mjs"
   },
   "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.86",
     "@sinclair/typebox": "^0.34.52",
     "fflate": "^0.8.3",
     "jolt-physics": "^1.1.0",

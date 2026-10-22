@@ -79,11 +79,14 @@ say "  ${BUDGET} MB to spend, so about ${FIT_B}B parameters at 4-bit (0.6 GB per
 # in order and takes the first that pulls, so a name that has been retired simply falls through to the next. Pass
 # --model to use something else entirely — anything ollama can pull works, and `ollama list` shows what you have.
 pick_candidates() {
-  if   [ "$FIT_B" -ge 24 ]; then echo "qwen2.5:32b-instruct-q4_K_M qwen2.5:14b-instruct-q4_K_M llama3.1:8b-instruct-q4_K_M"
-  elif [ "$FIT_B" -ge 12 ]; then echo "qwen2.5:14b-instruct-q4_K_M llama3.1:8b-instruct-q4_K_M qwen2.5:7b-instruct-q4_K_M"
-  elif [ "$FIT_B" -ge 7  ]; then echo "qwen2.5:7b-instruct-q4_K_M llama3.1:8b-instruct-q4_K_M qwen2.5:3b-instruct-q4_K_M"
-  elif [ "$FIT_B" -ge 3  ]; then echo "qwen2.5:3b-instruct-q4_K_M gemma2:2b-instruct-q4_K_M qwen2.5:1.5b-instruct-q4_K_M"
-  else                           echo "qwen2.5:1.5b-instruct-q4_K_M gemma2:2b-instruct-q4_K_M"; fi
+  # Qwen3 first at every size, with Qwen2.5 behind it: a tag that has gone is skipped and the next tried, so a
+  # name that moves on does not break the script. The page's in-browser path offers the same family, so the two
+  # ways of having a model answer alike.
+  if   [ "$FIT_B" -ge 24 ]; then echo "qwen3:32b qwen3:14b qwen2.5:32b-instruct-q4_K_M qwen2.5:14b-instruct-q4_K_M"
+  elif [ "$FIT_B" -ge 12 ]; then echo "qwen3:14b qwen3:8b qwen2.5:14b-instruct-q4_K_M llama3.1:8b-instruct-q4_K_M"
+  elif [ "$FIT_B" -ge 7  ]; then echo "qwen3:8b qwen3:4b qwen2.5:7b-instruct-q4_K_M llama3.1:8b-instruct-q4_K_M"
+  elif [ "$FIT_B" -ge 3  ]; then echo "qwen3:4b qwen3:1.7b qwen2.5:3b-instruct-q4_K_M gemma2:2b-instruct-q4_K_M"
+  else                           echo "qwen3:1.7b qwen3:0.6b qwen2.5:1.5b-instruct-q4_K_M"; fi
 }
 CANDIDATES="${WANT:-$(pick_candidates)}"
 say "  will try  $(echo "$CANDIDATES" | tr ' ' '\n' | head -1)$( [ -z "$WANT" ] && echo ' (then the next, if that name has gone)')"

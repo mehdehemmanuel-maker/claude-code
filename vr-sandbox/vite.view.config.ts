@@ -24,5 +24,5 @@ export default defineConfig({
   base: './',
   publicDir: 'public',
   plugins: [pyodideLocal()],
-  build: { outDir: '../dist-view', emptyOutDir: true, target: 'es2022', chunkSizeWarningLimit: 4000, rollupOptions: { input: { index: 'view/index.html', make: 'view/make.html', boards: 'view/boards.html', claude: 'view/claude.html', jarvis: 'view/jarvis.html', room: 'view/room.html', forge: 'view/forge.html', look: 'view/look.html' } } },
+  build: { outDir: '../dist-view', emptyOutDir: true, target: 'es2022', modulePreload: false, chunkSizeWarningLimit: 4000, rollupOptions: { input: { index: 'view/index.html', make: 'view/make.html', boards: 'view/boards.html', claude: 'view/claude.html', jarvis: 'view/jarvis.html', room: 'view/room.html', forge: 'view/forge.html', look: 'view/look.html' } } },
 });

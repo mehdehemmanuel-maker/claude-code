@@ -342,3 +342,41 @@ p.reads{font:500 11.5px var(--mono);color:var(--ink3);margin:0 0 8px;letter-spac
 .insp .from{width:auto;padding:7px 13px;font-size:12.5px;margin:0}
 .insp .sug{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
 .insp .what.wide{font:400 13.5px var(--mono);text-transform:none;letter-spacing:0;color:var(--ink)}
+
+/* ---- FOR A MOUSE AND FOR A CONTROLLER ---------------------------------------------------------------------------
+   The Quest browser points with a ray from your hand: it shakes a little, it has no hover to tell you what is live,
+   and you read the page from further away than a monitor. So every control is at least 40 px tall (44 where it is a
+   primary action), the focus ring is visible rather than the browser's hairline, and nothing depends on hovering to
+   be discoverable. On a mouse this costs nothing — it is simply a comfortable size. ---------------------------- */
+:root{ --tap:40px }
+button, .go, select, input, textarea, summary, a.chip, ul.tpl button, .calls li button, .rail .boards button{
+  min-height:var(--tap)
+}
+button, select, input[type=text], input:not([type]), .tools form.add button{ font-size:14px }
+.tools form.add input, .insp form.rename input, .mind input, .findcall, #q, #what{ min-height:var(--tap) }
+.tools form.add button, .zoom button{ min-width:var(--tap) }
+.calls li button, ul.tpl button, .rail .boards button{ padding-block:9px }
+.sug button, .try .chip, .insp .sug button{ min-height:34px; padding:7px 13px; font-size:12.5px }
+.insp .acts button, .picked-bar button, ul.inbox .acts button, ul.inbox .acts a{ min-height:36px }
+
+/* what is live, without needing to hover over it to find out */
+:where(button, a, select, input, textarea, summary, [tabindex]):focus-visible{
+  outline:2px solid var(--blue); outline-offset:2px; border-radius:8px
+}
+button:active, .go:active, ul.tpl button:active, .calls li button:active{ transform:translateY(1px) }
+@media (hover: none){ /* a controller ray and a finger have no hover: show the edges instead */
+  .go, ul.tpl button, .calls li button, .rail .boards button{ border-color:var(--edge) }
+  .calls li button{ border-color:var(--rule) }
+}
+
+/* read from further away: the headset browser renders CSS pixels smaller than a monitor does */
+@media (min-width: 1400px){ html{ font-size:17px } .go b{ font-size:17px } }
+
+/* the model panel's two ways, and the download bar */
+.ways{display:flex;gap:6px;margin-top:10px;background:#0b0e13;border:1px solid var(--edge);border-radius:9px;padding:3px;width:fit-content;max-width:100%;flex-wrap:wrap}
+.ways button{background:transparent;color:var(--ink2);padding:8px 15px;border-radius:7px;font:500 13px var(--sans)}
+.ways button.on{background:var(--blue);color:#06121c;font-weight:600}
+.mind select{background:#0b0e13;border:1px solid var(--edge);border-radius:7px;padding:9px 10px;color:var(--ink);font:400 12.5px var(--sans);max-width:100%}
+.mind label{min-width:0}
+.bar-load{height:7px;background:#0b0e13;border:1px solid var(--edge);border-radius:999px;overflow:hidden;margin-top:10px}
+.bar-load span{display:block;height:100%;width:0;background:linear-gradient(90deg,#6fbf84,#79b8e8);transition:width .25s}
