@@ -21,6 +21,11 @@
 // loaded; a slot that does not arrive stays absent rather than being filled with a guess. And it imports each owner
 // DIRECTLY, never `works.ts`'s barrel, which reaches `ask/conceive.ts` and its 3.56 MB of physics engine.
 //
+// WHAT CAME OFF IT, 2026-10-22. "Live, from nothing" is gone from the front door. It is a demo of the generator
+// placing elements with a robot driving between them, and as a thing to USE it is nothing: six controls, 147
+// characters on the page, and no way to get anything out of it. The file stays — it is still what it is — but a
+// front door should list what you can use, not what can be watched.
+//
 // Owner of: the 2D front door and what it lists.
 
 /** One thing you can open. `needs` says what it wants of you, because that is the question a person actually has. */
@@ -36,9 +41,8 @@ export const DOORS: Door[] = [
   { name: 'Boards', says: 'Pages, nodes and wires. The same nodes run as a pipeline you press ▶ on.', href: './boards.html', needs: 'nothing', fact: 'boards' },
   { name: 'To Claude', says: 'Press ⇧C to keep what you are looking at, or draw it, with what you want done.', href: './claude.html', needs: 'nothing', fact: 'inbox' },
   { name: 'The forge', says: 'The room you walk: the works, the warehouse, the benches, the phone in your hand.', href: './forge.html', needs: 'a headset is better', fact: 'works' },
-  { name: 'One thing, lit', says: 'A part on its own under daylight — three-quarter, exploded, or cut through.', href: './look.html', needs: 'a mouse', fact: 'parts' },
+  { name: 'One thing, lit', says: 'Any build on its own: turn it, take it apart, cut through it, read its curvature.', href: './look.html', needs: 'a mouse', fact: 'parts' },
   { name: 'The room Nexus builds', says: 'What the engine generated, standing where it put it. Read, not drawn by hand.', href: './room.html', needs: 'a mouse' },
-  { name: 'Live, from nothing', says: 'Ask for a thing and watch the generator place it, one element at a time.', href: './jarvis.html', needs: 'a mouse' },
 ];
 
 export function homeHtml(): string {

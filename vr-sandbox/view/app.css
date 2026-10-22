@@ -380,3 +380,24 @@ button:active, .go:active, ul.tpl button:active, .calls li button:active{ transf
 .mind label{min-width:0}
 .bar-load{height:7px;background:#0b0e13;border:1px solid var(--edge);border-radius:999px;overflow:hidden;margin-top:10px}
 .bar-load span{display:block;height:100%;width:0;background:linear-gradient(90deg,#6fbf84,#79b8e8);transition:width .25s}
+
+/* the look page's controls, over the picture */
+.lookbar{position:fixed;left:0;right:0;bottom:0;background:#0a0d12ee;border-top:1px solid var(--edge);
+  padding:9px max(14px,env(safe-area-inset-left,0px)) calc(9px + env(safe-area-inset-bottom,0px));backdrop-filter:blur(8px);z-index:20}
+.lookbar .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.lookbar .row+.row{margin-top:7px}
+.lookbar label{font:500 10.5px var(--mono);color:var(--ink3);letter-spacing:.05em;text-transform:uppercase;display:flex;gap:6px;align-items:center}
+.lookbar select{background:var(--panel);border:1px solid var(--edge);border-radius:7px;padding:8px 10px;color:var(--ink);
+  font:400 13px var(--sans);text-transform:none;letter-spacing:0;min-height:var(--tap)}
+.lookbar .back{margin:0}
+.lookbar .says{font:500 11px var(--mono);color:var(--gold)}
+.lookbar .board{margin-left:auto;font:500 11.5px var(--mono);color:var(--blue);text-decoration:none}
+.lookbar .tools button{background:transparent;border:1px solid var(--edge);color:var(--ink2);border-radius:999px;
+  padding:7px 13px;font:500 12.5px var(--sans);min-height:36px}
+.lookbar .tools button:hover{border-color:var(--blue);color:var(--blue)}
+.lookbar .tools button.on{background:var(--blue);color:#06121c;border-color:var(--blue);font-weight:600}
+.lookbar .tools button.clear{color:var(--ink3);border-style:dashed}
+.lookbar .parts{font:400 11px var(--mono);color:var(--ink3);margin-top:7px;line-height:1.5;max-height:3.6em;overflow:hidden}
+.lookbar .parts b{color:var(--ink2)}
+.lookbar .parts .names{display:block;color:#4a5462}
+@media(max-width:700px){.lookbar .parts{display:none} .lookbar .board{margin-left:0}}

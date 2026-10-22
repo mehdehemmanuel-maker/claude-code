@@ -3,10 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nexus Look</title>
+  <title>One thing, lit · Nexus</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./app.css" />
   <style>html, body { margin: 0; height: 100%; background: #c9ccd0; overflow: hidden; }</style>
 </head>
 <body>
-  <script type="module" src="../src/nexus/view/look.ts"></script>
+  <script type="module">
+    // the thing itself first, then its controls: look.ts registers the kits the picker lists
+    import '../src/nexus/view/look.ts';
+    const { mountLookUi } = await import('../src/nexus/view/look-ui.ts');
+    mountLookUi();
+    const { wireCaptureKey } = await import('../src/nexus/view/inbox.ts');
+    wireCaptureKey('One thing, lit');
+  </script>
 </body>
 </html>
