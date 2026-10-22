@@ -9,11 +9,13 @@
 //
 // Owner of: a board drawn as nodes and wires in 2D, and dragging one.
 
-import { BACK, HIER, UNDIRECTED, edgesOf, moveNode, nodesOf, type Board, type Derived, type Patch, type View } from '../substrate/boards';
+import { BACK, HIER, UNDIRECTED, edgesOf, moveNode, nodesOf, type Board, type Derived, type Live, type Patch, type View } from '../substrate/boards';
 
 const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export const CARD_H = 34;
+/** A step's card is taller and wider than a plain node, because it carries what it does as well as its name. */
+export const STEP_W = 210, STEP_H = 62;
 /** How wide a card is for its words: measured roughly, and the SAME function the layout is given, so what is drawn
  *  and what was laid out agree. */
 export const cardW = (label: string): number => Math.max(74, Math.min(210, Math.round(label.length * 7.3) + 30));
@@ -85,32 +87,58 @@ function wire(a: At, c: At): string {
   return `M${sx.toFixed(1)},${y1.toFixed(1)} C${(sx + (back ? -k : k)).toFixed(1)},${y1.toFixed(1)} ${(ex + (back ? k : -k)).toFixed(1)},${y2.toFixed(1)} ${ex.toFixed(1)},${y2.toFixed(1)}`;
 }
 
-export interface WireOpts { picked: string | null; view: View; zoom: number; panX: number; panY: number }
+export interface WireOpts {
+  picked: string | null; view: View; zoom: number; panX: number; panY: number;
+  /** drawn as a pipeline: the order the steps run in, what each one did, and the one running now */
+  flow?: { order: string[]; step: (id: string) => { kind: string; what: string } | null; ran?: Map<string, string>; doing?: string | null };
+}
+
+/** THE PIPELINE, LAID AS A CHAIN. One column per step in the order it runs, which is the order the page shows and
+ *  the order the run takes — not the card-wall packing and not the tree, because a pipeline's shape IS its order.
+ *  A step that has been dragged keeps where it was put, the same as anywhere else. */
+function placeSteps(b: Board, order: string[]): Map<string, At> {
+  const out = new Map<string, At>();
+  const live = new Map(nodesOf(b).map((n) => [n.id, n]));
+  // wrap to a new row every six, so a long pipeline stays a page rather than a mile of canvas
+  const PER = 6;
+  order.forEach((id, i) => {
+    const n = live.get(id); if (!n) return;
+    const col = i % PER, row = Math.floor(i / PER);
+    out.set(id, n.pin ? { ...n.pin, w: STEP_W, h: STEP_H } : { x: col * (STEP_W + 54), y: row * (STEP_H + 46), w: STEP_W, h: STEP_H });
+  });
+  return out;
+}
 
 export function wiresSvg(b: Board, d: Derived, o: WireOpts): string {
-  const at = placeCards(b, d, o.view);
-  const live = nodesOf(b, o.view);
+  const at = o.flow ? placeSteps(b, o.flow.order) : placeCards(b, d, o.view);
+  const live = o.flow ? o.flow.order.map((id) => nodesOf(b).find((n) => n.id === id)).filter((n): n is Live => !!n) : nodesOf(b, o.view);
   if (!live.length) return `<p class="none">Nothing on this board yet. Add a page and put some nodes on it.</p>`;
   const xs = [...at.values()];
   const minX = Math.min(...xs.map((p) => p.x)) - 30, minY = Math.min(...xs.map((p) => p.y)) - 30;
   const maxX = Math.max(...xs.map((p) => p.x + p.w)) + 30, maxY = Math.max(...xs.map((p) => p.y + p.h)) + 30;
   const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
 
-  const wires = edgesOf(b).map((e) => {
+  const chain = o.flow
+    ? o.flow.order.slice(0, -1).map((from, i) => ({ from, to: o.flow!.order[i + 1]!, rel: 'then' }))
+    : edgesOf(b).map((e) => ({ from: e.from, to: e.to, rel: e.rel ?? 'connects' }));
+  const wires = chain.map((e) => {
     const a = at.get(e.from), c = at.get(e.to);
     if (!a || !c) return '';
-    const rel = e.rel ?? 'connects';
+    const rel = e.rel;
     const hier = HIER.has(rel), none = UNDIRECTED.has(rel), back = BACK.has(rel);
-    const lit = o.picked && (e.from === o.picked || e.to === o.picked);
+    // on a pipeline, a wire is lit once the step it comes out of has run — so the run travels the board
+    const done = o.flow?.ran?.has(e.from);
+    const lit = done || (o.picked && (e.from === o.picked || e.to === o.picked));
     return `<path class="wire ${lit ? 'lit' : ''}" d="${wire(a, c)}"
-      stroke="${lit ? '#d9a441' : hier ? '#2b3542' : hueOf(d, e.from)}"
+      stroke="${done ? '#6fbf84' : lit ? '#d9a441' : hier ? '#2b3542' : o.flow ? '#2b3542' : hueOf(d, e.from)}"
       stroke-width="${lit ? 2.2 : hier ? 1.5 : 1.3}" stroke-opacity="${lit ? 1 : hier ? 0.9 : 0.55}"
       ${back ? 'stroke-dasharray="5 4"' : ''} fill="none"
-      marker-end="${none ? '' : `url(#${lit ? 'tip-lit' : hier ? 'tip' : 'tip-soft'})`}"><title>${esc(rel)}</title></path>`;
+      marker-end="${none ? '' : `url(#${done ? 'tip-done' : lit ? 'tip-lit' : hier ? 'tip' : 'tip-soft'})`}"><title>${esc(rel)}</title></path>`;
   }).join('');
 
   const cards = live.map((n) => {
     const p = at.get(n.id); if (!p) return '';
+    if (o.flow) return stepCard(n, p, o, d);
     const picked = o.picked === n.id, kin = b.nodes[n.id]?.kind === 'page';
     const near = o.picked && o.picked !== n.id && (d.nb.get(o.picked)?.has(n.id) ?? false);
     const label = n.label.length > 26 ? `${n.label.slice(0, 25)}…` : n.label;
@@ -131,9 +159,37 @@ export function wiresSvg(b: Board, d: Derived, o: WireOpts): string {
 
   return `<svg class="wires" viewBox="${minX} ${minY} ${w} ${h}" preserveAspectRatio="xMidYMid meet"
     style="--zoom:${o.zoom}" data-w="${w.toFixed(0)}" data-h="${h.toFixed(0)}" data-minx="${minX.toFixed(0)}" data-miny="${minY.toFixed(0)}">
-    <defs>${tip('tip', '#2b3542', 0.9)}${tip('tip-soft', '#5d6878', 0.6)}${tip('tip-lit', '#d9a441', 1)}</defs>
+    <defs>${tip('tip', '#2b3542', 0.9)}${tip('tip-soft', '#5d6878', 0.6)}${tip('tip-lit', '#d9a441', 1)}${tip('tip-done', '#6fbf84', 1)}</defs>
     <g transform="translate(${o.panX.toFixed(1)},${o.panY.toFixed(1)}) scale(${o.zoom})">${wires}${cards}</g>
   </svg>`;
+}
+
+/** ONE STEP, AS A CARD ON THE BOARD: its name, what kind of step it is, and what it does, in the kind's own colour —
+ *  the same colours the step list used, so the two readings of a pipeline agree. It is marked as it runs: amber while
+ *  it is the one going, green when it has been through, red where it refused. */
+const KIND_INK: Record<string, string> = {
+  trigger: '#ffd740', ai: '#b388ff', action: '#79b8e8', check: '#6fbf84', repeat: '#e0756a', '': '#5d6878',
+};
+function stepCard(n: Live, p: At, o: WireOpts, d: Derived): string {
+  void d;
+  const st = o.flow!.step(n.id);
+  const kind = st?.kind ?? '';
+  const ink = KIND_INK[kind] ?? KIND_INK[''];
+  const ran = o.flow!.ran?.get(n.id);
+  const doing = o.flow!.doing === n.id;
+  const picked = o.picked === n.id;
+  const edge = doing ? '#d9a441' : ran === 'failed' ? '#e0756a' : ran === 'ok' ? '#3f6b4e' : ran ? '#3a4450' : picked ? '#79b8e8' : '#1d242e';
+  const what = (st?.what ?? '').length > 30 ? `${(st?.what ?? '').slice(0, 29)}…` : st?.what ?? 'nothing yet';
+  return `<g class="card step ${doing ? 'doing' : ''}" data-node="${n.id}" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">
+    <rect width="${p.w}" height="${p.h}" rx="9" fill="${doing ? '#1d1a12' : ran === 'ok' ? '#101a14' : '#121820'}"
+      stroke="${edge}" stroke-width="${doing || picked ? 2 : 1}"/>
+    <rect width="3.5" height="${p.h}" rx="1.75" fill="${ink}"/>
+    <text x="13" y="21" fill="#e6ebf2" font-size="13" font-weight="600" font-family="system-ui,-apple-system,sans-serif">${esc(n.label.length > 24 ? `${n.label.slice(0, 23)}…` : n.label)}</text>
+    <text x="13" y="37" fill="${ink}" font-size="9" letter-spacing="0.8" font-family="ui-monospace,Menlo,monospace">${esc(kind.toUpperCase() || 'NOTHING')}</text>
+    <text x="13" y="52" fill="#8e9aab" font-size="10.5" font-family="ui-monospace,Menlo,monospace">${esc(what)}</text>
+    ${ran || doing ? `<text x="${p.w - 11}" y="21" text-anchor="end" font-size="13" fill="${doing ? '#d9a441' : ran === 'failed' ? '#e0756a' : ran === 'ok' ? '#6fbf84' : '#5d6878'}">${doing ? '▸' : ran === 'ok' ? '✓' : ran === 'failed' ? '✗' : '–'}</text>` : ''}
+    <title>${esc(n.label)} — ${kind || 'not a step yet'}${st?.what ? `: ${st.what}` : ''}</title>
+  </g>`;
 }
 
 /** Dragging a card. The engine keeps where a node was put (`moveNode` writes a pin that `placesOf` reads back), so a

@@ -17,8 +17,9 @@ import {
   type Board, type Derived, type Live,
 } from '../substrate/boards';
 import { makeBoardStore, type BoardStore } from './boards-store';
+import { CALLS } from '../substrate/calls';
 import { SUGGEST, TEMPLATES, boardOfTemplate, clipOf, graphOf, orderFrom, pasteOf, runFlow, stepOf, triggersOf, type FlowRun, type Step, type StepKind } from '../substrate/flows';
-import { engineHands, runHtml, type Worked } from './flow2d';
+import { engineHands, runHtml, type Trace, type Worked } from './flow2d';
 import { mountScenes, showHtml } from './show';
 import { mindBoxHtml, wireMindBox } from './mind-box';
 import { dragCard, wiresSvg } from './wires';
@@ -36,11 +37,22 @@ interface State {
   /** the node picked first, waiting for a second to connect to */ picked: string | null;
   rel: string; run: FlowRun | null; running: boolean; stop: AbortController | null; say: string;
   /** what the last run worked out, which decides whether it is shown in 3D or as a line */ worked: Worked | null;
+  /** what happened INSIDE each step, by its place in the run */ inside: Map<number, Trace[]>;
+  /** the step the run is on right now, so the page can say so while it waits */ doing: string | null;
+  /** the step whose call list is open, and what is being searched for in it */ picking: string | null; find: string;
 }
-const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, rel: 'connects', run: null, running: false, stop: null, say: '', worked: null };
+const S: State = { store: null, at: null, view: 'wires', zoom: 1, panX: 0, panY: 0, picked: null, rel: 'connects', run: null, running: false, stop: null, say: '', worked: null, inside: new Map(), doing: null, picking: null, find: '' };
 
 const board = (): Board | null => (S.at && S.store ? S.store.boards.get(S.at) ?? null : null);
 const put = (p: Parameters<BoardStore['write']>[1]) => { if (S.at && S.store) S.store.write(S.at, p); };
+
+/** Each step linked to the next, as `flows to` — what "link them in this order" writes, and what a run borrows
+ *  when nothing has been drawn yet. */
+function chainOf(order: string[]): Record<string, { from: string; to: string; rel: string }> {
+  const out: Record<string, { from: string; to: string; rel: string }> = {};
+  for (let i = 0; i + 1 < order.length; i++) out[`e${order[i]}_${order[i + 1]}`] = { from: order[i]!, to: order[i + 1]!, rel: 'flows to' };
+  return out;
+}
 
 /** A new board, with its first page already on it so the page is never empty and never asks what a node is. */
 function freshBoard(title: string): Board {
@@ -149,44 +161,107 @@ function linksHtml(b: Board, d: Derived): string {
   }).join('')}</ul>`;
 }
 
+/** THE ORDER THE STEPS RUN IN.
+ *
+ *  Where something links them in order — a `flows to`, a `feeds`, a `calls` — the engine's own `orderFrom` decides,
+ *  and it must, because that is the flow the person drew. Where NOTHING does, `orderFrom` falls back to the
+ *  hierarchy, which ranks by how connected each node is: six steps added one after another came out as
+ *  `ask about it, how heavy?, make the body, pick a matter`. That is a correct answer to a question nobody asked.
+ *
+ *  With no order drawn, the order is the order they were MADE, which is what a person who typed them in means. It is
+ *  only a reading: nothing is written to the board, and drawing a single `flows to` hands it straight back to the
+ *  engine. The bar says which of the two is in force, so it is never a mystery. */
+const ORDERED = new Set(['flows to', 'feeds', 'calls', 'feeds back to', 'depends on']);
+export function runOrder(b: Board, d: Derived): { order: string[]; drawn: boolean } {
+  const g = graphOf(b);
+  const drawn = edgesOf(b).some((e) => ORDERED.has(e.rel ?? 'connects'));
+  const trigs = triggersOf(b);
+  const start = trigs[0]?.id ?? d.order[0];
+  if (drawn && start) return { order: orderFrom(b, g, start), drawn: true };
+  // as they were made: a board's nodes keep the order they were put in it
+  const live = new Set(nodesOf(b).map((n) => n.id));
+  const made = Object.keys(b.nodes).filter((id) => live.has(id));
+  const first = trigs[0]?.id;
+  return { order: first ? [first, ...made.filter((x) => x !== first)] : made, drawn: false };
+}
+
 function pipelineHtml(b: Board, d: Derived): string {
   const g = graphOf(b);
   const trigs = triggersOf(b);
-  const start = trigs[0]?.id ?? d.order[0];
-  const order = start ? orderFrom(b, g, start) : nodesOf(b).map((n) => n.id);
+  const { order, drawn } = runOrder(b, d);
   const name = (id: string) => nodesOf(b).find((n) => n.id === id)?.label ?? id;
+  // what each step did on the last run, so the board carries the run rather than a list beneath it
+  const ran = new Map<string, string>();
+  for (const x of S.run?.steps ?? []) ran.set(x.node, x.status);
+  const doing = S.running ? S.run?.steps.at(-1)?.node ?? order[0] ?? null : null;
+  const picked = S.picked && order.includes(S.picked) ? S.picked : null;
   return `
   <div class="bar">
-    <span class="says">${order.length} step${order.length === 1 ? '' : 's'} in the order they are derived${trigs.length ? `, starting at “${esc(trigs[0]!.label)}”` : ', with no trigger yet'}</span>
+    <span class="says">${order.length} step${order.length === 1 ? '' : 's'}, ${drawn ? 'in the order you linked them' : 'in the order you made them'}${trigs.length ? `, from “${esc(trigs[0]!.label)}”` : ', with no trigger yet'}</span>
     <button id="run" ${S.running ? 'disabled' : ''}>${S.running ? 'running…' : '▶ Run'}</button>
     ${S.running ? '<button id="stoprun" class="danger">Stop</button>' : ''}
+    ${drawn || order.length < 2 ? '' : '<button data-act="chain" class="small">link them in this order</button>'}
   </div>
-  ${trigs.length ? '' : `<div class="picked-bar hintbar">A pipeline starts at a <b>trigger</b>. Give a step the kind
-    “starts it” and say when — “when I press run” is the plain one.</div>`}
-  <ol class="flow">
-    ${order.map((id, i) => {
-      const st = stepOf(b, id);
-      const kind = st?.kind ?? '';
-      return `<li data-step="${id}">
-        <span class="n">${i + 1}</span>
-        <div class="card ${kind ? `k-${kind}` : 'plain'}">
-          <input class="lab" data-rename="${id}" value="${esc(name(id))}" aria-label="this step's name">
-          <div class="row">
-            <select data-kind="${id}" aria-label="what kind of step">
-              <option value="" ${st ? '' : 'selected'}>— nothing, just a node</option>
-              ${KINDS.map((k) => `<option value="${k}" ${kind === k ? 'selected' : ''}>${k} · ${KIND_SAYS[k]}</option>`).join('')}
-            </select>
-            ${st ? `<input class="what" data-what="${id}" list="sug-${st.kind}" value="${esc(st.what)}" placeholder="${esc(SUGGEST[st.kind]?.[0]?.[0] ?? '')}" aria-label="what this step does">` : ''}
-          </div>
-          ${st && SUGGEST[st.kind] ? `<div class="sug">${SUGGEST[st.kind]!.slice(0, 4).map(([w]) => `<button data-sug="${id}" data-text="${esc(w)}">${esc(w)}</button>`).join('')}</div>` : ''}
-          ${(g.next.get(id) ?? []).length ? `<span class="then">then ${(g.next.get(id) ?? []).map((x) => esc(name(x))).join(', ')}</span>` : ''}
-        </div>
-        <button class="from" data-from="${id}" title="run from here">▶</button>
-      </li>`;
+  ${trigs.length ? '' : `<div class="picked-bar hintbar">A pipeline starts at a <b>trigger</b>. Click a step below and give it the
+    kind “starts it” — “when I press run” is the plain one.</div>`}
+  <div class="wirewrap flowwrap" id="wirewrap">${wiresSvg(b, d, {
+    picked: S.picked, view: 'pipeline', zoom: S.zoom, panX: S.panX, panY: S.panY,
+    flow: { order, step: (id) => stepOf(b, id), ran, doing },
+  })}
+    <div class="zoom"><button data-zoom="-">−</button><button data-zoom="0">fit</button><button data-zoom="+">+</button></div>
+  </div>
+  ${picked ? stepPanel(b, g, picked, name) : `<p class="none">Click a step on the board to change what it does. Drag one to move it;
+    drag the board to pan.</p>`}
+  ${S.worked ? showHtml(S.worked) : ''}${runHtml(S.run, S.inside, S.doing)}`;
+}
+
+/** THE PICKED STEP, OPENED UP BELOW THE BOARD: its name, what kind of step it is, what it does, and every call it
+ *  could do instead. One step at a time, because the board above already says what the whole pipeline is — a list of
+ *  every step's editor at once was the thing that stopped it looking like a board. */
+function stepPanel(b: Board, g: ReturnType<typeof graphOf>, id: string, name: (id: string) => string): string {
+  const st = stepOf(b, id);
+  const kind = st?.kind ?? '';
+  const after = (g.next.get(id) ?? []).map((x) => esc(name(x)));
+  return `<div class="steppanel k-${kind || 'plain'}">
+    <div class="row">
+      <input class="lab" data-rename="${id}" value="${esc(name(id))}" aria-label="this step's name">
+      <select data-kind="${id}" aria-label="what kind of step">
+        <option value="" ${st ? '' : 'selected'}>— nothing, just a node</option>
+        ${KINDS.map((k) => `<option value="${k}" ${kind === k ? 'selected' : ''}>${k} · ${KIND_SAYS[k]}</option>`).join('')}
+      </select>
+      <button class="from" data-from="${id}" title="run from here">▶ from here</button>
+    </div>
+    ${st ? `<input class="what wide" data-what="${id}" value="${esc(st.what)}" placeholder="${esc(SUGGEST[st.kind]?.[0]?.[0] ?? '')}" aria-label="what this step does">` : ''}
+    ${st ? callsHtml(id, st.kind) : '<p class="none">Give it a kind and it becomes a step.</p>'}
+    ${after.length ? `<span class="then">then ${after.join(', ')}</span>` : ''}
+  </div>`;
+}
+
+/** EVERY CALL A STEP CAN MAKE, from the engine's own catalogue (`substrate/calls.ts`) rather than a handful chosen
+ *  here — the same list the board in the headset offers, grouped by what each is for, each one written as it is said
+ *  and ready to be changed. `calltest.ts` runs every one of them for real, so nothing is offered that does not work.
+ *
+ *  This is the difference between a pipeline you can learn from and one you can build with: a step is not a fixed
+ *  menu of six things, it is anything the workshop can do, and a neural step (ask, check, repeat) sits beside a
+ *  physical one (place, size, join, material, energy) on the same board. */
+function callsHtml(id: string, kind: StepKind): string {
+  const groups = CALLS.filter((g) => g.kind === kind);
+  const quick = SUGGEST[kind]?.slice(0, 3) ?? [];
+  if (!groups.length && !quick.length) return '';
+  const open = S.picking === id;
+  return `<div class="sug">
+    ${quick.map(([w]) => `<button data-sug="${id}" data-text="${esc(w)}">${esc(w)}</button>`).join('')}
+    <button data-pick="${id}" class="${open ? 'on' : ''}">${open ? 'close' : `every call · ${groups.reduce((n, g) => n + g.calls.length, 0)}`}</button>
+  </div>
+  ${open ? `<div class="calls">
+    <input class="findcall" data-find="${id}" placeholder="find a call…" value="${esc(S.find)}" autocomplete="off">
+    ${groups.map((g) => {
+      const hits = g.calls.filter((c) => !S.find || `${c.label} ${c.text} ${c.says}`.toLowerCase().includes(S.find.toLowerCase()));
+      return hits.length ? `<section><h4>${esc(g.name)}<span>${esc(g.says)}</span></h4>
+        <ul>${hits.map((c) => `<li><button data-sug="${id}" data-text="${esc(c.text)}">
+          <b>${esc(c.label)}</b><code>${esc(c.text)}</code><span>${esc(c.says)}</span></button></li>`).join('')}</ul></section>` : '';
     }).join('')}
-  </ol>
-  ${KINDS.map((k) => `<datalist id="sug-${k}">${(SUGGEST[k] ?? []).map(([w, why]) => `<option value="${esc(w)}">${esc(why)}</option>`).join('')}</datalist>`).join('')}
-  ${S.worked ? showHtml(S.worked) : ''}${runHtml(S.run)}`;
+  </div>` : ''}`;
 }
 
 function shell(): string {
@@ -230,6 +305,8 @@ export function mountBoards(el: HTMLElement): void {
 
   const pick = (id: string) => {
     const b = board(); if (!b) return;
+    // on the pipeline board a click OPENS a step; connecting is what the graph board is for
+    if (S.view === 'pipeline') { S.picked = S.picked === id ? null : id; S.picking = null; return draw(); }
     if (!S.picked) { S.picked = id; S.say = ''; return draw(); }
     if (S.picked === id) { S.picked = null; return draw(); }
     const t = toggleLink(b, S.picked, id, S.rel);
@@ -247,7 +324,7 @@ export function mountBoards(el: HTMLElement): void {
     const svg = (ev.target as Element).closest?.('svg.wires') as SVGSVGElement | null;
     if (!svg || ev.button !== 0) return;
     const card = (ev.target as Element).closest?.('[data-node]') as SVGGElement | null;
-    if (card?.dataset.node) { dragCard(svg, card.dataset.node, ev, 'categories', S.zoom, put, draw); return; }
+    if (card?.dataset.node) { dragCard(svg, card.dataset.node, ev, S.view === 'pipeline' ? 'pipeline' : 'categories', S.zoom, put, draw); return; }
     const sx = ev.clientX, sy = ev.clientY, px = S.panX, py = S.panY;
     const box = svg.viewBox.baseVal, rect = svg.getBoundingClientRect();
     const per = Math.max(box.width / rect.width, box.height / rect.height);
@@ -268,7 +345,7 @@ export function mountBoards(el: HTMLElement): void {
   }, { passive: false });
 
   el.addEventListener('click', (ev) => {
-    const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],[data-zoom],[data-tpl],#run,#stoprun') as HTMLElement | null;
+    const t = (ev.target as HTMLElement).closest('[data-node],[data-board],[data-view],[data-act],[data-from],[data-sug],[data-zoom],[data-tpl],[data-pick],#run,#stoprun') as HTMLElement | null;
     if (!t) return;
     const z = t.dataset.zoom;
     if (z) { S.zoom = z === '0' ? 1 : Math.max(0.3, Math.min(4, S.zoom * (z === '+' ? 1.25 : 0.8))); if (z === '0') { S.panX = 0; S.panY = 0; } return draw(); }
@@ -283,7 +360,8 @@ export function mountBoards(el: HTMLElement): void {
       return draw();
     }
     if (t.dataset.view) { S.view = t.dataset.view as State['view']; S.picked = null; return draw(); }
-    if (t.dataset.sug && t.dataset.text) { put({ nodes: { [t.dataset.sug]: { step: { kind: stepOf(b!, t.dataset.sug)!.kind, what: t.dataset.text } } } }); return draw(); }
+    if (t.dataset.pick) { S.picking = S.picking === t.dataset.pick ? null : t.dataset.pick; S.find = ''; return draw(); }
+    if (t.dataset.sug && t.dataset.text) { put({ nodes: { [t.dataset.sug]: { step: { kind: stepOf(b!, t.dataset.sug)!.kind, what: t.dataset.text } } } }); S.picking = null; return draw(); }
     if (t.id === 'run' && b) return start(b, null);
     if (t.id === 'stoprun') { S.stop?.abort(); return; }
     if (t.dataset.from && b) return start(b, t.dataset.from);
@@ -294,6 +372,7 @@ export function mountBoards(el: HTMLElement): void {
     if (act === 'dup' && S.picked) { const dd = duplicateNode(b, S.picked); if (dd) { put(dd.patch); S.say = `copied as “${dd.label}”`; } S.picked = null; return draw(); }
     // COPY THE WHOLE THING. `clipOf` takes a board's steps and the links between them, `pasteOf` lays them into a
     // new one with fresh ids — the same pair the headset copies a pipeline with, so a board copied here opens there.
+    if (act === 'chain' && S.at) { put({ edges: chainOf(runOrder(b, derive(b)).order) }); S.say = 'linked in that order — you can drag the links about now'; return draw(); }
     if (act === 'copyboard' && S.at && S.store) {
       const clip = clipOf(b);
       const id = uid('b');
@@ -329,8 +408,23 @@ export function mountBoards(el: HTMLElement): void {
     draw();
   });
 
+  el.addEventListener('input', (ev) => {
+    const t = ev.target as HTMLInputElement;
+    if (!t.dataset.find) return;
+    S.find = t.value;
+    const list = el.querySelector('.calls'); if (!list) return;
+    // re-draw only the list, so the box keeps the cursor the person is typing in
+    const b2 = board(); if (!b2) return;
+    const st = stepOf(b2, t.dataset.find); if (!st) return;
+    const holder = document.createElement('div');
+    holder.innerHTML = callsHtml(t.dataset.find, st.kind);
+    const fresh = holder.querySelector('.calls');
+    if (fresh) { for (const sec of [...list.querySelectorAll('section')]) sec.remove(); for (const sec of fresh.querySelectorAll('section')) list.appendChild(sec); }
+  });
+
   el.addEventListener('change', (ev) => {
     const t = ev.target as HTMLInputElement & HTMLSelectElement;
+    if (t.dataset.find) return;
     const b = board(); if (!b) return;
     if (t.id === 'rel') { S.rel = t.value; return draw(); }
     if (t.id === 'title') { put({ title: t.value.trim() || b.title }); return draw(); }
@@ -350,18 +444,33 @@ export function mountBoards(el: HTMLElement): void {
 
   async function start(b: Board, from: string | null): Promise<void> {
     const g = graphOf(b);
-    const at = from ?? triggersOf(b)[0]?.id ?? derive(b).order[0];
+    const at = from ?? triggersOf(b)[0]?.id ?? runOrder(b, derive(b)).order[0];
     if (!at) { S.say = 'there is nothing to run'; return draw(); }
-    void g;
-    S.running = true; S.stop = new AbortController(); S.run = null; S.say = ''; S.worked = null; draw();
+    const { order } = runOrder(b, derive(b));
+    S.running = true; S.stop = new AbortController(); S.run = null; S.say = ''; S.worked = null;
+    S.inside = new Map(); S.doing = b.nodes[at]?.label ?? null; draw();
     const hands = engineHands();
     try {
-      const r = await runFlow(b, at, hands, from ? `pressed ▶ on “${b.nodes[at]?.label ?? at}”` : 'pressed ▶ Run',
-        (live) => { S.run = live; draw(); }, S.stop.signal);
+      // Each time a step finishes, everything the hands recorded since the last one belongs to THAT step. The
+      // engine keeps no page state, so the matching is done here, by draining the trace as each step lands.
+      let had = 0;
+      // the engine walks the links, so a board with none gets the reading's order written onto a copy it runs from
+      // — the person's board is untouched, and pressing "link them in this order" makes it theirs for good
+      const { order: reading, drawn } = runOrder(b, derive(b));
+      const ran: Board = drawn ? b : { ...b, edges: { ...b.edges, ...chainOf(reading) } };
+      const r = await runFlow(ran, at, hands, from ? `pressed ▶ on “${b.nodes[at]?.label ?? at}”` : 'pressed ▶ Run',
+        (live) => {
+          while (had < live.steps.length) { S.inside.set(had, hands.trace.splice(0)); had++; }
+          S.run = live;
+          S.doing = live.steps.length < order.length ? (b.nodes[order[live.steps.length]!]?.label ?? null) : null;
+          S.worked = hands.worked;          // so a shape made mid-run is already on screen
+          draw();
+        }, S.stop.signal);
+      void g;
       S.run = r; S.worked = hands.worked;
       put({ runs: [...(b.runs ?? []).slice(-4), r] });
     } catch (e) { S.say = `the run stopped: ${(e as Error).message}`; }
-    S.running = false; S.stop = null; draw();
+    S.running = false; S.stop = null; S.doing = null; draw();
   }
 
   void (async () => {
