@@ -52,6 +52,7 @@ Open `view/nodes.html` (build with `npx vite build --config vite.view.config.ts`
 | Cut a branch keeping what else needs it; dead branches; twins and merging; repeated wiring | `dataflow.ts` (`cutBranch`, `deadNodes`, `twins`, `mergeTwins`, `patterns`, `suggest`) | Built and tested |
 | The colourful canvas: blocks by kind, wires by quantity, glow and pulses on a run, heat map, minimap, command bar, undo, tidy layout, phone layout, inspector as each block's calculator | `src/nexus/view/nodes.ts`, `view/nodes.html` | Built, driven in Chromium, blind-checked |
 | Code blocks with typed ports (JS, TS, Python) off the page | `view/code-worker.ts` (`vars`) | Built; JS checked on the page |
+| The same board on a wall in the forge (☰ Tools → Blocks): its canvas as the wall's picture, pressed and dragged by a hand's ray or the mouse; a strip of starter boards, fit, tidy, zoom, undo, heat, out of a group, the library; a panel with the chosen block's inputs, − and + ten percent a press | `src/nexus/view/nodes-wall.ts`, `nodes.ts` (`wall`), `forge.ts` (`openNodes`) | Built; driven by the mouse in the forge in Chromium. Not yet tried on a Quest |
 | Parts in 3D: a Part block (words in, the library's real part out: 33 families drawn whole, with mass, pieces and its own check), Next size up (ISO 262), a 3D view block turned by hand on the canvas, full screen with taking apart, and the part viewer one press away | `blocks.ts` (`card.part`, `logic.next-size`, `view.3d`), `src/nexus/view/nodes3d.ts` | Built; seen in Chromium (software WebGL) |
 
 Measured on the build container by `tests/nexus/dataflow.test.ts` (not a Quest, not your machine):
@@ -67,7 +68,7 @@ Measured on the build container by `tests/nexus/dataflow.test.ts` (not a Quest, 
 
 Not built yet, and said plainly:
 - the forge's flows (`flows.ts`) still run on their own runner and are not yet steps in this one;
-- no VR view of the canvas yet, and no board-room screen (the 3D view is on the page only);
+- the board on the forge wall is built (below) but not yet tried in a real headset; no board-room screen yet;
 - Ask Claude works only where the forge's relay is; on the page it says it cannot ask;
 - runs are one block at a time on the page's thread. A pool of workers is not built yet;
 - agents, bridges and triggers are not block kinds yet;

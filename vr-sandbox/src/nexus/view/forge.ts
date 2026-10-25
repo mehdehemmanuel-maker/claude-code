@@ -604,6 +604,7 @@ function tick(): void {
   // on a screen, the board has the view: the tools and the chat, which would lie over its corners, are put away while it is up
   { const away = on('boards') && !renderer.xr.isPresenting; tools.style.display = away ? 'none' : 'flex'; chat.style.display = away ? 'none' : 'flex'; }
   if (boards && boardHand >= 0 && renderer.xr.isPresenting) { ray.setFromXRController(renderer.xr.getController(boardHand)); boards.move(ray); }
+  if (nodesWall) { if (nodesHand >= 0 && renderer.xr.isPresenting) { ray.setFromXRController(renderer.xr.getController(nodesHand)); nodesWall.move(ray); } nodesWall.update(performance.now()); }
   decide.style.display = on('loop') ? 'flex' : 'none';
   partCard.mesh.visible = clock() < partCardUntil && !holo.showing;
   if (partCard.mesh.visible) partCard.mesh.lookAt(eye);
@@ -755,7 +756,7 @@ const world2: WorldApi = {
   },
   flaws() { summonTo('flaws'); return flawRows().slice(0, 8).map((r, i) => `${i + 1}. ${r.text}`).join(' ') || 'No flaw, gap or report left on it.'; },
   expand: (target) => expand(target, true),
-  show: (p2) => { if (p2 === 'none') { windows.minAll(); newOpen = false; return 'Out of your way: the windows are on your phone.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates', 'operate', 'causes', 'boards'].includes(p2) ? p2 : 'loop') as Panel); },
+  show: (p2) => { if (p2 === 'none') { windows.minAll(); newOpen = false; return 'Out of your way: the windows are on your phone.'; } return summonTo((['pipeline', 'rounds', 'laws', 'bill', 'loop', 'flaws', 'chat', 'gates', 'operate', 'causes', 'boards', 'nodes'].includes(p2) ? p2 : 'loop') as Panel); },
   build: (target) => buildIt(target),
 };
 
@@ -824,12 +825,12 @@ async function noteOn(tg: Target, kind: NoteKind, text: string, on?: { node: str
   return `${pin ? 'Pinned' : 'Noted'} on ${s.part.name}: ${body.text}. ${sent.said}`;
 }
 // ---- panels: windows in the room, several open at once, each with a bar to carry it, put it away, close it -------------
-type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate' | 'causes' | 'new' | 'inside' | 'boards';
+type Panel = 'none' | 'pipeline' | 'rounds' | 'laws' | 'bill' | 'loop' | 'flaws' | 'chat' | 'gates' | 'operate' | 'causes' | 'new' | 'inside' | 'boards' | 'nodes';
 /** The window used last (what typing and voice go to first), and whether the suggestions are up. */
 let panel: Panel = 'none', newOpen = false, lastMake: { words: string; heard: string[]; assumed: string[] } | null = null;
 const windows = new Windows({
   eye: () => { eyeOf(eye); const xr = renderer.xr.isPresenting, head = xr ? renderer.xr.getCamera() : camera, f = new THREE.Vector3(); head.getWorldDirection(f); if (xr) f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); return { at: eye.clone(), fwd: f.normalize(), level: xr }; },
-  changed: (id, st) => { if (id.startsWith('holo:')) { if (st === 'closed') holos.closed(id); return; } if (st === 'open') panel = id as Panel; else if (panel === id) panel = (windows.top() as Panel | null) ?? 'none'; if (id === 'boards' && st !== 'open') boards?.hide(); },
+  changed: (id, st) => { if (id.startsWith('holo:')) { if (st === 'closed') holos.closed(id); return; } if (st === 'open') panel = id as Panel; else if (panel === id) panel = (windows.top() as Panel | null) ?? 'none'; if (id === 'boards' && st !== 'open') boards?.hide(); if (id === 'nodes') { if (st === 'open') nodesWall?.show(); else nodesWall?.hide(); } },
 });
 /** Whether a panel is up: its window open (not put away), or the suggestions. */
 const on = (p: Panel): boolean => (p === 'new' ? newOpen : p !== 'none' && windows.isOpen(p));
@@ -848,6 +849,8 @@ function summonTo(p: Panel): string {
   const place = (o: THREE.Object3D, dy = 0) => { o.position.copy(at).add(new THREE.Vector3(0, dy, 0)); o.lookAt(eye.x, eye.y + dy, eye.z); };
   if (p === 'new') { newOpen = true; place(suggest.group, 0.12); return 'What shall I build? Pick one, or say your own.'; }
   if (p === 'boards' && !boards) { panel = 'none'; return 'The boards are still opening; ask again in a moment.'; }
+  // the board of blocks is loaded the first time it is asked for, so the forge does not carry it until then
+  if (p === 'nodes' && !nodesWall) { panel = 'none'; void openNodes(); return 'Opening the board of blocks…'; }
   if (p === 'pipeline') layExec();
   if (p === 'causes') {
     layCausal(); causalNode = null; causalCard.mesh.visible = false;
@@ -864,6 +867,7 @@ function summonTo(p: Panel): string {
   if (p === 'chat') { drawChat(); const kb = eye.clone().addScaledVector(fwd, 0.55).add(new THREE.Vector3(0, -0.32, 0)); keyboard.mesh.position.copy(kb); keyboard.mesh.lookAt(eye.x, eye.y + 0.25, eye.z); }
   if (p === 'pipeline') drawRoundsNow();
   if (p === 'boards') return boards!.show();
+  if (p === 'nodes') return nodesWall!.show();
   return ({ pipeline: exec ? `What actually ran: ${exec.nodes.length} nodes, ${exec.edges.length} dependencies, ${exec.domains.length} domains, walked by depth. Point at any node.` : '', rounds: 'The rounds.', laws: 'The laws the experiment updated.', bill: 'The bill and the settings.', loop: 'Your reports, and what I put to you.', flaws: `${flawRows().length} to look at. Point at one to go to it.`, chat: 'Type, or say it.', gates: `${run.m.gates?.length ?? 0} decisions, each by its law.`, operate: operated ? 'What operating it found, and what it learned.' : 'Press ▶ Operate.', inside: insideOf ? `${insideOf.levels.length} levels inside ${insideOf.name}.` : '', causes: `${causal?.nodes.length ?? 0} subsystems and what passes between them; ${causal ? breaks(causal).length + (operated?.operation?.events.length ?? 0) : 0} breaks. Point at one.` } as Record<string, string>)[p] ?? '';
 }
 
@@ -1579,7 +1583,7 @@ const toolsToggle = document.createElement('button'); toolsToggle.textContent = 
 toolsToggle.onclick = () => { toolsOpen = !toolsOpen; toolsToggle.textContent = toolsOpen ? '☰ Tools ✕' : '☰ Tools'; for (const r of [showRow, actRow, seeRow]) r.style.display = toolsOpen ? 'flex' : 'none'; };
 tools.prepend(toolsToggle); for (const r of [showRow, actRow, seeRow]) r.style.display = 'none';
 let loopBtn: HTMLButtonElement | null = null;
-for (const [name, p2] of [['Boards', 'boards'], ['Causes', 'causes'], ['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
+for (const [name, p2] of [['Blocks', 'nodes'], ['Boards', 'boards'], ['Causes', 'causes'], ['Flaws', 'flaws'], ['Chat', 'chat'], ['Gates', 'gates'], ['Pipeline', 'pipeline'], ['Rounds', 'rounds'], ['Laws', 'laws'], ['Bill', 'bill'], ['My loop', 'loop']] as const) { const b2 = button(name, () => { const said = summon(p2); if (p2 === 'flaws' || p2 === 'chat') line('system', said); else say(said); }, showRow); if (p2 === 'loop') loopBtn = b2; }
 button('✗ Report', () => report(), actRow);
 { const fb = button('🛠 Fix', () => togglePin(), actRow); fb.dataset.fixOk = '1'; fixButtons.push(fb); }
 for (const [t2, q] of QUESTIONS) button(t2, () => askExec(q), execBox);
@@ -2569,6 +2573,15 @@ function send(text: string): void {
 }
 // ---- the node boards: words and their links on a wall in front of you (src/nexus/view/boards3d.ts) ------------------------
 let boards: Boards3D | null = null, boardHand = -1, boardMouse = false;
+// ---- the board of blocks on a wall: the same board as its page (src/nexus/view/nodes-wall.ts) ------------------------
+let nodesWall: import('./nodes-wall').NodesWall | null = null, nodesHand = -1, nodesMouse = false;
+async function openNodes(): Promise<void> {
+  try {
+    const { NodesWall } = await import('./nodes-wall');
+    if (!nodesWall) { nodesWall = new NodesWall((t2) => say(t2)); scene.add(nodesWall.group); named(nodesWall.group, 'the board of blocks'); windows.add({ id: 'nodes', title: 'Blocks', obj: nodesWall.group }); }
+    say(summonTo('nodes'));
+  } catch (e) { say(`The board of blocks could not be opened: ${(e as Error).message}`); }
+}
 const boardBar = document.createElement('form');
 boardBar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:7;display:none;gap:6px;width:min(34rem,calc(100vw - 32px));padding:8px;border-radius:12px;background:rgba(3,14,22,0.92);border:1px solid #4dd0e1';
 const boardInput = document.createElement('input'); boardInput.id = 'board-words';
@@ -3364,6 +3377,13 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   if (boards.down(ray)) { boardMouse = true; orbit.enabled = false; }
 });
 renderer.domElement.addEventListener('pointermove', (e) => { if (!boardMouse || !boards) return; ray.setFromCamera(ndc(e), camera); boards.move(ray); });
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (!on('nodes') || !nodesWall || renderer.xr.isPresenting || pinning || winMouse || phoneClick || boardMouse) return;
+  ray.setFromCamera(ndc(e), camera);
+  if (nodesWall.down(ray)) { nodesMouse = true; orbit.enabled = false; }
+});
+renderer.domElement.addEventListener('pointermove', (e) => { if (!nodesMouse || !nodesWall) return; ray.setFromCamera(ndc(e), camera); nodesWall.move(ray); });
+window.addEventListener('pointerup', () => { if (!nodesMouse) return; nodesMouse = false; nodesWall?.up(); orbit.enabled = true; });
 window.addEventListener('pointerup', () => { if (!boardMouse) return; boardMouse = false; boards?.up(); orbit.enabled = true; });
 
 // a person dragged by the mouse: the segment the pointer is on held, carried on a plane facing the camera
@@ -3652,20 +3672,22 @@ for (let i = 0; i < 2; i++) {
     // what is nearest along the ray is pressed: the phone, a window's bar, a chip, the keyboard of light, or the board behind
     const onBoard = on('boards') && boards && !pinning ? boards.distance(ray) : Infinity, onKeys = keyboard.mesh.visible ? ray.intersectObject(keyboard.mesh, false)[0]?.distance ?? Infinity : Infinity;
     const onPhone = phone.distance(ray), bar = pinning ? null : windows.barAt(ray), onBar = bar?.distance ?? Infinity, onChip = hit && (!pinning || hit.object.userData.fixOk) ? hit.distance : Infinity, onHolo = holos.distance(ray), on3d = apart3d.distance(ray);
-    const nearest = Math.min(onPhone, onBar, onChip, onBoard, onKeys, onHolo, on3d);
+    const onNodes = on('nodes') && nodesWall && !pinning ? nodesWall.distance(ray) : Infinity;
+    const nearest = Math.min(onPhone, onBar, onChip, onBoard, onKeys, onHolo, on3d, onNodes);
     if (nearest < Infinity && nearest === on3d && pick3d()) return;
     if (nearest < Infinity && nearest === onPhone) { const uv = phone.uvOf(ray), app = uv ? phone.appAt(uv) : null; if (app) { appDrag = { app, hand: i, id: null }; return; } phone.press(ray, renderer, scene); return; }
     if (nearest < Infinity && nearest === onHolo) { holos.press(ray, renderer, scene); return; }
     if (nearest < Infinity && nearest === onBar) { windows.press(ray, false); return; }
     if (nearest < Infinity && nearest === onChip) { all.find((c) => c.mesh === hit!.object)?.act(); return; }
     if (nearest < Infinity && nearest === onBoard && boards?.down(ray, 'press')) { boardHand = i; boardBy = 'select'; return; }
+    if (nearest < Infinity && nearest === onNodes && nodesWall?.down(ray)) { nodesHand = i; return; }
     if (dropPin()) return;
     if (pressBoards()) return;
     if (pickHolo()) return;
     const s = partAt(); if (s) select(s);
   });
   ctl.addEventListener('selectend', () => { if (appDrag?.hand === i) endDrag(); });
-  ctl.addEventListener('selectend', () => { if (boardHand === i && boardBy === 'select') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'select') { winHand = -1; windows.release(); } });
+  ctl.addEventListener('selectend', () => { if (nodesHand === i) { nodesHand = -1; nodesWall?.up(); } if (boardHand === i && boardBy === 'select') { boardHand = -1; boards?.up(); } if (winHand === i && winBy === 'select') { winHand = -1; windows.release(); } });
   // the grip on the right hand holds: a node on the board to move it, the board's sheet to slide it, a window (its bar,
   // or anywhere on it) to carry it; let go to leave it there. The left hand's grip pauses, as it did.
   ctl.addEventListener('squeezestart', () => {

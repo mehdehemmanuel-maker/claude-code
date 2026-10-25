@@ -130,9 +130,16 @@ const view = { ox: 0, oy: 0, k: 1 };
 const toWorld = (sx: number, sy: number) => [(sx - view.ox) / view.k, (sy - view.oy) / view.k] as const;
 
 // ---- drawing ---------------------------------------------------------------------------------------------------------
-const cv = document.getElementById('cv') as HTMLCanvasElement, g = cv.getContext('2d')!;
+/** On its own page (view/nodes.html), or hosted: the forge puts the same board on a wall in the room (nodes-wall.ts). */
+const PAGE = !!document.getElementById('app');
+const cv = (document.getElementById('cv') as HTMLCanvasElement | null) ?? hostedCanvas(), g = cv.getContext('2d')!;
+/** Hosted, the board draws on a canvas of its own, laid out off the page (so it has a size) and shown by the forge. */
+function hostedCanvas(): HTMLCanvasElement {
+  const c = document.createElement('canvas'); c.style.cssText = 'position:fixed;left:-30000px;top:0;width:1600px;height:900px;pointer-events:none;visibility:hidden';
+  document.body.appendChild(c); return c;
+}
 let drawQueued = false;
-function draw(): void { if (!drawQueued) { drawQueued = true; requestAnimationFrame(paint); } }
+function draw(): void { if (!PAGE && !wall.active) return; if (!drawQueued) { drawQueued = true; requestAnimationFrame(paint); } }
 function rr(x: number, y: number, w: number, h: number, r: number): void { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 function wirePath(e: LiveEdge): [number, number, number, number] | null {
   const b = cur(); if (!b.nodes[e.from] || !b.nodes[e.to]) return null;
@@ -156,6 +163,8 @@ function paint(): void {
   const dpr = window.devicePixelRatio || 1, W0 = cv.clientWidth, H0 = cv.clientHeight;
   if (cv.width !== Math.round(W0 * dpr) || cv.height !== Math.round(H0 * dpr)) { cv.width = Math.round(W0 * dpr); cv.height = Math.round(H0 * dpr); }
   g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W0, H0);
+  // on a wall in the room it is its own sheet, not see-through
+  if (!PAGE) { g.fillStyle = '#070a10'; g.fillRect(0, 0, W0, H0); }
   // the grid
   const step = 32 * view.k; if (step > 8) { g.fillStyle = '#16202e'; for (let x = view.ox % step; x < W0; x += step) for (let y = view.oy % step; y < H0; y += step) g.fillRect(x, y, 1.5, 1.5); }
   g.setTransform(dpr * view.k, 0, 0, dpr * view.k, dpr * view.ox, dpr * view.oy);
@@ -238,6 +247,7 @@ function paint(): void {
   if (box) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.strokeStyle = '#40c4ff'; g.fillStyle = '#40c4ff18'; g.lineWidth = 1; const x = Math.min(box.x0, box.x1), y = Math.min(box.y0, box.y1); g.fillRect(x, y, Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0)); g.strokeRect(x, y, Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0)); }
   paintMap(dpr, W0, H0);
   if (!nodesOf(b).length) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#5f6f84'; g.font = '15px system-ui'; g.textAlign = 'center'; g.fillText('Drag a block from the library, or type its name above (Ctrl K)', W0 / 2, H0 / 2); g.textAlign = 'left'; }
+  wall.painted?.();
   if (spinning || pulses.length || [...glow.values()].some((x) => t - x < 800)) draw();
 }
 /** The whole board small, in a corner, with what is in view outlined: where the rest of it is. Shown only when some of
@@ -311,8 +321,13 @@ function hit(sx: number, sy: number): Hit {
 let mode: 'none' | 'pan' | 'drag' | 'wire' | 'box' | 'pinch' | 'orbit' = 'none', last = { x: 0, y: 0 }, moved = false, dragStart: Map<string, [number, number]> = new Map();
 const touches = new Map<number, { x: number; y: number }>(); let pinch0 = { d: 0, k: 1, cx: 0, cy: 0 };
 const pos = (e: PointerEvent | MouseEvent) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-cv.addEventListener('pointerdown', (e) => {
-  cv.setPointerCapture(e.pointerId); const p = pos(e); touches.set(e.pointerId, p); last = p; moved = false;
+cv.addEventListener('pointerdown', (e) => { try { cv.setPointerCapture(e.pointerId); } catch { /* a pointer the page does not own */ } pointerDown(pos(e), e.pointerId, e.shiftKey); });
+cv.addEventListener('pointermove', (e) => pointerMove(pos(e), e.pointerId));
+cv.addEventListener('pointerup', (e) => pointerUp(pos(e), e.pointerId));
+type At = { x: number; y: number };
+/** A press at a point of the canvas (CSS pixels): a mouse, a finger, or a hand's ray on the forge's wall. */
+function pointerDown(p: At, pid: number, shift = false): void {
+  touches.set(pid, p); last = p; moved = false;
   if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch0 = { d: Math.hypot(a!.x - b!.x, a!.y - b!.y), k: view.k, cx: (a!.x + b!.x) / 2, cy: (a!.y + b!.y) / 2 }; mode = 'pinch'; dragWire = null; return; }
   if (mapBox && p.x >= mapBox.x - 6 && p.x <= mapBox.x + mapBox.w + 6 && p.y >= mapBox.y - 6 && p.y <= mapBox.y + mapBox.h + 6) {
     const wx = mapBox.x0 + (p.x - mapBox.x) / mapBox.s, wy = mapBox.y0 + (p.y - mapBox.y) / mapBox.s; view.ox = cv.clientWidth / 2 - wx * view.k; view.oy = cv.clientHeight / 2 - wy * view.k; mode = 'none'; draw(); return;
@@ -329,16 +344,16 @@ cv.addEventListener('pointerdown', (e) => {
     if (wy >= gg.bodyY && wy <= gg.bodyY + gg.bodyH) { mode = 'orbit'; orbiting = h.id; sel.clear(); sel.add(h.id); renderInspector(true); return; }
   }
   if (h?.kind === 'node') {
-    if (e.shiftKey) { if (sel.has(h.id)) sel.delete(h.id); else sel.add(h.id); } else if (!sel.has(h.id)) { sel.clear(); sel.add(h.id); }
+    if (shift) { if (sel.has(h.id)) sel.delete(h.id); else sel.add(h.id); } else if (!sel.has(h.id)) { sel.clear(); sel.add(h.id); }
     selWire = null; mode = 'drag'; dragStart = new Map([...sel].map((id) => [id, [cur().nodes[id]!.x ?? 0, cur().nodes[id]!.y ?? 0]]));
     renderInspector(true); draw(); return;
   }
   if (h?.kind === 'wire') { selWire = h.id; sel.clear(); renderInspector(true); draw(); mode = 'none'; return; }
-  if (e.shiftKey) { mode = 'box'; box = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; return; }
+  if (shift) { mode = 'box'; box = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; return; }
   mode = 'pan';
-});
-cv.addEventListener('pointermove', (e) => {
-  const p = pos(e); if (touches.has(e.pointerId)) touches.set(e.pointerId, p);
+}
+function pointerMove(p: At, pid: number): void {
+  if (touches.has(pid)) touches.set(pid, p);
   if (mode === 'pinch' && touches.size === 2) { const [a, b] = [...touches.values()], d = Math.hypot(a!.x - b!.x, a!.y - b!.y); zoomAt(pinch0.cx, pinch0.cy, (pinch0.k * d) / (pinch0.d || 1) / view.k); return; }
   const dx = p.x - last.x, dy = p.y - last.y; if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
   if (mode === 'pan') { view.ox += dx; view.oy += dy; last = p; draw(); }
@@ -347,9 +362,9 @@ cv.addEventListener('pointermove', (e) => {
   else if (mode === 'wire' && dragWire) { dragWire.x = p.x; dragWire.y = p.y; draw(); }
   else if (mode === 'box' && box) { box.x1 = p.x; box.y1 = p.y; draw(); }
   else { const h = hit(p.x, p.y); cv.style.cursor = h?.kind === 'in' || h?.kind === 'out' ? 'crosshair' : h?.kind === 'node' ? 'grab' : h?.kind === 'wire' ? 'pointer' : 'default'; }
-});
-cv.addEventListener('pointerup', (e) => {
-  const p = pos(e); touches.delete(e.pointerId);
+}
+function pointerUp(p: At, pid: number): void {
+  touches.delete(pid);
   if (mode === 'pinch') { if (touches.size < 2) mode = 'none'; return; }
   if (mode === 'wire' && dragWire) {
     const h = hit(p.x, p.y), from = dragWire.from, out = dragWire.out;
@@ -369,7 +384,7 @@ cv.addEventListener('pointerup', (e) => {
     box = null; renderInspector(true);
   } else if (mode === 'pan' && !moved) { sel.clear(); selWire = null; renderInspector(true); }
   mode = 'none'; orbiting = null; draw();
-});
+}
 cv.addEventListener('dblclick', (e) => {
   const p = pos(e), h = hit(p.x, p.y);
   if (h?.kind === 'node' && cur().nodes[h.id]?.inner) { enter(h.id); return; }
@@ -452,11 +467,12 @@ function tidy(b: Board): Board {
 }
 /** A block's height on a board not (yet) in view. */
 function geoOf(b: Board, id: string): number { const n = b.nodes[id]!, d = blockOf(n), p = d ? portsOf(d, { ...defaultsOf(d), ...(n.set ?? {}) }) : { inputs: [], outputs: [] }, blk = n.block ?? ''; const bh = blk === 'view.3d' ? 240 : blk === 'view.show' ? 58 : blk === 'view.gauge' ? 86 : blk === 'view.chart' ? 150 : blk === 'view.table' ? 124 : blk === 'note' ? 16 + 16 * Math.min(10, wrapCount(String(n.set?.text ?? ''), 30)) : 0; return HEAD + 8 + Math.max(p.inputs.length, p.outputs.length) * ROW + bh + FOOT; }
-function toast(s: string, bad = false): void { const t = document.getElementById('toast')!; t.textContent = s; t.className = bad ? 'bad' : ''; t.style.display = 'block'; clearTimeout((toast as unknown as { t: number }).t); (toast as unknown as { t: number }).t = window.setTimeout(() => (t.style.display = 'none'), 3200); }
+function toast(s: string, bad = false): void { if (!PAGE) { wall.said?.(s, bad); return; } const t = document.getElementById('toast')!; t.textContent = s; t.className = bad ? 'bad' : ''; t.style.display = 'block'; clearTimeout((toast as unknown as { t: number }).t); (toast as unknown as { t: number }).t = window.setTimeout(() => (t.style.display = 'none'), 3200); }
 
 // ---- the library ------------------------------------------------------------------------------------------------------
 let libBy: 'domain' | 'ability' | 'kind' = 'domain';
 function renderLibrary(): void {
+  if (!PAGE) return;
   const q = (document.getElementById('libQ') as HTMLInputElement).value, el = document.getElementById('shelves')!;
   el.innerHTML = '';
   for (const s of shelves(libBy, q)) {
@@ -472,12 +488,13 @@ function renderLibrary(): void {
     el.appendChild(d);
   }
 }
-document.getElementById('libQ')!.addEventListener('input', renderLibrary);
-for (const t of document.querySelectorAll<HTMLButtonElement>('.tabs button')) t.onclick = () => { libBy = t.dataset.by as typeof libBy; for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === t); renderLibrary(); };
+if (PAGE) document.getElementById('libQ')!.addEventListener('input', renderLibrary);
+for (const t of document.querySelectorAll<HTMLButtonElement>('#libTop .tabs button')) t.onclick = () => { libBy = t.dataset.by as typeof libBy; for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === t); renderLibrary(); };
 
 // ---- the inspector: each block's own calculator ---------------------------------------------------------------------
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 function renderInspector(full: boolean): void {
+  if (!PAGE) { wall.changed?.(); return; }
   const el = document.getElementById('inspector')!;
   if (!full && el.contains(document.activeElement) && document.activeElement !== document.body) { const o = document.getElementById('iouts'); if (o && sel.size === 1) o.innerHTML = outsHtml([...sel][0]!); return; }
   if (sel.size === 1) return nodeInspector(el, [...sel][0]!);
@@ -580,7 +597,7 @@ function nodeInspector(el: HTMLElement, id: string): void {
 }
 
 // ---- the command bar --------------------------------------------------------------------------------------------------
-const cmdIn = document.getElementById('cmdIn') as HTMLInputElement, cmdList = document.getElementById('cmdList')!;
+const cmdIn = (document.getElementById('cmdIn') ?? document.createElement('input')) as HTMLInputElement, cmdList = document.getElementById('cmdList') ?? document.createElement('div');
 interface Cmd { label: string; hint: string; colour: string; mark: string; run: () => void }
 let cmds: Cmd[] = [], cmdAt = 0;
 function commands(q: string): Cmd[] {
@@ -598,7 +615,7 @@ function commands(q: string): Cmd[] {
   const bl = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') || b.id === 'group.in' || b.id === 'group.out').map((b) => ({ label: b.name, hint: `${KINDS[b.kind].name} · ${(b.domains.map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x))[0] ?? ''}`, colour: KINDS[b.kind].hue, mark: KINDS[b.kind].mark, run: () => addBlock(b.id), key: `${b.name} ${b.says} ${b.id}` }));
   return [...acts.filter((a) => m(a.label)), ...bl.filter((b) => m(b.key))].slice(0, 40);
 }
-function openCmd(q: string): void { cmdIn.value = q; cmdIn.focus(); listCmd(); }
+function openCmd(q: string): void { if (!PAGE) { pendingWire = null; placeAt = null; return; } cmdIn.value = q; cmdIn.focus(); listCmd(); }
 function listCmd(): void {
   cmds = commands(cmdIn.value); cmdAt = 0;
   cmdList.innerHTML = cmds.map((c, i) => `<div data-i="${i}" class="${i === cmdAt ? 'on' : ''}"><span class="chip" style="background:${c.colour}">${esc(c.mark)}</span><span style="flex:1">${esc(c.label)}</span><span class="src">${esc(c.hint)}</span></div>`).join('');
@@ -617,8 +634,9 @@ cmdIn.addEventListener('keydown', (e) => {
 // ---- keys and buttons -------------------------------------------------------------------------------------------------
 function doUndo(): void { const s = undo.pop(); if (!s) return; redo.push(snapshot()); restore(s); }
 function doRedo(): void { const s = redo.pop(); if (!s) return; undo.push(snapshot()); restore(s); }
-function toggleHeat(): void { heat = !heat; document.getElementById('heat')!.classList.toggle('on', heat); draw(); }
+function toggleHeat(): void { heat = !heat; document.getElementById('heat')?.classList.toggle('on', heat); draw(); }
 window.addEventListener('keydown', (e) => {
+  if (!PAGE) return;
   const typing = (e.target as HTMLElement).closest('input, textarea, select');
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openCmd(''); return; }
   if (typing) return;
@@ -630,18 +648,21 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') { if (path.length) up(path.length - 1); else { sel.clear(); renderInspector(true); draw(); } }
   else if (e.key === '/') { e.preventDefault(); openCmd(''); }
 });
+if (PAGE) {
 document.getElementById('fit')!.onclick = fit; document.getElementById('heat')!.onclick = toggleHeat;
 document.getElementById('undo')!.onclick = doUndo; document.getElementById('redo')!.onclick = doRedo;
 document.getElementById('libBtn')!.onclick = () => { document.getElementById('lib')!.classList.toggle('open'); document.getElementById('inspector')!.classList.remove('open'); };
 document.getElementById('insBtn')!.onclick = () => { document.getElementById('inspector')!.classList.toggle('open'); document.getElementById('lib')!.classList.remove('open'); };
+}
 
 function renderCrumbs(): void {
+  if (!PAGE) return;
   const el = document.getElementById('crumbs')!; let b = root; const names = [root.title || 'Board'];
   for (const gid of path) { names.push(b.nodes[gid]?.label || 'Group'); b = b.nodes[gid]!.inner!; }
   el.innerHTML = names.map((n, i) => (i < names.length - 1 ? `<a data-i="${i}">${esc(n)}</a> ›` : `<span>${esc(n)}</span>`)).join(' ');
   for (const a of el.querySelectorAll<HTMLAnchorElement>('a')) a.onclick = () => up(Number(a.dataset.i));
 }
-function renderStats(): void { const nb = nodesOf(root).length; document.getElementById('stats')!.textContent = `${nb} blocks · last change: ${lastReport.ran} ran, ${lastReport.cached} reused, ${lastReport.ms.toFixed(1)} ms · ${memo.size.toLocaleString()} results cached · library of ${LIBRARY.size}`; }
+function renderStats(): void { if (!PAGE) return; const nb = nodesOf(root).length; document.getElementById('stats')!.textContent = `${nb} blocks · last change: ${lastReport.ran} ran, ${lastReport.cached} reused, ${lastReport.ms.toFixed(1)} ms · ${memo.size.toLocaleString()} results cached · library of ${LIBRARY.size}`; }
 function renderAll(): void { renderCrumbs(); renderLibrary(); renderInspector(true); renderStats(); draw(); }
 
 // ---- boards to start from: real work, each across fields ------------------------------------------------------------
@@ -754,4 +775,49 @@ requestAnimationFrame(() => { fit(); renderAll(); runSoon(); });
   board: () => root, path: () => path, select: (ids: string[]) => { sel.clear(); for (const id of ids) sel.add(id); renderInspector(true); draw(); },
   at: (id: string, port?: string, side: 'in' | 'out' = 'out') => { const gg = geo(id), q = port ? (side === 'in' ? gg.ins : gg.outs).find((x) => x.p.name === port) : null; const wx = q ? (side === 'in' ? gg.x : gg.x + gg.w) : gg.x + gg.w / 2, wy = q ? q.y : gg.y + HEAD / 2, r = cv.getBoundingClientRect(); return [wx * view.k + view.ox + r.left, wy * view.k + view.oy + r.top]; },
   state: (id: string) => curEngine()?.state.get(id), settled: () => !running,
+};
+
+// ---- hosted: the same board on the forge's wall (src/nexus/view/nodes-wall.ts) ----------------------------------------
+let wallActive = false;
+export interface WallInput { name: string; label: string; unit?: string; value: string; number: boolean; wired: boolean }
+/** What the forge drives the board by, and hears from it. Points are in the canvas's CSS pixels. */
+export const wall = {
+  canvas: cv,
+  /** Hosted and up: drawn; put away, it draws nothing (a 3D view turning by itself would otherwise draw every frame). */
+  get active(): boolean { return wallActive; }, set active(v: boolean) { wallActive = v; if (v) draw(); },
+  /** Drawn again: the forge's texture of it is out of date. */
+  painted: null as null | (() => void),
+  /** Something to say (a refused wire, what a cut took). */
+  said: null as null | ((s: string, bad: boolean) => void),
+  /** What is chosen, or the board, changed. */
+  changed: null as null | (() => void),
+  down: (x: number, y: number) => pointerDown({ x, y }, 901), move: (x: number, y: number) => pointerMove({ x, y }, 901), up: (x: number, y: number) => pointerUp({ x, y }, 901),
+  fit, tidy: () => { edit((b) => { tidy(b); }); fit(); }, undo: doUndo, redo: doRedo, heat: toggleHeat,
+  zoom: (f: number) => zoomAt(cv.clientWidth / 2, cv.clientHeight / 2, f),
+  up1: () => { if (path.length) up(path.length - 1); },
+  demos: () => DEMOS.map(([n]) => n),
+  demo: (i: number) => { const d = DEMOS[((i % DEMOS.length) + DEMOS.length) % DEMOS.length]!; pushUndo(); useBoard(d[1]()); save(); fit(); runSoon(); renderAll(); return d[0]; },
+  add: (blockId: string) => addBlock(blockId),
+  title: () => [root.title || 'Board', ...path.map((g0, i) => { let b = root; for (const x of path.slice(0, i)) b = b.nodes[x]!.inner!; return b.nodes[g0]?.label || 'Group'; })].join(' › '),
+  /** The block chosen, with each input you may set (those not wired), as it stands. */
+  chosen(): { id: string; label: string; says: string; inputs: WallInput[]; group: boolean } | null {
+    if (sel.size !== 1) return null; const id = [...sel][0]!, n = cur().nodes[id]; if (!n) return null; const d = blockOf(n), into = local.wiresInto(id);
+    const inputs = portsFor(id).inputs.map((q) => { const v = n.set?.[q.name] ?? q.default, wired = into.some((e) => e.in === q.name); return { name: q.name, label: q.label ?? q.name, ...(q.unit ? { unit: q.unit } : {}), value: wired ? 'wired' : v === undefined ? '—' : show(typeof v === 'string' && q.type === 'number' ? readQuantity(v, q.unit) : v, q.unit), number: q.type === 'number' || q.type === 'integer', wired }; });
+    const st = d?.settings?.find((x) => x.type === 'quantity' || x.type === 'number');
+    if (st) inputs.unshift({ name: `set:${st.key}`, label: st.label, value: show(typeof n.set?.[st.key] === 'string' ? readQuantity(String(n.set?.[st.key]), String(n.set?.unit ?? '') || undefined) : n.set?.[st.key] ?? st.default, String(n.set?.unit ?? '') || undefined), number: true, wired: false });
+    return { id, label: n.label || d?.name || '', says: d?.says ?? '', inputs, group: !!n.inner };
+  },
+  /** An input of the chosen block made bigger or smaller by a factor (a hand cannot type well): 1.1 is ten percent more. */
+  nudge(name: string, f: number): void {
+    const c = wall.chosen(); if (!c) return; const n = cur().nodes[c.id]!, set = name.startsWith('set:') ? name.slice(4) : null, key = set ?? name;
+    const d = blockOf(n), q = portsFor(c.id).inputs.find((x) => x.name === key), raw = n.set?.[key] ?? q?.default ?? d?.settings?.find((x) => x.key === key)?.default;
+    let v = typeof raw === 'number' ? raw : typeof raw === 'string' ? readQuantity(raw, set ? String(n.set?.unit ?? '') || undefined : q?.unit) : NaN;
+    if (typeof v !== 'number' || !Number.isFinite(v)) v = 0;
+    const next = v === 0 ? (f > 1 ? 1 : -1) : Number((v * f).toPrecision(4));
+    edit((b) => { b.nodes[c.id]!.set = { ...(b.nodes[c.id]!.set ?? {}), [key]: next }; }, c.id); draw();
+  },
+  open: () => { const c = wall.chosen(); if (c?.group) enter(c.id); },
+  cut: () => { const c = wall.chosen(); if (c) cut(c.id); },
+  fold: group,
+  shelves: (by: 'domain' | 'ability' | 'kind') => shelves(by),
 };

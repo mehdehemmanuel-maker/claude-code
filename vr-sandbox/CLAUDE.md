@@ -111,6 +111,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A board of blocks run: keys and a shared cache so only what changed runs, lists mapped, units converted on wires, groups folded, opened and saved as blocks, branches cut, dead blocks, twins and repeated wiring found | `src/nexus/dataflow.ts` (plan and status: `docs/NODE-ENGINE.md`) |
 | The board of blocks on a page: the coloured canvas, library, inspector-calculator, suggestions, starter boards | `src/nexus/view/nodes.ts`, `view/nodes.html` |
 | A part in 3D on a board of blocks: each 3D view block's picture, and full screen to turn and take apart | `src/nexus/view/nodes3d.ts` (draws with `kit3d.ts`) |
+| The board of blocks on a wall in the forge: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a hand's ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` (opened by `openNodes` in `forge.ts`) |
 
 ## The organising principle: interfaces, envelopes, one graph
 
