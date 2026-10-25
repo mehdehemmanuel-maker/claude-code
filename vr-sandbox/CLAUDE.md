@@ -50,6 +50,11 @@ the task list and lose the why. So the why lives here, and every round is checke
   it's the same for any new parts added … look for even more components in the sub component … some kind of table lookup;
   if the very specific part doesn't exist in the table queue it too, but first it has to be broken down" (2026-10-08:
   `breakdown.ts`, `npm run breakdown`)
+- "build a universal card engine that spans across all domains … a node graph that gets smarter meaning a node can be
+  a tree that can branch more trees and even delete branches and it should become the most efficient system" (a
+  challenge against another AI); "it should be colourful … mainly node pipeline but nodes can be blocks of code, can be
+  artifacts like different types of calculators and yes you can make new ones and they act like efficiency building
+  blocks like programming" (2026-10-25: plan drafted in `docs/NODE-ENGINE.md`, grown from `boards.ts` and `flows.ts`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
