@@ -11,8 +11,13 @@
 import { find, type Node as TaxNode } from './embody/taxonomy';
 import type { FlowRun, Step } from './flows';
 
-export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string; /** On a flow: what the node does when the flow runs. */ step?: Step }
-export interface BoardEdge { from: string; to: string; rel?: string; label?: string; note?: string; deleted?: boolean }
+export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string; /** On a flow: what the node does when the flow runs. */ step?: Step
+  /** On a pipeline of blocks (src/nexus/dataflow.ts): the library block it is (src/nexus/blocks.ts), its settings, and,
+   *  for a group, the board inside it. */
+  block?: string; set?: Record<string, unknown>; inner?: Board }
+export interface BoardEdge { from: string; to: string; rel?: string; label?: string; note?: string; deleted?: boolean
+  /** A wire between blocks: from the output port named `out` to the input port named `in`. */
+  out?: string; in?: string }
 export interface Board {
   title: string; kind?: string; about?: string;
   nodes: Record<string, BoardNode>; edges: Record<string, BoardEdge>;

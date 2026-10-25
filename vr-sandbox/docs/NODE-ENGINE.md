@@ -1,7 +1,7 @@
 # The node engine: a universal, colourful node pipeline
 
-Plan draft 1, 2026-10-25. Nothing in this plan is built yet. It is a plan to review, not a record of work done.
-Targets marked **target** are goals that will be measured. Nothing here is a claim about what already runs.
+Plan draft 1, 2026-10-25, with the first build (same day) recorded in [§0.1](#01-what-is-built-and-measured).
+Targets marked **target** are goals that will be measured. Only §0.1 says what already runs.
 
 **Contents**
 0. [Destination](#0-destination)
@@ -39,6 +39,41 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 - A person who has never seen it builds a working calculator chain in under five minutes (**target**, checked by a
   blind trial with an agent and with you).
 
+### 0.1 What is built and measured
+
+Open `view/nodes.html` (build with `npx vite build --config vite.view.config.ts`, then open `dist-view/nodes.html`).
+
+| Part | Where | State |
+| --- | --- | --- |
+| Typed ports, wires, unit dimensions, conversion on the wire, list mapping | `src/nexus/blocks.ts` (`fits`, `convert` in `dataflow.ts`) | Built and tested |
+| The library: 199 blocks, 195 with their own tests (all passing), every one of the 144 laws as a calculator, by field, by ability and by kind; a duplicate is refused | `src/nexus/blocks.ts` | Built. Thin shelves remain: controls 2, electronics 3, manufacturing 5 |
+| Incremental runner: keys, shared result cache across boards, only what an edit reaches is looked at | `src/nexus/dataflow.ts` (`Engine`, `Memo`) | Built and property-tested |
+| Groups as nodes, nested; fold (taking in what lies between), open, save as a library block | `dataflow.ts` (`collapse`, `expand`, `makeBlock`) | Built and property-tested |
+| Cut a branch keeping what else needs it; dead branches; twins and merging; repeated wiring | `dataflow.ts` (`cutBranch`, `deadNodes`, `twins`, `mergeTwins`, `patterns`, `suggest`) | Built and tested |
+| The colourful canvas: blocks by kind, wires by quantity, glow and pulses on a run, heat map, minimap, command bar, undo, tidy layout, phone layout, inspector as each block's calculator | `src/nexus/view/nodes.ts`, `view/nodes.html` | Built, driven in Chromium, blind-checked |
+| Code blocks with typed ports (JS, TS, Python) off the page | `view/code-worker.ts` (`vars`) | Built; JS checked on the page |
+
+Measured on the build container by `tests/nexus/dataflow.test.ts` (not a Quest, not your machine):
+
+| Case | Target | Measured |
+| --- | --- | --- |
+| 10,000-node board, an edit reaching 100 of them | under 16 ms | about 2 ms |
+| 10,000-node board, first full run | — | about 280 ms |
+| One library block placed 10,000 times | edits update once | its formula ran twice in all (first run, one edit) |
+| 1,048,576 blocks placed in nested library blocks | open in under 1 s | worked out in about 2 ms, one block actually run |
+| 100,000-row sweep through a law | without stalling | about 300 ms |
+| Groups 64 deep | open, run, fold back | passes |
+
+Not built yet, and said plainly:
+- the forge's flows (`flows.ts`) still run on their own runner and are not yet steps in this one;
+- no VR view of the canvas yet, and no board-room screen;
+- Ask Claude works only where the forge's relay is; on the page it says it cannot ask;
+- runs are one block at a time on the page's thread. A pool of workers is not built yet;
+- agents, bridges and triggers are not block kinds yet;
+- no versions of library blocks beyond `version: 1`;
+- no sharing or editing by several people;
+- blocks saved by you live in this browser only.
+
 ## 1. What already exists, and what this grows from
 
 The project rule is one owner per concern, so the engine is grown from the board code already in the app, not
@@ -51,7 +86,7 @@ written beside it:
 | `src/nexus/calls.ts`, `calltest.ts` | 25 groups of calls a step can make, each one tested for real | Calls are a flat list. There's no library with domains, versions or blocks people make |
 | `src/nexus/view/code-worker.ts` | Code steps in JavaScript, TypeScript, Python (Pyodide) and C++ (as converted JS), run off the main thread | Code gets `facts` and one input string, not typed ports |
 | `src/nexus/view/boards3d.ts`, `boards-store.ts` | The board on the wall in the forge, drawn as one canvas for each surface, and saved | Drawn as a word wall, not as wired blocks |
-| `src/ganglia/laws.ts`, `units.ts`, `src/nexus/lawgraph.ts` | 288 laws with checked units: a ready stock of calculators | Not exposed as blocks |
+| `src/ganglia/laws.ts`, `units.ts`, `src/nexus/lawgraph.ts` | 144 laws with checked units: a ready stock of calculators (draft 1 said 288; that was a miscount) | Not exposed as blocks (now they are: §0.1) |
 | `src/nexus/components.ts`, `inventory.ts`, `breakdown.ts` | The parts library and the breakdown queue: a thing becomes its sub-things, which are looked up before being added | Not blocks on a canvas |
 
 So the plan is: give `boards.ts` typed ports and values, give `flows.ts` a dataflow runner with caching, and make
@@ -237,7 +272,7 @@ uses (where it is placed), its usage record (§6) and a quality badge: **tested*
 figure says where it came from), **used** (placed and run many times) or **draft**.
 
 ### 8.3 How the library fills
-- **Seeded** from what exists: the 288 laws, the 25 call groups, the components, the generators and the critics,
+- **Seeded** from what exists: the 144 laws, the 25 call groups, the components, the generators and the critics,
   each wrapped as a block with tests. That is hundreds of real blocks on day one, none of them mock.
 - **Made by you:** select nodes, then "make block". The selection's loose wires become its ports.
 - **Made by Claude:** ask for a calculator or a block. Claude writes it with its tests and sources, and it enters as

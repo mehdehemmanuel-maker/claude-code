@@ -107,6 +107,9 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/kits.ts`, checked in `src/nexus/make/critic.ts` |
 | A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
 | Places, rides and games | `places.ts`, `karting.ts`, `coaster.ts`, `pingpong.ts` |
+| Blocks: what a node on a board of blocks can be (typed ports with units, settings, tests, sources), the library of them by field, ability and kind (every law a calculator), a duplicate refused | `src/nexus/blocks.ts` |
+| A board of blocks run: keys and a shared cache so only what changed runs, lists mapped, units converted on wires, groups folded, opened and saved as blocks, branches cut, dead blocks, twins and repeated wiring found | `src/nexus/dataflow.ts` (plan and status: `docs/NODE-ENGINE.md`) |
+| The board of blocks on a page: the coloured canvas, library, inspector-calculator, suggestions, starter boards | `src/nexus/view/nodes.ts`, `view/nodes.html` |
 
 ## The organising principle: interfaces, envelopes, one graph
 

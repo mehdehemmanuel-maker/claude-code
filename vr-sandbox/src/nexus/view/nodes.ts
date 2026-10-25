@@ -1,0 +1,715 @@
+// The board of blocks on a page (view/nodes.html): a canvas of coloured blocks wired port to port, the library beside it
+// sorted by field, by ability or by kind, and an inspector that is each block's own calculator. Every edit runs what it
+// reaches at once (src/nexus/dataflow.ts), each block glows as it runs and a pulse runs down each wire that carried a
+// new value; a failed block turns red and says why, a block waiting on an input says which. Groups open in place and
+// fold back; a group can be saved as a library block of its own and placed anywhere after. What the engine would change
+// (what is dead, what is twice, what wiring repeats) is listed when nothing is chosen, each with the press that does it.
+//
+// The board is kept in this browser (localStorage) and can be taken out and brought back as JSON. Code blocks run in
+// the forge's own worker (code-worker.ts), off the page. Asking Claude needs the forge's relay, which this page does not
+// have: such a block says so rather than pretending.
+
+import { ABILITIES, DOMAINS, KINDS, LIBRARY, block, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
+import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
+import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
+
+// ---- where things are kept ------------------------------------------------------------------------------------------
+const KEY = 'nexus.nodeboard.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1';
+const store = { get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }, set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* private window: kept for this visit only */ } } };
+interface Saved { id: string; name: string; says: string; domains: string[]; graph: Board }
+function loadBlocks(): void { try { for (const s of JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]) register(groupBlock(s.graph, { id: s.id, name: s.name, says: s.says, domains: s.domains, by: 'you' })); } catch { /* none kept */ } }
+function keepBlock(d: BlockDef): void { let all: Saved[] = []; try { all = JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { /* start again */ } all = all.filter((s) => s.id !== d.id); all.push({ id: d.id, name: d.name, says: d.says, domains: d.domains, graph: d.graph! }); store.set(BLOCKS_KEY, JSON.stringify(all)); }
+
+// ---- code, off the page ---------------------------------------------------------------------------------------------
+let worker: Worker | null = null, seq = 0;
+const waiting = new Map<number, { ok: (v: unknown) => void; no: (e: Error) => void; timer: number }>();
+function codeWorker(): Worker {
+  if (worker) return worker;
+  worker = new Worker(new URL('./code-worker.ts', import.meta.url), { type: 'module' });
+  worker.onmessage = (e: MessageEvent<{ id: number; value?: unknown; error?: string }>) => { const w = waiting.get(e.data.id); if (!w) return; waiting.delete(e.data.id); clearTimeout(w.timer); if (e.data.error) w.no(new Error(e.data.error)); else w.ok(e.data.value); };
+  return worker;
+}
+const env: Env = {
+  code: (lang, code, inputs) => new Promise((ok, no) => {
+    const id = ++seq, w = codeWorker();
+    const timer = window.setTimeout(() => { waiting.delete(id); w.terminate(); worker = null; no(new Error('stopped after 8 s: it ran too long')); }, 8000);
+    waiting.set(id, { ok, no, timer }); w.postMessage({ id, lang, code, facts: {}, input: '', vars: inputs });
+  }),
+  ai: async () => { throw new Error('asking Claude needs the forge\'s relay; open this board in the forge to ask'); },
+};
+
+// ---- the board ------------------------------------------------------------------------------------------------------
+let root: Board = emptyBoard('My pipeline');
+let path: string[] = [];
+const memo = new Memo();
+let engine = new Engine(root, env, memo);
+const sel = new Set<string>(); let selWire: string | null = null;
+const undo: string[] = [], redo: string[] = [];
+let heat = false;
+
+const cur = (): Board => { let b = root; for (const g of path) b = b.nodes[g]!.inner!; return b; };
+/** The engine that ran the board in view: the root's, or the one inside each group on the way down (once it has run). */
+function curEngine(): Engine | undefined { let e: Engine | undefined = engine; for (const g of path) e = e?.inside(g); return e; }
+let local = engine;
+function refreshLocal(): void { const ce = curEngine(); local = ce && ce.board === cur() ? ce : new Engine(cur(), env, memo); }
+const stateOf = (id: string): NodeState | undefined => curEngine()?.state.get(id);
+const portsFor = (id: string): Ports => { const n = cur().nodes[id]; if (!n) return { inputs: [], outputs: [] }; const e = curEngine(); if (e && e.board === cur()) return e.ports(id); const d = blockOf(n); return d ? portsOf(d, { ...defaultsOf(d), ...(n.set ?? {}) }) : { inputs: [], outputs: [] }; };
+
+/** Another board in view: its own engine, sharing what every board has worked out. */
+function useBoard(b: Board): void { root = b; path = []; engine = new Engine(root, env, memo); refreshLocal(); sel.clear(); selWire = null; glow.clear(); pulses = []; suggestions = null; }
+function snapshot(): string { return JSON.stringify({ root, path }); }
+function pushUndo(): void { undo.push(snapshot()); if (undo.length > 120) undo.shift(); redo.length = 0; }
+function restore(s: string): void { const o = JSON.parse(s) as { root: Board; path: string[] }; root = o.root; path = []; for (const g of o.path) { const b = cur(); if (b.nodes[g]?.inner) path.push(g); else break; } engine = new Engine(root, env, memo); refreshLocal(); sel.clear(); selWire = null; save(); runSoon(); renderAll(); }
+
+/** Changes the board in view. A change inside a group makes a new board of each group on the way down, so every key that
+ *  hangs on it is new and what it feeds runs again. `node` is set where only that node's settings changed. */
+function edit(fn: (b: Board) => void, node?: string): void {
+  pushUndo();
+  if (!path.length) { const before = node ? sigOf(node) : ''; fn(root); if (node && sigOf(node) === before) engine.touch(node); else engine.reshape(root); }
+  else {
+    const chain: Board[] = [root]; for (const g of path) chain.push(chain[chain.length - 1]!.nodes[g]!.inner!);
+    let child = structuredClone(chain[chain.length - 1]!); fn(child);
+    for (let i = path.length - 1; i >= 0; i--) { const parent = i === 0 ? root : structuredClone(chain[i]!); parent.nodes[path[i]!] = { ...parent.nodes[path[i]!]!, inner: child }; child = parent; }
+    engine.touch(path[0]!);
+  }
+  root.updatedAt = Date.now(); refreshLocal(); save(); runSoon();
+}
+const sigOf = (id: string) => { const p = portsFor(id); return `${p.inputs.map((x) => x.name + x.type + (x.unit ?? '')).join()}|${p.outputs.map((x) => x.name + x.type + (x.unit ?? '')).join()}`; };
+let saveT = 0; function save(): void { clearTimeout(saveT); saveT = window.setTimeout(() => store.set(KEY, JSON.stringify(root)), 250); }
+
+// ---- running --------------------------------------------------------------------------------------------------------
+let running = false, again = false, lastReport = { ran: 0, cached: 0, failed: 0, waiting: 0, ms: 0, looked: 0 };
+const glow = new Map<string, number>(); let pulses: { e: string; t0: number }[] = [];
+function runSoon(): void { if (running) { again = true; return; } void runNow(); }
+async function runNow(): Promise<void> {
+  running = true;
+  const before = new Map([...engine.state.entries()].map(([id, s]) => [id, s.runs]));
+  try { lastReport = await engine.run(); } catch (e) { toast(`run stopped: ${(e as Error).message}`, true); }
+  const t = performance.now();
+  for (const [id, s] of engine.state) if (s.runs !== before.get(id) && !s.cached) { glow.set(id, t); for (const w of engine.wiresFrom(id)) pulses.push({ e: w.id, t0: t }); }
+  // inside the group in view, its own nodes glow too
+  const ce = curEngine(); if (path.length && ce) for (const [id, s] of ce.state) if (!s.cached) { glow.set(id, t); for (const w of ce.wiresFrom(id)) pulses.push({ e: w.id, t0: t }); }
+  running = false; refreshLocal(); suggestions = null;
+  renderInspector(false); renderStats(); draw();
+  if (again) { again = false; runSoon(); }
+}
+
+// ---- colours ---------------------------------------------------------------------------------------------------------
+const DIM_HUE: [number[], string][] = [[[0, 1, 0, 0, 0], '#40c4ff'], [[1, 1, -2, 0, 0], '#ff5252'], [[1, -1, -2, 0, 0], '#ff6e40'], [[1, 0, 0, 0, 0], '#b2ff59'], [[0, 0, 1, 0, 0], '#ea80fc'], [[1, 2, -3, 0, 0], '#ffab40'], [[1, 2, -2, 0, 0], '#ffd180'], [[1, 2, -3, -1, 0], '#ffff00'], [[0, 0, 0, 1, 0], '#18ffff'], [[1, 2, -3, -2, 0], '#a7ffeb'], [[0, 0, 0, 0, 1], '#ff80ab'], [[0, 1, -1, 0, 0], '#82b1ff'], [[0, 0, -1, 0, 0], '#b388ff'], [[0, 4, 0, 0, 0], '#80d8ff'], [[0, 2, 0, 0, 0], '#84ffff']];
+/** A wire's colour is what it carries: each kind of quantity its own, money gold, words grey, yes or no lime, tables teal. */
+function typeColour(p?: PortDef): string {
+  if (!p) return '#78909c';
+  const t = elemOf(p.type) ?? p.type;
+  if (t === 'boolean') return '#c6ff00'; if (t === 'text') return '#b0bec5'; if (t === 'table' || t === 'record') return '#4db6ac';
+  if (t === 'material' || t === 'part') return '#80cbc4'; if (t === 'any') return '#9e9e9e'; if (t === 'event') return '#eeff41';
+  if (p.unit && /^(USD|EUR|GBP|JPY|CAD|AUD|CHF|CNY|INR)$/.test(p.unit)) return '#ffd740';
+  const d = dimOf(p.unit); if (!d) return '#e0e6ee';
+  const named = DIM_HUE.find(([x]) => x.every((v, i) => v === d[i])); if (named) return named[1];
+  let h = 0; for (const v of d) h = (h * 31 + v * 17 + 7) % 360; return `hsl(${h}, 90%, 70%)`;
+}
+function heatColour(id: string): string { const s = stateOf(id); if (!s) return '#455a64'; if (s.fails) return '#ff1744'; const k = Math.min(1, Math.log10(1 + s.ms * 10) / 3); return `hsl(${120 - 120 * k}, 85%, 55%)`; }
+
+// ---- geometry --------------------------------------------------------------------------------------------------------
+const W = 280, HEAD = 36, ROW = 26, FOOT = 24;
+function bodyH(id: string): number {
+  const n = cur().nodes[id]!; const b = n.block ?? '';
+  if (b === 'view.show') return 58; if (b === 'view.gauge') return 86; if (b === 'view.chart') return 150; if (b === 'view.table') return 124;
+  if (b === 'note') return 16 + 16 * Math.min(10, wrapCount(String(n.set?.text ?? ''), 30));
+  return 0;
+}
+const wrapCount = (s: string, per: number) => s.split('\n').reduce((t, l) => t + Math.max(1, Math.ceil(l.length / per)), 0);
+interface Geo { x: number; y: number; w: number; h: number; ins: { p: PortDef; y: number }[]; outs: { p: PortDef; y: number }[]; bodyY: number; bodyH: number }
+function geo(id: string): Geo {
+  const n = cur().nodes[id]!, p = portsFor(id), rows = Math.max(p.inputs.length, p.outputs.length), x = n.x ?? 0, y = n.y ?? 0, bh = bodyH(id);
+  const top = y + HEAD + 4;
+  return { x, y, w: W, h: HEAD + 8 + rows * ROW + bh + FOOT, ins: p.inputs.map((q, i) => ({ p: q, y: top + i * ROW + ROW / 2 })), outs: p.outputs.map((q, i) => ({ p: q, y: top + i * ROW + ROW / 2 })), bodyY: top + rows * ROW + 4, bodyH: bh };
+}
+const view = { ox: 0, oy: 0, k: 1 };
+const toWorld = (sx: number, sy: number) => [(sx - view.ox) / view.k, (sy - view.oy) / view.k] as const;
+
+// ---- drawing ---------------------------------------------------------------------------------------------------------
+const cv = document.getElementById('cv') as HTMLCanvasElement, g = cv.getContext('2d')!;
+let drawQueued = false;
+function draw(): void { if (!drawQueued) { drawQueued = true; requestAnimationFrame(paint); } }
+function rr(x: number, y: number, w: number, h: number, r: number): void { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function wirePath(e: LiveEdge): [number, number, number, number] | null {
+  const b = cur(); if (!b.nodes[e.from] || !b.nodes[e.to]) return null;
+  const a = geo(e.from), c = geo(e.to), o = a.outs.find((x) => x.p.name === e.out), i = c.ins.find((x) => x.p.name === e.in);
+  if (!o || !i) return null;
+  return [a.x + a.w, o.y, c.x, i.y];
+}
+function bez(x1: number, y1: number, x2: number, y2: number, t: number): [number, number] {
+  const dx = Math.max(60, Math.abs(x2 - x1) * 0.5), cx1 = x1 + dx, cx2 = x2 - dx, u = 1 - t;
+  return [u * u * u * x1 + 3 * u * u * t * cx1 + 3 * u * t * t * cx2 + t * t * t * x2, u * u * u * y1 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y2];
+}
+let dragWire: { from: string; out: string; x: number; y: number } | null = null, box: { x0: number; y0: number; x1: number; y1: number } | null = null;
+let suggestions: Suggestion[] | null = null;
+const dimmed = (): Set<string> => new Set((suggestions ??= suggest(cur(), curEngine())).filter((s) => s.kind === 'dead').flatMap((s) => s.nodes));
+
+function paint(): void {
+  drawQueued = false;
+  const dpr = window.devicePixelRatio || 1, W0 = cv.clientWidth, H0 = cv.clientHeight;
+  if (cv.width !== Math.round(W0 * dpr) || cv.height !== Math.round(H0 * dpr)) { cv.width = Math.round(W0 * dpr); cv.height = Math.round(H0 * dpr); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W0, H0);
+  // the grid
+  const step = 32 * view.k; if (step > 8) { g.fillStyle = '#16202e'; for (let x = view.ox % step; x < W0; x += step) for (let y = view.oy % step; y < H0; y += step) g.fillRect(x, y, 1.5, 1.5); }
+  g.setTransform(dpr * view.k, 0, 0, dpr * view.k, dpr * view.ox, dpr * view.oy);
+  const b = cur(), t = performance.now(), dead = dimmed();
+  const [vx0, vy0] = toWorld(0, 0), [vx1, vy1] = toWorld(W0, H0);
+  const seen = (gg: Geo) => gg.x + gg.w > vx0 - 40 && gg.x < vx1 + 40 && gg.y + gg.h > vy0 - 40 && gg.y < vy1 + 40;
+  // wires under blocks
+  for (const e of edgesOf(b)) {
+    if (!isWire(e)) continue; const p = wirePath(e); if (!p) continue;
+    const [x1, y1, x2, y2] = p, dx = Math.max(60, Math.abs(x2 - x1) * 0.5), op = geo(e.from).outs.find((x) => x.p.name === e.out)?.p, col = typeColour(op);
+    g.strokeStyle = col; g.globalAlpha = dead.has(e.from) ? 0.25 : 0.9; g.lineWidth = selWire === e.id ? 4 : 2.2;
+    if (op?.type === 'any') g.setLineDash([6, 5]); else g.setLineDash([]);
+    if (elemOf(op?.type ?? 'any') || (local.board === b && local.mapsOver(e.from).size)) g.lineWidth += 1.6;
+    g.beginPath(); g.moveTo(x1, y1); g.bezierCurveTo(x1 + dx, y1, x2 - dx, y2, x2, y2); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+  }
+  pulses = pulses.filter((p) => t - p.t0 < 700);
+  for (const pu of pulses) {
+    const e = b.edges[pu.e]; if (!e) continue; const p = wirePath({ ...e, id: pu.e }); if (!p) continue;
+    const [px, py] = bez(p[0], p[1], p[2], p[3], (t - pu.t0) / 700);
+    g.fillStyle = '#ffffff'; g.shadowColor = typeColour(geo(e.from).outs.find((x) => x.p.name === e.out)?.p); g.shadowBlur = 14; g.beginPath(); g.arc(px, py, 4, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
+  }
+  // blocks
+  for (const n of nodesOf(b)) {
+    const id = n.id, node = b.nodes[id]!; if (!node.block && !node.inner) continue;
+    const gg = geo(id); if (!seen(gg)) continue;
+    const d = blockOf(node), k = d?.kind ?? 'group', hue = heat ? heatColour(id) : KINDS[k].hue, s = stateOf(id), on = sel.has(id);
+    const gl = glow.get(id), ga = gl ? Math.max(0, 1 - (t - gl) / 800) : 0;
+    g.globalAlpha = dead.has(id) ? 0.45 : 1;
+    if (ga > 0) { g.shadowColor = hue; g.shadowBlur = 30 * ga; }
+    rr(gg.x, gg.y, gg.w, gg.h, 12); g.fillStyle = '#0f1520'; g.fill(); g.shadowBlur = 0;
+    // header
+    const grad = g.createLinearGradient(gg.x, gg.y, gg.x + gg.w, gg.y); grad.addColorStop(0, hue); grad.addColorStop(1, shade(hue));
+    g.save(); rr(gg.x, gg.y, gg.w, gg.h, 12); g.clip(); g.fillStyle = grad; g.fillRect(gg.x, gg.y, gg.w, HEAD); g.restore();
+    g.fillStyle = '#05080c'; g.font = '700 14px system-ui, sans-serif'; g.textBaseline = 'middle';
+    g.fillText(KINDS[k].mark, gg.x + 10, gg.y + HEAD / 2);
+    g.fillText(clip(node.label || d?.name || 'Block', 30), gg.x + 32, gg.y + HEAD / 2);
+    if (s?.mapped) { g.font = '700 11px system-ui'; const tx = `×${s.mapped.toLocaleString()}`, tw = g.measureText(tx).width; rr(gg.x + gg.w - tw - 16, gg.y + 8, tw + 10, 18, 9); g.fillStyle = '#05080cbb'; g.fill(); g.fillStyle = '#fff'; g.fillText(tx, gg.x + gg.w - tw - 11, gg.y + 17); }
+    if (node.inner || d?.graph) { g.fillStyle = '#05080c'; g.font = '11px system-ui'; g.fillText(node.inner ? '▣ open' : '▣ block', gg.x + gg.w - 52, gg.y + HEAD / 2); }
+    // outline: chosen, failed, waiting
+    rr(gg.x, gg.y, gg.w, gg.h, 12); g.lineWidth = on ? 3 : 1.4;
+    g.strokeStyle = on ? '#ffffff' : s?.status === 'failed' ? '#ff5252' : s?.status === 'waiting' ? '#ffb300' : '#273449';
+    if (s?.status === 'waiting' && !on) g.setLineDash([6, 4]); g.stroke(); g.setLineDash([]);
+    // ports
+    g.font = '13px system-ui, sans-serif';
+    const into = local.board === b ? local.wiresInto(id) : [];
+    const outW = gg.outs.map((q) => { const v = s?.status === 'ok' ? s.out?.[q.p.name] : undefined; return g.measureText(v === undefined ? q.p.name : `${clip(q.p.name, 10)} ${clip(show(v, q.p.unit), 20)}`).width; });
+    for (const [row, q] of gg.ins.entries()) {
+      const wired = into.some((e) => e.in === q.p.name), c = typeColour(q.p);
+      g.fillStyle = c; g.beginPath(); g.arc(gg.x, q.y, 5.5, 0, Math.PI * 2); g.fill();
+      if (!wired) { g.fillStyle = '#0f1520'; g.beginPath(); g.arc(gg.x, q.y, 2.6, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = q.p.optional && !wired ? '#6b7a8f' : '#c8d4e3'; g.fillText(clip(q.p.name, 12), gg.x + 12, q.y);
+      const v = node.set?.[q.p.name];
+      if (!wired && v !== undefined && v !== '') {
+        const x0 = gg.x + 12 + g.measureText(clip(q.p.name, 12)).width + 6, room = gg.x + gg.w - 18 - (outW[row] ?? 0) - x0;
+        let t = `= ${show(typeof v === 'string' ? readQuantity(v, q.p.unit) : v, q.p.unit)}`; while (t.length > 2 && g.measureText(t).width > room) t = `${t.slice(0, -2)}…`;
+        if (room > 24) { g.fillStyle = '#7f8ea3'; g.fillText(t, x0, q.y); }
+      }
+    }
+    for (const q of gg.outs) {
+      const c = typeColour(q.p); g.fillStyle = c; g.beginPath(); g.arc(gg.x + gg.w, q.y, 5.5, 0, Math.PI * 2); g.fill();
+      const v = s?.status === 'ok' ? s.out?.[q.p.name] : undefined, txt = v === undefined ? q.p.name : `${clip(q.p.name, 10)} ${clip(show(v, q.p.unit), 20)}`;
+      g.fillStyle = v === undefined ? '#8796aa' : '#ffffff'; const tw = g.measureText(txt).width; g.fillText(txt, gg.x + gg.w - 12 - tw, q.y);
+    }
+    // what a viewer shows
+    if (gg.bodyH) paintBody(id, gg, s);
+    // its foot: what it is doing
+    const fy = gg.y + gg.h - FOOT / 2; g.font = '12px system-ui';
+    if (s?.status === 'failed') { g.fillStyle = '#ff8a80'; g.fillText(clip(`✕ ${s.error}`, 44), gg.x + 10, fy); }
+    else if (s?.status === 'waiting') { g.fillStyle = '#ffd180'; g.fillText(clip(`… ${s.error}`, 44), gg.x + 10, fy); }
+    else if (s?.status === 'ok') { g.fillStyle = '#5f6f84'; g.fillText(`${s.cached ? '✓ reused' : '● ran'} · ${s.ms < 1 ? `${(s.ms * 1000).toFixed(0)} µs` : `${s.ms.toFixed(1)} ms`}${s.runs ? ` · ${s.runs} run${s.runs > 1 ? 's' : ''}` : ''}${d?.by !== 'built in' && d ? ` · ${d.by}` : ''}`, gg.x + 10, fy); }
+    else { g.fillStyle = '#5f6f84'; g.fillText(KINDS[k].name, gg.x + 10, fy); }
+    g.globalAlpha = 1;
+  }
+  if (dragWire) {
+    const a = geo(dragWire.from), o = a.outs.find((x) => x.p.name === dragWire!.out); if (o) {
+      const [x2, y2] = toWorld(dragWire.x, dragWire.y), x1 = a.x + a.w, y1 = o.y, dx = Math.max(60, Math.abs(x2 - x1) * 0.5);
+      g.strokeStyle = typeColour(o.p); g.lineWidth = 2.5; g.setLineDash([8, 6]); g.beginPath(); g.moveTo(x1, y1); g.bezierCurveTo(x1 + dx, y1, x2 - dx, y2, x2, y2); g.stroke(); g.setLineDash([]);
+    }
+  }
+  if (box) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.strokeStyle = '#40c4ff'; g.fillStyle = '#40c4ff18'; g.lineWidth = 1; const x = Math.min(box.x0, box.x1), y = Math.min(box.y0, box.y1); g.fillRect(x, y, Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0)); g.strokeRect(x, y, Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0)); }
+  paintMap(dpr, W0, H0);
+  if (!nodesOf(b).length) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#5f6f84'; g.font = '15px system-ui'; g.textAlign = 'center'; g.fillText('Drag a block from the library, or type its name above (Ctrl K)', W0 / 2, H0 / 2); g.textAlign = 'left'; }
+  if (pulses.length || [...glow.values()].some((x) => t - x < 800)) draw();
+}
+/** The whole board small, in a corner, with what is in view outlined: where the rest of it is. Shown only when some of
+ *  the board is out of view; pressing it goes there. */
+let mapBox: { x: number; y: number; w: number; h: number; x0: number; y0: number; s: number } | null = null;
+function paintMap(dpr: number, W0: number, H0: number): void {
+  mapBox = null; const ns = nodesOf(cur()).map((n) => geo(n.id)); if (ns.length < 2) return;
+  const x0 = Math.min(...ns.map((n) => n.x)), y0 = Math.min(...ns.map((n) => n.y)), x1 = Math.max(...ns.map((n) => n.x + n.w)), y1 = Math.max(...ns.map((n) => n.y + n.h));
+  const [vx0, vy0] = toWorld(0, 0), [vx1, vy1] = toWorld(W0, H0); if (vx0 <= x0 && vy0 <= y0 && vx1 >= x1 && vy1 >= y1) return;
+  const mw = Math.min(200, W0 * 0.3), s = mw / (x1 - x0), mh = Math.min(140, (y1 - y0) * s), sc = Math.min(s, mh / (y1 - y0)), bx = W0 - mw - 12, by = H0 - mh - 30;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); rr(bx - 6, by - 6, mw + 12, mh + 12, 8); g.fillStyle = '#0a0f17e6'; g.fill(); g.strokeStyle = '#1f2a3a'; g.lineWidth = 1; g.stroke();
+  for (const n of nodesOf(cur())) { const gg = geo(n.id), d = blockOf(cur().nodes[n.id]!); g.fillStyle = KINDS[d?.kind ?? 'group'].hue; g.fillRect(bx + (gg.x - x0) * sc, by + (gg.y - y0) * sc, Math.max(2, gg.w * sc), Math.max(2, gg.h * sc)); }
+  g.strokeStyle = '#ffffff'; g.lineWidth = 1.5; g.strokeRect(bx + (vx0 - x0) * sc, by + (vy0 - y0) * sc, (vx1 - vx0) * sc, (vy1 - vy0) * sc);
+  mapBox = { x: bx, y: by, w: mw, h: mh, x0, y0, s: sc };
+}
+function paintBody(id: string, gg: Geo, s: NodeState | undefined): void {
+  const n = cur().nodes[id]!, x = gg.x + 10, y = gg.bodyY, w = gg.w - 20, h = gg.bodyH - 6, inV = local.board === cur() ? local.wiresInto(id)[0] : undefined;
+  const inState = inV ? stateOf(inV.from) : undefined, val = inV ? inState?.out?.[inV.out!] : undefined, op = inV ? geo(inV.from).outs.find((q) => q.p.name === inV.out)?.p : undefined;
+  rr(x, y, w, h, 8); g.fillStyle = '#080c13'; g.fill();
+  const b = n.block;
+  if (b === 'note') { g.fillStyle = '#fff59d'; g.font = '12px system-ui'; String(n.set?.text ?? '').split('\n').flatMap((l) => l.match(/.{1,30}(\s|$)|.{1,30}/g) ?? ['']).slice(0, 10).forEach((l, i) => g.fillText(l, x + 6, y + 12 + i * 16)); return; }
+  if (val === undefined) { g.fillStyle = '#4a5a70'; g.font = '12px system-ui'; g.fillText(inV ? 'nothing yet' : 'wire something in', x + 8, y + h / 2); return; }
+  if (b === 'view.show') { const u = String(n.set?.unit ?? ''); let v = val; if (u && typeof v === 'number') { try { v = Number((v / readUnit(u)).toPrecision(5)); } catch { /* shown in SI */ } } g.fillStyle = typeColour(op); g.font = '700 22px system-ui'; g.fillText(clip(u && typeof v === 'number' ? `${v} ${u}` : show(v, op?.unit), 18), x + 8, y + h / 2); return; }
+  if (b === 'view.gauge') {
+    const lo = Number(n.set?.min ?? 0), hi = Number(n.set?.max ?? 100), f = Math.max(0, Math.min(1, (Number(val) - lo) / (hi - lo || 1))), cx = x + w / 2, cy = y + h - 10, r = Math.min(w / 2 - 10, h - 18);
+    g.lineWidth = 9; g.strokeStyle = '#1c2635'; g.beginPath(); g.arc(cx, cy, r, Math.PI, 2 * Math.PI); g.stroke();
+    g.strokeStyle = `hsl(${120 - 120 * f}, 90%, 55%)`; g.beginPath(); g.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * f); g.stroke();
+    g.fillStyle = '#fff'; g.font = '700 14px system-ui'; g.textAlign = 'center'; g.fillText(show(val, op?.unit), cx, cy - 6); g.textAlign = 'left'; return;
+  }
+  if (b === 'view.chart') {
+    const ys = (Array.isArray(val) ? val : [val]).map(Number).filter(Number.isFinite), xin = local.wiresInto(id).find((e) => e.in === 'x'), xs0 = xin ? stateOf(xin.from)?.out?.[xin.out!] : undefined;
+    const xs = Array.isArray(xs0) && xs0.length === ys.length ? xs0.map(Number) : ys.map((_, i) => i);
+    if (ys.length < 2) { g.fillStyle = '#4a5a70'; g.font = '12px system-ui'; g.fillText('needs two or more values', x + 8, y + h / 2); return; }
+    const y0 = Math.min(...ys), y1 = Math.max(...ys), x0 = Math.min(...xs), x1 = Math.max(...xs), px = (v: number) => x + 8 + ((v - x0) / (x1 - x0 || 1)) * (w - 16), py = (v: number) => y + h - 30 - ((v - y0) / (y1 - y0 || 1)) * (h - 46);
+    if (y0 < 0 && y1 > 0) { g.strokeStyle = '#2b3a50'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 8, py(0)); g.lineTo(x + w - 8, py(0)); g.stroke(); }
+    const col = typeColour(op), fill = g.createLinearGradient(0, y, 0, y + h); fill.addColorStop(0, col + '55'); fill.addColorStop(1, col + '00');
+    g.beginPath(); g.moveTo(px(xs[0]!), py(ys[0]!)); for (let i = 1; i < ys.length; i++) g.lineTo(px(xs[i]!), py(ys[i]!)); g.strokeStyle = col; g.lineWidth = 2; g.stroke();
+    g.lineTo(px(xs[xs.length - 1]!), y + h - 30); g.lineTo(px(xs[0]!), y + h - 30); g.closePath(); g.fillStyle = col.startsWith('#') ? fill : '#ffffff18'; g.fill();
+    const xp = xin ? geo(xin.from).outs.find((q) => q.p.name === xin.out)?.p : undefined;
+    g.fillStyle = '#9fb0c4'; g.font = '11px system-ui'; g.fillText(show(y1, op?.unit), x + 8, y + 10); g.fillText(show(y0, op?.unit), x + 8, y + h - 24);
+    g.fillStyle = '#7f8ea3'; g.fillText(xin ? show(x0, xp?.unit) : '1', x + 8, y + h - 6); const xr = xin ? show(x1, xp?.unit) : String(ys.length), tw = g.measureText(xr).width; g.fillText(xr, x + w - 8 - tw, y + h - 6); return;
+  }
+  if (b === 'view.table') {
+    const rows = Array.isArray(val) ? (val as Record<string, unknown>[]) : [], cols = rows[0] ? Object.keys(rows[0]).slice(0, 4) : [], cw = (w - 8) / Math.max(1, cols.length);
+    g.font = '600 11px system-ui'; g.fillStyle = '#9fb3c8'; cols.forEach((c, i) => g.fillText(clip(c, 10), x + 6 + i * cw, y + 11));
+    g.font = '11px system-ui'; g.fillStyle = '#dfe7f1'; rows.slice(0, 6).forEach((r, j) => cols.forEach((c, i) => g.fillText(clip(show(r[c]), 10), x + 6 + i * cw, y + 28 + j * 15)));
+    if (rows.length > 6) { g.fillStyle = '#5f6f84'; g.fillText(`… ${rows.length} rows`, x + 6, y + h - 6); }
+  }
+}
+const readUnit = (u: string): number => { const v = readQuantity(`1 ${u}`); if (typeof v !== 'number') throw new Error(v.error); return v; };
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+function shade(hex: string): string { if (!hex.startsWith('#')) return hex; const n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, gg = (n >> 8) & 255, b = n & 255, k = 0.62; return `rgb(${Math.round(r * k)}, ${Math.round(gg * k)}, ${Math.round(b * k)})`; }
+
+// ---- pointing ---------------------------------------------------------------------------------------------------------
+type Hit = { kind: 'in' | 'out'; id: string; port: string } | { kind: 'node'; id: string } | { kind: 'wire'; id: string } | null;
+function hit(sx: number, sy: number): Hit {
+  const [x, y] = toWorld(sx, sy), r = 10 / view.k, ns = nodesOf(cur()).map((n) => n.id).filter((id) => cur().nodes[id]!.block || cur().nodes[id]!.inner).reverse();
+  for (const id of ns) { const gg = geo(id); for (const q of gg.outs) if (Math.hypot(x - (gg.x + gg.w), y - q.y) < r) return { kind: 'out', id, port: q.p.name }; for (const q of gg.ins) if (Math.hypot(x - gg.x, y - q.y) < r) return { kind: 'in', id, port: q.p.name }; }
+  for (const id of ns) { const gg = geo(id); if (x >= gg.x && x <= gg.x + gg.w && y >= gg.y && y <= gg.y + gg.h) return { kind: 'node', id }; }
+  for (const e of edgesOf(cur())) { if (!isWire(e)) continue; const p = wirePath(e); if (!p) continue; for (let i = 0; i <= 30; i++) { const [px, py] = bez(p[0], p[1], p[2], p[3], i / 30); if (Math.hypot(px - x, py - y) < 7 / view.k) return { kind: 'wire', id: e.id }; } }
+  return null;
+}
+let mode: 'none' | 'pan' | 'drag' | 'wire' | 'box' | 'pinch' = 'none', last = { x: 0, y: 0 }, moved = false, dragStart: Map<string, [number, number]> = new Map();
+const touches = new Map<number, { x: number; y: number }>(); let pinch0 = { d: 0, k: 1, cx: 0, cy: 0 };
+const pos = (e: PointerEvent | MouseEvent) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+cv.addEventListener('pointerdown', (e) => {
+  cv.setPointerCapture(e.pointerId); const p = pos(e); touches.set(e.pointerId, p); last = p; moved = false;
+  if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch0 = { d: Math.hypot(a!.x - b!.x, a!.y - b!.y), k: view.k, cx: (a!.x + b!.x) / 2, cy: (a!.y + b!.y) / 2 }; mode = 'pinch'; dragWire = null; return; }
+  if (mapBox && p.x >= mapBox.x - 6 && p.x <= mapBox.x + mapBox.w + 6 && p.y >= mapBox.y - 6 && p.y <= mapBox.y + mapBox.h + 6) {
+    const wx = mapBox.x0 + (p.x - mapBox.x) / mapBox.s, wy = mapBox.y0 + (p.y - mapBox.y) / mapBox.s; view.ox = cv.clientWidth / 2 - wx * view.k; view.oy = cv.clientHeight / 2 - wy * view.k; mode = 'none'; draw(); return;
+  }
+  const h = hit(p.x, p.y);
+  if (h?.kind === 'out') { mode = 'wire'; dragWire = { from: h.id, out: h.port, ...p }; return; }
+  if (h?.kind === 'in') {
+    // pick up the wire already in it, to move it elsewhere
+    const w = local.wiresInto(h.id).find((x) => x.in === h.port);
+    if (w) { edit((b) => { b.edges[w.id] = { ...b.edges[w.id]!, deleted: true }; }); mode = 'wire'; dragWire = { from: w.from, out: w.out!, ...p }; return; }
+  }
+  if (h?.kind === 'node') {
+    if (e.shiftKey) { if (sel.has(h.id)) sel.delete(h.id); else sel.add(h.id); } else if (!sel.has(h.id)) { sel.clear(); sel.add(h.id); }
+    selWire = null; mode = 'drag'; dragStart = new Map([...sel].map((id) => [id, [cur().nodes[id]!.x ?? 0, cur().nodes[id]!.y ?? 0]]));
+    renderInspector(true); draw(); return;
+  }
+  if (h?.kind === 'wire') { selWire = h.id; sel.clear(); renderInspector(true); draw(); mode = 'none'; return; }
+  if (e.shiftKey) { mode = 'box'; box = { x0: p.x, y0: p.y, x1: p.x, y1: p.y }; return; }
+  mode = 'pan';
+});
+cv.addEventListener('pointermove', (e) => {
+  const p = pos(e); if (touches.has(e.pointerId)) touches.set(e.pointerId, p);
+  if (mode === 'pinch' && touches.size === 2) { const [a, b] = [...touches.values()], d = Math.hypot(a!.x - b!.x, a!.y - b!.y); zoomAt(pinch0.cx, pinch0.cy, (pinch0.k * d) / (pinch0.d || 1) / view.k); return; }
+  const dx = p.x - last.x, dy = p.y - last.y; if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+  if (mode === 'pan') { view.ox += dx; view.oy += dy; last = p; draw(); }
+  else if (mode === 'drag') { last = p; const [x0, y0] = toWorld(0, 0), [x1, y1] = toWorld(dx, dy); for (const id of sel) { const n = cur().nodes[id]!; n.x = (n.x ?? 0) + (x1 - x0); n.y = (n.y ?? 0) + (y1 - y0); } draw(); }
+  else if (mode === 'wire' && dragWire) { dragWire.x = p.x; dragWire.y = p.y; draw(); }
+  else if (mode === 'box' && box) { box.x1 = p.x; box.y1 = p.y; draw(); }
+  else { const h = hit(p.x, p.y); cv.style.cursor = h?.kind === 'in' || h?.kind === 'out' ? 'crosshair' : h?.kind === 'node' ? 'grab' : h?.kind === 'wire' ? 'pointer' : 'default'; }
+});
+cv.addEventListener('pointerup', (e) => {
+  const p = pos(e); touches.delete(e.pointerId);
+  if (mode === 'pinch') { if (touches.size < 2) mode = 'none'; return; }
+  if (mode === 'wire' && dragWire) {
+    const h = hit(p.x, p.y), from = dragWire.from, out = dragWire.out;
+    if (h?.kind === 'in' || h?.kind === 'node') {
+      const to = h.id, ports = portsFor(to).inputs, inp = h.kind === 'in' ? h.port : ports.find((q) => local.canWire(from, out, to, q.name).ok && !local.wiresInto(to).some((w) => w.in === q.name))?.name ?? ports.find((q) => local.canWire(from, out, to, q.name).ok)?.name;
+      if (!inp) toast('nothing on that block takes this', true);
+      else { const r = local.canWire(from, out, to, inp); if (!r.ok) toast(r.why, true); else { edit((b) => { wire(b, from, out, to, inp); }); if (r.map) toast('a list into a single value: it runs once for each item'); else if (r.convert) toast(`converted on the wire: ${r.convert}`); } }
+    } else if (!h) { pendingWire = { from, out }; const [wx, wy] = toWorld(p.x, p.y); placeAt = [wx, wy - 20]; openCmd(''); }
+    dragWire = null;
+  } else if (mode === 'drag' && moved) {
+    const moves = [...sel].map((id) => [id, cur().nodes[id]!.x, cur().nodes[id]!.y] as const);
+    for (const [id, [x, y]] of dragStart) { cur().nodes[id]!.x = x; cur().nodes[id]!.y = y; }
+    edit((b) => { for (const [id, x, y] of moves) { b.nodes[id]!.x = Math.round(x ?? 0); b.nodes[id]!.y = Math.round(y ?? 0); } });
+  } else if (mode === 'box' && box) {
+    const [ax, ay] = toWorld(Math.min(box.x0, box.x1), Math.min(box.y0, box.y1)), [bx, by] = toWorld(Math.max(box.x0, box.x1), Math.max(box.y0, box.y1));
+    for (const n of nodesOf(cur())) { const gg = geo(n.id); if (gg.x >= ax && gg.x + gg.w <= bx && gg.y >= ay && gg.y + gg.h <= by) sel.add(n.id); }
+    box = null; renderInspector(true);
+  } else if (mode === 'pan' && !moved) { sel.clear(); selWire = null; renderInspector(true); }
+  mode = 'none'; draw();
+});
+cv.addEventListener('dblclick', (e) => {
+  const p = pos(e), h = hit(p.x, p.y);
+  if (h?.kind === 'node' && cur().nodes[h.id]?.inner) { enter(h.id); return; }
+  if (!h) { const [wx, wy] = toWorld(p.x, p.y); placeAt = [wx, wy]; openCmd(''); }
+});
+function zoomAt(sx: number, sy: number, f: number): void { const k = Math.max(0.08, Math.min(3, view.k * f)); const [wx, wy] = toWorld(sx, sy); view.k = k; view.ox = sx - wx * k; view.oy = sy - wy * k; draw(); }
+cv.addEventListener('wheel', (e) => { e.preventDefault(); const p = pos(e); if (e.ctrlKey || Math.abs(e.deltaY) > Math.abs(e.deltaX) * 2 && !e.shiftKey) zoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0015)); else { view.ox -= e.deltaX; view.oy -= e.deltaY; draw(); } }, { passive: false });
+cv.addEventListener('dragover', (e) => { e.preventDefault(); });
+cv.addEventListener('drop', (e) => { e.preventDefault(); const id = e.dataTransfer?.getData('text/block'); if (!id) return; const p = pos(e); const [x, y] = toWorld(p.x, p.y); addBlock(id, x - W / 2, y - 20); });
+new ResizeObserver(() => draw()).observe(cv);
+
+// ---- doing things ---------------------------------------------------------------------------------------------------
+let placeAt: [number, number] | null = null, pendingWire: { from: string; out: string } | null = null;
+function addBlock(blockId: string, x?: number, y?: number): void {
+  const [cx, cy] = toWorld(cv.clientWidth / 2, cv.clientHeight / 2), at = x !== undefined ? [x, y!] : placeAt ?? [cx - W / 2 + (Math.random() - 0.5) * 60, cy - 60 + (Math.random() - 0.5) * 60];
+  placeAt = null; const id = uid('n'), pw = pendingWire; pendingWire = null;
+  edit((b) => {
+    placeBlock(b, blockId, Math.round(at[0]!), Math.round(at[1]!), {}, id);
+    if (pw) { const e = new Engine(b), inp = portsFor(id).inputs.find((q) => e.canWire(pw.from, pw.out, id, q.name).ok); if (inp) wire(b, pw.from, pw.out, id, inp.name); }
+  });
+  sel.clear(); sel.add(id); renderInspector(true); draw();
+}
+function removeSelected(): void {
+  if (selWire) { const w = selWire; edit((b) => { b.edges[w] = { ...b.edges[w]!, deleted: true }; }); selWire = null; draw(); return; }
+  if (!sel.size) return;
+  const ids = [...sel]; edit((b) => { for (const id of ids) { b.nodes[id] = { ...b.nodes[id]!, deleted: true }; for (const e of edgesOf(b)) if (e.from === id || e.to === id) b.edges[e.id] = { ...b.edges[e.id]!, deleted: true }; } });
+  sel.clear(); renderInspector(true); draw();
+}
+function group(): void {
+  if (!sel.size) { toast('choose blocks first: shift-drag a box round them', true); return; }
+  let made = ''; const ids = [...sel];
+  edit((b) => { const r = collapse(b, ids, 'Group'); tidy(r.board.nodes[r.id]!.inner!); Object.assign(b, { nodes: r.board.nodes, edges: r.board.edges }); made = r.id; if (r.folded.length > ids.length) toast(`folded ${r.folded.length - ids.length} more that lie between them, or the group would feed itself`); });
+  sel.clear(); sel.add(made); renderInspector(true); draw();
+}
+function unfold(id: string): void { edit((b) => { const r = expand(b, id); Object.assign(b, { nodes: r.nodes, edges: r.edges }); }); sel.clear(); renderInspector(true); draw(); }
+function cut(id: string): void {
+  let says = ''; edit((b) => { const r = cutBranch(b, id); Object.assign(b, { nodes: r.board.nodes, edges: r.board.edges }); says = `cut ${r.removed.length} block${r.removed.length > 1 ? 's' : ''}${r.kept.length ? `; kept ${r.kept.length} that something else still feeds` : ''}`; });
+  toast(says); sel.clear(); renderInspector(true); draw();
+}
+function merge(): void { let n = 0; edit((b) => { const r = mergeTwins(b); Object.assign(b, { nodes: r.board.nodes, edges: r.board.edges }); n = r.merged; }); toast(n ? `merged ${n} block${n > 1 ? 's' : ''} into the one each repeated` : 'nothing to merge'); renderInspector(true); draw(); }
+function saveAsBlock(id: string): void {
+  const name = prompt('Name the new block', cur().nodes[id]?.label || 'My block'); if (!name) return;
+  let out: { block: BlockDef; duplicateOf?: string } | null = null;
+  edit((b) => { const r = makeBlock(b, id, { name, domains: ['software'] }); Object.assign(b, { nodes: r.board.nodes }); out = r; });
+  const r = out as { block: BlockDef; duplicateOf?: string } | null;
+  if (r) { if (r.duplicateOf) toast(`that does what ${block(r.duplicateOf)?.name} already does: placed that one instead`); else { keepBlock(r.block); toast(`"${name}" is in the library, under Software & data`); } renderLibrary(); }
+  renderInspector(true); draw();
+}
+function openCopy(id: string): void { const n = cur().nodes[id]!, d = blockOf(n); if (!d?.graph) return; edit((b) => { b.nodes[id] = { label: n.label, inner: structuredClone(d.graph!), x: n.x, y: n.y }; }); renderInspector(true); draw(); }
+function enter(id: string): void { path.push(id); sel.clear(); refreshLocal(); suggestions = null; fit(); renderAll(); }
+function up(to: number): void { path = path.slice(0, to); sel.clear(); refreshLocal(); suggestions = null; fit(); renderAll(); }
+function fit(): void {
+  const ns = nodesOf(cur()).map((n) => geo(n.id)); if (!ns.length) { view.ox = cv.clientWidth / 2; view.oy = cv.clientHeight / 2; view.k = 1; draw(); return; }
+  const x0 = Math.min(...ns.map((n) => n.x)), y0 = Math.min(...ns.map((n) => n.y)), x1 = Math.max(...ns.map((n) => n.x + n.w)), y1 = Math.max(...ns.map((n) => n.y + n.h));
+  // the whole board where it fits at a size that can be read; else readable, from its start (pan or zoom for the rest)
+  const whole = Math.min((cv.clientWidth - 60) / (x1 - x0), (cv.clientHeight - 60) / (y1 - y0)), least = cv.clientWidth < 600 ? 0.55 : 0.8;
+  const k = Math.min(1.15, Math.max(least, whole));
+  view.k = k;
+  view.ox = whole >= least ? cv.clientWidth / 2 - ((x0 + x1) / 2) * k : 30 - x0 * k;
+  view.oy = whole >= least || (y1 - y0) * k < cv.clientHeight - 60 ? cv.clientHeight / 2 - ((y0 + y1) / 2) * k : 30 - y0 * k; draw();
+}
+/**
+ * Lays a board out in columns by how far each block is from where its values start, each column in the order of what
+ * feeds it, so wires run left to right and nothing sits on anything.
+ */
+function tidy(b: Board): Board {
+  const e = new Engine(b), col = new Map<string, number>();
+  for (const id of e.sequence) col.set(id, Math.max(0, ...e.wiresInto(id).map((w) => (col.get(w.from) ?? 0) + 1)));
+  for (const n of nodesOf(b)) if (!col.has(n.id)) col.set(n.id, 0);
+  // a block that only feeds one later column sits next to it: values start where they are used
+  for (const id of [...e.sequence].reverse()) { const outs = e.wiresFrom(id); if (outs.length && !e.wiresInto(id).length) col.set(id, Math.max(0, Math.min(...outs.map((w) => col.get(w.to)!)) - 1)); }
+  const cols = new Map<number, string[]>(); for (const [id, c] of col) (cols.get(c) ?? cols.set(c, []).get(c)!).push(id);
+  const yAt = new Map<string, number>(); const save = (id: string) => b.nodes[id]!;
+  for (const c of [...cols.keys()].sort((x, y) => x - y)) {
+    const ids = cols.get(c)!, bary = (id: string) => { const ws = e.wiresInto(id); return ws.length ? ws.reduce((t, w) => t + (yAt.get(w.from) ?? 0), 0) / ws.length : (save(id).y ?? 0); };
+    ids.sort((a, z) => bary(a) - bary(z));
+    let y = 0; for (const id of ids) { const n = save(id); n.x = c * (W + 90); const want = Math.max(y, bary(id) - 20); n.y = Math.round(c === 0 ? y : want); yAt.set(id, n.y); y = n.y + geoOf(b, id) + 26; }
+  }
+  return b;
+}
+/** A block's height on a board not (yet) in view. */
+function geoOf(b: Board, id: string): number { const n = b.nodes[id]!, d = blockOf(n), p = d ? portsOf(d, { ...defaultsOf(d), ...(n.set ?? {}) }) : { inputs: [], outputs: [] }, blk = n.block ?? ''; const bh = blk === 'view.show' ? 58 : blk === 'view.gauge' ? 86 : blk === 'view.chart' ? 150 : blk === 'view.table' ? 124 : blk === 'note' ? 16 + 16 * Math.min(10, wrapCount(String(n.set?.text ?? ''), 30)) : 0; return HEAD + 8 + Math.max(p.inputs.length, p.outputs.length) * ROW + bh + FOOT; }
+function toast(s: string, bad = false): void { const t = document.getElementById('toast')!; t.textContent = s; t.className = bad ? 'bad' : ''; t.style.display = 'block'; clearTimeout((toast as unknown as { t: number }).t); (toast as unknown as { t: number }).t = window.setTimeout(() => (t.style.display = 'none'), 3200); }
+
+// ---- the library ------------------------------------------------------------------------------------------------------
+let libBy: 'domain' | 'ability' | 'kind' = 'domain';
+function renderLibrary(): void {
+  const q = (document.getElementById('libQ') as HTMLInputElement).value, el = document.getElementById('shelves')!;
+  el.innerHTML = '';
+  for (const s of shelves(libBy, q)) {
+    const d = document.createElement('details'); d.className = 'shelf'; d.open = !!q || s.blocks.length < 8;
+    d.innerHTML = `<summary>${esc(s.name)} <span>${s.blocks.length}</span></summary>`;
+    for (const b of s.blocks) {
+      const r = document.createElement('div'); r.className = 'blk'; r.draggable = true; r.title = `${b.says}${b.valid ? `\nHolds: ${b.valid}` : ''}${b.sources?.length ? `\nFrom: ${b.sources.map((x) => x.cite).join('; ')}` : ''}`;
+      r.innerHTML = `<span class="chip" style="background:${KINDS[b.kind].hue}">${esc(KINDS[b.kind].mark)}</span><span class="n">${esc(b.name)}</span>${b.tests?.length ? '' : `<span class="t" style="color:#ffb300">draft</span>`}${b.by !== 'built in' ? `<span class="t" style="color:#b388ff">${esc(b.by)}</span>` : ''}`;
+      r.onclick = () => { addBlock(b.id); document.getElementById('lib')!.classList.remove('open'); };
+      r.ondragstart = (e) => e.dataTransfer?.setData('text/block', b.id);
+      d.appendChild(r);
+    }
+    el.appendChild(d);
+  }
+}
+document.getElementById('libQ')!.addEventListener('input', renderLibrary);
+for (const t of document.querySelectorAll<HTMLButtonElement>('.tabs button')) t.onclick = () => { libBy = t.dataset.by as typeof libBy; for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === t); renderLibrary(); };
+
+// ---- the inspector: each block's own calculator ---------------------------------------------------------------------
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+function renderInspector(full: boolean): void {
+  const el = document.getElementById('inspector')!;
+  if (!full && el.contains(document.activeElement) && document.activeElement !== document.body) { const o = document.getElementById('iouts'); if (o && sel.size === 1) o.innerHTML = outsHtml([...sel][0]!); return; }
+  if (sel.size === 1) return nodeInspector(el, [...sel][0]!);
+  if (sel.size > 1) {
+    el.innerHTML = `<div class="ititle">${sel.size} blocks chosen</div><div class="btns"><button id="iGroup" class="hot">▣ Fold into a group</button><button id="iDel">Delete</button></div><p class="says">A group holds them as one block: what crosses its edge becomes its ports. Open it to change it; save it to the library to use it anywhere.</p>`;
+    document.getElementById('iGroup')!.onclick = group; document.getElementById('iDel')!.onclick = removeSelected; return;
+  }
+  if (selWire) { const e = cur().edges[selWire]; el.innerHTML = `<div class="ititle">Wire</div><p class="says">${esc(cur().nodes[e?.from ?? '']?.label ?? '')}.${esc(e?.out ?? '')} → ${esc(cur().nodes[e?.to ?? '']?.label ?? '')}.${esc(e?.in ?? '')}</p><div class="btns"><button id="iDel">Delete wire</button></div>`; document.getElementById('iDel')!.onclick = removeSelected; return; }
+  boardInspector(el);
+}
+function boardInspector(el: HTMLElement): void {
+  const b = cur(), n = nodesOf(b).filter((x) => b.nodes[x.id]!.block || b.nodes[x.id]!.inner).length, sg = (suggestions ??= suggest(b, curEngine()));
+  el.innerHTML = `<div class="ititle"><input id="iTitle" value="${esc(b.title ?? '')}" /></div>
+    <p class="says">${n} block${n === 1 ? '' : 's'} · last change: ${lastReport.ran} block${lastReport.ran === 1 ? '' : 's'} ran, ${lastReport.cached} reused (nothing they read changed)${lastReport.failed ? `, ${lastReport.failed} failed` : ''}${lastReport.waiting ? `, ${lastReport.waiting} waiting` : ''}, in ${lastReport.ms.toFixed(1)} ms</p>
+    <h3>Suggestions</h3><div id="iSug">${sg.length ? '' : '<p class="says">Nothing: no dead branches, no twins, no repeated wiring.</p>'}</div>
+    <h3>Start from</h3><div id="iDemos"></div>
+    <h3>This board</h3><div class="btns"><button id="iExport">Export JSON</button><button id="iImport">Import JSON</button><button id="iTidy">Tidy</button><button id="iFresh">Run all afresh</button><button id="iClear">Clear</button></div>
+    <h3>How</h3><div class="kbd"><b>Drag</b> from an output to an input to wire · <b>drag</b> an input's wire off to move it · <b>double-click</b> empty space to add, a group to open · <b>shift-drag</b> to choose many · <b>Ctrl G</b> fold into a group · <b>Del</b> delete · <b>Ctrl Z</b> undo · <b>F</b> fit · <b>Ctrl K</b> commands · a list wired into one value runs the block once for each item</div>`;
+  (document.getElementById('iTitle') as HTMLInputElement).onchange = (e) => edit((x) => { x.title = (e.target as HTMLInputElement).value; });
+  const s = document.getElementById('iSug')!;
+  for (const x of sg) {
+    const d = document.createElement('div'); d.className = 'sug'; d.innerHTML = `<span>${esc(x.says)}</span>`;
+    const pick = document.createElement('button'); pick.textContent = 'Show'; pick.onclick = () => { sel.clear(); for (const id of x.nodes) sel.add(id); renderInspector(true); draw(); }; d.appendChild(pick);
+    if (x.kind === 'twins') { const m = document.createElement('button'); m.textContent = 'Merge'; m.className = 'hot'; m.onclick = merge; d.appendChild(m); }
+    if (x.kind === 'dead') { const m = document.createElement('button'); m.textContent = 'Cut'; m.onclick = () => { const ids = x.nodes; edit((bb) => { for (const id of ids) { bb.nodes[id] = { ...bb.nodes[id]!, deleted: true }; for (const e of edgesOf(bb)) if (e.from === id || e.to === id) bb.edges[e.id] = { ...bb.edges[e.id]!, deleted: true }; } }); renderInspector(true); draw(); }; d.appendChild(m); }
+    if (x.kind === 'pattern') { const m = document.createElement('button'); m.textContent = 'Fold one'; m.onclick = () => { sel.clear(); for (const id of x.nodes.slice(0, x.size ?? 2)) sel.add(id); group(); }; d.appendChild(m); }
+    s.appendChild(d);
+  }
+  const dm = document.getElementById('iDemos')!;
+  for (const [name, fn] of DEMOS) { const bt = document.createElement('button'); bt.className = 'demo'; bt.textContent = name; bt.onclick = () => { pushUndo(); useBoard(fn()); sel.clear(); save(); fit(); runSoon(); renderAll(); }; dm.appendChild(bt); }
+  document.getElementById('iExport')!.onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(root, null, 1)], { type: 'application/json' })); a.download = `${(root.title || 'board').replace(/[^\w-]+/g, '-')}.json`; a.click(); };
+  document.getElementById('iImport')!.onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json'; i.onchange = async () => { try { const b = JSON.parse(await i.files![0]!.text()) as Board; if (!b.nodes || !b.edges) throw new Error('not a board'); pushUndo(); useBoard(b); save(); fit(); runSoon(); renderAll(); } catch (e) { toast(`could not read it: ${(e as Error).message}`, true); } }; i.click(); };
+  document.getElementById('iTidy')!.onclick = () => { edit((b) => { tidy(b); }); fit(); };
+  document.getElementById('iFresh')!.onclick = async () => { await engine.fresh(); runSoon(); };
+  document.getElementById('iClear')!.onclick = () => { pushUndo(); useBoard(emptyBoard('My pipeline')); save(); runSoon(); renderAll(); };
+}
+function outsHtml(id: string): string {
+  const s = stateOf(id), p = portsFor(id);
+  let h = '';
+  if (s?.status === 'failed') h += `<div class="err">✕ ${esc(s.error ?? '')}</div>`;
+  if (s?.status === 'waiting') h += `<div class="wait">… ${esc(s.error ?? '')}</div>`;
+  for (const o of p.outputs) { const v = s?.out?.[o.name]; h += `<div class="out" style="border-left-color:${typeColour(o)}"><span>${esc(o.label ?? o.name)}</span><b>${esc(v === undefined ? '—' : Array.isArray(v) ? show(v, o.unit) : show(v, o.unit))}</b></div>`; }
+  if (s?.status === 'ok') h += `<p class="src">${s.cached ? 'reused: nothing it reads changed' : `ran in ${s.ms.toFixed(2)} ms`}${s.mapped ? `, once for each of ${s.mapped.toLocaleString()} items` : ''}</p>`;
+  return h;
+}
+function nodeInspector(el: HTMLElement, id: string): void {
+  const n = cur().nodes[id]; if (!n) { sel.clear(); return boardInspector(el); }
+  const d = blockOf(n), p = portsFor(id), into = local.wiresInto(id), k = d?.kind ?? 'group';
+  const settings = (d?.settings ?? []).map((s) => {
+    const v = n.set?.[s.key] ?? s.default, inputId = `s_${s.key}`;
+    const field = s.type === 'boolean' ? `<input type="checkbox" id="${inputId}" ${v ? 'checked' : ''} style="width:auto" />`
+      : s.type === 'choice' ? `<select id="${inputId}">${(s.choices ?? []).map((c) => `<option ${c === v ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`
+        : s.type === 'code' ? '' : `<input id="${inputId}" value="${esc(String(v ?? ''))}" ${s.type === 'number' ? 'inputmode="decimal"' : ''} />`;
+    return s.type === 'code' ? `<label class="src">${esc(s.label)}</label><textarea id="${inputId}" spellcheck="false">${esc(String(v ?? ''))}</textarea>` : `<div class="row"><label>${esc(s.label)}</label>${field}</div>`;
+  }).join('');
+  const free = p.inputs.filter((q) => !into.some((e) => e.in === q.name));
+  const ins = free.map((q) => {
+    const v = n.set?.[q.name], shown = v === undefined ? '' : typeof v === 'number' ? String(Number(v.toPrecision(6))) : String(v);
+    const typeable = q.type === 'number' || q.type === 'integer' || q.type === 'text' || q.type === 'boolean' || q.type === 'any';
+    return `<div class="row"><label title="${esc(q.label ?? q.name)}"><span class="dot" style="background:${typeColour(q)}"></span>${esc(q.label ?? q.name)}</label>${typeable ? (q.type === 'boolean' ? `<input type="checkbox" id="p_${esc(q.name)}" ${v ? 'checked' : ''} style="width:auto" />` : `<input id="p_${esc(q.name)}" value="${esc(shown)}" placeholder="${q.unit ? `in ${esc(q.unit)}, or any unit` : q.optional ? `optional${q.default !== undefined ? `, ${esc(show(q.default))}` : ''}` : ''}" />`) : `<span class="src">wire in a ${esc(q.type)}</span>`}</div>`;
+  }).join('');
+  el.innerHTML = `<div class="ititle"><span class="chip" style="background:${KINDS[k].hue}">${esc(KINDS[k].mark)}</span><input id="iLabel" value="${esc(n.label || d?.name || '')}" /></div>
+    <p class="says">${esc(d?.says ?? '')}</p>
+    ${d?.valid ? `<p class="src">Holds: ${esc(d.valid)}</p>` : ''}
+    ${settings ? `<h3>Settings</h3>${settings}` : ''}
+    ${ins ? `<h3>Inputs</h3>${ins}` : ''}
+    ${into.length ? `<p class="src">${into.length} input${into.length > 1 ? 's' : ''} wired</p>` : ''}
+    <h3>Results</h3><div id="iouts">${outsHtml(id)}</div>
+    <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}<button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
+    <p class="src">${esc(KINDS[k].name)} · ${esc(ABILITIES[d?.ability ?? 'transform'])} · ${esc((d?.domains ?? []).map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x).join(', '))}${d ? ` · v${d.version} · ${esc(d.by)}` : ''}${d?.tests?.length ? ` · ${d.tests.length} test${d.tests.length > 1 ? 's' : ''}` : ' · draft: no tests yet'}</p>
+    ${d?.sources?.length ? `<p class="src">From: ${d.sources.map((s) => esc(s.cite)).join('; ')}</p>` : ''}
+    <div id="iTestOut"></div>`;
+  (document.getElementById('iLabel') as HTMLInputElement).onchange = (e) => { const v = (e.target as HTMLInputElement).value; edit((b) => { b.nodes[id]!.label = v; }); draw(); };
+  for (const s of d?.settings ?? []) {
+    const f = document.getElementById(`s_${s.key}`) as HTMLInputElement | null; if (!f) continue;
+    const ev = s.type === 'code' ? 'change' : 'input';
+    f.addEventListener(s.type === 'boolean' || s.type === 'choice' ? 'change' : ev, () => {
+      const raw = s.type === 'boolean' ? f.checked : f.value, v = s.type === 'number' ? Number(raw) : s.type === 'quantity' ? (Number.isFinite(Number(raw)) && String(raw).trim() !== '' ? Number(raw) : raw) : raw;
+      if (s.type === 'number' && !Number.isFinite(v as number)) return;
+      edit((b) => { b.nodes[id]!.set = { ...(b.nodes[id]!.set ?? {}), [s.key]: v }; }, id); draw();
+    });
+  }
+  for (const q of free) {
+    const f = document.getElementById(`p_${q.name}`) as HTMLInputElement | null; if (!f) continue;
+    f.addEventListener(q.type === 'boolean' ? 'change' : 'change', () => {
+      let v: unknown = q.type === 'boolean' ? f.checked : f.value.trim();
+      if (v === '') { edit((b) => { const s = { ...(b.nodes[id]!.set ?? {}) }; delete s[q.name]; b.nodes[id]!.set = s; }, id); draw(); return; }
+      if (q.type === 'number' || q.type === 'integer') { const r = readQuantity(String(v), q.unit); if (typeof r !== 'number') { toast(r.error, true); return; } v = r; }
+      edit((b) => { b.nodes[id]!.set = { ...(b.nodes[id]!.set ?? {}), [q.name]: v }; }, id); draw();
+    });
+  }
+  const on = (bid: string, fn: () => void) => { const b = document.getElementById(bid); if (b) b.onclick = fn; };
+  on('iOpen', () => enter(id)); on('iUnfold', () => unfold(id)); on('iSave', () => saveAsBlock(id)); on('iCopy', () => openCopy(id)); on('iCut', () => cut(id)); on('iDel', removeSelected);
+  on('iTest', async () => { const r = await testBlock(d!); document.getElementById('iTestOut')!.innerHTML = r.ok ? `<p class="src" style="color:var(--ok)">✓ all ${r.ran} test${r.ran > 1 ? 's' : ''} pass</p>` : `<div class="err">${r.fails.map(esc).join('<br>')}</div>`; });
+}
+
+// ---- the command bar --------------------------------------------------------------------------------------------------
+const cmdIn = document.getElementById('cmdIn') as HTMLInputElement, cmdList = document.getElementById('cmdList')!;
+interface Cmd { label: string; hint: string; colour: string; mark: string; run: () => void }
+let cmds: Cmd[] = [], cmdAt = 0;
+function commands(q: string): Cmd[] {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean), m = (s: string) => words.every((w) => s.toLowerCase().includes(w));
+  const acts: Cmd[] = [
+    { label: 'Fold the chosen blocks into a group', hint: 'Ctrl G', colour: KINDS.group.hue, mark: '▣', run: group },
+    { label: 'Merge blocks that work out the same', hint: 'twins', colour: KINDS.meta.hue, mark: '⌘', run: merge },
+    { label: 'Fit the board in view', hint: 'F', colour: KINDS.meta.hue, mark: '⌘', run: fit },
+    { label: 'Tidy: lay the board out left to right', hint: 'T', colour: KINDS.meta.hue, mark: '⌘', run: () => { edit((b) => { tidy(b); }); fit(); } },
+    { label: 'Heat view: colour by time and failures', hint: 'toggle', colour: KINDS.meta.hue, mark: '⌘', run: toggleHeat },
+    { label: 'Run everything afresh', hint: 'no cache', colour: KINDS.meta.hue, mark: '⌘', run: () => { void engine.fresh().then(() => runSoon()); } },
+    { label: 'Undo', hint: 'Ctrl Z', colour: KINDS.meta.hue, mark: '↶', run: doUndo }, { label: 'Redo', hint: 'Ctrl Shift Z', colour: KINDS.meta.hue, mark: '↷', run: doRedo },
+    ...DEMOS.map(([name, fn]) => ({ label: `Open: ${name}`, hint: 'start from', colour: '#69f0ae', mark: '★', run: () => { pushUndo(); useBoard(fn()); sel.clear(); save(); fit(); runSoon(); renderAll(); } })),
+  ];
+  const bl = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') || b.id === 'group.in' || b.id === 'group.out').map((b) => ({ label: b.name, hint: `${KINDS[b.kind].name} · ${(b.domains.map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x))[0] ?? ''}`, colour: KINDS[b.kind].hue, mark: KINDS[b.kind].mark, run: () => addBlock(b.id), key: `${b.name} ${b.says} ${b.id}` }));
+  return [...acts.filter((a) => m(a.label)), ...bl.filter((b) => m(b.key))].slice(0, 40);
+}
+function openCmd(q: string): void { cmdIn.value = q; cmdIn.focus(); listCmd(); }
+function listCmd(): void {
+  cmds = commands(cmdIn.value); cmdAt = 0;
+  cmdList.innerHTML = cmds.map((c, i) => `<div data-i="${i}" class="${i === cmdAt ? 'on' : ''}"><span class="chip" style="background:${c.colour}">${esc(c.mark)}</span><span style="flex:1">${esc(c.label)}</span><span class="src">${esc(c.hint)}</span></div>`).join('');
+  cmdList.style.display = cmds.length ? 'block' : 'none';
+  for (const d of cmdList.querySelectorAll<HTMLDivElement>('div')) d.onmousedown = (e) => { e.preventDefault(); const c = cmds[Number(d.dataset.i)]; closeCmd(); c?.run(); };
+}
+function closeCmd(): void { cmdList.style.display = 'none'; cmdIn.value = ''; cmdIn.blur(); }
+cmdIn.addEventListener('input', listCmd); cmdIn.addEventListener('focus', listCmd);
+cmdIn.addEventListener('blur', () => setTimeout(() => { cmdList.style.display = 'none'; if (!cmdList.matches(':hover')) { pendingWire = null; } }, 120));
+cmdIn.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); cmdAt = (cmdAt + (e.key === 'ArrowDown' ? 1 : cmds.length - 1)) % Math.max(1, cmds.length); for (const [i, d] of [...cmdList.children].entries()) d.classList.toggle('on', i === cmdAt); }
+  else if (e.key === 'Enter') { const c = cmds[cmdAt]; closeCmd(); c?.run(); }
+  else if (e.key === 'Escape') { pendingWire = null; placeAt = null; closeCmd(); }
+});
+
+// ---- keys and buttons -------------------------------------------------------------------------------------------------
+function doUndo(): void { const s = undo.pop(); if (!s) return; redo.push(snapshot()); restore(s); }
+function doRedo(): void { const s = redo.pop(); if (!s) return; undo.push(snapshot()); restore(s); }
+function toggleHeat(): void { heat = !heat; document.getElementById('heat')!.classList.toggle('on', heat); draw(); }
+window.addEventListener('keydown', (e) => {
+  const typing = (e.target as HTMLElement).closest('input, textarea, select');
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openCmd(''); return; }
+  if (typing) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) doRedo(); else doUndo(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') { e.preventDefault(); group(); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') removeSelected();
+  else if (e.key === 'f' || e.key === 'F') fit();
+  else if (e.key === 't' || e.key === 'T') { edit((b) => { tidy(b); }); fit(); }
+  else if (e.key === 'Escape') { if (path.length) up(path.length - 1); else { sel.clear(); renderInspector(true); draw(); } }
+  else if (e.key === '/') { e.preventDefault(); openCmd(''); }
+});
+document.getElementById('fit')!.onclick = fit; document.getElementById('heat')!.onclick = toggleHeat;
+document.getElementById('undo')!.onclick = doUndo; document.getElementById('redo')!.onclick = doRedo;
+document.getElementById('libBtn')!.onclick = () => { document.getElementById('lib')!.classList.toggle('open'); document.getElementById('inspector')!.classList.remove('open'); };
+document.getElementById('insBtn')!.onclick = () => { document.getElementById('inspector')!.classList.toggle('open'); document.getElementById('lib')!.classList.remove('open'); };
+
+function renderCrumbs(): void {
+  const el = document.getElementById('crumbs')!; let b = root; const names = [root.title || 'Board'];
+  for (const gid of path) { names.push(b.nodes[gid]?.label || 'Group'); b = b.nodes[gid]!.inner!; }
+  el.innerHTML = names.map((n, i) => (i < names.length - 1 ? `<a data-i="${i}">${esc(n)}</a> ›` : `<span>${esc(n)}</span>`)).join(' ');
+  for (const a of el.querySelectorAll<HTMLAnchorElement>('a')) a.onclick = () => up(Number(a.dataset.i));
+}
+function renderStats(): void { const nb = nodesOf(root).length; document.getElementById('stats')!.textContent = `${nb} blocks · last change: ${lastReport.ran} ran, ${lastReport.cached} reused, ${lastReport.ms.toFixed(1)} ms · ${memo.size.toLocaleString()} results cached · library of ${LIBRARY.size}`; }
+function renderAll(): void { renderCrumbs(); renderLibrary(); renderInspector(true); renderStats(); draw(); }
+
+// ---- boards to start from: real work, each across fields ------------------------------------------------------------
+type Make = () => Board;
+const DEMOS: [string, Make][] = ([
+
+  ['Cantilever: how far it bends, for every length', () => {
+    const b = emptyBoard('Cantilever sweep');
+    const P = placeBlock(b, 'in.number', 0, 0, { value: '500 N', unit: 'N' }, 'P'); b.nodes.P!.label = 'End load';
+    const L = placeBlock(b, 'in.range', 0, 130, { from: 0.5, to: 2, count: 31, unit: 'm' }, 'L'); b.nodes.L!.label = 'Lengths';
+    const m = placeBlock(b, 'card.material', 0, 300, { id: 'steel.a36' }, 'mat');
+    const I = placeBlock(b, 'math.expr', 0, 520, { expr: 'w * h^3 / 12', unit: 'm^4', w: 0.03, h: 0.06 }, 'I'); b.nodes.I!.label = 'Section I (30 × 60 mm)';
+    const d = placeBlock(b, 'law.beam.cantilever.point', 330, 120, {}, 'd');
+    wire(b, P, 'value', d, 'P'); wire(b, L, 'value', d, 'L'); wire(b, m, 'E', d, 'E'); wire(b, I, 'result', d, 'I');
+    const ch = placeBlock(b, 'view.chart', 660, 0, {}, 'chart'); b.nodes.chart!.label = 'Tip deflection against length'; wire(b, d, 'd', ch, 'y'); wire(b, L, 'value', ch, 'x');
+    const st = placeBlock(b, 'math.stats', 660, 220, {}, 'stats'); wire(b, d, 'd', st, 'values');
+    const lim = placeBlock(b, 'in.number', 660, 420, { value: '15 mm', unit: 'm' }, 'lim'); b.nodes.lim!.label = 'Most it may bend';
+    const ck = placeBlock(b, 'check.limit', 960, 260, { what: 'deflection' }, 'ck'); wire(b, st, 'max', ck, 'value'); wire(b, lim, 'value', ck, 'limit');
+    const g = placeBlock(b, 'view.gauge', 1260, 260, { min: 0, max: 3 }, 'g'); b.nodes.g!.label = 'Stiffness: limit ÷ worst bend'; wire(b, ck, 'factor', g, 'value');
+    // and its strength: the moment at the root, over the section modulus, against the steel's yield
+    const M = placeBlock(b, 'math.multiply', 330, 300, {}, 'M'); b.nodes.M!.label = 'Moment at the root (P L)'; wire(b, P, 'value', M, 'a'); wire(b, L, 'value', M, 'b');
+    const S = placeBlock(b, 'math.expr', 330, 420, { expr: 'w * h^2 / 6', unit: 'm^3', w: 0.03, h: 0.06 }, 'S'); b.nodes.S!.label = 'Section modulus (30 × 60 mm)';
+    const sb = placeBlock(b, 'law.stress.bending', 600, 300, {}, 'sb'); wire(b, M, 'result', sb, 'M'); wire(b, S, 'result', sb, 'S');
+    const sm = placeBlock(b, 'math.stats', 900, 300, {}, 'sm'); b.nodes.sm!.label = 'Bending stress over the lengths'; wire(b, sb, 'sigma', sm, 'values');
+    const ck2 = placeBlock(b, 'check.limit', 1200, 300, { what: 'bending stress' }, 'ck2'); wire(b, sm, 'max', ck2, 'value'); wire(b, m, 'yield', ck2, 'limit');
+    const g2 = placeBlock(b, 'view.gauge', 1500, 300, { min: 0, max: 3 }, 'g2'); b.nodes.g2!.label = 'Strength: yield ÷ worst stress'; wire(b, ck2, 'factor', g2, 'value');
+    const nt = placeBlock(b, 'note', 330, 470, { text: 'Change the load, the section or the material: only what it reaches runs again. The law runs once for each of the 31 lengths.' }, 'note');
+    void nt; return b;
+  }],
+  ['Bolt: shear, tightening torque and margin', () => {
+    // an M8 property class 8.8 bolt: its figures from ISO 898-1:2013 (tables 3 and 7) and ISO 898-1's stress area
+    const b = emptyBoard('Bolted joint, M8 class 8.8');
+    const F = placeBlock(b, 'in.number', 0, 0, { value: '10 kN', unit: 'N' }, 'F'); b.nodes.F!.label = 'Shear load';
+    const dd = placeBlock(b, 'in.number', 0, 0, { value: '8 mm', unit: 'm' }, 'dd'); b.nodes.dd!.label = 'Bolt diameter';
+    const As = placeBlock(b, 'in.number', 0, 0, { value: '36.6 mm^2', unit: 'm^2' }, 'As'); b.nodes.As!.label = 'Stress area, M8 (ISO 898-1)';
+    const Sy = placeBlock(b, 'in.number', 0, 0, { value: '640 MPa', unit: 'Pa' }, 'Sy'); b.nodes.Sy!.label = 'Yield, class 8.8 (ISO 898-1)';
+    const Sp = placeBlock(b, 'in.number', 0, 0, { value: '580 MPa', unit: 'Pa' }, 'Sp'); b.nodes.Sp!.label = 'Proof stress, class 8.8 (ISO 898-1)';
+    const tau = placeBlock(b, 'math.expr', 0, 0, { expr: 'F / (pi * d^2 / 4)', unit: 'Pa' }, 'tau'); b.nodes.tau!.label = 'Shear stress on the shank';
+    wire(b, F, 'value', tau, 'F'); wire(b, dd, 'value', tau, 'd');
+    const allow = placeBlock(b, 'math.expr', 0, 0, { expr: '0.577 * Sy', unit: 'Pa' }, 'allow'); b.nodes.allow!.label = 'Allowed shear (von Mises)'; wire(b, Sy, 'value', allow, 'Sy');
+    const ck = placeBlock(b, 'check.limit', 0, 0, { what: 'bolt shear' }, 'ck'); wire(b, tau, 'result', ck, 'value'); wire(b, allow, 'result', ck, 'limit');
+    const pre = placeBlock(b, 'math.expr', 0, 0, { expr: '0.75 * Sp * As', unit: 'N' }, 'pre'); b.nodes.pre!.label = 'Preload, 75 % of proof load (Shigley 8-31)'; wire(b, Sp, 'value', pre, 'Sp'); wire(b, As, 'value', pre, 'As');
+    const T = placeBlock(b, 'law.bolt.torque.nut-factor', 0, 0, { K: 0.2 }, 'T'); wire(b, dd, 'value', T, 'd'); wire(b, pre, 'result', T, 'F');
+    const s1 = placeBlock(b, 'view.show', 0, 0, { unit: 'N m' }, 's1'); b.nodes.s1!.label = 'Tighten to'; wire(b, T, 'T', s1, 'value');
+    const s2 = placeBlock(b, 'view.gauge', 0, 0, { min: 0, max: 4 }, 's2'); b.nodes.s2!.label = 'Factor of safety in shear'; wire(b, ck, 'factor', s2, 'value');
+    placeBlock(b, 'note', 0, 0, { text: 'K = 0.2 is the nut factor for dry, as-received steel threads (Shigley table 8-15). Try 0.15 for lubricated threads, or a 12 kN load.' }, 'note');
+    return b;
+  }],
+  ['Business: cash flow, loan and what it is worth', () => {
+    const b = emptyBoard('Cash flow');
+    const t = placeBlock(b, 'in.table', 0, 0, { value: 'month, in, out\n1, 12000, 9000\n2, 13500, 9400\n3, 11000, 9800\n4, 15000, 10200\n5, 16200, 10900\n6, 14800, 11000' }, 'tab'); b.nodes.tab!.label = 'Monthly money';
+    const ci = placeBlock(b, 'list.column', 300, 0, { column: 'in' }, 'ci'), co = placeBlock(b, 'list.column', 300, 140, { column: 'out' }, 'co');
+    wire(b, t, 'rows', ci, 'rows'); wire(b, t, 'rows', co, 'rows');
+    const net = placeBlock(b, 'math.subtract', 580, 60, {}, 'net'); b.nodes.net!.label = 'Net each month'; wire(b, ci, 'values', net, 'a'); wire(b, co, 'values', net, 'b');
+    const loan = placeBlock(b, 'fin.loan', 0, 320, { principal: 40000, rate: 0.07, years: 5, perYear: 12 }, 'loan'); b.nodes.loan!.label = 'Van loan, 60 payments';
+    const left = placeBlock(b, 'math.subtract', 580, 360, {}, 'left'); b.nodes.left!.label = 'Net after the loan payment'; wire(b, net, 'result', left, 'a'); wire(b, loan, 'payment', left, 'b');
+    const run = placeBlock(b, 'list.running', 860, 0, { start: 5000 }, 'bal'); b.nodes.bal!.label = 'Bank balance, with the loan'; wire(b, left, 'result', run, 'values');
+    const ch = placeBlock(b, 'view.chart', 1160, 0, {}, 'chart'); b.nodes.chart!.label = 'Balance by month'; wire(b, run, 'totals', ch, 'y');
+    const npv = placeBlock(b, 'fin.npv', 860, 260, { rate: 0.01 }, 'npv'); b.nodes.npv!.label = 'Worth today, at 1 % a month'; wire(b, left, 'result', npv, 'flows');
+    const sv = placeBlock(b, 'view.show', 1160, 300, {}, 'sv'); b.nodes.sv!.label = 'These 6 months, after the loan, worth today'; wire(b, npv, 'npv', sv, 'value');
+    const t2 = placeBlock(b, 'list.zip', 860, 470, { names: 'net, after' }, 'zip'); wire(b, net, 'result', t2, 'net'); wire(b, left, 'result', t2, 'after');
+    const tv = placeBlock(b, 'view.table', 1160, 470, {}, 'tv'); b.nodes.tv!.label = 'Each month, before and after the loan'; wire(b, t2, 'rows', tv, 'rows');
+    return b;
+  }],
+  ['Electrical: a resistor heating, swept over current', () => {
+    const b = emptyBoard('Resistor');
+    const I = placeBlock(b, 'in.range', 0, 0, { from: 0, to: 3, count: 31, unit: 'A' }, 'I'); b.nodes.I!.label = 'Current';
+    const R = placeBlock(b, 'in.number', 0, 160, { value: 4.7, unit: 'ohm' }, 'R'); b.nodes.R!.label = 'Resistance';
+    const V = placeBlock(b, 'law.ohm', 300, 0, {}, 'V'), P = placeBlock(b, 'law.joule', 300, 200, {}, 'P');
+    wire(b, I, 'value', V, 'I'); wire(b, R, 'value', V, 'R'); wire(b, I, 'value', P, 'I'); wire(b, R, 'value', P, 'R');
+    const c1 = placeBlock(b, 'view.chart', 620, 0, {}, 'c1'); b.nodes.c1!.label = 'Voltage'; wire(b, V, 'V', c1, 'y'); wire(b, I, 'value', c1, 'x');
+    const c2 = placeBlock(b, 'view.chart', 620, 200, {}, 'c2'); b.nodes.c2!.label = 'Heat'; wire(b, P, 'P', c2, 'y'); wire(b, I, 'value', c2, 'x');
+    const st = placeBlock(b, 'math.stats', 620, 400, {}, 'st'); wire(b, P, 'P', st, 'values');
+    const rating = placeBlock(b, 'in.number', 620, 600, { value: '5 W', unit: 'W' }, 'rt'); b.nodes.rt!.label = 'Its rating';
+    const ck = placeBlock(b, 'check.limit', 940, 450, { what: 'power' }, 'ck'); wire(b, st, 'max', ck, 'value'); wire(b, rating, 'value', ck, 'limit');
+    const code = placeBlock(b, 'code', 940, 120, { lang: 'js', inputs: 'P, I', outputs: 'firstOver', code: 'const k = P.findIndex(p => p > 5);\nreturn { firstOver: k < 0 ? "never over 5 W" : `over 5 W from ${I[k].toFixed(1)} A` };' }, 'code'); b.nodes.code!.label = 'Where it overheats (code)';
+    wire(b, P, 'P', code, 'P'); wire(b, I, 'value', code, 'I');
+    const sv = placeBlock(b, 'view.show', 1240, 120, {}, 'sv'); wire(b, code, 'firstOver', sv, 'value');
+    return b;
+  }],
+] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
+
+// ---- start ----------------------------------------------------------------------------------------------------------
+loadBlocks();
+try { const s = store.get(KEY); if (s) { const b = JSON.parse(s) as Board; if (b.nodes && b.edges) root = b; } } catch { /* start fresh */ }
+if (!nodesOf(root).length) root = DEMOS[0]![1]();
+engine = new Engine(root, env, memo); refreshLocal();
+requestAnimationFrame(() => { fit(); renderAll(); runSoon(); });
+// what a browser test drives it by (tests reach the page only through this)
+(window as unknown as { nexusNodes: object }).nexusNodes = {
+  board: () => root, path: () => path, select: (ids: string[]) => { sel.clear(); for (const id of ids) sel.add(id); renderInspector(true); draw(); },
+  at: (id: string, port?: string, side: 'in' | 'out' = 'out') => { const gg = geo(id), q = port ? (side === 'in' ? gg.ins : gg.outs).find((x) => x.p.name === port) : null; const wx = q ? (side === 'in' ? gg.x : gg.x + gg.w) : gg.x + gg.w / 2, wy = q ? q.y : gg.y + HEAD / 2, r = cv.getBoundingClientRect(); return [wx * view.k + view.ox + r.left, wy * view.k + view.oy + r.top]; },
+  state: (id: string) => curEngine()?.state.get(id), settled: () => !running,
+};

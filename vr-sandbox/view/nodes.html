@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Nexus Nodes</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#070a10" />
+  <style>
+    :root {
+      --bg: #070a10; --panel: #0d121b; --panel2: #131a26; --line: #1f2a3a; --text: #dfe7f1; --dim: #8796aa; --accent: #40c4ff;
+      --ok: #69f0ae; --bad: #ff5252; --wait: #ffb300;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif; overflow: hidden; }
+    #app { display: grid; grid-template-columns: 270px 1fr 330px; grid-template-rows: 48px 1fr; height: 100%; }
+    header { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: linear-gradient(90deg, #0d1624, #160d24 50%, #0d1f1c); border-bottom: 1px solid var(--line); }
+    header h1 { font-size: 15px; margin: 0 10px 0 0; letter-spacing: .3px; white-space: nowrap; }
+    header h1 b { background: linear-gradient(90deg, #40c4ff, #e040fb, #ffd740, #69f0ae); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #crumbs { display: flex; gap: 4px; align-items: center; color: var(--dim); white-space: nowrap; overflow: hidden; }
+    #crumbs a { color: var(--accent); cursor: pointer; }
+    #cmd { flex: 1; max-width: 420px; margin-left: auto; position: relative; }
+    #cmd input { width: 100%; background: #0a0f17; border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 7px 10px; outline: none; }
+    #cmd input:focus { border-color: var(--accent); }
+    #cmdList { position: absolute; top: 36px; left: 0; right: 0; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; max-height: 340px; overflow: auto; z-index: 20; display: none; }
+    #cmdList div { padding: 6px 10px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+    #cmdList div.on, #cmdList div:hover { background: #1b2536; }
+    button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; font: inherit; white-space: nowrap; }
+    button:hover { border-color: var(--accent); }
+    button.on { background: #12324a; border-color: var(--accent); }
+    button.hot { background: linear-gradient(90deg, #1b3a5a, #3a1b5a); }
+    aside { background: var(--panel); border-right: 1px solid var(--line); overflow: auto; min-height: 0; }
+    #inspector { border-right: 0; border-left: 1px solid var(--line); padding: 12px; }
+    #lib { display: flex; flex-direction: column; }
+    #libTop { position: sticky; top: 0; background: var(--panel); padding: 10px; border-bottom: 1px solid var(--line); z-index: 2; }
+    #libTop input { width: 100%; background: #0a0f17; border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 6px 9px; outline: none; }
+    .tabs { display: flex; gap: 4px; margin-top: 8px; }
+    .tabs button { flex: 1; padding: 4px; font-size: 12px; }
+    .shelf > summary { list-style: none; cursor: pointer; padding: 7px 10px; font-weight: 600; display: flex; justify-content: space-between; color: #c5d3e4; border-bottom: 1px solid #141c28; }
+    .shelf > summary span { color: var(--dim); font-weight: 400; }
+    .blk { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 14px; cursor: grab; user-select: none; }
+    .blk:hover { background: #142033; }
+    .chip { width: 18px; height: 18px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: #000; font-weight: 700; flex: none; }
+    .blk .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .blk .t { font-size: 10px; color: var(--ok); }
+    main { position: relative; overflow: hidden; min-width: 0; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    #toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); background: #1a2333ee; border: 1px solid var(--line); padding: 8px 14px; border-radius: 9px; display: none; max-width: 80%; }
+    #toast.bad { border-color: var(--bad); }
+    #stats { position: absolute; left: 10px; right: 10px; bottom: 10px; color: var(--dim); font-size: 11px; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ititle { font-size: 16px; font-weight: 700; display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+    .ititle input { flex: 1; background: transparent; border: 0; color: var(--text); font: inherit; outline: none; border-bottom: 1px dashed transparent; }
+    .ititle input:focus { border-bottom-color: var(--accent); }
+    .says { color: var(--dim); margin: 4px 0 10px; }
+    h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--dim); margin: 14px 0 6px; }
+    .row { display: grid; grid-template-columns: 1fr 1.2fr; gap: 6px; align-items: center; margin: 4px 0; }
+    .row label { color: #b8c6d8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+    .row input, .row select, textarea { width: 100%; background: #0a0f17; border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 5px 7px; font: inherit; outline: none; }
+    textarea { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; min-height: 90px; resize: vertical; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+    .out { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; background: #0a0f17; border-radius: 6px; margin: 3px 0; border-left: 3px solid var(--accent); }
+    .out b { font-size: 15px; font-variant-numeric: tabular-nums; }
+    .err { color: var(--bad); background: #2a0f12; padding: 6px 8px; border-radius: 6px; margin: 6px 0; }
+    .wait { color: var(--wait); background: #2a200a; padding: 6px 8px; border-radius: 6px; margin: 6px 0; }
+    .btns { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+    .sug { padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; margin: 5px 0; display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+    .src { font-size: 11px; color: var(--dim); }
+    .demo { display: block; width: 100%; text-align: left; margin: 4px 0; }
+    .kbd { color: var(--dim); font-size: 11px; line-height: 1.7; }
+    .kbd b { color: #c5d3e4; font-weight: 600; }
+    #narrow { display: none; }
+    @media (max-width: 860px) {
+      #app { grid-template-columns: 1fr; grid-template-rows: 48px 1fr; }
+      #lib, #inspector { position: absolute; top: 48px; bottom: 0; width: min(88vw, 330px); z-index: 10; display: none; box-shadow: 0 0 40px #000; }
+      #lib.open, #inspector.open { display: block; }
+      #lib { left: 0; } #inspector { right: 0; }
+      #narrow { display: inline-flex; gap: 6px; }
+      header h1 span, #crumbs, #heat { display: none; }
+      header h1 { font-size: 14px; margin: 0; }
+      header { gap: 6px; padding: 0 8px; }
+      #cmd { max-width: none; min-width: 0; }
+      header button { padding: 6px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1><b>Nexus Nodes</b> <span>· any domain, one pipeline</span></h1>
+      <span id="narrow"><button id="libBtn">＋ Blocks</button><button id="insBtn">ⓘ</button></span>
+      <div id="crumbs"></div>
+      <div id="cmd"><input id="cmdIn" placeholder="Add a block or run a command… (Ctrl K)" autocomplete="off" /><div id="cmdList"></div></div>
+      <button id="heat" title="Colour blocks by time taken, failures and use">Heat</button>
+      <button id="fit" title="Fit the board in view (F)">Fit</button>
+      <button id="undo" title="Undo (Ctrl Z)">↶</button>
+      <button id="redo" title="Redo (Ctrl Shift Z)">↷</button>
+    </header>
+    <aside id="lib"><div id="libTop"><input id="libQ" placeholder="Search the library…" /><div class="tabs"><button data-by="domain" class="on">Field</button><button data-by="ability">Ability</button><button data-by="kind">Kind</button></div></div><div id="shelves"></div></aside>
+    <main><canvas id="cv"></canvas><div id="toast"></div><div id="stats"></div></main>
+    <aside id="inspector"></aside>
+  </div>
+  <script type="module" src="../src/nexus/view/nodes.ts"></script>
+</body>
+</html>
