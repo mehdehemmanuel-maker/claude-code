@@ -12,6 +12,8 @@
 import { ABILITIES, DOMAINS, KINDS, LIBRARY, block, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
 import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
+import { fullScreen, shot } from './nodes3d';
+import type { Part } from '../kits';
 
 // ---- where things are kept ------------------------------------------------------------------------------------------
 const KEY = 'nexus.nodeboard.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1';
@@ -113,7 +115,7 @@ function heatColour(id: string): string { const s = stateOf(id); if (!s) return 
 const W = 280, HEAD = 36, ROW = 26, FOOT = 24;
 function bodyH(id: string): number {
   const n = cur().nodes[id]!; const b = n.block ?? '';
-  if (b === 'view.show') return 58; if (b === 'view.gauge') return 86; if (b === 'view.chart') return 150; if (b === 'view.table') return 124;
+  if (b === 'view.3d') return 240; if (b === 'view.show') return 58; if (b === 'view.gauge') return 86; if (b === 'view.chart') return 150; if (b === 'view.table') return 124;
   if (b === 'note') return 16 + 16 * Math.min(10, wrapCount(String(n.set?.text ?? ''), 30));
   return 0;
 }
@@ -144,10 +146,13 @@ function bez(x1: number, y1: number, x2: number, y2: number, t: number): [number
 }
 let dragWire: { from: string; out: string; x: number; y: number } | null = null, box: { x0: number; y0: number; x1: number; y1: number } | null = null;
 let suggestions: Suggestion[] | null = null;
+/** How each 3D view is turned, and whether any turns by itself (then the board is drawn again each frame). */
+const orbits = new Map<string, { yaw: number; pitch: number }>(); let spinning = false, orbiting: string | null = null;
+const orbitOf = (id: string) => orbits.get(id) ?? orbits.set(id, { yaw: 0.7, pitch: 0.42 }).get(id)!;
 const dimmed = (): Set<string> => new Set((suggestions ??= suggest(cur(), curEngine())).filter((s) => s.kind === 'dead').flatMap((s) => s.nodes));
 
 function paint(): void {
-  drawQueued = false;
+  drawQueued = false; spinning = false;
   const dpr = window.devicePixelRatio || 1, W0 = cv.clientWidth, H0 = cv.clientHeight;
   if (cv.width !== Math.round(W0 * dpr) || cv.height !== Math.round(H0 * dpr)) { cv.width = Math.round(W0 * dpr); cv.height = Math.round(H0 * dpr); }
   g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W0, H0);
@@ -205,7 +210,7 @@ function paint(): void {
       const v = node.set?.[q.p.name];
       if (!wired && v !== undefined && v !== '') {
         const x0 = gg.x + 12 + g.measureText(clip(q.p.name, 12)).width + 6, room = gg.x + gg.w - 18 - (outW[row] ?? 0) - x0;
-        let t = `= ${show(typeof v === 'string' ? readQuantity(v, q.p.unit) : v, q.p.unit)}`; while (t.length > 2 && g.measureText(t).width > room) t = `${t.slice(0, -2)}…`;
+        let t = `= ${show(typeof v === 'string' && (q.p.type === 'number' || q.p.type === 'integer') ? readQuantity(v, q.p.unit) : v, q.p.unit)}`; while (t.length > 2 && g.measureText(t).width > room) t = `${t.slice(0, -2)}…`;
         if (room > 24) { g.fillStyle = '#7f8ea3'; g.fillText(t, x0, q.y); }
       }
     }
@@ -233,7 +238,7 @@ function paint(): void {
   if (box) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.strokeStyle = '#40c4ff'; g.fillStyle = '#40c4ff18'; g.lineWidth = 1; const x = Math.min(box.x0, box.x1), y = Math.min(box.y0, box.y1); g.fillRect(x, y, Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0)); g.strokeRect(x, y, Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0)); }
   paintMap(dpr, W0, H0);
   if (!nodesOf(b).length) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#5f6f84'; g.font = '15px system-ui'; g.textAlign = 'center'; g.fillText('Drag a block from the library, or type its name above (Ctrl K)', W0 / 2, H0 / 2); g.textAlign = 'left'; }
-  if (pulses.length || [...glow.values()].some((x) => t - x < 800)) draw();
+  if (spinning || pulses.length || [...glow.values()].some((x) => t - x < 800)) draw();
 }
 /** The whole board small, in a corner, with what is in view outlined: where the rest of it is. Shown only when some of
  *  the board is out of view; pressing it goes there. */
@@ -255,6 +260,14 @@ function paintBody(id: string, gg: Geo, s: NodeState | undefined): void {
   const b = n.block;
   if (b === 'note') { g.fillStyle = '#fff59d'; g.font = '12px system-ui'; String(n.set?.text ?? '').split('\n').flatMap((l) => l.match(/.{1,30}(\s|$)|.{1,30}/g) ?? ['']).slice(0, 10).forEach((l, i) => g.fillText(l, x + 6, y + 12 + i * 16)); return; }
   if (val === undefined) { g.fillStyle = '#4a5a70'; g.font = '12px system-ui'; g.fillText(inV ? 'nothing yet' : 'wire something in', x + 8, y + h / 2); return; }
+  if (b === 'view.3d') {
+    const part = val as Part, o = orbitOf(id), dpr = window.devicePixelRatio || 1;
+    if (n.set?.spin !== false && !(mode === 'orbit' && orbiting === id)) { o.yaw += 0.006; spinning = true; }
+    try { const c = shot(id, part, { yaw: o.yaw, pitch: o.pitch, explode: Math.max(0, Math.min(4, Math.round(Number(n.set?.explode ?? 0)))), w: w * view.k, h: h * view.k, dpr }); g.drawImage(c, x, y, w, h); }
+    catch (e) { g.fillStyle = '#ff8a80'; g.font = '12px system-ui'; g.fillText(clip(`cannot draw in 3D here: ${(e as Error).message}`, 40), x + 8, y + h / 2); }
+    g.fillStyle = '#dfe7f1'; g.font = '600 12px system-ui'; g.fillText(clip(part?.name ?? '', 34), x + 8, y + 14);
+    g.fillStyle = '#7f8ea3'; g.font = '11px system-ui'; g.fillText('drag to turn · ⤢ in the panel for full screen', x + 8, y + h - 8); return;
+  }
   if (b === 'view.show') { const u = String(n.set?.unit ?? ''); let v = val; if (u && typeof v === 'number') { try { v = Number((v / readUnit(u)).toPrecision(5)); } catch { /* shown in SI */ } } g.fillStyle = typeColour(op); g.font = '700 22px system-ui'; g.fillText(clip(u && typeof v === 'number' ? `${v} ${u}` : show(v, op?.unit), 18), x + 8, y + h / 2); return; }
   if (b === 'view.gauge') {
     const lo = Number(n.set?.min ?? 0), hi = Number(n.set?.max ?? 100), f = Math.max(0, Math.min(1, (Number(val) - lo) / (hi - lo || 1))), cx = x + w / 2, cy = y + h - 10, r = Math.min(w / 2 - 10, h - 18);
@@ -295,7 +308,7 @@ function hit(sx: number, sy: number): Hit {
   for (const e of edgesOf(cur())) { if (!isWire(e)) continue; const p = wirePath(e); if (!p) continue; for (let i = 0; i <= 30; i++) { const [px, py] = bez(p[0], p[1], p[2], p[3], i / 30); if (Math.hypot(px - x, py - y) < 7 / view.k) return { kind: 'wire', id: e.id }; } }
   return null;
 }
-let mode: 'none' | 'pan' | 'drag' | 'wire' | 'box' | 'pinch' = 'none', last = { x: 0, y: 0 }, moved = false, dragStart: Map<string, [number, number]> = new Map();
+let mode: 'none' | 'pan' | 'drag' | 'wire' | 'box' | 'pinch' | 'orbit' = 'none', last = { x: 0, y: 0 }, moved = false, dragStart: Map<string, [number, number]> = new Map();
 const touches = new Map<number, { x: number; y: number }>(); let pinch0 = { d: 0, k: 1, cx: 0, cy: 0 };
 const pos = (e: PointerEvent | MouseEvent) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 cv.addEventListener('pointerdown', (e) => {
@@ -311,6 +324,10 @@ cv.addEventListener('pointerdown', (e) => {
     const w = local.wiresInto(h.id).find((x) => x.in === h.port);
     if (w) { edit((b) => { b.edges[w.id] = { ...b.edges[w.id]!, deleted: true }; }); mode = 'wire'; dragWire = { from: w.from, out: w.out!, ...p }; return; }
   }
+  if (h?.kind === 'node' && cur().nodes[h.id]?.block === 'view.3d') {
+    const gg = geo(h.id), [, wy] = toWorld(p.x, p.y);
+    if (wy >= gg.bodyY && wy <= gg.bodyY + gg.bodyH) { mode = 'orbit'; orbiting = h.id; sel.clear(); sel.add(h.id); renderInspector(true); return; }
+  }
   if (h?.kind === 'node') {
     if (e.shiftKey) { if (sel.has(h.id)) sel.delete(h.id); else sel.add(h.id); } else if (!sel.has(h.id)) { sel.clear(); sel.add(h.id); }
     selWire = null; mode = 'drag'; dragStart = new Map([...sel].map((id) => [id, [cur().nodes[id]!.x ?? 0, cur().nodes[id]!.y ?? 0]]));
@@ -325,6 +342,7 @@ cv.addEventListener('pointermove', (e) => {
   if (mode === 'pinch' && touches.size === 2) { const [a, b] = [...touches.values()], d = Math.hypot(a!.x - b!.x, a!.y - b!.y); zoomAt(pinch0.cx, pinch0.cy, (pinch0.k * d) / (pinch0.d || 1) / view.k); return; }
   const dx = p.x - last.x, dy = p.y - last.y; if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
   if (mode === 'pan') { view.ox += dx; view.oy += dy; last = p; draw(); }
+  else if (mode === 'orbit' && orbiting) { const o = orbitOf(orbiting); o.yaw -= dx * 0.01; o.pitch = Math.max(-1.45, Math.min(1.45, o.pitch + dy * 0.01)); last = p; draw(); }
   else if (mode === 'drag') { last = p; const [x0, y0] = toWorld(0, 0), [x1, y1] = toWorld(dx, dy); for (const id of sel) { const n = cur().nodes[id]!; n.x = (n.x ?? 0) + (x1 - x0); n.y = (n.y ?? 0) + (y1 - y0); } draw(); }
   else if (mode === 'wire' && dragWire) { dragWire.x = p.x; dragWire.y = p.y; draw(); }
   else if (mode === 'box' && box) { box.x1 = p.x; box.y1 = p.y; draw(); }
@@ -350,7 +368,7 @@ cv.addEventListener('pointerup', (e) => {
     for (const n of nodesOf(cur())) { const gg = geo(n.id); if (gg.x >= ax && gg.x + gg.w <= bx && gg.y >= ay && gg.y + gg.h <= by) sel.add(n.id); }
     box = null; renderInspector(true);
   } else if (mode === 'pan' && !moved) { sel.clear(); selWire = null; renderInspector(true); }
-  mode = 'none'; draw();
+  mode = 'none'; orbiting = null; draw();
 });
 cv.addEventListener('dblclick', (e) => {
   const p = pos(e), h = hit(p.x, p.y);
@@ -433,7 +451,7 @@ function tidy(b: Board): Board {
   return b;
 }
 /** A block's height on a board not (yet) in view. */
-function geoOf(b: Board, id: string): number { const n = b.nodes[id]!, d = blockOf(n), p = d ? portsOf(d, { ...defaultsOf(d), ...(n.set ?? {}) }) : { inputs: [], outputs: [] }, blk = n.block ?? ''; const bh = blk === 'view.show' ? 58 : blk === 'view.gauge' ? 86 : blk === 'view.chart' ? 150 : blk === 'view.table' ? 124 : blk === 'note' ? 16 + 16 * Math.min(10, wrapCount(String(n.set?.text ?? ''), 30)) : 0; return HEAD + 8 + Math.max(p.inputs.length, p.outputs.length) * ROW + bh + FOOT; }
+function geoOf(b: Board, id: string): number { const n = b.nodes[id]!, d = blockOf(n), p = d ? portsOf(d, { ...defaultsOf(d), ...(n.set ?? {}) }) : { inputs: [], outputs: [] }, blk = n.block ?? ''; const bh = blk === 'view.3d' ? 240 : blk === 'view.show' ? 58 : blk === 'view.gauge' ? 86 : blk === 'view.chart' ? 150 : blk === 'view.table' ? 124 : blk === 'note' ? 16 + 16 * Math.min(10, wrapCount(String(n.set?.text ?? ''), 30)) : 0; return HEAD + 8 + Math.max(p.inputs.length, p.outputs.length) * ROW + bh + FOOT; }
 function toast(s: string, bad = false): void { const t = document.getElementById('toast')!; t.textContent = s; t.className = bad ? 'bad' : ''; t.style.display = 'block'; clearTimeout((toast as unknown as { t: number }).t); (toast as unknown as { t: number }).t = window.setTimeout(() => (t.style.display = 'none'), 3200); }
 
 // ---- the library ------------------------------------------------------------------------------------------------------
@@ -528,7 +546,7 @@ function nodeInspector(el: HTMLElement, id: string): void {
     ${ins ? `<h3>Inputs</h3>${ins}` : ''}
     ${into.length ? `<p class="src">${into.length} input${into.length > 1 ? 's' : ''} wired</p>` : ''}
     <h3>Results</h3><div id="iouts">${outsHtml(id)}</div>
-    <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}<button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
+    <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}${n.block === 'view.3d' || n.block === 'card.part' ? '<button id="i3d" class="hot">⤢ See it in 3D, full screen</button>' : ''}${n.block === 'card.part' ? `<a href="./look.html?kit=part&words=${encodeURIComponent(String(stateOf(id)?.out?.name ? (n.set?.what ?? '') : ''))}" target="_blank"><button>Open in the part viewer</button></a>` : ''}<button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
     <p class="src">${esc(KINDS[k].name)} · ${esc(ABILITIES[d?.ability ?? 'transform'])} · ${esc((d?.domains ?? []).map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x).join(', '))}${d ? ` · v${d.version} · ${esc(d.by)}` : ''}${d?.tests?.length ? ` · ${d.tests.length} test${d.tests.length > 1 ? 's' : ''}` : ' · draft: no tests yet'}</p>
     ${d?.sources?.length ? `<p class="src">From: ${d.sources.map((s) => esc(s.cite)).join('; ')}</p>` : ''}
     <div id="iTestOut"></div>`;
@@ -552,6 +570,11 @@ function nodeInspector(el: HTMLElement, id: string): void {
     });
   }
   const on = (bid: string, fn: () => void) => { const b = document.getElementById(bid); if (b) b.onclick = fn; };
+  on('i3d', () => {
+    const src = n.block === 'card.part' ? id : local.wiresInto(id)[0]?.from, st = src ? stateOf(src) : undefined;
+    if (!st?.out?.part) { toast('nothing to draw yet: wire a Part into it', true); return; }
+    fullScreen(st.out.part as Part, String(st.out.name ?? ''), String(st.out.check ?? ''));
+  });
   on('iOpen', () => enter(id)); on('iUnfold', () => unfold(id)); on('iSave', () => saveAsBlock(id)); on('iCopy', () => openCopy(id)); on('iCut', () => cut(id)); on('iDel', removeSelected);
   on('iTest', async () => { const r = await testBlock(d!); document.getElementById('iTestOut')!.innerHTML = r.ok ? `<p class="src" style="color:var(--ok)">✓ all ${r.ran} test${r.ran > 1 ? 's' : ''} pass</p>` : `<div class="err">${r.fails.map(esc).join('<br>')}</div>`; });
 }
@@ -625,6 +648,25 @@ function renderAll(): void { renderCrumbs(); renderLibrary(); renderInspector(tr
 type Make = () => Board;
 const DEMOS: [string, Make][] = ([
 
+  ['Parts in 3D: a bolt sized from its load, drawn whole', () => {
+    // the load picks the bolt: the shank area its shear needs, the next ISO 262 size up, and that bolt drawn from its
+    // standard (ISO 4014's hex bolt) with its head, shank and thread
+    const b = emptyBoard('A bolt from its load');
+    const F = placeBlock(b, 'in.number', 0, 0, { value: '10 kN', unit: 'N' }, 'F'); b.nodes.F!.label = 'Shear load';
+    const Sy = placeBlock(b, 'in.number', 0, 0, { value: '640 MPa', unit: 'Pa' }, 'Sy'); b.nodes.Sy!.label = 'Yield, class 8.8 (ISO 898-1)';
+    const n = placeBlock(b, 'in.number', 0, 0, { value: 2 }, 'n'); b.nodes.n!.label = 'Factor of safety wanted';
+    const d = placeBlock(b, 'math.expr', 0, 0, { expr: 'sqrt(4 * F * n / (pi * 0.577 * Sy))', unit: 'm' }, 'd'); b.nodes.d!.label = 'Least diameter for that';
+    wire(b, F, 'value', d, 'F'); wire(b, Sy, 'value', d, 'Sy'); wire(b, n, 'value', d, 'n');
+    const pick = placeBlock(b, 'logic.next-size', 0, 0, {}, 'pick'); b.nodes.pick!.label = 'Next metric size (ISO 262)'; wire(b, d, 'result', pick, 'need');
+    const L = placeBlock(b, 'in.number', 0, 0, { value: 40 }, 'L'); b.nodes.L!.label = 'Length, mm';
+    const w = placeBlock(b, 'text.format', 0, 0, { template: 'bolt M{d}x{L}' }, 'words'); b.nodes.words!.label = 'Its name'; wire(b, pick, 'inUnit', w, 'd'); wire(b, L, 'value', w, 'L');
+    const part = placeBlock(b, 'card.part', 0, 0, {}, 'part'); b.nodes.part!.label = 'The bolt'; wire(b, w, 'text', part, 'what');
+    const v = placeBlock(b, 'view.3d', 0, 0, {}, 'v3'); b.nodes.v3!.label = 'The bolt, in 3D'; wire(b, part, 'part', v, 'part');
+    const m = placeBlock(b, 'view.show', 0, 0, { unit: 'g' }, 'm'); b.nodes.m!.label = 'Its mass'; wire(b, part, 'mass', m, 'value');
+    const br = placeBlock(b, 'card.part', 0, 0, { what: 'bearing 6205' }, 'br'); b.nodes.br!.label = 'A bearing beside it';
+    const v2 = placeBlock(b, 'view.3d', 0, 0, { explode: 1 }, 'v4'); b.nodes.v4!.label = 'The bearing, taken apart'; wire(b, br, 'part', v2, 'part');
+    return b;
+  }],
   ['Cantilever: how far it bends, for every length', () => {
     const b = emptyBoard('Cantilever sweep');
     const P = placeBlock(b, 'in.number', 0, 0, { value: '500 N', unit: 'N' }, 'P'); b.nodes.P!.label = 'End load';

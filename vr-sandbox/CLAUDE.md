@@ -110,6 +110,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Blocks: what a node on a board of blocks can be (typed ports with units, settings, tests, sources), the library of them by field, ability and kind (every law a calculator), a duplicate refused | `src/nexus/blocks.ts` |
 | A board of blocks run: keys and a shared cache so only what changed runs, lists mapped, units converted on wires, groups folded, opened and saved as blocks, branches cut, dead blocks, twins and repeated wiring found | `src/nexus/dataflow.ts` (plan and status: `docs/NODE-ENGINE.md`) |
 | The board of blocks on a page: the coloured canvas, library, inspector-calculator, suggestions, starter boards | `src/nexus/view/nodes.ts`, `view/nodes.html` |
+| A part in 3D on a board of blocks: each 3D view block's picture, and full screen to turn and take apart | `src/nexus/view/nodes3d.ts` (draws with `kit3d.ts`) |
 
 ## The organising principle: interfaces, envelopes, one graph
 

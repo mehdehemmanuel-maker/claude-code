@@ -13,6 +13,9 @@ import { dimensionOf, fromSI, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
+import { DESIGNED, component, exampleOf } from './components';
+import { massOf } from './mass';
+import type { Part } from './kits';
 import type { Board } from './boards';
 
 // ---- the three ways a block is found ---------------------------------------------------------------------------------
@@ -470,6 +473,32 @@ const BUILT_IN: BlockDef[] = [
     run: (_, c) => { const m = MATERIALS.find((x) => x.id === c.set.id); if (!m) throw new Error(`no material ${String(c.set.id)}`); return { material: m, density: m.density, E: m.E, yield: m.yield, ultimate: m.ultimate }; },
     tests: MATERIALS[0] ? [{ set: { id: MATERIALS[0].id }, inputs: {}, outputs: { density: MATERIALS[0].density, E: MATERIALS[0].E } }] : [] }),
 
+  // parts: drawn whole from their standards by the library (src/nexus/components.ts)
+  def({ id: 'card.part', name: 'Part', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'vehicles', 'electrical'],
+    says: `A real part, drawn whole from its standard with every piece inside it: ${DESIGNED.length} kinds (${DESIGNED.slice(0, 8).map((f) => exampleOf(f)).join(', ')}, …). Words in, or typed here`,
+    settings: [{ key: 'what', label: 'Part', type: 'text', default: 'bolt M8x30' }],
+    ports: { inputs: [P('what', 'text', { optional: true, label: 'part, in words' })], outputs: [P('part', 'part'), N('mass', 'kg'), P('name', 'text'), P('pieces', 'integer'), P('check', 'text')] },
+    run: (i, c) => {
+      const words = String(i.what ?? '').trim() || String(c.set.what ?? ''), r = component(words);
+      if (typeof r === 'string') throw new Error(r);
+      const count = (q: Part): number => (q.parts?.length ? q.parts.reduce((t, x) => t + count(x), 0) : 1);
+      return { part: r.part, mass: massOf(r.part), name: r.part.name, pieces: count(r.part), check: r.faults.length ? r.faults.join('; ') : 'holds every piece its standard lists' };
+    },
+    tests: [{ set: { what: 'bolt M8x30' }, inputs: {}, outputs: { name: 'M8 × 30 hex bolt' } }, { inputs: { what: 'bearing 6205' }, outputs: { name: 'ball bearing 6205 ZZ (25 × 52 × 15)' } }] }),
+  def({ id: 'logic.next-size', name: 'Next size up', kind: 'logic', ability: 'decide', domains: ['mechanical', 'structural', 'everyday'], says: 'The smallest standard size at least the size worked out: a bolt from its diameter, a beam from its depth',
+    settings: [{ key: 'sizes', label: 'Sizes', type: 'text', default: '3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 30, 36' }, { key: 'unit', label: 'Sizes are in', type: 'text', default: 'mm' }],
+    ports: { inputs: [N('need', 'm', { label: 'size needed (SI)' })], outputs: [N('size', 'm'), N('inUnit', undefined, { label: 'size in its unit' }), P('fits', 'boolean')] },
+    run: (i, c) => {
+      const u = String(c.set.unit || 'm'), k = typeof readQuantity(`1 ${u}`) === 'number' ? (readQuantity(`1 ${u}`) as number) : 1;
+      const sizes = String(c.set.sizes).split(/[,;\s]+/).filter(Boolean).map(Number).filter(Number.isFinite).sort((a, b) => a - b), need = Number(i.need);
+      const pick = sizes.find((x) => x * k >= need - 1e-12);
+      if (pick === undefined) throw new Error(`nothing in the list is big enough: the largest is ${sizes[sizes.length - 1]} ${u}`);
+      return { size: pick * k, inUnit: pick, fits: true };
+    },
+    tests: [{ set: { sizes: '6, 8, 10', unit: 'mm' }, inputs: { need: 0.0071 }, outputs: { inUnit: 8, size: 0.008 } }], sources: [{ cite: 'ISO 262:1998, ISO general purpose metric screw threads: selected sizes (first choice)', kind: 'standard' }] }),
+  def({ id: 'view.3d', name: '3D view', kind: 'view', ability: 'show', domains: ['mechanical', 'manufacturing', 'everyday'], says: 'A part drawn in 3D, every piece of it: drag inside to turn it, take it apart, open it full screen',
+    settings: [{ key: 'explode', label: 'Taken apart (levels)', type: 'number', default: 0 }, { key: 'spin', label: 'Turn by itself', type: 'boolean', default: true }],
+    ports: { inputs: [P('part', 'part')], outputs: [] }, run: () => ({}), sink: true, tests: [{ inputs: { part: { name: 'x' } }, outputs: {} }] }),
   // viewers: what a board shows
   def({ id: 'view.show', name: 'Show', kind: 'view', ability: 'show', domains: ['everyday'], says: 'A value, large, in its unit', settings: [{ key: 'unit', label: 'Show in', type: 'text', default: '' }],
     ports: { inputs: [P('value', 'any')], outputs: [] }, run: () => ({}), sink: true, tests: [{ inputs: { value: 1 }, outputs: {} }] }),
