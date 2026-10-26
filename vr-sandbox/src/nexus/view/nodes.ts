@@ -767,6 +767,7 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'explode', 0, 0, { amount: 0.5, levels: 3 }, 'apart'); wire(b, 'all', 'assembly', 'apart', 'thing');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'car', 'vehicle', 'audit', 'thing');
     return b;
   }],
   ['A truck from the ground up: axles, then tyres, then batteries', () => {
@@ -792,6 +793,7 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'explode', 0, 0, { amount: 0, levels: 3 }, 'apart'); b.nodes.apart!.label = 'Take apart (turn it up)'; wire(b, 'all', 'assembly', 'apart', 'thing');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'truck', 'vehicle', 'audit', 'thing');
     return b;
   }],
   ['An electric car\'s pack: 3,360 cells, one stored', () => {

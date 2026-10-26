@@ -1034,6 +1034,98 @@ m('tungsten', 'tungsten', 'Metals', 'the metal with the highest melting point: l
 m('al-4043', '4043 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % silicon: a filler wire that flows well', 'AWS A5.10 ER4043');
 m('al-5356', '5356 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % magnesium: a stronger filler wire', 'AWS A5.10 ER5356');
 
+// ==== a highway tractor's fittings, each drawn whole by src/nexus/fittings.ts =============================================
+{
+// (each one's size, mm, typical of a highway tractor's)
+const SZ: Record<string, [number, number, number]> = {'trk-lamp-housing':  [300, 170, 180], 'trk-lamp-lens':  [300, 170, 4], 'trk-reflector':  [150, 150, 60], 'trk-led-board':  [50, 50, 8], 'trk-headlamp':  [300, 170, 180], 'trk-marker-lamp':  [100, 35, 50], 'trk-mirror-arm':  [600, 25, 25], 'trk-mirror-head':  [380, 200, 70], 'trk-mirror-glass':  [340, 170, 4], 'trk-mirror-bracket':  [60, 60, 30], 'trk-mirror':  [600, 700, 300], 'trk-door-skin':  [1000, 950, 2], 'trk-door-inner':  [960, 1500, 2], 'trk-door-glass':  [880, 580, 5], 'trk-window-seal':  [900, 25, 20], 'trk-door-hinge':  [90, 36, 36], 'trk-door-handle':  [160, 35, 30], 'trk-door-latch':  [80, 60, 30], 'trk-door':  [1000, 1600, 100], 'trk-cab-floor':  [1600, 6, 2200], 'trk-cab-back':  [2200, 1700, 3], 'trk-cab-roof':  [1100, 140, 2260], 'trk-cab-side':  [400, 1700, 3], 'trk-a-pillar':  [1100, 70, 70], 'trk-windscreen':  [1050, 1050, 7], 'trk-sun-visor':  [320, 12, 2200], 'trk-grab-handle':  [750, 30, 30], 'trk-cab-mount-rubber':  [110, 110, 60], 'trk-cab-mount-bracket':  [140, 12, 140], 'trk-cab-mount':  [140, 100, 140], 'trk-cab':  [1650, 1850, 2280], 'trk-hood-shell':  [1500, 1100, 2400], 'trk-hood-hinge':  [120, 40, 40], 'trk-grille-surround':  [1100, 60, 50], 'trk-grille-bar':  [1050, 35, 30], 'trk-grille':  [1150, 750, 60], 'trk-hood':  [1600, 1150, 2400], 'trk-bumper-shell':  [140, 360, 1960], 'trk-bumper-end':  [160, 360, 240], 'trk-bumper-bracket':  [120, 200, 12], 'trk-bumper':  [300, 360, 2440], 'trk-frame-rail':  [6200, 287, 85], 'trk-crossmember':  [200, 180, 770], 'trk-gusset':  [240, 220, 8], 'trk-crossmember-set':  [240, 220, 800], 'trk-tank-shell':  [1290, 640, 640], 'trk-tank-end':  [650, 650, 6], 'trk-tank-baffle':  [630, 630, 3], 'trk-filler-neck':  [90, 60, 90], 'trk-fuel-cap':  [110, 30, 110], 'trk-tank-strap':  [660, 660, 8], 'trk-strap-liner':  [650, 650, 5], 'trk-tank-bracket':  [90, 300, 330], 'trk-fuel-tank':  [1300, 700, 700], 'trk-at-can':  [1240, 600, 600], 'trk-at-can-end':  [610, 610, 6], 'trk-dpf-core':  [500, 480, 480], 'trk-scr-core':  [500, 480, 480], 'trk-step-tread':  [420, 30, 370], 'trk-aftertreatment':  [1250, 650, 650], 'trk-stack-pipe':  [2600, 127, 127], 'trk-heat-shield':  [900, 150, 150], 'trk-stack-clamp':  [140, 140, 12], 'trk-stack-bracket':  [90, 60, 6], 'trk-exhaust-stack':  [2700, 150, 500], 'trk-fw-plate':  [914, 50, 914], 'trk-fw-jaw':  [140, 50, 120], 'trk-fw-handle':  [500, 18, 18], 'trk-fw-bracket':  [300, 100, 80], 'trk-fw-pin':  [120, 50, 50], 'trk-fw-angle':  [750, 100, 100], 'trk-fifth-wheel':  [914, 300, 914], 'trk-step-bracket':  [12, 400, 700], 'trk-step':  [420, 400, 700], 'trk-quarter-fender':  [800, 400, 650], 'trk-fender-bracket':  [300, 24, 24], 'trk-mud-flap':  [8, 620, 600], 'trk-flap-hanger':  [500, 28, 28], 'trk-quarter-fender-set':  [800, 450, 700], 'trk-fender-flap-set':  [900, 900, 700], 'trk-air-tank-shell':  [700, 240, 240], 'trk-air-tank-end':  [240, 240, 8], 'trk-drain-valve':  [40, 24, 24], 'trk-air-tank':  [720, 250, 250]};
+const pt = (id: string, name: string, make: Process, of: string, says: string) => e(id, name, 'Mechanical/Vehicles/Highway tractors', 'part', make, of, says, '', { size: SZ[id] });
+const as = (id: string, name: string, of: string, says: string) => e(id, name, 'Mechanical/Vehicles/Highway tractors', 'assembly', 'assemble', of, says, '', { size: SZ[id] });
+pt('trk-lamp-housing', 'lamp housing', 'mould', 'pc', 'a moulded polycarbonate housing, its three ears screwed to what carries it');
+pt('trk-lamp-lens', 'lamp lens', 'mould', 'pc', 'clear or amber polycarbonate, hard-coated against stones and sun');
+pt('trk-reflector', 'lamp reflector', 'mould', 'pc', 'a moulded bowl, vacuum-metallised (its aluminium film too thin to list)');
+as('trk-led-board', 'LED board', `pcb-bare ${F('led white 5mm')}*6`, 'LEDs on a circuit board at the reflector focus');
+as('trk-headlamp', 'headlamp', `trk-lamp-housing trk-lamp-lens trk-reflector trk-led-board ${F('bolt M6x20')}*3`, 'a headlamp: housing, reflector, LED board, lens, three screws');
+as('trk-marker-lamp', 'marker lamp', `trk-lamp-housing trk-lamp-lens ${F('led yellow 5mm')}*2`, 'an amber clearance or identification lamp (FMVSS 108)');
+pt('trk-mirror-arm', 'mirror arm', 'bend', 'steel-low', 'a bent steel tube');
+pt('trk-mirror-head', 'mirror head', 'mould', 'abs', 'the moulded case its glass sits in');
+pt('trk-mirror-glass', 'mirror glass', 'grind', 'glass', 'silvered glass');
+pt('trk-mirror-bracket', 'mirror bracket', 'cast', 'al-a380', 'a die-cast bracket on the door');
+as('trk-mirror', 'mirror', `trk-mirror-arm*2 trk-mirror-head trk-mirror-glass trk-mirror-bracket*2 ${F('bolt M8x25')}*4`, 'a west-coast mirror');
+pt('trk-door-skin', 'door skin', 'stamp', 'al-5052', 'the pressed aluminium outer panel');
+pt('trk-door-inner', 'door inner panel', 'stamp', 'al-5052', 'the pressed inner panel its trim and mechanisms hang on');
+pt('trk-door-glass', 'door glass', 'grind', 'glass', 'tempered glass');
+pt('trk-window-seal', 'window seal', 'extrude', 'epdm', 'an extruded rubber run the glass slides in');
+pt('trk-door-hinge', 'door hinge', 'cast', 'steel-low', 'a cast steel hinge');
+pt('trk-door-handle', 'door handle', 'cast', 'zamak', 'a die-cast, chromed handle');
+pt('trk-door-latch', 'door latch', 'stamp', 'steel-low', 'the latch that catches the striker');
+as('trk-door', 'door', `trk-door-skin trk-door-inner trk-door-glass trk-window-seal*4 trk-door-hinge*2 trk-door-handle trk-door-latch ${F('bolt M8x25')}*4`, 'a cab door');
+pt('trk-cab-floor', 'cab floor panel', 'stamp', 'al-5052', 'a pressed aluminium floor or cowl panel');
+pt('trk-cab-back', 'cab back wall', 'stamp', 'al-5052', 'the pressed aluminium back wall');
+pt('trk-cab-roof', 'cab roof', 'stamp', 'al-5052', 'the pressed aluminium roof');
+pt('trk-cab-side', 'cab side panel', 'stamp', 'al-5052', 'a pressed aluminium side panel');
+pt('trk-a-pillar', 'A-pillar', 'extrude', 'al-6063', 'an aluminium extrusion beside the windscreen');
+pt('trk-windscreen', 'windscreen', 'grind', 'glass', 'laminated glass (its PVB interlayer too thin to list)');
+pt('trk-sun-visor', 'sun visor', 'stamp', 'al-5052', 'an exterior visor over the windscreen');
+pt('trk-grab-handle', 'grab handle', 'bend', 'stainless-304', 'a stainless handle beside the door');
+pt('trk-cab-mount-rubber', 'cab mount rubber', 'mould', 'rubber', 'a rubber isolator');
+pt('trk-cab-mount-bracket', 'cab mount bracket', 'stamp', 'steel-low', 'a bracket on the frame rail');
+as('trk-cab-mount', 'cab mount', `trk-cab-mount-rubber trk-cab-mount-bracket ${F('nut M16')} ${F('washer M16')}*2`, 'a rubber cab mount, bolted through');
+as('trk-cab', 'cab', `trk-cab-floor*2 trk-cab-back trk-door-glass trk-cab-roof trk-a-pillar*3 trk-windscreen*2 trk-cab-side*6 trk-door*2 trk-mirror*2 trk-grab-handle*2 trk-sun-visor trk-marker-lamp*5 trk-cab-mount*4`, 'a day cab');
+pt('trk-hood-shell', 'hood shell', 'mould', 'fibreglass', 'a sheet-moulded fibreglass hood with its fenders');
+pt('trk-hood-hinge', 'hood hinge', 'cast', 'steel-low', 'a cast hinge the hood tilts on');
+pt('trk-grille-surround', 'grille surround', 'mould', 'abs', 'chromed moulded plastic');
+pt('trk-grille-bar', 'grille bar', 'extrude', 'al-6063', 'an extruded aluminium bar');
+as('trk-grille', 'grille', `trk-grille-surround*4 trk-grille-bar*7 ${F('bolt M6x20')}*4`, 'a grille');
+as('trk-hood', 'hood', `trk-hood-shell trk-grille trk-headlamp*2 trk-hood-hinge*2 ${F('bolt M10x30')}*4`, 'a tilting hood');
+pt('trk-bumper-shell', 'bumper shell', 'stamp', 'steel-low', 'a pressed, chromed steel bumper');
+pt('trk-bumper-end', 'bumper end cap', 'mould', 'pp', 'a moulded end cap');
+pt('trk-bumper-bracket', 'bumper bracket', 'stamp', 'steel-low', 'a bracket bolted through the frame rail');
+as('trk-bumper', 'front bumper', `trk-bumper-shell trk-bumper-end*2 trk-bumper-bracket*2 ${F('nut M12')}*8`, 'a front bumper');
+pt('trk-frame-rail', 'frame rail', 'roll', 'steel-alloy', 'a heat-treated steel C-channel, rolled');
+pt('trk-crossmember', 'cross member channel', 'stamp', 'steel-low', 'a pressed channel between the rails');
+pt('trk-gusset', 'gusset', 'stamp', 'steel-low', 'a plate joining a cross member to a rail');
+as('trk-crossmember-set', 'cross member', `trk-crossmember*2 trk-gusset*2 ${F('nut M16')}*8`, 'a cross member and its gussets, bolted');
+pt('trk-tank-shell', 'tank shell', 'roll', 'al-5052', 'a rolled aluminium shell');
+pt('trk-tank-end', 'tank end', 'stamp', 'al-5052', 'a pressed end, welded in');
+pt('trk-tank-baffle', 'tank baffle', 'stamp', 'al-5052', 'a baffle against surge');
+pt('trk-filler-neck', 'filler neck', 'draw', 'al-6063', 'a drawn filler neck');
+pt('trk-fuel-cap', 'fuel cap', 'cast', 'zamak', 'a locking cap');
+pt('trk-tank-strap', 'tank strap', 'stamp', 'stainless-304', 'a stainless strap');
+pt('trk-strap-liner', 'strap liner', 'extrude', 'rubber', 'a rubber liner under a strap');
+pt('trk-tank-bracket', 'tank bracket', 'cast', 'al-a380', 'a cast bracket on the rail');
+as('trk-fuel-tank', 'fuel tank', `trk-tank-shell trk-tank-end*2 trk-tank-baffle*2 trk-filler-neck trk-fuel-cap trk-tank-strap*2 trk-strap-liner*2 trk-tank-bracket*2 ${F('nut M16')}*6`, 'a fuel tank on its brackets');
+pt('trk-at-can', 'aftertreatment can', 'roll', 'stainless-304', 'a rolled stainless can');
+pt('trk-at-can-end', 'aftertreatment can end', 'stamp', 'stainless-304', 'a pressed stainless end');
+pt('trk-dpf-core', 'particulate filter core', 'sinter', 'alumina', 'a ceramic wall-flow filter');
+pt('trk-scr-core', 'SCR catalyst core', 'sinter', 'alumina', 'a ceramic catalyst substrate');
+pt('trk-step-tread', 'step tread', 'extrude', 'al-6063', 'a serrated aluminium tread');
+as('trk-aftertreatment', 'aftertreatment unit', `trk-at-can trk-at-can-end*2 trk-dpf-core trk-scr-core trk-step-tread trk-tank-strap*2 trk-strap-liner*2 trk-tank-bracket*2 ${F('nut M16')}*6`, 'its exhaust aftertreatment');
+pt('trk-stack-pipe', 'stack pipe', 'draw', 'stainless-304', 'a stainless exhaust pipe');
+pt('trk-heat-shield', 'heat shield', 'stamp', 'stainless-304', 'a perforated stainless shield');
+pt('trk-stack-clamp', 'stack clamp', 'stamp', 'stainless-304', 'a band clamp');
+pt('trk-stack-bracket', 'stack bracket', 'stamp', 'steel-low', 'a bracket to the cab back');
+as('trk-exhaust-stack', 'exhaust stack', `trk-stack-pipe trk-heat-shield trk-stack-clamp*2 trk-stack-bracket ${F('bolt M10x30')}`, 'an exhaust stack');
+pt('trk-fw-plate', 'fifth wheel top plate', 'cast', 'cast-iron', 'a cast top plate with its throat');
+pt('trk-fw-jaw', 'locking jaw', 'forge', 'steel-alloy', 'a forged jaw round the kingpin');
+pt('trk-fw-handle', 'release handle', 'bend', 'steel-low', 'a bent rod');
+pt('trk-fw-bracket', 'fifth wheel bracket', 'cast', 'cast-iron', 'a cast bracket');
+pt('trk-fw-pin', 'bracket pin', 'machine', 'steel-alloy', 'a pivot pin');
+pt('trk-fw-angle', 'mounting angle', 'roll', 'steel-low', 'a rolled angle on the rail');
+as('trk-fifth-wheel', 'fifth wheel', `trk-fw-plate trk-fw-jaw trk-fw-handle trk-fw-bracket*2 trk-fw-pin*2 trk-fw-angle*2 ${F('nut M16')}*8`, 'a fifth wheel');
+pt('trk-step-bracket', 'step bracket', 'stamp', 'al-5052', 'a pressed step bracket');
+as('trk-step', 'cab step', `trk-step-tread*2 trk-step-bracket*2 ${F('nut M12')}*2`, 'a cab step');
+pt('trk-quarter-fender', 'quarter fender panel', 'mould', 'pp', 'a moulded fender');
+pt('trk-fender-bracket', 'fender bracket', 'bend', 'steel-low', 'a tube bracket');
+pt('trk-mud-flap', 'mud flap', 'mould', 'rubber', 'a rubber flap');
+pt('trk-flap-hanger', 'flap hanger', 'bend', 'steel-low', 'a tube hanger');
+as('trk-quarter-fender-set', 'quarter fender', `trk-quarter-fender trk-fender-bracket*2`, 'a quarter fender on its brackets');
+as('trk-fender-flap-set', 'quarter fender and mud flap', `trk-quarter-fender trk-fender-bracket*2 trk-mud-flap trk-flap-hanger`, 'a quarter fender, a mud flap behind it');
+pt('trk-air-tank-shell', 'air tank shell', 'roll', 'steel-low', 'a rolled steel shell');
+pt('trk-air-tank-end', 'air tank end', 'stamp', 'steel-low', 'a pressed end');
+pt('trk-drain-valve', 'drain valve', 'machine', 'brass', 'a brass drain valve');
+as('trk-air-tank', 'air tank', `trk-air-tank-shell trk-air-tank-end*2 trk-drain-valve trk-tank-strap*2 trk-strap-liner*2`, 'an air reservoir for the brakes');
+}
+
 // ==== life: molecules, cells, tissues, organs, the human body, the organisms used in technology (src/nexus/life) =====
 for (const mo of MOLECULES) { const da = daltonsOf(mo); put({ id: mo.id, name: mo.name, path: ['Life', 'Molecules', ...mo.group.split('/').slice(1)], kind: 'material', make: /Salts|Gases|Biominerals/.test(mo.group) ? 'stock' : 'grow', of: [], says: mo.says, ...(da ? { da: +da.toFixed(1) } : {}) }); }
 for (const e of LIFE) put({ id: e.id, name: e.name, path: e.path.split('/'), kind: e.kind, make: 'grow', of: e.of.map((c) => ({ ...c })), says: e.says, ...(e.spec ? { spec: e.spec } : {}), ...(e.size ? { size: e.size } : {}), ...(e.members ? { members: e.members } : {}), g: e.g, ...(e.look ? { look: e.look } : {}), ...(Object.keys(e.mass).length ? { mass: { ...e.mass } } : {}) });

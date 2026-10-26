@@ -41,6 +41,39 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-26, then: designs that come apart to the bottom.** The user, on the first truck: "very low quality and fake
+parts that probably couldn't be exploded to accurate parts … the fact that parts can be exploded down to the bottom is
+what makes designs more accurate … upgrade the design logic so it's easy to make things look realistic and detailed and
+accurate." The upgrade is a rule held by the system, not a one-off redraw:
+- **Recipes in the inventory, held by an audit** (`explodeAudit` in `components.ts`, beside `missingIn`; node *Comes apart
+  to the bottom?*): each drawn piece that is a single part (one material, one process) counts whole; a piece drawn as one
+  though what it is named for is an assembly in the inventory (a headlamp, a door, a fuel tank) is a lump, said with what
+  it should come apart into; every tagged assembly is held to its recipe. Scored by mass, so a cab drawn as one lump
+  outweighs a hundred real wheel nuts. Before: the Cascadia 13.2 % of its mass in 14 lumps (cab, hood, headlamps, tanks,
+  stacks, cross members, the fifth wheel). After: 0 %, every recipe met, 1,432 pieces, 271 of them tagged with what they
+  are. Still lumps, now said by the audit: the Corolla's doors, headlamps and hood (4.9 % of its mass), the ATV's and the
+  dirt bike's saddles and exhausts, the forklift's and the mower's cross members.
+- **Fittings drawn whole** (`src/nexus/fittings.ts`; 40 recipes added to `inventory.ts`): lamps (housing, metallised
+  reflector, LED board of library LEDs, lens, screws), a west-coast mirror (arms, head, glass, brackets, screws), a door
+  (skin, inner panel, glass in its seals, hinges, handle, latch, screws), a day cab (floor, back wall and rear window,
+  roof, side panels, A-pillars and centre post, two-piece windscreen, doors, mirrors, sun visor, five roof lamps per
+  FMVSS 108, four rubber cab mounts bolted through), a tilting hood (fibreglass moulding cut round the steer tyres' lock
+  and bump, grille of surround, bars and mesh, headlamps, hinges), a bumper (shell, end caps, brackets bolted through the
+  rails), a ladder frame (rolled C-channel at Freightliner's 11 × 85 × 287 mm, cross members on gussets with four M16
+  bolts a side), a fuel tank (shell, ends, baffles, filler and cap, straps on liners, brackets bolted through the rail),
+  the aftertreatment unit on the right (its can, DPF and SCR cores, step plate), exhaust stacks fed from it (pipe, heat
+  shield, clamps, bracket), a fifth wheel (cast plate with its throat, jaw, release handle, brackets on pins, angles
+  bolted to the rails), cab steps, quarter fenders and mud flaps (clear of the drive tyres' sweep), an air tank. Through
+  bolts are the library's bolted joints (bolt, two washers, nut), so their studs and nuts meet.
+- **The library grew an LED** (a design for the LED family: epoxy body and lens, lead frame, die, bond wire), so a lamp's
+  LEDs come apart too; the family's masses now by size (typical).
+- **How to make anything detailed now**: write its recipe in the inventory, draw it with its pieces tagged, and the audit
+  says at once what is still a lump and what its recipe misses. The same rule holds every machine.
+- Honest limits: the cab's panels are flat boxes on a rounded roof (its corners are not radiused like a Cascadia's); the
+  hood is one loft (its fender flares and crease lines are not modelled); the interior (dash, seats' insides, wiring,
+  air lines) is not drawn whole; the engine and gearbox are still drawn by their makers inline and their recipes are not
+  audited yet.
+
 **2026-10-26, then: things down to their bolts, reused; vehicles from their axles; a computer from its transistors.**
 The user: "build something complex like a car … down to its bolts … reuse things … batteries, tires … realistic tires …
 geometry and sizing settings … build a truck from the ground up … a logic that would allow you to build different kinds

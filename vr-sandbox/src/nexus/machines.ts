@@ -14,6 +14,7 @@
 import { use } from './components';
 import { massOfAll, place, type Assembly, type Placed } from './assembly';
 import { massOf } from './mass';
+import { aftertreatment, airTank, bumper, cabStep, dayCab, exhaustStack, fifthWheel, fuelTank, hood, ladderFrame, quarterFender, type TruckBody } from './fittings';
 import { WHEEL } from './kinds/fasteners';
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from './kits';
 import { bodyPanels, insideOf, roofOf, tailOf, type BodyPlan, type KeepOut, type WheelAt } from './panels';
@@ -1059,6 +1060,9 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
   let frameZ = (_x: number) => half * 0.8; const inner0 = Math.min(...m.axles.filter((a) => a.track > 0).map((a) => a.track / 2 - tyreOf(a.tyre)!.W / 2 - 0.04));
   // the frame
   const fx0 = rear - Math.max(0.1, (m.L / 2 + rear) * 0.6), fx1 = front + Math.max(0.1, (m.L / 2 - front) * 0.5), half = Math.max(0.12, Math.min(...m.axles.filter((a) => a.track > 0).map((a, i) => a.track / 2 - tyres[m.axles.indexOf(a)]!.W * 0.5 - 0.06), m.W / 2 - 0.1));
+  // (a highway tractor's body, its fittings each drawn whole by fittings.ts: its cab and hood from its published length,
+  // width and height, its cab's floor, cowl and roof lines typical of a conventional day cab)
+  const tb: TruckBody | null = m.kind === 'truck' ? (() => { const cabBack = m.L / 2 - m.L * 0.45; return { front: m.L / 2, cabBack, cowlX: cabBack + 1.62, roofX: cabBack + 1.05, floorY: 1.2, cowlY: 2.05, H: m.H, wc: m.W / 2 - 0.12, half: m.W / 2 - 0.02, railY: tyres[0]!.D * 0.8 + 0.287 / 2, railZ: 0.43, railH: 0.287, railW: 0.085, railT: 0.011, fx0, fx1, steerX: m.axles[0]!.x, steerR: tyres[0]!.D / 2, color: col }; })() : null;
   if (m.frame === 'tube') {
     const r = 0.016, y = c + r, k5 = m.rails ?? [0.85, 1, 0.7, 0.55, 0.5], rail: [number, number][] = [[fx0, k5[0]], [rear, k5[1]], [front - 0.15, k5[2]], [fx1 - 0.08, k5[3]], [fx1, k5[4]]];
     const railZ = frameZ = (x: number) => { for (let i = 1; i < rail.length; i++) { const [x0, k0] = rail[i - 1]!, [x1, k1] = rail[i]!; if (x <= x1) return half * (k0 + ((k1 - k0) * (x - x0)) / (x1 - x0)); } return half * 0.5; };
@@ -1073,6 +1077,8 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     }
     if (m.extras.includes('pods')) for (const sd of [-1, 1]) for (const xx of [rear + rR + 0.12, front - fR - 0.12]) out.push(tube('pod bracket', 0.01, [[xx, y, sd * railZ(xx)], [xx, y + 0.02, sd * (m.W / 2 - 0.13)]], 'steel-low', 0x2a2a2a));
     if (m.extras.includes('pods')) for (const sd of [-1, 1]) out.push(tube('bumper bracket', 0.012, [[fx0, y, sd * railZ(fx0)], [rear - rR - 0.08, y + 0.05, sd * railZ(fx0)]], 'steel-low', 0x2a2a2a));
+  } else if (m.frame === 'ladder' && tb) {
+    out.push(...ladderFrame(tb, [fx0 + 0.1, rear, (front + rear) / 2, front, fx1 - 0.1]));
   } else if (m.frame === 'ladder') {
     const hR = m.kind === 'truck' ? 0.287 : 0.1, wR = m.kind === 'truck' ? 0.085 : 0.05, y = (m.kind === 'truck' ? tyres[0]!.D * 0.8 : m.extras.includes('deck') ? c + 0.21 : Math.max(c, tyres[0]!.D * 0.42)) + hR / 2, z = m.kind === 'truck' ? 0.43 : half * 0.8;
     const tR = m.kind === 'truck' ? 0.011 : 0.004;
@@ -1160,7 +1166,8 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
   if (ex.has('tank')) out.push(loft('tank and shrouds', [{ x: front - 0.3, w: 0.17, lo: m.H * 0.6, hi: m.H * 0.8, n: 3 }, { x: front - 0.55, w: 0.16, lo: m.H * 0.55, hi: (m.seatH ?? m.H * 0.75) + 0.02, n: 3 }, { x: front - 0.75, w: 0.1, lo: m.H * 0.6, hi: (m.seatH ?? m.H * 0.75) - 0.01, n: 3 }], 'pe', col, { shell: 0.004, finish: 'paint', says: 'the fuel tank under its radiator shrouds (typical of motocross)' }));
   if (ex.has('number')) out.push(P('race number board', { box: [0.02, 0.2, 0.26] }, [front - 0.22, m.H * 0.82, 0], { rot: [0, 0, -(m.rake ?? 0.47)], mat: 'pp', color: 0xf2f2ee, shell: 0.003, finish: 'texture' }));
   if (ex.has('hood') && m.kind === 'mower') out.push(loft('hood', [{ x: m.L / 2 - 0.02, w: 0.2, lo: c + 0.24, hi: m.H * 0.55, n: 5 }, { x: front + 0.05, w: 0.27, lo: c + 0.26, hi: m.H * 0.62, n: 6 }, { x: (front + rear) / 2 + 0.15, w: 0.28, lo: c + 0.27, hi: m.H * 0.64, n: 6 }], 'abs', col, { shell: 0.003, finish: 'paint' }));
-  if (ex.has('cab')) {
+  if (ex.has('cab') && tb) out.push(dayCab(tb), hood(tb, travelOf(m.axles[0]!).bump), bumper(tb));
+  else if (ex.has('cab')) {
     const bbc = m.L * 0.45, cabX0 = m.L / 2 - bbc, cabH = m.H, w = m.W / 2;
     out.push(loft('hood', [{ x: m.L / 2 - 0.02, w: w * 0.78, lo: 0.75, hi: 1.55, n: 4 }, { x: m.L / 2 - 0.5, w: w * 0.84, lo: 0.7, hi: 1.75, n: 4 }, { x: cabX0 + 1.3, w: w * 0.86, lo: 0.7, hi: 1.95, n: 5 }], 'fibreglass', col, { shell: 0.004, finish: 'paint', says: 'a fibreglass hood over its engine (typical)' }));
     out.push(loft('cab', [{ x: cabX0 + 1.4, w: w * 0.96, lo: 1.0, hi: 1.95, n: 6 }, { x: cabX0 + 1.0, w: w * 0.98, lo: 1.0, hi: cabH - 0.1, n: 7 }, { x: cabX0 + 0.15, w: w * 0.98, lo: 1.0, hi: cabH, n: 8 }, { x: cabX0, w: w * 0.95, lo: 1.05, hi: cabH - 0.05, n: 8 }], 'al-5052', col, { shell: 0.0016, make: 'pressed', finish: 'paint', says: 'its cab: aluminium panels (Freightliner builds its cabs of aluminium)' }));
@@ -1175,9 +1182,28 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     const fronts = out.filter((p) => p.shape && 'loft' in p.shape).map((p) => { const st = [...(p.shape as { loft: { st: Station[] } }).loft.st].sort((a, b) => b.x - a.x)[0]!; return { p, st, x: st.x + (p.at?.[0] ?? 0) }; }).sort((a, b) => b.x - a.x)[0];
     if (fronts) { const { st, x } = fronts, y = (st.lo + st.hi) / 2 + (fronts.p.at?.[1] ?? 0); for (const sd of [-1, 1]) out.push(P(`headlight ${sd > 0 ? 'right' : 'left'}`, { cyl: [Math.min(0.06, (st.hi - st.lo) * 0.4), 0.04] }, [x + 0.005, y, sd * st.w * 0.55], { rot: [0, 0, PI / 2], mat: 'pc', color: 0xeef2f6, light: { lm: 800, color: 0xfff4e0 } })); }
   }
-  if (ex.has('tanks')) for (const s of [-1, 1]) out.push(P(`tank strap ${s > 0 ? 'right' : 'left'}`, { box: [0.08, 0.06, 0.4] }, [(front + rear) / 2 + 0.6, 0.95, s * 0.62], { mat: 'steel-low', color: 0x1a1a1a, finish: 'paint' }), P(`fuel tank ${s > 0 ? 'right' : 'left'}`, { cyl: [0.32, 1.3] }, [(front + rear) / 2 + 0.6, 0.85, s * 0.8], { rot: [0, 0, PI / 2], mat: 'al-5052', color: 0xc8ccd2, shell: 0.003, finish: 'brushed', says: 'about 380 L each (typical of highway tractors)' }));
-  if (ex.has('stacks')) for (const s of [-1, 1]) out.push(tube(`exhaust stack ${s > 0 ? 'right' : 'left'}`, 0.065, [[m.L / 2 - m.L * 0.45 - 0.06, 1.1, s * (m.W / 2 - 0.12)], [m.L / 2 - m.L * 0.45 - 0.06, m.H + 0.4, s * (m.W / 2 - 0.12)]], 'stainless-304', 0xd8dce2, { finish: 'chrome' }));
-  if (ex.has('fifth wheel')) out.push(P('fifth wheel mount', { box: [0.6, 0.1, 0.95] }, [rear + 0.25, tyres[0]!.D * 0.8 + 0.287 + 0.05, 0], { mat: 'steel-low', color: 0x1a1a1a, fill: 0.3, finish: 'paint' }), P('fifth wheel', { cyl: [0.45, 0.06] }, [rear + 0.25, tyres[0]!.D * 0.8 + 0.287 + 0.13, 0], { mat: 'cast-iron', color: 0x1a1a1a, fill: 0.5, finish: 'cast', says: 'where a trailer\'s kingpin couples (SAE J700: a 2-inch kingpin, typical)' }));
+  if (tb) {
+    // its fuel tank on the left, its aftertreatment on the right where it has stacks (Freightliner's layout), each on
+    // brackets bolted through the rail; its steps ahead of them under the doors; its stacks up behind the cab, fed from
+    // the aftertreatment (the left one by a crossover behind the cab)
+    const tx = (front + rear) / 2 + 0.6, ty = 0.85, tz = 0.8;
+    if (ex.has('tanks')) out.push(fuelTank('fuel tank (left)', -1, [tx, ty, -tz], 0.32, 1.3, tb), ex.has('stacks') ? aftertreatment(1, [tx, ty, tz], 0.3, 1.25, tb) : fuelTank('fuel tank (right)', 1, [tx, ty, tz], 0.32, 1.3, tb));
+    const stepX = Math.min(front - tyres[0]!.D / 2 - 0.35, tx + 0.65 + 0.32);
+    if (ex.has('cab')) for (const s of [-1, 1]) out.push(cabStep(`cab step (${s > 0 ? 'right' : 'left'})`, s, stepX, [0.5, 0.86], 0.78, tb.wc + 0.02, tb));
+    if (ex.has('stacks')) {
+      const foot = tb.railY + tb.railH / 2 + 0.12, sx = tb.cabBack - 0.09, sz = tb.wc - 0.02, outlet: V3 = [tx - 0.625 + 0.12, ty + 0.3, tz];
+      out.push(exhaustStack('exhaust stack (right)', [sx, foot, sz], outlet, m.H + 0.45, tb.cabBack), exhaustStack('exhaust stack (left)', [sx, foot, -sz], [sx, foot - 0.12, 0.5], m.H + 0.45, tb.cabBack));
+    }
+    if (ex.has('fifth wheel')) out.push(fifthWheel(tb, rear + 0.25));
+    // its quarter fenders over each drive axle's tyres, a mud flap behind the last; an air tank between its rails
+    const drives = m.axles.map((a, i) => ({ a, t: tyres[i]! })).filter((q) => q.a.drive && q.a.track > 0);
+    drives.forEach(({ a, t }, i) => { const last = i === drives.length - 1, w = a.dual ? 2 * t.W + 0.09 : t.W + 0.06; for (const s of [-1, 1]) out.push(quarterFender(`quarter fender (${a.x === rear ? 'rear' : `axle ${m.axles.indexOf(a) + 1}`}, ${s > 0 ? 'right' : 'left'})`, s, a.x, t.D / 2, a.track / 2, t.D / 2 + travelOf(a).bump + 0.05, w, tb, last)); });
+    const between = drives.length > 1 ? (drives[0]!.a.x + drives[1]!.a.x) / 2 : fx0 + 0.25;
+    out.push(airTank('air tank', [between, tb.railY, 0], 0.12, 2 * (tb.railZ - tb.railW / 2) - 0.06));
+  }
+  if (ex.has('tanks') && !tb) for (const s of [-1, 1]) out.push(P(`tank strap ${s > 0 ? 'right' : 'left'}`, { box: [0.08, 0.06, 0.4] }, [(front + rear) / 2 + 0.6, 0.95, s * 0.62], { mat: 'steel-low', color: 0x1a1a1a, finish: 'paint' }), P(`fuel tank ${s > 0 ? 'right' : 'left'}`, { cyl: [0.32, 1.3] }, [(front + rear) / 2 + 0.6, 0.85, s * 0.8], { rot: [0, 0, PI / 2], mat: 'al-5052', color: 0xc8ccd2, shell: 0.003, finish: 'brushed', says: 'about 380 L each (typical of highway tractors)' }));
+  if (ex.has('stacks') && !tb) for (const s of [-1, 1]) out.push(tube(`exhaust stack ${s > 0 ? 'right' : 'left'}`, 0.065, [[m.L / 2 - m.L * 0.45 - 0.06, 1.1, s * (m.W / 2 - 0.12)], [m.L / 2 - m.L * 0.45 - 0.06, m.H + 0.4, s * (m.W / 2 - 0.12)]], 'stainless-304', 0xd8dce2, { finish: 'chrome' }));
+  if (ex.has('fifth wheel') && !tb) out.push(P('fifth wheel mount', { box: [0.6, 0.1, 0.95] }, [rear + 0.25, tyres[0]!.D * 0.8 + 0.287 + 0.05, 0], { mat: 'steel-low', color: 0x1a1a1a, fill: 0.3, finish: 'paint' }), P('fifth wheel', { cyl: [0.45, 0.06] }, [rear + 0.25, tyres[0]!.D * 0.8 + 0.287 + 0.13, 0], { mat: 'cast-iron', color: 0x1a1a1a, fill: 0.5, finish: 'cast', says: 'where a trailer\'s kingpin couples (SAE J700: a 2-inch kingpin, typical)' }));
   if (ex.has('counterweight')) out.push(loft('counterweight', [{ x: -m.L / 2 + 0.36, w: m.W / 2 - 0.02, lo: c + 0.05, hi: m.H * 0.55, n: 7 }, { x: -m.L / 2 + 0.12, w: m.W / 2 - 0.03, lo: c + 0.05, hi: m.H * 0.53, n: 7 }, { x: -m.L / 2 + 0.02, w: m.W / 2 - 0.1, lo: c + 0.1, hi: m.H * 0.46, n: 6 }], 'cast-iron', darken(col, 0.9), { finish: 'paint', says: 'cast iron: what balances a load on the forks about the front axle' }));
   if (ex.has('guard')) { const gx0 = rear + rR + 0.07, gx1 = front - fR - 0.07, gh = m.guardH ?? m.H, gz = m.W / 2 - 0.06; for (const [xx, s] of [[gx0, 1], [gx0, -1], [gx1, 1], [gx1, -1]] as const) out.push(tube(`guard post`, 0.03, [[xx, Math.max(c, tyres[0]!.D * 0.42) + 0.1, s * gz], [xx, gh - 0.04, s * gz]], 'steel-low', 0x1a1a1a, { item: 'tube 60x4' })); for (let i = 0; i < 6; i++) { const xx = gx0 + ((gx1 - gx0) * i) / 5; out.push(tube('guard bar', 0.012, [[xx, gh - 0.02, -gz], [xx, gh - 0.02, gz]], 'steel-low', 0x1a1a1a)); } for (const s of [-1, 1]) out.push(tube('guard rail', 0.03, [[gx0, gh - 0.02, s * gz], [gx1, gh - 0.02, s * gz]], 'steel-low', 0x1a1a1a)); }
   if (ex.has('mast')) {

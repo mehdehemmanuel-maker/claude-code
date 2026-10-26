@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { tyreBuilt, tyreOf, makeMachine, MACHINES, rollingOf } from '../../src/nexus/machines';
-import { starterBattery, liCell, cellPack } from '../../src/nexus/components';
+import { starterBattery, liCell, cellPack, explodeAudit } from '../../src/nexus/components';
 import { BCI_GROUPS, CELL_FORMATS } from '../../src/data/batteries';
 import { boundsOfAll, distinctCount, exploded, fitIn, massOfAll, placedCount } from '../../src/nexus/assembly';
 import { PROCESSES, transistor, sramCell, die, packageOf, motherboard, desktop, SOCKETS, BOARDS } from '../../src/nexus/computer';
@@ -100,5 +100,20 @@ describe('a computer down to the transistor', () => {
     expect(size(p).x).toBeCloseTo(SOCKETS.LGA1151!.w, 6); expect(size(b).x).toBeCloseTo(BOARDS.ATX!.w, 6); expect(size(b).z).toBeCloseTo(BOARDS.ATX!.d, 6);
     const pc = desktop(b); expect(placedCount(pc)).toBeGreaterThan(placedCount(b)); expect(distinctCount(pc)).toBeLessThan(120);
     expect(massOfAll(pc)).toBeGreaterThan(4); expect(massOfAll(pc)).toBeLessThan(15);
+  });
+});
+
+describe('designs that come apart to the bottom', () => {
+  it('the highway tractor\'s every fitting is drawn whole: no lumps, every recipe met', () => {
+    const a = explodeAudit(makeMachine(MACHINES.find((m) => m.id === 'cascadia')!));
+    expect(a.faked).toEqual([]); expect(a.missing).toEqual([]); expect(a.score).toBe(1); expect(a.tagged).toBeGreaterThan(200);
+  });
+  it('a piece named for an assembly and drawn as one is found, with what it should come apart into', () => {
+    const a = explodeAudit({ name: 'lamp on a bracket', parts: [{ name: 'bracket', shape: { box: [0.1, 0.01, 0.1] }, mat: 'steel-low' }, { name: 'headlight (left)', shape: { box: [0.2, 0.2, 0.2] }, mat: 'pc' }] });
+    expect(a.faked).toHaveLength(1); expect(a.faked[0]!.is).toBe('headlamp'); expect(a.faked[0]!.of.join(' ')).toMatch(/lens/); expect(a.lumps).toBeGreaterThan(0.5);
+  });
+  it('what still is a lump is said: a car\'s doors and headlamps (not yet drawn whole)', () => {
+    const a = explodeAudit(makeMachine(MACHINES.find((m) => m.id === 'corolla')!));
+    expect(a.faked.map((f) => f.is)).toEqual(expect.arrayContaining(['door', 'headlamp']));
   });
 });

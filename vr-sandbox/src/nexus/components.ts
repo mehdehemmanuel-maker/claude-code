@@ -21,7 +21,7 @@ import { SOCKET_HEAD } from './embody/stock';
 import { BUTTON, PAN, SETSCREW_KEY } from './threads';
 import { UPN } from './kinds/stock';
 import { WHEEL } from './kinds/fasteners';
-import { itemOf, type Item } from './inventory';
+import { INVENTORY, inventoryRev, itemOf, type Item } from './inventory';
 import type { Cut, Iface, Part, Port, V3 } from './kits';
 import { DENSITY, massOf } from './mass';
 import { boundsOfAll, frame, place, type Assembly, type Placed } from './assembly';
@@ -94,6 +94,23 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     make: (p, it) => stepperParts(p, it.name),
     iface: (p) => [{ kind: 'shaft', role: 'provides', d: NEMA_FACE[String(p.nema)]!.shaft * mm }],
     ports: (p) => { const f = NEMA_FACE[String(p.nema)]!, d = stepperDims(p); return [port('front face', f.through ? 'holes' : 'threads', f.thread, sq(f.holes * mm), [0, 0, 0], [0, 1, 0], [1, 0, 0], f.through ? d.tf * mm : 0.0045, { pilot: f.pilot * mm, std: `NEMA ${p.nema}` })]; },
+  },
+  led: {
+    says: 'a through-hole LED: its die on the cathode lead\'s reflector cup (the anvil), a bond wire from the die to the anode lead\'s post, cast in an epoxy body domed into its lens, a flange at its foot with a flat on the cathode side; the anode lead the longer',
+    leaves: 'its body as tall as makers\' drawings give (5.3, 8.6 and 13.8 mm for 3, 5 and 10 mm, typical), its leads 0.5 mm square and 25 / 27 mm long, its die 0.25 mm square, its cup and post typical of a 5 mm package\'s drawing (proportional for 3 and 10 mm)',
+    make: (p) => {
+      const D = Number(p.size) * mm, r = D / 2, h = (({ 3: 5.3, 5: 8.6, 10: 13.8 } as Record<number, number>)[Number(p.size)] ?? Number(p.size) * 1.72) * mm, lead = 0.5 * mm, c = String(p.colour), tint = ({ red: 0xff6a5a, yellow: 0xffd84a, green: 0x6aff8a, blue: 0x6aa8ff, white: 0xf4f6ff } as Record<string, number>)[c] ?? 0xffffff, k = D / (5 * mm);
+      const die = c === 'red' || c === 'yellow' ? 'si-die' : 'gan';
+      return [
+        P('LED body', { cyl: [r, h - r] }, { at: [0, (h - r) / 2, 0], mat: 'epoxy', color: tint, finish: 'gloss', says: 'cast epoxy, tinted to its colour' }),
+        P('LED lens', { sphere: r }, { at: [0, h - r, 0], mat: 'epoxy', color: tint, finish: 'gloss' }),
+        P('LED flange', { cyl: [r + 0.4 * mm * k, 1 * mm * k] }, { at: [0, 0.5 * mm * k, 0], mat: 'epoxy', color: tint, finish: 'gloss' }),
+        P('cathode lead (anvil)', { box: [lead, 25 * mm + 4 * mm * k, lead] }, { at: [-1.27 * mm, (4 * mm * k - 25 * mm) / 2, 0], item: 'lead-frame', mat: 'copper', color: 0xc8ccd2, finish: 'plate' }),
+        P('anode lead (post)', { box: [lead, 27 * mm + 3 * mm * k, lead] }, { at: [1.27 * mm, (3 * mm * k - 27 * mm) / 2, 0], item: 'lead-frame', mat: 'copper', color: 0xc8ccd2, finish: 'plate' }),
+        P('LED die', { box: [0.25 * mm, 0.1 * mm, 0.25 * mm] }, { at: [-1.0 * mm, 4.1 * mm * k, 0], ...(die === 'si-die' ? { item: 'si-die' } : {}), mat: 'silicon', color: 0x2a2a3a }),
+        P('bond wire', { tube: { r: 0.0125 * mm, pts: [[-1.0 * mm, 4.15 * mm * k, 0], [0, 4.8 * mm * k, 0], [1.27 * mm, 3.2 * mm * k, 0]], wall: 0.0125 * mm } }, { item: 'bond-wire', mat: 'gold', color: 0xd4af37 }),
+      ];
+    },
   },
   bearing: {
     says: 'a deep-groove ball bearing (ISO 15): its outer and inner rings, each with its raceway ground into a groove 0.52 of a ball across (a typical conformity), its balls on the pitch circle between them, the two pressed halves of its cage riveted between the balls, and its shields (ZZ, pressed steel) or seals (2RS, rubber) set in recesses in its outer ring',
@@ -682,4 +699,44 @@ export function cellPack(o: { format: string; s: number; p: number; rows?: numbe
   const inner: Assembly = { name: 'modules and tray', items }, mid = boundsOfAll(inner).getCenter(new THREE.Vector3());
   const pack: Assembly = { name: o.name ?? `${o.s}s${o.p}p pack of ${o.format} cells (${kWh.toFixed(1)} kWh)`, items: [place(inner, [-mid.x, -mid.y, -mid.z])] };
   madeBatteries.set(key, pack); return pack;
+}
+
+// ---- how far down a build comes apart ----------------------------------------------------------------------------------------
+/** Words a maker names a piece by that the inventory files under another name. */
+const NAMED_AS: Record<string, string> = { headlight: 'headlamp', lamp: 'headlamp', 'door window': 'door glass', 'exhaust': 'exhaust stack' };
+const bareName = (name: string): string => {
+  const b = name.toLowerCase().replace(/\(.*?\)/g, ' ').replace(/\b(left|right|front|rear|inner|outer|upper|lower|middle|top|bottom|axle \d+|\d+)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const one = b.endsWith('s') && !b.endsWith('ss') ? b.slice(0, -1) : b;
+  return NAMED_AS[one] ?? NAMED_AS[b] ?? one;
+};
+let assemblyNamesAt = -1, assemblyNames = new Map<string, Item>();
+/** The inventory's assemblies by their names: what a piece named so is really made of. */
+function assembliesByName(): Map<string, Item> {
+  if (assemblyNamesAt !== inventoryRev()) {
+    assemblyNames = new Map(); assemblyNamesAt = inventoryRev();
+    for (const it of INVENTORY.values()) if ((it.kind === 'assembly' || it.kind === 'product') && it.of.some((c) => { const ci = itemOf(c.id); return ci && ci.kind !== 'material' && ci.kind !== 'element'; })) { const k = it.name.toLowerCase(); if (!assemblyNames.has(k)) assemblyNames.set(k, it); }
+  }
+  return assemblyNames;
+}
+export interface ExplodeAudit { /** the share of its drawn mass that is lumps */ lumps: number; pieces: number; /** pieces that are one part made one way (not an assembly drawn as a lump) */ whole: number; tagged: number; faked: { name: string; is: string; of: string[] }[]; missing: string[]; score: number; says: string }
+/** How far a build comes apart into what it is really made of: each drawn piece that is a single part (one material,
+ *  one process: a pressing, a casting, a moulding, a bolt) counts whole; a piece drawn as one lump though what it is named
+ *  for is an assembly in the inventory (a headlamp, a door, a fuel tank) is faked, and said with what it should come apart
+ *  into; every tagged assembly is held to its recipe (`missingIn`). Scored by mass, not by count: a cab drawn as one lump
+ *  outweighs a hundred real wheel nuts. The design rule it keeps: explode to the bottom. */
+export function explodeAudit(p: Part): ExplodeAudit {
+  const names = assembliesByName(), faked: ExplodeAudit['faked'] = []; let pieces = 0, tagged = 0, kg = 0, lumpKg = 0;
+  const walk = (q: Part) => {
+    if (q.shape) {
+      const own = massOf({ ...q, parts: [] }); pieces++; kg += own; if (q.item) tagged++;
+      if (!q.parts?.length) {
+        const it = q.item ? itemOf(q.item) ?? keptByItem.get(q.item) ?? null : null, as = it && (it.kind === 'assembly' || it.kind === 'product') ? it : !q.item ? names.get(bareName(q.name)) : undefined;
+        if (as && as.of.some((c) => { const ci = itemOf(c.id); return ci && ci.kind !== 'material' && ci.kind !== 'element'; })) { lumpKg += own; faked.push({ name: q.name, is: as.name, of: as.of.map((c) => `${c.n > 1 ? `${c.n} × ` : ''}${itemOf(c.id)?.name ?? c.id}`) }); }
+      }
+    }
+    for (const c of q.parts ?? []) walk(c);
+  };
+  walk(p);
+  const missing = missingIn(p), whole = pieces - faked.length, lumps = kg > 0 ? lumpKg / kg : 0, score = 1 - lumps;
+  return { lumps, pieces, whole, tagged, faked, missing, score, says: `${pieces} pieces; ${(lumps * 100).toFixed(1)} % of its mass in ${faked.length} lumps, each an assembly drawn as one piece${faked.length ? ` (${[...new Set(faked.map((f) => f.is))].slice(0, 6).join(', ')})` : ''}; ${missing.length} recipe${missing.length === 1 ? '' : 's'} not met; ${tagged} tagged with what they are` };
 }

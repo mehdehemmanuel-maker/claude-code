@@ -26,7 +26,7 @@ import type { Jolt } from './realize';
 import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
 import { massOf } from './mass';
 import { MACHINES, TREADS, makeMachine, rollingOf, styledCar, styles, tyreBuilt, tyreOf, type Axle, type Machine, type Susp, type Tread } from './machines';
-import { cellPack, liCell, starterBattery } from './components';
+import { cellPack, explodeAudit, liCell, starterBattery } from './components';
 import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
 import { exploded, fitIn } from './assembly';
 import { BOARDS, PROCESSES, SOCKETS, desktop, die, motherboard, nandCell, packageOf, sramCell, transistor } from './computer';
@@ -1227,6 +1227,17 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [thing('board', 'motherboard')], outputs: [thing('pc', 'PC'), N('mass', 'kg'), P('placed', 'integer', { label: 'pieces placed' }), P('distinct', 'integer', { label: 'things stored' })] },
     run: (i) => { const b = asThing(i.board); if (!isAssembly(b)) throw new Error('wire a motherboard in'); const pc = desktop(b); return { pc, mass: massOfAll(pc), placed: placedCount(pc), distinct: distinctCount(pc) }; },
     tests: [{ inputs: { board: { name: 'b', items: [] } }, outputs: { pc: { name: 'desktop PC' } } }] }),
+  def({ id: 'audit.explode', name: 'Comes apart to the bottom?', kind: 'critic', ability: 'check', domains: ['vehicles', 'mechanical', 'manufacturing', 'everyday'], sink: true, says: 'How far a build really comes apart: the share of its mass in lumps (a piece drawn as one though what it is named for is an assembly in the inventory: a headlamp, a door, a fuel tank), each said with what it should come apart into; and each tagged assembly held to its recipe. A design that explodes to the bottom scores 100 %',
+    ports: { inputs: [thing()], outputs: [N('score', undefined, { label: 'share of its mass that comes apart to single parts' }), P('pieces', 'integer'), P('lumps', 'list<text>'), P('missing', 'list<text>', { label: 'recipes not met' }), P('says', 'text')] },
+    run: (i) => {
+      const parts: Part[] = [], walk = (t: Part | Assembly) => { if (isPart(t)) parts.push(t); else for (const it of t.items) walk(it.of); }, seen = new Set<object>();
+      const visit = (t: Part | Assembly) => { if (seen.has(t)) return; seen.add(t); walk(t); };
+      visit(asThing(i.thing));
+      const aud = parts.map((p) => explodeAudit(p)), kg = parts.map((p) => massOf(p)), total = kg.reduce((a, b) => a + b, 0) || 1, lumps = aud.reduce((a, x, k) => a + x.lumps * kg[k]!, 0) / total;
+      const faked = aud.flatMap((x) => x.faked.map((f) => `${f.name}: a ${f.is}, drawn as one piece (it is ${f.of.join(', ')})`)), missing = aud.flatMap((x) => x.missing);
+      return { score: 1 - lumps, pieces: aud.reduce((a, x) => a + x.pieces, 0), lumps: [...new Set(faked)], missing, says: aud.length === 1 ? aud[0]!.says : `${parts.length} parts audited: ${(lumps * 100).toFixed(1)} % of their mass in lumps; ${missing.length} recipes not met` };
+    },
+    tests: [{ inputs: { thing: { name: 'lamp on a bracket', parts: [{ name: 'bracket', shape: { box: [0.1, 0.01, 0.1] }, mat: 'steel-low' }, { name: 'headlight', shape: { box: [0.1, 0.1, 0.1] }, mat: 'pc' }] } }, outputs: { pieces: 2 } }] }),
   def({ id: 'space.show', name: 'Show in space', kind: 'view', ability: 'show', domains: ['everyday', 'mechanical', 'structural'], says: 'Puts a thing into the 3D space, at its place: everything wired into one of these is what the space draws',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'shown' }],
     ports: { inputs: [thing()], outputs: [] }, run: () => ({}), sink: true, tests: [{ inputs: { thing: { name: 'b' } }, outputs: {} }] }),

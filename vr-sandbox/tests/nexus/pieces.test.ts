@@ -42,7 +42,8 @@ describe('everything in 3D: its look, and how it comes apart', () => {
   it('every entry has a size: its own, its kind\'s typical one, or one from its mass; none is guessed', () => {
     for (const i of INVENTORY.values()) {
       const s = sized(i);
-      expect(s.box.every((x) => x > 0 && x < 5), i.id).toBe(true);
+      // (under 20 m: a size in millimetres read as metres would be thousands; a highway tractor's frame rail is about 6 m)
+      expect(s.box.every((x) => x > 0 && x < 20), i.id).toBe(true);
       if (i.kind !== 'material' && i.kind !== 'element') expect(s.from, `${i.id} has no size`).not.toBe('guess');
     }
     for (const [id] of Object.entries(LOOKS)) { const r = lookRow(id)!; expect(SHAPES, id).toContain(r.kind); expect(r.size.every((x) => x > 0), id).toBe(true); expect(INVENTORY.has(id), `${id} is not in the inventory`).toBe(true); }

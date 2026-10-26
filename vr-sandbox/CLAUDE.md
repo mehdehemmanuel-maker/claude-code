@@ -98,6 +98,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   easily … then a computer … the tiniest individual functional component is the transistor … test yourself with realism
   and physics … texture lighting physics" (2026-10-26: tyres as made, batteries by their standards, Fit in and Take
   apart, vehicles from their axles, wheels that roll in the physics, `computer.ts` from FinFET to PC; shadows)
+- "that semi … very low quality and fake parts that probably couldn't be exploded to accurate parts … the fact that parts
+  can be exploded down to the bottom is what makes designs more accurate upgrade the design logic for things so it's easy
+  to make things look realistic and detailed and accurate" (2026-10-26: recipes in the inventory held by `explodeAudit`;
+  the truck's fittings drawn whole in `fittings.ts`; every build's lumps said by mass)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -164,6 +168,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Batteries drawn: a starting battery by its BCI group, lithium cells by format, packs of them (data: `data/batteries.ts`) | `src/nexus/components.ts` (`starterBattery`, `liCell`, `cellPack`) |
 | A part's tree opened into assemblies, pieces swapped for a shared thing by name (`fitIn`), taken apart (`exploded`) | `src/nexus/assembly.ts` (nodes Fit in, Take apart) |
 | A computer from its transistors: FinFETs at published process pitches, SRAM and logic cells, arrays, die, package, motherboard, PC | `src/nexus/computer.ts` (nodes Transistor, Logic or memory cell, Processor die, Processor package, Motherboard, Desktop PC) |
+| How far a build comes apart: lumps (a piece drawn as one though the inventory says it is an assembly) by share of mass, recipes not met (`explodeAudit`, node Comes apart to the bottom?) | `src/nexus/components.ts` |
+| A vehicle's fittings drawn whole to their recipes (lamps, mirrors, doors, cab, hood, grille, bumper, frame, tanks, aftertreatment, stacks, fifth wheel, steps, fenders, air tanks) | `src/nexus/fittings.ts` (recipes `trk-*` in `inventory.ts`; used by `machines.ts`) |
 | Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |
 | The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
 
