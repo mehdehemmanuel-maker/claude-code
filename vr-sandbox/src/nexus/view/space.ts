@@ -52,8 +52,10 @@ function zoomAbout(f: number, at: THREE.Vector3): void {
 /** Everything shown, framed before you: its middle at the point you turn about, its largest side a metre and a bit. */
 function fit(): void {
   const b = view.bounds(); if (b.isEmpty()) { world.scale.setScalar(1); world.position.copy(pivot()).sub(new THREE.Vector3(0, 0, 0)); grid.dirty = true; return; }
-  const c = b.getCenter(new THREE.Vector3()), size = Math.max(...b.getSize(new THREE.Vector3()).toArray(), 1e-6), s = 1.3 / size;
-  world.scale.setScalar(s); world.position.copy(pivot()).sub(c.multiplyScalar(s)); grid.dirty = true;
+  // on a screen with the board up beside it, framed in the open part of the view, left of the board
+  const open = !renderer.xr.isPresenting && panelsShown && !boardBig, c = b.getCenter(new THREE.Vector3()), size = Math.max(...b.getSize(new THREE.Vector3()).toArray(), 1e-6), s = (open ? 0.75 : 1.3) / size;
+  const at = pivot(); if (open) at.add(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(-0.85));
+  world.scale.setScalar(s); world.position.copy(at).sub(c.multiplyScalar(s)); grid.dirty = true;
 }
 /** S set so a cell is a decade: µm, mm, m or km, about the point you turn about. */
 function jump(cell: number): void { zoomAbout(0.04 / cell / S(), pivot()); }
@@ -135,12 +137,12 @@ function round(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: 
  *  what is drawn. */
 const bar = new Panel(1.7, 0.1, 2400, (p) => {
   const g = p.g, H = p.c.height; g.fillStyle = '#0b1220ee'; round(g, 0, 0, p.c.width, H, 24); g.fill();
-  g.textBaseline = 'middle'; g.font = `700 34px ${FONT}`; g.fillStyle = '#ffd740'; g.fillText('S', 24, H / 2);
-  g.font = `600 30px ${FONT}`; g.fillStyle = '#e6eef8'; g.fillText(`1 cell = ${lengthSaid(grid.cell || 1)}`, 64, H / 2);
+  g.textBaseline = 'middle'; g.font = `700 22px ${FONT}`; g.fillStyle = '#ffd740'; g.fillText('S · SCALE', 24, H / 2 - 18);
+  g.font = `600 28px ${FONT}`; g.fillStyle = '#e6eef8'; g.fillText(`1 cell = ${lengthSaid(grid.cell || 1)}`, 24, H / 2 + 16);
   let x = 300; for (const [name, cell] of [['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3]] as const) { p.button(name, x, 22, 84, H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += 92; }
   p.button('Fit', x, 22, 90, H - 44, fit); x += 100; p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130;
   for (const k of ['xz', 'xy', 'yz'] as const) { p.button(k.toUpperCase(), x, 22, 84, H - 44, () => { grid.planes[k] = !grid.planes[k]; grid.dirty = true; }, grid.planes[k]); x += 92; }
-  x += 26; g.font = `700 34px ${FONT}`; g.fillStyle = '#69f0ae'; g.fillText('T', x, H / 2); x += 40;
+  x += 22; g.font = `700 22px ${FONT}`; g.fillStyle = '#69f0ae'; g.fillText('T · TIME', x, H / 2 - 18); g.font = `500 20px ${FONT}`; g.fillStyle = '#9fb3c8'; g.fillText('history', x, H / 2 + 16); x += 104;
   const h = wall.history(), tx = x, tw = 470;
   p.button('◀', tx, 22, 64, H - 44, () => wall.goto(h.at - 1));
   const sx = tx + 84, sw = tw - 170; g.fillStyle = '#1c2a3d'; round(g, sx, H / 2 - 8, sw, 16, 8); g.fill();
@@ -156,13 +158,13 @@ const bar = new Panel(1.7, 0.1, 2400, (p) => {
 /** Chat: what you say goes to Claude Code (src/nexus/view/relay.ts); its last lines, and the line being typed. */
 const said: string[] = ['Claude: Build with the board; what a "Show in space" node is given stands here. Say anything to send it to Claude Code.'];
 let typing = '';
-const chat = new Panel(0.62, 0.3, 900, (p) => {
+const chat = new Panel(0.62, 0.22, 900, (p) => {
   const g = p.g; g.fillStyle = '#0b1220e6'; round(g, 0, 0, p.c.width, p.c.height, 22); g.fill();
   g.font = `700 30px ${FONT}`; g.fillStyle = '#b388ff'; g.textBaseline = 'top'; g.fillText('Chat with Claude', 24, 20);
   g.font = `400 24px ${FONT}`; let y = 70;
-  for (const l of said.slice(-6)) { for (const line of wrap(g, l, p.c.width - 48).slice(0, 3)) { g.fillStyle = l.startsWith('You:') ? '#e6eef8' : '#9fb3c8'; g.fillText(line, 24, y); y += 30; } y += 6; if (y > p.c.height - 80) break; }
+  for (const l of said.slice(-4)) { for (const line of wrap(g, l, p.c.width - 48).slice(0, 3)) { g.fillStyle = l.startsWith('You:') ? '#e6eef8' : '#9fb3c8'; g.fillText(line, 24, y); y += 30; } y += 6; if (y > p.c.height - 80) break; }
   g.fillStyle = '#162132'; round(g, 20, p.c.height - 62, p.c.width - 40, 46, 10); g.fill(); g.fillStyle = typing ? '#e6eef8' : '#5f6f84'; g.textBaseline = 'middle';
-  g.fillText(typing || (renderer.xr.isPresenting ? 'Press here to type' : 'Type below and press Enter'), 34, p.c.height - 39);
+  g.fillText(typing || (renderer.xr.isPresenting ? 'Press here to type' : 'Type in the box at the top left'), 34, p.c.height - 39);
   p.hits.push({ x0: 0, y0: p.c.height - 70, x1: p.c.width, y1: p.c.height, act: () => { if (renderer.xr.isPresenting) { keyboard.mesh.visible = !keyboard.mesh.visible; placeKeyboard(); } else chatInput.focus(); } });
 });
 function wrap(g: CanvasRenderingContext2D, t: string, w: number): string[] { const out: string[] = []; let line = ''; for (const word of t.split(/\s+/)) { const tryL = line ? `${line} ${word}` : word; if (g.measureText(tryL).width > w && line) { out.push(line); line = word; } else line = tryL; } if (line) out.push(line); return out; }
@@ -190,7 +192,7 @@ function layPanels(): void {
   const xr = renderer.xr.isPresenting;
   if (xr) { chat.mesh.visible = true; board.group.scale.setScalar(boardBig ? 0.6 : 0.42); board.group.position.set(0.12, 0.08, -1.25); board.group.rotation.set(0, 0, 0); bar.mesh.position.set(0, -0.44, -1.05); bar.mesh.scale.setScalar(0.9); chat.mesh.position.set(-0.95, 0.15, -1.0); chat.mesh.rotation.set(0, 0.45, 0); chat.mesh.scale.setScalar(1); }
   else if (boardBig) { board.group.scale.setScalar(0.5); board.group.position.set(-0.12, 0.06, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.visible = false; }
-  else { chat.mesh.visible = true; board.group.scale.setScalar(0.28); board.group.position.set(0.52, 0.13, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.position.set(-0.7, 0.36, -1.25); chat.mesh.scale.setScalar(0.75); chat.mesh.rotation.set(0, 0, 0); }
+  else { chat.mesh.visible = true; board.group.scale.setScalar(0.36); board.group.position.set(0.36, 0.1, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.position.set(-0.78, 0.4, -1.25); chat.mesh.scale.setScalar(0.65); chat.mesh.rotation.set(0, 0, 0); }
   // the panels are drawn over what is made: they are what you work with, never hidden inside it
   ui.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (m) { m.depthTest = false; m.depthWrite = false; } o.renderOrder = 50; });
 }
@@ -281,7 +283,7 @@ function sticks(dt: number): void {
 }
 
 // ---- running ----------------------------------------------------------------------------------------------------------
-{ const vr = VRButton.createButton(renderer); document.body.appendChild(vr); window.setTimeout(() => { vr.style.bottom = ''; vr.style.top = '16px'; vr.style.left = ''; vr.style.right = '16px'; vr.style.width = 'auto'; vr.style.padding = '8px 14px'; }, 50); }
+{ const vr = VRButton.createButton(renderer); document.body.appendChild(vr); window.setTimeout(() => { vr.style.bottom = ''; vr.style.top = '16px'; vr.style.left = ''; vr.style.right = '16px'; vr.style.width = 'auto'; vr.style.padding = '8px 14px'; if (/not supported|not allowed/i.test(vr.textContent ?? '')) vr.style.display = 'none'; }, 400); }
 layPanels(); bar.draw(); chat.draw(); keyboard.draw(); placeKeyboard();
 board.show();
 let first = true, last = performance.now();

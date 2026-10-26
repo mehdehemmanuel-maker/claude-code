@@ -114,10 +114,16 @@ export function arrayCircle(of: Part | Assembly, n: number, r: number, turn = tr
   const k = Math.max(0, Math.round(n));
   return { name, items: Array.from({ length: k }, (_, i) => { const a = (2 * Math.PI * i) / k; return place(of, [r * Math.cos(a), 0, r * Math.sin(a)], [0, turn ? -a : 0, 0]); }) };
 }
-/** On a grid: nx by nz (and ny high), `step` apart, centred on the origin in x and z. */
-export function arrayGrid(of: Part | Assembly, nx: number, nz: number, step: V3, ny = 1, name = `${nx} × ${nz} × ${of.name}`): Assembly {
-  const items: Placed[] = [], X = Math.round(nx), Z = Math.round(nz), Y = Math.max(1, Math.round(ny));
-  for (let y = 0; y < Y; y++) for (let x = 0; x < X; x++) for (let z = 0; z < Z; z++) items.push(place(of, [(x - (X - 1) / 2) * step[0], y * step[1], (z - (Z - 1) / 2) * step[2]]));
+/** On a grid: nx by nz (and ny high), `step` apart, centred on the origin in x and z. With `vary`, each one's height is
+ *  stretched by a factor between 1 − vary and 1 + vary, drawn from the seed: the same seed, the same street. */
+export function arrayGrid(of: Part | Assembly, nx: number, nz: number, step: V3, ny = 1, name = `${nx} × ${nz} × ${of.name}`, vary = 0, seed = 1): Assembly {
+  const items: Placed[] = [], X = Math.round(nx), Z = Math.round(nz), Y = Math.max(1, Math.round(ny)); let r = (Math.abs(Math.round(seed)) % 2147483646) + 1;
+  const next = () => { r = (r * 48271) % 2147483647; return r / 2147483647; };
+  for (let y = 0; y < Y; y++) for (let x = 0; x < X; x++) for (let z = 0; z < Z; z++) {
+    const p = place(of, [(x - (X - 1) / 2) * step[0], y * step[1], (z - (Z - 1) / 2) * step[2]]);
+    if (vary > 0) p.over = { scale: [1, Math.max(0.05, 1 + vary * (2 * next() - 1)), 1] };
+    items.push(p);
+  }
   return { name, items };
 }
 /** It and its mirror image across a plane through the origin. */

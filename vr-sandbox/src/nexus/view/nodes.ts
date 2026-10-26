@@ -682,9 +682,9 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'combine', 0, 0, { name: 'drone' }, 'drone'); wire(b, 'frame', 'part', 'drone', 'things'); wire(b, 'armsUp', 'placed', 'drone', 'things');
     placeBlock(b, 'array.grid', 0, 0, { nx: 10, nz: 10, sx: 1, sz: 1 }, 'swarm'); b.nodes.swarm!.label = 'Swarm'; wire(b, 'drone', 'assembly', 'swarm', 'thing');
     placeBlock(b, 'place', 0, 0, { y: 45 }, 'swarmUp'); wire(b, 'swarm', 'grid', 'swarmUp', 'thing');
-    placeBlock(b, 'shape.box', 0, 0, { name: 'tower', mat: 'concrete', color: '#b0bec5', finish: 'concrete', w: 20, h: 30, d: 20 }, 'tower');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'tower', mat: 'concrete', color: '#90a4ae', finish: 'concrete', w: 20, h: 30, d: 20 }, 'tower'); b.nodes.tower!.label = 'Tower';
     placeBlock(b, 'place', 0, 0, { y: 15 }, 'towerUp'); wire(b, 'tower', 'part', 'towerUp', 'thing');
-    placeBlock(b, 'array.grid', 0, 0, { nx: 4, nz: 4, sx: 30, sz: 30 }, 'block'); b.nodes.block!.label = 'City block'; wire(b, 'towerUp', 'placed', 'block', 'thing');
+    placeBlock(b, 'array.grid', 0, 0, { nx: 4, nz: 4, sx: 30, sz: 30, vary: 0.6, seed: 7 }, 'block'); b.nodes.block!.label = 'City block'; wire(b, 'towerUp', 'placed', 'block', 'thing');
     placeBlock(b, 'array.grid', 0, 0, { nx: 5, nz: 5, sx: 140, sz: 140 }, 'city'); b.nodes.city!.label = 'City'; wire(b, 'block', 'grid', 'city', 'thing');
     placeBlock(b, 'combine', 0, 0, { name: 'city and swarm' }, 'all'); wire(b, 'city', 'grid', 'all', 'things'); wire(b, 'swarmUp', 'placed', 'all', 'things');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
