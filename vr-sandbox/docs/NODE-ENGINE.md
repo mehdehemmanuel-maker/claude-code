@@ -41,6 +41,29 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-26, then: build each part, each sub part, with makers shared by process.** The user: "you can't build
+anything by designing what it looks like … you gotta build each part each sub part each subsubpart and make it easier to
+generate new parts … the build of a battery … follows a lot of the same processes and geometries of many things."
+- **General makers** (`src/nexus/makers.ts`; nodes under *make.*): a cast grid, a coat over a part, a wrap (envelope),
+  a stack at a pitch, straps over named lugs (with series links), an enclosure with cells and a lid, things into cells,
+  a wound roll of strips, a fill drawn as a surface but weighed whole. Each is a process with a geometry, not a product,
+  so a lead-acid battery, an 18650 cell and the next thing that is cast, coated, stacked, wound or boxed share them.
+- **The battery built from them** (`starterBattery`, and the board *A battery built from its parts*: 24 nodes, every one
+  running, with the grid, the pasted plate, the wrapped plate and the cell drawn on their own nodes): 6 cells, 13 plates
+  each, separators, straps, intercell links, acid, case, lid, posts. 16.73 kg on the board, against a typical Group 35 of
+  about 18 kg (an estimate from makers' sheets, held to within 20 % by a test). The Li cell's jelly roll is a
+  `woundRoll` of cathode, separator, anode, separator in a can with a cap of gasket, vent disc and button.
+- **Explode inside an explode** (`exploded` in `assembly.ts`): every level comes apart down to the bottom, or only the
+  piece named by `focus`; pieces made in one (a cast grid's bars and wires) stay together; a container drops while what
+  it holds lifts out, so plates no longer poke through their case.
+- **Real batteries in the vehicles**: the truck's battery box holds three Group 31s, lengthwise, on brackets bolted
+  through the rail web; the cars carry a Group 35 on a tray with its hold-down clamp and J-bolts; the EV and hybrid
+  packs are filled with cells by `packToFit` to the room they have.
+- **Overlaps found and fixed on the truck**: the stack crossover through the fuel tank; the air tank by the fifth wheel;
+  the battery box in the drive tyre's sweep. Still open: the engine block is drawn wider than the frame rails.
+- Still not done: the Corolla's doors, headlamps and hood are lumps (about 4.8 % of its mass); the board-built battery
+  has no vent caps (the `starterBattery` one does); a fully exploded battery is dense to read (focus helps).
+
 **2026-10-26, then: designs that come apart to the bottom.** The user, on the first truck: "very low quality and fake
 parts that probably couldn't be exploded to accurate parts … the fact that parts can be exploded down to the bottom is
 what makes designs more accurate … upgrade the design logic so it's easy to make things look realistic and detailed and

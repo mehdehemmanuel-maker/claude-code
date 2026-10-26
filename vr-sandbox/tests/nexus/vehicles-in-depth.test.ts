@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { tyreBuilt, tyreOf, makeMachine, MACHINES, rollingOf } from '../../src/nexus/machines';
 import { starterBattery, liCell, cellPack, explodeAudit } from '../../src/nexus/components';
 import { BCI_GROUPS, CELL_FORMATS } from '../../src/data/batteries';
-import { boundsOfAll, distinctCount, exploded, fitIn, massOfAll, placedCount } from '../../src/nexus/assembly';
+import { boundsOfAll, distinctCount, exploded, fitIn, massOfAll, partOf, placedCount } from '../../src/nexus/assembly';
 import { PROCESSES, transistor, sramCell, die, packageOf, motherboard, desktop, SOCKETS, BOARDS } from '../../src/nexus/computer';
 import { LIBRARY, defaultsOf } from '../../src/nexus/blocks';
 import * as THREE from 'three';
@@ -115,5 +115,38 @@ describe('designs that come apart to the bottom', () => {
   it('what still is a lump is said: a car\'s doors and headlamps (not yet drawn whole)', () => {
     const a = explodeAudit(makeMachine(MACHINES.find((m) => m.id === 'corolla')!));
     expect(a.faked.map((f) => f.is)).toEqual(expect.arrayContaining(['door', 'headlamp']));
+  });
+});
+
+describe('made the way things are made: general makers, nodes, and explode inside explode', () => {
+  it('a starting battery is made by the same makers the board uses, down to each plate\'s grid and paste', () => {
+    const b = starterBattery('35'), a = explodeAudit(partOf(b));
+    expect(a.faked).toEqual([]); expect(a.missing).toEqual([]);
+    const names = new Set<string>(); const walk = (p: { name: string; parts?: unknown[] }) => { names.add(p.name); for (const q of (p.parts ?? []) as typeof p[]) walk(q); }; walk(partOf(b));
+    for (const n of ['cast grid', 'positive paste', 'negative paste', 'separator envelope', 'strap 1', 'intercell connector 1', 'positive post (SAE)', 'lid']) expect([...names].some((x) => x.startsWith(n)), n).toBe(true);
+  });
+  it('the board\'s battery, node by node, weighs what a group 35 does and comes apart to the bottom', async () => {
+    const pw = 0.1636, ph = 0.1299, grid = (lug: string) => run('make.grid', { w: pw, h: ph, t: 0.0011, bars: 7, wires: 9, rim: 0.003 }, { lug });
+    const cp = (await run('make.coat', { part: (await grid('right')).grid, t: 0.00035, fill: 0.2 }, { color: '#4a2c1c' })).coated;
+    const cn = (await run('make.coat', { part: (await grid('left')).grid, t: 0.0002, fill: 0.2 }, { name: 'negative plate', item: 'plate-negative', layer: 'negative paste', layerItem: 'paste-negative' })).coated;
+    const wp = (await run('make.wrap', { part: cp })).wrapped, st = (await run('make.stack', { things: [cn, wp], n: 13, pitch: 0.00264, y: ph / 2 })).stack;
+    const cell = (await run('make.strap', { thing: st })).joined, en = await run('make.enclosure', { L: 0.2302, W: 0.1746, H: 0.1954 });
+    const filled = (await run('make.into', { thing: cell, into: en.case })).filled, ser = await run('make.strap', { thing: filled }, { path: '^strap \\d+$', series: true, name: 'intercell connector', item: 'la-intercell' });
+    expect(ser.ends).toHaveLength(2); expect(ser.count).toBe(5);
+    const acid = (await run('make.fill', { into: en.case, L: en.cellL, W: en.cellW, h: ph + 0.012, share: 0.55 })).filled;
+    const all = { name: 'battery', items: [en.case, ser.joined, acid, en.lid].map((x) => ({ of: x, at: [0, 0, 0] as [number, number, number], rot: [0, 0, 0] as [number, number, number], s: 1 })) };
+    expect(Math.abs(massOfAll(all) / BCI_GROUPS['35']!.kg - 1)).toBeLessThan(0.2);
+  });
+  it('taken apart to the bottom, a plate inside a cell inside the battery comes apart too; focused, only that piece opens', () => {
+    const b = starterBattery('35'), whole = size(b), apart = size(exploded(b, 0.6));
+    expect(apart.x).toBeGreaterThan(whole.x * 1.3);
+    const focus = exploded(b, 0.6, 64, /^cell/) as { items: { of: { name: string } }[] }, lid = focus.items.find((it) => it.of.name === 'lid')!, lid0 = b.items.find((it) => it.of.name === 'lid')!;
+    expect((lid as unknown as { at: number[] }).at).toEqual(lid0.at);
+  });
+  it('vehicles carry real batteries: a car its group 35 over its gearbox, the truck three group 31s in a box, an EV its pack of cells', () => {
+    const car = makeMachine(MACHINES.find((m) => m.id === 'corolla')!), truck = makeMachine(MACHINES.find((m) => m.id === 'cascadia')!);
+    const has = (p: { name: string; parts?: unknown[] }, re: RegExp): boolean => re.test(p.name) || ((p.parts ?? []) as typeof p[]).some((q) => has(q, re));
+    expect(has(car, /^battery and its tray$/)).toBe(true); expect(has(truck, /^battery box/)).toBe(true);
+    expect(explodeAudit(truck).missing).toEqual([]);
   });
 });

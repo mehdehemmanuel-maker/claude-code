@@ -47,9 +47,18 @@ const obbOf = (local: THREE.Box3, m: THREE.Matrix4): OBB => {
 
 /** The thing laid out: every part with its turn and place in the world, its oriented box, its bounds, and the bounds of
  *  all it holds. */
-export function layout(root: Part, at = new THREE.Matrix4()): Node[] {
+export function layout(root: Part, at = new THREE.Matrix4(), o: { sealedWhole?: boolean } = {}): Node[] {
   const out: Node[] = [];
   const walk = (p: Part, parent: Node | null, m0: THREE.Matrix4, depth: number, path: string): Node => {
+    // (a sealed part, designed whole and fitted as it comes, laid out as the box round its pieces, not piece by piece: a
+    // traction pack's 3,000 cells are not each worked on by the pipeline, which lays nothing inside a sealed part; one
+    // with a piece that moves in it, a rail's carriage, is laid out piece by piece, so its room to move is still checked)
+    if (o.sealedWhole && p.sealed && p.parts?.length && still(p)) {
+      const local = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
+      const m = m0.clone().multiply(local), lb = sealedBox(p), sub = lb ? lb.clone().applyMatrix4(m) : null;
+      const n: Node = { p, parent, kids: [], m, box: null, obb: null, pieces: [], local: null, sub, depth, path }; out.push(n); parent?.kids.push(n);
+      return n;
+    }
     const local = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
     const m = m0.clone().multiply(local), lb = shapeBox(p.shape, p.base), box = lb ? lb.clone().applyMatrix4(m) : null;
     const n: Node = { p, parent, kids: [], m, box, obb: lb ? obbOf(lb, m) : null, pieces: lb ? piecesIn(p.shape, lb, m, p.base) : [], local: lb, sub: box?.clone() ?? null, depth, path }; out.push(n); parent?.kids.push(n);
@@ -58,6 +67,20 @@ export function layout(root: Part, at = new THREE.Matrix4()): Node[] {
   };
   walk(root, null, at, 0, '');
   return out;
+}
+// (nothing in it moves: no travel, joint, link, swing or spin on any of its pieces)
+const stills = new WeakMap<Part, boolean>();
+function still(p: Part): boolean {
+  let s = stills.get(p); if (s !== undefined) return s;
+  s = !(p.travel || p.joint || p.link || p.movesWith || p.swing || p.spin) && (p.parts ?? []).every(still); stills.set(p, s); return s;
+}
+// (the box round a sealed part's pieces in its own frame, worked out once for each, shared by every place it is fitted)
+const sealedBoxes = new WeakMap<Part, THREE.Box3 | null>();
+function sealedBox(p: Part): THREE.Box3 | null {
+  if (sealedBoxes.has(p)) return sealedBoxes.get(p)!;
+  const b = new THREE.Box3(); let any = false;
+  for (const n of layout({ ...p, at: [0, 0, 0], rot: [0, 0, 0], sealed: undefined }, undefined, { sealedWhole: true })) if (n.sub && !n.parent) { b.copy(n.sub); any = true; }
+  const r = any ? b : null; sealedBoxes.set(p, r); return r;
 }
 
 export const least = (b: THREE.Box3) => { const s = b.getSize(new THREE.Vector3()); return Math.min(s.x, s.y, s.z); };

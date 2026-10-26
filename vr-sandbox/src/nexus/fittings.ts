@@ -10,7 +10,9 @@
 // published (its length, width, height, frame, tyres), and typical of a North American highway tractor where not (said
 // at each). A truck's body is built from `TruckBody`, worked out from its figures by machines.ts.
 
-import { boltedJoint, use } from './components';
+import { boltedJoint, starterBattery, use } from './components';
+import { boundsOfAll, partOf } from './assembly';
+import * as THREE from 'three';
 import type { Part, V3 } from './kits';
 
 const PI = Math.PI, mm = 1e-3;
@@ -235,6 +237,8 @@ export function aftertreatment(s: number, c: V3, r: number, L: number, b: TruckB
  *  perforated heat shield, two clamps and a bracket bolted to the cab's back wall. */
 export function exhaustStack(name: string, foot: V3, outlet: V3, top: number, xBack: number): Part {
   const r = 0.0635, x = foot[0], z = foot[2];
+  // (the left stack fed by a crossover from the frame's middle, between the rails, under the cab's back: its pipe rises
+  // from there, turns out over the rail and the tank to the stack's foot, then up)
   return group(name, 'trk-exhaust-stack', [0, 0, 0], [
     P('stack pipe', { tube: { r, pts: [outlet, [outlet[0], foot[1], outlet[2]], [x, foot[1], z], [x, top, z]], wall: 0.0015, bend: 0.15 } }, [0, 0, 0], { item: 'trk-stack-pipe', mat: 'stainless-304', color: 0xd8dce2, finish: 'chrome', says: '5 in (127 mm) stainless pipe (typical)' }),
     P('heat shield', { cyl: [r + 0.012, 0.9] }, [x, top - 0.75, z], { item: 'trk-heat-shield', mat: 'stainless-304', color: 0xe0e4e8, shell: 0.001, finish: 'chrome', says: 'perforated stainless, standing off the pipe' }),
@@ -298,4 +302,24 @@ export function airTank(name: string, c: V3, r: number, L: number): Part {
     ...[-L * 0.3, L * 0.3].flatMap((z, i) => strapRing(`air tank strap ${i + 1}`, r, 0, 'trk-tank-strap').map((p) => ({ ...p, at: [0, 0, z] as V3, rot: [0, 0, 0] as V3 }))),
   ];
   return group(name, 'trk-air-tank', c, parts, { says: 'a compressed-air reservoir for its brakes (typical: about 9.5 in across)' });
+}
+/** Its battery box: an aluminium box on two brackets bolted through the rail's web, holding `n` starting batteries of a BCI
+ *  group side by side across it (each to its cells and plates), under a lid. Its middle at `c`, on side `s`. */
+export function batteryBox(s: number, c: V3, grp: string, n: number, b: TruckBody): Part {
+  // (its batteries lengthwise along the frame, side by side out from the rail, so the box stands clear of the tyres ahead
+  // of and behind it)
+  const bat = starterBattery(grp), z = boundsOfAll(bat).getSize(new THREE.Vector3()), t = 0.003, L = z.x + 0.03, W = n * (z.z + 0.006) + 0.02, H = z.y + 0.03;
+  const al = { mat: 'al-5052', color: 0x2a2c30, finish: 'paint' as const, item: 'trk-battery-box-shell', one: true };
+  const parts: Part[] = [
+    box('battery box floor', [L, t, W], [0, t / 2, 0], al), box('battery box side', [L, H, t], [0, H / 2, -W / 2], al), box('battery box side', [L, H, t], [0, H / 2, W / 2], al),
+    box('battery box end', [t, H, W], [-L / 2, H / 2, 0], al), box('battery box end', [t, H, W], [L / 2, H / 2, 0], al),
+    box('battery box lid', [L + 0.01, t, W + 0.01], [0, H + t / 2 + 0.002, 0], { item: 'trk-battery-box-lid', mat: 'al-5052', color: 0x2a2c30, finish: 'paint' }),
+  ];
+  for (let i = 0; i < n; i++) parts.push(partOf(bat, [0, t, -W / 2 + 0.01 + (i + 0.5) * (z.z + 0.006)], [0, 0, 0], { name: `battery ${i + 1} (group ${grp})`, item: 'battery-sli', sealed: 'built whole as it is made (components.ts), fitted as it comes' }));
+  const web = s * (b.railZ + b.railW / 2) - c[2], inner = Math.sign(web) * W / 2;
+  for (const x of [-L / 2 + 0.05, L / 2 - 0.05]) {
+    parts.push(box('battery box bracket', [0.06, 0.2, Math.abs(web - inner)], [x, 0.05, (web + inner) / 2], { item: 'trk-tank-bracket', mat: 'al-a380', color: 0x2a2c30, finish: 'cast' }));
+    for (const dy of [0, 0.09]) parts.push(through('M16', b.railT + 0.015, [x, (b.railY - c[1]) + dy - 0.05, web - Math.sign(web) * 0.008], web > 0 ? 'z' : '-z', 'battery box bolt'));
+  }
+  return group(`battery box (${n} × group ${grp})`, 'trk-battery-box', c, parts, { says: `its starting batteries: ${n} BCI group ${grp}s (typical of a highway tractor: three or four), in an aluminium box on the frame` });
 }

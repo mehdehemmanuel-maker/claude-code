@@ -500,7 +500,7 @@ export function addDetails(root: Part, cond: Conditions, on: (r: DetailRule) => 
     if (!on(r)) continue;
     // laid out afresh for each rule: what one adds, the next can see
     // (a part designed whole, a component from the library, is fitted as it comes: nothing laid on it or in it)
-    const nodes = layout(root).filter((n) => !sealedIn(n)), all = new THREE.Box3(), grown = grownOf(nodes); for (const x of nodes) if (x.box) all.union(x.box);
+    const nodes = layout(root, undefined, { sealedWhole: true }).filter((n) => !sealedIn(n)), all = new THREE.Box3(), grown = grownOf(nodes); for (const x of nodes) if (x.box) all.union(x.box);
     const m0 = massOf(root), ctx: Ctx = { ...base, living: grown, nodes, touch: r.id === 'joints' ? contacts(nodes, engineered) : [], centre: all.isEmpty() ? new THREE.Vector3() : all.getCenter(new THREE.Vector3()), size: all.isEmpty() ? 1 : all.getSize(new THREE.Vector3()).length(), mass: massOf(root) };
     counts[r.id] = r.run(ctx); base.doors = ctx.doors; kg[r.id] = massOf(root) - m0;
   }

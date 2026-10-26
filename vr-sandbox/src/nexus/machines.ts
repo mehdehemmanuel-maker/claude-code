@@ -11,10 +11,10 @@
 // Where the parts drawn weigh less than its published mass, the rest (trim, wiring, fluids, what is not drawn) is
 // one part of that mass, said as such; where they weigh more, that is said too.
 
-import { use } from './components';
-import { massOfAll, place, type Assembly, type Placed } from './assembly';
+import { packToFit, starterBattery, use } from './components';
+import { boundsOfAll, massOfAll, partOf, place, type Assembly, type Placed } from './assembly';
 import { massOf } from './mass';
-import { aftertreatment, airTank, bumper, cabStep, dayCab, exhaustStack, fifthWheel, fuelTank, hood, ladderFrame, quarterFender, type TruckBody } from './fittings';
+import { aftertreatment, airTank, batteryBox, bumper, cabStep, dayCab, exhaustStack, fifthWheel, fuelTank, hood, ladderFrame, quarterFender, type TruckBody } from './fittings';
 import { WHEEL } from './kinds/fasteners';
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from './kits';
 import { bodyPanels, insideOf, roofOf, tailOf, type BodyPlan, type KeepOut, type WheelAt } from './panels';
@@ -1188,17 +1188,20 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     // the aftertreatment (the left one by a crossover behind the cab)
     const tx = (front + rear) / 2 + 0.6, ty = 0.85, tz = 0.8;
     if (ex.has('tanks')) out.push(fuelTank('fuel tank (left)', -1, [tx, ty, -tz], 0.32, 1.3, tb), ex.has('stacks') ? aftertreatment(1, [tx, ty, tz], 0.3, 1.25, tb) : fuelTank('fuel tank (right)', 1, [tx, ty, tz], 0.32, 1.3, tb));
+    // (its batteries in a box on the left rail just behind its fuel tank, three group 31s across it)
+    if (ex.has('tanks')) out.push(batteryBox(-1, [tx - 0.65 - 0.06 - 0.18, 0.6, -(tb.railZ + tb.railW / 2 + 0.02 + (3 * (6.8125 * 0.0254 + 0.006) + 0.02) / 2)], '31', 3, tb));
     const stepX = Math.min(front - tyres[0]!.D / 2 - 0.35, tx + 0.65 + 0.32);
     if (ex.has('cab')) for (const s of [-1, 1]) out.push(cabStep(`cab step (${s > 0 ? 'right' : 'left'})`, s, stepX, [0.5, 0.86], 0.78, tb.wc + 0.02, tb));
     if (ex.has('stacks')) {
       const foot = tb.railY + tb.railH / 2 + 0.12, sx = tb.cabBack - 0.09, sz = tb.wc - 0.02, outlet: V3 = [tx - 0.625 + 0.12, ty + 0.3, tz];
-      out.push(exhaustStack('exhaust stack (right)', [sx, foot, sz], outlet, m.H + 0.45, tb.cabBack), exhaustStack('exhaust stack (left)', [sx, foot, -sz], [sx, foot - 0.12, 0.5], m.H + 0.45, tb.cabBack));
+      out.push(exhaustStack('exhaust stack (right)', [sx, foot, sz], outlet, m.H + 0.45, tb.cabBack), exhaustStack('exhaust stack (left)', [sx, foot, -sz], [sx, foot - 0.04, 0], m.H + 0.45, tb.cabBack));
     }
     if (ex.has('fifth wheel')) out.push(fifthWheel(tb, rear + 0.25));
     // its quarter fenders over each drive axle's tyres, a mud flap behind the last; an air tank between its rails
     const drives = m.axles.map((a, i) => ({ a, t: tyres[i]! })).filter((q) => q.a.drive && q.a.track > 0);
     drives.forEach(({ a, t }, i) => { const last = i === drives.length - 1, w = a.dual ? 2 * t.W + 0.09 : t.W + 0.06; for (const s of [-1, 1]) out.push(quarterFender(`quarter fender (${a.x === rear ? 'rear' : `axle ${m.axles.indexOf(a) + 1}`}, ${s > 0 ? 'right' : 'left'})`, s, a.x, t.D / 2, a.track / 2, t.D / 2 + travelOf(a).bump + 0.05, w, tb, last)); });
-    const between = drives.length > 1 ? (drives[0]!.a.x + drives[1]!.a.x) / 2 : fx0 + 0.25;
+    // (between its drive axles, nearer the front one, clear of the fifth wheel's angles over the rear one)
+    const between = drives.length > 1 ? drives[0]!.a.x - 0.55 : fx0 + 0.25;
     out.push(airTank('air tank', [between, tb.railY, 0], 0.12, 2 * (tb.railZ - tb.railW / 2) - 0.06));
   }
   if (ex.has('tanks') && !tb) for (const s of [-1, 1]) out.push(P(`tank strap ${s > 0 ? 'right' : 'left'}`, { box: [0.08, 0.06, 0.4] }, [(front + rear) / 2 + 0.6, 0.95, s * 0.62], { mat: 'steel-low', color: 0x1a1a1a, finish: 'paint' }), P(`fuel tank ${s > 0 ? 'right' : 'left'}`, { cyl: [0.32, 1.3] }, [(front + rear) / 2 + 0.6, 0.85, s * 0.8], { rot: [0, 0, PI / 2], mat: 'al-5052', color: 0xc8ccd2, shell: 0.003, finish: 'brushed', says: 'about 380 L each (typical of highway tractors)' }));
@@ -1334,8 +1337,11 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     const pk = packOf(m);
     // (its tray's flange along each side, out to the floor's edge, where it is bolted to the sill's inner: a skateboard
     // pack hangs from its sills so, M10 bolts about every 200 mm, typical)
-    if (ev) out.push(P('battery pack (75 kWh)', pk ? { box: [pk.x1 - pk.x0, pk.h, 2 * pk.z] } : { box: [front - rear - 0.4, 0.12, m.W * 0.8] }, pk ? [(pk.x0 + pk.x1) / 2, pk.y0 + pk.h / 2, 0] : [(front + rear) / 2, c + 0.16, 0], { mat: 'battery', color: 0x2a3a4a, fill: 0.8, kg: 450, says: 'about 450 kg at 6 kg per kWh (pack level, typical)',
-      parts: pk ? [-1, 1].map((sd) => P(`pack flange ${sd > 0 ? 'right' : 'left'}`, { box: [pk.x1 - pk.x0 - 0.04, 0.03, 0.02] }, [0, pk.h / 2 - 0.015, sd * (pk.z + 0.01)], { mat: 'al-6061', color: 0x5a5c5e, finish: 'cast', kg: 0, fixed: 'part of its pack\'s tray along its side, bolted to its sill\'s inner', says: 'its tray\'s side flange, bolted to the sill\'s inner every 200 mm (typical)' })) : undefined }));
+    // (its pack: the most 21700 cells that fit the room under its floor, 96 in series (a 350 V class pack, typical), in
+    // modules on its tray: drawn cell by cell, each cell to its jelly roll)
+    const room: V3 = pk ? [pk.x1 - pk.x0, pk.h, 2 * pk.z] : [front - rear - 0.4, 0.12, m.W * 0.8], fitted = ev ? packToFit(room[0], room[1] - 0.012, room[2] - 0.02, '21700', 96) : null;
+    if (ev && fitted) out.push(P(`battery pack (${fitted.kWh.toFixed(0)} kWh)`, undefined, pk ? [(pk.x0 + pk.x1) / 2, pk.y0 + pk.h / 2, 0] : [(front + rear) / 2, c + 0.16, 0], { item: 'pack-ev', says: `96 groups of ${fitted.p} 21700 cells in series (${fitted.kWh.toFixed(1)} kWh), as many as fit its floor`,
+      parts: [partOf(fitted.pack, [0, -room[1] / 2 + 0.006 + 0.04, 0], [0, 0, 0], { sealed: 'built whole as it is made (components.ts), fitted as it comes' }), P('pack lid', { box: [room[0], 0.004, room[2]] }, [0, room[1] / 2 - 0.002, 0], { item: 'pack-lid', mat: 'al-6061', color: 0x5a5c5e, finish: 'cast', says: 'its sealed lid, the cabin floor on it' }), ...(pk ? [-1, 1].map((sd) => P(`pack flange ${sd > 0 ? 'right' : 'left'}`, { box: [pk.x1 - pk.x0 - 0.04, 0.03, 0.02] }, [0, pk.h / 2 - 0.015, sd * (pk.z + 0.01)], { mat: 'al-6061', color: 0x5a5c5e, finish: 'cast', kg: 0, fixed: 'part of its pack\'s tray along its side, bolted to its sill\'s inner', says: 'its tray\'s side flange, bolted to the sill\'s inner every 200 mm (typical)', item: 'pack-tray' })) : [])] }));
     else {
       const ft = floorOf(m)?.tank, tb: V3 = ft ? [ft.x1 - ft.x0, ft.h, ft.z1 - ft.z0] : [0.5, 0.2, 0.5], ta: V3 = ft ? [(ft.x0 + ft.x1) / 2, ft.y0 + ft.h / 2, (ft.z0 + ft.z1) / 2] : [rear + 0.35, c + 0.12, -0.3];
       out.push(P(`fuel tank (${Math.round(tb[0] * tb[1] * tb[2] * 1000)} L)`, { box: tb }, ta, { mat: 'pe', color: 0x1a1a1a, shell: 0.005, finish: 'texture', fixed: 'strapped up under the rear floor against the heel kick (its straps not drawn)', says: 'its tank and the fuel in it, under the rear seat beside the exhaust (about 50 L, typical)', parts: [P('petrol', undefined, [0, 0, 0], { kg: tb[0] * tb[1] * tb[2] * 1000 * 0.74 * 0.5, says: 'half a tank (typical)' })] }));
@@ -1344,7 +1350,21 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
       const pw2 = powerAt(m), es2 = engineSize(pw2, true).s;
       if (across(m)) { const b = bayOf(m, es2), ax = m.axles[0]!.x, x0 = ax - 0.08, x1 = pw2.x + 0.06; out.push(P('gearbox', { box: [x1 - x0, 0.35, b.gb[1] - b.gb[0]] }, [(x0 + x1) / 2, pw2.y! - 0.05, (b.gb[0] + b.gb[1]) / 2], { mat: 'al-a380', color: 0x8c8e90, kg: 45, finish: 'cast', passes: ['drive shaft left', 'drive shaft right', 'inner joint boot'], says: 'about 45 kg, on the engine\'s end, its differential on the drive shafts\' line (typical of a transverse gearbox)' })); }
       else out.push(P('gearbox', { box: [0.45, 0.3, 0.3] }, [pw2.x - es2[0] / 2 - 0.225, pw2.y! - 0.05, 0], { mat: 'al-a380', color: 0x8c8e90, kg: 45, finish: 'cast', says: 'about 45 kg, behind the engine (typical)' }));
-      if (hy) out.push(P('battery (1.5 kWh)', { box: [0.5, 0.2, 0.6] }, [rear + 0.6, c + 0.2, 0], { mat: 'battery', color: 0x2a3a4a, kg: 40, says: 'under the rear seat, on the floor (typical of a hybrid)' }));
+      if (hy) { const hp = packToFit(0.5, 0.2, 0.6, '18650', 56); out.push(P(`hybrid battery (${hp.kWh.toFixed(1)} kWh)`, undefined, [rear + 0.6, c + 0.2, 0], { item: 'pack-hybrid', says: `56 groups of ${hp.p} 18650 cells in series under the rear seat (typical of a hybrid's pack)`, parts: [partOf(hp.pack, [0, -0.06, 0], [0, 0, 0], { sealed: 'built whole as it is made (components.ts), fitted as it comes' })] })); }
+      // its starting battery: a BCI group 35 (typical of a small car's) on a moulded tray over its gearbox, as front-drive
+      // cars carry it, held down by a clamp bar on two J-bolts hooked under the tray
+      if (m.kind === 'car' && across(m)) {
+        const b = bayOf(m, es2), ax = m.axles[0]!.x, gx = (ax - 0.08 + pw2.x + 0.06) / 2, gz = (b.gb[0] + b.gb[1]) / 2, top = pw2.y! - 0.05 + 0.175 + 0.012, bat = starterBattery('35'), bs = boundsOfAll(bat).getSize(new THREE.Vector3());
+        out.push(P('battery and its tray', undefined, [gx, top, gz], { item: 'battery-mount', parts: [
+          P('battery tray', { box: [bs.x + 0.03, 0.006, bs.z + 0.03] }, [0, 0.003, 0], { item: 'battery-tray', mat: 'pp', color: 0x1a1a1a, finish: 'texture', says: 'moulded, bolted to its bracket on the gearbox' }),
+          partOf(bat, [0, 0.006, 0], [0, 0, 0], { item: 'battery-sli', sealed: 'built whole as it is made (components.ts), fitted as it comes' }),
+          P('hold-down clamp', { box: [0.03, 0.008, bs.z + 0.04] }, [0, bs.y - 0.015, 0], { item: 'battery-clamp', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', says: 'a pressed bar across its top, between its posts' }),
+          ...[-1, 1].flatMap((sd) => [
+            use('threadedrod M6 250', [0, bs.y / 2, sd * (bs.z / 2 + 0.012)], { name: 'J-bolt', fixed: 'hooked under its tray, up through its clamp' }),
+            use('nut M6', [0, bs.y - 0.008, sd * (bs.z / 2 + 0.012)], { passes: ['J-bolt'] }),
+          ]),
+        ] }));
+      }
     }
     if (!m.mass) out.push(P('wiring harness', undefined, [0, 0.6, 0], { kg: 40, says: 'about 40 kg of copper and insulation (typical)' }), P('climate system', undefined, [0.5, 0.6, 0], { kg: 20, says: 'typical' }), P('trim, carpets and sound deadening', undefined, [0, 0.5, 0], { kg: 60, says: 'typical' }), P('oil, coolant and other fluids', undefined, [0, 0.4, 0], { kg: 15, says: 'typical' }), P('body in white', undefined, [0, 0.5, 0], { kg: 230, says: 'its pressed and welded structure inside its skin: sills, pillars, floor, crossmembers (about 280–350 kg with its panels, typical)' }));
   }

@@ -99,14 +99,14 @@ function paired(nodes: Node[], touch: ReturnType<typeof contacts>): Set<string> 
 /** What is wrong with a thing, and what was put right (the thing is changed in place). */
 export function critique(root: Part): Finding[] {
   const out: Finding[] = [], say = (check: string, part: string, says: string, fixed: boolean) => out.push({ check, part, says, fixed });
-  let nodes = layout(root);
+  let nodes = layout(root, undefined, { sealedWhole: true });
   // ---- room to move: each turning thing (the outermost of what turns together) against the fixed parts near it ----
   const movers = nodes.filter((n) => turning(n.p) && n.sub && !n.p.detail && !sealedIn(n) && !ancestors(n).some((a) => turning(a.p)));
   const pairs = paired(nodes, contacts(nodes, (n) => !!n.p.iface?.length));
   const pairedTo = new Map<string, string[]>(); for (const k of pairs) { const [a, b] = k.split('|') as [string, string]; (pairedTo.get(a) ?? pairedTo.set(a, []).get(a)!).push(b); }
   let dirty = false;
   for (const m0 of movers) {
-    if (dirty) { nodes = layout(root); dirty = false; } const m = nodes.find((x) => x.path === m0.path)!, need = turning(m.p)!, ax = axisOf(m, nodes);
+    if (dirty) { nodes = layout(root, undefined, { sealedWhole: true }); dirty = false; } const m = nodes.find((x) => x.path === m0.path)!, need = turning(m.p)!, ax = axisOf(m, nodes);
     // (what turns is what is of its link: a brake's caliper carried in a wheel's group, on its own link (its knuckle's, its
     // fork's), does not turn with it, and the room is the wheel's, not the caliper's)
     const ownLink = (x: Node): boolean => { for (let y: Node | null = x; y && y !== m; y = y.parent) if (y.p.link !== undefined && y.p.link !== m.p.link) return false; return true; };
@@ -202,7 +202,7 @@ export function critique(root: Part): Finding[] {
     for (const f of inWay.slice(0, 8)) say('room to slide', s0.p.name, `it slides ${((sl.to - sl.from) * 1000).toFixed(0)} mm along its travel: the ${f.p.name} is in its way`, false);
   }
   // ---- held up: the embodiment's load path, from the ground (or, for a thing held or flying, its heaviest piece) ----
-  nodes = layout(root);
+  nodes = layout(root, undefined, { sealedWhole: true });
   // (what grew, a tree's twigs on its branches, is held by growing, not by resting)
   const alive = grownOf(nodes);
   const solid = nodes.filter((n) => n.obb && n.p.mat && classOf(n.p.mat) !== 'organic' && !n.p.detail && !alive(n)), touch = contacts(nodes, (n) => solid.includes(n));

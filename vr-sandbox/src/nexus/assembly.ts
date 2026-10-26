@@ -19,6 +19,7 @@ import { layout } from './make/space';
 export interface Override { color?: number; mat?: string; finish?: string; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
 export interface Placed { of: Part | Assembly; at: V3; rot: V3; s: number; over?: Override }
 export interface Assembly {
+  /** the inventory item it is, where it is one (a cell, a battery), so a tree made of it says so */ item?: string;
   name: string; items: Placed[]; ports?: Port[]; says?: string;
   /** Repeated for ever on a lattice (`step` apart along x, y and z; 0: not along that one), each cell one of `variants`
    *  picked by a hash of the cell and the seed: drawn only round where it is seen from. Its items are the cell at the
@@ -225,14 +226,42 @@ export function fitIn(t: Part | Assembly, pattern: string, by: Part | Assembly):
   return { thing, fitted: n };
 }
 /** A thing taken apart: each thing in it moved out from the middle of what holds it by `f` of how far its own middle is
- *  from there (0: together; 1: twice as far out), so many levels down; what is at the middle stays. Nothing is copied. */
-export function exploded(t: Part | Assembly, f: number, levels = 2): Part | Assembly {
-  const a = isPart(t) ? (t.parts?.length ? opened(t) : t) : t;
+ *  from there (0: together; 1: twice as far out), so many levels down (to the bottom by default), each level apart about
+ *  its own middle, so what is inside a piece comes apart inside it; what is at the middle stays. With `focus`, only the
+ *  pieces named like it are taken apart (all the way down) and pulled out of what holds them; the rest stays put: a
+ *  battery taken out of a truck and opened, a cell out of the battery, a plate out of the cell. Nothing is copied. */
+export function exploded(t: Part | Assembly, f: number, levels = 64, focus?: RegExp): Part | Assembly {
+  // (a piece made in one (a moulding's walls, a casting's bars: its parts all `one`) stays one: it does not come apart)
+  const a = isPart(t) ? (t.parts?.length && !t.parts.every((q) => q.one) ? opened(t) : t) : t;
   if (levels <= 0 || f === 0 || isPart(a)) return a;
-  const c = boundsOfAll(a).getCenter(new THREE.Vector3());
-  return { name: a.name, items: a.items.map((it) => {
-    const b = boundsOfAll(it.of); if (b.isEmpty()) return it;
-    const d = b.clone().applyMatrix4(matrixOf(it)).getCenter(new THREE.Vector3()).sub(c).multiplyScalar(f);
-    return { ...it, at: [it.at[0] + d.x, it.at[1] + d.y, it.at[2] + d.z] as V3, of: exploded(it.of, f, levels - 1) };
-  }) };
+  const whole = boundsOfAll(a), c = whole.getCenter(new THREE.Vector3()), H = whole.getSize(new THREE.Vector3());
+  // (a container and what is in it: the biggest thing here whose box holds the middles of others (a case and its cells) goes
+  // down, and what it holds comes up out of it together, as a drawing takes a thing apart; the rest go out from the middle)
+  const placedBox = (it: Placed) => { const b = boundsOfAll(it.of); return b.isEmpty() ? null : b.clone().applyMatrix4(matrixOf(it)); };
+  const boxes = new Map(a.items.map((it) => [it, placedBox(it)] as const)), vol = (b: THREE.Box3) => { const z = b.getSize(new THREE.Vector3()); return z.x * z.y * z.z; };
+  const lift = new Map<Placed, number>(), wholeVol = vol(whole) || 1;
+  const host = [...a.items].filter((it) => boxes.get(it) && vol(boxes.get(it)!) > 0.25 * wholeVol).sort((x, y) => vol(boxes.get(y)!) - vol(boxes.get(x)!))
+    .find((it) => a.items.some((o) => o !== it && boxes.get(o) && boxes.get(it)!.containsPoint(boxes.get(o)!.getCenter(new THREE.Vector3()))));
+  if (host) { lift.set(host, -f * H.y * 0.6); for (const o of a.items) if (o !== host && boxes.get(o) && boxes.get(host)!.containsPoint(boxes.get(o)!.getCenter(new THREE.Vector3()))) lift.set(o, f * H.y * 0.6); }
+  const out = (it: Placed): Placed => { const b = boxes.get(it) ?? placedBox(it); if (!b) return it; const d = b.getCenter(new THREE.Vector3()).sub(c).multiplyScalar(f); d.y += lift.get(it) ?? 0; return { ...it, at: [it.at[0] + d.x, it.at[1] + d.y, it.at[2] + d.z] as V3 }; };
+  if (!focus) return { name: a.name, items: a.items.map((it) => ({ ...out(it), of: exploded(it.of, f, levels - 1) })) };
+  return { name: a.name, items: a.items.map((it) => focus.test(it.of.name) ? { ...out(it), of: exploded(it.of, f, levels - 1) } : holds(it.of, focus) ? { ...it, of: exploded(it.of, f, levels - 1, focus) } : it) };
 }
+/** Whether anything in it, all the way down, is named like the pattern. */
+const holdsKept = new WeakMap<object, Map<string, boolean>>();
+function holds(t: Part | Assembly, re: RegExp): boolean {
+  const m = holdsKept.get(t) ?? holdsKept.set(t, new Map()).get(t)!, was = m.get(re.source); if (was !== undefined) return was;
+  const v = isPart(t) ? (t.parts ?? []).some((q) => re.test(q.name) || holds(q, re)) : t.items.some((it) => re.test(it.of.name) || holds(it.of, re));
+  m.set(re.source, v); return v;
+}
+/** An assembly as a part's tree (for a maker that builds trees of parts: a machine fitting a battery built as an
+ *  assembly): each placement a part at its place, turned as it is; the placed pieces' own parts shared, not copied.
+ *  (Scales and changes made where a thing is placed are not carried: a tree of parts has neither.) */
+export function partOf(t: Part | Assembly, at: V3 = [0, 0, 0], rot: V3 = [0, 0, 0], more: Partial<Part> = {}): Part {
+  if (isPart(t)) return { ...t, at, rot, ...more };
+  let parts = partsOf.get(t); if (!parts) { parts = t.items.map((it) => partOf(it.of, it.at, it.rot)); partsOf.set(t, parts); }
+  return { name: t.name, at, rot, ...(t.item ? { item: t.item } : {}), ...(t.ports ? { ports: t.ports } : {}), ...more, parts };
+}
+// (an assembly's pieces as parts, made once and shared by every place it is put: a pack of 3,000 cells is one cell's parts,
+// not 3,000 copies; never changed in place, as nothing here changes a part in place)
+const partsOf = new WeakMap<Assembly, Part[]>();

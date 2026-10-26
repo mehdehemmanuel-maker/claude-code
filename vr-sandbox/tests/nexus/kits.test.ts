@@ -53,7 +53,7 @@ describe('masses as real ones weigh', () => {
     const house = makeKit(kitById('house')!, 'a 2 storey brick house with a gable roof', 1).part; expect(massOf(house) / 1000).toBeGreaterThan(50); expect(massOf(house) / 1000).toBeLessThan(200); // a brick house: about 100–150 t (typical)
     for (const b of ['a king metal bed', 'a king wooden bed', 'a single wooden bed']) { const m = massOf(makeKit(kitById('bed')!, b, 1).part); expect(m, b).toBeGreaterThan(20); expect(m, b).toBeLessThan(160); }
     const palm = makeKit(kitById('tree')!, 'a 25 m palm', 1).part; expect(massOf(palm) / 1000).toBeLessThan(3); // a palm does not thicken with height
-    const ev = makeKit(kitById('car')!, 'an electric sedan', 4).part, pack = all(ev).find((p) => /battery pack/.test(p.name))!; expect(massOf(pack)).toBeGreaterThan(380); expect(massOf(pack)).toBeLessThan(520);
+    const ev = makeKit(kitById('car')!, 'an electric sedan', 4).part, pack = all(ev).find((p) => /battery pack/.test(p.name))!; const kWh = Number(/\((\d+(?:\.\d+)?) kWh\)/.exec(pack.name)![1]), whkg = (kWh * 1000) / massOf(pack); expect(whkg).toBeGreaterThan(120); expect(whkg).toBeLessThan(200); // as many cells as fit its floor; a liquid-cooled pack of cylindrical cells holds about 140–180 Wh a kg (typical; a Model 3 Long Range about 82 kWh in about 480 kg)
   });
 });
 describe('edges as things are made', () => {

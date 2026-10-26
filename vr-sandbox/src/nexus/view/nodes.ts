@@ -10,6 +10,7 @@
 // have: such a block says so rather than pretending.
 
 import { ABILITIES, DOMAINS, KINDS, LIBRARY, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
+import { isAssembly, partOf } from '../assembly';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
 import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
 import { fullScreen, shot } from './nodes3d';
@@ -288,7 +289,7 @@ function paintBody(id: string, gg: Geo, s: NodeState | undefined): void {
   if (b === 'note') { g.fillStyle = '#fff59d'; g.font = '12px system-ui'; String(n.set?.text ?? '').split('\n').flatMap((l) => l.match(/.{1,30}(\s|$)|.{1,30}/g) ?? ['']).slice(0, 10).forEach((l, i) => g.fillText(l, x + 6, y + 12 + i * 16)); return; }
   if (val === undefined) { g.fillStyle = '#4a5a70'; g.font = '12px system-ui'; g.fillText(inV ? 'nothing yet' : 'wire something in', x + 8, y + h / 2); return; }
   if (b === 'view.3d') {
-    const part = val as Part, o = orbitOf(id), dpr = window.devicePixelRatio || 1;
+    const part = asDrawn(val), o = orbitOf(id), dpr = window.devicePixelRatio || 1;
     if (n.set?.spin !== false && !(mode === 'orbit' && orbiting === id)) { o.yaw += 0.006; spinning = true; }
     try { const c = shot(id, part, { yaw: o.yaw, pitch: o.pitch, explode: Math.max(0, Math.min(4, Math.round(Number(n.set?.explode ?? 0)))), w: w * view.k, h: h * view.k, dpr }); g.drawImage(c, x, y, w, h); }
     catch (e) { g.fillStyle = '#ff8a80'; g.font = '12px system-ui'; g.fillText(clip(`cannot draw in 3D here: ${(e as Error).message}`, 40), x + 8, y + h / 2); }
@@ -483,6 +484,9 @@ function tidy(b: Board): Board {
   return b;
 }
 /** A block's height on a board not (yet) in view. */
+/** What a 3D view block is given, as a part's tree to draw (an assembly made one, once per assembly). */
+const drawnKept = new WeakMap<object, Part>();
+function asDrawn(v: unknown): Part { if (isAssembly(v)) { let p = drawnKept.get(v); if (!p) { p = partOf(v); drawnKept.set(v, p); } return p; } return v as Part; }
 function geoOf(b: Board, id: string): number { const n = b.nodes[id]!, d = blockOf(n), p = d ? portsOf(d, { ...defaultsOf(d), ...(n.set ?? {}) }) : { inputs: [], outputs: [] }, blk = n.block ?? ''; const bh = blk === 'view.3d' ? 240 : blk === 'view.show' ? 58 : blk === 'view.gauge' ? 86 : blk === 'view.chart' ? 150 : blk === 'view.table' ? 124 : blk === 'note' ? 16 + 16 * Math.min(10, wrapCount(String(n.set?.text ?? ''), 30)) : 0; return HEAD + 8 + Math.max(p.inputs.length, p.outputs.length) * ROW + bh + FOOT; }
 function toast(s: string, bad = false): void { if (!PAGE) { wall.said?.(s, bad); return; } const t = document.getElementById('toast')!; t.textContent = s; t.className = bad ? 'bad' : ''; t.style.display = 'block'; clearTimeout((toast as unknown as { t: number }).t); (toast as unknown as { t: number }).t = window.setTimeout(() => (t.style.display = 'none'), 3200); }
 
@@ -750,6 +754,39 @@ const DEMOS: [string, Make][] = ([
     for (const k of [1, 2, 3]) wire(b, `h${k}`, 'neighbourhood', 'world', 'things');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'world', 'world', 'show', 'thing');
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); b.nodes.measure!.label = 'Measure (one cell)'; wire(b, 'world', 'world', 'measure', 'thing');
+    return b;
+  }],
+  ['A battery built from its parts, node by node: grid, paste, separator, plates, cell, case', () => {
+    // a BCI group 35 starting battery (230 × 175 × 225 mm, its case the standard's), made the way one is made, every
+    // step a node that makes other things too: a grid cast (as a fan guard is), pasted (as anything is coated), the
+    // positive wrapped in a separator (as a bag wraps), plates stacked alternately (as fins and laminations are), a strap
+    // cast over their lugs (as a busbar joins terminals), the cells into a moulded case of partitions (as a toolbox's),
+    // joined in series zig-zag, posts on its free ends, its lid. Take it apart: case, cells, plates, each plate's grid and
+    // paste
+    const b = emptyBoard('A battery built from its parts');
+    const pw = 0.1636, ph = 0.1299;
+    placeBlock(b, 'make.grid', 0, 0, { lug: 'right', w: pw, h: ph, t: 0.0011, bars: 7, wires: 9, rim: 0.003 }, 'gp'); b.nodes.gp!.label = 'Cast grid (positive, lug right)';
+    placeBlock(b, 'make.grid', 0, 0, { lug: 'left', w: pw, h: ph, t: 0.0011, bars: 7, wires: 9, rim: 0.003 }, 'gn'); b.nodes.gn!.label = 'Cast grid (negative, lug left)';
+    placeBlock(b, 'make.coat', 0, 0, { name: 'positive plate', item: 'plate-positive', layer: 'positive paste', layerItem: 'paste-positive', mat: 'lead', color: '#4a2c1c', t: 0.00035, fill: 0.2 }, 'cp'); b.nodes.cp!.label = 'Paste it: lead dioxide'; wire(b, 'gp', 'grid', 'cp', 'part');
+    placeBlock(b, 'make.coat', 0, 0, { name: 'negative plate', item: 'plate-negative', layer: 'negative paste', layerItem: 'paste-negative', mat: 'lead', color: '#6a6d72', t: 0.0002, fill: 0.2 }, 'cn'); b.nodes.cn!.label = 'Paste it: sponge lead'; wire(b, 'gn', 'grid', 'cn', 'part');
+    placeBlock(b, 'make.wrap', 0, 0, { name: 'separator envelope', item: 'plate-separator', mat: 'pe', t: 0.0006, fill: 0.4 }, 'wp'); b.nodes.wp!.label = 'Wrap the positive in a separator'; wire(b, 'cp', 'coated', 'wp', 'part');
+    placeBlock(b, 'make.stack', 0, 0, { n: 13, pitch: 0.00264, y: ph / 2 }, 'st'); b.nodes.st!.label = 'Stack them: 13 plates'; wire(b, 'cn', 'coated', 'st', 'things'); wire(b, 'wp', 'wrapped', 'st', 'things');
+    placeBlock(b, 'make.strap', 0, 0, { path: '^lug$', name: 'strap', item: 'la-strap', result: 'cell (13 plates)' }, 'cell'); b.nodes.cell!.label = 'Strap their lugs: a 2 V cell'; wire(b, 'st', 'stack', 'cell', 'thing');
+    placeBlock(b, 'make.enclosure', 0, 0, { L: 0.2302, W: 0.1746, H: 0.1954, wall: 0.0025, cells: 6, rib: 0.012, lid: 0.012 }, 'case'); b.nodes.case!.label = 'Case: six cells, moulded';
+    placeBlock(b, 'make.into', 0, 0, { alternate: true }, 'into'); b.nodes.into!.label = 'Cells into the case, alternate turned'; wire(b, 'cell', 'joined', 'into', 'thing'); wire(b, 'case', 'case', 'into', 'into');
+    placeBlock(b, 'make.strap', 0, 0, { path: '^strap \\d+$', series: true, name: 'intercell connector', item: 'la-intercell', result: 'six cells in series' }, 'ser'); b.nodes.ser!.label = 'Join them in series'; wire(b, 'into', 'filled', 'ser', 'thing');
+    placeBlock(b, 'shape.cyl', 0, 0, { name: 'post', mat: 'lead', color: '#9a9da2', finish: 'satin', r: 0.0093, h: 0.034 }, 'pc'); b.nodes.pc!.label = 'Post (SAE, about 18 mm)';
+    placeBlock(b, 'tag', 0, 0, { name: 'terminal post', item: 'battery-post' }, 'pt'); wire(b, 'pc', 'part', 'pt', 'part');
+    placeBlock(b, 'place.points', 0, 0, { dy: 0.017 }, 'posts'); b.nodes.posts!.label = 'Posts on its free ends'; wire(b, 'pt', 'tagged', 'posts', 'thing'); wire(b, 'ser', 'ends', 'posts', 'points');
+    placeBlock(b, 'place', 0, 0, { y: 0.1954 + 0.006 }, 'lidAt'); b.nodes.lidAt!.label = 'Lid on top'; wire(b, 'case', 'lid', 'lidAt', 'thing');
+    placeBlock(b, 'make.fill', 0, 0, { name: 'electrolyte', mat: 'acid', h: ph + 0.012, share: 0.55 }, 'acid'); b.nodes.acid!.label = 'Fill each cell: acid'; wire(b, 'case', 'case', 'acid', 'into'); wire(b, 'case', 'cellL', 'acid', 'L'); wire(b, 'case', 'cellW', 'acid', 'W');
+    placeBlock(b, 'combine', 0, 0, { name: '12 V battery, group 35 (built here)' }, 'all'); wire(b, 'case', 'case', 'all', 'things'); wire(b, 'ser', 'joined', 'all', 'things'); wire(b, 'acid', 'filled', 'all', 'things'); wire(b, 'posts', 'placed', 'all', 'things'); wire(b, 'lidAt', 'placed', 'all', 'things');
+    placeBlock(b, 'explode', 0, 0, { amount: 0.5, levels: 64 }, 'apart'); b.nodes.apart!.label = 'Take it apart (to the bottom)'; wire(b, 'all', 'assembly', 'apart', 'thing');
+    // (each step's part on the board itself, turning: the grid, the pasted plate, the wrapped plate, the cell)
+    for (const [k, from, out, label, ex] of [['v1', 'gp', 'grid', 'The cast grid', 0], ['v2', 'cp', 'coated', 'The pasted plate', 1], ['v3', 'wp', 'wrapped', 'In its separator', 1], ['v4', 'cell', 'joined', 'A cell, its plates strapped', 0]] as [string, string, string, string, number][]) { placeBlock(b, 'view.3d', 0, 0, { explode: ex }, k); b.nodes[k]!.label = label; wire(b, from, out, k, 'part'); }
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'all', 'assembly', 'audit', 'thing');
     return b;
   }],
   ['A car down to its bolts: tyres made in depth, a shared battery, taken apart', () => {
@@ -1074,7 +1111,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['A battery built', 'electrical'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

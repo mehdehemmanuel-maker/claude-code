@@ -102,6 +102,12 @@ the task list and lose the why. So the why lives here, and every round is checke
   can be exploded down to the bottom is what makes designs more accurate upgrade the design logic for things so it's easy
   to make things look realistic and detailed and accurate" (2026-10-26: recipes in the inventory held by `explodeAudit`;
   the truck's fittings drawn whole in `fittings.ts`; every build's lumps said by mass)
+- "you can't build anything by designing what it looks like … you gotta build each part each sub part each subsubpart
+  and make it easier to generate new parts and assemble new parts … the build of a battery can fall into a lot of
+  categories … follows a lot of the same processes and geometries of many things that's what I mean by node efficiency
+  and versatility" and "parts exploded that have their own assemblies should be able to be exploded as well … showing
+  screen shot of it on the node graph and it's small parts on the node graph" (2026-10-26: makers by process in
+  `makers.ts`; the battery built from them node by node; explode inside an explode with focus; batteries in the vehicles)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -169,6 +175,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A part's tree opened into assemblies, pieces swapped for a shared thing by name (`fitIn`), taken apart (`exploded`) | `src/nexus/assembly.ts` (nodes Fit in, Take apart) |
 | A computer from its transistors: FinFETs at published process pitches, SRAM and logic cells, arrays, die, package, motherboard, PC | `src/nexus/computer.ts` (nodes Transistor, Logic or memory cell, Processor die, Processor package, Motherboard, Desktop PC) |
 | How far a build comes apart: lumps (a piece drawn as one though the inventory says it is an assembly) by share of mass, recipes not met (`explodeAudit`, node Comes apart to the bottom?) | `src/nexus/components.ts` |
+| General makers by process and geometry (cast grid, coat, wrap, stack, straps, enclosure with cells, into cells, wound roll, fill) | `src/nexus/makers.ts` (nodes `make.*` in `blocks.ts`; used by `components.ts`) |
 | A vehicle's fittings drawn whole to their recipes (lamps, mirrors, doors, cab, hood, grille, bumper, frame, tanks, aftertreatment, stacks, fifth wheel, steps, fenders, air tanks) | `src/nexus/fittings.ts` (recipes `trk-*` in `inventory.ts`; used by `machines.ts`) |
 | Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |
 | The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
