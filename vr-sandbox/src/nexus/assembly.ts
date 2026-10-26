@@ -18,7 +18,19 @@ import { layout } from './make/space';
  *  made further out wins (a swarm's colour over the drone's), as a variant of a whole thing should. */
 export interface Override { color?: number; mat?: string; finish?: string; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
 export interface Placed { of: Part | Assembly; at: V3; rot: V3; s: number; over?: Override }
-export interface Assembly { name: string; items: Placed[]; ports?: Port[]; says?: string }
+export interface Assembly {
+  name: string; items: Placed[]; ports?: Port[]; says?: string;
+  /** Repeated for ever on a lattice (`step` apart along x, y and z; 0: not along that one), each cell one of `variants`
+   *  picked by a hash of the cell and the seed: drawn only round where it is seen from. Its items are the cell at the
+   *  origin, so what it weighs and spans is one cell's. */
+  tiled?: { step: V3; variants: (Part | Assembly)[]; seed: number };
+}
+/** The variant a cell of a lattice gets: the same cell and seed, the same one, wherever it is drawn from. */
+export function cellPick(i: number, j: number, k: number, seed: number, n: number): number {
+  let h = (Math.imul(i | 0, 73856093) ^ Math.imul(j | 0, 19349663) ^ Math.imul(k | 0, 83492791) ^ Math.imul(seed | 0, 2654435761)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; h = (h ^ (h >>> 16)) >>> 0;
+  return n > 0 ? h % n : 0;
+}
 
 export const isAssembly = (x: unknown): x is Assembly => !!x && typeof x === 'object' && Array.isArray((x as Assembly).items);
 export const isPart = (x: unknown): x is Part => !!x && typeof x === 'object' && !isAssembly(x) && typeof (x as Part).name === 'string';
@@ -29,8 +41,14 @@ function lifted(p: Part): Assembly { let a = lifts.get(p); if (!a) { a = { name:
 export const place = (of: Part | Assembly, at: V3 = [0, 0, 0], rot: V3 = [0, 0, 0], s = 1, over?: Override): Placed => ({ of, at, rot, s, ...(over ? { over } : {}) });
 
 /** A placement's matrix: moved to its place, turned (x, then y, then z, as the parts are), scaled. */
+/** (Kept per placement, as worked out from these: a placement changed after is worked out again. Read it; never change it.) */
+const matKept = new WeakMap<object, { at: V3; rot: V3; s: number; k?: V3; m: THREE.Matrix4 }>();
 export function matrixOf(p: { at: V3; rot: V3; s: number; over?: Override }): THREE.Matrix4 {
-  const k = p.over?.scale ?? [1, 1, 1];
+  const k = p.over?.scale ?? [1, 1, 1], was = matKept.get(p);
+  if (was && was.at === p.at && was.rot === p.rot && was.s === p.s && was.k === p.over?.scale) return was.m;
+  const m = madeMatrix(p, k); matKept.set(p, { at: p.at, rot: p.rot, s: p.s, k: p.over?.scale, m }); return m;
+}
+function madeMatrix(p: { at: V3; rot: V3; s: number }, k: V3): THREE.Matrix4 {
   return new THREE.Matrix4().compose(new THREE.Vector3(...p.at), new THREE.Quaternion().setFromEuler(new THREE.Euler(...p.rot)), new THREE.Vector3(p.s * k[0], p.s * k[1], p.s * k[2]));
 }
 
@@ -47,7 +65,8 @@ export function leavesOf(p: Part): Leaf[] {
 
 // ---- flattening: every piece placed, with its matrix and what is changed about it ---------------------------------------
 export interface Flat { leaf: Part; m: THREE.Matrix4; over: Override }
-const matches = (o: Override, name: string) => !o.path || new RegExp(o.path, 'i').test(name);
+const patterns = new Map<string, RegExp>();
+const matches = (o: Override, name: string) => { if (!o.path) return true; let r = patterns.get(o.path); if (!r) { r = new RegExp(o.path, 'i'); patterns.set(o.path, r); } return r.test(name); };
 /** What is changed about one piece: every change it is under that finds it, the innermost first, so the outermost wins.
  *  (A stretch is not here: it is in the matrix.) */
 export function effective(overs: Override[], name: string): Override {

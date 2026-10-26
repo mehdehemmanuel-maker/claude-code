@@ -90,8 +90,9 @@ let saveT = 0; function save(): void { clearTimeout(saveT); saveT = window.setTi
 export interface RanNode { id: string; label: string; ms: number; status: NodeState['status']; error?: string; mapped?: number }
 let lastRan: { at: number; time: number; report: typeof lastReport; nodes: RanNode[] } = { at: 0, time: 0, report: { ran: 0, cached: 0, failed: 0, waiting: 0, ms: 0, looked: 0 }, nodes: [] };
 /** The board's clock: what every Clock node reads. Played, it runs on with the page's frames; only what reads it runs again. */
-const clock = { t: 0, playing: false, rate: 1, max: 120 };
-function setTime(t: number): void { clock.t = ((t % clock.max) + clock.max) % clock.max; if (engine.tick(clock.t)) runSoon(); wall.timed?.(); }
+/** The clock has no end: the bar shows a window of it (`span` seconds, a minute to a year), the one the time is in. */
+const clock = { t: 0, playing: false, rate: 1, span: 120 };
+function setTime(t: number): void { clock.t = Math.max(0, Number.isFinite(t) ? t : 0); if (engine.tick(clock.t)) runSoon(); wall.timed?.(); }
 const moves = (): boolean => nodesOf(root).some((n) => { const x = root.nodes[n.id]!, d = blockOf(x); return !!d && clockOf(d, x.set ?? {}); });
 { let last = 0; const frame = (now: number) => { if (clock.playing && last) setTime(clock.t + (Math.min(250, now - last) / 1000) * clock.rate); last = now; requestAnimationFrame(frame); }; requestAnimationFrame(frame); }
 let running = false, again = false, lastReport = { ran: 0, cached: 0, failed: 0, waiting: 0, ms: 0, looked: 0 };
@@ -740,6 +741,17 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
     return b;
   }],
+  ['A world without end: neighbourhoods for ever, each its own', () => {
+    // three neighbourhoods, each from its own seed, laid for ever along x and z (130 m a cell: two blocks of 60 m and a
+    // street), each cell one of them by its hash: drawn only out to the haze, so walking or flying never reaches an edge
+    const b = emptyBoard('A world without end');
+    for (const k of [1, 2, 3]) { placeBlock(b, 'seed.neighbourhood', 0, 0, { nx: 2, nz: 2, seed: k, traffic: 4 }, `h${k}`); b.nodes[`h${k}`]!.label = `Neighbourhood, seed ${k}`; }
+    placeBlock(b, 'forever', 0, 0, { sx: 130, sz: 130, seed: 7 }, 'world'); b.nodes.world!.label = 'For ever along x and z';
+    for (const k of [1, 2, 3]) wire(b, `h${k}`, 'neighbourhood', 'world', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'world', 'world', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); b.nodes.measure!.label = 'Measure (one cell)'; wire(b, 'world', 'world', 'measure', 'thing');
+    return b;
+  }],
   ['Mating: a door set in its wall by their frames', () => {
     // the wall's opening is a frame; the door's middle is a frame; Mate puts the one on the other, facing as it faces.
     // Change the wall's length or the opening's offset and the door follows
@@ -911,7 +923,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['A house', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));
@@ -997,7 +1009,9 @@ export const wall = {
   },
   /** The clock: where it is, whether it is running, and whether anything on the board moves with it. */
   clock: () => ({ ...clock, moves: moves() }),
-  setTime, play(on: boolean): void { clock.playing = on; wall.timed?.(); }, rate(r: number): void { clock.rate = r; wall.timed?.(); },
+  setTime, play(on: boolean): void { clock.playing = on; wall.timed?.(); }, rate(r: number): void { clock.rate = r; wall.timed?.(); }, span(sp: number): void { clock.span = Math.max(1, sp); wall.timed?.(); },
+  /** The window of the clock the bar shows: from, to. */
+  window: (): [number, number] => { const a = Math.floor(clock.t / clock.span) * clock.span; return [a, a + clock.span]; },
   /** The clock moved. */
   timed: null as null | (() => void),
   /** What the last run worked out anew, and how long each took. */

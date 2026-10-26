@@ -47,10 +47,13 @@ export class Dock3D {
     const b = this.view.bounds(); if (b.isEmpty()) return;
     const c = b.getCenter(new THREE.Vector3()), r = Math.max(0.05, b.getSize(new THREE.Vector3()).length() / 2);
     const d = r / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.05, dir = new THREE.Vector3(0.75, 0.62, 1).normalize();
-    (this.scene.fog as THREE.FogExp2).density = 0.35 / (d + r * 2);
     this.controls.target.copy(c); this.camera.position.copy(c).addScaledVector(dir, d); this.camera.near = Math.max(1e-4, d / 1e4); this.camera.far = d * 100; this.camera.updateProjectionMatrix(); this.controls.update();
   }
   get canvas(): HTMLCanvasElement { return this.renderer.domElement; }
+  /** The view put somewhere and turned to look at a point (a test's, or a bookmark's). */
+  look(from: [number, number, number], at: [number, number, number]): void { this.controls.target.set(...at); this.camera.position.set(...from); this.controls.update(); }
+  /** How long the last frames took to draw, ms (a moving mean). */
+  frameMs = 0;
 
   private resize(): void { const w = Math.max(1, this.host.clientWidth), h = Math.max(1, this.host.clientHeight); this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
   private pick(e: PointerEvent): void {
@@ -68,7 +71,12 @@ export class Dock3D {
   private frame(now: number): void {
     if (!this.host.offsetParent && this.host.clientWidth === 0) return;
     this.controls.update(); this.layGrid();
+    // the haze, and so the view's reach, follows how far off the view is: near, a street fades in a few hundred metres;
+    // pulled back, a whole world can be seen (where it fades, nothing more is drawn: what makes no end affordable)
+    const dist = this.camera.position.distanceTo(this.controls.target), fog = this.scene.fog as THREE.FogExp2;
+    // and thick enough by where a world without end is cut off that its edge is never seen
+    fog.density = Math.max(0.12 / Math.max(1e-6, dist), 2.6 / this.view.reach); this.view.range = 2 / fog.density; this.camera.far = Math.max(this.camera.far, this.view.range * 1.2); this.camera.near = Math.max(1e-5, dist / 5e4); this.camera.updateProjectionMatrix();
     this.view.update(this.camera, this.renderer.domElement.clientHeight || 300, now);
-    this.renderer.render(this.scene, this.camera);
+    const t0 = performance.now(); this.renderer.render(this.scene, this.camera); this.frameMs = 0.9 * this.frameMs + 0.1 * (performance.now() - t0); this.view.drawMs = this.frameMs;
   }
 }

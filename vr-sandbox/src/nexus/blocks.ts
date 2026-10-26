@@ -17,7 +17,7 @@ import { DESIGNED, component, componentFromParams, exampleOf } from './component
 import { FAMILIES } from './families';
 import { DENSITY } from './mass';
 import * as THREE from 'three';
-import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, combine, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
+import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
 import { massOf } from './mass';
 import type { Part } from './kits';
 import type { Board } from './boards';
@@ -613,6 +613,10 @@ export function heightOn(g: { w: number; d: number; n: number; h: number[] }, x:
   return (at(ix, iz) * (1 - ux) + at(ix + 1, iz) * ux) * (1 - uz) + (at(ix, iz + 1) * (1 - ux) + at(ix + 1, iz + 1) * ux) * uz;
 }
 /** Floor plans by name: each a typical home of its kind (room sizes typical of new homes, an estimate). */
+/** What Follow a path keeps of each street as it goes (its cars' places, speeds and last steps), by its inputs: the last
+ *  64 streets. */
+type Marks = Map<number, { s: number[]; vel: number[]; moved: number[] }> & { sigs: Map<string, number>; cycle?: { from: number; len: number } };
+const FOLLOW_MARKS = new Map<string, Marks>();
 /** A fixed-time cycle's phases ("green 30, yellow 4, red 34"), and which it is in at a time. */
 export function phasesOf(text: string): { name: string; s: number }[] {
   const ph = text.split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const m = /^(.+?)\s+([\d.]+)$/.exec(x); if (!m) throw new Error(`"${x}" is not "phase seconds"`); return { name: m[1]!.trim(), s: Number(m[2]) }; });
@@ -905,6 +909,16 @@ const BUILT_THINGS: BlockDef[] = [
       return { rows, low: rows.length ? low : 0, high: rows.length ? high : 0 };
     },
     tests: [{ inputs: { rows: [{ x: 0, z: 0 }], on: { name: 'g', at: [0, 0, 0], shape: { ground: { w: 2, d: 2, n: 1, h: [1, 1, 1, 1], base: 0.1 } } } }, outputs: { rows: [{ y: 1 }], low: 1, high: 1 } }] }),
+  def({ id: 'forever', name: 'Forever', kind: 'generator', ability: 'generate', domains: ['structural', 'everyday', 'energy'], says: 'Things repeated without end on a lattice (along x, y, z, or any of them), each cell one of them picked from the seed: the same cell, the same one. Only what is in view is ever drawn, so a world with no edge costs what the view holds. What it weighs and spans is one cell\'s',
+    settings: [{ key: 'seed', label: 'Seed', type: 'number', default: 1 }],
+    ports: { inputs: [P('things', 'assembly', { many: true, label: 'one or more things, a cell each' }), L('sx', 0, 'step along x (0: none)'), L('sy', 0, 'step up y (0: none)'), L('sz', 0, 'step along z (0: none)')], outputs: [thing('world', 'without end')] },
+    run: (i, c) => {
+      const vs = (Array.isArray(i.things) ? i.things : [i.things]).filter(Boolean).map(asThing); if (!vs.length) throw new Error('wire in something to repeat');
+      const step: [number, number, number] = [Number(i.sx ?? 0), Number(i.sy ?? 0), Number(i.sz ?? 0)]; if (step.some((x) => x < 0) || step.every((x) => x === 0)) throw new Error('give it a step along at least one of x, y, z');
+      const seed = Number(c.set.seed ?? 1);
+      return { world: { name: `${vs.map((v) => v.name).join(' or ')}, for ever`, items: [place(vs[cellPick(0, 0, 0, seed, vs.length)]!)], tiled: { step, variants: vs, seed } } };
+    },
+    tests: [{ set: { seed: 1 }, inputs: { things: [{ name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }], sx: 2 }, outputs: { world: { tiled: { step: [2, 0, 0], seed: 1 } } } }] }),
   // ---- time and motion: what changes as the clock runs --------------------------------------------------------------
   def({ id: 'time', name: 'Clock', kind: 'input', ability: 'measure', domains: ['everyday', 'vehicles', 'mechanical'], says: 'The time the board is at, in seconds: the time bar\'s. Everything wired from it runs again as time goes on, and nothing else does',
     ports: { inputs: [], outputs: [N('t', 's', { label: 'time' })] }, clock: true,
@@ -931,22 +945,23 @@ const BUILT_THINGS: BlockDef[] = [
     },
     tests: [{ inputs: { w: 60, d: 60, inset: 0 }, outputs: { length: 240, stops: [{ at: 55, axis: 'x' }, { at: 115, axis: 'z' }, { at: 175, axis: 'x' }, { at: 235, axis: 'z' }] } }] }),
   def({ id: 'follow', name: 'Follow a path', kind: 'solver', ability: 'simulate', domains: ['vehicles', 'mechanical', 'everyday'], says: 'Things moving along a path at the clock\'s time: each speeds up and slows as a car does, keeps a gap to the one ahead, and stops at a stop line while its way is red (or yellow, if it can stop). Worked out step by step from time 0 (a tenth of a second at a time), so the same time is always the same street. Gives where each is and which way it faces, for a spawner',
-    settings: [{ key: 'loop', label: 'Round and round (the path is a loop)', type: 'boolean', default: true }, { key: 'phases', label: 'Its signals\' phases, seconds', type: 'text', default: 'green 30, yellow 4, red 34' }],
+    settings: [{ key: 'loop', label: 'Round and round (the path is a loop)', type: 'boolean', default: true }, { key: 'phases', label: 'Its signals\' phases, seconds', type: 'text', default: 'green 30, yellow 4, red 34' }, { key: 'repeat', label: 'Find the round it repeats in (a year on as fast as a minute)', type: 'boolean', default: true }],
     ports: { inputs: [P('path', 'table'), N('n', undefined, { default: 4, optional: true, label: 'how many' }), N('speed', 'm/s', { default: 11, optional: true }), L('gap', 8, 'gap kept, front to front'), N('t', 's', { label: 'time' }), P('stops', 'table', { optional: true }), N('accel', 'm/s^2', { default: 2, optional: true, label: 'speeds up at most (2 m/s², typical of a car in town: an estimate)' }), N('brake', 'm/s^2', { default: 3.4, optional: true, label: 'slows at most (3.4 m/s², the deceleration ITE times yellows by)' })], outputs: [P('rows', 'table'), P('waiting', 'integer', { label: 'stopped' }), N('travelled', 'm', { label: 'the first has gone' }), N('speed', 'm/s', { label: 'mean speed' })] },
     run: (i, c) => {
       const pts = (Array.isArray(i.path) ? i.path : []).map((r) => r as { x: number; z: number }); if (pts.length < 2) throw new Error('a path needs two points or more');
       const cum = [0]; for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1]! + Math.hypot(pts[k]!.x - pts[k - 1]!.x, pts[k]!.z - pts[k - 1]!.z));
-      const L = cum[cum.length - 1]!, loop = c.set.loop !== false, n = Math.max(0, Math.min(500, Math.round(Number(i.n ?? 4)))), v = Number(i.speed ?? 11), gap = Number(i.gap ?? 8), T = Math.min(Math.max(0, Number(i.t ?? 0)), 1800), dt = 0.1;
+      const L = cum[cum.length - 1]!, loop = c.set.loop !== false, n = Math.max(0, Math.min(500, Math.round(Number(i.n ?? 4)))), v = Number(i.speed ?? 11), gap = Number(i.gap ?? 8), T = Math.max(0, Number(i.t ?? 0)), dt = 0.1;
       const ph = phasesOf(String(c.set.phases)), stops = (Array.isArray(i.stops) ? i.stops : []).map((r) => r as { at: number; axis?: string }).sort((a, b) => a.at - b.at);
       const go = (axis: string | undefined, t: number) => (axis === 'z' ? crossOf(ph, t) : phaseAt(ph, t).name) === 'green';
       const s = Array.from({ length: n }, (_, k) => (loop ? ((n - k) * L) / Math.max(1, n) : -k * gap) % (L || 1)), moved = new Array<number>(n).fill(0);
+      const start = [...s];
       const ahead = (from: number, to: number) => (loop ? (((to - from) % L) + L) % L : to - from);
       // each speeds up at `accel` and slows at `brake` at most, to what lets it stop short of what is ahead (the car in front,
       // less its gap; a stop line it may not cross); at a yellow it goes on if it is too close to stop at `brake` (as drivers
       // do: the yellow is timed so they can)
-      const vel = new Array<number>(n).fill(v), acc = Number(i.accel ?? 2), brk = Number(i.brake ?? 3.4);
-      for (let t = 0; t < T - 1e-9; t += dt) {
-        const h = Math.min(dt, T - t);
+      const acc = Number(i.accel ?? 2), brk = Number(i.brake ?? 3.4);
+      let vel = new Array<number>(n).fill(v);
+      const advance = (t: number, h: number) => {
         for (let k = 0; k < n; k++) {
           let free = Infinity;
           if (n > 1 && (loop || k > 0)) { const lead = s[(k - 1 + n) % n]!; free = Math.max(0, ahead(s[k]!, lead) - gap); }
@@ -959,7 +974,37 @@ const BUILT_THINGS: BlockDef[] = [
           const want = Math.min(v, vel[k]! + acc * h, Math.sqrt(2 * brk * free)), step = Math.min(free, Math.max(0, want) * h);
           vel[k] = step / h; moved[k] = step; s[k] = loop ? (s[k]! + step) % L : Math.min(L, s[k]! + step);
         }
+      };
+      // time without end: the street is kept every 30 s of its own time (every 5 min after its first 16 h), so a time an
+      // hour or a year on starts from the last kept before it, not from 0; and stepping whole tenths from a kept state
+      // gives what stepping from 0 gives, so the same time is still always the same street
+      const key = JSON.stringify([pts, n, v, gap, loop, String(c.set.phases), stops, acc, brk, c.set.repeat !== false]);
+      let book = FOLLOW_MARKS.get(key); if (book) { FOLLOW_MARKS.delete(key); FOLLOW_MARKS.set(key, book); } else { book = Object.assign(new Map(), { sigs: new Map<string, number>() }) as Marks; FOLLOW_MARKS.set(key, book); if (FOLLOW_MARKS.size > 64) FOLLOW_MARKS.delete(FOLLOW_MARKS.keys().next().value!); }
+      // and a street under a fixed cycle settles into a round that repeats: kept once a cycle (at the same point of it), a
+      // state met before (to a micrometre and a micrometre a second) means it repeats from there, and any time after folds
+      // back into that round, so a year on costs what the first few minutes did. Found, never assumed: until a state comes
+      // round again, it steps on
+      const cycleSteps = stops.length && loop && c.set.repeat !== false ? Math.round(ph.reduce((a, p) => a + p.s, 0) / dt) : 0, every = cycleSteps || 300;
+      const sigOf = () => `${s.map((x) => Math.round(x * 1e6)).join(',')}|${vel.map((x) => Math.round(x * 1e6)).join(',')}`;
+      let full = Math.floor(T / dt + 1e-9);
+      const fold = () => { const cy = book!.cycle; if (cy && full > cy.from) full = cy.from + ((full - cy.from) % cy.len); };
+      fold();
+      for (;;) {
+        let from = 0; for (const k of book.keys()) if (k <= full && k > from) from = k;
+        if (from) { const m0 = book.get(from)!; s.splice(0, n, ...m0.s); vel = [...m0.vel]; moved.splice(0, n, ...m0.moved); }
+        else { s.splice(0, n, ...start); vel = new Array<number>(n).fill(v); moved.fill(0); }
+        let found = false;
+        for (let k = from; k < full; k++) {
+          advance(k * dt, dt);
+          if ((k + 1) % every === 0 && !book.has(k + 1) && book.size < 20_000) {
+            book.set(k + 1, { s: [...s], vel: [...vel], moved: [...moved] });
+            if (cycleSteps && !book.cycle) { const sg = sigOf(), was = book.sigs.get(sg); if (was !== undefined) { book.cycle = { from: was, len: k + 1 - was }; found = true; break; } book.sigs.set(sg, k + 1); }
+          }
+        }
+        if (!found) break;
+        fold();
       }
+      if (T - Math.floor(T / dt + 1e-9) * dt > 1e-9) advance(full * dt, T - Math.floor(T / dt + 1e-9) * dt);
       const at = (d: number) => { let k = 1; while (k < cum.length - 1 && cum[k]! < d) k++; const a = pts[k - 1]!, b = pts[k]!, f = (d - cum[k - 1]!) / Math.max(1e-9, cum[k]! - cum[k - 1]!); return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, ry: Math.atan2(-(b.z - a.z), b.x - a.x) }; };
       const rows = s.map((d) => ({ ...at(Math.max(0, d)), y: 0 })), waiting = T > 0 ? moved.filter((m) => m < 1e-6).length : 0;
       return { rows, waiting, travelled: n ? s[0]! : 0, speed: n ? vel.reduce((a, b) => a + b, 0) / n : 0 };

@@ -39,6 +39,10 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x05070b);
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.55; renderer.toneMappingExposure = 0.95;
 scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x101820, 0.35));
+// a horizon: the space reaches 400 m of what you see (whatever S is, that many metres at your own size: 10 km of a city
+// seen at 1 cell = 1 m, 400 µm of a part at 1 cell = 1 µm), fading into haze before it, so a world without end costs what
+// the view holds and its edge is never seen
+const HORIZON = 400; scene.fog = new THREE.FogExp2(0x05070b, 2.6 / HORIZON);
 { const sun = new THREE.DirectionalLight(0xfff4e0, 1.6); sun.position.set(3, 6, 4); scene.add(sun); const back = new THREE.DirectionalLight(0x9ec3ff, 0.35); back.position.set(-4, 2, -3); scene.add(back); }
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 2e5);
 const rig = new THREE.Group(); rig.add(camera); scene.add(rig);
@@ -51,7 +55,7 @@ const view = new SpaceView(); world.add(view.group);
 const S = () => world.scale.x;
 /** S changed by a factor, about a point where you see it (it stays where it is). */
 function zoomAbout(f: number, at: THREE.Vector3): void {
-  const s = Math.min(1e6, Math.max(1e-6, S() * f)), k = s / S();
+  const s = Math.min(1e16, Math.max(1e-16, S() * f)), k = s / S();
   world.position.sub(at).multiplyScalar(k).add(at); world.scale.setScalar(s); grid.dirty = true;
 }
 /** Everything shown, framed before you: its middle at the point you turn about, its largest side a metre and a bit. */
@@ -73,7 +77,7 @@ const xrPivot = new THREE.Vector3(0, 1.0, -0.8);
 const grid = { group: new THREE.Group(), cell: 0, centre: new THREE.Vector3(Infinity, 0, 0), dirty: true, planes: { xz: true, xy: false, yz: false } };
 world.add(grid.group);
 const lineMat = (c: number, o: number) => new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: o, depthWrite: false });
-const NAMES: [number, string][] = [[1e3, 'km'], [1, 'm'], [1e-3, 'mm'], [1e-6, 'µm'], [1e-9, 'nm']];
+const NAMES: [number, string][] = [[9.4607e15, 'ly'], [1.496e11, 'AU'], [1e9, 'Gm'], [1e6, 'Mm'], [1e3, 'km'], [1, 'm'], [1e-3, 'mm'], [1e-6, 'µm'], [1e-9, 'nm'], [1e-12, 'pm'], [1e-15, 'fm']];
 /** A length as it is said: 1 km, 10 m, 100 µm. */
 export function lengthSaid(x: number): string { for (const [k, u] of NAMES) if (Math.abs(x) >= k * 0.999) return `${Number((x / k).toPrecision(3))} ${u}`; return `${x.toExponential(1)} m`; }
 function label(text: string, colour: string): THREE.Sprite {
@@ -85,18 +89,22 @@ function label(text: string, colour: string): THREE.Sprite {
 /** The grid laid again where the decade changed, or you went past a major cell: centred on the point you look at. */
 function layGrid(): void {
   const s = S(), cell = 10 ** Math.floor(Math.log10(0.1 / s)), focus = world.worldToLocal(pivot());
-  const major = cell * 10, centre = new THREE.Vector3(Math.round(focus.x / major) * major, 0, Math.round(focus.z / major) * major);
+  // the grid lies at the height you look at (to the nearest major cell): zoomed into the air above a city down to a
+  // micrometre, its cells are still there to read the scale by
+  const major = cell * 10, centre = new THREE.Vector3(Math.round(focus.x / major) * major, Math.abs(focus.y) < major * 5 ? 0 : Math.round(focus.y / major) * major, Math.round(focus.z / major) * major);
   if (!grid.dirty && cell === grid.cell && centre.distanceTo(grid.centre) < major * 0.5) return;
   grid.dirty = false; grid.cell = cell; grid.centre.copy(centre);
   for (const o of [...grid.group.children]) { grid.group.remove(o); (o as THREE.Mesh).geometry?.dispose(); }
   const shown = cell * s, fade = Math.min(1, Math.max(0, (shown - 0.01) / 0.03)), N = 40;
   /** One plane of lines spanned by axes u and v (the third axis at its zero), `step` apart, n each way of the centre. */
   const plane = (u: 0 | 1 | 2, v: 0 | 1 | 2, step: number, n: number, o: number, c: number) => {
-    const cen = [centre.x, 0, centre.z], pts: number[] = [];
+    // the lines measured from the grid's centre, the centre where the lines are placed: a grid of nanometre cells a hundred
+    // metres out keeps its lines apart (in 32 bits, 100 m and 100 m + 1 nm are the same number)
+    const cen = [0, 0, 0], pts: number[] = [];
     for (let i = -n; i <= n; i++) for (const [a, b] of [[u, v], [v, u]] as const) {
       const p = [0, 0, 0], q = [0, 0, 0]; p[a] = q[a] = cen[a]! + i * step; p[b] = cen[b]! - n * step; q[b] = cen[b]! + n * step; pts.push(...p, ...q);
     }
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); grid.group.add(new THREE.LineSegments(geo, lineMat(c, o)));
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); const ls = new THREE.LineSegments(geo, lineMat(c, o)); ls.position.copy(centre); grid.group.add(ls);
   };
   const each = (a: 0 | 1 | 2, b: 0 | 1 | 2) => { plane(a, b, cell, N, 0.22 * fade, 0x3b4a5e); plane(a, b, major, N / 10 + 4, 0.45, 0x5a6f88); };
   if (grid.planes.xz) each(0, 2); if (grid.planes.xy) each(0, 1); if (grid.planes.yz) each(1, 2);
@@ -145,7 +153,7 @@ const bar = new Panel(1.7, 0.1, 2400, (p) => {
   const g = p.g, H = p.c.height; g.fillStyle = '#0b1220ee'; round(g, 0, 0, p.c.width, H, 24); g.fill();
   g.textBaseline = 'middle'; g.font = `700 22px ${FONT}`; g.fillStyle = '#ffd740'; g.fillText('S · SCALE', 24, H / 2 - 18);
   g.font = `600 28px ${FONT}`; g.fillStyle = '#e6eef8'; g.fillText(`1 cell = ${lengthSaid(grid.cell || 1)}`, 24, H / 2 + 16);
-  let x = 300; for (const [name, cell] of [['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3]] as const) { p.button(name, x, 22, 84, H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += 92; }
+  let x = 300; for (const [name, cell] of [['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3], ['Mm', 1e6]] as const) { p.button(name, x, 22, 84, H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += 92; }
   p.button('Fit', x, 22, 90, H - 44, fit); x += 100; p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130;
   for (const k of ['xz', 'xy', 'yz'] as const) { p.button(k.toUpperCase(), x, 22, 84, H - 44, () => { grid.planes[k] = !grid.planes[k]; grid.dirty = true; }, grid.planes[k]); x += 92; }
   x += 22; g.font = `700 22px ${FONT}`; g.fillStyle = '#69f0ae'; g.fillText('T · TIME', x, H / 2 - 18);
@@ -160,8 +168,8 @@ const bar = new Panel(1.7, 0.1, 2400, (p) => {
   };
   if (clockMode) {
     p.button(ck.playing ? '❚❚' : '▶', tx, 22, 64, H - 44, () => { wall.play(!wall.clock().playing); bar.draw(); }, ck.playing);
-    slide(ck.t / ck.max, (f) => wall.setTime(f * ck.max));
-    p.button('×' + String(ck.rate), sx + sw + 14, 22, 64, H - 44, () => { wall.rate(({ 1: 2, 2: 5, 5: 10 } as Record<number, number>)[ck.rate] ?? 1); bar.draw(); });
+    const [w0] = wall.window(); slide((ck.t - w0) / ck.span, (f) => wall.setTime(w0 + f * ck.span));
+    p.button('×' + (ck.rate >= 1000 ? `${ck.rate / 1000}k` : String(ck.rate)), sx + sw + 14, 22, 64, H - 44, () => { wall.rate(({ 1: 10, 10: 100, 100: 1000 } as Record<number, number>)[ck.rate] ?? 1); wall.span(({ 1: 600, 10: 3600, 100: 86400 } as Record<number, number>)[ck.rate] ?? 120); bar.draw(); });
     g.font = `500 24px ${FONT}`; g.fillStyle = ck.moves ? '#a7ffeb' : '#5f6f84'; g.fillText(ck.moves ? `t = ${ck.t.toFixed(1)} s` : 'nothing moves', tx + tw + 8, H / 2 - 16);
   } else {
     const h = wall.history();
@@ -319,10 +327,11 @@ renderer.setAnimationLoop((now) => {
   if (first && view.bounds().isEmpty() === false) { first = false; fit(); }
   layGrid();
   const xrCam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
+  view.range = Math.min(HORIZON, view.reach); (scene.fog as THREE.FogExp2).density = 2.6 / view.range;
   view.update(xrCam as THREE.PerspectiveCamera, renderer.domElement.clientHeight || window.innerHeight, now);
   board.update(now);
   if (now % 500 < 17 || (wall.clock().playing && now % 100 < 17)) bar.draw();
-  renderer.render(scene, camera);
+  const r0 = performance.now(); renderer.render(scene, camera); view.drawMs = 0.9 * view.drawMs + 0.1 * (performance.now() - r0);
 });
 // the first time, a board that shows something in the space: the city from a few nodes
 try { if (!localStorage.getItem('nexus.space.seen')) { localStorage.setItem('nexus.space.seen', '1'); window.setTimeout(() => { if (!wall.shown().length) wall.demo(0); }, 400); } } catch { /* a private window: nothing kept */ }
@@ -331,7 +340,7 @@ window.setTimeout(refresh, 300);
 const emulate = emulated && {
   /** The right hand at the head's side, aimed at a button of the space bar by its label. */
   aimAtBar(label: string): boolean {
-    bar.draw(); const i = ['µm', 'mm', 'm', 'km'].indexOf(label); const h = bar.hits[i]; if (!h) return false;
+    bar.draw(); const i = ['nm', 'µm', 'mm', 'm', 'km', 'Mm'].indexOf(label); const h = bar.hits[i]; if (!h) return false;
     const uv = new THREE.Vector3(((h.x0 + h.x1) / 2 / bar.c.width - 0.5) * bar.w, (0.5 - (h.y0 + h.y1) / 2 / bar.c.height) * bar.h, 0), target = bar.mesh.localToWorld(uv);
     const from = new THREE.Vector3(0.2, 1.3, -0.1), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), target.clone().sub(from).normalize());
     emulated!.controllers.right.position.set(from.x, from.y, from.z); emulated!.controllers.right.quaternion.set(q.x, q.y, q.z, q.w); return true;

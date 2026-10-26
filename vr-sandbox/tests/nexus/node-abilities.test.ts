@@ -85,6 +85,15 @@ describe('the clock, signals and paths', () => {
     expect(after[0]!.x - 599.5).toBeGreaterThan(23); expect(after[0]!.x - 599.5).toBeLessThan(27);
     const slowing = (await run(38)).speed as number; expect(slowing).toBeGreaterThan(0); expect(slowing).toBeLessThan(15);
   });
+  it('a street that has come round to a state it was in before is folded into its round: the same as stepping all the way', async () => {
+    const ring = await runBlock('path.loop', { w: 120, d: 120, inset: 1.8 });
+    for (const t of [2000.05, 5000, 9000.3]) {
+      const fast = await runBlock('follow', { path: ring.path, stops: ring.stops, n: 8, t }, {}), slow = await runBlock('follow', { path: ring.path, stops: ring.stops, n: 8, t, repeat: false }, {});
+      const a = fast.rows as { x: number; z: number }[], b = slow.rows as { x: number; z: number }[];
+      for (let k = 0; k < a.length; k++) expect(Math.hypot(a[k]!.x - b[k]!.x, a[k]!.z - b[k]!.z)).toBeLessThan(1e-3);
+    }
+    const t0 = performance.now(); await runBlock('follow', { path: ring.path, stops: ring.stops, n: 8, t: 365 * 86400 }, {}); expect(performance.now() - t0).toBeLessThan(2000);
+  }, 60000);
   it('cars keep their gap: none closer than it to the one ahead', async () => {
     const out = await runBlock('follow', { path: [{ x: 0, z: 0 }, { x: 100, z: 0 }, { x: 100, z: 100 }, { x: 0, z: 100 }, { x: 0, z: 0 }], n: 12, speed: 12, gap: 8, t: 90, stops: [{ at: 95, axis: 'x' }, { at: 195, axis: 'z' }] }, {});
     const pts = out.rows as { x: number; z: number }[];

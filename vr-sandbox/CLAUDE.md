@@ -85,6 +85,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   do we handle realism at scale like right now you're just like stress testing to find flaws and making things more and
   more powerful but yea keep reading the file and executing" (2026-10-26: Boards in the library, by field, yours saved
   beside them; stand-ins with error bounds and a frame governor, the Seed document's 3.12; cars that speed up and brake)
+- "try to break rendering at some point once you finish up try to break rendering try to render tons of stuff make this
+  space infinite in all axes and scale and time try to break rendering find the cause and find a trick" (2026-10-26: the
+  breaks and their tricks in `docs/NODE-ENGINE.md`; culling, lazy groups, largest first, a stand-in pyramid, a governor,
+  a floating origin, Forever, a horizon, folded time)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -142,9 +146,9 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | The 3D view docked in the dashboard: what the board shows, drawn by the space's renderer, pressed to choose its node | `src/nexus/view/dock3d.ts` |
 | A part in 3D on a board of blocks: each 3D view block's picture, and full screen to turn and take apart | `src/nexus/view/nodes3d.ts` (draws with `kit3d.ts`) |
 | The space (`view/space.html`, entered from the dashboard): nothing but what is made, in x, y, z, at any scale (S: the world scaled round you, the grid's cells a decade at a time) and through time (T: the board's clock, or its history), the panels floating where you reach them, on a screen or in a headset | `src/nexus/view/space.ts` |
-| What the nodes make, drawn in the space: one instanced mesh per distinct piece; far off, a thing as its stand-in (its biggest pieces, chosen while what it leaves out is under a pixel or two), tinier still its box; a governor that coarsens when drawing falls behind | `src/nexus/view/space3d.ts` |
+| What the nodes make, drawn in the space and the dashboard: one instanced mesh per distinct piece; what is out of view culled by groups; long lists split lazily into groups; the biggest on the screen first, to a budget; far off a stand-in (4, 12 or 48 of its biggest pieces, the fewest under a pixel or two of error), tinier its box (as high and the colour most of it is); a governor on choosing and drawing time; positions from a floating origin; worlds without end (`tiled`) as super-cells; a horizon | `src/nexus/view/space3d.ts` |
 | Things placed, never copied: a part or an assembly placed (at, turned, scaled, changed there), shared by every place; mass, bounds and counts once per distinct thing; rows, rings, grids, mirrors; frames (named places on a thing, found through what it places) and mating one thing onto another by them (`frame`, `findFrame`, `mateTo`) | `src/nexus/assembly.ts` |
-| What building complexity showed nodes need: Mate (by frames), what each touches, rules over rows, Clear away (deleting by where things are), Clashes, Onto the ground, the Clock, Signal cycle, Loop round a block, Follow a path (gaps kept, stop lines obeyed, stepped from 0 so a time is always the same) | `src/nexus/blocks.ts` (the clock itself: `Engine.tick` and `clock` on a block in `dataflow.ts`) |
+| What building complexity showed nodes need: Mate (by frames), what each touches, rules over rows, Clear away (deleting by where things are), Clashes, Onto the ground, the Clock, Signal cycle, Loop round a block, Follow a path (gaps kept, stop lines obeyed, kept every 30 s and folded into the round it repeats, so any time is always the same and a year on is fast), Forever (a lattice without end) | `src/nexus/blocks.ts` (the clock itself: `Engine.tick` and `clock` on a block in `dataflow.ts`) |
 | Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |
 | The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
 

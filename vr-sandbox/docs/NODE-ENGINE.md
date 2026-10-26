@@ -41,6 +41,33 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-26, after: breaking the renderer, and the tricks that fixed each break.** The user: "try to break rendering
+… render tons of stuff, make this space infinite in all axes and scale and time … find the cause and find a trick." A
+harness drove the renderer's choosing of what to draw (exactly timed without a GPU) with fields of neighbourhoods up to
+1024 × 1024 (3.7 billion pieces placed), a car out to 10¹⁰ m, the clock out to a year, then the pages in Chromium.
+
+| What broke | Cause | Trick |
+| --- | --- | --- |
+| Looking away cost as much as looking at it | No frustum test | Whole groups culled by one sphere test |
+| 1M placed things visited every frame; first view 26 s | A flat list has no hierarchy | Lazy groups: positions in flat arrays, a group split at its median (quickselect) only when the view opens it |
+| 1M+ boxes past the budget | Over budget still drew a box per thing | Largest-on-screen first (a heap): when the budget runs out, the rest are the smallest, drawn as their group's box, never a hole |
+| Every far house as 48 pieces | One stand-in level | A pyramid: 4, 12 or 48 pieces, the fewest whose left-out error is under 1.5 px |
+| 3 µs a piece | `leafGeometry` wrote each shape out as JSON every piece, every frame; matrices re-made from angles; a RegExp per override | Geometry, materials, placement matrices and patterns kept per object |
+| The view never settled | The governor only learnt when the camera moved | A build that changes the governor asks for another; it hears the GPU's draw time as well; it jumps by how far over it is |
+| A car 10⁷ m out jittered (float32 spacing there: 1 m; at 10¹⁰ m, 1 km) | Instance positions in world terms | A floating origin: positions measured from the eye, the meshes moved to it (offsets under 10 m at 10¹⁰ m out) |
+| The 1 nm grid vanished | Grid lines 100 m out, 1 nm apart, are one float32 number | Grid lines measured from its centre; the grid at the height you look at |
+| No world without end | — | **Forever** (a node): a lattice drawn as a tree of super-cells (2, 4, 8 … cells a side), each an averaged slab while small, split only when big: from the street, from 1 Mm a cell, from 10⁹ m out, 15 to 27 ms a build |
+| The world's edge showed | Cells stopped before the haze | A horizon: haze that follows the view's distance (and the space's S), nothing drawn past it, thick where the cells stop |
+| A plateau with a cliff, grey | Far boxes as tall as the tallest roof, the colour of the first piece (a road) | A far box as high as most of the thing is and the colour most of it is, both weighted by area |
+| A week ahead took 25 s; time stopped at 30 min | Traffic replayed from 0 | Checkpoints every 30 s of the street's time; and a street under a fixed cycle settles into a round that repeats: found (a state met before at the same point of the cycle), any later time folds into it. A year on in under 2 s from nothing, then 1 ms. Checked against stepping all the way (within 1 mm) |
+| The clock ended at 120 s | A fixed bar | No end: a window of it (a minute to a year), rates to a day a second |
+
+Measured after (choosing what to draw, one core, no GPU): every scene and view 7 to 32 ms a build, under 25,000 pieces
+drawn, with the error allowed between 3 and 16 px (the governor's choice on this machine). In Chromium's software GPU the
+endless world built in 9 to 66 ms and drew in 3 to 27 ms. Honest limits: the first view of a list of a million things
+still takes 3 s (where each is, once); the governor is coarse on a slow machine (on this one, up to 16 px of error);
+nothing yet streams a seed's stand-in built once and saved, so a new kind of thing pays its first view.
+
 **2026-10-26, last: realism at scale.** Finding flaws and adding power is half of it; the other half is that a big
 thing still looks and behaves like itself. Following the Seed document's 3.12 ("cost follows the screen"):
 - **Stand-ins with an error bound** (`space3d.ts`): a thing far off is drawn as its biggest pieces (48, by the size of

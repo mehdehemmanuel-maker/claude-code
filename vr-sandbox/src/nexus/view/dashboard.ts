@@ -31,10 +31,17 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('dock').
 // ---- the clock -------------------------------------------------------------------------------------------------------
 const slider = $<HTMLInputElement>('tslider'), rate = $<HTMLSelectElement>('trate');
 function drawClock(): void {
-  const c = wall.clock(); slider.max = String(c.max); if (document.activeElement !== slider) slider.value = String(c.t);
-  $('play').textContent = c.playing ? '❚❚' : '▶'; $('tread').textContent = `t = ${c.t.toFixed(1)} s`;
-  $('tbar').classList.toggle('idle', !c.moves); slider.style.display = c.moves ? '' : 'none'; $('tread').textContent = c.moves ? `t = ${c.t.toFixed(1)} s` : 'Nothing on this board moves with time'; $('tbar').title = c.moves ? 'The board\'s clock: what moves with time runs as it goes' : 'Nothing on this board moves with time yet: wire a Clock into a Follow a path or a Signal cycle';
+  const c = wall.clock(), [w0, w1] = wall.window(); slider.min = String(w0); slider.max = String(w1); slider.step = String(c.span / 1000); if (document.activeElement !== slider) slider.value = String(c.t);
+  $('play').textContent = c.playing ? '❚❚' : '▶'; $('tread').textContent = `t = ${said(c.t)}`;
+  $('tbar').classList.toggle('idle', !c.moves); slider.style.display = c.moves ? '' : 'none'; $('tread').textContent = c.moves ? `t = ${said(c.t)}` : 'Nothing on this board moves with time'; $('tbar').title = c.moves ? 'The board\'s clock: what moves with time runs as it goes' : 'Nothing on this board moves with time yet: wire a Clock into a Follow a path or a Signal cycle';
 }
+/** A time said as people say it: 42.0 s, 3 min 20 s, 5 h 2 min, 12 d 4 h, 3.2 yr. */
+function said(t: number): string {
+  if (t < 60) return `${t.toFixed(1)} s`; if (t < 3600) return `${Math.floor(t / 60)} min ${Math.floor(t % 60)} s`;
+  if (t < 86400) return `${Math.floor(t / 3600)} h ${Math.floor((t % 3600) / 60)} min`; if (t < 365.25 * 86400) return `${Math.floor(t / 86400)} d ${Math.floor((t % 86400) / 3600)} h`;
+  return `${(t / (365.25 * 86400)).toFixed(t < 3.15e9 ? 2 : 0)} yr`;
+}
+const spanSel = $<HTMLSelectElement>('tspan'); spanSel.onchange = () => wall.span(Number(spanSel.value));
 $('play').onclick = () => wall.play(!wall.clock().playing);
 slider.oninput = () => wall.setTime(Number(slider.value));
 rate.onchange = () => wall.rate(Number(rate.value));
@@ -72,7 +79,8 @@ function metrics(): void {
     ring(total ? (total - failed - waiting) / total : null, failed ? '#ff5252' : '#40c4ff', total ? `${total - failed - waiting}/${total}` : '—', 'Nodes', failed ? `${failed} failed` : waiting ? `${waiting} waiting` : 'all working'),
     ring(st.instances / 250_000, '#e040fb', st.instances >= 1000 ? `${(st.instances / 1000).toFixed(st.instances >= 1e4 ? 0 : 1)}k` : String(st.instances), 'Drawn', 'pieces, of 250k most'),
   ].join('');
-  $('metNote').textContent = placed ? `What is shown spans ${show(box.x, 'm')} × ${show(box.z, 'm')}, ${show(box.y, 'm')} high.` : 'Wire something into a "Show in space" node to measure it here.';
+  const endless = things.some((x) => isAssembly(x.thing) && x.thing.tiled);
+  $('metNote').textContent = endless ? 'What is shown repeats for ever: these figures are for one cell of it.' : placed ? `What is shown spans ${show(box.x, 'm')} × ${show(box.z, 'm')}, ${show(box.y, 'm')} high.` : 'Wire something into a "Show in space" node to measure it here.';
   $('metOf').textContent = wall.boardTitle();
   $('stat3d').textContent = st.instances ? `${st.instances.toLocaleString()} pieces drawn${st.boxes ? `, ${st.boxes.toLocaleString()} of them far away, shown as plain boxes` : ''}` : '';
 }

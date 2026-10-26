@@ -145,7 +145,14 @@ function groundGeometry(g: Extract<Shape, { ground: unknown }>['ground']): THREE
 /** A piece's geometry as the forge draws it: its shape, its flats, standing on its base where it grows from one, its
  *  holes drilled; made once for every piece shaped and drilled alike (src/nexus/view/space3d.ts instances it). */
 const leafGeos = new Map<string, THREE.BufferGeometry | null>();
+/** (Each part's geometry and materials kept with the part itself: a city draws the same piece a million times a frame, and
+ *  its key, the shape written out, costs more than drawing it.) */
+const geoOfPart = new WeakMap<Part, THREE.BufferGeometry | null>(), matOfPart = new WeakMap<Part, Map<string, THREE.MeshStandardMaterial>>();
 export function leafGeometry(p: Part): THREE.BufferGeometry | null {
+  const was = geoOfPart.get(p); if (was !== undefined) return was;
+  const g = leafGeometryMade(p); geoOfPart.set(p, g); return g;
+}
+function leafGeometryMade(p: Part): THREE.BufferGeometry | null {
   if (!p.shape || 'stars' in p.shape || 'field' in p.shape || 'heap' in p.shape) return null;
   const key = JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts]); if (leafGeos.has(key)) return leafGeos.get(key)!;
   let g = geometry(p.shape, p.mat, p.make, p.facets);
@@ -156,6 +163,11 @@ export function leafGeometry(p: Part): THREE.BufferGeometry | null {
 /** A piece's material as the forge draws it, with a colour, material or finish placed over it. */
 const groundMats = new Map<string, THREE.MeshStandardMaterial>();
 export function leafMaterial(p: Part, over: { color?: number; mat?: string; finish?: string } = {}): THREE.MeshStandardMaterial {
+  const k = `${over.color ?? ''}|${over.mat ?? ''}|${over.finish ?? ''}`; let byOver = matOfPart.get(p); if (!byOver) { byOver = new Map(); matOfPart.set(p, byOver); }
+  const was = byOver.get(k); if (was) return was;
+  const m = leafMaterialMade(p, over); byOver.set(k, m); return m;
+}
+function leafMaterialMade(p: Part, over: { color?: number; mat?: string; finish?: string }): THREE.MeshStandardMaterial {
   // ground is shaded by its height, which its vertices carry
   if (p.shape && 'ground' in p.shape) { const c = over.color ?? p.color ?? 0x5d8a3a, k = String(c); return groundMats.get(k) ?? groundMats.set(k, new THREE.MeshStandardMaterial({ color: c, vertexColors: true, roughness: 0.95 })).get(k)!; }
   return matFor(over.color ?? p.color ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape));
