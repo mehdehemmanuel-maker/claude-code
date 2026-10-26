@@ -25,6 +25,10 @@ import { Keyboard } from './keyboard';
 import { makeRelay, type Relay } from './relay';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
+// ?emulate: an emulated Quest 3 (Meta's IWER), so a browser test can put on the headset, aim a hand and pull its trigger
+type Emulated = { position: { set(x: number, y: number, z: number): void }; quaternion: { set(x: number, y: number, z: number, w: number): void }; controllers: Record<'left' | 'right', { position: { set(x: number, y: number, z: number): void }; quaternion: { set(x: number, y: number, z: number, w: number): void }; updateButtonValue(id: string, v: number): void; updateAxes(id: string, x: number, y: number): void }> };
+let emulated: Emulated | null = null;
+if (new URLSearchParams(location.search).has('emulate')) { const { XRDevice, metaQuest3 } = await import('iwer'); const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true }); emulated = d as unknown as Emulated; }
 
 // ---- the renderer and the field --------------------------------------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
@@ -306,4 +310,15 @@ renderer.setAnimationLoop((now) => {
 try { if (!localStorage.getItem('nexus.space.seen')) { localStorage.setItem('nexus.space.seen', '1'); window.setTimeout(() => { if (!wall.shown().length) wall.demo(0); }, 400); } } catch { /* a private window: nothing kept */ }
 window.setTimeout(refresh, 300);
 // what a browser test drives it by
-(window as unknown as { space: object }).space = { S, fit, jump, focusOn: (x: number, y: number, z: number, cell: number) => focusOn(new THREE.Vector3(x, y, z), cell), zoomAbout, stats: () => view.stats, shown: () => wall.shown().length, pivot, grid: () => ({ cell: grid.cell, planes: grid.planes }), panels: (on: boolean) => { panelsShown = on; ui.visible = on; } };
+const emulate = emulated && {
+  /** The right hand at the head's side, aimed at a button of the space bar by its label. */
+  aimAtBar(label: string): boolean {
+    bar.draw(); const i = ['µm', 'mm', 'm', 'km'].indexOf(label); const h = bar.hits[i]; if (!h) return false;
+    const uv = new THREE.Vector3(((h.x0 + h.x1) / 2 / bar.c.width - 0.5) * bar.w, (0.5 - (h.y0 + h.y1) / 2 / bar.c.height) * bar.h, 0), target = bar.mesh.localToWorld(uv);
+    const from = new THREE.Vector3(0.2, 1.3, -0.1), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), target.clone().sub(from).normalize());
+    emulated!.controllers.right.position.set(from.x, from.y, from.z); emulated!.controllers.right.quaternion.set(q.x, q.y, q.z, q.w); return true;
+  },
+  trigger: (v: number) => emulated!.controllers.right.updateButtonValue('trigger', v),
+  stick: (y: number) => emulated!.controllers.right.updateAxes('thumbstick', 0, y),
+};
+(window as unknown as { space: object }).space = { emulate, presenting: () => renderer.xr.isPresenting, S, fit, jump, focusOn: (x: number, y: number, z: number, cell: number) => focusOn(new THREE.Vector3(x, y, z), cell), zoomAbout, stats: () => view.stats, shown: () => wall.shown().length, pivot, grid: () => ({ cell: grid.cell, planes: grid.planes }), panels: (on: boolean) => { panelsShown = on; ui.visible = on; } };
