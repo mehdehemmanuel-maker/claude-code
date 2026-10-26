@@ -10,7 +10,7 @@
 // into. What a node did, how long it took and how often it failed is kept, for the person and for the engine's own
 // suggestions: what is dead, what is the same twice, what wiring repeats and could be one block.
 
-import { block, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
+import { block, clockOf, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
 import { fromSI, sameDim, toSI } from '../ganglia/units';
 import type { Part } from './kits';
@@ -69,10 +69,11 @@ export function groupBlock(inner: Board, meta: Partial<BlockDef> = {}): BlockDef
     }
     return { inputs: ins, outputs: outs };
   };
-  const b: BlockDef = { id: meta.id ?? `group.${boardKey(inner)}`, name: meta.name ?? inner.title ?? 'Group', kind: 'group', ability: 'transform', domains: meta.domains ?? ['software'], says: meta.says ?? inner.about ?? 'A pipeline folded into one block', version: 1, ports: ports(), graph: inner, pure: allPure(inner), by: meta.by ?? 'you', ...meta };
+  const b: BlockDef = { id: meta.id ?? `group.${boardKey(inner)}`, name: meta.name ?? inner.title ?? 'Group', kind: 'group', ability: 'transform', domains: meta.domains ?? ['software'], says: meta.says ?? inner.about ?? 'A pipeline folded into one block', version: 1, ports: ports(), graph: inner, pure: allPure(inner), ...(anyClock(inner) ? { clock: true } : {}), by: meta.by ?? 'you', ...meta };
   if (!Object.keys(meta).length) groups.set(inner, b);
   return b;
 }
+function anyClock(b: Board): boolean { return nodesOf(b).some((n) => { const x = b.nodes[n.id]!, d = blockOf(x); return !!d && clockOf(d, x.set ?? {}); }); }
 function allPure(b: Board): boolean { return nodesOf(b).every((n) => { const x = b.nodes[n.id]!, d = blockOf(x); return !d || d.pure; }); }
 
 export interface NodeState {
@@ -87,7 +88,7 @@ export interface NodeState {
 export interface Report { ran: number; cached: number; failed: number; waiting: number; ms: number; looked: number }
 
 /** What a run may be given by the place it runs in: code run off the page, Claude, a stop. */
-export interface Env { code?: Ctx['code']; ai?: Ctx['ai']; signal?: AbortSignal }
+export interface Env { code?: Ctx['code']; ai?: Ctx['ai']; signal?: AbortSignal; /** the board's clock, s */ time?: number }
 /** What every board in one place shares: outputs by key, so one key is run once wherever it is. */
 export class Memo {
   private m = new Map<string, Outputs>();
@@ -117,6 +118,8 @@ export class Engine {
 
   /** The board changed shape: nodes or wires added or taken away. Everything is looked at on the next run. */
   reshape(b: Board = this.board): void { this.board = b; this.shaped = false; this.all = true; }
+  /** The clock moved: every node that reads it (or holds one that does) is looked at on the next run, and what it feeds. */
+  tick(time: number): number { this.env.time = time; let n = 0; for (const id of this.sequence) { const nd = this.board.nodes[id], b = nd && blockOf(nd); if (b && clockOf(b, nd.set ?? {})) { this.touch(id); n++; } } return n; }
   /** A node's settings changed: it, and what is downstream of it, are looked at on the next run. */
   touch(id: string): void { this.dirty.add(id); this.mapsTouched.add(id); }
 
@@ -236,6 +239,7 @@ export class Engine {
     }
     if (b.id === 'group.in') { const f = this.feeds[String(set.name)]; if (f) { set.value = f.value; keys.push(`feed=${f.key}`); } else if (!('value' in (n.set ?? {}))) missing.push(`what comes into the group as ${String(set.name)}`); }
     if (missing.length) { put({ status: 'waiting', error: `waiting on ${missing.join(', ')}`, out: undefined, key: undefined }); r.waiting++; return; }
+    if (clockOf(b, set)) keys.push(`t=${this.env.time ?? 0}`);
     const key = hash(`${b.id}@${b.version}:${b.graph ? boardKey(b.graph) : ''}|${stable(set)}|${keys.join('|')}${b.pure ? '' : `#${id}`}`);
     if (was.status === 'ok' && was.key === key) { put({ cached: true }); r.cached++; return; }
     const kept = b.pure ? this.memo.get(key) : undefined;
@@ -259,7 +263,7 @@ export class Engine {
     }
   }
   private async call(id: string, b: BlockDef, inputs: Record<string, unknown>, set: Record<string, unknown>): Promise<Outputs> {
-    if (b.run) { const o = b.run(inputs, { set, code: this.env.code, ai: this.env.ai, signal: this.env.signal }); return o instanceof Promise ? await o : o; }
+    if (b.run) { const o = b.run(inputs, { set, code: this.env.code, ai: this.env.ai, signal: this.env.signal, time: this.env.time ?? 0 }); return o instanceof Promise ? await o : o; }
     if (!b.graph) throw new Error(`${b.name} has nothing to run`);
     // a group, or a block made of a pipeline: its own board, with what came in
     let k = this.kids.get(id); if (!k || k.board !== b.graph) { k = new Engine(b.graph, this.env, this.memo); this.kids.set(id, k); }
@@ -491,6 +495,8 @@ export async function runBlock(id: string, inputs: Record<string, unknown>, env:
 }
 const PLACE_COLS = new Set(['x', 'y', 'z', 'rx', 'ry', 'rz', 's']);
 register({ id: 'spawn', name: 'Spawn', kind: 'generator', ability: 'generate', domains: ['everyday', 'structural', 'operations'], version: 1, by: 'built in', pure: true,
+  // it moves with the clock when what it spawns does (a street of moving cars), and not otherwise
+  clock: (set) => { const d = block(String(set.seed ?? '')); return !!d && clockOf(d); },
   says: 'A seed placed once for each row of a table: each row\'s x, y, z, ry (turn about y, radians) and s place it, and every other column sets the seed\'s input of that name (a house\'s plan, a car\'s paint). Rows that ask the same are worked out once and share it',
   settings: [{ key: 'seed', label: 'Seed (a library block\'s id)', type: 'text', default: 'seed.window' }, { key: 'out', label: 'Its output to place (blank: its first)', type: 'text', default: '' }],
   ports: { inputs: [P_('rows', 'table')], outputs: [P_('things', 'assembly'), P_('count', 'integer'), P_('distinct', 'integer')] },
@@ -503,7 +509,7 @@ register({ id: 'spawn', name: 'Spawn', kind: 'generator', ability: 'generate', d
       const params: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(row)) { if (PLACE_COLS.has(k)) continue; if (!ins.has(k)) throw new Error(`${d.name} has no input "${k}": it takes ${[...ins].join(', ') || 'nothing'}`); params[k] = v; }
       const key = stable(params); let thing = made.get(key);
-      if (!thing) { const out = await runBlock(id, params); thing = out[outName] as Part | Assembly; if (!thing || typeof thing !== 'object') throw new Error(`${d.name} gave no ${outName}`); made.set(key, thing); }
+      if (!thing) { const out = await runBlock(id, params, { time: c.time ?? 0 }); thing = out[outName] as Part | Assembly; if (!thing || typeof thing !== 'object') throw new Error(`${d.name} gave no ${outName}`); made.set(key, thing); }
       const n = (k: string, dflt = 0) => (typeof row[k] === 'number' ? (row[k] as number) : dflt);
       items.push({ of: thing, at: [n('x'), n('y'), n('z')], rot: [n('rx'), n('ry'), n('rz')], s: n('s', 1) });
     }

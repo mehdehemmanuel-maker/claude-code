@@ -133,3 +133,41 @@ export function mirror(of: Part | Assembly, axis: 'x' | 'y' | 'z', name = `${of.
 }
 /** Several things as one, each where it already is. */
 export function combine(things: (Part | Assembly)[], name = 'assembly'): Assembly { return { name, items: things.map((t) => place(t)) }; }
+
+// ---- frames: where a thing is set on another ----------------------------------------------------------------------------
+/** A frame: a named place on a thing, facing n with u up (a door's middle facing out of the room, a wall's opening). */
+export const frame = (name: string, at: V3, n: V3 = [0, 0, 1], u: V3 = [0, 1, 0]): Port => ({ name, sex: 'frame', thread: '', pattern: [], at, n, u, t: 0 });
+const framesKept = new WeakMap<object, Port[]>();
+/** Every frame on a thing, in its own frame: its own, and those of what is placed in it, three levels down, named by the
+ *  path to them ("front wall/opening"). */
+export function framesOf(t: Part | Assembly, depth = 3): Port[] {
+  const was = framesKept.get(t); if (was && depth === 3) return was;
+  const own = (t.ports ?? []).filter((q) => q.n && q.u);
+  const out = [...own];
+  if (isAssembly(t) && depth > 0) for (const it of t.items) {
+    const m = matrixOf(it), r = new THREE.Matrix4().extractRotation(m);
+    for (const q of framesOf(it.of, depth - 1)) {
+      const at = new THREE.Vector3(...q.at).applyMatrix4(m), n = new THREE.Vector3(...q.n).applyMatrix4(r).normalize(), u = new THREE.Vector3(...q.u).applyMatrix4(r).normalize();
+      out.push({ ...q, name: `${it.of.name}/${q.name}`, at: [at.x, at.y, at.z], n: [n.x, n.y, n.z], u: [u.x, u.y, u.z] });
+    }
+  }
+  if (depth === 3) framesKept.set(t, out);
+  return out;
+}
+/** A frame found by its name, or by the end of its path ("opening" finds "front wall/opening"). */
+export function findFrame(t: Part | Assembly, name: string): Port | undefined {
+  const all = framesOf(t); return all.find((q) => q.name === name) ?? all.find((q) => q.name.endsWith(`/${name}`));
+}
+/** A thing placed so its frame `fa` lands on `fb` of what it goes on: `into` turns it to face as `fb` faces (a door in its
+ *  opening), `against` turns it to face back at `fb` (a plug into its socket, a face on a face). Its up goes to `fb`'s up. */
+export function mateTo(t: Part | Assembly, fa: string, onto: Part | Assembly, fb: string, how: 'into' | 'against' = 'into', s = 1): Placed | string {
+  const a = findFrame(t, fa), b = findFrame(onto, fb);
+  if (!a) return `${t.name} has no frame "${fa}" (it has ${framesOf(t).map((q) => q.name).join(', ') || 'none'})`;
+  if (!b) return `${onto.name} has no frame "${fb}" (it has ${framesOf(onto).map((q) => q.name).join(', ') || 'none'})`;
+  const basis = (n: THREE.Vector3, u: THREE.Vector3) => { const w = n.clone().cross(u).normalize(), u2 = w.clone().cross(n).normalize(); return new THREE.Matrix4().makeBasis(n, u2, w); };
+  const na = new THREE.Vector3(...a.n).normalize(), ua = new THREE.Vector3(...a.u).normalize(), nb = new THREE.Vector3(...b.n).normalize().multiplyScalar(how === 'into' ? 1 : -1), ub = new THREE.Vector3(...b.u).normalize();
+  const R = basis(nb, ub).multiply(basis(na, ua).transpose()), e = new THREE.Euler().setFromRotationMatrix(R);
+  const off = new THREE.Vector3(...a.at).multiplyScalar(s).applyMatrix4(R), at = new THREE.Vector3(...b.at).sub(off);
+  const r6 = (x: number) => Math.round(x * 1e9) / 1e9;
+  return place(t, [r6(at.x), r6(at.y), r6(at.z)], [r6(e.x), r6(e.y), r6(e.z)], s);
+}

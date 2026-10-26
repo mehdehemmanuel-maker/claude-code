@@ -1,4 +1,4 @@
-// The board of blocks on a page (view/nodes.html): a canvas of coloured blocks wired port to port, the library beside it
+// The board of blocks on the dashboard (view/index.html, with dashboard.ts round it): a canvas of coloured blocks wired port to port, the library beside it
 // sorted by field, by ability or by kind, and an inspector that is each block's own calculator. Every edit runs what it
 // reaches at once (src/nexus/dataflow.ts), each block glows as it runs and a pulse runs down each wire that carried a
 // new value; a failed block turns red and says why, a block waiting on an input says which. Groups open in place and
@@ -9,7 +9,7 @@
 // the forge's own worker (code-worker.ts), off the page. Asking Claude needs the forge's relay, which this page does not
 // have: such a block says so rather than pretending.
 
-import { ABILITIES, DOMAINS, KINDS, LIBRARY, block, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
+import { ABILITIES, DOMAINS, KINDS, LIBRARY, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
 import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
 import { fullScreen, shot } from './nodes3d';
@@ -81,6 +81,13 @@ const sigOf = (id: string) => { const p = portsFor(id); return `${p.inputs.map((
 let saveT = 0; function save(): void { clearTimeout(saveT); saveT = window.setTimeout(() => store.set(KEY, JSON.stringify(root)), 250); }
 
 // ---- running --------------------------------------------------------------------------------------------------------
+export interface RanNode { id: string; label: string; ms: number; status: NodeState['status']; error?: string; mapped?: number }
+let lastRan: { at: number; time: number; report: typeof lastReport; nodes: RanNode[] } = { at: 0, time: 0, report: { ran: 0, cached: 0, failed: 0, waiting: 0, ms: 0, looked: 0 }, nodes: [] };
+/** The board's clock: what every Clock node reads. Played, it runs on with the page's frames; only what reads it runs again. */
+const clock = { t: 0, playing: false, rate: 1, max: 120 };
+function setTime(t: number): void { clock.t = ((t % clock.max) + clock.max) % clock.max; if (engine.tick(clock.t)) runSoon(); wall.timed?.(); }
+const moves = (): boolean => nodesOf(root).some((n) => { const x = root.nodes[n.id]!, d = blockOf(x); return !!d && clockOf(d, x.set ?? {}); });
+{ let last = 0; const frame = (now: number) => { if (clock.playing && last) setTime(clock.t + (Math.min(250, now - last) / 1000) * clock.rate); last = now; requestAnimationFrame(frame); }; requestAnimationFrame(frame); }
 let running = false, again = false, lastReport = { ran: 0, cached: 0, failed: 0, waiting: 0, ms: 0, looked: 0 };
 const glow = new Map<string, number>(); let pulses: { e: string; t0: number }[] = [];
 function runSoon(): void { if (running) { again = true; return; } void runNow(); }
@@ -92,6 +99,8 @@ async function runNow(): Promise<void> {
   for (const [id, s] of engine.state) if (s.runs !== before.get(id) && !s.cached) { glow.set(id, t); for (const w of engine.wiresFrom(id)) pulses.push({ e: w.id, t0: t }); }
   // inside the group in view, its own nodes glow too
   const ce = curEngine(); if (path.length && ce) for (const [id, s] of ce.state) if (!s.cached) { glow.set(id, t); for (const w of ce.wiresFrom(id)) pulses.push({ e: w.id, t0: t }); }
+  // what ran, for the run log: each node that worked something out anew, or failed, in the board's order
+  lastRan = { at: Date.now(), time: clock.t, report: lastReport, nodes: engine.sequence.flatMap((id) => { const s = engine.state.get(id), n = root.nodes[id]; if (!s || !n || (s.runs === before.get(id) && s.status !== 'failed') || (s.cached && s.status !== 'failed')) return []; return [{ id, label: n.label || blockOf(n)?.name || id, ms: s.ms, status: s.status, error: s.error, mapped: s.mapped }]; }) };
   running = false; refreshLocal(); suggestions = null; wall.ran?.();
   renderInspector(false); renderStats(); draw();
   if (again) { again = false; runSoon(); }
@@ -131,7 +140,7 @@ const view = { ox: 0, oy: 0, k: 1 };
 const toWorld = (sx: number, sy: number) => [(sx - view.ox) / view.k, (sy - view.oy) / view.k] as const;
 
 // ---- drawing ---------------------------------------------------------------------------------------------------------
-/** On its own page (view/nodes.html), or hosted: the forge puts the same board on a wall in the room (nodes-wall.ts). */
+/** On the dashboard (view/index.html), or hosted: the space puts the same board on a panel (nodes-wall.ts). */
 const PAGE = !!document.getElementById('app');
 const cv = (document.getElementById('cv') as HTMLCanvasElement | null) ?? hostedCanvas(), g = cv.getContext('2d')!;
 /** Hosted, the board draws on a canvas of its own, laid out off the page (so it has a size) and shown by the forge. */
@@ -495,7 +504,7 @@ for (const t of document.querySelectorAll<HTMLButtonElement>('#libTop .tabs butt
 // ---- the inspector: each block's own calculator ---------------------------------------------------------------------
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 function renderInspector(full: boolean): void {
-  if (!PAGE) { wall.changed?.(); return; }
+  wall.changed?.(); if (!PAGE) return;
   const el = document.getElementById('inspector')!;
   if (!full && el.contains(document.activeElement) && document.activeElement !== document.body) { const o = document.getElementById('iouts'); if (o && sel.size === 1) o.innerHTML = outsHtml([...sel][0]!); return; }
   if (sel.size === 1) return nodeInspector(el, [...sel][0]!);
@@ -679,6 +688,8 @@ function seedBoard(title: string, items: [string, string, Record<string, unknown
     const p = placeBlock(b, 'place', 0, 0, at, `p${i}`); wire(b, id, out, p, 'thing'); wire(b, p, 'placed', all, 'things');
   });
   wire(b, all, 'assembly', placeBlock(b, 'space.show', 0, 0, {}, 'show'), 'thing'); wire(b, all, 'assembly', placeBlock(b, 'measure', 0, 0, {}, 'measure'), 'thing');
+  // and whether any of them run into one another
+  wire(b, all, 'assembly', placeBlock(b, 'clash', 0, 0, { depth: 1 }, 'clash'), 'thing');
   return b;
 }
 const DEMOS: [string, Make][] = ([
@@ -687,6 +698,51 @@ const DEMOS: [string, Make][] = ([
     ['seed.car', 'Car in the drive', { paint: '#1565c0' }, { x: 9.5, z: 2, ry: Math.PI / 2 }, 'car'],
     ['seed.room', 'One room on its own (choose it: its type)', { type: 'bathroom' }, { x: -10 }, 'room'],
   ])],
+  ['Traffic on the clock: cars round a block, stopping at red', () => {
+    // two blocks each way of 60 m (typical of a suburb), its lights on a fixed-time cycle; eight cars at 11 m/s (40 km/h)
+    // round its edge, each 8 m behind the one ahead: press ▶ under the 3D view and watch them queue at red
+    const b = emptyBoard('Traffic on the clock');
+    placeBlock(b, 'seed.roads', 0, 0, { nx: 2, nz: 2, block: 60, lights: 'cycle' }, 'roads'); b.nodes.roads!.label = 'Road system (its lights on the clock)';
+    placeBlock(b, 'time', 0, 0, {}, 'clock');
+    placeBlock(b, 'path.loop', 0, 0, { w: 120, d: 120, inset: 1.8, every: 60, before: 5 }, 'ring'); b.nodes.ring!.label = 'Lane round its edge';
+    placeBlock(b, 'follow', 0, 0, { n: 8, speed: 11, gap: 8, phases: 'green 30, yellow 4, red 34' }, 'drive'); b.nodes.drive!.label = 'Cars follow the lane';
+    wire(b, 'ring', 'path', 'drive', 'path'); wire(b, 'ring', 'stops', 'drive', 'stops'); wire(b, 'clock', 't', 'drive', 't');
+    placeBlock(b, 'rows.set', 0, 0, { column: 'paint', turns: true, value: '#1565c0|#eceff1|#c62828|#212121|#f9a825|#2e7d32' }, 'paint'); b.nodes.paint!.label = 'Each its paint'; wire(b, 'drive', 'rows', 'paint', 'rows');
+    placeBlock(b, 'spawn', 0, 0, { seed: 'seed.car' }, 'cars'); b.nodes.cars!.label = 'A Car at each'; wire(b, 'paint', 'rows', 'cars', 'rows');
+    placeBlock(b, 'combine', 0, 0, { name: 'streets and traffic' }, 'all'); wire(b, 'roads', 'roads', 'all', 'things'); wire(b, 'cars', 'things', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    return b;
+  }],
+  ['Mating: a door set in its wall by their frames', () => {
+    // the wall's opening is a frame; the door's middle is a frame; Mate puts the one on the other, facing as it faces.
+    // Change the wall's length or the opening's offset and the door follows
+    const b = emptyBoard('Mating by frames');
+    placeBlock(b, 'wall', 0, 0, { opening: 'door', name: 'wall', mat: 'brick', color: '#eceff1', finish: 'paint', L: 4, h: 2.4, off: 0.8 }, 'wall'); b.nodes.wall!.label = 'Wall with a door opening';
+    placeBlock(b, 'seed.door', 0, 0, { colour: '#8d6e63' }, 'door'); b.nodes.door!.label = 'Door (its frame: "fit")';
+    placeBlock(b, 'mate', 0, 0, { frame: 'fit', onto: 'opening', how: 'into' }, 'mate'); b.nodes.mate!.label = 'Mate: fit into opening';
+    wire(b, 'door', 'door', 'mate', 'thing'); wire(b, 'wall', 'wall', 'mate', 'on');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'mate', 'both', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'mate', 'both', 'measure', 'thing');
+    return b;
+  }],
+  ['Clear away: a field of grass, cleared where a road goes', () => {
+    // a flat field 20 m square covered a foot at a time with grass; the patches the road comes within 0.2 m of taken away
+    // whole (depth 0: each patch stays one shared thing; deeper, it would cut patches blade by blade)
+    const b = emptyBoard('Clearing by where things are');
+    placeBlock(b, 'terrain', 0, 0, { w: 20, d: 20, relief: 0, cells: 8, color: '#4e7d32' }, 'field'); b.nodes.field!.label = 'Field';
+    placeBlock(b, 'seed.grass', 0, 0, { blades: 16, soil: 'none' }, 'patch'); b.nodes.patch!.label = 'A foot of grass';
+    placeBlock(b, 'scatter', 0, 0, { mode: 'grid', step: 0.3048, w: 20, d: 20, turn: true }, 'lawn'); b.nodes.lawn!.label = 'Patches all over it';
+    wire(b, 'patch', 'patch', 'lawn', 'thing'); wire(b, 'field', 'ground', 'lawn', 'on');
+    placeBlock(b, 'seed.road', 0, 0, { L: 20 }, 'road'); b.nodes.road!.label = 'Road across it';
+    placeBlock(b, 'place', 0, 0, { y: 0.1 }, 'roadAt'); wire(b, 'road', 'road', 'roadAt', 'thing');
+    placeBlock(b, 'clear', 0, 0, { keep: false, depth: 0, gap: 0.2 }, 'clear'); b.nodes.clear!.label = 'Clear the grass the road is on';
+    wire(b, 'lawn', 'scattered', 'clear', 'thing'); wire(b, 'roadAt', 'placed', 'clear', 'near');
+    placeBlock(b, 'combine', 0, 0, { name: 'field with a road' }, 'all'); wire(b, 'field', 'ground', 'all', 'things'); wire(b, 'clear', 'cleared', 'all', 'things'); wire(b, 'roadAt', 'placed', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    return b;
+  }],
   ['Seeds, one of each: window, door, toilet, sink, bed, car, stop light', () => seedBoard('Seeds, one of each', [
     ['seed.window', 'Window', {}, { x: -6, y: 1.5 }, 'window'],
     ['seed.door', 'Door', {}, { x: -4.5, y: 1.05 }, 'door'],
@@ -905,6 +961,31 @@ export const wall = {
     let at = id; for (const e of edgesOf(root)) if (e.to === id && isWire(e)) { at = e.from; break; }
     sel.clear(); sel.add(at); const gg = geo(at); view.ox = cv.clientWidth / 2 - (gg.x + gg.w / 2) * view.k; view.oy = cv.clientHeight / 2 - (gg.y + gg.h / 2) * view.k; renderInspector(true); draw();
   },
+  /** The clock: where it is, whether it is running, and whether anything on the board moves with it. */
+  clock: () => ({ ...clock, moves: moves() }),
+  setTime, play(on: boolean): void { clock.playing = on; wall.timed?.(); }, rate(r: number): void { clock.rate = r; wall.timed?.(); },
+  /** The clock moved. */
+  timed: null as null | (() => void),
+  /** What the last run worked out anew, and how long each took. */
+  lastRun: () => lastRan,
+  /** The block a node is, and what goes into it now: each wired input's value, else what it is set to, else its default. */
+  inputsOf(id: string): { block: BlockDef | null; inputs: Record<string, unknown>; ports: PortDef[] } {
+    const n = cur().nodes[id], d = n ? blockOf(n) : null; if (!n || !d) return { block: null, inputs: {}, ports: [] };
+    const e = curEngine(), ports = portsFor(id).inputs, inputs: Record<string, unknown> = {};
+    for (const q of ports) {
+      const w = e?.wiresInto(id).find((x) => x.in === q.name);
+      if (w) { const v = e?.state.get(w.from)?.out?.[w.out!]; if (v !== undefined) inputs[q.name] = v; }
+      else if (n.set && q.name in n.set && n.set[q.name] !== '') inputs[q.name] = n.set[q.name];
+    }
+    return { block: d, inputs, ports };
+  },
+  /** An input of a node set (a variation chosen from the table). */
+  setInput(id: string, name: string, v: unknown): void { if (!cur().nodes[id]) return; edit((b) => { b.nodes[id]!.set = { ...(b.nodes[id]!.set ?? {}), [name]: v }; }, id); renderInspector(true); draw(); },
+  /** The node chosen on the board (one), if any. */
+  selected: (): string | null => (sel.size === 1 ? [...sel][0]! : null),
+  /** The board's title. */
+  boardTitle: () => root.title || 'Board',
+  board: () => root,
   /** The board's history: how many states, and which it is at; and going to any of them. */
   history: () => ({ count: undo.length + redo.length + 1, at: undo.length, saved: undo.length ? 'changes' : 'start' }),
   goto(i: number): void { const k = Math.max(0, Math.min(undo.length + redo.length, Math.round(i))); while (undo.length > k) doUndo(); while (undo.length < k && redo.length) doRedo(); },

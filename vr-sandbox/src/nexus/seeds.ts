@@ -62,7 +62,8 @@ function window_(): void {
   const left = s.at([stile, 'part'], { x: [s.f('0 - x', { x: [xSide, 'result'] }), 'result'] }, 'left jamb'), right = s.at([stile, 'part'], { x: [xSide, 'result'] }, 'right jamb');
   const pane = s.n('shape.box', { name: 'window glass', mat: 'glass', color: '#9cc3d5', d: 0.006 }, 'glass'); s.w(s.f('w - 0.12', { w: [w, 'value'] }), 'result', pane, 'w'); s.w(s.f('h - 0.12', { h: [h, 'value'] }), 'result', pane, 'h');
   const win = s.all('window', [[top, 'placed'], [bot, 'placed'], [left, 'placed'], [right, 'placed'], [pane, 'part']]);
-  s.output('window', 'assembly', win, 'assembly');
+  const winF = s.n('frame', { name: 'fit', facing: '+z' }, 'its frame: its middle, facing out'); s.w(win, 'assembly', winF, 'thing');
+  s.output('window', 'assembly', winF, 'thing');
   s.save('seed.window', 'Window', 'A window: its frame round one pane of glass, centred on its own middle, facing z. Width, height and frame colour are yours (a 60 mm frame 100 mm deep, typical)', ['structural', 'everyday']);
 }
 function door(): void {
@@ -77,7 +78,8 @@ function door(): void {
   const jx = s.f('w / 2 - 0.01', { w: [w, 'value'] });
   const jl = s.at([jamb, 'part'], { x: [s.f('0 - x', { x: [jx, 'result'] }), 'result'] }, 'lining left'), jr = s.at([jamb, 'part'], { x: [jx, 'result'] }, 'lining right');
   const d = s.all('door', [[leaf, 'part'], [front, 'placed'], [back, 'placed'], [jl, 'placed'], [jr, 'placed']]);
-  s.output('door', 'assembly', d, 'assembly');
+  const dF = s.n('frame', { name: 'fit', facing: '+z' }, 'its frame: its middle, facing out'); s.w(d, 'assembly', dF, 'thing');
+  s.output('door', 'assembly', dF, 'thing');
   s.save('seed.door', 'Door', 'A door: its leaf, a lever handle on each face 1 m up, its lining; centred on its own middle. Width, height and colour are yours (an interior door 40 mm thick, typical)', ['structural', 'everyday']);
 }
 
@@ -213,32 +215,48 @@ function fittingsAll(): void {
   });
 }
 
+// ---- a wall with what is in it: a door, a window, or nothing --------------------------------------------------------
+function wallSeed(): void {
+  // walls 150 mm thick (typical of a house); a 900 × 2100 mm door, a 1.2 × 1.2 m window with its sill 0.9 m up (typical)
+  const s = new Seed('Wall');
+  const kind = s.input('kind', 'text', 'wall', 'what is in it', ['wall', 'door', 'window', 'none']);
+  const L = s.input('L', 'number', 4, 'length, m', undefined, 'm'), h = s.input('h', 'number', 2.4, 'height, m', undefined, 'm'), col = s.input('colour', 'text', '#eceff1', 'wall colour');
+  const mk = (opening: 'none' | 'door' | 'window', ow: number, oh: number, label: string) => { const id = s.n('wall', { opening, mat: 'brick', finish: 'paint', name: 'wall', ow, oh }, label); s.w(L, 'value', id, 'L'); s.w(h, 'value', id, 'h'); s.w(col, 'value', id, 'color'); return id; };
+  const plain = mk('none', 0.9, 2.1, 'plain wall'), withDoor = mk('door', 0.9, 2.1, 'wall with a door opening'), withWin = mk('window', 1.2, 1.2, 'wall with a window opening');
+  const dr = s.n('seed.door', {}, 'a door'), win = s.n('seed.window', {}, 'a window');
+  const md = s.n('mate', { frame: 'fit', onto: 'opening', how: 'into' }, 'the door mated into its opening'); s.w(dr, 'door', md, 'thing'); s.w(withDoor, 'wall', md, 'on');
+  const mw = s.n('mate', { frame: 'fit', onto: 'opening', how: 'into' }, 'the window mated into its opening'); s.w(win, 'window', mw, 'thing'); s.w(withWin, 'wall', mw, 'on');
+  const pick = s.n('pick', { options: 'wall|door|window|none', empty: true }, 'what is in it'); s.w(kind, 'value', pick, 'which');
+  s.w(plain, 'wall', pick, 'wall'); s.w(md, 'both', pick, 'door'); s.w(mw, 'both', pick, 'window');
+  s.output('wall', 'assembly', pick, 'chosen');
+  s.save('seed.wall', 'Wall', 'A wall along x standing on the ground, its face to +z: plain, with a door or a window mated into its opening by their frames, or none at all (an open side, where a hall meets a room)', ['structural', 'everyday']);
+}
+
 // ---- a room, plugged with its fittings by its type ----------------------------------------------------------------
 function room(): void {
-  // walls 150 mm thick and 2.4 m to the ceiling (typical of a house); a 900 × 2100 door in the front wall, a 1.2 m window
-  // in the back with its sill 0.9 m up
+  // 2.4 m to the ceiling (typical of a house)
   const s = new Seed('Room');
-  const type = s.input('type', 'text', 'bedroom', 'what kind of room', ['bedroom', 'bathroom', 'kitchen', 'living']);
+  const type = s.input('type', 'text', 'bedroom', 'what kind of room', ['bedroom', 'bathroom', 'kitchen', 'living', 'hall']);
   const w = s.input('w', 'number', 4, 'width, m', undefined, 'm'), d = s.input('d', 'number', 4, 'depth, m', undefined, 'm'), h = s.input('h', 'number', 2.4, 'ceiling height, m', undefined, 'm');
   const wallCol = s.input('wall', 'text', '#eceff1', 'wall colour');
-  // its floor by its type: timber in a bedroom and a living room, light tile in a bathroom, darker tile in a kitchen
-  const fc = s.n('pick', { options: 'bedroom|bathroom|kitchen|living' }, 'floor colour, by its type'); s.w(type, 'value', fc, 'which');
-  const fm = s.n('pick', { options: 'bedroom|bathroom|kitchen|living' }, 'floor material, by its type'); s.w(type, 'value', fm, 'which');
-  for (const [k, c, m] of [['bedroom', '#a1887f', 'oak'], ['bathroom', '#e0e4e8', 'tile'], ['kitchen', '#78868f', 'tile'], ['living', '#8d6e63', 'oak']] as const) { s.w(C(s, c, `${k} floor`)[0], 'value', fc, k); s.w(C(s, m, `${k}: ${m}`)[0], 'value', fm, k); }
+  const KINDS = ['wall', 'door', 'window', 'none'];
+  const side = { front: s.input('front', 'text', 'door', 'its front wall (+z)', KINDS), back: s.input('back', 'text', 'window', 'its back wall', KINDS), left: s.input('left', 'text', 'wall', 'its left wall (−x)', KINDS), right: s.input('right', 'text', 'wall', 'its right wall', KINDS) };
+  // its floor by its type: timber in a bedroom, a living room and a hall, light tile in a bathroom, darker tile in a kitchen
+  const fc = s.n('pick', { options: 'bedroom|bathroom|kitchen|living|hall' }, 'floor colour, by its type'); s.w(type, 'value', fc, 'which');
+  const fm = s.n('pick', { options: 'bedroom|bathroom|kitchen|living|hall' }, 'floor material, by its type'); s.w(type, 'value', fm, 'which');
+  for (const [k, c, m] of [['bedroom', '#a1887f', 'oak'], ['bathroom', '#e0e4e8', 'tile'], ['kitchen', '#78868f', 'tile'], ['living', '#8d6e63', 'oak'], ['hall', '#9c7b62', 'oak']] as const) { s.w(C(s, c, `${k} floor`)[0], 'value', fc, k); s.w(C(s, m, `${k}: ${m}`)[0], 'value', fm, k); }
   const floor = s.n('shape.box', { name: 'floor', mat: 'oak', finish: 'grain', h: 0.05 }, 'floor'); s.w(w, 'value', floor, 'w'); s.w(d, 'value', floor, 'd'); s.w(fc, 'chosen', floor, 'color'); s.w(fm, 'chosen', floor, 'mat');
   const fl = s.at([floor, 'part'], { y: -0.025 }, 'floor at its level');
-  const mk = (opening: 'none' | 'door' | 'window', len: string, label: string) => { const id = s.n('wall', { opening, mat: 'brick', finish: 'paint', name: label }, label); s.w(len, 'value', id, 'L'); s.w(h, 'value', id, 'h'); s.w(wallCol, 'value', id, 'color'); return id; };
-  const front = mk('door', w, 'front wall, its door'), backW = mk('window', w, 'back wall, its window'), left = mk('none', d, 'left wall'), right = mk('none', d, 'right wall');
+  // its four walls, each a Wall seed with what that side has in it; the back and left turned to face in
+  const wallOf = (k: keyof typeof side, len: string) => { const id = s.n('seed.wall', {}, `${k} wall`); s.w(side[k], 'value', id, 'kind'); s.w(len, 'value', id, 'L'); s.w(h, 'value', id, 'h'); s.w(wallCol, 'value', id, 'colour'); return id; };
   const zF = s.f('d / 2', { d: [d, 'value'] }), zB = s.f('0 - d / 2', { d: [d, 'value'] }), xR = s.f('w / 2', { w: [w, 'value'] }), xL = s.f('0 - w / 2', { w: [w, 'value'] });
-  const fw = s.at([front, 'wall'], { z: [zF, 'result'] }, 'front wall'), bw = s.at([backW, 'wall'], { z: [zB, 'result'] }, 'back wall');
-  const lw = s.at([left, 'wall'], { x: [xL, 'result'], ry: Math.PI / 2 }, 'left wall'), rw = s.at([right, 'wall'], { x: [xR, 'result'], ry: Math.PI / 2 }, 'right wall');
-  const dr = s.n('seed.door', {}, 'its door'), win = s.n('seed.window', {}, 'its window');
-  const da = s.at([dr, 'door'], { x: [front, 'ox'], y: [front, 'oy'], z: [zF, 'result'] }, 'door in its opening'), wa = s.at([win, 'window'], { x: [backW, 'ox'], y: [backW, 'oy'], z: [zB, 'result'] }, 'window in its opening');
-  const pick = s.n('pick', { options: 'bedroom|bathroom|kitchen|living' }, 'its fittings, by its type'); s.w(type, 'value', pick, 'which');
+  const fw = s.at([wallOf('front', w), 'wall'], { z: [zF, 'result'] }, 'front wall'), bw = s.at([wallOf('back', w), 'wall'], { z: [zB, 'result'], ry: Math.PI }, 'back wall');
+  const lw = s.at([wallOf('left', d), 'wall'], { x: [xL, 'result'], ry: -Math.PI / 2 }, 'left wall'), rw = s.at([wallOf('right', d), 'wall'], { x: [xR, 'result'], ry: Math.PI / 2 }, 'right wall');
+  const pick = s.n('pick', { options: 'bedroom|bathroom|kitchen|living|hall', empty: true }, 'its fittings, by its type (a hall has none)'); s.w(type, 'value', pick, 'which');
   for (const k of ['bedroom', 'bathroom', 'kitchen', 'living']) { const f = s.n(`seed.fittings.${k}`, {}, `${k} fittings`); s.w(w, 'value', f, 'w'); s.w(d, 'value', f, 'd'); s.w(f, 'fittings', pick, k); }
-  const r = s.all('room', [[fl, 'placed'], [fw, 'placed'], [bw, 'placed'], [lw, 'placed'], [rw, 'placed'], [da, 'placed'], [wa, 'placed'], [pick, 'chosen']]);
+  const r = s.all('room', [[fl, 'placed'], [fw, 'placed'], [bw, 'placed'], [lw, 'placed'], [rw, 'placed'], [pick, 'chosen']]);
   s.output('room', 'assembly', r, 'assembly');
-  s.save('seed.room', 'Room', 'A room: floor, four walls, a door in the front and a window in the back, and the fittings its type plugs in (a bedroom\'s bed, a bathroom\'s toilet, a kitchen\'s sink…). Its middle at the origin, no ceiling so you can see in', ['structural', 'everyday']);
+  s.save('seed.room', 'Room', 'A room: floor, four Walls (each plain, with a door, with a window, or open), and the fittings its type plugs in (a bedroom\'s bed, a bathroom\'s toilet, a kitchen\'s sink…). Its middle at the origin, no ceiling so you can see in', ['structural', 'everyday']);
 }
 
 // ---- a house: its rooms spawned from its plan, its roof over them --------------------------------------------------
@@ -247,8 +265,13 @@ function house(): void {
   const plan = s.input('plan', 'text', '2 bed', 'its layout', ['studio', '1 bed', '2 bed', '3 bed']);
   const wallCol = s.input('wall', 'text', '#eceff1', 'wall colour'), roofCol = s.input('roof', 'text', '#6d4c41', 'roof colour');
   const lid = s.input('show', 'text', 'roof on', 'its roof on, or off to see the rooms', ['roof on', 'roof off']);
-  const p = s.n('plan.rooms', {}, 'its floor plan'); s.w(plan, 'value', p, 'plan');
-  const painted = s.n('rows.set', { column: 'wall' }, 'every room its wall colour'); s.w(p, 'rows', painted, 'rows'); s.w(wallCol, 'value', painted, 'value');
+  // a hall 1.1 m wide between its rows of rooms (typical: 0.9 to 1.2 m); each wall's door, window or nothing from what it
+  // touches: a room's door opens onto the hall, its windows look outside, a wall two rooms share is built once, the hall
+  // is open to its rooms and has a door at each end
+  const p = s.n('plan.rooms', { hall: 1.1 }, 'its floor plan, a hall between its rows'); s.w(plan, 'value', p, 'plan');
+  const touch = s.n('rows.touch', {}, 'what each wall touches'); s.w(p, 'rows', touch, 'rows');
+  const rules = s.n('rows.recode', { rules: 'hall/outside: door\nhall/*: none\n*/outside: window\n*/hall*: door\n*/* (shared): none\n*: wall' }, 'doors to the hall, windows outside'); s.w(touch, 'rows', rules, 'rows');
+  const painted = s.n('rows.set', { column: 'wall' }, 'every room its wall colour'); s.w(rules, 'rows', painted, 'rows'); s.w(wallCol, 'value', painted, 'value');
   const rooms = s.n('spawn', { seed: 'seed.room' }, 'its rooms'); s.w(painted, 'rows', rooms, 'rows');
   // a gable roof: a triangle 1 m across and 0.4 m high, stretched over the floor with 300 mm eaves all round, a pitch of about 22° (typical)
   const roof = s.n('shape.extrude', { name: 'roof', mat: 'tile', finish: 'texture', profile: '-500, 0; 500, 0; 0, 400', L: 1 }, 'roof (gable)'); s.w(roofCol, 'value', roof, 'color');
@@ -258,7 +281,7 @@ function house(): void {
   const roofed = s.all('house', [[rooms, 'things'], [roofAt, 'placed']]);
   const all = s.n('pick', { options: 'roof on|roof off' }, 'roof on or off'); s.w(lid, 'value', all, 'which'); s.w(roofed, 'assembly', all, 'roof on'); s.w(rooms, 'things', all, 'roof off');
   s.output('house', 'assembly', all, 'chosen'); s.output('W', 'number', p, 'W', 'm'); s.output('D', 'number', p, 'D', 'm');
-  s.save('seed.house', 'House', 'A house: its rooms laid out from the plan you pick (studio, 1, 2 or 3 bed), each spawned as a Room with its fittings, under a gable roof (or with it off, to see in). Pick another plan and the rooms are laid out again', ['structural', 'everyday']);
+  s.save('seed.house', 'House', 'A house: its rooms laid out from the plan you pick (studio, 1, 2 or 3 bed) either side of a hall, each spawned as a Room with its fittings, its doors onto the hall and its windows outside decided by what each wall touches, under a gable roof (or with it off, to see in). Pick another plan and the rooms are laid out again', ['structural', 'everyday']);
 }
 
 // ---- a car ---------------------------------------------------------------------------------------------------------
@@ -357,30 +380,36 @@ function stoplight(): void {
 function crossing(): void {
   const s = new Seed('Crossing');
   const ns = s.input('state', 'text', 'green', 'the light along x', ['red', 'yellow', 'green']);
-  const other = s.n('pick', { options: 'red|yellow|green' }, 'the cross street shows the other'); s.w(ns, 'value', other, 'which');
-  for (const [k, v] of [['red', 'green'], ['yellow', 'red'], ['green', 'red']] as const) s.w(C(s, v, `when ${k}: ${v}`)[0], 'value', other, k);
+  const other = s.input('cross', 'text', 'red', 'the light for the cross street', ['red', 'yellow', 'green']);
   const slab = s.n('shape.box', { name: 'crossing', mat: 'asphalt', color: '#37474f', w: 7.2, h: 0.1, d: 7.2 }, 'asphalt');
   const a = s.n('seed.stoplight', {}, 'light for traffic along x'); s.w(ns, 'value', a, 'state');
-  const b = s.n('seed.stoplight', {}, 'light for the cross street'); s.w(other, 'chosen', b, 'state');
+  const b = s.n('seed.stoplight', {}, 'light for the cross street'); s.w(other, 'value', b, 'state');
   const c = s.all('crossing', [
     [s.at([slab, 'part'], { y: -0.05 }), 'placed'],
     [s.at([a, 'light'], { x: -4.6, z: 4.6, ry: Math.PI / 2 }), 'placed'], [s.at([a, 'light'], { x: 4.6, z: -4.6, ry: -Math.PI / 2 }), 'placed'],
     [s.at([b, 'light'], { x: 4.6, z: 4.6 }), 'placed'], [s.at([b, 'light'], { x: -4.6, z: -4.6, ry: Math.PI }), 'placed'],
   ]);
   s.output('crossing', 'assembly', c, 'assembly');
-  s.save('seed.crossing', 'Crossing', 'Where two streets cross: its asphalt and a stop light at each corner, one way showing what you set, the other the opposite', ['structural', 'vehicles']);
+  s.save('seed.crossing', 'Crossing', 'Where two streets cross: its asphalt and a stop light at each corner, one way\'s lights and the cross street\'s each as set (a signal cycle sets them both)', ['structural', 'vehicles']);
 }
 function roads(): void {
   const s = new Seed('Road system');
-  const nx = s.input('nx', 'number', 3, 'blocks along x'), nz = s.input('nz', 'number', 3, 'blocks along z'), B = s.input('block', 'number', 60, 'block, crossing to crossing, m', undefined, 'm'), state = s.input('state', 'text', 'green', 'lights along x', ['red', 'yellow', 'green']);
+  const nx = s.input('nx', 'number', 3, 'blocks along x'), nz = s.input('nz', 'number', 3, 'blocks along z'), B = s.input('block', 'number', 60, 'block, crossing to crossing, m', undefined, 'm');
+  // its lights: run by a fixed-time cycle on the clock (green 30 s, yellow 4 s, red 34 s along x, typical of a city
+  // crossing: the yellow 3 to 6 s by the street's speed, ITE), or held at one you pick
+  const lights = s.input('lights', 'text', 'cycle', 'its lights: on their cycle, or held', ['cycle', 'red', 'yellow', 'green']);
+  const clock = s.n('time', {}, 'the clock'), cyc = s.n('cycle', { phases: 'green 30, yellow 4, red 34' }, 'signal cycle'); s.w(clock, 't', cyc, 't');
+  const state = s.n('pick', { options: 'cycle|red|yellow|green' }, 'lights along x'), cross = s.n('pick', { options: 'cycle|red|yellow|green' }, 'lights across');
+  s.w(lights, 'value', state, 'which'); s.w(lights, 'value', cross, 'which'); s.w(cyc, 'state', state, 'cycle'); s.w(cyc, 'cross', cross, 'cycle');
+  for (const [k, other] of [['red', 'green'], ['yellow', 'red'], ['green', 'red']] as const) { s.w(C(s, k, `held ${k}`)[0], 'value', state, k); s.w(C(s, other, `then across: ${other}`)[0], 'value', cross, k); }
   const road = s.n('seed.road', {}, 'a road between crossings'); s.w(s.f('B - 7.2', { B: [B, 'value'] }), 'result', road, 'L');
   const along = s.n('array.grid', {}, 'roads along x'); s.w(road, 'road', along, 'thing'); s.w(nx, 'value', along, 'nx'); s.w(s.f('n + 1', { n: [nz, 'value'] }), 'result', along, 'nz'); s.w(B, 'value', along, 'sx'); s.w(B, 'value', along, 'sz');
   const turned = s.at([road, 'road'], { ry: Math.PI / 2 }, 'a road along z');
   const across = s.n('array.grid', {}, 'roads along z'); s.w(turned, 'placed', across, 'thing'); s.w(s.f('n + 1', { n: [nx, 'value'] }), 'result', across, 'nx'); s.w(nz, 'value', across, 'nz'); s.w(B, 'value', across, 'sx'); s.w(B, 'value', across, 'sz');
-  const cross = s.n('seed.crossing', {}, 'a crossing'); s.w(state, 'value', cross, 'state');
-  const crossings = s.n('array.grid', {}, 'crossings'); s.w(cross, 'crossing', crossings, 'thing'); s.w(s.f('n + 1', { n: [nx, 'value'] }), 'result', crossings, 'nx'); s.w(s.f('n + 1', { n: [nz, 'value'] }), 'result', crossings, 'nz'); s.w(B, 'value', crossings, 'sx'); s.w(B, 'value', crossings, 'sz');
+  const crossing = s.n('seed.crossing', {}, 'a crossing'); s.w(state, 'chosen', crossing, 'state'); s.w(cross, 'chosen', crossing, 'cross');
+  const crossings = s.n('array.grid', {}, 'crossings'); s.w(crossing, 'crossing', crossings, 'thing'); s.w(s.f('n + 1', { n: [nx, 'value'] }), 'result', crossings, 'nx'); s.w(s.f('n + 1', { n: [nz, 'value'] }), 'result', crossings, 'nz'); s.w(B, 'value', crossings, 'sx'); s.w(B, 'value', crossings, 'sz');
   s.output('roads', 'assembly', s.all('road system', [[along, 'grid'], [across, 'grid'], [crossings, 'grid']]), 'assembly');
-  s.save('seed.roads', 'Road system', 'Streets on a grid of blocks, nx by nz, with a crossing and its stop lights wherever two meet', ['structural', 'vehicles']);
+  s.save('seed.roads', 'Road system', 'Streets on a grid of blocks, nx by nz, with a crossing and its stop lights wherever two meet, the lights on their cycle as the clock runs (or held)', ['structural', 'vehicles']);
 }
 
 // ---- a neighbourhood, a city ---------------------------------------------------------------------------------------
@@ -396,10 +425,18 @@ function neighbourhood(): void {
   s.w(s.f('n * 2', { n: [nx, 'value'] }), 'result', drives, 'nx'); s.w(s.f('n * 2', { n: [nz, 'value'] }), 'result', drives, 'nz'); s.w(s.f('s + 7', { s: [seed, 'value'] }), 'result', drives, 'seed');
   const parked = s.n('rows.shift', { dx: 7.6, dz: 2.5, dry: Math.PI / 2 }, 'each in its drive, facing the street'); s.w(drives, 'rows', parked, 'rows');
   const cars = s.n('spawn', { seed: 'seed.car' }, 'its cars'); s.w(parked, 'rows', cars, 'rows');
+  // traffic: cars round the street on its edge, in the lane by the blocks, keeping 8 m front to front and stopping at
+  // each crossing's line while their way is not green; 11 m/s (40 km/h, typical of a residential street)
+  const traffic = s.input('traffic', 'number', 6, 'cars driving round it');
+  const clock = s.n('time', {}, 'the clock');
+  const ring = s.n('path.loop', { every: 60, before: 5 }, 'the lane round its edge'); s.w(s.f('n * 60', { n: [nx, 'value'] }), 'result', ring, 'w'); s.w(s.f('n * 60', { n: [nz, 'value'] }), 'result', ring, 'd');
+  const drive = s.n('follow', { phases: 'green 30, yellow 4, red 34' }, 'the cars on it, at the clock\'s time'); s.w(ring, 'path', drive, 'path'); s.w(ring, 'stops', drive, 'stops'); s.w(traffic, 'value', drive, 'n'); s.w(clock, 't', drive, 't');
+  const painted = s.n('rows.set', { column: 'paint', turns: true }, 'each its paint'); s.w(drive, 'rows', painted, 'rows'); s.w(C(s, '#1565c0|#eceff1|#c62828|#212121|#f9a825|#9e9e9e', 'paints')[0], 'value', painted, 'value');
+  const moving = s.n('spawn', { seed: 'seed.car' }, 'the moving cars'); s.w(painted, 'rows', moving, 'rows');
   const lawn = s.n('shape.box', { name: 'lawns', mat: 'soil', color: '#558b2f', h: 0.04 }, 'lawn under it all');
   const size = s.f('n * 60 + 10', { n: [nx, 'value'] }), sizeZ = s.f('n * 60 + 10', { n: [nz, 'value'] }); s.w(size, 'result', lawn, 'w'); s.w(sizeZ, 'result', lawn, 'd');
-  s.output('neighbourhood', 'assembly', s.all('neighbourhood', [[streets, 'roads'], [houses, 'things'], [cars, 'things'], [s.at([lawn, 'part'], { y: -0.13 }), 'placed']]), 'assembly');
-  s.save('seed.neighbourhood', 'Neighbourhood', 'Streets of blocks with four houses to a block, each house\'s plan and colours and the car in its drive picked from the seed: change the seed for another street', ['structural', 'everyday']);
+  s.output('neighbourhood', 'assembly', s.all('neighbourhood', [[streets, 'roads'], [houses, 'things'], [cars, 'things'], [moving, 'things'], [s.at([lawn, 'part'], { y: -0.13 }), 'placed']]), 'assembly');
+  s.save('seed.neighbourhood', 'Neighbourhood', 'Streets of blocks with four houses to a block, each house\'s plan and colours and the car in its drive picked from the seed (change the seed for another street), and cars driving round it, stopping at its lights, as the clock runs', ['structural', 'everyday']);
 }
 function city(): void {
   const s = new Seed('City');
@@ -415,6 +452,6 @@ function city(): void {
 let made = false;
 export function makeSeeds(): void {
   if (made) return; made = true;
-  window_(); door(); toilet(); sink(); bed(); fittingsAll(); room(); house(); car(); grass(); terrain(); road(); stoplight(); crossing(); roads(); neighbourhood(); city();
+  window_(); door(); wallSeed(); toilet(); sink(); bed(); fittingsAll(); room(); house(); car(); grass(); terrain(); road(); stoplight(); crossing(); roads(); neighbourhood(); city();
 }
 makeSeeds();

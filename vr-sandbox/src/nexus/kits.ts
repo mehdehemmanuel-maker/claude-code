@@ -37,7 +37,9 @@ export type Shape =
  *  part it is on is placed by it (src/nexus/mate.ts), its fasteners laid from the component library. */
 export interface Port {
   /** what it is called on its part ("front face", "tool flange") */ name: string;
-  sex: 'holes' | 'threads' | 'pins';
+  /** (a frame: where a thing is set, nothing fastened: a door in its opening, a car on its drive; mated by `mateTo` in
+   *  assembly.ts, never by a pattern) */
+  sex: 'holes' | 'threads' | 'pins' | 'frame';
   /** the thread or bolt it takes (M3, M6, M12x1.5) and the pattern's centres in its face, m */ thread: string; pattern: [number, number][];
   at: V3; n: V3; u: V3;
   /** how thick the part is behind the face where the holes are (the ply a bolt passes), or how deep its threads go, m */ t: number;

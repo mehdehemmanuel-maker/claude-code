@@ -16,7 +16,8 @@ import { calc, num, type Scope } from './generate';
 import { DESIGNED, component, componentFromParams, exampleOf } from './components';
 import { FAMILIES } from './families';
 import { DENSITY } from './mass';
-import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, combine, distinctCount, isAssembly, isPart, massOfAll, mirror, place, placedCount, type Assembly, type Override } from './assembly';
+import * as THREE from 'three';
+import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, combine, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
 import { massOf } from './mass';
 import type { Part } from './kits';
 import type { Board } from './boards';
@@ -81,6 +82,8 @@ export interface Ctx {
   code?(lang: string, code: string, inputs: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
   ai?(prompt: string, input: string, signal?: AbortSignal): Promise<{ text: string; by: string }>;
   signal?: AbortSignal;
+  /** The board's clock, s: what the time bar is at (motion, signals, anything that changes over time reads it). */
+  time?: number;
 }
 export type Outputs = Record<string, unknown>;
 export interface BlockTest { set?: Record<string, unknown>; inputs: Record<string, unknown>; outputs: Record<string, unknown>; rel?: number }
@@ -103,7 +106,12 @@ export interface BlockDef {
   by: 'built in' | 'you' | 'claude' | 'engine';
   /** A sink: what it shows or does is the point, so a branch that ends in it is not dead. */
   sink?: boolean;
+  /** It reads the board's clock (or holds a block that does): run again whenever the time changes. By its settings where
+   *  that hangs on them (a spawner of a seed that moves). */
+  clock?: boolean | ((set: Record<string, unknown>) => boolean);
 }
+/** Whether a block, so set, reads the clock. */
+export const clockOf = (b: BlockDef, set: Record<string, unknown> = {}): boolean => (typeof b.clock === 'function' ? b.clock({ ...defaultsOf(b), ...set }) : !!b.clock);
 export const portsOf = (b: BlockDef, set: Record<string, unknown> = {}): Ports => (typeof b.ports === 'function' ? b.ports(set) : b.ports);
 
 /** The element type of a list type, or null. */
@@ -605,6 +613,21 @@ export function heightOn(g: { w: number; d: number; n: number; h: number[] }, x:
   return (at(ix, iz) * (1 - ux) + at(ix + 1, iz) * ux) * (1 - uz) + (at(ix, iz + 1) * (1 - ux) + at(ix + 1, iz + 1) * ux) * uz;
 }
 /** Floor plans by name: each a typical home of its kind (room sizes typical of new homes, an estimate). */
+/** A fixed-time cycle's phases ("green 30, yellow 4, red 34"), and which it is in at a time. */
+export function phasesOf(text: string): { name: string; s: number }[] {
+  const ph = text.split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const m = /^(.+?)\s+([\d.]+)$/.exec(x); if (!m) throw new Error(`"${x}" is not "phase seconds"`); return { name: m[1]!.trim(), s: Number(m[2]) }; });
+  if (!ph.length || ph.some((p) => !(p.s > 0))) throw new Error('a cycle needs phases of more than 0 s'); return ph;
+}
+export function phaseAt(ph: { name: string; s: number }[], t: number): { name: string; left: number } {
+  const T = ph.reduce((a, p) => a + p.s, 0); let u = ((t % T) + T) % T;
+  for (const p of ph) { if (u < p.s) return { name: p.name, left: p.s - u }; u -= p.s; }
+  return { name: ph[0]!.name, left: ph[0]!.s };
+}
+/** The cross street's phase: green while this way is red, but yellow (as long as this way's yellow) at the end of it; red otherwise. */
+export function crossOf(ph: { name: string; s: number }[], t: number): string {
+  const at = phaseAt(ph, t); if (at.name !== 'red') return 'red';
+  const y = ph.find((p) => p.name === 'yellow')?.s ?? 0; return at.left <= y ? 'yellow' : 'green';
+}
 export const PLANS: Record<string, string> = {
   studio: 'living 5x4, bathroom 2.4x4 / kitchen 7.4x2.6',
   '1 bed': 'bedroom 3.6x3.6, bathroom 2.4x3.6 / kitchen 3x3.4, living 3x3.4',
@@ -734,14 +757,37 @@ const BUILT_THINGS: BlockDef[] = [
         const top = h - (sill + oh); if (top > 1e-4) parts.push(piece('wall over opening', ow, top, off, sill + oh + top / 2));
         if (sill > 1e-4) parts.push(piece('wall under opening', ow, sill, off, sill / 2));
       }
-      const p: Part = { name: String(set.name || 'wall'), at: [0, 0, 0], parts };
-      return { wall: p, ox: off, oy: kind === 'door' ? oh / 2 : sill + oh / 2, mass: massOf(p) };
+      const oy = kind === 'door' ? oh / 2 : sill + oh / 2;
+      // its opening is a frame (facing +z, the wall's front): a door or a window is mated into it by the frame's name
+      const p: Part = { name: String(set.name || 'wall'), at: [0, 0, 0], parts, ...(kind !== 'none' ? { ports: [frame('opening', [off, oy, 0])] } : {}) };
+      return { wall: p, ox: off, oy, mass: massOf(p) };
     },
     tests: [{ set: { opening: 'none', mat: 'concrete' }, inputs: { L: 4, h: 2.5, t: 0.2 }, outputs: { mass: 4 * 2.5 * 0.2 * 2400 }, rel: 1e-9 }, { set: { opening: 'door', mat: 'concrete' }, inputs: { L: 4, h: 2.5, t: 0.2, ow: 1, oh: 2 }, outputs: { mass: (4 * 2.5 - 1 * 2) * 0.2 * 2400, oy: 1 }, rel: 1e-9 }] }),
+  def({ id: 'frame', name: 'Frame', kind: 'logic', ability: 'connect', domains: ['mechanical', 'structural', 'everyday'], says: 'A named place on a thing, facing a way: where something is set on it, or where it is set on something (a door\'s middle, a house\'s drive). Mate finds it by its name',
+    settings: [{ key: 'name', label: 'Its name', type: 'text', default: 'fit' }, { key: 'facing', label: 'Facing', type: 'choice', default: '+z', choices: ['+z', '-z', '+x', '-x', '+y', '-y'] }],
+    ports: { inputs: [thing(), L('x', 0), L('y', 0), L('z', 0)], outputs: [thing('thing', 'with its frame'), P('frames', 'list<text>', { label: 'its frames' })] },
+    run: (i, c) => {
+      const t = asThing(i.thing), f = String(c.set.facing ?? '+z'), k = f[0] === '-' ? -1 : 1, ax = f[1] as 'x' | 'y' | 'z';
+      const n: [number, number, number] = [ax === 'x' ? k : 0, ax === 'y' ? k : 0, ax === 'z' ? k : 0], u: [number, number, number] = ax === 'y' ? [0, 0, -k] : [0, 1, 0];
+      const a = isAssembly(t) ? t : { name: t.name, items: [place(t)] };
+      const out: Assembly = { ...a, ports: [...(a.ports ?? []).filter((q) => q.name !== String(c.set.name)), frame(String(c.set.name), [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)], n, u)] };
+      return { thing: out, frames: framesOf(out).map((q) => q.name) };
+    },
+    tests: [{ set: { name: 'fit' }, inputs: { thing: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, y: 1 }, outputs: { frames: ['fit'] } }] }),
+  def({ id: 'mate', name: 'Mate', kind: 'logic', ability: 'connect', domains: ['mechanical', 'structural', 'everyday'], says: 'One thing set on another by their frames: its frame lands on the other\'s, turned to face as it does ("into": a door in its opening, a window in its wall) or back at it ("against": a face on a face). Move what it goes on and it follows',
+    settings: [{ key: 'frame', label: 'Its frame', type: 'text', default: 'fit' }, { key: 'onto', label: 'The frame it goes on', type: 'text', default: 'opening' }, { key: 'how', label: 'How', type: 'choice', default: 'into', choices: ['into', 'against'] }],
+    ports: { inputs: [thing('thing', 'what is set'), thing('on', 'what it is set on')], outputs: [thing('placed', 'it, placed'), thing('both', 'both together')] },
+    run: (i, c) => {
+      const t = asThing(i.thing), on = asThing(i.on), r = mateTo(t, String(c.set.frame), on, String(c.set.onto), c.set.how === 'against' ? 'against' : 'into');
+      if (typeof r === 'string') throw new Error(r);
+      const placed: Assembly = { name: t.name, items: [r] };
+      return { placed, both: { name: `${on.name} with ${t.name}`, items: [place(on), r] } };
+    },
+    tests: [{ set: { frame: 'fit', onto: 'opening' }, inputs: { thing: { name: 'door', items: [], ports: [{ name: 'fit', sex: 'frame', thread: '', pattern: [], at: [0, 0, 0], n: [0, 0, 1], u: [0, 1, 0], t: 0 }] }, on: { name: 'wall', items: [], ports: [{ name: 'opening', sex: 'frame', thread: '', pattern: [], at: [1, 1.05, 2], n: [1, 0, 0], u: [0, 1, 0], t: 0 }] } }, outputs: { placed: { items: [{ at: [1, 1.05, 2] }] } } }] }),
   def({ id: 'pick', name: 'Pick one', kind: 'logic', ability: 'decide', domains: ['everyday', 'software'], says: 'One of several things, by name: plug in what each choice is (a bathroom\'s fittings, a kitchen\'s, a bedroom\'s…), and the choice says which comes out',
-    settings: [{ key: 'options', label: 'Choices (split by |)', type: 'text', default: 'a|b' }],
+    settings: [{ key: 'options', label: 'Choices (split by |)', type: 'text', default: 'a|b' }, { key: 'empty', label: 'A choice with nothing plugged in gives nothing (an empty thing)', type: 'boolean', default: false }],
     ports: (s) => { const o = String(s.options ?? '').split('|').map((x) => x.trim()).filter(Boolean); return { inputs: [P('which', 'text', { label: 'which', choices: o, default: o[0] }), ...o.map((n) => P(n, 'any', { optional: true }))], outputs: [P('chosen', 'any')] }; },
-    run: (i, c) => { const o = String(c.set.options).split('|').map((x) => x.trim()).filter(Boolean), w = String(i.which ?? o[0]); if (!o.includes(w)) throw new Error(`"${w}" is not one of ${o.join(', ')}`); if (i[w] === undefined) throw new Error(`nothing is plugged in for "${w}"`); return { chosen: i[w] }; },
+    run: (i, c) => { const o = String(c.set.options).split('|').map((x) => x.trim()).filter(Boolean), w = String(i.which ?? o[0]); if (!o.includes(w)) throw new Error(`"${w}" is not one of ${o.join(', ')}`); if (i[w] === undefined) { if (c.set.empty) return { chosen: { name: w, items: [] } }; throw new Error(`nothing is plugged in for "${w}"`); } return { chosen: i[w] }; },
     tests: [{ set: { options: 'a|b' }, inputs: { which: 'b', a: 1, b: 2 }, outputs: { chosen: 2 } }] }),
   def({ id: 'rows.grid', name: 'Rows on a grid', kind: 'logic', ability: 'generate', domains: ['everyday', 'operations', 'structural'], says: 'Rows for a spawner: one for each place on an nx by nz grid (x, z), and for each column asked, a value picked at seeded random from its list ("layout: studio|1 bed|2 bed; paint: #e8dcc8|#cfd8dc"), or a number in a range ("length: 4..6")',
     settings: [{ key: 'columns', label: 'Columns: name: a|b|c; name: lo..hi', type: 'code', default: 'paint: #e8dcc8|#cfd8dc|#f5e6c8' }, { key: 'turn', label: 'Each turned by (degrees, about y)', type: 'number', default: 0 }],
@@ -759,24 +805,167 @@ const BUILT_THINGS: BlockDef[] = [
     },
     tests: [{ set: { columns: 'k: a' }, inputs: { nx: 2, nz: 1, sx: 10 }, outputs: { rows: [{ x: -5, z: 0, k: 'a' }, { x: 5, z: 0, k: 'a' }], count: 2 } }] }),
   def({ id: 'rows.set', name: 'Set a column', kind: 'logic', ability: 'transform', domains: ['everyday', 'software'], says: 'Every row given the same value in a column: each room of a house painted its wall colour, each house of a street its roof',
-    settings: [{ key: 'column', label: 'Column', type: 'text', default: 'paint' }],
+    settings: [{ key: 'column', label: 'Column', type: 'text', default: 'paint' }, { key: 'turns', label: 'A value split by | is given round the rows in turn (each car its own paint)', type: 'boolean', default: false }],
     ports: { inputs: [P('rows', 'table'), P('value', 'any')], outputs: [P('rows', 'table')] },
-    run: (i, c) => ({ rows: (Array.isArray(i.rows) ? i.rows : []).map((r) => ({ ...(r as object), [String(c.set.column)]: i.value })) }),
-    tests: [{ set: { column: 'k' }, inputs: { rows: [{ a: 1 }], value: 2 }, outputs: { rows: [{ a: 1, k: 2 }] } }] }),
+    run: (i, c) => { const vs = c.set.turns && typeof i.value === 'string' ? i.value.split('|').map((x) => x.trim()) : Array.isArray(i.value) && c.set.turns ? i.value : [i.value]; return { rows: (Array.isArray(i.rows) ? i.rows : []).map((r, k) => ({ ...(r as object), [String(c.set.column)]: vs[k % Math.max(1, vs.length)] })) }; },
+    tests: [{ set: { column: 'k' }, inputs: { rows: [{ a: 1 }], value: 2 }, outputs: { rows: [{ a: 1, k: 2 }] } }, { set: { column: 'k', turns: true }, inputs: { rows: [{}, {}, {}], value: 'a|b' }, outputs: { rows: [{ k: 'a' }, { k: 'b' }, { k: 'a' }] } }] }),
   def({ id: 'rows.shift', name: 'Move rows', kind: 'logic', ability: 'transform', domains: ['everyday', 'software'], says: 'Every row moved by dx, dz (and turned by dry): the car in front of each house, the lamp beside each door',
     ports: { inputs: [P('rows', 'table'), L('dx', 0), L('dz', 0), N('dry', 'rad', { default: 0, optional: true })], outputs: [P('rows', 'table')] },
     run: (i) => ({ rows: (Array.isArray(i.rows) ? i.rows : []).map((r) => { const o = r as Record<string, number>; return { ...o, x: (o.x ?? 0) + Number(i.dx ?? 0), z: (o.z ?? 0) + Number(i.dz ?? 0), ry: (o.ry ?? 0) + Number(i.dry ?? 0) }; }) }),
     tests: [{ inputs: { rows: [{ x: 1, z: 1 }], dx: 1, dz: 2 }, outputs: { rows: [{ x: 2, z: 3, ry: 0 }] } }] }),
+  def({ id: 'rows.touch', name: 'What each touches', kind: 'logic', ability: 'measure', domains: ['structural', 'everyday', 'software'], says: 'For boxes laid on the ground (rows with x, z, w, d: a house\'s rooms, a street\'s lots), what each side touches: the type of the box along most of it, or "outside". A side two boxes share is said once plainly and once as "(shared)", so only one of them need build it',
+    settings: [{ key: 'by', label: 'Named by the column', type: 'text', default: 'type' }, { key: 'gap', label: 'Touching within (m)', type: 'number', default: 0.05 }],
+    ports: { inputs: [P('rows', 'table')], outputs: [P('rows', 'table'), P('inside', 'integer', { label: 'sides shared' }), P('outside', 'integer', { label: 'sides outside' })] },
+    run: (i, c) => {
+      const rows = (Array.isArray(i.rows) ? i.rows : []) as Record<string, unknown>[], by = String(c.set.by || 'type'), gap = Number(c.set.gap ?? 0.05);
+      const box = rows.map((r) => { const x = Number(r.x ?? 0), z = Number(r.z ?? 0), w = Number(r.w ?? 0), d = Number(r.d ?? 0); return { x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }; });
+      const along = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+      let inside = 0, outside = 0;
+      const out = rows.map((r, k) => {
+        const a = box[k]!, sides: Record<string, string> = {};
+        for (const side of ['front', 'back', 'left', 'right'] as const) {
+          const zSide = side === 'front' || side === 'back', at = side === 'front' ? a.z1 : side === 'back' ? a.z0 : side === 'left' ? a.x0 : a.x1, len = zSide ? a.x1 - a.x0 : a.z1 - a.z0;
+          let best = -1, most = 0, covered = 0;
+          box.forEach((b, j) => {
+            if (j === k) return;
+            const other = side === 'front' ? b.z0 : side === 'back' ? b.z1 : side === 'left' ? b.x1 : b.x0; if (Math.abs(other - at) > gap) return;
+            const o = zSide ? along(a.x0, a.x1, b.x0, b.x1) : along(a.z0, a.z1, b.z0, b.z1); covered += o; if (o > most) { most = o; best = j; }
+          });
+          if (best < 0 || covered < len / 2) { sides[side] = 'outside'; outside++; }
+          else { const t = String(rows[best]![by] ?? 'box'); sides[side] = best < k ? `${t} (shared)` : t; inside++; }
+        }
+        return { ...r, ...sides };
+      });
+      return { rows: out, inside, outside };
+    },
+    tests: [{ inputs: { rows: [{ type: 'a', x: 0, z: 0, w: 2, d: 2 }, { type: 'b', x: 2, z: 0, w: 2, d: 2 }] }, outputs: { rows: [{ type: 'a', right: 'b', left: 'outside', front: 'outside' }, { type: 'b', left: 'a (shared)', right: 'outside' }], inside: 2, outside: 6 } }] }),
+  def({ id: 'rows.recode', name: 'Rules over rows', kind: 'logic', ability: 'decide', domains: ['everyday', 'software', 'structural'], says: 'Each value in some columns changed by the first rule that finds it: "what it is / what is there: what it becomes", * for anything ("hall/outside: door; */outside: window; *: wall"). How a house decides where its doors and windows go from what each wall touches',
+    settings: [{ key: 'columns', label: 'Columns', type: 'text', default: 'front, back, left, right' }, { key: 'by', label: 'What it is, from the column', type: 'text', default: 'type' }, { key: 'rules', label: 'Rules (first that finds it wins)', type: 'code', default: '*/outside: window\n*/hall*: door\n*/* (shared): none\n*: wall' }],
+    ports: { inputs: [P('rows', 'table')], outputs: [P('rows', 'table'), P('changed', 'integer')] },
+    run: (i, c) => {
+      const glob = (g: string) => new RegExp(`^${g.trim().replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`, 'i');
+      const rules = String(c.set.rules ?? '').split(/[;\n]/).map((l) => l.trim()).filter(Boolean).map((l) => { const k = l.lastIndexOf(':'); if (k < 0) throw new Error(`"${l}" is not "pattern: value"`); const pat = l.slice(0, k), [what, there] = pat.includes('/') ? pat.split('/') : ['*', pat]; return { what: glob(what!), there: glob(there!), to: l.slice(k + 1).trim() }; });
+      const cols = String(c.set.columns ?? '').split(',').map((x) => x.trim()).filter(Boolean), by = String(c.set.by || 'type'); let changed = 0;
+      const rows = (Array.isArray(i.rows) ? i.rows : []).map((r0) => { const r = { ...(r0 as Record<string, unknown>) }; for (const col of cols) { if (!(col in r)) continue; const hit = rules.find((u) => u.what.test(String(r[by] ?? '')) && u.there.test(String(r[col]))); if (hit && hit.to !== r[col]) { r[col] = hit.to; changed++; } } return r; });
+      return { rows, changed };
+    },
+    tests: [{ set: { columns: 'front', rules: 'hall/outside: door; */outside: window; *: wall' }, inputs: { rows: [{ type: 'hall', front: 'outside' }, { type: 'bed', front: 'outside' }, { type: 'bed', front: 'bath' }] }, outputs: { rows: [{ front: 'door' }, { front: 'window' }, { front: 'wall' }], changed: 3 } }] }),
+  def({ id: 'clear', name: 'Clear away', kind: 'logic', ability: 'transform', domains: ['structural', 'everyday', 'mechanical'], says: 'What a thing places, less whatever comes within a distance of another thing (grass under a road, trees where a house stands) or, with "keep", only those: deleting by where things are',
+    settings: [{ key: 'keep', label: 'Keep only those near it (else take them away)', type: 'boolean', default: false }, { key: 'depth', label: 'How many levels down it looks', type: 'number', default: 2 }],
+    ports: { inputs: [thing('thing', 'what to clear from'), thing('near', 'what clears it'), L('gap', 0, 'within')], outputs: [thing('cleared', 'what is left'), P('removed', 'integer', { label: 'taken away' })] },
+    run: (i, c) => {
+      const t = asThing(i.thing), near = asThing(i.near), gap = Number(i.gap ?? 0), a = isAssembly(t) ? t : { name: t.name, items: [place(t)] };
+      // what clears it, as the boxes of what it places (a road system: each road and crossing), one level or two down
+      const boxes: THREE.Box3[] = [], walk = (x: Part | Assembly, m: THREE.Matrix4, depth: number) => { if (isAssembly(x) && depth > 0 && x.items.length <= 4096) { for (const it of x.items) walk(it.of, m.clone().multiply(matrixOf(it)), depth - 1); return; } const b = boundsOfAll(x); if (!b.isEmpty()) boxes.push(b.clone().applyMatrix4(m).expandByScalar(gap)); };
+      walk(near, new THREE.Matrix4(), 2);
+      // down through what it places (a terrain's patches of grass, a street's lots), as deep as asked: what is wholly clear
+      // stays shared as it is; only what is cut through is made anew
+      let removed = 0; const keep = !!c.set.keep;
+      const cut = (x: Assembly, m: THREE.Matrix4, depth: number): Assembly => {
+        const items: Assembly['items'] = [];
+        for (const it of x.items) {
+          const mm = m.clone().multiply(matrixOf(it)), b = boundsOfAll(it.of).clone().applyMatrix4(mm), hit = !b.isEmpty() && boxes.some((q) => q.intersectsBox(b));
+          if (!hit) { if (keep) removed++; else items.push(it); continue; }
+          if (depth > 0 && isAssembly(it.of) && it.of.items.length) { const inner = cut(it.of, mm, depth - 1); if (inner.items.length) items.push({ ...it, of: inner }); continue; }
+          if (keep) items.push(it); else removed++;
+        }
+        return { ...x, items };
+      };
+      return { cleared: cut(a, new THREE.Matrix4(), Math.max(0, Math.round(Number(c.set.depth ?? 2)))), removed };
+    },
+    tests: [{ inputs: { thing: { name: 'row', items: [{ of: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [0, 0, 0], rot: [0, 0, 0], s: 1 }, { of: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [5, 0, 0], rot: [0, 0, 0], s: 1 }] }, near: { name: 'road', items: [{ of: { name: 'r', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [5, 0, 0], rot: [0, 0, 0], s: 1 }] } }, outputs: { removed: 1 } }] }),
+  def({ id: 'clash', sink: true, name: 'Clashes', kind: 'critic', ability: 'check', domains: ['mechanical', 'structural', 'everyday'], says: 'Which of the things a thing places run into one another (a car parked into a house, a pipe through a beam): their boxes, as far down as asked, overlapping by more than a touch. Says each pair and how deep the worst goes',
+    settings: [{ key: 'depth', label: 'How many levels down it looks', type: 'number', default: 1 }, { key: 'touch', label: 'Overlap that is only touching (m)', type: 'number', default: 0.005 }],
+    ports: { inputs: [thing()], outputs: [P('clashes', 'integer'), P('pairs', 'list<text>'), L('worst', 0, 'deepest overlap')] },
+    run: (i, c) => {
+      const t = asThing(i.thing), depth = Math.max(0, Math.round(Number(c.set.depth ?? 1))), tol = Number(c.set.touch ?? 0.005), boxes: { name: string; b: THREE.Box3 }[] = [];
+      const walk = (x: Part | Assembly, m: THREE.Matrix4, d: number, name: string) => {
+        if (isAssembly(x) && d > 0) { x.items.forEach((it, k) => walk(it.of, m.clone().multiply(matrixOf(it)), d - 1, `${it.of.name} ${k + 1}`)); return; }
+        const b = boundsOfAll(x); if (!b.isEmpty()) boxes.push({ name, b: b.clone().applyMatrix4(m) });
+      };
+      if (isAssembly(t)) t.items.forEach((it, k) => walk(it.of, matrixOf(it), depth - 1, `${it.of.name} ${k + 1}`)); else walk(t, new THREE.Matrix4(), 0, t.name);
+      if (boxes.length > 20000) throw new Error(`${boxes.length} things to check: look fewer levels down`);
+      // sweep along x: only boxes whose x spans meet are compared
+      boxes.sort((a, b) => a.b.min.x - b.b.min.x);
+      const pairs: string[] = []; let n = 0, worst = 0;
+      for (let a = 0; a < boxes.length; a++) for (let b = a + 1; b < boxes.length && boxes[b]!.b.min.x < boxes[a]!.b.max.x - tol; b++) {
+        const A = boxes[a]!.b, B = boxes[b]!.b, o = Math.min(A.max.x - B.min.x, B.max.x - A.min.x, A.max.y - B.min.y, B.max.y - A.min.y, A.max.z - B.min.z, B.max.z - A.min.z);
+        if (o > tol) { n++; worst = Math.max(worst, o); if (pairs.length < 50) pairs.push(`${boxes[a]!.name} into ${boxes[b]!.name} by ${(o * 1000).toFixed(0)} mm`); }
+      }
+      return { clashes: n, pairs, worst };
+    },
+    tests: [{ inputs: { thing: { name: 'two', items: [{ of: { name: 'a', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [0, 0, 0], rot: [0, 0, 0], s: 1 }, { of: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [0.9, 0, 0], rot: [0, 0, 0], s: 1 }, { of: { name: 'c', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [5, 0, 0], rot: [0, 0, 0], s: 1 }] } }, outputs: { clashes: 1, worst: 0.1 }, rel: 1e-9 }] }),
+  def({ id: 'rows.ground', name: 'Onto the ground', kind: 'logic', ability: 'transform', domains: ['structural', 'everyday', 'energy'], says: 'Each row (a house\'s lot, a tree, a car) set on the ground where it stands: its y the ground\'s height at its x and z, so what is spawned from them stands on the hills, not in them',
+    settings: [{ key: 'lift', label: 'And raised by (m)', type: 'number', default: 0 }],
+    ports: { inputs: [P('rows', 'table'), P('on', 'part', { label: 'ground' })], outputs: [P('rows', 'table'), L('low', 0, 'lowest it set'), L('high', 0, 'highest it set')] },
+    run: (i, c) => {
+      const g = (i.on as Part | undefined)?.shape as { ground?: { w: number; d: number; n: number; h: number[] } } | undefined; if (!g?.ground) throw new Error('wire a Terrain\'s ground in');
+      const at = (i.on as Part).at ?? [0, 0, 0], lift = Number(c.set.lift ?? 0); let low = Infinity, high = -Infinity;
+      const rows = (Array.isArray(i.rows) ? i.rows : []).map((r0) => { const r = r0 as Record<string, number>, y = heightOn(g.ground!, Number(r.x ?? 0) - at[0], Number(r.z ?? 0) - at[2]) + at[1] + lift; low = Math.min(low, y); high = Math.max(high, y); return { ...r, y }; });
+      return { rows, low: rows.length ? low : 0, high: rows.length ? high : 0 };
+    },
+    tests: [{ inputs: { rows: [{ x: 0, z: 0 }], on: { name: 'g', at: [0, 0, 0], shape: { ground: { w: 2, d: 2, n: 1, h: [1, 1, 1, 1], base: 0.1 } } } }, outputs: { rows: [{ y: 1 }], low: 1, high: 1 } }] }),
+  // ---- time and motion: what changes as the clock runs --------------------------------------------------------------
+  def({ id: 'time', name: 'Clock', kind: 'input', ability: 'measure', domains: ['everyday', 'vehicles', 'mechanical'], says: 'The time the board is at, in seconds: the time bar\'s. Everything wired from it runs again as time goes on, and nothing else does',
+    ports: { inputs: [], outputs: [N('t', 's', { label: 'time' })] }, clock: true,
+    run: (_i, c) => ({ t: Number(c.time ?? 0) }),
+    tests: [{ inputs: {}, outputs: { t: 0 } }] }),
+  def({ id: 'cycle', name: 'Signal cycle', kind: 'logic', ability: 'decide', domains: ['vehicles', 'everyday', 'software'], says: 'Which phase a fixed-time cycle is in at a time ("green 30, yellow 4, red 34", seconds): a traffic signal\'s, a washing machine\'s. Gives the way along x\'s phase and the cross street\'s, which is green while the first is red, then yellow for as long',
+    settings: [{ key: 'phases', label: 'Phases, seconds', type: 'text', default: 'green 30, yellow 4, red 34' }],
+    ports: { inputs: [N('t', 's', { label: 'time' }), N('offset', 's', { default: 0, optional: true })], outputs: [P('state', 'text', { label: 'this way' }), P('cross', 'text', { label: 'the cross street' }), N('left', 's', { label: 'left of this phase' }), N('period', 's')] },
+    run: (i, c) => {
+      const ph = phasesOf(String(c.set.phases)), T = ph.reduce((a, p) => a + p.s, 0), at = phaseAt(ph, Number(i.t ?? 0) + Number(i.offset ?? 0));
+      return { state: at.name, cross: crossOf(ph, Number(i.t ?? 0) + Number(i.offset ?? 0)), left: at.left, period: T };
+    },
+    tests: [{ inputs: { t: 31 }, outputs: { state: 'yellow', cross: 'red', left: 3, period: 68 } }, { inputs: { t: 40 }, outputs: { state: 'red', cross: 'green' } }, { inputs: { t: 66 }, outputs: { state: 'red', cross: 'yellow' } }] }),
+  def({ id: 'path.loop', name: 'Loop round a block', kind: 'generator', ability: 'generate', domains: ['vehicles', 'structural'], says: 'A path round a rectangle, in its lane (inset from the road\'s middle), driven with the block on the right as traffic keeps right; and where it must stop: before each crossing it meets, every so many metres',
+    settings: [{ key: 'every', label: 'A crossing every (m)', type: 'number', default: 60 }, { key: 'before', label: 'Stop this far before a crossing\'s middle (m)', type: 'number', default: 5 }],
+    ports: { inputs: [L('w', 120, 'width'), L('d', 120, 'depth'), L('inset', 1.8, 'lane in from the road\'s middle')], outputs: [P('path', 'table'), P('stops', 'table'), L('length', 0)] },
+    run: (i, c) => {
+      const W = Number(i.w ?? 120), D = Number(i.d ?? 120), k = Number(i.inset ?? 1.8), every = Number(c.set.every ?? 60), before = Number(c.set.before ?? 5);
+      const x0 = -W / 2 + k, x1 = W / 2 - k, z0 = -D / 2 + k, z1 = D / 2 - k;
+      const path = [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }, { x: x0, z: z0 }];
+      const sides: [number, 'x' | 'z', number][] = [[W, 'x', 0], [D, 'z', W - 2 * k], [W, 'x', W - 2 * k + D - 2 * k], [D, 'z', 2 * (W - 2 * k) + D - 2 * k]], stops: { at: number; axis: string }[] = [];
+      for (const [len, axis, start] of sides) for (let n = 1; n * every <= len + 1e-6; n++) { const at = start + n * every - k - before; if (at > start) stops.push({ at, axis }); }
+      return { path, stops, length: 2 * (W - 2 * k) + 2 * (D - 2 * k) };
+    },
+    tests: [{ inputs: { w: 60, d: 60, inset: 0 }, outputs: { length: 240, stops: [{ at: 55, axis: 'x' }, { at: 115, axis: 'z' }, { at: 175, axis: 'x' }, { at: 235, axis: 'z' }] } }] }),
+  def({ id: 'follow', name: 'Follow a path', kind: 'solver', ability: 'simulate', domains: ['vehicles', 'mechanical', 'everyday'], says: 'Things moving along a path at the clock\'s time: each keeps a gap to the one ahead, and stops at a stop line while its way is not green. Worked out step by step from time 0 (a tenth of a second at a time), so the same time is always the same street. Gives where each is and which way it faces, for a spawner',
+    settings: [{ key: 'loop', label: 'Round and round (the path is a loop)', type: 'boolean', default: true }, { key: 'phases', label: 'Its signals\' phases, seconds', type: 'text', default: 'green 30, yellow 4, red 34' }],
+    ports: { inputs: [P('path', 'table'), N('n', undefined, { default: 4, optional: true, label: 'how many' }), N('speed', 'm/s', { default: 11, optional: true }), L('gap', 8, 'gap kept, front to front'), N('t', 's', { label: 'time' }), P('stops', 'table', { optional: true })], outputs: [P('rows', 'table'), P('waiting', 'integer', { label: 'stopped' }), N('travelled', 'm', { label: 'the first has gone' })] },
+    run: (i, c) => {
+      const pts = (Array.isArray(i.path) ? i.path : []).map((r) => r as { x: number; z: number }); if (pts.length < 2) throw new Error('a path needs two points or more');
+      const cum = [0]; for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1]! + Math.hypot(pts[k]!.x - pts[k - 1]!.x, pts[k]!.z - pts[k - 1]!.z));
+      const L = cum[cum.length - 1]!, loop = c.set.loop !== false, n = Math.max(0, Math.min(500, Math.round(Number(i.n ?? 4)))), v = Number(i.speed ?? 11), gap = Number(i.gap ?? 8), T = Math.min(Math.max(0, Number(i.t ?? 0)), 1800), dt = 0.1;
+      const ph = phasesOf(String(c.set.phases)), stops = (Array.isArray(i.stops) ? i.stops : []).map((r) => r as { at: number; axis?: string }).sort((a, b) => a.at - b.at);
+      const go = (axis: string | undefined, t: number) => (axis === 'z' ? crossOf(ph, t) : phaseAt(ph, t).name) === 'green';
+      const s = Array.from({ length: n }, (_, k) => (loop ? ((n - k) * L) / Math.max(1, n) : -k * gap) % (L || 1)), moved = new Array<number>(n).fill(0);
+      const ahead = (from: number, to: number) => (loop ? (((to - from) % L) + L) % L : to - from);
+      for (let t = 0; t < T - 1e-9; t += dt) {
+        for (let k = 0; k < n; k++) {
+          let step = v * Math.min(dt, T - t);
+          if (n > 1 && (loop || k > 0)) { const lead = s[(k - 1 + n) % n]!; step = Math.min(step, Math.max(0, ahead(s[k]!, lead) - gap)); }
+          for (const st of stops) { const d = ahead(s[k]!, st.at); if (d >= 0 && d < step + 0.5 && !go(st.axis, t)) step = Math.min(step, Math.max(0, d - 0.5)); }
+          moved[k] = step; s[k] = loop ? (s[k]! + step) % L : Math.min(L, s[k]! + step);
+        }
+      }
+      const at = (d: number) => { let k = 1; while (k < cum.length - 1 && cum[k]! < d) k++; const a = pts[k - 1]!, b = pts[k]!, f = (d - cum[k - 1]!) / Math.max(1e-9, cum[k]! - cum[k - 1]!); return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, ry: Math.atan2(-(b.z - a.z), b.x - a.x) }; };
+      const rows = s.map((d) => ({ ...at(Math.max(0, d)), y: 0 })), waiting = T > 0 ? moved.filter((m) => m < 1e-6).length : 0;
+      return { rows, waiting, travelled: n ? s[0]! : 0 };
+    },
+    tests: [{ set: { loop: false }, inputs: { path: [{ x: 0, z: 0 }, { x: 100, z: 0 }], n: 1, speed: 10, t: 2 }, outputs: { rows: [{ x: 20, z: 0, ry: 0 }], waiting: 0 }, rel: 1e-6 },
+      { set: { loop: false, phases: 'red 30, green 30' }, inputs: { path: [{ x: 0, z: 0 }, { x: 100, z: 0 }], n: 1, speed: 10, t: 10, stops: [{ at: 50, axis: 'x' }] }, outputs: { rows: [{ x: 49.5 }], waiting: 1 }, rel: 1e-6 }] }),
   def({ id: 'plan.rooms', name: 'Floor plan', kind: 'logic', ability: 'generate', domains: ['structural', 'everyday'], says: 'A house\'s rooms laid out from its plan: rows of rooms split by "/", rooms in a row by ",", each "type W x D" in metres ("bedroom 4x4, bathroom 2.5x3 / kitchen 4x3.5, living 5x3.5"); or a plan by name. Gives a row for each room (type, w, d, x, z) for the spawner, and the whole floor\'s size',
     settings: [{ key: 'custom', label: 'Your own plan (blank: the named one)', type: 'code', default: '' }],
-    ports: { inputs: [P('plan', 'text', { label: 'plan', choices: Object.keys(PLANS), default: '2 bed' })], outputs: [P('rows', 'table'), L('W', 0, 'width'), L('D', 0, 'depth'), P('rooms', 'integer')] },
+    ports: { inputs: [P('plan', 'text', { label: 'plan', choices: Object.keys(PLANS), default: '2 bed' }), L('hall', 0, 'a hall between its rows, this wide (0: none)')], outputs: [P('rows', 'table'), L('W', 0, 'width'), L('D', 0, 'depth'), P('rooms', 'integer')] },
     run: (i, c) => {
       const text = String(c.set.custom || '').trim() || PLANS[String(i.plan ?? '2 bed')]; if (!text) throw new Error(`no plan "${String(i.plan)}": ${Object.keys(PLANS).join(', ')}`);
       const lines = text.split('/').map((l) => l.split(',').map((r) => r.trim()).filter(Boolean).map((r) => { const m = /^(.+?)\s+([\d.]+)\s*[x×]\s*([\d.]+)$/.exec(r); if (!m) throw new Error(`"${r}" is not "type W x D"`); return { type: m[1]!.trim(), w: Number(m[2]), d: Number(m[3]) }; }));
+      const hall = Number(i.hall ?? 0); if (hall > 0) for (let k = lines.length - 1; k > 0; k--) lines.splice(k, 0, [{ type: 'hall', w: 0, d: hall }]);
       const W = Math.max(...lines.map((l) => l.reduce((t, r) => t + r.w, 0))), D = lines.reduce((t, l) => t + Math.max(...l.map((r) => r.d)), 0), rows: Record<string, unknown>[] = [];
       let z = -D / 2;
       for (const l of lines) { const depth = Math.max(...l.map((r) => r.d)), lw = l.reduce((t, r) => t + r.w, 0); let x = -W / 2; for (const r of l) { const w = r.w + (r === l[l.length - 1] ? W - lw : 0); rows.push({ type: r.type, w, d: depth, x: x + w / 2, y: 0, z: z + depth / 2 }); x += w; } z += depth; }
-      return { rows, W, D, rooms: rows.length };
+      return { rows, W, D, rooms: rows.filter((r) => r.type !== 'hall').length };
     },
     tests: [{ set: { custom: 'bedroom 4x4, bathroom 2x3 / kitchen 6x3' }, inputs: {}, outputs: { W: 6, D: 7, rooms: 3, rows: [{ type: 'bedroom', w: 4, d: 4, x: -1, z: -1.5 }, { type: 'bathroom', w: 2, d: 4, x: 2 }, { type: 'kitchen', w: 6, d: 3, x: 0, z: 2 }] } }] }),
   def({ id: 'space.show', name: 'Show in space', kind: 'view', ability: 'show', domains: ['everyday', 'mechanical', 'structural'], says: 'Puts a thing into the 3D space, at its place: everything wired into one of these is what the space draws',

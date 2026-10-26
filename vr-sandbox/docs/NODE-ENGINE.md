@@ -41,6 +41,42 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-26, then: what building a city showed the nodes need, built, and what is still missing.** The city was
+the test, not the goal: each place it was hard to build is an ability nodes lacked. Built:
+
+| Where it was hard | The ability (a node anyone can use) |
+| --- | --- |
+| A door set in a wall by hand-wired offsets | **Frame** (a named place on a thing, found through what it places, "front wall/opening") and **Mate** (one thing set on another by their frames, into or against). The Wall seed mates its door or window into its opening |
+| Back rooms' doors opened onto front rooms' windows | **What each touches** (each side of each box: the neighbour along most of it, or outside, a shared side said once) and **Rules over rows** ("hall/outside: door; */outside: window; */hall*: door; *: wall"). The house gets a hall, a door from every room onto it, windows only outside, a shared wall built once |
+| Grass under the road | **Clear away**: what a thing places, less whatever comes near another thing (or only those), as deep as asked; what is untouched stays shared |
+| A parked car clipped a wide house | **Clashes**: which placed things overlap, how deep, by a sweep along x. Every seed board checks itself |
+| Houses can't stand on hills | **Onto the ground**: rows given the terrain's height where they stand, for a spawner |
+| Stop lights fixed, nothing moved | **Clock** (the board's time; only what reads it runs again: about 6 to 12 ms a tick for a neighbourhood), **Signal cycle** (fixed-time phases, the cross street's derived), **Loop round a block** (a lane path and its stop lines), **Follow a path** (things along a path keeping a gap, stopping at a red line; stepped from 0 at 0.1 s, so any time is always the same street). The road system's lights run on the cycle; each neighbourhood has cars driving round it |
+
+The dashboard (`view/index.html`) is the front door: the board, the library, a docked 3D view that can be entered to
+fill the page or taken on to the space (`view/space.html`, any scale, a headset), the clock under it, the run log
+(what each run worked out and how long each node took), results and metrics (mass, how much is shared, the last run
+against a frame, nodes working, what the view draws), and variations (the chosen node run for each of an input's
+choices, side by side, a press to take one). No panel is decoration: each is read from the board.
+
+Still missing, found while building (next, in this order unless asked otherwise):
+- **Routing on a network**: cars only go round a loop. Roads need to be a graph (crossings as nodes) so a car can turn,
+  and a route found between two places.
+- **Seeing other traffic**: cars keep a gap to the one ahead on their own path, but not to cross traffic, and go from
+  stopped to full speed at once (no acceleration); nothing changes lane.
+- **Neighbourhoods side by side**: each builds its own edge roads, so two that meet have two roads; overlapping duplicates
+  need merging (union by place).
+- **Roads that follow the ground**: Onto the ground lifts rows, but a road is one flat piece; it needs to bend to the
+  terrain, and a neighbourhood or city to sit on one.
+- **Pointing at one car in a city and changing only it** (the document's point edits, 3.10): overrides by path exist on
+  placements, but nothing yet resolves a pick in the view into a path and stores an override there.
+- **Mates that move together and constraints both ways**: a mate places once, from its inputs; nothing yet solves a set
+  of mates and dimensions together, or flags two that conflict.
+- **Stand-ins below a seed**: far things draw as their boxes; there is no simplified proxy mesh made when a seed is saved.
+- **Exploding a seed in the 3D view**: the part viewer explodes parts; assemblies in the space do not yet.
+- **Physics**: masses are real (with solid shares labelled estimates); nothing yet falls, collides or carries load in
+  the space; the periodic table is the phase after mating.
+
 **2026-10-26, later: seeds built from nodes** (`src/nexus/seeds.ts`, following the Seed Node System document). Each is
 an ordinary board of nodes folded into one node and registered in the library, and each is built from the ones before:
 

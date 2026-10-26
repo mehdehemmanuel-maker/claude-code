@@ -5,8 +5,9 @@
 //
 // S, scale: you stay your own size and the world is scaled round you, so zooming from a bolt to a city never takes the
 // camera kilometres off (which a screen's depth and a headset's comfort both dislike): a cell of the grid is always a
-// few centimetres where you see it, and it says what it is (1 µm, 1 mm, 1 m, 1 km), a decade at a time. T, time: a bar
-// that runs back and forward through the board's history now, and through simulations when physics nodes come.
+// few centimetres where you see it, and it says what it is (1 µm, 1 mm, 1 m, 1 km), a decade at a time. T, time: the
+// board's clock (played, what moves runs: traffic, signals), or its history run back and forward. Entered from the
+// dashboard (view/index.html), and back to it.
 //
 // The board of blocks (src/nexus/view/nodes.ts, the same board as its page) is the main panel, with its strip and its
 // chosen block's inputs (src/nexus/view/nodes-wall.ts); the space bar holds S and T; chat sends to Claude Code. On a
@@ -137,7 +138,8 @@ class Panel {
 }
 function round(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
-/** The space bar: S (what a cell is, the decades to jump to, fit), the planes of the grid, T (the board's history), and
+let tMode: 'auto' | 'clock' | 'history' = 'auto';
+/** The space bar: S (what a cell is, the decades to jump to, fit), the planes of the grid, T (the clock, or the board's history), and
  *  what is drawn. */
 const bar = new Panel(1.7, 0.1, 2400, (p) => {
   const g = p.g, H = p.c.height; g.fillStyle = '#0b1220ee'; round(g, 0, 0, p.c.width, H, 24); g.fill();
@@ -146,15 +148,28 @@ const bar = new Panel(1.7, 0.1, 2400, (p) => {
   let x = 300; for (const [name, cell] of [['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3]] as const) { p.button(name, x, 22, 84, H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += 92; }
   p.button('Fit', x, 22, 90, H - 44, fit); x += 100; p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130;
   for (const k of ['xz', 'xy', 'yz'] as const) { p.button(k.toUpperCase(), x, 22, 84, H - 44, () => { grid.planes[k] = !grid.planes[k]; grid.dirty = true; }, grid.planes[k]); x += 92; }
-  x += 22; g.font = `700 22px ${FONT}`; g.fillStyle = '#69f0ae'; g.fillText('T · TIME', x, H / 2 - 18); g.font = `500 20px ${FONT}`; g.fillStyle = '#9fb3c8'; g.fillText('history', x, H / 2 + 16); x += 104;
-  const h = wall.history(), tx = x, tw = 470;
-  p.button('◀', tx, 22, 64, H - 44, () => wall.goto(h.at - 1));
-  const sx = tx + 84, sw = tw - 170; g.fillStyle = '#1c2a3d'; round(g, sx, H / 2 - 8, sw, 16, 8); g.fill();
-  const f = h.count > 1 ? h.at / (h.count - 1) : 1; g.fillStyle = '#69f0ae'; round(g, sx, H / 2 - 8, Math.max(16, sw * f), 16, 8); g.fill();
-  g.beginPath(); g.arc(sx + sw * f, H / 2, 16, 0, Math.PI * 2); g.fill();
-  p.hits.push({ x0: sx - 10, y0: 0, x1: sx + sw + 10, y1: H, act: (px) => wall.goto(Math.round(((px - sx) / sw) * (h.count - 1))) });
-  p.button('▶', sx + sw + 14, 22, 64, H - 44, () => wall.goto(h.at + 1));
-  g.font = `500 24px ${FONT}`; g.fillStyle = '#9fb3c8'; g.fillText(`${h.at + 1} / ${h.count}`, tx + tw + 8, H / 2 - 16);
+  x += 22; g.font = `700 22px ${FONT}`; g.fillStyle = '#69f0ae'; g.fillText('T · TIME', x, H / 2 - 18);
+  // T is the clock (what moves: traffic, signals) or the board's history; the clock first when anything moves with it
+  const ck = wall.clock(), clockMode = tMode === 'clock' || (tMode === 'auto' && ck.moves);
+  p.button(clockMode ? 'clock' : 'history', x - 4, H / 2 + 2, 104, 34, () => { tMode = clockMode ? 'history' : 'clock'; bar.draw(); }); x += 112;
+  const tx = x, tw = 470, sx = tx + 84, sw = tw - 170;
+  const slide = (f: number, act: (f: number) => void) => {
+    g.fillStyle = '#1c2a3d'; round(g, sx, H / 2 - 8, sw, 16, 8); g.fill(); g.fillStyle = '#69f0ae'; round(g, sx, H / 2 - 8, Math.max(16, sw * f), 16, 8); g.fill();
+    g.beginPath(); g.arc(sx + sw * f, H / 2, 16, 0, Math.PI * 2); g.fill();
+    p.hits.push({ x0: sx - 10, y0: 0, x1: sx + sw + 10, y1: H, act: (px) => act(Math.max(0, Math.min(1, (px - sx) / sw))) });
+  };
+  if (clockMode) {
+    p.button(ck.playing ? '❚❚' : '▶', tx, 22, 64, H - 44, () => { wall.play(!wall.clock().playing); bar.draw(); }, ck.playing);
+    slide(ck.t / ck.max, (f) => wall.setTime(f * ck.max));
+    p.button('×' + String(ck.rate), sx + sw + 14, 22, 64, H - 44, () => { wall.rate(({ 1: 2, 2: 5, 5: 10 } as Record<number, number>)[ck.rate] ?? 1); bar.draw(); });
+    g.font = `500 24px ${FONT}`; g.fillStyle = ck.moves ? '#a7ffeb' : '#5f6f84'; g.fillText(ck.moves ? `t = ${ck.t.toFixed(1)} s` : 'nothing moves', tx + tw + 8, H / 2 - 16);
+  } else {
+    const h = wall.history();
+    p.button('◀', tx, 22, 64, H - 44, () => wall.goto(h.at - 1));
+    slide(h.count > 1 ? h.at / (h.count - 1) : 1, (f) => wall.goto(Math.round(f * (h.count - 1))));
+    p.button('▶', sx + sw + 14, 22, 64, H - 44, () => wall.goto(h.at + 1));
+    g.font = `500 24px ${FONT}`; g.fillStyle = '#9fb3c8'; g.fillText(`${h.at + 1} / ${h.count}`, tx + tw + 8, H / 2 - 16);
+  }
   const st = view.stats; g.fillStyle = '#7f8ea3'; g.font = `500 22px ${FONT}`;
   const sayIt = `${st.instances.toLocaleString()} drawn in ${st.draws} draw${st.draws === 1 ? '' : 's'}${st.boxes ? `, ${st.boxes.toLocaleString()} far off as boxes` : ''}`; g.fillText(sayIt, tx + tw + 8, H / 2 + 16);
 });
@@ -183,6 +198,9 @@ chatInput.placeholder = 'Say something to Claude…'; chatInput.style.cssText = 
 chatInput.addEventListener('input', () => { typing = chatInput.value; chat.draw(); });
 chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const t = chatInput.value; chatInput.value = ''; void send(t); } e.stopPropagation(); });
 document.body.appendChild(chatInput);
+const back = document.createElement('a'); back.href = './index.html'; back.textContent = '◀ Dashboard';
+back.style.cssText = 'position:fixed;left:16px;bottom:16px;padding:8px 14px;border-radius:10px;border:1px solid #5a3f9a;background:linear-gradient(90deg,#1b3a5a,#3a1b5a);color:#e6eef8;font:14px system-ui;text-decoration:none;z-index:5';
+document.body.appendChild(back);
 const keyboard = new Keyboard(false); keyboard.mesh.visible = false;
 function placeKeyboard(): void { keyboard.mesh.position.set(-0.2, -0.38, -0.55); keyboard.mesh.rotation.set(-0.5, 0, 0); }
 
@@ -303,7 +321,7 @@ renderer.setAnimationLoop((now) => {
   const xrCam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
   view.update(xrCam as THREE.PerspectiveCamera, renderer.domElement.clientHeight || window.innerHeight, now);
   board.update(now);
-  if (now % 500 < 17) bar.draw();
+  if (now % 500 < 17 || (wall.clock().playing && now % 100 < 17)) bar.draw();
   renderer.render(scene, camera);
 });
 // the first time, a board that shows something in the space: the city from a few nodes
