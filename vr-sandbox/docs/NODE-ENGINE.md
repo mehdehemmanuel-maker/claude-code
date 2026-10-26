@@ -61,7 +61,10 @@ New nodes for them: `terrain`, `scatter`, `wall`, `pick`, `rows.grid`, `rows.set
 material, a glow, and a solid share for hollow things. A seed's input with choices is a dropdown in the inspector and ◀ ▶
 on the panel in the space. Measured (2026-10-26): a 3 × 3 city is 22,813 pieces placed, stored as 968 distinct things,
 run in about 70 ms; a 24 m terrain is 150k grass blades drawn in 4 draw calls. Not yet: a house's rooms are laid in rows
-with each door in its front wall, so a back room's door opens onto the front room's window (no hallway rule yet).
+with each door in its front wall, so a back room's door opens onto the front room's window (no hallway rule yet). A blind
+check of the screenshots also found: cars on the lawns with no driveway; houses showing no windows from the street (each
+room's window is in its back wall); the grid's metre marks over everything in a city view; long node titles cut off in
+the inspector. Fixed after it: floors by room type (tile in bathrooms and kitchens), metres on a seed's sizes.
 
 **2026-10-26: the forge and its room are deleted.** The app's front door is the space (`view/index.html`): what the
 nodes make, in x, y and z, at any scale and through time, with the panels floating where you reach them. Build with

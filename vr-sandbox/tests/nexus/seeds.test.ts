@@ -29,6 +29,11 @@ describe('seeds', () => {
     expect(w(three)).toBeGreaterThan(w(st)); expect(placedCount(three)).toBeGreaterThan(placedCount(st));
     expect(names(await thing('house', { show: 'roof on' })).has('roof')).toBe(true); expect(names(three).has('roof')).toBe(false);
   });
+  it('a room is as wide as it is given, its floor by its type', async () => {
+    const b = boundsOfAll(await thing('room', { w: 5 })); expect(b.max.x - b.min.x).toBeCloseTo(5.15, 2);
+    const floors = new Map<string, unknown>(); for (const type of ['bathroom', 'bedroom']) flatten(await thing('room', { type }), (f) => { if (f.leaf.name === 'floor') floors.set(type, f.leaf.mat); });
+    expect(floors.get('bathroom')).toBe('tile'); expect(floors.get('bedroom')).toBe('oak');
+  });
   it('a stop light lights only the lens picked', async () => {
     for (const state of ['red', 'yellow', 'green']) {
       const lit: string[] = []; flatten(await thing('stoplight', { state }), (f) => { if (f.leaf.glow) lit.push(String(f.leaf.color)); });
