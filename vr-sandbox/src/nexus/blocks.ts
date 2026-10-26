@@ -25,6 +25,12 @@ import { AMBIENT } from '../engineering/thermal';
 import type { Jolt } from './realize';
 import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
 import { massOf } from './mass';
+import { MACHINES, TREADS, makeMachine, rollingOf, styledCar, styles, tyreBuilt, tyreOf, type Axle, type Machine, type Susp, type Tread } from './machines';
+import { cellPack, liCell, starterBattery } from './components';
+import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
+import { exploded, fitIn } from './assembly';
+import { BOARDS, PROCESSES, SOCKETS, desktop, die, motherboard, nandCell, packageOf, sramCell, transistor } from './computer';
+const KINDS_OF_VEHICLE = ['car', 'truck', 'atv', 'motorcycle', 'forklift', 'mower', 'kart'];
 import type { Part } from './kits';
 import type { Board } from './boards';
 
@@ -1106,6 +1112,121 @@ const BUILT_THINGS: BlockDef[] = [
       return { rows, W, D, rooms: rows.filter((r) => r.type !== 'hall').length };
     },
     tests: [{ set: { custom: 'bedroom 4x4, bathroom 2x3 / kitchen 6x3' }, inputs: {}, outputs: { W: 6, D: 7, rooms: 3, rows: [{ type: 'bedroom', w: 4, d: 4, x: -1, z: -1.5 }, { type: 'bathroom', w: 2, d: 4, x: 2 }, { type: 'kitchen', w: 6, d: 3, x: 0, z: 2 }] } }] }),
+  // ---- vehicles from what they are: tyres, batteries, axles, the vehicle itself; fitting shared parts in; taking apart ----
+  def({ id: 'tyre', name: 'Tyre', kind: 'generator', ability: 'generate', domains: ['vehicles', 'mechanical', 'manufacturing'], says: 'A tyre as it is made, from its size (a code off its sidewall, or its width, aspect and rim): inner liner, body ply, beads and their apexes, steel belts, cap ply, undertread, sidewalls, and its tread of blocks in pitches of three lengths, cut by grooves and sipes, with wear bars. Made once per size and tread, the same one on every wheel that takes it',
+    settings: [{ key: 'pattern', label: 'Tread', type: 'choice', default: 'highway', choices: TREADS }],
+    ports: { inputs: [P('code', 'text', { optional: true, label: 'size code (205/55R16, 11R22.5, 24x8-12; blank: from the numbers)' }), N('width', 'mm', { default: 205, optional: true, label: 'section width' }), N('aspect', undefined, { default: 55, optional: true, label: 'aspect (sidewall, % of width)' }), N('rim', undefined, { default: 16, optional: true, label: 'rim (in)' }), N('depth', 'mm', { optional: true, label: 'tread depth new (its pattern\'s, typical, if not set)' }), N('wear', undefined, { default: 0, optional: true, label: 'worn (0 new, 1 to its wear bars)' }), N('pitch', 'mm', { optional: true, label: 'tread pitch' }), N('sipes', undefined, { optional: true, label: 'sipes in each block' })],
+      outputs: [thing('tyre', 'tyre'), L('D', 0, 'across'), L('W', 0, 'wide'), N('mass', 'kg'), N('void', undefined, { label: 'tread open (share)' }), P('pitches', 'integer'), P('code', 'text')] },
+    run: (i, c) => {
+      const code = String(i.code ?? '').trim() || `${Math.round(Number(i.width ?? 205))}/${Math.round(Number(i.aspect ?? 55))}R${Number(i.rim ?? 16)}`, t = tyreOf(code);
+      if (!t) throw new Error(`"${code}" is not a tyre size code this reads (ISO metric 205/55R16, truck 11R22.5, flotation 24x8-12, bias 6.50-10)`);
+      const b = tyreBuilt(t, { pattern: String(c.set.pattern) as Tread, ...(i.depth ? { depth: Number(i.depth) / 1000 } : {}), ...(i.pitch ? { pitch: Number(i.pitch) / 1000 } : {}), ...(i.sipes !== undefined && i.sipes !== null && i.sipes !== '' ? { sipes: Number(i.sipes) } : {}), wear: Number(i.wear ?? 0) });
+      return { tyre: b.tyre, D: t.D, W: t.W, mass: b.kg, void: b.void, pitches: b.pitches, code };
+    },
+    tests: [{ inputs: { code: '205/55R16' }, outputs: { D: 0.6319, W: 0.205, code: '205/55R16' }, rel: 1e-3 }] }),
+  def({ id: 'battery.starter', name: 'Starting battery', kind: 'generator', ability: 'generate', domains: ['vehicles', 'electrical'], says: 'A 12 V lead-acid starting battery by its BCI group (its case is the standard): six cells of plates and separators, straps, joints through the partitions, electrolyte, vent caps and SAE posts. One made per group, shared by every machine that takes it',
+    settings: [{ key: 'group', label: 'BCI group', type: 'choice', default: '35', choices: Object.keys(BCI_GROUPS) }],
+    ports: { inputs: [], outputs: [thing('battery', 'battery'), N('mass', 'kg'), N('cca', 'A', { label: 'cold-cranking amps (typical)' }), N('Ah', 'A*h'), P('fits', 'text')] },
+    run: (_i, c) => { const g = BCI_GROUPS[String(c.set.group)]!, b = starterBattery(g.group); return { battery: b, mass: massOfAll(b), cca: g.cca, Ah: g.Ah, fits: g.fits }; },
+    tests: [{ set: { group: '31' }, inputs: {}, outputs: { cca: 950 } }] }),
+  def({ id: 'battery.cell', name: 'Lithium cell', kind: 'generator', ability: 'generate', domains: ['vehicles', 'electrical', 'energy'], says: 'A cylindrical lithium-ion cell by its format (18650, 21700, 4680): can, sleeve, its jelly roll wound turn by turn (cathode, anode, separator), insulators, cap with its vent disc and gasket',
+    settings: [{ key: 'format', label: 'Format', type: 'choice', default: '21700', choices: Object.keys(CELL_FORMATS) }],
+    ports: { inputs: [], outputs: [thing('cell', 'cell'), N('mass', 'kg'), N('Wh', 'W*h'), P('source', 'text')] },
+    run: (_i, c) => { const f = CELL_FORMATS[String(c.set.format)]!, cell = liCell(f.id); return { cell, mass: massOfAll(cell), Wh: f.V * f.Ah, source: f.source }; },
+    tests: [{ set: { format: '18650' }, inputs: {}, outputs: { Wh: 9 } }] }),
+  def({ id: 'battery.pack', name: 'Battery pack', kind: 'generator', ability: 'generate', domains: ['vehicles', 'electrical', 'energy'], says: 'Cells in a pack: so many groups in series, each so many cells in parallel standing in staggered rows, a busbar over each group, the groups in modules, the modules in a tray. One cell stored however many are placed (a Model 3 Long Range: 21700s, 96 in series of 46, modules of 23, 25, 25, 23 groups, as teardowns report)',
+    settings: [{ key: 'format', label: 'Cell', type: 'choice', default: '21700', choices: Object.keys(CELL_FORMATS) }],
+    ports: { inputs: [N('s', undefined, { default: 96, optional: true, label: 'groups in series' }), N('p', undefined, { default: 46, optional: true, label: 'cells in parallel' }), N('rows', undefined, { default: 4, optional: true, label: 'rows in a group' }), P('modules', 'text', { optional: true, label: 'groups in each module ("23, 25, 25, 23"; blank: one module)' })],
+      outputs: [thing('pack', 'pack'), N('mass', 'kg'), N('kWh', 'kW*h'), N('V', 'V'), P('cells', 'integer')] },
+    run: (i, c) => {
+      const f = CELL_FORMATS[String(c.set.format)]!, s = Math.max(1, Math.round(Number(i.s ?? 96))), p = Math.max(1, Math.round(Number(i.p ?? 46))), mods = String(i.modules ?? '').split(/[,\s]+/).filter(Boolean).map(Number);
+      const pack = cellPack({ format: f.id, s, p, rows: Number(i.rows ?? 4), ...(mods.length ? { modules: mods } : {}) });
+      return { pack, mass: massOfAll(pack), kWh: (s * p * f.V * f.Ah) / 1000, V: s * f.V, cells: s * p };
+    },
+    tests: [{ set: { format: '21700' }, inputs: { s: 4, p: 2 }, outputs: { cells: 8, V: 14.4 }, rel: 1e-9 }] }),
+  def({ id: 'vehicle.axle', name: 'Axle', kind: 'generator', ability: 'generate', domains: ['vehicles', 'mechanical'], says: 'An axle of a vehicle: where it is along it (+ forward of its middle), its track, its tyres by size code, whether it steers, drives, has twin tyres, its brakes and how it hangs from the frame. Wire axles into a Vehicle',
+    settings: [{ key: 'steer', label: 'Steers', type: 'boolean', default: false }, { key: 'drive', label: 'Driven', type: 'boolean', default: false }, { key: 'dual', label: 'Twin tyres', type: 'boolean', default: false }, { key: 'susp', label: 'Hung on', type: 'choice', default: 'rigid', choices: ['rigid', 'pivot', 'strut', 'beam', 'wishbone', 'swingarm', 'leaf', 'air', 'fork'] }, { key: 'brake', label: 'Brakes', type: 'choice', default: 'disc', choices: ['disc', 'drum', 'none'] }],
+    ports: { inputs: [L('x', 1.3, 'along (from its middle)'), L('track', 1.55, 'track'), P('tyre', 'text', { default: '205/55R16', optional: true, label: 'tyre size code' }), L('brakeD', 0.28, 'brake across')], outputs: [P('axle', 'any'), L('D', 0, 'tyre across')] },
+    run: (i, c) => {
+      const code = String(i.tyre ?? '205/55R16'), t = tyreOf(code); if (!t) throw new Error(`"${code}" is not a tyre size code this reads`);
+      const br = String(c.set.brake);
+      const axle: Axle = { x: Number(i.x ?? 1.3), track: Number(i.track ?? 1.55), tyre: code, ...(c.set.steer ? { steer: true } : {}), ...(c.set.drive ? { drive: true } : {}), ...(c.set.dual ? { dual: true } : {}), susp: String(c.set.susp) as Susp, ...(br !== 'none' ? { brake: { kind: br as 'disc', d: Number(i.brakeD ?? 0.28) } } : {}) };
+      return { axle, D: t.D };
+    },
+    tests: [{ set: { steer: true }, inputs: { x: 2, tyre: '315/80R22.5' }, outputs: { axle: { x: 2, tyre: '315/80R22.5', steer: true }, D: 1.0755 }, rel: 1e-3 }] }),
+  def({ id: 'vehicle', name: 'Vehicle', kind: 'generator', ability: 'generate', domains: ['vehicles', 'mechanical'], says: 'Any wheeled vehicle from what it is: its kind (its seats, body lines and controls as its kind\'s, scaled to its length), its axles (wired in, or its kind\'s), its size, frame, power and what it carries; built part by part down to its wheel nuts by the one maker every machine here comes from',
+    settings: [{ key: 'kind', label: 'Kind', type: 'choice', default: 'truck', choices: KINDS_OF_VEHICLE }, { key: 'body', label: 'Body (a car\'s)', type: 'choice', default: 'sedan', choices: styles }, { key: 'frame', label: 'Frame', type: 'choice', default: 'as its kind', choices: ['as its kind', 'shell', 'tube', 'ladder', 'backbone'] }, { key: 'power', label: 'Power', type: 'choice', default: 'as its kind', choices: ['as its kind', 'inline', 'diesel', 'electric', 'single', 'twin'] }, { key: 'extras', label: 'Carries (comma list; blank: its kind\'s)', type: 'text', default: '' }],
+    ports: { inputs: [P('axles', 'any', { many: true, optional: true, label: 'axles (blank: its kind\'s)' }), L('L', 0, 'length (0: its kind\'s)'), L('W', 0, 'width (0: its kind\'s)'), L('H', 0, 'height (0: its kind\'s)'), N('kW', 'kW', { optional: true, label: 'power (its kind\'s, if not set)' }), N('cc', undefined, { optional: true, label: 'displacement, cc' }), P('color', 'text', { optional: true, label: 'colour' })],
+      outputs: [P('vehicle', 'part'), N('mass', 'kg', { label: 'mass drawn' }), P('pieces', 'integer'), L('wheelbase', 0, 'wheelbase'), P('machine', 'any'), thing('rolling', 'to let go (its wheels apart)'), P('joints', 'any', { label: 'its wheels\' axles, for Let it go' })] },
+    run: (i, c) => {
+      const kind = String(c.set.kind), col = i.color ? hex(i.color) : undefined;
+      const ref = kind === 'car' ? styledCar(String(c.set.body), { color: col ?? 0xb8bcc2, rim: 16, rims: '5-spoke', power: String(c.set.power) === 'electric' ? 'electric' : String(c.set.power) === 'diesel' ? 'diesel' : 'petrol', tint: 'none' }) : MACHINES.find((m) => m.kind === kind);
+      if (!ref) throw new Error(`no vehicle of the kind "${kind}"`);
+      const m: Machine = structuredClone(ref), L0 = m.L, Lw = Number(i.L ?? 0) || L0, k = Lw / L0;
+      m.id = `${kind} built here`; m.name = kind === 'car' ? `${String(c.set.body)} (built here)` : `${kind} (built here)`; m.source = `built here on its kind's layout (${ref.name}), its figures as wired`;
+      m.L = Lw; m.W = Number(i.W ?? 0) || m.W; m.H = Number(i.H ?? 0) || m.H; m.seats = m.seats.map((s) => ({ ...s, x: s.x * k }));
+      const ax = (Array.isArray(i.axles) ? i.axles : i.axles ? [i.axles] : []).filter((a): a is Axle => !!a && typeof a === 'object' && 'tyre' in a);
+      if (ax.length) { if (ax.length < 2 && kind !== 'motorcycle') throw new Error('a vehicle stands on two axles at least'); m.axles = [...ax].sort((a, b) => b.x - a.x); }
+      else if (k !== 1) m.axles = m.axles.map((a) => ({ ...a, x: a.x * k }));
+      if (c.set.frame !== 'as its kind') m.frame = String(c.set.frame) as Machine['frame'];
+      if (c.set.power !== 'as its kind' && kind !== 'car') m.power = { ...m.power, kind: String(c.set.power) as Machine['power']['kind'], says: `${String(c.set.power)} (as wired)` };
+      if (i.kW) m.power = { ...m.power, kW: Number(i.kW), says: `${Number(i.kW)} kW (as wired)` };
+      if (i.cc) m.power = { ...m.power, cc: Number(i.cc) };
+      const ex = String(c.set.extras ?? '').split(',').map((s) => s.trim()).filter(Boolean); if (ex.length) m.extras = ex as Machine['extras'];
+      if (col !== undefined) m.color = col;
+      delete m.mass; delete m.massSays;
+      const v = makeMachine(m);
+      const r = rollingOf(v); return { vehicle: v, mass: massOf(v), pieces: placedCount(v), wheelbase: m.axles[0]!.x - m.axles[m.axles.length - 1]!.x, machine: m, rolling: r.thing, joints: r.joints };
+    },
+    tests: [{ set: { kind: 'kart' }, inputs: {}, outputs: { wheelbase: 1.04 }, rel: 1e-6 }] }),
+  def({ id: 'vehicle.model', name: 'Vehicle (a real model)', kind: 'generator', ability: 'generate', domains: ['vehicles', 'mechanical'], says: 'A real vehicle by its maker\'s published figures (each with its source), built down to its wheel nuts: a Toyota Corolla, a Freightliner Cascadia, a Honda Rancher, a CRF450R, a Toyota forklift, a John Deere X350, a rental kart',
+    settings: [{ key: 'model', label: 'Model', type: 'choice', default: 'corolla', choices: MACHINES.map((m) => m.short ?? m.id) }],
+    ports: { inputs: [P('color', 'text', { optional: true, label: 'colour (as made, if not set)' })], outputs: [P('vehicle', 'part'), N('mass', 'kg', { label: 'mass drawn' }), N('published', 'kg', { label: 'its published mass' }), P('pieces', 'integer'), P('source', 'text'), P('machine', 'any'), thing('rolling', 'to let go (its wheels apart)'), P('joints', 'any', { label: 'its wheels\' axles, for Let it go' })] },
+    run: (i, c) => { const m = MACHINES.find((x) => (x.short ?? x.id) === c.set.model) ?? MACHINES[0]!, mm = i.color ? { ...m, color: hex(i.color) } : m, v = makeMachine(mm), r = rollingOf(v); return { vehicle: v, mass: massOf(v), published: m.mass ?? 0, pieces: placedCount(v), source: m.source, machine: mm, rolling: r.thing, joints: r.joints }; },
+    tests: [{ set: { model: 'rental kart' }, inputs: {}, outputs: { published: 150 } }] }),
+  def({ id: 'fit', name: 'Fit in', kind: 'logic', ability: 'connect', domains: ['vehicles', 'mechanical', 'manufacturing', 'everyday'], says: 'Every piece of a thing whose name a pattern finds taken out, and the thing wired in put in its place (where it was, turned as it was): a tyre made in depth on every wheel, a real battery pack for the box that stood for one. The same one in every place, stored once',
+    settings: [{ key: 'path', label: 'Pieces named (pattern)', type: 'text', default: '^((outer|inner) )?tyre \\d' }],
+    ports: { inputs: [thing('thing', 'into'), thing('with', 'put in')], outputs: [thing('fitted', 'fitted'), P('count', 'integer', { label: 'pieces replaced' }), N('mass', 'kg'), P('placed', 'integer', { label: 'pieces placed' })] },
+    run: (i, c) => { const r = fitIn(asThing(i.thing), String(c.set.path), asThing(i.with)); if (!r.fitted) throw new Error(`nothing in it is named like "${String(c.set.path)}"`); return { fitted: r.thing, count: r.fitted, mass: massOfAll(r.thing), placed: placedCount(r.thing) }; },
+    tests: [{ set: { path: '^wheel' }, inputs: { thing: { name: 'cart', parts: [{ name: 'deck', shape: { box: [1, 0.1, 0.5] } }, { name: 'wheel 1', at: [0.4, 0, 0.3], shape: { box: [0.1, 0.1, 0.1] } }, { name: 'wheel 2', at: [-0.4, 0, 0.3], shape: { box: [0.1, 0.1, 0.1] } }] }, with: { name: 'better wheel', shape: { sphere: 0.05 }, mat: 'rubber' } }, outputs: { count: 2 } }] }),
+  def({ id: 'explode', name: 'Take apart', kind: 'logic', ability: 'transform', domains: ['vehicles', 'mechanical', 'manufacturing', 'everyday'], says: 'A thing taken apart to see what is in it: each piece moved out from the middle of what holds it, so many levels down (a car into its wheels and body, each wheel into its tyre, rim, brake and nuts, each tyre into its layers). Nothing is copied',
+    ports: { inputs: [thing(), N('amount', undefined, { default: 0.6, optional: true, label: 'how far apart (0 together, 1 twice as far)' }), N('levels', undefined, { default: 3, optional: true, label: 'how many levels down' })], outputs: [thing('apart', 'apart')] },
+    run: (i) => ({ apart: exploded(asThing(i.thing), Number(i.amount ?? 0.6), Math.max(0, Math.round(Number(i.levels ?? 3)))) }),
+    tests: [{ inputs: { thing: { name: 'pair', items: [{ of: { name: 'a', shape: { box: [1, 1, 1] } }, at: [-1, 0, 0], rot: [0, 0, 0], s: 1 }, { of: { name: 'b', shape: { box: [1, 1, 1] } }, at: [1, 0, 0], rot: [0, 0, 0], s: 1 }] }, amount: 1, levels: 1 }, outputs: { apart: { items: [{ at: [-2, 0, 0] }, { at: [2, 0, 0] }] } } }] }),
+  // ---- a computer from the transistor up --------------------------------------------------------------------------------
+  def({ id: 'chip.transistor', name: 'Transistor (FinFET)', kind: 'generator', ability: 'generate', domains: ['electrical', 'manufacturing'], says: 'The smallest working part of a computer: a FinFET at a real process\'s published pitches (Intel 22 nm, Intel 14 nm, TSMC N5 as reported): its fins, metal gate on its high-k liner, spacers, raised source and drain, contacts. Nanometres: zoom the space down to see it',
+    settings: [{ key: 'proc', label: 'Process', type: 'choice', default: 'intel-14nm', choices: Object.keys(PROCESSES) }, { key: 'type', label: 'Type', type: 'choice', default: 'n', choices: ['n', 'p'] }],
+    ports: { inputs: [N('fins', undefined, { default: 2, optional: true })], outputs: [P('transistor', 'part'), L('pitch', 0, 'gate pitch'), L('Lg', 0, 'gate length'), P('source', 'text')] },
+    run: (i, c) => { const pr = PROCESSES[String(c.set.proc)]!; return { transistor: transistor(pr.id, String(c.set.type) as 'n', Math.max(1, Math.round(Number(i.fins ?? 2)))), pitch: pr.cpp, Lg: pr.Lg, source: pr.source }; },
+    tests: [{ set: { proc: 'intel-14nm' }, inputs: {}, outputs: { pitch: 70e-9 }, rel: 1e-9 }] }),
+  def({ id: 'chip.cell', name: 'Logic or memory cell', kind: 'generator', ability: 'generate', domains: ['electrical', 'software'], says: 'Transistors made into a cell: a 6T SRAM bit (two inverters holding it, two pass gates) or a NAND2 gate (two p-type in parallel, two n-type in series), with its first metal wires. Wire your own transistors in, or it makes its own',
+    settings: [{ key: 'proc', label: 'Process', type: 'choice', default: 'intel-14nm', choices: Object.keys(PROCESSES) }, { key: 'kind', label: 'Cell', type: 'choice', default: 'SRAM bit (6T)', choices: ['SRAM bit (6T)', 'NAND2 gate'] }],
+    ports: { inputs: [P('n', 'part', { optional: true, label: 'n-type transistor' }), P('p', 'part', { optional: true, label: 'p-type transistor' })], outputs: [thing('cell', 'cell'), P('transistors', 'integer'), N('area', 'm^2')] },
+    run: (i, c) => { const pr = PROCESSES[String(c.set.proc)]!, o = { ...(isPart(i.n) ? { n: i.n } : {}), ...(isPart(i.p) ? { p: i.p } : {}) }, sram = String(c.set.kind).startsWith('SRAM'); return sram ? { cell: sramCell(pr.id, o), transistors: 6, area: pr.sram } : { cell: nandCell(pr.id, o), transistors: 4, area: 3 * pr.cpp * pr.cellH }; },
+    tests: [{ set: { proc: 'intel-14nm', kind: 'SRAM bit (6T)' }, inputs: {}, outputs: { transistors: 6, area: 0.0588e-12 }, rel: 1e-9 }] }),
+  def({ id: 'chip.die', name: 'Processor die', kind: 'generator', ability: 'generate', domains: ['electrical', 'manufacturing'], says: 'A processor die: its cores (each its logic and its L2), its L3, its uncore (graphics, memory controller, I/O), each from the cells below it placed by the million and billion, never copied; its transistors counted from what it places and its density set against its process\'s reported one. The logic is rows of one gate: a real floor plan is its maker\'s',
+    settings: [{ key: 'proc', label: 'Process', type: 'choice', default: 'intel-14nm', choices: Object.keys(PROCESSES) }],
+    ports: { inputs: [N('cores', undefined, { default: 4, optional: true }), N('coreMm2', 'mm^2', { default: 7, optional: true, label: 'each core\'s logic (an estimate)' }), N('l2KB', undefined, { default: 256, optional: true, label: 'L2 each core, KB' }), N('l3MB', undefined, { default: 8, optional: true, label: 'L3, MB' }), N('uncoreMm2', 'mm^2', { default: 50, optional: true, label: 'graphics and I/O' }), P('sram', 'assembly', { optional: true, label: 'SRAM bit (your own)' }), P('nand', 'assembly', { optional: true, label: 'logic gate (your own)' })],
+      outputs: [thing('die', 'die'), P('transistors', 'integer'), N('area', 'mm^2'), N('density', undefined, { label: 'millions of transistors per mm²' }), P('says', 'text')] },
+    run: (i, c) => {
+      const d = die({ proc: String(c.set.proc), cores: Math.max(1, Math.round(Number(i.cores ?? 4))), coreMm2: Number(i.coreMm2 ?? 7), l2KB: Number(i.l2KB ?? 256), l3MB: Number(i.l3MB ?? 8), uncoreMm2: Number(i.uncoreMm2 ?? 50) }, { ...(isAssembly(i.sram) ? { sram: i.sram } : {}), ...(isAssembly(i.nand) ? { nand: i.nand } : {}) });
+      const area = (d.w * d.d) / 1e-6; return { die: d.die, transistors: d.transistors, area, density: d.transistors / area / 1e6, says: d.says };
+    },
+    tests: [{ set: { proc: 'intel-14nm' }, inputs: { cores: 1, coreMm2: 0.01, l2KB: 2, l3MB: 0.001953125, uncoreMm2: 0.01 }, outputs: { transistors: 2 * 16384 * 6 + 2 * 1e6 * 4 }, rel: 1e-9 }] }),
+  def({ id: 'chip.package', name: 'Processor package', kind: 'generator', ability: 'generate', domains: ['electrical', 'manufacturing'], says: 'A die flipped face down into its package: solder bumps in underfill, a soldered heat spreader, the gold lands under it as its socket\'s datasheet counts them (LGA1151, LGA1700)',
+    settings: [{ key: 'socket', label: 'Socket', type: 'choice', default: 'LGA1151', choices: Object.keys(SOCKETS) }],
+    ports: { inputs: [thing('die', 'die')], outputs: [thing('package', 'package'), N('mass', 'kg'), P('source', 'text')] },
+    run: (i, c) => { const d = asThing(i.die); if (!isAssembly(d)) throw new Error('wire a die in'); const p = packageOf(d, String(c.set.socket)); return { package: p, mass: massOfAll(p), source: SOCKETS[String(c.set.socket)]!.source }; },
+    tests: [{ set: { socket: 'LGA1151' }, inputs: { die: { name: 'die', items: [{ of: { name: 'si', shape: { box: [0.01, 0.0003, 0.01] }, mat: 'silicon' }, at: [0, 0, 0], rot: [0, 0, 0], s: 1 }] } }, outputs: { package: { name: 'processor, LGA1151 package' } } }] }),
+  def({ id: 'pc.board', name: 'Motherboard', kind: 'generator', ability: 'generate', domains: ['electrical', 'everyday'], says: 'A motherboard of a form factor (ATX, microATX, Mini-ITX: their standards\' sizes) with the package in its socket: memory modules (JEDEC DDR4), power stages, chipset, a PCIe x16 slot, an M.2 2280 drive, power connectors, its clock battery',
+    settings: [{ key: 'form', label: 'Form factor', type: 'choice', default: 'ATX', choices: Object.keys(BOARDS) }],
+    ports: { inputs: [thing('package', 'processor package')], outputs: [thing('board', 'board'), N('mass', 'kg')] },
+    run: (i, c) => { const p = asThing(i.package); if (!isAssembly(p)) throw new Error('wire a processor package in'); const b = motherboard(String(c.set.form), p); return { board: b, mass: massOfAll(b) }; },
+    tests: [{ set: { form: 'mini-ITX' }, inputs: { package: { name: 'pkg', items: [] } }, outputs: { board: { name: 'mini-ITX motherboard' } } }] }),
+  def({ id: 'pc.desktop', name: 'Desktop PC', kind: 'generator', ability: 'generate', domains: ['electrical', 'everyday'], says: 'A desktop PC round a motherboard: a mid-tower case (its glass side left off so its inside shows), an ATX power supply, the board on its standoffs, a tower cooler (copper base, heat pipes, fin stack, fan) on the processor',
+    ports: { inputs: [thing('board', 'motherboard')], outputs: [thing('pc', 'PC'), N('mass', 'kg'), P('placed', 'integer', { label: 'pieces placed' }), P('distinct', 'integer', { label: 'things stored' })] },
+    run: (i) => { const b = asThing(i.board); if (!isAssembly(b)) throw new Error('wire a motherboard in'); const pc = desktop(b); return { pc, mass: massOfAll(pc), placed: placedCount(pc), distinct: distinctCount(pc) }; },
+    tests: [{ inputs: { board: { name: 'b', items: [] } }, outputs: { pc: { name: 'desktop PC' } } }] }),
   def({ id: 'space.show', name: 'Show in space', kind: 'view', ability: 'show', domains: ['everyday', 'mechanical', 'structural'], says: 'Puts a thing into the 3D space, at its place: everything wired into one of these is what the space draws',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'shown' }],
     ports: { inputs: [thing()], outputs: [] }, run: () => ({}), sink: true, tests: [{ inputs: { thing: { name: 'b' } }, outputs: {} }] }),

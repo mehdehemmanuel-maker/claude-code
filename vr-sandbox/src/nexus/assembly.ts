@@ -98,6 +98,9 @@ export function massOfAll(a: Part | Assembly, overs: Override[] = []): number {
       const own = massOf({ ...l.part, parts: [] }), rho = l.part.mat ? DENSITY[l.part.mat] : undefined, rhoNew = o.mat ? DENSITY[o.mat] : undefined;
       m += (rho && rhoNew ? (own * rhoNew) / rho : own) * Math.abs(l.m.determinant());
     }
+    // (and what is weighed but not drawn: a part with a mass and no shape, as a machine's "rest of it")
+    const unseen = (q: Part): number => (!q.shape && q.kg !== undefined && !effective(overs, q.name).hide ? q.kg : 0) + (q.parts ?? []).reduce((t, c) => t + unseen(c), 0);
+    m += unseen(a);
   } else for (const it of a.items) { const k = it.over?.scale ?? [1, 1, 1]; m += massOfAll(it.of, it.over ? [...overs, it.over] : overs) * Math.abs(it.s ** 3 * k[0] * k[1] * k[2]); }
   byOver.set(key, m); return m;
 }
@@ -189,4 +192,47 @@ export function mateTo(t: Part | Assembly, fa: string, onto: Part | Assembly, fb
   const off = new THREE.Vector3(...a.at).multiplyScalar(s).applyMatrix4(R), at = new THREE.Vector3(...b.at).sub(off);
   const r6 = (x: number) => Math.round(x * 1e9) / 1e9;
   return place(t, [r6(at.x), r6(at.y), r6(at.z)], [r6(e.x), r6(e.y), r6(e.z)], s);
+}
+
+// ---- a part's tree opened: each part that holds parts an assembly of them, so any of them can be taken out, swapped or
+// moved apart without copying the rest ------------------------------------------------------------------------------------
+const openedKept = new WeakMap<Part, Map<string, Assembly>>(), ids = new WeakMap<object, number>(); let nextId = 1;
+const idOf = (x: object) => ids.get(x) ?? (ids.set(x, nextId++), nextId - 1);
+export interface Swap { /** what the swap is called, so the same swap is made once */ key: string; by: (q: Part) => Part | Assembly | null }
+/** A part's tree as assemblies, one for each part holding parts (its own shape, if it has one, the first thing in it),
+ *  each part where it was. With a swap, every part the swap gives something for is replaced by that, placed where the
+ *  part was and turned as it was: shared, so a car's four tyres are one tyre stored once. Made once per part and swap. */
+export function opened(p: Part, swap?: Swap): Assembly {
+  const k = swap?.key ?? '', byKey = openedKept.get(p) ?? openedKept.set(p, new Map()).get(p)!, was = byKey.get(k); if (was) return was;
+  const items: Placed[] = [];
+  if (p.shape) items.push(place({ ...p, at: [0, 0, 0], rot: [0, 0, 0], parts: undefined }));
+  for (const c of p.parts ?? []) { const s = swap?.by(c); items.push(place(s ?? (c.parts?.length ? opened(c, swap) : c), c.at ?? [0, 0, 0], c.rot ?? [0, 0, 0])); }
+  const a: Assembly = { name: p.name, items, ...(p.ports ? { ports: p.ports } : {}) }; byKey.set(k, a); return a;
+}
+/** Every piece of a thing whose name the pattern finds, taken out and `by` put in its place (where it was, turned as it
+ *  was), the same one in every place: a tyre made in depth on every wheel of a car, one battery in every machine that
+ *  takes it. How many it replaced is said. */
+export function fitIn(t: Part | Assembly, pattern: string, by: Part | Assembly): { thing: Part | Assembly; fitted: number } {
+  let re: RegExp; try { re = new RegExp(pattern, 'i'); } catch { throw new Error(`"${pattern}" is not a pattern`); }
+  const swap: Swap = { key: `${pattern}#${idOf(by)}`, by: (q) => (re.test(q.name) ? by : null) };
+  const walk = (x: Part | Assembly): Part | Assembly => {
+    if (isPart(x)) return re.test(x.name) ? by : x.parts?.length ? opened(x, swap) : x;
+    return { name: x.name, items: x.items.map((it) => ({ ...it, of: walk(it.of) })), ...(x.ports ? { ports: x.ports } : {}) };
+  };
+  const thing = walk(t), kept = new Map<object, number>();
+  const count = (x: Part | Assembly): number => { if (x === by) return 1; if (isPart(x)) return 0; let c = kept.get(x); if (c === undefined) { c = x.items.reduce((s, it) => s + count(it.of), 0); kept.set(x, c); } return c; };
+  const n = count(thing);
+  return { thing, fitted: n };
+}
+/** A thing taken apart: each thing in it moved out from the middle of what holds it by `f` of how far its own middle is
+ *  from there (0: together; 1: twice as far out), so many levels down; what is at the middle stays. Nothing is copied. */
+export function exploded(t: Part | Assembly, f: number, levels = 2): Part | Assembly {
+  const a = isPart(t) ? (t.parts?.length ? opened(t) : t) : t;
+  if (levels <= 0 || f === 0 || isPart(a)) return a;
+  const c = boundsOfAll(a).getCenter(new THREE.Vector3());
+  return { name: a.name, items: a.items.map((it) => {
+    const b = boundsOfAll(it.of); if (b.isEmpty()) return it;
+    const d = b.clone().applyMatrix4(matrixOf(it)).getCenter(new THREE.Vector3()).sub(c).multiplyScalar(f);
+    return { ...it, at: [it.at[0] + d.x, it.at[1] + d.y, it.at[2] + d.z] as V3, of: exploded(it.of, f, levels - 1) };
+  }) };
 }

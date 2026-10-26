@@ -61,7 +61,13 @@ function proxyOf(t: Assembly): Proxy {
   const all: Proxy['pieces'] = [], tmp = new THREE.Box3();
   flatten(t, (f) => { const b = boundsOfAll(f.leaf); if (b.isEmpty()) return; tmp.copy(b).applyMatrix4(f.m); all.push({ part: f.leaf, m: f.m, over: f.over, size: tmp.getSize(new THREE.Vector3()).length() }); return all.length < 200_000; });
   all.sort((a, b) => b.size - a.size);
-  const p: Proxy = { pieces: all.slice(0, PROXY_PIECES), error: all[PROXY_PIECES]?.size ?? 0, levels: [4, 12, PROXY_PIECES].map((k) => ({ k: Math.min(k, all.length), error: all[k]?.size ?? 0 })) };
+  // (what a stand-in leaves out is not only its biggest piece left out: many small pieces left out together fill as much
+  // of the view as one piece as big as all of them gathered, the root of their sizes squared summed, halved, as they lie
+  // scattered (a sub-array's sixteen thousand bits are not drawn by forty-eight of them). And a thing too big to list,
+  // its stand-in made from only some of it, is never stood in for by that: its error is the whole of it)
+  const rest = new Float64Array(all.length + 1); for (let i = all.length - 1; i >= 0; i--) rest[i] = rest[i + 1]! + all[i]!.size ** 2;
+  const whole = all.length >= 200_000 ? boundsOfAll(t).getSize(new THREE.Vector3()).length() : 0, err = (k: number) => Math.max(whole, all[k]?.size ?? 0, Math.sqrt(rest[Math.min(k, all.length)]!) / 2);
+  const p: Proxy = { pieces: all.slice(0, PROXY_PIECES), error: err(PROXY_PIECES), levels: [4, 12, PROXY_PIECES].map((k) => ({ k: Math.min(k, all.length), error: err(k) })) };
   proxies.set(t, p); return p;
 }
 
@@ -267,6 +273,7 @@ export class SpaceView {
       if (!mesh || mesh.instanceMatrix.count < n) {
         if (mesh) { this.group.remove(mesh); mesh.dispose(); }
         mesh = new THREE.InstancedMesh(b.geo, b.mat, Math.max(16, 2 ** Math.ceil(Math.log2(n))));
+        mesh.castShadow = true; mesh.receiveShadow = true;
         mesh.frustumCulled = false; this.meshes.set(key, mesh); this.group.add(mesh);
       }
       mesh.position.copy(this.origin); mesh.updateMatrix();

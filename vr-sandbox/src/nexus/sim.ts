@@ -255,6 +255,8 @@ function simPart(leaf: Part, m: THREE.Matrix4, name: string): SimPart {
   if (s && 'box' in s) { const [w, h, d] = s.box as number[]; return { name, kind: 'box', axis: 'y', dims: {}, local: { w: w! * ax, h: h! * ay, d: d! * az }, at: [c.x, c.y, c.z], turn }; }
   if (s && 'cyl' in s) { const [r, h, r2] = s.cyl as number[]; const D = 2 * Math.max(r!, r2 ?? r!) * Math.max(ax, az); return { name, kind: 'cylinder', axis: 'y', dims: { D, h: h! * ay }, local: { w: D, h: h! * ay, d: D }, at: [c.x, c.y, c.z], turn }; }
   if (s && 'sphere' in s) { const D = 2 * (s.sphere as number) * Math.max(ax, ay, az); return { name, kind: 'sphere', axis: 'y', dims: { D }, local: { w: D, h: D, d: D }, at: [c.x, c.y, c.z], turn }; }
+  // (a turned shape, a tyre's, as the cylinder round it about its axis, so a wheel rolls)
+  if (s && 'lathe' in s) { const pr = s.lathe as [number, number][], D = 2 * Math.max(...pr.map((q) => q[0])) * Math.max(ax, az), h = (Math.max(...pr.map((q) => q[1])) - Math.min(...pr.map((q) => q[1]))) * ay; return { name, kind: 'cylinder', axis: 'y', dims: { D, h }, local: { w: D, h, d: D }, at: [c.x, c.y, c.z], turn }; }
   const z = b.getSize(new THREE.Vector3()); return { name, kind: 'box', axis: 'y', dims: {}, local: { w: Math.max(z.x * ax, 1e-4), h: Math.max(z.y * ay, 1e-4), d: Math.max(z.z * az, 1e-4) }, at: [c.x, c.y, c.z], turn };
 }
 /** The bodies an assembly lets go (each thing it places at its top, named by what it is: a second of a name gets " 2"),

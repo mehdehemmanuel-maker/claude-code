@@ -17,15 +17,21 @@ export class Dock3D {
   private readonly grid = new THREE.Group();
   private gridCell = 0; private framed = '';
   private readonly ray = new THREE.Raycaster();
+  private readonly sun = new THREE.DirectionalLight(0xffffff, 1.4);
+  private readonly catcher = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShadowMaterial({ opacity: 0.38, depthWrite: false }));
 
   constructor(private readonly host: HTMLElement, private readonly picked: (key: string) => void) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 0.95;
+    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.appendChild(this.renderer.domElement); this.renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
     this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture; this.scene.environmentIntensity = 0.6;
     this.scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x101820, 0.4));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(3, 6, 2); this.scene.add(sun);
+    // the sun: high and to one side, casting shadows onto what is under it and onto the ground (a plane that shows only
+    // the shadows on it), both sized each frame by how far off the view is, so a bolt and a truck are each lit alike
+    const sun = this.sun; sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; this.scene.add(sun, sun.target);
+    this.catcher.rotation.x = -Math.PI / 2; this.catcher.receiveShadow = true; this.catcher.renderOrder = -1; this.scene.add(this.catcher);
     // depth at any scale: haze that thickens with distance, set from how big what is shown is (a car and a city each fade
     // at their own far edge), toward the colour of the sky behind
     this.scene.fog = new THREE.FogExp2(0x0a111c, 0.01);
@@ -47,7 +53,7 @@ export class Dock3D {
     const b = this.view.bounds(); if (b.isEmpty()) return;
     const c = b.getCenter(new THREE.Vector3()), r = Math.max(0.05, b.getSize(new THREE.Vector3()).length() / 2);
     const d = r / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.05, dir = new THREE.Vector3(0.75, 0.62, 1).normalize();
-    this.controls.target.copy(c); this.camera.position.copy(c).addScaledVector(dir, d); this.camera.near = Math.max(1e-4, d / 1e4); this.camera.far = d * 100; this.camera.updateProjectionMatrix(); this.controls.update();
+    this.controls.target.copy(c); this.camera.position.copy(c).addScaledVector(dir, d); this.camera.near = Math.max(1e-12, d / 1e4); this.camera.far = d * 100; this.camera.updateProjectionMatrix(); this.controls.update();
   }
   get canvas(): HTMLCanvasElement { return this.renderer.domElement; }
   /** The view put somewhere and turned to look at a point (a test's, or a bookmark's). */
@@ -55,6 +61,17 @@ export class Dock3D {
   /** How long the last frames took to draw, ms (a moving mean). */
   frameMs = 0;
 
+  /** The sun and its shadows fitted round what is looked at: its shadow's box as wide as the view, the ground under what
+   *  is shown. Below a few centimetres off, no shadows: a GPU's 32-bit positions cannot place a shadow at those scales
+   *  away from the world's middle, and the light there would not be a sun's anyway. */
+  private light(dist: number): void {
+    const t = this.controls.target, on = dist > 0.03, sh = this.sun.shadow.camera, r = dist * 1.3, b = this.view.bounds();
+    this.sun.castShadow = on; this.catcher.visible = on && !b.isEmpty();
+    if (!on) return;
+    this.sun.position.set(t.x + dist * 0.9, t.y + dist * 2.2, t.z + dist * 0.6); this.sun.target.position.copy(t); this.sun.target.updateMatrixWorld();
+    sh.left = -r; sh.right = r; sh.top = r; sh.bottom = -r; sh.near = dist * 0.05; sh.far = dist * 6; sh.updateProjectionMatrix(); this.sun.shadow.normalBias = dist * 0.002;
+    if (!b.isEmpty()) { this.catcher.position.set(t.x, b.min.y + dist * 1e-4, t.z); this.catcher.scale.set(dist * 12, dist * 12, 1); }
+  }
   private resize(): void { const w = Math.max(1, this.host.clientWidth), h = Math.max(1, this.host.clientHeight); this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
   private pick(e: PointerEvent): void {
     const r = this.renderer.domElement.getBoundingClientRect(), ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -75,7 +92,8 @@ export class Dock3D {
     // pulled back, a whole world can be seen (where it fades, nothing more is drawn: what makes no end affordable)
     const dist = this.camera.position.distanceTo(this.controls.target), fog = this.scene.fog as THREE.FogExp2;
     // and thick enough by where a world without end is cut off that its edge is never seen
-    fog.density = Math.max(0.12 / Math.max(1e-6, dist), 2.6 / this.view.reach); this.view.range = 2 / fog.density; this.camera.far = Math.max(this.camera.far, this.view.range * 1.2); this.camera.near = Math.max(1e-5, dist / 5e4); this.camera.updateProjectionMatrix();
+    fog.density = Math.max(0.12 / Math.max(1e-6, dist), 2.6 / this.view.reach); this.view.range = 2 / fog.density; this.camera.far = Math.max(this.camera.far, this.view.range * 1.2); this.camera.near = Math.max(1e-12, dist / 5e4); this.camera.updateProjectionMatrix();
+    this.light(dist);
     this.view.update(this.camera, this.renderer.domElement.clientHeight || 300, now);
     const t0 = performance.now(); this.renderer.render(this.scene, this.camera); this.frameMs = 0.9 * this.frameMs + 0.1 * (performance.now() - t0); this.view.drawMs = this.frameMs;
   }

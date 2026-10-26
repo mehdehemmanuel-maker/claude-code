@@ -24,6 +24,9 @@ import { WHEEL } from './kinds/fasteners';
 import { itemOf, type Item } from './inventory';
 import type { Cut, Iface, Part, Port, V3 } from './kits';
 import { DENSITY, massOf } from './mass';
+import { boundsOfAll, frame, place, type Assembly, type Placed } from './assembly';
+import * as THREE from 'three';
+import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
 
 const PI = Math.PI, mm = 1e-3;
 /** A design: its part in its own frame, from its family's numbers and its item. */
@@ -570,4 +573,113 @@ export function boltedJoint(thread: string, grip: number, o: { class?: string; l
     use(`washer ${thread}`, [0, -(T.h + grip + T.h) * mm, 0], { name: `${thread} washer under the nut`, passes: [bName], fixed: 'under its nut' }),
     use(nut, [0, -(T.h + grip + T.h) * mm, 0], { rot: [PI, 0, 0], passes: [bName], fixed: `run onto its bolt and torqued` }),
   ] };
+}
+
+// ---- batteries: a starting battery by its BCI group, a lithium cell by its format, a pack of them -------------------------
+// (Each built once and shared: every car that takes a group 35 fits the same one, every pack of 21700s places the same
+// cell. Their frames: a starting battery stands on its tray, its length along x, its posts on its +z side, its foot at
+// y = 0; a cell stands on its negative end, its axis y, its middle at the origin.)
+const madeBatteries = new Map<string, Part | Assembly>();
+/** A part placed where it says it is (a placed part's own place is otherwise its placement's). */
+const put = (p: Part): Placed => place(p, p.at ?? [0, 0, 0], p.rot ?? [0, 0, 0]);
+const boxPart = (name: string, s: V3, at: V3, more: Partial<Part> = {}): Part => ({ name, shape: { box: s }, at, ...more });
+/** A flooded lead-acid starting battery of a BCI group: its case and lid (polypropylene), five partitions making six
+ *  cells, in each its plates (positive, lead dioxide on a lead-calcium grid; negative, sponge lead), a polyethylene
+ *  envelope round each positive, the plates' lugs cast into a strap on each side, the cells joined in series through the
+ *  partitions (alternate cells turned, so each joint is short), its electrolyte, its vent caps and its two posts (SAE
+ *  J537: the positive 17.5 mm across at its top, the negative 15.9 mm, so they cannot be swapped). */
+export function starterBattery(group: string): Assembly {
+  const g = BCI_GROUPS[group]; if (!g) throw new Error(`no BCI group "${group}" (there are ${Object.keys(BCI_GROUPS).join(', ')})`);
+  const key = `bci ${group}`, was = madeBatteries.get(key); if (was) return was as Assembly;
+  const [L, W, H] = g.dims, post = 0.018, Hc = H - post, wall = 0.0025, part = 0.0015, bottom = 0.003, lid = 0.012, bridge = 0.012;
+  const c = (L - 2 * wall - 5 * part) / 6, pw = W - 2 * wall - 0.006, y0 = bottom + bridge, ph = (Hc - lid - y0) * 0.72, top = y0 + ph;
+  const nPos = Math.floor(g.plates / 2), nNeg = g.plates - nPos, tp = 0.0018, tn = 0.0015, ts = 0.0009;
+  const lug = (z: number): Part => ({ name: 'lug', shape: { box: [0.002, 0.016, 0.012] as V3 }, at: [0, ph / 2 + 0.008, z] as V3, mat: 'lead', color: 0x7c7f84 });
+  const posPlate: Part = { name: 'positive plate', shape: { box: [tp, ph, pw] }, at: [0, 0, 0], mat: 'lead', fill: 0.34, color: 0x4a2c1c, finish: 'matte', says: 'lead dioxide paste on a lead-calcium grid: about half of it pores filled with acid, and lead dioxide lighter than lead, so it weighs as about a third of its volume of lead (an estimate, set so a group\'s mass comes to its typical)', parts: [lug(-pw / 2 + 0.012)] };
+  const negPlate: Part = { name: 'negative plate', shape: { box: [tn, ph, pw] }, at: [0, 0, 0], mat: 'lead', fill: 0.34, color: 0x6a6d72, finish: 'matte', says: 'sponge lead paste on a lead-calcium grid, porous (weighed as a third of its volume of lead: an estimate)', parts: [lug(pw / 2 - 0.012)] };
+  const env: Part = { name: 'separator envelope', shape: { box: [tp + 2 * ts, ph + 0.004, pw + 0.003] }, at: [0, 0, 0], mat: 'pe', fill: 0.4, color: 0xd9dad2, finish: 'matte', says: 'a ribbed microporous polyethylene envelope round each positive plate (0.9 mm a side, typical)' };
+  // the cell: its plates, negative first and last, evenly through the cell's depth
+  const items: Placed[] = [], step = (c - 0.002) / g.plates;
+  for (let i = 0; i < g.plates; i++) { const x = -c / 2 + 0.001 + step * (i + 0.5), pos = i % 2 === 1; items.push(place(pos ? posPlate : negPlate, [x, y0 + ph / 2, 0])); if (pos) items.push(place(env, [x, y0 + ph / 2, 0])); }
+  items.push(put(boxPart('positive strap', [c - 0.004, 0.008, 0.016], [0, top + 0.02, -pw / 2 + 0.012], { mat: 'lead', color: 0x7c7f84, says: 'cast on the positive plates\' lugs' })));
+  items.push(put(boxPart('negative strap', [c - 0.004, 0.008, 0.016], [0, top + 0.02, pw / 2 - 0.012], { mat: 'lead', color: 0x7c7f84, says: 'cast on the negative plates\' lugs' })));
+  const level = 0.012, cellVol = c * pw * (ph + level), wet = Math.max(0, cellVol - nPos * tp * ph * pw * 0.5 - nNeg * tn * ph * pw * 0.5 - nPos * 2 * ts * ph * pw * 0.6);
+  items.push(put(boxPart('electrolyte', [c - 0.001, level, pw], [0, top + level / 2, 0], { mat: 'acid', kg: wet * 1280, color: 0x9fb8c4, finish: 'gloss', says: `dilute sulphuric acid, 1.28 specific gravity charged (typical): drawn where it stands over the plates, weighed as all of it in the cell (${(wet * 1000).toFixed(2)} L)` })));
+  const cell: Assembly = { name: `cell (${g.plates} plates)`, items };
+  const out: Placed[] = [];
+  for (let i = 0; i < 6; i++) out.push(place(cell, [-L / 2 + wall + c / 2 + i * (c + part), 0, 0], [0, i % 2 ? PI : 0, 0]));
+  const caseParts: Part[] = [
+    boxPart('case bottom', [L, bottom, W], [0, bottom / 2, 0]), boxPart('case wall (front)', [L, Hc - lid, wall], [0, (Hc - lid) / 2, -W / 2 + wall / 2]), boxPart('case wall (back)', [L, Hc - lid, wall], [0, (Hc - lid) / 2, W / 2 - wall / 2]),
+    boxPart('case end', [wall, Hc - lid, W - 2 * wall], [-L / 2 + wall / 2, (Hc - lid) / 2, 0]), boxPart('case end', [wall, Hc - lid, W - 2 * wall], [L / 2 - wall / 2, (Hc - lid) / 2, 0]),
+    ...Array.from({ length: 5 }, (_, i) => boxPart(`partition ${i + 1}`, [part, Hc - lid - bottom, W - 2 * wall], [-L / 2 + wall + (i + 1) * (c + part) - part / 2, bottom + (Hc - lid - bottom) / 2, 0])),
+    ...Array.from({ length: 6 }, (_, i) => boxPart(`bridge ${i + 1}`, [c * 0.9, bridge, 0.004], [-L / 2 + wall + c / 2 + i * (c + part), bottom + bridge / 2, 0])),
+  ].map((p) => ({ ...p, mat: 'pp', color: 0x1c1d20, finish: 'satin' }));
+  out.push(put({ name: 'case', at: [0, 0, 0], mat: 'pp', parts: caseParts, says: 'moulded polypropylene, its walls 2.5 mm (typical); bridges across its floor hold the plates over the mud space' }));
+  // its joints through the partitions: each cell's positive strap to the next one's negative, alternating sides
+  for (let i = 0; i < 5; i++) out.push(put(boxPart(`intercell connector ${i + 1}`, [part + 0.01, 0.014, 0.014], [-L / 2 + wall + (i + 1) * (c + part) - part / 2, top + 0.02, (i % 2 ? 1 : -1) * (pw / 2 - 0.012)], { mat: 'lead', color: 0x7c7f84, says: 'welded through the partition (typical)' })));
+  out.push(put({ name: 'lid', shape: { box: [L, lid, W] }, at: [0, Hc - lid / 2, 0], mat: 'pp', color: 0x16171a, finish: 'satin', says: 'heat-sealed to the case and its partitions' }));
+  for (let i = 0; i < 6; i++) out.push(put({ name: 'vent cap', shape: { cyl: [0.011, 0.006] }, at: [-L / 2 + wall + c / 2 + i * (c + part), Hc + 0.003, 0], mat: 'pp', color: 0x2a2b2e }));
+  const zp = W / 2 - 0.035;
+  out.push(put({ name: 'positive post (SAE)', shape: { cyl: [0.0098, post, 0.00875] }, at: [L / 2 - wall - c / 2, Hc + post / 2, zp], mat: 'lead', color: 0x9a9da2, finish: 'satin', says: '17.5 mm across at its top, tapering out 1 in 9 (SAE J537)', parts: [{ name: 'positive mark', shape: { cyl: [0.011, 0.001] }, at: [0, -post / 2 + 0.0005, 0], mat: 'pp', color: 0xb3202a }] }));
+  out.push(put({ name: 'negative post (SAE)', shape: { cyl: [0.0089, post, 0.00795] }, at: [-L / 2 + wall + c / 2, Hc + post / 2, zp], mat: 'lead', color: 0x9a9da2, finish: 'satin', says: '15.9 mm across at its top (SAE J537)' }));
+  const bat: Assembly = { name: `12 V battery, BCI group ${g.group}`, items: out, ports: [frame('base', [0, 0, 0], [0, -1, 0], [1, 0, 0]), frame('positive', [L / 2 - wall - c / 2, H, zp], [0, 1, 0], [1, 0, 0]), frame('negative', [-L / 2 + wall + c / 2, H, zp], [0, 1, 0], [1, 0, 0])] };
+  madeBatteries.set(key, bat); return bat;
+}
+/** A cylindrical lithium-ion cell of a format: its can (nickel-plated steel) in its sleeve, its wound jelly roll (cathode,
+ *  anode and separator spiralled round a centre hole: their layers about 0.36 mm a turn together, typical of NMC
+ *  cells), insulating discs over and under the roll, its cap (the positive button over a vent disc that breaks the
+ *  circuit if it swells) sealed in a gasket. The roll's mass is the datasheet's less the can and cap drawn. */
+export function liCell(format: string): Part {
+  const f = CELL_FORMATS[format]; if (!f) throw new Error(`no cell format "${format}" (there are ${Object.keys(CELL_FORMATS).join(', ')})`);
+  const key = `cell ${format}`, was = madeBatteries.get(key); if (was) return was as Part;
+  const r = f.d / 2, L = f.L, w = f.wall, capH = Math.max(0.002, L * 0.04), sleeve = format === '4680' ? 0 : 0.00008, rIn = r - w - sleeve - 0.0003, core = Math.max(0.001, r * 0.11), rollH = L - capH - 0.004;
+  const pitch = 0.00036, turns = Math.max(3, Math.floor((rIn - core) / pitch)), spiral = (phase: number, t: number): [number, number][] => {
+    const n = turns * 48, a: [number, number][] = [], b: [number, number][] = [];
+    for (let i = 0; i <= n; i++) { const th = (i / 48) * 2 * PI, rr = core + pitch * (i / 48) + phase; a.push([rr * Math.cos(th), rr * Math.sin(th)]); b.push([(rr + t) * Math.cos(th), (rr + t) * Math.sin(th)]); }
+    return [...a, ...b.reverse()];
+  };
+  const can: Part = { name: 'can', shape: { cyl: [r - sleeve, L - capH * 0.5] }, at: [0, -capH * 0.25, 0], mat: 'steel-low', shell: w, color: 0x9a9ea4, finish: 'satin', says: `deep-drawn nickel-plated steel, ${(w * 1000).toFixed(2)} mm wall (typical): its negative terminal` };
+  const parts: Part[] = [can];
+  if (sleeve) parts.push({ name: 'sleeve', shape: { cyl: [r, L - 0.0006] }, at: [0, 0, 0], mat: 'pe', shell: sleeve, color: format === '18650' ? 0x2a5fb0 : 0x2f7a52, finish: 'gloss', says: 'a printed PET shrink sleeve, insulating the can' });
+  const canKg = massOf(can), capKg = 0.0025 * PI * r * r * 2 * 7850 * 0.25, roll = Math.max(0.2 * f.kg, f.kg - canKg - capKg - (sleeve ? 0.001 : 0));
+  const rolled = (name: string, phase: number, t: number, share: number, color: number, says: string): Part => ({ name, shape: { prism: { pts: spiral(phase, t), L: rollH } }, at: [0, -capH / 2, 0], rot: [PI / 2, 0, 0], color, finish: 'satin', kg: roll * share, says });
+  parts.push({ name: 'jelly roll', at: [0, 0, 0], says: `${turns} turns of cathode, separator and anode wound round a ${(core * 2000).toFixed(1)} mm centre hole (layers typical of NMC cells: an estimate)`, parts: [
+    rolled('cathode (NMC on aluminium foil)', 0, 0.00013, 0.45, 0x2b2d33, 'NMC oxide coated both sides of a 15 µm aluminium foil (typical): 45 % of the roll\'s mass (an estimate)'),
+    rolled('anode (graphite on copper foil)', 0.00015, 0.00017, 0.38, 0x111214, 'graphite coated both sides of an 8 µm copper foil (typical): 38 % of the roll\'s mass (an estimate)'),
+    rolled('separator, soaked in electrolyte', 0.00033, 0.00003, 0.17, 0xe6e6e0, 'a porous polyolefin film, 12–16 µm, holding the electrolyte (LiPF₆ in carbonates): weighed with it, 17 % of the roll (an estimate)'),
+  ] });
+  parts.push({ name: 'insulator (under the roll)', shape: { cyl: [rIn, 0.0003] }, at: [0, -L / 2 + 0.0008, 0], mat: 'pc', color: 0xd8c890 }, { name: 'insulator (over the roll)', shape: { cyl: [rIn, 0.0003] }, at: [0, L / 2 - capH - 0.0012, 0], mat: 'pc', color: 0xd8c890 });
+  parts.push({ name: 'cap', at: [0, L / 2 - capH / 2, 0], says: format === '4680' ? 'its top: the 4680 is tabless, its electrode edges welded to its ends (reported in teardowns)' : 'its top: a nickel tab from the cathode welded under it (typical)', parts: [
+    { name: 'gasket', shape: { lathe: [[r * 0.72, -capH / 2], [r - w, -capH / 2], [r - w, capH / 2], [r * 0.72, capH / 2], [r * 0.72, -capH / 2]] }, at: [0, 0, 0], mat: 'pp', color: 0x1a1a1a, says: 'polypropylene, sealing the cap in the can\'s crimp' },
+    { name: 'vent disc (current interrupt)', shape: { cyl: [r * 0.72, 0.0004] }, at: [0, -capH * 0.2, 0], mat: 'al-6061', color: 0xc8ccd2, finish: 'brushed', says: 'scored aluminium: pressure pushes it up and breaks the circuit, then it vents' },
+    { name: 'positive button', shape: { cyl: [r * 0.6, capH * 0.5, r * 0.45] }, at: [0, capH * 0.25, 0], mat: 'steel-low', color: 0xb8bcc2, finish: 'satin', says: 'nickel-plated steel, the positive terminal' },
+  ] });
+  const cell: Part = { name: `lithium-ion cell ${format}`, at: [0, 0, 0], says: `${(f.d * 1000).toFixed(1)} × ${(f.L * 1000).toFixed(1)} mm, ${f.V} V, ${f.Ah} Ah, ${(f.kg * 1000).toFixed(0)} g: ${f.source}`, parts, ports: [frame('negative', [0, -L / 2, 0], [0, -1, 0], [1, 0, 0]), frame('positive', [0, L / 2, 0], [0, 1, 0], [1, 0, 0])] };
+  madeBatteries.set(key, cell); return cell;
+}
+/** A pack of cells: `s` groups in series, each `p` cells in parallel standing in `rows` staggered rows (so a group is a
+ *  narrow band across the module), a busbar over each group, the groups side by side in modules (`modules` gives how
+ *  many groups each holds), the modules in a tray. One cell is stored, however many are placed. */
+export function cellPack(o: { format: string; s: number; p: number; rows?: number; modules?: number[]; name?: string }): Assembly {
+  const f = CELL_FORMATS[o.format]; if (!f) throw new Error(`no cell format "${o.format}"`);
+  const mods = o.modules?.length ? o.modules : [o.s], s = mods.reduce((a, b) => a + b, 0); if (s !== o.s) throw new Error(`its modules hold ${s} groups, not ${o.s}`);
+  const key = JSON.stringify(o), was = madeBatteries.get(key); if (was) return was as Assembly;
+  const cell = liCell(o.format), rows = Math.max(1, o.rows ?? 4), per = Math.ceil(o.p / rows), pitch = f.d + 0.0015, dx = pitch * 0.866;
+  const gi: Placed[] = []; for (let i = 0; i < o.p; i++) { const row = i % rows, k = Math.floor(i / rows); gi.push(place(cell, [row * dx, f.L / 2, (k + (row % 2 ? 0.5 : 0) - per / 2) * pitch])); }
+  const gw = (rows - 1) * dx + f.d, gz = per * pitch + f.d;
+  gi.push(put(boxPart('busbar', [gw, 0.0015, gz * 0.98], [gw / 2 - f.d / 2, f.L + 0.002, 0], { mat: 'al-6061', color: 0xc8ccd2, finish: 'brushed', says: 'joins the group\'s cells in parallel and on to the next group (aluminium, typical)' })));
+  const group: Assembly = { name: `${o.p} cells in parallel`, items: gi }, gl = gw + 0.003;
+  const modOf = new Map<number, Assembly>(), items: Placed[] = []; let x = 0;
+  for (const n of mods) {
+    let m = modOf.get(n);
+    if (!m) { m = { name: `module of ${n} groups`, items: [...Array.from({ length: n }, (_, i) => place(group, [i * gl, 0, 0])), put(boxPart('module side plate', [n * gl, f.L * 0.8, 0.002], [(n * gl) / 2 - f.d, f.L * 0.45, -gz / 2 - 0.003], { mat: 'pc', color: 0x30343a })), put(boxPart('module side plate', [n * gl, f.L * 0.8, 0.002], [(n * gl) / 2 - f.d, f.L * 0.45, gz / 2 + 0.003], { mat: 'pc', color: 0x30343a }))] }; modOf.set(n, m); }
+    items.push(place(m, [-(n * gl) / 2, 0.006, x])); x += gz + 0.03;
+  }
+  const len = Math.max(...mods) * gl + 0.04, wide = x + 0.01;
+  items.push(put(boxPart('tray floor', [len, 0.006, wide], [0, 0.003, x / 2 - gz / 2 - 0.015], { mat: 'al-6061', color: 0x8a8e94, finish: 'satin', says: 'its lid not drawn, so its cells can be seen' })));
+  const kWh = (o.s * f.V * o.p * f.Ah) / 1000;
+  // (its middle at its origin, as the box that stood for it had its)
+  const inner: Assembly = { name: 'modules and tray', items }, mid = boundsOfAll(inner).getCenter(new THREE.Vector3());
+  const pack: Assembly = { name: o.name ?? `${o.s}s${o.p}p pack of ${o.format} cells (${kWh.toFixed(1)} kWh)`, items: [place(inner, [-mid.x, -mid.y, -mid.z])] };
+  madeBatteries.set(key, pack); return pack;
 }

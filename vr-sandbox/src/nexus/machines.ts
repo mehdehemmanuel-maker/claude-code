@@ -12,6 +12,8 @@
 // one part of that mass, said as such; where they weigh more, that is said too.
 
 import { use } from './components';
+import { massOfAll, place, type Assembly, type Placed } from './assembly';
+import { massOf } from './mass';
 import { WHEEL } from './kinds/fasteners';
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from './kits';
 import { bodyPanels, insideOf, roofOf, tailOf, type BodyPlan, type KeepOut, type WheelAt } from './panels';
@@ -86,6 +88,128 @@ export function tyreSection(t: Tyre): [number, number][] {
   // its beads are pressed on its rim, not 4 mm over it)
   const R = t.D / 2, r0 = t.rim / 2 + 0.0005, h = R - r0, w = t.W / 2, zb = Math.min(w * 0.8, w * 0.9 - 0.009);
   return [[r0, -zb], [r0 + h * 0.4, -w], [R - h * 0.14, -w * 0.97], [R, -w * 0.78], [R, w * 0.78], [R - h * 0.14, w * 0.97], [r0 + h * 0.4, w], [r0, zb]];
+}
+// ---- a tyre as it is made: its layers and its tread, from its size and its pattern -------------------------------------
+// (A radial tyre from the inside out: an inner liner that holds the air, a body ply of cords from bead to bead, the
+// beads (hoops of steel wire with a hard rubber apex over each, what holds it on the rim), steel belts under its tread
+// (two in a car's, four in a truck's), a nylon cap ply over them (a car's), an undertread, its tread of blocks and ribs
+// cut by grooves and sipes, and its sidewalls. Each layer's thickness and each cord's share of its layer are typical
+// (estimates, said as such): a maker's exact construction is its own.)
+export type Tread = 'highway' | 'all-season' | 'all-terrain' | 'mud' | 'rib' | 'drive' | 'knobby' | 'slick';
+/** One row of blocks round the tread: where it is across (−1 to 1 of the tread's half width), how wide (a share of the
+ *  half width), how long round (a share of its pitch: 1, a rib cut only by its sipes) and how far on it starts (a share
+ *  of its pitch: rows staggered). */
+interface TreadRow { z: number; w: number; len: number; off?: number }
+const ROWS = (r: TreadRow[], both = true): TreadRow[] => both ? r.flatMap((x) => x.z === 0 ? [x] : [{ ...x, z: -x.z }, { ...x, z: x.z, off: x.off === undefined ? 0 : (x.off + 0.5) % 1 }]) : r;
+export const TREAD_PATTERNS: Record<Tread, { rows: TreadRow[]; /** new tread depth, m: a car's, a truck's */ depth: [number, number]; pitch: number; sipes: number; says: string }> = {
+  highway: { rows: ROWS([{ z: 0, w: 0.2, len: 1 }, { z: 0.32, w: 0.3, len: 1, off: 0 }, { z: 0.78, w: 0.4, len: 0.84, off: 0 }]), depth: [0.0085, 0.0127], pitch: 0.03, sipes: 1, says: 'three ribs and two rows of shoulder blocks between four grooves round it (typical of a touring tyre); new, 8.5 mm deep (10–11/32 in, typical)' },
+  'all-season': { rows: ROWS([{ z: 0, w: 0.2, len: 0.9 }, { z: 0.32, w: 0.3, len: 0.82, off: 0.25 }, { z: 0.78, w: 0.4, len: 0.8, off: 0 }]), depth: [0.0085, 0.0127], pitch: 0.03, sipes: 2, says: 'blocks cut by more sipes, for grip on wet and cold roads (typical of an all-season tyre); 8.5 mm deep new (typical)' },
+  'all-terrain': { rows: ROWS([{ z: 0, w: 0.26, len: 0.7 }, { z: 0.4, w: 0.3, len: 0.72, off: 0.25 }, { z: 0.8, w: 0.36, len: 0.68, off: 0 }]), depth: [0.0125, 0.016], pitch: 0.04, sipes: 1, says: 'staggered blocks with wide voids between them (typical of an all-terrain tyre); 12.5 mm deep new (about 16/32 in, typical)' },
+  mud: { rows: ROWS([{ z: 0.22, w: 0.38, len: 0.45, off: 0 }, { z: 0.74, w: 0.48, len: 0.5, off: 0.5 }]), depth: [0.018, 0.022], pitch: 0.065, sipes: 0, says: 'big lugs, alternating, with half the tread open between them to clear mud (typical of a mud-terrain tyre); 18 mm deep new (typical)' },
+  rib: { rows: ROWS([{ z: 0, w: 0.2, len: 1 }, { z: 0.4, w: 0.24, len: 1, off: 0 }, { z: 0.82, w: 0.32, len: 1, off: 0 }]), depth: [0.0095, 0.0127], pitch: 0.04, sipes: 1, says: 'five ribs straight round it, cut only by sipes (typical of a steer-axle tyre: it rolls true and wears evenly); 16/32 in (12.7 mm) new on a truck (typical)' },
+  drive: { rows: ROWS([{ z: 0.24, w: 0.42, len: 0.55, off: 0 }, { z: 0.76, w: 0.44, len: 0.6, off: 0.5 }]), depth: [0.014, 0.0206], pitch: 0.05, sipes: 1, says: 'deep lugs across it (typical of a drive-axle tyre: traction); 26/32 in (20.6 mm) new on a truck (typical)' },
+  knobby: { rows: ROWS([{ z: 0, w: 0.28, len: 0.35 }, { z: 0.6, w: 0.3, len: 0.35, off: 0.5 }]), depth: [0.015, 0.015], pitch: 0.055, sipes: 0, says: 'separate knobs, most of the tread open (typical of an off-road motorcycle or ATV tyre); 15 mm tall (typical)' },
+  slick: { rows: [{ z: 0, w: 2, len: 1 }], depth: [0.003, 0.003], pitch: 0.05, sipes: 0, says: 'a smooth band, no grooves (a racing slick, typical: dry tracks only)' },
+};
+export const TREADS = Object.keys(TREAD_PATTERNS) as Tread[];
+export interface TyreMake { pattern?: Tread; /** its tread's depth, m (new, typical of its pattern, where not said) */ depth?: number; /** its tread's mean pitch, m (each pitch one of three lengths) */ pitch?: number; /** sipes in each block */ sipes?: number; /** how worn, 0 new to 1 down to its wear bars (1.6 mm) */ wear?: number; /** its compound's colour */ color?: number }
+export interface TyreBuilt { tyre: Assembly; kg: number; /** the share of its tread open (grooves and voids) */ void: number; depth: number; pitches: number; heavy: boolean; layers: string[]; says: string }
+const tyresMade = new Map<string, TyreBuilt>();
+/** A tyre as it is made, from its size code and its tread: built once for each size and tread, and the same one is then
+ *  fitted to every wheel and every machine that takes it (each stores it once). Built about y (as a turned profile is),
+ *  so it fits where its wheel's tyre was. */
+export function tyreBuilt(t: Tyre, o: TyreMake = {}): TyreBuilt {
+  const heavy = t.rim >= 0.49, pat = TREAD_PATTERNS[o.pattern ?? (heavy ? 'rib' : 'highway')], key = JSON.stringify([t.code, o]);
+  const was = tyresMade.get(key); if (was) return was;
+  const R = t.D / 2, r0 = t.rim / 2 + 0.0005, h = R - r0, w = t.W / 2, zb = Math.min(w * 0.8, w * 0.9 - 0.009), tw = w * 0.78;
+  const BAR = 0.0016, depth0 = o.depth ?? pat.depth[heavy ? 1 : 0], wear = Math.max(0, Math.min(1, o.wear ?? 0)), depth = depth0 - (depth0 - BAR) * wear, Ru = R - depth0;
+  const col = o.color ?? 0x161616, rub = (more: Partial<Part> = {}): Partial<Part> => ({ mat: 'rubber', color: col, finish: 'tread', facets: 120, ...more });
+  // its casing's outside, bead to bead: under its tread at the tread's foot (Ru), its tread on it
+  const O: [number, number][] = [[r0, -zb], [r0 + h * 0.4, -w], [R - h * 0.14, -w * 0.97], [Ru, -w * 0.8], [Ru, w * 0.8], [R - h * 0.14, w * 0.97], [r0 + h * 0.4, w], [r0, zb]];
+  const cls = [0, 1, 2, 3, 3, 2, 1, 0], C: [number, number] = [(r0 + R) / 2, 0];
+  const nrm = O.map((p, i) => {
+    const segN = (a: [number, number], b: [number, number]): [number, number] => { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; };
+    const ns = [i > 0 ? segN(O[i - 1]!, p) : null, i < O.length - 1 ? segN(p, O[i + 1]!) : null].filter(Boolean) as [number, number][];
+    let n: [number, number] = [ns.reduce((s, q) => s + q[0], 0), ns.reduce((s, q) => s + q[1], 0)]; const l = Math.hypot(...n) || 1; n = [n[0] / l, n[1] / l];
+    return (C[0] - p[0]) * n[0] + (C[1] - p[1]) * n[1] < 0 ? [-n[0], -n[1]] as [number, number] : n;
+  });
+  // (thickness by where on the section: [bead, sidewall, shoulder, crown], m, and the share of each cord layer that is cord)
+  const T = heavy
+    ? { side: [0.007, 0.006, 0.003, 0], under: [0, 0, 0.002, 0.004], cap: [0, 0, 0, 0], belt: [0, 0, 0.001, 0.002], belts: 4, ply: 0.0028, liner: 0.0025, plyCord: { mat: 'steel', share: 0.15, rho: 7850 }, bead: 0.015 }
+    : { side: [0.004, 0.0035, 0.0018, 0], under: [0, 0, 0.001, 0.002], cap: [0, 0, 0.0004, 0.0008], belt: [0, 0, 0.0006, 0.0012], belts: 2, ply: 0.0012, liner: 0.001, plyCord: { mat: 'polyester', share: 0.2, rho: 1380 }, bead: 0.006 };
+  const depthAt = new Array(O.length).fill(0) as number[], parts: Part[] = [], layers: string[] = [];
+  const band = (name: string, thick: number[], i0: number, i1: number, more: Partial<Part>, why: string) => {
+    const outer: [number, number][] = [], inner: [number, number][] = [];
+    for (let i = i0; i <= i1; i++) { const d0 = depthAt[i]!, tk = thick[cls[i]!]!, n = nrm[i]!, p = O[i]!; outer.push([p[0] + n[0] * d0, p[1] + n[1] * d0]); inner.push([p[0] + n[0] * (d0 + tk), p[1] + n[1] * (d0 + tk)]); depthAt[i] = d0 + tk; }
+    const prof = [...outer, ...inner.reverse(), outer[0]!] as [number, number][];
+    parts.push(P(name, { lathe: prof }, [0, 0, 0], more)); if (!layers.includes(why)) layers.push(why);
+  };
+  // (a cord layer's mass: its cord's share at the cord's density, the rest rubber at 1,150 kg/m³)
+  const cord = (prof: number, share: number, rho: number) => (share * rho + (1 - share) * 1150) / 1150 * prof;
+  const withCord = (name: string, thick: number[], i0: number, i1: number, share: number, rho: number, more: Partial<Part>, why: string) => {
+    band(name, thick, i0, i1, more, why); const p = parts[parts.length - 1]!; p.kg = cord(massOf(p), share, rho);
+  };
+  band('sidewall (its outer side)', T.side, 5, 7, rub({ finish: 'satin' }), 'sidewalls: flexible rubber over the ply, bead to shoulder');
+  band('sidewall (its inner side)', T.side, 0, 2, rub({ finish: 'satin' }), 'sidewalls: flexible rubber over the ply, bead to shoulder');
+  band('undertread', T.under, 2, 5, rub(), 'an undertread under the blocks');
+  if (!heavy) withCord('cap ply (nylon)', T.cap, 2, 5, 0.3, 1140, rub({ color: 0x3a3226, finish: 'satin' }), 'a nylon cap ply over the belts (a car\'s: holds them down at speed)');
+  for (let b = T.belts; b >= 1; b--) withCord(`steel belt ${b}`, T.belt, 2, 5, 0.3, 7850, rub({ color: 0x55585c, finish: 'satin' }), `${T.belts} steel belts, their cords crossed (about 30 % steel by volume, typical)`);
+  withCord(`body ply (${T.plyCord.mat} cords)`, [T.ply, T.ply, T.ply, T.ply], 0, 7, T.plyCord.share, T.plyCord.rho, rub({ color: heavy ? 0x55585c : 0xc9b98f, finish: 'satin' }), `a body ply of ${T.plyCord.mat} cords radial from bead to bead (${Math.round(T.plyCord.share * 100)} % cord, typical)`);
+  band('inner liner (halobutyl)', [T.liner, T.liner, T.liner, T.liner], 0, 7, rub({ color: 0x2a2a2e, finish: 'satin' }), 'an inner liner of halobutyl rubber that holds the air (tubeless)');
+  // its beads: a hoop of steel wire, its apex of hard rubber over it, each inside the casing at its foot
+  const bs = T.bead, rB = r0 + 0.004 + bs / 2, zB = zb - bs / 2 - (heavy ? 0.006 : 0.003);
+  for (const s of [-1, 1]) {
+    parts.push(P(`bead (${s < 0 ? 'inner' : 'outer'} side)`, { torus: [rB, bs / 2] }, [0, s * zB, 0], { rot: [PI / 2, 0, 0], mat: 'steel-low', color: 0x8a6a3a, finish: 'satin', facets: 96, says: `a hoop of bronze-coated steel wire, ${Math.round(bs * 1000)} mm across its bundle (typical), round the rim's bead seat: what holds the tyre on` }));
+    parts.push(P(`apex (${s < 0 ? 'inner' : 'outer'} side)`, { lathe: [[rB + bs / 2, s * zB - s * bs * 0.35], [rB + h * 0.3, s * zB - s * bs * 0.05], [rB + bs / 2, s * zB + s * bs * 0.35], [rB + bs / 2, s * zB - s * bs * 0.35]] }, [0, 0, 0], rub({ color: 0x222226, finish: 'satin', says: 'a hard rubber filler over the bead, stiffening the lower sidewall' })));
+  }
+  layers.push('two beads of steel wire, a hard rubber apex over each');
+  const casing: Part = P(`casing ${t.code}`, undefined, [0, 0, 0], { mat: 'rubber', color: col, says: t.says, parts });
+  // its tread: pitches of three lengths in a sequence round it (as makers spread the noise of a tread's blocks over many
+  // tones: the lengths, 0.85, 1 and 1.15 of its mean, and their order are typical, not any maker's), each pitch a group of
+  // blocks, cut by its sipes; worn, its blocks stand lower on the same foot (0.6 mm, typical; drawn right through, where a real sipe stops short of the groove's floor)
+  const circ = 2 * PI * R, mean = o.pitch ?? pat.pitch, n = Math.max(12, Math.round(circ / mean)), SEQ = [1, 0, 1, 2, 2, 1, 0, 0, 1, 2], ratio = [0.85, 1, 1.15];
+  const raw = Array.from({ length: n }, (_, i) => ratio[SEQ[i % SEQ.length]!]!), k = circ / raw.reduce((a, b) => a + b, 0), SIPE = 0.0006;
+  const sipes = o.sipes ?? pat.sipes, rho = Ru + depth / 2, items: Placed[] = [];
+  const pitchOf = new Map<number, Part>(); let land = 0;
+  const blockOf = (len: number): Part => {
+    const blocks: Part[] = [];
+    for (const row of pat.rows) {
+      const bw = row.w * tw, z = row.z * tw; if (bw <= 0) continue;
+      const span = row.len >= 1 ? len - SIPE * Math.max(1, sipes) : len * row.len, cuts = row.len >= 1 ? Math.max(1, sipes) : sipes + 1, slab = (span - (row.len >= 1 ? 0 : SIPE * sipes)) / cuts;
+      if (pat === TREAD_PATTERNS.slick) { blocks.push(P('tread', { box: [depth, Math.min(2 * tw, bw), len + 0.0002] }, [rho, 0, 0], rub())); continue; }
+      for (let c = 0; c < cuts; c++) {
+        const s0 = (row.off ?? 0) * len + c * (slab + SIPE) + slab / 2, a = s0 / rho;
+        blocks.push(P('tread block', { box: [depth, bw, slab] }, [rho * Math.cos(a), z, rho * Math.sin(a)], rub({ rot: [0, -a, 0] })));
+      }
+    }
+    return P('tread pitch', undefined, [0, 0, 0], { parts: blocks });
+  };
+  let ang = 0;
+  for (let i = 0; i < n; i++) {
+    const len = raw[i]! * k, key2 = Math.round(raw[i]! * 100);
+    let pp = pitchOf.get(key2); if (!pp) { pp = blockOf(len); pitchOf.set(key2, pp); }
+    items.push(place(pp, [0, 0, 0], [0, -ang / R, 0])); ang += len;
+    land += pat.rows.reduce((s, row) => s + Math.min(2 * tw, row.w * tw) * (row.len >= 1 ? len - SIPE * Math.max(1, sipes) : len * row.len), 0);
+  }
+  // its wear bars: across the floor of its main grooves, 1.6 mm high (the legal limit in most countries), six round it
+  const spans = pat.rows.map((r) => [(r.z - r.w / 2) * tw, (r.z + r.w / 2) * tw] as [number, number]).sort((a, b) => a[0] - b[0]), grooves: [number, number][] = [];
+  for (let i = 1; i < spans.length; i++) if (spans[i]![0] - spans[i - 1]![1] > 0.003) grooves.push([spans[i - 1]![1], spans[i]![0]]);
+  const bars: Part[] = []; for (let j = 0; j < 6; j++) for (const [g0, g1] of grooves) { const a = (j / 6) * 2 * PI; bars.push(P('wear bar', { box: [BAR, g1 - g0, 0.012] }, [(Ru + BAR / 2) * Math.cos(a), (g0 + g1) / 2, (Ru + BAR / 2) * Math.sin(a)], rub({ rot: [0, -a, 0] }))); }
+  if (bars.length) items.push(place(P('wear bars', undefined, [0, 0, 0], { parts: bars })));
+  const tread: Assembly = { name: `tread (${o.pattern ?? (heavy ? 'rib' : 'highway')}, ${n} pitches)`, items };
+  const tyre: Assembly = { name: `tyre ${t.code}`, items: [place(casing), place(tread)] };
+  const voidShare = Math.max(0, 1 - land / (circ * 2 * tw)), kg = massOfAll(tyre);
+  const out: TyreBuilt = { tyre, kg, void: voidShare, depth, pitches: n, heavy, layers: [...layers, `its tread: ${pat.says}`], says: `${t.says}; ${n} pitches of three lengths round it; ${Math.round(voidShare * 100)} % of its tread open; ${(kg).toFixed(1)} kg as drawn` };
+  tyresMade.set(key, out); return out;
+}
+/** A machine made to roll: its wheels taken off its body as things of their own, each on a hinge about its axle (a joint
+ *  for Let it go, free: no brake, no drive), so pushed it rolls on and does not slide. Its body is everything else. */
+export function rollingOf(v: Part): { thing: Assembly; joints: { kind: 'hinge'; name: string; a: string; b: string; at: V3; axis: V3; friction: number }[] } {
+  const isWheel = (q: Part) => /^(front|rear|middle|axle \d+)\b.* wheel( \d+)?$/.test(q.name), wheels = (v.parts ?? []).filter(isWheel), body: Part = { ...v, name: `${v.name} (body)`, parts: (v.parts ?? []).filter((q) => !isWheel(q)) };
+  return {
+    thing: { name: v.name, items: [place(body), ...wheels.map((w) => place(w, w.at ?? [0, 0, 0], w.rot ?? [0, 0, 0]))] },
+    joints: wheels.map((w) => ({ kind: 'hinge' as const, name: `axle of ${w.name}`, a: w.name, b: body.name, at: (w.at ?? [0, 0, 0]) as V3, axis: [0, 0, 1] as V3, friction: 0 })),
+  };
 }
 /** A wheel: its tyre (a turned section, knobbed off-road), its rim (a turned barrel between flanges) and face, its hub
  *  and the nuts that hold it on their pitch circle, and its brake. Built with its outer face to +z. */

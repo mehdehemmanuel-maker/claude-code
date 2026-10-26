@@ -92,6 +92,12 @@ the task list and lose the why. So the why lives here, and every round is checke
 - "Okay now what next in the doc maybe realism or motion or physics" (2026-10-26: motion and physics as nodes, the
   document's 3.5 to 3.7: Let it go over the Jolt engine already here, Hinge, Push, Turn as a servo drives a joint, Sweep
   and Clashes for the room a motion needs; the next in `docs/NODE-ENGINE.md`)
+- "build something complex like a car but you need it explode or down to its bolts … reuse things to make the build
+  faster … batteries lots of cars use the same batteries or tires design realistic tires … geometry and sizing settings
+  on the tires … build truck from the ground up develop a logic that would allow you to build different kind of vehicle
+  easily … then a computer … the tiniest individual functional component is the transistor … test yourself with realism
+  and physics … texture lighting physics" (2026-10-26: tyres as made, batteries by their standards, Fit in and Take
+  apart, vehicles from their axles, wheels that roll in the physics, `computer.ts` from FinFET to PC; shadows)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -154,6 +160,10 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Rigid-body physics (Jolt): bodies falling, landing, sliding, tipping, resting, with each material's friction and bounce, hinges, slides and DC motors, the motion sampled 30 times a second; what the board makes let go as bodies and posed back at a time (`bodiesOf`, `posedAt`) | `src/nexus/sim.ts` (nodes: Let it go, Hinge, Push in `blocks.ts`) |
 | A joint driven to angles at times as a servo drives it (trapezoidal speed), and the room a turn needs (Turn, Sweep in `blocks.ts`) | `src/nexus/motion.ts` (`Servo`) |
 | What building complexity showed nodes need: Mate (by frames), what each touches, rules over rows, Clear away (deleting by where things are), Clashes, Onto the ground, the Clock, Signal cycle, Loop round a block, Follow a path (gaps kept, stop lines obeyed, kept every 30 s and folded into the round it repeats, so any time is always the same and a year on is fast), Forever (a lattice without end) | `src/nexus/blocks.ts` (the clock itself: `Engine.tick` and `clock` on a block in `dataflow.ts`) |
+| A tyre as it is made from its size code and tread (layers, beads, belts, pitches, sipes, wear bars), made once per size; a machine's wheels as hinged bodies (`rollingOf`) | `src/nexus/machines.ts` (`tyreBuilt`; nodes Tyre, Axle, Vehicle, Vehicle (a real model) in `blocks.ts`) |
+| Batteries drawn: a starting battery by its BCI group, lithium cells by format, packs of them (data: `data/batteries.ts`) | `src/nexus/components.ts` (`starterBattery`, `liCell`, `cellPack`) |
+| A part's tree opened into assemblies, pieces swapped for a shared thing by name (`fitIn`), taken apart (`exploded`) | `src/nexus/assembly.ts` (nodes Fit in, Take apart) |
+| A computer from its transistors: FinFETs at published process pitches, SRAM and logic cells, arrays, die, package, motherboard, PC | `src/nexus/computer.ts` (nodes Transistor, Logic or memory cell, Processor die, Processor package, Motherboard, Desktop PC) |
 | Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |
 | The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
 

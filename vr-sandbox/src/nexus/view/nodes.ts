@@ -752,6 +752,87 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); b.nodes.measure!.label = 'Measure (one cell)'; wire(b, 'world', 'world', 'measure', 'thing');
     return b;
   }],
+  ['A car down to its bolts: tyres made in depth, a shared battery, taken apart', () => {
+    // a Toyota Corolla by Toyota's figures, built part by part down to its wheel nuts; its four tyres swapped for one tyre
+    // made in depth (layers, beads, belts, a tread of pitches), the same one on every wheel; a group 35 battery (typical
+    // of Toyotas) over its gearbox on the left, where Toyota puts it; then taken apart three levels down: turn "how far
+    // apart" to 0 to put it back together
+    const b = emptyBoard('A car down to its bolts');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
+    placeBlock(b, 'tyre', 0, 0, { pattern: 'all-season', code: '205/55R16' }, 'tyre'); b.nodes.tyre!.label = 'Tyre 205/55R16, made in depth';
+    placeBlock(b, 'fit', 0, 0, {}, 'fit'); b.nodes.fit!.label = 'Fit it on every wheel'; wire(b, 'car', 'vehicle', 'fit', 'thing'); wire(b, 'tyre', 'tyre', 'fit', 'with');
+    placeBlock(b, 'battery.starter', 0, 0, { group: '35' }, 'bat'); b.nodes.bat!.label = 'Battery, BCI group 35';
+    placeBlock(b, 'place', 0, 0, { x: 1.56, y: 0.645, z: -0.275 }, 'batAt'); b.nodes.batAt!.label = 'Over the gearbox, left'; wire(b, 'bat', 'battery', 'batAt', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'Corolla, to its bolts' }, 'all'); wire(b, 'fit', 'fitted', 'all', 'things'); wire(b, 'batAt', 'placed', 'all', 'things');
+    placeBlock(b, 'explode', 0, 0, { amount: 0.5, levels: 3 }, 'apart'); wire(b, 'all', 'assembly', 'apart', 'thing');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    return b;
+  }],
+  ['A truck from the ground up: axles, then tyres, then batteries', () => {
+    // a 6x4 highway tractor built from its axles up (where each is, its track, its tyres, steer or drive, twin tyres, how
+    // it hangs: the Cascadia's figures), its kind giving its cab, tanks, stacks and fifth wheel; a rib tyre fitted to its
+    // steer axle and a drive tyre to its eight drive wheels; three group 31 batteries in a row on its left rail behind
+    // its tank. Add an axle (wire another Axle in) and it is an 8x4; take one away and it is a 4x2
+    const b = emptyBoard('A truck from the ground up');
+    placeBlock(b, 'vehicle.axle', 0, 0, { steer: true, susp: 'leaf', x: 2.268, track: 2.05, tyre: '315/80R22.5', brakeD: 0.43 }, 'a1'); b.nodes.a1!.label = 'Steer axle';
+    placeBlock(b, 'vehicle.axle', 0, 0, { drive: true, dual: true, susp: 'air', x: -1.51, track: 1.85, tyre: '11R22.5', brakeD: 0.43 }, 'a2'); b.nodes.a2!.label = 'Drive axle, front';
+    placeBlock(b, 'vehicle.axle', 0, 0, { drive: true, dual: true, susp: 'air', x: -2.805, track: 1.85, tyre: '11R22.5', brakeD: 0.43 }, 'a3'); b.nodes.a3!.label = 'Drive axle, rear';
+    placeBlock(b, 'vehicle', 0, 0, { kind: 'truck', power: 'diesel', extras: 'cab, tanks, stacks, fifth wheel', L: 7.166, W: 2.5, H: 3.03, kW: 375, cc: 14800, color: '#c62828' }, 'truck'); b.nodes.truck!.label = 'Truck from its axles';
+    for (const a of ['a1', 'a2', 'a3']) wire(b, a, 'axle', 'truck', 'axles');
+    placeBlock(b, 'tyre', 0, 0, { pattern: 'rib', code: '315/80R22.5' }, 'ts'); b.nodes.ts!.label = 'Steer tyre (rib)';
+    placeBlock(b, 'tyre', 0, 0, { pattern: 'drive', code: '11R22.5' }, 'td'); b.nodes.td!.label = 'Drive tyre (lug)';
+    placeBlock(b, 'fit', 0, 0, { path: '^((outer|inner) )?tyre 315' }, 'f1'); b.nodes.f1!.label = 'Fit on the steer axle'; wire(b, 'truck', 'vehicle', 'f1', 'thing'); wire(b, 'ts', 'tyre', 'f1', 'with');
+    placeBlock(b, 'fit', 0, 0, { path: '^((outer|inner) )?tyre 11R' }, 'f2'); b.nodes.f2!.label = 'Fit on the drive axles'; wire(b, 'f1', 'fitted', 'f2', 'thing'); wire(b, 'td', 'tyre', 'f2', 'with');
+    placeBlock(b, 'battery.starter', 0, 0, { group: '31' }, 'bat'); b.nodes.bat!.label = 'Battery, BCI group 31';
+    placeBlock(b, 'place', 0, 0, { ry: Math.PI / 2 }, 'batTurn'); b.nodes.batTurn!.label = 'Turned across'; wire(b, 'bat', 'battery', 'batTurn', 'thing');
+    placeBlock(b, 'array.line', 0, 0, { n: 3, dx: 0.185 }, 'bats'); b.nodes.bats!.label = 'Three in a row'; wire(b, 'batTurn', 'placed', 'bats', 'thing');
+    placeBlock(b, 'place', 0, 0, { x: -0.83, y: 0.62, z: -0.66 }, 'batAt'); b.nodes.batAt!.label = 'On the left rail, behind the tank'; wire(b, 'bats', 'row', 'batAt', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'truck' }, 'all'); wire(b, 'f2', 'fitted', 'all', 'things'); wire(b, 'batAt', 'placed', 'all', 'things');
+    placeBlock(b, 'explode', 0, 0, { amount: 0, levels: 3 }, 'apart'); b.nodes.apart!.label = 'Take apart (turn it up)'; wire(b, 'all', 'assembly', 'apart', 'thing');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    return b;
+  }],
+  ['An electric car\'s pack: 3,360 cells, one stored', () => {
+    // a sedan with electric drive; the box that stood for its pack swapped for a pack of 21700 cells: 96 in series of 35,
+    // six modules of 16 groups, 60 kWh (what the room under its floor takes laid this way); the same pack again beside it, so
+    // it can be seen (stored once, placed twice), and the cell itself
+    const b = emptyBoard('An electric car\'s pack');
+    placeBlock(b, 'vehicle', 0, 0, { kind: 'car', body: 'sedan', power: 'electric', color: '#eceff1' }, 'car'); b.nodes.car!.label = 'Sedan, electric';
+    placeBlock(b, 'battery.pack', 0, 0, { format: '21700', s: 96, p: 35, rows: 5, modules: '16, 16, 16, 16, 16, 16' }, 'pack'); b.nodes.pack!.label = 'Pack of 21700s, 96s35p';
+    placeBlock(b, 'fit', 0, 0, { path: '^battery pack' }, 'fit'); b.nodes.fit!.label = 'Fit it under the floor'; wire(b, 'car', 'vehicle', 'fit', 'thing'); wire(b, 'pack', 'pack', 'fit', 'with');
+    placeBlock(b, 'battery.cell', 0, 0, { format: '21700' }, 'cell'); b.nodes.cell!.label = 'One cell (21700)';
+    placeBlock(b, 'place', 0, 0, { x: -1.5, y: 0.035, z: 2.0 }, 'cellAt'); b.nodes.cellAt!.label = 'Beside it'; wire(b, 'cell', 'cell', 'cellAt', 'thing');
+    placeBlock(b, 'place', 0, 0, { x: 0, y: 0.04, z: 2.6 }, 'packAt'); b.nodes.packAt!.label = 'The same pack, beside it to be seen'; wire(b, 'pack', 'pack', 'packAt', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'electric car' }, 'all'); wire(b, 'fit', 'fitted', 'all', 'things'); wire(b, 'cellAt', 'placed', 'all', 'things'); wire(b, 'packAt', 'placed', 'all', 'things');
+    placeBlock(b, 'explode', 0, 0, { amount: 0, levels: 2 }, 'apart'); b.nodes.apart!.label = 'Take apart (turn it up)'; wire(b, 'all', 'assembly', 'apart', 'thing');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    return b;
+  }],
+  ['A computer down to the transistor: FinFET, cell, die, package, board, PC', () => {
+    // two FinFETs at Intel 14 nm's published pitches (an n-type, a p-type); made into a 6T SRAM bit and a NAND2 gate; those
+    // placed by the billion into a 4-core die (each core's logic and graphics an estimate); the die flipped into an
+    // LGA1151 package, socketed in an ATX board, in a tower PC. The same die beside the PC, face up, at its true size:
+    // zoom the 3D view (or the space's S) down into it, through its caches and rows of gates, to a single transistor
+    const b = emptyBoard('A computer down to the transistor');
+    placeBlock(b, 'chip.transistor', 0, 0, { proc: 'intel-14nm', type: 'n', fins: 1 }, 'tn'); b.nodes.tn!.label = 'nFET, 1 fin';
+    placeBlock(b, 'chip.transistor', 0, 0, { proc: 'intel-14nm', type: 'p', fins: 1 }, 'tp'); b.nodes.tp!.label = 'pFET, 1 fin';
+    placeBlock(b, 'chip.transistor', 0, 0, { proc: 'intel-14nm', type: 'n', fins: 2 }, 'tn2'); b.nodes.tn2!.label = 'nFET, 2 fins';
+    placeBlock(b, 'chip.transistor', 0, 0, { proc: 'intel-14nm', type: 'p', fins: 2 }, 'tp2'); b.nodes.tp2!.label = 'pFET, 2 fins';
+    placeBlock(b, 'chip.cell', 0, 0, { proc: 'intel-14nm', kind: 'SRAM bit (6T)' }, 'bit'); b.nodes.bit!.label = 'SRAM bit (6 transistors)'; wire(b, 'tn', 'transistor', 'bit', 'n'); wire(b, 'tp', 'transistor', 'bit', 'p');
+    placeBlock(b, 'chip.cell', 0, 0, { proc: 'intel-14nm', kind: 'NAND2 gate' }, 'gate'); b.nodes.gate!.label = 'NAND2 gate (4 transistors)'; wire(b, 'tn2', 'transistor', 'gate', 'n'); wire(b, 'tp2', 'transistor', 'gate', 'p');
+    placeBlock(b, 'chip.die', 0, 0, { proc: 'intel-14nm', cores: 4, coreMm2: 7, l2KB: 256, l3MB: 8, uncoreMm2: 50 }, 'die'); b.nodes.die!.label = 'Die, 4 cores'; wire(b, 'bit', 'cell', 'die', 'sram'); wire(b, 'gate', 'cell', 'die', 'nand');
+    placeBlock(b, 'chip.package', 0, 0, { socket: 'LGA1151' }, 'pkg'); wire(b, 'die', 'die', 'pkg', 'die');
+    placeBlock(b, 'pc.board', 0, 0, { form: 'ATX' }, 'board'); wire(b, 'pkg', 'package', 'board', 'package');
+    placeBlock(b, 'pc.desktop', 0, 0, {}, 'pc'); wire(b, 'board', 'board', 'pc', 'board');
+    placeBlock(b, 'place', 0, 0, { x: 0.45, y: 0.001 }, 'dieAt'); b.nodes.dieAt!.label = 'The die beside it, face up'; wire(b, 'die', 'die', 'dieAt', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'a computer, to its transistors' }, 'all'); wire(b, 'pc', 'pc', 'all', 'things'); wire(b, 'dieAt', 'placed', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    return b;
+  }],
   ['Physics: a steel ball let go into a tower of wooden blocks', () => {
     // 24 oak blocks 100 mm a side, two by two and six high; a 120 mm steel ball shoved at the tower for 0.1 s with 300 N.
     // Let it go runs Jolt once (each block a body, its mass from oak's density, friction and bounce from the materials
@@ -991,7 +1072,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

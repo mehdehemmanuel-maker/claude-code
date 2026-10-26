@@ -41,6 +41,51 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-26, then: things down to their bolts, reused; vehicles from their axles; a computer from its transistors.**
+The user: "build something complex like a car … down to its bolts … reuse things … batteries, tires … realistic tires …
+geometry and sizing settings … build a truck from the ground up … a logic that would allow you to build different kinds
+of vehicle easily … then a computer … the transistor … test yourself with realism and physics."
+- **Tyre** (`tyreBuilt` in `machines.ts`; node *Tyre*): from a size code or width / aspect / rim, as it is made: inner
+  liner, body ply (polyester in a car's, steel in a truck's, its cord share said), two beads with apexes, steel belts (two
+  or four), a nylon cap ply (a car's), undertread, sidewalls, and a tread of blocks in pitches of three lengths (noise
+  spread), cut by grooves and sipes, wear bars 1.6 mm high in its grooves; eight patterns (highway, all-season,
+  all-terrain, mud, rib, drive, knobby, slick); depth, pitch, sipes and wear set on the node. Masses against makers'
+  listings: 205/55R16 9.5 kg (8–10 listed), 11R22.5 drive 59.5 kg (about 55), 315/80R22.5 rib 64.7 kg (60–70). Made once
+  per size and tread: a car's four tyres are one stored tyre (498 pieces placed, 7 things stored).
+- **Batteries** (`starterBattery`, `liCell`, `cellPack` in `components.ts`; data in `data/batteries.ts`): a 12 V starting
+  battery by its BCI group (case size the standard's; six cells of plates, separator envelopes, straps, intercell joints
+  through the partitions, electrolyte, vent caps, SAE posts of their two sizes), within 15 % of each group's typical mass;
+  cylindrical cells (18650, 21700 from datasheets, 4680 from teardowns) with their wound jelly roll turn by turn; packs
+  (a Model 3-like 96s46p of 21700s: 4,416 cells, 44,265 pieces placed, 11 things stored).
+- **Vehicles from what they are** (nodes *Axle*, *Vehicle*, *Vehicle (a real model)*): an axle is where it is, its track,
+  its tyre code, steer, drive, twin tyres, brakes, how it hangs; a Vehicle is its kind (its seats, lines and controls
+  scaled to its length), its axles, size, frame, power and what it carries, built by the one maker every machine here
+  comes from. A truck from three Axle nodes is 433 pieces; wire a fourth in and it is an 8x4 (564), take one out and a
+  4x2 (306). **Fit in** swaps every piece a pattern names for a shared thing (the tyre made in depth on every wheel, a
+  real pack for the box that stood for one); **Take apart** moves each piece out from what holds it, so many levels
+  down. Starter boards: a car down to its bolts, a truck from the ground up, an electric car's pack.
+- **Physics, tested**: a vehicle's wheels come off as bodies of their own, each hinged on its axle (`rollingOf`; a
+  turned tyre is a cylinder to the physics). Pushed with 4,000 N for 1 s, the Corolla rolls on at 1.854 m/s, 98 % of
+  F·t/m (the rest spins its wheels up); as one rigid body the same push does not move it (its tyres' friction holds
+  2.1 t). The Cascadia: 1.279 against 1.302 m/s.
+- **A computer to the transistor** (`src/nexus/computer.ts`; nodes *Transistor*, *Logic or memory cell*, *Processor
+  die*, *Processor package*, *Motherboard*, *Desktop PC*): a FinFET at Intel 22 nm's and 14 nm's published pitches (IEDM
+  2012, 2014) or TSMC N5's reported ones; a 6T SRAM bit on its published bit-cell area and a NAND2 gate with their
+  first metal; 2 KB sub-arrays with their periphery; caches; rows of gates; a 4-core die of 3.25 billion transistors at
+  14 nm (5 × 10¹⁰ pieces placed, 25 things stored), flipped into an LGA1151 package on its bumps, in an ATX board with
+  JEDEC DIMMs, power stages, chipset, M.2 drive and graphics card, in a tower. The 3D view zooms from the PC to one
+  transistor (its near plane reaches 10⁻¹² m).
+- **Realism**: the docked view has a sun casting shadows and a ground that catches them, sized by how far the view is
+  (off below 3 cm: 32-bit positions cannot place them). A stand-in's error now counts many small pieces left out
+  together, and a thing too big to list is never stood in for by part of it (a sub-array was drawn grey from 48 of its
+  16,384 bits).
+- **Honest limits, found by these checks**: the Corolla as drawn weighs 2,116 kg and the Cascadia 12,287 kg against
+  1,340 and 8,200 published (drawn too heavy, from before this round); the kart's seat shell reaches the ground, so let
+  go it drags on it; the truck's cab and hood are crude next to a Cascadia (the blind check's first complaint); a die's
+  logic is rows of one gate at 70 % placement, its density 24.6 M/mm² against Intel's 37.5; its upper metal layers and
+  vias are not drawn; the DRAM inside a DIMM, a fan from the library (its family has no drawing) and the GPU's insides
+  are not drawn; the far view on a software GPU runs at the governor's coarsest, so far tyres are boxes.
+
 **2026-10-26, then: motion and physics as nodes** (the Seed document's 3.5 to 3.7: joints, drivers, kinematic and
 dynamic solvers, swept volumes). The Jolt rigid-body engine was already here (`sim.ts`, behind the old room's words);
 now the board reaches it:
