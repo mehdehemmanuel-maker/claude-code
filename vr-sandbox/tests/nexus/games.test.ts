@@ -5,8 +5,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import initJolt from 'jolt-physics/wasm-compat';
 import type { Jolt } from '../../src/nexus/realize';
-import { aimDart, dartFlight, Pool, POOL, POCKETS, rack, targetOn, throwDart } from '../../src/nexus/games';
-import { DARTBOARD } from '../../src/nexus/view/place3d';
+import { aimDart, dartFlight, DARTBOARD, Pool, POOL, POCKETS, rack, targetOn, throwDart } from '../../src/nexus/games';
 
 let J: Jolt; beforeAll(async () => { J = (await initJolt()) as unknown as Jolt; });
 const run = (p: Pool, s: number) => { for (let k = 0; k < s * 60; k++) p.step(1 / 60); };

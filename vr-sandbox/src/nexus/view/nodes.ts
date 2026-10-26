@@ -91,7 +91,7 @@ async function runNow(): Promise<void> {
   for (const [id, s] of engine.state) if (s.runs !== before.get(id) && !s.cached) { glow.set(id, t); for (const w of engine.wiresFrom(id)) pulses.push({ e: w.id, t0: t }); }
   // inside the group in view, its own nodes glow too
   const ce = curEngine(); if (path.length && ce) for (const [id, s] of ce.state) if (!s.cached) { glow.set(id, t); for (const w of ce.wiresFrom(id)) pulses.push({ e: w.id, t0: t }); }
-  running = false; refreshLocal(); suggestions = null;
+  running = false; refreshLocal(); suggestions = null; wall.ran?.();
   renderInspector(false); renderStats(); draw();
   if (again) { again = false; runSoon(); }
 }
@@ -668,6 +668,32 @@ function renderAll(): void { renderCrumbs(); renderLibrary(); renderInspector(tr
 // ---- boards to start from: real work, each across fields ------------------------------------------------------------
 type Make = () => Board;
 const DEMOS: [string, Make][] = ([
+  ['A city from a few nodes: motor, drone, swarm, buildings', () => {
+    // a racing quad's parts at typical sizes: a 2207 brushless motor's bell about 28 mm across and 18 mm tall, a 5 inch
+    // (127 mm) prop, a frame of about 220 mm between opposite motors; buildings 20 m square, streets 10 m (typical)
+    const b = emptyBoard('A city from a few nodes');
+    placeBlock(b, 'shape.cyl', 0, 0, { name: 'motor bell', mat: 'al-6061', color: '#c9ced6', finish: 'brushed', r: 0.014, h: 0.018 }, 'bell');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'prop', mat: 'pp', color: '#ff5252', w: 0.127, h: 0.002, d: 0.012 }, 'prop');
+    placeBlock(b, 'place', 0, 0, { y: 0.011 }, 'propUp'); wire(b, 'prop', 'part', 'propUp', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'motor' }, 'motor'); wire(b, 'bell', 'part', 'motor', 'things'); wire(b, 'propUp', 'placed', 'motor', 'things');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'frame', mat: 'fibreglass', color: '#263238', w: 0.16, h: 0.004, d: 0.16 }, 'frame');
+    placeBlock(b, 'array.circle', 0, 0, { n: 4, r: 0.11 }, 'arms'); wire(b, 'motor', 'assembly', 'arms', 'thing');
+    placeBlock(b, 'place', 0, 0, { y: 0.011 }, 'armsUp'); wire(b, 'arms', 'ring', 'armsUp', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'drone' }, 'drone'); wire(b, 'frame', 'part', 'drone', 'things'); wire(b, 'armsUp', 'placed', 'drone', 'things');
+    placeBlock(b, 'array.grid', 0, 0, { nx: 10, nz: 10, sx: 1, sz: 1 }, 'swarm'); b.nodes.swarm!.label = 'Swarm'; wire(b, 'drone', 'assembly', 'swarm', 'thing');
+    placeBlock(b, 'place', 0, 0, { y: 45 }, 'swarmUp'); wire(b, 'swarm', 'grid', 'swarmUp', 'thing');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'tower', mat: 'concrete', color: '#b0bec5', finish: 'concrete', w: 20, h: 30, d: 20 }, 'tower');
+    placeBlock(b, 'place', 0, 0, { y: 15 }, 'towerUp'); wire(b, 'tower', 'part', 'towerUp', 'thing');
+    placeBlock(b, 'array.grid', 0, 0, { nx: 4, nz: 4, sx: 30, sz: 30 }, 'block'); b.nodes.block!.label = 'City block'; wire(b, 'towerUp', 'placed', 'block', 'thing');
+    placeBlock(b, 'array.grid', 0, 0, { nx: 5, nz: 5, sx: 140, sz: 140 }, 'city'); b.nodes.city!.label = 'City'; wire(b, 'block', 'grid', 'city', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'city and swarm' }, 'all'); wire(b, 'city', 'grid', 'all', 'things'); wire(b, 'swarmUp', 'placed', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    // the motor and the drone folded into nodes of their own: open them to change them, save them to use anywhere
+    let r = collapse(b, ['bell', 'prop', 'propUp', 'motor'], 'Motor', 'gMotor'); tidy(r.board.nodes.gMotor!.inner!);
+    r = collapse(r.board, ['gMotor', 'frame', 'arms', 'armsUp', 'drone'], 'Drone', 'gDrone'); tidy(r.board.nodes.gDrone!.inner!);
+    return r.board;
+  }],
 
   ['Parts in 3D: a bolt sized from its load, drawn whole', () => {
     // the load picks the bolt: the shank area its shear needs, the next ISO 262 size up, and that bolt drawn from its
@@ -820,4 +846,21 @@ export const wall = {
   cut: () => { const c = wall.chosen(); if (c) cut(c.id); },
   fold: group,
   shelves: (by: 'domain' | 'ability' | 'kind') => shelves(by),
+  /** It ran: what it shows may have changed. */
+  ran: null as null | (() => void),
+  /** Every thing a "Show in space" node on the board is given, with that node's id. */
+  shown(): { key: string; thing: unknown }[] {
+    const out: { key: string; thing: unknown }[] = [];
+    for (const n of nodesOf(root)) { if (root.nodes[n.id]!.block !== 'space.show') continue; const w = engine.wiresInto(n.id)[0], v = w ? engine.state.get(w.from)?.out?.[w.out!] : undefined; if (v && typeof v === 'object') out.push({ key: n.id, thing: v }); }
+    return out;
+  },
+  /** A node chosen from outside (pressed in the space): the board goes to it. */
+  choose(id: string): void {
+    if (path.length) up(0);
+    let at = id; for (const e of edgesOf(root)) if (e.to === id && isWire(e)) { at = e.from; break; }
+    sel.clear(); sel.add(at); const gg = geo(at); view.ox = cv.clientWidth / 2 - (gg.x + gg.w / 2) * view.k; view.oy = cv.clientHeight / 2 - (gg.y + gg.h / 2) * view.k; renderInspector(true); draw();
+  },
+  /** The board's history: how many states, and which it is at; and going to any of them. */
+  history: () => ({ count: undo.length + redo.length + 1, at: undo.length, saved: undo.length ? 'changes' : 'start' }),
+  goto(i: number): void { const k = Math.max(0, Math.min(undo.length + redo.length, Math.round(i))); while (undo.length > k) doUndo(); while (undo.length < k && redo.length) doRedo(); },
 };

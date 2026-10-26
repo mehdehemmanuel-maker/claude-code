@@ -1,4 +1,4 @@
-# Nexus and the forge: read this before any work here
+# Nexus and the space: read this before any work here
 
 This file is the anchor against drift. Long recursive work loses the point when each round optimises what it can measure
 (tests green, numbers sourced, findings fixed) and forgets what the person asked for. Summaries after a context reset keep
@@ -55,6 +55,16 @@ the task list and lose the why. So the why lives here, and every round is checke
   challenge against another AI); "it should be colourful … mainly node pipeline but nodes can be blocks of code, can be
   artifacts like different types of calculators and yes you can make new ones and they act like efficiency building
   blocks like programming" (2026-10-25: plan drafted in `docs/NODE-ENGINE.md`, grown from `boards.ts` and `flows.ts`)
+- "delete the environment the robot the factory all of that … make it just floating structured ui and you need a 3d
+  renderer the space needs to become a x,y,z,s(scale),t(time) environment with grid cells … the main thing is nodes …
+  collapse a whole nodded generation into one node and save that node into the node library as a reusable node
+  permanently … create a motor … save it … put multiple of those nodes in and assign them different locations … create a
+  drone out of those motors … save the drone … a drone swarm … generate cities just from 10 nodes … variant nodes that
+  allow the change of a colour a material a size a shape an axis a hole a cut anything and mating logic and geometry and
+  position for compatible parts like a bolt and a bolt hole or an input and output … advanced physics nodes … precise
+  material values down to the element table densities and behaviours" (2026-10-26: the forge and its room deleted; the
+  space, `assembly.ts` and its nodes built; mating, then physics and the periodic table, are next: the plan in
+  `docs/NODE-ENGINE.md`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -89,8 +99,6 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | What an inventory item looks like, how it comes apart | `src/nexus/pieces.ts`, `looks.ts` |
 | An item the library draws, seen in 3D: drawn as the library draws it (not its look), taken apart by the viewer's own explode, each piece opening into its pieces, the part the library draws it as, or (one piece) what it is made of, drawn | `src/nexus/view/explode.ts` (`showPart`), `src/nexus/components.ts` (`componentOf`) |
 | How a drawn part comes apart (`explode`): what is the part itself stays, those round it go out from its middle, those at its middle out past its ends along its length (heaviest first, each kind as one), and no piece parted onto another | `src/nexus/view/kit3d.ts` |
-| The library on the phone: every drawn kind of part by trade, each size with its drawing's mass against its standard; three presses to stand it before you | `src/nexus/view/apps.ts` (`libraryApp`) |
-| A clear room: in a headset nothing floats in your view unasked (one chip asks what to build; the clock is on the phone; the robot stands back to your side, its thought shown only while you look at it); the phone drawn half again a real one's size | `src/nexus/view/forge.ts` |
 | Things with choices, as a placed tree of parts | `src/nexus/kits.ts` (drawn by `view/kit3d.ts`) |
 | Conditions on loads, holds and reach | `src/nexus/conditions.ts` |
 | Conditions on how a made thing is (age, setting, material, size) | `src/nexus/make/conditions.ts` |
@@ -111,7 +119,10 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A board of blocks run: keys and a shared cache so only what changed runs, lists mapped, units converted on wires, groups folded, opened and saved as blocks, branches cut, dead blocks, twins and repeated wiring found | `src/nexus/dataflow.ts` (plan and status: `docs/NODE-ENGINE.md`) |
 | The board of blocks on a page: the coloured canvas, library, inspector-calculator, suggestions, starter boards | `src/nexus/view/nodes.ts`, `view/nodes.html` |
 | A part in 3D on a board of blocks: each 3D view block's picture, and full screen to turn and take apart | `src/nexus/view/nodes3d.ts` (draws with `kit3d.ts`) |
-| The board of blocks on a wall in the forge: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a hand's ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` (opened by `openNodes` in `forge.ts`) |
+| The space, the app's front door (`view/index.html`): nothing but what is made, in x, y, z, at any scale (S: the world scaled round you, the grid's cells a decade at a time) and through time (T: the board's history), the panels floating where you reach them, on a screen or in a headset | `src/nexus/view/space.ts` |
+| What the nodes make, drawn in the space: one instanced mesh per distinct piece, what is too small to show its pieces drawn as its box | `src/nexus/view/space3d.ts` |
+| Things placed, never copied: a part or an assembly placed (at, turned, scaled, changed there), shared by every place; mass, bounds and counts once per distinct thing; rows, rings, grids, mirrors | `src/nexus/assembly.ts` |
+| The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
 
 ## The organising principle: interfaces, envelopes, one graph
 
@@ -161,7 +172,7 @@ Known gaps (from the 2026-10-08 audit, still open):
   of their own. Still
   drawn inline by their makers: most of every machine (brackets, bearings, springs, hinges, wiring, electronics);
   each is next to become a component, smallest and commonest first;
-- the forge routes a make ask to three generators (`embodyAny`, `conceive`, `kits`) by guesswork;
+- the space has no way yet to ask for a build in words (the forge's routing to `embodyAny`, `conceive` and `kits` went with it);
 - the go-kart on the track (`view/kart3d.ts`) is drawn by hand, apart from `machines.ts`;
 - planes, jets, cranes and power tools are not yet in `machines.ts` (a fixed wing, a boom, a handheld tool are each new
   architectures: add them as data on general builders, as the wheeled ones are).

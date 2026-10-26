@@ -41,7 +41,10 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
-Open `view/nodes.html` (build with `npx vite build --config vite.view.config.ts`, then open `dist-view/nodes.html`).
+**2026-10-26: the forge and its room are deleted.** The app's front door is the space (`view/index.html`): what the
+nodes make, in x, y and z, at any scale and through time, with the panels floating where you reach them. Build with
+`npx vite build --config vite.view.config.ts`, then open `dist-view/index.html` (or `dist-view/nodes.html` for the board
+on its own page).
 
 | Part | Where | State |
 | --- | --- | --- |
@@ -52,7 +55,11 @@ Open `view/nodes.html` (build with `npx vite build --config vite.view.config.ts`
 | Cut a branch keeping what else needs it; dead branches; twins and merging; repeated wiring | `dataflow.ts` (`cutBranch`, `deadNodes`, `twins`, `mergeTwins`, `patterns`, `suggest`) | Built and tested |
 | The colourful canvas: blocks by kind, wires by quantity, glow and pulses on a run, heat map, minimap, command bar, undo, tidy layout, phone layout, inspector as each block's calculator | `src/nexus/view/nodes.ts`, `view/nodes.html` | Built, driven in Chromium, blind-checked |
 | Code blocks with typed ports (JS, TS, Python) off the page | `view/code-worker.ts` (`vars`) | Built; JS checked on the page |
-| The same board on a wall in the forge (☰ Tools → Blocks): its canvas as the wall's picture, pressed and dragged by a hand's ray or the mouse; a strip of starter boards, fit, tidy, zoom, undo, heat, out of a group, the library; a panel with the chosen block's inputs, − and + ten percent a press | `src/nexus/view/nodes-wall.ts`, `nodes.ts` (`wall`), `forge.ts` (`openNodes`) | Built; driven by the mouse in the forge in Chromium. Not yet tried on a Quest |
+| The space: an empty field with grid cells a decade at a time, the x, y, z axes; S, the world scaled round you from µm to km (jumps, fit, the wheel or the right stick); T, the board's history scrubbed; the board, the space bar and chat as floating panels (B: the board large; H: panels away); double-click a thing to come closer | `src/nexus/view/space.ts`, `view/index.html` | Built; driven in Chromium (software WebGL). Not yet tried on a Quest |
+| Things placed, never copied: assemblies of shared parts and assemblies, with what is changed where each is placed; mass, bounds and counts once per distinct thing (a city of 9,000,000 pieces is 7 things stored, measured in under a millisecond) | `src/nexus/assembly.ts` | Built and property-tested |
+| Nodes that make and place: shapes (box, cylinder, sphere, cone, ring, tube, extrude, lathe), a standard part by its sizes, place, row, ring and grid of, mirror, combine, variant (colour, material, finish, size, hidden; on pieces by name), point along, hole, measure, show in space | `src/nexus/blocks.ts` | Built; each with its own tests |
+| Drawing it: one instanced mesh per distinct piece, what is too small to show its pieces drawn as its box, what cannot be seen not drawn; worked out again as the view moves | `src/nexus/view/space3d.ts` | Built; the starter city draws in 1 to 5 draws |
+| The same board as a panel in the space: its canvas as the panel's picture, pressed and dragged by a ray or the mouse | `src/nexus/view/nodes-wall.ts`, `nodes.ts` (`wall`) | Built |
 | Parts in 3D: a Part block (words in, the library's real part out: 33 families drawn whole, with mass, pieces and its own check), Next size up (ISO 262), a 3D view block turned by hand on the canvas, full screen with taking apart, and the part viewer one press away | `blocks.ts` (`card.part`, `logic.next-size`, `view.3d`), `src/nexus/view/nodes3d.ts` | Built; seen in Chromium (software WebGL) |
 
 Measured on the build container by `tests/nexus/dataflow.test.ts` (not a Quest, not your machine):
@@ -68,7 +75,8 @@ Measured on the build container by `tests/nexus/dataflow.test.ts` (not a Quest, 
 
 Not built yet, and said plainly:
 - the forge's flows (`flows.ts`) still run on their own runner and are not yet steps in this one;
-- the board on the forge wall is built (below) but not yet tried in a real headset; no board-room screen yet;
+- the space is built but not yet tried in a real headset; no board-room screen yet;
+- mating (ports, a mate node, compatible parts by their geometry) and physics with the periodic table are the next two phases;
 - Ask Claude works only where the forge's relay is; on the page it says it cannot ask;
 - runs are one block at a time on the page's thread. A pool of workers is not built yet;
 - agents, bridges and triggers are not block kinds yet;

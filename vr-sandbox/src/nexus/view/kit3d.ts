@@ -131,6 +131,21 @@ function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: 
   if ('capsule' in s) return new THREE.CapsuleGeometry(s.capsule[0], s.capsule[1], 4, 12);
   return null;
 }
+/** A piece's geometry as the forge draws it: its shape, its flats, standing on its base where it grows from one, its
+ *  holes drilled; made once for every piece shaped and drilled alike (src/nexus/view/space3d.ts instances it). */
+const leafGeos = new Map<string, THREE.BufferGeometry | null>();
+export function leafGeometry(p: Part): THREE.BufferGeometry | null {
+  if (!p.shape || 'stars' in p.shape || 'field' in p.shape || 'heap' in p.shape) return null;
+  const key = JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts]); if (leafGeos.has(key)) return leafGeos.get(key)!;
+  let g = geometry(p.shape, p.mat, p.make, p.facets);
+  if (g && p.base) { const s = p.shape, h = 'cyl' in s ? s.cyl[1] : 'cone' in s ? s.cone[1] : 'capsule' in s ? s.capsule[1] : 'box' in s ? s.box[1] : 0; g = g.clone(); g.translate(0, h / 2, 0); }
+  if (g && p.cuts?.length) g = drill(g, p.cuts, key);
+  leafGeos.set(key, g); return g;
+}
+/** A piece's material as the forge draws it, with a colour, material or finish placed over it. */
+export function leafMaterial(p: Part, over: { color?: number; mat?: string; finish?: string } = {}): THREE.MeshStandardMaterial {
+  return matFor(over.color ?? p.color ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape));
+}
 /** A galaxy's stars: on logarithmic spiral arms r = a e^(θ tan φ) (a bar across the middle if it is barred), a bulge of
  *  old stars, the disc thin; drawn as points, each going round at a flat rotation curve's speed (ω = v / r). */
 function galaxy(g: Extract<Shape, { stars: unknown }>['stars']): { obj: THREE.Points; turn: (dt: number) => void } {

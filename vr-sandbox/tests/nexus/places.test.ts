@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { FALLS, G, readPlace, terminal, wavePeriod } from '../../src/nexus/places';
 import { readPlain } from '../../src/nexus/directive';
-import { dartScore } from '../../src/nexus/view/place3d';
+import { dartScore } from '../../src/nexus/games';
 
 describe('a place read from words', () => {
   it('takes you where the blind testers asked to go', () => {
