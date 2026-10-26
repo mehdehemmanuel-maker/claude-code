@@ -17,6 +17,9 @@ import { DESIGNED, component, componentFromParams, exampleOf } from './component
 import { FAMILIES } from './families';
 import { DENSITY } from './mass';
 import * as THREE from 'three';
+import { bodiesOf, posedAt, simulate, type SimJoint, type SimOut } from './sim';
+import { Servo } from './motion';
+import type { Jolt } from './realize';
 import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
 import { massOf } from './mass';
 import type { Part } from './kits';
@@ -613,6 +616,30 @@ export function heightOn(g: { w: number; d: number; n: number; h: number[] }, x:
   return (at(ix, iz) * (1 - ux) + at(ix + 1, iz) * ux) * (1 - uz) + (at(ix, iz + 1) * (1 - ux) + at(ix + 1, iz + 1) * ux) * uz;
 }
 /** Floor plans by name: each a typical home of its kind (room sizes typical of new homes, an estimate). */
+/** The physics engine (Jolt, as WebAssembly), loaded the first time it is wanted. */
+let joltKept: Promise<Jolt> | null = null;
+const jolt = (): Promise<Jolt> => (joltKept ??= import('jolt-physics/wasm-compat').then((m) => m.default() as unknown as Promise<Jolt>));
+/** What Let it go worked out, by its inputs (the last 24): the clock only samples it. */
+const SIMS = new Map<string, SimOut>();
+/** Angles at times: "0 s 0°, 2 s 90°" (seconds, degrees). */
+export function keysOf(text: string): { t: number; a: number }[] {
+  const k = text.split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const m = /^([\d.]+)\s*s?\s+(-?[\d.]+)\s*°?$/.exec(x); if (!m) throw new Error(`"${x}" is not "seconds angle" (as "2 s 90°")`); return { t: Number(m[1]), a: Number(m[2]) }; });
+  if (!k.length) throw new Error('give it at least one angle'); return k.sort((p, q) => p.t - q.t);
+}
+/** The angle at a time: from the first, driven toward the next key's angle, as a servo (motion.ts) drives a
+ *  joint: stepped at 240 a second from 0, so a time is always the same angle. */
+export function angleAt(keys: { t: number; a: number }[], t: number, speed: number, accel: number): number {
+  const sv = new Servo(keys[0]!.a, Math.max(1e-6, speed), Math.max(1e-6, accel)), dt = 1 / 240, end = Math.min(t, keys[keys.length - 1]!.t + 3600);
+  // heading at each moment for the next key still to come (so it is there by its time, as far as its speed lets it), then the last
+  let k = 0; for (let x = 0; x < end - 1e-9; x += dt) { while (k < keys.length - 1 && keys[k]!.t <= x) k++; sv.step(keys[k]!.a, Math.min(dt, end - x)); }
+  return sv.pos;
+}
+/** A thing turned by an angle about an axis through a point. */
+function turnedAbout(t: Part | Assembly, axis: string, p: [number, number, number], ang: number): Assembly {
+  const ax = new THREE.Vector3(axis === 'x' ? 1 : 0, axis === 'y' ? 1 : 0, axis === 'z' ? 1 : 0), q = new THREE.Quaternion().setFromAxisAngle(ax, ang);
+  const at = new THREE.Vector3(...p).sub(new THREE.Vector3(...p).applyQuaternion(q)), e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+  return { name: t.name, items: [place(t, [at.x, at.y, at.z], [e.x, e.y, e.z])] };
+}
 /** What Follow a path keeps of each street as it goes (its cars' places, speeds and last steps), by its inputs: the last
  *  64 streets. */
 type Marks = Map<number, { s: number[]; vel: number[]; moved: number[] }> & { sigs: Map<string, number>; cycle?: { from: number; len: number } };
@@ -880,21 +907,23 @@ const BUILT_THINGS: BlockDef[] = [
     tests: [{ inputs: { thing: { name: 'row', items: [{ of: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [0, 0, 0], rot: [0, 0, 0], s: 1 }, { of: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [5, 0, 0], rot: [0, 0, 0], s: 1 }] }, near: { name: 'road', items: [{ of: { name: 'r', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, at: [5, 0, 0], rot: [0, 0, 0], s: 1 }] } }, outputs: { removed: 1 } }] }),
   def({ id: 'clash', sink: true, name: 'Clashes', kind: 'critic', ability: 'check', domains: ['mechanical', 'structural', 'everyday'], says: 'Which of the things a thing places run into one another (a car parked into a house, a pipe through a beam): their boxes, as far down as asked, overlapping by more than a touch. Says each pair and how deep the worst goes',
     settings: [{ key: 'depth', label: 'How many levels down it looks', type: 'number', default: 1 }, { key: 'touch', label: 'Overlap that is only touching (m)', type: 'number', default: 0.005 }],
-    ports: { inputs: [thing()], outputs: [P('clashes', 'integer'), P('pairs', 'list<text>'), L('worst', 0, 'deepest overlap')] },
+    ports: { inputs: [thing(), P('with', 'assembly', { optional: true, label: 'only against this (optional)' })], outputs: [P('clashes', 'integer'), P('pairs', 'list<text>'), L('worst', 0, 'deepest overlap')] },
     run: (i, c) => {
-      const t = asThing(i.thing), depth = Math.max(0, Math.round(Number(c.set.depth ?? 1))), tol = Number(c.set.touch ?? 0.005), boxes: { name: string; b: THREE.Box3 }[] = [];
+      const t = asThing(i.thing), depth = Math.max(0, Math.round(Number(c.set.depth ?? 1))), tol = Number(c.set.touch ?? 0.005), boxes: { name: string; b: THREE.Box3; side: number }[] = []; let side = 0;
       const walk = (x: Part | Assembly, m: THREE.Matrix4, d: number, name: string) => {
         if (isAssembly(x) && d > 0) { x.items.forEach((it, k) => walk(it.of, m.clone().multiply(matrixOf(it)), d - 1, `${it.of.name} ${k + 1}`)); return; }
-        const b = boundsOfAll(x); if (!b.isEmpty()) boxes.push({ name, b: b.clone().applyMatrix4(m) });
+        const b = boundsOfAll(x); if (!b.isEmpty()) boxes.push({ name, b: b.clone().applyMatrix4(m), side });
       };
       if (isAssembly(t)) t.items.forEach((it, k) => walk(it.of, matrixOf(it), depth - 1, `${it.of.name} ${k + 1}`)); else walk(t, new THREE.Matrix4(), 0, t.name);
+      // against another thing: only pairs one from each
+      const other = i.with ? asThing(i.with) : null; if (other) { side = 1; if (isAssembly(other)) other.items.forEach((it, k) => walk(it.of, matrixOf(it), depth - 1, `${it.of.name} ${k + 1}`)); else walk(other, new THREE.Matrix4(), 0, other.name); }
       if (boxes.length > 20000) throw new Error(`${boxes.length} things to check: look fewer levels down`);
       // sweep along x: only boxes whose x spans meet are compared
       boxes.sort((a, b) => a.b.min.x - b.b.min.x);
       const pairs: string[] = []; let n = 0, worst = 0;
       for (let a = 0; a < boxes.length; a++) for (let b = a + 1; b < boxes.length && boxes[b]!.b.min.x < boxes[a]!.b.max.x - tol; b++) {
         const A = boxes[a]!.b, B = boxes[b]!.b, o = Math.min(A.max.x - B.min.x, B.max.x - A.min.x, A.max.y - B.min.y, B.max.y - A.min.y, A.max.z - B.min.z, B.max.z - A.min.z);
-        if (o > tol) { n++; worst = Math.max(worst, o); if (pairs.length < 50) pairs.push(`${boxes[a]!.name} into ${boxes[b]!.name} by ${(o * 1000).toFixed(0)} mm`); }
+        if (o > tol && (!other || boxes[a]!.side !== boxes[b]!.side)) { n++; worst = Math.max(worst, o); if (pairs.length < 50) pairs.push(`${boxes[a]!.name} into ${boxes[b]!.name} by ${(o * 1000).toFixed(0)} mm`); }
       }
       return { clashes: n, pairs, worst };
     },
@@ -919,6 +948,50 @@ const BUILT_THINGS: BlockDef[] = [
       return { world: { name: `${vs.map((v) => v.name).join(' or ')}, for ever`, items: [place(vs[cellPick(0, 0, 0, seed, vs.length)]!)], tiled: { step, variants: vs, seed } } };
     },
     tests: [{ set: { seed: 1 }, inputs: { things: [{ name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }], sx: 2 }, outputs: { world: { tiled: { step: [2, 0, 0], seed: 1 } } } }] }),
+  // ---- physics and motion: what is made, let go; joints; what moves and the room it needs ---------------------------
+  def({ id: 'letgo', name: 'Let it go', kind: 'solver', ability: 'simulate', domains: ['mechanical', 'structural', 'everyday'], says: 'Real rigid-body physics (Jolt) over what is made: each thing it places a body of all its pieces, its mass from its materials, falling, landing, sliding, tipping and coming to rest on the floor, on what it is put on (fixed) and on each other, with each material\'s friction and bounce; held by hinges and slides where they are wired in. Worked out once; the clock plays it back',
+    settings: [{ key: 'seconds', label: 'For how long at most (s)', type: 'number', default: 8 }],
+    ports: { inputs: [thing('things', 'what is let go'), P('on', 'assembly', { optional: true, label: 'what it stands on (fixed)' }), P('joints', 'any', { many: true, optional: true, label: 'hinges and slides' }), P('push', 'any', { optional: true, label: 'a push' }), N('t', 's', { default: 0, optional: true, label: 'time' })], outputs: [thing('moved', 'where it is at the time'), P('ends', 'table', { label: 'where each ended' }), N('rested', 's', { label: 'all at rest by (or how long it ran, still moving)' }), P('moving', 'boolean', { label: 'still moving when it stopped' }), P('joint', 'table', { label: 'each joint over time' })] },
+    run: async (i, c) => {
+      const J = await jolt(), { bodies, boxes, placed } = bodiesOf(asThing(i.things), i.on ? asThing(i.on) : undefined);
+      if (!bodies.length) throw new Error('nothing to let go');
+      const joints = structuredClone((Array.isArray(i.joints) ? i.joints : i.joints ? [i.joints] : []).flat()) as SimJoint[], push = i.push as { name: string; force: [number, number, number]; seconds: number } | undefined;
+      // a joint on the world is held by a small fixed anchor where it is (the two do not collide: what holds them is the joint)
+      for (const j of joints) if (typeof j.b !== 'string' && j.b.fixed < 0) { boxes.push({ at: j.at, w: 0.01, h: 0.01, d: 0.01 }); j.b = { fixed: boxes.length - 1 }; }
+      const names = new Set(bodies.map((b) => b.name));
+      for (const j of joints) if (!names.has(j.a)) throw new Error(`a ${j.kind} holds "${j.a}", which is not one of ${[...names].join(', ')}`);
+      if (push && !names.has(push.name)) throw new Error(`the push is on "${push.name}", which is not one of ${[...names].join(', ')}`);
+      const key = JSON.stringify([bodies, boxes, joints, push ?? null, Number(c.set.seconds ?? 8)]);
+      let out = SIMS.get(key); if (!out) { out = simulate(J, bodies, boxes, { seconds: Math.min(60, Number(c.set.seconds ?? 8)), floor: 0, joints, ...(push ? { push } : {}) }); SIMS.set(key, out); if (SIMS.size > 24) SIMS.delete(SIMS.keys().next().value!); }
+      const t = Math.min(Number(i.t ?? 0), out.seconds);
+      return { moved: posedAt(out, bodies, placed, t), ends: out.ends.map((e) => ({ name: e.name, moved: e.moved, dropped: e.dropped, turned: e.turned, resting: e.resting })), rested: out.restedAt ?? out.seconds, moving: out.restedAt === null, joint: out.joints.map((j) => ({ name: j.name, kind: j.kind, end: j.end, min: j.min, max: j.max })) };
+    } }),
+  def({ id: 'hinge', name: 'Hinge', kind: 'logic', ability: 'connect', domains: ['mechanical', 'structural', 'everyday'], says: 'A revolute joint for Let it go: one thing turning on another (or on the world, fixed) about an axis through a point, between limits, with friction. A door on its frame, a lid, a pendulum, a wheel on its axle',
+    settings: [{ key: 'a', label: 'What turns (its name)', type: 'text', default: 'door' }, { key: 'b', label: 'On what (its name; blank: the world)', type: 'text', default: '' }, { key: 'axis', label: 'Axis', type: 'choice', default: 'y', choices: ['x', 'y', 'z'] }],
+    ports: { inputs: [L('x', 0), L('y', 0), L('z', 0), N('min', 'deg', { optional: true, label: 'turns no less than' }), N('max', 'deg', { optional: true, label: 'turns no more than' }), N('friction', 'N*m', { default: 0, optional: true })], outputs: [P('joint', 'any')] },
+    run: (i, c) => { const ax = String(c.set.axis ?? 'y'), lim = i.min !== undefined && i.max !== undefined ? { limits: [Number(i.min), Number(i.max)].map((d) => (d * Math.PI) / 180) as [number, number] } : {}; return { joint: { kind: 'hinge', name: `hinge of ${String(c.set.a)}`, a: String(c.set.a), b: String(c.set.b || '') ? String(c.set.b) : { fixed: -1 }, at: [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)], axis: [ax === 'x' ? 1 : 0, ax === 'y' ? 1 : 0, ax === 'z' ? 1 : 0], friction: Number(i.friction ?? 0), ...lim } }; },
+    tests: [{ set: { a: 'lid', axis: 'x' }, inputs: { y: 1 }, outputs: { joint: { kind: 'hinge', a: 'lid', at: [0, 1, 0], axis: [1, 0, 0] } } }] }),
+  def({ id: 'push', name: 'Push', kind: 'logic', ability: 'act', domains: ['mechanical', 'everyday'], says: 'A force on one thing Let it go lets go, for so long from the start: a shove, a kick, a gust',
+    settings: [{ key: 'name', label: 'On what (its name)', type: 'text', default: 'ball' }],
+    ports: { inputs: [N('fx', 'N', { default: 0, optional: true }), N('fy', 'N', { default: 0, optional: true }), N('fz', 'N', { default: 0, optional: true }), N('seconds', 's', { default: 0.1, optional: true, label: 'for' })], outputs: [P('push', 'any')] },
+    run: (i, c) => ({ push: { name: String(c.set.name), force: [Number(i.fx ?? 0), Number(i.fy ?? 0), Number(i.fz ?? 0)], seconds: Number(i.seconds ?? 0.1) } }),
+    tests: [{ set: { name: 'b' }, inputs: { fx: 10 }, outputs: { push: { name: 'b', force: [10, 0, 0], seconds: 0.1 } } }] }),
+  def({ id: 'turn', name: 'Turn', kind: 'logic', ability: 'transform', domains: ['mechanical', 'structural', 'everyday'], says: 'A thing turned about an axis through a point to the angles given at their times ("0 s 0°, 2 s 90°, 6 s 90°, 8 s 0°"), driven as a servo drives a joint: it speeds up and slows down at its acceleration, no faster than its speed, and stops on each angle (a door opening and closing, a lid, an arm). Kinematic: what it hits does not stop it (Sweep and Clashes say what it hits)',
+    settings: [{ key: 'axis', label: 'Axis', type: 'choice', default: 'y', choices: ['x', 'y', 'z'] }, { key: 'keys', label: 'Angles at times', type: 'text', default: '0 s 0°, 2 s 90°, 6 s 90°, 8 s 0°' }],
+    ports: { inputs: [thing(), L('x', 0, 'pivot x'), L('y', 0, 'pivot y'), L('z', 0, 'pivot z'), N('speed', 'deg/s', { default: 90, optional: true, label: 'turns no faster than' }), N('accel', 'deg/s^2', { default: 180, optional: true, label: 'speeds up at most' }), N('t', 's', { default: 0, optional: true, label: 'time' })], outputs: [thing('turned', 'turned'), N('angle', 'deg')] },
+    run: (i, c) => {
+      const keys = keysOf(String(c.set.keys)), a = angleAt(keys, Number(i.t ?? 0), Number(i.speed ?? 90), Number(i.accel ?? 180));
+      return { turned: turnedAbout(asThing(i.thing), String(c.set.axis ?? 'y'), [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)], (a * Math.PI) / 180), angle: a };
+    },
+    tests: [{ set: { keys: '0 s 0°, 1 s 90°' }, inputs: { thing: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, speed: 1000, accel: 1e6, t: 30 }, outputs: { angle: 90 }, rel: 1e-6 }] }),
+  def({ id: 'sweep', name: 'Sweep', kind: 'critic', ability: 'check', domains: ['mechanical', 'structural', 'everyday'], says: 'The room a thing needs as it turns from one angle to another about a pivot: it, at so many angles between, as one thing (its envelope), for Clashes to check against what is round it (a door\'s swing against the bed, an arm\'s reach against the wall)',
+    settings: [{ key: 'axis', label: 'Axis', type: 'choice', default: 'y', choices: ['x', 'y', 'z'] }],
+    ports: { inputs: [thing(), L('x', 0, 'pivot x'), L('y', 0, 'pivot y'), L('z', 0, 'pivot z'), N('from', 'deg', { default: 0, optional: true }), N('to', 'deg', { default: 90, optional: true }), N('n', undefined, { default: 12, optional: true, label: 'how many between' })], outputs: [thing('swept', 'the room it needs')] },
+    run: (i, c) => {
+      const t = asThing(i.thing), n = Math.max(2, Math.min(90, Math.round(Number(i.n ?? 12)))), f = Number(i.from ?? 0), to = Number(i.to ?? 90), piv: [number, number, number] = [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)];
+      return { swept: { name: `${t.name}, swept`, items: Array.from({ length: n }, (_, k) => turnedAbout(t, String(c.set.axis ?? 'y'), piv, ((f + ((to - f) * k) / (n - 1)) * Math.PI) / 180).items[0]!) } };
+    },
+    tests: [{ inputs: { thing: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, n: 3 }, outputs: { swept: { name: 'b, swept' } } }] }),
   // ---- time and motion: what changes as the clock runs --------------------------------------------------------------
   def({ id: 'time', name: 'Clock', kind: 'input', ability: 'measure', domains: ['everyday', 'vehicles', 'mechanical'], says: 'The time the board is at, in seconds: the time bar\'s. Everything wired from it runs again as time goes on, and nothing else does',
     ports: { inputs: [], outputs: [N('t', 's', { label: 'time' })] }, clock: true,

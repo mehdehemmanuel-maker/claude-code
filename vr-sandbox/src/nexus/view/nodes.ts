@@ -752,6 +752,52 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); b.nodes.measure!.label = 'Measure (one cell)'; wire(b, 'world', 'world', 'measure', 'thing');
     return b;
   }],
+  ['Physics: a steel ball let go into a tower of wooden blocks', () => {
+    // 24 oak blocks 100 mm a side, two by two and six high; a 120 mm steel ball shoved at the tower for 0.1 s with 300 N.
+    // Let it go runs Jolt once (each block a body, its mass from oak's density, friction and bounce from the materials
+    // table); press ▶ under the 3D view to watch it fall
+    const b = emptyBoard('A ball let go into a tower');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'block', mat: 'oak', color: '#c8a26b', finish: 'grain', w: 0.1, h: 0.1, d: 0.1 }, 'block');
+    placeBlock(b, 'array.grid', 0, 0, { nx: 2, nz: 2, ny: 6, sx: 0.1, sy: 0.1, sz: 0.1 }, 'tower'); b.nodes.tower!.label = 'Tower, 2 × 2 × 6'; wire(b, 'block', 'part', 'tower', 'thing');
+    placeBlock(b, 'place', 0, 0, { y: 0.05 }, 'towerAt'); wire(b, 'tower', 'grid', 'towerAt', 'thing');
+    placeBlock(b, 'shape.sphere', 0, 0, { name: 'ball', mat: 'steel-low', color: '#b0bec5', finish: 'chrome', r: 0.06 }, 'ball');
+    placeBlock(b, 'place', 0, 0, { x: -0.8, y: 0.06 }, 'ballAt'); wire(b, 'ball', 'part', 'ballAt', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'scene' }, 'all'); wire(b, 'towerAt', 'placed', 'all', 'things'); wire(b, 'ballAt', 'placed', 'all', 'things');
+    placeBlock(b, 'push', 0, 0, { name: 'ball', fx: 300, seconds: 0.1 }, 'shove'); b.nodes.shove!.label = 'Shove the ball';
+    placeBlock(b, 'time', 0, 0, {}, 'clock');
+    placeBlock(b, 'letgo', 0, 0, { seconds: 8 }, 'go'); wire(b, 'all', 'assembly', 'go', 'things'); wire(b, 'shove', 'push', 'go', 'push'); wire(b, 'clock', 't', 'go', 't');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'go', 'moved', 'show', 'thing');
+    return b;
+  }],
+  ['Motion: a door swinging, and what it hits', () => {
+    // a door mated into its wall, turned on its hinge edge (0 to 90° and back, at most 90°/s, 180°/s², about how a door is
+    // swung by hand: an estimate); its swing swept, and checked against a bed put too close
+    const b = emptyBoard('A door swinging, and what it hits');
+    placeBlock(b, 'wall', 0, 0, { opening: 'door', name: 'wall', mat: 'brick', color: '#eceff1', finish: 'paint', L: 4, h: 2.4 }, 'wall');
+    placeBlock(b, 'seed.door', 0, 0, {}, 'door');
+    placeBlock(b, 'mate', 0, 0, { frame: 'fit', onto: 'opening', how: 'into' }, 'mate'); wire(b, 'door', 'door', 'mate', 'thing'); wire(b, 'wall', 'wall', 'mate', 'on');
+    placeBlock(b, 'time', 0, 0, {}, 'clock');
+    placeBlock(b, 'turn', 0, 0, { axis: 'y', keys: '0 s 0°, 2 s 90°, 5 s 90°, 7 s 0°', x: -0.43, y: 0, z: 0, speed: 90, accel: 180 }, 'swing'); b.nodes.swing!.label = 'Turn it on its hinge';
+    wire(b, 'mate', 'placed', 'swing', 'thing'); wire(b, 'clock', 't', 'swing', 't');
+    placeBlock(b, 'seed.bed', 0, 0, { size: 'queen' }, 'bed');
+    placeBlock(b, 'place', 0, 0, { x: 0.3, z: -1.2, ry: Math.PI / 2 }, 'bedAt'); b.nodes.bedAt!.label = 'Bed, too close'; wire(b, 'bed', 'bed', 'bedAt', 'thing');
+    placeBlock(b, 'sweep', 0, 0, { axis: 'y', x: -0.43, from: 0, to: 90, n: 12 }, 'sweep'); b.nodes.sweep!.label = 'The room its swing needs'; wire(b, 'mate', 'placed', 'sweep', 'thing');
+    placeBlock(b, 'clash', 0, 0, { depth: 1 }, 'clash'); b.nodes.clash!.label = 'Does the swing hit the bed?'; wire(b, 'sweep', 'swept', 'clash', 'thing'); wire(b, 'bedAt', 'placed', 'clash', 'with');
+    placeBlock(b, 'combine', 0, 0, { name: 'room corner' }, 'all'); wire(b, 'wall', 'wall', 'all', 'things'); wire(b, 'swing', 'turned', 'all', 'things'); wire(b, 'bedAt', 'placed', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    return b;
+  }],
+  ['Physics: a pendulum on a hinge', () => {
+    // an oak plank 1 m long hung from a hinge 2 m up, let go from 60°: it swings, and the hinge's angle is kept over time
+    const b = emptyBoard('A pendulum on a hinge');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'plank', mat: 'oak', color: '#a1887f', w: 0.05, h: 1, d: 0.05 }, 'plank');
+    placeBlock(b, 'place', 0, 0, { x: 0.433, y: 1.75, rz: Math.PI / 3 }, 'plankAt'); b.nodes.plankAt!.label = 'Plank, raised 60°'; wire(b, 'plank', 'part', 'plankAt', 'thing');
+    placeBlock(b, 'hinge', 0, 0, { a: 'plank', axis: 'z', x: 0, y: 2, z: 0 }, 'hinge'); b.nodes.hinge!.label = 'Hinge, 2 m up';
+    placeBlock(b, 'time', 0, 0, {}, 'clock');
+    placeBlock(b, 'letgo', 0, 0, { seconds: 20 }, 'go'); wire(b, 'plankAt', 'placed', 'go', 'things'); wire(b, 'hinge', 'joint', 'go', 'joints'); wire(b, 'clock', 't', 'go', 't');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'go', 'moved', 'show', 'thing');
+    return b;
+  }],
   ['Mating: a door set in its wall by their frames', () => {
     // the wall's opening is a frame; the door's middle is a frame; Mate puts the one on the other, facing as it faces.
     // Change the wall's length or the opening's offset and the door follows
@@ -923,7 +969,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

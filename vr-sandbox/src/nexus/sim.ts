@@ -14,6 +14,11 @@
 
 import type { Jolt } from './realize';
 import { eulerOf, matOf, type Axis, type M3, type V3 } from './generate';
+import * as THREE from 'three';
+import { boundsOfAll, flatten, isAssembly, massOfAll, matrixOf, place, type Assembly } from './assembly';
+import type { Part } from './kits';
+import { MATERIALS, type Material } from '../data/materials';
+
 
 export interface SimPart { name: string; kind: string; axis: Axis; dims: Record<string, number>; local: { w: number; h: number; d: number }; at: V3; turn: V3 }
 export interface SimThing { name: string; parts: SimPart[]; mass: number; friction: number; restitution: number }
@@ -227,4 +232,74 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
   const joints = held.map((h) => ({ ...h.out, end: valueOf(h), ...(h.d ? { drive: h.d } : {}) }));
   J.destroy(jolt);
   return { ends, parts, seconds: t, restedAt, track, hulls, joints };
+}
+
+// ---- what the board makes, let go -----------------------------------------------------------------------------------------
+// (src/nexus/blocks.ts's Let go: each thing an assembly places at its top is a body of all its pieces, each piece its own
+// shape where it stands (a box, a cylinder, a sphere; anything else the box round it), what it weighs its mass; what it is
+// put on is fixed (its pieces as boxes); the floor at y = 0. The motion is the track sampled 30 times a second, so the
+// clock plays it back.)
+
+/** A piece's material in the friction table (data/materials.ts) by what its id says it is; else typical values (an estimate). */
+const SURFACE: [RegExp, string][] = [[/^stainless/, 'stainless.304'], [/^cast-iron/, 'cast-iron.gray-30'], [/^steel|iron/, 'steel.a36'], [/^al-|alumin/, 'aluminum.6061-t6'], [/copper/, 'copper.c110'], [/brass|bronze/, 'brass.c360'], [/titan|^ti/, 'titanium.ti6al4v'], [/mdf/, 'wood.mdf'], [/wood|oak|pine|birch|ply|walnut|maple/, 'wood.birch-plywood'], [/nylon|pa6/, 'polymer.nylon-microcarbon'], [/pmma|acryl|^pc$|^pp$|pvc|abs|pla|petg|^pe|polymer/, 'polymer.pmma'], [/rubber|tpu|tyre/, 'rubber.natural'], [/glass/, 'glass.soda-lime'], [/concrete|asphalt|stone|granite|marble/, 'concrete.c30'], [/brick|tile|ceramic|porcelain/, 'ceramic.clay-brick'], [/foam/, 'foam.eva'], [/cork/, 'cork.agglomerated'], [/soil|sand|earth/, 'ground.soil'], [/cfrp|carbon/, 'composite.cfrp'], [/gfrp|fibreglass|fiberglass/, 'composite.gfrp']];
+const byMat = new Map(MATERIALS.map((m) => [m.id, m]));
+export function surfaceOf(mat: string | undefined): { friction: number; restitution: number; from: string } {
+  const id = SURFACE.find(([re]) => re.test(mat ?? ''))?.[1], m: Material | undefined = id ? byMat.get(id) : undefined;
+  return m ? { friction: m.friction, restitution: m.restitution, from: m.id } : { friction: 0.5, restitution: 0.3, from: 'typical (an estimate)' };
+}
+/** One piece as a part of a body, where it stands in the world. */
+function simPart(leaf: Part, m: THREE.Matrix4, name: string): SimPart {
+  const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); m.decompose(pos, q, sc);
+  const b = boundsOfAll(leaf), c = b.getCenter(new THREE.Vector3()).applyMatrix4(m), e = new THREE.Euler().setFromQuaternion(q, 'XYZ'), turn: V3 = [e.x, e.y, e.z];
+  const s = leaf.shape as Record<string, unknown> | undefined, ax = Math.abs(sc.x), ay = Math.abs(sc.y), az = Math.abs(sc.z);
+  if (s && 'box' in s) { const [w, h, d] = s.box as number[]; return { name, kind: 'box', axis: 'y', dims: {}, local: { w: w! * ax, h: h! * ay, d: d! * az }, at: [c.x, c.y, c.z], turn }; }
+  if (s && 'cyl' in s) { const [r, h, r2] = s.cyl as number[]; const D = 2 * Math.max(r!, r2 ?? r!) * Math.max(ax, az); return { name, kind: 'cylinder', axis: 'y', dims: { D, h: h! * ay }, local: { w: D, h: h! * ay, d: D }, at: [c.x, c.y, c.z], turn }; }
+  if (s && 'sphere' in s) { const D = 2 * (s.sphere as number) * Math.max(ax, ay, az); return { name, kind: 'sphere', axis: 'y', dims: { D }, local: { w: D, h: D, d: D }, at: [c.x, c.y, c.z], turn }; }
+  const z = b.getSize(new THREE.Vector3()); return { name, kind: 'box', axis: 'y', dims: {}, local: { w: Math.max(z.x * ax, 1e-4), h: Math.max(z.y * ay, 1e-4), d: Math.max(z.z * az, 1e-4) }, at: [c.x, c.y, c.z], turn };
+}
+/** The bodies an assembly lets go (each thing it places at its top, named by what it is: a second of a name gets " 2"),
+ *  and the boxes of what is fixed. */
+export function bodiesOf(things: Part | Assembly, fixed?: Part | Assembly): { bodies: SimThing[]; boxes: SimBox[]; placed: { of: Part | Assembly; m: THREE.Matrix4 }[] } {
+  // the bodies: down through what only lays things out (a Place's one thing; a row, a grid or a ring of one thing; the
+  // things let go themselves), to the first thing made of different pieces (a car, a block): that is one body
+  const items: { of: Part | Assembly; m: THREE.Matrix4 }[] = [];
+  const into = (of: Part | Assembly, m: THREE.Matrix4, top: boolean) => {
+    if (isAssembly(of) && of.items.length && (top || of.items.length === 1 || of.items.every((x) => x.of === of.items[0]!.of))) { for (const x of of.items) into(x.of, m.clone().multiply(matrixOf(x)), false); return; }
+    items.push({ of, m });
+  };
+  into(things, new THREE.Matrix4(), true);
+  const seen = new Map<string, number>(), bodies: SimThing[] = [], placed: { of: Part | Assembly; m: THREE.Matrix4 }[] = [];
+  let pieces = 0;
+  for (const it of items) {
+    const n = (seen.get(it.of.name) ?? 0) + 1; seen.set(it.of.name, n); const name = n > 1 ? `${it.of.name} ${n}` : it.of.name;
+    const m = it.m, parts: SimPart[] = []; let fr = Infinity, re = 0;
+    flatten(it.of, (f) => { if (pieces++ > 4000) return false; const sp = simPart(f.leaf, m.clone().multiply(f.m), `${name}/${parts.length}`); parts.push(sp); const su = surfaceOf(f.over.mat ?? f.leaf.mat); fr = Math.min(fr, su.friction); re = Math.max(re, su.restitution); });
+    if (!parts.length) continue;
+    const sc = new THREE.Vector3().setFromMatrixScale(m);
+    bodies.push({ name, parts, mass: Math.max(1e-3, massOfAll(it.of) * Math.abs(sc.x * sc.y * sc.z)), friction: Number.isFinite(fr) ? fr : 0.5, restitution: re }); placed.push({ of: it.of, m });
+    if (bodies.length >= 400) break;
+  }
+  const boxes: SimBox[] = [];
+  if (fixed) flatten(fixed, (f) => { const b = boundsOfAll(f.leaf).clone().applyMatrix4(f.m); if (b.isEmpty()) return; const c = b.getCenter(new THREE.Vector3()), z = b.getSize(new THREE.Vector3()); boxes.push({ at: [c.x, c.y, c.z], w: Math.max(z.x, 1e-3), h: Math.max(z.y, 1e-3), d: Math.max(z.z, 1e-3) }); return boxes.length < 2000; });
+  return { bodies, boxes, placed };
+}
+/** Where each body is at a time, as an assembly: each thing placed where the track has it (between two samples, between
+ *  their places and turnings). */
+export function posedAt(out: SimOut, bodies: SimThing[], placed: { of: Part | Assembly; m: THREE.Matrix4 }[], t: number): Assembly {
+  const fr = out.track.frames; if (!fr.length) return { name: 'let go', items: placed.map((p) => mPlace(p.of, p.m)) };
+  let k = fr.findIndex((f) => f.t > t); if (k < 0) k = fr.length - 1;
+  const a = fr[Math.max(0, k - 1)]!, b = fr[k]!, u = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 1, f0 = fr[0]!;
+  const items: Assembly['items'] = []; let at = 0;
+  bodies.forEach((body, i) => {
+    const pa = a.poses[at]!, pb = b.poses[at]!, p0 = f0.poses[at]!; at += body.parts.length;
+    const pos = new THREE.Vector3(...pa.at).lerp(new THREE.Vector3(...pb.at), u), q = new THREE.Quaternion(...pa.q).slerp(new THREE.Quaternion(...pb.q), u);
+    // the body moved from where its first piece began to where it is: that move, on the whole thing
+    const start = new THREE.Matrix4().compose(new THREE.Vector3(...p0.at), new THREE.Quaternion(...p0.q), new THREE.Vector3(1, 1, 1)), now = new THREE.Matrix4().compose(pos, q, new THREE.Vector3(1, 1, 1));
+    items.push(mPlace(placed[i]!.of, now.multiply(start.invert()).multiply(placed[i]!.m)));
+  });
+  return { name: 'let go', items };
+}
+function mPlace(of: Part | Assembly, m: THREE.Matrix4): Assembly['items'][number] {
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(); m.decompose(p, q, s); const e = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+  return place(of, [p.x, p.y, p.z], [e.x, e.y, e.z], s.x);
 }

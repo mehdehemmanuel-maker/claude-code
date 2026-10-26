@@ -41,6 +41,27 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-26, then: motion and physics as nodes** (the Seed document's 3.5 to 3.7: joints, drivers, kinematic and
+dynamic solvers, swept volumes). The Jolt rigid-body engine was already here (`sim.ts`, behind the old room's words);
+now the board reaches it:
+- **Let it go** (dynamic): what a thing places, as bodies (down through what only lays things out: a Place, a row, a
+  grid; a thing of different pieces, a car, is one body), each piece its own shape, its mass from its materials, its
+  friction and bounce from the materials table (`data/materials.ts`) by what it is made of (else said to be typical);
+  what it stands on fixed; the floor. Worked out once per set of inputs; the clock plays the 30-a-second track back
+  (scrubbing is about 1 ms). Says when it all came to rest, or that it was still moving.
+- **Hinge**, **Push**: a revolute joint (on another thing or on the world), its limits and friction; a force for so long.
+- **Turn** (kinematic): a thing turned about a pivot to angles at times, driven as a servo drives a joint (`motion.ts`:
+  no faster than its speed, speeding up and slowing at its acceleration, at each angle by its time).
+- **Sweep**: the room a turn needs, as one thing; **Clashes** gained "with", so a door's swing is checked against the bed
+  and not against itself.
+Checked against the laws, not against last time: a 1 m rod hinged at its end, let go from 60°, swings with the period
+2π √(2L / 3g) × 1.073 (the elliptic factor for 60°) gives, within 3 % (`tests/nexus/physics-nodes.test.ts`); a tower
+left alone stands; shoved by a 120 mm steel ball at 300 N for 0.1 s it falls and rests. Starter boards: a ball into a
+tower, a door's swing and what it hits, a pendulum.
+Next in this line: wheels that roll (hinges on a car let go, driven by a motor: `sim.ts` has DC motors), slides,
+motion clips saved as seeds and played at offsets on many instances (the document's shared clips), swept volumes of
+any motion (not only a turn), and loads from motion feeding stress (the document's motion → analysis).
+
 **2026-10-26, after: breaking the renderer, and the tricks that fixed each break.** The user: "try to break rendering
 … render tons of stuff, make this space infinite in all axes and scale and time … find the cause and find a trick." A
 harness drove the renderer's choosing of what to draw (exactly timed without a GPU) with fields of neighbourhoods up to
