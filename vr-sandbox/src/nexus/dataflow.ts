@@ -13,6 +13,9 @@
 import { block, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
 import { fromSI, sameDim, toSI } from '../ganglia/units';
+import type { Part } from './kits';
+import type { Assembly, Placed } from './assembly';
+const P_ = (name: string, type: Type): PortDef => ({ name, type });
 
 // ---- keys -----------------------------------------------------------------------------------------------------------
 /** FNV-1a over a string, two lanes, as base 36: a key, not a secret. */
@@ -58,7 +61,10 @@ export function groupBlock(inner: Board, meta: Partial<BlockDef> = {}): BlockDef
     for (const n of nodesOf(inner)) {
       const x = inner.nodes[n.id]!; if (x.block !== 'group.in' && x.block !== 'group.out') continue;
       const s = { ...defaultsOf(block(x.block)!), ...(x.set ?? {}) }, unit = String(s.unit ?? '');
-      const p: PortDef = { name: String(s.name), type: (String(s.type || 'any') as Type), ...(unit ? { unit } : {}), label: String(s.name) };
+      // a seed's input says what it is, what it is when not given, and what it may be picked from
+      const type = String(s.type || 'any') as Type, dv = String(s.default ?? ''), choices = String(s.choices ?? '').split('|').map((c) => c.trim()).filter(Boolean);
+      const def = dv === '' ? undefined : type === 'number' || type === 'integer' ? Number(dv) : type === 'boolean' ? dv === 'true' : dv;
+      const p: PortDef = { name: String(s.name), type, ...(unit ? { unit } : {}), label: String(s.says || s.name), ...(def !== undefined ? { default: def, optional: true } : {}), ...(choices.length ? { choices } : {}) };
       if (x.block === 'group.in') ins.push(p); else if (x.block === 'group.out') outs.push(p);
     }
     return { inputs: ins, outputs: outs };
@@ -471,3 +477,35 @@ export function makeBlock(b: Board, gid: string, meta: { id?: string; name: stri
   out.nodes[gid] = { label: meta.name, block: r.id, set: {}, x: g.x, y: g.y };
   return { board: out, block: block(r.id) ?? d, ...(r.duplicateOf ? { duplicateOf: r.duplicateOf } : {}) };
 }
+
+// ---- the spawner: one seed run for each row, each with its own sizes, choices and place ----------------------------------
+/** What every seed run by a spawner has worked out, shared: rows asking the same give the very same thing. */
+const SEEDS = new Memo(50_000);
+/** A library block run on its own with these inputs: its outputs (a seed's whole board, run where it is needed). */
+export async function runBlock(id: string, inputs: Record<string, unknown>, env: Env = {}): Promise<Outputs> {
+  const b = emptyBoard(), d = block(id); if (!d) throw new Error(`no block "${id}" in the library`);
+  placeBlock(b, id, 0, 0, inputs, 'it');
+  const e = new Engine(b, env, SEEDS); await e.run();
+  const s = e.state.get('it'); if (!s || s.status !== 'ok') throw new Error(`${d.name}: ${s?.error ?? 'did not run'}`);
+  return s.out!;
+}
+const PLACE_COLS = new Set(['x', 'y', 'z', 'rx', 'ry', 'rz', 's']);
+register({ id: 'spawn', name: 'Spawn', kind: 'generator', ability: 'generate', domains: ['everyday', 'structural', 'operations'], version: 1, by: 'built in', pure: true,
+  says: 'A seed placed once for each row of a table: each row\'s x, y, z, ry (turn about y, radians) and s place it, and every other column sets the seed\'s input of that name (a house\'s plan, a car\'s paint). Rows that ask the same are worked out once and share it',
+  settings: [{ key: 'seed', label: 'Seed (a library block\'s id)', type: 'text', default: 'seed.window' }, { key: 'out', label: 'Its output to place (blank: its first)', type: 'text', default: '' }],
+  ports: { inputs: [P_('rows', 'table')], outputs: [P_('things', 'assembly'), P_('count', 'integer'), P_('distinct', 'integer')] },
+  run: async (i, c) => {
+    const id = String(c.set.seed), d = block(id); if (!d) throw new Error(`no block "${id}" in the library`);
+    const ins = new Set(portsOf(d, defaultsOf(d)).inputs.map((p) => p.name)), outName = String(c.set.out || '') || portsOf(d, defaultsOf(d)).outputs.find((p) => p.type === 'assembly' || p.type === 'part')?.name;
+    if (!outName) throw new Error(`${d.name} gives nothing to place`);
+    const rows = (Array.isArray(i.rows) ? i.rows : []) as Record<string, unknown>[], items: Placed[] = [], made = new Map<string, Part | Assembly>();
+    for (const row of rows) {
+      const params: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(row)) { if (PLACE_COLS.has(k)) continue; if (!ins.has(k)) throw new Error(`${d.name} has no input "${k}": it takes ${[...ins].join(', ') || 'nothing'}`); params[k] = v; }
+      const key = stable(params); let thing = made.get(key);
+      if (!thing) { const out = await runBlock(id, params); thing = out[outName] as Part | Assembly; if (!thing || typeof thing !== 'object') throw new Error(`${d.name} gave no ${outName}`); made.set(key, thing); }
+      const n = (k: string, dflt = 0) => (typeof row[k] === 'number' ? (row[k] as number) : dflt);
+      items.push({ of: thing, at: [n('x'), n('y'), n('z')], rot: [n('rx'), n('ry'), n('rz')], s: n('s', 1) });
+    }
+    return { things: { name: `${rows.length} × ${d.name}`, items } as Assembly, count: rows.length, distinct: made.size };
+  } });

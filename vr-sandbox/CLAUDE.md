@@ -65,6 +65,13 @@ the task list and lose the why. So the why lives here, and every round is checke
   material values down to the element table densities and behaviours" (2026-10-26: the forge and its room deleted; the
   space, `assembly.ts` and its nodes built; mating, then physics and the periodic table, are next: the plan in
   `docs/NODE-ENGINE.md`)
+- "the point of the city is not for you to just build a city no build a car out of nodes collapse it into one node save
+  it the library as car build a window do the same build a door … a room … a toilet … the things that can change what
+  type of room so you can just plug it in to the house node and change houses layout rooms layout by simply just clicking
+  things on a node build a square foot patch of grass generate a whole terrain build a road and stop light generate a
+  whole road system, build a sink … generate house with a few nodes … make them adjustable and generate a neighbourhood
+  … a whole city" (2026-10-26, with the Seed Node System document: the boundary rule, the ten-level ladder, seeds as
+  cached stand-ins placed by pointer, variants as overlays, spawners; `seeds.ts`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -122,6 +129,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | The space, the app's front door (`view/index.html`): nothing but what is made, in x, y, z, at any scale (S: the world scaled round you, the grid's cells a decade at a time) and through time (T: the board's history), the panels floating where you reach them, on a screen or in a headset | `src/nexus/view/space.ts` |
 | What the nodes make, drawn in the space: one instanced mesh per distinct piece, what is too small to show its pieces drawn as its box | `src/nexus/view/space3d.ts` |
 | Things placed, never copied: a part or an assembly placed (at, turned, scaled, changed there), shared by every place; mass, bounds and counts once per distinct thing; rows, rings, grids, mirrors | `src/nexus/assembly.ts` |
+| Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |
 | The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
 
 ## The organising principle: interfaces, envelopes, one graph

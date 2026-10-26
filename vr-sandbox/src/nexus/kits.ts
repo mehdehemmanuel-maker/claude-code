@@ -27,6 +27,7 @@ export type Shape =
   /** a freeform skin (a NURBS surface, or a part of one: src/nexus/surface.ts), its wall its shell */ | { surf: Patch }
   | { stars: { n: number; arms: number; pitch: number; radius: number; bulge: number; kind: 'spiral' | 'barred' | 'elliptical' | 'lenticular' | 'irregular'; flat: number; tint: number; seed: number } }
   | { field: { size: number; relief: number; kind: string; water: number; seed: number; color: number } }
+  /** ground: heights on an n × n grid of cells over w by d (row by row along x, then z; (n + 1)² of them), its soil `base` deep under its lowest */ | { ground: { w: number; d: number; n: number; h: number[]; base: number } }
   /** a heap of like things: so many, each its size, piled in a cone so wide and high (drawn as up to 20,000 of them) */
   | { heap: { n: number; size: V3; r: number; h: number; colors: number[]; seed: number } };
 /** A mating face of a part: a pattern of holes through it, threads tapped into it, or pins (studs) standing out of it, on

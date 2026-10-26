@@ -41,6 +41,28 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-26, later: seeds built from nodes** (`src/nexus/seeds.ts`, following the Seed Node System document). Each is
+an ordinary board of nodes folded into one node and registered in the library, and each is built from the ones before:
+
+| Seed | Built from | Its choices |
+| --- | --- | --- |
+| Window, Door | shape boxes placed by formulas of its width and height | width, height, colour |
+| Toilet, Sink, Bed | turned and boxed shapes; a `pick` between kinds | sink: pedestal, vanity, kitchen; bed: twin to king |
+| Bathroom, kitchen, bedroom and living fittings | Toilet, Sink, Bed and boxes, placed off the room's walls | room width, depth |
+| Room | floor; four `wall`s (a door opening in front, a window behind); Door and Window set in their openings; the fittings `pick`ed by type | type, size, ceiling, wall colour |
+| House | `plan.rooms` lays out its rooms; `spawn` makes a Room per row; a gable roof stretched over them | plan: studio, 1, 2 or 3 bed; roof on or off; colours |
+| Car | body, cabin and window profiles, four wheels, lamps, bumpers | paint |
+| Grass patch, Terrain | blades `scatter`ed on a foot (0.3048 m) of soil; a `terrain` heightfield covered a foot at a time | seed, size, relief, grassed or bare |
+| Road, Stop light, Crossing, Road system | lanes, dashes, sidewalks; a signal head with the lit lens picked; lights at four corners; `array.grid`s of roads and crossings | length; red, yellow or green; blocks each way |
+| Neighbourhood, City | Road system; `rows.grid` lots, each a random plan and colours, `spawn`ed as Houses with a Car each; City `spawn`s Neighbourhoods each from its own seed | blocks, seed; neighbourhoods each way |
+
+New nodes for them: `terrain`, `scatter`, `wall`, `pick`, `rows.grid`, `rows.set`, `rows.shift`, `plan.rooms` (`blocks.ts`),
+`spawn` (`dataflow.ts`: a seed made once per distinct row, so alike houses are one object). Shapes take a wired colour and
+material, a glow, and a solid share for hollow things. A seed's input with choices is a dropdown in the inspector and ◀ ▶
+on the panel in the space. Measured (2026-10-26): a 3 × 3 city is 22,813 pieces placed, stored as 968 distinct things,
+run in about 70 ms; a 24 m terrain is 150k grass blades drawn in 4 draw calls. Not yet: a house's rooms are laid in rows
+with each door in its front wall, so a back room's door opens onto the front room's window (no hallway rule yet).
+
 **2026-10-26: the forge and its room are deleted.** The app's front door is the space (`view/index.html`): what the
 nodes make, in x, y and z, at any scale and through time, with the panels floating where you reach them. Build with
 `npx vite build --config vite.view.config.ts`, then open `dist-view/index.html` (or `dist-view/nodes.html` for the board

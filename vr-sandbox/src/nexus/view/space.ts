@@ -321,4 +321,4 @@ const emulate = emulated && {
   trigger: (v: number) => emulated!.controllers.right.updateButtonValue('trigger', v),
   stick: (y: number) => emulated!.controllers.right.updateAxes('thumbstick', 0, y),
 };
-(window as unknown as { space: object }).space = { emulate, presenting: () => renderer.xr.isPresenting, S, fit, jump, focusOn: (x: number, y: number, z: number, cell: number) => focusOn(new THREE.Vector3(x, y, z), cell), zoomAbout, stats: () => view.stats, shown: () => wall.shown().length, pivot, grid: () => ({ cell: grid.cell, planes: grid.planes }), panels: (on: boolean) => { panelsShown = on; ui.visible = on; } };
+(window as unknown as { space: object }).space = { emulate, presenting: () => renderer.xr.isPresenting, S, fit, jump, focusOn: (x: number, y: number, z: number, cell: number) => focusOn(new THREE.Vector3(x, y, z), cell), zoomAbout, stats: () => view.stats, shown: () => wall.shown().length, pivot, grid: () => ({ cell: grid.cell, planes: grid.planes }), panels: (on: boolean) => { panelsShown = on; ui.visible = on; }, demo: (i: number) => wall.demo(i), wall, camera, orbit };

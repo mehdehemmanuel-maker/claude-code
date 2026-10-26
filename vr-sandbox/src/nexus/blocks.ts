@@ -68,6 +68,8 @@ export interface PortDef {
   many?: boolean;
   /** An output in the unit of what is wired into this input (a sum of lengths is a length). */
   unitFrom?: string;
+  /** The values it may take, to pick from (a room's type, a house's layout): one press each. */
+  choices?: string[];
 }
 export interface SettingDef { key: string; label: string; type: 'number' | 'text' | 'code' | 'choice' | 'boolean' | 'quantity'; default: unknown; choices?: string[]; unit?: string }
 export interface Ports { inputs: PortDef[]; outputs: PortDef[] }
@@ -532,7 +534,7 @@ const BUILT_IN: BlockDef[] = [
 
   // a group's own ports: inside a group, what comes in and what goes out
   def({ id: 'group.in', name: 'Group input', kind: 'group', ability: 'connect', domains: ['software'], says: 'What comes into the group, under this name',
-    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'x' }, { key: 'type', label: 'Type', type: 'text', default: 'any' }, { key: 'unit', label: 'Unit', type: 'text', default: '' }],
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'x' }, { key: 'type', label: 'Type', type: 'text', default: 'any' }, { key: 'unit', label: 'Unit', type: 'text', default: '' }, { key: 'default', label: 'Default (blank: must be given)', type: 'text', default: '' }, { key: 'choices', label: 'Choices (split by |)', type: 'text', default: '' }, { key: 'says', label: 'What it is', type: 'text', default: '' }],
     ports: (s) => ({ inputs: [], outputs: [P('value', (String(s.type ?? 'any') || 'any') as Type, String(s.unit ?? '') ? { unit: String(s.unit) } : {})] }), run: (_, c) => ({ value: c.set.value }) }),
   def({ id: 'group.out', name: 'Group output', kind: 'group', ability: 'connect', domains: ['software'], says: 'What goes out of the group, under this name',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'y' }, { key: 'type', label: 'Type', type: 'text', default: 'any' }, { key: 'unit', label: 'Unit', type: 'text', default: '' }],
@@ -563,19 +565,22 @@ export function lawBlocks(): BlockDef[] {
 // ---- things made and placed: shapes, parts by their sizes, places, patterns, variants (src/nexus/assembly.ts) ---------
 const ENGINEERING = Object.keys(DENSITY).filter((k) => !/^(bread|cheese|ham|tomato|lettuce|butter|chicken|egg|avocado|bacon|stingray|leaf|foliage|tissue|petrol|diesel|water|soil)$/.test(k)).sort();
 const FINISHES = ['', 'paint', 'chrome', 'brushed', 'ground', 'cast', 'plate', 'weld', 'thread', 'tread', 'texture', 'grain', 'stone', 'concrete'];
-const look: SettingDef[] = [{ key: 'mat', label: 'Material', type: 'choice', default: 'steel-low', choices: ENGINEERING }, { key: 'color', label: 'Colour', type: 'text', default: '#9aa3ad' }, { key: 'finish', label: 'Finish', type: 'choice', default: '', choices: FINISHES }];
+const look: SettingDef[] = [{ key: 'mat', label: 'Material', type: 'choice', default: 'steel-low', choices: ENGINEERING }, { key: 'color', label: 'Colour', type: 'text', default: '#9aa3ad' }, { key: 'finish', label: 'Finish', type: 'choice', default: '', choices: FINISHES }, { key: 'glow', label: 'Glows (a lamp lit)', type: 'boolean', default: false }, { key: 'fill', label: 'Solid share (1 solid; a car body or a fridge is mostly air)', type: 'number', default: 1 }];
+/** A shape's colour and material may be wired in, so a seed's paint reaches the pieces it paints. */
+const lookIn = (): PortDef[] => [P('color', 'text', { optional: true, label: 'colour (wired: over the setting)' }), P('mat', 'text', { optional: true, label: 'material (wired)' })];
+const lookOf = (i: Record<string, unknown>, set: Record<string, unknown>): Record<string, unknown> => ({ ...set, ...(i.color ? { color: i.color } : {}), ...(i.mat ? { mat: i.mat } : {}) });
 const hex = (c: unknown, d = 0x9aa3ad): number => { const m = /^#?([0-9a-f]{6})$/i.exec(String(c ?? '').trim()); return m ? parseInt(m[1]!, 16) : d; };
 const L = (name: string, def: number, label?: string, more: Partial<PortDef> = {}) => N(name, 'm', { default: def, optional: true, ...(label ? { label } : {}), ...more });
 const thing = (name = 'thing', label = 'thing') => P(name, 'assembly', { label });
 /** A part of one shape, of its material, coloured and finished. */
 function shapePart(name: string, shape: Part['shape'], set: Record<string, unknown>): Part {
-  return { name: String(set.name || name), shape, at: [0, 0, 0], mat: String(set.mat || 'steel-low'), color: hex(set.color), ...(set.finish ? { finish: String(set.finish) } : {}) };
+  return { name: String(set.name || name), shape, at: [0, 0, 0], mat: String(set.mat || 'steel-low'), color: hex(set.color), ...(set.finish ? { finish: String(set.finish) } : {}), ...(set.glow ? { glow: true } : {}), ...(set.fill !== undefined && Number(set.fill) !== 1 && Number(set.fill) >= 0 ? { fill: Number(set.fill) } : {}) };
 }
 const shapeBlock = (id: string, name: string, says: string, inputs: PortDef[], make: (i: Record<string, number>) => Part['shape'], test: { inputs: Record<string, number>; mass: number }) => def({
   id: `shape.${id}`, name, kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'structural'], says,
   settings: [{ key: 'name', label: 'Name', type: 'text', default: name.toLowerCase() }, ...look],
-  ports: { inputs, outputs: [P('part', 'part'), N('mass', 'kg')] },
-  run: (i, c) => { const v = Object.fromEntries(inputs.filter((q) => i[q.name] !== undefined || q.default !== undefined).map((q) => [q.name, Number(i[q.name] ?? q.default)])); for (const [k, x] of Object.entries(v)) if (!(x >= 0) || !Number.isFinite(x)) throw new Error(`${k} must be a size, not ${x}`); const p = shapePart(name.toLowerCase(), make(v), c.set); return { part: p, mass: massOf(p) }; },
+  ports: { inputs: [...inputs, ...lookIn()], outputs: [P('part', 'part'), N('mass', 'kg')] },
+  run: (i, c) => { const v = Object.fromEntries(inputs.filter((q) => i[q.name] !== undefined || q.default !== undefined).map((q) => [q.name, Number(i[q.name] ?? q.default)])); for (const [k, x] of Object.entries(v)) if (!(x >= 0) || !Number.isFinite(x)) throw new Error(`${k} must be a size, not ${x}`); const p = shapePart(name.toLowerCase(), make(v), lookOf(i, c.set)); return { part: p, mass: massOf(p) }; },
   tests: [{ set: { mat: 'steel-low' }, inputs: test.inputs, outputs: { mass: test.mass }, rel: 1e-9 }],
 });
 /** Points typed as "x, y; x, y; …" in millimetres. */
@@ -585,6 +590,27 @@ function points(t: unknown): [number, number][] {
   return pts;
 }
 const asThing = (v: unknown): Part | Assembly => { if (isAssembly(v) || isPart(v)) return v; throw new Error('nothing made to place: wire a shape, a part or an assembly in'); };
+
+/** A seeded stream of numbers in [0, 1): the same seed, the same stream (Park and Miller's minimal standard). */
+export function rng(seed: number): () => number { let r = (Math.abs(Math.round(seed * 9973)) % 2147483646) + 1; return () => { r = (r * 48271) % 2147483647; return r / 2147483647; }; }
+/** Smooth seeded noise: value noise summed over octaves, each finer by two and weaker by the roughness. */
+function fbm(x: number, z: number, seed: number, rough: number): number {
+  const v = (ix: number, iz: number) => { const h = Math.sin(ix * 127.1 + iz * 311.7 + seed * 74.7) * 43758.5453; return h - Math.floor(h); };
+  const smooth = (x0: number, z0: number) => { const ix = Math.floor(x0), iz = Math.floor(z0), fx = x0 - ix, fz = z0 - iz, ux = fx * fx * (3 - 2 * fx), uz = fz * fz * (3 - 2 * fz); return (v(ix, iz) * (1 - ux) + v(ix + 1, iz) * ux) * (1 - uz) + (v(ix, iz + 1) * (1 - ux) + v(ix + 1, iz + 1) * ux) * uz; };
+  let sum = 0, amp = 1, f = 1; for (let o = 0; o < 5; o++) { sum += smooth(x * f, z * f) * amp; amp *= Math.max(0.05, rough); f *= 2; } return sum;
+}
+/** The height of ground at x, z (between its grid's points, by their mix). */
+export function heightOn(g: { w: number; d: number; n: number; h: number[] }, x: number, z: number): number {
+  const fx = Math.max(0, Math.min(g.n, (x / g.w + 0.5) * g.n)), fz = Math.max(0, Math.min(g.n, (z / g.d + 0.5) * g.n)), ix = Math.min(g.n - 1, Math.floor(fx)), iz = Math.min(g.n - 1, Math.floor(fz)), ux = fx - ix, uz = fz - iz, at = (a: number, b: number) => g.h[b * (g.n + 1) + a] ?? 0;
+  return (at(ix, iz) * (1 - ux) + at(ix + 1, iz) * ux) * (1 - uz) + (at(ix, iz + 1) * (1 - ux) + at(ix + 1, iz + 1) * ux) * uz;
+}
+/** Floor plans by name: each a typical home of its kind (room sizes typical of new homes, an estimate). */
+export const PLANS: Record<string, string> = {
+  studio: 'living 5x4, bathroom 2.4x4 / kitchen 7.4x2.6',
+  '1 bed': 'bedroom 3.6x3.6, bathroom 2.4x3.6 / kitchen 3x3.4, living 3x3.4',
+  '2 bed': 'bedroom 3.6x3.6, bathroom 2.4x3.6, bedroom 3.2x3.6 / kitchen 3.4x3.6, living 5.8x3.6',
+  '3 bed': 'bedroom 3.6x3.6, bathroom 2.4x3.6, bedroom 3.2x3.6, bedroom 3.2x3.6 / kitchen 4x4, living 5.2x4, bathroom 3.2x4',
+};
 const BUILT_THINGS: BlockDef[] = [
   shapeBlock('box', 'Box', 'A block: width (x), height (y), depth (z)', [L('w', 0.1, 'width'), L('h', 0.1, 'height'), L('d', 0.1, 'depth')], (v) => ({ box: [v.w!, v.h!, v.d!] }), { inputs: { w: 0.1, h: 0.1, d: 0.1 }, mass: 7.85 }),
   shapeBlock('cyl', 'Cylinder', 'A cylinder along y: its radius and height; a second radius at its top makes it a frustum', [L('r', 0.05, 'radius'), L('h', 0.1, 'height'), N('r2', 'm', { optional: true, label: 'top radius (blank: the same)' })], (v) => ({ cyl: v.r2 !== undefined ? [v.r!, v.h!, v.r2] : [v.r!, v.h!] }), { inputs: { r: 0.05, h: 0.1 }, mass: Math.PI * 0.0025 * 0.1 * 7850 }),
@@ -594,13 +620,13 @@ const BUILT_THINGS: BlockDef[] = [
   shapeBlock('tube', 'Tube', 'A straight tube along y: outside radius, wall and length', [L('r', 0.02, 'outside radius'), L('wall', 0.002, 'wall'), L('h', 0.5, 'length')], (v) => { if (v.wall! >= v.r!) throw new Error('the wall is as thick as the tube'); return { tube: { r: v.r!, wall: v.wall!, pts: [[0, -v.h! / 2, 0], [0, v.h! / 2, 0]] } }; }, { inputs: { r: 0.02, wall: 0.002, h: 0.5 }, mass: Math.PI * (0.02 ** 2 - 0.018 ** 2) * 0.5 * 7850 }),
   def({ id: 'shape.extrude', name: 'Extrude', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'structural'], says: 'A profile drawn in x and y (mm), pushed out along z to a length: a bracket, a beam, a plate of any outline',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'profile' }, { key: 'profile', label: 'Profile, mm: x, y; x, y; …', type: 'code', default: '0, 0; 60, 0; 60, 6; 6, 6; 6, 40; 0, 40' }, ...look],
-    ports: { inputs: [L('L', 0.1, 'length')], outputs: [P('part', 'part'), N('mass', 'kg')] },
-    run: (i, c) => { const p = shapePart('profile', { prism: { pts: points(c.set.profile), L: Number(i.L ?? 0.1) } }, c.set); return { part: p, mass: massOf(p) }; },
+    ports: { inputs: [L('L', 0.1, 'length'), ...lookIn()], outputs: [P('part', 'part'), N('mass', 'kg')] },
+    run: (i, c) => { const p = shapePart('profile', { prism: { pts: points(c.set.profile), L: Number(i.L ?? 0.1) } }, lookOf(i, c.set)); return { part: p, mass: massOf(p) }; },
     tests: [{ set: { profile: '0,0; 100,0; 100,100; 0,100', mat: 'steel-low' }, inputs: { L: 0.1 }, outputs: { mass: 7.85 }, rel: 1e-9 }] }),
   def({ id: 'shape.lathe', name: 'Turn (lathe)', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing'], says: 'A profile of radius and height (mm) spun about y: a propeller hub, a pulley, a knob, a vase',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'turned' }, { key: 'profile', label: 'Profile, mm: r, y; r, y; …', type: 'code', default: '0, 0; 20, 0; 20, 5; 8, 8; 8, 30; 0, 30' }, ...look],
-    ports: { inputs: [], outputs: [P('part', 'part'), N('mass', 'kg')] },
-    run: (_, c) => { const p = shapePart('turned', { lathe: points(c.set.profile) }, c.set); return { part: p, mass: massOf(p) }; },
+    ports: { inputs: lookIn(), outputs: [P('part', 'part'), N('mass', 'kg')] },
+    run: (i, c) => { const p = shapePart('turned', { lathe: points(c.set.profile) }, lookOf(i, c.set)); return { part: p, mass: massOf(p) }; },
     tests: [{ set: { profile: '0,0; 50,0; 50,100; 0,100', mat: 'steel-low' }, inputs: {}, outputs: { mass: Math.PI * 0.0025 * 0.1 * 7850 }, rel: 1e-3 }] }),
   def({ id: 'part.family', name: 'Standard part by size', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'electrical', 'structural'],
     says: `A part drawn whole from its standard, its sizes set one by one: ${DESIGNED.length} families (bolts, nuts, bearings, steppers, rails, extrusions, beams, pipes…)`,
@@ -637,10 +663,10 @@ const BUILT_THINGS: BlockDef[] = [
     tests: [{ set: { name: 'two' }, inputs: { things: [{ name: 'a' }, { name: 'b' }] }, outputs: { assembly: { name: 'two' } } }] }),
   def({ id: 'variant', name: 'Variant', kind: 'logic', ability: 'transform', domains: ['mechanical', 'manufacturing', 'everyday'], says: 'The same thing changed where it is placed: its colour, its material, its finish, its size along x, y and z, or hidden; on all of it, or only the pieces whose names a pattern finds ("prop", "arm|frame")',
     settings: [{ key: 'path', label: 'Only pieces named (pattern, blank: all)', type: 'text', default: '' }, { key: 'color', label: 'Colour (blank: as it is)', type: 'text', default: '' }, { key: 'mat', label: 'Material (blank: as it is)', type: 'choice', default: '', choices: ['', ...ENGINEERING] }, { key: 'finish', label: 'Finish', type: 'choice', default: '', choices: FINISHES }, { key: 'hide', label: 'Hide them', type: 'boolean', default: false }],
-    ports: { inputs: [thing(), N('kx', undefined, { default: 1, optional: true, label: 'size along x' }), N('ky', undefined, { default: 1, optional: true, label: 'size along y' }), N('kz', undefined, { default: 1, optional: true, label: 'size along z' })], outputs: [thing('variant', 'variant'), N('mass', 'kg')] },
+    ports: { inputs: [thing(), P('color', 'text', { optional: true, label: 'colour (wired: over the setting)' }), N('kx', undefined, { default: 1, optional: true, label: 'size along x' }), N('ky', undefined, { default: 1, optional: true, label: 'size along y' }), N('kz', undefined, { default: 1, optional: true, label: 'size along z' })], outputs: [thing('variant', 'variant'), N('mass', 'kg')] },
     run: (i, c) => {
       const t = asThing(i.thing), k: [number, number, number] = [Number(i.kx ?? 1), Number(i.ky ?? 1), Number(i.kz ?? 1)];
-      const over: Override = { ...(c.set.path ? { path: String(c.set.path) } : {}), ...(c.set.color ? { color: hex(c.set.color) } : {}), ...(c.set.mat ? { mat: String(c.set.mat) } : {}), ...(c.set.finish ? { finish: String(c.set.finish) } : {}), ...(c.set.hide ? { hide: true } : {}), ...(k.some((x) => x !== 1) ? { scale: k } : {}) };
+      const over: Override = { ...(c.set.path ? { path: String(c.set.path) } : {}), ...(i.color || c.set.color ? { color: hex(i.color || c.set.color) } : {}), ...(c.set.mat ? { mat: String(c.set.mat) } : {}), ...(c.set.finish ? { finish: String(c.set.finish) } : {}), ...(c.set.hide ? { hide: true } : {}), ...(k.some((x) => x !== 1) ? { scale: k } : {}) };
       if (over.path) try { new RegExp(over.path); } catch { throw new Error(`"${over.path}" is not a pattern`); }
       const v: Assembly = { name: t.name, items: [{ ...place(t), over }] }; return { variant: v, mass: massOfAll(v) };
     },
@@ -667,6 +693,92 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [thing()], outputs: [N('mass', 'kg'), L('w', 0, 'width'), L('h', 0, 'height'), L('d', 0, 'depth'), P('placed', 'integer', { label: 'pieces placed' }), P('distinct', 'integer', { label: 'things stored' })] },
     run: (i) => { const t = asThing(i.thing), b = boundsOfAll(t), z = b.isEmpty(); return { mass: massOfAll(t), w: z ? 0 : b.max.x - b.min.x, h: z ? 0 : b.max.y - b.min.y, d: z ? 0 : b.max.z - b.min.z, placed: placedCount(t), distinct: distinctCount(t) }; },
     tests: [{ inputs: { thing: { name: 'b', shape: { box: [0.1, 0.2, 0.3] }, mat: 'steel-low' } }, outputs: { mass: 0.006 * 7850, w: 0.1, h: 0.2, d: 0.3, placed: 1 }, rel: 1e-9 }], sink: true }),
+  // ---- the world: ground, scattering, walls with openings, choosing, rows to spawn from ----------------------------
+  def({ id: 'terrain', name: 'Terrain', kind: 'generator', ability: 'generate', domains: ['structural', 'energy', 'everyday'], says: 'Ground over w by d, its hills from a seeded noise (the same seed, the same land): relief is how high its highest is over its lowest, roughness how much small detail it has',
+    settings: [{ key: 'color', label: 'Colour', type: 'text', default: '#5d8a3a' }],
+    ports: { inputs: [L('w', 50, 'width'), L('d', 50, 'depth'), L('relief', 3, 'relief'), N('cells', undefined, { default: 64, optional: true, label: 'cells across' }), N('rough', undefined, { default: 0.5, optional: true, label: 'roughness (0–1)' }), N('seed', undefined, { default: 1, optional: true })], outputs: [P('ground', 'part'), N('mass', 'kg'), L('high', 0, 'highest'), L('low', 0, 'lowest')] },
+    run: (i, c) => {
+      const w = Number(i.w ?? 50), d = Number(i.d ?? 50), n = Math.max(2, Math.min(256, Math.round(Number(i.cells ?? 64)))), relief = Number(i.relief ?? 3), rough = Math.max(0, Math.min(1, Number(i.rough ?? 0.5))), seed = Number(i.seed ?? 1);
+      const h: number[] = []; for (let z = 0; z <= n; z++) for (let x = 0; x <= n; x++) h.push(fbm(x / n * 4, z / n * 4, seed, rough));
+      const lo = Math.min(...h), hi = Math.max(...h), k = hi > lo ? relief / (hi - lo) : 0;
+      const heights = h.map((y) => (y - lo) * k), p: Part = { name: 'ground', shape: { ground: { w, d, n, h: heights, base: 0.3 } }, at: [0, 0, 0], mat: 'soil', color: hex(c.set.color, 0x5d8a3a) };
+      return { ground: p, mass: massOf(p), high: relief, low: 0 };
+    },
+    tests: [{ inputs: { w: 10, d: 10, relief: 0, cells: 4 }, outputs: { mass: 10 * 10 * 0.3 * 1500, high: 0 }, rel: 1e-9 }] }),
+  def({ id: 'scatter', name: 'Scatter', kind: 'logic', ability: 'generate', domains: ['everyday', 'structural', 'energy'], says: 'A thing many times over an area: at seeded random places (the same seed, the same places), or on a grid; each turned and sized a little differently if asked; standing on ground where ground is wired in',
+    settings: [{ key: 'mode', label: 'Laid', type: 'choice', default: 'random', choices: ['random', 'grid'] }, { key: 'turn', label: 'Turn each at random', type: 'boolean', default: true }],
+    ports: { inputs: [thing(), L('w', 1, 'width'), L('d', 1, 'depth'), N('n', undefined, { default: 20, optional: true, label: 'how many (random)' }), L('step', 0.3, 'spacing (grid)'), N('smin', undefined, { default: 1, optional: true, label: 'least scale' }), N('smax', undefined, { default: 1, optional: true, label: 'most scale' }), N('seed', undefined, { default: 1, optional: true }), P('on', 'part', { optional: true, label: 'ground to stand on' })], outputs: [thing('scattered', 'scattered'), P('count', 'integer')] },
+    run: (i, c) => {
+      const t = asThing(i.thing), w = Number(i.w ?? 1), d = Number(i.d ?? 1), r = rng(Number(i.seed ?? 1)), smin = Number(i.smin ?? 1), smax = Number(i.smax ?? 1), turn = c.set.turn !== false, on = i.on as Part | undefined;
+      const at: [number, number][] = [];
+      if (c.set.mode === 'grid') { const step = Math.max(1e-6, Number(i.step ?? 0.3)), nx = Math.max(1, Math.floor(w / step)), nz = Math.max(1, Math.floor(d / step)); if (nx * nz > 2e6) throw new Error(`${(nx * nz).toLocaleString()} is more than two million: space them wider`); for (let x = 0; x < nx; x++) for (let z = 0; z < nz; z++) at.push([(x + 0.5) * step - w / 2, (z + 0.5) * step - d / 2]); }
+      else { const n = Math.max(0, Math.min(2e6, Math.round(Number(i.n ?? 20)))); for (let k = 0; k < n; k++) at.push([(r() - 0.5) * w, (r() - 0.5) * d]); }
+      const g = on?.shape && 'ground' in on.shape ? on.shape.ground : null;
+      const items = at.map(([x, z]) => place(t, [x, g ? heightOn(g, x, z) : 0, z], [0, turn ? r() * Math.PI * 2 : 0, 0], smin + (smax - smin) * r()));
+      return { scattered: { name: `${items.length} × ${t.name}`, items }, count: items.length };
+    },
+    tests: [{ set: { mode: 'grid' }, inputs: { thing: { name: 'b' }, w: 1, d: 1, step: 0.5 }, outputs: { count: 4 } }] }),
+  def({ id: 'wall', name: 'Wall with an opening', kind: 'generator', ability: 'generate', domains: ['structural', 'everyday'], says: 'A wall along x, standing on y = 0, with an opening for a door or a window (or none) at an offset from its middle; gives the opening\'s middle, where a door or a window goes',
+    settings: [{ key: 'opening', label: 'Opening', type: 'choice', default: 'none', choices: ['none', 'door', 'window'] }, { key: 'name', label: 'Name', type: 'text', default: 'wall' }, ...look.filter((x) => x.key !== 'glow')],
+    ports: { inputs: [L('L', 4, 'length'), L('h', 2.4, 'height'), L('t', 0.15, 'thickness'), L('ow', 0.9, 'opening width'), L('oh', 2.1, 'opening height'), L('sill', 0.9, 'window sill height'), L('off', 0, 'opening offset from the middle'), P('opening', 'text', { optional: true, label: 'opening (wired: over the setting)', choices: ['none', 'door', 'window'] }), ...lookIn()], outputs: [P('wall', 'part'), L('ox', 0, 'opening middle x'), L('oy', 0, 'opening middle y'), N('mass', 'kg')] },
+    run: (i, c) => {
+      const Lw = Number(i.L ?? 4), h = Number(i.h ?? 2.4), t = Number(i.t ?? 0.15), kind = String(i.opening || c.set.opening || 'none'), set = lookOf(i, c.set);
+      const ow = Math.min(Number(i.ow ?? 0.9), Lw - 0.1), oh = Math.min(Number(i.oh ?? 2.1), h - 0.05), sill = kind === 'door' ? 0 : Math.min(Number(i.sill ?? 0.9), h - oh), off = Number(i.off ?? 0);
+      const piece = (name: string, w: number, hh: number, x: number, y: number): Part => ({ ...shapePart(name, { box: [w, hh, t] }, set), at: [x, y, 0] });
+      const parts: Part[] = [];
+      if (kind === 'none') parts.push(piece(`${set.name || 'wall'}`, Lw, h, 0, h / 2));
+      else {
+        const x0 = off - ow / 2, x1 = off + ow / 2, left = x0 + Lw / 2, right = Lw / 2 - x1;
+        if (left > 1e-4) parts.push(piece('wall left of opening', left, h, -Lw / 2 + left / 2, h / 2));
+        if (right > 1e-4) parts.push(piece('wall right of opening', right, h, Lw / 2 - right / 2, h / 2));
+        const top = h - (sill + oh); if (top > 1e-4) parts.push(piece('wall over opening', ow, top, off, sill + oh + top / 2));
+        if (sill > 1e-4) parts.push(piece('wall under opening', ow, sill, off, sill / 2));
+      }
+      const p: Part = { name: String(set.name || 'wall'), at: [0, 0, 0], parts };
+      return { wall: p, ox: off, oy: kind === 'door' ? oh / 2 : sill + oh / 2, mass: massOf(p) };
+    },
+    tests: [{ set: { opening: 'none', mat: 'concrete' }, inputs: { L: 4, h: 2.5, t: 0.2 }, outputs: { mass: 4 * 2.5 * 0.2 * 2400 }, rel: 1e-9 }, { set: { opening: 'door', mat: 'concrete' }, inputs: { L: 4, h: 2.5, t: 0.2, ow: 1, oh: 2 }, outputs: { mass: (4 * 2.5 - 1 * 2) * 0.2 * 2400, oy: 1 }, rel: 1e-9 }] }),
+  def({ id: 'pick', name: 'Pick one', kind: 'logic', ability: 'decide', domains: ['everyday', 'software'], says: 'One of several things, by name: plug in what each choice is (a bathroom\'s fittings, a kitchen\'s, a bedroom\'s…), and the choice says which comes out',
+    settings: [{ key: 'options', label: 'Choices (split by |)', type: 'text', default: 'a|b' }],
+    ports: (s) => { const o = String(s.options ?? '').split('|').map((x) => x.trim()).filter(Boolean); return { inputs: [P('which', 'text', { label: 'which', choices: o, default: o[0] }), ...o.map((n) => P(n, 'any', { optional: true }))], outputs: [P('chosen', 'any')] }; },
+    run: (i, c) => { const o = String(c.set.options).split('|').map((x) => x.trim()).filter(Boolean), w = String(i.which ?? o[0]); if (!o.includes(w)) throw new Error(`"${w}" is not one of ${o.join(', ')}`); if (i[w] === undefined) throw new Error(`nothing is plugged in for "${w}"`); return { chosen: i[w] }; },
+    tests: [{ set: { options: 'a|b' }, inputs: { which: 'b', a: 1, b: 2 }, outputs: { chosen: 2 } }] }),
+  def({ id: 'rows.grid', name: 'Rows on a grid', kind: 'logic', ability: 'generate', domains: ['everyday', 'operations', 'structural'], says: 'Rows for a spawner: one for each place on an nx by nz grid (x, z), and for each column asked, a value picked at seeded random from its list ("layout: studio|1 bed|2 bed; paint: #e8dcc8|#cfd8dc"), or a number in a range ("length: 4..6")',
+    settings: [{ key: 'columns', label: 'Columns: name: a|b|c; name: lo..hi', type: 'code', default: 'paint: #e8dcc8|#cfd8dc|#f5e6c8' }, { key: 'turn', label: 'Each turned by (degrees, about y)', type: 'number', default: 0 }],
+    ports: { inputs: [N('nx', undefined, { default: 3, optional: true }), N('nz', undefined, { default: 3, optional: true }), L('sx', 20, 'spacing x'), L('sz', 20, 'spacing z'), N('seed', undefined, { default: 1, optional: true })], outputs: [P('rows', 'table'), P('count', 'integer')] },
+    run: (i, c) => {
+      const nx = Math.max(1, Math.round(Number(i.nx ?? 3))), nz = Math.max(1, Math.round(Number(i.nz ?? 3))), sx = Number(i.sx ?? 20), sz = Number(i.sz ?? 20), r = rng(Number(i.seed ?? 1));
+      const cols = String(c.set.columns ?? '').split(/[;\n]/).map((x) => x.trim()).filter(Boolean).map((x) => { const [k, v] = x.split(':').map((y) => y.trim()); const range = /^(-?[\d.]+)\s*\.\.\s*(-?[\d.]+)$/.exec(v ?? ''); return { k: k!, opts: range ? null : (v ?? '').split('|').map((y) => y.trim()).filter(Boolean), lo: range ? Number(range[1]) : 0, hi: range ? Number(range[2]) : 0 }; });
+      const rows: Record<string, unknown>[] = [];
+      for (let x = 0; x < nx; x++) for (let z = 0; z < nz; z++) {
+        const row: Record<string, unknown> = { x: (x - (nx - 1) / 2) * sx, y: 0, z: (z - (nz - 1) / 2) * sz, ry: (Number(c.set.turn) || 0) * Math.PI / 180 };
+        for (const col of cols) row[col.k] = col.opts ? col.opts[Math.floor(r() * col.opts.length)] : col.lo + (col.hi - col.lo) * r();
+        rows.push(row);
+      }
+      return { rows, count: rows.length };
+    },
+    tests: [{ set: { columns: 'k: a' }, inputs: { nx: 2, nz: 1, sx: 10 }, outputs: { rows: [{ x: -5, z: 0, k: 'a' }, { x: 5, z: 0, k: 'a' }], count: 2 } }] }),
+  def({ id: 'rows.set', name: 'Set a column', kind: 'logic', ability: 'transform', domains: ['everyday', 'software'], says: 'Every row given the same value in a column: each room of a house painted its wall colour, each house of a street its roof',
+    settings: [{ key: 'column', label: 'Column', type: 'text', default: 'paint' }],
+    ports: { inputs: [P('rows', 'table'), P('value', 'any')], outputs: [P('rows', 'table')] },
+    run: (i, c) => ({ rows: (Array.isArray(i.rows) ? i.rows : []).map((r) => ({ ...(r as object), [String(c.set.column)]: i.value })) }),
+    tests: [{ set: { column: 'k' }, inputs: { rows: [{ a: 1 }], value: 2 }, outputs: { rows: [{ a: 1, k: 2 }] } }] }),
+  def({ id: 'rows.shift', name: 'Move rows', kind: 'logic', ability: 'transform', domains: ['everyday', 'software'], says: 'Every row moved by dx, dz (and turned by dry): the car in front of each house, the lamp beside each door',
+    ports: { inputs: [P('rows', 'table'), L('dx', 0), L('dz', 0), N('dry', 'rad', { default: 0, optional: true })], outputs: [P('rows', 'table')] },
+    run: (i) => ({ rows: (Array.isArray(i.rows) ? i.rows : []).map((r) => { const o = r as Record<string, number>; return { ...o, x: (o.x ?? 0) + Number(i.dx ?? 0), z: (o.z ?? 0) + Number(i.dz ?? 0), ry: (o.ry ?? 0) + Number(i.dry ?? 0) }; }) }),
+    tests: [{ inputs: { rows: [{ x: 1, z: 1 }], dx: 1, dz: 2 }, outputs: { rows: [{ x: 2, z: 3, ry: 0 }] } }] }),
+  def({ id: 'plan.rooms', name: 'Floor plan', kind: 'logic', ability: 'generate', domains: ['structural', 'everyday'], says: 'A house\'s rooms laid out from its plan: rows of rooms split by "/", rooms in a row by ",", each "type W x D" in metres ("bedroom 4x4, bathroom 2.5x3 / kitchen 4x3.5, living 5x3.5"); or a plan by name. Gives a row for each room (type, w, d, x, z) for the spawner, and the whole floor\'s size',
+    settings: [{ key: 'custom', label: 'Your own plan (blank: the named one)', type: 'code', default: '' }],
+    ports: { inputs: [P('plan', 'text', { label: 'plan', choices: Object.keys(PLANS), default: '2 bed' })], outputs: [P('rows', 'table'), L('W', 0, 'width'), L('D', 0, 'depth'), P('rooms', 'integer')] },
+    run: (i, c) => {
+      const text = String(c.set.custom || '').trim() || PLANS[String(i.plan ?? '2 bed')]; if (!text) throw new Error(`no plan "${String(i.plan)}": ${Object.keys(PLANS).join(', ')}`);
+      const lines = text.split('/').map((l) => l.split(',').map((r) => r.trim()).filter(Boolean).map((r) => { const m = /^(.+?)\s+([\d.]+)\s*[x×]\s*([\d.]+)$/.exec(r); if (!m) throw new Error(`"${r}" is not "type W x D"`); return { type: m[1]!.trim(), w: Number(m[2]), d: Number(m[3]) }; }));
+      const W = Math.max(...lines.map((l) => l.reduce((t, r) => t + r.w, 0))), D = lines.reduce((t, l) => t + Math.max(...l.map((r) => r.d)), 0), rows: Record<string, unknown>[] = [];
+      let z = -D / 2;
+      for (const l of lines) { const depth = Math.max(...l.map((r) => r.d)), lw = l.reduce((t, r) => t + r.w, 0); let x = -W / 2; for (const r of l) { const w = r.w + (r === l[l.length - 1] ? W - lw : 0); rows.push({ type: r.type, w, d: depth, x: x + w / 2, y: 0, z: z + depth / 2 }); x += w; } z += depth; }
+      return { rows, W, D, rooms: rows.length };
+    },
+    tests: [{ set: { custom: 'bedroom 4x4, bathroom 2x3 / kitchen 6x3' }, inputs: {}, outputs: { W: 6, D: 7, rooms: 3, rows: [{ type: 'bedroom', w: 4, d: 4, x: -1, z: -1.5 }, { type: 'bathroom', w: 2, d: 4, x: 2 }, { type: 'kitchen', w: 6, d: 3, x: 0, z: 2 }] } }] }),
   def({ id: 'space.show', name: 'Show in space', kind: 'view', ability: 'show', domains: ['everyday', 'mechanical', 'structural'], says: 'Puts a thing into the 3D space, at its place: everything wired into one of these is what the space draws',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'shown' }],
     ports: { inputs: [thing()], outputs: [] }, run: () => ({}), sink: true, tests: [{ inputs: { thing: { name: 'b' } }, outputs: {} }] }),

@@ -26,6 +26,7 @@ export function shapeBox(s: Shape | undefined, base?: boolean): THREE.Box3 | nul
   else if ('cone' in s) { const [r, h] = s.cone; min = new THREE.Vector3(-r, -h / 2, -r); max = new THREE.Vector3(r, h / 2, r); }
   else if ('torus' in s) { const [R, r] = s.torus; min = new THREE.Vector3(-R - r, -R - r, -r); max = new THREE.Vector3(R + r, R + r, r); }
   else if ('capsule' in s) { const [r, h] = s.capsule; min = new THREE.Vector3(-r, -h / 2 - r, -r); max = new THREE.Vector3(r, h / 2 + r, r); }
+  else if ('ground' in s) { const g = s.ground; min = new THREE.Vector3(-g.w / 2, Math.min(...g.h) - g.base, -g.d / 2); max = new THREE.Vector3(g.w / 2, Math.max(...g.h), g.d / 2); }
   else if ('loft' in s || 'tube' in s || 'lathe' in s || 'surf' in s || 'prism' in s) { const b = boundsOf(piecesOf(s)); min = new THREE.Vector3(...b.min); max = new THREE.Vector3(...b.max); }
   else return null; // stars, fields and heaps are not solids to join
   const b = new THREE.Box3(min, max); if (base) b.translate(new THREE.Vector3(0, -min.y, 0)); return b;

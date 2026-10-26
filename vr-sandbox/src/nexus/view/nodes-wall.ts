@@ -3,7 +3,8 @@
 // back. A hand's ray (or the mouse, on a screen) presses, drags and lets go on it as a mouse does on the page: wire an
 // output to an input, move a block, turn a 3D view, pan the sheet. Above it a strip: the boards to start from, fit,
 // tidy, zoom, undo, the heat map, back out of a group, and the library. Beside it a panel: the block chosen, each input
-// it may be given with − and + (a hand cannot type well; ten percent a press), and opening or cutting it; or, with the
+// it may be given with − and + (a hand cannot type well; ten percent a press), ◀ ▶ through an input's choices (a house's
+// plan, a light's state), and opening or cutting it; or, with the
 // library up, every block by field, a press to place it.
 
 import * as THREE from 'three';
@@ -130,6 +131,7 @@ export class NodesWall {
     for (const q of c.inputs.slice(0, 12)) {
       text(clip(q.label, 26), 30, y + 20, 28, q.wired ? '#6b7a8f' : '#c8d4e3');
       text(clip(q.value, 18), 30, y + 60, 34, q.wired ? '#6b7a8f' : '#ffffff', 600);
+      if (q.choices && !q.wired) { btn('◀', LPX - 250, y + 6, 100, 80, () => { this.say(`${q.label}: ${wall.step(q.name, -1)}`); this.drawSide(); }); btn('▶', LPX - 130, y + 6, 100, 80, () => { this.say(`${q.label}: ${wall.step(q.name, 1)}`); this.drawSide(); }); }
       if (q.number && !q.wired) { btn('−', LPX - 250, y + 6, 100, 80, () => wall.nudge(q.name, 1 / 1.1)); btn('+', LPX - 130, y + 6, 100, 80, () => wall.nudge(q.name, 1.1)); }
       y += 104;
     }

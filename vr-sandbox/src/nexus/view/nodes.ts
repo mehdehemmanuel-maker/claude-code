@@ -13,6 +13,7 @@ import { ABILITIES, DOMAINS, KINDS, LIBRARY, block, defaultsOf, dimOf, elemOf, p
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
 import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
 import { fullScreen, shot } from './nodes3d';
+import '../seeds';
 import type { Part } from '../kits';
 
 // ---- where things are kept ------------------------------------------------------------------------------------------
@@ -554,7 +555,9 @@ function nodeInspector(el: HTMLElement, id: string): void {
   const ins = free.map((q) => {
     const v = n.set?.[q.name], shown = v === undefined ? '' : typeof v === 'number' ? String(Number(v.toPrecision(6))) : String(v);
     const typeable = q.type === 'number' || q.type === 'integer' || q.type === 'text' || q.type === 'boolean' || q.type === 'any';
-    return `<div class="row"><label title="${esc(q.label ?? q.name)}"><span class="dot" style="background:${typeColour(q)}"></span>${esc(q.label ?? q.name)}</label>${typeable ? (q.type === 'boolean' ? `<input type="checkbox" id="p_${esc(q.name)}" ${v ? 'checked' : ''} style="width:auto" />` : `<input id="p_${esc(q.name)}" value="${esc(shown)}" placeholder="${q.unit ? `in ${esc(q.unit)}, or any unit` : q.optional ? `optional${q.default !== undefined ? `, ${esc(show(q.default))}` : ''}` : ''}" />`) : `<span class="src">wire in a ${esc(q.type)}</span>`}</div>`;
+    const lab = `<label title="${esc(q.label ?? q.name)}"><span class="dot" style="background:${typeColour(q)}"></span>${esc(q.label ?? q.name)}</label>`;
+    if (q.choices?.length) { const now = v ?? q.default; return `<div class="row">${lab}<select id="p_${esc(q.name)}">${q.choices.map((c) => `<option ${String(c) === String(now) ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>`; }
+    return `<div class="row">${lab}${typeable ? (q.type === 'boolean' ? `<input type="checkbox" id="p_${esc(q.name)}" ${v ? 'checked' : ''} style="width:auto" />` : `<input id="p_${esc(q.name)}" value="${esc(shown)}" placeholder="${q.unit ? `in ${esc(q.unit)}, or any unit` : q.optional ? `optional${q.default !== undefined ? `, ${esc(show(q.default))}` : ''}` : ''}" />`) : `<span class="src">wire in a ${esc(q.type)}</span>`}</div>`;
   }).join('');
   el.innerHTML = `<div class="ititle"><span class="chip" style="background:${KINDS[k].hue}">${esc(KINDS[k].mark)}</span><input id="iLabel" value="${esc(n.label || d?.name || '')}" /></div>
     <p class="says">${esc(d?.says ?? '')}</p>
@@ -582,6 +585,7 @@ function nodeInspector(el: HTMLElement, id: string): void {
     f.addEventListener(q.type === 'boolean' ? 'change' : 'change', () => {
       let v: unknown = q.type === 'boolean' ? f.checked : f.value.trim();
       if (v === '') { edit((b) => { const s = { ...(b.nodes[id]!.set ?? {}) }; delete s[q.name]; b.nodes[id]!.set = s; }, id); draw(); return; }
+      if (q.choices?.length) { edit((b) => { b.nodes[id]!.set = { ...(b.nodes[id]!.set ?? {}), [q.name]: q.type === 'number' ? Number(v) : v }; }, id); draw(); return; }
       if (q.type === 'number' || q.type === 'integer') { const r = readQuantity(String(v), q.unit); if (typeof r !== 'number') { toast(r.error, true); return; } v = r; }
       edit((b) => { b.nodes[id]!.set = { ...(b.nodes[id]!.set ?? {}), [q.name]: v }; }, id); draw();
     });
@@ -667,7 +671,41 @@ function renderAll(): void { renderCrumbs(); renderLibrary(); renderInspector(tr
 
 // ---- boards to start from: real work, each across fields ------------------------------------------------------------
 type Make = () => Board;
+/** A board of seeds, each placed where it is to be seen, all shown and measured: choose one and click through its choices. */
+function seedBoard(title: string, items: [string, string, Record<string, unknown>, Record<string, number>, string][]): Board {
+  const b = emptyBoard(title), all = placeBlock(b, 'combine', 0, 0, { name: title }, 'all');
+  items.forEach(([blockId, label, set, at, out], i) => {
+    const id = placeBlock(b, blockId, 0, 0, set, `s${i}`); b.nodes[id]!.label = label;
+    const p = placeBlock(b, 'place', 0, 0, at, `p${i}`); wire(b, id, out, p, 'thing'); wire(b, p, 'placed', all, 'things');
+  });
+  wire(b, all, 'assembly', placeBlock(b, 'space.show', 0, 0, {}, 'show'), 'thing'); wire(b, all, 'assembly', placeBlock(b, 'measure', 0, 0, {}, 'measure'), 'thing');
+  return b;
+}
 const DEMOS: [string, Make][] = ([
+  ['A house from seeds: pick its plan, its rooms change', () => seedBoard('A house from seeds', [
+    ['seed.house', 'House (choose it: its plan, its roof on or off, its colours)', { plan: '2 bed', show: 'roof off' }, {}, 'house'],
+    ['seed.car', 'Car in the drive', { paint: '#1565c0' }, { x: 9.5, z: 2, ry: Math.PI / 2 }, 'car'],
+    ['seed.room', 'One room on its own (choose it: its type)', { type: 'bathroom' }, { x: -10 }, 'room'],
+  ])],
+  ['Seeds, one of each: window, door, toilet, sink, bed, car, stop light', () => seedBoard('Seeds, one of each', [
+    ['seed.window', 'Window', {}, { x: -6, y: 1.5 }, 'window'],
+    ['seed.door', 'Door', {}, { x: -4.5, y: 1.05 }, 'door'],
+    ['seed.toilet', 'Toilet', {}, { x: -3 }, 'toilet'],
+    ['seed.sink', 'Sink (choose it: its kind)', { kind: 'vanity' }, { x: -2 }, 'sink'],
+    ['seed.bed', 'Bed (choose it: its size)', {}, { x: 0 }, 'bed'],
+    ['seed.car', 'Car (choose it: its paint)', {}, { x: 4.5, z: 1 }, 'car'],
+    ['seed.stoplight', 'Stop light (choose it: which is lit)', { state: 'green' }, { x: 8.5 }, 'light'],
+    ['seed.grass', 'A foot of grass', {}, { x: 10 }, 'patch'],
+  ])],
+  ['Ground: a foot of grass, then a whole terrain of it', () => seedBoard('Ground from a foot of grass', [
+    ['seed.terrain', 'Terrain (choose it: its seed, its size, grassed or bare)', { size: 24 }, {}, 'terrain'],
+  ])],
+  ['Streets: a road and a stop light, then a road system', () => seedBoard('Streets from a road and a stop light', [
+    ['seed.roads', 'Road system (choose it: blocks each way, which light is lit)', {}, {}, 'roads'],
+  ])],
+  ['A neighbourhood, then a city, from seeds', () => seedBoard('A city from seeds', [
+    ['seed.city', 'City (choose it: neighbourhoods each way, its seed)', { n: 3 }, {}, 'city'],
+  ])],
   ['A city from a few nodes: motor, drone, swarm, buildings', () => {
     // a racing quad's parts at typical sizes: a 2207 brushless motor's bell about 28 mm across and 18 mm tall, a 5 inch
     // (127 mm) prop, a frame of about 220 mm between opposite motors; buildings 20 m square, streets 10 m (typical)
@@ -805,7 +843,7 @@ requestAnimationFrame(() => { fit(); renderAll(); runSoon(); });
 
 // ---- hosted: the same board on the forge's wall (src/nexus/view/nodes-wall.ts) ----------------------------------------
 let wallActive = false;
-export interface WallInput { name: string; label: string; unit?: string; value: string; number: boolean; wired: boolean }
+export interface WallInput { name: string; label: string; unit?: string; value: string; number: boolean; wired: boolean; choices?: string[] }
 /** What the forge drives the board by, and hears from it. Points are in the canvas's CSS pixels. */
 export const wall = {
   canvas: cv,
@@ -828,7 +866,7 @@ export const wall = {
   /** The block chosen, with each input you may set (those not wired), as it stands. */
   chosen(): { id: string; label: string; says: string; inputs: WallInput[]; group: boolean } | null {
     if (sel.size !== 1) return null; const id = [...sel][0]!, n = cur().nodes[id]; if (!n) return null; const d = blockOf(n), into = local.wiresInto(id);
-    const inputs = portsFor(id).inputs.map((q) => { const v = n.set?.[q.name] ?? q.default, wired = into.some((e) => e.in === q.name); return { name: q.name, label: q.label ?? q.name, ...(q.unit ? { unit: q.unit } : {}), value: wired ? 'wired' : v === undefined ? '—' : show(typeof v === 'string' && q.type === 'number' ? readQuantity(v, q.unit) : v, q.unit), number: q.type === 'number' || q.type === 'integer', wired }; });
+    const inputs = portsFor(id).inputs.map((q) => { const v = n.set?.[q.name] ?? q.default, wired = into.some((e) => e.in === q.name); return { name: q.name, label: q.label ?? q.name, ...(q.unit ? { unit: q.unit } : {}), value: wired ? 'wired' : v === undefined ? '—' : show(typeof v === 'string' && q.type === 'number' ? readQuantity(v, q.unit) : v, q.unit), number: (q.type === 'number' || q.type === 'integer') && !q.choices?.length, wired, ...(q.choices?.length ? { choices: q.choices } : {}) }; });
     const st = d?.settings?.find((x) => x.type === 'quantity' || x.type === 'number');
     if (st) inputs.unshift({ name: `set:${st.key}`, label: st.label, value: show(typeof n.set?.[st.key] === 'string' ? readQuantity(String(n.set?.[st.key]), String(n.set?.unit ?? '') || undefined) : n.set?.[st.key] ?? st.default, String(n.set?.unit ?? '') || undefined), number: true, wired: false });
     return { id, label: n.label || d?.name || '', says: d?.says ?? '', inputs, group: !!n.inner };
@@ -841,6 +879,13 @@ export const wall = {
     if (typeof v !== 'number' || !Number.isFinite(v)) v = 0;
     const next = v === 0 ? (f > 1 ? 1 : -1) : Number((v * f).toPrecision(4));
     edit((b) => { b.nodes[c.id]!.set = { ...(b.nodes[c.id]!.set ?? {}), [key]: next }; }, c.id); draw();
+  },
+  /** An input with choices of the chosen block set to the next (or, by −1, the one before): a house's plan, a light's state. */
+  step(name: string, by: number): string {
+    const c = wall.chosen(), q = c?.inputs.find((x) => x.name === name); if (!c || !q?.choices?.length) return '';
+    const n = cur().nodes[c.id]!, now = String(n.set?.[name] ?? portsFor(c.id).inputs.find((x) => x.name === name)?.default ?? q.choices[0]);
+    const k = q.choices.indexOf(now), next = q.choices[(((k < 0 ? 0 : k + by) % q.choices.length) + q.choices.length) % q.choices.length]!;
+    edit((b) => { b.nodes[c.id]!.set = { ...(b.nodes[c.id]!.set ?? {}), [name]: next }; }, c.id); draw(); return next;
   },
   open: () => { const c = wall.chosen(); if (c?.group) enter(c.id); },
   cut: () => { const c = wall.chosen(); if (c) cut(c.id); },

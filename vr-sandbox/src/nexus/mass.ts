@@ -26,6 +26,7 @@ const vol = (s: Shape): number => {
   if ('tube' in s) return tubeVolume(s.tube);
   if ('lathe' in s) return latheVolume(s.lathe);
   if ('prism' in s) return prismVolume(s.prism);
+  if ('ground' in s) { const g = s.ground, lo = Math.min(...g.h); return g.w * g.d * (g.base + g.h.reduce((a, x) => a + x - lo, 0) / g.h.length); }
   // a heap: each brick's solid plastic, 0.386 of its box (a 2×4 brick's 2.3 g of ABS at 1,050 kg/m³ in its 31.8 × 11.3 × 15.8 mm)
   if ('heap' in s) return s.heap.n * s.heap.size[0] * s.heap.size[1] * s.heap.size[2] * 0.386;
   return 0;
@@ -39,6 +40,7 @@ const area = (s: Shape): number => {
   if ('tube' in s) return tubeLength(s.tube) * 2 * Math.PI * s.tube.r;
   if ('lathe' in s) return latheArea(s.lathe);
   if ('prism' in s) return prismArea(s.prism);
+  if ('ground' in s) return s.ground.w * s.ground.d;
   if ('surf' in s) return surfaceArea(s.surf);
   return 0;
 };

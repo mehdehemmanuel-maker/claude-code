@@ -114,6 +114,7 @@ function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string): THREE.BufferG
   const out = a.geometry; drilled.set(key, out); return out;
 }
 function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
+  if ('ground' in s) return groundGeometry(s.ground);
   if ('surf' in s) return surfGeometry(s.surf);
   if ('loft' in s) return loftGeometry(s.loft);
   if ('tube' in s) return tubeGeometry(s.tube);
@@ -131,6 +132,16 @@ function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: 
   if ('capsule' in s) return new THREE.CapsuleGeometry(s.capsule[0], s.capsule[1], 4, 12);
   return null;
 }
+/** Ground as it lies: its top on its heights, shaded lighter where it is high, and its sides down to its soil. */
+function groundGeometry(g: Extract<Shape, { ground: unknown }>['ground']): THREE.BufferGeometry {
+  const geo = new THREE.PlaneGeometry(g.w, g.d, g.n, g.n); geo.rotateX(-Math.PI / 2);
+  const p = geo.attributes.position!, lo = Math.min(...g.h), hi = Math.max(...g.h), cols = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const ix = Math.round((p.getX(i) / g.w + 0.5) * g.n), iz = Math.round((p.getZ(i) / g.d + 0.5) * g.n), y = g.h[iz * (g.n + 1) + ix] ?? 0; p.setY(i, y);
+    const t = hi > lo ? (y - lo) / (hi - lo) : 0.5, k = 0.72 + 0.4 * t; cols.set([k, k, k], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3)); geo.computeVertexNormals(); return geo;
+}
 /** A piece's geometry as the forge draws it: its shape, its flats, standing on its base where it grows from one, its
  *  holes drilled; made once for every piece shaped and drilled alike (src/nexus/view/space3d.ts instances it). */
 const leafGeos = new Map<string, THREE.BufferGeometry | null>();
@@ -143,7 +154,10 @@ export function leafGeometry(p: Part): THREE.BufferGeometry | null {
   leafGeos.set(key, g); return g;
 }
 /** A piece's material as the forge draws it, with a colour, material or finish placed over it. */
+const groundMats = new Map<string, THREE.MeshStandardMaterial>();
 export function leafMaterial(p: Part, over: { color?: number; mat?: string; finish?: string } = {}): THREE.MeshStandardMaterial {
+  // ground is shaded by its height, which its vertices carry
+  if (p.shape && 'ground' in p.shape) { const c = over.color ?? p.color ?? 0x5d8a3a, k = String(c); return groundMats.get(k) ?? groundMats.set(k, new THREE.MeshStandardMaterial({ color: c, vertexColors: true, roughness: 0.95 })).get(k)!; }
   return matFor(over.color ?? p.color ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape));
 }
 /** A galaxy's stars: on logarithmic spiral arms r = a e^(θ tan φ) (a bar across the middle if it is barred), a bulge of
