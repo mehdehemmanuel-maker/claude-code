@@ -494,6 +494,25 @@ export function component(words: string): Component | string {
   else out = byItem.get(r.id) ?? designed(r, words);
   kept.set(k, out); return out;
 }
+/** A component by its family and sizes as values (a node's settings), not words: the same part `component` gives for
+ *  the words that say those sizes, checked against the family's limits. */
+export function componentFromParams(family: string, params: Record<string, string | number>): Component | string {
+  const f = FAMILIES.find((x) => x.id === family); if (!f) return `no family "${family}"`;
+  if (!DESIGNS[f.id]) return `${f.name} is known but not drawn yet: its family has no design.`;
+  // (sizes not given are its first example's, which says every size, where its defaults leave some blank)
+  const ex = f.examples[0] ? f.read(f.examples[0].replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim()) : null, base = ex && typeof ex === 'object' ? ex : {};
+  const p: Record<string, string | number> = {};
+  for (const q of f.params) { const given = params[q.key], v = given !== undefined && given !== '' ? given : base[q.key] ?? q.default; p[q.key] = typeof q.default === 'number' && v !== '' && Number.isFinite(Number(v)) ? Number(v) : v; }
+  for (const q of f.params) if (q.min !== undefined && typeof p[q.key] === 'number' && ((p[q.key] as number) < q.min || (p[q.key] as number) > q.max!)) return `${q.says} must be ${q.min}–${q.max} ${q.unit}.`;
+  if (q0(f, p)) return q0(f, p)!;
+  const r = { ...f.make(p), sized: { family: f.id, params: p } };
+  return byItem.get(r.id) ?? designed(r, r.name);
+}
+/** A value not among those a family offers (a thread it has no size for). */
+function q0(f: { params: { key: string; says: string; values?: (string | number)[] }[] }, p: Record<string, string | number>): string | null {
+  for (const q of f.params) if (q.values?.length && !q.values.map(String).includes(String(p[q.key]))) return `${q.says} must be one of ${q.values.slice(0, 12).join(', ')}${q.values.length > 12 ? ', …' : ''}`;
+  return null;
+}
 /** The component an item is drawn as, by its id (an item made to sizes by a family the library draws, in the inventory or
  *  drawn inside another component), or null: so what the inventory lists, and what is inside a drawn part, opens as drawn. */
 export function componentOf(id: string): Component | null {

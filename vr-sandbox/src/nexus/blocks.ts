@@ -13,7 +13,10 @@ import { dimensionOf, fromSI, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
-import { DESIGNED, component, exampleOf } from './components';
+import { DESIGNED, component, componentFromParams, exampleOf } from './components';
+import { FAMILIES } from './families';
+import { DENSITY } from './mass';
+import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, combine, distinctCount, isAssembly, isPart, massOfAll, mirror, place, placedCount, type Assembly, type Override } from './assembly';
 import { massOf } from './mass';
 import type { Part } from './kits';
 import type { Board } from './boards';
@@ -56,7 +59,7 @@ const LAW_DOMAIN: Record<string, string> = { mechanics: 'mechanical', structures
 /** What travels on a wire: a number (in its port's unit, SI unless the port says otherwise, as a law in degrees Celsius
  *  does; a wire between two units of one kind converts), an integer, yes or no, text, a list of any
  *  of these ("list<number>"), a table (a list of records), a record, a material or part card, an event, or anything. */
-export type Type = 'number' | 'integer' | 'boolean' | 'text' | 'any' | 'table' | 'record' | 'material' | 'part' | 'event' | `list<${string}>`;
+export type Type = 'number' | 'integer' | 'boolean' | 'text' | 'any' | 'table' | 'record' | 'material' | 'part' | 'assembly' | 'event' | `list<${string}>`;
 export interface PortDef {
   name: string; type: Type;
   /** For a number: its SI unit, so its dimension can be checked ("N", "m", "Pa", "USD"). Money is its currency. */
@@ -117,6 +120,8 @@ export function fits(out: PortDef, inp: PortDef): { ok: true; map: boolean; conv
   let map = false, ot: Type = out.type;
   if (!same(ot, inp.type) && elemOf(ot) && !elemOf(inp.type)) { ot = elemOf(ot)!; map = true; }
   if (inp.type === 'text' && ot !== 'text' && !elemOf(ot)) return { ok: true, map, convert: `${ot} as text` };
+  // a part is an assembly of one: placed, patterned and combined as any assembly is
+  if (ot === 'part' && inp.type === 'assembly') return { ok: true, map };
   if (!same(ot, inp.type)) return { ok: false, why: `${out.label ?? out.name} gives ${out.type}, and ${inp.label ?? inp.name} takes ${inp.type}` };
   if ((ot === 'number' || ot === 'integer') && out.unit && inp.unit && out.unit !== inp.unit) {
     const a = dimOf(out.unit), b = dimOf(inp.unit);
@@ -554,6 +559,120 @@ export function lawBlocks(): BlockDef[] {
   }));
 }
 
+
+// ---- things made and placed: shapes, parts by their sizes, places, patterns, variants (src/nexus/assembly.ts) ---------
+const ENGINEERING = Object.keys(DENSITY).filter((k) => !/^(bread|cheese|ham|tomato|lettuce|butter|chicken|egg|avocado|bacon|stingray|leaf|foliage|tissue|petrol|diesel|water|soil)$/.test(k)).sort();
+const FINISHES = ['', 'paint', 'chrome', 'brushed', 'ground', 'cast', 'plate', 'weld', 'thread', 'tread', 'texture', 'grain', 'stone', 'concrete'];
+const look: SettingDef[] = [{ key: 'mat', label: 'Material', type: 'choice', default: 'steel-low', choices: ENGINEERING }, { key: 'color', label: 'Colour', type: 'text', default: '#9aa3ad' }, { key: 'finish', label: 'Finish', type: 'choice', default: '', choices: FINISHES }];
+const hex = (c: unknown, d = 0x9aa3ad): number => { const m = /^#?([0-9a-f]{6})$/i.exec(String(c ?? '').trim()); return m ? parseInt(m[1]!, 16) : d; };
+const L = (name: string, def: number, label?: string, more: Partial<PortDef> = {}) => N(name, 'm', { default: def, optional: true, ...(label ? { label } : {}), ...more });
+const thing = (name = 'thing', label = 'thing') => P(name, 'assembly', { label });
+/** A part of one shape, of its material, coloured and finished. */
+function shapePart(name: string, shape: Part['shape'], set: Record<string, unknown>): Part {
+  return { name: String(set.name || name), shape, at: [0, 0, 0], mat: String(set.mat || 'steel-low'), color: hex(set.color), ...(set.finish ? { finish: String(set.finish) } : {}) };
+}
+const shapeBlock = (id: string, name: string, says: string, inputs: PortDef[], make: (i: Record<string, number>) => Part['shape'], test: { inputs: Record<string, number>; mass: number }) => def({
+  id: `shape.${id}`, name, kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'structural'], says,
+  settings: [{ key: 'name', label: 'Name', type: 'text', default: name.toLowerCase() }, ...look],
+  ports: { inputs, outputs: [P('part', 'part'), N('mass', 'kg')] },
+  run: (i, c) => { const v = Object.fromEntries(inputs.filter((q) => i[q.name] !== undefined || q.default !== undefined).map((q) => [q.name, Number(i[q.name] ?? q.default)])); for (const [k, x] of Object.entries(v)) if (!(x >= 0) || !Number.isFinite(x)) throw new Error(`${k} must be a size, not ${x}`); const p = shapePart(name.toLowerCase(), make(v), c.set); return { part: p, mass: massOf(p) }; },
+  tests: [{ set: { mat: 'steel-low' }, inputs: test.inputs, outputs: { mass: test.mass }, rel: 1e-9 }],
+});
+/** Points typed as "x, y; x, y; …" in millimetres. */
+function points(t: unknown): [number, number][] {
+  const pts = String(t ?? '').split(';').map((q) => q.split(',').map((x) => Number(x.trim()) / 1000)).filter((q) => q.length === 2 && q.every(Number.isFinite)) as [number, number][];
+  if (pts.length < 3) throw new Error('a profile needs three points or more, as "x, y; x, y; …" in mm');
+  return pts;
+}
+const asThing = (v: unknown): Part | Assembly => { if (isAssembly(v) || isPart(v)) return v; throw new Error('nothing made to place: wire a shape, a part or an assembly in'); };
+const BUILT_THINGS: BlockDef[] = [
+  shapeBlock('box', 'Box', 'A block: width (x), height (y), depth (z)', [L('w', 0.1, 'width'), L('h', 0.1, 'height'), L('d', 0.1, 'depth')], (v) => ({ box: [v.w!, v.h!, v.d!] }), { inputs: { w: 0.1, h: 0.1, d: 0.1 }, mass: 7.85 }),
+  shapeBlock('cyl', 'Cylinder', 'A cylinder along y: its radius and height; a second radius at its top makes it a frustum', [L('r', 0.05, 'radius'), L('h', 0.1, 'height'), N('r2', 'm', { optional: true, label: 'top radius (blank: the same)' })], (v) => ({ cyl: v.r2 !== undefined ? [v.r!, v.h!, v.r2] : [v.r!, v.h!] }), { inputs: { r: 0.05, h: 0.1 }, mass: Math.PI * 0.0025 * 0.1 * 7850 }),
+  shapeBlock('sphere', 'Sphere', 'A ball: its radius', [L('r', 0.05, 'radius')], (v) => ({ sphere: v.r! }), { inputs: { r: 0.05 }, mass: (4 / 3) * Math.PI * 0.05 ** 3 * 7850 }),
+  shapeBlock('cone', 'Cone', 'A cone along y: base radius and height', [L('r', 0.05, 'radius'), L('h', 0.1, 'height')], (v) => ({ cone: [v.r!, v.h!] }), { inputs: { r: 0.05, h: 0.1 }, mass: (Math.PI * 0.0025 * 0.1 / 3) * 7850 }),
+  shapeBlock('torus', 'Ring', 'A ring round z: its radius to the middle of the tube, and the tube\'s radius', [L('R', 0.05, 'ring radius'), L('r', 0.01, 'tube radius')], (v) => ({ torus: [v.R!, v.r!] }), { inputs: { R: 0.05, r: 0.01 }, mass: 2 * Math.PI ** 2 * 0.05 * 0.0001 * 7850 }),
+  shapeBlock('tube', 'Tube', 'A straight tube along y: outside radius, wall and length', [L('r', 0.02, 'outside radius'), L('wall', 0.002, 'wall'), L('h', 0.5, 'length')], (v) => { if (v.wall! >= v.r!) throw new Error('the wall is as thick as the tube'); return { tube: { r: v.r!, wall: v.wall!, pts: [[0, -v.h! / 2, 0], [0, v.h! / 2, 0]] } }; }, { inputs: { r: 0.02, wall: 0.002, h: 0.5 }, mass: Math.PI * (0.02 ** 2 - 0.018 ** 2) * 0.5 * 7850 }),
+  def({ id: 'shape.extrude', name: 'Extrude', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'structural'], says: 'A profile drawn in x and y (mm), pushed out along z to a length: a bracket, a beam, a plate of any outline',
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'profile' }, { key: 'profile', label: 'Profile, mm: x, y; x, y; …', type: 'code', default: '0, 0; 60, 0; 60, 6; 6, 6; 6, 40; 0, 40' }, ...look],
+    ports: { inputs: [L('L', 0.1, 'length')], outputs: [P('part', 'part'), N('mass', 'kg')] },
+    run: (i, c) => { const p = shapePart('profile', { prism: { pts: points(c.set.profile), L: Number(i.L ?? 0.1) } }, c.set); return { part: p, mass: massOf(p) }; },
+    tests: [{ set: { profile: '0,0; 100,0; 100,100; 0,100', mat: 'steel-low' }, inputs: { L: 0.1 }, outputs: { mass: 7.85 }, rel: 1e-9 }] }),
+  def({ id: 'shape.lathe', name: 'Turn (lathe)', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing'], says: 'A profile of radius and height (mm) spun about y: a propeller hub, a pulley, a knob, a vase',
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'turned' }, { key: 'profile', label: 'Profile, mm: r, y; r, y; …', type: 'code', default: '0, 0; 20, 0; 20, 5; 8, 8; 8, 30; 0, 30' }, ...look],
+    ports: { inputs: [], outputs: [P('part', 'part'), N('mass', 'kg')] },
+    run: (_, c) => { const p = shapePart('turned', { lathe: points(c.set.profile) }, c.set); return { part: p, mass: massOf(p) }; },
+    tests: [{ set: { profile: '0,0; 50,0; 50,100; 0,100', mat: 'steel-low' }, inputs: {}, outputs: { mass: Math.PI * 0.0025 * 0.1 * 7850 }, rel: 1e-3 }] }),
+  def({ id: 'part.family', name: 'Standard part by size', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'electrical', 'structural'],
+    says: `A part drawn whole from its standard, its sizes set one by one: ${DESIGNED.length} families (bolts, nuts, bearings, steppers, rails, extrusions, beams, pipes…)`,
+    settings: [{ key: 'family', label: 'Family', type: 'choice', default: 'bolt', choices: DESIGNED }],
+    ports: (s) => { const f = FAMILIES.find((x) => x.id === String(s.family ?? 'bolt')); return { inputs: (f?.params ?? []).map((q) => typeof q.default === 'number' ? N(q.key, undefined, { label: `${q.says} (${q.unit})`, optional: true }) : P(q.key, 'text', { label: `${q.says}${q.values?.length ? ` (${q.values.slice(0, 6).join(', ')}${q.values.length > 6 ? ', …' : ''})` : ''}`, optional: true })), outputs: [P('part', 'part'), N('mass', 'kg'), P('name', 'text')] }; },
+    run: (i, c) => { const params: Record<string, string | number> = {}; for (const [k, v] of Object.entries(i)) if (v !== undefined && v !== null && v !== '') params[k] = v as string | number; const r = componentFromParams(String(c.set.family), params); if (typeof r === 'string') throw new Error(r); return { part: r.part, mass: massOf(r.part), name: r.part.name }; },
+    tests: [{ set: { family: 'bolt' }, inputs: { thread: 'M10', length: 40 }, outputs: { name: 'M10 × 40 hex bolt' } }, { set: { family: 'bearing' }, inputs: { number: '6205' }, outputs: { name: 'ball bearing 6205 ZZ (25 × 52 × 15)' } }] }),
+
+  def({ id: 'place', name: 'Place', kind: 'logic', ability: 'transform', domains: ['mechanical', 'structural', 'everyday'], says: 'A thing put at a place (x, y, z), turned about x, y and z, at a scale. The thing is shared, not copied',
+    ports: { inputs: [thing(), L('x', 0), L('y', 0), L('z', 0), N('rx', 'rad', { default: 0, optional: true, label: 'turn about x' }), N('ry', 'rad', { default: 0, optional: true, label: 'turn about y' }), N('rz', 'rad', { default: 0, optional: true, label: 'turn about z' }), N('s', undefined, { default: 1, optional: true, label: 'scale' })], outputs: [thing('placed', 'placed')] },
+    run: (i) => { const t = asThing(i.thing), at = (k: string) => Number(i[k] ?? 0); return { placed: { name: t.name, items: [place(t, [at('x'), at('y'), at('z')], [at('rx'), at('ry'), at('rz')], Number(i.s ?? 1))] } }; },
+    tests: [{ inputs: { thing: { name: 'b', shape: { box: [1, 1, 1] }, mat: 'steel-low' }, x: 2 }, outputs: { placed: { items: [{ at: [2, 0, 0], s: 1 }] } } }] }),
+  def({ id: 'array.line', name: 'Row of', kind: 'logic', ability: 'generate', domains: ['mechanical', 'structural', 'everyday'], says: 'A thing many times in a row, each a step on from the last: one thing stored, many placed',
+    ports: { inputs: [thing(), N('n', undefined, { default: 4, optional: true, label: 'how many' }), L('dx', 0.1, 'step x'), L('dy', 0, 'step y'), L('dz', 0, 'step z')], outputs: [thing('row', 'row')] },
+    run: (i) => ({ row: arrayLine(asThing(i.thing), Number(i.n ?? 4), [Number(i.dx ?? 0.1), Number(i.dy ?? 0), Number(i.dz ?? 0)]) }),
+    tests: [{ inputs: { thing: { name: 'b' }, n: 3, dx: 1 }, outputs: { row: { items: [{ at: [0, 0, 0] }, { at: [1, 0, 0] }, { at: [2, 0, 0] }] } } }] }),
+  def({ id: 'array.circle', name: 'Ring of', kind: 'logic', ability: 'generate', domains: ['mechanical', 'vehicles', 'aerospace'], says: 'A thing many times round a circle (about y), each turned to face out: a drone\'s four motors, a wheel\'s bolts',
+    settings: [{ key: 'turn', label: 'Turn each to face out', type: 'boolean', default: true }],
+    ports: { inputs: [thing(), N('n', undefined, { default: 4, optional: true, label: 'how many' }), L('r', 0.15, 'radius')], outputs: [thing('ring', 'ring')] },
+    run: (i, c) => ({ ring: arrayCircle(asThing(i.thing), Number(i.n ?? 4), Number(i.r ?? 0.15), c.set.turn !== false) }),
+    tests: [{ inputs: { thing: { name: 'b' }, n: 2, r: 1 }, outputs: { ring: { items: [{ at: [1, 0, 0] }, { s: 1 }] } } }] }),
+  def({ id: 'array.grid', name: 'Grid of', kind: 'logic', ability: 'generate', domains: ['structural', 'everyday', 'operations'], says: 'A thing on a grid, nx by nz, and ny high: a swarm, a street of buildings, a city of streets. One thing stored, all of them placed',
+    ports: { inputs: [thing(), N('nx', undefined, { default: 3, optional: true }), N('nz', undefined, { default: 3, optional: true }), N('ny', undefined, { default: 1, optional: true, label: 'how many high' }), L('sx', 1, 'spacing x'), L('sy', 1, 'spacing y'), L('sz', 1, 'spacing z')], outputs: [thing('grid', 'grid')] },
+    run: (i) => ({ grid: arrayGrid(asThing(i.thing), Number(i.nx ?? 3), Number(i.nz ?? 3), [Number(i.sx ?? 1), Number(i.sy ?? 1), Number(i.sz ?? 1)], Number(i.ny ?? 1)) }),
+    tests: [{ inputs: { thing: { name: 'b' }, nx: 2, nz: 1, sx: 2 }, outputs: { grid: { items: [{ at: [-1, 0, 0] }, { at: [1, 0, 0] }] } } }] }),
+  def({ id: 'mirror', name: 'Mirror', kind: 'logic', ability: 'transform', domains: ['mechanical', 'vehicles'], says: 'A thing and its mirror image across a plane through the origin',
+    settings: [{ key: 'axis', label: 'Across', type: 'choice', default: 'x', choices: ['x', 'y', 'z'] }],
+    ports: { inputs: [thing()], outputs: [thing('pair', 'pair')] }, run: (i, c) => ({ pair: mirror(asThing(i.thing), String(c.set.axis) as 'x') }),
+    tests: [{ set: { axis: 'x' }, inputs: { thing: { name: 'b' } }, outputs: { pair: { items: [{ s: 1 }, { over: { scale: [-1, 1, 1] } }] } } }] }),
+  def({ id: 'combine', name: 'Combine', kind: 'logic', ability: 'transform', domains: ['mechanical', 'structural', 'everyday'], says: 'Several things as one assembly, each where it is: a frame and its motors, a city and the swarm over it',
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'assembly' }],
+    ports: { inputs: [P('things', 'assembly', { many: true, label: 'things' })], outputs: [thing('assembly', 'assembly')] },
+    run: (i, c) => { const ts = (Array.isArray(i.things) ? i.things : [i.things]).filter(Boolean).map(asThing); if (!ts.length) throw new Error('nothing wired in to combine'); return { assembly: combine(ts, String(c.set.name || 'assembly')) }; },
+    tests: [{ set: { name: 'two' }, inputs: { things: [{ name: 'a' }, { name: 'b' }] }, outputs: { assembly: { name: 'two' } } }] }),
+  def({ id: 'variant', name: 'Variant', kind: 'logic', ability: 'transform', domains: ['mechanical', 'manufacturing', 'everyday'], says: 'The same thing changed where it is placed: its colour, its material, its finish, its size along x, y and z, or hidden; on all of it, or only the pieces whose names a pattern finds ("prop", "arm|frame")',
+    settings: [{ key: 'path', label: 'Only pieces named (pattern, blank: all)', type: 'text', default: '' }, { key: 'color', label: 'Colour (blank: as it is)', type: 'text', default: '' }, { key: 'mat', label: 'Material (blank: as it is)', type: 'choice', default: '', choices: ['', ...ENGINEERING] }, { key: 'finish', label: 'Finish', type: 'choice', default: '', choices: FINISHES }, { key: 'hide', label: 'Hide them', type: 'boolean', default: false }],
+    ports: { inputs: [thing(), N('kx', undefined, { default: 1, optional: true, label: 'size along x' }), N('ky', undefined, { default: 1, optional: true, label: 'size along y' }), N('kz', undefined, { default: 1, optional: true, label: 'size along z' })], outputs: [thing('variant', 'variant'), N('mass', 'kg')] },
+    run: (i, c) => {
+      const t = asThing(i.thing), k: [number, number, number] = [Number(i.kx ?? 1), Number(i.ky ?? 1), Number(i.kz ?? 1)];
+      const over: Override = { ...(c.set.path ? { path: String(c.set.path) } : {}), ...(c.set.color ? { color: hex(c.set.color) } : {}), ...(c.set.mat ? { mat: String(c.set.mat) } : {}), ...(c.set.finish ? { finish: String(c.set.finish) } : {}), ...(c.set.hide ? { hide: true } : {}), ...(k.some((x) => x !== 1) ? { scale: k } : {}) };
+      if (over.path) try { new RegExp(over.path); } catch { throw new Error(`"${over.path}" is not a pattern`); }
+      const v: Assembly = { name: t.name, items: [{ ...place(t), over }] }; return { variant: v, mass: massOfAll(v) };
+    },
+    tests: [{ set: { mat: 'al-6061' }, inputs: { thing: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' } }, outputs: { mass: 2.7 }, rel: 1e-9 }, { set: { hide: true }, inputs: { thing: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' } }, outputs: { mass: 0 } }] }),
+  def({ id: 'axis', name: 'Point along', kind: 'logic', ability: 'transform', domains: ['mechanical'], says: 'A thing turned so its up (y) points along x, y or z, or reversed: a motor laid on its side, a shaft made horizontal',
+    settings: [{ key: 'to', label: 'Its y along', type: 'choice', default: 'x', choices: ['x', '-x', 'y', '-y', 'z', '-z'] }],
+    ports: { inputs: [thing()], outputs: [thing('turned', 'turned')] },
+    run: (i, c) => { const r: Record<string, [number, number, number]> = { x: [0, 0, -Math.PI / 2], '-x': [0, 0, Math.PI / 2], y: [0, 0, 0], '-y': [Math.PI, 0, 0], z: [Math.PI / 2, 0, 0], '-z': [-Math.PI / 2, 0, 0] }; const t = asThing(i.thing); return { turned: { name: t.name, items: [place(t, [0, 0, 0], r[String(c.set.to)] ?? [0, 0, 0])] } }; },
+    tests: [{ set: { to: 'z' }, inputs: { thing: { name: 'b' } }, outputs: { turned: { items: [{ rot: [Math.PI / 2, 0, 0] }] } } }] }),
+  def({ id: 'hole', name: 'Hole', kind: 'logic', ability: 'transform', domains: ['mechanical', 'manufacturing'], says: 'A hole drilled into a part: its radius and depth, where it starts on the part and which way it goes in; with sides, a hex or square pocket. Its volume comes out of the mass',
+    settings: [{ key: 'dir', label: 'Drilled toward', type: 'choice', default: '-y', choices: ['-y', 'y', '-x', 'x', '-z', 'z'] }, { key: 'sides', label: 'Sides (0: round)', type: 'number', default: 0 }, { key: 'path', label: 'Into the piece named (blank: the part itself)', type: 'text', default: '' }],
+    ports: { inputs: [P('part', 'part'), L('r', 0.004, 'radius'), L('depth', 0.01, 'depth'), L('x', 0), L('y', 0), L('z', 0)], outputs: [P('drilled', 'part'), N('mass', 'kg')] },
+    run: (i, c) => {
+      const p = i.part as Part; if (!isPart(p)) throw new Error('a hole goes into a part (a shape or a standard part), not an assembly');
+      const d: Record<string, [number, number, number]> = { y: [0, 1, 0], '-y': [0, -1, 0], x: [1, 0, 0], '-x': [-1, 0, 0], z: [0, 0, 1], '-z': [0, 0, -1] };
+      const cut = { r: Number(i.r ?? 0.004), depth: Number(i.depth ?? 0.01), at: [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)] as [number, number, number], dir: d[String(c.set.dir)] ?? [0, -1, 0], ...(Number(c.set.sides) >= 3 ? { n: Math.round(Number(c.set.sides)) } : {}) };
+      const pat = c.set.path ? new RegExp(String(c.set.path), 'i') : null; let done = false;
+      const into = (q: Part): Part => { if (!done && q.shape && (!pat || pat.test(q.name))) { done = true; return { ...q, cuts: [...(q.cuts ?? []), cut] }; } return q.parts ? { ...q, parts: q.parts.map(into) } : q; };
+      const out = into(p); if (!done) throw new Error(pat ? `no piece named like "${c.set.path}" with a shape` : 'it has no shape of its own to drill: name the piece');
+      return { drilled: out, mass: massOf(out) };
+    },
+    tests: [{ inputs: { part: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, r: 0.01, depth: 0.1 }, outputs: { mass: (0.001 - Math.PI * 0.0001 * 0.1) * 7850 }, rel: 1e-9 }] }),
+  def({ id: 'measure', name: 'Measure', kind: 'critic', ability: 'measure', domains: ['mechanical', 'structural', 'everyday'], says: 'What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as',
+    ports: { inputs: [thing()], outputs: [N('mass', 'kg'), L('w', 0, 'width'), L('h', 0, 'height'), L('d', 0, 'depth'), P('placed', 'integer', { label: 'pieces placed' }), P('distinct', 'integer', { label: 'things stored' })] },
+    run: (i) => { const t = asThing(i.thing), b = boundsOfAll(t), z = b.isEmpty(); return { mass: massOfAll(t), w: z ? 0 : b.max.x - b.min.x, h: z ? 0 : b.max.y - b.min.y, d: z ? 0 : b.max.z - b.min.z, placed: placedCount(t), distinct: distinctCount(t) }; },
+    tests: [{ inputs: { thing: { name: 'b', shape: { box: [0.1, 0.2, 0.3] }, mat: 'steel-low' } }, outputs: { mass: 0.006 * 7850, w: 0.1, h: 0.2, d: 0.3, placed: 1 }, rel: 1e-9 }], sink: true }),
+  def({ id: 'space.show', name: 'Show in space', kind: 'view', ability: 'show', domains: ['everyday', 'mechanical', 'structural'], says: 'Puts a thing into the 3D space, at its place: everything wired into one of these is what the space draws',
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'shown' }],
+    ports: { inputs: [thing()], outputs: [] }, run: () => ({}), sink: true, tests: [{ inputs: { thing: { name: 'b' } }, outputs: {} }] }),
+];
+
 for (const b of BUILT_IN) LIBRARY.set(b.id, b);
+for (const b of BUILT_THINGS) LIBRARY.set(b.id, b);
 for (const b of lawBlocks()) LIBRARY.set(b.id, b);
 export const block = (id: string): BlockDef | undefined => LIBRARY.get(id);
