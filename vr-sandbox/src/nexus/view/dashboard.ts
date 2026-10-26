@@ -33,7 +33,7 @@ const slider = $<HTMLInputElement>('tslider'), rate = $<HTMLSelectElement>('trat
 function drawClock(): void {
   const c = wall.clock(); slider.max = String(c.max); if (document.activeElement !== slider) slider.value = String(c.t);
   $('play').textContent = c.playing ? '❚❚' : '▶'; $('tread').textContent = `t = ${c.t.toFixed(1)} s`;
-  $('tbar').classList.toggle('idle', !c.moves); $('tbar').title = c.moves ? 'The board\'s clock: what moves with time runs as it goes' : 'Nothing on this board moves with time yet: wire a Clock into a Follow a path or a Signal cycle';
+  $('tbar').classList.toggle('idle', !c.moves); slider.style.display = c.moves ? '' : 'none'; $('tread').textContent = c.moves ? `t = ${c.t.toFixed(1)} s` : 'Nothing on this board moves with time'; $('tbar').title = c.moves ? 'The board\'s clock: what moves with time runs as it goes' : 'Nothing on this board moves with time yet: wire a Clock into a Follow a path or a Signal cycle';
 }
 $('play').onclick = () => wall.play(!wall.clock().playing);
 slider.oninput = () => wall.setTime(Number(slider.value));
@@ -67,14 +67,14 @@ function metrics(): void {
   const shared = placed ? 1 - distinct / placed : 0;
   $('gauges').innerHTML = [
     ring(null, '#ff6e40', mass ? show(mass, 'kg') : '—', 'Mass', things.length ? `of ${things.length} shown` : 'nothing shown'),
-    ring(shared, '#ffd740', placed ? `${shared > 0.99 ? (Math.floor(shared * 1000) / 10).toFixed(1) : (shared * 100).toFixed(0)}%` : '—', 'Shared', `${placed.toLocaleString()} placed, ${distinct.toLocaleString()} kept`),
-    ring(Math.min(1, r.ms / 16.7), r.ms > 16.7 ? '#ff5252' : '#69f0ae', `${r.ms.toFixed(r.ms < 10 ? 1 : 0)} ms`, 'Last run', 'of a 16.7 ms frame'),
+    ring(shared, '#ffd740', placed ? `${shared > 0.99 ? (Math.floor(shared * 1000) / 10).toFixed(1) : (shared * 100).toFixed(0)}%` : '—', 'Shared', `${placed.toLocaleString()} pieces, ${distinct.toLocaleString()} made`),
+    ring(Math.min(1, r.ms / 16.7), r.ms > 16.7 ? '#ff5252' : '#69f0ae', `${r.ms.toFixed(r.ms < 10 ? 1 : 0)} ms`, 'Last run', 'a frame is 16.7 ms'),
     ring(total ? (total - failed - waiting) / total : null, failed ? '#ff5252' : '#40c4ff', total ? `${total - failed - waiting}/${total}` : '—', 'Nodes', failed ? `${failed} failed` : waiting ? `${waiting} waiting` : 'all working'),
-    ring(st.instances / 250_000, '#e040fb', st.instances >= 1000 ? `${(st.instances / 1000).toFixed(st.instances >= 1e4 ? 0 : 1)}k` : String(st.instances), 'Drawn', `${st.draws} draws of 250k`),
+    ring(st.instances / 250_000, '#e040fb', st.instances >= 1000 ? `${(st.instances / 1000).toFixed(st.instances >= 1e4 ? 0 : 1)}k` : String(st.instances), 'Drawn', 'pieces, of 250k most'),
   ].join('');
   $('metNote').textContent = placed ? `What is shown spans ${show(box.x, 'm')} × ${show(box.z, 'm')}, ${show(box.y, 'm')} high.` : 'Wire something into a "Show in space" node to measure it here.';
   $('metOf').textContent = wall.boardTitle();
-  $('stat3d').textContent = st.instances ? `${st.instances.toLocaleString()} drawn in ${st.draws} draw${st.draws === 1 ? '' : 's'}${st.boxes ? ` · ${st.boxes.toLocaleString()} far off as boxes` : ''}` : '';
+  $('stat3d').textContent = st.instances ? `${st.instances.toLocaleString()} pieces drawn${st.boxes ? `, ${st.boxes.toLocaleString()} of them far away, shown as plain boxes` : ''}` : '';
 }
 
 // ---- variations: one node, each of an input's choices -----------------------------------------------------------------

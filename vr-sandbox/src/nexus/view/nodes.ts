@@ -210,7 +210,7 @@ function paint(): void {
     g.save(); rr(gg.x, gg.y, gg.w, gg.h, 12); g.clip(); g.fillStyle = grad; g.fillRect(gg.x, gg.y, gg.w, HEAD); g.restore();
     g.fillStyle = '#05080c'; g.font = '700 14px system-ui, sans-serif'; g.textBaseline = 'middle';
     g.fillText(KINDS[k].mark, gg.x + 10, gg.y + HEAD / 2);
-    g.fillText(clip(node.label || d?.name || 'Block', 30), gg.x + 32, gg.y + HEAD / 2);
+    g.fillText(clip(node.label || d?.name || 'Block', node.inner || d?.graph ? 26 : 30), gg.x + 32, gg.y + HEAD / 2);
     if (s?.mapped) { g.font = '700 11px system-ui'; const tx = `×${s.mapped.toLocaleString()}`, tw = g.measureText(tx).width; rr(gg.x + gg.w - tw - 16, gg.y + 8, tw + 10, 18, 9); g.fillStyle = '#05080cbb'; g.fill(); g.fillStyle = '#fff'; g.fillText(tx, gg.x + gg.w - tw - 11, gg.y + 17); }
     if (node.inner || d?.graph) { g.fillStyle = '#05080c'; g.font = '11px system-ui'; g.fillText(node.inner ? '▣ open' : '▣ block', gg.x + gg.w - 52, gg.y + HEAD / 2); }
     // outline: chosen, failed, waiting
