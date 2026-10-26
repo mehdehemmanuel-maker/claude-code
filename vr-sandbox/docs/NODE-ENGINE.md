@@ -41,6 +41,26 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-26, last: realism at scale.** Finding flaws and adding power is half of it; the other half is that a big
+thing still looks and behaves like itself. Following the Seed document's 3.12 ("cost follows the screen"):
+- **Stand-ins with an error bound** (`space3d.ts`): a thing far off is drawn as its biggest pieces (48, by the size of
+  each piece's box), chosen only while the biggest piece it leaves out projects under 1.5 px. A 3 × 3 city far off draws
+  each house with its walls and roof, not a grey box (186 stand-ins, no boxes, 8,469 pieces). Made once per distinct
+  thing and kept.
+- **A frame governor**: when building what to draw takes over 30 ms (or nears the 250k budget) the stand-ins' allowed
+  error grows 1.5× a frame, and shrinks when there is time to spare, never finer than its best: the view degrades in
+  detail, never in speed, and never has holes (the worst is a box).
+- **Behaviour, not only looks**: cars speed up at 2 m/s² (typical in town, an estimate) and brake at 3.4 m/s² (the
+  deceleration ITE times yellows by), and at a yellow go on if they are too close to stop.
+- **Distance haze** in the docked view, set from the size of what is shown, so depth reads at a car's scale and a
+  city's.
+Next for realism at scale: proxies built bottom-up from the children's (the document's merge-and-simplify), shown
+through a seed's own saved stand-in; per-instance variation of look within a spawn (wear, tint) as overrides on one
+mesh; chunks generated as they come into view, so a city need not be built whole.
+
+The library has **Boards** first: every starter board and every board you save ("Save to the library's Boards"), by
+field (the traffic board under Vehicles, the resistor under Electrical).
+
 **2026-10-26, then: what building a city showed the nodes need, built, and what is still missing.** The city was
 the test, not the goal: each place it was hard to build is an ability nodes lacked. Built:
 

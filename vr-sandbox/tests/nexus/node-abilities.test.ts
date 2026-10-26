@@ -76,6 +76,15 @@ describe('the clock, signals and paths', () => {
     expect(await late(50)).toBeCloseTo(379.5, 6); expect(await late(60)).toBeCloseTo(379.5, 6); expect(await late(75)).toBeGreaterThan(380);
     expect(await late(50)).toBe(await late(50));
   });
+  it('a car moves off from a stop line at its acceleration, and slows to stop rather than stopping dead', async () => {
+    const run = async (t: number) => runBlock('follow', { path: [{ x: 0, z: 0 }, { x: 900, z: 0 }], loop: false, n: 1, speed: 15, accel: 2, brake: 3.4, t, stops: [{ at: 600, axis: 'x' }] }, {});
+    // at 15 m/s it comes to the line at 40 s, in the red (34 to 68 s): it slows, stops there, and goes again at 68 s
+    const before = (await run(60)).rows as { x: number }[], after = (await run(73)).rows as { x: number }[];
+    expect(before[0]!.x).toBeCloseTo(599.5, 6);
+    // 5 s from rest at 2 m/s²: half of 2 × 5², 25 m (it has not yet reached 15 m/s, which takes 7.5 s)
+    expect(after[0]!.x - 599.5).toBeGreaterThan(23); expect(after[0]!.x - 599.5).toBeLessThan(27);
+    const slowing = (await run(38)).speed as number; expect(slowing).toBeGreaterThan(0); expect(slowing).toBeLessThan(15);
+  });
   it('cars keep their gap: none closer than it to the one ahead', async () => {
     const out = await runBlock('follow', { path: [{ x: 0, z: 0 }, { x: 100, z: 0 }, { x: 100, z: 100 }, { x: 0, z: 100 }, { x: 0, z: 0 }], n: 12, speed: 12, gap: 8, t: 90, stops: [{ at: 95, axis: 'x' }, { at: 195, axis: 'z' }] }, {});
     const pts = out.rows as { x: number; z: number }[];

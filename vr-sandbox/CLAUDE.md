@@ -81,6 +81,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   movement needs and all types of stuff" (2026-10-26: the dashboard, every panel read from the board; frames and Mate,
   what touches what, rules over rows, Clear away, Clashes, Onto the ground, the Clock, signal cycles, Follow a path; what
   is still missing listed in `docs/NODE-ENGINE.md`)
+- "Could traffic board be under a board category in the library there's circuit boards and all types of stuff also how
+  do we handle realism at scale like right now you're just like stress testing to find flaws and making things more and
+  more powerful but yea keep reading the file and executing" (2026-10-26: Boards in the library, by field, yours saved
+  beside them; stand-ins with error bounds and a frame governor, the Seed document's 3.12; cars that speed up and brake)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -133,12 +137,12 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Places, rides and games | `places.ts`, `karting.ts`, `coaster.ts`, `pingpong.ts` |
 | Blocks: what a node on a board of blocks can be (typed ports with units, settings, tests, sources), the library of them by field, ability and kind (every law a calculator), a duplicate refused | `src/nexus/blocks.ts` |
 | A board of blocks run: keys and a shared cache so only what changed runs, lists mapped, units converted on wires, groups folded, opened and saved as blocks, branches cut, dead blocks, twins and repeated wiring found | `src/nexus/dataflow.ts` (plan and status: `docs/NODE-ENGINE.md`) |
-| The board of blocks: the coloured canvas, library, inspector-calculator, suggestions, starter boards; the board's clock (played, it ticks only what reads it) | `src/nexus/view/nodes.ts` (on the dashboard; hosted in the space as `wall`) |
+| The board of blocks: the coloured canvas, library (its Boards first: the starter boards and yours, by field), inspector-calculator, suggestions; the board's clock (played, it ticks only what reads it) | `src/nexus/view/nodes.ts` (on the dashboard; hosted in the space as `wall`) |
 | The dashboard, the app's front door (`view/index.html`): the board with the library, a docked 3D view (entered to fill the page, or on to the space), the clock under it, the run log, results and metrics, variations of the chosen node; every panel read from the board as it runs | `src/nexus/view/dashboard.ts` |
 | The 3D view docked in the dashboard: what the board shows, drawn by the space's renderer, pressed to choose its node | `src/nexus/view/dock3d.ts` |
 | A part in 3D on a board of blocks: each 3D view block's picture, and full screen to turn and take apart | `src/nexus/view/nodes3d.ts` (draws with `kit3d.ts`) |
 | The space (`view/space.html`, entered from the dashboard): nothing but what is made, in x, y, z, at any scale (S: the world scaled round you, the grid's cells a decade at a time) and through time (T: the board's clock, or its history), the panels floating where you reach them, on a screen or in a headset | `src/nexus/view/space.ts` |
-| What the nodes make, drawn in the space: one instanced mesh per distinct piece, what is too small to show its pieces drawn as its box | `src/nexus/view/space3d.ts` |
+| What the nodes make, drawn in the space: one instanced mesh per distinct piece; far off, a thing as its stand-in (its biggest pieces, chosen while what it leaves out is under a pixel or two), tinier still its box; a governor that coarsens when drawing falls behind | `src/nexus/view/space3d.ts` |
 | Things placed, never copied: a part or an assembly placed (at, turned, scaled, changed there), shared by every place; mass, bounds and counts once per distinct thing; rows, rings, grids, mirrors; frames (named places on a thing, found through what it places) and mating one thing onto another by them (`frame`, `findFrame`, `mateTo`) | `src/nexus/assembly.ts` |
 | What building complexity showed nodes need: Mate (by frames), what each touches, rules over rows, Clear away (deleting by where things are), Clashes, Onto the ground, the Clock, Signal cycle, Loop round a block, Follow a path (gaps kept, stop lines obeyed, stepped from 0 so a time is always the same) | `src/nexus/blocks.ts` (the clock itself: `Engine.tick` and `clock` on a block in `dataflow.ts`) |
 | Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |

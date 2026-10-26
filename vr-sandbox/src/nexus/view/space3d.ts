@@ -5,15 +5,15 @@
 // see is not drawn; come closer and it opens into its pieces. The level is worked out again when the view moves.
 
 import * as THREE from 'three';
-import { boundsOfAll, isAssembly, leavesOf, matrixOf, effective, type Assembly, type Override } from '../assembly';
+import { boundsOfAll, flatten, isAssembly, leavesOf, matrixOf, effective, type Assembly, type Override } from '../assembly';
 import type { Part } from '../kits';
 import { leafGeometry, leafMaterial } from './kit3d';
 
 /** A thing to show, and which node shows it (so pressing it in the space chooses that node). */
 export interface Shown { key: string; thing: Part | Assembly }
-export interface ViewStats { instances: number; draws: number; boxes: number; hidden: number; ms: number }
+export interface ViewStats { instances: number; draws: number; boxes: number; hidden: number; ms: number; /** things drawn as their stand-ins */ standins: number; /** how much coarser than its best the view is drawing, to keep its time */ coarse: number }
 
-const PIECE_PX = 2.5, OPEN_PX = 10, BUDGET = 250_000;
+const PIECE_PX = 2.5, OPEN_PX = 10, BOX_PX = 4, ERR_PX = 1.5, BUDGET = 250_000;
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const boxMats = new Map<number, THREE.MeshStandardMaterial>();
 const boxMat = (c: number) => boxMats.get(c) ?? boxMats.set(c, new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, metalness: 0.1 })).get(c)!;
@@ -29,9 +29,30 @@ function colourOf(t: Part | Assembly): number {
 
 interface Batch { geo: THREE.BufferGeometry; mat: THREE.Material; m: number[]; owners: string[] }
 
+// ---- stand-ins: a thing far off drawn as its biggest pieces --------------------------------------------------------------
+/** How many pieces a stand-in keeps. */
+const PROXY_PIECES = 48;
+/** A stand-in: a thing's biggest pieces (by the size of each one's box), placed in its frame, and how far it can differ
+ *  from the whole: the size of the biggest piece it leaves out (0 when it leaves none). Made once per distinct thing,
+ *  the first time it is far enough off to need one (the Seed document's render pyramid, 3.12: the error, projected to
+ *  the screen, chooses the level). */
+interface Proxy { pieces: { part: Part; m: THREE.Matrix4; over: Override; size: number }[]; error: number }
+const proxies = new WeakMap<object, Proxy>();
+function proxyOf(t: Assembly): Proxy {
+  const was = proxies.get(t); if (was) return was;
+  const all: Proxy['pieces'] = [], tmp = new THREE.Box3();
+  flatten(t, (f) => { const b = boundsOfAll(f.leaf); if (b.isEmpty()) return; tmp.copy(b).applyMatrix4(f.m); all.push({ part: f.leaf, m: f.m, over: f.over, size: tmp.getSize(new THREE.Vector3()).length() }); return all.length < 200_000; });
+  all.sort((a, b) => b.size - a.size);
+  const p: Proxy = { pieces: all.slice(0, PROXY_PIECES), error: all[PROXY_PIECES]?.size ?? 0 };
+  proxies.set(t, p); return p;
+}
+
 export class SpaceView {
   readonly group = new THREE.Group();
-  stats: ViewStats = { instances: 0, draws: 0, boxes: 0, hidden: 0, ms: 0 };
+  stats: ViewStats = { instances: 0, draws: 0, boxes: 0, hidden: 0, ms: 0, standins: 0, coarse: 1 };
+  /** The frame governor (3.12): when building what to draw takes too long, the stand-ins are allowed a bigger error; when
+   *  there is time to spare, a smaller one again. Never finer than its best (1). */
+  private coarse = 1;
   private shown: Shown[] = []; private dirty = true; private lastCam = ''; private lastBuild = 0;
   private meshes = new Map<string, THREE.InstancedMesh>(); private owners = new Map<THREE.InstancedMesh, string[]>();
   private readonly sphere = new THREE.Sphere(); private readonly box = new THREE.Box3();
@@ -52,7 +73,7 @@ export class SpaceView {
   private build(camera: THREE.PerspectiveCamera, heightPx: number): void {
     const t0 = performance.now(), batches = new Map<string, Batch>(), eye = camera.getWorldPosition(new THREE.Vector3());
     const px = (heightPx / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), world = this.group.matrixWorld;
-    let count = 0, boxes = 0, hidden = 0;
+    let count = 0, boxes = 0, hidden = 0, stand = 0;
     const add = (key: string, geo: THREE.BufferGeometry, mat: THREE.Material, m: THREE.Matrix4, owner: string) => {
       let b = batches.get(key); if (!b) { b = { geo, mat, m: [], owners: [] }; batches.set(key, b); }
       for (const x of m.elements) b.m.push(x); b.owners.push(owner); count++;
@@ -73,7 +94,15 @@ export class SpaceView {
       const b = boundsOfAll(t), size = b.isEmpty() ? 0 : seen(b, m);
       if (size < 0.5) { hidden++; return; }
       const eff = effective(overs, t.name);
-      if (count >= BUDGET || (isAssembly(t) ? size < OPEN_PX : size < PIECE_PX * 2)) { if (!eff.hide) asBox(t, m, eff, owner); return; }
+      if (count >= BUDGET || (isAssembly(t) ? size < BOX_PX : size < PIECE_PX * 2)) { if (!eff.hide) asBox(t, m, eff, owner); return; }
+      // far enough off that what its stand-in leaves out is under a pixel or two (more when the frame is behind): its stand-in
+      if (isAssembly(t) && size < OPEN_PX * 40 && !eff.hide) {
+        const p = proxyOf(t), errPx = size * (p.error / Math.max(1e-9, b.getSize(new THREE.Vector3()).length()));
+        if (errPx < ERR_PX * this.coarse) {
+          for (const q of p.pieces) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const geo = leafGeometry(q.part); if (!geo) continue; const mat = leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, m.clone().multiply(q.m), owner); }
+          stand++; return;
+        }
+      }
       if (isAssembly(t)) { for (const it of t.items) visit(it.of, m.clone().multiply(matrixOf(it)), it.over ? [...overs, it.over] : overs, owner); return; }
       for (const l of leavesOf(t)) {
         const o = effective(overs, l.part.name); if (o.hide) continue;
@@ -96,7 +125,9 @@ export class SpaceView {
       this.owners.set(mesh, b.owners);
     }
     for (const [key, mesh] of this.meshes) if (!used.has(key)) { mesh.count = 0; mesh.visible = false; }
-    this.stats = { instances: count, draws: batches.size, boxes, hidden, ms: performance.now() - t0 };
+    const ms = performance.now() - t0;
+    this.coarse = ms > 30 || count > BUDGET * 0.8 ? Math.min(16, this.coarse * 1.5) : ms < 8 ? Math.max(1, this.coarse / 1.25) : this.coarse;
+    this.stats = { instances: count, draws: batches.size, boxes, hidden, ms, standins: stand, coarse: this.coarse };
   }
 
   /** The node whose thing a ray meets first, and where. */

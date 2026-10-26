@@ -20,6 +20,12 @@ import type { Part } from '../kits';
 const KEY = 'nexus.nodeboard.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1';
 const store = { get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }, set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* private window: kept for this visit only */ } } };
 interface Saved { id: string; name: string; says: string; domains: string[]; graph: Board }
+const BOARDS_KEY = 'nexus.boards.v1';
+interface SavedBoard { title: string; field: string; board: Board }
+function savedBoards(): SavedBoard[] { try { return JSON.parse(store.get(BOARDS_KEY) ?? '[]') as SavedBoard[]; } catch { return []; } }
+/** The current board kept in the library's Boards, under its title and a field. */
+function keepBoard(field: string): void { const all = savedBoards().filter((x) => x.title !== (root.title || 'My board')); all.push({ title: root.title || 'My board', field, board: JSON.parse(JSON.stringify(root)) as Board }); store.set(BOARDS_KEY, JSON.stringify(all)); }
+function forgetBoard(title: string): void { store.set(BOARDS_KEY, JSON.stringify(savedBoards().filter((x) => x.title !== title))); }
 function loadBlocks(): void { try { for (const s of JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]) register(groupBlock(s.graph, { id: s.id, name: s.name, says: s.says, domains: s.domains, by: 'you' })); } catch { /* none kept */ } }
 function keepBlock(d: BlockDef): void { let all: Saved[] = []; try { all = JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { /* start again */ } all = all.filter((s) => s.id !== d.id); all.push({ id: d.id, name: d.name, says: d.says, domains: d.domains, graph: d.graph! }); store.set(BLOCKS_KEY, JSON.stringify(all)); }
 
@@ -485,6 +491,25 @@ function renderLibrary(): void {
   if (!PAGE) return;
   const q = (document.getElementById('libQ') as HTMLInputElement).value, el = document.getElementById('shelves')!;
   el.innerHTML = '';
+  // boards come first: whole pipelines to start from (the starter boards, and those you saved), by field, as blocks are
+  const boards = allBoards().filter((x) => !q || x.title.toLowerCase().includes(q.toLowerCase()));
+  if (boards.length) {
+    const d = document.createElement('details'); d.className = 'shelf'; d.open = !!q;
+    d.innerHTML = `<summary>Boards <span>${boards.length}</span></summary>`;
+    for (const f of [...new Set(boards.map((x) => x.field))]) {
+      const h = document.createElement('div'); h.className = 'sub'; h.textContent = DOMAINS.find((x) => x.id === f)?.name ?? f; d.appendChild(h);
+      for (const x of boards.filter((y) => y.field === f)) {
+        const r = document.createElement('div'); r.className = 'blk'; r.title = x.mine ? 'Your board: open it (what is on the board now is kept in undo)' : 'Open this board (what is on the board now is kept in undo)';
+        r.innerHTML = `<span class="chip" style="background:${x.mine ? '#b388ff' : '#18ffff'}">▦</span><span class="n">${esc(x.title)}</span>${x.mine ? '<span class="t" style="color:#b388ff">yours</span><span class="t del" title="Take it out of the library">✕</span>' : ''}`;
+        r.onclick = (e) => {
+          if ((e.target as HTMLElement).classList.contains('del')) { forgetBoard(x.title); renderLibrary(); return; }
+          pushUndo(); useBoard(x.make()); sel.clear(); save(); fit(); runSoon(); renderAll(); document.getElementById('lib')!.classList.remove('open');
+        };
+        d.appendChild(r);
+      }
+    }
+    el.appendChild(d);
+  }
   for (const s of shelves(libBy, q)) {
     const d = document.createElement('details'); d.className = 'shelf'; d.open = !!q || s.blocks.length < 8;
     d.innerHTML = `<summary>${esc(s.name)} <span>${s.blocks.length}</span></summary>`;
@@ -521,7 +546,7 @@ function boardInspector(el: HTMLElement): void {
     <p class="says">${n} block${n === 1 ? '' : 's'} · last change: ${lastReport.ran} block${lastReport.ran === 1 ? '' : 's'} ran, ${lastReport.cached} reused (nothing they read changed)${lastReport.failed ? `, ${lastReport.failed} failed` : ''}${lastReport.waiting ? `, ${lastReport.waiting} waiting` : ''}, in ${lastReport.ms.toFixed(1)} ms</p>
     <h3>Suggestions</h3><div id="iSug">${sg.length ? '' : '<p class="says">Nothing: no dead branches, no twins, no repeated wiring.</p>'}</div>
     <h3>Start from</h3><div id="iDemos"></div>
-    <h3>This board</h3><div class="btns"><button id="iExport">Export JSON</button><button id="iImport">Import JSON</button><button id="iTidy">Tidy</button><button id="iFresh">Run all afresh</button><button id="iClear">Clear</button></div>
+    <h3>This board</h3><div class="row"><label>Its field</label><select id="iField">${DOMAINS.map((d) => `<option value="${d.id}" ${d.id === (savedBoards().find((x) => x.title === b.title)?.field ?? 'everyday') ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div><div class="btns"><button id="iKeep" class="hot">Save to the library's Boards</button><button id="iExport">Export JSON</button><button id="iImport">Import JSON</button><button id="iTidy">Tidy</button><button id="iFresh">Run all afresh</button><button id="iClear">Clear</button></div>
     <h3>How</h3><div class="kbd"><b>Drag</b> from an output to an input to wire · <b>drag</b> an input's wire off to move it · <b>double-click</b> empty space to add, a group to open · <b>shift-drag</b> to choose many · <b>Ctrl G</b> fold into a group · <b>Del</b> delete · <b>Ctrl Z</b> undo · <b>F</b> fit · <b>Ctrl K</b> commands · a list wired into one value runs the block once for each item</div>`;
   (document.getElementById('iTitle') as HTMLInputElement).onchange = (e) => edit((x) => { x.title = (e.target as HTMLInputElement).value; });
   const s = document.getElementById('iSug')!;
@@ -538,6 +563,7 @@ function boardInspector(el: HTMLElement): void {
   document.getElementById('iExport')!.onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(root, null, 1)], { type: 'application/json' })); a.download = `${(root.title || 'board').replace(/[^\w-]+/g, '-')}.json`; a.click(); };
   document.getElementById('iImport')!.onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json'; i.onchange = async () => { try { const b = JSON.parse(await i.files![0]!.text()) as Board; if (!b.nodes || !b.edges) throw new Error('not a board'); pushUndo(); useBoard(b); save(); fit(); runSoon(); renderAll(); } catch (e) { toast(`could not read it: ${(e as Error).message}`, true); } }; i.click(); };
   document.getElementById('iTidy')!.onclick = () => { edit((b) => { tidy(b); }); fit(); };
+  document.getElementById('iKeep')!.onclick = () => { keepBoard((document.getElementById('iField') as HTMLSelectElement).value); renderLibrary(); toast(`"${root.title || 'My board'}" is in the library, under Boards`); };
   document.getElementById('iFresh')!.onclick = async () => { await engine.fresh(); runSoon(); };
   document.getElementById('iClear')!.onclick = () => { pushUndo(); useBoard(emptyBoard('My pipeline')); save(); runSoon(); renderAll(); };
 }
@@ -883,6 +909,14 @@ const DEMOS: [string, Make][] = ([
     return b;
   }],
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
+
+/** Each starter board's field, for the library's Boards (by the start of its name). */
+const BOARD_FIELD: [string, string][] = [['A house', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
+  const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
+  const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));
+  return [...mine, ...starters];
+}
 
 // ---- start ----------------------------------------------------------------------------------------------------------
 loadBlocks();

@@ -26,6 +26,9 @@ export class Dock3D {
     this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture; this.scene.environmentIntensity = 0.6;
     this.scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x101820, 0.4));
     const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(3, 6, 2); this.scene.add(sun);
+    // depth at any scale: haze that thickens with distance, set from how big what is shown is (a car and a city each fade
+    // at their own far edge), toward the colour of the sky behind
+    this.scene.fog = new THREE.FogExp2(0x0a111c, 0.01);
     this.scene.add(this.view.group, this.grid);
     this.camera.position.set(6, 5, 8);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement); this.controls.enableDamping = true; this.controls.zoomSpeed = 1.4;
@@ -44,6 +47,7 @@ export class Dock3D {
     const b = this.view.bounds(); if (b.isEmpty()) return;
     const c = b.getCenter(new THREE.Vector3()), r = Math.max(0.05, b.getSize(new THREE.Vector3()).length() / 2);
     const d = r / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.05, dir = new THREE.Vector3(0.75, 0.62, 1).normalize();
+    (this.scene.fog as THREE.FogExp2).density = 0.35 / (d + r * 2);
     this.controls.target.copy(c); this.camera.position.copy(c).addScaledVector(dir, d); this.camera.near = Math.max(1e-4, d / 1e4); this.camera.far = d * 100; this.camera.updateProjectionMatrix(); this.controls.update();
   }
   get canvas(): HTMLCanvasElement { return this.renderer.domElement; }

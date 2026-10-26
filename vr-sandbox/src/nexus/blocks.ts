@@ -930,9 +930,9 @@ const BUILT_THINGS: BlockDef[] = [
       return { path, stops, length: 2 * (W - 2 * k) + 2 * (D - 2 * k) };
     },
     tests: [{ inputs: { w: 60, d: 60, inset: 0 }, outputs: { length: 240, stops: [{ at: 55, axis: 'x' }, { at: 115, axis: 'z' }, { at: 175, axis: 'x' }, { at: 235, axis: 'z' }] } }] }),
-  def({ id: 'follow', name: 'Follow a path', kind: 'solver', ability: 'simulate', domains: ['vehicles', 'mechanical', 'everyday'], says: 'Things moving along a path at the clock\'s time: each keeps a gap to the one ahead, and stops at a stop line while its way is not green. Worked out step by step from time 0 (a tenth of a second at a time), so the same time is always the same street. Gives where each is and which way it faces, for a spawner',
+  def({ id: 'follow', name: 'Follow a path', kind: 'solver', ability: 'simulate', domains: ['vehicles', 'mechanical', 'everyday'], says: 'Things moving along a path at the clock\'s time: each speeds up and slows as a car does, keeps a gap to the one ahead, and stops at a stop line while its way is red (or yellow, if it can stop). Worked out step by step from time 0 (a tenth of a second at a time), so the same time is always the same street. Gives where each is and which way it faces, for a spawner',
     settings: [{ key: 'loop', label: 'Round and round (the path is a loop)', type: 'boolean', default: true }, { key: 'phases', label: 'Its signals\' phases, seconds', type: 'text', default: 'green 30, yellow 4, red 34' }],
-    ports: { inputs: [P('path', 'table'), N('n', undefined, { default: 4, optional: true, label: 'how many' }), N('speed', 'm/s', { default: 11, optional: true }), L('gap', 8, 'gap kept, front to front'), N('t', 's', { label: 'time' }), P('stops', 'table', { optional: true })], outputs: [P('rows', 'table'), P('waiting', 'integer', { label: 'stopped' }), N('travelled', 'm', { label: 'the first has gone' })] },
+    ports: { inputs: [P('path', 'table'), N('n', undefined, { default: 4, optional: true, label: 'how many' }), N('speed', 'm/s', { default: 11, optional: true }), L('gap', 8, 'gap kept, front to front'), N('t', 's', { label: 'time' }), P('stops', 'table', { optional: true }), N('accel', 'm/s^2', { default: 2, optional: true, label: 'speeds up at most (2 m/s², typical of a car in town: an estimate)' }), N('brake', 'm/s^2', { default: 3.4, optional: true, label: 'slows at most (3.4 m/s², the deceleration ITE times yellows by)' })], outputs: [P('rows', 'table'), P('waiting', 'integer', { label: 'stopped' }), N('travelled', 'm', { label: 'the first has gone' }), N('speed', 'm/s', { label: 'mean speed' })] },
     run: (i, c) => {
       const pts = (Array.isArray(i.path) ? i.path : []).map((r) => r as { x: number; z: number }); if (pts.length < 2) throw new Error('a path needs two points or more');
       const cum = [0]; for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1]! + Math.hypot(pts[k]!.x - pts[k - 1]!.x, pts[k]!.z - pts[k - 1]!.z));
@@ -941,17 +941,28 @@ const BUILT_THINGS: BlockDef[] = [
       const go = (axis: string | undefined, t: number) => (axis === 'z' ? crossOf(ph, t) : phaseAt(ph, t).name) === 'green';
       const s = Array.from({ length: n }, (_, k) => (loop ? ((n - k) * L) / Math.max(1, n) : -k * gap) % (L || 1)), moved = new Array<number>(n).fill(0);
       const ahead = (from: number, to: number) => (loop ? (((to - from) % L) + L) % L : to - from);
+      // each speeds up at `accel` and slows at `brake` at most, to what lets it stop short of what is ahead (the car in front,
+      // less its gap; a stop line it may not cross); at a yellow it goes on if it is too close to stop at `brake` (as drivers
+      // do: the yellow is timed so they can)
+      const vel = new Array<number>(n).fill(v), acc = Number(i.accel ?? 2), brk = Number(i.brake ?? 3.4);
       for (let t = 0; t < T - 1e-9; t += dt) {
+        const h = Math.min(dt, T - t);
         for (let k = 0; k < n; k++) {
-          let step = v * Math.min(dt, T - t);
-          if (n > 1 && (loop || k > 0)) { const lead = s[(k - 1 + n) % n]!; step = Math.min(step, Math.max(0, ahead(s[k]!, lead) - gap)); }
-          for (const st of stops) { const d = ahead(s[k]!, st.at); if (d >= 0 && d < step + 0.5 && !go(st.axis, t)) step = Math.min(step, Math.max(0, d - 0.5)); }
-          moved[k] = step; s[k] = loop ? (s[k]! + step) % L : Math.min(L, s[k]! + step);
+          let free = Infinity;
+          if (n > 1 && (loop || k > 0)) { const lead = s[(k - 1 + n) % n]!; free = Math.max(0, ahead(s[k]!, lead) - gap); }
+          for (const st of stops) {
+            const d = ahead(s[k]!, st.at); if (d < 0 || d > 200 || go(st.axis, t)) continue;
+            const yellow = (st.axis === 'z' ? crossOf(ph, t) : phaseAt(ph, t).name) === 'yellow';
+            if (yellow && vel[k]! * vel[k]! / (2 * brk) > d - 0.5) continue;
+            free = Math.min(free, Math.max(0, d - 0.5));
+          }
+          const want = Math.min(v, vel[k]! + acc * h, Math.sqrt(2 * brk * free)), step = Math.min(free, Math.max(0, want) * h);
+          vel[k] = step / h; moved[k] = step; s[k] = loop ? (s[k]! + step) % L : Math.min(L, s[k]! + step);
         }
       }
       const at = (d: number) => { let k = 1; while (k < cum.length - 1 && cum[k]! < d) k++; const a = pts[k - 1]!, b = pts[k]!, f = (d - cum[k - 1]!) / Math.max(1e-9, cum[k]! - cum[k - 1]!); return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, ry: Math.atan2(-(b.z - a.z), b.x - a.x) }; };
       const rows = s.map((d) => ({ ...at(Math.max(0, d)), y: 0 })), waiting = T > 0 ? moved.filter((m) => m < 1e-6).length : 0;
-      return { rows, waiting, travelled: n ? s[0]! : 0 };
+      return { rows, waiting, travelled: n ? s[0]! : 0, speed: n ? vel.reduce((a, b) => a + b, 0) / n : 0 };
     },
     tests: [{ set: { loop: false }, inputs: { path: [{ x: 0, z: 0 }, { x: 100, z: 0 }], n: 1, speed: 10, t: 2 }, outputs: { rows: [{ x: 20, z: 0, ry: 0 }], waiting: 0 }, rel: 1e-6 },
       { set: { loop: false, phases: 'red 30, green 30' }, inputs: { path: [{ x: 0, z: 0 }, { x: 100, z: 0 }], n: 1, speed: 10, t: 10, stops: [{ at: 50, axis: 'x' }] }, outputs: { rows: [{ x: 49.5 }], waiting: 1 }, rel: 1e-6 }] }),
