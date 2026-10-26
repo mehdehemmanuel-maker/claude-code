@@ -58,7 +58,16 @@ Checked against the laws, not against last time: a 1 m rod hinged at its end, le
 2π √(2L / 3g) × 1.073 (the elliptic factor for 60°) gives, within 3 % (`tests/nexus/physics-nodes.test.ts`); a tower
 left alone stands; shoved by a 120 mm steel ball at 300 N for 0.1 s it falls and rests. Starter boards: a ball into a
 tower, a door's swing and what it hits, a pendulum.
-Next in this line: wheels that roll (hinges on a car let go, driven by a motor: `sim.ts` has DC motors), slides,
+**Wheels that roll** (later the same day): a Hinge can be driven by a motor from its datasheet (`data/motors.ts`: the
+maxon RE 40 and the MY1016 scooter motor, their published constants) through a gearhead (the maxon GP 42 C 12:1), turned
+at the torque its constants give at the speed it turns, K_t (V − K_t ω) / R − T_f (`sim.ts`). A cart (an aluminium deck on
+four rubber wheels, each on a hinge, the back two driven) pulls away and settles at 6.5 m/s, within 5 % of the speed
+the motor's constants give through 12:1 on a 0.1 m wheel, drawing its stall current (24 V over its winding, about 80 A)
+to start (`tests/nexus/physics-nodes.test.ts`). Let it go gives each joint's motor speed, current, peak current and
+energy. Honest limits: nothing limits the current (a driver would hold it to the motor's 6 A continuous; the gearhead is
+rated 7.5 N·m, under the stall torque through it), and the Car seed is still one body (its wheels do not turn): a seed
+that keeps its wheels as their own things, hinged, is next.
+Next in this line: slides,
 motion clips saved as seeds and played at offsets on many instances (the document's shared clips), swept volumes of
 any motion (not only a turn), and loads from motion feeding stress (the document's motion → analysis).
 

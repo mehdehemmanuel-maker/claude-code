@@ -769,6 +769,28 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'go', 'moved', 'show', 'thing');
     return b;
   }],
+  ['Physics: a cart on two motor-driven wheels', () => {
+    // an aluminium deck 1 × 0.5 m on four rubber wheels 200 mm across, each on a hinge; the back two each turned by a maxon
+    // RE 40 (24 V) through its 12:1 gearhead, from their datasheets: it pulls away and settles at the speed the motors'
+    // constants give (about 6.5 m/s). The motors are not current-limited: they draw their stall current (80 A) to start,
+    // over the motor's 6 A continuous rating and the gearhead's 7.5 N·m (a driver would limit it: not yet modelled)
+    const b = emptyBoard('A cart on motor-driven wheels');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'chassis', mat: 'al-6061', color: '#90a4ae', finish: 'brushed', w: 1, h: 0.06, d: 0.5 }, 'deck'); b.nodes.deck!.label = 'Deck';
+    placeBlock(b, 'place', 0, 0, { y: 0.16 }, 'deckAt'); wire(b, 'deck', 'part', 'deckAt', 'thing');
+    placeBlock(b, 'shape.cyl', 0, 0, { name: 'wheel', mat: 'rubber', color: '#212121', finish: 'tread', r: 0.1, h: 0.05 }, 'wheel'); b.nodes.wheel!.label = 'Wheel';
+    placeBlock(b, 'combine', 0, 0, { name: 'cart' }, 'all'); wire(b, 'deckAt', 'placed', 'all', 'things');
+    placeBlock(b, 'time', 0, 0, {}, 'clock');
+    placeBlock(b, 'letgo', 0, 0, { seconds: 8 }, 'go'); wire(b, 'clock', 't', 'go', 't');
+    const W: [number, number][] = [[-0.4, 0.3], [-0.4, -0.3], [0.4, 0.3], [0.4, -0.3]], names = ['wheel', 'wheel 2', 'wheel 3', 'wheel 4'];
+    W.forEach(([x, z], k) => {
+      placeBlock(b, 'place', 0, 0, { x, y: 0.1, z, rx: Math.PI / 2 }, `w${k}`); b.nodes[`w${k}`]!.label = `${names[k]}, on its axle`; wire(b, 'wheel', 'part', `w${k}`, 'thing'); wire(b, `w${k}`, 'placed', 'all', 'things');
+      placeBlock(b, 'hinge', 0, 0, { a: names[k], b: 'chassis', axis: 'z', x, y: 0.1, z, ...(k < 2 ? { motor: 'motor.dc.coreless.d40-150w-24v', gear: 'gearhead.planetary.d42-12to1', reverse: 1 } : {}) }, `h${k}`);
+      b.nodes[`h${k}`]!.label = k < 2 ? `${names[k]}: motor and gearhead` : `${names[k]}: free`; wire(b, `h${k}`, 'joint', 'go', 'joints');
+    });
+    wire(b, 'all', 'assembly', 'go', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'go', 'moved', 'show', 'thing');
+    return b;
+  }],
   ['Motion: a door swinging, and what it hits', () => {
     // a door mated into its wall, turned on its hinge edge (0 to 90° and back, at most 90°/s, 180°/s², about how a door is
     // swung by hand: an estimate); its swing swept, and checked against a bed put too close

@@ -19,6 +19,9 @@ import { DENSITY } from './mass';
 import * as THREE from 'three';
 import { bodiesOf, posedAt, simulate, type SimJoint, type SimOut } from './sim';
 import { Servo } from './motion';
+import { GEARHEADS, MOTORS } from '../data/motors';
+import { motorModel, windingR } from '../engineering/dcmotor';
+import { AMBIENT } from '../engineering/thermal';
 import type { Jolt } from './realize';
 import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
 import { massOf } from './mass';
@@ -964,12 +967,18 @@ const BUILT_THINGS: BlockDef[] = [
       const key = JSON.stringify([bodies, boxes, joints, push ?? null, Number(c.set.seconds ?? 8)]);
       let out = SIMS.get(key); if (!out) { out = simulate(J, bodies, boxes, { seconds: Math.min(60, Number(c.set.seconds ?? 8)), floor: 0, joints, ...(push ? { push } : {}) }); SIMS.set(key, out); if (SIMS.size > 24) SIMS.delete(SIMS.keys().next().value!); }
       const t = Math.min(Number(i.t ?? 0), out.seconds);
-      return { moved: posedAt(out, bodies, placed, t), ends: out.ends.map((e) => ({ name: e.name, moved: e.moved, dropped: e.dropped, turned: e.turned, resting: e.resting })), rested: out.restedAt ?? out.seconds, moving: out.restedAt === null, joint: out.joints.map((j) => ({ name: j.name, kind: j.kind, end: j.end, min: j.min, max: j.max })) };
+      return { moved: posedAt(out, bodies, placed, t), ends: out.ends.map((e) => ({ name: e.name, moved: e.moved, dropped: e.dropped, turned: e.turned, speed: e.speed, resting: e.resting })), rested: out.restedAt ?? out.seconds, moving: out.restedAt === null, joint: out.joints.map((j) => ({ name: j.name, kind: j.kind, end: j.end, min: j.min, max: j.max, ...(j.drive ? { rpm: j.drive.rpm, amps: j.drive.current, peakAmps: j.drive.maxCurrent, energy: j.drive.energyIn } : {}) })) };
     } }),
   def({ id: 'hinge', name: 'Hinge', kind: 'logic', ability: 'connect', domains: ['mechanical', 'structural', 'everyday'], says: 'A revolute joint for Let it go: one thing turning on another (or on the world, fixed) about an axis through a point, between limits, with friction. A door on its frame, a lid, a pendulum, a wheel on its axle',
-    settings: [{ key: 'a', label: 'What turns (its name)', type: 'text', default: 'door' }, { key: 'b', label: 'On what (its name; blank: the world)', type: 'text', default: '' }, { key: 'axis', label: 'Axis', type: 'choice', default: 'y', choices: ['x', 'y', 'z'] }],
-    ports: { inputs: [L('x', 0), L('y', 0), L('z', 0), N('min', 'deg', { optional: true, label: 'turns no less than' }), N('max', 'deg', { optional: true, label: 'turns no more than' }), N('friction', 'N*m', { default: 0, optional: true })], outputs: [P('joint', 'any')] },
-    run: (i, c) => { const ax = String(c.set.axis ?? 'y'), lim = i.min !== undefined && i.max !== undefined ? { limits: [Number(i.min), Number(i.max)].map((d) => (d * Math.PI) / 180) as [number, number] } : {}; return { joint: { kind: 'hinge', name: `hinge of ${String(c.set.a)}`, a: String(c.set.a), b: String(c.set.b || '') ? String(c.set.b) : { fixed: -1 }, at: [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)], axis: [ax === 'x' ? 1 : 0, ax === 'y' ? 1 : 0, ax === 'z' ? 1 : 0], friction: Number(i.friction ?? 0), ...lim } }; },
+    settings: [{ key: 'a', label: 'What turns (its name)', type: 'text', default: 'door' }, { key: 'b', label: 'On what (its name; blank: the world)', type: 'text', default: '' }, { key: 'axis', label: 'Axis', type: 'choice', default: 'y', choices: ['x', 'y', 'z'] }, { key: 'motor', label: 'Driven by (a motor from its datasheet)', type: 'choice', default: 'none', choices: ['none', ...Object.keys(MOTORS)] }, { key: 'gear', label: 'Through (a gearhead)', type: 'choice', default: 'none', choices: ['none', ...Object.keys(GEARHEADS)] }],
+    ports: { inputs: [L('x', 0), L('y', 0), L('z', 0), N('min', 'deg', { optional: true, label: 'turns no less than' }), N('max', 'deg', { optional: true, label: 'turns no more than' }), N('friction', 'N*m', { default: 0, optional: true }), N('volts', 'V', { optional: true, label: 'volts across its motor (its own, if not set)' }), N('reverse', undefined, { default: 0, optional: true, label: 'turn it the other way (1)' })], outputs: [P('joint', 'any')] },
+    run: (i, c) => {
+      const ax = String(c.set.axis ?? 'y'), lim = i.min !== undefined && i.max !== undefined ? { limits: [Number(i.min), Number(i.max)].map((d) => (d * Math.PI) / 180) as [number, number] } : {};
+      // a motor turns it at the torque its constants give at the speed it turns (sim.ts): K_t (V − K_t ω) / R − T_f
+      const md = c.set.motor && c.set.motor !== 'none' ? MOTORS[String(c.set.motor)] : undefined, gh = c.set.gear && c.set.gear !== 'none' ? GEARHEADS[String(c.set.gear)] : undefined;
+      let drive = {}; if (md) { const m = motorModel(md), V = (i.volts !== undefined ? Number(i.volts) : md.V) * (Number(i.reverse ?? 0) ? -1 : 1); drive = { drive: { name: md.label, V, Kt: m.Kt, R: windingR(m, AMBIENT), Tf: m.Tf, ...(gh ? { gear: { ratio: gh.ratio, efficiency: gh.efficiency } } : {}) } }; }
+      return { joint: { kind: 'hinge', name: `hinge of ${String(c.set.a)}`, a: String(c.set.a), b: String(c.set.b || '') ? String(c.set.b) : { fixed: -1 }, at: [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)], axis: [ax === 'x' ? 1 : 0, ax === 'y' ? 1 : 0, ax === 'z' ? 1 : 0], friction: Number(i.friction ?? 0), ...lim, ...drive } };
+    },
     tests: [{ set: { a: 'lid', axis: 'x' }, inputs: { y: 1 }, outputs: { joint: { kind: 'hinge', a: 'lid', at: [0, 1, 0], axis: [1, 0, 0] } } }] }),
   def({ id: 'push', name: 'Push', kind: 'logic', ability: 'act', domains: ['mechanical', 'everyday'], says: 'A force on one thing Let it go lets go, for so long from the start: a shove, a kick, a gust',
     settings: [{ key: 'name', label: 'On what (its name)', type: 'text', default: 'ball' }],

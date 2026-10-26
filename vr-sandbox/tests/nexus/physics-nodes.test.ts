@@ -6,6 +6,9 @@ import '../../src/nexus/seeds';
 import { runBlock } from '../../src/nexus/dataflow';
 import { arrayGrid, boundsOfAll, flatten, place, type Assembly } from '../../src/nexus/assembly';
 import { surfaceOf } from '../../src/nexus/sim';
+import { MOTORS, GEARHEADS } from '../../src/data/motors';
+import { motorModel, windingR } from '../../src/engineering/dcmotor';
+import { AMBIENT } from '../../src/engineering/thermal';
 import type { Part } from '../../src/nexus/kits';
 
 const block: Part = { name: 'block', shape: { box: [0.1, 0.1, 0.1] }, mat: 'oak', at: [0, 0, 0] };
@@ -37,6 +40,22 @@ describe('let it go', () => {
   it('a piece\'s friction and bounce come from the materials table by what it is made of, else are said to be typical', () => {
     expect(surfaceOf('oak').from).toBe('wood.birch-plywood'); expect(surfaceOf('steel-low').from).toBe('steel.a36'); expect(surfaceOf('unobtainium').from).toMatch(/typical/);
   });
+});
+
+describe('wheels that roll', () => {
+  it('a cart on two motor-driven wheels settles at the speed its motor\'s constants give, and draws its stall current to start', async () => {
+    const chassis: Part = { name: 'chassis', shape: { box: [1.0, 0.06, 0.5] }, mat: 'al-6061', at: [0, 0, 0] }, wheel: Part = { name: 'wheel', shape: { cyl: [0.1, 0.05] }, mat: 'rubber', at: [0, 0, 0] };
+    const W: [number, number][] = [[-0.4, 0.3], [-0.4, -0.3], [0.4, 0.3], [0.4, -0.3]], names = ['wheel', 'wheel 2', 'wheel 3', 'wheel 4'];
+    const cart: Assembly = { name: 'cart', items: [place(chassis, [0, 0.16, 0]), ...W.map(([x, z]) => place(wheel, [x, 0.1, z], [Math.PI / 2, 0, 0]))] };
+    const motor = 'motor.dc.coreless.d40-150w-24v', gear = 'gearhead.planetary.d42-12to1';
+    const joints = await Promise.all(W.map(async ([x, z], k) => (await runBlock('hinge', { a: names[k], b: 'chassis', axis: 'z', x, y: 0.1, z, ...(k < 2 ? { motor, gear, reverse: 1 } : {}) })).joint));
+    const at = async (t: number) => { const o = await runBlock('letgo', { things: cart, joints, t, seconds: 6 }); return { x: boundsOfAll(o.moved as Assembly).getCenter(new THREE.Vector3()).x, joint: (o.joint as { peakAmps?: number }[])[0]! }; };
+    const a = await at(4), b = await at(6), v = (b.x - a.x) / 2;
+    // with only its own friction to turn: K_t (V − K_t ω) / R = T_f, so ω = (V − T_f R / K_t) / K_t; through 12:1, on a 0.1 m wheel
+    const m = motorModel(MOTORS[motor]!), R = windingR(m, AMBIENT), w = (24 - (m.Tf * R) / m.Kt) / m.Kt, expected = (w / GEARHEADS[gear]!.ratio) * 0.1;
+    expect(Math.abs(v - expected) / expected).toBeLessThan(0.05);
+    expect(Math.abs(b.joint.peakAmps! - 24 / R) / (24 / R)).toBeLessThan(0.1);
+  }, 120_000);
 });
 
 describe('turning, and the room it needs', () => {
