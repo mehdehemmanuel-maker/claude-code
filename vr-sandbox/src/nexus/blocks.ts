@@ -34,6 +34,7 @@ import { combineFields, fieldOf, shareWhere, showField, statsOf, type Field, typ
 import { explainPlaced, placeOne, type Placed } from './placement/solve';
 import { selectBattery, type Selection } from './placement/size';
 import { REPAIRS, autoLoop, type Repair } from './placement/repair';
+import { ACTORS, showTags, tagsOf } from './aware/tags';
 import { layout as layoutOf } from './make/space';
 import { LOGICS, SECTIONS, endOn, makeLine, outer, route, sectionOf, sizeBore, sizeWire, vary, type Logic, type Section } from './placement/line';
 import { boreThrough, onto } from './mate';
@@ -42,7 +43,7 @@ import { SPRING_WIRES } from '../engineering/springs';
 /** A load case's row as a table's: its figure, limit and factor, in the units it is said in. */
 const tableRow = (r: LoadRow): Record<string, unknown> => ({ what: r.what, value: +r.value.toPrecision(4), unit: r.unit, limit: +r.limit.toPrecision(4), factor: +r.factor.toFixed(2), ok: r.ok ? 'yes' : 'NO', says: r.says });
 import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
-import { exploded, fitIn } from './assembly';
+import { exploded, fitIn, partOf } from './assembly';
 import { chainPath, chainRun, coated, coil, enclosure, wound, sensor, SENSES, type SensorBody, type SensorElement, fastener, type FastenerSpec, type HeadShape, fillCells, gridPlate, intoCells, stackOf, strapsOver, toothed, turned, woundRoll, wrapped } from './makers';
 import { compileNotes, feedLinesOf, fidelityOf, gapOf, mergeReferences, REFERENCE_NOTES, referenceOf, referenceTree, webParts, type Reference, type WebParts } from './research';
 import { allVerdicts, approveProposals, candidatesOf, deleteThing, eventsSince, GATES, proposalsAll, researchLoop, runGauntlet, sortUnknowns, tasksNow, unknownQueue, unknownsUnder, webResolver, wordsOf, type EventKind, type GateId, type Lib } from './gauntlet';
@@ -645,7 +646,8 @@ function points(t: unknown): [number, number][] {
 }
 const asThing = (v: unknown): Part | Assembly => { if (isAssembly(v) || isPart(v)) return v; throw new Error('nothing made to place: wire a shape, a part or an assembly in'); };
 /** A thing as one part to look through by its pieces' names: an assembly's things gathered under it (where each sits does not matter to a name). */
-const asPart = (t: Part | Assembly): Part => (isPart(t) ? t : { name: t.name, parts: t.items.map((x) => asPart(x.of)) });
+/** A thing as a tree of parts, each where it is placed (assembly.ts partOf: the one owner of that). */
+const asPart = (t: Part | Assembly): Part => (isPart(t) ? t : partOf(t));
 const asPartTree = asPart;
 // (a map of two or three cells, for the tests of the nodes that read maps)
 /** A bay small enough to solve in a test: a floor and a hood, an engine, an exhaust at 600 °C, a battery (a polypropylene
@@ -1341,6 +1343,19 @@ const BUILT_THINGS: BlockDef[] = [
       else if (typeof v === 'string' && v) lines = [v]; else throw new Error('wire a result in');
       return { lines, says: lines[0]! }; },
     tests: [{ inputs: { value: { says: 'it holds', sources: ['a table'] } }, outputs: { lines: ['it holds', 'from: a table'] } }, { set: { depth: 'one line' }, inputs: { value: { reason: 'too hot', says: 'moved' } }, outputs: { says: 'moved' } }] }),
+  def({ id: 'signature', name: 'What it gives off', kind: 'critic', ability: 'measure', domains: ['everyday', 'mechanical', 'vehicles', 'structural', 'electrical'], says: 'What every part of a thing gives off, read from what it is, never tagged by hand: how far it is seen (its size against the eye\'s one arcminute, less the lower its contrast), how far it is heard if it makes sound by itself (its sound power falling to a quiet street\'s 40 dB(A)), how far its warmth is felt (the rules\' heat fall-off), whether it is hot to touch, heavy, fragile, moving, live, and what it smells of',
+    ports: { inputs: [thing()], outputs: [P('signatures', 'table'), N('parts', undefined, { label: 'parts read' }), P('says', 'text')] },
+    run: (i) => { const r = tagsOf(asPart(asThing(i.thing))), rows = r.tags.filter((t) => t.heard > 0 || t.warm > 0 || t.tags.length).map((t) => ({ part: t.part, seenM: Math.round(t.seen), heardM: Math.round(t.heard), warmMm: Math.round(t.warm * 1000), tags: t.tags.join(', ') }));
+      const loud = [...r.tags].sort((a, b) => b.heard - a.heard)[0], far = [...r.tags].sort((a, b) => b.seen - a.seen)[0];
+      return { signatures: rows, parts: r.tags.length, says: `${r.tags.length} parts read: ${far ? `seen farthest, the ${far.part} at ${(far.seen / 1000).toFixed(1)} km` : ''}${loud && loud.heard ? `; heard farthest, the ${loud.part} at ${Math.round(loud.heard)} m` : ''}; ${Object.entries(r.counts).filter(([k]) => !['grasp', 'pinch', 'lift', 'push', 'open', 'sit', 'step on', 'walk on', 'drive'].includes(k)).map(([k, v]) => `${v} ${k}`).join(', ')}` }; },
+    tests: [{ inputs: { thing: { name: 'bay', parts: [{ name: 'pipe', item: 'pipe', shape: { box: [0.3, 0.05, 0.05] }, mat: 'stainless-304', hot: 300 }] } }, outputs: { parts: 1 } }] }),
+  def({ id: 'afford', name: 'What it lets you do', kind: 'critic', ability: 'check', domains: ['everyday', 'mechanical', 'vehicles', 'structural'], says: 'What every part of a thing lets a body do, read from its shape, mass, joints and material against that body (an adult, or a child of 8: its grip, reach, knee height, stride and strength from its stature): grasp a bar it can close its hand round, lift what is free and within its strength, push what it cannot lift, open what is hinged and has something to take hold of, sit on a level top at the back of its knee with room above, step or walk on a level top low enough, drive a seat that faces a steering wheel. What is plainly made for something it cannot do (a door with no hinge, a seat with no headroom) is said. Drawn as coloured outlines',
+    settings: [{ key: 'who', label: 'For', type: 'choice', default: 'adult', choices: Object.keys(ACTORS) }],
+    ports: { inputs: [thing()], outputs: [P('affords', 'table'), N('open'), N('sit'), N('grasp'), N('lift'), P('findings', 'list<text>'), thing('view', 'tags drawn'), P('says', 'text')] },
+    run: (i, c) => { const root = asPart(asThing(i.thing)), who = ACTORS[String(c.set.who)] ?? ACTORS.adult!, r = tagsOf(root, who), n = (a: string) => r.counts[a] ?? 0;
+      return { affords: r.tags.filter((t) => t.affords.length).map((t) => ({ part: t.part, affords: t.affords.join(', '), why: t.why.join('; ') })), open: n('open'), sit: n('sit'), grasp: n('grasp'), lift: n('lift'), findings: r.findings, view: showTags(root, r.tags),
+        says: `for ${who.name}: ${['open', 'sit', 'grasp', 'lift', 'push', 'walk on', 'step on', 'drive'].map((a) => `${n(a)} ${a}`).join(', ')}${r.findings.length ? `; ${r.findings.length} finding${r.findings.length === 1 ? '' : 's'}` : ''}` }; },
+    tests: [{ inputs: { thing: { name: 'room', parts: [{ name: 'floor', shape: { box: [4, 0.02, 4] }, at: [0, -0.01, 0], mat: 'oak' }, { name: 'bedroom fittings', parts: [{ name: 'stool', parts: [{ name: 'stool top', shape: { box: [0.4, 0.04, 0.4] }, at: [0, 0.45, 0], mat: 'oak' }, { name: 'stool leg', shape: { box: [0.04, 0.43, 0.04] }, at: [0, 0.215, 0], mat: 'oak' }] }] }] } }, outputs: { sit: 1, lift: 1 } }] }),
   def({ id: 'line', name: 'Line', kind: 'generator', ability: 'generate', domains: ['electrical', 'mechanical', 'vehicles', 'structural', 'thermal', 'electronics'], says: 'Cables, hoses, wires, pipes, brake lines, traces and roads are one thing: a section swept along a path. The section is layers from the inside out: a core (solid copper, or hollow to carry a fluid, or any material), then walls, insulation, jackets; or flat (a trace, a road\'s courses). Pick one by what it is and change its core, its outer material and their sizes; wire a path in (from Route) to make it',
     settings: [{ key: 'section', label: 'What it is', type: 'choice', default: 'hose-32', choices: SECTIONS.map((x) => x.id) }, { key: 'core', label: 'Its core', type: 'choice', default: 'as it is', choices: ['as it is', 'hollow', 'copper', 'al-6061', 'steel-low', 'water', 'glycol-50', 'oil'] }, { key: 'coreMm', label: 'Core across, mm (0: as it is)', type: 'number', default: 0 }, { key: 'outer', label: 'Its outer layer', type: 'choice', default: 'as it is', choices: ['as it is', 'pvc', 'epdm', 'silicone', 'nylon', 'pe', 'rubber', 'steel-low', 'stainless-304', 'copper', 'asphalt'] }, { key: 'wallMm', label: 'Outer layer, mm (0: as it is)', type: 'number', default: 0 }],
     ports: { inputs: [P('path', 'table', { optional: true })], outputs: [P('section', 'any'), thing('line', 'line'), N('across', 'm', { label: 'across (outside)' }), P('says', 'text')] },

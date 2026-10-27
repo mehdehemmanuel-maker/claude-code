@@ -874,6 +874,26 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
     return b;
   }],
+  ['What things give off and let you do: a house and a car, tagged from what they are', () => {
+    // nothing tagged by hand: every part's signature (how far it is seen, heard, felt; hot, heavy, fragile, live, what it
+    // smells of) and what it affords a body (grasp, lift, push, open, sit, walk on, drive) read from its size, mass,
+    // joints and material against that body; an adult's or a child's. Each affordance outlined in its colour (open
+    // blue, grasp green, lift teal, sit orange, step yellow, walk grey, drive violet, hot red); what is made for
+    // something it cannot do is said (a cabinet with nothing hinged, a seat with no headroom)
+    const b = emptyBoard('What things give off and let you do');
+    placeBlock(b, 'seed.house', 0, 0, {}, 'house'); b.nodes.house!.label = 'A house (its plan picked)';
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
+    placeBlock(b, 'pick', 0, 0, { options: 'the house|the car', which: 'the house' }, 'pick'); b.nodes.pick!.label = 'Which to tag'; wire(b, 'house', 'house', 'pick', 'the house'); wire(b, 'car', 'vehicle', 'pick', 'the car');
+    placeBlock(b, 'afford', 0, 0, { who: 'adult' }, 'aff'); b.nodes.aff!.label = 'What it lets an adult do'; wire(b, 'pick', 'chosen', 'aff', 'thing');
+    placeBlock(b, 'afford', 0, 0, { who: 'child' }, 'affChild'); b.nodes.affChild!.label = 'What it lets a child of 8 do'; wire(b, 'pick', 'chosen', 'affChild', 'thing');
+    placeBlock(b, 'signature', 0, 0, {}, 'sig'); b.nodes.sig!.label = 'What it gives off'; wire(b, 'pick', 'chosen', 'sig', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'affRows'); b.nodes.affRows!.label = 'Each part, what it affords, why'; wire(b, 'aff', 'affords', 'affRows', 'rows');
+    placeBlock(b, 'view.table', 0, 0, {}, 'sigRows'); b.nodes.sigRows!.label = 'Seen, heard, felt'; wire(b, 'sig', 'signatures', 'sigRows', 'rows');
+    placeBlock(b, 'view.show', 0, 0, {}, 'found'); b.nodes.found!.label = 'What it is made for but cannot do'; wire(b, 'aff', 'findings', 'found', 'value');
+    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'The thing and its tags'; wire(b, 'pick', 'chosen', 'scene', 'things'); wire(b, 'aff', 'view', 'scene', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
+    return b;
+  }],
   ['Lines: one section, any material, any route (a battery cable, a road)', () => {
     // cables, hoses, wires, pipes, traces and roads as one thing: a section (layers from the inside out, its core solid or
     // hollow, each layer's material changeable) swept along a way that is found, not drawn. Here the Corolla's battery
@@ -1289,7 +1309,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

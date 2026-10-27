@@ -77,10 +77,15 @@ function door(): void {
   const jamb = s.n('shape.box', { name: 'door lining', mat: 'wood', color: '#efebe9', w: 0.02, d: 0.12 }, 'lining'); s.w(h, 'value', jamb, 'h');
   const jx = s.f('w / 2 - 0.01', { w: [w, 'value'] });
   const jl = s.at([jamb, 'part'], { x: [s.f('0 - x', { x: [jx, 'result'] }), 'result'] }, 'lining left'), jr = s.at([jamb, 'part'], { x: [jx, 'result'] }, 'lining right');
-  const d = s.all('door', [[leaf, 'part'], [front, 'placed'], [back, 'placed'], [jl, 'placed'], [jr, 'placed']]);
+  // (hung on two butt hinges at the side away from its handle, their knuckles at its edge: 89 mm leaves, a 13 mm knuckle;
+  // the top one 180 mm down, the bottom one 280 mm up, typical of interior doors)
+  const hinge = s.n('shape.cyl', { name: 'door hinge', mat: 'steel-low', color: '#9a9ea4', finish: 'plate', r: 0.0065, h: 0.089 }, 'hinge knuckle');
+  const kx = s.f('0 - (w / 2 - 0.02)', { w: [w, 'value'] });
+  const ht = s.at([hinge, 'part'], { x: [kx, 'result'], y: [s.f('h / 2 - 0.18', { h: [h, 'value'] }), 'result'], z: 0.02 }, 'hinge, top'), hb = s.at([hinge, 'part'], { x: [kx, 'result'], y: [s.f('0.28 - h / 2', { h: [h, 'value'] }), 'result'], z: 0.02 }, 'hinge, bottom');
+  const d = s.all('door', [[leaf, 'part'], [front, 'placed'], [back, 'placed'], [jl, 'placed'], [jr, 'placed'], [ht, 'placed'], [hb, 'placed']]);
   const dF = s.n('frame', { name: 'fit', facing: '+z' }, 'its frame: its middle, facing out'); s.w(d, 'assembly', dF, 'thing');
   s.output('door', 'assembly', dF, 'thing');
-  s.save('seed.door', 'Door', 'A door: its leaf, a lever handle on each face 1 m up, its lining; centred on its own middle. Width, height and colour are yours (an interior door 40 mm thick, typical)', ['structural', 'everyday']);
+  s.save('seed.door', 'Door', 'A door: its leaf hung on two hinges, a lever handle on each face 1 m up, its lining; centred on its own middle. Width, height and colour are yours (an interior door 40 mm thick, typical)', ['structural', 'everyday']);
 }
 
 // ---- fittings: a toilet, a sink, a bed -----------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # Life: things that run, move and sense, at scale
 
-Status: plan, nothing built. Base: commit after placement step 4.
+Status: step 1 built (`signature`, `afford`, `src/nexus/aware/tags.ts`); the rest planned.
 
 ## Contents
 1. What is wanted
@@ -173,6 +173,27 @@ One step at a time, each shown with pictures before the next.
 | 6 | A dog walked | Two agents and a lead: a person walking a dog down a street, both sensing and reacting |
 | 7 | Scale | A city block: hundreds of agents, cars, doors; behaviour stand-ins; many clocks; sleep; the frame budget measured |
 | 8 | 36 million | A large netlist run on the GPU, bit-parallel, with its rate measured and said against real time |
+
+Step 1 result:
+- **Speed:** every identified part of the Corolla (6,636) is read in about 1 s; a house of 263 things in 30 ms.
+- **The Corolla:**
+  - Its four doors open (hinged, a handle to take hold of).
+  - Its steering wheel drives it, a seat facing it.
+  - Its exhaust parts are hot, and their warmth is felt about 200 mm off.
+  - Its engine is heard to about 280 m, over a quiet street.
+  - Nothing bolted into it is liftable.
+- **A real fault found:** the Corolla's front seat cushion has 780 mm over it, where an adult sitting needs about 875 mm. Toyota publishes about 0.97 m of front headroom, so the model's seat is too high or its roof too low. It is said, not hidden.
+- **The house:**
+  - Its doors could not open (the seed door had no hinge). They now hang on two butt hinges and open.
+  - Its kitchen's base cabinet has nothing hinged, which is said.
+  - Beds, the bath, the toilet seat and the sofa can be sat on; the floors walked on; the bedside tables lifted; the bath and the sofa only pushed.
+- **A child and an adult:** an adult sits on a 480 mm seat, while it is over a child's knee. A child grasps more (smaller bars fit its hand) and lifts less.
+- **Fixed on the way:** the blocks turned an assembly into parts by dropping where each item was placed. They now use the assembly's own `partOf`, so every node given an assembly sees it where it is.
+- **Not yet:**
+  - What can be reached or seen from where someone stands (step 2).
+  - The range of a smell (diffusion and wind).
+  - The sound of things struck.
+  - Seeds' parts carry names, not inventory ids, so their things are read from names and marked inferred.
 
 ## 13. Measures
 
