@@ -687,7 +687,16 @@ container, and Quest numbers only ever come from a Quest.
   against everything; all six engines the machines use come back clean.
 - **Known limits:** the valve-float check takes the cam's lift as a harmonic over 60° of cam each way (an estimate); the
   cams and valves are held still through the turn; the Toyota four's bucket-tappet valve train, as drawn, floats at
-  about 6,300 rpm (its real one uses lighter roller rockers, not drawn here), and Engine under load says so.
+  about 6,300 rpm (its real one works its valves through finger rockers on hydraulic lash adjusters (Toyota names the
+  adjusters; the rockers are typical of them), not drawn here), and Engine under load says so.
+
+**Research, gap and fidelity** (`src/nexus/research.ts`, `docs/GAP-MAP.md`): what a real thing is made of, read off its
+sources and kept as notes (each part with the page it was read on, and how sure: confirmed, of its sister in its series,
+or typical); compiled into a reference tree (a part with no source refused, a count written twice differently said as a
+conflict); held against what is drawn (What is missing?: drawn, short, missing, or drawn the way the sources say it is
+not); and the drawing measured for how finely it is made (How finely is it made?: its plain boxes by number and by
+volume, the biggest first). The board Research to what is missing runs all of it with every check on the engine at once.
+The Corolla's engine went from 42 % to 82 % of the 67 parts Toyota's M20A-FKS sources name, its rules still at 0.
 
 **The challenge scoreboard** (for the contest with the other AI): one page that reports, from runs, the number of
 working blocks with tests passing, the domains covered, the scale results above, the edit-to-result latency, the

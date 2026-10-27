@@ -131,6 +131,17 @@ the task list and lose the why. So the why lives here, and every round is checke
   redline, a rod's big end by its firing force); the rules through a turn of the crank (Turn it over and check); a
   cutaway in the 3D view; each finish's grain drawn in the shader. The checker was found blind to anything thinner than
   6 mm and was fixed)
+- (with a photoreal cutaway of an inline four: fuel rail and regulator, coil packs, harness and ECU, alternators, A/C
+  compressor, clutch, heat-wrapped header, dipstick) "you need to ask why it's not at this level of detail and define the
+  gap map the bridge to getting this level of detail across different builds and execute create node pipelines for
+  researching create a pipeline for compiling research create a pipeline for looking for sub components and sub sub
+  components and then defining what's all missing and more pipelines to take stress out of your hands this nodes will
+  make your life more advanced use them right" (2026-10-27: `docs/GAP-MAP.md`; research as sourced notes compiled into a
+  reference (`research.ts`, `data/references.ts`; nodes Research notes, Researched reference, Compile research, Into
+  the inventory, Its parts and theirs, What is missing?, How finely is it made?); the Corolla's engine held against
+  Toyota's M20A-FKS went from 42 % to 82 % of the parts its sources name, its rules still clean; the maker's choices a
+  `fit` (`FITS` in `engines.ts`). In-app research cannot reach the web or Claude (the relay is gone): the research is
+  done by Claude with web search and kept as sourced data)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -206,13 +217,14 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A surface's grain by its finish (cast sand, turned and ground marks, brushed, paint's orange peel, moulded texture), drawn in the shader from where it is, in metres | `src/nexus/view/kit3d.ts` (`GRAIN`) |
 | One fastener of any size and kind (bolt, screw, rivet, stud): head by shape (hex, square, octagon, round, pan, countersunk, flange), drive, shank, helical thread, point | `src/nexus/makers.ts` `fastener` (node `make.fastener`) |
 | One piece out of anything by name, to look at close up (and the 3D view's zoom to a piece: double press, `dock.focus`) | node `piece` in `blocks.ts`; `src/nexus/view/dock3d.ts`, `space3d.ts` (`pieceAt`, `piecesNamed`) |
-| A piston engine from its first parts (pistons, rings, pins, rods, crank, block, liners, caps, shells, head, valve train, cams, timing, oiling, intake, exhaust, ignition, alternator, starter, pump, belt, flywheel), sized and weighed by its parts | `src/nexus/engines.ts` (nodes `engine.*` in `blocks.ts`; `engineSpecOf`/`engineSize` in `machines.ts` ask it) |
+| A piston engine from its first parts (pistons, rings, pins, rods, crank, block, liners, caps, shells, head, valve train, cams, timing, oiling, intake, exhaust, ignition, alternator, starter, pump, belt, flywheel), sized and weighed by its parts; what reads, cools, cleans and wires it (sensors, harness, thermostat, hoses, dipstick, PCV, catalyst, A/C, mounts); its maker's choices as a fit (`FITS`: electric pump, drive plate, VVT-iE, D-4S pump, EGR) | `src/nexus/engines.ts` (nodes `engine.*` in `blocks.ts`; `engineSpecOf`/`engineSize` in `machines.ts` ask it) |
 | A gearbox from its first parts (case, shafts, gears, bearings, seals, final drive, differential; a manual's synchros and forks or a CVT's pulleys, push belt and torque converter) | `src/nexus/drivetrain.ts` |
 | A car's closures built round their skins (doors, hood, deck lid: inner panels, beams, hinges, latches, regulators, trim) | `src/nexus/fittings.ts` `closureOf` |
 | General makers by process and geometry (cast grid, coat, wrap, stack, straps, enclosure with cells, into cells, wound roll, fill) | `src/nexus/makers.ts` (nodes `make.*` in `blocks.ts`; used by `components.ts`, `engines.ts`, `drivetrain.ts`): also turned, coil, toothed, ring clip, chain run, chain path, housing, moulded chip |
 | A vehicle's fittings drawn whole to their recipes (lamps, mirrors, doors, cab, hood, grille, bumper, frame, tanks, aftertreatment, stacks, fifth wheel, steps, fenders, air tanks) | `src/nexus/fittings.ts` (recipes `trk-*` in `inventory.ts`; used by `machines.ts`) |
 | Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |
 | The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
+| Research as a pipeline: sourced notes compiled into a reference tree (refusing what has no source, saying conflicts), references merged, entered in the inventory to open all the way down; a drawn thing held against its reference (drawn, short, missing, wrong: the gap); how finely a thing is drawn (its boxes by number and volume, the biggest first) | `src/nexus/research.ts` (the researched notes in `src/data/references.ts`; nodes `research.*` and `check.fidelity` in `blocks.ts`; the gap map in `docs/GAP-MAP.md`) |
 
 ## The organising principle: interfaces, envelopes, one graph
 

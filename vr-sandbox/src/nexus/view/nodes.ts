@@ -796,7 +796,7 @@ const DEMOS: [string, Make][] = ([
     // wired into the engine. Change any of them (the spring's wire, the bore) and it flows up into the engine, its mass
     // and its checks: does it come apart to the bottom, and does nothing run into anything
     const b = emptyBoard('An engine from its first parts');
-    const e = { layout: 'inline', fuel: 'petrol', block: 'al', cooling: 'liquid', cams: 'dohc', valves: '4', turbo: 'no', starter: 'electric' };
+    const e = { layout: 'inline', fuel: 'petrol', block: 'al', cooling: 'liquid', cams: 'dohc', valves: '4', turbo: 'no', starter: 'electric', fit: 'm20a-fks' };
     placeBlock(b, 'in.number', 0, 0, { value: 0.0805, unit: 'm' }, 'bore'); b.nodes.bore!.label = 'Bore (Toyota: 80.5 mm)';
     placeBlock(b, 'in.number', 0, 0, { value: 0.0976, unit: 'm' }, 'stroke'); b.nodes.stroke!.label = 'Stroke (Toyota: 97.6 mm)';
     const sized = (id: string) => { wire(b, 'bore', 'value', id, 'bore'); wire(b, 'stroke', 'value', id, 'stroke'); };
@@ -817,6 +817,35 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'view.table', 0, 0, {}, 'loadRows'); b.nodes.loadRows!.label = 'Each part: its stress, its limit, its margin'; wire(b, 'load', 'rows', 'loadRows', 'rows');
     placeBlock(b, 'sweep.range', 0, 0, { block: 'load.engine', vary: 'rpm', from: 1000, to: 7000, steps: 13, watch: 'worst', worstIs: 'lowest', blockSet: JSON.stringify(e) }, 'sweep'); b.nodes.sweep!.label = 'Stress test: 1,000 to 7,000 rpm'; sized('sweep'); wire(b, 'spr', 'spring', 'sweep', 'spring');
     placeBlock(b, 'view.chart', 0, 0, {}, 'sweepChart'); b.nodes.sweepChart!.label = 'Least margin by speed'; wire(b, 'sweep', 'ys', 'sweepChart', 'y'); wire(b, 'sweep', 'xs', 'sweepChart', 'x');
+    return b;
+  }],
+  ['Research to what is missing: Toyota\'s engine held against its sources', () => {
+    // research as a pipeline: what the M20A-FKS is made of, read off its sources and kept (src/data/references.ts), and
+    // notes of your own compiled with it (every part named with its source, or refused); the engine drawn from its parts
+    // held against the whole of it (what is drawn, short, missing, or drawn the way the sources say it is not); how finely
+    // it is drawn (how much is still plain boxes, and the biggest); the reference entered in the inventory and opened all
+    // the way down, its parts and theirs, and what of them waits to be researched; and every check on the engine at once
+    const b = emptyBoard('Research to what is missing');
+    const e = { layout: 'inline', fuel: 'petrol', block: 'al', cooling: 'liquid', cams: 'dohc', valves: '4', turbo: 'no', starter: 'electric', fit: 'm20a-fks' };
+    placeBlock(b, 'note', 0, 0, { text: 'Research → compile → its parts and theirs → what is missing → what to reshape. Add a line to the notes (a part, its pattern over drawn names, its source) and the gap and the inventory follow it.' }, 'about');
+    placeBlock(b, 'research.ref', 0, 0, { which: 'm20a-fks' }, 'ref'); b.nodes.ref!.label = 'Researched: the M20A-FKS, part by part, each sourced';
+    placeBlock(b, 'research.notes', 0, 0, { id: 'd4s-injector', name: 'a D-4S direct injector, inside', notes: '@TOY | https://global.toyota/en/mobility/tnga/powertrain2018/engine/index.html | Toyota: TNGA powertrain 2018 (a multi-hole direct injector)\ndi-in | a direct injector, inside | | 1 | | | typical | its nozzle and its solenoid\ndi-nozzle | multi-hole nozzle | di-in | 4 | multi-hole nozzle | TOY | confirmed | one on each direct injector' }, 'notes'); b.nodes.notes!.label = 'Notes of your own (sourced, or refused)';
+    placeBlock(b, 'research.merge', 0, 0, { id: 'm20a-compiled', name: 'the M20A-FKS, compiled' }, 'merge'); b.nodes.merge!.label = 'Compile the research'; wire(b, 'ref', 'reference', 'merge', 'references'); wire(b, 'notes', 'reference', 'merge', 'references');
+    placeBlock(b, 'in.number', 0, 0, { value: 0.0805, unit: 'm' }, 'bore'); b.nodes.bore!.label = 'Bore (Toyota: 80.5 mm)';
+    placeBlock(b, 'in.number', 0, 0, { value: 0.0976, unit: 'm' }, 'stroke'); b.nodes.stroke!.label = 'Stroke (Toyota: 97.6 mm)';
+    placeBlock(b, 'engine.whole', 0, 0, { ...e }, 'eng'); b.nodes.eng!.label = 'The engine, from its parts (its maker\'s choices: M20A-FKS)'; wire(b, 'bore', 'value', 'eng', 'bore'); wire(b, 'stroke', 'value', 'eng', 'stroke');
+    placeBlock(b, 'research.gap', 0, 0, {}, 'gap'); b.nodes.gap!.label = 'What is missing?'; wire(b, 'eng', 'engine', 'gap', 'thing'); wire(b, 'merge', 'reference', 'gap', 'reference');
+    placeBlock(b, 'view.table', 0, 0, {}, 'gapRows'); b.nodes.gapRows!.label = 'Each part the sources name: drawn, short, missing, wrong'; wire(b, 'gap', 'rows', 'gapRows', 'rows');
+    placeBlock(b, 'view.gauge', 0, 0, { min: 0, max: 1 }, 'cover'); b.nodes.cover!.label = 'Share drawn as the sources say'; wire(b, 'gap', 'coverage', 'cover', 'value');
+    placeBlock(b, 'check.fidelity', 0, 0, {}, 'fid'); b.nodes.fid!.label = 'How finely is it drawn?'; wire(b, 'eng', 'engine', 'fid', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'boxes'); b.nodes.boxes!.label = 'Its biggest plain boxes: reshape these first'; wire(b, 'fid', 'biggest', 'boxes', 'rows');
+    placeBlock(b, 'research.toInventory', 0, 0, {}, 'inv'); b.nodes.inv!.label = 'Into the inventory'; wire(b, 'merge', 'reference', 'inv', 'reference');
+    placeBlock(b, 'research.parts', 0, 0, { depth: 6 }, 'tree'); b.nodes.tree!.label = 'Its parts, and theirs, and what waits'; wire(b, 'inv', 'item', 'tree', 'item');
+    placeBlock(b, 'view.table', 0, 0, {}, 'treeRows'); b.nodes.treeRows!.label = 'Sub-components and theirs'; wire(b, 'tree', 'rows', 'treeRows', 'rows');
+    placeBlock(b, 'view.table', 0, 0, {}, 'waits'); b.nodes.waits!.label = 'Waiting to be researched'; wire(b, 'tree', 'waiting', 'waits', 'rows');
+    placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Does nothing run into anything?'; wire(b, 'eng', 'engine', 'rules', 'thing');
+    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'eng', 'engine', 'audit', 'thing');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'eng', 'engine', 'show', 'thing');
     return b;
   }],
   ['A car down to its bolts: tyres made in depth, a shared battery, taken apart', () => {
@@ -1141,7 +1170,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

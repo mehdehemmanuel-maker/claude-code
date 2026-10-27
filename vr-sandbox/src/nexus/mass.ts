@@ -59,6 +59,8 @@ function inside(s: Shape | undefined, c: { at: [number, number, number]; dir: [n
   return Math.max(0, t1 - t0);
 }
 /** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
+/** The volume a shape encloses, m³ (before what is drilled out of it, and its fill). */
+export const volumeOf = (s: Shape): number => vol(s);
 export function massOf(p: Part): number {
   // (a round shape drawn with flat sides, a nut's six, is that polygon round its axis, not the circle through its corners)
   const flats = p.facets && p.shape && ('cyl' in p.shape || 'lathe' in p.shape) ? (p.facets * Math.sin((2 * Math.PI) / p.facets)) / (2 * Math.PI) : 1;
