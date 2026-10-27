@@ -30,11 +30,11 @@ export const ACUITY = (1 / 60) * (Math.PI / 180);
  *  seen against (a mid grey, 18 % reflectance). */
 export const BACKGROUND_DB = 40, BACKGROUND_LUM = 0.18;
 /** What makes sound by itself, its sound power level running, dB(A) (estimates, typical of each). */
-const EMITS: [RegExp, number, string][] = [
-  [/^engine-ice$/, 100, 'an engine running (about 100 dB(A) of sound power, typical)'],
-  [/^starter-motor$/, 95, 'a starter cranking (about 95 dB(A), typical)'],
-  [/^(cooling-fan|fan)$/, 70, 'a fan (about 70 dB(A), typical)'],
-  [/^(alternator)$/, 75, 'an alternator whining (about 75 dB(A), typical)'],
+const EMITS: [RegExp, number, string, 'running' | 'starting'][] = [
+  [/^engine-ice$/, 80, 'an engine at idle (about 80 dB(A) of sound power, an estimate: about 60 dB(A) 5 m off)', 'running'],
+  [/^starter-motor$/, 90, 'a starter cranking (about 90 dB(A), an estimate)', 'starting'],
+  [/^(cooling-fan|fan)$/, 65, 'a fan (about 65 dB(A), an estimate)', 'running'],
+  [/^(alternator)$/, 70, 'an alternator whining (about 70 dB(A), an estimate)', 'running'],
 ];
 /** What it smells of, by material (a range is not modelled yet: diffusion and wind come with step 2). */
 const SMELLS: [RegExp, string][] = [[/^oil$/, 'oil'], [/^glycol-50$/, 'coolant'], [/^acid$/, 'battery acid'], [/^(leather)$/, 'leather'], [/^(rubber|epdm)$/, 'rubber']];
@@ -45,7 +45,7 @@ export type Afford = 'grasp' | 'pinch' | 'lift' | 'push' | 'open' | 'sit' | 'ste
 export interface Tag {
   part: string; path: string; item?: string;
   /** its size (its box's three sides, m), mass (kg, the part and all it holds), the colour it reflects */ size: [number, number, number]; mass: number;
-  /** how far each sense picks it up, m: seen at good light, heard if it makes sound, warmth felt */ seen: number; heard: number; warm: number;
+  /** how far each sense picks it up, m: seen at good light, heard if it makes sound (and when: running, or starting), warmth felt */ seen: number; heard: number; heardWhen?: 'running' | 'starting'; warm: number;
   tags: string[]; affords: Afford[]; why: string[];
 }
 
@@ -53,8 +53,8 @@ const lum = (color: number | undefined) => { const c = new THREE.Color(color ?? 
 const flat = (n: Node, axis = 1) => !!n.obb && Math.max(...n.obb.u.map((u, k) => Math.abs(u.getComponent(axis)) * (n.obb!.h[k]! < Math.max(...n.obb!.h) ? 1 : 0))) > Math.cos((10 * Math.PI) / 180);
 
 /** Every identified part of a thing, with what it gives off and what it lets an actor do. */
-export function tagsOf(root: Part, actor: Actor = ACTORS.adult!): { tags: Tag[]; counts: Record<string, number>; findings: string[]; sources: string[] } {
-  const ns = layout(root), body = bodyOf(actor), ground = Math.min(...ns.map((n) => n.sub?.min.y ?? Infinity).filter(Number.isFinite)), out: Tag[] = [], findings: string[] = [];
+export function tagsOf(root: Part, actor: Actor = ACTORS.adult!, laid?: Node[]): { tags: Tag[]; counts: Record<string, number>; findings: string[]; sources: string[] } {
+  const ns = laid ?? layout(root), body = bodyOf(actor), ground = Math.min(...ns.map((n) => n.sub?.min.y ?? Infinity).filter(Number.isFinite)), out: Tag[] = [], findings: string[] = [];
   const unitOf = (n: Node): Node => { let u = n; for (let x: Node | null = n; x && x.parent; x = x.parent) if (x.p.item) u = x; return u; };
   // (free: nothing it is in is an identified part, and it is not fixed or joined to anything: a thing on its own, not a
   // piece of an assembly; nothing bolted into a car is lifted)
@@ -102,7 +102,7 @@ export function tagsOf(root: Part, actor: Actor = ACTORS.adult!): { tags: Tag[];
     else if (seatable && flat(n) && roomAbove(n, actor.height) && dims[1] >= 0.25 && top <= body.step * 1.0 && dims[0] >= 0.02) {
       // (a level top a body fits on: walked on if it is wide and low (a floor), stepped on if not)
       if (dims[1] >= 1 && top <= 0.05) { aff.push('walk on'); why.push(`walk on: level, ${dims[1].toFixed(1)} by ${dims[2].toFixed(1)} m`); } else { aff.push('step on'); why.push(`step on: ${Math.round(top * 1000)} mm up, within a ${Math.round(body.step * 1000)} mm rise`); } }
-    out.push({ part: n.p.name, path: n.path, item: n.p.item, size: [s.x, s.y, s.z], mass, seen, heard, warm, tags, affords: aff, why });
+    out.push({ part: n.p.name, path: n.path, item: n.p.item, size: [s.x, s.y, s.z], mass, seen, heard, ...(em ? { heardWhen: em[3] } : {}), warm, tags, affords: aff, why });
   }
   // (what opens: a unit with a hinge and something in it to grasp; what is plainly a door or a lid but has no hinge is said)
   const byPath = new Map(out.map((t) => [t.path, t]));

@@ -874,6 +874,27 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
     return b;
   }],
+  ['Who notices what: a car running, a person behind it, one at its door, a CO alarm; in the open or shut in a garage', () => {
+    // senses as physics, nothing typed: the people stand by what is named (behind the muffler, at the driver's door), facing
+    // it; each sees by rays out from its eyes packed as its acuity is, hears the engine over a quiet street, smells the
+    // exhaust's hydrocarbons; carbon monoxide has no smell, so it harms unnoticed, and the alarm sounds at 70 ppm. Gases as
+    // substances: given off by the engine's breathing at idle (at most what a catalyst car may give), spread in still air,
+    // or shut in a 60 m³ garage changed twice in four hours. Lines show what each attends to: sight white, hearing violet,
+    // warmth orange, smell yellow, harm red
+    const b = emptyBoard('Who notices what');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
+    placeBlock(b, 'gas', 0, 0, { running: 'running', air: 'still' }, 'gas'); b.nodes.gas!.label = 'What it gives off, running, in still air'; wire(b, 'car', 'vehicle', 'gas', 'thing');
+    placeBlock(b, 'gas', 0, 0, { running: 'running', air: 'shut in a room', volume: 60, changes: 0.5 }, 'garage'); b.nodes.garage!.label = 'The same, shut in a 60 m³ garage'; wire(b, 'car', 'vehicle', 'garage', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'gasRows'); b.nodes.gasRows!.label = 'Each gas: smelled, harmful, flammable to'; wire(b, 'gas', 'releases', 'gasRows', 'rows');
+    placeBlock(b, 'sense', 0, 0, { air: 'still' }, 'open'); b.nodes.open!.label = 'Who notices what, in the open'; wire(b, 'car', 'vehicle', 'open', 'thing');
+    placeBlock(b, 'sense', 0, 0, { air: 'shut in a room', minutes: 30 }, 'shut'); b.nodes.shut!.label = 'Who notices what, 30 min shut in'; wire(b, 'car', 'vehicle', 'shut', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'openRows'); b.nodes.openRows!.label = 'Attended, in the open'; wire(b, 'open', 'noticed', 'openRows', 'rows');
+    placeBlock(b, 'view.table', 0, 0, {}, 'shutRows'); b.nodes.shutRows!.label = 'Attended, shut in'; wire(b, 'shut', 'noticed', 'shutRows', 'rows');
+    placeBlock(b, 'pick', 0, 0, { options: 'in the open|shut in the garage', which: 'in the open' }, 'pick'); b.nodes.pick!.label = 'Which to see'; wire(b, 'open', 'view', 'pick', 'in the open'); wire(b, 'shut', 'view', 'pick', 'shut in the garage');
+    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'The car and who notices what'; wire(b, 'car', 'vehicle', 'scene', 'things'); wire(b, 'pick', 'chosen', 'scene', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
+    return b;
+  }],
   ['What things give off and let you do: a house and a car, tagged from what they are', () => {
     // nothing tagged by hand: every part's signature (how far it is seen, heard, felt; hot, heavy, fragile, live, what it
     // smells of) and what it affords a body (grasp, lift, push, open, sit, walk on, drive) read from its size, mass,
@@ -1309,7 +1330,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

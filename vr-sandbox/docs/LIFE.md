@@ -1,6 +1,6 @@
 # Life: things that run, move and sense, at scale
 
-Status: step 1 built (`signature`, `afford`, `src/nexus/aware/tags.ts`); the rest planned.
+Status: steps 1 and 2 built (`signature`, `afford`, `gas`, `sense`; `src/nexus/aware/`); the rest planned.
 
 ## Contents
 1. What is wanted
@@ -194,6 +194,37 @@ Step 1 result:
   - The range of a smell (diffusion and wind).
   - The sound of things struck.
   - Seeds' parts carry names, not inventory ids, so their things are read from names and marked inferred.
+
+Step 2 result:
+- **Gases as substances (`aware/gas.ts`):** a smell is one sense's reading of a gas, not the gas.
+  - **Substances:** each says at what concentration it is smelled, harmful (a working day's limit, and dangerous at once) and flammable: carbon monoxide, hydrogen, hydrogen sulphide, petrol vapour, exhaust hydrocarbons, coolant.
+  - **Sources, from the physics:**
+    - A running engine breathes its displacement every two turns (12.4 L/s for the Corolla at idle). Its gas is at most what a catalyst car may give at idle (the UK MOT's 0.3 % carbon monoxide and 200 ppm hydrocarbons).
+    - A charging battery gives 0.418 L of hydrogen per ampere-hour of overcharge (Faraday's law).
+  - **Air:**
+    - In still air the gas falls as 1/r.
+    - In a wind it travels as a Gaussian plume with Briggs' neutral-air spreads.
+    - Shut in a room it climbs toward Q/(nV).
+  - **The Corolla running:**
+    - Its exhaust is smelled to about 13 m.
+    - Its carbon monoxide is over the working-day limit within about 1.7 m in still air (an upper bound).
+    - Shut in a 60 m³ garage it is past that limit in under 5 minutes, and past dangerous-at-once (1,200 ppm) later. It has no smell, so it harms unnoticed.
+- **Senses (`aware/sense.ts`):**
+  - **A person:**
+    - Sees by a budget of rays from the eyes, packed as acuity is: sharp where it looks, thin to the side. Each ray meets the first thing in its way, so what is hidden is not seen.
+    - Hears what runs over a quiet street's 40 dB(A).
+    - Feels warmth.
+    - Smells a gas over its threshold, and is harmed by one it cannot smell.
+  - **A CO alarm** sounds at 70 ppm (UL 2034).
+  - **Observers stand where they are found:** by a named part, on the side away from the middle, facing it.
+- **The tricks, measured:**
+  - The eyes' rays meet the parts' covering boxes (a dozen triangles each), not their 3.5 million drawn triangles. The Corolla went from 13.4 s to 1.9 s.
+  - Each person costs a fixed ray budget, not a pair with every part. In a neighbourhood of 8,565 parts, 112 people standing at its doors took 2.2 s in all, about 6 ms each after a 1.6 s setup.
+- **Found on the way:** the Corolla's exhaust stops under the engine and starts again at the muffler: no pipe joins them, to be routed (`route`). The engine's sound at idle had been put at 100 dB(A); it is now an estimated 80 dB(A) (about 60 dB(A) 5 m off).
+- **Not yet:**
+  - The smell of materials (rubber, leather) is a tag, not a release with a rate.
+  - Wind indoors, and gases heavier or lighter than air (hydrogen rises), are not modelled.
+  - Attention has no memory or goals yet (step 3).
 
 ## 13. Measures
 

@@ -66,13 +66,18 @@ function gridOf(nodes: Node[], region: THREE.Box3, step0: number, most: number):
   return { min, step, dims, solid, inside };
 }
 /** The drawn surfaces of some nodes as one geometry, in the world (a winding by its envelope, as the rules test it). */
-export function surfacesOf(ns: Node[]): THREE.BufferGeometry | null {
-  const parts: THREE.BufferGeometry[] = [];
-  for (const n of ns) { if (!n.p.shape) continue; const g = leafGeometry(n.p.envelope ? { ...n.p, shape: n.p.envelope, cuts: undefined } : n.p); if (!g) continue; const h = (g.index ? g.toNonIndexed() : g.clone()); h.applyMatrix4(n.m); for (const k of Object.keys(h.attributes)) if (k !== 'position') h.deleteAttribute(k); parts.push(h); }
+export function surfacesOf(ns: Node[]): THREE.BufferGeometry | null { return surfacesWithOwners(ns)?.geo ?? null; }
+/** The same, with which node each run of triangles came from (`upTo`: the triangle count after it), so a ray's hit names
+ *  what it hit: the triangle is its first vertex's index over 3 (the geometry is not indexed). */
+export function surfacesWithOwners(ns: Node[]): { geo: THREE.BufferGeometry; owners: { upTo: number; node: Node }[]; ownerOf: (triangle: number) => Node | undefined } | null {
+  const parts: THREE.BufferGeometry[] = [], owners: { upTo: number; node: Node }[] = []; let tris = 0;
+  for (const n of ns) { if (!n.p.shape) continue; const g = leafGeometry(n.p.envelope ? { ...n.p, shape: n.p.envelope, cuts: undefined } : n.p); if (!g) continue; const h = (g.index ? g.toNonIndexed() : g.clone()); h.applyMatrix4(n.m); for (const k of Object.keys(h.attributes)) if (k !== 'position') h.deleteAttribute(k); parts.push(h); tris += h.getAttribute('position').count / 3; owners.push({ upTo: tris, node: n }); }
   if (!parts.length) return null;
   const n = parts.reduce((a, g) => a + g.getAttribute('position').count, 0), pos = new Float32Array(n * 3); let o = 0;
   for (const g of parts) { pos.set(g.getAttribute('position').array as Float32Array, o); o += g.getAttribute('position').count * 3; }
-  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); return out;
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const ownerOf = (t: number) => { let lo = 0, hi = owners.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (t < owners[m]!.upTo) hi = m; else lo = m + 1; } return owners[lo]?.node; };
+  return { geo: out, owners, ownerOf };
 }
 const hotOf = (n: Node): number => { for (let x: Node | null = n; x; x = x.parent) if (x.p.hot) return x.p.hot; return 0; };
 

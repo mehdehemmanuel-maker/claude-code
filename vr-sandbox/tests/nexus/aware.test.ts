@@ -16,8 +16,8 @@ describe('signatures', () => {
     const panel = t.find((x) => x.part === 'panel')!, engine = t.find((x) => x.part === 'engine')!;
     // (a black 1 m square on mid grey: full contrast, 1 m / one arcminute ≈ 3.4 km)
     expect(panel.seen).toBeCloseTo(1 / ACUITY, -1);
-    // (100 dB(A) of sound power: 10^((100 − 11 − 40) / 20) ≈ 282 m)
-    expect(engine.heard).toBeCloseTo(10 ** (49 / 20), 3);
+    // (80 dB(A) of sound power at idle: 10^((80 − 11 − 40) / 20) ≈ 28 m)
+    expect(engine.heard).toBeCloseTo(10 ** (29 / 20), 3);
     expect(t.find((x) => x.part === 'block')!.warm).toBeCloseTo(0.04 * Math.log(50 / 5), 6);
     expect(t.find((x) => x.part === 'block')!.tags).toContain('hot');
   });
@@ -52,5 +52,48 @@ describe('affordances, against the body that looks', () => {
     expect(r.tags.filter((x) => x.part === 'door' && x.affords.includes('open')).length).toBeGreaterThan(0);
     expect(r.tags.some((x) => x.affords.includes('sit'))).toBe(true);
     expect(r.findings.some((f) => /inferred/.test(f))).toBe(true);
+  }, 120000);
+});
+
+import { CO_ALARM, perceive, standBy, type Observer } from '../../src/nexus/aware/sense';
+import { EXHAUST_LIMITS, STILL, SUBSTANCES, concentration, effectsOf, exhaustFlow, hydrogenFrom, releasesOf, shutIn } from '../../src/nexus/aware/gas';
+
+describe('gases: a substance given off at a rate, carried by the air, doing what it does at each concentration', () => {
+  it('the rates from the physics: an engine breathes its displacement every two turns; overcharge splits water by Faraday\'s law', () => {
+    expect(exhaustFlow(1987, 750)).toBeCloseTo(1987e-6 * 750 / 120, 12);
+    // (1 A for an hour: 3600 C / (2 × 96485) mol of hydrogen, 22.4 L each)
+    expect(hydrogenFrom(1) * 3600).toBeCloseTo((3600 / (2 * 96485)) * 0.0224, 9);
+  });
+  it('in still air it falls as 1 / r, never above what comes out; in a wind it is carried downwind and not upwind', () => {
+    const r = { at: [0, 1, 0] as [number, number, number], substance: 'co', rate: 1e-5, pure: 0.003, part: 'pipe', path: '/0', why: '' };
+    expect(concentration(r, [2, 1, 0]) / concentration(r, [4, 1, 0])).toBeCloseTo(2, 6);
+    expect(concentration(r, [0.051, 1, 0])).toBeLessThanOrEqual(0.003);
+    const w = { wind: 2, to: [1, 0, 0] as [number, number, number] };
+    expect(concentration(r, [5, 1, 0], w)).toBeGreaterThan(0); expect(concentration(r, [-5, 1, 0], w)).toBe(0);
+  });
+  it('carbon monoxide has no smell: it harms without being noticed; shut in a garage it climbs to where it is dangerous', () => {
+    expect(SUBSTANCES.co!.smell).toBeNull();
+    const rs = releasesOf(makeMachine(MACHINES.find((m) => m.id === 'corolla')!), { running: true }), co = rs.find((x) => x.substance === 'co')!;
+    expect(co.rate).toBeCloseTo(exhaustFlow(1987) * EXHAUST_LIMITS.co, 12); expect(co.part).toBe('muffler');
+    expect(effectsOf(co, STILL).smelled).toBe(0); expect(effectsOf(co, STILL).harmful).toBeGreaterThan(0);
+    const g = shutIn(co, 60, 0.5); expect(g.steady).toBeGreaterThan(SUBSTANCES.co!.deadly!); expect(g.minutesTo(SUBSTANCES.co!.harm!)).toBeLessThan(5);
+  }, 120000);
+});
+
+describe('who notices what', () => {
+  const floor = box('floor', [20, 0.02, 20], [0, -0.01, 0], { item: 'floor', mat: 'concrete' });
+  const eye = (at: [number, number, number], facing: [number, number, number]): Observer => ({ name: 'p', at, facing, kind: 'person' });
+  it('a person sees what is before them and not what a wall hides, nor what is behind their back', () => {
+    const t: Part = { name: 'yard', parts: [floor, box('front post', [0.3, 1.8, 0.3], [3, 0.9, 0], { item: 'post', color: 0x101010 }), box('wall', [0.1, 2.5, 3], [5, 1.25, 0], { item: 'wall', color: 0xdddddd }), box('hidden post', [0.3, 1.8, 0.3], [7, 0.9, 0], { item: 'post', color: 0x101010 }), box('back post', [0.3, 1.8, 0.3], [-3, 0.9, 0], { item: 'post', color: 0x101010 })] };
+    const p = perceive(t, [eye([0, 1.6, 0], [1, 0, 0])], { rays: 3000 }), seen = new Set(p.by.p!.notices.filter((n) => n.sense === 'sight').map((n) => n.thing));
+    expect(seen.has('front post')).toBe(true); expect(seen.has('wall')).toBe(true);
+    expect(seen.has('hidden post')).toBe(false); expect(seen.has('back post')).toBe(false);
+  });
+  it('the Corolla running, shut in a garage: the people are harmed by what they cannot smell, the alarm sounds; observers stand where they are found', () => {
+    const v = makeMachine(MACHINES.find((m) => m.id === 'corolla')!), obs = [standBy(v, /^muffler$/, { name: 'behind' }), standBy(v, /^muffler$/, { name: 'alarm', kind: 'co alarm', off: 1.5 })];
+    const p = perceive(v, obs, { state: { running: true }, shut: { volume: 60, minutes: 30 }, rays: 500 });
+    expect(p.by.behind!.attended[0]).toMatchObject({ sense: 'gas', harm: true });
+    expect(p.by.alarm!.notices.some((n) => n.harm && /70 ppm/.test(n.why))).toBe(true); expect(CO_ALARM).toBe(70e-6);
+    expect(p.by.behind!.notices.some((n) => n.sense === 'hearing' && /petrol engine/.test(n.thing))).toBe(true);
   }, 120000);
 });
