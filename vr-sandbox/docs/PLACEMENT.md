@@ -2,21 +2,24 @@
 
 Status: plan, not built. Base: commit `14e3283`.
 Design target: 1,000,000 components, 100,000 unique, solved, checked, changed and understood without hand edits.
+End state: a person states what they want; the system does the rest, asks only the questions that matter, and hands back a buildable, proven design.
 
 ## Contents
 
 1. [Rules](#1-rules)
 2. [Pipeline](#2-pipeline)
-3. [Scale model](#3-scale-model)
-4. [Node contract](#4-node-contract)
-5. [Glossary](#5-glossary)
-6. [Existing base](#6-existing-base)
-7. [Node groups](#7-node-groups)
-8. [Node index](#8-node-index)
-9. [Steps](#9-steps)
-10. [Measures](#10-measures)
-11. [Limits](#11-limits)
-12. [Starting state](#12-starting-state)
+3. [Effortless use](#3-effortless-use)
+4. [Autopilot loop](#4-autopilot-loop)
+5. [Scale model](#5-scale-model)
+6. [Node contract](#6-node-contract)
+7. [Glossary](#7-glossary)
+8. [Existing base](#8-existing-base)
+9. [Node groups](#9-node-groups)
+10. [Node index](#10-node-index)
+11. [Steps](#11-steps)
+12. [Measures](#12-measures)
+13. [Limits](#13-limits)
+14. [Starting state](#14-starting-state)
 
 ## 1. Rules
 
@@ -25,13 +28,16 @@ Design target: 1,000,000 components, 100,000 unique, solved, checked, changed an
 3. Every figure from a law, standard or source; otherwise labelled typical or estimate.
 4. Unsolved → named task with its cause.
 5. Never solve flat: solve by hierarchy, interface and unique part.
-6. Each step shown before the next.
+6. Every finding has an automatic repair, or it is a named gap in the repair library.
+7. Every figure is checked: units, conservation, invariants.
+8. Ask the person only what changes the answer most.
+9. Each step shown before the next.
 
 ## 2. Pipeline
 
 ```
-requirements → functions → architecture → space claims → layout → routing → sizing → generated parts
-→ detail → manufacture → assembly → service → proof
+intent → requirements → functions → architecture → space claims → layout → routing → sizing
+→ generated parts → detail → proof → manufacture → assembly → service → as-built twin → back to intent
 ```
 
 | Property | Meaning |
@@ -40,8 +46,37 @@ requirements → functions → architecture → space claims → layout → rout
 | Incremental | Only what a change reaches is redone |
 | Traceable | Every result links to the requirement and source behind it |
 | Explainable | Every result can say why |
+| Closed loop | What is built and measured feeds back into design |
 
-## 3. Scale model
+## 3. Effortless use
+
+| The person | The system |
+| --- | --- |
+| Says, sketches, photographs, or points at a product | Turns it into requirements, each with its source or assumption |
+| Answers at most a few questions | Asks only those with the highest value to the answer |
+| Watches it build | Generates, checks and repairs in the autopilot loop, live in 3D |
+| Picks among trade-offs | Offers the Pareto front with costs |
+| Grabs and moves anything | Re-solves around the choice and says what resists |
+| Asks anything | Answers from the system and the knowledge graph |
+| Exports | CAD, drawings, toolpaths, prints, instructions, wiring, permits, orders |
+
+## 4. Autopilot loop
+
+```
+generate → check (rules, fields, budgets, contracts, codes, invariants) → findings
+→ repair (strategy library, cheapest first) → re-check → keep if better
+→ until clean, or blocked → blocked findings become named tasks with their cause
+```
+
+| Part | Does |
+| --- | --- |
+| Repair library | For each finding kind, ordered strategies: move, reroute, shield, resize, bore, join, swap part, change choice, rebalance budget, renegotiate contract |
+| Fidelity on demand | Cheap checks first; full physics only where margins are thin |
+| Learning | Which repair worked for which finding is kept and tried first next time |
+| Guard | A repair that makes anything worse elsewhere is undone |
+| Stop | Clean, blocked, or out of budget; always reported |
+
+## 5. Scale model
 
 How 1,000,000 parts become small problems:
 
@@ -60,7 +95,7 @@ How 1,000,000 parts become small problems:
 
 Figures in this table are estimates for planning.
 
-## 4. Node contract
+## 6. Node contract
 
 Every node, existing and new:
 
@@ -78,8 +113,12 @@ Every node, existing and new:
 | Scoped | Runs on a whole system, a module, a selection or a query result |
 | Tested | Own tests; passes the gauntlet |
 | Budgeted | Reports its time and memory; respects a limit |
+| Self-checked | Units, conservation and invariants verified on its outputs |
+| Versioned | Every output kept by version; any past state can be replayed |
+| Shared | Many people and agents can edit at once without conflicts |
+| Repairable | Its failures name a repair strategy or a gap |
 
-## 5. Glossary
+## 7. Glossary
 
 | Term | Meaning |
 | --- | --- |
@@ -120,9 +159,20 @@ Every node, existing and new:
 | Broad phase | Cheap pass that finds candidate clashes before exact checks |
 | Content hash | Identity of a result from its inputs; the cache key |
 | Hand coordinate | Position typed into code; target 0 |
+| Intent | What the person wants, in any form: words, sketch, photo, reference product, spec sheet |
+| Autopilot | The generate–check–repair loop that runs until clean or blocked |
+| Repair strategy | An automatic fix for one kind of finding |
+| Fidelity ladder | Rule of thumb → law → surrogate → full simulation → physical test, climbed only as needed |
+| Invariant | Something that must always hold: mass conserved, energy balanced, units consistent |
+| Knowledge graph | One linked store of parts, materials, processes, laws, standards, suppliers and precedent |
+| Value of information | How much an answer would change the design; decides what to ask |
+| Node synthesis | Drafting a missing node from a specification, proven by the gauntlet before use |
+| Digital twin | The design linked to the built thing's measurements |
+| GD&T | Geometric dimensioning and tolerancing on drawings |
+| CRDT | A data structure that lets many editors change one design at once without conflicts |
 | Finding | Rules-checker problem: interference, clearance, heat |
 
-## 6. Existing base
+## 8. Existing base
 
 | Have | Where | Becomes |
 | --- | --- | --- |
@@ -142,7 +192,7 @@ Every node, existing and new:
 | Sourced notes | `research.ts` | `precedent.mine`, `req.capture` |
 | Gauntlet | `gauntlet.ts` | `gauntlet.solver`, `bench.scale` |
 
-## 7. Node groups
+## 9. Node groups
 
 ### U1 Needs
 | Node | Does | Options |
@@ -360,143 +410,287 @@ Every node, existing and new:
 | `risk.register` | Risks with likelihood and effect | From FMEA, budgets, margins |
 | `risk.rank` | Top risks across the system | By effect × likelihood |
 
-## 8. Node index
+### U25 Intent
+| Node | Does | Options |
+| --- | --- | --- |
+| `intent.words` | Requirements from plain words | Any language; assumptions listed |
+| `intent.sketch` | Requirements and layout from a sketch | 2D or 3D, in VR |
+| `intent.photo` | A product recognised from photos | Parts and sizes estimated, labelled |
+| `intent.reference` | Start from a named real product | Researched, sourced |
+| `intent.spec` | Requirements from a spec sheet or standard | Clause by clause |
+| `intent.clarify` | The fewest questions with the most value | Stops when answers stop changing the design |
+
+### U26 Import and recognition
+| Node | Does | Options |
+| --- | --- | --- |
+| `import.cad` | Read CAD files into parts | STEP, IGES, STL, glTF |
+| `import.scan` | Point clouds and meshes into parts | Segmented, fitted to primitives |
+| `import.drawing` | Drawings into parts | Dimensions, tolerances |
+| `import.bom` | Bills of materials into the tree | Matched to the inventory |
+| `recognise.part` | Identify a standard part from its geometry | Bolts, bearings, connectors by catalogue |
+
+### U27 Autopilot
+| Node | Does | Options |
+| --- | --- | --- |
+| `auto.loop` | Generate, check, repair until clean or blocked | Time and cost budget; live view |
+| `repair.library` | Strategies per finding kind | Ordered by cost; extensible |
+| `repair.learn` | Keeps which repair worked where | Tried first next time |
+| `repair.guard` | Undoes repairs that worsen anything | Across all checks |
+| `debt.queue` | Blocked findings as named tasks | Cause, owner, cheapest next move |
+
+### U28 Knowledge graph
+| Node | Does | Options |
+| --- | --- | --- |
+| `kg.store` | One linked store of parts, materials, processes, laws, standards, suppliers, precedent | Sourced links only |
+| `kg.ask` | Questions over the graph | Words or filters |
+| `kg.gap` | What the graph does not know | Into the unknown queue |
+| `kg.learn` | New facts from research and twins | Each with source and confidence |
+
+### U29 Fidelity and verification
+| Node | Does | Options |
+| --- | --- | --- |
+| `fidelity.escalate` | Climb the fidelity ladder where margins are thin | Per check |
+| `check.units` | Dimensional consistency everywhere | On every wire |
+| `check.conservation` | Mass, energy, charge, flow balanced | Per subsystem |
+| `check.invariants` | Declared truths always hold | Per node |
+| `check.margin` | Every safety factor against its standard | Ranked thinnest first |
+
+### U30 Self-extension
+| Node | Does | Options |
+| --- | --- | --- |
+| `node.synthesize` | Draft a missing node from a specification | Through the gauntlet before use |
+| `node.improve` | Rewrite slow or failing nodes | Kept only if the gauntlet improves |
+| `test.generate` | Property tests for any node | From its units and invariants |
+
+### U31 Output to reality
+| Node | Gives | Options |
+| --- | --- | --- |
+| `export.cad` | CAD files | STEP, glTF |
+| `export.drawing` | Drawings with GD&T | Per part, per assembly |
+| `export.toolpath` | Machining paths | CNC, by process |
+| `export.print` | Sliced prints | By printer and material |
+| `export.instructions` | Assembly steps with pictures | From `check.assembly` order |
+| `export.wiring` | Wiring diagrams and pinouts | From the harness |
+| `export.permit` | Permit drawings and schedules | By jurisdiction's code |
+| `export.order` | Orders to suppliers | From `supply.match` |
+
+### U32 Twin
+| Node | Does | Options |
+| --- | --- | --- |
+| `twin.ingest` | Measurements from the built thing | Sensors, logs, scans |
+| `twin.compare` | As-built against design | Deviations ranked |
+| `twin.predict` | Wear and maintenance ahead | From measured use |
+
+### U33 Collaboration
+| Node | Does | Options |
+| --- | --- | --- |
+| `collab.live` | Many people and agents editing at once | Conflict-free |
+| `review.pin` | Comments pinned to parts in 3D | Threads, status |
+| `approve.change` | Approval on frozen contracts and baselines | Roles |
+
+### U34 Lifetime
+| Node | Does | Options |
+| --- | --- | --- |
+| `lifetime.cost` | Cost of ownership | Purchase, energy, service, disposal |
+| `lifetime.energy` | Energy over its life | Use profile |
+| `lifetime.co2` | Emissions over its life | Sourced factors |
+| `end.recover` | Disassembly and recycling at end of life | Material recovery share |
+
+### U35 Explain
+| Node | Does | Options |
+| --- | --- | --- |
+| `report.generate` | A design report from the system | Requirements, decisions, proofs, risks |
+| `explain.level` | Any result explained at a chosen depth | Beginner to specialist |
+
+## 10. Node index
 
 | Node | Group | Step |
 | --- | --- | --- |
-| `agent.team` | U21 | 12 |
-| `anomaly.find` | U20 | 7 |
-| `baseline.freeze` | U17 | 9 |
-| `bench.scale` | U12 | 12 |
-| `body.model` | U8 | 10 |
-| `budget.allocate` | U18 | 8 |
-| `budget.margin` | U18 | 8 |
-| `budget.rollup` | U18 | 8 |
-| `cache.content` | U15 | 7 |
-| `change.impact` | U17 | 9 |
-| `change.propagate` | U17 | 9 |
-| `check.assembly` | U9 | 6 |
-| `check.circulation` | U8 | 10 |
-| `check.ergonomics` | U8 | 10 |
-| `check.failure` | U9 | 6 |
-| `check.reach` | U8 | 10 |
-| `check.reliability` | U9 | 6 |
-| `check.service` | U9 | 6 |
-| `check.sight` | U8 | 10 |
-| `check.tolerance` | U9 | 6 |
-| `choose.options` | U3 | 4 |
-| `choose.pareto` | U3 | 4 |
-| `clash.broad` | U15 | 7 |
-| `commonality` | U16 | 9 |
-| `compare` | U20 | 7 |
-| `comply.code` | U19 | 11 |
-| `config.variants` | U17 | 9 |
-| `cost.estimate` | U23 | 11 |
-| `dedupe.parts` | U16 | 9 |
-| `family.extract` | U16 | 9 |
-| `field.air` | U2 | 4 |
+| `agent.team` | U21 | 17 |
+| `anomaly.find` | U20 | 8 |
+| `approve.change` | U33 | 15 |
+| `auto.loop` | U27 | 3 |
+| `baseline.freeze` | U17 | 10 |
+| `bench.scale` | U12 | 17 |
+| `body.model` | U8 | 12 |
+| `budget.allocate` | U18 | 9 |
+| `budget.margin` | U18 | 9 |
+| `budget.rollup` | U18 | 9 |
+| `cache.content` | U15 | 8 |
+| `change.impact` | U17 | 10 |
+| `change.propagate` | U17 | 10 |
+| `check.assembly` | U9 | 7 |
+| `check.circulation` | U8 | 12 |
+| `check.conservation` | U29 | 7 |
+| `check.ergonomics` | U8 | 12 |
+| `check.failure` | U9 | 7 |
+| `check.invariants` | U29 | 7 |
+| `check.margin` | U29 | 7 |
+| `check.reach` | U8 | 12 |
+| `check.reliability` | U9 | 7 |
+| `check.service` | U9 | 7 |
+| `check.sight` | U8 | 12 |
+| `check.tolerance` | U9 | 7 |
+| `check.units` | U29 | 7 |
+| `choose.options` | U3 | 5 |
+| `choose.pareto` | U3 | 5 |
+| `clash.broad` | U15 | 8 |
+| `collab.live` | U33 | 15 |
+| `commonality` | U16 | 10 |
+| `compare` | U20 | 8 |
+| `comply.code` | U19 | 13 |
+| `config.variants` | U17 | 10 |
+| `cost.estimate` | U23 | 13 |
+| `debt.queue` | U27 | 3 |
+| `dedupe.parts` | U16 | 10 |
+| `end.recover` | U34 | 13 |
+| `explain.level` | U35 | 15 |
+| `export.cad` | U31 | 14 |
+| `export.drawing` | U31 | 14 |
+| `export.instructions` | U31 | 14 |
+| `export.order` | U31 | 14 |
+| `export.permit` | U31 | 14 |
+| `export.print` | U31 | 14 |
+| `export.toolpath` | U31 | 14 |
+| `export.wiring` | U31 | 14 |
+| `family.extract` | U16 | 10 |
+| `fidelity.escalate` | U29 | 7 |
+| `field.air` | U2 | 1 |
 | `field.combine` | U2 | 1 |
 | `field.heat` | U2 | 1 |
-| `field.light` | U2 | 10 |
-| `field.load` | U2 | 5 |
+| `field.light` | U2 | 1 |
+| `field.load` | U2 | 1 |
 | `field.motion` | U2 | 1 |
 | `field.reach` | U2 | 1 |
 | `field.show` | U2 | 1 |
-| `field.signal` | U2 | 3 |
-| `field.sound` | U2 | 10 |
-| `field.wet` | U2 | 6 |
-| `gauntlet.solver` | U12 | 12 |
-| `index.spatial` | U15 | 7 |
-| `infer.needs` | U1 | 8 |
-| `interface.check` | U14 | 8 |
-| `interface.contract` | U14 | 8 |
-| `interface.freeze` | U14 | 8 |
-| `layout.seed` | U10 | 4 |
-| `line.plan` | U23 | 11 |
-| `live.drag` | U13 | 12 |
-| `live.review` | U13 | 12 |
-| `lod.auto` | U15 | 7 |
-| `make.bracket` | U7 | 5 |
-| `make.duct` | U7 | 5 |
-| `make.enclosure` | U7 | 5 |
-| `make.harness` | U7 | 3 |
-| `make.mount` | U7 | 5 |
-| `make.shield` | U7 | 5 |
+| `field.signal` | U2 | 1 |
+| `field.sound` | U2 | 1 |
+| `field.wet` | U2 | 1 |
+| `gauntlet.solver` | U12 | 17 |
+| `import.bom` | U26 | 11 |
+| `import.cad` | U26 | 11 |
+| `import.drawing` | U26 | 11 |
+| `import.scan` | U26 | 11 |
+| `index.spatial` | U15 | 8 |
+| `infer.needs` | U1 | 9 |
+| `intent.clarify` | U25 | 11 |
+| `intent.photo` | U25 | 11 |
+| `intent.reference` | U25 | 11 |
+| `intent.sketch` | U25 | 11 |
+| `intent.spec` | U25 | 11 |
+| `intent.words` | U25 | 11 |
+| `interface.check` | U14 | 9 |
+| `interface.contract` | U14 | 9 |
+| `interface.freeze` | U14 | 9 |
+| `kg.ask` | U28 | 11 |
+| `kg.gap` | U28 | 11 |
+| `kg.learn` | U28 | 11 |
+| `kg.store` | U28 | 11 |
+| `layout.seed` | U10 | 5 |
+| `lifetime.cost` | U34 | 13 |
+| `lifetime.energy` | U34 | 13 |
+| `line.plan` | U23 | 13 |
+| `live.drag` | U13 | 17 |
+| `live.review` | U13 | 17 |
+| `lod.auto` | U15 | 8 |
+| `make.bracket` | U7 | 6 |
+| `make.duct` | U7 | 6 |
+| `make.enclosure` | U7 | 6 |
+| `make.harness` | U7 | 4 |
+| `make.mount` | U7 | 6 |
+| `make.shield` | U7 | 6 |
 | `need.access` | U1 | 1 |
 | `need.connect` | U1 | 1 |
 | `need.face` | U1 | 1 |
 | `need.group` | U1 | 1 |
 | `need.keepout` | U1 | 1 |
 | `need.mount` | U1 | 1 |
+| `node.improve` | U30 | 16 |
+| `node.synthesize` | U30 | 16 |
 | `place.lock` | U4 | 2 |
 | `place.negotiate` | U4 | 2 |
 | `place.solve` | U4 | 2 |
 | `place.whatif` | U4 | 2 |
 | `place.why` | U4 | 2 |
-| `precedent.mine` | U10 | 4 |
-| `process.select` | U23 | 11 |
-| `progress.track` | U21 | 12 |
-| `query` | U20 | 7 |
-| `req.capture` | U19 | 11 |
-| `req.trace` | U19 | 11 |
-| `req.verify` | U19 | 11 |
-| `risk.rank` | U24 | 11 |
-| `risk.register` | U24 | 11 |
-| `route.bundle` | U5 | 3 |
-| `route.clip` | U5 | 3 |
-| `route.network` | U5 | 10 |
-| `route.path` | U5 | 3 |
-| `route.slope` | U5 | 10 |
-| `score.layout` | U12 | 4 |
-| `sim.reduce` | U22 | 11 |
-| `sim.sensitivity` | U22 | 11 |
-| `sim.system` | U22 | 11 |
-| `sim.uncertainty` | U22 | 11 |
+| `precedent.mine` | U10 | 5 |
+| `process.select` | U23 | 13 |
+| `progress.track` | U21 | 17 |
+| `query` | U20 | 8 |
+| `recognise.part` | U26 | 11 |
+| `repair.guard` | U27 | 3 |
+| `repair.learn` | U27 | 3 |
+| `repair.library` | U27 | 3 |
+| `report.generate` | U35 | 15 |
+| `req.capture` | U19 | 13 |
+| `req.trace` | U19 | 13 |
+| `req.verify` | U19 | 13 |
+| `review.pin` | U33 | 15 |
+| `risk.rank` | U24 | 13 |
+| `risk.register` | U24 | 13 |
+| `route.bundle` | U5 | 4 |
+| `route.clip` | U5 | 4 |
+| `route.network` | U5 | 4 |
+| `route.path` | U5 | 4 |
+| `route.slope` | U5 | 4 |
+| `score.layout` | U12 | 5 |
+| `sim.reduce` | U22 | 13 |
+| `sim.sensitivity` | U22 | 13 |
+| `sim.system` | U22 | 13 |
+| `sim.uncertainty` | U22 | 13 |
 | `size.battery` | U6 | 2 |
-| `size.beam` | U6 | 10 |
-| `size.bolt` | U6 | 5 |
-| `size.drain` | U6 | 10 |
-| `size.duct` | U6 | 5 |
-| `size.fan` | U6 | 5 |
-| `size.hose` | U6 | 3 |
-| `size.motor` | U6 | 5 |
-| `size.pipe` | U6 | 10 |
-| `size.wire` | U6 | 3 |
-| `solve.distribute` | U15 | 7 |
-| `solve.incremental` | U15 | 7 |
-| `space.bid` | U3 | 4 |
-| `space.claim` | U3 | 4 |
-| `standardize` | U16 | 9 |
-| `stream.load` | U15 | 7 |
-| `summarize` | U20 | 7 |
-| `supply.match` | U23 | 11 |
-| `surrogate.train` | U22 | 11 |
-| `system.partition` | U14 | 8 |
-| `system.tree` | U14 | 8 |
-| `version.branch` | U17 | 9 |
-| `view.slice` | U20 | 7 |
-| `work.split` | U21 | 12 |
+| `size.beam` | U6 | 4 |
+| `size.bolt` | U6 | 4 |
+| `size.drain` | U6 | 4 |
+| `size.duct` | U6 | 4 |
+| `size.fan` | U6 | 4 |
+| `size.hose` | U6 | 4 |
+| `size.motor` | U6 | 4 |
+| `size.pipe` | U6 | 4 |
+| `size.wire` | U6 | 4 |
+| `solve.distribute` | U15 | 8 |
+| `solve.incremental` | U15 | 8 |
+| `space.bid` | U3 | 5 |
+| `space.claim` | U3 | 5 |
+| `standardize` | U16 | 10 |
+| `stream.load` | U15 | 8 |
+| `summarize` | U20 | 8 |
+| `supply.match` | U23 | 13 |
+| `surrogate.train` | U22 | 13 |
+| `system.partition` | U14 | 9 |
+| `system.tree` | U14 | 9 |
+| `test.generate` | U30 | 16 |
+| `twin.compare` | U32 | 14 |
+| `twin.ingest` | U32 | 14 |
+| `twin.predict` | U32 | 14 |
+| `version.branch` | U17 | 10 |
+| `view.slice` | U20 | 8 |
+| `work.split` | U21 | 17 |
 
-112 nodes, 0 built.
+159 nodes, 0 built.
 
-## 9. Steps
+## 11. Steps
 
 | Step | Scope | Groups | Output |
 | --- | --- | --- | --- |
-| 1 | Needs and first fields on the Corolla bay | U1, U2 | Field images |
+| 1 | Needs and fields on the Corolla bay | U1, U2 | Field images |
 | 2 | Solver places the battery | U4, `size.battery` | Position, reason, trade-offs |
-| 3 | Routing and sizing: cables, hoses, harness | U5, U6, `make.harness` | Routes, sizes |
-| 4 | Claims, choices; full bay re-solve | U3, U10, `score.layout` | Findings vs 262 |
-| 5 | Generated parts | U7 | Brackets, shields, ducts, mounts |
-| 6 | Lifecycle | U9 | Order, minutes, FMEA, stacks |
-| 7 | Scale engine and queries | U15, U20 | Times on the city and Cascadia |
-| 8 | Hierarchy, contracts, budgets; hand-placed builds converted | U14, U18, `infer.needs` | Hand coordinates left |
-| 9 | Variety reduction, configuration, change | U16, U17 | Unique count, change impact |
-| 10 | People and other domains | U8, U11 | A house, a board, a plant solved |
-| 11 | Requirements, system simulation, manufacture, risk | U19, U22, U23, U24 | Trace, costs, top risks |
-| 12 | Orchestration, live, proof at scale | U12, U13, U21 | 1,000,000 / 100,000 benchmark |
+| 3 | Autopilot with the first repair strategies on the Corolla | U27 | Findings cleared without hand edits |
+| 4 | Routing and sizing: cables, hoses, harness | U5, U6, `make.harness` | Routes, sizes |
+| 5 | Claims, choices, precedent; full bay re-solve | U3, U10, `score.layout` | Findings vs 262 |
+| 6 | Generated parts | U7 | Brackets, shields, ducts, mounts |
+| 7 | Lifecycle, fidelity, verification | U9, U29 | Order, minutes, FMEA, stacks, margins |
+| 8 | Scale engine and queries | U15, U20 | Times on the city and Cascadia |
+| 9 | Hierarchy, contracts, budgets; hand-placed builds converted | U14, U18, `infer.needs` | Hand coordinates left |
+| 10 | Variety reduction, configuration, change | U16, U17 | Unique count, change impact |
+| 11 | Intent, import, knowledge graph | U25, U26, U28 | A design from words; a scanned part recognised |
+| 12 | People and other domains | U8, U11 | A house, a board, a plant solved |
+| 13 | Requirements, system simulation, manufacture, risk, lifetime | U19, U22, U23, U24, U34 | Trace, costs, risks, lifetime |
+| 14 | Output to reality and twin | U31, U32 | Exports; as-built comparison |
+| 15 | Collaboration and explanation | U33, U35 | Shared editing; a design report |
+| 16 | Self-extension | U30 | A node drafted and proven by the gauntlet |
+| 17 | Orchestration, live, proof at scale | U12, U13, U21 | 1,000,000 / 100,000 benchmark |
 
-## 10. Measures
+## 12. Measures
 
 | Measure | Target |
 | --- | --- |
@@ -508,8 +702,13 @@ Every node, existing and new:
 | Re-solve after one change, 1,000,000 parts | Seconds (estimate to be measured) |
 | Unique parts after variety reduction | Falling, reported |
 | Blind check | Indistinguishable from a real layout |
+| Findings cleared by autopilot | 100 %, rest named |
+| Questions asked per design | Fewest that settle it |
+| Words to buildable design | Minutes (estimate to be measured) |
+| Invariant violations | 0 |
+| Gaps in the repair library | Listed, falling |
 
-## 11. Limits
+## 13. Limits
 
 | Limit | Mitigation |
 | --- | --- |
@@ -519,8 +718,12 @@ Every node, existing and new:
 | Codes and standards often paywalled | Cite clause; label where unread |
 | 1,000,000 parts exceed one browser's memory | Streaming, references, content cache, remote solve |
 | Many rounds of work | One step per round |
+| Photo and scan recognition is approximate | Confidence shown; person confirms low-confidence parts |
+| Synthesized nodes can be wrong | Gauntlet and generated tests before use |
+| Web unreachable from this container | Research by Claude kept as sourced data; live where reachable |
+| Exports for real manufacture carry liability | Marked for an engineer's sign-off |
 
-## 12. Starting state
+## 14. Starting state
 
 Gate: 9 of 1,630 tests fail. Causes:
 - `bearing-6206zz` is not stored in the inventory.
