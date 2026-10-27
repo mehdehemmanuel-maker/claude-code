@@ -39,7 +39,8 @@ const T = (m: Mesh3): Tris => (m.tris ??= trisOf(m));
 export function trianglesOf(root: Part): Mesh3[] {
   const out: Mesh3[] = [], v = new THREE.Vector3();
   for (const n of layout(root)) {
-    if (!n.p.shape) continue; const g = leafGeometry(n.p); if (!g) continue;
+    // (fine geometry tested by the shape that encloses it: what clears that clears it)
+    if (!n.p.shape) continue; const g = leafGeometry(n.p.envelope ? { ...n.p, shape: n.p.envelope, cuts: undefined } : n.p); if (!g) continue;
     const P = g.getAttribute('position'), pos = new Float32Array(P.count * 3);
     for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(n.m); pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z; }
     const idx = g.getIndex(); out.push({ name: n.p.name, path: n.path, pos, ...(idx ? { idx: idx.array } : {}), mat: n.p.mat, ...(n.p.passes ? { passes: n.p.passes } : {}), ...(n.p.joins ? { joins: n.p.joins } : {}), p: n.p, node: n });

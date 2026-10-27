@@ -142,6 +142,20 @@ the task list and lose the why. So the why lives here, and every round is checke
   Toyota's M20A-FKS went from 42 % to 82 % of the parts its sources name, its rules still clean; the maker's choices a
   `fit` (`FITS` in `engines.ts`). In-app research cannot reach the web or Claude (the relay is gone): the research is
   done by Claude with web search and kept as sourced data)
+- "I want a separate node space where nodes have to go through gauntlets before they get approved like if there's any
+  component that have sub components that aren't explodable and if them sub components have components or stress tests
+  or even versatility … universal nodes all types of nodes real search nodes input output read nodes pass nodes task
+  nodes event listeners … a unknown library queue a tester node a deletion node get creative", "make that unknown node
+  research and gauntlets flow more advanced like have sorter … sorts them by things they have in common so a lot more of
+  them can be made a lot faster … make sure that it's recursive … looks for components sub components sub sub components
+  and it keeps going through gates until there's no more and even more advanced", and "the detail ain't there textures
+  are too smooth … the copper is too smooth when it's supposed to be wire that's geometry don't half do stuff or no
+  mocking because that ruins this app's integrity" (2026-10-27: the gauntlet (`gauntlet.ts`, page `view/gauntlet.html`,
+  nodes `gauntlet.*`, `read.*`, `pass`, `task`, `on.event`, `unknown.*`, `research.loop`, `search.*`, `test.block`,
+  `delete`, `make.sensor`); windings drawn as their wire (`makers.ts` `wound`, node Winding). Put through it, the
+  library's 318 blocks first came back with 25 that gave NaN without a word, engine nodes that crashed on an 80 m bore,
+  brake pads and zirconia that weighed nothing, a starter solenoid listed only as its materials, and the Rancher's
+  engine with 6 collisions: each fixed)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -225,6 +239,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |
 | The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
 | Research as a pipeline: sourced notes compiled into a reference tree (refusing what has no source, saying conflicts), references merged, entered in the inventory to open all the way down; a drawn thing held against its reference (drawn, short, missing, wrong: the gap); how finely a thing is drawn (its boxes by number and volume, the biggest first) | `src/nexus/research.ts` (the researched notes in `src/data/references.ts`; nodes `research.*` and `check.fidelity` in `blocks.ts`; the gap map in `docs/GAP-MAP.md`) |
+| The gauntlet: what a block or an entry must come through to be approved (documented, unique, versatile, sourced, tests, robust, known, explodes, clean), each failure said; the unknown queue sorted by what its members share (one maker for a cluster) and researched in a loop to a fixed point (a family, a reference, the drawing read back, the web where reachable, a sibling as inferred); proposals fed in when sourced; tasks; events for listeners; guarded deletion | `src/nexus/gauntlet.ts` (its page `view/gauntlet.html` with `src/nexus/view/gauntlet.ts`; its nodes in `blocks.ts`; Wikidata's has-part in `research.ts` `webParts`) |
+| A winding as it is wound (on a former, round a ring's band, round a pole: its outer layer turn by turn as its wire, the layers under it as their packed solid; tested by the ring it lies within); a sensor as it is made (threaded probe, puck, block; its element by what it senses) | `src/nexus/makers.ts` `wound`, `sensor` (nodes Winding, Sensor); `Part.envelope` in `kits.ts`, read by the rules |
 
 ## The organising principle: interfaces, envelopes, one graph
 

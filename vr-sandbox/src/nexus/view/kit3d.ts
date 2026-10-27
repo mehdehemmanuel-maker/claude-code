@@ -24,7 +24,7 @@ const mats = new Map<string, THREE.MeshStandardMaterial>();
 // physically based renderers' guides for each; ground steel, a rail's or a block's, satin: it takes the room's light as
 // well as mirroring it)
 const FINISH: Record<string, { rough: number; metal: number; coat?: number }> = {
-  paint: { rough: 0.35, metal: 0.1, coat: 1 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, ground: { rough: 0.48, metal: 0.72 }, cast: { rough: 0.7, metal: 0.8 },
+  paint: { rough: 0.35, metal: 0.1, coat: 1 }, enamel: { rough: 0.22, metal: 0.85, coat: 0.6 }, chrome: { rough: 0.06, metal: 1 }, brushed: { rough: 0.32, metal: 1 }, ground: { rough: 0.48, metal: 0.72 }, cast: { rough: 0.7, metal: 0.8 },
   plate: { rough: 0.4, metal: 0.9 }, weld: { rough: 0.75, metal: 0.7 }, thread: { rough: 0.62, metal: 0.85 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
   weave: { rough: 0.95, metal: 0 }, texture: { rough: 0.8, metal: 0 }, grain: { rough: 0.7, metal: 0 }, stone: { rough: 0.85, metal: 0 }, concrete: { rough: 0.95, metal: 0 },
 };
@@ -38,7 +38,7 @@ FINISH.machined = { rough: 0.42, metal: 0.85 }; FINISH.forged = { rough: 0.6, me
 export const GRAIN: Record<string, { size: number; depth: number; rough: number; stretch?: [number, number, number] }> = {
   cast: { size: 0.0008, depth: 0.55, rough: 0.16 }, forged: { size: 0.004, depth: 0.3, rough: 0.1 }, machined: { size: 0.00035, depth: 0.16, rough: 0.05, stretch: [0.04, 1, 0.04] },
   ground: { size: 0.00018, depth: 0.08, rough: 0.04, stretch: [0.04, 1, 0.04] }, brushed: { size: 0.00025, depth: 0.14, rough: 0.07, stretch: [0.03, 1, 0.03] }, satin: { size: 0.0004, depth: 0.08, rough: 0.04 },
-  paint: { size: 0.003, depth: 0.05, rough: 0.03 }, texture: { size: 0.0006, depth: 0.35, rough: 0.12 }, matte: { size: 0.001, depth: 0.15, rough: 0.1 }, plate: { size: 0.0005, depth: 0.05, rough: 0.03 },
+  paint: { size: 0.003, depth: 0.05, rough: 0.03 }, enamel: { size: 0.002, depth: 0.03, rough: 0.02 }, texture: { size: 0.0006, depth: 0.35, rough: 0.12 }, matte: { size: 0.001, depth: 0.15, rough: 0.1 }, plate: { size: 0.0005, depth: 0.05, rough: 0.03 },
   tread: { size: 0.0008, depth: 0.3, rough: 0.1 }, weld: { size: 0.002, depth: 0.6, rough: 0.2, stretch: [1, 0.25, 1] }, thread: { size: 0.0004, depth: 0.2, rough: 0.06 }, weave: { size: 0.0012, depth: 0.4, rough: 0.1, stretch: [1, 0.3, 1] },
   leather: { size: 0.0015, depth: 0.3, rough: 0.1 }, stone: { size: 0.002, depth: 0.5, rough: 0.15 }, concrete: { size: 0.003, depth: 0.6, rough: 0.2 }, grain: { size: 0.002, depth: 0.25, rough: 0.08, stretch: [1, 0.08, 1] },
 };

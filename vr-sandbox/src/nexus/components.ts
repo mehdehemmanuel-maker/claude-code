@@ -27,7 +27,7 @@ import { DENSITY, massOf } from './mass';
 import { boundsOfAll, frame, partOf, place, type Assembly, type Placed } from './assembly';
 import * as THREE from 'three';
 import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
-import { chainRun, coated, coil, enclosure, fillCells, gridPlate, intoCells, ringClip, stackOf, strapsOver, toothed, woundRoll, wrapped } from './makers';
+import { chainRun, coated, coil, enclosure, fillCells, gridPlate, intoCells, ringClip, stackOf, strapsOver, toothed, wound, woundRoll, wrapped } from './makers';
 
 const PI = Math.PI, mm = 1e-3;
 /** A design: its part in its own frame, from its family's numbers and its item. */
@@ -478,7 +478,8 @@ function stepperParts(p: Record<string, string | number>, nm: string): Part[] {
   const yS = -L + rb, yF = -fb, mid = (yS + yF) / 2;
   const stack = slab(`${nm} stator`, through ? body : body.map(([x, z]) => [x * 0.985, z * 0.985] as [number, number]), [S(statorBore(d)), ...d.ties.map(([x, z]) => hole(clear / 2, x, z, 12))], yS, yF, { mat: 'steel-electrical', color: 0x6a6e72, finish: 'texture', fill: 0.95, item: 'lamination-stack', fixed: 'clamped between its end bells by its tie screws', passes });
   const coil = (k: number) => { const a = (k * PI) / 4, w2 = d.wp / 2 + d.g, Lz = d.r2 - d.r1, rc = (d.r1 + d.r2) / 2, hy = d.Ls / 2 + d.g, [x, z] = polar(rc, a);
-    return P(`${nm} winding`, section([[-d.w, -hy - d.tc], [d.w, -hy - d.tc], [d.w, hy + d.tc], [-d.w, hy + d.tc]], [[[-w2, -hy], [w2, -hy], [w2, hy], [-w2, hy]]], Lz), { rot: [0, PI / 2 - a, 0], at: [x * mm, mid * mm, z * mm], mat: 'magnet-wire', color: 0xb4643c, finish: 'plate', fill: 0.6, item: 'winding', fixed: 'wound round a pole of its stator' }); };
+    // (about 0.25 mm wire, typical of a NEMA 17's coils: its turns drawn round the pole, its layers under them)
+    return { ...wound({ name: `${nm} winding`, kind: 'pole', iw: w2 * mm, ih: hy * mm, ow: d.w * mm, oh: (hy + d.tc) * mm, L: Lz * mm, d: 0.00025, color: 0xb4643c }), rot: [0, PI / 2 - a, 0] as V3, at: [x * mm, mid * mm, z * mm] as V3, fixed: 'wound round a pole of its stator' }; };
   const stator = group(`${nm} stator`, 'stator-stepper', [stack, ...Array.from({ length: 8 }, (_, k) => coil(k))]);
   // the rotor: on its shaft, two toothed cups half a tooth apart either side of its magnet; the shaft in its bearings
   const rj = d.db / 2, rs = f.shaft / 2, yR0 = -L + rb - Bb, yr0 = yS + 0.5, yr1 = yF - 0.5, tm = Math.max(1, 0.1 * d.Ls), lc = (yr1 - yr0 - tm) / 2, rotor = { link: `${nm} rotor` };
@@ -534,6 +535,9 @@ const kept = new Map<string, Component | string>();
 const byItem = new Map<string, Component>();
 /** Each made component by its item's id, so what is in a drawn part can be found where the inventory has no entry for its size. */
 const keptByItem = new Map<string, Item>();
+/** A size made by its family for a build and kept with its drawing (a wheel stud of the length a hub asks): the library's,
+ *  by its item's id. */
+export const keptItem = (id: string): Item | undefined => keptByItem.get(id);
 /** Materials the drawing knows by density, though the inventory may not list them. */
 const DENSITY_KNOWN = new Set(Object.keys(DENSITY));
 /** The families drawn here (every size each family makes). */

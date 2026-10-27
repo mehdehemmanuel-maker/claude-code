@@ -167,3 +167,18 @@ export function grownOf(nodes: Node[]): (n: Node) => boolean {
 /** A world point or direction brought into a part's own frame (to place what is added to it). */
 export const toLocal = (n: Node, world: THREE.Vector3) => world.clone().applyMatrix4(n.m.clone().invert());
 export const dirToLocal = (n: Node, world: THREE.Vector3) => world.clone().transformDirection(n.m.clone().invert());
+
+/** A path clear of what is in its way: the first of the ways given (each a polyline) whose every point, sampled every
+ *  5 mm, is outside every box (each grown by the radius of what runs along it and a clearance). Points within `near` of
+ *  either end are not tried (where it is pushed on to what it joins). Null when none is clear. */
+export function clearPath(ways: THREE.Vector3[][], boxes: OBB[], r: number, near = 0.03): THREE.Vector3[] | null {
+  const inside = (q: THREE.Vector3) => boxes.some((b) => { const d = q.clone().sub(b.c); return Math.abs(d.dot(b.u[0])) < b.h[0] + r && Math.abs(d.dot(b.u[1])) < b.h[1] + r && Math.abs(d.dot(b.u[2])) < b.h[2] + r; });
+  for (const w of ways) {
+    const a = w[0]!, z = w[w.length - 1]!; let ok = true;
+    for (let i = 1; i < w.length && ok; i++) { const p0 = w[i - 1]!, p1 = w[i]!, n = Math.max(1, Math.ceil(p0.distanceTo(p1) / 0.005));
+      for (let k = 0; k <= n && ok; k++) { const q = p0.clone().lerp(p1, k / n); if (q.distanceTo(a) < near || q.distanceTo(z) < near) continue; if (inside(q)) ok = false; } }
+    if (ok) return w;
+  }
+  return null;
+}
+

@@ -848,6 +848,33 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'eng', 'engine', 'show', 'thing');
     return b;
   }],
+  ['The gauntlet as nodes: makers through gate after gate, the unknown sorted and researched to the bottom', () => {
+    // every maker of the library put through the gauntlet gate by gate (what passes one goes on to the next, what fails
+    // is shown with why); what they want that nothing knows queued, sorted by what it shares, and researched round after
+    // round to the bottom from what a maker draws; a listener hearing each approval; the tasks left; a block read, a
+    // block tested, a search; and a deletion that only says what it would do. The gauntlet's own page shows all of this
+    // as lanes (Gauntlet ↗ above)
+    const b = emptyBoard('The gauntlet as nodes');
+    placeBlock(b, 'gauntlet.candidates', 0, 0, { from: 'library', kind: 'generator', most: 16 }, 'cands'); b.nodes.cands!.label = 'Candidates: the makers';
+    const gates = ['documented', 'unique', 'tests', 'robust', 'known', 'explodes'];
+    gates.forEach((g, k) => { placeBlock(b, 'gauntlet.gate', 0, 0, { gate: g }, `g${k}`); b.nodes[`g${k}`]!.label = `Gate: ${g}`; wire(b, k ? `g${k - 1}` : 'cands', k ? 'passed' : 'candidates', `g${k}`, 'candidates'); });
+    gates.forEach((g, k) => { placeBlock(b, 'view.table', 0, 0, {}, `t${k}`); b.nodes[`t${k}`]!.label = `${g}: who and why`; wire(b, `g${k}`, 'rows', `t${k}`, 'rows'); });
+    placeBlock(b, 'gauntlet.approved', 0, 0, {}, 'ok'); b.nodes.ok!.label = 'Approved so far'; wire(b, `g${gates.length - 1}`, 'passed', 'ok', 'after');
+    placeBlock(b, 'on.event', 0, 0, { kind: 'approved' }, 'heard'); b.nodes.heard!.label = 'When something is approved'; wire(b, `g${gates.length - 1}`, 'passed', 'heard', 'after');
+    placeBlock(b, 'unknown.queue', 0, 0, {}, 'queue'); b.nodes.queue!.label = 'Unknown library queue'; wire(b, `g${gates.length - 1}`, 'passed', 'queue', 'after');
+    placeBlock(b, 'unknown.sort', 0, 0, {}, 'sort'); b.nodes.sort!.label = 'Sorted by what they share'; wire(b, 'queue', 'ids', 'sort', 'ids');
+    placeBlock(b, 'make.sensor', 0, 0, { body: 'puck', element: 'piezo', name: 'knock sensor', item: 'knock-sensor-puck' }, 'sens'); b.nodes.sens!.label = 'A sensor, from the one sensor node';
+    placeBlock(b, 'research.loop', 0, 0, { rounds: 8 }, 'loop'); b.nodes.loop!.label = 'Research loop, to the bottom'; wire(b, 'sens', 'sensor', 'loop', 'drawing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'rounds'); b.nodes.rounds!.label = 'Each round: found, resolved, left'; wire(b, 'loop', 'rounds', 'rounds', 'rows');
+    placeBlock(b, 'task', 0, 0, { list: true }, 'tasks'); b.nodes.tasks!.label = 'Tasks left'; wire(b, 'g5', 'passed', 'tasks', 'done');
+    placeBlock(b, 'view.table', 0, 0, {}, 'taskRows'); b.nodes.taskRows!.label = 'Tasks'; wire(b, 'tasks', 'tasks', 'taskRows', 'rows');
+    placeBlock(b, 'read.block', 0, 0, { id: 'make.wound' }, 'read'); b.nodes.read!.label = 'Read a block';
+    placeBlock(b, 'test.block', 0, 0, { id: 'make.wound' }, 'tester'); b.nodes.tester!.label = 'Tester';
+    placeBlock(b, 'search.library', 0, 0, { q: 'sensor' }, 'search'); b.nodes.search!.label = 'Search what is known';
+    placeBlock(b, 'delete', 0, 0, { what: 'block', really: false }, 'del'); b.nodes.del!.label = 'Delete (only says, until told)'; wire(b, 'g2', 'failed', 'del', 'ids');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
+    return b;
+  }],
   ['A car down to its bolts: tyres made in depth, a shared battery, taken apart', () => {
     // a Toyota Corolla by Toyota's figures, built part by part down to its wheel nuts; its four tyres swapped for one tyre
     // made in depth (layers, beads, belts, a tread of pitches), the same one on every wheel; a group 35 battery (typical
@@ -1170,7 +1197,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

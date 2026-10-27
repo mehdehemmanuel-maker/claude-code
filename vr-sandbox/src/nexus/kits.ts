@@ -62,6 +62,8 @@ export interface Cut { r: number; depth: number; at: V3; dir: V3; n?: number }
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
   /** holes drilled into it (its own frame) */ cuts?: Cut[];
+  /** a plain shape that wholly encloses what is drawn (a winding's turns of fine wire, inside the ring they are wound
+   *  within): the rules test this in its place, so what clears it clears every turn in it */ envelope?: Shape;
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
   /** how its maker made it, in its maker's own figures (a coil's wire, mean diameter, free and installed lengths, coils; a
    *  gear's module and teeth): what a load case reads, so what is calculated is what is drawn */ made?: Record<string, number | string>;

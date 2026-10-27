@@ -171,3 +171,21 @@ export function referenceOf(id: string): Compiled | null {
   const r = REFERENCE_NOTES[id]; if (!r) return null;
   let c = compiled.get(id); if (!c) compiled.set(id, (c = compileNotes(id, r.name, r.notes))); return c;
 }
+
+// ==== the web: Wikidata's "has part(s)" and "made from material", where the page can reach it =======================
+export interface WebParts { query: string; entity: string; label: string; description: string; url: string; parts: { id: string; label: string }[]; materials: { id: string; label: string }[] }
+const WD = 'https://www.wikidata.org/w/api.php';
+/** What Wikidata says a thing has as parts (P527) and is made from (P186): searched by its words, the best match's
+ *  claims read and their labels fetched; its entity's address is the source. Real requests (no key: Wikidata's API
+ *  answers any origin); where the web cannot be reached it fails with the reason, it never makes an answer up. */
+export async function webParts(query: string, fetcher: typeof fetch = fetch): Promise<WebParts> {
+  const get = async (params: Record<string, string>) => { const r = await fetcher(`${WD}?${new URLSearchParams({ format: 'json', origin: '*', ...params })}`); if (!r.ok) throw new Error(`Wikidata answered ${r.status}`); return r.json() as Promise<Record<string, unknown>>; };
+  const found = (await get({ action: 'wbsearchentities', search: query, language: 'en', limit: '1' })) as { search?: { id: string; label?: string; description?: string }[] };
+  const hit = found.search?.[0]; if (!hit) throw new Error(`Wikidata has nothing called "${query}"`);
+  const ent = (await get({ action: 'wbgetentities', ids: hit.id, props: 'claims' })) as { entities: Record<string, { claims?: Record<string, { mainsnak?: { datavalue?: { value?: { id?: string } } } }[]> }> };
+  const claims = ent.entities[hit.id]?.claims ?? {}, ids = (p: string) => (claims[p] ?? []).map((c) => c.mainsnak?.datavalue?.value?.id).filter((x): x is string => !!x);
+  const partIds = ids('P527'), matIds = ids('P186'), all = [...new Set([...partIds, ...matIds])].slice(0, 50);
+  const labels: Record<string, string> = {};
+  if (all.length) { const lab = (await get({ action: 'wbgetentities', ids: all.join('|'), props: 'labels', languages: 'en' })) as { entities: Record<string, { labels?: { en?: { value: string } } }> }; for (const [id, e] of Object.entries(lab.entities)) labels[id] = e.labels?.en?.value ?? id; }
+  return { query, entity: hit.id, label: hit.label ?? query, description: hit.description ?? '', url: `https://www.wikidata.org/wiki/${hit.id}`, parts: partIds.map((id) => ({ id, label: labels[id] ?? id })), materials: matIds.map((id) => ({ id, label: labels[id] ?? id })) };
+}

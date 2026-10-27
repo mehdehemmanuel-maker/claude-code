@@ -698,6 +698,18 @@ not); and the drawing measured for how finely it is made (How finely is it made?
 volume, the biggest first). The board Research to what is missing runs all of it with every check on the engine at once.
 The Corolla's engine went from 42 % to 82 % of the 67 parts Toyota's M20A-FKS sources name, its rules still at 0.
 
+**The gauntlet** (`src/nexus/gauntlet.ts`, its own page `view/gauntlet.html`): every block of the library and every
+entry of the inventory can be put through nine gates, cheapest first: documented, unique (one owner per concern),
+versatile (it reaches the library), sourced (where it states figures), tests (its own), robust (pushed to zero,
+negative, a thousandth and a thousand times; a tenth and ten times for what draws parts: it answers or refuses in
+words, never crashes, never gives NaN in silence), known (all the way down to materials), explodes (single parts,
+every recipe met, nothing only said, every piece weighed), clean (the rules). The first run over the library's 318
+blocks approved 222; what it found was fixed until 306 came through, and what is left is said as tasks (the batteries'
+and the kart's mass only said, four blocks that cannot be tested here). What anything wants that nothing knows goes to
+the unknown queue, sorted by what its members share so one maker makes a cluster, and researched in a loop to a fixed
+point: round after round a level down, by a family, a researched reference, the drawing read back, the web (Wikidata's
+has-part, where the page can reach it), or a known sibling (said as inferred, waiting for a source).
+
 **The challenge scoreboard** (for the contest with the other AI): one page that reports, from runs, the number of
 working blocks with tests passing, the domains covered, the scale results above, the edit-to-result latency, the
 dedup ratio (blocks stored against blocks placed), and the blind-check results. Every row is measured, never claimed.

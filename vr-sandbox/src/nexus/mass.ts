@@ -14,6 +14,11 @@ export const DENSITY: Record<string, number> = {
   pe: 950, pu: 1200, fibreglass: 1850, 'glass-wool': 2550, 'al-a380': 2710, 'al-5052': 2680, 'stainless-316': 8000, 'stainless-440c': 7800, brass: 8500, bronze: 8800, 'steel-chrome': 7830, pvc: 1400, pom: 1410, ptfe: 2200, 'al-7075': 2810, 'wood-veneer': 680, fr4: 1850,
   'steel-electrical': 7650, 'magnet-wire': 8900, ndfeb: 7500, nbr: 1200,
   lead: 11340, acid: 1280, 'glycol-50': 1070, 'al-3003': 2730, pet: 1380, oil: 870, zamak: 6700, alumina: 3900, 'nickel-alloy': 8400, pbt: 1310, epdm: 1150, 'al-2024': 2780, graphite: 1800, pla: 1240, silicone: 1150, fkm: 1800, 'pa66-gf30': 1350, 'mls-steel': 7900, paper: 800, epoxy: 1200, silicon: 2329, sio2: 2200, tungsten: 19300, hfo2: 9680, gold: 19300, solder: 7400, ceramic: 3900, 'nickel-plate': 8900,
+  // (the sensing ceramics, typical: yttria-stabilised zirconia about 6,050 kg/m³; PZT about 7,600 (its datasheets give
+  // 7,500 to 7,800); a nickel-manganese spinel thermistor about 5,000, an estimate)
+  zirconia: 6050, pzt: 7600, 'ntc-ceramic': 5000,
+  // (a phenolic resin about 1,300 kg/m³ (Bakelite's); a semi-metallic pad's friction material about 2,400, an estimate)
+  phenolic: 1300, 'friction-composite': 2400,
   tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
 };
 const vol = (s: Shape): number => {

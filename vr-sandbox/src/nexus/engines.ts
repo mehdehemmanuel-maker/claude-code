@@ -12,7 +12,7 @@
 // +y from the crank's axis at y = 0; its intake side +z, its exhaust side -z.
 
 import type { Part, V3 } from './kits';
-import { chainPath, chainRun, coil, housing, mouldedChip, ringClip, toothed, turned } from './makers';
+import { chainPath, chainRun, coil, housing, mouldedChip, ringClip, toothed, turned, wound } from './makers';
 import { boundsOfAll, partOf } from './assembly';
 import { prismVolume } from './form';
 import { use } from './components';
@@ -322,7 +322,9 @@ export function headPiece(s: EngineSpec, which: HeadPiece, d = engineDims(s)): P
   // (a coil on each plug: its housing up out of the cam cover, its windings and core, its boot down onto the plug)
   const hh = top - (y0 + 0.08) + 0.06;
   return group('ignition coil', [P('coil housing', { cyl: [0.12 * B, hh] }, [0, hh / 2, 0], { item: 'coil-housing', mat: 'pbt', color: 0x1a1a1a, finish: 'texture' }),
-    P('primary winding', { cyl: [0.05 * B, 0.3 * B] }, [0, 0.35 * B, 0], { item: 'winding', mat: 'copper', color: 0xb87333 }), P('secondary winding', { lathe: [[0.055 * B, 0], [0.09 * B, 0], [0.09 * B, 0.3 * B], [0.055 * B, 0.3 * B], [0.055 * B, 0]] }, [0, 0.2 * B, 0], { item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.6 }),
+    // (its primary of about 0.6 mm wire round its core, its secondary of about 0.06 mm round that, typical of a coil on a
+    // plug: a hundred-odd turns against some thousands)
+    { ...wound({ name: 'primary winding', ri: 0.03 * B, ro: 0.05 * B, L: 0.3 * B, d: 0.0006 }), at: [0, 0.2 * B, 0] as V3 }, { ...wound({ name: 'secondary winding', ri: 0.055 * B, ro: 0.09 * B, L: 0.3 * B, d: 0.00006 }), at: [0, 0.2 * B, 0] as V3 },
     box('coil core', [0.04 * B, 0.36 * B, 0.04 * B], [0, 0.35 * B, 0], { item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60 }),
     P('coil boot', { lathe: [[0.004, 0], [0.009, 0], [0.009, 0.04], [0.004, 0.04], [0.004, 0]] }, [0, -0.04, 0], { item: 'coil-boot', mat: 'silicone', color: 0x2a2a2a })], { item: 'ignition-coil' });
 }
@@ -423,11 +425,25 @@ export function cylinderHead(s: EngineSpec, d = engineDims(s), bank?: number, gi
   for (const c of cyl) {
     const pa = plugAt(d, c);
     if (!d.diesel) { out.push(placed(piece('spark plug'), [pa.x, y0, pa.z])); out.push(placed(piece('ignition coil'), [pa.x, y0 + 0.08, pa.z]));
-    } else out.push(group('fuel injector', [turned({ name: 'injector body', steps: [[0.05 * B, td + 0.02], [0.075 * B, 0.18]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.15]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.01, 0] }), P('injector coil', { lathe: [[0.02 * B, 0], [0.07 * B, 0], [0.07 * B, 0.04], [0.02 * B, 0.04], [0.02 * B, 0]] }, [0, 0.14, 0], { item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.6 })], { item: 'fuel-injector', at: [pa.x, y0, pa.z] }));
+    } else out.push(group('fuel injector', [turned({ name: 'injector body', steps: [[0.05 * B, td + 0.02], [0.075 * B, 0.18]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.15]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.01, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.07 * B, L: 0.04, d: 0.0003 }), at: [0, 0.14, 0] as V3 }], { item: 'fuel-injector', at: [pa.x, y0, pa.z] }));
   }
   return group(bank === undefined ? 'cylinder head' : `cylinder head ${bank + 1}`, out, { item: 'cylinder-head' });
 }
 
+/** A starter's solenoid as it is made: its steel can, its coil wound inside it round the plunger it pulls in, the copper
+ *  disc the plunger drives across its two contacts, and the two terminal studs out of its end (the battery's cable and
+ *  the motor's); r its can's radius, L its length, along x. */
+function starterSolenoid(r: number, L: number, at: V3): Part {
+  const steel = { mat: 'steel-low', color: 0x8a8c90 };
+  return group('starter solenoid', [
+    P('solenoid can', { cyl: [r, L] }, [0, 0, 0], { ...steel, shell: 0.0015, finish: 'paint', item: 'solenoid-can', passes: ['solenoid coil', 'plunger', 'contact disc', 'terminal stud'] }),
+    // (its pull-in and hold-in windings, about 0.8 mm wire, typical)
+    { ...wound({ name: 'solenoid coil', ri: 0.36 * r, ro: 0.85 * r, L: 0.6 * L, d: 0.0008, centre: true }), at: [0, -0.05 * L, 0] as V3 },
+    P('plunger', { cyl: [0.3 * r, 0.75 * L] }, [0, -0.1 * L, 0], { ...steel, finish: 'ground', item: 'plunger-core' }),
+    P('contact disc', { cyl: [0.62 * r, 0.004] }, [0, 0.36 * L, 0], { mat: 'copper', color: 0xb87333, item: 'contact-disc' }),
+    ...[-1, 1].map((sd) => P('terminal stud', { cyl: [0.004, 0.024] }, [sd * 0.4 * r, L / 2 + 0.012 - 0.008, 0], { mat: 'copper', color: 0xb87333, finish: 'thread', item: 'terminal-stud' })),
+  ], { item: 'starter-solenoid', at, rot: CYL_X });
+}
 /** A rectifier diode as it is made (a 1N4007's DO-41 package): its silicon die between two leads, moulded in epoxy. */
 export const rectifierDiode = (at: V3): Part => group('rectifier diode', [
   P('diode body', { cyl: [0.00135, 0.0052] }, [0, 0, 0], { rot: CYL_X, mat: 'epoxy', color: 0x1a1a1a }),
@@ -559,7 +575,9 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   // (a gerotor round the crank's nose: its inner rotor about 0.9 bore across, its outer ring round it, typical)
   const gm = (0.9 * B) / 11;
   out.push(group('oil pump', [ringX('oil pump body', 0.2 * B, 0.65 * B, 0.025, [0, 0, 0], { item: 'oil-pump-body', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', fill: 0.7 }), { ...toothed({ name: 'oil pump inner rotor', m: gm, z: 9, b: 0.012, bore: 0.42 * B, mat: 'steel-low', item: 'gerotor-inner' }), at: [0, 0, 0], rot: [0, PI / 2, 0] }, ringX('oil pump outer rotor', 0.45 * B + 0.002, 0.57 * B, 0.012, [0, 0, 0], { item: 'gerotor-outer', mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })], { item: 'oil-pump', at: [front + 0.0125, 0, 0] }));
-  out.push(group('oil pickup', [P('pickup tube', { tube: { r: 0.008, wall: 0.0012, pts: [[front + 0.0125, -0.65 * B - 0.009, 0], [front + 0.0125, Math.min(-0.65 * B - 0.03, panBot + 0.06), 0], [front - 0.06, panBot + 0.035, 0], [front - 0.12, panBot + 0.035, 0]] } }, [0, 0, 0], { mat: 'steel-low', color: 0x6a6c70, one: true }), P('strainer', { cyl: [0.035, 0.012] }, [front - 0.126, panBot + 0.035, 0], { rot: CYL_X, mat: 'steel-low', color: 0x8a8c90, fill: 0.35, one: true, says: 'a mesh over the pickup\'s mouth' })], { item: 'oil-pickup' }));
+  // (its strainer back in the sump, but no further back than the pan's own end wall: a short engine's is nearer its pump)
+  const strX = Math.max(front - 0.126, panBack + 0.012), pk1 = Math.max(front - 0.06, (front + strX) / 2);
+  out.push(group('oil pickup', [P('pickup tube', { tube: { r: 0.008, wall: 0.0012, pts: [[front + 0.0125, -0.65 * B - 0.009, 0], [front + 0.0125, Math.min(-0.65 * B - 0.03, panBot + 0.06), 0], [pk1, panBot + 0.035, 0], [strX + 0.006, panBot + 0.035, 0]] } }, [0, 0, 0], { mat: 'steel-low', color: 0x6a6c70, one: true }), P('strainer', { cyl: [0.035, 0.012] }, [strX, panBot + 0.035, 0], { rot: CYL_X, mat: 'steel-low', color: 0x8a8c90, fill: 0.35, one: true, says: 'a mesh over the pickup\'s mouth' })], { item: 'oil-pickup' }));
   const fr = Math.max(0.033, 0.45 * B), fh = Math.max(0.065, 0.85 * B), fz = Wc / 2 + 0.004;
   out.push(group('oil filter', [P('filter can', { cyl: [fr, fh] }, [0, fh / 2, 0], { shell: 0.0005, item: 'filter-can', mat: 'steel-low', color: 0x1a4a8a, finish: 'paint' }), P('filter element', { lathe: [[fr * 0.4, 0.004], [fr * 0.85, 0.004], [fr * 0.85, fh - 0.006], [fr * 0.4, fh - 0.006], [fr * 0.4, 0.004]] }, [0, 0, 0], { item: 'filter-element', mat: 'paper', color: 0xd8c890, fill: 0.45, says: 'pleated paper, about 0.45 of its ring (typical)' }), P('filter base plate', { lathe: [[0.01, 0], [fr * 0.9, 0], [fr * 0.9, 0.003], [0.01, 0.003], [0.01, 0]] }, [0, 0, 0], { item: 'filter-base', mat: 'steel-low', color: 0x8a8c90 }), P('filter gasket', { torus: [fr * 0.75, 0.0025] }, [0, -0.002, 0], { rot: [PI / 2, 0, 0], mat: 'nbr', color: 0x1a1a1a })], { item: 'oil-filter', ...(d.vee ? { at: [-0.15 * len, ysk, Wc / 2 + fr + 0.006] as V3, rot: [PI, 0, 0] as V3 } : { at: [-0.15 * len, 0.1 * B, fz] as V3, rot: [PI / 2, 0, 0] as V3 }) }));
   if (d.vee) out.push(box('filter adapter', [2 * fr + 0.012, 0.008, 2 * fr + 0.012], [-0.15 * len, ysk + 0.004, Wc / 2 + fr + 0.006], { item: 'filter-adapter', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', says: 'cast, its oil ways from the crankcase\'s side to the filter under it' }));
@@ -576,7 +594,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       // of an electronic throttle); in its own frame, its +y the engine's -x)
       const etc = !d.vee && !d.air && !(d.n <= 2) && d.cams === 'dohc' ? [group('throttle motor', [P('motor can', { cyl: [0.012, 0.03] }, [0, 0, 0], { shell: 0.001, item: 'motor-can', mat: 'steel-low', color: 0x2a2a2a })], { item: 'throttle-motor', at: [-(0.38 * B + 0.0125), 0.02, 0] }), group('throttle position sensor', [box('sensor case', [0.02, 0.02, 0.012], [0, 0, 0.006], { item: 'sensor-case', mat: 'pbt', color: 0x2a2a2a, finish: 'texture' })], { item: 'throttle-position-sensor', at: [0, 0.02, 0.38 * B + 0.0005] })] : [];
       out.push(group('throttle body', [P('throttle housing', { lathe: [[0.3 * B, 0], [0.38 * B, 0], [0.38 * B, 0.5 * B], [0.3 * B, 0.5 * B], [0.3 * B, 0]] }, [0, 0, 0], { item: 'throttle-housing', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('throttle plate', { cyl: [0.29 * B, 0.0012] }, [0, 0.25 * B, 0], { item: 'throttle-plate', mat: 'brass', color: 0xc8a050, rot: [0.3, 0, 0] }), ...etc], { item: 'throttle-body', at: [-plL / 2, plY, plZ], rot: [0, 0, PI / 2] }));
-      for (const c of inl) out.push(group('port injector', [turned({ name: 'injector body', steps: [[0.08 * B, 0.03], [0.11 * B, 0.03]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.05]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.005, 0] }), P('injector coil', { lathe: [[0.02 * B, 0], [0.1 * B, 0], [0.1 * B, 0.015], [0.02 * B, 0.015], [0.02 * B, 0]] }, [0, 0.0325, 0], { item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.6 })], { item: 'fuel-injector', at: [c.x, c.y + ir - 0.01, c.z + 0.12 * B] }));
+      for (const c of inl) out.push(group('port injector', [turned({ name: 'injector body', steps: [[0.08 * B, 0.03], [0.11 * B, 0.03]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.05]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.005, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.1 * B, L: 0.015, d: 0.0002 }), at: [0, 0.0325, 0] as V3 }], { item: 'fuel-injector', at: [c.x, c.y + ir - 0.01, c.z + 0.12 * B] }));
       const ry = yport + ir - 0.01 + 0.06 + 0.009;
       out.push(P('fuel rail', { tube: { r: 0.009, wall: 0.0012, pts: [[-len / 2 + 0.03, ry, zport + 0.12 * B], [len / 2 - 0.03, ry, zport + 0.12 * B]] } }, [0, 0, 0], { item: 'fuel-rail', mat: 'stainless-304', color: 0xc8ccd2 }));
     }
@@ -619,7 +637,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   const altR = Math.max(0.065, Math.min(0.09, 0.85 * B)), altL = altR * 2.1, altAt: [number, number] = [-(Math.max(Wc, tcW) / 2 + altR + 0.02), deck * 0.55];
   if (small) {
     // (a small engine's charging: a stator of coils under its flywheel, its magnets in the flywheel's rim (a magneto), no belt)
-    out.push(group('flywheel stator', [ringX('stator core', 0.52 * B, 0.9 * B, 0.11 * B, [0, 0, 0], { passes: ['stator coil'], item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60, fill: 0.6 }), ...Array.from({ length: 6 }, (_, k) => P('stator coil', { cyl: [0.08 * B, 0.1 * B] }, [0, 0.71 * B * Math.cos((k * PI) / 3), 0.71 * B * Math.sin((k * PI) / 3)], { rot: CYL_X, item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.6 }))], { at: [back - 0.004 - 0.055 * B, 0, 0], says: 'a stator of coils the flywheel\'s magnets sweep: its charging and its spark' }));
+    out.push(group('flywheel stator', [ringX('stator core', 0.52 * B, 0.9 * B, 0.11 * B, [0, 0, 0], { passes: ['stator coil'], item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60, fill: 0.6 }), ...Array.from({ length: 6 }, (_, k) => ({ ...wound({ name: 'stator coil', ri: 0.035 * B, ro: 0.08 * B, L: 0.1 * B, d: 0.0005, centre: true }), at: [0, 0.71 * B * Math.cos((k * PI) / 3), 0.71 * B * Math.sin((k * PI) / 3)] as V3, rot: CYL_X }))], { at: [back - 0.004 - 0.055 * B, 0, 0], says: 'a stator of coils the flywheel\'s magnets sweep: its charging and its spark' }));
   }
   if (!small) {
     belt.push([altAt[0], altAt[1], 0.03]);
@@ -628,8 +646,9 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       al('alternator front housing', altR * 0.3, altR, altL * 0.3, -altL * 0.15, { mat: 'al-a380', color: 0xa8aaae, finish: 'cast', fill: 0.4 }),
       al('alternator rear housing', altR * 0.3, altR, altL * 0.3, -altL * 0.85, { mat: 'al-a380', color: 0xa8aaae, finish: 'cast', fill: 0.4 }),
       al('stator', altR * 0.62, altR * 0.92, altL * 0.35, -altL * 0.5, { passes: ['stator winding 1', 'stator winding 2', 'stator winding 3'], item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60 }),
-      ...[0, 1, 2].map((k) => al(`stator winding ${k + 1}`, altR * 0.6, altR * 0.95, altL * 0.08, -altL * (0.3 + 0.2 * k) , { item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.5 })),
-      group('rotor', [al('claw pole', 0.006, altR * 0.58, altL * 0.15, -altL * 0.42, { mat: 'steel-low', color: 0x6a6c70, one: true }), al('claw pole', 0.006, altR * 0.58, altL * 0.15, -altL * 0.58, { mat: 'steel-low', color: 0x6a6c70, one: true }), al('field coil', 0.012, altR * 0.4, altL * 0.06, -altL * 0.5, { item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.6 }), P('rotor shaft', { cyl: [0.0085, altL * 1.1] }, [-altL * 0.5, 0, 0], { rot: CYL_X, item: 'shaft-steel', mat: 'steel-alloy', color: 0xc8ccd2 })], { item: 'rotor-claw' }),
+      // (its three phases' windings, about 1.2 mm wire (typical of a car's alternator), wrapped round the stator's band)
+      ...[0, 1, 2].map((k) => ({ ...wound({ name: `stator winding ${k + 1}`, kind: 'toroid', ri: altR * 0.6, ro: altR * 0.95, L: altL * 0.08, d: 0.0012, fill: 0.5 }), at: [-altL * (0.3 + 0.2 * k), 0, 0] as V3, rot: CYL_X })),
+      group('rotor', [al('claw pole', 0.006, altR * 0.58, altL * 0.15, -altL * 0.42, { mat: 'steel-low', color: 0x6a6c70, one: true }), al('claw pole', 0.006, altR * 0.58, altL * 0.15, -altL * 0.58, { mat: 'steel-low', color: 0x6a6c70, one: true }), { ...wound({ name: 'field coil', ri: 0.012, ro: altR * 0.4, L: altL * 0.06, d: 0.0006, centre: true }), at: [-altL * 0.5, 0, 0] as V3, rot: CYL_X }, P('rotor shaft', { cyl: [0.0085, altL * 1.1] }, [-altL * 0.5, 0, 0], { rot: CYL_X, item: 'shaft-steel', mat: 'steel-alloy', color: 0xc8ccd2 })], { item: 'rotor-claw' }),
       ...[0, 1, 2, 3, 4, 5].map((k) => rectifierDiode([-altL * 0.95, altR * 0.5 * Math.cos(k), altR * 0.5 * Math.sin(k)])),
       { ...mouldedChip({ name: 'voltage regulator', w: 0.01, d: 0.006, h: 0.0025, pins: 8 }), at: [-altL * 0.97, -altR * 0.4, 0] as V3, rot: [0, 0, PI / 2] as V3 },
       ...[-1, 1].map((sd) => box('carbon brush', [0.005, 0.005, 0.012], [-altL * 0.9, sd * 0.012, 0.012], { item: 'carbon-brush', mat: 'graphite', color: 0x2a2a2a })),
@@ -643,7 +662,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       // plate with its seal, its shaft, its pulley in the belt's plane)
       if (fit.waterPump !== 'electric') belt.push([wpAt[0], wpAt[1], 0.035]);
       const ph = { item: 'pump-housing', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', one: true };
-      out.push(group('water pump', [group('pump housing', [ringX('pump volute', 0.032, 0.06, 0.024, [-0.023, 0, 0], ph), ringX('pump front plate', 0.015, 0.06, 0.006, [-0.008, 0, 0], ph)], { item: 'pump-housing', mat: 'al-a380' }), { ...toothed({ name: 'impeller', m: 0.004, z: 12, b: 0.012, bore: 0.012, mat: 'pp', item: 'impeller' }), at: [-0.023, 0, 0], rot: [0, PI / 2, 0] }, P('pump shaft', { cyl: [0.006, fit.waterPump === 'electric' ? 0.085 : 0.05] }, [fit.waterPump === 'electric' ? 0.0025 : -0.015, 0, 0], { rot: CYL_X, item: 'pump-shaft', mat: 'steel-alloy', color: 0xc8ccd2 }), ringX('pump seal', 0.006, 0.015, 0.006, [-0.008, 0, 0], { item: 'shaft-seal', mat: 'nbr', color: 0x1a1a1a }), ...(fit.waterPump === 'electric' ? [group('water pump motor', [P('motor can', { cyl: [0.034, 0.03] }, [0.04, 0, 0], { rot: CYL_X, shell: 0.0015, passes: ['pump shaft'], item: 'motor-can', mat: 'al-a380', color: 0x2a2a2a, finish: 'paint' }), ringX('stator', 0.016, 0.03, 0.018, [0.04, 0, 0], { passes: ['pump shaft', 'stator winding'], item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60 }), ringX('stator winding', 0.016, 0.031, 0.006, [0.04, 0, 0], { item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.5 })], { item: 'pump-motor', says: 'a brushless motor turning the impeller as the ECU asks (Toyota: motor-driven water pump)' })] : [ringX('water pump pulley', 0.006, 0.035, 0.022, [0.01, 0, 0], { mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })])], { item: 'water-pump', at: [bx - 0.01, wpAt[1], -wpAt[0]], ...(fit.waterPump === 'electric' ? { says: 'its impeller turned by its own motor, off the belt' } : {}) }));
+      out.push(group('water pump', [group('pump housing', [ringX('pump volute', 0.032, 0.06, 0.024, [-0.023, 0, 0], ph), ringX('pump front plate', 0.015, 0.06, 0.006, [-0.008, 0, 0], ph)], { item: 'pump-housing', mat: 'al-a380' }), { ...toothed({ name: 'impeller', m: 0.004, z: 12, b: 0.012, bore: 0.012, mat: 'pp', item: 'impeller' }), at: [-0.023, 0, 0], rot: [0, PI / 2, 0] }, P('pump shaft', { cyl: [0.006, fit.waterPump === 'electric' ? 0.085 : 0.05] }, [fit.waterPump === 'electric' ? 0.0025 : -0.015, 0, 0], { rot: CYL_X, item: 'pump-shaft', mat: 'steel-alloy', color: 0xc8ccd2 }), ringX('pump seal', 0.006, 0.015, 0.006, [-0.008, 0, 0], { item: 'shaft-seal', mat: 'nbr', color: 0x1a1a1a }), ...(fit.waterPump === 'electric' ? [group('water pump motor', [P('motor can', { cyl: [0.034, 0.03] }, [0.04, 0, 0], { rot: CYL_X, shell: 0.0015, passes: ['pump shaft'], item: 'motor-can', mat: 'al-a380', color: 0x2a2a2a, finish: 'paint' }), ringX('stator', 0.016, 0.03, 0.018, [0.04, 0, 0], { passes: ['pump shaft', 'stator winding'], item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60 }), { ...wound({ name: 'stator winding', kind: 'toroid', ri: 0.016, ro: 0.031, L: 0.006, d: 0.0005, fill: 0.5 }), at: [0.04, 0, 0] as V3, rot: CYL_X }], { item: 'pump-motor', says: 'a brushless motor turning the impeller as the ECU asks (Toyota: motor-driven water pump)' })] : [ringX('water pump pulley', 0.006, 0.035, 0.022, [0.01, 0, 0], { mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })])], { item: 'water-pump', at: [bx - 0.01, wpAt[1], -wpAt[0]], ...(fit.waterPump === 'electric' ? { says: 'its impeller turned by its own motor, off the belt' } : {}) }));
     }
     // (its tensioner on the belt's slack side: low by the pump, or up between the crank and the alternator where the
     // pump is off the belt)
@@ -656,7 +675,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       const cz = Wc / 2 + 0.063, cy = -0.07, cr = 0.05, cL = 0.13;
       belt.push([-cz, cy, 0.055]);
       out.push(group('A/C compressor', [P('compressor body', { cyl: [cr, cL] }, [-0.02 - cL / 2, 0, 0], { rot: CYL_X, shell: 0.004, item: 'compressor-body', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', says: 'its swash plate and pistons inside (not drawn), a scroll of refrigerant R-1234yf (typical of a car of 2025)' }),
-        ringX('magnetic clutch', 0.012, 0.045, 0.012, [-0.011, 0, 0], { item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.6, says: 'its coil, pulling the clutch plate onto the pulley' }),
+        { ...wound({ name: 'magnetic clutch', ri: 0.012, ro: 0.045, L: 0.012, d: 0.0006, centre: true, says: 'its coil, about 0.6 mm wire (typical), pulling the clutch plate onto the pulley' }), at: [-0.011, 0, 0] as V3, rot: CYL_X },
         ringX('compressor pulley', 0.012, 0.055, 0.02, [0.005, 0, 0], { item: 'pulley', mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })], { item: 'ac-compressor', at: [bx - 0.005, cy, cz] }));
       out.push(box('compressor bracket', [0.03, 0.02, cz - Wc / 2 - 0.0005], [bx - 0.02 - cL + 0.015, cy + cr + 0.01, (Wc / 2 + 0.0005 + cz) / 2], { item: 'bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', joins: ['crankcase wall', 'compressor body'] }));
     }
@@ -667,7 +686,15 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   // (its starter beside the flywheel, its pinion by the ring gear; or a small engine's recoil starter)
   if (electric) {
     const sR = Math.max(0.035, Math.min(0.06, 0.45 * B)), sL = sR * 3.2, sz = fwR + 0.006 + sR * 0.6, sx = fx + 0.02 + sL / 2;
-    out.push(group('starter motor', [P('starter can', { cyl: [sR, sL * 0.6] }, [0, 0, 0], { rot: CYL_X, shell: 0.0025, passes: ['armature shaft'], item: 'starter-can', mat: 'steel-low', color: 0x2a2a2a, finish: 'paint' }), group('armature', [P('armature shaft', { cyl: [0.006, sL * 0.95] }, [0, 0, 0], { rot: CYL_X, item: 'shaft-steel', mat: 'steel-alloy', color: 0xc8ccd2 }), ringX('armature core', 0.006, sR * 0.62, sL * 0.35, [0, 0, 0], { passes: ['armature winding'], item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60, fill: 0.8 }), ...[0, 1, 2].map((k) => P('armature winding', { lathe: [[sR * 0.5, 0], [sR * 0.66, 0], [sR * 0.66, sL * 0.1], [sR * 0.5, sL * 0.1], [sR * 0.5, 0]] }, [sL * (-0.15 + 0.1 * k), 0, 0], { rot: ALONG_X, item: 'winding', mat: 'copper', color: 0xb87333, fill: 0.5 })), ringX('commutator', 0.007, sR * 0.3, sL * 0.1, [sL * 0.235, 0, 0], { item: 'commutator', mat: 'copper', color: 0xb87333 })], { item: 'armature' }), P('starter solenoid', { cyl: [sR * 0.5, sL * 0.5] }, [0.03, sR * 1.4, 0], { rot: CYL_X, item: 'starter-solenoid', mat: 'steel-low', color: 0x8a8c90, fill: 0.7 }), { ...toothed({ name: 'starter pinion', m: rgM, z: 10, b: 0.02, bore: 0.012, mat: 'steel-alloy', item: 'starter-pinion' }), at: [-sL * 0.4, 0, 0], rot: [0, PI / 2, 0] }, ...[-1, 1].map((sd) => box('starter brush', [0.006, 0.006, 0.012], [sL * 0.25, sd * sR * 0.5, 0], { item: 'carbon-brush', mat: 'graphite', color: 0x2a2a2a }))], { item: 'starter-motor', at: [sx, -0.2 * B, -sz] }));
+    // (where beside the crankcase there is no room for it (a short single's), it sits up on the crankcase beside the
+    // barrel on its intake side (away from its exhaust) and turns the ring gear through an idle gear between them, as a
+    // single-cylinder ATV's starter does; its solenoid on its outboard side)
+    const above = !d.vee && Wc / 2 + 0.003 + sR > sz, sAt: V3 = above ? [sx, d.yb0 + sR + 0.004, Wb / 2 + sR + 0.004] : [sx, -0.2 * B, -sz], out1 = sAt[2] >= 0 ? 1 : -1;
+    if (above) {
+      const D = Math.hypot(sAt[1], sAt[2]), rr = fwR + 0.006 + rgM, rp = (rgM * 10) / 2, ri = (D - rr - rp) / 2, zi = Math.max(12, Math.round((2 * ri) / rgM)), ux = sAt[1] / D, uz = sAt[2] / D, bw = 0.012 + 0.04 * B;
+      out.push({ ...toothed({ name: 'starter idle gear', m: rgM, z: zi, b: 0.012, bore: 0.012, mat: 'steel-alloy', item: 'spur-gear', says: 'between the starter\'s pinion and the ring gear' }), at: [fx + bw / 2 + 0.006 + 0.0015, (rr + ri) * ux, (rr + ri) * uz], rot: [0, PI / 2, 0] });
+    }
+    out.push(group('starter motor', [P('starter can', { cyl: [sR, sL * 0.6] }, [0, 0, 0], { rot: CYL_X, shell: 0.0025, passes: ['armature shaft'], item: 'starter-can', mat: 'steel-low', color: 0x2a2a2a, finish: 'paint' }), group('armature', [P('armature shaft', { cyl: [0.006, sL * 0.95] }, [0, 0, 0], { rot: CYL_X, item: 'shaft-steel', mat: 'steel-alloy', color: 0xc8ccd2 }), ringX('armature core', 0.006, sR * 0.62, sL * 0.35, [0, 0, 0], { passes: ['armature winding'], item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60, fill: 0.8 }), ...[0, 1, 2].map((k) => ({ ...wound({ name: 'armature winding', kind: 'toroid', ri: sR * 0.5, ro: sR * 0.66, L: sL * 0.094, d: 0.0015, fill: 0.5 }), at: [sL * (-0.1 + 0.1 * k), 0, 0] as V3, rot: ALONG_X })), ringX('commutator', 0.007, sR * 0.3, sL * 0.1, [sL * 0.235, 0, 0], { item: 'commutator', mat: 'copper', color: 0xb87333 })], { item: 'armature' }), starterSolenoid(sR * 0.5, sL * 0.5, [0.03, 0, out1 * sR * 1.4]), { ...toothed({ name: 'starter pinion', m: rgM, z: 10, b: 0.02, bore: 0.012, mat: 'steel-alloy', item: 'starter-pinion' }), at: [-sL * 0.4, 0, 0], rot: [0, PI / 2, 0] }, ...[-1, 1].map((sd) => box('starter brush', [0.006, 0.006, 0.012], [sL * 0.25, sd * sR * 0.5, 0], { item: 'carbon-brush', mat: 'graphite', color: 0x2a2a2a }))], { item: 'starter-motor', at: sAt }));
   } else {
     out.push(group('recoil starter', [box('recoil housing', [0.04, 1.6 * B, 1.6 * B], [0, 0, 0], { shell: 0.0012, mat: 'steel-low', color: 0x2a2a2a, finish: 'paint' }), ringX('rope pulley', 0.008, 0.45 * B, 0.02, [0.005, 0, 0], { mat: 'nylon', color: 0x1a1a1a }), P('starter rope', { torus: [0.42 * B, 0.002] }, [0.005, 0, 0], { rot: [0, PI / 2, 0], mat: 'nylon', color: 0xd8d0b0 }), { ...coil({ name: 'recoil spring', d: 0.0015, D: 0.5 * B, L: 0.012, n: 6 }), at: [0.01, 0, 0], rot: [0, 0, PI / 2] }], { at: [fx - fwT / 2 - 0.03, 0, 0], says: 'a pull rope wound on a sprung pulley, ratchets into the flywheel' }));
   }
@@ -675,7 +702,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   if (d.air) {
     out.push(box('blower housing', [0.06, deck + 0.3 * B - ysk, Wc + 0.3 * B], [fx, (deck + 0.3 * B + ysk) / 2, 0], { shell: 0.0012, mat: 'steel-low', color: 0xc82020, finish: 'paint', says: 'pressed steel, leading the flywheel\'s fan\'s air over the fins' }));
     const acAt: V3 = d.vee ? [0, deck + 0.8 * B + 0.6 * B + 0.45 * B, 0] : [-(len * 0.45 + 0.3 * B + 0.6 * B + 0.4 * B), yport + 0.5 * B, Wb / 2 + 0.9 * B];
-    out.push(group('air cleaner', [box('air cleaner case', [0.8 * B, 0.9 * B, 0.6 * B], [0, 0, 0], { shell: 0.0015, mat: 'abs', color: 0x1a1a1a, finish: 'texture' }), box('air filter', [0.7 * B, 0.7 * B, 0.4 * B], [0, 0, 0], { mat: 'paper', color: 0xd8c890, fill: 0.3 })], { item: 'air-cleaner', at: acAt }));
+    out.push(group('air cleaner', [box('air cleaner case', [0.8 * B, 0.9 * B, 0.6 * B], [0, 0, 0], { shell: 0.0015, mat: 'abs', color: 0x1a1a1a, finish: 'texture', item: 'air-cleaner-case', passes: ['air filter'] }), box('air filter', [0.7 * B, 0.7 * B, 0.4 * B], [0, 0, 0], { mat: 'paper', color: 0xd8c890, fill: 0.3, item: 'air-filter-element' })], { item: 'air-cleaner', at: acAt }));
   }
   // ==== what reads it, cools it, cleans it and wires it (an injected, liquid-cooled twin-cam car engine's, each typical
   // of one unless its fit says its maker's: src/data/references.ts names each with where it was read) ====
@@ -686,7 +713,8 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
     const conns: Part[] = [], leads: Part[] = [];
     const lead = (name: string, pts: V3[], r = 0.0035): void => { leads.push(P(name, { tube: { r, pts, bend: 0.008 } }, [0, 0, 0], { item: 'wire-loom', mat: 'nylon', color: 0x1a1a1a, finish: 'texture', fill: 0.7, one: true, says: 'its wires in convoluted nylon conduit (typical under a bonnet)' })); };
     // (the trunk of its harness along its intake side over the runners, down its back to a loom along the block)
-    const tz = Wb / 2 + 0.015, ty = ctop - 0.018, lx = -len / 2 - 0.007, ly = 0.1;
+    // (its low run above the bell housing's top, where a gearbox bolts on round the flywheel: the plate's radius and 30 mm)
+    const tz = Wb / 2 + 0.015, ty = ctop - 0.018, lx = -len / 2 - 0.007, ly = Math.max(0.1, fwR + 0.03);
     lead('harness trunk', [[0.19, ctop + 0.042, tz], [0.18, ty, tz], [lx, ty, tz], [lx, ly, tz], [0.18, ly, tz]], 0.005);
     // (a coil's plug on its housing's side above the cover, a lead over the cover's edge to the trunk)
     for (const c of cyl) { const pa = plugAt(d, c), cy0 = ctop + 0.012, cz = pa.z + 0.12 * B + 0.0065; conns.push(plug('coil connector', [pa.x, cy0, cz])); lead('coil lead', [[pa.x, cy0, cz + 0.006], [pa.x, cy0, tz - 0.006], [pa.x, ty, tz]]); }
@@ -695,7 +723,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
     // (a knock sensor bolted to the barrel's intake side between its middle cylinders, a piezoelectric ring under a
     // seismic mass in its case)
     const kx = cyl.length > 1 ? (cyl[(cyl.length >> 1) - 1]!.x + cyl[cyl.length >> 1]!.x) / 2 : 0, ky = deck - 0.08, kz = Wb / 2 + 0.0005;
-    out.push(group('knock sensor', [P('knock sensor case', { cyl: [0.014, 0.012] }, [0, 0, 0.006], { rot: [PI / 2, 0, 0], item: 'sensor-case', mat: 'pbt', color: 0x2a2a2a, finish: 'texture' }), ringX('piezo element', 0.005, 0.011, 0.002, [0, 0, 0.004], { rot: [0, PI / 2, 0], item: 'piezo-ceramic', mat: 'alumina', color: 0xe8e0d0, says: 'lead zirconate titanate, drawn by its alumina-like density (an estimate)' })], { item: 'knock-sensor', at: [kx, ky, kz], joins: ['barrel'] }));
+    out.push(group('knock sensor', [P('knock sensor case', { cyl: [0.014, 0.012] }, [0, 0, 0.006], { rot: [PI / 2, 0, 0], item: 'sensor-case', mat: 'pbt', color: 0x2a2a2a, finish: 'texture' }), ringX('piezo element', 0.005, 0.011, 0.002, [0, 0, 0.004], { rot: [0, PI / 2, 0], item: 'piezo-ceramic', mat: 'pzt', color: 0xe8e0d0, says: 'lead zirconate titanate (PZT)' })], { item: 'knock-sensor', at: [kx, ky, kz], joins: ['barrel'] }));
     conns.push(plug('knock sensor connector', [kx, ky - 0.014 - 0.0065, kz + 0.006])); lead('knock lead', [[kx, ky - 0.0275, kz + 0.006], [kx, ly + 0.005, tz]]);
     // (an oil pressure switch in the crankcase wall low on the intake side, by the filter)
     const ox = 0.02, oy = 0.03, oz = Wc / 2 + 0.0005;
@@ -743,31 +771,39 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
     conns.push(plug('throttle connector', [tbx - 0.02, plY, plZ + 0.38 * B + 0.0125 + 0.0065])); lead('throttle lead', [[tbx - 0.02, plY, plZ + 0.38 * B + 0.025], [lx - 0.021, plY, plZ + 0.38 * B + 0.025], [lx - 0.021, plY, tz], [lx, plY, tz]]);
     // (its exhaust past the collector: a front pipe down to its catalytic converter (a ceramic honeycomb, its washcoat's
     // metals on it, in a steel can), an air-fuel ratio sensor before it, an oxygen sensor after; each on its own lead)
-    const ce: V3 = [-len / 2 - 0.05, colY - 0.2 * B, colZ], cx = ce[0] - 0.06, cTop = ce[1] - 0.08, cR = 0.055, cH = 0.14;
+    // (close-coupled on its exhaust side, within the block's length and outboard of its crankcase: past its back end is the
+    // gearbox's bell housing, along its drive end the starter; beyond the torque rod's rubber by what its heat needs
+    // (TNGA engines' catalyst stands close behind the manifold the same way, Toyota))
+    const cR = 0.055, cH = 0.14, ce: V3 = [-len / 2 - 0.05, colY - 0.2 * B, colZ], cx = Math.min(len / 2 - cR - 0.02, 0.025 + 0.085 + cR), cz = -(Math.max(Wc, Wb) / 2 + cR + 0.0078 + 0.008), cTop = ce[1] - 0.08;
     const hotEx = { mat: 'stainless-304', color: 0x7a6a60, finish: 'cast' };
-    out.push(P('front pipe', { tube: { r: 0.02, wall: 0.0015, pts: [ce, [cx, ce[1] - 0.01, colZ], [cx, cTop + 0.0005, colZ]], bend: 0.03 } }, [0, 0, 0], { ...hotEx, item: 'exhaust-pipe', hot: 750, joins: ['exhaust collector'], says: 'about 750 °C at full load (typical)' }));
+    out.push(P('front pipe', { tube: { r: 0.02, wall: 0.0015, pts: [ce, [ce[0], ce[1] - 0.01, cz], [cx, ce[1] - 0.01, cz], [cx, cTop + 0.0005, cz]], bend: 0.03 } }, [0, 0, 0], { ...hotEx, item: 'exhaust-pipe', hot: 750, joins: ['exhaust collector'], says: 'about 750 °C at full load (typical)' }));
     // (its shield: a ring of aluminised steel round its can, open at its ends)
     const cs0 = cR + 0.007, cs1 = cs0 + 0.0008, sh = cH - 0.01;
     out.push(group('catalytic converter', [P('converter shell', { cyl: [cR, cH] }, [0, -cH / 2, 0], { shell: 0.0015, passes: ['catalyst substrate', 'converter mat'], item: 'converter-shell', mat: 'stainless-304', color: 0x8a8a88, finish: 'machined' }),
       P('converter mat', { lathe: [[cR - 0.0045, 0], [cR - 0.0016, 0], [cR - 0.0016, cH - 0.02], [cR - 0.0045, cH - 0.02], [cR - 0.0045, 0]] }, [0, -cH + 0.01, 0], { item: 'converter-mat', mat: 'mica', color: 0xd8d0c0, says: 'an intumescent mat holding the substrate in its can' }),
       P('converter heat shield', { lathe: [[cs0, 0], [cs1, 0], [cs1, sh], [cs0, sh], [cs0, 0]] }, [0, -cH + 0.005, 0], { item: 'heat-shield', mat: 'steel-low', color: 0xb8b8b0, finish: 'machined', hot: 350, says: 'aluminised steel, about 350 °C on its face (an estimate)' }),
-      P('catalyst substrate', { cyl: [cR - 0.0046, cH - 0.02] }, [0, -cH / 2, 0], { item: 'catalyst-substrate', mat: 'alumina', color: 0xd8c8a8, fill: 0.3, says: 'cordierite honeycomb, about 0.3 of it solid (typical), drawn by alumina\'s density; platinum, palladium and rhodium in its washcoat' })], { item: 'catalytic-converter', at: [cx, cTop, colZ], hot: 700, says: 'close to the manifold so it lights off soon; about 700 °C at work (typical)' }));
-    out.push(P('tail pipe', { tube: { r: 0.02, wall: 0.0015, pts: [[cx, cTop - cH - 0.0005, colZ], [cx, cTop - cH - 0.09, colZ]] } }, [0, 0, 0], { ...hotEx, item: 'exhaust-pipe', hot: 500, says: 'on to the car\'s muffler (not drawn)' }));
+      P('catalyst substrate', { cyl: [cR - 0.0046, cH - 0.02] }, [0, -cH / 2, 0], { item: 'catalyst-substrate', mat: 'alumina', color: 0xd8c8a8, fill: 0.3, says: 'cordierite honeycomb, about 0.3 of it solid (typical), drawn by alumina\'s density; platinum, palladium and rhodium in its washcoat' })], { item: 'catalytic-converter', at: [cx, cTop, cz], hot: 700, says: 'close to the manifold so it lights off soon; about 700 °C at work (typical)' }));
+    out.push(P('tail pipe', { tube: { r: 0.02, wall: 0.0015, pts: [[cx, cTop - cH - 0.0005, cz], [cx, cTop - cH - 0.03, cz - 0.06], [cx, cTop - cH - 0.09, cz - 0.06]], bend: 0.03 } }, [0, 0, 0], { ...hotEx, item: 'exhaust-pipe', hot: 500, says: 'on to the car\'s muffler (not drawn)' }));
+    // (a shield between the pipe below the converter and the oil pan's gasket, aluminised steel (typical of a down pipe's))
+    out.push(box('tail pipe heat shield', [0.07, 0.1, 0.001], [cx, cTop - cH - 0.05, cz + 0.03], { item: 'heat-shield', mat: 'steel-low', color: 0xb8b8b0, finish: 'machined', says: 'aluminised steel, between the down pipe and the oil pan' }));
     const o2 = (name: string, at: V3): void => {
       out.push(group(name, [P('sensor shell', { cyl: [0.009, 0.026] }, [0, 0, -0.013], { rot: [PI / 2, 0, 0], item: 'sensor-shell', ...sensorMat }), P('sensing element', { cyl: [0.004, 0.012] }, [0, 0, 0.006], { rot: [PI / 2, 0, 0], item: 'zirconia-element', mat: 'zirconia', color: 0xe8e0d0 })], { item: 'oxygen-sensor', at, joins: ['front pipe', 'tail pipe'] }));
       // (its own lead, in PTFE for the heat, up behind the engine to the loom)
-      leads.push(P(`${name} lead`, { tube: { r: 0.003, pts: [[at[0], at[1], at[2] - 0.0265], [at[0], at[1], colZ - 0.13], [at[0], ty + 0.08, colZ - 0.13], [lx - 0.02, ty + 0.08, tz], [lx, ty, tz]], bend: 0.01 } }, [0, 0, 0], { item: 'wire-loom', mat: 'ptfe', color: 0x6a6c70, finish: 'texture', one: true }));
+      leads.push(P(`${name} lead`, { tube: { r: 0.003, pts: [[at[0], at[1], at[2] - 0.0265], [at[0], at[1], cz - 0.125], [at[0], ty + 0.08, cz - 0.125], [lx - 0.02, ty + 0.08, cz - 0.125], [lx - 0.02, ty + 0.08, tz], [lx, ty, tz]], bend: 0.01 } }, [0, 0, 0], { item: 'wire-loom', mat: 'ptfe', color: 0x6a6c70, finish: 'texture', one: true }));
     };
-    o2('air-fuel ratio sensor', [cx, cTop + 0.06, colZ - 0.02 - 0.0005]);
-    o2('oxygen sensor', [cx, cTop - cH - 0.05, colZ - 0.02 - 0.0005]);
+    o2('air-fuel ratio sensor', [cx, cTop + 0.06, cz - 0.02 - 0.0005]);
+    o2('oxygen sensor', [cx, cTop - cH - 0.065, cz - 0.06 - 0.02 - 0.0005]);
     // (its mounts: a rubber mount on a bracket over the timing end, and a torque rod's bush low on the exhaust side; the
     // third is on the gearbox, which is not drawn)
     out.push(group('engine mount', [box('mount bracket', [0.05, 0.02, 0.07], [0, 0.01, 0], { item: 'bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('mount rubber', { cyl: [0.035, 0.035] }, [0, 0.02 + 0.0005 + 0.0175, 0], { item: 'mount-rubber', mat: 'rubber', color: 0x1a1a1a })], { item: 'engine-mount', at: [front + 0.036, deck + gasket + Hh + 0.0665, -0.08], joins: ['timing cover rim'], joint: 'mount', says: 'the timing end\'s: its rubber under the car\'s body rail (typical of a transverse engine)' }));
     out.push(group('engine mount', [box('mount bracket', [0.06, 0.04, 0.03], [0, 0, -0.015], { item: 'bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('mount rubber', { cyl: [0.025, 0.03] }, [0, 0, -0.03 - 0.0005 - 0.015], { rot: [PI / 2, 0, 0], item: 'mount-rubber', mat: 'rubber', color: 0x1a1a1a })], { item: 'engine-mount', at: [0, 0.035, -Wc / 2 - 0.0005], joins: ['crankcase wall'], joint: 'mount', says: 'a torque rod\'s bush, low behind (typical)' }));
+    // (a shield of aluminised steel on its bracket's side toward the catalyst, as its rubber cannot take the heat at that
+    // distance (typical: a pressed plate on the bracket))
+    out.push(box('mount heat shield', [0.001, 0.07, 0.06], [0.04, 0.035, -Wc / 2 - 0.035], { item: 'heat-shield', mat: 'steel-low', color: 0xb8b8b0, finish: 'machined', says: 'aluminised steel, between the catalyst and the torque rod\'s rubber' }));
     // (a maker's: its exhaust let back to its intake through a liquid cooler and a valve on the plenum (EGR))
     if (fit.egr === 'cooled') {
       const ex = -len / 2 - 0.13, egY = plTop + 0.0175 + 0.0005, egx = pvx - 0.045, coolY = ty + 0.03;
-      out.push(P('EGR pipe', { tube: { r: 0.008, wall: 0.0012, pts: [[cx - 0.0205, ce[1] - 0.01, colZ], [ex, ce[1] - 0.01, colZ], [ex, coolY, colZ], [ex, coolY, -0.0655]], bend: 0.02 } }, [0, 0, 0], { ...hotEx, item: 'egr-pipe', hot: 600, joins: ['front pipe'], says: 'about 600 °C into the cooler (an estimate)' }));
+      out.push(P('EGR pipe', { tube: { r: 0.008, wall: 0.0012, pts: [[ce[0] - 0.0205, ce[1] - 0.01, cz], [ex, ce[1] - 0.01, cz], [ex, coolY, cz], [ex, coolY, -0.0655]], bend: 0.02 } }, [0, 0, 0], { ...hotEx, item: 'egr-pipe', hot: 600, joins: ['front pipe'], says: 'about 600 °C into the cooler (an estimate)' }));
       out.push(group('EGR cooler', [P('cooler shell', { cyl: [0.018, 0.125] }, [0, 0, 0], { rot: [PI / 2, 0, 0], shell: 0.0012, item: 'egr-cooler', mat: 'stainless-304', color: 0x8a8a88 })], { item: 'egr-cooler', at: [ex, coolY, -0.003], hot: 110, says: 'coolant round tubes of exhaust: its skin about the coolant\'s heat, 110 °C (an estimate)' }));
       out.push(P('EGR pipe', { tube: { r: 0.008, wall: 0.0012, pts: [[ex, coolY, 0.0595], [ex, coolY, plZ], [egx - 0.06, coolY, plZ], [egx, coolY, plZ], [egx, egY + 0.0175 + 0.0005, plZ]], bend: 0.02 } }, [0, 0, 0], { ...hotEx, item: 'egr-pipe', hot: 200, says: 'about 200 °C past the cooler (an estimate)' }));
       out.push(group('EGR valve', [box('valve body', [0.04, 0.035, 0.04], [0, 0, 0], { item: 'egr-valve', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', says: 'a stepper opening it as the ECU asks' })], { item: 'egr-valve', at: [egx, egY, plZ], joins: ['intake plenum'] }));

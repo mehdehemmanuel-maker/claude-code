@@ -101,6 +101,7 @@ export const MATERIALS: Record<string, Spec> = {
   silicone: { formula: 'C2H6OSi', says: 'polydimethylsiloxane' }, rubber: { formula: 'C5H8', says: 'polyisoprene (the polymer only: fillers and carbon black are a third of a tyre)' }, neoprene: { formula: 'C4H5Cl' }, phenolic: { formula: 'C7H6O', says: 'phenol-formaldehyde (Bakelite)' },
   pet: { formula: 'C10H8O4' }, paper: { formula: 'C6H10O5', says: 'cellulose' }, graphite: { formula: 'C' }, glue: { formula: 'C4H6O2', says: 'polyvinyl acetate wood glue, dry' },
   alumina: { formula: 'Al2O3' }, batio3: { formula: 'BaTiO3' }, pzt: { formula: 'PbZr0.52Ti0.48O3' }, mgo: { formula: 'MgO' }, 'ntc-ceramic': { formula: 'NiMn2O4', says: 'a nickel-manganese spinel' }, quartz: { formula: 'SiO2' },
+  'friction-composite': { blend: [['phenolic', 20], ['steel-low', 25], ['graphite', 15], ['BaSO4', 25], ['Cu', 15]], says: 'a semi-metallic brake pad\'s friction material: phenolic resin binding steel fibre, graphite, barite and copper (typical shares, an estimate)' },
   silicon: { formula: 'Si' }, gan: { formula: 'GaN' }, nmc: { formula: 'LiNi0.333Mn0.333Co0.333O2', says: 'NMC 111' }, nitrogen: { formula: 'N2' }, water: { formula: 'H2O' }, bi2te3: { formula: 'Bi2Te3' }, sic: { formula: 'SiC' },
   mica: { formula: 'KAl3Si3O12H2', says: 'muscovite' }, oil: { formula: 'CH2', says: 'mineral oil, as (CH₂)ₙ' },
   abs: { blend: [['C3H3N', 25], ['C4H6', 20], ['C8H8', 55]], says: 'acrylonitrile, butadiene and styrene, typical shares' },

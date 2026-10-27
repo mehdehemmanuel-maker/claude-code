@@ -135,6 +135,7 @@ m('neoprene', 'neoprene', 'Polymers/Elastomers', 'belts and surrounds', '');
 m('rubber', 'natural rubber', 'Polymers/Elastomers', 'tyres', '');
 m('epoxy', 'epoxy', 'Polymers/Thermosets', 'coatings, potting, moulding compound', '');
 m('phenolic', 'phenolic', 'Polymers/Thermosets', 'potentiometer substrates, handles', '');
+m('friction-composite', 'friction composite', 'Polymers/Composites', 'a brake pad\'s friction material: phenolic resin binding steel fibre, graphite, barite and copper (typical shares)', '');
 m('fr4', 'FR-4 laminate', 'Composites/Laminates', 'woven glass in epoxy: the board circuits are on', '');
 m('fibreglass', 'glass fibre', 'Composites/Fibres', 'tension cords, insulation sleeving', '');
 m('glass-wool', 'glass wool', 'Composites/Fibres', 'silencer packing, heat insulation', '');
@@ -803,6 +804,21 @@ e('rivet-mandrel', 'rivet mandrel', 'Hardware/Fasteners/Rivet parts', 'part', 'c
 e('rivet-mandrel-stainless', 'stainless rivet mandrel', 'Hardware/Fasteners/Rivet parts', 'part', 'cold-head', 'stainless-304', 'a stainless mandrel, for a stainless rivet');
 e('nylon-insert', 'nylon insert', 'Hardware/Fasteners/Nut parts', 'part', 'mould', 'nylon', 'the nylon ring crimped into a lock nut\'s collar, its bore a little under the thread');
 e('ntc-bead', 'NTC bead', 'Electrical/Sensors/Thermistor parts', 'part', 'sinter', 'ntc-ceramic', 'a sintered bead of nickel-manganese oxide, its resistance falling as it warms');
+// (a sensor as the sensor maker draws it (makers.ts sensor): its body by kind, its element by what it senses, its plug)
+e('crush-washer', 'copper crush washer', 'Mechanical/Seals/Gaskets', 'part', 'stamp', 'copper', 'a soft copper washer crushed under a threaded fitting\'s hex to seal it');
+e('sensor-case', 'sensor case', 'Electrical/Sensors/Sensor parts', 'part', 'mould', 'pbt', 'a moulded glass-filled PBT case round the element and its leads');
+e('sensor-body', 'sensor body', 'Electrical/Sensors/Sensor parts', 'part', 'machine', 'stainless-304', 'a turned stainless body: a probe\'s hex and thread, or a puck\'s sleeve its bolt goes through');
+e('connector-shroud', 'connector shroud', 'Electrical/Sensors/Sensor parts', 'part', 'mould', 'pbt', 'the moulded shroud of a sensor\'s plug, keyed so its mating plug goes on one way');
+e('terminal', 'terminal pin', 'Electrical/Sensors/Sensor parts', 'part', 'stamp', 'brass', 'a tinned brass pin in the plug\'s shroud');
+e('seismic-mass', 'seismic mass', 'Electrical/Sensors/Sensor parts', 'part', 'machine', 'brass', 'the brass ring that presses on a knock sensor\'s piezo ring as the block rings');
+e('thermistor-element', 'NTC thermistor element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'ntc-ceramic', 'a sintered nickel-manganese spinel bead whose resistance falls as it warms');
+e('piezo-element', 'piezo element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'pzt', 'a sintered PZT ring, poled, giving a charge when it is squeezed');
+e('hall-element', 'Hall element', 'Electrical/Sensors/Sensor parts', 'part', 'etch', 'silicon', 'a silicon Hall die: a field through it gives a voltage across it');
+e('zirconia-element', 'zirconia element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'zirconia', 'a yttria-stabilised zirconia thimble, platinum electrodes each side');
+e('strain-element', 'strain element', 'Electrical/Sensors/Sensor parts', 'part', 'etch', 'silicon', 'a silicon diaphragm with strain gauges diffused in it');
+e('sensor-threaded', 'threaded sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-body connector-shroud crush-washer terminal', 'a threaded probe: its element in its tip (a temperature sender, a pressure switch, an oxygen sensor)');
+e('sensor-puck', 'puck sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-case sensor-body seismic-mass connector-shroud terminal', 'a puck bolted through its middle: a knock sensor\'s piezo ring under its seismic mass');
+e('sensor-block', 'block sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-case connector-shroud terminal', 'a moulded block on a lug: a Hall position sensor, a pressure sensor');
 e('ferrule-sleeve', 'ferrule sleeve', 'Electrical/Wiring and connectors/Ferrule parts', 'part', 'draw', 'copper tin', 'the tinned copper tube crimped over the strands');
 e('ferrule-collar', 'ferrule collar', 'Electrical/Wiring and connectors/Ferrule parts', 'part', 'mould', 'pp', 'the coloured plastic collar, its colour its wire size');
 e('pushfit-body', 'push-fit body', 'Fluid/Fittings/Push-fit parts', 'part', 'mould', 'pom', 'the moulded body');
@@ -1234,7 +1250,9 @@ pt('cam-cover-gasket', 'cam cover gasket', 'mould', 'nbr', 'a moulded rubber sea
 pt('stator-ring', 'stator', 'stamp', 'steel-electrical', 'its laminations stamped and stacked, its windings in its slots', [120, 30, 120]);
 pt('starter-can', 'starter motor housing', 'draw', 'steel-low', 'a drawn steel can, its field magnets inside', [70, 120, 70]);
 pt('starter-pinion', 'starter pinion', 'machine', 'steel-alloy', 'a small gear thrown into the ring gear by the solenoid', [30, 25, 30]);
-pt('starter-solenoid', 'starter solenoid', 'assemble', 'steel-low copper', 'a coil and plunger throwing the pinion in and closing the motor\'s contacts', [40, 80, 40]);
+pt('solenoid-can', 'solenoid can', 'draw', 'steel-low', 'a deep-drawn steel can, the coil\'s magnetic return', [40, 80, 40]);
+pt('contact-disc', 'contact disc', 'stamp', 'copper', 'the copper disc the plunger drives across the two contacts', [30, 4, 30]);
+as('starter-solenoid', 'starter solenoid', 'solenoid-can winding plunger-core contact-disc terminal-stud*2', 'a coil and plunger throwing the pinion in and closing the motor\'s contacts', [40, 80, 40]);
 as('starter-motor', 'starter motor', 'starter-can armature starter-solenoid starter-pinion carbon-brush*2', 'a motor turning a pinion thrown into the flywheel\'s ring gear', [80, 180, 80]);
 pt('pump-shaft', 'pump shaft', 'grind', 'steel-alloy', 'a ground shaft in its bearing, the pulley on one end and the impeller on the other', [15, 100, 15]);
 as('water-pump', 'water pump', 'pump-housing impeller pump-shaft shaft-seal', 'an impeller on a shaft in a housing, its seal between', [120, 80, 120]);
@@ -1255,6 +1273,9 @@ pt('main-jet', 'main jet', 'machine', 'brass', 'a brass jet drilled to its size,
 as('carburettor', 'carburettor', 'carb-body float-bowl carb-float main-jet throttle-plate', 'a venturi drawing fuel from a float bowl through a jet, a throttle plate after it', [60, 80, 60]);
 as('piston-assembly', 'piston and rings', 'piston piston-ring*3 wrist-pin wrist-pin-clip*2', 'a piston, its three rings, its pin and the pin\'s clips', [81, 60, 81]);
 as('con-rod-assembly', 'connecting rod', 'con-rod rod-cap rod-bearing-shell*2', 'a rod, its cap, its two bearing shells (its bolts the library\'s)', [60, 200, 80]);
+pt('air-cleaner-case', 'air cleaner case', 'mould', 'abs', 'a moulded case round its filter, its inlet snorkel and its outlet to the carburettor', [70, 80, 50]);
+pt('air-filter-element', 'air filter element', 'fab', 'paper', 'pleated filter paper in a foam pre-cleaner (typical of a small engine\'s)', [60, 60, 35]);
+as('air-cleaner', 'air cleaner', 'air-cleaner-case air-filter-element', 'a filter in its case on the carburettor\'s throat', [70, 80, 50]);
 as('engine-block', 'cylinder block', 'block-casting main-cap main-bearing-shell*2', 'the block casting, its main caps and bearing shells (its bolts the library\'s)', [450, 300, 220]);
 as('cylinder-head', 'cylinder head', 'head-casting valve-intake valve-exhaust valve-spring*2 valve-retainer*2 valve-keeper*4 valve-guide*2 valve-stem-seal*2', 'the head casting, its valves and their springs, retainers, keepers, guides and seals', [440, 140, 200]);
 as('timing-drive', 'timing drive', 'timing-sprocket*2 roller-chain chain-guide chain-tensioner', 'sprockets on the crank and cams, the chain round them, its guide and tensioner', [300, 400, 40]);
@@ -1523,6 +1544,8 @@ pt('axle-beam', 'axle beam', 'forge', 'steel-alloy', 'a steer axle\'s forged I-b
 pt('kingpin', 'kingpin', 'grind', 'steel-alloy', 'a ground pin a steering knuckle turns on', [50, 260, 50]);
 as('drive-axle', 'drive axle', 'axle-housing differential axle-shaft*2', 'a banjo housing, its carrier and differential, its two axle shafts', [2000, 500, 500]);
 as('steer-axle', 'steer axle', 'axle-beam kingpin*2', 'a forged I-beam and its kingpins', [2000, 200, 150]);
+pt('bearing-hanger-body', 'bearing hanger housing', 'weld', 'steel-low', 'a plate welded onto a kart\'s rail and a housing bored for the axle\'s bearing', [80, 110, 50]);
+as('bearing-hanger', 'axle bearing hanger', 'bearing-hanger-body bearing-6206zz', 'a hanger welded to the frame, a 6206 ball bearing pressed in, the axle through it', [80, 110, 50]);
 }
 
 // ==== a disc brake's caliper, part by part (machines.ts) ==============================================================
@@ -1535,8 +1558,10 @@ pt('caliper-piston', 'caliper piston', 'machine', 'steel-chrome', 'a chromed ste
 pt('piston-seal-brake', 'piston seal', 'mould', 'epdm', 'a square-section seal in the bore\'s groove that pulls the piston back', [60, 3, 60]);
 pt('dust-boot', 'dust boot', 'mould', 'epdm', 'a rubber boot over the piston\'s mouth', [60, 10, 60]);
 pt('pad-backing', 'pad backing plate', 'stamp', 'steel-low', 'a fine-blanked steel plate the friction material is bonded to', [120, 55, 5]);
-pt('pad-friction', 'pad friction', 'mould', 'phenolic', 'resin-bonded friction material, pressed and cured on its plate', [110, 50, 11]);
+pt('pad-friction', 'pad friction', 'mould', 'friction-composite', 'resin-bonded friction material, pressed and cured on its plate', [110, 50, 11]);
 as('disc-brake-pad', 'disc brake pad', 'pad-backing pad-friction', 'friction material bonded to a steel backing plate', [120, 55, 16]);
+pt('caliper-bracket', 'caliper bracket', 'weld', 'steel-low', 'a steel plate welded to the frame or a bearing hanger, a caliper bolted to it', [80, 50, 40]);
+as('brake-caliper-fixed', 'fixed brake caliper', 'caliper-body caliper-piston*2 disc-brake-pad*2', 'a fixed caliper: two opposed pistons in a body astride the disc, a pad each side (a kart\'s, typical)', [40, 60, 70]);
 pt('guide-pin', 'guide pin', 'grind', 'steel-alloy', 'a ground pin the caliper slides on, in its rubber boot', [9, 50, 9]);
 pt('bleed-screw', 'bleed screw', 'machine', 'steel-low', 'a hollow screw to bleed air from the caliper', [6, 18, 6]);
 as('brake-caliper', 'brake caliper', 'caliper-body caliper-piston disc-brake-pad*2 guide-pin*2 bleed-screw', 'a sliding caliper: its cast body, its piston, two pads, its guide pins', [160, 100, 80]);
@@ -1716,6 +1741,15 @@ export function feed(text: string): { added: Item[]; refused: string[] } {
     put(it); added.push(it);
   }
   return { added, refused };
+}
+/** An entry of yours taken out of the inventory: refused for what is seeded (only what was fed is yours to take out),
+ *  and for anything another entry holds (take that out first, or change it). */
+export function removeItem(id: string): { ok: boolean; says: string } {
+  const it = items.get(id); if (!it) return { ok: false, says: `nothing in the inventory is ${id}` };
+  if (!it.yours) return { ok: false, says: `${it.name} is seeded, not yours: it stays` };
+  const held = [...items.values()].filter((x) => x.id !== id && x.of.some((c) => c.id === id));
+  if (held.length) return { ok: false, says: `${it.name} is in ${held.slice(0, 3).map((x) => x.name).join(', ')}${held.length > 3 ? ', …' : ''}: take those out first` };
+  items.delete(id); rev++; return { ok: true, says: `${it.name} taken out` };
 }
 /** An entry as one line of the fast format, to copy, change and feed again. */
 export const lineOf = (i: Item) => [i.id, i.name, i.path.join('/'), i.kind, i.make, i.of.map((c) => (c.n > 1 ? `${c.id}*${c.n}` : c.id)).join(' '), i.says, i.spec ?? ''].join(' | ');

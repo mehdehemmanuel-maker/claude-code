@@ -155,6 +155,95 @@ export function coil(o: { name: string; d: number; D: number; L: number; n: numb
   for (let i = 0; i <= turns * per; i++) { const t = i / per, a = 2 * PI * t, y = t < 1 ? o.d / 2 + t * o.d : t > turns - 1 ? o.L - o.d / 2 - (turns - t) * o.d : o.d * 1.5 + (t - 1) * pitch; pts.push([(o.D / 2) * Math.cos(a), Math.min(o.L - o.d / 2, y), (o.D / 2) * Math.sin(a)]); }
   return { name: o.name, shape: { tube: { r: o.d / 2, pts, bend: o.d } }, at: [0, 0, 0], mat: o.mat ?? 'steel-spring', color: o.color ?? 0x3a3c40, finish: 'paint', ...(o.item ? { item: o.item } : {}), made: { by: 'coil', d: o.d, D: o.D, n: o.n, L: o.L, L0: Math.max(o.L, o.L0 ?? o.L) }, says: o.says ?? `coiled: ${(o.d * 1000).toFixed(1)} mm wire on a ${(o.D * 1000).toFixed(1)} mm mean diameter, ${o.n} active coils, ends closed${(o.L0 ?? o.L) > o.L ? `; ${(((o.L0 ?? o.L) - o.L) * 1000).toFixed(1)} mm compressed from its ${((o.L0 ?? o.L) * 1000).toFixed(1)} mm free length as fitted` : ''}` };
 }
+/** A winding as it is wound: close turns of enamelled wire d across. The outermost layer is drawn turn by turn, a wire
+ *  of its own diameter (what is seen of a coil); the layers under it are drawn as the solid they pack into, its share of
+ *  copper `fill` (round wire packs to about 0.5 to 0.7 of a winding's section, typical). On a former (a solenoid: round
+ *  its axis y, from ri to ro, L long, its foot at its origin, or its middle where `centre`), or round a ring's section
+ *  (a toroid: a band round the axis y from ri to ro, L thick, its middle at its origin, the wire wrapped round the band
+ *  as it goes round: a stator's, an armature's). A winding of more turns in its outer layer than can be drawn (fine wire)
+ *  draws the most that can and says how many it has. */
+export const WOUND_MOST = 160;
+export function wound(o: { name: string; kind?: 'solenoid' | 'toroid' | 'pole'; ri?: number; ro?: number; /** a pole's: its core's half width and height, and the winding's outside's */ iw?: number; ih?: number; ow?: number; oh?: number; L: number; d: number; fill?: number; centre?: boolean; item?: string; color?: number; says?: string }): Part {
+  const kind = o.kind ?? 'solenoid', d = o.d, w = { mat: 'magnet-wire', color: o.color ?? 0xb87333, one: true }, pts: V3[] = [];
+  let turns: number, drawn: number, dd: number;
+  if (kind === 'pole') {
+    // (round a rectangular pole that runs along z, L long, its middle at its origin: the turns in x-y, going along z)
+    const { iw = 0, ih = 0, ow = 0, oh = 0 } = o; turns = Math.max(1, Math.floor((o.L - d) / d)); drawn = Math.min(turns, WOUND_MOST); dd = drawn < turns ? (o.L - d) / (drawn + 1) : d;
+    const hx = ow - dd / 2, hy = oh - dd / 2, per = 16, sq = (x: number) => Math.sign(x) * Math.abs(x) ** 0.4, around = (t: number): [number, number] => [hx * sq(Math.cos(2 * PI * t)), hy * sq(Math.sin(2 * PI * t))];
+    for (let i = 0; i <= drawn * per; i++) { const t = i / per, [x, y] = around(t); pts.push([x, y, -o.L / 2 + dd / 2 + t * ((o.L - dd) / Math.max(1, drawn))]); }
+    const rect = (a: number, b: number): [number, number][] => [[-a, -b], [a, -b], [a, b], [-a, b]];
+    return { name: o.name, at: [0, 0, 0], ...(o.item ? { item: o.item } : { item: 'winding' }), mat: 'magnet-wire', made: { by: 'wound', kind, d, turnsOuter: turns, drawn }, says: o.says ?? `${turns} turns of ${(d * 1000).toFixed(2)} mm enamelled wire in its outer layer round its pole${drawn < turns ? ` (${drawn} drawn, each ${(dd * 1000).toFixed(2)} mm: finer than can be drawn)` : ''}, its layers under it packed to ${Math.round((o.fill ?? 0.6) * 100)} %`,
+      parts: [{ name: `${o.name} inner layers`, shape: { prism: { pts: rect(ow - dd, oh - dd), holes: [rect(iw, ih)], L: o.L } }, at: [0, 0, 0], ...w, fill: o.fill ?? 0.6 }, { name: `${o.name} wire`, shape: { tube: { r: dd / 2, pts, bend: dd / 4 } }, envelope: { prism: { pts: rect(ow, oh), holes: [rect(ow - dd - 1e-5, oh - dd - 1e-5)], L: o.L } }, at: [0, 0, 0], ...w, finish: 'enamel' }] };
+  }
+  const ri = o.ri ?? 0, ro = o.ro ?? 0;
+  if (kind === 'solenoid') {
+    const y0 = o.centre ? -o.L / 2 : 0, r = ro - d / 2; turns = Math.max(1, Math.floor((o.L - d) / d)); drawn = Math.min(turns, WOUND_MOST); dd = drawn < turns ? (o.L - d) / (drawn + 1) : d;
+    const per = 8;
+    for (let i = 0; i <= drawn * per; i++) { const t = i / per, a = 2 * PI * t; pts.push([r * Math.cos(a), y0 + dd / 2 + t * ((o.L - dd) / Math.max(1, drawn)), r * Math.sin(a)]); }
+    const body: [number, number][] = [[ri, y0], [ro - dd, y0], [ro - dd, y0 + o.L], [ri, y0 + o.L], [ri, y0]];
+    return { name: o.name, at: [0, 0, 0], ...(o.item ? { item: o.item } : { item: 'winding' }), mat: 'magnet-wire', made: { by: 'wound', kind, d, turnsOuter: turns, drawn }, says: o.says ?? `${turns} turns of ${(d * 1000).toFixed(2)} mm enamelled wire in its outer layer${drawn < turns ? ` (${drawn} drawn, each ${(dd * 1000).toFixed(2)} mm: finer than can be drawn)` : ''}, its layers under it packed to ${Math.round((o.fill ?? 0.6) * 100)} %`,
+      parts: [{ name: `${o.name} inner layers`, shape: { lathe: body }, at: [0, 0, 0], ...w, fill: o.fill ?? 0.6 }, { name: `${o.name} wire`, shape: { tube: { r: dd / 2, pts, bend: dd / 4 } }, envelope: { lathe: [[ro - dd - 1e-5, y0], [ro, y0], [ro, y0 + o.L], [ro - dd - 1e-5, y0 + o.L], [ro - dd - 1e-5, y0]] }, at: [0, 0, 0], ...w, finish: 'enamel' }] };
+  }
+  // (a toroid: round the band's section (a rounded rectangle, half a by half b) as it goes round the axis)
+  const Rm = (ri + ro) / 2; turns = Math.max(3, Math.floor((2 * PI * (ri + d / 2)) / d)); drawn = Math.min(turns, WOUND_MOST); dd = drawn < turns ? (2 * PI * (ri + d / 2)) / drawn : d;
+  const a = (ro - ri) / 2 - dd / 2, b = o.L / 2 - dd / 2, per = 12, sq = (x: number) => Math.sign(x) * Math.abs(x) ** 0.5;
+  for (let i = 0; i <= drawn * per; i++) { const t = i / per, phi = (2 * PI * t) / drawn, th = 2 * PI * t, rr = Rm + a * sq(Math.cos(th)); pts.push([rr * Math.cos(phi), b * sq(Math.sin(th)), rr * Math.sin(phi)]); }
+  const body: [number, number][] = [[ri + dd, -b], [ro - dd, -b], [ro - dd, b], [ri + dd, b], [ri + dd, -b]];
+  return { name: o.name, at: [0, 0, 0], ...(o.item ? { item: o.item } : { item: 'winding' }), mat: 'magnet-wire', made: { by: 'wound', kind, d, turnsOuter: turns, drawn }, says: o.says ?? `${turns} turns of ${(d * 1000).toFixed(2)} mm enamelled wire round its band${drawn < turns ? ` (${drawn} drawn, each ${(dd * 1000).toFixed(2)} mm: finer than can be drawn)` : ''}, its layers under them packed to ${Math.round((o.fill ?? 0.6) * 100)} %`,
+    parts: [{ name: `${o.name} inner layers`, shape: { lathe: body }, at: [0, 0, 0], ...w, fill: o.fill ?? 0.6 }, { name: `${o.name} wire`, shape: { tube: { r: dd / 2, pts, bend: dd / 4 } }, envelope: { lathe: [[ri, -o.L / 2], [ro, -o.L / 2], [ro, o.L / 2], [ri, o.L / 2], [ri, -o.L / 2]] }, at: [0, 0, 0], ...w, finish: 'enamel' }] };
+}
+/** A sensor as it is made, any of the kinds an engine (or a machine) is read by: a threaded probe (a hex body, its thread
+ *  and sealing ring, its stem with the element in its tip: a coolant temperature sender, an oil pressure switch, an
+ *  oxygen sensor), a puck bolted through its middle (a knock sensor: the element a ring under a seismic mass), or a
+ *  block held by a lug (a position sensor reading teeth past its face, a manifold pressure sensor). Its element by
+ *  what it senses: a thermistor (temperature), a piezoelectric ring (knock), a Hall die and its magnet (position), a
+ *  zirconia thimble (oxygen), a silicon strain die (pressure); its pins and the shroud of its plug. Its frame: its foot
+ *  (the face it seats on) at its origin, it standing up +y. Sizes in metres; every proportion typical. */
+export type SensorBody = 'threaded' | 'puck' | 'block';
+export type SensorElement = 'thermistor' | 'piezo' | 'hall' | 'zirconia' | 'strain';
+export const SENSES: Record<SensorElement, { mat: string; color: number; says: string }> = {
+  thermistor: { mat: 'ntc-ceramic', color: 0x3a3a3a, says: 'a metal-oxide bead whose resistance falls as it warms (an NTC thermistor)' },
+  piezo: { mat: 'pzt', color: 0xe8e0d0, says: 'a lead zirconate titanate (PZT) ring: it gives a charge when the block rings' },
+  hall: { mat: 'silicon', color: 0x30343a, says: 'a Hall die and the magnet behind it: a tooth going by changes the field through it' },
+  zirconia: { mat: 'zirconia', color: 0xe8e0d0, says: 'a zirconia thimble, platinum each side: oxygen ions through it give a voltage' },
+  strain: { mat: 'silicon', color: 0x30343a, says: 'a silicon diaphragm with strain gauges diffused in it' },
+};
+export function sensor(o: { name: string; body: SensorBody; element: SensorElement; D: number; L: number; pins?: number; thread?: string; item?: string; says?: string }): Part {
+  const D = o.D, L = o.L, el = SENSES[o.element], pins = Math.max(1, o.pins ?? (o.element === 'hall' ? 3 : o.element === 'zirconia' ? 4 : o.element === 'strain' ? 3 : 2)), parts: Part[] = [];
+  const plastic = { mat: 'pbt', color: 0x2a2a2a, finish: 'texture' }, steel = { mat: 'stainless-304', color: 0x9a9c9e, finish: 'machined' };
+  const shroudH = 0.35 * L, shroudR = Math.max(0.0055, 0.42 * D), pinR = Math.max(0.0004, 0.025 * D);
+  if (o.body === 'threaded') {
+    // (its thread down into what it reads, a hex above it to turn it by, its sealing ring under the hex, its element in its tip)
+    const tL = 0.3 * L, hexH = 0.18 * L, hexR = 0.55 * D, tR = 0.38 * D, hex = Array.from({ length: 6 }, (_, k) => [hexR * Math.cos((k * PI) / 3 + PI / 6), hexR * Math.sin((k * PI) / 3 + PI / 6)] as [number, number]);
+    parts.push({ name: 'sensor thread', shape: { lathe: [[0, -tL], [tR * 0.9, -tL], [tR, -tL + 0.001], [tR, 0], [0, 0]] }, at: [0, 0, 0], ...steel, finish: 'thread', item: 'sensor-body', one: true });
+    parts.push({ name: 'sensor hex', shape: { prism: { pts: hex, L: hexH } }, at: [0, 0.0011 + hexH / 2, 0], rot: [PI / 2, 0, 0], ...steel, item: 'sensor-body', one: true });
+    parts.push({ name: 'sealing ring', shape: { lathe: [[tR + 0.0002, 0], [hexR * 0.85, 0], [hexR * 0.85, 0.001], [tR + 0.0002, 0.001], [tR + 0.0002, 0]] }, at: [0, 0, 0], mat: 'copper', color: 0xb87333, item: 'crush-washer' });
+    parts.push({ name: 'sensing element', shape: { cyl: [tR * 0.45, 0.25 * tL] }, at: [0, -tL - 0.125 * tL + 0.0002, 0], mat: el.mat, color: el.color, item: `${o.element}-element`, says: el.says });
+    parts.push({ name: 'connector shroud', shape: { lathe: [[shroudR - 0.0012, 0], [shroudR, 0], [shroudR, shroudH], [shroudR - 0.0012, shroudH], [shroudR - 0.0012, 0]] }, at: [0, 0.0011 + hexH, 0], ...plastic, item: 'connector-shroud', one: true });
+    parts.push({ name: 'shroud floor', shape: { cyl: [shroudR - 0.0012, 0.0015] }, at: [0, 0.0011 + hexH + 0.00075, 0], ...plastic, item: 'connector-shroud', one: true });
+    for (let k = 0; k < pins; k++) { const a = (2 * PI * k) / pins, r = pins > 1 ? 0.45 * (shroudR - 0.0012) : 0; parts.push({ name: 'terminal pin', shape: { cyl: [pinR, shroudH * 0.75] }, at: [r * Math.cos(a), 0.0011 + hexH + 0.0015 + (shroudH * 0.75) / 2, r * Math.sin(a)], mat: 'brass', color: 0xc8a050, item: 'terminal' }); }
+  } else if (o.body === 'puck') {
+    // (a moulded puck round a sleeve its bolt goes through: under the mass, the element ring, on the face it is bolted to)
+    const h = 0.6 * L, sR = 0.2 * D;
+    parts.push({ name: 'sensor case', shape: { lathe: [[sR, 0], [D / 2, 0], [D / 2, h], [sR, h], [sR, 0]] }, at: [0, 0, 0], ...plastic, item: 'sensor-case', passes: ['sensing element', 'seismic mass', 'sensor sleeve'], one: true });
+    parts.push({ name: 'sensor sleeve', shape: { lathe: [[sR - 0.0012, 0], [sR, 0], [sR, h], [sR - 0.0012, h], [sR - 0.0012, 0]] }, at: [0, 0, 0], ...steel, item: 'sensor-body' });
+    parts.push({ name: 'sensing element', shape: { lathe: [[sR + 0.0005, 0.0012], [0.4 * D, 0.0012], [0.4 * D, 0.0012 + 0.06 * L], [sR + 0.0005, 0.0012 + 0.06 * L], [sR + 0.0005, 0.0012]] }, at: [0, 0, 0], mat: el.mat, color: el.color, item: `${o.element}-element`, says: el.says });
+    parts.push({ name: 'seismic mass', shape: { lathe: [[sR + 0.0005, 0.0012 + 0.06 * L + 0.0003], [0.42 * D, 0.0012 + 0.06 * L + 0.0003], [0.42 * D, 0.0012 + 0.06 * L + 0.0003 + 0.18 * L], [sR + 0.0005, 0.0012 + 0.06 * L + 0.0003 + 0.18 * L], [sR + 0.0005, 0.0012 + 0.06 * L + 0.0003]] }, at: [0, 0, 0], mat: 'brass', color: 0xc8a050, item: 'seismic-mass' });
+    const sh = { at: [D / 2 + shroudH / 2, h / 2, 0] as V3 };
+    parts.push({ name: 'connector shroud', shape: { box: [shroudH, 2 * shroudR, 2 * shroudR] }, ...sh, ...plastic, item: 'connector-shroud', one: true });
+    for (let k = 0; k < pins; k++) parts.push({ name: 'terminal pin', shape: { cyl: [pinR, shroudH * 0.75] }, at: [D / 2 + shroudH * 0.5, h / 2 + (k - (pins - 1) / 2) * 3 * pinR, 0], rot: [0, 0, PI / 2], mat: 'brass', color: 0xc8a050, item: 'terminal', one: true });
+  } else {
+    // (a moulded block: its element behind its face at its foot, a lug to bolt it by, its plug's shroud on top)
+    const w = D, h = L - shroudH;
+    parts.push({ name: 'sensor case', shape: { box: [w, h, w] }, at: [0, h / 2, 0], ...plastic, item: 'sensor-case', passes: ['sensing element'], one: true });
+    parts.push({ name: 'sensor lug', shape: { box: [0.7 * w, 0.18 * h, 0.8 * w] }, at: [w / 2 + 0.35 * w, 0.09 * h, 0], ...plastic, item: 'sensor-case', cuts: [{ r: 0.12 * w, depth: 0.18 * h, at: [0.1 * w, 0.09 * h, 0], dir: [0, -1, 0] }], one: true });
+    parts.push({ name: 'sensing element', shape: { box: [0.4 * w, 0.06 * h, 0.4 * w] }, at: [0, 0.06 * h, 0], mat: el.mat, color: el.color, item: `${o.element}-element`, says: el.says });
+    if (o.element === 'hall') parts.push({ name: 'bias magnet', shape: { box: [0.4 * w, 0.2 * h, 0.4 * w] }, at: [0, 0.2 * h, 0], mat: 'ndfeb', color: 0x6a6c70, item: 'magnet-ndfeb' });
+    parts.push({ name: 'connector shroud', shape: { lathe: [[shroudR - 0.0012, 0], [shroudR, 0], [shroudR, shroudH], [shroudR - 0.0012, shroudH], [shroudR - 0.0012, 0]] }, at: [0, h, 0], ...plastic, item: 'connector-shroud', one: true });
+    for (let k = 0; k < pins; k++) parts.push({ name: 'terminal pin', shape: { cyl: [pinR, shroudH * 0.75] }, at: [(k - (pins - 1) / 2) * 3 * pinR, h + (shroudH * 0.75) / 2, 0], mat: 'brass', color: 0xc8a050, item: 'terminal' });
+  }
+  return { name: o.name, at: [0, 0, 0], item: o.item ?? `sensor-${o.body}`, parts, made: { by: 'sensor', body: o.body, element: o.element, D, L, pins }, says: o.says ?? `${o.body === 'threaded' ? 'a threaded probe' : o.body === 'puck' ? 'a puck bolted through its middle' : 'a moulded block on its lug'}; ${el.says}; ${pins} pins in its plug` };
+}
 /** A toothed wheel cut round a bore: module m, z teeth, b wide along z (its axis), its teeth drawn as their straight-sided
  *  outline from the root to the tip circle (the involute's curve not drawn), as every spur, helical and timing gear and
  *  sprocket is cut. */

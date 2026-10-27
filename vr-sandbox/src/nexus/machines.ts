@@ -25,7 +25,7 @@ import { patchPoints, type Patch } from './surface';
 import { getMaterial } from '../data/materials';
 import type { Station } from './form';
 import * as THREE from 'three';
-import { layout, sat, type OBB } from './make/space';
+import { clearPath, layout, sat, type OBB } from './make/space';
 
 const IN = 0.0254, LB = 0.45359237, PI = Math.PI;
 
@@ -49,7 +49,7 @@ export function tyreOf(code: string): Tyre | null {
 
 // ---- what a machine is -------------------------------------------------------------------------------------------
 export type Susp = 'rigid' | 'pivot' | 'strut' | 'beam' | 'wishbone' | 'swingarm' | 'leaf' | 'air' | 'fork';
-export interface Axle { /** from the machine's middle, + forward */ x: number; track: number; tyre: string; steer?: boolean; drive?: boolean; dual?: boolean; brake?: { kind: 'disc' | 'drum'; d: number; vented?: boolean }; /** how it hangs from the frame */ susp?: Susp }
+export interface Axle { /** from the machine's middle, + forward */ x: number; track: number; tyre: string; steer?: boolean; drive?: boolean; dual?: boolean; brake?: { kind: 'disc' | 'drum'; d: number; vented?: boolean; /** one disc on the axle, not one in each wheel (a kart's) */ on?: 'axle' }; /** how it hangs from the frame */ susp?: Susp }
 export type Frame = 'shell' | 'tube' | 'ladder' | 'backbone';
 /** Where a panelled body's lines run, as shares of its length from its nose and of its height (typical of each style). */
 export interface Lines { cowl: number; roofF: number; roofR: number; deck: number; belt: number; nose: number; tail: number; n: number; /** how far its belt rises from its cowl to its deck, m (its wedge: 0.02, typical, where not said) */ wedge?: number; /** how high its windscreen's foot and its back glass's foot stand, as shares of its height, where above its belt (as most cars' do: the top edge rising to each from the belt under its sail and its C pillar; at the belt where not said) */ cowlH?: number; deckH?: number; /** where its rear door's top rear corner is, and where its side glass ends at the back, as shares of its length from its nose: its rear door's shut line upright by its rear arch, then leaning back over it to there, a fixed quarter glass in the body behind the door (else upright, and its glass ending a little short of its roof's end) */ doorR?: number; dloR?: number; /** how full its windscreen and its back glass are: how far up its rise each one's control point at its middle stands (0.55 and 0.62, typical, where not said) */ bow?: [number, number]; /** how far behind its windscreen's foot its front door's top front corner is, as a share of its length: the fender runs back to it, a black sail fills the corner between its glass and its A pillar, and its mirror stands on the door (0 where not said: the door runs to the A pillar) */ sail?: number; open?: boolean; bed?: boolean; /** doors a side: one long one (a coupe's, a roadster's) or two */ doors?: 1 | 2; /** its face: its headlamps' and its grille's height, m (typical of its kind where not said) */ face?: { lamp?: number; grille?: number } }
@@ -361,7 +361,8 @@ function wheel(name: string, t: Tyre, o: { pattern?: Tread; style: Machine['rims
     // through the flange, its thread out through the disc's hat and the wheel, 3 mm past its nut)
     const xy = [Math.cos(a) * pcd, Math.sin(a) * pcd] as const;
     parts.push(use(`wheelnut ${thread}`, [xy[0], xy[1], nutZ], { rot: [PI / 2, 0, 0], name: `wheel nut ${i + 1}`, fixed: 'run onto its stud against the wheel and torqued', joins: ['wheel disc', 'centre pad', rimName], passes: [`wheel stud ${i + 1}`] }));
-    parts.push(use(`wheelstud ${thread} L${Math.round((z1 - z0) * 2000) / 2}`, [xy[0], xy[1], z0], { rot: [-PI / 2, 0, 0], name: `wheel stud ${i + 1}`, fixed: 'pressed into the hub\'s flange, knurled under its head' }));
+    // (its length the next of its family's standard lengths, every 5 mm from 35, that reaches 3 mm past its nut)
+    parts.push(use(`wheelstud ${thread} L${Math.max(35, Math.ceil(((z1 - z0) * 1000) / 5) * 5)}`, [xy[0], xy[1], z0], { rot: [-PI / 2, 0, 0], name: `wheel stud ${i + 1}`, fixed: 'pressed into the hub\'s flange, knurled under its head' }));
   }
   if (o.brake?.kind === 'disc') {
     const { r, th, zD, rh, sideIn, sideOut } = cn;
@@ -383,7 +384,7 @@ function wheel(name: string, t: Tyre, o: { pattern?: Tread; style: Machine['rims
     const inCal = (x: number, y2: number, z: number): V3 => [Math.cos(ca) * x - Math.sin(ca) * y2, Math.sin(ca) * x + Math.cos(ca) * y2, z];
     const onPlate = !o.knuckle && !!o.bore, carrier: Part[] = o.knuckle || onPlate ? [-1, 1].flatMap((e) => {
       const yL = e * (ch / 2 + legW / 2), zIn = cn.zA + cn.armT / 2 - zD, zRing = -(th / 2 + 0.0015), zOut = th / 2 + 0.0015 + sideOut, r0 = rc - cw / 2, r1 = r + 0.016;
-      return [P('carrier leg', { box: [r1 - r0, legW, zRing - zIn] }, inCal((r0 + r1) / 2, yL, (zIn + zRing) / 2), { rot: [0, 0, ca], mat: 'cast-iron', color: 0x2e3032, finish: 'cast', fixed: onPlate ? 'bolted through the dust shield to its axle carrier' : 'bolted to its caliper ear on the knuckle' }),
+      return [P('carrier leg', { box: [r1 - r0, legW, zRing - zIn] }, inCal((r0 + r1) / 2, yL, (zIn + zRing) / 2), { rot: [0, 0, ca], mat: 'cast-iron', color: 0x2e3032, finish: 'cast', cuts: [{ r: 0.0048, depth: zRing - zIn + 0.002, at: [rc - cw * 0.1 - (r0 + r1) / 2, e * (0.006 - legW / 2), (zRing - zIn) / 2 + 0.001], dir: [0, 0, -1] }], says: 'its guide pin slides in a bore through it', fixed: onPlate ? 'bolted through the dust shield to its axle carrier' : 'bolted to its caliper ear on the knuckle' }),
         P('carrier bridge', { box: [r1 - r - 0.004, legW, zOut - zRing] }, inCal((r + 0.004 + r1) / 2, yL, (zRing + zOut) / 2), { rot: [0, 0, ca], mat: 'cast-iron', color: 0x2e3032, finish: 'cast' })];
     }) : [];
     // (a wheel on a spindle with no knuckle, a beam's: its anchor plate, the spindle through its bore, its two ears the
@@ -398,23 +399,23 @@ function wheel(name: string, t: Tyre, o: { pattern?: Tread; style: Machine['rims
     // plate, its friction material bonded on), on two guide pins in their boots, a bleed screw; a small one's return
     // spring and two bolts. The pads take the inner part of each half's room (typical proportions, so the caliper's
     // outline is what it was))
-    const padIn = Math.min(0.012, sideIn * 0.45), padOut = Math.min(0.008, sideOut * 0.6), bodyIn = sideIn - padIn, bodyOut = sideOut - padOut, pr = ch * 0.32, fixedC = 'cast as one with its other half and bridge, sliding on its two guide pins in its carrier';
+    const padIn = Math.min(0.012, sideIn * 0.45), padOut = Math.min(0.008, sideOut * 0.6), bodyIn = sideIn - padIn, bodyOut = sideOut - padOut, pr = Math.min(ch * 0.32, cw * 0.4), rp = r - cw * 0.425 - 0.001, fixedC = 'cast as one with its other half and bridge, sliding on its two guide pins in its carrier';
     const zIn0 = -(th / 2 + 0.0015), zOut0 = th / 2 + 0.0015, rot: V3 = [0, 0, ca], cast = { mat: cm, color: cc, finish: 'cast' };
     const pad = (z: number, t: number, side: string): Part => P(`brake pad (${side})`, undefined, [0, 0, 0], { item: 'disc-brake-pad', parts: [
-      P('pad backing plate', { box: [cw * 0.9, ch * 0.85, Math.min(0.005, t * 0.4)] }, [...at2(rc).slice(0, 2), z + Math.sign(z) * (t - Math.min(0.005, t * 0.4) / 2)] as V3, { rot, mat: 'steel-low', color: 0x3a3a3a, item: 'pad-backing' }),
-      P('pad friction', { box: [cw * 0.85, ch * 0.8, t - Math.min(0.005, t * 0.4)] }, [...at2(rc).slice(0, 2), z + Math.sign(z) * (t - Math.min(0.005, t * 0.4)) / 2] as V3, { rot, mat: 'phenolic', color: 0x5a5048, finish: 'texture', item: 'pad-friction', says: 'friction material: resin-bonded fibres and metal particles (typical)' })] });
+      P('pad backing plate', { box: [cw * 0.9, ch * 0.85, Math.min(0.005, t * 0.4)] }, [...at2(rp).slice(0, 2), z + Math.sign(z) * (t - Math.min(0.005, t * 0.4) / 2)] as V3, { rot, mat: 'steel-low', color: 0x3a3a3a, item: 'pad-backing' }),
+      P('pad friction', { box: [cw * 0.85, ch * 0.8, t - Math.min(0.005, t * 0.4)] }, [...at2(rp).slice(0, 2), z + Math.sign(z) * (t - Math.min(0.005, t * 0.4)) / 2] as V3, { rot, mat: 'friction-composite', color: 0x5a5048, finish: 'texture', item: 'pad-friction', says: 'friction material: resin-bonded fibres and metal particles (typical)' })] });
     const small = o.brake.d < 0.25;
     parts.push(P('brake caliper', undefined, [0, 0, zD], { item: small ? 'brake-caliper-disc' : 'brake-caliper', ...(o.knuckle ? { link: name.replace(/ wheel$/, ' upright') } : { link: o.axle ?? '' }), says: `a sliding caliper of ${cm === 'cast-iron' ? 'cast iron' : 'aluminium'}, one piston (typical)${o.knuckle ? ', on its carrier, bolted to two ears of the knuckle' : ''}`, parts: [
       ...(carrier.length ? [P('caliper carrier', undefined, [0, 0, 0], { mat: 'cast-iron', color: 0x2e3032, finish: 'cast', item: 'caliper-carrier', says: 'its carrier (bracket): cast iron, bolted to the knuckle\'s two ears, the caliper sliding on its two guide pins (typical)', parts: carrier })] : []),
       P('caliper body', undefined, [0, 0, 0], { item: 'caliper-body', mat: cm, parts: [
-        P('caliper piston half', { box: [cw, ch, bodyIn] }, [...at2(rc).slice(0, 2), zIn0 - padIn - bodyIn / 2] as V3, { rot, ...cast, one: true, fixed: fixedC, cuts: [{ r: pr, depth: bodyIn * 0.8, at: [0, 0, bodyIn / 2], dir: [0, 0, -1] }] }),
+        P('caliper piston half', { box: [cw, ch, bodyIn] }, [...at2(rc).slice(0, 2), zIn0 - padIn - bodyIn / 2] as V3, { rot, ...cast, one: true, fixed: fixedC, cuts: [{ r: pr, depth: bodyIn * 0.8, at: [rp - rc, 0, bodyIn / 2], dir: [0, 0, -1] }] }),
         P('caliper finger half', { box: [cw * 0.8, ch * 0.9, bodyOut] }, [...at2(rc + cw * 0.1).slice(0, 2), zOut0 + padOut + bodyOut / 2] as V3, { rot, ...cast, one: true, fixed: fixedC }),
         P('caliper bridge', { box: [0.016, ch * 0.7, th + 0.003 + sideIn + sideOut] }, [...at2(r + 0.0015 + 0.008).slice(0, 2), (sideOut - sideIn) / 2] as V3, { rot, ...cast, one: true, fixed: fixedC })] }),
-      P('caliper piston', { cyl: [pr - 0.0005, bodyIn * 0.75] }, [...at2(rc).slice(0, 2), zIn0 - padIn - bodyIn * 0.375] as V3, { rot: [PI / 2, 0, 0], mat: 'steel-chrome', color: 0xc8ccd2, finish: 'plate', item: 'caliper-piston' }),
-      P('piston seal', { torus: [pr - 0.0005, 0.0012] }, [...at2(rc).slice(0, 2), zIn0 - padIn - bodyIn * 0.6] as V3, { rot: [0, 0, 0], mat: 'epdm', color: 0x1a1a1a, item: 'piston-seal-brake' }),
-      P('dust boot', { torus: [pr, 0.002] }, [...at2(rc).slice(0, 2), zIn0 - padIn - 0.001] as V3, { mat: 'epdm', color: 0x1a1a1a, item: 'dust-boot' }),
+      P('caliper piston', { cyl: [pr - 0.0005, bodyIn * 0.75] }, [...at2(rp).slice(0, 2), zIn0 - padIn - bodyIn * 0.375] as V3, { rot: [PI / 2, 0, 0], mat: 'steel-chrome', color: 0xc8ccd2, finish: 'plate', item: 'caliper-piston' }),
+      P('piston seal', { torus: [pr - 0.0005, 0.0012] }, [...at2(rp).slice(0, 2), zIn0 - padIn - bodyIn * 0.6] as V3, { rot: [0, 0, 0], mat: 'epdm', color: 0x1a1a1a, item: 'piston-seal-brake' }),
+      P('dust boot', { torus: [pr, 0.002] }, [...at2(rp).slice(0, 2), zIn0 - padIn - 0.001] as V3, { mat: 'epdm', color: 0x1a1a1a, item: 'dust-boot' }),
       pad(zIn0, padIn, 'inner'), pad(zOut0, padOut, 'outer'),
-      ...[-1, 1].map((e2) => P('guide pin', { cyl: [0.0045, sideIn + 0.01] }, [Math.cos(ca) * (rc - cw * 0.1) - e2 * Math.sin(ca) * (ch / 2 + 0.006), Math.sin(ca) * (rc - cw * 0.1) + e2 * Math.cos(ca) * (ch / 2 + 0.006), zIn0 - sideIn / 2] as V3, { rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x8a8c90, item: 'guide-pin' })),
+      ...[-1, 1].map((e2) => P('guide pin', { cyl: [0.0045, sideIn + 0.01] }, [Math.cos(ca) * (rc - cw * 0.1) - e2 * Math.sin(ca) * (ch / 2 + 0.006), Math.sin(ca) * (rc - cw * 0.1) + e2 * Math.cos(ca) * (ch / 2 + 0.006), zIn0 - 0.0005 - (sideIn + 0.01) / 2] as V3, { rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x8a8c90, item: 'guide-pin' })),
       P('bleed screw', { cyl: [0.003, 0.018] }, [...at2(rc + cw / 2).slice(0, 2), zIn0 - padIn - bodyIn / 2] as V3, { rot: [0, 0, ca - PI / 2], mat: 'steel-low', color: 0x8a8c90, item: 'bleed-screw' }),
       ...(small ? [{ ...coiled({ name: 'return spring', d: 0.0008, D: 0.006, L: 0.012, n: 4, item: 'spring-compression' }), at: [...at2(rc).slice(0, 2), zIn0 - sideIn - 0.004] as V3 }, ...[-1, 1].map((e2) => use('bolt M6x20', [Math.cos(ca) * rc - e2 * Math.sin(ca) * ch * 0.3, Math.sin(ca) * rc + e2 * Math.cos(ca) * ch * 0.3, zIn0 - sideIn], { rot: [-PI / 2, 0, 0], name: 'caliper bolt' }))] : [])] }));
   } else if (o.brake?.kind === 'drum') parts.push(P(`brake drum ${Math.round(o.brake.d * 1000)} mm`, { cyl: [Math.min(o.brake.d / 2, rr - 0.015), cn.drumL] }, [0, 0, -wr * 0.3], { rot: [PI / 2, 0, 0], mat: 'cast-iron', color: 0x4a4a4a, shell: 0.008, finish: 'cast' }));
@@ -780,23 +781,23 @@ const seatPart = (s: Seat, i: number, col: number, floor?: number, room = Infini
   // sliding in a lower on balls, a latch bar between them (typical of a car's front seat); a bench's frame on the floor)
   const cush = loft('cushion foam', [{ x: -0.22, w: wd, lo, hi: 0.04, n: 4 }, { x: 0.25, w: wd, lo, hi: 0.02, n: 4 }], 'pu', col, { finish: 'weave', fill: 0.045, item: 'seat-foam', joins: ['seat frame', 'rear floor', 'floor pan', 'floor pan left', 'floor pan right'], says: 'moulded polyurethane foam, about 55 kg/m³ (typical)' });
   const bh = Math.max(0.3, Math.min(0.62, back)), bk = loft('backrest foam', [{ x: -0.324, w: wd, lo: 0, hi: bh, n: 4 }, { x: -0.22, w: wd * 0.95, lo: 0.02, hi: Math.max(0.32, Math.min(0.64, back + 0.02)), n: 4 }], 'pu', col, { rot: [0, 0, 0.18], finish: 'weave', fill: 0.045, item: 'seat-foam', joins: ['cushion foam'], says: 'its backrest\'s foam, on its recliner at the cushion\'s back' });
-  const cover = (q: Part, nmC: string): Part => ({ ...q, name: nmC, mat: 'pet', shell: 0.0012, fill: 1, item: 'seat-cover', joins: [q.name], says: 'its cover, woven polyester sewn over its foam (typical)' });
+  const cover = (q: Part, nmC: string): Part => ({ ...q, name: nmC, mat: 'pet', shell: 0.0012, fill: 1, item: 'seat-cover', joins: [q.name, ...(q.joins ?? []), 'seat frame', 'backrest frame'], says: 'its cover, woven polyester sewn over its foam and stapled to the frame inside it (typical)' });
   const steel = { mat: 'steel-low', color: 0x2a2a2a, finish: 'paint' } as const, parts: Part[] = [cush, cover(cush, 'cushion cover'), bk, cover(bk, 'backrest cover')];
   // (its springs: four sinuous wires across the cushion's frame, zig-zag front to back, 4 mm spring wire (typical))
   for (let k = 0; k < 4; k++) { const z = -wd * 0.6 + (k + 0.5) * (wd * 1.2) / 4, pts: V3[] = []; for (let j = 0; j <= 10; j++) pts.push([-0.2 + j * 0.04, lo - 0.005, z + (j % 2 ? 0.018 : -0.018)]); parts.push(P('seat spring', { tube: { r: 0.002, pts } }, [0, 0, 0], { mat: 'steel-spring', color: 0x3a3a3a, item: 'seat-spring' })); }
   if (!onFloor) {
     // (its frame: two pressed side members and two cross tubes, welded; the backrest's frame a bent tube up from its recliners)
-    parts.push(P('seat frame', undefined, [0, -0.13, 0], { item: 'seat-frame', joins: ['seat rails'], parts: [
-      ...[-1, 1].map((sd) => P('seat side member', { box: [0.48, 0.06, 0.003] }, [0, 0, sd * wd * 0.62], { ...steel, one: true })),
-      ...[-0.18, 0.2].map((x) => P('seat cross tube', { cyl: [0.012, wd * 1.24] }, [x, 0.02, 0], { ...steel, rot: [PI / 2, 0, 0], one: true }))] }));
+    parts.push(P('seat frame', undefined, [0, -0.13, 0], { item: 'seat-frame', joins: ['seat rail'], parts: [
+      ...[-1, 1].map((sd) => P('seat side member', { box: [0.48, 0.06, 0.003] }, [0, 0, sd * (wd + 0.002)], { ...steel, one: true })),
+      ...[-0.18, 0.2].map((x) => P('seat cross tube', { cyl: [0.012, 2 * wd + 0.004] }, [x, 0.02, 0], { ...steel, rot: [PI / 2, 0, 0], one: true }))] }));
   }
-  parts.push(P('backrest frame', { tube: { r: 0.011, wall: 0.0015, pts: [[-0.27, -0.05, -wd * 0.55], [-0.27 - bh * 0.18, bh * 0.95, -wd * 0.5], [-0.27 - bh * 0.18, bh * 0.95, wd * 0.5], [-0.27, -0.05, wd * 0.55]] } }, [0, 0, 0], { ...steel, item: 'seat-frame', joins: ['backrest foam'] }));
+  parts.push(P('backrest frame', { tube: { r: 0.011, wall: 0.0015, pts: [[-0.27, -0.05, -(wd - 0.012)], [-0.27 - bh * 0.18, bh * 0.95, -wd * 0.5], [-0.27 - bh * 0.18, bh * 0.95, wd * 0.5], [-0.27, -0.05, wd - 0.012]] } }, [0, 0, 0], { ...steel, item: 'seat-frame', joins: ['backrest foam', 'recliner'] }));
   // (a recliner each side at the backrest's pivot: two toothed discs, locked by a pawl, a lever on the outer one)
-  for (const sd of [-1, 1]) parts.push(P('recliner', undefined, [-0.27, -0.05, sd * wd * 0.62], { item: 'recliner', parts: [P('recliner plate', { cyl: [0.035, 0.006] }, [0, 0, -0.004], { ...steel, rot: [PI / 2, 0, 0], item: 'recliner-disc' }), P('recliner plate', { cyl: [0.035, 0.006] }, [0, 0, 0.004], { ...steel, rot: [PI / 2, 0, 0], item: 'recliner-disc' }), P('recliner pawl', { box: [0.03, 0.008, 0.004] }, [0.02, 0, 0], { mat: 'steel-alloy', color: 0x8a8c90, item: 'recliner-pawl' })] }));
+  for (const sd of [-1, 1]) parts.push(P('recliner', undefined, [-0.27, -0.05, sd * (wd + 0.012)], { item: 'recliner', joins: ['seat side member', 'backrest frame'], fixed: 'its inner disc bolted to the seat frame\'s side member, its outer to the backrest frame', parts: [P('recliner plate', { cyl: [0.035, 0.006] }, [0, 0, -0.004], { ...steel, rot: [PI / 2, 0, 0], item: 'recliner-disc' }), P('recliner plate', { cyl: [0.035, 0.006] }, [0, 0, 0.004], { ...steel, rot: [PI / 2, 0, 0], item: 'recliner-disc' }), P('recliner pawl', { box: [0.03, 0.008, 0.004] }, [0.02, 0, 0], { mat: 'steel-alloy', color: 0x8a8c90, item: 'recliner-pawl' })] }));
   if (s.style !== 'bench' && back > 0.5) {
     // (a headrest over the backrest's top on two posts: its foam in its cover)
     const ht = bh + 0.07;
-    parts.push(P('headrest', undefined, [-0.27 - bh * 0.19, ht, 0], { rot: [0, 0, 0.18], item: 'headrest', parts: [P('headrest foam', { box: [0.07, 0.15, wd * 0.9] }, [0, 0.04, 0], { mat: 'pu', color: col, fill: 0.055, item: 'seat-foam' }), P('headrest cover', { box: [0.075, 0.155, wd * 0.92] }, [0, 0.04, 0], { mat: 'pet', color: col, shell: 0.0012, finish: 'weave', item: 'seat-cover' }), ...[-1, 1].map((sd) => P('headrest post', { cyl: [0.0055, 0.16] }, [0, -0.05, sd * 0.07], { mat: 'steel-low', color: 0xc8ccd2, finish: 'plate', item: 'headrest-post' }))] }));
+    parts.push(P('headrest', undefined, [-0.27 - bh * 0.19, ht, 0], { rot: [0, 0, 0.18], item: 'headrest', parts: [P('headrest foam', { box: [0.07, 0.15, wd * 0.9] }, [0, 0.04, 0], { mat: 'pu', color: col, fill: 0.055, item: 'seat-foam' }), P('headrest cover', { box: [0.075, 0.155, wd * 0.92] }, [0, 0.04, 0], { mat: 'pet', color: col, shell: 0.0012, finish: 'weave', item: 'seat-cover' }), ...[-1, 1].map((sd) => P('headrest post', { cyl: [0.0055, 0.16] }, [0, -0.05, sd * 0.07], { mat: 'steel-low', color: 0xc8ccd2, finish: 'plate', item: 'headrest-post', passes: ['headrest foam', 'headrest cover', 'backrest foam', 'backrest cover'], fixed: 'through its foam, down into guides in the backrest\'s frame' }))] }));
   }
   // down to the floor it is bolted to, on its rails (a car's seat slides on two pairs, typical)
   if (floor !== undefined && !onFloor && s.y - 0.15 - floor > 0.01) {
@@ -806,7 +807,7 @@ const seatPart = (s: Seat, i: number, col: number, floor?: number, room = Infini
       P('upper rail', { box: [0.38, Math.min(0.03, rh * 0.45), 0.03] }, [0, -rh / 2 + Math.min(0.03, rh * 0.45) * 1.5, 0], { ...steel, fill: 0.3, item: 'seat-rail-upper' }),
       ...(rh > 0.08 ? [P('seat riser', { box: [0.3, rh - 0.06, 0.004] }, [0, 0.03, 0], { ...steel, item: 'seat-riser' })] : []),
       ...[-0.15, 0.15].map((x) => P('rail balls', { cyl: [0.004, 0.035] }, [x, -rh / 2 + Math.min(0.03, rh * 0.45), 0], { mat: 'steel-chrome', color: 0xc8ccd2, rot: [PI / 2, 0, 0], item: 'rail-ball', fill: 0.5 }))] }));
-    parts.push(P('seat latch bar', { tube: { r: 0.005, pts: [[0.2, yr - rh / 2 + 0.02, -wd * 0.6], [0.24, yr - rh / 2 + 0.02, 0], [0.2, yr - rh / 2 + 0.02, wd * 0.6]] } }, [0, 0, 0], { ...steel, item: 'seat-latch-bar' }));
+    parts.push(P('seat latch bar', { tube: { r: 0.005, pts: [[0.232, yr - rh / 2 + 0.02, -wd * 0.6], [0.27, yr - rh / 2 + 0.02, 0], [0.232, yr - rh / 2 + 0.02, wd * 0.6]] } }, [0, 0, 0], { ...steel, item: 'seat-latch-bar' }));
   }
   return P(nm, undefined, [s.x, s.y, s.z], { item: s.style === 'bench' || !parts.some((q) => q.item === 'seat-rail') ? 'bench-seat' : 'car-seat', parts });
 };
@@ -846,7 +847,7 @@ function engine(p: Power, alu: boolean, driven = 'rear axle', across = false): P
   const spec = engineSpecOf(p, alu), e = engineBuilt(spec), mid = e.mid, cc = p.cc ?? 1000;
   const parts = e.engine.parts!.map((q) => ({ ...q, at: [(q.at?.[0] ?? 0) - mid[0], (q.at?.[1] ?? 0) - mid[1], (q.at?.[2] ?? 0) - mid[2]] as V3 }));
   const drive: Iface[] = p.torque && p.ratio ? [{ kind: 'drive', role: 'provides', torque: p.torque * p.ratio, to: driven, says: p.driveSays }] : [];
-  return P(`${p.kind === 'diesel' ? 'diesel' : 'petrol'} engine (${cc} cc, ${p.kW} kW)`, undefined, [p.x, p.y ?? 0.4, p.z ?? 0], { parts, item: 'engine-ice', sealed: 'built whole from its parts (engines.ts), fitted as it comes', iface: drive, ...(across ? { rot: [0, PI / 2, 0] as V3 } : {}), says: `${p.says}; ${spec.says}; ${Math.round(e.kg)} kg as its ${e.pieces.toLocaleString('en')} pieces come to${p.kg ? ` (its maker gives ${p.kg} kg)` : ''}${across ? '; set across the car, its gearbox at its left end (typical of front-wheel drive)' : ''}` });
+  return P(`${p.kind === 'diesel' ? 'diesel' : 'petrol'} engine (${cc} cc, ${p.kW} kW)`, undefined, [p.x, p.y ?? 0.4, p.z ?? 0], { parts, item: 'engine-ice', sealed: 'built whole from its parts (engines.ts), fitted as it comes', iface: drive, ...(across ? { rot: [0, -PI / 2, 0] as V3 } : {}), says: `${p.says}; ${spec.says}; ${Math.round(e.kg)} kg as its ${e.pieces.toLocaleString('en')} pieces come to${p.kg ? ` (its maker gives ${p.kg} kg)` : ''}${across ? '; set across the car, its gearbox at its left end (typical of front-wheel drive)' : ''}` });
 }
 
 /** An axle hung from its frame (at the frame's half-width fz and height fy where the axle is), by its kind. */
@@ -854,18 +855,52 @@ function engine(p: Power, alu: boolean, driven = 'rear axle', across = false): P
  *  its axis 140 mm behind the axle, 18 mm over the wheels' centres (the tie rods' and steering arms' height), its housing
  *  out to zH each side. */
 const TIE_Y = 0.018;
-const rackOf = (m: Machine, a: Axle, t: Tyre) => { const cn = cornerOf(t, { ...m.rims, brake: a.brake }, true); return { x: a.x - 0.14, y: t.D / 2 + TIE_Y, zH: a.track / 2 + cn.zA - 0.39 }; };
+/** the brake each wheel of an axle carries (none when its one disc is on the axle) */
+const atWheel = (a: Axle) => (a.brake?.on === 'axle' ? undefined : a.brake);
+/** One disc on a live axle, as a kart's: a hub keyed to the axle just outboard of a bearing hanger, the disc bolted to
+ *  its flange, a fixed caliper of two opposed pistons astride the disc behind the axle, bolted to a bracket welded to the
+ *  hanger. Its disc 8 mm thick, its hub 30 mm long, its caliper 35 mm deep and 60 mm round the disc (typical of a rental
+ *  kart's). `zh` is the hanger's outer face, `sd` the side (-1 left). */
+function axleBrake(a: Axle, t: Tyre, zh: number, sd: number, end: string): Part {
+  const d = a.brake!.d, r = d / 2, y = t.D / 2, th = 0.008, axle = `${end} axle`, x0 = a.x, Z = (z: number) => sd * z, rot: V3 = [sd * PI / 2, 0, 0];
+  const hub0 = zh + 0.006, hubL = 0.03, zd = hub0 + hubL - 0.002 - th / 2, cw = 0.035, ch = 0.06, rc = r - cw / 2 + 0.001, body = 0.02, pad = 0.0085, gap = 0.0005;
+  const zi1 = zd - th / 2 - gap, zo0 = zd + th / 2 + gap, zIn = zi1 - pad - body, zOut = zo0 + pad + body, cx = x0 - rc, iron = { mat: 'al-a380', color: 0x9a1c1c, finish: 'cast' } as const;
+  const halfB = (nm: string, z0: number, z1: number, inner: boolean): Part => P(nm, { box: [cw, ch, z1 - z0] }, [cx, y, Z((z0 + z1) / 2)], { ...iron, one: true, fixed: 'bolted to its other half through the bridge', cuts: [{ r: 0.012, depth: body * 0.75, at: [0, 0, sd * (inner ? 1 : -1) * (z1 - z0) / 2], dir: [0, 0, -sd * (inner ? 1 : -1)] }] });
+  const piston = (nm: string, zf: number, dir: number): Part => P(nm, { cyl: [0.0115, body * 0.7] }, [cx, y, Z(zf + dir * body * 0.35)], { rot: [PI / 2, 0, 0], mat: 'steel-chrome', color: 0xc8ccd2, finish: 'plate', item: 'caliper-piston' });
+  const padOf = (nm: string, zFace: number, dir: number): Part => P(nm, undefined, [0, 0, 0], { item: 'disc-brake-pad', parts: [
+    P('pad friction', { box: [cw * 0.9, ch * 0.85, pad - 0.003] }, [cx, y, Z(zFace + dir * (pad - 0.003) / 2)], { mat: 'friction-composite', color: 0x5a5048, finish: 'texture', item: 'pad-friction' }),
+    P('pad backing plate', { box: [cw * 0.95, ch * 0.9, 0.003] }, [cx, y, Z(zFace + dir * (pad - 0.0015))], { mat: 'steel-low', color: 0x3a3a3a, item: 'pad-backing' })] });
+  return P(`axle brake ${Math.round(d * 1000)} mm`, undefined, [0, 0, 0], { says: `one ${Math.round(d * 1000)} mm disc on the rear axle, its caliper bolted to the frame (typical of a rental kart)`, parts: [
+    P('brake disc hub', { lathe: [[0.015, 0], [0.032, 0], [0.032, hubL - 0.006], [0.05, hubL - 0.006], [0.05, hubL], [0.015, hubL], [0.015, 0]] }, [x0, y, Z(hub0)], { rot, mat: 'al-6061', color: 0x9aa0a6, finish: 'machined', passes: [axle], fixed: 'keyed to the axle and clamped by its two set screws', says: 'a hub keyed to the axle, the disc bolted to its flange (typical)' }),
+    P(`brake disc ${Math.round(d * 1000)} mm`, { lathe: [[0.034, -th / 2], [r, -th / 2], [r, th / 2], [0.034, th / 2], [0.034, -th / 2]] }, [x0, y, Z(zd)], { rot, mat: 'steel-alloy', color: 0x8a8a8a, finish: 'ground', item: 'brake-disc', passes: [axle], joins: ['brake disc hub'], fixed: 'bolted to its hub\'s flange' }),
+    P('brake caliper', undefined, [0, 0, 0], { item: 'brake-caliper-fixed', says: 'a fixed caliper of two opposed pistons (typical of a kart\'s)', parts: [
+      P('caliper body', undefined, [0, 0, 0], { item: 'caliper-body', mat: 'al-a380', parts: [
+        halfB('caliper inner half', zIn, zi1 - pad, true), halfB('caliper outer half', zo0 + pad, zOut, false),
+        P('caliper bridge', { box: [0.012, ch * 0.8, zOut - zIn] }, [x0 - r - 0.0015 - 0.006, y, Z((zIn + zOut) / 2)], { ...iron, one: true, fixed: 'cast as one with its inner half' })] }),
+      piston('caliper piston (inner)', zi1 - pad, -1), piston('caliper piston (outer)', zo0 + pad, 1),
+      padOf('brake pad (inner)', zi1, -1), padOf('brake pad (outer)', zo0, 1)] }),
+    P('caliper bracket', { box: [rc + cw / 2 - 0.034, 0.05, zIn - zh] }, [x0 - (0.034 + rc + cw / 2) / 2, y, Z((zh + zIn) / 2)], { mat: 'steel-low', color: 0x2a2a2a, finish: 'paint', item: 'caliper-bracket', joins: [`hanger housing ${end} ${sd > 0 ? 'right' : 'left'}`, 'caliper inner half'], fixed: 'welded to its bearing hanger, the caliper bolted to it', says: 'a plate welded to the bearing hanger the caliper is bolted to (typical)' })] });
+}
+const rackOf = (m: Machine, a: Axle, t: Tyre) => { const cn = cornerOf(t, { ...m.rims, brake: atWheel(a) }, true); return { x: a.x - 0.14, y: t.D / 2 + TIE_Y, zH: a.track / 2 + cn.zA - 0.39 }; };
 function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, m: Machine): Part[] {
   const out: Part[] = [], y = t.D / 2, k = a.susp ?? 'rigid', dark = 0x2a2a2a;
   for (const s of [-1, 1]) {
     const side = `${end} ${s > 0 ? 'right' : 'left'}`, zf = s * f.z;
-    if (k === 'rigid') out.push(P(`bearing hanger ${side}`, { box: [0.08, Math.max(0.03, Math.abs(f.y - y) + 0.04), 0.05] }, [a.x, (f.y + y) / 2, zf], { mat: 'steel-low', color: dark, finish: 'paint', item: 'bearing 6206', says: 'a hanger holding the axle in a ball bearing, bolted to the frame (typical)' }));
+    if (k === 'rigid') {
+      // (a hanger as a kart's is made: a plate welded down onto its rail, a housing at the axle's height bored for a
+      // 6206 bearing (30 mm bore, the axle's own size; SKF's 30 × 62 × 16), the bearing pressed in and the axle through it;
+      // the housing 8 mm round the bearing's outside (typical))
+      const rO = 0.031, top = y + rO + 0.008, bot = f.y - 0.016, h = top - bot, cy = (top + bot) / 2, axleNm = `${end} axle`;
+      out.push(P(`bearing hanger ${side}`, undefined, [0, 0, 0], { item: 'bearing-hanger', says: 'a hanger holding the axle in a ball bearing, welded to the frame (typical of a rental kart)', parts: [
+        P(`hanger housing ${side}`, { box: [0.08, h, 0.05] }, [a.x, cy, zf], { mat: 'steel-low', color: dark, finish: 'paint', item: 'bearing-hanger-body', joins: [`main rail ${s > 0 ? 'right' : 'left'}`], fixed: 'welded down onto its rail', cuts: [{ r: rO, depth: 0.052, at: [0, y - cy, 0.026], dir: [0, 0, -1] }] }),
+        use('bearing 6206', [a.x, y, zf], { rot: [PI / 2, 0, 0], name: `axle bearing ${side}`, passes: [axleNm], fixed: 'pressed into its hanger, the axle through its inner ring' })] }));
+    }
     else if (k === 'pivot') { if (s > 0) out.push(P(`axle pivot ${end}`, { box: [0.1, Math.max(0.03, Math.abs(f.y - y) + 0.05), 2 * f.z + 0.04] }, [a.x, (f.y + y) / 2, 0], { mat: 'steel-low', color: dark, fill: 0.12, finish: 'paint', says: 'the axle pivots on one pin at its middle, so all four wheels keep the ground (typical)' })); }
     else if (k === 'strut' || k === 'wishbone') {
       // the corner as it is built: a knuckle round the hub's barrel (src cornerOf), its arms to the frame, its spring and
       // damper up to the body or the frame; on a unibody with struts, the subframe the arms pivot on, the steering rack
       // on it with a tie rod to each knuckle, and the anti-roll bar Toyota (and most makers) list, linked to each strut
-      const cn = cornerOf(t, { ...m.rims, brake: a.brake }, true), zW = a.track / 2, X = (dx: number) => (s > 0 ? dx : -dx), shellStrut = k === 'strut' && m.frame === 'shell';
+      const cn = cornerOf(t, { ...m.rims, brake: atWheel(a) }, true), zW = a.track / 2, X = (dx: number) => (s > 0 ? dx : -dx), shellStrut = k === 'strut' && m.frame === 'shell';
       const st = strutOf(a, t, m), zA = cn.zA, armT = cn.armT, tieY = TIE_Y, iron = { mat: 'cast-iron', color: 0x3a3a3a, finish: 'cast' } as const;
       // (the knuckle's points in its own frame, the wheel's: out along +z; its x mirrored on the left, which is turned
       // half round, so what is behind the axle on one side is behind it on the other)
@@ -887,7 +922,7 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
       else kp.push(P('upper ball joint boss', { box: [0.045, 0.03, 0.045] }, [0, up[1], zA], { ...iron, joint: 'ball', passes: [`upper arm ${side}`] }));
       // (its two caliper ears, cast with it: from inside the upright out to where its caliper's carrier legs stand, in
       // the caliper's own frame (cornerOf), mirrored on the left as the wheel's caliper is)
-      if (a.brake?.kind === 'disc' && cn.r > 0) { const ca = s < 0 ? PI - cn.ca0 : cn.ca0, r1 = cn.r + 0.016; for (const e of [-1, 1]) { const yL = e * (cn.ch / 2 + cn.legW / 2); kp.push(P('caliper ear', { box: [r1, cn.legW, armT] }, [Math.cos(ca) * (r1 / 2) - Math.sin(ca) * yL, Math.sin(ca) * (r1 / 2) + Math.cos(ca) * yL, zA], { rot: [0, 0, ca], ...iron })); } }
+      if (atWheel(a)?.kind === 'disc' && cn.r > 0) { const ca = s < 0 ? PI - cn.ca0 : cn.ca0, r1 = cn.r + 0.016; for (const e of [-1, 1]) { const yL = e * (cn.ch / 2 + cn.legW / 2); kp.push(P('caliper ear', { box: [r1, cn.legW, armT] }, [Math.cos(ca) * (r1 / 2) - Math.sin(ca) * yL, Math.sin(ca) * (r1 / 2) + Math.cos(ca) * yL, zA], { rot: [0, 0, ca], ...iron })); } }
       // (its steering arm back from the upright's edge, clear of the hub's barrel through it, at its tie rod's height: the
       // rack's, which runs low enough that its bellows clear the rails over them)
       // (from 3 mm outside the hub's barrel, whatever its size, back to 135 mm behind the axle)
@@ -988,7 +1023,7 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
       // ahead (typical); the beam across between the arms; a spring on a pad on each arm up to the body; a damper behind
       // the axle up to the body. What holds it to the body (the pivots' brackets, the springs' seats, the dampers' mounts,
       // the rails they hang from) is the body's own, fitted to it (rearFrame)
-      const cn = cornerOf(t, { ...m.rims, brake: a.brake, plate: !a.drive }), link = `${end} twist beam`, zc = a.track / 2 + cn.zA - cn.armT / 2, xp = a.x + 0.45, yp = f.y + 0.035, zp = Math.abs(zf);
+      const cn = cornerOf(t, { ...m.rims, brake: atWheel(a), plate: !a.drive }), link = `${end} twist beam`, zc = a.track / 2 + cn.zA - cn.armT / 2, xp = a.x + 0.45, yp = f.y + 0.035, zp = Math.abs(zf);
       // (its last 30 mm square to its sleeve, so its end meets the sleeve along a line, not edge first)
       const P0: V3 = [a.x + 0.045, y, s * zc], P1: V3 = [a.x + 0.045, y, s * (zc - 0.05)], P2: V3 = [xp - 0.068, yp, s * zp], P3: V3 = [xp - 0.0381, yp, s * zp], armAt = (x: number): V3 => { const u = Math.min(1, (x - P1[0]) / (P2[0] - P1[0])); return [x, P1[1] + (P2[1] - P1[1]) * u, P1[2] + (P2[2] - P1[2]) * u]; };
       out.push(tube(`trailing arm ${side}`, 0.025, [P0, P1, P2, P3], 'steel-low', dark, { finish: 'paint', link, fixed: 'welded to its axle carrier and its pivot sleeve', says: 'a trailing arm of its twist-beam axle: pressed steel tube, from its axle carrier at the wheel forward to its pivot (typical)' }));
@@ -1056,7 +1091,7 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
       // (a single-track machine's driven wheel has its disc on the side away from its chain: the rear wheel turned round,
       // as a left wheel is, where the chain runs on the left)
       const away = a.track === 0 && !!a.drive && !!m.chain && m.chain.z < 0;
-      const w = wheel(nm, t, { ...m.rims, ...(t.rim >= 0.49 ? { pattern: a.drive ? 'drive' as Tread : 'rib' as Tread } : {}), brake: a.brake, knobs: off, dual: a.dual, single: a.track === 0, left: s < 0 || away, knuckle: kn0, ...(kn0 && a.track > 0 ? { bore: a.drive ? 0.012 : d0 * 0.35 } : a.susp === 'beam' && a.track > 0 && !a.drive ? { bore: d0 * 0.35, axle: `${a.x === front ? "front" : a.x === rear ? "rear" : `axle ${i + 1}`} twist beam` } : {}) });
+      const w = wheel(nm, t, { ...m.rims, ...(t.rim >= 0.49 ? { pattern: a.drive ? 'drive' as Tread : 'rib' as Tread } : {}), brake: atWheel(a), knobs: off, dual: a.dual, single: a.track === 0, left: s < 0 || away, knuckle: kn0, ...(kn0 && a.track > 0 ? { bore: a.drive ? 0.012 : d0 * 0.35 } : a.susp === 'beam' && a.track > 0 && !a.drive ? { bore: d0 * 0.35, axle: `${a.x === front ? "front" : a.x === rear ? "rear" : `axle ${i + 1}`} twist beam` } : {}) });
       const tr = travelOf(a); out.push({ ...w, at: [a.x, t.D / 2, (s * a.track) / 2], rot: s < 0 || away ? [0, PI, 0] : [0, 0, 0], ...(tr.steer || tr.bump ? { travel: tr } : {}) });
     }
     if (a.track === 0) { const d = 0.022; out.push(P(`${i === 0 ? 'front' : 'rear'} axle`, { cyl: [d / 2, 0.26] }, [a.x, t.D / 2, 0], { rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x9a9a9a, finish: 'plate', iface: [{ kind: 'shaft', role: 'provides', d }], says: 'a solid steel axle through the hub, clamped in the fork or the swingarm (typical: 22 mm front, 25 mm rear)' })); }
@@ -1070,7 +1105,7 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
       // spindle; only a rigid axle runs across from wheel to wheel
       // (a hub in a knuckle ends just through the knuckle's bearing, the drive shaft's outer joint in its boot against the
       // knuckle's inner face; elsewhere at its own length in)
-      const end2 = a.x === front ? 'front' : a.x === rear ? 'rear' : `axle ${i + 1}`, kn = a.susp === 'strut' || a.susp === 'wishbone', cn = cornerOf(t, { ...m.rims, brake: a.brake }, kn), y = t.D / 2, hubIn = a.track / 2 + cn.hubIn, bootAt = kn ? a.track / 2 + cn.zK0 - 0.003 : hubIn, indep = kn || a.susp === 'beam';
+      const end2 = a.x === front ? 'front' : a.x === rear ? 'rear' : `axle ${i + 1}`, kn = a.susp === 'strut' || a.susp === 'wishbone', cn = cornerOf(t, { ...m.rims, brake: atWheel(a) }, kn), y = t.D / 2, hubIn = a.track / 2 + cn.hubIn, bootAt = kn ? a.track / 2 + cn.zK0 - 0.003 : hubIn, indep = kn || a.susp === 'beam';
       // (a rigid axle on a car's or a truck's springs is its own link, rising and rolling on them; its wheels turn on its
       // ends; on a frame with no springs (a kart's), the frame's)
       if (!indep && t.rim >= 0.49) out.push({ ...heavyAxle({ name: nm, x: a.x, y, track: a.track, drive: !!a.drive, shaft: d, carry: { ...(a.susp === 'leaf' || a.susp === 'air' ? { link: `${end2} axle`, joint: 'bearing' as const } : {}) } }), iface: a.drive ? [{ kind: 'drive' as const, role: 'requires' as const, torque: 2 * 3.4 * 2500, says: 'a 40,000 lb tandem\'s axle: its shafts carry its ring gear\'s torque (typical)' }] : [] });
@@ -1097,7 +1132,7 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
         // (a housing round its gears, mostly hollow: about a fifth of its box is iron, typical)
         if (!b && !du) { sh.push(P('differential', { box: [0.22 * k2, 0.18 * k2, 0.2 * k2] }, [a.x, y, 0], { mat: 'cast-iron', color: 0x3a3a3a, fill: 0.2, finish: 'cast', passes: ['drive shaft left', 'drive shaft right', 'inner joint boot'], says: 'its differential, a cast housing round its gears (typical)' })); }
         out.push(P(nm, undefined, [0, 0, 0], { parts: sh, iface: [{ kind: 'drive', role: 'requires', torque: T, says: carries }] }));
-      } else { const bm = a.susp === 'beam', cp = bm ? cornerOf(t, { ...m.rims, brake: a.brake, plate: true }) : cn, zIn = bm ? a.track / 2 + cp.zA - cp.armT / 2 - 0.004 : hubIn - 0.012, zOut = bm ? a.track / 2 + cp.hubFace - 0.01 - 0.006 - 0.002 : hubIn + 0.03;
+      } else { const bm = a.susp === 'beam', cp = bm ? cornerOf(t, { ...m.rims, brake: atWheel(a), plate: true }) : cn, zIn = bm ? a.track / 2 + cp.zA - cp.armT / 2 - 0.004 : hubIn - 0.012, zOut = bm ? a.track / 2 + cp.hubFace - 0.01 - 0.006 - 0.002 : hubIn + 0.03;
         // (a twist beam's: from its flange behind its axle carrier, through the carrier and the dust shield, into its bearing
         // in the hub's barrel, 2 mm short of the hub's closed end)
         out.push(P(nm, undefined, [0, 0, 0], { parts: [-1, 1].map((sd) => tube(`stub spindle ${sd > 0 ? 'right' : 'left'}`, r * 0.7, [[a.x, y, sd * zIn], [a.x, y, sd * zOut]], 'steel-alloy', 0x3a3a3a, { finish: 'paint', joint: 'bearing', ...(bm ? { link: `${end2} twist beam` } : {}), fixed: kn ? 'clamped in its knuckle by its nut' : bm ? 'its flange bolted to its axle carrier through the dust shield' : 'bolted through its backing plate to its arm', iface: [{ kind: 'shaft', role: 'provides', d }], says: kn ? 'the end of the spindle its hub turns on in the knuckle\'s bearing, its nut on it (typical)' : 'the spindle its wheel turns on, its bearing in the hub, bolted through its anchor plate to its arm (typical)' })), ...(a.drive ? { iface: [{ kind: 'drive', role: 'requires', torque: T, says: carries }] } : {}) })); }
@@ -1113,13 +1148,17 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
   if (m.frame === 'tube') {
     const r = 0.016, y = c + r, k5 = m.rails ?? [0.85, 1, 0.7, 0.55, 0.5], rail: [number, number][] = [[fx0, k5[0]], [rear, k5[1]], [front - 0.15, k5[2]], [fx1 - 0.08, k5[3]], [fx1, k5[4]]];
     const railZ = frameZ = (x: number) => { for (let i = 1; i < rail.length; i++) { const [x0, k0] = rail[i - 1]!, [x1, k1] = rail[i]!; if (x <= x1) return half * (k0 + ((k1 - k0) * (x - x0)) / (x1 - x0)); } return half * 0.5; };
+    // (a tube welded to a rail ends coped to it: its end cut to the rail's round, meeting it all round its edge, 0.44 of
+    // the rail's radius in from where the two centrelines cross for a tube of 0.9 its size)
+    const rails = ['main rail left', 'main rail right'], reach = Math.sqrt(r * r - (r * 0.9) ** 2);
     for (const s of [-1, 1]) out.push(tube(`main rail ${s > 0 ? 'right' : 'left'}`, r, rail.map(([x, k], i) => [x, y + (i >= 3 ? (i - 2) * 0.04 : 0), s * half * k] as V3), 'steel-alloy', 0x2a2a2a, { item: 'tube 32x2' }));
-    for (const xx of [rear + 0.02, (front + rear) / 2, front - 0.05]) out.push(tube(`cross tube at ${xx.toFixed(2)} m`, r * 0.9, [[xx, y, -railZ(xx)], [xx, y, railZ(xx)]], 'steel-alloy', 0x2a2a2a, { item: 'tube 28x2' }));
+    // (the cross tubes at the axles just clear of the bearing hangers, 80 mm long round each axle)
+    for (const xx of [rear + 0.06, (front + rear) / 2, front - 0.06]) out.push(tube(`cross tube at ${xx.toFixed(2)} m`, r * 0.9, [[xx, y, -railZ(xx) + reach], [xx, y, railZ(xx) - reach]], 'steel-alloy', 0x2a2a2a, { item: 'tube 28x2', joins: rails, fixed: 'coped to its rails and welded round' }));
     // what the bodywork hangs from: a bracket out from each rail under each pod, the bumpers and the seat
     if (m.upper) for (const sd of [-1, 1]) {
       const yu = m.upper, zu = sd * half * 0.6, xs = [rear - 0.25, rear + 0.15, (front + rear) / 2, front - 0.1, front + 0.25];
       out.push(tube(`upper rail ${sd > 0 ? 'right' : 'left'}`, r, xs.map((xx) => [xx, yu, zu] as V3), 'steel-alloy', 0x2a2a2a, { item: 'tube 32x2' }));
-      for (const xx of [rear + 0.15, front - 0.1]) out.push(tube('frame upright', r, [[xx, y, sd * railZ(xx)], [xx, yu, zu]], 'steel-alloy', 0x2a2a2a, { item: 'tube 32x2' }));
+      for (const xx of [rear + 0.15, front - 0.1]) out.push(tube('frame upright', r, [[xx, y, sd * railZ(xx)], [xx, yu, zu]], 'steel-alloy', 0x2a2a2a, { item: 'tube 32x2', joins: [...rails, `upper rail ${sd > 0 ? 'right' : 'left'}`], fixed: 'coped to its rails and welded round' }));
       if (sd > 0) for (const xx of [rear - 0.25, rear + 0.08, front + 0.25]) out.push(tube('upper cross tube', r * 0.9, [[xx, yu, -half * 0.6], [xx, yu, half * 0.6]], 'steel-alloy', 0x2a2a2a));
     }
     if (m.extras.includes('pods')) for (const sd of [-1, 1]) for (const xx of [rear + rR + 0.12, front - fR - 0.12]) out.push(tube('pod bracket', 0.01, [[xx, y, sd * railZ(xx)], [xx, y + 0.02, sd * (m.W / 2 - 0.13)]], 'steel-low', 0x2a2a2a));
@@ -1178,6 +1217,7 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
   const frameAt = (x: number): { z: number; y: number } => m.frame === 'ladder' ? { z: m.kind === 'truck' ? 0.43 : half * 0.8, y: m.kind === 'truck' ? tyres[0]!.D * 0.8 : m.extras.includes('deck') ? c + 0.21 : Math.max(c, tyres[0]!.D * 0.42) } : m.frame === 'tube' ? { z: frameZ(x), y: c + 0.016 } : m.frame === 'shell' ? { z: inner0 * 0.9, y: c + 0.1 } : { z: 0.12, y: c + 0.3 };
   // (each axle's suspension named as its wheels and axle are: front, rear, or by its place between)
   m.axles.forEach((a, i) => { if (a.track > 0) out.push(...suspension(a, tyres[i]!, frameAt(a.x), a.x === front ? 'front' : a.x === rear ? 'rear' : `axle ${i + 1}`, m)); });
+  m.axles.forEach((a, i) => { if (a.track > 0 && a.brake?.on === 'axle' && a.susp === 'rigid') out.push(axleBrake(a, tyres[i]!, frameAt(a.x).z + 0.025, m.chain && m.chain.z > 0 ? -1 : 1, a.x === front ? 'front' : a.x === rear ? 'rear' : `axle ${i + 1}`)); });
   // panels
   if (m.lines) out.push(...body(m, m.lines));
   // the bulkhead between the engine bay and the cabin, on a unibody car with its power ahead of the cabin
@@ -1315,13 +1355,6 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
     let from: V3 = [gx - L / 2 - 0.06, oy, 0.02];
     drives.forEach((a, i) => { const ty = tyreOf(a.tyre)!.D / 2, to: V3 = [a.x + 0.25, ty + 0.06, 0]; out.push(driveshaft(i === 0 ? 'main driveshaft' : 'inter-axle driveshaft', from, to, true)); from = [a.x - 0.25, ty + 0.06, 0]; });
   }
-  // (its cooling module ahead of a car's or a truck's engine, as close as its fan allows (typical): the radiator its parts
-  // make, its hoses to the engine's water outlet and inlet)
-  if ((m.kind === 'car' || m.kind === 'truck') && m.power.kind !== 'electric') {
-    const pw = powerAt(m), es = engineSize(pw, m.kind !== 'truck').s, ext = across(m) ? es[2] : es[0], truck = m.kind === 'truck', w = truck ? 1.0 : Math.min(0.66, ext * 1.1), h = truck ? 0.95 : 0.42;
-    const at: V3 = [pw.x + ext / 2 + (truck ? 0.17 : 0.11), pw.y! + (truck ? 0.08 : 0.02), 0], rel = (q: V3): V3 => [q[0] - at[0], q[1] - at[1], q[2] - at[2]];
-    out.push({ ...coolingModule({ w, h, truck, to: { outlet: rel([pw.x + ext / 2 - 0.02, pw.y! + es[1] * 0.3, -w / 2 + 0.05]), inlet: rel([pw.x + ext / 2 - 0.02, pw.y! - es[1] * 0.1, -w / 2 + 0.05]) } }), at, sealed: 'built whole from its parts (fittings.ts), fitted as it comes' });
-  }
   const drv = m.seats[0]!;
   if (m.controls === 'wheel') {
     const low = m.kind === 'mower' || m.kind === 'forklift', sx = drv.x + (m.kind === 'kart' ? 0.42 : low ? 0.42 : 0.5), sy = drv.y + (m.kind === 'kart' ? 0.24 : m.kind === 'mower' ? 0.16 : low ? 0.26 : 0.36), sz = drv.z, r = m.kind === 'kart' ? 0.15 : m.kind === 'truck' ? 0.24 : 0.17;
@@ -1379,7 +1412,7 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
         out.push(P('upper universal joint', undefined, Y0, { rot: [0, 0, al], item: 'universal-joint', says: 'the universal joint at its column\'s foot, on the steering shaft turning inside the column (typical)', parts: [
           P('yoke', { box: [0.012, 0.024, 0.024] }, [-0.009, 0, 0], { ...uj, item: 'uj-yoke', fill: 0.6 }), P('yoke', { box: [0.012, 0.024, 0.024] }, [0.009, 0, 0], { ...uj, item: 'uj-yoke', fill: 0.6, rot: [PI / 2, 0, 0] }),
           P('spider', { cyl: [0.004, 0.026] }, [0, 0, 0], { ...uj, item: 'uj-spider' }), P('spider', { cyl: [0.004, 0.026] }, [0, 0, 0], { ...uj, item: 'uj-spider', rot: [PI / 2, 0, 0] }),
-          ...[[0, 0.012, 0], [0, -0.012, 0], [0, 0, 0.012], [0, 0, -0.012]].map((q) => P('bearing cap', { cyl: [0.0055, 0.006] }, q as V3, { ...uj, item: 'uj-cap', ...(q[2] !== 0 ? { rot: [PI / 2, 0, 0] as V3 } : {}) }))] })); }
+          ...[[0, 0.012, 0], [0, -0.012, 0], [0, 0, 0.012], [0, 0, -0.012]].map((q) => P('bearing cap', { cyl: [0.0055, 0.006] }, q as V3, { ...uj, item: 'uj-cap', joins: ['yoke'], fixed: 'pressed into the ear of its yoke', ...(q[2] !== 0 ? { rot: [PI / 2, 0, 0] as V3 } : {}) }))] })); }
       out.push(tube('intermediate shaft', 0.009, [Y0, P2], 'steel-alloy', 0x3a3a3a, { finish: 'paint', link: 'steering wheel', joint: 'universal', fixed: 'splined into its universal joint', says: 'its intermediate shaft: from the column\'s universal joint down through the toe board to the pinion, a universal joint at each end (typical)' }, 0.009));
       const bh = out.find((p) => p.name === 'bulkhead'); for (const q of bh?.parts ?? []) if (/^(toe board|dash panel)$/.test(q.name)) q.passes = [...(q.passes ?? []), 'intermediate shaft'];
     }
@@ -1423,17 +1456,28 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
       if (across(m)) {
         // (its transaxle built from its parts (drivetrain.ts) in the room on the engine's end, its differential on the
         // drive shafts' line: a CVT where its maker fits one, else a six-speed manual)
-        const b = bayOf(m, es2), ax = m.axles[0]!.x, x0 = ax - 0.08, x1 = pw2.x + 0.06, cy = pw2.y! - 0.05, cx = (x0 + x1) / 2, ty = tyreOf(m.axles[0]!.tyre)!.D / 2;
-        const g = transaxle({ kind: m.gearbox ?? 'manual', room: [x1 - x0, 0.35, b.gb[1] - b.gb[0]], diff: [ax - cx, ty - cy], torque: m.power.torque ?? m.power.kW * 1.6, says: m.gearbox === 'cvt' ? 'a CVT: a push belt between two variable pulleys (as its maker fits)' : 'a six-speed manual (typical)' });
+        const b = bayOf(m, es2), ax = m.axles[0]!.x, x0 = ax - 0.08, x1 = pw2.x + 0.06, cy = pw2.y! - 0.05, ty = tyreOf(m.axles[0]!.tyre)!.D / 2;
+        // (its bell housing's face on the engine's block, the drive plate or flywheel inside it: where that plate is as the
+        // engine is built and turned, 4 mm on past its face; its far end where the bay leaves room)
+        const eng = out.find((q) => q.item === 'engine-ice'), side = Math.sign((b.gb[0] + b.gb[1]) / 2 - (pw2.z ?? 0)) || -1, plate = eng ? layout(eng).find((n) => /^(drive plate|flywheel)$/.test(n.p.name) && n.box) : undefined;
+        const near = plate ? (side < 0 ? plate.box!.max.z : plate.box!.min.z) - side * 0.004 : side < 0 ? b.gb[1] : b.gb[0], far = side < 0 ? b.gb[0] : b.gb[1];
+        b.gb = side < 0 ? [far, near] : [near, far];
+        // (as long and as tall as the room the bay gives it and the plate needs, 15 mm round the plate's ring gear, its middle
+        // level with the crank's where it has a plate to cover)
+        const pb = plate?.box, gx0 = pb ? Math.min(x0, pb.min.x - 0.015) : x0, gx1 = pb ? Math.max(x1, pb.max.x + 0.015) : x1, gH = pb ? Math.max(0.3, pb.max.y - pb.min.y + 0.03) : 0.35, gcy = pb ? (pb.min.y + pb.max.y) / 2 : cy, gcx = (gx0 + gx1) / 2;
+        const g = transaxle({ kind: m.gearbox ?? 'manual', room: [gx1 - gx0, gH, b.gb[1] - b.gb[0]], diff: [ax - gcx, ty - gcy], torque: m.power.torque ?? m.power.kW * 1.6, says: m.gearbox === 'cvt' ? 'a CVT: a push belt between two variable pulleys (as its maker fits)' : 'a six-speed manual (typical)' });
         const pass = (p: Part): Part => ({ ...p, passes: ['drive shaft left', 'drive shaft right', 'inner joint boot'], ...(p.parts ? { parts: p.parts.map(pass) } : {}) });
-        out.push({ ...pass(g.gearbox), at: [cx, cy, (b.gb[0] + b.gb[1]) / 2], sealed: 'built whole from its parts (drivetrain.ts), fitted as it comes', says: `${g.gearbox.says}; ${Math.round(g.kg)} kg as its ${g.pieces} pieces come to` });
+        out.push({ ...pass(g.gearbox), at: [gcx, gcy, (b.gb[0] + b.gb[1]) / 2], sealed: 'built whole from its parts (drivetrain.ts), fitted as it comes', says: `${g.gearbox.says}; ${Math.round(g.kg)} kg as its ${g.pieces} pieces come to` });
       }
       else out.push(P('gearbox', { box: [0.45, 0.3, 0.3] }, [pw2.x - es2[0] / 2 - 0.225, pw2.y! - 0.05, 0], { mat: 'al-a380', color: 0x8c8e90, kg: 45, finish: 'cast', says: 'about 45 kg, behind the engine (typical)' }));
       if (hy) { const hp = packToFit(0.5, 0.2, 0.6, '18650', 56); out.push(P(`hybrid battery (${hp.kWh.toFixed(1)} kWh)`, undefined, [rear + 0.6, c + 0.2, 0], { item: 'pack-hybrid', says: `56 groups of ${hp.p} 18650 cells in series under the rear seat (typical of a hybrid's pack)`, parts: [partOf(hp.pack, [0, -0.06, 0], [0, 0, 0], { sealed: 'built whole as it is made (components.ts), fitted as it comes' })] })); }
       // its starting battery: a BCI group 35 (typical of a small car's) on a moulded tray over its gearbox, as front-drive
       // cars carry it, held down by a clamp bar on two J-bolts hooked under the tray
       if (m.kind === 'car' && across(m)) {
-        const b = bayOf(m, es2), ax = m.axles[0]!.x, gx = (ax - 0.08 + pw2.x + 0.06) / 2, gz = (b.gb[0] + b.gb[1]) / 2, top = pw2.y! - 0.05 + 0.175 + 0.012, bat = starterBattery('35'), bs = boundsOfAll(bat).getSize(new THREE.Vector3());
+        const b = bayOf(m, es2), ax = m.axles[0]!.x, gx = (ax - 0.08 + pw2.x + 0.06) / 2, gz0 = (b.gb[0] + b.gb[1]) / 2, top = pw2.y! - 0.05 + 0.175 + 0.012, bat = starterBattery('35'), bs = boundsOfAll(bat).getSize(new THREE.Vector3());
+        // (in from the strut's spring where the two stand side by side: its outer edge 10 mm short of the spring's coils
+        // (their 60 mm round the strut's axis) at the battery's top, where the leaning strut comes furthest in)
+        const st0 = strutOf(m.axles[0]!, tyres[0]!, m), zRoom = st0.zAt(top + bs.y) - 0.06 - 0.01 - bs.z / 2 - 0.015, gz = Math.abs(gx - ax) < bs.x / 2 + 0.015 + 0.07 ? Math.sign(gz0) * Math.min(Math.abs(gz0), zRoom) : gz0;
         out.push(P('battery and its tray', undefined, [gx, top, gz], { item: 'battery-mount', parts: [
           P('battery tray', { box: [bs.x + 0.03, 0.006, bs.z + 0.03] }, [0, 0.003, 0], { item: 'battery-tray', mat: 'pp', color: 0x1a1a1a, finish: 'texture', says: 'moulded, bolted to its bracket on the gearbox' }),
           partOf(bat, [0, 0.006, 0], [0, 0, 0], { item: 'battery-sli', sealed: 'built whole as it is made (components.ts), fitted as it comes' }),
@@ -1446,6 +1490,47 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
       }
     }
     if (!m.mass) out.push(P('wiring harness', undefined, [0, 0.6, 0], { kg: 40, says: 'about 40 kg of copper and insulation (typical)' }), P('climate system', undefined, [0.5, 0.6, 0], { kg: 20, says: 'typical' }), P('trim, carpets and sound deadening', undefined, [0, 0.5, 0], { kg: 60, says: 'typical' }), P('oil, coolant and other fluids', undefined, [0, 0.4, 0], { kg: 15, says: 'typical' }), P('body in white', undefined, [0, 0.5, 0], { kg: 230, says: 'its pressed and welded structure inside its skin: sills, pillars, floor, crossmembers (about 280–350 kg with its panels, typical)' }));
+  }
+  // (after the gearbox and the battery, so its hoses are routed round them too)
+  // (its cooling module ahead of a car's or a truck's engine, as close as its fan allows (typical): the radiator its parts
+  // make, its hoses to the engine's water outlet and inlet)
+  if ((m.kind === 'car' || m.kind === 'truck') && m.power.kind !== 'electric') {
+    const pw = powerAt(m), es = engineSize(pw, m.kind !== 'truck').s, ext = across(m) ? es[2] : es[0], truck = m.kind === 'truck', w = truck ? 1.0 : Math.min(0.66, ext * 1.1), h = truck ? 0.95 : 0.42;
+    // (under the hood's latch where they stand one over the other: the latch on the core support's upper bar, the
+    // radiator's cap 10 mm under it, as a car's are built)
+    const laid = layout(P('so far', undefined, [0, 0, 0], { parts: out })), xr0 = pw.x + ext / 2 + (truck ? 0.17 : 0.11);
+    const latch = laid.filter((n) => /^hood latch$/.test(n.p.name) && n.sub && Math.abs((n.sub.min.x + n.sub.max.x) / 2 - xr0) < 0.12).map((n) => n.sub!.min.y);
+    const yr0 = pw.y! + (truck ? 0.08 : 0.02), yr = latch.length ? Math.min(yr0, Math.min(...latch) - 0.01 - 0.028 - h / 2) : yr0;
+    const at: V3 = [xr0, yr, 0], rel = (q: V3): V3 => [q[0] - at[0], q[1] - at[1], q[2] - at[2]];
+    // (each hose on to the end of the engine's own hose of that name, where the engine has one, as fitted: found where the
+    // engine is placed; otherwise to its end's outlet and inlet)
+    const eng = out.find((q) => q.item === 'engine-ice'), ends = new Map<string, { e: THREE.Vector3; d: THREE.Vector3 }>(), boxes: OBB[] = [];
+    if (eng) for (const n of laid) {
+      const sh = n.p.shape;
+      if (sh && 'tube' in sh && /^(upper|lower) radiator hose$/.test(n.p.name)) { const k = sh.tube.pts.length, e = new THREE.Vector3(...sh.tube.pts[k - 1]!).applyMatrix4(n.m), e0 = new THREE.Vector3(...sh.tube.pts[k - 2]!).applyMatrix4(n.m); ends.set(n.p.name.split(' ')[0]!, { e, d: e.clone().sub(e0).normalize() }); }
+      boxes.push(...n.pieces.map((b) => ({ ...b, name: n.p.name })));
+    }
+    // (each hose from the radiator's tank on the side nearer its end, back behind the fan, then the first way clear of all
+    // that is there (5 mm round it, its own radius 17 mm): straight, across ahead of the engine, or over its top; on to the
+    // engine's hose along that hose's own line)
+    const engTop = eng ? Math.max(...boxes.map((b) => b.c.y + Math.abs(b.u[0].y) * b.h[0] + Math.abs(b.u[1].y) * b.h[1] + Math.abs(b.u[2].y) * b.h[2])) : 0, rh = truck ? 0.03 : 0.017;
+    const route = (which: 'upper' | 'lower', y0: number): V3[] | undefined => {
+      const end = ends.get(which); if (!end) return undefined;
+      const sg = Math.sign(end.e.z - at[2]) || -1, fx = -((truck ? 0.06 : 0.026) / 2 + 0.06), V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z), ways: THREE.Vector3[][] = [];
+      // (out of the tank's end, or its back; behind the fan; then by straight runs along x, y and z in each order, or up over
+      // the engine and down, to a point on the engine's hose's line beyond its end, and along that line on to it)
+      for (const zo of [0, 0.03, 0.06]) for (const lead of [0.05, 0.1, 0.02, 0]) {
+        const zT = sg * (w / 2 - 0.02 + zo), A = V(at[0], at[1] + y0, at[2] + sg * (w / 2 - 0.02)), A2 = V(at[0], at[1] + y0, at[2] + zT), B = V(at[0] + fx - 0.09, at[1] + y0, at[2] + zT), E2 = end.e.clone().addScaledVector(end.d, lead), E1 = end.e.clone().addScaledVector(end.d, 0.03);
+        const head = zo ? [A, A2, B] : [A, B], tail = lead > 0.03 ? [E2, E1, end.e] : [E2, end.e];
+        const ax = (p0: THREE.Vector3, order: string, to: THREE.Vector3) => { const out2: THREE.Vector3[] = []; const c = p0.clone(); for (const k of order) { c[k as 'x' | 'y' | 'z'] = to[k as 'x' | 'y' | 'z']; out2.push(c.clone()); } return out2; };
+        for (const o of ['xyz', 'xzy', 'yxz', 'yzx', 'zxy', 'zyx']) ways.push([...head, ...ax(B, o, E2), ...tail.slice(1)]);
+        for (const yT of [engTop + rh + 0.015, engTop + rh + 0.04]) for (const o of ['xz', 'zx']) { const up2 = V(B.x, yT, B.z), mid = ax(up2, o, V(E2.x, yT, E2.z)); ways.push([...head, up2, ...mid, E2, ...tail.slice(1)]); }
+      }
+      const near = boxes.filter((b) => (b as OBB & { name?: string }).name !== `${which} radiator hose` );
+      const w0 = clearPath(ways.map((w1) => w1.filter((q, i) => i === 0 || q.distanceTo(w1[i - 1]!) > 1e-6)), near, rh + 0.005, 0.012); return w0 ? w0.map((v) => rel([v.x, v.y, v.z])) : undefined;
+    };
+    const up = route('upper', h / 2 - 0.04), lo = route('lower', -h / 2 + 0.04);
+    out.push({ ...coolingModule({ w, h, truck, to: { outlet: up ?? rel([pw.x + ext / 2 - 0.02, pw.y! + es[1] * 0.3, -w / 2 + 0.05]), inlet: lo ?? rel([pw.x + ext / 2 - 0.02, pw.y! - es[1] * 0.1, -w / 2 + 0.05]), ...(up || lo ? { joins: ['upper radiator hose', 'lower radiator hose'] } : {}) } }), at, sealed: 'built whole from its parts (fittings.ts), fitted as it comes' });
   }
   // its front structure, fitted to all that is in its bay, under its floor and in its skins, now that they are made
   if (m.lines && m.frame === 'shell' && m.kind === 'car') out.push(...frontFrame(m, out, tyres));
@@ -1528,7 +1613,7 @@ export const MACHINES: Machine[] = [
   {
     id: 'rental kart', short: 'rental kart', name: 'rental go-kart (typical)', kind: 'kart', source: 'typical of rental karts: tyres 10x4.50-5 and 11x7.10-5; a Honda GX270 at its own size (Honda)',
     L: 1.85, W: 1.35, H: 0.62, clearance: 0.035, frame: 'tube', rails: [0.45, 0.5, 0.95, 0.6, 0.5],
-    axles: [{ x: 0.52, track: 1.05, tyre: '10x4.50-5', steer: true, susp: 'rigid' }, { x: -0.52, track: 1.12, tyre: '11x7.10-5', drive: true, brake: { kind: 'disc', d: 0.2 }, susp: 'rigid' }],
+    axles: [{ x: 0.52, track: 1.05, tyre: '10x4.50-5', steer: true, susp: 'rigid' }, { x: -0.52, track: 1.12, tyre: '11x7.10-5', drive: true, brake: { kind: 'disc', d: 0.2, on: 'axle' }, susp: 'rigid' }],
     seats: [{ x: -0.12, z: -0.18, y: 0.08, style: 'kart' }],
     power: { kind: 'single', cc: 270, kW: 6.3, x: -0.22, z: 0.22, y: 0.29, bore: 0.077, stroke: 0.058, starter: 'recoil', box: [0.428, 0.422, 0.381], kg: 25, torque: 19.1, ratio: 6, says: 'a Honda GX270: 270 cc, 6.3 kW (8.5 hp) at 3,600 rpm, 19.1 N·m at 2,500 rpm, 381 × 428 × 422 mm, 25 kg dry (Honda)', driveSays: 'its 19.1 N·m through a chain of about 6 to 1 (typical of rental karts: a 12-tooth clutch to a 72-tooth axle sprocket)' },
     controls: 'wheel', rims: { style: 'split', spokes: 6, mat: 'al-a380', lugs: 3, lug: 8, color: 0xc8ccd2 }, extras: ['nose', 'pods'], chain: { teeth: [12, 72], pitch: 0.009525, at: [-0.12, -0.12], z: 0.22 + 0.381 * 0.2 + 0.004, item: 'chain 35', says: 'a #35 chain, 12 to 72 teeth (typical of rental karts)' }, mass: 150, massSays: 'typical of a rental kart without its driver', color: 0x1f4fa8,
