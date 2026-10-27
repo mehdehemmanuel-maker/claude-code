@@ -1,8 +1,8 @@
 # Engineering at any scale as nodes
 
 Status: plan, not built. Base: commit `14e3283`.
-Design target: 1,000,000 components, 100,000 unique, solved, checked, changed and understood without hand edits.
-End state: a person states what they want; the system does the rest, asks only the questions that matter, and hands back a buildable, proven design.
+Target: 1,000,000 components, 100,000 unique, solved, checked, changed and understood without hand edits.
+End state: a person states what they want; the system does the rest, asks only what matters, and returns a buildable, proven design.
 
 ## Contents
 
@@ -12,26 +12,30 @@ End state: a person states what they want; the system does the rest, asks only t
 4. [Autopilot loop](#4-autopilot-loop)
 5. [Scale model](#5-scale-model)
 6. [Node contract](#6-node-contract)
-7. [Glossary](#7-glossary)
-8. [Existing base](#8-existing-base)
-9. [Node groups](#9-node-groups)
-10. [Node index](#10-node-index)
-11. [Steps](#11-steps)
-12. [Measures](#12-measures)
-13. [Limits](#13-limits)
-14. [Starting state](#14-starting-state)
+7. [Engine features (not nodes)](#7-engine-features-not-nodes)
+8. [Glossary](#8-glossary)
+9. [Existing base](#9-existing-base)
+10. [Node layers](#10-node-layers)
+11. [Node index](#11-node-index)
+12. [Merges in this plan](#12-merges-in-this-plan)
+13. [Merges in the existing library](#13-merges-in-the-existing-library)
+14. [Steps](#14-steps)
+15. [Measures](#15-measures)
+16. [Limits](#16-limits)
+17. [Starting state](#17-starting-state)
 
 ## 1. Rules
 
 1. No hand-typed positions or sizes.
 2. Parts state needs; solvers place, route and size, and give the reason.
 3. Every figure from a law, standard or source; otherwise labelled typical or estimate.
-4. Unsolved → named task with its cause.
-5. Never solve flat: solve by hierarchy, interface and unique part.
-6. Every finding has an automatic repair, or it is a named gap in the repair library.
-7. Every figure is checked: units, conservation, invariants.
-8. Ask the person only what changes the answer most.
-9. Each step shown before the next.
+4. Every finding has an automatic repair, or is a named gap in the repair library.
+5. Every figure is checked: units, conservation, invariants.
+6. Never solve flat: solve by hierarchy, interface and unique part.
+7. Ask the person only what changes the answer most.
+8. One node per ability: a node another node does better is merged into it.
+9. Unsolved → named task with its cause.
+10. Each step shown before the next.
 
 ## 2. Pipeline
 
@@ -52,11 +56,11 @@ intent → requirements → functions → architecture → space claims → layo
 
 | The person | The system |
 | --- | --- |
-| Says, sketches, photographs, or points at a product | Turns it into requirements, each with its source or assumption |
-| Answers at most a few questions | Asks only those with the highest value to the answer |
-| Watches it build | Generates, checks and repairs in the autopilot loop, live in 3D |
-| Picks among trade-offs | Offers the Pareto front with costs |
-| Grabs and moves anything | Re-solves around the choice and says what resists |
+| Says, sketches, photographs or points at a product | Requirements, each with source or assumption |
+| Answers a few questions | Asks only those with the highest value |
+| Watches it build | Autopilot loop, live in 3D |
+| Picks among trade-offs | Pareto front with costs |
+| Grabs and moves anything | Re-solves around the choice; names what resists |
 | Asks anything | Answers from the system and the knowledge graph |
 | Exports | CAD, drawings, toolpaths, prints, instructions, wiring, permits, orders |
 
@@ -64,36 +68,34 @@ intent → requirements → functions → architecture → space claims → layo
 
 ```
 generate → check (rules, fields, budgets, contracts, codes, invariants) → findings
-→ repair (strategy library, cheapest first) → re-check → keep if better
-→ until clean, or blocked → blocked findings become named tasks with their cause
+→ repair (library, cheapest first) → re-check → keep if better
+→ until clean or blocked → blocked findings become named tasks with their cause
 ```
 
 | Part | Does |
 | --- | --- |
-| Repair library | For each finding kind, ordered strategies: move, reroute, shield, resize, bore, join, swap part, change choice, rebalance budget, renegotiate contract |
+| Repair library | Per finding kind, ordered strategies: move, reroute, shield, resize, bore, join, swap part, change choice, rebalance budget, renegotiate contract |
 | Fidelity on demand | Cheap checks first; full physics only where margins are thin |
-| Learning | Which repair worked for which finding is kept and tried first next time |
-| Guard | A repair that makes anything worse elsewhere is undone |
-| Stop | Clean, blocked, or out of budget; always reported |
+| Learning | Repairs that worked are tried first next time |
+| Guard | A repair that worsens anything is undone |
+| Stop | Clean, blocked or out of budget; always reported |
 
 ## 5. Scale model
 
-How 1,000,000 parts become small problems:
-
-| Lever | Effect | Node |
+| Lever | Effect | Where |
 | --- | --- | --- |
 | Hierarchy | About 5 levels of about 16 children: no solve sees more than about 100 things | `system.tree`, `system.partition` |
-| Interfaces as contracts | A module solves against its neighbours' contracts, not their insides | `interface.contract` |
-| Solve each unique once | 100,000 unique solves, not 1,000,000; placements share results | `cache.content` |
-| Variety reduction | Near-duplicates merged into families: unique count falls | `dedupe.parts`, `family.extract` |
-| Spatial index | Clash and field queries in O(n log n), not O(n²) | `index.spatial`, `clash.broad` |
-| Incremental | A change re-solves its module and the contracts it touches | `change.impact`, `solve.incremental` |
-| Parallel | Modules solved at once on workers or agents | `solve.distribute`, `agent.team` |
-| Budgets | Mass, power, heat, cost, volume roll up and are allocated down | `budget.*` |
-| Queries over browsing | Ask the system, do not scroll it | `query` |
-| Streaming | Load and draw only what is in view, by level of detail | `stream.load`, `lod.auto` |
+| Interfaces as contracts | Modules solve against neighbours' contracts, not their insides | `interface.contract` |
+| Solve each unique once | 100,000 solves, not 1,000,000 | Content cache |
+| Variety reduction | Near-duplicates merged into families | `similar`, `family.extract`, `standardize` |
+| Spatial index | Clash and field queries in O(n log n) | Spatial index, broad phase |
+| Incremental | A change re-solves its module and touched contracts | `change.impact`, incremental runs |
+| Parallel | Modules solved at once | `distribute` |
+| Budgets | Allocated down, rolled up | `budget` |
+| Queries | Ask, do not scroll | `query` |
+| Streaming | Load and draw only what is in view | Streaming, level of detail |
 
-Figures in this table are estimates for planning.
+Figures in this table are planning estimates.
 
 ## 6. Node contract
 
@@ -102,628 +104,431 @@ Every node, existing and new:
 | Requirement | Meaning |
 | --- | --- |
 | Units | Typed ports with units, converted on wires |
-| Lists | Maps over lists of any length without change |
+| Lists | Maps over lists of any length |
 | References | Takes shared assemblies by reference; never copies |
-| Cached | Keyed by content hash; same inputs, no rerun |
+| Cached | Keyed by content hash |
 | Incremental | Reruns only on changed inputs |
-| Streaming | Gives partial results while running; cancellable |
+| Streaming | Partial results while running; cancellable |
 | Explained | Every output carries its reason |
 | Sourced | Every figure carries its source or label |
-| Confidence | Every output carries how sure it is and why |
-| Scoped | Runs on a whole system, a module, a selection or a query result |
-| Tested | Own tests; passes the gauntlet |
-| Budgeted | Reports its time and memory; respects a limit |
-| Self-checked | Units, conservation and invariants verified on its outputs |
-| Versioned | Every output kept by version; any past state can be replayed |
-| Shared | Many people and agents can edit at once without conflicts |
-| Repairable | Its failures name a repair strategy or a gap |
+| Confidence | Every output carries how sure it is |
+| Scoped | Runs on a system, module, selection or query result |
+| Self-checked | Units, conservation, invariants on its outputs |
+| Versioned | Any past state replayable |
+| Repairable | Failures name a repair strategy or a gap |
+| Tested | Own tests, generated property tests; passes the gauntlet |
+| Budgeted | Reports time and memory; respects a limit |
 
-## 7. Glossary
+## 7. Engine features (not nodes)
+
+Built into the runner, renderer or app so every node gets them; never placed on a board.
+
+| Feature | Was planned as | Lives in |
+| --- | --- | --- |
+| Content cache | `cache.content` | `dataflow.ts` |
+| Incremental re-solve | `solve.incremental`, `change.propagate` | `dataflow.ts` |
+| Spatial index | `index.spatial` | `make/space.ts` |
+| Broad phase | `clash.broad` | `make/rules.ts` |
+| Streaming | `stream.load` | `space3d.ts` |
+| Level of detail | `lod.auto` | `space3d.ts` |
+| Fidelity escalation | `fidelity.escalate` | `auto.loop`, checks |
+| Repair learning, guard | `repair.learn`, `repair.guard` | `auto.loop` |
+| Property tests | `test.generate` | `gauntlet.ts` |
+| Task list | `debt.queue` | Existing `task`, `unknown.queue` |
+| Progress | `progress.track` | Existing events (`on.event`) |
+| Shared editing | `collab.live` | App (CRDT) |
+| Comments in 3D | `review.pin` | App |
+| Drag and re-solve | `live.drag` | `space.ts`, `dock3d.ts` |
+| VR review | `live.review` | `space.ts` |
+
+## 8. Glossary
 
 | Term | Meaning |
 | --- | --- |
-| Need | What a part requires: mount, connect, keep-out, face, access |
-| Field | Map of one quantity over space: heat, motion, reach, air, wet, noise, load |
-| Keep-out | Required distance from material limits, motion or code; hard or soft |
-| Envelope | Volume occupied; moving envelope includes everything swept |
-| Space claim | Zone given to one subsystem before detailing |
-| Budget | Allowance of mass, power, heat, cost, volume or data, allocated down and rolled up |
-| Margin | Budget left; tracked per level |
-| Bid | Subsystem's claim on contested space: need and cost of elsewhere |
-| Choice | Discrete decision (gearbox side, exhaust side, radiator count) |
-| Solver | Places from needs, fields, claims: search for choices, optimisation for positions |
-| Reason | What holds a result where it is |
-| Trade-off | Ranked option with its cost when something will not fit |
-| Interface contract | What a module promises its neighbours: ports, envelope, loads, heat, budget |
-| Frozen interface | A contract that may not change without approval |
-| Module | A subtree solved as a unit against its contracts |
-| Partition | Split of a system into modules by coupling strength |
-| Unique part | A distinct design; placements of it share one solve |
-| Family | Unique parts merged as one parametric design |
-| Variant | A configuration of options over one design (150 % BOM) |
-| Baseline | A frozen, named version of the whole system |
-| Impact | Everything a change reaches, through contracts and fields |
-| Route | Path of a hose, wire, pipe, duct, road or data link |
-| Harness | Wires routed as one bundle with branches, clips, connectors |
-| Connective parts | Brackets, clips, shields, ducts, harnesses; generated |
-| Topology optimisation | Shape grown from loads |
-| Removal path | Clear way in and out of a part's place |
-| FMEA | Failure modes and effects per part, rolled up per system |
-| Tolerance stack | Summed manufacturing variation at worst case |
-| Requirement | A stated need of the whole, traced to the parts and tests that meet it |
-| Precedent | Sourced placement from real products |
-| Seed | Solved thing kept as one reusable node |
-| Surrogate | Fast learned approximation of a slow solve |
-| Reduced-order model | A system model small enough to simulate the whole at once |
-| Spatial index | Tree over space for fast nearest and overlap queries |
-| Broad phase | Cheap pass that finds candidate clashes before exact checks |
-| Content hash | Identity of a result from its inputs; the cache key |
-| Hand coordinate | Position typed into code; target 0 |
-| Intent | What the person wants, in any form: words, sketch, photo, reference product, spec sheet |
 | Autopilot | The generate–check–repair loop that runs until clean or blocked |
-| Repair strategy | An automatic fix for one kind of finding |
-| Fidelity ladder | Rule of thumb → law → surrogate → full simulation → physical test, climbed only as needed |
-| Invariant | Something that must always hold: mass conserved, energy balanced, units consistent |
-| Knowledge graph | One linked store of parts, materials, processes, laws, standards, suppliers and precedent |
-| Value of information | How much an answer would change the design; decides what to ask |
-| Node synthesis | Drafting a missing node from a specification, proven by the gauntlet before use |
+| Bid | A subsystem's claim on contested space: need and cost of elsewhere |
+| Broad phase | Cheap pass that finds candidate clashes before exact checks |
+| Budget | Allowance of mass, power, heat, cost, volume, data or CO₂, allocated down and rolled up |
+| Choice | Discrete decision (gearbox side, exhaust side, radiator count) |
+| Confidence | How sure a result is, and why |
+| Connective parts | Brackets, clips, supports, shields, ducts, harnesses; generated |
+| Content hash | Identity of a result from its inputs; the cache key |
+| CRDT | Data structure that lets many editors change one design at once without conflicts |
 | Digital twin | The design linked to the built thing's measurements |
-| GD&T | Geometric dimensioning and tolerancing on drawings |
-| CRDT | A data structure that lets many editors change one design at once without conflicts |
+| Engine feature | A capability of the runner, renderer or app that every node gets; not a node |
+| Envelope | Volume occupied; the moving envelope includes everything swept |
+| Family | Unique parts merged into one parametric design |
+| Fidelity ladder | Rule of thumb → law → surrogate → full simulation → physical test |
+| Field | Map of one quantity over space |
 | Finding | Rules-checker problem: interference, clearance, heat |
+| FMEA | Failure modes and effects per part, rolled up |
+| GD&T | Geometric dimensioning and tolerancing on drawings |
+| Hand coordinate | Position typed into code; target 0 |
+| Harness | Wires routed as one bundle with branches, clips, connectors |
+| Intent | What the person wants, in any form |
+| Interface contract | What a module promises: ports, envelope, loads, heat, budget |
+| Invariant | What must always hold: mass conserved, energy balanced, units consistent |
+| Keep-out | Required distance from material limits, motion or code; hard or soft |
+| Knowledge graph | One linked store of parts, materials, processes, laws, standards, suppliers, precedent |
+| Lock | A pinned result, frozen contract or baseline; changes need approval |
+| Margin | Budget or safety factor left; tracked per level |
+| Module | A subtree solved as a unit against its contracts |
+| Need | What a part requires: mount, connect, keep-out, face, access, group |
+| Partition | Split of a system into modules by coupling |
+| Precedent | Sourced placement from real products |
+| Reason | What holds a result where it is |
+| Reduced model | A smaller model of a system: reduced-order or learned |
+| Removal path | Clear way in and out of a part's place |
+| Repair strategy | An automatic fix for one kind of finding |
+| Requirement | A stated need of the whole, traced to parts and checks |
+| Route | Path of a wire, hose, pipe, duct, drain, road or data link |
+| Seed | Solved thing kept as one reusable node |
+| Space claim | Zone given to one subsystem before detailing |
+| Spatial index | Tree over space for fast nearest and overlap queries |
+| Tolerance stack | Summed manufacturing variation, worst case or statistical |
+| Trade-off | Ranked option with its cost when something will not fit |
+| Unique part | A distinct design; its placements share one solve |
+| Value of information | How much an answer would change the design; decides what to ask |
+| Variant | A configuration of options over one design |
+| Version | A branch, trial or baseline of the whole design |
 
-## 8. Existing base
+## 9. Existing base
 
 | Have | Where | Becomes |
 | --- | --- | --- |
-| Typed ports, units, incremental runs, groups as blocks | `blocks.ts`, `dataflow.ts` | Node contract base |
-| Shared placement, instancing | `assembly.ts`, `space3d.ts` | `cache.content`, `stream.load`, `lod.auto` |
-| Iface, Port | `kits.ts`, `mate.ts` | `need.connect`, `need.mount`, `interface.contract` |
-| Interference, clearance, heat gate | `make/rules.ts` | Exact checks after `clash.broad` |
-| Oriented-box layout | `make/space.ts` | Solver geometry |
-| `clearPath` | `make/space.ts` | Replaced by `route.path` |
-| Swept room, servo | `make/critic.ts`, `motion.ts` | `field.motion` |
-| Load cases, strength | `loads.ts` | `size.bolt`, `make.bracket`, `field.load` |
-| Jolt physics | `sim.ts` | Mount rock, assembly paths, `sim.system` |
+| Typed ports, units, incremental runs, groups as blocks | `blocks.ts`, `dataflow.ts` | Node contract base, content cache |
+| Shared placement, instancing | `assembly.ts`, `space3d.ts` | Streaming, level of detail |
+| Iface, Port | `kits.ts`, `mate.ts` | `need`, `interface.contract` |
+| Interference, clearance, heat gate | `make/rules.ts` (`check.rules`) | Exact checks after the broad phase |
+| Oriented-box layout | `make/space.ts` | Solver geometry, spatial index |
+| `clearPath` | `make/space.ts` | Replaced by `route` |
+| Swept room, servo | `make/critic.ts`, `motion.ts` | `field` (motion) |
+| Load cases, strength, stress sweep | `loads.ts`, `sweep.range` | `size.select`, `make.bracket`, `study` |
+| Jolt physics | `sim.ts` | Mount rock, removal paths, `sim.system` |
 | Explode | `view/kit3d.ts` | `check.assembly` |
-| Inventory to elements | `inventory.ts`, `breakdown.ts` | BOM, `dedupe.parts`, `cost.estimate` |
-| Families from standards | `families.ts`, `components.ts` | `family.extract`, `standardize` |
+| Inventory to elements, breakdown | `inventory.ts`, `breakdown.ts` | `kg.store`, `cost.estimate` |
+| Families from standards | `families.ts`, `components.ts` | `family.extract`, `standardize`, `size.select` |
+| Enclosure maker | `makers.ts` (`make.enclosure`) | Upgraded in place |
 | Seeds | `seeds.ts` | `layout.seed` |
-| Sourced notes | `research.ts` | `precedent.mine`, `req.capture` |
-| Gauntlet | `gauntlet.ts` | `gauntlet.solver`, `bench.scale` |
+| Sourced notes | `research.ts` | `kg.learn` |
+| Gauntlet, unknown queue, tasks | `gauntlet.ts` | Upgraded `gauntlet`, task list |
 
-## 9. Node groups
+## 10. Node layers
 
-### U1 Needs
+Twelve layers, in the order a design flows through them. 65 nodes.
+
+### A. Describe
 | Node | Does | Options |
 | --- | --- | --- |
-| `need.mount` | Mount surface, orientation, fastener pattern | Any face, rail, floor, wall; isolated or rigid; serviceable or permanent |
-| `need.connect` | Port and max distance | Mechanical, fluid, electrical, data, thermal; length limits; flexible or rigid link |
-| `need.keepout` | Distance from heat, motion, water, noise, people | Hard or soft; directional; time-varying; from material limits or code |
-| `need.face` | Required facing | Exact, within a cone, or away from |
-| `need.access` | Who reaches it, how often | Hand, tool, robot, person; daily to never; with what removed first |
-| `need.group` | Parts that must stay together or apart | Same module, same zone, separated for redundancy |
-| `infer.needs` | Needs read from a hand-placed build | Confidence per need; review list for low confidence |
+| `intent` | Requirements from any input | Words, sketch, reference product, spec sheet, standard, document; assumptions listed |
+| `intent.clarify` | The fewest questions with the most value | Stops when answers stop changing the design |
+| `import` | Outside data into parts | CAD (STEP, IGES, STL, glTF), scan, photo, drawing, bill of materials |
+| `recognise` | Identify standard parts and products from geometry or photos | By catalogue; confidence shown |
+| `need` | What a part requires | Mount, connect, keep-out, face, access, group; hard or soft; directional; time-varying |
+| `infer.needs` | Needs read from a hand-placed build | Confidence per need; review list |
+| `req.trace` | Requirement → part → check, and coverage | Gaps listed; per baseline |
 
-### U2 Fields
-| Node | Map | Options |
+### B. Know
+| Node | Does | Options |
 | --- | --- | --- |
-| `field.heat` | Temperature | Conduction, convection, radiation; steady or transient; surrogate for live |
-| `field.motion` | Moving envelopes | Kinematic sweep, mount rock, thermal growth, deflection under load |
-| `field.reach` | Hand and tool reach | Body size range, tool kinds, posture |
-| `field.air` | Airflow | Ram air, fan, natural draft; surrogate for live |
-| `field.wet` | Spray, drip, flood | Leak sources, gravity, splash |
-| `field.signal` | Electrical noise | Sources by frequency; shielding |
-| `field.load` | Load paths | Static, dynamic, crash |
-| `field.sound` | Noise at listeners | Sources, paths, absorbers |
-| `field.light` | Daylight and lighting | Sun path, fixtures |
-| `field.combine` | Weighted sum of fields as one cost | Per need; per priority profile |
+| `kg.store` | One linked store of parts, materials, processes, laws, standards, suppliers, precedent | Sourced links only |
+| `kg.learn` | New facts and precedent from research and twins | Source and confidence each; gaps to the unknown queue |
+| `query` | Ask the system and the graph | Words or filters; any result shown as a view |
+| `similar` | Find alike or unlike | Near-duplicates, anomalies, commonality; by shape, size, material, function |
+| `layout.seed` | Solved layouts kept and reused | Nearest match, adapted |
+
+### C. Sense
+| Node | Does | Options |
+| --- | --- | --- |
+| `field` | Map of one quantity over space | Heat, motion (sweep, mount rock, thermal growth, deflection), reach, sight, air, wet, signal, load, sound, light; steady or transient; surrogate for live |
+| `field.combine` | Fields as one weighted cost | Per need; per priority profile |
 | `field.show` | Draw any field in 3D | Slices, isosurfaces, glow on parts |
 
-### U3 Space claims and choices
+### D. Decide
 | Node | Does | Options |
 | --- | --- | --- |
-| `space.claim` | Top-down zoning | Fixed, flexible, shared zones |
-| `space.bid` | Resolve contested space | By need, by cost, by priority |
-| `choose.options` | Search discrete choices | Exhaustive for few; tree search for many; seeded by precedent |
-| `choose.pareto` | All best trade-offs, none dominated | Any objectives: mass, cost, service, noise |
+| `space.claim` | Top-down zoning | Fixed, flexible, shared |
+| `choose.options` | Search discrete choices | Exhaustive or tree search; seeded by precedent |
+| `tradeoff` | Pareto front, bids for space, ranked options with costs | Auto-pick by profile or ask |
+| `place.solve` | Place everything | Global or local; anytime; incremental |
+| `lock` | Pin results, freeze contracts and baselines | Approval by role |
 
-### U4 Solve
+### E. Connect
 | Node | Does | Options |
 | --- | --- | --- |
-| `place.solve` | Place all | Global or local; anytime; incremental |
-| `place.why` | Reason per result | Binding constraints, their sources |
-| `place.whatif` | Uncommitted trial | Side by side with current |
-| `place.negotiate` | Ranked trade-offs | Auto-pick by profile or ask |
-| `place.lock` | Pin a result the person chose | Lock position, choice or contract |
+| `route` | Single runs or whole networks | Wire, hose, pipe, duct, drain, road, data; bundling into harnesses; slopes; bend radius; redundancy |
+| `size.line` | Size any run | Wire (current, length, drop, derating), hose and pipe (flow, pressure), duct (airflow, velocity), drain (fixture units) |
+| `size.select` | Catalogue item by duty | Battery, motor, fan, bolt, bearing, pump |
+| `size.section` | Members by load | Beams, columns, tubes; deflection limit |
 
-### U5 Routing
+### F. Make
 | Node | Does | Options |
 | --- | --- | --- |
-| `route.path` | Cost path | Hose, wire, pipe, duct, road, data; bend radius; surface-following |
-| `route.bundle` | Harness bundling | By signal class, segregation rules |
-| `route.clip` | Clips and supports | By weight, vibration, code spacing |
-| `route.slope` | Required falls | Drains, condensate, fuel return |
-| `route.network` | Whole networks at once | Power, data, plumbing, HVAC, roads; redundancy |
-
-### U6 Sizing
-| Node | Sizes | From |
-| --- | --- | --- |
-| `size.wire` | Gauge | Current, length, voltage drop, bundle derating, temperature |
-| `size.hose` | Bore | Flow, pressure, temperature |
-| `size.pipe` | Bore | Flow, pressure, code |
-| `size.duct` | Section | Airflow, velocity, noise |
-| `size.bolt` | Diameter, grade | Joint load, fatigue |
-| `size.beam` | Section | Span, load, deflection limit |
-| `size.battery` | Group or pack | Load profile, climate |
-| `size.motor` | Frame | Torque, speed, duty |
-| `size.drain` | Pipe, slope | Fixture units |
-| `size.fan` | Size, speed | Flow, pressure, noise |
-
-### U7 Generated parts
-| Node | Makes | Options |
-| --- | --- | --- |
-| `make.bracket` | Bracket from load | Pressed, cast, machined, printed |
-| `make.shield` | Heat or splash shield | From field; material by temperature |
-| `make.harness` | Harness | Trunk, branches, clips, connectors, conduit, labels |
-| `make.duct` | Duct | Between ends, by airflow |
-| `make.enclosure` | Housing round contents | Process, sealing, cooling |
+| `make.bracket` | Bracket grown from its load | Pressed, cast, machined, printed |
+| `make.shield` | Heat or splash shield from the field | Material by temperature |
 | `make.mount` | Isolation mount | Stiffness from vibration target |
+| `make.support` | Clips, hangers, supports along routes | Spacing by weight, vibration, code |
+| `make.enclosure` | Housing round contents (existing, upgraded) | Process, sealing, cooling |
+| `family.extract` | Uniques merged into parametric families | Parameters inferred |
+| `standardize` | Specials swapped for standard parts | From catalogues |
 
-### U8 People
+### G. Check
 | Node | Does | Options |
 | --- | --- | --- |
-| `body.model` | Body sizes | Published percentiles, posture, clothing |
-| `check.reach` | Reachability | Seated, standing, kneeling |
-| `check.sight` | Sightlines | Obstruction, glare |
-| `check.circulation` | Walkways, swings, turning | To code |
-| `check.ergonomics` | Force, posture, repetition | Task by task |
-
-### U9 Lifecycle
-| Node | Does | Options |
-| --- | --- | --- |
-| `check.assembly` | Build order, removal paths | Manual, robot, line |
-| `check.service` | Service minutes | Per task, per interval |
-| `check.failure` | FMEA | Per part, rolled up |
-| `check.tolerance` | Worst-case and statistical stack | Monte Carlo |
-| `check.reliability` | Life and failure rates | From sourced rates |
-
-### U10 Precedent
-| Node | Does | Options |
-| --- | --- | --- |
-| `precedent.mine` | Sourced placements as priors | By product class |
-| `layout.seed` | Solved layouts reused | Nearest match, adapted |
-
-### U11 Domains
-| Domain | Places | By |
-| --- | --- | --- |
-| Chips | Blocks, cells | Area, heat, timing |
-| Boards | Components, traces | Heat, signal, noise |
-| Machines | Bays, robots, appliances | All fields |
-| Vehicles | Systems, harnesses, plumbing | All fields, crash |
-| Buildings | Rooms, fixtures, services, structure | Codes, circulation, daylight, loads |
-| Plants | Equipment, piping, cable trays | Process flow, safety distance, access |
-| Land | Buildings, roads, drainage, utilities | Slope, sun, wind, flood |
-| Software | Services on machines, data paths | Latency, redundancy, cost |
-
-### U12 Proof
-| Node | Does | Options |
-| --- | --- | --- |
-| `gauntlet.solver` | Adversarial variants | Random, worst-case, from history |
-| `score.layout` | Layout score | Hand coordinates, findings, time, similarity |
-| `bench.scale` | Synthetic 1,000,000 / 100,000 system end to end | Time, memory, findings per stage |
-
-### U13 Live
-| Node | Does | Options |
-| --- | --- | --- |
-| `live.drag` | Drag in 3D or VR; re-solve on release | Fields shown; resisting constraint named |
-| `live.review` | Walk through the system in VR with findings pinned | By module, by risk |
-
-### U14 Hierarchy and interfaces
-| Node | Does | Options |
-| --- | --- | --- |
-| `system.tree` | System → subsystem → module → assembly → part | Any depth |
-| `system.partition` | Split into modules by coupling | Spatial, functional, by team |
-| `interface.contract` | Ports, envelope, loads, heat, budget a module promises | Versioned |
-| `interface.freeze` | Lock a contract | Approval to change |
+| `check.invariants` | Units, conservation, declared truths | Per subsystem |
+| `margin` | Budget and safety-factor margins | Ranked thinnest first; warn below threshold |
+| `check.tolerance` | Tolerance stacks | Worst case, statistical, Monte Carlo |
+| `check.failure` | Failure modes, rates, effects | Per part, rolled up |
+| `check.assembly` | Build and service sequences, removal paths, minutes | Manual, robot, line |
+| `check.human` | Reach, sight, posture, force | Body sizes from published percentiles |
+| `comply.code` | Codes and standards | Building codes, ISO, SAE, NEC; circulation |
 | `interface.check` | Every contract met on both sides | Per change |
 
-### U15 Scale engine
-| Node | Does | Options |
-| --- | --- | --- |
-| `index.spatial` | Tree over all parts | Rebuilt incrementally |
-| `clash.broad` | Candidate clashes for exact check | By module, by zone |
-| `cache.content` | Results keyed by content hash | Shared across systems |
-| `solve.incremental` | Re-solve only what a change reaches | With `change.impact` |
-| `solve.distribute` | Modules solved in parallel | Workers, remote machines |
-| `stream.load` | Load what is in view or in query | By level of detail |
-| `lod.auto` | Stand-ins with error bounds | Per view distance |
-
-### U16 Variety reduction
-| Node | Does | Options |
-| --- | --- | --- |
-| `dedupe.parts` | Near-duplicate unique parts found | By shape, size, material, function |
-| `family.extract` | Uniques merged into parametric families | Parameters inferred |
-| `standardize` | Swap specials for standard parts | From catalogues |
-| `commonality` | Share of parts reused across products | Per level |
-
-### U17 Configuration and change
-| Node | Does | Options |
-| --- | --- | --- |
-| `config.variants` | Options over one design | Rules between options |
-| `change.impact` | Everything a change reaches | Through contracts, fields, budgets |
-| `change.propagate` | Apply a change and re-solve | Dry run first |
-| `version.branch` | Branch, diff, merge designs | 3D diff |
-| `baseline.freeze` | Named frozen version | Compare any two |
-
-### U18 Budgets
-| Node | Does | Options |
-| --- | --- | --- |
-| `budget.allocate` | Split a budget down the tree | By need, by history |
-| `budget.rollup` | Sum up the tree | Mass, power, heat, cost, volume, data, CO₂ |
-| `budget.margin` | Margin per level | Warn below threshold |
-
-### U19 Requirements and compliance
-| Node | Does | Options |
-| --- | --- | --- |
-| `req.capture` | Requirements from words or documents | Each with source |
-| `req.trace` | Requirement → part → test | Gaps listed |
-| `req.verify` | Coverage of requirements by checks | Per baseline |
-| `comply.code` | Standards and regulations checked | Building codes, ISO, SAE, NEC |
-
-### U20 Query and understanding
-| Node | Does | Options |
-| --- | --- | --- |
-| `query` | Ask the system in words or filters | "Fasteners within 50 mm of anything over 200 °C" |
-| `view.slice` | One view of the system | By system, zone, supplier, risk, change |
-| `summarize` | Plain description of any subtree | Any length |
-| `anomaly.find` | What is unlike its siblings | Shape, mass, cost, findings |
-| `compare` | Two designs, two baselines | Differences ranked |
-
-### U21 Orchestration
-| Node | Does | Options |
-| --- | --- | --- |
-| `work.split` | Divide work by module | To workers or agents |
-| `agent.team` | Agents each owning a module, negotiating at contracts | Parallel |
-| `progress.track` | What is solved, open, blocked | Live |
-
-### U22 System simulation
-| Node | Does | Options |
-| --- | --- | --- |
-| `sim.system` | The whole as connected models | Mechanical, thermal, electrical, fluid, control |
-| `sim.reduce` | Reduced-order models from detailed ones | Error bound |
-| `surrogate.train` | Learned stand-ins from solves | Retrained on drift |
-| `sim.sensitivity` | Which inputs matter most | Ranked |
-| `sim.uncertainty` | Spread of results from spread of inputs | Monte Carlo |
-
-### U23 Manufacture and supply
-| Node | Does | Options |
-| --- | --- | --- |
-| `process.select` | Process per part | By volume, material, tolerance |
-| `cost.estimate` | Cost per part and rolled up | Material, process, assembly |
-| `supply.match` | Catalogue or supplier per part | Lead time, region |
-| `line.plan` | Assembly line stations and order | Takt time |
-
-### U24 Risk
-| Node | Does | Options |
-| --- | --- | --- |
-| `risk.register` | Risks with likelihood and effect | From FMEA, budgets, margins |
-| `risk.rank` | Top risks across the system | By effect × likelihood |
-
-### U25 Intent
-| Node | Does | Options |
-| --- | --- | --- |
-| `intent.words` | Requirements from plain words | Any language; assumptions listed |
-| `intent.sketch` | Requirements and layout from a sketch | 2D or 3D, in VR |
-| `intent.photo` | A product recognised from photos | Parts and sizes estimated, labelled |
-| `intent.reference` | Start from a named real product | Researched, sourced |
-| `intent.spec` | Requirements from a spec sheet or standard | Clause by clause |
-| `intent.clarify` | The fewest questions with the most value | Stops when answers stop changing the design |
-
-### U26 Import and recognition
-| Node | Does | Options |
-| --- | --- | --- |
-| `import.cad` | Read CAD files into parts | STEP, IGES, STL, glTF |
-| `import.scan` | Point clouds and meshes into parts | Segmented, fitted to primitives |
-| `import.drawing` | Drawings into parts | Dimensions, tolerances |
-| `import.bom` | Bills of materials into the tree | Matched to the inventory |
-| `recognise.part` | Identify a standard part from its geometry | Bolts, bearings, connectors by catalogue |
-
-### U27 Autopilot
+### H. Repair
 | Node | Does | Options |
 | --- | --- | --- |
 | `auto.loop` | Generate, check, repair until clean or blocked | Time and cost budget; live view |
 | `repair.library` | Strategies per finding kind | Ordered by cost; extensible |
-| `repair.learn` | Keeps which repair worked where | Tried first next time |
-| `repair.guard` | Undoes repairs that worsen anything | Across all checks |
-| `debt.queue` | Blocked findings as named tasks | Cause, owner, cheapest next move |
 
-### U28 Knowledge graph
+### I. Scale and change
 | Node | Does | Options |
 | --- | --- | --- |
-| `kg.store` | One linked store of parts, materials, processes, laws, standards, suppliers, precedent | Sourced links only |
-| `kg.ask` | Questions over the graph | Words or filters |
-| `kg.gap` | What the graph does not know | Into the unknown queue |
-| `kg.learn` | New facts from research and twins | Each with source and confidence |
+| `system.tree` | System → subsystem → module → assembly → part | Any depth |
+| `system.partition` | Modules by coupling | Spatial, functional, by team |
+| `interface.contract` | What a module promises | Versioned |
+| `budget` | Allocate down, roll up | Mass, power, heat, cost, volume, data, CO₂ |
+| `distribute` | Divide work and solve in parallel | Workers, machines, agents |
+| `change.impact` | Everything a change reaches | Through contracts, fields, budgets |
+| `version` | Branch, trial, merge, baseline | 3D diff via `compare` |
+| `config.variants` | Options over one design | Rules between options |
 
-### U29 Fidelity and verification
+### J. Simulate
 | Node | Does | Options |
 | --- | --- | --- |
-| `fidelity.escalate` | Climb the fidelity ladder where margins are thin | Per check |
-| `check.units` | Dimensional consistency everywhere | On every wire |
-| `check.conservation` | Mass, energy, charge, flow balanced | Per subsystem |
-| `check.invariants` | Declared truths always hold | Per node |
-| `check.margin` | Every safety factor against its standard | Ranked thinnest first |
+| `sim.system` | The whole as connected models | Mechanical, thermal, electrical, fluid, control |
+| `model.reduce` | Smaller models of slow ones | Reduced-order or learned; error bound |
+| `study` | How results move with inputs (upgrade of `sweep.range`) | Sweep, sensitivity, uncertainty |
 
-### U30 Self-extension
+### K. Deliver
 | Node | Does | Options |
 | --- | --- | --- |
-| `node.synthesize` | Draft a missing node from a specification | Through the gauntlet before use |
-| `node.improve` | Rewrite slow or failing nodes | Kept only if the gauntlet improves |
-| `test.generate` | Property tests for any node | From its units and invariants |
+| `process.select` | Process per part | By volume, material, tolerance |
+| `cost.estimate` | Cost per part, rolled up | Material, process, assembly |
+| `supply.match` | Catalogue or supplier per part | Lead time, region |
+| `line.plan` | Assembly line stations and order | Takt time |
+| `export` | Out to reality | CAD, drawings with GD&T, toolpaths, prints, instructions, wiring, permits, orders |
+| `lifetime` | Over its whole life | Cost, energy, CO₂, end-of-life recovery |
+| `twin` | The built thing's measurements | Ingest, predict wear and maintenance |
 
-### U31 Output to reality
-| Node | Gives | Options |
-| --- | --- | --- |
-| `export.cad` | CAD files | STEP, glTF |
-| `export.drawing` | Drawings with GD&T | Per part, per assembly |
-| `export.toolpath` | Machining paths | CNC, by process |
-| `export.print` | Sliced prints | By printer and material |
-| `export.instructions` | Assembly steps with pictures | From `check.assembly` order |
-| `export.wiring` | Wiring diagrams and pinouts | From the harness |
-| `export.permit` | Permit drawings and schedules | By jurisdiction's code |
-| `export.order` | Orders to suppliers | From `supply.match` |
-
-### U32 Twin
+### L. Explain and prove
 | Node | Does | Options |
 | --- | --- | --- |
-| `twin.ingest` | Measurements from the built thing | Sensors, logs, scans |
-| `twin.compare` | As-built against design | Deviations ranked |
-| `twin.predict` | Wear and maintenance ahead | From measured use |
+| `explain` | Why any result is as it is | Reasons, summaries, reports; beginner to specialist |
+| `compare` | Any two: designs, versions, as-built | Differences ranked |
+| `risk` | Risk register, ranked | From failures, budgets, margins |
+| `score` | Layout and design scores | Hand coordinates, findings, time, similarity to real products |
+| `gauntlet` | Existing gauntlet, upgraded | Adversarial variants; 1,000,000 / 100,000 benchmark |
+| `node.synthesize` | Draft or improve a node from a specification | Through the gauntlet before use |
 
-### U33 Collaboration
-| Node | Does | Options |
+## 11. Node index
+
+| Node | Layer | Step |
 | --- | --- | --- |
-| `collab.live` | Many people and agents editing at once | Conflict-free |
-| `review.pin` | Comments pinned to parts in 3D | Threads, status |
-| `approve.change` | Approval on frozen contracts and baselines | Roles |
+| `auto.loop` | H | 3 |
+| `budget` | I | 9 |
+| `change.impact` | I | 10 |
+| `check.assembly` | G | 7 |
+| `check.failure` | G | 7 |
+| `check.human` | G | 12 |
+| `check.invariants` | G | 7 |
+| `check.tolerance` | G | 7 |
+| `choose.options` | D | 5 |
+| `compare` | L | 14 |
+| `comply.code` | G | 12 |
+| `config.variants` | I | 10 |
+| `cost.estimate` | K | 13 |
+| `distribute` | I | 15 |
+| `explain` | L | 2 |
+| `export` | K | 14 |
+| `family.extract` | F | 10 |
+| `field` | C | 1 |
+| `field.combine` | C | 1 |
+| `field.show` | C | 1 |
+| `gauntlet` | L | 15 |
+| `import` | A | 11 |
+| `infer.needs` | A | 9 |
+| `intent` | A | 11 |
+| `intent.clarify` | A | 11 |
+| `interface.check` | G | 9 |
+| `interface.contract` | I | 9 |
+| `kg.learn` | B | 5 |
+| `kg.store` | B | 11 |
+| `layout.seed` | B | 5 |
+| `lifetime` | K | 13 |
+| `line.plan` | K | 13 |
+| `lock` | D | 10 |
+| `make.bracket` | F | 6 |
+| `make.enclosure` | F | 6 |
+| `make.mount` | F | 6 |
+| `make.shield` | F | 6 |
+| `make.support` | F | 6 |
+| `margin` | G | 7 |
+| `model.reduce` | J | 13 |
+| `need` | A | 1 |
+| `node.synthesize` | L | 15 |
+| `place.solve` | D | 2 |
+| `process.select` | K | 13 |
+| `query` | B | 8 |
+| `recognise` | A | 11 |
+| `repair.library` | H | 3 |
+| `req.trace` | A | 11 |
+| `risk` | L | 13 |
+| `route` | E | 4 |
+| `score` | L | 5 |
+| `sim.system` | J | 13 |
+| `similar` | B | 8 |
+| `size.line` | E | 4 |
+| `size.section` | E | 12 |
+| `size.select` | E | 2 |
+| `space.claim` | D | 5 |
+| `standardize` | F | 10 |
+| `study` | J | 13 |
+| `supply.match` | K | 13 |
+| `system.partition` | I | 9 |
+| `system.tree` | I | 9 |
+| `tradeoff` | D | 5 |
+| `twin` | K | 14 |
+| `version` | I | 10 |
 
-### U34 Lifetime
-| Node | Does | Options |
+65 nodes, 0 built.
+
+## 12. Merges in this plan
+
+159 planned nodes → 65 nodes and 15 engine features. Each row: what was deleted, what does it better, why.
+
+| Deleted | Kept | Why |
 | --- | --- | --- |
-| `lifetime.cost` | Cost of ownership | Purchase, energy, service, disposal |
-| `lifetime.energy` | Energy over its life | Use profile |
-| `lifetime.co2` | Emissions over its life | Sourced factors |
-| `end.recover` | Disassembly and recycling at end of life | Material recovery share |
+| `intent.words`, `intent.sketch`, `intent.reference`, `intent.spec`, `req.capture` | `intent` | One reader of wants; input kind is an option |
+| `intent.photo`, `import.cad`, `import.scan`, `import.drawing`, `import.bom` | `import` | One reader of outside data; format is an option |
+| `recognise.part` | `recognise` | Also recognises whole products |
+| `need.mount`, `need.connect`, `need.keepout`, `need.face`, `need.access`, `need.group` | `need` | One need node; kind is an option |
+| `req.verify` | `req.trace` | Coverage is a trace summed |
+| `kg.ask`, `view.slice` | `query` | A view is a query result shown |
+| `precedent.mine` | `kg.learn` | Precedent is one kind of learned fact |
+| `kg.gap` | Existing `unknown.queue` | Already does it |
+| `dedupe.parts`, `anomaly.find`, `commonality` | `similar` | Alike and unlike are one similarity search |
+| `field.heat`, `field.motion`, `field.reach`, `field.air`, `field.wet`, `field.signal`, `field.load`, `field.sound`, `field.light` | `field` | Same machinery; quantity is an option |
+| `choose.pareto`, `place.negotiate`, `space.bid` | `tradeoff` | All rank options by cost |
+| `place.lock`, `interface.freeze`, `baseline.freeze`, `approve.change` | `lock` | All pin something behind approval |
+| `place.whatif`, `version.branch` | `version` | A trial is an uncommitted branch |
+| `place.why`, `explain.level`, `report.generate`, `summarize` | `explain` | All say why or what, at a chosen depth |
+| `route.path`, `route.bundle`, `route.slope`, `route.network`, `make.harness`, `make.duct` | `route` | A harness and a duct are routed runs |
+| `route.clip` | `make.support` | Supports are generated parts |
+| `size.wire`, `size.hose`, `size.pipe`, `size.duct`, `size.drain` | `size.line` | Every run sized from what flows in it |
+| `size.battery`, `size.motor`, `size.fan`, `size.bolt` | `size.select` | All pick a catalogue item by duty |
+| `size.beam` | `size.section` | Covers columns and tubes too |
+| `check.units`, `check.conservation` | `check.invariants` | Units and conservation are invariants |
+| `budget.margin`, `check.margin` | `margin` | Budget left and safety factor are both margins |
+| `check.reliability` | `check.failure` | Rates belong with modes and effects |
+| `check.service` | `check.assembly` | Service is a removal sequence |
+| `body.model`, `check.reach`, `check.sight`, `check.ergonomics` | `check.human` | One check over body models |
+| `check.circulation` | `comply.code` | Circulation is a code requirement |
+| `budget.allocate`, `budget.rollup` | `budget` | Down and up are one tree pass |
+| `solve.distribute`, `work.split`, `agent.team` | `distribute` | Workers and agents are both workers |
+| `sim.reduce`, `surrogate.train` | `model.reduce` | Learned or reduced-order, same purpose |
+| `sim.sensitivity`, `sim.uncertainty` | `study` | Both sweep inputs; extends existing `sweep.range` |
+| `export.cad`, `export.drawing`, `export.toolpath`, `export.print`, `export.instructions`, `export.wiring`, `export.permit`, `export.order` | `export` | Format is an option |
+| `lifetime.cost`, `lifetime.energy`, `lifetime.co2`, `end.recover` | `lifetime` | One pass over the life |
+| `twin.ingest`, `twin.predict` | `twin` | One link to the built thing |
+| `twin.compare` | `compare` | As-built is one more thing to compare |
+| `risk.register`, `risk.rank` | `risk` | A register is kept ranked |
+| `score.layout` | `score` | Scores more than layouts |
+| `gauntlet.solver`, `bench.scale` | `gauntlet` | Modes of the existing gauntlet |
+| `node.improve` | `node.synthesize` | Improving is synthesizing from the old node |
+| `make.enclosure` (planned) | Existing `make.enclosure` | Upgrade, not a second |
+| `cache.content`, `solve.incremental`, `change.propagate`, `index.spatial`, `clash.broad`, `stream.load`, `lod.auto`, `fidelity.escalate`, `repair.learn`, `repair.guard`, `test.generate`, `debt.queue`, `progress.track`, `collab.live`, `review.pin`, `live.drag`, `live.review` | Engine features (section 7) | Every node gets them; not placed on boards |
 
-### U35 Explain
-| Node | Does | Options |
+## 13. Merges in the existing library
+
+Candidates among the built blocks. Each is confirmed by the gauntlet's unique gate and a search of saved boards before
+deletion; saved boards are rewired to the kept node and the old id kept as an alias.
+
+| Delete | Keep | Why |
 | --- | --- | --- |
-| `report.generate` | A design report from the system | Requirements, decisions, proofs, risks |
-| `explain.level` | Any result explained at a chosen depth | Beginner to specialist |
+| `math.sum` | `math.stats` | Statistics gives the sum and more |
+| `in.slider` | `in.number` | A slider is a number with a range |
+| `check.limit` | `logic.compare` | A limit check is a comparison with words |
+| `array.line`, `array.circle` | `array.grid` → `array` | One pattern node: line, ring, grid |
+| `place.points` | `place` | Lists map automatically (node contract) |
+| `rows.set` | `rows.recode` | Setting a column is a one-rule recode |
+| `read.block`, `read.item` | `read` | One reader by id |
+| `gauntlet.gate` | `gauntlet.run` | One gate is a run with one gate chosen |
+| `unknown.sort` | `unknown.queue` | The queue is given sorted |
+| `research.ref` | `research.notes` | A stored reference is compiled notes |
+| `check.turning` | `check.rules` | Through a motion is an option |
+| `piece` | `explode` | One piece is an explode filtered |
+| `hole` | `bore` | Holes made where things pass; no typed positions |
+| `make.coil` | `make.wound` | A spring is wire wound with no former |
+| `vehicle.model` | `vehicle` | A real model is a preset of axles, power and frame |
+| `sweep.range` | `study` | Upgraded |
+| `view.gauge`, `view.chart`, `view.table` | `view.show` → `view` | Display style is an option |
+| `ai.ask` | `search.web`, `query` | Cannot run (its relay is gone) |
 
-## 10. Node index
+## 14. Steps
 
-| Node | Group | Step |
-| --- | --- | --- |
-| `agent.team` | U21 | 17 |
-| `anomaly.find` | U20 | 8 |
-| `approve.change` | U33 | 15 |
-| `auto.loop` | U27 | 3 |
-| `baseline.freeze` | U17 | 10 |
-| `bench.scale` | U12 | 17 |
-| `body.model` | U8 | 12 |
-| `budget.allocate` | U18 | 9 |
-| `budget.margin` | U18 | 9 |
-| `budget.rollup` | U18 | 9 |
-| `cache.content` | U15 | 8 |
-| `change.impact` | U17 | 10 |
-| `change.propagate` | U17 | 10 |
-| `check.assembly` | U9 | 7 |
-| `check.circulation` | U8 | 12 |
-| `check.conservation` | U29 | 7 |
-| `check.ergonomics` | U8 | 12 |
-| `check.failure` | U9 | 7 |
-| `check.invariants` | U29 | 7 |
-| `check.margin` | U29 | 7 |
-| `check.reach` | U8 | 12 |
-| `check.reliability` | U9 | 7 |
-| `check.service` | U9 | 7 |
-| `check.sight` | U8 | 12 |
-| `check.tolerance` | U9 | 7 |
-| `check.units` | U29 | 7 |
-| `choose.options` | U3 | 5 |
-| `choose.pareto` | U3 | 5 |
-| `clash.broad` | U15 | 8 |
-| `collab.live` | U33 | 15 |
-| `commonality` | U16 | 10 |
-| `compare` | U20 | 8 |
-| `comply.code` | U19 | 13 |
-| `config.variants` | U17 | 10 |
-| `cost.estimate` | U23 | 13 |
-| `debt.queue` | U27 | 3 |
-| `dedupe.parts` | U16 | 10 |
-| `end.recover` | U34 | 13 |
-| `explain.level` | U35 | 15 |
-| `export.cad` | U31 | 14 |
-| `export.drawing` | U31 | 14 |
-| `export.instructions` | U31 | 14 |
-| `export.order` | U31 | 14 |
-| `export.permit` | U31 | 14 |
-| `export.print` | U31 | 14 |
-| `export.toolpath` | U31 | 14 |
-| `export.wiring` | U31 | 14 |
-| `family.extract` | U16 | 10 |
-| `fidelity.escalate` | U29 | 7 |
-| `field.air` | U2 | 1 |
-| `field.combine` | U2 | 1 |
-| `field.heat` | U2 | 1 |
-| `field.light` | U2 | 1 |
-| `field.load` | U2 | 1 |
-| `field.motion` | U2 | 1 |
-| `field.reach` | U2 | 1 |
-| `field.show` | U2 | 1 |
-| `field.signal` | U2 | 1 |
-| `field.sound` | U2 | 1 |
-| `field.wet` | U2 | 1 |
-| `gauntlet.solver` | U12 | 17 |
-| `import.bom` | U26 | 11 |
-| `import.cad` | U26 | 11 |
-| `import.drawing` | U26 | 11 |
-| `import.scan` | U26 | 11 |
-| `index.spatial` | U15 | 8 |
-| `infer.needs` | U1 | 9 |
-| `intent.clarify` | U25 | 11 |
-| `intent.photo` | U25 | 11 |
-| `intent.reference` | U25 | 11 |
-| `intent.sketch` | U25 | 11 |
-| `intent.spec` | U25 | 11 |
-| `intent.words` | U25 | 11 |
-| `interface.check` | U14 | 9 |
-| `interface.contract` | U14 | 9 |
-| `interface.freeze` | U14 | 9 |
-| `kg.ask` | U28 | 11 |
-| `kg.gap` | U28 | 11 |
-| `kg.learn` | U28 | 11 |
-| `kg.store` | U28 | 11 |
-| `layout.seed` | U10 | 5 |
-| `lifetime.cost` | U34 | 13 |
-| `lifetime.energy` | U34 | 13 |
-| `line.plan` | U23 | 13 |
-| `live.drag` | U13 | 17 |
-| `live.review` | U13 | 17 |
-| `lod.auto` | U15 | 8 |
-| `make.bracket` | U7 | 6 |
-| `make.duct` | U7 | 6 |
-| `make.enclosure` | U7 | 6 |
-| `make.harness` | U7 | 4 |
-| `make.mount` | U7 | 6 |
-| `make.shield` | U7 | 6 |
-| `need.access` | U1 | 1 |
-| `need.connect` | U1 | 1 |
-| `need.face` | U1 | 1 |
-| `need.group` | U1 | 1 |
-| `need.keepout` | U1 | 1 |
-| `need.mount` | U1 | 1 |
-| `node.improve` | U30 | 16 |
-| `node.synthesize` | U30 | 16 |
-| `place.lock` | U4 | 2 |
-| `place.negotiate` | U4 | 2 |
-| `place.solve` | U4 | 2 |
-| `place.whatif` | U4 | 2 |
-| `place.why` | U4 | 2 |
-| `precedent.mine` | U10 | 5 |
-| `process.select` | U23 | 13 |
-| `progress.track` | U21 | 17 |
-| `query` | U20 | 8 |
-| `recognise.part` | U26 | 11 |
-| `repair.guard` | U27 | 3 |
-| `repair.learn` | U27 | 3 |
-| `repair.library` | U27 | 3 |
-| `report.generate` | U35 | 15 |
-| `req.capture` | U19 | 13 |
-| `req.trace` | U19 | 13 |
-| `req.verify` | U19 | 13 |
-| `review.pin` | U33 | 15 |
-| `risk.rank` | U24 | 13 |
-| `risk.register` | U24 | 13 |
-| `route.bundle` | U5 | 4 |
-| `route.clip` | U5 | 4 |
-| `route.network` | U5 | 4 |
-| `route.path` | U5 | 4 |
-| `route.slope` | U5 | 4 |
-| `score.layout` | U12 | 5 |
-| `sim.reduce` | U22 | 13 |
-| `sim.sensitivity` | U22 | 13 |
-| `sim.system` | U22 | 13 |
-| `sim.uncertainty` | U22 | 13 |
-| `size.battery` | U6 | 2 |
-| `size.beam` | U6 | 4 |
-| `size.bolt` | U6 | 4 |
-| `size.drain` | U6 | 4 |
-| `size.duct` | U6 | 4 |
-| `size.fan` | U6 | 4 |
-| `size.hose` | U6 | 4 |
-| `size.motor` | U6 | 4 |
-| `size.pipe` | U6 | 4 |
-| `size.wire` | U6 | 4 |
-| `solve.distribute` | U15 | 8 |
-| `solve.incremental` | U15 | 8 |
-| `space.bid` | U3 | 5 |
-| `space.claim` | U3 | 5 |
-| `standardize` | U16 | 10 |
-| `stream.load` | U15 | 8 |
-| `summarize` | U20 | 8 |
-| `supply.match` | U23 | 13 |
-| `surrogate.train` | U22 | 13 |
-| `system.partition` | U14 | 9 |
-| `system.tree` | U14 | 9 |
-| `test.generate` | U30 | 16 |
-| `twin.compare` | U32 | 14 |
-| `twin.ingest` | U32 | 14 |
-| `twin.predict` | U32 | 14 |
-| `version.branch` | U17 | 10 |
-| `view.slice` | U20 | 8 |
-| `work.split` | U21 | 17 |
-
-159 nodes, 0 built.
-
-## 11. Steps
-
-| Step | Scope | Groups | Output |
+| Step | Scope | Nodes | Output |
 | --- | --- | --- | --- |
-| 1 | Needs and fields on the Corolla bay | U1, U2 | Field images |
-| 2 | Solver places the battery | U4, `size.battery` | Position, reason, trade-offs |
-| 3 | Autopilot with the first repair strategies on the Corolla | U27 | Findings cleared without hand edits |
-| 4 | Routing and sizing: cables, hoses, harness | U5, U6, `make.harness` | Routes, sizes |
-| 5 | Claims, choices, precedent; full bay re-solve | U3, U10, `score.layout` | Findings vs 262 |
-| 6 | Generated parts | U7 | Brackets, shields, ducts, mounts |
-| 7 | Lifecycle, fidelity, verification | U9, U29 | Order, minutes, FMEA, stacks, margins |
-| 8 | Scale engine and queries | U15, U20 | Times on the city and Cascadia |
-| 9 | Hierarchy, contracts, budgets; hand-placed builds converted | U14, U18, `infer.needs` | Hand coordinates left |
-| 10 | Variety reduction, configuration, change | U16, U17 | Unique count, change impact |
-| 11 | Intent, import, knowledge graph | U25, U26, U28 | A design from words; a scanned part recognised |
-| 12 | People and other domains | U8, U11 | A house, a board, a plant solved |
-| 13 | Requirements, system simulation, manufacture, risk, lifetime | U19, U22, U23, U24, U34 | Trace, costs, risks, lifetime |
-| 14 | Output to reality and twin | U31, U32 | Exports; as-built comparison |
-| 15 | Collaboration and explanation | U33, U35 | Shared editing; a design report |
-| 16 | Self-extension | U30 | A node drafted and proven by the gauntlet |
-| 17 | Orchestration, live, proof at scale | U12, U13, U21 | 1,000,000 / 100,000 benchmark |
+| 0 | Library merges (section 13) | — | Fewer blocks, boards rewired, gate green |
+| 1 | Needs and fields on the Corolla bay | `need`, `field`, `field.combine`, `field.show` | Field images |
+| 2 | Solver places the battery | `place.solve`, `size.select`, `explain` | Position, reason, trade-offs |
+| 3 | Autopilot on the Corolla | `auto.loop`, `repair.library` | Findings cleared without hand edits |
+| 4 | Routing and sizing | `route`, `size.line` | Cables, hoses, harness |
+| 5 | Full bay re-solve | `space.claim`, `choose.options`, `tradeoff`, `kg.learn`, `layout.seed`, `score` | Findings vs 262 |
+| 6 | Generated parts | `make.*` | Brackets, shields, mounts, supports |
+| 7 | Checks | `check.invariants`, `margin`, `check.tolerance`, `check.failure`, `check.assembly` | Margins, stacks, FMEA, order, minutes |
+| 8 | Scale features and queries | Engine features, `query`, `similar` | Times on the city and Cascadia |
+| 9 | Hierarchy and budgets; hand-placed builds converted | `system.*`, `interface.*`, `budget`, `infer.needs` | Hand coordinates left |
+| 10 | Variety and change | `family.extract`, `standardize`, `version`, `change.impact`, `config.variants`, `lock` | Unique count, change impact |
+| 11 | Describe | `intent`, `intent.clarify`, `import`, `recognise`, `kg.store`, `req.trace` | A design from words; a scan recognised |
+| 12 | People and other domains | `check.human`, `comply.code`, `size.section` | A house, a board, a plant |
+| 13 | Simulate and deliver | `sim.system`, `model.reduce`, `study`, `process.select`, `cost.estimate`, `supply.match`, `line.plan`, `lifetime`, `risk` | Costs, risks, lifetime |
+| 14 | Out to reality | `export`, `twin`, `compare` | Exports; as-built comparison |
+| 15 | Proof at scale | `distribute`, `node.synthesize`, `gauntlet` | 1,000,000 / 100,000 benchmark |
 
-## 12. Measures
+## 15. Measures
 
 | Measure | Target |
 | --- | --- |
 | Hand coordinates | 0 |
-| Findings cleared without hand edit | 100 % |
+| Findings cleared by autopilot | 100 %, rest named |
 | Sourced figures | 100 % (rest labelled) |
 | Requirements traced to a check | 100 % |
-| Solve time, one module | Live while dragging |
-| Re-solve after one change, 1,000,000 parts | Seconds (estimate to be measured) |
-| Unique parts after variety reduction | Falling, reported |
-| Blind check | Indistinguishable from a real layout |
-| Findings cleared by autopilot | 100 %, rest named |
-| Questions asked per design | Fewest that settle it |
-| Words to buildable design | Minutes (estimate to be measured) |
 | Invariant violations | 0 |
+| Overlapping nodes (unique gate) | 0 |
+| Questions asked per design | Fewest that settle it |
+| Words to buildable design | Minutes (estimate, to be measured) |
+| Re-solve after one change, 1,000,000 parts | Seconds (estimate, to be measured) |
+| Solve time, one module | Live while dragging |
 | Gaps in the repair library | Listed, falling |
+| Blind check | Indistinguishable from a real layout |
 
-## 13. Limits
+## 16. Limits
 
 | Limit | Mitigation |
 | --- | --- |
-| Physics solves slow in browser | Surrogates, reduced-order models, remote workers |
+| Physics solves slow in browser | Reduced models, remote workers |
 | Discrete search can wander | Scores from fields, precedent, Pareto fronts |
 | Placement data mostly unpublished | Label as typical |
 | Codes and standards often paywalled | Cite clause; label where unread |
 | 1,000,000 parts exceed one browser's memory | Streaming, references, content cache, remote solve |
+| Photo and scan recognition approximate | Confidence shown; person confirms low-confidence parts |
+| Synthesized nodes can be wrong | Gauntlet and property tests before use |
+| Merged nodes break saved boards | Boards rewired automatically; old ids kept as aliases |
+| Web unreachable from this container | Research kept as sourced data; live where reachable |
+| Exports for manufacture carry liability | Marked for an engineer's sign-off |
 | Many rounds of work | One step per round |
-| Photo and scan recognition is approximate | Confidence shown; person confirms low-confidence parts |
-| Synthesized nodes can be wrong | Gauntlet and generated tests before use |
-| Web unreachable from this container | Research by Claude kept as sourced data; live where reachable |
-| Exports for real manufacture carry liability | Marked for an engineer's sign-off |
 
-## 14. Starting state
+## 17. Starting state
 
 Gate: 9 of 1,630 tests fail. Causes:
 - `bearing-6206zz` is not stored in the inventory.
