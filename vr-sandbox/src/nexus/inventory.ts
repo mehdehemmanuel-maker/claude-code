@@ -910,7 +910,7 @@ e('wheel-scooter', 'scooter wheel', 'Mechanical/Vehicle parts/Wheels', 'assembly
 e('deck-scooter', 'scooter deck', 'Mechanical/Vehicles/Scooters', 'part', 'extrude', 'al-6063', 'an aluminium profile extruded, cut and machined: the battery rides inside it');
 e('stem-scooter', 'scooter stem', 'Mechanical/Vehicles/Scooters', 'assembly', 'weld', `${F('tube round 40x2 900 aluminium')} al-a380`, 'a tube welded to a cast folding hinge');
 e('brake-disc', 'brake disc', 'Mechanical/Vehicle parts/Brakes', 'part', 'stamp', 'stainless-304', 'cut from stainless plate, drilled to shed heat and water', '120 mm');
-e('brake-caliper-disc', 'disc brake caliper', 'Mechanical/Vehicle parts/Brakes', 'assembly', 'assemble', `al-a380 brake-pad*2 spring-compression ${F('bolt M6x20')}*2`, 'a cast body that a cable pulls shut, squeezing pads on the disc');
+e('brake-caliper-disc', 'disc brake caliper', 'Mechanical/Vehicle parts/Brakes', 'assembly', 'assemble', `al-a380 disc-brake-pad*2 spring-compression ${F('bolt M6x20')}*2`, 'a cast body that a cable pulls shut, squeezing pads on the disc');
 e('throttle-thumb', 'thumb throttle', 'Electrical/Vehicles/Scooters', 'product', 'assemble', 'magnet-ndfeb ic-package pc wire-hookup*3', 'a lever turning a magnet past a Hall sensor: its voltage is how hard you press');
 e('e-scooter', 'electric scooter', 'Electrical/Vehicles/Scooters', 'product', 'assemble', `deck-scooter stem-scooter hub-motor wheel-scooter ${F('pack 10S3P')} esc throttle-thumb brake-disc brake-caliper-disc lcd-module ${F('bolt M6x20')}*12`, 'a hub motor in the front wheel driven by a controller from a 36 V pack in the deck; a disc brake at the back; the stem folds', 'about 12 kg, 25 km/h (typical)');
 // a skateboard
@@ -1290,6 +1290,10 @@ pt('diff-pinion', 'differential pinion', 'forge', 'steel-alloy', 'a bevel pinion
 pt('diff-side-gear', 'side gear', 'forge', 'steel-alloy', 'a bevel gear splined to a drive shaft', [50, 15, 50]);
 as('differential', 'differential', 'diff-case pinion-shaft diff-pinion*2 diff-side-gear*2 final-drive-gear', 'a case turned by its ring gear, its pinions letting its two side gears turn at different speeds', [220, 160, 220]);
 as('manual-transaxle', 'manual transaxle', 'bell-housing gearbox-case input-shaft output-shaft transmission-gear synchro-ring shift-fork selector-rod final-drive-pinion differential', 'a gearbox and differential in one case, beside a transverse engine', [350, 350, 350]);
+as('manual-gearbox', 'manual gearbox', 'bell-housing gearbox-case input-shaft output-shaft transmission-gear synchro-ring shift-fork selector-rod', 'a gearbox in line behind its engine, its output to a driveshaft', [950, 500, 420]);
+pt('driveshaft-tube', 'driveshaft tube', 'roll', 'steel-low', 'a seam-welded steel tube, balanced', [1500, 115, 115]);
+pt('slip-yoke', 'slip yoke', 'forge', 'steel-alloy', 'a splined yoke that lets the driveshaft lengthen', [130, 115, 115]);
+as('driveshaft', 'driveshaft', 'driveshaft-tube slip-yoke universal-joint*2', 'a balanced tube, a slip yoke, a universal joint at each end', [1500, 120, 120]);
 as('cvt-transaxle', 'CVT transaxle', 'bell-housing gearbox-case input-shaft output-shaft cvt-pulley*2 push-belt torque-converter final-drive-pinion differential', 'a belt between two variable pulleys, its torque converter and its differential in one case', [350, 350, 350]);
 }
 
@@ -1442,6 +1446,99 @@ pt('drive-sprocket', 'drive sprocket', 'machine', 'steel-alloy', 'a sprocket on 
 pt('lower-triple-clamp', 'lower triple clamp', 'cast', 'al-6061', 'the lower clamp of a motorcycle\'s fork', [200, 30, 100]);
 pt('mount-rubber', 'mount', 'mould', 'rubber', 'a rubber mount', [100, 60, 60]);
 pt('bush-rubber', 'bush', 'mould', 'rubber', 'a rubber bush', [50, 40, 40]);
+}
+
+// ==== a seat, part by part (machines.ts seatPart) =====================================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Seat parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Seats', 'assembly', 'assemble', of, says, '', { size });
+pt('seat-foam', 'seat foam', 'mould', 'pu', 'polyurethane foam moulded to its shape', [500, 100, 500]);
+pt('seat-cover', 'seat cover', 'laminate', 'pet', 'woven fabric (or leather) cut and sewn over its foam', [500, 10, 500]);
+pt('seat-spring', 'sinuous spring', 'bend', 'steel-spring', 'a zig-zag of spring wire across a seat\'s frame', [400, 10, 40]);
+pt('recliner-disc', 'recliner plate', 'stamp', 'steel-low', 'a fine-blanked toothed disc of a recliner', [70, 6, 70]);
+pt('recliner-pawl', 'recliner pawl', 'stamp', 'steel-alloy', 'a hardened pawl that locks a recliner\'s discs', [30, 8, 4]);
+as('recliner', 'recliner', 'recliner-disc*2 recliner-pawl', 'two toothed discs locked by a pawl, the backrest\'s pivot', [70, 20, 70]);
+pt('headrest-post', 'headrest post', 'bend', 'steel-low', 'a chromed steel rod the headrest slides on', [11, 160, 11]);
+as('headrest', 'headrest', 'seat-foam seat-cover headrest-post*2', 'foam in its cover on two posts', [80, 200, 260]);
+pt('seat-rail-lower', 'lower seat rail', 'roll', 'steel-low', 'a rolled channel bolted to the floor', [420, 30, 40]);
+pt('seat-rail-upper', 'upper seat rail', 'roll', 'steel-low', 'a rolled channel sliding in the lower on balls', [380, 30, 30]);
+pt('rail-ball', 'rail balls', 'grind', 'steel-chrome', 'hardened balls the upper rail rolls on', [8, 35, 8]);
+pt('seat-riser', 'seat riser', 'stamp', 'steel-low', 'a pressed riser from the rail to the frame', [300, 100, 4]);
+pt('seat-latch-bar', 'seat latch bar', 'bend', 'steel-low', 'the bar under the seat\'s front that frees the rails', [400, 10, 10]);
+as('seat-rail', 'seat rail', 'seat-rail-lower seat-rail-upper rail-ball', 'an upper rail sliding in a lower on balls', [420, 60, 40]);
+as('car-seat', 'car seat', 'seat-foam seat-cover seat-spring seat-frame recliner seat-rail', 'foam on springs in a welded frame under its covers, a recliner, a headrest, on two rails', [550, 1000, 550]);
+as('bench-seat', 'bench seat', 'seat-foam seat-cover seat-spring seat-frame', 'foam on springs on a frame under its covers', [500, 700, 1300]);
+}
+
+// ==== a cooling module, part by part (fittings.ts coolingModule) ====================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Cooling parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Cooling', 'assembly', 'assemble', of, says, '', { size });
+pt('radiator-tube', 'radiator tube', 'extrude', 'al-6063', 'a flat folded or extruded aluminium tube', [600, 2, 26]);
+pt('radiator-fin', 'radiator fin', 'roll', 'al-6063', 'thin aluminium strip folded and louvred, brazed between the tubes', [600, 8, 26]);
+pt('radiator-tank', 'radiator tank', 'mould', 'nylon fibreglass', 'a glass-filled nylon tank crimped onto the core\'s header', [45, 400, 40]);
+pt('radiator-cap', 'radiator cap', 'stamp', 'steel-low rubber', 'a pressure cap, its spring and seal', [40, 20, 40]);
+pt('coolant', 'coolant', 'chemistry', 'water', 'a half-and-half mix of ethylene glycol and water', [100, 100, 100]);
+as('radiator', 'radiator', 'radiator-tube radiator-fin radiator-tank*2', 'flat tubes and folded fins brazed into a core, a tank at each end', [650, 400, 30]);
+as('condenser', 'condenser', 'radiator-tube radiator-fin radiator-tank*2', 'the air conditioning\'s condenser, built as a radiator is', [620, 370, 16]);
+as('charge-air-cooler', 'charge air cooler', 'radiator-tube radiator-fin radiator-tank*2', 'cools the turbo\'s air before the engine, built as a radiator is', [900, 850, 50]);
+pt('cooling-fan', 'cooling fan', 'mould', 'pp', 'a moulded fan, its hub and blades in one', [400, 50, 400]);
+pt('fan-motor', 'fan motor', 'assemble', 'steel-low copper', 'a 12 V motor turning the fan', [90, 70, 90]);
+pt('fan-clutch', 'fan clutch', 'assemble', 'al-a380 steel-low', 'a viscous clutch turning a truck\'s fan as hot as it needs', [150, 80, 150]);
+pt('fan-shroud', 'fan shroud', 'mould', 'pp', 'a moulded shroud leading the fan\'s air through the core', [650, 400, 60]);
+pt('coolant-hose', 'coolant hose', 'extrude', 'epdm', 'a moulded rubber hose on its clips', [400, 35, 35]);
+as('cooling-module', 'cooling module', 'radiator fan-shroud coolant-hose', 'a radiator (and condenser or charge air cooler), a fan in its shroud, its hoses', [650, 450, 150]);
+}
+
+// ==== an exhaust and a steering joint, part by part (fittings.ts exhaustSystem; machines.ts) =========================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Exhaust parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Exhaust', 'assembly', 'assemble', of, says, '', { size });
+pt('exhaust-pipe', 'exhaust pipe', 'bend', 'stainless-304', 'a bent stainless tube from the manifold to the tail', [3500, 50, 50]);
+pt('converter-shell', 'converter shell', 'roll', 'stainless-304', 'a rolled stainless can round the substrate', [260, 120, 120]);
+pt('catalyst-substrate', 'catalyst substrate', 'extrude', 'alumina mgo quartz platinum', 'an extruded cordierite honeycomb, washcoated with alumina and platinum-group metals', [220, 100, 100]);
+pt('converter-mat', 'converter mat', 'laminate', 'mica', 'an intumescent mat holding the substrate in its can', [220, 6, 300]);
+pt('heat-shield', 'heat shield', 'stamp', 'stainless-304', 'a pressed stainless shield', [250, 140, 140]);
+as('catalytic-converter', 'catalytic converter', 'converter-shell catalyst-substrate converter-mat heat-shield', 'a washcoated ceramic honeycomb held in its mat in a stainless can', [260, 140, 140]);
+pt('silencer-shell', 'silencer shell', 'roll', 'stainless-304', 'a rolled stainless shell, its ends seamed', [420, 150, 150]);
+pt('silencer-baffle', 'baffle', 'stamp', 'stainless-304', 'a pressed baffle across a silencer', [140, 1, 140]);
+pt('perforated-tube', 'perforated tube', 'roll', 'stainless-304', 'a tube pierced with holes inside a silencer', [400, 40, 40]);
+pt('silencer-packing', 'silencer packing', 'laminate', 'fibreglass', 'glass wool round its tubes', [400, 100, 100]);
+as('resonator', 'resonator', 'silencer-shell perforated-tube silencer-packing', 'a perforated tube in packing in a shell', [300, 100, 100]);
+as('muffler', 'muffler', 'silencer-shell silencer-baffle*2 perforated-tube*3 silencer-packing', 'baffles and perforated tubes in a shell', [420, 150, 150]);
+pt('uj-yoke', 'yoke', 'forge', 'steel-alloy', 'a forged yoke, its ears bored for the spider\'s caps', [30, 30, 30]);
+pt('uj-spider', 'spider', 'forge', 'steel-alloy', 'a forged cross, its four arms ground', [30, 10, 30]);
+pt('uj-cap', 'bearing cap', 'stamp', 'steel-alloy', 'a drawn cup of needle rollers on a spider\'s arm', [11, 6, 11]);
+as('universal-joint', 'universal joint', 'uj-yoke*2 uj-spider uj-cap*4', 'two yokes at right angles on a cross, its arms in needle-bearing caps', [40, 30, 30]);
+}
+
+// ==== a heavy axle, part by part (drivetrain.ts heavyAxle) =============================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Drivetrain/Axle parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Drivetrain/Axles', 'assembly', 'assemble', of, says, '', { size });
+pt('carrier-housing', 'carrier housing', 'cast', 'cast-iron', 'a cast housing the pinion and the differential\'s bearings sit in, bolted into the axle\'s bowl', [400, 400, 400]);
+pt('axle-shaft', 'axle shaft', 'forge', 'steel-alloy', 'a forged and induction-hardened shaft, splined into its side gear, its flange bolted to its hub', [1000, 55, 55]);
+pt('axle-beam', 'axle beam', 'forge', 'steel-alloy', 'a steer axle\'s forged I-beam, its kingpin bosses at its ends', [1800, 130, 100]);
+pt('kingpin', 'kingpin', 'grind', 'steel-alloy', 'a ground pin a steering knuckle turns on', [50, 260, 50]);
+as('drive-axle', 'drive axle', 'axle-housing differential axle-shaft*2', 'a banjo housing, its carrier and differential, its two axle shafts', [2000, 500, 500]);
+as('steer-axle', 'steer axle', 'axle-beam kingpin*2', 'a forged I-beam and its kingpins', [2000, 200, 150]);
+}
+
+// ==== a disc brake's caliper, part by part (machines.ts) ==============================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicle parts/Brake parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicle parts/Brakes', 'assembly', 'assemble', of, says, '', { size });
+pt('caliper-body', 'caliper body', 'cast', 'cast-iron', 'cast in one: its piston half, its finger half and the bridge over the disc, its bore machined', [150, 90, 70]);
+pt('caliper-carrier', 'caliper carrier', 'cast', 'cast-iron', 'a cast bracket bolted to the knuckle, the caliper sliding on its pins', [150, 60, 50]);
+pt('caliper-piston', 'caliper piston', 'machine', 'steel-chrome', 'a chromed steel (or phenolic) piston in the caliper\'s bore', [54, 40, 54]);
+pt('piston-seal-brake', 'piston seal', 'mould', 'epdm', 'a square-section seal in the bore\'s groove that pulls the piston back', [60, 3, 60]);
+pt('dust-boot', 'dust boot', 'mould', 'epdm', 'a rubber boot over the piston\'s mouth', [60, 10, 60]);
+pt('pad-backing', 'pad backing plate', 'stamp', 'steel-low', 'a fine-blanked steel plate the friction material is bonded to', [120, 55, 5]);
+pt('pad-friction', 'pad friction', 'mould', 'phenolic', 'resin-bonded friction material, pressed and cured on its plate', [110, 50, 11]);
+as('disc-brake-pad', 'disc brake pad', 'pad-backing pad-friction', 'friction material bonded to a steel backing plate', [120, 55, 16]);
+pt('guide-pin', 'guide pin', 'grind', 'steel-alloy', 'a ground pin the caliper slides on, in its rubber boot', [9, 50, 9]);
+pt('bleed-screw', 'bleed screw', 'machine', 'steel-low', 'a hollow screw to bleed air from the caliper', [6, 18, 6]);
+as('brake-caliper', 'brake caliper', 'caliper-body caliper-piston disc-brake-pad*2 guide-pin*2 bleed-screw', 'a sliding caliper: its cast body, its piston, two pads, its guide pins', [160, 100, 80]);
 }
 
 // ==== life: molecules, cells, tissues, organs, the human body, the organisms used in technology (src/nexus/life) =====

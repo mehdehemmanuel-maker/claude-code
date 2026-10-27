@@ -517,7 +517,9 @@ function stepperParts(p: Record<string, string | number>, nm: string): Part[] {
  *  any seal), and so on in each of those, all the way down. Empty when it is whole. */
 export function missingIn(p: Part, it: Item | null | undefined = p.item ? itemOf(p.item) ?? keptByItem.get(p.item) ?? null : null, where = p.name): string[] {
   const out: string[] = [], is = (got: string, want: string) => got === want || (got.startsWith(want) && !/\d/.test(got[want.length] ?? ''));
-  if (it) {
+  // (a part is made from what its recipe lists, by one process: the tube a handlebar is bent from becomes it, so only an
+  // assembly or a product is held to having its recipe's things in it)
+  if (it && it.kind !== 'part') {
     const found = (q: Part, want: string): number => (q.item && is(q.item, want) ? 1 : (q.parts ?? []).reduce((a, r) => a + found(r, want), 0));
     for (const c of it.of) { const ci = itemOf(c.id); if (ci && (ci.kind === 'material' || ci.kind === 'element')) continue; if (!ci && DENSITY_KNOWN.has(c.id)) continue;
       const got = (p.parts ?? []).reduce((a, r) => a + found(r, c.id), 0); if (got < c.n) out.push(`${where}: ${c.n - got} of ${c.n} ${ci?.name ?? c.id} not drawn in it`); }

@@ -383,3 +383,58 @@ export function closureOf(skin: Part, kind: 'door' | 'hood' | 'deck lid', more: 
   }
   return out;
 }
+
+// ---- a cooling module from its first parts: radiator, condenser, fan, shroud, hoses, coolant ---------------------------
+/** A radiator's core and its tanks (a condenser's, a charge-air cooler's: the same make), standing in the y-z plane, `t`
+ *  thick along x: flat tubes across it every 10 mm (typical), a band of folded fins between each pair (about 12 % of their
+ *  band solid, typical of louvred fins), a moulded tank at each end, the coolant in it. */
+export function heatExchanger(o: { name: string; w: number; h: number; t: number; item: string; tanks?: boolean; fluid?: { mat: string; share: number } }): Part {
+  const tankW = o.tanks === false ? 0 : 0.045, coreW = o.w - 2 * tankW, n = Math.max(4, Math.floor(o.h / 0.01)), pitch = o.h / n, al = { mat: 'al-6063', color: 0xb8bcc0, finish: 'satin' }, parts: Part[] = [];
+  for (let i = 0; i < n; i++) { const y = -o.h / 2 + (i + 0.5) * pitch; parts.push({ name: 'core tube', shape: { box: [o.t, 0.0018, coreW] }, at: [0, y, 0], ...al, fill: 0.15, item: 'radiator-tube', says: 'a flat aluminium tube, 0.3 mm wall (its hollow about 85 %)' }); if (i < n - 1) parts.push({ name: 'fin band', shape: { box: [o.t, pitch - 0.0018, coreW] }, at: [0, y + pitch / 2, 0], ...al, fill: 0.04, item: 'radiator-fin', says: 'folded louvred fin, brazed between the tubes' }); }
+  if (tankW) for (const sd of [-1, 1]) parts.push({ name: 'end tank', shape: { box: [o.t + 0.012, o.h + 0.02, tankW] }, at: [0, 0, sd * (coreW / 2 + tankW / 2)], mat: 'nylon', color: 0x1a1a1a, shell: 0.0025, finish: 'texture', item: 'radiator-tank' });
+  if (o.fluid) parts.push({ name: 'coolant', shape: { box: [o.t * 0.8, o.h, o.w - 0.01] }, at: [0, 0, 0], mat: o.fluid.mat, color: 0x3fa0d0, fill: o.fluid.share, item: 'coolant', says: `in its tubes and tanks (about ${Math.round(o.fluid.share * 100)} % of its box)` });
+  return { name: o.name, at: [0, 0, 0], item: o.item, parts, says: `${n} tubes, ${(coreW * 1000).toFixed(0)} × ${(o.h * 1000).toFixed(0)} × ${(o.t * 1000).toFixed(0)} mm core` };
+}
+/** A cooling module ahead of an engine, its face along +x: the condenser, the radiator, the fan in its shroud behind,
+ *  the hoses to the engine's outlet and inlet (given in the module's frame). Car's or truck's by its size. */
+export function coolingModule(o: { w: number; h: number; truck?: boolean; to?: { outlet: V3; inlet: V3 } }): Part {
+  const t = o.truck ? 0.06 : 0.026, fanR = Math.min(o.w, o.h) * 0.42, out: Part[] = [];
+  out.push({ ...heatExchanger({ name: 'radiator', w: o.w, h: o.h, t, item: 'radiator', fluid: { mat: 'glycol-50', share: o.truck ? 0.3 : 0.25 } }), at: [0, 0, 0] });
+  out.push({ ...heatExchanger({ name: o.truck ? 'charge air cooler' : 'condenser', w: o.w * 0.95, h: o.h * 0.92, t: o.truck ? 0.05 : 0.016, item: o.truck ? 'charge-air-cooler' : 'condenser', tanks: true }), at: [t / 2 + 0.02 + (o.truck ? 0.025 : 0.008), 0, 0] });
+  out.push({ name: 'radiator cap', shape: { lathe: [[0, 0], [0.02, 0], [0.02, 0.012], [0.012, 0.018], [0, 0.018], [0, 0]] }, at: [0, o.h / 2 + 0.01, o.w / 2 - 0.03], mat: 'steel-low', color: 0x8a8c90, item: 'radiator-cap' });
+  // (its fan behind it in a shroud: a moulded hub and blades on an electric motor (a car's) or a viscous clutch (a truck's))
+  const fx = -(t / 2 + 0.06), blades: Part[] = [];
+  for (let k = 0; k < 7; k++) { const a = (k * 2 * PI) / 7; blades.push({ name: 'fan blade', shape: { box: [0.004, fanR * 0.75, fanR * 0.32] }, at: [0, Math.cos(a) * fanR * 0.55, Math.sin(a) * fanR * 0.55], rot: [a, 0, 0.35], mat: o.truck ? 'nylon' : 'pp', color: 0x1a1a1a, one: true }); }
+  out.push({ name: 'fan', at: [fx, 0, 0], item: 'cooling-fan', parts: [{ name: 'fan hub', shape: { cyl: [fanR * 0.2, 0.04] }, at: [0, 0, 0], rot: [0, 0, PI / 2], mat: o.truck ? 'nylon' : 'pp', color: 0x1a1a1a, one: true }, ...blades] });
+  out.push(o.truck ? { name: 'fan clutch', shape: { cyl: [fanR * 0.25, 0.08] }, at: [fx - 0.06, 0, 0], rot: [0, 0, PI / 2], mat: 'al-a380', color: 0x9a9ca0, finish: 'cast', fill: 0.7, item: 'fan-clutch' } : { name: 'fan motor', shape: { cyl: [0.045, 0.07] }, at: [fx - 0.05, 0, 0], rot: [0, 0, PI / 2], mat: 'steel-low', color: 0x2a2a2a, fill: 0.7, item: 'fan-motor' });
+  out.push({ name: 'fan shroud', shape: { box: [0.06, o.h, o.w * 0.92] }, at: [fx + 0.01, 0, 0], mat: o.truck ? 'fibreglass' : 'pp', color: 0x1a1a1a, shell: 0.003, finish: 'texture', fill: 0.8, item: 'fan-shroud', says: 'moulded round the fan, its opening about a fifth of it' });
+  if (o.to) for (const [nm, end, y] of [['upper hose', o.to.outlet, o.h / 2 - 0.04], ['lower hose', o.to.inlet, -o.h / 2 + 0.04]] as [string, V3, number][]) out.push({ name: nm, shape: { tube: { r: o.truck ? 0.03 : 0.017, wall: 0.004, pts: [[0, y, -o.w / 2 + 0.02], [fx - 0.08, y, -o.w / 2 + 0.02], end] } }, at: [0, 0, 0], mat: 'epdm', color: 0x1a1a1a, item: 'coolant-hose' });
+  return { name: 'cooling module', at: [0, 0, 0], item: 'cooling-module', parts: out, says: o.truck ? 'radiator, charge air cooler, fan on its viscous clutch in its shroud' : 'condenser, radiator, electric fan in its shroud, its hoses to the engine' };
+}
+
+// ---- a car's exhaust from its first parts, along its pipe ---------------------------------------------------------------
+/** What sits along an exhaust pipe (its path, its radius): a catalytic converter near its front (its stainless shell, a
+ *  ceramic substrate in its mat, a heat shield over it), a resonator at its middle, a muffler near its end (its shell,
+ *  two baffles, three perforated tubes, its packing). Each where the pipe runs straight enough, turned along it. */
+export function exhaustSystem(pts: V3[], r: number): Part[] {
+  const segs = pts.slice(1).map((q, i) => ({ a: pts[i]!, b: q, L: Math.hypot(q[0] - pts[i]![0], q[1] - pts[i]![1], q[2] - pts[i]![2]) })), total = segs.reduce((x, s) => x + s.L, 0);
+  // (at a share of its length: where it is, and the pipe's heading there)
+  const at = (f: number): { p: V3; rot: V3 } => { let d = f * total; for (const s of segs) { if (d <= s.L) { const k = d / s.L, dir = [(s.b[0] - s.a[0]) / s.L, (s.b[1] - s.a[1]) / s.L, (s.b[2] - s.a[2]) / s.L]; return { p: [s.a[0] + (s.b[0] - s.a[0]) * k, s.a[1] + (s.b[1] - s.a[1]) * k, s.a[2] + (s.b[2] - s.a[2]) * k], rot: [0, -Math.atan2(dir[2]!, dir[0]!), Math.asin(Math.max(-1, Math.min(1, dir[1]!))) - PI / 2] }; } d -= s.L; } const l = pts[pts.length - 1]!; return { p: l, rot: [0, 0, -PI / 2] }; };
+  const ss = { mat: 'stainless-304', color: 0x8a8c90, finish: 'brushed' }, out: Part[] = [];
+  // (each a turned can about its own y, laid along the pipe by its heading)
+  const c = at(0.14), cR = Math.max(0.055, r * 2.6), cL = 0.26;
+  out.push({ name: 'catalytic converter', at: c.p, rot: c.rot, item: 'catalytic-converter', parts: [
+    { name: 'converter shell', shape: { cyl: [cR, cL] }, at: [0, 0, 0], ...ss, shell: 0.0015, item: 'converter-shell' },
+    { name: 'catalyst substrate', shape: { cyl: [cR - 0.008, cL - 0.04] }, at: [0, 0, 0], mat: 'ceramic', color: 0xd8d0b8, fill: 0.2, item: 'catalyst-substrate', says: 'a cordierite honeycomb, about 600 cells a square inch, its washcoat of platinum-group metals (about 0.2 of its volume solid, typical)' },
+    { name: 'mounting mat', shape: { lathe: [[cR - 0.008, -(cL - 0.04) / 2], [cR - 0.0015, -(cL - 0.04) / 2], [cR - 0.0015, (cL - 0.04) / 2], [cR - 0.008, (cL - 0.04) / 2], [cR - 0.008, -(cL - 0.04) / 2]] }, at: [0, 0, 0], mat: 'mica', color: 0xd8d8d0, fill: 0.3, item: 'converter-mat' },
+    { name: 'heat shield', shape: { cyl: [cR + 0.012, cL * 0.9] }, at: [0, 0, 0], ...ss, shell: 0.0006, fill: 0.5, item: 'heat-shield' }] });
+  const rz = at(0.5), rR = Math.max(0.045, r * 2.2);
+  out.push({ name: 'resonator', at: rz.p, rot: rz.rot, item: 'resonator', parts: [{ name: 'resonator shell', shape: { cyl: [rR, 0.3] }, at: [0, 0, 0], ...ss, shell: 0.0012, item: 'silencer-shell' }, { name: 'perforated tube', shape: { cyl: [r, 0.3] }, at: [0, 0, 0], ...ss, shell: 0.0012, fill: 0.7, item: 'perforated-tube' }, { name: 'packing', shape: { lathe: [[r + 0.002, -0.14], [rR - 0.002, -0.14], [rR - 0.002, 0.14], [r + 0.002, 0.14], [r + 0.002, -0.14]] }, at: [0, 0, 0], mat: 'fibreglass', color: 0xe8e0c8, fill: 0.08, item: 'silencer-packing' }] });
+  const mz = at(0.86), mR = Math.max(0.07, r * 3.4), mL = 0.42;
+  out.push({ name: 'muffler', at: mz.p, rot: mz.rot, item: 'muffler', parts: [
+    { name: 'muffler shell', shape: { cyl: [mR, mL] }, at: [0, 0, 0], ...ss, shell: 0.0012, item: 'silencer-shell' },
+    ...[-0.08, 0.08].map((y): Part => ({ name: 'baffle', shape: { cyl: [mR - 0.002, 0.0012] }, at: [0, y, 0], ...ss, item: 'silencer-baffle' })),
+    ...[[-0.03, 0], [0.03, 0.02], [0, -0.03]].map(([x, z]): Part => ({ name: 'perforated tube', shape: { cyl: [r * 0.8, mL - 0.04] }, at: [x!, 0, z!] as V3, ...ss, shell: 0.0012, fill: 0.7, item: 'perforated-tube' })),
+    { name: 'packing', shape: { cyl: [mR - 0.004, 0.12] }, at: [0, -0.14, 0], mat: 'fibreglass', color: 0xe8e0c8, fill: 0.08, item: 'silencer-packing' }] });
+  return out;
+}

@@ -67,9 +67,18 @@ before the mass rule was wired in (so the car came to 2.1 t). Now:
   latches, regulators, speakers, trim panels, seals; hood inner frame, insulator, hinges, latch, striker, prop rod.
 - **Single parts named**: castings, forgings and pressings drawn as one piece, now each an inventory part with its
   process and material (counterweight, hubs, beams, leaves, discs, drums, pressings, glass).
-- Scores now (built and identified, by mass): Corolla 51 %, truck 61 %, forklift 80 %, dirt bike 79 %. What is left is
-  mostly the stand-in for what is not drawn yet: the Corolla's 550 kg (seats, interior, cooling, exhaust, wiring,
-  fluids), the truck's 3,138 kg (its transmission, cooling package, cab interior, air system).
+- Then built from their parts too: seats (foam on sinuous springs in a welded frame, covers, recliners, headrests, rails
+  on balls; about 17 kg a front seat); a cooling module (radiator and condenser cores of tubes and fins, tanks, cap,
+  coolant, fan, shroud, hoses); a car's exhaust (catalytic converter with its substrate and mat, resonator, muffler);
+  a steering universal joint (yokes, spider, caps); disc brake calipers (body cast in one, piston, seal, boot, two pads
+  of backing and friction, guide pins, bleed screw); a truck's tandem drive axles (banjo housings, carriers with hypoid
+  pinion and ring gear, differentials, axle shafts), its steer axle's forged I-beam and kingpins, its 12-speed gearbox in
+  line and its driveshafts (tube, slip yoke, universal joints).
+- Every recipe met in every vehicle (a part made from stock is no longer asked to contain its stock).
+- Scores now (built and identified, by mass): Corolla 54.5 %, truck 74.9 %, forklift 80 %, dirt bike 81 %, mower 70 %,
+  quad 65 %, kart 60 %. What is left is mostly the stand-in for what is not drawn yet: the Corolla's about 550 kg
+  (interior trim, carpets, wiring, HVAC, airbags, fluids, and its body-in-white drawn lighter than a real one), the
+  truck's about 2,050 kg (its cab interior and structure, air system, fuel, wiring, frame fittings).
 
 **2026-10-26, then: build each part, each sub part, with makers shared by process.** The user: "you can't build
 anything by designing what it looks like … you gotta build each part each sub part each subsubpart and make it easier to

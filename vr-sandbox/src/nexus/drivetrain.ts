@@ -23,14 +23,15 @@ const gearZ = (name: string, m: number, z: number, b: number, bore: number, at: 
 /** A shaft turned along z through `at`, `L` long. */
 const shaftZ = (name: string, r: number, L: number, at: V3, item: string): Part => turned({ name, steps: [[r * 0.8, L * 0.1], [r, L * 0.8], [r * 0.8, L * 0.1]], mat: 'steel-alloy', item, at: [at[0], at[1], at[2] - L / 2], rot: [PI / 2, 0, 0], finish: 'ground' });
 
-export interface GearboxSpec { kind: 'manual' | 'cvt'; /** its room: fore-aft (x), up (y), across (z), m */ room: V3; /** its differential's axis, relative to its middle (x, y) */ diff: [number, number]; /** the most torque it takes, N·m */ torque: number; /** a manual's ratios, first to top */ ratios?: number[]; final?: number; says?: string }
+export interface GearboxSpec { kind: 'manual' | 'cvt'; /** its room: fore-aft (x), up (y), across (z), m */ room: V3; /** its differential's axis, relative to its middle (x, y); none for a gearbox behind an engine in line (a truck's), its output to a driveshaft */ diff: [number, number] | null; /** the most torque it takes, N·m */ torque: number; /** a manual's ratios, first to top */ ratios?: number[]; final?: number; says?: string }
 export interface GearboxBuilt { gearbox: Part; kg: number; pieces: number }
 const made = new Map<string, GearboxBuilt>();
 /** A transaxle: case, shafts, gears, bearings, seals, final drive and differential; a manual's gear train and shift, or a
  *  CVT's pulleys, belt and torque converter. */
 export function transaxle(s: GearboxSpec): GearboxBuilt {
   const key = JSON.stringify(s), was = made.get(key); if (was) return was;
-  const [L, H, W] = s.room, wall = 0.005, out: Part[] = [];
+  // (its case's walls 5 mm on a 200 N·m car's, thicker as the cube root of its torque (typical: a truck's about 12 mm))
+  const [L, H, W] = s.room, wall = 0.005 * Math.max(1, Math.cbrt(s.torque / 200)), out: Part[] = [];
   // (its gears' module from its torque: about 2.25 mm for a 200 N·m car's, as the cube root of the torque, typical)
   const m = Math.max(0.0015, 0.00225 * Math.cbrt(s.torque / 200)), fw = 6 * m;
   // (its case in two castings split across its shafts: the bell housing on the engine's side, the case beyond; each open
@@ -39,7 +40,7 @@ export function transaxle(s: GearboxSpec): GearboxBuilt {
   const kase = { ...housing({ name: 'transaxle case', L, H, W: W * 0.55, wall, open: ['right'], mat: 'al-a380', item: 'gearbox-case' }), at: [0, 0, -W * 0.225] as V3 };
   out.push(bell, kase);
   // (its shafts: its input from the engine high at its front, its output under it, its differential where it is told)
-  const dx = s.diff[0], dy = s.diff[1], inAt: [number, number] = [Math.min(L / 2 - 0.06, dx + 0.17), Math.min(H / 2 - 0.06, dy + 0.1)], outAt: [number, number] = [inAt[0] - 0.02, inAt[1] - 0.085];
+  const dx = s.diff ? s.diff[0] : -L / 2 + 0.08, dy = s.diff ? s.diff[1] : -H / 2 + 0.1, inAt: [number, number] = [Math.min(L / 2 - 0.06, dx + 0.17), Math.min(H / 2 - 0.06, dy + 0.1)], outAt: [number, number] = [inAt[0] - 0.02, inAt[1] - 0.085];
   const span = W - 2 * wall - 0.01, z0 = -span / 2;
   out.push(shaftZ('input shaft', 0.012, span, [inAt[0], inAt[1], 0], 'input-shaft'), shaftZ('output shaft', 0.014, span * 0.85, [outAt[0], outAt[1], -span * 0.05], 'output-shaft'));
   for (const [x, y, zz] of [[inAt[0], inAt[1], z0 + 0.01], [inAt[0], inAt[1], -z0 - 0.01], [outAt[0], outAt[1], z0 + 0.01], [outAt[0], outAt[1], -z0 - 0.06]] as V3[]) out.push(use('bearing 6205', [x, y, zz], { rot: [PI / 2, 0, 0], name: 'shaft bearing' }));
@@ -78,6 +79,7 @@ export function transaxle(s: GearboxSpec): GearboxBuilt {
   }
   // (its final drive: a pinion on the output shaft, a ring gear on the differential's case; their sizes from its final
   // ratio (about 4 to 1, typical) on their centre distance)
+  if (s.diff) {
   const cdF = Math.hypot(outAt[0] - dx, outAt[1] - dy), mF = m * 1.1, zSum = Math.round((2 * cdF) / mF), fin = s.final ?? 4, zp = Math.max(13, Math.round(zSum / (1 + fin))), zr = zSum - zp, zF = z0 + 0.05;
   out.push(gearZ('final drive pinion', mF, zp, fw * 1.3, 0.026, [outAt[0], outAt[1], zF], 'final-drive-pinion'));
   const ringR = (mF * zr) / 2;
@@ -90,12 +92,61 @@ export function transaxle(s: GearboxSpec): GearboxBuilt {
   out.push(group('differential', diff, { item: 'differential', at: [dx, dy, 0], says: 'its case turned by the ring gear, two pinions on its shaft driving the two side gears, the drive shafts in them' }));
   // (a seal where each drive shaft leaves it; its drain and fill plugs; its case's bolts round the joint)
   for (const sd of [-1, 1]) out.push(ringZ('drive shaft seal', 0.017, 0.031, 0.01, [dx, dy, sd * (W / 2 - 0.005)], { item: 'shaft-seal', mat: 'nbr', color: 0x1a1a1a }));
+  } else {
+    // (in line: its output shaft out through its rear seal to a yoke for the driveshaft)
+    out.push(ringZ('output seal', 0.03, 0.05, 0.012, [outAt[0], outAt[1], -W / 2 + 0.006], { item: 'shaft-seal', mat: 'nbr', color: 0x1a1a1a }), ringZ('output yoke', 0.03, 0.06, 0.06, [outAt[0], outAt[1], -W / 2 - 0.03], { item: 'uj-yoke', mat: 'steel-alloy', color: 0x6a6c70, finish: 'forged', fill: 0.6 }));
+  }
   out.push(use('bolt M14x20', [dx - 0.05, -H / 2, -W * 0.2], { rot: [PI, 0, 0], name: 'drain plug' }), use('bolt M14x20', [0, H * 0.1, -W / 2], { rot: [-PI / 2, 0, 0], name: 'fill plug' }));
   const nb = Math.max(8, Math.round((2 * (L + H)) / 0.09));
   for (let k = 0; k < nb; k++) { const f = k / nb, per = 2 * (L + H); let d = f * per, x: number, y: number; if (d < L) { x = -L / 2 + d; y = H / 2 + 0.006; } else if ((d -= L) < H) { x = L / 2 + 0.006; y = H / 2 - d; } else if ((d -= H) < L) { x = L / 2 - d; y = -H / 2 - 0.006; } else { d -= L; x = -L / 2 - 0.006; y = -H / 2 + d; }
     out.push(use('bolt M8x30', [x, y, W * 0.05 + 0.012], { rot: [PI / 2, 0, 0], name: 'case bolt' })); }
-  const gearbox = group('gearbox', out, { item: s.kind === 'cvt' ? 'cvt-transaxle' : 'manual-transaxle', says: s.says ?? '' });
+  const gearbox = group('gearbox', out, { item: s.kind === 'cvt' ? 'cvt-transaxle' : s.diff ? 'manual-transaxle' : 'manual-gearbox', says: s.says ?? '' });
   const count = (q: Part): number => (q.shape ? 1 : 0) + (q.parts ?? []).reduce((a, r) => a + count(r), 0);
   const res = { gearbox, kg: massOf(gearbox), pieces: count(gearbox) };
   made.set(key, res); return res;
+}
+
+/** A heavy rigid axle as it is made, across z at (x, y) in its machine's frame, its wheels' hubs at ±track/2: a drive
+ *  axle's banjo housing (two square arms welded to its bowl, a spindle at each end), its carrier bolted in the bowl (a
+ *  hypoid pinion and ring gear, the differential's case round its spider and side gears, its bearings), its two axle
+ *  shafts out to the hubs; or a steer axle's forged I-beam, a kingpin boss and kingpin at each end. Sizes typical of a
+ *  highway tractor's (a 40,000 lb tandem's), said where used. `carry` is what its whole is said to be (its link). */
+export function heavyAxle(o: { name: string; x: number; y: number; track: number; drive: boolean; carry?: Partial<Part>; /** the shaft its hubs turn on, as they ask it */ shaft?: number }): Part {
+  const fits: Partial<Part> = o.shaft ? { iface: [{ kind: 'shaft', role: 'provides', d: o.shaft }] } : {};
+  const half = o.track / 2, hubIn = half - 0.22, c = o.carry ?? {}, steel = { mat: 'steel-low', color: 0x2a2a2a, finish: 'paint', ...c } as Partial<Part>, out: Part[] = [];
+  if (o.drive) {
+    // (its arms: 150 mm square tube, 12 mm wall (typical), from the bowl out to the spindles; its spindles 130 mm across)
+    const arms: Part[] = [-1, 1].flatMap((sd) => [
+      P('housing arm', { box: [0.15, 0.15, hubIn - 0.25] }, [o.x, o.y, sd * (0.25 + (hubIn - 0.25) / 2)], { ...steel, shell: 0.012, one: true }),
+      P('spindle', { cyl: [0.065, 0.2] }, [o.x, o.y, sd * (hubIn + 0.1)], { ...steel, ...fits, rot: [PI / 2, 0, 0], one: true, finish: 'machined' })]);
+    out.push(group('axle housing', [...arms, P('housing bowl', { cyl: [0.24, 0.5] }, [o.x, o.y, 0], { ...steel, rot: [PI / 2, 0, 0], shell: 0.012, one: true })], { item: 'axle-housing', says: 'pressed and welded steel: two arms into its bowl, a spindle on each end' }));
+    // (its carrier bolted into the front of the bowl: a hypoid pinion at about 3.4 to 1 (a highway ratio, typical) driving
+    // the ring gear; the differential's case on two taper bearings, four spider pinions and two side gears in it)
+    const ring = { ...toothed({ name: 'ring gear', m: 0.009, z: 41, b: 0.06, bore: 0.3, mat: 'steel-alloy', item: 'final-drive-gear' }), at: [o.x, o.y, 0.09] as V3 };
+    const carrier: Part[] = [P('carrier housing', { lathe: [[0.06, 0], [0.2, 0], [0.2, 0.08], [0.09, 0.32], [0.06, 0.32], [0.06, 0]] }, [o.x, o.y, 0], { rot: [0, 0, -PI / 2], item: 'carrier-housing', mat: 'cast-iron', color: 0x3a3c40, finish: 'cast', fill: 0.6, ...c }),
+      { ...ring, ...c }, { ...toothed({ name: 'drive pinion', m: 0.009, z: 12, b: 0.07, bore: 0.03, mat: 'steel-alloy', item: 'final-drive-pinion' }), at: [o.x + 0.2, o.y, 0] as V3, rot: [0, PI / 2, 0] as V3, ...c },
+      P('differential case', { lathe: [[0.04, -0.12], [0.14, -0.12], [0.16, 0], [0.14, 0.12], [0.04, 0.12], [0.04, -0.12]] }, [o.x, o.y, 0], { rot: [PI / 2, 0, 0], item: 'diff-case', mat: 'cast-iron', color: 0x5a5c60, finish: 'cast', fill: 0.5, ...c }),
+      ...[-1, 1].map((sd) => ({ ...toothed({ name: 'side gear', m: 0.006, z: 18, b: 0.04, bore: 0.05, mat: 'steel-alloy', item: 'diff-side-gear' }), at: [o.x, o.y, sd * 0.07] as V3, ...c })),
+      ...[0, 1, 2, 3].map((k) => ({ ...toothed({ name: 'spider pinion', m: 0.006, z: 11, b: 0.03, bore: 0.025, mat: 'steel-alloy', item: 'diff-pinion' }), at: [o.x + 0.06 * Math.cos((k * PI) / 2), o.y + 0.06 * Math.sin((k * PI) / 2), 0] as V3, rot: [0, PI / 2, (k * PI) / 2] as V3, ...c })),
+      turned({ name: 'spider', steps: [[0.018, 0.14]], mat: 'steel-alloy', item: 'pinion-shaft', at: [o.x - 0.07, o.y, 0], rot: [0, 0, -PI / 2] }),
+      ...[-1, 1].map((sd) => use('bearing 6207', [o.x, o.y, sd * 0.15], { rot: [PI / 2, 0, 0], name: 'carrier bearing', ...c }))];
+    out.push(group('differential carrier', carrier, { item: 'differential', says: 'a hypoid pinion driving the ring gear on the differential\'s case (typical of a tandem\'s)' }));
+    // (its axle shafts: from the side gears out through the arms to the hubs, 2.1 in. splined bars (typical))
+    for (const sd of [-1, 1]) out.push(turned({ name: 'axle shaft', steps: [[0.027, hubIn + 0.18 - 0.07]], mat: 'steel-alloy', item: 'axle-shaft', at: [o.x, o.y, sd * 0.07], rot: [sd * PI / 2, 0, 0], finish: 'forged' }));
+  } else {
+    // (a steer axle: a forged I-beam (about 45 % of the box round it, its web and flanges), a kingpin boss at each end
+    // and the kingpin through it, its knuckles turning on them)
+    out.push(group('axle beam', [P('I-beam', { box: [0.1, 0.13, 2 * hubIn - 0.12] }, [o.x, o.y - 0.05, 0], { ...steel, fill: 0.45, one: true }), ...[-1, 1].map((sd) => P('kingpin boss', { cyl: [0.055, 0.2] }, [o.x, o.y, sd * (hubIn - 0.03)], { ...steel, ...fits, one: true }))], { item: 'axle-beam', says: 'forged steel I-section, its kingpin bosses at its ends' }));
+    for (const sd of [-1, 1]) out.push(turned({ name: 'kingpin', steps: [[0.025, 0.26]], mat: 'steel-alloy', item: 'kingpin', at: [o.x, o.y - 0.13, sd * (hubIn - 0.03)], finish: 'ground' }));
+  }
+  return group(o.name, out, { item: o.drive ? 'drive-axle' : 'steer-axle', ...c });
+}
+
+/** A driveshaft from one point to another: a steel tube, a slip yoke at its front end so it can lengthen as the axle
+ *  rises, a universal joint at each end (two yokes, a spider, four bearing caps). Its tube about 4.5 in. across on a
+ *  truck, 3 in. on a car (typical). */
+export function driveshaft(name: string, a: V3, b: V3, heavy: boolean): Part {
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(d[0]!, d[1]!, d[2]!), r = heavy ? 0.057 : 0.038, rot: V3 = [0, -Math.atan2(d[2]!, d[0]!), Math.asin(d[1]! / L) - PI / 2];
+  const uj = (y: number): Part => group('universal joint', [P('yoke', { box: [r * 1.6, r * 0.8, r * 1.6] }, [0, y - r * 0.4, 0], { item: 'uj-yoke', mat: 'steel-alloy', color: 0x6a6c70, finish: 'forged', fill: 0.5 }), P('yoke', { box: [r * 1.6, r * 0.8, r * 1.6] }, [0, y + r * 0.4, 0], { item: 'uj-yoke', mat: 'steel-alloy', color: 0x6a6c70, finish: 'forged', fill: 0.5, rot: [0, PI / 2, 0] }), P('spider', { cyl: [r * 0.2, r * 1.8] }, [0, y, 0], { item: 'uj-spider', mat: 'steel-alloy', color: 0x8a8c90, rot: [PI / 2, 0, 0] }), P('spider', { cyl: [r * 0.2, r * 1.8] }, [0, y, 0], { item: 'uj-spider', mat: 'steel-alloy', color: 0x8a8c90, rot: [0, 0, PI / 2] }), ...[[r * 0.9, 0], [-r * 0.9, 0], [0, r * 0.9], [0, -r * 0.9]].map(([x, z]) => P('bearing cap', { cyl: [r * 0.3, r * 0.3] }, [x!, y, z!], { item: 'uj-cap', mat: 'steel-alloy', color: 0x8a8c90, rot: x ? [0, 0, PI / 2] as V3 : [PI / 2, 0, 0] as V3 }))], { item: 'universal-joint' });
+  return group(name, [P('driveshaft tube', { cyl: [r, L - 4 * r] }, [0, L / 2, 0], { item: 'driveshaft-tube', mat: 'steel-low', color: 0x2a2a2a, finish: 'paint', shell: heavy ? 0.003 : 0.0018 }), P('slip yoke', { cyl: [r * 0.9, r * 2.2] }, [0, r * 2.6, 0], { item: 'slip-yoke', mat: 'steel-alloy', color: 0x6a6c70, finish: 'forged', fill: 0.7 }), uj(r * 0.8), uj(L - r * 0.8)], { item: 'driveshaft', at: a, rot });
 }
