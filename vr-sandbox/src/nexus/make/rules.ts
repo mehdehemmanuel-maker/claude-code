@@ -31,7 +31,7 @@ export const MAX_SERVICE: Record<string, number> = {
 export const HEAT_FALLOFF = 0.04;
 export const AMBIENT = 40;
 
-export interface Finding { rule: 'interference' | 'clearance' | 'heat'; a: string; b: string; says: string; depth?: number; gap?: number; need?: number; at?: [number, number, number] }
+export interface Finding { rule: 'interference' | 'clearance' | 'heat'; a: string; b: string; /** where each is in the tree checked ("/12/3": child 12, then its child 3), so a repair can find it */ pa?: string; pb?: string; says: string; depth?: number; gap?: number; need?: number; at?: [number, number, number]; /** the nearest point on a, where b's nearest is `at` (heat) */ from?: [number, number, number] }
 interface Mesh3 extends TriMesh { p: Part; node: Node; tris?: Tris }
 const T = (m: Mesh3): Tris => (m.tris ??= trisOf(m));
 
@@ -88,7 +88,7 @@ export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3,
     const key = [ownerOf(a.node).path, ownerOf(b.node).path].sort().join('|'); if (seen.has(key)) continue;
     const c = meshClashes([a, b], { touch: tol, edge: 'scaled', fused: () => false }).find((x) => x.kind === 'through'); if (!c) continue;
     seen.add(key);
-    out.push({ rule: 'interference', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, says: `the ${a.name} runs into the ${b.name}`, ...(c.at ? { at: c.at as [number, number, number] } : {}) });
+    out.push({ rule: 'interference', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, pa: ownerOf(a.node).path, pb: ownerOf(b.node).path, says: `the ${a.name} runs into the ${b.name}`, ...(c.at ? { at: c.at as [number, number, number] } : {}) });
   }
   return out;
 }
@@ -99,7 +99,7 @@ export function clearances(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = 
     const need = a.p.clear ?? (a.node.parent?.p.clear); if (!need) continue;
     for (const b of ms) {
       if (b === a || !pair(a, b) || linked(a, b) || said(a, b) || (a.p.runsOn ?? a.node.parent?.p.runsOn ?? []).some((r) => b.name.includes(r) || ownerOf(b.node).p.name.includes(r))) continue;
-      const d = leastDistance(T(a), T(b), need); if (d && d.d < need) out.push({ rule: 'clearance', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, gap: d.d, need, says: `the ${a.name} is ${(d.d * 1000).toFixed(1)} mm from the ${b.name}: it needs ${(need * 1000).toFixed(0)} mm` });
+      const d = leastDistance(T(a), T(b), need); if (d && d.d < need) out.push({ rule: 'clearance', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, pa: ownerOf(a.node).path, pb: ownerOf(b.node).path, gap: d.d, need, says: `the ${a.name} is ${(d.d * 1000).toFixed(1)} mm from the ${b.name}: it needs ${(need * 1000).toFixed(0)} mm` });
     }
   }
   return out;
@@ -133,7 +133,7 @@ export function heat(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => 
       if (!d || d.d >= need) continue;
       // (in the open between them, the heat reaches it; behind a metal wall (the head, a heat shield), it does not)
       if (shielded(new THREE.Vector3(...d.p), new THREE.Vector3(...d.q), ms, [h, b])) continue;
-      out.push({ rule: 'heat', a: ownerOf(h.node).p.name, b: ownerOf(b.node).p.name, gap: d.d, need, at: d.q as [number, number, number], says: `the ${b.name} (${b.mat}, good to about ${lim} °C) is ${(d.d * 1000).toFixed(0)} mm from the ${h.name} at about ${Th} °C, in the open: about ${Math.round(AMBIENT + (Th - AMBIENT) * Math.exp(-d.d / HEAT_FALLOFF))} °C there; it needs ${(need * 1000).toFixed(0)} mm, or a heat shield between` });
+      out.push({ rule: 'heat', a: ownerOf(h.node).p.name, b: ownerOf(b.node).p.name, pa: ownerOf(h.node).path, pb: ownerOf(b.node).path, gap: d.d, need, at: d.q as [number, number, number], from: d.p as [number, number, number], says: `the ${b.name} (${b.mat}, good to about ${lim} °C) is ${(d.d * 1000).toFixed(0)} mm from the ${h.name} at about ${Th} °C, in the open: about ${Math.round(AMBIENT + (Th - AMBIENT) * Math.exp(-d.d / HEAT_FALLOFF))} °C there; it needs ${(need * 1000).toFixed(0)} mm, or a heat shield between` });
     }
   }
   return out;
@@ -141,8 +141,8 @@ export function heat(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => 
 /** All three, on a thing's surfaces as drawn. */
 /** …or only between what is named like `only` (a piece of it, or anything it is in) and everything: what moves, at one
  *  place in its motion. */
-export function rulesOf(root: Part, o: { touch?: number; only?: RegExp; /** only what moves is tried (a pose in a motion): heat and clearance as at rest */ motion?: boolean } = {}): { findings: Finding[]; pieces: number } {
-  const all = trianglesOf(root), on = o.only ? (m: Mesh3) => [...names(m.node)].some((n) => o.only!.test(n)) : null, ms = all;
+export function rulesOf(root: Part, o: { touch?: number; only?: RegExp; /** or only what is under these places in the tree ("/12/3") */ within?: string[]; /** only what moves is tried (a pose in a motion): heat and clearance as at rest */ motion?: boolean } = {}): { findings: Finding[]; pieces: number } {
+  const all = trianglesOf(root), w = o.within, on = o.only ? (m: Mesh3) => [...names(m.node)].some((n) => o.only!.test(n)) : w ? (m: Mesh3) => w.some((x) => m.node.path === x || m.node.path.startsWith(x + '/')) : null, ms = all;
   if (on) { const pair = (a: Mesh3, b: Mesh3) => on(a) || on(b), res = [...interference(ms, { ...o, pair }), ...(o.motion ? [] : [...clearances(ms, pair), ...heat(ms, pair)])]; return { findings: res, pieces: all.filter(on).length }; }
   return { findings: [...interference(ms, o), ...clearances(ms), ...heat(ms)], pieces: ms.length };
 }

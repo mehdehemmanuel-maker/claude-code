@@ -33,6 +33,7 @@ import { needsOf, type Need } from './placement/model';
 import { combineFields, fieldOf, shareWhere, showField, statsOf, type Field, type FieldKind } from './placement/fields';
 import { explainPlaced, placeOne, type Placed } from './placement/solve';
 import { selectBattery, type Selection } from './placement/size';
+import { REPAIRS, autoLoop, type Repair } from './placement/repair';
 import { boreThrough, onto } from './mate';
 import { engineLoads, springCase, type LoadRow } from './loads';
 import { SPRING_WIRES } from '../engineering/springs';
@@ -1338,6 +1339,20 @@ const BUILT_THINGS: BlockDef[] = [
       else if (typeof v === 'string' && v) lines = [v]; else throw new Error('wire a result in');
       return { lines, says: lines[0]! }; },
     tests: [{ inputs: { value: { says: 'it holds', sources: ['a table'] } }, outputs: { lines: ['it holds', 'from: a table'] } }, { set: { depth: 'one line' }, inputs: { value: { reason: 'too hot', says: 'moved' } }, outputs: { says: 'moved' } }] }),
+  def({ id: 'repair.library', name: 'Repairs', kind: 'solver', ability: 'decide', domains: ['mechanical', 'vehicles', 'electrical', 'structural', 'manufacturing'], says: 'What the autopilot may do about a finding, by the rule it answers, least costly first: nudge a part clear of what it runs into, move it (the placement solver), put a heat shield between. Choose which, and in what order; a rule with no repair is said, a gap in the library',
+    settings: [{ key: 'use', label: 'Repairs, in order (blank: all, least costly first)', type: 'text', default: '' }],
+    ports: { inputs: [], outputs: [P('library', 'any'), P('repairs', 'table'), P('gaps', 'list<text>'), P('says', 'text')] },
+    run: (_i, c) => { const ids = String(c.set.use ?? '').split(/[\s,]+/).filter(Boolean), bad = ids.filter((x) => !REPAIRS.some((r) => r.id === x)); if (bad.length) throw new Error(`no repair "${bad[0]}" (there are ${REPAIRS.map((r) => r.id).join(', ')})`);
+      const lib = ids.length ? ids.map((x, k) => ({ ...REPAIRS.find((r) => r.id === x)!, cost: k + 1 })) : [...REPAIRS].sort((a, b) => a.cost - b.cost), gaps = (['interference', 'clearance', 'heat'] as const).filter((k) => !lib.some((r) => r.rules.includes(k))).map((k) => `nothing answers ${k}`);
+      return { library: lib, repairs: lib.map((r) => ({ repair: r.id, name: r.name, answers: r.rules.join(', '), does: r.says })), gaps, says: `${lib.length} repairs: ${lib.map((r) => r.id).join(', ')}${gaps.length ? `; ${gaps.join(', ')}` : ''}` }; },
+    tests: [{ inputs: {}, outputs: { gaps: [] } }, { set: { use: 'shield' }, inputs: {}, outputs: { gaps: ['nothing answers interference', 'nothing answers clearance'] } }] }),
+  def({ id: 'auto.loop', name: 'Autopilot', kind: 'solver', ability: 'optimise', domains: ['mechanical', 'vehicles', 'electrical', 'structural', 'manufacturing'], says: 'Checks a thing by the rules, groups what is wrong into problems, and tries the repairs on each, least costly first, keeping one only if its problem is gone and the parts it changed have less wrong than before; then checks the whole again. What no repair clears becomes a named task with why each repair failed. Nothing is typed by hand: what moves, where to and what is made come from the rules, the maps and what the parts need',
+    settings: [{ key: 'rounds', label: 'At most this many problems tried', type: 'number', default: 30 }, { key: 'step', label: 'The solver\'s cell, m', type: 'number', default: 0.025 }],
+    ports: { inputs: [thing(), P('library', 'any', { optional: true })], outputs: [thing('thing', 'thing, repaired'), N('before', undefined, { label: 'findings before' }), N('after', undefined, { label: 'findings after' }), P('attempts', 'table'), P('tasks', 'table'), P('kept', 'list<text>'), P('says', 'text')] },
+    run: (i, c) => { const lib = Array.isArray(i.library) ? (i.library as Repair[]) : undefined, step = Number(c.set.step); if (!(step >= 0.01 && step <= 0.2)) throw new Error('a cell from 10 mm to 0.2 m');
+      const r = autoLoop(asPart(asThing(i.thing)), { rounds: Number(c.set.rounds) || 30, repairs: lib, step });
+      return { thing: r.tree, before: r.before, after: r.after, attempts: r.attempts.map((a) => ({ problem: a.problem, repair: a.repair, kept: a.kept, why: a.why, ms: a.ms })), tasks: r.tasks, kept: r.kept, says: r.says }; },
+    tests: [{ set: { step: 0.05 }, inputs: { thing: BAY }, outputs: { before: 1, after: 0 } }] }),
   def({ id: 'check.rules', name: 'Nothing runs into anything?', kind: 'critic', ability: 'check', domains: ['vehicles', 'mechanical', 'manufacturing', 'electrical', 'everyday'], sink: true, says: 'The rules a made thing is held to, on its surfaces as drawn (triangle against triangle): no two pieces cross unless they are one piece, one is said to pass through the other, one is a fastener in what it fastens, or one sits in a hole cut for it; a piece that moves keeps the clearance it says (a belt, a chain) from all but what it runs on; and nothing stands nearer a hot piece (an exhaust, a turbo, a muffler) than its material takes, unless something solid is between them. Each finding names both pieces and what would put it right',
     ports: { inputs: [thing()], outputs: [N('findings', undefined, { label: 'how many' }), P('interference', 'list<text>'), P('clearance', 'list<text>'), P('heat', 'list<text>'), P('pieces', 'integer'), P('says', 'text')] },
     run: (i) => {

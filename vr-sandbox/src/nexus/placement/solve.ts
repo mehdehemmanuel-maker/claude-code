@@ -31,8 +31,10 @@ export interface Placed {
   reason: string; sources: string[];
 }
 
-/** Where a part sits in a tree: its holder's parts and its index there. */
-function locate(root: Part, re: RegExp): { path: number[]; part: Part } | null {
+/** Where a part sits in a tree: its holder's parts and its index there; by a pattern on its name (the first found), or by
+ *  its place ("/12/3"). */
+function locate(root: Part, re: RegExp | string): { path: number[]; part: Part } | null {
+  if (typeof re === 'string') { const path = re.split('/').filter(Boolean).map(Number); let part: Part | undefined = root; for (const i of path) part = part?.parts?.[i]; return part && path.length ? { path, part } : null; }
   const walk = (p: Part, path: number[]): { path: number[]; part: Part } | null => { for (let i = 0; i < (p.parts ?? []).length; i++) { const q = p.parts![i]!; if (re.test(q.name)) return { path: [...path, i], part: q }; const r = walk(q, [...path, i]); if (r) return r; } return null; };
   return walk(root, []);
 }
@@ -46,7 +48,7 @@ export function replaceAt(root: Part, path: number[], by: Part | null): Part {
 /** The least service temperature among a part's materials that heat harms (a battery's polyethylene separators: 80 °C). */
 export function heatLimit(p: Part): number { let lim = Infinity; const walk = (q: Part) => { if (q.shape && HEAT_HARMED.test(q.mat ?? '')) lim = Math.min(lim, MAX_SERVICE[q.mat!] ?? Infinity); (q.parts ?? []).forEach(walk); }; walk(p); return lim; }
 
-export function placeOne(root: Part, re: RegExp, o: PlaceOptions = {}): { placed: Placed; tree: Part } {
+export function placeOne(root: Part, re: RegExp | string, o: PlaceOptions = {}): { placed: Placed; tree: Part } {
   const at = locate(root, re); if (!at) throw new Error(`nothing named like ${String(re)} to place`);
   const nodes0 = layout(root), me = nodes0.find((n) => n.p === at.part); if (!me?.sub) throw new Error(`${at.part.name} has no size to place`);
   // (places are found in the world; its holder must not be moved or turned, so the world is its holder's frame)

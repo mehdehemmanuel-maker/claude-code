@@ -1,6 +1,6 @@
 # Engineering at any scale as nodes
 
-Status: steps 0 to 2 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select` for batteries, `explain`); the rest planned. Base: commit `14e3283`.
+Status: steps 0 to 3 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select` for batteries, `explain`, `repair.library`, `auto.loop`); the rest planned. Base: commit `14e3283`.
 Target: 1,000,000 components, 100,000 unique, solved, checked, changed and understood without hand edits.
 End state: a person states what they want; the system does the rest, asks only what matters, and returns a buildable, proven design.
 
@@ -418,7 +418,7 @@ Twelve layers, in the order a design flows through them. 65 nodes.
 | `twin` | K | 14 |
 | `version` | I | 10 |
 
-65 nodes, 7 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select`, `explain`).
+65 nodes, 9 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select`, `explain`, `repair.library`, `auto.loop`).
 
 ## 12. Merges in this plan
 
@@ -565,6 +565,20 @@ Step 2 result, the Corolla's battery:
   - the cable to the starter is not routed (step 4);
   - a part inside a moved holder is refused.
 - `size.select` for batteries uses a rule of thumb (CCA per cubic inch) as a floor and holds car groups only.
+
+Step 3 result, the autopilot on the Corolla (`placement/repair.ts`):
+- Before: 226 findings in 6 problems.
+- Kept, with nothing typed by hand:
+  - the battery moved by the solver (221 heat findings, and its tray in the heater hose);
+  - the hood inner frame nudged 4 mm down out of the hood;
+  - a 149 mm stainless shield between the front pipe and the upper hose.
+- After: 1 finding, a named task. The upper hose runs beside the EGR pipe, 23 mm off it.
+  - The move is refused: the hose is a line, and the radiator it serves faces the grille.
+  - No flat shield of up to 250 mm covers it: 450 points of the hose stay at up to 233 °C, over its 150 °C.
+  - It waits on routing (step 4).
+- About 110 s. The guard undoes any repair that leaves its problem or more findings where it changed things.
+- The rules' heat gate tries only the nearest pair of points. A plate across that one line passed the gate while the rest of the hose stayed too hot: the first run read 226 → 0. The shield repair now checks every point of the harmed part too hot for its material, and the gate itself is to be made to do the same.
+- The shield is held by what it says (clipped to the hot part), not yet by a bracket that is made (step 6).
 
 Gate: 9 of 1,630 tests fail. Causes:
 - `bearing-6206zz` is not stored in the inventory.

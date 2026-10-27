@@ -43,6 +43,9 @@ const ACCESS: [RegExp, string, number, string][] = [
   [/spark plug|ignition coil|coil pack/i, 'changing the plugs', 0.1, 'every 60,000 to 120,000 miles (typical)'],
   [/fuse box|relay box/i, 'changing a fuse', 0.2, 'when one blows (typical)'],
 ];
+/** What a part is wired or piped to, kept near (inferred from what it is): a battery near its starter, whose cable carries
+ *  the cranking current (the shorter it is, the less the voltage drops). */
+export const NEAR: [RegExp, RegExp, string][] = [[/battery/i, /^starter motor$/i, 'its cable to the starter carries the cranking current: the shorter, the less it drops']];
 // (what faces something: a heat exchanger faces the air coming in through the grille (+x, forward))
 const FACES: [RegExp, [number, number, number], string][] = [[/^(radiator|condenser|charge air cooler)$/i, [1, 0, 0], 'the air through the grille']];
 

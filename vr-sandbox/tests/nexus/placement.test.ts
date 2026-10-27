@@ -1,5 +1,5 @@
 // The placement model and its fields (docs/PLACEMENT.md, step 1): needs read from what parts state; heat, motion and
-// reach mapped cell by cell, with the rules' own heat model. Placing a part from them, and picking one by its duty (step 2).
+// reach mapped cell by cell, with the rules' own heat model. Placing a part from them, and picking one by its duty (step 2). The autopilot (step 3).
 import { describe, expect, it } from 'vitest';
 import type { Part } from '../../src/nexus/kits';
 import { needsOf } from '../../src/nexus/placement/model';
@@ -7,6 +7,7 @@ import { cellAt, combineFields, fieldOf, shareWhere, showField, statsOf, type Fi
 import { AMBIENT, HEAT_FALLOFF, rulesOf } from '../../src/nexus/make/rules';
 import { explainPlaced, placeOne } from '../../src/nexus/placement/solve';
 import { selectBattery } from '../../src/nexus/placement/size';
+import { REPAIRS, autoLoop } from '../../src/nexus/placement/repair';
 import { makeMachine, MACHINES } from '../../src/nexus/machines';
 
 const box = (name: string, size: [number, number, number], at: [number, number, number], more: Partial<Part> = {}): Part => ({ name, shape: { box: size }, at, mat: 'steel-low', ...more });
@@ -103,4 +104,31 @@ describe('placing a part from what it needs', () => {
     expect(placed.chosen.heat).toBeLessThanOrEqual(80); expect(placed.chosen.reach).toBeGreaterThan(0.5);
     expect(rulesOf(tree, { only: /^battery and its tray$/ }).findings).toHaveLength(0);
   }, 300000);
+});
+
+describe('the autopilot: check, repair, check again', () => {
+  it('a battery by an exhaust: the loop moves it, the guard keeps it, the whole is checked clean', () => {
+    const r = autoLoop(bay(), { step: 0.05 });
+    expect(r.before).toBe(1); expect(r.after).toBe(0); expect(r.tasks).toHaveLength(0);
+    expect(r.attempts.filter((a) => a.kept).map((a) => a.repair)).toEqual(['move']);
+  });
+  // (a hose 25 mm from a 600 °C pipe: across it, a shield covers every point too hot; along it, for 400 mm, no plate of
+  // 250 mm can, and the loop says so rather than pass on the one line the rules try)
+  const pipeAnd = (hose: Part): Part => ({ name: 'bay', parts: [box('pipe', [0.4, 0.03, 0.03], [0, 0.2, 0], { item: 'pipe', mat: 'stainless-304', hot: 600 }), hose] });
+  const shieldOnly = REPAIRS.filter((r) => r.id === 'shield');
+  it('a shield where it covers all that is too hot', () => {
+    const r = autoLoop(pipeAnd(box('hose', [0.03, 0.03, 0.3], [0, 0.26, 0], { item: 'hose', mat: 'epdm' })), { repairs: shieldOnly });
+    expect(r.before).toBe(1); expect(r.after).toBe(0); expect(r.kept[0]).toMatch(/shield between the pipe and the hose/);
+  });
+  it('no shield where a plate cannot cover it: a named task, with why', () => {
+    const r = autoLoop(pipeAnd(box('hose', [0.4, 0.03, 0.03], [0, 0.245, 0], { item: 'hose', mat: 'epdm' })), { repairs: shieldOnly });
+    expect(r.after).toBe(1); expect(r.tasks).toHaveLength(1); expect(r.tasks[0]!.cause).toMatch(/points of the hose at up to \d+ °C .* in the open/);
+  });
+  it('the Corolla: the battery moved, the hood frame nudged, a shield fitted; what no repair clears is named', () => {
+    const r = autoLoop(makeMachine(MACHINES.find((m) => m.id === 'corolla')!));
+    expect(r.before).toBeGreaterThan(200); expect(r.after).toBeLessThanOrEqual(r.tasks.reduce((n, t) => n + t.findings, 0));
+    expect(r.kept.some((k) => /battery and its tray moved/.test(k))).toBe(true);
+    expect(r.kept.some((k) => /hood inner frame moved/.test(k))).toBe(true);
+    for (const t of r.tasks) expect(t.cause.length).toBeGreaterThan(0);
+  }, 600000);
 });
