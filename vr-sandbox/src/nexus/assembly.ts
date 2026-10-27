@@ -218,6 +218,8 @@ export function fitIn(t: Part | Assembly, pattern: string, by: Part | Assembly):
   const swap: Swap = { key: `${pattern}#${idOf(by)}`, by: (q) => (re.test(q.name) ? by : null) };
   const walk = (x: Part | Assembly): Part | Assembly => {
     if (isPart(x)) return re.test(x.name) ? by : x.parts?.length ? opened(x, swap) : x;
+    // (a thing named like it is swapped whole, whether drawn as one piece or built of many: a tyre built in depth too)
+    if (re.test(x.name)) return by;
     return { name: x.name, items: x.items.map((it) => ({ ...it, of: walk(it.of) })), ...(x.ports ? { ports: x.ports } : {}) };
   };
   const thing = walk(t), kept = new Map<object, number>();
