@@ -874,6 +874,36 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
     return b;
   }],
+  ['Doorways kept clear: a living room with its door behind the television, before and after', () => {
+    // a room whose fittings were laid out by its type alone puts its television against the wall its door is in. Keep
+    // doorways clear reads each door (its hinge line, the side it swings to, its width) and keeps the room its leaf sweeps
+    // and the floor to come up to it; what stands there is slid along its wall with what stands on it, or turned to
+    // another wall, unless it is meant to be there. The house seed runs it on every house
+    const b = emptyBoard('Doorways kept clear');
+    placeBlock(b, 'seed.room', 0, 0, { type: 'living', front: 'wall', back: 'door' }, 'room'); b.nodes.room!.label = 'A living room, its door in its back wall';
+    placeBlock(b, 'keep.clear', 0, 0, { move: 'only said' }, 'said'); b.nodes.said!.label = 'What stands in a doorway (said)'; wire(b, 'room', 'room', 'said', 'thing');
+    placeBlock(b, 'keep.clear', 0, 0, { move: 'moved' }, 'moved'); b.nodes.moved!.label = 'Doorways kept clear (moved)'; wire(b, 'room', 'room', 'moved', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'What stood where, and what was done'; wire(b, 'moved', 'blocked', 'rows', 'rows');
+    placeBlock(b, 'pick', 0, 0, { options: 'before|after', which: 'after' }, 'pick'); b.nodes.pick!.label = 'Before or after'; wire(b, 'said', 'thing', 'pick', 'before'); wire(b, 'moved', 'thing', 'pick', 'after');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'pick', 'chosen', 'show', 'thing');
+    return b;
+  }],
+  ['A body from its measured segments, its math on every part', () => {
+    // a human body as numbers: laid out from its height (Drillis and Contini), each of its sixteen segments the share of
+    // its mass de Leva measured, the long limbs tapered so each centre of mass is where he measured it; each part carries
+    // its mass, length, centre and moments of inertia, set beside the measured ones; its joints with their AAOS ranges
+    const b = emptyBoard('A body from its measured segments');
+    placeBlock(b, 'body', 0, 0, { height: 1.75, mass: 75, sex: 'male', pose: 'standing' }, 'man'); b.nodes.man!.label = 'A man, 1.75 m, 75 kg, standing';
+    placeBlock(b, 'body', 0, 0, { height: 1.63, mass: 60, sex: 'female', pose: 'walking' }, 'woman'); b.nodes.woman!.label = 'A woman, 1.63 m, 60 kg, walking';
+    placeBlock(b, 'body', 0, 0, { height: 1.75, mass: 75, sex: 'male', pose: 'reaching' }, 'reach'); b.nodes.reach!.label = 'Reaching';
+    placeBlock(b, 'view.table', 0, 0, {}, 'segs'); b.nodes.segs!.label = 'Each segment: mass, length, centre, inertia (worked out, and measured)'; wire(b, 'man', 'segments', 'segs', 'rows');
+    placeBlock(b, 'view.table', 0, 0, {}, 'joints'); b.nodes.joints!.label = 'Each joint: its range, its torque'; wire(b, 'man', 'joints', 'joints', 'rows');
+    placeBlock(b, 'place', 0, 0, { x: 0.8 }, 'w2'); wire(b, 'woman', 'body', 'w2', 'thing');
+    placeBlock(b, 'place', 0, 0, { x: -0.8 }, 'r2'); wire(b, 'reach', 'body', 'r2', 'thing');
+    placeBlock(b, 'combine', 0, 0, {}, 'all'); wire(b, 'man', 'body', 'all', 'things'); wire(b, 'w2', 'placed', 'all', 'things'); wire(b, 'r2', 'placed', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    return b;
+  }],
   ['An agent opens a door: it sees it, walks to it, takes hold, pulls; the door swings in the physics', () => {
     // nothing placed by hand: the person stands where people pass (the middle of the hall), sees by its rays the doors it
     // can open, reads each door (its hinge line through its hinges' knuckles, which side it swings to, the handle on its
@@ -1352,7 +1382,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['An agent opens', 'everyday'], ['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['Doorways kept clear', 'structural'], ['A body from its measured', 'everyday'], ['An agent opens', 'everyday'], ['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

@@ -107,6 +107,8 @@ export interface Part {
   /** how a skin meets its neighbours along an edge of it, and why (src/nexus/panels.ts says these; the critic checks
    *  them with numbers): in one tangent plane across a shut line (G1: a highlight runs on across it), a deliberate crease
    *  (G0 only), or square to its own mirror at the middle */ meets?: { part: string; edge: 'a0' | 'a1' | 'b0' | 'b1'; kind: 'G1' | 'crease' | 'mirror'; why: string }[];
+  /** where it is on purpose where a rule would otherwise move it, by what that rule keeps clear: 'in a doorway' (a
+   *  draught screen, a barrier, a bookcase blocking a door that is not used) */ meant?: string[];
   /** its maker's published mass, kg: what is not drawn (its part named "the rest of it") makes up the difference */ published?: number;
   /** the kit that made it, on the root of each thing a kit makes (a street's cars and houses each carry theirs) */ kit?: string;
   /** what it is in the inventory (an item's id) or the words its family makes it from ("bolt M12x40", "tube 32x2"): so it

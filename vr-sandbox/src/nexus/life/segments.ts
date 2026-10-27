@@ -141,3 +141,46 @@ export function centreOfMass(rig: Rig): V3 {
   const c: V3 = [0, 0, 0]; for (const s of rig.segments) { const m = centreOf(s); for (let i = 0; i < 3; i++) c[i]! += (m[i]! * s.mass) / rig.mass; }
   return c;
 }
+
+/** de Leva (1996) table 4, the long limbs: each centre of mass as a share of the segment's length from its proximal end,
+ *  and its radii of gyration about it (sagittal, transverse, longitudinal), shares of its length; men and women apart. */
+const DE_LEVA: Record<'m' | 'f', Record<'upperArm' | 'forearm' | 'thigh' | 'shank', { com: number; k: [number, number, number] }>> = {
+  m: { upperArm: { com: 0.5772, k: [0.285, 0.269, 0.158] }, forearm: { com: 0.4574, k: [0.276, 0.265, 0.121] }, thigh: { com: 0.4095, k: [0.329, 0.329, 0.149] }, shank: { com: 0.4459, k: [0.255, 0.249, 0.103] } },
+  f: { upperArm: { com: 0.5754, k: [0.278, 0.260, 0.148] }, forearm: { com: 0.4559, k: [0.261, 0.257, 0.094] }, thigh: { com: 0.3612, k: [0.369, 0.364, 0.162] }, shank: { com: 0.4416, k: [0.271, 0.267, 0.093] } },
+};
+/** A segment's own numbers: its length, its centre of mass and its moments of inertia about that centre, kg·m², worked
+ *  out exactly for its shape at the body's density (I = ∫ r² dm); for a long limb, de Leva's measured ones beside them. */
+export interface SegmentMath {
+  id: SegmentId; name: string; mass: number; share: number; length: number; /** its shape: a capsule's radius, or a box's sides */ size: string;
+  /** its centre of mass, a share of its length from its proximal end: the shape's (a uniform capsule: 0.5) and de Leva's */ com: number; comMeasured?: number;
+  /** about its centre: across it (the larger of the two), and about its long axis */ Iacross: number; Ilong: number; IacrossMeasured?: number; IlongMeasured?: number;
+  /** a long limb tapered as it is: a frustum, its radius at its proximal end and its distal, fit so its centre of mass is
+   *  where de Leva measured it and its volume holds its mass */ taper?: { R: number; r: number };
+  says: string;
+}
+export function mathOf(rig: Rig, sex: 'm' | 'f' = 'm'): SegmentMath[] {
+  return rig.segments.map((s) => {
+    const L = len(sub(s.b, s.a)), m = s.mass; let Ia: number, Il: number, size: string;
+    if (s.shape.kind === 'capsule') {
+      // (a cylinder of length L and two half-balls: the cylinder's share and each half-ball's, its own inertia (83/320 m r²
+      // across, 2/5 m r² along) moved out by where its centre is (3r/8 past the cylinder's end))
+      const r = s.shape.r, vc = Math.PI * r * r * L, vh = (2 / 3) * Math.PI * r ** 3, mc = (m * vc) / (vc + 2 * vh), mh = (m * vh) / (vc + 2 * vh);
+      Ia = mc * (L * L / 12 + r * r / 4) + 2 * mh * ((83 / 320) * r * r + (L / 2 + (3 * r) / 8) ** 2); Il = (mc * r * r) / 2 + 2 * ((2 / 5) * mh * r * r); size = `r ${(r * 1000).toFixed(0)} mm`;
+    } else { const [a, b, c] = s.shape.half.map((h) => 2 * h) as [number, number, number]; Ia = Math.max((m * (b * b + c * c)) / 12, (m * (a * a + b * b)) / 12); Il = (m * (a * a + c * c)) / 12; size = `${(a * 1000).toFixed(0)} × ${(b * 1000).toFixed(0)} × ${(c * 1000).toFixed(0)} mm`; }
+    const kind = s.id.replace(/[LR]$/, '') as keyof (typeof DE_LEVA)['m'], d = DE_LEVA[sex][kind];
+    let com = 0.5, taper: SegmentMath['taper'];
+    if (d) {
+      // (a frustum's centre from its proximal end, radii R there and qR at its far end: L (1 + 2q + 3q²) / 4 (1 + q + q²);
+      // q found by bisection for de Leva's centre, R from its volume, π L R² (1 + q + q²) / 3 = m / ρ; its inertia summed
+      // over thin discs, each m r² / 4 across plus its distance to the centre squared, m r² / 2 along)
+      const f = (q: number) => (1 + 2 * q + 3 * q * q) / (4 * (1 + q + q * q)); let lo = 0.05, hi = 20; for (let k = 0; k < 60; k++) { const q = (lo + hi) / 2; if (f(q) < d.com) lo = q; else hi = q; }
+      const q = (lo + hi) / 2, R = Math.sqrt((3 * m) / (rig.density * Math.PI * L * (1 + q + q * q))), r = q * R, N = 400; let ia = 0, il = 0; const zc = d.com * L;
+      for (let k = 0; k < N; k++) { const z = ((k + 0.5) / N) * L, rr = R + (r - R) * (z / L), dm = rig.density * Math.PI * rr * rr * (L / N); ia += dm * (rr * rr / 4 + (z - zc) ** 2); il += (dm * rr * rr) / 2; }
+      Ia = ia; Il = il; com = d.com; taper = { R, r }; size = `${(R * 1000).toFixed(0)} to ${(r * 1000).toFixed(0)} mm radius, tapered`;
+    }
+    const out: SegmentMath = { id: s.id, name: s.name, mass: m, share: s.share, length: L, size, com, Iacross: Ia, Ilong: Il, ...(taper ? { taper } : {}), says: '' };
+    if (d) { out.comMeasured = d.com; out.IacrossMeasured = m * (Math.max(d.k[0], d.k[1]) * L) ** 2; out.IlongMeasured = m * (d.k[2] * L) ** 2; }
+    out.says = `${s.name}: ${m.toFixed(2)} kg (${(s.share * 100).toFixed(2)} % of the body, de Leva 1996), ${(L * 1000).toFixed(0)} mm, ${size}; its centre at ${out.com.toFixed(2)} of its length${d ? ` (de Leva measured ${d.com.toFixed(3)})` : ''}; I across ${Ia.toExponential(2)} kg·m²${out.IacrossMeasured ? ` (measured ${out.IacrossMeasured.toExponential(2)})` : ''}, along ${Il.toExponential(2)}${out.IlongMeasured ? ` (measured ${out.IlongMeasured.toExponential(2)})` : ''}`;
+    return out;
+  });
+}

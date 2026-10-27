@@ -177,18 +177,20 @@ function fittingsAll(): void {
   });
   fittings('kitchen', 'What makes a room a kitchen: a run of base cabinets and a worktop along the back wall, the sink in it, a stove and a fridge (cabinets 600 deep, 900 high; a 760 mm range; a 750 × 1750 mm fridge: typical)', (s, w, d) => {
     const bz = back(s, d);
-    const run = s.n('shape.box', { name: 'base cabinets', mat: 'wood', fill: 0.1, color: '#eceff1', finish: 'paint', h: 0.86, d: 0.6 }, 'cabinet run'); s.w(s.f('w - 1.2', { w: [w, 'value'] }), 'result', run, 'w');
-    const top = s.n('shape.box', { name: 'worktop', mat: 'granite', color: '#455a64', finish: 'stone', h: 0.04, d: 0.62 }, 'worktop'); s.w(s.f('w - 1.2', { w: [w, 'value'] }), 'result', top, 'w');
+    const run = s.n('shape.box', { name: 'base cabinets', mat: 'wood', fill: 0.1, color: '#eceff1', finish: 'paint', h: 0.86, d: 0.6 }, 'cabinet run'); s.w(s.f('w - 1.69', { w: [w, 'value'] }), 'result', run, 'w');
+    const top = s.n('shape.box', { name: 'worktop', mat: 'granite', color: '#455a64', finish: 'stone', h: 0.04, d: 0.62 }, 'worktop'); s.w(s.f('w - 1.69', { w: [w, 'value'] }), 'result', top, 'w');
     const sinkK = s.n('seed.sink', { kind: 'kitchen' }, 'sink');
     const stove = s.n('shape.box', { name: 'stove', mat: 'stainless-304', fill: 0.02, color: '#cfd8dc', finish: 'brushed', w: 0.76, h: 0.9, d: 0.62 }, 'stove');
     const fridge = s.n('shape.box', { name: 'fridge', mat: 'steel-low', fill: 0.012, color: '#eceff1', finish: 'paint', w: 0.75, h: 1.75, d: 0.7 }, 'fridge');
-    const runX = s.f('0 - 0.6 + 0', {}, 'run middle'), z0 = s.f('b + 0.3', { b: [bz, 'result'] }, 'its middle');
+    // (along the back wall between its side walls' faces, 75 mm in: the run from the left, then the stove, then the fridge,
+    // 10 mm apart)
+    const runX = s.f('0 - 0.765', {}, 'run middle'), z0 = s.f('b + 0.3', { b: [bz, 'result'] }, 'its middle');
     return [
       [s.at([run, 'part'], { x: [runX, 'result'], y: 0.43, z: [z0, 'result'] }), 'placed'],
       [s.at([top, 'part'], { x: [runX, 'result'], y: 0.88, z: [s.f('b + 0.31', { b: [bz, 'result'] }), 'result'] }), 'placed'],
-      [s.at([sinkK, 'sink'], { x: [s.f('0.4 - w / 4', { w: [w, 'value'] }), 'result'], z: [bz, 'result'] }), 'placed'],
-      [s.at([stove, 'part'], { x: [s.f('w / 4 - 0.5', { w: [w, 'value'] }), 'result'], y: 0.45, z: [s.f('b + 0.31', { b: [bz, 'result'] }), 'result'] }), 'placed'],
-      [s.at([fridge, 'part'], { x: [s.f('w / 2 - 0.5', { w: [w, 'value'] }), 'result'], y: 0.875, z: [s.f('b + 0.35', { b: [bz, 'result'] }), 'result'] }), 'placed'],
+      [s.at([sinkK, 'sink'], { x: [runX, 'result'], z: [bz, 'result'] }), 'placed'],
+      [s.at([stove, 'part'], { x: [s.f('w / 2 - 1.225', { w: [w, 'value'] }), 'result'], y: 0.45, z: [s.f('b + 0.31', { b: [bz, 'result'] }), 'result'] }), 'placed'],
+      [s.at([fridge, 'part'], { x: [s.f('w / 2 - 0.46', { w: [w, 'value'] }), 'result'], y: 0.875, z: [s.f('b + 0.35', { b: [bz, 'result'] }), 'result'] }), 'placed'],
     ];
   });
   fittings('bedroom', 'What makes a room a bedroom: a queen bed against the back wall, a bedside table each side, a wardrobe in the corner (600 deep, typical)', (s, w, d) => {
@@ -278,13 +280,16 @@ function house(): void {
   const rules = s.n('rows.recode', { rules: 'hall/outside: door\nhall/*: none\n*/outside: window\n*/hall*: door\n*/* (shared): none\n*: wall' }, 'doors to the hall, windows outside'); s.w(touch, 'rows', rules, 'rows');
   const painted = s.n('rows.set', { column: 'wall' }, 'every room its wall colour'); s.w(rules, 'rows', painted, 'rows'); s.w(wallCol, 'value', painted, 'value');
   const rooms = s.n('spawn', { seed: 'seed.room' }, 'its rooms'); s.w(painted, 'rows', rooms, 'rows');
+  // (and every doorway kept clear: what its room's fittings put where a door swings or is come up to is moved along its
+  // wall, or to another, unless it is meant to be there)
+  const clear = s.n('keep.clear', {}, 'its doorways kept clear'); s.w(rooms, 'things', clear, 'thing');
   // a gable roof: a triangle 1 m across and 0.4 m high, stretched over the floor with 300 mm eaves all round, a pitch of about 22° (typical)
   const roof = s.n('shape.extrude', { name: 'roof', mat: 'tile', finish: 'texture', profile: '-500, 0; 500, 0; 0, 400', L: 1 }, 'roof (gable)'); s.w(roofCol, 'value', roof, 'color');
   const stretch = s.n('variant', {}, 'roof over the whole floor'); s.w(roof, 'part', stretch, 'thing');
   s.w(s.f('W + 0.6', { W: [p, 'W'] }), 'result', stretch, 'kx'); s.w(s.f('(W + 0.6) * 0.5', { W: [p, 'W'] }), 'result', stretch, 'ky'); s.w(s.f('D + 0.6', { D: [p, 'D'] }), 'result', stretch, 'kz');
   const roofAt = s.at([stretch, 'variant'], { y: 2.45 }, 'roof on the walls');
-  const roofed = s.all('house', [[rooms, 'things'], [roofAt, 'placed']]);
-  const all = s.n('pick', { options: 'roof on|roof off' }, 'roof on or off'); s.w(lid, 'value', all, 'which'); s.w(roofed, 'assembly', all, 'roof on'); s.w(rooms, 'things', all, 'roof off');
+  const roofed = s.all('house', [[clear, 'thing'], [roofAt, 'placed']]);
+  const all = s.n('pick', { options: 'roof on|roof off' }, 'roof on or off'); s.w(lid, 'value', all, 'which'); s.w(roofed, 'assembly', all, 'roof on'); s.w(clear, 'thing', all, 'roof off');
   s.output('house', 'assembly', all, 'chosen'); s.output('W', 'number', p, 'W', 'm'); s.output('D', 'number', p, 'D', 'm');
   s.save('seed.house', 'House', 'A house: its rooms laid out from the plan you pick (studio, 1, 2 or 3 bed) either side of a hall, each spawned as a Room with its fittings, its doors onto the hall and its windows outside decided by what each wall touches, under a gable roof (or with it off, to see in). Pick another plan and the rooms are laid out again', ['structural', 'everyday']);
 }

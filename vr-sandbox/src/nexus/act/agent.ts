@@ -10,6 +10,7 @@
 //     between its ankles and its head, kept a shoulder's half-width off), at a walking pace;
 //   it reaches, grasps, pulls (or pushes) with the force a door may ask, until the handle leaves its reach, and lets go;
 //   the door swings on its hinge in the physics (Jolt, sim.ts) and comes to rest on its stop.
+// The body is drawn from its measured segments (act/body.ts), each part carrying its math.
 // Every number says where it comes from; what is not modelled yet is said in docs/LIFE.md.
 
 import * as THREE from 'three';
@@ -22,6 +23,7 @@ import { ACTORS, bodyOf, tagsOf, type Actor } from '../aware/tags';
 import { perceive, type Observer } from '../aware/sense';
 import { makeLine, route, type Section } from '../placement/line';
 import { bodiesOf, posedAt, simulate, type SimJoint, type SimOut, type SimThing } from '../sim';
+import { bodyParts, poseOf, rigFor } from './body';
 
 /** The pace: an adult's comfortable walk, 1.4 m/s (Bohannon 1997, typical of adults 20 to 60); a smaller body's by
  *  dynamic similarity, as the root of its height (Alexander's Froude scaling, an estimate). */
@@ -180,11 +182,6 @@ export function openDoor(J: Jolt, root: Part, goal: Goal = { open: /door/i }, o:
 
 // ---- the body drawn ------------------------------------------------------------------------------------------------------------
 
-/** A limb from a to b: a round bar of radius r. */
-function limb(name: string, a: THREE.Vector3, b: THREE.Vector3, r: number, color: number): Part {
-  const d = b.clone().sub(a), q = new THREE.Quaternion().setFromUnitVectors(UP, d.clone().normalize()), e = new THREE.Euler().setFromQuaternion(q, 'XYZ'), m = a.clone().add(b).multiplyScalar(0.5);
-  return { name, shape: { cyl: [r, Math.max(1e-3, d.length())] }, at: v3(m), rot: [e.x, e.y, e.z], mat: 'pvc', color };
-}
 /** Where the body is and what it does at a time: along its way, turning to the handle, its arm to it while it holds. */
 export function bodyAt(p: Plan, t: number): { at: V3; facing: V3; hand: V3 | null; moving: boolean; phase: number; step: Step | undefined } {
   const L = limbsOf(p.actor), step = p.steps.find((s) => t >= s.from && t < s.to) ?? (t >= p.end ? undefined : p.steps[p.steps.length - 1]), go = p.steps.find((s) => s.kind === 'go to')!;
@@ -200,28 +197,11 @@ export function bodyAt(p: Plan, t: number): { at: V3; facing: V3; hand: V3 | nul
   if (t >= reach.from && t < reach.to) hand = hang.clone().lerp(H, u * u * (3 - 2 * u)); else if (t >= reach.to && t < p.letGoAt) hand = Hn; else if (t >= p.letGoAt && t < p.letGoAt + 0.4) { const w = (t - p.letGoAt) / 0.4; hand = Hn.clone().lerp(hang, w * w * (3 - 2 * w)); }
   return { at: v3(at), facing: v3(dir), hand: hand ? v3(hand) : null, moving: t > go.from && t < go.to, phase: (2 * Math.PI * along) / (2 * L.stride), step };
 }
-/** The figure at a time: legs swinging as it walks, the arm on its handle side reaching by two-bone IK (its elbow out and down). */
+/** The body at a time, drawn from its measured segments (act/body.ts), each carrying its math: walking, its legs and
+ *  arms swinging; turning to the handle; leaning and reaching to it; its hand on it as it swings; back to its side. */
 export function figureAt(p: Plan, t: number, color = 0x3a7bff): Part {
-  const L = limbsOf(p.actor), b = bodyAt(p, t), at = vec(b.at), f = vec(b.facing), right = f.clone().cross(UP).normalize(), y0 = p.floor, parts: Part[] = [], skin = 0xd9a77e;
-  const hipC = at.clone().setY(y0 + L.hip), shC = at.clone().setY(y0 + L.shoulder), sw = b.moving ? 0.35 * Math.sin(b.phase) : 0, H = b.hand ? vec(b.hand) : null;
-  // (leaning toward a hand out past its arm, as far as a lean goes)
-  if (H) { const near = [-1, 1].map((k) => shC.clone().addScaledVector(right, (k * L.shoulders) / 2)).reduce((a, c) => (c.distanceTo(H) < a.distanceTo(H) ? c : a)), over = near.distanceTo(H) - (L.upper + L.fore + L.hand / 2) * 0.999;
-    if (over > 0) shC.addScaledVector(H.clone().sub(near).setY(0).normalize(), Math.min(over, leanOf(p.actor))); }
-  const lean = shC.clone().sub(at.clone().setY(y0 + L.shoulder));
-  parts.push(limb('torso', hipC, shC, L.hips / 2, color), { name: 'head', shape: { sphere: L.head / 2 }, at: [at.x + lean.x * 1.15, y0 + L.eye + 0.01, at.z + lean.z * 1.15], mat: 'pvc', color: skin });
-  for (const [k, sg] of [[-1, 1], [1, -1]] as const) { const hip = hipC.clone().addScaledVector(right, (k * L.hips) / 4), legL = L.hip - L.ankle, foot = hip.clone().addScaledVector(UP, -legL * Math.cos(sw)).addScaledVector(f, sg * legL * Math.sin(sw)); parts.push(limb(k < 0 ? 'left leg' : 'right leg', hip, foot, 0.06 * L.hips, 0x2c3e50)); }
-  for (const k of [-1, 1]) {
-    const s = shC.clone().addScaledVector(right, (k * L.shoulders) / 2), mine = !!H && s.distanceTo(H) <= shC.clone().addScaledVector(right, (-k * L.shoulders) / 2).distanceTo(H);
-    const a = L.upper, c = L.fore + L.hand / 2;
-    let target = mine ? H!.clone() : s.clone().addScaledVector(UP, -(a + c) * 0.98).addScaledVector(f, -(b.moving ? 0.3 * Math.sin(b.phase) * k : 0) * (a + c));
-    const d0 = target.clone().sub(s), d = Math.min(d0.length(), (a + c) * 0.999); target = s.clone().addScaledVector(d0.normalize(), d);
-    // (the elbow: law of cosines for its angle off the line to the hand, bent toward out and down)
-    const cosA = (a * a + d * d - c * c) / (2 * a * d), ang = Math.acos(Math.max(-1, Math.min(1, cosA))), axis = d0.clone(), pole = right.clone().multiplyScalar(k).addScaledVector(UP, -1);
-    const perp = pole.clone().addScaledVector(axis, -pole.dot(axis)); if (perp.lengthSq() < 1e-9) perp.copy(f.clone().multiplyScalar(-1)); perp.normalize();
-    const elbow = s.clone().addScaledVector(axis, a * Math.cos(ang)).addScaledVector(perp, a * Math.sin(ang));
-    parts.push(limb(`${k < 0 ? 'left' : 'right'} upper arm`, s, elbow, 0.045 * L.shoulders, color), limb(`${k < 0 ? 'left' : 'right'} forearm`, elbow, target, 0.035 * L.shoulders, skin));
-  }
-  return { name: `${p.actor.name}${b.step ? `, ${b.step.kind}` : ''}`, parts };
+  const b = bodyAt(p, t), built = rigFor(p.actor), { pose } = poseOf(built, { at: b.at, facing: b.facing, floor: p.floor, swing: b.moving ? 0.35 * Math.sin(b.phase) : 0, hand: b.hand });
+  return bodyParts(built, pose, `${p.actor.name}${b.step ? `, ${b.step.kind}` : ''}`, color);
 }
 
 /** A thing with some of its parts taken out (by their paths in its layout), the rest shared, not copied. */

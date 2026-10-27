@@ -254,6 +254,30 @@ Step 3 result (`act/agent.ts`; nodes `goal`, `agent`; board "An agent opens a do
   - Attention still has no memory: it sees once, at the start.
   - It opens; it does not go through, or close the door behind it.
 
+After step 3, asked for (`placement/clear.ts`, `act/body.ts`, `life/segments.ts`; nodes `keep.clear`, `body`; boards "Doorways kept clear", "A body from its measured segments"):
+- **Doorways kept clear:** the user saw a television standing in front of a door.
+  - **The cause:** each room's fittings are laid out by the room's type alone, against its back wall, wherever its door is.
+  - **The zones:** each door is read as the agent reads it. Two zones are kept: the room its leaf sweeps, and a passage its width wide, 760 mm deep, on the side it is pushed from (an estimate). Or, set to the ADA, its wheelchair room (404.2.4.1).
+  - **The repair:** what stands in a zone below the door's head moves with whatever touches it (the television with its stand, the sink with its worktop, the stove and the fridge with the cabinet run). It is slid along its wall, or turned to another wall of its room and pushed back until it meets a wall (not a sofa), to the nearest place clear of every zone and of everything else.
+  - **On purpose:** a thing marked as meant to be in a doorway (`Part.meant`) is left there, and that is said.
+  - **The house seed runs it on every house.** In all four plans, the kitchen run filled the wall its door is in and is turned to the wall across. The living room's television goes to a side wall; one bathroom's basin moves too. Every door ends clear.
+  - **Found on the way:** the kitchen seed's cabinet run went 75 mm into its left wall and its stove overlapped the run. They now sit side by side between the walls: run, stove, fridge.
+- **A body from its measured segments, its math on every part:**
+  - **The source:** the agent was a stick figure. It is now the body's sixteen segments from `life/segments.ts`: each de Leva's share of the body's mass (men and women apart), laid out by Drillis and Contini's proportions.
+  - **Tagged:** every drawn part carries its mass, length, centre of mass and moments of inertia, worked out for its own shape.
+  - **The long limbs tapered:** a frustum whose taper puts its centre of mass exactly where de Leva measured it, and whose volume holds its mass at the body's density.
+  - **The trick, measured:**
+    - As uniform capsules, the limbs' inertia across came out 20 to 70 % over de Leva's measured values; the shank was 0.067 against 0.039 kg·m².
+    - Tapered, they come within 3 to 29 %: upper arm 0.0181 against 0.0177, forearm 0.0071 against 0.0062, thigh 0.172 against 0.211, shank 0.051 against 0.039.
+    - The upper arm comes out wider at the elbow than at the shoulder, because de Leva puts its centre at 0.577 of its length from the shoulder. A frustum cannot also be narrower there; a muscle's bulge would need a third radius.
+  - **Posing:** the body is posed for what the agent does. It walks with its legs and arms swinging, leans toward a handle past its arm, and reaches by two-bone IK.
+  - **A child of 8:** its body is laid out at the least the layout takes (1.4 m), scaled to its height, and given its own 26 kg. This is said, as an estimate.
+  - **Not yet:**
+    - A body's trunk and head are boxes and a capsule, not its skin. `anatomy.ts` has the skin as a field, not yet drawn here.
+    - A muscle's bulge is not modelled.
+    - The body is not yet in the physics as it acts (`person.ts` has bodies on Jolt; the agent does not use them yet).
+    - A sofa that faced a moved television is not turned to face it again.
+
 ## 13. Measures
 
 | Measure | Target |
