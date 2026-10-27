@@ -1,6 +1,6 @@
 # Engineering at any scale as nodes
 
-Status: plan, not built. Base: commit `14e3283`.
+Status: step 0 and step 1 built (`need`, `field`, `field.combine`, `field.show`); the rest planned. Base: commit `14e3283`.
 Target: 1,000,000 components, 100,000 unique, solved, checked, changed and understood without hand edits.
 End state: a person states what they want; the system does the rest, asks only what matters, and returns a buildable, proven design.
 
@@ -13,6 +13,7 @@ End state: a person states what they want; the system does the rest, asks only w
 5. [Scale model](#5-scale-model)
 6. [Node contract](#6-node-contract)
 7. [Engine features (not nodes)](#7-engine-features-not-nodes)
+7a. [Data model](#7a-data-model)
 8. [Glossary](#8-glossary)
 9. [Existing base](#9-existing-base)
 10. [Node layers](#10-node-layers)
@@ -140,6 +141,23 @@ Built into the runner, renderer or app so every node gets them; never placed on 
 | Comments in 3D | `review.pin` | App |
 | Drag and re-solve | `live.drag` | `space.ts`, `dock3d.ts` |
 | VR review | `live.review` | `space.ts` |
+
+## 7a. Data model
+
+Owner: `src/nexus/placement/` (`model.ts`, `fields.ts`). Every placement node reads and writes these.
+
+| Type | Holds | Read from |
+| --- | --- | --- |
+| `Need` | kind (mount, connect, keepout, face, access, group), part and path, what it is to, distance kept or most allowed (°C), facing, how often reached, hard or soft, why, source, confidence | `needsOf(part)`: `Part.hot`, `Part.clear`, `Part.travel`, `joins`, `passes`, `fixed`, `Iface`, each material's `MAX_SERVICE`; access and facing from what a part is (confidence 0.7) |
+| `Field` | kind, unit, grid (least corner, cell, dims), a value per cell, which cells are solid, sources | `fieldOf(part, kind, { around, grow, step })` |
+
+| Field | Value per cell | Model |
+| --- | --- | --- |
+| heat | °C | The rules' own: each hot surface's excess over 40 °C falling e times each 40 mm (an estimate), blocked by any solid between |
+| motion | m of room | Wheels at each corner of their steer and bump; belts and fans by their clearance; the engine rocking ±10 mm on its mounts (an estimate); read to 60 mm |
+| reach | m of reach | Shoulders 0.3 m over the bay's edge at the front and sides (an estimate), arm 0.65 m (typical); only where the line straight up is clear, hood open |
+
+Not yet: the `group` need is never read (nothing states it); fields are recomputed per node (no shared cache of the layout).
 
 ## 8. Glossary
 
@@ -400,7 +418,7 @@ Twelve layers, in the order a design flows through them. 65 nodes.
 | `twin` | K | 14 |
 | `version` | I | 10 |
 
-65 nodes, 0 built.
+65 nodes, 4 built (`need`, `field`, `field.combine`, `field.show`).
 
 ## 12. Merges in this plan
 

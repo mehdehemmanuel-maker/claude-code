@@ -870,8 +870,32 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'read', 0, 0, { id: 'make.wound', kind: 'block' }, 'read'); b.nodes.read!.label = 'Read a block';
     placeBlock(b, 'test.block', 0, 0, { id: 'make.wound' }, 'tester'); b.nodes.tester!.label = 'Tester';
     placeBlock(b, 'search.library', 0, 0, { q: 'sensor' }, 'search'); b.nodes.search!.label = 'Search what is known';
-    placeBlock(b, 'delete', 0, 0, { what: 'block', really: false }, 'del'); b.nodes.del!.label = 'Delete (only says, until told)'; wire(b, 'g2', 'failed', 'del', 'ids');
+    placeBlock(b, 'delete', 0, 0, { what: 'block', really: false }, 'del'); b.nodes.del!.label = 'Delete (only says, until told)'; wire(b, 'g2', 'rejected', 'del', 'ids');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
+    return b;
+  }],
+  ['Fields over the engine bay: what each part needs, and maps of heat, motion and reach', () => {
+    // the Corolla's engine bay as maps, not as positions: what every part needs, read from what its parts state (nothing
+    // typed); then the space round the engine cell by cell: how hot (the rules' own fall-off from each hot surface, a
+    // solid between blocking it), how much room from what moves (wheels through their steer and bump, the belt, the engine
+    // rocking on its mounts), and where a hand reaches leaning over the open bay; and the three as one cost. Pick which
+    // the 3D view shows; each cell coloured blue (good) to red (bad)
+    const b = emptyBoard('Fields over the engine bay');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
+    placeBlock(b, 'need', 0, 0, {}, 'needs'); b.nodes.needs!.label = 'What every part needs'; wire(b, 'car', 'vehicle', 'needs', 'thing');
+    placeBlock(b, 'need', 0, 0, { kind: 'access' }, 'reachNeeds'); b.nodes.reachNeeds!.label = 'Who must reach what, how often'; wire(b, 'car', 'vehicle', 'reachNeeds', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'reachRows'); b.nodes.reachRows!.label = 'Reached, a year'; wire(b, 'reachNeeds', 'needs', 'reachRows', 'rows');
+    placeBlock(b, 'piece', 0, 0, { name: '^petrol engine', where: 'where it sits' }, 'eng'); b.nodes.eng!.label = 'The engine, to see the maps round'; wire(b, 'car', 'vehicle', 'eng', 'thing');
+    for (const [k, kind, show] of [['h', 'heat', { slice: 'y', at: 0.45 }], ['m', 'motion', { slice: 'y', at: 0.45 }], ['r', 'reach', { slice: 'y', at: 0.7 }]] as [string, string, Record<string, unknown>][]) {
+      placeBlock(b, 'field', 0, 0, { kind }, `f${k}`); b.nodes[`f${k}`]!.label = `Map: ${kind}`; wire(b, 'car', 'vehicle', `f${k}`, 'thing');
+      placeBlock(b, 'field.show', 0, 0, show, `s${k}`); b.nodes[`s${k}`]!.label = `Show ${kind}: a level slice`; wire(b, `f${k}`, 'field', `s${k}`, 'field');
+    }
+    placeBlock(b, 'field.combine', 0, 0, { weights: '1 1 1' }, 'fc'); b.nodes.fc!.label = 'Heat, motion and reach as one cost'; for (const k of ['h', 'm', 'r']) wire(b, `f${k}`, 'field', 'fc', 'fields');
+    placeBlock(b, 'field.show', 0, 0, { slice: 'y', at: 0.7 }, 'sc'); b.nodes.sc!.label = 'The three as one cost: a level slice'; wire(b, 'fc', 'field', 'sc', 'field');
+    placeBlock(b, 'pick', 0, 0, { options: 'heat|motion|reach|all three', which: 'heat' }, 'pick'); b.nodes.pick!.label = 'Which map to see';
+    for (const [k, o] of [['h', 'heat'], ['m', 'motion'], ['r', 'reach'], ['c', 'all three']] as [string, string][]) wire(b, `s${k}`, 'view', 'pick', o);
+    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'The engine and the map'; wire(b, 'eng', 'piece', 'scene', 'things'); wire(b, 'pick', 'chosen', 'scene', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
     return b;
   }],
   ['A car down to its bolts: tyres made in depth, a shared battery, taken apart', () => {
@@ -1196,7 +1220,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));
