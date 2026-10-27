@@ -110,6 +110,7 @@ export const MATERIALS: Record<string, Spec> = {
   eva: { blend: [['pe', 72], ['C4H6O2', 28]], says: 'ethylene with 28 % vinyl acetate' },
   glass: { blend: [['SiO2', 73], ['Na2O', 14], ['CaO', 9], ['MgO', 4]], says: 'soda-lime glass' },
   fibreglass: { blend: [['SiO2', 54], ['Al2O3', 14], ['CaO', 22], ['B2O3', 8], ['MgO', 2]], says: 'E-glass' },
+  'glass-wool': { blend: [['fibreglass', 100]], says: 'E-glass fibre, loose' },
   fr4: { blend: [['fibreglass', 60], ['epoxy', 40]], says: 'glass cloth in epoxy' },
   cfrp: { blend: [['graphite', 60], ['epoxy', 40]], says: 'carbon fibre in epoxy' },
   'wood-veneer': { blend: [['paper', 50], ['C5H8O4', 25], ['C10H12O3', 25]], says: 'cellulose, hemicellulose and lignin' },

@@ -5,6 +5,7 @@ import { bodyPlanOf, MACHINES, makeMachine, styledCar, travelOf, tyreOf, tyreSec
 import { BODY_RULES, bodyScore, bodyPanels, inSweep, lineBy, practise } from '../../src/nexus/panels';
 import { closestOn, comb, patchAt, patchPoints, type Patch } from '../../src/nexus/surface';
 import type { Part } from '../../src/nexus/kits';
+import { layout } from '../../src/nexus/make/space';
 
 const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 const corolla = MACHINES.find((m) => m.short === 'corolla')!, car = makeMachine(corolla), part = (n: string) => all(car).find((p) => p.name === n)!;
@@ -42,8 +43,9 @@ describe('a skin that closes smoothly', () => {
     for (const u of [0.2, 0.5, 0.8]) { const q = patchAt(surf('hood'), u, 1); expect(Math.abs(q.at[2])).toBeLessThan(1e-6); expect(Math.abs(q.n[2])).toBeLessThan(0.02); }
   });
   test('the hood clears the engine under it by the room asked', () => {
-    const eng = all(car).find((p) => /engine \(/.test(p.name))!, ex = eng.at![0], ey = eng.at![1];
-    const top = Math.max(...all(eng).filter((p) => p.shape && 'box' in p.shape).map((p) => ey + p.at![1] + (p.shape as { box: number[] }).box[1]! / 2));
+    const eng = all(car).find((p) => /engine \(/.test(p.name))!, ex = eng.at![0];
+    // (its pieces where they are drawn, each through every group it is in, and the box round each)
+    const top = Math.max(...layout(car).filter((n) => n.box && n.p.shape && 'box' in n.p.shape && all(eng).includes(n.p)).map((n) => n.box!.max.y)); expect(top).toBeGreaterThan(0.6);
     const over = patchPoints(surf('hood'), 40, 12, false).filter((q) => Math.abs(q[0] - ex) < 0.2 && Math.abs(q[2]) < 0.2);
     expect(over.length).toBeGreaterThan(0); for (const q of over) expect(q[1]).toBeGreaterThan(top + 0.03);
   });

@@ -110,6 +110,10 @@ export interface Part {
   /** designed whole and checked on its own (a component from the library, src/nexus/components.ts): the make pipeline
    *  lays no detail on it and moves nothing in it, as a bought part is fitted as it comes */ sealed?: string;
   /** added by the make pipeline's attention to detail, and by which rule (so it can be taken off and added again) */ detail?: string;
+  /** its surface's working temperature, °C, where it runs hot (an exhaust manifold, a turbo): what is near it is held to
+   *  what its material stands (src/nexus/make/rules.ts) */ hot?: number;
+  /** the gap it keeps from everything it does not run on, m (a belt, a fan's blades, a chain) */ clear?: number;
+  /** what it runs on, by name, which it may touch (a belt's pulleys) */ runsOn?: string[];
   parts?: Part[]; says?: string;
 }
 export type Pick = Record<string, string | number>;

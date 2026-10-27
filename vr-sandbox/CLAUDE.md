@@ -112,6 +112,15 @@ the task list and lose the why. So the why lives here, and every round is checke
   (2026-10-27: the engine and the gearbox built from their first parts, sized and weighed by them; every vehicle's tyres
   built in depth; doors, hood and deck lid built round their skins; the audit now says what is only said, not built (a
   stated mass, "the rest of it") and what nothing identifies, so the outer-layer-first fault is measured, not hidden)
+- "more attention to detail you can zoom in like you did to the computer chip make it easy to do that create more tools
+  for yourself in the nodes … the engine looks all sorts of fucked up … make sure nothing intersects, touches, that
+  shouldn't certain nodes need to define their parameters like shit that can't intersect touch or anything or like heat
+  things it has a proximity gate for which certain materials can't exist stably … a bolt one node can be any size bolt
+  screw or whatever assign the base geometry like a octagon for bolt circle for screw … then have a smaller circle
+  protrude given the parameters of the length … then assign its rivets [threads] … one node that covers so much ground"
+  (2026-10-27: the rules checker `make/rules.ts` (interference, clearance, heat gate) and node Nothing runs into
+  anything?; every engine the machines use comes back clean of it; the one fastener node; zoom to a piece; take out a
+  piece; turned parts with sharp edges)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -179,6 +188,9 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A part's tree opened into assemblies, pieces swapped for a shared thing by name (`fitIn`), taken apart (`exploded`) | `src/nexus/assembly.ts` (nodes Fit in, Take apart) |
 | A computer from its transistors: FinFETs at published process pitches, SRAM and logic cells, arrays, die, package, motherboard, PC | `src/nexus/computer.ts` (nodes Transistor, Logic or memory cell, Processor die, Processor package, Motherboard, Desktop PC) |
 | How far a build comes apart: lumps (a piece drawn as one though the inventory says it is an assembly) by share of mass, recipes not met (`explodeAudit`, node Comes apart to the bottom?) | `src/nexus/components.ts` |
+| What may not run into, touch or come near what: interference (triangle against triangle, unless one piece, said to pass (`passes`/`joins`, at any level of the tree), a fastener, or in a hole cut for it), clearance (`Part.clear`, `runsOn`), the heat gate (`Part.hot` against each material's `MAX_SERVICE`, falling off with distance, stopped by anything solid between) | `src/nexus/make/rules.ts` (`rulesOf`; node `check.rules` in `blocks.ts`) |
+| One fastener of any size and kind (bolt, screw, rivet, stud): head by shape (hex, square, octagon, round, pan, countersunk, flange), drive, shank, helical thread, point | `src/nexus/makers.ts` `fastener` (node `make.fastener`) |
+| One piece out of anything by name, to look at close up (and the 3D view's zoom to a piece: double press, `dock.focus`) | node `piece` in `blocks.ts`; `src/nexus/view/dock3d.ts`, `space3d.ts` (`pieceAt`, `piecesNamed`) |
 | A piston engine from its first parts (pistons, rings, pins, rods, crank, block, liners, caps, shells, head, valve train, cams, timing, oiling, intake, exhaust, ignition, alternator, starter, pump, belt, flywheel), sized and weighed by its parts | `src/nexus/engines.ts` (nodes `engine.*` in `blocks.ts`; `engineSpecOf`/`engineSize` in `machines.ts` ask it) |
 | A gearbox from its first parts (case, shafts, gears, bearings, seals, final drive, differential; a manual's synchros and forks or a CVT's pulleys, push belt and torque converter) | `src/nexus/drivetrain.ts` |
 | A car's closures built round their skins (doors, hood, deck lid: inner panels, beams, hinges, latches, regulators, trim) | `src/nexus/fittings.ts` `closureOf` |

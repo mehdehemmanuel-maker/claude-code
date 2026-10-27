@@ -15,6 +15,7 @@ import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
 import { DESIGNED, component, componentFromParams, exampleOf } from './components';
 import { CHAINS, FAMILIES } from './families';
+import { METRIC } from './threads';
 import { DENSITY } from './mass';
 import * as THREE from 'three';
 import { bodiesOf, posedAt, simulate, type SimJoint, type SimOut } from './sim';
@@ -27,9 +28,10 @@ import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, dist
 import { massOf } from './mass';
 import { MACHINES, TREADS, makeMachine, rollingOf, styledCar, styles, tyreBuilt, tyreOf, type Axle, type Machine, type Susp, type Tread } from './machines';
 import { cellPack, explodeAudit, liCell, starterBattery } from './components';
+import { rulesOf } from './make/rules';
 import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
 import { exploded, fitIn } from './assembly';
-import { chainPath, chainRun, coated, coil, enclosure, fillCells, gridPlate, intoCells, stackOf, strapsOver, toothed, turned, woundRoll, wrapped } from './makers';
+import { chainPath, chainRun, coated, coil, enclosure, fastener, type FastenerSpec, type HeadShape, fillCells, gridPlate, intoCells, stackOf, strapsOver, toothed, turned, woundRoll, wrapped } from './makers';
 import { conRod, crankshaft, cylinderBlock, cylinderHead, engineBuilt, engineDims, pistonAssembly, type EngineSpec } from './engines';
 import { BOARDS, PROCESSES, SOCKETS, desktop, die, motherboard, nandCell, packageOf, sramCell, transistor } from './computer';
 const KINDS_OF_VEHICLE = ['car', 'truck', 'atv', 'motorcycle', 'forklift', 'mower', 'kart'];
@@ -755,7 +757,7 @@ const BUILT_THINGS: BlockDef[] = [
       const out = into(p); if (!done) throw new Error(pat ? `no piece named like "${c.set.path}" with a shape` : 'it has no shape of its own to drill: name the piece');
       return { drilled: out, mass: massOf(out) };
     },
-    tests: [{ inputs: { part: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, r: 0.01, depth: 0.1 }, outputs: { mass: (0.001 - Math.PI * 0.0001 * 0.1) * 7850 }, rel: 1e-9 }] }),
+    tests: [{ inputs: { part: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, r: 0.01, depth: 0.1, y: 0.05 }, outputs: { mass: (0.001 - Math.PI * 0.0001 * 0.1) * 7850 }, rel: 1e-9 }, { inputs: { part: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, r: 0.01, depth: 0.1 }, outputs: { mass: (0.001 - Math.PI * 0.0001 * 0.05) * 7850 }, rel: 1e-9 }] }),
   def({ id: 'measure', name: 'Measure', kind: 'critic', ability: 'measure', domains: ['mechanical', 'structural', 'everyday'], says: 'What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as',
     ports: { inputs: [thing()], outputs: [N('mass', 'kg'), L('w', 0, 'width'), L('h', 0, 'height'), L('d', 0, 'depth'), P('placed', 'integer', { label: 'pieces placed' }), P('distinct', 'integer', { label: 'things stored' })] },
     run: (i) => { const t = asThing(i.thing), b = boundsOfAll(t), z = b.isEmpty(); return { mass: massOfAll(t), w: z ? 0 : b.max.x - b.min.x, h: z ? 0 : b.max.y - b.min.y, d: z ? 0 : b.max.z - b.min.z, placed: placedCount(t), distinct: distinctCount(t) }; },
@@ -1243,6 +1245,17 @@ const BUILT_THINGS: BlockDef[] = [
       return { score: 1 - lumps, pieces: aud.reduce((a, x) => a + x.pieces, 0), lumps: [...new Set(faked)], missing, says: aud.length === 1 ? aud[0]!.says : `${parts.length} parts audited: ${(lumps * 100).toFixed(1)} % of their mass in lumps; ${missing.length} recipes not met` };
     },
     tests: [{ inputs: { thing: { name: 'lamp on a bracket', parts: [{ name: 'bracket', shape: { box: [0.1, 0.01, 0.1] }, mat: 'steel-low' }, { name: 'headlight', shape: { box: [0.1, 0.1, 0.1] }, mat: 'pc' }] } }, outputs: { pieces: 2 } }] }),
+  def({ id: 'check.rules', name: 'Nothing runs into anything?', kind: 'critic', ability: 'check', domains: ['vehicles', 'mechanical', 'manufacturing', 'electrical', 'everyday'], sink: true, says: 'The rules a made thing is held to, on its surfaces as drawn (triangle against triangle): no two pieces cross unless they are one piece, one is said to pass through the other, one is a fastener in what it fastens, or one sits in a hole cut for it; a piece that moves keeps the clearance it says (a belt, a chain) from all but what it runs on; and nothing stands nearer a hot piece (an exhaust, a turbo, a muffler) than its material takes, unless something solid is between them. Each finding names both pieces and what would put it right',
+    ports: { inputs: [thing()], outputs: [N('findings', undefined, { label: 'how many' }), P('interference', 'list<text>'), P('clearance', 'list<text>'), P('heat', 'list<text>'), P('pieces', 'integer'), P('says', 'text')] },
+    run: (i) => {
+      const parts: Part[] = [], seen = new Set<object>(), walk = (t: Part | Assembly) => { if (seen.has(t)) return; seen.add(t); if (isPart(t)) parts.push(t); else for (const it of t.items) walk(it.of); };
+      walk(asThing(i.thing));
+      const rs = parts.map((p) => rulesOf(p)), all = rs.flatMap((r) => r.findings), of = (k: string) => all.filter((f) => f.rule === k).map((f) => f.says);
+      return { findings: all.length, interference: of('interference'), clearance: of('clearance'), heat: of('heat'), pieces: rs.reduce((a, r) => a + r.pieces, 0), says: all.length ? `${all.length} finding${all.length > 1 ? 's' : ''}: ${all.slice(0, 3).map((f) => f.says).join('; ')}${all.length > 3 ? '; …' : ''}` : 'nothing runs into, rubs or overheats anything' };
+    },
+    tests: [{ inputs: { thing: { name: 'two blocks', parts: [{ name: 'block a', item: 'a', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, { name: 'block b', item: 'b', shape: { box: [0.1, 0.1, 0.1] }, at: [0.05, 0.03, 0.02], mat: 'steel-low' }] } }, outputs: { findings: 1 } },
+      { inputs: { thing: { name: 'two blocks apart', parts: [{ name: 'block a', item: 'a', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, { name: 'block b', item: 'b', shape: { box: [0.1, 0.1, 0.1] }, at: [0.3, 0, 0], mat: 'steel-low' }] } }, outputs: { findings: 0 } },
+      { inputs: { thing: { name: 'a hose by a pipe', parts: [{ name: 'pipe', item: 'pipe', shape: { box: [0.05, 0.05, 0.5] }, mat: 'steel-low', hot: 800 }, { name: 'hose', item: 'hose', shape: { box: [0.05, 0.05, 0.5] }, at: [0.08, 0, 0], mat: 'epdm' }] } }, outputs: { findings: 1 } }] }),
   // ---- making things as they are made: one node per process or geometry, shared by everything made that way -------------
   def({ id: 'make.grid', name: 'Cast grid', kind: 'generator', ability: 'generate', domains: ['manufacturing', 'electrical', 'mechanical'], says: 'A grid cast in one: a frame round its edge, bars upright and wires across inside it, and a lug at its top. A battery plate\'s grid, a fan guard, a drain cover, a radiator\'s core. It stands thin along x',
     settings: [{ key: 'lug', label: 'Lug at its top', type: 'choice', default: 'right', choices: ['right', 'left', 'none'] }, { key: 'mat', label: 'Material', type: 'choice', default: 'lead', choices: ENGINEERING }, { key: 'item', label: 'It is (inventory item)', type: 'text', default: 'pb-grid' }],
@@ -1329,6 +1342,23 @@ const BUILT_THINGS: BlockDef[] = [
     run: (i, c) => { const s = engineSpecOf(i, c.set), d = engineDims(s), p = k === 'piston' ? pistonAssembly(s, d) : k === 'rod' ? conRod(s, d) : k === 'crank' ? crankshaft(s, d) : k === 'block' ? cylinderBlock(s, d) : k === 'head' ? cylinderHead(s, d, s.layout === 'vee' ? 0 : undefined) : engineBuilt(s).engine;
       const count = (q: Part): number => (q.shape ? 1 : 0) + (q.parts ?? []).reduce((a, r) => a + count(r), 0); return { [k === 'whole' ? 'engine' : k]: p, mass: massOf(p), pieces: count(p) }; },
     tests: [{ inputs: { cylinders: 1, bore: 0.077, stroke: 0.058 }, outputs: k === 'piston' ? { pieces: 13 } : {} }] })),
+  def({ id: 'make.fastener', name: 'Fastener (any)', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'everyday', 'structural'], says: 'Any bolt, screw, stud, rivet or pin from one node: its head (a polygon of 4, 6 or 8 sides, round, pan, button, countersunk, flanged or none), its drive, its shank, its thread drawn as a helix to its pitch, its point; a rivet set at its grip. A metric size reads its pitch and head from ISO 261 and 4017',
+    settings: [{ key: 'kind', label: 'What it is', type: 'choice', default: 'bolt', choices: ['bolt', 'screw', 'stud', 'rivet', 'pin'] }, { key: 'head', label: 'Head', type: 'choice', default: 'hex', choices: ['hex', 'square', 'octagon', 'round', 'pan', 'button', 'countersunk', 'flange', 'none'] }, { key: 'drive', label: 'Drive', type: 'choice', default: 'none', choices: ['none', 'hex socket', 'square socket', 'star', 'cross', 'slot'] }, { key: 'point', label: 'Point', type: 'choice', default: 'chamfer', choices: ['chamfer', 'flat', 'cone', 'dog'] }, { key: 'thread', label: 'Thread drawn as', type: 'choice', default: 'helix', choices: ['helix', 'plain'] }, { key: 'mat', label: 'Material', type: 'choice', default: 'steel-alloy', choices: ENGINEERING }],
+    ports: { inputs: [L('d', 0.008, 'diameter'), L('L', 0.04, 'length'), L('pitch', 0, 'pitch (0: its ISO coarse pitch)'), L('threadL', 0, 'thread length (0: ISO\'s)'), L('s', 0, 'head across (0: ISO\'s)'), L('k', 0, 'head height (0: ISO\'s)'), L('grip', 0, 'a rivet\'s grip')], outputs: [P('fastener', 'part'), N('mass', 'kg'), N('pieces')] },
+    run: (i, c) => { const d = Number(i.d ?? 0.008), iso = METRIC[`M${+(d * 1000).toFixed(1)}`.replace(/\.0$/, '')], kind = String(c.set.kind) as NonNullable<FastenerSpec['kind']>, head = String(c.set.head) as HeadShape;
+      const pitch = Number(i.pitch ?? 0) || (iso && kind !== 'rivet' && kind !== 'pin' ? iso.p / 1000 : undefined), s = Number(i.s ?? 0) || (iso && (head === 'hex' || head === 'flange') ? iso.s / 1000 : undefined), k = Number(i.k ?? 0) || undefined;
+      const p = fastener({ kind, head, drive: String(c.set.drive) as 'none', point: String(c.set.point) as 'chamfer', thread: String(c.set.thread) as 'helix', mat: String(c.set.mat), d, L: Number(i.L ?? 0.04), ...(pitch ? { pitch } : {}), ...(Number(i.threadL) ? { threadL: Number(i.threadL) } : {}), ...(s ? { s } : {}), ...(k ? { k } : {}), ...(Number(i.grip) ? { grip: Number(i.grip) } : {}) });
+      return { fastener: p, mass: massOf(p), pieces: p.parts!.length }; },
+    tests: [{ inputs: { d: 0.008, L: 0.04 }, outputs: { pieces: 4 } }, { set: { kind: 'rivet', head: 'button' }, inputs: { d: 0.005, L: 0.012, grip: 0.008 }, outputs: { pieces: 3 } }] }),
+  def({ id: 'piece', name: 'Take out a piece', kind: 'generator', ability: 'transform', domains: ['everyday', 'mechanical', 'manufacturing'], says: 'One piece of anything by its name (the first, or the nth, that matches): a valve spring out of an engine, a bolt out of a truck, a cell out of a battery. Wire it to a 3D view to see it close up, at its own size',
+    settings: [{ key: 'name', label: 'Named like', type: 'text', default: 'valve spring' }, { key: 'nth', label: 'Which one (1 = the first)', type: 'number', default: 1 }],
+    ports: { inputs: [thing('thing', 'what it is in')], outputs: [P('piece', 'assembly'), N('found', undefined, { label: 'how many there are' })] },
+    run: (i, c) => { let re: RegExp; try { re = new RegExp(String(c.set.name), 'i'); } catch { throw new Error(`"${c.set.name}" is not a pattern`); }
+      const hits: (Part | Assembly)[] = [], seen = new Set<object>(), walk = (x: Part | Assembly) => { if (re.test(x.name)) { hits.push(x); return; } if (isPart(x)) { for (const q of x.parts ?? []) walk(q); } else for (const it of x.items) walk(it.of); };
+      walk(i.thing as Part | Assembly); void seen; const n = Math.max(1, Math.round(Number(c.set.nth ?? 1)));
+      if (!hits.length) throw new Error(`nothing in it is named like "${c.set.name}"`); const h = hits[Math.min(hits.length, n) - 1]!;
+      return { piece: isPart(h) ? { ...h, at: [0, 0, 0] as [number, number, number], rot: [0, 0, 0] as [number, number, number] } : h, found: hits.length }; },
+    tests: [{ set: { name: 'b' }, inputs: { thing: { name: 'a', parts: [{ name: 'b', shape: { box: [1, 1, 1] }, at: [5, 0, 0] }] } }, outputs: { found: 1, piece: { name: 'b', at: [0, 0, 0] } } }] }),
   def({ id: 'space.show', name: 'Show in space', kind: 'view', ability: 'show', domains: ['everyday', 'mechanical', 'structural'], says: 'Puts a thing into the 3D space, at its place: everything wired into one of these is what the space draws',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'shown' }],
     ports: { inputs: [thing()], outputs: [] }, run: () => ({}), sink: true, tests: [{ inputs: { thing: { name: 'b' } }, outputs: {} }] }),

@@ -137,6 +137,7 @@ m('epoxy', 'epoxy', 'Polymers/Thermosets', 'coatings, potting, moulding compound
 m('phenolic', 'phenolic', 'Polymers/Thermosets', 'potentiometer substrates, handles', '');
 m('fr4', 'FR-4 laminate', 'Composites/Laminates', 'woven glass in epoxy: the board circuits are on', '');
 m('fibreglass', 'glass fibre', 'Composites/Fibres', 'tension cords, insulation sleeving', '');
+m('glass-wool', 'glass wool', 'Composites/Fibres', 'silencer packing, heat insulation', '');
 m('cfrp', 'carbon fibre in epoxy', 'Composites/Laminates', 'stiff and light', '');
 m('paper', 'paper', 'Other materials/Natural', 'cones, separators', '');
 m('wood-veneer', 'wood veneer', 'Other materials/Natural', 'plies for plywood', '');

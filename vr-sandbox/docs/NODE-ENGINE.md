@@ -657,6 +657,20 @@ container, and Quest numbers only ever come from a Quest.
 - Then a blind check, as the project's rounds already do: an agent with no context is given the board and asked
   what it does and what is wrong with it.
 
+**6. Made things held to their rules** (`src/nexus/make/rules.ts`, node *Nothing runs into anything?*)
+- **Interference:** no two pieces' surfaces cross (triangle against triangle, after an oriented-box pass), unless they
+  are one piece, one is said to pass through the other (`passes` or `joins`, said by the piece or anything it is in),
+  one is a fastener in what it fastens, or one sits in a hole cut for it.
+- **Clearance:** a piece that moves keeps the gap it says (`Part.clear`) from everything but what it runs on (`runsOn`).
+- **Heat:** a hot piece (`Part.hot`) heats what is near it, its excess over 40 °C falling about e times each 40 mm (an
+  estimate); a polymer, rubber, foam or low-melting metal nearer than its material's limit (`MAX_SERVICE`, typical
+  datasheet ratings) is a finding, unless something solid stands between them.
+- Every engine the machines use (Toyota M20A, Honda CRF450 and GX270, Toyota 4Y, Detroit DD15, Kawasaki FR651V) comes
+  back with no findings; the tests hold three of them to it.
+- **Known limits:** two boxes overlapping with faces exactly in one plane meet only along shared edges and are not
+  caught; the heat gate measures the shortest straight line, not the view between the surfaces; a piece is checked
+  where it is drawn, not through its motion.
+
 **The challenge scoreboard** (for the contest with the other AI): one page that reports, from runs, the number of
 working blocks with tests passing, the domains covered, the scale results above, the edit-to-result latency, the
 dedup ratio (blocks stored against blocks placed), and the blind-check results. Every row is measured, never claimed.

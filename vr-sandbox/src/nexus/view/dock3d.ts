@@ -38,6 +38,10 @@ export class Dock3D {
     this.scene.add(this.view.group, this.grid);
     this.camera.position.set(6, 5, 8);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement); this.controls.enableDamping = true; this.controls.zoomSpeed = 1.4;
+    // (the wheel zooms toward what is under the pointer, so a valve's keeper is reached by pointing at it and turning)
+    this.controls.zoomToCursor = true;
+    // (a double press on any piece flies the view to it, framed close: a bolt in a truck, a gate in a chip)
+    this.renderer.domElement.addEventListener('dblclick', (e) => { const h = this.hitAt(e.clientX, e.clientY); if (h) { this.frameBox(h.box); this.lastPiece = h.name; } });
     // a press that did not turn the view chooses what it lands on
     let down: [number, number] | null = null;
     this.renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
@@ -58,6 +62,22 @@ export class Dock3D {
   get canvas(): HTMLCanvasElement { return this.renderer.domElement; }
   /** The view put somewhere and turned to look at a point (a test's, or a bookmark's). */
   look(from: [number, number, number], at: [number, number, number]): void { this.controls.target.set(...at); this.camera.position.set(...from); this.controls.update(); }
+  /** The view flown to frame the pieces named like `re` (every one that matches, together), as close as shows them
+   *  whole: how a test, a bookmark or the command bar zooms into a part. Says how many it framed. */
+  focus(re: RegExp): number { const { box, n } = this.view.piecesNamed(re); if (n) this.frameBox(box); return n; }
+  /** The name of the piece last flown to (a double press on it). */
+  lastPiece = '';
+  /** The view turned and moved to see a box whole, from the side it is looked at now. */
+  frameBox(b: THREE.Box3): void {
+    if (b.isEmpty()) return;
+    const c = b.getCenter(new THREE.Vector3()), r = Math.max(1e-6, b.getSize(new THREE.Vector3()).length() / 2), d = (r / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2))) * 1.15;
+    const dir = this.camera.position.clone().sub(this.controls.target); if (dir.lengthSq() < 1e-20) dir.set(0.75, 0.62, 1); dir.normalize();
+    this.controls.target.copy(c); this.camera.position.copy(c).addScaledVector(dir, d); this.camera.near = Math.max(1e-12, d / 1e4); this.camera.far = d * 1e4; this.camera.updateProjectionMatrix(); this.controls.update();
+  }
+  private hitAt(x: number, y: number): { name: string; box: THREE.Box3 } | null {
+    const r = this.renderer.domElement.getBoundingClientRect(), ndc = new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+    this.ray.setFromCamera(ndc, this.camera); return this.view.pieceAt(this.ray);
+  }
   /** How long the last frames took to draw, ms (a moving mean). */
   frameMs = 0;
 

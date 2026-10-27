@@ -45,7 +45,7 @@ function colourOf(t: Part | Assembly): number {
   colourKept.set(t, c); return c;
 }
 
-interface Batch { geo: THREE.BufferGeometry; mat: THREE.Material; m: number[]; owners: string[] }
+interface Batch { geo: THREE.BufferGeometry; mat: THREE.Material; m: number[]; owners: string[]; names: string[] }
 
 // ---- stand-ins: a thing far off drawn as its biggest pieces --------------------------------------------------------------
 /** How many pieces a stand-in keeps. */
@@ -136,7 +136,7 @@ export class SpaceView {
    *  exactly as one at hand (a GPU keeps 24 bits: at 10,000 km that is a metre). */
   readonly origin = new THREE.Vector3();
   private shown: Shown[] = []; private dirty = true; private lastCam = ''; private lastBuild = 0;
-  private meshes = new Map<string, THREE.InstancedMesh>(); private owners = new Map<THREE.InstancedMesh, string[]>();
+  private meshes = new Map<string, THREE.InstancedMesh>(); private owners = new Map<THREE.InstancedMesh, string[]>(); private names = new Map<THREE.InstancedMesh, string[]>();
   private readonly sphere = new THREE.Sphere(); 
 
   /** The things to draw now. */
@@ -158,9 +158,9 @@ export class SpaceView {
     const toLocal = world.clone().invert(); this.origin.copy(eye).applyMatrix4(toLocal);
     const worldScale = new THREE.Vector3().setFromMatrixScale(world).x || 1;
     let count = 0, boxes = 0, hidden = 0, stand = 0;
-    const add = (key: string, geo: THREE.BufferGeometry, mat: THREE.Material, m: THREE.Matrix4, owner: string) => {
-      let b = batches.get(key); if (!b) { b = { geo, mat, m: [], owners: [] }; batches.set(key, b); }
-      const e = m.elements, o = this.origin; b.m.push(e[0]!, e[1]!, e[2]!, e[3]!, e[4]!, e[5]!, e[6]!, e[7]!, e[8]!, e[9]!, e[10]!, e[11]!, e[12]! - o.x, e[13]! - o.y, e[14]! - o.z, e[15]!); b.owners.push(owner); count++;
+    const add = (key: string, geo: THREE.BufferGeometry, mat: THREE.Material, m: THREE.Matrix4, owner: string, name = '') => {
+      let b = batches.get(key); if (!b) { b = { geo, mat, m: [], owners: [], names: [] }; batches.set(key, b); }
+      const e = m.elements, o = this.origin; b.m.push(e[0]!, e[1]!, e[2]!, e[3]!, e[4]!, e[5]!, e[6]!, e[7]!, e[8]!, e[9]!, e[10]!, e[11]!, e[12]! - o.x, e[13]! - o.y, e[14]! - o.z, e[15]!); b.owners.push(owner); b.names.push(name); count++;
     };
     const scratch = new THREE.Matrix4();
     // what can be seen at all: the view's frustum, in the space's frame (whole groups leave it by one test)
@@ -251,7 +251,7 @@ export class SpaceView {
           // the coarsest level of its stand-in whose error is under the threshold (4 pieces, 12, 48)
           const lv = p.levels.find((l) => l.error * per < ERR_PX * this.coarse);
           if (lv) {
-            for (const q of p.pieces.slice(0, lv.k)) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const geo = leafGeometry(q.part); if (!geo) continue; const mat = leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner); }
+            for (const q of p.pieces.slice(0, lv.k)) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const geo = leafGeometry(q.part); if (!geo) continue; const mat = leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name); }
             stand++; continue;
           }
         }
@@ -263,7 +263,7 @@ export class SpaceView {
         const o = effective(overs, l.part.name); if (o.hide) continue;
         const geo = leafGeometry(l.part); if (!geo) continue;
         const mat = leafMaterial(l.part, o);
-        add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, l.m), owner);
+        add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, l.m), owner, l.part.name);
       }
     }
     // the meshes: kept and grown when they must be, so moving the view does not make them again
@@ -278,7 +278,7 @@ export class SpaceView {
       }
       mesh.position.copy(this.origin); mesh.updateMatrix();
       (mesh.instanceMatrix.array as Float32Array).set(b.m); mesh.count = n; mesh.instanceMatrix.needsUpdate = true; mesh.visible = true; mesh.boundingSphere = null; mesh.boundingBox = null;
-      this.owners.set(mesh, b.owners);
+      this.owners.set(mesh, b.owners); this.names.set(mesh, b.names);
     }
     for (const [key, mesh] of this.meshes) if (!used.has(key)) { mesh.count = 0; mesh.visible = false; }
     const ms = performance.now() - t0; this.reach = cut;
@@ -291,6 +291,23 @@ export class SpaceView {
     this.stats = { instances: count, draws: batches.size, boxes, hidden, ms, standins: stand, coarse: this.coarse, culled };
   }
 
+  /** The box of one drawn piece (one instance of a mesh), in the world. */
+  private boxOf(mesh: THREE.InstancedMesh, i: number): THREE.Box3 {
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    const m = new THREE.Matrix4(); mesh.getMatrixAt(i, m); return mesh.geometry.boundingBox!.clone().applyMatrix4(m.premultiply(mesh.matrixWorld));
+  }
+  /** The piece a ray meets first: its name and its box (to fly the view to it). */
+  pieceAt(ray: THREE.Raycaster): { name: string; box: THREE.Box3 } | null {
+    const vis = [...this.meshes.values()].filter((m) => m.visible && m.count > 0), h = ray.intersectObjects(vis, false)[0];
+    if (!h || h.instanceId === undefined) return null; const mesh = h.object as THREE.InstancedMesh;
+    return { name: this.names.get(mesh)?.[h.instanceId] ?? '', box: this.boxOf(mesh, h.instanceId) };
+  }
+  /** The box round every drawn piece whose name is like `re`, and how many there are. */
+  piecesNamed(re: RegExp): { box: THREE.Box3; n: number } {
+    const box = new THREE.Box3(); let n = 0;
+    for (const mesh of this.meshes.values()) { if (!mesh.visible) continue; const nm = this.names.get(mesh) ?? []; for (let i = 0; i < mesh.count; i++) if (re.test(nm[i] ?? '')) { box.union(this.boxOf(mesh, i)); n++; } }
+    return { box, n };
+  }
   /** The node whose thing a ray meets first, and where. */
   pick(ray: THREE.Raycaster): { key: string; point: THREE.Vector3; distance: number } | null {
     const vis = [...this.meshes.values()].filter((m) => m.visible && m.count > 0);

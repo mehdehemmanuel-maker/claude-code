@@ -233,3 +233,61 @@ export function chainPath(wheels: [number, number, number][]): V3[] {
   for (const q of [...pts].reverse()) { while (hi.length >= 2 && cross(hi[hi.length - 2]!, hi[hi.length - 1]!, q) <= 0) hi.pop(); hi.push(q); }
   return [...lo.slice(0, -1), ...hi.slice(0, -1)].map(([u, v]) => [u, v, 0] as V3);
 }
+
+// ---- one fastener, any fastener ------------------------------------------------------------------------------------------
+export type HeadShape = 'square' | 'hex' | 'octagon' | 'round' | 'pan' | 'button' | 'countersunk' | 'flange' | 'none';
+export type Drive = 'none' | 'hex socket' | 'square socket' | 'star' | 'cross' | 'slot';
+export type Point = 'flat' | 'chamfer' | 'cone' | 'dog';
+export interface FastenerSpec {
+  name?: string; kind?: 'bolt' | 'screw' | 'stud' | 'rivet' | 'pin';
+  /** its shank's diameter, m */ d: number; /** its length under its head (a countersunk one's overall), m */ L: number;
+  head?: HeadShape; /** its head across flats (a polygon's) or across (a round one's), m */ s?: number; /** its head's height, m */ k?: number;
+  drive?: Drive; /** its thread's pitch, m (0: none, a pin's or a rivet's) */ pitch?: number; /** its threaded length from its point, m */ threadL?: number;
+  /** drawn as a helical crest (seen close) or as its pitch cylinder (cheap at a distance) */ thread?: 'helix' | 'plain';
+  point?: Point; /** a rivet's grip: its tail formed this far from its head, m */ grip?: number; mat?: string; color?: number; item?: string;
+}
+/** A fastener of any kind from one recipe: its head (a polygon of so many sides, or a round, pan, button, countersunk or
+ *  flanged one, or none), its drive cut into the head, its shank (plain under the head, then its thread to its point:
+ *  a helical crest round a core at the thread's root, sized so the two weigh what a cut thread does), its point (flat,
+ *  chamfered, a wood screw's cone, a dog point); a rivet's tail set at its grip. Every part of it one piece. Its head
+ *  sits on y = 0, its shank down -y (as the library's bolts). Sizes not given are ISO 4017's and 261's proportions for
+ *  its diameter (typical). */
+export function fastener(o: FastenerSpec): Part {
+  const d = o.d, r = d / 2, kind = o.kind ?? 'bolt', head = o.head ?? (kind === 'stud' || kind === 'pin' ? 'none' : kind === 'rivet' ? 'button' : kind === 'screw' ? 'pan' : 'hex');
+  const s = o.s ?? (head === 'square' ? 1.5 * d : head === 'hex' || head === 'octagon' || head === 'flange' ? 1.5 * d + 0.0006 : head === 'countersunk' ? 2 * d : 1.8 * d), k = o.k ?? (head === 'hex' || head === 'square' || head === 'octagon' ? 0.65 * d : head === 'countersunk' ? 0.55 * d : head === 'none' ? 0 : 0.6 * d);
+  const P0 = o.pitch ?? (kind === 'rivet' || kind === 'pin' ? 0 : Math.max(0.0002, 0.15 * d)), mat = o.mat ?? 'steel-alloy', color = o.color ?? 0x8a8c90, g = { mat, color, finish: 'machined', one: true } as Partial<Part>, parts: Part[] = [];
+  // its head
+  const nSides = head === 'square' ? 4 : head === 'hex' || head === 'flange' ? 6 : head === 'octagon' ? 8 : 0, e = nSides ? s / Math.cos(Math.PI / nSides) : s, c = Math.min(0.15 * k, 0.6e-3 + 0.05 * k);
+  if (nSides) {
+    parts.push({ name: 'head', shape: { lathe: [[0, 0], [e / 2, 0], [e / 2, k - c], [0.92 * (e / 2), k], [0, k], [0, 0]] }, at: [0, 0, 0], facets: nSides, rot: [0, Math.PI / nSides, 0], ...g });
+    if (head === 'flange') parts.push({ name: 'flange', shape: { lathe: [[0, 0], [0.75 * e, 0], [0.75 * e, 0.12 * k], [0.5 * e, 0.2 * k], [0, 0.2 * k], [0, 0]] }, at: [0, 0, 0], ...g });
+  } else if (head === 'round' || head === 'pan' || head === 'button') {
+    const prof: [number, number][] = head === 'button' ? Array.from({ length: 9 }, (_, i) => { const a = (i / 8) * (Math.PI / 2); return [(s / 2) * Math.cos(a), k * Math.sin(a)] as [number, number]; }) : head === 'pan' ? [[s / 2, 0], [s / 2, 0.6 * k], [0.42 * s, k], [0, k]] : [[s / 2, 0], [s / 2, k], [0, k]];
+    parts.push({ name: 'head', shape: { lathe: [[0, 0], ...prof, [0, 0]] }, at: [0, 0, 0], ...g });
+  } else if (head === 'countersunk') parts.push({ name: 'head', shape: { lathe: [[0, -k], [r, -k], [s / 2, 0], [0, 0], [0, -k]] }, at: [0, 0, 0], ...g });
+  // its drive, cut into the head's top (a polygon cut: a socket of so many sides; a slot or a cross as a long thin one)
+  const top = head === 'countersunk' ? 0 : k, depth = Math.min(0.6 * Math.max(k, 0.5 * d), 0.7 * (head === 'countersunk' ? 0.55 * d : k)), dr = o.drive ?? (head === 'button' || head === 'round' ? 'hex socket' : head === 'pan' || head === 'countersunk' ? 'cross' : 'none');
+  if (dr !== 'none' && head !== 'none' && parts[0]) {
+    const sock = dr === 'hex socket' ? { r: 0.3 * s, n: 6 } : dr === 'square socket' ? { r: 0.28 * s, n: 4 } : dr === 'star' ? { r: 0.3 * s, n: 12 } : { r: 0.32 * s, n: 4 };
+    parts[0] = { ...parts[0], cuts: [{ r: sock.r, depth, at: [0, top, 0], dir: [0, -1, 0], n: sock.n }] };
+  }
+  // its shank: plain under the head, then its thread; a rivet's or a pin's plain all the way
+  const tL = P0 ? Math.min(o.L, o.threadL ?? Math.min(o.L, 2 * d + 0.006)) : 0, plain = o.L - tL, y0 = head === 'countersunk' ? -k : 0, root = r - 0.6134 * P0, pointL = o.point === 'cone' ? 1.5 * d : o.point === 'dog' ? 0.5 * d : o.point === 'flat' ? 0 : Math.max(P0, 0.1 * d);
+  if (plain > 0) parts.push({ name: kind === 'rivet' ? 'rivet shank' : 'shank', shape: { lathe: [[0, y0], [r, y0], [r, y0 - plain], [0, y0 - plain], [0, y0]] }, at: [0, 0, 0], ...g });
+  if (tL > 0) {
+    const ty0 = y0 - plain, ty1 = y0 - o.L, cr = o.point === 'cone' ? 0.15 * r : o.point === 'dog' ? 0.65 * r : root * 0.85;
+    parts.push({ name: 'thread core', shape: { lathe: [[0, ty0], [root, ty0], [root, ty1 + pointL], [cr, ty1], [0, ty1], [0, ty0]] }, at: [0, 0, 0], ...g, finish: 'thread' });
+    // (its crest: a helix at the thread's pitch radius, its section sized so core and crest weigh what an ISO 68 thread
+    // between its root and its major diameter does, about half the ring between them)
+    const rp = (r + root) / 2, ring = Math.PI * (r * r - root * root) * 0.5, perL = (2 * Math.PI * rp) / P0, rc = Math.min(0.45 * P0, Math.sqrt(ring / (Math.PI * perL)));
+    if (o.thread !== 'plain') {
+      const turns = (tL - pointL) / P0, per = 12, pts: V3[] = [];
+      for (let i = 0; i <= Math.max(1, Math.round(turns * per)); i++) { const t = i / per, a = 2 * PI * t; pts.push([rp * Math.cos(a), ty0 - rc - t * P0, rp * Math.sin(a)]); }
+      parts.push({ name: 'thread crest', shape: { tube: { r: rc, pts, bend: rc } }, at: [0, 0, 0], ...g, finish: 'thread' });
+    } else parts[parts.length - 1] = { ...parts[parts.length - 1]!, shape: { lathe: [[0, ty0], [rp, ty0], [rp, ty1 + pointL], [cr, ty1], [0, ty1], [0, ty0]] } };
+  }
+  // a rivet's tail, set at its grip: a formed head half again its shank across
+  if (kind === 'rivet' && o.grip) parts.push({ name: 'set tail', shape: { lathe: [[0, -o.grip], [0.75 * d, -o.grip], [0.7 * d, -o.grip - 0.35 * d], [0, -o.grip - 0.4 * d], [0, -o.grip]] }, at: [0, 0, 0], ...g });
+  const nm = o.name ?? `${kind} M${+(d * 1000).toFixed(1)} × ${+(o.L * 1000).toFixed(0)}${head !== 'none' ? `, ${head} head` : ''}${dr !== 'none' && head !== 'none' ? `, ${dr}` : ''}`;
+  return { name: nm, at: [0, 0, 0], mat, ...(o.item ? { item: o.item } : {}), parts, says: `${kind}: ${+(d * 1000).toFixed(1)} mm across, ${+(o.L * 1000).toFixed(0)} mm long${P0 ? `, ${+(P0 * 1000).toFixed(2)} mm pitch, ${+(tL * 1000).toFixed(0)} mm of thread` : ''}${head !== 'none' ? `; a ${head} head ${+(s * 1000).toFixed(1)} × ${+(k * 1000).toFixed(1)} mm` : ''}` };
+}

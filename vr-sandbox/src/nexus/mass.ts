@@ -11,7 +11,7 @@ export const DENSITY: Record<string, number> = {
   'steel-low': 7850, 'steel-tool': 7850, 'steel-spring': 7850, 'steel-alloy': 7850, 'stainless-304': 8000, 'cast-iron': 7200, 'al-6061': 2700, 'al-6063': 2700, copper: 8960,
   wood: 500, oak: 750, glass: 2500, brick: 1900, concrete: 2400, granite: 2700, rubber: 1150, abs: 1050, pp: 905, pc: 1200, pmma: 1190, nylon: 1140,
   cotton: 80, foam: 35, leather: 860, asphalt: 2300, water: 1000, soil: 1500, leaf: 600, render: 1800, tile: 2000, silk: 1300, stingray: 1100,
-  pe: 950, pu: 1200, fibreglass: 1850, 'al-a380': 2710, 'al-5052': 2680, 'stainless-316': 8000, 'stainless-440c': 7800, brass: 8500, bronze: 8800, 'steel-chrome': 7830, pvc: 1400, pom: 1410, ptfe: 2200, 'al-7075': 2810, 'wood-veneer': 680, fr4: 1850,
+  pe: 950, pu: 1200, fibreglass: 1850, 'glass-wool': 2550, 'al-a380': 2710, 'al-5052': 2680, 'stainless-316': 8000, 'stainless-440c': 7800, brass: 8500, bronze: 8800, 'steel-chrome': 7830, pvc: 1400, pom: 1410, ptfe: 2200, 'al-7075': 2810, 'wood-veneer': 680, fr4: 1850,
   'steel-electrical': 7650, 'magnet-wire': 8900, ndfeb: 7500, nbr: 1200,
   lead: 11340, acid: 1280, 'glycol-50': 1070, 'al-3003': 2730, pet: 1380, oil: 870, zamak: 6700, alumina: 3900, 'nickel-alloy': 8400, pbt: 1310, epdm: 1150, 'al-2024': 2780, graphite: 1800, pla: 1240, silicone: 1150, fkm: 1800, 'pa66-gf30': 1350, 'mls-steel': 7900, paper: 800, epoxy: 1200, silicon: 2329, sio2: 2200, tungsten: 19300, hfo2: 9680, gold: 19300, solder: 7400, ceramic: 3900, 'nickel-plate': 8900,
   tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
@@ -45,12 +45,26 @@ const area = (s: Shape): number => {
   if ('surf' in s) return surfaceArea(s.surf);
   return 0;
 };
+/** How much of a hole's run (from its `at`, along its `dir`, `depth` long) lies inside the box round a shape (in the
+ *  part's frame): a box's own, a turned part's round its axis; any other, the hole's whole depth. */
+function inside(s: Shape | undefined, c: { at: [number, number, number]; dir: [number, number, number]; depth: number }): number {
+  let lo: number[], hi: number[];
+  if (s && 'box' in s) { lo = s.box.map((x) => -x / 2); hi = s.box.map((x) => x / 2); }
+  else if (s && 'lathe' in s) { const R = Math.max(...s.lathe.map((q) => q[0])), ys = s.lathe.map((q) => q[1]); lo = [-R, Math.min(...ys), -R]; hi = [R, Math.max(...ys), R]; }
+  else return c.depth;
+  const L = Math.hypot(...c.dir) || 1; let t0 = 0, t1 = c.depth;
+  for (let k = 0; k < 3; k++) { const d = c.dir[k]! / L, a = c.at[k]!;
+    if (Math.abs(d) < 1e-12) { if (a < lo[k]! || a > hi[k]!) return 0; continue; }
+    let ta = (lo[k]! - a) / d, tb = (hi[k]! - a) / d; if (ta > tb) [ta, tb] = [tb, ta]; t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); }
+  return Math.max(0, t1 - t0);
+}
 /** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
 export function massOf(p: Part): number {
   // (a round shape drawn with flat sides, a nut's six, is that polygon round its axis, not the circle through its corners)
   const flats = p.facets && p.shape && ('cyl' in p.shape || 'lathe' in p.shape) ? (p.facets * Math.sin((2 * Math.PI) / p.facets)) / (2 * Math.PI) : 1;
   // (less what is drilled out of it: each hole its own cylinder, or its n-sided prism)
-  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.n ? (c.n / 2) * Math.sin((2 * Math.PI) / c.n) : Math.PI) * c.r * c.r * c.depth, 0);
+  // (only as deep as it runs inside the shape: a bore along a pushrod drilled through a gasket takes the gasket's thickness)
+  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.n ? (c.n / 2) * Math.sin((2 * Math.PI) / c.n) : Math.PI) * c.r * c.r * inside(p.shape, c), 0);
   const own = p.kg !== undefined ? p.kg : p.shape && p.mat && DENSITY[p.mat] ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * DENSITY[p.mat]! * (p.fill ?? 1) : 0;
   return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
 }

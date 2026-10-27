@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { edgeRadius } from '../finish';
 import type { Cut, Part, Shape } from '../kits';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
@@ -62,7 +63,22 @@ function loftGeometry(l: Loft): THREE.BufferGeometry {
 function tubeGeometry(t: Tube): THREE.BufferGeometry {
   const path = new THREE.CurvePath<THREE.Vector3>(), v = (q: number[]) => new THREE.Vector3(q[0], q[1], q[2]), legs = tubeLegs(t);
   for (const l of legs) path.add(l.kind === 'line' ? new THREE.LineCurve3(v(l.a), v(l.b)) : new THREE.QuadraticBezierCurve3(v(l.a), v(l.c!), v(l.b)));
-  return legs.length ? new THREE.TubeGeometry(path, Math.max(8, legs.length * 6), t.r, 12, false) : new THREE.BufferGeometry();
+  // (six segments to a leg for a few long ones (a bent pipe's bends round), two for many short ones (a coil, a thread))
+  return legs.length ? new THREE.TubeGeometry(path, Math.max(8, Math.min(legs.length * 6, 40 + legs.length * 2)), t.r, legs.length > 40 ? 8 : 12, false) : new THREE.BufferGeometry();
+}
+/** A turned profile with its corners kept sharp: the profile split where it turns by more than 30° (a pulley's flange,
+ *  a piston's crown, a nut's chamfer), each run turned on its own and the runs joined, so each face keeps its own normal
+ *  and a flat face is drawn flat, not rounded into its neighbour (a lathe's normals are otherwise averaged round the
+ *  whole profile, and a pulley comes out a bulb). */
+function sharpLathe(pts: [number, number][], facets: number): THREE.BufferGeometry {
+  const v = pts.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), runs: THREE.Vector2[][] = [[v[0]!]];
+  for (let i = 1; i < v.length; i++) {
+    runs[runs.length - 1]!.push(v[i]!);
+    if (i < v.length - 1) { const a = v[i]!.clone().sub(v[i - 1]!), b = v[i + 1]!.clone().sub(v[i]!); if (a.lengthSq() > 0 && b.lengthSq() > 0 && Math.abs(a.angle() - b.angle()) % (2 * Math.PI) > 0.52 && Math.abs(Math.abs(a.angle() - b.angle()) - 2 * Math.PI) > 0.52) runs.push([v[i]!]); }
+  }
+  const geos = runs.filter((r) => r.length >= 2).map((r) => { return new THREE.LatheGeometry(r, facets).toNonIndexed(); });
+  if (geos.length === 1) return geos[0]!;
+  const m = mergeGeometries(geos, false); return m ?? new THREE.LatheGeometry(v, facets);
 }
 /** A cylinder (or a tapered one) with its rims rounded to r: a lathed profile. */
 export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24): THREE.BufferGeometry {
@@ -119,7 +135,7 @@ function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: 
   if ('loft' in s) return loftGeometry(s.loft);
   if ('tube' in s) return tubeGeometry(s.tube);
   // (turned, or with flat sides where it has them: a nut's six, round its bore)
-  if ('lathe' in s) return new THREE.LatheGeometry(s.lathe.map(([r, y]) => new THREE.Vector2(Math.max(0, r), y)), facets ?? 40);
+  if ('lathe' in s) return sharpLathe(s.lathe, facets ?? 40);
   if ('prism' in s) { const sh = new THREE.Shape(s.prism.pts.map(([x, y]) => new THREE.Vector2(x, y))); for (const h of s.prism.holes ?? []) sh.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y)))); const g = new THREE.ExtrudeGeometry(sh, { depth: s.prism.L, bevelEnabled: false, curveSegments: 1 }); g.translate(0, 0, -s.prism.L / 2); return g; }
   // a round part with flat sides (a hex head, a nut): its flats, its edges broken
   if (facets && 'cyl' in s) return new THREE.CylinderGeometry(s.cyl[2] ?? s.cyl[0], s.cyl[0], s.cyl[1], facets);
