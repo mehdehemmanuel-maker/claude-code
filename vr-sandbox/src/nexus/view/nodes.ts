@@ -874,6 +874,29 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
     return b;
   }],
+  ['A battery placed by the solver: where it goes, why, and what it gives up', () => {
+    // the Corolla's battery placed from what it needs, not typed: taken out, the bay mapped without it (heat, motion,
+    // reach), every place it fits standing on something and under the hood tried at each quarter turn; held to what it
+    // must have (no cell over the 80 °C its separators stand, none in what moves), the cheapest of the rest chosen (cool,
+    // a hand reaching its top, near its starter, little moved). Beside it: why, the next best and what each gives up, the
+    // rule findings before and after, and the battery its engine's duty calls for. The 3D view: the engine, the battery
+    // where the solver put it, and the heat round it
+    const b = emptyBoard('A battery placed by the solver');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
+    placeBlock(b, 'place.solve', 0, 0, {}, 'solve'); b.nodes.solve!.label = 'Place the battery'; wire(b, 'car', 'vehicle', 'solve', 'thing');
+    placeBlock(b, 'explain', 0, 0, {}, 'why'); b.nodes.why!.label = 'Why there'; wire(b, 'solve', 'placed', 'why', 'value');
+    placeBlock(b, 'view.show', 0, 0, {}, 'whyShow'); wire(b, 'why', 'lines', 'whyShow', 'value');
+    placeBlock(b, 'view.table', 0, 0, {}, 'others'); b.nodes.others!.label = 'The next best places'; wire(b, 'solve', 'others', 'others', 'rows');
+    placeBlock(b, 'size.select', 0, 0, {}, 'size'); b.nodes.size!.label = 'The battery its engine calls for'; wire(b, 'car', 'vehicle', 'size', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'groups'); b.nodes.groups!.label = 'Every group, weighed'; wire(b, 'size', 'options', 'groups', 'rows');
+    placeBlock(b, 'piece', 0, 0, { name: '^petrol engine', where: 'where it sits' }, 'eng'); b.nodes.eng!.label = 'The engine'; wire(b, 'solve', 'thing', 'eng', 'thing');
+    placeBlock(b, 'piece', 0, 0, { name: '^battery and its tray$', where: 'where it sits' }, 'bat'); b.nodes.bat!.label = 'The battery, where it was put'; wire(b, 'solve', 'thing', 'bat', 'thing');
+    placeBlock(b, 'field', 0, 0, { kind: 'heat', grow: 0.25 }, 'heat'); b.nodes.heat!.label = 'Map: heat, the battery moved'; wire(b, 'solve', 'thing', 'heat', 'thing');
+    placeBlock(b, 'field.show', 0, 0, { slice: 'y', at: 0.55 }, 'heatShow'); b.nodes.heatShow!.label = 'Heat: a level slice'; wire(b, 'heat', 'field', 'heatShow', 'field');
+    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'Engine, battery and heat'; wire(b, 'eng', 'piece', 'scene', 'things'); wire(b, 'bat', 'piece', 'scene', 'things'); wire(b, 'heatShow', 'view', 'scene', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
+    return b;
+  }],
   ['Fields over the engine bay: what each part needs, and maps of heat, motion and reach', () => {
     // the Corolla's engine bay as maps, not as positions: what every part needs, read from what its parts state (nothing
     // typed); then the space round the engine cell by cell: how hot (the rules' own fall-off from each hot surface, a
@@ -1220,7 +1243,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

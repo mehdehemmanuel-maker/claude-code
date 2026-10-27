@@ -1,6 +1,6 @@
 # Engineering at any scale as nodes
 
-Status: step 0 and step 1 built (`need`, `field`, `field.combine`, `field.show`); the rest planned. Base: commit `14e3283`.
+Status: steps 0 to 2 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select` for batteries, `explain`); the rest planned. Base: commit `14e3283`.
 Target: 1,000,000 components, 100,000 unique, solved, checked, changed and understood without hand edits.
 End state: a person states what they want; the system does the rest, asks only what matters, and returns a buildable, proven design.
 
@@ -418,7 +418,7 @@ Twelve layers, in the order a design flows through them. 65 nodes.
 | `twin` | K | 14 |
 | `version` | I | 10 |
 
-65 nodes, 4 built (`need`, `field`, `field.combine`, `field.show`).
+65 nodes, 7 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select`, `explain`).
 
 ## 12. Merges in this plan
 
@@ -552,6 +552,19 @@ Candidates rejected on reading:
 | Many rounds of work | One step per round |
 
 ## 17. Starting state
+
+Step 2 result, the Corolla's battery:
+- Where it was, it ran into the front inner wheelhouse (by about 7 mm), with 223 rule findings against it.
+- The solver tried 498,902 places at each quarter turn (12.5 mm across, 25 mm up). 577 fit and 550 hold.
+- Chosen: (1401, 582, 249) mm, at 48 °C (its limit 80 °C), 100 % of its top within reach, 728 mm from the starter, a bracket of up to 50 mm under it.
+- The rules then find 0 against it. The solve takes about 30 s.
+- The limits it still has:
+  - one part at a time;
+  - only quarter turns about the vertical;
+  - the bracket under it is not made yet (step 6);
+  - the cable to the starter is not routed (step 4);
+  - a part inside a moved holder is refused.
+- `size.select` for batteries uses a rule of thumb (CCA per cubic inch) as a floor and holds car groups only.
 
 Gate: 9 of 1,630 tests fail. Causes:
 - `bearing-6206zz` is not stored in the inventory.

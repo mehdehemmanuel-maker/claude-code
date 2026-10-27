@@ -1481,10 +1481,10 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
         out.push(P('battery and its tray', undefined, [gx, top, gz], { item: 'battery-mount', parts: [
           P('battery tray', { box: [bs.x + 0.03, 0.006, bs.z + 0.03] }, [0, 0.003, 0], { item: 'battery-tray', mat: 'pp', color: 0x1a1a1a, finish: 'texture', says: 'moulded, bolted to its bracket on the gearbox' }),
           partOf(bat, [0, 0.006, 0], [0, 0, 0], { item: 'battery-sli', sealed: 'built whole as it is made (components.ts), fitted as it comes' }),
-          P('hold-down clamp', { box: [0.03, 0.008, bs.z + 0.04] }, [0, bs.y - 0.015, 0], { item: 'battery-clamp', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', says: 'a pressed bar across its top, between its posts' }),
+          P('hold-down clamp', { box: [0.03, 0.008, bs.z + 0.04] }, [0, 0.006 + bs.y + 0.004, 0], { item: 'battery-clamp', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', says: 'a pressed bar across its top, between its posts' }),
           ...[-1, 1].flatMap((sd) => [
             use('threadedrod M6 250', [0, bs.y / 2, sd * (bs.z / 2 + 0.012)], { name: 'J-bolt', fixed: 'hooked under its tray, up through its clamp' }),
-            use('nut M6', [0, bs.y - 0.008, sd * (bs.z / 2 + 0.012)], { passes: ['J-bolt'] }),
+            use('nut M6', [0, 0.006 + bs.y + 0.008, sd * (bs.z / 2 + 0.012)], { passes: ['J-bolt'] }),
           ]),
         ] }));
       }

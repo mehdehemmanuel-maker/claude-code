@@ -1,13 +1,20 @@
 // The placement model and its fields (docs/PLACEMENT.md, step 1): needs read from what parts state; heat, motion and
-// reach mapped cell by cell, with the rules' own heat model.
+// reach mapped cell by cell, with the rules' own heat model. Placing a part from them, and picking one by its duty (step 2).
 import { describe, expect, it } from 'vitest';
 import type { Part } from '../../src/nexus/kits';
 import { needsOf } from '../../src/nexus/placement/model';
 import { cellAt, combineFields, fieldOf, shareWhere, showField, statsOf, type Field } from '../../src/nexus/placement/fields';
-import { AMBIENT, HEAT_FALLOFF } from '../../src/nexus/make/rules';
+import { AMBIENT, HEAT_FALLOFF, rulesOf } from '../../src/nexus/make/rules';
+import { explainPlaced, placeOne } from '../../src/nexus/placement/solve';
+import { selectBattery } from '../../src/nexus/placement/size';
 import { makeMachine, MACHINES } from '../../src/nexus/machines';
 
 const box = (name: string, size: [number, number, number], at: [number, number, number], more: Partial<Part> = {}): Part => ({ name, shape: { box: size }, at, mat: 'steel-low', ...more });
+/** A small bay: floor and hood, an engine, an exhaust at 600 °C, a battery (polypropylene, good to 100 °C) 25 mm from it
+ *  and standing on the floor, its starter across the bay. Identified parts (with an item), as the rules check them. */
+const bay = (holder: Partial<Part> = {}): Part => { const b = (n: string, s: [number, number, number], at: [number, number, number], m: Partial<Part> = {}) => box(n, s, at, { item: n, ...m });
+  return { name: 'bay', parts: [b('floor', [1, 0.01, 0.6], [0, -0.005, 0]), b('hood', [1, 0.005, 0.6], [0, 0.4, 0]), b('petrol engine (1987 cc, 126 kW)', [0.3, 0.2, 0.3], [0, 0.1, 0]), b('exhaust', [0.05, 0.05, 0.5], [-0.2, 0.025, 0], { mat: 'stainless-304', hot: 600 }),
+    { name: 'holder', ...holder, parts: [{ name: 'battery', item: 'battery', at: [-0.31, 0, 0], parts: [box('case', [0.12, 0.12, 0.12], [0, 0.06, 0], { mat: 'pp' })] }] }, b('starter', [0.08, 0.08, 0.08], [0.3, 0.04, 0.2])] }; };
 /** The value in the cell nearest a point. */
 const at = (f: Field, p: [number, number, number]) => { const i = Math.floor((p[0] - f.min[0]) / f.step), j = Math.floor((p[1] - f.min[1]) / f.step), k = Math.floor((p[2] - f.min[2]) / f.step); return { v: f.values[i + f.dims[0] * (j + f.dims[1] * k)]!, c: cellAt(f, i, j, k) }; };
 
@@ -63,4 +70,37 @@ describe('fields', () => {
     expect(() => combineFields([h, fieldOf(t, 'heat', { ...o, step: 0.02 })])).toThrow(/different grids/);
     expect(showField(h, { slice: { axis: 'y', at: 0.5 } }).parts!.length).toBeGreaterThan(0);
   });
+});
+
+describe('placing a part from what it needs', () => {
+  const o = { near: /^starter$/, around: /^petrol engine/, grow: 0.2, step: 0.05 };
+  it('a battery by an exhaust is moved where it is cool, can be reached, near its starter; the rules agree', () => {
+    const t = bay(), { placed, tree } = placeOne(t, /^battery$/, o);
+    expect(rulesOf(t, { only: /^battery$/ }).findings.map((f) => f.rule)).toEqual(['heat']);
+    expect(rulesOf(tree, { only: /^battery$/ }).findings).toHaveLength(0);
+    // (where it was holds nothing back: it fits, standing on the floor, but is over its 100 °C)
+    expect(placed.was?.holds).toBe(false); expect(placed.was!.heat).toBeGreaterThan(100);
+    expect(placed.chosen.heat).toBeLessThanOrEqual(placed.limit); expect(placed.limit).toBe(100);
+    expect(placed.chosen.reach).toBe(1); expect(placed.chosen.near).toBeLessThan(placed.was!.near);
+    expect(placed.others.length).toBeGreaterThan(0); for (const x of placed.others) expect(x.cost).toBeGreaterThanOrEqual(placed.chosen.cost);
+    expect(placed.rejected.solid + placed.rejected.support + placed.rejected.roof + placed.rejected.outside + placed.fits).toBe(placed.tried);
+    const said = explainPlaced(placed); expect(said[0]).toMatch(/^battery goes to/); expect(said.some((l) => /does not hold \(\d+ °C where it would be, over its 100 °C\)/.test(l))).toBe(true);
+  });
+  it('a part inside a moved holder is refused, not put in the wrong place', () => {
+    expect(() => placeOne(bay({ at: [0.1, 0, 0] }), /^battery$/, o)).toThrow(/moved or turned/);
+  });
+  it('a battery picked by its engine\'s duty, beside the one it has', () => {
+    const s = selectBattery(makeMachine(MACHINES.find((m) => m.id === 'corolla')!));
+    // (1987 cc is 121.3 cubic inches: 122 CCA at 1 per cubic inch)
+    expect(s.need).toBe(122); expect(s.has?.group).toBe('35'); expect(s.chosen.meets).toBe(true);
+    expect(s.options.filter((x) => x.meets && x.kg < s.chosen.kg)).toHaveLength(0);
+    const truck = selectBattery({ name: 'truck', parts: [{ name: 'diesel engine (14800 cc, 330 kW)' }] }, 3);
+    expect(truck.need).toBe(Math.ceil(Math.ceil(2 * 14800 / 16.387064) / 3));
+  }, 120000);
+  it('the Corolla\'s battery: off the wheelhouse it ran into, somewhere cool and reachable, and the rules come back clean', () => {
+    const { placed, tree } = placeOne(makeMachine(MACHINES.find((m) => m.id === 'corolla')!), /^battery and its tray$/, { near: /^starter motor$/ });
+    expect(placed.was).toBeNull(); expect(placed.wasNot).toMatch(/wheelhouse/);
+    expect(placed.chosen.heat).toBeLessThanOrEqual(80); expect(placed.chosen.reach).toBeGreaterThan(0.5);
+    expect(rulesOf(tree, { only: /^battery and its tray$/ }).findings).toHaveLength(0);
+  }, 300000);
 });

@@ -93,12 +93,12 @@ export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3,
   return out;
 }
 /** The gaps kept: a piece that says its clearance (Part.clear) closer than that to anything it does not run on. */
-export function clearances(ms: Mesh3[]): Finding[] {
+export function clearances(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => true): Finding[] {
   const out: Finding[] = [];
   for (const a of ms) {
     const need = a.p.clear ?? (a.node.parent?.p.clear); if (!need) continue;
     for (const b of ms) {
-      if (b === a || linked(a, b) || said(a, b) || (a.p.runsOn ?? a.node.parent?.p.runsOn ?? []).some((r) => b.name.includes(r) || ownerOf(b.node).p.name.includes(r))) continue;
+      if (b === a || !pair(a, b) || linked(a, b) || said(a, b) || (a.p.runsOn ?? a.node.parent?.p.runsOn ?? []).some((r) => b.name.includes(r) || ownerOf(b.node).p.name.includes(r))) continue;
       const d = leastDistance(T(a), T(b), need); if (d && d.d < need) out.push({ rule: 'clearance', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, gap: d.d, need, says: `the ${a.name} is ${(d.d * 1000).toFixed(1)} mm from the ${b.name}: it needs ${(need * 1000).toFixed(0)} mm` });
     }
   }
@@ -123,12 +123,12 @@ function shielded(p: THREE.Vector3, q: THREE.Vector3, ms: Mesh3[], skip: Mesh3[]
   }
   return false;
 }
-export function heat(ms: Mesh3[]): Finding[] {
+export function heat(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => true): Finding[] {
   const out: Finding[] = [], hot = ms.filter((m) => (m.p.hot ?? m.node.parent?.p.hot ?? 0) > AMBIENT);
   for (const h of hot) {
     const Th = (h.p.hot ?? h.node.parent?.p.hot)!;
     for (const b of ms) {
-      if (b === h || linked(h, b) || !HARMED.test(b.mat ?? '')) continue; const lim = MAX_SERVICE[b.mat ?? ''] ?? Infinity; if (lim >= Th) continue;
+      if (b === h || linked(h, b) || !HARMED.test(b.mat ?? '') || !pair(h, b)) continue; const lim = MAX_SERVICE[b.mat ?? ''] ?? Infinity; if (lim >= Th) continue;
       const need = HEAT_FALLOFF * Math.log((Th - AMBIENT) / Math.max(1, lim - AMBIENT)), d = leastDistance(T(h), T(b), need);
       if (!d || d.d >= need) continue;
       // (in the open between them, the heat reaches it; behind a metal wall (the head, a heat shield), it does not)
@@ -141,9 +141,9 @@ export function heat(ms: Mesh3[]): Finding[] {
 /** All three, on a thing's surfaces as drawn. */
 /** …or only between what is named like `only` (a piece of it, or anything it is in) and everything: what moves, at one
  *  place in its motion. */
-export function rulesOf(root: Part, o: { touch?: number; only?: RegExp } = {}): { findings: Finding[]; pieces: number } {
+export function rulesOf(root: Part, o: { touch?: number; only?: RegExp; /** only what moves is tried (a pose in a motion): heat and clearance as at rest */ motion?: boolean } = {}): { findings: Finding[]; pieces: number } {
   const all = trianglesOf(root), on = o.only ? (m: Mesh3) => [...names(m.node)].some((n) => o.only!.test(n)) : null, ms = all;
-  if (on) { const res = interference(ms, { ...o, pair: (a, b) => on(a) || on(b) }); return { findings: res, pieces: all.filter(on).length }; }
+  if (on) { const pair = (a: Mesh3, b: Mesh3) => on(a) || on(b), res = [...interference(ms, { ...o, pair }), ...(o.motion ? [] : [...clearances(ms, pair), ...heat(ms, pair)])]; return { findings: res, pieces: all.filter(on).length }; }
   return { findings: [...interference(ms, o), ...clearances(ms), ...heat(ms)], pieces: ms.length };
 }
 
@@ -151,6 +151,6 @@ export function rulesOf(root: Part, o: { touch?: number; only?: RegExp } = {}): 
  *  a door through its swing), only what moves tried against everything at each; each finding with where it happened. */
 export function rulesThrough(make: (t: number) => Part, steps: number, only: RegExp, o: { touch?: number } = {}): { findings: (Finding & { t: number })[]; tried: number } {
   const out: (Finding & { t: number })[] = [], seen = new Set<string>();
-  for (let k = 0; k < steps; k++) { const t = k / steps; for (const f of rulesOf(make(t), { ...o, only }).findings) { const key = `${f.a}|${f.b}|${f.says}`; if (seen.has(key)) continue; seen.add(key); out.push({ ...f, t }); } }
+  for (let k = 0; k < steps; k++) { const t = k / steps; for (const f of rulesOf(make(t), { ...o, only, motion: true }).findings) { const key = `${f.a}|${f.b}|${f.says}`; if (seen.has(key)) continue; seen.add(key); out.push({ ...f, t }); } }
   return { findings: out, tried: steps };
 }

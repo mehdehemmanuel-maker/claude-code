@@ -30,17 +30,20 @@ export interface Field {
 export interface FieldOptions {
   /** the region: the world box of everything named like this, grown by `grow` (default: the engine and 150 mm round it) */
   around?: RegExp; grow?: number;
+  /** or the region itself, and the thing already laid out (so several maps share one grid and one layout) */ region?: THREE.Box3; nodes?: Node[];
   /** cell size, m (default 25 mm) */ step?: number;
   /** cap on cells (default 120,000): the step grows to keep under it */ most?: number;
 }
 /** Leaning over an open bay: an arm's comfortable reach, m (about 0.65 m forward, typical of adults: anthropometric
- *  tables), and the shoulders about 0.3 m over the bay's edge (an estimate of leaning in over a fender or the front). */
+ *  tables), and the shoulders about 0.3 m in from and above the bay's edge, anywhere along it (an estimate of leaning in over a fender or the front). */
 export const ARM = 0.65, LEAN = 0.3;
+/** How far the motion map reads room, m: past it a cell is said to have this much (enough to judge a gap of MOTION_GAP). */
+export const MOTION_READ = 0.06;
 
 const idx = (f: { dims: [number, number, number] }, i: number, j: number, k: number) => i + f.dims[0] * (j + f.dims[1] * k);
 export const cellAt = (f: Field, i: number, j: number, k: number): V3 => [f.min[0] + (i + 0.5) * f.step, f.min[1] + (j + 0.5) * f.step, f.min[2] + (k + 0.5) * f.step];
 
-/** The grid of a region, its cells inside solids marked (each cell's middle against every covering box near it). */
+/** The grid of a region, its solid cells marked: those whose middles are inside a piece, and those a thin piece crosses. */
 function gridOf(nodes: Node[], region: THREE.Box3, step0: number, most: number): { min: V3; step: number; dims: [number, number, number]; solid: Uint8Array; inside: Node[] } {
   const size = region.getSize(new THREE.Vector3());
   let step = step0; while ((size.x / step) * (size.y / step) * (size.z / step) > most) step *= 1.25;
@@ -50,11 +53,14 @@ function gridOf(nodes: Node[], region: THREE.Box3, step0: number, most: number):
   // (each piece marks the cells of its box that are inside it)
   const p = new THREE.Vector3(), d = new THREE.Vector3();
   for (const b of pieces) {
-    const r = Math.abs(b.u[0].x) * b.h[0] + Math.abs(b.u[1].x) * b.h[1] + Math.abs(b.u[2].x) * b.h[2], ry = Math.abs(b.u[0].y) * b.h[0] + Math.abs(b.u[1].y) * b.h[1] + Math.abs(b.u[2].y) * b.h[2], rz = Math.abs(b.u[0].z) * b.h[0] + Math.abs(b.u[1].z) * b.h[1] + Math.abs(b.u[2].z) * b.h[2];
+    // (a thin piece, a skin or a sheet thinner than a cell, marks every cell it crosses, so a 1 mm hood is a wall and not a
+    // gap; a thicker one only the cells whose middles are inside it)
+    const hc = Math.min(b.h[0], b.h[1], b.h[2]) < step / 2 ? step / 2 : 0;
+    const r = hc + Math.abs(b.u[0].x) * b.h[0] + Math.abs(b.u[1].x) * b.h[1] + Math.abs(b.u[2].x) * b.h[2], ry = hc + Math.abs(b.u[0].y) * b.h[0] + Math.abs(b.u[1].y) * b.h[1] + Math.abs(b.u[2].y) * b.h[2], rz = hc + Math.abs(b.u[0].z) * b.h[0] + Math.abs(b.u[1].z) * b.h[1] + Math.abs(b.u[2].z) * b.h[2];
     const lo = [Math.floor((b.c.x - r - min[0]) / step), Math.floor((b.c.y - ry - min[1]) / step), Math.floor((b.c.z - rz - min[2]) / step)], hi = [Math.floor((b.c.x + r - min[0]) / step), Math.floor((b.c.y + ry - min[1]) / step), Math.floor((b.c.z + rz - min[2]) / step)];
     for (let k = Math.max(0, lo[2]!); k <= Math.min(dims[2] - 1, hi[2]!); k++) for (let j = Math.max(0, lo[1]!); j <= Math.min(dims[1] - 1, hi[1]!); j++) for (let i = Math.max(0, lo[0]!); i <= Math.min(dims[0] - 1, hi[0]!); i++) {
       p.set(min[0] + (i + 0.5) * step, min[1] + (j + 0.5) * step, min[2] + (k + 0.5) * step); d.copy(p).sub(b.c);
-      if (Math.abs(d.dot(b.u[0])) <= b.h[0] && Math.abs(d.dot(b.u[1])) <= b.h[1] && Math.abs(d.dot(b.u[2])) <= b.h[2]) solid[idx({ dims }, i, j, k)] = 1;
+      if (Math.abs(d.dot(b.u[0])) <= b.h[0] + hc * (Math.abs(b.u[0].x) + Math.abs(b.u[0].y) + Math.abs(b.u[0].z)) && Math.abs(d.dot(b.u[1])) <= b.h[1] + hc * (Math.abs(b.u[1].x) + Math.abs(b.u[1].y) + Math.abs(b.u[1].z)) && Math.abs(d.dot(b.u[2])) <= b.h[2] + hc * (Math.abs(b.u[2].x) + Math.abs(b.u[2].y) + Math.abs(b.u[2].z))) solid[idx({ dims }, i, j, k)] = 1;
     }
   }
   return { min, step, dims, solid, inside };
@@ -72,7 +78,7 @@ const hotOf = (n: Node): number => { for (let x: Node | null = n; x; x = x.paren
 
 /** One field over a thing, in its region. */
 export function fieldOf(root: Part, kind: FieldKind, o: FieldOptions = {}): Field {
-  const nodes = layout(root), region = regionOf(nodes, o.around ?? /^(petrol|diesel) engine/, o.grow ?? 0.15);
+  const nodes = o.nodes ?? layout(root), region = o.region?.clone() ?? regionOf(nodes, o.around ?? /^(petrol|diesel) engine/, o.grow ?? 0.15);
   if (!region) throw new Error(`nothing named like ${String(o.around ?? 'an engine')} to map round`);
   const g = gridOf(nodes, region, o.step ?? 0.025, o.most ?? 120_000), n = g.dims[0] * g.dims[1] * g.dims[2], values = new Float32Array(n);
   const f: Field = { kind, unit: kind === 'heat' ? '°C' : 'm', says: '', min: g.min, step: g.step, dims: g.dims, values, solid: g.solid, sources: [] };
@@ -99,7 +105,7 @@ export function fieldOf(root: Part, kind: FieldKind, o: FieldOptions = {}): Fiel
   } else if (kind === 'motion') {
     // (what moves, each with the room it needs: a wheel at each corner of its steer and bump (its box turned and raised),
     // a belt or fan's surfaces grown by its clearance, the engine's surfaces by how far it rocks; room read up to 60 mm)
-    const CAP = 0.06, wheels: { b: OBB; need: number }[] = [], byNeed = new Map<number, Node[]>();
+    const CAP = MOTION_READ, wheels: { b: OBB; need: number }[] = [], byNeed = new Map<number, Node[]>();
     for (const x of nodes) {
       if (x.p.travel && x.sub) {
         const c = x.sub.getCenter(new THREE.Vector3()), h = x.sub.getSize(new THREE.Vector3()).multiplyScalar(0.5), st = x.p.travel.steer ?? 0, bu = x.p.travel.bump ?? 0;
@@ -121,19 +127,20 @@ export function fieldOf(root: Part, kind: FieldKind, o: FieldOptions = {}): Fiel
     f.sources = ['Part.travel (each wheel at its steer and bump)', 'Part.clear (belts, fans)', 'MOUNT_ROCK ±10 mm (an estimate) for the engine on its mounts', 'MOTION_GAP 10 mm (typical)'];
     f.says = `room from what moves: ${wheels.length / 9 || 0} wheels through their travel, ${trees.length} surfaces by the room each needs (read to ${CAP * 1000} mm)`; void movers;
   } else {
-    // (a person leaning over the open bay from the front and from each side, shoulders LEAN over the top of the bay's
-    // edge; a hand comes in from above, so a cell counts only where the line straight up from it is clear of everything
-    // but the hood, which is open)
-    const car = new THREE.Box3(); for (const x of nodes) if (x.sub && !x.parent) car.union(x.sub);
-    const top = region.max.y + 0.4, edge = region.max.y + LEAN, cx = (region.min.x + region.max.x) / 2;
-    const shoulders = [...[-0.3, 0, 0.3].map((z) => new THREE.Vector3(Math.min(car.max.x, region.max.x), edge, z)), ...[-1, 1].map((sd) => new THREE.Vector3(cx, edge, sd * Math.min(car.max.z, region.max.z)))];
+    // (a person leaning over the open bay from the front or from either side, standing anywhere along that edge: the
+    // shoulders slide along a line set LEAN in from the edge and LEAN above it; a hand comes in from above, so a cell
+    // counts only where the line straight up from it is clear of everything but the hood, which is open)
+    // (the bay's edge is the hood's: its front and its two sides, as high as it is; without a hood, the region's)
+    const hood = new THREE.Box3(); for (const x of nodes) if (x.box && /^hood$/i.test(x.p.name)) hood.union(x.box);
+    const e = hood.isEmpty() ? region : hood, top = Math.max(region.max.y, e.max.y) + 0.4, y = e.max.y + LEAN, side = Math.max(Math.abs(e.min.z), Math.abs(e.max.z)) - LEAN, V = (x: number, z: number) => new THREE.Vector3(x, y, z);
+    const shoulders = [new THREE.Line3(V(e.max.x - LEAN, -side), V(e.max.x - LEAN, side)), ...[-1, 1].map((sd) => new THREE.Line3(V(e.min.x, sd * side), V(e.max.x - LEAN, sd * side)))], Q = new THREE.Vector3();
     const openG = surfacesOf(g.inside.filter((x) => x.p.shape && !/^hood\b|bonnet/i.test(x.p.name) && !/^hood /i.test(x.parent?.p.name ?? ''))), open = openG ? new MeshBVH(openG) : null, ray = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, 1, 0));
     for (let k = 0; k < g.dims[2]; k++) for (let j = 0; j < g.dims[1]; j++) for (let i = 0; i < g.dims[0]; i++) {
-      const c = idx(f, i, j, k); P.set(...cellAt(f, i, j, k)); let r = ARM - Math.min(...shoulders.map((sh) => sh.distanceTo(P)));
+      const c = idx(f, i, j, k); P.set(...cellAt(f, i, j, k)); let r = ARM - Math.min(...shoulders.map((sh) => sh.closestPointToPoint(P, true, Q).distanceTo(P)));
       if (open) { ray.origin.copy(P); const b = open.raycastFirst(ray, THREE.DoubleSide); if (b && b.distance < top - P.y) r = -1; }
       values[c] = r;
     }
-    f.sources = ['ARM 0.65 m: anthropometric tables, typical of adults', 'LEAN 0.3 m: shoulders over the bay\'s edge leaning in, an estimate', 'a clear line straight up, the hood open'];
+    f.sources = ['ARM 0.65 m: anthropometric tables, typical of adults', 'LEAN 0.3 m in from and above the hood\'s edges (front and sides), standing anywhere along them, an estimate', 'a clear line straight up, the hood open'];
     f.says = 'reach from the front and the sides, the hood open';
   }
   return f;
