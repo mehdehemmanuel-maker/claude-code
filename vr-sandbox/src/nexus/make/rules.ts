@@ -22,7 +22,7 @@ import { leafGeometry } from '../view/kit3d';
  *  metals and glass well above anything near an engine, given as where they begin to lose their strength or temper). */
 export const MAX_SERVICE: Record<string, number> = {
   rubber: 80, nbr: 120, epdm: 150, neoprene: 120, silicone: 230, fkm: 230, pu: 90, foam: 90, pet: 150, cotton: 120, paper: 150,
-  pp: 100, pe: 80, abs: 85, pvc: 60, pc: 120, pmma: 80, nylon: 120, pbt: 140, pom: 100, ptfe: 260, epoxy: 150, phenolic: 200, fibreglass: 300,
+  pp: 100, pe: 80, xlpe: 125, abs: 85, pvc: 60, pc: 120, pmma: 80, nylon: 120, pbt: 140, pom: 100, ptfe: 260, epoxy: 150, phenolic: 200, fibreglass: 300,
   'al-6061': 200, 'al-6063': 200, 'al-a380': 250, 'al-5052': 200, 'al-2024': 150, 'al-7075': 150, zamak: 100, lead: 150, solder: 150, copper: 250, brass: 250,
   glass: 450, 'glass-wool': 540, 'steel-low': 450, 'steel-alloy': 500, 'steel-spring': 250, 'steel-chrome': 400, 'cast-iron': 600, 'stainless-304': 870, 'nickel-alloy': 1000, ceramic: 1200, mica: 700, alumina: 1500,
 };
@@ -109,7 +109,8 @@ export function clearances(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = 
  *  needs to be. */
 // (what heat harms: polymers, rubbers, foams, fabrics and the metals that melt or soften low (lead, solder, zinc alloy);
 // a steel, iron or aluminium part near a manifold is cooled by what it is bolted to and is the engine's own business)
-const HARMED = /^(rubber|nbr|epdm|neoprene|silicone|fkm|pu|foam|pet|cotton|paper|pp|pe|abs|pvc|pc|pmma|nylon|pbt|pom|ptfe|epoxy|phenolic|fibreglass|lead|solder|zamak)$/;
+/** What heat harms: the polymers, rubbers, foams, fabrics and low-melting metals (each with its limit in MAX_SERVICE). */
+export const HARMED = /^(rubber|nbr|epdm|neoprene|silicone|fkm|pu|foam|pet|cotton|paper|pp|pe|xlpe|abs|pvc|pc|pmma|nylon|pbt|pom|ptfe|epoxy|phenolic|fibreglass|lead|solder|zamak)$/;
 /** Whether a straight line between two points passes through a solid piece other than the two (a shield between them:
  *  the head between an exhaust port and a valve's seal, a heat shield's sheet, a cover over a gasket). Any opaque piece
  *  stops what radiates; the piece that stops it is held to its own limit in its turn. Glass lets it through. */

@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import type { Part } from '../kits';
 import { layout, type Node, type OBB } from '../make/space';
-import { AMBIENT, HEAT_FALLOFF, MAX_SERVICE } from '../make/rules';
+import { AMBIENT, HARMED, HEAT_FALLOFF, MAX_SERVICE } from '../make/rules';
 
 export type NeedKind = 'mount' | 'connect' | 'keepout' | 'face' | 'access' | 'group';
 export interface Need {
@@ -25,8 +25,8 @@ export interface Need {
   /** 1: stated on the part; less: inferred from what it is */ confidence: number;
 }
 
-/** What harm heat does: the polymers, rubbers, foams, fabrics and low-melting metals (as the rules' heat gate). */
-export const HEAT_HARMED = /^(rubber|nbr|epdm|neoprene|silicone|fkm|pu|foam|pet|cotton|paper|pp|pe|abs|pvc|pc|pmma|nylon|pbt|pom|ptfe|epoxy|phenolic|fibreglass|lead|solder|zamak)$/;
+/** What harm heat does: the rules' own list (make/rules.ts HARMED). */
+export const HEAT_HARMED = HARMED;
 /** The engine rocking on its mounts under torque, m each way (an estimate: rubber mounts of a car's engine move about
  *  ±10 mm, typical). */
 export const MOUNT_ROCK = 0.01;

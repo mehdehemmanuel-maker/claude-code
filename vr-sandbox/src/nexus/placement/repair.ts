@@ -13,6 +13,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 import { layout, type Node } from '../make/space';
 import { NEAR, needsOf } from './model';
 import { placeOne } from './solve';
+import { route, type Section } from './line';
 
 export interface Problem { key: string; rule: Finding['rule']; a: string; b: string; findings: Finding[]; worst: Finding }
 /** What a repair changed: the tree, the places in it to check again, and what it did. */
@@ -108,6 +109,25 @@ export const REPAIRS: Repair[] = [
         }
       }
       return { no: 'no straight move of either up to 32 mm parts them' };
+    } },
+  { id: 'reroute', name: 'Route it again', rules: ['heat', 'clearance', 'interference'], cost: 1.5, says: 'a line (a hose, a cable, a pipe: a tube) routed again between its own two ends, each left the way it went, by the shortest way through free, cool space (route, its section read from the tube: its bore, its wall and its material)',
+    run: (t, pr, o) => {
+      const f = pr.worst, why: string[] = [], ns = layout(t);
+      // (for heat, only what is harmed: the hot part is where it is for its own reasons)
+      for (const path of (pr.rule === 'heat' ? [f.pb] : [f.pb, f.pa]).filter((x): x is string => !!x)) {
+        const p = partAt(t, path), tube = p?.shape && 'tube' in p.shape ? p.shape.tube : null; if (!p || !tube) { why.push(`the ${p?.name ?? 'part'} is not a line`); continue; }
+        const n = ns.find((x) => x.path === path); if (!n || tube.pts.length < 2) { why.push(`the ${p.name} has no ends`); continue; }
+        const W = tube.pts.map((q) => new THREE.Vector3(...q).applyMatrix4(n.m)), last = W.length - 1, dirOut = (a: THREE.Vector3, b: THREE.Vector3) => b.clone().sub(a).normalize().toArray() as V3;
+        const core = tube.wall ? tube.r - tube.wall : tube.r;
+        const sec: Section = { id: 'as-is', name: p.name, round: true, layers: tube.wall ? [{ name: 'bore', mat: 'water', t: core, bore: true }, { name: 'wall', mat: p.mat ?? 'rubber', t: tube.wall }] : [{ name: 'core', mat: p.mat ?? 'rubber', t: tube.r }], bend: (tube.bend ?? 2 * tube.r) / (2 * tube.r) /* (a moulded hose: as tight as one outside diameter where it says nothing, an estimate) */, clear: 0.005, logic: 'clear', color: p.color ?? 0x1a1a1a, source: 'as the line is drawn' };
+        try {
+          const r = route(setAt(t, path, { ...p, shape: undefined }), W[0]!.toArray() as V3, W[last]!.toArray() as V3, { section: sec, fromDir: dirOut(W[0]!, W[1]!), toDir: dirOut(W[last]!, W[last - 1]!), step: o.step ? Math.min(o.step, 0.02) : 0.015 });
+          if (r.tightest < r.least - 1e-6) { why.push(`the ${p.name}'s best way bends ${Math.round(r.tightest * 1000)} mm, tighter than the ${Math.round(r.least * 1000)} mm it may`); continue; }
+          const inv = n.m.clone().invert(), pts = r.pts.map((q) => new THREE.Vector3(...q).applyMatrix4(inv).toArray() as V3);
+          return { tree: setAt(t, path, { ...p, shape: { tube: { ...tube, pts, bend: r.least } } }), touched: [path], did: `the ${p.name} routed again: ${r.says}` };
+        } catch (e) { why.push((e as Error).message); }
+      }
+      return { no: why.join('; ') || 'no line to route' };
     } },
   { id: 'move', name: 'Move it (place.solve)', rules: ['heat', 'interference', 'clearance'], cost: 2, says: 'the part harmed (or the smaller that runs in) placed again by the solver: every place it fits tried, held to its material\'s heat and what moves, the cheapest chosen; kept near what it is wired to',
     run: (t, pr, o) => {

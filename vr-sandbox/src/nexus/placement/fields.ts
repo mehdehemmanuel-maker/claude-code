@@ -66,7 +66,7 @@ function gridOf(nodes: Node[], region: THREE.Box3, step0: number, most: number):
   return { min, step, dims, solid, inside };
 }
 /** The drawn surfaces of some nodes as one geometry, in the world (a winding by its envelope, as the rules test it). */
-function surfacesOf(ns: Node[]): THREE.BufferGeometry | null {
+export function surfacesOf(ns: Node[]): THREE.BufferGeometry | null {
   const parts: THREE.BufferGeometry[] = [];
   for (const n of ns) { if (!n.p.shape) continue; const g = leafGeometry(n.p.envelope ? { ...n.p, shape: n.p.envelope, cuts: undefined } : n.p); if (!g) continue; const h = (g.index ? g.toNonIndexed() : g.clone()); h.applyMatrix4(n.m); for (const k of Object.keys(h.attributes)) if (k !== 'position') h.deleteAttribute(k); parts.push(h); }
   if (!parts.length) return null;

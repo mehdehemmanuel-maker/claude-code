@@ -124,9 +124,10 @@ describe('the autopilot: check, repair, check again', () => {
     const r = autoLoop(pipeAnd(box('hose', [0.4, 0.03, 0.03], [0, 0.245, 0], { item: 'hose', mat: 'epdm' })), { repairs: shieldOnly });
     expect(r.after).toBe(1); expect(r.tasks).toHaveLength(1); expect(r.tasks[0]!.cause).toMatch(/points of the hose at up to \d+ °C .* in the open/);
   });
-  it('the Corolla: the battery moved, the hood frame nudged, a shield fitted; what no repair clears is named', () => {
+  it('the Corolla: the battery moved, the hood frame nudged, the upper hose routed again: nothing left', () => {
     const r = autoLoop(makeMachine(MACHINES.find((m) => m.id === 'corolla')!));
-    expect(r.before).toBeGreaterThan(200); expect(r.after).toBeLessThanOrEqual(r.tasks.reduce((n, t) => n + t.findings, 0));
+    expect(r.before).toBeGreaterThan(200); expect(r.after).toBe(0); expect(r.tasks).toHaveLength(0);
+    expect(r.kept.some((k) => /upper hose routed again/.test(k))).toBe(true);
     expect(r.kept.some((k) => /battery and its tray moved/.test(k))).toBe(true);
     expect(r.kept.some((k) => /hood inner frame moved/.test(k))).toBe(true);
     for (const t of r.tasks) expect(t.cause.length).toBeGreaterThan(0);

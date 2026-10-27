@@ -1,6 +1,6 @@
 # Engineering at any scale as nodes
 
-Status: steps 0 to 3 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select` for batteries, `explain`, `repair.library`, `auto.loop`); the rest planned. Base: commit `14e3283`.
+Status: steps 0 to 4 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select` for batteries, `explain`, `repair.library`, `auto.loop`, `line`, `route`, `size.line`); the rest planned. Base: commit `14e3283`.
 Target: 1,000,000 components, 100,000 unique, solved, checked, changed and understood without hand edits.
 End state: a person states what they want; the system does the rest, asks only what matters, and returns a buildable, proven design.
 
@@ -418,7 +418,7 @@ Twelve layers, in the order a design flows through them. 65 nodes.
 | `twin` | K | 14 |
 | `version` | I | 10 |
 
-65 nodes, 9 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select`, `explain`, `repair.library`, `auto.loop`).
+65 nodes, 11 built (`need`, `field`, `field.combine`, `field.show`, `place.solve`, `size.select`, `explain`, `repair.library`, `auto.loop`, `route`, `size.line`), and `line`, the section `route` sweeps.
 
 ## 12. Merges in this plan
 
@@ -579,6 +579,31 @@ Step 3 result, the autopilot on the Corolla (`placement/repair.ts`):
 - About 110 s. The guard undoes any repair that leaves its problem or more findings where it changed things.
 - The rules' heat gate tries only the nearest pair of points. A plate across that one line passed the gate while the rest of the hose stayed too hot: the first run read 226 → 0. The shield repair now checks every point of the harmed part too hot for its material, and the gate itself is to be made to do the same.
 - The shield is held by what it says (clipped to the hot part), not yet by a bracket that is made (step 6).
+
+Step 4 result, lines (`placement/line.ts`):
+- **One thing:** cables, hoses, wires, pipes, brake lines, traces and roads are a section swept along a path.
+  - The section is layers from the inside out: a core that is solid or a bore, then walls, insulation and jackets; or flat, a trace's copper or a road's courses.
+  - Its core, its outer material and their sizes can each be changed (`line`).
+  - The nine sections each say where their figures come from.
+- **One search (`route`), its logics as costs:**
+  - `clear`: shortest through free, cool space;
+  - `hug`: along surfaces;
+  - `orthogonal`: straight runs and square turns;
+  - `grade`: on the ground within its grade;
+  - `bundle`: with lines already run;
+  - `direct`: straight.
+- **What every route keeps out of:** solids, heat over its outer layer's limit, and what moves.
+- **How it is eased:** a shortcut is taken only where it costs little more by the logic's own costs. The line is then eased toward its bend radius (or a road toward its curve radius), and a road is laid on the ground.
+- **Ends:** found from what the line joins (a port, leaving along it or square to it; else the face nearest the other end).
+- **Sizing (`size.line`):** a wire by its current and the volts it may drop (the AWG rule, copper's resistivity); a bore by its flow.
+- **Autopilot:** its new repair `reroute` routes a line again between its own ends. The Corolla now goes 226 → 0: the upper hose is routed again, at most 89 °C, every bend within its radius, with no shield needed.
+- **Also changed:**
+  - XLPE (125 °C, SAE J1127 and J1128) added; one list of what heat harms, owned by the rules.
+  - A drawn tube's corner may use nine tenths of an end's straight (no corner at its other end), not half.
+- Limits:
+  - The battery cable's ends still bend tighter than six diameters: at the post it leaves under the hold-down clamp, and the starter has no port to say where its terminal is.
+  - A road is eased, not fitted to true 80 m arcs, and does not cut or fill the ground: where the land is steeper than its grade all round, it says there is no way.
+  - Hoses get no slack for the engine rocking on its mounts.
 
 Gate: 9 of 1,630 tests fail. Causes:
 - `bearing-6206zz` is not stored in the inventory.

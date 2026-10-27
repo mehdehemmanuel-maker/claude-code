@@ -874,12 +874,37 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
     return b;
   }],
+  ['Lines: one section, any material, any route (a battery cable, a road)', () => {
+    // cables, hoses, wires, pipes, traces and roads as one thing: a section (layers from the inside out, its core solid or
+    // hollow, each layer's material changeable) swept along a way that is found, not drawn. Here the Corolla's battery
+    // placed by the solver, then its cable run from the positive post (leaving it sideways, as a terminal does) to the
+    // starter along surfaces (hug), sized for the starter's draw over
+    // the length it came to; and a road laid over hills, never steeper than 8 %, round what it cannot climb. Pick which
+    // the 3D view shows
+    const b = emptyBoard('Lines: one section, any route');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
+    placeBlock(b, 'place.solve', 0, 0, { check: 'no' }, 'solve'); b.nodes.solve!.label = 'The battery placed first (out of the exhaust\'s heat)'; wire(b, 'car', 'vehicle', 'solve', 'thing');
+    placeBlock(b, 'line', 0, 0, { section: 'cable-2' }, 'cable'); b.nodes.cable!.label = 'Battery cable: copper in XLPE (change its core, its jacket)';
+    placeBlock(b, 'route', 0, 0, { from: '^battery and its tray$', fromPort: 'positive', to: '^starter motor$', toPort: '', logic: 'hug', leave: 'square to it (a terminal on a post)' }, 'run'); b.nodes.run!.label = 'Route it: along surfaces, clear of heat'; wire(b, 'solve', 'thing', 'run', 'thing'); wire(b, 'cable', 'section', 'run', 'section');
+    placeBlock(b, 'in.number', 0, 0, { value: 200, unit: 'A' }, 'amps'); b.nodes.amps!.label = 'The starter\'s draw, A (typical of a 2 L petrol engine)';
+    placeBlock(b, 'size.line', 0, 0, { chassis: 'yes' }, 'size'); b.nodes.size!.label = 'Is it thick enough?'; wire(b, 'amps', 'value', 'size', 'amps'); wire(b, 'run', 'length', 'size', 'length');
+    placeBlock(b, 'piece', 0, 0, { name: '^petrol engine', where: 'where it sits' }, 'eng'); b.nodes.eng!.label = 'The engine'; wire(b, 'solve', 'thing', 'eng', 'thing');
+    placeBlock(b, 'piece', 0, 0, { name: '^battery and its tray$', where: 'where it sits' }, 'bat'); b.nodes.bat!.label = 'The battery'; wire(b, 'solve', 'thing', 'bat', 'thing');
+    placeBlock(b, 'combine', 0, 0, {}, 'bay'); b.nodes.bay!.label = 'Engine, battery, cable'; wire(b, 'eng', 'piece', 'bay', 'things'); wire(b, 'bat', 'piece', 'bay', 'things'); wire(b, 'run', 'line', 'bay', 'things');
+    placeBlock(b, 'terrain', 0, 0, {}, 'land'); b.nodes.land!.label = 'Hills'; for (const [k, v] of [['w', 200], ['d', 200], ['relief', 6]] as [string, number][]) { placeBlock(b, 'in.number', 0, 0, { value: v }, `land${k}`); wire(b, `land${k}`, 'value', 'land', k); }
+    placeBlock(b, 'line', 0, 0, { section: 'road-2' }, 'roadSec'); b.nodes.roadSec!.label = 'A road: asphalt on a base course';
+    placeBlock(b, 'route', 0, 0, { from: '-90 -90', fromPort: '', to: '90 90', toPort: '', logic: 'grade' }, 'road'); b.nodes.road!.label = 'Lay it: never steeper than 8 %'; wire(b, 'land', 'ground', 'road', 'thing'); wire(b, 'roadSec', 'section', 'road', 'section');
+    placeBlock(b, 'pick', 0, 0, { options: 'the battery cable|the road', which: 'the battery cable' }, 'pick'); b.nodes.pick!.label = 'Which to see';
+    wire(b, 'bay', 'assembly', 'pick', 'the battery cable'); wire(b, 'road', 'with', 'pick', 'the road');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'pick', 'chosen', 'show', 'thing');
+    return b;
+  }],
   ['The autopilot on the Corolla: checked, repaired, checked again, what is left named', () => {
     // the Corolla as it was made, checked by the rules; what is wrong grouped into problems and each tried with the
-    // repairs, least costly first (nudge it clear, move it by the solver, a heat shield between), a repair kept only if
-    // its problem is gone and the parts it changed have less wrong than before; then the whole checked again. Nothing typed
-    // by hand. What no repair clears is a named task with why. The 3D view: the engine, the battery where it was moved,
-    // the shield fitted, and the upper hose still too near the EGR pipe
+    // repairs, least costly first (nudge it clear, route a line again, move it by the solver, a heat shield between), a
+    // repair kept only if its problem is gone and the parts it changed have less wrong than before; then the whole checked
+    // again. Nothing typed by hand. What no repair clears is a named task with why. The 3D view: the engine, the battery
+    // where it was moved, and the upper hose routed again, clear of the exhaust's heat
     const b = emptyBoard('The autopilot on the Corolla');
     placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
     placeBlock(b, 'repair.library', 0, 0, {}, 'lib'); b.nodes.lib!.label = 'The repairs it may make';
@@ -888,10 +913,10 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'view.table', 0, 0, {}, 'tried'); b.nodes.tried!.label = 'Every repair tried'; wire(b, 'auto', 'attempts', 'tried', 'rows');
     placeBlock(b, 'view.table', 0, 0, {}, 'left'); b.nodes.left!.label = 'What is left, and why'; wire(b, 'auto', 'tasks', 'left', 'rows');
     placeBlock(b, 'view.show', 0, 0, {}, 'said'); wire(b, 'auto', 'says', 'said', 'value');
-    for (const [k, name, label] of [['eng', '^petrol engine', 'The engine'], ['bat', '^battery and its tray$', 'The battery, moved'], ['shield', '^heat shield \\(', 'The shield fitted'], ['hose', '^upper hose$', 'The upper hose']] as [string, string, string][]) {
+    for (const [k, name, label] of [['eng', '^petrol engine', 'The engine'], ['bat', '^battery and its tray$', 'The battery, moved'], ['hose', '^upper hose$', 'The upper hose']] as [string, string, string][]) {
       placeBlock(b, 'piece', 0, 0, { name, where: 'where it sits' }, k); b.nodes[k]!.label = label; wire(b, 'auto', 'thing', k, 'thing');
     }
-    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'What the autopilot changed'; for (const k of ['eng', 'bat', 'shield', 'hose']) wire(b, k, 'piece', 'scene', 'things');
+    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'What the autopilot changed'; for (const k of ['eng', 'bat', 'hose']) wire(b, k, 'piece', 'scene', 'things');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
     return b;
   }],
@@ -1264,7 +1289,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));
