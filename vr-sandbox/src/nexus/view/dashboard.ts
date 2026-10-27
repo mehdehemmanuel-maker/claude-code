@@ -24,6 +24,7 @@ const thingy = (v: unknown): v is Part | Assembly => isAssembly(v) || isPart(v);
 const dock = new Dock3D($('view3d'), (key) => wall.choose(key));
 const shown = (): Shown[] => wall.shown().filter((s) => thingy(s.thing)) as Shown[];
 $('fit3d').onclick = () => dock.fit();
+$('cut3d').onclick = () => { const a = dock.nextSection(); $('cut3d').textContent = a ? `Cut ${a}` : 'Cut'; };
 const enter = (on: boolean) => { $('dock').classList.toggle('big', on); $('enter3d').textContent = on ? '✕ Back' : '⤢ Enter'; window.setTimeout(() => dock.fit(), 60); };
 $('enter3d').onclick = () => enter(!$('dock').classList.contains('big'));
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('dock').classList.contains('big')) enter(false); });

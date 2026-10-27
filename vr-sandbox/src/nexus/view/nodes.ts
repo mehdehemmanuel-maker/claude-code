@@ -790,24 +790,33 @@ const DEMOS: [string, Make][] = ([
     return b;
   }],
   ['An engine from its first parts: piston, rod, crank, block, head, then the whole', () => {
-    // Toyota's 2.0 L four (M20A-FKS: 80.5 mm bore, 97.6 mm stroke, Toyota), built the way an engine is built: a piston with
-    // its rings, pin and clips; a rod with its cap, shells and bolts; a crank forged in one; the block cast round its cores
-    // with its liners, main caps, shells and bolts; the head with every valve, spring, retainer, keeper, guide, seal,
-    // tappet, cam and cap. Every piece sized from the bore and stroke, every piece weighed from its own shape: the engine
-    // weighs what its parts come to. The makers it uses (a turned shaft, a coiled spring, a cut gear, a chain round its
-    // sprockets) are nodes of their own, and make other machines' parts too
+    // Toyota's 2.0 L four (M20A-FKS: 80.5 mm bore, 97.6 mm stroke, Toyota), built the way an engine is built, and every
+    // part on the board is a part of it: one bore and one stroke size every node; the head's pieces (valves, the spring off
+    // the coil maker, retainer, tappet, plug, coil) are wired into the head; the piston, rod, crank, block and head are
+    // wired into the engine. Change any of them (the spring's wire, the bore) and it flows up into the engine, its mass
+    // and its checks: does it come apart to the bottom, and does nothing run into anything
     const b = emptyBoard('An engine from its first parts');
-    const e = { cylinders: 4, bore: 0.0805, stroke: 0.0976, layout: 'inline', fuel: 'petrol', block: 'al', cooling: 'liquid', cams: 'dohc', valves: '4', turbo: 'no', starter: 'electric' };
-    for (const [k, id, label] of [['pis', 'engine.piston', 'Piston, rings, pin, clips'], ['rod', 'engine.rod', 'Rod, cap, shells, bolts'], ['crk', 'engine.crank', 'Crankshaft, forged in one'], ['blk', 'engine.block', 'Block, liners, caps, shells'], ['hd', 'engine.head', 'Head and its valve train'], ['eng', 'engine.whole', 'The engine, from those parts']] as [string, string, string][]) { placeBlock(b, id, 0, 0, e, k); b.nodes[k]!.label = label; }
-    placeBlock(b, 'make.coil', 0, 0, { name: 'valve spring', item: 'valve-spring', d: 0.0032, D: 0.024, L: 0.037, n: 5 }, 'spr'); b.nodes.spr!.label = 'Coil: a valve spring';
-    placeBlock(b, 'make.gear', 0, 0, { name: 'cam sprocket', item: 'timing-sprocket', m: 0.00303, z: 42, b: 0.0057, bore: 0.019 }, 'spk'); b.nodes.spk!.label = 'Cut: a cam sprocket (06B)';
-    placeBlock(b, 'make.chain', 0, 0, { series: '06B', wheels: '0 0 32\n16 290 64\n-16 290 64' }, 'chn'); b.nodes.chn!.label = 'Chain round its sprockets';
-    placeBlock(b, 'make.turned', 0, 0, { name: 'wrist pin', steps: '20.1 x 62', mat: 'steel-alloy', item: 'wrist-pin', bore: 0.0113 }, 'pin'); b.nodes.pin!.label = 'Turn: a wrist pin';
-    for (const [k, from, out, label, ex] of [['v1', 'pis', 'piston', 'The piston', 1], ['v2', 'rod', 'rod', 'The rod', 1], ['v3', 'crk', 'crank', 'The crank', 0], ['v4', 'hd', 'head', 'The head, apart', 1], ['v5', 'spr', 'spring', 'A valve spring', 0], ['v6', 'chn', 'chain', 'The timing chain', 0]] as [string, string, string, string, number][]) { placeBlock(b, 'view.3d', 0, 0, { explode: ex }, k); b.nodes[k]!.label = label; wire(b, from, out, k, 'part'); }
+    const e = { layout: 'inline', fuel: 'petrol', block: 'al', cooling: 'liquid', cams: 'dohc', valves: '4', turbo: 'no', starter: 'electric' };
+    placeBlock(b, 'in.number', 0, 0, { value: 0.0805, unit: 'm' }, 'bore'); b.nodes.bore!.label = 'Bore (Toyota: 80.5 mm)';
+    placeBlock(b, 'in.number', 0, 0, { value: 0.0976, unit: 'm' }, 'stroke'); b.nodes.stroke!.label = 'Stroke (Toyota: 97.6 mm)';
+    const sized = (id: string) => { wire(b, 'bore', 'value', id, 'bore'); wire(b, 'stroke', 'value', id, 'stroke'); };
+    for (const [k, id, label] of [['pis', 'engine.piston', 'Piston, rings, pin, clips'], ['rod', 'engine.rod', 'Rod, cap, shells, bolts'], ['crk', 'engine.crank', 'Crankshaft, forged in one'], ['blk', 'engine.block', 'Block, liners, caps, shells'], ['hd', 'engine.head', 'Head, from its pieces'], ['eng', 'engine.whole', 'The engine, from its parts']] as [string, string, string][]) { placeBlock(b, id, 0, 0, e, k); b.nodes[k]!.label = label; sized(k); }
+    // (the head's pieces, each a node: made to size, or the spring off the coil maker: the wire, coil and preload the head's
+    // own spring is sized to, to hold its valves on their cams at speed (src/nexus/engines.ts springOf))
+    for (const [k, which, port, label] of [['vin', 'intake valve', 'intakeValve', 'Intake valve'], ['vex', 'exhaust valve', 'exhaustValve', 'Exhaust valve (stainless)'], ['ret', 'valve spring retainer', 'valveSpringRetainer', 'Spring retainer'], ['tap', 'bucket tappet', 'bucketTappet', 'Bucket tappet'], ['plg', 'spark plug', 'sparkPlug', 'Spark plug'], ['ign', 'ignition coil', 'ignitionCoil', 'Ignition coil']] as [string, string, string, string][]) { placeBlock(b, 'engine.piece', 0, 0, { ...e, which }, k); b.nodes[k]!.label = label; sized(k); wire(b, k, 'piece', 'hd', port); }
+    placeBlock(b, 'make.coil', 0, 0, { name: 'valve spring', item: 'valve-spring', d: 0.0029, D: 0.0185, L: 0.037, L0: 0.0452, n: 5 }, 'spr'); b.nodes.spr!.label = 'Coil: the valve spring'; wire(b, 'spr', 'spring', 'hd', 'valveSpring');
+    for (const [from, out, port] of [['pis', 'piston', 'piston'], ['rod', 'rod', 'rod'], ['crk', 'crank', 'crank'], ['blk', 'block', 'block'], ['hd', 'head', 'head']] as [string, string, string][]) wire(b, from, out, 'eng', port);
+    for (const [k, from, out, label, ex] of [['v1', 'pis', 'piston', 'The piston', 1], ['v2', 'rod', 'rod', 'The rod', 1], ['v3', 'crk', 'crank', 'The crank', 0], ['v4', 'hd', 'head', 'The head, apart', 1], ['v5', 'spr', 'spring', 'The valve spring', 0], ['v6', 'vex', 'piece', 'An exhaust valve', 0]] as [string, string, string, string, number][]) { placeBlock(b, 'view.3d', 0, 0, { explode: ex }, k); b.nodes[k]!.label = label; wire(b, from, out, k, 'part'); }
     placeBlock(b, 'explode', 0, 0, { amount: 0.35, levels: 64 }, 'apart'); b.nodes.apart!.label = 'Take it apart (to the bottom)'; wire(b, 'eng', 'engine', 'apart', 'thing');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'eng', 'engine', 'measure', 'thing');
     placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'eng', 'engine', 'audit', 'thing');
+    placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Does nothing run into anything?'; wire(b, 'eng', 'engine', 'rules', 'thing');
+    // (and under load: at the 6,600 rpm Toyota gives its peak power at, and swept from 1,000 to 7,000 rpm for where it gives)
+    placeBlock(b, 'load.engine', 0, 0, { ...e }, 'load'); b.nodes.load!.label = 'Under load at 6,600 rpm'; b.nodes.load!.set = { ...(b.nodes.load!.set ?? {}), rpm: 6600 }; sized('load'); wire(b, 'spr', 'spring', 'load', 'spring');
+    placeBlock(b, 'view.table', 0, 0, {}, 'loadRows'); b.nodes.loadRows!.label = 'Each part: its stress, its limit, its margin'; wire(b, 'load', 'rows', 'loadRows', 'rows');
+    placeBlock(b, 'sweep.range', 0, 0, { block: 'load.engine', vary: 'rpm', from: 1000, to: 7000, steps: 13, watch: 'worst', worstIs: 'lowest', blockSet: JSON.stringify(e) }, 'sweep'); b.nodes.sweep!.label = 'Stress test: 1,000 to 7,000 rpm'; sized('sweep'); wire(b, 'spr', 'spring', 'sweep', 'spring');
+    placeBlock(b, 'view.chart', 0, 0, {}, 'sweepChart'); b.nodes.sweepChart!.label = 'Least margin by speed'; wire(b, 'sweep', 'ys', 'sweepChart', 'y'); wire(b, 'sweep', 'xs', 'sweepChart', 'x');
     return b;
   }],
   ['A car down to its bolts: tyres made in depth, a shared battery, taken apart', () => {

@@ -114,7 +114,7 @@ describe('pipeline', () => {
       expect(m.parts[1]).toBeGreaterThanOrEqual(m.parts[0]);
       if (k.id === 'tree' || k.id === 'forest' || k.id === 'plant') expect(m.details.joints).toBe(0);
     }
-  }, 180_000); // (every kit through the whole pipeline: slow under load, not stuck)
+  }, 360_000); // (every kit through the whole pipeline: about 150 s alone on this container, more with the gate's other files beside it; slow, not stuck)
 });
 
 describe('clashes', () => {

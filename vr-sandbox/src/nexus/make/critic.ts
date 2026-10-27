@@ -416,7 +416,7 @@ function pointTri(p: CV3, T: Tris, t: number): number {
   const den = 1 / (va + vb + vc), sv = vb * den, tw = vc * den; return dist([a[0] + ab[0] * sv + ac[0] * tw, a[1] + ab[1] * sv + ac[1] * tw, a[2] + ab[2] * sv + ac[2] * tw]);
 }
 /** Every place two parts' surfaces cross or come within `touch` of each other (1 mm unless said), each pair once. */
-export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: TriMesh, b: TriMesh) => boolean; /** a holder and what it holds that are one piece (src/nexus/make/detail.ts's onePiece, unless said) */ fused?: (a: TriMesh, b: TriMesh, kin: Clash['kin']) => boolean } = {}): Clash[] {
+export function meshClashes(meshes: TriMesh[], o: { touch?: number; /** the band along a triangle's edge in which a crossing is an edge resting on a face, not one through the other: 3 mm (a seam's), or 'scaled' (a fifth of the triangle's shortest side, never more than 3 mm: so a rod or a bolt thinner than the band still reads as passing through) */ edge?: 'seam' | 'scaled'; skip?: (a: TriMesh, b: TriMesh) => boolean; /** a holder and what it holds that are one piece (src/nexus/make/detail.ts's onePiece, unless said) */ fused?: (a: TriMesh, b: TriMesh, kin: Clash['kin']) => boolean } = {}): Clash[] {
   // (a holder and what it holds of its one casting, or two it holds that are: an alloy wheel's barrel, centre and spokes)
   // (and a part drawn in pieces, its patches under one name and holder (a skin split at a crease, a door in two), is one
   // pressing with itself)
@@ -425,6 +425,9 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
   // mouldings that only share the whole thing as their holder (a car's B pillar trim and its belt moulding) are not)
   const fitted = (a: TriMesh, b: TriMesh) => !!a.passes?.includes(b.name) || !!b.passes?.includes(a.name);
   const tol = o.touch ?? 0.001, T = meshes.map(trisOf), out: Clash[] = [];
+  // (a triangle's plane: a point's signed distance from it)
+  const planeOf = (X: Tris, t: number) => { const q = t * 9, a: CV3 = [X.v[q]!, X.v[q + 1]!, X.v[q + 2]!], u: CV3 = [X.v[q + 3]! - a[0], X.v[q + 4]! - a[1], X.v[q + 5]! - a[2]], w: CV3 = [X.v[q + 6]! - a[0], X.v[q + 7]! - a[1], X.v[q + 8]! - a[2]], n: CV3 = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], l = Math.hypot(...n) || 1; return (p: CV3) => ((p[0] - a[0]) * n[0] + (p[1] - a[1]) * n[1] + (p[2] - a[2]) * n[2]) / l; };
+  const bandOf = (X: Tris, t: number): number => { if (o.edge !== 'scaled') return 0.003; const q = t * 9, e = (i: number, j: number) => Math.hypot(X.v[q + i * 3]! - X.v[q + j * 3]!, X.v[q + i * 3 + 1]! - X.v[q + j * 3 + 1]!, X.v[q + i * 3 + 2]! - X.v[q + j * 3 + 2]!); return Math.min(0.003, 0.2 * Math.min(e(0, 1), e(1, 2), e(2, 0))); };
   const kinOf = (a: TriMesh, b: TriMesh): Clash['kin'] => (b.path.startsWith(a.path + '/') || a.path.startsWith(b.path + '/') ? 'holds' : a.path.slice(0, a.path.lastIndexOf('/')) === b.path.slice(0, b.path.lastIndexOf('/')) ? 'siblings' : 'apart');
   for (let i = 0; i < meshes.length; i++) for (let j = i + 1; j < meshes.length; j++) {
     const A = T[i]!, B = T[j]!; if (!A.n || !B.n) continue;
@@ -438,7 +441,7 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
     const cell = (x: number, c: number, nn: number) => Math.max(0, Math.min(nn - 1, Math.floor((x - lo[c]!) / h))), grid = new Map<number, number[]>();
     for (const t of ib) { const x0 = cell(B.box[t * 6]! - tol, 0, nx), x1 = cell(B.box[t * 6 + 3]! + tol, 0, nx), y0 = cell(B.box[t * 6 + 1]! - tol, 1, ny), y1 = cell(B.box[t * 6 + 4]! + tol, 1, ny), z0 = cell(B.box[t * 6 + 2]! - tol, 2, nz), z1 = cell(B.box[t * 6 + 5]! + tol, 2, nz); for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) { const k = (x * ny + y) * nz + z; let l = grid.get(k); if (!l) grid.set(k, (l = [])); l.push(t); } }
     // (each place they meet kept with what kind of meeting it is: 0 through, 1 where both end, 2 touching, 3 laid parallel)
-    const seen = new Int32Array(B.n).fill(-1), hits: { p: CV3; k: number; n: CV3; ta: number; tb: number }[] = [];
+    const seen = new Int32Array(B.n).fill(-1), hits: { p: CV3; k: number; n: CV3; ta: number; tb: number; e?: [CV3, CV3, 0 | 1] }[] = [];
     for (const ta of ia) {
       const near0: number[] = [], x0 = cell(A.box[ta * 6]!, 0, nx), x1 = cell(A.box[ta * 6 + 3]!, 0, nx), y0 = cell(A.box[ta * 6 + 1]!, 1, ny), y1 = cell(A.box[ta * 6 + 4]!, 1, ny), z0 = cell(A.box[ta * 6 + 2]!, 2, nz), z1 = cell(A.box[ta * 6 + 5]!, 2, nz);
       for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (const tb of grid.get((x * ny + y) * nz + z) ?? []) if (seen[tb] !== ta) { seen[tb] = ta; near0.push(tb); }
@@ -455,9 +458,12 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
         // (through only where it is within both: a crossing on either one's edge is that edge resting on the other's face, as
         // a wheel's mounting face on its hub, and on both, the two joined there; 3 mm, so a seam's band where two skins meet
         // in one tangent plane is a join, not a crossing)
-        const kindAt = (x: CV3) => { const ea = nearEdge(x, A, ta, 0.003), eb = nearEdge(x, B, tb, 0.003); return ea && eb ? 1 : ea || eb ? 2 : 0; };
-        for (let e = 0; e < 3; e++) { const x = segTri(va(e), va((e + 1) % 3), B, tb); if (x) { hits.push({ p: x, k: kindAt(x), n: nAB, ta, tb }); crossed = true; } }
-        for (let e = 0; e < 3; e++) { const x = segTri(vb(e), vb((e + 1) % 3), A, ta); if (x) { hits.push({ p: x, k: kindAt(x), n: nAB, ta, tb }); crossed = true; } }
+        const kindAt = (x: CV3) => { const ea = nearEdge(x, A, ta, bandOf(A, ta)), eb = nearEdge(x, B, tb, bandOf(B, tb)); return ea && eb ? 1 : ea || eb ? 2 : 0; };
+        // (scaled: an edge rests on the other's face only where it lies in its plane; one that passes from one side of it
+        // to the other goes through it, wherever along itself it crosses; it meets the other only at the other's edge)
+        const kindScaled = (x: CV3, p: CV3, q: CV3, O: Tris, ot: number) => { const pl = planeOf(O, ot), band = bandOf(O, ot), dp = pl(p), dq = pl(q); if (Math.abs(dp) < band && Math.abs(dq) < band) return 2; return nearEdge(x, O, ot, band) ? 2 : 0; };
+        for (let e = 0; e < 3; e++) { const x = segTri(va(e), va((e + 1) % 3), B, tb); if (x) { hits.push({ p: x, k: o.edge === 'scaled' ? kindScaled(x, va(e), va((e + 1) % 3), B, tb) : kindAt(x), n: nAB, ta, tb, e: [va(e), va((e + 1) % 3), 0] }); crossed = true; } }
+        for (let e = 0; e < 3; e++) { const x = segTri(vb(e), vb((e + 1) % 3), A, ta); if (x) { hits.push({ p: x, k: o.edge === 'scaled' ? kindScaled(x, vb(e), vb((e + 1) % 3), A, ta) : kindAt(x), n: nAB, ta, tb, e: [vb(e), vb((e + 1) % 3), 1] }); crossed = true; } }
         if (crossed) continue;
         // (not crossing: is a corner of either within the tolerance of the other, and are they laid parallel there?)
         const par = Math.abs(A.nor[ta * 3]! * B.nor[tb * 3]! + A.nor[ta * 3 + 1]! * B.nor[tb * 3 + 1]! + A.nor[ta * 3 + 2]! * B.nor[tb * 3 + 2]!) > 0.97;
@@ -503,6 +509,14 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
         // (the other's triangles met in this meeting, and those near them: enough to find the nearest face to each corner)
         const qs = (Q: Tris) => (Q === A ? [...new Set(hs.map((x) => x.ta))] : [...new Set(hs.map((x) => x.tb))]);
         if (B.closed) probe(A, new Set(hs.map((x) => x.ta)), B); if (A.closed) probe(B, new Set(hs.map((x) => x.tb)), A);
+        // (scaled: and along each edge that passes in, how deep the material it runs through goes: a rod through a plate
+        // has no corner in it, its edges have; points 0.5 to 16 mm along the edge from where it crosses, the deepest
+        // inside the other solid by its distance to its nearest face)
+        let tried = 0;
+        if (o.edge === 'scaled' && kind === 'through' && depth! < 0.002) for (const hh of hs) { if (hh.k !== 0 || !hh.e) continue; if (++tried > 12) break; const Q = hh.e[2] === 0 ? B : A; if (!Q.closed || Q.n > 40000) continue;
+          for (const end of [hh.e[0], hh.e[1]]) { const dx = end[0] - hh.p[0], dy = end[1] - hh.p[1], dz = end[2] - hh.p[2], L = Math.hypot(dx, dy, dz); if (L < 1e-9) continue;
+            for (const st of [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016]) { if (st >= L) break; const p: CV3 = [hh.p[0] + (dx / L) * st, hh.p[1] + (dy / L) * st, hh.p[2] + (dz / L) * st]; if (!inside(p, Q)) continue; let best = Infinity; for (const q of Q.n <= 6000 ? Array.from({ length: Q.n }, (_, i2) => i2) : qs(Q)) best = Math.min(best, pointTri(p, Q, q)); if (best < 0.5 && best > depth!) depth = best; } }
+          if (depth! >= 0.002) break; }
       }
       const nl = Math.hypot(...ns) || 1, kin = kinOf(meshes[i]!, meshes[j]!), kind2 = kind === 'through' && depth !== undefined && depth < 0.002 ? 'touch' : kind;
       // (a part said to be fixed to what holds it or beside it, welded, seated or clipped, meets it as it is fixed: unless

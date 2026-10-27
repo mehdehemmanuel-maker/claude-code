@@ -24,7 +24,7 @@ export class Dock3D {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 0.95;
-    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.renderer.localClippingEnabled = true;
     host.appendChild(this.renderer.domElement); this.renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
     this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture; this.scene.environmentIntensity = 0.6;
     this.scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x101820, 0.4));
@@ -52,6 +52,23 @@ export class Dock3D {
 
   /** What to draw: the board's shown things. The first time anything is shown (or a new board), it is framed. */
   show(things: Shown[], board: string): void { this.view.show(things); if (board !== this.framed && things.length) { this.framed = board; requestAnimationFrame(() => this.fit()); } }
+  /** A cutaway: what is shown cut by a plane square to an axis, through its middle (or `at` along that axis), the half
+   *  toward the viewer taken away, so its insides show (its castings' cores, its crank in its bearings); null puts it whole
+   *  again. Says the axis it cuts across, if any. */
+  section(axis: 'x' | 'y' | 'z' | null, at?: number): 'x' | 'y' | 'z' | null {
+    this.cut = null; if (axis) { const b = new THREE.Box3().setFromObject(this.view.group), c = b.isEmpty() ? new THREE.Vector3() : b.getCenter(new THREE.Vector3()), k = { x: 0, y: 1, z: 2 }[axis];
+      const n = new THREE.Vector3().setComponent(k, -1), p = c.clone(); if (at !== undefined) p.setComponent(k, at);
+      // (the half nearer the camera is the half taken away)
+      if (this.camera.position.getComponent(k) < p.getComponent(k)) n.negate();
+      this.cut = new THREE.Plane().setFromNormalAndCoplanarPoint(n, p); }
+    this.cutAxis = axis; this.clipAll(); return axis;
+  }
+  /** Turns the cutaway on round its axes: none, across x, across z, across y, none. */
+  nextSection(): 'x' | 'y' | 'z' | null { const order: ('x' | 'y' | 'z' | null)[] = [null, 'x', 'z', 'y']; return this.section(order[(order.indexOf(this.cutAxis) + 1) % order.length]!); }
+  private cut: THREE.Plane | null = null; private cutAxis: 'x' | 'y' | 'z' | null = null;
+  // (every material of what is shown clipped by it, its inside faces drawn too so a cut solid shows its wall; set again as
+  // the view makes meshes anew)
+  private clipAll(): void { const planes = this.cut ? [this.cut] : null; this.view.group.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined; if (!m) return; for (const x of Array.isArray(m) ? m : [m]) if (x.clippingPlanes !== planes) { x.clippingPlanes = planes; x.clipShadows = true; if (planes) { x.userData.side ??= x.side; x.side = THREE.DoubleSide; } else if (x.userData.side !== undefined) x.side = x.userData.side; x.needsUpdate = true; } }); }
   /** The view turned to see everything shown, whole. */
   fit(): void {
     const b = this.view.bounds(); if (b.isEmpty()) return;
@@ -107,7 +124,7 @@ export class Dock3D {
   }
   private frame(now: number): void {
     if (!this.host.offsetParent && this.host.clientWidth === 0) return;
-    this.controls.update(); this.layGrid();
+    this.controls.update(); this.layGrid(); if (this.cut) this.clipAll();
     // the haze, and so the view's reach, follows how far off the view is: near, a street fades in a few hundred metres;
     // pulled back, a whole world can be seen (where it fades, nothing more is drawn: what makes no end affordable)
     const dist = this.camera.position.distanceTo(this.controls.target), fog = this.scene.fog as THREE.FogExp2;

@@ -46,7 +46,8 @@ export function trianglesOf(root: Part): Mesh3[] {
   }
   return out;
 }
-const fastenerRe = /\b(bolt|screw|stud|nut|rivet|washer|pin|keeper|clip|circlip|dowel|spider|plug)\b/i;
+// (a pin is a fastener only as a dowel, a split pin or a cotter: a wrist pin, a crank pin or a hinge pin is a part in its own right)
+const fastenerRe = /\b(bolt|screw|stud|nut|rivet|washer|dowel|split pin|cotter pin|keeper|clip|circlip|spider|plug)\b/i;
 // (the nearest holder it is one piece with, or the thing it is a fastener of: what it may meet)
 const ownerOf = (n: Node): Node => { let x = n; while (x.parent && (x.p.one || !x.p.item)) x = x.parent; return x; };
 // (the unit made whole that it is in, under the thing checked: a chain, a bearing, a bought part fitted as it comes; its
@@ -77,14 +78,14 @@ export function candidates(ms: Mesh3[]): [Mesh3, Mesh3][] {
   const byNode = new Map<Node, Mesh3>(); for (const m of ms) byNode.set(m.node, m);
   return contacts(ms.map((m) => m.node)).filter((c) => c.depth > 0.0005).map((c) => [byNode.get(c.a)!, byNode.get(c.b)!] as [Mesh3, Mesh3]).filter(([a, b]) => a && b && !linked(a, b) && !fastens(a, b) && !said(a, b));
 }
-export function interference(ms: Mesh3[], o: { touch?: number } = {}): Finding[] {
+export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3, b: Mesh3) => boolean } = {}): Finding[] {
   const out: Finding[] = [], seen = new Set<string>(), tol = o.touch ?? 0.0002;
   // (first the pieces' oriented boxes, fast: only pairs whose boxes press into each other by more than half a millimetre,
   // and that the rules do not excuse, are tried on their triangles)
-  const cands = candidates(ms);
+  const cands = candidates(ms).filter(([a, b]) => !o.pair || o.pair(a, b));
   for (const [a, b] of cands) {
     const key = [ownerOf(a.node).path, ownerOf(b.node).path].sort().join('|'); if (seen.has(key)) continue;
-    const c = meshClashes([a, b], { touch: tol, fused: () => false }).find((x) => x.kind === 'through'); if (!c) continue;
+    const c = meshClashes([a, b], { touch: tol, edge: 'scaled', fused: () => false }).find((x) => x.kind === 'through'); if (!c) continue;
     seen.add(key);
     out.push({ rule: 'interference', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, says: `the ${a.name} runs into the ${b.name}`, ...(c.at ? { at: c.at as [number, number, number] } : {}) });
   }
@@ -137,7 +138,18 @@ export function heat(ms: Mesh3[]): Finding[] {
   return out;
 }
 /** All three, on a thing's surfaces as drawn. */
-export function rulesOf(root: Part, o: { touch?: number } = {}): { findings: Finding[]; pieces: number } {
-  const ms = trianglesOf(root);
+/** …or only between what is named like `only` (a piece of it, or anything it is in) and everything: what moves, at one
+ *  place in its motion. */
+export function rulesOf(root: Part, o: { touch?: number; only?: RegExp } = {}): { findings: Finding[]; pieces: number } {
+  const all = trianglesOf(root), on = o.only ? (m: Mesh3) => [...names(m.node)].some((n) => o.only!.test(n)) : null, ms = all;
+  if (on) { const res = interference(ms, { ...o, pair: (a, b) => on(a) || on(b) }); return { findings: res, pieces: all.filter(on).length }; }
   return { findings: [...interference(ms, o), ...clearances(ms), ...heat(ms)], pieces: ms.length };
+}
+
+/** The rules through a motion: the thing made at each of `steps` places through it (a crank turned through a revolution,
+ *  a door through its swing), only what moves tried against everything at each; each finding with where it happened. */
+export function rulesThrough(make: (t: number) => Part, steps: number, only: RegExp, o: { touch?: number } = {}): { findings: (Finding & { t: number })[]; tried: number } {
+  const out: (Finding & { t: number })[] = [], seen = new Set<string>();
+  for (let k = 0; k < steps; k++) { const t = k / steps; for (const f of rulesOf(make(t), { ...o, only }).findings) { const key = `${f.a}|${f.b}|${f.says}`; if (seen.has(key)) continue; seen.add(key); out.push({ ...f, t }); } }
+  return { findings: out, tried: steps };
 }

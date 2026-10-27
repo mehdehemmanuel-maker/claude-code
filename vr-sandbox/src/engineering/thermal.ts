@@ -26,6 +26,7 @@ const BY_ID: Record<string, ThermalProps> = {
   'steel.a36': T(486, 51.9, 0.8, 'MatWeb ASTM A36: c 0.486 J/g K, k 51.9 W/m K; emissivity of mill-scale steel 0.7-0.85'),
   'steel.1018-cd': T(486, 51.9, 0.6, 'MatWeb AISI 1018: c 0.486 J/g K, k 51.9 W/m K; cold-drawn surface 0.5-0.7'),
   'steel.4140-ann': T(473, 42.6, 0.7, 'MatWeb AISI 4140 annealed: c 0.473 J/g K, k 42.6 W/m K'),
+  'steel.4140-qt': T(473, 42.6, 0.7, 'MatWeb AISI 4140: c 0.473 J/g K, k 42.6 W/m K (as annealed: its temper changes them little)'),
   'steel.52100': T(475, 46.6, 0.3, 'MatWeb AISI 52100: c 0.475 J/g K, k 46.6 W/m K; polished 0.1-0.3'),
   'steel.music-wire': T(486, 50, 0.4, 'MatWeb high-carbon spring steel (typical)'),
   'stainless.304': T(500, 16.2, 0.4, 'MatWeb 304 annealed: c 0.500 J/g K, k 16.2 W/m K; 2B finish 0.3-0.45'),

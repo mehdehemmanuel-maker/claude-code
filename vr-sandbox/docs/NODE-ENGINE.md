@@ -667,9 +667,27 @@ container, and Quest numbers only ever come from a Quest.
   datasheet ratings) is a finding, unless something solid stands between them.
 - Every engine the machines use (Toyota M20A, Honda CRF450 and GX270, Toyota 4Y, Detroit DD15, Kawasaki FR651V) comes
   back with no findings; the tests hold three of them to it.
+- **Thin parts:** a crossing is "through" by where the crossing edge actually goes (into the other solid, how deep),
+  not by whether it falls near a triangle's edge, so a rod or a bolt thinner than the old 3 mm seam band is caught.
 - **Known limits:** two boxes overlapping with faces exactly in one plane meet only along shared edges and are not
   caught; the heat gate measures the shortest straight line, not the view between the surfaces; a piece is checked
   where it is drawn, not through its motion.
+
+**7. Under load, and through motion** (`src/nexus/loads.ts`, `rulesThrough` in `src/nexus/make/rules.ts`)
+- **Load cases read the drawn part:** a coil records its maker's figures (`Part.made`), so Spring under load holds the
+  spring that is drawn, not one typed beside it; Engine under load reads the piston's and rod's masses as their parts
+  come to and the rod's section as it is drawn.
+- **Sweep (stress test):** any block in the library over a range of one input, every answer in a table and the worst of
+  them with where it falls; the engine board sweeps its engine from 1,000 to 7,000 rpm.
+- **Sized from the loads:** a head's valve spring is the thinnest chrome-silicon wire, largest coil and least preload
+  that hold its valves on their cams at the engine's redline with 1.2 to spare, its wire within Shigley's allowable,
+  clear of coil bind, round its stem seal and inside its tappet; a rod's big end is as wide as keeps its shells under
+  about 60 MPa (typical of tri-metal shells) at peak firing pressure (typical: 8 MPa petrol, 18 MPa diesel).
+- **Through a turn:** Turn it over and check builds the engine at steps through a revolution and tries what moves
+  against everything; all six engines the machines use come back clean.
+- **Known limits:** the valve-float check takes the cam's lift as a harmonic over 60° of cam each way (an estimate); the
+  cams and valves are held still through the turn; the Toyota four's bucket-tappet valve train, as drawn, floats at
+  about 6,300 rpm (its real one uses lighter roller rockers, not drawn here), and Engine under load says so.
 
 **The challenge scoreboard** (for the contest with the other AI): one page that reports, from runs, the number of
 working blocks with tests passing, the domains covered, the scale results above, the edit-to-result latency, the

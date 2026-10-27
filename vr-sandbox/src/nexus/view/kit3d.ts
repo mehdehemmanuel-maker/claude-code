@@ -28,6 +28,41 @@ const FINISH: Record<string, { rough: number; metal: number; coat?: number }> = 
   plate: { rough: 0.4, metal: 0.9 }, weld: { rough: 0.75, metal: 0.7 }, thread: { rough: 0.62, metal: 0.85 }, tread: { rough: 0.92, metal: 0 }, leather: { rough: 0.55, metal: 0, coat: 0.2 },
   weave: { rough: 0.95, metal: 0 }, texture: { rough: 0.8, metal: 0 }, grain: { rough: 0.7, metal: 0 }, stone: { rough: 0.85, metal: 0 }, concrete: { rough: 0.95, metal: 0 },
 };
+FINISH.machined = { rough: 0.42, metal: 0.85 }; FINISH.forged = { rough: 0.6, metal: 0.8 }; FINISH.satin = { rough: 0.3, metal: 0.9 }; FINISH.gloss = { rough: 0.12, metal: 0, coat: 0.6 }; FINISH.matte = { rough: 0.85, metal: 0 };
+// ---- the grain of a surface, as it was made: drawn from where it is, in metres, so a sand casting's grain is the same
+// size on a bolt boss as on a block, and no picture is laid on it ------------------------------------------------------
+/** Each finish's grain: its feature's size (m), how far it tilts the surface (0 to 1), how much it varies its gloss, and
+ *  which way it runs (a turned or ground part's marks round its axis: fine along it, long round it). Every figure an
+ *  estimate of how the surface reads at arm's length (sand grain about 0.3 to 1 mm; a turned finish's feed marks tenths
+ *  of a millimetre; paint's orange peel a few millimetres). */
+export const GRAIN: Record<string, { size: number; depth: number; rough: number; stretch?: [number, number, number] }> = {
+  cast: { size: 0.0008, depth: 0.55, rough: 0.16 }, forged: { size: 0.004, depth: 0.3, rough: 0.1 }, machined: { size: 0.00035, depth: 0.16, rough: 0.05, stretch: [0.04, 1, 0.04] },
+  ground: { size: 0.00018, depth: 0.08, rough: 0.04, stretch: [0.04, 1, 0.04] }, brushed: { size: 0.00025, depth: 0.14, rough: 0.07, stretch: [0.03, 1, 0.03] }, satin: { size: 0.0004, depth: 0.08, rough: 0.04 },
+  paint: { size: 0.003, depth: 0.05, rough: 0.03 }, texture: { size: 0.0006, depth: 0.35, rough: 0.12 }, matte: { size: 0.001, depth: 0.15, rough: 0.1 }, plate: { size: 0.0005, depth: 0.05, rough: 0.03 },
+  tread: { size: 0.0008, depth: 0.3, rough: 0.1 }, weld: { size: 0.002, depth: 0.6, rough: 0.2, stretch: [1, 0.25, 1] }, thread: { size: 0.0004, depth: 0.2, rough: 0.06 }, weave: { size: 0.0012, depth: 0.4, rough: 0.1, stretch: [1, 0.3, 1] },
+  leather: { size: 0.0015, depth: 0.3, rough: 0.1 }, stone: { size: 0.002, depth: 0.5, rough: 0.15 }, concrete: { size: 0.003, depth: 0.6, rough: 0.2 }, grain: { size: 0.002, depth: 0.25, rough: 0.08, stretch: [1, 0.08, 1] },
+};
+/** A material given its finish's grain: a bump drawn in the shader from the surface's place (value noise over its size,
+ *  stretched its way), faded where a feature is smaller than a pixel so it never shimmers, its gloss varied with it. */
+function grained(m: THREE.MeshStandardMaterial, g: (typeof GRAIN)[string]): void {
+  const u = { uGrainF: { value: 1 / g.size }, uGrainA: { value: g.depth }, uGrainR: { value: g.rough }, uGrainS: { value: new THREE.Vector3(...(g.stretch ?? [1, 1, 1])) } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos;').replace('#include <begin_vertex>', '#include <begin_vertex>\n#ifdef USE_INSTANCING\nvGrainPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n#else\nvGrainPos = transformed;\n#endif');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vGrainPos; uniform float uGrainF; uniform float uGrainA; uniform float uGrainR; uniform vec3 uGrainS;
+float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float gNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(gHash(i), gHash(i + vec3(1,0,0)), f.x), mix(gHash(i + vec3(0,1,0)), gHash(i + vec3(1,1,0)), f.x), f.y), mix(mix(gHash(i + vec3(0,0,1)), gHash(i + vec3(1,0,1)), f.x), mix(gHash(i + vec3(0,1,1)), gHash(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float gHeight(vec3 p) { vec3 q = p * uGrainF * uGrainS; return 0.65 * gNoise(q) + 0.35 * gNoise(q * 2.7 + 11.0); }
+vec3 gPerturb(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) { vec3 vSigmaX = normalize(dFdx(surf_pos.xyz)); vec3 vSigmaY = normalize(dFdy(surf_pos.xyz)); vec3 vN = surf_norm; vec3 R1 = cross(vSigmaY, vN); vec3 R2 = cross(vN, vSigmaX); float fDet = dot(vSigmaX, R1) * faceDirection; vec3 vGrad = sign(fDet) * (dHdxy.x * R1 + dHdxy.y * R2); return normalize(abs(fDet) * surf_norm - vGrad); }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+float gFeat = length(fwidth(vGrainPos * uGrainS)) * uGrainF, gFade = 1.0 - smoothstep(0.35, 1.0, gFeat), gH = gHeight(vGrainPos);
+if (gFade > 0.0) normal = gPerturb(-vViewPosition, normal, vec2(dFdx(gH), dFdy(gH)) * uGrainA * gFade, faceDirection);`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor + (gHeight(vGrainPos * 0.37) - 0.5) * uGrainR, 0.02, 1.0);');
+  };
+  m.customProgramCacheKey = () => 'grain';
+}
 const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
 const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: string, wear = 0, open = false): THREE.MeshStandardMaterial => {
   const w = Math.round(wear * 10) / 10, key = `${color}|${mat}|${glow}|${finish}|${w}|${open}`; let m = mats.get(key);
@@ -41,6 +76,8 @@ const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: 
     // (a turned or lofted shell is open at its ends or its inside: drawn on both its faces; paint and glass take a clear
     // coat, the gloss that shows a body's shape in what it reflects)
     m = (f?.coat || glass) && !w ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: f?.coat ?? 1, clearcoatRoughness: 0.04 }) : new THREE.MeshStandardMaterial(base); if (open) m.side = THREE.DoubleSide;
+    // (its grain by its finish; a rubber or a moulding with none said takes its making's)
+    const gr = GRAIN[finish ?? (rubber ? 'tread' : /^(abs|pp|pe|nylon|pbt|pc)$/.test(mat ?? '') ? 'texture' : '')]; if (gr && !glow && !glass) grained(m, gr);
     mats.set(key, m);
   }
   return m;

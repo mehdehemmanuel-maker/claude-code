@@ -63,6 +63,8 @@ export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
   /** holes drilled into it (its own frame) */ cuts?: Cut[];
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
+  /** how its maker made it, in its maker's own figures (a coil's wire, mean diameter, free and installed lengths, coils; a
+   *  gear's module and teeth): what a load case reads, so what is calculated is what is drawn */ made?: Record<string, number | string>;
   /** how it is held where its maker says (a centre cap clipped into its bore, a lens bonded in its housing): the joints
    *  rule adds nothing to it */ fixed?: string;
   /** what passes through an opening in it (a dashboard's for the steering column): fitted there, not one through the other */ passes?: string[];

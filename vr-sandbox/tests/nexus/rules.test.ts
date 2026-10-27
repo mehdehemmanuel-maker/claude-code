@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { engineBuilt, type EngineSpec } from '../../src/nexus/engines';
 import { engineSpecOf } from '../../src/nexus/machines';
-import { rulesOf } from '../../src/nexus/make/rules';
+import { rulesOf, rulesThrough } from '../../src/nexus/make/rules';
 import type { Part } from '../../src/nexus/kits';
 
 const blk = (name: string, at: [number, number, number], more: Partial<Part> = {}): Part => ({ name, item: name, shape: { box: [0.1, 0.1, 0.1] }, at, mat: 'steel-low', ...more });
@@ -10,6 +10,10 @@ describe('the rules a made thing is held to', () => {
   it('finds two pieces that cross, and none when they are apart', () => {
     expect(rulesOf({ name: 'x', parts: [blk('a', [0, 0, 0]), blk('b', [0.05, 0.03, 0.02])] }).findings.map((f) => f.rule)).toEqual(['interference']);
     expect(rulesOf({ name: 'x', parts: [blk('a', [0, 0, 0]), blk('b', [0.3, 0, 0])] }).findings).toEqual([]);
+  });
+  it('catches a thin rod straight through a plate, though no corner of either is inside the other, and a pin that is not a fastener', () => {
+    expect(rulesOf({ name: 'x', parts: [blk('plate', [0, 0, 0], { shape: { box: [0.1, 0.01, 0.1] } }), blk('rod', [0, 0, 0], { shape: { cyl: [0.003, 0.1] } })] }).findings.map((f) => f.rule)).toEqual(['interference']);
+    expect(rulesOf({ name: 'x', parts: [blk('plate', [0, 0, 0], { shape: { box: [0.1, 0.01, 0.1] } }), blk('wrist pin', [0, 0, 0], { shape: { cyl: [0.003, 0.1] } })] }).findings.map((f) => f.rule)).toEqual(['interference']);
   });
   it('lets through what is said to pass, from any level of what it is in', () => {
     const shaft = blk('shaft', [0.05, 0, 0]);
@@ -25,5 +29,10 @@ describe('the rules a made thing is held to', () => {
     // (Toyota's M20A, Honda's GX270, Kawasaki's FR651V: the inline, the single and the vee; every bore and stroke their maker's)
     const powers = [{ kind: 'inline', cc: 1987, cyl: 4, bore: 0.0805, stroke: 0.0976 }, { kind: 'single', cc: 270, bore: 0.077, stroke: 0.058, starter: 'recoil' }, { kind: 'twin', cc: 726, bore: 0.078, stroke: 0.076 }];
     for (const p of powers) { const e = engineBuilt(engineSpecOf(p as Parameters<typeof engineSpecOf>[0], true) as EngineSpec); expect(rulesOf(e.engine).findings.map((f) => f.says)).toEqual([]); }
+  }, 120_000);
+  it('turns a single and a vee twin through a revolution of their cranks: nothing that moves runs into anything at any step', () => {
+    for (const p of [{ kind: 'single', cc: 270, bore: 0.077, stroke: 0.058, starter: 'recoil' }, { kind: 'twin', cc: 726, bore: 0.078, stroke: 0.076 }]) {
+      const s = engineSpecOf(p as Parameters<typeof engineSpecOf>[0], true) as EngineSpec, r = rulesThrough((t) => engineBuilt(s, {}, { crank: t * 2 * Math.PI }).engine, 12, /^(crankshaft|pistons and rods)$/);
+      expect(r.findings.map((f) => `${Math.round(f.t * 360)}°: ${f.says}`)).toEqual([]); }
   }, 120_000);
 });

@@ -80,6 +80,12 @@ export const MATERIALS: Material[] = [
     source: 'ASM Handbook vol. 1; MatWeb AISI 4140 annealed', confidence: 'handbook',
   },
   {
+    ...metal, id: 'steel.4140-qt', name: 'Steel AISI 4140 quenched and tempered', category: 'steel', density: 7850, E: 205 * GPa, nu: 0.29,
+    yield: 655 * MPa, ultimate: 758 * MPa, elongation: 0.22, ferromagnetic: true, conductivity: 4.5e6, weld: 'steel',
+    friction: 0.62, sound: 'steel', sparks: 'high-carbon', color: 0x7b8087, metalness: 0.9, roughness: 0.3,
+    source: 'ASM Handbook vol. 1; MatWeb AISI 4140 oil quenched from 845 °C, tempered at 650 °C (typical of forged rods, cranks and shafts)', confidence: 'handbook',
+  },
+  {
     ...metal, id: 'steel.52100', name: 'Chrome steel 52100 (bearing balls)', category: 'steel', density: 7810, E: 210 * GPa, nu: 0.3,
     yield: 2000 * MPa, ultimate: 2240 * MPa, elongation: 0.01, ductile: false, ferromagnetic: true, conductivity: 4.0e6, weld: 'none',
     friction: 0.5, restitution: 0.92, loss: 0.0002, sound: 'steel', sparks: 'high-carbon', color: 0xc8ccd0, metalness: 1, roughness: 0.08,

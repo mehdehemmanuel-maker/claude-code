@@ -149,10 +149,11 @@ export function turned(o: { name: string; steps: [number, number][]; bore?: numb
 }
 /** A coil of wire along y from y = 0: wire d, mean diameter D, free length L, n active coils and a closed coil at each end
  *  (a compression spring's ends, closed so it stands square), as a valve's, a clutch's or a pen's is coiled. */
-export function coil(o: { name: string; d: number; D: number; L: number; n: number; mat?: string; color?: number; item?: string; says?: string }): Part {
+/** A coiled spring drawn at its length L (as it is fitted, compressed from its free length L0 where that is longer). */
+export function coil(o: { name: string; d: number; D: number; L: number; n: number; L0?: number; mat?: string; color?: number; item?: string; says?: string }): Part {
   const per = 12, turns = o.n + 2, pitch = (o.L - 2 * o.d) / o.n, pts: V3[] = [];
   for (let i = 0; i <= turns * per; i++) { const t = i / per, a = 2 * PI * t, y = t < 1 ? o.d / 2 + t * o.d : t > turns - 1 ? o.L - o.d / 2 - (turns - t) * o.d : o.d * 1.5 + (t - 1) * pitch; pts.push([(o.D / 2) * Math.cos(a), Math.min(o.L - o.d / 2, y), (o.D / 2) * Math.sin(a)]); }
-  return { name: o.name, shape: { tube: { r: o.d / 2, pts, bend: o.d } }, at: [0, 0, 0], mat: o.mat ?? 'steel-spring', color: o.color ?? 0x3a3c40, finish: 'paint', ...(o.item ? { item: o.item } : {}), says: o.says ?? `coiled: ${(o.d * 1000).toFixed(1)} mm wire on a ${(o.D * 1000).toFixed(1)} mm mean diameter, ${o.n} active coils, ends closed` };
+  return { name: o.name, shape: { tube: { r: o.d / 2, pts, bend: o.d } }, at: [0, 0, 0], mat: o.mat ?? 'steel-spring', color: o.color ?? 0x3a3c40, finish: 'paint', ...(o.item ? { item: o.item } : {}), made: { by: 'coil', d: o.d, D: o.D, n: o.n, L: o.L, L0: Math.max(o.L, o.L0 ?? o.L) }, says: o.says ?? `coiled: ${(o.d * 1000).toFixed(1)} mm wire on a ${(o.D * 1000).toFixed(1)} mm mean diameter, ${o.n} active coils, ends closed${(o.L0 ?? o.L) > o.L ? `; ${(((o.L0 ?? o.L) - o.L) * 1000).toFixed(1)} mm compressed from its ${((o.L0 ?? o.L) * 1000).toFixed(1)} mm free length as fitted` : ''}` };
 }
 /** A toothed wheel cut round a bore: module m, z teeth, b wide along z (its axis), its teeth drawn as their straight-sided
  *  outline from the root to the tip circle (the involute's curve not drawn), as every spur, helical and timing gear and

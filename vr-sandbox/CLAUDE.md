@@ -121,6 +121,16 @@ the task list and lose the why. So the why lives here, and every round is checke
   (2026-10-27: the rules checker `make/rules.ts` (interference, clearance, heat gate) and node Nothing runs into
   anything?; every engine the machines use comes back clean of it; the one fastener node; zoom to a piece; take out a
   piece; turned parts with sharp edges)
+- "what does the node setups look like and all of the sub parts setups and all of the sub sub parts … everything needs
+  to be a node calculator nodes can be stress testers don't just rely on the nodes you have see if you need another node
+  that would make things more efficient … what determines texture do you have advanced textures", then "Ok execute"
+  (2026-10-27: parts placed by their round faces and bored where others pass (`mate.ts` `onto`, `boreThrough`; nodes
+  Onto a shaft, Bore where it passes); the engine board made of its parts, each wired into what it is in (Engine piece,
+  the head's and the engine's part inputs); load cases on drawn parts (`loads.ts`; Spring under load, Engine under load)
+  and a stress test of any block over a range (Sweep (stress test)); parts sized from their loads (a valve spring by its
+  redline, a rod's big end by its firing force); the rules through a turn of the crank (Turn it over and check); a
+  cutaway in the 3D view; each finish's grain drawn in the shader. The checker was found blind to anything thinner than
+  6 mm and was fixed)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -189,6 +199,11 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A computer from its transistors: FinFETs at published process pitches, SRAM and logic cells, arrays, die, package, motherboard, PC | `src/nexus/computer.ts` (nodes Transistor, Logic or memory cell, Processor die, Processor package, Motherboard, Desktop PC) |
 | How far a build comes apart: lumps (a piece drawn as one though the inventory says it is an assembly) by share of mass, recipes not met (`explodeAudit`, node Comes apart to the bottom?) | `src/nexus/components.ts` |
 | What may not run into, touch or come near what: interference (triangle against triangle, unless one piece, said to pass (`passes`/`joins`, at any level of the tree), a fastener, or in a hole cut for it), clearance (`Part.clear`, `runsOn`), the heat gate (`Part.hot` against each material's `MAX_SERVICE`, falling off with distance, stopped by anything solid between) | `src/nexus/make/rules.ts` (`rulesOf`; node `check.rules` in `blocks.ts`) |
+| A made part under its working loads: a spring as its maker made it (Shigley ch. 10 via `engineering/springs.ts`), a piston engine at a speed and a peak pressure (rod, rod bolts, crank pin shells, wrist pin, valve float); a part's material's handbook strength (`strengthOf`); a stress test of any block over a range of one input | `src/nexus/loads.ts` (nodes `load.spring`, `load.engine`, `sweep.range` in `blocks.ts`) |
+| Parts placed by their round faces (a bore slid onto a shaft, its fit said) and a part bored where another passes through it | `src/nexus/mate.ts` (`onto`, `boreThrough`; nodes `onto`, `bore`) |
+| The rules through a motion (each place in it, only what moves tried) | `src/nexus/make/rules.ts` (`rulesThrough`; node `check.turning` for an engine's crank) |
+| A cutaway in the 3D view (a plane across x, y or z, the near half taken away) | `src/nexus/view/dock3d.ts` (`section`, the Cut button) |
+| A surface's grain by its finish (cast sand, turned and ground marks, brushed, paint's orange peel, moulded texture), drawn in the shader from where it is, in metres | `src/nexus/view/kit3d.ts` (`GRAIN`) |
 | One fastener of any size and kind (bolt, screw, rivet, stud): head by shape (hex, square, octagon, round, pan, countersunk, flange), drive, shank, helical thread, point | `src/nexus/makers.ts` `fastener` (node `make.fastener`) |
 | One piece out of anything by name, to look at close up (and the 3D view's zoom to a piece: double press, `dock.focus`) | node `piece` in `blocks.ts`; `src/nexus/view/dock3d.ts`, `space3d.ts` (`pieceAt`, `piecesNamed`) |
 | A piston engine from its first parts (pistons, rings, pins, rods, crank, block, liners, caps, shells, head, valve train, cams, timing, oiling, intake, exhaust, ignition, alternator, starter, pump, belt, flywheel), sized and weighed by its parts | `src/nexus/engines.ts` (nodes `engine.*` in `blocks.ts`; `engineSpecOf`/`engineSize` in `machines.ts` ask it) |
