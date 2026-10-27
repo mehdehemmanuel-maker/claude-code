@@ -450,35 +450,40 @@ Twelve layers, in the order a design flows through them. 65 nodes.
 
 ## 13. Merges in the existing library
 
-Candidates among the built blocks. Each is confirmed by the gauntlet's unique gate and a search of saved boards before
-deletion; saved boards are rewired to the kept node and the old id kept as an alias.
+Done in step 0. Each candidate was read in code before merging; old ids stay as adapters (`ALIASES` in `blocks.ts`): not in
+the library, they run as before through the kept block, and `rewire` (`dataflow.ts`) moves boards on to the kept block.
 
-| Delete | Keep | Why |
+| Merged | Into | How |
 | --- | --- | --- |
-| `math.sum` | `math.stats` | Statistics gives the sum and more |
-| `in.slider` | `in.number` | A slider is a number with a range |
-| `check.limit` | `logic.compare` | A limit check is a comparison with words |
-| `array.line`, `array.circle` | `array.grid` → `array` | One pattern node: line, ring, grid |
-| `place.points` | `place` | Lists map automatically (node contract) |
-| `rows.set` | `rows.recode` | Setting a column is a one-rule recode |
-| `read.block`, `read.item` | `read` | One reader by id |
-| `gauntlet.gate` | `gauntlet.run` | One gate is a run with one gate chosen |
-| `unknown.sort` | `unknown.queue` | The queue is given sorted |
-| `research.ref` | `research.notes` | A stored reference is compiled notes |
-| `check.turning` | `check.rules` | Through a motion is an option |
-| `piece` | `explode` | One piece is an explode filtered |
-| `hole` | `bore` | Holes made where things pass; no typed positions |
-| `make.coil` | `make.wound` | A spring is wire wound with no former |
-| `vehicle.model` | `vehicle` | A real model is a preset of axles, power and frame |
-| `sweep.range` | `study` | Upgraded |
-| `view.gauge`, `view.chart`, `view.table` | `view.show` → `view` | Display style is an option |
-| `ai.ask` | `search.web`, `query` | Cannot run (its relay is gone) |
+| `math.sum` | `math.stats` | Gains `sum`, `count` and many wires in; an empty list sums to 0 |
+| `in.slider` | `in.number` | Gains ends (`min`, `max`) and `style: slider` |
+| `array.line`, `array.circle`, `array.grid` | `array` | `pattern`: line, ring, grid; ports per pattern |
+| `place.points` | `place` | Optional `points` table; x, y, z move each |
+| `read.block`, `read.item` | `read` | `block:` or `item:` prefix, or `kind` |
+| `gauntlet.gate` | `gauntlet.run` | One gate chosen; gains `unknowns` |
+| `unknown.sort` | `unknown.queue` | Gains `only`, `clusters`, `clusterCount`, `first` |
+| `research.ref` | `research.notes` | `from`: a kept reference or your notes; gains `sources` |
+
+Candidates rejected on reading:
+
+| Kept | Was to merge into | Why kept |
+| --- | --- | --- |
+| `check.limit` | `logic.compare` | Gives margin and factor of safety; seed of `margin` |
+| `rows.set` | `rows.recode` | Value on a wire, given round the rows in turn; not a rule match |
+| `check.turning` | `check.rules` | Builds an engine through a turn; `check.rules` has no motion yet |
+| `piece` | `explode` | Lifts one piece out; explode spreads them all |
+| `hole` | `bore` | Deliberate holes (a drain, a mount) still need placing |
+| `make.coil` | `make.wound` | A spring's closed, ground ends; a winding's layers |
+| `vehicle.model` | `vehicle` | Published figures and sources per model |
+| `view.gauge`, `view.chart`, `view.table` | `view.show` | Different displays, not options of one |
+| `sweep.range` | `study` | `study` is not built yet (step 13) |
+| `ai.ask` | — | Runs again if the relay returns; reported as unable to run here |
 
 ## 14. Steps
 
 | Step | Scope | Nodes | Output |
 | --- | --- | --- | --- |
-| 0 | Library merges (section 13) | — | Fewer blocks, boards rewired, gate green |
+| 0 | Library merges (section 13) | — | 11 blocks merged into 8, boards rewired, gate green |
 | 1 | Needs and fields on the Corolla bay | `need`, `field`, `field.combine`, `field.show` | Field images |
 | 2 | Solver places the battery | `place.solve`, `size.select`, `explain` | Position, reason, trade-offs |
 | 3 | Autopilot on the Corolla | `auto.loop`, `repair.library` | Findings cleared without hand edits |

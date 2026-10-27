@@ -60,8 +60,9 @@ export function layout(root: Part, at = new THREE.Matrix4(), o: { sealedWhole?: 
       return n;
     }
     const local = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
-    const m = m0.clone().multiply(local), lb = shapeBox(p.shape, p.base), box = lb ? lb.clone().applyMatrix4(m) : null;
-    const n: Node = { p, parent, kids: [], m, box, obb: lb ? obbOf(lb, m) : null, pieces: lb ? piecesIn(p.shape, lb, m, p.base) : [], local: lb, sub: box?.clone() ?? null, depth, path }; out.push(n); parent?.kids.push(n);
+    // (a part with an envelope, a winding's wire, is laid out by it: the simple solid it fills, as the rules test it)
+    const sh = p.envelope ?? p.shape, m = m0.clone().multiply(local), lb = shapeBox(sh, p.base), box = lb ? lb.clone().applyMatrix4(m) : null;
+    const n: Node = { p, parent, kids: [], m, box, obb: lb ? obbOf(lb, m) : null, pieces: lb ? piecesIn(sh, lb, m, p.base) : [], local: lb, sub: box?.clone() ?? null, depth, path }; out.push(n); parent?.kids.push(n);
     (p.parts ?? []).forEach((q, i) => { const k = walk(q, n, m, depth + 1, `${path}/${i}`); if (k.sub && !q.detail) n.sub = n.sub ? n.sub.union(k.sub) : k.sub.clone(); });
     return n;
   };
@@ -172,11 +173,17 @@ export const dirToLocal = (n: Node, world: THREE.Vector3) => world.clone().trans
  *  5 mm, is outside every box (each grown by the radius of what runs along it and a clearance). Points within `near` of
  *  either end are not tried (where it is pushed on to what it joins). Null when none is clear. */
 export function clearPath(ways: THREE.Vector3[][], boxes: OBB[], r: number, near = 0.03): THREE.Vector3[] | null {
-  const inside = (q: THREE.Vector3) => boxes.some((b) => { const d = q.clone().sub(b.c); return Math.abs(d.dot(b.u[0])) < b.h[0] + r && Math.abs(d.dot(b.u[1])) < b.h[1] + r && Math.abs(d.dot(b.u[2])) < b.h[2] + r; });
+  // (each box tried only against the segments that pass within its bounding sphere and the clearance)
+  const reach = boxes.map((b) => Math.hypot(b.h[0], b.h[1], b.h[2]) + r), seg = new THREE.Line3(), on = new THREE.Vector3();
+  const inside = (q: THREE.Vector3, bs: OBB[]) => bs.some((b) => { const d = q.clone().sub(b.c); return Math.abs(d.dot(b.u[0])) < b.h[0] + r && Math.abs(d.dot(b.u[1])) < b.h[1] + r && Math.abs(d.dot(b.u[2])) < b.h[2] + r; });
   for (const w of ways) {
     const a = w[0]!, z = w[w.length - 1]!; let ok = true;
-    for (let i = 1; i < w.length && ok; i++) { const p0 = w[i - 1]!, p1 = w[i]!, n = Math.max(1, Math.ceil(p0.distanceTo(p1) / 0.005));
-      for (let k = 0; k <= n && ok; k++) { const q = p0.clone().lerp(p1, k / n); if (q.distanceTo(a) < near || q.distanceTo(z) < near) continue; if (inside(q)) ok = false; } }
+    for (let i = 1; i < w.length && ok; i++) {
+      const p0 = w[i - 1]!, p1 = w[i]!, n = Math.max(1, Math.ceil(p0.distanceTo(p1) / 0.005)); seg.set(p0, p1);
+      const bs = boxes.filter((b, k) => seg.closestPointToPoint(b.c, true, on).distanceTo(b.c) < reach[k]!);
+      if (!bs.length) continue;
+      for (let k = 0; k <= n && ok; k++) { const q = p0.clone().lerp(p1, k / n); if (q.distanceTo(a) < near || q.distanceTo(z) < near) continue; if (inside(q, bs)) ok = false; }
+    }
     if (ok) return w;
   }
   return null;

@@ -349,7 +349,7 @@ function road(): void {
   const walk = s.n('shape.box', { name: 'sidewalk', mat: 'concrete', color: '#b0bec5', finish: 'concrete', h: 0.15, d: 1.5 }, 'sidewalk'); s.w(L, 'value', walk, 'w');
   const dash = s.n('shape.box', { name: 'centre line', mat: 'pvc', color: '#fdd835', w: 3, h: 0.005, d: 0.12 }, 'a dash');
   const n = s.f('floor(L / 12)', { L: [L, 'value'] }, 'how many dashes');
-  const dashes = s.n('array.line', { dx: 12 }, 'dashes along it'); s.w(dash, 'part', dashes, 'thing'); s.w(n, 'result', dashes, 'n');
+  const dashes = s.n('array', { pattern: 'line', dx: 12 }, 'dashes along it'); s.w(dash, 'part', dashes, 'thing'); s.w(n, 'result', dashes, 'n');
   const start = s.f('6 - L / 2', { L: [L, 'value'] }, 'first dash');
   const r = s.all('road', [
     [s.at([asphalt, 'part'], { y: -0.05 }), 'placed'],
@@ -403,11 +403,11 @@ function roads(): void {
   s.w(lights, 'value', state, 'which'); s.w(lights, 'value', cross, 'which'); s.w(cyc, 'state', state, 'cycle'); s.w(cyc, 'cross', cross, 'cycle');
   for (const [k, other] of [['red', 'green'], ['yellow', 'red'], ['green', 'red']] as const) { s.w(C(s, k, `held ${k}`)[0], 'value', state, k); s.w(C(s, other, `then across: ${other}`)[0], 'value', cross, k); }
   const road = s.n('seed.road', {}, 'a road between crossings'); s.w(s.f('B - 7.2', { B: [B, 'value'] }), 'result', road, 'L');
-  const along = s.n('array.grid', {}, 'roads along x'); s.w(road, 'road', along, 'thing'); s.w(nx, 'value', along, 'nx'); s.w(s.f('n + 1', { n: [nz, 'value'] }), 'result', along, 'nz'); s.w(B, 'value', along, 'sx'); s.w(B, 'value', along, 'sz');
+  const along = s.n('array', { pattern: 'grid' }, 'roads along x'); s.w(road, 'road', along, 'thing'); s.w(nx, 'value', along, 'nx'); s.w(s.f('n + 1', { n: [nz, 'value'] }), 'result', along, 'nz'); s.w(B, 'value', along, 'sx'); s.w(B, 'value', along, 'sz');
   const turned = s.at([road, 'road'], { ry: Math.PI / 2 }, 'a road along z');
-  const across = s.n('array.grid', {}, 'roads along z'); s.w(turned, 'placed', across, 'thing'); s.w(s.f('n + 1', { n: [nx, 'value'] }), 'result', across, 'nx'); s.w(nz, 'value', across, 'nz'); s.w(B, 'value', across, 'sx'); s.w(B, 'value', across, 'sz');
+  const across = s.n('array', { pattern: 'grid' }, 'roads along z'); s.w(turned, 'placed', across, 'thing'); s.w(s.f('n + 1', { n: [nx, 'value'] }), 'result', across, 'nx'); s.w(nz, 'value', across, 'nz'); s.w(B, 'value', across, 'sx'); s.w(B, 'value', across, 'sz');
   const crossing = s.n('seed.crossing', {}, 'a crossing'); s.w(state, 'chosen', crossing, 'state'); s.w(cross, 'chosen', crossing, 'cross');
-  const crossings = s.n('array.grid', {}, 'crossings'); s.w(crossing, 'crossing', crossings, 'thing'); s.w(s.f('n + 1', { n: [nx, 'value'] }), 'result', crossings, 'nx'); s.w(s.f('n + 1', { n: [nz, 'value'] }), 'result', crossings, 'nz'); s.w(B, 'value', crossings, 'sx'); s.w(B, 'value', crossings, 'sz');
+  const crossings = s.n('array', { pattern: 'grid' }, 'crossings'); s.w(crossing, 'crossing', crossings, 'thing'); s.w(s.f('n + 1', { n: [nx, 'value'] }), 'result', crossings, 'nx'); s.w(s.f('n + 1', { n: [nz, 'value'] }), 'result', crossings, 'nz'); s.w(B, 'value', crossings, 'sx'); s.w(B, 'value', crossings, 'sz');
   s.output('roads', 'assembly', s.all('road system', [[along, 'grid'], [across, 'grid'], [crossings, 'grid']]), 'assembly');
   s.save('seed.roads', 'Road system', 'Streets on a grid of blocks, nx by nz, with a crossing and its stop lights wherever two meet, the lights on their cycle as the clock runs (or held)', ['structural', 'vehicles']);
 }

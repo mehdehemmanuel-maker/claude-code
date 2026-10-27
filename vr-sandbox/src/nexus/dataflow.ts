@@ -10,7 +10,7 @@
 // into. What a node did, how long it took and how often it failed is kept, for the person and for the engine's own
 // suggestions: what is dead, what is the same twice, what wiring repeats and could be one block.
 
-import { block, clockOf, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
+import { ALIASES, aliasSet, block, clockOf, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
 import { fromSI, sameDim, toSI } from '../ganglia/units';
 import type { Part } from './kits';
@@ -46,6 +46,22 @@ export function adjacency(b: Board): { into: Map<string, LiveEdge[]>; from: Map<
   return { into, from };
 }
 
+// ---- merged blocks ---------------------------------------------------------------------------------------------------
+/** A board moved on from blocks that were merged into others (`ALIASES` in blocks.ts): each such node becomes the kept
+ *  block with its settings carried over, and the wires into and out of it renamed to the kept block's ports. Groups'
+ *  boards too. Returns how many nodes were moved. */
+export function rewire(b: Board): number {
+  let n = 0;
+  for (const [id, x] of Object.entries(b.nodes)) {
+    if (x.inner) n += rewire(x.inner);
+    const a = x.block ? ALIASES[x.block] : undefined; if (!a || !x.block) continue;
+    const fwd = Object.fromEntries(Object.entries(a.ports ?? {}).map(([neu, old]) => [old, neu]));
+    for (const e of Object.values(b.edges)) { if (e.from === id && e.out && fwd[e.out]) e.out = fwd[e.out]; if (e.to === id && e.in && fwd[e.in]) e.in = fwd[e.in]; }
+    x.set = aliasSet(x.block, x.set ?? {}); x.block = a.to; n++;
+  }
+  return n;
+}
+
 // ---- what a node is -------------------------------------------------------------------------------------------------
 /** The block a node is: a library block, or a group made of the board inside it. */
 export function blockOf(n: BoardNode): BlockDef | null {
@@ -55,6 +71,7 @@ export function blockOf(n: BoardNode): BlockDef | null {
 const groups = new WeakMap<Board, BlockDef>();
 /** A board with group.in and group.out nodes, as a block: its inputs and outputs are theirs, by name. */
 export function groupBlock(inner: Board, meta: Partial<BlockDef> = {}): BlockDef {
+  rewire(inner);
   const kept = groups.get(inner); if (kept && !Object.keys(meta).length) return kept;
   const ports = (): Ports => {
     const ins: PortDef[] = [], outs: PortDef[] = [];
@@ -114,10 +131,10 @@ export class Engine {
   private kids = new Map<string, Engine>();
   /** What comes into a group's board: by group.in name, its value and its key. */
   feeds: Record<string, { value: unknown; key: string }> = {};
-  constructor(public board: Board, public env: Env = {}, public memo = new Memo()) {}
+  constructor(public board: Board, public env: Env = {}, public memo = new Memo()) { rewire(board); }
 
   /** The board changed shape: nodes or wires added or taken away. Everything is looked at on the next run. */
-  reshape(b: Board = this.board): void { this.board = b; this.shaped = false; this.all = true; }
+  reshape(b: Board = this.board): void { rewire(b); this.board = b; this.shaped = false; this.all = true; }
   /** The clock moved: every node that reads it (or holds one that does) is looked at on the next run, and what it feeds. */
   tick(time: number): number { this.env.time = time; let n = 0; for (const id of this.sequence) { const nd = this.board.nodes[id], b = nd && blockOf(nd); if (b && clockOf(b, nd.set ?? {})) { this.touch(id); n++; } } return n; }
   /** A node's settings changed: it, and what is downstream of it, are looked at on the next run. */

@@ -128,7 +128,7 @@ describe('the gauntlet as nodes on a board', () => {
     placeBlock(b, 'logic.compare', 0, 0, { op: '>' }, 'any'); wire(b, 'g3', 'passed', 'any', 'a');
     const run = new Engine(b); await run.run();
     for (const id of ['cands', 'g1', 'g2', 'g3', 'heard']) expect(run.state.get(id)?.status, `${id}: ${run.state.get(id)?.error}`).toBe('ok');
-    expect(run.state.get('g3')!.out!.passed).toEqual(expect.arrayContaining(['block:law.stress.axial']));
+    expect(run.state.get('g3')!.out!.approved).toEqual(expect.arrayContaining(['block:law.stress.axial']));
     expect(run.state.get('heard')!.out!.count as number).toBeGreaterThan(0);
   });
   it('the unknown queue and the sorter as nodes; the loop as a node, from what is drawn', async () => {

@@ -804,21 +804,22 @@ e('rivet-mandrel', 'rivet mandrel', 'Hardware/Fasteners/Rivet parts', 'part', 'c
 e('rivet-mandrel-stainless', 'stainless rivet mandrel', 'Hardware/Fasteners/Rivet parts', 'part', 'cold-head', 'stainless-304', 'a stainless mandrel, for a stainless rivet');
 e('nylon-insert', 'nylon insert', 'Hardware/Fasteners/Nut parts', 'part', 'mould', 'nylon', 'the nylon ring crimped into a lock nut\'s collar, its bore a little under the thread');
 e('ntc-bead', 'NTC bead', 'Electrical/Sensors/Thermistor parts', 'part', 'sinter', 'ntc-ceramic', 'a sintered bead of nickel-manganese oxide, its resistance falling as it warms');
-// (a sensor as the sensor maker draws it (makers.ts sensor): its body by kind, its element by what it senses, its plug)
-e('crush-washer', 'copper crush washer', 'Mechanical/Seals/Gaskets', 'part', 'stamp', 'copper', 'a soft copper washer crushed under a threaded fitting\'s hex to seal it');
-e('sensor-case', 'sensor case', 'Electrical/Sensors/Sensor parts', 'part', 'mould', 'pbt', 'a moulded glass-filled PBT case round the element and its leads');
-e('sensor-body', 'sensor body', 'Electrical/Sensors/Sensor parts', 'part', 'machine', 'stainless-304', 'a turned stainless body: a probe\'s hex and thread, or a puck\'s sleeve its bolt goes through');
-e('connector-shroud', 'connector shroud', 'Electrical/Sensors/Sensor parts', 'part', 'mould', 'pbt', 'the moulded shroud of a sensor\'s plug, keyed so its mating plug goes on one way');
-e('terminal', 'terminal pin', 'Electrical/Sensors/Sensor parts', 'part', 'stamp', 'brass', 'a tinned brass pin in the plug\'s shroud');
-e('seismic-mass', 'seismic mass', 'Electrical/Sensors/Sensor parts', 'part', 'machine', 'brass', 'the brass ring that presses on a knock sensor\'s piezo ring as the block rings');
-e('thermistor-element', 'NTC thermistor element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'ntc-ceramic', 'a sintered nickel-manganese spinel bead whose resistance falls as it warms');
-e('piezo-element', 'piezo element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'pzt', 'a sintered PZT ring, poled, giving a charge when it is squeezed');
-e('hall-element', 'Hall element', 'Electrical/Sensors/Sensor parts', 'part', 'etch', 'silicon', 'a silicon Hall die: a field through it gives a voltage across it');
-e('zirconia-element', 'zirconia element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'zirconia', 'a yttria-stabilised zirconia thimble, platinum electrodes each side');
-e('strain-element', 'strain element', 'Electrical/Sensors/Sensor parts', 'part', 'etch', 'silicon', 'a silicon diaphragm with strain gauges diffused in it');
-e('sensor-threaded', 'threaded sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-body connector-shroud crush-washer terminal', 'a threaded probe: its element in its tip (a temperature sender, a pressure switch, an oxygen sensor)');
-e('sensor-puck', 'puck sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-case sensor-body seismic-mass connector-shroud terminal', 'a puck bolted through its middle: a knock sensor\'s piezo ring under its seismic mass');
-e('sensor-block', 'block sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-case connector-shroud terminal', 'a moulded block on a lug: a Hall position sensor, a pressure sensor');
+// (a sensor as the sensor maker draws it (makers.ts sensor): its body by kind, its element by what it senses, its plug;
+// sizes in mm, typical of an automotive sensor's)
+e('crush-washer', 'copper crush washer', 'Mechanical/Seals/Gaskets', 'part', 'stamp', 'copper', 'a soft copper washer crushed under a threaded fitting\'s hex to seal it (an M12 sensor\'s about 12 × 16 × 1.5 mm, typical)', '', { size: [16, 1.5, 16] });
+e('sensor-case', 'sensor case', 'Electrical/Sensors/Sensor parts', 'part', 'mould', 'pbt', 'a moulded glass-filled PBT case round the element and its leads', '', { size: [30, 25, 30] });
+e('sensor-body', 'sensor body', 'Electrical/Sensors/Sensor parts', 'part', 'machine', 'stainless-304', 'a turned stainless body: a probe\'s hex and thread, or a puck\'s sleeve its bolt goes through', '', { size: [20, 40, 20] });
+e('connector-shroud', 'connector shroud', 'Electrical/Sensors/Sensor parts', 'part', 'mould', 'pbt', 'the moulded shroud of a sensor\'s plug, keyed so its mating plug goes on one way', '', { size: [15, 12, 20] });
+e('terminal', 'terminal pin', 'Electrical/Sensors/Sensor parts', 'part', 'stamp', 'brass', 'a tinned brass pin in the plug\'s shroud', '', { size: [1, 10, 1] });
+e('seismic-mass', 'seismic mass', 'Electrical/Sensors/Sensor parts', 'part', 'machine', 'brass', 'the brass ring that presses on a knock sensor\'s piezo ring as the block rings', '', { size: [20, 6, 20] });
+e('thermistor-element', 'NTC thermistor element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'ntc-ceramic', 'a sintered nickel-manganese spinel bead whose resistance falls as it warms', '', { size: [3, 4, 3] });
+e('piezo-element', 'piezo element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'pzt', 'a sintered PZT ring, poled, giving a charge when it is squeezed', '', { size: [20, 2, 20] });
+e('hall-element', 'Hall element', 'Electrical/Sensors/Sensor parts', 'part', 'etch', 'silicon', 'a silicon Hall die: a field through it gives a voltage across it', '', { size: [2, 0.5, 2] });
+e('zirconia-element', 'zirconia element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'zirconia', 'a yttria-stabilised zirconia thimble, platinum electrodes each side', '', { size: [5, 25, 5] });
+e('strain-element', 'strain element', 'Electrical/Sensors/Sensor parts', 'part', 'etch', 'silicon', 'a silicon diaphragm with strain gauges diffused in it', '', { size: [3, 0.5, 3] });
+e('sensor-threaded', 'threaded sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-body connector-shroud crush-washer terminal', 'a threaded probe: its element in its tip (a temperature sender, a pressure switch, an oxygen sensor)', '', { size: [20, 50, 20] });
+e('sensor-puck', 'puck sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-case sensor-body seismic-mass connector-shroud terminal', 'a puck bolted through its middle: a knock sensor\'s piezo ring under its seismic mass', '', { size: [30, 25, 30] });
+e('sensor-block', 'block sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-case connector-shroud terminal', 'a moulded block on a lug: a Hall position sensor, a pressure sensor', '', { size: [25, 15, 30] });
 e('ferrule-sleeve', 'ferrule sleeve', 'Electrical/Wiring and connectors/Ferrule parts', 'part', 'draw', 'copper tin', 'the tinned copper tube crimped over the strands');
 e('ferrule-collar', 'ferrule collar', 'Electrical/Wiring and connectors/Ferrule parts', 'part', 'mould', 'pp', 'the coloured plastic collar, its colour its wire size');
 e('pushfit-body', 'push-fit body', 'Fluid/Fittings/Push-fit parts', 'part', 'mould', 'pom', 'the moulded body');
@@ -1545,7 +1546,7 @@ pt('kingpin', 'kingpin', 'grind', 'steel-alloy', 'a ground pin a steering knuckl
 as('drive-axle', 'drive axle', 'axle-housing differential axle-shaft*2', 'a banjo housing, its carrier and differential, its two axle shafts', [2000, 500, 500]);
 as('steer-axle', 'steer axle', 'axle-beam kingpin*2', 'a forged I-beam and its kingpins', [2000, 200, 150]);
 pt('bearing-hanger-body', 'bearing hanger housing', 'weld', 'steel-low', 'a plate welded onto a kart\'s rail and a housing bored for the axle\'s bearing', [80, 110, 50]);
-as('bearing-hanger', 'axle bearing hanger', 'bearing-hanger-body bearing-6206zz', 'a hanger welded to the frame, a 6206 ball bearing pressed in, the axle through it', [80, 110, 50]);
+as('bearing-hanger', 'axle bearing hanger', `bearing-hanger-body ${F('bearing 6206')}`, 'a hanger welded to the frame, a 6206 ball bearing pressed in, the axle through it', [80, 110, 50]);
 }
 
 // ==== a disc brake's caliper, part by part (machines.ts) ==============================================================
