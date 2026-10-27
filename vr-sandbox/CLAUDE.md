@@ -156,6 +156,11 @@ the task list and lose the why. So the why lives here, and every round is checke
   library's 318 blocks first came back with 25 that gave NaN without a word, engine nodes that crashed on an 80 m bore,
   brake pads and zirconia that weighed nothing, a starter solenoid listed only as its materials, and the Rancher's
   engine with 6 collisions: each fixed)
+- "the point is to eliminate the need for manual stuff while maintaining the same results as a high level engineer from
+  houses too environments too mechanical too software nodes need to be max capable eliminate the need for guessing and
+  manual", "think outside the box … think about the pinnacle of it" (2026-10-27: hours had gone into hand-typed positions
+  for single parts; the plan is `docs/PLACEMENT.md`: parts say what they need, a solver places, routes, sizes and explains,
+  nothing placed by hand; each step shown to the user before the next)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
