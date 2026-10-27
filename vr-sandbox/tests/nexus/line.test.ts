@@ -55,11 +55,13 @@ describe('routing: one search, logics as its costs', () => {
     const share = (pts: V3[]) => { let n = 0, k = 0; for (let i = 1; i < pts.length; i++) for (let s = 0; s <= 20; s++) { k++; if (near(first.pts, new THREE.Vector3(...pts[i - 1]!).lerp(new THREE.Vector3(...pts[i]!), s / 20)) < 0.03) n++; } return n / k; };
     expect(share(withIt.pts)).toBeGreaterThan(share(alone.pts) + 0.2);
   });
-  it('grade: a road round a cliff, never steeper than 8 %', () => {
-    const land: Part = { name: 'land', parts: [box('ground', [40, 0.2, 40], [0, -0.1, 0]), box('ridge', [2, 3, 30], [0, 1.5, 0])] };
-    const r = route(land, [-10, 0, 0], [10, 0, 0], { section: sectionOf('road-2'), logic: 'grade' });
+  it('grade: a road round a cliff it cannot cut, through a bank it can; never steeper than 8 %', () => {
+    const land = (h: number): Part => ({ name: 'land', parts: [box('ground', [40, 0.2, 40], [0, -0.1, 0]), box('ridge', [8, h, 30], [0, h / 2, 0])] });
+    const bank = route(land(1), [-10, 0, 0], [10, 0, 0], { section: sectionOf('road-2'), logic: 'grade' });
+    expect(Math.max(...bank.pts.map((p) => Math.abs(p[2])))).toBeLessThan(15); expect(bank.says).toMatch(/earthwork \d+ m³ cut/);
+    const r = route(land(20), [-10, 0, 0], [10, 0, 0], { section: sectionOf('road-2'), logic: 'grade' });
     expect(Math.max(...r.pts.map((p) => Math.abs(p[2])))).toBeGreaterThan(15);
-    for (let i = 1; i < r.pts.length; i++) { const [a, b] = [r.pts[i - 1]!, r.pts[i]!]; expect(Math.abs(b[1] - a[1]) / Math.max(1e-9, Math.hypot(b[0] - a[0], b[2] - a[2]))).toBeLessThanOrEqual(0.08 + 1e-9); }
+    for (const x of [bank, r]) for (let i = 1; i < x.pts.length; i++) { const [a, b] = [x.pts[i - 1]!, x.pts[i]!]; expect(Math.abs(b[1] - a[1]) / Math.max(1e-9, Math.hypot(b[0] - a[0], b[2] - a[2]))).toBeLessThanOrEqual(0.08 + 1e-9); }
     expect(outer(sectionOf('road-2'))).toBeCloseTo(0.25, 9);
   });
 });

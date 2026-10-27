@@ -180,40 +180,71 @@ function routeOnce(root: Part, from: V3, to: V3, o: RouteOptions): Route {
 
 // (on the ground: each column's height from the surfaces under it, moves between neighbouring columns allowed no steeper
 // than its grade, the steeper the dearer)
+// (on the ground: each column's height from the surfaces under it; between neighbouring columns a move no steeper than
+// its grade costs its length, a little more the steeper; a steeper one is earthwork, cutting into the ground or building it
+// up, and costs as much as the earth it moves. Then straightened and eased where that moves no more earth, its corners
+// rounded to its curve radius, and its height fitted to the ground within its grade: what is cut and filled is said)
 function grade(nodes: Node[], region: THREE.Box3, a1: THREE.Vector3, b1: THREE.Vector3, from: V3, to: V3, sec: Section, step0: number, finish: (pts: V3[], cells: number, step: number, hottest: number) => Route): Route {
   const geo = surfacesOf(nodes.filter((n) => n.box && n.box.intersectsBox(region))); if (!geo) throw new Error('nothing to lay it on');
   const bvh = new MeshBVH(geo), size = region.getSize(new THREE.Vector3()); let step = Math.max(step0, sec.w ? sec.w / 2 : step0); while ((size.x / step) * (size.z / step) > 60_000) step *= 1.25;
   const nx = Math.max(2, Math.ceil(size.x / step)), nz = Math.max(2, Math.ceil(size.z / step)), H = new Float64Array(nx * nz).fill(NaN), ray = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
   for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) { ray.origin.set(region.min.x + (i + 0.5) * step, region.max.y + 1, region.min.z + (k + 0.5) * step); const hit = bvh.raycastFirst(ray, THREE.DoubleSide); if (hit) H[i + nx * k] = hit.point.y; }
   const col = (p: THREE.Vector3): [number, number] => [Math.max(0, Math.min(nx - 1, Math.floor((p.x - region.min.x) / step))), Math.max(0, Math.min(nz - 1, Math.floor((p.z - region.min.z) / step)))];
-  const gmax = sec.grade ?? 0.08, [si, sk] = col(a1), [gi, gk] = col(b1), S = si + nx * sk, G = gi + nx * gk, g = new Float64Array(nx * nz).fill(Infinity), came = new Int32Array(nx * nz).fill(-1), heap = new Heap();
+  const gmax = sec.grade ?? 0.08, W = sec.w ?? step, [si, sk] = col(a1), [gi, gk] = col(b1), S = si + nx * sk, G = gi + nx * gk, g = new Float64Array(nx * nz).fill(Infinity), came = new Int32Array(nx * nz).fill(-1), heap = new Heap();
+  // (earth moved over a run steeper than its grade, m³ a metre of road: half the excess rise over the run, its width wide;
+  // a cubic metre of earth moved weighed as this many metres of road (an estimate: what a detour is worth against a cutting))
+  const EARTH = 0.5;
   g[S] = 0; heap.push(S, 0); let popped = 0;
   while (heap.size) {
     const c = heap.pop(); popped++; if (c === G) break; const i = c % nx, k = Math.floor(c / nx);
     for (let dk = -1; dk <= 1; dk++) for (let di = -1; di <= 1; di++) { if (!di && !dk) continue; const x = i + di, z = k + dk; if (x < 0 || z < 0 || x >= nx || z >= nz) continue; const n = x + nx * z; if (Number.isNaN(H[n]!)) continue;
-      const run = Math.hypot(di, dk) * step, rise = Math.abs(H[n]! - H[c]!), s = rise / run; if (s > gmax) continue;
-      const ng = g[c]! + run * (1 + 2 * (s / gmax) ** 2); if (ng < g[n]!) { g[n] = ng; came[n] = c; heap.push(n, ng + Math.hypot(x - gi, z - gk) * step); } }
+      const run = Math.hypot(di, dk) * step, rise = Math.abs(H[n]! - H[c]!), s = rise / run, over = Math.max(0, rise - gmax * run);
+      const ng = g[c]! + run * (1 + 2 * Math.min(1, s / gmax) ** 2) + EARTH * (over / 2) * W * run; if (ng < g[n]!) { g[n] = ng; came[n] = c; heap.push(n, ng + Math.hypot(x - gi, z - gk) * step); } }
   }
-  if (!Number.isFinite(g[G]!)) throw new Error(`no way for the ${sec.name} no steeper than ${Math.round(gmax * 100)} % (${popped} cells tried)`);
+  if (!Number.isFinite(g[G]!)) throw new Error(`no ground for the ${sec.name} between its ends (${popped} cells tried)`);
   const cs: number[] = []; for (let c = G; c >= 0; c = came[c]!) { cs.push(c); if (c === S) break; } cs.reverse();
-  // (the ground's height anywhere, between the columns' middles; and whether a straight run in plan keeps every stretch
-  // of the ground under it within its grade)
+  // (the ground's height anywhere, between the columns' middles)
   const at = (x: number, z: number): number => { const fx = (x - region.min.x) / step - 0.5, fz = (z - region.min.z) / step - 0.5, i = Math.max(0, Math.min(nx - 2, Math.floor(fx))), k = Math.max(0, Math.min(nz - 2, Math.floor(fz))), u = Math.max(0, Math.min(1, fx - i)), w = Math.max(0, Math.min(1, fz - k)), h = (a: number, b: number) => H[a + nx * b]!;
     let sum = 0, wt = 0; for (const [a, b, f] of [[i, k, (1 - u) * (1 - w)], [i + 1, k, u * (1 - w)], [i, k + 1, (1 - u) * w], [i + 1, k + 1, u * w]] as [number, number, number][]) { const y = h(a, b); if (!Number.isNaN(y) && f > 0) { sum += f * y; wt += f; } }
     return wt > 1e-9 ? sum / wt : NaN; };
-  const graded = (p: [number, number], q: [number, number]) => { const L = Math.hypot(q[0] - p[0], q[1] - p[1]), n = Math.max(1, Math.ceil(L / (step / 2))); let y0 = at(p[0], p[1]); if (Number.isNaN(y0)) return false; for (let t = 1; t <= n; t++) { const y1 = at(p[0] + ((q[0] - p[0]) * t) / n, p[1] + ((q[1] - p[1]) * t) / n); if (Number.isNaN(y1) || Math.abs(y1 - y0) / (L / n) > gmax) return false; y0 = y1; } return true; };
+  // (what a straight run in plan costs by the same measure: its length, and the earth where the ground under it is steeper
+  // than its grade; Infinity off the ground)
+  const runCost = (p: [number, number], q: [number, number]) => { const L = Math.hypot(q[0] - p[0], q[1] - p[1]), n = Math.max(1, Math.ceil(L / (step / 2))), d = L / n; let y0 = at(p[0], p[1]), c0 = 0; if (Number.isNaN(y0)) return Infinity;
+    for (let t = 1; t <= n; t++) { const y1 = at(p[0] + ((q[0] - p[0]) * t) / n, p[1] + ((q[1] - p[1]) * t) / n); if (Number.isNaN(y1)) return Infinity; const rise = Math.abs(y1 - y0); c0 += d * (1 + 2 * Math.min(1, rise / d / gmax) ** 2) + EARTH * (Math.max(0, rise - gmax * d) / 2) * W * d; y0 = y1; } return c0; };
   let xz: [number, number][] = cs.map((c) => [region.min.x + ((c % nx) + 0.5) * step, region.min.z + (Math.floor(c / nx) + 0.5) * step]);
   xz[0] = [a1.x, a1.z]; xz[xz.length - 1] = [b1.x, b1.z];
-  // (straightened where the ground allows; then eased toward its curve radius: points every quarter of it, each pulled to
-  // its neighbours' middle where the ground still allows; then laid on the ground every cell)
-  { const out = [xz[0]!]; let i = 0; while (i < xz.length - 1) { let j = xz.length - 1; while (j > i + 1 && !graded(xz[i]!, xz[j]!)) j--; out.push(xz[j]!); i = j; } xz = out; }
+  // (straightened where it costs no more; eased, points every quarter of its curve radius each pulled to its neighbours'
+  // middle where that costs no more)
+  { const pre = [0]; for (let k = 1; k < xz.length; k++) pre.push(pre[k - 1]! + runCost(xz[k - 1]!, xz[k]!)); const out = [xz[0]!]; let i = 0; while (i < xz.length - 1) { let j = xz.length - 1; while (j > i + 1 && !(runCost(xz[i]!, xz[j]!) <= pre[j]! - pre[i]! + 1e-9)) j--; out.push(xz[j]!); i = j; } xz = out; }
   { const gap = Math.max(step, sec.bend / 4), dense: [number, number][] = [xz[0]!]; for (let k = 1; k < xz.length; k++) { const n = Math.max(1, Math.round(Math.hypot(xz[k]![0] - xz[k - 1]![0], xz[k]![1] - xz[k - 1]![1]) / gap)); for (let t = 1; t <= n; t++) dense.push([xz[k - 1]![0] + ((xz[k]![0] - xz[k - 1]![0]) * t) / n, xz[k - 1]![1] + ((xz[k]![1] - xz[k - 1]![1]) * t) / n]); }
-    for (let it = 0; it < 60; it++) { let moved = 0; for (let k = 1; k < dense.length - 1; k++) { const p = dense[k]!, q: [number, number] = [(p[0] + (dense[k - 1]![0] + dense[k + 1]![0]) / 2) / 2, (p[1] + (dense[k - 1]![1] + dense[k + 1]![1]) / 2) / 2]; if (Math.hypot(q[0] - p[0], q[1] - p[1]) < 1e-4) continue; if (graded(dense[k - 1]!, q) && graded(q, dense[k + 1]!)) { dense[k] = q; moved++; } } if (!moved) break; }
-    xz = dense; }
-  const th = outer(sec), out: V3[] = [];
-  for (let k = 0; k < xz.length; k++) { const p = xz[k]!, q = xz[k + 1]; out.push([p[0], at(p[0], p[1]) + th / 2, p[1]]); if (!q) break; const n = Math.max(1, Math.round(Math.hypot(q[0] - p[0], q[1] - p[1]) / Math.max(step, sec.w ?? step))); for (let t = 1; t < n; t++) { const x = p[0] + ((q[0] - p[0]) * t) / n, z = p[1] + ((q[1] - p[1]) * t) / n; out.push([x, at(x, z) + th / 2, z]); } }
+    for (let it = 0; it < 80; it++) { let moved = 0; for (let k = 1; k < dense.length - 1; k++) { const p = dense[k]!, q: [number, number] = [(p[0] + (dense[k - 1]![0] + dense[k + 1]![0]) / 2) / 2, (p[1] + (dense[k - 1]![1] + dense[k + 1]![1]) / 2) / 2]; if (Math.hypot(q[0] - p[0], q[1] - p[1]) < 1e-4) continue; if (runCost(dense[k - 1]!, q) + runCost(q, dense[k + 1]!) <= 1.02 * (runCost(dense[k - 1]!, p) + runCost(p, dense[k + 1]!)) + 1e-9) { dense[k] = q; moved++; } } if (!moved) break; }
+    // (points that turn it hardly at all dropped, so what is left are its true corners)
+    xz = dense.filter((p, k) => k === 0 || k === dense.length - 1 || Math.abs(Math.atan2(dense[k + 1]![1] - p[1], dense[k + 1]![0] - p[0]) - Math.atan2(p[1] - dense[k - 1]![1], p[0] - dense[k - 1]![0])) % (2 * Math.PI) > 0.01); }
+  // (each corner rounded: an arc of its curve radius where both straights beside it allow, else as round as they do)
+  const R = sec.bend; let tightest = Infinity; const plan: [number, number][] = [xz[0]!];
+  for (let k = 1; k < xz.length - 1; k++) {
+    const p = xz[k]!, a = xz[k - 1]!, b = xz[k + 1]!, u = [a[0] - p[0], a[1] - p[1]], v = [b[0] - p[0], b[1] - p[1]], lu = Math.hypot(u[0]!, u[1]!), lv = Math.hypot(v[0]!, v[1]!);
+    const th = Math.PI - Math.acos(Math.max(-1, Math.min(1, (u[0]! * v[0]! + u[1]! * v[1]!) / (lu * lv)))); if (th < 1e-3) { plan.push(p); continue; }
+    const t = Math.tan(th / 2), cut = Math.min(R * t, lu * (k === 1 ? 0.9 : 0.5), lv * (k === xz.length - 2 ? 0.9 : 0.5)), r = cut / t; tightest = Math.min(tightest, r);
+    const s0: [number, number] = [p[0] + (u[0]! / lu) * cut, p[1] + (u[1]! / lu) * cut], s1: [number, number] = [p[0] + (v[0]! / lv) * cut, p[1] + (v[1]! / lv) * cut], n = Math.max(2, Math.ceil(th / 0.05));
+    // (on the arc: quadratic Bézier through the corner, close to a circle for the turns a road takes)
+    for (let q = 0; q <= n; q++) { const f = q / n; plan.push([(1 - f) ** 2 * s0[0] + 2 * (1 - f) * f * p[0] + f * f * s1[0], (1 - f) ** 2 * s0[1] + 2 * (1 - f) * f * p[1] + f * f * s1[1]]); }
+  }
+  plan.push(xz[xz.length - 1]!);
+  // (laid along at least its width at a time, the ground's height under each point; then its height fitted within its grade
+  // (from each end in turn, no rise between two points more than its grade allows): cut where it runs under the ground,
+  // fill where over)
+  const along: [number, number][] = [plan[0]!]; for (let k = 1; k < plan.length; k++) { const p = plan[k - 1]!, q = plan[k]!, n = Math.max(1, Math.round(Math.hypot(q[0] - p[0], q[1] - p[1]) / Math.max(step, W))); for (let t = 1; t <= n; t++) along.push([p[0] + ((q[0] - p[0]) * t) / n, p[1] + ((q[1] - p[1]) * t) / n]); }
+  const ground = along.map(([x, z]) => at(x, z)), h = ground.slice(), d = along.map((p, k) => (k ? Math.hypot(p[0] - along[k - 1]![0], p[1] - along[k - 1]![1]) : 0));
+  for (let k = 1; k < h.length; k++) h[k] = Math.min(Math.max(h[k]!, h[k - 1]! - gmax * d[k]!), h[k - 1]! + gmax * d[k]!);
+  for (let k = h.length - 2; k >= 0; k--) h[k] = Math.min(Math.max(h[k]!, h[k + 1]! - gmax * d[k + 1]!), h[k + 1]! + gmax * d[k + 1]!);
+  let cut = 0, fill = 0, deepest = 0, highest = 0; for (let k = 1; k < h.length; k++) { const e = ((h[k]! - ground[k]!) + (h[k - 1]! - ground[k - 1]!)) / 2; if (e < 0) cut += -e * W * d[k]!; else fill += e * W * d[k]!; deepest = Math.max(deepest, ground[k]! - h[k]!); highest = Math.max(highest, h[k]! - ground[k]!); }
+  const th0 = outer(sec), out = along.map(([x, z], k) => [x, h[k]! + th0 / 2, z] as V3);
   void from; void to;
-  return finish(out, popped, step, AMBIENT);
+  const r = finish(out, popped, step, AMBIENT); r.tightest = tightest; r.least = R;
+  const earth = cut + fill > 0.5 ? `; earthwork ${Math.round(cut)} m³ cut (to ${deepest.toFixed(1)} m deep), ${Math.round(fill)} m³ filled (to ${highest.toFixed(1)} m high)` : '; on the ground as it lies';
+  r.says += `${tightest < R - 1e-6 ? `, its tightest curve ${Math.round(tightest)} m, under the ${Math.round(R)} m it should` : `, every curve at least ${Math.round(R)} m`}${earth}`;
+  return r;
 }
 
 /** A line made as parts: round, each layer a tube round the one in it (a bore left hollow); flat, each layer a strip on

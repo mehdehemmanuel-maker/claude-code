@@ -11,7 +11,7 @@ import { AMBIENT, HEAT_FALLOFF, MAX_SERVICE, rulesOf, trianglesOf, type Finding 
 import { trisOf } from '../make/critic';
 import { MeshBVH } from 'three-mesh-bvh';
 import { layout, type Node } from '../make/space';
-import { NEAR, needsOf } from './model';
+import { MOUNT_ROCK, NEAR, needsOf } from './model';
 import { placeOne } from './solve';
 import { route, type Section } from './line';
 
@@ -123,8 +123,13 @@ export const REPAIRS: Repair[] = [
         try {
           const r = route(setAt(t, path, { ...p, shape: undefined }), W[0]!.toArray() as V3, W[last]!.toArray() as V3, { section: sec, fromDir: dirOut(W[0]!, W[1]!), toDir: dirOut(W[last]!, W[last - 1]!), step: o.step ? Math.min(o.step, 0.02) : 0.015 });
           if (r.tightest < r.least - 1e-6) { why.push(`the ${p.name}'s best way bends ${Math.round(r.tightest * 1000)} mm, tighter than the ${Math.round(r.least * 1000)} mm it may`); continue; }
+          // (slack: an end on the engine rocks with it, ±MOUNT_ROCK, against one on the body; the line must be longer than
+          // the straight between its ends by twice that, and bend somewhere to take it up)
+          const onEngine = (q: THREE.Vector3) => ns.some((x) => x !== n && !x.path.startsWith(n.path) && x.sub?.clone().expandByScalar(0.005).containsPoint(q) && (() => { for (let y: Node | null = x; y; y = y.parent) if (y.p.item === 'engine-ice') return true; return false; })());
+          const rocks = onEngine(W[0]!) !== onEngine(W[last]!), slack = r.length - W[0]!.distanceTo(W[last]!);
+          if (rocks && (slack < 2 * MOUNT_ROCK || r.bends < 1)) { why.push(`the ${p.name} joins the engine to the body: its way has ${Math.round(slack * 1000)} mm of slack and ${r.bends} bends, where the engine rocks ±${MOUNT_ROCK * 1000} mm`); continue; }
           const inv = n.m.clone().invert(), pts = r.pts.map((q) => new THREE.Vector3(...q).applyMatrix4(inv).toArray() as V3);
-          return { tree: setAt(t, path, { ...p, shape: { tube: { ...tube, pts, bend: r.least } } }), touched: [path], did: `the ${p.name} routed again: ${r.says}` };
+          return { tree: setAt(t, path, { ...p, shape: { tube: { ...tube, pts, bend: r.least } } }), touched: [path], did: `the ${p.name} routed again: ${r.says}${rocks ? `; ${Math.round(slack * 1000)} mm of slack for the engine rocking ±${MOUNT_ROCK * 1000} mm` : ''}` };
         } catch (e) { why.push((e as Error).message); }
       }
       return { no: why.join('; ') || 'no line to route' };

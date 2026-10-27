@@ -13,7 +13,7 @@
 
 import type { Part, V3 } from './kits';
 import { chainPath, chainRun, coil, housing, mouldedChip, ringClip, toothed, turned, wound } from './makers';
-import { boundsOfAll, partOf } from './assembly';
+import { boundsOfAll, frame, partOf } from './assembly';
 import { prismVolume } from './form';
 import { use } from './components';
 import { massOf } from './mass';
@@ -442,7 +442,9 @@ function starterSolenoid(r: number, L: number, at: V3): Part {
     P('plunger', { cyl: [0.3 * r, 0.75 * L] }, [0, -0.1 * L, 0], { ...steel, finish: 'ground', item: 'plunger-core' }),
     P('contact disc', { cyl: [0.62 * r, 0.004] }, [0, 0.36 * L, 0], { mat: 'copper', color: 0xb87333, item: 'contact-disc' }),
     ...[-1, 1].map((sd) => P('terminal stud', { cyl: [0.004, 0.024] }, [sd * 0.4 * r, L / 2 + 0.012 - 0.008, 0], { mat: 'copper', color: 0xb87333, finish: 'thread', item: 'terminal-stud' })),
-  ], { item: 'starter-solenoid', at, rot: CYL_X });
+  ], { item: 'starter-solenoid', at, rot: CYL_X,
+    // (where its cables are bolted: the battery's on one stud, the motor's strap on the other, each on the stud's end)
+    ports: [frame('battery terminal', [-0.4 * r, L / 2 + 0.016, 0], [0, 1, 0], [1, 0, 0]), frame('motor terminal', [0.4 * r, L / 2 + 0.016, 0], [0, 1, 0], [1, 0, 0])] });
 }
 /** A rectifier diode as it is made (a 1N4007's DO-41 package): its silicon die between two leads, moulded in epoxy. */
 export const rectifierDiode = (at: V3): Part => group('rectifier diode', [

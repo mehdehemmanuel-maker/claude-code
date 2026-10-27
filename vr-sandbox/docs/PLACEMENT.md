@@ -600,10 +600,16 @@ Step 4 result, lines (`placement/line.ts`):
 - **Also changed:**
   - XLPE (125 °C, SAE J1127 and J1128) added; one list of what heat harms, owned by the rules.
   - A drawn tube's corner may use nine tenths of an end's straight (no corner at its other end), not half.
+- Fixed after:
+  - **Starter ports:** the starter's solenoid has its two terminal studs as ports, and the battery cable ends on the battery terminal (leaving each stud square to it, as a ring lug does).
+  - **Roads:**
+    - Each corner is rounded to the road's curve radius, where the straights beside it allow.
+    - Where the ground is too steep, the road cuts into it or is built up. The earth moved is weighed against the detour, an estimate. The road's height is fitted within its grade from each end, and the cut and fill are said, with depth and volume.
+  - **Slack:** a line rerouted between the engine and the body must have twice the engine's rock in slack, and a bend. The Corolla's upper hose has 168 mm.
 - Limits:
-  - The battery cable's ends still bend tighter than six diameters: at the post it leaves under the hold-down clamp, and the starter has no port to say where its terminal is.
-  - A road is eased, not fitted to true 80 m arcs, and does not cut or fill the ground: where the land is steeper than its grade all round, it says there is no way.
-  - Hoses get no slack for the engine rocking on its mounts.
+  - **Battery cable:** its ends bend about 21 mm, against six diameters (57 mm). It turns into its way in tight space at each terminal, where real cables use angled lugs.
+  - **Road ground:** ground thinner than half a road's width, between its columns, is not seen.
+  - **Road earthwork:** it is counted per step, not as the whole length of a cutting's ramps.
 
 Gate: 9 of 1,630 tests fail. Causes:
 - `bearing-6206zz` is not stored in the inventory.

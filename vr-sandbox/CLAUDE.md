@@ -160,6 +160,12 @@ the task list and lose the why. So the why lives here, and every round is checke
   make the material changeable make the inside either hollow or of a material like copper … and for routing logic you can
   have various different routing logics make sure to be thinking smart" (2026-10-27: `placement/line.ts`, nodes `line`,
   `route`, `size.line`; the autopilot's `reroute`)
+- "switch to large scale operation like actually building and running 36 million transistors resistors actually running a
+  real engine that actually will move thing like actually giving things life energy time meaning people driving cars
+  walking dogs opening doors grabbing things … maybe there's a node system like proximity nodes where based off of its
+  material or size you can automatically calculate its field of view proximity and tag it … wayyyy more advanced"
+  (2026-10-27: the plan is `docs/LIFE.md`: signatures and affordances read from what things are, awareness by sensory
+  reach, agents, characterise-once logic, an engine that drives; each step shown before the next)
 - "the point is to eliminate the need for manual stuff while maintaining the same results as a high level engineer from
   houses too environments too mechanical too software nodes need to be max capable eliminate the need for guessing and
   manual", "think outside the box … think about the pinnacle of it" (2026-10-27: hours had gone into hand-typed positions
