@@ -37,6 +37,7 @@ import { REPAIRS, autoLoop, type Repair } from './placement/repair';
 import { ACTORS, showTags, tagsOf } from './aware/tags';
 import { STILL, effectsOf, releasesOf, shutIn, type Air } from './aware/gas';
 import { perceive, showPerception, standBy, type Observer } from './aware/sense';
+import { openDoor, sceneAt, type Goal, type Plan } from './act/agent';
 import { layout as layoutOf } from './make/space';
 import { LOGICS, SECTIONS, endOn, makeLine, outer, route, sectionOf, sizeBore, sizeWire, vary, type Logic, type Section } from './placement/line';
 import { boreThrough, onto } from './mate';
@@ -680,6 +681,8 @@ export function heightOn(g: { w: number; d: number; n: number; h: number[] }, x:
 /** Floor plans by name: each a typical home of its kind (room sizes typical of new homes, an estimate). */
 /** The physics engine (Jolt, as WebAssembly), loaded the first time it is wanted. */
 let joltKept: Promise<Jolt> | null = null;
+/** Agents' plans, worked out once for each thing they act in and each goal. */
+const AGENT_PLANS = new WeakMap<object, Map<string, Plan>>();
 const jolt = (): Promise<Jolt> => (joltKept ??= import('jolt-physics/wasm-compat').then((m) => m.default() as unknown as Promise<Jolt>));
 /** What Let it go worked out, by its inputs (the last 24): the clock only samples it. */
 const SIMS = new Map<string, SimOut>();
@@ -1378,6 +1381,21 @@ const BUILT_THINGS: BlockDef[] = [
       const harmed = obs.filter((ob) => (p.by[ob.name]?.attended ?? []).some((n) => n.harm)).length;
       return { noticed: rows, harmed, view: showPerception(p, obs), says: `${p.says}; ${obs.map((ob) => `${ob.name}: ${(p.by[ob.name]?.attended ?? []).map((n) => `${n.sense} ${n.thing}`).join(', ') || 'nothing'}`).join('; ')}` }; },
     tests: [{ set: { by: '^pipe$', alarm: '', running: 'off' }, inputs: { thing: { name: 'a pipe', parts: [{ name: 'floor', item: 'floor', shape: { box: [4, 0.02, 4] }, at: [0, -0.01, 0], mat: 'concrete' }, { name: 'pipe', item: 'pipe', shape: { box: [1, 0.1, 0.1] }, at: [1, 0.05, 0], mat: 'steel-low', color: 0x202020 }] } }, outputs: { harmed: 0 } }] }),
+  def({ id: 'goal', name: 'Goal', kind: 'input', ability: 'act', domains: ['everyday', 'structural'], says: 'What an agent sets out to do: open something (a door, a gate, a lid), named by a pattern, the nearest or the farthest of those it sees. The agent plans the steps itself from what the world affords',
+    settings: [{ key: 'open', label: 'Open what is named like', type: 'text', default: '^door$' }, { key: 'which', label: 'Of those it sees', type: 'choice', default: 'nearest', choices: ['nearest', 'farthest'] }],
+    ports: { inputs: [], outputs: [P('goal', 'any'), P('says', 'text')] },
+    run: (_i, c) => { let re: RegExp; try { re = new RegExp(String(c.set.open), 'i'); } catch { throw new Error(`"${String(c.set.open)}" is not a pattern`); } const which = c.set.which === 'farthest' ? 'farthest' : 'nearest';
+      return { goal: { open: re, which } satisfies Goal, says: `open the ${which} thing named like ${String(c.set.open)} it sees` }; },
+    tests: [{ set: { open: 'door', which: 'farthest' }, inputs: {}, outputs: { says: 'open the farthest thing named like door it sees' } }] }),
+  def({ id: 'agent', name: 'Agent', kind: 'solver', ability: 'simulate', domains: ['everyday', 'structural'], says: 'A body with senses and a goal. It stands where people pass (the middle of the longest floor), sees by its rays what it can open, reads the door (its hinge line through its knuckles, the side it swings to, the handle on its side), finds where to stand beside the handle (clear of the sweep, in reach, where the handle stays in reach longest), walks there by the shortest clear way, reaches, grasps, pulls or pushes with the force a door may ask (22.2 N, ADA 404.2.9) until the handle leaves its reach, and lets go; the door swings on its hinges in the physics (Jolt). Worked out once; the clock plays it',
+    settings: [{ key: 'who', label: 'Who', type: 'choice', default: 'adult', choices: Object.keys(ACTORS) }, { key: 'rays', label: 'Rays its eyes cast', type: 'number', default: 3000 }],
+    ports: { inputs: [thing('thing', 'where it is'), P('goal', 'any', { optional: true, label: 'what it sets out to do (default: open the nearest door)' }), N('t', 's', { default: 0, optional: true, label: 'time' })], outputs: [thing('view', 'the world at the time'), P('steps', 'table', { label: 'its plan, step by step' }), N('angle', '°', { label: 'the door open by' }), N('done', 's', { label: 'all done by' }), P('doing', 'text', { label: 'what it is doing' }), P('says', 'text'), P('findings', 'text')] },
+    run: async (i, c) => { const J = await jolt(), src = asThing(i.thing) as object, root = asPart(asThing(i.thing)), goal = (i.goal ?? { open: /^door$/i, which: 'nearest' }) as Goal, who = String(c.set.who ?? 'adult');
+      const key = `${who}|${String(goal.open)}|${goal.which ?? ''}|${Number(c.set.rays) || 3000}`, kept = AGENT_PLANS.get(src) ?? AGENT_PLANS.set(src, new Map()).get(src)!;
+      let p = kept.get(key); if (!p) { p = openDoor(J, root, goal, { actor: ACTORS[who] ?? ACTORS.adult, rays: Number(c.set.rays) || 3000 }); kept.set(key, p); }
+      const t = Math.max(0, Number(i.t ?? 0)), now = p.steps.find((s) => t >= s.from && t < s.to);
+      return { view: sceneAt(root, p, t), steps: p.steps.map((s) => ({ step: s.kind, from: Math.round(s.from * 100) / 100, to: Math.round(s.to * 100) / 100, done: s.done, says: s.says })), angle: (p.angle(t) * 180) / Math.PI, done: p.end, doing: now ? `${now.kind}: ${now.says}` : t >= p.end ? `done: the ${p.door.name} open at ${Math.round((p.angle(t) * 180) / Math.PI)}°` : 'the door swinging on', says: p.says, findings: p.findings.join('; ') || 'nothing' }; },
+    tests: [] }),
   def({ id: 'line', name: 'Line', kind: 'generator', ability: 'generate', domains: ['electrical', 'mechanical', 'vehicles', 'structural', 'thermal', 'electronics'], says: 'Cables, hoses, wires, pipes, brake lines, traces and roads are one thing: a section swept along a path. The section is layers from the inside out: a core (solid copper, or hollow to carry a fluid, or any material), then walls, insulation, jackets; or flat (a trace, a road\'s courses). Pick one by what it is and change its core, its outer material and their sizes; wire a path in (from Route) to make it',
     settings: [{ key: 'section', label: 'What it is', type: 'choice', default: 'hose-32', choices: SECTIONS.map((x) => x.id) }, { key: 'core', label: 'Its core', type: 'choice', default: 'as it is', choices: ['as it is', 'hollow', 'copper', 'al-6061', 'steel-low', 'water', 'glycol-50', 'oil'] }, { key: 'coreMm', label: 'Core across, mm (0: as it is)', type: 'number', default: 0 }, { key: 'outer', label: 'Its outer layer', type: 'choice', default: 'as it is', choices: ['as it is', 'pvc', 'epdm', 'silicone', 'nylon', 'pe', 'rubber', 'steel-low', 'stainless-304', 'copper', 'asphalt'] }, { key: 'wallMm', label: 'Outer layer, mm (0: as it is)', type: 'number', default: 0 }],
     ports: { inputs: [P('path', 'table', { optional: true })], outputs: [P('section', 'any'), thing('line', 'line'), N('across', 'm', { label: 'across (outside)' }), P('says', 'text')] },

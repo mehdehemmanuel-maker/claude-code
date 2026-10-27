@@ -874,6 +874,28 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
     return b;
   }],
+  ['An agent opens a door: it sees it, walks to it, takes hold, pulls; the door swings in the physics', () => {
+    // nothing placed by hand: the person stands where people pass (the middle of the hall), sees by its rays the doors it
+    // can open, reads each door (its hinge line through its hinges' knuckles, which side it swings to, the handle on its
+    // side), finds where to stand beside the handle (clear of the door's sweep, in reach, where the handle stays in reach
+    // longest), walks there by the router's clear way, reaches (Fitts' law), grasps, pulls the bedroom door toward it, or
+    // pushes the front door out, with the 22.2 N a door may ask (ADA), and lets go; the door swings on its hinges in Jolt and
+    // stops on its stop. The clock plays it
+    const b = emptyBoard('An agent opens a door');
+    placeBlock(b, 'seed.house', 0, 0, { show: 'roof off' }, 'house'); b.nodes.house!.label = 'A house, its roof off to see in';
+    placeBlock(b, 'time', 0, 0, {}, 'clock');
+    placeBlock(b, 'goal', 0, 0, { open: '^door$', which: 'nearest' }, 'near'); b.nodes.near!.label = 'Open the nearest door it sees';
+    placeBlock(b, 'goal', 0, 0, { open: '^door$', which: 'farthest' }, 'far'); b.nodes.far!.label = 'Open the farthest door it sees';
+    placeBlock(b, 'pick', 0, 0, { options: 'the nearest (a bedroom\'s, pulled)|the farthest (the front door, pushed)', which: 'the nearest (a bedroom\'s, pulled)' }, 'pick'); b.nodes.pick!.label = 'Which goal';
+    wire(b, 'near', 'goal', 'pick', 'the nearest (a bedroom\'s, pulled)'); wire(b, 'far', 'goal', 'pick', 'the farthest (the front door, pushed)');
+    placeBlock(b, 'agent', 0, 0, { who: 'adult' }, 'agent'); b.nodes.agent!.label = 'An adult';
+    wire(b, 'house', 'house', 'agent', 'thing'); wire(b, 'pick', 'chosen', 'agent', 'goal'); wire(b, 'clock', 't', 'agent', 't');
+    placeBlock(b, 'view.table', 0, 0, {}, 'steps'); b.nodes.steps!.label = 'Its plan, step by step'; wire(b, 'agent', 'steps', 'steps', 'rows');
+    placeBlock(b, 'view.show', 0, 0, {}, 'doing'); b.nodes.doing!.label = 'What it is doing now'; wire(b, 'agent', 'doing', 'doing', 'value');
+    placeBlock(b, 'view.show', 0, 0, {}, 'angle'); b.nodes.angle!.label = 'The door open by, °'; wire(b, 'agent', 'angle', 'angle', 'value');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'agent', 'view', 'show', 'thing');
+    return b;
+  }],
   ['Who notices what: a car running, a person behind it, one at its door, a CO alarm; in the open or shut in a garage', () => {
     // senses as physics, nothing typed: the people stand by what is named (behind the muffler, at the driver's door), facing
     // it; each sees by rays out from its eyes packed as its acuity is, hears the engine over a quiet street, smells the
@@ -1330,7 +1352,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['An agent opens', 'everyday'], ['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

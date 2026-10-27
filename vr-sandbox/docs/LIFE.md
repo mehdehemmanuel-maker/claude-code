@@ -150,7 +150,7 @@ Each affordance is read from geometry, mass, joints and material, against the ac
 | `afford` | Sense | What a thing lets an actor do, read from its shape, against that actor's body |
 | `sense` | Sense | Who notices what: fields of view, ranges, line of sight, salience, attention |
 | `agent` | Act | A body with senses and a goal; plans over affordances; drives motion primitives |
-| `task` | Act | One step of a plan (go to, reach, grasp, pull, sit, drive), with its condition to be done |
+| `goal` | Act | What an agent sets out to do (open the nearest or farthest door it sees); the agent breaks it into steps (see, go to, reach, grasp, pull or push, let go), each with its condition to be done. Named `goal`, as `task` is the gauntlet's |
 | `cell.characterise` | Logic | A cell solved at switch level: truth table, delays, energy |
 | `netlist` | Logic | A design as cells and nets, from a real netlist or synthesised |
 | `logic.run` | Logic | Runs a netlist (event-driven, bit-parallel, GPU), with equivalence checks against finer levels |
@@ -167,7 +167,7 @@ One step at a time, each shown with pictures before the next.
 | --- | --- | --- |
 | 1 | `signature`, `afford` | Every part of the Corolla and a house tagged from what it is: visible at what range, audible at what range, graspable, openable, sittable, hot. A picture with the tags on. |
 | 2 | `sense` | A person in a room: their field of view as a cone, what they notice and why; the pairs tried against all pairs, measured |
-| 3 | `agent`, `task`: a door | A person sees a door, walks to it, grasps the handle, pulls; the door swings on its hinge in the physics |
+| 3 | `agent`, `goal`: a door | A person sees a door, walks to it, grasps the handle, pulls; the door swings on its hinge in the physics |
 | 4 | `cell.characterise`, `netlist`, `logic.run` | The 6502's transistors, characterised, running a real program; its fast model checked against switch level; the clock rate measured |
 | 5 | `engine.run`, `drive` | The Corolla's engine firing, its torque through its gearbox, the car driving itself round a block |
 | 6 | A dog walked | Two agents and a lead: a person walking a dog down a street, both sensing and reacting |
@@ -225,6 +225,34 @@ Step 2 result:
   - The smell of materials (rubber, leather) is a tag, not a release with a rate.
   - Wind indoors, and gases heavier or lighter than air (hydrogen rises), are not modelled.
   - Attention has no memory or goals yet (step 3).
+
+Step 3 result (`act/agent.ts`; nodes `goal`, `agent`; board "An agent opens a door"):
+- **Nothing placed by hand:**
+  - The person stands where people pass: the middle of the longest floor (the hall), facing along it.
+  - It sees by its rays (step 2) which of the things that afford opening (step 1) are in view, and takes the nearest or the farthest as its goal says.
+- **It reads the door:**
+  - Its hinge line runs through its two hinges' knuckles.
+  - It swings to the side its knuckles stand proud of (a butt hinge's knuckle is on the face the door swings to).
+  - Its free edge is a leaf's width off (860 mm for a 900 mm door), and its handle is the one on the agent's side. On the swing side it pulls; on the other it pushes.
+- **It finds where to stand:** beside the handle, clear of the leaf's sweep and of everything else, with the handle in reach (an arm, 0.39 of the height, plus a lean of about 0.25 m: Duncan's functional reach). Of those spots, it takes the one where the handle stays in reach through the most of the swing, then the nearest.
+- **It walks there:**
+  - The router (`placement/line.ts`) runs the body as a line half its shoulders across through a plan of what stands between its ankles and its head.
+  - Its pace is 1.4 m/s (Bohannon 1997), a child's less by the root of its height.
+- **It reaches, grasps, pulls:**
+  - The reach is timed by Fitts' law.
+  - It pulls or pushes with 22.2 N, the most an interior door may ask (ADA 404.2.9), until the handle leaves its reach, then lets go.
+  - The door is one body (leaf and handles, 13.4 kg from their materials) on a Jolt hinge along the line read. It swings on and stops on a stop at 90°, a hinge friction of 0.5 N·m against it (an estimate).
+- **The house:**
+  - The nearest door from the hall is a bedroom's, swinging into the hall. The adult walks 0.7 m, reaches 0.8 m in 0.73 s, pulls for 0.82 s to 86° and lets go. The door rests on its stop 4.6 s after it first saw it.
+  - The farthest is the front door, swinging out. It walks 4.3 m and pushes it open.
+  - A child of 8 walks slower and stands elsewhere.
+  - About 1.5 s to plan and run each.
+- **Fixed on the way:** the router blocked every cell for any line thicker than the motion map reads (60 mm). A body, a thick pipe or a duct could go nowhere. The map's ceiling is now taken as room, not as a part too near.
+- **Not yet:**
+  - The body is a stick figure: kinematic, not in the physics. The door cannot push it, and it does not step back as the door comes.
+  - The walls are not bodies in the door's run unless they stand in its sweep; its lining and its own wall are left out.
+  - Attention still has no memory: it sees once, at the start.
+  - It opens; it does not go through, or close the door behind it.
 
 ## 13. Measures
 

@@ -14,7 +14,7 @@ import type { Part, V3 } from '../kits';
 import { tubeLegs } from '../form';
 import { layout, type Node } from '../make/space';
 import { AMBIENT, MAX_SERVICE } from '../make/rules';
-import { fieldOf, surfacesOf, type Field } from './fields';
+import { fieldOf, MOTION_READ, surfacesOf, type Field } from './fields';
 
 export interface Layer { name: string; mat: string; /** thickness, m (the core: its radius, or its height if flat) */ t: number; /** the core: solid, or a bore (drawn hollow) */ bore?: boolean }
 export type Logic = 'direct' | 'clear' | 'hug' | 'orthogonal' | 'grade' | 'bundle';
@@ -99,7 +99,9 @@ function routeOnce(root: Part, from: V3, to: V3, o: RouteOptions): Route {
   // a moving part needs; near its two ends, only what is solid itself or too hot, so it can leave what it joins (which
   // may be what moves: a hose on the engine rocks with it))
   const blocked = new Uint8Array(N), hard = new Uint8Array(N), keep = R + sec.clear, rc = Math.ceil(keep / step), rh = Math.ceil(R / step);
-  for (let c = 0; c < N; c++) if (heat.solid[c] || (!o.noHeat && heat.values[c]! > limit) || motion.values[c]! < R) hard[c] = 1;
+  for (let c = 0; c < N; c++) if (heat.solid[c] || (!o.noHeat && heat.values[c]! > limit) || motion.values[c]! < Math.min(R, MOTION_READ * 0.999)) hard[c] = 1;
+  // (the motion map reads room only so far: a line thicker than that is kept off what moves by as much as it reads, not
+  // blocked everywhere)
   for (let k = 0; k < D[2]; k++) for (let j = 0; j < D[1]; j++) for (let i = 0; i < D[0]; i++) {
     const c = I(i, j, k); if (!hard[c]) continue; const solid = heat.solid[c], r = solid ? rc : rh;
     for (let dk = -r; dk <= r; dk++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const x = i + di, y = j + dj, z = k + dk; if (x < 0 || y < 0 || z < 0 || x >= D[0] || y >= D[1] || z >= D[2]) continue; if ((di * di + dj * dj + dk * dk) * step * step <= (r * step) ** 2 + 1e-12) blocked[I(x, y, z)] = 1; }
