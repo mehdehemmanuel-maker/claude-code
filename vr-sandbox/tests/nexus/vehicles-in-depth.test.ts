@@ -4,7 +4,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { tyreBuilt, tyreOf, makeMachine, MACHINES, rollingOf } from '../../src/nexus/machines';
-import { starterBattery, liCell, cellPack, explodeAudit } from '../../src/nexus/components';
+import { starterBattery, liCell, cellPack, explodeAudit, missingIn } from '../../src/nexus/components';
+import { engineBuilt, engineDims, type EngineSpec } from '../../src/nexus/engines';
+import type { Part } from '../../src/nexus/kits';
+const all = (p: Part): Part[] => [p, ...(p.parts ?? []).flatMap(all)];
 import { BCI_GROUPS, CELL_FORMATS } from '../../src/data/batteries';
 import { boundsOfAll, distinctCount, exploded, fitIn, massOfAll, partOf, placedCount } from '../../src/nexus/assembly';
 import { PROCESSES, transistor, sramCell, die, packageOf, motherboard, desktop, SOCKETS, BOARDS } from '../../src/nexus/computer';
@@ -33,7 +36,9 @@ describe('tyres, made as they are made', () => {
     expect(tyreBuilt(tyreOf('205/55R16')!)).toBe(tyreBuilt(tyreOf('205/55R16')!));
     const car = makeMachine(MACHINES.find((m) => m.id === 'corolla')!), tyre = tyreBuilt(tyreOf('205/55R16')!).tyre, f = fitIn(car, '^((outer|inner) )?tyre \\d', tyre);
     expect(f.fitted).toBe(4);
-    expect(placedCount(f.thing)).toBe(placedCount(car) - 4 + 4 * placedCount(tyre));
+    // (the car's own tyres are built in depth too, all-season: each swapped for this one, piece for piece)
+    const own = placedCount(tyreBuilt(tyreOf('205/55R16')!, { pattern: 'all-season' }).tyre);
+    expect(placedCount(f.thing)).toBe(placedCount(car) - 4 * own + 4 * placedCount(tyre));
   });
 });
 
@@ -75,7 +80,10 @@ describe('vehicles from what they are', () => {
     const body = r.thing.items[0]!.of.name, push = { name: body, force: [F, 0, 0], seconds: 1 };
     const rolled = await run('letgo', { things: r.thing, joints: r.joints, push, t: 3 }, { seconds: 3 });
     const sp = rolled.ends.find((e: { name: string }) => e.name === body).speed, want = F / m;
-    expect(sp).toBeLessThan(want); expect(sp).toBeGreaterThan(want * 0.95);
+    // (its wheels take some of the push to spin: at most as if all of each wheel's mass were at its rim, so it does no worse
+    // than F over its mass and its wheels' mass again)
+    const wheels = r.thing.items.slice(1).reduce((a, it) => a + massOfAll(it.of), 0);
+    expect(sp).toBeLessThan(want); expect(sp).toBeGreaterThan(F / (m + wheels));
     const rigid = await run('letgo', { things: { name: 'car', items: [{ of: v, at: [0, 0, 0], rot: [0, 0, 0], s: 1 }] }, push: { ...push, name: v.name }, t: 3 }, { seconds: 3 });
     expect(rigid.ends[0].speed).toBeLessThan(0.05);
   }, 120000);
@@ -106,15 +114,20 @@ describe('a computer down to the transistor', () => {
 describe('designs that come apart to the bottom', () => {
   it('the highway tractor\'s every fitting is drawn whole: no lumps, every recipe met', () => {
     const a = explodeAudit(makeMachine(MACHINES.find((m) => m.id === 'cascadia')!));
-    expect(a.faked).toEqual([]); expect(a.missing).toEqual([]); expect(a.score).toBe(1); expect(a.tagged).toBeGreaterThan(200);
+    expect(a.faked).toEqual([]); expect(a.missing).toEqual([]); expect(a.lumps).toBe(0); expect(a.tagged).toBeGreaterThan(200);
+    // (what is not built yet is said, by mass: its stand-in for what is not drawn, and pieces nothing identifies)
+    expect(a.says).toMatch(/only said, not built/); expect(a.unbuilt).toBeGreaterThan(0); expect(a.score).toBeLessThan(1);
   });
   it('a piece named for an assembly and drawn as one is found, with what it should come apart into', () => {
     const a = explodeAudit({ name: 'lamp on a bracket', parts: [{ name: 'bracket', shape: { box: [0.1, 0.01, 0.1] }, mat: 'steel-low' }, { name: 'headlight (left)', shape: { box: [0.2, 0.2, 0.2] }, mat: 'pc' }] });
     expect(a.faked).toHaveLength(1); expect(a.faked[0]!.is).toBe('headlamp'); expect(a.faked[0]!.of.join(' ')).toMatch(/lens/); expect(a.lumps).toBeGreaterThan(0.5);
   });
-  it('what still is a lump is said: a car\'s doors and headlamps (not yet drawn whole)', () => {
-    const a = explodeAudit(makeMachine(MACHINES.find((m) => m.id === 'corolla')!));
-    expect(a.faked.map((f) => f.is)).toEqual(expect.arrayContaining(['door', 'headlamp']));
+  it('what still is a lump is said (a car\'s headlamps); its doors are built round their skins, part by part', () => {
+    const car = makeMachine(MACHINES.find((m) => m.id === 'corolla')!), a = explodeAudit(car);
+    expect(a.faked.map((f) => f.is)).toContain('headlamp'); expect(a.faked.map((f) => f.is)).not.toContain('door');
+    const doors = all(car).filter((p) => p.item === 'car-door');
+    expect(doors).toHaveLength(4); for (const d of doors) expect(missingIn(d)).toEqual([]);
+    expect(all(car).filter((p) => p.item === 'door-inner-panel').length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -148,5 +161,26 @@ describe('made the way things are made: general makers, nodes, and explode insid
     const has = (p: { name: string; parts?: unknown[] }, re: RegExp): boolean => re.test(p.name) || ((p.parts ?? []) as typeof p[]).some((q) => has(q, re));
     expect(has(car, /^battery and its tray$/)).toBe(true); expect(has(truck, /^battery box/)).toBe(true);
     expect(explodeAudit(truck).missing).toEqual([]);
+  });
+});
+
+describe('an engine from its first parts', () => {
+  it('weighs what its parts come to, every recipe met, no mass said for any piece', () => {
+    const gx = engineBuilt({ cyl: 1, bore: 0.077, stroke: 0.058, fuel: 'petrol', block: 'al', cooling: 'air', cams: 'ohv', valves: 2, starter: 'recoil' });
+    // (Honda gives the GX270 25 kg dry, with its fuel tank, which is not drawn here: within a fifth)
+    expect(gx.kg).toBeGreaterThan(20); expect(gx.kg).toBeLessThan(30);
+    for (const s of [{ cyl: 4, bore: 0.0805, stroke: 0.0976, fuel: 'petrol', block: 'al' }, { cyl: 6, bore: 0.139, stroke: 0.163, fuel: 'diesel', block: 'iron', turbo: true }, { cyl: 2, bore: 0.078, stroke: 0.076, layout: 'vee', fuel: 'petrol', block: 'al', cooling: 'air', cams: 'ohv', valves: 2 }] as EngineSpec[]) {
+      const e = engineBuilt(s); expect(missingIn(e.engine)).toEqual([]);
+      const a = explodeAudit(e.engine); expect(a.lumps).toBe(0); expect(a.unbuilt).toBe(0); expect(a.pieces).toBeGreaterThan(300);
+    }
+  });
+  it('is what the vehicles carry: the Corolla\'s is Toyota\'s bore and stroke, sized by its parts', () => {
+    const car = makeMachine(MACHINES.find((m) => m.id === 'corolla')!), eng = (car.parts ?? []).find((p) => /^petrol engine/.test(p.name))!;
+    expect(eng.item).toBe('engine-ice'); expect(all(eng).filter((p) => p.item === 'piston-assembly')).toHaveLength(4);
+    expect(all(eng).filter((p) => p.item === 'valve-intake' || p.item === 'valve-exhaust')).toHaveLength(16);
+  });
+  it('its piston at the top of its stroke, its rod\'s length apart from its pin', () => {
+    const s: EngineSpec = { cyl: 4, bore: 0.0805, stroke: 0.0976, fuel: 'petrol', block: 'al' }, d = engineDims(s);
+    expect(d.deck - (d.r + d.L + d.CH)).toBeCloseTo(0, 9); expect(d.L / d.S).toBeCloseTo(1.6, 9);
   });
 });

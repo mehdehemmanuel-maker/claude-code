@@ -12,9 +12,11 @@
 // one part of that mass, said as such; where they weigh more, that is said too.
 
 import { packToFit, starterBattery, use } from './components';
+import { engineBuilt, type EngineSpec } from './engines';
+import { transaxle } from './drivetrain';
 import { boundsOfAll, massOfAll, partOf, place, type Assembly, type Placed } from './assembly';
 import { massOf } from './mass';
-import { aftertreatment, airTank, batteryBox, bumper, cabStep, dayCab, exhaustStack, fifthWheel, fuelTank, hood, ladderFrame, quarterFender, type TruckBody } from './fittings';
+import { aftertreatment, airTank, batteryBox, closureOf, bumper, cabStep, dayCab, exhaustStack, fifthWheel, fuelTank, hood, ladderFrame, quarterFender, type TruckBody } from './fittings';
 import { WHEEL } from './kinds/fasteners';
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from './kits';
 import { bodyPanels, insideOf, roofOf, tailOf, type BodyPlan, type KeepOut, type WheelAt } from './panels';
@@ -51,7 +53,7 @@ export type Frame = 'shell' | 'tube' | 'ladder' | 'backbone';
 /** Where a panelled body's lines run, as shares of its length from its nose and of its height (typical of each style). */
 export interface Lines { cowl: number; roofF: number; roofR: number; deck: number; belt: number; nose: number; tail: number; n: number; /** how far its belt rises from its cowl to its deck, m (its wedge: 0.02, typical, where not said) */ wedge?: number; /** how high its windscreen's foot and its back glass's foot stand, as shares of its height, where above its belt (as most cars' do: the top edge rising to each from the belt under its sail and its C pillar; at the belt where not said) */ cowlH?: number; deckH?: number; /** where its rear door's top rear corner is, and where its side glass ends at the back, as shares of its length from its nose: its rear door's shut line upright by its rear arch, then leaning back over it to there, a fixed quarter glass in the body behind the door (else upright, and its glass ending a little short of its roof's end) */ doorR?: number; dloR?: number; /** how full its windscreen and its back glass are: how far up its rise each one's control point at its middle stands (0.55 and 0.62, typical, where not said) */ bow?: [number, number]; /** how far behind its windscreen's foot its front door's top front corner is, as a share of its length: the fender runs back to it, a black sail fills the corner between its glass and its A pillar, and its mirror stands on the door (0 where not said: the door runs to the A pillar) */ sail?: number; open?: boolean; bed?: boolean; /** doors a side: one long one (a coupe's, a roadster's) or two */ doors?: 1 | 2; /** its face: its headlamps' and its grille's height, m (typical of its kind where not said) */ face?: { lamp?: number; grille?: number } }
 export interface Seat { x: number; z: number; /** its cushion's top above the ground */ y: number; style: 'bucket' | 'bench' | 'saddle' | 'pan' | 'kart' }
-export interface Power { kind: 'single' | 'twin' | 'inline' | 'diesel' | 'electric'; cc?: number; kW: number; x: number; z?: number; y?: number; says: string; /** its own size where it is published, m */ box?: V3; kg?: number; /** its most torque, N·m, and the reduction from it to the driven axle, where known */ torque?: number; ratio?: number; driveSays?: string }
+export interface Power { kind: 'single' | 'twin' | 'inline' | 'diesel' | 'electric'; cc?: number; kW: number; /** its cylinders, bore and stroke (m), how its valves are worked, how it is cooled and started, where its maker gives them (else typical of its kind and size) */ cyl?: number; bore?: number; stroke?: number; cams?: EngineSpec['cams']; valves?: 2 | 4; cooling?: 'liquid' | 'air'; starter?: 'electric' | 'recoil'; x: number; z?: number; y?: number; says: string; /** its own size where it is published, m */ box?: V3; kg?: number; /** its most torque, N·m, and the reduction from it to the driven axle, where known */ torque?: number; ratio?: number; driveSays?: string }
 export type Extra = 'mast' | 'guard' | 'counterweight' | 'fifth wheel' | 'tanks' | 'stacks' | 'deck' | 'racks' | 'bumpers' | 'lights' | 'pods' | 'nose' | 'fenders' | 'hood' | 'cab' | 'fork' | 'swingarm' | 'tank' | 'exhaust' | 'number';
 /** A wheel cover as its maker styled it: so many spokes, in pairs or evenly round it, each swept round so far as it goes
  *  out (degrees) and widening toward the rim; a domed centre, with its maker's emblem on it. */
@@ -63,6 +65,7 @@ export interface Machine {
   L: number; W: number; H: number; clearance: number; axles: Axle[]; frame: Frame; lines?: Lines; seats: Seat[]; power: Power;
   controls: 'wheel' | 'bars'; /** the driver's side: -1 left (as in North America), 1 right */ hand?: -1 | 1;
   rims: { style: 'spokes' | 'steel' | 'wire' | 'disc' | 'split'; spokes?: number; mat: string; lugs: number; lug: number; color?: number; /** the studs' pitch circle, mm, where its maker gives it (else typical of its stud count) */ pcd?: number; /** its offset, mm: its mounting face outboard of its rim's middle */ offset?: number; /** a full wheel cover over a steel wheel: so many spokes in its moulding, or as its maker styled it */ cover?: number | Cover };
+  /** its gearbox, where its maker says (a CVT, a manual) */ gearbox?: 'cvt' | 'manual';
   extras: Extra[]; /** its published mass, kg (kerb, wet, or operating, as its maker gives it) */ mass?: number; massSays?: string;
   /** a motorcycle's head angle from vertical, rad */ rake?: number; seatH?: number; color: number; says: string;
   /** it goes on public roads (where it is sold, if said: its plates are that market's) */ road?: boolean | 'us' | 'eu';
@@ -147,8 +150,9 @@ export function tyreBuilt(t: Tyre, o: TyreMake = {}): TyreBuilt {
   };
   // (a cord layer's mass: its cord's share at the cord's density, the rest rubber at 1,150 kg/m³)
   const cord = (prof: number, share: number, rho: number) => (share * rho + (1 - share) * 1150) / 1150 * prof;
+  // (weighed by its rubber's density times that: the layer as drawn, rubber and cord together, no mass said for it)
   const withCord = (name: string, thick: number[], i0: number, i1: number, share: number, rho: number, more: Partial<Part>, why: string) => {
-    band(name, thick, i0, i1, more, why); const p = parts[parts.length - 1]!; p.kg = cord(massOf(p), share, rho);
+    band(name, thick, i0, i1, { ...more, fill: cord(1, share, rho), says: `rubber with ${Math.round(share * 100)} % cord by volume (its weight ${cord(1, share, rho).toFixed(2)} times its rubber's)` }, why);
   };
   band('sidewall (its outer side)', T.side, 5, 7, rub({ finish: 'satin' }), 'sidewalls: flexible rubber over the ply, bead to shoulder');
   band('sidewall (its inner side)', T.side, 0, 2, rub({ finish: 'satin' }), 'sidewalls: flexible rubber over the ply, bead to shoulder');
@@ -164,6 +168,9 @@ export function tyreBuilt(t: Tyre, o: TyreMake = {}): TyreBuilt {
     parts.push(P(`apex (${s < 0 ? 'inner' : 'outer'} side)`, { lathe: [[rB + bs / 2, s * zB - s * bs * 0.35], [rB + h * 0.3, s * zB - s * bs * 0.05], [rB + bs / 2, s * zB + s * bs * 0.35], [rB + bs / 2, s * zB - s * bs * 0.35]] }, [0, 0, 0], rub({ color: 0x222226, finish: 'satin', says: 'a hard rubber filler over the bead, stiffening the lower sidewall' })));
   }
   layers.push('two beads of steel wire, a hard rubber apex over each');
+  // (each layer what it is in the inventory, so the tyre comes apart into named parts)
+  const LAYER: [RegExp, string][] = [[/^sidewall/, 'tyre-sidewall'], [/^undertread/, 'tyre-tread'], [/^cap ply/, 'tyre-cap-ply'], [/^steel belt/, 'tyre-belt'], [/^body ply/, 'tyre-casing'], [/^inner liner/, 'tyre-liner'], [/^bead/, 'tyre-bead'], [/^apex/, 'tyre-apex']];
+  for (const q of parts) { const hit = LAYER.find(([re]) => re.test(q.name)); if (hit) q.item = hit[1]; }
   const casing: Part = P(`casing ${t.code}`, undefined, [0, 0, 0], { mat: 'rubber', color: col, says: t.says, parts });
   // its tread: pitches of three lengths in a sequence round it (as makers spread the noise of a tread's blocks over many
   // tones: the lengths, 0.85, 1 and 1.15 of its mean, and their order are typical, not any maker's), each pitch a group of
@@ -180,7 +187,7 @@ export function tyreBuilt(t: Tyre, o: TyreMake = {}): TyreBuilt {
       if (pat === TREAD_PATTERNS.slick) { blocks.push(P('tread', { box: [depth, Math.min(2 * tw, bw), len + 0.0002] }, [rho, 0, 0], rub())); continue; }
       for (let c = 0; c < cuts; c++) {
         const s0 = (row.off ?? 0) * len + c * (slab + SIPE) + slab / 2, a = s0 / rho;
-        blocks.push(P('tread block', { box: [depth, bw, slab] }, [rho * Math.cos(a), z, rho * Math.sin(a)], rub({ rot: [0, -a, 0] })));
+        blocks.push(P('tread block', { box: [depth, bw, slab] }, [rho * Math.cos(a), z, rho * Math.sin(a)], rub({ rot: [0, -a, 0], item: 'tyre-tread' })));
       }
     }
     return P('tread pitch', undefined, [0, 0, 0], { parts: blocks });
@@ -198,7 +205,7 @@ export function tyreBuilt(t: Tyre, o: TyreMake = {}): TyreBuilt {
   const bars: Part[] = []; for (let j = 0; j < 6; j++) for (const [g0, g1] of grooves) { const a = (j / 6) * 2 * PI; bars.push(P('wear bar', { box: [BAR, g1 - g0, 0.012] }, [(Ru + BAR / 2) * Math.cos(a), (g0 + g1) / 2, (Ru + BAR / 2) * Math.sin(a)], rub({ rot: [0, -a, 0] }))); }
   if (bars.length) items.push(place(P('wear bars', undefined, [0, 0, 0], { parts: bars })));
   const tread: Assembly = { name: `tread (${o.pattern ?? (heavy ? 'rib' : 'highway')}, ${n} pitches)`, items };
-  const tyre: Assembly = { name: `tyre ${t.code}`, items: [place(casing), place(tread)] };
+  const tyre: Assembly = { name: `tyre ${t.code}`, item: 'pneumatic-tyre', items: [place(casing), place(tread)] };
   const voidShare = Math.max(0, 1 - land / (circ * 2 * tw)), kg = massOfAll(tyre);
   const out: TyreBuilt = { tyre, kg, void: voidShare, depth, pitches: n, heavy, layers: [...layers, `its tread: ${pat.says}`], says: `${t.says}; ${n} pitches of three lengths round it; ${Math.round(voidShare * 100)} % of its tread open; ${(kg).toFixed(1)} kg as drawn` };
   tyresMade.set(key, out); return out;
@@ -255,13 +262,16 @@ const strutOf = (a: Axle, t: Tyre, m: Machine) => {
   const ySeat = Math.min(t.D + 0.015, top - 0.03 - 0.16 * cos), beside = ySeat < t.D + 0.015, zb = Math.min(zIn - 0.03, beside ? zIn - 0.015 - 0.066 + (ySeat - yb) * lean : Infinity);
   return { y, yb, top, lean, zb, zt: zb - (top - yb) * lean, ySeat, zAt: (yy: number) => zb - (yy - yb) * lean };
 };
-function wheel(name: string, t: Tyre, o: { style: Machine['rims']['style']; spokes?: number; mat: string; lugs: number; lug: number; color?: number; pcd?: number; offset?: number; cover?: number | Cover; brake?: Axle['brake']; knobs?: boolean; dual?: boolean; single?: boolean; /** its hub's bore, m (the radius of what it turns on or is turned by: a drive shaft's splined stub, a spindle); solid where not said */ bore?: number; /** on the car's left, turned half round to face out: what is behind its axle on the right is behind it here too */ left?: boolean; knuckle?: boolean; /** the rigid link its axle is (a twist beam's), which its anchor plate and caliper are one with */ axle?: string }): Part {
+function wheel(name: string, t: Tyre, o: { pattern?: Tread; style: Machine['rims']['style']; spokes?: number; mat: string; lugs: number; lug: number; color?: number; pcd?: number; offset?: number; cover?: number | Cover; brake?: Axle['brake']; knobs?: boolean; dual?: boolean; single?: boolean; /** its hub's bore, m (the radius of what it turns on or is turned by: a drive shaft's splined stub, a spindle); solid where not said */ bore?: number; /** on the car's left, turned half round to face out: what is behind its axle on the right is behind it here too */ left?: boolean; knuckle?: boolean; /** the rigid link its axle is (a twist beam's), which its anchor plate and caliper are one with */ axle?: string }): Part {
   const R = t.D / 2, parts: Part[] = [], wr = t.W * 0.45, rr = t.rim / 2, metal = o.mat;
   const tyre = (dz: number, nm: string): Part => {
     const prof = tyreSection(t);
     const knobs: Part[] = [];
     if (o.knobs) { const n = Math.round((2 * PI * R) / 0.05); for (let i = 0; i < n; i++) for (const s of [-1, 1]) { const a = ((i + (s > 0 ? 0.5 : 0)) / n) * 2 * PI; knobs.push(P('knob', { box: [0.014, 0.024, t.W * 0.34] }, [(R + 0.005) * Math.cos(a), (R + 0.005) * Math.sin(a), s * t.W * 0.22], { rot: [0, 0, a], mat: 'rubber', color: 0x141414, finish: 'tread', one: true })); } }
-    return P(nm, { lathe: prof }, [0, 0, dz], { rot: [PI / 2, 0, 0], mat: 'rubber', color: 0x161616, shell: Math.min(0.012, Math.max(0.004, t.D * 0.016)), finish: 'tread', fixed: 'its beads seated on its rim, held there by its pressure', says: t.says, parts: knobs.length ? [P('tread blocks', undefined, [0, 0, 0], { rot: [-PI / 2, 0, 0], parts: knobs })] : undefined });
+    // (the tyre as it is made (tyreBuilt): its casing's layers, beads and liner, its tread's pitches of blocks; shared by
+    // every wheel that takes it, fitted as it comes)
+    void prof; void knobs;
+    return partOf(tyreBuilt(t, { pattern: o.pattern ?? (o.knobs ? 'knobby' : t.rim >= 0.49 ? 'rib' : 'all-season') }).tyre, [0, 0, dz], [PI / 2, 0, 0], { name: nm, fixed: 'its beads seated on its rim, held there by its pressure', says: t.says, sealed: 'built whole as it is made (tyreBuilt), fitted as it comes' });
   };
   const gap = o.dual ? t.W + 0.03 : 0;
   if (o.dual) { parts.push(tyre(gap / 2, `outer tyre ${t.code}`), tyre(-gap / 2, `inner tyre ${t.code}`)); } else parts.push(tyre(0, `tyre ${t.code}`));
@@ -572,11 +582,11 @@ function rearFrame(m: Machine, out: Part[]): Part[] {
  *  narrower than 30 mm between the engine and the apron), it is left out and says so. */
 function frontFrame(m: Machine, out: Part[], tyres: Tyre[]): Part[] {
   const fa = m.axles[0]!, ft = tyres[0]!, R = ft.D / 2, inside = insideOf(out), nodes = layout(P('so far', undefined, [0, 0, 0], { parts: out }));
-  const boxOf = (re: RegExp, side = 0) => { let lo: V3 | null = null, hi: V3 | null = null; for (const n of nodes) { if (!n.box || !re.test(n.p.name)) continue; const cz = (n.box.min.z + n.box.max.z) / 2; if (side && Math.sign(cz) !== side) continue; const a = n.box.min.toArray() as V3, b = n.box.max.toArray() as V3; lo = lo ? [Math.min(lo[0], a[0]), Math.min(lo[1], a[1]), Math.min(lo[2], a[2])] : a; hi = hi ? [Math.max(hi[0], b[0]), Math.max(hi[1], b[1]), Math.max(hi[2], b[2])] : b; } return lo && hi ? { lo, hi } : null; };
+  const boxOf = (re: RegExp, side = 0) => { let lo: V3 | null = null, hi: V3 | null = null; for (const n of nodes) { const bx = n.box ?? n.sub; if (!bx || !re.test(n.p.name)) continue; const cz = (bx.min.z + bx.max.z) / 2; if (side && Math.sign(cz) !== side) continue; const a = bx.min.toArray() as V3, b = bx.max.toArray() as V3; lo = lo ? [Math.min(lo[0], a[0]), Math.min(lo[1], a[1]), Math.min(lo[2], a[2])] : a; hi = hi ? [Math.max(hi[0], b[0]), Math.max(hi[1], b[1]), Math.max(hi[2], b[2])] : b; } return lo && hi ? { lo, hi } : null; };
   // (structural pressings: bent tight, not styled round as a skin is, so not 'pressed' for the edges rule; spot-welded, so
   // the joints rule lays nothing more on them)
   const steel = { mat: 'steel-low', color: 0x2a2c2e, shell: 0.0015, finish: 'paint' as const, fixed: 'spot-welded to what it meets (the welds not drawn)' }, said: string[] = [], parts: Part[] = [];
-  const eng = boxOf(/^(engine block|gearbox|intake and accessories|reduction gear and differential|electric motor \(.*\)|inverter)$/), apron = boxOf(/^front inner wheelhouses$/), toe = nodes.find((n) => n.p.name === 'toe board' && n.obb);
+  const eng = boxOf(/^(engine block|gearbox|intake manifold|alternator|reduction gear and differential|electric motor \(.*\)|inverter)$/), apron = boxOf(/^front inner wheelhouses$/), toe = nodes.find((n) => n.p.name === 'toe board' && n.obb);
   const tr = travelOf(fa), zWb = Math.min(fa.track / 2 - ft.W / 2 - 0.04, fa.track / 2 - (ft.W / 2) * Math.cos(tr.steer) - (R + 0.03) * Math.sin(tr.steer) - 0.025);
   const zEng = eng ? Math.max(Math.abs(eng.lo[2]), Math.abs(eng.hi[2])) : 0.3, zAp = apron ? Math.max(Math.abs(apron.lo[2]), Math.abs(apron.hi[2])) : zWb;
   // (the rails: their outer faces on the aprons, within the steered tyres' sweep; over the drive shafts' boots by 12 mm)
@@ -587,7 +597,7 @@ function frontFrame(m: Machine, out: Part[], tyres: Tyre[]): Part[] {
   // (behind every recess and lamp of its face, ahead of everything in its bay: where there is no room between them it is
   // not made, and says so)
   const face = nodes.filter((n) => n.box && n.box.min.x > fa.x + 0.2 && /grille|lamp|headl|intake wall|valance|plate|fog/.test(n.p.name) && n.box.max.y > y0 - 0.05 && n.box.min.y < y1 + 0.05).map((n) => n.box!.min.x);
-  const bay = Math.max(eng ? eng.hi[0] : fa.x + 0.3, ...nodes.filter((n) => n.box && n.box.min.y < y1 && n.box.max.y > y0 && /radiator|condenser|battery|motor|intake and accessories/.test(n.p.name)).map((n) => n.box!.max.x));
+  const bay = Math.max(eng ? eng.hi[0] : fa.x + 0.3, ...nodes.filter((n) => n.box && n.box.min.y < y1 && n.box.max.y > y0 && /radiator|condenser|battery|motor|intake manifold|alternator/.test(n.p.name)).map((n) => n.box!.max.x));
   // (the toe board's face toward the bay, at a height: its middle plane less its half thickness)
   const lowerAt = (y: number) => toeAt(y) + (toe?.obb ? toe.obb.h[1]! / Math.abs(toe.obb.u[1]!.x) : 0);
   const xb1 = (face.length ? Math.min(...face) : bay + 0.1) - 0.005, xb0 = Math.max(bay + 0.008, xb1 - 0.04), xr0 = lowerAt(y1) + 0.0003;
@@ -685,7 +695,7 @@ function frontFrame(m: Machine, out: Part[], tyres: Tyre[]): Part[] {
   const ex = out.find((p) => p.name === 'exhaust' && p.shape && 'tube' in p.shape), blk = boxOf(/^engine block$/);
   if (ex && blk) {
     const tb = (ex.shape as { tube: { pts: V3[]; r: number } }).tube, p0 = tb.pts[0]!, rr = tb.r;
-    if (p0[0] < blk.lo[0] && blk.lo[0] - p0[0] < 0.12) parts.push(P('exhaust manifold', { box: [blk.lo[0] - (p0[0] - rr - 0.008), 0.07, Math.min(0.32, blk.hi[2] - blk.lo[2] - 0.02)] }, [(blk.lo[0] + p0[0] - rr - 0.008) / 2, p0[1] + 0.035, Math.max(blk.lo[2] + 0.17, Math.min(blk.hi[2] - 0.17, p0[2]))], { mat: 'cast-iron', color: 0x5a4a40, finish: 'cast', joins: ['engine block', 'exhaust'], fixed: 'bolted to the head on its studs, the down pipe on its flange', says: 'its exhaust manifold, cast iron, on the back of the head, the down pipe from it (typical)' }));
+    if (!nodes.some((n) => n.p.name === 'exhaust manifold') && p0[0] < blk.lo[0] && blk.lo[0] - p0[0] < 0.12) parts.push(P('exhaust manifold', { box: [blk.lo[0] - (p0[0] - rr - 0.008), 0.07, Math.min(0.32, blk.hi[2] - blk.lo[2] - 0.02)] }, [(blk.lo[0] + p0[0] - rr - 0.008) / 2, p0[1] + 0.035, Math.max(blk.lo[2] + 0.17, Math.min(blk.hi[2] - 0.17, p0[2]))], { mat: 'cast-iron', color: 0x5a4a40, finish: 'cast', joins: ['engine block', 'exhaust'], fixed: 'bolted to the head on its studs, the down pipe on its flange', says: 'its exhaust manifold, cast iron, on the back of the head, the down pipe from it (typical)' }));
     const segAt = (x: number): V3 | null => { for (let i = 1; i < tb.pts.length; i++) { const a = tb.pts[i - 1]!, b = tb.pts[i]!; if ((a[0] - x) * (b[0] - x) <= 0 && a[0] !== b[0]) { const f = (x - a[0]) / (b[0] - a[0]); return [x, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; } } return null; };
     const xs3 = Array.from({ length: 12 }, (_, i) => fa.x - 0.5 - i * 0.6).filter((x) => x > tb.pts[tb.pts.length - 1]![0] + 0.1);
     for (const x of xs3) { const q = segAt(x); if (!q) continue; const top = q[1] + rr;
@@ -716,7 +726,11 @@ export function bodyPlanOf(m: Machine): BodyPlan {
   return { L, W, H: m.H, c, lines: m.lines!, wheels, color: m.color, inside };
 }
 function body(m: Machine, ln: Lines): Part[] {
-  const plan = bodyPlanOf(m), { L, W, wheels } = plan, c = m.clearance, out = bodyPanels(plan);
+  // (its panels as the body's lines cut them; then each door, the hood and the deck lid built round its skin from its
+  // first parts (fittings.ts closureOf))
+  const plan = bodyPlanOf(m), { L, W, wheels } = plan, c = m.clearance, built = new Set<string>(), panels = bodyPanels(plan), out = panels.flatMap((p) => { const k = /^(front |rear )?doors$/.test(p.name) ? 'door' : p.name === 'hood' || p.name === 'deck lid' ? p.name : null; if (!k) return [p];
+    // (a skin cut in two patches (a rear door's, below and above its arch's line) is one door: built round its first)
+    if (built.has(p.name)) return [{ ...p, item: k === 'door' ? 'door-skin' : k === 'hood' ? 'hood-skin' : 'deck-lid-skin' }]; built.add(p.name); return closureOf(p, k as 'door', panels.filter((q) => q !== p && q.name === p.name)); });
   const x = (f: number) => L / 2 - f * L;
   // a pickup's bed: its floor over the rear tyres (with the room the tyres need), its sides the body's own skin
   const rt = Math.max(...wheels.filter((w) => w.x < 0).map((w) => w.y + w.R + w.bump), c + 0.4);
@@ -754,16 +768,18 @@ const seatPart = (s: Seat, i: number, col: number, floor?: number, room = Infini
  *  and its size that mass at its bulk density (its mass over its bounding box: about 360 kg/m³ for a small single,
  *  470 for a car's four, 870 for a truck's diesel; estimates from a Honda GX270, a 2.0 L four and a Detroit DD15), so
  *  the masses of its parts are its mass shared out. */
-/** An engine's mass and its box (its maker's where published, else from its displacement at its bulk density). */
+/** The engine a power is: its cylinders, bore and stroke as its maker gives them, else from its displacement (an inline
+ *  engine's cylinders by its size, a stroke 1.15 of its bore, typical of modern engines); a diesel's block iron, turbocharged
+ *  and with four valves and two cams a cylinder; a single's and a twin's air-cooled with pushrods unless said. */
+export function engineSpecOf(p: Power, alu: boolean): EngineSpec {
+  const cc = p.cc ?? 1000, diesel = p.kind === 'diesel', n = p.cyl ?? (p.kind === 'single' ? 1 : p.kind === 'twin' ? 2 : diesel ? 6 : cc <= 1000 ? 3 : cc <= 2600 ? 4 : 6);
+  const bore = p.bore ?? Math.cbrt((4 * cc * 1e-6) / n / (Math.PI * 1.15)), stroke = p.stroke ?? (cc * 1e-6 * 4) / (Math.PI * bore * bore * n), small = p.kind === 'single' || p.kind === 'twin';
+  return { cyl: n, bore, stroke, layout: p.kind === 'twin' ? 'vee' : 'inline', vee: 90, fuel: diesel ? 'diesel' : 'petrol', block: diesel || !alu ? 'iron' : 'al', cooling: p.cooling ?? (small ? 'air' : 'liquid'), cams: p.cams ?? (small ? 'ohv' : 'dohc'), valves: p.valves ?? (small ? 2 : 4), turbo: diesel, starter: p.starter ?? 'electric', says: `${p.bore ? `${(bore * 1000).toFixed(1)} × ${(stroke * 1000).toFixed(1)} mm (its maker's)` : `bore and stroke estimated from its ${cc} cc`}` };
+}
+/** An engine's mass and its box: what the engine its parts make comes to (engines.ts), not a figure said for it. */
 export function engineSize(p: Power, alu: boolean): { kg: number; s: V3 } {
   if (p.kind === 'electric') return { kg: 0, s: [0.3, 0.26, 0.26] };
-  const cc = p.cc ?? 1000, kg = p.kg ?? cc * (alu ? 0.055 : 0.09), bulk = p.kind === 'diesel' ? 870 : cc < 1000 ? 380 : 470, side = Math.cbrt(kg / bulk);
-  // an inline engine as long as its cylinders in a row (each bore and a quarter of it again for its walls and coolant,
-  // its bore from its displacement a cylinder at a stroke 1.15 times it, typical of modern engines) and its timing drive,
-  // about 140 mm; as tall as its mass at its bulk density would make a cube; as wide as what is left, no wider than a
-  // tenth more (its manifolds): an estimate where its maker gives no size
-  if (p.kind === 'inline' && !p.box) { const nc = cc <= 1000 ? 3 : cc <= 2600 ? 4 : 6, bore = Math.cbrt((4 * cc * 1e-6) / nc / (Math.PI * 1.15)), Lc = nc * bore * 1.25 + 0.14; return { kg, s: [Lc, side, Math.max(0.35, Math.min(side * 1.1, kg / bulk / (Lc * side)))] }; }
-  return { kg, s: p.box ?? ([side * 1.05, side, side * 0.95] as V3) };
+  const e = engineBuilt(engineSpecOf(p, alu)); return { kg: e.kg, s: e.size };
 }
 /** An electric car's drive unit, on its driven axle's line (p.x, p.y): a cast housing round its reduction gears and its
  *  differential on that line, the drive shafts out of its faces (EDU.gb); its motor bolted on its left face, ahead of the
@@ -780,27 +796,11 @@ function driveUnit(p: Power): Part {
 }
 function engine(p: Power, alu: boolean, driven = 'rear axle', across = false): Part {
   if (p.kind === 'electric') return driveUnit(p);
-  const cc = p.cc ?? 1000, { kg, s } = engineSize(p, alu), parts: Part[] = [];
-  const fins = (r: number, h: number): [number, number][] => { const out: [number, number][] = [[0, -h / 2]]; const n = Math.max(4, Math.round(h / 0.012)); for (let i = 0; i <= n; i++) { const y = -h / 2 + (h * i) / n; out.push([i % 2 ? r : r * 1.3, y]); } out.push([0, h / 2]); return out; };
-  if (p.kind === 'single' || p.kind === 'twin') {
-    parts.push(P('crankcase', { box: [s[0] * 0.75, s[1] * 0.45, s[2] * 0.4] }, [0, -s[1] * 0.27, 0], { mat: 'al-a380', color: 0x8c8e90, kg: kg * 0.5, finish: 'cast', iface: [{ kind: 'shaft', role: 'provides', d: 0.0254, says: 'its output shaft (a 1 in keyed shaft, typical of small engines)' }] }));
-    const n = p.kind === 'twin' ? 2 : 1;
-    for (const k of n === 2 ? [-1, 1] : [0]) parts.push(P(n === 2 ? `cylinder ${k > 0 ? 2 : 1}` : 'cylinder', { lathe: fins(s[0] * 0.17, s[1] * 0.42) }, [k * s[0] * 0.18, s[1] * 0.12, 0], { rot: [0, 0, n === 2 ? k * 0.78 : -0.3], mat: 'al-a380', color: 0x9a9c9e, kg: (kg * 0.22) / n, finish: 'cast', says: 'its cooling fins (about 2 fins per 25 mm, typical)', parts: [P('cylinder head', { box: [s[0] * 0.3, s[1] * 0.14, s[2] * 0.42] }, [0, s[1] * 0.27, 0], { mat: 'al-a380', color: 0x2a2a2a, kg: (kg * 0.1) / n, finish: 'cast' })] }));
-    parts.push(P('air cleaner', { cyl: [s[0] * 0.16, s[2] * 0.3] }, [-s[0] * 0.3, s[1] * 0.2, s[2] * 0.38], { rot: [PI / 2, 0, 0], mat: 'abs', color: 0x1a1a1a, kg: kg * 0.04, finish: 'texture' }));
-    parts.push(P('recoil starter or cover', { cyl: [s[1] * 0.26, s[2] * 0.08] }, [s[0] * 0.05, -s[1] * 0.2, -s[2] * 0.24], { rot: [PI / 2, 0, 0], mat: 'steel-low', color: p.cc && p.cc < 400 && p.kW < 10 ? 0xc81e1e : 0x2a2a2a, kg: kg * 0.06, finish: 'paint' }));
-    parts.push(P('muffler', { cyl: [s[1] * 0.12, s[2] * 0.4] }, [s[0] * 0.38, s[1] * 0.1, 0], { rot: [PI / 2, 0, 0], mat: 'steel-low', color: 0x2a2a2a, kg: kg * 0.08, finish: 'paint' }));
-  } else {
-    // (each stacked on the face of the one under it, as they are bolted: the head on the block's deck, the cover on the
-    // head, the pan under the block, the intake on its side; none sunk in another)
-    const bH = s[1] * 0.55, bY = -s[1] * 0.12, deck = bY + bH / 2, foot = bY - bH / 2, hH = s[1] * 0.2, cH = s[1] * 0.08, pH = s[1] * 0.16;
-    parts.push(P('engine block', { box: [s[0], bH, s[2] * 0.75] }, [0, bY, 0], { mat: alu ? 'al-a380' : 'cast-iron', color: alu ? 0x8c8e90 : 0x4a4c4e, kg: kg * 0.55, finish: 'cast' }));
-    parts.push(P('cylinder head', { box: [s[0] * 0.95, hH, s[2] * 0.6] }, [0, deck + hH / 2, 0], { mat: alu ? 'al-a380' : 'cast-iron', color: alu ? 0x9a9c9e : 0x50525a, kg: kg * 0.18, finish: 'cast' }));
-    parts.push(P('cam cover', { box: [s[0] * 0.9, cH, s[2] * 0.45] }, [0, deck + hH + cH / 2, 0], { mat: 'abs', color: 0x1a1a1a, kg: kg * 0.02, finish: 'texture' }));
-    parts.push(P('oil pan', { box: [s[0] * 0.85, pH, s[2] * 0.6] }, [0, foot - pH / 2, 0], { mat: 'steel-low', color: 0x2a2a2a, kg: kg * 0.05, finish: 'paint' }));
-    parts.push(P('intake and accessories', { box: [s[0] * 0.5, s[1] * 0.35, s[2] * 0.2] }, [0, 0.05 * s[1], s[2] * 0.375 + s[2] * 0.1], { mat: 'al-a380', color: 0x3a3a3a, kg: kg * 0.2, finish: 'cast' }));
-  }
+  // (the engine its parts make, its box's middle on its place: each of its pieces as engines.ts makes it, shared)
+  const spec = engineSpecOf(p, alu), e = engineBuilt(spec), mid = e.mid, cc = p.cc ?? 1000;
+  const parts = e.engine.parts!.map((q) => ({ ...q, at: [(q.at?.[0] ?? 0) - mid[0], (q.at?.[1] ?? 0) - mid[1], (q.at?.[2] ?? 0) - mid[2]] as V3 }));
   const drive: Iface[] = p.torque && p.ratio ? [{ kind: 'drive', role: 'provides', torque: p.torque * p.ratio, to: driven, says: p.driveSays }] : [];
-  return P(`${p.kind === 'diesel' ? 'diesel' : 'petrol'} engine (${cc} cc, ${p.kW} kW)`, undefined, [p.x, p.y ?? 0.4, p.z ?? 0], { parts, iface: drive, ...(across ? { rot: [0, PI / 2, 0] as V3 } : {}), says: `${p.says}; about ${Math.round(kg)} kg${p.kg ? '' : ' (an estimate from its displacement)'}${across ? '; set across the car, its gearbox at its left end (typical of front-wheel drive)' : ''}` });
+  return P(`${p.kind === 'diesel' ? 'diesel' : 'petrol'} engine (${cc} cc, ${p.kW} kW)`, undefined, [p.x, p.y ?? 0.4, p.z ?? 0], { parts, item: 'engine-ice', sealed: 'built whole from its parts (engines.ts), fitted as it comes', iface: drive, ...(across ? { rot: [0, PI / 2, 0] as V3 } : {}), says: `${p.says}; ${spec.says}; ${Math.round(e.kg)} kg as its ${e.pieces.toLocaleString('en')} pieces come to${p.kg ? ` (its maker gives ${p.kg} kg)` : ''}${across ? '; set across the car, its gearbox at its left end (typical of front-wheel drive)' : ''}` });
 }
 
 /** An axle hung from its frame (at the frame's half-width fz and height fy where the axle is), by its kind. */
@@ -1010,7 +1010,7 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
       // (a single-track machine's driven wheel has its disc on the side away from its chain: the rear wheel turned round,
       // as a left wheel is, where the chain runs on the left)
       const away = a.track === 0 && !!a.drive && !!m.chain && m.chain.z < 0;
-      const w = wheel(nm, t, { ...m.rims, brake: a.brake, knobs: off, dual: a.dual, single: a.track === 0, left: s < 0 || away, knuckle: kn0, ...(kn0 && a.track > 0 ? { bore: a.drive ? 0.012 : d0 * 0.35 } : a.susp === 'beam' && a.track > 0 && !a.drive ? { bore: d0 * 0.35, axle: `${a.x === front ? "front" : a.x === rear ? "rear" : `axle ${i + 1}`} twist beam` } : {}) });
+      const w = wheel(nm, t, { ...m.rims, ...(t.rim >= 0.49 ? { pattern: a.drive ? 'drive' as Tread : 'rib' as Tread } : {}), brake: a.brake, knobs: off, dual: a.dual, single: a.track === 0, left: s < 0 || away, knuckle: kn0, ...(kn0 && a.track > 0 ? { bore: a.drive ? 0.012 : d0 * 0.35 } : a.susp === 'beam' && a.track > 0 && !a.drive ? { bore: d0 * 0.35, axle: `${a.x === front ? "front" : a.x === rear ? "rear" : `axle ${i + 1}`} twist beam` } : {}) });
       const tr = travelOf(a); out.push({ ...w, at: [a.x, t.D / 2, (s * a.track) / 2], rot: s < 0 || away ? [0, PI, 0] : [0, 0, 0], ...(tr.steer || tr.bump ? { travel: tr } : {}) });
     }
     if (a.track === 0) { const d = 0.022; out.push(P(`${i === 0 ? 'front' : 'rear'} axle`, { cyl: [d / 2, 0.26] }, [a.x, t.D / 2, 0], { rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x9a9a9a, finish: 'plate', iface: [{ kind: 'shaft', role: 'provides', d }], says: 'a solid steel axle through the hub, clamped in the fork or the swingarm (typical: 22 mm front, 25 mm rear)' })); }
@@ -1348,7 +1348,14 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
       // (across the car: on the engine's left end, as deep as from just behind its drive shafts to just ahead of its crank;
       // along it, behind the engine)
       const pw2 = powerAt(m), es2 = engineSize(pw2, true).s;
-      if (across(m)) { const b = bayOf(m, es2), ax = m.axles[0]!.x, x0 = ax - 0.08, x1 = pw2.x + 0.06; out.push(P('gearbox', { box: [x1 - x0, 0.35, b.gb[1] - b.gb[0]] }, [(x0 + x1) / 2, pw2.y! - 0.05, (b.gb[0] + b.gb[1]) / 2], { mat: 'al-a380', color: 0x8c8e90, kg: 45, finish: 'cast', passes: ['drive shaft left', 'drive shaft right', 'inner joint boot'], says: 'about 45 kg, on the engine\'s end, its differential on the drive shafts\' line (typical of a transverse gearbox)' })); }
+      if (across(m)) {
+        // (its transaxle built from its parts (drivetrain.ts) in the room on the engine's end, its differential on the
+        // drive shafts' line: a CVT where its maker fits one, else a six-speed manual)
+        const b = bayOf(m, es2), ax = m.axles[0]!.x, x0 = ax - 0.08, x1 = pw2.x + 0.06, cy = pw2.y! - 0.05, cx = (x0 + x1) / 2, ty = tyreOf(m.axles[0]!.tyre)!.D / 2;
+        const g = transaxle({ kind: m.gearbox ?? 'manual', room: [x1 - x0, 0.35, b.gb[1] - b.gb[0]], diff: [ax - cx, ty - cy], torque: m.power.torque ?? m.power.kW * 1.6, says: m.gearbox === 'cvt' ? 'a CVT: a push belt between two variable pulleys (as its maker fits)' : 'a six-speed manual (typical)' });
+        const pass = (p: Part): Part => ({ ...p, passes: ['drive shaft left', 'drive shaft right', 'inner joint boot'], ...(p.parts ? { parts: p.parts.map(pass) } : {}) });
+        out.push({ ...pass(g.gearbox), at: [cx, cy, (b.gb[0] + b.gb[1]) / 2], sealed: 'built whole from its parts (drivetrain.ts), fitted as it comes', says: `${g.gearbox.says}; ${Math.round(g.kg)} kg as its ${g.pieces} pieces come to` });
+      }
       else out.push(P('gearbox', { box: [0.45, 0.3, 0.3] }, [pw2.x - es2[0] / 2 - 0.225, pw2.y! - 0.05, 0], { mat: 'al-a380', color: 0x8c8e90, kg: 45, finish: 'cast', says: 'about 45 kg, behind the engine (typical)' }));
       if (hy) { const hp = packToFit(0.5, 0.2, 0.6, '18650', 56); out.push(P(`hybrid battery (${hp.kWh.toFixed(1)} kWh)`, undefined, [rear + 0.6, c + 0.2, 0], { item: 'pack-hybrid', says: `56 groups of ${hp.p} 18650 cells in series under the rear seat (typical of a hybrid's pack)`, parts: [partOf(hp.pack, [0, -0.06, 0], [0, 0, 0], { sealed: 'built whole as it is made (components.ts), fitted as it comes' })] })); }
       // its starting battery: a BCI group 35 (typical of a small car's) on a moulded tray over its gearbox, as front-drive
@@ -1380,8 +1387,10 @@ export function makeMachine(m: Machine, pick: Pick = {}): Part {
   }
   return P(m.name, undefined, [0, 0, 0], { parts, road: m.road, published: m.mass, says: m.says + (m.mass && modelled > m.mass * 1.02 ? ` (its parts as drawn weigh ${Math.round(modelled)} kg, more than its published ${Math.round(m.mass)} kg: a fault in the drawing)` : '') });
 }
-// a part's mass for the reckoning above: the same rule as the kits' (src/nexus/kits.ts massOf), filled in by the caller
-let approxMass: (p: Part) => number = () => 0;
+// a part's mass for the reckoning above: the one rule everything is weighed by (mass.ts), from the start, so a machine
+// made before the kits are loaded is not reckoned as weighing nothing (which once made its "rest" its whole published
+// mass, and a Corolla 2.1 t)
+let approxMass: (p: Part) => number = massOf;
 /** (kits.ts gives its mass rule, so a machine's published mass is reckoned against the same masses everything uses) */
 export function useMass(f: (p: Part) => number): void { approxMass = f; }
 
@@ -1389,13 +1398,13 @@ export function useMass(f: (p: Part) => number): void { approxMass = f; }
 const red = 0xb3202a;
 export const MACHINES: Machine[] = [
   {
-    id: 'corolla', short: 'corolla', name: 'Toyota Corolla LE (2025)', kind: 'car', source: 'Toyota, 2025 Corolla eBrochure: dimensions, tread, curb weight, brakes',
+    id: 'corolla', short: 'corolla', name: 'Toyota Corolla LE (2025)', kind: 'car', gearbox: 'cvt', source: 'Toyota, 2025 Corolla eBrochure: dimensions, tread, curb weight, brakes',
     L: 182.3 * IN, W: 70.1 * IN, H: 56.5 * IN, clearance: 5.3 * IN, frame: 'shell', hand: -1,
     axles: [{ x: (182.3 / 2 - 37) * IN, track: 60.3 * IN, tyre: '205/55R16', steer: true, drive: true, brake: { kind: 'disc', d: 10.8 * IN, vented: true }, susp: 'strut' }, { x: (182.3 / 2 - 37 - 106.3) * IN, track: 61.0 * IN, tyre: '205/55R16', brake: { kind: 'disc', d: 10.2 * IN }, susp: 'beam' }],
     // (its lines measured off a side elevation of the E210 sedan, scaled by its published wheelbase: see its says)
     lines: { cowl: 0.23, roofF: 0.49, roofR: 0.66, deck: 0.9, belt: 0.648, nose: 0.52, tail: 0.74, wedge: 0.14, sail: 0.073, cowlH: 0.68, deckH: 0.771, bow: [0.7, 0.75], doorR: 0.755, dloR: 0.79, n: 5 },
     seats: [{ x: -0.1, z: -0.38, y: 0.55, style: 'bucket' }, { x: -0.1, z: 0.38, y: 0.55, style: 'bucket' }, { x: -0.95, z: 0, y: 0.57, style: 'bench' }],
-    power: { kind: 'inline', cc: 1987, kW: 126, x: 1.55, says: '2.0 L four-cylinder Dynamic Force engine, 169 hp at 6,600 rpm (Toyota)' },
+    power: { kind: 'inline', cc: 1987, kW: 126, x: 1.55, cyl: 4, bore: 0.0805, stroke: 0.0976, torque: 205, says: '2.0 L four-cylinder Dynamic Force engine (M20A-FKS: 80.5 × 97.6 mm, DOHC, four valves a cylinder), 169 hp at 6,600 rpm, 151 lb-ft (205 N·m) (Toyota)' },
     controls: 'wheel', rims: { style: 'steel', cover: { spokes: 8, pairs: 6, sweep: 4, width: [0.42, 0.56], emblem: true, says: '8 broad spokes in 4 V-pairs, each widening to its rim, a domed centre with its emblem (Toyota part 42602-02540, the LE\'s 16-in. cover, from its catalogue photograph: its spread, sweep and widths estimated from it; its five holes over the nuts not cut)' }, mat: 'steel-low', lugs: 5, lug: 12, color: 0x2a2c2e, pcd: 100, offset: 45 }, extras: ['exhaust'], road: 'us', mass: 2955 * LB, massSays: 'curb weight, Toyota', color: 0xb8bcc2,
     says: 'its lines: its windscreen\'s foot 0.23 of its length from its nose, its roof from 0.49 to 0.66, its back glass\'s foot 0.90, its belt 930 mm up at its cowl rising 140 mm to its deck, its windscreen\'s foot 976 mm up and its back glass\'s 1,106 mm, its rear door\'s top rear corner 0.755 of its length from its nose and its side glass ending at 0.79, its front door\'s leading edge 0.303 of its length from its nose (0.073 behind its windscreen\'s foot), its hood\'s front edge about 750 mm up and its deck 1,060 mm at its tail, measured off dimensions.com\'s side elevation of the E210 sedan scaled by its published 106.3-in. wheelbase (so scaled, that drawing\'s length agrees with the published 182.3 in to 0.3 % and its tyre with a 225/40R18\'s to 2 %: a third party\'s drawing, so these are estimates); its tyres 205/55R16 (typical of its 16-in. wheels: Toyota gives the wheel size, not the tyre code here); its front overhang about 37 in (an estimate from its length and wheelbase); its 16-in. steel wheels under full wheel covers (Toyota, 2025 Corolla LE), on 5 × 100 mm studs, M12 × 1.5, at a +45 mm offset (wheel fitment listings for the E210)',
   },
@@ -1404,7 +1413,7 @@ export const MACHINES: Machine[] = [
     L: 82.8 * IN, W: 47.4 * IN, H: 46.2 * IN, clearance: 7.1 * IN, frame: 'tube', seatH: 33.6 * IN, upper: 33.6 * IN - 0.18,
     axles: [{ x: 25 * IN, track: 36 * IN, tyre: '24x8-12', steer: true, drive: true, brake: { kind: 'disc', d: 0.19 }, susp: 'wishbone' }, { x: -25 * IN, track: 36.5 * IN, tyre: '24x10-11', drive: true, brake: { kind: 'drum', d: 0.16 }, susp: 'swingarm' }],
     seats: [{ x: -0.15, z: 0, y: 33.6 * IN, style: 'saddle' }],
-    power: { kind: 'single', cc: 420, kW: 20, x: 0.05, y: 0.42, says: 'a 420 cc liquid-cooled single (typical of the Rancher: its displacement is in Honda\'s own model line, not in this page)' },
+    power: { kind: 'single', cc: 420, kW: 20, x: 0.05, y: 0.42, cooling: 'liquid', says: 'a 420 cc liquid-cooled single (typical of the Rancher: its displacement is in Honda\'s own model line, not in this page)' },
     controls: 'bars', rims: { style: 'steel', mat: 'steel-low', lugs: 4, lug: 10, color: 0x2a2a2a }, extras: ['fenders', 'racks', 'exhaust', 'lights'], mass: 615 * LB, massSays: 'curb weight with fluids and a full tank, Honda', color: red,
     says: 'front brakes dual 190 mm discs, rear a 160 mm drum; 6.7 in of travel front and rear (Honda); its track about 36 in (an estimate: Honda gives its width, 47.4 in)',
   },
@@ -1413,7 +1422,7 @@ export const MACHINES: Machine[] = [
     L: 2.183, W: 0.827, H: 1.27, clearance: 13.1 * IN, frame: 'backbone', seatH: 38.0 * IN, rake: 27.3 * PI / 180,
     axles: [{ x: 58.3 * IN / 2, track: 0, tyre: '80/100-21', steer: true, brake: { kind: 'disc', d: 0.26 } }, { x: -58.3 * IN / 2, track: 0, tyre: '120/80-19', drive: true, brake: { kind: 'disc', d: 0.24 } }],
     seats: [{ x: -0.25, z: 0, y: 38.0 * IN, style: 'saddle' }],
-    power: { kind: 'single', cc: 450, kW: 40, x: 0.05, y: 0.55, says: 'a 450 cc single' },
+    power: { kind: 'single', cc: 450, kW: 40, x: 0.05, y: 0.55, bore: 0.096, stroke: 0.0621, cams: 'sohc', valves: 4, cooling: 'liquid', says: 'a 450 cc single, 96 × 62.1 mm, Unicam SOHC, four valves, liquid-cooled (Honda)' },
     controls: 'bars', rims: { style: 'wire', spokes: 36, mat: 'al-6061', lugs: 0, lug: 8, color: 0x1a1a1a }, extras: ['tank', 'number', 'exhaust'], chain: { teeth: [13, 49], pitch: 0.015875, at: [-0.12, -0.12], z: -0.093, says: 'a 520 chain on 13 and 49 teeth (typical of a 450 motocrosser; Honda fits its own ratio)' }, mass: 245 * LB, massSays: 'curb weight, Honda', color: red,
     says: 'wheelbase 58.3 in, seat 38.0 in, rake 27.3°, trail 4.5 in (Honda); its front tyre 80/100-21 (typical of a 21-in. motocross front); its length and width typical of a 450 motocrosser (estimates)',
   },
@@ -1422,7 +1431,7 @@ export const MACHINES: Machine[] = [
     L: 2.380, W: 1.065, H: 2.115, clearance: 0.1, frame: 'ladder', hand: -1,
     axles: [{ x: 2.380 / 2 - 0.55, track: 0.890, tyre: '21x7x15', drive: true, brake: { kind: 'drum', d: 0.28 }, susp: 'rigid' }, { x: 2.380 / 2 - 0.55 - 1.485, track: 0.915, tyre: '16x6x10.5', steer: true, susp: 'pivot' }],
     seats: [{ x: -0.25, z: 0, y: 1.05, style: 'pan' }],
-    power: { kind: 'inline', cc: 2237, kW: 38, x: -0.25, y: 0.55, says: 'a 2,237 cc four (Toyota\'s 4Y family in this spec sheet), 51 hp at 2,570 rpm (Toyota)' },
+    power: { kind: 'inline', cc: 2237, kW: 38, x: -0.25, y: 0.55, cyl: 4, bore: 0.091, stroke: 0.086, cams: 'ohv', valves: 2, says: 'a 2,237 cc four (Toyota\'s 4Y: 91 × 86 mm, pushrods, two valves a cylinder), 51 hp at 2,570 rpm (Toyota)' },
     controls: 'wheel', rims: { style: 'disc', mat: 'steel-low', lugs: 6, lug: 14, color: 0x1a1a1a }, extras: ['mast', 'guard', 'counterweight'], guardH: 2.05, mass: 3630, massSays: 'total truck weight, Toyota', color: 0xd8a21a,
     says: 'length to its fork face 2,380 mm, wheelbase 1,485 mm, tread 890/915 mm, overhead guard 2,050 mm, mast 2,115 mm lowered and 4,560 mm raised (Toyota); its cushion tyres 21x7x15 and 16x6x10.5 (typical of a 5,000 lb cushion truck)',
   },
@@ -1431,7 +1440,7 @@ export const MACHINES: Machine[] = [
     L: 7.166, W: 2.5, H: 3.03, clearance: 0.25, frame: 'ladder', hand: -1,
     axles: [{ x: 7.166 / 2 - 1.315, track: 2.05, tyre: '315/80R22.5', steer: true, brake: { kind: 'disc', d: 0.43 }, susp: 'leaf' }, { x: 7.166 / 2 - 1.315 - 4.425 + 1.295 / 2, track: 1.85, tyre: '11R22.5', drive: true, dual: true, brake: { kind: 'disc', d: 0.43 }, susp: 'air' }, { x: 7.166 / 2 - 1.315 - 4.425 - 1.295 / 2, track: 1.85, tyre: '11R22.5', drive: true, dual: true, brake: { kind: 'disc', d: 0.43 }, susp: 'air' }],
     seats: [{ x: 7.166 / 2 - 3.22 + 0.55, z: -0.5, y: 1.55, style: 'bucket' }, { x: 7.166 / 2 - 3.22 + 0.55, z: 0.5, y: 1.55, style: 'bucket' }],
-    power: { kind: 'diesel', cc: 14800, kW: 375, x: 7.166 / 2 - 1.3, y: 1.15, says: 'a Detroit DD15, 14.8 L (Freightliner: the 126 in. cab takes the DD15)' },
+    power: { kind: 'diesel', cc: 14800, kW: 375, x: 7.166 / 2 - 1.3, y: 1.15, cyl: 6, bore: 0.139, stroke: 0.163, says: 'a Detroit DD15, 14.8 L, six cylinders of 139 × 163 mm (Detroit) (Freightliner: the 126 in. cab takes the DD15)' },
     controls: 'wheel', rims: { style: 'disc', mat: 'al-6061', lugs: 10, lug: 22, color: 0xd8dce2 }, extras: ['cab', 'tanks', 'stacks', 'fifth wheel'], road: true, mass: 8200, massSays: 'day cab 6x4 at 4,425 mm, Freightliner Australia', color: 0xf2f2ee,
     says: 'BBC 3,220 mm, cab 3,030 mm high, wheelbase 4,425 mm, rear axles 1,295 mm apart, front overhang 1,315 mm, frame 11 × 85 × 287 mm (Freightliner); 2.5 m wide (the legal limit in Australia)',
   },
@@ -1440,7 +1449,7 @@ export const MACHINES: Machine[] = [
     L: 1.75, W: 1.2, H: 1.1, clearance: 0.08, frame: 'ladder',
     axles: [{ x: 49.4 * IN / 2 + 0.05, track: 0.78, tyre: '15x6.00-6', steer: true, susp: 'pivot' }, { x: -49.4 * IN / 2 + 0.05, track: 0.8, tyre: '20x10-8', drive: true, susp: 'rigid' }],
     seats: [{ x: -0.3, z: 0, y: 0.78, style: 'pan' }],
-    power: { kind: 'twin', cc: 726, kW: 16, x: 0.55, y: 0.45, says: 'a Kawasaki FR651V, 44.3 cu in (726 cc) V-twin, 21.5 hp (16.0 kW) (John Deere)' },
+    power: { kind: 'twin', cc: 726, kW: 16, x: 0.55, y: 0.45, bore: 0.078, stroke: 0.076, says: 'a Kawasaki FR651V, 44.3 cu in (726 cc) V-twin, 21.5 hp (16.0 kW) (John Deere)' },
     controls: 'wheel', rims: { style: 'disc', mat: 'steel-low', lugs: 0, lug: 8, color: 0xe8c22a }, extras: ['hood', 'deck', 'lights'], mass: 464 * LB, massSays: 'TractorData.com', color: 0x367c2b,
     says: 'wheelbase 49.4 in, front tyres 15x6.00-6, rear 20x10-8 (TractorData, John Deere); its length and width typical of a 42 in lawn tractor (estimates)',
   },
@@ -1449,7 +1458,7 @@ export const MACHINES: Machine[] = [
     L: 1.85, W: 1.35, H: 0.62, clearance: 0.035, frame: 'tube', rails: [0.45, 0.5, 0.95, 0.6, 0.5],
     axles: [{ x: 0.52, track: 1.05, tyre: '10x4.50-5', steer: true, susp: 'rigid' }, { x: -0.52, track: 1.12, tyre: '11x7.10-5', drive: true, brake: { kind: 'disc', d: 0.2 }, susp: 'rigid' }],
     seats: [{ x: -0.12, z: -0.18, y: 0.08, style: 'kart' }],
-    power: { kind: 'single', cc: 270, kW: 6.3, x: -0.22, z: 0.22, y: 0.29, box: [0.428, 0.422, 0.381], kg: 25, torque: 19.1, ratio: 6, says: 'a Honda GX270: 270 cc, 6.3 kW (8.5 hp) at 3,600 rpm, 19.1 N·m at 2,500 rpm, 381 × 428 × 422 mm, 25 kg dry (Honda)', driveSays: 'its 19.1 N·m through a chain of about 6 to 1 (typical of rental karts: a 12-tooth clutch to a 72-tooth axle sprocket)' },
+    power: { kind: 'single', cc: 270, kW: 6.3, x: -0.22, z: 0.22, y: 0.29, bore: 0.077, stroke: 0.058, starter: 'recoil', box: [0.428, 0.422, 0.381], kg: 25, torque: 19.1, ratio: 6, says: 'a Honda GX270: 270 cc, 6.3 kW (8.5 hp) at 3,600 rpm, 19.1 N·m at 2,500 rpm, 381 × 428 × 422 mm, 25 kg dry (Honda)', driveSays: 'its 19.1 N·m through a chain of about 6 to 1 (typical of rental karts: a 12-tooth clutch to a 72-tooth axle sprocket)' },
     controls: 'wheel', rims: { style: 'split', spokes: 6, mat: 'al-a380', lugs: 3, lug: 8, color: 0xc8ccd2 }, extras: ['nose', 'pods'], chain: { teeth: [12, 72], pitch: 0.009525, at: [-0.12, -0.12], z: 0.22 + 0.381 * 0.2 + 0.004, item: 'chain 35', says: 'a #35 chain, 12 to 72 teeth (typical of rental karts)' }, mass: 150, massSays: 'typical of a rental kart without its driver', color: 0x1f4fa8,
     says: 'about 1.85 m by 1.35 m, its wheelbase about 1,040 mm (typical of rental karts)',
   },

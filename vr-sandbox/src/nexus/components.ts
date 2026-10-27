@@ -14,7 +14,7 @@
 // down -y; stock and profiles are centred, their length along y.
 
 import { FAMILIES, callFamily } from './families';
-import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
+import { BEARINGS, CHAINS, CIRCLIPS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
 import { CLEAR } from './kinds/motion';
 import { SOCKET_HEAD } from './embody/stock';
@@ -24,10 +24,10 @@ import { WHEEL } from './kinds/fasteners';
 import { INVENTORY, inventoryRev, itemOf, type Item } from './inventory';
 import type { Cut, Iface, Part, Port, V3 } from './kits';
 import { DENSITY, massOf } from './mass';
-import { boundsOfAll, frame, place, type Assembly, type Placed } from './assembly';
+import { boundsOfAll, frame, partOf, place, type Assembly, type Placed } from './assembly';
 import * as THREE from 'three';
 import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
-import { coated, enclosure, fillCells, gridPlate, intoCells, stackOf, strapsOver, woundRoll, wrapped } from './makers';
+import { chainRun, coated, coil, enclosure, fillCells, gridPlate, intoCells, ringClip, stackOf, strapsOver, toothed, woundRoll, wrapped } from './makers';
 
 const PI = Math.PI, mm = 1e-3;
 /** A design: its part in its own frame, from its family's numbers and its item. */
@@ -269,6 +269,37 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     says: 'a T-slot aluminium extrusion: a slot down the middle of each face of each cell, its centre bored for a tapped end', leaves: 'its slots\' undercut chamfers and its inner webs drawn square (a typical outline, not one maker\'s die)',
     make: (p, it) => { const s = String(p.series), cell = Number(s.slice(0, 2)), n = Math.max(1, Number(s.slice(2)) / cell), L = Number(p.length), mat = 'al-6063'; return [P(it.name, section(tslot(cell, n), tslotHollows(cell, n), L), { mat, color: 0xc9ced3, finish: 'brushed', rot: ALONG_Y })]; },
   },
+  // (springs, gears, clips, rings and chain: drawn by the general makers (makers.ts) to their standards' sizes)
+  spring: {
+    says: 'a compression spring: music wire coiled on a mandrel, its ends closed', leaves: 'its ends closed but not ground flat',
+    make: (p, it) => [coil({ name: it.name, d: Number(p.d) * mm, D: Number(p.D) * mm, L: Number(p.L) * mm, n: Number(p.n) })],
+  },
+  gear: {
+    says: 'a spur gear: its teeth cut round its bore, module × teeth across its pitch circle', leaves: 'its teeth straight-sided from root to tip (the involute not drawn); its bore about 0.3 of its pitch circle (typical of a plain gear blank)',
+    make: (p, it) => { const m = Number(p.m) * mm, z = Number(p.z), mat = ({ pla: 'pla', pom: 'pom', steel: 'steel-alloy', brass: 'brass', aluminium: 'al-6061' } as Record<string, string>)[String(p.matter)] ?? 'steel-alloy'; return [toothed({ name: it.name, m, z, b: Number(p.b) * mm, bore: Math.max(1 * mm, Math.round(m * z * 0.3 * 1000) / 1000), mat })]; },
+    iface: (p) => [{ kind: 'shaft', role: 'requires', d: Math.max(1 * mm, Math.round(Number(p.m) * Number(p.z) * 0.3) * mm) }],
+  },
+  helicalgear: {
+    says: 'a helical gear: its teeth cut at its helix angle round its bore', leaves: 'its teeth drawn straight across its face (their helix not drawn); its face 10 modules wide and its bore 0.3 of its pitch circle (typical)',
+    make: (p, it) => { const m = Number(p.m) * mm, z = Number(p.z); return [toothed({ name: it.name, m: m / Math.cos((Number(p.b) * PI) / 180), z, b: 10 * m, bore: Math.round(m * z * 0.3 * 1000) / 1000, mat: 'steel-alloy' })]; },
+  },
+  circlip: {
+    says: 'DIN 471: a stamped spring-steel ring with its two lug eyes, in a groove on a shaft', leaves: 'its band drawn of even width (it tapers to its ends)',
+    make: (p, it) => { const d = Number(p.d), [t, g] = CIRCLIPS[d]!, b = 0.1 * d + 1; return [ringClip({ name: it.name, ri: (g / 2) * mm, w: 0.8 * b * mm, t: t * mm, says: 'its band drawn at its mean width (it tapers from its lugs to its back)' })]; },
+  },
+  circlipint: {
+    says: 'DIN 472: a stamped spring-steel ring with its two lug eyes, in a groove in a bore', leaves: 'its band drawn of even width',
+    make: (p, it) => { const d = Number(p.d), t = d < 10 ? 0.8 : d <= 22 ? 1 : d <= 32 ? 1.2 : d <= 37 ? 1.5 : d <= 48 ? 1.75 : d <= 68 ? 2 : d <= 85 ? 2.5 : 3, b = 0.1 * d; return [ringClip({ name: it.name, ri: 0.44 * d * mm, w: 0.9 * b * mm, t: t * mm, says: 'its band drawn at its mean width, about a tenth of its bore (it tapers to its lugs)' })]; },
+  },
+  oring: {
+    says: 'an O-ring: a ring of round section moulded in rubber', leaves: 'nothing: a torus',
+    make: (p, it) => { const d1 = Number(p.id), cs = Number(p.cs), mat = String(p.matter); return [P(it.name, { torus: [((d1 + cs) / 2) * mm, (cs / 2) * mm] }, { mat, color: mat === 'nbr' ? 0x1a1a1a : mat === 'fkm' ? 0x5a3020 : 0xc84030, finish: 'matte', rot: [PI / 2, 0, 0] })]; },
+  },
+  chain: {
+    says: 'roller chain (ISO 606 / ANSI B29.1): inner links of two plates on two bushes with a roller on each, outer links of two plates riveted on two pins, turn and turn about', leaves: 'its plates drawn as rectangles (their waisted outline not drawn); laid out straight',
+    make: (p, it) => { const C = CHAINS[String(p.series)]!, L = Number(p.length), links = Math.max(2, Math.round((L * 1000) / C.p / 2) * 2); return [partOf(chainRun({ name: it.name, p: C.p * mm, roller: C.roller * mm, width: C.width * mm, path: [[0, 0, 0], [links * C.p * mm + 1e-6, 0, 0]] }))]; },
+  },
+
 };
 /** A section drawn along z, its length L mm, turned so its length runs along y. */
 const ALONG_Y: V3 = [-PI / 2, 0, 0];
@@ -705,7 +736,8 @@ export function cellPack(o: { format: string; s: number; p: number; rows?: numbe
 /** Words a maker names a piece by that the inventory files under another name. */
 const NAMED_AS: Record<string, string> = { headlight: 'headlamp', lamp: 'headlamp', 'door window': 'door glass', 'exhaust': 'exhaust stack' };
 const bareName = (name: string): string => {
-  const b = name.toLowerCase().replace(/\(.*?\)/g, ' ').replace(/\b(left|right|front|rear|inner|outer|upper|lower|middle|top|bottom|axle \d+|\d+)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  // (its sizes and codes off too: "brake disc 274 mm", "axle sprocket 49T", "tyre 315/80R22.5" are named a brake disc, a sprocket, a tyre)
+  const b = name.toLowerCase().replace(/\(.*?\)/g, ' ').replace(/\b[\d.]+\s*(mm|cm|in|kwh|kw|l|t|cc)\b/g, ' ').replace(/\b[\d.]+\/[\d.]+[a-z]*[\d.]*|\b\d+[x×][\d.x×-]+\b/g, ' ').replace(/\b(left|right|front|rear|inner|outer|upper|lower|middle|top|bottom|axle \d+|\d+)\b/g, ' ').replace(/\s+/g, ' ').trim();
   const one = b.endsWith('s') && !b.endsWith('ss') ? b.slice(0, -1) : b;
   return NAMED_AS[one] ?? NAMED_AS[b] ?? one;
 };
@@ -718,27 +750,46 @@ function assembliesByName(): Map<string, Item> {
   }
   return assemblyNames;
 }
-export interface ExplodeAudit { /** the share of its drawn mass that is lumps */ lumps: number; pieces: number; /** pieces that are one part made one way (not an assembly drawn as a lump) */ whole: number; tagged: number; faked: { name: string; is: string; of: string[] }[]; missing: string[]; score: number; says: string }
+export interface ExplodeAudit {
+  /** the share of its mass that is lumps */ lumps: number; pieces: number; /** pieces that are one part made one way (not an assembly drawn as a lump) */ whole: number; tagged: number; faked: { name: string; is: string; of: string[] }[]; missing: string[];
+  /** the share of its mass only said (a mass given for what is not built: its "rest", a part weighed by a figure) */ unbuilt: number; said: { name: string; kg: number }[];
+  /** the share of its mass in pieces nothing says what they are: not tagged with an item, not named as one, not made in
+   *  one with a tagged part, not a piece of a bought one */ unknown: number; unnamed: { name: string; kg: number }[];
+  score: number; says: string;
+}
 /** How far a build comes apart into what it is really made of: each drawn piece that is a single part (one material,
  *  one process: a pressing, a casting, a moulding, a bolt) counts whole; a piece drawn as one lump though what it is named
  *  for is an assembly in the inventory (a headlamp, a door, a fuel tank) is faked, and said with what it should come apart
- *  into; every tagged assembly is held to its recipe (`missingIn`). Scored by mass, not by count: a cab drawn as one lump
- *  outweighs a hundred real wheel nuts. The design rule it keeps: explode to the bottom. */
+ *  into; every tagged assembly is held to its recipe (`missingIn`). And what is not built at all is said: mass only given
+ *  as a figure (unbuilt), and pieces nothing identifies (unknown). Scored by mass, not by count: a cab drawn as one lump
+ *  outweighs a hundred real wheel nuts. The design rule it keeps: build from the first parts up, explode to the bottom. */
 export function explodeAudit(p: Part): ExplodeAudit {
-  const names = assembliesByName(), faked: ExplodeAudit['faked'] = []; let pieces = 0, tagged = 0, kg = 0, lumpKg = 0;
-  const walk = (q: Part) => {
+  const names = assembliesByName(), known = partNames(), faked: ExplodeAudit['faked'] = [], said: ExplodeAudit['said'] = [], unnamed: ExplodeAudit['unnamed'] = [];
+  let pieces = 0, tagged = 0, kg = 0, lumpKg = 0, saidKg = 0, unknownKg = 0;
+  // (`held`: it is a piece of a tagged part or assembly: what it is, its owner says, and its owner's recipe holds it)
+  const walk = (q: Part, held: boolean) => {
+    if (q.kg !== undefined) { saidKg += q.kg; said.push({ name: q.name, kg: q.kg }); if (!q.shape) kg += q.kg; }
     if (q.shape) {
       const own = massOf({ ...q, parts: [] }); pieces++; kg += own; if (q.item) tagged++;
       if (!q.parts?.length) {
         const it = q.item ? itemOf(q.item) ?? keptByItem.get(q.item) ?? null : null, as = it && (it.kind === 'assembly' || it.kind === 'product') ? it : !q.item ? names.get(bareName(q.name)) : undefined;
         if (as && as.of.some((c) => { const ci = itemOf(c.id); return ci && ci.kind !== 'material' && ci.kind !== 'element'; })) { lumpKg += own; faked.push({ name: q.name, is: as.name, of: as.of.map((c) => `${c.n > 1 ? `${c.n} × ` : ''}${itemOf(c.id)?.name ?? c.id}`) }); }
+        else if (!q.item && !held && !known.has(bareName(q.name)) && q.kg === undefined) { unknownKg += own; unnamed.push({ name: q.name, kg: own }); }
       }
     }
-    for (const c of q.parts ?? []) walk(c);
+    for (const c of q.parts ?? []) walk(c, held || !!q.item);
   };
-  walk(p);
-  const missing = missingIn(p), whole = pieces - faked.length, lumps = kg > 0 ? lumpKg / kg : 0, score = 1 - lumps;
-  return { lumps, pieces, whole, tagged, faked, missing, score, says: `${pieces} pieces; ${(lumps * 100).toFixed(1)} % of its mass in ${faked.length} lumps, each an assembly drawn as one piece${faked.length ? ` (${[...new Set(faked.map((f) => f.is))].slice(0, 6).join(', ')})` : ''}; ${missing.length} recipe${missing.length === 1 ? '' : 's'} not met; ${tagged} tagged with what they are` };
+  walk(p, false);
+  const missing = missingIn(p), whole = pieces - faked.length, lumps = kg > 0 ? lumpKg / kg : 0, unbuilt = kg > 0 ? saidKg / kg : 0, unknown = kg > 0 ? unknownKg / kg : 0, score = Math.max(0, 1 - lumps - unbuilt - unknown);
+  said.sort((a, b) => b.kg - a.kg); unnamed.sort((a, b) => b.kg - a.kg);
+  const top = (xs: { name: string; kg: number }[]) => [...new Map(xs.map((x) => [bareName(x.name), x])).values()].slice(0, 6).map((x) => `${x.name} ${x.kg >= 1 ? x.kg.toFixed(0) : x.kg.toFixed(2)} kg`).join(', ');
+  return { lumps, pieces, whole, tagged, faked, missing, unbuilt, said, unknown, unnamed, score, says: `${pieces} pieces; ${(lumps * 100).toFixed(1)} % of its mass in ${faked.length} lumps, each an assembly drawn as one piece${faked.length ? ` (${[...new Set(faked.map((f) => f.is))].slice(0, 6).join(', ')})` : ''}; ${(unbuilt * 100).toFixed(1)} % only said, not built${said.length ? ` (${top(said)})` : ''}; ${(unknown * 100).toFixed(1)} % in pieces nothing identifies${unnamed.length ? ` (${top(unnamed)})` : ''}; ${missing.length} recipe${missing.length === 1 ? '' : 's'} not met; ${tagged} tagged with what they are` };
+}
+let partNamesAt = -1, partNamesMap = new Set<string>();
+/** Every inventory item's name, as a piece is named (so a piece named as a part is identified by its name). */
+function partNames(): Set<string> {
+  if (partNamesAt !== inventoryRev()) { partNamesMap = new Set([...INVENTORY.values()].filter((it) => it.kind === 'part' || it.kind === 'material').map((it) => bareName(it.name))); partNamesAt = inventoryRev(); }
+  return partNamesMap;
 }
 /** The biggest pack of a cell format that fits a space (its length along x, height, width along z), `s` groups in
  *  series: as many cells in parallel as fit, in modules side by side across it. */

@@ -259,6 +259,21 @@ function simPart(leaf: Part, m: THREE.Matrix4, name: string): SimPart {
   if (s && 'lathe' in s) { const pr = s.lathe as [number, number][], D = 2 * Math.max(...pr.map((q) => q[0])) * Math.max(ax, az), h = (Math.max(...pr.map((q) => q[1])) - Math.min(...pr.map((q) => q[1]))) * ay; return { name, kind: 'cylinder', axis: 'y', dims: { D, h }, local: { w: D, h, d: D }, at: [c.x, c.y, c.z], turn }; }
   const z = b.getSize(new THREE.Vector3()); return { name, kind: 'box', axis: 'y', dims: {}, local: { w: Math.max(z.x * ax, 1e-4), h: Math.max(z.y * ay, 1e-4), d: Math.max(z.z * az, 1e-4) }, at: [c.x, c.y, c.z], turn };
 }
+/** A part as the physics takes it: each sealed part in it (an engine, a tyre, a battery, fitted as it comes) as one
+ *  shape round its pieces, at its whole mass: a cylinder where it is round about its axis (a tyre rolls), else its box.
+ *  What is drawn is untouched; this is only what the bodies collide and weigh by. Made once for each part. */
+const proxies = new WeakMap<Part, Part>();
+export function physicsOf(p: Part): Part {
+  const was = proxies.get(p); if (was) return was;
+  let out: Part;
+  if (p.sealed && p.parts?.length) {
+    const own = { ...p, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3 }, b = boundsOfAll(own), z = b.getSize(new THREE.Vector3()), c = b.getCenter(new THREE.Vector3());
+    const round = Math.abs(z.x - z.z) < 0.05 * Math.max(z.x, z.z), first = (q: Part): string | undefined => q.mat ?? (q.parts ?? []).map(first).find(Boolean);
+    const core: Part = { name: p.name, shape: round ? { cyl: [z.x / 2, z.y] } : { box: [z.x, z.y, z.z] }, at: [c.x, c.y, c.z], mat: /tyre/.test(p.name) ? 'rubber' : first(p) ?? 'steel-low', kg: massOfAll(p) };
+    out = { name: p.name, at: p.at, rot: p.rot, parts: [core] };
+  } else out = p.parts?.length ? { ...p, parts: p.parts.map(physicsOf) } : p;
+  proxies.set(p, out); return out;
+}
 /** The bodies an assembly lets go (each thing it places at its top, named by what it is: a second of a name gets " 2"),
  *  and the boxes of what is fixed. */
 export function bodiesOf(things: Part | Assembly, fixed?: Part | Assembly): { bodies: SimThing[]; boxes: SimBox[]; placed: { of: Part | Assembly; m: THREE.Matrix4 }[] } {
@@ -272,13 +287,17 @@ export function bodiesOf(things: Part | Assembly, fixed?: Part | Assembly): { bo
   into(things, new THREE.Matrix4(), true);
   const seen = new Map<string, number>(), bodies: SimThing[] = [], placed: { of: Part | Assembly; m: THREE.Matrix4 }[] = [];
   let pieces = 0;
-  for (const it of items) {
+  for (const it0 of items) {
+    const it = { ...it0, of: isAssembly(it0.of) ? it0.of : physicsOf(it0.of) };
     const n = (seen.get(it.of.name) ?? 0) + 1; seen.set(it.of.name, n); const name = n > 1 ? `${it.of.name} ${n}` : it.of.name;
     const m = it.m, parts: SimPart[] = []; let fr = Infinity, re = 0;
-    flatten(it.of, (f) => { if (pieces++ > 4000) return false; const sp = simPart(f.leaf, m.clone().multiply(f.m), `${name}/${parts.length}`); parts.push(sp); const su = surfaceOf(f.over.mat ?? f.leaf.mat); fr = Math.min(fr, su.friction); re = Math.max(re, su.restitution); });
+    // (each body its own budget of pieces, so one body made of thousands (an engine, a tyre's tread) does not leave the
+    // next with none; and all of them a ceiling)
+    let own = 0;
+    flatten(it.of, (f) => { if (own++ > 1500 || pieces++ > 20000) return false; const sp = simPart(f.leaf, m.clone().multiply(f.m), `${name}/${parts.length}`); parts.push(sp); const su = surfaceOf(f.over.mat ?? f.leaf.mat); fr = Math.min(fr, su.friction); re = Math.max(re, su.restitution); });
     if (!parts.length) continue;
     const sc = new THREE.Vector3().setFromMatrixScale(m);
-    bodies.push({ name, parts, mass: Math.max(1e-3, massOfAll(it.of) * Math.abs(sc.x * sc.y * sc.z)), friction: Number.isFinite(fr) ? fr : 0.5, restitution: re }); placed.push({ of: it.of, m });
+    bodies.push({ name, parts, mass: Math.max(1e-3, massOfAll(it.of) * Math.abs(sc.x * sc.y * sc.z)), friction: Number.isFinite(fr) ? fr : 0.5, restitution: re }); placed.push({ of: it0.of, m });
     if (bodies.length >= 400) break;
   }
   const boxes: SimBox[] = [];

@@ -789,6 +789,27 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'all', 'assembly', 'audit', 'thing');
     return b;
   }],
+  ['An engine from its first parts: piston, rod, crank, block, head, then the whole', () => {
+    // Toyota's 2.0 L four (M20A-FKS: 80.5 mm bore, 97.6 mm stroke, Toyota), built the way an engine is built: a piston with
+    // its rings, pin and clips; a rod with its cap, shells and bolts; a crank forged in one; the block cast round its cores
+    // with its liners, main caps, shells and bolts; the head with every valve, spring, retainer, keeper, guide, seal,
+    // tappet, cam and cap. Every piece sized from the bore and stroke, every piece weighed from its own shape: the engine
+    // weighs what its parts come to. The makers it uses (a turned shaft, a coiled spring, a cut gear, a chain round its
+    // sprockets) are nodes of their own, and make other machines' parts too
+    const b = emptyBoard('An engine from its first parts');
+    const e = { cylinders: 4, bore: 0.0805, stroke: 0.0976, layout: 'inline', fuel: 'petrol', block: 'al', cooling: 'liquid', cams: 'dohc', valves: '4', turbo: 'no', starter: 'electric' };
+    for (const [k, id, label] of [['pis', 'engine.piston', 'Piston, rings, pin, clips'], ['rod', 'engine.rod', 'Rod, cap, shells, bolts'], ['crk', 'engine.crank', 'Crankshaft, forged in one'], ['blk', 'engine.block', 'Block, liners, caps, shells'], ['hd', 'engine.head', 'Head and its valve train'], ['eng', 'engine.whole', 'The engine, from those parts']] as [string, string, string][]) { placeBlock(b, id, 0, 0, e, k); b.nodes[k]!.label = label; }
+    placeBlock(b, 'make.coil', 0, 0, { name: 'valve spring', item: 'valve-spring', d: 0.0032, D: 0.024, L: 0.037, n: 5 }, 'spr'); b.nodes.spr!.label = 'Coil: a valve spring';
+    placeBlock(b, 'make.gear', 0, 0, { name: 'cam sprocket', item: 'timing-sprocket', m: 0.00303, z: 42, b: 0.0057, bore: 0.019 }, 'spk'); b.nodes.spk!.label = 'Cut: a cam sprocket (06B)';
+    placeBlock(b, 'make.chain', 0, 0, { series: '06B', wheels: '0 0 32\n16 290 64\n-16 290 64' }, 'chn'); b.nodes.chn!.label = 'Chain round its sprockets';
+    placeBlock(b, 'make.turned', 0, 0, { name: 'wrist pin', steps: '20.1 x 62', mat: 'steel-alloy', item: 'wrist-pin', bore: 0.0113 }, 'pin'); b.nodes.pin!.label = 'Turn: a wrist pin';
+    for (const [k, from, out, label, ex] of [['v1', 'pis', 'piston', 'The piston', 1], ['v2', 'rod', 'rod', 'The rod', 1], ['v3', 'crk', 'crank', 'The crank', 0], ['v4', 'hd', 'head', 'The head, apart', 1], ['v5', 'spr', 'spring', 'A valve spring', 0], ['v6', 'chn', 'chain', 'The timing chain', 0]] as [string, string, string, string, number][]) { placeBlock(b, 'view.3d', 0, 0, { explode: ex }, k); b.nodes[k]!.label = label; wire(b, from, out, k, 'part'); }
+    placeBlock(b, 'explode', 0, 0, { amount: 0.35, levels: 64 }, 'apart'); b.nodes.apart!.label = 'Take it apart (to the bottom)'; wire(b, 'eng', 'engine', 'apart', 'thing');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'eng', 'engine', 'measure', 'thing');
+    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'eng', 'engine', 'audit', 'thing');
+    return b;
+  }],
   ['A car down to its bolts: tyres made in depth, a shared battery, taken apart', () => {
     // a Toyota Corolla by Toyota's figures, built part by part down to its wheel nuts; its four tyres swapped for one tyre
     // made in depth (layers, beads, belts, a tread of pitches), the same one on every wheel; a group 35 battery (typical
@@ -1111,7 +1132,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['A battery built', 'electrical'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));

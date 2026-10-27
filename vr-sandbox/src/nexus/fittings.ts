@@ -14,6 +14,7 @@ import { boltedJoint, starterBattery, use } from './components';
 import { boundsOfAll, partOf } from './assembly';
 import * as THREE from 'three';
 import type { Part, V3 } from './kits';
+import { patchPoints } from './surface';
 
 const PI = Math.PI, mm = 1e-3;
 const P = (name: string, shape: Part['shape'] | undefined, at: V3, more: Partial<Part> = {}): Part => ({ name, ...(shape ? { shape } : {}), at, ...more });
@@ -322,4 +323,63 @@ export function batteryBox(s: number, c: V3, grp: string, n: number, b: TruckBod
     for (const dy of [0, 0.09]) parts.push(through('M16', b.railT + 0.015, [x, (b.railY - c[1]) + dy - 0.05, web - Math.sign(web) * 0.008], web > 0 ? 'z' : '-z', 'battery box bolt'));
   }
   return group(`battery box (${n} × group ${grp})`, 'trk-battery-box', c, parts, { says: `its starting batteries: ${n} BCI group ${grp}s (typical of a highway tractor: three or four), in an aluminium box on the frame` });
+}
+
+// ---- closures from their first parts: a car's doors, hood and deck lid ------------------------------------------------
+// Each built round the skin the body's panels cut for it (its outer panel, as pressed): an inner panel pressed to the
+// same shape and set in from it, hemmed to it round its edge; what is fitted between them and on them; a trim panel
+// inside a door. Doors and their skins are drawn with their mirror (both sides), so what is fitted to one is fitted to
+// its mirror too. Sizes typical of a mid-size car's, said where used.
+const mirrorZ = (p: Part): Part => ({ ...p, at: p.at ? [p.at[0], p.at[1], -p.at[2]] : p.at, ...(p.shape && 'tube' in p.shape ? { shape: { tube: { ...p.shape.tube, pts: p.shape.tube.pts.map((q) => [q[0], q[1], -q[2]] as V3) } } } : {}), ...(p.parts ? { parts: p.parts.map(mirrorZ) } : {}), name: p.name.replace('(right)', '(left)') });
+/** A closure's parts, round its skin (a part whose shape is a patch of the body's surface): kind says which. Returns its
+ *  skin tagged with what it is, and what is built round it. */
+export function closureOf(skin: Part, kind: 'door' | 'hood' | 'deck lid', more: Part[] = []): Part[] {
+  if (!skin.shape || !('surf' in skin.shape)) return [skin];
+  // (its extent over all its skin's patches: a rear door's skin is cut in two, below and above its arch's line)
+  const pt = skin.shape.surf, pts = [skin, ...more].flatMap((q) => q.shape && 'surf' in q.shape ? patchPoints(q.shape.surf, 8, 6, false) : []), xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]), zs = pts.map((q) => q[2]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), zm = zs.reduce((a, b) => a + b, 0) / zs.length, h = y1 - y0, l = x1 - x0;
+  const steel = { mat: 'steel-low', color: 0x3a3c40, finish: 'paint' }, out: Part[] = [{ ...skin, item: kind === 'door' ? 'door-skin' : kind === 'hood' ? 'hood-skin' : 'deck-lid-skin' }];
+  // (an inner panel set in from each of its skin's patches)
+  const patches = [skin, ...more].flatMap((q) => q.shape && 'surf' in q.shape ? [q.shape.surf] : []);
+  const inners = (name: string, off: number, m2: Partial<Part>): Part[] => patches.map((pp) => ({ name, shape: { surf: { ...pp, off } }, at: [0, 0, 0], ...m2 }));
+  void pt;
+  if (kind === 'door') {
+    // (its inner panel 110 mm in from its skin (a door's depth at its waist, typical), pressed 0.7 mm, lightened by its
+    // openings (about a third of it, for the regulator and the speaker); its trim panel inside it, moulded)
+    out.push(...inners(`${skin.name} inner panel`, -0.11, { ...steel, shell: 0.0007, fill: 0.68, item: 'door-inner-panel', make: 'pressed', says: 'pressed 0.7 mm steel, hemmed to its skin round its edge; its openings for the regulator and speaker (about a third of it)' }));
+    out.push(...inners(`${skin.name} trim panel`, -0.125, { mat: 'pp', color: 0x2a2a2c, shell: 0.0025, finish: 'texture', item: 'door-trim-panel', says: 'moulded polypropylene, clipped to the inner panel' }));
+    const hand: Part[] = [], zi = zm - 0.055;
+    // (its side-impact beam: a high-strength steel tube from its front to its back, low in it (typical))
+    // (as long as the door is at its height: a rear door's skin is cut back round its arch below its waist)
+    const yb = y0 + 0.42 * h, at = pts.filter((q) => Math.abs(q[1] - yb) < 0.08), bx0 = at.length ? Math.min(...at.map((q) => q[0])) : x0, bx1 = at.length ? Math.max(...at.map((q) => q[0])) : x1;
+    hand.push({ name: 'side impact beam', shape: { tube: { r: 0.016, wall: 0.0018, pts: [[bx1 - 0.06, yb + 0.02, zi], [bx0 + 0.06, yb, zi]] } }, at: [0, 0, 0], mat: 'steel-alloy', color: 0x5a5c60, item: 'intrusion-beam' });
+    // (two hinges on its front edge, a check strap between them; its latch on its back edge, the striker on the pillar)
+    for (const f of [0.25, 0.72]) hand.push({ name: 'door hinge', at: [x1 - 0.02, y0 + f * h, zi], parts: [{ name: 'hinge leaf (door)', shape: { box: [0.03, 0.06, 0.006] }, at: [-0.012, 0, 0], mat: 'steel-low', color: 0x2a2a2a, item: 'hinge-leaf' }, { name: 'hinge leaf (body)', shape: { box: [0.03, 0.06, 0.006] }, at: [0.018, 0, 0.004], mat: 'steel-low', color: 0x2a2a2a, item: 'hinge-leaf' }, { name: 'hinge pin', shape: { cyl: [0.004, 0.065] }, at: [0.004, 0, 0.004], mat: 'steel-alloy', color: 0x8a8c90, item: 'hinge-pin' }], item: 'door-hinge' });
+    hand.push({ name: 'door check strap', shape: { box: [0.12, 0.012, 0.008] }, at: [x1 - 0.06, y0 + 0.5 * h, zi], mat: 'steel-low', color: 0x2a2a2a, item: 'door-check' });
+    hand.push({ name: 'door latch', at: [x0 + 0.03, y0 + 0.45 * h, zi], item: 'door-latch', parts: [{ name: 'latch housing', shape: { box: [0.03, 0.08, 0.05] }, at: [0, 0, 0], mat: 'pbt', color: 0x1a1a1a, item: 'latch-housing' }, { name: 'latch claw', shape: { box: [0.006, 0.03, 0.025] }, at: [-0.017, 0, 0], mat: 'steel-alloy', color: 0x8a8c90, item: 'latch-claw' }, { name: 'lock actuator', shape: { cyl: [0.012, 0.04] }, at: [0.01, 0.06, 0], mat: 'pbt', color: 0x1a1a1a, item: 'lock-actuator' }] });
+    // (its window regulator: two rails up its middle, a cable round them, a motor at their foot)
+    const xr = (x0 + x1) / 2;
+    hand.push({ name: 'window regulator', at: [0, 0, 0], item: 'window-regulator', parts: [
+      ...[-0.11, 0.11].map((dx) => ({ name: 'regulator rail', shape: { box: [0.025, 0.75 * h, 0.008] as V3 }, at: [xr + dx, y0 + 0.5 * h, zi + 0.02] as V3, mat: 'steel-low', color: 0x6a6c70, item: 'regulator-rail' }) as Part),
+      { name: 'regulator motor', shape: { cyl: [0.03, 0.06] }, at: [xr, y0 + 0.15 * h, zi - 0.01], rot: [PI / 2, 0, 0], mat: 'steel-low', color: 0x2a2a2a, item: 'window-motor' },
+      { name: 'regulator cable', shape: { tube: { r: 0.0015, pts: [[xr - 0.11, y0 + 0.13 * h, zi + 0.02], [xr - 0.11, y0 + 0.87 * h, zi + 0.02], [xr + 0.11, y0 + 0.87 * h, zi + 0.02], [xr + 0.11, y0 + 0.13 * h, zi + 0.02], [xr - 0.11, y0 + 0.13 * h, zi + 0.02]] } }, at: [0, 0, 0], mat: 'steel-alloy', color: 0x8a8c90, item: 'regulator-cable' }] });
+    hand.push({ name: 'door speaker', shape: { lathe: [[0.01, 0], [0.075, 0], [0.075, 0.006], [0.03, 0.05], [0.01, 0.05], [0.01, 0]] }, at: [x1 - 0.2, y0 + 0.2 * h, zi - 0.03], rot: [-PI / 2, 0, 0], mat: 'pp', color: 0x1a1a1a, item: 'loudspeaker-car', fill: 0.4 });
+    hand.push({ name: 'inside door handle', shape: { box: [0.12, 0.025, 0.02] }, at: [x0 + 0.25, y0 + 0.65 * h, zm - 0.13], mat: 'abs', color: 0x2a2a2c, item: 'door-inner-handle' });
+    hand.push({ name: 'door seal', shape: { tube: { r: 0.008, wall: 0.0015, pts: [[x0 + 0.01, y0 + 0.02, zm - 0.08], [x1 - 0.01, y0 + 0.02, zm - 0.08], [x1 - 0.01, y1 - 0.02, zm - 0.08], [x0 + 0.01, y1 - 0.02, zm - 0.08], [x0 + 0.01, y0 + 0.02, zm - 0.08]] } }, at: [0, 0, 0], mat: 'epdm', color: 0x1a1a1a, item: 'door-seal' });
+    const right: Part = { name: `${skin.name.replace(/s$/, '')} (right)`, at: [0, 0, 0], item: 'car-door', parts: hand, says: 'what is in the door between its skin and its trim: beam, hinges, check, latch, regulator, speaker, handle, seal' };
+    out.push(right, mirrorZ(right));
+  } else {
+    // (its inner frame 25 mm under its skin, pressed 0.7 mm and lightened to about half (typical of a hood's or a lid's
+    // inner, its ribs between the openings), hemmed to the skin; its hinges at its back corners (a hood's) or its front
+    // ones (a lid's), its latch at its other end, the striker on it, a prop rod or a struts, an insulator under a hood)
+    out.push(...inners(`${skin.name} inner frame`, -0.025, { ...steel, shell: 0.0007, fill: 0.5, item: 'closure-inner', make: 'pressed', says: 'pressed 0.7 mm steel, its openings about half of it, hemmed to its skin' }));
+    if (kind === 'hood') out.push(...inners('hood insulator', -0.03, { mat: 'cotton', color: 0x3a3a3a, shell: 0.012, finish: 'texture', item: 'hood-insulator', says: 'a felt pad under the hood, clipped to its inner frame' }));
+    const hx = kind === 'hood' ? x0 + 0.04 : x1 - 0.04, lx = kind === 'hood' ? x1 - 0.06 : x0 + 0.05, hy = (y0 + y1) / 2 - 0.02, zh = Math.min(zm * 2 - 0.08, 0.55);
+    const hinge: Part = { name: `${skin.name} hinge (right)`, at: [hx, hy, zh], item: 'closure-hinge', parts: [{ name: 'hinge arm', shape: { box: [0.12, 0.02, 0.008] }, at: [0, -0.02, 0], mat: 'steel-low', color: 0x2a2a2a, item: 'hinge-leaf' }, { name: 'hinge pin', shape: { cyl: [0.005, 0.03] }, at: [kind === 'hood' ? -0.06 : 0.06, -0.03, 0], rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x8a8c90, item: 'hinge-pin' }] };
+    out.push(hinge, mirrorZ(hinge));
+    out.push({ name: `${skin.name} latch`, at: [lx, y0 - 0.02, 0], item: 'closure-latch', parts: [{ name: 'latch housing', shape: { box: [0.05, 0.06, 0.08] }, at: [0, 0, 0], mat: 'steel-low', color: 0x2a2a2a, item: 'latch-housing' }, { name: 'latch claw', shape: { box: [0.025, 0.006, 0.03] }, at: [0, 0.03, 0], mat: 'steel-alloy', color: 0x8a8c90, item: 'latch-claw' }] });
+    out.push({ name: `${skin.name} striker`, shape: { tube: { r: 0.004, pts: [[lx, y0 - 0.0, -0.015], [lx, y0 + 0.02, -0.015], [lx, y0 + 0.02, 0.015], [lx, y0, 0.015]] } }, at: [0, 0, 0], mat: 'steel-alloy', color: 0x8a8c90, item: 'striker' });
+    if (kind === 'hood') out.push({ name: 'hood prop rod', shape: { tube: { r: 0.004, pts: [[x1 - 0.12, y0 - 0.04, zh], [x0 + l * 0.5, y0 - 0.04, zh]] } }, at: [0, 0, 0], mat: 'steel-low', color: 0x2a2a2a, item: 'prop-rod' });
+  }
+  return out;
 }

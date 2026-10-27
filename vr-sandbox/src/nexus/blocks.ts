@@ -14,7 +14,7 @@ import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
 import { DESIGNED, component, componentFromParams, exampleOf } from './components';
-import { FAMILIES } from './families';
+import { CHAINS, FAMILIES } from './families';
 import { DENSITY } from './mass';
 import * as THREE from 'three';
 import { bodiesOf, posedAt, simulate, type SimJoint, type SimOut } from './sim';
@@ -29,7 +29,8 @@ import { MACHINES, TREADS, makeMachine, rollingOf, styledCar, styles, tyreBuilt,
 import { cellPack, explodeAudit, liCell, starterBattery } from './components';
 import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
 import { exploded, fitIn } from './assembly';
-import { coated, enclosure, fillCells, gridPlate, intoCells, stackOf, strapsOver, woundRoll, wrapped } from './makers';
+import { chainPath, chainRun, coated, coil, enclosure, fillCells, gridPlate, intoCells, stackOf, strapsOver, toothed, turned, woundRoll, wrapped } from './makers';
+import { conRod, crankshaft, cylinderBlock, cylinderHead, engineBuilt, engineDims, pistonAssembly, type EngineSpec } from './engines';
 import { BOARDS, PROCESSES, SOCKETS, desktop, die, motherboard, nandCell, packageOf, sramCell, transistor } from './computer';
 const KINDS_OF_VEHICLE = ['car', 'truck', 'atv', 'motorcycle', 'forklift', 'mower', 'kart'];
 import type { Part } from './kits';
@@ -593,6 +594,8 @@ const lookOf = (i: Record<string, unknown>, set: Record<string, unknown>): Recor
 const hex = (c: unknown, d = 0x9aa3ad): number => { const m = /^#?([0-9a-f]{6})$/i.exec(String(c ?? '').trim()); return m ? parseInt(m[1]!, 16) : d; };
 const L = (name: string, def: number, label?: string, more: Partial<PortDef> = {}) => N(name, 'm', { default: def, optional: true, ...(label ? { label } : {}), ...more });
 const thing = (name = 'thing', label = 'thing') => P(name, 'assembly', { label });
+const ENGINE_SET = [{ key: 'layout', label: 'Cylinders laid', type: 'choice' as const, default: 'inline', choices: ['inline', 'vee'] }, { key: 'fuel', label: 'Fuel', type: 'choice' as const, default: 'petrol', choices: ['petrol', 'diesel'] }, { key: 'block', label: 'Block cast in', type: 'choice' as const, default: 'al', choices: ['al', 'iron'] }, { key: 'cooling', label: 'Cooled by', type: 'choice' as const, default: 'liquid', choices: ['liquid', 'air'] }, { key: 'cams', label: 'Cams', type: 'choice' as const, default: 'dohc', choices: ['dohc', 'sohc', 'ohv'] }, { key: 'valves', label: 'Valves a cylinder', type: 'choice' as const, default: '4', choices: ['4', '2'] }, { key: 'turbo', label: 'Turbocharged', type: 'choice' as const, default: 'no', choices: ['no', 'yes'] }, { key: 'starter', label: 'Started by', type: 'choice' as const, default: 'electric', choices: ['electric', 'recoil'] }];
+const engineSpecOf = (i: Record<string, unknown>, set: Record<string, unknown>): EngineSpec => ({ cyl: Math.max(1, Math.round(Number(i.cylinders ?? 4))), bore: Number(i.bore ?? 0.0805), stroke: Number(i.stroke ?? 0.0976), layout: set.layout as 'inline', vee: 90, fuel: set.fuel as 'petrol', block: set.block as 'al', cooling: set.cooling as 'liquid', cams: set.cams as 'dohc', valves: Number(set.valves) as 4, turbo: set.turbo === 'yes', starter: set.starter as 'electric' });
 /** A part of one shape, of its material, coloured and finished. */
 function shapePart(name: string, shape: Part['shape'], set: Record<string, unknown>): Part {
   return { name: String(set.name || name), shape, at: [0, 0, 0], mat: String(set.mat || 'steel-low'), color: hex(set.color), ...(set.finish ? { finish: String(set.finish) } : {}), ...(set.glow ? { glow: true } : {}), ...(set.fill !== undefined && Number(set.fill) !== 1 && Number(set.fill) >= 0 ? { fill: Number(set.fill) } : {}) };
@@ -1298,6 +1301,34 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [P('into', 'part', { label: 'enclosure' }), L('L', 0.036, 'each cell\'s length'), L('W', 0.17, 'each cell\'s width'), L('h', 0.14, 'filled to'), N('share', undefined, { default: 0.55, optional: true, label: 'share of the cell it fills' })], outputs: [thing('filled', 'filled'), N('mass', 'kg')] },
     run: (i, c) => { if (!isPart(i.into)) throw new Error('wire an enclosure in'); const m = String(c.set.mat), f = fillCells(i.into, { name: String(c.set.name), L: Number(i.L ?? 0.036), W: Number(i.W ?? 0.17), h: Number(i.h ?? 0.14), mat: m, rho: DENSITY[m] ?? 1000, share: Number(i.share ?? 0.55) }); return { filled: f, mass: massOfAll(f) }; },
     tests: [{ set: { mat: 'water' }, inputs: { into: { name: 'box', ports: [{ name: 'cell 1', sex: 'frame', thread: '', pattern: [], at: [0, 0, 0], n: [0, 1, 0], u: [1, 0, 0], t: 0 }] }, L: 0.1, W: 0.1, h: 0.1, share: 1 }, outputs: { mass: 1 }, rel: 1e-9 }] }),
+  // ---- an engine from its first parts up (engines.ts), and the makers its parts share with every other machine ----------
+  def({ id: 'make.turned', name: 'Turned part', kind: 'generator', ability: 'generate', domains: ['manufacturing', 'mechanical'], says: 'A part turned on a lathe from steps of radius and length along its axis: a shaft, a pin, a valve, an axle, a journal. Steps as "diameter-mm × length-mm", one a line',
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'shaft' }, { key: 'steps', label: 'Steps (Ø mm × length mm)', type: 'text', default: '20 x 30\n15 x 80\n12 x 20' }, { key: 'mat', label: 'Material', type: 'choice', default: 'steel-alloy', choices: ENGINEERING }, { key: 'item', label: 'It is (inventory item)', type: 'text', default: '' }],
+    ports: { inputs: [L('bore', 0, 'bore through it')], outputs: [P('part', 'part'), N('mass', 'kg')] },
+    run: (i, c) => { const steps = String(c.set.steps).split('\n').map((l) => /([\d.]+)\s*[x×]\s*([\d.]+)/.exec(l)).filter(Boolean).map((m) => [Number(m![1]) / 2000, Number(m![2]) / 1000] as [number, number]); if (!steps.length) throw new Error('give its steps as "Ø × length", in mm'); const p = turned({ name: String(c.set.name), steps, bore: Number(i.bore ?? 0) / 2 || undefined, mat: String(c.set.mat), item: String(c.set.item) || undefined }); return { part: p, mass: massOf(p) }; },
+    tests: [{ set: { steps: '20 x 100' }, inputs: {}, outputs: { mass: Math.PI * 0.01 * 0.01 * 0.1 * 7850 }, rel: 1e-6 }] }),
+  def({ id: 'make.coil', name: 'Coiled spring', kind: 'generator', ability: 'generate', domains: ['manufacturing', 'mechanical'], says: 'Wire coiled round a mandrel, its ends closed: a valve\'s spring, a clutch\'s, a pen\'s',
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'spring' }, { key: 'item', label: 'It is (inventory item)', type: 'text', default: '' }],
+    ports: { inputs: [L('d', 0.003, 'wire'), L('D', 0.024, 'mean diameter'), L('L', 0.04, 'free length'), N('n', undefined, { default: 5, optional: true, label: 'active coils' })], outputs: [P('spring', 'part'), N('mass', 'kg'), N('rate', 'N/m')] },
+    run: (i, c) => { const d = Number(i.d ?? 0.003), D = Number(i.D ?? 0.024), n = Number(i.n ?? 5), p = coil({ name: String(c.set.name), d, D, L: Number(i.L ?? 0.04), n, item: String(c.set.item) || undefined }); return { spring: p, mass: massOf(p), rate: (79e9 * d ** 4) / (8 * D ** 3 * n) }; },
+    tests: [{ inputs: { d: 0.002, D: 0.02, n: 5 }, outputs: { rate: (79e9 * 0.002 ** 4) / (8 * 0.02 ** 3 * 5) }, rel: 1e-9 }] }),
+  def({ id: 'make.gear', name: 'Cut gear or sprocket', kind: 'generator', ability: 'generate', domains: ['manufacturing', 'mechanical'], says: 'Teeth cut round a bore by module and count: a spur gear, a timing sprocket, a ring gear, a pump\'s rotor',
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'gear' }, { key: 'mat', label: 'Material', type: 'choice', default: 'steel-alloy', choices: ENGINEERING }, { key: 'item', label: 'It is (inventory item)', type: 'text', default: '' }],
+    ports: { inputs: [L('m', 0.002, 'module'), N('z', undefined, { default: 30, optional: true, label: 'teeth' }), L('b', 0.015, 'face width'), L('bore', 0.012, 'bore')], outputs: [P('gear', 'part'), N('mass', 'kg'), L('d', 0, 'pitch diameter')] },
+    run: (i, c) => { const m = Number(i.m ?? 0.002), z = Math.round(Number(i.z ?? 30)), p = toothed({ name: String(c.set.name), m, z, b: Number(i.b ?? 0.015), bore: Number(i.bore ?? 0.012), mat: String(c.set.mat), item: String(c.set.item) || undefined }); return { gear: p, mass: massOf(p), d: m * z }; },
+    tests: [{ inputs: { m: 0.002, z: 30 }, outputs: { d: 0.06 }, rel: 1e-9 }] }),
+  def({ id: 'make.chain', name: 'Chain round wheels', kind: 'generator', ability: 'generate', domains: ['manufacturing', 'mechanical'], says: 'Roller chain round sprockets in a plane, link by link (inner links of plates, bushes and rollers; outer of plates and pins): a timing drive, a bicycle\'s, a conveyor\'s. Wheels as "u v radius" in mm, one a line',
+    settings: [{ key: 'series', label: 'Chain', type: 'choice', default: '06B', choices: Object.keys(CHAINS) }, { key: 'wheels', label: 'Wheels (u v r, mm)', type: 'text', default: '0 0 31\n-40 280 62\n40 280 62' }],
+    ports: { inputs: [], outputs: [thing('chain', 'chain'), N('links'), N('mass', 'kg')] },
+    run: (_i, c) => { const C = CHAINS[String(c.set.series)]!, w = String(c.set.wheels).split('\n').map((l) => l.trim().split(/\s+/).map(Number)).filter((a) => a.length === 3 && a.every(Number.isFinite)).map(([u, v, r]) => [u! / 1000, v! / 1000, r! / 1000 + C.roller / 2000] as [number, number, number]); if (w.length < 2) throw new Error('give it two wheels or more');
+      const path = chainPath(w), a = chainRun({ name: `chain ${c.set.series}`, p: C.p / 1000, roller: C.roller / 1000, width: C.width / 1000, path, closed: true }); return { chain: a, links: a.items.length, mass: massOfAll(a) }; },
+    tests: [{ set: { wheels: '0 0 30\n200 0 30' }, inputs: {}, outputs: { links: 62 } }] }),
+  ...(['piston', 'rod', 'crank', 'block', 'head', 'whole'] as const).map((k) => def({ id: `engine.${k}`, name: ({ piston: 'Piston and rings', rod: 'Connecting rod', crank: 'Crankshaft', block: 'Cylinder block', head: 'Cylinder head', whole: 'Piston engine' })[k], kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'energy'],
+    says: ({ piston: 'A piston with its three rings, its wrist pin and the pin\'s two clips, sized from the bore', rod: 'A connecting rod forged to its I-section, its cap cracked off, its two shells and two bolts', crank: 'A crankshaft forged in one: its main journals, a pin for each throw at its firing angle, webs and counterweights, its nose and flange', block: 'The block cast round its cores (barrel, water jacket, crankcase, bulkheads), its liners, main caps, shells and bolts', head: 'The head cast round its ports, its valves, springs, retainers, keepers, guides, seals, tappets or rockers, its cams and caps, its bolts, its plugs and coils or its injectors', whole: 'A whole piston engine from its first parts: block, crank, pistons and rods, head, timing, oiling, intake, exhaust and what hangs on it. Its mass and size are what its parts come to' })[k],
+    settings: ENGINE_SET, ports: { inputs: [N('cylinders', undefined, { default: 4, optional: true }), L('bore', 0.0805, 'bore'), L('stroke', 0.0976, 'stroke')], outputs: [P(k === 'whole' ? 'engine' : k, 'part'), N('mass', 'kg'), N('pieces')] },
+    run: (i, c) => { const s = engineSpecOf(i, c.set), d = engineDims(s), p = k === 'piston' ? pistonAssembly(s, d) : k === 'rod' ? conRod(s, d) : k === 'crank' ? crankshaft(s, d) : k === 'block' ? cylinderBlock(s, d) : k === 'head' ? cylinderHead(s, d, s.layout === 'vee' ? 0 : undefined) : engineBuilt(s).engine;
+      const count = (q: Part): number => (q.shape ? 1 : 0) + (q.parts ?? []).reduce((a, r) => a + count(r), 0); return { [k === 'whole' ? 'engine' : k]: p, mass: massOf(p), pieces: count(p) }; },
+    tests: [{ inputs: { cylinders: 1, bore: 0.077, stroke: 0.058 }, outputs: k === 'piston' ? { pieces: 13 } : {} }] })),
   def({ id: 'space.show', name: 'Show in space', kind: 'view', ability: 'show', domains: ['everyday', 'mechanical', 'structural'], says: 'Puts a thing into the 3D space, at its place: everything wired into one of these is what the space draws',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'shown' }],
     ports: { inputs: [thing()], outputs: [] }, run: () => ({}), sink: true, tests: [{ inputs: { thing: { name: 'b' } }, outputs: {} }] }),

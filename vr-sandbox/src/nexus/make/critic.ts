@@ -227,9 +227,9 @@ export function critique(root: Part): Finding[] {
     if (best && best.d > 0 && best.d < Math.min(size / 4, 0.06)) { const gap = gapBetween(n.box, best.to.box!); moveBy(n, gap); say('held up', n.p.name, `it touched nothing that holds it: set onto the ${best.to.p.name} (${(gap.length() * 1000).toFixed(0)} mm)`, true); }
     else say('held up', n.p.name, `nothing holds it up${best ? ` (the nearest, the ${best.to.p.name}, is ${(Math.max(0, best.d) * 1000).toFixed(0)} mm away)` : ''}`, false);
   }
-  // ---- walls ----
+  // ---- walls (not inside a sealed part: it is fitted as it comes, its walls its maker's) ----
   for (const n of nodes) {
-    const p = n.p; if (!p.shell || !p.mat || p.detail) continue; const w = WALL.find(([re]) => re.test(p.mat!));
+    const p = n.p; if (!p.shell || !p.mat || p.detail || sealedIn(n)) continue; const w = WALL.find(([re]) => re.test(p.mat!));
     if (w && p.shell < w[1] - 1e-9) { say('walls', p.name, `its ${(p.shell * 1000).toFixed(1)} mm wall is thinner than ${w[2]} is made (${(w[1] * 1000).toFixed(1)} mm): thickened`, true); p.shell = w[1]; }
   }
   // ---- skins: how each meets its neighbours (as its maker says, and why), whether it parts from its die, how tight it bends ----

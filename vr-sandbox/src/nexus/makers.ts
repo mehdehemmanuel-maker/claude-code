@@ -133,3 +133,103 @@ export function fillCells(container: Part, o: { L: number; W: number; h: number;
   const liquid: Part = box(o.name ?? 'liquid', [o.L - 0.001, layer, o.W - 0.001], [0, 0, 0], { mat: o.mat, kg, color: o.color ?? 0x9fb8c4, finish: 'gloss', ...(o.item ? { item: o.item } : {}), says: `filled ${(o.h * 1000).toFixed(0)} mm deep: ${(o.L * o.W * o.h * share * 1000).toFixed(2)} L, ${kg.toFixed(2)} kg (drawn as its surface)` });
   return { name: `${o.name ?? 'liquid'} in ${cells.length} cells`, items: cells.map((q) => place(liquid, [q.at[0], q.at[1] + o.h - layer / 2, q.at[2]])) };
 }
+
+// ---- turned, coiled, cut, stamped, chained, cast: the makers of machines -----------------------------------------------
+// (as many products share these as share a grid or a coat: a valve, a crank's journal, a bolt's blank, an axle are
+// turned; a valve's spring, a clutch's, a pen's are coiled; every gear is cut round a bore; a circlip, a washer, a chain's
+// plate are stamped; an engine's block, a gearbox's case, a pump's body are cored castings, their walls round cavities)
+
+/** A turned part along y from y = 0: its steps, each [radius, length] (m) one after the other, a stepped shaft, pin, valve
+ *  or axle; `bore` drills it through. */
+export function turned(o: { name: string; steps: [number, number][]; bore?: number; mat: string; color?: number; item?: string; finish?: string; says?: string; at?: V3; rot?: V3 }): Part {
+  const pts: [number, number][] = [[o.bore ?? 0, 0]]; let y = 0;
+  for (const [r, l] of o.steps) { pts.push([r, y], [r, y + l]); y += l; }
+  pts.push([o.bore ?? 0, y], [o.bore ?? 0, 0]);
+  return { name: o.name, shape: { lathe: pts }, at: o.at ?? [0, 0, 0], ...(o.rot ? { rot: o.rot } : {}), mat: o.mat, color: o.color ?? 0x9a9ca0, finish: o.finish ?? 'machined', ...(o.item ? { item: o.item } : {}), says: o.says ?? `turned: ${o.steps.map(([r, l]) => `Ø${(r * 2000).toFixed(1)} × ${(l * 1000).toFixed(1)}`).join(', ')} mm` };
+}
+/** A coil of wire along y from y = 0: wire d, mean diameter D, free length L, n active coils and a closed coil at each end
+ *  (a compression spring's ends, closed so it stands square), as a valve's, a clutch's or a pen's is coiled. */
+export function coil(o: { name: string; d: number; D: number; L: number; n: number; mat?: string; color?: number; item?: string; says?: string }): Part {
+  const per = 12, turns = o.n + 2, pitch = (o.L - 2 * o.d) / o.n, pts: V3[] = [];
+  for (let i = 0; i <= turns * per; i++) { const t = i / per, a = 2 * PI * t, y = t < 1 ? o.d / 2 + t * o.d : t > turns - 1 ? o.L - o.d / 2 - (turns - t) * o.d : o.d * 1.5 + (t - 1) * pitch; pts.push([(o.D / 2) * Math.cos(a), Math.min(o.L - o.d / 2, y), (o.D / 2) * Math.sin(a)]); }
+  return { name: o.name, shape: { tube: { r: o.d / 2, pts, bend: o.d } }, at: [0, 0, 0], mat: o.mat ?? 'steel-spring', color: o.color ?? 0x3a3c40, finish: 'paint', ...(o.item ? { item: o.item } : {}), says: o.says ?? `coiled: ${(o.d * 1000).toFixed(1)} mm wire on a ${(o.D * 1000).toFixed(1)} mm mean diameter, ${o.n} active coils, ends closed` };
+}
+/** A toothed wheel cut round a bore: module m, z teeth, b wide along z (its axis), its teeth drawn as their straight-sided
+ *  outline from the root to the tip circle (the involute's curve not drawn), as every spur, helical and timing gear and
+ *  sprocket is cut. */
+export function toothed(o: { name: string; m: number; z: number; b: number; bore: number; mat: string; color?: number; item?: string; says?: string; hub?: { r: number; L: number } }): Part {
+  const ra = (o.m * (o.z + 2)) / 2, rf = (o.m * (o.z - 2.5)) / 2, outline: [number, number][] = [], step = (2 * PI) / o.z;
+  for (let i = 0; i < o.z; i++) { const a = i * step; for (const [f, r] of [[0, rf], [0.04, rf], [0.21, ra], [0.47, ra], [0.64, rf], [1, rf]] as [number, number][]) if (!(f === 1)) outline.push([r * Math.cos(a + f * step), r * Math.sin(a + f * step)]); }
+  const hole = Array.from({ length: 24 }, (_, i) => [(o.bore / 2) * Math.cos((2 * PI * i) / 24), (o.bore / 2) * Math.sin((2 * PI * i) / 24)] as [number, number]);
+  const g: Partial<Part> = { mat: o.mat, color: o.color ?? 0x8a8c90, finish: 'machined', one: true };
+  const parts: Part[] = [{ name: `${o.name} teeth`, shape: { prism: { pts: outline, holes: [hole], L: o.b } }, at: [0, 0, 0], ...g }];
+  if (o.hub) parts.push({ name: `${o.name} hub`, shape: { lathe: [[o.bore / 2, 0], [o.hub.r, 0], [o.hub.r, o.hub.L], [o.bore / 2, o.hub.L], [o.bore / 2, 0]] }, at: [0, 0, o.b / 2], rot: [PI / 2, 0, 0], ...g });
+  return { name: o.name, at: [0, 0, 0], ...(o.item ? { item: o.item } : {}), mat: o.mat, parts, says: o.says ?? `cut: module ${(o.m * 1000).toFixed(2)}, ${o.z} teeth, ${(o.b * 1000).toFixed(0)} mm wide, pitch circle ${(o.m * o.z * 1000).toFixed(1)} mm` };
+}
+/** A ring stamped from sheet, open at a gap, with two lug eyes either side of it (a circlip's, a hose clip's): inside
+ *  radius ri, its band w wide, t thick along z. */
+export function ringClip(o: { name: string; ri: number; w: number; t: number; gap?: number; lugs?: boolean; mat?: string; color?: number; item?: string; says?: string }): Part {
+  const g = o.gap ?? 0.5, n = 32, ro = o.ri + o.w, pts: [number, number][] = [];
+  for (let i = 0; i <= n; i++) { const a = g / 2 + ((2 * PI - g) * i) / n; pts.push([ro * Math.cos(a), ro * Math.sin(a)]); }
+  for (let i = n; i >= 0; i--) { const a = g / 2 + ((2 * PI - g) * i) / n; pts.push([o.ri * Math.cos(a), o.ri * Math.sin(a)]); }
+  const parts: Part[] = [{ name: o.name, shape: { prism: { pts, L: o.t } }, at: [0, 0, 0], mat: o.mat ?? 'steel-spring', color: o.color ?? 0x2a2b2e, finish: 'plate', one: true }];
+  if (o.lugs !== false) for (const s of [-1, 1]) parts.push({ name: `${o.name} lug`, shape: { cyl: [o.w * 0.9, o.t] }, at: [ro * Math.cos(s * (g / 2 + 0.25)), ro * Math.sin(s * (g / 2 + 0.25)), 0], rot: [PI / 2, 0, 0], mat: o.mat ?? 'steel-spring', color: o.color ?? 0x2a2b2e, finish: 'plate', one: true, cuts: [{ r: o.w * 0.35, depth: o.t, at: [0, o.t / 2, 0], dir: [0, -1, 0] }] });
+  return { name: o.name, at: [0, 0, 0], ...(o.item ? { item: o.item } : {}), parts, says: o.says ?? `stamped from ${(o.t * 1000).toFixed(1)} mm spring steel` };
+}
+/** Roller chain along a path of points (closed: back to its first), a link at each pitch: an inner link (two plates
+ *  pressed on two bushes, a roller on each) then an outer (two plates riveted on two pins through the bushes), turn and
+ *  turn about, each piece tagged; as a bicycle's, a timing drive's and a conveyor's chain are made. */
+export function chainRun(o: { name: string; p: number; roller: number; width: number; path: V3[]; closed?: boolean; says?: string }): Assembly {
+  // (its pin about 0.52 of its roller across, its bush's outside 0.74, its plates 0.93 of its pitch high and 0.126 thick,
+  // as an 08B's 4.45, 6.3, 11.8 and 1.6 mm are to its 8.51 mm roller and 12.7 mm pitch: ISO 606, others in proportion)
+  const p = o.p, h = p * 0.93, t = p * 0.126, pin = o.roller * 0.26, bushR = o.roller * 0.37, w = o.width;
+  // (a plate: its two holes drilled, its rounded ends and waist (about 0.68 of the box round it, typical of a figure-of-eight plate) as its share)
+  const plate = (n: string, it: string, z: number, r: number): Part => ({ name: n, shape: { box: [p + h * 0.8, h, t] }, at: [p / 2, 0, z], mat: 'steel-alloy', color: 0x6a6c70, finish: 'machined', item: it, fill: 0.68, cuts: [-p / 2, p / 2].map((x) => ({ r, depth: t, at: [x, 0, t / 2] as V3, dir: [0, 0, -1] as V3 })) });
+  const inner: Assembly = { name: 'inner link', item: 'chain-inner-link', items: [plate('inner plate', 'chain-plate', -(w / 2 + t / 2), bushR), plate('inner plate', 'chain-plate', w / 2 + t / 2, bushR), ...[0, p].flatMap((x) => [
+    { name: 'bush', shape: { lathe: [[pin, -(w / 2 + t)], [bushR, -(w / 2 + t)], [bushR, w / 2 + t], [pin, w / 2 + t], [pin, -(w / 2 + t)]] }, at: [x, 0, 0], rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x8a8c90, finish: 'machined', item: 'chain-bush' } as Part,
+    { name: 'roller', shape: { lathe: [[bushR, -w / 2 + 0.0003], [o.roller / 2, -w / 2 + 0.0003], [o.roller / 2, w / 2 - 0.0003], [bushR, w / 2 - 0.0003], [bushR, -w / 2 + 0.0003]] }, at: [x, 0, 0], rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0x9a9ca0, finish: 'machined', item: 'chain-roller' } as Part])].map((q) => ({ of: q, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3, s: 1 })) };
+  const outer: Assembly = { name: 'outer link', item: 'chain-outer-link', items: [plate('outer plate', 'chain-plate', -(w / 2 + 1.5 * t), pin), plate('outer plate', 'chain-plate', w / 2 + 1.5 * t, pin), ...[0, p].map((x) => ({ name: 'pin', shape: { cyl: [pin, w + 4.6 * t] }, at: [x, 0, 0], rot: [PI / 2, 0, 0], mat: 'steel-alloy', color: 0xb0b2b6, finish: 'machined', item: 'chain-pin' } as Part))].map((q) => ({ of: q, at: [0, 0, 0] as V3, rot: [0, 0, 0] as V3, s: 1 })) };
+  // (walk the path a pitch at a time, each link turned to the line from its pin to the next)
+  const pts = o.closed ? [...o.path, o.path[0]!] : o.path, items: Placed[] = []; let k = 0;
+  const segLen = (i: number) => Math.hypot(pts[i + 1]![0] - pts[i]![0], pts[i + 1]![1] - pts[i]![1], pts[i + 1]![2] - pts[i]![2]);
+  const at = (s: number): V3 => { let i = 0, rest = s; while (i < pts.length - 2 && rest > segLen(i)) { rest -= segLen(i); i++; } const L = segLen(i) || 1, f = Math.min(1, rest / L); return [0, 1, 2].map((j) => pts[i]![j]! + (pts[i + 1]![j]! - pts[i]![j]!) * f) as V3; };
+  const total = pts.slice(0, -1).reduce((a, _, i) => a + segLen(i), 0), n = Math.max(2, Math.floor(total / p / 2) * 2);
+  for (k = 0; k < n; k++) { const a = at(k * p), b = at((k + 1) * p); items.push(place(k % 2 ? outer : inner, a, [0, 0, Math.atan2(b[1] - a[1], b[0] - a[0])])); }
+  return { name: o.name, item: 'roller-chain', items };
+}
+/** A cored casting drawn as its walls: a box L × H × W (x, y, z), its walls `wall` thick, open on the faces named (its
+ *  machined faces, where a head, a pan or a cover is bolted), bulkheads across it at the x given; each wall one casting
+ *  with the rest; holes in it by `cuts` on the wall they cross (an engine's block, a gearbox's case, a pump's body). */
+export function housing(o: { name: string; L: number; H: number; W: number; wall: number; open?: ('top' | 'bottom' | 'front' | 'back' | 'left' | 'right')[]; bulkheads?: number[]; bulkheadCuts?: Part['cuts']; mat: string; color?: number; item?: string; finish?: string; says?: string }): Part {
+  const { L, H, W, wall: t } = o, open = new Set(o.open ?? []), g: Partial<Part> = { mat: o.mat, color: o.color ?? 0x8c8e90, finish: o.finish ?? 'cast', one: true }, parts: Part[] = [];
+  if (!open.has('top')) parts.push(box(`${o.name} top`, [L, t, W], [0, H / 2 - t / 2, 0], g));
+  if (!open.has('bottom')) parts.push(box(`${o.name} bottom`, [L, t, W], [0, -H / 2 + t / 2, 0], g));
+  if (!open.has('left')) parts.push(box(`${o.name} side`, [L, H, t], [0, 0, -W / 2 + t / 2], g));
+  if (!open.has('right')) parts.push(box(`${o.name} side`, [L, H, t], [0, 0, W / 2 - t / 2], g));
+  if (!open.has('front')) parts.push(box(`${o.name} end`, [t, H, W - 2 * t], [L / 2 - t / 2, 0, 0], g));
+  if (!open.has('back')) parts.push(box(`${o.name} end`, [t, H, W - 2 * t], [-L / 2 + t / 2, 0, 0], g));
+  for (const x of o.bulkheads ?? []) parts.push(box(`${o.name} bulkhead`, [t, H - 2 * t, W - 2 * t], [x, 0, 0], { ...g, ...(o.bulkheadCuts ? { cuts: o.bulkheadCuts } : {}) }));
+  return { name: o.name, at: [0, 0, 0], ...(o.item ? { item: o.item } : {}), mat: o.mat, parts, says: o.says ?? `cast round its cores: ${(L * 1000).toFixed(0)} × ${(H * 1000).toFixed(0)} × ${(W * 1000).toFixed(0)} mm, walls ${(t * 1000).toFixed(1)} mm` };
+}
+/** A chip moulded in its package, as every SOIC, QFN and DIP is made: its die glued on the lead frame's paddle, a gold
+ *  bond wire from each pad to a lead, all moulded in epoxy, its leads out of two sides (w along x, d along z, h tall). */
+export function mouldedChip(o: { name: string; w: number; d: number; h: number; pins: number; die?: number; item?: string }): Part {
+  const n = Math.max(2, o.pins), per = Math.ceil(n / 2), pitch = o.w / (per + 0.5), die = o.die ?? Math.min(o.w, o.d) * 0.4, frame: Part[] = [box('paddle', [die * 1.3, 0.0002, die * 1.3], [0, -o.h / 2 + 0.0004, 0], { mat: 'copper', color: 0xc8a070, one: true })];
+  const wires: Part[] = [];
+  for (let i = 0; i < n; i++) { const side = i < per ? -1 : 1, x = -o.w / 2 + pitch * (0.75 + (i % per)), z = side * (o.d / 2 + 0.0004);
+    frame.push(box('lead', [pitch * 0.4, 0.0002, 0.0016], [x, -o.h / 2 + 0.0004, z], { mat: 'copper', color: 0xc8ccd2, one: true }));
+    wires.push({ name: 'bond wire', shape: { tube: { r: 0.0000125, pts: [[x * 0.4, -o.h / 2 + 0.0008, side * die * 0.4], [x * 0.7, -o.h / 2 + 0.0012, side * o.d * 0.3], [x, -o.h / 2 + 0.0005, side * (o.d / 2 - 0.0004)]] } }, at: [0, 0, 0], item: 'bond-wire', mat: 'gold', color: 0xd4af37 }); }
+  return { name: o.name, at: [0, 0, 0], ...(o.item ? { item: o.item } : { item: 'ic-package' }), parts: [
+    { name: `${o.name} lead frame`, at: [0, 0, 0], item: 'lead-frame', parts: frame },
+    box('die', [die, 0.0003, die], [0, -o.h / 2 + 0.00065, 0], { item: 'si-die', mat: 'silicon', color: 0x3a3a4a }), ...wires,
+    box('moulding', [o.w, o.h, o.d], [0, 0, 0], { item: 'mould-compound', mat: 'epoxy', color: 0x1a1a1a, finish: 'matte', fill: 0.97 })], says: `a die bonded out to ${n} leads, moulded in epoxy` };
+}
+/** The path a belt or a chain takes round wheels in a plane (each [u, v, radius]): round the outside of them all (their
+ *  convex hull), as a drive's belt and a timing chain run; in that plane as [u, v, 0]. */
+export function chainPath(wheels: [number, number, number][]): V3[] {
+  const pts = wheels.flatMap(([u, v, r]) => Array.from({ length: 24 }, (_, i) => [u + r * Math.cos((2 * PI * i) / 24), v + r * Math.sin((2 * PI * i) / 24)] as [number, number])).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo: [number, number][] = [], hi: [number, number][] = [];
+  for (const q of pts) { while (lo.length >= 2 && cross(lo[lo.length - 2]!, lo[lo.length - 1]!, q) <= 0) lo.pop(); lo.push(q); }
+  for (const q of [...pts].reverse()) { while (hi.length >= 2 && cross(hi[hi.length - 2]!, hi[hi.length - 1]!, q) <= 0) hi.pop(); hi.push(q); }
+  return [...lo.slice(0, -1), ...hi.slice(0, -1)].map(([u, v]) => [u, v, 0] as V3);
+}

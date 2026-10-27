@@ -41,6 +41,36 @@ From that record it offers merges, cuts and new blocks, and it only re-runs what
 
 ### 0.1 What is built and measured
 
+**2026-10-27, then: the first parts before the outer layer.** The user: "you built the outer layer before the first parts
+every single piece need to be able to be exploded." Measured first: the Corolla's engine was a block, a head, a cover, a
+pan and an "intake and accessories" box, its mass said (`kg`) not built; its gearbox a 45 kg box; its doors and hood skins
+with nothing in them; its tyres one shell each; and its "rest of it" its whole published 1,340 kg, because it was weighed
+before the mass rule was wired in (so the car came to 2.1 t). Now:
+- **The audit says what is not built** (`explodeAudit`): besides lumps, the share of mass only said (a stated mass, the
+  stand-in for what is not drawn) and the share in pieces nothing identifies. Its score is what is left.
+- **An engine from its first parts** (`engines.ts`): pistons, three rings, wrist pins and their clips; rods, caps, shells
+  and bolts; a crank forged in one at its firing angles; the block cast round its jacket and crankcase, its liners, main
+  caps, shells and bolts; the head with every valve, guide, seal, spring, retainer, keeper, tappet or rocker, its cams and
+  caps; its timing chain link by link (or gears); its pan, pump, pickup and filter; its intake, injectors or carburettor;
+  its exhaust manifold; plugs and coils or injectors; alternator (stator, windings, claw rotor, diodes, regulator die),
+  water pump, starter, belt, tensioner, damper, flywheel. Sized from bore and stroke, weighed from each piece's shape:
+  Honda's GX270 (25 kg published) comes to 22.9 kg as its parts; the Corolla's M20A 82 kg; the truck's DD15 825 kg (low:
+  its gear housing, air compressor, fuel pump and EGR are not built yet). Each vehicle's engine is now this, and its bay
+  is laid out round the engine its parts make.
+- **A gearbox from its first parts** (`drivetrain.ts`): case and bell housing, shafts, gears on bearings, final drive and
+  differential; a CVT's pulleys and ~400-element push belt and torque converter (the Corolla's, as Toyota fits), or a
+  manual's gear pairs, synchros and forks. About 27 kg as drawn: light for a CVT (its valve body, oil and pump not built).
+- **Library families drawn** that were "known but not drawn": compression springs, spur and helical gears, circlips
+  (their DIN 472 thickness made consistent), O-rings (each rubber at its own density), roller chain link by link.
+- **Tyres built in depth on every vehicle**, their cord layers weighed by their cord share rather than a stated mass.
+- **Doors, hood and deck lid built round their skins** (`closureOf`): inner panels, beams, hinges, check straps,
+  latches, regulators, speakers, trim panels, seals; hood inner frame, insulator, hinges, latch, striker, prop rod.
+- **Single parts named**: castings, forgings and pressings drawn as one piece, now each an inventory part with its
+  process and material (counterweight, hubs, beams, leaves, discs, drums, pressings, glass).
+- Scores now (built and identified, by mass): Corolla 51 %, truck 61 %, forklift 80 %, dirt bike 79 %. What is left is
+  mostly the stand-in for what is not drawn yet: the Corolla's 550 kg (seats, interior, cooling, exhaust, wiring,
+  fluids), the truck's 3,138 kg (its transmission, cooling package, cab interior, air system).
+
 **2026-10-26, then: build each part, each sub part, with makers shared by process.** The user: "you can't build
 anything by designing what it looks like … you gotta build each part each sub part each subsubpart and make it easier to
 generate new parts … the build of a battery … follows a lot of the same processes and geometries of many things."

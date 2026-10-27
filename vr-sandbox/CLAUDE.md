@@ -108,6 +108,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   and versatility" and "parts exploded that have their own assemblies should be able to be exploded as well … showing
   screen shot of it on the node graph and it's small parts on the node graph" (2026-10-26: makers by process in
   `makers.ts`; the battery built from them node by node; explode inside an explode with focus; batteries in the vehicles)
+- "the problem is you built the outer layer before the first parts every single piece need to be able to be exploded"
+  (2026-10-27: the engine and the gearbox built from their first parts, sized and weighed by them; every vehicle's tyres
+  built in depth; doors, hood and deck lid built round their skins; the audit now says what is only said, not built (a
+  stated mass, "the rest of it") and what nothing identifies, so the outer-layer-first fault is measured, not hidden)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -175,7 +179,10 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | A part's tree opened into assemblies, pieces swapped for a shared thing by name (`fitIn`), taken apart (`exploded`) | `src/nexus/assembly.ts` (nodes Fit in, Take apart) |
 | A computer from its transistors: FinFETs at published process pitches, SRAM and logic cells, arrays, die, package, motherboard, PC | `src/nexus/computer.ts` (nodes Transistor, Logic or memory cell, Processor die, Processor package, Motherboard, Desktop PC) |
 | How far a build comes apart: lumps (a piece drawn as one though the inventory says it is an assembly) by share of mass, recipes not met (`explodeAudit`, node Comes apart to the bottom?) | `src/nexus/components.ts` |
-| General makers by process and geometry (cast grid, coat, wrap, stack, straps, enclosure with cells, into cells, wound roll, fill) | `src/nexus/makers.ts` (nodes `make.*` in `blocks.ts`; used by `components.ts`) |
+| A piston engine from its first parts (pistons, rings, pins, rods, crank, block, liners, caps, shells, head, valve train, cams, timing, oiling, intake, exhaust, ignition, alternator, starter, pump, belt, flywheel), sized and weighed by its parts | `src/nexus/engines.ts` (nodes `engine.*` in `blocks.ts`; `engineSpecOf`/`engineSize` in `machines.ts` ask it) |
+| A gearbox from its first parts (case, shafts, gears, bearings, seals, final drive, differential; a manual's synchros and forks or a CVT's pulleys, push belt and torque converter) | `src/nexus/drivetrain.ts` |
+| A car's closures built round their skins (doors, hood, deck lid: inner panels, beams, hinges, latches, regulators, trim) | `src/nexus/fittings.ts` `closureOf` |
+| General makers by process and geometry (cast grid, coat, wrap, stack, straps, enclosure with cells, into cells, wound roll, fill) | `src/nexus/makers.ts` (nodes `make.*` in `blocks.ts`; used by `components.ts`, `engines.ts`, `drivetrain.ts`): also turned, coil, toothed, ring clip, chain run, chain path, housing, moulded chip |
 | A vehicle's fittings drawn whole to their recipes (lamps, mirrors, doors, cab, hood, grille, bumper, frame, tanks, aftertreatment, stacks, fifth wheel, steps, fenders, air tanks) | `src/nexus/fittings.ts` (recipes `trk-*` in `inventory.ts`; used by `machines.ts`) |
 | Seeds: things built from nodes and kept in the library as one node each, each built from the ones before (window, door, toilet, sink, bed; a room's fittings by its type; room; house by its plan; car; grass, terrain; road, stop light, crossing, road system; neighbourhood; city) | `src/nexus/seeds.ts` (their nodes: `terrain`, `scatter`, `wall`, `pick`, `rows.*`, `plan.rooms` in `blocks.ts`; `spawn` in `dataflow.ts`) |
 | The board of blocks as a panel in the space: the page's own board and drawing (`wall` in `nodes.ts`), pressed by a ray; its strip and side panel | `src/nexus/view/nodes-wall.ts` |
