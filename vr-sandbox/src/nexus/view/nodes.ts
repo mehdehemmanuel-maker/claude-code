@@ -892,16 +892,17 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'run', 'memory', 'show', 'thing');
     return b;
   }],
-  ['Doorways kept clear: a living room with its door behind the television, before and after', () => {
-    // a room whose fittings were laid out by its type alone puts its television against the wall its door is in. Keep
-    // doorways clear reads each door (its hinge line, the side it swings to, its width) and keeps the room its leaf sweeps
-    // and the floor to come up to it; what stands there is slid along its wall with what stands on it, or turned to
-    // another wall, unless it is meant to be there. The house seed runs it on every house
-    const b = emptyBoard('Doorways kept clear');
+  ['Proximity: each thing carries the room it needs; a door\'s sweep and a toilet\'s clear floor kept, nothing told what a door is', () => {
+    // no rule for doors: each node puts the room its thing needs on the thing itself, worked out from its own figures (a
+    // door its leaf's sweep from its hinge, the leaf's width its radius; a toilet and a basin the floor a code asks in
+    // front of them; a kitchen run its work aisle), and one proximity node keeps every zone clear: what stands in one is
+    // moved along its wall with what touches it, or to another wall, where it stands in no zone and its own hold nothing.
+    // Here a living room whose door is behind the television, before and after; the zones drawn
+    const b = emptyBoard('Proximity');
     placeBlock(b, 'seed.room', 0, 0, { type: 'living', front: 'wall', back: 'door' }, 'room'); b.nodes.room!.label = 'A living room, its door in its back wall';
-    placeBlock(b, 'keep.clear', 0, 0, { move: 'only said' }, 'said'); b.nodes.said!.label = 'What stands in a doorway (said)'; wire(b, 'room', 'room', 'said', 'thing');
-    placeBlock(b, 'keep.clear', 0, 0, { move: 'moved' }, 'moved'); b.nodes.moved!.label = 'Doorways kept clear (moved)'; wire(b, 'room', 'room', 'moved', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'What stood where, and what was done'; wire(b, 'moved', 'blocked', 'rows', 'rows');
+    placeBlock(b, 'proximity', 0, 0, { move: 'only said' }, 'said'); b.nodes.said!.label = 'What stands in a zone (said)'; wire(b, 'room', 'room', 'said', 'thing');
+    placeBlock(b, 'proximity', 0, 0, { move: 'moved' }, 'moved'); b.nodes.moved!.label = 'Every zone kept clear (moved)'; wire(b, 'room', 'room', 'moved', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'What stood in which zone, and what was done'; wire(b, 'moved', 'found', 'rows', 'rows');
     placeBlock(b, 'pick', 0, 0, { options: 'before|after', which: 'after' }, 'pick'); b.nodes.pick!.label = 'Before or after'; wire(b, 'said', 'thing', 'pick', 'before'); wire(b, 'moved', 'thing', 'pick', 'after');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'pick', 'chosen', 'show', 'thing');
     return b;

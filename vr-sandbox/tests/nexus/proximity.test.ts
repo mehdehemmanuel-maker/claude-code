@@ -1,4 +1,4 @@
-// Doorways kept clear (src/nexus/placement/clear.ts), and a body drawn from its measured segments with its math on it
+// Proximity: each thing carries the room it needs, kept clear by one node that knows no kind of thing (src/nexus/placement/proximity.ts), and a body drawn from its measured segments with its math on it
 // (src/nexus/act/body.ts, src/nexus/life/segments.ts).
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
@@ -7,38 +7,42 @@ import type { Part } from '../../src/nexus/kits';
 import { Engine, emptyBoard, placeBlock } from '../../src/nexus/dataflow';
 import { partOf, type Assembly } from '../../src/nexus/assembly';
 import { layout } from '../../src/nexus/make/space';
-import { keepClear, MEANT_IN_DOORWAY } from '../../src/nexus/placement/clear';
+import { inZone, proximity, zoneFor, MEANT_ANYWHERE } from '../../src/nexus/placement/proximity';
 import { ACTORS } from '../../src/nexus/aware/tags';
 import { bodyParts, poseOf, rigFor } from '../../src/nexus/act/body';
 
 const room = async (set: Record<string, string>): Promise<Part> => { const b = emptyBoard('r'); placeBlock(b, 'seed.room', 0, 0, set, 'r'); const e = new Engine(b); await e.run(); const o = e.state.get('r')!.out!; return partOf(o[Object.keys(o)[0]!] as Assembly); };
 
-describe('doorways kept clear', () => {
-  it('a living room with its door behind the television: the stand and the television on it move together, out of the door\'s way, and stay in the room', async () => {
-    const r = await room({ type: 'living', front: 'wall', back: 'door' }), before = keepClear(r, { move: false });
-    expect(before.blocked.map((b) => b.thing)).toContain('tv stand');
-    const after = keepClear(r);
-    expect(after.moved).toBe(2);
-    expect(keepClear(after.tree, { move: false }).blocked).toHaveLength(0);
-    // (the television is still on its stand)
+describe('proximity: the room each thing needs, on the thing', () => {
+  it('a zone is worked out from the thing\'s own size: in front of a face, or swept from a hinge, its radius the leaf\'s width', () => {
+    const box = new THREE.Box3(new THREE.Vector3(-0.45, -1.05, -0.06), new THREE.Vector3(0.45, 1.05, 0.06)), sw = zoneFor(box, { kind: 'swing', face: '+z', hinge: 'left', r: 0.86, name: 'swing', why: '' });
+    expect(sw.at).toEqual([-0.45, 0, 0.06]); expect(sw.r).toBe(0.86);
+    const id = new THREE.Matrix4(), at = (x: number, z: number) => new THREE.Box3(new THREE.Vector3(x - 0.05, -1, z - 0.05), new THREE.Vector3(x + 0.05, 0, z + 0.05));
+    // (inside the quarter disc, outside its radius, behind the door, past the hinge)
+    expect(inZone(sw, id, at(0, 0.4))).toBe(true); expect(inZone(sw, id, at(0.4, 0.8))).toBe(false); expect(inZone(sw, id, at(0, -0.3))).toBe(false); expect(inZone(sw, id, at(-0.7, 0.3))).toBe(false);
+  });
+  it('a living room with its door behind the television: the television and its stand move together, out of the door\'s zones, and stay in the room', async () => {
+    const r = await room({ type: 'living', front: 'wall', back: 'door' }), before = proximity(r, { move: false });
+    expect(before.found.map((b) => b.thing)).toContain('tv stand'); expect(before.found[0]!.of).toBe('door');
+    const after = proximity(r);
+    expect(after.moved).toBe(2); expect(proximity(after.tree, { move: false }).found).toHaveLength(0);
     const ns = layout(after.tree), tv = ns.find((n) => n.p.name === 'television')!.sub!, st = ns.find((n) => n.p.name === 'tv stand')!.sub!;
     expect(tv.min.y).toBeCloseTo(st.max.y, 1); expect(tv.getCenter(new THREE.Vector3()).setY(0).distanceTo(st.getCenter(new THREE.Vector3()).setY(0))).toBeLessThan(0.25);
   }, 60000);
-  it('a kitchen whose run fills the wall its door is in is turned to the wall across, sink, stove and fridge with it', async () => {
-    const r = keepClear(await room({ type: 'kitchen', front: 'wall', back: 'door' }));
-    expect(r.blocked[0]!.did).toMatch(/turned to the wall across.*sink.*stove.*fridge/);
-    expect(keepClear(r.tree, { move: false }).blocked).toHaveLength(0);
+  it('the zones come with the things: the door\'s sweep and approach, the toilet\'s and basin\'s clear floor (IRC R307.1), the kitchen\'s aisle (NKBA)', async () => {
+    const ns = layout(await room({ type: 'bathroom', front: 'wall', back: 'door' })), names = ns.flatMap((n) => (n.p.keep ?? []).map((k) => `${n.p.name}: ${k.name}`));
+    expect(names).toEqual(expect.arrayContaining(['door: swing', 'door: approach', 'toilet: clear floor', 'pedestal sink: clear floor']));
+    expect(ns.find((n) => n.p.name === 'toilet' && n.p.keep)!.p.keep![0]!.why).toMatch(/R307\.1/);
+    const k = layout(await room({ type: 'kitchen', front: 'wall', back: 'window' })); expect(k.some((n) => n.p.keep?.some((z) => z.name === 'work aisle' && /NKBA/.test(z.why)))).toBe(true);
   }, 60000);
   it('what is there on purpose is left, and said', async () => {
     const r = await room({ type: 'living', front: 'wall', back: 'door' }), ns = layout(r), stand = ns.find((n) => n.p.name === 'tv stand')!;
-    const mark = (p: Part, path = ''): Part => (path === stand.path ? { ...p, meant: [MEANT_IN_DOORWAY] } : p.parts ? { ...p, parts: p.parts.map((k, i) => mark(k, `${path}/${i}`)) } : p);
-    const out = keepClear(mark(r));
-    expect(out.blocked.find((b) => b.thing === 'tv stand')!.did).toMatch(/meant/);
+    const mark = (p: Part, path = ''): Part => (path === stand.path ? { ...p, meant: [MEANT_ANYWHERE] } : p.parts ? { ...p, parts: p.parts.map((k, i) => mark(k, `${path}/${i}`)) } : p);
+    expect(proximity(mark(r)).found.find((b) => b.thing === 'tv stand')!.did).toMatch(/meant/);
   }, 60000);
-  it('every house plan comes out of its seed with every door clear; to the ADA\'s wheelchair room, more is said', async () => {
-    let ada = 0; for (const plan of ['studio', '1 bed', '2 bed', '3 bed']) { const b = emptyBoard('h'); placeBlock(b, 'seed.house', 0, 0, { plan }, 'h'); const e = new Engine(b); await e.run(); const h = partOf(e.state.get('h')!.out!.house as Assembly);
-      expect(keepClear(h, { move: false }).blocked).toHaveLength(0); ada += keepClear(h, { move: false, standard: 'ada' }).blocked.length; }
-    expect(ada).toBeGreaterThan(0);
+  it('every house plan comes out of its seed with every zone clear', async () => {
+    for (const plan of ['studio', '1 bed', '2 bed', '3 bed']) { const b = emptyBoard('h'); placeBlock(b, 'seed.house', 0, 0, { plan }, 'h'); const e = new Engine(b); await e.run(); const h = partOf(e.state.get('h')!.out!.house as Assembly);
+      const p = proximity(h, { move: false }); expect(p.found).toHaveLength(0); expect(p.zones).toBeGreaterThan(10); }
   }, 120000);
 });
 

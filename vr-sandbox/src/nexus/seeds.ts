@@ -83,7 +83,12 @@ function door(): void {
   const kx = s.f('0 - (w / 2 - 0.02)', { w: [w, 'value'] });
   const ht = s.at([hinge, 'part'], { x: [kx, 'result'], y: [s.f('h / 2 - 0.18', { h: [h, 'value'] }), 'result'], z: 0.02 }, 'hinge, top'), hb = s.at([hinge, 'part'], { x: [kx, 'result'], y: [s.f('0.28 - h / 2', { h: [h, 'value'] }), 'result'], z: 0.02 }, 'hinge, bottom');
   const d = s.all('door', [[leaf, 'part'], [front, 'placed'], [back, 'placed'], [jl, 'placed'], [jr, 'placed'], [ht, 'placed'], [hb, 'placed']]);
-  const dF = s.n('frame', { name: 'fit', facing: '+z' }, 'its frame: its middle, facing out'); s.w(d, 'assembly', dF, 'thing');
+  // (the room it needs, on it: its leaf's sweep out of the face its knuckles are on, from its hinged edge, the leaf's width
+  // its radius; and the floor to come up to it and push on its other face, a passage 760 mm deep (an estimate: a body's
+  // depth and a step))
+  const sweep = s.n('zone', { name: 'swing', kind: 'swing', face: '+z', hinge: 'left', why: 'the quarter disc its leaf sweeps from its hinge, its radius the leaf\'s width' }, 'the room its leaf sweeps'); s.w(d, 'assembly', sweep, 'thing'); s.w(s.f('w - 0.04', { w: [w, 'value'] }), 'result', sweep, 'r');
+  const reach = s.n('zone', { name: 'approach', kind: 'front', face: '-z', why: 'a passage its width wide, 760 mm deep, to come up to it and push (an estimate: a body\'s depth and a step)' }, 'the floor to come up to it'); s.w(sweep, 'thing', reach, 'thing'); s.w(s.f('0.76', {}), 'result', reach, 'depth');
+  const dF = s.n('frame', { name: 'fit', facing: '+z' }, 'its frame: its middle, facing out'); s.w(reach, 'thing', dF, 'thing');
   s.output('door', 'assembly', dF, 'thing');
   s.save('seed.door', 'Door', 'A door: its leaf hung on two hinges, a lever handle on each face 1 m up, its lining; centred on its own middle. Width, height and colour are yours (an interior door 40 mm thick, typical)', ['structural', 'everyday']);
 }
@@ -105,7 +110,8 @@ function toilet(): void {
   const flush = s.n('shape.cyl', { name: 'flush button', mat: 'stainless-304', color: '#c0c4c8', finish: 'chrome', r: 0.025, h: 0.01 }, 'flush button');
   const flushAt = s.at([flush, 'part'], { y: 0.795, z: 0.11 }, 'button on top');
   const t = s.all('toilet', [[panAt, 'placed'], [seatAt, 'placed'], [tankAt, 'placed'], [flushAt, 'placed']]);
-  s.output('toilet', 'assembly', t, 'assembly');
+  const tz = s.n('zone', { name: 'clear floor', kind: 'front', face: '+z', why: '21 in (533 mm) clear in front of a water closet, and 15 in (381 mm) from its centre line to anything beside it (IRC R307.1)' }, 'its clear floor'); s.w(t, 'assembly', tz, 'thing'); s.w(s.f('0.533', {}), 'result', tz, 'depth'); s.w(s.f('2 * 0.381', {}), 'result', tz, 'width');
+  s.output('toilet', 'assembly', tz, 'thing');
   s.save('seed.toilet', 'Toilet', 'A close-coupled toilet with its back to the wall at z = 0, facing +z, standing on the floor: pan, seat 400 mm up, cistern and flush (typical sizes)', ['structural', 'everyday']);
 }
 function sink(): void {
@@ -125,7 +131,10 @@ function sink(): void {
   const worktop = s.n('shape.box', { name: 'worktop', mat: 'granite', color: '#455a64', finish: 'stone', w: 0.8, h: 0.04, d: 0.62 }, 'worktop');
   const bowl = s.n('shape.box', { name: 'sink bowl', mat: 'stainless-304', color: '#b0b6bc', finish: 'brushed', w: 0.5, h: 0.02, d: 0.4 }, 'bowl');
   const kit = s.all('kitchen sink', [[s.at([base, 'part'], { y: 0.43, z: 0.3 }), 'placed'], [s.at([worktop, 'part'], { y: 0.88, z: 0.31 }), 'placed'], [s.at([bowl, 'part'], { y: 0.895, z: 0.33 }), 'placed'], [s.at([tap, 'part'], { y: 1.01, z: 0.07 }), 'placed'], [s.at([spout, 'part'], { y: 1.11, z: 0.13 }), 'placed']]);
-  const pick = s.n('pick', { options: 'pedestal|vanity|kitchen' }, 'which kind'); s.w(kind, 'value', pick, 'which'); s.w(ped, 'assembly', pick, 'pedestal'); s.w(van, 'assembly', pick, 'vanity'); s.w(kit, 'assembly', pick, 'kitchen');
+  // (a basin keeps the floor in front of it a code asks for; a kitchen sink is in its run, which keeps its aisle)
+  const basinZone = (a: string, label: string) => { const z = s.n('zone', { name: 'clear floor', kind: 'front', face: '+z', why: '21 in (533 mm) clear in front of a lavatory (IRC R307.1)' }, label); s.w(a, 'assembly', z, 'thing'); s.w(s.f('0.533', {}), 'result', z, 'depth'); return z; };
+  const pedZ = basinZone(ped, 'its clear floor'), vanZ = basinZone(van, 'its clear floor ');
+  const pick = s.n('pick', { options: 'pedestal|vanity|kitchen' }, 'which kind'); s.w(kind, 'value', pick, 'which'); s.w(pedZ, 'thing', pick, 'pedestal'); s.w(vanZ, 'thing', pick, 'vanity'); s.w(kit, 'assembly', pick, 'kitchen');
   s.output('sink', 'assembly', pick, 'chosen');
   s.save('seed.sink', 'Sink', 'A sink with its back to the wall at z = 0, facing +z: a pedestal basin, a vanity, or a kitchen sink in its base cabinet, by its kind (typical sizes)', ['structural', 'everyday']);
 }
@@ -184,9 +193,11 @@ function fittingsAll(): void {
     const fridge = s.n('shape.box', { name: 'fridge', mat: 'steel-low', fill: 0.012, color: '#eceff1', finish: 'paint', w: 0.75, h: 1.75, d: 0.7 }, 'fridge');
     // (along the back wall between its side walls' faces, 75 mm in: the run from the left, then the stove, then the fridge,
     // 10 mm apart)
+    // (the run keeps its work aisle in front of it: 42 in, 1067 mm, for one cook, the NKBA's kitchen planning guidelines)
+    const runZ = s.n('zone', { name: 'work aisle', kind: 'front', face: '+z', why: 'a 42 in (1067 mm) work aisle for one cook (NKBA Kitchen Planning Guidelines)' }, 'its work aisle'); s.w(run, 'part', runZ, 'thing'); s.w(s.f('1.067', {}), 'result', runZ, 'depth');
     const runX = s.f('0 - 0.765', {}, 'run middle'), z0 = s.f('b + 0.3', { b: [bz, 'result'] }, 'its middle');
     return [
-      [s.at([run, 'part'], { x: [runX, 'result'], y: 0.43, z: [z0, 'result'] }), 'placed'],
+      [s.at([runZ, 'thing'], { x: [runX, 'result'], y: 0.43, z: [z0, 'result'] }), 'placed'],
       [s.at([top, 'part'], { x: [runX, 'result'], y: 0.88, z: [s.f('b + 0.31', { b: [bz, 'result'] }), 'result'] }), 'placed'],
       [s.at([sinkK, 'sink'], { x: [runX, 'result'], z: [bz, 'result'] }), 'placed'],
       [s.at([stove, 'part'], { x: [s.f('w / 2 - 1.225', { w: [w, 'value'] }), 'result'], y: 0.45, z: [s.f('b + 0.31', { b: [bz, 'result'] }), 'result'] }), 'placed'],
@@ -280,9 +291,9 @@ function house(): void {
   const rules = s.n('rows.recode', { rules: 'hall/outside: door\nhall/*: none\n*/outside: window\n*/hall*: door\n*/* (shared): none\n*: wall' }, 'doors to the hall, windows outside'); s.w(touch, 'rows', rules, 'rows');
   const painted = s.n('rows.set', { column: 'wall' }, 'every room its wall colour'); s.w(rules, 'rows', painted, 'rows'); s.w(wallCol, 'value', painted, 'value');
   const rooms = s.n('spawn', { seed: 'seed.room' }, 'its rooms'); s.w(painted, 'rows', rooms, 'rows');
-  // (and every doorway kept clear: what its room's fittings put where a door swings or is come up to is moved along its
-  // wall, or to another, unless it is meant to be there)
-  const clear = s.n('keep.clear', {}, 'its doorways kept clear'); s.w(rooms, 'things', clear, 'thing');
+  // (and the room every thing in it needs kept clear (each carries its own zones: a door's sweep, a toilet's clear floor,
+  // a kitchen's aisle): what stands in one is moved along its wall, or to another, unless it is meant to be there)
+  const clear = s.n('proximity', {}, 'every zone kept clear'); s.w(rooms, 'things', clear, 'thing');
   // a gable roof: a triangle 1 m across and 0.4 m high, stretched over the floor with 300 mm eaves all round, a pitch of about 22° (typical)
   const roof = s.n('shape.extrude', { name: 'roof', mat: 'tile', finish: 'texture', profile: '-500, 0; 500, 0; 0, 400', L: 1 }, 'roof (gable)'); s.w(roofCol, 'value', roof, 'color');
   const stretch = s.n('variant', {}, 'roof over the whole floor'); s.w(roof, 'part', stretch, 'thing');

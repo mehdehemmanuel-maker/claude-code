@@ -254,13 +254,21 @@ Step 3 result (`act/agent.ts`; nodes `goal`, `agent`; board "An agent opens a do
   - Attention still has no memory: it sees once, at the start.
   - It opens; it does not go through, or close the door behind it.
 
-After step 3, asked for (`placement/clear.ts`, `act/body.ts`, `life/segments.ts`; nodes `keep.clear`, `body`; boards "Doorways kept clear", "A body from its measured segments"):
-- **Doorways kept clear:** the user saw a television standing in front of a door.
-  - **The cause:** each room's fittings are laid out by the room's type alone, against its back wall, wherever its door is.
-  - **The zones:** each door is read as the agent reads it. Two zones are kept: the room its leaf sweeps, and a passage its width wide, 760 mm deep, on the side it is pushed from (an estimate). Or, set to the ADA, its wheelchair room (404.2.4.1).
-  - **The repair:** what stands in a zone below the door's head moves with whatever touches it (the television with its stand, the sink with its worktop, the stove and the fridge with the cabinet run). It is slid along its wall, or turned to another wall of its room and pushed back until it meets a wall (not a sofa), to the nearest place clear of every zone and of everything else.
-  - **On purpose:** a thing marked as meant to be in a doorway (`Part.meant`) is left there, and that is said.
-  - **The house seed runs it on every house.** In all four plans, the kitchen run filled the wall its door is in and is turned to the wall across. The living room's television goes to a side wall; one bathroom's basin moves too. Every door ends clear.
+After step 3, asked for (`placement/proximity.ts`, `act/body.ts`, `life/segments.ts`; nodes `zone`, `proximity`, `body`; boards "Proximity", "A body from its measured segments"):
+- **Proximity, on the nodes (not a rule for doors):** the user saw a television in front of a door.
+  - **First try, replaced:** a rule that read doors and moved what stood in front of them. The user's direction: the room a thing needs should be on the node, with its math, and one proximity logic should keep it. So:
+  - **`Part.keep`, set by the `zone` node:** each thing carries the zones it needs, worked out from its own size or from numbers wired in. There are two kinds: in front of a face so deep, or swept from a hinge at one edge.
+  - **The seeds put them on their own things:**
+    - The door: its leaf's sweep, from its hinged edge, the leaf's width (w − 40 mm) its radius; and a 760 mm approach on the face it is pushed from (an estimate).
+    - The toilet: 21 in (533 mm) in front, and 15 in (381 mm) from its centre line to either side (IRC R307.1).
+    - A basin: 21 in in front (IRC R307.1).
+    - The kitchen run: a 42 in (1,067 mm) work aisle (NKBA Kitchen Planning Guidelines).
+  - **One `proximity` node knows no kind of thing:**
+    - It finds what stands in another's zone, below the zone's height.
+    - It moves what can move, with what touches it (the television with its stand, the sink with its worktop, the cabinet run with its stove and fridge): along the wall it stands against, or turned to another wall and pushed back until it meets a wall.
+    - It takes the nearest place where the thing stands in no zone and its own zones, moved with it, hold nothing. So a toilet is never turned to face a wall.
+    - What is meant to be there (`Part.meant`: the zone's name, or 'in the way') is left, and that is said.
+  - **The house seed runs it on every house.** Every room type and all four house plans now come out with every zone clear: 13 to 23 zones a house. The toilet stood in the basin's clear floor in every plan, and is now moved apart from it.
   - **Found on the way:** the kitchen seed's cabinet run went 75 mm into its left wall and its stove overlapped the run. They now sit side by side between the walls: run, stove, fridge.
 - **A body from its measured segments, its math on every part:**
   - **The source:** the agent was a stick figure. It is now the body's sixteen segments from `life/segments.ts`: each de Leva's share of the body's mass (men and women apart), laid out by Drillis and Contini's proportions.
@@ -276,7 +284,7 @@ After step 3, asked for (`placement/clear.ts`, `act/body.ts`, `life/segments.ts`
     - A body's trunk and head are boxes and a capsule, not its skin. `anatomy.ts` has the skin as a field, not yet drawn here.
     - A muscle's bulge is not modelled.
     - The body is not yet in the physics as it acts (`person.ts` has bodies on Jolt; the agent does not use them yet).
-    - A sofa that faced a moved television is not turned to face it again.
+    - A sofa that faced a moved television is not turned to face it again: a television's viewing zone, with the sofa meant in it, would say so.
 
 Step 4 result (`src/nexus/logic/`: `netlist.ts`, `switch.ts`, `cells.ts`, `cpu6502.ts`, `asm6502.ts`, `chip6502.ts`, `programs.ts`; nodes `netlist`, `cell.characterise`, `logic.run`; board "The 6502 from its transistors"):
 - **The netlist:**
