@@ -41,6 +41,12 @@ import { openDoor, sceneAt, type Goal, type Plan } from './act/agent';
 import { CLEARANCE, keepClear, type Standard } from './placement/clear';
 import { bodyParts, poseOf, rigFor } from './act/body';
 import { centreOfMass } from './life/segments';
+import { load6502, NETLIST_6502, type Netlist } from './logic/netlist';
+import { cellsOf, characterise } from './logic/cells';
+import { memoryView, runBoth } from './logic/chip6502';
+import { assemble } from './logic/asm6502';
+import { Cpu6502 } from './logic/cpu6502';
+import { PROGRAMS } from './logic/programs';
 import { layout as layoutOf } from './make/space';
 import { LOGICS, SECTIONS, endOn, makeLine, outer, route, sectionOf, sizeBore, sizeWire, vary, type Logic, type Section } from './placement/line';
 import { boreThrough, onto } from './mate';
@@ -1384,6 +1390,31 @@ const BUILT_THINGS: BlockDef[] = [
       const harmed = obs.filter((ob) => (p.by[ob.name]?.attended ?? []).some((n) => n.harm)).length;
       return { noticed: rows, harmed, view: showPerception(p, obs), says: `${p.says}; ${obs.map((ob) => `${ob.name}: ${(p.by[ob.name]?.attended ?? []).map((n) => `${n.sense} ${n.thing}`).join(', ') || 'nothing'}`).join('; ')}` }; },
     tests: [{ set: { by: '^pipe$', alarm: '', running: 'off' }, inputs: { thing: { name: 'a pipe', parts: [{ name: 'floor', item: 'floor', shape: { box: [4, 0.02, 4] }, at: [0, -0.01, 0], mat: 'concrete' }, { name: 'pipe', item: 'pipe', shape: { box: [1, 0.1, 0.1] }, at: [1, 0.05, 0], mat: 'steel-low', color: 0x202020 }] } }, outputs: { harmed: 0 } }] }),
+  def({ id: 'netlist', name: 'Netlist', kind: 'input', ability: 'measure', domains: ['electronics', 'electrical'], says: 'A chip as its transistors: each a switch between two nodes, closed while the node at its gate is high, some nodes held high by a load. The MOS 6502 (revD), as the Visual 6502 team traced it from the die: 3,288 transistors as traced, 1,726 nodes. Its data is CC BY-NC-SA 3.0 and is fetched from its source, not kept here. Its gates are read from their pull-down networks: inverters, NORs, NANDs, AND-OR-INVERTs',
+    settings: [{ key: 'chip', label: 'Chip', type: 'choice', default: '6502', choices: ['6502'] }],
+    ports: { inputs: [], outputs: [P('netlist', 'any'), N('transistors'), N('nodes'), P('cells', 'table', { label: 'its gates, by kind' }), P('says', 'text')] },
+    run: async () => { const n = await load6502(), c = cellsOf(n);
+      return { netlist: n, transistors: n.gate.length, nodes: n.nodes, cells: c.kinds.map((k) => ({ kind: k.kind, count: k.count, example_node: k.example })), says: `${n.traced} transistors traced, ${n.gate.length} once duplicates are one; ${n.nodes} nodes, ${c.pulled} pulled up. ${c.says}. Source: ${NETLIST_6502.source}` }; },
+    tests: [] }),
+  def({ id: 'cell.characterise', name: 'Characterise a cell', kind: 'critic', ability: 'check', domains: ['electronics', 'electrical'], says: 'One of a chip\'s own gates, of the kind you pick (the commonest first), copied out of its netlist and run at switch level through every input: its truth table, and whether it gives the gate its pull-down network says. What a switch-level netlist does not hold (a node\'s capacitance, so a gate\'s delay and energy) is said, not guessed',
+    settings: [{ key: 'rank', label: 'Which kind (1 the commonest)', type: 'number', default: 3 }],
+    ports: { inputs: [P('netlist', 'any')], outputs: [P('table', 'table', { label: 'its truth table' }), P('is', 'text', { label: 'the gate it is' }), P('says', 'text')] },
+    run: (i, c) => { const n = i.netlist as Netlist; if (!n?.gate) throw new Error('wire a netlist in'); const cs = cellsOf(n), k = cs.kinds[Math.max(0, Math.min(cs.kinds.length - 1, Math.round(Number(c.set.rank) || 1) - 1))]!, cell = cs.cells.find((x) => x.out === k.example)!, ch = characterise(cell);
+      return { table: ch.rows, is: ch.is, says: `${k.kind}, ${k.count} of them in the chip; ${ch.says}` }; },
+    tests: [] }),
+  def({ id: 'logic.run', name: 'Run on its transistors', kind: 'solver', ability: 'simulate', domains: ['electronics', 'software'], says: 'A program assembled and run on a chip\'s transistors, at switch level, half a clock cycle at a time, against 64 KB of memory; and beside it on the fast model (the instruction set as its manual gives it), compared instruction by instruction: the registers, the flags, the cycles each took, what each wrote. The transistors are the truth. Its rate measured, against the real chip\'s 1 MHz',
+    settings: [{ key: 'program', label: 'Program', type: 'choice', default: 'primes', choices: [...Object.keys(PROGRAMS), 'your own'] }, { key: 'source', label: 'Your own (6502 assembly; start at .org, end by jumping to itself)', type: 'text', default: '' }, { key: 'most', label: 'Most cycles', type: 'number', default: 20000 }, { key: 'page', label: 'Memory page to show ($)', type: 'text', default: '10' }],
+    ports: { inputs: [P('netlist', 'any')], outputs: [P('registers', 'table'), P('differences', 'table', { label: 'where the model and the transistors differ' }), N('instructions'), N('cycles'), N('hz', 'Hz', { label: 'cycles a second, on its transistors' }), N('modelHz', 'Hz', { label: 'cycles a second, on the fast model' }), thing('memory', 'a page of its memory'), P('says', 'text')] },
+    run: (i, c) => { const n = i.netlist as Netlist; if (!n?.gate) throw new Error('wire a netlist in');
+      const name = String(c.set.program ?? 'primes'), src = name === 'your own' ? String(c.set.source ?? '') : PROGRAMS[name]?.src ?? ''; if (!src.trim()) throw new Error('no program: pick one, or write your own');
+      const a = assemble(src), r = runBoth(n, a.bytes, { start: a.start, most: Math.max(100, Number(c.set.most) || 20000) });
+      // (the fast model alone, timed over the same program)
+      const mem = new Uint8Array(65536); for (const [k, v] of a.bytes) mem[k] = v; mem[0xfffc] = a.start & 0xff; mem[0xfffd] = a.start >> 8; const cpu = new Cpu6502(mem); cpu.reset(); const t0 = performance.now(); let steps = 0;
+      while (steps < 5_000_000) { const pc = cpu.r.pc; if (mem[pc] === 0x4c && (mem[pc + 1]! | (mem[pc + 2]! << 8)) === pc) break; cpu.step(); steps++; } const modelHz = (cpu.cycles / Math.max(1e-3, performance.now() - t0)) * 1000;
+      const page = parseInt(String(c.set.page ?? '10'), 16) & 0xff, h = (v: number, w = 2) => `$${v.toString(16).padStart(w, '0')}`;
+      return { registers: [{ A: h(r.regs.a), X: h(r.regs.x), Y: h(r.regs.y), SP: h(r.regs.sp), P: h(r.regs.p), PC: h(r.regs.pc, 4) }], differences: r.mismatches.map((m) => ({ instruction: m.instr, at: h(m.pc, 4), op: m.op, what: m.what, transistors: m.chip, model: m.model })), instructions: r.instructions, cycles: r.cycles, hz: r.hz, modelHz, memory: memoryView(r.mem, page, r.written),
+        says: `${PROGRAMS[name]?.says ?? 'your program'}: ${r.instructions} instructions, ${r.cycles} cycles on ${n.gate.length} transistors (${Math.round(r.switchesPerCycle)} node groups worked out a cycle); ${r.stoppedBy}; ${r.mismatches.length ? `${r.mismatches.length} differences from the fast model` : 'not one difference from the fast model in registers, flags, cycles or writes'}. ${Math.round(r.hz)} cycles a second on its transistors, ${(r.hz / 1e6 * 100).toFixed(2)} % of the real chip\'s 1 MHz (its rated clock; the Apple II ran it at 1.023 MHz); the fast model ${(modelHz / 1e6).toFixed(1)} MHz` }; },
+    tests: [] }),
   def({ id: 'body', name: 'Body', kind: 'generator', ability: 'generate', domains: ['everyday', 'science'], says: 'A human body from its measured segments, not drawn by eye: laid out from its height by Drillis and Contini\'s proportions, its sixteen segments each the share of its mass de Leva measured (men and women apart), shaped as the room that mass takes at the body\'s density round its bone; its joints with the AAOS ranges and the torques its muscles give. Every part carries its math: mass, length, centre of mass and moments of inertia worked out for its shape, beside de Leva\'s measured ones for the long limbs',
     settings: [{ key: 'height', label: 'Height, m', type: 'number', default: 1.75 }, { key: 'mass', label: 'Mass, kg', type: 'number', default: 75 }, { key: 'sex', label: 'Sex', type: 'choice', default: 'male', choices: ['male', 'female'] }, { key: 'muscle', label: 'Muscle (1 typical)', type: 'number', default: 1 }, { key: 'fat', label: 'Fat (1 typical)', type: 'number', default: 1 }, { key: 'pose', label: 'Pose', type: 'choice', default: 'standing', choices: ['standing', 'walking', 'reaching'] }],
     ports: { inputs: [], outputs: [thing('body', 'the body'), P('segments', 'table', { label: 'each segment, its math' }), P('joints', 'table', { label: 'each joint, its range and torque' }), N('mass', 'kg'), N('com', 'm', { label: 'its centre of mass, up from the floor' }), P('says', 'text')] },

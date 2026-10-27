@@ -278,6 +278,33 @@ After step 3, asked for (`placement/clear.ts`, `act/body.ts`, `life/segments.ts`
     - The body is not yet in the physics as it acts (`person.ts` has bodies on Jolt; the agent does not use them yet).
     - A sofa that faced a moved television is not turned to face it again.
 
+Step 4 result (`src/nexus/logic/`: `netlist.ts`, `switch.ts`, `cells.ts`, `cpu6502.ts`, `asm6502.ts`, `chip6502.ts`, `programs.ts`; nodes `netlist`, `cell.characterise`, `logic.run`; board "The 6502 from its transistors"):
+- **The netlist:**
+  - The MOS 6502 revD as the Visual 6502 team traced it from the die: 3,288 transistors (3,239 once the duplicates are one) and 1,726 nodes, 1,039 of them pulled up.
+  - Its data is CC BY-NC-SA 3.0 (Greg James, Brian Silverman, Barry Silverman; www.visual6502.org). So it is not kept in this repository: it is fetched from perfect6502's copy the first time it is needed, and cached in `data/ext/` (ignored by git). The page fetches it too.
+- **Switch level (`switch.ts`):**
+  - Each transistor is a switch, closed while its gate is high. Nodes joined through closed switches form a group and take one level: ground first, then the supply, an input held low, a pull-up, then stored charge.
+  - Groups whose switches changed are worked out again until nothing changes. This is the Visual 6502 team's method, written from its description.
+- **Cells (`cells.ts`):**
+  - Each pulled-up node's pull-down network is read: switches to ground side by side are a NOR, a chain is a NAND, chains side by side are an AND-OR-INVERT.
+  - 1,006 of the 1,039 pulled-up nodes are gates read this way: 345 inverters, 210 inverters with pass transistors, 119 two-input NORs, NORs up to 8 inputs, NANDs and AND-OR-INVERTs, 34 kinds in all.
+  - Each kind is copied out on its own and run at switch level through every input. Its truth table is the gate its network says.
+- **The fast model (`cpu6502.ts`):** the 151 official opcodes as the programming manual gives them, with their cycles (and the extra one where an index carries into the next page or a branch is taken). It includes decimal mode and the indirect jump's page bug. An assembler (`asm6502.ts`) reads programs from the same table.
+- **Checked against each other (`chip6502.ts`):**
+  - The chip runs from its transistors, half a clock at a time, against 64 KB of memory. Where it fetches an opcode (SYNC), the next cycle's registers, the cycles between fetches, and what each instruction wrote are compared with the fast model's.
+  - **The primes below 200:** 46 of them, then 29 × 71 = 2,059. That is 4,447 instructions and 12,035 cycles, with not one difference.
+  - **All 151 opcodes:** generated from the opcode table, not listed by hand. Each runs over operands that reach every flag, ADC and SBC in binary and decimal, branches taken and not, BRK and RTI. That is 29,621 instructions and 98,923 cycles, with not one difference.
+  - **The check is real:** a model wrong by one cycle on STA abs,X is caught at the first STA it runs.
+  - **Found on the way:** the first exerciser claimed every instruction but ran 82 of the 151 opcodes. The test that counts them caught it, and the exerciser is now generated.
+- **The rate, measured on this machine:**
+  - On its transistors, about 4,500 cycles a second (2,189 node groups worked out a cycle). That is 0.45 % of the real chip's 1 MHz, about 220 times slower than the real thing.
+  - The fast model runs 3 to 6 MHz, faster than the real chip. That is why a fast model is checked against the transistors, then run in their place.
+- **Not yet:**
+  - A gate's delay and energy: the netlist used here has no capacitances (the layout's polygons in segdefs would give them).
+  - Interrupts by IRQ and NMI pins (BRK is checked), and the undocumented opcodes.
+  - The GPU: step 8.
+  - The die drawn.
+
 ## 13. Measures
 
 | Measure | Target |

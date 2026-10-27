@@ -874,6 +874,24 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'sens', 'sensor', 'show', 'thing');
     return b;
   }],
+  ['The 6502 from its transistors: a real program run switch by switch, checked against its fast model', () => {
+    // the MOS 6502 as the Visual 6502 team traced it from the die (fetched from its source: its data is CC BY-NC-SA):
+    // each transistor a switch, each gate read from its pull-down network and characterised at switch level; a program
+    // assembled and run on the transistors half a clock at a time, and beside them on the fast model (the instruction set
+    // as its manual gives it), compared instruction by instruction; the rate measured. What the sieve leaves in memory
+    // is drawn: a byte a tile, the primes lit
+    const b = emptyBoard('The 6502 from its transistors');
+    placeBlock(b, 'netlist', 0, 0, { chip: '6502' }, 'chip'); b.nodes.chip!.label = 'The MOS 6502, its transistors';
+    placeBlock(b, 'view.table', 0, 0, {}, 'cells'); b.nodes.cells!.label = 'Its gates, read from the netlist'; wire(b, 'chip', 'cells', 'cells', 'rows');
+    placeBlock(b, 'cell.characterise', 0, 0, { rank: 3 }, 'nor'); b.nodes.nor!.label = 'Its commonest NOR, at switch level'; wire(b, 'chip', 'netlist', 'nor', 'netlist');
+    placeBlock(b, 'view.table', 0, 0, {}, 'truth'); b.nodes.truth!.label = 'Its truth table'; wire(b, 'nor', 'table', 'truth', 'rows');
+    placeBlock(b, 'logic.run', 0, 0, { program: 'primes', most: 20000, page: '10' }, 'run'); b.nodes.run!.label = 'The primes below 200, on its transistors'; wire(b, 'chip', 'netlist', 'run', 'netlist');
+    placeBlock(b, 'view.table', 0, 0, {}, 'regs'); b.nodes.regs!.label = 'Its registers at the end'; wire(b, 'run', 'registers', 'regs', 'rows');
+    placeBlock(b, 'view.table', 0, 0, {}, 'diff'); b.nodes.diff!.label = 'Where the fast model differs from the transistors'; wire(b, 'run', 'differences', 'diff', 'rows');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it did, and how fast'; wire(b, 'run', 'says', 'said', 'value');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'run', 'memory', 'show', 'thing');
+    return b;
+  }],
   ['Doorways kept clear: a living room with its door behind the television, before and after', () => {
     // a room whose fittings were laid out by its type alone puts its television against the wall its door is in. Keep
     // doorways clear reads each door (its hinge line, the side it swings to, its width) and keeps the room its leaf sweeps
@@ -1382,7 +1400,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['Doorways kept clear', 'structural'], ['A body from its measured', 'everyday'], ['An agent opens', 'everyday'], ['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['The 6502 from its transistors', 'electronics'], ['Doorways kept clear', 'structural'], ['A body from its measured', 'everyday'], ['An agent opens', 'everyday'], ['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));
