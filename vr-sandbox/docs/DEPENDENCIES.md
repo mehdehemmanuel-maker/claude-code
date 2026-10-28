@@ -1,6 +1,6 @@
 # The dependency map
 
-Written from the code by `tests/nexus/dependencies.test.ts` (step 0 of `docs/REALITY.md`); the test fails when it is out of date (`UPDATE_DEPS=1 npx vitest run tests/nexus/dependencies.test.ts`).
+Written from the code by `tests/nexus/docs.ts` (step 0 of `docs/REALITY.md`): `UPDATE_DOCS=1 npx vitest run`.
 
 ## Laws and the engines that hold them
 

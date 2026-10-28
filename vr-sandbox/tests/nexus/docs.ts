@@ -1,10 +1,10 @@
-// The dependency map (docs/REALITY.md, step 0), written from the code itself so it cannot drift: every law, its kind and
-// whether it is a node; the quantities laws share, read from their
-// ports (the start of step 2's registry), and the letters that mean different things in different laws; every material
-// table and which files read it. Kept current here; write it again with
-//   UPDATE_DEPS=1 npx vitest run tests/nexus/dependencies.test.ts
+// The generated docs, written from the code (not a test): the node catalogue (docs/NODES.md), the atlas (docs/ATLAS.md,
+// and the names each node's code reaches, src/nexus/navigate-named.ts), the dependency map (docs/DEPENDENCIES.md, and
+// the laws compared with an independent reference, src/nexus/book/compared.ts) and when each node was built
+// (src/nexus/built.ts, from git: needs a full clone). Written by `UPDATE_DOCS=1 npx vitest run` (the one test calls
+// `writeDocs`); run it twice where the nodes' code changed (the atlas reads the names the first run wrote).
 
-import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
@@ -13,9 +13,10 @@ import { QUANTITIES, quantityOf } from '../../src/nexus/quantities';
 import { crossCheck } from '../../src/nexus/lawgraph';
 import { FIELDS } from '../../src/nexus/book/fields';
 import { MATTER, matterOf } from '../../src/nexus/matter';
-import { LIBRARY } from '../../src/nexus/blocks';
+import { LIBRARY, libraryCatalogue } from '../../src/nexus/blocks';
+import { NAMED_BY, atlasText } from '../../src/nexus/navigate';
 
-const root = join(__dirname, '../..'), update = !!process.env['UPDATE_DEPS'];
+const root = join(__dirname, '../..');
 const files = (d = join(root, 'src'), out: string[] = []): string[] => { for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) files(p, out); else if (p.endsWith('.ts')) out.push(p); } return out; };
 
 /** The material tables, where each is defined, and the names others read it by. */
@@ -52,7 +53,7 @@ const NUMERIC: { what: string; at: string; find: RegExp; stays?: string }[] = [
 ];
 
 function mapText(): string {
-  const L: string[] = ['# The dependency map', '', 'Written from the code by `tests/nexus/dependencies.test.ts` (step 0 of `docs/REALITY.md`); the test fails when it is out of date (`UPDATE_DEPS=1 npx vitest run tests/nexus/dependencies.test.ts`).', ''];
+  const L: string[] = ['# The dependency map', '', 'Written from the code by `tests/nexus/docs.ts` (step 0 of `docs/REALITY.md`): `UPDATE_DOCS=1 npx vitest run`.', ''];
   // ---- laws ----
   const node = new Set([...LIBRARY.values()].filter((b) => b.kind === 'law').map((b) => b.id.replace(/^law\./, '')));
   const field = new Map<string, string>(); for (const [k, ls] of Object.entries(KEPT)) for (const l of ls) field.set(l.id, k); for (const l of SLICE) field.set(l.id, 'derived (slice)'); for (const l of UNIVERSAL) field.set(l.id, 'universal');
@@ -84,9 +85,8 @@ function mapText(): string {
   // ---- the laws checked against each other ----
   const xc = crossCheck();
   // the laws compared with an independent reference, kept for the evidence each node shows (src/nexus/evidence.ts)
-  const compared = `// Written by tests/nexus/dependencies.test.ts (UPDATE_DEPS=1): the laws whose worked example the other laws of the book\n// reach another way, and agree with (\`crossCheck\` in lawgraph.ts). Do not edit by hand; the test fails when it is stale.\nexport const COMPARED: string[] = [${xc.filter((r) => r.agree).map((r) => `'${r.law}'`).join(', ')}];\n`;
-  if (update) writeFileSync(join(root, 'src/nexus/book/compared.ts'), compared);
-  expect(readFileSync(join(root, 'src/nexus/book/compared.ts'), 'utf8'), 'compared.ts out of date: UPDATE_DEPS=1').toBe(compared);
+  const compared = `// Written by tests/nexus/docs.ts (UPDATE_DOCS=1): the laws whose worked example the other laws of the book\n// reach another way, and agree with (\`crossCheck\` in lawgraph.ts). Do not edit by hand; when it is stale.\nexport const COMPARED: string[] = [${xc.filter((r) => r.agree).map((r) => `'${r.law}'`).join(', ')}];\n`;
+  writeFileSync(join(root, 'src/nexus/book/compared.ts'), compared);
   L.push('', '## The laws checked against each other', '', `Each law's worked example given, its output sought through the other laws alone (\`crossCheck\` in \`src/nexus/lawgraph.ts\`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). ${xc.length} of ${BOOK.length} laws have another way to their output; ${xc.filter((r) => r.agree).length} agree to 10⁻⁶; ${xc.filter((r) => !r.agree).length} do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in \`docs/REALITY.md\`.`, '', '| Law | Its example | By the others | Through | |', '| --- | --- | --- | --- | --- |');
   for (const r of xc) L.push(`| \`${r.law}\` | ${+r.own.toPrecision(8)} ${r.unit} | ${+r.other.toPrecision(8)} ${r.unit} | ${r.by.map((b) => `\`${b}\``).join(' → ')} | ${r.agree ? 'agree' : '**differ**'} |`);
   // ---- material tables and who reads them ----
@@ -108,10 +108,42 @@ function mapText(): string {
   return L.join('\n') + '\n';
 }
 
-describe('the dependency map', () => {
-  it("is current", () => {
-    const want = mapText(), path = join(root, 'docs/DEPENDENCIES.md');
-    if (update) writeFileSync(path, want);
-    expect(readFileSync(path, 'utf8'), 'out of date: UPDATE_DEPS=1 npx vitest run tests/nexus/dependencies.test.ts').toBe(want);
-  }, 600_000);
-});
+
+/** For each library, the nodes whose code in blocks.ts names it. */
+function namedText(): string {
+  const src = readFileSync(join(root, 'src/nexus/blocks.ts'), 'utf8'), parts = src.split(/\n\s*def\(\{ id: '/).slice(1), named: Record<string, string[]> = {};
+  for (const p of parts) { const id = p.slice(0, p.indexOf("'")); if (!LIBRARY.has(id)) continue; for (const [lib, re] of Object.entries(NAMED_BY)) if (re.test(p)) (named[lib] ??= []).push(id); }
+  const body = Object.keys(NAMED_BY).filter((k) => named[k]).map((k) => `  ${k}: [${named[k]!.sort().map((x) => `'${x}'`).join(', ')}],`).join('\n');
+  return `// Written by tests/nexus/docs.ts (UPDATE_DOCS=1): for each library, the nodes whose code in blocks.ts names it\n// (NAMED_BY in navigate.ts). Do not edit by hand.\nexport const NAMED: Record<string, string[]> = {\n${body}\n};\n`;
+}
+
+
+/** When each node's definition was last changed, from git blame. */
+function builtText(): string {
+  // each line of every source file with the time of the commit that last changed it (now, for what is not committed)
+  const lines: { file: string; text: string; t: string }[] = [];
+  for (const f of files(join(root, 'src/nexus')).map((p) => relative(root, p))) {
+    let out: string; try { out = execFileSync('git', ['blame', '--line-porcelain', f], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }); } catch { continue; } // (a file git does not know yet: nothing in it is a node)
+    let t = '';
+    for (const l of out.split('\n')) { if (l.startsWith('committer-time ')) t = new Date(Number(l.slice(15)) * 1000).toISOString(); else if (l.startsWith('\t')) lines.push({ file: f, text: l.slice(1), t }); }
+  }
+  const now = new Date().toISOString(), built: Record<string, string> = {}, unfound: string[] = [];
+  for (const id of [...LIBRARY.keys()].sort()) {
+    const key = id.startsWith('law.') ? id.slice(4) : id, inBook = id.startsWith('law.');
+    const written = (k: string, book: boolean) => lines.find((l) => (!book || l.file.includes('/book/')) && (l.text.includes(`id: '${k}'`) || l.text.includes(`id: "${k}"`) || l.text.includes(`save('${k}'`)));
+    // (made in a loop: the line that makes it, its id a template on its prefix)
+    const prefix = id.slice(0, id.lastIndexOf('.') + 1), looped = () => lines.find((l) => l.text.includes(`id: \`${prefix}\${`) || l.text.includes(`save(\`${prefix}\${`));
+    const hit = (inBook ? written(key, true) : undefined) ?? written(id, false) ?? (prefix ? looped() : undefined);
+    if (hit) built[id] = hit.t || now; else unfound.push(id);
+  }
+  return (`// Generated by tests/nexus/docs.ts (UPDATE_DOCS=1): when each node's definition was last changed, from git.\n// A node built before the update is said to be on the node: its tests may be flawed, and it is not yet re-checked\n// against what the update brought (laws with units, evidence, ±, materials down to their elements).\n\n/** The update: Reality step 0 (docs/REALITY.md), commit 269af04. */\nexport const UPDATE = '2026-10-28T06:21:22.000Z';\n/** Each node's id, and when it was built or last rebuilt. */\nexport const BUILT: Record<string, string> = ${JSON.stringify(built, null, 0).replace(/","/g, '",\n  "').replace('{"', '{\n  "').replace('"}', '"\n}')};\n/** Nodes whose definition could not be found written out (made in a loop): dated by nothing, so said as before the update. */\nexport const UNDATED: string[] = ${JSON.stringify(unfound)};\n`);
+}
+
+/** Writes every generated doc. */
+export function writeDocs(): void {
+  writeFileSync(join(root, 'docs/NODES.md'), libraryCatalogue() + '\n');
+  writeFileSync(join(root, 'src/nexus/navigate-named.ts'), namedText());
+  writeFileSync(join(root, 'docs/ATLAS.md'), atlasText());
+  writeFileSync(join(root, 'docs/DEPENDENCIES.md'), mapText());
+  writeFileSync(join(root, 'src/nexus/built.ts'), builtText());
+}

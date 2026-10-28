@@ -568,3 +568,12 @@ previously built nodes as before the update, they could be flawed tests anyways"
 - Found on the way: a code block could run only in the page's worker, so no test could run a board with one (the
   resistor board's "where it overheats" failed headless); the worker's own runner now serves tests. Two messages
   still named the deleted forge; they no longer do.
+
+- Then (the user: "Dude we don't need all these tests"): the legacy suite deleted, 72 test files and the baseline
+  snapshot (commit f509152 holds them). One test is left, `tests/nexus/domains.test.ts`: every domain's nodes (ports,
+  evidence, units, date, their own tests), one quick starter board per field, and the reach check (every source file
+  reached from the app); 26 s with the type check, and CI runs the same. The generated docs are written by
+  `tests/nexus/docs.ts` (`UPDATE_DOCS=1 npx vitest run`), no longer checked by tests of their own. What is given up,
+  said: the snapshot that held every output still (the step 0 baseline), and the slow end-to-end checks (the Corolla's
+  autopilot, the 6502's 151 opcodes on its transistors, every kit through the make pipeline, the 10,000-node scale
+  runs); a change to what a board gives is now caught only where its node's own tests or its domain's quick board see it.

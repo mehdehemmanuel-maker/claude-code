@@ -1,5 +1,5 @@
-// Written by tests/nexus/navigate.test.ts (UPDATE_ATLAS=1): for each library, the nodes whose code in blocks.ts names it
-// (NAMED_BY in navigate.ts). Do not edit by hand; the test fails when it is out of date.
+// Written by tests/nexus/docs.ts (UPDATE_DOCS=1): for each library, the nodes whose code in blocks.ts names it
+// (NAMED_BY in navigate.ts). Do not edit by hand.
 export const NAMED: Record<string, string[]> = {
   machines: ['drive', 'engine.run', 'vehicle', 'vehicle.model'],
   powertrains: ['drive', 'engine.run'],

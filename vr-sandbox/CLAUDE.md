@@ -210,12 +210,12 @@ known gaps are there too.
 | Materials and everything known of them | `nexus/matter.ts` (data: `mass.ts`, `elements.ts`, `data/materials.ts`, `periodic.ts`, `woods.ts`, `mixes.ts`) |
 | What a thing is made of; mass, centre, inertia, heat capacity; paths and networks | `nexus/madeof.ts` |
 | Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
-| Baseline snapshot and dependency map | `tests/nexus/baseline.test.ts`, `dependencies.test.ts` |
+| The one test (every domain), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
 | Running boards (cache, lists, units on wires, groups, clock) | `nexus/dataflow.ts` |
 | Starter boards | `nexus/starters.ts` |
 | Navigation (libraries, flows, search) | `nexus/navigate.ts` (`docs/ATLAS.md` generated) |
-| Only what the app reaches is kept | `tests/nexus/reach.test.ts` |
+| Only what the app reaches is kept | the reach check in `tests/nexus/domains.test.ts` |
 | Things placed, never copied; frames; fit in; take apart | `nexus/assembly.ts` |
 | Layout, contacts, contact patches of a placed tree | `nexus/make/space.ts` |
 | Rules: interference, clearance, heat gate | `nexus/make/rules.ts` |
@@ -292,10 +292,9 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
 
 ## Working here
 
-- Gate: `npm run gate` (under a minute: the type check and `tests/nexus/domains.test.ts`, one pass over every domain;
-  run it before every push). `npm run gate:full` runs every test, the legacy suite with it (long: in the background,
-  logged to a file; CI runs it on every push). Nodes are dated (`src/nexus/built.ts`, `UPDATE_BUILT=1`); those built
-  before the update are the queue to re-check. Build the viewer:
-  `npx vite build --config vite.view.config.ts --logLevel error`.
+- Gate: `npm run gate`: the type check and the one test, `tests/nexus/domains.test.ts` (every domain's nodes, their own
+  tests, one quick board per field, the reach check), under a minute; CI runs the same. `UPDATE_DOCS=1 npx vitest run`
+  writes the generated docs and the nodes' dates (twice where nodes' code changed). Nodes built before the update are
+  marked as such: the queue to re-check. Build the viewer: `npx vite build --config vite.view.config.ts --logLevel error`.
 - Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing.
 - Never put API keys in the repo or in client code.
