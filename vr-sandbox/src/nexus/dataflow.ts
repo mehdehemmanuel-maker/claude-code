@@ -106,6 +106,14 @@ export interface NodeState {
   evidence?: { kind: EvidenceKind; from: string[] };
   /** What it gives that cannot be physical (a negative mass, an efficiency over one), said, never corrected. */
   warnings?: string[];
+  /** The standard uncertainty on each number it gives, in that port's unit: its own spread and what came in on its
+   *  wires carried through it to first order (each source moved by its ± and the node run again; inputs from different
+   *  sources taken as independent, one source feeding two inputs moved together). */
+  uncertainty?: Record<string, number>;
+  /** Why an uncertainty that came in could not be carried through it, when it could not. */
+  uncertaintyLost?: string;
+  /** The nodes that extrapolated outside where their law holds, which what it gives rests on. */
+  extrapolated?: string[];
 }
 export interface Report { ran: number; cached: number; failed: number; waiting: number; ms: number; looked: number }
 
@@ -245,12 +253,14 @@ export class Engine {
 
   private async step(id: string, r: Report): Promise<void> {
     const n = this.board.nodes[id]!, b = blockOf(n), was = this.state.get(id) ?? { status: 'idle', ms: 0, cached: false, runs: 0, fails: 0 } as NodeState;
-    const put = (s: Partial<NodeState>) => { const next = { ...was, ...s } as NodeState; if (b && next.status === 'ok' && next.out) { try { Object.assign(next, this.judge(id, b, next.out)); } catch { /* judging what it gives never fails it */ } } this.state.set(id, next); };
+    const put = (s: Partial<NodeState>) => { const next = { ...was, ...s } as NodeState; if (next.status !== 'ok') { delete next.uncertainty; delete next.uncertaintyLost; delete next.extrapolated; delete next.warnings; } if (b && next.status === 'ok' && next.out) { try { Object.assign(next, this.judge(id, b, next.out)); } catch { /* judging what it gives never fails it */ } } this.state.set(id, next); };
     if (!b) { put({ status: 'failed', error: `no block "${n.block}" in the library`, out: undefined, key: undefined }); r.failed++; return; }
     if (this.loop.has(id)) { put({ status: 'failed', error: 'in a loop: it feeds what feeds it', out: undefined, key: undefined }); r.failed++; return; }
     const set = { ...defaultsOf(b), ...(n.set ?? {}) }, ports = portsOf(b, set), wires = this.into.get(id) ?? [];
     // what comes in, and the key it all makes
     const inputs: Record<string, unknown> = {}, keys: string[] = [], missing: string[] = [];
+    // what came in uncertain: by the source that is uncertain, each input it feeds and its ± in that input's unit
+    const spreadIn = new Map<string, { input: string; at?: number; du: number }[]>();
     for (const p of ports.inputs) {
       const ws = wires.filter((e) => e.in === p.name);
       if (ws.length) {
@@ -258,7 +268,9 @@ export class Engine {
         for (const w of ws.sort((a, c) => (a.from < c.from ? -1 : a.from > c.from ? 1 : 0))) {
           const s = this.state.get(w.from);
           if (!s || s.status !== 'ok' || !s.out || !(w.out! in s.out)) { missing.push(`${p.label ?? p.name} (from ${this.board.nodes[w.from]?.label || w.from}, ${s?.status === 'failed' ? 'which failed' : 'which has nothing yet'})`); continue; }
-          vals.push(convert(s.out[w.out!], this.ports(w.from).outputs.find((o) => o.name === w.out)?.unit, p.unit)); keys.push(`${p.name}<${s.key}.${w.out}`);
+          const fromUnit = this.ports(w.from).outputs.find((o) => o.name === w.out)?.unit, v = convert(s.out[w.out!], fromUnit, p.unit), u = s.uncertainty?.[w.out!];
+          vals.push(v); keys.push(`${p.name}<${s.key}.${w.out}${u ? `±${u}` : ''}`);
+          if (u && typeof s.out[w.out!] === 'number' && typeof v === 'number') { const src = `${w.from}.${w.out}`, du = Math.abs((convert((s.out[w.out!] as number) + u, fromUnit, p.unit) as number) - v); spreadIn.set(src, [...(spreadIn.get(src) ?? []), { input: p.name, ...(p.many ? { at: vals.length - 1 } : {}), du }]); }
         }
         inputs[p.name] = p.many ? vals : vals[0];
       } else if (n.set && p.name in n.set && n.set[p.name] !== '' && n.set[p.name] !== null) { inputs[p.name] = n.set[p.name]; keys.push(`${p.name}=${stable(n.set[p.name])}`); }
@@ -271,7 +283,7 @@ export class Engine {
     const key = hash(`${b.id}@${b.version}:${b.graph ? boardKey(b.graph) : ''}|${stable(set)}|${keys.join('|')}${b.pure ? '' : `#${id}`}`);
     if (was.status === 'ok' && was.key === key) { put({ cached: true }); r.cached++; return; }
     const kept = b.pure ? this.memo.get(key) : undefined;
-    if (kept) { put({ status: 'ok', out: kept, key, cached: true, error: undefined }); r.cached++; return; }
+    if (kept) { put({ status: 'ok', out: kept, key, cached: true, error: undefined, ...(await this.spreadOf(id, b, inputs, set, kept, spreadIn, ports)) }); r.cached++; return; }
     const t = now(), use = USAGE.get(b.id) ?? { runs: 0, fails: 0, ms: 0 };
     try {
       const maps = this.mapsOver(id); let out: Outputs, mapped: number | undefined;
@@ -282,9 +294,10 @@ export class Engine {
         for (let k = 0; k < len; k++) { const one = { ...inputs }; for (const m of maps) one[m] = Array.isArray(inputs[m]) ? (inputs[m] as unknown[])[k] : inputs[m]; rows.push(await this.call(id, b, one, set)); }
         out = Object.fromEntries(ports.outputs.map((p) => [p.name, rows.map((x) => x[p.name])])); mapped = len;
       } else out = await this.call(id, b, inputs, set);
+      const spread = mapped === undefined ? await this.spreadOf(id, b, inputs, set, out, spreadIn, ports) : spreadIn.size ? { uncertainty: undefined, uncertaintyLost: 'run once for each item of a list: the uncertainty is not carried through a sweep' } : { uncertainty: undefined, uncertaintyLost: undefined };
       const ms = now() - t; use.runs++; use.ms += ms; USAGE.set(b.id, use);
       if (b.pure) this.memo.set(key, out);
-      put({ status: 'ok', out, key, ms, cached: false, error: undefined, mapped, runs: was.runs + 1 }); r.ran++;
+      put({ status: 'ok', out, key, ms, cached: false, error: undefined, mapped, runs: was.runs + 1, ...spread }); r.ran++;
     } catch (e) {
       use.fails++; USAGE.set(b.id, use);
       put({ status: 'failed', error: (e as Error).message, out: undefined, key, ms: now() - t, cached: false, runs: was.runs + 1, fails: was.fails + 1 }); r.failed++;
@@ -292,14 +305,44 @@ export class Engine {
   }
   /** What a node's result rests on: the weakest of its own evidence and what is wired into it, and the nodes that set
    *  it; and what in it cannot be physical. */
-  private judge(id: string, b: BlockDef, out: Outputs): Pick<NodeState, 'evidence' | 'warnings'> {
+  private judge(id: string, b: BlockDef, out: Outputs): Pick<NodeState, 'evidence' | 'warnings' | 'extrapolated'> {
     const own = evidenceKept.get(b) ?? evidenceKept.set(b, evidenceOf(b)).get(b)!;
     const ins = this.wiresInto(id).map((w) => ({ from: w.from, e: this.state.get(w.from)?.evidence })).filter((x): x is { from: string; e: { kind: EvidenceKind; from: string[] } } => !!x.e);
     const kind = weakestOf(own.kind, ...ins.map((x) => x.e.kind));
     const from = rankOf(own.kind) >= rankOf(kind) ? [id] : [...new Set(ins.filter((x) => x.e.kind === kind).flatMap((x) => x.e.from))];
     const warnings: string[] = [];
     for (const p of this.ports(id).outputs) { const w = nonphysical(p, out[p.name]); if (w) warnings.push(w); }
-    return { evidence: { kind, from }, ...(warnings.length ? { warnings } : { warnings: undefined }) };
+    // a law asked to go past where it holds says so in its status: what it gives, and all that rests on it, is marked
+    const self = typeof out.status === 'string' && /extrapolated/.test(out.status);
+    if (typeof out.violation === 'string' && out.violation) warnings.push(out.violation);
+    if (self) warnings.push(`extrapolated outside where it holds: ${typeof out.caution === 'string' ? out.caution : 'not a prediction it makes'}`);
+    const past = [...new Set([...(self ? [id] : []), ...this.wiresInto(id).flatMap((w) => this.state.get(w.from)?.extrapolated ?? [])])];
+    return { evidence: { kind, from }, warnings: warnings.length ? warnings : undefined, extrapolated: past.length ? past : undefined };
+  }
+  /** The uncertainty on what a node gives: its own spread, and each uncertain source moved by its ± (every input it
+   *  feeds together) and the node run again, the half-difference its sensitivity times its ±, summed in quadrature. A
+   *  first-order estimate (GUM), sources taken as independent; carried only through a node that does the same for the
+   *  same inputs and nothing else (pure), else said as not carried. */
+  private async spreadOf(id: string, b: BlockDef, inputs: Record<string, unknown>, set: Record<string, unknown>, out: Outputs, spreadIn: Map<string, { input: string; at?: number; du: number }[]>, ports: Ports): Promise<Pick<NodeState, 'uncertainty' | 'uncertaintyLost'>> {
+    const u2: Record<string, number> = {};
+    let own: Record<string, number> = {}; try { own = b.spread?.(set) ?? {}; } catch { /* a ± that cannot be read is no spread; the node says so when it runs */ }
+    for (const [k, v] of Object.entries(own)) if (v > 0 && typeof out[k] === 'number') u2[k] = v * v;
+    let lost: string | undefined;
+    if (spreadIn.size) {
+      if (!b.pure || !b.run) lost = `${b.pure ? 'it runs a board of its own' : 'it does not give the same for the same inputs'}: the uncertainty that came in is not carried through it`;
+      else {
+        const nums = ports.outputs.filter((p) => typeof out[p.name] === 'number');
+        try {
+          for (const [, fed] of spreadIn) {
+            const moved = (sign: number) => { const x = { ...inputs }; for (const f of fed) { if (f.at === undefined) x[f.input] = (x[f.input] as number) + sign * f.du; else { const l = [...(x[f.input] as number[])]; l[f.at] = l[f.at]! + sign * f.du; x[f.input] = l; } } return this.call(id, b, x, set); };
+            const hi = await moved(1), lo = await moved(-1);
+            for (const p of nums) { const a = hi[p.name], z = lo[p.name]; if (typeof a === 'number' && typeof z === 'number' && Number.isFinite(a) && Number.isFinite(z)) u2[p.name] = (u2[p.name] ?? 0) + ((a - z) / 2) ** 2; }
+          }
+        } catch (e) { lost = `moved by its ±, it does not run (${(e as Error).message}): the uncertainty that came in is not carried through it`; }
+      }
+    }
+    const uncertainty = Object.fromEntries(Object.entries(u2).filter(([, v]) => v > 0).map(([k, v]) => [k, Math.sqrt(v)]));
+    return { uncertainty: Object.keys(uncertainty).length ? uncertainty : undefined, uncertaintyLost: lost };
   }
   private async call(id: string, b: BlockDef, inputs: Record<string, unknown>, set: Record<string, unknown>): Promise<Outputs> {
     if (b.run) { const o = b.run(inputs, { set, code: this.env.code, ai: this.env.ai, signal: this.env.signal, time: this.env.time ?? 0 }); return o instanceof Promise ? await o : o; }

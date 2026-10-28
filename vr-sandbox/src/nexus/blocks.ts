@@ -166,6 +166,8 @@ export interface BlockDef {
   sources?: Source[];
   /** Where it holds, and what it leaves out. */
   valid?: string;
+  /** The standard uncertainty it puts on its own outputs (a reading's ±), by output port, in that port's unit. */
+  spread?(set: Record<string, unknown>): Record<string, number>;
   by: 'built in' | 'you' | 'claude' | 'engine';
   /** A sink: what it shows or does is the point, so a branch that ends in it is not dead. */
   sink?: boolean;
@@ -383,6 +385,8 @@ const ASTROM: Source = { cite: 'Åström & Murray, Feedback Systems, 2nd ed., Pr
 const NAKAJIMA: Source = { cite: 'Nakajima, Introduction to TPM: Total Productive Maintenance, Productivity Press 1988 (OEE)', kind: 'textbook' };
 const KELLEY: Source = { cite: 'Kelley & Walker, Critical-path planning and scheduling, Proc. Eastern Joint Computer Conference 1959', kind: 'paper' };
 type Def = Omit<BlockDef, 'version' | 'by' | 'pure'> & { version?: number; pure?: boolean };
+/** A ± typed on a setting: blank none, else a standard uncertainty not below nothing. */
+const pmOf = (v: unknown): number => { const t = String(v ?? '').trim(); if (!t) return 0; const u = Number(t); if (!Number.isFinite(u) || u < 0) throw new Error(`± ${t} is not an uncertainty: a number not below nothing`); return u; };
 const def = (d: Def): BlockDef => ({ version: 1, by: 'built in', pure: true, ...d });
 const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : v === undefined || v === null ? [] : [v]);
 const nums = (v: unknown): number[] => asList(v).map(Number).filter((x) => Number.isFinite(x));
@@ -416,9 +420,10 @@ const ratesOf = (src: string) => { const names: string[] = [], exprs: string[] =
 const BUILT_IN: BlockDef[] = [
   // inputs: what enters a board
   def({ id: 'in.number', name: 'Number', kind: 'input', ability: 'measure', domains: ['everyday', 'math'], says: 'A number you set, in any unit: typed "200 mm" is kept as 0.2 m; with ends set, held between them and shown as a slider you drag',
-    settings: [{ key: 'value', label: 'Value', type: 'quantity', default: 1 }, { key: 'unit', label: 'Unit (SI)', type: 'text', default: '' }, { key: 'min', label: 'From (blank: no end)', type: 'text', default: '' }, { key: 'max', label: 'To (blank: no end)', type: 'text', default: '' }, { key: 'style', label: 'Shown as', type: 'choice', default: 'box', choices: ['box', 'slider'] }],
+    settings: [{ key: 'value', label: 'Value', type: 'quantity', default: 1 }, { key: 'unit', label: 'Unit (SI)', type: 'text', default: '' }, { key: 'pm', label: '± (standard uncertainty, same unit; blank: none)', type: 'text', default: '' }, { key: 'min', label: 'From (blank: no end)', type: 'text', default: '' }, { key: 'max', label: 'To (blank: no end)', type: 'text', default: '' }, { key: 'style', label: 'Shown as', type: 'choice', default: 'box', choices: ['box', 'slider'] }],
     ports: (s) => ({ inputs: [], outputs: [N('value', String(s.unit ?? '') || undefined)] }),
-    run: (_, c) => { const v = typeof c.set.value === 'number' ? c.set.value : readQuantity(String(c.set.value), String(c.set.unit ?? '') || undefined); if (typeof v !== 'number') throw new Error(v.error); const end = (k: string) => { const t = String(c.set[k] ?? '').trim(); return t === '' ? undefined : Number(t); }, lo = end('min'), hi = end('max'); return { value: Math.min(hi ?? Infinity, Math.max(lo ?? -Infinity, v)) }; },
+    spread: (s): Record<string, number> => { const u = pmOf(s.pm); return u ? { value: u } : {}; },
+    run: (_, c) => { pmOf(c.set.pm); const v = typeof c.set.value === 'number' ? c.set.value : readQuantity(String(c.set.value), String(c.set.unit ?? '') || undefined); if (typeof v !== 'number') throw new Error(v.error); const end = (k: string) => { const t = String(c.set[k] ?? '').trim(); return t === '' ? undefined : Number(t); }, lo = end('min'), hi = end('max'); return { value: Math.min(hi ?? Infinity, Math.max(lo ?? -Infinity, v)) }; },
     tests: [{ set: { value: '200 mm', unit: 'm' }, inputs: {}, outputs: { value: 0.2 } }, { set: { value: 5, unit: '' }, inputs: {}, outputs: { value: 5 } }, { set: { value: 150, min: 0, max: 100, style: 'slider' }, inputs: {}, outputs: { value: 100 } }], sources: [SIBROCHURE] }),
   def({ id: 'in.text', name: 'Text', kind: 'input', ability: 'measure', domains: ['everyday'], says: 'Words you type, carried on a wire to whatever reads text (a label, a search, a note)', settings: [{ key: 'value', label: 'Text', type: 'text', default: '' }],
     ports: { inputs: [], outputs: [P('value', 'text')] }, run: (_, c) => ({ value: String(c.set.value ?? '') }), tests: [{ set: { value: 'hi' }, inputs: {}, outputs: { value: 'hi' } }] }),
@@ -455,6 +460,16 @@ const BUILT_IN: BlockDef[] = [
     ports: { inputs: [P('values', 'list<number>', { many: true })], outputs: [N('sum', undefined, { unitFrom: 'values' }), P('count', 'integer'), ...(['min', 'max', 'mean', 'median', 'sd'] as const).map((k) => N(k, undefined, { unitFrom: 'values' }))] },
     run: (i) => { const v = nums(asList(i.values).flat()).sort((a, b) => a - b), sum = v.reduce((a, b) => a + b, 0); if (!v.length) return { sum: 0, count: 0 }; const m = sum / v.length; const sd = v.length > 1 ? Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (v.length - 1)) : 0; const h = v.length >> 1; return { sum, count: v.length, min: v[0], max: v[v.length - 1], mean: m, median: v.length % 2 ? v[h] : (v[h - 1]! + v[h]!) / 2, sd }; },
     tests: [{ inputs: { values: [2, 4, 4, 4, 5, 5, 7, 9] }, outputs: { sum: 40, count: 8, min: 2, max: 9, mean: 5, median: 4.5, sd: 2.138089935299395 } }, { inputs: { values: [1, 2, 3.5] }, outputs: { sum: 6.5, count: 3 } }, { inputs: { values: [] }, outputs: { sum: 0, count: 0 } }] }),
+  def({ id: 'check.balance', name: 'Balance (what is conserved)', kind: 'calculator', ability: 'check', domains: ['science', 'math', 'energy'], says: 'What goes in against what comes out and what is kept, of one thing that is conserved (energy, mass, momentum along one axis, charge): every wire into In and into Out summed in one unit, and the imbalance; said on the node when it is more than the tolerance, never corrected. Each uncertain input is carried into the imbalance',
+    valid: 'one closed account: everything that crosses the boundary wired in, nothing created or destroyed inside (no nuclear change for mass)',
+    settings: [{ key: 'what', label: 'What is conserved', type: 'text', default: 'energy' }, { key: 'unit', label: 'Unit', type: 'text', default: 'J' }, { key: 'tol', label: 'Tolerance (share of the larger side)', type: 'number', default: 1e-6 }],
+    ports: (s) => { const u = String(s.unit ?? '') || undefined; return { inputs: [N('in', u, { many: true, label: 'In' }), N('out', u, { many: true, label: 'Out' }), N('kept', u, { optional: true, default: 0, label: 'Kept inside (change in what is stored)' })], outputs: [N('imbalance', u, { label: 'In − out − kept' }), N('share', undefined, { label: 'Imbalance as a share of the larger side' }), P('violation', 'text')] }; },
+    run: (i, c) => {
+      const sum = (v: unknown) => nums(asList(v).flat()).reduce((a, b) => a + b, 0), a = sum(i.in), z = sum(i.out) + Number(i.kept ?? 0), d = a - z, big = Math.max(Math.abs(a), Math.abs(z));
+      const share = big ? d / big : 0, tol = Number(c.set.tol ?? 1e-6), what = String(c.set.what ?? 'it'), u = String(c.set.unit ?? '');
+      return { imbalance: d, share, violation: Math.abs(share) > tol ? `${what} is not conserved: in ${+a.toPrecision(6)} ${u}, out and kept ${+z.toPrecision(6)} ${u}, ${+(share * 100).toPrecision(3)} % unaccounted for (something crossing the boundary not wired in, or a model that loses it)` : '' };
+    },
+    tests: [{ inputs: { in: [100], out: [60, 40] }, outputs: { imbalance: 0, share: 0, violation: '' } }, { set: { what: 'energy', unit: 'J', tol: 0.01 }, inputs: { in: [100], out: [80], kept: 10 }, outputs: { imbalance: 10, share: 0.1 } }] }),
   def({ id: 'math.round', name: 'Round', kind: 'calculator', ability: 'transform', domains: ['math'], says: 'Rounded to so many decimal places', settings: [{ key: 'places', label: 'Places', type: 'number', default: 2 }],
     ports: { inputs: [N('value')], outputs: [N('result', undefined, { unitFrom: 'value' })] }, run: (i, c) => { const k = 10 ** Math.round(Number(c.set.places)); return { result: Math.round(Number(i.value) * k) / k }; },
     tests: [{ set: { places: 1 }, inputs: { value: 2.46 }, outputs: { result: 2.5 } }] }),

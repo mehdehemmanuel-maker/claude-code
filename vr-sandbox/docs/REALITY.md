@@ -395,3 +395,19 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   every port to a unit the parser reads.
   Still to do in this step: uncertainty carried on wires where it changes a result; conservation checks across a chain;
   extrapolation outside a law's domain said on the value, not only listed as a limit.
+- **Step 8, the second round done.** Uncertainty on wires: a number typed with a ± (one standard uncertainty, in its own
+  unit) carries it, and the engine carries it through every node that gives the same for the same inputs: each
+  uncertain source moved by its ± and the node run again, the half-difference its sensitivity, summed in quadrature (a
+  first-order estimate as the GUM gives it). One source feeding two inputs is moved as one, so x × x gives 2x δx, not
+  √2 x δx; sources reached by different paths from one origin are still taken as independent, which is said. A ± is
+  converted with its value (2 mm arrives as 0.002 m), changing only a ± runs again what it feeds, and a node it cannot
+  pass (one with a board of its own, one that does not give the same twice, a sweep) says so rather than dropping it.
+  Shown as "value ± u" in the inspector. Extrapolation carried: a law asked to go past where it holds says so on its
+  node, and every value downstream says it rests on an extrapolation and which node made it, not a prediction.
+  Conservation: a balance node (`check.balance`) sums what goes in against what comes out and is kept, of one
+  conserved thing in one unit, says on the node when the imbalance is more than its tolerance, and carries the inputs'
+  ± into the imbalance. Verified by hand-worked answers (2 ± 0.1 kg weighs 19.61 ± 0.98 N; a pendulum's δT = T δL / 2L;
+  100 ± 3 J in against 90 ± 4 J out is 10 ± 5 J unaccounted for). The snapshot did not move.
+  Still to do in this step: the balance applied along the existing chains (the electrical-to-heat chain, collisions in
+  the physics) rather than only as a node one places; uncertainty from the material tables (a property's own spread)
+  and from the solvers' own error; judging a balance against its imbalance's uncertainty rather than a fixed tolerance.

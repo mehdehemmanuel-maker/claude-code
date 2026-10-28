@@ -660,9 +660,12 @@ function outsHtml(id: string): string {
   let h = '';
   if (s?.status === 'failed') h += `<div class="err">✕ ${esc(s.error ?? '')}</div>`;
   if (s?.status === 'waiting') h += `<div class="wait">… ${esc(s.error ?? '')}</div>`;
-  for (const o of p.outputs) { const v = s?.out?.[o.name]; h += `<div class="out" style="border-left-color:${typeColour(o)}"><span>${esc(o.label ?? o.name)}</span><b>${esc(v === undefined ? '—' : Array.isArray(v) ? show(v, o.unit) : show(v, o.unit))}</b></div>`; }
+  for (const o of p.outputs) { const v = s?.out?.[o.name]; h += `<div class="out" style="border-left-color:${typeColour(o)}"><span>${esc(o.label ?? o.name)}</span><b>${esc(v === undefined ? '—' : Array.isArray(v) ? show(v, o.unit) : show(v, o.unit))}${s?.uncertainty?.[o.name] ? ` ± ${esc(show(s.uncertainty[o.name], o.unit))}` : ''}</b></div>`; }
   if (s?.status === 'ok') h += `<p class="src">${s.cached ? 'reused: nothing it reads changed' : `ran in ${s.ms.toFixed(2)} ms`}${s.mapped ? `, once for each of ${s.mapped.toLocaleString()} items` : ''}</p>`;
   for (const w of s?.warnings ?? []) h += `<div class="wait">⚠ ${esc(w)}</div>`;
+  if (s?.uncertaintyLost) h += `<div class="wait">± ${esc(s.uncertaintyLost)}</div>`;
+  if (s?.status === 'ok' && s.uncertainty) h += `<p class="src">± is one standard uncertainty, carried to first order from each uncertain source wired in, sources taken as independent</p>`;
+  if (s?.extrapolated?.some((x) => x !== id)) h += `<div class="wait">rests on an extrapolation past where a law holds (${esc(s.extrapolated.filter((x) => x !== id).map((f) => cur().nodes[f]?.label || f).join(', '))}): not a prediction</div>`;
   // what it gives rests on: the weakest evidence under it, and where that came from; and its own evidence, assumptions,
   // limits and how it is checked (src/nexus/evidence.ts)
   const n = cur().nodes[id], d = n?.block ? block(n.block) : undefined;
