@@ -17,6 +17,7 @@ import { BOOK, KEPT, KINDS as LAW_KINDS } from './book';
 import { TAGS } from './book/tags';
 import { FIELDS } from './book/fields';
 import { MATTER, matterOf } from './matter';
+import { madeOf, massProperties } from './madeof';
 import { apply, type Law } from './law';
 import { varsOf } from './term';
 import { breakdown, chain, setting, solve as solveLaw, valueIn, type Known } from './lawgraph';
@@ -1075,6 +1076,22 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [thing()], outputs: [N('mass', 'kg'), L('w', 0, 'width'), L('h', 0, 'height'), L('d', 0, 'depth'), P('placed', 'integer', { label: 'pieces placed' }), P('distinct', 'integer', { label: 'things stored' })] },
     run: (i) => { const t = asThing(i.thing), b = boundsOfAll(t), z = b.isEmpty(); return { mass: massOfAll(t), w: z ? 0 : b.max.x - b.min.x, h: z ? 0 : b.max.y - b.min.y, d: z ? 0 : b.max.z - b.min.z, placed: placedCount(t), distinct: distinctCount(t) }; },
     tests: [{ inputs: { thing: { name: 'b', shape: { box: [0.1, 0.2, 0.3] }, mat: 'steel-low' } }, outputs: { mass: 0.006 * 7850, w: 0.1, h: 0.2, d: 0.3, placed: 1 }, rel: 1e-9 }], sink: true }),
+  def({ id: 'made.of', name: 'What it is made of', kind: 'critic', ability: 'measure', domains: ['materials', 'mechanical', 'structural', 'everyday'], says: 'Any thing opened as its materials all the way down: its own tree with each thing\'s mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a grade, a species, or only a family), by element, and what is not known (no material, no density, only a family, a mass stated rather than worked out)',
+    settings: [{ key: 'depth', label: 'Levels of its tree', type: 'number', default: 6 }],
+    ports: { inputs: [thing()], outputs: [N('mass', 'kg'), P('materials', 'table'), P('elements', 'table'), P('tree', 'table'), P('unknown', 'list<text>'), P('says', 'text')] },
+    run: (i, c) => {
+      const m = madeOf(asThing(i.thing), Math.max(0, Math.round(Number(c.set.depth ?? 6))));
+      const top = m.materials.slice(0, 3).map((x) => `${(100 * x.share).toFixed(1)} % ${x.is}`).join(', ');
+      return { mass: m.mass, materials: m.materials.map((x) => ({ material: x.mat, is: x.is, specified: x.specified, kg: x.mass, share: x.share, pieces: x.pieces, density: x.density })), elements: m.elements.map((e) => ({ element: e.element, kg: e.mass, share: e.share })), tree: m.tree.map((t) => ({ level: t.depth, name: t.name, material: t.mat ?? '', count: t.count, kg: t.mass, share: t.share })), unknown: m.unknown, says: `${m.mass.toPrecision(4)} kg: ${top}${m.materials.length > 3 ? `, and ${m.materials.length - 3} more materials` : ''}${m.elementsUnknown > 0 ? `; ${(100 * m.elementsUnknown / (m.mass || 1)).toFixed(1)} % not known down to its elements` : ''}${m.unknown.length ? `; ${m.unknown.length} things not known` : ''}` };
+    },
+    tests: [{ inputs: { thing: { name: 'b', shape: { box: [0.1, 0.2, 0.3] }, mat: 'steel-low' } }, outputs: { mass: 0.006 * 7850, unknown: [] }, rel: 1e-9 }], sink: true }),
+  def({ id: 'mass.properties', name: 'Mass, centre and inertia', kind: 'critic', ability: 'measure', domains: ['mechanical', 'structural', 'vehicles', 'aerospace'], says: 'What follows from a thing\'s pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece\'s own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass times its distance squared), its principal moments, and its heat capacity from each material\'s own specific heat, with how much of the mass each covers',
+    ports: { inputs: [thing()], outputs: [N('mass', 'kg'), N('x', 'm', { label: 'centre x' }), N('y', 'm', { label: 'centre y' }), N('z', 'm', { label: 'centre z' }), P('inertia', 'table'), P('principal', 'list<number>', { unit: 'kg m^2' }), N('heat', 'J/K', { label: 'heat capacity' }), P('says', 'text')] },
+    run: (i) => {
+      const p = massProperties(asThing(i.thing));
+      return { mass: p.mass, x: p.centre[0], y: p.centre[1], z: p.centre[2], inertia: p.inertia.map((r, k) => ({ axis: 'xyz'[k], x: r[0], y: r[1], z: r[2] })), principal: p.principal, heat: p.heatCapacity, says: `${p.mass.toPrecision(4)} kg, its centre at (${p.centre.map((v) => v.toFixed(3)).join(', ')}) m; its inertia ${(100 * p.exactShare).toFixed(0)} % exact by shape, the rest as boxes${p.unplacedMass ? `; ${p.unplacedMass.toPrecision(3)} kg is stated with no place, so in the mass and not the centre or inertia` : ''}; its heat capacity ${p.heatCapacity.toPrecision(3)} J/K over ${(100 * p.heatCovered).toFixed(0)} % of its mass (the rest's specific heat not known)` };
+    },
+    tests: [{ inputs: { thing: { name: 'b', shape: { box: [0.1, 0.2, 0.3] }, mat: 'steel-low' } }, outputs: { mass: 0.006 * 7850, x: 0, y: 0, z: 0 }, rel: 1e-9 }], sink: true }),
   // ---- the world: ground, scattering, walls with openings, choosing, rows to spawn from ----------------------------
   def({ id: 'terrain', name: 'Terrain', kind: 'generator', ability: 'generate', domains: ['structural', 'energy', 'everyday'], says: 'Ground over w by d, its hills from a seeded noise (the same seed, the same land): relief is how high its highest is over its lowest, roughness how much small detail it has',
     settings: [{ key: 'color', label: 'Colour', type: 'text', default: '#5d8a3a' }],

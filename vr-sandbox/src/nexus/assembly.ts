@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import type { Part, Port, V3 } from './kits';
-import { DENSITY, massOf } from './mass';
+import { densityKg, massOf } from './mass';
 import { layout } from './make/space';
 
 /** What is changed about a thing where it is placed: on every piece, or those whose names a pattern finds. The change
@@ -92,7 +92,7 @@ export function massOfAll(a: Part | Assembly, overs: Override[] = []): number {
   if (isPart(a)) {
     for (const l of leavesOf(a)) {
       const o = effective(overs, l.part.name); if (o.hide) continue;
-      const own = massOf({ ...l.part, parts: [] }), rho = l.part.mat ? DENSITY[l.part.mat] : undefined, rhoNew = o.mat ? DENSITY[o.mat] : undefined;
+      const own = massOf({ ...l.part, parts: [] }), rho = l.part.mat ? densityKg(l.part.mat) : undefined, rhoNew = o.mat ? densityKg(o.mat) : undefined;
       m += (rho && rhoNew ? (own * rhoNew) / rho : own) * Math.abs(l.m.determinant());
     }
     // (and what is weighed but not drawn: a part with a mass and no shape, as a machine's "rest of it")

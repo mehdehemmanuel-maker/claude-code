@@ -1,13 +1,14 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 549 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 551 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
-## 1 · Start: values and inputs (12)
+## 1 · Start: values and inputs (14)
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
 - **Laws by field** (`law.fields`): Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas)
 - **List of numbers** (`in.list`): Numbers you type, split by commas: wire it into any block to run that block once for each
+- **Mass, centre and inertia** (`mass.properties`): What follows from a thing's pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece's own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass …
 - **Material** (`card.material`): A material as the kept data has it: density, stiffness, strengths
 - **Measure** (`measure`): What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as
 - **Number** (`in.number`): A number you set, in any unit: typed "200 mm" is kept as 0.2 m; with ends set, held between them and shown as a slider you drag
@@ -17,6 +18,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Table** (`in.table`): Rows you paste, the first row their headings (comma or tab separated): numbers read as numbers
 - **Text** (`in.text`): Words you type, carried on a wire to whatever reads text (a label, a search, a note)
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its …
+- **What it is made of** (`made.of`): Any thing opened as its materials all the way down: its own tree with each thing's mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a …
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it
 
 ## 2 · Make: shapes, parts, things (72)

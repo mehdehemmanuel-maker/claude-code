@@ -358,3 +358,20 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   Still to do in this step: the house's walls and frame (the wall node's material), reinforcing in the concrete,
   thermal and fusion properties for the stand-ins' own grades, polymers' own handbook entries (50 stand-ins remain),
   composites' stiffness as bounds; then step 7 opens any thing as its materials all the way down.
+- **Step 7, the first round done.** `src/nexus/madeof.ts`, from one walk of a thing's placed pieces (the walk that draws
+  and weighs it): `madeOf` opens any thing as its materials all the way down (its own tree, each thing's mass and share,
+  a thing placed many times counted once at each place; mass by material, each said as exactly as `matter.ts` knows it;
+  by element; and what is not known: pieces with no material, materials with no density, materials known only by their
+  family, masses stated rather than worked out); `massProperties` gives mass, centre of mass, the inertia tensor about it
+  (each piece's own, exact for a box, a cylinder or a ball, else its box and said; the parallel axis theorem in tensor
+  form), its principal moments, and heat capacity from each material's own specific heat with the share of mass it
+  covers. Verified against answers worked by hand (a steel block and an aluminium rod a metre apart: mass, centre,
+  inertia about two axes; iron from both, the aluminium's 0.35 % too), against the existing weighing (the house and the
+  default vehicle agree to 10⁻¹⁵), nested and repeated placing (four of a pair weigh four pairs), what is not known said,
+  and a material changed on a board re-running mass, make-up and heat capacity. Nodes `made.of`, `mass.properties`.
+  What it found, left as findings (design is not this round's): the house is 213 t, 81 % of it "tile": the roof is a
+  solid triangular prism of tile, not a roof; tile has no make-up, so 82 % of the house is not known down to elements;
+  "oak" (unspecified) is still in the room plans. The default vehicle is 6.1 t, 11.6 % of it alumina (about 700 kg),
+  which no car holds: some part is drawn of it or at a size it is not; 12 of its materials are known only by family.
+  Still to do in this step: resistance and conductance along a defined path, expansion, stiffness and strength of an
+  assembly where a model holds; the physics bodies' inertia read from here rather than from their shapes alone.
