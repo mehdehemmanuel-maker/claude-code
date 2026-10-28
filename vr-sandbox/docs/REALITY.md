@@ -375,3 +375,23 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   which no car holds: some part is drawn of it or at a size it is not; 12 of its materials are known only by family.
   Still to do in this step: resistance and conductance along a defined path, expansion, stiffness and strength of an
   assembly where a model holds; the physics bodies' inertia read from here rather than from their shapes alone.
+- **Step 8, the first round done.** `src/nexus/evidence.ts` gives every node its own evidence, read from what it is: a
+  law from its kind (definition or geometry exact, fundamental or derived law derived, approximation simplified, the rest
+  empirical) with its validity as an assumption and its domain as its limits; a typed or chosen value given; a maker's,
+  a standard's or a table's figures specified; the 6502 netlist measured (traced from the die); simulations and
+  perception models simplified; designs, generators, AI and the web hypothetical; anything that says its figures are
+  typical or an estimate no stronger than estimated; set by hand only for 14 nodes a rule cannot tell, each with why.
+  Counts: exact 81, measured 1, specified 7, derived 289, given 9, empirical 47, estimated 6, simplified 40,
+  hypothetical 71. Validation in the grades the plan set, never claimed past what was done: 9 laws compared with an
+  independent reference (their worked example reached another way through the book, and agreeing), 510 tested here (a
+  check that a node does what it says, not that the world does), 32 untested, none validated against experiment.
+  The engine carries on every value the weakest evidence it rests on and the node it came from; a result that cannot be
+  physical (a mass, density, volume, area or resistance below nothing, a temperature below absolute zero, an efficiency
+  or share outside nothing to one) is said on the node that made it, never corrected. Shown on each node's footer and in
+  the inspector (kind, why, assumptions, limits, how checked), counted in `docs/NODES.md`; the gauntlet fails a node that
+  claims specified or measured figures with no source. The snapshot did not move.
+  What it found: 29 ports were in units the units parser cannot read (USD, N*m, A*h, W*h, kW*h, °), so no value through them
+  could be converted or checked; they now read N m, Ah, Wh, kWh and deg, currency is let stand as currency, and a test holds
+  every port to a unit the parser reads.
+  Still to do in this step: uncertainty carried on wires where it changes a result; conservation checks across a chain;
+  extrapolation outside a law's domain said on the value, not only listed as a limit.

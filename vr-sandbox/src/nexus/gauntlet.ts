@@ -16,6 +16,7 @@
 //
 // The blocks are passed in (Lib), so this owner imports nothing of the library's (blocks.ts registers its nodes).
 
+import { evidenceOf } from './evidence';
 import type { BlockDef, Ports, PortDef } from './blocks';
 import type { Part } from './kits';
 import { INVENTORY, feed, findItem, itemOf, removeItem, resolve, type Item } from './inventory';
@@ -188,6 +189,9 @@ async function gate(lib: Lib, g: GateId, c: Candidate): Promise<Omit<GateResult,
     }
     case 'sourced': {
       if (b) {
+        // (a node that says its figures are a standard's, a maker's or measured names where from)
+        const ev = evidenceOf(b).kind;
+        if ((ev === 'specified' || ev === 'measured') && !b.sources?.length) return { pass: false, says: `its evidence is ${ev}, and it cites nothing` };
         // (a law's figures are its own and are always sourced; any other block is held to it where it states figures (a
         // number with its unit) in what it says: a sum or a box of the sizes it is given has none of its own)
         const figures = ownWords(b.says).match(FIGURES) ?? [];

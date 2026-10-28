@@ -9,6 +9,7 @@
 // the forge's own worker (code-worker.ts), off the page. Asking Claude needs the forge's relay, which this page does not
 // have: such a block says so rather than pretending.
 
+import { EVIDENCE_SAYS, evidenceOf } from '../evidence';
 import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { isAssembly, partOf } from '../assembly';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
@@ -253,7 +254,9 @@ function paint(): void {
     const fy = gg.y + gg.h - FOOT / 2; g.font = '12px system-ui';
     if (s?.status === 'failed') { g.fillStyle = '#ff8a80'; g.fillText(clip(`✕ ${s.error}`, 44), gg.x + 10, fy); }
     else if (s?.status === 'waiting') { g.fillStyle = '#ffd180'; g.fillText(clip(`… ${s.error}`, 44), gg.x + 10, fy); }
-    else if (s?.status === 'ok') { g.fillStyle = '#5f6f84'; g.fillText(`${s.cached ? '✓ reused' : '● ran'} · ${s.ms < 1 ? `${(s.ms * 1000).toFixed(0)} µs` : `${s.ms.toFixed(1)} ms`}${s.runs ? ` · ${s.runs} run${s.runs > 1 ? 's' : ''}` : ''}${d?.by !== 'built in' && d ? ` · ${d.by}` : ''}`, gg.x + 10, fy); }
+    else if (s?.status === 'ok' && s.warnings?.length) { g.fillStyle = '#ffab40'; g.fillText(clip(`⚠ ${s.warnings[0]}`, 44), gg.x + 10, fy); }
+    // (what it rests on, first: the weakest evidence under what it gives)
+    else if (s?.status === 'ok') { g.fillStyle = '#5f6f84'; g.fillText(`${s.evidence ? `${s.evidence.kind} · ` : ''}${s.cached ? '✓ reused' : '● ran'} · ${s.ms < 1 ? `${(s.ms * 1000).toFixed(0)} µs` : `${s.ms.toFixed(1)} ms`}${s.runs ? ` · ${s.runs} run${s.runs > 1 ? 's' : ''}` : ''}${d?.by !== 'built in' && d ? ` · ${d.by}` : ''}`, gg.x + 10, fy); }
     else { g.fillStyle = '#5f6f84'; g.fillText(KINDS[k].name, gg.x + 10, fy); }
     g.globalAlpha = 1;
   }
@@ -659,6 +662,12 @@ function outsHtml(id: string): string {
   if (s?.status === 'waiting') h += `<div class="wait">… ${esc(s.error ?? '')}</div>`;
   for (const o of p.outputs) { const v = s?.out?.[o.name]; h += `<div class="out" style="border-left-color:${typeColour(o)}"><span>${esc(o.label ?? o.name)}</span><b>${esc(v === undefined ? '—' : Array.isArray(v) ? show(v, o.unit) : show(v, o.unit))}</b></div>`; }
   if (s?.status === 'ok') h += `<p class="src">${s.cached ? 'reused: nothing it reads changed' : `ran in ${s.ms.toFixed(2)} ms`}${s.mapped ? `, once for each of ${s.mapped.toLocaleString()} items` : ''}</p>`;
+  for (const w of s?.warnings ?? []) h += `<div class="wait">⚠ ${esc(w)}</div>`;
+  // what it gives rests on: the weakest evidence under it, and where that came from; and its own evidence, assumptions,
+  // limits and how it is checked (src/nexus/evidence.ts)
+  const n = cur().nodes[id], d = n?.block ? block(n.block) : undefined;
+  if (s?.evidence) h += `<p class="src"><b>${esc(s.evidence.kind)}</b>: ${esc(EVIDENCE_SAYS[s.evidence.kind])}${s.evidence.from.length && !(s.evidence.from.length === 1 && s.evidence.from[0] === id) ? ` (from ${esc(s.evidence.from.map((f) => cur().nodes[f]?.label || f).join(', '))})` : ''}</p>`;
+  if (d) { const e = evidenceOf(d); h += `<p class="src">its own: ${esc(e.kind)}, ${esc(e.why)}; ${esc(e.validation)} (${esc(e.validationSays)})${e.assumptions.length ? `; assumes ${esc(e.assumptions.join('; '))}` : ''}${e.limits.length ? `; holds only for ${esc(e.limits.join('; '))}` : ''}</p>`; }
   return h;
 }
 function nodeInspector(el: HTMLElement, id: string): void {

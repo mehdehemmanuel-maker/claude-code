@@ -83,6 +83,10 @@ function mapText(): string {
   for (const f of FIELDS) { const m = f.laws.filter((x) => !x.id); L.push(`| ${f.field} (${f.from}) | ${f.laws.length - m.length} of ${f.laws.length} | ${m.map((x) => `${x.name} (${x.formula})`).join('; ') || 'none'} |`); }
   // ---- the laws checked against each other ----
   const xc = crossCheck();
+  // the laws compared with an independent reference, kept for the evidence each node shows (src/nexus/evidence.ts)
+  const compared = `// Written by tests/nexus/dependencies.test.ts (UPDATE_DEPS=1): the laws whose worked example the other laws of the book\n// reach another way, and agree with (\`crossCheck\` in lawgraph.ts). Do not edit by hand; the test fails when it is stale.\nexport const COMPARED: string[] = [${xc.filter((r) => r.agree).map((r) => `'${r.law}'`).join(', ')}];\n`;
+  if (update) writeFileSync(join(root, 'src/nexus/book/compared.ts'), compared);
+  expect(readFileSync(join(root, 'src/nexus/book/compared.ts'), 'utf8'), 'compared.ts out of date: UPDATE_DEPS=1').toBe(compared);
   L.push('', '## The laws checked against each other', '', `Each law's worked example given, its output sought through the other laws alone (\`crossCheck\` in \`src/nexus/lawgraph.ts\`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). ${xc.length} of ${BOOK.length} laws have another way to their output; ${xc.filter((r) => r.agree).length} agree to 10⁻⁶; ${xc.filter((r) => !r.agree).length} do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in \`docs/REALITY.md\`.`, '', '| Law | Its example | By the others | Through | |', '| --- | --- | --- | --- | --- |');
   for (const r of xc) L.push(`| \`${r.law}\` | ${+r.own.toPrecision(8)} ${r.unit} | ${+r.other.toPrecision(8)} ${r.unit} | ${r.by.map((b) => `\`${b}\``).join(' → ')} | ${r.agree ? 'agree' : '**differ**'} |`);
   // ---- material tables and who reads them ----

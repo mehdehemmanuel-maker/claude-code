@@ -10,6 +10,7 @@
 // into. What a node did, how long it took and how often it failed is kept, for the person and for the engine's own
 // suggestions: what is dead, what is the same twice, what wiring repeats and could be one block.
 
+import { evidenceOf, nonphysical, rankOf, weakestOf, type EvidenceKind, type NodeEvidence } from './evidence';
 import { ALIASES, aliasSet, block, clockOf, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
 import { fromSI, sameDim, toSI } from '../ganglia/units';
@@ -101,6 +102,10 @@ export interface NodeState {
   /** How many times it ran in a list (a sweep), when it did. */
   mapped?: number;
   runs: number; fails: number; key?: string;
+  /** The weakest evidence what it gives rests on (its own, or what is wired into it), and the nodes that set it there. */
+  evidence?: { kind: EvidenceKind; from: string[] };
+  /** What it gives that cannot be physical (a negative mass, an efficiency over one), said, never corrected. */
+  warnings?: string[];
 }
 export interface Report { ran: number; cached: number; failed: number; waiting: number; ms: number; looked: number }
 
@@ -240,7 +245,7 @@ export class Engine {
 
   private async step(id: string, r: Report): Promise<void> {
     const n = this.board.nodes[id]!, b = blockOf(n), was = this.state.get(id) ?? { status: 'idle', ms: 0, cached: false, runs: 0, fails: 0 } as NodeState;
-    const put = (s: Partial<NodeState>) => this.state.set(id, { ...was, ...s } as NodeState);
+    const put = (s: Partial<NodeState>) => { const next = { ...was, ...s } as NodeState; if (b && next.status === 'ok' && next.out) { try { Object.assign(next, this.judge(id, b, next.out)); } catch { /* judging what it gives never fails it */ } } this.state.set(id, next); };
     if (!b) { put({ status: 'failed', error: `no block "${n.block}" in the library`, out: undefined, key: undefined }); r.failed++; return; }
     if (this.loop.has(id)) { put({ status: 'failed', error: 'in a loop: it feeds what feeds it', out: undefined, key: undefined }); r.failed++; return; }
     const set = { ...defaultsOf(b), ...(n.set ?? {}) }, ports = portsOf(b, set), wires = this.into.get(id) ?? [];
@@ -285,6 +290,17 @@ export class Engine {
       put({ status: 'failed', error: (e as Error).message, out: undefined, key, ms: now() - t, cached: false, runs: was.runs + 1, fails: was.fails + 1 }); r.failed++;
     }
   }
+  /** What a node's result rests on: the weakest of its own evidence and what is wired into it, and the nodes that set
+   *  it; and what in it cannot be physical. */
+  private judge(id: string, b: BlockDef, out: Outputs): Pick<NodeState, 'evidence' | 'warnings'> {
+    const own = evidenceKept.get(b) ?? evidenceKept.set(b, evidenceOf(b)).get(b)!;
+    const ins = this.wiresInto(id).map((w) => ({ from: w.from, e: this.state.get(w.from)?.evidence })).filter((x): x is { from: string; e: { kind: EvidenceKind; from: string[] } } => !!x.e);
+    const kind = weakestOf(own.kind, ...ins.map((x) => x.e.kind));
+    const from = rankOf(own.kind) >= rankOf(kind) ? [id] : [...new Set(ins.filter((x) => x.e.kind === kind).flatMap((x) => x.e.from))];
+    const warnings: string[] = [];
+    for (const p of this.ports(id).outputs) { const w = nonphysical(p, out[p.name]); if (w) warnings.push(w); }
+    return { evidence: { kind, from }, ...(warnings.length ? { warnings } : { warnings: undefined }) };
+  }
   private async call(id: string, b: BlockDef, inputs: Record<string, unknown>, set: Record<string, unknown>): Promise<Outputs> {
     if (b.run) { const o = b.run(inputs, { set, code: this.env.code, ai: this.env.ai, signal: this.env.signal, time: this.env.time ?? 0 }); return o instanceof Promise ? await o : o; }
     if (!b.graph) throw new Error(`${b.name} has nothing to run`);
@@ -320,6 +336,7 @@ export function unitCombined(a: string | undefined, b: string | undefined, op: '
   if (!n.length) return d.map(([base, p]) => at(base, p)).join(' ');
   return n.map(([base, p]) => at(base, p)).join(' ') + (d.length ? `/${d.map(([base, p]) => at(base, -p)).join(' ')}` : '');
 }
+const evidenceKept = new WeakMap<BlockDef, NodeEvidence>();
 export function convert(v: unknown, from?: string, to?: string): unknown {
   if (!from || !to || from === to) return v;
   const a = dimOf(from), b = dimOf(to); if (!a || !b || !sameDim(a, b)) return v;

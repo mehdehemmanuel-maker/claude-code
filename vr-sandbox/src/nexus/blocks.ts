@@ -8,6 +8,7 @@
 // What runs a board of blocks, caches, maps over lists and opens groups is src/nexus/dataflow.ts; this file only says
 // what each block is and does.
 
+import { EVIDENCE, EVIDENCE_SAYS, evidenceOf, type NodeEvidence } from './evidence';
 import { dimensionOf, fromSI, parseUnit, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
@@ -346,12 +347,15 @@ export function stageOf(b: BlockDef): string {
 export function libraryCatalogue(): string {
   const first = (t: string) => { const one = t.replace(/\s+/g, ' '), m = /^(.+?\.)(\s|$)/.exec(one), f = m ? m[1]! : one; return f.length > 220 ? `${f.slice(0, f.lastIndexOf(' ', 217))} …` : f; };
   const all = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') || b.id === 'group.in' || b.id === 'group.out'), lines = ['# The node library', '', `Generated from the library (\`libraryCatalogue()\` in \`src/nexus/blocks.ts\`); \`tests/nexus/shelves.test.ts\` fails if it is out of date (write it again with \`UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts\`). ${all.length} nodes, on ${STAGES.length} shelves in the order a board runs; a node's shelf is read from what it is (\`stageOf\`), never filed by hand.`, ''];
+  // what each node's own contribution rests on, and how it is checked (src/nexus/evidence.ts)
+  { const ev = all.map(evidenceOf), count = (f: (e: NodeEvidence) => boolean) => ev.filter(f).length;
+    lines.push('## Evidence', '', 'What each node\'s own contribution rests on, read from what it is (src/nexus/evidence.ts); a value on a wire is as strong as the weakest node it rests on.', '', '| Evidence | Nodes | Means |', '| --- | --- | --- |', ...EVIDENCE.map((k) => `| ${k} | ${count((e) => e.kind === k)} | ${EVIDENCE_SAYS[k]} |`), '', `Checked: ${count((e) => e.validation === 'compared with an independent reference')} compared with an independent reference (laws the rest of the book reaches another way, agreeing); ${count((e) => e.validation === 'tested here')} tested here (their own tests: that they do what they say, not that the world does); ${count((e) => e.validation === 'untested')} untested; none validated against experiment.`, ''); }
   for (const st of STAGES) {
     const bs = all.filter((b) => stageOf(b) === st.id).sort((a, c) => a.name.localeCompare(c.name)); if (!bs.length) continue;
     lines.push(`## ${st.name} (${bs.length})`, '', `${st.says[0]!.toUpperCase()}${st.says.slice(1)}.`, '');
     if (st.id === 'law') { const by = new Map<string, string[]>(); for (const b of bs) { const f = DOMAINS.find((d) => d.id === b.domains[0])?.name ?? 'Other'; by.set(f, [...(by.get(f) ?? []), b.name]); }
       for (const [f, ns] of [...by].sort((a, c) => a[0].localeCompare(c[0]))) lines.push(`- **${f}** (${ns.length}): ${ns.join(', ')}`); }
-    else for (const b of bs) lines.push(`- **${b.name}** (\`${b.id}\`): ${first(b.says)}`);
+    else for (const b of bs) { const e = evidenceOf(b); lines.push(`- **${b.name}** (\`${b.id}\`): ${first(b.says)} *${e.kind}, ${e.validation}*`); }
     lines.push('');
   }
   return lines.join('\n');
@@ -1313,7 +1317,7 @@ const BUILT_THINGS: BlockDef[] = [
     } }),
   def({ id: 'hinge', name: 'Hinge', kind: 'logic', ability: 'connect', domains: ['mechanical', 'structural', 'everyday'], says: 'A revolute joint for Let it go: one thing turning on another (or on the world, fixed) about an axis through a point, between limits, with friction. A door on its frame, a lid, a pendulum, a wheel on its axle',
     settings: [{ key: 'a', label: 'What turns (its name)', type: 'text', default: 'door' }, { key: 'b', label: 'On what (its name; blank: the world)', type: 'text', default: '' }, { key: 'axis', label: 'Axis', type: 'choice', default: 'y', choices: ['x', 'y', 'z'] }, { key: 'motor', label: 'Driven by (a motor from its datasheet)', type: 'choice', default: 'none', choices: ['none', ...Object.keys(MOTORS)] }, { key: 'gear', label: 'Through (a gearhead)', type: 'choice', default: 'none', choices: ['none', ...Object.keys(GEARHEADS)] }],
-    ports: { inputs: [L('x', 0), L('y', 0), L('z', 0), N('min', 'deg', { optional: true, label: 'turns no less than' }), N('max', 'deg', { optional: true, label: 'turns no more than' }), N('friction', 'N*m', { default: 0, optional: true }), N('volts', 'V', { optional: true, label: 'volts across its motor (its own, if not set)' }), N('reverse', undefined, { default: 0, optional: true, label: 'turn it the other way (1)' })], outputs: [P('joint', 'any')] },
+    ports: { inputs: [L('x', 0), L('y', 0), L('z', 0), N('min', 'deg', { optional: true, label: 'turns no less than' }), N('max', 'deg', { optional: true, label: 'turns no more than' }), N('friction', 'N m', { default: 0, optional: true }), N('volts', 'V', { optional: true, label: 'volts across its motor (its own, if not set)' }), N('reverse', undefined, { default: 0, optional: true, label: 'turn it the other way (1)' })], outputs: [P('joint', 'any')] },
     run: (i, c) => {
       const ax = String(c.set.axis ?? 'y'), lim = i.min !== undefined && i.max !== undefined ? { limits: [Number(i.min), Number(i.max)].map((d) => (d * Math.PI) / 180) as [number, number] } : {};
       // a motor turns it at the torque its constants give at the speed it turns (sim.ts): K_t (V − K_t ω) / R − T_f
@@ -1475,18 +1479,18 @@ const BUILT_THINGS: BlockDef[] = [
     tests: [{ inputs: { code: '205/55R16' }, outputs: { D: 0.6319, W: 0.205, code: '205/55R16' }, rel: 1e-3 }] }),
   def({ id: 'battery.starter', name: 'Starting battery', kind: 'generator', ability: 'generate', domains: ['vehicles', 'electrical'], says: 'A 12 V lead-acid starting battery by its BCI group (its case is the standard): six cells of plates and separators, straps, joints through the partitions, electrolyte, vent caps and SAE posts. One made per group, shared by every machine that takes it',
     settings: [{ key: 'group', label: 'BCI group', type: 'choice', default: '35', choices: Object.keys(BCI_GROUPS) }],
-    ports: { inputs: [], outputs: [thing('battery', 'battery'), N('mass', 'kg'), N('cca', 'A', { label: 'cold-cranking amps (typical)' }), N('Ah', 'A*h'), P('fits', 'text')] },
+    ports: { inputs: [], outputs: [thing('battery', 'battery'), N('mass', 'kg'), N('cca', 'A', { label: 'cold-cranking amps (typical)' }), N('Ah', 'Ah'), P('fits', 'text')] },
     run: (_i, c) => { const g = BCI_GROUPS[String(c.set.group)]!, b = starterBattery(g.group); return { battery: b, mass: massOfAll(b), cca: g.cca, Ah: g.Ah, fits: g.fits }; },
     tests: [{ set: { group: '31' }, inputs: {}, outputs: { cca: 950 } }] }),
   def({ id: 'battery.cell', name: 'Lithium cell', kind: 'generator', ability: 'generate', domains: ['vehicles', 'electrical', 'energy'], says: 'A cylindrical lithium-ion cell by its format (18650, 21700, 4680): can, sleeve, its jelly roll wound turn by turn (cathode, anode, separator), insulators, cap with its vent disc and gasket',
     settings: [{ key: 'format', label: 'Format', type: 'choice', default: '21700', choices: Object.keys(CELL_FORMATS) }],
-    ports: { inputs: [], outputs: [thing('cell', 'cell'), N('mass', 'kg'), N('Wh', 'W*h'), P('source', 'text')] },
+    ports: { inputs: [], outputs: [thing('cell', 'cell'), N('mass', 'kg'), N('Wh', 'Wh'), P('source', 'text')] },
     run: (_i, c) => { const f = CELL_FORMATS[String(c.set.format)]!, cell = liCell(f.id); return { cell, mass: massOfAll(cell), Wh: f.V * f.Ah, source: f.source }; },
     tests: [{ set: { format: '18650' }, inputs: {}, outputs: { Wh: 9 } }] }),
   def({ id: 'battery.pack', name: 'Battery pack', kind: 'generator', ability: 'generate', domains: ['vehicles', 'electrical', 'energy'], says: 'Cells in a pack: so many groups in series, each so many cells in parallel standing in staggered rows, a busbar over each group, the groups in modules, the modules in a tray. One cell stored however many are placed (a Model 3 Long Range: 21700s, 96 in series of 46, modules of 23, 25, 25, 23 groups, as teardowns report)',
     settings: [{ key: 'format', label: 'Cell', type: 'choice', default: '21700', choices: Object.keys(CELL_FORMATS) }],
     ports: { inputs: [N('s', undefined, { default: 96, optional: true, label: 'groups in series' }), N('p', undefined, { default: 46, optional: true, label: 'cells in parallel' }), N('rows', undefined, { default: 4, optional: true, label: 'rows in a group' }), P('modules', 'text', { optional: true, label: 'groups in each module ("23, 25, 25, 23"; blank: one module)' })],
-      outputs: [thing('pack', 'pack'), N('mass', 'kg'), N('kWh', 'kW*h'), N('V', 'V'), P('cells', 'integer')] },
+      outputs: [thing('pack', 'pack'), N('mass', 'kg'), N('kWh', 'kWh'), N('V', 'V'), P('cells', 'integer')] },
     run: (i, c) => {
       const f = CELL_FORMATS[String(c.set.format)]!, s = Math.max(1, Math.round(Number(i.s ?? 96))), p = Math.max(1, Math.round(Number(i.p ?? 46))), mods = String(i.modules ?? '').split(/[,\s]+/).filter(Boolean).map(Number);
       const pack = cellPack({ format: f.id, s, p, rows: Number(i.rows ?? 4), ...(mods.length ? { modules: mods } : {}) });
@@ -1711,7 +1715,7 @@ const BUILT_THINGS: BlockDef[] = [
     tests: [{ set: { height: 1.75, mass: 75 }, inputs: {}, outputs: { mass: 75 }, rel: 0.02 }] }),
   def({ id: 'engine.run', name: 'Run an engine', kind: 'solver', ability: 'simulate', domains: ['mechanical', 'vehicles', 'energy'], says: 'Any piston engine run from what it is (its bore, stroke, rod, compression, cylinders and the intake valves its head is built with): each cylinder crank degree by crank degree, filled as its valves let it (Taylor\'s inlet Mach index), its fuel burned as a Wiebe function says a flame burns, the pressure that makes on its piston turned through its rod and crank into torque, its cylinders firing in turn; less what friction and pumping take (Heywood\'s correlation, scaled if you know yours is lower). Gives its pressure and torque through the cycle at a speed, and its full-load curve',
     settings: [{ key: 'model', label: 'From a machine (its published engine)', type: 'choice', default: 'custom', choices: ['custom', ...MACHINES.filter((m) => m.power?.bore && m.power.stroke).map((m) => m.short ?? m.id)] }, { key: 'fuel', label: 'Fuel', type: 'choice', default: 'petrol', choices: ['petrol', 'diesel'] }],
-    ports: { inputs: [N('cyl', undefined, { default: 4, optional: true, label: 'cylinders' }), N('bore', 'm', { default: 0.0805, optional: true }), N('stroke', 'm', { default: 0.0976, optional: true }), N('cr', undefined, { default: 10.5, optional: true, label: 'compression ratio (10.5, typical)' }), N('rpm', 'rpm', { default: 4400, optional: true, label: 'speed' }), N('load', undefined, { default: 1, optional: true, label: 'manifold pressure over the air\'s (1 full)' }), N('friction', undefined, { default: 1, optional: true, label: 'friction over Heywood\'s (1)' })], outputs: [N('torque', 'N*m'), N('power', 'W'), N('bmep', 'Pa'), N('peak', 'Pa', { label: 'peak cylinder pressure' }), N('bsfc', undefined, { label: 'g/kWh' }), N('efficiency'), P('cycle', 'table', { label: 'pressure and torque, crank degree by degree' }), P('curve', 'table', { label: 'full-load torque and power by speed' }), P('says', 'text')] },
+    ports: { inputs: [N('cyl', undefined, { default: 4, optional: true, label: 'cylinders' }), N('bore', 'm', { default: 0.0805, optional: true }), N('stroke', 'm', { default: 0.0976, optional: true }), N('cr', undefined, { default: 10.5, optional: true, label: 'compression ratio (10.5, typical)' }), N('rpm', 'rpm', { default: 4400, optional: true, label: 'speed' }), N('load', undefined, { default: 1, optional: true, label: 'manifold pressure over the air\'s (1 full)' }), N('friction', undefined, { default: 1, optional: true, label: 'friction over Heywood\'s (1)' })], outputs: [N('torque', 'N m'), N('power', 'W'), N('bmep', 'Pa'), N('peak', 'Pa', { label: 'peak cylinder pressure' }), N('bsfc', undefined, { label: 'g/kWh' }), N('efficiency'), P('cycle', 'table', { label: 'pressure and torque, crank degree by degree' }), P('curve', 'table', { label: 'full-load torque and power by speed' }), P('says', 'text')] },
     run: (i, c) => { const m = MACHINES.find((x) => (x.short ?? x.id) === c.set.model), pt = m ? POWERTRAINS[m.id] : undefined;
       const cyl = m?.power?.cyl ?? Number(i.cyl ?? 4), bore = m?.power?.bore ?? Number(i.bore ?? 0.0805), stroke = m?.power?.stroke ?? Number(i.stroke ?? 0.0976), fuel = (c.set.fuel === 'diesel' ? 'diesel' : 'petrol') as 'petrol' | 'diesel';
       const e: EngineRun = { cyl, bore, stroke, rod: pt?.engine.rod ?? 1.6 * stroke, cr: pt?.engine.cr ?? Number(i.cr ?? 10.5), fuel, valve: intakeValves({ cyl, bore, stroke, fuel, block: 'al' }) }, fr = Number(i.friction ?? 1);
@@ -1768,7 +1772,7 @@ const BUILT_THINGS: BlockDef[] = [
     tests: [{ set: { verb: 'open', open: 'door', which: 'farthest' }, inputs: {}, outputs: { says: 'open the farthest thing named like door it sees' } }, { set: { verb: 'go to', open: '', affords: 'sit' }, inputs: { most: 0.5 }, outputs: { says: 'go to the nearest thing that lets it sit it sees, ending 0 to 0.5 m from it' } }] }),
   def({ id: 'agent', name: 'Agent', kind: 'solver', ability: 'simulate', domains: ['everyday', 'structural'], says: 'A body with senses and a goal. It stands where people pass (the middle of the longest floor), or beside the agent it is wired to follow; sees by its rays; and does what its goal asks: to open a thing, it reads it (its hinge line through its knuckles, the side it swings to, the handle on its side), stands beside the handle where it stays in reach longest, walks there by the shortest clear way, reaches, grasps, pulls or pushes with the force a door may ask (22.2 N, ADA 404.2.9) until the handle leaves its reach, and lets go, the door swinging on its hinges in the physics (Jolt); to go to a thing or keep away from it, it finds where to stand at the distance asked and walks there; wired to another agent, it stays within its goal\'s range of it, going after it no faster than its own pace. Worked out once; the clock plays it',
     settings: [{ key: 'who', label: 'Who', type: 'choice', default: 'adult', choices: Object.keys(ACTORS) }, { key: 'rays', label: 'Rays its eyes cast', type: 'number', default: 3000 }],
-    ports: { inputs: [thing('thing', 'where it is'), P('goal', 'any', { many: true, optional: true, label: 'what it sets out to do, one goal after another (default: open the nearest door)' }), P('follows', 'any', { optional: true, label: 'an agent to stay near (its plan)' }), N('t', 's', { default: 0, optional: true, label: 'time' })], outputs: [thing('view', 'the world at the time'), P('plan', 'any', { label: 'its plan (to wire into another that follows it)' }), P('steps', 'table', { label: 'its plan, step by step' }), N('angle', '°', { label: 'the door open by' }), N('done', 's', { label: 'all done by' }), P('doing', 'text', { label: 'what it is doing' }), P('says', 'text'), P('findings', 'text')] },
+    ports: { inputs: [thing('thing', 'where it is'), P('goal', 'any', { many: true, optional: true, label: 'what it sets out to do, one goal after another (default: open the nearest door)' }), P('follows', 'any', { optional: true, label: 'an agent to stay near (its plan)' }), N('t', 's', { default: 0, optional: true, label: 'time' })], outputs: [thing('view', 'the world at the time'), P('plan', 'any', { label: 'its plan (to wire into another that follows it)' }), P('steps', 'table', { label: 'its plan, step by step' }), N('angle', 'deg', { label: 'the door open by' }), N('done', 's', { label: 'all done by' }), P('doing', 'text', { label: 'what it is doing' }), P('says', 'text'), P('findings', 'text')] },
     run: async (i, c) => { const J = await jolt(), src = asThing(i.thing) as object, root = asPart(asThing(i.thing)), goals = (Array.isArray(i.goal) ? i.goal : i.goal ? [i.goal] : [{ verb: 'open', what: /^door$/i, which: 'nearest' }]).flat() as Goal[], goal = goals[0]!, who = String(c.set.who ?? 'adult'), actor = ACTORS[who] ?? ACTORS.adult!;
       const lead = i.follows as Plan | undefined;
       const key = `${who}|${goals.map((x) => { const y = goalOf(x); return `${y.verb}/${String(y.what)}/${x.which ?? ''}/${x.affords ?? ''}/${x.range ?? ''}/${x.knows ?? ''}`; }).join('>')}|${Number(c.set.rays) || 3000}`, kept = AGENT_PLANS.get(src) ?? AGENT_PLANS.set(src, new Map()).get(src)!;
@@ -2153,6 +2157,19 @@ const BUILT_THINGS: BlockDef[] = [
 for (const b of BUILT_IN) LIBRARY.set(b.id, b);
 for (const b of BUILT_THINGS) LIBRARY.set(b.id, b);
 for (const b of lawBlocks()) LIBRARY.set(b.id, b);
+// nodes whose figures come from tables that cite their own sources: the citation said on the node too, so a node that
+// says it is specified or measured (src/nexus/evidence.ts) names where from
+const CITED: Record<string, Source> = {
+  'law.fields': { cite: 'each field\'s standard textbook, named on its list in src/nexus/book/fields.ts', kind: 'textbook' },
+  'card.part': { cite: 'each family\'s standard (ISO, DIN, ANSI) or maker\'s table, named in src/nexus/families.ts and components.ts', kind: 'standard' },
+  'part.family': { cite: 'each family\'s standard (ISO, DIN, ANSI) or maker\'s table, named in src/nexus/families.ts', kind: 'standard' },
+  'battery.starter': { cite: 'the BCI group sizes, as src/data/batteries.ts cites each', kind: 'standard' },
+  'battery.cell': { cite: 'makers\' datasheets for each cell format, as src/data/batteries.ts cites them (the 4680 from teardowns, said so)', kind: 'maker' },
+  'vehicle.model': { cite: 'each model\'s maker\'s published figures, as src/nexus/machines.ts cites them', kind: 'maker' },
+  'chip.transistor': { cite: 'Intel, IEDM 2012 (Auth et al.) and IEDM 2014 (Natarajan et al.); TSMC N5 as reported (TSMC, IEDM 2019; WikiChip), as src/nexus/computer.ts cites them', kind: 'paper' },
+  netlist: { cite: 'MOS 6502 revD, traced from the die by the Visual 6502 team (James, Silverman & Silverman, 2010; www.visual6502.org), as perfect6502 (Steil) keeps it', kind: 'measurement' },
+};
+for (const [id, s] of Object.entries(CITED)) { const b = LIBRARY.get(id); if (b && !b.sources?.length) b.sources = [s]; }
 /** Blocks merged into one that does what they did and more (docs/PLACEMENT.md, section 13): each old id is the kept block
  *  with its settings preset (`set`), old setting keys moved to new ones (`keys`, old: new) and its ports under their old
  *  names (`ports`, new: old), so boards made with it run as they did; `rewire` (dataflow.ts) moves boards on to the kept
