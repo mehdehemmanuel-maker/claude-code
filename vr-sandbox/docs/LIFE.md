@@ -154,8 +154,8 @@ Each affordance is read from geometry, mass, joints and material, against the ac
 | `cell.characterise` | Logic | A cell solved at switch level: truth table, delays, energy |
 | `netlist` | Logic | A design as cells and nets, from a real netlist or synthesised |
 | `logic.run` | Logic | Runs a netlist (event-driven, bit-parallel, GPU), with equivalence checks against finer levels |
-| `engine.run` | Machines | An engine firing: cylinder pressures, crank torque, fuel drawn |
-| `drive` | Machines | A powertrain into wheels on the physics, under a driver's controls |
+| `engine.run` | Machines | Any piston engine run from its numbers, crank degree by crank degree: cylinder pressures, crank torque, fuel drawn, its full-load curve |
+| `drive` | Machines | Any powertrain on the road: what it can pull and speed up at each speed, 0 to 100, top speed; wired into Follow a path |
 | `energy` | Time | Stores, chains of efficiency, conservation |
 | `fidelity` | Time | Which level each thing runs at, why, and moving between them |
 
@@ -169,7 +169,7 @@ One step at a time, each shown with pictures before the next.
 | 2 | `sense` | A person in a room: their field of view as a cone, what they notice and why; the pairs tried against all pairs, measured |
 | 3 | `agent`, `goal`: a door | A person sees a door, walks to it, grasps the handle, pulls; the door swings on its hinge in the physics |
 | 4 | `cell.characterise`, `netlist`, `logic.run` | The 6502's transistors, characterised, running a real program; its fast model checked against switch level; the clock rate measured |
-| 5 | `engine.run`, `drive` | The Corolla's engine firing, its torque through its gearbox, the car driving itself round a block |
+| 5 | `engine.run`, `drive` | Any engine run from its numbers, its torque through any gearbox to the road, what it can do driving whatever follows a path |
 | 6 | A dog walked | Two agents and a lead: a person walking a dog down a street, both sensing and reacting |
 | 7 | Scale | A city block: hundreds of agents, cars, doors; behaviour stand-ins; many clocks; sleep; the frame budget measured |
 | 8 | 36 million | A large netlist run on the GPU, bit-parallel, with its rate measured and said against real time |
@@ -331,6 +331,36 @@ Step 4 result (`src/nexus/logic/`: `netlist.ts`, `switch.ts`, `cells.ts`, `cpu65
   - Interrupts by IRQ and NMI pins (BRK is checked), and the undocumented opcodes.
   - The GPU: step 8.
   - The die drawn.
+
+Step 5 result (`src/nexus/power/`: `cycle.ts`, `drive.ts`; nodes `engine.run`, `drive`, and `follow` given a capability; board "Power as nodes"):
+- **`engine.run`, any piston engine from its numbers:** bore, stroke, rod, compression, cylinders, and the intake valves its head is built with (`engines.ts` `intakeValves`, the same engine the engine nodes draw).
+  - **How it is worked out, each cylinder crank degree by crank degree:**
+    - It is filled as its valves let it (Taylor's inlet Mach index; a well-tuned 0.9 below 0.6, less past it, an estimate fit to Heywood's figure).
+    - Its fuel is burned stoichiometric (gasoline 44.0 MJ/kg, 14.6:1: Heywood).
+    - The heat comes out as a Wiebe function (a = 5, m = 2, 55°, half burned 8° after top centre, Heywood's best timing).
+    - The pressure comes from a single zone, polytropic with γ = 1.3, a fifth of the heat lost to walls and incomplete burning (an estimate).
+    - That pressure is turned through rod and crank into torque, its cylinders firing in turn.
+    - Friction and pumping are taken by Heywood's correlation (eq. 13.20), scalable.
+  - **What it gives:** the pressure and torque trace, the full-load curve, bmep, fuel, bsfc and efficiency.
+  - **A test holds the two ways of reckoning together:** the torque summed through the rods equals the work ∮ p dV to under 1 %. It caught a bug where cylinders firing late read the wrong part of the cycle.
+- **The Corolla's published 2.0** (80.5 × 97.6 mm, 13.0:1; the ratio from an engine listing, not Toyota):
+  - Its indicated pressure is 13.1 bar, where the 205 N·m Toyota gives means 13.0 bar of brake pressure.
+  - Heywood's 1988 friction, typical of engines of the 1980s, takes 2.6 bar at 4,400 rpm and 4.1 bar at 6,600. So it makes 166 N·m and at most 91 kW against Toyota's 205 N·m and 126 kW.
+  - At 0.6 of that friction (an estimate for a modern low-friction engine) it makes 183 N·m and 105 kW. The rest of the gap is said, not fitted away.
+  - Its curve has no low-speed dip: the filling is flat below the valves' limit, as no cam timing by speed is modelled.
+- **`drive`, any powertrain on the road:**
+  - **Its inputs:** a torque curve; a manual's gears or a CVT's range and launch gear; a final drive; tyres rolling on their size code's radius; mass; drag area and rolling resistance.
+  - **How it is worked out:** at each speed, the best ratio with the engine between idle and redline, no more than the driven tyres grip.
+  - **What it gives:** the most it can speed up at each speed, 0 to 100 km/h, and top speed.
+  - **The Corolla:**
+    - Its K120 CVT: launch gear 3.377, belt 2.236 to 0.447, final drive 4.262 (a third-party listing, said as such).
+    - Its kerb mass plus a driver; drag area Cd 0.30 (an estimate) × 0.84 of its width by height.
+    - Results: 0 to 100 km/h in 8.8 s and 205 km/h flat out; 7.8 s and 216 km/h at 0.6 friction.
+- **`follow` takes a capability:** cars round a block speed up no faster than their own powertrain lets them, the engine's numbers reaching the street through three wires.
+- **Not yet:**
+  - Knock (13:1 is knock-limited at full load in a real engine).
+  - Cam phasing by speed, turbos, diesels' own combustion (a diesel runs here only as a heavier fuel), and the engine's warm-up.
+  - Steering: cars follow a lane's path; a driver turning a wheel by its geometry is next.
 
 ## 13. Measures
 

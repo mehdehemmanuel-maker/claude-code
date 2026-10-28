@@ -285,6 +285,8 @@ export type HeadPiece = (typeof HEAD_PIECES)[number];
 export type HeadParts = Partial<Record<HeadPiece, Part>>;
 const valveR = (d: Dims, ex: boolean): number => (d.valves === 4 ? (ex ? 0.155 : 0.18) : ex ? 0.19 : 0.22) * d.B;
 const stemOf = (d: Dims): number => Math.max(0.0025, 0.035 * d.B);
+/** Its intake valves as drawn: each one's head diameter, and how many a cylinder (what its breathing is worked from). */
+export const intakeValves = (s: EngineSpec): { dia: number; count: number } => { const d = engineDims(s); return { dia: 2 * valveR(d, false), count: d.valves === 4 ? 2 : 1 }; };
 // (the valve train's moving pieces, made as the head makes them: what its spring must hold on the cam)
 const valvePart = (d: Dims, ex: boolean): Part => { const r = valveR(d, ex), head = 0.16 * r, vL = d.tip - (d.deck + d.gasket), stem = stemOf(d);
   return turned({ name: ex ? 'exhaust valve' : 'intake valve', steps: [[r, head], [r * 0.45, 0.6 * r], [stem, vL - head - 0.6 * r]], mat: ex ? 'stainless-304' : 'steel-alloy', color: ex ? 0xa8a6a0 : 0xc8ccd2, item: ex ? 'valve-exhaust' : 'valve-intake', finish: 'ground', says: `its head ${(2 * r * 1000).toFixed(1)} mm across, its stem ${(2 * stem * 1000).toFixed(1)} mm, ${(vL * 1000).toFixed(0)} mm long${ex ? ', stainless for the heat' : ''}` }); };

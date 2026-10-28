@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 359 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 361 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## 1 · Start: values and inputs (9)
 
@@ -159,11 +159,12 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Tester** (`test.block`): A block of the library put to its own tests, then pushed far from its defaults (zero, a thousandth, a thousand times, negative): each failure and each crash said, and whether it answered or refused in words
 - **Turn it over and check** (`check.turning`): A piston engine turned through a whole revolution of its crank, a step at a time: at each, its crank and every piston and rod where they then are, tried against everything else (block, caps, pan, pump, cams in the …
 
-## 6 · Simulate and run (13)
+## 6 · Simulate and run (15)
 
 Physics, motion, the clock, chips run from their transistors, engines under load.
 
 - **Clock** (`time`): The time the board is at, in seconds: the time bar's.
+- **Drive** (`drive`): Any powertrain on the road: its engine's torque curve (from Run an engine), its gearbox (a manual's gears, or a CVT's range and launch gear), its final drive, its tyres' rolling radius from their size code, its mass …
 - **Engine under load** (`load.engine`): A piston engine at a speed and a peak cylinder pressure, its working parts read off them as drawn: the rod pulled at the top of the exhaust stroke and pushed at firing, its buckling, its bolts; its crank pin's bearing …
 - **Follow a path** (`follow`): Things moving along a path at the clock's time: each speeds up and slows as a car does, keeps a gap to the one ahead, and stops at a stop line while its way is red (or yellow, if it can stop).
 - **Forever** (`forever`): Things repeated without end on a lattice (along x, y, z, or any of them), each cell one of them picked from the seed: the same cell, the same one.
@@ -171,6 +172,7 @@ Physics, motion, the clock, chips run from their transistors, engines under load
 - **Let it go** (`letgo`): Real rigid-body physics (Jolt) over what is made: each thing it places a body of all its pieces, its mass from its materials, falling, landing, sliding, tipping and coming to rest on the floor, on what it is put on …
 - **Netlist** (`netlist`): A chip as its transistors: each a switch between two nodes, closed while the node at its gate is high, some nodes held high by a load.
 - **Push** (`push`): A force on one thing Let it go lets go, for so long from the start: a shove, a kick, a gust
+- **Run an engine** (`engine.run`): Any piston engine run from what it is (its bore, stroke, rod, compression, cylinders and the intake valves its head is built with): each cylinder crank degree by crank degree, filled as its valves let it (Taylor's …
 - **Run on its transistors** (`logic.run`): A program assembled and run on a chip's transistors, at switch level, half a clock cycle at a time, against 64 KB of memory; and beside it on the fast model (the instruction set as its manual gives it), compared …
 - **Spring under load** (`load.spring`): A coiled spring as it was made (its wire, its coil, its coils, its free and fitted lengths, read off the part), compressed as fitted and by a stroke more: its rate and forces, its wire's stress against what the wire …
 - **Sweep** (`sweep`): The room a thing needs as it turns from one angle to another about a pivot: it, at so many angles between, as one thing (its envelope), for Clashes to check against what is round it (a door's swing against the bed, an …

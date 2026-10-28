@@ -733,6 +733,34 @@ const DEMOS: [string, Make][] = ([
     ['seed.car', 'Car in the drive', { paint: '#1565c0' }, { x: 9.5, z: 2, ry: Math.PI / 2 }, 'car'],
     ['seed.room', 'One room on its own (choose it: its type)', { type: 'bathroom' }, { x: -10 }, 'room'],
   ])],
+  ['Power as nodes: an engine run from its numbers, the powertrain it drives, a car round a block as fast as that lets it', () => {
+    // nothing told how fast it goes: Run an engine works each cylinder crank degree by crank degree from its bore, stroke,
+    // compression and the valves its head is built with (here the Corolla's published 2.0); its full-load curve feeds
+    // Drive (its CVT, final drive, tyres, mass and drag), which gives the most it can speed up at each speed; Follow a
+    // path drives cars round a block no faster than that lets them, stopping at red. Friction is Heywood's 1988
+    // correlation, scaled here to 0.6 (an estimate for a modern engine: the gap to Toyota's figures is said, not hidden)
+    const b = emptyBoard('Power as nodes');
+    placeBlock(b, 'in.number', 0, 0, { value: 0.6 }, 'fr'); b.nodes.fr!.label = 'Friction over Heywood 1988 (an estimate)';
+    placeBlock(b, 'engine.run', 0, 0, { model: 'corolla' }, 'engine'); b.nodes.engine!.label = 'Run an engine (its published bore, stroke and compression)'; wire(b, 'fr', 'value', 'engine', 'friction');
+    placeBlock(b, 'list.column', 0, 0, { column: 'rpm' }, 'rpm'); wire(b, 'engine', 'curve', 'rpm', 'rows');
+    placeBlock(b, 'list.column', 0, 0, { column: 'torque' }, 'nm'); wire(b, 'engine', 'curve', 'nm', 'rows');
+    placeBlock(b, 'view.chart', 0, 0, {}, 'tq'); b.nodes.tq!.label = 'Its torque by speed, N·m'; wire(b, 'nm', 'values', 'tq', 'y'); wire(b, 'rpm', 'values', 'tq', 'x');
+    placeBlock(b, 'list.column', 0, 0, { column: 'bar' }, 'bar'); wire(b, 'engine', 'cycle', 'bar', 'rows');
+    placeBlock(b, 'view.chart', 0, 0, {}, 'pc'); b.nodes.pc!.label = 'A cylinder\'s pressure through two turns, bar'; wire(b, 'bar', 'values', 'pc', 'y');
+    placeBlock(b, 'drive', 0, 0, { model: 'corolla' }, 'drive'); b.nodes.drive!.label = 'Drive (its CVT, tyres, mass and drag)'; wire(b, 'engine', 'curve', 'drive', 'curve');
+    placeBlock(b, 'list.column', 0, 0, { column: 'accel' }, 'acc'); wire(b, 'drive', 'capability', 'acc', 'rows');
+    placeBlock(b, 'view.chart', 0, 0, {}, 'ac'); b.nodes.ac!.label = 'The most it can speed up, m/s² by m/s'; wire(b, 'acc', 'values', 'ac', 'y');
+    placeBlock(b, 'view.show', 0, 0, {}, 'es'); b.nodes.es!.label = 'The engine, said'; wire(b, 'engine', 'says', 'es', 'value');
+    placeBlock(b, 'view.show', 0, 0, {}, 'ds'); b.nodes.ds!.label = 'The car, said'; wire(b, 'drive', 'says', 'ds', 'value');
+    placeBlock(b, 'seed.roads', 0, 0, { nx: 2, nz: 2, block: 60, lights: 'cycle' }, 'roads'); b.nodes.roads!.label = 'Road system (its lights on the clock)';
+    placeBlock(b, 'time', 0, 0, {}, 'clock');
+    placeBlock(b, 'path.loop', 0, 0, { w: 120, d: 120, inset: 1.8, every: 60, before: 5 }, 'ring'); b.nodes.ring!.label = 'Lane round its edge';
+    placeBlock(b, 'follow', 0, 0, { n: 3, speed: 14, gap: 12, accel: 6, phases: 'green 30, yellow 4, red 34' }, 'go'); b.nodes.go!.label = 'Cars round it at 50 km/h, as their powertrain lets them'; wire(b, 'ring', 'path', 'go', 'path'); wire(b, 'ring', 'stops', 'go', 'stops'); wire(b, 'clock', 't', 'go', 't'); wire(b, 'drive', 'capability', 'go', 'capability');
+    placeBlock(b, 'spawn', 0, 0, { seed: 'seed.car' }, 'cars'); b.nodes.cars!.label = 'A Car at each'; wire(b, 'go', 'rows', 'cars', 'rows');
+    placeBlock(b, 'combine', 0, 0, { name: 'streets and cars' }, 'all'); wire(b, 'roads', 'roads', 'all', 'things'); wire(b, 'cars', 'things', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    return b;
+  }],
   ['Traffic on the clock: cars round a block, stopping at red', () => {
     // two blocks each way of 60 m (typical of a suburb), its lights on a fixed-time cycle; eight cars at 11 m/s (40 km/h)
     // round its edge, each 8 m behind the one ahead: press ▶ under the 3D view and watch them queue at red
@@ -1407,7 +1435,7 @@ const DEMOS: [string, Make][] = ([
 ] as [string, Make][]).map(([n, f]) => [n, () => tidy(f())]);
 
 /** Each starter board's field, for the library's Boards (by the start of its name). */
-const BOARD_FIELD: [string, string][] = [['The 6502 from its transistors', 'electronics'], ['Doorways kept clear', 'structural'], ['A body from its measured', 'everyday'], ['An agent opens', 'everyday'], ['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
+const BOARD_FIELD: [string, string][] = [['Power as nodes', 'vehicles'], ['The 6502 from its transistors', 'electronics'], ['Doorways kept clear', 'structural'], ['A body from its measured', 'everyday'], ['An agent opens', 'everyday'], ['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
   const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));
