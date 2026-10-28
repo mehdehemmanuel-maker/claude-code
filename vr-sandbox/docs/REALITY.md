@@ -615,3 +615,9 @@ every species now has its k (across the grain, along it 1.5 to 2.8 times) and sp
 "wood" cubes give 130.4 K/W ± 8.4 (the span's middle, 0.153 W/m K, by hand 0.2 / (0.1534 × 0.01)), estimated; copper's
 answer unchanged and exact. Concrete still carries nothing: the mixes have no conductivity (to come with step 6's
 remainder).
+
+**Step E, done (2026-10-28).** The flow node also gives what it worked out as the thing itself, each piece coloured by
+its level, blue at the cold end through green and yellow to red at the hot, grey where nothing reaches (`coloured` in
+`graph.ts`, each piece placed, shared). On the rods board, beside the rods: the steel block red, the rods blue. Seen
+plainly: each piece is one colour, because each is one temperature (lumped), though heat falls along a rod; step G
+splits pieces so the gradient shows and the answer can be seen settling.

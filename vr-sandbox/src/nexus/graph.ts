@@ -208,3 +208,16 @@ export function flowOver(g: Graph, kind: 'heat' | 'current', from: number[], to:
   return { resistance: R, conductance: out, level, through, imbalance: scale > 0 ? worst / scale : 0, converged: sol.converged, steps: sol.steps, lacking, floating,
     resistanceU: uncertainFrom.length ? Math.sqrt(u2) : null, uncertainFrom, evidence, laws: [law.id] };
 }
+
+/** A thing's pieces coloured by a level from 0 to 1 (a temperature, a voltage, a force): blue at 0 through green and
+ *  yellow to red at 1, as heat maps are read; grey where it has none. Each piece placed where it is, shared, not copied
+ *  (step E: what flows, seen). */
+export function coloured(g: Graph, level: (number | null)[], name = 'coloured by what flows'): Assembly {
+  const hue = (x: number) => new THREE.Color().setHSL((2 / 3) * (1 - Math.max(0, Math.min(1, x))), 0.85, 0.5).getHex();
+  const items = g.pieces.map((p, i) => {
+    const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); p.node.m.decompose(pos, q, sc);
+    const e = new THREE.Euler().setFromQuaternion(q), v = level[i];
+    return { of: { ...p.node.p, at: undefined, rot: undefined, parts: [] } as Part, at: pos.toArray() as V3, rot: [e.x, e.y, e.z] as V3, s: sc.x, over: { color: v === null || v === undefined ? 0x777777 : hue(v), finish: 'satin' } };
+  });
+  return { name, items };
+}

@@ -19,7 +19,7 @@ import { TAGS } from './book/tags';
 import { FIELDS } from './book/fields';
 import { MATTER, matterOf } from './matter';
 import { alongPath, END_K, madeOf, massProperties, throughNetwork } from './madeof';
-import { flowOver, graphOf, groupsOf, piecesBy } from './graph';
+import { coloured, flowOver, graphOf, groupsOf, piecesBy } from './graph';
 import { apply, type Law } from './law';
 import { varsOf } from './term';
 import { breakdown, chain, setting, solve as solveLaw, valueIn, type Known } from './lawgraph';
@@ -1130,7 +1130,7 @@ const BUILT_THINGS: BlockDef[] = [
     valid: 'steady state; each piece one temperature or voltage (lumped: its own gradient left out); contact resistance only where given, so the least the way can resist; conductivities at room temperature',
     spread: (_s, out): Record<string, number> => (out?._u && typeof out._u === 'object' ? (out._u as Record<string, number>) : {}),
     settings: [{ key: 'what', label: 'What flows', type: 'choice', default: 'heat', choices: ['heat', 'current'] }, { key: 'from', label: 'From (the highest, the lowest, or a name or material)', type: 'text', default: 'the highest pieces' }, { key: 'to', label: 'To', type: 'text', default: 'the lowest pieces' }, { key: 'drive', label: 'Difference between them (K, or V)', type: 'number', default: 10 }, { key: 'contact', label: 'Contact conductance where pieces meet (W/m² K, or S/m²; blank: left out)', type: 'text', default: '' }],
-    ports: (s) => { const heat = String(s.what ?? 'heat') === 'heat'; return { inputs: [thing()], outputs: [N('resistance', heat ? 'K/W' : 'ohm', { label: 'resistance between the ends' }), N('flow', heat ? 'W' : 'A', { label: 'what flows, for the difference given' }), P('pieces', 'table', { label: 'each piece: its temperature or voltage' }), P('says', 'text')] }; },
+    ports: (s) => { const heat = String(s.what ?? 'heat') === 'heat'; return { inputs: [thing()], outputs: [N('resistance', heat ? 'K/W' : 'ohm', { label: 'resistance between the ends' }), N('flow', heat ? 'W' : 'A', { label: 'what flows, for the difference given' }), P('pieces', 'table', { label: 'each piece: its temperature or voltage' }), P('seen', 'assembly', { label: 'each piece coloured, blue at the far end to red at the near' }), P('says', 'text')] }; },
     run: (i, c) => {
       const heat = String(c.set.what ?? 'heat') === 'heat', g = graphOf(asThing(i.thing)), from = piecesBy(g, String(c.set.from ?? 'the highest pieces')), to = piecesBy(g, String(c.set.to ?? 'the lowest pieces')).filter((x) => !from.includes(x));
       if (!from.length) throw new Error(`no piece is "${String(c.set.from)}"`); if (!to.length) throw new Error(`no piece is "${String(c.set.to)}" (apart from the first end)`);
@@ -1139,6 +1139,7 @@ const BUILT_THINGS: BlockDef[] = [
       const out: Outputs = { flow: f.conductance * dv, pieces: g.pieces.map((p, k) => ({ piece: p.name, material: p.mat ?? '', [heat ? 'above the cold end, K' : 'volts']: f.level[k] === null ? null : +(f.level[k]! * dv).toPrecision(5) })).filter((r) => Object.values(r)[2] !== null).slice(0, 3000),
         says: [`${heat ? 'heat' : 'current'} from ${from.length} piece${from.length > 1 ? 's' : ''} to ${to.length}, ${dv} ${u} apart: ${f.resistance === null ? 'nothing joins them through pieces that carry it' : `${f.resistance.toPrecision(4)} ${heat ? 'K/W' : 'Ω'} between them, ${(f.conductance * dv).toPrecision(4)} ${heat ? 'W' : 'A'} through`}`, `solved ${f.converged ? 'to 10⁻¹⁰' : 'NOT converged'} in ${f.steps} steps; what comes in goes out at every piece to ${(f.imbalance * 100).toExponential(1)} %`, ...(f.floating ? [`${f.floating} pieces joined to neither end`] : []), ...f.lacking, contact ? `${contact} ${heat ? 'W/m² K' : 'S/m²'} at every contact` : 'contact resistance left out: the least the way can resist; give a contact conductance to add it', 'each piece one temperature or voltage (its own gradient left out)'].join('. ') };
       if (f.resistance !== null) out.resistance = f.resistance;
+      out.seen = coloured(g, f.level, `${heat ? 'temperature' : 'voltage'} through ${asThing(i.thing).name}`);
       out._evidence = f.evidence; if (f.resistanceU !== null && f.resistance !== null) { out._u = { resistance: f.resistanceU, flow: (f.resistanceU / f.resistance ** 2) * dv }; }
       out.says = `${out.says}. Each half worked by the book's law ${f.laws.map((l) => `\`${l}\``).join(', ')}; it rests on ${f.evidence} figures${f.resistanceU !== null ? `; ± ${f.resistanceU.toPrecision(2)} ${heat ? 'K/W' : 'Ω'} from ${f.uncertainFrom.join(', ')}, known only by their family (its span taken as uniform)` : ''}`;
       return out;
