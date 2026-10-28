@@ -17,7 +17,7 @@ import type { Part } from '../kits';
 import { contacts, layout, type Node } from './space';
 import { leastDistance, meshClashes, trisOf, type Tris, type TriMesh } from './critic';
 import { leafGeometry } from '../view/kit3d';
-import { graphOf, groupsOf, temperaturesOf } from '../graph';
+import { graphOf, groupsOf, sliced, temperaturesOf } from '../graph';
 import { matterOf } from '../matter';
 
 /** The most a material stands in service, °C (typical continuous ratings: makers' datasheets for each polymer family;
@@ -147,7 +147,9 @@ export function heat(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => 
  *  each contact, every piece losing to the air from its surface); a piece hotter than its material stands is said, with
  *  the hot piece its heat comes from. */
 export function conducted(root: Part, already: Finding[] = []): Finding[] {
-  const g = graphOf(root), hotOf = (n: Node) => n.p.hot ?? n.parent?.p.hot;
+  // (each piece cut into slices along its longest side, so a long plate is hot by the exhaust and cool at its far end,
+  // not one temperature over it all: step G)
+  const g = sliced(graphOf(root), 8), hotOf = (n: Node) => n.p.hot ?? n.parent?.p.hot;
   const hot = new Map<number, number>(); g.pieces.forEach((p, i) => { const t = hotOf(p.node); if (t !== undefined && t > AMBIENT) hot.set(i, t); });
   if (!hot.size) return [];
   const { T } = temperaturesOf(g, hot, AMBIENT), groups = groupsOf(g), groupOf = new Map<number, number[]>(); for (const gr of groups) for (const i of gr) groupOf.set(i, gr);
