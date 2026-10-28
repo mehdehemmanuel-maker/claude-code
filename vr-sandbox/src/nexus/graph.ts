@@ -8,7 +8,7 @@
 // for only where two placements' bounds come within reach of each other). A city of one drone builds one drone's graph.
 
 import * as THREE from 'three';
-import { isAssembly, levelColour, matrixOf, type Assembly, type Override } from './assembly';
+import { isAssembly, levelColour, matrixOf, type Assembly, type Bend, type Override } from './assembly';
 import { contacts, layout, patchIn, type Node, type OBB } from './make/space';
 import type { Part } from './kits';
 import { matterOf } from './matter';
@@ -240,6 +240,28 @@ export function coloured(g: Graph, level: (number | null)[], name = 'coloured by
     const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); p.node.m.decompose(pos, q, sc);
     const e = new THREE.Euler().setFromQuaternion(q), v = level[i], none = v === null || v === undefined;
     return { of: { ...p.node.p, at: undefined, rot: undefined, parts: [] } as Part, at: pos.toArray() as V3, rot: [e.x, e.y, e.z] as V3, s: sc.x, over: { color: none ? 0x777777 : levelColour(v), finish: 'satin', ...(!none && faces[i]!.length ? { field: { v, faces: faces[i]! } } : {}) } };
+  });
+  return { name, items };
+}
+
+/** Each whole piece drawn once and bent (`Bend`): its slices' movements and turns, scaled by `scale` to be seen, run along
+ *  it as the beam bends between them; coloured by how far each point moves. */
+export function bentWhole(g: Graph, moved: (V3 | null)[], turned: (V3 | null)[], scale: number, whole: Graph, name: string): Assembly {
+  const of = new Map<string, number[]>(); g.pieces.forEach((p, i) => { const k = p.id.replace(/#\d+$/, ''); (of.get(k) ?? of.set(k, []).get(k)!).push(i); });
+  const most = Math.max(1e-30, ...moved.map((m) => (m ? Math.hypot(...m) * scale : 0)));
+  const items = whole.pieces.map((p) => {
+    const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); p.node.m.decompose(pos, q, sc);
+    const e = new THREE.Euler().setFromQuaternion(q), inv = p.node.m.clone().invert(), lin = new THREE.Matrix3().setFromMatrix4(inv), qi = q.clone().invert();
+    const parts = (of.get(p.id) ?? []).filter((i) => moved[i] && turned[i]);
+    let over: Override = { color: 0x777777, finish: 'satin' };
+    if (parts.length) {
+      const mids = parts.map((i) => g.pieces[i]!.node.box!.getCenter(new THREE.Vector3()).applyMatrix4(inv));
+      const u = parts.length > 1 ? mids[mids.length - 1]!.clone().sub(mids[0]!).normalize() : new THREE.Vector3(0, 1, 0);
+      const pts = parts.map((i, k) => ({ t: mids[k]!.dot(u), d: new THREE.Vector3(...moved[i]!).multiplyScalar(scale).applyMatrix3(lin).toArray() as V3, r: new THREE.Vector3(...turned[i]!).multiplyScalar(scale).applyQuaternion(qi).toArray() as V3 }));
+      const bend: Bend = { along: u.toArray() as V3, pts, most: most / (sc.x || 1) };
+      over = { color: levelColour(Math.max(...parts.map((i) => Math.hypot(...moved[i]!) * scale)) / most), finish: 'satin', bend };
+    }
+    return { of: { ...p.node.p, at: undefined, rot: undefined, parts: [] } as Part, at: pos.toArray() as V3, rot: [e.x, e.y, e.z] as V3, s: sc.x, over };
   });
   return { name, items };
 }

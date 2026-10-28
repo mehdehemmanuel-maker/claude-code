@@ -48,7 +48,37 @@ export function fieldAt(f: Field, x: number, y: number, z: number): number {
 /** A level from 0 to 1 as heat maps are read: blue at 0 through green and yellow to red at 1. */
 export function levelColour(x: number): number { return new THREE.Color().setHSL((2 / 3) * (1 - Math.max(0, Math.min(1, x))), 0.85, 0.5).getHex(); }
 
-export interface Override { /** a level varying through the piece, drawn by `levelColour` at every point (over its colour) */ field?: Field; color?: number; mat?: string; finish?: string; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
+/**
+ * A piece drawn bent, as the beam it was worked out as bends between the points where its movement is known: each slice's
+ * middle (`pts`: its distance `t` along the axis `along` from the piece's frame's origin, its movement `d` and turn `r`,
+ * in the piece's frame, already scaled to be seen). Between two, Euler and Bernoulli's beam carrying load only at its ends
+ * takes the cubic its two ends' movements and slopes set (Hermite's: the slope of the movement along the axis is the turn
+ * crossed with it); its stretch is straight between; each section turns as a whole, by the turn between its ends'. Past
+ * the last, carried on as it moves there. Coloured by how far each point moves, over `most`.
+ */
+export interface Bend { along: V3; pts: { t: number; d: V3; r: V3 }[]; most: number }
+/** How far a point in the piece's frame moves, bent as `Bend` says. */
+export function bentAt(b: Bend, x: number, y: number, z: number): V3 {
+  const u = b.along, p = b.pts, t = x * u[0] + y * u[1] + z * u[2], q: V3 = [x - t * u[0], y - t * u[1], z - t * u[2]];
+  const cross = (a: V3, c: V3): V3 => [a[1] * c[2] - a[2] * c[1], a[2] * c[0] - a[0] * c[2], a[0] * c[1] - a[1] * c[0]];
+  let d: V3, r: V3;
+  const end = t <= p[0]!.t ? p[0]! : t >= p[p.length - 1]!.t ? p[p.length - 1]! : null;
+  if (end || p.length === 1) {
+    const e = end ?? p[0]!, s = cross(e.r, u), h = t - e.t; d = [e.d[0] + s[0] * h, e.d[1] + s[1] * h, e.d[2] + s[2] * h]; r = e.r;
+  } else {
+    let lo = 0, hi = p.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (p[m]!.t <= t) lo = m; else hi = m; }
+    const a = p[lo]!, c = p[hi]!, L = c.t - a.t, x1 = L > 0 ? (t - a.t) / L : 0, x2 = x1 * x1, x3 = x2 * x1;
+    const h00 = 2 * x3 - 3 * x2 + 1, h10 = x3 - 2 * x2 + x1, h01 = -2 * x3 + 3 * x2, h11 = x3 - x2, ma = cross(a.r, u), mc = cross(c.r, u);
+    d = [0, 1, 2].map((i) => h00 * a.d[i]! + h10 * L * ma[i]! + h01 * c.d[i]! + h11 * L * mc[i]!) as V3;
+    // (its stretch straight between, as a bar's is)
+    const ax = (1 - x1) * (a.d[0] * u[0] + a.d[1] * u[1] + a.d[2] * u[2]) + x1 * (c.d[0] * u[0] + c.d[1] * u[1] + c.d[2] * u[2]), now = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+    d = [d[0] + (ax - now) * u[0], d[1] + (ax - now) * u[1], d[2] + (ax - now) * u[2]];
+    r = [0, 1, 2].map((i) => (1 - x1) * a.r[i]! + x1 * c.r[i]!) as V3;
+  }
+  const w = cross(r, q); return [d[0] + w[0], d[1] + w[1], d[2] + w[2]];
+}
+
+export interface Override { /** a level varying through the piece, drawn by `levelColour` at every point (over its colour) */ field?: Field; /** drawn bent, and coloured by how far each point moves */ bend?: Bend; color?: number; mat?: string; finish?: string; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
 export interface Placed { of: Part | Assembly; at: V3; rot: V3; s: number; over?: Override }
 export interface Assembly {
   /** the inventory item it is, where it is one (a cell, a battery), so a tree made of it says so */ item?: string;
@@ -100,7 +130,7 @@ const matches = (o: Override, name: string) => { if (!o.path) return true; let r
  *  (A stretch is not here: it is in the matrix.) */
 export function effective(overs: Override[], name: string): Override {
   const out: Override = {};
-  for (let i = overs.length - 1; i >= 0; i--) { const o = overs[i]!; if (!matches(o, name)) continue; for (const k of ['color', 'mat', 'finish', 'hide', 'field'] as const) if (o[k] !== undefined) (out as Record<string, unknown>)[k] = o[k]; }
+  for (let i = overs.length - 1; i >= 0; i--) { const o = overs[i]!; if (!matches(o, name)) continue; for (const k of ['color', 'mat', 'finish', 'hide', 'field', 'bend'] as const) if (o[k] !== undefined) (out as Record<string, unknown>)[k] = o[k]; }
   return out;
 }
 /** Every drawn piece of an assembly, placed: what renders it and what checks it read. `visit` returns false to stop. */

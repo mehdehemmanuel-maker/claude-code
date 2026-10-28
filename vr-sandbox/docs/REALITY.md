@@ -711,3 +711,11 @@ its slices' middles and faces run along it (`Field` in `assembly.ts`), and the r
 triangles halved along their longest side until they are fine enough. No seams where it was cut; the colour bends where
 copper meets aluminium because the law does. Bending is next: a beam's shape between two slices is the cubic its end
 movements and turns set (Hermite), the same idea.
+
+**F, seen bent as beams bend.** The bent view moved each slice as a block, so it showed steps. Between two slices the
+beam the frame solves (Euler and Bernoulli's, loaded only at its ends) takes exactly the cubic its two ends' movements and
+turns set (Hermite's), its stretch straight between, each section turning as a whole (`Bend`, `bentAt` in `assembly.ts`;
+`bentWhole` in `graph.ts`). Each whole piece is now drawn once, every point of it moved by that and coloured by how far
+it moves. Checked against the textbook: a 1 m steel cantilever pushed at its top, its drawn shape against P x² (3a − x)
+/ 6EI at a hundred points along it, agrees to 10⁻¹² mm at 2, 4, 8 and 16 slices (slice by slice, it was up to 1.3 mm
+out). On the rods board the two rods sway in the S a frame makes when the block keeps their tops from turning.

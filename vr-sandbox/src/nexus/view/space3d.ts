@@ -5,19 +5,15 @@
 // see is not drawn; come closer and it opens into its pieces. The level is worked out again when the view moves.
 
 import * as THREE from 'three';
-import { boundsOfAll, cellPick, fieldAt, flatten, isAssembly, leavesOf, levelColour, matrixOf, effective, type Assembly, type Field, type Override } from '../assembly';
+import { bentAt, boundsOfAll, cellPick, fieldAt, flatten, isAssembly, leavesOf, levelColour, matrixOf, effective, type Assembly, type Bend, type Field, type Override } from '../assembly';
 import type { Part } from '../kits';
 import { leafGeometry, leafMaterial } from './kit3d';
 
-/** A piece drawn with a level varying through it (`Field`): its own copy of the shape, each triangle halved across its
- *  longest side until no side is longer than a fortieth of the piece, so the colour follows the field and not just the
- *  corners, coloured at every point. Kept with the field. */
-const fieldDrawn = new WeakMap<Field, THREE.BufferGeometry>();
+const fieldDrawn = new WeakMap<Field | Bend, THREE.BufferGeometry>(), refinedOf = new WeakMap<THREE.BufferGeometry, { p: number[]; n: number[] }>();
 let fieldMat: THREE.MeshStandardMaterial | null = null;
-function fieldGeometry(geo: THREE.BufferGeometry, f: Field): THREE.BufferGeometry {
-  const was = fieldDrawn.get(f); if (was) return was;
-  const src = geo.index ? geo.toNonIndexed() : geo;
-  let p = Array.from(src.getAttribute('position').array as ArrayLike<number>), n = Array.from((src.getAttribute('normal')?.array ?? new Float32Array(p.length)) as ArrayLike<number>);
+function refined(geo: THREE.BufferGeometry): { p: number[]; n: number[] } {
+  const was = refinedOf.get(geo); if (was) return was;
+  const src = geo.index ? geo.toNonIndexed() : geo, p = Array.from(src.getAttribute('position').array as ArrayLike<number>), n = Array.from((src.getAttribute('normal')?.array ?? new Float32Array(p.length)) as ArrayLike<number>);
   src.computeBoundingBox(); const most = src.boundingBox!.getSize(new THREE.Vector3()).length() / 40, P: number[] = [], N: number[] = [];
   const split = (v: number[][], w: number[][], depth: number): void => {
     const d = [0, 1, 2].map((k) => Math.hypot(...v[k]!.map((x, i) => x - v[(k + 1) % 3]![i]!))), k = d.indexOf(Math.max(...d));
@@ -27,9 +23,19 @@ function fieldGeometry(geo: THREE.BufferGeometry, f: Field): THREE.BufferGeometr
     const vt = [], wt = []; vt[a] = m; vt[b] = v[b]!; vt[c] = v[c]!; wt[a] = nm; wt[b] = w[b]!; wt[c] = w[c]!; split(vt, wt, depth + 1);
   };
   for (let t = 0; t < p.length; t += 9) split([0, 1, 2].map((k) => p.slice(t + 3 * k, t + 3 * k + 3)), [0, 1, 2].map((k) => n.slice(t + 3 * k, t + 3 * k + 3)), 0);
-  p = P; n = N;
-  const col = new Float32Array(p.length), c = new THREE.Color();
-  for (let i = 0; i < p.length; i += 3) { c.setHex(levelColour(fieldAt(f, p[i]!, p[i + 1]!, p[i + 2]!))); col[i] = c.r; col[i + 1] = c.g; col[i + 2] = c.b; }
+  const r = { p: P, n: N }; refinedOf.set(geo, r); return r;
+}
+/** A piece drawn with a level varying through it (`Field`), or bent (`Bend`): its shape refined (each triangle halved
+ *  across its longest side until no side is longer than a fortieth of the piece), so the colour and the bend follow the
+ *  law and not just the corners; coloured, and moved, at every point. Kept with what it draws. */
+function fieldGeometry(geo: THREE.BufferGeometry, f: Field | Bend): THREE.BufferGeometry {
+  const was = fieldDrawn.get(f); if (was) return was;
+  const { p: p0, n } = refined(geo), p = p0.slice(), col = new Float32Array(p.length), c = new THREE.Color(), bend = 'most' in f ? f : null;
+  for (let i = 0; i < p.length; i += 3) {
+    const x = p[i]!, y = p[i + 1]!, z = p[i + 2]!;
+    if (bend) { const d = bentAt(bend, x, y, z); p[i] = x + d[0]; p[i + 1] = y + d[1]; p[i + 2] = z + d[2]; c.setHex(levelColour(Math.hypot(...d) / bend.most)); } else c.setHex(levelColour(fieldAt(f as Field, x, y, z)));
+    col[i] = c.r; col[i + 1] = c.g; col[i + 2] = c.b;
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.computeBoundingSphere(); fieldDrawn.set(f, g); return g;
@@ -278,7 +284,7 @@ export class SpaceView {
           // the coarsest level of its stand-in whose error is under the threshold (4 pieces, 12, 48)
           const lv = p.levels.find((l) => l.error * per < ERR_PX * this.coarse);
           if (lv) {
-            for (const q of p.pieces.slice(0, lv.k)) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const g0 = leafGeometry(q.part); if (!g0) continue; const geo = o.field ? fieldGeometry(g0, o.field) : g0, mat = o.field ? fieldMaterial() : leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name); }
+            for (const q of p.pieces.slice(0, lv.k)) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const g0 = leafGeometry(q.part); if (!g0) continue; const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : g0, mat = fb ? fieldMaterial() : leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name); }
             stand++; continue;
           }
         }
@@ -289,7 +295,7 @@ export class SpaceView {
       for (const l of leavesOf(t)) {
         const o = effective(overs, l.part.name); if (o.hide) continue;
         const g0 = leafGeometry(l.part); if (!g0) continue;
-        const geo = o.field ? fieldGeometry(g0, o.field) : g0, mat = o.field ? fieldMaterial() : leafMaterial(l.part, o);
+        const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : g0, mat = fb ? fieldMaterial() : leafMaterial(l.part, o);
         add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, l.m), owner, l.part.name);
       }
     }
