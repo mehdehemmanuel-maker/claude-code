@@ -96,89 +96,130 @@ The thread through all of it is the **quantity**: a law's port, a material's pro
 same kind of thing (a quantity with a dimension, a unit and its evidence), so a material's density can feed any law
 that takes a density, and the chain solver can join a mechanics law to a heat law through the temperature they share.
 
-## 3. What changes, in order (the user's priority: laws first, then the math they stand on, then materials)
+## 3. The plan, step by step
 
-1. **One numeric layer** (`src/nexus/numeric.ts`, new: nothing like it exists). Root finding (bisection, Brent,
-   Newton by finite differences), integration (adaptive Simpson, Gauss–Legendre), derivatives (central differences
-   with Richardson), ordinary differential equations (Euler, RK4, adaptive RK45, backward Euler for stiff ones). Each
-   takes its method, tolerance and most iterations, and returns its value with whether it converged, its iterations
-   and its error estimate, never a number alone. The duplicates call it: `law.invert`, `fin.irr`, `lawgraph.solve`,
-   the Simpson rule in `evaluate.ts`, and the steppers that are ODEs (PID, battery drain, motor run, warming). The heat
-   flow's implicit grid solver is a field solver, not an ODE, and stays as it is. Nodes: `math.root`,
-   `math.integrate`, `math.derivative`, `math.ode`, each with method, tolerance and iterations as settings and a
-   `converged` output; `math.multiply` and `math.divide` keep their units.
-2. **Quantities** (in `dimension.ts`, which owns dimensions): a registry of named quantities (about 120: force,
-   length, mass, time, temperature, pressure, stress, energy, power, current, voltage, resistance, density, …), each
-   its dimension and SI unit. Every port of every book law is mapped to one, by its name and its dimension; a test fails
-   on any law port that maps to none, or two quantities of one name with different dimensions.
-3. **Law nodes from the book.** `lawBlocks` builds every `law.*` node from `BOOK` (all 241), keeping the 144 ids boards
-   already use. Each node: its ports as quantities with units; a "solve for" setting (any of its variables, by the
-   numeric layer's root finder, with its method and tolerance); its domain refusing outside (said, not a number); its
-   output's derivation (evidence, inputs, uncertainty, limits); its sources and validity shown. The closures in
-   `ganglia/laws.ts` are retired only after a parity test shows the book gives the same numbers: their tags and range
-   checks move onto the book's laws; the engineering functions other code uses stay. Duplicates folded (one
-   Stefan–Boltzmann, one `Source`, `U()` into `L()`, the nine kept/book-only pairs kept as distinct laws only where they
-   say different things).
-4. **The chain solver** (in `lawgraph.ts`, which owns joining laws). Laws and quantities as one graph: a law can give
-   any one of its quantities when all the others are known. From what is known, it applies laws until the target is
-   known, as many steps as it takes, preferring the fewest steps and the strongest evidence; where two laws share two
-   unknowns (a simultaneous pair) it solves them together by Newton's method from the numeric layer. Node
-   `law.solve`: knowns in (a table of quantity, value, unit, or wires), a target out, with the chain (each step's law,
-   its inputs, its evidence, any limit it came near) and the weakest evidence it rests on. What it assumes is said: that
-   a quantity of the same name in two laws is the same thing (the force in one law is the force in the next), unless the
-   board names them apart.
-5. **One material system** (`src/nexus/matter.ts`, new owner; `elements.ts` and `data/materials.ts` stay as its data).
-   For every id parts carry: its composition (to elements), its handbook grade by one explicit table (replacing
-   `HANDBOOK`, `SURFACE` and `MATTER_WORDS`, and the spelling matches that give tissue titanium's friction), and each
-   property (density, E, ν, yield, ultimate, c, k, emissivity, melting, expansion, service limit, friction,
-   restitution, colour) with its value, unit, source and evidence. What is not measured is worked out where a law allows
-   (a mixture's density by the rule of mixtures from its constituents, labelled estimated), else said missing; element
-   densities and melting points added from CRC. Every consumer reads it: `mass.ts`, `strengthOf`, `surfaceOf`,
-   `MAX_SERVICE`, `tetherOf`, the thermal and fusion tables. Nodes: `card.material` over all of it, its properties as
-   quantities wired into any law; "material from composition" (a candidate's properties from its constituents,
-   hypothetical until checked).
-6. **What it is made of, viewable for anything** (from the user's draft). A node and a panel that open any thing (a
-   house, a car, a battery) as its materials all the way down: each part, the specific material it is made of (which
-   wood, which steel, which plastic), the mixes and what is in each, down to elements, with the mass of each at every
-   level and its share of the whole. A material named only by its family ("wood", "plastic", "steel") is shown as
-   unspecified, never passed off as a species or a grade. The inventory's `massMakeup` and `fundamentals`, which no
-   node reaches today, are its start.
-7. **Laws: coverage, the math between them, consistency** (from the user's draft).
-   - Coverage: the laws there are set against the fields of physics and chemistry (mechanics, continua, fluids,
-     heat, electromagnetism as fields, waves and acoustics, optics, quantum, relativity, nuclear, chemistry and
-     kinetics, materials, astronomy), what each field is missing named, and sourced laws added for it, field by field.
-   - The math between them: where a law follows from others (electrical power is P = I²R only because Ohm's law and
-     P = V I combine), the node says so and shows the derivation; a node that is only another's rearrangement or
-     another's special case is folded into it, and the law it rests on is strengthened by the check.
-   - Consistency: every chain checked for units at every joint; where two routes reach one quantity they must agree, and
-     a disagreement is shown, never hidden; what is conserved (energy, mass, charge, momentum) checked across a chain.
-8. **Evidence on every node and value.** `evidence` and `assumes` on every node, read from what it is (a law from its
-   sources; a datasheet lookup is measured; a model that leaves things out simplified; a generator hypothetical),
-   overridden by hand only where a rule cannot tell; the board carries the weakest evidence along each wire with the
-   node it came from; shown as a badge on every node, checked by the gauntlet, written in `docs/NODES.md`.
+The user's brief (2026-10-28, "Reality Physics Unification and Material Transparency") sets the order: audit, map,
+then a plan, then small verified stages; correctness, clarity, shared foundations and consistency across fields over
+the size of the catalogue; nothing fabricated, gaps recorded. Each step below is its own commit after the full gate.
 
-## 4. How it is verified without breaking what works
+**Step 0. Baseline and the dependency map (no behaviour changes).**
+- A snapshot test that records what the system gives today: every starter board run headless (each node's outputs),
+  every law node's worked example, the mass of everything every seed and machine makes. Every later step runs it and
+  lists each difference; none may stand unexplained.
+- The dependency map as data, written into a document and kept current by a test: law ↔ quantity ↔ node ↔ material
+  property ↔ consumer (which code reads which table), so what each step changes can be seen before it is changed.
 
-- **Before anything changes, a snapshot:** every starter board run headless, every law node's worked example, the
-  mass of every seed, machine and starter board's thing, every node's own tests. After each step, the same snapshot is
-  run and every difference listed: none may appear that is not explained (a weightless part gaining its mass is
-  explained; a law's value moving is not, until found).
-- **Parity before retiring the closures:** each of the 144 laws in the book and as a closure gives the same value on its
-  worked example and on 50 samples inside its domain, to 1 part in 10⁹; any that differ are listed and the wrong one
-  fixed before either is removed.
-- **The numeric layer against closed forms:** roots of polynomials, ∫ of sin and e^x, y' = −ky against e^(−kt), a
-  pendulum's period against the elliptic integral the book derives; each method's order of convergence measured (RK4's
-  error falling as h⁴); a problem that does not converge says so, and never returns a number as if it did. The
-  replaced duplicates give their old answers to within their tolerance (`fin.irr`'s examples, `law.invert`'s tests,
-  the PID and battery tests).
-- **The chain solver on problems with known answers across fields:** a steel rod under a hung mass (weight → stress →
-  strain → elongation, from the material's E); a wire's resistance from its material and size, its heating, its
-  temperature rise; a pendulum's length from its period. Each answer checked by hand.
-- **Materials:** a test that no id carried by any part is without density; that tissue, tile, platinum and alumina get
-  their own properties; that every property says its source and evidence.
-- **Ids kept:** every `law.*` id that exists keeps working (aliases where one is folded), so saved boards open.
-- **The gate, the reach test, the gauntlet over every node, the pages in a browser,** and screenshots of a board that
-  solves a cross-field problem through the laws and a material.
+**Step 1. One numeric layer.** (`src/nexus/numeric.ts`, new.)
+- Root finding (bisection, Brent, Newton with a finite-difference derivative), integration (adaptive Simpson,
+  Gauss–Legendre), derivatives (central differences with Richardson), ordinary differential equations (Euler, RK4,
+  adaptive RK45, backward Euler for stiff systems).
+- Each call takes its method, tolerance and most iterations, and returns its value with whether it converged, its
+  iterations, its error estimate, and a warning when it is unstable or extrapolates; never a number alone.
+- The duplicates call it: `law.invert`, `fin.irr`, `lawgraph.solve`, the Simpson rule in `evaluate.ts`, the steppers
+  that are ODEs (PID, battery drain, motor run, warming). The heat flow's implicit grid solver is a field solver and
+  stays.
+- Nodes `math.root`, `math.integrate`, `math.derivative`, `math.ode`, with the settings and a `converged` output;
+  `math.multiply` and `math.divide` keep units.
+- Verified against closed forms, with each method's order of convergence measured, and the replaced duplicates giving
+  their old answers within tolerance.
 
-Each step lands as its own commit after the gate. Steps 1 and 2 change no answers; step 3 changes none until parity
-holds; steps 5 and 6 change answers only where the snapshot says why.
+**Step 2. Quantities, and what each law is.** (`dimension.ts` owns dimensions; the book owns laws.)
+- A registry of named quantities (force, length, temperature, pressure, stress, energy, power, current, voltage,
+  resistance, density, …; about 120), each its dimension, SI unit and a plain sentence of what it is. Amount of
+  substance added to the dimensions, which lack it.
+- Every port of every book law mapped to a quantity, with a plain sentence of what the variable means in that law; a
+  test fails on any port that maps to none.
+- Each law given its kind: fundamental (a conservation law, Maxwell's), definition (P = V I), constitutive (Hooke's,
+  Ohm's for a material), empirical or a correlation (Dittus–Boelter), an approximation of another (a small swing's
+  pendulum), a phenomenological rule; with why it works, what it predicts, and when it must not be used (its domain,
+  said in words beside the predicates that refuse).
+- One set of constants (CODATA) and one `Source` type; the duplicates folded.
+
+**Step 3. The law nodes from the book.**
+- `lawBlocks` builds every `law.*` node from the book (241), keeping the ids boards use. Each node: its equation, its
+  variables as quantities with units and meanings, a "solve for" setting (any variable, by the numeric layer), its
+  domain refusing outside it (said, never a number), each output's derivation (evidence, inputs, uncertainty), its
+  sources and kind, its tests.
+- Parity first: each of the 144 laws in both engines gives the same value on its example and on 50 samples inside
+  its domain, to 1 part in 10⁹; differences found and fixed in whichever is wrong. Only then are the closures retired
+  (their tags and range checks moved onto the book's laws; the engineering functions other code uses stay).
+- Where a law follows from others, it says so, and the derivation is kept (P = I²R from Ohm's law and P = V I): a
+  rearrangement or a special case is folded into the law it comes from, never kept as a second source of truth.
+
+**Step 4. Laws connected: the chain solver and consistency.** (`lawgraph.ts` owns joining laws.)
+- Laws and quantities as one graph; from what is known, laws applied as many steps as it takes to reach the target,
+  across fields; two laws sharing two unknowns solved together by Newton's method from the numeric layer.
+- Node `law.solve`: knowns in, a target out, with the chain (each step's law, inputs, evidence, the limits it came near),
+  the weakest evidence it rests on, and what it assumed (that a quantity named alike in two laws is the same thing,
+  unless the board names them apart). Where more than one model fits, which was chosen and why is said; nothing
+  substituted silently.
+- Consistency: units checked at every joint; where two chains reach one quantity they must agree, else both are shown;
+  energy, mass, charge and momentum checked across a chain where they apply.
+- Verified on cross-field problems with known answers (a hung steel rod: weight, stress, strain, elongation from its E;
+  a wire's resistance, heating and temperature rise; a pendulum's length from its period).
+
+**Step 5. Coverage: the laws reality needs that Nexus lacks.**
+- The laws there are set against the fields (mechanics and collisions; gravitation and orbits; relativity where it
+  matters; electromagnetism as fields and circuits; heat and thermodynamics; fluids, gases, buoyancy, turbulence;
+  waves, acoustics, optics, radiation; atomic and quantum; chemistry, bonding, reactions, kinetics; solids: elasticity,
+  plasticity, fracture, fatigue; materials' properties; biomechanics): what each field has, what it is missing, written
+  into the dependency map.
+- Missing laws added field by field from sources (CODATA, textbooks, standards), each with its kind, domain and tests;
+  disagreements between models and unresolved questions recorded as such, never smoothed over.
+
+**Step 6. One material system.** (`src/nexus/matter.ts`, new owner; `elements.ts` and `data/materials.ts` its data.)
+- For every id parts carry: its precise identity (wood species and grade, steel grade, polymer type, concrete mix,
+  glass type), its composition recursively (a mix of materials, each down to compounds and elements, with shares),
+  and each property (density, E, ν, yield, ultimate, elongation, c, k, expansion, emissivity, melting, service limit,
+  resistivity, friction, restitution, colour) with its value, unit, source and evidence: measured, specified (a
+  standard or a maker), estimated or typical.
+- One explicit table from part ids to handbook grades replaces `HANDBOOK`, `SURFACE` and `MATTER_WORDS` and their
+  spelling matches.
+- What is not measured is worked out only where a rule holds and labelled so (density of a mixture by volume
+  fractions); properties that depend on microstructure, direction or arrangement (stiffness, conductivity of a
+  composite) are given as bounds (Voigt and Reuss) or left missing, never averaged blindly.
+- A material known only by its family ("wood", "plastic", "steel") is shown as unspecified, with the range its family
+  spans, never passed off as a species or a grade. The house seed's generic "wood" and its concrete (oxides only, no
+  mix, no reinforcing) are the first to be specified.
+- Element data added from CRC and IUPAC (densities, melting points, standard atomic weights).
+- Every consumer reads it: `mass.ts`, `strengthOf`, `surfaceOf`, `MAX_SERVICE`, `tetherOf`, the thermal and fusion
+  tables. The snapshot lists every mass and property that moves, each explained.
+
+**Step 7. What anything is made of, and what follows from it.**
+- A node and a panel that open any thing as its materials all the way down: each part, its precise material, the mixes
+  and what is in each, elements, with the mass and share at every level, and what is known, estimated and unspecified.
+- Properties of any part and assembly from its parts, without double counting what is nested: mass and material
+  quantities, centre of mass, inertia tensor, heat capacity; resistance and conductance where a path is defined;
+  expansion; stiffness and strength where a model holds.
+- Fed into the physics, sizing, clearances, heat and simulation that exist; a material changed on a board re-runs every
+  result that depends on it, and a test proves it (the house's framing changed, its mass and its loads follow).
+
+**Step 8. Evidence on every node and every value.**
+- Every node labelled: exact, measured, specified, derived, validated, empirical, estimated, simplified, hypothetical,
+  given; with its assumptions and limits. Read from what a node is (a law from its kind and sources, a datasheet
+  lookup as measured, a model that leaves things out as simplified, a generator as hypothetical), set by hand only
+  where a rule cannot tell.
+- Every value on a wire carries the weakest evidence it rests on and the node it came from; uncertainty carried where it
+  changes a result; invalid inputs, incompatible units, violated assumptions, nonphysical results (a negative mass, an
+  efficiency over one), instability and extrapolation said on the node that hit them.
+- Validation recorded honestly in three grades: tested here, compared with an independent reference, validated against
+  experiment; a model is never called validated because its tests pass.
+- Shown as a badge on every node and in the inspector, checked by the gauntlet, written into `docs/NODES.md`.
+
+## 4. How each step is verified without breaking what works
+
+- The step 0 snapshot after every step; each difference explained, or the step is not done.
+- Dimensional analysis: every law, every chain joint, every node with units.
+- Known analytical solutions and limiting cases (a pendulum's small swing, a beam's tip load, e^(−kt), a cubic's
+  roots); boundary conditions.
+- Conservation of energy and momentum where they apply (collisions, a chain through electrical and heat).
+- Independent references: a law's worked example from its own source; a material's figure against a second source.
+- Material consistency: density from composition against the measured where both exist; every id parts carry has a
+  density; tissue, tile, platinum and alumina get their own properties.
+- Assemblies: mass and centre of mass of a known shape against hand calculation; nested assemblies not counted twice.
+- Cross-field: the hung rod, the heated wire, a motor's winding changed and its electrical, heat and mass results
+  following.
+- Incremental runs: a change re-runs every dependent result and nothing else.
+- Failures: insufficient data and violated assumptions give a stated warning or refusal, never a number.
+- Ids kept: every `law.*` id keeps working, so saved boards open; the reach test, the gauntlet over every node, the
+  pages in a browser, and screenshots of a board that solves a cross-field problem through laws and a material.
