@@ -18,27 +18,22 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | simplified | 40 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 71 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 511 tested here (their own tests: that they do what they say, not that the world does); 34 untested; none validated against experiment.
+Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 513 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
 
-## 1 · Start: values and inputs (16)
+## 1 · Start: values and inputs (11)
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
-- **Along a path through it** (`path.properties`): Pieces of a thing named in order, one after another along an axis, in series: from what each is made of, the path's resistance to heat (L / k A), to current (L / σ A), its stiffness under an axial force (from L / E … *derived, untested*
 - **Laws by field** (`law.fields`): Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas) *specified, tested here*
 - **List of numbers** (`in.list`): Numbers you type, split by commas: wire it into any block to run that block once for each *given, tested here*
-- **Mass, centre and inertia** (`mass.properties`): What follows from a thing's pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece's own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass … *estimated, tested here*
 - **Material** (`card.material`): A material as the kept data has it: density, stiffness, strengths *derived, tested here*
-- **Measure** (`measure`): What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as *derived, tested here*
 - **Number** (`in.number`): A number you set, in any unit: typed "200 mm" is kept as 0.2 m; with ends set, held between them and shown as a slider you drag *given, tested here*
 - **Quantity** (`quantity`): One of the quantities laws are written in (a force, a stress, a temperature, a concentration…): what it is, its SI unit and dimension, and every law in the book it appears in, with what kind of law each is. *exact, tested here*
 - **Range** (`in.range`): Evenly spaced numbers from one end to the other: a sweep *given, tested here*
 - **Read** (`read`): A block of the library or an entry of the inventory read as it is (block:… or item:…, or either by its id or words): a block's ports, settings, tests and sources; an entry's place, make and what is in it *derived, tested here*
 - **Table** (`in.table`): Rows you paste, the first row their headings (comma or tab separated): numbers read as numbers *given, tested here*
 - **Text** (`in.text`): Words you type, carried on a wire to whatever reads text (a label, a search, a note) *given, tested here*
-- **Through a network of pieces** (`path.network`): Pieces of a thing as branches between named junctions (a path that splits and rejoins, a bridge, a mesh): the network solved by nodal analysis, each junction's balance a line of one linear system, for its resistance … *derived, untested*
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
-- **What it is made of** (`made.of`): Any thing opened as its materials all the way down: its own tree with each thing's mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a … *derived, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here*
 
 ## 2 · Make: shapes, parts, things (72)
@@ -169,10 +164,11 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. *derived, tested here*
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what … *derived, tested here*
 
-## 5 · Check (13)
+## 5 · Check (18)
 
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
+- **Along a path through it** (`path.properties`): Pieces of a thing named in order, one after another along an axis, in series: from what each is made of, the path's resistance to heat (L / k A), to current (L / σ A), its stiffness under an axial force (from L / E … *derived, tested here*
 - **Approved** (`gauntlet.approved`): What has come through the gauntlet so far (read from its verdicts), and what was turned back and why *derived, tested here*
 - **Balance (what is conserved)** (`check.balance`): What goes in against what comes out and what is kept, of one thing that is conserved (energy, mass, momentum along one axis, charge): every wire into In and into Out summed in one unit, and the imbalance; said on the … *derived, tested here*
 - **Candidates** (`gauntlet.candidates`): What is put through the gauntlet: blocks of the library (all, of a kind or a field, or made by you), or entries of the inventory (under a path, or yours), or named ones. *given, tested here*
@@ -182,10 +178,14 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Comes apart to the bottom?** (`audit.explode`): How far a build really comes apart: the share of its mass in lumps (a piece drawn as one though what it is named for is an assembly in the inventory: a headlamp, a door, a fuel tank), each said with what it should … *derived, tested here*
 - **Feed the proposals in** (`gauntlet.feed`): The proposals with a source (read off a drawing, a reference, or the web) entered in the inventory, what each holds first; the inferred stay proposed until a source confirms them *derived, tested here*
 - **How finely is it made?** (`check.fidelity`): A drawn thing measured for how finely it is made: its pieces and kinds; how many, and how much of it, are still plain boxes (a casting drawn as a slab wants its ribs, bosses and fillets); how many are shaped (turned, … *derived, tested here*
+- **Mass, centre and inertia** (`mass.properties`): What follows from a thing's pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece's own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass … *estimated, tested here*
+- **Measure** (`measure`): What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as *derived, tested here*
 - **Nothing runs into anything?** (`check.rules`): The rules a made thing is held to, on its surfaces as drawn (triangle against triangle): no two pieces cross unless they are one piece, one is said to pass through the other, one is a fastener in what it fastens, or … *derived, tested here*
 - **Run the gauntlet** (`gauntlet.run`): Every candidate through the gates chosen (all if none, one for a single gate), each where it applies, cheapest first: approved only when none fails. *derived, tested here*
 - **Tester** (`test.block`): A block of the library put to its own tests, then pushed far from its defaults (zero, a thousandth, a thousand times, negative): each failure and each crash said, and whether it answered or refused in words *derived, tested here*
+- **Through a network of pieces** (`path.network`): Pieces of a thing as branches between named junctions (a path that splits and rejoins, a bridge, a mesh): the network solved by nodal analysis, each junction's balance a line of one linear system, for its resistance … *derived, tested here*
 - **Turn it over and check** (`check.turning`): A piston engine turned through a whole revolution of its crank, a step at a time: at each, its crank and every piston and rod where they then are, tried against everything else (block, caps, pan, pump, cams in the … *derived, tested here*
+- **What it is made of** (`made.of`): Any thing opened as its materials all the way down: its own tree with each thing's mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a … *derived, tested here*
 
 ## 6 · Simulate and run (16)
 

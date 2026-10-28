@@ -250,6 +250,28 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
     return b;
   }],
+  ['What it is made of, and what it carries: a copper and an aluminium rod side by side under a steel block, opened down to its elements, weighed and balanced, and as a path for heat, current and force', () => {
+    // any thing opened as its materials (docs/REALITY.md, step 7): the same three pieces read as what they are made of,
+    // their mass, centre and inertia, and as a path: the rods side by side (a + between them), then the block, along y
+    const b = emptyBoard('What it is made of, and what it carries');
+    placeBlock(b, 'shape.cyl', 0, 0, { name: 'copper rod', mat: 'copper', color: '#b87333', finish: 'machined', r: 0.006, h: 0.2 }, 'cu'); b.nodes.cu!.label = 'Copper rod, 12 mm, 200 mm long';
+    placeBlock(b, 'shape.cyl', 0, 0, { name: 'aluminium rod', mat: 'al-6061', color: '#b0b8c0', finish: 'machined', r: 0.006, h: 0.2 }, 'al'); b.nodes.al!.label = 'Aluminium rod (6061), 12 mm, 200 mm long';
+    placeBlock(b, 'shape.box', 0, 0, { name: 'steel block', mat: 'steel-low', color: '#6d7278', finish: 'machined', w: 0.06, h: 0.03, d: 0.03 }, 'st'); b.nodes.st!.label = 'Steel block on top';
+    placeBlock(b, 'place', 0, 0, { x: -0.015, y: 0.1 }, 'pcu'); wire(b, 'cu', 'part', 'pcu', 'thing');
+    placeBlock(b, 'place', 0, 0, { x: 0.015, y: 0.1 }, 'pal'); wire(b, 'al', 'part', 'pal', 'thing');
+    placeBlock(b, 'place', 0, 0, { y: 0.215 }, 'pst'); wire(b, 'st', 'part', 'pst', 'thing');
+    placeBlock(b, 'combine', 0, 0, { name: 'two rods and a block' }, 'all'); for (const x of ['pcu', 'pal', 'pst']) wire(b, x, 'placed', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'made.of', 0, 0, {}, 'made'); wire(b, 'all', 'assembly', 'made', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'mats'); b.nodes.mats!.label = 'By material'; wire(b, 'made', 'materials', 'mats', 'rows');
+    placeBlock(b, 'view.table', 0, 0, {}, 'els'); b.nodes.els!.label = 'By element'; wire(b, 'made', 'elements', 'els', 'rows');
+    placeBlock(b, 'mass.properties', 0, 0, {}, 'mp'); wire(b, 'all', 'assembly', 'mp', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'mps'); b.nodes.mps!.label = 'Its mass, centre and inertia'; wire(b, 'mp', 'says', 'mps', 'value');
+    placeBlock(b, 'path.properties', 0, 0, { path: 'copper rod + aluminium rod, steel block', axis: 'y', dT: 50, ends: 'fixed at one end, free at the other' }, 'path'); wire(b, 'all', 'assembly', 'path', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'paths'); b.nodes.paths!.label = 'As a path: heat, current, force, warmed 50 K'; wire(b, 'path', 'says', 'paths', 'value');
+    placeBlock(b, 'view.table', 0, 0, {}, 'pieces'); b.nodes.pieces!.label = 'Each piece on the path'; wire(b, 'path', 'pieces', 'pieces', 'rows');
+    return b;
+  }],
   ['Two agents: one goes to sit, opening the way; one keeps within a lead\'s length of it', () => {
     // goals on any thing (docs/LIFE.md step 6): the adult is told only "go to what lets you sit, anywhere in the house";
     // the sofa is behind a shut door, so it opens the doors it sees on its way, nearest first, until it has a way, then

@@ -20,7 +20,7 @@ Boards: whole pipelines of nodes to start from, and yours.
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Starter boards | 39 | the library panel | `src/nexus/starters.ts` |
+| Starter boards | 40 | the library panel | `src/nexus/starters.ts` |
 
 ### Products
 
@@ -92,17 +92,18 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 | Board | Field | Nodes | Stages it reaches | May be missing |
 | --- | --- | --- | --- | --- |
-| A house from seeds: pick its plan, its rooms change | structural | 10 | 1 2 3 5 10 | · |
+| A house from seeds: pick its plan, its rooms change | structural | 10 | 2 3 5 10 | · |
 | Power as nodes: an engine run from its numbers, the powertrain it dr… | vehicles | 19 | 1 2 3 6 9 10 | · |
-| Traffic on the clock: cars round a block, stopping at red | structural | 9 | 1 2 3 6 9 10 | · |
-| A world without end: neighbourhoods for ever, each its own | structural | 6 | 1 2 6 10 | · |
-| A battery built from its parts, node by node: grid, paste, separator… | manufacturing | 24 | 1 2 3 5 10 | it has what plays with time, and no clock |
+| Traffic on the clock: cars round a block, stopping at red | structural | 9 | 2 3 5 6 9 10 | · |
+| A world without end: neighbourhoods for ever, each its own | structural | 6 | 2 5 6 10 | · |
+| A battery built from its parts, node by node: grid, paste, separator… | manufacturing | 24 | 2 3 5 10 | it has what plays with time, and no clock |
 | An engine from its first parts: piston, rod, crank, block, head, the… | mechanical | 30 | 1 2 3 5 6 10 | · |
 | Research to what is missing: Toyota's engine held against its sources | mechanical | 19 | 1 2 5 9 10 11 | · |
 | The gauntlet as nodes: makers through gate after gate, the unknown s… | software | 26 | 1 2 5 9 10 | · |
 | The 6502 from its transistors: a real program run switch by switch, … | electronics | 9 | 5 6 10 | · |
 | Proximity and mates: each thing carries the room and the mates it ne… | structural | 8 | 2 3 4 10 | · |
 | A body from its measured segments, its math on every part | science | 9 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
+| What it is made of, and what it carries: a copper and an aluminium r… | structural | 16 | 2 3 5 10 | · |
 | Two agents: one goes to sit, opening the way; one keeps within a lea… | structural | 11 | 1 2 6 7 10 | · |
 | An agent opens a door: it sees it, walks to it, takes hold, pulls; t… | structural | 10 | 2 4 6 7 10 | · |
 | Who notices what: a car running, a person behind it, one at its door… | vehicles | 11 | 2 3 4 7 10 | · |
@@ -111,21 +112,21 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 | The autopilot on the Corolla: checked, repaired, checked again, what… | mechanical | 12 | 2 3 4 10 | · |
 | A battery placed by the solver: where it goes, why, and what it give… | mechanical | 13 | 2 3 4 10 | · |
 | Fields over the engine bay: what each part needs, and maps of heat, … | mechanical | 16 | 2 3 4 10 | · |
-| A car down to its bolts: tyres made in depth, a shared battery, take… | mechanical | 10 | 1 2 3 5 10 | · |
-| A truck from the ground up: axles, then tyres, then batteries | mechanical | 17 | 1 2 3 5 10 | · |
-| An electric car's pack: 3,360 cells, one stored | mechanical | 10 | 1 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
-| A computer down to the transistor: FinFET, cell, die, package, board… | electrical | 14 | 1 2 3 10 | · |
+| A car down to its bolts: tyres made in depth, a shared battery, take… | mechanical | 10 | 2 3 5 10 | · |
+| A truck from the ground up: axles, then tyres, then batteries | mechanical | 17 | 2 3 5 10 | · |
+| An electric car's pack: 3,360 cells, one stored | mechanical | 10 | 2 3 5 10 | · |
+| A computer down to the transistor: FinFET, cell, die, package, board… | electrical | 14 | 2 3 5 10 | · |
 | Physics: a steel ball let go into a tower of wooden blocks | mechanical | 10 | 2 3 6 10 | it places things itself and never checks whether they run into each other or keep their room |
 | Physics: a cart on two motor-driven wheels | mechanical | 15 | 2 3 6 10 | it places things itself and never checks whether they run into each other or keep their room |
 | Motion: a door swinging, and what it hits | structural | 11 | 2 3 5 6 10 | · |
 | Physics: a pendulum on a hinge | mechanical | 6 | 2 3 6 10 | · |
-| Mating: a door set in its wall by their frames | structural | 5 | 1 2 3 10 | it has what plays with time, and no clock |
-| Clear away: a field of grass, cleared where a road goes | structural | 9 | 1 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Seeds, one of each: window, door, toilet, sink, bed, car, stop light | structural | 20 | 1 2 3 5 10 | · |
-| Ground: a foot of grass, then a whole terrain of it | structural | 6 | 1 2 3 5 10 | · |
-| Streets: a road and a stop light, then a road system | structural | 6 | 1 2 3 5 10 | · |
-| A neighbourhood, then a city, from seeds | structural | 6 | 1 2 3 5 10 | · |
-| A city from a few nodes: motor, drone, swarm, buildings | structural | 10 | 1 2 3 5 10 | · |
+| Mating: a door set in its wall by their frames | structural | 5 | 2 3 5 10 | it has what plays with time, and no clock |
+| Clear away: a field of grass, cleared where a road goes | structural | 9 | 2 3 5 10 | · |
+| Seeds, one of each: window, door, toilet, sink, bed, car, stop light | structural | 20 | 2 3 5 10 | · |
+| Ground: a foot of grass, then a whole terrain of it | structural | 6 | 2 3 5 10 | · |
+| Streets: a road and a stop light, then a road system | structural | 6 | 2 3 5 10 | · |
+| A neighbourhood, then a city, from seeds | structural | 6 | 2 3 5 10 | · |
+| A city from a few nodes: motor, drone, swarm, buildings | structural | 10 | 2 3 5 10 | · |
 | Parts in 3D: a bolt sized from its load, drawn whole | mechanical | 12 | 1 2 4 8 9 10 | · |
 | Cantilever: how far it bends, for every length | structural | 17 | 1 5 8 10 11 | · |
 | Bolt: shear, tightening torque and margin | mechanical | 13 | 1 5 8 10 11 | · |
@@ -134,4 +135,4 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 ## Nodes no starter board uses yet
 
-79 of 229 (laws aside): Add, Along a path through it, Ask Claude, Balance (what is conserved), Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Integral, Internal rate of return, Keep where, LED resistor, Laws by field, List of numbers, Machining time, Margin and markup, Mass, centre and inertia, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, Quantity, RC filter corner, Ring, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Slope, Solar panel, a day, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Tether, Text, Through a network of pieces, Through time, Tube, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What a material is, What each touches, What it is made of, Winding, Wound roll, Yes / no, Zone.
+76 of 229 (laws aside): Add, Ask Claude, Balance (what is conserved), Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Integral, Internal rate of return, Keep where, LED resistor, Laws by field, List of numbers, Machining time, Margin and markup, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, Quantity, RC filter corner, Ring, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Slope, Solar panel, a day, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Tether, Text, Through a network of pieces, Through time, Tube, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, Zone.

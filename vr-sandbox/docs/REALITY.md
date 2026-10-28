@@ -419,6 +419,12 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   fixed-free ends, the stepped column's floor, the contact added at a joint, a split that rejoins equal to pieces side
   by side, and an unbalanced Wheatstone bridge of five rods of three metals against its closed form (to 12 figures).
   The snapshot did not move.
+  Shown on a starter board (What it is made of, and what it carries: a copper and an aluminium rod side by side under
+  a steel block), looked at in the app: what it is made of by material and element, its mass, centre and inertia, and
+  the path's heat, current, stiffness, growth, first yield, bending and buckling. Looking found two faults, both fixed:
+  the analyses were shelved under Start (any node that measures was, before its being a critic was asked; a critic is
+  now shelved under Check first), and the path nodes said "untested" (their tests were in a test file, not on the
+  node: each now carries one worked by hand from its material's handbook figures).
   Step 7 as planned is done but for two things said plainly: contact conductance from what the faces are (no data
   here for it yet), and a test that the house's framing changed moves its loads (the house is parked: design is not
   this round's).
