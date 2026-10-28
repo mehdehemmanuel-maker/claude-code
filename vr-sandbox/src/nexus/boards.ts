@@ -39,8 +39,6 @@ export interface Live { id: string; label: string; note: string; pin: { x: numbe
 export type LiveEdge = BoardEdge & { id: string };
 export type Patch = Partial<Omit<Board, 'nodes' | 'edges'>> & { nodes?: Record<string, Partial<BoardNode>>; edges?: Record<string, Partial<BoardEdge>> };
 
-/** A loop back (a redesign, a critique fed into the ask again): drawn, but it orders nothing. */
-/** Links that only say two things belong together: they order along the derived tree, nothing else. */
 /** Which end of a directed link is derived first: what is depended on, or read, before what needs it. */
 export const LEVELS = ['category', 'subcategory', 'sub-subcategory'] as const;
 
@@ -76,8 +74,6 @@ export interface Derived {
 }
 /** What the links make: each node's place under the most connected neighbour, the categories, and the steps of the pipeline. */
 export type Level = (typeof LEVELS)[number] | 'item' | 'unlinked';
-/** From its category down to it. */
-/** The categories, the largest first. */
 
 export interface Box { w: number; h: number }
 /** Where each node goes, unless it has been dragged: in the categories view, each category a column with what sits under
@@ -132,7 +128,6 @@ export function layout(d: Derived, view: View, box: (id: string) => Box, aspect 
   }
   return pos;
 }
-/** Where each node stands: where it was dragged to, else where its links put it. */
 
 // ---- edits: each a patch, merged into the board and written as it is --------------------------------------------------
 export const deepMerge = <T extends object>(a: T | undefined, b: object): T => {
@@ -148,15 +143,6 @@ export function compact(b: Board): Board {
   return o;
 }
 export const uid = (p: string): string => p + Math.random().toString(36).slice(2, 9);
-/** A new node: just its word, linked from another if given. Where it goes and what it is come from its links. */
-/** A name not on the board yet: the name itself where it is free, else it numbered ("Check 2", "Check 3"), so two nodes
- *  may say the same and still be told apart. */
-export function freeName(b: Board | null, label: string): string {
-  const base = label.trim().replace(/\s+\d+$/, ''), taken = new Set(nodesOf(b).map((n) => n.label.toLowerCase()));
-  if (!taken.has(label.trim().toLowerCase())) return label.trim();
-  for (let k = 2; ; k++) if (!taken.has(`${base} ${k}`.toLowerCase())) return `${base} ${k}`;
-}
-/** A node again, beside itself: its words, its note and its step, linked to what it is linked to, under a name of its own. */
 /** A link between two nodes. One deleted before between the same two is brought back, so the board does not fill with dead ones. */
 export function link(b: Board, from: string, to: string, rel = 'connects'): Patch | null {
   if (from === to) return null;
@@ -165,10 +151,6 @@ export function link(b: Board, from: string, to: string, rel = 'connects'): Patc
   const dead = Object.entries(b.edges ?? {}).find(([, e]) => e && e.deleted && same(e));
   return { edges: { [dead ? dead[0] : uid('e')]: { from, to, rel, deleted: false, label: '', note: '' } } };
 }
-/** Link two nodes, or unlink them if they are linked (every link between them goes). On a flow the link is "flows to",
- *  from the first to the second: the second runs after it. */
-/** Let go of every place a node was dragged to in this view: the links lay it out again. */
-/** The nodes a word finds: the one it names first, then those it begins, then those it is in; the most connected first. */
 
 // ---- a board of what Nexus knows: a branch of its taxonomy -------------------------------------------------------------
 /** A branch of the taxonomy as a board: each entry a node under what holds it, its note what it is, the law that decides

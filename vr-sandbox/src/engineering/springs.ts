@@ -63,11 +63,6 @@ export function bergstrasser(C: number) {
   return (4 * C + 2) / (4 * C - 3);
 }
 
-/** Wahl factor K_W = (4C - 1)/(4C - 4) + 0.615/C. */
-export function wahl(C: number) {
-  return (4 * C - 1) / (4 * C - 4) + 0.615 / C;
-}
-
 /** Corrected shear stress for axial load F: tau = K_B 8 F D / (pi d^3). */
 export function shearStress(s: CoilSpring, F: number) {
   return (bergstrasser(springIndex(s)) * 8 * F * s.D) / (Math.PI * s.d ** 3);
@@ -84,9 +79,6 @@ export const allowableShear = (s: CoilSpring) => s.wire.allowableFraction * wire
 /** Solid length for squared-and-ground ends: L_s = d (N_a + 2). */
 export const solidLength = (s: CoilSpring) => s.d * (s.Na + 2);
 
-/** Force at which the spring takes a permanent set. */
-export const yieldForce = (s: CoilSpring) => (allowableShear(s) * Math.PI * s.d ** 3) / (bergstrasser(springIndex(s)) * 8 * s.D);
-
 /**
  * Fundamental surge (standing-wave) frequency, spring between flat parallel plates:
  * f = (2 d / (pi D^2 N_a)) sqrt(G / (32 rho))  (Shigley eq. 10-25, SI form).
@@ -95,9 +87,6 @@ export const yieldForce = (s: CoilSpring) => (allowableShear(s) * Math.PI * s.d 
 export function surgeFrequency(s: CoilSpring) {
   return ((2 * s.d) / (Math.PI * s.D ** 2 * s.Na)) * Math.sqrt(s.wire.G / (32 * s.wire.density));
 }
-
-/** Mass of the wire (active + 2 dead coils). */
-
 
 /** Helical torsion spring rate per radian, Shigley eq. 10-51: k' = d^4 E / (10.8 D N) per turn. */
 export function torsionSpringRate(d: number, D: number, N: number, E: number) {

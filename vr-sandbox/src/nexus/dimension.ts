@@ -36,16 +36,6 @@ const fmul = (a: Frac, b: Frac) => frac(a.n * b.n, a.d * b.d);
 const fdiv = (a: Frac, b: Frac) => frac(a.n * b.d, a.d * b.n);
 
 /**
- * The integer exponent vectors k with Σ k_i · dim_i = 0: every independent dimensionless product of the given
- * quantities (the null space of their dimension matrix, over the rationals, scaled to integers). For (ρ, v, L, μ)
- * it is the one vector (1, 1, 1, -1): the Reynolds number, found without being told its name.
- */
-export function piGroups(dims: Dim[]): number[][] {
-  // rows: base dimensions; columns: quantities
-  return integerNullSpace([0, 1, 2, 3, 4].map((r) => dims.map((d) => d[r]!)));
-}
-
-/**
  * The integer vectors k with Σ_j M[r][j] k_j = 0 for every row r: the null space of a matrix over the rationals, each
  * basis vector scaled to integers with its first nonzero entry positive. One algebra, two readings: over dimensions it
  * gives the dimensionless groups; over what a transformation conserves it gives the balanced transformations.

@@ -2,7 +2,7 @@
 // set of quantities are found from their dimensions alone.
 
 import { describe, expect, it } from 'vitest';
-import { DimensionError, dimOf, dimText, piGroups } from '../../src/nexus/dimension';
+import { DimensionError, dimOf, dimText, } from '../../src/nexus/dimension';
 import { add, div, leaf, mul, variable } from '../../src/nexus/term';
 
 const given = (name: string, v: number, unit: string) => leaf(name, v, unit, { class: 'given', by: 'test' });
@@ -23,18 +23,5 @@ describe('dimension', () => {
     expect(dimText(div(variable('M', 'N m'), variable('S', 'm^3')).dim)).toBe(dimText(dimOf('Pa')));
   });
 
-  it('finds the Reynolds group of (ρ, v, L, μ) without being told', () => {
-    const groups = piGroups([dimOf('kg/m^3'), dimOf('m/s'), dimOf('m'), dimOf('Pa s')]);
-    expect(groups).toEqual([[1, 1, 1, -1]]);
+  
   });
-
-  it('finds two groups where there are two (a pendulum: g, L, T, m)', () => {
-    const groups = piGroups([dimOf('m/s^2'), dimOf('m'), dimOf('s'), dimOf('kg')]);
-    // one group: g T^2 / L; the mass joins no group
-    expect(groups.length).toBe(1);
-    const [g] = groups;
-    expect(g![3]).toBe(0);
-    const scaled = g!.map((x) => x / g![0]!);
-    expect(scaled).toEqual([1, -1, 2, 0]);
-  });
-});

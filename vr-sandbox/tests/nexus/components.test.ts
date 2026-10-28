@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { DESIGNED, boltedJoint, component, componentOf, library, use, type Component } from '../../src/nexus/components';
+import { DESIGNED, boltedJoint, component, library, use, type Component } from '../../src/nexus/components';
 import { catalogue } from '../../src/nexus/catalogue';
 import { FAMILIES } from '../../src/nexus/families';
 import { type Part } from '../../src/nexus/kits';
@@ -91,9 +91,4 @@ describe('taken apart', () => {
       if (/rail/.test(w)) expect(ways(/seal screw$/), w).toBe(4);
     }
   });
-  it('finds the drawn part an item is, by its id, however it was asked for', () => {
-    const c = component('rail MGN12H 400') as Component;
-    expect(componentOf(c.item.id)).toBe(c); expect(component('rail mgn12h 400')).toBe(c);
-    expect(componentOf('no-such-part')).toBeNull();
   });
-});

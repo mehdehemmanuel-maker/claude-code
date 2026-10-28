@@ -85,31 +85,10 @@ function readPlain(cond: string, facts: Record<string, number>, input: string): 
   }
   return { error: `I cannot read the condition "${cond}". Say it like "flaws = 0", "no flaws", "mass under 500", "parts at most 200", or "output contains wheel".` };
 }
-/** A repeat's most rounds: "until flaws = 0, at most 3 times" is 3; else 3. */
-export const maxRounds = (what: string) => Math.max(1, Math.min(20, Number(what.match(/at most (\d+)/i)?.[1] ?? 3)));
-
-/** Everything a node leads to, in an order where each comes after all that leads to it (ties by how connected it is). */
-/** The triggers of a board, and what starts each. */
-
-// ---- running --------------------------------------------------------------------------------------------------------
-/** Run a flow from a trigger: each step in order, its output the next one's input; a check that does not hold stops
- *  what comes only through it; a repeat whose condition does not hold goes back along its feed back, at most so many
- *  rounds; a step that fails stops the flow. `on` hears the run after every step. */
 
 // ---- a step from one word -------------------------------------------------------------------------------------------
-/** What the room's actions are called: the first word of an action step. */
-/** What a step added to a flow does, read from its word, so one word is enough: "flaws" lists the flaws, "operate"
- *  operates it, "when a build finishes" is a trigger, "any flaws?" a check, "until no flaws" a repeat, "ask how to fix"
- *  an AI call. A word that reads as none of these stays a plain step, which passes on what came to it. */
-/** What to put in a step, by kind: a few to press, each as it is written. */
-/** A run as it is kept on the board: each output cut to a length, and the last so many steps. */
 /** An event, in words: why a flow started. */
 export const saidOf = (e: FlowEvent): string => (e.kind === 'run' ? 'pressed ▶ Run' : e.kind === 'built' ? 'a build finished' : e.kind === 'flaw' ? `a flaw was found${e.text ? `: ${e.text}` : ''}` : e.kind === 'note' ? `a note was added${e.text ? `: ${e.text}` : ''}` : e.kind === 'tick' ? `${Number.isInteger(e.minutes) ? `${e.minutes} min` : `${Math.round((e.minutes ?? 0) * 60)} s`} in` : e.kind === 'start' ? 'the forge opened' : e.kind === 'made' ? `a shape was made${e.text ? `: ${e.text}` : ''}` : e.kind === 'cond' ? `it came true${e.text ? `: ${e.text}` : ''}` : `you said "${e.text ?? ''}"`);
 
-/** A template as a board: its steps as nodes, its order as "flows to" links (a loop's way back as "feeds back to"). */
-
 // ---- a pipeline carried from one board to another, or kept ------------------------------------------------------------
-/** A pipeline as it travels: its steps (each its word and what it does) and the links between them. */
-/** Taken from a board: from a step and all it leads to, or the whole of it (every step; every node where none does anything). */
-/** Put onto a board: its steps as new nodes and its links as they were; where a step is open, the first runs after it. */
 /** A board made from a kept pipeline. */

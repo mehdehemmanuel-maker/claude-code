@@ -306,9 +306,6 @@ const ALONG_Y: V3 = [-PI / 2, 0, 0];
 const section = (outer: [number, number][], holes: [number, number][][], L: number): Part['shape'] => ({ prism: { pts: outer.map(([x, y]) => [x * mm, y * mm] as [number, number]), ...(holes.length ? { holes: holes.map((h) => h.map(([x, y]) => [x * mm, y * mm] as [number, number])) } : {}), L: L * mm } });
 const box = (w: number, h: number): [number, number][] => [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
 const circle = (r: number, x0: number, y0: number, n = 16): [number, number][] => Array.from({ length: n }, (_, i) => [x0 + r * Math.cos((2 * PI * i) / n), y0 + r * Math.sin((2 * PI * i) / n)] as [number, number]);
-/** A T-slot profile of n cells side by side (a 2040 is two 20 mm cells): each face of each cell has its slot, an opening
- *  0.31 of the cell wide through a lip 0.09 deep, opening to a cavity 0.43 wide and 0.19 deep (typical of 20 to 40 mm
- *  series, scaled), drawn square. */
 /** Its hollows: each cell's centre bore (0.21 of the cell across, for a tapped end), a hollow in each of its corners
  *  (0.25 to 0.425 of the cell out from its middle each way, leaving walls about 0.035 of the cell to the slots and 0.075
  *  to the faces), and one where two cells meet (0.34 by 0.5 of a cell). Typical of the 20 to 40 mm series; each drawn
@@ -573,10 +570,6 @@ function q0(f: { params: { key: string; says: string; values?: (string | number)
 }
 /** The component an item is drawn as, by its id (an item made to sizes by a family the library draws, in the inventory or
  *  drawn inside another component), or null: so what the inventory lists, and what is inside a drawn part, opens as drawn. */
-export function componentOf(id: string): Component | null {
-  const was = byItem.get(id); if (was) return was;
-  const r = itemOf(id) ?? keptByItem.get(id); return r?.sized && DESIGNS[r.sized.family] ? designed(r, r.name) : null;
-}
 function designed(r: Item, words: string): Component {
   // (drawn under its name up to its first comma, the thing it is ("M8 × 30 hex bolt"), so what is said of it by name
   // reads its head noun; its class and its make in what it says)

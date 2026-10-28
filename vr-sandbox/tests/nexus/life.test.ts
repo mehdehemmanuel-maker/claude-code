@@ -4,9 +4,8 @@
 // numbers their sources give.
 
 import { describe, expect, it } from 'vitest';
-import { INVENTORY, atomsOf, countIn, fundamentals, massMakeup, resolve, routeOf, treeLines } from '../../src/nexus/inventory';
-import { AMU, LIFE, LIFE_FAULTS, MOLECULES, daltonsOf } from '../../src/nexus/life';
-import { BONES } from '../../src/nexus/life/human';
+import { INVENTORY, fundamentals, massMakeup, resolve, routeOf, treeLines } from '../../src/nexus/inventory';
+import { LIFE, LIFE_FAULTS, MOLECULES, daltonsOf } from '../../src/nexus/life';
 
 const g = (id: string) => INVENTORY.get(id)!.g!;
 const near = (x: number, want: number, rel: number) => { expect(x).toBeGreaterThan(want * (1 - rel)); expect(x).toBeLessThan(want * (1 + rel)); };
@@ -30,22 +29,7 @@ describe('the human body', () => {
     for (const [id, want] of [['muscles', 29000], ['adipose', 14500], ['skeleton', 10500], ['skin', 3300], ['blood', 5600], ['brain', 1450], ['liver', 1800], ['heart', 330]] as const) near(g(id), want, 0.012);
     near(g('human'), 73000, 0.02); // its 18.2 kg of adipose tissue counts the yellow marrow too: counted once, the parts add to 73 kg
   });
-  it('has all 206 bones by name, and its long bones give its height back (Trotter & Gleser 1952)', () => {
-    let n = 0; for (const b of BONES) n += countIn('skeleton', b.id);
-    expect(n).toBe(206); expect(BONES.reduce((a, b) => a + b.count, 0)).toBe(206);
-    const len = (id: string) => INVENTORY.get(id)!.size![0] / 10;
-    near(2.38 * len('femur') + 61.41, 176, 0.005); near(2.52 * len('tibia') + 78.62, 176, 0.005); near(3.08 * len('humerus') + 70.45, 176, 0.005);
-    near(countIn('skeleton', 'cortical-bone'), 4400, 0.01); near(countIn('skeleton', 'trabecular-bone'), 1100, 0.01);
-  });
-  it('counts its cells as they are counted: red cells, neurons, synapses, osteocytes, nephrons, gut bacteria', () => {
-    near(countIn('human', 'red-blood-cell'), 2.5e13, 0.1); // Sender et al. 2016
-    const neurons = ['pyramidal-neuron', 'interneuron', 'granule-cell', 'purkinje-cell', 'deep-neuron', 'dopamine-neuron'].reduce((a, x) => a + countIn('brain', x), 0);
-    near(neurons, 86.1e9, 0.08); near(countIn('brain', 'granule-cell'), 69e9, 0.05); near(countIn('cerebrum', 'pyramidal-neuron') + countIn('cerebrum', 'interneuron'), 16.3e9, 0.1); // Azevedo et al. 2009
-    const syn = countIn('brain', 'synapse') + countIn('brain', 'synapse-gaba'); expect(syn).toBeGreaterThan(1e14); expect(syn).toBeLessThan(3e14);
-    near(countIn('human', 'osteocyte'), 4.2e10, 0.15); near(countIn('human', 'nephron'), 1.8e6, 0.1); near(countIn('human', 'gut-bacterium'), 3.8e13, 0.05); near(countIn('human', 'hepatocyte'), 2.4e11, 0.2);
-    expect(countIn('human', 'chr1')).toBeGreaterThan(1e12);
-  });
-  it('comes down to the elements a body is made of (ICRP 23 Reference Man), tissue by tissue as ICRU 46 measures them', () => {
+      it('comes down to the elements a body is made of (ICRP 23 Reference Man), tissue by tissue as ICRU 46 measures them', () => {
     const body = massMakeup('human')!, pct = (m: Record<string, number>, el: string) => 100 * (m[el] ?? 0);
     // ICRP 23: O 61, C 23, H 10, N 2.6, Ca 1.4, P 1.1 % (a leaner man: ICRP 89's has more fat, so more carbon)
     near(pct(body, 'O'), 61, 0.1); near(pct(body, 'C'), 23, 0.2); near(pct(body, 'H'), 10, 0.05); near(pct(body, 'N'), 2.6, 0.15); near(pct(body, 'Ca'), 1.4, 0.25); near(pct(body, 'P'), 1.1, 0.25);
@@ -56,12 +40,7 @@ describe('the human body', () => {
     ];
     for (const [id, want] of icru) { const m = massMakeup(id)!; for (const [el, w] of Object.entries(want)) expect(Math.abs(pct(m, el) - w), `${id} ${el}: ${pct(m, el).toFixed(1)} against ${w}`).toBeLessThan(el === 'H' || el === 'N' ? 1.2 : 3.5); }
   });
-  it('is about 7 × 10²⁷ atoms, nearly two thirds of them hydrogen, each kept as a count until opened', () => {
-    const a = atomsOf('human')!; expect(a.total).toBeGreaterThan(6e27); expect(a.total).toBeLessThan(9e27);
-    expect(a.by[0]!.el).toBe('H'); expect(a.by[0]!.share).toBeGreaterThan(0.58); expect(a.by[0]!.share).toBeLessThan(0.66);
-    expect(atomsOf('haemoglobin')!.by.find((b) => b.el === 'Fe')!.n).toBeCloseTo(4, 0); // one molecule: its four irons
-  });
-  it('reads as a tree from the body to its elements, and comes down to them by fundamentals', () => {
+    it('reads as a tree from the body to its elements, and comes down to them by fundamentals', () => {
     const t = treeLines('human', 40).join('\n');
     expect(t).toMatch(/human body — grown/); expect(t).toMatch(/million × nucleosome/); expect(t).toMatch(/= carbon/);
     const els = fundamentals('human').map((f) => f.id); for (const e of ['el-c', 'el-o', 'el-h', 'el-n', 'el-ca', 'el-p', 'el-fe', 'el-i', 'el-k', 'el-na']) expect(els).toContain(e);
@@ -69,17 +48,3 @@ describe('the human body', () => {
   });
 });
 
-describe('organisms used in technology', () => {
-  it('E. coli by Neidhardt\'s numbers, its flagellar motor by its proteins\' counts', () => {
-    near(g('e-coli'), 9.5e-13, 0.001); near(INVENTORY.get('e-coli')!.mass!.water! / g('e-coli'), 0.7, 0.02);
-    near(massMakeup('e-coli')!.O! * 100, 69.5, 0.03);
-    expect(countIn('flagellar-motor', 'stator-unit')).toBe(11); expect(countIn('flagellum', 'flic')).toBe(20000); expect(countIn('flagellar-motor', 'mota')).toBe(44);
-    near(countIn('ecoli-chromosome', 'dna') * 2, 4641652, 0.001);
-  });
-  it('viruses, plants and animals each weighed and made of their molecules', () => {
-    near(countIn('t4-phage', 'dna') * 2, 168903, 0.001); expect(countIn('tmv', 'tmv-coat')).toBe(2130); near(g('sars-cov-2'), 1e-15, 0.6);
-    for (const id of ['silkworm', 'honey-bee', 'horseshoe-crab', 'gecko', 'c-elegans', 'yeast', 'leaf', 'spirulina', 'diatom']) { expect(g(id), id).toBeGreaterThan(0); expect(Object.keys(massMakeup(id)!).length, id).toBeGreaterThan(3); }
-    expect(countIn('c-elegans', 'worm-neuron')).toBe(302);
-    expect(AMU).toBeCloseTo(1.6605e-24, 27);
-  });
-});

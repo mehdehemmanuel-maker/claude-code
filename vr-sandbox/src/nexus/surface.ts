@@ -235,11 +235,6 @@ export function fitThrough(Q: V3[], t: number[], n: number, p: number, lambda: n
   const X: V3[] = new Array(m); for (let c = m - 1; c >= 0; c--) { let acc = B[c]!; for (let j = c + 1; j < m; j++) acc = sub(acc, mul(X[j]!, A[c]![j]!)); X[c] = mul(acc, 1 / (A[c]![c]! || 1e-300)); }
   return { P: Array.from({ length: nn }, (_, i) => fixed.get(i) ?? X[idx.get(i)!]!), U };
 }
-/** A curve through the points given, in their order (degree 3, or less where there are fewer than four). */
-export function interpolate(Q: V3[], p = 3, ends: { d0?: V3; d1?: V3 } = {}): Curve {
-  const m = Q.length + (ends.d0 ? 1 : 0) + (ends.d1 ? 1 : 0), d = Math.min(p, m - 1), t = chordParams(Q), U = averagedKnots(withEnds(t, !!ends.d0, !!ends.d1), d);
-  return { P: through(Q, t, U, d, ends.d0, ends.d1), U };
-}
 /** A skin through rows of points: each row a section (all with as many points), the surface passing through every
  *  point given. Each section is interpolated on parameters shared by all of them, then each column of the sections'
  *  control points across the sections (a skinned or lofted surface by interpolation). */
@@ -263,11 +258,6 @@ export function skinThrough(rows: V3[][], o: { p?: number; q?: number; mirror?: 
   const Kc = K + (o.e0 ? 1 : 0) + (o.e1 ? 1 : 0), pc = Math.min(o.p ?? 3, Kc - 1), U = averagedKnots(withEnds(ub, !!o.e0, !!o.e1), pc);
   const cols = Array.from({ length: Mc }, (_, j) => { const col = R.map((r) => r[j]!), ch = chord(col); return through(col, ub, U, pc, o.e0 ? mul(unit(o.e0), ch) : undefined, o.e1 ? mul(unit(o.e1), ch) : undefined); });
   return { net: Array.from({ length: Kc }, (_, i) => cols.map((c) => c[i]!)), U, V, p: pc, q, mirror: o.mirror };
-}
-/** Where on a skin a section's point falls: the (u, v) its interpolation gave it (the averaged chord parameters). */
-export function skinParams(rows: V3[][], u?: number[]): { u: number[]; v: number[] } {
-  const avg = (ts: number[][]) => ts[0]!.map((_, j) => ts.reduce((a, t) => a + t[j]!, 0) / ts.length);
-  return { v: avg(rows.map(chordParams)), u: u ?? avg(Array.from({ length: rows[0]!.length }, (_, j) => chordParams(rows.map((r) => r[j]!)))) };
 }
 
 // ---- making surfaces -------------------------------------------------------------------------------------------------
@@ -308,17 +298,6 @@ export function fromEdge(s: Surface, row: (E: V3, d: V3, i: number) => V3[], o: 
 export function skin(sections: Curve[], o: { mirror?: boolean; q?: number } = {}): Surface {
   const n = sections[0]!.P.length; if (sections.some((c) => c.P.length !== n)) throw new Error('every section needs as many control points');
   return { net: sections.map((c) => c.P.map((P) => [...P] as V3)), p: Math.min(3, sections.length - 1), q: o.q ?? Math.min(3, n - 1), mirror: o.mirror };
-}
-/** A Coons patch from four boundary curves, as a control net nu × nv: the patch's points at the net's places, each the
- *  two ruled surfaces less the bilinear one (top: u = 0 … 1 at v = 0; bottom at v = 1; left: v = 0 … 1 at u = 0; right
- *  at u = 1; corners shared). */
-export function coons(top: Curve, bottom: Curve, left: Curve, right: Curve, nu = 7, nv = 6): Surface {
-  const T = (u: number) => curveAt(top, u).at, B = (u: number) => curveAt(bottom, u).at, L = (v: number) => curveAt(left, v).at, R = (v: number) => curveAt(right, v).at;
-  const c00 = T(0), c10 = T(1), c01 = B(0), c11 = B(1), net: V3[][] = [];
-  for (let i = 0; i < nu; i++) { const u = i / (nu - 1); net.push([]); for (let j = 0; j < nv; j++) { const v = j / (nv - 1);
-    const ruledU = add(mul(T(u), 1 - v), mul(B(u), v)), ruledV = add(mul(L(v), 1 - u), mul(R(v), u)), bil = add(add(mul(c00, (1 - u) * (1 - v)), mul(c10, u * (1 - v))), add(mul(c01, (1 - u) * v), mul(c11, u * v)));
-    net[i]!.push(sub(add(ruledU, ruledV), bil)); } }
-  return { net };
 }
 /** Made to cross its mirror smoothly: the row on z = 0 kept on it, the next row moved only in z (one tangent plane). */
 export function symmetric(s: Surface, axisRow: 'first' | 'last' = 'first'): Surface {

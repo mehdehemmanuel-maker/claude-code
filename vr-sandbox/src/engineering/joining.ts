@@ -11,13 +11,6 @@ export function weldable(a: WeldClass, b: WeldClass) {
   return pair === 'stainless+steel';
 }
 
-
-
-/**
- * Fillers that make a sound weld between two base-metal families, the usual choice first. Carbon-steel wire on
- * stainless dilutes into brittle martensite; steel to stainless takes over-alloyed 309L (Schaeffler diagram).
- */
-
 /**
  * Nominal shear capacity of a fillet weld: R = 0.707 a L (0.6 F_EXX) (AWS D1.1 / AISC J2.4, without phi).
  * The weaker of weld metal and heat-affected base metal governs.
@@ -31,14 +24,6 @@ export function filletWeldCapacity(leg: number, length: number, Fexx: number, ba
 export function heatInput(eta: number, volts: number, amps: number, travelSpeed: number) {
   return (eta * volts * amps) / Math.max(travelSpeed, 1e-4);
 }
-
-/** Shear capacity of n solid rivets: n tau_u pi d^2 / 4, with tau_u ~ 0.6 sigma_u unless given. */
-export function rivetShear(n: number, d: number, rivetUltimate: number, shearUltimate?: number) {
-  const tau = shearUltimate ?? 0.6 * rivetUltimate;
-  return n * tau * (Math.PI / 4) * d * d;
-}
-
-/** Blind (pop) rivets have a hollow shank; tension is limited by head pull-off (estimated factors). */
 
 export interface Adhesive {
   id: string;
@@ -100,43 +85,11 @@ export const ADHESIVES: Record<string, Adhesive> = {
   },
 };
 
-/** Strength fraction reached after t seconds (clock-scaled by the caller). */
-export const cureFraction = (a: Adhesive, t: number) => (t <= 0 ? 0 : 1 - Math.exp(-t / a.cureTau));
-
 /** Substrate multiplier for an adhesive on a given material category. */
 export function substrateFactor(a: Adhesive, category: string) {
   if (a.poorOn.includes(category)) return 0.05;
   if (a.onlyOn.length > 0 && !a.onlyOn.includes(category)) return 0.1;
   return 1;
-}
-
-/**
- * How far into a bond line a load applied at its edge reaches, m: 1/beta of an adherend (modulus E, thickness t) on
- * the adhesive layer as an elastic foundation, beta^4 = (Ea / ta) / (4 E I), I = t^3 / 12 per unit width
- * (Hetenyi; Goland-Reissner). A stiff, thick part spreads the load over the whole face; a thin sheet concentrates it
- * at the edge, where the bond peels.
- */
-export function bondEdgeLength(E: number, t: number, a: Adhesive) {
-  const beta = Math.pow(a.modulus / a.bondline / ((E * t ** 3) / 3), 0.25);
-  return 1 / beta;
-}
-
-/**
- * Capacities of a rectangular bond b x d with lap shear tau and peel p (N/m): shear = tau A; tension ~ 0.7 tau A.
- * Bending: rigid parts load the face linearly, M = sigma long short^2 / 6 with sigma = 0.7 tau. A flexible part
- * (edge length `edge` shorter than the face) loads only an edge strip, M = long short sigma edge / 2, never below
- * the measured peel line load p (thin-sheet peel test). The blend between the two is estimated.
- */
-export function bondCapacities(b: number, d: number, tau: number, peel: number, edge = Infinity) {
-  const A = b * d;
-  const shear = tau * A;
-  const tension = 0.7 * shear;
-  const long = Math.max(b, d), short = Math.min(b, d);
-  const sigma = 0.7 * tau;
-  const lineLoad = Math.min((sigma * short) / 6, Math.max(peel / 2, (sigma * edge) / 2));
-  const r = Math.hypot(b, d) / 2;
-  const torsion = tau * A * r * 0.5;
-  return { shear, tension, bending: long * short * lineLoad + 1e-9, torsion };
 }
 
 export interface Solder {
@@ -146,6 +99,5 @@ export interface Solder {
   liquidus: number;
   source: string;
 }
-
 
 /** Base metals that solder wets with ordinary rosin flux. */

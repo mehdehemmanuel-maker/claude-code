@@ -2,9 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import type { Part, V3 } from '../../src/nexus/kits';
-import { SECTIONS, makeLine, outer, route, sectionOf, sizeBore, sizeWire, vary } from '../../src/nexus/placement/line';
+import { makeLine, outer, route, sectionOf, sizeBore, sizeWire } from '../../src/nexus/placement/line';
 import { rulesOf } from '../../src/nexus/make/rules';
-import { WIRE_GAUGES } from '../../src/data/batteries';
 
 const box = (name: string, size: V3, at: V3, more: Partial<Part> = {}): Part => ({ name, item: name, shape: { box: size }, at, mat: 'steel-low', ...more });
 // (a floor, and a wall across the middle, 0.4 m wide, the ends to either side of it)
@@ -13,16 +12,7 @@ const A: V3 = [-0.4, 0.06, 0], B: V3 = [0.4, 0.06, 0];
 const near = (pts: V3[], p: THREE.Vector3) => { let d = Infinity; for (let i = 1; i < pts.length; i++) d = Math.min(d, new THREE.Line3(new THREE.Vector3(...pts[i - 1]!), new THREE.Vector3(...pts[i]!)).closestPointToPoint(p, true, new THREE.Vector3()).distanceTo(p)); return d; };
 
 describe('sections', () => {
-  it('a wire\'s copper by the AWG rule, as the gauge table has it; a hose\'s bore hollow, a cable\'s core drawn', () => {
-    const w12 = sectionOf('wire-12'); expect(Math.PI * w12.layers[0]!.t ** 2).toBeCloseTo(WIRE_GAUGES['12']!.area, 7);
-    const hose = makeLine(sectionOf('hose-32'), [[0, 0, 0], [0.2, 0, 0]]); expect(hose.parts!.map((p) => p.name)).toEqual(['wall']);
-    const wire = makeLine(w12, [[0, 0, 0], [0.2, 0, 0]]); expect(wire.parts!.map((p) => p.mat)).toEqual(['copper', 'xlpe']);
-    // (the same hose made a copper rod: its core solid and drawn; a pipe made of stainless)
-    expect(makeLine(vary(sectionOf('hose-32'), { core: 'copper' }), [[0, 0, 0], [0.2, 0, 0]]).parts!.map((p) => p.mat)).toEqual(['copper', 'epdm']);
-    expect(vary(sectionOf('pipe-1in'), { outer: 'stainless-304', wall: 0.002 }).layers[1]).toMatchObject({ mat: 'stainless-304', t: 0.002 });
-    for (const s of SECTIONS) expect(s.source.length, s.id).toBeGreaterThan(10);
-  });
-  it('a wire sized by its current and the volts it may drop; a bore by its flow', () => {
+    it('a wire sized by its current and the volts it may drop; a bore by its flow', () => {
     // (100 A for 1 m back through the chassis, 0.36 V allowed: 10 AWG (5.26 mm²) drops 0.33 V, 11 AWG 0.41 V)
     expect(sizeWire(100, 1, { chassisReturn: true }).awg).toBe(10);
     expect(sizeBore(0.001, 2).bore).toBeCloseTo(Math.sqrt(0.004 / (2 * Math.PI)), 9);

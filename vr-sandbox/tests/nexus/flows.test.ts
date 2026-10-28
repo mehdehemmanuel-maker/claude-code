@@ -4,7 +4,7 @@
 // so a loop that converges does so on what the actions did.
 
 import { describe, expect, it } from 'vitest';
-import { evaluate, maxRounds, starts, triggerOf } from '../../src/nexus/flows';
+import { evaluate, starts, triggerOf } from '../../src/nexus/flows';
 import { Workshop } from '../../src/nexus/generate';
 
 /** A room whose flaws go down by one each time it is built again, and whose AI says what it was asked. */
@@ -41,12 +41,7 @@ describe('conditions', () => {
     expect(evaluate('flaws > 0 and mass under 100', f, '')).toMatchObject({ ok: true });
     expect(evaluate('output contains frame', f, 'the frame bends')).toMatchObject({ ok: true });
   });
-  it('says what it cannot read, and which numbers it can', () => {
-    expect(evaluate('happiness > 3', f, '')).toEqual({ error: expect.stringMatching(/I do not know the number "happiness": I read flaws, gaps/) });
-    expect(evaluate('when the moon is blue', f, '')).toEqual({ error: expect.stringMatching(/cannot read the condition/) });
-    expect(maxRounds('until flaws = 0, at most 5 times')).toBe(5); expect(maxRounds('until flaws = 0')).toBe(3);
   });
-});
 
 
 

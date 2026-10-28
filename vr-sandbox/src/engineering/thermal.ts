@@ -97,18 +97,6 @@ export function thermalOf(m: Material): ThermalProps {
 }
 
 /**
- * Of heat made at a contact, the share that goes into side A: Blok's partition by thermal effusivity sqrt(k rho c).
- * The surface that soaks heat away faster takes more of it (steel on wood: the steel takes about 95%).
- */
-export function heatShare(a: Material, b: Material | null): number {
-  if (!b) return 0.5;
-  const ea = Math.sqrt(thermalOf(a).k * a.density * thermalOf(a).c), eb = Math.sqrt(thermalOf(b).k * b.density * thermalOf(b).c);
-  return ea / (ea + eb);
-}
-
-/** Of plastic work, the share that becomes heat (the rest is stored in the metal's dislocations): Taylor-Quinney. */
-
-/**
  * Heat a part loses to still room air, W: natural convection (the simplified laminar air correlation for a surface
  * of size L, h = 1.42 (dT / L)^0.25, Holman, Heat Transfer, table 7-2) plus radiation to the room (eps sigma (T^4 -
  * Ta^4)). `area` in m^2, `L` in m.

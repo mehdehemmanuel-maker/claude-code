@@ -1667,19 +1667,6 @@ export const massMakeup = memo((id: string): Record<string, number> | null => {
   for (const k of Object.keys(out)) out[k]! /= all;
   return out;
 });
-/** The atoms in one of an item, element by element: its grams by element over each one's atomic weight, times
- *  Avogadro's number; kept as these counts until it is opened, they are its atoms as a mapped probability. */
-export const atomsOf = memo((id: string): { total: number; by: { el: string; n: number; share: number }[] } | null => {
-  const i = items.get(id), mk = massMakeup(id); if (!i || !mk) return null; const g = gramsOfItem(i); if (!g) return null;
-  const by = Object.entries(mk).map(([el, f]) => ({ el, n: (g * f / ELEMENTS[el]!.w) * 6.02214076e23 })), total = by.reduce((a, b) => a + b.n, 0);
-  return { total, by: by.map((b) => ({ ...b, share: b.n / total })).sort((a, b) => b.n - a.n) };
-});
-/** How many of a thing there are in an item, all the way down (red cells in a body, synapses in a brain). */
-export const countIn = (id: string, what: string): number => {
-  const memoN = new Map<string, number>();
-  const n = (x: string): number => { if (x === what) return 1; const k = memoN.get(x); if (k !== undefined) return k; memoN.set(x, 0); const i = items.get(x); let t = 0; if (i) for (const c of i.of) t += c.n * n(c.id); memoN.set(x, t); return t; };
-  return n(id);
-};
 
 /** The tree of what is in an item, every level, as lines to read: inside what is bought too (its maker's parts, said
  *  as bought), each material's make-up under it, down to the elements. */
@@ -1744,7 +1731,4 @@ export function removeItem(id: string): { ok: boolean; says: string } {
 export const lineOf = (i: Item) => [i.id, i.name, i.path.join('/'), i.kind, i.make, i.of.map((c) => (c.n > 1 ? `${c.id}*${c.n}` : c.id)).join(' '), i.says, i.spec ?? ''].join(' | ');
 
 // ==== as boards =========================================================================================================
-/** The whole inventory as a board of its categories: category, subcategory and sub-subcategory, each entry filed under
- *  them; the adjustable families marked ⚙ with their sizes. */
-/** What is inside an item, every level down to its materials, as a board. */
 /** Making an item, as a pipeline: each thing inside it made (or bought, or taken from stock), then it put together. */

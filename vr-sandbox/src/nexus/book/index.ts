@@ -35,4 +35,3 @@ const byHash = new Map(BOOK.map((l) => [l.hash, l]));
 /** A kept law by its identity, when a record cites it: the way a derivation names the law it rests on. */
 export const lawByHash = (hash: string): Law | undefined => byHash.get(hash);
 
-export const WEIGHT = lawById('weight');

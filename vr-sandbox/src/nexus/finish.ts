@@ -29,11 +29,5 @@ export function edgeRadius(mat: string | undefined, thinnest: number, make?: 'pr
   const r = ruleFor(mat), mm = typeof r.mm === 'number' ? r.mm : r.mm(thinnest * 1000);
   return Math.max(0, Math.min(mm / 1000, thinnest / 3));
 }
-/** A rule changed by its line: "edges wood 4 mm", "edges machined metal 0.2". */
-export function setEdge(line: string): string {
-  const m = /^edges\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(?:mm)?\b/i.exec(line.trim()); if (!m) return 'Say it as "edges <kind> <mm>": "edges wood 4 mm".';
-  const r = EDGE_RULES.find((x) => x.id === m[1]!.toLowerCase() || x.mats.includes(m[1]!.toLowerCase())); if (!r) return `No edge rule for "${m[1]}": there are ${EDGE_RULES.map((x) => x.id).join(', ')}.`;
-  r.mm = Number(m[2]); r.source = 'set by you'; return `Edges of ${r.id} now ${r.mm} mm (${r.says}).`;
-}
 /** The edge rule's material for a build's material (src/data/materials.ts ids): metals machined, cast iron cast, plastics
  *  moulded, wood eased, glass arrissed, concrete chamfered, brick worn, cloth and foam soft. */

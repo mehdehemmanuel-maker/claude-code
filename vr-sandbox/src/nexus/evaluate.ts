@@ -168,11 +168,6 @@ export function evaluate(name: string, term: Term, env: Env, cite?: { law: strin
   return brand({ ...base, value, status, ...(u2 > 0 ? { uncertainty: Math.sqrt(u2) } : {}), hash });
 }
 
-/** Re-evaluate a record from its own term and inputs: the value must come back (the derivation test). */
-export const recompute = (d: Derivation): Derivation => (d.term.kind === 'leaf' ? ofLeaf(d.term) : evaluate(d.name, d.term, d.inputs, d.law ? { law: d.law, unit: d.unit, ...(d.cites ? { also: [...d.cites] } : {}) } : undefined));
-
-/** The same record with a wider uncertainty and the reason: an observer's resolution, never a smaller one. */
-
 /** A judgement the evidence cannot decide: inside a bound's uncertainty. Not unknown: what is known is said. */
 export function unresolved(name: string, term: Term, inputs: Record<string, Derivation>, because: string, unit = '1'): Derivation {
   return brand({ name, term, inputs, value: null, dim: term.dim, unit, status: 'unresolved', because, hash: hashOf({ record: 'unresolved', term: term.hash, inputs: Object.fromEntries(Object.entries(inputs).map(([s, d]) => [s, d.hash])), because }) });

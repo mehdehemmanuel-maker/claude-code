@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AMBIENT, DRAPER, glow, heatLoss, heatShare, thermalOf, warm } from '../../src/engineering/thermal';
+import { AMBIENT, DRAPER, glow, heatLoss, thermalOf, warm } from '../../src/engineering/thermal';
 import { getMaterial, MATERIALS } from '../../src/data/materials';
 
 describe('heat', () => {
@@ -20,13 +20,7 @@ describe('heat', () => {
     expect(t.k).toBeCloseTo(0.12, 1);
   });
 
-  it('friction heat goes mostly into the surface that soaks it away: steel on wood, the steel', () => {
-    const steel = getMaterial('steel.a36'), fir = getMaterial('wood.douglas-fir');
-    expect(heatShare(steel, fir)).toBeGreaterThan(0.9);
-    expect(heatShare(steel, steel)).toBeCloseTo(0.5, 12);
-    expect(heatShare(fir, steel) + heatShare(steel, fir)).toBeCloseTo(1, 12);
-  });
-
+  
   it('a warmed part heats by what it absorbs over its heat capacity and cools back to the room', () => {
     // 1 kg of steel given 48.6 kJ: 100 K warmer at once
     const steel = thermalOf(getMaterial('steel.a36'));
