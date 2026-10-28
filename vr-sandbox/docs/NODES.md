@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 464 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 465 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## 1 · Start: values and inputs (10)
 
@@ -124,7 +124,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Variant** (`variant`): The same thing changed where it is placed: its colour, its material, its finish, its size along x, y and z, or hidden; on all of it, or only the pieces whose names a pattern finds ("prop", "arm|frame")
 - **Zone** (`zone`): The room a thing needs kept clear, put on the thing itself and worked out from its own size: in front of a face, so deep (a toilet's clear floor, a kitchen's work aisle), or swept from a hinge at one edge of that face …
 
-## 4 · Choose, size and decide (15)
+## 4 · Choose, size and decide (16)
 
 Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is wanted; if, compare, pick one.
 
@@ -142,6 +142,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Signal cycle** (`cycle`): Which phase a fixed-time cycle is in at a time ("green 30, yellow 4, red 34", seconds): a traffic signal's, a washing machine's.
 - **Size a line** (`size.line`): A line sized by what it carries: a wire by its current over its length (out and back, or back through the chassis), the thinnest AWG whose drop is within what may be lost (3 % of 12 V, typical); a bore by its flow at …
 - **Solve for zero** (`math.root`): Where a formula is zero, as one of its names varies between two ends (every other name an input): by Brent's method, bisection, Newton's or the secant, to the tolerance set, saying whether it converged and its error.
+- **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward.
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what …
 
 ## 5 · Check (12)

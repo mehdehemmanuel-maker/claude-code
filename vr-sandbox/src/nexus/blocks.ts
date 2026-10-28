@@ -8,7 +8,7 @@
 // What runs a board of blocks, caches, maps over lists and opens groups is src/nexus/dataflow.ts; this file only says
 // what each block is and does.
 
-import { dimensionOf, fromSI, sameDim, toSI, type Dim } from '../ganglia/units';
+import { dimensionOf, fromSI, parseUnit, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
@@ -17,7 +17,7 @@ import { BOOK, KEPT, KINDS as LAW_KINDS } from './book';
 import { TAGS } from './book/tags';
 import { apply, type Law } from './law';
 import { varsOf } from './term';
-import { breakdown, setting, solve as solveLaw, valueIn } from './lawgraph';
+import { breakdown, chain, setting, solve as solveLaw, valueIn, type Known } from './lawgraph';
 import { evaluate, type Derivation } from './evaluate';
 import { DERIVATIVE_METHODS, INTEGRAL_METHODS, ODE_METHODS, ROOT_METHODS, derivative, integrate, ode, root, saysFound, step as stepOde, type Found } from './numeric';
 import { DESIGNED, component, componentFromParams, exampleOf } from './components';
@@ -483,6 +483,18 @@ const BUILT_IN: BlockDef[] = [
     tests: [{ set: { rates: "y' = -k * y", start: 'y = 1' }, inputs: { from: 0, to: 1, k: 1 }, outputs: { final: Math.exp(-1), converged: true }, rel: 1e-7 }, { set: { rates: "x' = v\nv' = -x", start: 'x = 1, v = 0', method: 'rk4', step: '0.001' }, inputs: { from: 0, to: 6.283185307179586 }, outputs: { final: 1, converged: true }, rel: 1e-9 }], sources: [NR] }),
 
   // units
+  def({ id: 'law.solve', name: 'Solve through laws', kind: 'solver', ability: 'solve', domains: ['science', 'mechanical', 'electrical', 'thermal'], says: 'What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. Every step is said with its law and its kind, every assumption (a value of one name taken for a port of another; standard gravity) is said, other laws that reach it and what they give, and any law the values do not satisfy. A length, an area, a time join a law only by name; pin one to a port with @law.symbol',
+    settings: [{ key: 'knowns', label: 'Known, one a line (name = value unit [quantity] @law.sym)', type: 'code', default: 'mass = 1000 kg\nsection area = 1 cm^2\nmodulus = 200 GPa' }, { key: 'target', label: 'Wanted (a quantity, and its name in brackets)', type: 'text', default: 'strain' }, { key: 'unit', label: 'In (blank: SI)', type: 'text', default: '' }, { key: 'most', label: 'Most laws deep', type: 'number', default: 6 }],
+    ports: (s) => { let ks: ReturnType<typeof knownsOf> = []; try { ks = knownsOf(String(s.knowns ?? '')); } catch { /* said when it runs */ } let u = String(s.unit ?? '').trim(); if (!u) { try { u = quantityById(targetOf(String(s.target ?? '')).quantity).unit; } catch { u = ''; } } return { inputs: ks.map((k) => N(k.slug, k.unit === '1' ? undefined : k.unit, { label: k.name, optional: true, default: k.value })), outputs: [N('value', u && u !== '1' ? u : undefined), P('status', 'text'), P('chain', 'text'), P('steps', 'table'), P('assumed', 'list<text>'), P('disagreements', 'list<text>'), P('checks', 'list<text>'), P('alternatives', 'list<text>'), P('says', 'text')] }; },
+    run: (i, c) => {
+      const ks = knownsOf(String(c.set.knowns ?? '')), t = targetOf(String(c.set.target ?? ''));
+      const knowns: Known[] = ks.map((k) => ({ name: k.name, quantity: k.quantity, pins: k.pins, d: setting(k.name, i[k.slug] !== undefined && i[k.slug] !== null ? Number(i[k.slug]) : k.value, k.unit, i[k.slug] !== undefined ? 'what is wired in' : 'the board') }));
+      const r = chain(knowns, t, { most: Math.max(1, Math.round(Number(c.set.most ?? 6))) });
+      if (!r.result) throw new Error(r.says);
+      const unit = String(c.set.unit ?? '').trim() || quantityById(t.quantity).unit;
+      return { value: valueIn(r.result, unit), status: r.weakest ?? 'unknown', chain: breakdown(r.result).join('\n'), steps: r.steps.map((st) => ({ law: st.law, name: st.lawName, kind: st.kind, solved: st.solved, gives: st.gives, value: st.value, unit: st.unit, status: st.status, ...(st.note ? { note: st.note } : {}) })), assumed: r.assumed, disagreements: r.disagreements, checks: r.agreements, alternatives: r.alternatives, says: `${r.says}; the weakest kind of law in it: ${r.weakestKind ?? 'none'}` };
+    },
+    tests: [{ inputs: {}, outputs: { value: 4.903325e-4 }, rel: 1e-9 }, { set: { knowns: 'period = 2 s', target: 'length' }, inputs: {}, outputs: { value: 0.9936213855661314 }, rel: 1e-9 }], sources: [SIBROCHURE] }),
   def({ id: 'quantity', name: 'Quantity', kind: 'input', ability: 'measure', domains: ['science', 'math'], says: 'One of the quantities laws are written in (a force, a stress, a temperature, a concentration…): what it is, its SI unit and dimension, and every law in the book it appears in, with what kind of law each is. Laws join through the quantities they share',
     settings: [{ key: 'quantity', label: 'Quantity', type: 'choice', default: 'force', choices: QUANTITIES.map((x) => x.id) }],
     ports: { inputs: [], outputs: [P('says', 'text'), P('unit', 'text'), P('laws', 'list<text>'), P('rows', 'table')] },
@@ -775,6 +787,25 @@ function runLaw(law: Law, i: Record<string, unknown>, set: Record<string, unknow
   const v = valueIn(d, x.unit); if (v === null) throw new Error(`${law.name}: ${d.because ?? 'no value'}`);
   return { [x.sym]: v, caution, status: /extrapolated/.test(caution) ? 'outside-validity (extrapolated)' : d.status, why: breakdown(d).join('\n') };
 }
+
+/** A problem's knowns, one a line: "mass = 1000 kg", with its quantity named where its unit is not enough ("[stress]")
+ *  and its pins where a name would join it to the wrong law ("@convection.A"). */
+function knownsOf(text: string): { name: string; slug: string; value: number; unit: string; quantity: string; pins: string[] }[] {
+  const out: ReturnType<typeof knownsOf> = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/#.*$/, '').trim(); if (!line) continue;
+    const m = /^([^=]+?)\s*=\s*(-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*([^[@]*?)\s*(?:\[([\w-]+)\])?\s*((?:@[\w.-]+\s*)*)$/i.exec(line);
+    if (!m) throw new Error(`I cannot read "${line}": write a known as name = value unit, as "mass = 1000 kg"`);
+    const name = m[1]!.trim(), unit = m[3]!.trim() || '1', pins = (m[5] ?? '').split(/\s+/).filter(Boolean).map((p) => p.slice(1));
+    try { parseUnit(unit); } catch { throw new Error(`"${unit}" is not a unit I know, in "${line}"`); }
+    const q = m[4] ? QUANTITIES.find((x) => x.id === m[4]) : quantityOf({ id: '' }, { sym: name, unit, name });
+    if (!q) throw new Error(`what quantity "${name}" (${unit}) is cannot be told from its unit: name it, as "${line} [stress]"`);
+    if (m[4] && !sameDim(q.dim, dimensionOf(unit))) throw new Error(`${name}: ${unit} is not a unit of ${q.name}`);
+    out.push({ name, slug: name.replace(/\W+/g, '_').replace(/^_|_$/g, '') || 'x', value: Number(m[2]), unit, quantity: q.id, pins });
+  }
+  return out;
+}
+const targetOf = (text: string) => { const m = /^\s*([^()]+?)\s*(?:\(([^)]*)\))?\s*$/.exec(text) ?? []; const w = (m[1] ?? '').trim().toLowerCase(), q = QUANTITIES.find((x) => x.id === w || x.name.toLowerCase() === w) ?? QUANTITIES.find((x) => x.name.toLowerCase().includes(w)); if (!q) throw new Error(`no quantity "${w}": name one, as "strain" or "length (span)"`); return { quantity: q.id, ...(m[2] ? { name: m[2].trim() } : {}) }; };
 
 export function lawBlocks(): BlockDef[] {
   return BOOK.map((law) => {

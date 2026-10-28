@@ -10,6 +10,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { BOOK, KEPT, KINDS, SLICE, UNIVERSAL } from '../../src/nexus/book';
 import { QUANTITIES, quantityOf } from '../../src/nexus/quantities';
+import { crossCheck } from '../../src/nexus/lawgraph';
 import { LIBRARY } from '../../src/nexus/blocks';
 
 const root = join(__dirname, '../..'), update = !!process.env['UPDATE_DEPS'];
@@ -70,6 +71,10 @@ function mapText(): string {
   const clashes = [...bySym].filter(([, s]) => s.size > 1).sort((a, b) => b[1].size - a[1].size);
   L.push('', '### One letter, different things', '', `${clashes.length} symbols stand for different quantities in different laws: laws are joined by the quantity, never by the letter.`, '', '| Symbol | Means |', '| --- | --- |');
   for (const [k, s] of clashes) L.push(`| ${k} | ${[...s].join('; ')} |`);
+  // ---- the laws checked against each other ----
+  const xc = crossCheck();
+  L.push('', '## The laws checked against each other', '', `Each law's worked example given, its output sought through the other laws alone (\`crossCheck\` in \`src/nexus/lawgraph.ts\`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). ${xc.length} of ${BOOK.length} laws have another way to their output; ${xc.filter((r) => r.agree).length} agree to 10⁻⁶; ${xc.filter((r) => !r.agree).length} do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in \`docs/REALITY.md\`.`, '', '| Law | Its example | By the others | Through | |', '| --- | --- | --- | --- | --- |');
+  for (const r of xc) L.push(`| \`${r.law}\` | ${+r.own.toPrecision(8)} ${r.unit} | ${+r.other.toPrecision(8)} ${r.unit} | ${r.by.map((b) => `\`${b}\``).join(' → ')} | ${r.agree ? 'agree' : '**differ**'} |`);
   // ---- material tables and who reads them ----
   const src = files().map((f) => ({ f: relative(root, f), text: readFileSync(f, 'utf8') }));
   L.push('', '## Material tables and the code that reads them', '', '| Table | Defined in | Holds | Read by |', '| --- | --- | --- | --- |');

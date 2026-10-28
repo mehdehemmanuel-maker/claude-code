@@ -22,9 +22,12 @@ export interface QuantityDef {
   words?: RegExp;
   /** The dimension's general quantity: a port of this dimension whose words say nothing else is this. */
   general?: boolean;
+  /** Port names that mean any value of it (σ = F/A takes any force), beside its own name: a port named otherwise (a
+   *  critical load, a yield strength) means one value of it in particular. */
+  plain?: string[];
 }
 
-const q = (id: string, name: string, unit: string, says: string, more: { words?: RegExp; general?: boolean } = {}): QuantityDef => ({ id, name, unit, dim: dimOf(unit), says, ...more });
+const q = (id: string, name: string, unit: string, says: string, more: { words?: RegExp; general?: boolean; plain?: string[] } = {}): QuantityDef => ({ id, name, unit, dim: dimOf(unit), says, ...more });
 
 /** The registry. Within a dimension, the first whose words match wins; so the narrow come before the general. */
 export const QUANTITIES: QuantityDef[] = [
@@ -56,13 +59,13 @@ export const QUANTITIES: QuantityDef[] = [
   q('acceleration', 'acceleration', 'm/s^2', 'How fast speed changes; gravity\'s pull on each kilogram.', { general: true }),
   q('angular-speed', 'angular speed', 'rad/s', 'How fast something turns.', { words: /angular|speed/i }),
   q('frequency', 'frequency or rate', 'Hz', 'How many times a second; how fast something happens or decays.', { general: true }),
-  q('force', 'force', 'N', 'A push or a pull: what changes a body\'s motion or strains it.', { general: true }),
+  q('force', 'force', 'N', 'A push or a pull: what changes a body\'s motion or strains it.', { general: true, plain: ['load', 'weight'] }),
   q('heat-input-per-length', 'heat input per length', 'J/m', 'Energy laid into each metre of a weld.', { words: /heat input/i }),
   q('torque', 'torque or moment', 'N m', 'A force times its lever: what turns or bends.', { words: /torque|moment|bending capacity/i }),
   q('torsional-stiffness', 'torsional stiffness', 'N m/rad', 'Torque for each radian a spring or a shaft is twisted.', { words: /^rate$|stiffness/i }),
   q('energy', 'energy', 'J', 'What work and heat are: what it takes to move against a force or to warm something.', { general: true }),
-  q('power', 'power', 'W', 'Energy each second: work done or heat carried in a time.', { general: true }),
-  q('modulus', 'elastic modulus', 'Pa', 'A material\'s stiffness: the stress it takes to strain it.', { words: /modulus/i }),
+  q('power', 'power', 'W', 'Energy each second: work done or heat carried in a time.', { general: true, plain: ['heat flow', 'heat'] }),
+  q('modulus', 'elastic modulus', 'Pa', 'A material\'s stiffness: the stress it takes to strain it.', { words: /modulus/i, plain: ['modulus', 'young\'s modulus'] }),
   q('stress', 'stress', 'Pa', 'A force over the area it acts on, inside a solid; a strength is the stress it fails at.', { words: /stress|strength|endurance|shear|coefficient/i }),
   q('pressure', 'pressure', 'Pa', 'A fluid\'s push on each square metre of what holds it.', { general: true }),
   q('density', 'density', 'kg/m^3', 'Mass in each cubic metre.', { general: true }),
@@ -147,4 +150,10 @@ export const dimSays = (d: Dim): string => { const here = QUANTITIES.filter((x) 
 export function meaning(l: Pick<Law, 'id' | 'name'>, p: Port): string {
   const x = quantityOf(l, p);
   return `${p.sym}, the ${p.name} in ${l.name}: ${x ? `${/^[aeiou]/i.test(x.name) ? 'an' : 'a'} ${x.name} (${x.says.charAt(0).toLowerCase()}${x.says.slice(1).replace(/\.$/, '')})` : 'a quantity not registered'}, in ${p.unit && p.unit !== '-' && p.unit !== '1' ? p.unit : 'no unit'}.`;
+}
+/** Whether a port's name means any value of its quantity (its own name, or one of its plain names), so a value of that
+ *  quantity under another name may be joined to it; else the port means one value in particular. */
+export function isPlain(x: QuantityDef, portName: string): boolean {
+  const n = portName.toLowerCase().trim();
+  return [x.name, x.id, ...x.name.split(' or '), ...(x.plain ?? [])].some((w) => w.toLowerCase() === n);
 }

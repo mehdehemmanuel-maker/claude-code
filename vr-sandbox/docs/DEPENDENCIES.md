@@ -485,6 +485,20 @@ The registry (`src/nexus/quantities.ts`) holds 85 quantities; every one of the 8
 | r2 | length; frequency or rate |
 | N0 | ratio; count |
 
+## The laws checked against each other
+
+Each law's worked example given, its output sought through the other laws alone (`crossCheck` in `src/nexus/lawgraph.ts`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). 7 of 241 laws have another way to their output; 5 agree to 10⁻⁶; 2 do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in `docs/REALITY.md`.
+
+| Law | Its example | By the others | Through | |
+| --- | --- | --- | --- | --- |
+| `ohm` | 6 V | 6 V | `joule` → `power.electric` | agree |
+| `joule` | 120 W | 120 W | `ohm` → `power.electric` | agree |
+| `energy.electric` | 864000 J | 864000 J | `power.electric` → `energy.power-time` | agree |
+| `power.electric` | 240 W | 240 W | `ohm` → `joule` | agree |
+| `beam.simply-supported.central-patch.sag` | 0.0078125 m | 0.0078125 m | `beam.simply-supported.point` | agree |
+| `pendulum.amplitude-factor` | 1.0174039 1 | 1.0174088 1 | `pendulum.period-factor` | **differ** |
+| `volume.of-box` | 0.000031415927 m^3 | 0.000020943951 m^3 | `volume.ellipsoid` | **differ** |
+
 ## Material tables and the code that reads them
 
 | Table | Defined in | Holds | Read by |

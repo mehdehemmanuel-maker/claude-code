@@ -275,3 +275,27 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   The baseline moved only by the new outputs and nodes and by two laws now on CODATA 2018's μ₀ rather than 4π × 10⁻⁷
   (5 parts in 10¹⁰). `src/ganglia/laws.ts` is deleted, and with it three engineering files only it reached
   (`battery.ts`, `beams.ts`, `mechanics.ts`); their formulas are the book's.
+- **Step 4, done.** `chain` in `src/nexus/lawgraph.ts` and the node `law.solve`: knowns written one a line ("mass =
+  1000 kg", a quantity named in brackets where the unit is not enough, `@law.sym` to pin one to a port), a quantity
+  wanted, and the laws of the book chained to reach it, sought from the target back so only laws on a way to it are
+  applied, as many deep as asked (six by default), each forward or solved backward, a law never twice on one way. Of the
+  ways found, the fewest laws then the strongest kind is taken; the rest are said with their values. Where no single law
+  can be solved, two laws sharing the same two unknowns are solved together by Newton's method. Out: the value, its
+  evidence, the tree it rests on, each step with its law and kind, every assumption, other ways and their values, and
+  every other law the values can be checked by, agreeing or not.
+  Joining is the rule the plan set, made exact: a value joins a port by its pin, its name or its symbol; by its quantity
+  alone only where both the port and the value are named plainly (σ = F/A takes a weight; a critical load, an applied
+  voltage, a yield strength are particular and join only by name); a length, an area, a time, a temperature, a speed, an
+  energy and every ratio join only by name. Standard gravity is used where a law needs gravity and none is given, and
+  said. Verified: a rod holding a tonne (weight → stress → Hooke's law solved for strain, 4.903 × 10⁻⁴); a wire carrying
+  5 A (its resistance → Joule heating → Newton's law of cooling solved for the rise, 42 K), its two areas pinned apart;
+  a pendulum's length from its period (0.9936 m); a voltage and a current from a power and a resistance by two laws
+  solved together; a mass and a weight that do not agree, shown. A wire's length is never joined to a plate's size.
+  The laws checked against each other (`crossCheck`, written into `docs/DEPENDENCIES.md`): each law's example given and
+  its output sought through the others. Building this found the joining faults the rule above fixes (a normal force
+  taken as a friction force, an applied voltage as the drop across a resistance, a law used to find its own input):
+  35 false disagreements before, 2 after. 7 laws have another way to their output; 5 agree; the 2 that differ are read:
+  the series for a pendulum's period against the exact elliptic integral (5 parts in 10⁶ at 60°, the series' own
+  truncation), and a box's shape factor against an ellipsoid's volume (two models of a shape). That only 7 of 241 have a
+  second way is the coverage gap step 5 is for. The old two-step `routes` (by dimension alone) is gone; so is the mole
+  count kept beside the dimensions, now that the mole is one.

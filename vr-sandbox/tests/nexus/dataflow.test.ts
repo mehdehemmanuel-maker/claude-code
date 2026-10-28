@@ -19,7 +19,7 @@ const outputs = (e: Engine) => Object.fromEntries([...e.state.entries()].map(([i
 describe('the library', () => {
   it('holds every law as a calculator, and every block passes its own tests', async () => {
     const all = [...LIBRARY.values()].filter((b) => b.tests?.length);
-    expect([...LIBRARY.keys()].filter((k) => k.startsWith('law.')).length).toBe(BOOK.length);
+    expect([...LIBRARY.values()].filter((b) => b.kind === 'law').length).toBe(BOOK.length);
     const fails: string[] = [];
     for (const b of all) { const r = await testBlock(b); if (!r.ok) fails.push(`${b.id}: ${r.fails.join('; ')}`); }
     expect(fails).toEqual([]);
