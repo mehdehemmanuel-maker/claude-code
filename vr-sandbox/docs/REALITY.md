@@ -385,6 +385,19 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   a body of pieces of different materials: its swing now ends one physics step (1/60 s) later, so the plans end
   1/60 s later, and the child's drawn path has one segment fewer (3 g of PVC line).
   Still to do: resistance and conductance along a defined path, expansion, stiffness and strength of an assembly.
+- **Step 7, along a path.** `alongPath` (`madeof.ts`, node `path.properties`): pieces of a thing named in order along an
+  axis, in series; each piece's length its extent along the axis and its section its volume over that length (exact
+  for a box square to the axes or a cylinder lying along the axis, else a mean, said); from each material's own figures,
+  the path's resistance to heat (L / k A), to current (L / σ A), its axial stiffness (1 / Σ L / E A) and its growth
+  warmed (Σ α L ΔT); where neighbours expand differently, the strain between them and the stress if one held the other
+  (the stiffer E times |Δα| ΔT, an upper bound). A piece not found, a material with no figure, a stand-in grade's figure:
+  each said, nothing guessed. Left out, said: contact resistance (for heat often the larger part, so the result is the
+  least the path can be), bending, any other path. Verified against the same sums worked by hand for an aluminium rod,
+  a copper rod and a steel block (all four quantities, the sections exact, the mismatch strain and stress), a rod lying
+  across the path read as a mean section, and a material changed on a board changing what the path carries.
+  The snapshot did not move.
+  Still to do: paths in parallel (a section of several pieces side by side) and networks; strength along the path
+  (the weakest piece's load, by its section and yield); bending stiffness of an assembly.
 - **Step 8, the first round done.** `src/nexus/evidence.ts` gives every node its own evidence, read from what it is: a
   law from its kind (definition or geometry exact, fundamental or derived law derived, approximation simplified, the rest
   empirical) with its validity as an assumption and its domain as its limits; a typed or chosen value given; a maker's,

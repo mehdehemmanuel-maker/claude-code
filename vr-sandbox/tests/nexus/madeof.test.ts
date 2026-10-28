@@ -71,3 +71,40 @@ describe('a material changed on a board, and everything that rests on it follows
     void twoOf; void runBlock;
   });
 });
+
+import { alongPath } from '../../src/nexus/madeof';
+import { matterOf } from '../../src/nexus/matter';
+
+describe('along a path through it, in series', () => {
+  // a 10 mm copper rod 100 mm long standing on a 10 mm aluminium rod 200 mm long, then a 20 × 20 mm steel block 50 mm tall
+  const cu: Part = { name: 'cu', shape: { cyl: [0.005, 0.1] }, mat: 'copper' }, al: Part = { name: 'al', shape: { cyl: [0.005, 0.2] }, mat: 'al-6061' }, st: Part = { name: 'st', shape: { box: [0.02, 0.05, 0.02] }, mat: 'steel-low' };
+  const stack = () => ({ name: 'stack', items: [place(al, [0, 0.1, 0]), place(cu, [0, 0.25, 0]), place(st, [0, 0.325, 0])] });
+  const prop = (m: string, k: string) => matterOf(m).props.find((p) => p.key === k)!.value;
+  it('resistance to heat and to current, stiffness and growth, as worked by hand from each material\'s own figures', () => {
+    const r = alongPath(stack(), ['al', 'cu', 'st'], 'y', 50), A = Math.PI * 0.005 ** 2, As = 0.02 * 0.02;
+    expect(r.thermal).toBeCloseTo(0.2 / (prop('al-6061', 'k') * A) + 0.1 / (prop('copper', 'k') * A) + 0.05 / (prop('steel-low', 'k') * As), 9);
+    expect(r.electrical).toBeCloseTo(0.2 / (prop('al-6061', 'conductivity') * A) + 0.1 / (prop('copper', 'conductivity') * A) + 0.05 / (prop('steel-low', 'conductivity') * As), 15);
+    expect(1 / r.stiffness!).toBeCloseTo(0.2 / (prop('al-6061', 'E') * A) + 0.1 / (prop('copper', 'E') * A) + 0.05 / (prop('steel-low', 'E') * As), 15);
+    expect(r.growth).toBeCloseTo(50 * (prop('al-6061', 'alpha') * 0.2 + prop('copper', 'alpha') * 0.1 + prop('steel-low', 'alpha') * 0.05), 12);
+    // each section exact: rods along the path, a block square to it
+    expect(r.pieces.every((p) => p.areaExact)).toBe(true);
+    // aluminium and copper grow apart: |Δα| ΔT, and held together the stiffer one's E times that
+    const m = r.mismatch.find((x) => x.a === 'al' && x.b === 'cu')!;
+    expect(m.strain).toBeCloseTo(Math.abs(prop('al-6061', 'alpha') - prop('copper', 'alpha')) * 50, 12);
+    expect(m.stress).toBeCloseTo(Math.max(prop('al-6061', 'E'), prop('copper', 'E')) * m.strain, 3);
+  });
+  it('a rod lying across the path is a mean section, said; a piece not there or a property not known is said, never guessed', () => {
+    const lying = { name: 'l', items: [place(cu, [0, 0, 0], [0, 0, Math.PI / 2])] };
+    expect(alongPath(lying, ['cu'], 'y').pieces[0]!.areaExact).toBe(false);
+    expect(alongPath(stack(), ['al', 'nope'], 'y').missing).toEqual(['nope']);
+    const mystery: Part = { name: 'm', shape: { box: [0.01, 0.01, 0.01] } };
+    const r = alongPath({ name: 's', items: [place(mystery, [0, 0, 0]), place(cu, [0, 0.1, 0])] }, ['m', 'cu'], 'y');
+    expect(r.thermal).toBeNull(); expect(r.lacking.join(' ')).toMatch(/m \(no material\)/);
+  });
+  it('as a node: a material changed on the board changes what the path carries', async () => {
+    const out = await runBlock('path.properties', { thing: stack(), path: 'al, cu, st', axis: 'y', dT: 0 });
+    expect(out.thermal).toBeGreaterThan(0); expect(String(out.says)).toMatch(/left out: the resistance where pieces touch/);
+    const swapped = { name: 'stack', items: [place({ ...al, mat: 'copper' }, [0, 0.1, 0]), place(cu, [0, 0.25, 0]), place(st, [0, 0.325, 0])] };
+    expect((await runBlock('path.properties', { thing: swapped, path: 'al, cu, st', axis: 'y' })).thermal as number).toBeLessThan(out.thermal as number);
+  });
+});

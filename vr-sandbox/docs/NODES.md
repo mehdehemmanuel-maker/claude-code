@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 552 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 553 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Evidence
 
@@ -11,19 +11,20 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 81 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 290 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 291 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 40 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 71 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 511 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
+Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 511 tested here (their own tests: that they do what they say, not that the world does); 33 untested; none validated against experiment.
 
-## 1 · Start: values and inputs (14)
+## 1 · Start: values and inputs (15)
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
+- **Along a path through it** (`path.properties`): Pieces of a thing named in order, one after another along an axis, in series: from what each is made of, the path's resistance to heat (L / k A), to current (L / σ A), its stiffness under an axial force (from L / E A) … *derived, untested*
 - **Laws by field** (`law.fields`): Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas) *specified, tested here*
 - **List of numbers** (`in.list`): Numbers you type, split by commas: wire it into any block to run that block once for each *given, tested here*
 - **Mass, centre and inertia** (`mass.properties`): What follows from a thing's pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece's own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass … *estimated, tested here*
