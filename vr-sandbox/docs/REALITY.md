@@ -673,3 +673,14 @@ than 10 °C, is a source like the hot surfaces, in bands of 10 °C; the field sa
 The placement, autopilot, field and rules nodes' own tests pass. Not done in H, said: the load cases (`loads.ts`) are
 closed forms on one part each, and read nothing from the graph yet; that waits on F's second round (bending through an
 assembly), which gives them something to read.
+
+**Step F, second round (2026-10-28): bending in 3D.** `bentUnder` (`graph.ts`), node `bend` (How it bends under a load):
+any thing as a 3D frame of Euler–Bernoulli beams over its sliced contact graph, each node free to move and turn six
+ways; between a piece's slices a beam of its own section (a box's two second moments and Roark's torsion constant, a
+cylinder's) and material (E, and G from Poisson's ratio, else 0.3); between pieces, a beam bonded through their patch;
+held and pushed where said, by what pieces are; solved at once by conjugate gradients. Checked: a 1 m steel bar 20 mm
+square, held at its bottom slice and pushed 10 N sideways at its top, moves P a³ / 3 E I to twelve figures both ways
+across it, and pushed along it P a / E A, exactly (the node's own test); the rods with the block pushed sideways,
+323 kN/m, near two rods clamped at both ends worked by hand (12 E I / L³ each, about 327). Seen: drawn bent, its
+movements exaggerated, red where it moves most. Said on the node: small elastic movements, slender pieces (a block's
+shear left out), contacts bonded, no buckling yet.

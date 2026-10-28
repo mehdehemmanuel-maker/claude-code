@@ -294,3 +294,85 @@ export function temperaturesOf(g: Graph, hot: Map<number, number>, ambient: numb
   }
   return { T, lacking };
 }
+
+export interface Bent {
+  /** Each piece's movement (m) and turn (rad) under the load, in the thing's frame; null where joined to nothing held. */
+  moved: (V3 | null)[]; turned: (V3 | null)[];
+  /** How far the loaded pieces move along the load, on average (m), and the stiffness that is (N/m). */
+  give: number | null; stiffness: number | null;
+  converged: boolean; steps: number; residual: number; floating: number; lacking: string[];
+  evidence: EvidenceKind;
+}
+
+/**
+ * How a thing bends, stretches and twists under a load (docs/REALITY.md, section 6, step F, second round): its pieces
+ * (cut into slices) as a 3D frame of Euler–Bernoulli beams, each node free to move and turn six ways. Between the slices
+ * of a piece, a beam of its own section (a box's, a cylinder's) and material (E, and G from E and Poisson's ratio, else
+ * 0.3); between pieces that touch, a beam bonded through the patch they meet over (its section the patch, as a round
+ * one; its E the two moduli in series). The held pieces fixed, the load shared among the loaded; solved at once
+ * (conjugate gradients). Exact for prismatic bars at their nodes (a cantilever's tip, a bar's stretch); a solid block is a
+ * beam too (shear deformation and the block's own spreading left out); contacts never part (bonded). Small movements.
+ */
+export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3): Bent {
+  const n = g.pieces.length, lacking: string[] = [], ev: Evidence[] = [];
+  const Eof = new Map<string, { E: number; nu: number } | null>(), mat = (m: string | null) => {
+    if (!m) return null;
+    if (!Eof.has(m)) { const mt = matterOf(m), E = mt.props.find((p) => p.key === 'E'), nu = mt.props.find((p) => p.key === 'nu'), sp = mt.span?.E; Eof.set(m, E ? { E: E.value, nu: nu?.value ?? 0.3 } : sp ? { E: (sp[0] + sp[1]) / 2, nu: 0.3 } : null); if (E) ev.push(E.evidence); else if (sp) ev.push('estimated'); }
+    return Eof.get(m)!;
+  };
+  const props = g.pieces.map((p) => mat(p.mat)), centre = g.pieces.map((p) => p.node.obb!.c);
+  const noE = g.pieces.filter((_, i) => !props[i]); if (noE.length) lacking.push(`${noE.length} pieces with no elastic modulus known, carrying nothing (${[...new Set(noE.map((p) => p.mat ?? 'no material'))].slice(0, 6).join(', ')})`);
+  // a piece's section across an axis: area, second moments about its two other axes (in that axis's frame), torsion
+  const sectionOf = (i: number, k: number) => {
+    const p = g.pieces[i]!, s = p.node.p.shape, h = p.node.obb!.h, o = [0, 1, 2].filter((x) => x !== k) as [number, number];
+    if (s && 'cyl' in s && k === 1) { const r = Math.sqrt(h[0] * h[2]), A = Math.PI * r * r, I = (Math.PI * r ** 4) / 4; return { A, I1: I, I2: I, J: 2 * I, u1: o[0], u2: o[1] }; }
+    const b = 2 * h[o[0]]!, d = 2 * h[o[1]]!, A = b * d, a = Math.max(b, d), c = Math.min(b, d);
+    // (a rectangle's torsion constant, Roark table 10.7: a c³ (1/3 − 0.21 c/a (1 − c⁴ / 12 a⁴)))
+    return { A, I1: (b * d ** 3) / 12, I2: (d * b ** 3) / 12, J: a * c ** 3 * (1 / 3 - 0.21 * (c / a) * (1 - c ** 4 / (12 * a ** 4))), u1: o[0], u2: o[1] };
+  };
+  const entries: [number, number, number][] = [];
+  const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3) => {
+    const d = centre[b]!.clone().sub(centre[a]!), L = d.length(); if (!(L > 1e-9)) return;
+    const ex = d.clone().multiplyScalar(1 / L); let y = ey ? ey.clone().addScaledVector(ex, -ey.dot(ex)) : new THREE.Vector3();
+    if (y.lengthSq() < 1e-12) { y = Math.abs(ex.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0); y.addScaledVector(ex, -y.dot(ex)); }
+    y.normalize(); const z = new THREE.Vector3().crossVectors(ex, y), R = [ex, y, z];
+    const K = Array.from({ length: 12 }, () => new Array<number>(12).fill(0)), set = (i: number, j: number, v: number) => { K[i]![j] = v; K[j]![i] = v; };
+    const EA = (E * A) / L, GJ = (G * J) / L, z12 = (12 * E * Iz) / L ** 3, z6 = (6 * E * Iz) / L ** 2, z4 = (4 * E * Iz) / L, z2 = (2 * E * Iz) / L, y12 = (12 * E * Iy) / L ** 3, y6 = (6 * E * Iy) / L ** 2, y4 = (4 * E * Iy) / L, y2 = (2 * E * Iy) / L;
+    set(0, 0, EA); set(0, 6, -EA); set(6, 6, EA); set(3, 3, GJ); set(3, 9, -GJ); set(9, 9, GJ);
+    set(1, 1, z12); set(1, 5, z6); set(1, 7, -z12); set(1, 11, z6); set(5, 5, z4); set(5, 7, -z6); set(5, 11, z2); set(7, 7, z12); set(7, 11, -z6); set(11, 11, z4);
+    set(2, 2, y12); set(2, 4, -y6); set(2, 8, -y12); set(2, 10, -y6); set(4, 4, y4); set(4, 8, y6); set(4, 10, y2); set(8, 8, y12); set(8, 10, y6); set(10, 10, y4);
+    // to the thing's frame: Kg = Tᵀ K T, T four blocks of the local axes
+    const Tm = (r: number, c: number) => (Math.floor(r / 3) === Math.floor(c / 3) ? R[r % 3]!.getComponent(c % 3) : 0);
+    const KT = K.map((row) => Array.from({ length: 12 }, (_, c) => row.reduce((s2, v, k) => s2 + v * Tm(k, c), 0)));
+    const dof = (q: number) => (q < 6 ? a * 6 + q : b * 6 + q - 6);
+    for (let r = 0; r < 12; r++) for (let c = 0; c < 12; c++) { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * KT[k]![c]!; if (v !== 0) entries.push([dof(r), dof(c), v]); }
+  };
+  for (const e of g.edges) {
+    const pa = props[e.a], pb = props[e.b]; if (!pa || !pb) continue;
+    const same = g.pieces[e.a]!.node.p === g.pieces[e.b]!.node.p || (g.pieces[e.a]!.id.split('#')[0] === g.pieces[e.b]!.id.split('#')[0] && g.pieces[e.a]!.id.includes('#'));
+    if (same) {
+      // two slices of one piece: a beam of the piece's own section along its axis
+      const o = g.pieces[e.a]!.node.obb!, ax = centre[e.b]!.clone().sub(centre[e.a]!).normalize(), k = o.u.map((u) => Math.abs(u.dot(ax))).reduce((m, v, i, arr) => (v > arr[m]! ? i : m), 0), s = sectionOf(e.a, k);
+      beam(e.a, e.b, pa.E, pa.E / (2 * (1 + pa.nu)), s.A, s.I1, s.I2, s.J, o.u[s.u1]);
+    } else {
+      // two pieces bonded through their patch, as a round section of its area; moduli in series
+      const E = (2 * pa.E * pb.E) / (pa.E + pb.E), nu = (pa.nu + pb.nu) / 2, A = Math.max(e.area, 1e-12), I = (A * A) / (4 * Math.PI);
+      beam(e.a, e.b, E, E / (2 * (1 + nu)), A, I, I, 2 * I);
+    }
+  }
+  // only what is joined to what is held
+  const nb: number[][] = g.pieces.map(() => []); for (const e of g.edges) if (props[e.a] && props[e.b]) { nb[e.a]!.push(e.b); nb[e.b]!.push(e.a); }
+  const seen = new Set(held), st = [...held]; while (st.length) { const x = st.pop()!; for (const y of nb[x]!) if (!seen.has(y)) { seen.add(y); st.push(y); } }
+  const fixed = new Set(held), free = [...seen].filter((i) => !fixed.has(i)).sort((x, y) => x - y), at = new Map<number, number>(); free.forEach((i, r) => { for (let q = 0; q < 6; q++) at.set(i * 6 + q, r * 6 + q); });
+  const rows: [number, number, number][] = []; for (const [r, c, v] of entries) { const R2 = at.get(r), C2 = at.get(c); if (R2 !== undefined && C2 !== undefined) rows.push([R2, C2, v]); }
+  const live = loaded.filter((i) => at.has(i * 6)), f = new Array<number>(free.length * 6).fill(0);
+  for (const i of live) for (let q = 0; q < 3; q++) f[at.get(i * 6 + q)!]! += load[q]! / live.length;
+  if (!live.length) lacking.push('none of the loaded pieces is joined to what holds it');
+  const sol = free.length && live.length ? solveSparseSPD(free.length * 6, rows, f, { maxSteps: 40 * free.length * 6 + 1000 }) : { x: [], converged: true, steps: 0, residual: 0 };
+  const moved = g.pieces.map((_, i) => (fixed.has(i) ? [0, 0, 0] as V3 : at.has(i * 6) ? [0, 1, 2].map((q) => sol.x[at.get(i * 6 + q)!]!) as V3 : null));
+  const turned = g.pieces.map((_, i) => (fixed.has(i) ? [0, 0, 0] as V3 : at.has(i * 6) ? [3, 4, 5].map((q) => sol.x[at.get(i * 6 + q)!]!) as V3 : null));
+  const L = Math.hypot(...load), dir = L > 0 ? load.map((v) => v / L) : [0, 0, 0];
+  const give = live.length && L > 0 ? live.reduce((s2, i) => s2 + moved[i]!.reduce((t, v, q) => t + v * dir[q]!, 0), 0) / live.length : null;
+  const evidence = ev.length ? weakestOf(...ev.map((e): EvidenceKind => (e === 'handbook' || e === 'specified' || e === 'secondary' ? 'specified' : e === 'derived' ? 'derived' : 'estimated'))) : 'derived';
+  return { moved, turned, give, stiffness: give && give > 0 ? L / give : null, converged: sol.converged, steps: sol.steps, residual: sol.residual, floating: n - seen.size, lacking, evidence };
+}
