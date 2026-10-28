@@ -544,3 +544,27 @@ snapshot's differences explained, a screenshot of it in the app sent to the user
 3. Step 5's remainder: more of the laws each field needs, by the coverage map.
 4. Parked until the user lifts it (design): the house's roof (213 t, 81 % tile), the default vehicle's 700 kg of
    alumina, Cascadia; and #52 (segment tables), blocked by the network.
+
+**Step A, done (2026-10-28).** The user: "the gate should be one minute at max", then "since you have updated the system
+it should be more effective creat one teste that converse all domains also mark have a date on nodes so you can marke
+previously built nodes as before the update, they could be flawed tests anyways".
+- The anchor: `CLAUDE.md` from 55 KB to 29 KB, its owners table a one-line index, the full rows word for word in
+  `docs/OWNERS.md`.
+- Why the gate took 8 to 12 minutes, measured: 21.7 minutes of test work on 4 cores, 96 % of it in 56 tests; one alone
+  ("every kit through the pipeline") took 4 m 46 s, 90 % of that a car park and a street, each many copies of one car
+  worked through the make pipeline one copy at a time.
+- Faster, proven unchanged: the contact search (`contacts`, `sat` in `make/space.ts`) allocates nothing per pair,
+  works out each part's tolerance once, sweeps along the axis the parts spread furthest over, and skips covering
+  boxes whose bounds are apart by more than the tolerance (two shapes are never nearer than their bounds). Every one
+  of the 30 kits gives the same contacts, interfaces and critique, bit for bit; the car park's search from 5.0 s to
+  1.2 s, the street's from 1.6 s to 0.34 s. Still to do: the pipeline working a thing placed many times once.
+- The gate is now the type check and one test, `tests/nexus/domains.test.ts`: for each of the 19 domains, every node
+  resolves its ports, says its evidence, works in units the parser reads, is dated and passes its own tests, and one
+  quick starter board of the field runs with no node failing; 28 s. The tests from before are the legacy suite:
+  `npm run gate:full`, and CI on every push.
+- Every node is dated (`src/nexus/built.ts`, from git: the commit that last changed the line that defines it), and one
+  built before the update (Reality step 0, 2026-10-28 06:21 UTC) says so on its node, in the inspector and in
+  `docs/NODES.md`: its tests may be flawed and it is to be re-checked. 457 of 554 nodes are before it, the queue.
+- Found on the way: a code block could run only in the page's worker, so no test could run a board with one (the
+  resistor board's "where it overheats" failed headless); the worker's own runner now serves tests. Two messages
+  still named the deleted forge; they no longer do.

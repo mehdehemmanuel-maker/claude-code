@@ -292,7 +292,10 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
 
 ## Working here
 
-- Gate: `npm run gate` (long; run it in the background and log to a file). Build the viewer:
+- Gate: `npm run gate` (under a minute: the type check and `tests/nexus/domains.test.ts`, one pass over every domain;
+  run it before every push). `npm run gate:full` runs every test, the legacy suite with it (long: in the background,
+  logged to a file; CI runs it on every push). Nodes are dated (`src/nexus/built.ts`, `UPDATE_BUILT=1`); those built
+  before the update are the queue to re-check. Build the viewer:
   `npx vite build --config vite.view.config.ts --logLevel error`.
 - Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing.
 - Never put API keys in the repo or in client code.

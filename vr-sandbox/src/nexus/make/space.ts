@@ -89,16 +89,25 @@ const leastH = (o: OBB) => 2 * Math.min(...o.h);
 /** The separating-axis test of two oriented boxes: null if apart by more than tol, else the axis of least overlap and how
  *  far they press into each other along it (negative: a gap within tol). */
 export function sat(A: OBB, B: OBB, tol: number): { normal: THREE.Vector3; depth: number } | null {
-  const T = B.c.clone().sub(A.c), axes: THREE.Vector3[] = [...A.u, ...B.u];
-  for (const a of A.u) for (const b of B.u) { const x = new THREE.Vector3().crossVectors(a, b); if (x.lengthSq() > 1e-10) axes.push(x.normalize()); }
-  let best: { normal: THREE.Vector3; depth: number } | null = null;
-  for (const L of axes) {
-    const ra = A.h[0] * Math.abs(A.u[0].dot(L)) + A.h[1] * Math.abs(A.u[1].dot(L)) + A.h[2] * Math.abs(A.u[2].dot(L));
-    const rb = B.h[0] * Math.abs(B.u[0].dot(L)) + B.h[1] * Math.abs(B.u[1].dot(L)) + B.h[2] * Math.abs(B.u[2].dot(L)), d = Math.abs(T.dot(L)), pen = ra + rb - d;
-    if (pen < -tol) return null;
-    if (!best || pen < best.depth) best = { normal: L.clone().multiplyScalar(T.dot(L) >= 0 ? 1 : -1), depth: pen };
+  // (numbers, not vectors: run for every pair of pieces that might touch, so nothing is made but the answer; the axes
+  // in the same order and the least overlap chosen as before: each box's three, then each pair's cross)
+  const tx = B.c.x - A.c.x, ty = B.c.y - A.c.y, tz = B.c.z - A.c.z, a = A.u, b = B.u;
+  let bx = 0, by = 0, bz = 0, bd = Infinity, found = false;
+  const test = (lx: number, ly: number, lz: number): boolean => {
+    const ra = A.h[0] * Math.abs(a[0].x * lx + a[0].y * ly + a[0].z * lz) + A.h[1] * Math.abs(a[1].x * lx + a[1].y * ly + a[1].z * lz) + A.h[2] * Math.abs(a[2].x * lx + a[2].y * ly + a[2].z * lz);
+    const rb = B.h[0] * Math.abs(b[0].x * lx + b[0].y * ly + b[0].z * lz) + B.h[1] * Math.abs(b[1].x * lx + b[1].y * ly + b[1].z * lz) + B.h[2] * Math.abs(b[2].x * lx + b[2].y * ly + b[2].z * lz);
+    const td = tx * lx + ty * ly + tz * lz, pen = ra + rb - Math.abs(td);
+    if (pen < -tol) return false;
+    if (!found || pen < bd) { found = true; bd = pen; const sg = td >= 0 ? 1 : -1; bx = lx * sg; by = ly * sg; bz = lz * sg; }
+    return true;
+  };
+  for (const u of a) if (!test(u.x, u.y, u.z)) return null;
+  for (const u of b) if (!test(u.x, u.y, u.z)) return null;
+  for (const u of a) for (const v of b) {
+    let cx = u.y * v.z - u.z * v.y, cy = u.z * v.x - u.x * v.z, cz = u.x * v.y - u.y * v.x; const l2 = cx * cx + cy * cy + cz * cz;
+    if (l2 > 1e-10) { const k = 1 / Math.sqrt(l2); cx *= k; cy *= k; cz *= k; if (!test(cx, cy, cz)) return null; }
   }
-  return best;
+  return found ? { normal: new THREE.Vector3(bx, by, bz), depth: bd } : null;
 }
 /** Whether one oriented box lies wholly inside another (all its corners within it). */
 export function within(inner: OBB, outer: OBB, tol = 1e-4): boolean {
@@ -112,21 +121,36 @@ export function within(inner: OBB, outer: OBB, tol = 1e-4): boolean {
 /** The parts that touch: swept along x by their bounds, then tested as oriented boxes. One wholly inside another that
  *  does not hold it (an engine inside a car's shell) is inside it, not joined to it. */
 export function contacts(nodes: Node[], keep: (n: Node) => boolean = () => true): Contact[] {
-  const solid = nodes.filter((n) => n.obb && keep(n)).sort((a, b) => a.box!.min.x - b.box!.min.x), out: Contact[] = [];
+  // (swept along the axis the parts spread furthest over; each part's least size, and each covering piece's bounds,
+  // worked out once, so two pieces whose bounds are apart by more than the tolerance are never tested as boxes)
+  const solid0 = nodes.filter((n) => n.obb && keep(n)), out: Contact[] = [];
+  const all = new THREE.Box3(); for (const n of solid0) all.union(n.box!);
+  const sz = all.getSize(new THREE.Vector3()), ax: 'x' | 'y' | 'z' = sz.x >= sz.y && sz.x >= sz.z ? 'x' : sz.y >= sz.z ? 'y' : 'z';
+  // (each pair said in the order a sweep along x gives, and the list in that order, so what reads it is unchanged)
+  const rank = new Map([...solid0].sort((a, b) => a.box!.min.x - b.box!.min.x).map((n, i) => [n, i]));
+  const solid = solid0.sort((a, b) => a.box!.min[ax] - b.box!.min[ax]), lh = solid.map((n) => leastH(n.obb!)), found: [number, number, Contact][] = [];
+  const bounds = new Map<OBB, number[]>(), boundsOf = (o: OBB): number[] => {
+    let r = bounds.get(o); if (r) return r;
+    const e = [0, 1, 2].map((k) => o.h[0] * Math.abs(o.u[0].getComponent(k)) + o.h[1] * Math.abs(o.u[1].getComponent(k)) + o.h[2] * Math.abs(o.u[2].getComponent(k)));
+    r = [o.c.x - e[0]!, o.c.y - e[1]!, o.c.z - e[2]!, o.c.x + e[0]!, o.c.y + e[1]!, o.c.z + e[2]!]; bounds.set(o, r); return r;
+  };
+  const near = (x: OBB, y: OBB, tol: number) => { const p = boundsOf(x), q = boundsOf(y); return !(q[0]! > p[3]! + tol || q[3]! < p[0]! - tol || q[1]! > p[4]! + tol || q[4]! < p[1]! - tol || q[2]! > p[5]! + tol || q[5]! < p[2]! - tol); };
   for (let i = 0; i < solid.length; i++) {
-    const a = solid[i]!, A = a.box!;
+    const A = solid[i]!.box!;
     for (let j = i + 1; j < solid.length; j++) {
-      const b = solid[j]!, B = b.box!, tol = Math.max(0.002, 0.01 * Math.min(leastH(a.obb!), leastH(b.obb!)));
-      if (B.min.x > A.max.x + tol) break;
-      if (B.min.y > A.max.y + tol || B.max.y < A.min.y - tol || B.min.z > A.max.z + tol || B.max.z < A.min.z - tol) continue;
+      const B = solid[j]!.box!, tol = Math.max(0.002, 0.01 * Math.min(lh[i]!, lh[j]!));
+      if (B.min[ax] > A.max[ax] + 0.01 * lh[i]! + 0.002) break;
+      if (B.min.x > A.max.x + tol || B.max.x < A.min.x - tol || B.min.y > A.max.y + tol || B.max.y < A.min.y - tol || B.min.z > A.max.z + tol || B.max.z < A.min.z - tol) continue;
+      const swap = rank.get(solid[i]!)! > rank.get(solid[j]!)!, a = swap ? solid[j]! : solid[i]!, b = swap ? solid[i]! : solid[j]!;
       // (between their covering pieces: a part inside a kart's frame touches the tubes it meets, not the frame's bounds)
       let s: { normal: THREE.Vector3; depth: number } | null = null, pa = a.obb!, pb = b.obb!;
-      for (const x of a.pieces) for (const y of b.pieces) { const t = sat(x, y, tol); if (t && (!s || t.depth > s.depth)) { s = t; pa = x; pb = y; } }
+      for (const x of a.pieces) for (const y of b.pieces) { if ((a.pieces.length > 1 || b.pieces.length > 1) && !near(x, y, tol)) continue; const t = sat(x, y, tol); if (t && (!s || t.depth > s.depth)) { s = t; pa = x; pb = y; } }
       if (!s) continue;
       if (b.parent !== a && a.parent !== b && a.pieces.length === 1 && b.pieces.length === 1 && ((within(a.obb!, b.obb!) && !seated(b, a)) || (within(b.obb!, a.obb!) && !seated(a, b)))) continue;
-      out.push({ a, b, normal: s.normal, depth: s.depth, mid: pa.c.clone().add(pb.c).multiplyScalar(0.5), pa, pb });
+      found.push([rank.get(a)!, rank.get(b)!, { a, b, normal: s.normal, depth: s.depth, mid: pa.c.clone().add(pb.c).multiplyScalar(0.5), pa, pb }]);
     }
   }
+  for (const f of found.sort((x, y) => x[0] - y[0] || x[1] - y[1])) out.push(f[2]);
   return out;
 }
 // a ring (a tyre: a torus or a turned section) holds what sits in its bore on its own axis (a rim), though its box holds

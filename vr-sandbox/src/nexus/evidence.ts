@@ -9,6 +9,7 @@ import { KINDS } from './book/kinds';
 import { lawById } from './book';
 import { COMPARED } from './book/compared';
 import { quantityOf } from './quantities';
+import { BUILT, UPDATE } from './built';
 
 /** Strongest first. A value is as strong as the weakest thing it rests on. */
 export const EVIDENCE = ['exact', 'measured', 'specified', 'derived', 'given', 'empirical', 'estimated', 'simplified', 'hypothetical'] as const;
@@ -28,7 +29,14 @@ export const rankOf = (k: EvidenceKind) => EVIDENCE.indexOf(k);
 export const weakestOf = (...ks: EvidenceKind[]): EvidenceKind => ks.reduce((w, k) => (rankOf(k) > rankOf(w) ? k : w), 'exact');
 
 export type Validation = 'tested here' | 'compared with an independent reference' | 'validated against experiment' | 'untested';
-export interface NodeEvidence { kind: EvidenceKind; why: string; assumptions: string[]; limits: string[]; validation: Validation; validationSays: string }
+export interface NodeEvidence { kind: EvidenceKind; why: string; assumptions: string[]; limits: string[]; validation: Validation; validationSays: string;
+  /** When its definition was last changed (src/nexus/built.ts), and whether that was before the update: built before it,
+   *  its own tests may be flawed and it is not yet re-checked against what the update brought. */
+  built?: string; beforeUpdate: boolean }
+/** When a node was built or last rebuilt, and whether before the update (a node made on a board, not in the library, is
+ *  new: after it). */
+export function builtOf(id: string): { at?: string; before: boolean } { const at = BUILT[id]; return { at, before: at !== undefined && at < UPDATE }; }
+export const UPDATE_SAYS = `the update of ${UPDATE.slice(0, 10)} (laws with their units, evidence and ±, materials down to their elements)`;
 
 /** Nodes whose evidence a rule cannot read from what they are: each with why. */
 const SET: Record<string, [EvidenceKind, string]> = {
@@ -73,7 +81,9 @@ export function evidenceOf(b: BlockDef): NodeEvidence {
   const compared = b.kind === 'law' && COMPARED.includes(b.id.slice(4));
   const validation: Validation = compared ? 'compared with an independent reference' : b.tests?.length ? 'tested here' : 'untested';
   const validationSays = compared ? 'its worked example is reached another way through the other laws, and agrees' : b.tests?.length ? `its ${b.tests.length} own test${b.tests.length > 1 ? 's' : ''}: a check that it does what it says, not that the world does` : 'no tests of its own';
-  return { kind, why, assumptions, limits, validation, validationSays };
+  const when = builtOf(b.id);
+  const says = when.before ? `${validationSays}; built ${when.at!.slice(0, 10)}, before ${UPDATE_SAYS}: its tests may be flawed, and it is not yet re-checked against it` : validationSays;
+  return { kind, why, assumptions, limits, validation, validationSays: says, ...(when.at ? { built: when.at } : {}), beforeUpdate: when.before };
 }
 
 /** What a result cannot be: a mass, a density, a volume, an area, a resistance, a capacitance below nothing; an absolute

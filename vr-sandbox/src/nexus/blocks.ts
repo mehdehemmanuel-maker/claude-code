@@ -8,7 +8,7 @@
 // What runs a board of blocks, caches, maps over lists and opens groups is src/nexus/dataflow.ts; this file only says
 // what each block is and does.
 
-import { EVIDENCE, EVIDENCE_SAYS, evidenceOf, type NodeEvidence } from './evidence';
+import { EVIDENCE, EVIDENCE_SAYS, UPDATE_SAYS, evidenceOf, type NodeEvidence } from './evidence';
 import { dimensionOf, fromSI, parseUnit, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
@@ -352,13 +352,13 @@ export function libraryCatalogue(): string {
   const all = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') || b.id === 'group.in' || b.id === 'group.out'), lines = ['# The node library', '', `Generated from the library (\`libraryCatalogue()\` in \`src/nexus/blocks.ts\`); \`tests/nexus/shelves.test.ts\` fails if it is out of date (write it again with \`UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts\`). ${all.length} nodes, on ${STAGES.length} shelves in the order a board runs; a node's shelf is read from what it is (\`stageOf\`), never filed by hand.`, ''];
   // what each node's own contribution rests on, and how it is checked (src/nexus/evidence.ts)
   { const ev = all.map(evidenceOf), count = (f: (e: NodeEvidence) => boolean) => ev.filter(f).length;
-    lines.push('## Evidence', '', 'What each node\'s own contribution rests on, read from what it is (src/nexus/evidence.ts); a value on a wire is as strong as the weakest node it rests on.', '', '| Evidence | Nodes | Means |', '| --- | --- | --- |', ...EVIDENCE.map((k) => `| ${k} | ${count((e) => e.kind === k)} | ${EVIDENCE_SAYS[k]} |`), '', `Checked: ${count((e) => e.validation === 'compared with an independent reference')} compared with an independent reference (laws the rest of the book reaches another way, agreeing); ${count((e) => e.validation === 'tested here')} tested here (their own tests: that they do what they say, not that the world does); ${count((e) => e.validation === 'untested')} untested; none validated against experiment.`, ''); }
+    lines.push('## Evidence', '', 'What each node\'s own contribution rests on, read from what it is (src/nexus/evidence.ts); a value on a wire is as strong as the weakest node it rests on.', '', '| Evidence | Nodes | Means |', '| --- | --- | --- |', ...EVIDENCE.map((k) => `| ${k} | ${count((e) => e.kind === k)} | ${EVIDENCE_SAYS[k]} |`), '', `Checked: ${count((e) => e.validation === 'compared with an independent reference')} compared with an independent reference (laws the rest of the book reaches another way, agreeing); ${count((e) => e.validation === 'tested here')} tested here (their own tests: that they do what they say, not that the world does); ${count((e) => e.validation === 'untested')} untested; none validated against experiment.`, '', `Built before ${UPDATE_SAYS}: ${count((e) => e.beforeUpdate)} of ${ev.length} (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.`, ''); }
   for (const st of STAGES) {
     const bs = all.filter((b) => stageOf(b) === st.id).sort((a, c) => a.name.localeCompare(c.name)); if (!bs.length) continue;
     lines.push(`## ${st.name} (${bs.length})`, '', `${st.says[0]!.toUpperCase()}${st.says.slice(1)}.`, '');
     if (st.id === 'law') { const by = new Map<string, string[]>(); for (const b of bs) { const f = DOMAINS.find((d) => d.id === b.domains[0])?.name ?? 'Other'; by.set(f, [...(by.get(f) ?? []), b.name]); }
       for (const [f, ns] of [...by].sort((a, c) => a[0].localeCompare(c[0]))) lines.push(`- **${f}** (${ns.length}): ${ns.join(', ')}`); }
-    else for (const b of bs) { const e = evidenceOf(b); lines.push(`- **${b.name}** (\`${b.id}\`): ${first(b.says)} *${e.kind}, ${e.validation}*`); }
+    else for (const b of bs) { const e = evidenceOf(b); lines.push(`- **${b.name}** (\`${b.id}\`): ${first(b.says)} *${e.kind}, ${e.validation}${e.beforeUpdate ? ", before the update" : ""}*`); }
     lines.push('');
   }
   return lines.join('\n');
@@ -756,7 +756,7 @@ const BUILT_IN: BlockDef[] = [
     settings: [{ key: 'lang', label: 'Language', type: 'choice', default: 'js', choices: ['js', 'ts', 'python'] }, { key: 'inputs', label: 'Inputs', type: 'text', default: 'a, b' }, { key: 'outputs', label: 'Outputs', type: 'text', default: 'result' }, { key: 'code', label: 'Code', type: 'code', default: 'return { result: a + b }' }],
     ports: (s) => ({ inputs: String(s.inputs ?? '').split(',').map((x) => x.trim()).filter(Boolean).map((n) => P(n, 'any')), outputs: String(s.outputs ?? '').split(',').map((x) => x.trim()).filter(Boolean).map((n) => P(n, 'any')) }),
     run: async (i, c) => {
-      if (!c.code) throw new Error('code runs only where a worker can run it (the board page, the forge)');
+      if (!c.code) throw new Error('code runs only where something can run it: the board page (in a worker), or a test that gives the board a runner');
       const r = await c.code(String(c.set.lang), String(c.set.code), i, c.signal), outs = String(c.set.outputs).split(',').map((x) => x.trim()).filter(Boolean);
       return r && typeof r === 'object' && !Array.isArray(r) && outs.every((o) => o in (r as object)) ? (r as Outputs) : { [outs[0] ?? 'result']: r };
     } }),

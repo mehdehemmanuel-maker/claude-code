@@ -6,10 +6,10 @@
 // (what is dead, what is twice, what wiring repeats) is listed when nothing is chosen, each with the press that does it.
 //
 // The board is kept in this browser (localStorage) and can be taken out and brought back as JSON. Code blocks run in
-// the forge's own worker (code-worker.ts), off the page. Asking Claude needs the forge's relay, which this page does not
-// have: such a block says so rather than pretending.
+// a worker (code-worker.ts), off the page. Asking Claude needs a relay to Claude, which this page does not have: such a
+// block says so rather than pretending.
 
-import { EVIDENCE_SAYS, evidenceOf } from '../evidence';
+import { EVIDENCE_SAYS, builtOf, evidenceOf } from '../evidence';
 import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { isAssembly, partOf } from '../assembly';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
@@ -48,7 +48,7 @@ const env: Env = {
     const timer = window.setTimeout(() => { waiting.delete(id); w.terminate(); worker = null; no(new Error('stopped after 8 s: it ran too long')); }, 8000);
     waiting.set(id, { ok, no, timer }); w.postMessage({ id, lang, code, facts: {}, input: '', vars: inputs });
   }),
-  ai: async () => { throw new Error('asking Claude needs the forge\'s relay; open this board in the forge to ask'); },
+  ai: async () => { throw new Error('asking Claude needs a relay to Claude, and this page has none (the forge that had one is gone)'); },
 };
 
 // ---- the board ------------------------------------------------------------------------------------------------------
@@ -256,7 +256,7 @@ function paint(): void {
     else if (s?.status === 'waiting') { g.fillStyle = '#ffd180'; g.fillText(clip(`… ${s.error}`, 44), gg.x + 10, fy); }
     else if (s?.status === 'ok' && s.warnings?.length) { g.fillStyle = '#ffab40'; g.fillText(clip(`⚠ ${s.warnings[0]}`, 44), gg.x + 10, fy); }
     // (what it rests on, first: the weakest evidence under what it gives)
-    else if (s?.status === 'ok') { g.fillStyle = '#5f6f84'; g.fillText(`${s.evidence ? `${s.evidence.kind} · ` : ''}${s.cached ? '✓ reused' : '● ran'} · ${s.ms < 1 ? `${(s.ms * 1000).toFixed(0)} µs` : `${s.ms.toFixed(1)} ms`}${s.runs ? ` · ${s.runs} run${s.runs > 1 ? 's' : ''}` : ''}${d?.by !== 'built in' && d ? ` · ${d.by}` : ''}`, gg.x + 10, fy); }
+    else if (s?.status === 'ok') { g.fillStyle = '#5f6f84'; g.fillText(`${d && builtOf(d.id).before ? 'before update · ' : ''}${s.evidence ? `${s.evidence.kind} · ` : ''}${s.cached ? '✓ reused' : '● ran'} · ${s.ms < 1 ? `${(s.ms * 1000).toFixed(0)} µs` : `${s.ms.toFixed(1)} ms`}${s.runs ? ` · ${s.runs} run${s.runs > 1 ? 's' : ''}` : ''}${d?.by !== 'built in' && d ? ` · ${d.by}` : ''}`, gg.x + 10, fy); }
     else { g.fillStyle = '#5f6f84'; g.fillText(KINDS[k].name, gg.x + 10, fy); }
     g.globalAlpha = 1;
   }

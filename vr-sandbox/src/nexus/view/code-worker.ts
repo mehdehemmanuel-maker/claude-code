@@ -11,7 +11,8 @@ type Msg = { id: number; lang: 'js' | 'ts' | 'python' | 'cpp'; code: string; fac
 let ts: { transpile(code: string, o: object): string } | null = null;
 let py: { runPythonAsync(code: string, o?: object): Promise<unknown>; toPy(x: unknown): unknown; globals: { set(k: string, v: unknown): void; get(k: string): unknown } } | null = null;
 
-async function run(m: Msg): Promise<{ value: unknown; logs: string[]; steps: string[] }> {
+/** Runs a step's code; the worker's own, and what a test gives a board to run its code headless. */
+export async function run(m: Msg): Promise<{ value: unknown; logs: string[]; steps: string[] }> {
   const logs: string[] = [], steps: string[] = [], vars = m.vars ?? {};
   const show = (x: unknown) => (m.vars ? x : typeof x === 'string' ? x : JSON.stringify(x));
   const api = { facts: m.facts, input: m.input, step: (w: string) => { steps.push(String(w)); }, say: (w: string) => { steps.push(`say ${w}`); }, log: (...xs: unknown[]) => { logs.push(xs.map(show).join(' ')); } };
@@ -50,7 +51,8 @@ function stripTypes(src: string): string {
     .replace(/\s+as\s+[\w[\]<>|.]+/g, '')
     .replace(/(\w|\))!(?=[.)\],;\s])/g, '$1');
 }
-self.onmessage = async (e: MessageEvent<Msg>) => {
+// (only where it is a worker: imported by a test, it only lends `run`)
+if (typeof self !== 'undefined' && typeof window === 'undefined') self.onmessage = async (e: MessageEvent<Msg>) => {
   const m = e.data;
   try { self.postMessage({ id: m.id, ...(await run(m)) }); }
   catch (err) { self.postMessage({ id: m.id, error: (err as Error).message ?? String(err) }); }
