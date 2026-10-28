@@ -10,6 +10,13 @@ knowledge first, combine what already exists, identify missing information, and 
 Every prediction must remain distinguishable from verified reality. First inspect Nexus's existing architecture … then
 connect and expand the system without rebuilding working features unnecessarily."
 
+And, in the user's own earlier draft of the same ask: "find all real physical laws of reality … map out how each
+interact with each other, find the in between math and equations … it could cancel out the need for certain nodes or
+strengthen other nodes … physics should all interconnect in math and interaction so no errors are hit … can everything's
+material be exposed … the house, what material is it made out of, if wood what type, if metal what type, what type of
+plastic, is it a mix of materials, what are them materials made out of, how much does it weigh, all of these should be
+viewable".
+
 ## 1. What exists (inspected 2026-10-28)
 
 ### Laws
@@ -130,7 +137,22 @@ that takes a density, and the chain solver can join a mechanics law to a heat la
    `MAX_SERVICE`, `tetherOf`, the thermal and fusion tables. Nodes: `card.material` over all of it, its properties as
    quantities wired into any law; "material from composition" (a candidate's properties from its constituents,
    hypothetical until checked).
-6. **Evidence on every node and value.** `evidence` and `assumes` on every node, read from what it is (a law from its
+6. **What it is made of, viewable for anything** (from the user's draft). A node and a panel that open any thing (a
+   house, a car, a battery) as its materials all the way down: each part, the specific material it is made of (which
+   wood, which steel, which plastic), the mixes and what is in each, down to elements, with the mass of each at every
+   level and its share of the whole. A material named only by its family ("wood", "plastic", "steel") is shown as
+   unspecified, never passed off as a species or a grade. The inventory's `massMakeup` and `fundamentals`, which no
+   node reaches today, are its start.
+7. **Laws: coverage, the math between them, consistency** (from the user's draft).
+   - Coverage: the laws there are set against the fields of physics and chemistry (mechanics, continua, fluids,
+     heat, electromagnetism as fields, waves and acoustics, optics, quantum, relativity, nuclear, chemistry and
+     kinetics, materials, astronomy), what each field is missing named, and sourced laws added for it, field by field.
+   - The math between them: where a law follows from others (electrical power is P = I²R only because Ohm's law and
+     P = V I combine), the node says so and shows the derivation; a node that is only another's rearrangement or
+     another's special case is folded into it, and the law it rests on is strengthened by the check.
+   - Consistency: every chain checked for units at every joint; where two routes reach one quantity they must agree, and
+     a disagreement is shown, never hidden; what is conserved (energy, mass, charge, momentum) checked across a chain.
+8. **Evidence on every node and value.** `evidence` and `assumes` on every node, read from what it is (a law from its
    sources; a datasheet lookup is measured; a model that leaves things out simplified; a generator hypothetical),
    overridden by hand only where a rule cannot tell; the board carries the weakest evidence along each wire with the
    node it came from; shown as a badge on every node, checked by the gauntlet, written in `docs/NODES.md`.
@@ -158,5 +180,5 @@ that takes a density, and the chain solver can join a mechanics law to a heat la
 - **The gate, the reach test, the gauntlet over every node, the pages in a browser,** and screenshots of a board that
   solves a cross-field problem through the laws and a material.
 
-Each step lands as its own commit after the gate. Step 1 and 2 change no answers; step 3 changes none until parity
+Each step lands as its own commit after the gate. Steps 1 and 2 change no answers; step 3 changes none until parity
 holds; steps 5 and 6 change answers only where the snapshot says why.
