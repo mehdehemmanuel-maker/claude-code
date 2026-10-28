@@ -16,6 +16,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 import type { Part, V3 } from '../kits';
 import { layout, type Node, type OBB } from '../make/space';
 import { AMBIENT, HEAT_FALLOFF } from '../make/rules';
+import { graphOf, sliced, temperaturesOf } from '../graph';
 import { leafGeometry } from '../view/kit3d';
 import { MOTION_GAP, MOUNT_ROCK, regionOf } from './model';
 
@@ -91,6 +92,13 @@ export function fieldOf(root: Part, kind: FieldKind, o: FieldOptions = {}): Fiel
   if (kind === 'heat') {
     // (each temperature's hot surfaces as one tree; every solid surface near as the tree that blocks)
     const hot = new Map<number, Node[]>(); for (const x of g.inside) { const t = hotOf(x); if (t > AMBIENT && x.p.shape) (hot.get(t) ?? hot.set(t, []).get(t)!).push(x); }
+    // and what is warmed by touching them (step H: heat conducted, `temperaturesOf`): each slice of every piece in the
+    // region at its steady temperature, in bands of 10 °C, a source as the hot surfaces are
+    let warmed = 0;
+    if (hot.size) {
+      const gr = sliced(graphOf(root), 8), held = new Map<number, number>(); gr.pieces.forEach((q, i) => { const t = hotOf(q.node); if (t > AMBIENT) held.set(i, t); });
+      if (held.size) { const { T } = temperaturesOf(gr, held, AMBIENT); gr.pieces.forEach((q, i) => { if (held.has(i) || !(T[i]! > AMBIENT + 10) || !q.node.p.shape || !q.node.box?.intersectsBox(region)) return; const band = Math.round(T[i]! / 10) * 10; (hot.get(band) ?? hot.set(band, []).get(band)!).push(q.node); warmed++; }); }
+    }
     const blockG = surfacesOf(g.inside.filter((x) => x.p.shape && !/glass/.test(x.p.mat ?? ''))), block = blockG ? new MeshBVH(blockG) : null;
     const trees = [...hot].map(([t, ns]) => { const geo = surfacesOf(ns); return geo ? { t, bvh: new MeshBVH(geo), reach: HEAT_FALLOFF * Math.log((t - AMBIENT) / 0.5) } : null; }).filter((x): x is NonNullable<typeof x> => !!x);
     const hit = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 }, ray = new THREE.Ray();
@@ -105,8 +113,8 @@ export function fieldOf(root: Part, kind: FieldKind, o: FieldOptions = {}): Fiel
       }
       values[c] = T;
     }
-    f.sources = ['make/rules.ts: HEAT_FALLOFF 40 mm (an estimate), AMBIENT 40 °C, shielding by solids', 'Part.hot on each hot surface'];
-    f.says = `heat over ${trees.length} hot surface temperature${trees.length === 1 ? '' : 's'}`;
+    f.sources = ['make/rules.ts: HEAT_FALLOFF 40 mm (an estimate), AMBIENT 40 °C, shielding by solids', 'Part.hot on each hot surface', 'graph.ts temperaturesOf: what touches them, warmed by conduction (Fourier) and cooled to the air (Holman, radiation)'];
+    f.says = `heat over ${trees.length} hot surface temperature${trees.length === 1 ? '' : 's'}${warmed ? `, ${warmed} slices among them warmed by touching what is hot` : ''}`;
   } else if (kind === 'motion') {
     // (what moves, each with the room it needs: a wheel at each corner of its steer and bump (its box turned and raised),
     // a belt or fan's surfaces grown by its clearance, the engine's surfaces by how far it rocks; room read up to 60 mm)

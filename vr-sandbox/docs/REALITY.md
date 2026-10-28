@@ -665,3 +665,11 @@ bracket on it is said at 243 °C (the bracket's tip) over its 80 °C; a rubber p
 left as findings (design is parked): the semi's fibreglass hood shell touches its 700 °C turbine housing (a geometry
 fault: the hood is on the turbo) and a silicone gasket on that housing reaches 304 °C over its 230 °C (a turbo's
 gasket is metal). A finding on the car's oxygen sensor lead, made while lumped, went when sliced: withdrawn. Still to do in H: placement's heat map and the loads reading the engine.
+
+**Step H, placement's heat map (2026-10-28).** The heat field (`placement/fields.ts`) took only the hot surfaces as
+sources; what touches them, warmed by conduction, heats the cells round it too. Now each slice of every piece in the
+region gets its steady temperature (`temperaturesOf` over the sliced contact graph) and, warmer than the air by more
+than 10 °C, is a source like the hot surfaces, in bands of 10 °C; the field says how many slices were warmed this way.
+The placement, autopilot, field and rules nodes' own tests pass. Not done in H, said: the load cases (`loads.ts`) are
+closed forms on one part each, and read nothing from the graph yet; that waits on F's second round (bending through an
+assembly), which gives them something to read.
