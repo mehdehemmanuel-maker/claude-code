@@ -702,3 +702,12 @@ fixed-end force E A α ΔT, the stress said net of it. Checked exactly: the 1 m 
 the rods board, warmed 50 K, copper and aluminium grow apart under the steel block, and the board says how hard that
 pulls. With that, `path.properties` (pieces named in order along an axis) does nothing the engine does not, from the
 geometry: it is gone, its id now opens `bend`, and its code (`alongPath`, `END_K`) is deleted from `madeof.ts`.
+
+**E, seen smoothly.** A heat map drawn one colour per slice showed the slices, not the heat. Between two points where the
+level is known, the law that carries it sets its shape, as a string's shape between two hands is set by the string: steady
+conduction with no source and no loss from the sides is a straight line (Fourier's law in one dimension). So each contact
+now gives the level at its two faces (the middle's level less what each half drops), each whole piece is drawn once with
+its slices' middles and faces run along it (`Field` in `assembly.ts`), and the renderer colours every point of it, its
+triangles halved along their longest side until they are fine enough. No seams where it was cut; the colour bends where
+copper meets aluminium because the law does. Bending is next: a beam's shape between two slices is the cubic its end
+movements and turns set (Hermite), the same idea.

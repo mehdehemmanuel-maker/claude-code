@@ -8,7 +8,7 @@
 // for only where two placements' bounds come within reach of each other). A city of one drone builds one drone's graph.
 
 import * as THREE from 'three';
-import { isAssembly, matrixOf, type Assembly } from './assembly';
+import { isAssembly, levelColour, matrixOf, type Assembly, type Override } from './assembly';
 import { contacts, layout, patchIn, type Node, type OBB } from './make/space';
 import type { Part } from './kits';
 import { matterOf } from './matter';
@@ -123,6 +123,9 @@ export interface Flow {
   /** Each piece's level between the ends, 1 at the first and 0 at the second (null: not joined to either through
    *  pieces that carry it); and what goes through each contact, from a to b, for a unit difference. */
   level: (number | null)[]; through: number[];
+  /** The level at each contact's two faces, a's side and b's (what flows through it over each half: the middle's level
+   *  less what each half drops; the two differ only by a contact resistance), null where it carries nothing. */
+  face: ([number, number] | null)[];
   /** The worst balance at any piece between the ends (Kirchhoff: what comes in goes out), as a share of the flow. */
   imbalance: number; converged: boolean; steps: number;
   /** The resistance's standard uncertainty (K/W or Ω) from what the materials are known only as (a family's span, taken
@@ -174,18 +177,19 @@ export function edgeConductances(g: Graph, kind: 'heat' | 'current' | 'force', o
     if (d.value === null) { refused.push(d.refusal?.domain ?? 'no value'); return 0; }
     return kind === 'current' ? 1 / d.value : d.value;
   };
-  const conductances = (k: (number | null)[]) => g.edges.map((e) => {
-    const ka = k[e.a], kb = k[e.b]; if (!ka || !kb || !(e.area > 0)) return 0;
+  // each contact's two halves, from each middle to where they meet (0 where one carries nothing)
+  const halves = (k: (number | null)[]) => g.edges.map((e): [number, number] => {
+    const ka = k[e.a], kb = k[e.b]; if (!ka || !kb || !(e.area > 0)) return [0, 0];
     const at = new THREE.Vector3(...e.at), ga = half(ka, e.area, Math.max(mid[e.a]!.distanceTo(at), 1e-5)), gb = half(kb, e.area, Math.max(mid[e.b]!.distanceTo(at), 1e-5));
-    if (!(ga > 0) || !(gb > 0)) return 0;
-    return 1 / (1 / ga + 1 / gb + (o.contact ? 1 / (o.contact * e.area) : 0));
+    return ga > 0 && gb > 0 ? [ga, gb] : [0, 0];
   });
-  return { conductances, k0, known, law, refused, lacking, mid };
+  const conductances = (k: (number | null)[]) => halves(k).map(([ga, gb], q) => (ga > 0 ? 1 / (1 / ga + 1 / gb + (o.contact ? 1 / (o.contact * g.edges[q]!.area) : 0)) : 0));
+  return { conductances, halves, k0, known, law, refused, lacking, mid };
 }
 
 export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: number[], to: number[], o: { contact?: number } = {}): Flow {
-  const n = g.pieces.length, { conductances, k0, known, law, refused, lacking } = edgeConductances(g, kind, o);
-  const G = conductances(k0.map((x) => x?.v ?? null));
+  const n = g.pieces.length, { conductances, halves, k0, known, law, refused, lacking } = edgeConductances(g, kind, o);
+  const G = conductances(k0.map((x) => x?.v ?? null)), H = halves(k0.map((x) => x?.v ?? null));
   const end = new Map<number, number>(); for (const i of to) end.set(i, 0); for (const i of from) end.set(i, 1);
   // only pieces joined to an end through pieces that carry it
   const nb: [number, number][][] = g.pieces.map(() => []); g.edges.forEach((e, q) => { if (G[q]! > 0) { nb[e.a]!.push([e.b, q]); nb[e.b]!.push([e.a, q]); } });
@@ -195,6 +199,7 @@ export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: num
   const sol = free.length ? solveSparseSPD(free.length, entries, b) : { x: [], converged: true, steps: 0, residual: 0 };
   const level = g.pieces.map((_, i) => (end.has(i) ? end.get(i)! : at.has(i) ? sol.x[at.get(i)!]! : null));
   const through = g.edges.map((e, q) => (level[e.a] === null || level[e.b] === null ? 0 : G[q]! * (level[e.a]! - level[e.b]!)));
+  const face = g.edges.map((e, q): [number, number] | null => (level[e.a] === null || level[e.b] === null || !(G[q]! > 0) ? null : [level[e.a]! - through[q]! / H[q]![0], level[e.b]! + through[q]! / H[q]![1]]));
   let out = 0; g.edges.forEach((e, q) => { const fa = from.includes(e.a), fb = from.includes(e.b); if (fa && !fb) out += through[q]!; else if (fb && !fa) out -= through[q]!; });
   const net = new Array<number>(n).fill(0); g.edges.forEach((e, q) => { net[e.a]! -= through[q]!; net[e.b]! += through[q]!; });
   let worst = 0; for (const i of free) worst = Math.max(worst, Math.abs(net[i]!));
@@ -217,19 +222,52 @@ export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: num
   if (refused.length) lacking.push(`${refused.length} halves refused by the law (${[...new Set(refused)][0]})`);
   const ev = (e: Evidence): EvidenceKind => (e === 'handbook' || e === 'specified' || e === 'secondary' ? 'specified' : e === 'derived' ? 'derived' : 'estimated');
   const evidence = used.length ? weakestOf(...used.map((m) => ev(known.get(m)!.ev))) : 'derived';
-  return { resistance: R, conductance: out, level, through, imbalance: scale > 0 ? worst / scale : 0, converged: sol.converged, steps: sol.steps, lacking, floating,
+  return { resistance: R, conductance: out, level, through, face: face as Flow['face'], imbalance: scale > 0 ? worst / scale : 0, converged: sol.converged, steps: sol.steps, lacking, floating,
     resistanceU: uncertainFrom.length ? Math.sqrt(u2) : null, uncertainFrom, evidence, laws: [law.id] };
 }
 
 /** A thing's pieces coloured by a level from 0 to 1 (a temperature, a voltage, a force): blue at 0 through green and
  *  yellow to red at 1, as heat maps are read; grey where it has none. Each piece placed where it is, shared, not copied
  *  (step E: what flows, seen). */
-export function coloured(g: Graph, level: (number | null)[], name = 'coloured by what flows'): Assembly {
-  const hue = (x: number) => new THREE.Color().setHSL((2 / 3) * (1 - Math.max(0, Math.min(1, x))), 0.85, 0.5).getHex();
+export function coloured(g: Graph, level: (number | null)[], name = 'coloured by what flows', face?: Flow['face'], whole?: Graph): Assembly {
+  if (face && whole && whole !== g) return colouredWhole(g, level, name, face, whole);
+  // with each contact's face levels, each piece carries its field (`Field`: the level from its middle to each face as the
+  // law shapes it), so the colour runs smoothly through it and on across where it meets the next; without them, one
+  // colour each
+  const faces: { at: V3; v: number }[][] = g.pieces.map(() => []), inv = g.pieces.map((p) => p.node.m.clone().invert());
+  if (face) g.edges.forEach((e, q) => { const f = face[q]; if (!f) return; for (const [i, v] of [[e.a, f[0]], [e.b, f[1]]] as const) faces[i]!.push({ at: new THREE.Vector3(...e.at).applyMatrix4(inv[i]!).toArray() as V3, v }); });
   const items = g.pieces.map((p, i) => {
     const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); p.node.m.decompose(pos, q, sc);
-    const e = new THREE.Euler().setFromQuaternion(q), v = level[i];
-    return { of: { ...p.node.p, at: undefined, rot: undefined, parts: [] } as Part, at: pos.toArray() as V3, rot: [e.x, e.y, e.z] as V3, s: sc.x, over: { color: v === null || v === undefined ? 0x777777 : hue(v), finish: 'satin' } };
+    const e = new THREE.Euler().setFromQuaternion(q), v = level[i], none = v === null || v === undefined;
+    return { of: { ...p.node.p, at: undefined, rot: undefined, parts: [] } as Part, at: pos.toArray() as V3, rot: [e.x, e.y, e.z] as V3, s: sc.x, over: { color: none ? 0x777777 : levelColour(v), finish: 'satin', ...(!none && faces[i]!.length ? { field: { v, faces: faces[i]! } } : {}) } };
+  });
+  return { name, items };
+}
+
+/** Each whole piece drawn once, its slices' levels run along it (the middles and the faces between them, straight
+ *  between as Fourier's law has it with nothing lost from the sides), so it shows no seams where it was cut. */
+function colouredWhole(g: Graph, level: (number | null)[], name: string, face: Flow['face'], whole: Graph): Assembly {
+  const of = new Map<string, number[]>(); g.pieces.forEach((p, i) => { const k = p.id.replace(/#\d+$/, ''); (of.get(k) ?? of.set(k, []).get(k)!).push(i); });
+  const facesOf: [V3, number][][] = g.pieces.map(() => []);
+  g.edges.forEach((e, q) => { const f = face[q]; if (f) { facesOf[e.a]!.push([e.at, f[0]]); facesOf[e.b]!.push([e.at, f[1]]); } });
+  const items = whole.pieces.map((p) => {
+    const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); p.node.m.decompose(pos, q, sc);
+    const e = new THREE.Euler().setFromQuaternion(q), inv = p.node.m.clone().invert(), parts = (of.get(p.id) ?? []).filter((i) => level[i] !== null && level[i] !== undefined);
+    const loc = (v: THREE.Vector3 | V3) => (Array.isArray(v) ? new THREE.Vector3(...v) : v.clone()).applyMatrix4(inv);
+    let over: Override = { color: 0x777777, finish: 'satin' };
+    if (parts.length === 1 && g.pieces[parts[0]!]!.id === p.id) {
+      const i = parts[0]!; over = { color: levelColour(level[i]!), finish: 'satin', ...(facesOf[i]!.length ? { field: { v: level[i]!, faces: facesOf[i]!.map(([at, v]) => ({ at: loc(at).toArray() as V3, v })) } } : {}) };
+    } else if (parts.length) {
+      const mids = parts.map((i) => loc(g.pieces[i]!.node.box!.getCenter(new THREE.Vector3())));
+      const u = parts.length > 1 ? mids[mids.length - 1]!.clone().sub(mids[0]!).normalize() : new THREE.Vector3(0, 1, 0);
+      const pts: [number, number][] = parts.map((i, k) => [mids[k]!.dot(u), level[i]!]);
+      // the faces along the axis (between slices, and the contacts at its ends), not those met from the side
+      parts.forEach((i, k) => { for (const [at, v] of facesOf[i]!) { const d = loc(at).sub(mids[k]!); if (d.length() > 0 && Math.abs(d.clone().normalize().dot(u)) > 0.9) pts.push([loc(at).dot(u), v]); } });
+      pts.sort((a, b) => a[0] - b[0]);
+      const mean = parts.reduce((s, i) => s + level[i]!, 0) / parts.length;
+      over = { color: levelColour(mean), finish: 'satin', field: { along: u.toArray() as V3, pts } };
+    }
+    return { of: { ...p.node.p, at: undefined, rot: undefined, parts: [] } as Part, at: pos.toArray() as V3, rot: [e.x, e.y, e.z] as V3, s: sc.x, over };
   });
   return { name, items };
 }

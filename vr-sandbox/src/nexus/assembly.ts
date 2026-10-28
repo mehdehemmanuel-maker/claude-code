@@ -16,7 +16,39 @@ import { layout } from './make/space';
 
 /** What is changed about a thing where it is placed: on every piece, or those whose names a pattern finds. The change
  *  made further out wins (a swarm's colour over the drone's), as a variant of a whole thing should. */
-export interface Override { color?: number; mat?: string; finish?: string; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
+/**
+ * A level (a temperature, a voltage, from 0 to 1) varying through one piece, as the law that carries it shapes it between
+ * the points where it is known, the way a string's shape between two hands is set by the string's own law: the level at
+ * the piece's middle (its frame's origin) and at each face where it meets a neighbour or its next slice (`at`, in its
+ * frame). Steady conduction through a piece with no source in it and no loss from its sides is Fourier's law in one
+ * dimension: the level falls in a straight line from the middle to each face. Each point takes the face it lies toward
+ * (its share along the line from the middle to that face, 0 at the middle, 1 at the face), blended where several faces
+ * lie the same way; a side with no face (an end touching nothing) carries nothing and stays at the middle's level.
+ * Exact along a bar or a stack; across a piece met at several patches, an estimate. Or, for a piece worked out in slices
+ * along an axis (`along`, a unit direction in its frame), the levels known along it (`pts`: the distance along it from its
+ * frame's origin, and the level there: each slice's middle and faces), straight between each two as the same law gives.
+ */
+export type Field = { v: number; faces: { at: V3; v: number }[] } | { along: V3; pts: [number, number][] };
+/** The field's level at a point in the piece's frame. */
+export function fieldAt(f: Field, x: number, y: number, z: number): number {
+  if ('along' in f) {
+    const t = x * f.along[0] + y * f.along[1] + z * f.along[2], p = f.pts;
+    if (t <= p[0]![0]) return p[0]![1]; if (t >= p[p.length - 1]![0]) return p[p.length - 1]![1];
+    let lo = 0, hi = p.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (p[m]![0] <= t) lo = m; else hi = m; }
+    const [ta, va] = p[lo]!, [tb, vb] = p[hi]!; return tb > ta ? va + ((t - ta) / (tb - ta)) * (vb - va) : vb;
+  }
+  let w = 0, acc = 0;
+  for (const c of f.faces) {
+    const L2 = c.at[0] * c.at[0] + c.at[1] * c.at[1] + c.at[2] * c.at[2]; if (!(L2 > 0)) continue;
+    const t = (x * c.at[0] + y * c.at[1] + z * c.at[2]) / L2; if (t <= 0) continue;
+    const k = t ** 4; w += k; acc += k * (f.v + Math.min(1, t) * (c.v - f.v));
+  }
+  return w > 0 ? acc / w : f.v;
+}
+/** A level from 0 to 1 as heat maps are read: blue at 0 through green and yellow to red at 1. */
+export function levelColour(x: number): number { return new THREE.Color().setHSL((2 / 3) * (1 - Math.max(0, Math.min(1, x))), 0.85, 0.5).getHex(); }
+
+export interface Override { /** a level varying through the piece, drawn by `levelColour` at every point (over its colour) */ field?: Field; color?: number; mat?: string; finish?: string; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
 export interface Placed { of: Part | Assembly; at: V3; rot: V3; s: number; over?: Override }
 export interface Assembly {
   /** the inventory item it is, where it is one (a cell, a battery), so a tree made of it says so */ item?: string;
@@ -68,7 +100,7 @@ const matches = (o: Override, name: string) => { if (!o.path) return true; let r
  *  (A stretch is not here: it is in the matrix.) */
 export function effective(overs: Override[], name: string): Override {
   const out: Override = {};
-  for (let i = overs.length - 1; i >= 0; i--) { const o = overs[i]!; if (!matches(o, name)) continue; for (const k of ['color', 'mat', 'finish', 'hide'] as const) if (o[k] !== undefined) (out as Record<string, unknown>)[k] = o[k]; }
+  for (let i = overs.length - 1; i >= 0; i--) { const o = overs[i]!; if (!matches(o, name)) continue; for (const k of ['color', 'mat', 'finish', 'hide', 'field'] as const) if (o[k] !== undefined) (out as Record<string, unknown>)[k] = o[k]; }
   return out;
 }
 /** Every drawn piece of an assembly, placed: what renders it and what checks it read. `visit` returns false to stop. */
