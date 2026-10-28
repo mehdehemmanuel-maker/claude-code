@@ -464,3 +464,83 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   Still to do in this step: the balance applied along the existing chains (the electrical-to-heat chain, collisions in
   the physics) rather than only as a node one places; uncertainty from the material tables (a property's own spread)
   and from the solvers' own error; judging a balance against its imbalance's uncertainty rather than a fixed tolerance.
+
+## 6. The plan from here (2026-10-28), in order
+
+The user, after step 7's rounds: "pause gather your self … optimize you context … give me a full system report and a
+smarter way to go about step 7", then "Yes create a new plan based off this in chronological order".
+
+Why step 7 is redone. What was built (`alongPath`, `throughNetwork`, nodes `path.properties` and `path.network`) is
+formulas driven by typing piece names: the manual work the user has asked again and again to eliminate. It also does
+its own arithmetic where the book owns the law (`conduction.series`), so its values skip the units, evidence, ± and
+extrapolation that steps 3 and 8 built (a second owner); it guesses each joint as the lesser section, though
+`contacts()` and `patchIn()` in `make/space.ts` already find what touches and over what patch; and it is one
+dimensional, so it cannot say where heat or force goes through a real build. Its hand-worked tests (a stepped beam,
+Euler's load, a Wheatstone bridge, Turner's growth) stay, as the checks the new engine must still pass.
+
+Each step below ends the same way: the tests that touch it while working, the full gate once before it is pushed, the
+snapshot's differences explained, a screenshot of it in the app sent to the user, and a progress entry in section 5.
+
+**Step A. Context and process (first, small).**
+- `CLAUDE.md` trimmed, only with the user's yes: the owners table to one line per concern, its detail moved into the
+  docs each row names; "What is wanted" and the rules kept word for word.
+- Work reads what it needs by searching, never whole large files; the full gate runs once per push, not per edit.
+
+**Step B. The contact graph, from the geometry.**
+- `graphOf(thing)`: every piece a node; every pair that touches an edge, with its real contact patch (area, normal,
+  where it is) from `contacts()` and `patchIn()`; nothing typed. Computed once per distinct thing and shared wherever
+  it is placed, as mass is (a city of the same drone builds one drone's graph).
+- Its own pieces' sections and lengths through each contact, for the edges' figures in step C.
+- Node `graph` (what touches what, as a table and drawn as lines between pieces in the 3D view).
+- Checked: a stack of blocks is a chain; a bolted joint joins through the bolt; pieces a hair apart do not touch;
+  the same thing placed a thousand times builds its graph once.
+
+**Step C. One solver for everything that flows.**
+- Heat and current first: each piece split at its contacts, each part of it a conductance from the book's own laws
+  (conduction, resistance from resistivity), each contact a conductance through its patch (given, or left out and
+  said, as now); the network solved by nodal analysis (`solveLinear`, sparse when large). Ends chosen by a click on a
+  piece or by what a piece is (the hot one, the mount, the earth: tags that exist), never by name.
+- Answers: the resistance between the ends, each piece's temperature or voltage, the flow through each contact.
+- Checked: the hand-worked path and network cases give the same answers through the new engine; a bridge; energy in
+  equals energy out at every junction (step 8's balance, applied).
+
+**Step D. Laws, evidence and ± on every edge.**
+- Each edge's figure is a law of the book run through the law engine, so its units, evidence and extrapolation come
+  with it; a material known only by its family, or a stand-in grade, carries its family's span as ± (step 6's spans),
+  and the ± reaches the answer by step 8's propagation.
+- Checked: a material swapped on the board moves the answer and its ±; a stand-in shows as one on the result.
+
+**Step E. Seen in the 3D view.**
+- The build coloured by temperature, voltage or force along the graph (the field colours placement already draws),
+  with the flow through each contact as arrows sized by it. Screenshots of the copper and aluminium rods, a heat sink
+  on a chip, and an engine's block from the head down.
+
+**Step F. Force: a 3D spring network.**
+- The same graph, each piece's stiffness from its material and section (axial and bending), each contact a joint;
+  solved for deflections, reaction forces at what holds it, and the load path (which pieces carry how much). Bending
+  and buckling of an assembly read from it rather than from a chain.
+- Checked against the hand-worked beam, column and stepped-beam cases, and a frame with a closed form.
+
+**Step G. Accuracy that grows, said.**
+- One element per piece is fast and shows which way things flow. Where a piece's own gradient matters, it is split
+  into more nodes of the same graph (finite volumes, finite elements: no second engine), and the answer is shown
+  settling as it is split (a convergence check, with the error said).
+
+**Step H. Fed into what exists.**
+- The heat gate in `make/rules.ts` reads conduction through the graph where pieces touch (its distance fall-off kept
+  for what only radiates); placement's heat map the same; `loads.ts` reads stiffness and load paths from step F;
+  the physics already takes mass, centre and inertia from the pieces.
+- The snapshot will move where the heat gate's answers change: each difference explained.
+
+**Step I. Retire what the engine replaces.**
+- `path.properties` and `path.network` become thin wrappers over the engine (or are merged into its node as aliases,
+  `ALIASES`), their tests kept as regression; nothing does the same thing twice.
+
+**Then, in order:**
+1. Step 6's remainder: the 50 stand-in grades each given its own figures from a source, or said unknown; composites'
+   stiffness as bounds; the old word-to-material maps retired.
+2. Step 8's remainder: balances applied along the existing chains (electrical to heat, collisions), a balance judged
+   against its imbalance's ±, uncertainty from the solvers' own error.
+3. Step 5's remainder: more of the laws each field needs, by the coverage map.
+4. Parked until the user lifts it (design): the house's roof (213 t, 81 % tile), the default vehicle's 700 kg of
+   alumina, Cascadia; and #52 (segment tables), blocked by the network.
