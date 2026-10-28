@@ -719,3 +719,15 @@ turns set (Hermite's), its stretch straight between, each section turning as a w
 it moves. Checked against the textbook: a 1 m steel cantilever pushed at its top, its drawn shape against P x² (3a − x)
 / 6EI at a hundred points along it, agrees to 10⁻¹² mm at 2, 4, 8 and 16 slices (slice by slice, it was up to 1.3 mm
 out). On the rods board the two rods sway in the S a frame makes when the block keeps their tops from turning.
+
+**H, the load checks read the frame.** The engine's con-rod rows had been hand formulas on a section typed beside the rod
+(0.7 of its width by 1.6 of its beam, 0.62 filled), its buckling Euler's with pinned ends about its thin way. They now read
+the rod as drawn (`rodFrame` in `loads.ts`): its beam in slices, its eyes and cap bonded where they meet. For that the frame
+learned two things every engineer expects. Supports by kind: a held piece holds only the movements said (a slide leaves
+its way free), and can be held at a point, not its middle, going round it as it turns (u = θ × r, solved for its turn):
+the bearing shells held at the crank pin's axis, the small end kept in line by the piston and turning about the wrist pin.
+And a part's stated fill (a forged I-section's 0.62 of its box) taken into its section. Checked: pushed with 40.7 kN, the
+beam's stress is the hand formula's 268 MPa exactly; it buckles at 294 kN, against 296 kN for Euler's pinned ends in the
+plane the crank turns in (the eyes give a little). The hand row's 226 kN was about the rod's thin way with pinned ends,
+which the pin's bosses and the throw do not allow; first held at the shells' own middles it read 794 kN, the big end
+locked against turning, which is what showed supports at a point were needed.

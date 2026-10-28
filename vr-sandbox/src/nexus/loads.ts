@@ -18,6 +18,7 @@ import { SPRING_WIRES, allowableShear, shearStress, solidLength, springRate, sur
 import { conRod, cylinderHead, engineDims, headPiece, pistonAssembly, threadFor, type EngineSpec } from './engines';
 import type { Part } from './kits';
 import { massOf } from './mass';
+import { bentUnder, graphOf, sliced } from './graph';
 import { METRIC } from './threads';
 
 export interface LoadRow { what: string; value: number; unit: string; limit: number; factor: number; ok: boolean; says: string }
@@ -56,6 +57,22 @@ export function springCase(p: Part, o: { stroke: number; wire?: string }): LoadC
   return { rows, worst: worstOf(rows), says: `rate ${(k / 1000).toFixed(2)} N/mm; ${F1.toFixed(0)} N as fitted (${mm(pre)} mm in from ${mm(s0.L0)} mm free), ${F2.toFixed(0)} N at ${mm(o.stroke)} mm more; surge at ${surgeFrequency(s).toFixed(0)} Hz` };
 }
 
+// ---- a con-rod as a frame -------------------------------------------------------------------------------------------------
+/** A con-rod as drawn (conRod's frame: its big end round the origin, its pins along x, its small end at L up y), worked out
+ *  as a frame for a push or pull along it at its small end. */
+export function rodFrame(rod: Part): { lacking: string; at: (F: number, buckling: boolean) => { vm: number; where: string; buckles: number | null } | null } {
+  const g = sliced(graphOf(rod), 8, { x: 0, y: 1, z: 0 } as never), shells = g.pieces.flatMap((p, i) => (/bearing shell/.test(p.name) ? [i] : [])), small = g.pieces.flatMap((p, i) => (p.name === 'small end' ? [i] : []));
+  const lacking = [!shells.length && 'bearing shells', !small.length && 'small end'].filter(Boolean).join(' or ');
+  const sup = new Map<number, boolean[] | { held: boolean[]; at: [number, number, number] }>();
+  for (const i of shells) sup.set(i, { held: [true, true, true, false, true, true], at: [0, 0, 0] });
+  for (const i of small) sup.set(i, [true, false, true, false, true, true]);
+  return { lacking, at: (F, buckling) => {
+    if (lacking) return null;
+    const b = bentUnder(g, [...shells, ...small], small, [0, F, 0], { buckling, supports: sup }), w = [...b.stress].sort((x, y) => y.vm - x.vm)[0];
+    return w ? { vm: w.vm, where: g.pieces[w.a]!.name === g.pieces[w.b]!.name ? g.pieces[w.a]!.name : `${g.pieces[w.a]!.name} where it meets its ${g.pieces[w.b]!.name}`, buckles: b.bucklesAt } : null;
+  } };
+}
+
 // ---- an engine ----------------------------------------------------------------------------------------------------------------
 export interface EngineLoadsIn { rpm: number; /** peak cylinder pressure, Pa (typical: about 8 MPa in a petrol engine at full load, 18 MPa in a heavy diesel) */ pmax: number; piston?: Part; rod?: Part; spring?: Part; wire?: string }
 /** A piston engine's working parts at a speed and a peak cylinder pressure. */
@@ -64,12 +81,17 @@ export function engineLoads(spec: EngineSpec, o: EngineLoadsIn): LoadCase & { fl
   const w = (o.rpm * 2 * Math.PI) / 60, lam = r / L, mp = massOf(piston), mr = massOf(rod), mrec = mp + mr / 3;
   // (the piston and a third of the rod go up and down with it, typical of a rod's split between its ends)
   const Fi = mrec * r * w * w * (1 + lam), Fg = o.pmax * Math.PI * B * B / 4, rows: LoadRow[] = [];
-  // its rod: its beam's I-section (the box round it, 0.62 of it filled, as conRod draws it) of forged steel
-  const sR = strengthOf('steel-alloy')!, b = 0.7 * rodW, h = 1.6 * 0.13 * B, A = 0.62 * b * h, I = 0.62 * (h * b ** 3) / 12;
-  rows.push(row('rod pulled at the top of the exhaust stroke', Fi / A, 'Pa', sR.yield, { says: `${(Fi / 1000).toFixed(1)} kN (its ${(mrec * 1000).toFixed(0)} g going up and down, r ω² (1 + r/L)) on ${(A * 1e6).toFixed(0)} mm² of beam: ${MPa(Fi / A)} MPa against ${sR.name}'s ${MPa(sR.yield)} MPa yield (${sR.source})` }));
-  rows.push(row('rod pushed at firing', Fg / A, 'Pa', sR.yield, { says: `${(Fg / 1000).toFixed(1)} kN of gas (${(o.pmax / 1e6).toFixed(1)} MPa on the piston, the inertia at its slowest taken as none) on ${(A * 1e6).toFixed(0)} mm²: ${MPa(Fg / A)} MPa` }));
-  const Pcr = (Math.PI ** 2 * sR.E * I) / (L * L);
-  rows.push(row('rod buckling at firing', Fg, 'N', Pcr, { says: `Euler, pinned ends, about its weak axis: ${(Pcr / 1000).toFixed(0)} kN to buckle it against ${(Fg / 1000).toFixed(1)} kN` }));
+  // its rod: the drawn rod worked out as a frame (src/nexus/graph.ts), its beam in slices, its eyes and cap bonded where
+  // they meet; its bearing shells held at the crank pin's axis and turning about it, its small end kept in line by the
+  // piston (held sideways, free along the bore and turning about the wrist pin); pulled and pushed along it there
+  const sR = strengthOf('steel-alloy')!, rf = rodFrame(rod);
+  const pull = rf.at(Fi, false), push = rf.at(-Fg, true);
+  if (pull && push) {
+    const where = (x: typeof pull) => `its ${x.where}`;
+    rows.push(row('rod pulled at the top of the exhaust stroke', pull.vm, 'Pa', sR.yield, { says: `${(Fi / 1000).toFixed(1)} kN (its ${(mrec * 1000).toFixed(0)} g going up and down, r ω² (1 + r/L)), the drawn rod as a frame: ${MPa(pull.vm)} MPa at worst, in ${where(pull)}, against ${sR.name}'s ${MPa(sR.yield)} MPa yield (${sR.source})` }));
+    rows.push(row('rod pushed at firing', push.vm, 'Pa', sR.yield, { says: `${(Fg / 1000).toFixed(1)} kN of gas (${(o.pmax / 1e6).toFixed(1)} MPa on the piston, the inertia at its slowest taken as none): ${MPa(push.vm)} MPa at worst, in ${where(push)}` }));
+    if (push.buckles) rows.push(row('rod buckling at firing', Fg, 'N', push.buckles, { says: `the drawn rod's own buckling (its frame's geometric stiffness under this push, pinned at the crank pin and the wrist pin and turning about them, kept in line by the piston): ${(push.buckles / 1000).toFixed(0)} kN to buckle it against ${(Fg / 1000).toFixed(1)} kN` }));
+  } else rows.push(row('rod as drawn', 0, 'Pa', sR.yield, { says: `the rod given has no ${rf.lacking} to hold it by: its stress is not worked out` }));
   // its rod bolts: the inertia pulls its cap off, carried by two bolts (ISO 898-1 stress area), class 10.9's proof strength
   const t = METRIC[threadFor(B * 0.85)]!, dn = Number(threadFor(B * 0.85).slice(1)), As = (Math.PI / 4) * (dn - 0.9382 * t.p) ** 2 * 1e-6;
   rows.push(row('rod bolts pulled', Fi / 2 / As, 'Pa', 830e6, { says: `${threadFor(B * 0.85)}, ${(As * 1e6).toFixed(1)} mm² each, ${(Fi / 2000).toFixed(1)} kN each (preload aside): ${MPa(Fi / 2 / As)} MPa against class 10.9's 830 MPa proof (ISO 898-1; rod bolts are 10.9 or 12.9, typical)` }));

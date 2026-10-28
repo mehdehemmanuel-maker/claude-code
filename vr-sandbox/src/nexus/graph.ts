@@ -381,7 +381,12 @@ export interface Bent {
  * (conjugate gradients). Exact for prismatic bars at their nodes (a cantilever's tip, a bar's stretch); a solid block is a
  * beam too (shear deformation and the block's own spreading left out); contacts never part (bonded). Small movements.
  */
-export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, o: { buckling?: boolean; /** warmed evenly by, K: each beam would grow α L ΔT; where it is held, that is force */ dT?: number } = {}): Bent {
+export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, o: { buckling?: boolean; /** warmed evenly by, K: each beam would grow α L ΔT; where it is held, that is force */ dT?: number;
+  /** How each held piece is held, where not clamped: which of its six movements (along x, y, z, then turning about x, y, z,
+   *  in the thing's frame) are held. A slide leaves free the way it slides. With `at`, it is held at that point and not its
+   *  own middle: the point stays (where its positions are held) and the piece goes round it as it turns, as a bearing
+   *  shell goes round its crank pin's axis. */
+  supports?: Map<number, boolean[] | { held: boolean[]; at: V3 }> } = {}): Bent {
   const n = g.pieces.length, lacking: string[] = [], ev: Evidence[] = [];
   const Eof = new Map<string, { E: number; nu: number; y?: number; alpha?: number } | null>(), mat = (m: string | null) => {
     if (!m) return null;
@@ -393,10 +398,13 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
   // a piece's section across an axis: area, second moments about its two other axes (in that axis's frame), torsion
   const sectionOf = (i: number, k: number) => {
     const p = g.pieces[i]!, s = p.node.p.shape, h = p.node.obb!.h, o = [0, 1, 2].filter((x) => x !== k) as [number, number];
-    if (s && 'cyl' in s && k === 1) { const r = Math.sqrt(h[0] * h[2]), A = Math.PI * r * r, I = (Math.PI * r ** 4) / 4; return { A, I1: I, I2: I, J: 2 * I, u1: o[0], u2: o[1] }; }
+    // (a part said to fill only some of its box, a forged I-section's 0.62, carries that share of the box's section and
+    // its second moments: the part's own statement, as its mass takes it)
+    const fl = p.node.p.fill && p.node.p.fill > 0 && p.node.p.fill < 1 ? p.node.p.fill : 1;
+    if (s && 'cyl' in s && k === 1) { const r = Math.sqrt(h[0] * h[2]), A = Math.PI * r * r, I = (Math.PI * r ** 4) / 4; return { A: fl * A, I1: fl * I, I2: fl * I, J: fl * 2 * I, u1: o[0], u2: o[1] }; }
     const b = 2 * h[o[0]]!, d = 2 * h[o[1]]!, A = b * d, a = Math.max(b, d), c = Math.min(b, d);
     // (a rectangle's torsion constant, Roark table 10.7: a c³ (1/3 − 0.21 c/a (1 − c⁴ / 12 a⁴)))
-    return { A, I1: (b * d ** 3) / 12, I2: (d * b ** 3) / 12, J: a * c ** 3 * (1 / 3 - 0.21 * (c / a) * (1 - c ** 4 / (12 * a ** 4))), u1: o[0], u2: o[1] };
+    return { A: fl * A, I1: (fl * b * d ** 3) / 12, I2: (fl * d * b ** 3) / 12, J: fl * a * c ** 3 * (1 / 3 - 0.21 * (c / a) * (1 - c ** 4 / (12 * a ** 4))), u1: o[0], u2: o[1] };
   };
   const entries: [number, number, number][] = [], elems: { a: number; b: number; K: number[][]; R: THREE.Vector3[]; A: number; Iy: number; Iz: number; J: number; cy: number; cz: number; cj: number; y?: number; th: number }[] = [];
   const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3, c?: { cy: number; cz: number; cj: number; y?: number; alpha?: number }) => {
@@ -435,16 +443,37 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
   // only what is joined to what is held
   const nb: number[][] = g.pieces.map(() => []); for (const e of g.edges) if (props[e.a] && props[e.b]) { nb[e.a]!.push(e.b); nb[e.b]!.push(e.a); }
   const seen = new Set(held), st = [...held]; while (st.length) { const x = st.pop()!; for (const y of nb[x]!) if (!seen.has(y)) { seen.add(y); st.push(y); } }
-  const fixed = new Set(held), free = [...seen].filter((i) => !fixed.has(i)).sort((x, y) => x - y), at = new Map<number, number>(); free.forEach((i, r) => { for (let q = 0; q < 6; q++) at.set(i * 6 + q, r * 6 + q); });
-  const rows: [number, number, number][] = []; for (const [r, c, v] of entries) { const R2 = at.get(r), C2 = at.get(c); if (R2 !== undefined && C2 !== undefined) rows.push([R2, C2, v]); }
-  const live = loaded.filter((i) => at.has(i * 6)), f = new Array<number>(free.length * 6).fill(0);
-  for (const i of live) for (let q = 0; q < 3; q++) f[at.get(i * 6 + q)!]! += load[q]! / live.length;
+  // each movement of each piece joined to what holds it is free, but those its support holds (all six, clamped, unless said)
+  const sup = (i: number) => { const s = o.supports?.get(i); return Array.isArray(s) ? { held: s, at: undefined } : s; };
+  const holds = (i: number, q: number) => held.includes(i) && (sup(i)?.held[q] ?? true), fixed = new Set(held.filter((i) => [0, 1, 2, 3, 4, 5].every((q) => holds(i, q))));
+  // each of a piece's movements as what is solved for: itself where free, nothing where held, and for a piece held at a
+  // point, its positions there held and each of its own as its turn crossed with where it is from the point (u = θ × r)
+  const free = [...seen].sort((x, y) => x - y), at = new Map<number, number>(), via = new Map<number, [number, number][]>(); let nf = 0;
+  for (const i of free) {
+    for (let q = 3; q < 6; q++) if (!holds(i, q)) at.set(i * 6 + q, nf++);
+    const s = held.includes(i) ? sup(i) : undefined;
+    if (!s?.at) { for (let q = 0; q < 3; q++) if (!holds(i, q)) at.set(i * 6 + q, nf++); continue; }
+    const r = centre[i]!.clone().sub(new THREE.Vector3(...s.at)).toArray(), th = (k: number) => at.get(i * 6 + 3 + k);
+    // (θ × r: x = θy rz − θz ry, y = θz rx − θx rz, z = θx ry − θy rx)
+    const cr: [number, number][][] = [[[1, r[2]!], [2, -r[1]!]], [[2, r[0]!], [0, -r[2]!]], [[0, r[1]!], [1, -r[0]!]]];
+    for (let q = 0; q < 3; q++) {
+      const terms = cr[q]!.filter(([k, c]) => th(k) !== undefined && c !== 0).map(([k, c]) => [th(k)!, c] as [number, number]);
+      // (a position left free at the point moves as itself, plus the turn's share)
+      if (!s.held[q]) terms.push([nf++, 1]);
+      via.set(i * 6 + q, terms);
+    }
+  }
+  const map = (d: number): [number, number][] => via.get(d) ?? (at.has(d) ? [[at.get(d)!, 1]] : []);
+  const rows: [number, number, number][] = []; for (const [r, c, v] of entries) for (const [R2, a] of map(r)) for (const [C2, b] of map(c)) rows.push([R2, C2, v * a * b]);
+  const live = loaded.filter((i) => seen.has(i) && !fixed.has(i)), f = new Array<number>(nf).fill(0);
+  for (const i of live) for (let q = 0; q < 3; q++) for (const [r, a] of map(i * 6 + q)) f[r]! += (a * load[q]!) / live.length;
   // warmed: each beam pushes its ends apart along it with E A α ΔT (what a held bar feels)
-  for (const el of elems) if (el.th) { const ex = el.R[0]!; for (let q = 0; q < 3; q++) { const ra = at.get(el.a * 6 + q), rb = at.get(el.b * 6 + q); if (ra !== undefined) f[ra]! -= el.th * ex.getComponent(q); if (rb !== undefined) f[rb]! += el.th * ex.getComponent(q); } }
+  for (const el of elems) if (el.th) { const ex = el.R[0]!; for (let q = 0; q < 3; q++) { for (const [ra, a] of map(el.a * 6 + q)) f[ra]! -= a * el.th * ex.getComponent(q); for (const [rb, b] of map(el.b * 6 + q)) f[rb]! += b * el.th * ex.getComponent(q); } }
   if (!live.length && !o.dT) lacking.push('none of the loaded pieces is joined to what holds it');
-  const sol = free.length && (live.length || o.dT) ? solveSparseSPD(free.length * 6, rows, f, { maxSteps: 40 * free.length * 6 + 1000 }) : { x: [], converged: true, steps: 0, residual: 0 };
-  const moved = g.pieces.map((_, i) => (fixed.has(i) ? [0, 0, 0] as V3 : at.has(i * 6) ? [0, 1, 2].map((q) => sol.x[at.get(i * 6 + q)!]!) as V3 : null));
-  const turned = g.pieces.map((_, i) => (fixed.has(i) ? [0, 0, 0] as V3 : at.has(i * 6) ? [3, 4, 5].map((q) => sol.x[at.get(i * 6 + q)!]!) as V3 : null));
+  const sol = nf && (live.length || o.dT) ? solveSparseSPD(nf, rows, f, { maxSteps: 40 * nf + 1000 }) : { x: [], converged: true, steps: 0, residual: 0 };
+  const val = (i: number, q: number) => map(i * 6 + q).reduce((s2, [r, a]) => s2 + a * (sol.x[r] ?? 0), 0);
+  const moved = g.pieces.map((_, i) => (seen.has(i) ? [0, 1, 2].map((q) => val(i, q)) as V3 : null));
+  const turned = g.pieces.map((_, i) => (seen.has(i) ? [3, 4, 5].map((q) => val(i, q)) as V3 : null));
   const L = Math.hypot(...load), dir = L > 0 ? load.map((v) => v / L) : [0, 0, 0];
   const give = live.length && L > 0 ? live.reduce((s2, i) => s2 + moved[i]!.reduce((t, v, q) => t + v * dir[q]!, 0), 0) / live.length : null;
   const evidence = ev.length ? weakestOf(...ev.map((e): EvidenceKind => (e === 'handbook' || e === 'specified' || e === 'secondary' ? 'specified' : e === 'derived' ? 'derived' : 'estimated'))) : 'derived';
@@ -464,7 +493,7 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
   // buckling: each beam's geometric stiffness from the axial force it carries (consistent, for bending both ways; its
   // twist's left out), assembled as K is; the least λ with (K + λ K_g) φ = 0 by inverse iteration
   let bucklesAt: number | null = null;
-  if (o.buckling && free.length && live.length) {
+  if (o.buckling && nf && live.length) {
     const kg: [number, number, number][] = [];
     for (const el of elems) {
       if (!moved[el.a] || !moved[el.b]) continue;
@@ -475,9 +504,9 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
       put([2, 4, 8, 10], [[36, -3 * L, -36, -3 * L], [-3 * L, 4 * L * L, 3 * L, -L * L], [-36, 3 * L, 36, 3 * L], [-3 * L, -L * L, 3 * L, 4 * L * L]]);
       const Tm = (r: number, cc: number) => (Math.floor(r / 3) === Math.floor(cc / 3) ? el.R[r % 3]!.getComponent(cc % 3) : 0), dof = (q: number) => (q < 6 ? el.a * 6 + q : el.b * 6 + q - 6);
       const GT = G.map((row) => Array.from({ length: 12 }, (_, cc) => row.reduce((s2, v, k) => s2 + v * Tm(k, cc), 0)));
-      for (let r = 0; r < 12; r++) for (let cc = 0; cc < 12; cc++) { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * GT[k]![cc]!; const R2 = at.get(dof(r)), C2 = at.get(dof(cc)); if (v !== 0 && R2 !== undefined && C2 !== undefined) kg.push([R2, C2, v]); }
+      for (let r = 0; r < 12; r++) for (let cc = 0; cc < 12; cc++) { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * GT[k]![cc]!; if (v !== 0) for (const [R2, a] of map(dof(r))) for (const [C2, b] of map(dof(cc))) kg.push([R2, C2, v * a * b]); }
     }
-    const m = free.length * 6, mulKg = (x: number[]) => { const y = new Array<number>(m).fill(0); for (const [r, cc, v] of kg) y[r]! += v * x[cc]!; return y; };
+    const m = nf, mulKg = (x: number[]) => { const y = new Array<number>(m).fill(0); for (const [r, cc, v] of kg) y[r]! += v * x[cc]!; return y; };
     const mulK = (x: number[]) => { const y = new Array<number>(m).fill(0); for (const [r, cc, v] of rows) y[r]! += v * x[cc]!; return y; };
     let x = sol.x.map((v) => v + 1e-12), lam = NaN;
     for (let it = 0; it < 40; it++) {
