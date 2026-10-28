@@ -321,11 +321,11 @@ export interface Bent {
  * (conjugate gradients). Exact for prismatic bars at their nodes (a cantilever's tip, a bar's stretch); a solid block is a
  * beam too (shear deformation and the block's own spreading left out); contacts never part (bonded). Small movements.
  */
-export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, o: { buckling?: boolean } = {}): Bent {
+export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, o: { buckling?: boolean; /** warmed evenly by, K: each beam would grow α L ΔT; where it is held, that is force */ dT?: number } = {}): Bent {
   const n = g.pieces.length, lacking: string[] = [], ev: Evidence[] = [];
-  const Eof = new Map<string, { E: number; nu: number; y?: number } | null>(), mat = (m: string | null) => {
+  const Eof = new Map<string, { E: number; nu: number; y?: number; alpha?: number } | null>(), mat = (m: string | null) => {
     if (!m) return null;
-    if (!Eof.has(m)) { const mt = matterOf(m), E = mt.props.find((p) => p.key === 'E'), nu = mt.props.find((p) => p.key === 'nu'), sp = mt.span?.E, y = mt.props.find((p) => p.key === 'yield') ?? mt.props.find((p) => p.key === 'ultimate'); Eof.set(m, E ? { E: E.value, nu: nu?.value ?? 0.3, y: y?.value } : sp ? { E: (sp[0] + sp[1]) / 2, nu: 0.3, y: y?.value } : null); if (E) ev.push(E.evidence); else if (sp) ev.push('estimated'); }
+    if (!Eof.has(m)) { const mt = matterOf(m), E = mt.props.find((p) => p.key === 'E'), nu = mt.props.find((p) => p.key === 'nu'), sp = mt.span?.E, y = mt.props.find((p) => p.key === 'yield') ?? mt.props.find((p) => p.key === 'ultimate'), al = mt.props.find((p) => p.key === 'alpha')?.value; Eof.set(m, E ? { E: E.value, nu: nu?.value ?? 0.3, y: y?.value, alpha: al } : sp ? { E: (sp[0] + sp[1]) / 2, nu: 0.3, y: y?.value, alpha: al } : null); if (E) ev.push(E.evidence); else if (sp) ev.push('estimated'); }
     return Eof.get(m)!;
   };
   const props = g.pieces.map((p) => mat(p.mat)), centre = g.pieces.map((p) => p.node.obb!.c);
@@ -338,8 +338,8 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     // (a rectangle's torsion constant, Roark table 10.7: a c³ (1/3 − 0.21 c/a (1 − c⁴ / 12 a⁴)))
     return { A, I1: (b * d ** 3) / 12, I2: (d * b ** 3) / 12, J: a * c ** 3 * (1 / 3 - 0.21 * (c / a) * (1 - c ** 4 / (12 * a ** 4))), u1: o[0], u2: o[1] };
   };
-  const entries: [number, number, number][] = [], elems: { a: number; b: number; K: number[][]; R: THREE.Vector3[]; A: number; Iy: number; Iz: number; J: number; cy: number; cz: number; cj: number; y?: number }[] = [];
-  const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3, c?: { cy: number; cz: number; cj: number; y?: number }) => {
+  const entries: [number, number, number][] = [], elems: { a: number; b: number; K: number[][]; R: THREE.Vector3[]; A: number; Iy: number; Iz: number; J: number; cy: number; cz: number; cj: number; y?: number; th: number }[] = [];
+  const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3, c?: { cy: number; cz: number; cj: number; y?: number; alpha?: number }) => {
     const d = centre[b]!.clone().sub(centre[a]!), L = d.length(); if (!(L > 1e-9)) return;
     const ex = d.clone().multiplyScalar(1 / L); let y = ey ? ey.clone().addScaledVector(ex, -ey.dot(ex)) : new THREE.Vector3();
     if (y.lengthSq() < 1e-12) { y = Math.abs(ex.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0); y.addScaledVector(ex, -y.dot(ex)); }
@@ -352,7 +352,8 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     // to the thing's frame: Kg = Tᵀ K T, T four blocks of the local axes
     const Tm = (r: number, c: number) => (Math.floor(r / 3) === Math.floor(c / 3) ? R[r % 3]!.getComponent(c % 3) : 0);
     const KT = K.map((row) => Array.from({ length: 12 }, (_, c) => row.reduce((s2, v, k) => s2 + v * Tm(k, c), 0)));
-    elems.push({ a, b, K, R, A, Iy, Iz, J, cy: c?.cy ?? Math.sqrt(A / Math.PI), cz: c?.cz ?? Math.sqrt(A / Math.PI), cj: c?.cj ?? Math.sqrt(A / Math.PI), y: c?.y });
+    // (warmed: the force it would push its ends apart with, held, E A α ΔT)
+    elems.push({ a, b, K, R, A, Iy, Iz, J, cy: c?.cy ?? Math.sqrt(A / Math.PI), cz: c?.cz ?? Math.sqrt(A / Math.PI), cj: c?.cj ?? Math.sqrt(A / Math.PI), y: c?.y, th: o.dT && c?.alpha ? E * A * c.alpha * o.dT : 0 });
     const dof = (q: number) => (q < 6 ? a * 6 + q : b * 6 + q - 6);
     for (let r = 0; r < 12; r++) for (let c = 0; c < 12; c++) { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * KT[k]![c]!; if (v !== 0) entries.push([dof(r), dof(c), v]); }
   };
@@ -364,11 +365,11 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
       const o = g.pieces[e.a]!.node.obb!, ax = centre[e.b]!.clone().sub(centre[e.a]!).normalize(), k = o.u.map((u) => Math.abs(u.dot(ax))).reduce((m, v, i, arr) => (v > arr[m]! ? i : m), 0), s = sectionOf(e.a, k);
       // (its outer fibres: half its side across each axis, a cylinder's radius; the twist's shear at its widest)
       const hh = g.pieces[e.a]!.node.obb!.h, cy = hh[s.u1]!, cz = hh[s.u2]!;
-      beam(e.a, e.b, pa.E, pa.E / (2 * (1 + pa.nu)), s.A, s.I1, s.I2, s.J, o.u[s.u1], { cy, cz, cj: Math.max(cy, cz), y: pa.y });
+      beam(e.a, e.b, pa.E, pa.E / (2 * (1 + pa.nu)), s.A, s.I1, s.I2, s.J, o.u[s.u1], { cy, cz, cj: Math.max(cy, cz), y: pa.y, alpha: pa.alpha });
     } else {
       // two pieces bonded through their patch, as a round section of its area; moduli in series
       const E = (2 * pa.E * pb.E) / (pa.E + pb.E), nu = (pa.nu + pb.nu) / 2, A = Math.max(e.area, 1e-12), I = (A * A) / (4 * Math.PI);
-      beam(e.a, e.b, E, E / (2 * (1 + nu)), A, I, I, 2 * I, undefined, { cy: Math.sqrt(A / Math.PI), cz: Math.sqrt(A / Math.PI), cj: Math.sqrt(A / Math.PI), y: pa.y !== undefined && pb.y !== undefined ? Math.min(pa.y, pb.y) : pa.y ?? pb.y });
+      beam(e.a, e.b, E, E / (2 * (1 + nu)), A, I, I, 2 * I, undefined, { cy: Math.sqrt(A / Math.PI), cz: Math.sqrt(A / Math.PI), cj: Math.sqrt(A / Math.PI), y: pa.y !== undefined && pb.y !== undefined ? Math.min(pa.y, pb.y) : pa.y ?? pb.y, alpha: pa.alpha !== undefined && pb.alpha !== undefined ? (pa.alpha + pb.alpha) / 2 : undefined });
     }
   }
   // only what is joined to what is held
@@ -378,8 +379,10 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
   const rows: [number, number, number][] = []; for (const [r, c, v] of entries) { const R2 = at.get(r), C2 = at.get(c); if (R2 !== undefined && C2 !== undefined) rows.push([R2, C2, v]); }
   const live = loaded.filter((i) => at.has(i * 6)), f = new Array<number>(free.length * 6).fill(0);
   for (const i of live) for (let q = 0; q < 3; q++) f[at.get(i * 6 + q)!]! += load[q]! / live.length;
-  if (!live.length) lacking.push('none of the loaded pieces is joined to what holds it');
-  const sol = free.length && live.length ? solveSparseSPD(free.length * 6, rows, f, { maxSteps: 40 * free.length * 6 + 1000 }) : { x: [], converged: true, steps: 0, residual: 0 };
+  // warmed: each beam pushes its ends apart along it with E A α ΔT (what a held bar feels)
+  for (const el of elems) if (el.th) { const ex = el.R[0]!; for (let q = 0; q < 3; q++) { const ra = at.get(el.a * 6 + q), rb = at.get(el.b * 6 + q); if (ra !== undefined) f[ra]! -= el.th * ex.getComponent(q); if (rb !== undefined) f[rb]! += el.th * ex.getComponent(q); } }
+  if (!live.length && !o.dT) lacking.push('none of the loaded pieces is joined to what holds it');
+  const sol = free.length && (live.length || o.dT) ? solveSparseSPD(free.length * 6, rows, f, { maxSteps: 40 * free.length * 6 + 1000 }) : { x: [], converged: true, steps: 0, residual: 0 };
   const moved = g.pieces.map((_, i) => (fixed.has(i) ? [0, 0, 0] as V3 : at.has(i * 6) ? [0, 1, 2].map((q) => sol.x[at.get(i * 6 + q)!]!) as V3 : null));
   const turned = g.pieces.map((_, i) => (fixed.has(i) ? [0, 0, 0] as V3 : at.has(i * 6) ? [3, 4, 5].map((q) => sol.x[at.get(i * 6 + q)!]!) as V3 : null));
   const L = Math.hypot(...load), dir = L > 0 ? load.map((v) => v / L) : [0, 0, 0];
@@ -390,12 +393,13 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
   const u6 = (i: number) => [...(moved[i] ?? [0, 0, 0]), ...(turned[i] ?? [0, 0, 0])];
   const stress = elems.filter((el) => moved[el.a] && moved[el.b]).map((el) => {
     const ug = [...u6(el.a), ...u6(el.b)], ul = ug.map((_, r) => { const blk = Math.floor(r / 3) * 3, ax = el.R[r % 3]!; return ax.x * ug[blk]! + ax.y * ug[blk + 1]! + ax.z * ug[blk + 2]!; });
-    const f = el.K.map((row) => row.reduce((s2, v, k) => s2 + v * ul[k]!, 0)), N = Math.abs(f[0]!), T = Math.abs(f[3]!), My = Math.max(Math.abs(f[4]!), Math.abs(f[10]!)), Mz = Math.max(Math.abs(f[5]!), Math.abs(f[11]!));
+    const f = el.K.map((row) => row.reduce((s2, v, k) => s2 + v * ul[k]!, 0)); f[0]! += el.th; f[6]! -= el.th; const N = Math.abs(f[0]!), T = Math.abs(f[3]!), My = Math.max(Math.abs(f[4]!), Math.abs(f[10]!)), Mz = Math.max(Math.abs(f[5]!), Math.abs(f[11]!));
     const sig = N / el.A + (My * el.cz) / el.Iy + (Mz * el.cy) / el.Iz, tau = (T * el.cj) / el.J, vm = Math.sqrt(sig * sig + 3 * tau * tau);
     return { a: el.a, b: el.b, vm, share: el.y ? vm / el.y : null };
   });
   const worst = stress.filter((x) => x.share !== null).sort((x, y) => y.share! - x.share!)[0];
-  const yieldsAt = worst && worst.share! > 0 ? { load: L / worst.share!, a: worst.a, b: worst.b, share: worst.share! } : null;
+  // (warmed, the stress is not proportional to the push: the share is said as it is, the load at yield left out)
+  const yieldsAt = worst && worst.share! > 0 && !o.dT ? { load: L / worst.share!, a: worst.a, b: worst.b, share: worst.share! } : null;
   if (stress.some((x) => x.share === null)) lacking.push('some pieces have no yield or ultimate strength known: their stress is given, not judged');
   // buckling: each beam's geometric stiffness from the axial force it carries (consistent, for bending both ways; its
   // twist's left out), assembled as K is; the least λ with (K + λ K_g) φ = 0 by inverse iteration
@@ -405,7 +409,7 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     for (const el of elems) {
       if (!moved[el.a] || !moved[el.b]) continue;
       const ug = [...u6(el.a), ...u6(el.b)], ul = ug.map((_, r) => { const blk = Math.floor(r / 3) * 3, ax = el.R[r % 3]!; return ax.x * ug[blk]! + ax.y * ug[blk + 1]! + ax.z * ug[blk + 2]!; });
-      const Nt = el.K[6]!.reduce((s2, v, k) => s2 + v * ul[k]!, 0), L = centre[el.b]!.distanceTo(centre[el.a]!), c = Nt / (30 * L);
+      const Nt = el.K[6]!.reduce((s2, v, k) => s2 + v * ul[k]!, 0) - el.th, L = centre[el.b]!.distanceTo(centre[el.a]!), c = Nt / (30 * L);
       const G = Array.from({ length: 12 }, () => new Array<number>(12).fill(0)), put = (idx: number[], m: number[][]) => { for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) G[idx[r]!]![idx[q]!]! += c * m[r]![q]!; };
       put([1, 5, 7, 11], [[36, 3 * L, -36, 3 * L], [3 * L, 4 * L * L, -3 * L, -L * L], [-36, -3 * L, 36, -3 * L], [3 * L, -L * L, -3 * L, 4 * L * L]]);
       put([2, 4, 8, 10], [[36, -3 * L, -36, -3 * L], [-3 * L, 4 * L * L, 3 * L, -L * L], [-36, 3 * L, 36, 3 * L], [-3 * L, -L * L, 3 * L, 4 * L * L]]);

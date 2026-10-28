@@ -474,7 +474,6 @@ export const BUILT: Record<string, string> = {
   "part.family":"2026-10-26T12:29:11.000Z",
   "pass":"2026-10-27T08:19:24.000Z",
   "path.loop":"2026-10-26T14:10:44.000Z",
-  "path.properties":"2026-10-28T14:20:58.000Z",
   "pc.board":"2026-10-26T17:22:21.000Z",
   "pc.desktop":"2026-10-26T17:22:21.000Z",
   "pick":"2026-10-26T13:27:56.000Z",

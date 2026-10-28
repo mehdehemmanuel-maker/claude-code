@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 557 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 556 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Evidence
 
@@ -11,16 +11,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 81 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 295 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 294 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 40 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 71 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 516 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
+Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 515 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 457 of 557 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 457 of 556 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -166,11 +166,10 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. *derived, tested here*
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what … *derived, tested here, before the update*
 
-## 5 · Check (20)
+## 5 · Check (19)
 
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
-- **Along a path through it** (`path.properties`): Pieces of a thing named in order, one after another along an axis, in series: from what each is made of, the path's resistance to heat (L / k A), to current (L / σ A), its stiffness under an axial force (from L / E … *derived, tested here*
 - **Approved** (`gauntlet.approved`): What has come through the gauntlet so far (read from its verdicts), and what was turned back and why *derived, tested here, before the update*
 - **Balance (what is conserved)** (`check.balance`): What goes in against what comes out and what is kept, of one thing that is conserved (energy, mass, momentum along one axis, charge): every wire into In and into Out summed in one unit, and the imbalance; said on the … *derived, tested here*
 - **Candidates** (`gauntlet.candidates`): What is put through the gauntlet: blocks of the library (all, of a kind or a field, or made by you), or entries of the inventory (under a path, or yours), or named ones. *given, tested here, before the update*

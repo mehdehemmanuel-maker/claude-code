@@ -208,7 +208,7 @@ known gaps are there too.
 | Laws (terms, kinds, nodes, solving, chains) | `nexus/book/`, `lawBlocks` in `blocks.ts`, `lawgraph.ts` |
 | Numeric methods (roots, integrals, slopes, ODEs, linear systems) | `nexus/numeric.ts` |
 | Materials and everything known of them | `nexus/matter.ts` (data: `mass.ts`, `elements.ts`, `data/materials.ts`, `periodic.ts`, `woods.ts`, `mixes.ts`) |
-| What a thing is made of; mass, centre, inertia, heat capacity; growth, strength, bending and buckling along a path | `nexus/madeof.ts` |
+| What a thing is made of; mass, centre, inertia, heat capacity | `nexus/madeof.ts` |
 | Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
 | The one test (every domain), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
@@ -218,7 +218,7 @@ known gaps are there too.
 | Only what the app reaches is kept | the reach check in `tests/nexus/domains.test.ts` |
 | Things placed, never copied; frames; fit in; take apart | `nexus/assembly.ts` |
 | Layout, contacts, contact patches of a placed tree | `nexus/make/space.ts` |
-| The contact graph of any thing (what touches what, from the geometry; each distinct thing once); what flows through it (steps C to F) | `nexus/graph.ts` (node `graph`) |
+| The contact graph of any thing (what touches what, from the geometry; each distinct thing once); what flows through it, how it bends, buckles and grows when warmed (steps C to F) | `nexus/graph.ts` (nodes `graph`, `flow`, `bend`) |
 | Rules: interference, clearance, heat gate | `nexus/make/rules.ts` |
 | Critic, detail, conditions, the make pipeline | `nexus/make/` (`critic.ts`, `detail.ts`, `conditions.ts`, `pipeline.ts`) |
 | Mating by faces, ports, round faces, bores | `nexus/mate.ts` |

@@ -694,3 +694,11 @@ yield (else its ultimate), and the push at which the first yields, with where; a
 figures, in 31 ms; pulled, it does not buckle. Both are the node's own tests. Found on the rods board: 200 N sideways
 puts the annealed copper rod past its yield (it yields at 184 N), so the board pushes 100 N and says so. With this, the
 engine does all `path.properties` did but growth when warmed and the mismatch between neighbours (thermal loads, next).
+
+**F, thermal loads, and I: `path.properties` retired.** The frame takes an even warming: each element pushed by its
+fixed-end force E A α ΔT, the stress said net of it. Checked exactly: the 1 m steel bar left free grows α × 0.9375 m ×
+50 K to the last digit, unstressed; held at both ends it is pushed by E α ΔT = 117.875 MPa, to the last digit (the
+`bend` node's own test). `bend` takes "Warmed evenly by, K" and holds "the lowest and the highest pieces" together. On
+the rods board, warmed 50 K, copper and aluminium grow apart under the steel block, and the board says how hard that
+pulls. With that, `path.properties` (pieces named in order along an axis) does nothing the engine does not, from the
+geometry: it is gone, its id now opens `bend`, and its code (`alongPath`, `END_K`) is deleted from `madeof.ts`.

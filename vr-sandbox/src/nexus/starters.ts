@@ -267,13 +267,12 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.table', 0, 0, {}, 'els'); b.nodes.els!.label = 'By element'; wire(b, 'made', 'elements', 'els', 'rows');
     placeBlock(b, 'mass.properties', 0, 0, {}, 'mp'); wire(b, 'all', 'assembly', 'mp', 'thing');
     placeBlock(b, 'view.show', 0, 0, {}, 'mps'); b.nodes.mps!.label = 'Its mass, centre and inertia'; wire(b, 'mp', 'says', 'mps', 'value');
-    placeBlock(b, 'path.properties', 0, 0, { path: 'copper rod + aluminium rod, steel block', axis: 'y', dT: 50, ends: 'fixed at one end, free at the other' }, 'path'); wire(b, 'all', 'assembly', 'path', 'thing');
-    placeBlock(b, 'view.show', 0, 0, {}, 'paths'); b.nodes.paths!.label = 'As a path: heat, current, force, warmed 50 K'; wire(b, 'path', 'says', 'paths', 'value');
-    placeBlock(b, 'view.table', 0, 0, {}, 'pieces'); b.nodes.pieces!.label = 'Each piece on the path'; wire(b, 'path', 'pieces', 'pieces', 'rows');
     placeBlock(b, 'graph', 0, 0, {}, 'touch'); wire(b, 'all', 'assembly', 'touch', 'thing');
     placeBlock(b, 'flow', 0, 0, { what: 'heat', from: 'steel block', to: 'the lowest pieces', drive: 50 }, 'heat'); b.nodes.heat!.label = 'Heat from the block down the rods, 50 K across'; wire(b, 'all', 'assembly', 'heat', 'thing');
     placeBlock(b, 'view.table', 0, 0, {}, 'temps'); b.nodes.temps!.label = 'Each piece\'s temperature'; wire(b, 'heat', 'pieces', 'temps', 'rows');
     placeBlock(b, 'bend', 0, 0, { load: 100, dir: '+x', at: 'steel block', held: 'the lowest pieces' }, 'bent'); b.nodes.bent!.label = 'Pushed sideways at the block, 100 N (the copper rod yields at 184)'; wire(b, 'all', 'assembly', 'bent', 'thing');
+    placeBlock(b, 'bend', 0, 0, { load: 0, warmed: 50, held: 'the lowest pieces', at: 'steel block' }, 'warm'); b.nodes.warm!.label = 'Warmed 50 K: copper and aluminium grow apart under the block'; wire(b, 'all', 'assembly', 'warm', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'warmsays'); b.nodes.warmsays!.label = 'What warming does'; wire(b, 'warm', 'says', 'warmsays', 'value');
     placeBlock(b, 'place', 0, 0, { x: -0.15 }, 'aside2'); wire(b, 'bent', 'seen', 'aside2', 'thing');
     placeBlock(b, 'space.show', 0, 0, {}, 'bentshow'); b.nodes.bentshow!.label = 'Seen bent: movements exaggerated, red moves most'; wire(b, 'aside2', 'placed', 'bentshow', 'thing');
     placeBlock(b, 'place', 0, 0, { x: 0.15 }, 'aside'); b.nodes.aside!.label = 'Beside it'; wire(b, 'heat', 'seen', 'aside', 'thing');
