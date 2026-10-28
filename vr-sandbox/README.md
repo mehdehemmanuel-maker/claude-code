@@ -22,6 +22,8 @@ Build the pages with `npx vite build --config vite.view.config.ts --logLevel err
 - `src/nexus/blocks.ts`: every node, on its shelf by stage; `docs/NODES.md` is that catalogue written out.
 - `src/nexus/dataflow.ts`: a board of nodes run, only what changed run again.
 - `src/nexus/starters.ts`: the starter boards.
+- `src/nexus/navigate.ts`: everything found and shown where it is needed: every library by its type and what reaches
+  it, one search through all of it, what goes with each node, what a board may be missing (`docs/ATLAS.md`).
 - the rest of `src/nexus`, `src/data`, `src/engineering`, `src/ganglia`: what the nodes are made of, each owner in the
   table in `CLAUDE.md`.
 

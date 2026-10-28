@@ -238,7 +238,7 @@ Tables and rows, research, the gauntlet, money, operations.
 - **Rules over rows** (`rows.recode`): Each value in some columns changed by the first rule that finds it: "what it is / what is there: what it becomes", * for anything ("hall/outside: door; */outside: window; *: wall").
 - **Running total** (`list.running`): Each item added to all before it, from a start: a balance from its ins and outs
 - **Search the web (Wikidata)** (`search.web`): What Wikidata says a thing has as its parts and is made from: its entity found by its words, its "has part(s)" and "made from material" read, its address the source.
-- **Search what is known** (`search.library`): Words looked for through the library's blocks, the inventory's entries and the researched references: each match with where it is and what it says
+- **Search what is known** (`search.library`): Words looked for through everything (src/nexus/navigate.ts): every node, law, seed and starter board, every product, part, material, body, reference and program, and the catalogue's sizes, the best first: each match …
 - **Sentence** (`text.format`): Words with values filled in: "{a} costs {b}"
 - **Set a column** (`rows.set`): Every row given the same value in a column: each room of a house painted its wall colour, each house of a street its roof
 - **Sort** (`list.sort`): A list from least to most, or most to least

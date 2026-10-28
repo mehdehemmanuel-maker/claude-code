@@ -86,7 +86,7 @@ Each affordance is read from geometry, mass, joints and material, against the ac
 
 ## 6. Senses and awareness: who notices what
 
-- **Senses:** an observer is the senses it has (`perceive.ts`): eyes with a field of view, acuity and a direction, ears, skin, nose.
+- **Senses:** an observer is the senses it has (`aware/sense.ts`): eyes with a field of view, acuity and a direction, ears, skin, nose.
 - **Awareness:** what reaches its senses. A spatial hash holds every signature by its reach. A sense asks only the cells its own reach covers (T7).
 - **Line of sight:** sight is blocked by what is between, using the same raycasts the heat model uses for shielding.
 - **Attention:** what is noticed is ranked by salience: how strong it is over its threshold, how new it is, and whether it matters to what the agent is doing. Only the top few are attended.
@@ -97,7 +97,7 @@ Each affordance is read from geometry, mass, joints and material, against the ac
 - **Intent:** a goal (walk the dog, drive to work, get a drink), broken into tasks by what the world affords: to go out, open the door; to open it, reach the handle, grasp it, pull.
 - **Planning:** over affordances and places, with the routing search from step 4 for the way, and the placement maps for where to stand.
 - **Motion:** each task is driven by motion primitives (reach, grasp, step, sit, turn a wheel), kinematic where nothing touches and physical where something does (T3).
-- **Bodies:** people as `person.ts` builds them; animals as `creatures.ts` (gait by the Froude number); vehicles as `machines.ts`.
+- **Bodies:** people as `act/body.ts` draws them from their measured segments; animals as `creatures.ts` (gait by the Froude number); vehicles as `machines.ts`.
 - **A dog on a lead:** two agents joined by a rope. Each follows its own goal, and the lead's tension pulls them together.
 
 ## 8. Running logic: from transistors to programs
@@ -170,9 +170,26 @@ One step at a time, each shown with pictures before the next.
 | 3 | `agent`, `goal`: a door | A person sees a door, walks to it, grasps the handle, pulls; the door swings on its hinge in the physics |
 | 4 | `cell.characterise`, `netlist`, `logic.run` | The 6502's transistors, characterised, running a real program; its fast model checked against switch level; the clock rate measured |
 | 5 | `engine.run`, `drive` | Any engine run from its numbers, its torque through any gearbox to the road, what it can do driving whatever follows a path |
-| 6 | A dog walked | Two agents and a lead: a person walking a dog down a street, both sensing and reacting |
-| 7 | Scale | A city block: hundreds of agents, cars, doors; behaviour stand-ins; many clocks; sleep; the frame budget measured |
+| 6 | A mate with force, a goal to any thing, any body from its table | Three universal nodes (below), shown first on two agents joined by a line, each sensing the other; nothing in them knows what a dog, a lead or a street is |
+| 7 | Scale | Any board's agents, machines and clocks at the size of a city block: behaviour stand-ins, sleep, the frame budget measured |
 | 8 | 36 million | A large netlist run on the GPU, bit-parallel, with its rate measured and said against real time |
+
+### Steps 6 to 8, made universal
+
+The user, before step 6: "pause ask how does this node update your about to do apply to various other things and then
+update the plan don't make anything too specific too the subject … ask yourself what already exists". Step 6 was "a
+dog walked"; that is one subject, not a node. What it needs, asked node by node:
+
+| Wanted for | What already exists | The universal node | What else it is for |
+| --- | --- | --- | --- |
+| A lead between two bodies | `relate` holds a distance in a range, `proximity` keeps it by moving what can move; `sim.ts` joins bodies with hinges and slides in Jolt | **A mate with force**: `relate`'s distance (or any measure) held in the physics too, as Jolt's distance constraint with a spring and a breaking load, between any two bodies, each end on a frame (`frame`, `findFrame`); not a new kind of mating, the same mate given a force | a tow rope or a towbar (its least and most the same), a chain hoist, a crane's cable, a hose to its tap, a charger's lead, a door's check strap, a mooring line, a bungee (a spring), a safety line |
+| The dog going where its owner goes | `goal` (open a door) and `agent` (see by rays, route, reach, grasp); `follow` keeps cars on a path with gaps | **A goal to any thing**: `goal` given verbs over what things afford (go to, stay near, keep away, open, grasp, sit), its target any thing found by name, frame or what it affords; "stay near" is a mate held by the agent's own motion rather than by the solver | a person to a door, a car to a parking space, a drone keeping station on another, a forklift to a pallet, a camera on its subject, a crowd keeping its spacing, a robot arm to a part |
+| A dog's body | `body` draws a person from de Leva's segments (`life/segments.ts`); `creatures.ts` gives gaits by size | **Any body from its segment table**: the body node takes a table of segments (length, mass share, centre of mass, inertia) by species, each table sourced, de Leva's the first; a body with no sourced table is said to be a scaled stand-in | a person of any size, a child, a dog, a horse, a robot's links from its datasheet, a mannequin, a crash dummy |
+| Each noticing the other | `sense` says who notices what by sight, sound, warmth and gas | Nothing new: `sense` wired into `goal` (what an agent notices becomes what its goal can choose) | a driver seeing a light change, a person hearing a car behind, an alarm reading gas |
+
+Each of these is a node that already exists, given one more input or measure: no node for a dog, a lead or a walk.
+Navigation (`src/nexus/navigate.ts`) shows each where it is needed: a board that puts zones or mates on and keeps
+none is told so, and each node lists what goes after it.
 
 Step 1 result:
 - **Speed:** every identified part of the Corolla (6,636) is read in about 1 s; a house of 263 things in 30 ms.
@@ -303,7 +320,7 @@ After step 3, asked for (`placement/proximity.ts`, `act/body.ts`, `life/segments
   - **Not yet:**
     - A body's trunk and head are boxes and a capsule, not its skin. `anatomy.ts` has the skin as a field, not yet drawn here.
     - A muscle's bulge is not modelled.
-    - The body is not yet in the physics as it acts (`person.ts` has bodies on Jolt; the agent does not use them yet).
+    - The body is not yet in the physics as it acts (its segments carry their masses and inertias; nothing yet puts them on Jolt).
 
 Step 4 result (`src/nexus/logic/`: `netlist.ts`, `switch.ts`, `cells.ts`, `cpu6502.ts`, `asm6502.ts`, `chip6502.ts`, `programs.ts`; nodes `netlist`, `cell.characterise`, `logic.run`; board "The 6502 from its transistors"):
 - **The netlist:**
@@ -384,17 +401,19 @@ Step 5 result (`src/nexus/power/`: `cycle.ts`, `drive.ts`; nodes `engine.run`, `
 
 | Concern | Where |
 | --- | --- |
-| Senses as physics (carrier, band, threshold, window, latency) | `perceive.ts` |
-| People as physical bodies, senses as numbers | `person.ts` |
+| What things give off and afford; gases; who notices what | `aware/` (`tags.ts`, `gas.ts`, `sense.ts`) |
+| A body from its measured segments; posed | `act/body.ts`, `life/segments.ts` |
+| An agent with a goal: see, route, reach, grasp | `act/agent.ts` |
 | Animals moving at their size's gait | `creatures.ts` |
 | Rigid bodies, hinges, slides, motors; rolling wheels | `sim.ts`, `machines.ts` (`rollingOf`) |
 | Servos, motion | `motion.ts` |
-| Robots with batteries and rules | `fleet.ts` |
-| Transistors, cells, dies, a PC | `computer.ts` |
-| Engines from their parts; loads on them | `engines.ts`, `loads.ts` |
+| Mates as numbers, held by one solver | `placement/relate.ts`, `placement/proximity.ts` |
+| Transistors, cells, dies, a PC; a netlist run | `computer.ts`, `logic/` |
+| Engines from their parts; run from their numbers; on the road | `engines.ts`, `loads.ts`, `power/` |
 | Paths, stop lines, the clock | `blocks.ts` (Follow a path, the Clock), `dataflow.ts` |
 | Routing search; placement maps | `placement/line.ts`, `placement/fields.ts` |
 | Stand-ins, culling, a frame governor | `view/space3d.ts` |
+| Everything, found and shown where it is needed | `navigate.ts` |
 
 ## The library, navigable
 
@@ -408,3 +427,23 @@ The user: "go through and optimize sort nodes so that you don't get lost in your
 - **The inspector shows each node's stage.**
 - **`docs/NODES.md`** is the whole catalogue written out from the library, one line a node. A test fails when it falls out of date, and another when two nodes share a name.
 - **Field, Ability and Kind** remain as other ways in.
+
+**Everything, reachable (2026-10-28).** The user: "sort everything every node ever node flow every type of flow every
+library every library type … even when you didn't know you needed it the navigation showed you that you need it".
+First, what was not the node setup was deleted (183 source files and their tests; `CLAUDE.md` has the rule and the
+reach test enforces it), so nothing stale is sorted in with what is current. Then `src/nexus/navigate.ts`:
+
+- **Every library by its type** (nodes, flows, products, parts, matter, bodies, knowledge), how much it holds, and what
+  reaches it: a node whose setting chooses among its entries (found from the choices themselves), or whose code names
+  it (read from `blocks.ts` by the test). One library no node reaches is named: the standard faces.
+- **How each node's work flows**: worked once, with the clock, played by the clock, many at once, to a fixed point, on
+  an event, from outside, shown.
+- **One search through everything** (the library's search box, and the node Search what is known): each thing found
+  with the node that uses it, set to it, or the board to open.
+- **What goes with a node** (the inspector's Goes with): what the flows already wire after and before it, then what
+  takes what it gives, each pressed to put it on the board wired; the boards that use it.
+- **What a board may be missing** (the board's suggestions): things it places itself and never checks, zones or mates
+  put on and never kept, what plays with time and no clock, numbers worked out and never shown, each with the nodes
+  that would give it. A board's field is read from its nodes, no longer filed by hand.
+- **`docs/ATLAS.md`**: all of it written out, kept current by `tests/nexus/navigate.test.ts`.
+

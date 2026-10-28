@@ -618,7 +618,8 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'place', 0, 0, { y: 0.011 }, 'armsUp'); wire(b, 'arms', 'ring', 'armsUp', 'thing');
     placeBlock(b, 'combine', 0, 0, { name: 'drone' }, 'drone'); wire(b, 'frame', 'part', 'drone', 'things'); wire(b, 'armsUp', 'placed', 'drone', 'things');
     placeBlock(b, 'array', 0, 0, { pattern: 'grid', nx: 10, nz: 10, sx: 1, sz: 1 }, 'swarm'); b.nodes.swarm!.label = 'Swarm'; wire(b, 'drone', 'assembly', 'swarm', 'thing');
-    placeBlock(b, 'place', 0, 0, { y: 45 }, 'swarmUp'); wire(b, 'swarm', 'grid', 'swarmUp', 'thing');
+    // (flown clear of the tallest tower: 30 m, varied by up to 60 %, so 48 m; at 45 m the clash check below found the swarm in a tower)
+    placeBlock(b, 'place', 0, 0, { y: 55 }, 'swarmUp'); wire(b, 'swarm', 'grid', 'swarmUp', 'thing');
     placeBlock(b, 'shape.box', 0, 0, { name: 'tower', mat: 'concrete', color: '#90a4ae', finish: 'concrete', w: 20, h: 30, d: 20 }, 'tower'); b.nodes.tower!.label = 'Tower';
     placeBlock(b, 'place', 0, 0, { y: 15 }, 'towerUp'); wire(b, 'tower', 'part', 'towerUp', 'thing');
     placeBlock(b, 'array', 0, 0, { pattern: 'grid', nx: 4, nz: 4, sx: 30, sz: 30, vary: 0.6, seed: 7 }, 'block'); b.nodes.block!.label = 'City block'; wire(b, 'towerUp', 'placed', 'block', 'thing');
@@ -626,6 +627,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'combine', 0, 0, { name: 'city and swarm' }, 'all'); wire(b, 'city', 'grid', 'all', 'things'); wire(b, 'swarmUp', 'placed', 'all', 'things');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
+    placeBlock(b, 'clash', 0, 0, { depth: 1 }, 'clash'); wire(b, 'all', 'assembly', 'clash', 'thing');
     // the motor and the drone folded into nodes of their own: open them to change them, save them to use anywhere
     let r = collapse(b, ['bell', 'prop', 'propUp', 'motor'], 'Motor', 'gMotor'); tidy(r.board.nodes.gMotor!.inner!);
     r = collapse(r.board, ['gMotor', 'frame', 'arms', 'armsUp', 'drone'], 'Drone', 'gDrone'); tidy(r.board.nodes.gDrone!.inner!);
@@ -728,6 +730,3 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
   ] as [string, Make][]);
   return boards.map(([n, f]) => [n, () => tidy(f())] as [string, Make]);
 }
-
-/** Each starter board's field, for the library's Boards (by the start of its name). */
-export const BOARD_FIELD: [string, string][] = [['Power as nodes', 'vehicles'], ['The 6502 from its transistors', 'electronics'], ['Doorways kept clear', 'structural'], ['A body from its measured', 'everyday'], ['An agent opens', 'everyday'], ['Who notices what', 'everyday'], ['What things give off', 'everyday'], ['Lines: one section', 'mechanical'], ['The autopilot on', 'mechanical'], ['A battery placed', 'mechanical'], ['Fields over', 'mechanical'], ['A battery built', 'electrical'], ['An engine from', 'mechanical'], ['Research to', 'mechanical'], ['The gauntlet', 'software'], ['A computer down', 'electrical'], ['A car down', 'vehicles'], ['A truck from', 'vehicles'], ['An electric car', 'energy'], ['Physics', 'mechanical'], ['Motion', 'mechanical'], ['A house', 'structural'], ['A world without end', 'structural'], ['Traffic', 'vehicles'], ['Mating', 'mechanical'], ['Clear away', 'energy'], ['Seeds, one of each', 'everyday'], ['Ground', 'energy'], ['Streets', 'vehicles'], ['A neighbourhood', 'structural'], ['A city from a few nodes', 'aerospace'], ['Parts in 3D', 'mechanical'], ['Cantilever', 'structural'], ['Bolt', 'mechanical'], ['Business', 'finance'], ['Electrical', 'electrical']];

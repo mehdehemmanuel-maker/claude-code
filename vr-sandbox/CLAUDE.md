@@ -174,6 +174,12 @@ the task list and lose the why. So the why lives here, and every round is checke
   manual", "think outside the box … think about the pinnacle of it" (2026-10-27: hours had gone into hand-typed positions
   for single parts; the plan is `docs/PLACEMENT.md`: parts say what they need, a solver places, routes, sizes and explains,
   nothing placed by hand; each step shown to the user before the next)
+- "sort everything every node ever node flow every type of flow every library every library type just organize
+  everything make it so easy to navigate and use that it puts shame to other structures … how well everything can be
+  reached and seen when needed even when you didn't know you needed it the navigation showed you that you need it", and
+  before it "how does this node … apply to various other things … don't make anything too specific too the subject …
+  ask yourself what already exists" (2026-10-28: `navigate.ts`; steps 6 to 8 of `docs/LIFE.md` made universal: a mate
+  with force, a goal to any thing, any body from its segment table, sense wired into goal)
 - "be careful with the library if there's a library of something that wasn't created from the node setup then it's
   outdated and not to be merged with this like old builds before nodes need to be deleted anything taken up space that
   is outdated needs to be permanently terminated and deleted" (2026-10-28: every file no page of the node app reaches
@@ -227,6 +233,9 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/kits.ts`, checked in `src/nexus/make/critic.ts` |
 | A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
 | Blocks: what a node on a board of blocks can be (typed ports with units, settings, tests, sources), the library of them by stage (`STAGES`, `stageOf`: read from what a node is, never filed by hand; the catalogue `docs/NODES.md` written from it and kept current by `tests/nexus/shelves.test.ts`), field, ability and kind (every law a calculator), a duplicate refused; blocks merged into one that does more kept as adapters (`ALIASES`), boards moved on by `rewire` in `dataflow.ts` | `src/nexus/blocks.ts` |
+| Navigation: every library by its type and what reaches it (found from nodes' setting choices, or named in their code), how each node's work flows, one search through everything with the node that uses each thing, what goes after and before a node, what a board may be missing, a board's field read from its nodes; `docs/ATLAS.md` written from it and kept current by `tests/nexus/navigate.test.ts` | `src/nexus/navigate.ts` (`navigate-named.ts` generated) |
+| The starter boards, pure, read without a page | `src/nexus/starters.ts` |
+| Only the node setup is kept: every source file reached from the app | `tests/nexus/reach.test.ts` |
 | A board of blocks run: keys and a shared cache so only what changed runs, lists mapped, units converted on wires, groups folded, opened and saved as blocks, branches cut, dead blocks, twins and repeated wiring found | `src/nexus/dataflow.ts` (plan and status: `docs/NODE-ENGINE.md`) |
 | The board of blocks: the coloured canvas, library (its Boards first: the starter boards and yours, by field), inspector-calculator, suggestions; the board's clock (played, it ticks only what reads it) | `src/nexus/view/nodes.ts` (on the dashboard; hosted in the space as `wall`) |
 | The dashboard, the app's front door (`view/index.html`): the board with the library, a docked 3D view (entered to fill the page, or on to the space), the clock under it, the run log, results and metrics, variations of the chosen node; every panel read from the board as it runs | `src/nexus/view/dashboard.ts` |

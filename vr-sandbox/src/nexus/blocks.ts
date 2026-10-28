@@ -63,7 +63,7 @@ import { exploded, fitIn, partOf } from './assembly';
 import { chainPath, chainRun, coated, coil, enclosure, wound, sensor, SENSES, type SensorBody, type SensorElement, fastener, type FastenerSpec, type HeadShape, fillCells, gridPlate, intoCells, stackOf, strapsOver, toothed, turned, woundRoll, wrapped } from './makers';
 import { compileNotes, feedLinesOf, fidelityOf, gapOf, mergeReferences, REFERENCE_NOTES, referenceOf, referenceTree, webParts, type Reference, type WebParts } from './research';
 import { allVerdicts, approveProposals, candidatesOf, deleteThing, eventsSince, GATES, proposalsAll, researchLoop, runGauntlet, sortUnknowns, tasksNow, unknownQueue, unknownsUnder, webResolver, wordsOf, type EventKind, type GateId, type Lib } from './gauntlet';
-import { feed, findItem, INVENTORY, itemOf, treeLines } from './inventory';
+import { feed, findItem, itemOf, treeLines } from './inventory';
 import { judge } from './breakdown';
 import { FITS, HEAD_PIECES, conRod, crankshaft, cylinderBlock, cylinderHead, engineBuilt, engineDims, headPiece, pistonAssembly, type EngineSpec, type HeadPiece } from './engines';
 /** A head's piece's port: its name run together ("intake valve" → intakeValve). */
@@ -88,12 +88,12 @@ export const KINDS: Record<Kind, { name: string; hue: string; mark: string }> = 
   generator: { name: 'Generator', hue: '#66bb6a', mark: '✚' }, critic: { name: 'Critic', hue: '#ff7043', mark: '✓' },
   view: { name: 'Viewer', hue: '#00e5ff', mark: '◉' }, group: { name: 'Group', hue: '#90a4ae', mark: '▣' },
   note: { name: 'Note', hue: '#fff59d', mark: '✎' }, agent: { name: 'Agent', hue: '#e040fb', mark: '☺' },
-  bridge: { name: 'Bridge', hue: '#8d6e63', mark: '⇄' }, meta: { name: 'Meta', hue: '#bdbdbd', mark: '⌘' },
+  bridge: { name: 'Bridge', hue: '#8d6e63', mark: '⇄' }, meta: { name: 'Meta', hue: '#bdbdbd', mark: '⌘' }
 };
 export const ABILITIES: Record<Ability, string> = {
   measure: 'Measure and enter', convert: 'Convert', calculate: 'Calculate', solve: 'Solve backwards', optimise: 'Optimise',
   simulate: 'Simulate', generate: 'Generate', check: 'Check', decide: 'Compare and decide', store: 'Store', show: 'Show',
-  transform: 'Transform', ask: 'Ask', act: 'Act', connect: 'Connect',
+  transform: 'Transform', ask: 'Ask', act: 'Act', connect: 'Connect'
 };
 /** The fields a block serves. A block may serve several (a unit converter serves them all, and says "everyday"). */
 export const DOMAINS: { id: string; name: string }[] = [
@@ -227,7 +227,7 @@ const READABLE: Record<string, [string, number][]> = {
   J: [['MJ', 1e6], ['kJ', 1e3], ['J', 1], ['mJ', 1e-3]], kg: [['t', 1e3], ['kg', 1], ['g', 1e-3], ['mg', 1e-6]],
   s: [['h', 3600], ['min', 60], ['s', 1], ['ms', 1e-3], ['µs', 1e-6]], A: [['kA', 1e3], ['A', 1], ['mA', 1e-3], ['µA', 1e-6]],
   V: [['kV', 1e3], ['V', 1], ['mV', 1e-3]], ohm: [['MΩ', 1e6], ['kΩ', 1e3], ['Ω', 1], ['mΩ', 1e-3]], Hz: [['GHz', 1e9], ['MHz', 1e6], ['kHz', 1e3], ['Hz', 1]],
-  'N m': [['kN m', 1e3], ['N m', 1], ['N mm', 1e-3]], 'm^2': [['m²', 1], ['cm²', 1e-4], ['mm²', 1e-6]], 'm^3': [['m³', 1], ['cm³', 1e-6], ['mm³', 1e-9]], 'm^4': [['m⁴', 1], ['cm⁴', 1e-8], ['mm⁴', 1e-12]],
+  'N m': [['kN m', 1e3], ['N m', 1], ['N mm', 1e-3]], 'm^2': [['m²', 1], ['cm²', 1e-4], ['mm²', 1e-6]], 'm^3': [['m³', 1], ['cm³', 1e-6], ['mm³', 1e-9]], 'm^4': [['m⁴', 1], ['cm⁴', 1e-8], ['mm⁴', 1e-12]]
 };
 
 /** A quantity as typed: "200 mm", "3/4 in", "1.5", "25 kN": to SI in the unit asked for, or a reason it cannot be. */
@@ -673,7 +673,7 @@ export function lawBlocks(): BlockDef[] {
       // (where the law has no real answer for what is put in (a root of a negative, a ratio of nothing), it says so)
       if (Number.isNaN(r.value)) throw new Error(`${law.name} has no real answer for ${Object.entries(v).map(([k, x]) => `${k} = ${x}`).join(', ')}${law.valid ? `: it holds where ${law.valid}` : ''}`);
       return { [law.output.sym]: r.value, caution: r.caution ?? '' }; },
-    tests: [{ inputs: law.example.inputs, outputs: { [law.output.sym]: law.example.output }, rel: law.example.rel ?? 1e-6 }],
+    tests: [{ inputs: law.example.inputs, outputs: { [law.output.sym]: law.example.output }, rel: law.example.rel ?? 1e-6 }]
   }));
 }
 
@@ -709,7 +709,7 @@ const shapeBlock = (id: string, name: string, says: string, inputs: PortDef[], m
   settings: [{ key: 'name', label: 'Name', type: 'text', default: name.toLowerCase() }, ...look],
   ports: { inputs: [...inputs, ...lookIn()], outputs: [P('part', 'part'), N('mass', 'kg')] },
   run: (i, c) => { const v = Object.fromEntries(inputs.filter((q) => i[q.name] !== undefined || q.default !== undefined).map((q) => [q.name, Number(i[q.name] ?? q.default)])); for (const [k, x] of Object.entries(v)) if (!(x >= 0) || !Number.isFinite(x)) throw new Error(`${k} must be a size, not ${x}`); const p = shapePart(name.toLowerCase(), make(v), lookOf(i, c.set)); return { part: p, mass: massOf(p) }; },
-  tests: [{ set: { mat: 'steel-low' }, inputs: test.inputs, outputs: { mass: test.mass }, rel: 1e-9 }],
+  tests: [{ set: { mat: 'steel-low' }, inputs: test.inputs, outputs: { mass: test.mass }, rel: 1e-9 }]
 });
 /** Points typed as "x, y; x, y; …" in millimetres. */
 function points(t: unknown): [number, number][] {
@@ -798,7 +798,7 @@ export const PLANS: Record<string, string> = {
   studio: 'living 5x4, bathroom 2.4x4 / kitchen 7.4x2.6',
   '1 bed': 'bedroom 3.6x3.6, bathroom 2.4x3.6 / kitchen 3x3.4, living 3x3.4',
   '2 bed': 'bedroom 3.6x3.6, bathroom 2.4x3.6, bedroom 3.2x3.6 / kitchen 3.4x3.6, living 5.8x3.6',
-  '3 bed': 'bedroom 3.6x3.6, bathroom 2.4x3.6, bedroom 3.2x3.6, bedroom 3.2x3.6 / kitchen 4x4, living 5.2x4, bathroom 3.2x4',
+  '3 bed': 'bedroom 3.6x3.6, bathroom 2.4x3.6, bedroom 3.2x3.6, bedroom 3.2x3.6 / kitchen 4x4, living 5.2x4, bathroom 3.2x4'
 };
 const BUILT_THINGS: BlockDef[] = [
   shapeBlock('box', 'Box', 'A block: width (x), height (y), depth (z)', [L('w', 0.1, 'width'), L('h', 0.1, 'height'), L('d', 0.1, 'depth')], (v) => ({ box: [v.w!, v.h!, v.d!] }), { inputs: { w: 0.1, h: 0.1, d: 0.1 }, mass: 7.85 }),
@@ -1850,11 +1850,11 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [P('ids', 'list<text>', { optional: true, label: 'these proposals (else every sourced one)' }), P('after', 'any', { optional: true, label: 'after this ran' })], outputs: [N('added'), P('refused', 'list<text>'), P('says', 'text')] },
     run: (i) => { const r = approveProposals(['drawn', 'web'], i.ids === undefined ? undefined : asList(i.ids).map(String)); return { added: r.added, refused: r.refused, says: `${r.added} entered${r.refused.length ? `; ${r.refused.length} refused: ${r.refused[0]}` : ''}` }; },
     tests: [{ inputs: { ids: [] }, outputs: { added: 0, refused: [] } }] }),
-  def({ id: 'search.library', name: 'Search what is known', kind: 'card', ability: 'store', pure: false, domains: ['software', 'everyday', 'manufacturing'], says: 'Words looked for through the library\'s blocks, the inventory\'s entries and the researched references: each match with where it is and what it says',
+  def({ id: 'search.library', name: 'Search what is known', kind: 'card', ability: 'store', pure: false, domains: ['software', 'everyday', 'manufacturing'], says: 'Words looked for through everything (src/nexus/navigate.ts): every node, law, seed and starter board, every product, part, material, body, reference and program, and the catalogue\'s sizes, the best first: each match with its library, what it says and the node that uses it',
     settings: [{ key: 'q', label: 'Look for', type: 'text', default: 'sensor' }, { key: 'most', label: 'At most', type: 'number', default: 30 }],
     ports: { inputs: [P('q', 'text', { optional: true })], outputs: [P('rows', 'table'), N('count')] },
-    run: (i, c) => { const q = String(i.q ?? c.set.q ?? '').toLowerCase().trim(); if (!q) throw new Error('give it words to look for'); const ws = q.split(/\s+/), hit = (t: string) => ws.every((w) => t.toLowerCase().includes(w)), most = Number(c.set.most ?? 30);
-      const rows = [...[...LIBRARY.values()].filter((b) => hit(`${b.id} ${b.name} ${b.says}`)).map((b) => ({ where: 'block', id: b.id, name: b.name, says: b.says.slice(0, 120) })), ...[...INVENTORY.values()].filter((x) => hit(`${x.id} ${x.name} ${x.says}`)).map((x) => ({ where: 'inventory', id: x.id, name: x.name, says: x.says.slice(0, 120) })), ...Object.keys(REFERENCE_NOTES).flatMap((rid) => (referenceOf(rid)?.reference.entries ?? []).filter((e) => hit(`${e.id} ${e.name} ${e.says}`)).map((e) => ({ where: `reference ${rid}`, id: e.id, name: e.name, says: e.says.slice(0, 120) })))].slice(0, most);
+    run: async (i, c) => { const q = String(i.q ?? c.set.q ?? '').trim(); if (!q) throw new Error('give it words to look for'); const { search } = await import('./navigate');
+      const rows = search(q, Number(c.set.most ?? 30)).map((f) => ({ where: f.libraryName, id: f.id, name: f.name, says: f.says.slice(0, 120), use: f.add ? f.add.block : f.board ? 'open the board' : '' }));
       return { rows, count: rows.length }; },
     tests: [{ inputs: { q: 'zz no such words anywhere' }, outputs: { count: 0, rows: [] } }] }),
   def({ id: 'search.web', name: 'Search the web (Wikidata)', kind: 'card', ability: 'ask', pure: false, domains: ['everyday', 'mechanical', 'manufacturing'], says: 'What Wikidata says a thing has as its parts and is made from: its entity found by its words, its "has part(s)" and "made from material" read, its address the source. A real request; where the page cannot reach the web it says so and gives nothing',
@@ -1932,7 +1932,7 @@ export const ALIASES: Record<string, { to: string; set?: Record<string, unknown>
   'read.item': { to: 'read', set: { kind: 'item', id: 'engine-ice' } },
   'gauntlet.gate': { to: 'gauntlet.run', set: { gates: 'documented' }, keys: { gate: 'gates' }, ports: { approved: 'passed', rejected: 'failed' } },
   'unknown.sort': { to: 'unknown.queue', ports: { only: 'ids', clusterCount: 'count', count: 'unknownCount' } },
-  'research.ref': { to: 'research.notes', set: { from: 'm20a-fks' }, keys: { which: 'from' } },
+  'research.ref': { to: 'research.notes', set: { from: 'm20a-fks' }, keys: { which: 'from' } }
 };
 /** An old id's settings as the kept block takes them. */
 export function aliasSet(id: string, set: Record<string, unknown> = {}): Record<string, unknown> {

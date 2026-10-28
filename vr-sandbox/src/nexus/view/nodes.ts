@@ -13,7 +13,8 @@ import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf,
 import { isAssembly, partOf } from '../assembly';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
 import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
-import { BOARD_FIELD, starterBoards } from '../starters';
+import { starterBoards } from '../starters';
+import { LIBRARY_TYPES, allLibraries, fieldOf, needsOf, nextFor, reachText, search, useOf, type Found } from '../navigate';
 import { fullScreen, shot } from './nodes3d';
 import '../seeds';
 import type { Part } from '../kits';
@@ -416,13 +417,19 @@ new ResizeObserver(() => draw()).observe(cv);
 
 // ---- doing things ---------------------------------------------------------------------------------------------------
 let placeAt: [number, number] | null = null, pendingWire: { from: string; out: string } | null = null;
-function addBlock(blockId: string, x?: number, y?: number): void {
-  const [cx, cy] = toWorld(cv.clientWidth / 2, cv.clientHeight / 2), at = x !== undefined ? [x, y!] : placeAt ?? [cx - W / 2 + (Math.random() - 0.5) * 60, cy - 60 + (Math.random() - 0.5) * 60];
-  placeAt = null; const id = uid('n'), pw = pendingWire; pendingWire = null;
+/** A block put on the board (set so, where given), and wired after or before one already there where their ports fit
+ *  (what navigation offers: "goes after", "goes before", an entry of a library its node uses). */
+function addBlock(blockId: string, x?: number, y?: number, opts: { set?: Record<string, unknown>; after?: string; before?: string } = {}): void {
+  const [cx, cy] = toWorld(cv.clientWidth / 2, cv.clientHeight / 2), by = opts.after ?? opts.before, near = by ? cur().nodes[by] : undefined;
+  const at = x !== undefined ? [x, y!] : near ? [(near.x ?? 0) + (opts.after ? W + 90 : -(W + 90)), near.y ?? 0] : placeAt ?? [cx - W / 2 + (Math.random() - 0.5) * 60, cy - 60 + (Math.random() - 0.5) * 60];
+  placeAt = null; const id = uid('n'), pw = pendingWire; pendingWire = null; let wired = !by;
   edit((b) => {
-    placeBlock(b, blockId, Math.round(at[0]!), Math.round(at[1]!), {}, id);
-    if (pw) { const e = new Engine(b), inp = portsFor(id).inputs.find((q) => e.canWire(pw.from, pw.out, id, q.name).ok); if (inp) wire(b, pw.from, pw.out, id, inp.name); }
+    placeBlock(b, blockId, Math.round(at[0]!), Math.round(at[1]!), opts.set ?? {}, id);
+    const e = new Engine(b), fit = (from: string, to: string) => { for (const o of portsFor(from).outputs) for (const q of portsFor(to).inputs) if (e.canWire(from, o.name, to, q.name).ok) { wire(b, from, o.name, to, q.name); return true; } return false; };
+    if (pw) { const inp = portsFor(id).inputs.find((q) => e.canWire(pw.from, pw.out, id, q.name).ok); if (inp) wire(b, pw.from, pw.out, id, inp.name); }
+    if (opts.after) wired = fit(opts.after, id); else if (opts.before) wired = fit(id, opts.before);
   });
+  if (!wired) toast('placed beside it: no port of one takes what the other gives as they are set', true);
   sel.clear(); sel.add(id); renderInspector(true); draw();
 }
 function removeSelected(): void {
@@ -490,13 +497,29 @@ function geoOf(b: Board, id: string): number { const n = b.nodes[id]!, d = block
 function toast(s: string, bad = false): void { if (!PAGE) { wall.said?.(s, bad); return; } const t = document.getElementById('toast')!; t.textContent = s; t.className = bad ? 'bad' : ''; t.style.display = 'block'; clearTimeout((toast as unknown as { t: number }).t); (toast as unknown as { t: number }).t = window.setTimeout(() => (t.style.display = 'none'), 3200); }
 
 // ---- the library ------------------------------------------------------------------------------------------------------
-let libBy: 'stage' | 'domain' | 'ability' | 'kind' = 'stage';
+let libBy: 'stage' | 'domain' | 'ability' | 'kind' | 'library' = 'stage';
 function renderLibrary(): void {
   if (!PAGE) return;
   const q = (document.getElementById('libQ') as HTMLInputElement).value, el = document.getElementById('shelves')!;
   el.innerHTML = '';
+  // words looked for through everything first: every library's entries, each with the node that uses it, set to it
+  if (q.trim()) {
+    const found = search(q, 40);
+    if (found.length) {
+      const d = document.createElement('details'); d.className = 'shelf'; d.open = true;
+      d.innerHTML = `<summary>Everything <span>${found.length}${found.length === 40 ? '+' : ''}</span></summary>`;
+      let last = '';
+      for (const f of found) {
+        if (f.libraryName !== last) { last = f.libraryName; const h = document.createElement('div'); h.className = 'sub'; h.textContent = f.libraryName; d.appendChild(h); }
+        d.appendChild(foundRow(f));
+      }
+      el.appendChild(d);
+    }
+  }
+  if (libBy === 'library') return renderLibraries(el, q);
   // boards come first: whole pipelines to start from (the starter boards, and those you saved), by field, as blocks are
-  const boards = allBoards().filter((x) => !q || x.title.toLowerCase().includes(q.toLowerCase()));
+  // (searching, the boards found are under Everything)
+  const boards = q.trim() ? [] : allBoards();
   if (boards.length) {
     const d = document.createElement('details'); d.className = 'shelf'; d.open = !!q;
     d.innerHTML = `<summary>Boards <span>${boards.length}</span></summary>`;
@@ -531,6 +554,39 @@ function renderLibrary(): void {
     el.appendChild(d);
   }
 }
+/** One thing found: pressed, its node is put on the board set to it, or its board opened; what it is and what uses it said. */
+function foundRow(f: Found): HTMLElement {
+  const r = document.createElement('div'); r.className = 'blk';
+  const how = f.add ? `put a ${LIBRARY.get(f.add.block)?.name ?? f.add.block} on the board${f.add.set ? ', set to it' : ''}` : f.board ? 'open this board' : 'known; no node uses it yet';
+  r.title = `${f.says}\n${how}`;
+  r.innerHTML = `<span class="chip" style="background:${f.board ? '#18ffff' : f.add ? '#69f0ae' : '#455a64'}">${f.board ? '▦' : f.add ? '+' : '·'}</span><span class="n">${esc(f.name)}</span>${f.add || f.board ? '' : '<span class="t" style="color:#90a4ae">no node</span>'}`;
+  r.onclick = () => {
+    if (f.board) { const x = allBoards().find((y) => y.title === f.board); if (x) { pushUndo(); useBoard(x.make()); save(); fit(); runSoon(); renderAll(); } return; }
+    if (f.add) { addBlock(f.add.block, undefined, undefined, { set: f.add.set }); document.getElementById('lib')!.classList.remove('open'); }
+    else toast(`${f.name}: in ${f.libraryName}, and no node uses it yet`);
+  };
+  return r;
+}
+/** Every library by its type: how much it holds, what reaches it, and (opened) its entries. */
+function renderLibraries(el: HTMLElement, q: string): void {
+  const libs = allLibraries();
+  for (const t of LIBRARY_TYPES) {
+    const ls = libs.filter((l) => l.type === t.id); if (!ls.length) continue;
+    const h = document.createElement('div'); h.className = 'sub'; h.style.cssText = 'padding-top:10px'; h.textContent = t.name; el.appendChild(h);
+    for (const l of ls) {
+      const d = document.createElement('details'); d.className = 'shelf';
+      d.innerHTML = `<summary>${esc(l.name)} <span>${l.count.toLocaleString('en-US')}</span></summary><div class="sub" style="text-transform:none;letter-spacing:0;opacity:.75">${esc(l.says)}. Reached by ${esc(reachText(l).replace(/[`*]/g, ''))}</div>`;
+      d.ontoggle = () => {
+        if (!d.open || d.dataset.filled) return; d.dataset.filled = '1';
+        const rows = search(q.trim() || l.name, 200).filter((f) => f.library === l.id), more = l.entries().filter((e) => !rows.some((f) => f.id === e.id)).slice(0, Math.max(0, 120 - rows.length));
+        for (const f of rows) d.appendChild(foundRow(f));
+        for (const e of more) d.appendChild(foundRow({ ...e, libraryName: l.name, score: 0, ...useOf(l, e) }));
+        if (l.count > rows.length + more.length) { const m = document.createElement('div'); m.className = 'sub'; m.textContent = `and ${(l.count - rows.length - more.length).toLocaleString('en-US')} more: search for them`; d.appendChild(m); }
+      };
+      el.appendChild(d);
+    }
+  }
+}
 if (PAGE) document.getElementById('libQ')!.addEventListener('input', renderLibrary);
 for (const t of document.querySelectorAll<HTMLButtonElement>('#libTop .tabs button')) t.onclick = () => { libBy = t.dataset.by as typeof libBy; for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === t); renderLibrary(); };
 
@@ -549,12 +605,12 @@ function renderInspector(full: boolean): void {
   boardInspector(el);
 }
 function boardInspector(el: HTMLElement): void {
-  const b = cur(), n = nodesOf(b).filter((x) => b.nodes[x.id]!.block || b.nodes[x.id]!.inner).length, sg = (suggestions ??= suggest(b, curEngine()));
+  const b = cur(), n = nodesOf(b).filter((x) => b.nodes[x.id]!.block || b.nodes[x.id]!.inner).length, sg = (suggestions ??= suggest(b, curEngine())), needs = needsOf(b);
   el.innerHTML = `<div class="ititle"><input id="iTitle" value="${esc(b.title ?? '')}" /></div>
     <p class="says">${n} block${n === 1 ? '' : 's'} · last change: ${lastReport.ran} block${lastReport.ran === 1 ? '' : 's'} ran, ${lastReport.cached} reused (nothing they read changed)${lastReport.failed ? `, ${lastReport.failed} failed` : ''}${lastReport.waiting ? `, ${lastReport.waiting} waiting` : ''}, in ${lastReport.ms.toFixed(1)} ms</p>
-    <h3>Suggestions</h3><div id="iSug">${sg.length ? '' : '<p class="says">Nothing: no dead branches, no twins, no repeated wiring.</p>'}</div>
+    <h3>Suggestions</h3><div id="iSug">${sg.length || needs.length ? '' : '<p class="says">Nothing: no dead branches, no twins, no repeated wiring, and nothing its work leaves out.</p>'}</div>
     <h3>Start from</h3><div id="iDemos"></div>
-    <h3>This board</h3><div class="row"><label>Its field</label><select id="iField">${DOMAINS.map((d) => `<option value="${d.id}" ${d.id === (savedBoards().find((x) => x.title === b.title)?.field ?? 'everyday') ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div><div class="btns"><button id="iKeep" class="hot">Save to the library's Boards</button><button id="iExport">Export JSON</button><button id="iImport">Import JSON</button><button id="iTidy">Tidy</button><button id="iFresh">Run all afresh</button><button id="iClear">Clear</button></div>
+    <h3>This board</h3><div class="row"><label>Its field</label><select id="iField">${DOMAINS.map((d) => `<option value="${d.id}" ${d.id === (savedBoards().find((x) => x.title === b.title)?.field ?? fieldOf(b)) ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div><div class="btns"><button id="iKeep" class="hot">Save to the library's Boards</button><button id="iExport">Export JSON</button><button id="iImport">Import JSON</button><button id="iTidy">Tidy</button><button id="iFresh">Run all afresh</button><button id="iClear">Clear</button></div>
     <h3>How</h3><div class="kbd"><b>Drag</b> from an output to an input to wire · <b>drag</b> an input's wire off to move it · <b>double-click</b> empty space to add, a group to open · <b>shift-drag</b> to choose many · <b>Ctrl G</b> fold into a group · <b>Del</b> delete · <b>Ctrl Z</b> undo · <b>F</b> fit · <b>Ctrl K</b> commands · a list wired into one value runs the block once for each item</div>`;
   (document.getElementById('iTitle') as HTMLInputElement).onchange = (e) => edit((x) => { x.title = (e.target as HTMLInputElement).value; });
   const s = document.getElementById('iSug')!;
@@ -566,6 +622,12 @@ function boardInspector(el: HTMLElement): void {
     if (x.kind === 'pattern') { const m = document.createElement('button'); m.textContent = 'Fold one'; m.onclick = () => { sel.clear(); for (const id of x.nodes.slice(0, x.size ?? 2)) sel.add(id); group(); }; d.appendChild(m); }
     s.appendChild(d);
   }
+  // (what its work may be missing, read from the stages its nodes reach: each with the nodes that would give it)
+  for (const x of needs) {
+    const d = document.createElement('div'); d.className = 'sug need'; d.innerHTML = `<span>It may be missing: ${esc(x.why)}</span>`;
+    for (const nid of x.nodes.filter((y) => LIBRARY.has(y)).slice(0, 3)) { const bt = document.createElement('button'); bt.textContent = `+ ${LIBRARY.get(nid)!.name}`; bt.onclick = () => addBlock(nid, undefined, undefined, x.at ?? {}); d.appendChild(bt); }
+    s.appendChild(d);
+  }
   const dm = document.getElementById('iDemos')!;
   for (const [name, fn] of DEMOS) { const bt = document.createElement('button'); bt.className = 'demo'; bt.textContent = name; bt.onclick = () => { pushUndo(); useBoard(fn()); sel.clear(); save(); fit(); runSoon(); renderAll(); }; dm.appendChild(bt); }
   document.getElementById('iExport')!.onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(root, null, 1)], { type: 'application/json' })); a.download = `${(root.title || 'board').replace(/[^\w-]+/g, '-')}.json`; a.click(); };
@@ -574,6 +636,21 @@ function boardInspector(el: HTMLElement): void {
   document.getElementById('iKeep')!.onclick = () => { keepBoard((document.getElementById('iField') as HTMLSelectElement).value); renderLibrary(); toast(`"${root.title || 'My board'}" is in the library, under Boards`); };
   document.getElementById('iFresh')!.onclick = async () => { await engine.fresh(); runSoon(); };
   document.getElementById('iClear')!.onclick = () => { pushUndo(); useBoard(emptyBoard('My pipeline')); save(); runSoon(); renderAll(); };
+}
+/** What could go after a node and before it (the flows' own wiring first, then what takes what it gives), and the boards
+ *  that use it: each pressed to put it on the board wired to this one, or to open the board. */
+function goesWith(el: HTMLElement, id: string, blockId: string): void {
+  const g = nextFor(blockId, 6);
+  const list = (title: string, xs: { id: string; name: string; why: string }[], dir: 'after' | 'before') => {
+    if (!xs.length) return;
+    const h = document.createElement('div'); h.className = 'src'; h.textContent = title; el.appendChild(h);
+    for (const x of xs) { const b = document.createElement('button'); b.className = 'demo'; b.title = x.why; b.innerHTML = `${dir === 'after' ? '→ ' : '← '}${esc(x.name)} <span style="opacity:.6">· ${esc(x.why)}</span>`; b.onclick = () => addBlock(x.id, undefined, undefined, { [dir]: id }); el.appendChild(b); }
+  };
+  list('After it', g.after, 'after'); list('Before it', g.before, 'before');
+  if (g.usedIn.length) {
+    const h = document.createElement('div'); h.className = 'src'; h.textContent = `Used in ${g.usedIn.length} starter board${g.usedIn.length > 1 ? 's' : ''}`; el.appendChild(h);
+    for (const t of g.usedIn.slice(0, 4)) { const b = document.createElement('button'); b.className = 'demo'; b.textContent = `▦ ${t}`; b.onclick = () => { const x = allBoards().find((y) => y.title === t); if (x) { pushUndo(); useBoard(x.make()); save(); fit(); runSoon(); renderAll(); } }; el.appendChild(b); }
+  } else { const h = document.createElement('div'); h.className = 'src'; h.textContent = 'No starter board uses it yet'; el.appendChild(h); }
 }
 function outsHtml(id: string): string {
   const s = stateOf(id), p = portsFor(id);
@@ -612,7 +689,9 @@ function nodeInspector(el: HTMLElement, id: string): void {
     <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}${n.block === 'view.3d' || n.block === 'card.part' ? '<button id="i3d" class="hot">⤢ See it in 3D, full screen</button>' : ''}${n.block === 'card.part' ? `<a href="./look.html?kit=part&words=${encodeURIComponent(String(stateOf(id)?.out?.name ? (n.set?.what ?? '') : ''))}" target="_blank"><button>Open in the part viewer</button></a>` : ''}<button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
     <p class="src">${d ? `${esc(STAGES.find((x) => x.id === stageOf(d))?.name ?? '')} · ` : ''}${esc(KINDS[k].name)} · ${esc(ABILITIES[d?.ability ?? 'transform'])} · ${esc((d?.domains ?? []).map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x).join(', '))}${d ? ` · v${d.version} · ${esc(d.by)}` : ''}${d?.tests?.length ? ` · ${d.tests.length} test${d.tests.length > 1 ? 's' : ''}` : ' · draft: no tests yet'}</p>
     ${d?.sources?.length ? `<p class="src">From: ${d.sources.map((s) => esc(s.cite)).join('; ')}</p>` : ''}
-    <div id="iTestOut"></div>`;
+    <div id="iTestOut"></div>
+    ${d && !n.inner ? '<h3>Goes with</h3><div id="iNext"></div>' : ''}`;
+  if (d && !n.inner) goesWith(document.getElementById('iNext')!, id, d.id);
   (document.getElementById('iLabel') as HTMLInputElement).onchange = (e) => { const v = (e.target as HTMLInputElement).value; edit((b) => { b.nodes[id]!.label = v; }); draw(); };
   for (const s of d?.settings ?? []) {
     const f = document.getElementById(`s_${s.key}`) as HTMLInputElement | null; if (!f) continue;
@@ -716,8 +795,9 @@ function renderAll(): void { renderCrumbs(); renderLibrary(); renderInspector(tr
 type Make = () => Board;
 const DEMOS: [string, Make][] = starterBoards(tidy);
 
+const fieldKept: Record<string, string> = {};
 function allBoards(): { title: string; field: string; mine: boolean; make: () => Board }[] {
-  const starters = DEMOS.map(([title, make]) => ({ title, field: BOARD_FIELD.find(([k]) => title.startsWith(k))?.[1] ?? 'everyday', mine: false, make }));
+  const starters = DEMOS.map(([title, make]) => ({ title, field: (fieldKept[title] ??= fieldOf(make())), mine: false, make }));
   const mine = savedBoards().map((x) => ({ title: x.title, field: x.field, mine: true, make: () => JSON.parse(JSON.stringify(x.board)) as Board }));
   return [...mine, ...starters];
 }

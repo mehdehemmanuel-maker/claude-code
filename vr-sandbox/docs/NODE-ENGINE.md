@@ -455,7 +455,7 @@ Shared abilities, so every kind above gets them without writing them again:
 **Know itself**
 - Ports with types and units, a description, an example, its domain of validity (where the answer holds), its
   sources, its version and its author (you, Claude, or the engine).
-- Its own tests: inputs with known outputs that it must reproduce, as `calltest.ts` already does for calls.
+- Its own tests: inputs with known outputs that it must reproduce.
 - Its cost: how long a run takes and how much memory and money it uses.
 
 **Explain itself**
@@ -542,7 +542,7 @@ Every block is tagged on three axes, so it can be found any of these ways:
 - Aerospace: lift, drag, propulsion, structures, flight
 - Chemical and process: reactions, mass balance, separation
 - Energy and environment: generation, storage, emissions, efficiency
-- Biomedical and life: the creature laws in `abilities.ts`, ergonomics
+- Biomedical and life: the creature laws (`creatures.ts`), ergonomics
 - Software and data: parsing, transforms, statistics, ML, APIs
 - Math: algebra, calculus, linear algebra, optimisation, statistics, geometry
 - Business and finance: money, cash flow, budgets, pricing, loans, tax, payroll, inventory, the board room
@@ -618,7 +618,7 @@ Five layers. Every number is published with the code that produced it. The machi
 container, and Quest numbers only ever come from a Quest.
 
 **1. Correctness**
-- Every block runs its own tests on every gate (as `calltest.ts` does now).
+- Every block runs its own tests on every gate.
 - Every law is checked for consistent units (as `units.ts` does now).
 - The runner is checked against a plain reference runner on random graphs: same outputs, every time.
 
