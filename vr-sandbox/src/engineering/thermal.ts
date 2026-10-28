@@ -73,7 +73,9 @@ const BY_ID: Record<string, ThermalProps> = {
 };
 
 /** Wood at 12% moisture: Wood Handbook ch. 4 (FPL-GTR-282), from the wood's specific gravity. */
-function woodThermal(G: number): ThermalProps {
+/** A wood's specific heat and conductivity across the grain from its specific gravity, at 12 % moisture (Wood Handbook,
+ *  eqs. 4-7, 4-11 to 4-13). */
+export function woodThermal(G: number): ThermalProps {
   const mc = 12;
   // conductivity across the grain, eq. 4-7: k = G (B + C MC) + A
   const k = G * (0.1941 + 0.004064 * mc) + 0.01864;

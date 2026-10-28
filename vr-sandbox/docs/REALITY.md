@@ -603,3 +603,15 @@ Also: the one test made quicker (a law's back-solve bracketed: 8.4 s to 1.0 s; t
 fail removed); `UPDATE_DOCS=quick` writes the dates and the catalogue in seconds.
 Still to do in step C: the contact patch for round pieces meeting side on, and step D (each edge's figure through the
 law book, so its ± and evidence come with it).
+
+**Step D, done for heat and current (2026-10-28).** Each half of each contact is now worked by the book's own law, not
+private arithmetic: Fourier's (`conduction`) for heat, a wire's resistance (`wire.resistance`) for current, run through
+the law engine; a half the law refuses carries nothing and is said. The answer rests on the weakest evidence of the
+material figures it used (said on the node and carried on its wires, the engine now taking a node's evidence and ± from
+what it worked out), and a material known only by its family takes the middle of its family's span with the span as a
+uniform ± (span / √12), carried to the resistance by solving again with each such material moved. Found and fixed on the
+way: no wood had a thermal conductivity, though `thermal.ts` held the Wood Handbook's relations from specific gravity;
+every species now has its k (across the grain, along it 1.5 to 2.8 times) and specific heat, derived. Checked: plain
+"wood" cubes give 130.4 K/W ± 8.4 (the span's middle, 0.153 W/m K, by hand 0.2 / (0.1534 × 0.01)), estimated; copper's
+answer unchanged and exact. Concrete still carries nothing: the mixes have no conductivity (to come with step 6's
+remainder).

@@ -14,7 +14,7 @@
 import { DENSITY } from './mass';
 import { MATERIALS as COMPOSITION, elementsOf, makeup, makeupSays, pureElement } from './elements';
 import { MATERIALS as HANDBOOK, type Material } from '../data/materials';
-import { thermalOf } from '../engineering/thermal';
+import { thermalOf, woodThermal } from '../engineering/thermal';
 import { FUSION } from '../engineering/fusion';
 import { PERIODIC, PERIODIC_SOURCE } from '../data/periodic';
 import { WOODS, woodDensity } from '../data/woods';
@@ -177,6 +177,8 @@ export function matterOf(id: string): Matter {
     }
   }
   const w = WOODS[id];
+  // (a species' heat from its specific gravity by the Wood Handbook's own relations: across the grain, at 12 % moisture)
+  if (w) { const t = woodThermal(w.G12); props.push({ key: 'c', name: 'specific heat', value: t.c, unit: 'J/kg K', source: `${t.source}; from its specific gravity ${w.G12}`, evidence: 'derived' }, { key: 'k', name: 'thermal conductivity (across the grain)', value: t.k, unit: 'W/m K', source: `${t.source}; from its specific gravity ${w.G12}`, evidence: 'derived', note: 'across the grain; along it 1.5 to 2.8 times as much (Wood Handbook ch. 4)' }); }
   if (w) props.push({ key: 'E', name: 'modulus of elasticity (bending, along the grain)', value: w.MOE, unit: 'Pa', source: w.source, evidence: 'handbook', note: 'small clear specimens: lumber of a grade is less' }, { key: 'ultimate', name: 'modulus of rupture (bending, along the grain)', value: w.MOR, unit: 'Pa', source: w.source, evidence: 'handbook', note: 'small clear specimens: lumber of a grade is less' });
   const el = pureElement(id);
   if (el && PERIODIC[el]?.melt) props.push({ key: 'melts', name: 'melting point', value: PERIODIC[el]!.melt!, unit: 'K', source: `${PERIODIC[el]!.name}: ${PERIODIC_SOURCE}`, evidence: 'secondary' });

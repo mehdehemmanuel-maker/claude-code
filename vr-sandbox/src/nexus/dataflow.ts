@@ -10,7 +10,7 @@
 // into. What a node did, how long it took and how often it failed is kept, for the person and for the engine's own
 // suggestions: what is dead, what is the same twice, what wiring repeats and could be one block.
 
-import { evidenceOf, nonphysical, rankOf, weakestOf, type EvidenceKind, type NodeEvidence } from './evidence';
+import { EVIDENCE, evidenceOf, nonphysical, rankOf, weakestOf, type EvidenceKind, type NodeEvidence } from './evidence';
 import { ALIASES, aliasSet, block, clockOf, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
 import { fromSI, sameDim, toSI } from '../ganglia/units';
@@ -306,7 +306,11 @@ export class Engine {
   /** What a node's result rests on: the weakest of its own evidence and what is wired into it, and the nodes that set
    *  it; and what in it cannot be physical. */
   private judge(id: string, b: BlockDef, out: Outputs): Pick<NodeState, 'evidence' | 'warnings' | 'extrapolated'> {
-    const own = evidenceKept.get(b) ?? evidenceKept.set(b, evidenceOf(b)).get(b)!;
+    const own0 = evidenceKept.get(b) ?? evidenceKept.set(b, evidenceOf(b)).get(b)!;
+    // (a node may say from what it just worked out that it rests on weaker figures than it is by kind: a flow through
+    // materials known only by their family)
+    const said = typeof out._evidence === 'string' && (EVIDENCE as readonly string[]).includes(out._evidence) ? (out._evidence as EvidenceKind) : null;
+    const own = said ? { ...own0, kind: weakestOf(own0.kind, said) } : own0;
     const ins = this.wiresInto(id).map((w) => ({ from: w.from, e: this.state.get(w.from)?.evidence })).filter((x): x is { from: string; e: { kind: EvidenceKind; from: string[] } } => !!x.e);
     const kind = weakestOf(own.kind, ...ins.map((x) => x.e.kind));
     const from = rankOf(own.kind) >= rankOf(kind) ? [id] : [...new Set(ins.filter((x) => x.e.kind === kind).flatMap((x) => x.e.from))];
@@ -325,7 +329,7 @@ export class Engine {
    *  same inputs and nothing else (pure), else said as not carried. */
   private async spreadOf(id: string, b: BlockDef, inputs: Record<string, unknown>, set: Record<string, unknown>, out: Outputs, spreadIn: Map<string, { input: string; at?: number; du: number }[]>, ports: Ports): Promise<Pick<NodeState, 'uncertainty' | 'uncertaintyLost'>> {
     const u2: Record<string, number> = {};
-    let own: Record<string, number> = {}; try { own = b.spread?.(set) ?? {}; } catch { /* a ± that cannot be read is no spread; the node says so when it runs */ }
+    let own: Record<string, number> = {}; try { own = b.spread?.(set, out) ?? {}; } catch { /* a ± that cannot be read is no spread; the node says so when it runs */ }
     for (const [k, v] of Object.entries(own)) if (v > 0 && typeof out[k] === 'number') u2[k] = v * v;
     let lost: string | undefined;
     if (spreadIn.size) {

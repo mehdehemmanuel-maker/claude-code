@@ -13,6 +13,11 @@ import { contacts, layout, patchIn, type Node, type OBB } from './make/space';
 import type { Part } from './kits';
 import { matterOf } from './matter';
 import { solveSparseSPD } from './numeric';
+import { apply } from './law';
+import { lawById } from './book';
+import { setting } from './lawgraph';
+import { weakestOf, type EvidenceKind } from './evidence';
+import type { Evidence } from './matter';
 
 type V3 = [number, number, number];
 /** A piece of the thing: a part with a shape, where it is. */
@@ -119,6 +124,11 @@ export interface Flow {
   level: (number | null)[]; through: number[];
   /** The worst balance at any piece between the ends (Kirchhoff: what comes in goes out), as a share of the flow. */
   imbalance: number; converged: boolean; steps: number;
+  /** The resistance's standard uncertainty (K/W or Ω) from what the materials are known only as (a family's span, taken
+   *  as uniform over it: span / √12, the GUM's type B), and which materials gave it; null where none is known. */
+  resistanceU: number | null; uncertainFrom: string[];
+  /** The weakest evidence of any material figure it rests on, and the laws each half of each contact is worked by. */
+  evidence: EvidenceKind; laws: string[];
   /** Pieces carrying none of it: their material's figure not known, or touching nothing that leads to the ends. */
   lacking: string[]; floating: number;
 }
@@ -134,15 +144,36 @@ export interface Flow {
  */
 export function flowOver(g: Graph, kind: 'heat' | 'current', from: number[], to: number[], o: { contact?: number } = {}): Flow {
   const key = kind === 'heat' ? 'k' : 'conductivity', n = g.pieces.length, lacking: string[] = [];
-  const kOf = new Map<string, number | null>(), prop = (m: string | null) => { if (!m) return null; if (!kOf.has(m)) kOf.set(m, matterOf(m).props.find((p) => p.key === key)?.value ?? null); return kOf.get(m)!; };
-  const k = g.pieces.map((p) => prop(p.mat));
-  const noK = g.pieces.filter((_, i) => k[i] === null || !(k[i]! > 0)); if (noK.length) lacking.push(`${noK.length} piece${noK.length > 1 ? 's' : ''} with no ${kind === 'heat' ? 'thermal' : 'electrical'} conductivity known, carrying none (${[...new Set(noK.map((p) => p.mat ?? 'no material'))].slice(0, 6).join(', ')})`);
+  const known = new Map<string, { v: number; ev: Evidence; span?: [number, number] } | null>(), prop = (m: string | null) => {
+    if (!m) return null;
+    if (!known.has(m)) {
+      // (its own figure; else, known only by its family, the middle of the span its family's members here cover, as an
+      // estimate, with that span as its ±)
+      const mt = matterOf(m), p = mt.props.find((x) => x.key === key), sp = mt.span?.[key];
+      known.set(m, p && p.value > 0 ? { v: p.value, ev: p.evidence, ...(sp ? { span: sp } : {}) } : sp && sp[0] > 0 ? { v: (sp[0] + sp[1]) / 2, ev: 'estimated', span: sp } : null);
+    }
+    return known.get(m)!;
+  };
+  const k0 = g.pieces.map((p) => prop(p.mat));
+  const noK = g.pieces.filter((_, i) => !k0[i]); if (noK.length) lacking.push(`${noK.length} piece${noK.length > 1 ? 's' : ''} with no ${kind === 'heat' ? 'thermal' : 'electrical'} conductivity known, carrying none (${[...new Set(noK.map((p) => p.mat ?? 'no material'))].slice(0, 6).join(', ')})`);
   const mid = g.pieces.map((p) => p.node.box!.getCenter(new THREE.Vector3()));
-  const G = g.edges.map((e) => {
+  // each half by the book's own law: Fourier's (heat through a thickness L of conductivity k over an area A, per kelvin)
+  // or a wire's resistance (resistivity times length over section); a half the law refuses carries nothing, said
+  const law = lawById(kind === 'heat' ? 'conduction' : 'wire.resistance'), refused: string[] = [];
+  const half = (kv: number, A: number, L: number): number => {
+    const d = kind === 'heat'
+      ? apply(law, { k: setting('conductivity', kv, 'W/m K', 'its material'), A: setting('area', A, 'm^2', 'the patch'), dT: setting('temperature difference', 1, 'K', 'per kelvin'), L: setting('thickness', L, 'm', 'middle to patch') })
+      : apply(law, { rho: setting('resistivity', 1 / kv, 'ohm m', 'its material'), L: setting('length', L, 'm', 'middle to patch'), A: setting('section', A, 'm^2', 'the patch') });
+    if (d.value === null) { refused.push(d.refusal?.domain ?? 'no value'); return 0; }
+    return kind === 'heat' ? d.value : 1 / d.value;
+  };
+  const conductances = (k: (number | null)[]) => g.edges.map((e) => {
     const ka = k[e.a], kb = k[e.b]; if (!ka || !kb || !(e.area > 0)) return 0;
-    const at = new THREE.Vector3(...e.at), da = Math.max(mid[e.a]!.distanceTo(at), 1e-5), db = Math.max(mid[e.b]!.distanceTo(at), 1e-5);
-    return 1 / (da / (ka * e.area) + db / (kb * e.area) + (o.contact ? 1 / (o.contact * e.area) : 0));
+    const at = new THREE.Vector3(...e.at), ga = half(ka, e.area, Math.max(mid[e.a]!.distanceTo(at), 1e-5)), gb = half(kb, e.area, Math.max(mid[e.b]!.distanceTo(at), 1e-5));
+    if (!(ga > 0) || !(gb > 0)) return 0;
+    return 1 / (1 / ga + 1 / gb + (o.contact ? 1 / (o.contact * e.area) : 0));
   });
+  const G = conductances(k0.map((x) => x?.v ?? null));
   const end = new Map<number, number>(); for (const i of to) end.set(i, 0); for (const i of from) end.set(i, 1);
   // only pieces joined to an end through pieces that carry it
   const nb: [number, number][][] = g.pieces.map(() => []); g.edges.forEach((e, q) => { if (G[q]! > 0) { nb[e.a]!.push([e.b, q]); nb[e.b]!.push([e.a, q]); } });
@@ -156,6 +187,24 @@ export function flowOver(g: Graph, kind: 'heat' | 'current', from: number[], to:
   const net = new Array<number>(n).fill(0); g.edges.forEach((e, q) => { net[e.a]! -= through[q]!; net[e.b]! += through[q]!; });
   let worst = 0; for (const i of free) worst = Math.max(worst, Math.abs(net[i]!));
   const floating = n - seen.size;
-  const scale = Math.max(out, ...through.map(Math.abs));
-  return { resistance: out > 0 ? 1 / out : null, conductance: out, level, through, imbalance: scale > 0 ? worst / scale : 0, converged: sol.converged, steps: sol.steps, lacking, floating };
+  const scale = Math.max(out, ...through.map(Math.abs)), R = out > 0 ? 1 / out : null;
+  // ± from what is known only by its family: each such material moved by its standard uncertainty, the network solved
+  // again, the changes summed in quadrature (independent materials; the twelve that carry the most, said where more)
+  const used = [...new Set(g.pieces.map((p, i) => (k0[i] && seen.has(i) ? p.mat! : null)).filter((m): m is string => !!m))];
+  const unsure = used.filter((m) => known.get(m)!.span).slice(0, 12), uncertainFrom: string[] = []; let u2 = 0;
+  if (R !== null) for (const m of unsure) {
+    const [lo, hi] = known.get(m)!.span!, sd = (hi - lo) / Math.sqrt(12); if (!(sd > 0)) continue;
+    const G2 = conductances(g.pieces.map((p, i) => (k0[i] ? (p.mat === m ? k0[i]!.v + sd : k0[i]!.v) : null)));
+    const e2: [number, number, number][] = [], b2 = new Array<number>(free.length).fill(0);
+    for (const i of free) { const r = at.get(i)!; let d = 0; for (const [j, q] of nb[i]!) { d += G2[q]!; const c = at.get(j); if (c !== undefined) e2.push([r, c, -G2[q]!]); else b2[r]! += G2[q]! * end.get(j)!; } e2.push([r, r, d]); }
+    const x2 = free.length ? solveSparseSPD(free.length, e2, b2).x : [], lv = (i: number) => (end.has(i) ? end.get(i)! : x2[at.get(i)!]!);
+    let o2 = 0; g.edges.forEach((e, q) => { const fa = from.includes(e.a), fb = from.includes(e.b); if (seen.has(e.a) && seen.has(e.b)) { if (fa && !fb) o2 += G2[q]! * (lv(e.a) - lv(e.b)); else if (fb && !fa) o2 -= G2[q]! * (lv(e.a) - lv(e.b)); } });
+    if (o2 > 0) { u2 += (1 / o2 - R) ** 2; uncertainFrom.push(m); }
+  }
+  if (used.filter((m) => known.get(m)!.span).length > 12) lacking.push('more than twelve materials known only by their family: the twelve first met carry the ±');
+  if (refused.length) lacking.push(`${refused.length} halves refused by the law (${[...new Set(refused)][0]})`);
+  const ev = (e: Evidence): EvidenceKind => (e === 'handbook' || e === 'specified' || e === 'secondary' ? 'specified' : e === 'derived' ? 'derived' : 'estimated');
+  const evidence = used.length ? weakestOf(...used.map((m) => ev(known.get(m)!.ev))) : 'derived';
+  return { resistance: R, conductance: out, level, through, imbalance: scale > 0 ? worst / scale : 0, converged: sol.converged, steps: sol.steps, lacking, floating,
+    resistanceU: uncertainFrom.length ? Math.sqrt(u2) : null, uncertainFrom, evidence, laws: [law.id] };
 }
