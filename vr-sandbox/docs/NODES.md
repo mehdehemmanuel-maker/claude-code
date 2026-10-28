@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 553 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 554 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Evidence
 
@@ -11,16 +11,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 81 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 291 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 292 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 40 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 71 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 511 tested here (their own tests: that they do what they say, not that the world does); 33 untested; none validated against experiment.
+Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 511 tested here (their own tests: that they do what they say, not that the world does); 34 untested; none validated against experiment.
 
-## 1 · Start: values and inputs (15)
+## 1 · Start: values and inputs (16)
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
@@ -36,6 +36,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Read** (`read`): A block of the library or an entry of the inventory read as it is (block:… or item:…, or either by its id or words): a block's ports, settings, tests and sources; an entry's place, make and what is in it *derived, tested here*
 - **Table** (`in.table`): Rows you paste, the first row their headings (comma or tab separated): numbers read as numbers *given, tested here*
 - **Text** (`in.text`): Words you type, carried on a wire to whatever reads text (a label, a search, a note) *given, tested here*
+- **Through a network of pieces** (`path.network`): Pieces of a thing as branches between named junctions (a path that splits and rejoins, a bridge, a mesh): the network solved by nodal analysis, each junction's balance a line of one linear system, for its resistance … *derived, untested*
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
 - **What it is made of** (`made.of`): Any thing opened as its materials all the way down: its own tree with each thing's mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a … *derived, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here*

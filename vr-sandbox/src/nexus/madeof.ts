@@ -13,6 +13,7 @@ import { flatten, isPart, massOfAll, type Assembly } from './assembly';
 import { densityKg, massOf } from './mass';
 import { shapeBox } from './make/space';
 import { matterOf, type Evidence } from './matter';
+import { solveLinear } from './numeric';
 import type { Part, Shape } from './kits';
 
 type V3 = [number, number, number];
@@ -142,7 +143,9 @@ export function madeOf(t: Part | Assembly, depth = 6): MadeOf {
 }
 
 /** One piece on a path, as it carries heat, current and force along the path's axis. */
-export interface PathPiece { name: string; mat: string | null; L: number; A: number; areaExact: boolean; thermal?: number; electrical?: number; compliance?: number; growth?: number; alpha?: number; E?: number; yields?: number; standIn: string[] }
+export interface PathPiece { name: string; mat: string | null; L: number; A: number; areaExact: boolean; thermal?: number; electrical?: number; compliance?: number; growth?: number; alpha?: number; E?: number; yields?: number; standIn: string[];
+  /** Its section's second moments for bending toward each of the other two axes (in the order x, y, z less the path's), m⁴. */
+  I: [number, number] }
 export interface PathResult {
   pieces: PathPiece[]; missing: string[];
   /** The path as stages one after another, each one piece or several side by side. */
@@ -156,22 +159,24 @@ export interface PathResult {
   /** Where pieces joined grow by different amounts per kelvin (neighbouring stages, and pieces side by side): the strain
    *  between them, and the stress if each were held to the other (E Δα ΔT, the stiffer one's E: an upper bound, uniaxial). */
   mismatch: { a: string; b: string; strain: number; stress: number | null }[];
+  /** Held fixed at its start, pushed sideways at its end: the force per metre of deflection there, toward each of the
+   *  other two axes (Euler–Bernoulli, exact for a stepped beam: δ = P Σ ((L − a)³ − (L − b)³) / 3 E I over its stages;
+   *  pieces side by side bending each about its own middle, so less than bonded ones would be). */
+  bending: [number, number] | null;
+  /** The push along it it takes at least before it buckles, with its ends held as said: π² E I / (K L)² with the least
+   *  E I of any stage and the whole length (a stepped column is stiffer everywhere than one as weak as its weakest
+   *  stage, so this is a floor, never an overestimate). */
+  buckles: number | null;
+  /** The joints between stages, each with its area and what a contact conductance or resistance added there. */
+  joints: { a: string; b: string; area: number }[];
   lacking: string[];
 }
+/** How a path's ends are held, for buckling: K, its effective length over its length (the theoretical values). */
+export const END_K: Record<string, number> = { 'pinned at both ends': 1, 'fixed at both ends': 0.5, 'fixed at one end, pinned at the other': 0.699, 'fixed at one end, free at the other': 2 };
 
-/**
- * What a path through a thing carries (docs/REALITY.md, step 7): stages one after another along an axis, in series, each
- * one piece or several side by side, in parallel, joined at both ends. Each piece's length is its extent along the axis,
- * its section its volume over that length (exact for a prism or a cylinder lying along the axis, a mean for anything
- * else, said); from what it is made of, its resistance to heat L / (k A), to current L / (σ A), its stiffness E A / L and
- * its growth α L ΔT. In series resistances add; side by side conductances and stiffnesses add, and pieces held together
- * at both ends grow by their stiffness-weighted mean (Turner). Its strength: the force at which the first piece yields.
- * What is left out, said: the resistance where two pieces touch (to heat it is often the larger part), bending,
- * buckling, any path but the one named. Wood along its grain.
- */
-export function alongPath(t: Part | Assembly, path: (string | string[])[], axis: 'x' | 'y' | 'z', dT = 0): PathResult {
-  const stages0 = path.map((x) => (Array.isArray(x) ? x : [x])), names = stages0.flat();
-  const k = axis === 'x' ? 0 : axis === 'y' ? 1 : 2, found = new Map<string, PathPiece>(), missing: string[] = [];
+/** Each named piece of a thing as it lies along an axis: its length, section and second moments, and from what it is
+ *  made of its resistances, its give, its growth and its yield. */
+function measure(t: Part | Assembly, names: string[], k: number, dT: number, found: Map<string, PathPiece>): void {
   flatten(t, (f) => {
     const leaf = f.leaf; if (!names.includes(leaf.name) || found.has(leaf.name) || !leaf.shape) return;
     const b = shapeBox(leaf.shape); if (!b) return;
@@ -184,8 +189,28 @@ export function alongPath(t: Part | Assembly, path: (string | string[])[], axis:
     // (exact where the section is the same all along: a box square to the axes, or a cylinder lying along the axis)
     const along = Math.abs(new THREE.Vector3(0, 1, 0).transformDirection(f.m).toArray()[k]!) > 1 - 1e-9;
     const exact = V !== undefined && (('box' in leaf.shape && Math.abs(V / L - boxA) < 1e-9 * boxA) || ('cyl' in leaf.shape && along && (leaf.shape.cyl[2] === undefined || leaf.shape.cyl[2] === leaf.shape.cyl[0])));
-    found.set(leaf.name, { name: leaf.name, mat, L, A, areaExact: !!exact, ...(kk && A > 0 ? { thermal: L / (kk.value * A) } : {}), ...(s && s.value > 0 && A > 0 ? { electrical: L / (s.value * A) } : {}), ...(E && A > 0 ? { compliance: L / (E.value * A), E: E.value } : {}), ...(al ? { growth: al.value * L * dT, alpha: al.value } : {}), ...(y ? { yields: y.value } : {}), standIn });
+        // its section's second moments: exact for a box square to the axes and a cylinder along the axis; else its box's,
+    // scaled to its mean section (an estimate, as its section is)
+    const [u, v] = [0, 1, 2].filter((i) => i !== k) as [number, number], su = size[u]!, sv = size[v]!;
+    const I: [number, number] = 'cyl' in leaf.shape && along ? [(Math.PI * (su / 2) ** 4) / 4, (Math.PI * (sv / 2) ** 4) / 4] : [((sv * su ** 3) / 12) * (A / boxA) ** 2, ((su * sv ** 3) / 12) * (A / boxA) ** 2];
+    found.set(leaf.name, { name: leaf.name, mat, L, A, I, areaExact: !!exact, ...(kk && A > 0 ? { thermal: L / (kk.value * A) } : {}), ...(s && s.value > 0 && A > 0 ? { electrical: L / (s.value * A) } : {}), ...(E && A > 0 ? { compliance: L / (E.value * A), E: E.value } : {}), ...(al ? { growth: al.value * L * dT, alpha: al.value } : {}), ...(y ? { yields: y.value } : {}), standIn });
   });
+}
+
+/**
+ * What a path through a thing carries (docs/REALITY.md, step 7): stages one after another along an axis, in series, each
+ * one piece or several side by side, in parallel, joined at both ends. Each piece's length is its extent along the axis,
+ * its section its volume over that length (exact for a prism or a cylinder lying along the axis, a mean for anything
+ * else, said); from what it is made of, its resistance to heat L / (k A), to current L / (σ A), its stiffness E A / L and
+ * its growth α L ΔT. In series resistances add; side by side conductances and stiffnesses add, and pieces held together
+ * at both ends grow by their stiffness-weighted mean (Turner). Its strength: the force at which the first piece yields.
+ * What is left out, said: the resistance where two pieces touch (to heat it is often the larger part), bending,
+ * buckling, any path but the one named. Wood along its grain.
+ */
+export function alongPath(t: Part | Assembly, path: (string | string[])[], axis: 'x' | 'y' | 'z', dT = 0, o: { K?: number; contactW?: number; contactOhm?: number } = {}): PathResult {
+  const stages0 = path.map((x) => (Array.isArray(x) ? x : [x])), names = stages0.flat();
+  const k = axis === 'x' ? 0 : axis === 'y' ? 1 : 2, found = new Map<string, PathPiece>(), missing: string[] = [];
+  measure(t, names, k, dT, found);
   const pieces: PathPiece[] = [];
   for (const n of names) { const p = found.get(n); if (p) pieces.push(p); else missing.push(n); }
   const stages = stages0.map((st) => st.map((n) => found.get(n)).filter((p): p is PathPiece => !!p)).filter((st) => st.length);
@@ -211,5 +236,62 @@ export function alongPath(t: Part | Assembly, path: (string | string[])[], axis:
     mismatch.push({ a: a.name, b: b.name, strain, stress: a.E !== undefined && b.E !== undefined ? Math.max(a.E, b.E) * strain : null });
   };
   stages.forEach((st, i) => { for (let x = 0; x < st.length; x++) for (let y = x + 1; y < st.length; y++) pair(st[x]!, st[y]!); if (i) for (const a of stages[i - 1]!) for (const b of st) pair(a, b); });
-  return { pieces, missing, stages: stages.map((st) => st.map((p) => p.name)), thermal, electrical, stiffness: c === null ? null : c > 0 ? 1 / c : null, growth, strength, mismatch, lacking };
+  // where two stages meet: through the lesser of their sections; a contact conductance (W/m² K) or resistance (Ω) given
+  // for the joints adds there; none given, the joints are left out (said)
+  const sect = (st: PathPiece[]) => st.reduce((a, p) => a + p.A, 0);
+  const joints = stages.slice(1).map((st, i) => ({ a: stages[i]!.map((p) => p.name).join(' + '), b: st.map((p) => p.name).join(' + '), area: Math.min(sect(stages[i]!), sect(st)) }));
+  const thermalAll = thermal === null ? null : thermal + (o.contactW ? joints.reduce((a, j) => a + 1 / (o.contactW! * j.area), 0) : 0);
+  const electricalAll = electrical === null ? null : electrical + (o.contactOhm ? o.contactOhm * joints.length : 0);
+  // as a beam held at its start: each stage's E I (side by side, summed), along its length
+  let bending: PathResult['bending'] = null, buckles: number | null = null;
+  if (hasE) {
+    const EI = stages.map((st) => [0, 1].map((d) => st.reduce((a, p) => a + p.E! * p.I[d]!, 0)) as [number, number]), Ls = stages.map((st) => Math.max(...st.map((p) => p.L))), Lt = Ls.reduce((a, x) => a + x, 0);
+    if (EI.every((e) => e[0] > 0 && e[1] > 0) && Lt > 0) {
+      let a = 0; const f: [number, number] = [0, 0];
+      stages.forEach((_, i) => { const b = a + Ls[i]!; for (const d of [0, 1]) f[d] += ((Lt - a) ** 3 - (Lt - b) ** 3) / (3 * EI[i]![d]!); a = b; });
+      bending = [1 / f[0], 1 / f[1]];
+      buckles = (Math.PI ** 2 * Math.min(...EI.flat())) / ((o.K ?? 1) * Lt) ** 2;
+    }
+  }
+  return { pieces, missing, stages: stages.map((st) => st.map((p) => p.name)), thermal: thermalAll, electrical: electricalAll, stiffness: c === null ? null : c > 0 ? 1 / c : null, growth, strength, mismatch, bending, buckles, joints, lacking };
+}
+
+/** A network through a thing: each piece a branch between two named junctions. */
+export interface NetworkResult { pieces: PathPiece[]; missing: string[]; thermal: number | null; electrical: number | null; stiffness: number | null; lacking: string[] }
+
+/**
+ * What a network of pieces carries between two junctions (docs/REALITY.md, step 7): each piece a branch from one junction
+ * to another, each measured along the axis as on a path, the network solved by nodal analysis (each junction's balance,
+ * Kirchhoff's current law, as a linear system) for the resistance to heat and to current between the two, and its
+ * stiffness as springs along the axis between them (each junction moving only along it). A path that splits and rejoins
+ * is one; so is a bridge no series-and-parallel reduction can take. Contact at the junctions is left out, said.
+ */
+export function throughNetwork(t: Part | Assembly, branches: { name: string; a: string; b: string }[], axis: 'x' | 'y' | 'z', from: string, to: string): NetworkResult {
+  const k = axis === 'x' ? 0 : axis === 'y' ? 1 : 2, found = new Map<string, PathPiece>();
+  measure(t, branches.map((x) => x.name), k, 0, found);
+  const missing = branches.filter((x) => !found.has(x.name)).map((x) => x.name), pieces = [...new Set(branches.map((x) => x.name))].map((n) => found.get(n)).filter((p): p is PathPiece => !!p);
+  const nodes = [...new Set(branches.flatMap((x) => [x.a, x.b]))], lacking: string[] = [];
+  if (!nodes.includes(from) || !nodes.includes(to)) lacking.push(`the junctions ${from} and ${to} must both be ends of branches`);
+  const solve = (key: 'thermal' | 'electrical' | 'compliance', what: string): number | null => {
+    const live = branches.filter((x) => found.has(x.name));
+    const no = live.filter((x) => found.get(x.name)![key] === undefined); if (no.length) { lacking.push(`${what}: ${no.map((x) => x.name).join(', ')} has none known`); return null; }
+    if (!nodes.includes(from) || !nodes.includes(to) || from === to) return null;
+    // the junctions other than the two ends are unknown; the end `from` held at 1, `to` at 0; what flows out of `from`
+    // at that difference is the network's conductance
+    const inner = nodes.filter((n) => n !== from && n !== to), at = new Map(inner.map((n, i) => [n, i]));
+    const G = inner.map(() => inner.map(() => 0)), rhs = inner.map(() => 0);
+    for (const x of live) {
+      const g = 1 / found.get(x.name)![key]!, i = at.get(x.a), j = at.get(x.b);
+      if (i !== undefined) { G[i]![i]! += g; if (j !== undefined) G[i]![j]! -= g; else if (x.b === from) rhs[i]! += g; }
+      if (j !== undefined) { G[j]![j]! += g; if (i !== undefined) G[j]![i]! -= g; else if (x.a === from) rhs[j]! += g; }
+    }
+    const v = inner.length ? solveLinear(G, rhs) : [];
+    if (!v) { lacking.push(`${what}: some junctions reach neither end, so the network cannot be solved`); return null; }
+    const V = (n: string) => (n === from ? 1 : n === to ? 0 : v[at.get(n)!]!);
+    const out = live.reduce((a, x) => { const g = 1 / found.get(x.name)![key]!; return a + (x.a === from ? g * (1 - V(x.b)) : x.b === from ? g * (1 - V(x.a)) : 0); }, 0);
+    if (!(out > 0)) { lacking.push(`${what}: nothing joins ${from} to ${to}`); return null; }
+    return 1 / out;
+  };
+  const thermal = solve('thermal', 'thermal conductivity'), electrical = solve('electrical', 'electrical conductivity'), c = solve('compliance', 'elastic modulus');
+  return { pieces, missing, thermal, electrical, stiffness: c === null ? null : 1 / c, lacking: [...new Set(lacking)] };
 }

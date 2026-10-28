@@ -72,7 +72,7 @@ describe('a material changed on a board, and everything that rests on it follows
   });
 });
 
-import { alongPath } from '../../src/nexus/madeof';
+import { alongPath, throughNetwork } from '../../src/nexus/madeof';
 import { matterOf } from '../../src/nexus/matter';
 
 describe('along a path through it, in series', () => {
@@ -123,5 +123,44 @@ describe('along a path through it, in series', () => {
     expect(out.thermal).toBeGreaterThan(0); expect(String(out.says)).toMatch(/left out: the resistance where pieces touch/);
     const swapped = { name: 'stack', items: [place({ ...al, mat: 'copper' }, [0, 0.1, 0]), place(cu, [0, 0.25, 0]), place(st, [0, 0.325, 0])] };
     expect((await runBlock('path.properties', { thing: swapped, path: 'al, cu, st', axis: 'y' })).thermal as number).toBeLessThan(out.thermal as number);
+  });
+});
+
+describe('a path as a beam and a column, its joints, and networks', () => {
+  const prop = (m: string, k: string) => matterOf(m).props.find((p) => p.key === k)!.value;
+  const bar: Part = { name: 'bar', shape: { box: [0.02, 0.5, 0.01] }, mat: 'steel-low' }, thin: Part = { name: 'thin', shape: { box: [0.01, 0.3, 0.01] }, mat: 'al-6061' };
+  it('held at its start: 3 E I / L³ for one bar; a stepped beam as Σ ((L − a)³ − (L − b)³) / 3 E I; the joints\' contact added when given', () => {
+    const E = prop('steel-low', 'E'), Ix = (0.01 * 0.02 ** 3) / 12, Iz = (0.02 * 0.01 ** 3) / 12;
+    const one = alongPath({ name: 'o', items: [place(bar, [0, 0.25, 0])] }, ['bar'], 'y');
+    expect(one.bending![0]).toBeCloseTo((3 * E * Ix) / 0.5 ** 3, 6); expect(one.bending![1]).toBeCloseTo((3 * E * Iz) / 0.5 ** 3, 6);
+    const t = { name: 's', items: [place(bar, [0, 0.25, 0]), place(thin, [0, 0.65, 0])] }, Ea = prop('al-6061', 'E'), Ia = 0.01 ** 4 / 12, L = 0.8;
+    const r = alongPath(t, ['bar', 'thin'], 'y'), f = (L ** 3 - 0.3 ** 3) / (3 * E * Ix) + 0.3 ** 3 / (3 * Ea * Ia);
+    expect(r.bending![0]).toBeCloseTo(1 / f, 6);
+    // a contact conductance at the joint: 1 / (h A) more, through the lesser section
+    const h = 5000, withC = alongPath(t, ['bar', 'thin'], 'y', 0, { contactW: h });
+    expect(withC.thermal! - r.thermal!).toBeCloseTo(1 / (h * 0.01 * 0.01), 9);
+    expect(alongPath(t, ['bar', 'thin'], 'y', 0, { contactOhm: 1e-4 }).electrical! - r.electrical!).toBeCloseTo(1e-4, 12);
+  });
+  it('pushed along it: Euler\'s π² E I / (K L)² for one bar; for a stepped one a floor from its weakest stage, never above the truth', () => {
+    const E = prop('steel-low', 'E'), Iz = (0.02 * 0.01 ** 3) / 12;
+    const one = { name: 'o', items: [place(bar, [0, 0.25, 0])] };
+    expect(alongPath(one, ['bar'], 'y').buckles).toBeCloseTo((Math.PI ** 2 * E * Iz) / 0.5 ** 2, 3);
+    expect(alongPath(one, ['bar'], 'y', 0, { K: 2 }).buckles).toBeCloseTo((Math.PI ** 2 * E * Iz) / 1 ** 2, 3);
+    const t = { name: 's', items: [place(bar, [0, 0.25, 0]), place(thin, [0, 0.65, 0])] }, Ea = prop('al-6061', 'E');
+    expect(alongPath(t, ['bar', 'thin'], 'y').buckles).toBeCloseTo((Math.PI ** 2 * Math.min(E * Iz, Ea * 0.01 ** 4 / 12)) / 0.8 ** 2, 3);
+  });
+  it('a network: a split that rejoins is the same as pieces side by side; a Wheatstone bridge as its closed form', () => {
+    const rod = (name: string, mat: string, len: number): Part => ({ name, shape: { cyl: [0.004, len] }, mat });
+    const ps = [rod('r1', 'copper', 0.1), rod('r2', 'al-6061', 0.15), rod('r3', 'steel-low', 0.05), rod('r4', 'copper', 0.2), rod('r5', 'al-6061', 0.08)];
+    const t = { name: 'net', items: ps.map((p, i) => place(p, [i * 0.05, 0, 0])) };
+    const R = (n: string) => alongPath(t, [n], 'y').electrical!;
+    const split = throughNetwork(t, [{ name: 'r1', a: 'S', b: 'T' }, { name: 'r2', a: 'S', b: 'T' }], 'y', 'S', 'T');
+    expect(split.electrical).toBeCloseTo(alongPath(t, [['r1', 'r2']], 'y').electrical!, 15);
+    const [R1, R2, R3, R4, R5] = ['r1', 'r2', 'r3', 'r4', 'r5'].map(R) as [number, number, number, number, number];
+    const bridge = throughNetwork(t, [{ name: 'r1', a: 'S', b: 'A' }, { name: 'r2', a: 'S', b: 'B' }, { name: 'r3', a: 'A', b: 'T' }, { name: 'r4', a: 'B', b: 'T' }, { name: 'r5', a: 'A', b: 'B' }], 'y', 'S', 'T');
+    const want = (R1 * R2 * (R3 + R4) + R3 * R4 * (R1 + R2) + R5 * (R1 + R3) * (R2 + R4)) / ((R1 + R2) * (R3 + R4) + R5 * (R1 + R2 + R3 + R4));
+    expect(bridge.electrical! / want).toBeCloseTo(1, 12);
+    // a junction that reaches neither end is said, not guessed
+    expect(throughNetwork(t, [{ name: 'r1', a: 'S', b: 'T' }, { name: 'r2', a: 'X', b: 'Y' }], 'y', 'S', 'T').lacking.join(' ')).toMatch(/cannot be solved/);
   });
 });

@@ -403,8 +403,25 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   reaches its own yield strain σy / E; series: the least over the stages). Pieces side by side of different lengths are
   said to be taken as joined at both ends. Verified against the sums worked by hand for a steel and an aluminium rod
   side by side under a copper rod (resistance, stiffness, Turner growth, first yield). The snapshot did not move.
-  Still to do: networks (a path that splits and rejoins across stages), buckling under a push, bending stiffness of an
-  assembly, contact resistance from what the faces are and how hard they are pressed.
+- **Step 7, a beam, a column, its joints and networks.** A path is now also a beam held at its start: its end's
+  stiffness to a sideways push toward each of the other two axes, exact for a stepped beam (Euler–Bernoulli,
+  δ = P Σ ((L − a)³ − (L − b)³) / 3 E I over its stages; each piece's section second moments exact for a box square to
+  the axes and a cylinder along the path, else its box's scaled to its mean section and said). And a column: the push it
+  takes at least before buckling, π² E I / (K L)² with its weakest stage's E I over its whole length and its ends as
+  said (K 1, 0.5, 0.699, 2): a stepped column is stiffer everywhere than one as weak as its weakest stage, so this is a
+  floor, never an overestimate; where it is below the yield force, it is said to buckle first. The joints between
+  stages, through the lesser section: a contact conductance (W/m² K) or resistance (Ω) given is added there; none is
+  invented (it hangs on the faces' finish and how hard they are pressed, which nothing here knows yet), and left out it
+  is said. Networks (`throughNetwork`, node `path.network`): pieces as branches between named junctions, solved by
+  nodal analysis (each junction's balance one row of a linear system, `solveLinear`) for heat, current and axial
+  stiffness between two junctions; a bridge no series-and-parallel reduction can take is solved as readily. Verified
+  against hand-worked answers: a bar's 3 E I / L³ both ways, a stepped beam's sum, Euler's load for pinned and
+  fixed-free ends, the stepped column's floor, the contact added at a joint, a split that rejoins equal to pieces side
+  by side, and an unbalanced Wheatstone bridge of five rods of three metals against its closed form (to 12 figures).
+  The snapshot did not move.
+  Step 7 as planned is done but for two things said plainly: contact conductance from what the faces are (no data
+  here for it yet), and a test that the house's framing changed moves its loads (the house is parked: design is not
+  this round's).
 - **Step 8, the first round done.** `src/nexus/evidence.ts` gives every node its own evidence, read from what it is: a
   law from its kind (definition or geometry exact, fundamental or derived law derived, approximation simplified, the rest
   empirical) with its validity as an assumption and its domain as its limits; a typed or chosen value given; a maker's,
