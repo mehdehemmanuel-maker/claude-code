@@ -577,3 +577,13 @@ previously built nodes as before the update, they could be flawed tests anyways"
   said: the snapshot that held every output still (the step 0 baseline), and the slow end-to-end checks (the Corolla's
   autopilot, the 6502's 151 opcodes on its transistors, every kit through the make pipeline, the 10,000-node scale
   runs); a change to what a board gives is now caught only where its node's own tests or its domain's quick board see it.
+
+**Step B, done (2026-10-28).** `src/nexus/graph.ts` (`graphOf`, node `graph`, What touches what): the contact graph of any
+thing from its geometry, nothing typed: every piece a node, every two that touch an edge with where, which way, how hard
+and over what patch (the overlap of their covering boxes: exact for boxes face to face; for a 12 mm rod's end it reads
+144 mm² where the circle is 113, said on the node, to be tightened in step C); the groups held together. Each distinct
+thing's graph is worked out once in its own frame and placed; between placements only pieces near each other are
+looked at. Checked: three stacked cubes give three pieces, two contacts of 0.0100 m², one group (the node's own test);
+a car is 1,523 pieces and 4,840 contacts in 0.26 s; twenty of it 30,460 pieces in 0.58 s, the car worked out once.
+Found: the car is 55 groups that do not touch each other, so some of its pieces float (to look at when design is back).
+Shown on the starter board What it is made of, and what it carries.

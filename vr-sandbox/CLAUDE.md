@@ -218,6 +218,7 @@ known gaps are there too.
 | Only what the app reaches is kept | the reach check in `tests/nexus/domains.test.ts` |
 | Things placed, never copied; frames; fit in; take apart | `nexus/assembly.ts` |
 | Layout, contacts, contact patches of a placed tree | `nexus/make/space.ts` |
+| The contact graph of any thing (what touches what, from the geometry; each distinct thing once); what flows through it (steps C to F) | `nexus/graph.ts` (node `graph`) |
 | Rules: interference, clearance, heat gate | `nexus/make/rules.ts` |
 | Critic, detail, conditions, the make pipeline | `nexus/make/` (`critic.ts`, `detail.ts`, `conditions.ts`, `pipeline.ts`) |
 | Mating by faces, ports, round faces, bores | `nexus/mate.ts` |

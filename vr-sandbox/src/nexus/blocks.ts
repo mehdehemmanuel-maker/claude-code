@@ -19,6 +19,7 @@ import { TAGS } from './book/tags';
 import { FIELDS } from './book/fields';
 import { MATTER, matterOf } from './matter';
 import { alongPath, END_K, madeOf, massProperties, throughNetwork } from './madeof';
+import { graphOf, groupsOf } from './graph';
 import { apply, type Law } from './law';
 import { varsOf } from './term';
 import { breakdown, chain, setting, solve as solveLaw, valueIn, type Known } from './lawgraph';
@@ -1105,6 +1106,22 @@ const BUILT_THINGS: BlockDef[] = [
       return { mass: m.mass, materials: m.materials.map((x) => ({ material: x.mat, is: x.is, specified: x.specified, kg: x.mass, share: x.share, pieces: x.pieces, density: x.density })), elements: m.elements.map((e) => ({ element: e.element, kg: e.mass, share: e.share })), tree: m.tree.map((t) => ({ level: t.depth, name: t.name, material: t.mat ?? '', count: t.count, kg: t.mass, share: t.share })), unknown: m.unknown, says: `${m.mass.toPrecision(4)} kg: ${top}${m.materials.length > 3 ? `, and ${m.materials.length - 3} more materials` : ''}${m.elementsUnknown > 0 ? `; ${(100 * m.elementsUnknown / (m.mass || 1)).toFixed(1)} % not known down to its elements` : ''}${m.unknown.length ? `; ${m.unknown.length} things not known` : ''}` };
     },
     tests: [{ inputs: { thing: { name: 'b', shape: { box: [0.1, 0.2, 0.3] }, mat: 'steel-low' } }, outputs: { mass: 0.006 * 7850, unknown: [] }, rel: 1e-9 }], sink: true }),
+  def({ id: 'graph', name: 'What touches what', kind: 'critic', ability: 'measure', domains: ['mechanical', 'structural', 'electrical', 'thermal'], says: 'The contact graph of any thing, read from its geometry with nothing typed: every piece a node, every two that touch an edge, with where they meet, which way, how hard they press and over what patch; the groups that hold together through their contacts. A thing placed many times is worked out once, and only where two placements come near is looked at between them. What flows through a thing (heat, current, force) is solved over it',
+    valid: 'contacts between covering boxes, within a tolerance of a hundredth of the smaller piece (at least 2 mm); the patch is the overlap of their boxes, exact for boxes face to face',
+    ports: { inputs: [thing()], outputs: [P('pieces', 'integer'), P('contacts', 'integer'), P('groups', 'integer', { label: 'groups held together' }), P('edges', 'table'), P('links', 'part', { label: 'drawn: a rod between the middles of every two that touch' }), P('says', 'text')] },
+    run: (i) => {
+      const g = graphOf(asThing(i.thing)), grp = groupsOf(g), mid = (k: number) => g.pieces[k]!.node.box!.getCenter(new THREE.Vector3());
+      const links: Part = { name: 'what touches what', parts: g.edges.slice(0, 5000).map((e, k) => {
+        const a = mid(e.a), b = mid(e.b), d = b.clone().sub(a), len = Math.max(d.length(), 1e-4), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()), r = new THREE.Euler().setFromQuaternion(q);
+        return { name: `link ${k}`, shape: { cyl: [Math.max(0.0015, Math.min(0.006, Math.sqrt(e.area) / 6)), len] }, at: a.clone().add(b).multiplyScalar(0.5).toArray() as [number, number, number], rot: [r.x, r.y, r.z] as [number, number, number], color: 0xffab40, mat: 'pvc' };
+      }) };
+      const big = [...grp].sort((x, y) => y.length - x.length);
+      return { pieces: g.pieces.length, contacts: g.edges.length, groups: grp.length, links,
+        edges: g.edges.slice(0, 2000).map((e) => ({ a: g.pieces[e.a]!.name, b: g.pieces[e.b]!.name, 'area mm²': +(e.area * 1e6).toPrecision(4), 'press mm': +(e.depth * 1e3).toPrecision(3), at: e.at.map((v) => +v.toFixed(3)).join(', ') })),
+        says: `${g.pieces.length} pieces, ${g.edges.length} contacts; ${grp.length === 1 ? 'all held together as one' : `${grp.length} groups held together (the largest ${big[0]?.length ?? 0} pieces${grp.length > 1 ? `; ${grp.filter((x) => x.length === 1).length} touching nothing` : ''})`}${g.worked < 1 ? '' : `; ${g.worked} distinct thing${g.worked > 1 ? 's' : ''} worked out, the rest reused`}` };
+    },
+    // three 100 mm cubes stacked: three pieces, two faces met, each 100 × 100 mm, all one group
+    tests: [{ inputs: { thing: { name: 'stack', items: [0, 0.1, 0.2].map((y) => ({ of: { name: 'cube', shape: { box: [0.1, 0.1, 0.1] }, mat: 'oak' }, at: [0, y, 0], rot: [0, 0, 0], s: 1 })) } }, outputs: { pieces: 3, contacts: 2, groups: 1 } }] }),
   def({ id: 'path.properties', name: 'Along a path through it', kind: 'critic', ability: 'measure', domains: ['mechanical', 'electrical', 'thermal', 'structural'], says: 'Pieces of a thing named in order, one after another along an axis, in series: from what each is made of, the path\'s resistance to heat (L / k A), to current (L / σ A), its stiffness under an axial force (from L / E A), how much it grows when it warms (α L ΔT) and the force at which its first piece yields; pieces side by side (a + between them) share what flows and the force; each piece\'s length its extent along the axis, its section its volume over that length. Where neighbours grow by different amounts, the strain between them and the stress if one held the other. Left out, said: the resistance where pieces touch, bending, any other path',
     valid: 'pieces in series along one axis, each carrying the whole of what flows; one-dimensional flow; properties at room temperature',
     settings: [{ key: 'path', label: 'Pieces in order (by name, comma between; + between pieces side by side)', type: 'text', default: '' }, { key: 'axis', label: 'Along', type: 'choice', default: 'x', choices: ['x', 'y', 'z'] }, { key: 'dT', label: 'Warmed by, K', type: 'number', default: 0 }, { key: 'ends', label: 'Its ends, for buckling', type: 'choice', default: 'pinned at both ends', choices: Object.keys(END_K) }, { key: 'contactW', label: 'Contact conductance at each joint, W/m² K (blank: left out)', type: 'text', default: '' }, { key: 'contactOhm', label: 'Contact resistance at each joint, Ω (blank: left out)', type: 'text', default: '' }],

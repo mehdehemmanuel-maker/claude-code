@@ -74,6 +74,7 @@ export const BUILT: Record<string, string> = {
   "gauntlet.feed":"2026-10-27T08:19:24.000Z",
   "gauntlet.run":"2026-10-27T09:49:49.000Z",
   "goal":"2026-10-28T05:16:00.000Z",
+  "graph":"2026-10-28T21:51:38.000Z",
   "group.in":"2026-10-25T09:05:20.000Z",
   "group.out":"2026-10-25T09:05:20.000Z",
   "hinge":"2026-10-26T15:57:08.000Z",
