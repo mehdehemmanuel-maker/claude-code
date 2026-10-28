@@ -302,6 +302,14 @@ export interface Bent {
   give: number | null; stiffness: number | null;
   converged: boolean; steps: number; residual: number; floating: number; lacking: string[];
   evidence: EvidenceKind;
+  /** Each beam's worst stress (von Mises: stretch and bending at its outer fibre with its twist's shear), and that over
+   *  its material's yield (or, where it has none, its ultimate strength); and the push at which the first one yields
+   *  (the response being linear: the push over the worst share), with where. */
+  stress: { a: number; b: number; vm: number; share: number | null }[];
+  yieldsAt: { load: number; a: number; b: number; share: number } | null;
+  /** The push at which it buckles (linear buckling: the least λ making K + λ K_g singular, K_g from each beam's axial
+   *  force under this push; inverse iteration), where asked; null where it does not under this push (all in tension). */
+  bucklesAt: number | null;
 }
 
 /**
@@ -313,11 +321,11 @@ export interface Bent {
  * (conjugate gradients). Exact for prismatic bars at their nodes (a cantilever's tip, a bar's stretch); a solid block is a
  * beam too (shear deformation and the block's own spreading left out); contacts never part (bonded). Small movements.
  */
-export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3): Bent {
+export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, o: { buckling?: boolean } = {}): Bent {
   const n = g.pieces.length, lacking: string[] = [], ev: Evidence[] = [];
-  const Eof = new Map<string, { E: number; nu: number } | null>(), mat = (m: string | null) => {
+  const Eof = new Map<string, { E: number; nu: number; y?: number } | null>(), mat = (m: string | null) => {
     if (!m) return null;
-    if (!Eof.has(m)) { const mt = matterOf(m), E = mt.props.find((p) => p.key === 'E'), nu = mt.props.find((p) => p.key === 'nu'), sp = mt.span?.E; Eof.set(m, E ? { E: E.value, nu: nu?.value ?? 0.3 } : sp ? { E: (sp[0] + sp[1]) / 2, nu: 0.3 } : null); if (E) ev.push(E.evidence); else if (sp) ev.push('estimated'); }
+    if (!Eof.has(m)) { const mt = matterOf(m), E = mt.props.find((p) => p.key === 'E'), nu = mt.props.find((p) => p.key === 'nu'), sp = mt.span?.E, y = mt.props.find((p) => p.key === 'yield') ?? mt.props.find((p) => p.key === 'ultimate'); Eof.set(m, E ? { E: E.value, nu: nu?.value ?? 0.3, y: y?.value } : sp ? { E: (sp[0] + sp[1]) / 2, nu: 0.3, y: y?.value } : null); if (E) ev.push(E.evidence); else if (sp) ev.push('estimated'); }
     return Eof.get(m)!;
   };
   const props = g.pieces.map((p) => mat(p.mat)), centre = g.pieces.map((p) => p.node.obb!.c);
@@ -330,8 +338,8 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3):
     // (a rectangle's torsion constant, Roark table 10.7: a c³ (1/3 − 0.21 c/a (1 − c⁴ / 12 a⁴)))
     return { A, I1: (b * d ** 3) / 12, I2: (d * b ** 3) / 12, J: a * c ** 3 * (1 / 3 - 0.21 * (c / a) * (1 - c ** 4 / (12 * a ** 4))), u1: o[0], u2: o[1] };
   };
-  const entries: [number, number, number][] = [];
-  const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3) => {
+  const entries: [number, number, number][] = [], elems: { a: number; b: number; K: number[][]; R: THREE.Vector3[]; A: number; Iy: number; Iz: number; J: number; cy: number; cz: number; cj: number; y?: number }[] = [];
+  const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3, c?: { cy: number; cz: number; cj: number; y?: number }) => {
     const d = centre[b]!.clone().sub(centre[a]!), L = d.length(); if (!(L > 1e-9)) return;
     const ex = d.clone().multiplyScalar(1 / L); let y = ey ? ey.clone().addScaledVector(ex, -ey.dot(ex)) : new THREE.Vector3();
     if (y.lengthSq() < 1e-12) { y = Math.abs(ex.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0); y.addScaledVector(ex, -y.dot(ex)); }
@@ -344,6 +352,7 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3):
     // to the thing's frame: Kg = Tᵀ K T, T four blocks of the local axes
     const Tm = (r: number, c: number) => (Math.floor(r / 3) === Math.floor(c / 3) ? R[r % 3]!.getComponent(c % 3) : 0);
     const KT = K.map((row) => Array.from({ length: 12 }, (_, c) => row.reduce((s2, v, k) => s2 + v * Tm(k, c), 0)));
+    elems.push({ a, b, K, R, A, Iy, Iz, J, cy: c?.cy ?? Math.sqrt(A / Math.PI), cz: c?.cz ?? Math.sqrt(A / Math.PI), cj: c?.cj ?? Math.sqrt(A / Math.PI), y: c?.y });
     const dof = (q: number) => (q < 6 ? a * 6 + q : b * 6 + q - 6);
     for (let r = 0; r < 12; r++) for (let c = 0; c < 12; c++) { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * KT[k]![c]!; if (v !== 0) entries.push([dof(r), dof(c), v]); }
   };
@@ -353,11 +362,13 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3):
     if (same) {
       // two slices of one piece: a beam of the piece's own section along its axis
       const o = g.pieces[e.a]!.node.obb!, ax = centre[e.b]!.clone().sub(centre[e.a]!).normalize(), k = o.u.map((u) => Math.abs(u.dot(ax))).reduce((m, v, i, arr) => (v > arr[m]! ? i : m), 0), s = sectionOf(e.a, k);
-      beam(e.a, e.b, pa.E, pa.E / (2 * (1 + pa.nu)), s.A, s.I1, s.I2, s.J, o.u[s.u1]);
+      // (its outer fibres: half its side across each axis, a cylinder's radius; the twist's shear at its widest)
+      const hh = g.pieces[e.a]!.node.obb!.h, cy = hh[s.u1]!, cz = hh[s.u2]!;
+      beam(e.a, e.b, pa.E, pa.E / (2 * (1 + pa.nu)), s.A, s.I1, s.I2, s.J, o.u[s.u1], { cy, cz, cj: Math.max(cy, cz), y: pa.y });
     } else {
       // two pieces bonded through their patch, as a round section of its area; moduli in series
       const E = (2 * pa.E * pb.E) / (pa.E + pb.E), nu = (pa.nu + pb.nu) / 2, A = Math.max(e.area, 1e-12), I = (A * A) / (4 * Math.PI);
-      beam(e.a, e.b, E, E / (2 * (1 + nu)), A, I, I, 2 * I);
+      beam(e.a, e.b, E, E / (2 * (1 + nu)), A, I, I, 2 * I, undefined, { cy: Math.sqrt(A / Math.PI), cz: Math.sqrt(A / Math.PI), cj: Math.sqrt(A / Math.PI), y: pa.y !== undefined && pb.y !== undefined ? Math.min(pa.y, pb.y) : pa.y ?? pb.y });
     }
   }
   // only what is joined to what is held
@@ -374,5 +385,44 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3):
   const L = Math.hypot(...load), dir = L > 0 ? load.map((v) => v / L) : [0, 0, 0];
   const give = live.length && L > 0 ? live.reduce((s2, i) => s2 + moved[i]!.reduce((t, v, q) => t + v * dir[q]!, 0), 0) / live.length : null;
   const evidence = ev.length ? weakestOf(...ev.map((e): EvidenceKind => (e === 'handbook' || e === 'specified' || e === 'secondary' ? 'specified' : e === 'derived' ? 'derived' : 'estimated'))) : 'derived';
-  return { moved, turned, give, stiffness: give && give > 0 ? L / give : null, converged: sol.converged, steps: sol.steps, residual: sol.residual, floating: n - seen.size, lacking, evidence };
+  // each beam's end forces from its ends' movements (f = K T u, in its own axes): stretch N, twist T, bending My, Mz at
+  // whichever end is worse
+  const u6 = (i: number) => [...(moved[i] ?? [0, 0, 0]), ...(turned[i] ?? [0, 0, 0])];
+  const stress = elems.filter((el) => moved[el.a] && moved[el.b]).map((el) => {
+    const ug = [...u6(el.a), ...u6(el.b)], ul = ug.map((_, r) => { const blk = Math.floor(r / 3) * 3, ax = el.R[r % 3]!; return ax.x * ug[blk]! + ax.y * ug[blk + 1]! + ax.z * ug[blk + 2]!; });
+    const f = el.K.map((row) => row.reduce((s2, v, k) => s2 + v * ul[k]!, 0)), N = Math.abs(f[0]!), T = Math.abs(f[3]!), My = Math.max(Math.abs(f[4]!), Math.abs(f[10]!)), Mz = Math.max(Math.abs(f[5]!), Math.abs(f[11]!));
+    const sig = N / el.A + (My * el.cz) / el.Iy + (Mz * el.cy) / el.Iz, tau = (T * el.cj) / el.J, vm = Math.sqrt(sig * sig + 3 * tau * tau);
+    return { a: el.a, b: el.b, vm, share: el.y ? vm / el.y : null };
+  });
+  const worst = stress.filter((x) => x.share !== null).sort((x, y) => y.share! - x.share!)[0];
+  const yieldsAt = worst && worst.share! > 0 ? { load: L / worst.share!, a: worst.a, b: worst.b, share: worst.share! } : null;
+  if (stress.some((x) => x.share === null)) lacking.push('some pieces have no yield or ultimate strength known: their stress is given, not judged');
+  // buckling: each beam's geometric stiffness from the axial force it carries (consistent, for bending both ways; its
+  // twist's left out), assembled as K is; the least λ with (K + λ K_g) φ = 0 by inverse iteration
+  let bucklesAt: number | null = null;
+  if (o.buckling && free.length && live.length) {
+    const kg: [number, number, number][] = [];
+    for (const el of elems) {
+      if (!moved[el.a] || !moved[el.b]) continue;
+      const ug = [...u6(el.a), ...u6(el.b)], ul = ug.map((_, r) => { const blk = Math.floor(r / 3) * 3, ax = el.R[r % 3]!; return ax.x * ug[blk]! + ax.y * ug[blk + 1]! + ax.z * ug[blk + 2]!; });
+      const Nt = el.K[6]!.reduce((s2, v, k) => s2 + v * ul[k]!, 0), L = centre[el.b]!.distanceTo(centre[el.a]!), c = Nt / (30 * L);
+      const G = Array.from({ length: 12 }, () => new Array<number>(12).fill(0)), put = (idx: number[], m: number[][]) => { for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) G[idx[r]!]![idx[q]!]! += c * m[r]![q]!; };
+      put([1, 5, 7, 11], [[36, 3 * L, -36, 3 * L], [3 * L, 4 * L * L, -3 * L, -L * L], [-36, -3 * L, 36, -3 * L], [3 * L, -L * L, -3 * L, 4 * L * L]]);
+      put([2, 4, 8, 10], [[36, -3 * L, -36, -3 * L], [-3 * L, 4 * L * L, 3 * L, -L * L], [-36, 3 * L, 36, 3 * L], [-3 * L, -L * L, 3 * L, 4 * L * L]]);
+      const Tm = (r: number, cc: number) => (Math.floor(r / 3) === Math.floor(cc / 3) ? el.R[r % 3]!.getComponent(cc % 3) : 0), dof = (q: number) => (q < 6 ? el.a * 6 + q : el.b * 6 + q - 6);
+      const GT = G.map((row) => Array.from({ length: 12 }, (_, cc) => row.reduce((s2, v, k) => s2 + v * Tm(k, cc), 0)));
+      for (let r = 0; r < 12; r++) for (let cc = 0; cc < 12; cc++) { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * GT[k]![cc]!; const R2 = at.get(dof(r)), C2 = at.get(dof(cc)); if (v !== 0 && R2 !== undefined && C2 !== undefined) kg.push([R2, C2, v]); }
+    }
+    const m = free.length * 6, mulKg = (x: number[]) => { const y = new Array<number>(m).fill(0); for (const [r, cc, v] of kg) y[r]! += v * x[cc]!; return y; };
+    const mulK = (x: number[]) => { const y = new Array<number>(m).fill(0); for (const [r, cc, v] of rows) y[r]! += v * x[cc]!; return y; };
+    let x = sol.x.map((v) => v + 1e-12), lam = NaN;
+    for (let it = 0; it < 40; it++) {
+      const rhs = mulKg(x).map((v) => -v), y = solveSparseSPD(m, rows, rhs, { maxSteps: 40 * m + 1000 }).x, nrm = Math.sqrt(y.reduce((s2, v) => s2 + v * v, 0)); if (!(nrm > 0)) break;
+      x = y.map((v) => v / nrm);
+      const Kx = mulK(x), Gx = mulKg(x), num = x.reduce((s2, v, k) => s2 + v * Kx[k]!, 0), den = -x.reduce((s2, v, k) => s2 + v * Gx[k]!, 0), l2 = den !== 0 ? num / den : NaN;
+      if (Math.abs(l2 - lam) < 1e-9 * Math.abs(l2)) { lam = l2; break; } lam = l2;
+    }
+    bucklesAt = lam > 0 && Number.isFinite(lam) ? lam * L : null;
+  }
+  return { moved, turned, give, bucklesAt, stiffness: give && give > 0 ? L / give : null, converged: sol.converged, steps: sol.steps, residual: sol.residual, floating: n - seen.size, lacking, evidence, stress, yieldsAt };
 }

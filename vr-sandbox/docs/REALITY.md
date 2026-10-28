@@ -684,3 +684,13 @@ across it, and pushed along it P a / E A, exactly (the node's own test); the rod
 323 kN/m, near two rods clamped at both ends worked by hand (12 E I / L³ each, about 327). Seen: drawn bent, its
 movements exaggerated, red where it moves most. Said on the node: small elastic movements, slender pieces (a block's
 shear left out), contacts bonded, no buckling yet.
+
+**Step F, stress and buckling (2026-10-28).** The frame now gives each beam's worst stress (its ends' forces from their
+movements: stretch and both bendings at its outer fibre, with its twist's shear, as von Mises) over its material's
+yield (else its ultimate), and the push at which the first yields, with where; and the push at which it buckles
+(linear buckling: each beam's consistent geometric stiffness from the axial force it carries, the least λ with
+(K + λ K_g) singular by inverse iteration). Checked by hand: the 1 m bar's root stress 7.03 MPa, first yield at 526 N
+(10 × 370 / 7.03), to eight figures; stood up and pushed down, it buckles at Euler's π² E I / (2a)² = 7,673 N, to seven
+figures, in 31 ms; pulled, it does not buckle. Both are the node's own tests. Found on the rods board: 200 N sideways
+puts the annealed copper rod past its yield (it yields at 184 N), so the board pushes 100 N and says so. With this, the
+engine does all `path.properties` did but growth when warmed and the mismatch between neighbours (thermal loads, next).
