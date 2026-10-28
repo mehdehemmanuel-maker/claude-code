@@ -150,35 +150,6 @@ export function principlesOf(l: Law): Principle[] | 'unplaced' {
   return 'unplaced';
 }
 /** How laws feed or contain one another. */
-export const LINKS: [from: string, to: string, how: string][] = [
-  ['free-energy.gradient', 'nernst', 'at equilibrium (ΔG = 0) the gradient\'s free energy gives the Nernst potential'],
-  ['boltzmann.distribution', 'arrhenius', 'a rate is the share of molecules over the barrier: the Boltzmann factor at the activation energy'],
-  ['arrhenius', 'arrhenius.ratio', 'two rates by Arrhenius over each other'],
-  ['stoichiometry.mass', 'carbonation.capacity', 'stoichiometry with one CO₂ a CaO'],
-  ['network.scaling', 'kleiber.scaling', 'the network\'s exponent is Kleiber\'s'],
-  ['poiseuille', 'murray.branching', 'least work against Poiseuille flow gives Murray\'s cube law'],
-  ['murray.branching', 'network.scaling', 'Murray-type branching (β = n^−⅓) in a network gives the small-vessel exponent'],
-  ['decay.first-order', 'half-life', 'where the first-order loss is a half'],
-  ['decay.first-order', 'growth.doubling', 'the same exponential with the sign turned'],
-  ['fick.diffusion', 'diffusion.front', 'Fick\'s flux through the reacted layer, conserved at the front'],
-  ['fick.diffusion', 'diffusion.erf', 'Fick\'s flux conserved everywhere gives his second law, whose solution from a held surface is the error function'],
-  ['fick.diffusion', 'diffusion.sphere-limit', 'Fick\'s flux balanced by consumption in a sphere'],
-  ['diffusion.time', 'diffusion.front', 'both go as √(D t): the random walk'],
-  ['ideal.gas', 'gas.concentration', 'the ideal gas, as moles a volume'],
-  ['ideal.gas', 'osmotic.van-t-hoff', 'dilute solutes press like a gas (van \'t Hoff)'],
-  ['clausius-clapeyron', 'vapour.pressure', 'the slope integrated at a constant latent heat'],
-  ['vapour.pressure', 'evaporation.max', 'the skin\'s and the air\'s vapour pressures drive evaporation'],
-  ['convection', 'evaporation.max', 'the Lewis relation: mass transfer follows heat transfer'],
-  ['osmotic.van-t-hoff', 'starling.filtration', 'the osmotic pressure that holds water back'],
-  ['faraday.electrolysis', 'corrosion.penetration', 'Faraday\'s mass, spread over the area as thickness'],
-  ['porosity.powers', 'diffusivity.papadakis', 'the paste\'s porosity sets how fast CO₂ diffuses'],
-  ['diffusivity.papadakis', 'diffusion.front', 'the diffusivity of the carbonated layer'],
-  ['gas.concentration', 'diffusion.front', 'the CO₂ held at the surface'],
-  ['weight', 'column.self-weight', 'its weight a volume against its strength'],
-  ['conduction', 'conduction.series', 'Fourier\'s layers in series'],
-  ['queueing', 'residence.stock', 'Little\'s law for a continuum'],
-  ['residence.stock', 'balance.steady', 'a stock held steady by its flows'],
-];
 
 // ---- the shapes of math ---------------------------------------------------------------------------------------------------
 /** A product of powers: its constant (SI), each input's exponent, and the constants with units in it (R, F, g), each
@@ -278,12 +249,3 @@ export function routes(target: string, have: string[], laws: readonly Law[] = BO
 }
 
 /** The graph in numbers: laws by principle and shape, families of shared math, what units force. */
-export function graphSummary(laws: readonly Law[] = BOOK) {
-  const byPrinciple: Record<string, string[]> = {}, byShape: Record<string, number> = {}, units: Record<string, string[]> = {};
-  for (const l of laws) {
-    const p = principlesOf(l); for (const x of p === 'unplaced' ? ['unplaced'] : p) (byPrinciple[x] ??= []).push(l.id);
-    const s = shapeOf(l); byShape[s] = (byShape[s] ?? 0) + 1;
-    const f = forcedByUnits(l).verdict; (units[f] ??= []).push(l.id);
-  }
-  return { laws: laws.length, byPrinciple, byShape, units, families: families(laws), links: LINKS.length };
-}

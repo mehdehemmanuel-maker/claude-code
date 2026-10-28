@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import type { Part } from '../kits';
-import { layout, type Node, type OBB } from '../make/space';
+import { layout, type Node } from '../make/space';
 import { AMBIENT, HARMED, HEAT_FALLOFF, MAX_SERVICE } from '../make/rules';
 
 export type NeedKind = 'mount' | 'connect' | 'keepout' | 'face' | 'access' | 'group';
@@ -80,8 +80,6 @@ export function needsOf(root: Part, nodes: Node[] = layout(root)): Need[] {
   return out;
 }
 
-/** A part's world pieces (its covering boxes), and those of all it holds. */
-export function piecesUnder(n: Node): OBB[] { const out: OBB[] = []; const walk = (x: Node) => { out.push(...x.pieces); x.kids.forEach(walk); }; walk(n); return out; }
 /** The world box of every node named like `re` (the engine, the bay), grown by `grow`. */
 export function regionOf(nodes: Node[], re: RegExp, grow = 0.1): THREE.Box3 | null {
   const b = new THREE.Box3(); for (const n of nodes) if (re.test(n.p.name) && n.sub) b.union(n.sub);

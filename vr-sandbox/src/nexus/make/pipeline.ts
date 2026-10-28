@@ -44,12 +44,3 @@ export function perfect(made: Part, words: string | Conditions = '', o: { rules?
   stages.push({ stage: 'interfaces', did: ct.map((c) => `${c.ok ? 'meets' : 'FAILS'} — ${c.requirer} on the ${c.provider}: ${c.rows.map((r) => `${r.what}: needs ${r.required}, has ${r.provided}${r.ok ? '' : ' ✗'}`).join('; ')}`) });
   return { part, conditions: cond, stages, findings, rounds: Math.min(rounds + 1, o.rounds ?? 3), details: counts, detailKg: kg, contracts: ct, parts: [before[0], countParts(part)], kg: [before[1], massOf(part)] };
 }
-
-/** What the pipeline did, said in a line or two. */
-export function sayMade(m: Made): string {
-  const d = Object.values(m.details).reduce((a, b) => a + b, 0), fixed = m.findings.filter((f) => f.fixed), open = m.findings.filter((f) => !f.fixed);
-  const what = Object.entries(m.details).filter(([, n]) => n > 0).map(([id, n]) => `${n} ${id}`).join(', ');
-  const ok = m.contracts.filter((c) => c.ok).length, bad = m.contracts.filter((c) => !c.ok);
-  const ifs = m.contracts.length ? ` ${m.contracts.length} interfaces checked: ${ok} meet${bad.length ? `, ${bad.length} fail (${bad.slice(0, 2).map((c) => `${c.requirer} on the ${c.provider}: ${c.rows.filter((r) => !r.ok).map((r) => `${r.what} needs ${r.required}, has ${r.provided}`).join('; ')}`).join('; ')})` : ''}.` : '';
-  return `Attention to detail: ${d} added (${what}); ${m.parts[0]} parts became ${m.parts[1]}.${ifs}${fixed.length ? ` The critic put ${fixed.length} right: ${[...new Set(fixed.map((f) => f.says))].slice(0, 3).join('; ')}.` : ' The critic found nothing to put right.'}${open.length ? ` Still to say: ${[...new Set(open.map((f) => `${f.part}: ${f.says}`))].slice(0, 3).join('; ')}.` : ''}`;
-}

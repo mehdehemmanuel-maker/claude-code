@@ -7,8 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { AMPLITUDE_FACTOR, PERIOD_FACTOR, PRISM_INERTIA, PRISM_MASS, RECT_AREA, RECT_I } from '../../src/nexus/book';
 import { evaluate, ofLeaf } from '../../src/nexus/evaluate';
 import { apply } from '../../src/nexus/law';
-import { add, boundSyms, cells, div, integral, k, leaf, leavesOf, mul, neg, pow, show, sin, sqrt, substitute, varsOf, variable, PI, zero } from '../../src/nexus/term';
-import { closure, leavesUnder } from '../../src/nexus/why';
+import { add, boundSyms, cells, div, integral, k, leaf, mul, neg, pow, show, sin, sqrt, substitute, varsOf, variable, PI, zero } from '../../src/nexus/term';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'the test' }));
 const res = (n: number) => cells(n, 'the test');
@@ -27,20 +26,7 @@ describe('the binder as a term', () => {
     expect(show(t)).toBe('∫[0, L] q · x dx');
   });
 
-  it('identity is by content: renaming the bound coordinate changes nothing, the resolution leaf is in the identity and the closure', () => {
-    const x = variable('x', 'm'), y = variable('y', 'm'), q = variable('q', 'N/m');
-    const a = integral(x, zero('m'), variable('L', 'm'), mul(q, x), res(4));
-    const b = integral(y, zero('m'), variable('L', 'm'), mul(q, y), res(4));
-    const c = integral(x, zero('m'), variable('L', 'm'), mul(q, x), res(8));
-    expect(a.hash).toBe(b.hash);
-    expect(a.hash).not.toBe(c.hash);
-    expect(leavesOf(a).map((l) => l.name)).toContain('4 Simpson panels');
-    const d = evaluate('∫ q x', a, { q: given('q', 10, 'N/m'), L: given('L', 2, 'm') }, { law: 'the test', unit: 'N m' });
-    expect(leavesUnder(d).map((l) => l.name)).toContain('4 Simpson panels');
-    expect(closure(d).has(res(4).hash)).toBe(true);
-    expect(d.inputs['x']).toBeUndefined();
-  });
-
+  
   it('substitution respects the binder: free ends and body are replaced, the bound coordinate is not, capture is refused', () => {
     const x = variable('x', 'm'), q = variable('q', 'N/m'), L = variable('L', 'm');
     const t = integral(x, zero('m'), L, mul(q, x), res(4));

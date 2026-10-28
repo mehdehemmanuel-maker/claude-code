@@ -172,10 +172,6 @@ export function evaluate(name: string, term: Term, env: Env, cite?: { law: strin
 export const recompute = (d: Derivation): Derivation => (d.term.kind === 'leaf' ? ofLeaf(d.term) : evaluate(d.name, d.term, d.inputs, d.law ? { law: d.law, unit: d.unit, ...(d.cites ? { also: [...d.cites] } : {}) } : undefined));
 
 /** The same record with a wider uncertainty and the reason: an observer's resolution, never a smaller one. */
-export function withUncertainty(d: Derivation, uncertainty: number, because: string): Derivation {
-  if (uncertainty < (d.uncertainty ?? 0)) throw new Error(`${d.name}: an uncertainty is never narrowed by hand`);
-  return brand({ ...d, uncertainty, because: d.because ? `${d.because}; ${because}` : because });
-}
 
 /** A judgement the evidence cannot decide: inside a bound's uncertainty. Not unknown: what is known is said. */
 export function unresolved(name: string, term: Term, inputs: Record<string, Derivation>, because: string, unit = '1'): Derivation {

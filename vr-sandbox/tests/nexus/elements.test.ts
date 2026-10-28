@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ELEMENTS, MATERIALS, elementsOf, formula, makeup } from '../../src/nexus/elements';
-import { INVENTORY, boardOfTree, fundamentals, treeLines } from '../../src/nexus/inventory';
+import { INVENTORY } from '../../src/nexus/inventory';
 
 describe('the elements, and what is made of them', () => {
   it('a formula by mass, from the standard atomic weights: PLA, alumina, PTFE', () => {
@@ -22,11 +22,4 @@ describe('the elements, and what is made of them', () => {
     expect(makeup('fr4').map(([x]) => x)).toEqual(['fibreglass', 'epoxy']);
     for (const e of Object.values(ELEMENTS)) expect(e.from.length).toBeGreaterThan(5);
   });
-  it('every part of the inventory ends in the same fundamentals: its tree and board go down to them, one node an element', () => {
-    const els = new Set(Object.keys(ELEMENTS).map((s) => `el-${s.toLowerCase()}`));
-    for (const i of INVENTORY.values()) { if (i.kind === 'element') continue; const f = fundamentals(i.id); expect(f.length, i.id).toBeGreaterThan(0); for (const e of f) expect(els.has(e.id)).toBe(true); }
-    const bike = fundamentals('bicycle'); expect(bike.find((e) => e.id === 'el-fe')!.via.length).toBeGreaterThan(3);
-    expect(treeLines('screw-m3').join('\n')).toMatch(/= iron 9\d\.\d %/);
-    const b = boardOfTree('skateboard')!; expect(Object.keys(b.nodes).some((k) => k === 'fund/el-al')).toBe(true);
   });
-});

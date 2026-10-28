@@ -97,10 +97,6 @@ export function surgeFrequency(s: CoilSpring) {
 }
 
 /** Mass of the wire (active + 2 dead coils). */
-export function springMass(s: CoilSpring) {
-  const wireLength = Math.PI * s.D * (s.Na + 2);
-  return s.wire.density * (Math.PI / 4) * s.d ** 2 * wireLength;
-}
 
 
 /** Helical torsion spring rate per radian, Shigley eq. 10-51: k' = d^4 E / (10.8 D N) per turn. */

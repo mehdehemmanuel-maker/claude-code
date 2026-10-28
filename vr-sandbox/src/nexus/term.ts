@@ -164,16 +164,6 @@ export function leaf(name: string, value: number | null, unit: string, origin: O
   return { ...l, hash: hashOf(leafContent(l)) };
 }
 
-/**
- * A leaf of an intent: given by the person when they gave it; when the slice filled it in, assumed, with the slice's
- * grounds and the fact that it was not given. The origin says who chose the value; a slice's choice never claims to be the person's.
- */
-export function intentLeaf(by: string, name: string, given: number | undefined, fallback: number, unit: string, grounds: string): Leaf {
-  return given === undefined
-    ? leaf(name, fallback, unit, { class: 'assumed', by: 'the slice', grounds: `${grounds}; not given by ${by}, varied through the intent` })
-    : leaf(name, given, unit, { class: 'given', by, grounds });
-}
-
 /** A mathematical constant of a derivation (the 48 in P L^3 / 48 E I): exact, its source the mathematics. */
 export const k = (value: number, name = String(value)): Leaf => leaf(name, value, '1', { class: 'fundamental', source: 'mathematics: exact in the derivation it belongs to' });
 
@@ -315,9 +305,7 @@ function shapeKey(t: Term): string {
   return key;
 }
 
-/** What a leaf is, for identity: its origin (class, source, grounds, by, window), value, dimension, uncertainty. Not its name. */
 /** A leaf's identity from its content: what a reloaded leaf is checked against. */
-export const leafHashOf = (l: Omit<Leaf, 'hash'>): string => hashOf(leafContent(l));
 const leafContent = (l: Omit<Leaf, 'hash'>) => ({ leaf: true, class: l.origin.class, source: l.origin.source ?? null, grounds: l.origin.grounds ?? null, by: l.origin.by ?? null, window: l.origin.window ?? null, value: l.value, dim: l.dim, uncertainty: l.uncertainty ?? null });
 
 const sortedArgs = new WeakMap<Term, readonly Term[]>(), orders = new WeakMap<Term, readonly string[]>();
@@ -364,27 +352,6 @@ export function termHash(t: Term): string {
     return r;
   };
   return h(t);
-}
-
-/** Commutative arguments in content order, variables numbered by first appearance in that order. */
-export function canonicalForm(t: Term): Canon {
-  const order = new Map<string, number>();
-  const walk = (x: Term): Canon => {
-    if (x.kind === 'leaf') return leafContent(x);
-    if (x.kind === 'var') {
-      if (!order.has(x.sym)) order.set(x.sym, order.size);
-      return { v: order.get(x.sym), dim: x.dim };
-    }
-    if (x.kind === 'bind') return { bind: x.rule, over: walk(x.over), lo: walk(x.lo), hi: walk(x.hi), body: walk(x.body), cells: leafContent(x.cells) };
-    let args = [...x.args];
-    if (OPERATORS[x.op].commutative) {
-      const keyed = args.map((a) => ({ a, key: shapeKey(a) }));
-      keyed.sort((p, q) => (p.key < q.key ? -1 : p.key > q.key ? 1 : 0));
-      args = keyed.map((p) => p.a);
-    }
-    return { op: OPERATORS[x.op].hash, ...(x.k === undefined ? {} : { k: x.k }), args: args.map(walk) };
-  };
-  return walk(t);
 }
 
 /** The variables of a term, by first appearance. */

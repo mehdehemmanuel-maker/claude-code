@@ -2,10 +2,9 @@
 // adjustable families that make any size from their standards; entries fed fast and checked; all of it as boards.
 
 import { describe, expect, it } from 'vitest';
-import { INVENTORY, PROCESSES, WRITTEN_TWICE, boardOfInventory, boardOfTree, categories, feed, lineOf, makeBoard, plan, resolve, routeOf, summary } from '../../src/nexus/inventory';
+import { INVENTORY, PROCESSES, WRITTEN_TWICE, categories, feed, lineOf, plan, resolve, routeOf, summary } from '../../src/nexus/inventory';
 import type { Item } from '../../src/nexus/inventory';
 import { FAMILIES, callFamily } from '../../src/nexus/families';
-import { triggersOf } from '../../src/nexus/flows';
 
 describe('the inventory', () => {
   it('is filed by category and subcategory, electrical, mechanical and hardware among them, with materials at the bottom', () => {
@@ -71,10 +70,3 @@ describe('feeding it fast', () => {
   });
 });
 
-describe('as boards', () => {
-  it('the inventory is a board of its categories; an item\'s inside a tree; making it a pipeline', () => {
-    const b = boardOfInventory(); expect(Object.keys(b.nodes).length).toBeGreaterThan(150); expect(Object.values(b.nodes).some((n) => n.label.startsWith('⚙'))).toBe(true);
-    const t = boardOfTree('mg996r')!; expect(Object.values(t.nodes).map((n) => n.label).join(' ')).toMatch(/servo case.*brushed DC motor|brushed DC motor.*servo case/s);
-    const m = makeBoard('mg996r')!; expect(triggersOf(m)).toHaveLength(1); expect(Object.values(m.nodes).map((n) => n.step?.what)).toContain('inventory make potentiometer');
-  });
-});

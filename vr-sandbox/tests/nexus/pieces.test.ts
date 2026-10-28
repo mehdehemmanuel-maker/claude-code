@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { INVENTORY, resolve } from '../../src/nexus/inventory';
 import { KINDS } from '../../src/nexus/kinds';
 import { linesOf } from '../../src/nexus/kinds/core';
-import { lookOf, planOf, sized, wayDown, finishOf, SHAPES, MOST, MATTER_TO_INVENTORY } from '../../src/nexus/pieces';
-import { MATERIALS as MATTERS } from '../../src/data/materials';
+import { lookOf, planOf, sized, finishOf, SHAPES, MOST } from '../../src/nexus/pieces';
 import { LOOKS, lookRow } from '../../src/nexus/looks';
 import type { Item } from '../../src/nexus/inventory';
 
@@ -65,18 +64,4 @@ describe('everything in 3D: its look, and how it comes apart', () => {
     expect(Math.max(...tyre.look.size) / Math.max(...hub.look.size)).toBeGreaterThan(3); // a 700 mm tyre beside a 100 mm hub
     const tiny = p.pieces.find((x) => x.id === 'nipple-spoke')!; expect(tiny.shown).toBeGreaterThan(1); expect(tiny.note).toMatch(/shown larger/);
   });
-  it('pointing at the first part each time always ends at an element', () => {
-    for (const id of ['bicycle', 'printer-fdm', 'kettle', 'quadcopter', get('aircylinder bore32 double 100mm').id, get('lens d25.4 f100 uncoated').id]) {
-      const way = wayDown(id);
-      expect(way.at(-1)!.startsWith('el-'), `${id}: ${way.join(' › ')}`).toBe(true);
-    }
-  });
-  it('a shape made in the room opens into its matter: every matter the generator builds with has its material here, but cloth, leather and soil', () => {
-    for (const m of MATTERS) {
-      const id = MATTER_TO_INVENTORY[m.id];
-      if (!id) { expect(['textile.baize', 'leather.veg-tan', 'cork.agglomerated', 'ground.soil'], m.id).toContain(m.id); continue; }
-      expect(INVENTORY.get(id)?.kind, `${m.id} → ${id}`).toBe('material');
-      expect(wayDown(id).at(-1)!.startsWith('el-'), m.id).toBe(true);
-    }
-  });
-});
+    });

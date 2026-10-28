@@ -121,4 +121,3 @@ const LEGACY: Record<string, string> = {
 export const currentId = (id: string) => LEGACY[id] ?? id;
 
 export const getMotor = (id: string) => MOTORS[currentId(id)] ?? MOTORS['motor.dc.coreless.d40-150w-24v']!;
-export const getGearhead = (id: string) => (id === 'none' ? null : GEARHEADS[currentId(id)] ?? null);

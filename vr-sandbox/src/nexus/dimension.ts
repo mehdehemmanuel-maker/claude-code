@@ -9,7 +9,6 @@ export { DIMLESS, sameDim };
 /** The dimension a unit is written in (`N`, `m/s^2`, `kg m^2`, `-`). */
 export const dimOf = (unit: string): Dim => parseUnit(unit).dim;
 /** The factor that takes a value written in `unit` to SI. */
-export const scaleOf = (unit: string): number => parseUnit(unit).scale;
 export const mulDim = (a: Dim, b: Dim): Dim => a.map((x, i) => x + b[i]!) as Dim;
 export const divDim = (a: Dim, b: Dim): Dim => a.map((x, i) => x - b[i]!) as Dim;
 export const powDim = (a: Dim, k: number): Dim => a.map((x) => x * k) as Dim;
@@ -104,17 +103,3 @@ export function integerNullSpace(rows: number[][], columns?: number): number[][]
  * every vector of the null space is some assignment of its free variables, so the smallest ones are found by
  * enumerating them, not by combining an arbitrarily scaled basis.
  */
-export function integerNullVectors(rows: number[][], columns: number, range: number): number[][] {
-  const r = reduce(rows, columns);
-  const out = new Map<string, number[]>();
-  const vals = new Array<number>(r.free.length).fill(-range);
-  const total = (2 * range + 1) ** r.free.length;
-  for (let i = 0; i < total; i++) {
-    let v = i;
-    for (let j = 0; j < r.free.length; j++) { vals[j] = (v % (2 * range + 1)) - range; v = Math.floor(v / (2 * range + 1)); }
-    if (vals.every((x) => x === 0)) continue;
-    const k = vectorAt(r, new Map(r.free.map((f, j) => [f, vals[j]!])));
-    if (k) out.set(k.join(','), k);
-  }
-  return [...out.values()].sort((a, b) => a.reduce((s, x) => s + Math.abs(x), 0) - b.reduce((s, x) => s + Math.abs(x), 0));
-}

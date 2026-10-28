@@ -107,7 +107,6 @@ export function heatShare(a: Material, b: Material | null): number {
 }
 
 /** Of plastic work, the share that becomes heat (the rest is stored in the metal's dislocations): Taylor-Quinney. */
-export const TAYLOR_QUINNEY = 0.9;
 
 /**
  * Heat a part loses to still room air, W: natural convection (the simplified laminar air correlation for a surface

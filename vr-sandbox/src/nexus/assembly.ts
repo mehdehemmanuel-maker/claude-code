@@ -36,12 +36,8 @@ export function cellPick(i: number, j: number, k: number, seed: number, n: numbe
 export const isAssembly = (x: unknown): x is Assembly => !!x && typeof x === 'object' && Array.isArray((x as Assembly).items);
 export const isPart = (x: unknown): x is Part => !!x && typeof x === 'object' && !isAssembly(x) && typeof (x as Part).name === 'string';
 /** A part, or an assembly, as an assembly: a part alone is one placed at the origin. */
-export function asAssembly(x: Part | Assembly): Assembly { return isAssembly(x) ? x : lifted(x); }
-const lifts = new WeakMap<Part, Assembly>();
-function lifted(p: Part): Assembly { let a = lifts.get(p); if (!a) { a = { name: p.name, items: [{ of: p, at: [0, 0, 0], rot: [0, 0, 0], s: 1 }] }; lifts.set(p, a); } return a; }
 export const place = (of: Part | Assembly, at: V3 = [0, 0, 0], rot: V3 = [0, 0, 0], s = 1, over?: Override): Placed => ({ of, at, rot, s, ...(over ? { over } : {}) });
 
-/** A placement's matrix: moved to its place, turned (x, then y, then z, as the parts are), scaled. */
 /** (Kept per placement, as worked out from these: a placement changed after is worked out again. Read it; never change it.) */
 const matKept = new WeakMap<object, { at: V3; rot: V3; s: number; k?: V3; m: THREE.Matrix4 }>();
 export function matrixOf(p: { at: V3; rot: V3; s: number; over?: Override }): THREE.Matrix4 {

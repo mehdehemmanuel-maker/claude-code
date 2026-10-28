@@ -36,5 +36,3 @@ const byHash = new Map(BOOK.map((l) => [l.hash, l]));
 export const lawByHash = (hash: string): Law | undefined => byHash.get(hash);
 
 export const WEIGHT = lawById('weight');
-export const BENDING_STRESS = lawById('stress.bending');
-export const BAR_WAVE_SPEED = lawById('sound.speed');

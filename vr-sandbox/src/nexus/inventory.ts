@@ -9,9 +9,7 @@
 // standard parts carry their standard's name and sizes (ISO 4762 screws, the 608 bearing's 8 × 22 × 7 mm, the NEMA 17
 // face). Counts and masses marked "about" or "typical" vary from maker to maker.
 
-import { shapes, type Section } from './cell';
-import type { Board } from './boards';
-import { callFamily, FAMILIES } from './families';
+import { callFamily } from './families';
 import { ELEMENTS, elementId, elementsOf, makeup, makeupSays } from './elements';
 import { LIFE, MOLECULES, daltonsOf } from './life';
 
@@ -49,7 +47,7 @@ export const PROCESSES: Record<Process, { says: string; here: boolean }> = {
   chemistry: { says: 'made by chemistry: refined, reacted or synthesised', here: false },
   roll: { says: 'hot-rolled in a mill: needs a rolling mill', here: false },
   swage: { says: 'swaged: compacted by a swaging machine', here: false },
-  grow: { says: 'grown by living cells, from food, as their genes direct', here: false },
+  grow: { says: 'grown by living cells, from food, as their genes direct', here: false }
 };
 export type Kind = 'product' | 'assembly' | 'part' | 'material' | 'element';
 export interface Item {
@@ -78,7 +76,6 @@ function memo<T>(f: (id: string) => T): (id: string) => T {
   let at = -1; const kept = new Map<string, T>();
   return (id) => { if (at !== rev) { kept.clear(); at = rev; } let v = kept.get(id); if (v === undefined) { v = f(id); kept.set(id, v); } return v; };
 }
-/** An entry, compactly: id, name, "Category/Subcategory[/Sub-subcategory]", kind, process, "child*n child …", says, spec, more. */
 /** Ids written by hand twice: the second would replace the first unseen (a gear pump turned into one of its gears). */
 export const WRITTEN_TWICE: string[] = [];
 function e(id: string, name: string, path: string, kind: Kind, make: Process, of: string, says: string, spec = '', more: Partial<Item> = {}): void {
@@ -1684,7 +1681,6 @@ export const countIn = (id: string, what: string): number => {
   return n(id);
 };
 
-/** The tree of what is in an item, every level, as lines to read. */
 /** The tree of what is in an item, every level, as lines to read: inside what is bought too (its maker's parts, said
  *  as bought), each material's make-up under it, down to the elements. */
 export function treeLines(id: string, most = 60): string[] {
@@ -1699,14 +1695,6 @@ export function treeLines(id: string, most = 60): string[] {
   };
   walk(id, 0, 1, new Set());
   return out;
-}
-/** A part's shape to print or cast it here: a hollow box of its size for a housing or case, a disc for a gear or wheel. */
-export function sectionsOf(i: Item): Section[] {
-  const [w, d, h] = i.size ?? [30, 30, 10];
-  if (/gear/.test(i.id)) return [{ outline: shapes.gear(Math.max(10, Math.round(w / 1.5)), 1), holes: [shapes.circle(2.5)], z0: 0, z1: h }];
-  if (/wheel|pulley|roller|collar|coupling|hub/.test(i.id)) return [{ outline: shapes.circle(w / 2), holes: [shapes.circle(Math.max(1.5, w / 8))], z0: 0, z1: h }];
-  if (/case|housing|holder|head|cap|bobbin/.test(i.id)) return [{ outline: shapes.rect(w, d), z0: 0, z1: 1.2 }, { outline: shapes.rect(w, d), holes: [shapes.rect(w - 3, d - 3)], z0: 1.2, z1: h }];
-  return [{ outline: shapes.rect(w, d), z0: 0, z1: h }];
 }
 
 // ==== feeding it fast ====================================================================================================
@@ -1758,52 +1746,5 @@ export const lineOf = (i: Item) => [i.id, i.name, i.path.join('/'), i.kind, i.ma
 // ==== as boards =========================================================================================================
 /** The whole inventory as a board of its categories: category, subcategory and sub-subcategory, each entry filed under
  *  them; the adjustable families marked ⚙ with their sizes. */
-export function boardOfInventory(at = Date.now()): Board {
-  const b: Board = { title: 'Inventory', kind: 'categories', about: '', nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: 'inventory' };
-  let e2 = 0; const node = (id: string, label: string, note: string) => { if (!b.nodes[id]) b.nodes[id] = { label, note }; return id; }, link = (a: string, c: string) => { b.edges[`e${e2++}`] = { from: a, to: c, rel: 'contains' }; };
-  const root = node('inv', 'Inventory', 'Everything the forge knows how to make, by what it is');
-  for (const [cat, subs] of categories()) {
-    const cid = node(`c-${cat}`, cat, ''); link(root, cid);
-    for (const [sub, subsubs] of subs) {
-      const sid = sub ? node(`s-${cat}-${sub}`, sub, '') : cid; if (sub) link(cid, sid);
-      for (const [ss, ids] of subsubs) {
-        const ssid = ss ? node(`ss-${cat}-${sub}-${ss}`, ss, '') : sid; if (ss) link(sid, ssid);
-        for (const id of ids) { const i = items.get(id)!; if (i.adjustable && !i.family) continue; const sm = i.kind === 'material' ? null : summary(id); link(ssid, node(`i-${id}`, `${i.family ? '⚙ ' : ''}${i.name}`, `${i.says}${i.spec ? ` · ${i.spec}` : ''}${sm ? ` · made here: ${sm.made}, bought: ${sm.bought}, from stock: ${sm.stock}` : ''}${i.family ? ` · adjustable: "${FAMILIES.find((f) => f.id === i.family)?.examples[1] ?? i.family}"` : ''}`)); }
-      }
-    }
-  }
-  for (const f of FAMILIES) { const id = `f-${f.id}`, under = `ss-${f.path.join('-')}`; node(id, `⚙ ${f.name} (any size)`, `${f.says}. Call it: ${f.examples.join(', ')}. Sizes: ${f.params.map((q) => `${q.key} ${q.values ? q.values.join('/') : `${q.min}–${q.max} ${q.unit}`}`).join('; ')}`); link(b.nodes[under] ? under : root, id); }
-  const n = [...items.values()].filter((i) => !(i.adjustable && !i.family)).length;
-  b.about = `${n} entries in ${categories().size} categories, and ${FAMILIES.length} adjustable families (⚙) that make any size asked for. Each entry is mapped to what is inside it, down to its materials; open one's tree, or make it ("inventory make nema17", "inventory make screw M4x20").`;
-  return b;
-}
 /** What is inside an item, every level down to its materials, as a board. */
-export function boardOfTree(id: string, at = Date.now()): Board | null {
-  const top = items.get(id); if (!top) return null;
-  const b: Board = { title: `Inside: ${top.name}`, kind: 'categories', about: `${top.says}. Every part inside it, and what is inside that, down to its materials and their elements (each element one node, where every branch meets); each marked by how it is made here (made, bought, or from stock).`, nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `inventory:${id}` };
-  let e2 = 0;
-  const walk = (x: string, under: string | null, n: number, path: string) => {
-    const i = items.get(x); if (!i || Object.keys(b.nodes).length >= 600) return; const r = routeOf(i), nid = `${path}/${x}`.replace(/[^a-z0-9/.-]/gi, '-');
-    b.nodes[nid] = { label: `${n !== 1 ? `${countSays(n)} × ` : ''}${i.name}`, note: `${i.says}${i.spec ? ` · ${i.spec}` : ''} · ${i.kind === 'material' ? 'from stock' : r.bought ? r.why : `made here: ${r.why}`}` };
-    if (under) b.edges[`e${e2++}`] = { from: under, to: nid, rel: 'contains' };
-    if (path.split('/').length < 8) for (const c of i.of) walk(c.id, nid, c.n, `${path}/${x}`);
-    // a material: what it is made of; an element is one node, so every branch that comes to it meets there
-    if (i.kind === 'material' && i.makeup) for (const m of i.makeup) {
-      const el = items.get(m.id); if (!el) continue;
-      if (el.kind === 'element') { const fid = `fund/${m.id}`; if (!b.nodes[fid]) b.nodes[fid] = { label: `⚛ ${el.name}`, note: el.says }; b.edges[`e${e2++}`] = { from: nid, to: fid, rel: `${m.pct >= 1 ? m.pct.toFixed(1) : m.pct.toFixed(2)} % of it` }; }
-      else if (path.split('/').length < 9) walk(m.id, nid, 1, `${path}/${x}`);
-    }
-  };
-  walk(id, null, 1, '');
-  return b;
-}
 /** Making an item, as a pipeline: each thing inside it made (or bought, or taken from stock), then it put together. */
-export function makeBoard(id: string, at = Date.now()): Board | null {
-  const i = items.get(id); if (!i) return null; const r = routeOf(i);
-  const steps: [string, string, { kind: 'trigger' | 'action'; what: string }][] = [['t', 'Run', { kind: 'trigger', what: 'when I press run' }]];
-  i.of.forEach((c, k) => { const ci = items.get(c.id); if (ci) steps.push([`c${k}`, `${c.n > 1 ? `${c.n} × ` : ''}${ci.name}`, { kind: 'action', what: `inventory make ${c.id}${c.n > 1 ? ` x${c.n}` : ''}` }]); });
-  steps.push(['f', `${r.bought ? 'Take' : r.process === 'print' ? 'Print' : r.process === 'cast' ? 'Cast' : 'Put together'} the ${i.name}`, { kind: 'action', what: `inventory finish ${id}` }]);
-  const b: Board = { title: `Make: ${i.name}`, kind: 'flow', about: `${i.says}. Each step makes (or buys, or takes from stock) one thing inside it, each of those made the same way all the way down; the last step ${r.bought ? 'takes it as bought' : r.why}.`, nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `inventory:${id}` };
-  steps.forEach(([sid, label, step], k) => { b.nodes[sid] = { label, step }; if (k) b.edges[`e${k}`] = { from: steps[k - 1]![0], to: sid, rel: 'flows to' }; });
-  return b;
-}

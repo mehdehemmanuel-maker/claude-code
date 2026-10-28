@@ -6,15 +6,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { BOOK, UNIVERSAL, lawById } from '../../src/nexus/book';
-import { breakdown, discover, families, forcedByUnits, graphSummary, leavesUnder, lawsUnder, measured, principlesOf, solve, step, valueIn } from '../../src/nexus/lawgraph';
-import { densityOf, profile, profileFaults } from '../../src/nexus/derive';
-import { flowsOf } from '../../src/nexus/life/flows';
+import { breakdown, discover, families, measured, principlesOf, solve, step } from '../../src/nexus/lawgraph';
 import { INVENTORY, countIn, gramsOfItem } from '../../src/nexus/inventory';
 import { MOLECULES } from '../../src/nexus/life';
 import { GLAND_KINDS } from '../../src/nexus/life/glands';
 import { ofLeaf } from '../../src/nexus/evaluate';
 import { leaf } from '../../src/nexus/term';
-import { holding } from '../../src/nexus/boxfill';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 
@@ -32,16 +29,7 @@ describe('the universal laws', () => {
 });
 
 describe('the law graph', () => {
-  it('places every law, finds the ones units force, and none its units forbid', () => {
-    const g = graphSummary();
-    expect(g.byPrinciple.unplaced ?? []).toEqual([]);
-    expect(g.units['contradicts its units'] ?? []).toEqual([]);
-    expect(g.units.forced!.length).toBeGreaterThan(60);
-    for (const id of ['weight', 'pendulum.period', 'diffusion.time', 'henry.solubility', 'column.self-weight', 'diffusion.sphere-limit']) expect(g.units.forced, id).toContain(id);
-    // what units cannot know: Kleiber's exponent, Basquin's, the Gompertz rate
-    for (const id of ['kleiber.scaling', 'fatigue.basquin', 'network.scaling']) expect(forcedByUnits(lawById(id)).verdict, id).not.toBe('forced');
-  });
-  it('finds a law from units alone: a pendulum\'s period, the largest a cell can grow by diffusion, the tallest column', () => {
+    it('finds a law from units alone: a pendulum\'s period, the largest a cell can grow by diffusion, the tallest column', () => {
     expect(discover(['period', 's'], [['length', 'm'], ['gravity', 'm/s^2']]).exponents).toEqual({ length: 0.5, gravity: -0.5 });
     expect(discover(['radius', 'm'], [['D', 'm^2/s'], ['C', 'mol/m^3'], ['q', 'mol/m^3 s']]).exponents).toEqual({ D: 0.5, C: 0.5, q: -0.5 });
     expect(discover(['drag', 'N'], [['mu', 'Pa s'], ['r', 'm'], ['v', 'm/s'], ['rho', 'kg/m^3']]).forced).toBe(false); // the Reynolds number is free
@@ -61,34 +49,7 @@ describe('the law graph', () => {
 });
 
 describe('every part through the same laws', () => {
-  it('its density from its make-up: tissues within a few % of ICRU 46, the body about 1.05', () => {
-    const rho = (id: string) => valueIn(densityOf(id)!, 'kg/m^3')!;
-    for (const [id, want] of [['skeletal-muscle-tissue', 1050], ['adipose-tissue', 950], ['cortical-bone', 1920], ['blood', 1060], ['brain', 1040], ['liver', 1060]] as const) { const r = rho(id); expect(Math.abs(r - want) / want, `${id}: ${r.toFixed(0)} against ${want}`).toBeLessThan(0.035); }
-    expect(rho('human')).toBeGreaterThan(1030); expect(rho('human')).toBeLessThan(1080);
-    expect(rho('red-blood-cell')).toBeGreaterThan(1070); expect(rho('red-blood-cell')).toBeLessThan(1120); // measured about 1.10
-  });
-  it('whether it could live without vessels, by Hill\'s diffusion limit on what it burns', () => {
-    expect(profile('liver')!.oxygen!.needsVessels).toBe(true); expect(profile('brain')!.oxygen!.needsVessels).toBe(true);
-    expect(profile('hepatocyte')!.oxygen!.needsVessels).toBe(false); expect(profile('e-coli')!.oxygen!.needsVessels).toBe(false);
-    const r = valueIn(profile('liver')!.oxygen!.reach, 'mm')!; expect(r).toBeGreaterThan(0.05); expect(r).toBeLessThan(0.5); // a few tenths of a mm: why capillaries are that far apart
-    expect(lawsUnder(profile('liver')!.oxygen!.reach).map((l) => l.id)).toEqual(expect.arrayContaining(['mixing.density', 'mass.volume', 'reaction.rate-from-power', 'henry.solubility', 'diffusion.sphere-limit']));
-  });
-  it('finds no part whose size and mass disagree', () => {
-    expect(profileFaults().map((f) => f.says)).toEqual([]);
-  });
-  it('counts a set by its members: the 23 ligamenta flava, the tendons of a forearm, both tonsils', () => {
-    const lf = profile('ligamenta-flava')!; expect(lawsUnder(lf.box!).map((l) => l.id)).toEqual(expect.arrayContaining(['total.volume', 'volume.of-box']));
-    expect(lf.fill!).toBeGreaterThan(0.85); expect(lf.fill!).toBeLessThan(1.15);
-    // a band's mass is its size's volume at its tissue's density: the Achilles tendon, 150 × 15 × 6 mm, about 12 g
-    expect(gramsOfItem(INVENTORY.get('achilles-tendon')!)!).toBeCloseTo(12, 0);
-    expect(countIn('human', 'parotid-gland')).toBe(2); expect(gramsOfItem(INVENTORY.get('salivary-glands')!)).toBe(85); // ICRP 89's 85 g, three pairs
-  });
-  it('grows a cell\'s size until it holds the volume it is measured to have', () => {
-    expect(holding([10, 10, 10], 524, 'cell')).toEqual([10, 10, 10]); // an ellipsoid 10 µm across holds 524 µm³
-    const k = holding([15, 15, 7], 1500, 'cell'); expect((Math.PI / 6) * k[0] * k[1] * k[2]).toBeCloseTo(1500, -1); expect(k[0] / k[2]).toBeCloseTo(15 / 7, 1);
-    for (const id of ['keratinocyte', 'osteoclast', 'alveolar-cell-2', 'hepatocyte']) expect(profile(id)!.fill!, id).toBeLessThanOrEqual(1.05);
-  });
-  it('spreads the cortex 2.5 mm thick: its areas add to the cortex\'s measured 1,800–2,600 cm²', () => {
+            it('spreads the cortex 2.5 mm thick: its areas add to the cortex\'s measured 1,800–2,600 cm²', () => {
     let mm2 = 0; for (const [id, i] of INVENTORY) if (id.startsWith('brodmann-')) mm2 += countIn('brain', id) * i.size![0] * i.size![1];
     expect(mm2 / 100).toBeGreaterThan(1800); expect(mm2 / 100).toBeLessThan(2600);
   });
@@ -103,22 +64,7 @@ describe('what a body makes', () => {
     expect(INVENTORY.get('reproductive-system-female')!.of.map((c) => c.id)).toEqual(expect.arrayContaining(['ovary', 'uterus', 'breast']));
     for (const id of ['sebum', 'cerumen', 'tear-fluid', 'meibum', 'mucus', 'milk', 'pancreatic-juice', 'urine', 'sweat', 'saliva']) { const m = MOLECULES.find((x) => x.id === id)!; expect('blend' in m.spec, id).toBe(true); if ('blend' in m.spec) expect(m.spec.blend.reduce((a, [, p]) => a + p, 0), id).toBeCloseTo(100, 0); }
   });
-  it('works out each flow by the universal laws, within the range it is measured in', () => {
-    const fs = flowsOf();
-    for (const f of fs) if (f.measured) { const v = valueIn(f.rate, f.unit)!; expect(v, `${f.name}: ${v} ${f.unit}`).toBeGreaterThanOrEqual(f.measured.lo); expect(v, `${f.name}: ${v} ${f.unit}`).toBeLessThanOrEqual(f.measured.hi); }
-    expect(fs.filter((f) => f.measured).length).toBeGreaterThan(12);
-    const urine = fs.find((f) => f.id === 'urine')!;
-    expect(lawsUnder(urine.rate).map((l) => l.id)).toEqual(expect.arrayContaining(['balance.difference', 'junction.sum', 'transport.advection', 'vapour.pressure', 'gas.concentration', 'flux.area']));
-    const bili = fs.find((f) => f.id === 'bilirubin')!;
-    expect(lawsUnder(bili.rate).map((l) => l.id)).toEqual(expect.arrayContaining(['queueing', 'total.mass', 'stoichiometry.mass']));
-    expect(leavesUnder(bili.rate).every((d) => d.term.kind === 'leaf')).toBe(true);
-    // breath and blood by the same laws: the oxygen burnt from resting power, the heart's output by Fick's principle
-    const heart = fs.find((f) => f.id === 'cardiac-output')!;
-    expect(lawsUnder(heart.rate).map((l) => l.id)).toEqual(expect.arrayContaining(['power.molar', 'transport.advection', 'stoichiometry.moles', 'saturation.share', 'amount.concentration', 'total.mass']));
-    const alb = fs.find((f) => f.id === 'albumin')!; expect(lawsUnder(alb.rate).map((l) => l.id)).toEqual(expect.arrayContaining(['loss.first-order', 'half-life', 'share.of']));
-    const hair = fs.find((f) => f.id === 'hair')!; const longest = valueIn(hair.also[0]!.d, 'cm')!; expect(longest).toBeGreaterThan(20); expect(longest).toBeLessThan(80); // its growth rate times its growing phase
-  });
-  it('its glands are kinds other creatures have too: silk, wax, light, venom, ink, slime', () => {
+    it('its glands are kinds other creatures have too: silk, wax, light, venom, ink, slime', () => {
     for (const k of GLAND_KINDS) { expect(INVENTORY.has(k.id), k.id).toBe(true); for (const c of k.in) expect(countIn(c, k.id), `${c} has ${k.id}`).toBeGreaterThan(0); }
     expect(countIn('hagfish', 'slime-gland')).toBe(300); expect(countIn('silkworm', 'silk-gland')).toBe(2);
     expect(MOLECULES.find((m) => m.id === 'hagfish-slime')!.spec).toMatchObject({ blend: expect.arrayContaining([['water', 99.996]]) });

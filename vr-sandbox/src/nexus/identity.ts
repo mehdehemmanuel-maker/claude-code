@@ -1,6 +1,5 @@
 // Identity is content: the hash of a canonical form. Nothing is identified by its name; a name is a label.
 
-const OFFSET = 0xcbf29ce484222325n, PRIME = 0x100000001b3n, MASK = 0xffffffffffffffffn;
 const enc = new TextEncoder();
 
 /** FNV-1a, 64 bits, of a string; 16 hex characters. Computed in four 16-bit limbs: the same number as 64-bit arithmetic. */
@@ -14,13 +13,6 @@ export function fnv64(text: string): string {
     h0 = t0 & 0xffff; h1 = t1 & 0xffff; h2 = t2 & 0xffff; h3 = t3 & 0xffff;
   }
   return [h3, h2, h1, h0].map((x) => x.toString(16).padStart(4, '0')).join('');
-}
-
-/** FNV-1a by BigInt arithmetic, the definition the limbs are checked against. */
-export function fnv64Reference(text: string): string {
-  let h = OFFSET;
-  for (const b of enc.encode(text)) { h ^= BigInt(b); h = (h * PRIME) & MASK; }
-  return h.toString(16).padStart(16, '0');
 }
 
 /** JSON with object keys sorted, so equal structures print equally. Numbers print exactly; NaN is refused. */

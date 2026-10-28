@@ -1,6 +1,6 @@
 // A body as the rigid segments physics moves: fifteen of them, from the body laid out (src/nexus/anatomy.ts), each with
 // the share of the body's mass de Leva measured for its sex, the room that mass takes at the body's own density (its
-// make-up through the mixing law, src/nexus/derive.ts) as the shape round its bone, and between them the joints with
+// make-up through the mixing law) as the shape round its bone, and between them the joints with
 // the ranges a joint moves through and the torques the muscles across it can give. Nothing here moves; it is what a
 // physics engine needs to make a body that falls, stands, steps and strikes by its own masses and muscles.
 //

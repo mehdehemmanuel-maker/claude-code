@@ -366,19 +366,6 @@ export function getMaterial(id: string): Material {
   return m;
 }
 
-
-export const MATERIAL_GROUPS: { label: string; ids: string[] }[] = [
-  { label: 'Steel & iron', ids: MATERIALS.filter((m) => ['steel', 'stainless', 'cast-iron'].includes(m.category)).map((m) => m.id) },
-  { label: 'Aluminium', ids: MATERIALS.filter((m) => m.category === 'aluminum').map((m) => m.id) },
-  { label: 'Copper, brass, titanium', ids: MATERIALS.filter((m) => ['copper-alloy', 'titanium'].includes(m.category)).map((m) => m.id) },
-  { label: 'Wood', ids: MATERIALS.filter((m) => ['wood', 'engineered-wood'].includes(m.category)).map((m) => m.id) },
-  { label: 'Plastics & rubber', ids: MATERIALS.filter((m) => ['polymer', 'polyolefin', 'ptfe', 'elastomer'].includes(m.category)).map((m) => m.id) },
-  { label: 'Glass, stone & concrete', ids: MATERIALS.filter((m) => ['glass', 'ceramic', 'stone'].includes(m.category)).map((m) => m.id) },
-  { label: 'Cloth, leather, foam & cork', ids: MATERIALS.filter((m) => ['textile', 'leather', 'foam', 'cork'].includes(m.category)).map((m) => m.id) },
-  { label: 'Composites', ids: MATERIALS.filter((m) => m.category === 'composite').map((m) => m.id) },
-  { label: 'Magnets', ids: MATERIALS.filter((m) => m.category === 'magnet').map((m) => m.id) },
-];
-
 /** Water and air at 20 C. */
 export const FLUIDS = {
   freshWater: { density: 998.2, source: 'CRC Handbook, water at 20 C' },

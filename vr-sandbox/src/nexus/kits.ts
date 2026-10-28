@@ -576,7 +576,6 @@ scene('armoury', 'a sword rack', /\b(sword rack|armou?ry|swords on a rack|collec
 
 // ---- counting what there is, and choosing from words ----
 const byId = { get: (id: string) => KITS.find((k) => k.id === id) };
-export const kitById = (id: string): Kit | undefined => byId.get(id);
 /** How many different things a kit makes, as a power of ten: the product of its choices, times every kit it uses to the
  *  number of times it uses it. */
 export function log10Kinds(k: Kit, seen = new Set<string>()): number {
@@ -584,17 +583,10 @@ export function log10Kinds(k: Kit, seen = new Set<string>()): number {
   return k.choices.reduce((a, ch) => a + Math.log10(ch.options.length), 0) + (k.uses ?? []).reduce((a, u) => a + u.n * log10Kinds(byId.get(u.kit)!, s), 0);
 }
 /** How many things all the kits make between them, as a power of ten. */
-export function log10All(): number { const ls = KITS.map((k) => log10Kinds(k)), m = Math.max(...ls); return m + Math.log10(ls.reduce((a, l) => a + 10 ** (l - m), 0)); }
 /** A kit's thing named in the plural: a galaxy's galaxies, a sandwich's sandwiches, a scene's without its "a". */
 export const plural = (name: string): string => { const n = name.replace(/^an? /, ''); const m = /^(.*?)( \(a prop\))?$/.exec(n)!; const w = m[1]!; return `${/(s|x|ch|sh)$/.test(w) ? `${w}es` : /[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : /s$/.test(w) ? w : `${w}s`}${m[2] ?? ''}`; };
-export const sayKinds = (l: number): string => (l < 6 ? Math.round(10 ** l).toLocaleString('en-US') : l < 15 ? `${(10 ** (l - Math.floor(l))).toFixed(1)} × 10^${Math.floor(l)}` : `about 10^${Math.round(l)}`);
 
 /** The kit the words name: a scene before the things in it ("a street with lamp posts" is the street), else the first named. */
-export function kitFor(words: string): Kit | null {
-  const t = words.toLowerCase(), hits = KITS.map((k) => ({ k, m: k.words.exec(t) })).filter((x) => x.m);
-  if (!hits.length) return null; const scenes = hits.filter((x) => x.k.uses && x.k.choices.length === 1);
-  return (scenes[0] ?? hits.sort((a, b) => a.m!.index - b.m!.index)[0]!).k;
-}
 /** The choices the words make (an option named, or a number with the choice's unit), the rest drawn at random. */
 export function choose(k: Kit, words: string, r: () => number): Pick {
   const t = ` ${words.toLowerCase()} `, out: Pick = {}, taken = new Set<string | number>();

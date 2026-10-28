@@ -120,5 +120,4 @@ addKit({
 });
 
 /** How far a creature's legs and wings go round in a stride (0–1), and so how each swinging part is turned now. */
-export const swingAt = (s: NonNullable<Part['swing']>, t: number, freq: number): number => s.amp * Math.sin(2 * Math.PI * (freq * t + s.phase));
 export type { Pick };

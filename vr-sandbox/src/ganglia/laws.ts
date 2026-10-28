@@ -14,8 +14,6 @@ import type { Law, Quantity } from './types';
 
 const q = (sym: string, name: string, unit: string): Quantity => ({ sym, name, unit });
 
-/** Resistivity of annealed copper at 20 deg C, ohm m (IEC 60028: 1/58 ohm mm^2/m). */
-export const COPPER_RHO = 1 / 58e6;
 /** Stefan-Boltzmann constant, W/m^2 K^4 (CODATA 2018). */
 export const SIGMA_SB = 5.670374419e-8;
 
@@ -46,7 +44,7 @@ export const LAWS: Law[] = [
     inputs: [q('m', 'mass', 'kg'), q('a', 'acceleration', 'm/s^2')], output: q('F', 'net force', 'N'),
     eval: ({ m, a }) => m! * a!, valid: 'Rigid bodies at speeds far below light\'s; a is measured in an inertial frame.',
     example: { inputs: { m: 2, a: 3 }, output: 6 }, source: PHYSICS, tags: ['force', 'acceleration', 'mass', 'dynamics'],
-    implementedIn: 'physics/world.ts (Jolt integrates it)',
+    implementedIn: 'nexus/sim.ts (Jolt integrates it)',
   },
   {
     id: 'weight', name: 'Weight', domain: 'mechanics',
@@ -61,7 +59,7 @@ export const LAWS: Law[] = [
     formula: 'F ≤ μ N', inputs: [q('mu', 'friction coefficient', '-'), q('N', 'normal force', 'N')], output: q('F', 'friction force (limit)', 'N'),
     eval: ({ mu, N }) => mu! * N!, valid: 'Dry, unlubricated contact; μ depends on the pair and the surfaces, not on the contact area.',
     example: { inputs: { mu: 0.4, N: 500 }, output: 200 }, source: SHIGLEY, tags: ['friction', 'grip', 'slip', 'clamp'],
-    implementedIn: 'physics/world.ts (contacts), connectors/registry.ts (bolted slip, clamp)',
+    implementedIn: 'nexus/sim.ts (each material\'s friction in Jolt\'s contacts)',
   },
   {
     id: 'rolling.resistance', name: 'Rolling resistance', domain: 'mechanics',
@@ -85,7 +83,7 @@ export const LAWS: Law[] = [
     output: q('F', 'drag', 'N'), eval: ({ rho, Cd, A, v }) => dragForce(rho!, Cd!, A!, v!),
     valid: 'Turbulent flow (Reynolds above about 10^4); air at 20 °C is 1.204 kg/m^3.',
     example: { inputs: { rho: 1.204, Cd: 0.9, A: 0.5, v: 10 }, output: 27.09 }, source: { cite: 'Hoerner, Fluid-Dynamic Drag, 1965' }, tags: ['air', 'speed', 'vehicle'],
-    implementedIn: 'engineering/mechanics.ts dragForce; physics/world.ts applyAirDrag with the frontal area by shape (frontalAreas): a sphere π r², a cylinder its rectangle across and its disc along, a box its faces',
+    implementedIn: 'engineering/mechanics.ts dragForce; nexus/power/drive.ts (½ ρ Cd A v² on the road)',
   },
   {
     id: 'power.linear', name: 'Power of a force', domain: 'mechanics', statement: 'A force moving its point at a speed does work at force times speed.',
@@ -112,13 +110,11 @@ export const LAWS: Law[] = [
     id: 'energy.kinetic', name: 'Kinetic energy', domain: 'mechanics', statement: 'A moving mass holds half its mass times its speed squared.',
     formula: 'E = ½ m v²', inputs: [q('m', 'mass', 'kg'), q('v', 'speed', 'm/s')], output: q('E', 'kinetic energy', 'J'),
     eval: ({ m, v }) => 0.5 * m! * v! * v!, valid: 'Translation only; a spinning body adds ½ I ω².', example: { inputs: { m: 120, v: 2.2 }, output: 290.4 }, source: PHYSICS, tags: ['energy', 'speed'],
-    implementedIn: 'physics/energy.ts kineticEnergy',
   },
   {
     id: 'energy.potential', name: 'Gravitational potential energy', domain: 'mechanics', statement: 'A raised mass holds its weight times its height.',
     formula: 'E = m g h', inputs: [q('m', 'mass', 'kg'), q('h', 'height', 'm')], output: q('E', 'potential energy', 'J'),
     constants: G, eval: ({ m, h, g: gg }) => m! * gg! * h!, valid: 'Uniform gravity.', example: { inputs: { m: 10, h: 2 }, output: 196.133 }, source: PHYSICS, tags: ['energy', 'height', 'lift'],
-    implementedIn: 'physics/energy.ts potentialEnergy',
   },
   {
     id: 'braking.distance', name: 'Stopping distance', domain: 'mechanics', statement: 'Braking steadily, a body stops in its speed squared over twice its deceleration.',
@@ -264,12 +260,12 @@ export const LAWS: Law[] = [
   {
     id: 'ohm', name: 'Ohm\'s law', domain: 'electrical', statement: 'The voltage across a resistance is the current through it times the resistance.', formula: 'V = I R',
     inputs: [q('I', 'current', 'A'), q('R', 'resistance', 'ohm')], output: q('V', 'voltage', 'V'), eval: ({ I, R }) => I! * R!, valid: 'Ohmic conductors at a given temperature.',
-    example: { inputs: { I: 20, R: 0.3 }, output: 6 }, source: PHYSICS, tags: ['voltage', 'current', 'wire', 'circuit'], implementedIn: 'physics/electric.ts',
+    example: { inputs: { I: 20, R: 0.3 }, output: 6 }, source: PHYSICS, tags: ['voltage', 'current', 'wire', 'circuit'],
   },
   {
     id: 'joule', name: 'Joule heating', domain: 'electrical', statement: 'Current through a resistance heats it at the current squared times the resistance.', formula: 'P = I² R',
     inputs: [q('I', 'current', 'A'), q('R', 'resistance', 'ohm')], output: q('P', 'heat', 'W'), eval: ({ I, R }) => I! * I! * R!, valid: 'Any conductor.',
-    example: { inputs: { I: 20, R: 0.3 }, output: 120 }, source: PHYSICS, tags: ['heat', 'wire', 'motor', 'loss'], implementedIn: 'physics/world.ts bookDrive',
+    example: { inputs: { I: 20, R: 0.3 }, output: 120 }, source: PHYSICS, tags: ['heat', 'wire', 'motor', 'loss'],
   },
   {
     id: 'wire.resistance', name: 'Resistance of a wire', domain: 'electrical', statement: 'A wire\'s resistance is its resistivity times its length over its cross-section.', formula: 'R = ρ L / A',
@@ -303,7 +299,6 @@ export const LAWS: Law[] = [
     id: 'motor.current', name: 'DC motor current', domain: 'electrical', statement: 'A motor draws what the applied voltage less its back-EMF drives through its winding.', formula: 'I = (V − K_e ω) / R',
     inputs: [q('V', 'applied voltage', 'V'), q('Ke', 'back-EMF constant', 'V s/rad'), q('w', 'speed', 'rad/s'), q('R', 'winding resistance', 'ohm')], output: q('I', 'current', 'A'),
     eval: ({ V, Ke, w, R }) => (V! - Ke! * w!) / R!, outside: ({ V, Ke, w }) => (Ke! * w! > V! ? 'turning faster than its no-load speed at this voltage, it generates instead of draws' : null), valid: 'Steady state (the winding\'s inductance only delays it, by L/R).', example: { inputs: { V: 24, Ke: 0.0302, w: 500, R: 0.299 }, output: 29.765886287625413 }, source: { cite: 'Hughes, Electric Motors and Drives, 4th ed.' }, tags: ['motor', 'current', 'battery'],
-    implementedIn: 'physics/electric.ts loadCurrent',
   },
   {
     id: 'motor.time-constant', name: 'Mechanical time constant', domain: 'electrical', statement: 'An unloaded motor reaches 63% of its no-load speed in R J over K_t^2.', formula: 'τ_m = R J / K_t²',
@@ -444,7 +439,7 @@ export const LAWS: Law[] = [
   {
     id: 'spring.energy', name: 'Energy in a spring', domain: 'mechanics', statement: 'A spring stretched or squeezed from rest holds half its rate times the stretch squared.',
     formula: 'E = ½ k x²', inputs: [q('k', 'rate', 'N/m'), q('x', 'deflection', 'm')], output: q('E', 'stored energy', 'J'),
-    eval: ({ k, x }) => 0.5 * k! * x! * x!, valid: 'Linear spring, below its solid length and its yield.', example: { inputs: { k: 12100, x: 0.02 }, output: 2.42 }, source: PHYSICS, tags: ['spring', 'launcher', 'energy'], implementedIn: 'physics/energy.ts springEnergy',
+    eval: ({ k, x }) => 0.5 * k! * x! * x!, valid: 'Linear spring, below its solid length and its yield.', example: { inputs: { k: 12100, x: 0.02 }, output: 2.42 }, source: PHYSICS, tags: ['spring', 'launcher', 'energy'],
   },
   {
     id: 'capacitor.energy', name: 'Energy in a capacitor', domain: 'electrical', statement: 'A charged capacitor holds half its capacitance times the voltage across it squared.',
@@ -471,7 +466,7 @@ export const LAWS: Law[] = [
     id: 'bolt.torque.nut-factor', name: 'Bolt tightening torque (nut factor)', domain: 'machine elements', statement: 'Tightening a bolt to a preload takes about a nut factor (0.2 dry steel) times the preload times its diameter.',
     formula: 'T = K F d', inputs: [q('K', 'nut factor', '-'), q('F', 'preload', 'N'), q('d', 'nominal diameter', 'm')], output: q('T', 'wrench torque', 'N m'),
     eval: ({ K, F, d }) => K! * F! * d!, outside: ({ K }) => (K! < 0.1 || K! > 0.35 ? `nut factor ${K} is outside 0.1 (lubricated) to 0.3 (dry, rough)` : null),
-    valid: 'Quick estimate; the world uses VDI 2230 (thread and head friction separately).', example: { inputs: { K: 0.2, F: 10000, d: 0.008 }, output: 16 }, source: SHIGLEY, tags: ['bolt', 'torque', 'preload', 'wrench'], implementedIn: 'engineering/bolts.ts tighteningTorque (VDI 2230)',
+    valid: 'Quick estimate; the world uses VDI 2230 (thread and head friction separately).', example: { inputs: { K: 0.2, F: 10000, d: 0.008 }, output: 16 }, source: SHIGLEY, tags: ['bolt', 'torque', 'preload', 'wrench'],
   },
   {
     id: 'power.electric', name: 'Electrical power', domain: 'electrical', statement: 'Power is voltage times current.', formula: 'P = V I',
@@ -522,7 +517,7 @@ export const LAWS: Law[] = [
   {
     id: 'buoyancy', name: 'Archimedes\' principle', domain: 'fluids', statement: 'A body in a fluid is pushed up by the weight of the fluid it displaces.', formula: 'F = ρ g V',
     inputs: [q('rho', 'fluid density', 'kg/m^3'), q('V', 'displaced volume', 'm^3')], output: q('F', 'buoyancy', 'N'), constants: G, eval: ({ rho, V, g: gg }) => rho! * gg! * V!,
-    valid: 'Fluid at rest.', example: { inputs: { rho: 1000, V: 0.001 }, output: 9.80665 }, source: PHYSICS, tags: ['water', 'float', 'raft'], implementedIn: 'physics/world.ts applyFluids',
+    valid: 'Fluid at rest.', example: { inputs: { rho: 1000, V: 0.001 }, output: 9.80665 }, source: PHYSICS, tags: ['water', 'float', 'raft'],
   },
   {
     id: 'hydrostatic', name: 'Hydrostatic pressure', domain: 'fluids', statement: 'Pressure in a still liquid rises with depth by its density times gravity times the depth.', formula: 'p = ρ g h',

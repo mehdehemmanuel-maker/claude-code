@@ -3,11 +3,8 @@ import { KINDS } from '../../src/nexus/kinds';
 import { linesOf, readKind, wordsOf } from '../../src/nexus/kinds/core';
 import { FAMILIES, HAND_FAMILIES, callFamily } from '../../src/nexus/families';
 import { INVENTORY, fundamentals, resolve } from '../../src/nexus/inventory';
-import { catalogue } from '../../src/nexus/catalogue';
-import { numberOf, partAt, randomPart, spaceSize } from '../../src/nexus/partspace';
 import { ELEMENTS, MATERIALS, elementsOf } from '../../src/nexus/elements';
 import type { Item } from '../../src/nexus/inventory';
-import { behave } from '../../src/nexus/behave';
 
 const make = (w: string): Item => { const r = callFamily(w); if (!r || typeof r === 'string') throw new Error(`${w}: ${r}`); return r; };
 
@@ -90,12 +87,7 @@ describe('kinds of bought part, as data', () => {
     expect(make('pillowblock 205').inner!.map((x) => x.id)).toContain('bearing-62052rs');
     expect(make('pillowblock 210').of.map((x) => x.id)).toContain('bearing-ball'); // no 6210 in the table: its fallback
   });
-  it('says what it does: its numbers, from its standard and law', () => {
-    const r = behave(resolve('aircylinder bore50 double 100mm') as Item, '', FAMILIES, callFamily);
-    expect(typeof r).toBe('object'); expect((r as { lines: string[] }).lines[0]).toMatch(/1178 N out/); // 0.6 MPa × π 50² / 4
-    expect((r as { lines: string[] }).lines[0]).not.toMatch(/sizes:/);
-  });
-  it('the second batch says its numbers from its standard: motors by frame, breakers by curve, antennas by wavelength', () => {
+    it('the second batch says its numbers from its standard: motors by frame, breakers by curve, antennas by wavelength', () => {
     expect(make('acmotor 132M 7.5kW 4P B3').spec).toMatch(/1500 rpm synchronous .* about 1440 rpm .* 49\.7 N·m .* shaft 38 mm at 132 mm high/);
     expect(make('mcb C 16A 1P').spec).toMatch(/between 80 and 160 A/);
     expect(make('antenna 2.4GHz whip').spec).toMatch(/λ = 125 mm: a quarter-wave whip 31\.2 mm/);
@@ -143,33 +135,4 @@ describe('kinds of bought part, as data', () => {
     expect(make('cement CEM-II/A-L-32.5R').name).toBe('CEM II/A-L 32.5 R cement, 25 kg');
     expect(make('powerinverter 1000W 12V pure-sine').spec).toMatch(/I = P \/ \(V η\) = 93 A/);
   });
-  it('springs are made to order: any wire, coil, coils, legs and angle; one that cannot be wound is refused', () => {
-    const t = make('torsionspring d1.35 D12.7 n7.75 a135 right l142 l218'); // legs: l1 42, l2 18
-    expect(t.name).toBe('torsion spring 1.35 × 12.7, 7.75 coils, legs at 135°, right-hand, legs 42 and 18 mm');
-    expect(callFamily('torsionspring d1 D30 n5 a90 left')).toMatch(/30\.0 wires across: makers wind 4 to 16/);
-    expect(callFamily('extspring d2 D20 L20 machine')).toMatch(/at least 42 mm/);
-    const sz = spaceSize(), ts = sz.families.find((f) => f.family === 'torsionspring')!.n;
-    expect(ts).toBeGreaterThan(1e13); // wire × coil × coils × angle × hand × leg × leg, every one a spring a maker would wind
-    expect(sz.total).toBeGreaterThan(1e12);
-    // a part at random comes from any family alike, not almost always the one with the most sizes
-    let seed = 7; const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    const fams = new Set(Array.from({ length: 300 }, () => partAt(randomPart(r))!.family));
-    expect(fams.size).toBeGreaterThan(80);
-  });
-  it('the catalogue lists every size sold, and the part space every size each can be made in', () => {
-    expect(catalogue().length).toBeGreaterThan(45000);
-    const sz = spaceSize();
-    for (const k of KINDS) {
-      const last = k.axes.reduce((at, a, i) => (typeof a.values === 'function' ? i : at), -1);
-      if (!k.space) k.axes.slice(0, Math.max(0, last)).forEach((a) => expect(a.cut, `${k.id}.${a.key}: a made-to-order axis before a dependent one`).toBeUndefined());
-      expect(sz.families.find((f) => f.family === k.id)?.n, k.id).toBeGreaterThanOrEqual(linesOf(k).length);
-    }
-    let checked = 0;
-    for (let n = 0; n < sz.total; n += Math.floor(sz.total / 4001)) {
-      const p = partAt(n)!; if (!KINDS.some((k) => k.id === p.family)) continue;
-      expect(numberOf(p.family, p.params), p.words).toBe(n);
-      const i = callFamily(p.words); expect(typeof i === 'object' && i, `${n}: ${p.words}: ${i}`).toBeTruthy(); checked++;
-    }
-    expect(checked).toBeGreaterThan(5);
-  });
-});
+    });

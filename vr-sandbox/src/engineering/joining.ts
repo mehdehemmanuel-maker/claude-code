@@ -11,40 +11,12 @@ export function weldable(a: WeldClass, b: WeldClass) {
   return pair === 'stainless+steel';
 }
 
-export interface Filler {
-  id: string;
-  label: string;
-  /** Weld metal tensile strength (classification) F_EXX, Pa. */
-  Fexx: number;
-  source: string;
-}
 
-export const FILLERS: Record<string, Filler> = {
-  E60: { id: 'E60', label: 'E60xx (stick)', Fexx: 414e6, source: 'AWS A5.1 classification' },
-  E70: { id: 'E70', label: 'E70xx / ER70S-6 (MIG)', Fexx: 483e6, source: 'AWS A5.1 / A5.18 classification' },
-  E80: { id: 'E80', label: 'E80xx', Fexx: 552e6, source: 'AWS A5.5 classification' },
-  ER308L: { id: 'ER308L', label: 'ER308L stainless', Fexx: 520e6, source: 'AWS A5.9 typical as-deposited' },
-  ER309L: { id: 'ER309L', label: 'ER309L (steel to stainless)', Fexx: 520e6, source: 'AWS A5.9 minimum tensile, 309L' },
-  ER4043: { id: 'ER4043', label: 'ER4043 aluminium', Fexx: 165e6, source: 'AWS D1.2 min. as-welded 6061 w/ 4043' },
-  ER5356: { id: 'ER5356', label: 'ER5356 aluminium', Fexx: 207e6, source: 'AWS D1.2 typical' },
-  ERCu: { id: 'ERCu', label: 'ERCu deoxidised copper', Fexx: 170e6, source: 'AWS A5.7 ERCu, typical as-welded (estimated)' },
-  'ERTi-5': { id: 'ERTi-5', label: 'ERTi-5 (Ti-6Al-4V)', Fexx: 895e6, source: 'AWS A5.16 ERTi-5, matching Ti-6Al-4V (estimated)' },
-};
 
 /**
  * Fillers that make a sound weld between two base-metal families, the usual choice first. Carbon-steel wire on
  * stainless dilutes into brittle martensite; steel to stainless takes over-alloyed 309L (Schaeffler diagram).
  */
-export function fillersFor(a: WeldClass, b: WeldClass): string[] {
-  const has = (c: WeldClass) => a === c || b === c;
-  if (!weldable(a, b)) return [];
-  if (has('aluminum')) return ['ER4043', 'ER5356'];
-  if (has('copper')) return ['ERCu'];
-  if (has('titanium')) return ['ERTi-5'];
-  if (a === 'stainless' && b === 'stainless') return ['ER308L', 'ER309L'];
-  if (has('stainless')) return ['ER309L'];
-  return ['E70', 'E60', 'E80'];
-}
 
 /**
  * Nominal shear capacity of a fillet weld: R = 0.707 a L (0.6 F_EXX) (AWS D1.1 / AISC J2.4, without phi).
@@ -67,10 +39,6 @@ export function rivetShear(n: number, d: number, rivetUltimate: number, shearUlt
 }
 
 /** Blind (pop) rivets have a hollow shank; tension is limited by head pull-off (estimated factors). */
-export function blindRivet(n: number, d: number, rivetUltimate: number) {
-  const shear = 0.8 * rivetShear(n, d, rivetUltimate);
-  return { shear, tension: 0.65 * shear };
-}
 
 export interface Adhesive {
   id: string;
@@ -179,10 +147,5 @@ export interface Solder {
   source: string;
 }
 
-export const SOLDERS: Record<string, Solder> = {
-  'sn63pb37': { id: 'sn63pb37', label: 'Sn63/Pb37', shear: 37e6, liquidus: 456, source: 'typical bulk shear, NIST solder data (estimated)' },
-  sac305: { id: 'sac305', label: 'SAC305 (lead-free)', shear: 40e6, liquidus: 493, source: 'typical bulk shear (estimated)' },
-};
 
 /** Base metals that solder wets with ordinary rosin flux. */
-export const SOLDERABLE = new Set(['copper-alloy', 'steel', 'stainless']);

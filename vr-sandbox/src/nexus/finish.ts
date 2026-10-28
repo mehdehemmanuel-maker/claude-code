@@ -29,8 +29,6 @@ export function edgeRadius(mat: string | undefined, thinnest: number, make?: 'pr
   const r = ruleFor(mat), mm = typeof r.mm === 'number' ? r.mm : r.mm(thinnest * 1000);
   return Math.max(0, Math.min(mm / 1000, thinnest / 3));
 }
-/** The rules as lines a board can show and a person can change: "edges <rule> <mm> mm". */
-export const edgeLines = (): string[] => EDGE_RULES.map((r) => `edges ${r.id} ${typeof r.mm === 'number' ? `${r.mm} mm` : 'by thickness'}: ${r.says} (${r.source})`);
 /** A rule changed by its line: "edges wood 4 mm", "edges machined metal 0.2". */
 export function setEdge(line: string): string {
   const m = /^edges\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(?:mm)?\b/i.exec(line.trim()); if (!m) return 'Say it as "edges <kind> <mm>": "edges wood 4 mm".';
@@ -39,7 +37,3 @@ export function setEdge(line: string): string {
 }
 /** The edge rule's material for a build's material (src/data/materials.ts ids): metals machined, cast iron cast, plastics
  *  moulded, wood eased, glass arrissed, concrete chamfered, brick worn, cloth and foam soft. */
-export function edgeMatOf(id: string | undefined): string | undefined {
-  if (!id) return undefined; const k = id.split('.')[0]!;
-  return ({ steel: 'steel-low', stainless: 'steel-low', aluminum: 'al-6061', copper: 'copper', brass: 'copper', titanium: 'steel-low', composite: 'steel-low', 'cast-iron': 'cast-iron', wood: 'wood', cork: 'wood', polymer: 'abs', rubber: 'rubber', glass: 'glass', concrete: 'concrete', ceramic: 'brick', textile: 'cotton', leather: 'leather', foam: 'foam' } as Record<string, string>)[k];
-}

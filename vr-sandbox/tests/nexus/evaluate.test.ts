@@ -7,7 +7,6 @@ import { evaluate, isDerivation, ofLeaf, recompute } from '../../src/nexus/evalu
 import { apply } from '../../src/nexus/law';
 import { PATCH_SAG, WEIGHT } from '../../src/nexus/book';
 import { leaf, mul, unknown, variable } from '../../src/nexus/term';
-import { why } from '../../src/nexus/why';
 
 const given = (name: string, v: number, unit: string, u?: number) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }, u));
 
@@ -56,11 +55,4 @@ describe('derivation', () => {
     expect(W.uncertainty).toBeCloseTo(0.981, 6);
   });
 
-  it('WHY is total: every path ends in a leaf with an origin', () => {
-    const W = apply(WEIGHT, { m: given('mass', 10, 'kg'), g: ofLeaf(leaf('g', 9.80665, 'm/s^2', { class: 'fundamental', source: 'ISO 80000-3' })) });
-    const tree = why(W);
-    expect(tree.law).toBe(WEIGHT.hash);
-    expect(tree.inputs['m']!.origin?.class).toBe('given');
-    expect(tree.inputs['g']!.origin?.source).toBe('ISO 80000-3');
   });
-});

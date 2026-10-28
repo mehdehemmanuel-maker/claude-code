@@ -7,7 +7,6 @@ import { PI, add, and, cells, div, ge, gt, integral, k, le, leaf, lt, max, mul, 
 export const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 export const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002, table 8.1', kind: 'handbook' as const };
 export const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
-export const NDS = { cite: 'AWC, National Design Specification for Wood Construction, 2018, §4.4.1.2 (beam stability: sawn lumber, d/b ≤ 2 needs no lateral support)', kind: 'standard' as const };
 export const SUPERPOSITION = { cite: 'Derived by superposition of the point-load influence line of a simply supported beam (Roark table 8.1 case 1e) over a central patch; the two limits (a point, the whole span) are the book\'s own cases', kind: 'derivation' as const };
 
 const m = variable('m', 'kg', 'mass'), g = variable('g', 'm/s^2', 'gravity');

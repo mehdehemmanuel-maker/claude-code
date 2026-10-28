@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { DESIGNED, boltedJoint, component, componentOf, library, use, type Component } from '../../src/nexus/components';
 import { catalogue } from '../../src/nexus/catalogue';
 import { FAMILIES } from '../../src/nexus/families';
-import { kitFor, makeKit, kitById, type Part } from '../../src/nexus/kits';
+import { type Part } from '../../src/nexus/kits';
 import { critique } from '../../src/nexus/make/critic';
 import { kitView } from '../../src/nexus/view/kit3d';
 
@@ -37,12 +37,7 @@ describe('the component library', () => {
     expect(w1!.at![1]).toBeCloseTo(-0.002, 6); expect(w2!.at![1]).toBeCloseTo(-0.026, 6); expect(nut!.at![1]).toBeCloseTo(-0.026, 6);
     for (const p of [w1, w2, nut]) expect(p!.passes, p!.name).toContain(bolt!.name);
   });
-  it('is a kit: a part is called by its words, and only with a size said', () => {
-    expect(kitFor('bolt M12x40')!.id).toBe('part'); expect(kitFor('angle 40x4 steel 1000mm')!.id).toBe('part');
-    expect(kitFor('a pipe organ')?.id).not.toBe('part');
-    const { part } = makeKit(kitById('part')!, 'extrusion 2040 500', 1); expect(part.name).toBe('2040 extrusion');
   });
-});
 
 describe('a linear guideway, drawn whole from HIWIN\'s table', () => {
   it('draws every MGN size and carriage with every part its inventory lists, within a tenth of HIWIN\'s mass', () => {

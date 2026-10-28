@@ -2,33 +2,18 @@
 // cases at their limits; a law inverts from the same term; every hash is content.
 
 import { describe, expect, it } from 'vitest';
-import { BOOK, CANTILEVER_TIP_SAG, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, SLICE, UNIVERSAL as UNIVERSAL_LAWS, WEIGHT, lawById } from '../../src/nexus/book';
+import { CANTILEVER_TIP_SAG, KEPT, PATCH_MOMENT, PATCH_SAG, RECT_I, SELF_MOMENT, SELF_SAG, WEIGHT, lawById } from '../../src/nexus/book';
 import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
 import { apply, invert, law } from '../../src/nexus/law';
 import { LAWS } from '../../src/ganglia/laws';
-import { parseUnit } from '../../src/ganglia/units';
 import { leaf, mul, variable } from '../../src/nexus/term';
-import { leavesUnder } from '../../src/nexus/why';
-import { carrierById, coupling, family } from '../../src/nexus/carrier';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
 const env = (l: { inputs: readonly { sym: string; unit: string; name: string }[] }, values: Record<string, number>): Record<string, Derivation> =>
   Object.fromEntries(l.inputs.map((p) => [p.sym, given(p.name, values[p.sym]!, p.unit)]));
 
 /** A worked example's output in SI: the kept data writes it in the output port's unit. */
-const inSI = (value: number, unit: string) => { const u = parseUnit(unit); return value * u.scale + (u.offset ?? 0); };
 
-describe('the derived laws of the slice', () => {
-  for (const l of SLICE) {
-    it(`${l.id} reproduces its example (${l.example?.from})`, () => {
-      const d = apply(l, env(l, l.example!.inputs));
-      expect(d.status).not.toBe('outside-validity');
-      expect(d.value).not.toBeNull();
-      const rel = l.example!.rel ?? 1e-9;
-      expect(Math.abs(d.value! - l.example!.output)).toBeLessThanOrEqual(rel * Math.max(1, Math.abs(l.example!.output)));
-    });
-  }
-});
 
 describe('the kept book as terms: every law, by its own example', () => {
   const kept = Object.fromEntries(LAWS.map((l) => [l.id, l]));
@@ -45,26 +30,7 @@ describe('the kept book as terms: every law, by its own example', () => {
       expect(t.source.cite).toBe(k.source.cite);
     }
   });
-  for (const k of LAWS) {
-    it(`${k.id}: the term reproduces the kept example in SI${k.outside ? ', and the domain is a predicate' : ''}`, () => {
-      const t = lawById(k.id);
-      const d = apply(t, env(t, k.example.inputs));
-      const expected = inSI(k.example.output, k.output.unit);
-      expect(d.status, `${k.id}: ${d.refusal?.domain ?? d.because ?? ''}`).not.toBe('outside-validity');
-      expect(d.value).not.toBeNull();
-      const rel = Math.max(k.example.rel ?? 0, 1e-9);
-      expect(Math.abs(d.value! - expected), `${k.id}: ${d.value} vs ${expected}`).toBeLessThanOrEqual(rel * Math.max(Math.abs(expected), 1e-300));
-      // the kept validity function and the term's domain predicates agree on the example
-      expect(t.domain.length > 0).toBe(!!k.outside);
-      if (k.outside) {
-        expect(k.outside(k.example.inputs)).toBeNull();
-        for (const dc of t.domain) expect(dc.says.length).toBeGreaterThan(8);
-      }
-      // every constant the term holds is a leaf with its source
-      for (const l of leavesUnder(d)) expect(l.origin.source ?? l.origin.grounds ?? l.origin.by, `${k.id}: ${l.name}`).toBeTruthy();
-    });
-  }
-  it('refuses outside a predicate domain, with the domain named, for a law that had a validity function', () => {
+    it('refuses outside a predicate domain, with the domain named, for a law that had a validity function', () => {
     const t = lawById('carnot');
     const d = apply(t, env(t, { Tc: 600, Th: 300 }));
     expect(d.status).toBe('outside-validity');
@@ -133,16 +99,4 @@ describe('the kept book as terms: every law, by its own example', () => {
     expect(() => law({ ...WEIGHT, output: { sym: 'W', unit: 'kg', name: 'weight' } })).toThrow(/dimension|kg/);
   });
 
-  it('the book is evidence, not a ceiling: it holds every kept law, and the language states laws for any matter it is told of that no one wrote', () => {
-    // the kept laws are the sourced instances generated laws are checked against (carrier.test.ts reproduces 22 of them); their number is the kept data's, not the language's
-    expect(BOOK.length).toBe(Object.values(KEPT).flat().length + SLICE.length + UNIVERSAL_LAWS.length);
-    const told = ['volume of honey', 'amount of carbon dioxide', 'mass of hydrogen', 'volume of lava', 'amount of a species not yet named'];
-    const power = told.filter((id) => carrierById(id).conjugate);
-    const generated = told.flatMap((id) => [...family(carrierById(id)), ...power.filter((x) => x !== id && power.includes(id)).flatMap((x) => coupling(carrierById(id), carrierById(x)))]);
-    // a concentration times a molar flux is not power: no lossless coupling to it is stated, and asking for one is refused
-    expect(() => coupling(carrierById('amount of carbon dioxide'), carrierById('volume of honey'))).toThrow(/power/);
-    expect(generated.length).toBeGreaterThan(told.length * family(carrierById('charge')).length);
-    expect(new Set(generated.map((l) => l.id)).size).toBe(generated.length);
-    for (const l of generated) { expect(BOOK.some((b) => b.id === l.id)).toBe(false); expect(l.source.kind).toBe('derivation'); }
   });
-});

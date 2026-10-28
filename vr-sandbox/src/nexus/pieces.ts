@@ -26,15 +26,6 @@ export interface Plan { id: string; name: string; says: string; whole: Look; pie
 
 /** The inventory's material for each matter the generator builds with (src/data/materials.ts), so a shape made in the
  *  room opens into what it is made of, then its elements. A matter with none here (textiles, leather, soil) has none. */
-export const MATTER_TO_INVENTORY: Record<string, string> = {
-  'steel.a36': 'steel-low', 'steel.1018-cd': 'steel-low', 'steel.4140-ann': 'steel-alloy', 'steel.4140-qt': 'steel-alloy', 'steel.52100': 'steel-chrome', 'steel.music-wire': 'steel-spring', 'stainless.304': 'stainless-304', 'stainless.316': 'stainless-316',
-  'cast-iron.gray-30': 'cast-iron', 'aluminum.6061-t6': 'al-6061', 'aluminum.7075-t6': 'al-7075', 'aluminum.5052-h32': 'al-5052', 'aluminum.2024-t3': 'al-2024', 'copper.c110': 'copper', 'brass.c360': 'brass',
-  'titanium.ti6al4v': 'ti-6al4v', 'wood.birch-plywood': 'wood-veneer', 'wood.mdf': 'wood', 'polymer.nylon-microcarbon': 'nylon', 'polymer.pmma': 'pmma', 'rubber.natural': 'rubber', 'glass.soda-lime': 'glass',
-  'concrete.c30': 'concrete', 'ceramic.clay-brick': 'brick', 'textile.canvas': 'paper', 'textile.nylon-ripstop': 'nylon', 'foam.eva': 'eva', 'composite.cfrp': 'cfrp', 'composite.gfrp': 'fr4', 'polymer.phenolic': 'phenolic', 'ground.sand-dry': 'quartz',
-  'wood.douglas-fir': 'wood', 'wood.southern-pine': 'wood', 'wood.white-pine': 'wood', 'wood.red-oak': 'wood', 'wood.white-oak': 'wood', 'wood.hard-maple': 'wood', 'wood.balsa': 'wood', 'wood.c24': 'wood',
-  'polymer.abs': 'abs', 'polymer.pla': 'pla', 'polymer.nylon66': 'nylon', 'polymer.pom': 'pom', 'polymer.pc': 'pc', 'polymer.hdpe': 'pe', 'polymer.ptfe': 'ptfe',
-  'stone.slate': 'slate', 'stone.granite': 'granite', 'stone.marble': 'marble', 'magnet.n35': 'ndfeb', 'magnet.n42': 'ndfeb', 'magnet.n52': 'ndfeb', 'magnet.ferrite-c8': 'ferrite-hard',
-};
 /** The finish of a material: its colour, how metallic, how rough. */
 export function finishOf(material: string): Finish {
   const m = material.toLowerCase();
@@ -116,8 +107,6 @@ function ringOf(n: number, rx: number, ry: number): V3[] {
   const rows = n <= 10 ? [n] : [Math.ceil(n * 0.45), n - Math.ceil(n * 0.45)];
   return rows.flatMap((k, r) => Array.from({ length: k }, (_, j): V3 => { const t = Math.PI / 2 + (j / k) * Math.PI * 2 + r * 0.3; const f = r ? 1.42 : 1; return [Math.cos(t) * rx * f, Math.sin(t) * ry * f, r ? -0.06 : 0]; }));
 }
-/** How big a thing is shown, metres across: a whole body half life size, the rest about a hand. */
-export const fitFor = (id: string): number => (WHOLE_BODY.has(id) ? 0.55 : 0.22);
 /** The most kinds of part laid out at once; the rest are counted. */
 export const MOST = 18;
 /** How an item comes apart: its look whole, scaled to fit about 0.3 m, and each of its parts round it at the same scale. */
@@ -181,8 +170,3 @@ function inBodyPlan(i: Item, rows: { item: Item; n: number }[], whole: Look, sca
   return { id: i.id, name: i.name, says: says.replace(/ \(where each sits inside it is not in the inventory\)/, ' (each from where it lies in it)'), whole: { ...whole, size: ws }, pieces, more: Math.max(0, loose.length - MOST), scale, deeper: rows.length > 0, inPlace: true };
 }
 /** The way down from an item to an element, always: its first part each time, then the material, then the element. */
-export function wayDown(id: string, most = 20): string[] {
-  const out = [id];
-  for (let k = 0; k < most; k++) { const p = planOf(out.at(-1)!); const i = INVENTORY.get(out.at(-1)!); if (!p || !i || i.kind === 'element' || !p.pieces.length) break; out.push(p.pieces[0]!.id); }
-  return out;
-}

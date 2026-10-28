@@ -5,7 +5,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { flapRate, froudeSpeed, wingArea } from '../../src/nexus/creatures';
-import { kitById, kitFor, makeKit, massOf } from '../../src/nexus/kits';
+import { KITS, makeKit, massOf } from '../../src/nexus/kits';
+
+const kitById = (id: string) => KITS.find((k) => k.id === id);
 
 describe('creatures as their size lets them move', () => {
   it('walks, trots, swims and flies at the rates their bodies give', () => {
@@ -15,7 +17,6 @@ describe('creatures as their size lets them move', () => {
     const whale = kitById('humpback')!.moves!({ age: 'adult' }); expect(whale.freq).toBeCloseTo((0.3 * 2) / (0.2 * 15), 6);
   });
   it('makes each creature from its words, at its real size, and knows how it moves', () => {
-    for (const [w, id] of [['a golden retriever puppy that follows me everywhere', 'dog'], ['a bunch of penguins', 'penguin'], ['whales swimming past', 'humpback'], ['a t-rex', 't rex'], ['a dragon I can ride', 'dragon']] as const) expect(kitFor(w)?.id, w).toBe(id);
     const pup = makeKit(kitById('dog')!, 'a golden retriever puppy', 1).part; expect(pup.says).toMatch(/35 cm|3[0-9] cm/); expect(massOf(pup)).toBeGreaterThan(3); expect(massOf(pup)).toBeLessThan(30);
     const rex = makeKit(kitById('t rex')!, 'an adult t rex', 1).part; expect(rex.says).toMatch(/hips 3.1 m/);
     const d = makeKit(kitById('dragon')!, 'a 500 kg dragon with a saddle', 1).part; expect(d.says).toMatch(/580|500 kg and a rider/); expect(d.says).toMatch(/m²/);

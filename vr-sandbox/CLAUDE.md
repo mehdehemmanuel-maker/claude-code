@@ -174,6 +174,13 @@ the task list and lose the why. So the why lives here, and every round is checke
   manual", "think outside the box … think about the pinnacle of it" (2026-10-27: hours had gone into hand-typed positions
   for single parts; the plan is `docs/PLACEMENT.md`: parts say what they need, a solver places, routes, sizes and explains,
   nothing placed by hand; each step shown to the user before the next)
+- "be careful with the library if there's a library of something that wasn't created from the node setup then it's
+  outdated and not to be merged with this like old builds before nodes need to be deleted anything taken up space that
+  is outdated needs to be permanently terminated and deleted" (2026-10-28: every file no page of the node app reaches
+  was deleted (138 source files, 26,300 lines: the words-to-build pipeline, the old embodiment, the census and manifold,
+  places and games, the old physics client), with their tests, their command-line programs, 43 docs about systems
+  before nodes and `spikes/`; then every export nothing used; what is kept is what the node app reaches. Commit
+  `e70944a` holds the last of it, if any of it is ever wanted back)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
@@ -187,11 +194,10 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 
 | Concern | Owner |
 | --- | --- |
-| Words to wants, figures, questions; designs from laws | `src/nexus/conceive.ts` |
-| Generated structure for any intent; its body in space | `src/nexus/generate.ts`, `src/nexus/realize-space.ts` |
-| Machines as real hardware from generated elements | `src/nexus/embody/` (`any.ts`, `tree.ts` load path, `stock.ts`) |
+| Generated structure for any intent | `src/nexus/generate.ts` |
+| Machines as real hardware from generated elements | `src/nexus/embody/` (`tree.ts` load path, `stock.ts`) |
 | Real products and what each contains, down to elements | `src/nexus/inventory.ts` (about 1,500 items) |
-| Parts made to any size by their standard | `src/nexus/families.ts`, `catalogue.ts`, `partspace.ts` |
+| Parts made to any size by their standard | `src/nexus/families.ts`, `catalogue.ts` |
 | Parts designed once in 3D from their standard, saved by name and category, used by every build (`use("bolt M8x30")`); assemblies of them (a bolted joint) | `src/nexus/components.ts` (kit `part`; checked over every catalogue size in `tests/nexus/components.test.ts`) |
 | A part's mass from its shape, material and fill | `src/nexus/mass.ts` (re-exported by `kits.ts`) |
 | Whether a drawn part holds every part its inventory says is in it, all the way down (`missingIn`); each component's own check runs it | `src/nexus/components.ts` |
@@ -209,7 +215,6 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | An item the library draws, seen in 3D: drawn as the library draws it (not its look), taken apart by the viewer's own explode, each piece opening into its pieces, the part the library draws it as, or (one piece) what it is made of, drawn | `src/nexus/view/explode.ts` (`showPart`), `src/nexus/components.ts` (`componentOf`) |
 | How a drawn part comes apart (`explode`): what is the part itself stays, those round it go out from its middle, those at its middle out past its ends along its length (heaviest first, each kind as one), and no piece parted onto another | `src/nexus/view/kit3d.ts` |
 | Things with choices, as a placed tree of parts | `src/nexus/kits.ts` (drawn by `view/kit3d.ts`) |
-| Conditions on loads, holds and reach | `src/nexus/conditions.ts` |
 | Conditions on how a made thing is (age, setting, material, size) | `src/nexus/make/conditions.ts` |
 | Edges as made (radius by material and process) | `src/nexus/finish.ts` |
 | Oriented-box layout and contacts of a placed tree | `src/nexus/make/space.ts` |
@@ -220,10 +225,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Lofts, bent tubes, turned profiles: mass, bounds, covering boxes | `src/nexus/form.ts` |
 | Freeform surfaces: NURBS curves and skins, interpolation, regions and trims, fairness, zebra, draft, seams | `src/nexus/surface.ts` |
 | Panelled bodies on curve networks (side skin, hood, deck, cabin; arches from the wheels' sweep; keep-outs) | `src/nexus/panels.ts` (rules in `BODY_RULES`, their history in `RULE_UPDATES`) |
-| Vehicles as points in a want-space (not a maker) | `src/nexus/vehicle.ts` |
 | Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/kits.ts`, checked in `src/nexus/make/critic.ts` |
 | A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
-| Places, rides and games | `places.ts`, `karting.ts`, `coaster.ts`, `pingpong.ts` |
 | Blocks: what a node on a board of blocks can be (typed ports with units, settings, tests, sources), the library of them by stage (`STAGES`, `stageOf`: read from what a node is, never filed by hand; the catalogue `docs/NODES.md` written from it and kept current by `tests/nexus/shelves.test.ts`), field, ability and kind (every law a calculator), a duplicate refused; blocks merged into one that does more kept as adapters (`ALIASES`), boards moved on by `rewire` in `dataflow.ts` | `src/nexus/blocks.ts` |
 | A board of blocks run: keys and a shared cache so only what changed runs, lists mapped, units converted on wires, groups folded, opened and saved as blocks, branches cut, dead blocks, twins and repeated wiring found | `src/nexus/dataflow.ts` (plan and status: `docs/NODE-ENGINE.md`) |
 | The board of blocks: the coloured canvas, library (its Boards first: the starter boards and yours, by field), inspector-calculator, suggestions; the board's clock (played, it ticks only what reads it) | `src/nexus/view/nodes.ts` (on the dashboard; hosted in the space as `wall`) |
@@ -264,7 +267,7 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Mating, universal and numerical: every mate a measure held in a range (faces and patterns: `mate.ts`; a zone kept clear: `Part.keep`, node `zone`; distance, gap, facing, sees, height to the nearest thing named: `Part.mates`, node `relate`), each perhaps only while a state holds; one solver (node Proximity and mates) keeps them, moving what can move with what it touches and is mated with; measured by node `mates`. Put the zone or the mate on the node; never write a rule for one kind of thing | `src/nexus/placement/proximity.ts`, `src/nexus/placement/relate.ts` |
 | A body drawn from its measured segments (de Leva's shares, long limbs tapered to his centres of mass), each part carrying its mass, length, centre and inertia, posed walking, leaning and reaching | `src/nexus/act/body.ts` (node `body`); the numbers in `src/nexus/life/segments.ts` (`mathOf`) |
 | Acting: an agent with a goal (open the nearest or farthest door it sees) that sees by its rays, reads the door (hinge line through its knuckles, the side it swings to, its handle on the agent's side), finds where to stand beside the handle (clear of the sweep, in reach, held longest), walks there by the router, reaches (Fitts), grasps, pulls or pushes with the ADA's 22.2 N and lets go, the door swinging on a Jolt hinge; a stick figure posed at any time | `src/nexus/act/` (`agent.ts`; nodes `goal`, `agent`; the plan in `docs/LIFE.md` step 3) |
-| Awareness: what every part gives off (seen by its size and contrast against the eye's arcminute, heard by its sound power over a quiet street, warmth by the rules' fall-off; hot, heavy, fragile, live, its smell) and what it lets a body do (grasp, lift, push, open, sit, step or walk on, drive), read from what it is against that body (an adult's, a child's), never tagged by hand; what is made for something it cannot do said; gases as substances (given off at a rate from the physics, carried by still air, a wind or shut in a room; smelled, harmful, flammable at their own concentrations); who notices what (eyes by an acuity-packed ray budget against the parts' covering boxes, ears over the background, warmth, gas at the nose; a CO alarm), observers stood where they are found | `src/nexus/aware/` (`tags.ts`, `gas.ts`, `sense.ts`; nodes `signature`, `afford`, `gas`, `sense`; the plan in `docs/LIFE.md`; not `life.ts` and `life/`, which are the body down to its molecules) |
+| Awareness: what every part gives off (seen by its size and contrast against the eye's arcminute, heard by its sound power over a quiet street, warmth by the rules' fall-off; hot, heavy, fragile, live, its smell) and what it lets a body do (grasp, lift, push, open, sit, step or walk on, drive), read from what it is against that body (an adult's, a child's), never tagged by hand; what is made for something it cannot do said; gases as substances (given off at a rate from the physics, carried by still air, a wind or shut in a room; smelled, harmful, flammable at their own concentrations); who notices what (eyes by an acuity-packed ray budget against the parts' covering boxes, ears over the background, warmth, gas at the nose; a CO alarm), observers stood where they are found | `src/nexus/aware/` (`tags.ts`, `gas.ts`, `sense.ts`; nodes `signature`, `afford`, `gas`, `sense`; the plan in `docs/LIFE.md`; not `life/`, which is the body down to its molecules) |
 | A winding as it is wound (on a former, round a ring's band, round a pole: its outer layer turn by turn as its wire, the layers under it as their packed solid; tested by the ring it lies within); a sensor as it is made (threaded probe, puck, block; its element by what it senses) | `src/nexus/makers.ts` `wound`, `sensor` (nodes Winding, Sensor); `Part.envelope` in `kits.ts`, read by the rules |
 
 ## The organising principle: interfaces, envelopes, one graph
@@ -315,8 +318,6 @@ Known gaps (from the 2026-10-08 audit, still open):
   of their own. Still
   drawn inline by their makers: most of every machine (brackets, bearings, springs, hinges, wiring, electronics);
   each is next to become a component, smallest and commonest first;
-- the space has no way yet to ask for a build in words (the forge's routing to `embodyAny`, `conceive` and `kits` went with it);
-- the go-kart on the track (`view/kart3d.ts`) is drawn by hand, apart from `machines.ts`;
 - planes, jets, cranes and power tools are not yet in `machines.ts` (a fixed wing, a boom, a handheld tool are each new
   architectures: add them as data on general builders, as the wheeled ones are).
 
@@ -324,7 +325,10 @@ Known gaps (from the 2026-10-08 audit, still open):
 
 1. `ls src/nexus` (the whole listing: never `| head`, which hid `vehicle.ts` once and it was overwritten) and grep for the
    concern. If it is in the table, extend its owner. Before writing a file, check that it does not already exist.
-2. If what you are about to write makes one named thing (a car builder, a kart builder), stop. Find the general rule
+2. Only the node setup is current. A library, a build or a module that the node app (its pages, its nodes, the boards
+   they make) does not reach is outdated: never merge it in or build on it; delete it. Check with the reach scan
+   (what `view/*.html` imports, followed through every import) before keeping anything that looks old.
+3. If what you are about to write makes one named thing (a car builder, a kart builder), stop. Find the general rule
    that makes it and its relatives from data (a wheeled vehicle from its axles, tyres, frame, seats, power, implements).
    Per-product data (a real model's published figures) is fine; per-product code is a template.
 
