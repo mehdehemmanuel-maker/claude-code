@@ -221,3 +221,39 @@ export function coloured(g: Graph, level: (number | null)[], name = 'coloured by
   });
   return { name, items };
 }
+
+/**
+ * The graph with each piece cut into slices along its length (step G: accuracy that grows): a box across the way what
+ * flows goes (its side most along the direction given; else its longest),
+ * a cylinder along its axis, into n slices each its own piece, the slices of one piece joined through its own section
+ * at each cut; a contact from outside lands on the slice that holds where it meets. Other shapes (tubes, lofts, pieces
+ * of several covering boxes) stay whole. Splitting more and seeing the answer settle is how far to trust it.
+ */
+export function sliced(g: Graph, n: number, along?: THREE.Vector3): Graph {
+  if (n <= 1) return g;
+  const pieces: GraphPiece[] = [], edges: GraphEdge[] = [], first: number[] = [], axisOf: { k: number; L: number; c: THREE.Vector3; u: THREE.Vector3; m: number }[] = [];
+  g.pieces.forEach((p) => {
+    const nd = p.node, s = nd.p.shape, o = nd.obb!;
+    const w = along ? o.u.map((u, i) => Math.abs(u.dot(along)) * (1 + 1e-6 * o.h[i]!)) : o.h, best = w.indexOf(Math.max(...w));
+    const k = s && 'cyl' in s && (s.cyl[2] === undefined || s.cyl[2] === s.cyl[0]) ? 1 : s && 'box' in s ? best : -1;
+    first.push(pieces.length);
+    if (k < 0 || nd.pieces.length > 1 || !nd.local) { pieces.push(p); axisOf.push({ k: -1, L: 0, c: o.c, u: o.u[0], m: 1 }); return; }
+    const L = 2 * o.h[k]!, sl = L / n, sc = new THREE.Vector3().setFromMatrixScale(nd.m), lsc = [sc.x, sc.y, sc.z][k]!;
+    axisOf.push({ k, L, c: o.c, u: o.u[k]!, m: n });
+    for (let j = 0; j < n; j++) {
+      const off = -L / 2 + sl * (j + 0.5), c = o.c.clone().addScaledVector(o.u[k]!, off), h = [...o.h] as OBB['h']; h[k] = sl / 2;
+      const ob: OBB = { c, u: o.u, h }, box = new THREE.Box3();
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) box.expandByPoint(c.clone().addScaledVector(o.u[0], sx * h[0]).addScaledVector(o.u[1], sy * h[1]).addScaledVector(o.u[2], sz * h[2]));
+      // its own part, a slice of the shape, at the slice's middle (in the piece's frame: offset along its own axis)
+      const shape = 'cyl' in s! ? { cyl: [s.cyl[0], s.cyl[1] / n] as [number, number] } : { box: (s as { box: [number, number, number] }).box.map((v, i) => (i === k ? v / n : v)) as [number, number, number] };
+      const lo = [0, 0, 0]; lo[k] = off / lsc; const m = nd.m.clone().multiply(new THREE.Matrix4().makeTranslation(lo[0]!, lo[1]!, lo[2]!));
+      const local = nd.local.clone(); local.min.setComponent(k, -sl / lsc / 2); local.max.setComponent(k, sl / lsc / 2);
+      pieces.push({ id: `${p.id}#${j}`, name: p.name, mat: p.mat, node: { ...nd, p: { ...nd.p, shape, parts: [] }, m, obb: ob, box, pieces: [ob], local, sub: box.clone() } });
+    }
+    const A = k === 1 && 'cyl' in s! ? Math.PI * o.h[0] * o.h[2] : 4 * o.h.filter((_, i) => i !== k).reduce((a, x) => a * x, 1);
+    for (let j = 1; j < n; j++) edges.push({ a: first[first.length - 1]! + j - 1, b: first[first.length - 1]! + j, at: o.c.clone().addScaledVector(o.u[k]!, -L / 2 + sl * j).toArray() as V3, normal: o.u[k]!.toArray() as V3, depth: 0, area: A });
+  });
+  const slabAt = (i: number, at: V3) => { const a = axisOf[i]!; if (a.k < 0) return first[i]!; const t = new THREE.Vector3(...at).sub(a.c).dot(a.u) + a.L / 2; return first[i]! + Math.max(0, Math.min(a.m - 1, Math.floor((t / a.L) * a.m))); };
+  for (const e of g.edges) edges.push({ ...e, a: slabAt(e.a, e.at), b: slabAt(e.b, e.at) });
+  return { pieces, edges, bounds: g.bounds, worked: 0 };
+}

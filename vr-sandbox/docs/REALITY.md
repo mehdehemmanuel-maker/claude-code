@@ -621,3 +621,15 @@ its level, blue at the cold end through green and yellow to red at the hot, grey
 `graph.ts`, each piece placed, shared). On the rods board, beside the rods: the steel block red, the rods blue. Seen
 plainly: each piece is one colour, because each is one temperature (lumped), though heat falls along a rod; step G
 splits pieces so the gradient shows and the answer can be seen settling.
+
+**Step G, first round (2026-10-28).** `sliced` in `graph.ts`: each box and cylinder cut into slices (node setting, 8 by
+default), a box across the way what flows goes (its side most along the line from the one end to the other; its
+longest when no way is given), a cylinder along its axis; the slices of a piece joined through its own section at each
+cut, by the same law; a contact from outside lands on the slice that holds where it meets; tubes, lofts and pieces of
+several boxes stay whole. The flow node says the answer at its slices and at half as many, and how far apart: how far
+to trust its last figures. Checked by hand: three copper cubes in 8 slices each, top slice to bottom slice, 0.2875 /
+(388 × 0.01) K/W, their middles' distance through the same bar (the node's second test). Found by that test: a cube's
+sides are all equal, so "the longest side" cut the stack across the wrong way; cutting across the way it flows put it
+right. The rods: 4.424 K/W at 8 slices, 4.270 at 4, 3.5 % apart; seen in 3D, red at the block through green and
+yellow to blue at the rods' feet, the copper rod's top cooler than the aluminium's because copper draws more heat
+through the steel above it.
