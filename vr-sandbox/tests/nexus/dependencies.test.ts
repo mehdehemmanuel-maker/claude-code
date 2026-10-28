@@ -1,5 +1,5 @@
-// The dependency map (docs/REALITY.md, step 0), written from the code itself so it cannot drift: every law and which of
-// the engines holds it (the book's terms, the closures the nodes run, a node); the quantities laws share, read from their
+// The dependency map (docs/REALITY.md, step 0), written from the code itself so it cannot drift: every law, its kind and
+// whether it is a node; the quantities laws share, read from their
 // ports (the start of step 2's registry), and the letters that mean different things in different laws; every material
 // table and which files read it. Kept current here; write it again with
 //   UPDATE_DEPS=1 npx vitest run tests/nexus/dependencies.test.ts
@@ -10,7 +10,6 @@ import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { BOOK, KEPT, KINDS, SLICE, UNIVERSAL } from '../../src/nexus/book';
 import { QUANTITIES, quantityOf } from '../../src/nexus/quantities';
-import { LAWS } from '../../src/ganglia/laws';
 import { LIBRARY } from '../../src/nexus/blocks';
 
 const root = join(__dirname, '../..'), update = !!process.env['UPDATE_DEPS'];
@@ -42,7 +41,6 @@ const NUMERIC: { what: string; at: string; find: RegExp; stays?: string }[] = [
   { what: 'an integral in a term (Simpson\'s rule, its error by halving)', at: 'src/nexus/evaluate.ts', find: /simpsonRule\(/ },
   { what: 'a PID loop\'s plant stepped in time', at: 'src/nexus/blocks.ts', find: /stepOde\(method/ },
   { what: 'roots, integrals, slopes and paths on a board', at: 'src/nexus/blocks.ts', find: /id: 'math\.ode'/ },
-  { what: 'a battery drained', at: 'src/engineering/battery.ts', find: /export function drain/, stays: 'one step of charge counted (I dt over the capacity at that rate): no equation to solve' },
   { what: 'a motor run in time', at: 'src/engineering/motorrun.ts', find: /export function runMotor/, stays: 'its steps switch between spin-up and a steady state, with events (overheating, the rise time) and energy counted each step; kept until a stepper with events replaces it whole, its results held by the baseline' },
   { what: 'warming in substeps', at: 'src/engineering/thermal.ts', find: /export function warm/, stays: 'a frame\'s step of a part cooling, its sub-step limited so it never crosses the room\'s temperature: called each frame, not run over a span' },
   { what: 'heat through a grid', at: 'src/nexus/heatflow.ts', find: /export function/, stays: 'a field solver (implicit, Gauss–Seidel over cells), not one equation in time' },
@@ -51,16 +49,16 @@ const NUMERIC: { what: string; at: string; find: RegExp; stays?: string }[] = [
 function mapText(): string {
   const L: string[] = ['# The dependency map', '', 'Written from the code by `tests/nexus/dependencies.test.ts` (step 0 of `docs/REALITY.md`); the test fails when it is out of date (`UPDATE_DEPS=1 npx vitest run tests/nexus/dependencies.test.ts`).', ''];
   // ---- laws ----
-  const closure = new Set(LAWS.map((l) => l.id)), node = new Set([...LIBRARY.values()].filter((b) => b.kind === 'law').map((b) => b.id.replace(/^law\./, '')));
+  const node = new Set([...LIBRARY.values()].filter((b) => b.kind === 'law').map((b) => b.id.replace(/^law\./, '')));
   const field = new Map<string, string>(); for (const [k, ls] of Object.entries(KEPT)) for (const l of ls) field.set(l.id, k); for (const l of SLICE) field.set(l.id, 'derived (slice)'); for (const l of UNIVERSAL) field.set(l.id, 'universal');
   const fields = [...new Set(field.values())];
-  L.push('## Laws and the engines that hold them', '', `${BOOK.length} laws in the book (terms: dimensions checked, domains, derivations); ${LAWS.length} as closures; ${node.size} as nodes (built from the closures). In the book only: ${BOOK.filter((l) => !closure.has(l.id)).length}. As closures only: ${LAWS.filter((l) => !BOOK.some((b) => b.id === l.id)).length}.`, '', 'Each law\'s kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived, constitutive (how a material behaves), empirical (a fit), an approximation (another law in a limit), or geometry.', '', '| Field | In the book | Also a closure and a node | Only in the book | Kinds |', '| --- | --- | --- | --- | --- |');
+  L.push('## Laws and the engines that hold them', '', `${BOOK.length} laws in the book (terms: dimensions checked, domains, derivations); ${node.size} of them nodes, built from the book (step 3: the closures that ran the first 144 are gone). In the book without a node: ${BOOK.filter((l) => !node.has(l.id)).length}.`, '', 'Each law\'s kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived, constitutive (how a material behaves), empirical (a fit), an approximation (another law in a limit), or geometry.', '', '| Field | In the book | Nodes | Kinds |', '| --- | --- | --- | --- |');
   const kindsIn = (ls: typeof BOOK) => { const c = new Map<string, number>(); for (const l of ls) { const k = KINDS[l.id]?.[0] ?? '?'; c.set(k, (c.get(k) ?? 0) + 1); } return [...c].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', '); };
-  for (const f of fields) { const ls = BOOK.filter((l) => field.get(l.id) === f); L.push(`| ${f} | ${ls.length} | ${ls.filter((l) => closure.has(l.id) && node.has(l.id)).length} | ${ls.filter((l) => !closure.has(l.id)).length} | ${kindsIn(ls)} |`); }
-  L.push(`| all | ${BOOK.length} | | | ${kindsIn(BOOK)} |`);
+  for (const f of fields) { const ls = BOOK.filter((l) => field.get(l.id) === f); L.push(`| ${f} | ${ls.length} | ${ls.filter((l) => node.has(l.id)).length} | ${kindsIn(ls)} |`); }
+  L.push(`| all | ${BOOK.length} | ${node.size} | ${kindsIn(BOOK)} |`);
   for (const f of fields) {
     L.push('', `### ${f}`, '', '| Law | Kind | Variables (symbol: what, unit) | Gives | Engines |', '| --- | --- | --- | --- | --- |');
-    for (const l of BOOK.filter((x) => field.get(x.id) === f)) L.push(`| \`${l.id}\` ${l.name} | ${KINDS[l.id]?.[0] ?? '**none**'} | ${l.inputs.map((p) => `${p.sym}: ${p.name}, ${p.unit || '1'}`).join('; ')} | ${l.output.sym}: ${l.output.name}, ${l.output.unit || '1'} | book${closure.has(l.id) ? ', closure' : ''}${node.has(l.id) ? ', node' : ''} |`);
+    for (const l of BOOK.filter((x) => field.get(x.id) === f)) L.push(`| \`${l.id}\` ${l.name} | ${KINDS[l.id]?.[0] ?? '**none**'} | ${l.inputs.map((p) => `${p.sym}: ${p.name}, ${p.unit || '1'}`).join('; ')} | ${l.output.sym}: ${l.output.name}, ${l.output.unit || '1'} | book${node.has(l.id) ? ', node' : ''} |`);
   }
   // ---- quantities shared ----
   const ports = BOOK.flatMap((l) => [...l.inputs, l.output].map((p) => ({ l: l.id, ...p, q: quantityOf(l, p) })));

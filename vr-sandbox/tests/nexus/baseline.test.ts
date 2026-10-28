@@ -1,11 +1,12 @@
 // The baseline (docs/REALITY.md, step 0): what Nexus gives today, recorded so every later step can show each thing it
 // changed and why. Every starter board run headless, each node's outputs digested (numbers to ten figures, a thing by
 // its mass and its pieces, anything else by a hash of its content); every law node's worked example; every seed's mass.
-// A difference fails the test and is listed; when every difference is explained, write it again:
+// A difference fails the test and is listed (all of them in a file with BASELINE_DIFFS=path); when every difference is
+// explained, write it again:
 //   UPDATE_BASELINE=1 npx vitest run tests/nexus/baseline.test.ts
 
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import '../../src/nexus/seeds';
 import { Engine, runBlock } from '../../src/nexus/dataflow';
@@ -64,6 +65,8 @@ const finish = (name: string, rec: Rec) => {
   fresh[name] = rec;
   if (update) { stored[name] = rec; writeFileSync(FILE, JSON.stringify(stored, Object.keys(stored).sort().reduce<string[]>((a, k) => a.concat(k, Object.keys(stored[k]!)), []), 1)); return; }
   const diffs = compare(name, rec, stored[name]);
+  // every difference, to read in full: BASELINE_DIFFS=path
+  if (process.env['BASELINE_DIFFS'] && diffs.length) appendFileSync(process.env['BASELINE_DIFFS'], diffs.join('\n') + '\n');
   expect(diffs, `${diffs.length} differences from the baseline (explain each, then UPDATE_BASELINE=1):\n${diffs.slice(0, 40).join('\n')}`).toEqual([]);
 };
 

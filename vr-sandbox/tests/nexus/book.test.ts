@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { CANTILEVER_TIP_SAG, KEPT, PATCH_MOMENT, RECT_I, SELF_MOMENT, lawById } from '../../src/nexus/book';
 import { ofLeaf, type Derivation } from '../../src/nexus/evaluate';
 import { apply, invert } from '../../src/nexus/law';
-import { LAWS } from '../../src/ganglia/laws';
 import { leaf } from '../../src/nexus/term';
 
 const given = (name: string, v: number, unit: string) => ofLeaf(leaf(name, v, unit, { class: 'given', by: 'test' }));
@@ -16,19 +15,11 @@ const env = (l: { inputs: readonly { sym: string; unit: string; name: string }[]
 
 
 describe('the kept book as terms: every law, by its own example', () => {
-  const kept = Object.fromEntries(LAWS.map((l) => [l.id, l]));
-  it('holds every kept law once, with the kept ports in the kept order, and nothing twice', () => {
-    expect(LAWS.length).toBe(144);
+  it('holds every kept law once, and nothing twice (the 144 the closures held until step 3, checked equal to them at 2,940 points before they went)', () => {
     const ids = Object.values(KEPT).flat().map((l) => l.id);
+    expect(ids.length).toBe(144);
     expect(new Set(ids).size).toBe(ids.length);
-    expect([...ids].sort()).toEqual(LAWS.map((l) => l.id).sort());
-    for (const id of ids) {
-      const t = lawById(id), k = kept[id]!;
-      expect(t.inputs.map((p) => [p.sym, p.unit]), id).toEqual(k.inputs.map((p) => [p.sym, p.unit]));
-      expect([t.output.sym, t.output.unit], id).toEqual([k.output.sym, k.output.unit]);
-      expect(t.statement).toBe(k.statement);
-      expect(t.source.cite).toBe(k.source.cite);
-    }
+    for (const id of ids) expect(lawById(id).example, id).toBeDefined();
   });
     it('refuses outside a predicate domain, with the domain named, for a law that had a validity function', () => {
     const t = lawById('carnot');

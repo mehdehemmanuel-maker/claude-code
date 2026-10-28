@@ -1,4 +1,4 @@
-// The book, fluids: the kept laws (src/ganglia/laws.ts) as terms. Every term is SI; the ports say the
+// The book, fluids: the kept laws as terms (closures in src/ganglia/laws.ts until docs/REALITY.md step 3). Every term is SI; the ports say the
 // units people write. Metadata is the kept data's own; the terms and domains are written here.
 
 import { L } from './define';

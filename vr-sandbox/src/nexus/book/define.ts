@@ -30,6 +30,6 @@ export function L(s: Spec): Law {
     id: s.id, name: s.name, statement: s.statement, formula: s.formula, valid: s.valid,
     inputs: s.inputs.map(([sym, unit, name]) => ({ sym, unit, name })), output: { sym: osym, unit: ounit, name: oname },
     term: s.term(v), domain: s.domain?.(v) ?? [], source: s.source,
-    example: { ...s.example, from: `ganglia/laws.ts ${s.id}` },
+    example: { ...s.example, from: `the kept example of ${s.id}` },
   });
 }

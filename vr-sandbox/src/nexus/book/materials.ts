@@ -1,4 +1,4 @@
-// The book, materials: the kept laws (src/ganglia/laws.ts) as terms. Every term is SI; the ports say the
+// The book, materials: the kept laws as terms (closures in src/ganglia/laws.ts until docs/REALITY.md step 3). Every term is SI; the ports say the
 // units people write. Metadata is the kept data's own; the terms and domains are written here.
 
 import { L } from './define';
@@ -47,6 +47,7 @@ export const MATERIALS = [
     valid: "A lower (Reuss) bound; carbon fibre is itself much less stiff across than along, which lowers it further.",
     inputs: [["Vf", "-", "fibre volume fraction"], ["Ef", "Pa", "fibre modulus (transverse)"], ["Em", "Pa", "matrix modulus"]], output: ["E", "Pa", "transverse modulus"],
     term: (v) => div(k(1), add(div(v.Vf, v.Ef), div(sub(k(1), v.Vf), v.Em))),
+    domain: (v) => [{ says: 'a fibre fraction between 0 and about 0.7 (what can be packed)', holds: and(ge(v.Vf, k(0)), le(v.Vf, est('greatest fibre fraction', 0.7, '1', 'the most fibre that can be packed'))) }],
     source: { cite: "Hull & Clyne, An Introduction to Composite Materials, 2nd ed., Cambridge 1996", kind: "textbook" }, example: { inputs: {"Vf":0.3,"Ef":60000000000,"Em":2400000000}, output: 3370786516.853933 },
   }),
   L({

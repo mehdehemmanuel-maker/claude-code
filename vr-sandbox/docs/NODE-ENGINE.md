@@ -374,7 +374,7 @@ written beside it:
 | `src/nexus/calls.ts`, `calltest.ts` (removed 2026-10-28: no node reached them) | 25 groups of calls a step can make, each one tested for real | Calls are a flat list. There's no library with domains, versions or blocks people make |
 | `src/nexus/view/code-worker.ts` | Code steps in JavaScript, TypeScript, Python (Pyodide) and C++ (as converted JS), run off the main thread | Code gets `facts` and one input string, not typed ports |
 | `src/nexus/view/boards3d.ts`, `boards-store.ts` (removed with the forge) | The board on the wall in the forge, drawn as one canvas for each surface, and saved | Drawn as a word wall, not as wired blocks |
-| `src/ganglia/laws.ts`, `units.ts`, `src/nexus/lawgraph.ts` | 144 laws with checked units: a ready stock of calculators (draft 1 said 288; that was a miscount) | Not exposed as blocks (now they are: §0.1) |
+| `src/nexus/book/` (once `src/ganglia/laws.ts`), `units.ts`, `src/nexus/lawgraph.ts` | 144 laws with checked units: a ready stock of calculators (draft 1 said 288; that was a miscount) | Not exposed as blocks (now they are: §0.1) |
 | `src/nexus/components.ts`, `inventory.ts`, `breakdown.ts` | The parts library and the breakdown queue: a thing becomes its sub-things, which are looked up before being added | Not blocks on a canvas |
 
 So the plan is: give `boards.ts` typed ports and values, give `flows.ts` a dataflow runner with caching, and make

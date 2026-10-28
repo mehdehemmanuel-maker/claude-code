@@ -8,7 +8,7 @@ import fc from 'fast-check';
 import { LIBRARY, block, fits, readQuantity, register, shelves, show, testBlock, type BlockDef } from '../../src/nexus/blocks';
 import { Engine, Memo, USAGE, collapse, cutBranch, deadNodes, emptyBoard, expand, groupBlock, makeBlock, mergeTwins, patterns, placeBlock, shapeKeys, suggest, twins, unitCombined, wire } from '../../src/nexus/dataflow';
 import { compact, nodesOf, type Board } from '../../src/nexus/boards';
-import { LAWS } from '../../src/ganglia/laws';
+import { BOOK } from '../../src/nexus/book';
 import { COPPER_ALPHA } from '../../src/engineering/dcmotor';
 
 const value = (e: Engine, id: string, port: string) => e.state.get(id)?.out?.[port];
@@ -19,11 +19,11 @@ const outputs = (e: Engine) => Object.fromEntries([...e.state.entries()].map(([i
 describe('the library', () => {
   it('holds every law as a calculator, and every block passes its own tests', async () => {
     const all = [...LIBRARY.values()].filter((b) => b.tests?.length);
-    expect([...LIBRARY.keys()].filter((k) => k.startsWith('law.')).length).toBe(LAWS.length);
+    expect([...LIBRARY.keys()].filter((k) => k.startsWith('law.')).length).toBe(BOOK.length);
     const fails: string[] = [];
     for (const b of all) { const r = await testBlock(b); if (!r.ok) fails.push(`${b.id}: ${r.fails.join('; ')}`); }
     expect(fails).toEqual([]);
-    console.log(`library: ${LIBRARY.size} blocks, ${all.length} with tests, all passing; ${LAWS.length} of them laws`);
+    console.log(`library: ${LIBRARY.size} blocks, ${all.length} with tests, all passing; ${BOOK.length} of them laws`);
   });
   it('is found by domain, by ability and by kind, and every block is on a shelf each way', () => {
     for (const by of ['domain', 'ability', 'kind'] as const) {

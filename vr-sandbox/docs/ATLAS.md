@@ -11,7 +11,7 @@ What a board is built from: the node library, its laws, its seeds (nodes built f
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
 | Node library | 200 | the library panel | `src/nexus/blocks.ts` |
-| Laws | 144 | the library panel | `src/nexus/law.ts` |
+| Laws | 241 | the library panel | `src/nexus/law.ts` |
 | Seeds | 21 | the library panel | `src/nexus/seeds.ts` |
 
 ### Flows
@@ -30,7 +30,7 @@ Real things by their makers' figures: machines, powertrains, the inventory of wh
 | --- | --- | --- | --- |
 | Machines | 7 | `vehicle.model` (its model), `engine.run` (its model); `drive`, `vehicle` (in their code) | `src/nexus/machines.ts` |
 | Powertrains | 1 | `drive`, `engine.run` (in their code) | `src/nexus/power/drive.ts` |
-| Inventory | 2,397 | the mat of 19 nodes (`shape.box`, `shape.cyl`, `shape.sphere`, …); `line` (its core); `line` (its outer); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
+| Inventory | 2,397 | the mat of 19 nodes (`shape.box`, `shape.cyl`, `shape.sphere`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
 
 ### Parts
 
@@ -79,7 +79,7 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 | Flow | Nodes | Which |
 | --- | --- | --- |
-| Worked once: from its inputs, again only when they change (most nodes) | 329 | the rest |
+| Worked once: from its inputs, again only when they change (most nodes) | 426 | the rest |
 | With the clock: again as the board's time goes on | 2 | Approved, Clock |
 | Worked once, played by the clock: a simulation run once and posed at any time | 3 | Agent, Follow a path, Let it go |
 | Many at once: one thing for each row or point: spawned, scattered, patterned | 6 | City, Neighbourhood, Pattern of, Road system, Scatter, Spawn |

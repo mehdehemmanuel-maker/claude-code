@@ -256,3 +256,22 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   the law's is the ganglia's with its kind required. The dependency map now shows each law's kind and the laws each
   quantity joins, and finds a table's readers by the file they import from (it had counted the book's own
   `./materials` as the handbook's).
+- **Step 3, done.** One law engine. Every one of the 241 laws of the book is a node (`law.<id>`; the 144 old ids
+  kept, 97 new). Before the closures went, each of the 144 was run against its book term at its example and 20 points
+  around it (2,940 runs): the ports and units were the same in every law, and every value the same to 10⁻⁹ wherever
+  both answered; the only difference was what each did outside its range, where a closure gave a number with a caution
+  and the book refuses. So each node now has "Outside where it holds": refuse (by default, in words) or extrapolate
+  (the number, marked `outside-validity (extrapolated)` and "not a prediction it makes"). "Solve for" any variable the
+  term reads: a product of powers is rearranged; anything else is found by the numeric layer, its bracket searched over
+  ±10⁴⁰ and at the edges of where the law is finite, the answer put back to check it holds there and gives what was
+  asked; where more than one value solves it, it says how many and takes the positive one nearest 1 where the law
+  holds, and From and To choose another. A variable only in a law's domain (the depth that makes a beam slender)
+  cannot be solved for, and says so. Each node gives its result's evidence (`status`) and the tree it rests on
+  (`why`), and says the law's kind and why it works. Every law's example is its test forward and backward for each
+  input it can be solved for; four cannot at their examples (a double root or an edge), each with its reason.
+  Found and fixed on the way: the law graph's numeric solve converted an answer in a unit with a scale or an offset
+  (°C, mm) as if it were SI; three laws lacked a domain a root search needs (a slope angle within ±90°, a glancing
+  angle within 0 to 90°, a transverse fibre fraction within 0 to 0.7) and a bolt's pitch is now below its diameter.
+  The baseline moved only by the new outputs and nodes and by two laws now on CODATA 2018's μ₀ rather than 4π × 10⁻⁷
+  (5 parts in 10¹⁰). `src/ganglia/laws.ts` is deleted, and with it three engineering files only it reached
+  (`battery.ts`, `beams.ts`, `mechanics.ts`); their formulas are the book's.

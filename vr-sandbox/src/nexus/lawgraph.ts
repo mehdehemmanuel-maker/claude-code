@@ -14,6 +14,7 @@ import { dimOf, integerNullSpace, sameDim, type Dim } from './dimension';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { apply, invert, invertFound, type Law } from './law';
 import { div, leaf, mul, OPERATORS, pow, substitute, variable, type Term } from './term';
+import { bracketsOf, type Found } from './numeric';
 import { fromSI, parseUnit } from '../ganglia/units';
 
 // ---- records ----------------------------------------------------------------------------------------------------------
@@ -53,9 +54,32 @@ export function solve(id: string, sym: string, env: Record<string, Derivation>, 
     const t = mul(one, p === 1 ? div(outVar, rest) : pow(div(outVar, rest), 1 / p));
     return evaluate(name ?? port.name, t, { ...env }, { law: l.hash, unit: port.unit });
   }
-  if (!bracket) throw new Error(`${id}: ${sym} is not a power in it; give a bracket to invert in`);
-  const r = invertFound(l, sym, out.value!, env, bracket, (n, v, un) => setting(n, v, un, 'the inversion')), x = r.value;
-  return x === null ? ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown' })) : ofLeaf(leaf(name ?? port.name, fromSI(x, port.unit), port.unit, { class: 'assumed', by: 'the law graph', grounds: `${l.name} solved numerically for ${port.name} by ${r.method}, ${r.converged ? 'converged' : 'not converged'} in ${r.iterations} steps (±${r.error.toPrecision(2)} SI)` }));
+  // the search and the inversion run the law's term without its domain, so a narrow domain does not hide the answer;
+  // whether the law holds at the answer is the caller's to check (the law node puts it back)
+  const free: Law = { ...l, domain: [] }, target = out.value!;
+  const f = (x: number) => { const d = apply(free, { ...env, [sym]: setting(port.name, x, port.unit, 'the search') }); return d.value === null ? NaN : d.value - target; };
+  let also = '', r: Found | null = null;
+  const mk = (n: string, v: number, un: string) => setting(n, v, un, 'the inversion');
+  if (!bracket) {
+    // no bracket given: look for every one, the law's output against the target over every decade; take the first whose
+    // answer the law holds at, else the first
+    const all = bracketsOf(f);
+    if (!all.length) return ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown', by: 'the law graph', grounds: `no value of ${port.name} from −10⁴⁰ to 10⁴⁰ makes ${l.name} give ${says(out)}` }));
+    const tries = all.slice(0, 12).map((b) => (b[0] === b[1] ? { value: b[0], converged: true, iterations: 0, evaluations: 0, error: 0, method: 'the search' } : invertFound(free, sym, target, env, b, mk, { ftol: 0 }))).filter((t) => t.value !== null);
+    const holds = (t: { value: number | null }) => apply(l, { ...env, [sym]: setting(port.name, t.value!, port.unit, 'the check') }).status !== 'outside-validity';
+    r = tries.find(holds) ?? tries[0] ?? null;
+    const good = tries.filter(holds).length;
+    if (all.length > 1) also = `; one of ${all.length} values that solve it (${good} where the law holds; the positive one nearest 1 ${port.unit || ''} where it holds is taken: set a range to choose another)`;
+  } else {
+    if (!(f(bracket[0]) * f(bracket[1]) <= 0)) return ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown', by: 'the law graph', grounds: `no value of ${port.name} from ${bracket[0]} to ${bracket[1]} ${port.unit} makes ${l.name} give ${says(out)}` }));
+    r = invertFound(free, sym, target, env, bracket, mk, { ftol: 0 });
+  }
+  let x = r?.value ?? null;
+  // an answer a rounding away from an exact zero of the law is that zero
+  if (x !== null && x !== 0 && Math.abs(x) < 1e-8 && f(0) === 0) x = 0;
+  if (x === null || !r) return ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown', by: 'the law graph', grounds: r?.warning ?? 'the inversion found nothing' }));
+  // (the inversion works in the port's own unit, as the value is set)
+  return ofLeaf(leaf(name ?? port.name, x, port.unit, { class: 'assumed', by: 'the law graph', grounds: `${l.name} solved numerically for ${port.name} by ${r.method}, ${r.converged ? 'converged' : 'not converged'} in ${r.iterations} steps (±${r.error.toPrecision(2)} ${port.unit || 'in its unit'})${also}` }));
 }
 /** A record's value in a unit. */
 export const valueIn = (d: Derivation, unit = d.unit): number | null => (d.value === null ? null : fromSI(d.value, unit));

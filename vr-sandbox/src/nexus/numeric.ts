@@ -112,6 +112,39 @@ export function root(f: (x: number) => number, o: RootOptions = {}): Found {
   return { value: x, converged: false, iterations: most, evaluations, error: Math.abs(x - xPrev), method, warning: `ran out of steps (${most})` };
 }
 
+/**
+ * Where f changes sign, found without a guess: f sampled at ±10^k for k from −40 to 40 in half-decades, and at the edge
+ * of where f is finite (an arcsine past 1, a root of a negative), found by halving, so a root there is not missed.
+ * Every bracket found is returned, best first: positive ones before negative (most quantities are positive), each
+ * nearest `near` on a log scale first. More than one means more than one value solves it.
+ */
+export function bracketsOf(f: (x: number) => number, near = 1): [number, number][] {
+  const xs: number[] = [];
+  for (let k = -80; k <= 80; k++) xs.push(10 ** (k / 2));
+  const grid = [...xs.map((x) => -x).reverse(), 0, ...xs], pts: { x: number; v: number }[] = [];
+  let prev: { x: number; v: number } | null = null;
+  for (const x of grid) {
+    const v = f(x), here = { x, v };
+    // between a finite sample and one that is not, find where f stops being finite and sample just inside it
+    if (prev && Number.isFinite(prev.v) !== Number.isFinite(v)) {
+      let inside = Number.isFinite(prev.v) ? prev.x : x, outside = inside === x ? prev.x : x;
+      for (let i = 0; i < 80; i++) { const m = (inside + outside) / 2; if (Number.isFinite(f(m))) inside = m; else outside = m; }
+      const edge = inside, ev = f(edge);
+      if (Number.isFinite(ev)) pts.push({ x: edge, v: ev });
+    }
+    if (Number.isFinite(v)) pts.push(here);
+    prev = here;
+  }
+  pts.sort((p, q) => p.x - q.x);
+  const found: [number, number][] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]!, b = pts[i + 1];
+    if (a.v === 0) found.push([a.x, a.x]); else if (b && a.v * b.v < 0) found.push([a.x, b.x]);
+  }
+  const far = (r: [number, number]) => { const m = Math.abs((r[0] + r[1]) / 2); return m === 0 ? 1e9 : Math.abs(Math.log10(m) - Math.log10(Math.max(Math.abs(near), 1e-300))); };
+  return found.sort((p, q) => (p[0] >= 0 ? 0 : 1) - (q[0] >= 0 ? 0 : 1) || far(p) - far(q));
+}
+
 // ---- integrals ------------------------------------------------------------------------------------------------------
 export const INTEGRAL_METHODS = ['adaptive-simpson', 'gauss-legendre', 'simpson'] as const;
 export type IntegralMethod = (typeof INTEGRAL_METHODS)[number];

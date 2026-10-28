@@ -1,20 +1,24 @@
 // Blocks: what a node on a board can be, kept in one library. A block is known by what it takes and gives (typed
 // ports, a number with its unit), what it does (its ability), what it is (its kind) and the fields it serves (its
 // domains), so it is found any of the three ways. Every block carries its own tests, inputs with the outputs they must
-// give, and where its figures come from; a block whose tests fail is a draft and says so. The laws (src/ganglia/laws.ts)
-// come in as calculators, each with its worked example as its test; the parts library and the materials come in as
+// give, and where its figures come from; a block whose tests fail is a draft and says so. The laws of the book
+// (src/nexus/book) come in as calculators, each solved for any of its variables, its worked example its test both ways; the parts library and the materials come in as
 // cards; a block made from a pipeline (src/nexus/dataflow.ts) comes in as itself, and is placed like any other.
 //
 // What runs a board of blocks, caches, maps over lists and opens groups is src/nexus/dataflow.ts; this file only says
 // what each block is and does.
 
-import { LAWS, isOptional, use as useLaw } from '../ganglia/laws';
 import { dimensionOf, fromSI, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
 import { QUANTITIES, quantityById, quantityOf } from './quantities';
-import { BOOK, KINDS as LAW_KINDS } from './book';
+import { BOOK, KEPT, KINDS as LAW_KINDS } from './book';
+import { TAGS } from './book/tags';
+import { apply, type Law } from './law';
+import { varsOf } from './term';
+import { breakdown, setting, solve as solveLaw, valueIn } from './lawgraph';
+import { evaluate, type Derivation } from './evaluate';
 import { DERIVATIVE_METHODS, INTEGRAL_METHODS, ODE_METHODS, ROOT_METHODS, derivative, integrate, ode, root, saysFound, step as stepOde, type Found } from './numeric';
 import { DESIGNED, component, componentFromParams, exampleOf } from './components';
 import { CHAINS, FAMILIES } from './families';
@@ -728,18 +732,86 @@ export function readTable(text: string): Record<string, unknown>[] {
 
 /** Every law as a calculator: its inputs and output in SI with their units, a caution where the inputs leave the range
  *  it holds over, its worked example as its test, its source as its own. */
-export function lawBlocks(): BlockDef[] {
-  return LAWS.map((law) => def({
-    id: `law.${law.id}`, name: law.name, kind: 'law', ability: 'calculate', domains: [LAW_DOMAIN[law.domain] ?? 'science', ...(law.tags.some((t) => /vehicle|kart|tyre|tire|car/.test(t)) ? ['vehicles'] : []), ...(law.tags.some((t) => /flight|wing|lift|drag/.test(t)) ? ['aerospace'] : []), ...(law.tags.some((t) => /battery|solar|energy|efficien/.test(t)) ? ['energy'] : []), ...(law.domain === 'optics' || law.domain === 'magnetism' ? ['science'] : [])].filter((d, i, a) => a.indexOf(d) === i),
-    says: `${law.statement} (${law.formula})`, valid: law.valid, sources: [law.source],
-    ports: { inputs: law.inputs.map((q) => N(q.sym, q.unit === '-' ? undefined : q.unit, { label: `${q.name} (${q.sym})`, ...(isOptional(law.id, q.sym) ? { optional: true } : {}) })), outputs: [N(law.output.sym, law.output.unit === '-' ? undefined : law.output.unit, { label: `${law.output.name} (${law.output.sym})` }), P('caution', 'text')] },
-    run: (i) => { const v: Record<string, number> = {}; for (const [k, x] of Object.entries(i)) if (x !== undefined && x !== null) v[k] = Number(x); const r = useLaw(law.id, v);
-      // (where the law has no real answer for what is put in (a root of a negative, a ratio of nothing), it says so)
-      if (Number.isNaN(r.value)) throw new Error(`${law.name} has no real answer for ${Object.entries(v).map(([k, x]) => `${k} = ${x}`).join(', ')}${law.valid ? `: it holds where ${law.valid}` : ''}`);
-      return { [law.output.sym]: r.value, caution: r.caution ?? '' }; },
-    tests: [{ inputs: law.example.inputs, outputs: { [law.output.sym]: law.example.output }, rel: law.example.rel ?? 1e-6 }]
-  }));
+/** Inputs a law fills itself when nothing is wired in: the end factor of a pinned column, a ball bearing's life exponent. */
+const LAW_DEFAULTS: Record<string, Record<string, number>> = { 'buckling.euler': { K: 1 }, 'bearing.life.l10': { p: 3 } };
+const FIELD_OF = new Map<string, string>(Object.entries(KEPT).flatMap(([k, ls]) => ls.map((l) => [l.id, k] as [string, string])));
+const unitOf = (u: string) => (u === '-' || u === '1' || u === '' ? undefined : u);
+
+/**
+ * A law of the book run as a node (docs/REALITY.md, step 3): forward to its output, or solved for any of its inputs
+ * (rearranged where it is a product of powers, else by the numeric layer, its bracket found by itself); refused in
+ * words outside where it holds, or, when asked, extrapolated there and marked so; its result's evidence and the tree
+ * of what it rests on said beside it.
+ */
+function runLaw(law: Law, i: Record<string, unknown>, set: Record<string, unknown>): Outputs {
+  const all = [...law.inputs, law.output], x = all.find((p) => p.sym === String(set.solve ?? law.output.sym)) ?? law.output, extrapolate = set.outside === 'extrapolate';
+  if (x !== law.output && !varsOf(law.term).some((v) => v.sym === x.sym)) throw new Error(`${law.name} does not change with ${x.name} (${x.sym}): it is only in where the law holds, so it cannot be solved for`);
+  const env: Record<string, Derivation> = {}, given: string[] = [];
+  for (const p of all) {
+    if (p === x) continue;
+    let v = i[p.sym]; if ((v === undefined || v === null) && LAW_DEFAULTS[law.id]?.[p.sym] !== undefined) v = LAW_DEFAULTS[law.id]![p.sym];
+    if (v === undefined || v === null) throw new Error(`${law.name} needs ${p.name} (${p.sym})`);
+    const n = Number(v); if (!Number.isFinite(n)) throw new Error(`${law.name}: ${p.sym} is not a number`);
+    env[p.sym] = setting(p.name, n, p.unit, 'what is wired in'); given.push(`${p.sym} = ${+n.toPrecision(6)}`);
+  }
+  const holds = (d: Derivation) => d.refusal ? `${law.name} does not hold here: it needs ${d.refusal.domain}${law.valid ? ` (${law.valid})` : ''}` : null;
+  let d: Derivation, caution = '';
+  if (x === law.output) {
+    d = apply(law, env);
+    if (d.status === 'outside-validity' && /not finite/.test(d.refusal?.domain ?? '')) throw new Error(`${law.name} has no real answer for ${given.join(', ')}${law.valid ? `: it holds where ${law.valid}` : ''}`);
+    const no = holds(d);
+    if (no) { if (!extrapolate) throw new Error(no); d = evaluate(law.output.name, law.term, env, { law: law.hash, unit: law.output.unit }); caution = `${no}: extrapolated, not a prediction it makes`; }
+  } else {
+    const lo = String(set.from ?? '').trim(), hi = String(set.to ?? '').trim();
+    d = solveLaw(law.id, x.sym, env, x.name, lo && hi ? [Number(lo), Number(hi)] : undefined);
+    const many = d.term.kind === 'leaf' ? /one of (\d+) values/.exec(d.term.origin.grounds ?? '') : null; if (many) caution = `${many[1]} values of ${x.sym} solve it; the positive one nearest 1 ${x.unit} is given: set From and To to choose another`;
+    if (d.value === null) throw new Error(`no ${x.name} makes ${law.name} give what is wired in${d.term.kind === 'leaf' && d.term.origin.grounds ? `: ${d.term.origin.grounds}` : ''}`);
+    // the answer put back into the law: where it holds there, and that it gives what was asked
+    const back = apply(law, { ...Object.fromEntries(law.inputs.filter((p) => p !== x).map((p) => [p.sym, env[p.sym]!])), [x.sym]: setting(x.name, valueIn(d, x.unit)!, x.unit, 'the solution') });
+    const no = holds(back); if (no) { if (!extrapolate) throw new Error(no); caution = [caution, `${no}: extrapolated, not a prediction it makes`].filter(Boolean).join('; '); }
+    const want = env[law.output.sym]!.value!, got = back.value ?? evaluate(law.output.name, law.term, { ...env, [x.sym]: setting(x.name, valueIn(d, x.unit)!, x.unit, 'the solution') }, { law: law.hash }).value;
+    if (got === null || Math.abs(got - want) > 1e-6 * Math.max(Math.abs(want), 1e-300)) caution = [caution, `put back, it gives ${got === null ? 'nothing' : +fromSI(got, law.output.unit).toPrecision(6)} rather than ${+fromSI(want, law.output.unit).toPrecision(6)}: another root may be the one meant`].filter(Boolean).join('; ');
+  }
+  const v = valueIn(d, x.unit); if (v === null) throw new Error(`${law.name}: ${d.because ?? 'no value'}`);
+  return { [x.sym]: v, caution, status: /extrapolated/.test(caution) ? 'outside-validity (extrapolated)' : d.status, why: breakdown(d).join('\n') };
 }
+
+export function lawBlocks(): BlockDef[] {
+  return BOOK.map((law) => {
+    const all = [...law.inputs, law.output], tags = TAGS[law.id] ?? [], field = FIELD_OF.get(law.id), [kind, why] = LAW_KINDS[law.id] ?? ['derived', ''];
+    const portOf = (p: (typeof all)[number], out = false) => N(p.sym, unitOf(p.unit), { label: `${p.name} (${p.sym})`, ...(!out && LAW_DEFAULTS[law.id]?.[p.sym] !== undefined ? { optional: true, default: LAW_DEFAULTS[law.id]![p.sym] } : {}) });
+    const ex = law.example, inTerm = new Set(varsOf(law.term).map((v) => v.sym));
+    return def({
+      id: `law.${law.id}`, name: law.name, kind: 'law', ability: 'calculate',
+      domains: [field ? LAW_DOMAIN[field] ?? 'science' : 'science', ...(tags.some((t) => /vehicle|kart|tyre|tire|car/.test(t)) ? ['vehicles'] : []), ...(tags.some((t) => /flight|wing|lift|drag/.test(t)) ? ['aerospace'] : []), ...(tags.some((t) => /battery|solar|energy|efficien/.test(t)) ? ['energy'] : []), ...(field === 'optics' || field === 'magnetism' ? ['science'] : [])].filter((d, k, a) => a.indexOf(d) === k),
+      says: `${law.statement} (${law.formula}). It is ${kind === 'approximation' ? 'an approximation' : kind === 'empirical' ? 'empirical' : kind === 'definition' ? 'a definition' : kind === 'geometry' ? 'geometry' : kind}: ${why}`,
+      ...(law.valid ? { valid: law.valid } : {}), sources: [law.source],
+      settings: [{ key: 'solve', label: 'Solve for', type: 'choice', default: law.output.sym, choices: [law.output.sym, ...law.inputs.filter((p) => inTerm.has(p.sym)).map((p) => p.sym)] }, { key: 'outside', label: 'Outside where it holds', type: 'choice', default: 'refuse', choices: ['refuse', 'extrapolate'] }, { key: 'from', label: 'Solving: from (blank: search)', type: 'text', default: '' }, { key: 'to', label: 'Solving: to', type: 'text', default: '' }],
+      ports: (s) => { const x = all.find((p) => p.sym === String(s.solve ?? law.output.sym)) ?? law.output; return { inputs: all.filter((p) => p !== x).map((p) => portOf(p)), outputs: [portOf(x, true), P('caution', 'text'), P('status', 'text'), P('why', 'text')] }; },
+      run: (i, c) => runLaw(law, i, c.set),
+      tests: ex ? [{ inputs: ex.inputs, outputs: { [law.output.sym]: ex.output }, rel: ex.rel ?? 1e-6 }, ...lawBackTests(law)] : [],
+    });
+  });
+}
+/** The worked example run backwards: each input it can be solved for, from the example's output, gives the example's input
+ *  back (those whose answer is not unique there, or that the law does not change with, are left out by LAW_NOT_BACK). */
+function lawBackTests(law: Law): BlockTest[] {
+  const ex = law.example; if (!ex) return [];
+  const inTerm = new Set(varsOf(law.term).map((v) => v.sym));
+  return law.inputs.filter((p) => inTerm.has(p.sym) && !LAW_NOT_BACK[`${law.id}.${p.sym}`] && ex.inputs[p.sym] !== undefined).map((p) => ({ set: { solve: p.sym, ...(LAW_BACK_RANGE[`${law.id}.${p.sym}`] ? { from: String(LAW_BACK_RANGE[`${law.id}.${p.sym}`]![0]), to: String(LAW_BACK_RANGE[`${law.id}.${p.sym}`]![1]) } : {}) }, inputs: { ...Object.fromEntries(Object.entries(ex.inputs).filter(([k]) => k !== p.sym)), [law.output.sym]: ex.output }, outputs: { [p.sym]: ex.inputs[p.sym] }, rel: Math.max(ex.rel ?? 1e-6, 1e-6) }));
+}
+/** Inputs a law cannot be solved back for at its example: more than one value gives the output, or none does there. */
+const LAW_NOT_BACK: Record<string, string> = {
+  'beam.simply-supported.central-patch.moment.L': 'the example is the whole-span patch, w = L: the span solved for lands a rounding either side of the edge where the law holds',
+  'beam.simply-supported.central-patch.sag.w': 'the example is the point load, w = 0, where the sag is flat against w (a double root): no change of sign to find',
+  'beam.overhang.self-moment.Lt': 'the example has no overhang, Lt = L, where the moment is at its most against Lt (a double root)',
+  'beam.overhang.self-sag.Lt': 'the example has no overhang, Lt = L, where the sag is at its most against Lt (a double root)',
+};
+/** Inputs whose example value is one of several that solve it, and the range that holds the one meant. */
+const LAW_BACK_RANGE: Record<string, [number, number]> = {
+  // efficiency rises with the lead to a helix of about 45° and falls past it: two leads give each efficiency
+  'screw.efficiency.l': [0, 0.02],
+};
 
 
 // ---- things made and placed: shapes, parts by their sizes, places, patterns, variants (src/nexus/assembly.ts) ---------
