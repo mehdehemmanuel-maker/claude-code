@@ -24,7 +24,7 @@ Checked: 9 compared with an independent reference (laws the rest of the book rea
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
-- **Along a path through it** (`path.properties`): Pieces of a thing named in order, one after another along an axis, in series: from what each is made of, the path's resistance to heat (L / k A), to current (L / σ A), its stiffness under an axial force (from L / E A) … *derived, untested*
+- **Along a path through it** (`path.properties`): Pieces of a thing named in order, one after another along an axis, in series: from what each is made of, the path's resistance to heat (L / k A), to current (L / σ A), its stiffness under an axial force (from L / E … *derived, untested*
 - **Laws by field** (`law.fields`): Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas) *specified, tested here*
 - **List of numbers** (`in.list`): Numbers you type, split by commas: wire it into any block to run that block once for each *given, tested here*
 - **Mass, centre and inertia** (`mass.properties`): What follows from a thing's pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece's own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass … *estimated, tested here*

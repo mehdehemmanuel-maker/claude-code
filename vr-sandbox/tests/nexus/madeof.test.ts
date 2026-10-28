@@ -101,6 +101,23 @@ describe('along a path through it, in series', () => {
     const r = alongPath({ name: 's', items: [place(mystery, [0, 0, 0]), place(cu, [0, 0.1, 0])] }, ['m', 'cu'], 'y');
     expect(r.thermal).toBeNull(); expect(r.lacking.join(' ')).toMatch(/m \(no material\)/);
   });
+  it('side by side: conductances and stiffnesses add, they grow by their stiffness-weighted mean, the first to yield sets its strength', () => {
+    // a steel rod and an aluminium rod, both 200 mm, side by side and joined at both ends; then the copper rod on top
+    const fe: Part = { name: 'fe', shape: { cyl: [0.005, 0.2] }, mat: 'steel-low' };
+    const t = { name: 'pair', items: [place(al, [0, 0.1, 0]), place(fe, [0.02, 0.1, 0]), place(cu, [0, 0.25, 0])] };
+    const r = alongPath(t, [['al', 'fe'], 'cu'], 'y', 40), A = Math.PI * 0.005 ** 2;
+    const Rt = (m: string, L: number) => L / (prop(m, 'k') * A), ka = (prop('al-6061', 'E') * A) / 0.2, kf = (prop('steel-low', 'E') * A) / 0.2, kc = (prop('copper', 'E') * A) / 0.1;
+    expect(r.stages).toEqual([['al', 'fe'], ['cu']]);
+    expect(r.thermal).toBeCloseTo(1 / (1 / Rt('al-6061', 0.2) + 1 / Rt('steel-low', 0.2)) + Rt('copper', 0.1), 9);
+    expect(r.stiffness).toBeCloseTo(1 / (1 / (ka + kf) + 1 / kc), 0);
+    // Turner: bonded, they grow by (k₁ α₁ + k₂ α₂) L ΔT / (k₁ + k₂)
+    expect(r.growth).toBeCloseTo(((ka * prop('al-6061', 'alpha') + kf * prop('steel-low', 'alpha')) * 0.2 * 40) / (ka + kf) + prop('copper', 'alpha') * 0.1 * 40, 12);
+    // the pair stretches as one: the first to reach its own yield strain σy / E sets the force, ΣEA times that strain
+    const ey = (m: string) => prop(m, 'yield') / prop(m, 'E'), pairF = Math.min(ey('al-6061'), ey('steel-low')) * (prop('al-6061', 'E') + prop('steel-low', 'E')) * A, cuF = prop('copper', 'yield') * A;
+    expect(r.strength!.force).toBeCloseTo(Math.min(pairF, cuF), 3);
+    // the two side by side grow apart from each other too
+    expect(r.mismatch.some((m) => m.a === 'al' && m.b === 'fe')).toBe(true);
+  });
   it('as a node: a material changed on the board changes what the path carries', async () => {
     const out = await runBlock('path.properties', { thing: stack(), path: 'al, cu, st', axis: 'y', dT: 0 });
     expect(out.thermal).toBeGreaterThan(0); expect(String(out.says)).toMatch(/left out: the resistance where pieces touch/);

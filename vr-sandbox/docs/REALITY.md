@@ -396,8 +396,15 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   a copper rod and a steel block (all four quantities, the sections exact, the mismatch strain and stress), a rod lying
   across the path read as a mean section, and a material changed on a board changing what the path carries.
   The snapshot did not move.
-  Still to do: paths in parallel (a section of several pieces side by side) and networks; strength along the path
-  (the weakest piece's load, by its section and yield); bending stiffness of an assembly.
+- **Step 7, side by side and strength.** A path is now stages one after another, each one piece or several side by
+  side ("a + b, c"), joined at both ends: in a stage conductances and stiffnesses add, and the pieces grow by their
+  stiffness-weighted mean (Turner), each pair side by side with its own mismatch; its strength is the axial force at
+  which the first piece yields (each stage carries it all, shared by stiffness, so a stage yields when its first piece
+  reaches its own yield strain σy / E; series: the least over the stages). Pieces side by side of different lengths are
+  said to be taken as joined at both ends. Verified against the sums worked by hand for a steel and an aluminium rod
+  side by side under a copper rod (resistance, stiffness, Turner growth, first yield). The snapshot did not move.
+  Still to do: networks (a path that splits and rejoins across stages), buckling under a push, bending stiffness of an
+  assembly, contact resistance from what the faces are and how hard they are pressed.
 - **Step 8, the first round done.** `src/nexus/evidence.ts` gives every node its own evidence, read from what it is: a
   law from its kind (definition or geometry exact, fundamental or derived law derived, approximation simplified, the rest
   empirical) with its validity as an assumption and its domain as its limits; a typed or chosen value given; a maker's,

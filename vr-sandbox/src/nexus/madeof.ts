@@ -142,26 +142,35 @@ export function madeOf(t: Part | Assembly, depth = 6): MadeOf {
 }
 
 /** One piece on a path, as it carries heat, current and force along the path's axis. */
-export interface PathPiece { name: string; mat: string | null; L: number; A: number; areaExact: boolean; thermal?: number; electrical?: number; compliance?: number; growth?: number; standIn: string[] }
+export interface PathPiece { name: string; mat: string | null; L: number; A: number; areaExact: boolean; thermal?: number; electrical?: number; compliance?: number; growth?: number; alpha?: number; E?: number; yields?: number; standIn: string[] }
 export interface PathResult {
   pieces: PathPiece[]; missing: string[];
-  /** Summed in series, each only where every piece has what it needs (else null, with why). */
+  /** The path as stages one after another, each one piece or several side by side. */
+  stages: string[][];
+  /** Summed in series over the stages, each stage's pieces in parallel; each only where every piece has what it needs
+   *  (else null, with why). */
   thermal: number | null; electrical: number | null; stiffness: number | null; growth: number | null;
-  /** Where neighbours on the path grow by different amounts per kelvin: the strain between them, and the stress if each
-   *  were held to the other (E Δα ΔT, the stiffer one's E: an upper bound, uniaxial). */
+  /** The axial force at which the first piece yields: each stage carries it all, its pieces sharing it by their
+   *  stiffness, so a stage yields when its first piece reaches its own yield strain. */
+  strength: { force: number; first: string } | null;
+  /** Where pieces joined grow by different amounts per kelvin (neighbouring stages, and pieces side by side): the strain
+   *  between them, and the stress if each were held to the other (E Δα ΔT, the stiffer one's E: an upper bound, uniaxial). */
   mismatch: { a: string; b: string; strain: number; stress: number | null }[];
   lacking: string[];
 }
 
 /**
- * What a path through a thing carries (docs/REALITY.md, step 7): pieces named in order, one after another along an axis,
- * in series. Each piece's length is its extent along the axis, its section its volume over that length (exact for a
- * prism or a cylinder lying along the axis, a mean for anything else, said); from what it is made of, its resistance to
- * heat L / (k A), to current L / (σ A), its give under an axial force L / (E A), and its growth α L ΔT. Summed in series.
- * What is left out, said: the resistance where two pieces touch (to heat it is often the larger part), bending, and any
- * path but the one named. Wood along its grain.
+ * What a path through a thing carries (docs/REALITY.md, step 7): stages one after another along an axis, in series, each
+ * one piece or several side by side, in parallel, joined at both ends. Each piece's length is its extent along the axis,
+ * its section its volume over that length (exact for a prism or a cylinder lying along the axis, a mean for anything
+ * else, said); from what it is made of, its resistance to heat L / (k A), to current L / (σ A), its stiffness E A / L and
+ * its growth α L ΔT. In series resistances add; side by side conductances and stiffnesses add, and pieces held together
+ * at both ends grow by their stiffness-weighted mean (Turner). Its strength: the force at which the first piece yields.
+ * What is left out, said: the resistance where two pieces touch (to heat it is often the larger part), bending,
+ * buckling, any path but the one named. Wood along its grain.
  */
-export function alongPath(t: Part | Assembly, names: string[], axis: 'x' | 'y' | 'z', dT = 0): PathResult {
+export function alongPath(t: Part | Assembly, path: (string | string[])[], axis: 'x' | 'y' | 'z', dT = 0): PathResult {
+  const stages0 = path.map((x) => (Array.isArray(x) ? x : [x])), names = stages0.flat();
   const k = axis === 'x' ? 0 : axis === 'y' ? 1 : 2, found = new Map<string, PathPiece>(), missing: string[] = [];
   flatten(t, (f) => {
     const leaf = f.leaf; if (!names.includes(leaf.name) || found.has(leaf.name) || !leaf.shape) return;
@@ -171,23 +180,36 @@ export function alongPath(t: Part | Assembly, names: string[], axis: 'x' | 'y' |
     const V = rho ? (massOf({ ...leaf, parts: [] }) / (leaf.mat ? densityKg(leaf.mat) ?? rho : rho)) * det : undefined;
     const boxA = size.filter((_, i) => i !== k).reduce((a, x) => a * x, 1), A = V !== undefined && L > 0 ? V / L : boxA;
     const props = mat ? matterOf(mat).props : [], get = (key: string) => props.find((p) => p.key === key);
-    const kk = get('k'), s = get('conductivity'), E = get('E'), al = get('alpha'), standIn = [kk, s, E, al].filter((p) => p?.evidence === 'stand-in').map((p) => p!.name);
+    const kk = get('k'), s = get('conductivity'), E = get('E'), al = get('alpha'), y = get('yield'), standIn = [kk, s, E, al, y].filter((p) => p?.evidence === 'stand-in').map((p) => p!.name);
     // (exact where the section is the same all along: a box square to the axes, or a cylinder lying along the axis)
     const along = Math.abs(new THREE.Vector3(0, 1, 0).transformDirection(f.m).toArray()[k]!) > 1 - 1e-9;
     const exact = V !== undefined && (('box' in leaf.shape && Math.abs(V / L - boxA) < 1e-9 * boxA) || ('cyl' in leaf.shape && along && (leaf.shape.cyl[2] === undefined || leaf.shape.cyl[2] === leaf.shape.cyl[0])));
-    found.set(leaf.name, { name: leaf.name, mat, L, A, areaExact: !!exact, ...(kk && A > 0 ? { thermal: L / (kk.value * A) } : {}), ...(s && s.value > 0 && A > 0 ? { electrical: L / (s.value * A) } : {}), ...(E && A > 0 ? { compliance: L / (E.value * A) } : {}), ...(al ? { growth: al.value * L * dT } : {}), standIn });
+    found.set(leaf.name, { name: leaf.name, mat, L, A, areaExact: !!exact, ...(kk && A > 0 ? { thermal: L / (kk.value * A) } : {}), ...(s && s.value > 0 && A > 0 ? { electrical: L / (s.value * A) } : {}), ...(E && A > 0 ? { compliance: L / (E.value * A), E: E.value } : {}), ...(al ? { growth: al.value * L * dT, alpha: al.value } : {}), ...(y ? { yields: y.value } : {}), standIn });
   });
   const pieces: PathPiece[] = [];
   for (const n of names) { const p = found.get(n); if (p) pieces.push(p); else missing.push(n); }
+  const stages = stages0.map((st) => st.map((n) => found.get(n)).filter((p): p is PathPiece => !!p)).filter((st) => st.length);
   const lacking: string[] = [];
-  const sum = (key: 'thermal' | 'electrical' | 'compliance' | 'growth', what: string) => { const no = pieces.filter((p) => p[key] === undefined); if (no.length || !pieces.length) { if (pieces.length) lacking.push(`${what}: ${no.map((p) => `${p.name} (${p.mat ?? 'no material'})`).join(', ')} has no ${what} known`); return null; } return pieces.reduce((a, p) => a + p[key]!, 0); };
-  const thermal = sum('thermal', 'thermal conductivity'), electrical = sum('electrical', 'electrical conductivity'), c = sum('compliance', 'elastic modulus'), growth = sum('growth', 'thermal expansion');
-  const mismatch: PathResult['mismatch'] = [];
-  for (let i = 1; i < pieces.length; i++) {
-    const a = pieces[i - 1]!, b = pieces[i]!, pa = a.mat ? matterOf(a.mat).props : [], pb = b.mat ? matterOf(b.mat).props : [];
-    const aa = pa.find((p) => p.key === 'alpha')?.value, ab = pb.find((p) => p.key === 'alpha')?.value; if (aa === undefined || ab === undefined || aa === ab || !dT) continue;
-    const Ea = pa.find((p) => p.key === 'E')?.value, Eb = pb.find((p) => p.key === 'E')?.value, strain = Math.abs(aa - ab) * Math.abs(dT);
-    mismatch.push({ a: a.name, b: b.name, strain, stress: Ea !== undefined && Eb !== undefined ? Math.max(Ea, Eb) * strain : null });
+  for (const st of stages) if (st.length > 1 && Math.max(...st.map((p) => p.L)) > 1.01 * Math.min(...st.map((p) => p.L))) lacking.push(`side by side, ${st.map((p) => p.name).join(' and ')} are not as long as each other: each is taken as joined at both ends, so its strength and growth are what such a joint would make them`);
+  const need = (key: keyof PathPiece, what: string) => { const no = pieces.filter((p) => p[key] === undefined); if (no.length && pieces.length) lacking.push(`${what}: ${no.map((p) => `${p.name} (${p.mat ?? 'no material'})`).join(', ')} has no ${what} known`); return !no.length && pieces.length > 0; };
+  // in series the stages' resistances add; side by side, within a stage, their conductances add
+  const series = (key: 'thermal' | 'electrical' | 'compliance') => stages.reduce((a, st) => a + 1 / st.reduce((c, p) => c + 1 / p[key]!, 0), 0);
+  const thermal = need('thermal', 'thermal conductivity') ? series('thermal') : null, electrical = need('electrical', 'electrical conductivity') ? series('electrical') : null;
+  const hasE = need('compliance', 'elastic modulus'), c = hasE ? series('compliance') : null;
+  // a stage of pieces held together at both ends grows by the mean of each one's free growth weighted by its stiffness
+  const growth = need('growth', 'thermal expansion') ? stages.reduce((a, st) => a + (st.length === 1 ? st[0]!.growth! : hasE ? st.reduce((g, p) => g + p.growth! / p.compliance!, 0) / st.reduce((q, p) => q + 1 / p.compliance!, 0) : NaN), 0) : null;
+  let strength: PathResult['strength'] = null;
+  if (hasE && need('yields', 'yield strength')) for (const st of stages) {
+    // the stage stretches as one: each piece at strain F / Σ(E A) of the pieces as long as it; the first to reach σy / E
+    const first = st.reduce((w, p) => (p.yields! / p.E! < w.yields! / w.E! ? p : w)), F = (first.yields! / first.E!) * st.reduce((a, p) => a + p.E! * p.A, 0);
+    if (!strength || F < strength.force) strength = { force: F, first: first.name };
   }
-  return { pieces, missing, thermal, electrical, stiffness: c === null ? null : c > 0 ? 1 / c : null, growth, mismatch, lacking };
+  const mismatch: PathResult['mismatch'] = [];
+  const pair = (a: PathPiece, b: PathPiece) => {
+    if (a.alpha === undefined || b.alpha === undefined || a.alpha === b.alpha || !dT) return;
+    const strain = Math.abs(a.alpha - b.alpha) * Math.abs(dT);
+    mismatch.push({ a: a.name, b: b.name, strain, stress: a.E !== undefined && b.E !== undefined ? Math.max(a.E, b.E) * strain : null });
+  };
+  stages.forEach((st, i) => { for (let x = 0; x < st.length; x++) for (let y = x + 1; y < st.length; y++) pair(st[x]!, st[y]!); if (i) for (const a of stages[i - 1]!) for (const b of st) pair(a, b); });
+  return { pieces, missing, stages: stages.map((st) => st.map((p) => p.name)), thermal, electrical, stiffness: c === null ? null : c > 0 ? 1 / c : null, growth, strength, mismatch, lacking };
 }
