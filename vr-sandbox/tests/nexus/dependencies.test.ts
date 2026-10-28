@@ -33,17 +33,19 @@ const TABLES: { table: string; file: string; names: string[]; holds: string }[] 
   { table: 'gases', file: 'src/nexus/aware/gas.ts', names: ['SUBSTANCES'], holds: 'molar mass, smell, harm, flammable limits' },
   { table: 'edges', file: 'src/nexus/finish.ts', names: ['ruleFor', 'EDGE_RULES'], holds: 'edge radius by material' },
 ];
-/** Where numbers are solved for or stepped through time, each its own code today (step 1 joins them). */
-const NUMERIC: { what: string; at: string; find: RegExp }[] = [
-  { what: 'a law solved for an input (bisection)', at: 'src/nexus/law.ts', find: /export function invert/ },
-  { what: 'a law solved for an input (rearranged, else bisection)', at: 'src/nexus/lawgraph.ts', find: /export function solve/ },
-  { what: 'internal rate of return (bisection, 200 steps)', at: 'src/nexus/blocks.ts', find: /id: 'fin\.irr'/ },
-  { what: 'an integral by Simpson\'s rule, its error by halving', at: 'src/nexus/evaluate.ts', find: /simpson|Simpson/ },
-  { what: 'a PID loop stepped in time', at: 'src/nexus/blocks.ts', find: /id: 'ctrl\.pid'/ },
-  { what: 'a battery drained in time', at: 'src/engineering/battery.ts', find: /export function/ },
-  { what: 'a motor run in time', at: 'src/engineering/motorrun.ts', find: /export function runMotor/ },
-  { what: 'warming in substeps', at: 'src/engineering/thermal.ts', find: /export function warm/ },
-  { what: 'heat through a grid (implicit, Gauss–Seidel: a field solver)', at: 'src/nexus/heatflow.ts', find: /export function/ },
+/** Where numbers are solved for or stepped through time, and whether each goes through the numeric layer
+ *  (src/nexus/numeric.ts, step 1); those that stay their own code say why. */
+const NUMERIC: { what: string; at: string; find: RegExp; stays?: string }[] = [
+  { what: 'a law solved for an input', at: 'src/nexus/law.ts', find: /root\(f, \{ method: 'bisection'/ },
+  { what: 'a law solved for an input (rearranged where it can be, else inverted)', at: 'src/nexus/lawgraph.ts', find: /invertFound\(/ },
+  { what: 'internal rate of return', at: 'src/nexus/blocks.ts', find: /id: 'fin\.irr'[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*root\(npv/ },
+  { what: 'an integral in a term (Simpson\'s rule, its error by halving)', at: 'src/nexus/evaluate.ts', find: /simpsonRule\(/ },
+  { what: 'a PID loop\'s plant stepped in time', at: 'src/nexus/blocks.ts', find: /stepOde\(method/ },
+  { what: 'roots, integrals, slopes and paths on a board', at: 'src/nexus/blocks.ts', find: /id: 'math\.ode'/ },
+  { what: 'a battery drained', at: 'src/engineering/battery.ts', find: /export function drain/, stays: 'one step of charge counted (I dt over the capacity at that rate): no equation to solve' },
+  { what: 'a motor run in time', at: 'src/engineering/motorrun.ts', find: /export function runMotor/, stays: 'its steps switch between spin-up and a steady state, with events (overheating, the rise time) and energy counted each step; kept until a stepper with events replaces it whole, its results held by the baseline' },
+  { what: 'warming in substeps', at: 'src/engineering/thermal.ts', find: /export function warm/, stays: 'a frame\'s step of a part cooling, its sub-step limited so it never crosses the room\'s temperature: called each frame, not run over a span' },
+  { what: 'heat through a grid', at: 'src/nexus/heatflow.ts', find: /export function/, stays: 'a field solver (implicit, Gauss–Seidel over cells), not one equation in time' },
 ];
 
 function mapText(): string {
@@ -77,8 +79,8 @@ function mapText(): string {
     L.push(`| ${t.table} | \`${t.file}\` | ${t.holds} | ${readers.length ? readers.join(', ') : '**nothing**'} |`);
   }
   // ---- numeric ----
-  L.push('', '## Where numbers are solved for or stepped in time', '', '| What | Where | Found |', '| --- | --- | --- |');
-  for (const n of NUMERIC) { const x = src.find((s) => s.f === n.at); L.push(`| ${n.what} | \`${n.at}\` | ${x && n.find.test(x.text) ? 'yes' : '**not found**'} |`); }
+  L.push('', '## Where numbers are solved for or stepped in time', '', 'The numeric layer is `src/nexus/numeric.ts`: each answer with its method, whether it converged, its steps and its error.', '', '| What | Where | Through the numeric layer |', '| --- | --- | --- |');
+  for (const n of NUMERIC) { const x = src.find((s) => s.f === n.at), found = !!x && n.find.test(x.text); L.push(`| ${n.what} | \`${n.at}\` | ${!found ? '**not found**' : n.stays ? `no: ${n.stays}` : 'yes'} |`); }
   return L.join('\n') + '\n';
 }
 

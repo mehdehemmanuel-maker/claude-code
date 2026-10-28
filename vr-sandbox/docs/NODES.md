@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 362 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 366 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## 1 · Start: values and inputs (9)
 
@@ -123,7 +123,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Variant** (`variant`): The same thing changed where it is placed: its colour, its material, its finish, its size along x, y and z, or hidden; on all of it, or only the pieces whose names a pattern finds ("prop", "arm|frame")
 - **Zone** (`zone`): The room a thing needs kept clear, put on the thing itself and worked out from its own size: in front of a face, so deep (a toilet's clear floor, a kitchen's work aisle), or swept from a hinge at one edge of that face …
 
-## 4 · Choose, size and decide (14)
+## 4 · Choose, size and decide (15)
 
 Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is wanted; if, compare, pick one.
 
@@ -140,6 +140,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Show a map** (`field.show`): A map drawn in 3D as coloured cells, blue (good) to red (bad): only the cells at least so bad, or a slice across it.
 - **Signal cycle** (`cycle`): Which phase a fixed-time cycle is in at a time ("green 30, yellow 4, red 34", seconds): a traffic signal's, a washing machine's.
 - **Size a line** (`size.line`): A line sized by what it carries: a wire by its current over its length (out and back, or back through the chassis), the thinnest AWG whose drop is within what may be lost (3 % of 12 V, typical); a bore by its flow at …
+- **Solve for zero** (`math.root`): Where a formula is zero, as one of its names varies between two ends (every other name an input): by Brent's method, bisection, Newton's or the secant, to the tolerance set, saying whether it converged and its error.
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what …
 
 ## 5 · Check (12)
@@ -159,7 +160,7 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Tester** (`test.block`): A block of the library put to its own tests, then pushed far from its defaults (zero, a thousandth, a thousand times, negative): each failure and each crash said, and whether it answered or refused in words
 - **Turn it over and check** (`check.turning`): A piston engine turned through a whole revolution of its crank, a step at a time: at each, its crank and every piston and rod where they then are, tried against everything else (block, caps, pan, pump, cams in the …
 
-## 6 · Simulate and run (15)
+## 6 · Simulate and run (16)
 
 Physics, motion, the clock, chips run from their transistors, engines under load.
 
@@ -177,6 +178,7 @@ Physics, motion, the clock, chips run from their transistors, engines under load
 - **Spring under load** (`load.spring`): A coiled spring as it was made (its wire, its coil, its coils, its free and fitted lengths, read off the part), compressed as fitted and by a stroke more: its rate and forces, its wire's stress against what the wire …
 - **Sweep** (`sweep`): The room a thing needs as it turns from one angle to another about a pivot: it, at so many angles between, as one thing (its envelope), for Clashes to check against what is round it (a door's swing against the bed, an …
 - **Sweep (stress test)** (`sweep.range`): Any block in the library run over a range of one of its inputs (an engine's speed, a beam's load, a loan's rate), the rest wired in as for the block itself: every answer in a table, and the worst of them and where it …
+- **Through time** (`math.ode`): How quantities change when their rates are known: one line a rate ("y' = -k * y"), where each starts ("y = 1"), from one time to another.
 - **Turn** (`turn`): A thing turned about an axis through a point to the angles given at their times ("0 s 0°, 2 s 90°, 6 s 90°, 8 s 0°"), driven as a servo drives a joint: it speeds up and slows down at its acceleration, no faster than …
 
 ## 7 · Sense and act (6)
@@ -190,7 +192,7 @@ What things give off and afford, gases, who notices what, agents and their goals
 - **What it lets you do** (`afford`): What every part of a thing lets a body do, read from its shape, mass, joints and material against that body (an adult, or a child of 8: its grip, reach, knee height, stride and strength from its stature): grasp a bar …
 - **Who notices what** (`sense`): What each observer takes in where it stands, facing what it faces: a person sees by rays out from its eyes packed as its acuity is (sharp where it looks, thin to the side), each meeting the first thing in its way; …
 
-## 8 · Laws and formulas (162)
+## 8 · Laws and formulas (164)
 
 Every physical law as a calculator, by its field, and formulas you write.
 
@@ -202,7 +204,7 @@ Every physical law as a calculator, by its field, and formulas you write.
 - **Everyday** (1): Unit converter
 - **Manufacturing** (3): Filament for a print, Machining time, Spindle speed
 - **Materials** (12): Carbon dioxide a lime can hold, Contact angle (Young), Endurance limit of steel, Griffith criterion, Hall-Petch relation, Hooke's law, Inverse rule of mixtures (across the fibre), Piezo stack stroke, Rule of mixtures (along the fibre), Scale-up for sintering shrinkage, Thermal expansion, Von Mises stress
-- **Math** (8): Add, Divide, Formula, Multiply, Power, Round, Statistics, Subtract
+- **Math** (10): Add, Divide, Formula, Integral, Multiply, Power, Round, Slope, Statistics, Subtract
 - **Mechanical** (45): Bearing life in hours, Bearing rating life (L10), Belt or rim speed, Bolt tightening torque (nut factor), Capstan (belt friction) equation, Centripetal force, Chain pull, Chain speed, Conservation of momentum (two bodies that stick), Cornering speed limit, Coulomb friction, Efficiency of a power screw, Energy a flywheel can hold per kilogram, Energy in a spring, Force from a power screw, Froude number of a gait, Gear tooth bending stress (Lewis), Grade resistance, Gravitational potential energy, Gravitational time dilation, Gruebler's equation (planar), Helical spring rate, Helical torsion spring rate, Hertzian contact (a sphere on a flat), Hill's muscle equation, Kinetic energy, Moment of inertia of a disc, Moment of inertia of a rod about its end, Natural frequency of a mass on a spring, Newton's second law, Parallel axis theorem, Pendulum period, Power of a force, Power of a torque, Rocket equation, Rolling resistance, Rotational kinetic energy, Shaft diameter for bending and torque (static), Speed after a fall, Speed of a longitudinal wave in a bar, Stopping distance, Torque at a wheel, Torque through a gear train, Traction limit, Weight
 - **Physics & science** (3): Bragg's law, Planck relation, Snell's law
 - **Software & data** (7): Diffraction limit of an aperture, Information in a choice, Landauer's limit, Little's law, Nyquist-Shannon sampling theorem, Resolution of optical lithography (Rayleigh), Shannon capacity
@@ -219,7 +221,7 @@ Tables and rows, research, the gauntlet, money, operations.
 - **Compound growth** (`fin.compound`): What an amount grows to at a rate, compounded so many times a year
 - **Critical path** (`ops.critical-path`): How long a project takes and which tasks set it: rows of task, how long, and what each must wait for (names split by ; or spaces)
 - **Delete** (`delete`): Takes something out: a block you (or Claude) made, an entry you fed, a proposal, an unknown off the queue.
-- **Internal rate of return** (`fin.irr`): The discount rate at which cash flows are worth nothing today: found by bisection
+- **Internal rate of return** (`fin.irr`): The discount rate at which cash flows are worth nothing today: found between −99 % and 1000 % by the method chosen (bisection by default), with whether it converged
 - **Into the inventory** (`research.toInventory`): A reference entered in the inventory (filed under Researched), each of its parts an entry holding its own parts by count and saying its source: so it opens all the way down like anything stored, and what has nothing …
 - **Its parts, and theirs** (`research.parts`): An item in the inventory opened all the way down: its components, their sub-components and theirs, each with how many and how it is made or bought; and every one of them still waiting to be broken down, with why (not …
 - **Keep where** (`list.filter`): Keeps the items of a list a condition holds for ("x > 0"), x each item in turn

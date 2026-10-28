@@ -201,6 +201,8 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 | Concern | Owner |
 | --- | --- |
 | Generated structure for any intent | `src/nexus/generate.ts` |
+| Every numeric method: a root, an integral, a slope, a path through time, each by a method chosen and to a tolerance, answering with whether it converged, its steps and its error (the nodes `math.root`, `math.integrate`, `math.derivative`, `math.ode`; laws solved backwards; the rate of return; a term's integrals) | `src/nexus/numeric.ts` |
+| What Nexus gives today, every starter board, law node, seed and model (`tests/nexus/baseline.json`), and the dependency map written from the code (`docs/DEPENDENCIES.md`) | `tests/nexus/baseline.test.ts`, `tests/nexus/dependencies.test.ts` |
 | Machines as real hardware from generated elements | `src/nexus/embody/` (`tree.ts` load path, `stock.ts`) |
 | Real products and what each contains, down to elements | `src/nexus/inventory.ts` (about 1,500 items) |
 | Parts made to any size by their standard | `src/nexus/families.ts`, `catalogue.ts` |

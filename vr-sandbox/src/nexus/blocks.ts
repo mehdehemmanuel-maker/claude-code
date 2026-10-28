@@ -13,6 +13,7 @@ import { dimensionOf, fromSI, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
+import { DERIVATIVE_METHODS, INTEGRAL_METHODS, ODE_METHODS, ROOT_METHODS, derivative, integrate, ode, root, saysFound, step as stepOde, type Found } from './numeric';
 import { DESIGNED, component, componentFromParams, exampleOf } from './components';
 import { CHAINS, FAMILIES } from './families';
 import { METRIC } from './threads';
@@ -118,7 +119,8 @@ export interface PortDef {
   unit?: string; label?: string; default?: unknown; optional?: boolean;
   /** Takes many wires; its value is then the list of what each brings. */
   many?: boolean;
-  /** An output in the unit of what is wired into this input (a sum of lengths is a length). */
+  /** An output in the unit of what is wired into this input (a sum of lengths is a length); "a*b" or "a/b": in their
+   *  units multiplied or divided (a force by a length is a moment). */
   unitFrom?: string;
   /** The values it may take, to pick from (a room's type, a house's layout): one press each. */
   choices?: string[];
@@ -361,6 +363,9 @@ const SIBROCHURE: Source = { cite: 'BIPM, The International System of Units (SI 
 const KALPAKJIAN: Source = { cite: 'Kalpakjian & Schmid, Manufacturing Engineering and Technology, 7th ed., Pearson 2014, ch. 21–23 (cutting speed, feed, machining time)', kind: 'textbook' };
 const HH: Source = { cite: 'Horowitz & Hill, The Art of Electronics, 3rd ed., Cambridge 2015, ch. 1', kind: 'textbook' };
 const DUFFIE: Source = { cite: 'Duffie & Beckman, Solar Engineering of Thermal Processes, 4th ed., Wiley 2013, ch. 23 (photovoltaics); IEC 61724-1 (performance ratio)', kind: 'textbook' };
+const BRENT: Source = { cite: 'Brent, Algorithms for Minimization without Derivatives, Prentice-Hall 1973, ch. 4', kind: 'textbook' };
+const NR: Source = { cite: 'Press, Teukolsky, Vetterling & Flannery, Numerical Recipes, 3rd ed., Cambridge 2007, §4.5, §5.7, §17.2, §17.5', kind: 'textbook' };
+const BURDEN: Source = { cite: 'Burden & Faires, Numerical Analysis, 9th ed., Brooks/Cole 2011, §4.6 (adaptive quadrature)', kind: 'textbook' };
 const ASTROM: Source = { cite: 'Åström & Murray, Feedback Systems, 2nd ed., Princeton 2021, ch. 11 (PID control)', kind: 'textbook' };
 const NAKAJIMA: Source = { cite: 'Nakajima, Introduction to TPM: Total Productive Maintenance, Productivity Press 1988 (OEE)', kind: 'textbook' };
 const KELLEY: Source = { cite: 'Kelley & Walker, Critical-path planning and scheduling, Proc. Eastern Joint Computer Conference 1959', kind: 'paper' };
@@ -379,6 +384,21 @@ export function namesIn(expr: string): string[] {
   return out;
 }
 const scope = (vals: Record<string, unknown>): Scope => ({ get: (n) => { const v = vals[n]; return typeof v === 'number' ? v : typeof v === 'boolean' ? Number(v) : undefined; }, names: () => Object.keys(vals) });
+// a solver's settings, read the same way by every node that solves (the numeric layer, src/nexus/numeric.ts)
+const SOLVER_SETTINGS = (method: string, tol: number, methods: readonly string[] = ROOT_METHODS): SettingDef[] => [
+  { key: 'method', label: 'Method', type: 'choice', default: method, choices: [...methods] },
+  { key: 'tol', label: 'Relative tolerance', type: 'number', default: tol },
+  { key: 'most', label: 'Most steps', type: 'number', default: 200 },
+];
+const rootSet = (s: Record<string, unknown>) => ({ method: String(s.method ?? 'brent') as (typeof ROOT_METHODS)[number], tol: Number(s.tol ?? 1e-12), most: Math.max(1, Math.round(Number(s.most ?? 200))) });
+/** What every solver says beside its answer. */
+const FOUND_OUT: PortDef[] = [P('converged', 'boolean'), P('iterations', 'integer'), N('error', undefined, { label: 'error estimate' }), P('says', 'text')];
+const foundOut = (r: Found) => ({ converged: r.converged, iterations: r.iterations, error: r.error, says: saysFound(r) });
+/** A formula as a function of one of its names, every other name read from the inputs. */
+const fnOf = (expr: string, name: string, inp: Record<string, unknown>) => { const vals: Record<string, unknown> = { ...inp }; const sc = scope(vals); return (x: number) => { vals[name] = x; return num(expr, sc); }; };
+const othersIn = (expr: string, ...not: string[]) => namesIn(expr).filter((n) => !not.includes(n));
+/** Rates written one a line, "y' = -k * y": the names that change and what their rates are. */
+const ratesOf = (src: string) => { const names: string[] = [], exprs: string[] = []; for (const line of src.split('\n')) { const m = line.match(/^\s*([A-Za-z_]\w*)\s*'\s*=\s*(.+)$/); if (m) { names.push(m[1]!); exprs.push(m[2]!.trim()); } } return { names, exprs }; };
 
 const BUILT_IN: BlockDef[] = [
   // inputs: what enters a board
@@ -415,7 +435,7 @@ const BUILT_IN: BlockDef[] = [
     tests: [{ set: { expr: 'a * b + 1' }, inputs: { a: 3, b: 4 }, outputs: { result: 13 } }, { set: { expr: 'x + 5 mm' }, inputs: { x: 1 }, outputs: { result: 1.005 } }] }),
   ...(['add', 'subtract', 'multiply', 'divide', 'power'] as const).map((op) => def({
     id: `math.${op}`, name: op[0]!.toUpperCase() + op.slice(1), kind: 'calculator', ability: 'calculate', domains: ['math'], says: { add: 'a + b: the sum of two numbers, in a\'s unit (a length and a length make a length)', subtract: 'a − b: what is left of a when b is taken from it, in a\'s unit', multiply: 'a × b: their product, its unit theirs multiplied (a force by a length is a moment)', divide: 'a ÷ b: how many b go into a, its unit theirs divided; refused where b is zero', power: 'a to the power b: a multiplied by itself b times (b may be a fraction: a root)' }[op],
-    ports: { inputs: [N('a'), N('b')], outputs: [N('result', undefined, op === 'add' || op === 'subtract' ? { unitFrom: 'a' } : {})] },
+    ports: { inputs: [N('a'), N('b')], outputs: [N('result', undefined, op === 'add' || op === 'subtract' ? { unitFrom: 'a' } : op === 'multiply' ? { unitFrom: 'a*b' } : op === 'divide' ? { unitFrom: 'a/b' } : {})] },
     run: (i) => { const a = Number(i.a), b = Number(i.b); if (op === 'divide' && b === 0) throw new Error('divided by zero'); return { result: op === 'add' ? a + b : op === 'subtract' ? a - b : op === 'multiply' ? a * b : op === 'divide' ? a / b : a ** b }; },
     tests: [{ inputs: { a: 6, b: 3 }, outputs: { result: { add: 9, subtract: 3, multiply: 18, divide: 2, power: 216 }[op] } }] })),
   def({ id: 'math.stats', name: 'Statistics', kind: 'calculator', ability: 'calculate', domains: ['math', 'software', 'finance'], says: 'All the numbers in a list, or on every wire into it: their sum and count, the least, the most, the mean, the middle and the spread (sample standard deviation). An empty list sums to 0; it has no least, most or mean',
@@ -425,6 +445,36 @@ const BUILT_IN: BlockDef[] = [
   def({ id: 'math.round', name: 'Round', kind: 'calculator', ability: 'transform', domains: ['math'], says: 'Rounded to so many decimal places', settings: [{ key: 'places', label: 'Places', type: 'number', default: 2 }],
     ports: { inputs: [N('value')], outputs: [N('result', undefined, { unitFrom: 'value' })] }, run: (i, c) => { const k = 10 ** Math.round(Number(c.set.places)); return { result: Math.round(Number(i.value) * k) / k }; },
     tests: [{ set: { places: 1 }, inputs: { value: 2.46 }, outputs: { result: 2.5 } }] }),
+
+  def({ id: 'math.root', name: 'Solve for zero', kind: 'solver', ability: 'solve', domains: ['math', 'science'], says: 'Where a formula is zero, as one of its names varies between two ends (every other name an input): by Brent\'s method, bisection, Newton\'s or the secant, to the tolerance set, saying whether it converged and its error. To solve a = b, write a - b',
+    settings: [{ key: 'expr', label: 'Formula (zero where)', type: 'text', default: 'x^2 - 2' }, { key: 'of', label: 'Solve for', type: 'text', default: 'x' }, { key: 'lo', label: 'From', type: 'number', default: 0 }, { key: 'hi', label: 'To', type: 'number', default: 10 }, { key: 'unit', label: 'Its unit (SI)', type: 'text', default: '' }, ...SOLVER_SETTINGS('brent', 1e-12)],
+    ports: (s) => ({ inputs: othersIn(String(s.expr ?? ''), String(s.of ?? 'x')).map((n) => N(n, undefined, { label: n })), outputs: [P('value', 'number', String(s.unit ?? '') ? { unit: String(s.unit) } : {}), ...FOUND_OUT] }),
+    run: (inp, c) => { const f = fnOf(String(c.set.expr), String(c.set.of ?? 'x'), inp), lo = Number(c.set.lo ?? 0), hi = Number(c.set.hi ?? 10); const r = root(f, { ...rootSet(c.set), bracket: [lo, hi] }); if (r.value === null) throw new Error(saysFound(r)); return { value: r.value, ...foundOut(r) }; },
+    tests: [{ set: { expr: 'x^2 - a', of: 'x', lo: 0, hi: 2 }, inputs: { a: 2 }, outputs: { value: Math.SQRT2, converged: true }, rel: 1e-10 }, { set: { expr: 'cos(x) - x', lo: 0, hi: 1, method: 'bisection', tol: 1e-14 }, inputs: {}, outputs: { value: 0.7390851332151607 }, rel: 1e-12 }], sources: [BRENT] }),
+  def({ id: 'math.integrate', name: 'Integral', kind: 'solver', ability: 'calculate', domains: ['math', 'science'], says: 'The integral of a formula as one of its names runs from one end to the other (every other name an input): by adaptive Simpson, Gauss–Legendre, or Simpson on so many panels, saying whether it converged and its error',
+    settings: [{ key: 'expr', label: 'Formula', type: 'text', default: 'x^2' }, { key: 'of', label: 'Over', type: 'text', default: 'x' }, { key: 'unit', label: 'Its unit (SI)', type: 'text', default: '' }, ...SOLVER_SETTINGS('adaptive-simpson', 1e-10, INTEGRAL_METHODS), { key: 'panels', label: 'Panels (Simpson)', type: 'number', default: 64 }],
+    ports: (s) => ({ inputs: [N('from'), N('to'), ...othersIn(String(s.expr ?? ''), String(s.of ?? 'x'), 'from', 'to').map((n) => N(n, undefined, { label: n }))], outputs: [P('value', 'number', String(s.unit ?? '') ? { unit: String(s.unit) } : {}), ...FOUND_OUT] }),
+    run: (inp, c) => { const f = fnOf(String(c.set.expr), String(c.set.of ?? 'x'), inp); const r = integrate(f, Number(inp.from), Number(inp.to), { method: String(c.set.method ?? 'adaptive-simpson') as (typeof INTEGRAL_METHODS)[number], tol: Number(c.set.tol ?? 1e-10), most: Math.max(1, Math.round(Number(c.set.most ?? 50))), panels: Number(c.set.panels ?? 64) }); if (r.value === null) throw new Error(saysFound(r)); return { value: r.value, ...foundOut(r) }; },
+    tests: [{ set: { expr: 'x^2' }, inputs: { from: 0, to: 3 }, outputs: { value: 9, converged: true }, rel: 1e-10 }, { set: { expr: 'exp(-k * t)', of: 't', method: 'gauss-legendre' }, inputs: { from: 0, to: 1, k: 2 }, outputs: { value: (1 - Math.exp(-2)) / 2 }, rel: 1e-10 }], sources: [BURDEN, NR] }),
+  def({ id: 'math.derivative', name: 'Slope', kind: 'calculator', ability: 'calculate', domains: ['math', 'science'], says: 'How fast a formula changes with one of its names at a point (every other name an input): by Ridders\' extrapolation of central differences, with its error, or one central difference',
+    settings: [{ key: 'expr', label: 'Formula', type: 'text', default: 'x^3' }, { key: 'of', label: 'With', type: 'text', default: 'x' }, { key: 'method', label: 'Method', type: 'choice', default: 'richardson', choices: [...DERIVATIVE_METHODS] }, { key: 'tol', label: 'Relative tolerance', type: 'number', default: 1e-8 }],
+    ports: (s) => ({ inputs: [N('at'), ...othersIn(String(s.expr ?? ''), String(s.of ?? 'x'), 'at').map((n) => N(n, undefined, { label: n }))], outputs: [N('slope'), ...FOUND_OUT] }),
+    run: (inp, c) => { const f = fnOf(String(c.set.expr), String(c.set.of ?? 'x'), inp); const r = derivative(f, Number(inp.at), { method: String(c.set.method ?? 'richardson') as (typeof DERIVATIVE_METHODS)[number], tol: Number(c.set.tol ?? 1e-8) }); if (r.value === null) throw new Error(saysFound(r)); return { slope: r.value, ...foundOut(r) }; },
+    tests: [{ set: { expr: 'x^3' }, inputs: { at: 2 }, outputs: { slope: 12, converged: true }, rel: 1e-9 }], sources: [NR] }),
+  def({ id: 'math.ode', name: 'Through time', kind: 'solver', ability: 'simulate', domains: ['math', 'science', 'controls'], says: 'How quantities change when their rates are known: one line a rate ("y\' = -k * y"), where each starts ("y = 1"), from one time to another. By Dormand–Prince (its step kept to the tolerance), RK4, Euler, or backward Euler for stiff systems; saying whether it converged, its error and what to beware of. Other names are inputs; t is the time',
+    settings: [{ key: 'rates', label: 'Rates (one a line)', type: 'code', default: "y' = -k * y" }, { key: 'start', label: 'Where each starts', type: 'text', default: 'y = 1' }, { key: 'method', label: 'Method', type: 'choice', default: 'rk45', choices: [...ODE_METHODS] }, { key: 'step', label: 'Step, s (blank: a thousandth of the span)', type: 'text', default: '' }, { key: 'tol', label: 'Relative tolerance', type: 'number', default: 1e-8 }, { key: 'most', label: 'Most steps', type: 'number', default: 100000 }],
+    ports: (s) => { const { names, exprs } = ratesOf(String(s.rates ?? '')); return { inputs: [N('from', 's'), N('to', 's'), ...[...new Set(exprs.flatMap((e) => othersIn(e, 't', 'from', 'to', ...names)))].map((n) => N(n, undefined, { label: n }))], outputs: [P('t', 'list<number>', { unit: 's' }), P('rows', 'table'), N('final', undefined, { label: `${names[0] ?? 'y'} at the end` }), ...FOUND_OUT] }; },
+    run: (inp, c) => {
+      const { names, exprs } = ratesOf(String(c.set.rates ?? '')); if (!names.length) throw new Error('no rates: write one a line, as y\' = -k * y');
+      const start: Record<string, number> = {}; for (const part of String(c.set.start ?? '').split(/[,;\n]/)) { const m = part.match(/^\s*([A-Za-z_]\w*)\s*=\s*(.+)$/); if (m) start[m[1]!] = num(m[2]!, scope(inp)); }
+      const missing = names.filter((n) => start[n] === undefined); if (missing.length) throw new Error(`where ${missing.join(', ')} start${missing.length > 1 ? '' : 's'} is not said: "${missing[0]} = …"`);
+      const vals: Record<string, unknown> = { ...inp }, sc = scope(vals);
+      const f = (t: number, y: readonly number[]) => { vals.t = t; names.forEach((n, i) => { vals[n] = y[i]; }); return exprs.map((e) => num(e, sc)); };
+      const from = Number(inp.from), to = Number(inp.to), stepAt = String(c.set.step ?? '').trim();
+      const p = ode(f, names.map((n) => start[n]!), from, to, { method: String(c.set.method ?? 'rk45') as (typeof ODE_METHODS)[number], tol: Number(c.set.tol ?? 1e-8), most: Math.max(1, Math.round(Number(c.set.most ?? 100000))), ...(stepAt ? { step: num(stepAt, sc) } : {}) });
+      return { t: p.t, rows: p.t.map((t, k) => ({ t, ...Object.fromEntries(names.map((n, i) => [n, p.y[k]![i]])) })), final: p.final[0], ...foundOut(p) };
+    },
+    tests: [{ set: { rates: "y' = -k * y", start: 'y = 1' }, inputs: { from: 0, to: 1, k: 1 }, outputs: { final: Math.exp(-1), converged: true }, rel: 1e-7 }, { set: { rates: "x' = v\nv' = -x", start: 'x = 1, v = 0', method: 'rk4', step: '0.001' }, inputs: { from: 0, to: 6.283185307179586 }, outputs: { final: 1, converged: true }, rel: 1e-9 }], sources: [NR] }),
 
   // units
   def({ id: 'unit.convert', name: 'Unit converter', kind: 'calculator', ability: 'convert', domains: ['everyday', 'mechanical', 'electrical', 'thermal', 'science'], says: 'A quantity read in any unit it is in, said in the unit you choose',
@@ -484,9 +534,10 @@ const BUILT_IN: BlockDef[] = [
     ports: { inputs: [P('flows', 'list<number>', { unit: 'USD' }), N('rate', undefined, { label: 'rate a period' })], outputs: [N('npv', 'USD'), P('positive', 'boolean', { label: 'worth more than nothing' })] },
     run: (i) => { const r = Number(i.rate), v = nums(i.flows).reduce((t, c, k) => t + c / (1 + r) ** k, 0); return { npv: v, positive: v > 0 }; },
     tests: [{ inputs: { flows: [-1000, 500, 500, 500], rate: 0.1 }, outputs: { npv: 243.4259954921112, positive: true }, rel: 1e-9 }], sources: [BREALEY] }),
-  def({ id: 'fin.irr', name: 'Internal rate of return', kind: 'solver', ability: 'solve', domains: ['finance'], says: 'The discount rate at which cash flows are worth nothing today: found by bisection',
-    ports: { inputs: [P('flows', 'list<number>', { unit: 'USD' })], outputs: [N('irr')] },
-    run: (i) => { const f = nums(i.flows), npv = (r: number) => f.reduce((t, c, k) => t + c / (1 + r) ** k, 0); let lo = -0.99, hi = 10; if (npv(lo) * npv(hi) > 0) throw new Error('no rate makes these flows worth nothing'); for (let k = 0; k < 200; k++) { const m = (lo + hi) / 2; if (npv(lo) * npv(m) <= 0) hi = m; else lo = m; } return { irr: (lo + hi) / 2 }; },
+  def({ id: 'fin.irr', name: 'Internal rate of return', kind: 'solver', ability: 'solve', domains: ['finance'], says: 'The discount rate at which cash flows are worth nothing today: found between −99 % and 1000 % by the method chosen (bisection by default), with whether it converged',
+    settings: SOLVER_SETTINGS('bisection', 1e-14),
+    ports: { inputs: [P('flows', 'list<number>', { unit: 'USD' })], outputs: [N('irr'), ...FOUND_OUT] },
+    run: (i, c) => { const f = nums(i.flows), npv = (r: number) => f.reduce((t, x, k) => t + x / (1 + r) ** k, 0); if (npv(-0.99) * npv(10) > 0) throw new Error('no rate makes these flows worth nothing'); const r = root(npv, { ...rootSet(c.set), bracket: [-0.99, 10] }); if (r.value === null) throw new Error(saysFound(r)); return { irr: r.value, ...foundOut(r) }; },
     tests: [{ inputs: { flows: [-1000, 500, 500, 500] }, outputs: { irr: 0.2337519285 }, rel: 1e-6 }], sources: [BREALEY] }),
   def({ id: 'fin.compound', name: 'Compound growth', kind: 'calculator', ability: 'calculate', domains: ['finance', 'everyday'], says: 'What an amount grows to at a rate, compounded so many times a year',
     ports: { inputs: [N('amount', 'USD'), N('rate', undefined, { label: 'rate a year' }), N('years'), N('perYear', undefined, { optional: true, default: 12 })], outputs: [N('value', 'USD'), N('gain', 'USD')] },
@@ -547,10 +598,12 @@ const BUILT_IN: BlockDef[] = [
     tests: [{ inputs: { A: 1.7, eta: 0.2, psh: 5, pr: 0.75 }, outputs: { kWh: 1.275 }, rel: 1e-12 }], sources: [DUFFIE] }),
 
   // controls
-  def({ id: 'ctrl.pid', name: 'PID loop on a lag', kind: 'calculator', ability: 'simulate', domains: ['controls'], says: 'A PID controller driving a first-order plant (gain K, time constant τ) to a set point, stepped in time: how it rises, overshoots and settles',
+  def({ id: 'ctrl.pid', name: 'PID loop on a lag', kind: 'calculator', ability: 'simulate', domains: ['controls'], says: 'A PID controller driving a first-order plant (gain K, time constant τ) to a set point, stepped in time: how it rises, overshoots and settles. The controller acts each step; the plant is stepped by the method chosen (Euler, as a sampled loop is usually modelled; RK4; backward Euler, stable at any step)',
+    settings: [{ key: 'method', label: 'Plant stepped by', type: 'choice', default: 'euler', choices: ['euler', 'rk4', 'backward-euler'] }],
     ports: { inputs: [N('sp', undefined, { label: 'set point' }), N('Kp'), N('Ki', undefined, { optional: true, default: 0 }), N('Kd', undefined, { optional: true, default: 0 }), N('K', undefined, { label: 'plant gain', optional: true, default: 1 }), N('tau', 's', { label: 'plant time constant' }), N('T', 's', { label: 'how long' })],
       outputs: [P('t', 'list<number>', { unit: 's' }), P('y', 'list<number>'), P('u', 'list<number>'), N('final'), N('overshoot')] },
-    run: (i) => {
+    run: (i, cx) => {
+      const method = String(cx.set.method ?? 'euler') as 'euler' | 'rk4' | 'backward-euler';
       const sp = Number(i.sp), Kp = Number(i.Kp), Ki = Number(i.Ki ?? 0), Kd = Number(i.Kd ?? 0), K = Number(i.K ?? 1), tau = Number(i.tau), T = Number(i.T);
       if (!(tau > 0) || !(T > 0)) throw new Error('τ and the time must be more than nothing');
       const n = 2000, dt = T / n, keep = Math.max(1, Math.round(n / 200)), t: number[] = [], y: number[] = [], u: number[] = [];
@@ -558,7 +611,7 @@ const BUILT_IN: BlockDef[] = [
       for (let k = 0; k <= n; k++) {
         const e = sp - x; integ += e * dt; const d = k ? (e - prev) / dt : 0; prev = e;
         const c = Kp * e + Ki * integ + Kd * d; if (k % keep === 0) { t.push(k * dt); y.push(x); u.push(c); }
-        top = Math.max(top, x); x += (dt / tau) * (K * c - x);
+        top = Math.max(top, x); x = stepOde(method, (_t, s) => [(K * c - s[0]!) / tau], k * dt, [x], dt)[0]!;
         if (!Number.isFinite(x)) throw new Error(`it runs away (unstable) by ${(k * dt).toFixed(2)} s: the loop's gains are too high for its step (a time step of ${dt.toPrecision(2)} s against τ = ${tau})`);
       }
       return { t, y, u, final: x, overshoot: sp ? Math.max(0, (top - sp) / sp) : 0 };

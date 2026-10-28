@@ -533,14 +533,17 @@ Written from the code by `tests/nexus/dependencies.test.ts` (step 0 of `docs/REA
 
 ## Where numbers are solved for or stepped in time
 
-| What | Where | Found |
+The numeric layer is `src/nexus/numeric.ts`: each answer with its method, whether it converged, its steps and its error.
+
+| What | Where | Through the numeric layer |
 | --- | --- | --- |
-| a law solved for an input (bisection) | `src/nexus/law.ts` | yes |
-| a law solved for an input (rearranged, else bisection) | `src/nexus/lawgraph.ts` | yes |
-| internal rate of return (bisection, 200 steps) | `src/nexus/blocks.ts` | yes |
-| an integral by Simpson's rule, its error by halving | `src/nexus/evaluate.ts` | yes |
-| a PID loop stepped in time | `src/nexus/blocks.ts` | yes |
-| a battery drained in time | `src/engineering/battery.ts` | yes |
-| a motor run in time | `src/engineering/motorrun.ts` | yes |
-| warming in substeps | `src/engineering/thermal.ts` | yes |
-| heat through a grid (implicit, Gauss–Seidel: a field solver) | `src/nexus/heatflow.ts` | yes |
+| a law solved for an input | `src/nexus/law.ts` | yes |
+| a law solved for an input (rearranged where it can be, else inverted) | `src/nexus/lawgraph.ts` | yes |
+| internal rate of return | `src/nexus/blocks.ts` | yes |
+| an integral in a term (Simpson's rule, its error by halving) | `src/nexus/evaluate.ts` | yes |
+| a PID loop's plant stepped in time | `src/nexus/blocks.ts` | yes |
+| roots, integrals, slopes and paths on a board | `src/nexus/blocks.ts` | yes |
+| a battery drained | `src/engineering/battery.ts` | no: one step of charge counted (I dt over the capacity at that rate): no equation to solve |
+| a motor run in time | `src/engineering/motorrun.ts` | no: its steps switch between spin-up and a steady state, with events (overheating, the rise time) and energy counted each step; kept until a stepper with events replaces it whole, its results held by the baseline |
+| warming in substeps | `src/engineering/thermal.ts` | no: a frame's step of a part cooling, its sub-step limited so it never crosses the room's temperature: called each frame, not run over a span |
+| heat through a grid | `src/nexus/heatflow.ts` | no: a field solver (implicit, Gauss–Seidel over cells), not one equation in time |

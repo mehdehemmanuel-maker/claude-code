@@ -223,3 +223,22 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
 - Failures: insufficient data and violated assumptions give a stated warning or refusal, never a number.
 - Ids kept: every `law.*` id keeps working, so saved boards open; the reach test, the gauntlet over every node, the
   pages in a browser, and screenshots of a board that solves a cross-field problem through laws and a material.
+
+## 5. Progress
+
+- **Step 0, done.** `tests/nexus/baseline.test.ts` records 1,447 values from every starter board, law node, seed and
+  vehicle model (timings left out; two runs alike). `docs/DEPENDENCIES.md` is written from the code by
+  `tests/nexus/dependencies.test.ts` and fails when stale. It found: 241 laws in the book, 144 of them also closures
+  and nodes, 97 in the book alone; 558 quantity names over 892 ports, 117 shared by two laws or more; 53 letters that
+  mean different things in different laws (so laws are joined by quantity, never by letter); four material tables no
+  code reads (the friction map, words to matter, the liquids, the edge rules).
+- **Step 1, done.** `src/nexus/numeric.ts`: roots (Brent, bisection, Newton, secant), integrals (adaptive Simpson,
+  Gauss–Legendre, Simpson on panels), slopes (Ridders, central), paths (Dormand–Prince, RK4, Euler, backward Euler),
+  each answer with its method, whether it converged, its steps, its evaluations, its error and a warning. Tested
+  against closed forms, with Simpson's fourth order, Euler's first and RK4's fourth measured, and a stiff system
+  shown running away explicitly and held by backward Euler. Through it now: a law solved for an input, the law graph's
+  inversion (its grounds say the method, whether it converged and its error), `fin.irr` (method and tolerance
+  settings, and `converged`), a term's integrals, the PID plant (method setting). New nodes `math.root`,
+  `math.integrate`, `math.derivative`, `math.ode`. `math.multiply` and `math.divide` carry units (N × mm is N mm; N ÷
+  mm² is N/mm^2). The baseline is unchanged. Kept as their own code, each with its reason in the dependency map: the
+  battery's one-step charge count, the motor run (events and energy each step), a frame's warming, the heat grid.

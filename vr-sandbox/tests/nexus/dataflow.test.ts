@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { LIBRARY, block, fits, readQuantity, register, shelves, show, testBlock, type BlockDef } from '../../src/nexus/blocks';
-import { Engine, Memo, USAGE, collapse, cutBranch, deadNodes, emptyBoard, expand, groupBlock, makeBlock, mergeTwins, patterns, placeBlock, shapeKeys, suggest, twins, wire } from '../../src/nexus/dataflow';
+import { Engine, Memo, USAGE, collapse, cutBranch, deadNodes, emptyBoard, expand, groupBlock, makeBlock, mergeTwins, patterns, placeBlock, shapeKeys, suggest, twins, unitCombined, wire } from '../../src/nexus/dataflow';
 import { compact, nodesOf, type Board } from '../../src/nexus/boards';
 import { LAWS } from '../../src/ganglia/laws';
 import { COPPER_ALPHA } from '../../src/engineering/dcmotor';
@@ -68,6 +68,15 @@ describe('wires', () => {
     expect(value(e, t, 'value')).toBeCloseTo(323.15, 9);
     // copper's resistance 30 K above where it was 1 Ω: 1 + α × 30
     expect(value(e, law, 'R')).toBeCloseTo(1 + 30 * COPPER_ALPHA, 9);
+  });
+  it('a product or a quotient carries its units: a force by a length is N m, by an area N/m^2, and converts on', async () => {
+    const b = emptyBoard(), F = placeBlock(b, 'in.number', 0, 0, { value: '2 kN', unit: 'N' }), L = placeBlock(b, 'in.number', 0, 0, { value: '30 mm', unit: 'mm' });
+    const M = placeBlock(b, 'math.multiply', 0, 0, {}), A = placeBlock(b, 'math.multiply', 0, 0, {}), S = placeBlock(b, 'math.divide', 0, 0, {});
+    wire(b, F, 'value', M, 'a'); wire(b, L, 'value', M, 'b'); wire(b, L, 'value', A, 'a'); wire(b, L, 'value', A, 'b'); wire(b, F, 'value', S, 'a'); wire(b, A, 'result', S, 'b');
+    const e = await runOf(b);
+    expect(e.ports(M).outputs[0]!.unit).toBe('N mm'); expect(e.ports(A).outputs[0]!.unit).toBe('mm^2'); expect(e.ports(S).outputs[0]!.unit).toBe('N/mm^2');
+    expect(value(e, M, 'result')).toBeCloseTo(60000, 9);
+    expect(unitCombined('m', 'm', '/')).toBe('1'); expect(unitCombined(undefined, 's', '/')).toBe('s^-1'); expect(unitCombined('N m', 'm', '/')).toBe('N');
   });
   it('are refused where they would make a loop', async () => {
     const b = emptyBoard(), a = placeBlock(b, 'math.add', 0, 0, { a: 1, b: 2 }), c = placeBlock(b, 'math.multiply', 0, 0, { b: 2 });

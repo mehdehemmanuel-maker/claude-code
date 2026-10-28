@@ -4,6 +4,7 @@
 
 import { dimText, type Dim } from './dimension';
 import { hashOf } from './identity';
+import { simpsonRule } from './numeric';
 import { carriesValue, weakest, type Status } from './status';
 import { OPERATORS, bindsOf, show, type Leaf, type Term } from './term';
 
@@ -96,15 +97,7 @@ const numericOnce = (t: Term, env: Values, halve: boolean, seen: Map<Term, numbe
     const lo = numeric(t.lo, env, halve, seen), hi = numeric(t.hi, env, halve, seen), panels = t.cells.value;
     if (lo === null || hi === null || panels === null) return null;
     const n = halve ? Math.max(1, Math.floor(panels / 2)) : panels;
-    const h = (hi - lo) / (2 * n);
-    let s = 0;
-    for (let i = 0; i <= 2 * n; i++) {
-      const f = numeric(t.body, { ...env, [t.over.sym]: { value: lo + i * h } }, halve);
-      if (f === null) return null;
-      if (!Number.isFinite(f)) return NaN;
-      s += (i === 0 || i === 2 * n ? 1 : i % 2 ? 4 : 2) * f;
-    }
-    return (s * h) / 3;
+    return simpsonRule((x) => numeric(t.body, { ...env, [t.over.sym]: { value: x } }, halve), lo, hi, n);
   }
   const args = t.args.map((a) => numeric(a, env, halve, seen));
   // a predicate one known part decides is decided, whatever the unknown parts are: false and anything is false, true

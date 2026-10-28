@@ -12,7 +12,7 @@
 import { BOOK, lawById, lawByHash } from './book';
 import { dimOf, integerNullSpace, sameDim, type Dim } from './dimension';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { apply, invert, type Law } from './law';
+import { apply, invert, invertFound, type Law } from './law';
 import { div, leaf, mul, OPERATORS, pow, substitute, variable, type Term } from './term';
 import { fromSI, parseUnit } from '../ganglia/units';
 
@@ -54,8 +54,8 @@ export function solve(id: string, sym: string, env: Record<string, Derivation>, 
     return evaluate(name ?? port.name, t, { ...env }, { law: l.hash, unit: port.unit });
   }
   if (!bracket) throw new Error(`${id}: ${sym} is not a power in it; give a bracket to invert in`);
-  const x = invert(l, sym, out.value!, env, bracket, (n, v, un) => setting(n, v, un, 'the inversion'));
-  return x === null ? ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown' })) : ofLeaf(leaf(name ?? port.name, fromSI(x, port.unit), port.unit, { class: 'assumed', by: 'the law graph', grounds: `${l.name} solved numerically for ${port.name}` }));
+  const r = invertFound(l, sym, out.value!, env, bracket, (n, v, un) => setting(n, v, un, 'the inversion')), x = r.value;
+  return x === null ? ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown' })) : ofLeaf(leaf(name ?? port.name, fromSI(x, port.unit), port.unit, { class: 'assumed', by: 'the law graph', grounds: `${l.name} solved numerically for ${port.name} by ${r.method}, ${r.converged ? 'converged' : 'not converged'} in ${r.iterations} steps (±${r.error.toPrecision(2)} SI)` }));
 }
 /** A record's value in a unit. */
 export const valueIn = (d: Derivation, unit = d.unit): number | null => (d.value === null ? null : fromSI(d.value, unit));

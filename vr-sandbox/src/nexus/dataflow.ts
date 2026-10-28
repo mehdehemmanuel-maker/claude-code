@@ -179,8 +179,14 @@ export class Engine {
     const n = this.board.nodes[id], b = n && blockOf(n), out: Record<string, string> = {}; if (!b) return out;
     for (const o of portsOf(b, { ...defaultsOf(b), ...(n.set ?? {}) }).outputs) {
       if (o.unit || !o.unitFrom) continue;
-      const w = (this.into.get(id) ?? []).find((e) => e.in === o.unitFrom); if (!w) continue;
-      const src = this.board.nodes[w.from], sb = src && blockOf(src), u = this.units.get(w.from)?.[w.out!] ?? (sb ? portsOf(sb, { ...defaultsOf(sb), ...(src.set ?? {}) }).outputs.find((p) => p.name === w.out)?.unit : undefined);
+      const unitAt = (input: string) => {
+        const w = (this.into.get(id) ?? []).find((e) => e.in === input); if (!w) return undefined;
+        const src = this.board.nodes[w.from], sb = src && blockOf(src);
+        return this.units.get(w.from)?.[w.out!] ?? (sb ? portsOf(sb, { ...defaultsOf(sb), ...(src.set ?? {}) }).outputs.find((p) => p.name === w.out)?.unit : undefined);
+      };
+      // a product or a quotient of two inputs takes their units multiplied or divided ("a*b", "a/b")
+      const op = /^(\w+)\s*([*/])\s*(\w+)$/.exec(o.unitFrom);
+      const u = op ? unitCombined(unitAt(op[1]!), unitAt(op[3]!), op[2] as '*' | '/') : unitAt(o.unitFrom);
       if (u) out[o.name] = u;
     }
     return out;
@@ -300,6 +306,20 @@ export class Engine {
 }
 /** A value in one unit said in another of its kind (degrees Celsius to kelvin, amp hours to coulombs): what a wire
  *  between two units does. Lists are converted item by item; anything else passes as it is. */
+/** Two units multiplied or divided, as a unit string the units parser reads ("N" × "m" is "N m"; "N" ÷ "mm mm" is
+ *  "N/mm^2"); like factors gather into powers and cancel across the line. Undefined when neither has a unit. */
+export function unitCombined(a: string | undefined, b: string | undefined, op: '*' | '/'): string | undefined {
+  if (!a && !b) return undefined;
+  const split = (u = '') => { const [n = '', ...d] = u.replace(/·/g, ' ').split('/'); const toks = (s: string) => s.trim().split(/\s+/).filter((t) => t && t !== '1'); return { n: toks(n), d: toks(d.join(' ')) }; };
+  const x = split(a), y = split(b), exp = new Map<string, number>();
+  const put = (toks: string[], sign: number) => { for (const t of toks) { const [base = t, p = '1'] = t.split('^'); exp.set(base, (exp.get(base) ?? 0) + sign * Number(p)); } };
+  put(x.n, 1); put(x.d, -1); put(y.n, op === '*' ? 1 : -1); put(y.d, op === '*' ? -1 : 1);
+  const at = (base: string, p: number) => (p === 1 ? base : `${base}^${+p.toFixed(6)}`), live = [...exp].filter(([, p]) => Math.abs(p) > 1e-12);
+  const n = live.filter(([, p]) => p > 0), d = live.filter(([, p]) => p < 0);
+  if (!live.length) return '1';
+  if (!n.length) return d.map(([base, p]) => at(base, p)).join(' ');
+  return n.map(([base, p]) => at(base, p)).join(' ') + (d.length ? `/${d.map(([base, p]) => at(base, -p)).join(' ')}` : '');
+}
 export function convert(v: unknown, from?: string, to?: string): unknown {
   if (!from || !to || from === to) return v;
   const a = dimOf(from), b = dimOf(to); if (!a || !b || !sameDim(a, b)) return v;
