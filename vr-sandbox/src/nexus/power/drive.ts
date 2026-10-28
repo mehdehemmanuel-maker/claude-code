@@ -4,9 +4,10 @@
 // can pull (the best ratio for that speed, its engine kept between idle and redline), less what it takes to keep going,
 // over its mass and its turning parts' share: the most it can speed up, which anything driving it (Follow a path) uses.
 
+import { STANDARD_GRAVITY } from '../../data/constants';
 
 /** The air (ISO 2533 at sea level, 15 °C: 1.225 kg/m³) and gravity (standard: 9.80665 m/s²). */
-export const RHO = 1.225, G = 9.80665;
+export const RHO = 1.225, G = STANDARD_GRAVITY;
 export type Gearbox = { kind: 'manual'; ratios: number[]; source?: string } | { kind: 'cvt'; /** the belt's lowest and highest ratios */ low: number; high: number; /** a launch gear below the belt, if it has one */ launch?: number; source?: string };
 export interface Powertrain { curve: { rpm: number; torque: number }[]; gearbox: Gearbox; final: number; /** from crank to wheels (0.9, typical of a front-drive transaxle) */ efficiency?: number; idle?: number; redline?: number }
 export interface Road { mass: number; /** m */ tyreR: number; /** drag area Cd × A, m² */ CdA: number; /** rolling resistance (0.010, typical of a passenger tyre) */ Crr?: number; /** the share of its weight on its driven wheels, and their grip (0.6 and 0.9, typical of front drive on dry asphalt) */ driven?: number; mu?: number; /** its turning parts' inertia as a share of its mass (0.05, typical) */ rotating?: number }

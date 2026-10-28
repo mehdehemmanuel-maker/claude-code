@@ -242,3 +242,17 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   `math.integrate`, `math.derivative`, `math.ode`. `math.multiply` and `math.divide` carry units (N × mm is N mm; N ÷
   mm² is N/mm^2). The baseline is unchanged. Kept as their own code, each with its reason in the dependency map: the
   battery's one-step charge count, the motor run (events and energy each step), a frame's warming, the heat grid.
+- **Step 2, done.** Amount of substance is a base dimension (the mole was a plain number, so a molar slip could not be
+  seen); every law of the book still balances with it. `src/nexus/quantities.ts`: 85 quantities, each a dimension, an
+  SI unit and a sentence; all 892 ports of the 241 laws map to one (a test fails on any that does not), told apart by
+  their words where a dimension holds several (a torque is not an energy, a stress not a pressure, a modulus not
+  either); 55 letters that mean different things in different laws are now different quantities. `meaning(law, port)`
+  says what each variable is in its law. `src/nexus/book/kinds.ts`: every law's kind and why it works (92 derived, 40
+  definitions, 29 empirical, 25 fundamental, 24 geometry, 18 approximations, 13 constitutive); when it must not be used
+  stays its `valid` text and its domain. `src/data/constants.ts`: the constants once (the 2019 SI's exact ones with
+  e and N_A added, CODATA 2018's measured ones with their uncertainty); the book's leaves, the Stefan–Boltzmann
+  constant in the thermal code and the closures, standard gravity in five modules and the Faraday constant in the gas
+  code (it was 96485, now 96485.33212) all read it; a test fails if any code defines one again. One `Source` type:
+  the law's is the ganglia's with its kind required. The dependency map now shows each law's kind and the laws each
+  quantity joins, and finds a table's readers by the file they import from (it had counted the book's own
+  `./materials` as the handbook's).

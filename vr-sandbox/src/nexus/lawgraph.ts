@@ -96,7 +96,7 @@ export function leavesUnder(d: Derivation, out: Derivation[] = []): Derivation[]
  *  with its exponent; null where the term is not one. */
 export interface Monomial { c: number; e: Record<string, number>; k: { name: string; unit: string; e: number }[] }
 export function monomial(t: Term): Monomial | null {
-  if (t.kind === 'leaf') return t.value === null ? null : { c: t.value, e: {}, k: sameDim(t.dim, [0, 0, 0, 0, 0]) && !/mol/.test(t.unit) ? [] : [{ name: t.name, unit: t.unit, e: 1 }] };
+  if (t.kind === 'leaf') return t.value === null ? null : { c: t.value, e: {}, k: sameDim(t.dim, [0, 0, 0, 0, 0, 0]) ? [] : [{ name: t.name, unit: t.unit, e: 1 }] };
   if (t.kind === 'var') return { c: 1, e: { [t.sym]: 1 }, k: [] };
   if (t.kind !== 'app') return null;
   const of = t.args.map(monomial); if (of.some((x) => !x)) return null;

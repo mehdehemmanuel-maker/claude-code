@@ -61,8 +61,8 @@ import { EXHAUST_LIMITS, STILL, SUBSTANCES, concentration, effectsOf, exhaustFlo
 describe('gases: a substance given off at a rate, carried by the air, doing what it does at each concentration', () => {
   it('the rates from the physics: an engine breathes its displacement every two turns; overcharge splits water by Faraday\'s law', () => {
     expect(exhaustFlow(1987, 750)).toBeCloseTo(1987e-6 * 750 / 120, 12);
-    // (1 A for an hour: 3600 C / (2 × 96485) mol of hydrogen, 22.4 L each)
-    expect(hydrogenFrom(1) * 3600).toBeCloseTo((3600 / (2 * 96485)) * 0.0224, 9);
+    // (1 A for an hour: 3600 C / (2 F) mol of hydrogen, 22.4 L each; F = 96485.33212 C/mol, exact in the 2019 SI)
+    expect(hydrogenFrom(1) * 3600).toBeCloseTo((3600 / (2 * 96485.33212)) * 0.0224, 12);
   });
   it('in still air it falls as 1 / r, never above what comes out; in a wind it is carried downwind and not upwind', () => {
     const r = { at: [0, 1, 0] as [number, number, number], substance: 'co', rate: 1e-5, pure: 0.003, part: 'pipe', path: '/0', why: '' };

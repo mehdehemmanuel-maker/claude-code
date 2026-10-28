@@ -3,6 +3,7 @@
 // natural convection and radiation. Hot enough, metal glows; hot enough, wood chars. Values are typical handbook
 // properties near room temperature; each names its source.
 
+import { SIGMA_SB } from '../data/constants';
 import type { Material } from '../data/materials';
 
 export interface ThermalProps {
@@ -17,7 +18,7 @@ export interface ThermalProps {
 
 /** Room temperature, deg C. */
 export const AMBIENT = 20;
-const SIGMA = 5.670374419e-8;
+const SIGMA = SIGMA_SB;
 const K0 = 273.15;
 
 const T = (c: number, k: number, emissivity: number, source: string): ThermalProps => ({ c, k, emissivity, source });

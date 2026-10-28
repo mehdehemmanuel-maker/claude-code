@@ -11,6 +11,7 @@
 // ½ I ω² to spin it, ½ m v² to move it, each matter's values from the kept data with their sources. Every length is in
 // metres, every number in SI; a number may carry its unit (40 mm, 2 kN, 20 N·m, 45 deg).
 
+import { STANDARD_GRAVITY } from '../data/constants';
 import { MATERIALS, type Material } from '../data/materials';
 import { FUSION, fusible } from '../engineering/fusion';
 import { motorModel, windingR } from '../engineering/dcmotor';
@@ -433,7 +434,7 @@ export class Workshop {
     const sc: Scope = {
       get(name) {
         if (over.has(name)) return over.get(name);
-        if (name === 'g') return 9.80665;
+        if (name === 'g') return STANDARD_GRAVITY;
         const law = self.laws.get(name);
         if (law) { if (busy.has(`var:${name}`)) throw new Error(`${name} is sized from itself`); busy.add(`var:${name}`); try { return self.least(name, law, sc); } finally { busy.delete(`var:${name}`); } }
         const e = self.vars.get(name);
@@ -1469,7 +1470,7 @@ export class Workshop {
     const m = this.madeOf(name, new Map(), new Set(), new Map()), x = this.value(/^-?[\d.]+$/.test(amount.trim()) && (how === 'spin' || how === 'turn') ? `${amount} rpm` : amount);
     if (!m.matter) throw new Error(`${name} is a surface: it has no mass to lift, heat, spin or move`);
     let e: number, law: string;
-    if (how === 'lift' || how === 'raise') { e = m.mass * 9.80665 * x; law = 'E = m g h'; }
+    if (how === 'lift' || how === 'raise') { e = m.mass * STANDARD_GRAVITY * x; law = 'E = m g h'; }
     else if (how === 'heat' || how === 'warm') { const t = thermalOf(m.matter); e = m.mass * t.c * x; law = `Q = m c ΔT, c = ${t.c} J/kg K (${t.source})`; }
     else if (how === 'spin' || how === 'turn') { const I = inertia(m); e = 0.5 * I * x * x; law = `E = ½ I ω², I = ${fmt(I)} kg m² about its axis`; }
     else { e = 0.5 * m.mass * x * x; law = 'E = ½ m v²'; }

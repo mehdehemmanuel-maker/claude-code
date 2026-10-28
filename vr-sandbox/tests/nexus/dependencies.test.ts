@@ -6,12 +6,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
-import { BOOK, KEPT, SLICE, UNIVERSAL } from '../../src/nexus/book';
+import { BOOK, KEPT, KINDS, SLICE, UNIVERSAL } from '../../src/nexus/book';
+import { QUANTITIES, quantityOf } from '../../src/nexus/quantities';
 import { LAWS } from '../../src/ganglia/laws';
 import { LIBRARY } from '../../src/nexus/blocks';
-import { dimOf, dimText } from '../../src/nexus/dimension';
 
 const root = join(__dirname, '../..'), update = !!process.env['UPDATE_DEPS'];
 const files = (d = join(root, 'src'), out: string[] = []): string[] => { for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) files(p, out); else if (p.endsWith('.ts')) out.push(p); } return out; };
@@ -54,28 +54,31 @@ function mapText(): string {
   const closure = new Set(LAWS.map((l) => l.id)), node = new Set([...LIBRARY.values()].filter((b) => b.kind === 'law').map((b) => b.id.replace(/^law\./, '')));
   const field = new Map<string, string>(); for (const [k, ls] of Object.entries(KEPT)) for (const l of ls) field.set(l.id, k); for (const l of SLICE) field.set(l.id, 'derived (slice)'); for (const l of UNIVERSAL) field.set(l.id, 'universal');
   const fields = [...new Set(field.values())];
-  L.push('## Laws and the engines that hold them', '', `${BOOK.length} laws in the book (terms: dimensions checked, domains, derivations); ${LAWS.length} as closures; ${node.size} as nodes (built from the closures). In the book only: ${BOOK.filter((l) => !closure.has(l.id)).length}. As closures only: ${LAWS.filter((l) => !BOOK.some((b) => b.id === l.id)).length}.`, '', '| Field | In the book | Also a closure and a node | Only in the book |', '| --- | --- | --- | --- |');
-  for (const f of fields) { const ls = BOOK.filter((l) => field.get(l.id) === f); L.push(`| ${f} | ${ls.length} | ${ls.filter((l) => closure.has(l.id) && node.has(l.id)).length} | ${ls.filter((l) => !closure.has(l.id)).length} |`); }
+  L.push('## Laws and the engines that hold them', '', `${BOOK.length} laws in the book (terms: dimensions checked, domains, derivations); ${LAWS.length} as closures; ${node.size} as nodes (built from the closures). In the book only: ${BOOK.filter((l) => !closure.has(l.id)).length}. As closures only: ${LAWS.filter((l) => !BOOK.some((b) => b.id === l.id)).length}.`, '', 'Each law\'s kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived, constitutive (how a material behaves), empirical (a fit), an approximation (another law in a limit), or geometry.', '', '| Field | In the book | Also a closure and a node | Only in the book | Kinds |', '| --- | --- | --- | --- | --- |');
+  const kindsIn = (ls: typeof BOOK) => { const c = new Map<string, number>(); for (const l of ls) { const k = KINDS[l.id]?.[0] ?? '?'; c.set(k, (c.get(k) ?? 0) + 1); } return [...c].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', '); };
+  for (const f of fields) { const ls = BOOK.filter((l) => field.get(l.id) === f); L.push(`| ${f} | ${ls.length} | ${ls.filter((l) => closure.has(l.id) && node.has(l.id)).length} | ${ls.filter((l) => !closure.has(l.id)).length} | ${kindsIn(ls)} |`); }
+  L.push(`| all | ${BOOK.length} | | | ${kindsIn(BOOK)} |`);
   for (const f of fields) {
-    L.push('', `### ${f}`, '', '| Law | Variables (symbol: what, unit) | Gives | Engines |', '| --- | --- | --- | --- |');
-    for (const l of BOOK.filter((x) => field.get(x.id) === f)) L.push(`| \`${l.id}\` ${l.name} | ${l.inputs.map((p) => `${p.sym}: ${p.name}, ${p.unit || '1'}`).join('; ')} | ${l.output.sym}: ${l.output.name}, ${l.output.unit || '1'} | book${closure.has(l.id) ? ', closure' : ''}${node.has(l.id) ? ', node' : ''} |`);
+    L.push('', `### ${f}`, '', '| Law | Kind | Variables (symbol: what, unit) | Gives | Engines |', '| --- | --- | --- | --- | --- |');
+    for (const l of BOOK.filter((x) => field.get(x.id) === f)) L.push(`| \`${l.id}\` ${l.name} | ${KINDS[l.id]?.[0] ?? '**none**'} | ${l.inputs.map((p) => `${p.sym}: ${p.name}, ${p.unit || '1'}`).join('; ')} | ${l.output.sym}: ${l.output.name}, ${l.output.unit || '1'} | book${closure.has(l.id) ? ', closure' : ''}${node.has(l.id) ? ', node' : ''} |`);
   }
   // ---- quantities shared ----
-  const ports = BOOK.flatMap((l) => [...l.inputs, l.output].map((p) => ({ l: l.id, ...p, dim: dimText(dimOf(p.unit)) })));
-  const norm = (n: string) => n.toLowerCase().replace(/^(the|a|an) /, '').replace(/\s+/g, ' ').trim();
-  const byQ = new Map<string, Set<string>>(); for (const p of ports) { const k = `${norm(p.name)} [${p.dim}]`; (byQ.get(k) ?? byQ.set(k, new Set()).get(k)!).add(p.l); }
-  const shared = [...byQ].filter(([, s]) => s.size > 1).sort((a, b) => b[1].size - a[1].size);
-  L.push('', '## Quantities the laws share (by name and dimension, as their ports say them)', '', `${byQ.size} distinct names-with-dimension across ${ports.length} ports; ${shared.length} shared by two laws or more. Step 2 makes these one registry; the names below are the laws' own words, so one quantity can appear under several names.`, '', '| Quantity [dimension] | Laws |', '| --- | --- |');
-  for (const [k, s] of shared) L.push(`| ${k} | ${s.size}: ${[...s].slice(0, 8).map((x) => `\`${x}\``).join(', ')}${s.size > 8 ? ', …' : ''} |`);
-  const bySym = new Map<string, Set<string>>(); for (const p of ports) (bySym.get(p.sym) ?? bySym.set(p.sym, new Set()).get(p.sym)!).add(`${norm(p.name)} [${p.dim}]`);
-  const clashes = [...bySym].filter(([, s]) => new Set([...s].map((x) => x.slice(x.indexOf('[')))).size > 1).sort((a, b) => b[1].size - a[1].size);
-  L.push('', '### One letter, different things', '', `${clashes.length} symbols stand for quantities of different dimensions in different laws: joining laws by the letter would join the wrong things, so they are joined by the quantity.`, '', '| Symbol | Means |', '| --- | --- |');
-  for (const [k, s] of clashes) L.push(`| ${k} | ${[...s].slice(0, 6).join('; ')}${s.size > 6 ? '; …' : ''} |`);
+  const ports = BOOK.flatMap((l) => [...l.inputs, l.output].map((p) => ({ l: l.id, ...p, q: quantityOf(l, p) })));
+  const byQ = new Map<string, Set<string>>(); for (const p of ports) if (p.q) (byQ.get(p.q.id) ?? byQ.set(p.q.id, new Set()).get(p.q.id)!).add(p.l);
+  const used = QUANTITIES.filter((x) => byQ.has(x.id)).sort((a, b) => byQ.get(b.id)!.size - byQ.get(a.id)!.size);
+  L.push('', '## Quantities: what joins the laws', '', `The registry (\`src/nexus/quantities.ts\`) holds ${QUANTITIES.length} quantities; every one of the ${ports.length} ports of the book is one of them (${ports.filter((p) => !p.q).length} are not). ${used.filter((x) => byQ.get(x.id)!.size > 1).length} quantities are shared by two laws or more: those are the joins a chain of laws runs along.`, '', '| Quantity | Unit | Laws |', '| --- | --- | --- |');
+  for (const x of used) { const s = byQ.get(x.id)!; L.push(`| ${x.name} | ${x.unit} | ${s.size}: ${[...s].slice(0, 8).map((y) => `\`${y}\``).join(', ')}${s.size > 8 ? ', …' : ''} |`); }
+  const bySym = new Map<string, Set<string>>(); for (const p of ports) (bySym.get(p.sym) ?? bySym.set(p.sym, new Set()).get(p.sym)!).add(p.q?.name ?? '?');
+  const clashes = [...bySym].filter(([, s]) => s.size > 1).sort((a, b) => b[1].size - a[1].size);
+  L.push('', '### One letter, different things', '', `${clashes.length} symbols stand for different quantities in different laws: laws are joined by the quantity, never by the letter.`, '', '| Symbol | Means |', '| --- | --- |');
+  for (const [k, s] of clashes) L.push(`| ${k} | ${[...s].join('; ')} |`);
   // ---- material tables and who reads them ----
   const src = files().map((f) => ({ f: relative(root, f), text: readFileSync(f, 'utf8') }));
   L.push('', '## Material tables and the code that reads them', '', '| Table | Defined in | Holds | Read by |', '| --- | --- | --- | --- |');
   for (const t of TABLES) {
-    const readers = src.filter((x) => x.f !== t.file && t.names.some((n) => new RegExp(`import[^;]*\\b${n}\\b[^;]*from '[^']*${t.file.replace(/^src\//, '').replace(/\.ts$/, '').split('/').pop()}'`).test(x.text))).map((x) => `\`${x.f.replace(/^src\//, '')}\``);
+    // a file reads the table when it imports one of its names from the very file that defines it
+    const reads = (x: { f: string; text: string }) => [...x.text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+'([^']+)'/g)].some((m) => resolve(dirname(join(root, x.f)), m[2]!) + '.ts' === join(root, t.file) && t.names.some((n) => new RegExp(`(^|[\\s,])${n}(\\s|,|$)`).test(m[1]!)));
+    const readers = src.filter((x) => x.f !== t.file && reads(x)).map((x) => `\`${x.f.replace(/^src\//, '')}\``);
     L.push(`| ${t.table} | \`${t.file}\` | ${t.holds} | ${readers.length ? readers.join(', ') : '**nothing**'} |`);
   }
   // ---- numeric ----

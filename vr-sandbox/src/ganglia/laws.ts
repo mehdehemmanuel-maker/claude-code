@@ -3,6 +3,7 @@
 // `implementedIn` names the module, and the law here calls the same function, so what Ego reasons with and what the
 // physics does are one thing.
 
+import { SIGMA_SB } from '../data/constants';
 import { eulerBucklingLoad, cantileverDeflection, plasticMoment } from '../engineering/beams';
 import { capstanRatio, dragForce, lewisStress, skinDepth } from '../engineering/mechanics';
 import { torsionSpringRate } from '../engineering/springs';
@@ -14,8 +15,7 @@ import type { Law, Quantity } from './types';
 
 const q = (sym: string, name: string, unit: string): Quantity => ({ sym, name, unit });
 
-/** Stefan-Boltzmann constant, W/m^2 K^4 (CODATA 2018). */
-export const SIGMA_SB = 5.670374419e-8;
+export { SIGMA_SB };
 
 const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002', kind: 'handbook' as const };

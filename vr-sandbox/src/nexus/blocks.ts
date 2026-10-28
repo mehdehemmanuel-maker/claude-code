@@ -13,6 +13,8 @@ import { dimensionOf, fromSI, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
+import { QUANTITIES, quantityById, quantityOf } from './quantities';
+import { BOOK, KINDS as LAW_KINDS } from './book';
 import { DERIVATIVE_METHODS, INTEGRAL_METHODS, ODE_METHODS, ROOT_METHODS, derivative, integrate, ode, root, saysFound, step as stepOde, type Found } from './numeric';
 import { DESIGNED, component, componentFromParams, exampleOf } from './components';
 import { CHAINS, FAMILIES } from './families';
@@ -477,6 +479,15 @@ const BUILT_IN: BlockDef[] = [
     tests: [{ set: { rates: "y' = -k * y", start: 'y = 1' }, inputs: { from: 0, to: 1, k: 1 }, outputs: { final: Math.exp(-1), converged: true }, rel: 1e-7 }, { set: { rates: "x' = v\nv' = -x", start: 'x = 1, v = 0', method: 'rk4', step: '0.001' }, inputs: { from: 0, to: 6.283185307179586 }, outputs: { final: 1, converged: true }, rel: 1e-9 }], sources: [NR] }),
 
   // units
+  def({ id: 'quantity', name: 'Quantity', kind: 'input', ability: 'measure', domains: ['science', 'math'], says: 'One of the quantities laws are written in (a force, a stress, a temperature, a concentration…): what it is, its SI unit and dimension, and every law in the book it appears in, with what kind of law each is. Laws join through the quantities they share',
+    settings: [{ key: 'quantity', label: 'Quantity', type: 'choice', default: 'force', choices: QUANTITIES.map((x) => x.id) }],
+    ports: { inputs: [], outputs: [P('says', 'text'), P('unit', 'text'), P('laws', 'list<text>'), P('rows', 'table')] },
+    run: (_, c) => {
+      const x = quantityById(String(c.set.quantity ?? 'force'));
+      const rows = BOOK.flatMap((l) => [...l.inputs, l.output].filter((p) => quantityOf(l, p)?.id === x.id).map((p) => ({ law: l.id, name: l.name, kind: LAW_KINDS[l.id]?.[0] ?? '', symbol: p.sym, as: p.name, gives: p === l.output })));
+      return { says: `${x.name}: ${x.says}`, unit: x.unit, laws: [...new Set(rows.map((r) => r.law))], rows };
+    },
+    tests: [{ set: { quantity: 'modulus' }, inputs: {}, outputs: { unit: 'Pa' } }], sources: [SIBROCHURE] }),
   def({ id: 'unit.convert', name: 'Unit converter', kind: 'calculator', ability: 'convert', domains: ['everyday', 'mechanical', 'electrical', 'thermal', 'science'], says: 'A quantity read in any unit it is in, said in the unit you choose',
     settings: [{ key: 'to', label: 'To unit', type: 'text', default: 'mm' }],
     ports: { inputs: [N('value', undefined, { label: 'value (SI)' })], outputs: [N('result'), P('says', 'text')] },

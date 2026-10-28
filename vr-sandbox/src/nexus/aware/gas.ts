@@ -6,6 +6,7 @@
 // battery's hydrogen by Faraday's law), and the air carries it: in still air it spreads as from a point into a room
 // stirred by its own draughts; in a wind, as a plume (Briggs' spreads for neutral air).
 
+import { FARADAY } from '../../data/constants';
 import * as THREE from 'three';
 import type { Part, V3 } from '../kits';
 import { layout, type Node } from '../make/space';
@@ -38,7 +39,7 @@ export const EXHAUST_LIMITS = { co: 0.003, hc: 200 * ppm };
 export const exhaustFlow = (cc: number, rpm = IDLE_RPM) => cc * 1e-6 * rpm / 120;
 /** Hydrogen from a lead-acid battery overcharged, m³/s: by Faraday's law, 1 Ah splits water for 0.418 L of hydrogen at
  *  0 °C and 1 atm (3600 C / (2 × 96485 C/mol) × 22.4 L/mol). A flooded battery's float overcharge, about 0.1 A (typical). */
-export const hydrogenFrom = (amps: number) => amps * (3600 / (2 * 96485)) * 0.0224 / 3600;
+export const hydrogenFrom = (amps: number) => amps * (3600 / (2 * FARADAY)) * 0.0224 / 3600;
 
 /** How the air moves: still (indoors, or a calm), or a wind at a speed toward a direction. */
 export interface Air { wind: number; to?: V3; /** stirring of still air, m²/s (about 0.05 indoors: an estimate of a room's own draughts) */ stir?: number }

@@ -21,6 +21,7 @@ import { UNIVERSAL } from './universal';
 export * from './slice';
 export { UNIVERSAL } from './universal';
 export { CONST, est } from './constants';
+export { KINDS, KIND_SAYS, type LawKind } from './kinds';
 
 /** The kept book as terms, by area. */
 export const KEPT: Record<string, Law[]> = { mechanics: MECHANICS, structures: STRUCTURES, materials: MATERIALS, 'machine elements': MACHINE_ELEMENTS, electrical: ELECTRICAL, thermal: THERMAL, fluids: FLUIDS, magnetism: MAGNETISM, information: INFORMATION, chemistry: CHEMISTRY, optics: OPTICS };

@@ -1,8 +1,8 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 366 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 367 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
-## 1 · Start: values and inputs (9)
+## 1 · Start: values and inputs (10)
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
@@ -10,6 +10,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Material** (`card.material`): A material as the kept data has it: density, stiffness, strengths
 - **Measure** (`measure`): What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as
 - **Number** (`in.number`): A number you set, in any unit: typed "200 mm" is kept as 0.2 m; with ends set, held between them and shown as a slider you drag
+- **Quantity** (`quantity`): One of the quantities laws are written in (a force, a stress, a temperature, a concentration…): what it is, its SI unit and dimension, and every law in the book it appears in, with what kind of law each is.
 - **Range** (`in.range`): Evenly spaced numbers from one end to the other: a sweep
 - **Read** (`read`): A block of the library or an entry of the inventory read as it is (block:… or item:…, or either by its id or words): a block's ports, settings, tests and sources; an entry's place, make and what is in it
 - **Table** (`in.table`): Rows you paste, the first row their headings (comma or tab separated): numbers read as numbers

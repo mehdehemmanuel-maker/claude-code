@@ -1,4 +1,4 @@
-// Dimension: the type of every quantity. Exponents of mass, length, time, current and temperature (the kept algebra
+// Dimension: the type of every quantity. Exponents of mass, length, time, current, temperature and amount of substance (the kept algebra
 // in ganglia/units.ts); units are conventions for writing a dimension and a scale, never a type of their own.
 
 import { DIMLESS, parseUnit, sameDim, type Dim } from '../ganglia/units';
@@ -14,7 +14,7 @@ export const divDim = (a: Dim, b: Dim): Dim => a.map((x, i) => x - b[i]!) as Dim
 export const powDim = (a: Dim, k: number): Dim => a.map((x) => x * k) as Dim;
 export const isDimless = (a: Dim) => sameDim(a, DIMLESS);
 
-const BASE = ['kg', 'm', 's', 'A', 'K'];
+const BASE = ['kg', 'm', 's', 'A', 'K', 'mol'];
 /** A dimension written in base units: `kg m^2 s^-2`; `1` when dimensionless. */
 export function dimText(d: Dim): string {
   const parts = d.map((e, i) => (e === 0 ? '' : e === 1 ? BASE[i]! : `${BASE[i]}^${Number.isInteger(e) ? e : e.toFixed(2)}`)).filter(Boolean);

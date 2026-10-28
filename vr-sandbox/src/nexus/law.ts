@@ -8,8 +8,10 @@ import { hashOf } from './identity';
 import { root, type Found, type RootOptions } from './numeric';
 import { varsOf, type Term } from './term';
 
-export type SourceKind = 'standard' | 'textbook' | 'handbook' | 'derivation' | 'measurement' | 'declaration' | 'maker' | 'distributor' | 'rule of thumb' | 'press' | 'patent' | 'paper' | 'database';
-export interface Source { cite: string; kind: SourceKind; url?: string }
+import type { Source as Cited, SourceKind } from '../ganglia/types';
+export type { SourceKind };
+/** Where a law comes from: the one source type (ganglia/types.ts), its kind always said. */
+export type Source = Cited & { kind: SourceKind };
 export interface Port { sym: string; unit: string; name: string }
 
 export interface Law {

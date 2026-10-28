@@ -3,6 +3,8 @@
 // and slows down in time to stop on its target (from speed v it needs v² / 2a to stop), so it starts and stops softly
 // and never overshoots. A base on two driven wheels (a differential drive) turns each wheel by how far its side
 // travels: v ∓ ω b / 2 over the wheel's radius, so turning in place spins them opposite ways.
+import { STANDARD_GRAVITY } from '../data/constants';
+
 
 /** One joint's motion along one coordinate (an angle, rad; or a distance, m): where it is, and how fast it goes. */
 export class Servo {
@@ -27,4 +29,4 @@ export interface Quat { x: number; y: number; z: number; w: number }
 
 /** How far a body on wheels pitches when it speeds up or slows down: as far as its suspension gives under the inertial
  *  push, a / g of its stiffness angle (rad), forward when it brakes. */
-export const pitchOf = (accel: number, give = 0.35) => Math.max(-0.06, Math.min(0.06, (-accel / 9.80665) * give));
+export const pitchOf = (accel: number, give = 0.35) => Math.max(-0.06, Math.min(0.06, (-accel / STANDARD_GRAVITY) * give));
