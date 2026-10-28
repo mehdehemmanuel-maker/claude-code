@@ -9,7 +9,7 @@
 // the forge's own worker (code-worker.ts), off the page. Asking Claude needs the forge's relay, which this page does not
 // have: such a block says so rather than pretending.
 
-import { ABILITIES, DOMAINS, KINDS, LIBRARY, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
+import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { isAssembly, partOf } from '../assembly';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
 import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
@@ -491,7 +491,7 @@ function geoOf(b: Board, id: string): number { const n = b.nodes[id]!, d = block
 function toast(s: string, bad = false): void { if (!PAGE) { wall.said?.(s, bad); return; } const t = document.getElementById('toast')!; t.textContent = s; t.className = bad ? 'bad' : ''; t.style.display = 'block'; clearTimeout((toast as unknown as { t: number }).t); (toast as unknown as { t: number }).t = window.setTimeout(() => (t.style.display = 'none'), 3200); }
 
 // ---- the library ------------------------------------------------------------------------------------------------------
-let libBy: 'domain' | 'ability' | 'kind' = 'domain';
+let libBy: 'stage' | 'domain' | 'ability' | 'kind' = 'stage';
 function renderLibrary(): void {
   if (!PAGE) return;
   const q = (document.getElementById('libQ') as HTMLInputElement).value, el = document.getElementById('shelves')!;
@@ -517,8 +517,12 @@ function renderLibrary(): void {
   }
   for (const s of shelves(libBy, q)) {
     const d = document.createElement('details'); d.className = 'shelf'; d.open = !!q || s.blocks.length < 8;
-    d.innerHTML = `<summary>${esc(s.name)} <span>${s.blocks.length}</span></summary>`;
-    for (const b of s.blocks) {
+    const st = libBy === 'stage' ? STAGES.find((x) => x.id === s.id) : undefined;
+    d.innerHTML = `<summary>${esc(s.name)} <span>${s.blocks.length}</span></summary>${st ? `<div class="sub" style="text-transform:none;letter-spacing:0;opacity:.7">${esc(st.says)}</div>` : ''}`;
+    // (the laws, a long shelf, split by their field)
+    let lastField = '';
+    for (const b of libBy === 'stage' && s.id === 'law' ? [...s.blocks].sort((a, c) => (a.domains[0] ?? '').localeCompare(c.domains[0] ?? '') || a.name.localeCompare(c.name)) : s.blocks) {
+      if (libBy === 'stage' && s.id === 'law' && (b.domains[0] ?? '') !== lastField) { lastField = b.domains[0] ?? ''; const h = document.createElement('div'); h.className = 'sub'; h.textContent = DOMAINS.find((x) => x.id === lastField)?.name ?? lastField; d.appendChild(h); }
       const r = document.createElement('div'); r.className = 'blk'; r.draggable = true; r.title = `${b.says}${b.valid ? `\nHolds: ${b.valid}` : ''}${b.sources?.length ? `\nFrom: ${b.sources.map((x) => x.cite).join('; ')}` : ''}`;
       r.innerHTML = `<span class="chip" style="background:${KINDS[b.kind].hue}">${esc(KINDS[b.kind].mark)}</span><span class="n">${esc(b.name)}</span>${b.tests?.length ? '' : `<span class="t" style="color:#ffb300">draft</span>`}${b.by !== 'built in' ? `<span class="t" style="color:#b388ff">${esc(b.by)}</span>` : ''}`;
       r.onclick = () => { addBlock(b.id); document.getElementById('lib')!.classList.remove('open'); };
@@ -607,7 +611,7 @@ function nodeInspector(el: HTMLElement, id: string): void {
     ${into.length ? `<p class="src">${into.length} input${into.length > 1 ? 's' : ''} wired</p>` : ''}
     <h3>Results</h3><div id="iouts">${outsHtml(id)}</div>
     <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}${n.block === 'view.3d' || n.block === 'card.part' ? '<button id="i3d" class="hot">⤢ See it in 3D, full screen</button>' : ''}${n.block === 'card.part' ? `<a href="./look.html?kit=part&words=${encodeURIComponent(String(stateOf(id)?.out?.name ? (n.set?.what ?? '') : ''))}" target="_blank"><button>Open in the part viewer</button></a>` : ''}<button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
-    <p class="src">${esc(KINDS[k].name)} · ${esc(ABILITIES[d?.ability ?? 'transform'])} · ${esc((d?.domains ?? []).map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x).join(', '))}${d ? ` · v${d.version} · ${esc(d.by)}` : ''}${d?.tests?.length ? ` · ${d.tests.length} test${d.tests.length > 1 ? 's' : ''}` : ' · draft: no tests yet'}</p>
+    <p class="src">${d ? `${esc(STAGES.find((x) => x.id === stageOf(d))?.name ?? '')} · ` : ''}${esc(KINDS[k].name)} · ${esc(ABILITIES[d?.ability ?? 'transform'])} · ${esc((d?.domains ?? []).map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x).join(', '))}${d ? ` · v${d.version} · ${esc(d.by)}` : ''}${d?.tests?.length ? ` · ${d.tests.length} test${d.tests.length > 1 ? 's' : ''}` : ' · draft: no tests yet'}</p>
     ${d?.sources?.length ? `<p class="src">From: ${d.sources.map((s) => esc(s.cite)).join('; ')}</p>` : ''}
     <div id="iTestOut"></div>`;
   (document.getElementById('iLabel') as HTMLInputElement).onchange = (e) => { const v = (e.target as HTMLInputElement).value; edit((b) => { b.nodes[id]!.label = v; }); draw(); };
@@ -892,7 +896,7 @@ const DEMOS: [string, Make][] = ([
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'run', 'memory', 'show', 'thing');
     return b;
   }],
-  ['Proximity: each thing carries the room it needs; a door\'s sweep and a toilet\'s clear floor kept, nothing told what a door is', () => {
+  ['Proximity and mates: each thing carries the room and the mates it needs, as numbers; nothing told what a door or a sofa is', () => {
     // no rule for doors: each node puts the room its thing needs on the thing itself, worked out from its own figures (a
     // door its leaf's sweep from its hinge, the leaf's width its radius; a toilet and a basin the floor a code asks in
     // front of them; a kitchen run its work aisle), and one proximity node keeps every zone clear: what stands in one is
@@ -901,8 +905,10 @@ const DEMOS: [string, Make][] = ([
     const b = emptyBoard('Proximity');
     placeBlock(b, 'seed.room', 0, 0, { type: 'living', front: 'wall', back: 'door' }, 'room'); b.nodes.room!.label = 'A living room, its door in its back wall';
     placeBlock(b, 'proximity', 0, 0, { move: 'only said' }, 'said'); b.nodes.said!.label = 'What stands in a zone (said)'; wire(b, 'room', 'room', 'said', 'thing');
-    placeBlock(b, 'proximity', 0, 0, { move: 'moved' }, 'moved'); b.nodes.moved!.label = 'Every zone kept clear (moved)'; wire(b, 'room', 'room', 'moved', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'What stood in which zone, and what was done'; wire(b, 'moved', 'found', 'rows', 'rows');
+    placeBlock(b, 'proximity', 0, 0, { move: 'moved' }, 'moved'); b.nodes.moved!.label = 'Every zone clear, every mate held (moved)'; wire(b, 'room', 'room', 'moved', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'What broke which zone or mate, and what was done'; wire(b, 'moved', 'found', 'rows', 'rows');
+    placeBlock(b, 'mates', 0, 0, { state: '*' }, 'measured'); b.nodes.measured!.label = 'Its mates, measured after'; wire(b, 'moved', 'thing', 'measured', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'mrows'); b.nodes.mrows!.label = 'Each mate: its measure, its value, its range'; wire(b, 'measured', 'mates', 'mrows', 'rows');
     placeBlock(b, 'pick', 0, 0, { options: 'before|after', which: 'after' }, 'pick'); b.nodes.pick!.label = 'Before or after'; wire(b, 'said', 'thing', 'pick', 'before'); wire(b, 'moved', 'thing', 'pick', 'after');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'pick', 'chosen', 'show', 'thing');
     return b;

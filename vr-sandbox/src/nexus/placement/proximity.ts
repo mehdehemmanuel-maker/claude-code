@@ -7,9 +7,10 @@
 // so (Part.meant: the zone's name, or 'in the way') and is left.
 
 import * as THREE from 'three';
-import type { Keep, Part } from '../kits';
+import type { Keep, Mate, Part } from '../kits';
 import type { V3 } from '../generate';
 import { layout, type Node } from '../make/space';
+import { inForce, measure, outBy, targetOf } from './relate';
 
 export const MEANT_ANYWHERE = 'in the way';
 export interface Zone { owner: Node; keep: Keep; m: THREE.Matrix4 }
@@ -35,8 +36,8 @@ export function inZone(k: Keep, m: THREE.Matrix4, b: THREE.Box3): boolean {
 }
 
 /** The room every zone needs, found and (unless asked only to say) made: what stands where it should not, moved. */
-export function proximity(root: Part, o: { move?: boolean } = {}): { tree: Part; found: Intrusion[]; moved: number; zones: number; says: string } {
-  const move = o.move ?? true, rows: Intrusion[] = [], done = new Set<string>(); let tree = root, moved = 0, zoneCount = 0;
+export function proximity(root: Part, o: { move?: boolean; /** what is going on ('watching, cooking'), or '*' for all of it */ state?: string } = {}): { tree: Part; found: Intrusion[]; moved: number; zones: number; mates: number; says: string } {
+  const state = o.state ?? '*', move = o.move ?? true, mateCount = { n: 0 }, rows: Intrusion[] = [], done = new Set<string>(); let tree = root, moved = 0, zoneCount = 0;
   const movable = (n: Node) => !!n.parent && /fittings$/i.test(n.parent.p.name);
   const unitOf = (n: Node): Node | null => { for (let x: Node | null = n; x; x = x.parent) if (movable(x)) return x; return null; };
   const meant = (n: Node, zone: string) => { for (let x: Node | null = n; x; x = x.parent) if (x.p.meant?.some((w) => w === zone || w === MEANT_ANYWHERE || (w === 'in a doorway' && /door/i.test(zone)))) return true; return false; };
@@ -44,54 +45,83 @@ export function proximity(root: Part, o: { move?: boolean } = {}): { tree: Part;
   const overlapPlan = (a: THREE.Box3, b: THREE.Box3, g = 0) => a.min.x < b.max.x + g && a.max.x > b.min.x - g && a.min.z < b.max.z + g && a.max.z > b.min.z - g;
   const pieceBox = (b: { c: THREE.Vector3; u: THREE.Vector3[]; h: number[] }) => { const e = [0, 1, 2].map((k) => Math.abs(b.u[0]!.getComponent(k)) * b.h[0]! + Math.abs(b.u[1]!.getComponent(k)) * b.h[1]! + Math.abs(b.u[2]!.getComponent(k)) * b.h[2]!); return new THREE.Box3(new THREE.Vector3(b.c.x - e[0]!, b.c.y - e[1]!, b.c.z - e[2]!), new THREE.Vector3(b.c.x + e[0]!, b.c.y + e[1]!, b.c.z + e[2]!)); };
   for (let round = 0; round < 64; round++) {
-    const ns = layout(tree), zones = zonesIn(ns); zoneCount = zones.length;
+    const ns = layout(tree), zones = zonesIn(ns).filter((z) => inForce(z.keep.when, state)); zoneCount = zones.length;
     const floorTop = (n: Node) => { let r: Node | null = n; while (r && !/^room$/i.test(r.p.name)) r = r.parent; const f = r ? ns.find((x) => x.path.startsWith(r!.path + '/') && /^floor$/i.test(x.p.name)) : undefined; return { room: r, floor: f }; };
     // (what stands: each movable thing whole, and every fixed drawn piece above the floor, as boxes)
     const units = ns.filter((n) => movable(n) && n.sub && !n.sub.isEmpty());
     const pieces = ns.filter((n) => n.p.shape && n.sub && !unitOf(n) && !/^floor$/i.test(n.p.name)).flatMap((n) => n.pieces.map((p) => ({ n, b: pieceBox(p) })));
     // (the first zone something stands in, where something can move)
-    let hit: { z: Zone; x: Node; mover: Node } | null = null;
+    type Hit = { name: string; of: Node; why: string; x: Node; mover: Node; key: string; zone?: Zone; mateTarget?: Node };
+    let hit: Hit | null = null;
     for (const z of zones) {
       const ou = unitOf(z.owner);
-      for (const u of units) { if (within(u, z.owner) || (ou && (within(u, ou) || (u.parent === ou.parent && overlapPlan(u.sub!, ou.sub!, 0.02)))) || done.has(`${z.owner.path}|${z.keep.name}|${u.path}`)) continue; if (inZone(z.keep, z.m, u.sub!)) { hit = { z, x: u, mover: u }; break; } }
+      for (const u of units) { if (within(u, z.owner) || (ou && (within(u, ou) || (u.parent === ou.parent && overlapPlan(u.sub!, ou.sub!, 0.02)))) || done.has(`${z.owner.path}|${z.keep.name}|${u.path}`)) continue; if (inZone(z.keep, z.m, u.sub!)) { hit = { name: z.keep.name, of: z.owner, why: z.keep.why, x: u, mover: u, key: `${z.owner.path}|${z.keep.name}|${u.path}`, zone: z }; break; } }
       if (hit) break;
-      if (ou) for (const p of pieces) { if (within(p.n, z.owner) || done.has(`${z.owner.path}|${z.keep.name}|${ou.path}`)) continue; if (inZone(z.keep, z.m, p.b)) { hit = { z, x: p.n, mover: ou }; break; } }
+      if (ou) for (const p of pieces) { if (within(p.n, z.owner) || done.has(`${z.owner.path}|${z.keep.name}|${ou.path}`)) continue; if (inZone(z.keep, z.m, p.b)) { hit = { name: z.keep.name, of: z.owner, why: z.keep.why, x: p.n, mover: ou, key: `${z.owner.path}|${z.keep.name}|${ou.path}`, zone: z }; break; } }
       if (hit) break;
     }
+    // (then the mates in force: one out of its range moves what carries it, if that can move)
+    const mates = ns.flatMap((n) => (n.p.mates ?? []).filter((k) => inForce(k.when, state)).map((k) => ({ n, k }))); mateCount.n = mates.length;
+    const between = (a: Node, t: Node) => [...units.filter((u) => !within(u, a) && !within(u, t) && !(unitOf(a) && within(u, unitOf(a)!))).map((u) => u.sub!), ...pieces.filter((p) => !within(p.n, t)).map((p) => p.b)];
+    if (!hit) for (const { n, k } of mates) { const ou = unitOf(n), t = targetOf(ns, n, k); if (!ou || !t || !n.sub || done.has(`${n.path}|${k.name}`)) continue;
+      const v = measure(k, { box: n.sub, m: n.m }, t.sub!, between(n, t)); if (outBy(k, v) > 0) { hit = { name: k.name, of: n, why: `${k.why}: ${fmtMate(k, v)}`, x: t, mover: ou, key: `${n.path}|${k.name}`, mateTarget: unitOf(t) ?? t }; break; } }
     if (!hit) break;
-    const { z, x, mover } = hit, row = (did: string) => rows.push({ zone: z.keep.name, of: z.owner.p.name, of_path: z.owner.path, thing: x.p.name, path: x.path, why: z.keep.why, did });
-    done.add(`${z.owner.path}|${z.keep.name}|${mover === x ? x.path : mover.path}`);
-    if (meant(x, z.keep.name)) { row('left: it is meant to be there'); continue; }
+    const { x, mover } = hit, row = (did: string) => rows.push({ zone: hit!.name, of: hit!.of.p.name, of_path: hit!.of.path, thing: x.p.name, path: x.path, why: hit!.why, did });
+    done.add(hit.key);
+    if (hit.zone && meant(x, hit.name)) { row('left: it is meant to be there'); continue; }
     if (!move) { row('said, not moved'); continue; }
     // (what moves with it: what touches it in plan in its room: a television on its stand, a sink in its worktop)
-    const group = new Set([mover]); for (let grew = true; grew;) { grew = false; for (const t of units) if (!group.has(t) && t.parent === mover.parent && [...group].some((g) => overlapPlan(g.sub!, t.sub!, 0.02))) { group.add(t); grew = true; } }
-    const inGroup = (n: Node) => [...group].some((g) => within(n, g) && n.path.startsWith(g.path));
-    const all = new THREE.Box3(); for (const g of group) all.union(g.sub!);
-    const { floor } = floorTop(mover), fl = floor?.sub?.max.y ?? -Infinity;
-    const others = [...units.filter((u) => !group.has(u)).map((u) => u.sub!), ...pieces.filter((p) => p.b.max.y > fl + 0.02).map((p) => p.b)].filter((b) => b.max.y > all.min.y + 0.02 && b.min.y < all.max.y - 0.02);
-    const walls = pieces.filter((p) => /wall|lining/i.test(p.n.p.name)).map((p) => p.b);
-    const theirZones = zones.filter((q) => !inGroup(q.owner)), ownZones = zones.filter((q) => inGroup(q.owner));
-    const stand = [...units.filter((u) => !group.has(u)).map((u) => u.sub!), ...pieces.filter((p) => p.b.max.y > fl + 0.02).map((p) => p.b)];
-    const boxAfter = (T: THREE.Matrix4) => { const b = new THREE.Box3(); for (const g of group) for (let k = 0; k < 8; k++) b.expandByPoint(new THREE.Vector3(k & 1 ? g.sub!.max.x : g.sub!.min.x, k & 2 ? g.sub!.max.y : g.sub!.min.y, k & 4 ? g.sub!.max.z : g.sub!.min.z).applyMatrix4(T)); return b; };
-    const room_ = (T: THREE.Matrix4) => { const b = boxAfter(T), s = b.clone().expandByVector(new THREE.Vector3(-0.005, 0, -0.005));
-      if (floor?.sub && (b.min.x < floor.sub.min.x - 1e-6 || b.max.x > floor.sub.max.x + 1e-6 || b.min.z < floor.sub.min.z - 1e-6 || b.max.z > floor.sub.max.z + 1e-6)) return false; return !others.some((q) => overlapPlan(s, q)); };
-    // (clear: it stands in no one else's zone, and its own zones, moved with it, hold nothing)
-    const fits = (T: THREE.Matrix4) => { if (!room_(T)) return false; const b = boxAfter(T); if (theirZones.some((q) => inZone(q.keep, q.m, b))) return false;
-      return !ownZones.some((q) => { const m = T.clone().multiply(q.m); return stand.some((s) => inZone(q.keep, m, s)); }); };
-    const mid = floor?.sub?.getCenter(new THREE.Vector3()) ?? all.getCenter(new THREE.Vector3());
-    let found: { T: THREE.Matrix4; did: string } | null = null;
-    for (const turn of [0, Math.PI, Math.PI / 2, -Math.PI / 2]) {
-      const R = new THREE.Matrix4().makeTranslation(mid.x, 0, mid.z).multiply(new THREE.Matrix4().makeRotationY(turn)).multiply(new THREE.Matrix4().makeTranslation(-mid.x, 0, -mid.z));
-      const b0 = boxAfter(R), sz = b0.getSize(new THREE.Vector3()), ax = sz.x >= sz.z ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1), back = new THREE.Vector3(ax.z, 0, ax.x);
-      if (back.dot(b0.getCenter(new THREE.Vector3()).sub(mid)) < 0) back.negate();
-      for (let k = 0; k <= 160 && !found; k++) for (const sgn of k ? [1, -1] : [1]) {
-        if (turn === 0 && k === 0) continue;
-        let T = new THREE.Matrix4().makeTranslation(ax.x * sgn * k * 0.025, 0, ax.z * sgn * k * 0.025).multiply(R);
-        // (turned, pushed back from there until it meets the wall it now faces away from, and that is a wall)
-        if (turn) { let best: number | null = null; for (let q = 24; q >= -60; q--) { const t = new THREE.Matrix4().makeTranslation(back.x * q * 0.025, 0, back.z * q * 0.025).multiply(T); if (room_(t)) { best = q; break; } }
-          if (best === null) continue; T = new THREE.Matrix4().makeTranslation(back.x * best * 0.025, 0, back.z * best * 0.025).multiply(T);
-          const probe = boxAfter(T).translate(back.clone().multiplyScalar(0.04)).expandByVector(new THREE.Vector3(-0.01, 0, -0.01)); if (!walls.some((w) => overlapPlan(probe, w))) continue; }
-        if (fits(T)) { found = { T, did: `${turn ? `turned to the wall ${Math.abs(turn) > 2 ? 'across' : 'beside'} and ` : ''}${k ? `slid ${Math.round(k * 25)} mm along it` : 'set against it'}` }; break; }
+    // (and what it is mated with, in its room, with what touches that: a sofa, its table and its television move as one
+    // arrangement, so their mates hold as they go)
+    const mateEdges = mates.map(({ n, k }) => { const t = targetOf(ns, n, k); return [unitOf(n), t ? unitOf(t) : null] as const; }).filter((e): e is readonly [Node, Node] => !!e[0] && !!e[1] && e[0].parent === e[1].parent);
+    // (to keep a mate, what carries it moves, with what touches it and what is mated to it, not what it is mated with:
+    // a sofa drawn up to its television brings its table, not the television)
+    const pinned = hit.mateTarget, linked = (g: Node, t: Node) => overlapPlan(g.sub!, t.sub!, 0.02) || mateEdges.some(([a, b]) => (a === g && b === t) || (a === t && b === g));
+    // (first as the whole arrangement it is in; if that fits nowhere, what is in the way alone, with what touches it: its
+    // mates then break, and are drawn back next)
+    let found: { T: THREE.Matrix4; did: string } | null = null, group = new Set<Node>([mover]);
+    for (const alone of [false, true]) {
+      group = new Set([mover]); for (let grew = true; grew;) { grew = false; for (const t of units) if (!group.has(t) && t !== pinned && t.parent === mover.parent && [...group].some((g) => (alone ? overlapPlan(g.sub!, t.sub!, 0.02) : linked(g, t)))) { group.add(t); grew = true; } }
+      const inGroup = (n: Node) => [...group].some((g) => within(n, g) && n.path.startsWith(g.path));
+      const all = new THREE.Box3(); for (const g of group) all.union(g.sub!);
+      const { floor } = floorTop(mover), fl = floor?.sub?.max.y ?? -Infinity;
+      const others = [...units.filter((u) => !group.has(u)).map((u) => u.sub!), ...pieces.filter((p) => p.b.max.y > fl + 0.02).map((p) => p.b)].filter((b) => b.max.y > all.min.y + 0.02 && b.min.y < all.max.y - 0.02);
+      const walls = pieces.filter((p) => /wall|lining/i.test(p.n.p.name)).map((p) => p.b);
+      const theirZones = zones.filter((q) => !inGroup(q.owner)), ownZones = zones.filter((q) => inGroup(q.owner));
+      const ownMates = mates.filter(({ n }) => inGroup(n)).map(({ n, k }) => ({ n, k, t: targetOf(ns, n, k) })).filter((x): x is { n: Node; k: Mate; t: Node } => !!x.t && !!x.n.sub && !inGroup(x.t));
+      const stand = [...units.filter((u) => !group.has(u)).map((u) => u.sub!), ...pieces.filter((p) => p.b.max.y > fl + 0.02).map((p) => p.b)];
+      const boxAfter = (T: THREE.Matrix4) => { const b = new THREE.Box3(); for (const g of group) for (let k = 0; k < 8; k++) b.expandByPoint(new THREE.Vector3(k & 1 ? g.sub!.max.x : g.sub!.min.x, k & 2 ? g.sub!.max.y : g.sub!.min.y, k & 4 ? g.sub!.max.z : g.sub!.min.z).applyMatrix4(T)); return b; };
+      const room_ = (T: THREE.Matrix4) => { const b = boxAfter(T), s = b.clone().expandByVector(new THREE.Vector3(-0.005, 0, -0.005));
+        if (floor?.sub && (b.min.x < floor.sub.min.x - 1e-6 || b.max.x > floor.sub.max.x + 1e-6 || b.min.z < floor.sub.min.z - 1e-6 || b.max.z > floor.sub.max.z + 1e-6)) return false; return !others.some((q) => overlapPlan(s, q)); };
+      // (clear: it stands in no one else's zone, and its own zones, moved with it, hold nothing)
+      const fits = (T: THREE.Matrix4) => { if (!room_(T)) return false; const b = boxAfter(T); if (theirZones.some((q) => inZone(q.keep, q.m, b))) return false;
+        if (ownZones.some((q) => { const m = T.clone().multiply(q.m); return stand.some((s) => inZone(q.keep, m, s)); })) return false;
+        // (and its own mates hold where it goes: a sofa still faces, sees and sits at its distance from its television)
+        return ownMates.every(({ n, k, t }) => { const b = new THREE.Box3(); for (let i = 0; i < 8; i++) b.expandByPoint(new THREE.Vector3(i & 1 ? n.sub!.max.x : n.sub!.min.x, i & 2 ? n.sub!.max.y : n.sub!.min.y, i & 4 ? n.sub!.max.z : n.sub!.min.z).applyMatrix4(T));
+          const moved = between(n, t).filter((q) => ![...group].some((g) => g.sub === q)); return outBy(k, measure(k, { box: b, m: T.clone().multiply(n.m) }, t.sub!, moved)) === 0; }); };
+      const mid = floor?.sub?.getCenter(new THREE.Vector3()) ?? all.getCenter(new THREE.Vector3());
+      
+      for (const turn of [0, Math.PI, Math.PI / 2, -Math.PI / 2]) {
+        const R = new THREE.Matrix4().makeTranslation(mid.x, 0, mid.z).multiply(new THREE.Matrix4().makeRotationY(turn)).multiply(new THREE.Matrix4().makeTranslation(-mid.x, 0, -mid.z));
+        const b0 = boxAfter(R), sz = b0.getSize(new THREE.Vector3()), long = sz.x >= sz.z ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
+        // (one thing slides along the wall it stands against, its long way; an arrangement of several either way)
+        for (const ax of group.size > 2 ? [long, new THREE.Vector3(long.z, 0, long.x)] : [long]) {
+        const back = new THREE.Vector3(ax.z, 0, ax.x); if (back.dot(b0.getCenter(new THREE.Vector3()).sub(mid)) < 0) back.negate();
+        // (what carries mates may stand off its wall too: a sofa drawn up to its television; tried after the wall)
+        const across = ownMates.length ? [0, ...Array.from({ length: 30 }, (_, i) => -(i + 1) * 0.05)] : [0];
+        for (const plain of turn && group.size > 2 ? [false, true] : [false]) for (const off of across) for (let k = 0; k <= 160 && !found; k += ownMates.length ? 2 : 1) for (const sgn of k ? [1, -1] : [1]) {
+          if (turn === 0 && k === 0 && off === 0) continue;
+          let T = new THREE.Matrix4().makeTranslation(ax.x * sgn * k * 0.025 + back.x * off, 0, ax.z * sgn * k * 0.025 + back.z * off).multiply(R);
+          // (turned, pushed back from there until it meets the wall it now faces away from, and that is a wall)
+          if (turn && !plain) { let best: number | null = null; for (let q = 24; q >= -60; q--) { const t = new THREE.Matrix4().makeTranslation(back.x * q * 0.025, 0, back.z * q * 0.025).multiply(T); if (room_(t)) { best = q; break; } }
+            if (best === null) continue; T = new THREE.Matrix4().makeTranslation(back.x * best * 0.025, 0, back.z * best * 0.025).multiply(T);
+            const probe = boxAfter(T).translate(back.clone().multiplyScalar(0.04)).expandByVector(new THREE.Vector3(-0.01, 0, -0.01)); if (!walls.some((w) => overlapPlan(probe, w))) continue; }
+          if (off && turn && !plain) T = new THREE.Matrix4().makeTranslation(back.x * off, 0, back.z * off).multiply(T);
+          if (fits(T)) { found = { T, did: `${turn ? (plain ? `turned ${Math.abs(turn) > 2 ? 'half' : 'a quarter'} round about the room's middle and ` : `turned to the wall ${Math.abs(turn) > 2 ? 'across' : 'beside'} and `) : ''}${k ? `slid ${Math.round(k * 25)} mm along it` : 'set against it'}${off ? `, ${Math.round(-off * 1000)} mm out from it` : ''}` }; break; }
+        }
+        if (found) break;
+        }
+        if (found) break;
       }
       if (found) break;
     }
@@ -101,7 +131,9 @@ export function proximity(root: Part, o: { move?: boolean } = {}): { tree: Part;
     tree = shifted(tree, moves); moved += group.size;
     row(`the ${mover.p.name} ${found.did}${group.size > 1 ? `, with ${[...group].filter((g) => g !== mover).map((g) => `its ${g.p.name}`).join(', ')}` : ''}`);
   }
-  return { tree, found: rows, moved, zones: zoneCount, says: rows.length ? `${zoneCount} zones; ${rows.length} kept: ${rows.map((r) => `the ${r.thing} in the ${r.of}'s ${r.zone} (${r.did})`).join('; ')}` : `${zoneCount} zones, each clear` };
+  return { tree, found: rows, moved, zones: zoneCount, mates: mateCount.n, says: rows.length ? `${zoneCount} zones and ${mateCount.n} mates in force; ${rows.length} kept: ${rows.map((r) => `the ${r.of}'s ${r.zone} with the ${r.thing} (${r.did})`).join('; ')}` : `${zoneCount} zones and ${mateCount.n} mates in force, each holding` };
+}
+const fmtMate = (k: Mate, v: number) => { const u = k.measure === 'facing' ? '°' : k.measure === 'sees' ? '' : ' m'; return `${k.measure} ${Math.round(v * 100) / 100}${u}, wanted ${k.min !== undefined ? `at least ${k.min}${u}` : ''}${k.min !== undefined && k.max !== undefined ? ' and ' : ''}${k.max !== undefined ? `at most ${k.max}${u}` : ''}`;
 }
 
 /** A tree with some of its parts set anew in their holders' frames (by their paths), the rest shared. */

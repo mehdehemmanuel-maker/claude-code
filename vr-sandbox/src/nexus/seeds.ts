@@ -217,16 +217,26 @@ function fittingsAll(): void {
   });
   fittings('living', 'What makes a room a living room: a sofa facing a television on its stand, a low table between (a 2.1 m three-seat sofa, typical)', (s, w, d) => {
     const bz = back(s, d);
-    const seat = s.n('shape.box', { name: 'sofa seat', mat: 'foam', color: '#78909c', w: 2.1, h: 0.45, d: 0.9 }, 'sofa seat');
+    const seat0 = s.n('shape.box', { name: 'sofa seat', mat: 'foam', color: '#78909c', w: 2.1, h: 0.45, d: 0.9 }, 'sofa seat');
+    // (the sofa mates with the television while someone watches, each by a number: it faces it within 30° (an estimate),
+    // sits between the THX distance (a 40° view: 1.37 times the screen's width) and SMPTE's (30°: 1.87 times), and sees
+    // most of the screen from a seated eye 1.1 m up (typical) past what is between)
+    const tvW = 1.44, rel = (k: string, set: Record<string, unknown>, mn?: string, mx?: string) => { const r = s.n('relate', { to: 'television', when: 'watching', face: '-z', ...set }, k); if (mn) s.w(s.f(mn, {}), 'result', r, 'min'); if (mx) s.w(s.f(mx, {}), 'result', r, 'max'); return r; };
+    const r1 = rel('it faces the television', { name: 'faces the screen', measure: 'facing', why: 'within 30° of straight on (an estimate)' }, undefined, '30');
+    const r2 = rel('it sits at a viewing distance', { name: 'viewing distance', measure: 'distance', why: `between THX's 40° view (1.37 × the ${tvW} m screen) and SMPTE EG-18's 30° (1.87 ×)` }, `1.37 * ${tvW}`, `1.87 * ${tvW}`);
+    const r3 = rel('it sees the screen', { name: 'sees the screen', measure: 'sees', eye: 1.1, why: 'most of the screen seen from a seated eye 1.1 m up (typical)' }, '0.75');
+    s.w(seat0, 'part', r1, 'thing'); s.w(r1, 'thing', r2, 'thing'); s.w(r2, 'thing', r3, 'thing'); const seat = r3;
     const sback = s.n('shape.box', { name: 'sofa back', mat: 'foam', color: '#607d8b', w: 2.1, h: 0.45, d: 0.2 }, 'sofa back');
-    const table = s.n('shape.box', { name: 'coffee table', mat: 'oak', fill: 0.15, color: '#8d6e63', w: 1.1, h: 0.42, d: 0.6 }, 'low table');
+    const table0 = s.n('shape.box', { name: 'coffee table', mat: 'oak', fill: 0.15, color: '#8d6e63', w: 1.1, h: 0.42, d: 0.6 }, 'low table');
+    // (the table mates with the sofa: within reach of it, 350 to 500 mm off its seat (typical of interior guidance))
+    const table = s.n('relate', { name: 'within reach of the sofa', to: 'sofa seat', measure: 'gap', why: '350 to 500 mm off the seat (typical of interior guidance)' }, 'it stands within reach of the sofa'); s.w(table0, 'part', table, 'thing'); s.w(s.f('0.35', {}), 'result', table, 'min'); s.w(s.f('0.5', {}), 'result', table, 'max');
     const tvStand = s.n('shape.box', { name: 'tv stand', mat: 'oak', fill: 0.15, color: '#5d4037', w: 1.6, h: 0.5, d: 0.4 }, 'tv stand');
     const tv = s.n('shape.box', { name: 'television', mat: 'glass', fill: 0.15, color: '#111417', w: 1.44, h: 0.83, d: 0.05 }, 'television (65 in)');
     const front = s.f('d / 2 - 0.6', { d: [d, 'value'] }, 'sofa toward the front');
     return [
-      [s.at([seat, 'part'], { y: 0.225, z: [front, 'result'] }), 'placed'],
+      [s.at([seat, 'thing'], { y: 0.225, z: [front, 'result'] }), 'placed'],
       [s.at([sback, 'part'], { y: 0.675, z: [s.f('f + 0.35', { f: [front, 'result'] }), 'result'] }), 'placed'],
-      [s.at([table, 'part'], { y: 0.21, z: [s.f('f - 1.2', { f: [front, 'result'] }), 'result'] }), 'placed'],
+      [s.at([table, 'thing'], { y: 0.21, z: [s.f('f - 1.2', { f: [front, 'result'] }), 'result'] }), 'placed'],
       [s.at([tvStand, 'part'], { y: 0.25, z: [s.f('b + 0.2', { b: [bz, 'result'] }), 'result'] }), 'placed'],
       [s.at([tv, 'part'], { y: 0.95, z: [s.f('b + 0.2', { b: [bz, 'result'] }), 'result'] }), 'placed'],
     ];
@@ -357,7 +367,7 @@ function terrain(): void {
   const grassy = s.all('grassed ground', [[g, 'ground'], [lawn, 'scattered']]);
   const pick = s.n('pick', { options: 'grass|bare' }, 'grassed or bare'); s.w(cover, 'value', pick, 'which'); s.w(grassy, 'assembly', pick, 'grass'); s.w(g, 'ground', pick, 'bare');
   s.output('terrain', 'assembly', pick, 'chosen');
-  s.save('seed.terrain', 'Terrain', 'Ground of hills from a seed, covered a foot square at a time with Grass patches standing on it (or bare)', ['energy', 'structural', 'everyday']);
+  s.save('seed.terrain', 'Terrain of grass patches', 'Ground of hills from a seed, covered a foot square at a time with Grass patches standing on it (or bare)', ['energy', 'structural', 'everyday']);
 }
 
 // ---- roads and the lights at their crossings -----------------------------------------------------------------------

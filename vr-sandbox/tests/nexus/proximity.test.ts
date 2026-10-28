@@ -8,6 +8,7 @@ import { Engine, emptyBoard, placeBlock } from '../../src/nexus/dataflow';
 import { partOf, type Assembly } from '../../src/nexus/assembly';
 import { layout } from '../../src/nexus/make/space';
 import { inZone, proximity, zoneFor, MEANT_ANYWHERE } from '../../src/nexus/placement/proximity';
+import { inForce, matesOf, measure, outBy } from '../../src/nexus/placement/relate';
 import { ACTORS } from '../../src/nexus/aware/tags';
 import { bodyParts, poseOf, rigFor } from '../../src/nexus/act/body';
 
@@ -25,7 +26,7 @@ describe('proximity: the room each thing needs, on the thing', () => {
     const r = await room({ type: 'living', front: 'wall', back: 'door' }), before = proximity(r, { move: false });
     expect(before.found.map((b) => b.thing)).toContain('tv stand'); expect(before.found[0]!.of).toBe('door');
     const after = proximity(r);
-    expect(after.moved).toBe(2); expect(proximity(after.tree, { move: false }).found).toHaveLength(0);
+    expect(after.moved).toBeGreaterThanOrEqual(2); expect(proximity(after.tree, { move: false }).found).toHaveLength(0);
     const ns = layout(after.tree), tv = ns.find((n) => n.p.name === 'television')!.sub!, st = ns.find((n) => n.p.name === 'tv stand')!.sub!;
     expect(tv.min.y).toBeCloseTo(st.max.y, 1); expect(tv.getCenter(new THREE.Vector3()).setY(0).distanceTo(st.getCenter(new THREE.Vector3()).setY(0))).toBeLessThan(0.25);
   }, 60000);
@@ -40,10 +41,39 @@ describe('proximity: the room each thing needs, on the thing', () => {
     const mark = (p: Part, path = ''): Part => (path === stand.path ? { ...p, meant: [MEANT_ANYWHERE] } : p.parts ? { ...p, parts: p.parts.map((k, i) => mark(k, `${path}/${i}`)) } : p);
     expect(proximity(mark(r)).found.find((b) => b.thing === 'tv stand')!.did).toMatch(/meant/);
   }, 60000);
-  it('every house plan comes out of its seed with every zone clear', async () => {
+  it('every house plan comes out of its seed with every zone clear and every mate held', async () => {
     for (const plan of ['studio', '1 bed', '2 bed', '3 bed']) { const b = emptyBoard('h'); placeBlock(b, 'seed.house', 0, 0, { plan }, 'h'); const e = new Engine(b); await e.run(); const h = partOf(e.state.get('h')!.out!.house as Assembly);
-      const p = proximity(h, { move: false }); expect(p.found).toHaveLength(0); expect(p.zones).toBeGreaterThan(10); }
+      const p = proximity(h, { move: false }); expect(p.found).toHaveLength(0); expect(p.zones).toBeGreaterThan(10); expect(matesOf(h).every((m) => m.holds)).toBe(true); }
   }, 120000);
+});
+
+describe('mates as numbers: proximity, sense and conditional', () => {
+  const box = (x: number, z: number, w = 1, d = 0.5, h = 1) => new THREE.Box3(new THREE.Vector3(x - w / 2, 0, z - d / 2), new THREE.Vector3(x + w / 2, h, z + d / 2));
+  it('each measure from where things are: a distance, a gap, an angle off a front, a share seen past what is between', () => {
+    const a = { box: box(0, 0), m: new THREE.Matrix4() }, b = box(0, 3);
+    expect(measure({ name: '', to: '', measure: 'distance', why: '' }, a, b)).toBeCloseTo(3, 9);
+    expect(measure({ name: '', to: '', measure: 'gap', why: '' }, a, b)).toBeCloseTo(2.5, 9);
+    expect(measure({ name: '', to: '', measure: 'facing', face: '+z', why: '' }, a, b)).toBeCloseTo(0, 6);
+    expect(measure({ name: '', to: '', measure: 'facing', face: '-z', why: '' }, a, b)).toBeCloseTo(180, 6);
+    expect(measure({ name: '', to: '', measure: 'facing', face: '+z', why: '' }, a, box(3, 3))).toBeCloseTo(45, 6);
+    const sees = { name: '', to: '', measure: 'sees' as const, eye: 0.5, why: '' };
+    expect(measure(sees, a, b, [])).toBe(1); expect(measure(sees, a, b, [box(0, 1.5, 3, 0.2, 3)])).toBe(0);
+    expect(outBy({ name: '', to: '', measure: 'distance', min: 2, max: 2.5, why: '' }, 3)).toBeCloseTo(0.5, 9);
+  });
+  it('a mate in force only while its state holds', () => { expect(inForce('watching', '*')).toBe(true); expect(inForce('watching', 'cooking, watching')).toBe(true); expect(inForce('watching', 'cooking')).toBe(false); expect(inForce(undefined, 'cooking')).toBe(true); });
+  it('a living room: the sofa sits too far from its television (3.1 m, past SMPTE\'s 1.87 screen widths); drawn up to it, its table with it, it faces it, sees it, and every mate holds', async () => {
+    const r = await room({ type: 'living', front: 'wall', back: 'window' }), before = matesOf(r);
+    expect(before.find((m) => m.mate === 'viewing distance')!.holds).toBe(false);
+    const p = proximity(r), after = matesOf(p.tree);
+    expect(after.every((m) => m.holds)).toBe(true); const d = after.find((m) => m.mate === 'viewing distance')!; expect(d.value).toBeGreaterThanOrEqual(1.37 * 1.44 - 1e-3); expect(d.value).toBeLessThanOrEqual(1.87 * 1.44 + 1e-3);
+    // (not while nobody watches: then nothing is out)
+    expect(proximity(r, { state: 'cooking' }).found).toHaveLength(0);
+  }, 60000);
+  it('a door behind the television: the sofa, its table and the television turn as one arrangement out of the door\'s zones; every zone clear and every mate held after', async () => {
+    const r = await room({ type: 'living', front: 'wall', back: 'door' }), p = proximity(r);
+    expect(p.found[0]!.did).toMatch(/turned.*television.*sofa seat.*coffee table/);
+    expect(proximity(p.tree, { move: false }).found).toHaveLength(0); expect(matesOf(p.tree).every((m) => m.holds)).toBe(true);
+  }, 60000);
 });
 
 describe('a body from its measured segments, its math on each part', () => {

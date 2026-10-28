@@ -269,6 +269,26 @@ After step 3, asked for (`placement/proximity.ts`, `act/body.ts`, `life/segments
     - It takes the nearest place where the thing stands in no zone and its own zones, moved with it, hold nothing. So a toilet is never turned to face a wall.
     - What is meant to be there (`Part.meant`: the zone's name, or 'in the way') is left, and that is said.
   - **The house seed runs it on every house.** Every room type and all four house plans now come out with every zone clear: 13 to 23 zones a house. The toilet stood in the basin's clear floor in every plan, and is now moved apart from it.
+  - **Mating, universal and numerical (`placement/relate.ts`; nodes `relate`, `mates`):** the user, next: "proximity mating is a thing … sense matings, proximity matings, conditional mating … it doesn't just apply to bolts and screws and engines, it's universal and numerical".
+    - **Every mate is a measure held in a range**, between a thing and the nearest thing named like its target.
+    - **Faces meeting** are the bolt-in-hole mates of `mate.ts`: a pattern landing within 0.2 mm, a bore on a shaft.
+    - **A zone** is a mate that nothing be in it.
+    - **`Part.mates`, set by `relate`,** holds the rest:
+      - distance (between middles);
+      - gap (between surfaces);
+      - facing (degrees off its front);
+      - sees (the share of the other seen from an eye past what is between, by 9 sight lines);
+      - height.
+    - **Conditional:** each mate and zone may hold only while a state does (`when`). The proximity and mates nodes take the state; `*` is everything at once.
+    - **The living room's mates, while watching:**
+      - The sofa faces the television within 30° (an estimate).
+      - It sits between THX's 40° view (1.37 × the 1.44 m screen) and SMPTE EG-18's 30° (1.87 ×).
+      - It sees at least 75 % of the screen from a seated eye 1.1 m up (typical).
+      - The coffee table stands 350 to 500 mm off the seat (typical).
+    - **One solver keeps zones and mates alike:**
+      - **A thing standing in a zone** moves with the whole arrangement it is mated into, so the sofa, its table and the television turn round together and their mates hold by construction. Where that fits nowhere, what is in the way moves alone and its broken mates are drawn back next.
+      - **A thing carrying a broken mate** moves with what touches it and depends on it (the table comes with the sofa), not its target. It may stand off its wall to do it.
+    - **The seed's own sofa sat 3.1 m from its screen,** past SMPTE's 2.69 m, in every living room. It is now drawn up to 2.68 m. Every room type and house plan comes out with every zone clear and every mate held.
   - **Found on the way:** the kitchen seed's cabinet run went 75 mm into its left wall and its stove overlapped the run. They now sit side by side between the walls: run, stove, fridge.
 - **A body from its measured segments, its math on every part:**
   - **The source:** the agent was a stick figure. It is now the body's sixteen segments from `life/segments.ts`: each de Leva's share of the body's mass (men and women apart), laid out by Drillis and Contini's proportions.
@@ -284,7 +304,6 @@ After step 3, asked for (`placement/proximity.ts`, `act/body.ts`, `life/segments
     - A body's trunk and head are boxes and a capsule, not its skin. `anatomy.ts` has the skin as a field, not yet drawn here.
     - A muscle's bulge is not modelled.
     - The body is not yet in the physics as it acts (`person.ts` has bodies on Jolt; the agent does not use them yet).
-    - A sofa that faced a moved television is not turned to face it again: a television's viewing zone, with the sofa meant in it, would say so.
 
 Step 4 result (`src/nexus/logic/`: `netlist.ts`, `switch.ts`, `cells.ts`, `cpu6502.ts`, `asm6502.ts`, `chip6502.ts`, `programs.ts`; nodes `netlist`, `cell.characterise`, `logic.run`; board "The 6502 from its transistors"):
 - **The netlist:**
@@ -346,3 +365,16 @@ Step 4 result (`src/nexus/logic/`: `netlist.ts`, `switch.ts`, `cells.ts`, `cpu65
 | Paths, stop lines, the clock | `blocks.ts` (Follow a path, the Clock), `dataflow.ts` |
 | Routing search; placement maps | `placement/line.ts`, `placement/fields.ts` |
 | Stand-ins, culling, a frame governor | `view/space3d.ts` |
+
+## The library, navigable
+
+The user: "go through and optimize sort nodes so that you don't get lost in your own sauce or someone using this system can easily navigate and use".
+
+**Before:** 359 nodes. Browsed by field, "Mechanical" held 143 of them and "Everyday" 117. 55 ids had no prefix and the rest used 45 different prefixes. Two nodes were both named Terrain.
+
+**Now:**
+- **The library opens on Stage:** eleven shelves in the order a board runs. Start, make, arrange and mate, choose and size, check, simulate and run, sense and act, laws (by field), data, show, board tools.
+- **Each shelf says what it holds.** A node's stage is read from what it is (`stageOf`: its kind, its ability, what its ports carry, a few id families), never filed by hand, so a new node lands where it belongs.
+- **The inspector shows each node's stage.**
+- **`docs/NODES.md`** is the whole catalogue written out from the library, one line a node. A test fails when it falls out of date, and another when two nodes share a name.
+- **Field, Ability and Kind** remain as other ways in.

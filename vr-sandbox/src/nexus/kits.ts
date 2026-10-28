@@ -61,7 +61,12 @@ export interface Iface {
 export interface Cut { r: number; depth: number; at: V3; dir: V3; n?: number }
 /** A zone a part keeps clear, in its own frame: a box (its middle and size), or a sector swept about an upright axis
  *  (the hinge, the radius, the direction it starts and ends, the height it spans from y0); why, with the figures. */
-export interface Keep { name: string; kind: 'box' | 'sector'; at: V3; size?: V3; r?: number; from?: V3; to?: V3; y0?: number; h?: number; why: string }
+export interface Keep { name: string; kind: 'box' | 'sector'; at: V3; size?: V3; r?: number; from?: V3; to?: V3; y0?: number; h?: number; why: string; /** only while (a state: 'cooking', 'door opening'); else always */ when?: string }
+/** A mate as a number: from the part that carries it to the nearest thing named like `to`, a measure (the distance between
+ *  them, the gap between their surfaces, how far off its front the other is, how much of the other it sees, how much
+ *  higher the other is) held within min and max; only while a state holds, if it says one; why, with its figures. Bolts
+ *  meeting their holes are mates of another kind (src/nexus/mate.ts); a zone (Keep) is a mate that nothing be in it. */
+export interface Mate { name: string; to: string; measure: 'distance' | 'gap' | 'facing' | 'sees' | 'height'; min?: number; max?: number; /** its front, in its own frame (facing, sees) */ face?: '+z' | '-z' | '+x' | '-x'; /** the eye's height over the floor (sees) */ eye?: number; when?: string; why: string }
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
   /** holes drilled into it (its own frame) */ cuts?: Cut[];
@@ -113,6 +118,8 @@ export interface Part {
   /** the room it needs kept clear round it, in its own frame, each zone with the math it comes from: a door's leaf's
    *  sweep (a quarter disc from its hinge, its radius the leaf's width), the floor in front of a toilet a code asks for.
    *  Whatever else stands in one is found by proximity (src/nexus/placement/proximity.ts) and moved */ keep?: Keep[];
+  /** how it mates with what is round it, each by a measure held in a range (src/nexus/placement/relate.ts): a sofa facing
+   *  a television, sitting so far from it, seeing it */ mates?: Mate[];
   /** where it is on purpose where a rule would otherwise move it, by what that rule keeps clear: 'in a doorway' (a
    *  draught screen, a barrier, a bookcase blocking a door that is not used) */ meant?: string[];
   /** its maker's published mass, kg: what is not drawn (its part named "the rest of it") makes up the difference */ published?: number;

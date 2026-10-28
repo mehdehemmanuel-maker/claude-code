@@ -39,6 +39,7 @@ import { STILL, effectsOf, releasesOf, shutIn, type Air } from './aware/gas';
 import { perceive, showPerception, standBy, type Observer } from './aware/sense';
 import { openDoor, sceneAt, type Goal, type Plan } from './act/agent';
 import { proximity, zoneFor } from './placement/proximity';
+import { MEASURES, matesOf } from './placement/relate';
 import { bodyParts, poseOf, rigFor } from './act/body';
 import { centreOfMass } from './life/segments';
 import { load6502, NETLIST_6502, type Netlist } from './logic/netlist';
@@ -285,8 +286,65 @@ export async function testBlock(b: BlockDef, runGraph?: (b: BlockDef, inputs: Re
 export const defaultsOf = (b: BlockDef): Record<string, unknown> => Object.fromEntries((b.settings ?? []).map((s) => [s.key, s.default]));
 
 /** The library sorted one of the three ways: domain, ability or kind, each heading with its blocks, by name. */
-export function shelves(by: 'domain' | 'ability' | 'kind', q = ''): { id: string; name: string; blocks: BlockDef[] }[] {
+/** The stages of the work, in the order a board runs: the library's first shelves, so a node is found by what you are
+ *  doing with it, not by which of 19 fields it was filed under. A node's stage is read from what it is (its kind, its
+ *  ability, what its ports carry), never tagged by hand, so a new node lands where it belongs. */
+export const STAGES: { id: string; name: string; says: string }[] = [
+  { id: 'start', name: '1 · Start: values and inputs', says: 'numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from' },
+  { id: 'make', name: '2 · Make: shapes, parts, things', says: 'shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines' },
+  { id: 'mate', name: '3 · Arrange and mate', says: 'place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes' },
+  { id: 'size', name: '4 · Choose, size and decide', says: 'pick from a catalogue by duty, size a part, a wire, a battery; solve for what is wanted; if, compare, pick one' },
+  { id: 'check', name: '5 · Check', says: 'rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers' },
+  { id: 'run', name: '6 · Simulate and run', says: 'physics, motion, the clock, chips run from their transistors, engines under load' },
+  { id: 'sense', name: '7 · Sense and act', says: 'what things give off and afford, gases, who notices what, agents and their goals' },
+  { id: 'law', name: '8 · Laws and formulas', says: 'every physical law as a calculator, by its field, and formulas you write' },
+  { id: 'data', name: '9 · Data, money and projects', says: 'tables and rows, research, the gauntlet, money, operations' },
+  { id: 'show', name: '10 · Show', says: 'tables, values, charts, the 3D view, the space' },
+  { id: 'board', name: '11 · Board tools', says: 'groups, notes, code, asking, events' },
+];
+const STAGE_BY_ID: [RegExp, string][] = [
+  [/^(signature|afford|gas|sense|agent|goal)$/, 'sense'],
+  [/^(netlist|logic\.run|letgo|time|hinge|push|turn|sweep(\.range)?|follow|loop|signal|traffic|forever)$|^(load|engine\.run)/, 'run'],
+  [/^(place|array|combine|mirror|variant|mate|fit|onto|bore|frame|zone|proximity|relate|route|line|clear|scatter|spawn|explode|apart|fit\.in|piece|onground|ground)/, 'mate'],
+  [/^(size|select|catalogue|place\.solve|auto\.loop|repair|explain|need|field)/, 'size'],
+  [/^(check|mates|gauntlet\.|test\.|audit|clash|missing|fidelity|cell\.characterise)/, 'check'],
+  [/^(research|read\.|search\.|unknown\.|rows|list|text|fin\.|ops\.|on\.event|task|pass|delete|store)/, 'data'],
+  [/^(seed\.|shape\.|make\.|part|body|terrain|wall|plan\.rooms|chip\.|engine\.|vehicle|tyre|axle|battery|pc\.|computer)/, 'make'],
+];
+export function stageOf(b: BlockDef): string {
+  for (const [re, st] of STAGE_BY_ID) if (re.test(b.id)) return st;
+  if (b.kind === 'law' || b.kind === 'calculator' || b.kind === 'code' && b.ability === 'calculate') return 'law';
+  if (b.kind === 'view' || b.ability === 'show') return 'show';
+  if (b.kind === 'group' || b.kind === 'note' || b.kind === 'meta' || b.kind === 'bridge' || b.kind === 'code' || b.kind === 'ai' || b.kind === 'trigger') return 'board';
+  if (b.kind === 'input' || b.kind === 'card' || b.ability === 'measure' || b.ability === 'convert') return 'start';
+  if (b.kind === 'critic' || b.ability === 'check') return 'check';
+  if (b.ability === 'simulate') return 'run';
+  if (b.ability === 'solve' || b.ability === 'optimise' || b.ability === 'decide') return 'size';
+  if (b.ability === 'store' || b.ability === 'ask' || b.ability === 'act') return 'data';
+  const ps = portsOf(b, defaultsOf(b)), out = ps.outputs.map((p) => p.type), into = ps.inputs.map((p) => p.type), thingy = (t: string) => t === 'part' || t === 'assembly';
+  if (out.some(thingy) && into.some(thingy)) return 'mate';
+  if (out.some(thingy) || b.kind === 'generator' || b.ability === 'generate') return 'make';
+  if (b.ability === 'calculate') return 'law';
+  return 'data';
+}
+/** The library as a catalogue (docs/NODES.md is this, written out and kept current by a test): each stage, what it is
+ *  for, and each node in it with what it does in one sentence; the laws by their field, by name. */
+export function libraryCatalogue(): string {
+  const first = (t: string) => { const one = t.replace(/\s+/g, ' '), m = /^(.+?\.)(\s|$)/.exec(one), f = m ? m[1]! : one; return f.length > 220 ? `${f.slice(0, f.lastIndexOf(' ', 217))} …` : f; };
+  const all = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') || b.id === 'group.in' || b.id === 'group.out'), lines = ['# The node library', '', `Generated from the library (\`libraryCatalogue()\` in \`src/nexus/blocks.ts\`); \`tests/nexus/shelves.test.ts\` fails if it is out of date (write it again with \`UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts\`). ${all.length} nodes, on ${STAGES.length} shelves in the order a board runs; a node's shelf is read from what it is (\`stageOf\`), never filed by hand.`, ''];
+  for (const st of STAGES) {
+    const bs = all.filter((b) => stageOf(b) === st.id).sort((a, c) => a.name.localeCompare(c.name)); if (!bs.length) continue;
+    lines.push(`## ${st.name} (${bs.length})`, '', `${st.says[0]!.toUpperCase()}${st.says.slice(1)}.`, '');
+    if (st.id === 'law') { const by = new Map<string, string[]>(); for (const b of bs) { const f = DOMAINS.find((d) => d.id === b.domains[0])?.name ?? 'Other'; by.set(f, [...(by.get(f) ?? []), b.name]); }
+      for (const [f, ns] of [...by].sort((a, c) => a[0].localeCompare(c[0]))) lines.push(`- **${f}** (${ns.length}): ${ns.join(', ')}`); }
+    else for (const b of bs) lines.push(`- **${b.name}** (\`${b.id}\`): ${first(b.says)}`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+export function shelves(by: 'stage' | 'domain' | 'ability' | 'kind', q = ''): { id: string; name: string; blocks: BlockDef[] }[] {
   const qq = q.trim().toLowerCase(), all = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') && (!qq || `${b.name} ${b.says} ${b.id}`.toLowerCase().includes(qq)));
+  if (by === 'stage') return STAGES.map((h) => ({ id: h.id, name: h.name, blocks: all.filter((b) => stageOf(b) === h.id).sort((a, c) => a.name.localeCompare(c.name)) })).filter((x) => x.blocks.length);
   const heads = by === 'domain' ? DOMAINS : by === 'ability' ? Object.entries(ABILITIES).map(([id, name]) => ({ id, name })) : Object.entries(KINDS).map(([id, k]) => ({ id, name: k.name }));
   return heads.map((h) => ({ ...h, blocks: all.filter((b) => (by === 'domain' ? b.domains.includes(h.id) : by === 'ability' ? b.ability === h.id : b.kind === h.id)).sort((a, c) => a.name.localeCompare(c.name)) })).filter((s) => s.blocks.length);
 }
@@ -1431,11 +1489,24 @@ const BUILT_THINGS: BlockDef[] = [
       const k = zoneFor(box, { kind: c.set.kind === 'swing' ? 'swing' : 'front', face: String(c.set.face ?? '+z') as '+z', depth: Number(i.depth ?? 0.5), ...(i.r !== undefined && i.r !== null ? { r: Number(i.r) } : {}), ...(i.width !== undefined && i.width !== null ? { width: Number(i.width) } : {}), hinge: c.set.hinge === 'right' ? 'right' : 'left', name: String(c.set.name || 'its room'), why: String(c.set.why || '') });
       return { thing: { ...p, keep: [...(p.keep ?? []), k] }, says: `${k.name}: ${k.kind === 'box' ? `${k.size!.map((v) => Math.round(v * 1000)).join(' × ')} mm in front of its ${String(c.set.face)} face` : `a sweep of radius ${Math.round(k.r! * 1000)} mm from its hinge`}${k.why ? ` (${k.why})` : ''}` }; },
     tests: [{ set: { kind: 'front', face: '+z', name: 'clear floor' }, inputs: { thing: { name: 'b', shape: { box: [0.4, 0.8, 0.6] }, mat: 'pvc' }, depth: 0.533 }, outputs: { says: 'clear floor: 400 × 800 × 533 mm in front of its +z face' } }] }),
-  def({ id: 'proximity', name: 'Proximity', kind: 'critic', ability: 'check', domains: ['structural', 'everyday', 'mechanical'], says: 'Every zone a thing carries (Zone: a door\'s sweep, a toilet\'s clear floor, a kitchen\'s aisle) kept clear: what stands in one is found, and what can move moves, with what stands on or against it, along its wall or to another, to the nearest place where it stands in no zone and its own zones hold nothing. Nothing here knows what any thing is: the room each needs comes with it. What is there on purpose (meant) is left',
-    settings: [{ key: 'move', label: 'What is in the way', type: 'choice', default: 'moved', choices: ['moved', 'only said'] }],
-    ports: { inputs: [thing()], outputs: [thing('thing', 'with every zone clear'), P('found', 'table', { label: 'what stood in which zone, and what was done' }), N('moved', undefined, { label: 'things moved' }), N('zones'), P('says', 'text')] },
-    run: (i, c) => { const r = proximity(asPart(asThing(i.thing)), { move: c.set.move !== 'only said' }); return { thing: r.tree, found: r.found, moved: r.moved, zones: r.zones, says: r.says }; },
-    tests: [{ inputs: { thing: { name: 'nothing', parts: [] } }, outputs: { moved: 0, zones: 0 } }] }),
+  def({ id: 'proximity', name: 'Proximity and mates', kind: 'critic', ability: 'check', domains: ['structural', 'everyday', 'mechanical'], says: 'Every zone a thing carries kept clear and every mate it carries held, as numbers (Zone: a door\'s sweep, a toilet\'s clear floor; Mate by a measure: a sofa facing, seeing and sitting at its distance from its television), in the state you give (watching, cooking; * for everything). What breaks one is found, and what can move moves: what stands in a zone with all it touches and is mated with, as one arrangement; what carries a broken mate with what touches it, drawn to where the mate holds. Nothing here knows what any thing is: the room and the mates each needs come with it. What is there on purpose (meant) is left',
+    settings: [{ key: 'move', label: 'What is in the way', type: 'choice', default: 'moved', choices: ['moved', 'only said'] }, { key: 'state', label: 'What is going on (* for everything; else e.g. watching, cooking)', type: 'text', default: '*' }],
+    ports: { inputs: [thing()], outputs: [thing('thing', 'with every zone clear and every mate held'), P('found', 'table', { label: 'what stood in which zone or broke which mate, and what was done' }), N('moved', undefined, { label: 'things moved' }), N('zones'), N('mates'), P('says', 'text')] },
+    run: (i, c) => { const r = proximity(asPart(asThing(i.thing)), { move: c.set.move !== 'only said', state: String(c.set.state ?? '*') }); return { thing: r.tree, found: r.found, moved: r.moved, zones: r.zones, mates: r.mates, says: r.says }; },
+    tests: [{ inputs: { thing: { name: 'nothing', parts: [] } }, outputs: { moved: 0, zones: 0, mates: 0 } }] }),
+  def({ id: 'relate', name: 'Mate by a measure', kind: 'logic', ability: 'connect', domains: ['structural', 'everyday', 'mechanical'], says: 'A mate as a number, put on the thing itself: to the nearest thing named like the one you give, a measure held in a range: the distance between their middles, the gap between their surfaces, how far off its front the other is (facing), how much of the other it sees past what is between (sees), how much higher the other is. Only while a state holds if you say one (a sofa faces its television while someone watches). Wire min and max from formulas to work them out (a sitting distance from a screen\'s width). Proximity then keeps it, moving what carries it',
+    settings: [{ key: 'name', label: 'Its name', type: 'text', default: 'mate' }, { key: 'to', label: 'To what is named like', type: 'text', default: '' }, { key: 'measure', label: 'Measure', type: 'choice', default: 'distance', choices: Object.keys(MEASURES) }, { key: 'face', label: 'Its front (facing, sees)', type: 'choice', default: '+z', choices: ['+z', '-z', '+x', '-x'] }, { key: 'eye', label: 'Eye height over the floor, m (sees)', type: 'number', default: 1.1 }, { key: 'when', label: 'Only while (blank: always)', type: 'text', default: '' }, { key: 'why', label: 'Why, with its figures', type: 'text', default: '' }],
+    ports: { inputs: [thing('thing'), N('min', undefined, { optional: true, label: 'at least' }), N('max', undefined, { optional: true, label: 'at most' })], outputs: [thing('thing', 'with its mate'), P('says', 'text')] },
+    run: (i, c) => { const p = asPart(asThing(i.thing)), m = String(c.set.measure ?? 'distance') as keyof typeof MEASURES; if (!String(c.set.to ?? '').trim()) throw new Error('say what it mates with');
+      const k = { name: String(c.set.name || 'mate'), to: String(c.set.to), measure: m, ...(i.min !== undefined && i.min !== null ? { min: Number(i.min) } : {}), ...(i.max !== undefined && i.max !== null ? { max: Number(i.max) } : {}), face: String(c.set.face ?? '+z') as '+z', eye: Number(c.set.eye ?? 1.1), ...(String(c.set.when ?? '').trim() ? { when: String(c.set.when).trim() } : {}), why: String(c.set.why ?? '') };
+      return { thing: { ...p, mates: [...(p.mates ?? []), k] }, says: `${k.name}: its ${m} to the nearest ${k.to} (${MEASURES[m].says}) held${k.min !== undefined ? ` at least ${k.min}` : ''}${k.max !== undefined ? ` at most ${k.max}` : ''} ${MEASURES[m].unit}${k.when ? `, while ${k.when}` : ''}${k.why ? ` (${k.why})` : ''}` }; },
+    tests: [{ set: { name: 'facing', to: 'television', measure: 'facing' }, inputs: { thing: { name: 'sofa', shape: { box: [2, 0.8, 0.9] }, mat: 'foam' }, max: 30 }, outputs: { says: 'facing: its facing to the nearest television (how far off its front the other\'s middle is, in plan) held at most 30 °' } }] }),
+  def({ id: 'mates', name: 'Its mates, measured', kind: 'critic', ability: 'check', domains: ['structural', 'everyday', 'mechanical'], says: 'Every mate on everything in a thing, measured where it stands, as numbers: what each carries it to, its measure, its value, the range it must hold in, whether it holds, and whether it is in force in the state you give',
+    settings: [{ key: 'state', label: 'What is going on (* for everything)', type: 'text', default: '*' }],
+    ports: { inputs: [thing()], outputs: [P('mates', 'table'), N('holding'), N('broken'), P('says', 'text')] },
+    run: (i, c) => { const rows = matesOf(asPart(asThing(i.thing)), String(c.set.state ?? '*')), broken = rows.filter((r) => !r.holds).length;
+      return { mates: rows, holding: rows.length - broken, broken, says: `${rows.length} mates: ${rows.length - broken} hold${broken ? `, ${broken} do not: ${rows.filter((r) => !r.holds).map((r) => `the ${r.of}'s ${r.mate} (${r.measure} ${r.value}${r.unit})`).join('; ')}` : ''}` }; },
+    tests: [{ inputs: { thing: { name: 'nothing', parts: [] } }, outputs: { holding: 0, broken: 0 } }] }),
   def({ id: 'goal', name: 'Goal', kind: 'input', ability: 'act', domains: ['everyday', 'structural'], says: 'What an agent sets out to do: open something (a door, a gate, a lid), named by a pattern, the nearest or the farthest of those it sees. The agent plans the steps itself from what the world affords',
     settings: [{ key: 'open', label: 'Open what is named like', type: 'text', default: '^door$' }, { key: 'which', label: 'Of those it sees', type: 'choice', default: 'nearest', choices: ['nearest', 'farthest'] }],
     ports: { inputs: [], outputs: [P('goal', 'any'), P('says', 'text')] },
