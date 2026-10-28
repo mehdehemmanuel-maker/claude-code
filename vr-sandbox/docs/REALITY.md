@@ -643,3 +643,8 @@ bottom moves the top 1000 × 0.2 / (205 GPa × 0.01) (the node's third test); th
 62.1 % of the load through the copper rod, as its E A share (115 / (115 + 69) = 62.5 %, less the steel above each)
 says. Said on the node: along the way it is loaded only, contacts bonded; bending, buckling and a 3D frame are the
 next round of F.
+
+**Step I, first round (2026-10-28).** `path.network` and `throughNetwork` retired: a network named piece by piece is what
+What flows through it finds from the geometry, nothing typed; the old id is an alias of `flow`, so a saved board moves
+on. `path.properties` stays, for what the engine does not yet: growth when warmed, the first yield, bending and
+buckling; its heat, current and axial stiffness are the engine's, and go when F's second round brings bending.

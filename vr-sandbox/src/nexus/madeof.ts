@@ -13,7 +13,6 @@ import { flatten, isPart, massOfAll, type Assembly } from './assembly';
 import { densityKg, massOf } from './mass';
 import { shapeBox } from './make/space';
 import { matterOf, type Evidence } from './matter';
-import { solveLinear } from './numeric';
 import type { Part, Shape } from './kits';
 
 type V3 = [number, number, number];
@@ -254,44 +253,4 @@ export function alongPath(t: Part | Assembly, path: (string | string[])[], axis:
     }
   }
   return { pieces, missing, stages: stages.map((st) => st.map((p) => p.name)), thermal: thermalAll, electrical: electricalAll, stiffness: c === null ? null : c > 0 ? 1 / c : null, growth, strength, mismatch, bending, buckles, joints, lacking };
-}
-
-/** A network through a thing: each piece a branch between two named junctions. */
-export interface NetworkResult { pieces: PathPiece[]; missing: string[]; thermal: number | null; electrical: number | null; stiffness: number | null; lacking: string[] }
-
-/**
- * What a network of pieces carries between two junctions (docs/REALITY.md, step 7): each piece a branch from one junction
- * to another, each measured along the axis as on a path, the network solved by nodal analysis (each junction's balance,
- * Kirchhoff's current law, as a linear system) for the resistance to heat and to current between the two, and its
- * stiffness as springs along the axis between them (each junction moving only along it). A path that splits and rejoins
- * is one; so is a bridge no series-and-parallel reduction can take. Contact at the junctions is left out, said.
- */
-export function throughNetwork(t: Part | Assembly, branches: { name: string; a: string; b: string }[], axis: 'x' | 'y' | 'z', from: string, to: string): NetworkResult {
-  const k = axis === 'x' ? 0 : axis === 'y' ? 1 : 2, found = new Map<string, PathPiece>();
-  measure(t, branches.map((x) => x.name), k, 0, found);
-  const missing = branches.filter((x) => !found.has(x.name)).map((x) => x.name), pieces = [...new Set(branches.map((x) => x.name))].map((n) => found.get(n)).filter((p): p is PathPiece => !!p);
-  const nodes = [...new Set(branches.flatMap((x) => [x.a, x.b]))], lacking: string[] = [];
-  if (!nodes.includes(from) || !nodes.includes(to)) lacking.push(`the junctions ${from} and ${to} must both be ends of branches`);
-  const solve = (key: 'thermal' | 'electrical' | 'compliance', what: string): number | null => {
-    const live = branches.filter((x) => found.has(x.name));
-    const no = live.filter((x) => found.get(x.name)![key] === undefined); if (no.length) { lacking.push(`${what}: ${no.map((x) => x.name).join(', ')} has none known`); return null; }
-    if (!nodes.includes(from) || !nodes.includes(to) || from === to) return null;
-    // the junctions other than the two ends are unknown; the end `from` held at 1, `to` at 0; what flows out of `from`
-    // at that difference is the network's conductance
-    const inner = nodes.filter((n) => n !== from && n !== to), at = new Map(inner.map((n, i) => [n, i]));
-    const G = inner.map(() => inner.map(() => 0)), rhs = inner.map(() => 0);
-    for (const x of live) {
-      const g = 1 / found.get(x.name)![key]!, i = at.get(x.a), j = at.get(x.b);
-      if (i !== undefined) { G[i]![i]! += g; if (j !== undefined) G[i]![j]! -= g; else if (x.b === from) rhs[i]! += g; }
-      if (j !== undefined) { G[j]![j]! += g; if (i !== undefined) G[j]![i]! -= g; else if (x.a === from) rhs[j]! += g; }
-    }
-    const v = inner.length ? solveLinear(G, rhs) : [];
-    if (!v) { lacking.push(`${what}: some junctions reach neither end, so the network cannot be solved`); return null; }
-    const V = (n: string) => (n === from ? 1 : n === to ? 0 : v[at.get(n)!]!);
-    const out = live.reduce((a, x) => { const g = 1 / found.get(x.name)![key]!; return a + (x.a === from ? g * (1 - V(x.b)) : x.b === from ? g * (1 - V(x.a)) : 0); }, 0);
-    if (!(out > 0)) { lacking.push(`${what}: nothing joins ${from} to ${to}`); return null; }
-    return 1 / out;
-  };
-  const thermal = solve('thermal', 'thermal conductivity'), electrical = solve('electrical', 'electrical conductivity'), c = solve('compliance', 'elastic modulus');
-  return { pieces, missing, thermal, electrical, stiffness: c === null ? null : 1 / c, lacking: [...new Set(lacking)] };
 }

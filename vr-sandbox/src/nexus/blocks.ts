@@ -18,7 +18,7 @@ import { BOOK, KEPT, KINDS as LAW_KINDS } from './book';
 import { TAGS } from './book/tags';
 import { FIELDS } from './book/fields';
 import { MATTER, matterOf } from './matter';
-import { alongPath, END_K, madeOf, massProperties, throughNetwork } from './madeof';
+import { alongPath, END_K, madeOf, massProperties } from './madeof';
 import { coloured, flowOver, graphOf, groupsOf, piecesBy, sliced } from './graph';
 import { apply, type Law } from './law';
 import { varsOf } from './term';
@@ -1187,21 +1187,6 @@ const BUILT_THINGS: BlockDef[] = [
     }, // a 10 × 10 mm steel-low bar 100 mm long along y, worked by hand from its handbook figures (k 51.9 W/m K, σ 5.8 MS/m,
     // E 205 GPa, α 11.5 µm/m K, yield 370 MPa): L / k A, L / σ A, E A / L, α L ΔT, σy A, 3 E I / L³, π² E I / L²
     tests: [{ inputs: { thing: { name: 'bar', shape: { box: [0.01, 0.1, 0.01] }, mat: 'steel-low' } }, set: { path: 'bar', axis: 'y', dT: 100 }, outputs: { thermal: 0.1 / (51.9 * 1e-4), electrical: 0.1 / (5.8e6 * 1e-4), stiffness: (205e9 * 1e-4) / 0.1, growth: 11.5e-6 * 0.1 * 100, strength: 370e6 * 1e-4, bending: (3 * 205e9 * (0.01 ** 4 / 12)) / 0.1 ** 3, buckles: (Math.PI ** 2 * 205e9 * (0.01 ** 4 / 12)) / 0.1 ** 2 }, rel: 1e-9 }] }),
-  def({ id: 'path.network', name: 'Through a network of pieces', kind: 'critic', ability: 'measure', domains: ['mechanical', 'electrical', 'thermal', 'structural'], says: 'Pieces of a thing as branches between named junctions (a path that splits and rejoins, a bridge, a mesh): the network solved by nodal analysis, each junction\'s balance a line of one linear system, for its resistance to heat and to current and its stiffness along an axis between two junctions; each piece measured as on a path, from what it is made of. Contact at the junctions left out, said',
-    valid: 'each branch one-dimensional along the axis; junctions joined without resistance; for stiffness, each junction moving only along the axis',
-    settings: [{ key: 'branches', label: 'Branches, one a line: piece: from - to', type: 'code', default: '' }, { key: 'axis', label: 'Along', type: 'choice', default: 'x', choices: ['x', 'y', 'z'] }, { key: 'from', label: 'Between junction', type: 'text', default: '' }, { key: 'to', label: 'and junction', type: 'text', default: '' }],
-    ports: { inputs: [thing()], outputs: [N('thermal', 'K/W', { label: 'resistance to heat' }), N('electrical', 'ohm', { label: 'resistance to current' }), N('stiffness', 'N/m', { label: 'axial stiffness' }), P('says', 'text')] },
-    run: (i, c) => {
-      const br = String(c.set.branches ?? '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = /^(.+?)\s*:\s*(.+?)\s*-\s*(.+)$/.exec(l); if (!m) throw new Error(`"${l}": write a branch as piece: from - to`); return { name: m[1]!, a: m[2]!, b: m[3]! }; });
-      if (!br.length) throw new Error('name the branches, one a line: piece: from - to');
-      const r = throughNetwork(asThing(i.thing), br, String(c.set.axis ?? 'x') as 'x' | 'y' | 'z', String(c.set.from ?? '').trim(), String(c.set.to ?? '').trim());
-      if (r.missing.length) throw new Error(`no piece named ${r.missing.map((m) => `"${m}"`).join(', ')} in it`);
-      const fmt = (v: number | null, u: string) => (v === null ? 'not known' : `${v.toPrecision(4)} ${u}`);
-      const out: Outputs = { says: [`${br.length} branches between ${String(c.set.from)} and ${String(c.set.to)}: to heat ${fmt(r.thermal, 'K/W')}, to current ${fmt(r.electrical, 'Ω')}, stiffness ${fmt(r.stiffness, 'N/m')}`, ...r.lacking, 'left out: the resistance where pieces meet at the junctions'].join('. ') };
-      if (r.thermal !== null) out.thermal = r.thermal; if (r.electrical !== null) out.electrical = r.electrical; if (r.stiffness !== null) out.stiffness = r.stiffness;
-      return out;
-    }, // two such bars side by side between the same two junctions: half the one's resistances, twice its stiffness
-    tests: [{ inputs: { thing: { name: 'two', items: [{ of: { name: 'a', shape: { box: [0.01, 0.1, 0.01] }, mat: 'steel-low' }, at: [0, 0, 0], rot: [0, 0, 0], s: 1 }, { of: { name: 'b', shape: { box: [0.01, 0.1, 0.01] }, mat: 'steel-low' }, at: [0.02, 0, 0], rot: [0, 0, 0], s: 1 }] } }, set: { branches: 'a: S - T\nb: S - T', axis: 'y', from: 'S', to: 'T' }, outputs: { thermal: 0.1 / (51.9 * 1e-4) / 2, electrical: 0.1 / (5.8e6 * 1e-4) / 2, stiffness: (2 * 205e9 * 1e-4) / 0.1 }, rel: 1e-9 }] }),
   def({ id: 'mass.properties', name: 'Mass, centre and inertia', kind: 'critic', ability: 'measure', domains: ['mechanical', 'structural', 'vehicles', 'aerospace'], says: 'What follows from a thing\'s pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece\'s own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass times its distance squared), its principal moments, and its heat capacity from each material\'s own specific heat, with how much of the mass each covers',
     ports: { inputs: [thing()], outputs: [N('mass', 'kg'), N('x', 'm', { label: 'centre x' }), N('y', 'm', { label: 'centre y' }), N('z', 'm', { label: 'centre z' }), P('inertia', 'table'), P('principal', 'list<number>', { unit: 'kg m^2' }), N('heat', 'J/K', { label: 'heat capacity' }), P('says', 'text')] },
     run: (i) => {
@@ -2289,6 +2274,8 @@ for (const [id, s] of Object.entries(CITED)) { const b = LIBRARY.get(id); if (b 
  *  block. They are not in the library, so nothing new is made with them. */
 export const ALIASES: Record<string, { to: string; set?: Record<string, unknown>; keys?: Record<string, string>; ports?: Record<string, string> }> = {
   'math.sum': { to: 'math.stats' },
+  // (a network of pieces named by hand: What flows through it finds the network from the geometry, nothing typed)
+  'path.network': { to: 'flow' },
   'in.slider': { to: 'in.number', set: { style: 'slider', value: 50, min: '0', max: '100' } },
   'array.line': { to: 'array', set: { pattern: 'line' } },
   'array.circle': { to: 'array', set: { pattern: 'ring' } },

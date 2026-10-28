@@ -208,7 +208,7 @@ known gaps are there too.
 | Laws (terms, kinds, nodes, solving, chains) | `nexus/book/`, `lawBlocks` in `blocks.ts`, `lawgraph.ts` |
 | Numeric methods (roots, integrals, slopes, ODEs, linear systems) | `nexus/numeric.ts` |
 | Materials and everything known of them | `nexus/matter.ts` (data: `mass.ts`, `elements.ts`, `data/materials.ts`, `periodic.ts`, `woods.ts`, `mixes.ts`) |
-| What a thing is made of; mass, centre, inertia, heat capacity; paths and networks | `nexus/madeof.ts` |
+| What a thing is made of; mass, centre, inertia, heat capacity; growth, strength, bending and buckling along a path | `nexus/madeof.ts` |
 | Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
 | The one test (every domain), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
