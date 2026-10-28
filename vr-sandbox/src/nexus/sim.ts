@@ -21,11 +21,14 @@ import type { Jolt } from './realize';
 import { eulerOf, matOf, type Axis, type M3, type V3 } from './generate';
 import * as THREE from 'three';
 import { boundsOfAll, flatten, isAssembly, massOfAll, matrixOf, place, type Assembly } from './assembly';
+import { massOf } from './mass';
 import type { Part } from './kits';
 import type { Material } from '../data/materials';
 
 
-export interface SimPart { name: string; kind: string; axis: Axis; dims: Record<string, number>; local: { w: number; h: number; d: number }; at: V3; turn: V3 }
+/** A piece of a body; with its own mass where it is known (what it is made of times its volume), so a body of a steel
+ *  head on a wooden handle has its centre of mass and its inertia where its masses put them, not where its volume does. */
+export interface SimPart { name: string; kind: string; axis: Axis; dims: Record<string, number>; local: { w: number; h: number; d: number }; at: V3; turn: V3; mass?: number }
 export interface SimThing { name: string; parts: SimPart[]; mass: number; friction: number; restitution: number }
 export interface SimBox { at: V3; w: number; h: number; d: number }
 export interface SimEnd { name: string; from: V3; to: V3; moved: number; dropped: number; turned: number; speed: number; resting: boolean }
@@ -121,6 +124,16 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     const cs = new J.BodyCreationSettings(shape, R(origin), Q(q0), J.EMotionType_Dynamic, LAYER_MOVING);
     cs.mFriction = th.friction; cs.mRestitution = th.restitution; cs.mLinearDamping = 0; cs.mAngularDamping = 0; cs.mMaxAngularVelocity = 400;
     cs.mOverrideMassProperties = J.EOverrideMassProperties_CalculateInertia; cs.mMassPropertiesOverride.mMass = Math.max(th.mass, 1e-4); cs.mMotionQuality = J.EMotionQuality_LinearCast;
+    // a body of pieces whose masses are known: its centre of mass and inertia from them (Jolt's own takes one density
+    // for the whole body, so a steel head on a wooden handle would balance at the middle of their volume)
+    const mp = single ? null : massPropsOf(rel, th.mass);
+    if (mp) {
+      const c0 = shape.GetCenterOfMass(), d: V3 = [mp.centre[0] - c0.GetX(), mp.centre[1] - c0.GetY(), mp.centre[2] - c0.GetZ()];
+      if (Math.hypot(...d) > 1e-9) { const sc2 = new J.StaticCompoundShapeSettings(); for (const r of rel) sc2.AddShape(V(r.at), Q(quatOf(r.R)), convex(r.part), 0); const o2 = new J.OffsetCenterOfMassShapeSettings(V(d), sc2); shape = o2.Create().Get(); J.destroy(o2); cs.SetShape(shape); }
+      const I = new J.Mat44(), col = (k: number) => new J.Vec4(V([mp.I[k]!, mp.I[3 + k]!, mp.I[6 + k]!]), 0);
+      I.SetColumn4(0, col(0)); I.SetColumn4(1, col(1)); I.SetColumn4(2, col(2)); I.SetColumn4(3, new J.Vec4(V([0, 0, 0]), 1));
+      cs.mOverrideMassProperties = J.EOverrideMassProperties_MassAndInertiaProvided; cs.mMassPropertiesOverride.mInertia = I;
+    }
     // a body of parts joined keeps each part's contacts its own: merged into one set of four, the points of a part not yet
     // touching (a block 9 mm up on a 9 mm plate, within the 10 mm a contact is looked for ahead) were kept in place of the
     // plate's own, and that side of the plate sank 9 mm into the floor
@@ -286,6 +299,31 @@ export function surfaceOf(mat: string | undefined): { friction: number; restitut
   return m ? { friction: m.friction, restitution: m.restitution, from: h!.same ? m.id : `${m.id} (a stand-in)` } : { friction: 0.5, restitution: 0.3, from: 'typical (an estimate)' };
 }
 /** One piece as a part of a body, where it stands in the world. */
+/** A body's centre of mass and inertia tensor about it (row-major, body axes), from its pieces' own masses, scaled so
+ *  they sum to the body's: each piece's own inertia about its centre (exact for a box, a ball and a cylinder; a cone
+ *  with its centre a quarter up; a ring or a tube as the solid cylinder round it, more than it has), turned into the
+ *  body's axes, plus its mass times its distance squared (the parallel axis theorem). Null where any mass is unknown. */
+export function massPropsOf(rel: { part: SimPart; at: V3; R: M3 }[], total: number): { centre: V3; I: M3; exact: number } | null {
+  const sum = rel.reduce((t, r) => t + (r.part.mass ?? NaN), 0);
+  if (!(sum > 0) || !(total > 0)) return null;
+  const k = total / sum, own = rel.map((r) => {
+    const m = r.part.mass! * k, p = r.part, l = p.local, d = p.dims;
+    if (p.kind === 'box') return { m, c: r.at, I: [(m * (l.h * l.h + l.d * l.d)) / 12, (m * (l.w * l.w + l.d * l.d)) / 12, (m * (l.w * l.w + l.h * l.h)) / 12] as V3, exact: true };
+    if (p.kind === 'sphere') { const t = 0.1 * m * d.D! * d.D!; return { m, c: r.at, I: [t, t, t] as V3, exact: true }; }
+    const rr = (d.D ?? Math.max(l.w, l.d)) / 2, h = 2 * ((d.h ?? d.dt ?? l.h) / 2);
+    // (in the shape's own axes, its round axis y, as the shape the engine is given)
+    if (p.kind === 'cone') { const up = apply(r.R, [0, -h / 4, 0]); const t = m * ((3 / 20) * rr * rr + (3 / 80) * h * h); return { m, c: [r.at[0] + up[0], r.at[1] + up[1], r.at[2] + up[2]] as V3, I: [t, 0.3 * m * rr * rr, t] as V3, exact: true }; }
+    const t = (m * (3 * rr * rr + h * h)) / 12; return { m, c: r.at, I: [t, (m * rr * rr) / 2, t] as V3, exact: p.kind === 'cylinder' };
+  });
+  const centre: V3 = [0, 0, 0]; for (const o of own) for (let a = 0; a < 3; a++) centre[a] += (o.m * o.c[a]!) / total;
+  const I = [0, 0, 0, 0, 0, 0, 0, 0, 0] as M3; let exact = 0;
+  own.forEach((o, i) => {
+    const R = rel[i]!.R, D = [o.I[0], 0, 0, 0, o.I[1], 0, 0, 0, o.I[2]] as M3, Iw = mul(mul(R, D), T(R)), x: V3 = [o.c[0] - centre[0], o.c[1] - centre[1], o.c[2] - centre[2]], xx = x[0] * x[0] + x[1] * x[1] + x[2] * x[2];
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) I[a * 3 + b] += Iw[a * 3 + b]! + o.m * ((a === b ? xx : 0) - x[a]! * x[b]!);
+    if (o.exact) exact += o.m / total;
+  });
+  return { centre, I, exact };
+}
 function simPart(leaf: Part, m: THREE.Matrix4, name: string): SimPart {
   const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); m.decompose(pos, q, sc);
   const b = boundsOfAll(leaf), c = b.getCenter(new THREE.Vector3()).applyMatrix4(m), e = new THREE.Euler().setFromQuaternion(q, 'XYZ'), turn: V3 = [e.x, e.y, e.z];
@@ -332,7 +370,7 @@ export function bodiesOf(things: Part | Assembly, fixed?: Part | Assembly): { bo
     // (each body its own budget of pieces, so one body made of thousands (an engine, a tyre's tread) does not leave the
     // next with none; and all of them a ceiling)
     let own = 0;
-    flatten(it.of, (f) => { if (own++ > 1500 || pieces++ > 20000) return false; const sp = simPart(f.leaf, m.clone().multiply(f.m), `${name}/${parts.length}`); parts.push(sp); const su = surfaceOf(f.over.mat ?? f.leaf.mat); fr = Math.min(fr, su.friction); re = Math.max(re, su.restitution); });
+    flatten(it.of, (f) => { if (own++ > 1500 || pieces++ > 20000) return false; const fm = m.clone().multiply(f.m), sp = simPart(f.leaf, fm, `${name}/${parts.length}`); sp.mass = massOf({ ...f.leaf, parts: [] }) * Math.abs(fm.determinant()); parts.push(sp); const su = surfaceOf(f.over.mat ?? f.leaf.mat); fr = Math.min(fr, su.friction); re = Math.max(re, su.restitution); });
     if (!parts.length) continue;
     const sc = new THREE.Vector3().setFromMatrixScale(m);
     bodies.push({ name, parts, mass: Math.max(1e-3, massOfAll(it.of) * Math.abs(sc.x * sc.y * sc.z)), friction: Number.isFinite(fr) ? fr : 0.5, restitution: re }); placed.push({ of: it0.of, m });

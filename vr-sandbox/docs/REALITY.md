@@ -375,6 +375,16 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   which no car holds: some part is drawn of it or at a size it is not; 12 of its materials are known only by family.
   Still to do in this step: resistance and conductance along a defined path, expansion, stiffness and strength of an
   assembly where a model holds; the physics bodies' inertia read from here rather than from their shapes alone.
+- **Step 7, fed into the physics.** A body of several pieces is now given to the rigid-body engine with its centre of
+  mass and inertia tensor from its pieces' own masses (`massPropsOf` in `sim.ts`, the same parallel-axis sum as
+  `madeof.ts`; each piece's own inertia exact for a box, a ball, a cylinder and a cone, a ring or a tube as the solid
+  cylinder round it), the centre moved by Jolt's offset-centre-of-mass shape. Before, Jolt took one density for the
+  whole body, so a steel cube joined to a pine cube balanced at the middle of their volume; now, set across a knife
+  edge there, the steel side goes down, and with one density it still balances (the test holds both). A body with any
+  piece of unknown mass keeps Jolt's own. What moved in the snapshot: the two agent boards, through the door, which is
+  a body of pieces of different materials: its swing now ends one physics step (1/60 s) later, so the plans end
+  1/60 s later, and the child's drawn path has one segment fewer (3 g of PVC line).
+  Still to do: resistance and conductance along a defined path, expansion, stiffness and strength of an assembly.
 - **Step 8, the first round done.** `src/nexus/evidence.ts` gives every node its own evidence, read from what it is: a
   law from its kind (definition or geometry exact, fundamental or derived law derived, approximation simplified, the rest
   empirical) with its validity as an assumption and its domain as its limits; a typed or chosen value given; a maker's,

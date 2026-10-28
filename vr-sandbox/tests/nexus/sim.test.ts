@@ -36,3 +36,29 @@ describe('let go: real physics over what is made', () => {
     const n = new Workshop({ parts: () => [] }); n.run('place cube named k at 0, 1 m, 0 size 10 mm'); expect(() => n.run('simulate 1 s')).toThrow(/physics engine is still loading/);
   });
 });
+
+import { massPropsOf, simulate, type SimThing } from '../../src/nexus/sim';
+
+describe('a body\'s centre of mass and inertia from its pieces\' own masses', () => {
+  // a 100 mm steel cube (7.85 kg) joined to a 100 mm pine cube (0.5 kg), side by side along x
+  const body = (masses: boolean): SimThing => ({ name: 'pair', mass: 8.35, friction: 0.6, restitution: 0, parts: [
+    { name: 'steel', kind: 'box', axis: 'y', dims: {}, local: { w: 0.1, h: 0.1, d: 0.1 }, at: [-0.05, 0.55, 0], turn: [0, 0, 0], ...(masses ? { mass: 7.85 } : {}) },
+    { name: 'pine', kind: 'box', axis: 'y', dims: {}, local: { w: 0.1, h: 0.1, d: 0.1 }, at: [0.05, 0.55, 0], turn: [0, 0, 0], ...(masses ? { mass: 0.5 } : {}) }] });
+  it('worked by hand: its centre where the masses put it, its inertia each cube\'s own plus m d²', () => {
+    const I3 = [1, 0, 0, 0, 1, 0, 0, 0, 1] as const, rel = body(true).parts.map((p) => ({ part: p, at: [p.at[0], 0, 0] as [number, number, number], R: [...I3] as never }));
+    const mp = massPropsOf(rel, 8.35)!, cx = (7.85 * -0.05 + 0.5 * 0.05) / 8.35;
+    expect(mp.centre[0]).toBeCloseTo(cx, 12);
+    // about z: each cube m(a² + a²)/12, plus its mass times its distance from the centre squared
+    const Izz = (8.35 * 0.02) / 12 + 7.85 * (-0.05 - cx) ** 2 + 0.5 * (0.05 - cx) ** 2;
+    expect(mp.I[8]).toBeCloseTo(Izz, 12); expect(mp.I[0]).toBeCloseTo((8.35 * 0.02) / 12, 12); expect(mp.exact).toBe(1);
+    // a piece of unknown mass: no answer, so the engine's own is used
+    expect(massPropsOf(body(false).parts.map((p, k) => ({ ...rel[k]!, part: p })), 8.35)).toBeNull();
+  });
+  it('set across a knife edge at the middle of their volume, the steel side goes down; one density for both would balance it', () => {
+    const edge = { at: [0, 0.25, 0] as [number, number, number], w: 0.01, h: 0.5, d: 0.3 };
+    const real = simulate(J, [body(true)], [edge], { seconds: 0.3 }), steel = real.parts.find((p) => p.name === 'steel')!, pine = real.parts.find((p) => p.name === 'pine')!;
+    expect(steel.at[1]).toBeLessThan(pine.at[1] - 0.03);
+    const even = simulate(J, [body(false)], [edge], { seconds: 2 }), s2 = even.parts.find((p) => p.name === 'steel')!, p2 = even.parts.find((p) => p.name === 'pine')!;
+    expect(Math.abs(s2.at[1] - p2.at[1])).toBeLessThan(0.01);
+  });
+});

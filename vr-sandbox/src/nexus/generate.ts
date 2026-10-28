@@ -920,7 +920,7 @@ export class Workshop {
     if (!this.J) throw new Error('The physics engine is still loading: say it again in a moment.');
     if (!(seconds > 0) || seconds > 60) throw new Error('Let it go for between a moment and 60 s.');
     const { made } = this.all(), things: SimThing[] = [], done = new Set<string>(), skipped: string[] = [];
-    const part = (m: Made) => ({ name: m.name, kind: m.kind, axis: m.axis, dims: m.dims, local: m.local, at: m.at, turn: m.turn });
+    const part = (m: Made) => ({ name: m.name, kind: m.kind, axis: m.axis, dims: m.dims, local: m.local, at: m.at, turn: m.turn, mass: m.mass });
     for (const g of this.groups.values()) {
       if (g.loose) continue; const ms = made.filter((m) => g.members.includes(m.name)); if (!ms.length || ms.some((m) => !m.matter)) continue;
       things.push({ name: g.name, parts: ms.map(part), mass: ms.reduce((t, m) => t + m.mass, 0), friction: Math.min(...ms.map((m) => m.matter!.friction)), restitution: Math.max(...ms.map((m) => m.matter!.restitution)) });
