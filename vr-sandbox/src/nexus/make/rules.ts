@@ -17,6 +17,8 @@ import type { Part } from '../kits';
 import { contacts, layout, type Node } from './space';
 import { leastDistance, meshClashes, trisOf, type Tris, type TriMesh } from './critic';
 import { leafGeometry } from '../view/kit3d';
+import { graphOf, groupsOf, temperaturesOf } from '../graph';
+import { matterOf } from '../matter';
 
 /** The most a material stands in service, °C (typical continuous ratings: makers' datasheets for each polymer family;
  *  metals and glass well above anything near an engine, given as where they begin to lose their strength or temper). */
@@ -139,13 +141,40 @@ export function heat(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => 
   }
   return out;
 }
+/** What heat conducted harms (step H of docs/REALITY.md, section 6): the heat gate above judges what a hot piece's heat
+ *  reaches across the air; a piece touching it, or touching what touches it, is reached through them. Each piece's steady
+ *  temperature from the thing's contact graph (`temperaturesOf`: hot pieces held, heat conducted by Fourier's law through
+ *  each contact, every piece losing to the air from its surface); a piece hotter than its material stands is said, with
+ *  the hot piece its heat comes from. */
+export function conducted(root: Part, already: Finding[] = []): Finding[] {
+  const g = graphOf(root), hotOf = (n: Node) => n.p.hot ?? n.parent?.p.hot;
+  const hot = new Map<number, number>(); g.pieces.forEach((p, i) => { const t = hotOf(p.node); if (t !== undefined && t > AMBIENT) hot.set(i, t); });
+  if (!hot.size) return [];
+  const { T } = temperaturesOf(g, hot, AMBIENT), groups = groupsOf(g), groupOf = new Map<number, number[]>(); for (const gr of groups) for (const i of gr) groupOf.set(i, gr);
+  // (a piece whose conductivity is not known carries nothing in the network, so it would read the air's temperature:
+  // never safe on that account; it is judged at the face it touches, as hot as the hottest thing it touches, and said)
+  const face = new Map<number, number>(); for (const e of g.edges) { face.set(e.a, Math.max(face.get(e.a) ?? -Infinity, T[e.b]!)); face.set(e.b, Math.max(face.get(e.b) ?? -Infinity, T[e.a]!)); }
+  const unknownK = (m: string | null) => !m || !(matterOf(m).props.find((x) => x.key === 'k')?.value! > 0);
+  const said = new Set(already.filter((f) => f.rule === 'heat').map((f) => f.pb)), out: Finding[] = [];
+  g.pieces.forEach((p, i) => {
+    const mat = p.mat ?? ''; if (hot.has(i) || !HARMED.test(mat)) return; const lim = MAX_SERVICE[mat] ?? Infinity, atFace = unknownK(p.mat) && face.has(i), Ti = atFace ? Math.max(T[i]!, face.get(i)!) : T[i]!; if (!(Ti > lim)) return;
+    const owner = ownerOf(p.node); if (said.has(owner.path)) return;
+    const src = (groupOf.get(i) ?? []).filter((j) => hot.has(j)).sort((x, y) => hot.get(y)! - hot.get(x)!)[0]; if (src === undefined) return;
+    // (named by what owns it, unless that is the whole thing checked: then by the piece itself)
+    const sp = g.pieces[src]!.node, so0 = ownerOf(sp), so = so0.parent ? so0 : sp; said.add(owner.path);
+    out.push({ rule: 'heat', a: so.p.name, b: owner.p.name, pa: so.path, pb: owner.path, at: p.node.box!.getCenter(new THREE.Vector3()).toArray() as [number, number, number],
+      says: `the ${p.name} (${mat}) reaches ${Ti.toFixed(0)} °C${atFace ? ' at the face it touches (its own conductivity not known)' : ''} through what it touches from the ${so.p.name} at ${hot.get(src)!.toFixed(0)} °C, over the ${lim} °C ${mat} stands: conducted, not across the air` });
+  });
+  return out;
+}
 /** All three, on a thing's surfaces as drawn. */
 /** …or only between what is named like `only` (a piece of it, or anything it is in) and everything: what moves, at one
  *  place in its motion. */
 export function rulesOf(root: Part, o: { touch?: number; only?: RegExp; /** or only what is under these places in the tree ("/12/3") */ within?: string[]; /** only what moves is tried (a pose in a motion): heat and clearance as at rest */ motion?: boolean } = {}): { findings: Finding[]; pieces: number } {
   const all = trianglesOf(root), w = o.within, on = o.only ? (m: Mesh3) => [...names(m.node)].some((n) => o.only!.test(n)) : w ? (m: Mesh3) => w.some((x) => m.node.path === x || m.node.path.startsWith(x + '/')) : null, ms = all;
   if (on) { const pair = (a: Mesh3, b: Mesh3) => on(a) || on(b), res = [...interference(ms, { ...o, pair }), ...(o.motion ? [] : [...clearances(ms, pair), ...heat(ms, pair)])]; return { findings: res, pieces: all.filter(on).length }; }
-  return { findings: [...interference(ms, o), ...clearances(ms), ...heat(ms)], pieces: ms.length };
+  const near = heat(ms);
+  return { findings: [...interference(ms, o), ...clearances(ms), ...near, ...conducted(root, near)], pieces: ms.length };
 }
 
 /** The rules through a motion: the thing made at each of `steps` places through it (a crank turned through a revolution,

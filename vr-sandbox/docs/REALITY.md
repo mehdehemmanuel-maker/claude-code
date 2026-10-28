@@ -648,3 +648,18 @@ next round of F.
 What flows through it finds from the geometry, nothing typed; the old id is an alias of `flow`, so a saved board moves
 on. `path.properties` stays, for what the engine does not yet: growth when warmed, the first yield, bending and
 buckling; its heat, current and axial stiffness are the engine's, and go when F's second round brings bending.
+
+**Step H, first round (2026-10-28): the heat gate by conduction.** The heat gate judged only what a hot piece's heat
+reaches across the air, and skipped anything touching it ("cooled by what it is bolted to"), so heat conducted was never
+judged. `temperaturesOf` (`graph.ts`): each piece's steady temperature over the contact graph, the hot pieces held,
+heat conducted by Fourier's law through each contact (the conductances `flowOver` uses, now one function,
+`edgeConductances`), every piece losing to the air from its surface by `heatLoss` (Holman's natural convection and
+radiation, its emissivity, else 0.9), linear and worked again from the temperatures it gives. `conducted` in
+`make/rules.ts`, run with the other rules: a piece hotter than its material stands is a heat finding, with the hot
+piece its heat comes from. A piece whose own conductivity is not known (rubbers, most polymers: not in the tables) would
+read the air's temperature, never safe on that account: it is judged at the face it touches, said. Checked on a rig: a
+pipe at 400 °C, a steel bracket on it settles at 309 °C, the rubber mount on the bracket is said at 309 °C over its
+80 °C; a rubber pad in the open is not. What it found, left as findings (design is parked): the car's oxygen sensor
+lead (PTFE) touches the 800 °C exhaust manifold, 284 °C over its 260 °C; the semi's fibreglass hood shell touches its
+700 °C turbine housing (a geometry fault: the hood is on the turbo) and a silicone gasket on that housing is over its
+230 °C (a turbo's gasket is metal). Still to do in H: placement's heat map and the loads reading the engine.

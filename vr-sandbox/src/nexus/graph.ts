@@ -13,6 +13,7 @@ import { contacts, layout, patchIn, type Node, type OBB } from './make/space';
 import type { Part } from './kits';
 import { matterOf } from './matter';
 import { solveSparseSPD } from './numeric';
+import { heatLoss } from '../engineering/thermal';
 import { apply } from './law';
 import { lawById } from './book';
 import { setting } from './lawgraph';
@@ -142,9 +143,12 @@ export interface Flow {
  * left out (step G splits pieces where it matters), and so is any contact resistance not given: the result is the
  * least the way can resist.
  */
-export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: number[], to: number[], o: { contact?: number } = {}): Flow {
-  const key = kind === 'heat' ? 'k' : kind === 'force' ? 'E' : 'conductivity', n = g.pieces.length, lacking: string[] = [];
-  const known = new Map<string, { v: number; ev: Evidence; span?: [number, number] } | null>(), prop = (m: string | null) => {
+type Known = { v: number; ev: Evidence; span?: [number, number] } | null;
+/** Each contact's conductance for what flows (by the book's law over each half, with the contact's own where given), and
+ *  each piece's figure, with how it is known: what `flowOver` and `temperaturesOf` both solve over. */
+export function edgeConductances(g: Graph, kind: 'heat' | 'current' | 'force', o: { contact?: number } = {}) {
+  const key = kind === 'heat' ? 'k' : kind === 'force' ? 'E' : 'conductivity', lacking: string[] = [];
+  const known = new Map<string, Known>(), prop = (m: string | null) => {
     if (!m) return null;
     if (!known.has(m)) {
       // (its own figure; else, known only by its family, the middle of the span its family's members here cover, as an
@@ -176,6 +180,11 @@ export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: num
     if (!(ga > 0) || !(gb > 0)) return 0;
     return 1 / (1 / ga + 1 / gb + (o.contact ? 1 / (o.contact * e.area) : 0));
   });
+  return { conductances, k0, known, law, refused, lacking, mid };
+}
+
+export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: number[], to: number[], o: { contact?: number } = {}): Flow {
+  const n = g.pieces.length, { conductances, k0, known, law, refused, lacking } = edgeConductances(g, kind, o);
   const G = conductances(k0.map((x) => x?.v ?? null));
   const end = new Map<number, number>(); for (const i of to) end.set(i, 0); for (const i of from) end.set(i, 1);
   // only pieces joined to an end through pieces that carry it
@@ -259,4 +268,29 @@ export function sliced(g: Graph, n: number, along?: THREE.Vector3): Graph {
   const slabAt = (i: number, at: V3) => { const a = axisOf[i]!; if (a.k < 0) return first[i]!; const t = new THREE.Vector3(...at).sub(a.c).dot(a.u) + a.L / 2; return first[i]! + Math.max(0, Math.min(a.m - 1, Math.floor((t / a.L) * a.m))); };
   for (const e of g.edges) edges.push({ ...e, a: slabAt(e.a, e.at), b: slabAt(e.b, e.at) });
   return { pieces, edges, bounds: g.bounds, worked: 0 };
+}
+
+/**
+ * Each piece's steady temperature (step H: the heat gate by conduction): the hot pieces held at their temperatures, heat
+ * conducted through every contact (as `flowOver`, by Fourier's law over each half), and every piece losing heat to the air
+ * round it from its surface (its covering box's), by natural convection and radiation (`heatLoss`: Holman's correlation,
+ * the material's emissivity, else 0.9), taken as linear and worked again from the temperatures it gives, a few rounds.
+ * A piece joined to nothing hot stays at the air's temperature.
+ */
+export function temperaturesOf(g: Graph, hot: Map<number, number>, ambient: number, o: { rounds?: number } = {}): { T: number[]; lacking: string[] } {
+  const { conductances, k0, lacking } = edgeConductances(g, 'heat'), G = conductances(k0.map((x) => x?.v ?? null));
+  const area = g.pieces.map((p) => { const h = p.node.obb!.h; return 8 * (h[0] * h[1] + h[1] * h[2] + h[0] * h[2]); }), size = g.pieces.map((p) => 2 * Math.max(...p.node.obb!.h));
+  const eps = g.pieces.map((p) => (p.mat ? matterOf(p.mat).props.find((x) => x.key === 'emissivity')?.value : undefined) ?? 0.9);
+  const nb: [number, number][][] = g.pieces.map(() => []); g.edges.forEach((e, q) => { if (G[q]! > 0) { nb[e.a]!.push([e.b, q]); nb[e.b]!.push([e.a, q]); } });
+  const free = g.pieces.map((_, i) => i).filter((i) => !hot.has(i)), at = new Map(free.map((i, r) => [i, r]));
+  let T = g.pieces.map((_, i) => hot.get(i) ?? ambient + (Math.max(...hot.values(), ambient) - ambient) / 2);
+  for (let r = 0; r < (o.rounds ?? 4); r++) {
+    // what each piece loses to the air per kelvin above it, at the temperature it was last found at
+    const Ga = T.map((t, i) => { const dT = t - ambient; return Math.abs(dT) < 1e-6 ? heatLoss(ambient + 1, area[i]!, size[i]!, eps[i]!, ambient) : heatLoss(t, area[i]!, size[i]!, eps[i]!, ambient) / dT; });
+    const entries: [number, number, number][] = [], b = new Array<number>(free.length).fill(0);
+    for (const i of free) { const row = at.get(i)!; let d = Ga[i]!; b[row]! += Ga[i]! * ambient; for (const [j, q] of nb[i]!) { d += G[q]!; const c = at.get(j); if (c !== undefined) entries.push([row, c, -G[q]!]); else b[row]! += G[q]! * hot.get(j)!; } entries.push([row, row, d]); }
+    const x = free.length ? solveSparseSPD(free.length, entries, b).x : [];
+    T = g.pieces.map((_, i) => hot.get(i) ?? x[at.get(i)!]!);
+  }
+  return { T, lacking };
 }
