@@ -271,6 +271,8 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'paths'); b.nodes.paths!.label = 'As a path: heat, current, force, warmed 50 K'; wire(b, 'path', 'says', 'paths', 'value');
     placeBlock(b, 'view.table', 0, 0, {}, 'pieces'); b.nodes.pieces!.label = 'Each piece on the path'; wire(b, 'path', 'pieces', 'pieces', 'rows');
     placeBlock(b, 'graph', 0, 0, {}, 'touch'); wire(b, 'all', 'assembly', 'touch', 'thing');
+    placeBlock(b, 'flow', 0, 0, { what: 'heat', from: 'steel block', to: 'the lowest pieces', drive: 50 }, 'heat'); b.nodes.heat!.label = 'Heat from the block down the rods, 50 K across'; wire(b, 'all', 'assembly', 'heat', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'temps'); b.nodes.temps!.label = 'Each piece\'s temperature'; wire(b, 'heat', 'pieces', 'temps', 'rows');
     placeBlock(b, 'view.table', 0, 0, {}, 'contacts'); b.nodes.contacts!.label = 'What touches what, read from the geometry'; wire(b, 'touch', 'edges', 'contacts', 'rows');
     return b;
   }],

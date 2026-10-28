@@ -587,3 +587,19 @@ looked at. Checked: three stacked cubes give three pieces, two contacts of 0.010
 a car is 1,523 pieces and 4,840 contacts in 0.26 s; twenty of it 30,460 pieces in 0.58 s, the car worked out once.
 Found: the car is 55 groups that do not touch each other, so some of its pieces float (to look at when design is back).
 Shown on the starter board What it is made of, and what it carries.
+
+**Step C, first round (2026-10-28).** `flowOver` in `graph.ts`, node `flow` (What flows through it): heat or current
+through any thing between two sets of its pieces over its contact graph, the ends chosen by what pieces are (the highest,
+the lowest, a name or a material), never a typed path. Each piece held at its middle; between two that touch, half of
+each from its middle to the middle of the patch they meet over, by each material's own conductivity (`matter.ts`), and
+the contact's conductance where given; the network solved at once by conjugate gradients (`solveSparseSPD`, added to
+`numeric.ts`), with the balance at every piece said. The contact patch is now no more than either piece's own section
+across it (a 12 mm rod's end is 113.1 mm², not its box's 144), and where pieces meet is the patch's middle, not halfway
+between their centres (which had put a block's contact 58 mm down inside the rod under it and doubled the answer).
+Checked by hand: three copper cubes, top to bottom, 0.2 / (388 × 0.01) K/W, exactly a 200 mm bar (the node's own test);
+the steel block on its copper and aluminium rods, 3.618 K/W, the same as the halves and branches worked out apart. A car
+through its 1,523 pieces in 0.75 s (540 pieces with no conductivity known, said).
+Also: the one test made quicker (a law's back-solve bracketed: 8.4 s to 1.0 s; the evidence check that could never
+fail removed); `UPDATE_DOCS=quick` writes the dates and the catalogue in seconds.
+Still to do in step C: the contact patch for round pieces meeting side on, and step D (each edge's figure through the
+law book, so its ± and evidence come with it).

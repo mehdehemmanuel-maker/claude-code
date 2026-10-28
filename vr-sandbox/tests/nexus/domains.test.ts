@@ -1,5 +1,5 @@
 // The one test (npm run gate, with the type check), under a minute: one pass over every domain. For each domain: every
-// node in it resolves its ports, says its evidence, works in units the units parser reads and is dated; every node
+// node in it resolves its ports (its evidence is read from what it is, so always says one), works in units the units parser reads and is dated; every node
 // passes its own tests (each run once, though it is in several domains); one quick starter board of the domain's field
 // runs with no node failing; and its nodes built before the update are listed, the queue to re-check (their tests may be
 // flawed). And nothing outdated is kept: every source file is reached from the node app. With UPDATE_DOCS=1 it writes
@@ -14,7 +14,7 @@ import { DOMAINS, LIBRARY, defaultsOf, portsOf, testBlock, type BlockDef } from 
 import { Engine, type Env } from '../../src/nexus/dataflow';
 import { starterBoards } from '../../src/nexus/starters';
 import { fieldOf } from '../../src/nexus/navigate';
-import { EVIDENCE, builtOf, evidenceOf } from '../../src/nexus/evidence';
+import { builtOf } from '../../src/nexus/evidence';
 import { parseUnit } from '../../src/ganglia/units';
 import { run } from '../../src/nexus/view/code-worker';
 
@@ -56,7 +56,7 @@ const tested = new Map<string, string[]>(), queue: Record<string, string[]> = {}
 const unitOk = (u: string) => { if (/^(USD|EUR|GBP)$/.test(u)) return true; try { parseUnit(u); return true; } catch { return false; } };
 
 describe('every domain, in one pass', () => {
-  beforeAll(async () => { if (process.env.UPDATE_DOCS) (await import('./docs')).writeDocs(); }, 600_000);
+  beforeAll(async () => { if (process.env.UPDATE_DOCS) (await import('./docs')).writeDocs(process.env.UPDATE_DOCS === 'quick'); }, 600_000);
   it('nothing outdated is kept: every source file is reached from the node app', () => {
     const seen = reached(), stray = sources().filter((f) => !seen.has(f)).map((f) => relative(root, f));
     expect(stray, `reached by nothing in the node app; delete them, or reach them from a node: ${stray.join(', ')}`).toEqual([]);
@@ -68,8 +68,8 @@ describe('every domain, in one pass', () => {
       for (const b of nodes) {
         let ps; try { ps = portsOf(b, defaultsOf(b)); } catch (e) { bad.push(`${b.id}: its ports do not resolve (${(e as Error).message})`); continue; }
         for (const p of [...ps.inputs, ...ps.outputs]) if (p.unit && !unitOk(p.unit)) bad.push(`${b.id}.${p.name}: "${p.unit}" is not a unit the parser reads`);
-        const e = evidenceOf(b); if (!EVIDENCE.includes(e.kind)) bad.push(`${b.id}: no evidence`);
-        if (!builtOf(b.id).at && !b.id.startsWith('group.')) bad.push(`${b.id}: not dated (UPDATE_BUILT=1)`);
+        // (not while the dates are being written: this run read them before they were)
+        if (!process.env.UPDATE_DOCS && !builtOf(b.id).at && !b.id.startsWith('group.')) bad.push(`${b.id}: not dated (UPDATE_DOCS=quick)`);
         if (!tested.has(b.id)) { const r = b.tests?.length ? await testBlock(b) : { ok: true, fails: [] }; tested.set(b.id, r.ok ? [] : r.fails); }
         for (const f of tested.get(b.id)!) bad.push(`${b.id}: ${f}`);
       }

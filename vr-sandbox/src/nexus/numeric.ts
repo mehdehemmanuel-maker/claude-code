@@ -305,6 +305,25 @@ export function solveLinear(A: number[][], b: number[]): number[] | null {
   return x;
 }
 
+/** A large sparse symmetric positive-definite system (a network's conductances: each row a junction's balance) by
+ *  conjugate gradients, preconditioned by its diagonal: entries as row, column, value (both halves of a symmetric pair
+ *  given), solved to a relative residual; with whether it converged, its steps and the residual it reached. */
+export function solveSparseSPD(n: number, entries: [number, number, number][], b: number[], o: { tol?: number; maxSteps?: number } = {}): { x: number[]; converged: boolean; steps: number; residual: number } {
+  const rows: [number, number][][] = Array.from({ length: n }, () => []), diag = new Array<number>(n).fill(0);
+  for (const [i, j, v] of entries) { rows[i]!.push([j, v]); if (i === j) diag[i]! += v; }
+  const mul = (x: number[]) => rows.map((r) => r.reduce((s, [j, v]) => s + v * x[j]!, 0)), dot = (a: number[], c: number[]) => a.reduce((s, v, i) => s + v * c[i]!, 0);
+  const tol = o.tol ?? 1e-10, most = o.maxSteps ?? Math.max(100, 10 * n), x = new Array<number>(n).fill(0), bn = Math.sqrt(dot(b, b)) || 1;
+  let r = [...b], z = r.map((v, i) => v / (diag[i] || 1)), p = [...z], rz = dot(r, z), k = 0, res = Math.sqrt(dot(r, r)) / bn;
+  for (; k < most && res > tol; k++) {
+    const q = mul(p), a = rz / (dot(p, q) || 1e-300);
+    for (let i = 0; i < n; i++) { x[i]! += a * p[i]!; r[i]! -= a * q[i]!; }
+    res = Math.sqrt(dot(r, r)) / bn; if (res <= tol) { k++; break; }
+    z = r.map((v, i) => v / (diag[i] || 1)); const rz2 = dot(r, z), beta = rz2 / (rz || 1e-300); rz = rz2;
+    p = z.map((v, i) => v + beta * p[i]!);
+  }
+  return { x, converged: res <= tol, steps: k, residual: res };
+}
+
 // Dormand–Prince 5(4) tableau
 const DP_C = [0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1, 1];
 const DP_A = [[], [1 / 5], [3 / 40, 9 / 40], [44 / 45, -56 / 15, 32 / 9], [19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729], [9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656], [35 / 384, 0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84]];
