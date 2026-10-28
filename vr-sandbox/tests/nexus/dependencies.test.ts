@@ -12,6 +12,7 @@ import { BOOK, KEPT, KINDS, SLICE, UNIVERSAL } from '../../src/nexus/book';
 import { QUANTITIES, quantityOf } from '../../src/nexus/quantities';
 import { crossCheck } from '../../src/nexus/lawgraph';
 import { FIELDS } from '../../src/nexus/book/fields';
+import { MATTER, matterOf } from '../../src/nexus/matter';
 import { LIBRARY } from '../../src/nexus/blocks';
 
 const root = join(__dirname, '../..'), update = !!process.env['UPDATE_DEPS'];
@@ -25,8 +26,10 @@ const TABLES: { table: string; file: string; names: string[]; holds: string }[] 
   { table: 'density', file: 'src/nexus/mass.ts', names: ['DENSITY', 'massOf'], holds: 'density by the ids parts carry (typical)' },
   { table: 'composition', file: 'src/nexus/elements.ts', names: ['makeup', 'elementsOf', 'makeupSays', 'ELEMENTS', 'formula'], holds: 'alloys, formulas, blends down to elements, by the ids parts carry' },
   { table: 'service limit', file: 'src/nexus/make/rules.ts', names: ['MAX_SERVICE'], holds: 'most service temperature, °C, by the ids parts carry' },
-  { table: 'strength map', file: 'src/nexus/loads.ts', names: ['strengthOf'], holds: 'part id → handbook grade for yield, ultimate, E (14 mapped)' },
-  { table: 'friction map', file: 'src/nexus/sim.ts', names: ['surfaceOf'], holds: 'part id → handbook grade for friction and bounce, by spelling' },
+  { table: 'the material system', file: 'src/nexus/matter.ts', names: ['matterOf', 'handbookOf', 'MATTER', 'densityOf', 'matterSays'], holds: 'every part material id: its family, what it is exactly or that it is unspecified, its handbook grade (its own, or a stand-in, said); every property with its source and evidence' },
+  { table: 'elements', file: 'src/data/periodic.ts', names: ['PERIODIC', 'PERIODIC_SOURCE'], holds: '118 elements: weight, density, melting and boiling points (secondary: compiled from Wikipedia citing CRC and IUPAC)' },
+  { table: 'wood species', file: 'src/data/woods.ts', names: ['WOODS', 'woodDensity'], holds: 'species by the Wood Handbook: specific gravity, MOE, MOR at 12 % moisture' },
+  { table: 'mixes', file: 'src/data/mixes.ts', names: ['MIXES', 'mixDensity'], holds: 'mixes by what goes into a cubic metre: their density and make-up follow' },
   { table: 'words to matter', file: 'src/nexus/kinds/core.ts', names: ['MATTER'], holds: 'a word → inventory id, density, label' },
   { table: 'spring wires', file: 'src/engineering/springs.ts', names: ['SPRING_WIRES'], holds: 'ASTM spring wires: A, m, G, E, density' },
   { table: 'adhesives', file: 'src/engineering/joining.ts', names: ['ADHESIVES'], holds: 'adhesives by the handbook categories' },
@@ -91,6 +94,10 @@ function mapText(): string {
     const readers = src.filter((x) => x.f !== t.file && reads(x)).map((x) => `\`${x.f.replace(/^src\//, '')}\``);
     L.push(`| ${t.table} | \`${t.file}\` | ${t.holds} | ${readers.length ? readers.join(', ') : '**nothing**'} |`);
   }
+  // ---- the materials parts carry ----
+  const ms = Object.keys(MATTER).sort().map(matterOf), has = (m: ReturnType<typeof matterOf>, k: string) => m.props.find((p) => p.key === k);
+  L.push('', '## The materials parts carry', '', `${ms.length} material ids in the one table (\`MATTER\` in \`src/nexus/matter.ts\`): ${ms.filter((m) => m.specified).length} specified (a grade, a species, a type, a mix), ${ms.filter((m) => !m.specified).length} known only by their family (said unspecified). Handbook grade: ${ms.filter((m) => m.handbook?.same).length} their own, ${ms.filter((m) => m.handbook && !m.handbook.same).length} a stand-in (said), ${ms.filter((m) => !m.handbook).length} none. With a density: ${ms.filter((m) => has(m, 'density')).length}; a strength: ${ms.filter((m) => has(m, 'yield') || has(m, 'ultimate')).length}; a friction: ${ms.filter((m) => has(m, 'friction')).length}; a specific heat: ${ms.filter((m) => has(m, 'c')).length}; a melting point: ${ms.filter((m) => has(m, 'melts')).length}; a make-up down to elements: ${ms.filter((m) => Object.keys(m.makeup.elements).length).length}. Tables that disagree on one property: ${ms.filter((m) => m.disagreements.length).length}.`, '', '| Material | Family | Specified | Handbook grade | Density | Strength | Disagreements |', '| --- | --- | --- | --- | --- | --- | --- |');
+  for (const m of ms) { const d = has(m, 'density'), st = has(m, 'yield') ?? has(m, 'ultimate'); L.push(`| \`${m.id}\` ${m.is} | ${m.family} | ${m.specified ? 'yes' : '**no**'} | ${m.handbook ? `${m.handbook.name}${m.handbook.same ? '' : ' (stand-in)'}` : '—'} | ${d ? `${+d.value.toPrecision(5)} (${d.evidence})` : '**none**'} | ${st ? `${+(st.value / 1e6).toPrecision(4)} MPa (${st.evidence})` : '—'} | ${m.disagreements.join('; ') || '—'} |`); }
   // ---- numeric ----
   L.push('', '## Where numbers are solved for or stepped in time', '', 'The numeric layer is `src/nexus/numeric.ts`: each answer with its method, whether it converged, its steps and its error.', '', '| What | Where | Through the numeric layer |', '| --- | --- | --- |');
   for (const n of NUMERIC) { const x = src.find((s) => s.f === n.at), found = !!x && n.find.test(x.text); L.push(`| ${n.what} | \`${n.at}\` | ${!found ? '**not found**' : n.stays ? `no: ${n.stays}` : 'yes'} |`); }

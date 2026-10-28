@@ -10,7 +10,7 @@ What a board is built from: the node library, its laws, its seeds (nodes built f
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Node library | 202 | the library panel | `src/nexus/blocks.ts` |
+| Node library | 203 | the library panel | `src/nexus/blocks.ts` |
 | Laws | 323 | the library panel | `src/nexus/law.ts` |
 | Seeds | 21 | the library panel | `src/nexus/seeds.ts` |
 
@@ -30,7 +30,7 @@ Real things by their makers' figures: machines, powertrains, the inventory of wh
 | --- | --- | --- | --- |
 | Machines | 7 | `vehicle.model` (its model), `engine.run` (its model); `drive`, `vehicle` (in their code) | `src/nexus/machines.ts` |
 | Powertrains | 1 | `drive`, `engine.run` (in their code) | `src/nexus/power/drive.ts` |
-| Inventory | 2,397 | the mat of 19 nodes (`shape.box`, `shape.cyl`, `shape.sphere`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
+| Inventory | 2,397 | the mat of 20 nodes (`matter`, `shape.box`, `shape.cyl`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
 
 ### Parts
 
@@ -79,7 +79,7 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 | Flow | Nodes | Which |
 | --- | --- | --- |
-| Worked once: from its inputs, again only when they change (most nodes) | 510 | the rest |
+| Worked once: from its inputs, again only when they change (most nodes) | 511 | the rest |
 | With the clock: again as the board's time goes on | 2 | Approved, Clock |
 | Worked once, played by the clock: a simulation run once and posed at any time | 3 | Agent, Follow a path, Let it go |
 | Many at once: one thing for each row or point: spawned, scattered, patterned | 6 | City, Neighbourhood, Pattern of, Road system, Scatter, Spawn |
@@ -134,4 +134,4 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 ## Nodes no starter board uses yet
 
-73 of 223 (laws aside): Add, Ask Claude, Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Integral, Internal rate of return, Keep where, LED resistor, Laws by field, List of numbers, Machining time, Margin and markup, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, Quantity, RC filter corner, Ring, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Slope, Solar panel, a day, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Tether, Text, Through time, Tube, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What each touches, Winding, Wound roll, Yes / no, Zone.
+74 of 224 (laws aside): Add, Ask Claude, Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Integral, Internal rate of return, Keep where, LED resistor, Laws by field, List of numbers, Machining time, Margin and markup, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, Quantity, RC filter corner, Ring, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Slope, Solar panel, a day, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Tether, Text, Through time, Tube, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, Zone.

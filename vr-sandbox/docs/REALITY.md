@@ -331,3 +331,30 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   Still to cover, beyond each field's core: biomechanics, plasticity beyond yield, turbulence beyond friction factors,
   electrochemistry of cells, nuclear reactions, statistical mechanics past the Boltzmann factor; each to be listed in
   `fields.ts` from its textbook before its laws are added.
+- **Step 6, the first round done.** `src/nexus/matter.ts` is the one material system: one explicit table (`MATTER`)
+  from every material id a part carries (114) to its family, what it is as exactly as it is known, whether that is a
+  grade, species, type or mix (66) or only a family (48, said unspecified, with the span its family's specified members
+  cover), and its handbook grade, its own (19) or the nearest the handbook holds (50, every number from it said as a
+  stand-in's). `matterOf` gives every property with its value, unit, source and evidence, and keeps two tables'
+  disagreement rather than choosing (one found: phenolic, 1300 kg/m³ typical against the handbook's 1735 for a filled
+  billiard-ball resin). The friction map's spelling matches are gone (they gave tissue and tile titanium's friction,
+  platinum PMMA's); strength comes only from a material's own grade, so a stand-in never lends its strength; `steel-low`
+  is one steel throughout (its make-up was AISI 1020's while its strength was 1018's: now 1018's, ASTM A108). The
+  elements (`data/periodic.ts`, 118): weight, density, melting and boiling points from a secondary compilation (Wikipedia
+  citing CRC and IUPAC; PubChem was not reachable from here), said so, the superheavy elements' predicted figures left
+  out; a material that is one element now weighs that element's density (a silver or tin part weighed nothing). Wood
+  species from the Wood Handbook (`data/woods.ts`: Douglas-fir, northern red oak; density worked out from specific gravity
+  at 12 % moisture; MOE and MOR of clear wood, said not a grade's); mixes by the cubic metre (`data/mixes.ts`: a 25 MPa
+  concrete, its density the sum of its parts and its make-up from them, down to Portland cement's oxides). The house
+  seeds now say their materials: red oak for the oak, MDF for the door leaf and the cabinets, Douglas-fir for the door
+  lining, the concrete mix for the sidewalk (each the seed's choice, changed on its node). The baseline moved only by
+  that: a door 18.6 → 25.2 kg (MDF at 750 kg/m³ against an unspecified 500), a bed 116.9 → 111.7 kg (red oak 705.6
+  against 750), roads lighter by the mix's 2335 kg/m³ against 2400; the agents' timings by the heavier door's swing; more
+  kitchen pieces past what a body can lift. Node `matter` opens any material. The dependency map lists every material
+  with its family, whether it is specified, its handbook grade, its density and strength with their evidence.
+  A stand-in must fit the property it lends: the gate caught a car held still by friction starting to slide, because
+  the brake pads' friction material and epoxy had been given the handbook's only thermoset, a filled phenolic billiard
+  ball (friction 0.06); neither has a stand-in now, and each says its friction is typical.
+  Still to do in this step: the house's walls and frame (the wall node's material), reinforcing in the concrete,
+  thermal and fusion properties for the stand-ins' own grades, polymers' own handbook entries (50 stand-ins remain),
+  composites' stiffness as bounds; then step 7 opens any thing as its materials all the way down.

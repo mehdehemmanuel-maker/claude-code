@@ -5,6 +5,10 @@
 import { latheArea, latheVolume, loftArea, loftVolume, prismArea, prismVolume, tubeLength, tubeVolume } from './form';
 import { surfaceArea } from './surface';
 import type { Part, Shape } from './kits';
+import { pureElement } from './elements';
+import { PERIODIC } from '../data/periodic';
+import { WOODS, woodDensity } from '../data/woods';
+import { MIXES, mixDensity } from '../data/mixes';
 
 /** Densities, kg/m³ (typical values). */
 export const DENSITY: Record<string, number> = {
@@ -19,8 +23,20 @@ export const DENSITY: Record<string, number> = {
   zirconia: 6050, pzt: 7600, 'ntc-ceramic': 5000,
   // (a phenolic resin about 1,300 kg/m³ (Bakelite's); a semi-metallic pad's friction material about 2,400, an estimate)
   phenolic: 1300, 'friction-composite': 2400,
+  // MDF: EN 622-5 typical (the handbook's wood.mdf, an estimate)
+  mdf: 750,
   tissue: 1050, foliage: 1.5, battery: 1500, petrol: 740, diesel: 840, bread: 250, cheese: 1100, ham: 1050, tomato: 1000, lettuce: 400, butter: 911, chicken: 1050, egg: 1030, avocado: 1000, bacon: 1000,
 };
+/** A material's density, kg/m³: the table's; else, for a material that is one element (silver, tin, nickel), the
+ *  element's (src/data/periodic.ts), so a part of it is not weightless. Undefined where neither knows. */
+export function densityKg(mat: string): number | undefined {
+  if (DENSITY[mat] !== undefined) return DENSITY[mat];
+  const el = pureElement(mat), d = el ? PERIODIC[el]?.density : undefined;
+  return d ?? undefined;
+}
+// the species and the mixes: worked out, from a species' specific gravity, from what goes into a mix's cubic metre
+for (const [id, w] of Object.entries(WOODS)) DENSITY[id] = woodDensity(w);
+for (const [id, m] of Object.entries(MIXES)) DENSITY[id] = mixDensity(m);
 const vol = (s: Shape): number => {
   if ('box' in s) return s.box[0] * s.box[1] * s.box[2];
   if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return (Math.PI * h * (r * r + r * r2 + r2 * r2)) / 3; }
@@ -72,6 +88,7 @@ export function massOf(p: Part): number {
   // (less what is drilled out of it: each hole its own cylinder, or its n-sided prism)
   // (only as deep as it runs inside the shape: a bore along a pushrod drilled through a gasket takes the gasket's thickness)
   const holes = (p.cuts ?? []).reduce((v, c) => v + (c.n ? (c.n / 2) * Math.sin((2 * Math.PI) / c.n) : Math.PI) * c.r * c.r * inside(p.shape, c), 0);
-  const own = p.kg !== undefined ? p.kg : p.shape && p.mat && DENSITY[p.mat] ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * DENSITY[p.mat]! * (p.fill ?? 1) : 0;
+  const rho = p.mat ? densityKg(p.mat) : undefined;
+  const own = p.kg !== undefined ? p.kg : p.shape && rho ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * rho * (p.fill ?? 1) : 0;
   return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
 }

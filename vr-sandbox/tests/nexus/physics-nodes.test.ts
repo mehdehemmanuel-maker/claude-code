@@ -39,7 +39,8 @@ describe('let it go', () => {
     expect(Math.abs(period - expected) / expected).toBeLessThan(0.03);
   }, 120_000);
   it('a piece\'s friction and bounce come from the materials table by what it is made of, else are said to be typical', () => {
-    expect(surfaceOf('oak').from).toBe('wood.birch-plywood'); expect(surfaceOf('steel-low').from).toBe('steel.a36'); expect(surfaceOf('unobtainium').from).toMatch(/typical/);
+    // oak's own grade is not in the handbook: birch plywood's numbers stand in, and say so; low-carbon steel is 1018 throughout
+    expect(surfaceOf('oak').from).toBe('wood.birch-plywood (a stand-in)'); expect(surfaceOf('steel-low').from).toBe('steel.1018-cd'); expect(surfaceOf('unobtainium').from).toMatch(/typical/);
   });
 });
 

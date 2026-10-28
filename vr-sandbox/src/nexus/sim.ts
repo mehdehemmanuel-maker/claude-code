@@ -16,12 +16,13 @@
 // is turned by the motor's own torque at the speed it turns: T = K_t (V - K_t w) / R - T_f, against what holds it,
 // equal and opposite, so the current it draws and the energy it takes are its datasheet's at every step.
 
+import { handbookOf } from './matter';
 import type { Jolt } from './realize';
 import { eulerOf, matOf, type Axis, type M3, type V3 } from './generate';
 import * as THREE from 'three';
 import { boundsOfAll, flatten, isAssembly, massOfAll, matrixOf, place, type Assembly } from './assembly';
 import type { Part } from './kits';
-import { MATERIALS, type Material } from '../data/materials';
+import type { Material } from '../data/materials';
 
 
 export interface SimPart { name: string; kind: string; axis: Axis; dims: Record<string, number>; local: { w: number; h: number; d: number }; at: V3; turn: V3 }
@@ -279,11 +280,10 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
 // clock plays it back.)
 
 /** A piece's material in the friction table (data/materials.ts) by what its id says it is; else typical values (an estimate). */
-const SURFACE: [RegExp, string][] = [[/^stainless/, 'stainless.304'], [/^cast-iron/, 'cast-iron.gray-30'], [/^steel|iron/, 'steel.a36'], [/^al-|alumin/, 'aluminum.6061-t6'], [/copper/, 'copper.c110'], [/brass|bronze/, 'brass.c360'], [/titan|^ti/, 'titanium.ti6al4v'], [/mdf/, 'wood.mdf'], [/wood|oak|pine|birch|ply|walnut|maple/, 'wood.birch-plywood'], [/nylon|pa6/, 'polymer.nylon-microcarbon'], [/pmma|acryl|^pc$|^pp$|pvc|abs|pla|petg|^pe|polymer/, 'polymer.pmma'], [/rubber|tpu|tyre/, 'rubber.natural'], [/glass/, 'glass.soda-lime'], [/concrete|asphalt|stone|granite|marble/, 'concrete.c30'], [/brick|tile|ceramic|porcelain/, 'ceramic.clay-brick'], [/foam/, 'foam.eva'], [/cork/, 'cork.agglomerated'], [/soil|sand|earth/, 'ground.soil'], [/cfrp|carbon/, 'composite.cfrp'], [/gfrp|fibreglass|fiberglass/, 'composite.gfrp']];
-const byMat = new Map(MATERIALS.map((m) => [m.id, m]));
 export function surfaceOf(mat: string | undefined): { friction: number; restitution: number; from: string } {
-  const id = SURFACE.find(([re]) => re.test(mat ?? ''))?.[1], m: Material | undefined = id ? byMat.get(id) : undefined;
-  return m ? { friction: m.friction, restitution: m.restitution, from: m.id } : { friction: 0.5, restitution: 0.3, from: 'typical (an estimate)' };
+  // the one table (src/nexus/matter.ts): the material's own grade, or the nearest the handbook holds, said as a stand-in
+  const h = handbookOf(mat), m: Material | undefined = h?.m;
+  return m ? { friction: m.friction, restitution: m.restitution, from: h!.same ? m.id : `${m.id} (a stand-in)` } : { friction: 0.5, restitution: 0.3, from: 'typical (an estimate)' };
 }
 /** One piece as a part of a body, where it stands in the world. */
 function simPart(leaf: Part, m: THREE.Matrix4, name: string): SimPart {

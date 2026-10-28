@@ -16,6 +16,7 @@ import { QUANTITIES, quantityById, quantityOf } from './quantities';
 import { BOOK, KEPT, KINDS as LAW_KINDS } from './book';
 import { TAGS } from './book/tags';
 import { FIELDS } from './book/fields';
+import { MATTER, matterOf } from './matter';
 import { apply, type Law } from './law';
 import { varsOf } from './term';
 import { breakdown, chain, setting, solve as solveLaw, valueIn, type Known } from './lawgraph';
@@ -496,6 +497,14 @@ const BUILT_IN: BlockDef[] = [
       return { value: valueIn(r.result, unit), status: r.weakest ?? 'unknown', chain: breakdown(r.result).join('\n'), steps: r.steps.map((st) => ({ law: st.law, name: st.lawName, kind: st.kind, solved: st.solved, gives: st.gives, value: st.value, unit: st.unit, status: st.status, ...(st.note ? { note: st.note } : {}) })), assumed: r.assumed, disagreements: r.disagreements, checks: r.agreements, alternatives: r.alternatives, says: `${r.says}; the weakest kind of law in it: ${r.weakestKind ?? 'none'}` };
     },
     tests: [{ inputs: {}, outputs: { value: 4.903325e-4 }, rel: 1e-9 }, { set: { knowns: 'period = 2 s', target: 'length' }, inputs: {}, outputs: { value: 0.9936213855661314 }, rel: 1e-9 }], sources: [SIBROCHURE] }),
+  def({ id: 'matter', name: 'What a material is', kind: 'input', ability: 'measure', domains: ['materials', 'science', 'mechanical'], says: 'What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its value, unit, source and how it is known: the handbook\'s, a standard\'s, typical, estimated, worked out, or a stand-in (the nearest grade the handbook holds, said as such)',
+    settings: [{ key: 'mat', label: 'Material', type: 'choice', default: 'steel-low', choices: Object.keys(MATTER).sort() }],
+    ports: { inputs: [P('mat', 'text', { optional: true, label: 'material (wired: over the setting)' })], outputs: [P('is', 'text'), P('specified', 'boolean'), P('props', 'table'), P('elements', 'table'), P('makeup', 'text'), P('disagreements', 'list<text>'), P('says', 'text')] },
+    run: (i, c) => {
+      const m = matterOf(String(i.mat ?? c.set.mat ?? 'steel-low'));
+      return { is: m.is, specified: m.specified, props: m.props.map((p) => ({ property: p.name, value: p.value, unit: p.unit, evidence: p.evidence, source: p.source, ...(p.note ? { note: p.note } : {}) })), elements: Object.entries(m.makeup.elements).sort((a, b) => b[1] - a[1]).map(([el, pct]) => ({ element: el, percent: pct })), makeup: m.makeup.says, disagreements: m.disagreements, says: `${m.is}${m.specified ? '' : ': unspecified, only its family is known'}${m.handbook ? `; ${m.handbook.same ? 'its handbook grade' : 'standing in'}: ${m.handbook.name}` : ''}${m.span ? `; its family spans ${Object.entries(m.span).filter(([k]) => k === 'density').map(([, s]) => `${s[0]} to ${s[1]} kg/m³`).join('')}` : ''}` };
+    },
+    tests: [{ set: { mat: 'steel-low' }, inputs: {}, outputs: { specified: true } }, { set: { mat: 'wood' }, inputs: {}, outputs: { specified: false } }], sources: [{ cite: 'the material tables of src/nexus/matter.ts, each value with its own source', kind: 'database' }] }),
   def({ id: 'law.fields', name: 'Laws by field', kind: 'input', ability: 'measure', domains: ['science'], says: 'Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas)',
     settings: [{ key: 'field', label: 'Field (blank: all)', type: 'choice', default: '', choices: ['', ...FIELDS.map((f) => f.field)] }],
     ports: { inputs: [], outputs: [P('rows', 'table'), P('missing', 'list<text>'), P('says', 'text')] },

@@ -13,7 +13,7 @@
 //
 // Each row says its figure, the limit it is held to, the factor between and where every number comes from.
 
-import { MATERIALS } from '../data/materials';
+import { handbookOf } from './matter';
 import { SPRING_WIRES, allowableShear, shearStress, solidLength, springRate, surgeFrequency, wireUltimate, type CoilSpring } from '../engineering/springs';
 import { conRod, cylinderHead, engineDims, headPiece, pistonAssembly, threadFor, type EngineSpec } from './engines';
 import type { Part } from './kits';
@@ -31,9 +31,9 @@ const mm = (x: number) => (x * 1000).toFixed(2), MPa = (x: number) => (x / 1e6).
 
 /** A part's material's strength from the handbook table (src/data/materials.ts), where the part's material is one it
  *  holds: yield, ultimate, Young's modulus. Null where it holds none: said, never guessed. */
-const HANDBOOK: Record<string, string> = { 'steel-alloy': 'steel.4140-qt', 'steel-low': 'steel.1018-cd', 'stainless-304': 'stainless.304', 'stainless-316': 'stainless.316', 'cast-iron': 'cast-iron.gray-30', 'al-6061': 'aluminum.6061-t6', 'al-7075': 'aluminum.7075-t6', 'al-5052': 'aluminum.5052-h32', 'al-2024': 'aluminum.2024-t3', copper: 'copper.c110', brass: 'brass.c360', 'steel-spring': 'steel.music-wire', 'steel-chrome': 'steel.52100', titanium: 'titanium.ti6al4v' };
 export function strengthOf(mat: string | undefined): { yield: number; ultimate: number; E: number; name: string; source: string } | null {
-  const m = MATERIALS.find((x) => x.id === HANDBOOK[mat ?? '']); return m ? { yield: m.yield, ultimate: m.ultimate, E: m.E, name: m.name, source: m.source } : null;
+  // only the handbook grade that is this material: a stand-in's strength is not this material's (src/nexus/matter.ts)
+  const h = handbookOf(mat), m = h?.same ? h.m : undefined; return m ? { yield: m.yield, ultimate: m.ultimate, E: m.E, name: m.name, source: m.source } : null;
 }
 
 // ---- a spring ---------------------------------------------------------------------------------------------------------------

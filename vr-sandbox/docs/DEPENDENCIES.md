@@ -548,20 +548,143 @@ Each law's worked example given, its output sought through the other laws alone 
 
 | Table | Defined in | Holds | Read by |
 | --- | --- | --- | --- |
-| handbook materials | `src/data/materials.ts` | E, ν, yield, ultimate, elongation, conductivity, friction, restitution, colour; source and confidence; ids like steel.a36 | `nexus/blocks.ts`, `nexus/generate.ts`, `nexus/loads.ts`, `nexus/machines.ts`, `nexus/navigate.ts`, `nexus/sim.ts` |
-| thermal | `src/engineering/thermal.ts` | c, k, emissivity by handbook id | `engineering/dcmotor.ts`, `engineering/motorrun.ts`, `nexus/blocks.ts`, `nexus/generate.ts`, `nexus/heatflow.ts` |
-| fusion | `src/engineering/fusion.ts` | melting, expansion, bond, base element by handbook id | `nexus/generate.ts` |
-| density | `src/nexus/mass.ts` | density by the ids parts carry (typical) | `nexus/assembly.ts`, `nexus/blocks.ts`, `nexus/components.ts`, `nexus/drivetrain.ts`, `nexus/engines.ts`, `nexus/gauntlet.ts`, `nexus/kits.ts`, `nexus/loads.ts`, `nexus/machines.ts`, `nexus/view/kit3d.ts`, `nexus/view/nodes3d.ts` |
-| composition | `src/nexus/elements.ts` | alloys, formulas, blends down to elements, by the ids parts carry | `nexus/inventory.ts`, `nexus/life/index.ts`, `nexus/pieces.ts` |
+| handbook materials | `src/data/materials.ts` | E, ν, yield, ultimate, elongation, conductivity, friction, restitution, colour; source and confidence; ids like steel.a36 | `nexus/blocks.ts`, `nexus/generate.ts`, `nexus/machines.ts`, `nexus/matter.ts`, `nexus/navigate.ts` |
+| thermal | `src/engineering/thermal.ts` | c, k, emissivity by handbook id | `engineering/dcmotor.ts`, `engineering/motorrun.ts`, `nexus/blocks.ts`, `nexus/generate.ts`, `nexus/heatflow.ts`, `nexus/matter.ts` |
+| fusion | `src/engineering/fusion.ts` | melting, expansion, bond, base element by handbook id | `nexus/generate.ts`, `nexus/matter.ts` |
+| density | `src/nexus/mass.ts` | density by the ids parts carry (typical) | `nexus/assembly.ts`, `nexus/blocks.ts`, `nexus/components.ts`, `nexus/drivetrain.ts`, `nexus/engines.ts`, `nexus/gauntlet.ts`, `nexus/kits.ts`, `nexus/loads.ts`, `nexus/machines.ts`, `nexus/matter.ts`, `nexus/view/kit3d.ts`, `nexus/view/nodes3d.ts` |
+| composition | `src/nexus/elements.ts` | alloys, formulas, blends down to elements, by the ids parts carry | `nexus/inventory.ts`, `nexus/life/index.ts`, `nexus/matter.ts`, `nexus/pieces.ts` |
 | service limit | `src/nexus/make/rules.ts` | most service temperature, °C, by the ids parts carry | `nexus/placement/line.ts`, `nexus/placement/model.ts`, `nexus/placement/repair.ts`, `nexus/placement/solve.ts` |
-| strength map | `src/nexus/loads.ts` | part id → handbook grade for yield, ultimate, E (14 mapped) | `nexus/placement/line.ts` |
-| friction map | `src/nexus/sim.ts` | part id → handbook grade for friction and bounce, by spelling | **nothing** |
+| the material system | `src/nexus/matter.ts` | every part material id: its family, what it is exactly or that it is unspecified, its handbook grade (its own, or a stand-in, said); every property with its source and evidence | `nexus/blocks.ts`, `nexus/loads.ts`, `nexus/sim.ts` |
+| elements | `src/data/periodic.ts` | 118 elements: weight, density, melting and boiling points (secondary: compiled from Wikipedia citing CRC and IUPAC) | `nexus/mass.ts`, `nexus/matter.ts` |
+| wood species | `src/data/woods.ts` | species by the Wood Handbook: specific gravity, MOE, MOR at 12 % moisture | `nexus/mass.ts`, `nexus/matter.ts` |
+| mixes | `src/data/mixes.ts` | mixes by what goes into a cubic metre: their density and make-up follow | `nexus/elements.ts`, `nexus/mass.ts`, `nexus/matter.ts` |
 | words to matter | `src/nexus/kinds/core.ts` | a word → inventory id, density, label | **nothing** |
 | spring wires | `src/engineering/springs.ts` | ASTM spring wires: A, m, G, E, density | `nexus/blocks.ts`, `nexus/engines.ts`, `nexus/loads.ts` |
 | adhesives | `src/engineering/joining.ts` | adhesives by the handbook categories | `nexus/generate.ts` |
 | liquids | `src/engineering/motorrun.ts` | density, c, viscosity, k of four liquids | **nothing** |
 | gases | `src/nexus/aware/gas.ts` | molar mass, smell, harm, flammable limits | `nexus/aware/sense.ts`, `nexus/navigate.ts` |
 | edges | `src/nexus/finish.ts` | edge radius by material | **nothing** |
+
+## The materials parts carry
+
+114 material ids in the one table (`MATTER` in `src/nexus/matter.ts`): 66 specified (a grade, a species, a type, a mix), 48 known only by their family (said unspecified). Handbook grade: 19 their own, 48 a stand-in (said), 47 none. With a density: 107; a strength: 21; a friction: 67; a specific heat: 19; a melting point: 23; a make-up down to elements: 74. Tables that disagree on one property: 1.
+
+| Material | Family | Specified | Handbook grade | Density | Strength | Disagreements |
+| --- | --- | --- | --- | --- | --- | --- |
+| `abs` acrylonitrile butadiene styrene (ABS) | polymer | yes | Acrylic (PMMA) (stand-in) | 1050 (typical) | — | — |
+| `acid` battery acid (dilute sulfuric acid) | fluid | **no** | — | 1280 (typical) | — | — |
+| `al-2024` aluminium 2024-T3 | aluminium | yes | Aluminium 2024-T3 | 2780 (typical) | 345 MPa (handbook) | — |
+| `al-3003` aluminium 3003 | aluminium | yes | Aluminium 5052-H32 (stand-in) | 2730 (typical) | — | — |
+| `al-5052` aluminium 5052-H32 | aluminium | yes | Aluminium 5052-H32 | 2680 (typical) | 193 MPa (handbook) | — |
+| `al-6061` aluminium 6061-T6 | aluminium | yes | Aluminium 6061-T6 | 2700 (typical) | 276 MPa (handbook) | — |
+| `al-6063` aluminium 6063 (extrusion alloy) | aluminium | yes | Aluminium 6061-T6 (stand-in) | 2700 (typical) | — | — |
+| `al-7075` aluminium 7075-T6 | aluminium | yes | Aluminium 7075-T6 | 2810 (typical) | 503 MPa (handbook) | — |
+| `al-a380` aluminium A380 die-casting alloy | aluminium | yes | Aluminium 6061-T6 (stand-in) | 2710 (typical) | — | — |
+| `alumina` alumina (Al₂O₃) | ceramic | yes | — | 3900 (typical) | — | — |
+| `asphalt` asphalt concrete, mix unsaid | concrete and mortar | **no** | Concrete C30 (stand-in) | 2300 (typical) | — | — |
+| `avocado` avocado | food | **no** | — | 1000 (typical) | — | — |
+| `bacon` bacon | food | **no** | — | 1000 (typical) | — | — |
+| `bamboo` bamboo culm, species unsaid | wood | **no** | Birch plywood (stand-in) | **none** | — | — |
+| `battery` a battery, chemistry unsaid | battery | **no** | — | 1500 (typical) | — | — |
+| `brass` free-cutting brass C36000 | copper alloy | yes | Brass C360 half hard | 8500 (typical) | 310 MPa (handbook) | — |
+| `bread` bread | food | **no** | — | 250 (typical) | — | — |
+| `brick` fired clay brick | ceramic | yes | Fired clay brick | 1900 (typical) | 3.5 MPa (estimated) | — |
+| `bronze` tin bronze | copper alloy | **no** | Brass C360 half hard (stand-in) | 8800 (typical) | — | — |
+| `butter` butter | food | **no** | — | 911 (typical) | — | — |
+| `carbon-fibre` carbon fibre reinforced polymer, layup unsaid | composite | **no** | Carbon fibre laminate (quasi-isotropic) (stand-in) | **none** | — | — |
+| `cardboard` corrugated board | wood product | **no** | — | **none** | — | — |
+| `cast-iron` grey cast iron, class 30 | cast iron | yes | Grey cast iron, class 30 | 7200 (typical) | 214 MPa (handbook) | — |
+| `ceramic` a technical ceramic, unsaid | ceramic | **no** | — | 3900 (typical) | — | — |
+| `cheese` cheese | food | **no** | — | 1100 (typical) | — | — |
+| `chicken` chicken | food | **no** | — | 1050 (typical) | — | — |
+| `chocolate` chocolate | food | **no** | — | **none** | — | — |
+| `concrete` concrete, mix and strength class unsaid, plain (no reinforcing said) | concrete and mortar | **no** | Concrete C30 (stand-in) | 2400 (typical) | — | — |
+| `concrete-c25` normal-weight concrete, about 25 MPa, plain (no reinforcing): a typical mix | concrete and mortar | yes | Concrete C30 (stand-in) | 2335 (derived) | — | — |
+| `copper` copper C11000 (electrolytic tough pitch) | copper alloy | yes | Copper C110 annealed | 8960 (typical) | 69 MPa (handbook) | — |
+| `cotton` cotton fibre (loose) | textile and paper | yes | Cotton duck canvas (stand-in) | 80 (typical) | — | — |
+| `diesel` diesel | fluid | **no** | — | 840 (typical) | — | — |
+| `douglas-fir` Douglas-fir (coast), Pseudotsuga menziesii, at 12 % moisture | wood | yes | Birch plywood (stand-in) | 537.6 (derived) | 85 MPa (handbook) | — |
+| `egg` egg | food | **no** | — | 1030 (typical) | — | — |
+| `epdm` EPDM rubber | elastomer | yes | Natural rubber / latex (stand-in) | 1150 (typical) | — | — |
+| `epoxy` bisphenol-A epoxy, amine cured | polymer | yes | — | 1200 (typical) | — | — |
+| `fibreglass` glass fibre reinforced polymer | composite | **no** | Glass fibre laminate (E-glass) (stand-in) | 1850 (typical) | — | — |
+| `fkm` fluoroelastomer (FKM) | elastomer | yes | Natural rubber / latex (stand-in) | 1800 (typical) | — | — |
+| `foam` foam, polymer and density unsaid | foam | **no** | EVA foam (closed cell, 100 kg/m³) (stand-in) | 35 (typical) | — | — |
+| `foliage` foliage (a crown, mostly air) | living tissue | **no** | — | 1.5 (typical) | — | — |
+| `fr4` FR-4 glass-epoxy laminate | composite | yes | Glass fibre laminate (E-glass) (stand-in) | 1850 (typical) | — | — |
+| `friction-composite` semi-metallic brake pad friction material | composite | **no** | — | 2400 (typical) | — | — |
+| `glass` soda-lime glass | glass | yes | Soda-lime glass | 2500 (typical) | 40 MPa (estimated) | — |
+| `glass-wool` glass wool insulation (E-glass fibre) | glass | yes | — | 2550 (typical) | — | — |
+| `glycol-50` ethylene glycol and water, 50:50 | fluid | yes | — | 1070 (typical) | — | — |
+| `gold` fine gold | other metal | yes | — | 19300 (typical) | — | — |
+| `granite` granite | stone | yes | Concrete C30 (stand-in) | 2700 (typical) | — | — |
+| `graphite` graphite | ceramic | yes | — | 1800 (typical) | — | — |
+| `ham` ham | food | **no** | — | 1050 (typical) | — | — |
+| `hfo2` hafnium dioxide | ceramic | yes | — | 9680 (typical) | — | — |
+| `ice` ice | fluid | yes | — | **none** | — | — |
+| `lead` commercially pure lead | other metal | yes | — | 11340 (typical) | — | — |
+| `leaf` leaf | living tissue | **no** | — | 600 (typical) | — | — |
+| `leather` leather, tannage unsaid | textile and paper | **no** | Leather (vegetable-tanned cowhide) (stand-in) | 860 (typical) | — | — |
+| `lettuce` lettuce | food | **no** | — | 400 (typical) | — | — |
+| `magnet-wire` enamelled copper winding wire | copper alloy | yes | Copper C110 annealed (stand-in) | 8900 (typical) | — | — |
+| `marble` marble | stone | yes | Concrete C30 (stand-in) | **none** | — | — |
+| `mdf` medium-density fibreboard (EN 622-5) | wood product | yes | MDF | 750 (typical) | 30 MPa (estimated) | — |
+| `mls-steel` multi-layer steel gasket sheet (spring steel, coated) | steel | **no** | Steel AISI 1018 cold drawn (stand-in) | 7900 (typical) | — | — |
+| `nbr` nitrile rubber (NBR) | elastomer | yes | Natural rubber / latex (stand-in) | 1200 (typical) | — | — |
+| `ndfeb` sintered neodymium-iron-boron magnet | other metal | yes | — | 7500 (typical) | — | — |
+| `nickel-alloy` a nickel alloy, grade unsaid | other metal | **no** | — | 8400 (typical) | — | — |
+| `nickel-plate` electroplated nickel | other metal | yes | — | 8900 (typical) | — | — |
+| `ntc-ceramic` nickel-manganese spinel thermistor ceramic | ceramic | yes | — | 5000 (typical) | — | — |
+| `nylon` polyamide, PA6 or PA66 unsaid | polymer | **no** | Printed micro carbon fibre filled nylon (stand-in) | 1140 (typical) | — | — |
+| `oak` oak (Quercus), red or white unsaid | wood | **no** | Birch plywood (stand-in) | 750 (typical) | — | — |
+| `oil` oil, grade unsaid | fluid | **no** | — | 870 (typical) | — | — |
+| `pa66-gf30` polyamide 66, 30 % glass filled | composite | yes | Printed micro carbon fibre filled nylon (stand-in) | 1350 (typical) | — | — |
+| `paper` paper, grade unsaid | textile and paper | **no** | — | 800 (typical) | — | — |
+| `pbt` polybutylene terephthalate | polymer | yes | Acrylic (PMMA) (stand-in) | 1310 (typical) | — | — |
+| `pc` polycarbonate | polymer | yes | Acrylic (PMMA) (stand-in) | 1200 (typical) | — | — |
+| `pe` polyethylene, density grade unsaid | polymer | **no** | Acrylic (PMMA) (stand-in) | 950 (typical) | — | — |
+| `pet` polyethylene terephthalate | polymer | yes | Acrylic (PMMA) (stand-in) | 1380 (typical) | — | — |
+| `petrol` petrol | fluid | **no** | — | 740 (typical) | — | — |
+| `phenolic` phenolic resin (Bakelite type) | polymer | yes | Cast phenolic resin (billiard balls) | 1300 (typical) | 50 MPa (handbook) | density: 1300 kg/m³ typical (mass.ts), 1735 kg/m³ in the handbook (Cast phenolic resin (billiard balls)) |
+| `pla` polylactic acid | polymer | yes | Acrylic (PMMA) (stand-in) | 1240 (typical) | — | — |
+| `pmma` polymethyl methacrylate (acrylic) | polymer | yes | Acrylic (PMMA) | 1190 (typical) | 70 MPa (handbook) | — |
+| `pom` polyoxymethylene (acetal) | polymer | yes | Acrylic (PMMA) (stand-in) | 1410 (typical) | — | — |
+| `pp` polypropylene | polymer | yes | Acrylic (PMMA) (stand-in) | 905 (typical) | — | — |
+| `ptfe` polytetrafluoroethylene | polymer | yes | Acrylic (PMMA) (stand-in) | 2200 (typical) | — | — |
+| `pu` polyurethane, solid or elastomeric unsaid | polymer | **no** | Acrylic (PMMA) (stand-in) | 1200 (typical) | — | — |
+| `pvc` polyvinyl chloride, rigid or flexible unsaid | polymer | **no** | Acrylic (PMMA) (stand-in) | 1400 (typical) | — | — |
+| `pzt` lead zirconate titanate (PZT) | ceramic | yes | — | 7600 (typical) | — | — |
+| `red-oak` northern red oak, Quercus rubra, at 12 % moisture | wood | yes | Birch plywood (stand-in) | 705.6 (derived) | 99 MPa (handbook) | — |
+| `render` cement render, mix unsaid | concrete and mortar | **no** | Concrete C30 (stand-in) | 1800 (typical) | — | — |
+| `rubber` rubber, natural or synthetic unsaid | elastomer | **no** | Natural rubber / latex (stand-in) | 1150 (typical) | — | — |
+| `silicon` crystalline silicon | other metal | yes | — | 2329 (typical) | — | — |
+| `silicone` silicone rubber | elastomer | yes | Natural rubber / latex (stand-in) | 1150 (typical) | — | — |
+| `silk` silk | textile and paper | yes | Coated nylon ripstop (tent cloth) (stand-in) | 1300 (typical) | — | — |
+| `silver` fine silver | other metal | yes | — | 10490 (secondary) | — | — |
+| `sio2` silicon dioxide (thermal oxide) | glass | yes | — | 2200 (typical) | — | — |
+| `soil` soil, type unsaid | soil | **no** | — | 1500 (typical) | — | — |
+| `solder` tin-lead or lead-free solder, alloy unsaid | other metal | **no** | — | 7400 (typical) | — | — |
+| `stainless-304` AISI 304 austenitic stainless | stainless steel | yes | Stainless 304 annealed | 8000 (typical) | 215 MPa (specified) | — |
+| `stainless-316` AISI 316 austenitic stainless | stainless steel | yes | Stainless 316 annealed | 8000 (typical) | 205 MPa (specified) | — |
+| `stainless-440c` AISI 440C martensitic stainless | stainless steel | yes | Stainless 304 annealed (stand-in) | 7800 (typical) | — | — |
+| `steel-alloy` AISI 4140 chromium-molybdenum steel, quenched and tempered | steel | yes | Steel AISI 4140 quenched and tempered | 7850 (typical) | 655 MPa (handbook) | — |
+| `steel-chrome` AISI 52100 bearing steel | steel | yes | Chrome steel 52100 (bearing balls) | 7830 (typical) | 2000 MPa (handbook) | — |
+| `steel-electrical` non-oriented electrical steel (silicon steel) | steel | **no** | Steel AISI 1018 cold drawn (stand-in) | 7650 (typical) | — | — |
+| `steel-low` AISI 1018 low-carbon steel (cold drawn) | steel | yes | Steel AISI 1018 cold drawn | 7850 (typical) | 370 MPa (handbook) | — |
+| `steel-spring` music wire, ASTM A228 | steel | yes | Music wire ASTM A228 | 7850 (typical) | 1600 MPa (handbook) | — |
+| `steel-tool` AISI O1 oil-hardening tool steel | steel | yes | Steel AISI 1018 cold drawn (stand-in) | 7850 (typical) | — | — |
+| `stingray` a stingray's body | living tissue | **no** | — | 1100 (typical) | — | — |
+| `tile` ceramic tile, body unsaid | ceramic | **no** | Fired clay brick (stand-in) | 2000 (typical) | — | — |
+| `tissue` soft tissue | living tissue | **no** | — | 1050 (typical) | — | — |
+| `titanium` titanium Ti-6Al-4V (grade 5) | other metal | yes | Titanium Ti-6Al-4V annealed | **none** | 880 MPa (handbook) | — |
+| `tomato` tomato | food | **no** | — | 1000 (typical) | — | — |
+| `tungsten` tungsten | other metal | yes | — | 19300 (typical) | — | — |
+| `water` water | fluid | yes | — | 1000 (typical) | — | — |
+| `wood` wood, species unsaid | wood | **no** | Birch plywood (stand-in) | 500 (typical) | — | — |
+| `wood-veneer` wood veneer, species unsaid | wood product | **no** | Birch plywood (stand-in) | 680 (typical) | — | — |
+| `xlpe` cross-linked polyethylene | polymer | yes | Acrylic (PMMA) (stand-in) | 930 (typical) | — | — |
+| `zamak` zinc die-casting alloy (Zamak) | other metal | **no** | — | 6700 (typical) | — | — |
+| `zirconia` yttria-stabilised zirconia | ceramic | yes | — | 6050 (typical) | — | — |
 
 ## Where numbers are solved for or stepped in time
 

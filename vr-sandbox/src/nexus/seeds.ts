@@ -9,6 +9,9 @@
 // Sizes are typical of each thing (said where each is built), not one maker's: a seed's inputs change them. A hollow thing
 // drawn as a solid shape (a car's body, a fridge, a cabinet) is given the share of it that is solid (`fill`), set so its
 // mass comes near a typical one: those shares are estimates.
+// Their materials are said exactly (src/nexus/matter.ts): the oak is northern red oak; a door's leaf and the cabinets are
+// MDF, the door's lining Douglas-fir; the sidewalk a 25 MPa concrete mix. These are the seeds' choices, each changed on a
+// node like any setting; a material known only by its family ("wood") is said to be unspecified where it is used.
 
 import { register, type BlockDef, type Type } from './blocks';
 import { Engine, emptyBoard, groupBlock, placeBlock, wire } from './dataflow';
@@ -70,11 +73,11 @@ function door(): void {
   // an interior door leaf 40 mm thick (typical), a lever handle 1 m up on both faces, a 20 mm lining round it
   const s = new Seed('Door');
   const w = s.input('w', 'number', 0.9, 'width, m', undefined, 'm'), h = s.input('h', 'number', 2.1, 'height, m', undefined, 'm'), col = s.input('colour', 'text', '#a1887f', 'door colour');
-  const leaf = s.n('shape.box', { name: 'door leaf', mat: 'wood', fill: 0.35, d: 0.04, finish: 'paint' }, 'leaf'); s.w(s.f('w - 0.04', { w: [w, 'value'] }), 'result', leaf, 'w'); s.w(s.f('h - 0.02', { h: [h, 'value'] }), 'result', leaf, 'h'); s.w(col, 'value', leaf, 'color');
+  const leaf = s.n('shape.box', { name: 'door leaf', mat: 'mdf', fill: 0.35, d: 0.04, finish: 'paint' }, 'leaf'); s.w(s.f('w - 0.04', { w: [w, 'value'] }), 'result', leaf, 'w'); s.w(s.f('h - 0.02', { h: [h, 'value'] }), 'result', leaf, 'h'); s.w(col, 'value', leaf, 'color');
   const lever = s.n('shape.box', { name: 'door handle', mat: 'stainless-304', color: '#c0c4c8', finish: 'brushed', w: 0.13, h: 0.02, d: 0.02 }, 'lever');
   const hx = s.f('w / 2 - 0.12', { w: [w, 'value'] }), hy = s.f('1 - h / 2', { h: [h, 'value'] });
   const front = s.at([lever, 'part'], { x: [hx, 'result'], y: [hy, 'result'], z: 0.035 }, 'handle, front'), back = s.at([lever, 'part'], { x: [hx, 'result'], y: [hy, 'result'], z: -0.035 }, 'handle, back');
-  const jamb = s.n('shape.box', { name: 'door lining', mat: 'wood', color: '#efebe9', w: 0.02, d: 0.12 }, 'lining'); s.w(h, 'value', jamb, 'h');
+  const jamb = s.n('shape.box', { name: 'door lining', mat: 'douglas-fir', color: '#efebe9', w: 0.02, d: 0.12 }, 'lining'); s.w(h, 'value', jamb, 'h');
   const jx = s.f('w / 2 - 0.01', { w: [w, 'value'] });
   const jl = s.at([jamb, 'part'], { x: [s.f('0 - x', { x: [jx, 'result'] }), 'result'] }, 'lining left'), jr = s.at([jamb, 'part'], { x: [jx, 'result'] }, 'lining right');
   // (hung on two butt hinges at the side away from its handle, their knuckles at its edge: 89 mm leaves, a 13 mm knuckle;
@@ -124,10 +127,10 @@ function sink(): void {
   const basin = s.n('shape.lathe', { name: 'basin', mat: 'tile', fill: 0.35, profile: '0, 0; 160, 0; 230, 120; 280, 160; 270, 170; 0, 170' }, 'basin (turned)'); s.w(col, 'value', basin, 'color');
   const column = s.n('shape.cyl', { name: 'pedestal', mat: 'tile', fill: 0.3, r: 0.09, h: 0.68, r2: 0.07 }, 'pedestal'); s.w(col, 'value', column, 'color');
   const ped = s.all('pedestal sink', [[s.at([column, 'part'], { y: 0.34, z: 0.25 }), 'placed'], [s.at([basin, 'part'], { y: 0.68, z: 0.25 }), 'placed'], [s.at([tap, 'part'], { y: 0.94, z: 0.05 }), 'placed'], [s.at([spout, 'part'], { y: 1.04, z: 0.11 }), 'placed']]);
-  const cab = s.n('shape.box', { name: 'vanity cabinet', mat: 'wood', fill: 0.1, color: '#6d4c41', finish: 'paint', w: 0.6, h: 0.8, d: 0.46 }, 'vanity cabinet');
+  const cab = s.n('shape.box', { name: 'vanity cabinet', mat: 'mdf', fill: 0.1, color: '#6d4c41', finish: 'paint', w: 0.6, h: 0.8, d: 0.46 }, 'vanity cabinet');
   const top = s.n('shape.box', { name: 'vanity top', mat: 'tile', w: 0.62, h: 0.05, d: 0.48 }, 'vanity top'); s.w(col, 'value', top, 'color');
   const van = s.all('vanity', [[s.at([cab, 'part'], { y: 0.4, z: 0.23 }), 'placed'], [s.at([top, 'part'], { y: 0.825, z: 0.24 }), 'placed'], [s.at([tap, 'part'], { y: 0.96, z: 0.06 }), 'placed'], [s.at([spout, 'part'], { y: 1.06, z: 0.12 }), 'placed']]);
-  const base = s.n('shape.box', { name: 'base cabinet', mat: 'wood', fill: 0.1, color: '#eceff1', finish: 'paint', w: 0.8, h: 0.86, d: 0.6 }, 'base cabinet');
+  const base = s.n('shape.box', { name: 'base cabinet', mat: 'mdf', fill: 0.1, color: '#eceff1', finish: 'paint', w: 0.8, h: 0.86, d: 0.6 }, 'base cabinet');
   const worktop = s.n('shape.box', { name: 'worktop', mat: 'granite', color: '#455a64', finish: 'stone', w: 0.8, h: 0.04, d: 0.62 }, 'worktop');
   const bowl = s.n('shape.box', { name: 'sink bowl', mat: 'stainless-304', color: '#b0b6bc', finish: 'brushed', w: 0.5, h: 0.02, d: 0.4 }, 'bowl');
   const kit = s.all('kitchen sink', [[s.at([base, 'part'], { y: 0.43, z: 0.3 }), 'placed'], [s.at([worktop, 'part'], { y: 0.88, z: 0.31 }), 'placed'], [s.at([bowl, 'part'], { y: 0.895, z: 0.33 }), 'placed'], [s.at([tap, 'part'], { y: 1.01, z: 0.07 }), 'placed'], [s.at([spout, 'part'], { y: 1.11, z: 0.13 }), 'placed']]);
@@ -146,9 +149,9 @@ function bed(): void {
   for (const [k, v] of [['twin', 0.99], ['full', 1.37], ['queen', 1.52], ['king', 1.93]] as const) s.w(C(s, v, `${k} ${v} m`)[0], 'value', pw, k);
   const pl = s.n('pick', { options: 'twin|full|queen|king' }, 'its length'); s.w(size, 'value', pl, 'which');
   for (const [k, v] of [['twin', 1.91], ['full', 1.91], ['queen', 2.03], ['king', 2.03]] as const) s.w(C(s, v, `${k} ${v} m`)[0], 'value', pl, k);
-  const frame = s.n('shape.box', { name: 'bed frame', mat: 'oak', fill: 0.08, color: '#8d6e63', h: 0.3 }, 'frame'); s.w(s.f('w + 0.06', { w: [pw, 'chosen'] }), 'result', frame, 'w'); s.w(s.f('l + 0.06', { l: [pl, 'chosen'] }), 'result', frame, 'd');
+  const frame = s.n('shape.box', { name: 'bed frame', mat: 'red-oak', fill: 0.08, color: '#8d6e63', h: 0.3 }, 'frame'); s.w(s.f('w + 0.06', { w: [pw, 'chosen'] }), 'result', frame, 'w'); s.w(s.f('l + 0.06', { l: [pl, 'chosen'] }), 'result', frame, 'd');
   const matt = s.n('shape.box', { name: 'mattress', mat: 'foam', h: 0.25 }, 'mattress'); s.w(pw, 'chosen', matt, 'w'); s.w(pl, 'chosen', matt, 'd'); s.w(cover, 'value', matt, 'color');
-  const head = s.n('shape.box', { name: 'headboard', mat: 'oak', fill: 0.4, color: '#6d4c41', h: 1.0, d: 0.06 }, 'headboard'); s.w(s.f('w + 0.06', { w: [pw, 'chosen'] }), 'result', head, 'w');
+  const head = s.n('shape.box', { name: 'headboard', mat: 'red-oak', fill: 0.4, color: '#6d4c41', h: 1.0, d: 0.06 }, 'headboard'); s.w(s.f('w + 0.06', { w: [pw, 'chosen'] }), 'result', head, 'w');
   const pillow = s.n('shape.box', { name: 'pillow', mat: 'foam', color: '#fafafa', w: 0.6, h: 0.12, d: 0.4 }, 'pillow');
   const pz = s.f('0.3', {}, 'pillow 0.3 m from the head'), px = s.f('w / 4', { w: [pw, 'chosen'] });
   const b = s.all('bed', [
@@ -186,7 +189,7 @@ function fittingsAll(): void {
   });
   fittings('kitchen', 'What makes a room a kitchen: a run of base cabinets and a worktop along the back wall, the sink in it, a stove and a fridge (cabinets 600 deep, 900 high; a 760 mm range; a 750 × 1750 mm fridge: typical)', (s, w, d) => {
     const bz = back(s, d);
-    const run = s.n('shape.box', { name: 'base cabinets', mat: 'wood', fill: 0.1, color: '#eceff1', finish: 'paint', h: 0.86, d: 0.6 }, 'cabinet run'); s.w(s.f('w - 1.69', { w: [w, 'value'] }), 'result', run, 'w');
+    const run = s.n('shape.box', { name: 'base cabinets', mat: 'mdf', fill: 0.1, color: '#eceff1', finish: 'paint', h: 0.86, d: 0.6 }, 'cabinet run'); s.w(s.f('w - 1.69', { w: [w, 'value'] }), 'result', run, 'w');
     const top = s.n('shape.box', { name: 'worktop', mat: 'granite', color: '#455a64', finish: 'stone', h: 0.04, d: 0.62 }, 'worktop'); s.w(s.f('w - 1.69', { w: [w, 'value'] }), 'result', top, 'w');
     const sinkK = s.n('seed.sink', { kind: 'kitchen' }, 'sink');
     const stove = s.n('shape.box', { name: 'stove', mat: 'stainless-304', fill: 0.02, color: '#cfd8dc', finish: 'brushed', w: 0.76, h: 0.9, d: 0.62 }, 'stove');
@@ -206,8 +209,8 @@ function fittingsAll(): void {
   });
   fittings('bedroom', 'What makes a room a bedroom: a queen bed against the back wall, a bedside table each side, a wardrobe in the corner (600 deep, typical)', (s, w, d) => {
     const bz = back(s, d), b = s.n('seed.bed', { size: 'queen' }, 'bed');
-    const stand = s.n('shape.box', { name: 'bedside table', mat: 'oak', fill: 0.15, color: '#8d6e63', w: 0.45, h: 0.55, d: 0.4 }, 'bedside table');
-    const robe = s.n('shape.box', { name: 'wardrobe', mat: 'oak', fill: 0.07, color: '#a1887f', finish: 'paint', w: 1.0, h: 2.0, d: 0.6 }, 'wardrobe');
+    const stand = s.n('shape.box', { name: 'bedside table', mat: 'red-oak', fill: 0.15, color: '#8d6e63', w: 0.45, h: 0.55, d: 0.4 }, 'bedside table');
+    const robe = s.n('shape.box', { name: 'wardrobe', mat: 'red-oak', fill: 0.07, color: '#a1887f', finish: 'paint', w: 1.0, h: 2.0, d: 0.6 }, 'wardrobe');
     return [
       [s.at([b, 'bed'], { z: [bz, 'result'] }), 'placed'],
       [s.at([stand, 'part'], { x: -1.05, y: 0.275, z: [s.f('b + 0.2', { b: [bz, 'result'] }), 'result'] }), 'placed'],
@@ -227,10 +230,10 @@ function fittingsAll(): void {
     const r3 = rel('it sees the screen', { name: 'sees the screen', measure: 'sees', eye: 1.1, why: 'most of the screen seen from a seated eye 1.1 m up (typical)' }, '0.75');
     s.w(seat0, 'part', r1, 'thing'); s.w(r1, 'thing', r2, 'thing'); s.w(r2, 'thing', r3, 'thing'); const seat = r3;
     const sback = s.n('shape.box', { name: 'sofa back', mat: 'foam', color: '#607d8b', w: 2.1, h: 0.45, d: 0.2 }, 'sofa back');
-    const table0 = s.n('shape.box', { name: 'coffee table', mat: 'oak', fill: 0.15, color: '#8d6e63', w: 1.1, h: 0.42, d: 0.6 }, 'low table');
+    const table0 = s.n('shape.box', { name: 'coffee table', mat: 'red-oak', fill: 0.15, color: '#8d6e63', w: 1.1, h: 0.42, d: 0.6 }, 'low table');
     // (the table mates with the sofa: within reach of it, 350 to 500 mm off its seat (typical of interior guidance))
     const table = s.n('relate', { name: 'within reach of the sofa', to: 'sofa seat', measure: 'gap', why: '350 to 500 mm off the seat (typical of interior guidance)' }, 'it stands within reach of the sofa'); s.w(table0, 'part', table, 'thing'); s.w(s.f('0.35', {}), 'result', table, 'min'); s.w(s.f('0.5', {}), 'result', table, 'max');
-    const tvStand = s.n('shape.box', { name: 'tv stand', mat: 'oak', fill: 0.15, color: '#5d4037', w: 1.6, h: 0.5, d: 0.4 }, 'tv stand');
+    const tvStand = s.n('shape.box', { name: 'tv stand', mat: 'red-oak', fill: 0.15, color: '#5d4037', w: 1.6, h: 0.5, d: 0.4 }, 'tv stand');
     const tv = s.n('shape.box', { name: 'television', mat: 'glass', fill: 0.15, color: '#111417', w: 1.44, h: 0.83, d: 0.05 }, 'television (65 in)');
     const front = s.f('d / 2 - 0.6', { d: [d, 'value'] }, 'sofa toward the front');
     return [
@@ -273,7 +276,7 @@ function room(): void {
   const fc = s.n('pick', { options: 'bedroom|bathroom|kitchen|living|hall' }, 'floor colour, by its type'); s.w(type, 'value', fc, 'which');
   const fm = s.n('pick', { options: 'bedroom|bathroom|kitchen|living|hall' }, 'floor material, by its type'); s.w(type, 'value', fm, 'which');
   for (const [k, c, m] of [['bedroom', '#a1887f', 'oak'], ['bathroom', '#e0e4e8', 'tile'], ['kitchen', '#78868f', 'tile'], ['living', '#8d6e63', 'oak'], ['hall', '#9c7b62', 'oak']] as const) { s.w(C(s, c, `${k} floor`)[0], 'value', fc, k); s.w(C(s, m, `${k}: ${m}`)[0], 'value', fm, k); }
-  const floor = s.n('shape.box', { name: 'floor', mat: 'oak', finish: 'grain', h: 0.05 }, 'floor'); s.w(w, 'value', floor, 'w'); s.w(d, 'value', floor, 'd'); s.w(fc, 'chosen', floor, 'color'); s.w(fm, 'chosen', floor, 'mat');
+  const floor = s.n('shape.box', { name: 'floor', mat: 'red-oak', finish: 'grain', h: 0.05 }, 'floor'); s.w(w, 'value', floor, 'w'); s.w(d, 'value', floor, 'd'); s.w(fc, 'chosen', floor, 'color'); s.w(fm, 'chosen', floor, 'mat');
   const fl = s.at([floor, 'part'], { y: -0.025 }, 'floor at its level');
   // its four walls, each a Wall seed with what that side has in it; the back and left turned to face in
   const wallOf = (k: keyof typeof side, len: string) => { const id = s.n('seed.wall', {}, `${k} wall`); s.w(side[k], 'value', id, 'kind'); s.w(len, 'value', id, 'L'); s.w(h, 'value', id, 'h'); s.w(wallCol, 'value', id, 'colour'); return id; };
@@ -377,7 +380,7 @@ function road(): void {
   const s = new Seed('Road');
   const L = s.input('L', 'number', 60, 'length, m', undefined, 'm');
   const asphalt = s.n('shape.box', { name: 'asphalt', mat: 'asphalt', color: '#37474f', h: 0.1, d: 7.2 }, 'asphalt, two lanes'); s.w(L, 'value', asphalt, 'w');
-  const walk = s.n('shape.box', { name: 'sidewalk', mat: 'concrete', color: '#b0bec5', finish: 'concrete', h: 0.15, d: 1.5 }, 'sidewalk'); s.w(L, 'value', walk, 'w');
+  const walk = s.n('shape.box', { name: 'sidewalk', mat: 'concrete-c25', color: '#b0bec5', finish: 'concrete', h: 0.15, d: 1.5 }, 'sidewalk'); s.w(L, 'value', walk, 'w');
   const dash = s.n('shape.box', { name: 'centre line', mat: 'pvc', color: '#fdd835', w: 3, h: 0.005, d: 0.12 }, 'a dash');
   const n = s.f('floor(L / 12)', { L: [L, 'value'] }, 'how many dashes');
   const dashes = s.n('array', { pattern: 'line', dx: 12 }, 'dashes along it'); s.w(dash, 'part', dashes, 'thing'); s.w(n, 'result', dashes, 'n');

@@ -1,8 +1,8 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 548 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 549 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
-## 1 · Start: values and inputs (11)
+## 1 · Start: values and inputs (12)
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
@@ -16,6 +16,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Read** (`read`): A block of the library or an entry of the inventory read as it is (block:… or item:…, or either by its id or words): a block's ports, settings, tests and sources; an entry's place, make and what is in it
 - **Table** (`in.table`): Rows you paste, the first row their headings (comma or tab separated): numbers read as numbers
 - **Text** (`in.text`): Words you type, carried on a wire to whatever reads text (a label, a search, a note)
+- **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its …
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it
 
 ## 2 · Make: shapes, parts, things (72)
