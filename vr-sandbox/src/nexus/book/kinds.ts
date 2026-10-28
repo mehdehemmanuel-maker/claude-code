@@ -67,6 +67,7 @@ export const KINDS: Record<string, [LawKind, string]> = {
   'beam.plastic-moment': [V, 'A fully plastic section with an elastic-perfectly-plastic material.'],
   // materials
   'hooke': [C, 'Linear elasticity: stress is proportional to strain below the proportional limit.'],
+  'bar.axial-stiffness': [V, 'Hooke\'s law over a whole uniform bar: its strain is the force over E A, its give that strain times its length.'],
   'stress.von-mises': [V, 'The distortion-energy criterion for a plane state of one normal and one shear stress.'],
   'thermal.expansion': [C, 'Linear thermal expansion: α is a material property, near constant over a moderate range.'],
   'fatigue.endurance.steel': [E, 'Shigley\'s rule from rotating-beam tests of steels: half the ultimate strength, capped.'],

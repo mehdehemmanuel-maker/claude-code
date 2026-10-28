@@ -633,3 +633,13 @@ sides are all equal, so "the longest side" cut the stack across the wrong way; c
 right. The rods: 4.424 K/W at 8 slices, 4.270 at 4, 3.5 % apart; seen in 3D, red at the block through green and
 yellow to blue at the rods' feet, the copper rod's top cooler than the aluminium's because copper draws more heat
 through the steel above it.
+
+**Step F, first round (2026-10-28).** Force through the same graph: the flow node's third kind. Each half a bar by a new
+law of the book, `bar.axial-stiffness` (k = E A / L, Hooke's law over a whole bar; Shigley eq. 4-4, with its kind and
+worked example), stiffnesses in series and side by side as conductances are; the ends where it is pushed and what holds
+it; it gives the give between them (m/N), how far the pushed end moves for the push given, each piece's movement, and
+the load path: what each contact carries, most first. Checked by hand: 1,000 N on three steel cubes held at the
+bottom moves the top 1000 × 0.2 / (205 GPa × 0.01) (the node's third test); the steel block pushed onto its rods puts
+62.1 % of the load through the copper rod, as its E A share (115 / (115 + 69) = 62.5 %, less the steel above each)
+says. Said on the node: along the way it is loaded only, contacts bonded; bending, buckling and a 3D frame are the
+next round of F.

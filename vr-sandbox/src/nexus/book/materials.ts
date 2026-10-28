@@ -14,6 +14,13 @@ export const MATERIALS = [
     source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015", kind: "textbook" }, example: { inputs: {"E":200000000000,"eps":0.001}, output: 200000000 },
   }),
   L({
+    id: "bar.axial-stiffness", name: "Axial stiffness of a bar", statement: "A bar pulled or pushed along its length gives by the force times its length over its modulus and its section, so its stiffness is E A over L: Hooke's law over the whole bar.", formula: "k = E A / L",
+    valid: "Linear elastic range; a uniform bar loaded along its axis, not buckled.",
+    inputs: [["E", "Pa", "elastic modulus"], ["A", "m^2", "section"], ["L", "m", "length"]], output: ["k", "N/m", "stiffness"],
+    term: (v) => div(mul(v.E, v.A), v.L),
+    source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, eq. 4-4", kind: "textbook" }, example: { inputs: {"E":200000000000,"A":0.0001,"L":1}, output: 20000000 },
+  }),
+  L({
     id: "stress.von-mises", name: "Von Mises stress", statement: "A ductile metal under bending and twisting together yields when root(σ^2 + 3 τ^2) reaches its yield strength.", formula: "σ' = √(σ² + 3τ²)",
     valid: "Ductile materials (distortion-energy theory); brittle ones need another criterion.",
     inputs: [["sigma", "Pa", "normal stress"], ["tau", "Pa", "shear stress"]], output: ["s", "Pa", "equivalent stress"],

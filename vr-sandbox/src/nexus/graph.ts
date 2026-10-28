@@ -142,8 +142,8 @@ export interface Flow {
  * left out (step G splits pieces where it matters), and so is any contact resistance not given: the result is the
  * least the way can resist.
  */
-export function flowOver(g: Graph, kind: 'heat' | 'current', from: number[], to: number[], o: { contact?: number } = {}): Flow {
-  const key = kind === 'heat' ? 'k' : 'conductivity', n = g.pieces.length, lacking: string[] = [];
+export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: number[], to: number[], o: { contact?: number } = {}): Flow {
+  const key = kind === 'heat' ? 'k' : kind === 'force' ? 'E' : 'conductivity', n = g.pieces.length, lacking: string[] = [];
   const known = new Map<string, { v: number; ev: Evidence; span?: [number, number] } | null>(), prop = (m: string | null) => {
     if (!m) return null;
     if (!known.has(m)) {
@@ -155,17 +155,20 @@ export function flowOver(g: Graph, kind: 'heat' | 'current', from: number[], to:
     return known.get(m)!;
   };
   const k0 = g.pieces.map((p) => prop(p.mat));
-  const noK = g.pieces.filter((_, i) => !k0[i]); if (noK.length) lacking.push(`${noK.length} piece${noK.length > 1 ? 's' : ''} with no ${kind === 'heat' ? 'thermal' : 'electrical'} conductivity known, carrying none (${[...new Set(noK.map((p) => p.mat ?? 'no material'))].slice(0, 6).join(', ')})`);
+  const noK = g.pieces.filter((_, i) => !k0[i]); if (noK.length) lacking.push(`${noK.length} piece${noK.length > 1 ? 's' : ''} with no ${kind === 'heat' ? 'thermal conductivity' : kind === 'force' ? 'elastic modulus' : 'electrical conductivity'} known, carrying none (${[...new Set(noK.map((p) => p.mat ?? 'no material'))].slice(0, 6).join(', ')})`);
   const mid = g.pieces.map((p) => p.node.box!.getCenter(new THREE.Vector3()));
   // each half by the book's own law: Fourier's (heat through a thickness L of conductivity k over an area A, per kelvin)
   // or a wire's resistance (resistivity times length over section); a half the law refuses carries nothing, said
-  const law = lawById(kind === 'heat' ? 'conduction' : 'wire.resistance'), refused: string[] = [];
+  // (force along the way it is loaded: each half a bar, E A / L, its stiffness springs in series and side by side as
+  // conductances are)
+  const law = lawById(kind === 'heat' ? 'conduction' : kind === 'force' ? 'bar.axial-stiffness' : 'wire.resistance'), refused: string[] = [];
   const half = (kv: number, A: number, L: number): number => {
-    const d = kind === 'heat'
+    const d = kind === 'force' ? apply(law, { E: setting('elastic modulus', kv, 'Pa', 'its material'), A: setting('section', A, 'm^2', 'the patch'), L: setting('length', L, 'm', 'middle to patch') })
+      : kind === 'heat'
       ? apply(law, { k: setting('conductivity', kv, 'W/m K', 'its material'), A: setting('area', A, 'm^2', 'the patch'), dT: setting('temperature difference', 1, 'K', 'per kelvin'), L: setting('thickness', L, 'm', 'middle to patch') })
       : apply(law, { rho: setting('resistivity', 1 / kv, 'ohm m', 'its material'), L: setting('length', L, 'm', 'middle to patch'), A: setting('section', A, 'm^2', 'the patch') });
     if (d.value === null) { refused.push(d.refusal?.domain ?? 'no value'); return 0; }
-    return kind === 'heat' ? d.value : 1 / d.value;
+    return kind === 'current' ? 1 / d.value : d.value;
   };
   const conductances = (k: (number | null)[]) => g.edges.map((e) => {
     const ka = k[e.a], kb = k[e.b]; if (!ka || !kb || !(e.area > 0)) return 0;
