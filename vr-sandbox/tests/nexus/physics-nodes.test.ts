@@ -10,6 +10,7 @@ import { MOTORS, GEARHEADS } from '../../src/data/motors';
 import { motorModel, windingR } from '../../src/engineering/dcmotor';
 import { AMBIENT } from '../../src/engineering/thermal';
 import type { Part } from '../../src/nexus/kits';
+import { massOfAll } from '../../src/nexus/assembly';
 
 const block: Part = { name: 'block', shape: { box: [0.1, 0.1, 0.1] }, mat: 'oak', at: [0, 0, 0] };
 const tower = (): Assembly => ({ name: 'scene', items: [place(arrayGrid(block, 2, 2, [0.1, 0.1, 0.1], 6), [0, 0.05, 0])] });
@@ -40,6 +41,30 @@ describe('let it go', () => {
   it('a piece\'s friction and bounce come from the materials table by what it is made of, else are said to be typical', () => {
     expect(surfaceOf('oak').from).toBe('wood.birch-plywood'); expect(surfaceOf('steel-low').from).toBe('steel.a36'); expect(surfaceOf('unobtainium').from).toMatch(/typical/);
   });
+});
+
+describe('a tether: a mate held with force', () => {
+  // a steel block hung on 2 m of line from a point 12 m up (its top 10 m up, 2 m below the anchor), room under it to fall
+  const hang = async (section: string, side: number) => {
+    const load: Part = { name: 'load', shape: { box: [side, side, side] }, mat: 'steel-low', at: [0, 0, 0] }, m = massOfAll(load);
+    const tie = await runBlock('tether', { ay: 10, by: 12, length: 2, a: 'load', section, damping: 0.3 });
+    const out = await runBlock('letgo', { things: { name: 'hung', items: [place(load, [0, 10 - side / 2, 0])] } as Assembly, joints: [tie.joint], t: 6, seconds: 6 });
+    return { m, k: tie.stiffness as number, breaks: tie.breaks as number, j: (out.joint as Record<string, number | string>[])[0]! };
+  };
+  it('hangs a load at the stretch its stiffness gives (E A / L) and carries its weight', async () => {
+    const r = await hang('wire-rope-6', 0.2), g = 9.80665;
+    // 6 mm wire rope: E A 1.62 MN over 2 m, so 0.8 MN/m; a 62.8 kg block stretches it under a millimetre
+    expect(r.k).toBeCloseTo(810000, -2);
+    expect(((r.j.end as number) - 2) / ((r.m * g) / r.k)).toBeCloseTo(1, 1);
+    expect((r.j.pull as number) / (r.m * g)).toBeCloseTo(1, 1);
+    expect(r.j.parted).toBe('');
+  }, 60_000);
+  it('parts at its breaking load: a 4 t block on a 10 mm dynamic rope (20 kN)', async () => {
+    const r = await hang('rope-dynamic-10', 0.8);
+    expect(r.m * 9.80665).toBeGreaterThan(r.breaks);
+    expect(typeof r.j.parted).toBe('number');
+    expect(r.j.peakPull as number).toBeGreaterThan(r.breaks);
+  }, 60_000);
 });
 
 describe('wheels that roll', () => {

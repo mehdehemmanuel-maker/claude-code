@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 361 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/shelves.test.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/shelves.test.ts`). 362 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## 1 · Start: values and inputs (9)
 
@@ -184,7 +184,7 @@ Physics, motion, the clock, chips run from their transistors, engines under load
 What things give off and afford, gases, who notices what, agents and their goals.
 
 - **Agent** (`agent`): A body with senses and a goal.
-- **Goal** (`goal`): What an agent sets out to do: open something (a door, a gate, a lid), named by a pattern, the nearest or the farthest of those it sees.
+- **Goal** (`goal`): What an agent sets out to do, as a verb and a target: open it (a door, a gate, a lid), go to it, or keep away from it; the target found by its name, or by what it lets a body do (sit on, open, grasp …), the nearest or …
 - **What it gives off** (`signature`): What every part of a thing gives off, read from what it is, never tagged by hand: how far it is seen (its size against the eye's one arcminute, less the lower its contrast), how far it is heard if it makes sound by …
 - **What it gives off into the air** (`gas`): A gas as a substance, not a smell: what a thing gives off in a state (an engine running: its exhaust from its displacement and speed, at most the carbon monoxide and hydrocarbons a catalyst car may give at idle; a …
 - **What it lets you do** (`afford`): What every part of a thing lets a body do, read from its shape, mass, joints and material against that body (an adult, or a child of 8: its grip, reach, knee height, stride and strength from its stature): grasp a bar …
@@ -209,7 +209,7 @@ Every physical law as a calculator, by its field, and formulas you write.
 - **Structural & civil** (13): Angle of twist, Axial stress, Bending stress, Deflection of a cantilever under an end load, Euler buckling, Euler-Johnson transition slenderness, Hoop stress in a thin-walled cylinder, Johnson column formula, Plastic moment of a section, Sag of a simply supported beam under a central load, Sag of a simply supported beam under a spread load, Shear in a fillet weld, Shear stress in a twisted round shaft
 - **Thermal & fluids** (29): Aerodynamic drag, Aerodynamic lift, Arc welding heat input, Archimedes' principle, Arrhenius rate, Bernoulli's equation, Boltzmann distribution, Carnot efficiency, Clausius-Clapeyron relation, Continuity equation, First law of thermodynamics, Fourier's law, Free convection in still air, Heat capacity, Hydrostatic pressure, Ideal gas law, Ideal static thrust of a rotor (momentum theory), Least work to take out a trace, Lumped thermal time constant, Newton's law of cooling, Pressure drop in a pipe (Darcy-Weisbach), Reynolds number, Sound insulation of a wall (mass law), Stefan-Boltzmann radiation, Sunlight a surface absorbs, Temperature rise through thermal resistances, Thermal resistance of a wall, Time to diffuse a distance, Work in a compressed gas (isothermal)
 
-## 9 · Data, money and projects (35)
+## 9 · Data, money and projects (36)
 
 Tables and rows, research, the gauntlet, money, operations.
 
@@ -244,6 +244,7 @@ Tables and rows, research, the gauntlet, money, operations.
 - **Sort** (`list.sort`): A list from least to most, or most to least
 - **Straight-line depreciation** (`fin.depreciation`): What an asset loses each year, evenly over its life, down to what it is worth at the end
 - **Task** (`task`): A task on the board: what is to be done, and done when what it waits on holds (wire in a gate's count, an approval, a check).
+- **Tether** (`tether`): A mate held with force, for Let it go: a line of any section made fast to a point on one thing and a point on another (or on the world), slack while they are nearer than its length, past it pulling back by its own …
 - **Unknown library queue** (`unknown.queue`): Everything something wants that nothing knows: not in the table, listed only as its materials, nothing in it listed, or drawn as one piece though it is made of parts.
 - **What each touches** (`rows.touch`): For boxes laid on the ground (rows with x, z, w, d: a house's rooms, a street's lots), what each side touches: the type of the box along most of it, or "outside".
 - **What is missing** (`research.gap`): A drawn thing held against its researched reference: every part the sources name looked for among the drawn pieces by its pattern (a part's parts inside what found it), each drawn, short of its count, missing, or …

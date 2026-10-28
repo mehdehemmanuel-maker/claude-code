@@ -6,7 +6,7 @@ export const NAMED: Record<string, string[]> = {
   inventory: ['group.out', 'read', 'research.parts', 'research.toInventory'],
   components: ['card.part', 'part.family'],
   families: ['part.family'],
-  sections: ['line', 'route'],
+  sections: ['line', 'route', 'tether'],
   bci: ['battery.starter'],
   motors: ['hinge'],
   gearheads: ['hinge'],

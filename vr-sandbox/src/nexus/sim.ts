@@ -7,6 +7,10 @@
 // The motion is kept, sampled 30 times a second, so the room can show it as it happened; where things end is written
 // back into what is made.
 //
+// A tether (a rope, a lead, a cable, a towbar: a mate held with force) is Jolt's distance constraint between a point on
+// each: slack while nearer than its length, past it pulled back by its own stiffness (EA / L), and let go when what it
+// carries passes its breaking load. Its length and pull are kept with the motion.
+//
 // Things hinged or slid on each other are held by Jolt's hinge and slider constraints, where they touched when they
 // were hinged; the two do not collide with each other (what holds them is the joint). A hinge driven by a DC motor
 // is turned by the motor's own torque at the speed it turns: T = K_t (V - K_t w) / R - T_f, against what holds it,
@@ -28,7 +32,12 @@ export interface SimTrack { names: string[]; frames: { t: number; poses: { at: V
 /** A joint: what moves (a thing let go, by its name or a member's), on what holds it (another, or a part of the build,
  *  fixed, by its index), about or along an axis through a point, in the room. */
 export interface SimJoint {
-  kind: 'hinge' | 'slide'; name: string; a: string; b: string | { fixed: number }; at: V3; axis: V3;
+  kind: 'hinge' | 'slide' | 'tether'; name: string; a: string; b: string | { fixed: number }; at: V3; axis: V3;
+  /** a tether: where it is made fast on b, in the room (on a, `at`); its least and most length, m; its stiffness past
+   *  its length, N/m (what it is made of gives it: E A / L; a towbar's is a steel bar's, high but never infinite); the
+   *  share of critical damping it has (an estimate where it is not measured);
+   *  the pull it parts at, N */
+  at2?: V3; length?: [number, number]; stiffness?: number; damping?: number; breaks?: number;
   /** hinge: radians; slide: metres from where it starts */
   limits?: [number, number];
   /** N·m about a hinge, N along a slide */
@@ -38,9 +47,11 @@ export interface SimJoint {
     /** a speed controller: it sets the volts, up to V, to hold the hinge at so many rad/s, its current held under Imax */ hold?: { w: number; Imax: number } };
 }
 export interface SimJointOut {
-  name: string; kind: 'hinge' | 'slide';
-  /** sampled with the motion: a hinge's angle in radians, a slide's travel in metres */
+  name: string; kind: 'hinge' | 'slide' | 'tether';
+  /** sampled with the motion: a hinge's angle in radians, a slide's travel in metres, a tether's length in metres */
   t: number[]; v: number[]; end: number; min: number; max: number;
+  /** a tether: the pull it carried, N, sampled with the motion, its most, and when it parted (null: it held) */
+  pull?: { t: number[]; peak: number; end: number; parted: number | null };
   /** the motor driving it: where it ended, and the energy over the run, J */
   drive?: { rpm: number; current: number; maxCurrent: number; energyIn: number; copper: number; out: number; friction: number; /** lost in a gearhead */ gears: number };
 }
@@ -125,7 +136,11 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
   };
   // the joints: what moves on what holds it, about or along its axis through where they touched
   const liveOf = (n: string) => live.find((l) => l.thing.name === n || l.rel.some((x) => x.part.name === n));
-  type Held = { j: SimJoint; c: InstanceType<Jolt['HingeConstraint']> | InstanceType<Jolt['SliderConstraint']>; mover: Live; holder: Live | null; out: SimJointOut; d: NonNullable<SimJointOut['drive']> | null };
+  type Held = { j: SimJoint; c: InstanceType<Jolt['HingeConstraint']> | InstanceType<Jolt['SliderConstraint']> | InstanceType<Jolt['DistanceConstraint']>; mover: Live; holder: Live | null; fixedAt: V3 | null; out: SimJointOut; d: NonNullable<SimJointOut['drive']> | null;
+    /** a tether's two ends, each in its own body's frame (a fixed end: where it is) */ ends?: [V3, V3]; parted?: boolean };
+  /** A point in the room, in a body's own frame as it stands now, and back. */
+  const toLocal = (b: InstanceType<Jolt['Body']>, w: V3): V3 => { const p = b.GetPosition(), r = b.GetRotation(); return apply(T(matQ([r.GetX(), r.GetY(), r.GetZ(), r.GetW()])), [w[0] - p.GetX(), w[1] - p.GetY(), w[2] - p.GetZ()]); };
+  const toWorld = (b: InstanceType<Jolt['Body']>, l: V3): V3 => { const p = b.GetPosition(), r = b.GetRotation(), o = apply(matQ([r.GetX(), r.GetY(), r.GetZ(), r.GetW()]), l); return [p.GetX() + o[0], p.GetY() + o[1], p.GetZ() + o[2]]; };
   const held: Held[] = [];
   for (const j of o.joints ?? []) {
     const mover = liveOf(j.a); if (!mover) throw new Error(`${j.a} is not let go, so it cannot turn or slide`);
@@ -136,8 +151,24 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     // a normal to it: across it, from whichever of x, y, z it lies least along
     const e: V3 = Math.abs(u[0]) < 0.6 ? [1, 0, 0] : [0, 1, 0], c0: V3 = [u[1] * e[2] - u[2] * e[1], u[2] * e[0] - u[0] * e[2], u[0] * e[1] - u[1] * e[0]], cn = Math.hypot(...c0), nrm: V3 = [c0[0] / cn, c0[1] / cn, c0[2] / cn];
     const b1 = holder ? holder.body : fixedBody!.body, b2 = mover.body;
-    filter.DisableCollision(holder ? holder.sub : fixedBody!.sub, mover.sub);
     let c: Held['c'];
+    if (j.kind === 'tether') {
+      // (what a tether joins still meets: a lead does not stop a dog bumping its owner)
+      const at2 = j.at2 ?? j.at, [lo, hi] = j.length ?? [0, Math.hypot(at2[0] - j.at[0], at2[1] - j.at[1], at2[2] - j.at[2])];
+      const st = new J.DistanceConstraintSettings(); st.mPoint1 = R(at2); st.mPoint2 = R(j.at); st.mMinDistance = lo; st.mMaxDistance = hi;
+      if (!(Number(j.stiffness) > 0)) throw new Error(`the ${j.name} has no stiffness: say what it is made of (its E A over its length)`);
+      {
+        // past its length it is a spring of its own stiffness, damped by its share of critical for the two masses it joins
+        const m1 = holder ? Math.max(holder.thing.mass, 1e-4) : Infinity, m2 = Math.max(mover.thing.mass, 1e-4), mr = Number.isFinite(m1) ? (m1 * m2) / (m1 + m2) : m2;
+        const sp = st.mLimitsSpringSettings; sp.mMode = J.ESpringMode_StiffnessAndDamping; sp.mStiffness = j.stiffness!; sp.mDamping = 2 * (j.damping ?? 0.05) * Math.sqrt(j.stiffness! * mr);
+      }
+      st.mNumVelocityStepsOverride = 120; st.mNumPositionStepsOverride = 40;
+      c = J.castObject(st.Create(b1, b2), J.DistanceConstraint); J.destroy(st);
+      ps.AddConstraint(c);
+      held.push({ j, c, mover, holder, fixedAt: holder ? null : at2, ends: [holder ? toLocal(holder.body, at2) : at2, toLocal(b2, j.at)], out: { name: j.name, kind: 'tether', t: [], v: [], end: 0, min: Infinity, max: 0, pull: { t: [], peak: 0, end: 0, parted: null } }, d: null });
+      continue;
+    }
+    filter.DisableCollision(holder ? holder.sub : fixedBody!.sub, mover.sub);
     if (j.kind === 'hinge') {
       const st = new J.HingeConstraintSettings(); st.mPoint1 = R(j.at); st.mPoint2 = R(j.at); st.mHingeAxis1 = V(u); st.mHingeAxis2 = V(u); st.mNormalAxis1 = V(nrm); st.mNormalAxis2 = V(nrm);
       if (j.limits) { st.mLimitsMin = j.limits[0]; st.mLimitsMax = j.limits[1]; }
@@ -154,10 +185,14 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     ps.AddConstraint(c);
     // a motor may turn it faster than the engine's usual cap: up to half again its no-load speed
     if (j.drive) bi.SetMaxAngularVelocity(b2.GetID(), Math.max(400, (1.5 * Math.abs(j.drive.V)) / j.drive.Kt / (j.drive.gear?.ratio ?? 1)));
-    held.push({ j, c, mover, holder, out: { name: j.name, kind: j.kind, t: [], v: [], end: 0, min: 0, max: 0 }, d: j.drive ? { rpm: 0, current: 0, maxCurrent: 0, energyIn: 0, copper: 0, out: 0, friction: 0, gears: 0 } : null });
+    held.push({ j, c, mover, holder, fixedAt: null, out: { name: j.name, kind: j.kind, t: [], v: [], end: 0, min: 0, max: 0 }, d: j.drive ? { rpm: 0, current: 0, maxCurrent: 0, energyIn: 0, copper: 0, out: 0, friction: 0, gears: 0 } : null });
   }
   // a hinge's angle unwrapped: a wheel that turns round and round counts its turns
-  const raw = (h: Held) => (h.j.kind === 'hinge' ? (h.c as InstanceType<Jolt['HingeConstraint']>).GetCurrentAngle() : (h.c as InstanceType<Jolt['SliderConstraint']>).GetCurrentPosition());
+  /** A tether's length now: between its two ends where their bodies have them. */
+  const lengthOf = (h: Held) => { const a = h.holder ? toWorld(h.holder.body, h.ends![0]) : h.ends![0], b = toWorld(h.mover.body, h.ends![1]); return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); };
+  /** What a tether pulls with now, N: past its length, its stiffness times how far; slack, nothing. */
+  const pullOf = (h: Held) => (h.parted ? 0 : Math.max(0, h.j.stiffness! * (lengthOf(h) - (h.c as InstanceType<Jolt['DistanceConstraint']>).GetMaxDistance())));
+  const raw = (h: Held) => (h.j.kind === 'tether' ? lengthOf(h) : h.j.kind === 'hinge' ? (h.c as InstanceType<Jolt['HingeConstraint']>).GetCurrentAngle() : (h.c as InstanceType<Jolt['SliderConstraint']>).GetCurrentPosition());
   const unwrap = new Map<Held, { last: number; add: number }>();
   const valueOf = (h: Held) => { const v = raw(h); if (h.j.kind !== 'hinge') return v; const u = unwrap.get(h) ?? { last: v, add: 0 }; if (v - u.last > Math.PI) u.add -= 2 * Math.PI; else if (u.last - v > Math.PI) u.add += 2 * Math.PI; u.last = v; unwrap.set(h, u); return v + u.add; };
   /** A driven hinge's motor: its torque at the speed it turns, on what turns and back on what holds it. */
@@ -218,8 +253,11 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     // with joints, four steps to each: a hinge's solver loses a little of a swing's energy each step, less the shorter the step
     jolt.Step(dt, held.length ? 4 : 1); t += dt;
     for (const l of live) { const v = l.body.GetLinearVelocity(); l.speed = Math.max(l.speed, Math.hypot(v.GetX(), v.GetY(), v.GetZ())); }
-    for (const h of held) { const v = valueOf(h); h.out.min = Math.min(h.out.min, v); h.out.max = Math.max(h.out.max, v); }
-    if (t >= sample - 1e-9) { track.frames.push({ t, poses: live.flatMap((l) => posesOf(l).map((x) => ({ at: x.at, q: x.q }))) }); for (const h of held) { h.out.t.push(t); h.out.v.push(valueOf(h)); } sample += 1 / 30; }
+    for (const h of held) { const v = valueOf(h); h.out.min = Math.min(h.out.min, v); h.out.max = Math.max(h.out.max, v);
+      if (h.out.pull && !h.parted) { const F = pullOf(h); h.out.pull.peak = Math.max(h.out.pull.peak, F); h.out.pull.end = F;
+        // past what it parts at, it parts, and the two go their own ways
+        if (h.j.breaks !== undefined && F > h.j.breaks) { h.parted = true; h.c.SetEnabled(false); h.out.pull.parted = t; h.out.pull.end = 0; bi.ActivateBody(h.mover.body.GetID()); if (h.holder) bi.ActivateBody(h.holder.body.GetID()); } } }
+    if (t >= sample - 1e-9) { track.frames.push({ t, poses: live.flatMap((l) => posesOf(l).map((x) => ({ at: x.at, q: x.q }))) }); for (const h of held) { h.out.t.push(t); h.out.v.push(valueOf(h)); if (h.out.pull) h.out.pull.t.push(h.parted ? 0 : h.out.pull.end); } sample += 1 / 30; }
     if (t > 0.25 && (!pushed || t > o.push!.seconds) && !held.some((h) => h.d) && live.every((l) => !bi.IsActive(l.body.GetID()))) { restedAt = t; break; }
   }
   const ends: SimEnd[] = [], parts: SimOut['parts'] = [];

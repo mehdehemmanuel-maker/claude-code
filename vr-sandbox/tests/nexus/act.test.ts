@@ -9,7 +9,7 @@ import type { Part } from '../../src/nexus/kits';
 import { Engine, emptyBoard, placeBlock } from '../../src/nexus/dataflow';
 import { partOf, type Assembly } from '../../src/nexus/assembly';
 import { ACTORS } from '../../src/nexus/aware/tags';
-import { DOOR_FORCE, DOOR_STOP, WALK, bodyAt, doorsOf, leanOf, limbsOf, openDoor, sceneAt, walkerOf } from '../../src/nexus/act/agent';
+import { DOOR_FORCE, DOOR_STOP, WALK, act, actAll, bodyAt, doneBy, doorsOf, follow, leanOf, limbsOf, openDoor, sceneAt, stepsOf, walkerOf } from '../../src/nexus/act/agent';
 import { route } from '../../src/nexus/placement/line';
 
 let J: Jolt, house: Part;
@@ -35,15 +35,15 @@ describe('reading a door', () => {
 
 describe('an agent opens a door', () => {
   it('the nearest door it sees, a bedroom\'s swinging into the hall: it walks to beside its handle, clear of its sweep, and pulls it to its stop', () => {
-    const p = openDoor(J, house, { open: /^door$/i, which: 'nearest' }), L = limbsOf(p.actor), foot = new THREE.Vector3(...p.door.at);
+    const p = openDoor(J, house, { open: /^door$/i, which: 'nearest' }), L = limbsOf(p.actor), foot = new THREE.Vector3(...p.door!.at);
     expect(p.side).toBe(1);
     expect(p.steps.map((s) => s.kind)).toEqual(['see', 'go to', 'reach', 'grasp', 'pull', 'let go']);
     // (where it stands is clear of the leaf's sweep)
-    expect(new THREE.Vector3(...p.stand).sub(foot).setY(0).length()).toBeGreaterThan(p.door.width + L.shoulders / 2);
+    expect(new THREE.Vector3(...p.stand).sub(foot).setY(0).length()).toBeGreaterThan(p.door!.width + L.shoulders / 2);
     // (it walks at 1.4 m/s)
     const go = p.steps.find((s) => s.kind === 'go to')!; expect(p.walked / (go.to - go.from)).toBeCloseTo(WALK, 6);
     // (its hand is on the handle when it has grasped it, and moves with it as the door swings, never past its reach)
-    const H = new THREE.Vector3(...p.handle), grasp = p.steps.find((s) => s.kind === 'grasp')!;
+    const H = new THREE.Vector3(...p.handle!), grasp = p.steps.find((s) => s.kind === 'grasp')!;
     expect(new THREE.Vector3(...bodyAt(p, grasp.to - 1e-3).hand!).distanceTo(H)).toBeLessThan(1e-6);
     for (let t = grasp.to; t < p.letGoAt; t += 0.05) { const b = bodyAt(p, t), hand = new THREE.Vector3(...b.hand!); expect(hand.clone().setY(0).distanceTo(new THREE.Vector3(...b.at).setY(0))).toBeLessThan(L.reach + leanOf(p.actor) + L.shoulders / 2 + 1e-6); }
     // (the door, pulled with 22.2 N, swings and comes to rest on its stop at 90°)
@@ -65,6 +65,39 @@ describe('an agent opens a door', () => {
     expect(pace(c)).toBeCloseTo(WALK * Math.sqrt(1.28 / 1.75), 6);
     expect(c.stand).not.toEqual(a.stand);
   }, 60000);
+});
+
+describe('goals on any thing: go to, keep away, stay near, one after another', () => {
+  it('to go to a thing behind a shut door, it opens the door on its way, then stands within reach of it', () => {
+    const p = act(J, house, { verb: 'go to', what: /sofa seat/i, knows: 'here' });
+    expect(p.door).toBeDefined(); expect(p.then).toBeDefined();
+    expect(p.then!.findings[0]).toMatch(/opened the door on its way/);
+    expect(stepsOf(p).map((s) => s.kind)).toEqual(['see', 'go to', 'reach', 'grasp', 'pull', 'let go', 'see', 'go to']);
+    // (within its reach of the sofa's footprint, and on the sofa's side of the wall)
+    const L = limbsOf(ACTORS.adult!), d = p.then!.says.match(/to ([\d.]+) m from the sofa seat/)![1]!; expect(Number(d)).toBeLessThanOrEqual(L.reach + leanOf(ACTORS.adult!) + 1e-3);
+    expect(p.then!.stand[2]).toBeGreaterThan(0.5);
+    expect(doneBy(p)).toBeGreaterThan(p.end);
+  }, 120000);
+  it('to keep away from a thing, it ends at least as far as asked, facing away', () => {
+    const p = act(J, house, { verb: 'keep away', what: /^door$/i, range: [2, Infinity] });
+    expect(Number(p.says.match(/to ([\d.]+) m from the door/)![1])).toBeGreaterThanOrEqual(2);
+    expect(p.walked).toBeGreaterThan(0.5);
+  }, 120000);
+  it('one after another, each from where the last left it, in the world as it left it', () => {
+    const p = actAll(J, house, [{ verb: 'open', what: /^door$/i }, { verb: 'go to', affords: 'sit', knows: 'here' }]);
+    expect(p.then).toBeDefined(); expect(p.then!.start).toEqual(bodyAt(p, p.end).at);
+    expect(p.then!.world).not.toBe(house);
+  }, 120000);
+  it('staying near one that moves: as fast, it keeps within; slower, it falls behind, and says so', () => {
+    const lead = openDoor(J, house, { open: /^door$/i, which: 'farthest' }), f = lead.facing, s0: [number, number, number] = [lead.start[0] - f[0], lead.start[1], lead.start[2] - f[2]];
+    const same = follow(house, (t) => bodyAt(lead, t).at, { actor: ACTORS.adult, start: s0, range: [0.5, 1.5], until: lead.end + 2 });
+    const kid = follow(house, (t) => bodyAt(lead, t).at, { actor: ACTORS.child, start: s0, range: [0.5, 1.5], until: lead.end + 2 });
+    const share = (q: typeof same) => Number(q.says.match(/within it (\d+) %/)![1]);
+    expect(share(same)).toBeGreaterThanOrEqual(90); expect(share(kid)).toBeLessThan(share(same));
+    expect(kid.findings.join(' ')).toMatch(/faster than its pace/);
+    // (both drawn at any time: the world with the two of them)
+    expect(sceneAt(house, kid, 2, [{ plan: lead, color: 0xff7043 }]).items.length).toBeGreaterThanOrEqual(3);
+  }, 120000);
 });
 
 describe('the router, for a body', () => {

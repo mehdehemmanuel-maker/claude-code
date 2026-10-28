@@ -10,7 +10,7 @@ What a board is built from: the node library, its laws, its seeds (nodes built f
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Node library | 194 | the library panel | `src/nexus/blocks.ts` |
+| Node library | 195 | the library panel | `src/nexus/blocks.ts` |
 | Laws | 144 | the library panel | `src/nexus/law.ts` |
 | Seeds | 21 | the library panel | `src/nexus/seeds.ts` |
 
@@ -42,7 +42,7 @@ What builds are made of, by standard: designed components, families sized by the
 | Part families | 340 | `part.family` (its family) | `src/nexus/families.ts` |
 | Catalogue sizes | 56,064 | `card.part` (its what): 14,577 of its 56,064 sizes, those of the 41 kinds drawn in 3D; the rest are known by name and size and not drawn yet | `src/nexus/catalogue.ts` |
 | Standard faces | 14 | **no node reaches it yet** | `src/nexus/mate.ts` |
-| Line sections | 9 | `line` (its section), `route` (its section) | `src/nexus/placement/line.ts` |
+| Line sections | 11 | `tether` (its section), `line` (its section), `route` (its section) | `src/nexus/placement/line.ts` |
 | BCI battery groups | 6 | `battery.starter` (its group) | `src/data/batteries.ts` |
 | Motors | 2 | `hinge` (its motor) | `src/data/motors.ts` |
 | Gearheads | 1 | `hinge` (in its code) | `src/data/motors.ts` |
@@ -79,7 +79,7 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 | Flow | Nodes | Which |
 | --- | --- | --- |
-| Worked once: from its inputs, again only when they change (most nodes) | 323 | the rest |
+| Worked once: from its inputs, again only when they change (most nodes) | 324 | the rest |
 | With the clock: again as the board's time goes on | 2 | Approved, Clock |
 | Worked once, played by the clock: a simulation run once and posed at any time | 3 | Agent, Follow a path, Let it go |
 | Many at once: one thing for each row or point: spawned, scattered, patterned | 6 | City, Neighbourhood, Pattern of, Road system, Scatter, Spawn |
@@ -133,4 +133,4 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 ## Nodes no starter board uses yet
 
-65 of 215 (laws aside): Add, Ask Claude, Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Internal rate of return, Keep where, LED resistor, List of numbers, Machining time, Margin and markup, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, RC filter corner, Ring, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Solar panel, a day, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Text, Tube, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What each touches, Winding, Wound roll, Yes / no, Zone.
+66 of 216 (laws aside): Add, Ask Claude, Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Internal rate of return, Keep where, LED resistor, List of numbers, Machining time, Margin and markup, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, RC filter corner, Ring, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Solar panel, a day, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Tether, Text, Tube, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What each touches, Winding, Wound roll, Yes / no, Zone.

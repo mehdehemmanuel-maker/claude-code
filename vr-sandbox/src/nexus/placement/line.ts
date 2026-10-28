@@ -14,6 +14,7 @@ import type { Part, V3 } from '../kits';
 import { tubeLegs } from '../form';
 import { layout, type Node } from '../make/space';
 import { AMBIENT, MAX_SERVICE } from '../make/rules';
+import { strengthOf } from '../loads';
 import { fieldOf, MOTION_READ, surfacesOf, type Field } from './fields';
 
 export interface Layer { name: string; mat: string; /** thickness, m (the core: its radius, or its height if flat) */ t: number; /** the core: solid, or a bore (drawn hollow) */ bore?: boolean }
@@ -24,6 +25,10 @@ export interface Section {
   /** least bend radius: so many outside diameters, or (flat) metres */ bend: number;
   /** the gap it keeps to anything, m */ clear: number; /** how it is run where nothing says */ logic: Logic; /** the steepest it climbs (grade) */ grade?: number;
   item?: string; color: number; source: string;
+  /** what it carries pulled along its length, where its maker or its standard says (a stranded or woven line, which
+   *  carries less than its fibres would solid): its stretch stiffness E A, N, and the pull it parts at, N. Else they are
+   *  worked out from its layers (tetherOf) */
+  pull?: { EA: number; breaks: number; source: string };
 }
 export const outer = (s: Section) => s.layers.reduce((a, l) => a + l.t, 0);
 const AWG = (n: number) => 0.000127 * 92 ** ((36 - n) / 39) / 2;
@@ -36,10 +41,28 @@ export const SECTIONS: Section[] = [
   { id: 'fuel-8', name: 'fuel line, 8 mm', round: true, layers: [{ name: 'bore', mat: 'pe', t: 0.004, bore: true }, { name: 'wall', mat: 'nylon', t: 0.001 }], bend: 5, clear: 0.01, logic: 'hug', item: 'fuel-line', color: 0x303030, source: 'nylon wall 1 mm (typical of SAE J2260 tubing); bend 5 diameters (typical)' },
   { id: 'brake-3/16', name: 'brake line, 3/16 in', round: true, layers: [{ name: 'bore', mat: 'oil', t: 0.00168, bore: true }, { name: 'wall', mat: 'steel-low', t: 0.00071 }], bend: 2.5, clear: 0.006, logic: 'hug', item: 'brake-line', color: 0x8a8e94, source: '4.76 mm outside, 0.71 mm wall (SAE J527 double-wall tubing); bend 2.5 diameters (typical)' },
   { id: 'pipe-1in', name: 'pipe, 1 in schedule 40', round: true, layers: [{ name: 'bore', mat: 'water', t: 0.01332, bore: true }, { name: 'wall', mat: 'steel-low', t: 0.00338 }], bend: 1.5, clear: 0.02, logic: 'orthogonal', item: 'pipe', color: 0x6b7178, source: '33.4 mm outside, 3.38 mm wall (ASME B36.10M, NPS 1 schedule 40); a long-radius elbow, 1.5 diameters (ASME B16.9)' },
+  // (lines made to carry a pull: a tether's stiffness and breaking load are their standard's or maker's figures)
+  { id: 'wire-rope-6', name: 'steel wire rope, 6 mm, 6×19 IWRC', round: true, layers: [{ name: 'strands', mat: 'steel-alloy', t: 0.003 }], bend: 20, clear: 0.005, logic: 'direct', color: 0x9ea4aa, source: 'minimum breaking load 22.7 kN at grade 1770 (Katradis, EN 12385); 16.2 mm² of steel (Mennens, 6x19S-IWRC, EN 12385-4); its effective modulus about 100 GPa, half the steel\'s, as strands lay (typical, an estimate); bend at 20 diameters (typical)', pull: { EA: 100e9 * 16.2e-6, breaks: 22.7e3, source: 'Katradis 6x19 IWRC table (22.7 kN at 1770); Mennens 6x19S-IWRC sheet (16.2 mm²); E about 100 GPa (an estimate)' } },
+  { id: 'rope-dynamic-10', name: 'dynamic rope, 10 mm (EN 892 single)', round: true, layers: [{ name: 'kern', mat: 'nylon', t: 0.0035 }, { name: 'mantle', mat: 'nylon', t: 0.0015 }], bend: 4, clear: 0.005, logic: 'direct', color: 0x2e7d32, source: 'EN 892: a single rope stretches at most 10 % from 5 to 80 kg (taken at 8 %, typical) and holds a fall at no more than 12 kN; it parts near 20 kN pulled slowly (typical, an estimate)', pull: { EA: (75 * 9.80665) / 0.08, breaks: 20e3, source: 'EN 892 static elongation at most 10 % between 5 and 80 kg (EDELRID\'s summary), taken at 8 % (typical); parting near 20 kN (an estimate)' } },
   { id: 'trace-1oz', name: 'trace, 0.25 mm, 1 oz copper', round: false, w: 0.00025, layers: [{ name: 'copper', mat: 'copper', t: 0.000035 }], bend: 0, clear: 0.00015, logic: 'orthogonal', item: 'trace', color: 0xc87533, source: '1 oz copper is 35 µm (IPC-2221); 0.15 mm spacing (typical of a board maker\'s standard)' },
   { id: 'road-2', name: 'road, two lanes', round: false, w: 7.2, layers: [{ name: 'base course', mat: 'granite', t: 0.2 }, { name: 'asphalt', mat: 'asphalt', t: 0.05 }], bend: 80, clear: 1, logic: 'grade', grade: 0.08, item: 'road', color: 0x34363a, source: 'two 3.6 m lanes (AASHTO, typical); 200 mm crushed stone under 50 mm of asphalt (typical); curves of 80 m at 50 km/h and grades to 8 % (typical of AASHTO for local roads)' },
 ];
 export const sectionOf = (id: string): Section => { const s = SECTIONS.find((x) => x.id === id); if (!s) throw new Error(`no section "${id}" (there are ${SECTIONS.map((x) => x.id).join(', ')})`); return s; };
+/** A line as a tether over a length: its stretch stiffness E A / L, N/m, and the pull it parts at, N, from its maker's or
+ *  standard's figures, else from its layers (each solid layer's handbook modulus and strength over its area; a bore, and
+ *  a layer of what the handbook does not hold, carry nothing and are said). */
+export function tetherOf(s: Section, L: number): { k: number; EA: number; breaks: number; says: string } {
+  if (L <= 0) throw new Error('a tether needs a length');
+  if (s.pull) return { k: s.pull.EA / L, EA: s.pull.EA, breaks: s.pull.breaks, says: `${s.name}: E A ${(s.pull.EA / 1e3).toFixed(1)} kN, parts at ${(s.pull.breaks / 1e3).toFixed(1)} kN (${s.pull.source})` };
+  let r = 0, EA = 0, breaks = 0; const used: string[] = [], none: string[] = [];
+  for (const l of s.layers) {
+    const A = s.round ? Math.PI * ((r + l.t) ** 2 - r ** 2) : (s.w ?? 0) * l.t; r += l.t;
+    const m = l.bore ? null : strengthOf(l.mat); if (!m) { none.push(l.name); continue; }
+    EA += m.E * A; breaks += m.ultimate * A; used.push(`${l.name} ${m.name}`);
+  }
+  if (!EA) throw new Error(`${s.name}: nothing in it the handbook holds carries a pull (${none.join(', ')})`);
+  return { k: EA / L, EA, breaks, says: `${s.name}: E A ${(EA / 1e3).toFixed(1)} kN, parts at ${(breaks / 1e3).toFixed(1)} kN, from ${used.join(' and ')} (handbook)${none.length ? `; ${none.join(', ')} carry nothing here` : ''}` };
+}
 /** The least bend radius of a section, m. */
 export const bendOf = (s: Section) => (s.round ? s.bend * 2 * outer(s) : s.bend);
 
