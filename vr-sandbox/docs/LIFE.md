@@ -191,6 +191,36 @@ Each of these is a node that already exists, given one more input or measure: no
 Navigation (`src/nexus/navigate.ts`) shows each where it is needed: a board that puts zones or mates on and keeps
 none is told so, and each node lists what goes after it.
 
+Step 6 result (`sim.ts` tethers; `placement/line.ts` `tetherOf`; `act/agent.ts` `act`, `approach`, `follow`, `actAll`;
+nodes `tether`, `goal`, `agent`; board "Two agents"):
+
+- **A mate held with force (node Tether).** A line of any section made fast to a point on one thing and a point on
+  another (or the world), as Jolt's distance constraint: slack while nearer than its length, past it pulling back by
+  its own stretch, E A over its length, and parting at the pull it parts at. Both come from what it is made of: from a
+  line's layers (each solid layer's handbook modulus and strength over its area), or for a stranded or woven line from
+  its standard's figures (a 6 mm 6×19 IWRC wire rope: 22.7 kN, Katradis, 16.2 mm² of steel, Mennens; a 10 mm EN 892
+  dynamic rope: at most 10 % stretch from 5 to 80 kg). In the physics, 80 kg hung on 2 m stretches the wire rope 0.97 mm
+  and the dynamic rope 170.8 mm (E A / L gives 0.97 and 170.7) and each carries 784 N against its weight's 785 N; a 4 t
+  block parts the dynamic rope 1.2 s in, past 20 kN.
+- **Goals on any thing.** A verb (open, go to, keep away) and a target found by its name or by what it lets a body do,
+  chosen from what the agent sees or from all that is here, with how far from it to end. Going to a thing, it stands
+  within reach of its footprint, clear for its body and with nothing chest high between (to be by a thing is not to be
+  behind a wall from it); keeping away, at least as far as asked. Where it has no way, it opens the doors it sees,
+  nearest first, and tries again in the world as that leaves it: told to go to the sofa from the hall, an adult opens
+  the living room's door and stands 0.93 m from the sofa 7 s later. Goals run one after another, each from where the
+  last left it.
+- **Staying near one that moves.** Wired to another agent, an agent stays within its goal's range of it, no faster
+  than its own pace: an adult behind an adult keeps within 0.5 to 1.5 m over 90 % of the time; a child of 8 (1.2 m/s
+  against 1.4) falls behind, and says so.
+- **Not yet:**
+  - **Any body from its segment table** is waiting on its numbers: the sourced dog table (Jones, Raschke and Riches
+    2018, "Inertial properties of the German Shepherd Dog") could not be read from this session (its pages are
+    outside the network it is allowed), and the human rig is not made table-driven until a second sourced table is
+    there to make it against.
+  - The lead between the two agents is held by the follower's motion (a mate in range), not yet as a tether in the
+    physics: bodies are not in Jolt as they act.
+  - Choosing which door leads where is by trying (nearest first, up to three), not by reading the plan of the place.
+
 Step 1 result:
 - **Speed:** every identified part of the Corolla (6,636) is read in about 1 s; a house of 263 things in 30 ms.
 - **The Corolla:**

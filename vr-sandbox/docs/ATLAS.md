@@ -20,7 +20,7 @@ Boards: whole pipelines of nodes to start from, and yours.
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Starter boards | 38 | the library panel | `src/nexus/starters.ts` |
+| Starter boards | 39 | the library panel | `src/nexus/starters.ts` |
 
 ### Products
 
@@ -103,6 +103,7 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 | The 6502 from its transistors: a real program run switch by switch, … | electronics | 9 | 5 6 10 | · |
 | Proximity and mates: each thing carries the room and the mates it ne… | structural | 8 | 2 3 4 10 | · |
 | A body from its measured segments, its math on every part | science | 9 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
+| Two agents: one goes to sit, opening the way; one keeps within a lea… | structural | 11 | 1 2 6 7 10 | · |
 | An agent opens a door: it sees it, walks to it, takes hold, pulls; t… | structural | 10 | 2 4 6 7 10 | · |
 | Who notices what: a car running, a person behind it, one at its door… | vehicles | 11 | 2 3 4 7 10 | · |
 | What things give off and let you do: a house and a car, tagged from … | structural | 11 | 2 3 4 7 10 | · |

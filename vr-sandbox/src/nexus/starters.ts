@@ -250,6 +250,28 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
     return b;
   }],
+  ['Two agents: one goes to sit, opening the way; one keeps within a lead\'s length of it', () => {
+    // goals on any thing (docs/LIFE.md step 6): the adult is told only "go to what lets you sit, anywhere in the house";
+    // the sofa is behind a shut door, so it opens the doors it sees on its way, nearest first, until it has a way, then
+    // stands within reach of the sofa. The child is wired to follow it and told only to stay 0.5 to 1.5 m from it (a
+    // lead's length): it goes after it no faster than its own pace, and says how much of the time it kept within
+    const b = emptyBoard('Two agents');
+    placeBlock(b, 'seed.house', 0, 0, { show: 'roof off' }, 'house'); b.nodes.house!.label = 'A house, its roof off to see in';
+    placeBlock(b, 'time', 0, 0, {}, 'clock');
+    placeBlock(b, 'goal', 0, 0, { verb: 'go to', open: 'sofa', affords: 'sit', knows: 'all that is here (a place it knows)' }, 'sit'); b.nodes.sit!.label = 'Go to the sofa, anywhere in the house';
+    placeBlock(b, 'agent', 0, 0, { who: 'adult' }, 'adult'); b.nodes.adult!.label = 'An adult';
+    wire(b, 'house', 'house', 'adult', 'thing'); wire(b, 'sit', 'goal', 'adult', 'goal'); wire(b, 'clock', 't', 'adult', 't');
+    placeBlock(b, 'in.number', 0, 0, { value: 1.5 }, 'lead'); b.nodes.lead!.label = 'A lead\'s length, m (typical)';
+    placeBlock(b, 'goal', 0, 0, { verb: 'go to', open: '', least: 0.5 }, 'near'); b.nodes.near!.label = 'Stay within the lead of it';
+    wire(b, 'lead', 'value', 'near', 'most');
+    placeBlock(b, 'agent', 0, 0, { who: 'child' }, 'child'); b.nodes.child!.label = 'A child, following';
+    wire(b, 'house', 'house', 'child', 'thing'); wire(b, 'near', 'goal', 'child', 'goal'); wire(b, 'adult', 'plan', 'child', 'follows'); wire(b, 'clock', 't', 'child', 't');
+    placeBlock(b, 'view.table', 0, 0, {}, 'steps'); b.nodes.steps!.label = 'The adult\'s plan, step by step'; wire(b, 'adult', 'steps', 'steps', 'rows');
+    placeBlock(b, 'view.show', 0, 0, {}, 'kept'); b.nodes.kept!.label = 'How the child kept up'; wire(b, 'child', 'says', 'kept', 'value');
+    placeBlock(b, 'view.show', 0, 0, {}, 'found'); b.nodes.found!.label = 'What they found'; wire(b, 'child', 'findings', 'found', 'value');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'child', 'view', 'show', 'thing');
+    return b;
+  }],
   ['An agent opens a door: it sees it, walks to it, takes hold, pulls; the door swings in the physics', () => {
     // nothing placed by hand: the person stands where people pass (the middle of the hall), sees by its rays the doors it
     // can open, reads each door (its hinge line through its hinges' knuckles, which side it swings to, the handle on its
