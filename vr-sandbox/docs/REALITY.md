@@ -299,3 +299,35 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   truncation), and a box's shape factor against an ellipsoid's volume (two models of a shape). That only 7 of 241 have a
   second way is the coverage gap step 5 is for. The old two-step `routes` (by dimension alone) is gone; so is the mole
   count kept beside the dimensions, now that the mole is one.
+- **Step 5, the first round done.** The coverage map (`src/nexus/book/fields.ts`, written into `docs/DEPENDENCIES.md`):
+  fourteen fields, each the core its standard textbook teaches (the source named on each list), 179 laws in all. At the
+  start of the step the book had 131 of them. 82 laws were added from those textbooks
+  (`book/foundations.ts`, `book/core.ts`), each with its kind and reason, its domain, its source and a worked example
+  computed independently in Python, and each tested forward and backward as every law node is: the definitions the rest
+  join through (strain, momentum, impulse, work, pressure, wave speed, charge, capacitance), steady acceleration,
+  rotation, gravitation and orbits (Newton's law, orbital and escape speed, Kepler's third, vis-viva), special
+  relativity (the Lorentz factor, time dilation, length contraction, relativistic momentum, E = m c²), solids (Poisson,
+  the isotropic shear modulus, thermal stress, stress intensity at a crack, Goodman, power-law creep, strain energy),
+  fluids (terminal speed, Haaland's friction factor), heat (adiabatic compression, entropy of heating, fin efficiency,
+  Dittus–Boelter), waves and sound (Doppler, decibels, the speed of sound in a gas, harmonics, inverse square), light
+  (the thin lens, magnification, two slits, Malus, Beer–Lambert, Wien), circuits (series and parallel, a wire's field,
+  the transformer, LC resonance), the quantum (Planck–Einstein, de Broglie, hydrogen's levels, the photoelectric
+  effect, Heisenberg, the particle in a box, Compton), chemistry (pH, the equilibrium constant, Raoult, second-order
+  kinetics, van 't Hoff), the binary entropy, and machine elements (a shaft's critical speed, belt power, a clutch's
+  torque). New constants from CODATA 2018 (Wien's b, the Rydberg energy) and the conventions they need (I₀ = 10⁻¹²
+  W/m², ISO 1683; c° = 1 mol/L, IUPAC); the electronvolt as a unit; six quantities (mass per length, entropy, energy
+  density, molar absorptivity, the second-order rate constant, momentum and its angular kin, angular acceleration).
+  The book now holds 323 laws, all nodes; the map's core is 177 of 179. The two left: Colebrook's friction factor, which
+  is implicit (f on both sides) and so not a term (Haaland's explicit fit to it, within 2 %, is in), and the entropy of a
+  distribution of many outcomes, which takes a list, not a number.
+  Found on the way: the dimension checker refused my first pH (a concentration over a bare 1000, not over 1 mol/L); the
+  root search took a pole (where 1/(1/f − 1/d) changes sign through infinity) for a root, and now keeps only roots the
+  law reaches; classical momentum, valid "far below light's speed" in words only, now refuses past a tenth of it (the
+  cross-check had found it differing from the relativistic law at 0.6 c, as it should); series and parallel resistance
+  each named their output "resistance" and were taken for each other. Laws with a second way to their output: 14 (from
+  7); all agree but the two read in step 4. Five laws repeat their outputs (an angle and its complement, a cosine, a
+  damped swing, a yes-or-no): their backward tests are given the range that holds the root meant, and the node says
+  how many values solve it.
+  Still to cover, beyond each field's core: biomechanics, plasticity beyond yield, turbulence beyond friction factors,
+  electrochemistry of cells, nuclear reactions, statistical mechanics past the Boltzmann factor; each to be listed in
+  `fields.ts` from its textbook before its laws are added.

@@ -19,7 +19,7 @@ export interface Spec {
   domain?: (v: Record<string, Var>) => DomainCheck[];
   source: Source;
   /** The kept data's worked example, in the ports' units. */
-  example: { inputs: Record<string, number>; output: number; rel?: number };
+  example: { inputs: Record<string, number>; output: number; rel?: number; from?: string };
 }
 
 export function L(s: Spec): Law {
@@ -30,6 +30,6 @@ export function L(s: Spec): Law {
     id: s.id, name: s.name, statement: s.statement, formula: s.formula, valid: s.valid,
     inputs: s.inputs.map(([sym, unit, name]) => ({ sym, unit, name })), output: { sym: osym, unit: ounit, name: oname },
     term: s.term(v), domain: s.domain?.(v) ?? [], source: s.source,
-    example: { ...s.example, from: `the kept example of ${s.id}` },
+    example: { ...s.example, from: s.example.from ?? `the kept example of ${s.id}` },
   });
 }

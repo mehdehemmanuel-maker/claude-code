@@ -17,6 +17,8 @@ import { SLICE } from './slice';
 import { STRUCTURES } from './structures';
 import { THERMAL } from './thermal';
 import { UNIVERSAL } from './universal';
+import { FOUNDATIONS } from './foundations';
+import { CORE } from './core';
 
 export * from './slice';
 export { UNIVERSAL } from './universal';
@@ -27,7 +29,8 @@ export { KINDS, KIND_SAYS, type LawKind } from './kinds';
 export const KEPT: Record<string, Law[]> = { mechanics: MECHANICS, structures: STRUCTURES, materials: MATERIALS, 'machine elements': MACHINE_ELEMENTS, electrical: ELECTRICAL, thermal: THERMAL, fluids: FLUIDS, magnetism: MAGNETISM, information: INFORMATION, chemistry: CHEMISTRY, optics: OPTICS };
 
 /** The book: the kept laws, the slice's derived ones, and the universal laws everything else is a chain of. */
-export const BOOK: Law[] = [...Object.values(KEPT).flat(), ...SLICE, ...UNIVERSAL];
+export const BOOK: Law[] = [...Object.values(KEPT).flat(), ...SLICE, ...UNIVERSAL, ...FOUNDATIONS, ...CORE];
+export { FOUNDATIONS, CORE };
 
 const byId = new Map(BOOK.map((l) => [l.id, l]));
 for (const l of BOOK) if (BOOK.filter((x) => x.id === l.id).length > 1) throw new Error(`the book holds ${l.id} twice`);

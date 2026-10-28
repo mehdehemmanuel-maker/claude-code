@@ -41,6 +41,8 @@ export const UNITS: Record<string, UnitDef> = {
   mmHg: u(PA, 133.322387415),
   Pa: u(PA), hPa: u(PA, 100), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168), psf: u(PA, 47.88025898),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
+  // the electronvolt: the energy an electron gains across a volt, e × 1 V, exact since the 2019 SI
+  eV: u(J, 1.602176634e-19), keV: u(J, 1.602176634e-16), MeV: u(J, 1.602176634e-13),
   // a dose of radiation: energy absorbed per kilogram (the gray), weighed for harm (the sievert): J/kg (SI Brochure, 9th ed., Table 4)
   Gy: u([0, 2, -2, 0, 0, 0]), Sv: u([0, 2, -2, 0, 0, 0]), krad: u([0, 2, -2, 0, 0, 0], 10), mSv: u([0, 2, -2, 0, 0, 0], 1e-3), uSv: u([0, 2, -2, 0, 0, 0], 1e-6),
   W: u(W), kW: u(W, 1e3), hp: u(W, 745.69987158227), mW: u(W, 1e-3), uW: u(W, 1e-6), MW: u(W, 1e6), GW: u(W, 1e9), TW: u(W, 1e12),

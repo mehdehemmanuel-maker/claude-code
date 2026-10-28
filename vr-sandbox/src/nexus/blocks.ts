@@ -15,6 +15,7 @@ import { calc, num, type Scope } from './generate';
 import { QUANTITIES, quantityById, quantityOf } from './quantities';
 import { BOOK, KEPT, KINDS as LAW_KINDS } from './book';
 import { TAGS } from './book/tags';
+import { FIELDS } from './book/fields';
 import { apply, type Law } from './law';
 import { varsOf } from './term';
 import { breakdown, chain, setting, solve as solveLaw, valueIn, type Known } from './lawgraph';
@@ -495,6 +496,15 @@ const BUILT_IN: BlockDef[] = [
       return { value: valueIn(r.result, unit), status: r.weakest ?? 'unknown', chain: breakdown(r.result).join('\n'), steps: r.steps.map((st) => ({ law: st.law, name: st.lawName, kind: st.kind, solved: st.solved, gives: st.gives, value: st.value, unit: st.unit, status: st.status, ...(st.note ? { note: st.note } : {}) })), assumed: r.assumed, disagreements: r.disagreements, checks: r.agreements, alternatives: r.alternatives, says: `${r.says}; the weakest kind of law in it: ${r.weakestKind ?? 'none'}` };
     },
     tests: [{ inputs: {}, outputs: { value: 4.903325e-4 }, rel: 1e-9 }, { set: { knowns: 'period = 2 s', target: 'length' }, inputs: {}, outputs: { value: 0.9936213855661314 }, rel: 1e-9 }], sources: [SIBROCHURE] }),
+  def({ id: 'law.fields', name: 'Laws by field', kind: 'input', ability: 'measure', domains: ['science'], says: 'Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas)',
+    settings: [{ key: 'field', label: 'Field (blank: all)', type: 'choice', default: '', choices: ['', ...FIELDS.map((f) => f.field)] }],
+    ports: { inputs: [], outputs: [P('rows', 'table'), P('missing', 'list<text>'), P('says', 'text')] },
+    run: (_, c) => {
+      const fs = FIELDS.filter((f) => !c.set.field || f.field === c.set.field), rows = fs.flatMap((f) => f.laws.map((l) => ({ field: f.field, law: l.name, formula: l.formula, node: l.id ? `law.${l.id}` : '', from: f.from })));
+      const missing = rows.filter((r) => !r.node).map((r) => `${r.field}: ${r.law} (${r.formula})`);
+      return { rows, missing, says: `${rows.length - missing.length} of ${rows.length} core laws are nodes${missing.length ? `; missing: ${missing.length}` : ''}` };
+    },
+    tests: [{ set: { field: 'Relativity' }, inputs: {}, outputs: { missing: [] } }] }),
   def({ id: 'quantity', name: 'Quantity', kind: 'input', ability: 'measure', domains: ['science', 'math'], says: 'One of the quantities laws are written in (a force, a stress, a temperature, a concentration…): what it is, its SI unit and dimension, and every law in the book it appears in, with what kind of law each is. Laws join through the quantities they share',
     settings: [{ key: 'quantity', label: 'Quantity', type: 'choice', default: 'force', choices: QUANTITIES.map((x) => x.id) }],
     ports: { inputs: [], outputs: [P('says', 'text'), P('unit', 'text'), P('laws', 'list<text>'), P('rows', 'table')] },
@@ -842,6 +852,14 @@ const LAW_NOT_BACK: Record<string, string> = {
 const LAW_BACK_RANGE: Record<string, [number, number]> = {
   // efficiency rises with the lead to a helix of about 45° and falls past it: two leads give each efficiency
   'screw.efficiency.l': [0, 0.02],
+  // a launch angle and its complement reach the same range
+  'projectile.range.theta': [0, Math.PI / 4],
+  // a damped swing passes through each displacement again and again
+  'oscillator.damped.w': [9.5, 10.5], 'oscillator.damped.t': [1.5, 2.5],
+  // the cosine squared repeats every half turn
+  'malus.theta': [0, Math.PI / 2],
+  // a yes-or-no tells as much at p as at 1 − p
+  'entropy.binary.p': [0.01, 0.5],
 };
 
 

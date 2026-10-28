@@ -70,10 +70,12 @@ export function solve(id: string, sym: string, env: Record<string, Derivation>, 
     const all = bracketsOf(f);
     if (!all.length) return ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown', by: 'the law graph', grounds: `no value of ${port.name} from −10⁴⁰ to 10⁴⁰ makes ${l.name} give ${says(out)}` }));
     const tries = all.slice(0, 12).map((b) => (b[0] === b[1] ? { value: b[0], converged: true, iterations: 0, evaluations: 0, error: 0, method: 'the search' } : invertFound(free, sym, target, env, b, mk, { ftol: 0 }))).filter((t) => t.value !== null);
+    // a root is where the law gives the target, not where it changes sign through a pole (1/(1/f − 1/d) at f = d)
+    const tries2 = tries.filter((t) => Math.abs(f(t.value!)) <= 1e-6 * Math.max(Math.abs(target), 1e-300));
     const holds = (t: { value: number | null }) => apply(l, { ...env, [sym]: setting(port.name, t.value!, port.unit, 'the check') }).status !== 'outside-validity';
-    r = tries.find(holds) ?? tries[0] ?? null;
-    const good = tries.filter(holds).length;
-    if (all.length > 1) also = `; one of ${all.length} values that solve it (${good} where the law holds; the positive one nearest 1 ${port.unit || ''} where it holds is taken: set a range to choose another)`;
+    r = tries2.find(holds) ?? tries2[0] ?? null;
+    const good = tries2.filter(holds).length;
+    if (tries2.length > 1) also = `; one of ${tries2.length} values that solve it (${good} where the law holds; the positive one nearest 1 ${port.unit || ''} where it holds is taken: set a range to choose another)`;
   } else {
     if (!(f(bracket[0]) * f(bracket[1]) <= 0)) return ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown', by: 'the law graph', grounds: `no value of ${port.name} from ${bracket[0]} to ${bracket[1]} ${port.unit} makes ${l.name} give ${says(out)}` }));
     r = invertFound(free, sym, target, env, bracket, mk, { ftol: 0 });

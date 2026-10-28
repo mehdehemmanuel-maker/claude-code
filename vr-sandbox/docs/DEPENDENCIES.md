@@ -4,7 +4,7 @@ Written from the code by `tests/nexus/dependencies.test.ts` (step 0 of `docs/REA
 
 ## Laws and the engines that hold them
 
-241 laws in the book (terms: dimensions checked, domains, derivations); 241 of them nodes, built from the book (step 3: the closures that ran the first 144 are gone). In the book without a node: 0.
+323 laws in the book (terms: dimensions checked, domains, derivations); 323 of them nodes, built from the book (step 3: the closures that ran the first 144 are gone). In the book without a node: 0.
 
 Each law's kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived, constitutive (how a material behaves), empirical (a fit), an approximation (another law in a limit), or geometry.
 
@@ -23,7 +23,7 @@ Each law's kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived,
 | optics | 3 | 3 | 2 derived, 1 fundamental |
 | derived (slice) | 22 | 22 | 14 derived, 5 geometry, 3 approximation |
 | universal | 75 | 75 | 25 definition, 15 derived, 11 geometry, 11 empirical, 6 fundamental, 5 approximation, 2 constitutive |
-| all | 241 | 241 | 92 derived, 40 definition, 29 empirical, 25 fundamental, 24 geometry, 18 approximation, 13 constitutive |
+| all | 323 | 323 | 135 derived, 54 definition, 34 fundamental, 32 empirical, 27 approximation, 26 geometry, 15 constitutive |
 
 ### mechanics
 
@@ -333,72 +333,84 @@ Each law's kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived,
 
 ## Quantities: what joins the laws
 
-The registry (`src/nexus/quantities.ts`) holds 85 quantities; every one of the 892 ports of the book is one of them (0 are not). 61 quantities are shared by two laws or more: those are the joins a chain of laws runs along.
+The registry (`src/nexus/quantities.ts`) holds 93 quantities; every one of the 1169 ports of the book is one of them (0 are not). 67 quantities are shared by two laws or more: those are the joins a chain of laws runs along.
 
 | Quantity | Unit | Laws |
 | --- | --- | --- |
-| length | m | 86: `wheel.torque`, `energy.potential`, `braking.distance`, `cornering.limit`, `pendulum.period`, `centripetal`, `inertia.disc`, `inertia.rod-end`, … |
-| force | N | 39: `newton.second`, `weight`, `friction.coulomb`, `rolling.resistance`, `grade.force`, `power.linear`, `wheel.torque`, `traction.limit`, … |
-| ratio | 1 | 35: `rolling.resistance`, `flywheel.specific-energy`, `time.dilation.gravity`, `buckling.euler`, `buckling.johnson`, `sinter.scale`, `shaft.diameter.static`, `capstan`, … |
-| mass | kg | 31: `newton.second`, `weight`, `grade.force`, `energy.kinetic`, `energy.potential`, `natural.frequency`, `centripetal`, `inertia.disc`, … |
-| count | 1 | 27: `piezo.stroke`, `bearing.life.l10`, `bearing.life.hours`, `spring.rate`, `chain.speed`, `spring.torsion.rate`, `grubler`, `ampere.law`, … |
-| area | m^2 | 26: `stress.axial`, `buckling.johnson`, `wire.resistance`, `electrostatic.pull`, `pv.power`, `convection`, `conduction`, `radiation`, … |
-| time | s | 25: `pendulum.period`, `bearing.life.hours`, `motor.time-constant`, `energy.electric`, `rc.time-constant`, `lumped.time-constant`, `diffusion.time`, `queueing`, … |
-| speed | m/s | 25: `power.linear`, `energy.kinetic`, `braking.distance`, `cornering.limit`, `centripetal`, `free-fall.speed`, `sound.speed`, `conservation.momentum`, … |
-| power | W | 23: `power.linear`, `power.rotary`, `chain.pull`, `joule`, `power.electric`, `cmos.dynamic`, `pv.power`, `convection`, … |
-| elastic modulus | Pa | 19: `sound.speed`, `beam.simply-supported.udl`, `beam.simply-supported.point`, `beam.cantilever.point`, `buckling.euler`, `torsion.twist`, `buckling.johnson`, `slenderness.transition`, … |
-| stress | Pa | 19: `flywheel.specific-energy`, `stress.axial`, `stress.bending`, `torsion.solid`, `buckling.johnson`, `slenderness.transition`, `stress.hoop`, `weld.fillet.shear`, … |
-| density | kg/m^3 | 19: `flywheel.specific-energy`, `sound.speed`, `drag.aero`, `lift.aero`, `reynolds`, `darcy-weisbach`, `buoyancy`, `hydrostatic`, … |
-| voltage | V | 18: `piezo.stroke`, `ohm`, `wire.drop`, `motor.back-emf`, `motor.current`, `lead-acid.ocv`, `energy.electric`, `capacitor.energy`, … |
-| fraction | 1 | 17: `composite.rule-of-mixtures`, `composite.transverse`, `cmos.dynamic`, `radiation`, `absorbed.solar`, `separation.work`, `balance.steady`, `share.of`, … |
-| temperature | K | 17: `copper.tempco`, `radiation`, `carnot`, `arrhenius`, `separation.work`, `ideal.gas`, `clausius-clapeyron`, `boltzmann.distribution`, … |
-| frequency or rate | Hz | 16: `natural.frequency`, `cmos.dynamic`, `arrhenius`, `acoustic.mass-law`, `skin.depth`, `shannon.capacity`, `shannon.sampling`, `queueing`, … |
-| pressure | Pa | 16: `stress.hoop`, `hertz.contact`, `ideal.gas`, `gas.isothermal-work`, `darcy-weisbach`, `hydrostatic`, `bernoulli`, `starling.filtration`, … |
-| torque or moment | N m | 15: `power.rotary`, `wheel.torque`, `stress.bending`, `torsion.solid`, `torsion.twist`, `beam.plastic-moment`, `shaft.diameter.static`, `gear.output.torque`, … |
-| energy | J | 14: `energy.kinetic`, `energy.potential`, `energy.rotational`, `spring.energy`, `energy.electric`, `capacitor.energy`, `inductor.energy`, `heat.capacity`, … |
-| electric current | A | 13: `ohm`, `joule`, `wire.drop`, `motor.torque`, `motor.current`, `energy.electric`, `inductor.energy`, `power.electric`, … |
-| volume | m^3 | 12: `ideal.gas`, `gas.isothermal-work`, `buoyancy`, `residence.stock`, `total.volume`, `amount.concentration`, `reaction.rate-from-power`, `volume.cylinder`, … |
-| concentration | mol/m^3 | 11: `fick.diffusion`, `michaelis-menten`, `transport.advection`, `concentration.difference`, `amount.concentration`, `saturation.share`, `diffusion.front`, `diffusion.sphere-limit`, … |
-| angle | rad | 10: `grade.force`, `torsion.twist`, `young.contact`, `capstan`, `screw.efficiency`, `diffraction.limit`, `snell.law`, `bragg.law`, … |
+| length | m | 116: `wheel.torque`, `energy.potential`, `braking.distance`, `cornering.limit`, `pendulum.period`, `centripetal`, `inertia.disc`, `inertia.rod-end`, … |
+| ratio | 1 | 56: `rolling.resistance`, `flywheel.specific-energy`, `time.dilation.gravity`, `buckling.euler`, `buckling.johnson`, `sinter.scale`, `shaft.diameter.static`, `capstan`, … |
+| speed | m/s | 49: `power.linear`, `energy.kinetic`, `braking.distance`, `cornering.limit`, `centripetal`, `free-fall.speed`, `sound.speed`, `conservation.momentum`, … |
+| force | N | 48: `newton.second`, `weight`, `friction.coulomb`, `rolling.resistance`, `grade.force`, `power.linear`, `wheel.torque`, `traction.limit`, … |
+| mass | kg | 46: `newton.second`, `weight`, `grade.force`, `energy.kinetic`, `energy.potential`, `natural.frequency`, `centripetal`, `inertia.disc`, … |
+| time | s | 33: `pendulum.period`, `bearing.life.hours`, `motor.time-constant`, `energy.electric`, `rc.time-constant`, `lumped.time-constant`, `diffusion.time`, `queueing`, … |
+| count | 1 | 32: `piezo.stroke`, `bearing.life.l10`, `bearing.life.hours`, `spring.rate`, `chain.speed`, `spring.torsion.rate`, `grubler`, `ampere.law`, … |
+| area | m^2 | 29: `stress.axial`, `buckling.johnson`, `wire.resistance`, `electrostatic.pull`, `pv.power`, `convection`, `conduction`, `radiation`, … |
+| temperature | K | 25: `copper.tempco`, `radiation`, `carnot`, `arrhenius`, `separation.work`, `ideal.gas`, `clausius-clapeyron`, `boltzmann.distribution`, … |
+| frequency or rate | Hz | 25: `natural.frequency`, `cmos.dynamic`, `arrhenius`, `acoustic.mass-law`, `skin.depth`, `shannon.capacity`, `shannon.sampling`, `queueing`, … |
+| power | W | 25: `power.linear`, `power.rotary`, `chain.pull`, `joule`, `power.electric`, `cmos.dynamic`, `pv.power`, `convection`, … |
+| stress | Pa | 24: `flywheel.specific-energy`, `stress.axial`, `stress.bending`, `torsion.solid`, `buckling.johnson`, `slenderness.transition`, `stress.hoop`, `weld.fillet.shear`, … |
+| energy | J | 23: `energy.kinetic`, `energy.potential`, `energy.rotational`, `spring.energy`, `energy.electric`, `capacitor.energy`, `inductor.energy`, `heat.capacity`, … |
+| elastic modulus | Pa | 22: `sound.speed`, `beam.simply-supported.udl`, `beam.simply-supported.point`, `beam.cantilever.point`, `buckling.euler`, `torsion.twist`, `buckling.johnson`, `slenderness.transition`, … |
+| density | kg/m^3 | 20: `flywheel.specific-energy`, `sound.speed`, `drag.aero`, `lift.aero`, `reynolds`, `darcy-weisbach`, `buoyancy`, `hydrostatic`, … |
+| voltage | V | 20: `piezo.stroke`, `ohm`, `wire.drop`, `motor.back-emf`, `motor.current`, `lead-acid.ocv`, `energy.electric`, `capacitor.energy`, … |
+| pressure | Pa | 19: `stress.hoop`, `hertz.contact`, `ideal.gas`, `gas.isothermal-work`, `darcy-weisbach`, `hydrostatic`, `bernoulli`, `starling.filtration`, … |
+| fraction | 1 | 18: `composite.rule-of-mixtures`, `composite.transverse`, `cmos.dynamic`, `radiation`, `absorbed.solar`, `separation.work`, `balance.steady`, `share.of`, … |
+| torque or moment | N m | 18: `power.rotary`, `wheel.torque`, `stress.bending`, `torsion.solid`, `torsion.twist`, `beam.plastic-moment`, `shaft.diameter.static`, `gear.output.torque`, … |
+| electric current | A | 15: `ohm`, `joule`, `wire.drop`, `motor.torque`, `motor.current`, `energy.electric`, `inductor.energy`, `power.electric`, … |
+| concentration | mol/m^3 | 14: `fick.diffusion`, `michaelis-menten`, `transport.advection`, `concentration.difference`, `amount.concentration`, `saturation.share`, `diffusion.front`, `diffusion.sphere-limit`, … |
+| angle | rad | 13: `grade.force`, `torsion.twist`, `young.contact`, `capstan`, `screw.efficiency`, `diffraction.limit`, `snell.law`, `bragg.law`, … |
+| volume | m^3 | 13: `ideal.gas`, `gas.isothermal-work`, `buoyancy`, `residence.stock`, `total.volume`, `amount.concentration`, `reaction.rate-from-power`, `volume.cylinder`, … |
+| angular speed | rad/s | 11: `power.rotary`, `energy.rotational`, `bearing.life.hours`, `chain.speed`, `belt.speed`, `motor.back-emf`, `motor.current`, `angular-momentum`, … |
 | second moment of area | m^4 | 10: `beam.simply-supported.udl`, `beam.simply-supported.point`, `beam.cantilever.point`, `buckling.euler`, `torsion.twist`, `section.rect.second-moment`, `beam.simply-supported.central-patch.sag`, `beam.overhang.self-sag`, … |
+| acceleration | m/s^2 | 10: `newton.second`, `weight`, `braking.distance`, `weight.per-length`, `pendulum.physical.period`, `kinematics.velocity`, `kinematics.displacement`, `kinematics.timeless`, … |
+| moment of inertia | kg m^2 | 10: `inertia.disc`, `inertia.rod-end`, `parallel-axis`, `energy.rotational`, `motor.time-constant`, `inertia.prism.centre`, `pendulum.physical.period`, `angular-momentum`, … |
 | volume flow | m^3/s | 10: `balance.steady`, `residence.stock`, `balance.difference`, `junction.sum`, `transport.advection`, `total.flow`, `rate.per-mass`, `mass.flow`, … |
-| temperature difference | K | 8: `thermal.expansion`, `seebeck`, `convection`, `conduction`, `convection.natural`, `heat.capacity`, `thermal.network`, `conduction.series` |
-| electrical resistance | ohm | 8: `ohm`, `joule`, `wire.resistance`, `copper.tempco`, `motor.current`, `motor.time-constant`, `rc.time-constant`, `strain.gauge` |
-| angular speed | rad/s | 7: `power.rotary`, `energy.rotational`, `bearing.life.hours`, `chain.speed`, `belt.speed`, `motor.back-emf`, `motor.current` |
+| electrical resistance | ohm | 10: `ohm`, `joule`, `wire.resistance`, `copper.tempco`, `motor.current`, `motor.time-constant`, `rc.time-constant`, `strain.gauge`, … |
+| molar energy | J/mol | 10: `arrhenius`, `separation.work`, `gibbs.energy`, `power.molar`, `reaction.rate-from-power`, `free-energy.gradient`, `arrhenius.ratio`, `creep.power-law`, … |
+| temperature difference | K | 9: `thermal.expansion`, `seebeck`, `convection`, `conduction`, `convection.natural`, `heat.capacity`, `thermal.network`, `conduction.series`, … |
+| efficiency | 1 | 8: `gear.output.torque`, `screw.force`, `screw.efficiency`, `pv.power`, `carnot`, `weld.heat-input`, `heat-engine.efficiency`, `fin.efficiency` |
+| molar mass | kg/mol | 8: `faraday.electrolysis`, `stoichiometry.mass`, `molar.mass-flow`, `vapour.pressure`, `moles.of-mass`, `corrosion.penetration`, `sound.speed.gas`, `gas.rms-speed` |
+| dimensionless group | 1 | 7: `froude`, `slenderness.transition`, `reynolds`, `rayleigh.resolution`, `shannon.capacity`, `friction-factor.haaland`, `dittus-boelter` |
 | load per length | N/m | 7: `beam.simply-supported.udl`, `weight.per-length`, `beam.overhang.self-moment`, `beam.overhang.self-sag`, `cantilever.root-moment`, `cantilever.root-shear`, `cantilever.tip-sag` |
-| moment of inertia | kg m^2 | 7: `inertia.disc`, `inertia.rod-end`, `parallel-axis`, `energy.rotational`, `motor.time-constant`, `inertia.prism.centre`, `pendulum.physical.period` |
 | heat transfer coefficient | W/m^2 K | 7: `convection`, `convection.natural`, `lumped.time-constant`, `radiation.linear`, `conductance.parallel`, `conduction.series`, `evaporation.max` |
-| molar energy | J/mol | 7: `arrhenius`, `separation.work`, `gibbs.energy`, `power.molar`, `reaction.rate-from-power`, `free-energy.gradient`, `arrhenius.ratio` |
-| efficiency | 1 | 6: `gear.output.torque`, `screw.force`, `screw.efficiency`, `pv.power`, `carnot`, `weld.heat-input` |
+| friction coefficient | 1 | 6: `friction.coulomb`, `traction.limit`, `cornering.limit`, `capstan`, `screw.efficiency`, `clutch.torque` |
 | mass flow | kg/s | 6: `flux.area`, `residence.mass`, `heat.latent-flow`, `mass.flow`, `molar.mass-flow`, `loss.first-order` |
-| molar mass | kg/mol | 6: `faraday.electrolysis`, `stoichiometry.mass`, `molar.mass-flow`, `vapour.pressure`, `moles.of-mass`, `corrosion.penetration` |
+| capacitance | F | 6: `rc.time-constant`, `capacitor.energy`, `cmos.dynamic`, `capacitor.charge`, `capacitance.plates`, `lc.resonance` |
 | diffusivity | m^2/s | 6: `diffusion.time`, `fick.diffusion`, `diffusion.front`, `diffusion.erf`, `diffusion.sphere-limit`, `diffusivity.papadakis` |
-| friction coefficient | 1 | 5: `friction.coulomb`, `traction.limit`, `cornering.limit`, `capstan`, `screw.efficiency` |
-| dimensionless group | 1 | 5: `froude`, `slenderness.transition`, `reynolds`, `rayleigh.resolution`, `shannon.capacity` |
-| acceleration | m/s^2 | 5: `newton.second`, `weight`, `braking.distance`, `weight.per-length`, `pendulum.physical.period` |
-| exponent | 1 | 4: `bearing.life.l10`, `network.scaling`, `kleiber.scaling`, `fatigue.basquin` |
+| strain | 1 | 5: `hooke`, `sinter.scale`, `strain.gauge`, `strain.definition`, `poisson.lateral` |
+| exponent | 1 | 5: `bearing.life.l10`, `network.scaling`, `kleiber.scaling`, `fatigue.basquin`, `creep.power-law` |
+| stiffness | N/m | 5: `natural.frequency`, `spring.energy`, `spring.rate`, `spring.hooke`, `shaft.critical-speed` |
+| heat flux or irradiance | W/m^2 | 5: `pv.power`, `absorbed.solar`, `sound.level`, `inverse-square`, `malus` |
+| magnetic flux density | T | 5: `lorentz.force`, `magnetic.pull`, `ampere.law`, `lorentz.charge`, `wire.field` |
 | amount of substance | mol | 4: `ideal.gas`, `amount.concentration`, `stoichiometry.moles`, `moles.of-mass` |
+| momentum | kg m/s | 4: `momentum.definition`, `impulse`, `momentum.relativistic`, `uncertainty.heisenberg` |
 | specific energy | J/kg | 4: `flywheel.specific-energy`, `clausius-clapeyron`, `heat.latent-flow`, `vapour.pressure` |
+| electric charge | C | 4: `coulomb.law`, `charge.definition`, `capacitor.charge`, `lorentz.charge` |
 | motor constant | N m/A | 4: `motor.torque`, `motor.back-emf`, `motor.current`, `motor.time-constant` |
-| strain | 1 | 3: `hooke`, `sinter.scale`, `strain.gauge` |
 | section modulus | m^3 | 3: `stress.bending`, `beam.plastic-moment`, `section.rect.modulus` |
-| stiffness | N/m | 3: `natural.frequency`, `spring.energy`, `spring.rate` |
 | surface tension or energy | J/m^2 | 3: `young.contact`, `griffith`, `laplace.pressure` |
 | dynamic viscosity | Pa s | 3: `reynolds`, `poiseuille`, `stokes.drag` |
-| capacitance | F | 3: `rc.time-constant`, `capacitor.energy`, `cmos.dynamic` |
+| specific heat | J/kg K | 3: `heat.capacity`, `lumped.time-constant`, `entropy.heating` |
 | current density | A/m^2 | 3: `butler-volmer`, `faraday.flux`, `corrosion.penetration` |
-| magnetic flux density | T | 3: `lorentz.force`, `magnetic.pull`, `ampere.law` |
 | molar flow | mol/s | 3: `transport.advection`, `power.molar`, `molar.mass-flow` |
 | reaction rate per volume | mol/m^3 s | 3: `michaelis-menten`, `reaction.rate-from-power`, `diffusion.sphere-limit` |
+| information | 1 | 2: `information.choices`, `entropy.binary` |
+| stress over root length | Pa m^0.5 | 2: `hall-petch`, `fracture.toughness` |
 | thermal conductivity | W/m K | 2: `conduction`, `thermal.resistance.conduction` |
 | thermal resistance | K/W | 2: `thermal.network`, `thermal.resistance.conduction` |
-| heat flux or irradiance | W/m^2 | 2: `pv.power`, `absorbed.solar` |
-| specific heat | J/kg K | 2: `heat.capacity`, `lumped.time-constant` |
 | dose rate | Gy/s | 2: `dose.time`, `hazard.dose` |
+| thermal expansion coefficient | 1/K | 2: `thermal.expansion`, `thermal.stress` |
 | resistance per length | ohm/m | 2: `wire.drop`, `cable.equation` |
 | resistivity | ohm m | 2: `wire.resistance`, `cable.equation` |
+| inductance | H | 2: `inductor.energy`, `lc.resonance` |
 | molar flux | mol/m^2 s | 2: `fick.diffusion`, `faraday.flux` |
-| information | 1 | 1: `information.choices` |
+| mass per length | kg/m | 1: `string.wave-speed` |
+| entropy | J/K | 1: `entropy.heating` |
+| energy density | J/m^3 | 1: `strain-energy.density` |
+| molar absorptivity | m^2/mol | 1: `beer-lambert` |
+| second-order rate constant | m^3/mol s | 1: `rate.second-order` |
+| angular momentum | kg m^2/s | 1: `angular-momentum` |
+| angular acceleration | rad/s^2 | 1: `newton.rotational` |
 | heat input per length | J/m | 1: `weld.heat-input` |
 | torsional stiffness | N m/rad | 1: `spring.torsion.rate` |
 | mass per area | kg/m^2 | 1: `acoustic.mass-law` |
@@ -406,15 +418,11 @@ The registry (`src/nexus/quantities.ts`) holds 85 quantities; every one of the 8
 | specific volume | m^3/kg | 1: `clausius-clapeyron` |
 | flow per mass | m^3/kg s | 1: `rate.per-mass` |
 | filtration coefficient | m^4 s/kg | 1: `starling.filtration` |
-| stress over root length | Pa m^0.5 | 1: `hall-petch` |
 | pressure per temperature | Pa/K | 1: `clausius-clapeyron` |
 | absorbed dose | Gy | 1: `dose.time` |
 | power per mass | W/kg | 1: `power.per-mass` |
 | risk per dose | 1/Gy | 1: `hazard.dose` |
-| thermal expansion coefficient | 1/K | 1: `thermal.expansion` |
 | electrical conductivity | S/m | 1: `skin.depth` |
-| inductance | H | 1: `inductor.energy` |
-| electric charge | C | 1: `coulomb.law` |
 | rate of change of flux density | T/s | 1: `faraday.induction` |
 | magnetic permeability | N/A^2 | 1: `wave.speed.electromagnetic` |
 | electric permittivity | F/m | 1: `wave.speed.electromagnetic` |
@@ -425,51 +433,53 @@ The registry (`src/nexus/quantities.ts`) holds 85 quantities; every one of the 8
 
 ### One letter, different things
 
-55 symbols stand for different quantities in different laws: laws are joined by the quantity, never by the letter.
+67 symbols stand for different quantities in different laws: laws are joined by the quantity, never by the letter.
 
 | Symbol | Means |
 | --- | --- |
 | a | acceleration; force; length; fraction; exponent; concentration; time |
 | k | stiffness; ratio; torsional stiffness; thermal conductivity; frequency or rate; risk per dose |
+| M | mass; torque or moment; count; molar mass; fraction; ratio |
+| J | second moment of area; moment of inertia; molar flux; mass flux; volume flow; momentum |
+| p | pressure; exponent; length; power per mass; momentum; ratio |
+| n | count; ratio; angular speed; amount of substance; molar flow; exponent |
+| q | power; load per length; volume flow; flow per mass; reaction rate per volume; electric charge |
+| Q | energy; heat input per length; ratio; volume flow; electric charge; molar energy |
+| m | mass; length; mass per area; mass flow; count |
+| mu | friction coefficient; magnetic permeability; dynamic viscosity; frequency or rate; mass per length |
 | E | energy; elastic modulus; voltage; molar energy; power |
 | h | length; time; heat transfer coefficient; fraction; frequency or rate |
 | L | length; count; inductance; specific energy; force |
-| M | mass; torque or moment; count; molar mass; fraction |
-| J | second moment of area; moment of inertia; molar flux; mass flux; volume flow |
-| n | count; ratio; angular speed; amount of substance; molar flow |
+| A | area; frequency or rate; length; ratio; concentration |
 | C | force; capacitance; frequency or rate; concentration; ratio |
-| q | power; load per length; volume flow; flow per mass; reaction rate per volume |
-| m | mass; length; mass per area; mass flow |
 | W | force; molar energy; energy; time |
-| mu | friction coefficient; magnetic permeability; dynamic viscosity; frequency or rate |
 | T | torque or moment; time; temperature; force |
 | w | angular speed; load per length; length; fraction |
 | R | length; electrical resistance; thermal resistance; force |
+| f | frequency or rate; ratio; fraction; length |
+| I | moment of inertia; second moment of area; electric current; heat flux or irradiance |
 | c | speed; specific heat; concentration; length |
 | s | dimensionless group; stress; strain; ratio |
-| p | pressure; exponent; length; power per mass |
-| Q | energy; heat input per length; ratio; volume flow |
+| eps | strain; electric permittivity; fraction; molar absorptivity |
+| alpha | thermal expansion coefficient; angle; fraction; angular acceleration |
 | N | force; count; ratio |
 | r | length; ratio; frequency or rate |
-| f | frequency or rate; ratio; fraction |
-| I | moment of inertia; second moment of area; electric current |
+| K | ratio; stress over root length; energy |
+| e | specific energy; time; ratio |
 | b | speed; length; exponent |
 | S | section modulus; Seebeck coefficient; concentration |
 | G | elastic modulus; heat flux or irradiance; frequency or rate |
-| eps | strain; electric permittivity; fraction |
-| alpha | thermal expansion coefficient; angle; fraction |
 | V | voltage; volume; force |
 | D | length; diffusivity; absorbed dose |
 | B | magnetic flux density; frequency or rate; power |
+| T1 | time; temperature; force |
 | theta | angle; fraction |
 | v | speed; reaction rate per volume |
 | P | power; force |
 | sigma | stress; electrical conductivity |
 | rho | density; resistivity |
-| e | specific energy; time |
 | x | length; fraction |
 | dv | speed; specific volume |
-| A | area; frequency or rate |
 | tau | stress; time |
 | t | length; time |
 | Mp | torque or moment; molar mass |
@@ -479,15 +489,46 @@ The registry (`src/nexus/quantities.ts`) holds 85 quantities; every one of the 8
 | eta | efficiency; voltage |
 | T0 | temperature; time |
 | Rm | resistance per length; stress |
+| ri | resistance per length; length |
 | lambda | length; frequency or rate |
+| dp | pressure; momentum |
 | H | information; length |
+| dS | molar entropy; entropy |
+| V1 | volume; voltage |
 | r1 | frequency or rate; length |
+| nu | count; ratio |
+| phi | fraction; energy |
+| A0 | area; concentration |
 | r2 | length; frequency or rate |
 | N0 | ratio; count |
+| rate | dose rate; frequency or rate |
+| V2 | volume; voltage |
+| T2 | temperature; force |
+
+## Coverage: each field's core laws, and which the book has
+
+The core of each field as its standard textbook teaches it (`src/nexus/book/fields.ts`, each list's source named). 177 of 179 are in the book; the 2 missing are named with their formulas, to be added from their sources.
+
+| Field | In the book | Missing |
+| --- | --- | --- |
+| Mechanics: motion and force (Young & Freedman, University Physics, 15th ed., ch. 2–11) | 17 of 17 | none |
+| Mechanics: rotation and oscillation (Young & Freedman, ch. 9–10, 14) | 10 of 10 | none |
+| Gravitation and orbits (Young & Freedman, ch. 13) | 7 of 7 | none |
+| Relativity (Young & Freedman, ch. 37) | 6 of 6 | none |
+| Solids: elasticity, strength, fracture, fatigue (Budynas & Nisbett, Shigley's, 10th ed., ch. 3–6; Callister, ch. 6–8) | 18 of 18 | none |
+| Fluids (Fox, McDonald & Pritchard, Introduction to Fluid Mechanics, 9th ed., ch. 3–8) | 15 of 16 | Turbulent friction factor (Colebrook: implicit, f on both sides, so not a term; solved through Haaland's fit) (1/√f = −2 log(ε/3.7D + 2.51/(Re √f))) |
+| Heat and thermodynamics (Bergman et al., Fundamentals of Heat and Mass Transfer, 7th ed.; Çengel & Boles, Thermodynamics, 9th ed.) | 18 of 18 | none |
+| Waves, sound and acoustics (Kinsler et al., Fundamentals of Acoustics, 4th ed.; Young & Freedman, ch. 15–16) | 9 of 9 | none |
+| Optics and light (Hecht, Optics, 5th ed.) | 11 of 11 | none |
+| Electricity and magnetism (Griffiths, Introduction to Electrodynamics, 4th ed.; Horowitz & Hill, ch. 1) | 22 of 22 | none |
+| Atomic, nuclear and quantum (Griffiths & Schroeter, Introduction to Quantum Mechanics, 3rd ed.; Young & Freedman, ch. 38–43) | 12 of 12 | none |
+| Chemistry: equilibrium, kinetics, electrochemistry (Atkins, de Paula & Keeler, Physical Chemistry, 11th ed.) | 14 of 14 | none |
+| Information and signals (Cover & Thomas, Elements of Information Theory, 2nd ed.) | 6 of 7 | Entropy of a distribution of many outcomes (H = −Σ p log₂ p) |
+| Machine elements (Budynas & Nisbett, Shigley's, 10th ed., ch. 7–18) | 12 of 12 | none |
 
 ## The laws checked against each other
 
-Each law's worked example given, its output sought through the other laws alone (`crossCheck` in `src/nexus/lawgraph.ts`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). 7 of 241 laws have another way to their output; 5 agree to 10⁻⁶; 2 do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in `docs/REALITY.md`.
+Each law's worked example given, its output sought through the other laws alone (`crossCheck` in `src/nexus/lawgraph.ts`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). 11 of 323 laws have another way to their output; 9 agree to 10⁻⁶; 2 do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in `docs/REALITY.md`.
 
 | Law | Its example | By the others | Through | |
 | --- | --- | --- | --- | --- |
@@ -498,6 +539,10 @@ Each law's worked example given, its output sought through the other laws alone 
 | `beam.simply-supported.central-patch.sag` | 0.0078125 m | 0.0078125 m | `beam.simply-supported.point` | agree |
 | `pendulum.amplitude-factor` | 1.0174039 1 | 1.0174088 1 | `pendulum.period-factor` | **differ** |
 | `volume.of-box` | 0.000031415927 m^3 | 0.000020943951 m^3 | `volume.ellipsoid` | **differ** |
+| `momentum.definition` | 6 kg m/s | 6 kg m/s | `momentum.relativistic` | agree |
+| `kinematics.velocity` | 14 m/s | 14 m/s | `kinematics.displacement` → `kinematics.timeless` | agree |
+| `kinematics.displacement` | 32 m | 32 m | `kinematics.velocity` → `kinematics.timeless` | agree |
+| `kinematics.timeless` | 14 m/s | 14 m/s | `kinematics.displacement` → `kinematics.velocity` | agree |
 
 ## Material tables and the code that reads them
 

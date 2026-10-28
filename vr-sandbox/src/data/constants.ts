@@ -35,6 +35,8 @@ export const CONSTANTS = {
   G: measured(6.6743e-11, 1.5e-15, 'm^3/kg s^2', 'Newtonian constant of gravitation', 'CODATA 2018: 6.67430(15)e-11'),
   mu0: measured(1.25663706212e-6, 1.9e-16, 'N/A^2', 'vacuum magnetic permeability', 'CODATA 2018: 1.25663706212(19)e-6'),
   eps0: measured(8.8541878128e-12, 1.3e-21, 'F/m', 'vacuum electric permittivity', 'CODATA 2018: 8.8541878128(13)e-12'),
+  b: exact(2.897771955e-3, 'm K', 'Wien wavelength displacement law constant', 'CODATA 2018: hc/(4.965114231… k_B), exact from exact constants (2.897771955…e-3)'),
+  Ry: measured(13.605693122994, 2.6e-11, 'eV', 'Rydberg energy (R∞ h c)', 'CODATA 2018: 13.605693122994(26) eV'),
   me: measured(9.1093837015e-31, 2.8e-40, 'kg', 'electron mass', 'CODATA 2018: 9.1093837015(28)e-31'),
   mu: measured(1.6605390666e-27, 5.0e-37, 'kg', 'atomic mass constant', 'CODATA 2018: 1.66053906660(50)e-27'),
 } as const satisfies Record<string, Constant>;

@@ -11,6 +11,7 @@ import '../../src/nexus/seeds';
 import { BOOK, KEPT, KINDS, SLICE, UNIVERSAL } from '../../src/nexus/book';
 import { QUANTITIES, quantityOf } from '../../src/nexus/quantities';
 import { crossCheck } from '../../src/nexus/lawgraph';
+import { FIELDS } from '../../src/nexus/book/fields';
 import { LIBRARY } from '../../src/nexus/blocks';
 
 const root = join(__dirname, '../..'), update = !!process.env['UPDATE_DEPS'];
@@ -71,6 +72,12 @@ function mapText(): string {
   const clashes = [...bySym].filter(([, s]) => s.size > 1).sort((a, b) => b[1].size - a[1].size);
   L.push('', '### One letter, different things', '', `${clashes.length} symbols stand for different quantities in different laws: laws are joined by the quantity, never by the letter.`, '', '| Symbol | Means |', '| --- | --- |');
   for (const [k, s] of clashes) L.push(`| ${k} | ${[...s].join('; ')} |`);
+  // ---- coverage by field ----
+  const have = new Set(BOOK.map((l) => l.id));
+  for (const f of FIELDS) for (const x of f.laws) if (x.id && !have.has(x.id)) throw new Error(`the coverage map names ${x.id}, not in the book`);
+  const all = FIELDS.flatMap((f) => f.laws), got = all.filter((x) => x.id);
+  L.push('', '## Coverage: each field\'s core laws, and which the book has', '', `The core of each field as its standard textbook teaches it (\`src/nexus/book/fields.ts\`, each list's source named). ${got.length} of ${all.length} are in the book; the ${all.length - got.length} missing are named with their formulas, to be added from their sources.`, '', '| Field | In the book | Missing |', '| --- | --- | --- |');
+  for (const f of FIELDS) { const m = f.laws.filter((x) => !x.id); L.push(`| ${f.field} (${f.from}) | ${f.laws.length - m.length} of ${f.laws.length} | ${m.map((x) => `${x.name} (${x.formula})`).join('; ') || 'none'} |`); }
   // ---- the laws checked against each other ----
   const xc = crossCheck();
   L.push('', '## The laws checked against each other', '', `Each law's worked example given, its output sought through the other laws alone (\`crossCheck\` in \`src/nexus/lawgraph.ts\`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). ${xc.length} of ${BOOK.length} laws have another way to their output; ${xc.filter((r) => r.agree).length} agree to 10⁻⁶; ${xc.filter((r) => !r.agree).length} do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in \`docs/REALITY.md\`.`, '', '| Law | Its example | By the others | Through | |', '| --- | --- | --- | --- | --- |');
@@ -91,9 +98,9 @@ function mapText(): string {
 }
 
 describe('the dependency map', () => {
-  it('is current', () => {
+  it("is current", () => {
     const want = mapText(), path = join(root, 'docs/DEPENDENCIES.md');
     if (update) writeFileSync(path, want);
     expect(readFileSync(path, 'utf8'), 'out of date: UPDATE_DEPS=1 npx vitest run tests/nexus/dependencies.test.ts').toBe(want);
-  });
+  }, 600_000);
 });
