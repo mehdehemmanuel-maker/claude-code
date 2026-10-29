@@ -10,6 +10,7 @@
 // block says so rather than pretending.
 
 import { EVIDENCE_SAYS, boardBuiltOf, builtOf, evidenceOf } from '../evidence';
+import { DISCIPLINE } from '../../data/disciplines';
 import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { isAssembly, partOf } from '../assembly';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
@@ -670,6 +671,9 @@ function outsHtml(id: string): string {
   // limits and how it is checked (src/nexus/evidence.ts)
   const n = cur().nodes[id], d = n?.block ? block(n.block) : undefined;
   if (s?.evidence) h += `<p class="src"><b>${esc(s.evidence.kind)}</b>: ${esc(EVIDENCE_SAYS[s.evidence.kind])}${s.evidence.from.length && !(s.evidence.from.length === 1 && s.evidence.from[0] === id) ? ` (from ${esc(s.evidence.from.map((f) => cur().nodes[f]?.label || f).join(', '))})` : ''}</p>`;
+  // what it is, specified (docs/REALITY.md phase 2): its plain gloss, discipline, codes, role and model
+  if (d?.spec) { const sp = d.spec, path: string[] = []; for (let k = sp.discipline; k; k = k.includes('.') ? k.slice(0, k.lastIndexOf('.')) : '') path.unshift(DISCIPLINE.get(k)?.name ?? k);
+    h += `<p class="src"><b>${esc(sp.gloss)}</b> · ${esc(path.join(' › '))} · ${esc(sp.role)} · ${sp.codes.map((c) => `${esc(c.scheme)} ${esc(c.code)} (${esc(c.label)})`).join('; ')}${sp.model ? `<br>model: ${esc(sp.model.class)}, ${esc(sp.model.time)}, ${sp.model.linear ? 'linear' : 'nonlinear'}; ${esc(sp.model.equations.join('; '))}${sp.model.method ? `; by ${esc(sp.model.method)}` : ''}<br>after ${esc(sp.model.references.join('; '))}` : ''}</p>`; }
   if (d) { const e = evidenceOf(d); h += `<p class="src">its own: ${esc(e.kind)}, ${esc(e.why)}; ${esc(e.validation)} (${esc(e.validationSays)})${e.assumptions.length ? `; assumes ${esc(e.assumptions.join('; '))}` : ''}${e.limits.length ? `; holds only for ${esc(e.limits.join('; '))}` : ''}</p>`; }
   return h;
 }
@@ -750,7 +754,7 @@ function commands(q: string): Cmd[] {
     { label: 'Undo', hint: 'Ctrl Z', colour: KINDS.meta.hue, mark: '↶', run: doUndo }, { label: 'Redo', hint: 'Ctrl Shift Z', colour: KINDS.meta.hue, mark: '↷', run: doRedo },
     ...DEMOS.map(([name, fn]) => ({ label: `Open: ${name}`, hint: 'start from', colour: '#69f0ae', mark: '★', run: () => { pushUndo(); useBoard(fn()); sel.clear(); save(); fit(); runSoon(); renderAll(); } })),
   ];
-  const bl = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') || b.id === 'group.in' || b.id === 'group.out').map((b) => ({ label: b.name, hint: `${KINDS[b.kind].name} · ${(b.domains.map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x))[0] ?? ''}`, colour: KINDS[b.kind].hue, mark: KINDS[b.kind].mark, run: () => addBlock(b.id), key: `${b.name} ${b.says} ${b.id}` }));
+  const bl = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') || b.id === 'group.in' || b.id === 'group.out').map((b) => ({ label: b.name, hint: `${KINDS[b.kind].name} · ${(b.domains.map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x))[0] ?? ''}`, colour: KINDS[b.kind].hue, mark: KINDS[b.kind].mark, run: () => addBlock(b.id), key: `${b.name} ${b.spec ? `${b.spec.gloss} ` : ''}${b.says} ${b.id}` }));
   return [...acts.filter((a) => m(a.label)), ...bl.filter((b) => m(b.key))].slice(0, 40);
 }
 function openCmd(q: string): void { if (!PAGE) { pendingWire = null; placeAt = null; return; } cmdIn.value = q; cmdIn.focus(); listCmd(); }

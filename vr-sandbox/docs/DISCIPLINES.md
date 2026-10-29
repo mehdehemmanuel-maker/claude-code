@@ -1,6 +1,6 @@
 # Engineering disciplines
 
-Generated from `src/data/disciplines.ts`: 17 disciplines, 363 entries in all (discipline, branch, specialty). Each discipline is organised after the body named with it; nodes are classified to the deepest entry that fits (docs/REALITY.md, step K).
+Generated from `src/data/disciplines.ts`: 17 disciplines, 364 entries in all (discipline, branch, specialty). Each discipline is organised after the body named with it; nodes are classified to the deepest entry that fits (docs/REALITY.md, step K).
 
 ## Civil engineering (`civil`)
 
@@ -100,6 +100,7 @@ After ASME's technical divisions.
   - Design for manufacture and assembly (`mechanical.design.dfm`)
   - Dimensioning and tolerancing (GD&T) (`mechanical.design.tolerancing`)
   - Mechanical reliability (`mechanical.design.reliability`)
+  - Computer-aided design and geometric modelling (`mechanical.design.cad`)
 - Thermal and fluid sciences (`mechanical.thermofluids`)
   - Engineering thermodynamics (`mechanical.thermofluids.thermodynamics`)
   - Conduction heat transfer (`mechanical.thermofluids.conduction`)

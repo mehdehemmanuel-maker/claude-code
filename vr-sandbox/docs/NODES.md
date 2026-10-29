@@ -4,7 +4,7 @@ Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tes
 
 ## Fields and the disciplines they reach
 
-The fields below are the library's own; the engineering disciplines are a tree of 17 disciplines and 363 entries in all (docs/DISCIPLINES.md).
+The fields below are the library's own; the engineering disciplines are a tree of 17 disciplines and 364 entries in all (docs/DISCIPLINES.md).
 
 | Field | Disciplines |
 | --- | --- |
@@ -199,18 +199,18 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Check a limit** (`check.limit`): A value against its limit: whether it passes, the margin left, and the factor of safety *derived, tested here, before the update*
 - **Clashes** (`clash`): Which of the things a thing places run into one another (a car parked into a house, a pipe through a beam): their boxes, as far down as asked, overlapping by more than a touch. *derived, tested here, before the update*
 - **Comes apart to the bottom?** (`audit.explode`): How far a build really comes apart: the share of its mass in lumps (a piece drawn as one though what it is named for is an assembly in the inventory: a headlamp, a door, a fuel tank), each said with what it should … *derived, tested here, before the update*
+- **Contact graph** (`graph`): The contact graph of any thing, read from its geometry with nothing typed: every piece a node, every two that touch an edge, with where they meet, which way, how hard they press and over what patch; the groups that … *derived, tested here*
 - **Feed the proposals in** (`gauntlet.feed`): The proposals with a source (read off a drawing, a reference, or the web) entered in the inventory, what each holds first; the inferred stay proposed until a source confirms them *derived, tested here, before the update*
+- **Frame analysis (3D beams)** (`bend`): Any thing as a 3D frame of beams, read from its geometry (What touches what), nothing typed: each piece cut into slices, each slice a beam of its own section and material (stretch, twist and bending both ways, … *derived, tested here*
 - **How finely is it made?** (`check.fidelity`): A drawn thing measured for how finely it is made: its pieces and kinds; how many, and how much of it, are still plain boxes (a casting drawn as a slab wants its ribs, bosses and fillets); how many are shaped (turned, … *derived, tested here, before the update*
-- **How it bends under a load** (`bend`): Any thing as a 3D frame of beams, read from its geometry (What touches what), nothing typed: each piece cut into slices, each slice a beam of its own section and material (stretch, twist and bending both ways, … *derived, tested here*
+- **Lumped network analysis** (`flow`): Heat, current or force through any thing between two sets of its pieces, over its contact graph (What touches what), nothing typed: the ends chosen by what pieces are (the highest, the lowest, or a name or material). *derived, tested here*
 - **Mass, centre and inertia** (`mass.properties`): What follows from a thing's pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece's own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass … *estimated, tested here*
 - **Measure** (`measure`): What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as *derived, tested here, before the update*
 - **Nothing runs into anything?** (`check.rules`): The rules a made thing is held to, on its surfaces as drawn (triangle against triangle): no two pieces cross unless they are one piece, one is said to pass through the other, one is a fastener in what it fastens, or … *derived, tested here, before the update*
 - **Run the gauntlet** (`gauntlet.run`): Every candidate through the gates chosen (all if none, one for a single gate), each where it applies, cheapest first: approved only when none fails. *derived, tested here, before the update*
 - **Tester** (`test.block`): A block of the library put to its own tests, then pushed far from its defaults (zero, a thousandth, a thousand times, negative): each failure and each crash said, and whether it answered or refused in words *derived, tested here, before the update*
 - **Turn it over and check** (`check.turning`): A piston engine turned through a whole revolution of its crank, a step at a time: at each, its crank and every piston and rod where they then are, tried against everything else (block, caps, pan, pump, cams in the … *derived, tested here, before the update*
-- **What flows through it** (`flow`): Heat, current or force through any thing between two sets of its pieces, over its contact graph (What touches what), nothing typed: the ends chosen by what pieces are (the highest, the lowest, or a name or material). *derived, tested here*
 - **What it is made of** (`made.of`): Any thing opened as its materials all the way down: its own tree with each thing's mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a … *derived, tested here*
-- **What touches what** (`graph`): The contact graph of any thing, read from its geometry with nothing typed: every piece a node, every two that touch an edge, with where they meet, which way, how hard they press and over what patch; the groups that … *derived, tested here*
 
 ## 6 · Simulate and run (16)
 

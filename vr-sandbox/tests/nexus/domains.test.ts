@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
-import { DOMAINS, LIBRARY, defaultsOf, portsOf, testBlock, type BlockDef } from '../../src/nexus/blocks';
+import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
 import { Engine, type Env } from '../../src/nexus/dataflow';
 import { starterBoards } from '../../src/nexus/starters';
 import { fieldOf } from '../../src/nexus/navigate';
@@ -70,6 +70,8 @@ describe('every domain, in one pass', () => {
         for (const p of [...ps.inputs, ...ps.outputs]) if (p.unit && !unitOk(p.unit)) bad.push(`${b.id}.${p.name}: "${p.unit}" is not a unit the parser reads`);
         // (not while the dates are being written: this run read them before they were)
         if (!process.env.UPDATE_DOCS && !builtOf(b.id).at && !b.id.startsWith('group.')) bad.push(`${b.id}: not dated (UPDATE_DOCS=quick)`);
+        // (changed since the taxonomy: specified, or it fails; docs/REALITY.md phase 2)
+        const at = builtOf(b.id).at; if (!process.env.UPDATE_DOCS && b.kind !== 'law' && !b.alias && at && at >= SPEC_FROM) for (const p of specProblems(b)) bad.push(`${b.id}: ${p}`);
         if (!tested.has(b.id)) { const r = b.tests?.length ? await testBlock(b) : { ok: true, fails: [] }; tested.set(b.id, r.ok ? [] : r.fails); }
         for (const f of tested.get(b.id)!) bad.push(`${b.id}: ${f}`);
       }

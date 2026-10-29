@@ -11,6 +11,7 @@ import { INVENTORY } from './inventory';
 import { FAMILIES } from './families';
 import { DESIGNED } from './components';
 import { catalogue } from './catalogue';
+import { DISCIPLINE } from '../data/disciplines';
 import { MATERIALS, GROUND_MATERIALS } from '../data/materials';
 import { BCI_GROUPS } from '../data/batteries';
 import { MOTORS, GEARHEADS } from '../data/motors';
@@ -60,7 +61,7 @@ const boards = () => starterBoards();
 export function libraries(): Library[] {
   const blocks = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.'));
   const L: Omit<Library, 'reach' | 'count'>[] = [
-    { id: 'nodes', name: 'Node library', type: 'nodes', says: 'every node, on its shelf by stage (docs/NODES.md)', source: 'src/nexus/blocks.ts', entries: () => blocks.filter((b) => b.kind !== 'law' && !b.id.startsWith('seed.')).map((b) => ({ library: 'nodes', id: b.id, name: b.name, says: b.says })) },
+    { id: 'nodes', name: 'Node library', type: 'nodes', says: 'every node, on its shelf by stage (docs/NODES.md)', source: 'src/nexus/blocks.ts', entries: () => blocks.filter((b) => b.kind !== 'law' && !b.id.startsWith('seed.')).map((b) => ({ library: 'nodes', id: b.id, name: b.name, says: specified(b) })) },
     { id: 'laws', name: 'Laws', type: 'nodes', says: 'every physical law as a calculator', source: 'src/nexus/law.ts', entries: () => blocks.filter((b) => b.kind === 'law').map((b) => ({ library: 'laws', id: b.id, name: b.name, says: b.says })) },
     { id: 'seeds', name: 'Seeds', type: 'nodes', says: 'things built from nodes, kept as one node each (a door, a room, a house, a city)', source: 'src/nexus/seeds.ts', entries: () => blocks.filter((b) => b.id.startsWith('seed.')).map((b) => ({ library: 'seeds', id: b.id, name: b.name, says: b.says })) },
     { id: 'boards', name: 'Starter boards', type: 'flows', says: 'whole pipelines across fields, to open and change', source: 'src/nexus/starters.ts', entries: () => boards().map(([t]) => ({ library: 'boards', id: t, name: t.split(':')[0]!, says: t })) },
@@ -122,6 +123,9 @@ export function useOf(l: Library, e: Entry): Pick<Found, 'add' | 'board'> {
 /** Words looked for through everything: every node, law, seed and starter board, every product, part, material, body,
  *  reference and program, and the catalogue's sizes; the best first (the whole name, then its start, then a word in it,
  *  then what it says). Each with the node that uses it, set to it, where one does. */
+/** What a node says, with its specification where it has one: its plain gloss, its discipline and its codes, so a search
+ *  by either the technical term or the plain question finds it. */
+const specified = (b: BlockDef): string => (b.spec ? `${b.spec.gloss}. ${b.says} ${DISCIPLINE.get(b.spec.discipline)?.name ?? ''} ${b.spec.codes.map((c) => `${c.code} ${c.label}`).join(' ')}` : b.says);
 export function search(q: string, most = 40): Found[] {
   const ws = q.toLowerCase().split(/\s+/).filter(Boolean); if (!ws.length) return [];
   const out: Found[] = [], rank = (name: string, says: string, id: string): number => {

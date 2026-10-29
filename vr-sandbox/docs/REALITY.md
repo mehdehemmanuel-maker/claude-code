@@ -764,3 +764,18 @@ beam's stress is the hand formula's 268 MPa exactly; it buckles at 294 kN, again
 plane the crank turns in (the eyes give a little). The hand row's 226 kN was about the rod's thin way with pinned ends,
 which the pin's bosses and the throw do not allow; first held at the shells' own middles it read 794 kN, the big end
 locked against turning, which is what showed supports at a point were needed.
+
+**Phase 2.1, the taxonomy's schema (2026-10-29).** Every node can now carry a specification (`Spec` in `blocks.ts`): its
+name is its discipline's term and its plain question becomes its gloss; its place in the disciplines tree; codes on
+recognised schemes (MSC2020, PhySH, ICS, ACM CCS 2012, JEL, each checked against that scheme's form); its role (data
+source, geometry operation, analysis, numerical solver, assessment, data transformation, control flow, visualisation,
+I/O); and, for what models, its model (governing equations, the book's laws, class, steady or transient, linear or not,
+numerical method, references). The one test holds every node changed from `SPEC_FROM` on to it (`specProblems`: a name
+that is a question fails, a discipline not in the tree fails, a code not of its scheme's form fails, a model without an
+equation or a reference fails); the rest are specified as phase 4 re-works them. Search finds a node by its term or its
+gloss; the inspector shows the whole specification. The first three: `graph` is now Contact graph (mechanical › machine
+design › computer-aided design and geometric modelling, a branch added to the tree; MSC2020 05C90), `flow` Lumped network
+analysis (mechanical › thermal and fluid sciences › conduction; MSC2020 80A19; Incropera ch. 3, Shigley eq. 4-4), `bend`
+Frame analysis (3D beams) (civil › structural › structural analysis; MSC2020 74K10; Przemieniecki 1968, Roark). Each
+MSC2020 code was checked against the AMS's MathSciNet listing. Law nodes are left to phase 4, where their specification
+is read from the book.

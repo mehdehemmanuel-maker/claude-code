@@ -98,6 +98,7 @@ mechanical Mechanical engineering | ASME's technical divisions
     dfm Design for manufacture and assembly
     tolerancing Dimensioning and tolerancing (GD&T)
     reliability Mechanical reliability
+    cad Computer-aided design and geometric modelling
   thermofluids Thermal and fluid sciences
     thermodynamics Engineering thermodynamics
     conduction Conduction heat transfer
