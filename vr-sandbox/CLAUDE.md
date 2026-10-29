@@ -236,7 +236,8 @@ known gaps are there too.
 | Rigid-body physics (Jolt) | `nexus/sim.ts` |
 | Servo motion | `nexus/motion.ts` |
 | Power: engines run from their numbers, powertrains | `nexus/power/` |
-| Parts: kits, shapes, cuts, mass | `nexus/kits.ts`, `mass.ts`, `form.ts`, `surface.ts`, `finish.ts` |
+| Parts: kits, shapes, cuts, mass | `nexus/kits.ts`, `mass.ts`, `form.ts`, `surface.ts`, `finish.ts` (and the surface a process leaves) |
+| How a part looks: colour from optics, films, the look stack | `nexus/colour.ts`, `appearance.ts`, `data/optics.ts` |
 | Parts from standards; components; catalogue | `nexus/families.ts`, `catalogue.ts`, `components.ts` |
 | Makers by process (fastener, winding, sensor, …) | `nexus/makers.ts` |
 | Engines, gearboxes, fittings, closures | `nexus/engines.ts`, `drivetrain.ts`, `fittings.ts` |

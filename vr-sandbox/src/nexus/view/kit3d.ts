@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FINISH_MAKE, edgeRadius, surfaceOf } from '../finish';
+import { resolveLook, type Look } from '../appearance';
 import type { Cut, Part, Shape } from '../kits';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { massOf } from '../mass';
@@ -43,6 +44,8 @@ export const GRAIN: Record<string, { size: number; depth: number; rough: number;
   // (a process's own: a cut surface's marks one feed apart, round its axis; a print's layers; a blast's dimples)
   turned: { size: 0.00015, depth: 0.16, rough: 0.05, stretch: [0.04, 1, 0.04] }, 'face-milled': { size: 0.0001, depth: 0.14, rough: 0.05, stretch: [0.05, 1, 0.05] }, printed: { size: 0.0002, depth: 0.45, rough: 0.08, stretch: [1, 0.06, 1] },
   lapped: { size: 0.00008, depth: 0.03, rough: 0.02 }, 'bead blasted': { size: 0.0004, depth: 0.12, rough: 0.05 }, 'sand cast': { size: 0.0008, depth: 0.55, rough: 0.16 }, 'die cast': { size: 0.0005, depth: 0.12, rough: 0.05 }, 'spark eroded': { size: 0.00025, depth: 0.35, rough: 0.1 },
+  // (a metallic paint's flakes: aluminium platelets about 10 to 30 µm across, each tilted its own way: the sparkle)
+  flake: { size: 0.00004, depth: 0.25, rough: 0.12 },
   leather: { size: 0.0015, depth: 0.3, rough: 0.1 }, stone: { size: 0.002, depth: 0.5, rough: 0.15 }, concrete: { size: 0.003, depth: 0.6, rough: 0.2 }, grain: { size: 0.002, depth: 0.25, rough: 0.08, stretch: [1, 0.08, 1] },
 };
 /** A material given its finish's grain: a bump drawn in the shader from the surface's place (value noise over its size,
@@ -67,8 +70,10 @@ if (gFade > 0.0) normal = gPerturb(-vViewPosition, normal, vec2(dFdx(gH), dFdy(g
   m.customProgramCacheKey = () => 'grain';
 }
 const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
-const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: string, wear = 0, open = false): THREE.MeshStandardMaterial => {
-  const w = Math.round(wear * 10) / 10, key = `${color}|${mat}|${glow}|${finish}|${w}|${open}`; let m = mats.get(key);
+const matFor = (color0: number, mat: string | undefined, glow: boolean, finish?: string, wear0 = 0, open = false, look?: Look): THREE.MeshStandardMaterial => {
+  // (a look's layers resolved against this piece's own material: appearance.ts)
+  const lk = look ? resolveLook(look, mat, color0) : undefined, color = lk?.color ?? color0, wear = Math.max(wear0, look?.wear ?? 0);
+  const w = Math.round(wear * 10) / 10, key = `${color}|${mat}|${glow}|${finish}|${w}|${open}|${lk ? `${lk.metal}|${lk.rough}|${lk.clear}|${lk.flake}` : ''}`; let m = mats.get(key);
   if (!m) {
     const metal = /steel|al-|copper|iron|gold|silver|titanium/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
     // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
@@ -77,15 +82,16 @@ const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: 
     // slope; along its lay where it has one, the slope across it as anisotropy, as three.js takes it: α across = α along +
     // s² (1 − α along))
     const sf = finish && FINISH_MAKE[finish] ? surfaceOf(FINISH_MAKE[finish]!) : undefined;
-    const rough = Math.min(1, (sf ? Math.sqrt(sf.lay ? sf.alphaAlong : sf.alphaAcross) : f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
+    const rough = Math.min(1, (lk?.rough !== undefined ? lk.rough : sf ? Math.sqrt(sf.lay ? sf.alphaAlong : sf.alphaAcross) : f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
     const aniso = sf?.lay && sf.alphaAcross > sf.alphaAlong ? Math.sqrt((sf.alphaAcross - sf.alphaAlong) / (1 - sf.alphaAlong)) : 0;
     // (tinted glass, a car's windows, is mostly reflection: nearly opaque, dark, glossy; clear glass and lenses are see-through)
-    const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: rough, metalness: sf && metal ? 1 : f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
+    const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: rough, metalness: lk ? lk.metal : sf && metal ? 1 : f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
     // (a turned or lofted shell is open at its ends or its inside: drawn on both its faces; paint and glass take a clear
     // coat, the gloss that shows a body's shape in what it reflects)
-    m = (f?.coat || glass) && !w ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: f?.coat ?? 1, clearcoatRoughness: 0.04 }) : aniso > 0 ? new THREE.MeshPhysicalMaterial({ ...base, anisotropy: aniso, anisotropyRotation: Math.PI / 2 }) : new THREE.MeshStandardMaterial(base); if (open) m.side = THREE.DoubleSide;
+    m = lk && lk.clear > 0 ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: lk.clear * (1 - w), clearcoatRoughness: 0.03 + w * 0.3, ...(aniso > 0 && lk.flake === 0 ? { anisotropy: aniso, anisotropyRotation: Math.PI / 2 } : {}) })
+      : (f?.coat || glass) && !w && !lk ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: f?.coat ?? 1, clearcoatRoughness: 0.04 }) : aniso > 0 ? new THREE.MeshPhysicalMaterial({ ...base, anisotropy: aniso, anisotropyRotation: Math.PI / 2 }) : new THREE.MeshStandardMaterial(base); if (open) m.side = THREE.DoubleSide;
     // (its grain by its finish; a rubber or a moulding with none said takes its making's)
-    const gr = GRAIN[finish ?? (rubber ? 'tread' : /^(abs|pp|pe|nylon|pbt|pc)$/.test(mat ?? '') ? 'texture' : '')]; if (gr && !glow && !glass) grained(m, gr);
+    const gr = lk?.flake ? GRAIN.flake : GRAIN[finish ?? (rubber ? 'tread' : /^(abs|pp|pe|nylon|pbt|pc)$/.test(mat ?? '') ? 'texture' : '')]; if (gr && !glow && !glass) grained(m, gr);
     mats.set(key, m);
   }
   return m;
@@ -223,15 +229,15 @@ function leafGeometryMade(p: Part): THREE.BufferGeometry | null {
 }
 /** A piece's material as the forge draws it, with a colour, material or finish placed over it. */
 const groundMats = new Map<string, THREE.MeshStandardMaterial>();
-export function leafMaterial(p: Part, over: { color?: number; mat?: string; finish?: string } = {}): THREE.MeshStandardMaterial {
-  const k = `${over.color ?? ''}|${over.mat ?? ''}|${over.finish ?? ''}`; let byOver = matOfPart.get(p); if (!byOver) { byOver = new Map(); matOfPart.set(p, byOver); }
+export function leafMaterial(p: Part, over: { color?: number; mat?: string; finish?: string; look?: Look } = {}): THREE.MeshStandardMaterial {
+  const k = `${over.color ?? ''}|${over.mat ?? ''}|${over.finish ?? ''}|${over.look ? JSON.stringify(over.look) : ''}`; let byOver = matOfPart.get(p); if (!byOver) { byOver = new Map(); matOfPart.set(p, byOver); }
   const was = byOver.get(k); if (was) return was;
   const m = leafMaterialMade(p, over); byOver.set(k, m); return m;
 }
-function leafMaterialMade(p: Part, over: { color?: number; mat?: string; finish?: string }): THREE.MeshStandardMaterial {
+function leafMaterialMade(p: Part, over: { color?: number; mat?: string; finish?: string; look?: Look }): THREE.MeshStandardMaterial {
   // ground is shaded by its height, which its vertices carry
   if (p.shape && 'ground' in p.shape) { const c = over.color ?? p.color ?? 0x5d8a3a, k = String(c); return groundMats.get(k) ?? groundMats.set(k, new THREE.MeshStandardMaterial({ color: c, vertexColors: true, roughness: 0.95 })).get(k)!; }
-  return matFor(over.color ?? p.color ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape));
+  return matFor(over.color ?? p.color ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape), over.look ?? p.look);
 }
 /** A galaxy's stars: on logarithmic spiral arms r = a e^(θ tan φ) (a bar across the middle if it is barred), a bulge of
  *  old stars, the disc thin; drawn as points, each going round at a flat rotation curve's speed (ω = v / r). */
@@ -320,7 +326,7 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
       if ('stars' in p.shape) { const gx = galaxy(p.shape.stars); g.add(gx.obj); turners.push(gx.turn); }
       else if ('field' in p.shape) g.add(land(p.shape.field));
       else if ('heap' in p.shape) g.add(heap(p.shape.heap));
-      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape, p.look))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
     }
     else if (p.item && !p.parts?.length) {
       // a part that is an item of the inventory and has no shape of its own: drawn as that item looks, at its size (not

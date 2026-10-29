@@ -38,6 +38,9 @@ to read that you don't need"); `CLAUDE.md` keeps a one-line index. Read the row 
 | Things with choices, as a placed tree of parts | `src/nexus/kits.ts` (drawn by `view/kit3d.ts`) |
 | Conditions on how a made thing is (age, setting, material, size) | `src/nexus/make/conditions.ts` |
 | Edges as made (radius by material and process) | `src/nexus/finish.ts` |
+| Surfaces from the process (roughness, gloss, lay) | `src/nexus/finish.ts` |
+| Colour from optics (metals, thin films) | `src/nexus/colour.ts`, `src/data/optics.ts` |
+| A part's look as layers (substrate, treatment, coat, wear) | `src/nexus/appearance.ts` |
 | Oriented-box layout and contacts of a placed tree | `src/nexus/make/space.ts` |
 | Attention to detail (joints, fasteners, seals, finishes, wear) | `src/nexus/make/detail.ts` |
 | Critic (room to move, held up, walls, through, standing) | `src/nexus/make/critic.ts` |

@@ -10,6 +10,7 @@
 // part's frame (make/space.ts's layout); an assembly composes matrices down to them.
 
 import * as THREE from 'three';
+import type { Look } from './appearance';
 import type { Part, Port, V3 } from './kits';
 import { densityKg, massOf } from './mass';
 import { layout } from './make/space';
@@ -78,7 +79,7 @@ export function bentAt(b: Bend, x: number, y: number, z: number): V3 {
   const w = cross(r, q); return [d[0] + w[0], d[1] + w[1], d[2] + w[2]];
 }
 
-export interface Override { /** drawn over everything, seen through what is in front (a marker: what flows across a contact inside a thing) */ overlay?: boolean; /** a level varying through the piece, drawn by `levelColour` at every point (over its colour) */ field?: Field; /** drawn bent, and coloured by how far each point moves */ bend?: Bend; color?: number; mat?: string; finish?: string; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
+export interface Override { /** drawn over everything, seen through what is in front (a marker: what flows across a contact inside a thing) */ overlay?: boolean; /** a level varying through the piece, drawn by `levelColour` at every point (over its colour) */ field?: Field; /** drawn bent, and coloured by how far each point moves */ bend?: Bend; color?: number; mat?: string; finish?: string; /** its look's layers (appearance.ts), over its own */ look?: Look; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
 export interface Placed { of: Part | Assembly; at: V3; rot: V3; s: number; over?: Override }
 export interface Assembly {
   /** the inventory item it is, where it is one (a cell, a battery), so a tree made of it says so */ item?: string;
@@ -130,7 +131,7 @@ const matches = (o: Override, name: string) => { if (!o.path) return true; let r
  *  (A stretch is not here: it is in the matrix.) */
 export function effective(overs: Override[], name: string): Override {
   const out: Override = {};
-  for (let i = overs.length - 1; i >= 0; i--) { const o = overs[i]!; if (!matches(o, name)) continue; for (const k of ['color', 'mat', 'finish', 'hide', 'field', 'bend', 'overlay'] as const) if (o[k] !== undefined) (out as Record<string, unknown>)[k] = o[k]; }
+  for (let i = overs.length - 1; i >= 0; i--) { const o = overs[i]!; if (!matches(o, name)) continue; for (const k of ['color', 'mat', 'finish', 'look', 'hide', 'field', 'bend', 'overlay'] as const) if (o[k] !== undefined) (out as Record<string, unknown>)[k] = o[k]; }
   return out;
 }
 /** Every drawn piece of an assembly, placed: what renders it and what checks it read. `visit` returns false to stop. */

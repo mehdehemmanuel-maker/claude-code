@@ -939,3 +939,15 @@ tint is taken as magnetite (the oxide next to the steel), said. Not found: visib
 2.5 µm) and for chromium oxide, so copper's tarnish and stainless heat tint wait for data; a temperature and time to a
 thickness needs the oxide's growth law, not kept yet. A node, `optics.film` (tested: no film is the bare metal by
 Fresnel; a quarter wave of n 1.5 on n 3 reflects ((3 − 1.5²)/(3 + 1.5²))² at 550 nm), and a board of twenty coupons.
+- **2026-10-29, phase 3.4, a part's look as layers (first half).** `appearance.ts` owns a look as data, bottom up:
+the substrate's colour worked out from its material (steels as iron, aluminium alloys as aluminium, copper, titanium,
+gold and the other measured metals; stainless, brass and bronze have no data here and keep their colour, said), a
+treatment grown on it (an anodic or oxide film, coloured by `filmColour`), a coat over it (a paint's colour, a design
+choice; its metal flake as metalness with a sparkle grain; a clear coat, F0 0.04 at n 1.5), and wear. The look rides on
+the part or on the override that places it, and is resolved per piece against that piece's own material when drawn,
+so one look over an assembly colours a steel bolt and an aluminium bracket each by its own optics. A node, `look`
+(ICS 25.220, 87.040), tested on bare steel taking iron's colour, titanium anodised at 30 V, and a chosen paint; a board
+of one sphere in eight looks. Seen: the metals, anodising, heat tint, clear-coated and metallic paint all read as they
+should. Left: wear only dulls and dirties; paint coming off at edges (by curvature) and dirt in hollows (by occlusion)
+not yet; graphics (livery, decals) not yet a layer; heat tint from the part's own computed temperatures needs the
+oxide's growth law.

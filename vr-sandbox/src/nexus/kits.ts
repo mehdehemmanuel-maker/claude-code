@@ -107,6 +107,7 @@ export interface Part {
   /** it glows (a lamp's light, lit or not) */ glow?: boolean;
   /** how its surface looks at its true size, as its material and making leave it: grain, brick, tread, weave… */ finish?: string;
   /** how worn it is, 0 new to 1 derelict */ wear?: number;
+  /** its look's layers: substrate, treatment, coat, wear (appearance.ts) */ look?: import('./appearance').Look;
   /** it goes on public roads (and so carries number plates and mirrors): where it is sold, so its plates are that
    *  market's (US 12 × 6 in, AAMVA; else EU 520 × 110 mm) */ road?: boolean | 'us' | 'eu';
   /** made as one piece with what holds it (a tyre's tread blocks, a casting's fins): held by being part of it */ one?: boolean;

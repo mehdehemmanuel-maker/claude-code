@@ -296,6 +296,23 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'Titanium at 30 V: why it is blue'; wire(b, 'c_ti30', 'says', 'why', 'value');
     return tidy(b);
   }],
+  ['One shape, eight looks: bare steel, aluminium and copper coloured by their optics, titanium anodised, steel heat tinted, a solid paint under clear coat, a metallic paint, and the same paint worn', () => {
+    // a part's look as layers (docs/REALITY.md phase 3.4): the substrate worked out, everything over it editable
+    const b = emptyBoard('One shape, eight looks');
+    const looks: [string, string, Record<string, unknown>, string][] = [
+      ['steel', 'steel-low', { finish: 'polished' }, 'Steel, bare: iron\'s optics'], ['al', 'al-6061', {}, 'Aluminium, bare'], ['cu', 'copper', {}, 'Copper, bare'],
+      ['ti', 'titanium', { treatment: 'anodised at a voltage', volts: 30 }, 'Titanium anodised at 30 V'], ['tint', 'steel-low', { treatment: 'an oxide film', film: 'Fe3O4 (magnetite)', d: 45 }, 'Steel heat tinted, 45 nm of oxide'],
+      ['red', 'steel-low', { coat: 'solid paint', paint: '#b3122b' }, 'Solid red under clear coat'], ['blue', 'al-6061', { coat: 'metallic paint', paint: '#1d3f8f', flake: 0.5 }, 'Metallic blue, half flake'], ['worn', 'steel-low', { coat: 'solid paint', paint: '#b3122b', wear: 0.6 }, 'The red, worn']];
+    looks.forEach(([id, mat, set, label], k) => {
+      placeBlock(b, 'shape.sphere', 0, 0, { name: label, mat, color: '#888888', finish: (set.finish as string) ?? 'polished', r: 0.03 }, `s_${id}`);
+      const { finish: _f, ...rest } = set; placeBlock(b, 'look', 0, 0, rest, `l_${id}`); b.nodes[`l_${id}`]!.label = label; wire(b, `s_${id}`, 'part', `l_${id}`, 'thing');
+      placeBlock(b, 'place', 0, 0, { x: (k % 4) * 0.08 - 0.12, y: 0.03, z: Math.floor(k / 4) * 0.09 - 0.045 }, `p_${id}`); wire(b, `l_${id}`, 'looked', `p_${id}`, 'thing');
+    });
+    placeBlock(b, 'combine', 0, 0, { name: 'eight looks' }, 'all'); looks.forEach(([id]) => wire(b, `p_${id}`, 'placed', 'all', 'things'));
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'Back: steel, aluminium, copper, titanium anodised; front: heat tint, red, metallic blue, worn red'; wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'The anodised one: why'; wire(b, 'l_ti', 'says', 'why', 'value');
+    return tidy(b);
+  }],
   ['Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one', () => {
     // a material is what goes into it and how it is arranged (docs/REALITY.md phase 2.4): each worked out, not looked up
     const b = emptyBoard('Materials from their phases');

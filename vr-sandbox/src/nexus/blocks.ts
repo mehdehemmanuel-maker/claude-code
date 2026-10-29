@@ -23,6 +23,7 @@ import { ARRANGEMENTS, type Arrangement } from './mixture';
 import { FILMS_MEASURED, METALS_MEASURED, colourOfNK, filmColour, metalColour, reflectanceFilm, xyzOf, linearSRGB, hexOf } from './colour';
 import { FILM_NK, METAL_NK, NM } from '../data/optics';
 import { SURFACE_MAKES, surfaceOf } from './finish';
+import { resolveLook, type Look } from './appearance';
 import { madeOf, massProperties } from './madeof';
 import { arrowsOf, bentUnder, bentWhole, coloured, flowOver, graphOf, groupsOf, piecesBy, sliced, temperaturesOf, type Contact } from './graph';
 import { apply, type Law } from './law';
@@ -76,7 +77,7 @@ import { SPRING_WIRES } from '../engineering/springs';
 /** A load case's row as a table's: its figure, limit and factor, in the units it is said in. */
 const tableRow = (r: LoadRow): Record<string, unknown> => ({ what: r.what, value: +r.value.toPrecision(4), unit: r.unit, limit: +r.limit.toPrecision(4), factor: +r.factor.toFixed(2), ok: r.ok ? 'yes' : 'NO', says: r.says });
 import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
-import { exploded, fitIn, partOf } from './assembly';
+import { exploded, fitIn, leavesOf, partOf } from './assembly';
 import { chainPath, chainRun, coated, coil, enclosure, wound, sensor, SENSES, type SensorBody, type SensorElement, fastener, type FastenerSpec, type HeadShape, fillCells, gridPlate, intoCells, stackOf, strapsOver, toothed, turned, woundRoll, wrapped } from './makers';
 import { compileNotes, feedLinesOf, fidelityOf, gapOf, mergeReferences, REFERENCE_NOTES, referenceOf, referenceTree, webParts, type Reference, type WebParts } from './research';
 import { allVerdicts, approveProposals, candidatesOf, deleteThing, eventsSince, GATES, proposalsAll, researchLoop, runGauntlet, sortUnknowns, tasksNow, unknownQueue, unknownsUnder, webResolver, wordsOf, type EventKind, type GateId, type Lib } from './gauntlet';
@@ -1209,6 +1210,33 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [P('things', 'assembly', { many: true, label: 'things' })], outputs: [thing('assembly', 'assembly')] },
     run: (i, c) => { const ts = (Array.isArray(i.things) ? i.things : [i.things]).filter(Boolean).map(asThing); if (!ts.length) throw new Error('nothing wired in to combine'); return { assembly: combine(ts, String(c.set.name || 'assembly')) }; },
     tests: [{ set: { name: 'two' }, inputs: { things: [{ name: 'a' }, { name: 'b' }] }, outputs: { assembly: { name: 'two' } } }] }),
+  // a part's look as layers anyone can change, from an auto start (docs/REALITY.md phase 3.4)
+  def({ id: 'look', name: 'Look (substrate, treatment, coating, wear)', spec: { gloss: 'How a part looks, layer by layer: an auto texture you can repaint', discipline: 'manufacturing.surface', role: 'data transformation', codes: [{ scheme: 'ICS', code: '25.220', label: 'Surface treatment and coating' }, { scheme: 'ICS', code: '87.040', label: 'Paints and varnishes' }], model: { equations: ['substrate: a metal\'s colour from its measured n + i k (Fresnel, CIE 1931, D65)', 'treatment: a film of thickness d by Airy interference; anodised d = (growth per volt) × V', 'clear coat: F0 = ((n − 1)/(n + 1))² = 0.04 at n 1.5', 'metallic paint: metalness the flakes\' share of its face'], class: 'analytical', time: 'steady', linear: false, method: 'each piece resolved against its own material when drawn', references: ['Born & Wolf, Principles of Optics, §1.5, §1.6', 'Burley, Physically Based Shading at Disney (2012): base, metalness, clear coat', 'ICS 25.220, 87.040'] } }, kind: 'logic', ability: 'transform', domains: ['manufacturing', 'materials', 'everyday', 'vehicles'], says: 'How a thing looks, as layers, each changeable: its material\'s own colour worked out from its optics (steel grey, copper red, gold yellow: not chosen), then a treatment grown on it (anodised titanium, heat-tinted steel: coloured by the film\'s thickness), then a coat over it (a solid or metallic paint, a clear coat), then wear. On all of it, or only the pieces a pattern names: a steel bolt and an aluminium bracket under one look each take their own metal\'s colour',
+    valid: 'colours from optics only where a metal\'s are measured (steels as iron; stainless, brass and bronze keep their colour); a film only on such a metal; a paint\'s colour is a design choice (a pigment\'s absorption is not worked out here); graphics and decals not yet a layer',
+    settings: [{ key: 'path', label: 'Only pieces named (pattern, blank: all)', type: 'text', default: '' }, { key: 'auto', label: 'Its colour from its material\'s optics', type: 'boolean', default: true },
+      { key: 'treatment', label: 'Treatment', type: 'choice', default: 'none', choices: ['none', 'anodised at a voltage', 'an oxide film'] }, { key: 'film', label: 'Film', type: 'choice', default: 'TiO2 (amorphous)', choices: FILMS_MEASURED }, { key: 'volts', label: 'Anodising voltage (V)', type: 'number', default: 30 }, { key: 'perVolt', label: 'Growth per volt (nm/V)', type: 'number', default: 2 }, { key: 'd', label: 'Film thickness (nm)', type: 'number', default: 50 },
+      { key: 'coat', label: 'Coat', type: 'choice', default: 'none', choices: ['none', 'solid paint', 'metallic paint', 'clear lacquer'] }, { key: 'paint', label: 'Paint colour', type: 'text', default: '#b3122b' }, { key: 'flake', label: 'Metal flake share (metallic paint)', type: 'number', default: 0.45 }, { key: 'clear', label: 'Clear coat', type: 'boolean', default: true }, { key: 'rough', label: 'Paint roughness (0 mirror, 1 chalk)', type: 'number', default: 0.35 },
+      { key: 'wear', label: 'Wear (0 new, 1 derelict)', type: 'number', default: 0 }],
+    ports: { inputs: [thing(), P('paint', 'text', { optional: true, label: 'paint colour (wired: over the setting)' })], outputs: [thing('looked', 'looked'), P('hex', 'text', { label: 'its first piece\'s colour, as drawn' }), P('says', 'text')] },
+    run: (i, c) => {
+      const t = asThing(i.thing), set = c.set, coat = String(set.coat ?? 'none'), tr = String(set.treatment ?? 'none');
+      const look: Look = { auto: set.auto !== false,
+        ...(tr !== 'none' ? { film: { film: String(set.film ?? 'TiO2 (amorphous)'), d: tr === 'anodised at a voltage' ? Number(set.volts ?? 30) * Number(set.perVolt ?? 2) : Number(set.d ?? 50) } } : {}),
+        ...(coat !== 'none' ? { coat: { ...(coat === 'clear lacquer' ? {} : { colour: hex(i.paint || set.paint || '#b3122b') }), flake: coat === 'metallic paint' ? Math.max(0, Math.min(1, Number(set.flake ?? 0.45))) : 0, clear: coat === 'clear lacquer' || set.clear !== false ? 1 : 0, rough: Math.max(0, Math.min(1, Number(set.rough ?? 0.35))) } } : {}),
+        ...(Number(set.wear ?? 0) > 0 ? { wear: Math.min(1, Number(set.wear)) } : {}) };
+      const over: Override = { ...(set.path ? { path: String(set.path) } : {}), look };
+      if (over.path) try { new RegExp(over.path); } catch { throw new Error(`"${over.path}" is not a pattern`); }
+      const first = leavesOf(asPart(t)).map((l) => l.part).find((p) => !over.path || new RegExp(over.path).test(p.name)); if (!first) throw new Error('no piece the pattern names');
+      const r = resolveLook(look, first.mat, first.color ?? 0x999999);
+      return { looked: { name: t.name, items: [{ ...place(t), over }] } as Assembly, hex: `#${r.color.toString(16).padStart(6, '0')}`, says: `${first.name}: ${r.says || 'as it is'}` };
+    },
+    tests: [
+      // a steel piece left bare: iron's own colour from its optics (Johnson and Christy), not the grey it was given
+      { set: {}, inputs: { thing: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low', color: 0x777777 } }, outputs: { hex: `#${metalColour('iron')!.hex.toString(16).padStart(6, '0')}` } },
+      // titanium anodised at 30 V, 2 nm/V: the 60 nm film's colour
+      { set: { treatment: 'anodised at a voltage', volts: 30 }, inputs: { thing: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'titanium' } }, outputs: { hex: `#${filmColour('titanium', 'TiO2 (amorphous)', 60).hex.toString(16).padStart(6, '0')}` } },
+      // painted: the paint's colour, chosen
+      { set: { coat: 'solid paint', paint: '#1e5bc8' }, inputs: { thing: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' } }, outputs: { hex: '#1e5bc8' } }] }),
   def({ id: 'variant', name: 'Variant', kind: 'logic', ability: 'transform', domains: ['mechanical', 'manufacturing', 'everyday'], says: 'The same thing changed where it is placed: its colour, its material, its finish, its size along x, y and z, or hidden; on all of it, or only the pieces whose names a pattern finds ("prop", "arm|frame")',
     settings: [{ key: 'path', label: 'Only pieces named (pattern, blank: all)', type: 'text', default: '' }, { key: 'color', label: 'Colour (blank: as it is)', type: 'text', default: '' }, { key: 'mat', label: 'Material (blank: as it is)', type: 'choice', default: '', choices: ['', ...ENGINEERING] }, { key: 'finish', label: 'Finish', type: 'choice', default: '', choices: FINISHES }, { key: 'hide', label: 'Hide them', type: 'boolean', default: false }],
     ports: { inputs: [thing(), P('color', 'text', { optional: true, label: 'colour (wired: over the setting)' }), N('kx', undefined, { default: 1, optional: true, label: 'size along x' }), N('ky', undefined, { default: 1, optional: true, label: 'size along y' }), N('kz', undefined, { default: 1, optional: true, label: 'size along z' })], outputs: [thing('variant', 'variant'), N('mass', 'kg')] },
