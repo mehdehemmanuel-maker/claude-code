@@ -326,3 +326,67 @@ export function partOf(t: Part | Assembly, at: V3 = [0, 0, 0], rot: V3 = [0, 0, 
 // (an assembly's pieces as parts, made once and shared by every place it is put: a pack of 3,000 cells is one cell's parts,
 // not 3,000 copies; never changed in place, as nothing here changes a part in place)
 const partsOf = new WeakMap<Assembly, Part[]>();
+
+/** FNV-1a over a string, two lanes, as base 36: a key, not a secret. */
+export function hash(s: string): string {
+  let a = 0x811c9dc5, b = 0x01000193 ^ s.length;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193); b = Math.imul(b ^ c, 0x5bd1e995) ^ (b >>> 15); }
+  return (a >>> 0).toString(36) + (b >>> 0).toString(36);
+}
+
+// ---- a piece's design, and pieces taken from the library -------------------------------------------------------------
+/** Not the design: where it is, what it is called and said to be, its colour and look (variants over it), and what it is
+ *  next to (its neighbours by name). */
+const NOT_DESIGN = new Set(['name', 'at', 'rot', 'parts', 'color', 'look', 'wear', 'text', 'says', 'link', 'passes', 'joins', 'movesWith', 'runsOn', 'kit', 'detail', 'meant', 'mates']);
+const round = (n: number) => (Math.abs(n) < 1e-12 ? 0 : Number(n.toPrecision(7)));
+const num = (_k: string, v: unknown) => (typeof v === 'number' ? round(v) : v);
+const v3 = (v: V3 | undefined) => (v ?? [0, 0, 0]).map(round).join(',');
+interface Design { key: string; off: V3 }
+const designs = new WeakMap<object, Design>();
+/** A thing's design key, and where its drawing starts in its own frame (a path-drawn tube, moved to start at its origin
+ *  for its key: its holder places it by that). */
+export function designOf(t: Part | Assembly): Design {
+  const was = designs.get(t); if (was) return was;
+  let own: Record<string, unknown> = {}, off: V3 = [0, 0, 0], kids: string[];
+  if (isAssembly(t)) {
+    kids = t.items.map((it) => { const d = designOf(it.of), o = it.over ? Object.fromEntries(Object.entries(it.over).filter(([k]) => k !== 'color' && k !== 'look')) : {}; return `${d.key}|${v3(it.at)}|${v3(it.rot)}|${round(it.s)}|${v3(d.off)}|${JSON.stringify(o, num)}`; });
+  } else {
+    for (const [k, v] of Object.entries(t)) if (!NOT_DESIGN.has(k) && v !== undefined) own[k] = v;
+    const s = t.shape;
+    if (s && 'tube' in s && s.tube.pts.length) { const p0 = s.tube.pts[0]!; off = [p0[0], p0[1], p0[2]]; own = { ...own, shape: { tube: { ...s.tube, pts: s.tube.pts.map((p) => [p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]]) } } }; }
+    kids = (t.parts ?? []).map((q) => { const d = designOf(q); return `${d.key}|${v3(q.at)}|${v3(q.rot)}|${v3(d.off)}`; });
+  }
+  const d = { key: hash(JSON.stringify(own, num) + '#' + kids.sort().join(';')), off };
+  designs.set(t, d); return d;
+}
+/** Everything about a piece that is not its design (where it is, what it is called, its colour, its neighbours), so a
+ *  piece equal to another in every way is found by its design and this. */
+const contextOf = (p: Part) => JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k, v]) => k !== 'parts' && NOT_DESIGN.has(k) && v !== undefined)), num);
+/** The library's pieces as they are held while building: one object for each piece equal in every way. */
+const pool = new Map<string, Part>();
+const shared = new WeakSet<object>();
+/** The library law in a build (src/nexus/stock.ts): every piece inside a part designed whole and still (Part.sealed, which
+ *  nothing after it is made changes inside: the make pipeline lays nothing in it and moves nothing in it) is taken from
+ *  the library's pieces held while building, where one equal in every way is there, and is put there where it is not:
+ *  so a bolt drawn a thousand times is one object, and so is every valve spring. In place; what a build gives is the same
+ *  in every value. A part that moves inside (a rail's carriage) is left as made, as the pipeline works on it piece by
+ *  piece. */
+export function fromLibrary<T>(t: T): T {
+  const take = (q: Part): Part => {
+    if (shared.has(q)) return q;
+    const k = `${designOf(q).key}|${v3(designOf(q).off)}|${contextOf(q)}`, was = pool.get(k); if (was) return was;
+    if (q.parts) for (let i = 0; i < q.parts.length; i++) q.parts[i] = take(q.parts[i]!);
+    pool.set(k, q); shared.add(q); return q;
+  };
+  const walk = (x: unknown): void => {
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (!x || typeof x !== 'object' || shared.has(x)) return;
+    if (isAssembly(x)) { shared.add(x); x.items.forEach((it) => walk(it.of)); return; }
+    if (!isPart(x)) return;
+    shared.add(x);
+    if (x.sealed && x.parts?.length && stillAll(x)) { for (let i = 0; i < x.parts.length; i++) x.parts[i] = take(x.parts[i]!); }
+    else x.parts?.forEach(walk);
+  };
+  walk(t); return t;
+}
+const stillAll = (p: Part): boolean => !(p.travel || p.joint || p.link || p.movesWith || p.swing || p.spin) && (p.parts ?? []).every(stillAll);

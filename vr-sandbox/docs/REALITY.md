@@ -1063,3 +1063,12 @@ specification and the plain gate failed on the last two commits (they were check
 that check); specified. Gate with the law's check: 36.5 s. Not yet: a piece a person makes in the browser is not stored
 for good (only what the committed builds make is); the builders do not yet ask the library first when they draw (the
 same design drawn twice is stored once, but still drawn twice).
+- **2026-10-29, builds take their pieces from the library (the second half of the law).** `fromLibrary` (assembly.ts),
+called by the node engine on everything a node makes: each piece inside a part designed whole and still (`sealed`, which
+the make pipeline never changes inside) is taken from the pieces the library holds while building where one equal in
+every way is there, and put there where not. Measured on every vehicle: each build is the same in every value after
+(compared as JSON), and the Monte Carlo's rules (0 findings) and take-apart audit (0 recipes not met) read the same. It
+saves less than the stored count suggested: the builds already held a repeated piece as one object (the Monte Carlo
+places 9,717 pieces with 2,677 objects; 2,520 after; the Cascadia 4,434, 3,400 after), at 14 to 63 ms a build. Not taken
+from the library: pieces outside sealed parts (17 places in the code change a part after it is made: the detail pass,
+the critic's moves, conditions), until those work on copies.

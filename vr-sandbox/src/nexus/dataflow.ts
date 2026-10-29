@@ -15,16 +15,12 @@ import { ALIASES, aliasSet, block, clockOf, defaultsOf, dimOf, elemOf, fits, por
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
 import { fromSI, sameDim, toSI } from '../ganglia/units';
 import type { Part } from './kits';
-import type { Assembly, Placed } from './assembly';
+import { fromLibrary, hash, type Assembly, type Placed } from './assembly';
 const P_ = (name: string, type: Type): PortDef => ({ name, type });
 
 // ---- keys -----------------------------------------------------------------------------------------------------------
-/** FNV-1a over a string, two lanes, as base 36: a key, not a secret. */
-export function hash(s: string): string {
-  let a = 0x811c9dc5, b = 0x01000193 ^ s.length;
-  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193); b = Math.imul(b ^ c, 0x5bd1e995) ^ (b >>> 15); }
-  return (a >>> 0).toString(36) + (b >>> 0).toString(36);
-}
+// (a key's hash: assembly.ts, where the design of every piece is keyed)
+export { hash };
 /** JSON with its keys in order, so two equal settings write the same. */
 export function stable(v: unknown): string {
   if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'undefined';
@@ -294,6 +290,8 @@ export class Engine {
         for (let k = 0; k < len; k++) { const one = { ...inputs }; for (const m of maps) one[m] = Array.isArray(inputs[m]) ? (inputs[m] as unknown[])[k] : inputs[m]; rows.push(await this.call(id, b, one, set)); }
         out = Object.fromEntries(ports.outputs.map((p) => [p.name, rows.map((x) => x[p.name])])); mapped = len;
       } else out = await this.call(id, b, inputs, set);
+      // (the library law: what it makes takes each piece inside a part designed whole from the library's, src/nexus/assembly.ts)
+      for (const o of ports.outputs) if (/part|assembly/.test(o.type) && out[o.name] !== undefined) fromLibrary(out[o.name]);
       const spread = mapped === undefined ? await this.spreadOf(id, b, inputs, set, out, spreadIn, ports) : spreadIn.size ? { uncertainty: undefined, uncertaintyLost: 'run once for each item of a list: the uncertainty is not carried through a sweep' } : { uncertainty: undefined, uncertaintyLost: undefined };
       const ms = now() - t; use.runs++; use.ms += ms; USAGE.set(b.id, use);
       if (b.pure) this.memo.set(key, out);
