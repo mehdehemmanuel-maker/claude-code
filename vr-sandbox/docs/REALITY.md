@@ -951,3 +951,18 @@ of one sphere in eight looks. Seen: the metals, anodising, heat tint, clear-coat
 should. Left: wear only dulls and dirties; paint coming off at edges (by curvature) and dirt in hollows (by occlusion)
 not yet; graphics (livery, decals) not yet a layer; heat tint from the part's own computed temperatures needs the
 oxide's growth law.
+- **2026-10-29, phase 3.4, graphics and wear where the shape puts it (second half).** Graphics are a layer of the look
+(`appearance.ts` `Graphic`): stripes and two-tone splits across an axis of the piece's own frame, under the wear, two
+per look, set on the `look` node. Wear reads the surface's own shape. Each vertex gets its mean curvature (from every
+mesh edge, (n_j − n_i)·(p_j − p_i)/|p_j − p_i|², pooled where copies of a point meet) and its distance to the nearest
+sharp feature (a crease, or a rounded edge tighter than 4 mm). This is `kit3d.ts` `surfaceShape`, run on the piece's
+geometry split finely first (`space3d.ts` `wornGeometry` over `refined`, which now carries texture coordinates).
+A coat chips off within a reach of its edges that grows with wear (1 mm + 12 mm × wear), cut crisply and broken up
+at two scales, and shows the substrate under it with its own computed colour. Bare iron rusts in patches and hollows.
+Dirt gathers in hollows. Found on the way, each fixed: curvature read from screen-space derivatives missed every edge
+narrower than a pixel and drew each triangle flat (the torus showed its facets); per-vertex distance on a mesh whose
+faces have no inner points made every point an edge (the box and drum came out bare); the split mesh without texture
+coordinates broke the ground finish's anisotropy (pieces drawn white). Seen: the panel and the drum chip at their
+edges and rims, the tube rusts in spots. Left: a smooth piece with no edges (the ring) does not chip, true to the
+rule but perhaps not to wear by handling; decals and text not yet; heat tint from computed temperatures still needs
+the oxide's growth law.

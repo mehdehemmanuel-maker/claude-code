@@ -23,7 +23,7 @@ import { ARRANGEMENTS, type Arrangement } from './mixture';
 import { FILMS_MEASURED, METALS_MEASURED, colourOfNK, filmColour, metalColour, reflectanceFilm, xyzOf, linearSRGB, hexOf } from './colour';
 import { FILM_NK, METAL_NK, NM } from '../data/optics';
 import { SURFACE_MAKES, surfaceOf } from './finish';
-import { resolveLook, type Look } from './appearance';
+import { resolveLook, type Graphic, type Look } from './appearance';
 import { madeOf, massProperties } from './madeof';
 import { arrowsOf, bentUnder, bentWhole, coloured, flowOver, graphOf, groupsOf, piecesBy, sliced, temperaturesOf, type Contact } from './graph';
 import { apply, type Law } from './law';
@@ -1216,7 +1216,8 @@ const BUILT_THINGS: BlockDef[] = [
     settings: [{ key: 'path', label: 'Only pieces named (pattern, blank: all)', type: 'text', default: '' }, { key: 'auto', label: 'Its colour from its material\'s optics', type: 'boolean', default: true },
       { key: 'treatment', label: 'Treatment', type: 'choice', default: 'none', choices: ['none', 'anodised at a voltage', 'an oxide film'] }, { key: 'film', label: 'Film', type: 'choice', default: 'TiO2 (amorphous)', choices: FILMS_MEASURED }, { key: 'volts', label: 'Anodising voltage (V)', type: 'number', default: 30 }, { key: 'perVolt', label: 'Growth per volt (nm/V)', type: 'number', default: 2 }, { key: 'd', label: 'Film thickness (nm)', type: 'number', default: 50 },
       { key: 'coat', label: 'Coat', type: 'choice', default: 'none', choices: ['none', 'solid paint', 'metallic paint', 'clear lacquer'] }, { key: 'paint', label: 'Paint colour', type: 'text', default: '#b3122b' }, { key: 'flake', label: 'Metal flake share (metallic paint)', type: 'number', default: 0.45 }, { key: 'clear', label: 'Clear coat', type: 'boolean', default: true }, { key: 'rough', label: 'Paint roughness (0 mirror, 1 chalk)', type: 'number', default: 0.35 },
-      { key: 'wear', label: 'Wear (0 new, 1 derelict)', type: 'number', default: 0 }],
+      ...[1, 2].flatMap((n): SettingDef[] => [{ key: `g${n}`, label: `Graphic ${n}`, type: 'choice', default: 'none', choices: ['none', 'stripe', 'two-tone above', 'two-tone below'] }, { key: `g${n}axis`, label: `Graphic ${n}: across which axis (its own frame)`, type: 'choice', default: 'y', choices: ['x', 'y', 'z'] }, { key: `g${n}at`, label: `Graphic ${n}: where along it (m, from its middle)`, type: 'number', default: 0 }, { key: `g${n}width`, label: `Graphic ${n}: stripe width (m)`, type: 'number', default: 0.01 }, { key: `g${n}colour`, label: `Graphic ${n}: colour`, type: 'text', default: '#f2f2f2' }]),
+      { key: 'wear', label: 'Wear (0 new, 1 derelict): a coat chips off its edges first, bare iron rusts in its hollows', type: 'number', default: 0 }],
     ports: { inputs: [thing(), P('paint', 'text', { optional: true, label: 'paint colour (wired: over the setting)' })], outputs: [thing('looked', 'looked'), P('hex', 'text', { label: 'its first piece\'s colour, as drawn' }), P('says', 'text')] },
     run: (i, c) => {
       const t = asThing(i.thing), set = c.set, coat = String(set.coat ?? 'none'), tr = String(set.treatment ?? 'none');
@@ -1224,6 +1225,9 @@ const BUILT_THINGS: BlockDef[] = [
         ...(tr !== 'none' ? { film: { film: String(set.film ?? 'TiO2 (amorphous)'), d: tr === 'anodised at a voltage' ? Number(set.volts ?? 30) * Number(set.perVolt ?? 2) : Number(set.d ?? 50) } } : {}),
         ...(coat !== 'none' ? { coat: { ...(coat === 'clear lacquer' ? {} : { colour: hex(i.paint || set.paint || '#b3122b') }), flake: coat === 'metallic paint' ? Math.max(0, Math.min(1, Number(set.flake ?? 0.45))) : 0, clear: coat === 'clear lacquer' || set.clear !== false ? 1 : 0, rough: Math.max(0, Math.min(1, Number(set.rough ?? 0.35))) } } : {}),
         ...(Number(set.wear ?? 0) > 0 ? { wear: Math.min(1, Number(set.wear)) } : {}) };
+      const graphics: Graphic[] = [1, 2].filter((n) => set[`g${n}`] && set[`g${n}`] !== 'none').map((n) => { const k = String(set[`g${n}`]), w = Number(set[`g${n}width`] ?? 0.01); if (k === 'stripe' && !(w > 0)) throw new Error(`graphic ${n}: a stripe needs a width`);
+        return { kind: k === 'stripe' ? 'stripe' : k === 'two-tone above' ? 'above' : 'below', axis: String(set[`g${n}axis`] ?? 'y') as Graphic['axis'], at: Number(set[`g${n}at`] ?? 0), width: w, colour: hex(set[`g${n}colour`] || '#f2f2f2') }; });
+      if (graphics.length) look.graphics = graphics;
       const over: Override = { ...(set.path ? { path: String(set.path) } : {}), look };
       if (over.path) try { new RegExp(over.path); } catch { throw new Error(`"${over.path}" is not a pattern`); }
       const first = leavesOf(asPart(t)).map((l) => l.part).find((p) => !over.path || new RegExp(over.path).test(p.name)); if (!first) throw new Error('no piece the pattern names');

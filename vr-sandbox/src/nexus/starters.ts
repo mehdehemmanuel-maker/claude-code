@@ -313,6 +313,28 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'The anodised one: why'; wire(b, 'l_ti', 'says', 'why', 'value');
     return tidy(b);
   }],
+  ['Paint jobs and wear: a striped panel new and worn, a two-tone drum, bare steel rusting in its hollows, the wear drawn where the shape puts it', () => {
+    // graphics and wear as layers of a look (docs/REALITY.md phase 3.4): a coat chips off where the surface is most
+    // convex, bare iron rusts where it is hollow, both read from the shape itself
+    const b = emptyBoard('Paint jobs and wear');
+    const stripe = { coat: 'solid paint', paint: '#b3122b', g1: 'stripe', g1axis: 'x', g1at: 0, g1width: 0.02, g1colour: '#f2f2f2', g2: 'stripe', g2axis: 'x', g2at: 0.025, g2width: 0.006, g2colour: '#f2f2f2' };
+    const items: [string, string, Record<string, unknown>, Record<string, unknown>, string][] = [
+      ['new', 'shape.box', { w: 0.12, h: 0.04, d: 0.08 }, stripe, 'Red, white stripes, new'],
+      ['worn', 'shape.box', { w: 0.12, h: 0.04, d: 0.08 }, { ...stripe, wear: 0.7 }, 'The same, worn: chipped at its edges'],
+      ['two', 'shape.cyl', { r: 0.035, h: 0.09 }, { coat: 'solid paint', paint: '#1d3f8f', g1: 'two-tone above', g1axis: 'y', g1at: 0.005, g1colour: '#ece8dc' }, 'Two-tone drum'],
+      ['twow', 'shape.cyl', { r: 0.035, h: 0.09 }, { coat: 'solid paint', paint: '#1d3f8f', g1: 'two-tone above', g1axis: 'y', g1at: 0.005, g1colour: '#ece8dc', wear: 0.6 }, 'The drum, worn'],
+      ['tube', 'shape.tube', { r: 0.03, wall: 0.006, h: 0.11 }, { wear: 0.7 }, 'Bare steel tube, rusting'],
+      ['ring', 'shape.torus', { R: 0.035, r: 0.012 }, { coat: 'metallic paint', paint: '#2f6b3a', flake: 0.5, wear: 0.5 }, 'Metallic green ring, worn']];
+    items.forEach(([id, shape, size, look, label], k) => {
+      placeBlock(b, shape, 0, 0, { name: label, mat: 'steel-low', color: '#888888', finish: 'ground', ...size }, `s_${id}`);
+      placeBlock(b, 'look', 0, 0, look, `l_${id}`); b.nodes[`l_${id}`]!.label = label; wire(b, `s_${id}`, 'part', `l_${id}`, 'thing');
+      placeBlock(b, 'place', 0, 0, { x: (k % 3) * 0.16 - 0.16, y: 0.05, z: Math.floor(k / 3) * 0.14 - 0.07, ...(shape === 'shape.tube' ? { rz: Math.PI / 2 } : {}) }, `p_${id}`); wire(b, `l_${id}`, 'looked', `p_${id}`, 'thing');
+    });
+    placeBlock(b, 'combine', 0, 0, { name: 'paint and wear' }, 'all'); items.forEach(([id]) => wire(b, `p_${id}`, 'placed', 'all', 'things'));
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'Back: panel new, worn, drum; front: drum worn, tube rusting, ring'; wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'The worn panel: why there'; wire(b, 'l_worn', 'says', 'why', 'value');
+    return tidy(b);
+  }],
   ['Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one', () => {
     // a material is what goes into it and how it is arranged (docs/REALITY.md phase 2.4): each worked out, not looked up
     const b = emptyBoard('Materials from their phases');

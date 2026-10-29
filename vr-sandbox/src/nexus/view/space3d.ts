@@ -7,27 +7,35 @@
 import * as THREE from 'three';
 import { bentAt, boundsOfAll, cellPick, fieldAt, flatten, isAssembly, leavesOf, levelColour, matrixOf, effective, type Assembly, type Bend, type Field, type Override } from '../assembly';
 import type { Part } from '../kits';
-import { leafGeometry, leafMaterial } from './kit3d';
+import { leafGeometry, leafMaterial, surfaceShape } from './kit3d';
 
-const fieldDrawn = new WeakMap<Field | Bend, THREE.BufferGeometry>(), refinedOf = new WeakMap<THREE.BufferGeometry, { p: number[]; n: number[] }>();
+const fieldDrawn = new WeakMap<Field | Bend, THREE.BufferGeometry>(), refinedOf = new WeakMap<THREE.BufferGeometry, { p: number[]; n: number[]; u: number[] }>();
 let fieldMat: THREE.MeshStandardMaterial | null = null;
-function refined(geo: THREE.BufferGeometry): { p: number[]; n: number[] } {
+function refined(geo: THREE.BufferGeometry): { p: number[]; n: number[]; u: number[] } {
   const was = refinedOf.get(geo); if (was) return was;
-  const src = geo.index ? geo.toNonIndexed() : geo, p = Array.from(src.getAttribute('position').array as ArrayLike<number>), n = Array.from((src.getAttribute('normal')?.array ?? new Float32Array(p.length)) as ArrayLike<number>);
-  src.computeBoundingBox(); const most = src.boundingBox!.getSize(new THREE.Vector3()).length() / 40, P: number[] = [], N: number[] = [];
-  const split = (v: number[][], w: number[][], depth: number): void => {
+  const src = geo.index ? geo.toNonIndexed() : geo, p = Array.from(src.getAttribute('position').array as ArrayLike<number>), n = Array.from((src.getAttribute('normal')?.array ?? new Float32Array(p.length)) as ArrayLike<number>), uv = Array.from((src.getAttribute('uv')?.array ?? new Float32Array((p.length / 3) * 2)) as ArrayLike<number>);
+  src.computeBoundingBox(); const most = src.boundingBox!.getSize(new THREE.Vector3()).length() / 40, P: number[] = [], N: number[] = [], U: number[] = [];
+  const split = (v: number[][], w: number[][], q: number[][], depth: number): void => {
     const d = [0, 1, 2].map((k) => Math.hypot(...v[k]!.map((x, i) => x - v[(k + 1) % 3]![i]!))), k = d.indexOf(Math.max(...d));
-    if (d[k]! <= most || depth > 12) { for (let j = 0; j < 3; j++) { P.push(...v[j]!); N.push(...w[j]!); } return; }
-    const a = k, b = (k + 1) % 3, c = (k + 2) % 3, m = v[a]!.map((x, i) => (x + v[b]![i]!) / 2), nm0 = w[a]!.map((x, i) => (x + w[b]![i]!) / 2), l = Math.hypot(...nm0) || 1, nm = nm0.map((x) => x / l);
-    const vs = [], ws = []; vs[a] = v[a]!; vs[b] = m; vs[c] = v[c]!; ws[a] = w[a]!; ws[b] = nm; ws[c] = w[c]!; split(vs, ws, depth + 1);
-    const vt = [], wt = []; vt[a] = m; vt[b] = v[b]!; vt[c] = v[c]!; wt[a] = nm; wt[b] = w[b]!; wt[c] = w[c]!; split(vt, wt, depth + 1);
+    if (d[k]! <= most || depth > 12) { for (let j = 0; j < 3; j++) { P.push(...v[j]!); N.push(...w[j]!); U.push(...q[j]!); } return; }
+    const a = k, b = (k + 1) % 3, c = (k + 2) % 3, m = v[a]!.map((x, i) => (x + v[b]![i]!) / 2), nm0 = w[a]!.map((x, i) => (x + w[b]![i]!) / 2), l = Math.hypot(...nm0) || 1, nm = nm0.map((x) => x / l), um = q[a]!.map((x, i) => (x + q[b]![i]!) / 2);
+    const vs = [], ws = []; vs[a] = v[a]!; vs[b] = m; vs[c] = v[c]!; ws[a] = w[a]!; ws[b] = nm; ws[c] = w[c]!; const qs = []; qs[a] = q[a]!; qs[b] = um; qs[c] = q[c]!; split(vs, ws, qs, depth + 1);
+    const vt = [], wt = []; vt[a] = m; vt[b] = v[b]!; vt[c] = v[c]!; wt[a] = nm; wt[b] = w[b]!; wt[c] = w[c]!; const qt = []; qt[a] = um; qt[b] = q[b]!; qt[c] = q[c]!; split(vt, wt, qt, depth + 1);
   };
-  for (let t = 0; t < p.length; t += 9) split([0, 1, 2].map((k) => p.slice(t + 3 * k, t + 3 * k + 3)), [0, 1, 2].map((k) => n.slice(t + 3 * k, t + 3 * k + 3)), 0);
-  const r = { p: P, n: N }; refinedOf.set(geo, r); return r;
+  for (let t = 0; t < p.length; t += 9) split([0, 1, 2].map((k) => p.slice(t + 3 * k, t + 3 * k + 3)), [0, 1, 2].map((k) => n.slice(t + 3 * k, t + 3 * k + 3)), [0, 1, 2].map((k) => uv.slice((t / 3) * 2 + 2 * k, (t / 3) * 2 + 2 * k + 2)), 0);
+  const r = { p: P, n: N, u: U }; refinedOf.set(geo, r); return r;
 }
 /** A piece drawn with a level varying through it (`Field`), or bent (`Bend`): its shape refined (each triangle halved
  *  across its longest side until no side is longer than a fortieth of the piece), so the colour and the bend follow the
  *  law and not just the corners; coloured, and moved, at every point. Kept with what it draws. */
+/** A worn piece's geometry: split finely enough (`refined`) that its faces have points away from their edges, then
+ *  its curvature and its distance to its edges read on each point (kit3d `surfaceShape`), for wear to follow. */
+const wornOf = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
+function wornGeometry(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const was = wornOf.get(geo); if (was) return was;
+  const { p, n, u } = refined(geo), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(u, 2));
+  surfaceShape(g); wornOf.set(geo, g); return g;
+}
 function fieldGeometry(geo: THREE.BufferGeometry, f: Field | Bend): THREE.BufferGeometry {
   const was = fieldDrawn.get(f); if (was) return was;
   const { p: p0, n } = refined(geo), p = p0.slice(), col = new Float32Array(p.length), c = new THREE.Color(), bend = 'most' in f ? f : null;
@@ -287,7 +295,7 @@ export class SpaceView {
           // the coarsest level of its stand-in whose error is under the threshold (4 pieces, 12, 48)
           const lv = p.levels.find((l) => l.error * per < ERR_PX * this.coarse);
           if (lv) {
-            for (const q of [...p.pieces.slice(0, lv.k), ...p.marks.filter((x) => !p.pieces.slice(0, lv.k).includes(x))]) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const g0 = leafGeometry(q.part); if (!g0) continue; const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : g0, mat = o.overlay ? overlayMaterial(o.color ?? q.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name); }
+            for (const q of [...p.pieces.slice(0, lv.k), ...p.marks.filter((x) => !p.pieces.slice(0, lv.k).includes(x))]) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const g0 = leafGeometry(q.part); if (!g0) continue; const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : (o.look ?? q.part.look)?.wear ? wornGeometry(g0) : g0, mat = o.overlay ? overlayMaterial(o.color ?? q.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name); }
             stand++; continue;
           }
         }
@@ -298,7 +306,7 @@ export class SpaceView {
       for (const l of leavesOf(t)) {
         const o = effective(overs, l.part.name); if (o.hide) continue;
         const g0 = leafGeometry(l.part); if (!g0) continue;
-        const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : g0, mat = o.overlay ? overlayMaterial(o.color ?? l.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(l.part, o);
+        const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : (o.look ?? l.part.look)?.wear ? wornGeometry(g0) : g0, mat = o.overlay ? overlayMaterial(o.color ?? l.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(l.part, o);
         add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, l.m), owner, l.part.name);
       }
     }
