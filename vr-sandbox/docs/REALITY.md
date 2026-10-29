@@ -465,141 +465,89 @@ the size of the catalogue; nothing fabricated, gaps recorded. Each step below is
   the physics) rather than only as a node one places; uncertainty from the material tables (a property's own spread)
   and from the solvers' own error; judging a balance against its imbalance's uncertainty rather than a fixed tolerance.
 
-## 6. The plan from here (2026-10-28), in order
+## 6. The plan from here, in order (rewritten 2026-10-29)
 
-The user, after step 7's rounds: "pause gather your self … optimize you context … give me a full system report and a
-smarter way to go about step 7", then "Yes create a new plan based off this in chronological order".
+History. 2026-10-28, after step 7's rounds, the user asked for "a smarter way to go about step 7 … in chronological
+order": what step 7 had built (`alongPath`, `throughNetwork`, nodes `path.properties`, `path.network`) was formulas driven
+by typed piece names, doing its own arithmetic where the book owns the law, one-dimensional. Steps A to I replaced it with
+one engine over the contact graph. 2026-10-29 the user asked what is retired, merged and connected, whether the whole
+system is updated ("put it in system population and take all previous builds as before the update"), for nodes "more
+technical, scientifically specified", and for the engineering disciplines as a tree; then for the whole plan in
+chronological order. This is that order. Two rules set it: what changes the answers (the engine, the materials, the
+evidence) is finished before anything is re-checked against it, so nothing is re-checked twice; and the naming schema
+exists before the re-check, so each node is renamed once, while it is re-worked.
 
-Why step 7 is redone. What was built (`alongPath`, `throughNetwork`, nodes `path.properties` and `path.network`) is
-formulas driven by typing piece names: the manual work the user has asked again and again to eliminate. It also does
-its own arithmetic where the book owns the law (`conduction.series`), so its values skip the units, evidence, ± and
-extrapolation that steps 3 and 8 built (a second owner); it guesses each joint as the lesser section, though
-`contacts()` and `patchIn()` in `make/space.ts` already find what touches and over what patch; and it is one
-dimensional, so it cannot say where heat or force goes through a real build. Its hand-worked tests (a stepped beam,
-Euler's load, a Wheatstone bridge, Turner's growth) stay, as the checks the new engine must still pass.
+Every step ends the same way: the tests that touch it while working (probes, deleted after), the one test (under a
+minute) before it is pushed and only pushed on its passing, a screenshot in the app where it can be seen, and a progress
+entry below.
 
-Each step below ends the same way: the tests that touch it while working, the full gate once before it is pushed, the
-snapshot's differences explained, a screenshot of it in the app sent to the user, and a progress entry in section 5.
+### Phase 1. The engine (steps A to I): done, 2026-10-28 to 10-29
 
-**Step A. Context and process (first, small).**
-- `CLAUDE.md` trimmed, only with the user's yes: the owners table to one line per concern, its detail moved into the
-  docs each row names; "What is wanted" and the rules kept word for word.
-- Work reads what it needs by searching, never whole large files; the full gate runs once per push, not per edit.
+| Step | What | State |
+| --- | --- | --- |
+| A | Context and process: CLAUDE.md trimmed, the one test, nodes dated, the gate under a minute | done |
+| B | Contact graph from the geometry (`graphOf`, node `graph`), each distinct thing once | done |
+| C | One solver for what flows (`flowOver`, node `flow`): heat, current, force | done |
+| D | Each edge by the book's laws; evidence and ± (GUM type B from families' spans) | done for heat, current, axial force; bending stiffness still by beam formulas in `graph.ts`, not book laws (Phase 2) |
+| E | Seen in 3D: coloured by level, smooth fields through each piece (Fourier between known points), bent as beams bend (Hermite) | done; arrows for the flow through each contact not yet (Phase 2) |
+| F | Force: 3D frame (`bentUnder`, node `bend`): deflection, von Mises stress, first yield, linear buckling, thermal loads, supports by kind and at a point | done; supports not yet settings on the node (Phase 2) |
+| G | Accuracy that grows: slices along the flow, the answer shown settling | done for flow; convergence not yet said by `bend` (Phase 2) |
+| H | Fed into what exists: heat gate by conduction, placement's heat map, the con-rod check | done for those; the other load rows in Phase 3 |
+| I | Retired: `path.network` → `flow`, `path.properties` → `bend`, their code deleted | done |
 
-**Step B. The contact graph, from the geometry.**
-- `graphOf(thing)`: every piece a node; every pair that touches an edge, with its real contact patch (area, normal,
-  where it is) from `contacts()` and `patchIn()`; nothing typed. Computed once per distinct thing and shared wherever
-  it is placed, as mass is (a city of the same drone builds one drone's graph).
-- Its own pieces' sections and lengths through each contact, for the edges' figures in step C.
-- Node `graph` (what touches what, as a table and drawn as lines between pieces in the 3D view).
-- Checked: a stack of blocks is a chain; a bolted joint joins through the bolt; pieces a hair apart do not touch;
-  the same thing placed a thousand times builds its graph once.
+### Phase 2. Finish what changes the answers (before anything is re-checked)
 
-**Step C. One solver for everything that flows.**
-- Heat and current first: each piece split at its contacts, each part of it a conductance from the book's own laws
-  (conduction, resistance from resistivity), each contact a conductance through its patch (given, or left out and
-  said, as now); the network solved by nodal analysis (`solveLinear`, sparse when large). Ends chosen by a click on a
-  piece or by what a piece is (the hot one, the mount, the earth: tags that exist), never by name.
-- Answers: the resistance between the ends, each piece's temperature or voltage, the flow through each contact.
-- Checked: the hand-worked path and network cases give the same answers through the new engine; a bridge; energy in
-  equals energy out at every junction (step 8's balance, applied).
+1. **Taxonomy schema (step K, its fields).** The disciplines tree is populated (`src/data/disciplines.ts`,
+   `docs/DISCIPLINES.md`: 17 disciplines, 363 entries, each after the body that divides it). Next: the fields on every
+   node (technical name and plain gloss; discipline entry; scheme code from PhySH, MSC2020, ICS, ACM CCS or JEL; role
+   from data source, geometry operation, analysis, numerical solver, assessment, data transformation, control flow,
+   visualisation, I/O; model specification: governing laws, model class, steady or transient, linear or not, numerical
+   method, assumptions and range, references; physical domain read from its ports' quantities; a hierarchical technical
+   id with the old one an alias). For example `bend`: "Frame analysis: 3D Euler–Bernoulli beam network (deflection, von
+   Mises stress, linear buckling, thermal load)", discipline mechanical → solid mechanics → elasticity, role analysis, id
+   `solid.frame`; `flow`: "Lumped network analysis: steady conduction, DC current, axial stiffness", id
+   `heat.conduction.network`; `graph`: "Contact graph (adjacency from geometry)". The one test's check holds them on every node marked current; a node before the update
+   is exempt until Phase 3 re-works it, so the gate stays green and the check grows with the work.
+2. **One heat solver.** `heatflow.ts` (lumped, stepped in time, used by `generate.ts`) becomes the time-stepped form of
+   `temperaturesOf` over the same graph and laws; Incropera's touching-contact resistance becomes the engine's default
+   where pieces only touch. Nothing does heat twice.
+3. **Engine leftovers.** Bending stiffness through book laws (D for the frame); `bend` takes supports as settings
+   (clamped, pinned, sliding, held at a point) and says its convergence as `flow` does (G); arrows for the flow through
+   each contact (E).
+4. **Materials (step 6's remainder).** The 50 stand-in grades each given their own sourced figures or said unknown;
+   conductivity for polymers, rubbers and mixes; composites' stiffness and conductivity as bounds (Voigt and Reuss);
+   the old word-to-material maps retired.
+5. **Evidence (step 8's remainder).** Balances along the existing chains (electrical to heat, collisions), a balance
+   judged against its imbalance's ±; ± from the solvers' own error (the residual, the settling as slices double).
 
-**Step D. Laws, evidence and ± on every edge.**
-- Each edge's figure is a law of the book run through the law engine, so its units, evidence and extrapolation come
-  with it; a material known only by its family, or a stand-in grade, carries its family's span as ± (step 6's spans),
-  and the ± reaches the answer by step 8's propagation.
-- Checked: a material swapped on the board moves the answer and its ±; a stand-in shows as one on the result.
+### Phase 3. System population (step J): everything before the update re-worked through it
 
-**Step E. Seen in the 3D view.**
-- The build coloured by temperature, voltage or force along the graph (the field colours placement already draws),
-  with the flow through each contact as arrows sized by it. Screenshots of the copper and aluminium rods, a heat sink
-  on a chip, and an engine's block from the head down.
+Dated from git: 457 of 556 nodes and 39 of 40 boards were from before the update (`BUILT`, `BOARDS_BUILT`, `UPDATE` in
+`src/nexus/built.ts`), marked so on the node, in the inspector, in NODES.md and on the board in the library. Something
+counts as current only when it has been re-worked and specified, never because it passes.
 
-**Step F. Force: a 3D spring network.**
-- The same graph, each piece's stiffness from its material and section (axial and bending), each contact a joint;
-  solved for deflections, reaction forces at what holds it, and the load path (which pieces carry how much). Bending
-  and buckling of an assembly read from it rather than from a chain.
-- Checked against the hand-worked beam, column and stepped-beam cases, and a frame with a closed form.
+1. **Load checks read the drawn parts**: rod bolts, crank-pin bearing, wrist pin (`loads.ts`), as the con-rod does.
+2. **Builds, field by field** (the 39 boards): each thing through the contact graph (floating pieces said), the heat gate
+   by conduction, the frame under its own weight and its working loads (a vehicle's frame on its axles, a building on its
+   ground). What each finds is fixed or said; its nodes named and classified (step K); the board then current.
+3. **Nodes, field by field** (the 457: laws 241, seeds 21, make 16, engine 8, …): each re-checked against units,
+   evidence and ±, its own tests read again ("they could be flawed tests"), named and classified (step K), and so dated
+   after. Open decision for the user: the 241 law nodes were re-checked with units and their examples in step 3; dated
+   by their book entries they read as before the update. Whether to date them by that re-check, or leave them marked
+   until this step reaches them.
+4. **Retire what the population shows doubled**, as aliases, so no board breaks.
 
-**Step G. Accuracy that grows, said.**
-- One element per piece is fast and shows which way things flow. Where a piece's own gradient matters, it is split
-  into more nodes of the same graph (finite volumes, finite elements: no second engine), and the answer is shown
-  settling as it is split (a convergence check, with the error said).
+### Phase 4. Coverage (step 5's remainder)
 
-**Step H. Fed into what exists.**
-- The heat gate in `make/rules.ts` reads conduction through the graph where pieces touch (its distance fall-off kept
-  for what only radiates); placement's heat map the same; `loads.ts` reads stiffness and load paths from step F;
-  the physics already takes mass, centre and inertia from the pieces.
-- The snapshot will move where the heat gate's answers change: each difference explained.
+The laws and nodes each discipline needs, measured against the disciplines tree: each specialty with no node, or only
+nodes from before the update, listed; the most used first. The tree makes the gap a list, not a guess.
 
-**Step I. Retire what the engine replaces.**
-- `path.properties` and `path.network` become thin wrappers over the engine (or are merged into its node as aliases,
-  `ALIASES`), their tests kept as regression; nothing does the same thing twice.
+### Phase 5. Parked until the user lifts it (design)
 
-**Step J. System population: everything before the update re-worked through it (asked 2026-10-29).** The engine (steps
-B to I) is built and proven on its own boards; most of what was built before it does not use it yet. Everything is dated
-from git: a node (`BUILT`) or a build, a starter board (`BOARDS_BUILT`), last changed before the update (`UPDATE`, step
-0) is marked "before update" on the node, in the inspector, in NODES.md and on the board in the library. At this step's
-start, 457 of 556 nodes and 39 of 40 boards. The queue, in order:
+The house's roof (213 t, 81 % tile), the default vehicle's 700 kg of alumina, Cascadia; #52 (segment tables), blocked by
+the network.
 
-1. Merge the second heat solver: `heatflow.ts` (lumped, stepped in time, its own conductances and a contact resistance,
-   used by `generate.ts`) becomes the time-stepped form of `temperaturesOf` over the same graph and the book's laws; its
-   contact resistance (Incropera's) becomes `flowOver`'s and `temperaturesOf`'s default where pieces only touch.
-2. The rest of the hand-worked load rows read the drawn parts: rod bolts, crank-pin bearing, wrist pin (`loads.ts`).
-3. Every build put through the engine: each board's things through the contact graph (floating pieces said), the heat
-   gate by conduction, and the frame under its own weight and its working loads where it has them (a vehicle's frame
-   on its axles, a building on its ground). What each finds is fixed or said, and the board is then current.
-4. The 457 nodes, field by field (laws 241, seeds 21, make 16, engine 8, ...): each re-checked against units, evidence
-   and ± and its own tests read again (they "could be flawed tests"); a node re-checked is rebuilt and so dated after.
-5. The bend node takes supports by kind (pinned, sliding, held at a point) as settings, as the engine check does.
-
-Nothing is counted current because it passes: only because it was re-worked through the update and changed where
-that showed it wrong.
-
-**Step K. Technical taxonomy and nomenclature (asked 2026-10-29: "the way nodes are categorized and named is bad it
-needs to be more technical, scientifically specified").** Today a node is named as a plain question ("How it bends under
-a load", "What touches what") and filed by a loose kind (`critic` holds both analyses and checks), a loose ability and a
-field list that puts "Everyday" beside "Mechanical". Each node will instead be specified the way a reference work
-specifies a method:
-
-1. **Name**: the technical term of the discipline first, its plain gloss second (search finds both). `bend`: "Frame
-   analysis: 3D Euler–Bernoulli beam network (deflection, von Mises stress, linear buckling, thermal load)"; `flow`:
-   "Lumped network analysis: steady conduction, DC current, axial stiffness"; `graph`: "Contact graph (adjacency from
-   geometry)"; `matter`: "Material properties"; `explode`: "Disassembly (bill of materials tree)".
-2. **The engineering disciplines as a tree** (`src/data/disciplines.ts`, `docs/DISCIPLINES.md`, populated 2026-10-29:
-   17 disciplines, 363 entries; discipline, branch, specialty, e.g. civil → transportation → railway engineering, civil →
-   urban and land development → landscape engineering, manufacturing → additive → powder bed fusion), each discipline
-   organised after the body that divides it (ASCE's institutes, ASME's divisions, IEEE's societies, AIChE, TMS/ASM/MRS,
-   SME/IISE with ISO/ASTM 52900, AIAA, SAE, SNAME, ANS, BMES, INCOSE, ASABE), labelled as compiled after them. Each node
-   is classified to the deepest entry that fits, beside its scheme code below.
-3. **Classification on recognised schemes**, so it is read the same by anyone: physics by APS PhySH, mathematics by
-   MSC2020, engineering by the ISO International Classification for Standards (ICS), computing by ACM CCS 2012,
-   economics and finance by JEL; the code kept on the node and shown with it.
-4. **Model specification** on every node that models anything: governing equation(s) or law ids from the book; model
-   class (analytical, empirical, lumped 0-D, 1-D, 3-D discretised, statistical, data); steady or transient; linear or
-   not; the numerical method (conjugate gradients, inverse iteration, backward Euler, …); assumptions and validity range
-   (as `valid` holds now, made complete); its references.
-5. **Role in a pipeline**, replacing kind and ability with precise ones: data source, geometry operation, analysis
-   (a model of physics), numerical solver, assessment (against a stated criterion or standard), data transformation,
-   control flow, visualisation, I/O.
-6. **Physical domain from the quantities on its ports** (`quantities.ts` dimensions), not typed: a node whose outputs are
-   W and K is thermal because of them.
-7. **Ids** hierarchical and technical (`solid.frame`, `heat.conduction.network`), the old ids kept as aliases so no board
-   breaks.
-8. **Held by the one test**: every node has its scheme code, its role, its model specification where it models, and a
-   name that is not a question; a node without them fails.
-
-Order: the schema and the test's check (points 2 to 8's fields) first, the nodes renamed and classified as Step J
-re-works each one (a node is current when it is both re-checked and specified), so nothing is renamed twice.
-
-**Then, in order:**
-1. Step 6's remainder: the 50 stand-in grades each given its own figures from a source, or said unknown; composites'
-   stiffness as bounds; the old word-to-material maps retired.
-2. Step 8's remainder: balances applied along the existing chains (electrical to heat, collisions), a balance judged
-   against its imbalance's ±, uncertainty from the solvers' own error.
-3. Step 5's remainder: more of the laws each field needs, by the coverage map.
-4. Parked until the user lifts it (design): the house's roof (213 t, 81 % tile), the default vehicle's 700 kg of
-   alumina, Cascadia; and #52 (segment tables), blocked by the network.
+### Progress (newest last)
 
 **Step A, done (2026-10-28).** The user: "the gate should be one minute at max", then "since you have updated the system
 it should be more effective creat one teste that converse all domains also mark have a date on nodes so you can marke
