@@ -435,6 +435,22 @@ export interface Bent {
   laws: string[];
 }
 
+/** An element whose ends are tied rigidly to its pieces' middles by offsets ra and rb: its ends' movements from the
+ *  middles' (u at the end = u + θ × r, θ the same), as a 12 × 12 matrix; null where both offsets are nothing. */
+function offsetO(ra: THREE.Vector3, rb: THREE.Vector3): number[][] | null {
+  if (ra.lengthSq() < 1e-24 && rb.lengthSq() < 1e-24) return null;
+  const O = Array.from({ length: 12 }, (_, i) => Array.from({ length: 12 }, (_, j): number => (i === j ? 1 : 0)));
+  for (const [e, r] of [[0, ra], [6, rb]] as const) { const x = r.x, y = r.y, z = r.z, m = [[0, z, -y], [-z, 0, x], [y, -x, 0]]; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) O[e + i]![e + 3 + j] = m[i]![j]!; }
+  return O;
+}
+/** Oᵀ M O: a matrix at the element's ends carried to its pieces' middles. */
+function sandwich(O: number[][], M: number[][]): number[][] {
+  const MO = M.map((row) => O[0]!.map((_, c) => row.reduce((s, v, k) => s + v * O[k]![c]!, 0)));
+  return O[0]!.map((_, r) => O[0]!.map((_, c) => O.reduce((s, row, k) => s + row[r]! * MO[k]![c]!, 0)));
+}
+/** The element's ends' movements from its pieces' middles'. */
+const endsOf = (el: { O: number[][] | null }, ug: number[]) => (el.O ? el.O.map((row) => row.reduce((s, v, k) => s + v * ug[k]!, 0)) : ug);
+
 /**
  * How a thing bends, stretches and twists under a load (docs/REALITY.md, section 6, step F, second round): its pieces
  * (cut into slices) as a 3D frame of Euler–Bernoulli beams, each node free to move and turn six ways. Between the slices
@@ -478,9 +494,10 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     const b = 2 * h[o[0]]!, d = 2 * h[o[1]]!;
     return { A: fl * book('section.rect.area', { b, h: d }), I1: fl * book('section.rect.second-moment', { b, h: d }), I2: fl * book('section.rect.second-moment', { b: d, h: b }), J: fl * book('section.rect.torsion-constant', { a: Math.max(b, d), c: Math.min(b, d) }), u1: o[0], u2: o[1] };
   };
-  const entries: [number, number, number][] = [], elems: { a: number; b: number; K: number[][]; R: THREE.Vector3[]; A: number; Iy: number; Iz: number; J: number; cy: number; cz: number; cj: number; y?: number; th: number }[] = [];
-  const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3, c?: { cy: number; cz: number; cj: number; y?: number; alpha?: number }) => {
-    const d = centre[b]!.clone().sub(centre[a]!), L = d.length(); if (!(L > 1e-9)) return;
+  const entries: [number, number, number][] = [], elems: { a: number; b: number; K: number[][]; R: THREE.Vector3[]; O: number[][] | null; L: number; A: number; Iy: number; Iz: number; J: number; cy: number; cz: number; cj: number; y?: number; th: number }[] = [];
+  const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3, c?: { cy: number; cz: number; cj: number; y?: number; alpha?: number; /** the section its stress is read on, where its stiffness is two halves' in series */ st?: { A: number; Iy: number; Iz: number; J: number }; /** its ends where they are, each tied rigidly to its piece's middle (an end offset) */ ends?: [THREE.Vector3, THREE.Vector3] }) => {
+    const pa = c?.ends?.[0] ?? centre[a]!, pb = c?.ends?.[1] ?? centre[b]!, d = pb.clone().sub(pa), L = d.length(); if (!(L > 1e-9)) return;
+    const O = offsetO(pa.clone().sub(centre[a]!), pb.clone().sub(centre[b]!));
     const ex = d.clone().multiplyScalar(1 / L); let y = ey ? ey.clone().addScaledVector(ex, -ey.dot(ex)) : new THREE.Vector3();
     if (y.lengthSq() < 1e-12) { y = Math.abs(ex.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0); y.addScaledVector(ex, -y.dot(ex)); }
     y.normalize(); const z = new THREE.Vector3().crossVectors(ex, y), R = [ex, y, z];
@@ -495,9 +512,11 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     const Tm = (r: number, c: number) => (Math.floor(r / 3) === Math.floor(c / 3) ? R[r % 3]!.getComponent(c % 3) : 0);
     const KT = K.map((row) => Array.from({ length: 12 }, (_, c) => row.reduce((s2, v, k) => s2 + v * Tm(k, c), 0)));
     // (warmed: the force it would push its ends apart with, held, E A α ΔT)
-    elems.push({ a, b, K, R, A, Iy, Iz, J, cy: c?.cy ?? Math.sqrt(A / Math.PI), cz: c?.cz ?? Math.sqrt(A / Math.PI), cj: c?.cj ?? Math.sqrt(A / Math.PI), y: c?.y, th: o.dT && c?.alpha ? E * A * c.alpha * o.dT : 0 });
+    elems.push({ a, b, K, R, O, L, A: c?.st?.A ?? A, Iy: c?.st?.Iy ?? Iy, Iz: c?.st?.Iz ?? Iz, J: c?.st?.J ?? J, cy: c?.cy ?? Math.sqrt(A / Math.PI), cz: c?.cz ?? Math.sqrt(A / Math.PI), cj: c?.cj ?? Math.sqrt(A / Math.PI), y: c?.y, th: o.dT && c?.alpha ? E * A * c.alpha * o.dT : 0 });
     const dof = (q: number) => (q < 6 ? a * 6 + q : b * 6 + q - 6);
-    for (let r = 0; r < 12; r++) for (let c = 0; c < 12; c++) { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * KT[k]![c]!; if (v !== 0) entries.push([dof(r), dof(c), v]); }
+    const Kp = Array.from({ length: 12 }, (_, r) => Array.from({ length: 12 }, (_, c) => { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * KT[k]![c]!; return v; }));
+    const Kn = O ? sandwich(O, Kp) : Kp;
+    for (let r = 0; r < 12; r++) for (let c = 0; c < 12; c++) if (Kn[r]![c] !== 0) entries.push([dof(r), dof(c), Kn[r]![c]!]);
   };
   for (const e of g.edges) {
     const pa = props[e.a], pb = props[e.b]; if (!pa || !pb) continue;
@@ -509,7 +528,29 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
       const hh = g.pieces[e.a]!.node.obb!.h, cy = hh[s.u1]!, cz = hh[s.u2]!;
       beam(e.a, e.b, pa.E, book('shear-modulus.isotropic', { E: pa.E, nu: pa.nu }), s.A, s.I1, s.I2, s.J, o.u[s.u1], { cy, cz, cj: Math.max(cy, cz), y: pa.y, alpha: pa.alpha });
     } else {
-      // two pieces bonded through their patch, as a round section of its area; moduli in series
+      // two pieces bonded where they meet: from each one's middle to where they meet, a half of its own section and
+      // material, the two in series (each stiffness as 1/k = Σ dᵢ / (E X)ᵢ over the halves). So the joint is the two pieces
+      // themselves up to their face, and as they are cut finer it shortens with them: the answer settles. (Its stress is
+      // read on the smaller half's section.) Pieces of other shapes: through their patch, as a round section of its area.
+      // (each half along the contact's normal through where they meet, from the plane through its piece's middle to the
+      // face; tied rigidly to the middle, an end offset, so a contact off to one side of a piece's middle is where it is)
+      const at = new THREE.Vector3(...e.at), ab = centre[e.b]!.clone().sub(centre[e.a]!);
+      let nrm = new THREE.Vector3(...e.normal); if (nrm.lengthSq() < 1e-12) nrm = ab.clone(); nrm.normalize(); if (nrm.dot(ab) < 0) nrm.negate();
+      const half = (i: number, len: number) => {
+        const o = g.pieces[i]!.node.obb!, sh = g.pieces[i]!.node.p.shape, k = o.u.map((u) => Math.abs(u.dot(nrm))).reduce((m, v, j, arr) => (v > arr[m]! ? j : m), 0);
+        if (!sh || !('box' in sh || ('cyl' in sh && k === 1))) return null;
+        return { s: sectionOf(i, k), len: Math.max(len, 1e-6), o, h: o.h };
+      };
+      const ha = half(e.a, Math.abs(at.clone().sub(centre[e.a]!).dot(nrm))), hb = half(e.b, Math.abs(centre[e.b]!.clone().sub(at).dot(nrm)));
+      if (ha && hb && ab.length() > 1e-9) {
+        const ua1 = ha.o.u[ha.s.u1]!, bAbout1 = Math.abs(hb.o.u[hb.s.u1]!.dot(ua1)) >= Math.abs(hb.o.u[hb.s.u2]!.dot(ua1));
+        const Ib1 = bAbout1 ? hb.s.I1 : hb.s.I2, Ib2 = bAbout1 ? hb.s.I2 : hb.s.I1, Ga = book('shear-modulus.isotropic', { E: pa.E, nu: pa.nu }), Gb = book('shear-modulus.isotropic', { E: pb.E, nu: pb.nu });
+        const L = ha.len + hb.len, ser = (xa: number, xb: number) => L / (ha.len / xa + hb.len / xb);
+        // (as E = G = 1, the section's A, I and J are the stiffnesses E A, E I and G J of the two halves in series)
+        const small = ha.s.A <= hb.s.A ? { s: ha.s, h: ha.h } : { s: hb.s, h: hb.h }, cy = small.h[small.s.u1]!, cz = small.h[small.s.u2]!;
+        beam(e.a, e.b, 1, 1, ser(pa.E * ha.s.A, pb.E * hb.s.A), ser(pa.E * ha.s.I1, pb.E * Ib1), ser(pa.E * ha.s.I2, pb.E * Ib2), ser(Ga * ha.s.J, Gb * hb.s.J), ua1, { cy, cz, cj: Math.max(cy, cz), y: pa.y !== undefined && pb.y !== undefined ? Math.min(pa.y, pb.y) : pa.y ?? pb.y, alpha: pa.alpha !== undefined && pb.alpha !== undefined ? (pa.alpha + pb.alpha) / 2 : pa.alpha ?? pb.alpha, st: { A: small.s.A, Iy: small.s.I1, Iz: small.s.I2, J: small.s.J }, ends: [at.clone().addScaledVector(nrm, -ha.len), at.clone().addScaledVector(nrm, hb.len)] });
+        continue;
+      }
       const E = (2 * pa.E * pb.E) / (pa.E + pb.E), nu = (pa.nu + pb.nu) / 2, r = Math.sqrt(Math.max(e.area, 1e-12) / Math.PI), A = book('section.circle.area', { r }), I = book('section.circle.second-moment', { r });
       beam(e.a, e.b, E, book('shear-modulus.isotropic', { E, nu }), A, I, I, book('section.circle.polar-moment', { r }), undefined, { cy: Math.sqrt(A / Math.PI), cz: Math.sqrt(A / Math.PI), cj: Math.sqrt(A / Math.PI), y: pa.y !== undefined && pb.y !== undefined ? Math.min(pa.y, pb.y) : pa.y ?? pb.y, alpha: pa.alpha !== undefined && pb.alpha !== undefined ? (pa.alpha + pb.alpha) / 2 : undefined });
     }
@@ -542,7 +583,11 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
   const live = loaded.filter((i) => seen.has(i) && !fixed.has(i)), f = new Array<number>(nf).fill(0);
   for (const i of live) for (let q = 0; q < 3; q++) for (const [r, a] of map(i * 6 + q)) f[r]! += (a * load[q]!) / live.length;
   // warmed: each beam pushes its ends apart along it with E A α ΔT (what a held bar feels)
-  for (const el of elems) if (el.th) { const ex = el.R[0]!; for (let q = 0; q < 3; q++) { for (const [ra, a] of map(el.a * 6 + q)) f[ra]! -= a * el.th * ex.getComponent(q); for (const [rb, b] of map(el.b * 6 + q)) f[rb]! += b * el.th * ex.getComponent(q); } }
+  for (const el of elems) if (el.th) {
+    const ex = el.R[0]!, fp = new Array<number>(12).fill(0); for (let q = 0; q < 3; q++) { fp[q] = -el.th * ex.getComponent(q); fp[6 + q] = el.th * ex.getComponent(q); }
+    const fn = el.O ? el.O[0]!.map((_, c) => el.O!.reduce((s2, row, r) => s2 + row[c]! * fp[r]!, 0)) : fp;
+    for (let q = 0; q < 12; q++) if (fn[q]) for (const [r, a] of map((q < 6 ? el.a * 6 : el.b * 6 - 6) + q)) f[r]! += a * fn[q]!;
+  }
   if (!live.length && !o.dT) lacking.push('none of the loaded pieces is joined to what holds it');
   const sol = nf && (live.length || o.dT) ? solveSparseSPD(nf, rows, f, { maxSteps: 40 * nf + 1000 }) : { x: [], converged: true, steps: 0, residual: 0 };
   const val = (i: number, q: number) => map(i * 6 + q).reduce((s2, [r, a]) => s2 + a * (sol.x[r] ?? 0), 0);
@@ -555,7 +600,7 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
   // whichever end is worse
   const u6 = (i: number) => [...(moved[i] ?? [0, 0, 0]), ...(turned[i] ?? [0, 0, 0])];
   const stress = elems.filter((el) => moved[el.a] && moved[el.b]).map((el) => {
-    const ug = [...u6(el.a), ...u6(el.b)], ul = ug.map((_, r) => { const blk = Math.floor(r / 3) * 3, ax = el.R[r % 3]!; return ax.x * ug[blk]! + ax.y * ug[blk + 1]! + ax.z * ug[blk + 2]!; });
+    const ug = endsOf(el, [...u6(el.a), ...u6(el.b)]), ul = ug.map((_, r) => { const blk = Math.floor(r / 3) * 3, ax = el.R[r % 3]!; return ax.x * ug[blk]! + ax.y * ug[blk + 1]! + ax.z * ug[blk + 2]!; });
     const f = el.K.map((row) => row.reduce((s2, v, k) => s2 + v * ul[k]!, 0)); f[0]! += el.th; f[6]! -= el.th; const N = Math.abs(f[0]!), T = Math.abs(f[3]!), My = Math.max(Math.abs(f[4]!), Math.abs(f[10]!)), Mz = Math.max(Math.abs(f[5]!), Math.abs(f[11]!));
     const sig = N / el.A + (My * el.cz) / el.Iy + (Mz * el.cy) / el.Iz, tau = (T * el.cj) / el.J, vm = Math.sqrt(sig * sig + 3 * tau * tau);
     return { a: el.a, b: el.b, vm, share: el.y ? vm / el.y : null };
@@ -571,14 +616,15 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     const kg: [number, number, number][] = [];
     for (const el of elems) {
       if (!moved[el.a] || !moved[el.b]) continue;
-      const ug = [...u6(el.a), ...u6(el.b)], ul = ug.map((_, r) => { const blk = Math.floor(r / 3) * 3, ax = el.R[r % 3]!; return ax.x * ug[blk]! + ax.y * ug[blk + 1]! + ax.z * ug[blk + 2]!; });
-      const Nt = el.K[6]!.reduce((s2, v, k) => s2 + v * ul[k]!, 0) - el.th, L = centre[el.b]!.distanceTo(centre[el.a]!), c = Nt / (30 * L);
+      const ug = endsOf(el, [...u6(el.a), ...u6(el.b)]), ul = ug.map((_, r) => { const blk = Math.floor(r / 3) * 3, ax = el.R[r % 3]!; return ax.x * ug[blk]! + ax.y * ug[blk + 1]! + ax.z * ug[blk + 2]!; });
+      const Nt = el.K[6]!.reduce((s2, v, k) => s2 + v * ul[k]!, 0) - el.th, L = el.L, c = Nt / (30 * L);
       const G = Array.from({ length: 12 }, () => new Array<number>(12).fill(0)), put = (idx: number[], m: number[][]) => { for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) G[idx[r]!]![idx[q]!]! += c * m[r]![q]!; };
       put([1, 5, 7, 11], [[36, 3 * L, -36, 3 * L], [3 * L, 4 * L * L, -3 * L, -L * L], [-36, -3 * L, 36, -3 * L], [3 * L, -L * L, -3 * L, 4 * L * L]]);
       put([2, 4, 8, 10], [[36, -3 * L, -36, -3 * L], [-3 * L, 4 * L * L, 3 * L, -L * L], [-36, 3 * L, 36, 3 * L], [-3 * L, -L * L, 3 * L, 4 * L * L]]);
       const Tm = (r: number, cc: number) => (Math.floor(r / 3) === Math.floor(cc / 3) ? el.R[r % 3]!.getComponent(cc % 3) : 0), dof = (q: number) => (q < 6 ? el.a * 6 + q : el.b * 6 + q - 6);
       const GT = G.map((row) => Array.from({ length: 12 }, (_, cc) => row.reduce((s2, v, k) => s2 + v * Tm(k, cc), 0)));
-      for (let r = 0; r < 12; r++) for (let cc = 0; cc < 12; cc++) { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * GT[k]![cc]!; if (v !== 0) for (const [R2, a] of map(dof(r))) for (const [C2, b] of map(dof(cc))) kg.push([R2, C2, v * a * b]); }
+      const Gp = Array.from({ length: 12 }, (_, r) => Array.from({ length: 12 }, (_, cc) => { let v = 0; for (let k = 0; k < 12; k++) v += Tm(k, r) * GT[k]![cc]!; return v; })), Gn = el.O ? sandwich(el.O, Gp) : Gp;
+      for (let r = 0; r < 12; r++) for (let cc = 0; cc < 12; cc++) { const v = Gn[r]![cc]!; if (v !== 0) for (const [R2, a] of map(dof(r))) for (const [C2, b] of map(dof(cc))) kg.push([R2, C2, v * a * b]); }
     }
     const m = nf, mulKg = (x: number[]) => { const y = new Array<number>(m).fill(0); for (const [r, cc, v] of kg) y[r]! += v * x[cc]!; return y; };
     const mulK = (x: number[]) => { const y = new Array<number>(m).fill(0); for (const [r, cc, v] of rows) y[r]! += v * x[cc]!; return y; };

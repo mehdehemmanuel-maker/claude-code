@@ -867,3 +867,17 @@ materials' spread. Found by it: on the rods board the flow's 5.72 K/W is ± 0.16
 side push is 0.31 ± 0.09 mm (29 %), not settled at 8 slices; the contact links run from slice middle to slice middle, so
 their length (and stiffness) changes with the cut. The frame's contact link is to be made independent of the slicing
 (phase 4, with the frame's re-check).
+
+**Phase 2.5, the frame's joints made independent of the slicing (2026-10-29).** A joint between two pieces was one beam of
+the contact patch's round section from slice middle to slice middle: its length, and so its stiffness, changed with the
+cut. A first fix (each piece's own section in series to the contact point) made it worse, the give growing without
+settling (0.10, 0.22, 0.35, 0.63, 1.12 mm at 2 to 32 slices): the block's slab met the rods 15 mm to one side of its
+middle, and the half took its section across that side, a sliver that thinned as the slab was cut. Now each half runs
+along the contact's normal through the point where they meet, from the plane through its piece's middle to the face,
+with that piece's own section and material, the two in series; each end is tied rigidly to its piece's middle (an end
+offset, u = u₀ + θ × r, carried into the stiffness, the stress, the buckling stiffness and the thermal load). The give
+now settles: 0.186, 0.278, 0.337, 0.370, 0.388 mm at 2, 4, 8, 16, 32 slices, each step about half the last. What still
+moves with the cut is where it is held: a held piece is clamped at its slice's middle, which comes nearer its end as it
+is cut finer (its free length grows; the give with its cube: 2.26 times from 2 to 32 slices by that alone, 2.09 seen).
+Holding at the face rather than the middle is the next refinement. The con-rod's check is unchanged (294 kN; its eyes
+meet its beam head on).

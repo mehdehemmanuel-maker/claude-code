@@ -22,7 +22,7 @@ export const BUILT: Record<string, string> = {
   "card.material":"2026-10-25T09:05:20.000Z",
   "card.part":"2026-10-25T09:16:19.000Z",
   "cell.characterise":"2026-10-27T23:33:16.000Z",
-  "check.balance":"2026-10-29T02:51:35.000Z",
+  "check.balance":"2026-10-29T02:51:54.000Z",
   "check.fidelity":"2026-10-27T05:54:58.000Z",
   "check.limit":"2026-10-25T09:05:20.000Z",
   "check.rules":"2026-10-27T03:19:31.000Z",
