@@ -473,7 +473,7 @@ by typed piece names, doing its own arithmetic where the book owns the law, one-
 one engine over the contact graph. 2026-10-29 the user asked what is retired, merged and connected, whether the whole
 system is updated ("put it in system population and take all previous builds as before the update"), for nodes "more
 technical, scientifically specified", and for the engineering disciplines as a tree; then for the whole plan in
-chronological order. This is that order. Two rules set it: what changes the answers (the engine, the materials, the
+chronological order, then for appearance from physics ahead of a design round that throws away what was built before the update and rebuilds it. This is that order. Two rules set it: what changes the answers (the engine, the materials, the
 evidence) is finished before anything is re-checked against it, so nothing is re-checked twice; and the naming schema
 exists before the re-check, so each node is renamed once, while it is re-worked.
 
@@ -492,7 +492,7 @@ entry below.
 | E | Seen in 3D: coloured by level, smooth fields through each piece (Fourier between known points), bent as beams bend (Hermite) | done; arrows for the flow through each contact not yet (Phase 2) |
 | F | Force: 3D frame (`bentUnder`, node `bend`): deflection, von Mises stress, first yield, linear buckling, thermal loads, supports by kind and at a point | done; supports not yet settings on the node (Phase 2) |
 | G | Accuracy that grows: slices along the flow, the answer shown settling | done for flow; convergence not yet said by `bend` (Phase 2) |
-| H | Fed into what exists: heat gate by conduction, placement's heat map, the con-rod check | done for those; the other load rows in Phase 3 |
+| H | Fed into what exists: heat gate by conduction, placement's heat map, the con-rod check | done for those; the other load rows in Phase 4 |
 | I | Retired: `path.network` → `flow`, `path.properties` → `bend`, their code deleted | done |
 
 ### Phase 2. Finish what changes the answers (before anything is re-checked)
@@ -507,7 +507,7 @@ entry below.
    Mises stress, linear buckling, thermal load)", discipline mechanical → solid mechanics → elasticity, role analysis, id
    `solid.frame`; `flow`: "Lumped network analysis: steady conduction, DC current, axial stiffness", id
    `heat.conduction.network`; `graph`: "Contact graph (adjacency from geometry)". The one test's check holds them on every node marked current; a node before the update
-   is exempt until Phase 3 re-works it, so the gate stays green and the check grows with the work.
+   is exempt until Phase 4 re-works it, so the gate stays green and the check grows with the work.
 2. **One heat solver.** `heatflow.ts` (lumped, stepped in time, used by `generate.ts`) becomes the time-stepped form of
    `temperaturesOf` over the same graph and laws; Incropera's touching-contact resistance becomes the engine's default
    where pieces only touch. Nothing does heat twice.
@@ -520,32 +520,61 @@ entry below.
 5. **Evidence (step 8's remainder).** Balances along the existing chains (electrical to heat, collisions), a balance
    judged against its imbalance's ±; ± from the solvers' own error (the residual, the settling as slices double).
 
-### Phase 3. System population (step J): everything before the update re-worked through it
+### Phase 3. Appearance from physics: how a thing looks, worked out and editable (asked 2026-10-29)
 
-Dated from git: 457 of 556 nodes and 39 of 40 boards were from before the update (`BUILT`, `BOARDS_BUILT`, `UPDATE` in
-`src/nexus/built.ts`), marked so on the node, in the inspector, in NODES.md and on the board in the library. Something
-counts as current only when it has been re-worked and specified, never because it passes.
+The user: "I would rather get textures stunning and different tools that govern how something looks maybe math can
+determine something color like why is metal silvery grey why is copper its color … like a auto texture that is editable
+like paint jobs or design". Before anything is rebuilt, so every rebuilt thing gets it.
+
+1. **Optical data on the materials** (`matter.ts`): each metal's complex refractive index n(λ) + i k(λ) across the
+   visible (Johnson and Christy 1972 for copper, silver and gold; Rakić et al. 1998 for aluminium, chromium, nickel,
+   titanium, tungsten; others as the compilations give them, sourced); each dielectric's index and absorption; pigments
+   by their absorption.
+2. **Colour computed, not chosen**: reflectance at each wavelength from Fresnel's equations, R = ((n−1)² + k²) /
+   ((n+1)² + k²) at normal incidence, weighed by the CIE 1931 observer under D65 into XYZ, then linear sRGB: the metal's
+   reflected colour (its F0). This is the why: silver and aluminium reflect nearly the same at every wavelength, so they
+   look neutral; copper's d-band electrons absorb above about 2.1 eV (green and blue), so it reflects red and orange;
+   gold's edge is near 2.4 eV, so it is yellow; iron and steel reflect about 55 to 65 % flatly, so they are grey and
+   darker than silver. Checked against measured colours.
+3. **Surface from the process**: roughness from the finishing process's Ra (turned, ground, polished, cast, forged, blasted,
+   printed) into microfacet roughness; the lay of machining as anisotropy; what is geometry at that scale (layer lines,
+   knurls, weave, threads) made as height and normal maps; oxides and patinas (copper's Cu₂O then verdigris, aluminium's
+   anodic film, heat tint on steel) as layers with their own optics, thin films by interference.
+4. **An editable look stack on every part** (an auto texture to start from, every layer changeable): substrate (from its
+   material, step 2) → treatment (anodised, plated, oxidised) → coating (primer, base coat by pigment, metallic or pearl
+   flake, clear coat) → graphics (livery, decals, patterns) → wear and weathering (edge wear by curvature, dirt by
+   occlusion, heat tint by the engine's own temperature field). Nodes for each layer; a paint job is a node.
+5. **The renderer**: physically based (clear coat, anisotropy, sheen, iridescence), lit by an environment; screenshots
+   close up and a blind check each round ("would a person call this cheap?").
+
+### Phase 4. Node population (step J): every node before the update re-checked
+
+Dated from git: 457 of 556 nodes were from before the update (`BUILT`, `UPDATE` in `src/nexus/built.ts`), marked so on
+the node, in the inspector and in NODES.md. A node counts as current only when it has been re-worked and specified
+(step K), never because it passes; one that would take longer to fix than to rebuild is rebuilt.
 
 1. **Load checks read the drawn parts**: rod bolts, crank-pin bearing, wrist pin (`loads.ts`), as the con-rod does.
-2. **Builds, field by field** (the 39 boards): each thing through the contact graph (floating pieces said), the heat gate
-   by conduction, the frame under its own weight and its working loads (a vehicle's frame on its axles, a building on its
-   ground). What each finds is fixed or said; its nodes named and classified (step K); the board then current.
-3. **Nodes, field by field** (the 457: laws 241, seeds 21, make 16, engine 8, …): each re-checked against units,
-   evidence and ±, its own tests read again ("they could be flawed tests"), named and classified (step K), and so dated
-   after. Open decision for the user: the 241 law nodes were re-checked with units and their examples in step 3; dated
-   by their book entries they read as before the update. Whether to date them by that re-check, or leave them marked
-   until this step reaches them.
-4. **Retire what the population shows doubled**, as aliases, so no board breaks.
+2. **Nodes, field by field** (laws 241, seeds 21, make 16, engine 8, …): each re-checked against units, evidence and ±,
+   its own tests read again ("they could be flawed tests"), named and classified (step K), and so dated after. Open
+   decision for the user: the 241 law nodes were re-checked with units and their examples in step 3; dated by their book
+   entries they read as before the update. Whether to date them by that re-check, or leave them marked until reached.
+3. **Retire what the population shows doubled**, as aliases, so no board breaks.
 
-### Phase 4. Coverage (step 5's remainder)
+### Phase 5. Design population: what was built before the update thrown away and rebuilt
 
-The laws and nodes each discipline needs, measured against the disciplines tree: each specialty with no node, or only
-nodes from before the update, listed; the most used first. The tree makes the gap a list, not a guess.
+The user: "those were really just tasks that helped us see what we need … thing built before the update just throw it
+away it's gonna be too buggy and be a unreasonable headache when you can rebuild it way faster and way better now". The
+39 boards from before the update (`BOARDS_BUILT`, marked in the library) and the builds they make (the house, the
+vehicles, the truck, the city, the engine, the battery, the computer, …) are deleted, not repaired; what they taught
+stays in this document and in the nodes. Then rebuilt, field by field, from the current nodes only: each from its first
+parts, through the contact graph, the heat gate and the frame under its own weight and working loads, with its look from
+Phase 3, and shown. The one test's quick board for each field is rebuilt with it, so the gate never runs a thrown-away
+board.
 
-### Phase 5. Parked until the user lifts it (design)
+### Phase 6. Coverage (step 5's remainder)
 
-The house's roof (213 t, 81 % tile), the default vehicle's 700 kg of alumina, Cascadia; #52 (segment tables), blocked by
-the network.
+The laws and nodes each discipline needs, measured against the disciplines tree: each specialty with no node listed,
+the most used first; and what the rebuilds of Phase 5 found missing. (Segment tables, #52, are one of these.)
 
 ### Progress (newest last)
 

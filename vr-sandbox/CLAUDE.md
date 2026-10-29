@@ -191,6 +191,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   that come later if so put it in system population and take all previous builds as before the update", and "the way
   nodes are categorized and named is bad it needs to be more technical, scientifically specified" (2026-10-29: steps J
   and K in `docs/REALITY.md`; builds dated from git like nodes, those before the update marked in the library)
+- "I would rather get textures stunning and different tools that govern how something looks maybe math can determine
+  something color like why is metal silvery grey why is copper its color … a auto texture that is editable like paint
+  jobs or design", and "thing built before the update just throw it away it's gonna be too buggy … you can rebuild it
+  way faster and way better now" (2026-10-29: phases 3 and 5 of the plan in `docs/REALITY.md`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
