@@ -556,6 +556,36 @@ start, 457 of 556 nodes and 39 of 40 boards. The queue, in order:
 Nothing is counted current because it passes: only because it was re-worked through the update and changed where
 that showed it wrong.
 
+**Step K. Technical taxonomy and nomenclature (asked 2026-10-29: "the way nodes are categorized and named is bad it
+needs to be more technical, scientifically specified").** Today a node is named as a plain question ("How it bends under
+a load", "What touches what") and filed by a loose kind (`critic` holds both analyses and checks), a loose ability and a
+field list that puts "Everyday" beside "Mechanical". Each node will instead be specified the way a reference work
+specifies a method:
+
+1. **Name**: the technical term of the discipline first, its plain gloss second (search finds both). `bend`: "Frame
+   analysis: 3D Euler–Bernoulli beam network (deflection, von Mises stress, linear buckling, thermal load)"; `flow`:
+   "Lumped network analysis: steady conduction, DC current, axial stiffness"; `graph`: "Contact graph (adjacency from
+   geometry)"; `matter`: "Material properties"; `explode`: "Disassembly (bill of materials tree)".
+2. **Classification on recognised schemes**, so it is read the same by anyone: physics by APS PhySH, mathematics by
+   MSC2020, engineering by the ISO International Classification for Standards (ICS), computing by ACM CCS 2012,
+   economics and finance by JEL; the code kept on the node and shown with it.
+3. **Model specification** on every node that models anything: governing equation(s) or law ids from the book; model
+   class (analytical, empirical, lumped 0-D, 1-D, 3-D discretised, statistical, data); steady or transient; linear or
+   not; the numerical method (conjugate gradients, inverse iteration, backward Euler, …); assumptions and validity range
+   (as `valid` holds now, made complete); its references.
+4. **Role in a pipeline**, replacing kind and ability with precise ones: data source, geometry operation, analysis
+   (a model of physics), numerical solver, assessment (against a stated criterion or standard), data transformation,
+   control flow, visualisation, I/O.
+5. **Physical domain from the quantities on its ports** (`quantities.ts` dimensions), not typed: a node whose outputs are
+   W and K is thermal because of them.
+6. **Ids** hierarchical and technical (`solid.frame`, `heat.conduction.network`), the old ids kept as aliases so no board
+   breaks.
+7. **Held by the one test**: every node has its scheme code, its role, its model specification where it models, and a
+   name that is not a question; a node without them fails.
+
+Order: the schema and the test's check (points 2 to 7's fields) first, the nodes renamed and classified as Step J
+re-works each one (a node is current when it is both re-checked and specified), so nothing is renamed twice.
+
 **Then, in order:**
 1. Step 6's remainder: the 50 stand-in grades each given its own figures from a source, or said unknown; composites'
    stiffness as bounds; the old word-to-material maps retired.

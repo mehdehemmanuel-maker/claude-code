@@ -187,6 +187,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   places and games, the old physics client), with their tests, their command-line programs, 43 docs about systems
   before nodes and `spikes/`; then every export nothing used; what is kept is what the node app reaches. Commit
   `e70944a` holds the last of it, if any of it is ever wanted back)
+- "analyze everything what all is retired … merged, connected down the line … did you update the whole system or does
+  that come later if so put it in system population and take all previous builds as before the update", and "the way
+  nodes are categorized and named is bad it needs to be more technical, scientifically specified" (2026-10-29: steps J
+  and K in `docs/REALITY.md`; builds dated from git like nodes, those before the update marked in the library)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 
 ## What can honestly be promised
