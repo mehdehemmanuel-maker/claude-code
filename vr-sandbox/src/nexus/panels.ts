@@ -392,7 +392,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     if (ok.every(Boolean)) return w; let best: [number, number] = [0, -1]; for (let i = 0; i <= N; i++) if (ok[i]) { let j = i; while (j + 1 <= N && ok[j + 1]) j++; if (j - i > best[1] - best[0]) best = [i, j]; i = j; }
     return best[1] - best[0] >= 4 ? { ...w, u0: w.u0 + ((w.u1 - w.u0) * best[0]) / N, u1: w.u0 + ((w.u1 - w.u0) * best[1]) / N } : w;
   };
-  const tailW: Win = roomy({ u0: uZ(W2 * 0.5, false), u1: Math.min(uTl(0.45), U(rArchBack - 0.08)), v0: tb0, v1: Math.min(vAt(uMidT, yTopT - 0.015), vUnder(uZ(W2 * 0.5, false), Math.min(uTl(0.45), U(rArchBack - 0.08)), 0.015)) }, 0.04), valW: Win = { u0: 0, u1: uTl(0.35), v0: vAt(uTl(0.01), lowT + 0.025), v1: vAt(uTl(0.01), lowT + 0.085) };
+  const wrapT = b.lines.face?.wrap ?? 0.45, tailW: Win = roomy({ u0: uZ(W2 * 0.5, false), u1: Math.min(uTl(wrapT), U(rArchBack - 0.08)), v0: tb0, v1: Math.min(vAt(uMidT, yTopT - 0.015), vUnder(uZ(W2 * 0.5, false), Math.min(uTl(wrapT), U(rArchBack - 0.08)), 0.015)) }, 0.04), valW: Win = { u0: 0, u1: uTl(0.35), v0: vAt(uTl(0.01), lowT + 0.025), v1: vAt(uTl(0.01), lowT + 0.085) };
   const fWins = [lampW, grilleW, intakeW], tWins = [tailW, valW];
   // a panel round openings: its run in slabs along u, each from its foot (round the arches in it) up to its top, less the
   // openings over that slab
@@ -743,15 +743,18 @@ export function practise<K extends keyof BodyRules>(rule: K, values: BodyRules[K
 
 // ---- reading a finished skin: what is fitted onto it (a body kit) is fitted to the skin as made ---------------------------
 /** The painted skins as points, each with the way it faces (its lamps, glass, liners and seams left out). */
-export interface Skin { pts: { at: V3; n: V3 }[] }
+export interface Skin { pts: { at: V3; n: V3; of: string }[] }
 const skinPts = new WeakMap<Patch, { at: V3; n: V3 }[]>();
 export function skinOf(parts: Part[]): Skin {
   const pts: Skin['pts'] = [];
-  for (const p of parts) {
+  // (and the skins of what is built round them, a door, the hood, the deck lid: groups drawn where they stand)
+  const all: Part[] = []; const walk = (q: Part) => { all.push(q); if (!q.shape && !q.rot && !(q.at ?? [0, 0, 0]).some((v) => v !== 0)) q.parts?.forEach(walk); };
+  parts.forEach(walk);
+  for (const p of all) {
     if (!p.shape || !('surf' in p.shape) || /liner|wheelhouse|handle|lamp|light|grille|glass|windscreen|plate|seam|shut line|mirror/.test(p.name)) continue;
     const pt = p.shape.surf; let got = skinPts.get(pt);
     if (!got) { got = []; for (let i = 0; i <= 64; i++) for (let j = 0; j <= 32; j++) { const q = patchAt(pt, i / 64, j / 32); got.push({ at: q.at, n: q.n }); } skinPts.set(pt, got); }
-    pts.push(...got);
+    for (const q of got) pts.push({ ...q, of: p.name });
   }
   return { pts };
 }

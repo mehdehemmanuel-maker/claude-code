@@ -13,6 +13,8 @@ export interface Coat {
   /** metal flakes in the paint, the share of its face they cover (0 solid, about 0.3 to 0.6 a metallic) */ flake: number;
   /** a clear coat over it, 0 to 1 (a glossy layer of n about 1.5: about 4 % of the light reflected square on, Fresnel) */ clear: number;
   /** the paint's own roughness under any clear coat, 0 a mirror to 1 chalk */ rough: number;
+  /** a primer under the paint (its colour): what shows where the paint is worn or sanded through, not the bare metal */ primer?: number;
+  /** sanded back by hand, not chipped: its wear broad patches through to its primer on the flat, the paint kept in its hollows */ sanded?: boolean;
 }
 /** A graphic laid on the coat (a paint job's stripe, a two-tone split), in the piece's own frame, metres: a band across
  *  one axis at a place, so many wide; a split, everything above (or below) a place. */
@@ -41,7 +43,7 @@ export function metalOf(mat: string | undefined): string | undefined {
 
 export interface Resolved { color: number; metal: number; rough?: number; clear: number; flake: number; says: string;
   /** what wear shows: under a coat, the surface it covers (its colour, how metallic, how rough); on bare iron, rust */
-  under?: { color: number; metal: number; rough: number; kind: 'chip' | 'rust' } }
+  under?: { color: number; metal: number; rough: number; kind: 'chip' | 'rust' | 'sand' } }
 const cache = new Map<string, Resolved>();
 /** A look on a piece of a material carrying a colour, resolved into what a renderer draws: its colour (linear values
  *  encoded as sRGB hex), how metallic, any roughness the coat sets, its clear coat and flake. */
@@ -62,8 +64,8 @@ export function resolveLook(look: Look, mat: string | undefined, given: number):
   if (look.graphics?.length) says.push(`${look.graphics.length} graphic${look.graphics.length > 1 ? 's' : ''} on it (${look.graphics.map((g) => g.kind === 'stripe' ? `a ${(g.width * 1000).toFixed(0)} mm stripe across ${g.axis}` : `a two-tone ${g.kind} ${g.axis} ${g.at} m`).join(', ')})`);
   // (wear: a coat chips first where the surface is most convex (an edge is struck, rubbed and coated thinnest) and shows
   // what is under it; bare iron rusts first where water stands, in hollows; everything gathers dirt in hollows)
-  const under = look.wear && c?.colour !== undefined ? { color: bare.color, metal: bare.metal, rough: 0.45, kind: 'chip' as const } : look.wear && metal === 'iron' ? { color: 0x7a3a1a, metal: 0, rough: 0.9, kind: 'rust' as const } : undefined;
-  if (look.wear) says.push(`worn ${(look.wear * 100).toFixed(0)} %: ${under?.kind === 'chip' ? 'the paint chipped off its edges, showing what is under it' : under?.kind === 'rust' ? 'rusting, in its hollows first' : 'duller'}; dirt gathered in its hollows`);
+  const under = look.wear && c?.primer !== undefined ? { color: c.primer, metal: 0, rough: 0.85, kind: c.sanded ? 'sand' as const : 'chip' as const } : look.wear && c?.colour !== undefined ? { color: bare.color, metal: bare.metal, rough: 0.45, kind: 'chip' as const } : look.wear && metal === 'iron' ? { color: 0x7a3a1a, metal: 0, rough: 0.9, kind: 'rust' as const } : undefined;
+  if (look.wear) says.push(`worn ${(look.wear * 100).toFixed(0)} %: ${under?.kind === 'chip' || under?.kind === 'sand' ? (c?.sanded ? 'sanded back in broad patches to its primer' : c?.primer !== undefined ? 'the paint worn through to its primer' : 'the paint chipped off its edges, showing what is under it') : under?.kind === 'rust' ? 'rusting, in its hollows first' : 'duller'}; dirt gathered in its hollows`);
   const r = { color, metal: metallic, ...(rough !== undefined ? { rough } : {}), clear, flake, says: says.join('; '), ...(under ? { under } : {}) };
   cache.set(key, r); return r;
 }

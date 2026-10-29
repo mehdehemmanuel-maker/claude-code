@@ -55,12 +55,12 @@ export const GRAIN: Record<string, { size: number; depth: number; rough: number;
  *  (κ = (dN·dP)/(dP·dP), view space: 1/R on a ball of radius R, positive convex, negative in a hollow); a coat chips
  *  where κ passes 1/r for a radius r that grows with wear (edges first), broken up by noise a few millimetres across;
  *  bare iron rusts and everything gathers dirt where κ is negative. */
-export interface Worn { wear: number; under?: { color: number; metal: number; rough: number; kind: 'chip' | 'rust' }; graphics?: Graphic[] }
+export interface Worn { wear: number; under?: { color: number; metal: number; rough: number; kind: 'chip' | 'rust' | 'sand' }; graphics?: Graphic[] }
 const NO_GRAIN = { size: 0.001, depth: 0, rough: 0 };
 function grained(m: THREE.MeshStandardMaterial, g: (typeof GRAIN)[string], x?: Worn): void {
   const gs = (x?.graphics ?? []).slice(0, 2), ax = { x: 0, y: 1, z: 2 }, rc = 0.001 + 0.012 * (x?.wear ?? 0);
   const u = { uGrainF: { value: 1 / g.size }, uGrainA: { value: g.depth }, uGrainR: { value: g.rough }, uGrainS: { value: new THREE.Vector3(...(g.stretch ?? [1, 1, 1])) },
-    uGrainRad: { value: g.radial ? 1 : 0 }, uWear: { value: x?.wear ?? 0 }, uChipK: { value: 1 / rc }, uUnder: { value: new THREE.Color(x?.under?.color ?? 0) }, uUnderM: { value: x?.under?.metal ?? 0 }, uUnderR: { value: x?.under?.rough ?? 0.5 }, uRust: { value: x?.under?.kind === 'rust' ? 1 : 0 }, uHasUnder: { value: x?.under ? 1 : 0 },
+    uGrainRad: { value: g.radial ? 1 : 0 }, uWear: { value: x?.wear ?? 0 }, uChipK: { value: 1 / rc }, uUnder: { value: new THREE.Color(x?.under?.color ?? 0) }, uUnderM: { value: x?.under?.metal ?? 0 }, uUnderR: { value: x?.under?.rough ?? 0.5 }, uRust: { value: x?.under?.kind === 'rust' ? 1 : 0 }, uSand: { value: x?.under?.kind === 'sand' ? 1 : 0 }, uHasUnder: { value: x?.under ? 1 : 0 },
     uG: { value: [0, 1].map((i) => { const q = gs[i]; return q ? new THREE.Vector4(ax[q.axis], q.at, q.width / 2, q.kind === 'stripe' ? 1 : q.kind === 'above' ? 2 : 3) : new THREE.Vector4(0, 0, 0, 0); }) }, uGC: { value: [0, 1].map((i) => new THREE.Color(gs[i]?.colour ?? 0)) } };
   const looked = !!x && (x.wear > 0 || gs.length > 0);
   m.onBeforeCompile = (sh) => {
@@ -69,7 +69,7 @@ function grained(m: THREE.MeshStandardMaterial, g: (typeof GRAIN)[string], x?: W
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 varying vec3 vGrainPos; varying vec3 vLocalPos; varying vec3 vLocalN; uniform float uGrainF;
 ${looked ? 'varying float vCurv; varying float vEdge;' : ''}
-uniform float uGrainRad; uniform float uWear; uniform float uChipK; uniform vec3 uUnder; uniform float uUnderM; uniform float uUnderR; uniform float uRust; uniform float uHasUnder; uniform vec4 uG[2]; uniform vec3 uGC[2];
+uniform float uGrainRad; uniform float uWear; uniform float uChipK; uniform vec3 uUnder; uniform float uUnderM; uniform float uUnderR; uniform float uRust; uniform float uSand; uniform float uHasUnder; uniform vec4 uG[2]; uniform vec3 uGC[2];
 float wMask = 0.0, wDirt = 0.0; uniform float uGrainA; uniform float uGrainR; uniform vec3 uGrainS;
 float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float gNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -90,6 +90,12 @@ if (uWear > 0.0) {
   // (a chip's edge shows the paint's thickness: a thin band of the lighter primer under it)
   float rim = uHasUnder * (1.0 - uRust) * (smoothstep(1.0 - fw, 1.0 + fw, reach) - smoothstep(1.12 - fw, 1.12 + fw, reach));
   wMask = uHasUnder * clamp((uRust > 0.5 ? hollow * 1.3 + patches * 1.6 : convex + patches * step(0.5, n1)) * min(1.0, uWear * 1.6), 0.0, 1.0);
+  // (sanded back by hand: broad patches through to the primer, a block's reach across (tens of centimetres), mottled at
+  // their edges, on the flat; the paint kept in the hollows and on the tight edges the block rode over)
+  if (uSand > 0.5) { float m = 0.62 * gNoise(vGrainPos * 5.0 + 11.0) + 0.26 * gNoise(vGrainPos * 17.0 + 5.0) + 0.12 * gNoise(vGrainPos * 70.0 + 2.0), th = 1.0 - uWear * 0.85;
+    // (its edges feathered, and specks of the paint left in the low spots inside a sanded patch, as a block leaves them)
+    float specks = smoothstep(0.3, 0.42, gNoise(vGrainPos * 140.0 + 9.0)) * 0.6 + 0.4 * smoothstep(0.25, 0.4, gNoise(vGrainPos * 38.0 + 4.0));
+    wMask = uHasUnder * smoothstep(th - 0.05, th + 0.05, m) * mix(1.0, specks, 0.55) * (1.0 - hollow) * (1.0 - smoothstep(0.5 * uChipK, uChipK, k)); rim *= 0.0; }
   wDirt = clamp(hollow * uWear * 0.8 + uWear * 0.12 * n2, 0.0, 0.85);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55, 0.53, 0.5), rim * 0.7 * (1.0 - wMask));
   diffuseColor.rgb = mix(diffuseColor.rgb, uUnder, wMask);

@@ -1098,3 +1098,15 @@ rules give 2 findings (its hood inner frame in its hood, its battery tray in its
 1937fd8, before this work. Blind check: "a four-door sedan in black with red body-kit accents", taken for a Holden
 Commodore at about 20 %, still not a Monte Carlo; its list: the wing flat slabs, the flares thin, the vent flat, the skirts
 and splitter boards, tyres with a chunky tread, the nose blank, the tail lamps boxy, the plates' text clipped.
+- **2026-10-29, the user's own Monte Carlo, from their garage photographs.** A third record: its paint sanded back to a
+tan primer (sampled #c8bd9d), red bolt-on flares round all four arches (their heads red), a red ducktail on its deck lid,
+red mirrors, its own 16-in. five-spoke wheels black with a red lip on 225/60R16s. Each by a general option: a coat's
+primer and its being sanded (broad patches through to the primer on the flat, feathered, specks of paint left, the paint
+kept in hollows and on tight edges; a second kind of wear beside chipping), a build's mirror colour, a rim's lip colour
+apart from its spokes', a ducktail fitted to the deck lid across its crown, and how far a car's tail lamps wrap round.
+Found on the way: the skin reader saw only top-level panels, not the hood, doors and deck lid built as closures, and a
+mirrored skin has only its right half (both fixed). Rules: 0 findings; recipes: all met. Blind check: "a generic 4-door
+sedan" with "a cream-and-black cow-print or camo-style wrap", taken for a Charger or a 300 at about 15 %: the sanding
+reads as a wrap, not as work in progress; the flares still read thin, the ducktail a flat slab, the wheels small and set
+in, the body slab-sided and inflated, its windows near opaque with no pillar between. The body's own shape (the
+Monte Carlo's rear window, haunch and deck) is the gap now.
