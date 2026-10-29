@@ -22,9 +22,10 @@ import { layout } from './make/space';
 import { geometry } from './view/kit3d';
 import { minimize } from './numeric';
 import type { Part, V3 } from './kits';
+import { tessellate, type Patch } from './surface';
 import { PHOTOS, photoOf, type Mark } from './photo-marks';
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
-import { makeMachine, tyreOf, bodyPlanOf, type Machine } from './machines';
+import { makeMachine, tyreOf, bodyPlanOf, bodyKit, type Machine } from './machines';
 import { bodyPanels } from './panels';
 
 // ---- images -----------------------------------------------------------------------------------------------------------
@@ -128,14 +129,18 @@ export function solveCamera(pairs: Pair[], w: number, h: number, start: Camera):
 }
 
 // ---- rendering a silhouette -------------------------------------------------------------------------------------------
-const geos = new WeakMap<object, THREE.BufferGeometry | null>();
+const geos = new WeakMap<object, THREE.BufferGeometry | null>(), coarser = new Map<number, WeakMap<object, THREE.BufferGeometry | null>>();
+/** A freeform skin drawn with n facets each way, not by its curvature (the viewer's): for seeing its outline many times
+ *  over at a few pixels a facet, where its curvature's hundreds of facets cost more than they show. */
+function coarseSurf(pt: Patch, n: number): THREE.BufferGeometry { const t = tessellate(pt, n, n), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3)); g.setIndex(t.idx); return g; }
 /** The thing as the camera sees it: every drawn piece's triangles (as the viewer draws them) filled into a mask, 1 where
- *  any piece covers the pixel. `skip` leaves out pieces by name (what the photograph does not show). */
-export function silhouette(root: Part, c: Camera, skip?: RegExp): Uint8Array {
-  const m = new Uint8Array(c.w * c.h), B = basis(c), v = new THREE.Vector3();
+ *  any piece covers the pixel. `skip` leaves out pieces by name (what the photograph does not show); `coarse` draws its
+ *  freeform skins with that many facets each way (see coarseSurf). */
+export function silhouette(root: Part, c: Camera, skip?: RegExp, coarse?: number): Uint8Array {
+  const m = new Uint8Array(c.w * c.h), B = basis(c), v = new THREE.Vector3(), kept = coarse ? (coarser.get(coarse) ?? coarser.set(coarse, new WeakMap()).get(coarse)!) : geos;
   for (const n of layout(root)) {
     const p = n.p; if (!p.shape || (skip && skip.test(p.name))) continue;
-    let g = geos.get(p.shape); if (g === undefined) { try { g = geometry(p.shape, p.mat, p.make, p.facets); } catch { g = null; } geos.set(p.shape, g); }
+    let g = kept.get(p.shape); if (g === undefined) { try { g = coarse && 'surf' in p.shape ? coarseSurf(p.shape.surf, coarse) : geometry(p.shape, p.mat, p.make, p.facets); } catch { g = null; } kept.set(p.shape, g); }
     if (!g) continue;
     const pos = g.attributes.position!, idx = g.index, pr: ([number, number, number] | null)[] = [];
     for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(n.m); pr.push(project(c, [v.x, v.y, v.z], B)); }
@@ -191,34 +196,187 @@ export function backProject(c: Camera, u: number, v: number, zp: number): V3 | n
 }
 /** A camera made smaller (its image and focal length by k): the same view, fewer pixels. */
 export const scaled = (c: Camera, k: number): Camera => ({ ...c, f: c.f * k, w: Math.round(c.w * k), h: Math.round(c.h * k) });
-/** Its pixels made smaller by k (each the most of the k × k it covers: a thin edge is kept). */
-export function shrinkMask(m: Uint8Array, w: number, h: number, k: number): { m: Uint8Array; w: number; h: number } {
-  const W = Math.round(w * k), H = Math.round(h * k), out = new Uint8Array(W * H);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (m[y * w + x]) out[Math.min(H - 1, Math.floor(y * k)) * W + Math.min(W - 1, Math.floor(x * k))] = 1;
-  return { m: out, w: W, h: H };
+// ---- the outline, dense and on the picture's own edges ----------------------------------------------------------------
+/** The traced outline made dense and laid on the picture's own edges: a point every `step` pixels along it, each moved along
+ *  the outline's normal to the strongest edge within r pixels (nearer ones preferred, an edge under `clear` not counted),
+ *  the moves then smoothed round it (the middle of seven) so one caught on a reflection does not kink it. Each point keeps
+ *  the region it lies in; one with no clear edge near stays where the trace put it. */
+export function denseOutline(img: Img, outline: Mark[], step = 3, r = 6, clear = 120): { pts: Mark[]; snapped: number; moved: number } {
+  const g = gradient(img), { w, h } = img, raw: { region: string; u: number; v: number; nx: number; ny: number }[] = [], regionOf = (n: string) => n.replace(/^outline /, '').replace(/ \d+$/, '');
+  for (let i = 0; i < outline.length; i++) {
+    const a = outline[i]!, b = outline[(i + 1) % outline.length]!, L = Math.hypot(b.u - a.u, b.v - a.v); if (L < 1e-6) continue;
+    const k = Math.max(1, Math.round(L / step)), nx = -(b.v - a.v) / L, ny = (b.u - a.u) / L;
+    for (let j = 0; j < k; j++) raw.push({ region: regionOf(a.name), u: a.u + ((b.u - a.u) * j) / k, v: a.v + ((b.v - a.v) * j) / k, nx, ny });
+  }
+  const off = raw.map((p) => { let best = -Infinity, bt = NaN; for (let t = -r; t <= r; t += 0.5) { const x = Math.round(p.u + t * p.nx), y = Math.round(p.v + t * p.ny); if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue; const e = g[y * w + x]!; if (e < clear) continue; const sc = e - 8 * Math.abs(t); if (sc > best) { best = sc; bt = t; } } return bt; });
+  const n = raw.length, sm = off.map((_, i) => { const q: number[] = []; for (let d = -3; d <= 3; d++) { const o = off[(i + d + n) % n]!; if (Number.isFinite(o)) q.push(o); } q.sort((a, b) => a - b); return q.length ? q[Math.floor(q.length / 2)]! : 0; });
+  const counts = new Map<string, number>(), pts = raw.map((p, i) => { const c = (counts.get(p.region) ?? 0) + 1; counts.set(p.region, c); return { name: `outline ${p.region} ${c}`, u: p.u + sm[i]! * p.nx, v: p.v + sm[i]! * p.ny }; });
+  return { pts, snapped: off.filter(Number.isFinite).length, moved: Math.max(0, ...sm.map(Math.abs)) };
 }
 
-// ---- fitting its figures to what is seen ---------------------------------------------------------------------------------
-export interface Fitted { key: string; was: number; now: number; pm: number; evidence: 'measured' | 'estimated'; says: string }
-/** Figures of a thing moved so its rendered outline meets the traced one: `render(x)` makes its mask for figures x (at the
- *  camera given), `outline` the traced points (in that camera's pixels), `keys` what each figure is. The error is the mean
- *  of |distance| over the outline points of the regions named; minimised by Nelder–Mead within each figure's range. Each
- *  figure's ± after: how far it can move before the error grows by one pixel (from the error's curvature there); a figure
- *  that moves the error by less than a pixel over its whole range is not fixed by this view: said estimated, left as it
- *  was. */
-export function fitFigures(render: (x: number[]) => Uint8Array, outline: { name: string; u: number; v: number }[], w: number, h: number, keys: { key: string; x0: number; lo: number; hi: number; step: number }[], regions: RegExp, o: { most?: number } = {}): { figures: Fitted[]; before: number; after: number; evaluations: number } {
-  const pts = outline.filter((p) => regions.test(p.name));
-  const cost = (x: number[]) => { const m = render(x), c = compareOutline(m, pts, w, h, 1); return c.meanAbsPx; };
-  const x0 = keys.map((k) => k.x0), before = cost(x0);
-  const r = minimize(cost, x0, { step: keys.map((k) => k.step), lo: keys.map((k) => k.lo), hi: keys.map((k) => k.hi), most: o.most ?? 60, ftol: 0.05 });
-  let evals = r.evaluations + 1;
-  const figures = keys.map((k, i): Fitted => {
-    // (the error's curvature along this figure alone: at ± one step)
-    const at = (d: number) => { const x = r.x.slice(); x[i] = Math.min(k.hi, Math.max(k.lo, x[i]! + d)); evals++; return cost(x); };
-    const up = at(k.step), dn = at(-k.step), curv = (up + dn - 2 * r.value) / (k.step * k.step), pm = curv > 1e-9 ? Math.sqrt(2 / curv) : Infinity, fixed = pm < (k.hi - k.lo) / 2;
-    return { key: k.key, was: k.x0, now: fixed ? r.x[i]! : k.x0, pm, evidence: fixed ? 'measured' : 'estimated', says: fixed ? `fitted to the outline: ${r.x[i]!.toPrecision(4)} ± ${pm.toPrecision(2)} (the error grows a pixel over that)` : 'not fixed by this view: the outline hardly moves with it; kept as it was' };
-  });
-  return { figures, before, after: r.value, evaluations: evals };
+// ---- matching both ways ------------------------------------------------------------------------------------------------
+/** What a model is matched to: the outline as a filled mask at a scale k of the picture, how far every pixel is from its
+ *  edge, and its points. */
+export interface Target { w: number; h: number; mask: Uint8Array; dt: Float32Array; pts: { u: number; v: number }[] }
+export function targetOf(outline: { u: number; v: number }[], w: number, h: number, k = 1): Target {
+  const pts = outline.map((p) => ({ u: p.u * k, v: p.v * k })), W = Math.round(w * k), H = Math.round(h * k), mask = polygonMask(pts.map((p) => [p.u, p.v]), W, H);
+  return { w: W, h: H, mask, dt: edgeDistance(mask, W, H), pts };
+}
+/** A model's silhouette against a target both ways: the mean distance from the target's outline to the model's edge
+ *  (where the model falls short of it, or stands past it at those points), and from the model's edge to the target's
+ *  outline (so a piece standing out where the outline is not, a wing's tip, a nose run long, counts too); their mean, in
+ *  pixels at the target's scale; and their overlap (IoU). */
+export function twoSided(model: Uint8Array, T: Target): { err: number; toModel: number; toTarget: number; iou: number } {
+  const { w, h } = T, d = edgeDistance(model, w, h); let a = 0;
+  for (const p of T.pts) a += d[Math.min(h - 1, Math.max(0, Math.round(p.v))) * w + Math.min(w - 1, Math.max(0, Math.round(p.u)))]!;
+  a /= Math.max(1, T.pts.length);
+  let b = 0, nb = 0, inter = 0, uni = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, v = model[i], t = T.mask[i]; if (v && t) inter++; if (v || t) uni++;
+    if (v && ((x > 0 && !model[i - 1]) || (x < w - 1 && !model[i + 1]) || (y > 0 && !model[i - w]) || (y < h - 1 && !model[i + w]))) { b += T.dt[i]!; nb++; } }
+  b = nb ? b / nb : w;
+  return { err: (a + b) / 2, toModel: a, toTarget: b, iou: inter / Math.max(1, uni) };
+}
+
+// ---- a vehicle seen many times over --------------------------------------------------------------------------------------
+/** What fitting may move. Its body lines (LINE_KEYS); its proportions: how far its body runs past each axle (its overhangs,
+ *  the body made longer or shorter round wheels that stay where they are); and the camera along the one family of
+ *  cameras its wheels cannot tell apart (nearer with a wider lens or further with a longer one, its wheels' plane the same
+ *  size in the picture and the rest in more or less perspective): what the silhouette's depth then decides; with its lens
+ *  and its aim. Its stance: its tyres' size (on their own rims) and how high its body rides over them: a picture can show
+ *  bigger wheels and a lower car than its record (the Monte Carlo's goal picture does), and a camera solved from wheels of
+ *  the wrong size is wrong with them. Its details: its roof's height, and its kit's wing (how high over the deck, how far
+ *  ahead of the tail, how deep its blade) and front lip (how deep). */
+export type Free = 'lines' | 'proportion' | 'stance' | 'camera' | 'details';
+export interface Key { key: string; x0: number; lo: number; hi: number; step: number; group: Free }
+export const LINE_KEYS: Record<string, [number, number, number]> = { nose: [0.4, 0.7, 0.02], cowl: [0.2, 0.36, 0.01], roofF: [0.33, 0.5, 0.01], roofR: [0.55, 0.72, 0.01], deck: [0.7, 0.88, 0.01], tail: [0.6, 0.85, 0.02], belt: [0.55, 0.75, 0.01], cowlH: [0.6, 0.82, 0.01], deckH: [0.68, 0.9, 0.01] };
+/** What a side view hides behind its skin (a wheelhouse's liners, a lamp's walls and back, a shut line's strip). */
+const HIDDEN = /wheelhouse|inner|wall$|back$|shut line/;
+/** A vehicle made to be seen from one camera many times over: its body and kit made again for each trial of its figures
+ *  (quickly: bodyPanels' `quick`), its wheels, which no figure moves, made once. */
+export class Rig {
+  readonly fa: number; readonly ra: number; readonly P0: V3; private readonly wheels: Part; private wheelMasks = new Map<string, Uint8Array>();
+  constructor(readonly m: Machine, readonly cam: Camera, full: Part = makeMachine(m)) {
+    const xs = m.axles.filter((a) => a.track > 0).map((a) => a.x); this.fa = Math.max(...xs); this.ra = Math.min(...xs);
+    const side = cam.eye[2] < 0 ? -1 : 1, cs = knownPoints(m, side).filter((k) => /centre/.test(k.name)).map((k) => k.world);
+    this.P0 = [0, 1, 2].map((j) => cs.reduce((a, p) => a + p[j]!, 0) / Math.max(1, cs.length)) as V3;
+    this.wheels = { name: 'wheels', parts: (full.parts ?? []).filter((p) => / wheel$/.test(p.name)) } as Part;
+  }
+  /** The figures free in a fit, each at its value now, its range and its first step. */
+  keys(free: Free[], lineKeys = Object.keys(LINE_KEYS)): Key[] {
+    const out: Key[] = [], ln = (this.m.lines ?? {}) as unknown as Record<string, number>;
+    if (free.includes('lines')) for (const key of lineKeys) { const r = LINE_KEYS[key]; if (r) out.push({ key, x0: Number(ln[key] ?? (r[0] + r[1]) / 2), lo: r[0], hi: r[1], step: r[2], group: 'lines' }); }
+    if (free.includes('proportion')) { const fo = this.m.L / 2 - this.fa, ro = this.ra + this.m.L / 2; out.push({ key: 'front overhang', x0: fo, lo: fo * 0.6, hi: fo * 1.3, step: 0.03, group: 'proportion' }, { key: 'rear overhang', x0: ro, lo: ro * 0.6, hi: ro * 1.3, step: 0.03, group: 'proportion' }); }
+    if (free.includes('stance')) { const t = tyreOf(this.m.axles[0]!.tyre)!; out.push({ key: 'tyre diameter', x0: t.D, lo: t.D * 0.85, hi: t.D * 1.25, step: 0.02, group: 'stance' }, { key: 'clearance', x0: this.m.clearance, lo: Math.max(0.04, this.m.clearance * 0.4), hi: this.m.clearance * 1.6, step: 0.01, group: 'stance' }); }
+    if (free.includes('details')) { const H = this.m.H, w = this.m.kit?.wing, lip = this.m.kit?.lip; out.push({ key: 'height', x0: H, lo: H * 0.95, hi: H * 1.08, step: 0.005, group: 'details' });
+      if (w) out.push({ key: 'wing height', x0: w.h, lo: 0.05, hi: 0.3, step: 0.02, group: 'details' }, { key: 'wing back', x0: w.back, lo: -0.05, hi: 0.3, step: 0.02, group: 'details' }, { key: 'wing chord', x0: w.chord, lo: 0.15, hi: 0.4, step: 0.02, group: 'details' });
+      if (lip) out.push({ key: 'lip depth', x0: lip.d, lo: 0.04, hi: 0.2, step: 0.01, group: 'details' }); }
+    if (free.includes('camera')) out.push({ key: 'camera distance ×', x0: 1, lo: 0.08, hi: 12, step: 0.1, group: 'camera' }, { key: 'lens ×', x0: 1, lo: 0.8, hi: 1.25, step: 0.02, group: 'camera' }, { key: 'aim across, px', x0: 0, lo: -60, hi: 60, step: 4, group: 'camera' }, { key: 'aim up, px', x0: 0, lo: -60, hi: 60, step: 4, group: 'camera' });
+    return out;
+  }
+  /** The vehicle's record and the camera at figures x: its body shifted (dx, m) so its wheels stay where they were seen. */
+  apply(keys: Key[], x: number[]): { machine: Machine; camera: Camera; dx: number } {
+    const v = new Map(keys.map((k, i) => [k.key, x[i]!])), lines = keys.filter((k) => k.group === 'lines');
+    let m: Machine = lines.length ? { ...this.m, lines: { ...this.m.lines!, ...Object.fromEntries(lines.map((k) => [k.key, v.get(k.key)!])) } } : this.m, dx = 0, camera = this.cam;
+    if (v.has('front overhang') || v.has('rear overhang')) { const fo = v.get('front overhang') ?? this.m.L / 2 - this.fa, ro = v.get('rear overhang') ?? this.ra + this.m.L / 2, lo = this.ra - ro, hi = this.fa + fo; dx = (lo + hi) / 2; m = { ...m, L: hi - lo, axles: m.axles.map((a) => ({ ...a, x: a.x - dx })) }; }
+    // (its tyres a size of the same width on the same rim, their sidewall what makes the diameter; its body over them)
+    if (v.has('tyre diameter')) m = { ...m, axles: m.axles.map((a) => { const t = tyreOf(a.tyre); if (!t || !/^\D*\d{2,3}\/\d{2,3}/.test(a.tyre)) return a; const asp = Math.max(20, Math.min(90, Math.round(((v.get('tyre diameter')! - t.rim) / (2 * t.W)) * 100))); return { ...a, tyre: `${Math.round(t.W * 1000)}/${asp}R${Math.round(t.rim / 0.0254)}` }; }) };
+    if (v.has('clearance')) m = { ...m, clearance: v.get('clearance')! };
+    if (v.has('height')) m = { ...m, H: v.get('height')! };
+    if (m.kit && (v.has('wing height') || v.has('lip depth'))) { const k = m.kit; m = { ...m, kit: { ...k, ...(k.wing ? { wing: { ...k.wing, h: v.get('wing height') ?? k.wing.h, back: v.get('wing back') ?? k.wing.back, chord: v.get('wing chord') ?? k.wing.chord } } : {}), ...(k.lip ? { lip: { ...k.lip, d: v.get('lip depth') ?? k.lip.d } } : {}) } }; }
+    // (a dolly zoom: the camera moved back along its own axis to k times its wheels' depth, its lens k times as long, so
+    // everything in the plane through its wheels square to it is seen exactly as before)
+    if (v.has('camera distance ×')) { const k = v.get('camera distance ×')!, c = camera, fw = basis(c).fw, back = (k - 1) * dot(sub(this.P0, c.eye), fw), mv = (q: V3): V3 => [q[0] - fw[0] * back, q[1] - fw[1] * back, q[2] - fw[2] * back]; camera = { ...c, eye: mv(c.eye), target: mv(c.target), f: c.f * k }; }
+    if (v.has('lens ×')) camera = { ...camera, f: camera.f * v.get('lens ×')! };
+    if (v.has('aim across, px') || v.has('aim up, px')) { const B = basis(camera), du = v.get('aim across, px') ?? 0, dv = v.get('aim up, px') ?? 0, k = Math.hypot(...sub(camera.target, camera.eye)) / camera.f; camera = { ...camera, target: [0, 1, 2].map((j) => camera.target[j]! + (B.rt[j]! * du + B.up[j]! * dv) * k) as V3 }; }
+    return { machine: m, camera, dx };
+  }
+  private frozen: { front: Part[]; mid: Part[]; rear: Part[] } | null = null;
+  /** Its kit fitted once to the body as it was, in three: what is ahead of its front axle, behind its rear one, and between
+   *  (each piece by where its middle is). Fitting a kit to a skin is most of the time a trial takes (1.2 s of 1.9 s for the
+   *  Monte Carlo, measured 2026-10-29), so a coarse stage holds it as made and slides its ends with the overhangs. */
+  private kitFrozen(): { front: Part[]; mid: Part[]; rear: Part[] } {
+    if (this.frozen) return this.frozen;
+    const out = { front: [] as Part[], mid: [] as Part[], rear: [] as Part[] }, m = this.m;
+    if (m.kit) for (const p of bodyKit(m, m.kit, bodyPanels(bodyPlanOf(m), undefined, true))) { const sh = p.shape as { surf?: Patch } | undefined, net = sh?.surf?.s.net.flat() ?? [], x = (p.at?.[0] ?? 0) + (net.length ? net.reduce((a, q) => a + q[0], 0) / net.length : 0);
+      (x > this.fa ? out.front : x < this.ra ? out.rear : out.mid).push(p); }
+    return (this.frozen = out);
+  }
+  /** Its body, kit and wheels as a camera sees them at figures x, at scale s of the picture (coarse: see silhouette); its kit
+   *  fitted to the body at each trial (`live`), or held as first made and its ends slid with the overhangs (`frozen`). */
+  render(keys: Key[], x: number[], s: number, coarse?: number, kit: 'live' | 'frozen' = 'live', discs = keys.some((k) => k.group === 'stance')): Uint8Array {
+    const { machine, camera, dx } = this.apply(keys, x), c = scaled(camera, s), ps = bodyPanels(bodyPlanOf(machine), undefined, true), parts: Part[] = [{ name: 'body', at: [dx, 0, 0], parts: ps } as Part];
+    if (machine.kit && kit === 'live') ps.push(...bodyKit(machine, machine.kit, ps));
+    else if (machine.kit) { const f = this.kitFrozen(), fo = this.m.L / 2 - this.fa, ro = this.ra + this.m.L / 2, v = new Map(keys.map((k, i) => [k.key, x[i]!])), dF = (v.get('front overhang') ?? fo) - fo, dR = (v.get('rear overhang') ?? ro) - ro;
+      parts.push({ name: 'kit ahead', at: [dF, 0, 0], parts: f.front } as Part, { name: 'kit between', parts: f.mid } as Part, { name: 'kit behind', at: [-dR, 0, 0], parts: f.rear } as Part); }
+    // (its wheels as the discs their tyres are, side on, where their size is free; as made where it is not)
+    if (discs) { for (const a of machine.axles) { const t = tyreOf(a.tyre); if (!t || a.track <= 0) continue; for (const sd of [-1, 1]) parts.push({ name: 'tyre seen', shape: { cyl: [t.D / 2, t.W] }, at: [a.x + dx, t.D / 2, (sd * a.track) / 2], rot: [Math.PI / 2, 0, 0] } as Part); } return silhouette({ name: 'seen', parts } as Part, c, HIDDEN, coarse); }
+    const m = silhouette({ name: 'seen', parts } as Part, c, HIDDEN, coarse), wk = JSON.stringify([c, coarse ?? 0]);
+    let wm = this.wheelMasks.get(wk); if (!wm) { wm = silhouette(this.wheels, c, undefined, coarse); if (this.wheelMasks.size > 8) this.wheelMasks.clear(); this.wheelMasks.set(wk, wm); }
+    for (let i = 0; i < m.length; i++) m[i] = m[i]! | wm[i]!;
+    return m;
+  }
+}
+
+// ---- fitting figures to what is seen -----------------------------------------------------------------------------------
+/** Figures moved to bring a cost down (Nelder–Mead within each one's range), and each one's ± after: how far it can move
+ *  alone before the cost grows by one (from the cost's curvature there). One the cost hardly moves with over its whole
+ *  range is not fixed by what is seen. */
+export function fitBy(cost: (x: number[]) => number, keys: { x0: number; lo: number; hi: number; step: number }[], o: { most?: number; x0?: number[]; ftol?: number } = {}): { x: number[]; before: number; after: number; pm: number[]; fixed: boolean[]; evaluations: number } {
+  const x0 = o.x0 ?? keys.map((k) => k.x0), before = cost(x0);
+  const r = minimize(cost, x0, { step: keys.map((k) => k.step), lo: keys.map((k) => k.lo), hi: keys.map((k) => k.hi), most: o.most ?? 60, ftol: o.ftol ?? 0.05 });
+  let evals = r.evaluations + 1; const best = r.value <= before ? r : { x: x0, value: before };
+  const pm = keys.map((k, i) => { const at = (d: number) => { const x = best.x.slice(); x[i] = Math.min(k.hi, Math.max(k.lo, x[i]! + d)); evals++; return cost(x); };
+    const up = at(k.step), dn = at(-k.step), curv = (up + dn - 2 * best.value) / (k.step * k.step); return curv > 1e-9 ? Math.sqrt(2 / curv) : Infinity; });
+  return { x: best.x, before, after: best.value, pm, fixed: keys.map((k, i) => pm[i]! < (k.hi - k.lo) / 2), evaluations: evals };
+}
+
+// ---- pipelines tried, and the one kept --------------------------------------------------------------------------------------
+/** One way of fitting a model to a picture: which outline it is held to (the trace's few points, or the dense one on the
+ *  picture's edges), its cost (one way: the outline's points to the model's edge; or both ways), what is free, and its
+ *  stages (each at a scale of the picture, its skins drawn coarse or not, at most so many trials). */
+export interface Recipe { id: string; says: string; outline: 'traced' | 'dense'; cost: 'one-sided' | 'two-sided'; free: Free[]; stages: { scale: number; coarse?: number; most: number; kit?: 'live' | 'frozen'; only?: Free[]; scan?: { key: string; at: number[] } }[] }
+export const RECIPES: Recipe[] = [
+  { id: 'A', says: 'as first built: the traced points one way, its lines only, at half size', outline: 'traced', cost: 'one-sided', free: ['lines'], stages: [{ scale: 0.5, most: 60 }] },
+  { id: 'B', says: 'the dense outline one way, its lines only', outline: 'dense', cost: 'one-sided', free: ['lines'], stages: [{ scale: 0.5, most: 60 }] },
+  { id: 'C', says: 'the dense outline both ways, its lines only', outline: 'dense', cost: 'two-sided', free: ['lines'], stages: [{ scale: 0.5, most: 60 }] },
+  { id: 'D', says: 'both ways, its lines and its overhangs', outline: 'dense', cost: 'two-sided', free: ['lines', 'proportion'], stages: [{ scale: 0.5, most: 80 }] },
+  { id: 'E', says: 'both ways, its lines, its overhangs and the camera\'s distance', outline: 'dense', cost: 'two-sided', free: ['lines', 'proportion', 'camera'], stages: [{ scale: 0.5, most: 80 }] },
+  { id: 'F', says: 'as E, coarse to fine: a quarter size, coarse skins and its kit held as made first, then half size with its kit fitted each trial', outline: 'dense', cost: 'two-sided', free: ['lines', 'proportion', 'camera'], stages: [{ scale: 0.25, coarse: 10, most: 200, kit: 'frozen' }, { scale: 0.5, most: 60 }] },
+  { id: 'H', says: 'as F, its stance (tyre size, ride height) and the whole camera (distance, lens, aim) free too: the camera\'s distance scanned from 0.08 to eight times and the camera alone fitted first (its body made once), then everything coarse, then fine', outline: 'dense', cost: 'two-sided', free: ['lines', 'proportion', 'stance', 'camera'], stages: [{ scale: 0.25, coarse: 10, most: 150, kit: 'frozen', only: ['camera'], scan: { key: 'camera distance ×', at: [0.08, 0.11, 0.15, 0.2, 0.28, 0.4, 0.56, 0.8, 1, 1.4, 2, 4, 8] } }, { scale: 0.25, coarse: 10, most: 300, kit: 'frozen' }, { scale: 0.5, most: 60 }] },
+  { id: 'I', says: 'as H, then its details (its roof\'s height, its wing\'s height, setback and depth, its lip\'s depth) and its lines once more at half size, its kit fitted each trial', outline: 'dense', cost: 'two-sided', free: ['lines', 'proportion', 'stance', 'camera', 'details'], stages: [{ scale: 0.25, coarse: 10, most: 150, kit: 'frozen', only: ['camera'], scan: { key: 'camera distance ×', at: [0.08, 0.11, 0.15, 0.2, 0.28, 0.4, 0.56, 0.8, 1, 1.4, 2, 4, 8] } }, { scale: 0.25, coarse: 10, most: 300, kit: 'frozen', only: ['lines', 'proportion', 'stance', 'camera'] }, { scale: 0.5, most: 60, only: ['lines', 'proportion', 'stance', 'camera'] }, { scale: 0.5, most: 80, only: ['details', 'lines'] }] },
+  { id: 'G', says: 'as F\'s first stage only (the fastest)', outline: 'dense', cost: 'two-sided', free: ['lines', 'proportion', 'camera'], stages: [{ scale: 0.25, coarse: 10, most: 300, kit: 'frozen' }] },
+];
+/** One recipe run: the figures it ends at (each with its ± in pixels of its last stage), and what it is worth by one judge
+ *  for all: both ways against the dense outline at half size, its skins drawn fine and its wheels as their tyres' discs
+ *  (so a recipe that sizes them is judged as one that does not), in the picture's pixels and in mm at
+ *  the scale its wheelbase sets (`mmPerPx`); its time, measured. */
+export function runRecipe(r: Recipe, rig: Rig, traced: Mark[], dense: Mark[], w: number, h: number, mmPx: number, lineKeys?: string[]): { recipe: string; keys: Key[]; x: number[]; pm: number[]; fixed: boolean[]; iou: number; errPx: number; errMm: number; before: { iou: number; errPx: number }; ms: number; evaluations: number } {
+  const t0 = Date.now(), keys = rig.keys(r.free, lineKeys?.length ? lineKeys : undefined); let x = keys.map((k) => k.x0), last: ReturnType<typeof fitBy> | null = null, evals = 0;
+  const J0 = twoSided(rig.render(keys, x, 0.5, undefined, 'live', true), targetOf(dense, w, h, 0.5));
+  for (const st of r.stages) {
+    const T = targetOf(r.outline === 'dense' ? dense : traced, w, h, st.scale);
+    // (a stage that frees only some groups moves those, the rest held where they are)
+    const idx = keys.map((k, j) => (!st.only || st.only.includes(k.group) ? j : -1)).filter((j) => j >= 0), full = (q: number[]) => { const y = x.slice(); idx.forEach((j, n) => (y[j] = q[n]!)); return y; };
+    const cost = (q: number[]) => { const tw = twoSided(rig.render(keys, full(q), st.scale, st.coarse, st.kit), T); return (r.cost === 'two-sided' ? tw.err : tw.toModel) / st.scale; };
+    // (a figure whose cost has more than one valley, as the camera's distance along the cameras its wheels cannot tell
+    // apart, scanned over its range first, and the fit started from the best: Nelder–Mead finds the bottom of the valley
+    // it starts in, not the deepest)
+    const sj = st.scan ? keys.findIndex((k) => k.key === st.scan!.key) : -1;
+    if (sj >= 0) { let best = Infinity, bx = x[sj]!; for (const a of st.scan!.at) { const y = x.slice(); y[sj] = a; const q = idx.map((j) => y[j]!), c = cost(q); evals++; if (c < best) { best = c; bx = a; } } x = x.slice(); x[sj] = bx; }
+    const f = fitBy(cost, idx.map((j) => keys[j]!), { x0: idx.map((j) => x[j]!), most: st.most }); x = full(f.x); evals += f.evaluations;
+    last = { ...f, x, pm: keys.map((_, j) => { const n = idx.indexOf(j); return n >= 0 ? f.pm[n]! : last?.pm[j] ?? Infinity; }), fixed: keys.map((_, j) => { const n = idx.indexOf(j); return n >= 0 ? f.fixed[n]! : last?.fixed[j] ?? false; }) };
+  }
+  const J = twoSided(rig.render(keys, x, 0.5, undefined, 'live', true), targetOf(dense, w, h, 0.5));
+  return { recipe: r.id, keys, x, pm: last!.pm, fixed: last!.fixed, iou: J.iou, errPx: J.err / 0.5, errMm: (J.err / 0.5) * mmPx, before: { iou: J0.iou, errPx: J0.err / 0.5 }, ms: Date.now() - t0, evaluations: evals };
+}
+/** The recipe kept for a vehicle's side seen in one picture: the best of RECIPES by the judge (docs/RECONSTRUCT.md, where
+ *  each one's result is kept). */
+export const BEST_RECIPE = 'I';
+/** Millimetres a pixel at a vehicle's wheels, from its wheelbase and its wheel centres as marked (a made picture has no
+ *  camera to ask; its own wheels set its scale). */
+export function mmPerPxOf(m: Machine, marks: { name: string; u: number; v: number }[]): number {
+  const f = marks.find((p) => p.name === 'front wheel centre'), r = marks.find((p) => p.name === 'rear wheel centre'), xs = m.axles.filter((a) => a.track > 0).map((a) => a.x);
+  return f && r ? ((Math.max(...xs) - Math.min(...xs)) * 1000) / Math.hypot(f.u - r.u, f.v - r.v) : NaN;
 }
 
 // ---- what to ask for next ----------------------------------------------------------------------------------------------
@@ -235,6 +393,8 @@ export const ASKS: { ask: string; fixes: RegExp }[] = [
   { ask: 'a tape measure along the ground from each tyre\'s centre to its bumper\'s face, front and back (its overhangs), and bumper to bumper (its length)', fixes: /length|overhang|nose|tail/ },
   { ask: 'a tape measure from the ground to the top of the front fender over the wheel\'s centre, and the same at the rear', fixes: /clearance|belt|shoulder|ride/ },
 ];
+/** What is asked beside a made picture of the goal: photographs of the thing as it is, from the same side and as square. */
+export const CONCEPT_ASK = 'a photograph of the car as it is now, square to the same side as the picture (its left), at door-handle height, the whole car and the ground under its tyres in frame: the real car set beside the goal, line by line';
 export function askNext(table: { key: string; evidence: string; pm?: number; range?: number }[]): { ask: string; fixes: string[]; weight: number } {
   const w = (r: (typeof table)[number]) => (r.evidence === 'conflict' || r.evidence === 'not fixed' ? 2 : r.evidence === 'measured' ? Math.min(1, (r.pm ?? 0) / Math.max(1e-9, r.range ?? 1)) : 1);
   const scored = ASKS.map((a) => { const hit = table.filter((r) => a.fixes.test(r.key)); return { ask: a.ask, fixes: hit.map((r) => r.key), weight: hit.reduce((s, r) => s + w(r), 0) }; });
@@ -267,11 +427,11 @@ const mmPerPx = (c: Camera, at: V3 = [0, 0.7, 0]) => (Math.hypot(...sub(c.eye, a
 
 node({ id: 'photo.load', name: 'Photograph (pixels and its marks)', kind: 'generator', ability: 'generate', domains: ['vehicles', 'manufacturing', 'science'],
   spec: { gloss: 'A reference photograph of the thing to rebuild, and what is marked on it', discipline: 'electrical.signals', role: 'I/O', codes: [VISION, ACM_CV] },
-  says: 'A photograph from the library (view/public/photos), decoded to its pixels, with the points marked on it (photo-marks.ts: its wheels, its outline round it by region), who marked them and how, and the thing it is of',
+  says: 'A photograph from the library (view/public/photos), decoded to its pixels, with the points marked on it (photo-marks.ts: its wheels, its outline round it by region), who marked them and how, the thing it is of, and whether it is a photograph of it or a made picture (an AI\'s, a render) of how it is wanted: matched as a goal, never read as a measurement',
   settings: [{ key: 'id', label: 'Photograph', type: 'choice', default: PHOTOS[0]!.id, choices: PHOTOS.map((p) => p.id) }],
-  ports: { inputs: [], outputs: [P('image', 'record'), P('marks', 'table'), P('object', 'text', { label: 'the record it is of' }), P('w', 'integer'), P('h', 'integer'), P('says', 'text')] },
-  run: async (_i, c) => { const ph = photoOf(String(c.set.id)); if (!ph) throw new Error(`no photograph "${String(c.set.id)}"`); const img = await loadPhoto(ph.id);
-    return { image: brief(img, `${img.w} × ${img.h} pixels`), marks: ph.marks.map((m) => ({ ...m })), object: ph.object, w: img.w, h: img.h, says: `${ph.says}; ${ph.marks.length} points ${ph.by}` }; },
+  ports: { inputs: [P('id', 'text', { optional: true, label: 'which picture (the setting, if not wired)' })], outputs: [P('image', 'record'), P('marks', 'table'), P('object', 'text', { label: 'the record it is of' }), P('w', 'integer'), P('h', 'integer'), P('says', 'text'), P('concept', 'boolean', { label: 'a made picture of how it is wanted, not a photograph of it' })] },
+  run: async (i, c) => { const id = String(i.id ?? c.set.id), ph = photoOf(id); if (!ph) throw new Error(`no photograph "${id}"`); const img = await loadPhoto(ph.id);
+    return { image: brief(img, `${img.w} × ${img.h} pixels`), marks: ph.marks.map((m) => ({ ...m })), object: ph.object, w: img.w, h: img.h, says: `${ph.says}; ${ph.marks.length} points ${ph.by}`, concept: !!ph.concept }; },
   tests: [{ set: { id: 'mc-side' }, inputs: {}, outputs: { w: 1152, h: 864 } }] });
 
 node({ id: 'photo.features', name: 'Edge-snapped image features (Sobel)', kind: 'logic', ability: 'transform', domains: ['vehicles', 'manufacturing', 'science'],
@@ -281,6 +441,15 @@ node({ id: 'photo.features', name: 'Edge-snapped image features (Sobel)', kind: 
   ports: { inputs: [P('image', 'record'), P('marks', 'table')], outputs: [P('features', 'table'), P('measured', 'integer', { label: 'snapped to an edge' }), P('observed', 'integer', { label: 'by eye only' }), N('moved', undefined, { label: 'the most any moved, px' })] },
   run: (i, c) => { const f = snapMarks(imgOf(i.image), rowsOf(i.marks).map((r) => ({ name: String(r.name), u: Number(r.u), v: Number(r.v) })), Number(c.set.r ?? 5));
     return { features: f.map((x) => ({ ...x })), measured: f.filter((x) => x.evidence === 'measured').length, observed: f.filter((x) => x.evidence === 'observed').length, moved: Math.max(0, ...f.map((x) => Math.hypot(x.du, x.dv))) }; } });
+
+node({ id: 'photo.outline', name: 'Dense outline on the image\'s edges (active contour, one step)', kind: 'logic', ability: 'transform', domains: ['vehicles', 'manufacturing', 'science'],
+  spec: { gloss: 'Where exactly is the thing\'s edge, all the way round?', discipline: 'electrical.signals', role: 'data transformation', codes: [VISION, ACM_CV],
+    model: { equations: ['p\' = p + t* n, t* = argmax over |t| ≤ r of (|∇I|(p + t n) − 8|t|), |∇I| ≥ clear; t* smoothed by the median of 7 round the outline'], class: 'analytical', time: 'steady', linear: false, references: ['Kass, Witkin & Terzopoulos, Snakes: active contour models, IJCV 1, 321 (1988)', 'Sobel & Feldman (1968), the 3 × 3 gradient'] } },
+  says: 'The outline traced round the thing made dense (a point every few pixels) and laid on the picture\'s own edges: each point moved along the outline\'s normal to the strongest edge near it, the moves smoothed round it so one caught on a reflection does not kink it. Each point keeps its region (its nose, roof, tail …); one with no clear edge near stays where the trace put it. The other marks (its wheels) pass through as they were',
+  settings: [{ key: 'step', label: 'A point every, pixels', type: 'number', default: 3 }, { key: 'r', label: 'Search across it, pixels', type: 'number', default: 6 }],
+  ports: { inputs: [P('image', 'record'), P('features', 'table')], outputs: [P('features', 'table', { label: 'its marks, the outline dense' }), P('points', 'integer', { label: 'outline points' }), P('snapped', 'integer', { label: 'on a clear edge' }), N('moved', undefined, { label: 'the most any moved, px' })] },
+  run: (i, c) => { const rows = rowsOf(i.features), d = denseOutline(imgOf(i.image), outlineOf(rows), Number(c.set.step ?? 3), Number(c.set.r ?? 6));
+    return { features: [...rows.filter((r) => !String(r.name).startsWith('outline')), ...d.pts.map((p) => ({ ...p, evidence: 'measured' }))], points: d.pts.length, snapped: d.snapped, moved: d.moved }; } });
 
 node({ id: 'camera.solve', name: 'Camera resection from known points (pinhole, least squares)', kind: 'solver', ability: 'solve', domains: ['vehicles', 'manufacturing', 'science'],
   spec: { gloss: 'Where was the camera, and how was it pointed?', discipline: 'electrical.signals', role: 'numerical solver', codes: [ACM_CV, { scheme: 'MSC2020', code: '68T45', label: 'Machine vision and scene understanding' }],
@@ -305,7 +474,7 @@ node({ id: 'camera.solve', name: 'Camera resection from known points (pinhole, l
 node({ id: 'photo.measure', name: 'Photogrammetric dimensions (back-projection onto its middle plane)', kind: 'calculator', ability: 'measure', domains: ['vehicles', 'manufacturing', 'science'],
   spec: { gloss: 'How long, how high is it, by the photograph?', discipline: 'manufacturing.metrology.inspection', role: 'analysis', codes: [MEAS, ACM_CV], model: { equations: ['X = eye + t·ray(u, v), t where X·ẑ = 0'], class: 'analytical', time: 'steady', linear: false, references: ['Hartley & Zisserman, Multiple View Geometry, 2nd ed., §8.1 (back-projection)'] } },
   says: 'Its length, overhangs and roof height read off the photograph: the outline\'s foremost, rearmost and highest points cast back through the camera onto the vehicle\'s middle plane, each ± the camera\'s error at that distance; set against its record\'s figures, and any that disagree by more than three times that said as a conflict, not overwritten',
-  ports: { inputs: [P('features', 'table'), P('camera', 'record'), P('machine', 'any'), P('cameras', 'any', { optional: true, label: 'every camera that fits (Camera node): measured through each' })], outputs: [P('dimensions', 'table'), P('conflicts', 'integer'), P('unfixed', 'integer', { label: 'not fixed by the photograph' })] },
+  ports: { inputs: [P('features', 'table'), P('camera', 'record'), P('machine', 'any'), P('cameras', 'any', { optional: true, label: 'every camera that fits (Camera node): measured through each' }), P('concept', 'boolean', { optional: true, label: 'a made picture, not a photograph (Photograph node)' })], outputs: [P('dimensions', 'table'), P('conflicts', 'integer'), P('unfixed', 'integer', { label: 'not fixed by the photograph' })] },
   run: (i) => {
     const c0 = camOf(i.camera), m = machineOf(i.machine), o = outlineOf(i.features); if (o.length < 3) throw new Error('no outline marked');
     const fa = Math.max(...m.axles.map((a) => a.x)), ra = Math.min(...m.axles.map((a) => a.x)), cams = Array.isArray(i.cameras) && i.cameras.length ? (i.cameras as Camera[]) : [c0];
@@ -320,6 +489,8 @@ node({ id: 'photo.measure', name: 'Photogrammetric dimensions (back-projection o
       // (its height placed the camera (Camera node): read back through it, it is no check of itself)
       if (k === 'height') return { dimension: k, photograph: +best[j]!.toFixed(3), pm: +pm.toFixed(3), record: +rec[j]!.toFixed(3), source: 'published, and used to place the camera: not checked by it', differs: +d.toFixed(3), evidence: 'given' };
       return { dimension: k, photograph: +best[j]!.toFixed(3), pm: +pm.toFixed(3), record: +rec[j]!.toFixed(3), source: src[j], differs: +d.toFixed(3), evidence: pm > 0.05 * rec[j]! ? 'not fixed' : Math.abs(d) > pm ? 'conflict' : 'measured' }; });
+    // (a made picture is no measurement of the thing: what it shows is the picture's, set beside the record, never against it)
+    if (i.concept === true) return { dimensions: rows.map((r) => (r.evidence === 'given' ? r : { ...r, evidence: 'the picture\'s', source: `${r.source}; the picture is made, not a photograph: its figure is how it is drawn` })), conflicts: 0, unfixed: 0 };
     return { dimensions: rows, conflicts: rows.filter((r) => r.evidence === 'conflict').length, unfixed: rows.filter((r) => r.evidence === 'not fixed').length };
   } });
 
@@ -339,32 +510,51 @@ node({ id: 'compare.outline', name: 'Silhouette comparison (IoU, signed contour 
   // (a 20 × 20 square drawn where a square outline is traced: they overlap wholly)
   tests: [{ inputs: { mask: { w: 40, h: 40, m: Uint8Array.from({ length: 1600 }, (_, k) => (k % 40 >= 10 && k % 40 < 30 && k >= 400 && k < 1200 ? 1 : 0)) }, camera: { eye: [0, 0, -10], target: [0, 0, 0], roll: 0, f: 100, w: 40, h: 40 }, features: [{ name: 'outline a 1', u: 10, v: 10 }, { name: 'outline a 2', u: 30, v: 10 }, { name: 'outline a 3', u: 30, v: 30 }, { name: 'outline a 4', u: 10, v: 30 }] }, outputs: { iou: 1 } }] });
 
-const LINE_KEYS: Record<string, [number, number, number]> = { nose: [0.4, 0.7, 0.02], cowl: [0.2, 0.36, 0.01], roofF: [0.33, 0.5, 0.01], roofR: [0.55, 0.72, 0.01], deck: [0.7, 0.88, 0.01], tail: [0.6, 0.85, 0.02], belt: [0.55, 0.75, 0.01], cowlH: [0.6, 0.82, 0.01], deckH: [0.68, 0.9, 0.01] };
-node({ id: 'fit.lines', name: 'Body lines fitted to a photograph (analysis by synthesis)', kind: 'solver', ability: 'optimise', domains: ['vehicles', 'manufacturing', 'science'], pure: true,
-  spec: { gloss: 'Which body lines make the model look like the photograph?', discipline: 'mechanical.design', role: 'numerical solver', codes: [ACM_CV, { scheme: 'MSC2020', code: '65K10', label: 'Numerical optimization and variational techniques' }],
-    model: { equations: ['minimise mean |d(outline point, model edge)| over the line figures, the body built and rendered from the photograph\'s camera each step', '± from the curvature of that error: ±σ = √(2 / ∂²E/∂x²) (a pixel\'s growth)'], class: 'analytical', time: 'steady', linear: false, method: 'Nelder–Mead within each figure\'s range; at half the photograph\'s size', references: ['Nelder & Mead, Comput. J. 7, 308 (1965)', 'Hartley & Zisserman, Multiple View Geometry, 2nd ed. (analysis by synthesis: render, compare, correct)'] } },
-  says: 'The vehicle\'s body lines (where its windscreen\'s foot, its roof, its back glass\'s foot are along it, how high its nose, tail and the glass\'s feet stand) moved until its rendered silhouette meets the outline traced on the photograph: the body built and rendered from the photograph\'s camera at every step (the rest of the vehicle rendered once). Each figure with its ±; one the view does not fix (the outline hardly moves with it) kept as it was and said estimated. Gives the fitted vehicle and its record, to render and compare again',
-  settings: [{ key: 'keys', label: 'Figures to fit', type: 'text', default: 'nose cowl roofF roofR deck tail cowlH deckH' }, { key: 'most', label: 'At most, evaluations', type: 'number', default: 60 }, { key: 'scale', label: 'Image scale while fitting', type: 'number', default: 0.5 }],
-  ports: { inputs: [P('machine', 'any'), P('camera', 'record'), P('features', 'table'), P('cameras', 'any', { optional: true, label: 'every camera that fits (Camera node)' })], outputs: [P('figures', 'table'), N('before', undefined, { label: 'error before (mean, at its scale), px' }), N('after', undefined, { label: 'error after, px' }), P('machine', 'any', { label: 'the fitted record' }), P('vehicle', 'part', { label: 'the fitted vehicle' })] },
+node({ id: 'fit.lines', name: 'Body fitted to a picture (analysis by synthesis)', kind: 'solver', ability: 'optimise', domains: ['vehicles', 'manufacturing', 'science'], pure: true,
+  spec: { gloss: 'Which body lines, proportions and camera make the model look like the picture?', discipline: 'mechanical.design', role: 'numerical solver', codes: [ACM_CV, { scheme: 'MSC2020', code: '65K10', label: 'Numerical optimization and variational techniques' }],
+    model: { equations: ['minimise ½ (mean d(outline, model edge) + mean d(model edge, outline)) over its free figures, the body and its kit built and rendered from the camera each trial', '± from the curvature of that error: ±σ = √(2 / ∂²E/∂x²) (a pixel\'s growth)'], class: 'analytical', time: 'steady', linear: false, method: 'Nelder–Mead within each figure\'s range, in the stages of its recipe (RECIPES; the one kept, BEST_RECIPE, chosen by Pipelines tried)', references: ['Nelder & Mead, Comput. J. 7, 308 (1965)', 'Hartley & Zisserman, Multiple View Geometry, 2nd ed. (analysis by synthesis: render, compare, correct)', 'Borgefors, Distance transformations in digital images, CVGIP 34, 344 (1986)'] } },
+  says: 'The vehicle moved until its rendered silhouette meets the outline on the picture, both ways (where it falls short and where it stands past it): its body lines (where its windscreen\'s foot, its roof, its back glass\'s foot are along it, how high its nose, tail and the glass\'s feet stand), its overhangs (its body longer or shorter round its wheels) and the camera\'s distance along the family of cameras its wheels cannot tell apart, by a recipe (the one kept is the best Pipelines tried found). Each figure with its ±; one the picture does not fix kept as it was and said estimated. On a made picture (an AI\'s, a render) what is fitted is the picture\'s, the goal it shows, not a measurement of the thing. Gives the fitted vehicle, its record and the camera it is seen from',
+  settings: [{ key: 'recipe', label: 'Recipe', type: 'choice', default: BEST_RECIPE, choices: RECIPES.map((r) => r.id) }, { key: 'keys', label: 'Body lines to fit', type: 'text', default: 'nose cowl roofF roofR deck tail cowlH deckH' }],
+  ports: { inputs: [P('machine', 'any'), P('camera', 'record'), P('features', 'table', { label: 'its marks and outline (dense: Dense outline)' }), P('cameras', 'any', { optional: true, label: 'every camera that fits (Camera node)' }), P('concept', 'boolean', { optional: true, label: 'a made picture, not a photograph (Photograph node)' })],
+    outputs: [P('figures', 'table'), N('before', undefined, { label: 'error both ways before, px' }), N('after', undefined, { label: 'error both ways after, px' }), N('iou', undefined, { label: 'overlap after (IoU)' }), P('machine', 'any', { label: 'the fitted record' }), P('vehicle', 'part', { label: 'the fitted vehicle' }), P('camera', 'record', { label: 'the camera it is seen from, fitted' }), P('recipe', 'text')] },
   run: (i, c) => {
-    const m = machineOf(i.machine), cam = camOf(i.camera), o = outlineOf(i.features); if (!m.lines) throw new Error('its record has no body lines to fit'); if (o.length < 3) throw new Error('no outline marked');
-    const k = Number(c.set.scale ?? 0.5), cs = scaled(cam, k), full = makeMachine(m), names = new Set(bodyPanels(bodyPlanOf(m)).map((p) => p.name)), rest = silhouette(full, cs, new RegExp(`^(${[...names].map((n) => n.replace(/[()]/g, '\\$&')).join('|')})$`));
-    const keys = String(c.set.keys ?? '').split(/\s+/).filter((x) => LINE_KEYS[x]).map((key) => { const [lo, hi, step] = LINE_KEYS[key]!; return { key, x0: Number((m.lines as unknown as Record<string, number>)[key] ?? (lo + hi) / 2), lo, hi, step }; });
-    const linesOf = (x: number[]) => ({ ...m.lines!, ...Object.fromEntries(keys.map((kk, j) => [kk.key, x[j]!])) });
-    const render = (x: number[]) => { const b = silhouette({ name: 'body', parts: bodyPanels(bodyPlanOf({ ...m, lines: linesOf(x) })) }, cs), r = new Uint8Array(rest); for (let j = 0; j < r.length; j++) r[j] = r[j]! | b[j]!; return r; };
-    const fit = fitFigures(render, o.map((p) => ({ ...p, u: p.u * k, v: p.v * k })), cs.w, cs.h, keys, /nose|hood|windscreen|roof|backlight|tail/, { most: Number(c.set.most ?? 60) });
-    const fitted: Machine = { ...m, lines: linesOf(fit.figures.map((f) => f.now)) };
-    // (fitted through the best camera: where others fit the photograph as well from elsewhere, what is fitted is no better
-    // fixed than the camera is, and is said so)
-    const cs2 = Array.isArray(i.cameras) ? (i.cameras as Camera[]) : [], ds = cs2.map((q) => Math.hypot(...sub(q.eye, [0, 0.6, 0]))), loose = ds.length > 1 && Math.max(...ds) - Math.min(...ds) > 0.1 * Math.min(...ds);
-    return { figures: fit.figures.map((f) => ({ figure: f.key, was: +f.was.toFixed(3), now: +f.now.toFixed(3), pm: Number.isFinite(f.pm) ? +f.pm.toFixed(3) : 'unbounded', evidence: loose && f.evidence === 'measured' ? 'not fixed' : f.evidence, says: loose && f.evidence === 'measured' ? `${f.says}; but only through the best of cameras ${Math.min(...ds).toFixed(1)}–${Math.max(...ds).toFixed(1)} m away that fit as well: not fixed until the camera is` : f.says })), before: fit.before / k, after: fit.after / k, machine: fitted, vehicle: makeMachine(fitted) };
+    const m = machineOf(i.machine), cam = camOf(i.camera), rows = rowsOf(i.features), o = outlineOf(rows), concept = i.concept === true; if (!m.lines) throw new Error('its record has no body lines to fit'); if (o.length < 3) throw new Error('no outline marked');
+    const r = RECIPES.find((x) => x.id === String(c.set.recipe ?? BEST_RECIPE)) ?? RECIPES.find((x) => x.id === BEST_RECIPE)!, rig = new Rig(m, cam);
+    const marks = rows.map((q) => ({ name: String(q.name), u: Number(q.u), v: Number(q.v) })), fit = runRecipe(r, rig, o, o, cam.w, cam.h, mmPerPxOf(m, marks), String(c.set.keys ?? '').split(/\s+/).filter((k) => LINE_KEYS[k]));
+    const x = fit.keys.map((k, j) => (fit.fixed[j] ? fit.x[j]! : k.x0)), got = rig.apply(fit.keys, x), fitted = got.machine;
+    // (what it is seen from: the camera fitted, moved with the body, so the vehicle as made (its own middle at x = 0) is seen as fitted)
+    const seen: Camera = { ...got.camera, eye: [got.camera.eye[0] - got.dx, got.camera.eye[1], got.camera.eye[2]], target: [got.camera.target[0] - got.dx, got.camera.target[1], got.camera.target[2]] };
+    // (fitted through the solved camera alone, where the camera is not free: no better fixed than the camera is)
+    const cs2 = Array.isArray(i.cameras) ? (i.cameras as Camera[]) : [], ds = cs2.map((q) => Math.hypot(...sub(q.eye, [0, 0.6, 0]))), loose = !r.free.includes('camera') && ds.length > 1 && Math.max(...ds) - Math.min(...ds) > 0.1 * Math.min(...ds);
+    const ev = (fixed: boolean) => (!fixed ? 'estimated' : concept ? 'the picture\'s' : loose ? 'not fixed' : 'measured');
+    const figures = fit.keys.map((k, j) => ({ figure: k.key, was: +k.x0.toFixed(3), now: +x[j]!.toFixed(3), pm: Number.isFinite(fit.pm[j]!) ? +fit.pm[j]!.toFixed(3) : 'unbounded', evidence: ev(fit.fixed[j]!),
+      says: !fit.fixed[j] ? 'not fixed by this picture: the outline hardly moves with it; kept as it was' : concept ? 'fitted to a made picture: how it is drawn there, the goal, not a measurement of the car' : loose ? 'fitted, but only through the best of the cameras that fit as well: not fixed until the camera is' : 'fitted to the photograph\'s outline' }));
+    if (r.free.includes('proportion')) figures.push({ figure: 'length', was: +m.L.toFixed(3), now: +fitted.L.toFixed(3), pm: 'from its overhangs', evidence: ev(true), says: `its length as the picture has it, ${(fitted.L - m.L >= 0 ? '+' : '')}${((fitted.L - m.L) * 1000).toFixed(0)} mm on the record's ${m.L.toFixed(3)} m${concept ? ' (a made picture: drawn so, not measured)' : ''}` });
+    return { figures, before: fit.before.errPx, after: fit.errPx, iou: fit.iou, machine: fitted, vehicle: makeMachine(fitted), camera: seen, recipe: `${r.id}: ${r.says}; ${fit.evaluations} trials in ${(fit.ms / 1000).toFixed(0)} s` };
+  } });
+
+node({ id: 'recon.search', name: 'Pipelines tried (which way of fitting matches best)', kind: 'critic', ability: 'check', domains: ['vehicles', 'manufacturing', 'science'], pure: true,
+  spec: { gloss: 'Of the ways to fit a model to a picture, which matches it best, and at what cost?', discipline: 'manufacturing.metrology.inspection', role: 'assessment', codes: [ACM_CV, { scheme: 'MSC2020', code: '65K10', label: 'Numerical optimization and variational techniques' }] },
+  says: 'Each recipe (RECIPES: which outline it is held to, its cost one way or both, what is free, its stages) run on the same picture and the same model, and each judged alike: both ways against the dense outline at half size with its skins drawn fine, its overlap, its error in pixels and in millimetres at the scale its wheelbase sets, and its time as measured. The best is the one Body fitted to a picture keeps (BEST_RECIPE, set from this, its results kept in docs/RECONSTRUCT.md)',
+  settings: [{ key: 'recipes', label: 'Recipes to try', type: 'text', default: RECIPES.map((r) => r.id).join(' ') }],
+  ports: { inputs: [P('image', 'record'), P('features', 'table', { label: 'its marks, snapped (Edge-snapped features)' }), P('machine', 'any'), P('camera', 'record')], outputs: [P('results', 'table'), P('best', 'text'), P('kept', 'text', { label: 'the recipe kept now' })] },
+  run: (i, c) => {
+    const img = imgOf(i.image), m = machineOf(i.machine), cam = camOf(i.camera), rows = rowsOf(i.features), traced = outlineOf(rows), dense = denseOutline(img, traced).pts, rig = new Rig(m, cam);
+    const mmPx = mmPerPxOf(m, rows.map((q) => ({ name: String(q.name), u: Number(q.u), v: Number(q.v) }))), ids = String(c.set.recipes ?? '').split(/\s+/);
+    const results = RECIPES.filter((r) => ids.includes(r.id)).map((r) => { const f = runRecipe(r, rig, traced, dense, img.w, img.h, mmPx);
+      return { recipe: r.id, says: r.says, iou: +f.iou.toFixed(4), px: +f.errPx.toFixed(2), mm: +f.errMm.toFixed(1), seconds: +(f.ms / 1000).toFixed(1), trials: f.evaluations, before: `IoU ${f.before.iou.toFixed(4)}, ${f.before.errPx.toFixed(2)} px` }; });
+    const best = [...results].sort((a, b) => a.px - b.px)[0];
+    return { results, best: best ? `${best.recipe}: ${best.px} px (${best.mm} mm), IoU ${best.iou}, ${best.seconds} s` : 'none run', kept: BEST_RECIPE };
   } });
 
 node({ id: 'ask.next', name: 'Next best view or measurement (uncertainty ranking)', kind: 'critic', ability: 'ask', domains: ['vehicles', 'manufacturing', 'science'],
   spec: { gloss: 'What one photograph or measurement would settle the most?', discipline: 'manufacturing.metrology.inspection', role: 'assessment', codes: [MEAS, ACM_CV] },
   says: 'What is still not known, or not well fixed, after fitting and measuring (a figure the photograph does not fix, a dimension that conflicts with the record, what no photograph yet shows: its width and its plan, its face, its tail), weighed (unknown 1, a conflict 2, a measured figure by its ± over its range), and the single photograph or measurement that would settle the most of it',
-  ports: { inputs: [P('figures', 'table', { optional: true }), P('dimensions', 'table', { optional: true }), P('ambiguity', 'text', { optional: true, label: 'how well the camera is fixed (Camera node)' })], outputs: [P('ask', 'text'), P('settles', 'list<text>'), P('open', 'table', { label: 'what is still open' })] },
+  ports: { inputs: [P('figures', 'table', { optional: true }), P('dimensions', 'table', { optional: true }), P('ambiguity', 'text', { optional: true, label: 'how well the camera is fixed (Camera node)' }), P('concept', 'boolean', { optional: true, label: 'a made picture, not a photograph (Photograph node)' })], outputs: [P('ask', 'text'), P('settles', 'list<text>'), P('open', 'table', { label: 'what is still open' })] },
   run: (i) => {
+    // (a made picture is the goal: the camera it was not taken with is nothing to ask for; what is open is the real thing)
+    if (i.concept === true) { const open = [{ what: 'the real thing, as it is', evidence: 'unknown' }, ...rowsOf(i.figures).filter((r) => r.evidence === 'estimated').map((r) => ({ what: String(r.figure), evidence: 'estimated' }))];
+      return { ask: CONCEPT_ASK, settles: ['the real car beside the goal: how far each line is from it'], open }; }
     const rows = [...rowsOf(i.figures).map((r) => ({ key: String(r.figure), evidence: String(r.evidence), pm: Number(r.pm), range: 0.1 })), ...rowsOf(i.dimensions).map((r) => ({ key: String(r.dimension), evidence: String(r.evidence), pm: Number(r.pm), range: 0.5 })),
       ...(String(i.ambiguity ?? '').startsWith('not fixed') ? [{ key: 'camera distance', evidence: 'not fixed' }] : []),
       // (what a single side view never shows)

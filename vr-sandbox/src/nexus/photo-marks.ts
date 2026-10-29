@@ -5,14 +5,16 @@
 // model is wrong (its roof, its tail), not only how much.
 
 export interface Mark { name: string; u: number; v: number }
-export interface Photo { id: string; says: string; object: string; w: number; h: number; by: string; marks: Mark[] }
+/** `concept`: a picture made (an AI's, a render, an edit) of how the thing is wanted, not a photograph of it: matched as the
+ *  goal, and nothing read off it is a measurement of the thing. */
+export interface Photo { id: string; says: string; object: string; w: number; h: number; by: string; marks: Mark[]; concept?: boolean }
 
 const pts = (region: string, s: string): Mark[] => s.trim().split(/\s+/).map((p, i) => { const [u, v] = p.split(',').map(Number); return { name: `outline ${region} ${i + 1}`, u: u!, v: v! }; });
 
 export const PHOTOS: Photo[] = [
   {
-    id: 'mc-side', w: 1152, h: 864, object: 'montecarlo04-kit',
-    says: 'the user\'s reference for their Monte Carlo as they want it built: side on from its left, the car facing left, in sun (2026-10-29)',
+    id: 'mc-side', w: 1152, h: 864, object: 'montecarlo04-kit', concept: true,
+    says: 'an AI-generated picture of the user\'s Monte Carlo as they want it built (their goal; the user, 2026-10-29: "that was an ai generated version that is the goal"), not a photograph of the car: side on from its left, the car facing left, in sun',
     by: 'marked by eye by Claude on an edge map of the photograph (2026-10-29): estimates to a few pixels, refined by snapping to edges',
     marks: [
       // its wheels: what the camera is solved from (their places are published: wheelbase, track, tyre size)

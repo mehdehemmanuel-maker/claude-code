@@ -16,6 +16,8 @@
 import { register, type BlockDef, type Type } from './blocks';
 import { Engine, emptyBoard, groupBlock, placeBlock, wire } from './dataflow';
 import type { Board } from './boards';
+import { PHOTOS } from './photo-marks';
+import './reconstruct';
 
 /** A board being built, a node at a time, and saved as a seed. */
 class Seed {
@@ -39,9 +41,9 @@ class Seed {
   /** Things as one, each where it is. */
   all(name: string, things: [string, string][]): string { const id = this.n('combine', { name }, name); for (const [n, p] of things) this.w(n, p, id, 'things'); return id; }
   /** Saved to the library under its id: laid out to be read, its inputs and outputs its own. */
-  save(id: string, name: string, says: string, domains: string[]): BlockDef {
+  save(id: string, name: string, says: string, domains: string[], spec?: BlockDef['spec']): BlockDef {
     layOut(this.b);
-    const d = groupBlock(this.b, { id, name, says, domains, by: 'built in' });
+    const d = groupBlock(this.b, { id, name, says, domains, by: 'built in', ...(spec ? { spec } : {}) });
     register(d); return d;
   }
 }
@@ -482,10 +484,32 @@ function city(): void {
   s.save('seed.city', 'City', 'A city of neighbourhoods, n by n, each its own streets, houses and cars from its own seed', ['structural', 'everyday']);
 }
 
+// ---- a picture to a model ----------------------------------------------------------------------------------------------
+function imageToModel(): void {
+  // (docs/RECONSTRUCT.md: the pipeline that matched best, folded: the picture and its marks, its marks on its edges, its
+  // outline dense, the model its picture is of, the camera from its wheels, the model fitted by the recipe kept
+  // (BEST_RECIPE, chosen by Pipelines tried), seen again and compared, and what to ask for next)
+  const s = new Seed('Picture to model');
+  const id = s.input('picture', 'text', '', 'the picture (its id in view/public/photos, with its marks in photo-marks.ts)', PHOTOS.map((p) => p.id));
+  const ph = s.n('photo.load', {}, 'the picture and its marks'); s.w(id, 'value', ph, 'id');
+  const ft = s.n('photo.features', { r: 5 }, 'its marks on its edges'); s.w(ph, 'image', ft, 'image'); s.w(ph, 'marks', ft, 'marks');
+  const ol = s.n('photo.outline', { step: 3, r: 6 }, 'its outline, dense'); s.w(ph, 'image', ol, 'image'); s.w(ft, 'features', ol, 'features');
+  const car = s.n('vehicle.model', {}, 'the model it is of'); s.w(ph, 'object', car, 'model');
+  const cam = s.n('camera.solve', {}, 'the camera, from its wheels'); s.w(ft, 'features', cam, 'features'); s.w(car, 'machine', cam, 'machine'); s.w(ph, 'w', cam, 'w'); s.w(ph, 'h', cam, 'h');
+  const fit = s.n('fit.lines', {}, 'fitted to it'); s.w(car, 'machine', fit, 'machine'); s.w(cam, 'camera', fit, 'camera'); s.w(ol, 'features', fit, 'features'); s.w(cam, 'cameras', fit, 'cameras'); s.w(ph, 'concept', fit, 'concept');
+  const seen = s.n('render.silhouette', {}, 'seen as fitted'); s.w(fit, 'vehicle', seen, 'thing'); s.w(fit, 'camera', seen, 'camera');
+  const cmp = s.n('compare.outline', {}, 'against the picture'); s.w(seen, 'mask', cmp, 'mask'); s.w(ol, 'features', cmp, 'features'); s.w(fit, 'camera', cmp, 'camera');
+  const ask = s.n('ask.next', {}, 'what to ask for next'); s.w(fit, 'figures', ask, 'figures'); s.w(cam, 'ambiguity', ask, 'ambiguity'); s.w(ph, 'concept', ask, 'concept');
+  s.output('vehicle', 'part', fit, 'vehicle'); s.output('camera', 'record', fit, 'camera'); s.output('machine', 'any', fit, 'machine'); s.output('figures', 'table', fit, 'figures'); s.output('iou', 'number', cmp, 'iou'); s.output('error', 'number', cmp, 'error', 'mm'); s.output('regions', 'table', cmp, 'regions'); s.output('recipe', 'text', fit, 'recipe'); s.output('ask', 'text', ask, 'ask');
+  s.save('seed.image-to-model', 'Picture to model', 'A picture of a thing (a photograph, or a made picture of how it is wanted) to its model: its marks laid on the picture\'s edges, its outline made dense, the model its picture is of, the camera solved from its wheels, the model\'s body lines, overhangs and the camera fitted so its silhouette meets the outline both ways, by the recipe Pipelines tried found best; then seen again and compared region by region, each figure said measured, the picture\'s, or estimated, and what to ask for next. Nothing made until a picture is given', ['vehicles', 'manufacturing', 'science'],
+    { gloss: 'What model makes this picture?', discipline: 'mechanical.design', role: 'numerical solver', codes: [{ scheme: 'ACM CCS 2012', code: '10010147.10010178.10010224', label: 'Computing methodologies: computer vision' }, { scheme: 'MSC2020', code: '65K10', label: 'Numerical optimization and variational techniques' }],
+      model: { equations: ['minimise ½ (mean d(outline, model edge) + mean d(model edge, outline)) over its lines, overhangs, stance, details and camera, the model rendered from the camera each trial'], class: 'analytical', time: 'steady', linear: false, method: 'the recipe kept (BEST_RECIPE in reconstruct.ts): the camera\'s distance scanned, then Nelder–Mead in stages, coarse to fine', references: ['Nelder & Mead, Comput. J. 7, 308 (1965)', 'Hartley & Zisserman, Multiple View Geometry, 2nd ed. (analysis by synthesis)', 'Kass, Witkin & Terzopoulos, IJCV 1, 321 (1988) (active contours)'] } });
+}
+
 /** Every seed, in the order each needs the ones before it. */
 let made = false;
 export function makeSeeds(): void {
   if (made) return; made = true;
-  window_(); door(); wallSeed(); toilet(); sink(); bed(); fittingsAll(); room(); house(); car(); grass(); terrain(); road(); stoplight(); crossing(); roads(); neighbourhood(); city();
+  window_(); door(); wallSeed(); toilet(); sink(); bed(); fittingsAll(); room(); house(); car(); grass(); terrain(); road(); stoplight(); crossing(); roads(); neighbourhood(); city(); imageToModel();
 }
 makeSeeds();

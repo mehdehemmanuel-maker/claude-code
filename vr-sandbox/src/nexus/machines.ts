@@ -785,7 +785,8 @@ function body(m: Machine, ln: Lines): Part[] {
 }
 
 /** A body kit fitted to the skin as made: each piece where the skin is, standing on it, on both sides. */
-function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
+/** A body kit fitted to the skin of `out` (its flares on its arches' lips, its skirts, lip, valance, scoops and wing). */
+export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
   const s = skinOf(out), mat = k.mat ?? 'abs', col = k.color, kit: Part[] = [], deg = PI / 180, side = (sd: number) => (sd > 0 ? 'right' : 'left');
   const own = { mat, color: col, finish: 'paint' } as const;
   // flares: a band round each arch from its lip out, as thick as it stands proud, on the most the skin stands out under it
@@ -1735,7 +1736,12 @@ export const MACHINES: Machine[] = [
     kit: { color: 0xaf2b36, flares: { w: 0.08, t: 0.02, from: 8, to: 172, every: 20, heads: 0xaf2b36 }, spoiler: { h: 0.1, d: 0.28, span: 0.86 },
       says: 'its owner\'s own: red bolt-on flares, a red ducktail spoiler (moulded ABS, typical), as in its owner\'s photographs' },
     says: MONTE_CARLO_04.says + '; this one its owner\'s, as it stands in their garage: its paint sanded back to primer, red flares, a red ducktail and red mirrors, its wheels black with a red lip' },
+  // (its body fitted to the goal picture by Picture to model, recipe I, 2026-10-29 (docs/RECONSTRUCT.md): its nose 0.474
+  // high, its roof ending 0.668 along it, its deck 0.783, its tail 0.746 and its deck 0.805 high, its roof 1.41 m and its
+  // body 135 mm over the ground; each the picture's (a made picture: how the goal is drawn, not a measurement of a car),
+  // each ± in the doc; its windscreen's foot, roof's start and cowl's height kept, the picture not fixing them)
   { ...MONTE_CARLO_04, id: 'montecarlo04-kit', short: 'monte carlo custom', name: 'Chevrolet Monte Carlo SS (2004), black with a red body kit', color: 0x141416,
+    H: 1.41, clearance: 0.135, lines: { ...MONTE_CARLO_04.lines!, nose: 0.474, roofR: 0.668, deck: 0.783, tail: 0.746, deckH: 0.805 },
     axles: MONTE_CARLO_04.axles.map((a) => ({ ...a, tyre: '245/35R20' })),
     rims: { ...MONTE_CARLO_04.rims, color: 0x18181a, accent: 0xb3121f, lip: 0xb3121f, cap: 0x1a1a1c },
     kit: { color: 0xb3121f, flares: { w: 0.075, t: 0.018, from: 14, to: 166, every: 16 }, skirts: { h: 0.075, t: 0.03 }, lip: { d: 0.12, t: 0.02, out: 0.012 }, valance: { d: 0.1, t: 0.018, out: 0.008 },

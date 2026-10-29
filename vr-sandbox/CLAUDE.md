@@ -207,6 +207,12 @@ the task list and lose the why. So the why lives here, and every round is checke
   → geometry → CAD → render → compare → correct pipeline … Audit the existing implementation first. Reuse working
   components … Report measurable discrepancies and unresolved ambiguities instead of claiming unverified accuracy"
   (2026-10-29: the plan in `docs/RECONSTRUCT.md`)
+- "try to think outside the box you where getting close all you gotta do is match it and find a way to really match it
+  better and better create node tools for this see what pipeline works optimize it and store it for this exact problem
+  make a image to modal node that was folded", and "that was an ai generated version that is the goal of what I wanna get
+  my Monte carlo too you seen mine it's not too pretty right now" (2026-10-29: the side picture is the goal, not a
+  photograph; recipes tried and judged alike by Pipelines tried, the best kept; node Picture to model, folded; results in
+  `docs/RECONSTRUCT.md`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say

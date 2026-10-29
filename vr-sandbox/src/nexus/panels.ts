@@ -218,15 +218,17 @@ type Deep<T> = { [K in keyof T]?: T[K] extends object ? Deep<T[K]> : T[K] };
 let trial: { rules?: Deep<BodyRules>; lines?: Partial<Lines> } | null = null;
 export function tryBody(t: { rules?: Deep<BodyRules>; lines?: Partial<Lines> } | null): void { trial = t; made.clear(); }
 const merged = <T>(a: T, b: Deep<T> | undefined): T => { if (!b) return a; const o = { ...(a as object) } as Record<string, unknown>; for (const [k, v] of Object.entries(b)) o[k] = v && typeof v === 'object' && !Array.isArray(v) && o[k] && typeof o[k] === 'object' ? merged(o[k], v as Deep<unknown>) : v; return o as T; };
-export function bodyPanels(b0: BodyPlan, r0: BodyRules = BODY_RULES): Part[] {
+/** `quick`: without the lids' check against what is under them (millimetres; for seeing its shape many times over, as a
+ *  photograph is fitted). */
+export function bodyPanels(b0: BodyPlan, r0: BodyRules = BODY_RULES, quick = false): Part[] {
   const r = trial ? merged(r0, trial.rules) : r0, b = trial?.lines ? { ...b0, lines: { ...b0.lines, ...trial.lines } } : b0;
-  const key = JSON.stringify([{ ...b, color: 0 }, r]), kept = made.get(key); if (kept) return kept.map(copy(b.color));
+  const key = JSON.stringify([{ ...b, color: 0 }, r, quick]), kept = made.get(key); if (kept) return kept.map(copy(b.color));
   // (then looked at as made: its hood or deck, crowned from the side's top edge, can stand a few millimetres short of what
   // is under it near that edge, as a strut's tower; where it does, the lid alone is crowned more there, by what is
   // missing over the share of its crown that reaches that far out (about 40%), and the body made again, up to three
   // times: the creator's own check, as its liner's is; the side skin, and the doors on it, are not touched)
   let b2: BodyPlan = { ...b, color: UNPAINTED }, out = makeBody(b2, r);
-  for (let k = 0; k < 3; k++) { const short = lidShort(out, b2); if (!short.some((d) => d > 0.001)) break; b2 = { ...b2, lift: [...(b2.lift ?? []), ...(b2.inside ?? []).flatMap((q, i) => (short[i]! > 0.001 ? [{ x0: q.min[0], x1: q.max[0], dy: (short[i]! + 0.004) / 0.4 }] : []))] }; out = makeBody(b2, r); }
+  for (let k = 0; k < (quick ? 0 : 3); k++) { const short = lidShort(out, b2); if (!short.some((d) => d > 0.001)) break; b2 = { ...b2, lift: [...(b2.lift ?? []), ...(b2.inside ?? []).flatMap((q, i) => (short[i]! > 0.001 ? [{ x0: q.min[0], x1: q.max[0], dy: (short[i]! + 0.004) / 0.4 }] : []))] }; out = makeBody(b2, r); }
   if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy(b.color));
 }
 /** The nearest point on a ruled strip (a recess's wall: a degree-1 net of rows of two points), and how far: its quads

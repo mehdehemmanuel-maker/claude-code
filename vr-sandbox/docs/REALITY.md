@@ -1130,3 +1130,15 @@ fixed; IoU 0.831 → 0.841, mean outline error 68 → 62 mm after fitting; nose 
 Asked for: the original photograph file or the phone and lens. Not done: joining several photographs into one solution,
 the garage photographs not marked, outlines traced by eye (no segmentation), only the line figures fitted, 2 s an
 evaluation.
+- **2026-10-29, matching the goal picture better, and the pipeline folded into one node.** The side picture is the user's
+AI-made goal, not a photograph (marked `concept`: matched, never read as a measurement). New tools: Dense outline on the
+image's edges, the error both ways, Pipelines tried (every recipe judged alike), and Picture to model (`seed.image-to-model`,
+folded). Nine recipes run on the picture: the error both ways went from 19.26 px (IoU 0.833) to 9.23 px (IoU 0.898) with
+the one kept (I: the camera's distance scanned first, then lines, overhangs, stance and camera, then the roof, wing and
+lip; 932 s); the first round's way gave 17.24 px. What did it was the camera: the solve's 40 m camera fits the wheels as
+well as a near one, but not the body; scanned, the fit came to about 5.4 m, and through it the published length fits
+(5.020 m), so "the AI drew it short" (the round before) was wrong. A bug was found on the way (the dolly zoom slid the
+picture) and fixed. The fitted body is stored on the kit record. Rules clean. Blind check: "a 4-door sedan with a body
+kit", a Grand Prix or a Monaro at about 15 %: the outline matches; what is inside it (flat flares, a decal-like vent, a
+slab wing, the windows one band) does not, and the wing still stands about 55 px behind the picture's (its setback not
+fixed: its edge is a small share of the outline).

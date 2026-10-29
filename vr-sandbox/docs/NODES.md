@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 577 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 580 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -33,16 +33,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 308 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 310 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 73 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 74 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 532 tested here (their own tests: that they do what they say, not that the world does); 35 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 532 tested here (their own tests: that they do what they say, not that the world does); 38 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 577 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 580 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -60,7 +60,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 
-## 2 · Make: shapes, parts, things (74)
+## 2 · Make: shapes, parts, things (75)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -104,7 +104,8 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Motherboard** (`pc.board`): A motherboard of a form factor (ATX, microATX, Mini-ITX: their standards' sizes) with the package in its socket: memory modules (JEDEC DDR4), power stages, chipset, a PCIe x16 slot, an M.2 2280 drive, power … *hypothetical, tested here, before the update*
 - **Neighbourhood** (`seed.neighbourhood`): Streets of blocks with four houses to a block, each house's plan and colours and the car in its drive picked from the seed (change the seed for another street), and cars driving round it, stopping at its lights, as … *hypothetical, untested, before the update*
 - **Part** (`card.part`): A real part, drawn whole from its standard with every piece inside it: 41 kinds (stepper nema17 40, led red 5mm, bearing 608, rail MGN12H 400, motorplate nema17 t3 aluminium, bolt M8x30, screw M3x10, panhead M1.6 L2 … *specified, tested here, before the update*
-- **Photograph (pixels and its marks)** (`photo.load`): A photograph from the library (view/public/photos), decoded to its pixels, with the points marked on it (photo-marks.ts: its wheels, its outline round it by region), who marked them and how, and the thing it is of *hypothetical, tested here*
+- **Photograph (pixels and its marks)** (`photo.load`): A photograph from the library (view/public/photos), decoded to its pixels, with the points marked on it (photo-marks.ts: its wheels, its outline round it by region), who marked them and how, the thing it is of, and … *hypothetical, tested here*
+- **Picture to model** (`seed.image-to-model`): A picture of a thing (a photograph, or a made picture of how it is wanted) to its model: its marks laid on the picture's edges, its outline made dense, the model its picture is of, the camera solved from its wheels, … *hypothetical, untested*
 - **Piston and rings** (`engine.piston`): A piston with its three rings, its wrist pin and the pin's two clips, sized from the bore *hypothetical, tested here, before the update*
 - **Piston engine** (`engine.whole`): A whole piston engine from its first parts: block, crank, pistons and rods, head, timing, oiling, intake, exhaust and what hangs on it. *hypothetical, tested here, before the update*
 - **Processor die** (`chip.die`): A processor die: its cores (each its logic and its L2), its L3, its uncore (graphics, memory controller, I/O), each from the cells below it placed by the million and billion, never copied; its transistors counted from … *hypothetical, tested here, before the update*
@@ -143,7 +144,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
-- **Body lines fitted to a photograph (analysis by synthesis)** (`fit.lines`): The vehicle's body lines (where its windscreen's foot, its roof, its back glass's foot are along it, how high its nose, tail and the glass's feet stand) moved until its rendered silhouette meets the outline traced on … *derived, untested*
+- **Body fitted to a picture (analysis by synthesis)** (`fit.lines`): The vehicle moved until its rendered silhouette meets the outline on the picture, both ways (where it falls short and where it stands past it): its body lines (where its windscreen's foot, its roof, its back glass's … *derived, untested*
 - **Bore where it passes** (`bore`): A part bored wherever another runs through it: a hole along the other's line, as wide as it reaches and a clearance more, cut in each piece it passes and in no other (a pushrod's bore through a block, its gasket and … *derived, tested here, before the update*
 - **Clear away** (`clear`): What a thing places, less whatever comes within a distance of another thing (grass under a road, trees where a house stands) or, with "keep", only those: deleting by where things are *derived, tested here, before the update*
 - **Combine** (`combine`): Several things as one assembly, each where it is: a frame and its motors, a city and the swarm over it *derived, tested here, before the update*
@@ -193,7 +194,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. *derived, tested here*
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what … *derived, tested here, before the update*
 
-## 5 · Check (21)
+## 5 · Check (22)
 
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
@@ -212,6 +213,7 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Measure** (`measure`): What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as *derived, tested here, before the update*
 - **Next best view or measurement (uncertainty ranking)** (`ask.next`): What is still not known, or not well fixed, after fitting and measuring (a figure the photograph does not fix, a dimension that conflicts with the record, what no photograph yet shows: its width and its plan, its … *derived, tested here*
 - **Nothing runs into anything?** (`check.rules`): The rules a made thing is held to, on its surfaces as drawn (triangle against triangle): no two pieces cross unless they are one piece, one is said to pass through the other, one is a fastener in what it fastens, or … *derived, tested here, before the update*
+- **Pipelines tried (which way of fitting matches best)** (`recon.search`): Each recipe (RECIPES: which outline it is held to, its cost one way or both, what is free, its stages) run on the same picture and the same model, and each judged alike: both ways against the dense outline at half … *derived, untested*
 - **Run the gauntlet** (`gauntlet.run`): Every candidate through the gates chosen (all if none, one for a single gate), each where it applies, cheapest first: approved only when none fails. *derived, tested here, before the update*
 - **Silhouette comparison (IoU, signed contour error)** (`compare.outline`): The model's silhouette against the outline traced on the photograph: their overlap (intersection over union), and at each outline point how far the model's edge is, + where the model falls short of the photograph, − … *derived, tested here*
 - **Switch-level cell characterisation** (`cell.characterise`): One of a chip's own gates, of the kind you pick (the commonest first), copied out of its netlist and run at switch level through every input: its truth table, and whether it gives the gate its pull-down network says. *derived, tested here*
@@ -272,7 +274,7 @@ Every physical law as a calculator, by its field, and formulas you write.
 - **Thermal & fluids** (29): Aerodynamic drag, Aerodynamic lift, Arc welding heat input, Archimedes' principle, Arrhenius rate, Bernoulli's equation, Boltzmann distribution, Carnot efficiency, Clausius-Clapeyron relation, Continuity equation, First law of thermodynamics, Fourier's law, Free convection in still air, Heat capacity, Hydrostatic pressure, Ideal gas law, Ideal static thrust of a rotor (momentum theory), Least work to take out a trace, Lumped thermal time constant, Newton's law of cooling, Pressure drop in a pipe (Darcy-Weisbach), Reynolds number, Sound insulation of a wall (mass law), Stefan-Boltzmann radiation, Sunlight a surface absorbs, Temperature rise through thermal resistances, Thermal resistance of a wall, Time to diffuse a distance, Work in a compressed gas (isothermal)
 - **Vehicles** (1): Photogrammetric dimensions (back-projection onto its middle plane)
 
-## 9 · Data, money and projects (38)
+## 9 · Data, money and projects (39)
 
 Tables and rows, research, the gauntlet, money, operations.
 
@@ -283,6 +285,7 @@ Tables and rows, research, the gauntlet, money, operations.
 - **Critical path method (CPM)** (`ops.critical-path`): How long a project takes and which tasks set it: rows of task, how long, and what each must wait for (names split by ; or spaces) *derived, tested here*
 - **Cumulative sum (running balance)** (`list.running`): Each item added to all before it, from a start: a balance from its ins and outs *derived, tested here*
 - **Delete** (`delete`): Takes something out: a block you (or Claude) made, an entry you fed, a proposal, an unknown off the queue. *derived, tested here, before the update*
+- **Dense outline on the image's edges (active contour, one step)** (`photo.outline`): The outline traced round the thing made dense (a point every few pixels) and laid on the picture's own edges: each point moved along the outline's normal to the strongest edge near it, the moves smoothed round it so … *derived, untested*
 - **Edge-snapped image features (Sobel)** (`photo.features`): Each marked point moved to the strongest edge near it (Sobel's gradient on the brightness, nearer edges preferred): measured where a clear edge was found, with how far it moved; observed (by eye) where none was. *derived, untested*
 - **Gross margin and markup** (`fin.margin`): From cost and price: the profit, the margin on the price and the markup on the cost *derived, tested here*
 - **Internal rate of return** (`fin.irr`): The discount rate at which cash flows are worth nothing today: found between −99 % and 1000 % by the method chosen (bisection by default), with whether it converged *derived, tested here*
