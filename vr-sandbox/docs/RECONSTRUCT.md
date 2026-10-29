@@ -97,6 +97,66 @@ What made the difference, found on the way:
   as made and slid with the overhangs on the coarse stage, a trial there takes about 0.5 s.
 - **The overhangs were not wrong**; the camera was. Through a near camera the published length fits.
 
+## Third round: judged from the picture's own camera, four ways apart (2026-10-29)
+
+An expert's critique, passed on by the user: a closer outline does not prove the car is right; silhouette, features and
+3D are separate objectives; compare from the same camera, find the mismatched regions, correct the geometry, report
+silhouette, landmarks, surface and dimensions apart. (The orientation it saw reversed was the 3D viewer's shot from the
+car's other side; every comparison here is from the picture's own camera, and the check says which way it faces.)
+
+New tools, each a node:
+- **Same-camera view** (`render.view`): the model z-buffered from the fitted camera: which part is at each pixel, how
+  far, its shade. The fitted camera: 5.5 m from the car, 1.27 m up, a focal length of 1,031 px (about a 59° view across
+  the 1,152 px: a phone's main lens).
+- **Accuracy, four ways** (`check.accuracy`): silhouette (both ways, IoU); features (each traced feature, `traces` in
+  `photo-marks.ts`, 18 of them, against the model's own part of that name: overlap, offset of their middles and which way,
+  edge error both ways; a missing part said missing); surface (the model's edges inside the outline against the
+  picture's, the six worst cells of a 6 × 3 grid and the parts there; and depth, curvature, thickness, the far side, the
+  top and the plan said **unknown**: one side view does not show them); dimensions (the model's, the published, and the
+  picture's read through the camera, each ±); and which way it faces.
+- **Geometry fitted to its features** (`fit.features`): each group of features moves the figures that own it (its
+  windows and door its body lines, its flares, wing, lamps, skirts, lip and valance their own), by those features and
+  the outline together; the intake and its vent not fitted but **taken off the picture** onto the model's own surface.
+- **Side by side from the same camera** (`view.compare`): the picture, the model, and the picture with each feature's
+  edge traced (green) and the model's (red), as a PNG.
+
+What they found, and what was done about it:
+- A coupe's one door was held to 1.15 m (a typical figure) whatever its record said: the door stood 31 px forward of the
+  picture's. Now a one-door car's door ends where its record puts its top rear corner (`panels.ts`): the door's overlap
+  0.74 → 0.92, its handle 38 → 8 px off.
+- The kit's lip and valance were plates under the bumpers only, hidden from the side; the picture's are side pieces down
+  the bumpers' corners. Lips and valances may now have side pieces (`Plate` in `machines.ts`), ending where the skin
+  ends at the side (the first try ran them to the middle's end, and they hung in the air past the corners).
+- The model has no wing mirror (mirrors come only from the detail pass, not the vehicle node) and no fuel door: said
+  "the model has no such part", not hidden.
+- The fitted figures are stored on the kit record (`montecarlo04-kit`), so the next fit starts from them.
+
+Measured: the folded node run end to end, before the feature fit and door and kit fixes (the outline fit alone), and
+after them, from the stored record (899 s, this machine):
+
+| Objective | Measure | Before | After |
+| --- | --- | --- | --- |
+| silhouette | outline error both ways | 8.73 px, IoU 0.882 | 7.05 px (37 mm), IoU 0.918 |
+| features | mean edge error of those found | 11.0 px | 6.5 px |
+| features | mean offset of their middles | 19.2 px | 7.5 px |
+| features | mean overlap | 0.41 | 0.56 |
+| surface | model edges to the picture's | 4.1 px (56 % within 3 px) | 4.15 px (55 %) |
+| surface | depth, curvature, thickness, far side, top, plan | unknown | unknown |
+| dimensions | model against published, largest | 21 mm | 35 mm (its roof, the picture's 1.437 m) |
+| orientation | | agrees | agrees |
+
+By feature, after: door 0.92 overlap; side glass 0.84; intake and vent 0.96 and 0.97 (taken off the picture, so a match
+by making, not a check); front lip 0.69; side skirt 0.70; quarter glass 0.69; the rest under 0.45: the wing 0.39 (its
+end plates and blade not the picture's shape), the rims 0.39–0.44 (their spokes not the picture's star with red
+inserts), the flares 0.21–0.28 (bands where the picture has wide arches), the tail lamp 0.20 (a block where it is a
+thin strip), the headlamp 0.44. Mirror and fuel door: none in the model. The surface measure did not move: what it
+counts (the panels' own edges and creases) the fits do not change. Blind check of the same-camera render: "a black
+two-door coupe … facing left", a Charger or a Monaro at 15–25 %: no longer a sedan, still not a Monte Carlo.
+
+- Reading the picture's length off one plane is wrong through a near camera (its ends are seen at its corners: 5.566 m
+  read where 5.047 m fits); its ends and roof are now read as the model's own and how far the outline stands past it, at
+  the model's own depth there.
+
 ## Not done yet (said plainly)
 
 - Multi-view: each photograph gets its own camera (the nodes are per photograph), but nothing yet joins them into one
@@ -105,5 +165,7 @@ What made the difference, found on the way:
 - Feature extraction beyond edges (holes, joints, symmetry, part boundaries) is not built.
 - The fit moves the body's lines, overhangs, stance, roof height, wing and lip; not its width or plan (a side view does
   not show them), not the flares, skirts or scoop.
-- It is slow: the kept recipe takes about 15 minutes on this machine.
+- It is slow: Picture to model took 899 s end to end on this machine.
+- The wing's end plates, the rims' spokes, the flares' wide arches, the lamps' shapes, the mirror and the fuel door
+  are shapes the model does not have yet: the check finds them; making them is next.
 - It is fitted to one picture, and it is the goal: no photograph of the car as it is is marked yet to set beside it.

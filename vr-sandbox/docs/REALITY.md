@@ -1142,3 +1142,11 @@ picture) and fixed. The fitted body is stored on the kit record. Rules clean. Bl
 kit", a Grand Prix or a Monaro at about 15 %: the outline matches; what is inside it (flat flares, a decal-like vent, a
 slab wing, the windows one band) does not, and the wing still stands about 55 px behind the picture's (its setback not
 fixed: its edge is a small share of the outline).
+- **2026-10-29, judged from the picture's own camera, four ways apart.** After an expert's critique (an outline is not
+the car): Same-camera view, Accuracy four ways (silhouette, features, surface, dimensions, and which way it faces),
+Geometry fitted to its features, Side by side, all in Picture to model. 18 features traced on the goal picture. Found
+and fixed: a coupe's door held to 1.15 m whatever its record said; the kit's lip and valance had no side pieces; those,
+when added, hung past the bumpers' corners; the picture's length read off one plane through a near camera. After: outline
+7.05 px (IoU 0.918), features' edges 11.0 → 6.5 px, their middles 19.2 → 7.5 px, overlap 0.41 → 0.56; surface unchanged;
+depth and the unseen sides unknown. Rules clean on all three Monte Carlos. Blind check: a two-door coupe facing left,
+not yet a Monte Carlo; the wing, flares, rims, lamps and the missing mirror are what it names.

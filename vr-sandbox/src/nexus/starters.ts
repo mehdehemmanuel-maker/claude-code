@@ -335,14 +335,14 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'The worn panel: why there'; wire(b, 'l_worn', 'says', 'why', 'value');
     return tidy(b);
   }],
-  ['Picture to model: the Monte Carlo fitted to the AI-made picture of how its owner wants it, by the one folded node (open it for its eleven steps), its match region by region and what to ask for next', () => {
+  ['Picture to model: the Monte Carlo fitted to the AI-made picture of how its owner wants it, by the one folded node (open it for its steps): its outline, then its features one group at a time; then seen from the picture\'s own camera and judged four ways apart, side by side with the picture, and what to ask for next', () => {
     // (docs/RECONSTRUCT.md: image → features → outline → camera → model → fit → render → compare → ask, folded into one node
     // by the recipe Pipelines tried found best)
     const b = emptyBoard('Picture to model');
     placeBlock(b, 'in.text', 0, 0, { value: 'mc-side' }, 'pic'); b.nodes.pic!.label = 'The picture: how the owner wants their Monte Carlo (AI-made)';
     placeBlock(b, 'seed.image-to-model', 0, 0, {}, 'i2m'); b.nodes.i2m!.label = 'Picture to model'; wire(b, 'pic', 'value', 'i2m', 'picture');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'The model, fitted'; wire(b, 'i2m', 'vehicle', 'show', 'thing');
-    for (const [k, l] of [['iou', 'Overlap with the picture (IoU)'], ['error', 'Mean outline error (mm)'], ['regions', 'By region'], ['figures', 'Each figure, and what it rests on'], ['recipe', 'How it was fitted'], ['ask', 'What to ask for next']] as const) { placeBlock(b, 'view.show', 0, 0, {}, `v${k}`); b.nodes[`v${k}`]!.label = l; wire(b, 'i2m', k, `v${k}`, 'value'); }
+    for (const [k, l] of [['objectives', 'How right, four ways: silhouette, features, surface, dimensions'], ['orientation', 'Facing the way the picture does?'], ['features', 'Each feature against the model\'s own part'], ['regions', 'Where its edges disagree most'], ['dimensions', 'Its dimensions: the picture\'s, the model\'s, the published'], ['groups', 'Each feature group, before and after'], ['figures', 'Each body figure, and what it rests on'], ['feature figures', 'Each feature figure, and what it rests on'], ['ask', 'What to ask for next']] as const) { placeBlock(b, 'view.show', 0, 0, {}, `v${k}`); b.nodes[`v${k}`]!.label = l; wire(b, 'i2m', k, `v${k}`, 'value'); }
     return tidy(b);
   }],
   ['Pipelines tried: every recipe for fitting a model to a picture run on the Monte Carlo\'s, each judged alike (overlap, error both ways, time), the best kept for Picture to model', () => {

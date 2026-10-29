@@ -63,13 +63,17 @@ export interface Cover { spokes: number; /** in pairs, each pair's two spreading
 /** A body kit bolted onto a car's skin (aftermarket, or its maker's own), each piece fitted to the skin as it is made
  *  (panels.ts skinOf): flares round its arches, skirts along its rockers, a lip under its nose and a valance under its tail,
  *  an insert in a scoop on each rear quarter, a wing on its deck. Moulded ABS unless said; its colour its own. */
+/** A lip's or a valance's figures (BodyKit). */
+export interface Plate { d: number; t: number; out: number; sd?: number; sh?: number; rise?: number }
 export interface BodyKit {
   color: number; mat?: string; says: string;
   /** a flare round each arch: so wide out from the lip, so thick (how far proud of the skin), round from and to what angle
    *  over the axle (degrees from straight ahead), riveted every so many degrees, their heads painted (black where not said) */ flares?: { w: number; t: number; from?: number; to?: number; every?: number; heads?: number };
   /** a skirt along each rocker between the arches: so tall over the skin's foot, so thick */ skirts?: { h: number; t: number };
-  /** a lip under the front bumper and a valance under the rear: so deep along the car, so thick, reaching so far past the skin */
-  lip?: { d: number; t: number; out: number }; valance?: { d: number; t: number; out: number };
+  /** a lip under the front bumper and a valance under the rear: so deep along the car, so thick, reaching so far past the
+   *  skin; and where said, a side piece down each of the bumper's corners: so long along the car from its end (sd), so tall
+   *  (sh), its top edge rising so much toward the end (rise), m */
+  lip?: Plate; valance?: Plate;
   /** an insert in a scoop on each rear quarter: its outline seen from the side, m, from the rear axle (x, ahead +) and the ground (y); and the vent it frames */ scoop?: [number, number][]; vent?: [number, number][];
   /** a ducktail spoiler moulded along the deck lid's tail: so tall at its trailing edge, so deep along the deck, across so much of the width */ spoiler?: { h: number; d: number; span: number };
   /** a wing on the deck: its chord, its height over the deck, its span as a share of the width, its pitch (degrees, its
@@ -838,7 +842,7 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
     }
   }
   // a lip under the nose, a valance under the tail: a plate following the bumper's outline in plan at its foot
-  const plate = (o: { d: number; t: number; out: number }, front: boolean) => {
+  const plate = (o: Plate, front: boolean) => {
     // (its foot: the skin's lowest within its last 35 cm, where the bumper is)
     const end = (front ? 1 : -1) * (m.L / 2), xs = Array.from({ length: 13 }, (_, i) => end - (front ? 1 : -1) * (0.05 + (i / 12) * 0.3));
     const foot = Math.min(...xs.map((x) => lowAt(s, x).y).filter(Number.isFinite));
@@ -849,6 +853,18 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
     if (line.length < 4) return;
     const pts: [number, number][] = [...line.map(([x, z]): [number, number] => [x + (front ? o.out : -o.out), z]), ...line.slice().reverse().map(([x, z]): [number, number] => [x - (front ? o.d : -o.d), z])];
     kit.push(P(front ? 'front lip' : 'rear valance', { prism: { pts, L: o.t } }, [0, foot - o.t / 2, 0], { ...own, rot: [PI / 2, 0, 0], item: front ? 'front-lip' : 'rear-valance', joins: [front ? 'bumper cover' : 'rear bumper cover', front ? 'front fender' : 'rear quarter panel'], fixed: 'screwed up into the bumper cover\'s foot', says: `${front ? 'a lip under the front bumper' : 'a valance under the rear bumper'}, ${(o.d * 1000).toFixed(0)} mm deep: moulded ABS (typical)` }));
+    // (its side pieces down the bumper's corners: each a plate on the skin's side there, from the end back along the car,
+    // its top edge rising toward the end by `rise`, its foot hanging `sh` under that)
+    if (o.sd && o.sh) {
+      const far0 = end - (front ? 1 : -1) * o.sd, rise = o.rise ?? 0, lo0 = Math.min(end, far0), hi0 = Math.max(end, far0);
+      const near = s.pts.filter((q) => q.at[2] > 0.2 && q.at[0] > lo0 && q.at[0] < hi0 && q.at[1] > foot - 0.05 && q.at[1] < foot + rise + 0.3), z0 = Math.max(...near.map((q) => q.at[2]));
+      // (its end where the skin ends at its side, not at the middle: a rounded nose or tail turns back at its corners, and
+      // a piece run out to the middle's end hangs in the air past them)
+      const atSide = near.filter((q) => q.at[2] > z0 - 0.08), xEnd = atSide.length ? (front ? Math.max(...atSide.map((q) => q.at[0])) : Math.min(...atSide.map((q) => q.at[0]))) : end;
+      const e = xEnd + (front ? o.out : -o.out), far = xEnd - (front ? 1 : -1) * o.sd;
+      const side2: [number, number][] = [[e, foot + rise], [far, foot], [far, foot - o.sh], [e, foot + rise - o.sh]];
+      if (Number.isFinite(z0)) for (const sd of [-1, 1]) kit.push(P(`${front ? 'front lip' : 'rear valance'} side ${side(sd)}`, { prism: { pts: side2, L: o.t } }, [0, 0, sd * (z0 + o.t / 2)], { ...own, item: front ? 'front-lip' : 'rear-valance', joins: [front ? 'front lip' : 'rear valance', front ? 'bumper cover' : 'rear bumper cover'], fixed: 'screwed to the bumper cover\'s corner', says: `its side piece down the bumper's corner, ${(o.sd * 1000).toFixed(0)} mm along it: moulded ABS (typical)` }));
+    }
   };
   if (k.lip) plate(k.lip, true);
   if (k.valance) plate(k.valance, false);
@@ -1736,18 +1752,18 @@ export const MACHINES: Machine[] = [
     kit: { color: 0xaf2b36, flares: { w: 0.08, t: 0.02, from: 8, to: 172, every: 20, heads: 0xaf2b36 }, spoiler: { h: 0.1, d: 0.28, span: 0.86 },
       says: 'its owner\'s own: red bolt-on flares, a red ducktail spoiler (moulded ABS, typical), as in its owner\'s photographs' },
     says: MONTE_CARLO_04.says + '; this one its owner\'s, as it stands in their garage: its paint sanded back to primer, red flares, a red ducktail and red mirrors, its wheels black with a red lip' },
-  // (its body fitted to the goal picture by Picture to model, recipe I, 2026-10-29 (docs/RECONSTRUCT.md): its nose 0.474
-  // high, its roof ending 0.668 along it, its deck 0.783, its tail 0.746 and its deck 0.805 high, its roof 1.41 m and its
-  // body 135 mm over the ground; each the picture's (a made picture: how the goal is drawn, not a measurement of a car),
-  // each ± in the doc; its windscreen's foot, roof's start and cowl's height kept, the picture not fixing them)
+  // (its body and kit fitted to the goal picture by Picture to model, 2026-10-29 (docs/RECONSTRUCT.md, third round): its
+  // outline by recipe I, then its features one group at a time (Geometry fitted to its features), its intake and vent
+  // taken off the picture onto its surface. Each the picture's (a made picture: how the goal is drawn, not a measurement
+  // of a car), each ± in the doc; a figure the picture did not fix kept as it was)
   { ...MONTE_CARLO_04, id: 'montecarlo04-kit', short: 'monte carlo custom', name: 'Chevrolet Monte Carlo SS (2004), black with a red body kit', color: 0x141416,
-    H: 1.41, clearance: 0.135, lines: { ...MONTE_CARLO_04.lines!, nose: 0.474, roofR: 0.668, deck: 0.783, tail: 0.746, deckH: 0.805 },
+    H: 1.43, clearance: 0.13, lines: { ...MONTE_CARLO_04.lines!, nose: 0.515, cowl: 0.281, roofF: 0.434, roofR: 0.646, deck: 0.774, tail: 0.762, cowlH: 0.706, deckH: 0.835, belt: 0.641, dloR: 0.68, doorR: 0.584, face: { ...MONTE_CARLO_04.lines!.face, lamp: 0.104, wrap: 0.385 } },
     axles: MONTE_CARLO_04.axles.map((a) => ({ ...a, tyre: '245/35R20' })),
     rims: { ...MONTE_CARLO_04.rims, color: 0x18181a, accent: 0xb3121f, lip: 0xb3121f, cap: 0x1a1a1c },
-    kit: { color: 0xb3121f, flares: { w: 0.075, t: 0.018, from: 14, to: 166, every: 16 }, skirts: { h: 0.075, t: 0.03 }, lip: { d: 0.12, t: 0.02, out: 0.012 }, valance: { d: 0.1, t: 0.018, out: 0.008 },
-      scoop: [[0.905, 0.798], [0.435, 0.811], [0.448, 0.757], [0.544, 0.563], [0.622, 0.397], [0.87, 0.37], [0.87, 0.397], [0.675, 0.428], [0.574, 0.631], [0.509, 0.757], [0.905, 0.757]],
-      vent: [[0.905, 0.757], [0.509, 0.757], [0.574, 0.631], [0.675, 0.428], [0.87, 0.397]],
-      wing: { chord: 0.3, h: 0.17, span: 0.92, pitch: 8, back: 0.06, color: 0x141416 },
+    kit: { color: 0xb3121f, flares: { w: 0.066, t: 0.0096, from: 27, to: 160, every: 16 }, skirts: { h: 0.109, t: 0.03 }, lip: { d: 0.12, t: 0.02, out: 0.016, sd: 0.6, sh: 0.09, rise: 0 }, valance: { d: 0.1, t: 0.018, out: 0.008, sd: 0.52, sh: 0.07, rise: 0.11 },
+      scoop: [[0.874, 0.799], [0.405, 0.818], [0.399, 0.737], [0.464, 0.618], [0.55, 0.498], [0.643, 0.428], [0.872, 0.404], [0.845, 0.442], [0.777, 0.461], [0.698, 0.539], [0.619, 0.653], [0.568, 0.767], [0.851, 0.764]],
+      vent: [[0.851, 0.764], [0.568, 0.767], [0.619, 0.653], [0.698, 0.539], [0.777, 0.461], [0.845, 0.442]],
+      wing: { chord: 0.15, h: 0.05, span: 0.686, pitch: 8, back: 0.275, color: 0x141416 },
       says: 'its body kit as in its owner\'s photograph: red flares, skirts, lip, valance and scoop inserts, a black wing with red end plates and uprights; each piece\'s size read off the photograph (estimates), moulded ABS (typical)' },
     says: MONTE_CARLO_04.says + '; this one gloss black, with a red body kit and black and red 20-in. wheels, as in its owner\'s photograph' },
   {

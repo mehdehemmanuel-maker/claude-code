@@ -17,15 +17,15 @@
 // Nothing here guesses silently: a figure the photographs do not fix stays the estimate it was, and says so.
 
 import * as THREE from 'three';
-import { unzlibSync } from 'fflate';
+import { unzlibSync, zlibSync } from 'fflate';
 import { layout } from './make/space';
 import { geometry } from './view/kit3d';
 import { minimize } from './numeric';
 import type { Part, V3 } from './kits';
 import { tessellate, type Patch } from './surface';
-import { PHOTOS, photoOf, type Mark } from './photo-marks';
+import { PHOTOS, photoOf, type Mark, type Trace } from './photo-marks';
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
-import { makeMachine, tyreOf, bodyPlanOf, bodyKit, type Machine } from './machines';
+import { makeMachine, tyreOf, bodyPlanOf, bodyKit, type Machine, type BodyKit } from './machines';
 import { bodyPanels } from './panels';
 
 // ---- images -----------------------------------------------------------------------------------------------------------
@@ -237,6 +237,145 @@ export function twoSided(model: Uint8Array, T: Target): { err: number; toModel: 
   return { err: (a + b) / 2, toModel: a, toTarget: b, iou: inter / Math.max(1, uni) };
 }
 
+// ---- seeing the model as the picture does ------------------------------------------------------------------------------
+/** The model seen from a camera as a picture is: at each pixel which part is nearest (its index in `names`, -1 none), how
+ *  far (along the camera's axis, m), and its colour shaded by a light from over the camera's shoulder (Lambert, both
+ *  faces lit). From the same camera as the picture, so it is set against the picture the right way round, feature by
+ *  feature. */
+export interface View { w: number; h: number; depth: Float32Array; id: Int32Array; names: string[]; rgb: Uint8Array; camera: Camera }
+export function renderView(root: Part, c: Camera, skip?: RegExp, coarse?: number): View {
+  const { w, h } = c, depth = new Float32Array(w * h).fill(Infinity), id = new Int32Array(w * h).fill(-1), rgb = new Uint8Array(w * h * 3), names: string[] = [], B = basis(c), v = new THREE.Vector3(), kept = coarse ? (coarser.get(coarse) ?? coarser.set(coarse, new WeakMap()).get(coarse)!) : geos;
+  const L = unit([-B.fw[0] + 0.6 * B.up[0] - 0.3 * B.rt[0], -B.fw[1] + 0.6 * B.up[1] - 0.3 * B.rt[1], -B.fw[2] + 0.6 * B.up[2] - 0.3 * B.rt[2]]);
+  for (const n of layout(root)) {
+    const p = n.p; if (!p.shape || (skip && skip.test(p.name))) continue;
+    let g = kept.get(p.shape); if (g === undefined) { try { g = coarse && 'surf' in p.shape ? coarseSurf(p.shape.surf, coarse) : geometry(p.shape, p.mat, p.make, p.facets); } catch { g = null; } kept.set(p.shape, g); }
+    if (!g) continue;
+    const k = names.length; names.push(p.name); const col = p.color ?? 0x8a8d91, cr = (col >> 16) & 255, cg = (col >> 8) & 255, cb = col & 255;
+    const pos = g.attributes.position!, idx = g.index, W: V3[] = [], pr: ([number, number, number] | null)[] = [];
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(n.m); const q: V3 = [v.x, v.y, v.z]; W.push(q); pr.push(project(c, q, B)); }
+    const tri = (a: number, b: number, d: number) => {
+      const A = pr[a], Bq = pr[b], C = pr[d]; if (!A || !Bq || !C) return;
+      const nn = unit(cross(sub(W[b]!, W[a]!), sub(W[d]!, W[a]!))), lam = 0.32 + 0.68 * Math.abs(dot(nn, L));
+      const x0 = Math.max(0, Math.floor(Math.min(A[0], Bq[0], C[0]))), x1 = Math.min(w - 1, Math.ceil(Math.max(A[0], Bq[0], C[0]))), y0 = Math.max(0, Math.floor(Math.min(A[1], Bq[1], C[1]))), y1 = Math.min(h - 1, Math.ceil(Math.max(A[1], Bq[1], C[1])));
+      const e = (P: number[], Q: number[], x: number, y: number) => (Q[0]! - P[0]!) * (y - P[1]!) - (Q[1]! - P[1]!) * (x - P[0]!), area = e(A, Bq, C[0], C[1]); if (Math.abs(area) < 1e-9) return;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const px = x + 0.5, py = y + 0.5, wa = e(Bq, C, px, py) / area, wb = e(C, A, px, py) / area, wc = e(A, Bq, px, py) / area; if (wa < 0 || wb < 0 || wc < 0) continue;
+        // (depth across the triangle as the picture has it: its reciprocal is what varies evenly across the screen)
+        const z = 1 / (wa / A[2] + wb / Bq[2] + wc / C[2]), i = y * w + x; if (z >= depth[i]!) continue;
+        depth[i] = z; id[i] = k; rgb[i * 3] = Math.min(255, cr * lam + 18 * lam); rgb[i * 3 + 1] = Math.min(255, cg * lam + 18 * lam); rgb[i * 3 + 2] = Math.min(255, cb * lam + 18 * lam); }
+    };
+    if (idx) for (let i = 0; i < idx.count; i += 3) tri(idx.getX(i), idx.getX(i + 1), idx.getX(i + 2)); else for (let i = 0; i < pos.count; i += 3) tri(i, i + 1, i + 2);
+  }
+  return { w, h, depth, id, names, rgb, camera: c };
+}
+/** How far every pixel is from the nearest of a set of pixels (a two-pass 3–4 chamfer, Borgefors 1986), in pixels. */
+export function distTo(set: Uint8Array, w: number, h: number): Float32Array {
+  const d = new Float32Array(w * h); for (let i = 0; i < w * h; i++) d[i] = set[i] ? 0 : 1e9;
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 1e9 : d[y * w + x]!);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; d[i] = Math.min(d[i]!, at(x - 1, y) + 3, at(x, y - 1) + 3, at(x - 1, y - 1) + 4, at(x + 1, y - 1) + 4); }
+  for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) { const i = y * w + x; d[i] = Math.min(d[i]!, at(x + 1, y) + 3, at(x, y + 1) + 3, at(x + 1, y + 1) + 4, at(x - 1, y + 1) + 4); }
+  for (let i = 0; i < w * h; i++) d[i] = d[i]! / 3; return d;
+}
+/** A mask's own edge: its pixels with a neighbour outside it. */
+export function rim(m: Uint8Array, w: number, h: number): Uint8Array {
+  const r = new Uint8Array(w * h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; if (m[i] && ((x > 0 && !m[i - 1]) || (x < w - 1 && !m[i + 1]) || (y > 0 && !m[i - w]) || (y < h - 1 && !m[i + w]) || x === 0 || y === 0 || x === w - 1 || y === h - 1)) r[i] = 1; }
+  return r;
+}
+
+// ---- features, one by one ------------------------------------------------------------------------------------------------
+export interface FeatureRow { feature: string; found: boolean; iou: number; centrePx: number; centreMm: number; edgePx: number; edgeMm: number; area: number; du: number; dv: number; says: string }
+/** Each traced feature against the model's own part of that name as the same camera sees it (only what is not hidden
+ *  behind something nearer counts, and only near where the feature is traced, so a car's other wheel is not this one):
+ *  their overlap, how far apart their middles are (and which way: du + the model's is to the right, dv + below), the
+ *  mean distance between their edges both ways, and the model's area over the traced one; in pixels and in mm at the
+ *  scale given. A traced point (a handle) against the middle of the model's part near it. */
+export function compareFeatures(view: View, traces: Trace[], mmPx: number): FeatureRow[] {
+  const { w, h } = view;
+  return traces.map((t): FeatureRow => {
+    const re = new RegExp(t.parts), ids = new Set(view.names.flatMap((n, i) => (re.test(n) ? [i] : [])));
+    const pts = t.poly ?? (t.at ? [t.at] : []), xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys), pad = Math.max(40, 0.6 * Math.max(bw, bh));
+    const X0 = Math.max(0, Math.floor(Math.min(...xs) - pad)), X1 = Math.min(w - 1, Math.ceil(Math.max(...xs) + pad)), Y0 = Math.max(0, Math.floor(Math.min(...ys) - pad)), Y1 = Math.min(h - 1, Math.ceil(Math.max(...ys) + pad));
+    const mm = new Uint8Array(w * h); let n = 0, sx = 0, sy = 0;
+    for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) { const i = y * w + x; if (ids.has(view.id[i]!)) { mm[i] = 1; n++; sx += x + 0.5; sy += y + 0.5; } }
+    if (!n) return { feature: t.name, found: false, iou: 0, centrePx: NaN, centreMm: NaN, edgePx: NaN, edgeMm: NaN, area: 0, du: NaN, dv: NaN, says: ids.size ? 'the model has it, but it is hidden or elsewhere from this camera' : 'the model has no such part' };
+    const cx = sx / n, cy = sy / n;
+    if (!t.poly) { const du = cx - t.at![0], dv = cy - t.at![1], c = Math.hypot(du, dv); return { feature: t.name, found: true, iou: NaN, centrePx: c, centreMm: c * mmPx, edgePx: NaN, edgeMm: NaN, area: NaN, du, dv, says: 'a point: the middle of the model\'s part near it' }; }
+    const tm = polygonMask(t.poly, w, h); let inter = 0, uni = 0, tn = 0, tx = 0, ty = 0;
+    for (let i = 0; i < w * h; i++) { const a = mm[i], b = tm[i]; if (a && b) inter++; if (a || b) uni++; if (b) { tn++; tx += (i % w) + 0.5; ty += Math.floor(i / w) + 0.5; } }
+    const dm = distTo(rim(mm, w, h), w, h), dt = distTo(rim(tm, w, h), w, h), rm = rim(mm, w, h), rt = rim(tm, w, h); let a = 0, na = 0, b = 0, nb = 0;
+    for (let i = 0; i < w * h; i++) { if (rt[i]) { a += dm[i]!; na++; } if (rm[i]) { b += dt[i]!; nb++; } }
+    const du = cx - tx / tn, dv = cy - ty / tn, c = Math.hypot(du, dv), e = (a / Math.max(1, na) + b / Math.max(1, nb)) / 2;
+    return { feature: t.name, found: true, iou: inter / Math.max(1, uni), centrePx: c, centreMm: c * mmPx, edgePx: e, edgeMm: e * mmPx, area: n / Math.max(1, tn), du, dv, says: '' };
+  });
+}
+
+// ---- edges inside the outline ---------------------------------------------------------------------------------------------
+/** The model's own edges as the camera sees them: where the nearest part changes, or the depth jumps (a panel standing
+ *  proud of the next), or the shade turns sharply (a crease). */
+export function viewEdges(v: View): Uint8Array {
+  const { w, h } = v, e = new Uint8Array(w * h), L = (i: number) => v.rgb[i * 3]! + v.rgb[i * 3 + 1]! + v.rgb[i * 3 + 2]!;
+  for (let y = 0; y < h - 1; y++) for (let x = 0; x < w - 1; x++) { const i = y * w + x;
+    for (const j of [i + 1, i + w]) { if (v.id[i]! < 0 && v.id[j]! < 0) continue;
+      if (v.id[i] !== v.id[j] || Math.abs(v.depth[i]! - v.depth[j]!) > 0.02 * Math.min(v.depth[i]!, v.depth[j]!) || Math.abs(L(i) - L(j)) > 90) { e[i] = 1; break; } } }
+  return e;
+}
+export interface EdgeReport { precision: number; recall: number; modelToPicture: number; pictureToModel: number; cells: { cell: string; error: number; parts: string }[] }
+/** The model's edges against the picture's (Sobel's, over `strong`), inside the thing's outline (and a few pixels round
+ *  it): how many of the model's edges have a picture edge within `near` pixels (precision) and the picture's a model edge
+ *  (recall), the mean distance each way (capped at 20 px, so one missing feature does not swamp the rest), and the thing
+ *  cut in a 6 × 3 grid with each cell's error and the model's parts on its edges there, worst first: where the model's
+ *  windows, seams, vents and creases are not where the picture's are. The picture's edges include its reflections and
+ *  shadows, which no model has: its recall is a floor, not a score. */
+export function compareEdges(v: View, img: Img, outline: { u: number; v: number }[], o: { strong?: number; near?: number } = {}): EdgeReport {
+  const { w, h } = v, k = w / img.w, g = gradient(img), strong = o.strong ?? 160, near = o.near ?? 3;
+  const T = targetOf(outline, img.w, img.h, k), inside = (i: number) => T.mask[i] || T.dt[i]! <= 4;
+  const pe = new Uint8Array(w * h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; if (!inside(i)) continue; const gi = Math.min(img.h - 1, Math.round((y + 0.5) / k)) * img.w + Math.min(img.w - 1, Math.round((x + 0.5) / k)); if (g[gi]! > strong) pe[i] = 1; }
+  const me = viewEdges(v); for (let i = 0; i < w * h; i++) if (!inside(i)) me[i] = 0;
+  const dP = distTo(pe, w, h), dM = distTo(me, w, h), cap = (d: number) => Math.min(20, d);
+  const xs = T.pts.map((p) => p.u), ys = T.pts.map((p) => p.v), X0 = Math.min(...xs), X1 = Math.max(...xs), Y0 = Math.min(...ys), Y1 = Math.max(...ys);
+  const cells = Array.from({ length: 18 }, () => ({ s: 0, n: 0, parts: new Map<string, number>() }));
+  const cellOf = (x: number, y: number) => Math.min(5, Math.max(0, Math.floor(((x - X0) / Math.max(1, X1 - X0)) * 6))) + 6 * Math.min(2, Math.max(0, Math.floor(((y - Y0) / Math.max(1, Y1 - Y0)) * 3)));
+  let mt = 0, mn = 0, mp = 0, pt = 0, pn = 0, pr = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x;
+    if (me[i]) { mt += cap(dP[i]!); mn++; if (dP[i]! <= near) mp++; const c = cells[cellOf(x, y)]!; c.s += cap(dP[i]!); c.n++; const nm = v.names[v.id[i]!] ?? ''; if (nm) c.parts.set(nm, (c.parts.get(nm) ?? 0) + 1); }
+    if (pe[i]) { pt += cap(dM[i]!); pn++; if (dM[i]! <= near) pr++; const c = cells[cellOf(x, y)]!; c.s += cap(dM[i]!); c.n++; } }
+  const cols = ['its front', 'its front wheel', 'ahead of its door', 'its door', 'its rear quarter', 'its tail'], rows = ['top', 'middle', 'bottom'];
+  return { precision: mp / Math.max(1, mn), recall: pr / Math.max(1, pn), modelToPicture: (mt / Math.max(1, mn)) / k, pictureToModel: (pt / Math.max(1, pn)) / k,
+    cells: cells.map((c, j) => ({ cell: `${rows[Math.floor(j / 6)]} of ${cols[j % 6]}`, error: c.n ? c.s / c.n / k : 0, parts: [...c.parts].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n]) => n).join(', ') })).filter((c) => c.error > 0).sort((a, b) => b.error - a.error) };
+}
+
+// ---- onto the model's own surface ----------------------------------------------------------------------------------------
+/** Where a pixel's ray meets the model's surface as the view saw it (its depth there), or, where the model has nothing
+ *  at that pixel, the plane at depth `z`: the picture's point put back on the thing in 3D. */
+export function onSurface(v: View, u: number, vv: number, z?: number): V3 | null {
+  const c = v.camera, B = basis(c), x = Math.min(v.w - 1, Math.max(0, Math.round(u))), y = Math.min(v.h - 1, Math.max(0, Math.round(vv))), d = v.depth[y * v.w + x]!, zz = Number.isFinite(d) ? d : z; if (zz === undefined) return null;
+  const a = (u - c.w / 2) / c.f, b = -(vv - c.h / 2) / c.f; return [0, 1, 2].map((j) => c.eye[j]! + zz * (B.fw[j]! + a * B.rt[j]! + b * B.up[j]!)) as V3;
+}
+
+// ---- a picture written ----------------------------------------------------------------------------------------------------
+/** RGB pixels written as a PNG (8-bit truecolour, no filter), to keep or show. */
+export function encodePng(w: number, h: number, rgb: Uint8Array): Uint8Array {
+  const raw = new Uint8Array((w * 3 + 1) * h); for (let y = 0; y < h; y++) raw.set(rgb.subarray(y * w * 3, (y + 1) * w * 3), y * (w * 3 + 1) + 1);
+  const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b: Uint8Array) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255]! ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type: string, data: Uint8Array) => { const out = new Uint8Array(12 + data.length), dv = new DataView(out.buffer); dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i); out.set(data, 8); dv.setUint32(8 + data.length, crc(out.subarray(4, 8 + data.length))); return out; };
+  const hd = new Uint8Array(13), dv = new DataView(hd.buffer); dv.setUint32(0, w); dv.setUint32(4, h); hd[8] = 8; hd[9] = 2;
+  const parts = [Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10), chunk('IHDR', hd), chunk('IDAT', zlibSync(raw)), chunk('IEND', new Uint8Array(0))], all = new Uint8Array(parts.reduce((a, p) => a + p.length, 0)); let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
+  return all;
+}
+/** The picture and the model side by side from the same camera, and the picture with each traced feature's edge (green)
+ *  and the model's part's edge (red) over it: what a person looks at to see where the model is wrong. */
+export function sideBySide(img: Img, v: View, traces: Trace[]): { w: number; h: number; rgb: Uint8Array } {
+  const k = v.w / img.w, W = v.w, H = v.h, out = new Uint8Array(W * 3 * H * 3), put = (panel: number, x: number, y: number, r: number, g: number, b: number) => { const i = (y * W * 3 + panel * W + x) * 3; out[i] = r; out[i + 1] = g; out[i + 2] = b; };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const s = (Math.min(img.h - 1, Math.floor((y + 0.5) / k)) * img.w + Math.min(img.w - 1, Math.floor((x + 0.5) / k))) * 4, i = y * W + x;
+    put(0, x, y, img.rgba[s]!, img.rgba[s + 1]!, img.rgba[s + 2]!);
+    if (v.id[i]! >= 0) put(1, x, y, v.rgb[i * 3]!, v.rgb[i * 3 + 1]!, v.rgb[i * 3 + 2]!); else put(1, x, y, 236, 238, 240);
+    put(2, x, y, img.rgba[s]! * 0.55, img.rgba[s + 1]! * 0.55, img.rgba[s + 2]! * 0.55); }
+  for (const t of traces) { if (!t.poly) continue; const tm = rim(polygonMask(t.poly.map(([u, vv]) => [u * k, vv * k]), W, H), W, H), re = new RegExp(t.parts), mm = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) if (v.id[i]! >= 0 && re.test(v.names[v.id[i]!]!)) mm[i] = 1;
+    const mr = rim(mm, W, H); for (let i = 0; i < W * H; i++) { if (mr[i]) put(2, i % W, Math.floor(i / W), 255, 40, 40); if (tm[i]) put(2, i % W, Math.floor(i / W), 40, 255, 80); } }
+  return { w: W * 3, h: H, rgb: out };
+}
+
 // ---- a vehicle seen many times over --------------------------------------------------------------------------------------
 /** What fitting may move. Its body lines (LINE_KEYS); its proportions: how far its body runs past each axle (its overhangs,
  *  the body made longer or shorter round wheels that stay where they are); and the camera along the one family of
@@ -246,43 +385,69 @@ export function twoSided(model: Uint8Array, T: Target): { err: number; toModel: 
  *  bigger wheels and a lower car than its record (the Monte Carlo's goal picture does), and a camera solved from wheels of
  *  the wrong size is wrong with them. Its details: its roof's height, and its kit's wing (how high over the deck, how far
  *  ahead of the tail, how deep its blade) and front lip (how deep). */
-export type Free = 'lines' | 'proportion' | 'stance' | 'camera' | 'details';
+export type Free = 'lines' | 'proportion' | 'stance' | 'camera' | 'details' | 'features';
 export interface Key { key: string; x0: number; lo: number; hi: number; step: number; group: Free }
 export const LINE_KEYS: Record<string, [number, number, number]> = { nose: [0.4, 0.7, 0.02], cowl: [0.2, 0.36, 0.01], roofF: [0.33, 0.5, 0.01], roofR: [0.55, 0.72, 0.01], deck: [0.7, 0.88, 0.01], tail: [0.6, 0.85, 0.02], belt: [0.55, 0.75, 0.01], cowlH: [0.6, 0.82, 0.01], deckH: [0.68, 0.9, 0.01] };
 /** What a side view hides behind its skin (a wheelhouse's liners, a lamp's walls and back, a shut line's strip). */
 const HIDDEN = /wheelhouse|inner|wall$|back$|shut line/;
+/** The kit's own figures a fit may move, each by its piece and field, its range and its first step. */
+export const KIT_KEYS: Record<string, [string, string, number, number, number]> = {
+  'flare width': ['flares', 'w', 0.03, 0.15, 0.01], 'flare thickness': ['flares', 't', 0.008, 0.05, 0.004], 'flare from': ['flares', 'from', 0, 40, 3], 'flare to': ['flares', 'to', 140, 180, 3],
+  'skirt height': ['skirts', 'h', 0.03, 0.15, 0.01], 'lip depth': ['lip', 'd', 0.04, 0.2, 0.01], 'lip out': ['lip', 'out', 0, 0.06, 0.005], 'valance depth': ['valance', 'd', 0.04, 0.2, 0.01],
+  'lip side length': ['lip', 'sd', 0.1, 0.7, 0.03], 'lip side height': ['lip', 'sh', 0.03, 0.16, 0.01], 'valance side length': ['valance', 'sd', 0.1, 0.8, 0.03], 'valance side height': ['valance', 'sh', 0.03, 0.16, 0.01], 'valance side rise': ['valance', 'rise', 0, 0.3, 0.02],
+  'wing height': ['wing', 'h', 0.05, 0.3, 0.02], 'wing back': ['wing', 'back', -0.05, 0.3, 0.02], 'wing chord': ['wing', 'chord', 0.15, 0.4, 0.02], 'wing span': ['wing', 'span', 0.6, 1, 0.03], 'wing pitch': ['wing', 'pitch', 0, 20, 2],
+};
+/** Body lines a side view's windows and door fix (beyond LINE_KEYS): where its side glass ends and its door's top rear
+ *  corner is, as shares of its length from its nose. */
+export const GLASS_KEYS: Record<string, [number, number, number]> = { dloR: [0.6, 0.76, 0.006], doorR: [0.5, 0.66, 0.006] };
+/** Its lamps' figures (its face's, in its lines): its headlamps' height, its tail lamps' height and how far they wrap
+ *  forward along its sides, m. */
+export const FACE_KEYS: Record<string, ['lamp' | 'tail' | 'wrap', number, number, number]> = { 'headlamp height': ['lamp', 0.05, 0.2, 0.01], 'tail lamp height': ['tail', 0.08, 0.4, 0.02], 'tail lamp wrap': ['wrap', 0, 0.4, 0.03] };
 /** A vehicle made to be seen from one camera many times over: its body and kit made again for each trial of its figures
  *  (quickly: bodyPanels' `quick`), its wheels, which no figure moves, made once. */
 export class Rig {
-  readonly fa: number; readonly ra: number; readonly P0: V3; private readonly wheels: Part; private wheelMasks = new Map<string, Uint8Array>();
-  constructor(readonly m: Machine, readonly cam: Camera, full: Part = makeMachine(m)) {
+  readonly fa: number; readonly ra: number; readonly P0: V3; private wheelPart: Part | null = null; private wheelMasks = new Map<string, Uint8Array>();
+  constructor(readonly m: Machine, readonly cam: Camera, private full?: Part) {
     const xs = m.axles.filter((a) => a.track > 0).map((a) => a.x); this.fa = Math.max(...xs); this.ra = Math.min(...xs);
     const side = cam.eye[2] < 0 ? -1 : 1, cs = knownPoints(m, side).filter((k) => /centre/.test(k.name)).map((k) => k.world);
     this.P0 = [0, 1, 2].map((j) => cs.reduce((a, p) => a + p[j]!, 0) / Math.max(1, cs.length)) as V3;
-    this.wheels = { name: 'wheels', parts: (full.parts ?? []).filter((p) => / wheel$/.test(p.name)) } as Part;
   }
+  /** Its wheels as made (the whole vehicle made once, the first time they are asked for). */
+  private get wheels(): Part { return (this.wheelPart ??= { name: 'wheels', parts: ((this.full ??= makeMachine(this.m)).parts ?? []).filter((p) => / wheel$/.test(p.name)) } as Part); }
   /** The figures free in a fit, each at its value now, its range and its first step. */
   keys(free: Free[], lineKeys = Object.keys(LINE_KEYS)): Key[] {
     const out: Key[] = [], ln = (this.m.lines ?? {}) as unknown as Record<string, number>;
     if (free.includes('lines')) for (const key of lineKeys) { const r = LINE_KEYS[key]; if (r) out.push({ key, x0: Number(ln[key] ?? (r[0] + r[1]) / 2), lo: r[0], hi: r[1], step: r[2], group: 'lines' }); }
     if (free.includes('proportion')) { const fo = this.m.L / 2 - this.fa, ro = this.ra + this.m.L / 2; out.push({ key: 'front overhang', x0: fo, lo: fo * 0.6, hi: fo * 1.3, step: 0.03, group: 'proportion' }, { key: 'rear overhang', x0: ro, lo: ro * 0.6, hi: ro * 1.3, step: 0.03, group: 'proportion' }); }
     if (free.includes('stance')) { const t = tyreOf(this.m.axles[0]!.tyre)!; out.push({ key: 'tyre diameter', x0: t.D, lo: t.D * 0.85, hi: t.D * 1.25, step: 0.02, group: 'stance' }, { key: 'clearance', x0: this.m.clearance, lo: Math.max(0.04, this.m.clearance * 0.4), hi: this.m.clearance * 1.6, step: 0.01, group: 'stance' }); }
-    if (free.includes('details')) { const H = this.m.H, w = this.m.kit?.wing, lip = this.m.kit?.lip; out.push({ key: 'height', x0: H, lo: H * 0.95, hi: H * 1.08, step: 0.005, group: 'details' });
-      if (w) out.push({ key: 'wing height', x0: w.h, lo: 0.05, hi: 0.3, step: 0.02, group: 'details' }, { key: 'wing back', x0: w.back, lo: -0.05, hi: 0.3, step: 0.02, group: 'details' }, { key: 'wing chord', x0: w.chord, lo: 0.15, hi: 0.4, step: 0.02, group: 'details' });
-      if (lip) out.push({ key: 'lip depth', x0: lip.d, lo: 0.04, hi: 0.2, step: 0.01, group: 'details' }); }
+    if (free.includes('details')) { const H = this.m.H; out.push({ key: 'height', x0: H, lo: H * 0.95, hi: H * 1.08, step: 0.005, group: 'details' }, ...this.named(['wing height', 'wing back', 'wing chord', 'lip depth'], 'details')); }
     if (free.includes('camera')) out.push({ key: 'camera distance ×', x0: 1, lo: 0.08, hi: 12, step: 0.1, group: 'camera' }, { key: 'lens ×', x0: 1, lo: 0.8, hi: 1.25, step: 0.02, group: 'camera' }, { key: 'aim across, px', x0: 0, lo: -60, hi: 60, step: 4, group: 'camera' }, { key: 'aim up, px', x0: 0, lo: -60, hi: 60, step: 4, group: 'camera' });
     return out;
   }
+  /** Figures by name (a body line, a window's, a kit piece's), each at its value now; one its record does not have (a
+   *  kit with no wing) left out. */
+  named(names: string[], group: Free = 'features'): Key[] {
+    const ln = (this.m.lines ?? {}) as unknown as Record<string, number>, kit = (this.m.kit ?? {}) as unknown as Record<string, Record<string, number> | undefined>;
+    return names.flatMap((key): Key[] => {
+      const l = LINE_KEYS[key] ?? GLASS_KEYS[key]; if (l) return [{ key, x0: Number(ln[key] ?? (l[0] + l[1]) / 2), lo: l[0], hi: l[1], step: l[2], group }];
+      const fk = FACE_KEYS[key]; if (fk) { const now = (this.m.lines?.face as Record<string, number> | undefined)?.[fk[0]]; return [{ key, x0: Number(now ?? (fk[1] + fk[2]) / 2), lo: fk[1], hi: fk[2], step: fk[3], group }]; }
+      const k = KIT_KEYS[key]; if (!k || !kit[k[0]]) return []; const now = kit[k[0]]![k[1]];
+      return [{ key, x0: Number(now ?? (k[2] + k[3]) / 2), lo: k[2], hi: k[3], step: k[4], group }];
+    });
+  }
   /** The vehicle's record and the camera at figures x: its body shifted (dx, m) so its wheels stay where they were seen. */
   apply(keys: Key[], x: number[]): { machine: Machine; camera: Camera; dx: number } {
-    const v = new Map(keys.map((k, i) => [k.key, x[i]!])), lines = keys.filter((k) => k.group === 'lines');
+    const v = new Map(keys.map((k, i) => [k.key, x[i]!])), lines = keys.filter((k) => LINE_KEYS[k.key] || GLASS_KEYS[k.key]);
     let m: Machine = lines.length ? { ...this.m, lines: { ...this.m.lines!, ...Object.fromEntries(lines.map((k) => [k.key, v.get(k.key)!])) } } : this.m, dx = 0, camera = this.cam;
     if (v.has('front overhang') || v.has('rear overhang')) { const fo = v.get('front overhang') ?? this.m.L / 2 - this.fa, ro = v.get('rear overhang') ?? this.ra + this.m.L / 2, lo = this.ra - ro, hi = this.fa + fo; dx = (lo + hi) / 2; m = { ...m, L: hi - lo, axles: m.axles.map((a) => ({ ...a, x: a.x - dx })) }; }
     // (its tyres a size of the same width on the same rim, their sidewall what makes the diameter; its body over them)
     if (v.has('tyre diameter')) m = { ...m, axles: m.axles.map((a) => { const t = tyreOf(a.tyre); if (!t || !/^\D*\d{2,3}\/\d{2,3}/.test(a.tyre)) return a; const asp = Math.max(20, Math.min(90, Math.round(((v.get('tyre diameter')! - t.rim) / (2 * t.W)) * 100))); return { ...a, tyre: `${Math.round(t.W * 1000)}/${asp}R${Math.round(t.rim / 0.0254)}` }; }) };
     if (v.has('clearance')) m = { ...m, clearance: v.get('clearance')! };
     if (v.has('height')) m = { ...m, H: v.get('height')! };
-    if (m.kit && (v.has('wing height') || v.has('lip depth'))) { const k = m.kit; m = { ...m, kit: { ...k, ...(k.wing ? { wing: { ...k.wing, h: v.get('wing height') ?? k.wing.h, back: v.get('wing back') ?? k.wing.back, chord: v.get('wing chord') ?? k.wing.chord } } : {}), ...(k.lip ? { lip: { ...k.lip, d: v.get('lip depth') ?? k.lip.d } } : {}) } }; }
+    const fk = keys.filter((k) => FACE_KEYS[k.key]); if (fk.length && m.lines) m = { ...m, lines: { ...m.lines, face: { ...m.lines.face, ...Object.fromEntries(fk.map((k) => [FACE_KEYS[k.key]![0], v.get(k.key)!])) } } };
+    // (a kit piece's figures: each set on its piece, the rest of it as it was)
+    const kk = keys.filter((k) => KIT_KEYS[k.key]);
+    if (m.kit && kk.length) { const kit = { ...m.kit } as unknown as Record<string, unknown>; for (const k of kk) { const [piece, field] = KIT_KEYS[k.key]!; if (kit[piece]) kit[piece] = { ...(kit[piece] as object), [field]: v.get(k.key) }; } m = { ...m, kit: kit as unknown as BodyKit }; }
     // (a dolly zoom: the camera moved back along its own axis to k times its wheels' depth, its lens k times as long, so
     // everything in the plane through its wheels square to it is seen exactly as before)
     if (v.has('camera distance ×')) { const k = v.get('camera distance ×')!, c = camera, fw = basis(c).fw, back = (k - 1) * dot(sub(this.P0, c.eye), fw), mv = (q: V3): V3 => [q[0] - fw[0] * back, q[1] - fw[1] * back, q[2] - fw[2] * back]; camera = { ...c, eye: mv(c.eye), target: mv(c.target), f: c.f * k }; }
@@ -301,20 +466,28 @@ export class Rig {
       (x > this.fa ? out.front : x < this.ra ? out.rear : out.mid).push(p); }
     return (this.frozen = out);
   }
-  /** Its body, kit and wheels as a camera sees them at figures x, at scale s of the picture (coarse: see silhouette); its kit
-   *  fitted to the body at each trial (`live`), or held as first made and its ends slid with the overhangs (`frozen`). */
-  render(keys: Key[], x: number[], s: number, coarse?: number, kit: 'live' | 'frozen' = 'live', discs = keys.some((k) => k.group === 'stance')): Uint8Array {
-    const { machine, camera, dx } = this.apply(keys, x), c = scaled(camera, s), ps = bodyPanels(bodyPlanOf(machine), undefined, true), parts: Part[] = [{ name: 'body', at: [dx, 0, 0], parts: ps } as Part];
+  /** What the camera sees at figures x: its body and kit (fitted to the body each trial, `live`, or held as first made and
+   *  its ends slid with the overhangs, `frozen`), its wheels as the discs their tyres are where `discs`; and the camera. */
+  scene(keys: Key[], x: number[], kit: 'live' | 'frozen' = 'live', discs = false): { root: Part; camera: Camera; dx: number } {
+    const { machine, camera, dx } = this.apply(keys, x), ps = bodyPanels(bodyPlanOf(machine), undefined, true), parts: Part[] = [{ name: 'body', at: [dx, 0, 0], parts: ps } as Part];
     if (machine.kit && kit === 'live') ps.push(...bodyKit(machine, machine.kit, ps));
     else if (machine.kit) { const f = this.kitFrozen(), fo = this.m.L / 2 - this.fa, ro = this.ra + this.m.L / 2, v = new Map(keys.map((k, i) => [k.key, x[i]!])), dF = (v.get('front overhang') ?? fo) - fo, dR = (v.get('rear overhang') ?? ro) - ro;
       parts.push({ name: 'kit ahead', at: [dF, 0, 0], parts: f.front } as Part, { name: 'kit between', parts: f.mid } as Part, { name: 'kit behind', at: [-dR, 0, 0], parts: f.rear } as Part); }
-    // (its wheels as the discs their tyres are, side on, where their size is free; as made where it is not)
-    if (discs) { for (const a of machine.axles) { const t = tyreOf(a.tyre); if (!t || a.track <= 0) continue; for (const sd of [-1, 1]) parts.push({ name: 'tyre seen', shape: { cyl: [t.D / 2, t.W] }, at: [a.x + dx, t.D / 2, (sd * a.track) / 2], rot: [Math.PI / 2, 0, 0] } as Part); } return silhouette({ name: 'seen', parts } as Part, c, HIDDEN, coarse); }
-    const m = silhouette({ name: 'seen', parts } as Part, c, HIDDEN, coarse), wk = JSON.stringify([c, coarse ?? 0]);
+    if (discs) for (const a of machine.axles) { const t = tyreOf(a.tyre); if (!t || a.track <= 0) continue; for (const sd of [-1, 1]) parts.push({ name: 'tyre seen', shape: { cyl: [t.D / 2, t.W] }, at: [a.x + dx, t.D / 2, (sd * a.track) / 2], rot: [Math.PI / 2, 0, 0], color: 0x111111 } as Part); }
+    return { root: { name: 'seen', parts } as Part, camera, dx };
+  }
+  /** Its body, kit and wheels as a camera sees them at figures x, at scale s of the picture (coarse: see silhouette); its
+   *  wheels as the discs their tyres are where their size is free (`discs`), as made where it is not. */
+  render(keys: Key[], x: number[], s: number, coarse?: number, kit: 'live' | 'frozen' = 'live', discs = keys.some((k) => k.group === 'stance')): Uint8Array {
+    const sc = this.scene(keys, x, kit, discs), c = scaled(sc.camera, s), m = silhouette(sc.root, c, HIDDEN, coarse);
+    if (discs) return m;
+    const wk = JSON.stringify([c, coarse ?? 0]);
     let wm = this.wheelMasks.get(wk); if (!wm) { wm = silhouette(this.wheels, c, undefined, coarse); if (this.wheelMasks.size > 8) this.wheelMasks.clear(); this.wheelMasks.set(wk, wm); }
     for (let i = 0; i < m.length; i++) m[i] = m[i]! | wm[i]!;
     return m;
   }
+  /** The same, seen as a picture is (renderView): which part is at each pixel, how far, its shade; at scale s. */
+  view(keys: Key[], x: number[], s: number, coarse?: number): View { const sc = this.scene(keys, x, 'live', true); return renderView(sc.root, scaled(sc.camera, s), HIDDEN, coarse); }
 }
 
 // ---- fitting figures to what is seen -----------------------------------------------------------------------------------
@@ -328,6 +501,95 @@ export function fitBy(cost: (x: number[]) => number, keys: { x0: number; lo: num
   const pm = keys.map((k, i) => { const at = (d: number) => { const x = best.x.slice(); x[i] = Math.min(k.hi, Math.max(k.lo, x[i]! + d)); evals++; return cost(x); };
     const up = at(k.step), dn = at(-k.step), curv = (up + dn - 2 * best.value) / (k.step * k.step); return curv > 1e-9 ? Math.sqrt(2 / curv) : Infinity; });
   return { x: best.x, before, after: best.value, pm, fixed: keys.map((k, i) => pm[i]! < (k.hi - k.lo) / 2), evaluations: evals };
+}
+
+// ---- correcting the geometry feature by feature ------------------------------------------------------------------------
+/** What owns each feature: the figures that move it (its windows by its body lines, its flares by the kit's flares …). */
+export const FEATURE_FIT: { features: RegExp; keys: string[]; says: string }[] = [
+  { features: /glass|door/, keys: ['belt', 'roofF', 'roofR', 'cowl', 'dloR', 'doorR'], says: 'its windows and door: its belt, its roof\'s ends, its windscreen\'s foot, where its side glass ends and its door\'s top rear corner' },
+  { features: /flare/, keys: ['flare width', 'flare thickness', 'flare from', 'flare to'], says: 'its flares: how wide, how proud, round from and to where' },
+  { features: /wing/, keys: ['wing height', 'wing back', 'wing chord', 'wing span', 'wing pitch'], says: 'its wing: how high, how far ahead of the tail, how deep, how wide, its pitch' },
+  { features: /lamp/, keys: ['headlamp height', 'tail lamp height', 'tail lamp wrap'], says: 'its lamps: how tall, and how far its tail lamps wrap round its sides' },
+  { features: /skirt|lip|valance/, keys: ['skirt height', 'lip out', 'lip side length', 'lip side height', 'valance side length', 'valance side height', 'valance side rise'], says: 'its skirts, its lip and valance and their side pieces' },
+];
+/** A feature's error as one number: the mean distance between its edges both ways and half the distance between its
+ *  middles, px; one the model does not have, or hides, counted as 30 px (so it is looked for, not ignored). */
+const featureCost = (rows: FeatureRow[]) => rows.reduce((a, r) => a + (r.found && Number.isFinite(r.edgePx) ? r.edgePx + 0.5 * r.centrePx : r.found ? r.centrePx : 30), 0) / Math.max(1, rows.length);
+export interface FeatureFit { group: string; features: string; before: number; after: number; trials: number; figures: { figure: string; was: number; now: number; pm: number; fixed: boolean }[] }
+/** Each feature group's figures moved so the model's own parts meet the traced features as the camera sees them: its
+ *  windows and door, its flares, its wing, its skirts, lip and valance, one group at a time, each by the features it owns
+ *  and the outline together (so a window is not put right by putting the roof wrong). At scale s of the picture. */
+export function fitFeatures(rig: Rig, traces: Trace[], outline: { u: number; v: number }[], w: number, h: number, o: { scale?: number; most?: number } = {}): { keys: Key[]; x: number[]; groups: FeatureFit[] } {
+  const s = o.scale ?? 0.5, T = targetOf(outline, w, h, s), trs = traces.map((t) => ({ ...t, ...(t.poly ? { poly: t.poly.map(([u, v]) => [u * s, v * s] as [number, number]) } : {}), ...(t.at ? { at: [t.at[0] * s, t.at[1] * s] as [number, number] } : {}) }));
+  const keys = rig.named([...new Set(FEATURE_FIT.flatMap((g) => g.keys))]); let x = keys.map((k) => k.x0); const groups: FeatureFit[] = [];
+  for (const g of FEATURE_FIT) {
+    const mine = trs.filter((t) => g.features.test(t.name)), idx = keys.flatMap((k, j) => (g.keys.includes(k.key) ? [j] : [])); if (!mine.length || !idx.length) continue;
+    const full = (q: number[]) => { const y = x.slice(); idx.forEach((j, n) => (y[j] = q[n]!)); return y; };
+    const cost = (q: number[]) => { const v = rig.view(keys, full(q), s), m = new Uint8Array(v.w * v.h); for (let i = 0; i < m.length; i++) m[i] = v.id[i]! >= 0 ? 1 : 0; return (featureCost(compareFeatures(v, mine, 1)) + twoSided(m, T).err) / s; };
+    const f = fitBy(cost, idx.map((j) => keys[j]!), { x0: idx.map((j) => x[j]!), most: o.most ?? 30 }); x = full(f.x);
+    groups.push({ group: g.says, features: mine.map((t) => t.name).join(', '), before: f.before, after: f.after, trials: f.evaluations, figures: idx.map((j, n) => ({ figure: keys[j]!.key, was: keys[j]!.x0, now: f.fixed[n] ? f.x[n]! : keys[j]!.x0, pm: f.pm[n]!, fixed: f.fixed[n]! })) });
+    // (a figure the picture does not fix goes back to what it was: nothing guessed is kept as found)
+    idx.forEach((j, n) => { if (!f.fixed[n]) x[j] = keys[j]!.x0; });
+  }
+  return { keys, x, groups };
+}
+/** A side intake's outline taken straight off the picture: each traced point's ray put onto the model's own surface where
+ *  it meets it (else onto the plane at the median depth of those that did), and said as the kit says it, m ahead of the
+ *  rear axle and over the ground. Not fitted: reconstructed. */
+export function outlineOnto(v: View, poly: [number, number][], k: number, ra: number): [number, number][] {
+  const hits = poly.map(([u, vv]) => { const x = Math.round(u * k), y = Math.round(vv * k), d = v.depth[Math.min(v.h - 1, Math.max(0, y)) * v.w + Math.min(v.w - 1, Math.max(0, x))]!; return Number.isFinite(d) ? d : NaN; }), ok = hits.filter(Number.isFinite).sort((a, b) => a - b), z = ok[Math.floor(ok.length / 2)];
+  return poly.flatMap(([u, vv]) => { const P = onSurface(v, u * k, vv * k, z); return P ? [[+(P[0] - ra).toFixed(3), +P[1].toFixed(3)] as [number, number]] : []; });
+}
+
+// ---- how right it is, four ways --------------------------------------------------------------------------------------------
+export interface Accuracy { objectives: { objective: string; measure: string; value: number | string; unit: string; notes: string }[]; features: FeatureRow[]; regions: EdgeReport['cells']; dimensions: { dimension: string; picture: number | string; model: number; published: number; differs: number | string; evidence: string }[]; orientation: string }
+/** The model against the picture from the picture's own camera, as four separate answers, never one blended score:
+ *  its silhouette (does the outline match?), its features (are its windows, seams, wheels, vents, wing where the picture's
+ *  are, and their shape?), its surface (its edges inside the outline: creases, seams, panel edges; and what one view
+ *  cannot show at all: depth, curvature, thickness, the far side), and its dimensions (the model's figures against the
+ *  published ones and against the picture's, read through the camera). And whether it faces the way the picture's does. */
+export function accuracy(v: View, img: Img, outline: { name: string; u: number; v: number }[], traces: Trace[], marks: { name: string; u: number; v: number }[], m: Machine, pub: Machine, concept: boolean): Accuracy {
+  const k = v.w / img.w, mmPx = mmPerPx(v.camera) / 1, T = targetOf(outline, img.w, img.h, k), mask = new Uint8Array(v.w * v.h); for (let i = 0; i < mask.length; i++) mask[i] = v.id[i]! >= 0 ? 1 : 0;
+  const sil = twoSided(mask, T), trs = traces.map((t) => ({ ...t, ...(t.poly ? { poly: t.poly.map(([u, vv]) => [u * k, vv * k] as [number, number]) } : {}), ...(t.at ? { at: [t.at[0] * k, t.at[1] * k] as [number, number] } : {}) }));
+  const feats = compareFeatures(v, trs, mmPx).map((r) => ({ ...r, centrePx: r.centrePx / k, edgePx: r.edgePx / k, du: r.du / k, dv: r.dv / k })), found = feats.filter((r) => r.found);
+  const edges = compareEdges(v, img, outline), mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+  // (the way it faces: the model's lamps where the picture's are, front and back, not swapped)
+  const at = (n: string) => feats.find((r) => r.feature === n), hl = traces.find((t) => t.name === 'headlamp'), tl = traces.find((t) => t.name === 'tail lamp');
+  const cx = (t: Trace) => mean((t.poly ?? [t.at!]).map((p) => p[0])), mh = at('headlamp'), mt = at('tail lamp');
+  const orientation = hl && tl && mh?.found && mt?.found ? (Math.sign(cx(hl) + mh.du - (cx(tl) + mt.du)) === Math.sign(cx(hl) - cx(tl)) ? `agrees: its nose to the picture's ${cx(hl) < cx(tl) ? 'left' : 'right'}, as the picture's is` : 'REVERSED: its nose where the picture\'s tail is') : 'not checked: its lamps are not both traced and seen';
+  // (its dimensions: the model's, the published, and the picture's through the camera, each where it can be read)
+  const xs = m.axles.filter((a) => a.track > 0).map((a) => a.x), side = v.camera.eye[2] < 0 ? -1 : 1, plane = (z: number) => (u: number, vv: number) => { const c = v.camera, B = basis(c), a = (u * k - c.w / 2) / c.f, b = -(vv * k - c.h / 2) / c.f, d: V3 = [B.fw[0] + a * B.rt[0] + b * B.up[0], B.fw[1] + a * B.rt[1] + b * B.up[1], B.fw[2] + a * B.rt[2] + b * B.up[2]], t = (z - c.eye[2]) / d[2]; return t > 0 ? ([c.eye[0] + t * d[0], c.eye[1] + t * d[1], z] as V3) : null; };
+  // (the picture's ends and top are not on any one plane through a near camera: a rounded car's ends are seen at its
+  // corners. So each is read as the model's own, and how far the picture's outline stands past the model's edge there, in
+  // mm at the depth of the model's surface nearest it: + where the picture's stands further out)
+  const wheelPlane = plane((side * (m.axles[0]?.track ?? 0)) / 2), o = outline, nose = o.reduce((a, b) => ((b.u < a.u) === (side < 0) ? b : a)), tail = o.reduce((a, b) => ((b.u > a.u) === (side < 0) ? b : a)), top = o.reduce((a, b) => (b.v < a.v ? b : a));
+  const dM = edgeDistance(mask, v.w, v.h), past = (q: { u: number; v: number }) => { const x = Math.min(v.w - 1, Math.max(0, Math.round(q.u * k))), y = Math.min(v.h - 1, Math.max(0, Math.round(q.v * k))), i = y * v.w + x; let z = v.depth[i]!; for (let r = 1; !Number.isFinite(z) && r < 80; r++) for (const j of [i - r, i + r, i - r * v.w, i + r * v.w]) if (j >= 0 && j < v.w * v.h && Number.isFinite(v.depth[j]!)) { z = v.depth[j]!; break; } return (dM[i]! * (mask[i] ? -1 : 1) * z) / v.camera.f; };
+  const pN = past(nose), pT = past(tail), pR = past(top), mk = (n: string) => marks.find((q) => q.name === n), fwc = mk('front wheel centre'), rwc = mk('rear wheel centre'), ftt = mk('front tyre top'), ftb = mk('front tyre bottom');
+  const F = fwc && wheelPlane(fwc.u, fwc.v), Rw = rwc && wheelPlane(rwc.u, rwc.v), FT = ftt && wheelPlane(ftt.u, ftt.v), FB = ftb && wheelPlane(ftb.u, ftb.v), fo = m.L / 2 - Math.max(...xs), ro = Math.min(...xs) + m.L / 2;
+  const wb = (q: Machine) => { const ys = q.axles.filter((a) => a.track > 0).map((a) => a.x); return Math.max(...ys) - Math.min(...ys); }, tyreD = (q: Machine) => tyreOf(q.axles[0]!.tyre)?.D ?? NaN;
+  const ev = concept ? 'the picture\'s (a made picture: how it is drawn)' : 'measured off the photograph';
+  const dims: Accuracy['dimensions'] = [
+    { dimension: 'length', picture: +(m.L + pN + pT).toFixed(3), model: +m.L.toFixed(3), published: +pub.L.toFixed(3), differs: +(m.L - pub.L).toFixed(3), evidence: `${ev}; the picture's: the model's, its outline ${(pN * 1000).toFixed(0)} mm past it at the nose and ${(pT * 1000).toFixed(0)} mm at the tail` },
+    { dimension: 'height', picture: +(m.H + pR).toFixed(3), model: +m.H.toFixed(3), published: +pub.H.toFixed(3), differs: +(m.H - pub.H).toFixed(3), evidence: `${ev}; the picture's: the model's and its outline ${(pR * 1000).toFixed(0)} mm past it at the roof` },
+    { dimension: 'wheelbase', picture: F && Rw ? `${Math.abs(F[0] - Rw[0]).toFixed(3)} ± ${((2 * 3 * Math.hypot(...sub(F, v.camera.eye))) / v.camera.f).toFixed(3)}` : 'not read', model: +wb(m).toFixed(3), published: +wb(pub).toFixed(3), differs: +(wb(m) - wb(pub)).toFixed(3), evidence: ev },
+    { dimension: 'tyre diameter', picture: FT && FB ? `${Math.abs(FT[1] - FB[1]).toFixed(3)} ± ${((2 * 3 * Math.hypot(...sub(FT, v.camera.eye))) / v.camera.f).toFixed(3)}` : 'not read', model: +tyreD(m).toFixed(3), published: +tyreD(pub).toFixed(3), differs: +(tyreD(m) - tyreD(pub)).toFixed(3), evidence: `${ev}; the record's tyres (${m.axles[0]!.tyre}) against the stock car's (${pub.axles[0]!.tyre})` },
+    { dimension: 'rear overhang', picture: +(ro + pT).toFixed(3), model: +ro.toFixed(3), published: +(Math.min(...pub.axles.map((a) => a.x)) + pub.L / 2).toFixed(3), differs: '', evidence: `${ev}; the published one is an estimate (its record's)` },
+    { dimension: 'front overhang', picture: +(fo + pN).toFixed(3), model: +fo.toFixed(3), published: +(pub.L / 2 - Math.max(...pub.axles.map((a) => a.x))).toFixed(3), differs: '', evidence: `${ev}; the published one is an estimate (its record's)` },
+    { dimension: 'ground clearance', picture: 'not marked', model: +m.clearance.toFixed(3), published: +pub.clearance.toFixed(3), differs: +(m.clearance - pub.clearance).toFixed(3), evidence: 'the model\'s against the published' },
+    { dimension: 'width', picture: 'not seen from the side', model: +m.W.toFixed(3), published: +pub.W.toFixed(3), differs: +(m.W - pub.W).toFixed(3), evidence: 'unknown from this picture: a front or back view would show it' },
+  ];
+  const objectives: Accuracy['objectives'] = [
+    { objective: 'silhouette', measure: 'outline error both ways', value: +(sil.err / k).toFixed(2), unit: 'px', notes: `${((sil.err / k) * mmPerPx(v.camera) * k).toFixed(0)} mm at the car; IoU ${sil.iou.toFixed(3)}` },
+    { objective: 'features', measure: 'mean edge error of the features found', value: +mean(found.filter((r) => Number.isFinite(r.edgePx)).map((r) => r.edgePx)).toFixed(2), unit: 'px', notes: `${found.length} of ${feats.length} traced features found in the model; worst: ${[...found].filter((r) => Number.isFinite(r.edgePx)).sort((a, b) => b.edgePx - a.edgePx).slice(0, 3).map((r) => `${r.feature} ${r.edgePx.toFixed(1)} px`).join(', ')}` },
+    { objective: 'features', measure: 'mean offset of their middles', value: +mean(found.map((r) => r.centrePx)).toFixed(2), unit: 'px', notes: 'how far each found feature\'s middle is from the traced one\'s' },
+    { objective: 'features', measure: 'mean overlap (IoU) of the features found', value: +mean(found.filter((r) => Number.isFinite(r.iou)).map((r) => r.iou)).toFixed(3), unit: '', notes: 'each feature\'s own region against its tracing' },
+    { objective: 'surface', measure: 'model edges to the picture\'s (creases, seams, panel edges)', value: +edges.modelToPicture.toFixed(2), unit: 'px', notes: `${(edges.precision * 100).toFixed(0)} % of the model's edges within 3 px of one of the picture's` },
+    { objective: 'surface', measure: 'picture edges to the model\'s', value: +edges.pictureToModel.toFixed(2), unit: 'px', notes: `${(edges.recall * 100).toFixed(0)} % within 3 px: a floor, the picture's reflections and shadows counted as edges` },
+    { objective: 'surface', measure: 'depth, curvature, thickness, the far side, the top, its plan', value: 'unknown', unit: '', notes: 'one side view does not show them; nothing here says they are right' },
+    { objective: 'dimensions', measure: 'model against published, largest difference', value: +Math.max(...dims.filter((d) => typeof d.differs === 'number').map((d) => Math.abs(d.differs as number))).toFixed(3), unit: 'm', notes: dims.filter((d) => typeof d.differs === 'number' && Math.abs(d.differs) > 0.005).map((d) => `${d.dimension} ${(d.differs as number) > 0 ? '+' : ''}${((d.differs as number) * 1000).toFixed(0)} mm`).join(', ') || 'none over 5 mm' },
+    { objective: 'orientation', measure: 'the way it faces', value: orientation.split(':')[0]!, unit: '', notes: orientation },
+  ];
+  return { objectives, features: feats, regions: edges.cells.slice(0, 6), dimensions: dims, orientation };
 }
 
 // ---- pipelines tried, and the one kept --------------------------------------------------------------------------------------
@@ -429,9 +691,9 @@ node({ id: 'photo.load', name: 'Photograph (pixels and its marks)', kind: 'gener
   spec: { gloss: 'A reference photograph of the thing to rebuild, and what is marked on it', discipline: 'electrical.signals', role: 'I/O', codes: [VISION, ACM_CV] },
   says: 'A photograph from the library (view/public/photos), decoded to its pixels, with the points marked on it (photo-marks.ts: its wheels, its outline round it by region), who marked them and how, the thing it is of, and whether it is a photograph of it or a made picture (an AI\'s, a render) of how it is wanted: matched as a goal, never read as a measurement',
   settings: [{ key: 'id', label: 'Photograph', type: 'choice', default: PHOTOS[0]!.id, choices: PHOTOS.map((p) => p.id) }],
-  ports: { inputs: [P('id', 'text', { optional: true, label: 'which picture (the setting, if not wired)' })], outputs: [P('image', 'record'), P('marks', 'table'), P('object', 'text', { label: 'the record it is of' }), P('w', 'integer'), P('h', 'integer'), P('says', 'text'), P('concept', 'boolean', { label: 'a made picture of how it is wanted, not a photograph of it' })] },
+  ports: { inputs: [P('id', 'text', { optional: true, label: 'which picture (the setting, if not wired)' })], outputs: [P('image', 'record'), P('marks', 'table'), P('object', 'text', { label: 'the record it is of' }), P('base', 'text', { label: 'the record as its maker published it' }), P('w', 'integer'), P('h', 'integer'), P('says', 'text'), P('concept', 'boolean', { label: 'a made picture of how it is wanted, not a photograph of it' }), P('traces', 'table', { label: 'its features traced (windows, door, flares, wing …), each with the model\'s part it is' })] },
   run: async (i, c) => { const id = String(i.id ?? c.set.id), ph = photoOf(id); if (!ph) throw new Error(`no photograph "${id}"`); const img = await loadPhoto(ph.id);
-    return { image: brief(img, `${img.w} × ${img.h} pixels`), marks: ph.marks.map((m) => ({ ...m })), object: ph.object, w: img.w, h: img.h, says: `${ph.says}; ${ph.marks.length} points ${ph.by}`, concept: !!ph.concept }; },
+    return { image: brief(img, `${img.w} × ${img.h} pixels`), marks: ph.marks.map((m) => ({ ...m })), object: ph.object, base: ph.base ?? ph.object, w: img.w, h: img.h, says: `${ph.says}; ${ph.marks.length} points ${ph.by}`, concept: !!ph.concept, traces: (ph.traces ?? []).map((t) => ({ ...t })) }; },
   tests: [{ set: { id: 'mc-side' }, inputs: {}, outputs: { w: 1152, h: 864 } }] });
 
 node({ id: 'photo.features', name: 'Edge-snapped image features (Sobel)', kind: 'logic', ability: 'transform', domains: ['vehicles', 'manufacturing', 'science'],
@@ -546,6 +808,57 @@ node({ id: 'recon.search', name: 'Pipelines tried (which way of fitting matches 
     const best = [...results].sort((a, b) => a.px - b.px)[0];
     return { results, best: best ? `${best.recipe}: ${best.px} px (${best.mm} mm), IoU ${best.iou}, ${best.seconds} s` : 'none run', kept: BEST_RECIPE };
   } });
+
+
+const tracesOf = (v: unknown): Trace[] => rowsOf(v).map((r) => ({ name: String(r.name), parts: String(r.parts), ...(Array.isArray(r.poly) ? { poly: r.poly as [number, number][] } : {}), ...(Array.isArray(r.at) ? { at: r.at as [number, number] } : {}) }));
+const viewOf = (v: unknown): View => { const x = v as View; if (!x?.id || !x.camera) throw new Error('wire a view in (Same-camera view)'); return x; };
+
+node({ id: 'render.view', name: 'Same-camera view (z-buffered render)', kind: 'logic', ability: 'transform', domains: ['vehicles', 'manufacturing', 'science'],
+  spec: { gloss: 'What does the model look like from exactly where the picture was taken?', discipline: 'electrical.signals', role: 'visualisation', codes: [ACM_CV, { scheme: 'ACM CCS 2012', code: '10010147.10010371.10010372', label: 'Computing methodologies: rendering' }],
+    model: { equations: ['each triangle projected through the camera; at each pixel the nearest kept (1/z interpolated across it); shade = 0.32 + 0.68 |n · l|'], class: 'analytical', time: 'steady', linear: false, references: ['Catmull, A subdivision algorithm for computer display of curved surfaces (1974): the z-buffer', 'Lambert, Photometria (1760)'] } },
+  says: 'The thing as made, seen from the camera the picture was taken from, the right way round: at each pixel which of its parts is nearest, how far, and its colour shaded. What the comparisons read (each feature against its own part), and what a person sets beside the picture',
+  settings: [{ key: 'scale', label: 'Scale of the picture', type: 'number', default: 1 }],
+  ports: { inputs: [P('thing', 'assembly'), P('camera', 'record')], outputs: [P('view', 'record'), P('parts', 'integer', { label: 'parts seen' })] },
+  run: (i, c) => { const t = i.thing as Part; if (!t || !('name' in t)) throw new Error('wire a thing in'); const v = renderView(t, scaled(camOf(i.camera), Number(c.set.scale ?? 1)));
+    return { view: brief(v, `a ${v.w} × ${v.h} view of ${v.names.length} parts`), parts: new Set(v.id).size - (v.id.includes(-1) ? 1 : 0) }; } });
+
+node({ id: 'fit.features', name: 'Geometry fitted to its features (windows, flares, wing, skirts; the intake taken off the picture)', kind: 'solver', ability: 'optimise', domains: ['vehicles', 'manufacturing', 'science'],
+  spec: { gloss: 'Which figures put each of its features where the picture has it?', discipline: 'mechanical.design', role: 'numerical solver', codes: [ACM_CV, { scheme: 'MSC2020', code: '65K10', label: 'Numerical optimization and variational techniques' }],
+    model: { equations: ['for each group of features: minimise mean over its features of (edge error both ways + ½ the offset of their middles) + the outline\'s error both ways, over the figures that own them', 'a traced outline put onto the model\'s surface: P = eye + z (w + a r + b u) at the view\'s depth z'], class: 'analytical', time: 'steady', linear: false, method: 'Nelder–Mead, group by group (FEATURE_FIT); each figure\'s ± from the curvature; a figure not fixed goes back to what it was', references: ['Nelder & Mead, Comput. J. 7, 308 (1965)', 'Hartley & Zisserman, Multiple View Geometry, 2nd ed., §8.1 (back-projection)'] } },
+  says: 'The model\'s own parts moved to where the picture\'s features are, as the same camera sees them, group by group: its windows and door by its body lines, its flares, its wing, its skirts, lip and valance by the kit\'s figures; each by the features it owns and the outline together. A side intake traced on the picture is not fitted but taken off it: its outline put onto the model\'s own surface through the camera. Each figure with its ±; one the picture does not fix goes back to what it was',
+  settings: [{ key: 'most', label: 'At most, trials a group', type: 'number', default: 30 }, { key: 'scale', label: 'Scale of the picture while fitting', type: 'number', default: 0.5 }],
+  ports: { inputs: [P('machine', 'any'), P('camera', 'record', { label: 'the camera it is seen from (fitted)' }), P('traces', 'table'), P('features', 'table', { label: 'its outline (Dense outline)' }), P('concept', 'boolean', { optional: true })],
+    outputs: [P('groups', 'table', { label: 'each group, before and after, px' }), P('figures', 'table'), P('machine', 'any', { label: 'the fitted record' }), P('vehicle', 'part', { label: 'the fitted vehicle' }), P('camera', 'record')] },
+  run: (i, c) => {
+    const m = machineOf(i.machine), cam = camOf(i.camera), traces = tracesOf(i.traces), o = outlineOf(i.features); if (!traces.length) throw new Error('no features traced on the picture (Photograph → traces)');
+    const rig = new Rig(m, cam), f = fitFeatures(rig, traces, o, cam.w, cam.h, { scale: Number(c.set.scale ?? 0.5), most: Number(c.set.most ?? 30) });
+    let fitted = rig.apply(f.keys, f.x).machine;
+    // (the intake and its vent: put onto the model's own surface, not fitted)
+    const intake = traces.find((t) => t.name === 'intake' && t.poly), vent = traces.find((t) => t.name === 'intake vent' && t.poly), extra: Record<string, unknown>[] = [];
+    if (fitted.kit && intake) { const sc = new Rig(fitted, cam).scene([], [], 'live', true), v = renderView(sc.root, cam, HIDDEN), ra = Math.min(...fitted.axles.filter((a) => a.track > 0).map((a) => a.x));
+      const sco = outlineOnto(v, intake.poly!, 1, ra), ve = vent ? outlineOnto(v, vent.poly!, 1, ra) : fitted.kit.vent;
+      fitted = { ...fitted, kit: { ...fitted.kit, scoop: sco, ...(ve ? { vent: ve } : {}) } }; extra.push({ figure: 'intake outline', was: 'its record\'s', now: sco.map((p) => p.join(' ')).join(', '), pm: 'the trace\'s', evidence: i.concept === true ? 'the picture\'s' : 'measured', says: 'taken off the picture onto the model\'s surface, m ahead of the rear axle and over the ground' }); }
+    const ev = (fx: boolean) => (!fx ? 'estimated' : i.concept === true ? 'the picture\'s' : 'measured');
+    return { groups: f.groups.map((g) => ({ group: g.group, features: g.features, before: +g.before.toFixed(2), after: +g.after.toFixed(2), trials: g.trials })),
+      figures: [...f.groups.flatMap((g) => g.figures.map((q) => ({ figure: q.figure, was: +q.was.toFixed(3), now: +q.now.toFixed(3), pm: Number.isFinite(q.pm) ? +q.pm.toFixed(3) : 'unbounded', evidence: ev(q.fixed), says: q.fixed ? `fitted to its features (${g.features})` : 'not fixed by this picture: kept as it was' }))), ...extra],
+      machine: fitted, vehicle: makeMachine(fitted), camera: cam };
+  } });
+
+node({ id: 'check.accuracy', name: 'Accuracy, four ways (silhouette, features, surface, dimensions)', kind: 'critic', ability: 'check', domains: ['vehicles', 'manufacturing', 'science'],
+  spec: { gloss: 'How right is the model: its outline, its features, its surface, its dimensions, each apart?', discipline: 'manufacturing.metrology.inspection', role: 'assessment', codes: [MEAS, ACM_CV] },
+  says: 'The model against the picture from the picture\'s own camera, as four separate answers, never one blended score: its silhouette (does the outline match, both ways), its features (each traced feature against the model\'s own part: overlap, offset, edge error), its surface (the model\'s edges inside the outline against the picture\'s, where they disagree most and which parts are there; and what one view cannot show, said unknown), and its dimensions (the model\'s against the published and against the picture\'s, read through the camera). And whether it faces the way the picture does',
+  ports: { inputs: [P('view', 'record'), P('image', 'record'), P('features', 'table', { label: 'its marks and outline' }), P('traces', 'table'), P('machine', 'any', { label: 'the model\'s record' }), P('published', 'any', { label: 'the record as published (Vehicle)' }), P('concept', 'boolean', { optional: true })],
+    outputs: [P('objectives', 'table'), P('features', 'table', { label: 'each feature' }), P('regions', 'table', { label: 'where its edges disagree most' }), P('dimensions', 'table'), P('orientation', 'text')] },
+  run: (i) => { const rows = rowsOf(i.features), a = accuracy(viewOf(i.view), imgOf(i.image), outlineOf(rows), tracesOf(i.traces), rows.map((r) => ({ name: String(r.name), u: Number(r.u), v: Number(r.v) })), machineOf(i.machine), machineOf(i.published), i.concept === true);
+    const r2 = (x: number) => (Number.isFinite(x) ? +x.toFixed(2) : 'not found');
+    return { objectives: a.objectives, features: a.features.map((r) => ({ feature: r.feature, found: r.found, iou: Number.isFinite(r.iou) ? +r.iou.toFixed(3) : '', middle_px: r2(r.centrePx), edge_px: r2(r.edgePx), edge_mm: Number.isFinite(r.edgeMm) ? +r.edgeMm.toFixed(0) : '', model_is: Number.isFinite(r.du) ? `${Math.abs(r.du).toFixed(0)} px ${r.du > 0 ? 'right' : 'left'}, ${Math.abs(r.dv).toFixed(0)} px ${r.dv > 0 ? 'low' : 'high'}` : '', area: Number.isFinite(r.area) ? +r.area.toFixed(2) : '', says: r.says })),
+      regions: a.regions.map((r) => ({ ...r, error: +r.error.toFixed(1) })), dimensions: a.dimensions, orientation: a.orientation }; } });
+
+node({ id: 'view.compare', name: 'Side by side from the same camera', kind: 'view', ability: 'show', domains: ['vehicles', 'manufacturing', 'science'],
+  spec: { gloss: 'The picture, the model from the same camera, and where their features differ', discipline: 'electrical.signals', role: 'visualisation', codes: [ACM_CV] },
+  says: 'Three panels: the picture; the model from the picture\'s own camera (the right way round); and the picture dimmed with each traced feature\'s edge in green and the model\'s own part\'s in red. As a PNG to keep',
+  ports: { inputs: [P('image', 'record'), P('view', 'record'), P('traces', 'table')], outputs: [P('picture', 'record'), P('png', 'any', { label: 'as a PNG file' })] },
+  run: (i) => { const p = sideBySide(imgOf(i.image), viewOf(i.view), tracesOf(i.traces)); return { picture: brief(p, `${p.w} × ${p.h} pixels`), png: brief(encodePng(p.w, p.h, p.rgb), 'a PNG') }; } });
 
 node({ id: 'ask.next', name: 'Next best view or measurement (uncertainty ranking)', kind: 'critic', ability: 'ask', domains: ['vehicles', 'manufacturing', 'science'],
   spec: { gloss: 'What one photograph or measurement would settle the most?', discipline: 'manufacturing.metrology.inspection', role: 'assessment', codes: [MEAS, ACM_CV] },

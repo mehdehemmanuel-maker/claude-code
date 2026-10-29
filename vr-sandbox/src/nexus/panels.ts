@@ -353,7 +353,9 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   // its doors: two a side where it has them (its maker's count, else by its length), or one long one (a coupe's, about
   // 1.15 m: typical), the rear quarter running forward to meet it
   const doors = !b.lines.bed && xFD - xRD > 0.6, twoDoors = doors && (b.lines.doors ? b.lines.doors === 2 : xFD - xRD > 1.6);
-  if (doors && !twoDoors) xRD = Math.max(xRD, xFD - 1.15);
+  // (a coupe's one long door: its rear edge where its maker puts its top rear corner (doorR), upright, short of its rear
+  // arch; else about 1.15 m long, typical)
+  if (doors && !twoDoors) xRD = b.lines.doorR !== undefined ? Math.max(rArchFront + 0.04, b.L / 2 - b.lines.doorR * b.L) : Math.max(xRD, xFD - 1.15);
   // (the B pillar between the doors by their lengths, the front one a little longer (typical), not by the roof: a short
   // car's rear arch would otherwise leave its rear door a hand's width)
   const xB = twoDoors ? xRD + 0.47 * (xFD - xRD) : ln.xB;
