@@ -53,7 +53,7 @@ export type Susp = 'rigid' | 'pivot' | 'strut' | 'beam' | 'wishbone' | 'swingarm
 export interface Axle { /** from the machine's middle, + forward */ x: number; track: number; tyre: string; steer?: boolean; drive?: boolean; dual?: boolean; brake?: { kind: 'disc' | 'drum'; d: number; vented?: boolean; /** one disc on the axle, not one in each wheel (a kart's) */ on?: 'axle' }; /** how it hangs from the frame */ susp?: Susp }
 export type Frame = 'shell' | 'tube' | 'ladder' | 'backbone';
 /** Where a panelled body's lines run, as shares of its length from its nose and of its height (typical of each style). */
-export interface Lines { cowl: number; roofF: number; roofR: number; deck: number; belt: number; nose: number; tail: number; n: number; /** how far its belt rises from its cowl to its deck, m (its wedge: 0.02, typical, where not said) */ wedge?: number; /** how high its windscreen's foot and its back glass's foot stand, as shares of its height, where above its belt (as most cars' do: the top edge rising to each from the belt under its sail and its C pillar; at the belt where not said) */ cowlH?: number; deckH?: number; /** where its rear door's top rear corner is, and where its side glass ends at the back, as shares of its length from its nose: its rear door's shut line upright by its rear arch, then leaning back over it to there, a fixed quarter glass in the body behind the door (else upright, and its glass ending a little short of its roof's end) */ doorR?: number; dloR?: number; /** how full its windscreen and its back glass are: how far up its rise each one's control point at its middle stands (0.55 and 0.62, typical, where not said) */ bow?: [number, number]; /** how far behind its windscreen's foot its front door's top front corner is, as a share of its length: the fender runs back to it, a black sail fills the corner between its glass and its A pillar, and its mirror stands on the door (0 where not said: the door runs to the A pillar) */ sail?: number; open?: boolean; bed?: boolean; /** doors a side: one long one (a coupe's, a roadster's) or two */ doors?: 1 | 2; /** its face: its headlamps' and its grille's height, m (typical of its kind where not said) */ face?: { lamp?: number; grille?: number } }
+export interface Lines { cowl: number; roofF: number; roofR: number; deck: number; belt: number; nose: number; tail: number; n: number; /** how far its belt rises from its cowl to its deck, m (its wedge: 0.02, typical, where not said) */ wedge?: number; /** how high its windscreen's foot and its back glass's foot stand, as shares of its height, where above its belt (as most cars' do: the top edge rising to each from the belt under its sail and its C pillar; at the belt where not said) */ cowlH?: number; deckH?: number; /** where its rear door's top rear corner is, and where its side glass ends at the back, as shares of its length from its nose: its rear door's shut line upright by its rear arch, then leaning back over it to there, a fixed quarter glass in the body behind the door (else upright, and its glass ending a little short of its roof's end) */ doorR?: number; dloR?: number; /** how full its windscreen and its back glass are: how far up its rise each one's control point at its middle stands (0.55 and 0.62, typical, where not said) */ bow?: [number, number]; /** how far behind its windscreen's foot its front door's top front corner is, as a share of its length: the fender runs back to it, a black sail fills the corner between its glass and its A pillar, and its mirror stands on the door (0 where not said: the door runs to the A pillar) */ sail?: number; open?: boolean; bed?: boolean; /** doors a side: one long one (a coupe's, a roadster's) or two */ doors?: 1 | 2; /** its face: its headlamps' and its grille's height, and its tail lamps', m (typical of its kind where not said) */ face?: { lamp?: number; grille?: number; tail?: number } }
 export interface Seat { x: number; z: number; /** its cushion's top above the ground */ y: number; style: 'bucket' | 'bench' | 'saddle' | 'pan' | 'kart' }
 export interface Power { kind: 'single' | 'twin' | 'inline' | 'vee' | 'diesel' | 'electric'; /** a vee's angle between its banks, degrees (90 where not said) */ vee?: number; /** its block cast in iron or aluminium, where its maker says (else aluminium in a car, typical) */ block?: 'iron' | 'al'; cc?: number; kW: number; /** its cylinders, bore and stroke (m), how its valves are worked, how it is cooled and started, where its maker gives them (else typical of its kind and size) */ cyl?: number; bore?: number; stroke?: number; cams?: EngineSpec['cams']; valves?: 2 | 4; /** what its maker chose where engines differ (engines.ts FITS) */ fit?: string; cooling?: 'liquid' | 'air'; starter?: 'electric' | 'recoil'; x: number; z?: number; y?: number; says: string; /** its own size where it is published, m */ box?: V3; kg?: number; /** its most torque, N·m, and the reduction from it to the driven axle, where known */ torque?: number; ratio?: number; driveSays?: string }
 export type Extra = 'mast' | 'guard' | 'counterweight' | 'fifth wheel' | 'tanks' | 'stacks' | 'deck' | 'racks' | 'bumpers' | 'lights' | 'pods' | 'nose' | 'fenders' | 'hood' | 'cab' | 'fork' | 'swingarm' | 'tank' | 'exhaust' | 'number';
@@ -70,7 +70,7 @@ export interface BodyKit {
   /** a skirt along each rocker between the arches: so tall over the skin's foot, so thick */ skirts?: { h: number; t: number };
   /** a lip under the front bumper and a valance under the rear: so deep along the car, so thick, reaching so far past the skin */
   lip?: { d: number; t: number; out: number }; valance?: { d: number; t: number; out: number };
-  /** an insert in a scoop on each rear quarter: its outline seen from the side, m, from the rear axle (x, ahead +) and the ground (y) */ scoop?: [number, number][];
+  /** an insert in a scoop on each rear quarter: its outline seen from the side, m, from the rear axle (x, ahead +) and the ground (y); and the vent it frames */ scoop?: [number, number][]; vent?: [number, number][];
   /** a wing on the deck: its chord, its height over the deck, its span as a share of the width, its pitch (degrees, its
    *  leading edge down, as a wing pressing the car down is set), how far its trailing edge is ahead of the tail, its
    *  blade's colour (its end plates and uprights the kit's) */ wing?: { chord: number; h: number; span: number; pitch: number; back: number; color: number };
@@ -789,25 +789,37 @@ function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
   const own = { mat, color: col, finish: 'paint' } as const;
   // flares: a band round each arch from its lip out, as thick as it stands proud, on the most the skin stands out under it
   const arches = m.axles.filter((a) => a.track > 0).map((a) => { const t = tyreOf(a.tyre)!, R = t.D / 2, from = (k.flares?.from ?? 12) * deg, to = (k.flares?.to ?? 168) * deg, n = 36;
-    const lip = archLip(s, a.x, R, R, Array.from({ length: n + 1 }, (_, i) => from + ((to - from) * i) / n)).filter((q) => Number.isFinite(q.r));
+    const lip0 = archLip(s, a.x, R, R, Array.from({ length: n + 1 }, (_, i) => from + ((to - from) * i) / n)).filter((q) => Number.isFinite(q.r));
+    // (the lip's radius read off the skin's samples, smoothed round the arch: the middle of five, then their mean, so a
+    // sample caught on a shut line or a panel's edge does not notch the flare)
+    const med = lip0.map((_, i) => { const w5 = lip0.slice(Math.max(0, i - 2), i + 3).map((q) => q.r).sort((x, y) => x - y); return w5[Math.floor(w5.length / 2)]!; });
+    const lip = lip0.map((q, i) => { const w5 = med.slice(Math.max(0, i - 2), i + 3); return { ...q, r: w5.reduce((x, y) => x + y, 0) / w5.length }; });
     return { a, R, lip, front: a.x === Math.max(...m.axles.map((b) => b.x)) }; });
   if (k.flares) for (const { a, R, lip, front } of arches) {
     if (lip.length < 4) continue;
     const w = k.flares.w, t = k.flares.t, nm = front ? 'front fender flare' : 'rear fender flare', on = front ? 'front fender' : 'rear quarter panel';
     // (on the most the skin stands out under the band, so it sits on the skin, not in it)
     const band = s.pts.filter((q) => q.at[2] > 0.2 && Math.abs(q.n[2]) > 0.3 && (() => { const d = Math.hypot(q.at[0] - a.x, q.at[1] - R), qa = Math.atan2(q.at[1] - R, q.at[0] - a.x); return qa > lip[0]!.a && qa < lip[lip.length - 1]!.a && d > Math.min(...lip.map((l) => l.r)) - 0.005 && d < Math.max(...lip.map((l) => l.r)) + w; })());
-    const z0 = Math.max(...lip.map((l) => l.z), ...band.map((q) => q.at[2]));
-    const pts: [number, number][] = [...lip.map((l): [number, number] => [(l.r + w) * Math.cos(l.a), (l.r + w) * Math.sin(l.a)]), ...lip.slice().reverse().map((l): [number, number] => [(l.r - 0.006) * Math.cos(l.a), (l.r - 0.006) * Math.sin(l.a)])];
+    // (the skin's own z near a point, the most it stands out there; the lip's where there is none, over the opening)
+    const zs = (x: number, y: number, or: number) => { let z = -Infinity; for (const q of band) if (Math.abs(q.at[0] - x) < 0.025 && Math.abs(q.at[1] - y) < 0.025) z = Math.max(z, q.at[2]); return Number.isFinite(z) ? z : or; };
+    // (a moulded band: proudest at its inner edge, rolled over the arch's lip, falling back onto the skin at its outer
+    // edge; drawn as a surface through four lines round the arch)
+    const cols: [number, number][] = [[-0.004, 1], [0.25, 1], [0.7, 0.5], [1, 0.08]];
+    // (each line out from the axle at the most the skin stands out along it, smoothed round the arch over five lines, so
+    // the band runs round as one moulding, not stepping with the skin's samples)
+    const raw = lip.map((l) => Math.max(...[0, 0.33, 0.66, 1].map((f) => { const r = l.r + f * w; return zs(a.x + r * Math.cos(l.a), R + r * Math.sin(l.a), l.z); })));
+    const zRow = raw.map((_, i) => { const win = raw.slice(Math.max(0, i - 2), i + 3); return win.reduce((p, q) => p + q, 0) / win.length; });
+    const net = lip.map((l, i) => cols.map(([f, h]): V3 => { const r = l.r + (f < 0 ? f : f * w); return [a.x + r * Math.cos(l.a), R + r * Math.sin(l.a), zRow[i]! + h * t]; }));
     for (const sd of [-1, 1]) {
-      const z = sd * (z0 + t / 2), fl = `${nm} ${side(sd)}`;
-      kit.push(P(fl, { prism: { pts, L: t } }, [a.x, R, z], { ...own, item: 'fender-flare', joins: [on], fixed: `riveted to the ${on} round its arch`, says: `a flare round the arch, ${(w * 1000).toFixed(0)} mm wide, standing ${(t * 1000).toFixed(0)} mm proud of the skin: moulded ABS (typical of bolt-on flares)` }));
-      // (its rivets every so many degrees round its middle, their heads on its face)
+      const fl = `${nm} ${side(sd)}`, sn = (sd > 0 ? net : net.slice().reverse()).map((row) => row.map((q): V3 => [q[0], q[1], sd * q[2]]));
+      kit.push(P(fl, { surf: { s: { net: sn } } }, [0, 0, 0], { ...own, shell: 0.003, item: 'fender-flare', joins: [on], fixed: `riveted to the ${on} round its arch`, says: `a flare round the arch, ${(w * 1000).toFixed(0)} mm wide, standing ${(t * 1000).toFixed(0)} mm proud of the skin at its lip and falling back onto it: moulded ABS, 3 mm (typical of bolt-on flares)` }));
+      // (its rivets every so many degrees round it, a third of the way out, their heads on its face)
       const every = (k.flares.every ?? 18) * deg;
-      for (let q = lip[0]!.a + every / 2; q < lip[lip.length - 1]!.a; q += every) { const l = lip.reduce((b, c) => (Math.abs(c.a - q) < Math.abs(b.a - q) ? c : b)), rm = l.r + w / 2;
+      for (let q = lip[0]!.a + every / 2; q < lip[lip.length - 1]!.a; q += every) { const li = lip.reduce((b, c, i) => (Math.abs(c.a - q) < Math.abs(lip[b]!.a - q) ? i : b), 0), l = lip[li]!, rm = l.r + w * 0.3, x = a.x + rm * Math.cos(q), y = R + rm * Math.sin(q), zf = zRow[li]! + t * 0.97;
         // (set: its head on the flare's face, its body through the flare, the stub of its mandrel left in it (4.8 mm, typical))
-        kit.push(P('flare rivet', undefined, [a.x + rm * Math.cos(q), R + rm * Math.sin(q), sd * (z0 + t + 0.0015)], { rot: [sd * PI / 2, 0, 0], item: 'rivet-pop', says: 'a blind rivet through the flare into the fender, 4.8 mm (typical)', parts: [
+        kit.push(P('flare rivet', undefined, [x, y, sd * (zf + 0.0015)], { rot: [sd * PI / 2, 0, 0], item: 'rivet-pop', says: 'a blind rivet through the flare into the fender, 4.8 mm (typical)', parts: [
           P('rivet head', { cyl: [0.005, 0.003] }, [0, 0, 0], { mat: 'al-6061', color: 0x2a2a2c, finish: 'paint' }),
-          P('rivet body', { cyl: [0.0024, t] }, [0, -0.0015 - t / 2, 0], { mat: 'al-6061', color: 0x9a9ca0, passes: [fl] }),
+          P('rivet body', { cyl: [0.0024, t] }, [0, -0.0015 - t / 2, 0], { mat: 'al-6061', color: 0x9a9ca0, passes: [fl, on] }),
           P('rivet mandrel', { cyl: [0.0013, t * 0.6] }, [0, -0.0015 - t * 0.3, 0], { mat: 'steel-low', color: 0x6a6a6a, item: 'rivet-mandrel', passes: [fl, 'rivet body'] })] })); }
     }
   }
@@ -827,7 +839,11 @@ function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
   const plate = (o: { d: number; t: number; out: number }, front: boolean) => {
     // (its foot: the skin's lowest within its last 35 cm, where the bumper is)
     const end = (front ? 1 : -1) * (m.L / 2), xs = Array.from({ length: 13 }, (_, i) => end - (front ? 1 : -1) * (0.05 + (i / 12) * 0.3));
-    const foot = Math.min(...xs.map((x) => lowAt(s, x).y).filter(Number.isFinite)), line = endAt(s, foot + 0.03, front);
+    const foot = Math.min(...xs.map((x) => lowAt(s, x).y).filter(Number.isFinite));
+    // (only across where the bumper comes down to its foot: not out under its corners, where it has rolled up, or the plate
+    // would hang there under nothing)
+    const footAt = (x: number, z: number) => { let y = Infinity; for (const q of s.pts) if (Math.abs(q.at[0] - x) < 0.06 && Math.abs(Math.abs(q.at[2]) - Math.abs(z)) < 0.04) y = Math.min(y, q.at[1]); return y; };
+    const line = endAt(s, foot + 0.03, front).filter(([x, z]) => footAt(x, z) < foot + 0.035);
     if (line.length < 4) return;
     const pts: [number, number][] = [...line.map(([x, z]): [number, number] => [x + (front ? o.out : -o.out), z]), ...line.slice().reverse().map(([x, z]): [number, number] => [x - (front ? o.d : -o.d), z])];
     kit.push(P(front ? 'front lip' : 'rear valance', { prism: { pts, L: o.t } }, [0, foot - o.t / 2, 0], { ...own, rot: [PI / 2, 0, 0], item: front ? 'front-lip' : 'rear-valance', joins: [front ? 'bumper cover' : 'rear bumper cover', front ? 'front fender' : 'rear quarter panel'], fixed: 'screwed up into the bumper cover\'s foot', says: `${front ? 'a lip under the front bumper' : 'a valance under the rear bumper'}, ${(o.d * 1000).toFixed(0)} mm deep: moulded ABS (typical)` }));
@@ -839,7 +855,13 @@ function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
   if (k.scoop) {
     const pts = k.scoop.map(([x, y]): [number, number] => [x, y]), xs = pts.map((q) => q[0] + ra.x), ys = pts.map((q) => q[1]);
     const under = s.pts.filter((q) => q.at[2] > 0.2 && q.at[0] > Math.min(...xs) && q.at[0] < Math.max(...xs) && q.at[1] > Math.min(...ys) && q.at[1] < Math.max(...ys)), z0 = Math.max(...under.map((q) => q.at[2])), t = 0.012;
-    if (Number.isFinite(z0)) for (const sd of [-1, 1]) kit.push(P(`quarter scoop ${side(sd)}`, { prism: { pts, L: t } }, [ra.x, 0, sd * (z0 + t / 2)], { ...own, item: 'quarter-scoop', joins: ['rear quarter panel'], fixed: 'taped and screwed onto the quarter panel', says: 'a scoop\'s insert on the rear quarter, moulded ABS (its outline as the kit\'s maker shaped it)' }));
+    // (and the vent it frames: a black moulded mesh across the opening between it and the door, closed behind, as a
+    // bolt-on scoop's is)
+    const vent = k.vent?.map(([x, y]): [number, number] => [x, y]);
+    if (Number.isFinite(z0)) for (const sd of [-1, 1]) {
+      kit.push(P(`quarter scoop ${side(sd)}`, { prism: { pts, L: t } }, [ra.x, 0, sd * (z0 + t / 2)], { ...own, item: 'quarter-scoop', joins: ['rear quarter panel'], fixed: 'taped and screwed onto the quarter panel', says: 'a scoop\'s insert on the rear quarter, moulded ABS (its outline as the kit\'s maker shaped it)' }));
+      if (vent) kit.push(P(`scoop vent ${side(sd)}`, { prism: { pts: vent, L: 0.004 } }, [ra.x, 0, sd * (z0 + 0.002)], { mat: 'abs', color: 0x0c0c0d, finish: 'texture', item: 'scoop-vent', joins: ['rear quarter panel', `quarter scoop ${side(sd)}`], fixed: 'clipped into the scoop\'s insert', says: 'its vent: a black moulded mesh, closed behind (typical of a bolt-on scoop)' }));
+    }
   }
   // a wing on the deck: its blade on two uprights, an end plate at each end of it
   if (k.wing) {
@@ -1663,7 +1685,7 @@ const MONTE_CARLO_04: Machine = {
     // (its lines measured off a photograph of one side-on (the user's, 2026-10-29), scaled by its published 110.5-in.
     // wheelbase, which its 225/60R16-sized tyres agree with to 2 %; its ends, nearer the lens's edge, foreshortened, so its
     // overhangs scaled by their own published lengths: estimates, said so)
-    lines: { cowl: 0.274, roofF: 0.4, roofR: 0.642, deck: 0.76, belt: 0.675, nose: 0.563, tail: 0.75, wedge: 0.04, sail: 0.035, cowlH: 0.72, deckH: 0.81, dloR: 0.668, n: 5, doors: 1 },
+    lines: { cowl: 0.274, roofF: 0.4, roofR: 0.642, deck: 0.76, belt: 0.675, nose: 0.563, tail: 0.75, wedge: 0.04, sail: 0.035, cowlH: 0.72, deckH: 0.81, dloR: 0.668, n: 5, doors: 1, face: { lamp: 0.11, grille: 0.06, tail: 0.23 } },
     seats: [{ x: -0.15, z: -0.38, y: 0.52, style: 'bucket' }, { x: -0.15, z: 0.38, y: 0.52, style: 'bucket' }, { x: -1.0, z: 0, y: 0.55, style: 'bench' }],
     power: { kind: 'vee', vee: 90, block: 'iron', cc: 3791, kW: 149, x: 1.6, cyl: 6, bore: 0.0965, stroke: 0.0864, cams: 'ohv', valves: 2, torque: 305, fit: 'gm-3800-l36', says: '3.8 L V6 (GM 3800 Series II, L36: 96.5 × 86.4 mm, 90° vee, iron block, pushrods, two valves a cylinder), 200 hp at 5,200 rpm, 225 lb-ft (305 N·m) at 4,000 rpm (listings for the 2004 Monte Carlo SS); its place ahead of the front axle an estimate' },
     controls: 'wheel', rims: { style: 'spokes', spokes: 5, mat: 'al-6061', lugs: 5, lug: 12, color: 0xc8ccd2, pcd: 115, offset: 45 }, extras: ['exhaust'], road: 'us', mass: 3435 * LB, massSays: 'curb weight, automobile-catalog.com (others give 3,395 lb)', color: 0x6a0f1c,
@@ -1691,8 +1713,9 @@ export const MACHINES: Machine[] = [
   { ...MONTE_CARLO_04, id: 'montecarlo04-kit', short: 'monte carlo custom', name: 'Chevrolet Monte Carlo SS (2004), black with a red body kit', color: 0x141416,
     axles: MONTE_CARLO_04.axles.map((a) => ({ ...a, tyre: '245/35R20' })),
     rims: { ...MONTE_CARLO_04.rims, color: 0x18181a, accent: 0xb3121f, cap: 0x1a1a1c },
-    kit: { color: 0xb3121f, flares: { w: 0.075, t: 0.018, from: 14, to: 166, every: 16 }, skirts: { h: 0.075, t: 0.03 }, lip: { d: 0.12, t: 0.018, out: 0.03 }, valance: { d: 0.1, t: 0.016, out: 0.02 },
+    kit: { color: 0xb3121f, flares: { w: 0.075, t: 0.018, from: 14, to: 166, every: 16 }, skirts: { h: 0.075, t: 0.03 }, lip: { d: 0.12, t: 0.02, out: 0.012 }, valance: { d: 0.1, t: 0.018, out: 0.008 },
       scoop: [[0.905, 0.798], [0.435, 0.811], [0.448, 0.757], [0.544, 0.563], [0.622, 0.397], [0.87, 0.37], [0.87, 0.397], [0.675, 0.428], [0.574, 0.631], [0.509, 0.757], [0.905, 0.757]],
+      vent: [[0.905, 0.757], [0.509, 0.757], [0.574, 0.631], [0.675, 0.428], [0.87, 0.397]],
       wing: { chord: 0.3, h: 0.17, span: 0.92, pitch: 8, back: 0.06, color: 0x141416 },
       says: 'its body kit as in its owner\'s photograph: red flares, skirts, lip, valance and scoop inserts, a black wing with red end plates and uprights; each piece\'s size read off the photograph (estimates), moulded ABS (typical)' },
     says: MONTE_CARLO_04.says + '; this one gloss black, with a red body kit and black and red 20-in. wheels, as in its owner\'s photograph' },

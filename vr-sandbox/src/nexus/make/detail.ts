@@ -271,7 +271,7 @@ export const RULES: DetailRule[] = [
       for (const x of c.nodes) {
         const p = x.p, m = p.mat; if (!m || p.detail || p.finish) continue;
         const f = m === 'wood' || m === 'oak' || m === 'bamboo' ? 'grain' : m === 'brick' ? 'brick' : m === 'concrete' || m === 'render' ? 'concrete' : m === 'tile' ? 'tiles' : m === 'asphalt' ? 'asphalt' : m === 'rubber' ? ('torus' in (p.shape ?? {}) ? 'tread' : 'rubber') : m === 'cotton' || m === 'silk' || m === 'foam' ? 'weave' : m === 'leather' ? 'leather' : m === 'cast-iron' ? 'cast' : /^al-/.test(m) && !p.make ? 'brushed' : classOf(m) === 'metal' ? 'paint' : m === 'granite' || m === 'marble' ? 'stone' : classOf(m) === 'polymer' && m !== 'pc' && m !== 'pmma' ? 'texture' : null;
-        if (f) { p.finish = f; n++; }
+        if (f) { p.finish = f; p.finishBy = 'finishes'; n++; }
       }
       return n;
     },
@@ -508,4 +508,5 @@ export function addDetails(root: Part, cond: Conditions, on: (r: DetailRule) => 
 }
 /** A thing without the details a pipeline added (to add them again after it is changed). */
 /** (what the critic cut, an opening for a wheel, is a change to the thing itself, and stays) */
-export function stripDetails(p: Part): Part { if (p.sealed) return p; return { ...p, parts: p.parts?.filter((q) => !q.detail || q.detail === 'room to move').map(stripDetails), finish: undefined, wear: undefined }; }
+// (only the finishes it chose itself, by material: a finish its maker gave a part (a wheel painted, not polished) stays)
+export function stripDetails(p: Part): Part { if (p.sealed) return p; return { ...p, parts: p.parts?.filter((q) => !q.detail || q.detail === 'room to move').map(stripDetails), finish: p.finishBy ? undefined : p.finish, finishBy: undefined, wear: undefined }; }

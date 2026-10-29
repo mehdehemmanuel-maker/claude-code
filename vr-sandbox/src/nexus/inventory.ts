@@ -1357,6 +1357,7 @@ pt('fender-flare', 'fender flare', 'mould', 'abs', 'a moulded ABS band round a w
 pt('side-skirt', 'side skirt', 'mould', 'abs', 'a moulded ABS skirt along the rocker, screwed along its foot and taped along its top', [1800, 90, 25]);
 pt('front-lip', 'front lip', 'mould', 'abs', 'a moulded ABS lip under the front bumper, screwed up into its foot', [1600, 15, 120]);
 pt('rear-valance', 'rear valance', 'mould', 'abs', 'a moulded ABS valance under the rear bumper', [1600, 15, 100]);
+pt('scoop-vent', 'scoop vent', 'mould', 'abs', 'a black moulded mesh across a bolt-on scoop\'s opening, closed behind', [450, 400, 4]);
 pt('quarter-scoop', 'quarter scoop insert', 'mould', 'abs', 'a moulded ABS insert in a scoop on the rear quarter', [500, 450, 12]);
 pt('wing-blade', 'wing blade', 'laminate', 'fibreglass', 'a cambered blade laid up in glass fibre and resin, painted', [1600, 40, 320]);
 pt('wing-upright', 'wing upright', 'cast', 'al-a380', 'a cast aluminium upright, bolted through the deck lid', [150, 200, 12]);

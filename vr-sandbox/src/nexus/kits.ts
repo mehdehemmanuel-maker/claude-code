@@ -106,6 +106,8 @@ export interface Part {
   /** a round part drawn with so many flat sides (a hex head: 6) */ facets?: number;
   /** it glows (a lamp's light, lit or not) */ glow?: boolean;
   /** how its surface looks at its true size, as its material and making leave it: grain, brick, tread, weave… */ finish?: string;
+  /** its finish was chosen by the make pipeline's rule of that name (by its material), not by its maker: so taking the
+   *  pipeline's work off takes it off */ finishBy?: string;
   /** how worn it is, 0 new to 1 derelict */ wear?: number;
   /** its look's layers: substrate, treatment, coat, wear (appearance.ts) */ look?: import('./appearance').Look;
   /** it goes on public roads (and so carries number plates and mirrors): where it is sold, so its plates are that

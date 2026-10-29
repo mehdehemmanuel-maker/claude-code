@@ -1087,3 +1087,14 @@ findings; recipes: all met. Blind check: read as "a black two-door coupe with re
 Holden Monaro / Pontiac GTO at about 25 % confidence, not a Monte Carlo; its list: flares flat and stuck on, a smooth body
 without mirrors or shut lines that read, the arches seen through, a crude wing, the lip and valance floating as blades,
 the scoop insert an outline that reads as a bracket, the skirts flat bars, the ends unfinished.
+- **2026-10-29, the Monte Carlo's kit, second round (from the blind check).** Flares are now moulded surfaces through four
+lines round each arch, proudest at the lip and falling back onto the skin, their lip read off the skin and smoothed (the
+middle of five, then the mean: single samples caught on a gap had notched them); the skin reader no longer takes the
+inner wheelhouses for the skin (it had put the front flares into the strut springs); the scoop frames a black vent; the
+lip keeps to where the bumper comes down to its foot; a car's face may say its tail lamps' height. Found on the way, for
+every build: the make pipeline's `stripDetails` took off every finish a maker gave a part, not only its own, so a painted
+wheel came back polished: now only the finishes its rule chose (`finishBy`) are taken off. Not fixed, found: the Corolla's
+rules give 2 findings (its hood inner frame in its hood, its battery tray in its heater hose) on every commit back to
+1937fd8, before this work. Blind check: "a four-door sedan in black with red body-kit accents", taken for a Holden
+Commodore at about 20 %, still not a Monte Carlo; its list: the wing flat slabs, the flares thin, the vent flat, the skirts
+and splitter boards, tyres with a chunky tread, the nose blank, the tail lamps boxy, the plates' text clipped.

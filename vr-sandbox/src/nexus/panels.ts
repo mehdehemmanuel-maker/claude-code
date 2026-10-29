@@ -383,7 +383,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const vTopF = Math.min(vAt(uMidF, yTopF - 0.012), vUnder(hl0, uG, 0.012)), lampW: Win = { u0: hl0, u1: uG, v0: hb0, v1: vTopF }, grilleW: Win = { u0: uG, u1: 1, v0: Math.min(gv0, hb0), v1: Math.min(vAt(uN(0.01), yTopF - 0.012), vUnder(uG, 1, 0.012)) }, intakeW: Win = { u0: uI, u1: 1, v0: vI0, v1: vI1 };
   // the back: its tail lamps round the corners, under the deck's edge, from the tail's face out along the sides; the
   // valance low across the bumper
-  const yTopT = pointAt(side, uTl(0.08), 1)[1], uMidT = uTl(0.22), tb0 = vAt(uMidT, yTopT - 0.03 - 0.12), lowT = ln.low(ln.xT + 0.05);
+  const yTopT = pointAt(side, uTl(0.08), 1)[1], uMidT = uTl(0.22), tb0 = vAt(uMidT, yTopT - 0.03 - (b.lines.face?.tail ?? 0.12)), lowT = ln.low(ln.xT + 0.05);
   // (a lamp's opening only where the skin turns gently enough to set its housing in as deep as it asks, its back no
   // nearer than 80% of its depth to folding: round a box van's tight tail corner, the longest run of the window that
   // does, not all of it)
@@ -748,7 +748,7 @@ const skinPts = new WeakMap<Patch, { at: V3; n: V3 }[]>();
 export function skinOf(parts: Part[]): Skin {
   const pts: Skin['pts'] = [];
   for (const p of parts) {
-    if (!p.shape || !('surf' in p.shape) || /liner|handle|lamp|light|grille|glass|windscreen|plate|seam|shut line|mirror/.test(p.name)) continue;
+    if (!p.shape || !('surf' in p.shape) || /liner|wheelhouse|handle|lamp|light|grille|glass|windscreen|plate|seam|shut line|mirror/.test(p.name)) continue;
     const pt = p.shape.surf; let got = skinPts.get(pt);
     if (!got) { got = []; for (let i = 0; i <= 64; i++) for (let j = 0; j <= 32; j++) { const q = patchAt(pt, i / 64, j / 32); got.push({ at: q.at, n: q.n }); } skinPts.set(pt, got); }
     pts.push(...got);
