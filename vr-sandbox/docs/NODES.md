@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 565 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 566 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -36,13 +36,13 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | derived | 299 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
-| estimated | 6 | typical values or an estimate, said so |
+| estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 71 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 525 tested here (their own tests: that they do what they say, not that the world does); 31 untested; none validated against experiment.
+Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 526 tested here (their own tests: that they do what they say, not that the world does); 31 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 458 of 565 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 458 of 566 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -245,7 +245,7 @@ What things give off and afford, gases, who notices what, agents and their goals
 - **What it lets you do** (`afford`): What every part of a thing lets a body do, read from its shape, mass, joints and material against that body (an adult, or a child of 8: its grip, reach, knee height, stride and strength from its stature): grasp a bar … *simplified, tested here, before the update*
 - **Who notices what** (`sense`): What each observer takes in where it stands, facing what it faces: a person sees by rays out from its eyes packed as its acuity is (sharp where it looks, thin to the side), each meeting the first thing in its way; … *simplified, tested here, before the update*
 
-## 8 · Laws and formulas (352)
+## 8 · Laws and formulas (353)
 
 Every physical law as a calculator, by its field, and formulas you write.
 
@@ -255,7 +255,7 @@ Every physical law as a calculator, by its field, and formulas you write.
 - **Electronics & embedded** (3): LED resistor, RC filter corner, Voltage divider
 - **Energy & environment** (2): Battery runtime, Solar panel, a day
 - **Everyday** (1): Unit converter
-- **Manufacturing** (3): Filament for a print, Machining time, Spindle speed
+- **Manufacturing** (4): Filament for a print, Machining time, Spindle speed, Surface texture from the process (roughness, gloss)
 - **Materials** (21): Area of a circle, Axial stiffness of a bar, Carbon dioxide a lime can hold, Composite and mixture properties (micromechanics), Contact angle (Young), Endurance limit of steel, Flexural stiffness of a beam, Griffith criterion, Hall-Petch relation, Hooke's law, Inverse rule of mixtures (across the fibre), Piezo stack stroke, Polar moment of a circle, Reflectance colour (Fresnel, CIE 1931), Rule of mixtures (along the fibre), Scale-up for sintering shrinkage, Second moment of a circle, Thermal expansion, Torsion constant of a rectangle, Torsional stiffness of a bar, Von Mises stress
 - **Math** (10): Add, Divide, Formula, Integral, Multiply, Power, Round, Slope, Statistics, Subtract
 - **Mechanical** (45): Bearing life in hours, Bearing rating life (L10), Belt or rim speed, Bolt tightening torque (nut factor), Capstan (belt friction) equation, Centripetal force, Chain pull, Chain speed, Conservation of momentum (two bodies that stick), Cornering speed limit, Coulomb friction, Efficiency of a power screw, Energy a flywheel can hold per kilogram, Energy in a spring, Force from a power screw, Froude number of a gait, Gear tooth bending stress (Lewis), Grade resistance, Gravitational potential energy, Gravitational time dilation, Gruebler's equation (planar), Helical spring rate, Helical torsion spring rate, Hertzian contact (a sphere on a flat), Hill's muscle equation, Kinetic energy, Moment of inertia of a disc, Moment of inertia of a rod about its end, Natural frequency of a mass on a spring, Newton's second law, Parallel axis theorem, Pendulum period, Power of a force, Power of a torque, Rocket equation, Rolling resistance, Rotational kinetic energy, Shaft diameter for bending and torque (static), Speed after a fall, Speed of a longitudinal wave in a bar, Stopping distance, Torque at a wheel, Torque through a gear train, Traction limit, Weight

@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { edgeRadius } from '../finish';
+import { FINISH_MAKE, edgeRadius, surfaceOf } from '../finish';
 import type { Cut, Part, Shape } from '../kits';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { massOf } from '../mass';
@@ -40,6 +40,9 @@ export const GRAIN: Record<string, { size: number; depth: number; rough: number;
   ground: { size: 0.00018, depth: 0.08, rough: 0.04, stretch: [0.04, 1, 0.04] }, brushed: { size: 0.00025, depth: 0.14, rough: 0.07, stretch: [0.03, 1, 0.03] }, satin: { size: 0.0004, depth: 0.08, rough: 0.04 },
   paint: { size: 0.003, depth: 0.05, rough: 0.03 }, enamel: { size: 0.002, depth: 0.03, rough: 0.02 }, texture: { size: 0.0006, depth: 0.35, rough: 0.12 }, matte: { size: 0.001, depth: 0.15, rough: 0.1 }, plate: { size: 0.0005, depth: 0.05, rough: 0.03 },
   tread: { size: 0.0008, depth: 0.3, rough: 0.1 }, weld: { size: 0.002, depth: 0.6, rough: 0.2, stretch: [1, 0.25, 1] }, thread: { size: 0.0004, depth: 0.2, rough: 0.06 }, weave: { size: 0.0012, depth: 0.4, rough: 0.1, stretch: [1, 0.3, 1] },
+  // (a process's own: a cut surface's marks one feed apart, round its axis; a print's layers; a blast's dimples)
+  turned: { size: 0.00015, depth: 0.16, rough: 0.05, stretch: [0.04, 1, 0.04] }, 'face-milled': { size: 0.0001, depth: 0.14, rough: 0.05, stretch: [0.05, 1, 0.05] }, printed: { size: 0.0002, depth: 0.45, rough: 0.08, stretch: [1, 0.06, 1] },
+  lapped: { size: 0.00008, depth: 0.03, rough: 0.02 }, 'bead blasted': { size: 0.0004, depth: 0.12, rough: 0.05 }, 'sand cast': { size: 0.0008, depth: 0.55, rough: 0.16 }, 'die cast': { size: 0.0005, depth: 0.12, rough: 0.05 }, 'spark eroded': { size: 0.00025, depth: 0.35, rough: 0.1 },
   leather: { size: 0.0015, depth: 0.3, rough: 0.1 }, stone: { size: 0.002, depth: 0.5, rough: 0.15 }, concrete: { size: 0.003, depth: 0.6, rough: 0.2 }, grain: { size: 0.002, depth: 0.25, rough: 0.08, stretch: [1, 0.08, 1] },
 };
 /** A material given its finish's grain: a bump drawn in the shader from the surface's place (value noise over its size,
@@ -70,12 +73,17 @@ const matFor = (color: number, mat: string | undefined, glow: boolean, finish?: 
     const metal = /steel|al-|copper|iron|gold|silver|titanium/.test(mat ?? ''), glass = mat === 'glass' || mat === 'pmma' || mat === 'pc', f = finish ? FINISH[finish] : undefined, rubber = mat === 'rubber';
     // worn: bare steel rusts, paint fades toward grey and gathers dirt, everything goes rougher (an estimate of how it looks)
     const c = new THREE.Color(color); if (w > 0) { if (metal && !/stainless|al-|gold|titanium/.test(mat ?? '') && finish !== 'paint') c.lerp(RUST, w * 0.7); else c.lerp(DIRT, w * 0.35).offsetHSL(0, -w * 0.3, 0); }
-    const rough = Math.min(1, (f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
+    // (a finish that is a process: its roughness from the surface the process leaves (finish.ts): α = r², α its facets' rms
+    // slope; along its lay where it has one, the slope across it as anisotropy, as three.js takes it: α across = α along +
+    // s² (1 − α along))
+    const sf = finish && FINISH_MAKE[finish] ? surfaceOf(FINISH_MAKE[finish]!) : undefined;
+    const rough = Math.min(1, (sf ? Math.sqrt(sf.lay ? sf.alphaAlong : sf.alphaAcross) : f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
+    const aniso = sf?.lay && sf.alphaAcross > sf.alphaAlong ? Math.sqrt((sf.alphaAcross - sf.alphaAlong) / (1 - sf.alphaAlong)) : 0;
     // (tinted glass, a car's windows, is mostly reflection: nearly opaque, dark, glossy; clear glass and lenses are see-through)
-    const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: rough, metalness: f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
+    const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: rough, metalness: sf && metal ? 1 : f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
     // (a turned or lofted shell is open at its ends or its inside: drawn on both its faces; paint and glass take a clear
     // coat, the gloss that shows a body's shape in what it reflects)
-    m = (f?.coat || glass) && !w ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: f?.coat ?? 1, clearcoatRoughness: 0.04 }) : new THREE.MeshStandardMaterial(base); if (open) m.side = THREE.DoubleSide;
+    m = (f?.coat || glass) && !w ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: f?.coat ?? 1, clearcoatRoughness: 0.04 }) : aniso > 0 ? new THREE.MeshPhysicalMaterial({ ...base, anisotropy: aniso, anisotropyRotation: Math.PI / 2 }) : new THREE.MeshStandardMaterial(base); if (open) m.side = THREE.DoubleSide;
     // (its grain by its finish; a rubber or a moulding with none said takes its making's)
     const gr = GRAIN[finish ?? (rubber ? 'tread' : /^(abs|pp|pe|nylon|pbt|pc)$/.test(mat ?? '') ? 'texture' : '')]; if (gr && !glow && !glass) grained(m, gr);
     mats.set(key, m);

@@ -913,3 +913,17 @@ electron energy-loss spectra) made platinum reflect 95 % where it reflects about
 measurements. Tin has none covering the visible here; lead's starts at 450 nm (held below, said). It says why: copper
 gives back 94 % of red, 62 % of green and 54 % of blue, its electrons taking the bluer light; silver 98 to 99 % of every
 colour, so white-silver. A starter board of fourteen polished spheres, each coloured only by this.
+- **2026-10-29, phase 3.3, surfaces from the process (first half).** `finish.ts` keeps twelve processes (turned,
+face milled, printed, ground, brushed, polished, lapped, bead blasted, sand cast, die cast, forged, spark eroded). A cut
+surface is worked out from its feed and tool radius: the tool's arcs one feed apart give Ra = f²/18√3 r (Shaw), Rq =
+f²/4√45 r, and its facets' rms slope across the lay f/2√3 r. A random surface takes the figures typical of its process,
+labelled. How much light stays in a mirror image is Davies' exp(−(4π Rq/λ)²) at 550 nm; how wide the highlight spreads
+is the facets' slope (GGX α), so the renderer's roughness is √α along the lay and the lay is anisotropy across it
+(MeshPhysicalMaterial). Found: calling a surface "matt" from the mirror-image share alone was wrong; a turned shaft
+gives no mirror image yet a sharp highlight. Its look is now said from the slopes, and its image from the heights.
+"Polished" made a true mirror polish (Ra 0.02 µm, 72 % of green light kept in the image). Every part's finish word
+maps to its process (machined → turned, chrome → polished, cast → sand cast, satin → bead blasted), and the process
+names are finishes themselves, wirable into any shape (a new `finish` input). A node, `surface.finish` (ICS 17.040.20),
+tested on the cusp formula and Davies' share; a starter board of five steel bars, iron's colour from its optics, one per
+process. Seen: turned and ground streak along the axis, polished mirrors the room, blasted is evenly matt, cast grainy.
+Left: a turned end face shows radial marks where facing leaves rings; oxides and heat tint (the second half) next.

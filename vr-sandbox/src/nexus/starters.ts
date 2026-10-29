@@ -264,6 +264,22 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'Copper: why'; wire(b, 'c12', 'says', 'why', 'value');
     return tidy(b);
   }],
+  ['Steel, finished five ways: turned, ground, polished, bead blasted and sand cast, each surface\'s roughness and gloss worked out from how it was made, its colour from iron\'s optics', () => {
+    // how a surface looks is how it was made (docs/REALITY.md phase 3.3): the tool's marks set its roughness, its facets'
+    // slopes how wide the highlight spreads; the metal's own optics its colour
+    const b = emptyBoard('Steel, finished five ways');
+    placeBlock(b, 'optics.colour', 0, 0, { metal: 'iron' }, 'fe'); b.nodes.fe!.label = 'Iron: its colour';
+    const ways = ['turned', 'ground', 'polished', 'bead blasted', 'sand cast'];
+    ways.forEach((w, k) => {
+      placeBlock(b, 'surface.finish', 0, 0, { process: w }, `f${k}`); b.nodes[`f${k}`]!.label = `${w[0]!.toUpperCase()}${w.slice(1)}: its surface`;
+      placeBlock(b, 'shape.cyl', 0, 0, { name: `${w} bar`, mat: 'steel-low', r: 0.02, h: 0.16 }, `s${k}`); wire(b, 'fe', 'hex', `s${k}`, 'color'); wire(b, `f${k}`, 'finish', `s${k}`, 'finish');
+      placeBlock(b, 'place', 0, 0, { x: k * 0.07 - 0.14, y: 0.08 }, `p${k}`); wire(b, `s${k}`, 'part', `p${k}`, 'thing');
+    });
+    placeBlock(b, 'combine', 0, 0, { name: 'five finishes' }, 'all'); ways.forEach((_, k) => wire(b, `p${k}`, 'placed', 'all', 'things'));
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'Left to right: turned, ground, polished, bead blasted, sand cast'; wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'Turned: why it shines in a streak'; wire(b, 'f0', 'says', 'why', 'value');
+    return tidy(b);
+  }],
   ['Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one', () => {
     // a material is what goes into it and how it is arranged (docs/REALITY.md phase 2.4): each worked out, not looked up
     const b = emptyBoard('Materials from their phases');
