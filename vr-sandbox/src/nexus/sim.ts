@@ -59,7 +59,12 @@ export interface SimJointOut {
   /** the motor driving it: where it ended, and the energy over the run, J */
   drive?: { rpm: number; current: number; maxCurrent: number; energyIn: number; copper: number; out: number; friction: number; /** lost in a gearhead */ gears: number };
 }
-export interface SimOut { ends: SimEnd[]; parts: { name: string; at: V3; turn: V3 }[]; seconds: number; restedAt: number | null; track: SimTrack; hulls: string[]; joints: SimJointOut[] }
+/** Energy over the run, J: nothing is lost, only moved. The bodies' mechanical energy (½ m v², ½ ω·I ω, m g h) at the
+ *  start and the end, the work done on them (pushes and motors), and what the bodies' mechanical energy does not hold of
+ *  it at the end: gone into the molecules' motion (heat: collisions, sliding, joints' friction, the engine's own damping),
+ *  each body's mechanical energy at the end with it. */
+export interface SimEnergy { start: number; end: number; work: number; heat: number; bodies: { name: string; start: number; end: number }[] }
+export interface SimOut { ends: SimEnd[]; parts: { name: string; at: V3; turn: V3 }[]; seconds: number; restedAt: number | null; track: SimTrack; hulls: string[]; joints: SimJointOut[]; energy: SimEnergy }
 
 type Q4 = [number, number, number, number];
 const quatOf = (m: M3): Q4 => {
@@ -251,6 +256,17 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     d.energyIn += Vin * I * dt; d.copper += I * I * m.R * dt; d.out += T * out * dt; d.friction += Tf * w * dt; d.gears += Tm * w * dt - T * out * dt;
   };
   const dt = 1 / 240, track: SimTrack = { names: live.flatMap((l) => l.rel.map((x) => x.part.name)), frames: [] };
+  // each body's mechanical energy: moving, turning (in its principal frame, from the engine's own inertia) and lifted
+  const gv = ps.GetGravity(), grav: V3 = [gv.GetX(), gv.GetY(), gv.GetZ()];
+  const mech = (l: Live): number => {
+    const b = l.body, mp = b.GetMotionProperties(), im = mp.GetInverseMass(); if (!(im > 0)) return 0;
+    const m = 1 / im, v = b.GetLinearVelocity(), lin = 0.5 * m * (v.GetX() ** 2 + v.GetY() ** 2 + v.GetZ() ** 2);
+    const w = b.GetAngularVelocity(), wv: V3 = [w.GetX(), w.GetY(), w.GetZ()], r = b.GetRotation(), dv = mp.GetInverseInertiaDiagonal(), d: V3 = [dv.GetX(), dv.GetY(), dv.GetZ()], iq = mp.GetInertiaRotation();
+    const p = apply(T(matQ([iq.GetX(), iq.GetY(), iq.GetZ(), iq.GetW()])), apply(T(matQ([r.GetX(), r.GetY(), r.GetZ(), r.GetW()])), wv)), rot = 0.5 * [0, 1, 2].reduce((s, k) => s + (d[k]! > 0 ? p[k]! ** 2 / d[k]! : 0), 0);
+    const c = b.GetCenterOfMassPosition(), lift = -m * (grav[0] * c.GetX() + grav[1] * c.GetY() + grav[2] * c.GetZ());
+    return lin + rot + lift;
+  };
+  const e0 = live.map(mech); let work = 0;
   let t = 0, restedAt: number | null = null, sample = 0;
   const pushed = o.push ? live.find((l) => l.thing.name === o.push!.name || l.rel.some((x) => x.part.name === o.push!.name)) : undefined;
   if (o.push && !pushed) throw new Error(`Nothing named ${o.push.name} is let go here`);
@@ -263,6 +279,7 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
       if (pushOff) { const p = pushed.body.GetPosition(), r = pushed.body.GetRotation(), at = [p.GetX(), p.GetY(), p.GetZ()], w = apply(matQ([r.GetX(), r.GetY(), r.GetZ(), r.GetW()]), pushOff); bi.AddForce(pushed.body.GetID(), V(o.push!.force), R([at[0]! + w[0], at[1]! + w[1], at[2]! + w[2]]), J.EActivation_Activate); }
       else bi.AddForce(pushed.body.GetID(), V(o.push!.force), J.EActivation_Activate);
     }
+    if (pushed && t < o.push!.seconds) { const v = pushed.body.GetLinearVelocity(); work += (o.push!.force[0] * v.GetX() + o.push!.force[1] * v.GetY() + o.push!.force[2] * v.GetZ()) * dt; }
     for (const h of held) if (h.d) drive(h, dt);
     // with joints, four steps to each: a hinge's solver loses a little of a swing's energy each step, less the shorter the step
     jolt.Step(dt, held.length ? 4 : 1); t += dt;
@@ -282,8 +299,11 @@ export function simulate(J: Jolt, things: SimThing[], fixed: SimBox[], o: { seco
     for (const x of poses) parts.push({ name: x.name, at: x.at, turn: eulerOf(x.turnM) });
   }
   const joints = held.map((h) => ({ ...h.out, end: valueOf(h), ...(h.d ? { drive: h.d } : {}) }));
+  const e1 = live.map(mech), start = e0.reduce((a, b) => a + b, 0), end = e1.reduce((a, b) => a + b, 0);
+  work += held.reduce((a, h) => a + (h.d?.out ?? 0), 0);
+  const energy: SimEnergy = { start, end, work, heat: start + work - end, bodies: live.map((l, k) => ({ name: l.thing.name, start: e0[k]!, end: e1[k]! })) };
   J.destroy(jolt);
-  return { ends, parts, seconds: t, restedAt, track, hulls, joints };
+  return { ends, parts, seconds: t, restedAt, track, hulls, joints, energy };
 }
 
 // ---- what the board makes, let go -----------------------------------------------------------------------------------------

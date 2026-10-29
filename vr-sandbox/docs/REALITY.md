@@ -860,8 +860,8 @@ that the engine carried onto the port it names) and more than its tolerance, nev
 judged so: 100 ± 3 J in against 90 ± 4 J out is 10 ± 5 J, not warned; 100 ± 1 against 90 ± 1 is 10 ± 1.4 J, warned
 (its `violation` output stays the fixed-tolerance verdict). Applied along the chains: the thermal analysis's energy in,
 to the air and held; the flow's Kirchhoff balance at every junction; each motor in the physics, its electrical energy
-against its copper's heat, its friction, its gears' loss and its work out (the electrical-to-heat chain). Collisions
-are not balanced: Jolt does not report what they dissipate (said). The solvers' own error is now in their ±: how far
+against its copper's heat, its friction, its gears' loss and its work out (the electrical-to-heat chain). Collisions:
+see below (the energy is not lost, it is moved). The solvers' own error is now in their ±: how far
 halving the slices moved the answer, taken whole as the error of the finer cut, summed in quadrature with the
 materials' spread. Found by it: on the rods board the flow's 5.72 K/W is ± 0.16 (2.8 %), but the frame's give under the
 side push is 0.31 ± 0.09 mm (29 %), not settled at 8 slices; the contact links run from slice middle to slice middle, so
@@ -881,3 +881,19 @@ moves with the cut is where it is held: a held piece is clamped at its slice's m
 is cut finer (its free length grows; the give with its cube: 2.26 times from 2 to 32 slices by that alone, 2.09 seen).
 Holding at the face rather than the middle is the next refinement. The con-rod's check is unchanged (294 kN; its eyes
 meet its beam head on).
+
+**Phase 2.5, energy moved, not lost (2026-10-29).** The user: "energy collisions don't lose it, it can relocate into
+thermal energy and the molecular energy … it's a scale thing, everything is made of energy trapped in loops". So the
+physics now accounts its energy whole: each body's mechanical energy at the start and the end (½ m v², ½ ω·I ω in its
+principal frame from the engine's own inertia, m g h against the engine's own gravity), the work done on them (pushes as
+F·v at the centre of mass, motors' work out), and what the bodies' mechanical energy no longer holds at the end gone
+into their molecules' motion: heat (collisions, sliding, joints' friction, and the engine's own numerical damping, which
+in the real thing is the air and the hinge). Where the heat lands the engine does not say (which contact, how much to the
+floor); if it all stayed in the bodies, shared by their heat capacity (m c of their materials), they are this much
+warmer together: the most it can warm them. Heat below nothing would be energy made from nothing, the engine's own
+error: judged as a balance and said. Checked: a 100 mm steel cube let fall 0.5 m and come to rest turned m g h = 38.5 J to
+heat, to 0.5 % (the node's own test). On the boards: the steel ball into the wooden tower, 57.2 J at the start and 56.7 J
+of push, 17.1 J left mechanical, 96.8 J to heat (0.028 K warmer, at most); the cart, its motors' 2,079 J, 1,995 J into
+its motion and 83.8 J to heat; the pendulum, 0.345 J of its 32.2 J to heat over its run (the hinge solver's loss: in the
+real thing, the hinge's friction and the air).
+

@@ -40,7 +40,7 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 71 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 523 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
+Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 524 tested here (their own tests: that they do what they say, not that the world does); 31 untested; none validated against experiment.
 
 Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 458 of 564 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
@@ -222,7 +222,7 @@ Physics, motion, the clock, chips run from their transistors, engines under load
 - **Follow a path** (`follow`): Things moving along a path at the clock's time: each speeds up and slows as a car does, keeps a gap to the one ahead, and stops at a stop line while its way is red (or yellow, if it can stop). *simplified, tested here, before the update*
 - **Forever** (`forever`): Things repeated without end on a lattice (along x, y, z, or any of them), each cell one of them picked from the seed: the same cell, the same one. *hypothetical, tested here, before the update*
 - **Hinge** (`hinge`): A revolute joint for Let it go: one thing turning on another (or on the world, fixed) about an axis through a point, between limits, with friction. *derived, tested here, before the update*
-- **Let it go** (`letgo`): Real rigid-body physics (Jolt) over what is made: each thing it places a body of all its pieces, its mass from its materials, falling, landing, sliding, tipping and coming to rest on the floor, on what it is put on … *simplified, untested, before the update*
+- **Let it go** (`letgo`): Real rigid-body physics (Jolt) over what is made: each thing it places a body of all its pieces, its mass from its materials, falling, landing, sliding, tipping and coming to rest on the floor, on what it is put on … *simplified, tested here, before the update*
 - **Netlist** (`netlist`): A chip as its transistors: each a switch between two nodes, closed while the node at its gate is high, some nodes held high by a load. *measured, untested, before the update*
 - **Push** (`push`): A force on one thing Let it go lets go, for so long from the start: a shove, a kick, a gust *simplified, tested here, before the update*
 - **Run an engine** (`engine.run`): Any piston engine run from what it is (its bore, stroke, rod, compression, cylinders and the intake valves its head is built with): each cylinder crank degree by crank degree, filled as its valves let it (Taylor's … *simplified, tested here, before the update*
