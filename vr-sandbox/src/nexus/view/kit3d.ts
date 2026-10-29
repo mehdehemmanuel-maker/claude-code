@@ -236,7 +236,7 @@ function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string): THREE.BufferG
   }
   const out = a.geometry; drilled.set(key, out); return out;
 }
-function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
+export function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
   if ('ground' in s) return groundGeometry(s.ground);
   if ('surf' in s) return surfGeometry(s.surf);
   if ('loft' in s) return loftGeometry(s.loft);

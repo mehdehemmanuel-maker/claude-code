@@ -335,6 +335,23 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'The worn panel: why there'; wire(b, 'l_worn', 'says', 'why', 'value');
     return tidy(b);
   }],
+  ['Rebuilt from a photograph: the Monte Carlo against its owner\'s side photograph, its camera solved, its silhouette compared, its lines fitted and compared again, and what to photograph or measure next', () => {
+    // (docs/RECONSTRUCT.md: image → features → camera → model → render → compare → correct → ask; every step a node)
+    const b = emptyBoard('Rebuilt from a photograph');
+    placeBlock(b, 'photo.load', 0, 0, { id: 'mc-side' }, 'ph'); b.nodes.ph!.label = 'The owner\'s photograph';
+    placeBlock(b, 'photo.features', 0, 0, { r: 5 }, 'ft'); b.nodes.ft!.label = 'Its marks, snapped to edges'; wire(b, 'ph', 'image', 'ft', 'image'); wire(b, 'ph', 'marks', 'ft', 'marks');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'car'); b.nodes.car!.label = 'The model, as built';
+    placeBlock(b, 'camera.solve', 0, 0, {}, 'cam'); b.nodes.cam!.label = 'The camera, from its wheels'; wire(b, 'ft', 'features', 'cam', 'features'); wire(b, 'car', 'machine', 'cam', 'machine'); wire(b, 'ph', 'w', 'cam', 'w'); wire(b, 'ph', 'h', 'cam', 'h');
+    placeBlock(b, 'photo.measure', 0, 0, {}, 'dim'); b.nodes.dim!.label = 'Its dimensions off the photograph'; wire(b, 'ft', 'features', 'dim', 'features'); wire(b, 'cam', 'camera', 'dim', 'camera'); wire(b, 'cam', 'cameras', 'dim', 'cameras'); wire(b, 'car', 'machine', 'dim', 'machine');
+    placeBlock(b, 'render.silhouette', 0, 0, {}, 's0'); b.nodes.s0!.label = 'The model seen by that camera'; wire(b, 'car', 'vehicle', 's0', 'thing'); wire(b, 'cam', 'camera', 's0', 'camera');
+    placeBlock(b, 'compare.outline', 0, 0, {}, 'c0'); b.nodes.c0!.label = 'Against the photograph: before'; wire(b, 's0', 'mask', 'c0', 'mask'); wire(b, 'ft', 'features', 'c0', 'features'); wire(b, 'cam', 'camera', 'c0', 'camera');
+    placeBlock(b, 'fit.lines', 0, 0, { most: 60, scale: 0.5 }, 'fit'); b.nodes.fit!.label = 'Its lines fitted to the photograph'; wire(b, 'car', 'machine', 'fit', 'machine'); wire(b, 'cam', 'camera', 'fit', 'camera'); wire(b, 'cam', 'cameras', 'fit', 'cameras'); wire(b, 'ft', 'features', 'fit', 'features');
+    placeBlock(b, 'render.silhouette', 0, 0, {}, 's1'); b.nodes.s1!.label = 'The fitted model seen by that camera'; wire(b, 'fit', 'vehicle', 's1', 'thing'); wire(b, 'cam', 'camera', 's1', 'camera');
+    placeBlock(b, 'compare.outline', 0, 0, {}, 'c1'); b.nodes.c1!.label = 'Against the photograph: after'; wire(b, 's1', 'mask', 'c1', 'mask'); wire(b, 'ft', 'features', 'c1', 'features'); wire(b, 'cam', 'camera', 'c1', 'camera');
+    placeBlock(b, 'ask.next', 0, 0, {}, 'ask'); b.nodes.ask!.label = 'What to photograph or measure next'; wire(b, 'fit', 'figures', 'ask', 'figures'); wire(b, 'dim', 'dimensions', 'ask', 'dimensions'); wire(b, 'cam', 'ambiguity', 'ask', 'ambiguity');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'fit', 'vehicle', 'show', 'thing');
+    return b;
+  }],
   ['Chevrolet Monte Carlo SS (2004), built from its first parts: its 3.8 L V6 and four-speed automatic drawn piece by piece, checked that nothing runs into anything and that it comes apart to the bottom', () => {
     // a real car by its published figures (machines.ts, each sourced or said to be an estimate), built from its parts
     const b = emptyBoard('Chevrolet Monte Carlo SS (2004)');

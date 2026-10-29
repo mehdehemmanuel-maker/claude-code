@@ -1120,3 +1120,13 @@ now read as a two-door ("a 2-door built on a sedan body"), still not as a Monte 
 10 %): its body hangs nearly to the ground beside each arch with no sill line, the arches cut as notches with the
 suspension showing; a long slab deck and a tall plain tail; the wheels small and flat chrome; the door a flat cut-out.
 The body falling to the ground by its arches is every car's, from the body maker's bottom line: next.
+- **2026-10-29, rebuilding the user's own object from photographs: the closed loop, first round** (docs/RECONSTRUCT.md).
+Photograph → edge-snapped features → camera solved from the published wheel places → dimensions through every camera
+that fits → the model rendered from that camera → its silhouette compared with the photograph's by region → the body's
+line figures fitted → rendered and compared again → the one photograph or measurement that settles the most. Each a node,
+on the board "Rebuilt from a photograph". On the user's side photograph: the camera fits to 5.0 px rms but is not fixed
+(4.2 to 54.6 m away fit as well: the photographs have no EXIF); length 4.59 ± 0.48 m against the published 5.027 m, not
+fixed; IoU 0.831 → 0.841, mean outline error 68 → 62 mm after fitting; nose −113 mm and tail −133 mm left unresolved.
+Asked for: the original photograph file or the phone and lens. Not done: joining several photographs into one solution,
+the garage photographs not marked, outlines traced by eye (no segmentation), only the line figures fitted, 2 s an
+evaluation.

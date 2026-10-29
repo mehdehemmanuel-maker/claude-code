@@ -27,6 +27,7 @@ import { starterBoards } from './starters';
 import { searchCatalogue } from './catalogue';
 import { NAMED } from './navigate-named';
 import { stocked } from './stock';
+import './reconstruct';
 import type { Board, BoardNode, BoardEdge } from './boards';
 
 const nodesIn = (b: Board): (BoardNode & { id: string })[] => Object.entries(b.nodes).filter(([, n]) => !n.deleted && n.block).map(([id, n]) => ({ ...n, id }));

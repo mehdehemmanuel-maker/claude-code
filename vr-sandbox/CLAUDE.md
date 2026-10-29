@@ -198,6 +198,15 @@ the task list and lose the why. So the why lives here, and every round is checke
 - "Make sure every peice built is stored correctly in node librarie every sub component stored every sub sub component
   make that a law you either use what's in the library or create something and store in the library" (2026-10-29: the
   built-parts library, `stock.ts`, and law 4 below)
+- "Look everything your doing needs to be done in nodes or if missing a tool make it and put it in nodes Upgrade CAD
+  Visual Reconstruction Accuracy … The system generates plausible geometry instead of faithfully reconstructing the actual
+  object … Multi-view analysis … Feature extraction … Geometric constraints … Uncertainty tracking: Separate observed,
+  measured, inferred, and unknown geometry. Never silently treat guesses as facts … Parametric reconstruction … Visual
+  verification loop: Render the model from the original camera angles, compare silhouettes and feature positions against
+  the reference images, identify errors, and iteratively correct them … Targeted clarification … Build a closed-loop image
+  → geometry → CAD → render → compare → correct pipeline … Audit the existing implementation first. Reuse working
+  components … Report measurable discrepancies and unresolved ambiguities instead of claiming unverified accuracy"
+  (2026-10-29: the plan in `docs/RECONSTRUCT.md`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say

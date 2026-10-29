@@ -382,3 +382,26 @@ export function ode(f: Rates, y0: readonly number[], t0: number, t1: number, o: 
   }
   return out(y, true, steps, worst, rejected, rejected > steps ? `it rejected ${rejected} steps against ${steps} taken: the system may be stiff (backward-euler is made for that)` : undefined);
 }
+
+// ---- minimising a function of several numbers --------------------------------------------------------------------
+/** Where f of several numbers is least, by the downhill simplex (Nelder & Mead, Comput. J. 7, 308 (1965); the standard
+ *  coefficients, reflection 1, expansion 2, contraction 0.5, shrink 0.5, Numerical Recipes §10.5): no derivatives, so a
+ *  function worked out by building and rendering a thing can be minimised. `step` is each number's first stride; it
+ *  stops when the simplex's values agree to `ftol` (absolute) or after `most` evaluations. Each number may be held in a
+ *  range (`lo`, `hi`): a point outside is moved to its edge. */
+export function minimize(f: (x: number[]) => number, x0: number[], o: { step?: number[]; ftol?: number; most?: number; lo?: number[]; hi?: number[] } = {}): { x: number[]; value: number; evaluations: number; converged: boolean } {
+  const n = x0.length, clampX = (x: number[]) => x.map((v, i) => Math.min(o.hi?.[i] ?? Infinity, Math.max(o.lo?.[i] ?? -Infinity, v)));
+  let evals = 0; const F = (x: number[]) => { evals++; const v = f(x); return Number.isFinite(v) ? v : Infinity; };
+  const pts = [clampX(x0)]; for (let i = 0; i < n; i++) { const p = x0.slice(); p[i] = p[i]! + (o.step?.[i] ?? (Math.abs(p[i]!) * 0.05 || 0.05)); pts.push(clampX(p)); }
+  let vals = pts.map(F); const most = o.most ?? 200 * n, ftol = o.ftol ?? 1e-8;
+  while (evals < most) {
+    const ord = vals.map((v, i) => i).sort((a, b) => vals[a]! - vals[b]!); const P = ord.map((i) => pts[i]!), V = ord.map((i) => vals[i]!); pts.splice(0, pts.length, ...P); vals = V;
+    if (Math.abs(vals[n]! - vals[0]!) <= ftol) return { x: pts[0]!, value: vals[0]!, evaluations: evals, converged: true };
+    const c = Array.from({ length: n }, (_, j) => pts.slice(0, n).reduce((s, p) => s + p[j]!, 0) / n), at = (t: number) => clampX(c.map((cj, j) => cj + t * (pts[n]![j]! - cj)));
+    const r = at(-1), fr = F(r);
+    if (fr < vals[0]!) { const e = at(-2), fe = F(e); if (fe < fr) { pts[n] = e; vals[n] = fe; } else { pts[n] = r; vals[n] = fr; } }
+    else if (fr < vals[n - 1]!) { pts[n] = r; vals[n] = fr; }
+    else { const k = at(fr < vals[n]! ? -0.5 : 0.5), fk = F(k); if (fk < Math.min(fr, vals[n]!)) { pts[n] = k; vals[n] = fk; } else { for (let i = 1; i <= n; i++) { pts[i] = clampX(pts[i]!.map((v, j) => pts[0]![j]! + 0.5 * (v - pts[0]![j]!))); vals[i] = F(pts[i]!); } } }
+  }
+  const b = vals.indexOf(Math.min(...vals)); return { x: pts[b]!, value: vals[b]!, evaluations: evals, converged: false };
+}
