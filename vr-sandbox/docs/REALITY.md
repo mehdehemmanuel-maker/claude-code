@@ -555,9 +555,9 @@ the node, in the inspector and in NODES.md. A node counts as current only when i
 
 1. **Load checks read the drawn parts**: rod bolts, crank-pin bearing, wrist pin (`loads.ts`), as the con-rod does. Done 2026-10-29.
 2. **Nodes, field by field** (laws 241, seeds 21, make 16, engine 8, …): each re-checked against units, evidence and ±,
-   its own tests read again ("they could be flawed tests"), named and classified (step K), and so dated after. Open
-   decision for the user: the 241 law nodes were re-checked with units and their examples in step 3; dated by their book
-   entries they read as before the update. Whether to date them by that re-check, or leave them marked until reached.
+   its own tests read again ("they could be flawed tests"), named and classified (step K), and so dated after. Decided
+   by the user (2026-10-29): "if the law nodes fall into the math node hierarchy with no contradictions then they're
+   safe": a law node is current when `lawFits` holds for its law as it now is (all 330 do; see the progress entry).
 3. **Retire what the population shows doubled**, as aliases, so no board breaks.
 
 ### Phase 5. Design population: what was built before the update thrown away and rebuilt
@@ -990,3 +990,18 @@ row that fails, said so, not one that passes. Found by reading them: the drawn r
 while the check judged them as 10.9 (830 MPa); rod bolts are 10.9 or 12.9, so the rod now carries 10.9 (margin 2.88 at
 6,600 rpm). Seen with it, already shown: the starter engine's valve spring lets its valves float above 6,304 rpm,
 under the 6,600 rpm its board runs (margin 0.91), a design fault in that spring for that speed, left for the rebuild.
+- **2026-10-29, phase 4.2, the laws held in the math hierarchy.** The user's rule for the law nodes: current if they fall
+into the math node hierarchy with no contradictions. `lawFits` (lawgraph.ts) holds each law to it. (1) Its term is
+rewritten in the math nodes' own language (`asFormula`: the Formula node's, an integral by the Integral node's
+adaptive Simpson) and run: it must give what the law gives. (2) Its worked example holds. (3) Solved back for each
+input from that example, it holds again wherever it lands (another root is not a contradiction; no root in range is
+said). (4) No chain of other laws to the same quantity gives another answer. Units are held already: a law whose
+term and ports disagree is never built. Found on the way: the Formula language lacked asin, acos, atan, log2, log10
+and erf, functions the laws use, so not every law could be written as math nodes; added (`generate.ts`). The cross-check
+called four laws contradicted that were not: it reached a rectangle's area through a circle's (a length is not said
+to be which length of which shape) and a box's volume through an ellipsoid's, and held the pendulum's series to its
+exact elliptic integral at 10⁻⁶ when they differ by 5 × 10⁻⁶. Fixed in `crossCheck`: geometry laws are not ways to
+each other, and an approximation or an empirical law agrees within 10⁻³ (an estimate), its difference shown. All 330
+laws fit; 10 are reached another way and agree. The record (`book/fits.ts`, each law's hash with it) is written with
+the generated docs (the cross-check takes a minute, too long for the gate); a law changed since counts as before the
+update until worked out again, and a law node that fits shows as current (`builtOf` in evidence.ts).

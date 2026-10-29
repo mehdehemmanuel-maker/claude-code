@@ -10,8 +10,8 @@ What a board is built from: the node library, its laws, its seeds (nodes built f
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Node library | 209 | the library panel | `src/nexus/blocks.ts` |
-| Laws | 323 | the library panel | `src/nexus/law.ts` |
+| Node library | 215 | the library panel | `src/nexus/blocks.ts` |
+| Laws | 330 | the library panel | `src/nexus/law.ts` |
 | Seeds | 21 | the library panel | `src/nexus/seeds.ts` |
 
 ### Flows
@@ -20,7 +20,7 @@ Boards: whole pipelines of nodes to start from, and yours.
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Starter boards | 40 | the library panel | `src/nexus/starters.ts` |
+| Starter boards | 46 | the library panel | `src/nexus/starters.ts` |
 
 ### Products
 
@@ -30,7 +30,7 @@ Real things by their makers' figures: machines, powertrains, the inventory of wh
 | --- | --- | --- | --- |
 | Machines | 7 | `vehicle.model` (its model), `engine.run` (its model); `drive`, `vehicle` (in their code) | `src/nexus/machines.ts` |
 | Powertrains | 1 | `drive`, `engine.run` (in their code) | `src/nexus/power/drive.ts` |
-| Inventory | 2,397 | the mat of 20 nodes (`matter`, `shape.box`, `shape.cyl`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
+| Inventory | 2,397 | `optics.colour` (its metal), `optics.film` (its metal); the mat of 20 nodes (`matter`, `shape.box`, `shape.cyl`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
 
 ### Parts
 
@@ -79,7 +79,7 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 | Flow | Nodes | Which |
 | --- | --- | --- |
-| Worked once: from its inputs, again only when they change (most nodes) | 515 | the rest |
+| Worked once: from its inputs, again only when they change (most nodes) | 528 | the rest |
 | With the clock: again as the board's time goes on | 2 | Approved, Clock |
 | Worked once, played by the clock: a simulation run once and posed at any time | 3 | Agent, Follow a path, Let it go |
 | Many at once: one thing for each row or point: spawned, scattered, patterned | 6 | City, Neighbourhood, Pattern of, Road system, Scatter, Spawn |
@@ -103,7 +103,13 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 | The 6502 from its transistors: a real program run switch by switch, … | electronics | 9 | 5 6 10 | · |
 | Proximity and mates: each thing carries the room and the mates it ne… | structural | 8 | 2 3 4 10 | · |
 | A body from its measured segments, its math on every part | science | 9 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
-| What it is made of, and what it carries: a copper and an aluminium r… | structural | 18 | 2 3 5 10 | · |
+| Metals, coloured by their physics: fourteen polished metals, each it… | structural | 45 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
+| Steel, finished five ways: turned, ground, polished, bead blasted an… | structural | 19 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
+| Colours with no dye: titanium anodised from 10 to 100 volts, and ste… | structural | 63 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
+| One shape, eight looks: bare steel, aluminium and copper coloured by… | structural | 27 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
+| Paint jobs and wear: a striped panel new and worn, a two-tone drum, … | structural | 21 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
+| Materials from their phases: carbon fibre and epoxy, thermal paste a… | structural | 16 | 2 3 5 8 10 | · |
+| What it is made of, and what it carries: a copper and an aluminium r… | structural | 28 | 2 3 5 6 10 | · |
 | Two agents: one goes to sit, opening the way; one keeps within a lea… | structural | 11 | 1 2 6 7 10 | · |
 | An agent opens a door: it sees it, walks to it, takes hold, pulls; t… | structural | 10 | 2 4 6 7 10 | · |
 | Who notices what: a car running, a person behind it, one at its door… | vehicles | 11 | 2 3 4 7 10 | · |
@@ -135,4 +141,4 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 ## Nodes no starter board uses yet
 
-76 of 230 (laws aside): Add, Ask Claude, Balance (what is conserved), Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Integral, Internal rate of return, Keep where, LED resistor, Laws by field, List of numbers, Machining time, Margin and markup, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, Quantity, RC filter corner, Ring, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Slope, Solar panel, a day, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Tether, Text, Through a network of pieces, Through time, Tube, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, Zone.
+73 of 236 (laws aside): Add, Ask Claude, Balance (what is conserved), Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Integral, Internal rate of return, Keep where, LED resistor, Laws by field, List of numbers, Machining time, Margin and markup, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, Quantity, RC filter corner, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Slope, Solar panel, a day, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Tether, Text, Through time, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, Zone.

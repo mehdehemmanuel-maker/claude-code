@@ -10,7 +10,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { BOOK, KEPT, KINDS, SLICE, UNIVERSAL } from '../../src/nexus/book';
 import { QUANTITIES, quantityOf } from '../../src/nexus/quantities';
-import { crossCheck } from '../../src/nexus/lawgraph';
+import { crossCheck, lawFits } from '../../src/nexus/lawgraph';
 import { FIELDS } from '../../src/nexus/book/fields';
 import { MATTER, matterOf } from '../../src/nexus/matter';
 import { LIBRARY, libraryCatalogue } from '../../src/nexus/blocks';
@@ -86,7 +86,13 @@ function mapText(): string {
   // the laws compared with an independent reference, kept for the evidence each node shows (src/nexus/evidence.ts)
   const compared = `// Written by tests/nexus/docs.ts (UPDATE_DOCS=1): the laws whose worked example the other laws of the book\n// reach another way, and agree with (\`crossCheck\` in lawgraph.ts). Do not edit by hand; when it is stale.\nexport const COMPARED: string[] = [${xc.filter((r) => r.agree).map((r) => `'${r.law}'`).join(', ')}];\n`;
   writeFileSync(join(root, 'src/nexus/book/compared.ts'), compared);
-  L.push('', '## The laws checked against each other', '', `Each law's worked example given, its output sought through the other laws alone (\`crossCheck\` in \`src/nexus/lawgraph.ts\`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). ${xc.length} of ${BOOK.length} laws have another way to their output; ${xc.filter((r) => r.agree).length} agree to 10⁻⁶; ${xc.filter((r) => !r.agree).length} do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in \`docs/REALITY.md\`.`, '', '| Law | Its example | By the others | Through | |', '| --- | --- | --- | --- | --- |');
+  // each law held in the math hierarchy (the user, 2026-10-29: "if the law nodes fall into the math node hierarchy with
+  // no contradictions then they're safe"): `lawFits` in lawgraph.ts; a law that fits counts as current
+  const xm = new Map(xc.map((r) => [r.law, r])), fits = BOOK.map((l) => lawFits(l, xm));
+  writeFileSync(join(root, 'src/nexus/book/fits.ts'), `// Written by tests/nexus/docs.ts (UPDATE_DOCS=1): each law of the book held in the math hierarchy (\`lawFits\` in\n// lawgraph.ts): '' where it fits with nothing contradicting it, else what does not. Do not edit by hand.\n/** The book these were worked out on (its laws' hashes); a law changed since is not counted until worked out again. */\nexport const FITS_OF: Record<string, string> = {\n${BOOK.map((l) => `  ${JSON.stringify(l.id)}: ${JSON.stringify(l.hash)},`).join('\n')}\n};\nexport const FITS: Record<string, string> = {\n${fits.map((f) => `  ${JSON.stringify(f.law)}: ${JSON.stringify(f.fits ? '' : f.checks.filter((c) => !c.ok).map((c) => `${c.check}: ${c.says}`).join('; '))},`).join('\n')}\n};\n`);
+  L.push('', '## The laws in the math hierarchy', '', `Each law rewritten in the math nodes (the Formula node, the Integral node) and run, its worked example held, solved back for each input, and held against the other laws (\`lawFits\` in \`src/nexus/lawgraph.ts\`). ${fits.filter((f) => f.fits).length} of ${fits.length} fit with nothing contradicting them.`, '');
+  for (const f of fits.filter((x) => !x.fits)) L.push(`- \`${f.law}\`: ${f.checks.filter((c) => !c.ok).map((c) => `${c.check}: ${c.says}`).join('; ')}`);
+  L.push('', '## The laws checked against each other', '', `Each law's worked example given, its output sought through the other laws alone (\`crossCheck\` in \`src/nexus/lawgraph.ts\`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). ${xc.length} of ${BOOK.length} laws have another way to their output; ${xc.filter((r) => r.agree).length} agree (to 10⁻⁶, or within 10⁻³ where an approximation or an empirical law is on either side, the difference shown; geometry laws not used as ways to each other: a length is not said to be which length of which shape); ${xc.filter((r) => !r.agree).length} do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in \`docs/REALITY.md\`.`, '', '| Law | Its example | By the others | Through | |', '| --- | --- | --- | --- | --- |');
   for (const r of xc) L.push(`| \`${r.law}\` | ${+r.own.toPrecision(8)} ${r.unit} | ${+r.other.toPrecision(8)} ${r.unit} | ${r.by.map((b) => `\`${b}\``).join(' → ')} | ${r.agree ? 'agree' : '**differ**'} |`);
   // ---- material tables and who reads them ----
   const src = files().map((f) => ({ f: relative(root, f), text: readFileSync(f, 'utf8') }));

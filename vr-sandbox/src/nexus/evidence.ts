@@ -8,6 +8,7 @@ import type { BlockDef } from './blocks';
 import { KINDS } from './book/kinds';
 import { lawById } from './book';
 import { COMPARED } from './book/compared';
+import { FITS, FITS_OF } from './book/fits';
 import { quantityOf } from './quantities';
 import { BOARDS_BUILT, BUILT, UPDATE } from './built';
 
@@ -37,7 +38,19 @@ export interface NodeEvidence { kind: EvidenceKind; why: string; assumptions: st
  *  new: after it). */
 /** When a starter board (a build) was last changed, and whether that is before the update. */
 export function boardBuiltOf(title: string): { at?: string; before: boolean } { const at = BOARDS_BUILT[title]; return { at, before: at !== undefined && at < UPDATE }; }
-export function builtOf(id: string): { at?: string; before: boolean } { const at = BUILT[id]; return { at, before: at !== undefined && at < UPDATE }; }
+/** A law node is current, whenever its book entry was written, once its law is held in the math hierarchy with nothing
+ *  contradicting it (`lawFits`, recorded in book/fits.ts for the law as it is now): the user's rule, 2026-10-29. */
+export function lawFitsOf(id: string): { fits: boolean; says: string } | null {
+  if (!id.startsWith('law.')) return null; const lid = id.slice(4), why = FITS[lid];
+  let hash = ''; try { hash = lawById(lid).hash; } catch { return null; }
+  if (why === undefined || FITS_OF[lid] !== hash) return { fits: false, says: 'not yet held in the math hierarchy as it is now' };
+  return { fits: why === '', says: why === '' ? 'written in the math nodes, its example held, solved back for each input, and nothing in the book contradicting it' : why };
+}
+export function builtOf(id: string): { at?: string; before: boolean; fits?: string } {
+  const at = BUILT[id], f = lawFitsOf(id);
+  if (f?.fits) return { at, before: false, fits: f.says };
+  return { at, before: at !== undefined && at < UPDATE };
+}
 export const UPDATE_SAYS = `the update of ${UPDATE.slice(0, 10)} (laws with their units, evidence and ±, materials down to their elements)`;
 
 /** Nodes whose evidence a rule cannot read from what they are: each with why. */

@@ -4,7 +4,7 @@ Written from the code by `tests/nexus/docs.ts` (step 0 of `docs/REALITY.md`): `U
 
 ## Laws and the engines that hold them
 
-323 laws in the book (terms: dimensions checked, domains, derivations); 323 of them nodes, built from the book (step 3: the closures that ran the first 144 are gone). In the book without a node: 0.
+330 laws in the book (terms: dimensions checked, domains, derivations); 330 of them nodes, built from the book (step 3: the closures that ran the first 144 are gone). In the book without a node: 0.
 
 Each law's kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived, constitutive (how a material behaves), empirical (a fit), an approximation (another law in a limit), or geometry.
 
@@ -12,7 +12,7 @@ Each law's kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived,
 | --- | --- | --- | --- |
 | mechanics | 29 | 29 | 13 derived, 5 definition, 4 empirical, 3 fundamental, 3 geometry, 1 approximation |
 | structures | 13 | 13 | 9 derived, 2 approximation, 1 definition, 1 empirical |
-| materials | 12 | 12 | 3 constitutive, 3 derived, 2 empirical, 2 approximation, 2 geometry |
+| materials | 19 | 19 | 6 derived, 5 geometry, 3 constitutive, 3 approximation, 2 empirical |
 | machine elements | 16 | 16 | 8 derived, 3 geometry, 2 empirical, 2 definition, 1 approximation |
 | electrical | 24 | 24 | 14 derived, 4 constitutive, 2 empirical, 2 definition, 2 fundamental |
 | thermal | 17 | 17 | 4 fundamental, 4 derived, 3 empirical, 3 constitutive, 2 definition, 1 approximation |
@@ -23,7 +23,7 @@ Each law's kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived,
 | optics | 3 | 3 | 2 derived, 1 fundamental |
 | derived (slice) | 22 | 22 | 14 derived, 5 geometry, 3 approximation |
 | universal | 75 | 75 | 25 definition, 15 derived, 11 geometry, 11 empirical, 6 fundamental, 5 approximation, 2 constitutive |
-| all | 323 | 323 | 135 derived, 54 definition, 34 fundamental, 32 empirical, 27 approximation, 26 geometry, 15 constitutive |
+| all | 330 | 330 | 138 derived, 54 definition, 34 fundamental, 32 empirical, 29 geometry, 28 approximation, 15 constitutive |
 
 ### mechanics
 
@@ -82,6 +82,13 @@ Each law's kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived,
 | Law | Kind | Variables (symbol: what, unit) | Gives | Engines |
 | --- | --- | --- | --- | --- |
 | `hooke` Hooke's law | constitutive | E: elastic modulus, Pa; eps: strain, - | sigma: stress, Pa | book, node |
+| `bar.axial-stiffness` Axial stiffness of a bar | derived | E: elastic modulus, Pa; A: section, m^2; L: length, m | k: stiffness, N/m | book, node |
+| `section.circle.area` Area of a circle | geometry | r: radius, m | A: area, m^2 | book, node |
+| `section.circle.second-moment` Second moment of a circle | geometry | r: radius, m | I: second moment, m^4 | book, node |
+| `section.circle.polar-moment` Polar moment of a circle | geometry | r: radius, m | J: polar moment, m^4 | book, node |
+| `section.rect.torsion-constant` Torsion constant of a rectangle | approximation | a: longer side, m; c: shorter side, m | J: torsion constant, m^4 | book, node |
+| `shaft.torsional-stiffness` Torsional stiffness of a bar | derived | G: shear modulus, Pa; J: torsion constant, m^4; L: length, m | k: stiffness in twist, per radian, N m | book, node |
+| `beam.flexural-stiffness` Flexural stiffness of a beam | derived | E: elastic modulus, Pa; I: second moment, m^4; L: length, m | k: flexural stiffness, N m | book, node |
 | `stress.von-mises` Von Mises stress | derived | sigma: normal stress, Pa; tau: shear stress, Pa | s: equivalent stress, Pa | book, node |
 | `thermal.expansion` Thermal expansion | constitutive | alpha: expansion coefficient, 1/K; L: length, m; dT: temperature rise, K | dL: growth, m | book, node |
 | `fatigue.endurance.steel` Endurance limit of steel | empirical | Sut: tensile strength, Pa | Se: rotating-beam endurance limit, Pa | book, node |
@@ -333,35 +340,35 @@ Each law's kind (`src/nexus/book/kinds.ts`): fundamental, a definition, derived,
 
 ## Quantities: what joins the laws
 
-The registry (`src/nexus/quantities.ts`) holds 93 quantities; every one of the 1169 ports of the book is one of them (0 are not). 67 quantities are shared by two laws or more: those are the joins a chain of laws runs along.
+The registry (`src/nexus/quantities.ts`) holds 93 quantities; every one of the 1190 ports of the book is one of them (0 are not). 68 quantities are shared by two laws or more: those are the joins a chain of laws runs along.
 
 | Quantity | Unit | Laws |
 | --- | --- | --- |
-| length | m | 116: `wheel.torque`, `energy.potential`, `braking.distance`, `cornering.limit`, `pendulum.period`, `centripetal`, `inertia.disc`, `inertia.rod-end`, … |
+| length | m | 123: `wheel.torque`, `energy.potential`, `braking.distance`, `cornering.limit`, `pendulum.period`, `centripetal`, `inertia.disc`, `inertia.rod-end`, … |
 | ratio | 1 | 56: `rolling.resistance`, `flywheel.specific-energy`, `time.dilation.gravity`, `buckling.euler`, `buckling.johnson`, `sinter.scale`, `shaft.diameter.static`, `capstan`, … |
 | speed | m/s | 49: `power.linear`, `energy.kinetic`, `braking.distance`, `cornering.limit`, `centripetal`, `free-fall.speed`, `sound.speed`, `conservation.momentum`, … |
 | force | N | 48: `newton.second`, `weight`, `friction.coulomb`, `rolling.resistance`, `grade.force`, `power.linear`, `wheel.torque`, `traction.limit`, … |
 | mass | kg | 46: `newton.second`, `weight`, `grade.force`, `energy.kinetic`, `energy.potential`, `natural.frequency`, `centripetal`, `inertia.disc`, … |
 | time | s | 33: `pendulum.period`, `bearing.life.hours`, `motor.time-constant`, `energy.electric`, `rc.time-constant`, `lumped.time-constant`, `diffusion.time`, `queueing`, … |
 | count | 1 | 32: `piezo.stroke`, `bearing.life.l10`, `bearing.life.hours`, `spring.rate`, `chain.speed`, `spring.torsion.rate`, `grubler`, `ampere.law`, … |
-| area | m^2 | 29: `stress.axial`, `buckling.johnson`, `wire.resistance`, `electrostatic.pull`, `pv.power`, `convection`, `conduction`, `radiation`, … |
+| area | m^2 | 31: `stress.axial`, `buckling.johnson`, `bar.axial-stiffness`, `section.circle.area`, `wire.resistance`, `electrostatic.pull`, `pv.power`, `convection`, … |
 | temperature | K | 25: `copper.tempco`, `radiation`, `carnot`, `arrhenius`, `separation.work`, `ideal.gas`, `clausius-clapeyron`, `boltzmann.distribution`, … |
 | frequency or rate | Hz | 25: `natural.frequency`, `cmos.dynamic`, `arrhenius`, `acoustic.mass-law`, `skin.depth`, `shannon.capacity`, `shannon.sampling`, `queueing`, … |
 | power | W | 25: `power.linear`, `power.rotary`, `chain.pull`, `joule`, `power.electric`, `cmos.dynamic`, `pv.power`, `convection`, … |
+| elastic modulus | Pa | 25: `sound.speed`, `beam.simply-supported.udl`, `beam.simply-supported.point`, `beam.cantilever.point`, `buckling.euler`, `torsion.twist`, `buckling.johnson`, `slenderness.transition`, … |
 | stress | Pa | 24: `flywheel.specific-energy`, `stress.axial`, `stress.bending`, `torsion.solid`, `buckling.johnson`, `slenderness.transition`, `stress.hoop`, `weld.fillet.shear`, … |
 | energy | J | 23: `energy.kinetic`, `energy.potential`, `energy.rotational`, `spring.energy`, `energy.electric`, `capacitor.energy`, `inductor.energy`, `heat.capacity`, … |
-| elastic modulus | Pa | 22: `sound.speed`, `beam.simply-supported.udl`, `beam.simply-supported.point`, `beam.cantilever.point`, `buckling.euler`, `torsion.twist`, `buckling.johnson`, `slenderness.transition`, … |
 | density | kg/m^3 | 20: `flywheel.specific-energy`, `sound.speed`, `drag.aero`, `lift.aero`, `reynolds`, `darcy-weisbach`, `buoyancy`, `hydrostatic`, … |
 | voltage | V | 20: `piezo.stroke`, `ohm`, `wire.drop`, `motor.back-emf`, `motor.current`, `lead-acid.ocv`, `energy.electric`, `capacitor.energy`, … |
 | pressure | Pa | 19: `stress.hoop`, `hertz.contact`, `ideal.gas`, `gas.isothermal-work`, `darcy-weisbach`, `hydrostatic`, `bernoulli`, `starling.filtration`, … |
 | fraction | 1 | 18: `composite.rule-of-mixtures`, `composite.transverse`, `cmos.dynamic`, `radiation`, `absorbed.solar`, `separation.work`, `balance.steady`, `share.of`, … |
 | torque or moment | N m | 18: `power.rotary`, `wheel.torque`, `stress.bending`, `torsion.solid`, `torsion.twist`, `beam.plastic-moment`, `shaft.diameter.static`, `gear.output.torque`, … |
 | electric current | A | 15: `ohm`, `joule`, `wire.drop`, `motor.torque`, `motor.current`, `energy.electric`, `inductor.energy`, `power.electric`, … |
+| second moment of area | m^4 | 15: `beam.simply-supported.udl`, `beam.simply-supported.point`, `beam.cantilever.point`, `buckling.euler`, `torsion.twist`, `section.circle.second-moment`, `section.circle.polar-moment`, `section.rect.torsion-constant`, … |
 | concentration | mol/m^3 | 14: `fick.diffusion`, `michaelis-menten`, `transport.advection`, `concentration.difference`, `amount.concentration`, `saturation.share`, `diffusion.front`, `diffusion.sphere-limit`, … |
 | angle | rad | 13: `grade.force`, `torsion.twist`, `young.contact`, `capstan`, `screw.efficiency`, `diffraction.limit`, `snell.law`, `bragg.law`, … |
 | volume | m^3 | 13: `ideal.gas`, `gas.isothermal-work`, `buoyancy`, `residence.stock`, `total.volume`, `amount.concentration`, `reaction.rate-from-power`, `volume.cylinder`, … |
 | angular speed | rad/s | 11: `power.rotary`, `energy.rotational`, `bearing.life.hours`, `chain.speed`, `belt.speed`, `motor.back-emf`, `motor.current`, `angular-momentum`, … |
-| second moment of area | m^4 | 10: `beam.simply-supported.udl`, `beam.simply-supported.point`, `beam.cantilever.point`, `buckling.euler`, `torsion.twist`, `section.rect.second-moment`, `beam.simply-supported.central-patch.sag`, `beam.overhang.self-sag`, … |
 | acceleration | m/s^2 | 10: `newton.second`, `weight`, `braking.distance`, `weight.per-length`, `pendulum.physical.period`, `kinematics.velocity`, `kinematics.displacement`, `kinematics.timeless`, … |
 | moment of inertia | kg m^2 | 10: `inertia.disc`, `inertia.rod-end`, `parallel-axis`, `energy.rotational`, `motor.time-constant`, `inertia.prism.centre`, `pendulum.physical.period`, `angular-momentum`, … |
 | volume flow | m^3/s | 10: `balance.steady`, `residence.stock`, `balance.difference`, `junction.sum`, `transport.advection`, `total.flow`, `rate.per-mass`, `mass.flow`, … |
@@ -374,12 +381,12 @@ The registry (`src/nexus/quantities.ts`) holds 93 quantities; every one of the 1
 | load per length | N/m | 7: `beam.simply-supported.udl`, `weight.per-length`, `beam.overhang.self-moment`, `beam.overhang.self-sag`, `cantilever.root-moment`, `cantilever.root-shear`, `cantilever.tip-sag` |
 | heat transfer coefficient | W/m^2 K | 7: `convection`, `convection.natural`, `lumped.time-constant`, `radiation.linear`, `conductance.parallel`, `conduction.series`, `evaporation.max` |
 | friction coefficient | 1 | 6: `friction.coulomb`, `traction.limit`, `cornering.limit`, `capstan`, `screw.efficiency`, `clutch.torque` |
+| stiffness | N/m | 6: `natural.frequency`, `spring.energy`, `bar.axial-stiffness`, `spring.rate`, `spring.hooke`, `shaft.critical-speed` |
 | mass flow | kg/s | 6: `flux.area`, `residence.mass`, `heat.latent-flow`, `mass.flow`, `molar.mass-flow`, `loss.first-order` |
 | capacitance | F | 6: `rc.time-constant`, `capacitor.energy`, `cmos.dynamic`, `capacitor.charge`, `capacitance.plates`, `lc.resonance` |
 | diffusivity | m^2/s | 6: `diffusion.time`, `fick.diffusion`, `diffusion.front`, `diffusion.erf`, `diffusion.sphere-limit`, `diffusivity.papadakis` |
 | strain | 1 | 5: `hooke`, `sinter.scale`, `strain.gauge`, `strain.definition`, `poisson.lateral` |
 | exponent | 1 | 5: `bearing.life.l10`, `network.scaling`, `kleiber.scaling`, `fatigue.basquin`, `creep.power-law` |
-| stiffness | N/m | 5: `natural.frequency`, `spring.energy`, `spring.rate`, `spring.hooke`, `shaft.critical-speed` |
 | heat flux or irradiance | W/m^2 | 5: `pv.power`, `absorbed.solar`, `sound.level`, `inverse-square`, `malus` |
 | magnetic flux density | T | 5: `lorentz.force`, `magnetic.pull`, `ampere.law`, `lorentz.charge`, `wire.field` |
 | amount of substance | mol | 4: `ideal.gas`, `amount.concentration`, `stoichiometry.moles`, `moles.of-mass` |
@@ -388,6 +395,7 @@ The registry (`src/nexus/quantities.ts`) holds 93 quantities; every one of the 1
 | electric charge | C | 4: `coulomb.law`, `charge.definition`, `capacitor.charge`, `lorentz.charge` |
 | motor constant | N m/A | 4: `motor.torque`, `motor.back-emf`, `motor.current`, `motor.time-constant` |
 | section modulus | m^3 | 3: `stress.bending`, `beam.plastic-moment`, `section.rect.modulus` |
+| torsional stiffness | N m/rad | 3: `shaft.torsional-stiffness`, `beam.flexural-stiffness`, `spring.torsion.rate` |
 | surface tension or energy | J/m^2 | 3: `young.contact`, `griffith`, `laplace.pressure` |
 | dynamic viscosity | Pa s | 3: `reynolds`, `poiseuille`, `stokes.drag` |
 | specific heat | J/kg K | 3: `heat.capacity`, `lumped.time-constant`, `entropy.heating` |
@@ -412,7 +420,6 @@ The registry (`src/nexus/quantities.ts`) holds 93 quantities; every one of the 1
 | angular momentum | kg m^2/s | 1: `angular-momentum` |
 | angular acceleration | rad/s^2 | 1: `newton.rotational` |
 | heat input per length | J/m | 1: `weld.heat-input` |
-| torsional stiffness | N m/rad | 1: `spring.torsion.rate` |
 | mass per area | kg/m^2 | 1: `acoustic.mass-law` |
 | mass flux | kg/m^2 s | 1: `flux.area` |
 | specific volume | m^3/kg | 1: `clausius-clapeyron` |
@@ -458,7 +465,7 @@ The registry (`src/nexus/quantities.ts`) holds 93 quantities; every one of the 1
 | R | length; electrical resistance; thermal resistance; force |
 | f | frequency or rate; ratio; fraction; length |
 | I | moment of inertia; second moment of area; electric current; heat flux or irradiance |
-| c | speed; specific heat; concentration; length |
+| c | speed; length; specific heat; concentration |
 | s | dimensionless group; stress; strain; ratio |
 | eps | strain; electric permittivity; fraction; molar absorptivity |
 | alpha | thermal expansion coefficient; angle; fraction; angular acceleration |
@@ -526,9 +533,14 @@ The core of each field as its standard textbook teaches it (`src/nexus/book/fiel
 | Information and signals (Cover & Thomas, Elements of Information Theory, 2nd ed.) | 6 of 7 | Entropy of a distribution of many outcomes (H = −Σ p log₂ p) |
 | Machine elements (Budynas & Nisbett, Shigley's, 10th ed., ch. 7–18) | 12 of 12 | none |
 
+## The laws in the math hierarchy
+
+Each law rewritten in the math nodes (the Formula node, the Integral node) and run, its worked example held, solved back for each input, and held against the other laws (`lawFits` in `src/nexus/lawgraph.ts`). 330 of 330 fit with nothing contradicting them.
+
+
 ## The laws checked against each other
 
-Each law's worked example given, its output sought through the other laws alone (`crossCheck` in `src/nexus/lawgraph.ts`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). 11 of 323 laws have another way to their output; 9 agree to 10⁻⁶; 2 do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in `docs/REALITY.md`.
+Each law's worked example given, its output sought through the other laws alone (`crossCheck` in `src/nexus/lawgraph.ts`, three laws deep, values joined by name, or by quantity where both the port and the value are named plainly). 10 of 330 laws have another way to their output; 10 agree (to 10⁻⁶, or within 10⁻³ where an approximation or an empirical law is on either side, the difference shown; geometry laws not used as ways to each other: a length is not said to be which length of which shape); 0 do not. A disagreement is an approximation against its exact law, a second model of the same thing, or a fault; each is read and said in `docs/REALITY.md`.
 
 | Law | Its example | By the others | Through | |
 | --- | --- | --- | --- | --- |
@@ -537,8 +549,7 @@ Each law's worked example given, its output sought through the other laws alone 
 | `energy.electric` | 864000 J | 864000 J | `power.electric` → `energy.power-time` | agree |
 | `power.electric` | 240 W | 240 W | `ohm` → `joule` | agree |
 | `beam.simply-supported.central-patch.sag` | 0.0078125 m | 0.0078125 m | `beam.simply-supported.point` | agree |
-| `pendulum.amplitude-factor` | 1.0174039 1 | 1.0174088 1 | `pendulum.period-factor` | **differ** |
-| `volume.of-box` | 0.000031415927 m^3 | 0.000020943951 m^3 | `volume.ellipsoid` | **differ** |
+| `pendulum.amplitude-factor` | 1.0174039 1 | 1.0174088 1 | `pendulum.period-factor` | agree |
 | `momentum.definition` | 6 kg m/s | 6 kg m/s | `momentum.relativistic` | agree |
 | `kinematics.velocity` | 14 m/s | 14 m/s | `kinematics.displacement` → `kinematics.timeless` | agree |
 | `kinematics.displacement` | 32 m | 32 m | `kinematics.velocity` → `kinematics.timeless` | agree |
@@ -548,39 +559,41 @@ Each law's worked example given, its output sought through the other laws alone 
 
 | Table | Defined in | Holds | Read by |
 | --- | --- | --- | --- |
-| handbook materials | `src/data/materials.ts` | E, ν, yield, ultimate, elongation, conductivity, friction, restitution, colour; source and confidence; ids like steel.a36 | `nexus/blocks.ts`, `nexus/generate.ts`, `nexus/machines.ts`, `nexus/matter.ts`, `nexus/navigate.ts` |
-| thermal | `src/engineering/thermal.ts` | c, k, emissivity by handbook id | `engineering/dcmotor.ts`, `engineering/motorrun.ts`, `nexus/blocks.ts`, `nexus/generate.ts`, `nexus/heatflow.ts`, `nexus/matter.ts` |
-| fusion | `src/engineering/fusion.ts` | melting, expansion, bond, base element by handbook id | `nexus/generate.ts`, `nexus/matter.ts` |
-| density | `src/nexus/mass.ts` | density by the ids parts carry (typical) | `nexus/assembly.ts`, `nexus/blocks.ts`, `nexus/components.ts`, `nexus/drivetrain.ts`, `nexus/engines.ts`, `nexus/gauntlet.ts`, `nexus/kits.ts`, `nexus/loads.ts`, `nexus/machines.ts`, `nexus/madeof.ts`, `nexus/matter.ts`, `nexus/sim.ts`, `nexus/view/kit3d.ts`, `nexus/view/nodes3d.ts` |
+| handbook materials | `src/data/materials.ts` | E, ν, yield, ultimate, elongation, conductivity, friction, restitution, colour; source and confidence; ids like steel.a36 | `nexus/blocks.ts`, `nexus/machines.ts`, `nexus/matter.ts`, `nexus/navigate.ts` |
+| thermal | `src/engineering/thermal.ts` | c, k, emissivity by handbook id | `engineering/dcmotor.ts`, `nexus/blocks.ts`, `nexus/graph.ts`, `nexus/matter.ts` |
+| fusion | `src/engineering/fusion.ts` | melting, expansion, bond, base element by handbook id | `nexus/matter.ts` |
+| density | `src/nexus/mass.ts` | density by the ids parts carry (typical) | `nexus/assembly.ts`, `nexus/blocks.ts`, `nexus/components.ts`, `nexus/drivetrain.ts`, `nexus/engines.ts`, `nexus/gauntlet.ts`, `nexus/graph.ts`, `nexus/kits.ts`, `nexus/loads.ts`, `nexus/machines.ts`, `nexus/madeof.ts`, `nexus/matter.ts`, `nexus/sim.ts`, `nexus/view/kit3d.ts`, `nexus/view/nodes3d.ts` |
 | composition | `src/nexus/elements.ts` | alloys, formulas, blends down to elements, by the ids parts carry | `nexus/inventory.ts`, `nexus/life/index.ts`, `nexus/matter.ts`, `nexus/pieces.ts` |
 | service limit | `src/nexus/make/rules.ts` | most service temperature, °C, by the ids parts carry | `nexus/placement/line.ts`, `nexus/placement/model.ts`, `nexus/placement/repair.ts`, `nexus/placement/solve.ts` |
-| the material system | `src/nexus/matter.ts` | every part material id: its family, what it is exactly or that it is unspecified, its handbook grade (its own, or a stand-in, said); every property with its source and evidence | `nexus/blocks.ts`, `nexus/loads.ts`, `nexus/madeof.ts`, `nexus/sim.ts` |
+| the material system | `src/nexus/matter.ts` | every part material id: its family, what it is exactly or that it is unspecified, its handbook grade (its own, or a stand-in, said); every property with its source and evidence | `nexus/blocks.ts`, `nexus/graph.ts`, `nexus/loads.ts`, `nexus/madeof.ts`, `nexus/make/rules.ts`, `nexus/sim.ts` |
 | elements | `src/data/periodic.ts` | 118 elements: weight, density, melting and boiling points (secondary: compiled from Wikipedia citing CRC and IUPAC) | `nexus/mass.ts`, `nexus/matter.ts` |
 | wood species | `src/data/woods.ts` | species by the Wood Handbook: specific gravity, MOE, MOR at 12 % moisture | `nexus/mass.ts`, `nexus/matter.ts` |
 | mixes | `src/data/mixes.ts` | mixes by what goes into a cubic metre: their density and make-up follow | `nexus/elements.ts`, `nexus/mass.ts`, `nexus/matter.ts` |
 | words to matter | `src/nexus/kinds/core.ts` | a word → inventory id, density, label | **nothing** |
 | spring wires | `src/engineering/springs.ts` | ASTM spring wires: A, m, G, E, density | `nexus/blocks.ts`, `nexus/engines.ts`, `nexus/loads.ts` |
-| adhesives | `src/engineering/joining.ts` | adhesives by the handbook categories | `nexus/generate.ts` |
-| liquids | `src/engineering/motorrun.ts` | density, c, viscosity, k of four liquids | **nothing** |
+| adhesives | `src/engineering/joining.ts` | adhesives by the handbook categories | **nothing** |
 | gases | `src/nexus/aware/gas.ts` | molar mass, smell, harm, flammable limits | `nexus/aware/sense.ts`, `nexus/navigate.ts` |
 | edges | `src/nexus/finish.ts` | edge radius by material | **nothing** |
 
 ## The materials parts carry
 
-114 material ids in the one table (`MATTER` in `src/nexus/matter.ts`): 66 specified (a grade, a species, a type, a mix), 48 known only by their family (said unspecified). Handbook grade: 19 their own, 48 a stand-in (said), 47 none. With a density: 107; a strength: 21; a friction: 67; a specific heat: 19; a melting point: 23; a make-up down to elements: 74. Tables that disagree on one property: 1.
+128 material ids in the one table (`MATTER` in `src/nexus/matter.ts`): 80 specified (a grade, a species, a type, a mix), 48 known only by their family (said unspecified). Handbook grade: 19 their own, 45 a stand-in (said), 64 none. With a density: 123; a strength: 64; a friction: 64; a specific heat: 75; a melting point: 23; a make-up down to elements: 75. Tables that disagree on one property: 4.
 
 | Material | Family | Specified | Handbook grade | Density | Strength | Disagreements |
 | --- | --- | --- | --- | --- | --- | --- |
-| `abs` acrylonitrile butadiene styrene (ABS) | polymer | yes | Acrylic (PMMA) (stand-in) | 1050 (typical) | — | — |
+| `abs` acrylonitrile butadiene styrene (ABS) | polymer | yes | Acrylic (PMMA) (stand-in) | 1050 (typical) | 40 MPa (typical) | — |
 | `acid` battery acid (dilute sulfuric acid) | fluid | **no** | — | 1280 (typical) | — | — |
+| `air` air, still, at 300 K and 1 atm | fluid | yes | — | 1.1614 (handbook) | — | — |
 | `al-2024` aluminium 2024-T3 | aluminium | yes | Aluminium 2024-T3 | 2780 (typical) | 345 MPa (handbook) | — |
-| `al-3003` aluminium 3003 | aluminium | yes | Aluminium 5052-H32 (stand-in) | 2730 (typical) | — | — |
+| `al-3003` aluminium 3003 | aluminium | yes | Aluminium 5052-H32 (stand-in) | 2730 (typical) | 145 MPa (typical) | — |
 | `al-5052` aluminium 5052-H32 | aluminium | yes | Aluminium 5052-H32 | 2680 (typical) | 193 MPa (handbook) | — |
 | `al-6061` aluminium 6061-T6 | aluminium | yes | Aluminium 6061-T6 | 2700 (typical) | 276 MPa (handbook) | — |
-| `al-6063` aluminium 6063 (extrusion alloy) | aluminium | yes | Aluminium 6061-T6 (stand-in) | 2700 (typical) | — | — |
+| `al-6063` aluminium 6063 (extrusion alloy) | aluminium | yes | Aluminium 6061-T6 (stand-in) | 2700 (typical) | 214 MPa (typical) | — |
 | `al-7075` aluminium 7075-T6 | aluminium | yes | Aluminium 7075-T6 | 2810 (typical) | 503 MPa (handbook) | — |
-| `al-a380` aluminium A380 die-casting alloy | aluminium | yes | Aluminium 6061-T6 (stand-in) | 2710 (typical) | — | — |
-| `alumina` alumina (Al₂O₃) | ceramic | yes | — | 3900 (typical) | — | — |
+| `al-a380` aluminium A380 die-casting alloy | aluminium | yes | Aluminium 6061-T6 (stand-in) | 2710 (typical) | 160 MPa (typical) | — |
+| `al-foam-10` open-cell aluminium foam, 10 % dense | foam | yes | — | 271.05 (typical) | 2.941 MPa (estimated) | — |
+| `al-sic-20` aluminium 6061 with 20 % silicon carbide particles by volume (a metal-matrix composite) | composite | yes | — | 2802 (typical) | — | not worked out: electrical conductivity: a phase's is not known |
+| `alumina` alumina (Al₂O₃) | ceramic | yes | — | 3900 (typical) | 300 MPa (typical) | — |
 | `asphalt` asphalt concrete, mix unsaid | concrete and mortar | **no** | Concrete C30 (stand-in) | 2300 (typical) | — | — |
 | `avocado` avocado | food | **no** | — | 1000 (typical) | — | — |
 | `bacon` bacon | food | **no** | — | 1000 (typical) | — | — |
@@ -592,99 +605,110 @@ Each law's worked example given, its output sought through the other laws alone 
 | `bronze` tin bronze | copper alloy | **no** | Brass C360 half hard (stand-in) | 8800 (typical) | — | — |
 | `butter` butter | food | **no** | — | 911 (typical) | — | — |
 | `carbon-fibre` carbon fibre reinforced polymer, layup unsaid | composite | **no** | Carbon fibre laminate (quasi-isotropic) (stand-in) | **none** | — | — |
+| `carbon-fibre-t300` carbon fibre, standard modulus (Toray T300), the bare fibre | ceramic | yes | — | 1760 (specified) | 3530 MPa (specified) | — |
 | `cardboard` corrugated board | wood product | **no** | — | **none** | — | — |
 | `cast-iron` grey cast iron, class 30 | cast iron | yes | Grey cast iron, class 30 | 7200 (typical) | 214 MPa (handbook) | — |
+| `cement-paste` hardened portland cement paste, water to cement 0.5 | concrete and mortar | yes | — | 1950 (typical) | 3 MPa (typical) | — |
 | `ceramic` a technical ceramic, unsaid | ceramic | **no** | — | 3900 (typical) | — | — |
+| `cfrp-ud-60` carbon fibre and epoxy, unidirectional, 60 % fibre by volume | composite | yes | — | 1536 (typical) | 2136 MPa (estimated) | — |
 | `cheese` cheese | food | **no** | — | 1100 (typical) | — | — |
 | `chicken` chicken | food | **no** | — | 1050 (typical) | — | — |
 | `chocolate` chocolate | food | **no** | — | **none** | — | — |
 | `concrete` concrete, mix and strength class unsaid, plain (no reinforcing said) | concrete and mortar | **no** | Concrete C30 (stand-in) | 2400 (typical) | — | — |
-| `concrete-c25` normal-weight concrete, about 25 MPa, plain (no reinforcing): a typical mix | concrete and mortar | yes | Concrete C30 (stand-in) | 2335 (derived) | — | — |
+| `concrete-aggregate-70` concrete as its phases: granite aggregate in hardened cement paste, 70 % aggregate by volume | concrete and mortar | yes | — | 2475 (typical) | — | not worked out: electrical conductivity: a phase's is not known |
+| `concrete-c25` normal-weight concrete, about 25 MPa, as its hardened phases | concrete and mortar | yes | — | 2335 (derived) | — | not worked out: electrical conductivity: a phase's is not known |
 | `copper` copper C11000 (electrolytic tough pitch) | copper alloy | yes | Copper C110 annealed | 8960 (typical) | 69 MPa (handbook) | — |
 | `cotton` cotton fibre (loose) | textile and paper | yes | Cotton duck canvas (stand-in) | 80 (typical) | — | — |
 | `diesel` diesel | fluid | **no** | — | 840 (typical) | — | — |
 | `douglas-fir` Douglas-fir (coast), Pseudotsuga menziesii, at 12 % moisture | wood | yes | Birch plywood (stand-in) | 537.6 (derived) | 85 MPa (handbook) | — |
+| `e-glass` E-glass fibre | glass | yes | — | 2540 (secondary) | 3450 MPa (secondary) | — |
 | `egg` egg | food | **no** | — | 1030 (typical) | — | — |
-| `epdm` EPDM rubber | elastomer | yes | Natural rubber / latex (stand-in) | 1150 (typical) | — | — |
-| `epoxy` bisphenol-A epoxy, amine cured | polymer | yes | — | 1200 (typical) | — | — |
+| `epdm` EPDM rubber | elastomer | yes | Natural rubber / latex (stand-in) | 1150 (typical) | 12 MPa (typical) | — |
+| `epoxy` bisphenol-A epoxy, amine cured | polymer | yes | — | 1200 (typical) | 70 MPa (typical) | — |
 | `fibreglass` glass fibre reinforced polymer | composite | **no** | Glass fibre laminate (E-glass) (stand-in) | 1850 (typical) | — | — |
-| `fkm` fluoroelastomer (FKM) | elastomer | yes | Natural rubber / latex (stand-in) | 1800 (typical) | — | — |
+| `fkm` fluoroelastomer (FKM) | elastomer | yes | Natural rubber / latex (stand-in) | 1800 (typical) | 12 MPa (typical) | — |
 | `foam` foam, polymer and density unsaid | foam | **no** | EVA foam (closed cell, 100 kg/m³) (stand-in) | 35 (typical) | — | — |
 | `foliage` foliage (a crown, mostly air) | living tissue | **no** | — | 1.5 (typical) | — | — |
-| `fr4` FR-4 glass-epoxy laminate | composite | yes | Glass fibre laminate (E-glass) (stand-in) | 1850 (typical) | — | — |
+| `fr4` FR-4: woven E-glass in epoxy, about 50 % glass by volume | composite | yes | — | 1870 (typical) | — | — |
 | `friction-composite` semi-metallic brake pad friction material | composite | **no** | — | 2400 (typical) | — | — |
+| `gfrp-random-30` chopped glass fibre and epoxy, random in a plane, 30 % fibre by volume | composite | yes | — | 1602 (typical) | — | — |
+| `gfrp-woven-50` woven glass and epoxy laminate, 50 % glass by volume (as circuit-board laminate is) | composite | yes | — | 1870 (typical) | — | — |
 | `glass` soda-lime glass | glass | yes | Soda-lime glass | 2500 (typical) | 40 MPa (estimated) | — |
-| `glass-wool` glass wool insulation (E-glass fibre) | glass | yes | — | 2550 (typical) | — | — |
+| `glass-wool` glass wool insulation, 24 kg/m³ (E-glass fibres in air; radiation through it left out, so it conducts a little more than said) | foam | yes | — | 25.15 (typical) | 0.9506 MPa (estimated) | — |
 | `glycol-50` ethylene glycol and water, 50:50 | fluid | yes | — | 1070 (typical) | — | — |
-| `gold` fine gold | other metal | yes | — | 19300 (typical) | — | — |
-| `granite` granite | stone | yes | Concrete C30 (stand-in) | 2700 (typical) | — | — |
-| `graphite` graphite | ceramic | yes | — | 1800 (typical) | — | — |
+| `gold` fine gold | other metal | yes | — | 19300 (typical) | 120 MPa (typical) | — |
+| `granite` granite | stone | yes | Concrete C30 (stand-in) | 2700 (typical) | 10 MPa (typical) | — |
+| `graphite` graphite | ceramic | yes | — | 1800 (typical) | 40 MPa (typical) | — |
 | `ham` ham | food | **no** | — | 1050 (typical) | — | — |
 | `hfo2` hafnium dioxide | ceramic | yes | — | 9680 (typical) | — | — |
 | `ice` ice | fluid | yes | — | **none** | — | — |
-| `lead` commercially pure lead | other metal | yes | — | 11340 (typical) | — | — |
+| `lead` commercially pure lead | other metal | yes | — | 11340 (typical) | 5 MPa (typical) | — |
 | `leaf` leaf | living tissue | **no** | — | 600 (typical) | — | — |
 | `leather` leather, tannage unsaid | textile and paper | **no** | Leather (vegetable-tanned cowhide) (stand-in) | 860 (typical) | — | — |
 | `lettuce` lettuce | food | **no** | — | 400 (typical) | — | — |
-| `magnet-wire` enamelled copper winding wire | copper alloy | yes | Copper C110 annealed (stand-in) | 8900 (typical) | — | — |
-| `marble` marble | stone | yes | Concrete C30 (stand-in) | **none** | — | — |
+| `magnet-wire` enamelled copper winding wire | copper alloy | yes | Copper C110 annealed (stand-in) | 8900 (typical) | 69 MPa (typical) | — |
+| `marble` marble | stone | yes | Concrete C30 (stand-in) | 2700 (typical) | 15 MPa (typical) | — |
 | `mdf` medium-density fibreboard (EN 622-5) | wood product | yes | MDF | 750 (typical) | 30 MPa (estimated) | — |
 | `mls-steel` multi-layer steel gasket sheet (spring steel, coated) | steel | **no** | Steel AISI 1018 cold drawn (stand-in) | 7900 (typical) | — | — |
-| `nbr` nitrile rubber (NBR) | elastomer | yes | Natural rubber / latex (stand-in) | 1200 (typical) | — | — |
-| `ndfeb` sintered neodymium-iron-boron magnet | other metal | yes | — | 7500 (typical) | — | — |
+| `nbr` nitrile rubber (NBR) | elastomer | yes | Natural rubber / latex (stand-in) | 1200 (typical) | 15 MPa (typical) | — |
+| `ndfeb` sintered neodymium-iron-boron magnet | other metal | yes | — | 7500 (typical) | 80 MPa (typical) | — |
 | `nickel-alloy` a nickel alloy, grade unsaid | other metal | **no** | — | 8400 (typical) | — | — |
-| `nickel-plate` electroplated nickel | other metal | yes | — | 8900 (typical) | — | — |
-| `ntc-ceramic` nickel-manganese spinel thermistor ceramic | ceramic | yes | — | 5000 (typical) | — | — |
+| `nickel-plate` electroplated nickel | other metal | yes | — | 8900 (typical) | 150 MPa (typical) | — |
+| `ntc-ceramic` nickel-manganese spinel thermistor ceramic | ceramic | yes | — | 5000 (typical) | 60 MPa (typical) | — |
 | `nylon` polyamide, PA6 or PA66 unsaid | polymer | **no** | Printed micro carbon fibre filled nylon (stand-in) | 1140 (typical) | — | — |
 | `oak` oak (Quercus), red or white unsaid | wood | **no** | Birch plywood (stand-in) | 750 (typical) | — | — |
 | `oil` oil, grade unsaid | fluid | **no** | — | 870 (typical) | — | — |
-| `pa66-gf30` polyamide 66, 30 % glass filled | composite | yes | Printed micro carbon fibre filled nylon (stand-in) | 1350 (typical) | — | — |
+| `pa66` polyamide 66, unfilled, dry as moulded | polymer | yes | — | 1140 (typical) | 80 MPa (typical) | — |
+| `pa66-gf30` polyamide 66 with 30 % short glass fibre by mass (injection moulded: the fibres taken as random in the plane) | composite | yes | — | 1365.8 (typical) | — | — |
 | `paper` paper, grade unsaid | textile and paper | **no** | — | 800 (typical) | — | — |
-| `pbt` polybutylene terephthalate | polymer | yes | Acrylic (PMMA) (stand-in) | 1310 (typical) | — | — |
-| `pc` polycarbonate | polymer | yes | Acrylic (PMMA) (stand-in) | 1200 (typical) | — | — |
+| `pbt` polybutylene terephthalate | polymer | yes | Acrylic (PMMA) (stand-in) | 1310 (typical) | 55 MPa (typical) | — |
+| `pc` polycarbonate | polymer | yes | Acrylic (PMMA) (stand-in) | 1200 (typical) | 62 MPa (typical) | — |
 | `pe` polyethylene, density grade unsaid | polymer | **no** | Acrylic (PMMA) (stand-in) | 950 (typical) | — | — |
-| `pet` polyethylene terephthalate | polymer | yes | Acrylic (PMMA) (stand-in) | 1380 (typical) | — | — |
+| `pet` polyethylene terephthalate | polymer | yes | Acrylic (PMMA) (stand-in) | 1380 (typical) | 55 MPa (typical) | — |
 | `petrol` petrol | fluid | **no** | — | 740 (typical) | — | — |
 | `phenolic` phenolic resin (Bakelite type) | polymer | yes | Cast phenolic resin (billiard balls) | 1300 (typical) | 50 MPa (handbook) | density: 1300 kg/m³ typical (mass.ts), 1735 kg/m³ in the handbook (Cast phenolic resin (billiard balls)) |
-| `pla` polylactic acid | polymer | yes | Acrylic (PMMA) (stand-in) | 1240 (typical) | — | — |
+| `pla` polylactic acid | polymer | yes | Acrylic (PMMA) (stand-in) | 1240 (typical) | 60 MPa (typical) | — |
 | `pmma` polymethyl methacrylate (acrylic) | polymer | yes | Acrylic (PMMA) | 1190 (typical) | 70 MPa (handbook) | — |
-| `pom` polyoxymethylene (acetal) | polymer | yes | Acrylic (PMMA) (stand-in) | 1410 (typical) | — | — |
-| `pp` polypropylene | polymer | yes | Acrylic (PMMA) (stand-in) | 905 (typical) | — | — |
-| `ptfe` polytetrafluoroethylene | polymer | yes | Acrylic (PMMA) (stand-in) | 2200 (typical) | — | — |
+| `pom` polyoxymethylene (acetal) | polymer | yes | Acrylic (PMMA) (stand-in) | 1410 (typical) | 65 MPa (typical) | — |
+| `pp` polypropylene | polymer | yes | Acrylic (PMMA) (stand-in) | 905 (typical) | 32 MPa (typical) | — |
+| `ptfe` polytetrafluoroethylene | polymer | yes | Acrylic (PMMA) (stand-in) | 2200 (typical) | 25 MPa (typical) | — |
 | `pu` polyurethane, solid or elastomeric unsaid | polymer | **no** | Acrylic (PMMA) (stand-in) | 1200 (typical) | — | — |
 | `pvc` polyvinyl chloride, rigid or flexible unsaid | polymer | **no** | Acrylic (PMMA) (stand-in) | 1400 (typical) | — | — |
-| `pzt` lead zirconate titanate (PZT) | ceramic | yes | — | 7600 (typical) | — | — |
+| `pzt` lead zirconate titanate (PZT) | ceramic | yes | — | 7600 (typical) | 75 MPa (typical) | — |
 | `red-oak` northern red oak, Quercus rubra, at 12 % moisture | wood | yes | Birch plywood (stand-in) | 705.6 (derived) | 99 MPa (handbook) | — |
 | `render` cement render, mix unsaid | concrete and mortar | **no** | Concrete C30 (stand-in) | 1800 (typical) | — | — |
 | `rubber` rubber, natural or synthetic unsaid | elastomer | **no** | Natural rubber / latex (stand-in) | 1150 (typical) | — | — |
-| `silicon` crystalline silicon | other metal | yes | — | 2329 (typical) | — | — |
-| `silicone` silicone rubber | elastomer | yes | Natural rubber / latex (stand-in) | 1150 (typical) | — | — |
+| `sand-quartz` quartz sand grains (as aggregate) | stone | yes | — | 2650 (typical) | — | — |
+| `silicon` crystalline silicon | other metal | yes | — | 2329 (typical) | 300 MPa (typical) | — |
+| `silicon-carbide` silicon carbide, sintered | ceramic | yes | — | 3210 (typical) | 400 MPa (typical) | — |
+| `silicone` silicone rubber | elastomer | yes | Natural rubber / latex (stand-in) | 1150 (typical) | 7 MPa (typical) | — |
 | `silk` silk | textile and paper | yes | Coated nylon ripstop (tent cloth) (stand-in) | 1300 (typical) | — | — |
-| `silver` fine silver | other metal | yes | — | 10490 (secondary) | — | — |
-| `sio2` silicon dioxide (thermal oxide) | glass | yes | — | 2200 (typical) | — | — |
+| `silver` fine silver | other metal | yes | — | 10490 (secondary) | 170 MPa (typical) | — |
+| `sio2` silicon dioxide (thermal oxide) | glass | yes | — | 2200 (typical) | 50 MPa (typical) | — |
 | `soil` soil, type unsaid | soil | **no** | — | 1500 (typical) | — | — |
 | `solder` tin-lead or lead-free solder, alloy unsaid | other metal | **no** | — | 7400 (typical) | — | — |
 | `stainless-304` AISI 304 austenitic stainless | stainless steel | yes | Stainless 304 annealed | 8000 (typical) | 215 MPa (specified) | — |
 | `stainless-316` AISI 316 austenitic stainless | stainless steel | yes | Stainless 316 annealed | 8000 (typical) | 205 MPa (specified) | — |
-| `stainless-440c` AISI 440C martensitic stainless | stainless steel | yes | Stainless 304 annealed (stand-in) | 7800 (typical) | — | — |
+| `stainless-440c` AISI 440C martensitic stainless | stainless steel | yes | Stainless 304 annealed (stand-in) | 7800 (typical) | 1900 MPa (typical) | — |
 | `steel-alloy` AISI 4140 chromium-molybdenum steel, quenched and tempered | steel | yes | Steel AISI 4140 quenched and tempered | 7850 (typical) | 655 MPa (handbook) | — |
 | `steel-chrome` AISI 52100 bearing steel | steel | yes | Chrome steel 52100 (bearing balls) | 7830 (typical) | 2000 MPa (handbook) | — |
 | `steel-electrical` non-oriented electrical steel (silicon steel) | steel | **no** | Steel AISI 1018 cold drawn (stand-in) | 7650 (typical) | — | — |
 | `steel-low` AISI 1018 low-carbon steel (cold drawn) | steel | yes | Steel AISI 1018 cold drawn | 7850 (typical) | 370 MPa (handbook) | — |
 | `steel-spring` music wire, ASTM A228 | steel | yes | Music wire ASTM A228 | 7850 (typical) | 1600 MPa (handbook) | — |
-| `steel-tool` AISI O1 oil-hardening tool steel | steel | yes | Steel AISI 1018 cold drawn (stand-in) | 7850 (typical) | — | — |
+| `steel-tool` AISI O1 oil-hardening tool steel | steel | yes | Steel AISI 1018 cold drawn (stand-in) | 7850 (typical) | 1500 MPa (typical) | — |
 | `stingray` a stingray's body | living tissue | **no** | — | 1100 (typical) | — | — |
+| `thermal-paste-60` thermal paste: alumina particles in silicone, 60 % by volume | composite | yes | — | 2800 (typical) | — | — |
 | `tile` ceramic tile, body unsaid | ceramic | **no** | Fired clay brick (stand-in) | 2000 (typical) | — | — |
 | `tissue` soft tissue | living tissue | **no** | — | 1050 (typical) | — | — |
-| `titanium` titanium Ti-6Al-4V (grade 5) | other metal | yes | Titanium Ti-6Al-4V annealed | **none** | 880 MPa (handbook) | — |
+| `titanium` titanium Ti-6Al-4V (grade 5) | other metal | yes | Titanium Ti-6Al-4V annealed | 4430 (typical) | 880 MPa (handbook) | — |
 | `tomato` tomato | food | **no** | — | 1000 (typical) | — | — |
-| `tungsten` tungsten | other metal | yes | — | 19300 (typical) | — | — |
+| `tungsten` tungsten | other metal | yes | — | 19300 (typical) | 980 MPa (typical) | — |
 | `water` water | fluid | yes | — | 1000 (typical) | — | — |
 | `wood` wood, species unsaid | wood | **no** | Birch plywood (stand-in) | 500 (typical) | — | — |
 | `wood-veneer` wood veneer, species unsaid | wood product | **no** | Birch plywood (stand-in) | 680 (typical) | — | — |
-| `xlpe` cross-linked polyethylene | polymer | yes | Acrylic (PMMA) (stand-in) | 930 (typical) | — | — |
+| `xlpe` cross-linked polyethylene | polymer | yes | Acrylic (PMMA) (stand-in) | 930 (typical) | 20 MPa (typical) | — |
 | `zamak` zinc die-casting alloy (Zamak) | other metal | **no** | — | 6700 (typical) | — | — |
-| `zirconia` yttria-stabilised zirconia | ceramic | yes | — | 6050 (typical) | — | — |
+| `zirconia` yttria-stabilised zirconia | ceramic | yes | — | 6050 (typical) | 900 MPa (typical) | — |
 
 ## Where numbers are solved for or stepped in time
 
@@ -698,6 +722,4 @@ The numeric layer is `src/nexus/numeric.ts`: each answer with its method, whethe
 | an integral in a term (Simpson's rule, its error by halving) | `src/nexus/evaluate.ts` | yes |
 | a PID loop's plant stepped in time | `src/nexus/blocks.ts` | yes |
 | roots, integrals, slopes and paths on a board | `src/nexus/blocks.ts` | yes |
-| a motor run in time | `src/engineering/motorrun.ts` | no: its steps switch between spin-up and a steady state, with events (overheating, the rise time) and energy counted each step; kept until a stepper with events replaces it whole, its results held by the baseline |
 | warming in substeps | `src/engineering/thermal.ts` | no: a frame's step of a part cooling, its sub-step limited so it never crosses the room's temperature: called each frame, not run over a span |
-| heat through a grid | `src/nexus/heatflow.ts` | no: a field solver (implicit, Gauss–Seidel over cells), not one equation in time |

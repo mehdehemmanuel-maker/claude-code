@@ -13,8 +13,9 @@ import { BOOK, lawById, lawByHash } from './book';
 import { dimOf, integerNullSpace, sameDim } from './dimension';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
 import { apply, invert, invertFound, type Law, type Port } from './law';
-import { div, leaf, mul, OPERATORS, pow, substitute, variable, varsOf, type Term } from './term';
-import { bracketsOf, solveLinear, type Found } from './numeric';
+import { bindsOf, div, leaf, mul, OPERATORS, pow, substitute, variable, varsOf, type Term } from './term';
+import { bracketsOf, integrate, solveLinear, type Found } from './numeric';
+import { calc } from './generate';
 import { isPlain, quantityById, quantityOf, type QuantityDef } from './quantities';
 import { KINDS } from './book/kinds';
 import type { Status } from './status';
@@ -397,16 +398,92 @@ export function chain(knowns: Known[], target: { quantity: string; name?: string
 /** Each law checked against the rest of the book: its worked example's inputs given, its output sought through the other
  *  laws alone. Where another way reaches it, the two must agree; where they do not, one is an approximation of the other
  *  or a different model of the same thing, and both are said. */
-export function crossCheck(laws: readonly Law[] = BOOK, most = 3): { law: string; agree: boolean; own: number; other: number; unit: string; by: string[] }[] {
-  const out: { law: string; agree: boolean; own: number; other: number; unit: string; by: string[] }[] = [];
+export function crossCheck(laws: readonly Law[] = BOOK, most = 3): { law: string; agree: boolean; own: number; other: number; unit: string; by: string[]; within?: number }[] {
+  const out: { law: string; agree: boolean; own: number; other: number; unit: string; by: string[]; within?: number }[] = [];
+  // (a shape's formulas are not ways to each other: a length is not said to be which length of which shape, so a box's
+  // width would be taken for a circle's diameter; geometry laws are left out of the chains that check another)
+  const pool = laws.filter((x) => KINDS[x.id]?.[0] !== 'geometry');
   for (const l of laws) {
     const ex = l.example; if (!ex) continue;
     const knowns = l.inputs.filter((p) => ex.inputs[p.sym] !== undefined && quantityOf(l, p)).map((p) => ({ name: p.name, quantity: quantityOf(l, p)!.id, d: setting(p.name, ex.inputs[p.sym]!, p.unit, 'the worked example') }));
     const q = quantityOf(l, l.output); if (!q) continue;
-    const c = chain(knowns, { quantity: q.id, name: l.output.name }, { laws: laws.filter((x) => x !== l), most });
+    const c = chain(knowns, { quantity: q.id, name: l.output.name }, { laws: pool.filter((x) => x !== l), most });
     if (!c.result || c.result.value === null || !c.steps.length) continue;
-    const other = fromSI(c.result.value, l.output.unit);
-    out.push({ law: l.id, agree: Math.abs(other - ex.output) <= 1e-6 * Math.abs(ex.output), own: ex.output, other, unit: l.output.unit, by: c.steps.map((s) => s.law) });
+    const other = fromSI(c.result.value, l.output.unit), by = c.steps.map((s) => s.law);
+    // (an approximation agrees with the law it approximates within its truncation: taken as 0.1 % (an estimate of what
+    // an approximation in the book claims inside its stated range), the difference said)
+    const approx = [l.id, ...by].some((id) => KINDS[id]?.[0] === 'approximation' || KINDS[id]?.[0] === 'empirical'), within = approx ? 1e-3 : 1e-6;
+    out.push({ law: l.id, agree: Math.abs(other - ex.output) <= within * Math.abs(ex.output), own: ex.output, other, unit: l.output.unit, by, ...(approx ? { within } : {}) });
   }
   return out;
+}
+
+// ---- a law in the math hierarchy -----------------------------------------------------------------------------------
+/** A law's term written in the formula language the math nodes take (the Formula node; an integral is the Integral
+ *  node's, named here by `bound`): leaves as their SI values, each input by a plain name. */
+export function asFormula(t: Term, name: (sym: string) => string, bound: (b: Term) => string): string {
+  const f = (x: Term): string => asFormula(x, name, bound);
+  if (t.kind === 'leaf') return t.value! < 0 ? `(${t.value!.toPrecision(17)})` : t.value!.toPrecision(17);
+  if (t.kind === 'var') return name(t.sym);
+  if (t.kind === 'bind') return bound(t);
+  const [a, b] = t.args;
+  switch (t.op) {
+    case 'add': return `(${f(a!)} + ${f(b!)})`; case 'sub': return `(${f(a!)} - ${f(b!)})`;
+    case 'mul': return `(${f(a!)} * ${f(b!)})`; case 'div': return `(${f(a!)} / ${f(b!)})`;
+    case 'pow': return `(${f(a!)} ^ (${t.k!.toPrecision(17)}))`; case 'neg': return `(0 - ${f(a!)})`;
+    case 'le': return `((${f(a!)}) <= (${f(b!)}))`; case 'ge': return `((${f(a!)}) >= (${f(b!)}))`; case 'lt': return `((${f(a!)}) < (${f(b!)}))`; case 'gt': return `((${f(a!)}) > (${f(b!)}))`;
+    case 'and': return `((${f(a!)}) and (${f(b!)}))`; case 'or': return `((${f(a!)}) or (${f(b!)}))`;
+    default: return `${t.op}(${t.args.map(f).join(', ')})`;
+  }
+}
+/** Whether a law sits in the math hierarchy with nothing contradicting it (the user, 2026-10-29: "if the law nodes fall
+ *  into the math node hierarchy with no contradictions then they're safe"): (1) its term, rewritten as the math nodes'
+ *  formula (an integral as the Integral node's), gives what the law gives; (2) its worked example holds; (3) solved for
+ *  each of its inputs from that example, it gives back a value at which it holds again; (4) no chain of other laws to
+ *  the same quantity from the same inputs gives another answer. Its units are held already: a law whose term and ports
+ *  disagree in dimension is never built. */
+export interface Fit { law: string; fits: boolean; checks: { check: string; ok: boolean; says: string }[] }
+export function lawFits(l: Law, others?: Map<string, { agree: boolean; other: number; by: string[] }>): Fit {
+  const checks: Fit['checks'] = [], ex = l.example, close = (a: number, b: number, rel: number) => Math.abs(a - b) <= rel * Math.max(Math.abs(a), Math.abs(b), 1e-300);
+  if (!ex) return { law: l.id, fits: false, checks: [{ check: 'worked example', ok: false, says: 'no worked example to hold it against' }] };
+  const si = (sym: string, v: number) => { const p = l.inputs.find((q) => q.sym === sym)!, u = parseUnit(p.unit); return v * u.scale + (u.offset ?? 0); };
+  const names = new Map(l.inputs.map((p, k) => [p.sym, `v${k}`])), binds = bindsOf(l.term), values: Record<string, number> = {};
+  for (const p of l.inputs) values[names.get(p.sym)!] = si(p.sym, ex.inputs[p.sym]!);
+  // (1) through the math nodes' formula, an integral by the Integral node's adaptive Simpson
+  try {
+    const scope = (v: Record<string, number>) => ({ get: (n: string) => v[n], names: () => Object.keys(v) });
+    const boundName = new Map(binds.map((b, j) => [b, `b${j}`]));
+    for (const b of [...binds].reverse()) {
+      if (b.kind !== 'bind') continue;
+      const over = 'x0', lo = Number(calc(asFormula(b.lo, (s) => names.get(s)!, (q) => boundName.get(q as never)!), scope(values))), hi = Number(calc(asFormula(b.hi, (s) => names.get(s)!, (q) => boundName.get(q as never)!), scope(values)));
+      const body = asFormula(b.body, (s) => (s === b.over.sym ? over : names.get(s)!), (q) => boundName.get(q as never)!);
+      const r = integrate((x) => Number(calc(body, scope({ ...values, [over]: x }))), lo, hi, { method: 'adaptive-simpson', tol: 1e-12 });
+      values[boundName.get(b)!] = r.value ?? NaN;
+    }
+    const viaMath = Number(calc(asFormula(l.term, (s) => names.get(s)!, (q) => boundName.get(q as never)!), scope(values)));
+    const own = apply({ ...l, domain: [] }, Object.fromEntries(l.inputs.map((p) => [p.sym, setting(p.name, ex.inputs[p.sym]!, p.unit, 'the worked example')]))).value;
+    const ok = own !== null && Number.isFinite(viaMath) && close(viaMath, own, binds.length ? 1e-6 : 1e-9);
+    checks.push({ check: 'written in the math nodes', ok, says: ok ? `the math nodes give it again (${viaMath.toPrecision(6)} in SI)` : `the math nodes give ${viaMath} where the law gives ${own}` });
+  } catch (e) { checks.push({ check: 'written in the math nodes', ok: false, says: `cannot be written in the math nodes: ${(e as Error).message}` }); }
+  // (2) its worked example
+  const env = Object.fromEntries(l.inputs.map((p) => [p.sym, setting(p.name, ex.inputs[p.sym]!, p.unit, 'the worked example')]));
+  const fwd = apply(l, env), out = fwd.value === null ? null : fromSI(fwd.value, l.output.unit);
+  const exOk = out !== null && close(out, ex.output, ex.rel ?? 1e-6);
+  checks.push({ check: 'worked example', ok: exOk, says: exOk ? `gives ${out!.toPrecision(6)} ${l.output.unit}, as ${ex.from}` : `gives ${out} where ${ex.from} gives ${ex.output}` });
+  // (3) solved for each input, it holds again where it lands
+  const back: string[] = [];
+  for (const p of l.inputs) {
+    if (p.unit && parseUnit(p.unit).offset) continue;
+    const others = { ...env, [l.output.sym]: setting(l.output.name, ex.output, l.output.unit, 'the worked example') }; delete (others as Record<string, unknown>)[p.sym];
+    let got: number | null = null;
+    try { const d = solve(l.id, p.sym, others); got = d.value === null ? null : fromSI(d.value, p.unit); } catch { got = null; }
+    if (got === null) { back.push(`${p.sym} not solvable here`); continue; }
+    const again = apply({ ...l, domain: [] }, { ...env, [p.sym]: setting(p.name, got, p.unit, 'the inversion') }).value;
+    if (again === null || !close(fromSI(again, l.output.unit), ex.output, 1e-5)) checks.push({ check: `solved for ${p.sym}`, ok: false, says: `solved for ${p.name} it gives ${got} ${p.unit}, where the law then gives ${again === null ? 'nothing' : fromSI(again, l.output.unit)} not ${ex.output}` });
+  }
+  if (!checks.some((c) => c.check.startsWith('solved for'))) checks.push({ check: 'solved for each input', ok: true, says: back.length ? `holds again wherever it is solved (${back.join('; ')}: no value in range, not a contradiction)` : 'holds again for each input solved' });
+  // (4) no other law contradicts it
+  const o = others?.get(l.id);
+  if (o) checks.push({ check: 'against other laws', ok: o.agree, says: o.agree ? `the same through ${o.by.join(' → ')}` : `${o.by.join(' → ')} gives ${o.other} ${l.output.unit} where it gives ${ex.output}` });
+  return { law: l.id, fits: checks.every((c) => c.ok), checks };
 }

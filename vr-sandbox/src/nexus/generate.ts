@@ -8,6 +8,7 @@
 // contact graph, in `graph.ts`.)
 
 import type { Material } from '../data/materials';
+import { erf } from './term';
 
 // ---- numbers with their units, and the expressions they are said in ---------------------------------------------------
 const UNITS: [string, number][] = ([
@@ -91,7 +92,9 @@ function spatial(f: string, A: Box3, B: Box3): number {
   if (f === 'touches') return !over && gap <= 1e-6 ? 1 : 0;
   return dc.every((d, i) => d + ha[i]! <= hb[i]! + 1e-9) ? 1 : 0;
 }
-const FN: Record<string, (...a: number[]) => number> = { sqrt: Math.sqrt, cbrt: Math.cbrt, abs: Math.abs, min: Math.min, max: Math.max, round: Math.round, floor: Math.floor, ceil: Math.ceil, sin: Math.sin, cos: Math.cos, tan: Math.tan, log: Math.log10, ln: Math.log, exp: Math.exp, pow: Math.pow };
+// (every function the laws' terms use (term.ts OPERATORS) is here, so any law can be written as a formula: the math
+// nodes cover the book)
+const FN: Record<string, (...a: number[]) => number> = { sqrt: Math.sqrt, cbrt: Math.cbrt, abs: Math.abs, min: Math.min, max: Math.max, round: Math.round, floor: Math.floor, ceil: Math.ceil, sin: Math.sin, cos: Math.cos, tan: Math.tan, asin: Math.asin, acos: Math.acos, atan: Math.atan, log: Math.log10, log10: Math.log10, log2: Math.log2, ln: Math.log, exp: Math.exp, erf, pow: Math.pow };
 const WORD_OP: [string[], string][] = [[['at', 'most'], '<='], [['at', 'least'], '>='], [['less', 'than'], '<'], [['more', 'than'], '>'], [['fewer', 'than'], '<'], [['under'], '<'], [['below'], '<'], [['over'], '>'], [['above'], '>'], [['is', 'not'], '!='], [['is'], '=']];
 class Parser {
   private i = 0;
