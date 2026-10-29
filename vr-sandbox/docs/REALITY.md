@@ -779,3 +779,18 @@ analysis (mechanical › thermal and fluid sciences › conduction; MSC2020 80A1
 Frame analysis (3D beams) (civil › structural › structural analysis; MSC2020 74K10; Przemieniecki 1968, Roark). Each
 MSC2020 code was checked against the AMS's MathSciNet listing. Law nodes are left to phase 4, where their specification
 is read from the book.
+
+**Phase 2.2, one heat solver (2026-10-29).** `heatflow.ts` was a second heat solver (lumped, stepped in time, its own
+conductances), and the only thing that used it was `Workshop` in `generate.ts`, the old word-driven workshop: 1,250
+lines nothing reached (the reach check sees files, not classes, so it had stayed). Both deleted, with every declaration
+only they used (pruned by the compiler's own unused-code report until none was left: `generate.ts` 1,667 lines to 192,
+now only the expression language nodes use) and `engineering/motorrun.ts`, reached only by them. What was worth keeping
+moved into the engine: `temperaturesOf` (`graph.ts`) now runs steady or in time (backward Euler, each piece holding m c,
+its air loss read again each step, what went in, to the air and was held more balanced), takes heaters, and the contact
+resistance where pieces only touch (`TOUCHING_R`, Incropera Table 3.1b, said as an estimate past aluminium). The flow
+node takes it as its default (`touching`; `none` for one body): the rods board's resistance goes from 3.6 to 5.7 K/W, the
+faces between block and rods now most of it, and its evidence is said as estimated. New node, specified from the start:
+Thermal analysis (conduction, convection, radiation) (`thermal`, gloss How hot each piece gets; MSC2020 80A19 and
+80A21), checked exactly: 10 W through two sealed copper cubes, 20 + 10 R; and the free cube warming toward 100 °C in
+time, 100 − 80 (1 + dt/RC)⁻²⁰⁰ to the digit (the continuous exponential is 0.11 % above, the step's own error). On the
+rods board, 5 W into the steel block settles it at 35.3 °C, the rods' tops at 31 °C.

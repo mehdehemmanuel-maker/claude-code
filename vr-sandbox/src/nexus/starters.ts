@@ -275,6 +275,10 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'warmsays'); b.nodes.warmsays!.label = 'What warming does'; wire(b, 'warm', 'says', 'warmsays', 'value');
     placeBlock(b, 'place', 0, 0, { x: -0.15 }, 'aside2'); wire(b, 'bent', 'seen', 'aside2', 'thing');
     placeBlock(b, 'space.show', 0, 0, {}, 'bentshow'); b.nodes.bentshow!.label = 'Seen bent: movements exaggerated, red moves most'; wire(b, 'aside2', 'placed', 'bentshow', 'thing');
+    placeBlock(b, 'thermal', 0, 0, { hot: '', heated: 'steel block', power: 5 }, 'therm'); b.nodes.therm!.label = '5 W into the block, cooled by the air: how hot each piece gets'; wire(b, 'all', 'assembly', 'therm', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'thermt'); b.nodes.thermt!.label = 'Each piece, steady'; wire(b, 'therm', 'pieces', 'thermt', 'rows');
+    placeBlock(b, 'place', 0, 0, { x: 0.3 }, 'aside3'); wire(b, 'therm', 'seen', 'aside3', 'thing');
+    placeBlock(b, 'space.show', 0, 0, {}, 'thermshow'); b.nodes.thermshow!.label = 'Seen: the block 5 W warm, the rods carrying it down'; wire(b, 'aside3', 'placed', 'thermshow', 'thing');
     placeBlock(b, 'place', 0, 0, { x: 0.15 }, 'aside'); b.nodes.aside!.label = 'Beside it'; wire(b, 'heat', 'seen', 'aside', 'thing');
     placeBlock(b, 'space.show', 0, 0, {}, 'hot'); b.nodes.hot!.label = 'Seen: hot red at the block, cold blue at the rods\' feet'; wire(b, 'aside', 'placed', 'hot', 'thing');
     placeBlock(b, 'view.table', 0, 0, {}, 'contacts'); b.nodes.contacts!.label = 'What touches what, read from the geometry'; wire(b, 'touch', 'edges', 'contacts', 'rows');

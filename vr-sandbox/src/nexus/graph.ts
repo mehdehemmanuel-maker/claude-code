@@ -13,6 +13,7 @@ import { contacts, layout, patchIn, type Node, type OBB } from './make/space';
 import type { Part } from './kits';
 import { matterOf } from './matter';
 import { solveSparseSPD } from './numeric';
+import { massOf } from './mass';
 import { heatLoss } from '../engineering/thermal';
 import { apply } from './law';
 import { lawById } from './book';
@@ -149,7 +150,16 @@ export interface Flow {
 type Known = { v: number; ev: Evidence; span?: [number, number] } | null;
 /** Each contact's conductance for what flows (by the book's law over each half, with the contact's own where given), and
  *  each piece's figure, with how it is known: what `flowOver` and `temperaturesOf` both solve over. */
-export function edgeConductances(g: Graph, kind: 'heat' | 'current' | 'force', o: { contact?: number } = {}) {
+/** Where two pieces only touch, pressed lightly, in air: the face between them resists heat by R'' = 2.75e-4 m² K/W, an
+ *  aluminium interface of 10 µm roughness at 10⁵ N/m² with air between (Incropera, DeWitt, Bergman, Lavine, Fundamentals of
+ *  Heat and Mass Transfer, 7th ed., Table 3.1b). Used for every pair that touches, since no other pair's figure is kept:
+ *  an estimate past aluminium, said so where it is used. Slices of one piece are one body and have none. */
+export const TOUCHING_R = 2.75e-4;
+/** A contact's conductance per area where pieces meet: a number (W/m² K, or S/m²), or as pieces only touching in air
+ *  (`TOUCHING_R`, for heat; current has no figure kept and is left without). */
+export type Contact = number | 'touching';
+const oneBody = (g: Graph, e: GraphEdge) => { const a = g.pieces[e.a]!.id, b = g.pieces[e.b]!.id; return a.includes('#') && b.includes('#') && a.split('#')[0] === b.split('#')[0]; };
+export function edgeConductances(g: Graph, kind: 'heat' | 'current' | 'force', o: { contact?: Contact } = {}) {
   const key = kind === 'heat' ? 'k' : kind === 'force' ? 'E' : 'conductivity', lacking: string[] = [];
   const known = new Map<string, Known>(), prop = (m: string | null) => {
     if (!m) return null;
@@ -183,12 +193,16 @@ export function edgeConductances(g: Graph, kind: 'heat' | 'current' | 'force', o
     const at = new THREE.Vector3(...e.at), ga = half(ka, e.area, Math.max(mid[e.a]!.distanceTo(at), 1e-5)), gb = half(kb, e.area, Math.max(mid[e.b]!.distanceTo(at), 1e-5));
     return ga > 0 && gb > 0 ? [ga, gb] : [0, 0];
   });
-  const conductances = (k: (number | null)[]) => halves(k).map(([ga, gb], q) => (ga > 0 ? 1 / (1 / ga + 1 / gb + (o.contact ? 1 / (o.contact * g.edges[q]!.area) : 0)) : 0));
-  return { conductances, halves, k0, known, law, refused, lacking, mid };
+  // each contact's own resistance (K/W or Ω), where pieces meet and are not one body
+  const touching = o.contact === 'touching' && kind === 'heat';
+  const contactR = g.edges.map((e) => (oneBody(g, e) || !(e.area > 0) ? 0 : touching ? TOUCHING_R / e.area : typeof o.contact === 'number' && o.contact > 0 ? 1 / (o.contact * e.area) : 0));
+  const conductances = (k: (number | null)[]) => halves(k).map(([ga, gb], q) => (ga > 0 ? 1 / (1 / ga + 1 / gb + contactR[q]!) : 0));
+  const contactSaid = touching && contactR.some((r) => r > 0) ? `where pieces only touch, R'' ${TOUCHING_R} m² K/W across the face (Incropera Table 3.1b, aluminium pressed lightly in air; an estimate past aluminium)` : null;
+  return { conductances, halves, k0, known, law, refused, lacking, mid, contactSaid };
 }
 
-export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: number[], to: number[], o: { contact?: number } = {}): Flow {
-  const n = g.pieces.length, { conductances, halves, k0, known, law, refused, lacking } = edgeConductances(g, kind, o);
+export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: number[], to: number[], o: { contact?: Contact } = {}): Flow {
+  const n = g.pieces.length, { conductances, halves, k0, known, law, refused, lacking, contactSaid } = edgeConductances(g, kind, o);
   const G = conductances(k0.map((x) => x?.v ?? null)), H = halves(k0.map((x) => x?.v ?? null));
   const end = new Map<number, number>(); for (const i of to) end.set(i, 0); for (const i of from) end.set(i, 1);
   // only pieces joined to an end through pieces that carry it
@@ -221,7 +235,8 @@ export function flowOver(g: Graph, kind: 'heat' | 'current' | 'force', from: num
   if (used.filter((m) => known.get(m)!.span).length > 12) lacking.push('more than twelve materials known only by their family: the twelve first met carry the ±');
   if (refused.length) lacking.push(`${refused.length} halves refused by the law (${[...new Set(refused)][0]})`);
   const ev = (e: Evidence): EvidenceKind => (e === 'handbook' || e === 'specified' || e === 'secondary' ? 'specified' : e === 'derived' ? 'derived' : 'estimated');
-  const evidence = used.length ? weakestOf(...used.map((m) => ev(known.get(m)!.ev))) : 'derived';
+  if (contactSaid) lacking.push(contactSaid);
+  const evidence0 = used.length ? weakestOf(...used.map((m) => ev(known.get(m)!.ev))) : 'derived', evidence = contactSaid ? weakestOf(evidence0, 'estimated') : evidence0;
   return { resistance: R, conductance: out, level, through, face: face as Flow['face'], imbalance: scale > 0 ? worst / scale : 0, converged: sol.converged, steps: sol.steps, lacking, floating,
     resistanceU: uncertainFrom.length ? Math.sqrt(u2) : null, uncertainFrom, evidence, laws: [law.id] };
 }
@@ -331,28 +346,59 @@ export function sliced(g: Graph, n: number, along?: THREE.Vector3): Graph {
 }
 
 /**
- * Each piece's steady temperature (step H: the heat gate by conduction): the hot pieces held at their temperatures, heat
- * conducted through every contact (as `flowOver`, by Fourier's law over each half), and every piece losing heat to the air
- * round it from its surface (its covering box's), by natural convection and radiation (`heatLoss`: Holman's correlation,
- * the material's emissivity, else 0.9), taken as linear and worked again from the temperatures it gives, a few rounds.
- * A piece joined to nothing hot stays at the air's temperature.
+ * Each piece's temperature (step H: the heat gate by conduction; phase 2: one heat solver, in time as well): the hot pieces
+ * held at their temperatures, heat put into any by `heaters` (W), heat conducted through every contact (as `flowOver`, by
+ * Fourier's law over each half, and the contact's own resistance where given), and every piece losing heat to the air round
+ * it from its surface (its covering box's), by natural convection and radiation (`heatLoss`: Holman's correlation, the
+ * material's emissivity, else 0.9), taken as linear and worked again from the temperatures it gives. Steady, or with
+ * `seconds`, in time from `start` (each piece's, else the air's): each piece holding heat as its mass times its specific
+ * heat, stepped by backward Euler (stable at any step), its air loss read again at each step; what went in, what went to
+ * the air and what is held more at the end balance to the solver's tolerance (`energy`). A piece joined to nothing hot and
+ * heated by nothing stays at the air's temperature.
  */
-export function temperaturesOf(g: Graph, hot: Map<number, number>, ambient: number, o: { rounds?: number } = {}): { T: number[]; lacking: string[] } {
-  const { conductances, k0, lacking } = edgeConductances(g, 'heat'), G = conductances(k0.map((x) => x?.v ?? null));
+export interface Temperatures { T: number[]; lacking: string[]; face: ([number, number] | null)[]; evidence: EvidenceKind;
+  /** in time: the moments sampled (s), each piece's temperature at each, and the energy (J) put in by heaters and through
+   *  what is held hot, lost to the air, and held more at the end than at the start */
+  run?: { t: number[]; T: number[][]; energy: { in: number; air: number; stored: number } } }
+export function temperaturesOf(g: Graph, hot: Map<number, number>, ambient: number, o: { rounds?: number; contact?: Contact; heaters?: Map<number, number>; seconds?: number; start?: number[]; /** false: no loss to the air (sealed, or to check against a closed form) */ air?: boolean } = {}): Temperatures {
+  const { conductances, halves, k0, lacking, contactSaid, known } = edgeConductances(g, 'heat', { contact: o.contact }), kv = k0.map((x) => x?.v ?? null), G = conductances(kv), H = halves(kv);
   const area = g.pieces.map((p) => { const h = p.node.obb!.h; return 8 * (h[0] * h[1] + h[1] * h[2] + h[0] * h[2]); }), size = g.pieces.map((p) => 2 * Math.max(...p.node.obb!.h));
   const eps = g.pieces.map((p) => (p.mat ? matterOf(p.mat).props.find((x) => x.key === 'emissivity')?.value : undefined) ?? 0.9);
   const nb: [number, number][][] = g.pieces.map(() => []); g.edges.forEach((e, q) => { if (G[q]! > 0) { nb[e.a]!.push([e.b, q]); nb[e.b]!.push([e.a, q]); } });
-  const free = g.pieces.map((_, i) => i).filter((i) => !hot.has(i)), at = new Map(free.map((i, r) => [i, r]));
-  let T = g.pieces.map((_, i) => hot.get(i) ?? ambient + (Math.max(...hot.values(), ambient) - ambient) / 2);
-  for (let r = 0; r < (o.rounds ?? 4); r++) {
-    // what each piece loses to the air per kelvin above it, at the temperature it was last found at
-    const Ga = T.map((t, i) => { const dT = t - ambient; return Math.abs(dT) < 1e-6 ? heatLoss(ambient + 1, area[i]!, size[i]!, eps[i]!, ambient) : heatLoss(t, area[i]!, size[i]!, eps[i]!, ambient) / dT; });
+  const free = g.pieces.map((_, i) => i).filter((i) => !hot.has(i)), at = new Map(free.map((i, r) => [i, r])), P = (i: number) => o.heaters?.get(i) ?? 0;
+  // what each piece loses to the air per kelvin above it, at a temperature
+  const airG = (t: number, i: number) => { if (o.air === false) return 0; const dT = t - ambient; return Math.abs(dT) < 1e-6 ? heatLoss(ambient + 1, area[i]!, size[i]!, eps[i]!, ambient) : heatLoss(t, area[i]!, size[i]!, eps[i]!, ambient) / dT; };
+  // one solve: each free piece's balance, with what it holds (C/dt, from its last temperature) where in time
+  const solve = (Tnow: number[], cdt: number[] | null, Tlast: number[] | null) => {
     const entries: [number, number, number][] = [], b = new Array<number>(free.length).fill(0);
-    for (const i of free) { const row = at.get(i)!; let d = Ga[i]!; b[row]! += Ga[i]! * ambient; for (const [j, q] of nb[i]!) { d += G[q]!; const c = at.get(j); if (c !== undefined) entries.push([row, c, -G[q]!]); else b[row]! += G[q]! * hot.get(j)!; } entries.push([row, row, d]); }
+    for (const i of free) { const row = at.get(i)!, ga = airG(Tnow[i]!, i); let d = ga + (cdt ? cdt[i]! : 0); b[row]! += ga * ambient + P(i) + (cdt ? cdt[i]! * Tlast![i]! : 0); for (const [j, q] of nb[i]!) { d += G[q]!; const c = at.get(j); if (c !== undefined) entries.push([row, c, -G[q]!]); else b[row]! += G[q]! * hot.get(j)!; } entries.push([row, row, d]); }
     const x = free.length ? solveSparseSPD(free.length, entries, b).x : [];
-    T = g.pieces.map((_, i) => hot.get(i) ?? x[at.get(i)!]!);
+    return g.pieces.map((_, i) => hot.get(i) ?? x[at.get(i)!]!);
+  };
+  let T: number[], run: Temperatures['run'];
+  if (o.seconds && o.seconds > 0) {
+    // what each piece holds per kelvin: its mass (its part's) times its specific heat
+    const cOf = g.pieces.map((p) => (p.mat ? matterOf(p.mat).props.find((x) => x.key === 'c')?.value : undefined)), C = g.pieces.map((p, i) => (cOf[i] ? massOf(p.node.p) * cOf[i]! : 0));
+    const noC = g.pieces.filter((_, i) => !cOf[i] && !hot.has(i)).length; if (noC) lacking.push(`${noC} pieces with no specific heat known, holding no heat (they follow at once)`);
+    const steps = Math.min(2000, Math.max(200, Math.ceil(o.seconds / 0.5))), dt = o.seconds / steps, every = Math.max(1, Math.round(steps / 200)), cdt = C.map((c) => c / dt);
+    T = g.pieces.map((_, i) => hot.get(i) ?? o.start?.[i] ?? ambient); const T0 = [...T];
+    run = { t: [0], T: T.map((t) => [t]), energy: { in: 0, air: 0, stored: 0 } };
+    for (let s = 1; s <= steps; s++) {
+      const last = [...T]; T = solve(last, cdt, last);
+      for (const i of free) { run.energy.in += P(i) * dt; run.energy.air += airG(last[i]!, i) * (T[i]! - ambient) * dt; for (const [j, q] of nb[i]!) if (hot.has(j)) run.energy.in += G[q]! * (hot.get(j)! - T[i]!) * dt; }
+      if (s % every === 0 || s === steps) { run.t.push(s * dt); T.forEach((t, i) => run!.T[i]!.push(t)); }
+    }
+    run.energy.stored = free.reduce((a, i) => a + C[i]! * (T[i]! - T0[i]!), 0);
+  } else {
+    T = g.pieces.map((_, i) => hot.get(i) ?? ambient + (Math.max(...hot.values(), ambient) - ambient) / 2);
+    for (let r = 0; r < (o.rounds ?? 4); r++) T = solve(T, null, null);
   }
-  return { T, lacking };
+  const face = g.edges.map((e, q): [number, number] | null => { if (!(G[q]! > 0)) return null; const Q = G[q]! * (T[e.a]! - T[e.b]!); return [T[e.a]! - Q / H[q]![0], T[e.b]! + Q / H[q]![1]]; });
+  if (contactSaid) lacking.push(contactSaid);
+  const ev = (e: Evidence): EvidenceKind => (e === 'handbook' || e === 'specified' || e === 'secondary' ? 'specified' : e === 'derived' ? 'derived' : 'estimated');
+  const used = [...new Set(g.pieces.map((p) => p.mat).filter((m): m is string => !!m && !!known.get(m)))];
+  const evidence = weakestOf(...(used.length ? used.map((m) => ev(known.get(m)!.ev)) : ['derived' as EvidenceKind]), 'estimated');
+  return { T, lacking, face, evidence, ...(run ? { run } : {}) };
 }
 
 export interface Bent {

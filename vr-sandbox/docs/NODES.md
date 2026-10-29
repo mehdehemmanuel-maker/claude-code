@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 556 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 557 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -33,16 +33,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 81 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 294 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 295 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 40 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 71 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 515 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
+Checked: 9 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 516 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 457 of 556 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 458 of 557 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -212,7 +212,7 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Turn it over and check** (`check.turning`): A piston engine turned through a whole revolution of its crank, a step at a time: at each, its crank and every piston and rod where they then are, tried against everything else (block, caps, pan, pump, cams in the … *derived, tested here, before the update*
 - **What it is made of** (`made.of`): Any thing opened as its materials all the way down: its own tree with each thing's mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a … *derived, tested here*
 
-## 6 · Simulate and run (16)
+## 6 · Simulate and run (17)
 
 Physics, motion, the clock, chips run from their transistors, engines under load.
 
@@ -230,6 +230,7 @@ Physics, motion, the clock, chips run from their transistors, engines under load
 - **Spring under load** (`load.spring`): A coiled spring as it was made (its wire, its coil, its coils, its free and fitted lengths, read off the part), compressed as fitted and by a stroke more: its rate and forces, its wire's stress against what the wire … *derived, tested here, before the update*
 - **Sweep** (`sweep`): The room a thing needs as it turns from one angle to another about a pivot: it, at so many angles between, as one thing (its envelope), for Clashes to check against what is round it (a door's swing against the bed, an … *derived, tested here, before the update*
 - **Sweep (stress test)** (`sweep.range`): Any block in the library run over a range of one of its inputs (an engine's speed, a beam's load, a loan's rate), the rest wired in as for the block itself: every answer in a table, and the worst of them and where it … *derived, tested here, before the update*
+- **Thermal analysis (conduction, convection, radiation)** (`thermal`): How hot each piece of any thing gets, over its contact graph (Contact graph), nothing typed: pieces held at a temperature (the hottest, the lowest, a name or a material), heat put into others (a chip, a coil, a … *derived, tested here, before the update*
 - **Through time** (`math.ode`): How quantities change when their rates are known: one line a rate ("y' = -k * y"), where each starts ("y = 1"), from one time to another. *derived, tested here*
 - **Turn** (`turn`): A thing turned about an axis through a point to the angles given at their times ("0 s 0°, 2 s 90°, 6 s 90°, 8 s 0°"), driven as a servo drives a joint: it speeds up and slows down at its acceleration, no faster than … *derived, tested here, before the update*
 

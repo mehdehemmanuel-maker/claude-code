@@ -36,7 +36,6 @@ const TABLES: { table: string; file: string; names: string[]; holds: string }[] 
   { table: 'words to matter', file: 'src/nexus/kinds/core.ts', names: ['MATTER'], holds: 'a word → inventory id, density, label' },
   { table: 'spring wires', file: 'src/engineering/springs.ts', names: ['SPRING_WIRES'], holds: 'ASTM spring wires: A, m, G, E, density' },
   { table: 'adhesives', file: 'src/engineering/joining.ts', names: ['ADHESIVES'], holds: 'adhesives by the handbook categories' },
-  { table: 'liquids', file: 'src/engineering/motorrun.ts', names: ['LIQUIDS'], holds: 'density, c, viscosity, k of four liquids' },
   { table: 'gases', file: 'src/nexus/aware/gas.ts', names: ['SUBSTANCES'], holds: 'molar mass, smell, harm, flammable limits' },
   { table: 'edges', file: 'src/nexus/finish.ts', names: ['ruleFor', 'EDGE_RULES'], holds: 'edge radius by material' },
 ];
@@ -49,9 +48,7 @@ const NUMERIC: { what: string; at: string; find: RegExp; stays?: string }[] = [
   { what: 'an integral in a term (Simpson\'s rule, its error by halving)', at: 'src/nexus/evaluate.ts', find: /simpsonRule\(/ },
   { what: 'a PID loop\'s plant stepped in time', at: 'src/nexus/blocks.ts', find: /stepOde\(method/ },
   { what: 'roots, integrals, slopes and paths on a board', at: 'src/nexus/blocks.ts', find: /id: 'math\.ode'/ },
-  { what: 'a motor run in time', at: 'src/engineering/motorrun.ts', find: /export function runMotor/, stays: 'its steps switch between spin-up and a steady state, with events (overheating, the rise time) and energy counted each step; kept until a stepper with events replaces it whole, its results held by the baseline' },
   { what: 'warming in substeps', at: 'src/engineering/thermal.ts', find: /export function warm/, stays: 'a frame\'s step of a part cooling, its sub-step limited so it never crosses the room\'s temperature: called each frame, not run over a span' },
-  { what: 'heat through a grid', at: 'src/nexus/heatflow.ts', find: /export function/, stays: 'a field solver (implicit, Gauss–Seidel over cells), not one equation in time' },
 ];
 
 function mapText(): string {
