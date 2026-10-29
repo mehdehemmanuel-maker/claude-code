@@ -1110,3 +1110,13 @@ sedan" with "a cream-and-black cow-print or camo-style wrap", taken for a Charge
 reads as a wrap, not as work in progress; the flares still read thin, the ducktail a flat slab, the wheels small and set
 in, the body slab-sided and inflated, its windows near opaque with no pillar between. The body's own shape (the
 Monte Carlo's rear window, haunch and deck) is the gap now.
+- **2026-10-29, the Monte Carlo's own shape, first round.** Two general options any car can take: its haunches (`haunch` in
+its lines: each side narrower along its doors than over its rear wheel, where its published width is, so much of that over
+its front wheel, and its shoulder line rising over its rear wheel) and a coupe's one long door with a quarter glass
+behind it (`doorR` now splits a one-door car's side glass at its door's top rear corner: the door's drop glass, a black
+bar, a fixed quarter glass). The Monte Carlo: 35 mm of waist, 55 % of it at the front, a 50 mm rise; its door's rear edge
+0.581 of its length (measured off the first photograph). Rules clean on all three records. Blind check of the stock car:
+now read as a two-door ("a 2-door built on a sedan body"), still not as a Monte Carlo (an Audi A6 or a Commodore, under
+10 %): its body hangs nearly to the ground beside each arch with no sill line, the arches cut as notches with the
+suspension showing; a long slab deck and a tall plain tail; the wheels small and flat chrome; the door a flat cut-out.
+The body falling to the ground by its arches is every car's, from the body maker's bottom line: next.

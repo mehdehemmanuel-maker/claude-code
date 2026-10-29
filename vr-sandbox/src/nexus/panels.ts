@@ -135,8 +135,11 @@ function lined(b: BodyPlan, r: BodyRules): Lined {
   // in plan: a rounded rectangle, its corners superellipses (G2 where they meet the straight), flared out round each arch
   // where the tyre's face needs it
   const corner = (d: number, R: number) => (d >= R ? 1 : (1 - (1 - d / R) ** r.plan.k) ** (1 / r.plan.k));
+  // (its haunches: full over each wheel, easing to its waist along the doors between, over a wheel's diameter and more)
+  const hipAt = (x: number, front: number) => { let g = 0; for (const wh of b.wheels) { const reach = wh.R * 2 + 0.4, d = Math.abs(x - wh.x); if (d >= reach) continue; const t = 0.5 + 0.5 * Math.cos((Math.PI * d) / reach); g = Math.max(g, (wh.x > 0 ? front : 1) * t * t * (3 - 2 * t)); } return g; };
   const plan = (x: number) => {
     let w = W2 * Math.min(corner(xN - x, r.plan.nose), corner(x - xT, r.plan.tail));
+    if (ln.haunch) w -= ln.haunch.waist * (1 - hipAt(x, ln.haunch.front ?? 0.5)) * (w / W2);
     for (const wh of b.wheels) { const need = wh.z + wh.w / 2 + r.room.side + r.flare, reach = wh.R + r.room.radial + 0.25, d = Math.abs(x - wh.x); if (need > W2 * 0.97 && d < reach) { const t = 0.5 + 0.5 * Math.cos((Math.PI * d) / reach), s3 = t * t * (3 - 2 * t); w = Math.max(w, Math.min(W2, need) * s3 + w * (1 - s3)); } }
     return w;
   };
@@ -164,7 +167,7 @@ function lined(b: BodyPlan, r: BodyRules): Lined {
     [xCowl + hoodRun * 0.4, noseH + (cowlY - noseH) * 0.55], [xN - 0.16, noseH + 0.008], [xN - 0.04, noseH - 0.004], [xN, noseH - 0.022],
   ]);
   const top = (x: number) => { const n = need(x); return n === -Infinity ? drawn(x) : -softMin(-drawn(x), -n, 0.04); };
-  const shoulder = (x: number) => softMin(top(x) - 0.06, belt - r.side.shoulder, 0.08);
+  const shoulder = (x: number) => softMin(top(x) - 0.06, belt - r.side.shoulder + (ln.haunch?.lift ?? 0) * (ln.haunch ? (x < 0 ? hipAt(x, 0) : 0) : 0), 0.08);
   // the cabin's top line: the windscreen from the cowl, rounding into the roof, the roof, the back glass to the deck
   const wsRun = xCowl - xRoofF, bgRun = xRoofR - xDeck, rb = cowlY;
   const roof = lineBy([
@@ -666,7 +669,16 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
         const half = frame ? 0.012 : r.cabin.pillar, edges = [uB0, ...cuts.sort((a2, b2) => b2 - a2).flatMap((x) => [Uc(x + half), Uc(x - half)]), uCe];
         for (let k = 0; k + 1 < edges.length; k += 2) out.push(frame && k > 0 ? glass('rear quarter windows', [[edges[k + 1]!, vg0], [edges[k]!, vg0], [edges[k]!, v3 - p], [edges[k + 1]!, v3 - p]], 'its rear quarter glass, fixed in the body behind its rear door (typical)') : glass('rear side windows', [[edges[k + 1]!, vg0], [edges[k]!, vg0], [edges[k]!, v3 - p], [edges[k + 1]!, v3 - p]], 'its rear side glass (typical)'));
         for (const x of cuts) out.push(trim(frame ? 'rear door frames' : 'D pillars', [[Uc(x - half), vg0], [Uc(x + half), vg0], [Uc(x + half), v3 - p], [Uc(x - half), v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: frame ? 'its rear door\'s window frame, where its glass runs on behind the door, trimmed black (typical)' : 'a pillar between its rear side windows, trimmed black (typical)' }));
-      } else out.push(glass('side windows', [[uCe, vg0], [uS, vg0], [uS, v3 - p], [uCe, v3 - p]], 'its side glass (typical)'));
+      } else {
+        // (a coupe's one long door, its glass ending where its maker ends the door's top (doorR), a fixed quarter glass in
+        // the body behind it past a thin black bar: its door glass drops, its quarter glass does not)
+        const xQ = b.lines.doorR !== undefined ? b.L / 2 - b.lines.doorR * b.L : -Infinity, hq = 0.014;
+        if (xQ - hq > xCe + 0.08 && xQ + hq < xB + 0.2) {
+          out.push(glass('side windows', [[Uc(xQ + hq), vg0], [uS, vg0], [uS, v3 - p], [Uc(xQ + hq), v3 - p]], 'its door glass (typical)'));
+          out.push(glass('rear quarter windows', [[uCe, vg0], [Uc(xQ - hq), vg0], [Uc(xQ - hq), v3 - p], [uCe, v3 - p]], 'its quarter glass, fixed in the body behind its door (typical)'));
+          out.push(trim('rear door frames', [[Uc(xQ - hq), vg0], [Uc(xQ + hq), vg0], [Uc(xQ + hq), v3 - p], [Uc(xQ - hq), v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'the bar between its door glass and its quarter glass, trimmed black (typical)' }));
+        } else out.push(glass('side windows', [[uCe, vg0], [uS, vg0], [uS, v3 - p], [uCe, v3 - p]], 'its side glass (typical)'));
+      }
       // (where its door is set back from its windscreen's foot, the corner between its glass and its A pillar a black sail,
       // fixed: its glass in its door)
       if (uS < 1 - 1e-6) out.push(trim('mirror sails', [[uS, vg0], [1, vg0], [1, v3 - p], [uS, v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', fixed: 'clipped into the corner at the foot of its A pillar', says: 'the black sail between its front door glass and its A pillar, ahead of its door (typical)' }));
