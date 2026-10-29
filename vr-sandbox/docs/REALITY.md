@@ -783,7 +783,7 @@ is read from the book.
 **Phase 2.2, one heat solver (2026-10-29).** `heatflow.ts` was a second heat solver (lumped, stepped in time, its own
 conductances), and the only thing that used it was `Workshop` in `generate.ts`, the old word-driven workshop: 1,250
 lines nothing reached (the reach check sees files, not classes, so it had stayed). Both deleted, with every declaration
-only they used (pruned by the compiler's own unused-code report until none was left: `generate.ts` 1,667 lines to 192,
+only they used (pruned by the compiler's own unused-code report until none was left: `generate.ts` 1,667 lines to 180,
 now only the expression language nodes use) and `engineering/motorrun.ts`, reached only by them. What was worth keeping
 moved into the engine: `temperaturesOf` (`graph.ts`) now runs steady or in time (backward Euler, each piece holding m c,
 its air loss read again each step, what went in, to the air and was held more balanced), takes heaters, and the contact

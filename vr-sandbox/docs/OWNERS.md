@@ -7,7 +7,7 @@ to read that you don't need"); `CLAUDE.md` keeps a one-line index. Read the row 
 
 | Concern | Owner |
 | --- | --- |
-| Generated structure for any intent | `src/nexus/generate.ts` |
+| Expressions in words and units: numbers with their units read to SI, arithmetic, comparison and choice, the names a scope gives, boxes apart and touching (the formula language a formula node, a rule over rows and a condition in a flow take); a turn as a matrix and back | `src/nexus/generate.ts` |
 | The physical constants, once (the 2019 SI's exact ones, CODATA 2018's measured ones with their uncertainty, standard gravity); every module reads them from here, the book makes its constant leaves from them | `src/data/constants.ts` |
 | The quantities a law's variables are (85, each a dimension, an SI unit and a sentence; every port of the book maps to one, so laws join by quantity, never by letter) | `src/nexus/quantities.ts` |
 | The laws, once: each a term with its dimensions checked, its domain, its source and its worked example; every one a node (`law.<id>`), forward or solved for any variable, refused outside its domain or extrapolated and marked, its evidence and its tree beside it (the closures that ran the first 144 are gone: one engine) | `src/nexus/book/` (terms), `lawBlocks` in `src/nexus/blocks.ts` (the nodes), `src/nexus/lawgraph.ts` (solving) |
