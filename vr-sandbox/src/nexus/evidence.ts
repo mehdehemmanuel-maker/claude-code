@@ -9,7 +9,7 @@ import { KINDS } from './book/kinds';
 import { lawById } from './book';
 import { COMPARED } from './book/compared';
 import { quantityOf } from './quantities';
-import { BUILT, UPDATE } from './built';
+import { BOARDS_BUILT, BUILT, UPDATE } from './built';
 
 /** Strongest first. A value is as strong as the weakest thing it rests on. */
 export const EVIDENCE = ['exact', 'measured', 'specified', 'derived', 'given', 'empirical', 'estimated', 'simplified', 'hypothetical'] as const;
@@ -35,6 +35,8 @@ export interface NodeEvidence { kind: EvidenceKind; why: string; assumptions: st
   built?: string; beforeUpdate: boolean }
 /** When a node was built or last rebuilt, and whether before the update (a node made on a board, not in the library, is
  *  new: after it). */
+/** When a starter board (a build) was last changed, and whether that is before the update. */
+export function boardBuiltOf(title: string): { at?: string; before: boolean } { const at = BOARDS_BUILT[title]; return { at, before: at !== undefined && at < UPDATE }; }
 export function builtOf(id: string): { at?: string; before: boolean } { const at = BUILT[id]; return { at, before: at !== undefined && at < UPDATE }; }
 export const UPDATE_SAYS = `the update of ${UPDATE.slice(0, 10)} (laws with their units, evidence and ±, materials down to their elements)`;
 

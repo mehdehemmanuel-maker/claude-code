@@ -565,3 +565,48 @@ export const BUILT: Record<string, string> = {
 };
 /** Nodes whose definition could not be found written out (made in a loop): dated by nothing, so said as before the update. */
 export const UNDATED: string[] = [];
+/** Each starter board (a build), and when any of it was last changed: one made before the update, and not rebuilt since, is
+ *  said to be from before it (its parts and its answers not yet re-worked through the contact graph, the frame and the
+ *  laws with units). */
+export const BOARDS_BUILT: Record<string, string> = {
+  "A house from seeds: pick its plan, its rooms change":"2026-10-28T02:22:33.000Z",
+  "Power as nodes: an engine run from its numbers, the powertrain it drives, a car round a block as fast as that lets it":"2026-10-28T02:22:33.000Z",
+  "Traffic on the clock: cars round a block, stopping at red":"2026-10-28T02:22:33.000Z",
+  "A world without end: neighbourhoods for ever, each its own":"2026-10-28T02:22:33.000Z",
+  "A battery built from its parts, node by node: grid, paste, separator, plates, cell, case":"2026-10-28T02:22:33.000Z",
+  "An engine from its first parts: piston, rod, crank, block, head, then the whole":"2026-10-28T02:22:33.000Z",
+  "Research to what is missing: Toyota's engine held against its sources":"2026-10-28T02:22:33.000Z",
+  "The gauntlet as nodes: makers through gate after gate, the unknown sorted and researched to the bottom":"2026-10-28T02:22:33.000Z",
+  "The 6502 from its transistors: a real program run switch by switch, checked against its fast model":"2026-10-28T02:22:33.000Z",
+  "Proximity and mates: each thing carries the room and the mates it needs, as numbers; nothing told what a door or a sofa is":"2026-10-28T02:22:33.000Z",
+  "A body from its measured segments, its math on every part":"2026-10-28T02:22:33.000Z",
+  "What it is made of, and what it carries: a copper and an aluminium rod side by side under a steel block, opened down to its elements, weighed and balanced, and as a path for heat, current and force":"2026-10-28T23:11:55.000Z",
+  "Two agents: one goes to sit, opening the way; one keeps within a lead's length of it":"2026-10-28T05:32:52.000Z",
+  "An agent opens a door: it sees it, walks to it, takes hold, pulls; the door swings in the physics":"2026-10-28T02:22:33.000Z",
+  "Who notices what: a car running, a person behind it, one at its door, a CO alarm; in the open or shut in a garage":"2026-10-28T02:22:33.000Z",
+  "What things give off and let you do: a house and a car, tagged from what they are":"2026-10-28T02:22:33.000Z",
+  "Lines: one section, any material, any route (a battery cable, a road)":"2026-10-28T02:22:33.000Z",
+  "The autopilot on the Corolla: checked, repaired, checked again, what is left named":"2026-10-28T02:22:33.000Z",
+  "A battery placed by the solver: where it goes, why, and what it gives up":"2026-10-28T02:22:33.000Z",
+  "Fields over the engine bay: what each part needs, and maps of heat, motion and reach":"2026-10-28T02:22:33.000Z",
+  "A car down to its bolts: tyres made in depth, a shared battery, taken apart":"2026-10-28T02:22:33.000Z",
+  "A truck from the ground up: axles, then tyres, then batteries":"2026-10-28T02:22:33.000Z",
+  "An electric car's pack: 3,360 cells, one stored":"2026-10-28T02:22:33.000Z",
+  "A computer down to the transistor: FinFET, cell, die, package, board, PC":"2026-10-28T02:22:33.000Z",
+  "Physics: a steel ball let go into a tower of wooden blocks":"2026-10-28T02:22:33.000Z",
+  "Physics: a cart on two motor-driven wheels":"2026-10-28T02:22:33.000Z",
+  "Motion: a door swinging, and what it hits":"2026-10-28T02:22:33.000Z",
+  "Physics: a pendulum on a hinge":"2026-10-28T02:22:33.000Z",
+  "Mating: a door set in its wall by their frames":"2026-10-28T02:22:33.000Z",
+  "Clear away: a field of grass, cleared where a road goes":"2026-10-28T02:22:33.000Z",
+  "Seeds, one of each: window, door, toilet, sink, bed, car, stop light":"2026-10-28T02:22:33.000Z",
+  "Ground: a foot of grass, then a whole terrain of it":"2026-10-28T02:22:33.000Z",
+  "Streets: a road and a stop light, then a road system":"2026-10-28T02:22:33.000Z",
+  "A neighbourhood, then a city, from seeds":"2026-10-28T02:22:33.000Z",
+  "A city from a few nodes: motor, drone, swarm, buildings":"2026-10-28T02:59:17.000Z",
+  "Parts in 3D: a bolt sized from its load, drawn whole":"2026-10-28T02:22:33.000Z",
+  "Cantilever: how far it bends, for every length":"2026-10-28T02:22:33.000Z",
+  "Bolt: shear, tightening torque and margin":"2026-10-28T02:22:33.000Z",
+  "Business: cash flow, loan and what it is worth":"2026-10-28T02:22:33.000Z",
+  "Electrical: a resistor heating, swept over current":"2026-10-28T02:22:33.000Z"
+};

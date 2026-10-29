@@ -9,7 +9,7 @@
 // a worker (code-worker.ts), off the page. Asking Claude needs a relay to Claude, which this page does not have: such a
 // block says so rather than pretending.
 
-import { EVIDENCE_SAYS, builtOf, evidenceOf } from '../evidence';
+import { EVIDENCE_SAYS, boardBuiltOf, builtOf, evidenceOf } from '../evidence';
 import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { isAssembly, partOf } from '../assembly';
 import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
@@ -530,7 +530,7 @@ function renderLibrary(): void {
       const h = document.createElement('div'); h.className = 'sub'; h.textContent = DOMAINS.find((x) => x.id === f)?.name ?? f; d.appendChild(h);
       for (const x of boards.filter((y) => y.field === f)) {
         const r = document.createElement('div'); r.className = 'blk'; r.title = x.mine ? 'Your board: open it (what is on the board now is kept in undo)' : 'Open this board (what is on the board now is kept in undo)';
-        r.innerHTML = `<span class="chip" style="background:${x.mine ? '#b388ff' : '#18ffff'}">▦</span><span class="n">${esc(x.title)}</span>${x.mine ? '<span class="t" style="color:#b388ff">yours</span><span class="t del" title="Take it out of the library">✕</span>' : ''}`;
+        r.innerHTML = `<span class="chip" style="background:${x.mine ? '#b388ff' : '#18ffff'}">▦</span><span class="n">${esc(x.title)}</span>${x.mine ? '<span class="t" style="color:#b388ff">yours</span><span class="t del" title="Take it out of the library">✕</span>' : boardBuiltOf(x.title).before ? '<span class="t" style="color:#ffb74d" title="Built before the update: its parts and answers not yet re-worked through the contact graph, the frame and the laws with units">before update</span>' : ''}`;
         r.onclick = (e) => {
           if ((e.target as HTMLElement).classList.contains('del')) { forgetBoard(x.title); renderLibrary(); return; }
           pushUndo(); useBoard(x.make()); sel.clear(); save(); fit(); runSoon(); renderAll(); document.getElementById('lib')!.classList.remove('open');

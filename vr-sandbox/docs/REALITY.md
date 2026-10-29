@@ -536,6 +536,26 @@ snapshot's differences explained, a screenshot of it in the app sent to the user
 - `path.properties` and `path.network` become thin wrappers over the engine (or are merged into its node as aliases,
   `ALIASES`), their tests kept as regression; nothing does the same thing twice.
 
+**Step J. System population: everything before the update re-worked through it (asked 2026-10-29).** The engine (steps
+B to I) is built and proven on its own boards; most of what was built before it does not use it yet. Everything is dated
+from git: a node (`BUILT`) or a build, a starter board (`BOARDS_BUILT`), last changed before the update (`UPDATE`, step
+0) is marked "before update" on the node, in the inspector, in NODES.md and on the board in the library. At this step's
+start, 457 of 556 nodes and 39 of 40 boards. The queue, in order:
+
+1. Merge the second heat solver: `heatflow.ts` (lumped, stepped in time, its own conductances and a contact resistance,
+   used by `generate.ts`) becomes the time-stepped form of `temperaturesOf` over the same graph and the book's laws; its
+   contact resistance (Incropera's) becomes `flowOver`'s and `temperaturesOf`'s default where pieces only touch.
+2. The rest of the hand-worked load rows read the drawn parts: rod bolts, crank-pin bearing, wrist pin (`loads.ts`).
+3. Every build put through the engine: each board's things through the contact graph (floating pieces said), the heat
+   gate by conduction, and the frame under its own weight and its working loads where it has them (a vehicle's frame
+   on its axles, a building on its ground). What each finds is fixed or said, and the board is then current.
+4. The 457 nodes, field by field (laws 241, seeds 21, make 16, engine 8, ...): each re-checked against units, evidence
+   and ± and its own tests read again (they "could be flawed tests"); a node re-checked is rebuilt and so dated after.
+5. The bend node takes supports by kind (pinned, sliding, held at a point) as settings, as the engine check does.
+
+Nothing is counted current because it passes: only because it was re-worked through the update and changed where
+that showed it wrong.
+
 **Then, in order:**
 1. Step 6's remainder: the 50 stand-in grades each given its own figures from a source, or said unknown; composites'
    stiffness as bounds; the old word-to-material maps retired.
