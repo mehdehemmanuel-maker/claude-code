@@ -591,6 +591,8 @@ const BUILT_IN: BlockDef[] = [
       // by mass: a mix's density is 1 / Σ (w / ρ)
       { set: { phases: 'e-glass 0.3, epoxy 0.7', by: 'mass', arrangement: 'random fibres' }, inputs: {}, outputs: { density: 1 / (0.3 / 2540 + 0.7 / (matterOf('epoxy').props.find((p) => p.key === 'density')?.value ?? NaN)) }, rel: 1e-9 },
       // an open foam 10 % dense: Gibson and Ashby's (ρ*/ρs)² Es
+      // pure gold, one phase: its conductivity as Wiedemann and Franz give it from its electrical, L₀ σ T, L₀ = π²/3 (k_B/e)²
+      { set: { phases: 'gold 1', arrangement: 'grains' }, inputs: {}, outputs: { k: (Math.PI ** 2 / 3) * (1.380649e-23 / 1.602176634e-19) ** 2 * 4.1e7 * 293.15 }, rel: 1e-9 },
       { set: { phases: 'al-6061 1', arrangement: 'open foam', porosity: 0.9 }, inputs: {}, outputs: { E: 0.01 * (matterOf('al-6061').props.find((p) => p.key === 'E')?.value ?? NaN) }, rel: 1e-9 }] }),
   def({ id: 'matter', name: 'What a material is', kind: 'input', ability: 'measure', domains: ['materials', 'science', 'mechanical'], says: 'What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its value, unit, source and how it is known: the handbook\'s, a standard\'s, typical, estimated, worked out, or a stand-in (the nearest grade the handbook holds, said as such)',
     settings: [{ key: 'mat', label: 'Material', type: 'choice', default: 'steel-low', choices: Object.keys(MATTER).sort() }],

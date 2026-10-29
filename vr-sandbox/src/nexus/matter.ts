@@ -192,6 +192,17 @@ export function matterOf(id: string): Matter {
   // a phase's own figures (src/data/constituents.ts): over any stand-in or typical figure, never over the handbook's own
   const own = (key: string) => props.findIndex((p) => p.key === key), put = (q: Prop) => { const i = own(q.key); if (i >= 0) { if (RANK[props[i]!.evidence] >= RANK[q.evidence] && props[i]!.evidence !== 'stand-in' && props[i]!.evidence !== 'typical') return; props.splice(i, 1); } props.push(q); };
   const cons = CONSTITUENTS[id]; if (cons) for (const [key, f] of Object.entries(cons.figures)) { const [name, unit] = says(key); put({ key, name, value: f.value, unit, source: f.source, evidence: f.evidence }); }
+  // what physics gives where nothing better is kept: a heavy element's specific heat by Dulong and Petit, 3R per mole
+  // (within some 5 % at room temperature for elements heavier than calcium, whose Debye temperatures lie below it); a
+  // metal's thermal conductivity from its electrical conductivity by Wiedemann and Franz, k = L₀ σ T with Sommerfeld's
+  // L₀ = π²/3 (k_B/e)² (within some 10 % for most metals at room temperature: its electrons carry both)
+  const sym = pureElement(id), atom = sym ? PERIODIC[sym] : undefined;
+  if (atom && atom.phase === 'solid' && atom.weight > 40 && !props.some((p) => p.key === 'c')) put({ key: 'c', name: 'specific heat', value: (3 * 8.314462618) / (atom.weight / 1000), unit: 'J/kg K', source: `Dulong and Petit: 3R over its atomic weight, ${atom.weight} g/mol (${PERIODIC_SOURCE})`, evidence: 'derived' });
+  const sig = props.find((p) => p.key === 'conductivity' && p.evidence !== 'stand-in');
+  if (sig && row && ['steel', 'stainless steel', 'cast iron', 'aluminium', 'copper alloy', 'other metal'].includes(row.family) && !props.some((p) => p.key === 'k' && p.evidence !== 'stand-in')) {
+    const L0 = (Math.PI ** 2 / 3) * (1.380649e-23 / 1.602176634e-19) ** 2;
+    put({ key: 'k', name: 'thermal conductivity', value: L0 * sig.value * 293.15, unit: 'W/m K', source: `Wiedemann and Franz: L₀ σ T at 293 K, L₀ = π²/3 (k_B/e)² = ${L0.toPrecision(4)} W Ω/K², from its electrical conductivity (${sig.source})`, evidence: sig.evidence === 'typical' ? 'typical' : 'derived' });
+  }
   // a mixture: worked out from its phases' figures by the mathematics of composites (src/nexus/mixture.ts)
   const mx = MIXTURES[id];
   if (mx) { const w = mixedMatter(mx); for (const q of w.props) put(q); for (const c of w.cannot) disagreements.push(`not worked out: ${c}`); }

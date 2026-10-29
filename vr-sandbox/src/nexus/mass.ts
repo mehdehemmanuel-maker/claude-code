@@ -42,6 +42,7 @@ for (const [id, m] of Object.entries(MIXES)) DENSITY[id] = mixDensity(m);
 // the phases mixtures are made of, where the table above has none; and each mixture's, worked from its phases'
 for (const [id, c] of Object.entries(CONSTITUENTS)) if (DENSITY[id] === undefined && c.figures.density) DENSITY[id] = c.figures.density.value;
 for (const [id, x] of Object.entries(MIXTURES)) {
+  if (MIXES[id]) continue; // (a mix given by what goes into its cubic metre keeps that)
   const ph = x.phases.map(([p, f]) => ({ p: { name: p, density: DENSITY[p] }, frac: f })), d = mix(ph, x.by, x.arrangement, { porosity: x.porosity, gas: x.gas ? { name: x.gas, density: DENSITY[x.gas] } : undefined }).props.density;
   if (d) DENSITY[id] = d.value;
 }

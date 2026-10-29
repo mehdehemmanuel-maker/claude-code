@@ -838,3 +838,17 @@ about 100; the matrix bound is the lower one); concrete 33 GPa, 2.0 W/m K, 2,475
 bar of the laminate bends 1.48 mm under 10 N where steel bends 1.005, as their moduli say (the frame takes the laminate
 as isotropic at its along-fibre modulus: right for bending along the fibres, too stiff in twist). Next: suppliers'
 datasheets, open-source, to confirm or replace every typical figure (asked for tomorrow).
+
+**Phase 2.4, the stand-ins replaced (2026-10-29).** Of the 76 specified solid materials, 28 had taken their core figures
+(modulus, Poisson's ratio, conductivity, specific heat, expansion) from another grade (every plastic from PMMA, every
+rubber from natural rubber, tool steel from 1018); none does now. The grades without a handbook row of their own have
+typical figures (`data/constituents.ts`, said so, for a supplier's datasheet to confirm). Physics gives what it can: a
+heavy element's specific heat by Dulong and Petit, 3R per mole (gold 126.6 J/kg K against the handbook's 129, silver
+231 against 235, tungsten 135.7 against 132, lead 120 against 129); a metal's thermal conductivity from its electrical
+by Wiedemann and Franz with Sommerfeld's L₀ = π²/3 (k_B/e)² (gold 294 W/m K against 318, silver 451 against 429, lead
+34.4 against 35.3), the mixture node's test holding gold to L₀ σ T. What were typed figures for mixes are now worked
+from their phases: PA66 with 30 % glass by mass, 1,366 kg/m³ (sold at 1.36 to 1.37 g/cm³), 8.1 GPa; FR-4, 1,870
+kg/m³ (about 1,850), 23.9 GPa; glass wool at 24 kg/m³, 0.029 W/m K (about 0.035 measured: radiation through it is left
+out, said); the 25 MPa concrete as its own recipe's hardened phases (paste, sand, granite and the 4 % air its cubic
+metre leaves), 33 GPa, 2.2 W/m K. Left without a core figure: the woods' Poisson's ratio and expansion (they differ by
+direction), the loose textiles, and the foams' Poisson's ratio.

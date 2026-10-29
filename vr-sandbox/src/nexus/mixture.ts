@@ -39,10 +39,11 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const hsK = (phi: number[], k: number[], k0: number) => 1 / sum(phi.map((f, i) => f / (k[i]! + 2 * k0))) - 2 * k0;
 /** Their bounds on the bulk and shear moduli, with reference moduli K0 and G0. */
 const hsKG = (phi: number[], K: number[], G: number[], K0: number, G0: number): [number, number] => {
-  const z = (G0 / 6) * ((9 * K0 + 8 * G0) / (K0 + 2 * G0));
+  const z = K0 + 2 * G0 > 0 ? (G0 / 6) * ((9 * K0 + 8 * G0) / (K0 + 2 * G0)) : 0;
   return [1 / sum(phi.map((f, i) => f / (K[i]! + (4 / 3) * G0))) - (4 / 3) * G0, 1 / sum(phi.map((f, i) => f / (G[i]! + z))) - z];
 };
-const EofKG = (K: number, G: number) => (9 * K * G) / (3 * K + G), nuOfKG = (K: number, G: number) => (3 * K - 2 * G) / (2 * (3 * K + G));
+// (a phase with no stiffness, a gas in its pores, gives a bound of nothing: said as zero, not as 0/0)
+const EofKG = (K: number, G: number) => (3 * K + G > 0 ? (9 * K * G) / (3 * K + G) : 0), nuOfKG = (K: number, G: number) => (3 * K + G > 0 ? (3 * K - 2 * G) / (2 * (3 * K + G)) : 0);
 /** Bruggeman's effective medium: the k for which Σ φ (kᵢ − k) / (kᵢ + 2k) = 0, by bisection between the bounds. */
 const bruggeman = (phi: number[], k: number[]) => { let lo = Math.min(...k), hi = Math.max(...k); for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2, f = sum(phi.map((p, j) => (p * (k[j]! - m)) / (k[j]! + 2 * m))); if (f > 0) lo = m; else hi = m; } return (lo + hi) / 2; };
 
