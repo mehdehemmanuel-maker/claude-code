@@ -1005,3 +1005,28 @@ each other, and an approximation or an empirical law agrees within 10⁻³ (an e
 laws fit; 10 are reached another way and agree. The record (`book/fits.ts`, each law's hash with it) is written with
 the generated docs (the cross-check takes a minute, too long for the gate); a law changed since counts as before the
 update until worked out again, and a law node that fits shows as current (`builtOf` in evidence.ts).
+- **2026-10-29, phase 4.2, the first fields re-checked: finance, operations, energy, electronics, materials (20 nodes).**
+Each read again with its tests, given its discipline's name, a gloss, its place in the tree, codes and its model:
+- **Finance:** the loan is an amortisation payment (JEL G21, G51) and NPV is capital budgeting (G31). Compound
+  interest is E43; break-even (cost–volume–profit), margin and markup, depreciation and the running balance are M41.
+  Relative change is C43. All of it sits under a new branch, `manufacturing.industrial.economy`, engineering economy,
+  which IISE counts in industrial engineering.
+- **Operations:** OEE is defined by ISO 22400-2 (ICS 25.040.01). The critical path method is MSC2020 90B35, after
+  Kelley and Walker (1959).
+- **Energy:** battery runtime at constant power is ICS 29.220.01. Daily photovoltaic yield is ICS 27.160, with
+  IEC 61724-1's performance ratio.
+- **Electronics:** the divider, the LED resistor and the RC corner are MSC2020 94C05 with their ICS components. The
+  netlist, the cell and the switch-level run are ICS 31.200 and 35.160, the run after Bryant (1984).
+
+Found on reading:
+- **Silent Infinity:** seven nodes divided with no guard and gave Infinity without a word. They were battery runtime
+  at no load, margin at no price, markup at no cost, relative change from nothing, NPV and the loan at a rate of −100 %
+  or less, the divider with no resistance, and the LED resistor at no current. Each now refuses, saying why.
+- **Relative change from a negative value** had its sign turned; it now divides by the magnitude, tested.
+- **Untested outputs:** the divider's current was never tested, and is now.
+- **No tests at all:** `cell.characterise` had none and now has a hand-made two-input NOR, read back as
+  NOT (a OR b) with its truth table. `netlist` and `logic.run` still have no offline test. They fetch the real 6502
+  netlist, and only the 6502 starter board runs them, said so.
+- **The ACM CCS 2012 code form** was wrong (it expected "10.…"). Its concept ids are eight digits (10010293); fixed.
+  The ACM site is not reachable from here, so the chip nodes are coded on ICS, which is known, rather than by guessed
+  ACM ids.

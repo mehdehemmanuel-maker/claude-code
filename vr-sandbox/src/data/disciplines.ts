@@ -284,6 +284,7 @@ manufacturing Manufacturing and industrial engineering | SME and IISE; additive 
     supply Supply chain engineering
     lean Lean manufacturing
     maintenance Reliability and maintenance engineering
+    economy Engineering economy (time value of money, cost accounting)
   cost Manufacturing cost engineering
 
 aerospace Aerospace engineering | AIAA's technical committees

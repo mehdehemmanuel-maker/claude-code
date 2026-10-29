@@ -1,6 +1,6 @@
 # Engineering disciplines
 
-Generated from `src/data/disciplines.ts`: 17 disciplines, 364 entries in all (discipline, branch, specialty). Each discipline is organised after the body named with it; nodes are classified to the deepest entry that fits (docs/REALITY.md, step K).
+Generated from `src/data/disciplines.ts`: 17 disciplines, 365 entries in all (discipline, branch, specialty). Each discipline is organised after the body named with it; nodes are classified to the deepest entry that fits (docs/REALITY.md, step K).
 
 ## Civil engineering (`civil`)
 
@@ -304,6 +304,7 @@ After SME and IISE; additive processes by ISO/ASTM 52900.
   - Supply chain engineering (`manufacturing.industrial.supply`)
   - Lean manufacturing (`manufacturing.industrial.lean`)
   - Reliability and maintenance engineering (`manufacturing.industrial.maintenance`)
+  - Engineering economy (time value of money, cost accounting) (`manufacturing.industrial.economy`)
 - Manufacturing cost engineering (`manufacturing.cost`)
 
 ## Aerospace engineering (`aerospace`)
