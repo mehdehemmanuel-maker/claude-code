@@ -852,3 +852,18 @@ kg/m³ (about 1,850), 23.9 GPa; glass wool at 24 kg/m³, 0.029 W/m K (about 0.03
 out, said); the 25 MPa concrete as its own recipe's hardened phases (paste, sand, granite and the 4 % air its cubic
 metre leaves), 33 GPa, 2.2 W/m K. Left without a core figure: the woods' Poisson's ratio and expansion (they differ by
 direction), the loose textiles, and the foams' Poisson's ratio.
+
+**Phase 2.5, balances and the solvers' own error (2026-10-29).** A node may account what it conserves (`_balance`: what
+goes in, out and is kept, or its imbalance against its scale) and the engine judges it the same everywhere: an
+imbalance is warned of only when it is more than twice its standard uncertainty (95 % covered: the node's own, and
+that the engine carried onto the port it names) and more than its tolerance, never corrected. The balance node is
+judged so: 100 ± 3 J in against 90 ± 4 J out is 10 ± 5 J, not warned; 100 ± 1 against 90 ± 1 is 10 ± 1.4 J, warned
+(its `violation` output stays the fixed-tolerance verdict). Applied along the chains: the thermal analysis's energy in,
+to the air and held; the flow's Kirchhoff balance at every junction; each motor in the physics, its electrical energy
+against its copper's heat, its friction, its gears' loss and its work out (the electrical-to-heat chain). Collisions
+are not balanced: Jolt does not report what they dissipate (said). The solvers' own error is now in their ±: how far
+halving the slices moved the answer, taken whole as the error of the finer cut, summed in quadrature with the
+materials' spread. Found by it: on the rods board the flow's 5.72 K/W is ± 0.16 (2.8 %), but the frame's give under the
+side push is 0.31 ± 0.09 mm (29 %), not settled at 8 slices; the contact links run from slice middle to slice middle, so
+their length (and stiffness) changes with the cut. The frame's contact link is to be made independent of the slicing
+(phase 4, with the frame's re-check).

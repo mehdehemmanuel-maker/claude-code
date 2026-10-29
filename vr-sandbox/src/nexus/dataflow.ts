@@ -253,7 +253,7 @@ export class Engine {
 
   private async step(id: string, r: Report): Promise<void> {
     const n = this.board.nodes[id]!, b = blockOf(n), was = this.state.get(id) ?? { status: 'idle', ms: 0, cached: false, runs: 0, fails: 0 } as NodeState;
-    const put = (s: Partial<NodeState>) => { const next = { ...was, ...s } as NodeState; if (next.status !== 'ok') { delete next.uncertainty; delete next.uncertaintyLost; delete next.extrapolated; delete next.warnings; } if (b && next.status === 'ok' && next.out) { try { Object.assign(next, this.judge(id, b, next.out)); } catch { /* judging what it gives never fails it */ } } this.state.set(id, next); };
+    const put = (s: Partial<NodeState>) => { const next = { ...was, ...s } as NodeState; if (next.status !== 'ok') { delete next.uncertainty; delete next.uncertaintyLost; delete next.extrapolated; delete next.warnings; } if (b && next.status === 'ok' && next.out) { try { Object.assign(next, this.judge(id, b, next.out, next.uncertainty)); } catch { /* judging what it gives never fails it */ } } this.state.set(id, next); };
     if (!b) { put({ status: 'failed', error: `no block "${n.block}" in the library`, out: undefined, key: undefined }); r.failed++; return; }
     if (this.loop.has(id)) { put({ status: 'failed', error: 'in a loop: it feeds what feeds it', out: undefined, key: undefined }); r.failed++; return; }
     const set = { ...defaultsOf(b), ...(n.set ?? {}) }, ports = portsOf(b, set), wires = this.into.get(id) ?? [];
@@ -305,7 +305,7 @@ export class Engine {
   }
   /** What a node's result rests on: the weakest of its own evidence and what is wired into it, and the nodes that set
    *  it; and what in it cannot be physical. */
-  private judge(id: string, b: BlockDef, out: Outputs): Pick<NodeState, 'evidence' | 'warnings' | 'extrapolated'> {
+  private judge(id: string, b: BlockDef, out: Outputs, u?: Record<string, number>): Pick<NodeState, 'evidence' | 'warnings' | 'extrapolated'> {
     const own0 = evidenceKept.get(b) ?? evidenceKept.set(b, evidenceOf(b)).get(b)!;
     // (a node may say from what it just worked out that it rests on weaker figures than it is by kind: a flow through
     // materials known only by their family)
@@ -318,7 +318,15 @@ export class Engine {
     for (const p of this.ports(id).outputs) { const w = nonphysical(p, out[p.name]); if (w) warnings.push(w); }
     // a law asked to go past where it holds says so in its status: what it gives, and all that rests on it, is marked
     const self = typeof out.status === 'string' && /extrapolated/.test(out.status);
-    if (typeof out.violation === 'string' && out.violation) warnings.push(out.violation);
+    // what is conserved, as the node accounts it (`_balance`: one or several): judged against its own uncertainty, not a
+    // fixed line: an imbalance is said only when it is more than twice its standard uncertainty (95 % covered, the
+    // uncertainty the node gives, or that the engine carried onto the port it names) and more than its tolerance
+    const bals = (Array.isArray(out._balance) ? out._balance : out._balance ? [out._balance] : []) as { what: string; unit?: string; in?: number; out?: number; kept?: number; d?: number; scale?: number; u?: number; tol?: number; port?: string }[];
+    for (const x of bals) {
+      const d = x.d ?? (x.in ?? 0) - (x.out ?? 0) - (x.kept ?? 0), scale = x.scale ?? Math.max(Math.abs(x.in ?? 0), Math.abs(x.out ?? 0) + Math.abs(x.kept ?? 0)), uu = Math.hypot(x.u ?? 0, x.port ? u?.[x.port] ?? 0 : 0), tol = (x.tol ?? 1e-9) * scale;
+      if (Math.abs(d) > Math.max(2 * uu, tol)) warnings.push(`${x.what} is not conserved: ${+d.toPrecision(4)}${x.unit ? ` ${x.unit}` : ''} unaccounted for${scale ? ` (${+((100 * Math.abs(d)) / scale).toPrecision(3)} % of it)` : ''}${uu ? `, more than twice its uncertainty (± ${+uu.toPrecision(3)})` : ''}: something crossing the boundary not counted, or a model that loses it`);
+    }
+    if (typeof out.violation === 'string' && out.violation && !bals.length) warnings.push(out.violation);
     if (self) warnings.push(`extrapolated outside where it holds: ${typeof out.caution === 'string' ? out.caution : 'not a prediction it makes'}`);
     const past = [...new Set([...(self ? [id] : []), ...this.wiresInto(id).flatMap((w) => this.state.get(w.from)?.extrapolated ?? [])])];
     return { evidence: { kind, from }, warnings: warnings.length ? warnings : undefined, extrapolated: past.length ? past : undefined };

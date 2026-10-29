@@ -193,7 +193,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
 - **Approved** (`gauntlet.approved`): What has come through the gauntlet so far (read from its verdicts), and what was turned back and why *derived, tested here, before the update*
-- **Balance (what is conserved)** (`check.balance`): What goes in against what comes out and what is kept, of one thing that is conserved (energy, mass, momentum along one axis, charge): every wire into In and into Out summed in one unit, and the imbalance; said on the … *derived, tested here*
+- **Balance (what is conserved)** (`check.balance`): What goes in against what comes out and what is kept, of one thing that is conserved (energy, mass, momentum along one axis, charge): every wire into In and into Out summed in one unit, and the imbalance. *derived, tested here*
 - **Candidates** (`gauntlet.candidates`): What is put through the gauntlet: blocks of the library (all, of a kind or a field, or made by you), or entries of the inventory (under a path, or yours), or named ones. *given, tested here, before the update*
 - **Characterise a cell** (`cell.characterise`): One of a chip's own gates, of the kind you pick (the commonest first), copied out of its netlist and run at switch level through every input: its truth table, and whether it gives the gate its pull-down network says. *derived, untested, before the update*
 - **Check a limit** (`check.limit`): A value against its limit: whether it passes, the margin left, and the factor of safety *derived, tested here, before the update*
