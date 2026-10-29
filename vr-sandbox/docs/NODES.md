@@ -42,7 +42,7 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 
 Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 528 tested here (their own tests: that they do what they say, not that the world does); 30 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 217 of 568 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 568 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -50,7 +50,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 
 - **Laws by field** (`law.fields`): Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas) *specified, tested here*
 - **List of numbers** (`in.list`): Numbers you type, split by commas: wire it into any block to run that block once for each *given, tested here, before the update*
-- **Material property record** (`card.material`): A material as the kept data has it: density, stiffness, strengths *derived, tested here, before the update*
+- **Material property record** (`card.material`): A material as the kept data has it: density, stiffness, strengths *derived, tested here*
 - **Number** (`in.number`): A number you set, in any unit: typed "200 mm" is kept as 0.2 m; with ends set, held between them and shown as a slider you drag *given, tested here, before the update*
 - **Quantity** (`quantity`): One of the quantities laws are written in (a force, a stress, a temperature, a concentration…): what it is, its SI unit and dimension, and every law in the book it appears in, with what kind of law each is. *exact, tested here*
 - **Range** (`in.range`): Evenly spaced numbers from one end to the other: a sweep *given, tested here, before the update*
@@ -208,7 +208,7 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Measure** (`measure`): What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as *derived, tested here, before the update*
 - **Nothing runs into anything?** (`check.rules`): The rules a made thing is held to, on its surfaces as drawn (triangle against triangle): no two pieces cross unless they are one piece, one is said to pass through the other, one is a fastener in what it fastens, or … *derived, tested here, before the update*
 - **Run the gauntlet** (`gauntlet.run`): Every candidate through the gates chosen (all if none, one for a single gate), each where it applies, cheapest first: approved only when none fails. *derived, tested here, before the update*
-- **Switch-level cell characterisation** (`cell.characterise`): One of a chip's own gates, of the kind you pick (the commonest first), copied out of its netlist and run at switch level through every input: its truth table, and whether it gives the gate its pull-down network says. *derived, tested here, before the update*
+- **Switch-level cell characterisation** (`cell.characterise`): One of a chip's own gates, of the kind you pick (the commonest first), copied out of its netlist and run at switch level through every input: its truth table, and whether it gives the gate its pull-down network says. *derived, tested here*
 - **Tester** (`test.block`): A block of the library put to its own tests, then pushed far from its defaults (zero, a thousandth, a thousand times, negative): each failure and each crash said, and whether it answered or refused in words *derived, tested here, before the update*
 - **Turn it over and check** (`check.turning`): A piston engine turned through a whole revolution of its crank, a step at a time: at each, its crank and every piston and rod where they then are, tried against everything else (block, caps, pan, pump, cams in the … *derived, tested here, before the update*
 - **What it is made of** (`made.of`): Any thing opened as its materials all the way down: its own tree with each thing's mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a … *derived, tested here*
@@ -229,10 +229,10 @@ Physics, motion, the clock, chips run from their transistors, engines under load
 - **Spring under load** (`load.spring`): A coiled spring as it was made (its wire, its coil, its coils, its free and fitted lengths, read off the part), compressed as fitted and by a stroke more: its rate and forces, its wire's stress against what the wire … *derived, tested here, before the update*
 - **Sweep** (`sweep`): The room a thing needs as it turns from one angle to another about a pivot: it, at so many angles between, as one thing (its envelope), for Clashes to check against what is round it (a door's swing against the bed, an … *derived, tested here, before the update*
 - **Sweep (stress test)** (`sweep.range`): Any block in the library run over a range of one of its inputs (an engine's speed, a beam's load, a loan's rate), the rest wired in as for the block itself: every answer in a table, and the worst of them and where it … *derived, tested here, before the update*
-- **Switch-level simulation against an instruction-set model** (`logic.run`): A program assembled and run on a chip's transistors, at switch level, half a clock cycle at a time, against 64 KB of memory; and beside it on the fast model (the instruction set as its manual gives it), compared … *simplified, untested, before the update*
+- **Switch-level simulation against an instruction-set model** (`logic.run`): A program assembled and run on a chip's transistors, at switch level, half a clock cycle at a time, against 64 KB of memory; and beside it on the fast model (the instruction set as its manual gives it), compared … *simplified, untested*
 - **Thermal analysis (conduction, convection, radiation)** (`thermal`): How hot each piece of any thing gets, over its contact graph (Contact graph), nothing typed: pieces held at a temperature (the hottest, the lowest, a name or a material), heat put into others (a chip, a coil, a … *derived, tested here, before the update*
 - **Through time** (`math.ode`): How quantities change when their rates are known: one line a rate ("y' = -k * y"), where each starts ("y = 1"), from one time to another. *derived, tested here*
-- **Transistor-level netlist** (`netlist`): A chip as its transistors: each a switch between two nodes, closed while the node at its gate is high, some nodes held high by a load. *measured, untested, before the update*
+- **Transistor-level netlist** (`netlist`): A chip as its transistors: each a switch between two nodes, closed while the node at its gate is high, some nodes held high by a load. *measured, untested*
 - **Turn** (`turn`): A thing turned about an axis through a point to the angles given at their times ("0 s 0°, 2 s 90°, 6 s 90°, 8 s 0°"), driven as a servo drives a joint: it speeds up and slows down at its acceleration, no faster than … *derived, tested here, before the update*
 
 ## 7 · Sense and act (6)
@@ -269,26 +269,26 @@ Every physical law as a calculator, by its field, and formulas you write.
 
 Tables and rows, research, the gauntlet, money, operations.
 
-- **Break-even analysis (cost–volume–profit)** (`fin.breakeven`): How many must be sold to cover fixed costs, and the sales that takes *derived, tested here, before the update*
+- **Break-even analysis (cost–volume–profit)** (`fin.breakeven`): How many must be sold to cover fixed costs, and the sales that takes *derived, tested here*
 - **Column** (`list.column`): One column of a table, as a list *derived, tested here, before the update*
 - **Compile research** (`research.merge`): Several references compiled into one: every source kept, each part once, a later one filling in what an earlier lacks, and where two sources give a different count, a conflict said to be settled *derived, tested here, before the update*
-- **Compound interest (future value)** (`fin.compound`): What an amount grows to at a rate, compounded so many times a year *derived, tested here, before the update*
-- **Critical path method (CPM)** (`ops.critical-path`): How long a project takes and which tasks set it: rows of task, how long, and what each must wait for (names split by ; or spaces) *derived, tested here, before the update*
-- **Cumulative sum (running balance)** (`list.running`): Each item added to all before it, from a start: a balance from its ins and outs *derived, tested here, before the update*
+- **Compound interest (future value)** (`fin.compound`): What an amount grows to at a rate, compounded so many times a year *derived, tested here*
+- **Critical path method (CPM)** (`ops.critical-path`): How long a project takes and which tasks set it: rows of task, how long, and what each must wait for (names split by ; or spaces) *derived, tested here*
+- **Cumulative sum (running balance)** (`list.running`): Each item added to all before it, from a start: a balance from its ins and outs *derived, tested here*
 - **Delete** (`delete`): Takes something out: a block you (or Claude) made, an entry you fed, a proposal, an unknown off the queue. *derived, tested here, before the update*
-- **Gross margin and markup** (`fin.margin`): From cost and price: the profit, the margin on the price and the markup on the cost *derived, tested here, before the update*
+- **Gross margin and markup** (`fin.margin`): From cost and price: the profit, the margin on the price and the markup on the cost *derived, tested here*
 - **Internal rate of return** (`fin.irr`): The discount rate at which cash flows are worth nothing today: found between −99 % and 1000 % by the method chosen (bisection by default), with whether it converged *derived, tested here*
 - **Into the inventory** (`research.toInventory`): A reference entered in the inventory (filed under Researched), each of its parts an entry holding its own parts by count and saying its source: so it opens all the way down like anything stored, and what has nothing … *derived, tested here, before the update*
 - **Its parts, and theirs** (`research.parts`): An item in the inventory opened all the way down: its components, their sub-components and theirs, each with how many and how it is made or bought; and every one of them still waiting to be broken down, with why (not … *derived, tested here, before the update*
 - **Keep where** (`list.filter`): Keeps the items of a list a condition holds for ("x > 0"), x each item in turn *derived, tested here, before the update*
-- **Loan amortisation payment (annuity)** (`fin.loan`): The payment each period that pays a loan off, with interest, in so many periods (an annuity) *derived, tested here, before the update*
+- **Loan amortisation payment (annuity)** (`fin.loan`): The payment each period that pays a loan off, with interest, in so many periods (an annuity) *derived, tested here*
 - **Make a table** (`list.zip`): Lists side by side as the columns of a table *derived, tested here, before the update*
 - **Move rows** (`rows.shift`): Every row moved by dx, dz (and turned by dry): the car in front of each house, the lamp beside each door *derived, tested here, before the update*
-- **Net present value (NPV)** (`fin.npv`): What a series of cash flows is worth today at a discount rate; the first flow is now *derived, tested here, before the update*
+- **Net present value (NPV)** (`fin.npv`): What a series of cash flows is worth today at a discount rate; the first flow is now *derived, tested here*
 - **Onto the ground** (`rows.ground`): Each row (a house's lot, a tree, a car) set on the ground where it stands: its y the ground's height at its x and z, so what is spawned from them stands on the hills, not in them *derived, tested here, before the update*
-- **Overall equipment effectiveness (OEE)** (`ops.oee`): How much of a machine's time makes good parts: availability × performance × quality *derived, tested here, before the update*
+- **Overall equipment effectiveness (OEE)** (`ops.oee`): How much of a machine's time makes good parts: availability × performance × quality *derived, tested here*
 - **Pass** (`pass`): A gate on a wire: what comes in goes on out of passed while the condition holds, else it is held (out of held) and what follows passed waits *derived, tested here, before the update*
-- **Relative change (percentage)** (`fin.change`): How much a value went up or down, as a share of what it was *derived, tested here, before the update*
+- **Relative change (percentage)** (`fin.change`): How much a value went up or down, as a share of what it was *derived, tested here*
 - **Research loop (to the bottom)** (`research.loop`): From the roots down, round after round, until nothing more is found: what is unknown under them is sorted, the most wanted clusters first, and each resolved by a family that makes that size, a researched reference, … *derived, tested here, before the update*
 - **Research notes** (`research.notes`): What was found out about a real thing (a reference kept, or your own notes), written down a line a part with where it was read: "@S1 | https://… | title" names a source once; "id | name | in | n | finds | source | … *estimated, tested here, before the update*
 - **Rows on a grid** (`rows.grid`): Rows for a spawner: one for each place on an nx by nz grid (x, z), and for each column asked, a value picked at seeded random from its list ("layout: studio|1 bed|2 bed; paint: #e8dcc8|#cfd8dc"), or a number in a … *hypothetical, tested here, before the update*
@@ -298,8 +298,8 @@ Tables and rows, research, the gauntlet, money, operations.
 - **Sentence** (`text.format`): Words with values filled in: "{a} costs {b}" *derived, tested here, before the update*
 - **Set a column** (`rows.set`): Every row given the same value in a column: each room of a house painted its wall colour, each house of a street its roof *derived, tested here, before the update*
 - **Sort** (`list.sort`): A list from least to most, or most to least *derived, tested here, before the update*
-- **Straight-line depreciation** (`fin.depreciation`): What an asset loses each year, evenly over its life, down to what it is worth at the end *derived, tested here, before the update*
-- **Task** (`task`): A task on the board: what is to be done, and done when what it waits on holds (wire in a gate's count, an approval, a check). *derived, tested here, before the update*
+- **Straight-line depreciation** (`fin.depreciation`): What an asset loses each year, evenly over its life, down to what it is worth at the end *derived, tested here*
+- **Task** (`task`): A task on the board: what is to be done, and done when what it waits on holds (wire in a gate's count, an approval, a check). *derived, tested here*
 - **Tether** (`tether`): A mate held with force, for Let it go: a line of any section made fast to a point on one thing and a point on another (or on the world), slack while they are nearer than its length, past it pulling back by its own … *derived, tested here, before the update*
 - **Unknown library queue** (`unknown.queue`): Everything something wants that nothing knows: not in the table, listed only as its materials, nothing in it listed, or drawn as one piece though it is made of parts. *derived, tested here, before the update*
 - **What each touches** (`rows.touch`): For boxes laid on the ground (rows with x, z, w, d: a house's rooms, a street's lots), what each side touches: the type of the box along most of it, or "outside". *derived, tested here, before the update*
