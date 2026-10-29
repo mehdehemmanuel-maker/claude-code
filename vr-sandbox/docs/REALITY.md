@@ -553,7 +553,7 @@ Dated from git: 457 of 556 nodes were from before the update (`BUILT`, `UPDATE` 
 the node, in the inspector and in NODES.md. A node counts as current only when it has been re-worked and specified
 (step K), never because it passes; one that would take longer to fix than to rebuild is rebuilt.
 
-1. **Load checks read the drawn parts**: rod bolts, crank-pin bearing, wrist pin (`loads.ts`), as the con-rod does.
+1. **Load checks read the drawn parts**: rod bolts, crank-pin bearing, wrist pin (`loads.ts`), as the con-rod does. Done 2026-10-29.
 2. **Nodes, field by field** (laws 241, seeds 21, make 16, engine 8, …): each re-checked against units, evidence and ±,
    its own tests read again ("they could be flawed tests"), named and classified (step K), and so dated after. Open
    decision for the user: the 241 law nodes were re-checked with units and their examples in step 3; dated by their book
@@ -980,3 +980,13 @@ photographed balls, the bars' ends clean, the chips crisp. Left from the check: 
 (by the space's design: a void with a grid; a stage for look-dev boards is a choice for the user); no scale cue; a
 polished bar mirrors mostly floor and reads flat grey; blasted and cast metal still read near plaster; plastics have
 no subsurface glow; sheet parts (the tube cut) have no thickness.
+- **2026-10-29, phase 4.1, the engine's load rows read the drawn parts.** The rod bolts, the crank-pin shells and the
+wrist pin were worked out from formulas parallel to the drawing (a thread from 0.85 × the bore, a shell 0.86 × the rod's
+width, a pin bored 0.56 of its diameter): right only while the formulas matched the parts, wrong without a word for any
+rod or piston wired in. Now each is read off what is drawn: the bolts by their catalogue item and class (`families.ts`
+`boltOf`, and `proofStress` from ISO 898-1 table 3, kept now), how many hold the cap, the stress area from the thread;
+a shell's bore and width from its profile; the pin's outside and bore from its lathe profile. A piece not drawn is a
+row that fails, said so, not one that passes. Found by reading them: the drawn rod bolts were class 8.8 (580 MPa proof)
+while the check judged them as 10.9 (830 MPa); rod bolts are 10.9 or 12.9, so the rod now carries 10.9 (margin 2.88 at
+6,600 rpm). Seen with it, already shown: the starter engine's valve spring lets its valves float above 6,304 rpm,
+under the 6,600 rpm its board runs (margin 0.91), a design fault in that spring for that speed, left for the rebuild.

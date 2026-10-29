@@ -15,11 +15,12 @@
 
 import { handbookOf } from './matter';
 import { SPRING_WIRES, allowableShear, shearStress, solidLength, springRate, surgeFrequency, wireUltimate, type CoilSpring } from '../engineering/springs';
-import { conRod, cylinderHead, engineDims, headPiece, pistonAssembly, threadFor, type EngineSpec } from './engines';
+import { conRod, cylinderHead, engineDims, headPiece, pistonAssembly, type EngineSpec } from './engines';
 import type { Part } from './kits';
 import { massOf } from './mass';
 import { bentUnder, graphOf, sliced } from './graph';
 import { METRIC } from './threads';
+import { boltOf, proofStress } from './families';
 
 export interface LoadRow { what: string; value: number; unit: string; limit: number; factor: number; ok: boolean; says: string }
 export interface LoadCase { rows: LoadRow[]; worst: LoadRow | null; says: string }
@@ -27,6 +28,8 @@ const row = (what: string, value: number, unit: string, limit: number, more: { h
   const bad = more.higherIsBad ?? true, factor = bad ? limit / Math.max(1e-12, value) : value / Math.max(1e-12, limit);
   return { what, value, unit, limit, factor, ok: factor >= 1, says: more.says };
 };
+/** A row that cannot be worked out because what it reads is not drawn: not passed, said so. */
+const lacking = (what: string, says: string): LoadRow => ({ what, value: 0, unit: '', limit: 0, factor: 0, ok: false, says });
 const worstOf = (rows: LoadRow[]): LoadRow | null => rows.reduce<LoadRow | null>((a, r) => (!a || r.factor < a.factor ? r : a), null);
 const mm = (x: number) => (x * 1000).toFixed(2), MPa = (x: number) => (x / 1e6).toFixed(0);
 
@@ -74,10 +77,19 @@ export function rodFrame(rod: Part): { lacking: string; at: (F: number, buckling
 }
 
 // ---- an engine ----------------------------------------------------------------------------------------------------------------
+/** The pieces of a drawn thing whose names a pattern finds, each whole (not looked into further once found). */
+const piecesNamed = (p: Part, re: RegExp): Part[] => (re.test(p.name) ? [p] : (p.parts ?? []).flatMap((q) => piecesNamed(q, re)));
+/** A drawn round piece's inside and outside radius and its length, from its lathe profile or its prism (a half shell). */
+function roundOf(p: Part): { ri: number; ro: number; L: number } | null {
+  const sh = p.shape; if (!sh) return null;
+  if ('lathe' in sh) { const xs = sh.lathe.map((q) => q[0]), ys = sh.lathe.map((q) => q[1]); return { ri: Math.min(...xs), ro: Math.max(...xs), L: Math.max(...ys) - Math.min(...ys) }; }
+  if ('prism' in sh) { const r = sh.prism.pts.map(([x, y]) => Math.hypot(x, y)); return { ri: Math.min(...r), ro: Math.max(...r), L: sh.prism.L ?? 0 }; }
+  return null;
+}
 export interface EngineLoadsIn { rpm: number; /** peak cylinder pressure, Pa (typical: about 8 MPa in a petrol engine at full load, 18 MPa in a heavy diesel) */ pmax: number; piston?: Part; rod?: Part; spring?: Part; wire?: string }
 /** A piston engine's working parts at a speed and a peak cylinder pressure. */
 export function engineLoads(spec: EngineSpec, o: EngineLoadsIn): LoadCase & { floatRpm: number } {
-  const d = engineDims(spec), { B, r, L, rodW, rp, pinD } = d, piston = o.piston ?? pistonAssembly(spec, d), rod = o.rod ?? conRod(spec, d);
+  const d = engineDims(spec), { B, r, L } = d, piston = o.piston ?? pistonAssembly(spec, d), rod = o.rod ?? conRod(spec, d);
   const w = (o.rpm * 2 * Math.PI) / 60, lam = r / L, mp = massOf(piston), mr = massOf(rod), mrec = mp + mr / 3;
   // (the piston and a third of the rod go up and down with it, typical of a rod's split between its ends)
   const Fi = mrec * r * w * w * (1 + lam), Fg = o.pmax * Math.PI * B * B / 4, rows: LoadRow[] = [];
@@ -91,16 +103,26 @@ export function engineLoads(spec: EngineSpec, o: EngineLoadsIn): LoadCase & { fl
     rows.push(row('rod pulled at the top of the exhaust stroke', pull.vm, 'Pa', sR.yield, { says: `${(Fi / 1000).toFixed(1)} kN (its ${(mrec * 1000).toFixed(0)} g going up and down, r ω² (1 + r/L)), the drawn rod as a frame: ${MPa(pull.vm)} MPa at worst, in ${where(pull)}, against ${sR.name}'s ${MPa(sR.yield)} MPa yield (${sR.source})` }));
     rows.push(row('rod pushed at firing', push.vm, 'Pa', sR.yield, { says: `${(Fg / 1000).toFixed(1)} kN of gas (${(o.pmax / 1e6).toFixed(1)} MPa on the piston, the inertia at its slowest taken as none): ${MPa(push.vm)} MPa at worst, in ${where(push)}` }));
     if (push.buckles) rows.push(row('rod buckling at firing', Fg, 'N', push.buckles, { says: `the drawn rod's own buckling (its frame's geometric stiffness under this push, pinned at the crank pin and the wrist pin and turning about them, kept in line by the piston): ${(push.buckles / 1000).toFixed(0)} kN to buckle it against ${(Fg / 1000).toFixed(1)} kN` }));
-  } else rows.push(row('rod as drawn', 0, 'Pa', sR.yield, { says: `the rod given has no ${rf.lacking} to hold it by: its stress is not worked out` }));
-  // its rod bolts: the inertia pulls its cap off, carried by two bolts (ISO 898-1 stress area), class 10.9's proof strength
-  const t = METRIC[threadFor(B * 0.85)]!, dn = Number(threadFor(B * 0.85).slice(1)), As = (Math.PI / 4) * (dn - 0.9382 * t.p) ** 2 * 1e-6;
-  rows.push(row('rod bolts pulled', Fi / 2 / As, 'Pa', 830e6, { says: `${threadFor(B * 0.85)}, ${(As * 1e6).toFixed(1)} mm² each, ${(Fi / 2000).toFixed(1)} kN each (preload aside): ${MPa(Fi / 2 / As)} MPa against class 10.9's 830 MPa proof (ISO 898-1; rod bolts are 10.9 or 12.9, typical)` }));
-  // its crank pin's shells: the firing force over their projected area
-  const Ab = 2 * rp * 0.86 * rodW, pB = Fg / Ab;
-  rows.push(row('crank pin bearing pressure', pB, 'Pa', 60e6, { says: `${MPa(pB)} MPa over ${(Ab * 1e6).toFixed(0)} mm² projected (${mm(2 * rp)} × ${mm(0.86 * rodW)} mm) against about 60 MPa peak for tri-metal shells (typical)` }));
-  // its wrist pin: in double shear between its bosses
-  const pinA = (Math.PI / 4) * (pinD ** 2 - (pinD * 0.56) ** 2), tPin = Fg / (2 * pinA);
-  rows.push(row('wrist pin shear', tPin, 'Pa', 0.577 * sR.yield, { says: `${MPa(tPin)} MPa in double shear on its ${mm(pinD)} mm tube against 0.577 × yield (von Mises): ${MPa(0.577 * sR.yield)} MPa` }));
+  } else rows.push(lacking('rod as drawn', `the rod given has no ${rf.lacking} to hold it by: its stress is not worked out`));
+  // its rod bolts, as drawn: the inertia pulls its cap off, shared by the bolts that hold it, each on its stress area
+  // (ISO 898-1: A_s = π/4 (d − 0.9382 P)²) against its own class's proof stress
+  const bolts = piecesNamed(rod, /^rod bolt$/).map((b) => boltOf(b)).filter((b): b is NonNullable<typeof b> => !!b);
+  if (bolts.length) {
+    const b0 = bolts[0]!, t = METRIC[b0.thread], dn = Number(b0.thread.slice(1)), proof = proofStress(b0.cls, dn / 1000);
+    if (!t || !proof) rows.push(lacking('rod bolts', `${b0.thread} class ${b0.cls}: its thread or its class's proof stress is not kept`));
+    else { const As = (Math.PI / 4) * (dn - 0.9382 * t.p) ** 2 * 1e-6, each = Fi / bolts.length;
+      rows.push(row('rod bolts pulled', each / As, 'Pa', proof, { says: `${bolts.length} drawn ${b0.thread} class ${b0.cls} bolts, ${(As * 1e6).toFixed(1)} mm² each, ${(each / 1000).toFixed(1)} kN each (preload aside): ${MPa(each / As)} MPa against class ${b0.cls}'s ${MPa(proof)} MPa proof (ISO 898-1 table 3)` })); }
+  } else rows.push(lacking('rod bolts', 'the rod given has no bolts drawn (pieces named "rod bolt", each a catalogue bolt): their stress is not worked out'));
+  // its crank pin's shells, as drawn: the firing force over one shell's projected area (its bore across, its width)
+  const shells = piecesNamed(rod, /^rod bearing shell/).map(roundOf).filter((x): x is NonNullable<typeof x> => !!x && x.L > 0);
+  if (shells.length) { const sh = shells[0]!, Ab = 2 * sh.ri * sh.L, pB = Fg / Ab;
+    rows.push(row('crank pin bearing pressure', pB, 'Pa', 60e6, { says: `${MPa(pB)} MPa over the drawn shell's ${(Ab * 1e6).toFixed(0)} mm² projected (${mm(2 * sh.ri)} × ${mm(sh.L)} mm) against about 60 MPa peak for tri-metal shells (typical)` }));
+  } else rows.push(lacking('crank pin bearing', 'the rod given has no bearing shells drawn: their pressure is not worked out'));
+  // its wrist pin, as drawn: in double shear between its bosses, on its tube's section
+  const pin = piecesNamed(piston, /^wrist pin$/).map(roundOf).find((x) => !!x);
+  if (pin) { const pinA = Math.PI * (pin.ro ** 2 - pin.ri ** 2), tPin = Fg / (2 * pinA);
+    rows.push(row('wrist pin shear', tPin, 'Pa', 0.577 * sR.yield, { says: `${MPa(tPin)} MPa in double shear on the drawn pin, Ø${mm(2 * pin.ro)} mm bored Ø${mm(2 * pin.ri)} mm, against 0.577 × yield (von Mises): ${MPa(0.577 * sR.yield)} MPa` }));
+  } else rows.push(lacking('wrist pin', 'the piston given has no wrist pin drawn: its shear is not worked out'));
   // its valve train: the valve and what rides with it, thrown off the cam's flank unless its spring holds it on
   let floatRpm = Infinity;
   {

@@ -386,6 +386,17 @@ const pcb: Family = {
 /** ISO 4017 hex head heights, mm. */
 export const HEX_K: Record<string, number> = { 'M1.6': 1.1, M2: 1.4, 'M2.5': 1.7, M3: 2, M4: 2.8, M5: 3.5, M6: 4, M8: 5.3, M10: 6.4, M12: 7.5, M14: 8.8, M16: 10, M20: 12.5, M24: 15 };
 export const CLASSES = ['4.6', '4.8', '5.6', '5.8', '6.8', '8.8', '10.9', '12.9', 'A2', 'A4'];
+/** Each property class's proof stress, Pa (ISO 898-1:2013 table 3, coarse threads; class 8.8 is 580 MPa to M16 and
+ *  600 MPa above); the stainless classes' 0.2 % proof (ISO 3506-1, A2-70 and A4-70). */
+export function proofStress(cls: string, d: number): number | undefined {
+  const t: Record<string, number> = { '4.6': 225, '4.8': 310, '5.6': 280, '5.8': 380, '6.8': 440, '8.8': d > 0.016 ? 600 : 580, '9.8': 650, '10.9': 830, '12.9': 970, A2: 450, A4: 450 };
+  return t[cls.toUpperCase()] !== undefined ? t[cls.toUpperCase()]! * 1e6 : undefined;
+}
+/** A drawn bolt's thread and property class, read from what it is (its catalogue item and what it says of itself). */
+export function boltOf(p: { item?: string; says?: string; name: string }): { thread: string; cls: string } | undefined {
+  const m = /bolt-m(\d+(?:\.\d+)?)x/i.exec(p.item ?? ''); if (!m) return undefined;
+  return { thread: `M${m[1]}`, cls: /class\s+(\d+\.\d|A[24])/i.exec(p.says ?? '')?.[1]?.toUpperCase() ?? '8.8' };
+}
 const lengthIn = (w: string, d: number) => num(/[x×]\s*(\d+(?:\.\d+)?)/i.exec(w)?.[1] ?? /(\d+(?:\.\d+)?)\s*mm\b/i.exec(w)?.[1]) || d;
 const classIn = (w: string, d: string) => /(?:^|\s)(4\.6|4\.8|5\.6|5\.8|6\.8|8\.8|10\.9|12\.9|A2|A4)(?=\s|$)/i.exec(w)?.[1]?.toUpperCase() ?? d;
 const metres = (w: string, d: number) => num(/(\d+(?:\.\d+)?)\s*m\b/i.exec(w)?.[1]) || d;

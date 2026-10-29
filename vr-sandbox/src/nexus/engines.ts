@@ -61,7 +61,7 @@ function halfRing(name: string, ri: number, ro: number, w: number, at: V3, up: b
 /** A ring turned about x: inside ri, outside ro, w long, its middle at `at`. */
 const ringX = (name: string, ri: number, ro: number, w: number, at: V3, more: Partial<Part> = {}): Part => P(name, { lathe: [[ri, -w / 2], [ro, -w / 2], [ro, w / 2], [ri, w / 2], [ri, -w / 2]] }, at, { rot: CYL_X, ...more });
 /** A bolt from the library, its head at `at`, its shank down -y turned by `rot`; its length to the nearest 5 mm. */
-const bolt = (thread: string, L: number, at: V3, rot: V3 = [0, 0, 0], name?: string): Part => use(`bolt ${thread}x${Math.max(10, Math.min(300, Math.round((L * 1000) / 5) * 5))}`, at, { rot, ...(name ? { name } : {}) });
+const bolt = (thread: string, L: number, at: V3, rot: V3 = [0, 0, 0], name?: string, cls?: string): Part => use(`bolt ${thread}x${Math.max(10, Math.min(300, Math.round((L * 1000) / 5) * 5))}${cls ? ` ${cls}` : ''}`, at, { rot, ...(name ? { name } : {}) });
 export const threadFor = (B: number): string => (B < 0.06 ? 'M6' : B < 0.085 ? 'M8' : B < 0.11 ? 'M10' : B < 0.13 ? 'M12' : 'M16');
 const around = (wheels: [number, number, number][]): [number, number][] => chainPath(wheels).map(([u, v]) => [u, v] as [number, number]);
 
@@ -165,7 +165,8 @@ export function conRod(s: EngineSpec, d = engineDims(s)): Part {
   const cap = group('rod cap', [halfRing('rod cap', bigI, bigO, rodW, [0, 0, 0], false, iron), ...[-1, 1].map((sd) => box('cap boss', [rodW, 0.09 * B, 0.12 * B], [0, -0.045 * B, sd * (bigO + 0.03 * B)], iron))], { item: 'rod-cap' });
   const shell = (up: boolean) => halfRing(`rod bearing shell (${up ? 'upper' : 'lower'})`, rp, bigI, rodW * 0.86, [0, 0, 0], up, { item: 'rod-bearing-shell', mat: 'steel-low', color: 0xb89a6a, finish: 'machined', says: 'a steel back lined with bearing alloy' });
   const t = threadFor(B * 0.85), bL = 0.09 * B + 0.12 * B + 0.004;
-  const bolts = [-1, 1].map((sd) => bolt(t, bL, [0, -0.09 * B, sd * (bigO + 0.03 * B)], [PI, 0, 0], 'rod bolt'));
+  // (rod bolts are class 10.9 or 12.9, typical: they carry the cap against the piston's inertia every turn)
+  const bolts = [-1, 1].map((sd) => bolt(t, bL, [0, -0.09 * B, sd * (bigO + 0.03 * B)], [PI, 0, 0], 'rod bolt', '10.9'));
   return group('connecting rod and cap', [rod, cap, shell(true), shell(false), ...bolts], { item: 'con-rod-assembly' });
 }
 /** Its crankshaft, forged in one: a main journal between each pair of cylinders and at each end, a pin for each throw
