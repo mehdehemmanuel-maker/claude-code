@@ -49,6 +49,8 @@ export const CONSTITUENTS: Record<string, { is: string; family?: string; figures
   'pla': { is: '', figures: { E: t(3500000000.0), nu: t(0.36), k: t(0.13), c: t(1600), alpha: t(7e-05), conductivity: t(1e-14), ultimate: t(60000000.0) } },
   'pa66': { is: 'polyamide 66, unfilled, dry as moulded', family: 'polymer', figures: { density: t(1140), E: t(3000000000.0), nu: t(0.4), k: t(0.25), c: t(1700), alpha: t(8e-05), conductivity: t(1e-12), yield: t(80000000.0), ultimate: t(85000000.0) } },
   'nbr': { is: '', figures: { E: t(5000000.0), nu: t(0.49), k: t(0.25), c: t(1550), alpha: t(0.0002), conductivity: t(1e-10), ultimate: t(15000000.0) } },
+  // (polychloroprene, CR: the elastomer of CV joint boots, oil- and heat-resistant; typical figures for a moulded compound)
+  'neoprene': { is: '', figures: { E: t(4000000.0), nu: t(0.49), k: t(0.19), c: t(2170), alpha: t(0.0002), conductivity: t(1e-12), ultimate: t(15000000.0) } },
   'epdm': { is: '', figures: { E: t(4000000.0), nu: t(0.49), k: t(0.25), c: t(2000), alpha: t(0.00016), conductivity: t(1e-13), ultimate: t(12000000.0) } },
   'fkm': { is: '', figures: { E: t(6000000.0), nu: t(0.49), k: t(0.2), c: t(1250), alpha: t(0.00016), conductivity: t(1e-12), ultimate: t(12000000.0) } },
   'zirconia': { is: '', figures: { E: t(205000000000.0), nu: t(0.31), k: t(2.5), c: t(460), alpha: t(1.05e-05), conductivity: t(1e-10), ultimate: t(900000000.0) } },

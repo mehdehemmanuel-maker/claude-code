@@ -335,6 +335,18 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'The worn panel: why there'; wire(b, 'l_worn', 'says', 'why', 'value');
     return tidy(b);
   }],
+  ['Chevrolet Monte Carlo SS (2004), built from its first parts: its 3.8 L V6 and four-speed automatic drawn piece by piece, checked that nothing runs into anything and that it comes apart to the bottom', () => {
+    // a real car by its published figures (machines.ts, each sourced or said to be an estimate), built from its parts
+    const b = emptyBoard('Chevrolet Monte Carlo SS (2004)');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo' }, 'car'); b.nodes.car!.label = 'Monte Carlo SS (2004): its published figures';
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'The car'; wire(b, 'car', 'vehicle', 'show', 'thing');
+    placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Nothing runs into anything, nothing too hot?'; wire(b, 'car', 'vehicle', 'rules', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'rulesSay'); wire(b, 'rules', 'says', 'rulesSay', 'value');
+    placeBlock(b, 'audit.explode', 0, 0, {}, 'apart'); b.nodes.apart!.label = 'Comes apart to the bottom?'; wire(b, 'car', 'vehicle', 'apart', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'apartSay'); wire(b, 'apart', 'says', 'apartSay', 'value');
+    placeBlock(b, 'view.show', 0, 0, {}, 'mass'); b.nodes.mass!.label = 'Mass drawn (kg)'; wire(b, 'car', 'mass', 'mass', 'value');
+    return tidy(b);
+  }],
   ['Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one', () => {
     // a material is what goes into it and how it is arranged (docs/REALITY.md phase 2.4): each worked out, not looked up
     const b = emptyBoard('Materials from their phases');

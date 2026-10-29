@@ -597,6 +597,7 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Colours with no dye: titanium anodised from 10 to 100 volts, and steel tempered as its oxide thickens, each colour worked out from light crossing a film of oxide":"2026-10-29T03:32:45.000Z",
   "One shape, eight looks: bare steel, aluminium and copper coloured by their optics, titanium anodised, steel heat tinted, a solid paint under clear coat, a metallic paint, and the same paint worn":"2026-10-29T03:40:31.000Z",
   "Paint jobs and wear: a striped panel new and worn, a two-tone drum, bare steel rusting in its hollows, the wear drawn where the shape puts it":"2026-10-29T04:43:14.000Z",
+  "Chevrolet Monte Carlo SS (2004), built from its first parts: its 3.8 L V6 and four-speed automatic drawn piece by piece, checked that nothing runs into anything and that it comes apart to the bottom":"2026-10-29T08:37:52.000Z",
   "Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one":"2026-10-29T02:24:45.000Z",
   "What it is made of, and what it carries: a copper and an aluminium rod side by side under a steel block, opened down to its elements, weighed and balanced, and as a path for heat, current and force":"2026-10-29T01:42:13.000Z",
   "Two agents: one goes to sit, opening the way; one keeps within a lead's length of it":"2026-10-28T05:32:52.000Z",

@@ -42,6 +42,9 @@ export const FITS: Record<string, EngineFit> = {
   // (Toyota's TNGA page: a motor-driven water pump, D-4S; Wikipedia's on the series: VVT-iE on the intake cam, the
   // pump off the exhaust cam (of the A25A, its sister); mymotorlist: EGR with its liquid cooler; AustralianCar.Reviews:
   // the Corolla's CVT, which an engine drives through a drive plate)
+  // (the GM 3800 Series II (L36) as fitted to the 2004 Monte Carlo: it drives a four-speed automatic, so a drive plate to
+  // its torque converter; its other choices not researched here, so left as an engine of its kind has them)
+  'gm-3800-l36': { drive: 'drive-plate', says: 'GM 3800 Series II (L36) as fitted to the 2004 Monte Carlo SS, driving a 4T65-E automatic' },
   'm20a-fks': { waterPump: 'electric', drive: 'drive-plate', vvt: 'electric-intake', injection: 'port+direct', egr: 'cooled', says: 'Toyota M20A-FKS as fitted to the 2025 Corolla LE (src/data/references.ts)' },
 };
 export const fitOf = (s: EngineSpec): EngineFit => (typeof s.fit === 'string' ? FITS[s.fit] ?? {} : s.fit ?? {});
@@ -68,6 +71,9 @@ const around = (wheels: [number, number, number][]): [number, number][] => chain
 /** Its sizes, all from its bore and stroke (each proportion typical of engines of its kind, not one maker's). */
 export function engineDims(s: EngineSpec) {
   const B = s.bore, S = s.stroke, r = S / 2, n = s.cyl, diesel = s.fuel === 'diesel', air = s.cooling === 'air', vee = s.layout === 'vee';
+  // (a vee of two (a twin: its rods side by side on one pin) or of more (banked: two rows, each pair of rods on a pin)
+  const twin = vee && n <= 2, banked = vee && n > 2;
+  if (banked && n % 2) throw new Error(`a vee of ${n} cylinders: a banked vee has an even number, half in each bank`);
   const L = s.rod ?? 1.6 * S, CH = diesel ? 0.62 * B : 0.33 * B, skirt0 = diesel ? 0.55 * B : 0.42 * B;
   const pinD = diesel ? 0.4 * B : 0.25 * B, rp = diesel ? 0.32 * B : 0.27 * B, rm = diesel ? 0.38 * B : 0.3 * B;
   // (its piston's skirt no longer than clears its crank's webs as they come round under it at the bottom of its stroke: a
@@ -78,7 +84,7 @@ export function engineDims(s: EngineSpec) {
   const pmax = s.pmax ?? (diesel ? 18e6 : 8e6), redline = s.redline ?? (diesel ? 2100 : n <= 2 ? 3600 : 6500), Fg = (pmax * PI * B * B) / 4;
   const rodW = Math.max(diesel ? 0.3 * B : 0.26 * B, Fg / (2 * rp * 0.86 * 60e6));
   const shellT = Math.max(0.0015, 0.022 * B), wm = diesel ? 0.3 * B : 0.24 * B;
-  const pitch = vee ? 0 : (air ? 1.4 : diesel ? 1.18 : 1.12) * B + 0.005;
+  const pitch = twin ? 0 : (air ? 1.4 : diesel ? 1.18 : 1.12) * B + 0.005;
   const wallB = (air ? 0.05 : 0.06) * B, jacket = air ? 0 : 0.08 * B, outer = (s.block === 'iron' ? 0.04 : 0.045) * B, Wb = B + 2 * (wallB + jacket + outer);
   const wc = (s.block === 'iron' ? 0.06 : 0.05) * B, swing = r + (diesel ? 0.62 : 0.55) * B, Wc = 2 * (swing + 0.01) + 2 * wc;
   // (its counterweights no taller than lets them pass under the piston's skirt at the bottom of its stroke; its bores'
@@ -89,24 +95,46 @@ export function engineDims(s: EngineSpec) {
   // (a vee twin's two rods side by side on one pin, a main journal each side of the pin's webs, out past its barrels'
   // fins; its ends flush with its end mains)
   const linerT = s.block === 'iron' && !diesel ? 0 : (diesel ? 0.05 : 0.025) * B, roFin = B / 2 + linerT + wallB + outer + (air ? 0.28 * B : 0);
-  const we = wm / 2, veeMain = Math.max(rodW + 0.002 + 0.12 * B + wm / 2, (rodW + 0.004) / 2 + roFin + wm / 2 + 0.005), len = vee ? 2 * (veeMain + wm / 2) + 2 * we : n * pitch + 2 * we, ysk = -(diesel ? 0.45 : 0.15) * B;
+  const we = wm / 2, veeMain = Math.max(rodW + 0.002 + 0.12 * B + wm / 2, (rodW + 0.004) / 2 + roFin + wm / 2 + 0.005), len = twin ? 2 * (veeMain + wm / 2) + 2 * we : banked ? (n / 2) * pitch + 2 * we + (rodW + 0.004) : n * pitch + 2 * we, ysk = -(diesel ? 0.45 : 0.15) * B;
   const cams = s.cams ?? (diesel ? 'dohc' : 'dohc'), valves = s.valves ?? 4, Hh0 = (cams === 'dohc' ? (diesel ? 1.1 : 1.45) : cams === 'sohc' ? 1.2 : 0.95) * B, td = (diesel ? 0.16 : 0.11) * B, gasket = 0.0012;
   // (where its cams turn: over its buckets (dohc) or over its rockers (sohc), from its valve train's heights below)
   // (its springs seated on a floor over its ports (a port about 0.3 bore across, its roof about 0.32 bore over the deck))
   const seatH = 0.36 * B, tip = deck + gasket + td + seatH + 0.46 * B + 0.06 * B + 0.006, camY = cams === 'dohc' ? tip + 0.004 + 0.17 * B : tip + 0.12 * B + 0.1 * B + 0.17 * B;
   const HhIn = Math.max(Hh0, (cams === 'ohv' ? tip + 0.25 * B : camY + 0.2 * B) - (deck + gasket)), Hh = HhIn;
   const noseL = n <= 2 && !diesel ? 0.7 * B : 0.125;
-  return { tip, camY, seatH, noseL, cwH, veeMain, pmax, redline, B, S, r, n, L, CH, skirt, pinD, rp, rm, rodW, shellT, wm, pitch, wallB, jacket, outer, Wb, deck, yb0, swing, wc, Wc, we, len, ysk, cams, valves, Hh, td, gasket, diesel, air, vee };
+  return { tip, camY, seatH, noseL, cwH, veeMain, pmax, redline, B, S, r, n, L, CH, skirt, pinD, rp, rm, rodW, shellT, wm, pitch, wallB, jacket, outer, Wb, deck, yb0, swing, wc, Wc, we, len, ysk, cams, valves, Hh, td, gasket, diesel, air, vee, twin, banked };
 }
 type Dims = ReturnType<typeof engineDims>;
 /** Where each cylinder is: along the crank (x), its bank's lean about x (radians), its crank pin's angle. */
 function cylinders(s: EngineSpec, d: Dims): { x: number; lean: number; phase: number }[] {
   const n = d.n;
-  if (d.vee) { const h = ((s.vee ?? 90) * PI) / 360; return Array.from({ length: n }, (_, i) => ({ x: (i - (n - 1) / 2) * (d.rodW + 0.004), lean: i % 2 ? -h : h, phase: h })); }
+  if (d.twin) { const h = ((s.vee ?? 90) * PI) / 360; return Array.from({ length: n }, (_, i) => ({ x: (i - (n - 1) / 2) * (d.rodW + 0.004), lean: i % 2 ? -h : h, phase: h })); }
+  if (d.banked) {
+    // (two banks, a pair of rods side by side on each pin, one from each bank; its pins' angles for an even firing:
+    // three pins 120° apart in a V6, two 180° in a V4, four at 90° (a cross-plane crank) in a V8. A V6 of 90°, as the
+    // 3800, splits each pin by 30° for an even 120° firing interval: drawn here as one pin to each pair, a simplification)
+    const h = ((s.vee ?? 90) * PI) / 360, m = n / 2, off = (d.rodW + 0.004) / 2;
+    const pins: Record<number, number[]> = { 2: [0, 180], 3: [0, 120, 240], 4: [0, 90, 270, 180] }, deg = pins[m] ?? Array.from({ length: m }, (_, k) => (k * 360) / m);
+    return Array.from({ length: n }, (_, i) => { const k = i >> 1, a = i % 2 ? 1 : -1; return { x: (k - (m - 1) / 2) * d.pitch + a * off, lean: a < 0 ? h : -h, phase: (deg[k]! * PI) / 180 + h }; });
+  }
   // (its firing order's crank: a four's pins at 0, 180, 180, 0°; a six's at 0, 240, 120, 120, 240, 0°; a three's 120° apart)
   const ph: Record<number, number[]> = { 1: [0], 2: [0, 180], 3: [0, 240, 120], 4: [0, 180, 180, 0], 5: [0, 144, 288, 72, 216], 6: [0, 240, 120, 120, 240, 0] };
   const deg = ph[n] ?? Array.from({ length: n }, (_, i) => (i * 720) / n);
   return Array.from({ length: n }, (_, i) => ({ x: (i - (n - 1) / 2) * d.pitch, lean: 0, phase: (deg[i]! * PI) / 180 }));
+}
+/** The heads it carries, each over its cylinders: one along an inline engine; one on each cylinder of a vee twin; one
+ *  along each bank of a banked vee. Each with the cylinders under it (and their indices), its middle along the crank and
+ *  its length. */
+function headsOf(d: Dims, cyl: { x: number; lean: number; phase: number }[], len: number): { x: number; lean: number; L: number; cyl: typeof cyl; idx: number[] }[] {
+  if (!d.vee) return [{ x: 0, lean: 0, L: len - 0.4 * d.we, cyl, idx: cyl.map((_, i) => i) }];
+  if (d.twin) return cyl.map((c, i) => ({ x: c.x, lean: c.lean, L: 1.5 * d.B, cyl: [c], idx: [i] }));
+  return [...new Set(cyl.map((c) => c.lean))].map((lean) => { const idx = cyl.flatMap((c, i) => (c.lean === lean ? [i] : [])), cs = idx.map((i) => cyl[i]!), x = cs.reduce((t, c) => t + c.x, 0) / cs.length;
+    return { x, lean, L: cs.length * d.pitch - 0.004, cyl: cs, idx }; });
+}
+/** Where its main journals are along the crank: one each side of a vee twin's pin; between each throw and at each end. */
+function mainsOf(d: Dims): number[] {
+  if (d.twin) return [-d.veeMain, d.veeMain];
+  const throws = d.banked ? d.n / 2 : d.n; return Array.from({ length: throws + 1 }, (_, k) => (k - throws / 2) * d.pitch);
 }
 /** Which side of its head a bank's exhausts leave by (+1 or -1 along its head's z): an inline engine's on its -z side, a
  *  vee's on the outside of each bank, its intakes in the vee between them. */
@@ -173,11 +201,11 @@ export function conRod(s: EngineSpec, d = engineDims(s)): Part {
  *  at its angle with a web each side and a counterweight opposite, its nose at the front and its flange at the back. */
 export function crankshaft(s: EngineSpec, d = engineDims(s)): Part {
   const { B, r, rp, rm, wm, rodW } = d, cyl = cylinders(s, d), forged = { mat: 'steel-alloy', color: 0x8a8c90, finish: 'forged', one: true }, parts: Part[] = [];
-  const throws = d.vee ? [{ x: 0, phase: cyl[0]!.phase, w: 2 * rodW + 0.004 }] : cyl.map((c) => ({ x: c.x, phase: c.phase, w: rodW + 0.003 }));
-  const mains = d.vee ? [-d.veeMain, d.veeMain] : Array.from({ length: d.n + 1 }, (_, k) => (k - d.n / 2) * d.pitch);
+  const throws = d.twin ? [{ x: 0, phase: cyl[0]!.phase, w: 2 * rodW + 0.004 }] : d.banked ? cyl.filter((_, i) => i % 2 === 0).map((c) => ({ x: c.x + (rodW + 0.004) / 2, phase: c.phase, w: 2 * rodW + 0.004 })) : cyl.map((c) => ({ x: c.x, phase: c.phase, w: rodW + 0.003 }));
+  const mains = mainsOf(d);
   for (const x of mains) parts.push(P('main journal', { cyl: [rm, wm] }, [x, 0, 0], { ...forged, rot: CYL_X, finish: 'ground' }));
   for (const t of throws) {
-    const c = Math.cos(t.phase), sn = Math.sin(t.phase), webT = d.vee ? d.veeMain - wm / 2 - t.w / 2 - 0.001 : Math.max(0.08 * B, (d.pitch - wm - t.w) / 2 - 0.001);
+    const c = Math.cos(t.phase), sn = Math.sin(t.phase), webT = d.twin ? d.veeMain - wm / 2 - t.w / 2 - 0.001 : Math.max(0.08 * B, (d.pitch - wm - t.w) / 2 - 0.001);
     parts.push(P('crank pin', { cyl: [rp, t.w] }, [t.x, r * c, r * sn], { ...forged, rot: CYL_X, finish: 'ground' }));
     for (const sd of [-1, 1]) {
       const xw = t.x + sd * (t.w / 2 + webT / 2), span = r + rp + rm, mid = (r + rp - rm) / 2, cwH = d.cwH, cwAt = -(rm + cwH / 2 - 0.02 * B);
@@ -223,6 +251,15 @@ export function cylinderBlock(s: EngineSpec, d = engineDims(s)): Part {
       const kx = n > 1 ? (cyl[(n >> 1) - 1]!.x + cyl[n >> 1]!.x) / 2 : 0, kz0 = barrelHalfAt(d, cyl, kx) - 0.001;
       parts.push(P('knock sensor boss', { cyl: [0.016, Wb / 2 - kz0] }, [kx, deck - 0.08, (Wb / 2 + kz0) / 2], { ...cast, rot: [PI / 2, 0, 0] }));
     }
+  } else if (d.banked) {
+    // (a banked vee's barrels: one casting along each bank round its bores and their water jacket, leaning with it, its
+    // pushrods' and lifters' bores through it; the two meet the crankcase's top in the vee)
+    for (const h of headsOf(d, cyl, len)) {
+      const m = h.cyl.length, at: V3 = [h.x, (deck + yb0) / 2, 0], jv = m * PI * ((B / 2 + liner + d.wallB + d.jacket) ** 2 - (B / 2 + liner + d.wallB) ** 2) * H * 0.85, V = h.L * H * Wb, holes = m * PI * bore * bore * H;
+      const mine = rods.filter((q) => h.idx.includes(q.bank));
+      parts.push(box('barrel', [h.L, H, Wb], fromBank(at, h.lean), { ...cast, rot: [h.lean, 0, 0], fill: 1 - jv / (V - holes), says: 'a bank\'s bores, and its water jacket cored round them (its share of the casting less)',
+        cuts: [...h.cyl.map((c) => ({ r: bore, depth: H, at: [c.x - h.x, H / 2, 0] as V3, dir: [0, -1, 0] as V3 })), ...mine.map((q) => boreAlong(q.hi, q.lo, ohv!.rodR + 0.0015, at)), ...mine.map((q) => boreAlong([q.x, q.lifter[1] + 0.15 * B, q.lifter[2]], [q.x, q.lifter[1] - 0.15 * B, q.lifter[2]], ohv!.liftR + 0.001, at))] }));
+    }
   } else for (const c of cyl) {
     // (a barrel to each cylinder, finned where it is cooled by air (a fin about every 9 mm, typical), leaning with its bank)
     const ro = B / 2 + liner + d.wallB + d.outer, fins: [number, number][] = [[bore, 0], [ro, 0]];
@@ -232,7 +269,7 @@ export function cylinderBlock(s: EngineSpec, d = engineDims(s)): Part {
     parts.push(P('barrel', { lathe: fins }, [c.x, yb0 * Math.cos(c.lean), yb0 * Math.sin(c.lean)], { ...cast, rot: [c.lean, 0, 0], cuts: [...rodBores([c.x, yb0, 0], bi), ...rods.filter((q) => q.bank === bi).map((q) => boreAlong([q.x, q.lifter[1] + 0.15 * B, q.lifter[2]], [q.x, q.lifter[1] - 0.15 * B, q.lifter[2]], ohv!.liftR + 0.001, [c.x, yb0, 0]))], says: d.air ? 'its barrel, finned to shed its heat to the air' : 'its barrel' }));
   }
   // (its crankcase: two side walls, a floor plate at the barrel's foot, its ends, and a bulkhead at each main)
-  const Hc = yb0 - ysk, mains = d.vee ? [-d.veeMain, d.veeMain] : Array.from({ length: n + 1 }, (_, k) => (k - n / 2) * d.pitch);
+  const Hc = yb0 - ysk, mains = mainsOf(d);
   // (a vee's walls open where its banks' bores run out through them, for its rods)
   for (const sd of [-1, 1]) { const wAt: V3 = [0, (yb0 + ysk) / 2, sd * (Wc / 2 - wc / 2)]; parts.push(box('crankcase wall', [len, Hc, wc], wAt, { ...cast, cuts: d.vee ? cyl.map((c) => boreAlong(fromBank([c.x, deck, 0], c.lean), fromBank([c.x, 0, 0], c.lean), bore, wAt)) : [] })); }
   // (its top, its bores through it (a vee's along each bank), its lifters' bores)
@@ -245,7 +282,7 @@ export function cylinderBlock(s: EngineSpec, d = engineDims(s)): Part {
     for (const sz of [-1, 1]) { const z0 = capW0 / 2, z1 = Wc / 2 - wc; parts.push(box('crankcase end', [we, -ysk, z1 - z0], [sd * (len / 2 - we / 2), ysk / 2, sz * (z0 + z1) / 2], cast)); }
   }
   const bw = wm, bh = yb0 - wc, saddle = rm + shellT, bV = bw * bh * (Wc - 2 * wc), full = PI * saddle * saddle * bw;
-  for (const x of mains) parts.push(box('bulkhead', [bw, bh, Wc - 2 * wc], [x, bh / 2, 0], { ...cast, fill: (bV - full / 2) / (bV - full), cuts: [{ r: saddle, depth: bw, at: [bw / 2, -bh / 2, 0], dir: [-1, 0, 0] }, ...camBore([x, bh / 2, 0], bw).map((k) => ({ ...k, at: [bw / 2, k.at[1], k.at[2]] as V3 })), ...liftBoresAll([x, bh / 2, 0])], says: 'its main saddle bored in it' }));
+  for (const x of mains) parts.push(box('bulkhead', [bw, bh, Wc - 2 * wc], [x, bh / 2, 0], { ...cast, fill: (bV - full / 2) / (bV - full), cuts: [{ r: saddle, depth: bw, at: [bw / 2, -bh / 2, 0], dir: [-1, 0, 0] }, ...(d.banked ? cyl.filter((c) => Math.abs(c.x - x) < bore + bw / 2).map((c) => boreAlong(fromBank([c.x, deck, 0], c.lean), fromBank([c.x, 0, 0], c.lean), bore, [x, bh / 2, 0])) : []), ...camBore([x, bh / 2, 0], bw).map((k) => ({ ...k, at: [bw / 2, k.at[1], k.at[2]] as V3 })), ...liftBoresAll([x, bh / 2, 0])], says: 'its main saddle bored in it' }));
   const casting = group('block casting', parts, { item: 'block-casting', mat: cast.mat, says: `cast ${iron ? 'iron' : 'aluminium'} round its cores, ${(len * 1000).toFixed(0)} × ${((deck - ysk) * 1000).toFixed(0)} × ${(Wc * 1000).toFixed(0)} mm` });
   const out: Part[] = [casting];
   if (liner) for (const c of cyl) out.push(P('cylinder liner', { lathe: [[B / 2, 0], [bore, 0], [bore, H], [B / 2, H], [B / 2, 0]] }, [c.x, yb0 * Math.cos(c.lean), yb0 * Math.sin(c.lean)], { rot: [c.lean, 0, 0], item: 'cylinder-liner', mat: 'cast-iron', color: 0x5a5c60, finish: 'machined', says: d.diesel ? 'a wet liner, its coolant against it' : 'cast in' }));
@@ -345,10 +382,10 @@ const placed = (q: Part, at: V3): Part => ({ ...q, at });
  *  its deck's foot at the block's deck. */
 export function cylinderHead(s: EngineSpec, d = engineDims(s), bank?: number, given: HeadParts = {}): Part {
   const piece = (w: HeadPiece): Part => given[w] ?? headPiece(s, w, d);
-  const { B, deck, Wb, Hh, td, gasket, valves, cams, len, we } = d, cylAll = cylinders(s, d), cyl = bank === undefined ? cylAll : [cylAll[bank]!];
+  const { B, deck, Wb, Hh, td, gasket, valves, cams, len, we } = d, cylAll = cylinders(s, d), hd = bank === undefined ? headsOf({ ...d, vee: false }, cylAll, len)[0]! : headsOf(d, cylAll, len)[bank]!, cyl = hd.cyl;
   const iron = d.diesel, cast = { mat: iron ? 'cast-iron' : 'al-a380', color: iron ? 0x50525a : 0x9a9c9e, finish: 'cast', one: true }, parts: Part[] = [];
-  const y0 = deck + gasket, Lh = bank === undefined ? len - 0.4 * we : d.pitch || 1.5 * B, x0 = bank === undefined ? 0 : cyl[0]!.x, Wh = Wb, tw = 0.05 * B;
-  const xs = exSide(d, cyl[0]!.lean), train = cams === 'ohv' ? ohvTrain(d, cylAll).rods.filter((q) => bank === undefined || q.bank === bank) : [];
+  const y0 = deck + gasket, Lh = hd.L, x0 = hd.x, Wh = Wb, tw = 0.05 * B; void we;
+  const xs = exSide(d, cyl[0]!.lean), train = cams === 'ohv' ? ohvTrain(d, cylAll).rods.filter((q) => hd.idx.includes(q.bank)) : [];
   // (its valves: four to a cylinder, two intake and two exhaust across it, or two in a row; their heads' sizes a share of
   // the bore, typical of pent-roof and of wedge chambers; its exhausts on its xs side)
   const vs = cyl.flatMap((c) => valves === 4 ? [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([a, b]) => ({ x: c.x + a! * 0.22 * B, z: b! * 0.21 * B, ex: b === xs, r: (b === xs ? 0.155 : 0.18) * B, c })) : [{ x: c.x - 0.22 * B, z: cams === 'ohv' ? 0 : -xs * 0.18 * B, ex: false, r: 0.22 * B, c }, { x: c.x + 0.22 * B, z: cams === 'ohv' ? 0 : xs * 0.18 * B, ex: true, r: 0.19 * B, c }]);
@@ -495,13 +532,13 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   });
   out.push(group('pistons and rods', moving));
   // (its head: one along an inline engine, one on each cylinder of a vee, leaning with it; its gasket under it)
-  const heads = d.vee ? cyl.map((c, i) => ({ ...cylinderHead(s, d, i), rot: [c.lean, 0, 0] as V3 })) : [given.head ? { ...given.head, at: [0, 0, 0] as V3 } : cylinderHead(s, d)];
+  const hs = headsOf(d, cyl, len), heads = d.vee ? hs.map((h, i) => ({ ...cylinderHead(s, d, i), rot: [h.lean, 0, 0] as V3 })) : [given.head ? { ...given.head, at: [0, 0, 0] as V3 } : cylinderHead(s, d)];
   out.push(...heads);
-  for (const c of d.vee ? cyl : [{ x: 0, lean: 0 }]) out.push(box('head gasket', [d.vee ? 1.5 * B : len, gasket, Wb], [d.vee ? c.x : 0, (deck + gasket / 2) * Math.cos(c.lean), (deck + gasket / 2) * Math.sin(c.lean)], { rot: [c.lean, 0, 0], item: 'head-gasket', mat: 'stainless-304', color: 0x9a9c9e, cuts: [...(d.vee ? [{ x: 0 }] : cyl).map((q) => ({ r: B / 2, depth: gasket, at: [q.x, gasket / 2, 0] as V3, dir: [0, -1, 0] as V3 })), ...(d.cams === 'ohv' ? ohvTrain(d, cyl).rods.filter((q) => Math.abs(q.lean - c.lean) < 1e-6).map((q) => boreAlong(q.hi, q.lo, 0.03 * B + 0.0015, [d.vee ? c.x : 0, deck + gasket / 2, 0])) : [])] }));
+  for (const c of hs) out.push(box('head gasket', [d.vee ? c.L : len, gasket, Wb], [d.vee ? c.x : 0, (deck + gasket / 2) * Math.cos(c.lean), (deck + gasket / 2) * Math.sin(c.lean)], { rot: [c.lean, 0, 0], item: 'head-gasket', mat: 'stainless-304', color: 0x9a9c9e, cuts: [...(d.vee ? c.cyl.map((q) => ({ x: q.x - c.x })) : cyl).map((q) => ({ r: B / 2, depth: gasket, at: [q.x, gasket / 2, 0] as V3, dir: [0, -1, 0] as V3 })), ...(d.cams === 'ohv' ? ohvTrain(d, cyl).rods.filter((q) => Math.abs(q.lean - c.lean) < 1e-6).map((q) => boreAlong(q.hi, q.lo, 0.03 * B + 0.0015, [d.vee ? c.x : 0, deck + gasket / 2, 0])) : [])] }));
   // (its cam cover over each head, its gasket in its groove, its bolts round it)
   const top = deck + gasket + Hh, ctop = d.cams === 'dohc' ? top + 0.45 * B : top + 0.35 * B, coverMat = d.diesel ? 'al-a380' : d.cams === 'ohv' ? 'steel-low' : 'nylon';
-  for (const c of d.vee ? cyl : [{ x: 0, lean: 0 }]) {
-    const Lc = d.vee ? 1.5 * B : len - 0.4 * d.we, h = ctop - top, yc = top + h / 2, at: V3 = [c.x, yc * Math.cos(c.lean), yc * Math.sin(c.lean)];
+  for (const c of hs) {
+    const Lc = c.L, h = ctop - top, yc = top + h / 2, at: V3 = [c.x, yc * Math.cos(c.lean), yc * Math.sin(c.lean)];
     // (a well through it down each plug tower, for its coil; or for each injector)
     const wells = (d.vee ? cyl.filter((q) => q.lean === c.lean) : cyl).map((q) => { const pa = plugAt(d, q); return { r: (d.diesel ? 0.11 : 0.13) * B, depth: h, at: [pa.x - c.x, h / 2, pa.z] as V3, dir: [0, -1, 0] as V3 }; });
     // (and the high-pressure pump's plunger down through it to its lobe)
@@ -563,7 +600,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   const plate = fit.drive === 'drive-plate', small = d.n <= 2 && !d.diesel, fwR = (small ? 1.15 : 1.75) * B, fwT = plate ? 0.004 : (d.diesel ? 0.35 : small ? 0.22 : 0.3) * B, fx = back - 0.12 * B - fwT / 2 - 0.004, electric = s.starter !== 'recoil', rgM = d.diesel ? 0.0042 : 0.0025;
   const fw: Part[] = [plate ? ringX('drive plate', 0.12 * B, fwR, fwT, [0, 0, 0], { item: 'drive-plate', mat: 'steel-low', color: 0x6a6c70, finish: 'machined', fill: 0.85, says: 'pressed from 4 mm steel (typical), its torque converter bolted to its rim: an automatic\'s or a CVT\'s, with no clutch' }) : ringX('flywheel', 0.12 * B, fwR, fwT, [0, 0, 0], { item: 'flywheel-disc', mat: 'cast-iron', color: 0x5a5c60, finish: 'machined', fill: 0.85, says: 'its face ground (its pockets and lightening about 0.15 of it, typical)' })];
   if (electric) fw.push({ ...toothed({ name: 'starter ring gear', m: rgM, z: Math.round((2 * (fwR + 0.006)) / rgM), b: 0.012 + 0.04 * B, bore: 2 * fwR, mat: 'steel-alloy', item: 'starter-ring-gear' }), at: [0, 0, 0], rot: [0, PI / 2, 0] });
-  out.push(electric ? group(plate ? 'drive plate and ring gear' : 'flywheel and ring gear', fw, { item: plate ? 'drive-plate' : 'flywheel', at: [fx, 0, 0] }) : { ...fw[0]!, name: 'flywheel', at: [fx, 0, 0], says: 'its fan cast in its face, its magneto\'s magnets in its rim (not drawn)' });
+  out.push(electric ? group(plate ? 'drive plate and ring gear' : 'flywheel and ring gear', fw, { item: plate ? 'flywheel-drive-plate' : 'flywheel', at: [fx, 0, 0] }) : { ...fw[0]!, name: 'flywheel', at: [fx, 0, 0], says: 'its fan cast in its face, its magneto\'s magnets in its rim (not drawn)' });
   for (let k = 0; k < 6; k++) { const a = (k * PI) / 3; out.push(bolt(threadFor(B), fwT + 0.12 * B, [fx - fwT / 2, 0.3 * B * Math.cos(a), 0.3 * B * Math.sin(a)], [0, 0, PI / 2], plate ? 'drive plate bolt' : 'flywheel bolt')); }
   // (its oiling: the pan under its crankcase, its gasket and bolts; the pump on the crank's nose; its pickup to the sump;
   // its filter on the block's side; the pan's drain plug)
@@ -603,6 +640,20 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       const ry = yport + ir - 0.01 + 0.06 + 0.009;
       out.push(P('fuel rail', { tube: { r: 0.009, wall: 0.0012, pts: [[-len / 2 + 0.03, ry, zport + 0.12 * B], [len / 2 - 0.03, ry, zport + 0.12 * B]] } }, [0, 0, 0], { item: 'fuel-rail', mat: 'stainless-304', color: 0xc8ccd2 }));
     }
+  } else if (d.banked) {
+    // (a banked vee's: a runner from each port on its bank's inside up into a plenum along the vee, its throttle at the
+    // plenum's front; an injector in each runner, a fuel rail along each bank (typical of an injected pushrod V6's))
+    const pY = deck + 1.1 * B, runs: Part[] = [], inj: Part[] = [];
+    for (const c of cyl) { const xs = exSide(d, c.lean);
+      for (const vx of valveXs(d, c, false)) {
+        const a0 = fromBank([vx, yport, -xs * Wb / 2], c.lean), a1 = fromBank([vx, yport, -xs * (Wb / 2 + 0.3 * B)], c.lean);
+        runs.push(P('intake runner', { tube: { r: ir, wall: 0.003, pts: [a0, a1, [vx, pY - 0.25 * B, 0]] } }, [0, 0, 0], { one: true, item: 'intake-runner', mat: 'al-a380', color: 0x8c8e90, finish: 'cast', passes: ['injector body', 'injector needle'] }));
+        inj.push(group('port injector', [turned({ name: 'injector body', steps: [[0.08 * B, 0.03], [0.11 * B, 0.03]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.05]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.005, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.1 * B, L: 0.015, d: 0.0002 }), at: [0, 0.0325, 0] as V3 }], { item: 'fuel-injector', at: a1 }));
+      } }
+    out.push(group('intake manifold', [box('intake plenum', [len * 0.85, 0.7 * B, 0.9 * B], [0, pY, 0], { passes: ['intake runner'], item: 'intake-plenum', mat: 'al-a380', shell: 0.004, color: 0x8c8e90, finish: 'cast' }), ...runs], { item: 'intake-manifold', says: 'cast aluminium: a plenum along the vee, a runner down to each port (typical of a pushrod V6\'s)' }));
+    out.push(...inj);
+    out.push(group('throttle body', [P('throttle housing', { lathe: [[0.3 * B, 0], [0.38 * B, 0], [0.38 * B, 0.5 * B], [0.3 * B, 0.5 * B], [0.3 * B, 0]] }, [0, 0, 0], { item: 'throttle-housing', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('throttle plate', { cyl: [0.29 * B, 0.0012] }, [0, 0.25 * B, 0], { item: 'throttle-plate', mat: 'steel-low', color: 0xc8ccd2 })], { item: 'throttle-body', at: [len * 0.425, pY, 0], rot: [0, 0, -PI / 2] }));
+    for (const h of headsOf(d, cyl, len)) { const xs = exSide(d, h.lean); out.push(P('fuel rail', { tube: { r: 0.009, wall: 0.0012, pts: [fromBank([h.x - h.L / 2 + 0.02, yport + 0.32 * B, -xs * (Wb / 2 + 0.3 * B)], h.lean), fromBank([h.x + h.L / 2 - 0.02, yport + 0.32 * B, -xs * (Wb / 2 + 0.3 * B)], h.lean)] } }, [0, 0, 0], { item: 'fuel-rail', mat: 'steel-low', color: 0xc8ccd2 })); }
   } else {
     // (a vee twin's: a runner from each head's port to its carburettor's throat between the banks, typical)
     out.push(group('intake manifold', [box('intake plenum', [0.8 * B, 0.5 * B, 0.5 * B], [0, deck + 0.5 * B, 0], { passes: ['intake runner'], item: 'intake-plenum', mat: 'al-a380', shell: 0.004, color: 0x8c8e90, finish: 'cast' }), ...cyl.flatMap((c) => valveXs(d, c, false).map((vx) => { const xs = exSide(d, c.lean); return P('intake runner', { tube: { r: ir, wall: 0.004, pts: [fromBank([vx, yport, -xs * Wb / 2], c.lean), fromBank([vx, yport, -xs * (Wb / 2 + 0.2 * B)], c.lean), [0, deck + 0.5 * B, 0]] } }, [0, 0, 0], { one: true, item: 'intake-runner', mat: 'al-a380', color: 0x8c8e90, finish: 'cast' }); }))], { item: 'intake-manifold' }));
@@ -631,6 +682,25 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
     out.push(...muf);
     const xb = boundsOfAll(group('x', [...exRunners, ...muf, ...turbo])), sTop = xb.max.y + 0.025, sBot = xb.min.y - 0.01, sOut = xb.min.z - 0.01, sIn = exZ - 0.0002, sF = xb.max.x + 0.008, sB = Math.min(xb.min.x, -len / 2) - 0.01;
     out.push({ ...housing({ name: 'exhaust heat shield', L: sF - sB, H: sTop - sBot, W: sIn - sOut, wall: 0.0008, open: ['bottom', 'right', 'back'], item: 'heat-shield', mat: 'steel-low', color: 0xb8b8b0, finish: 'machined', says: 'aluminised steel sheet, 0.8 mm (typical); about 250 °C on its face (an estimate)' }), at: [(sF + sB) / 2, (sTop + sBot) / 2, (sIn + sOut) / 2], hot: 250 });
+  } else if (d.banked) {
+    // (a banked vee's: a cast-iron manifold on each bank's outside, a short runner from each port into a log along it;
+    // the two joined behind the engine by a crossover pipe down to where the exhaust leaves (typical of a transverse V6))
+    const ends: V3[] = [];
+    for (const h of headsOf(d, cyl, len)) { const xs = exSide(d, h.lean), logZ = xs * (Wb / 2 + 0.55 * B), logY = yport - 0.35 * B, rs: Part[] = [];
+      for (const c of h.cyl) for (const vx of valveXs(d, c, true)) rs.push(P('exhaust runner', { tube: { r: er, wall: 0.005, pts: [fromBank([vx, yport, xs * (Wb / 2 + 0.0024)], h.lean), fromBank([vx, yport, xs * (Wb / 2 + 0.25 * B)], h.lean), fromBank([c.x, logY, logZ], h.lean)] } }, [0, 0, 0], { mat: 'cast-iron', color: 0x5a4a40, finish: 'cast', one: true }));
+      const x0 = h.x + h.L / 2 - 0.02, x1 = h.x - h.L / 2 + 0.02;
+      rs.push(P('exhaust log', { tube: { r: 0.2 * B, wall: 0.005, pts: [fromBank([x0, logY, logZ], h.lean), fromBank([x1, logY, logZ], h.lean)] } }, [0, 0, 0], { mat: 'cast-iron', color: 0x5a4a40, finish: 'cast', one: true }));
+      // (its gasket between it and the head: stainless sheet, a hole at each port)
+      out.push(box('manifold gasket', [h.L * 0.9, 2 * Math.min(er + 0.022, yport - deck - gasket - 0.001), 0.0012], fromBank([h.x, yport, xs * (Wb / 2 + 0.0006)], h.lean), { rot: [h.lean, 0, 0], item: 'manifold-gasket', mat: 'stainless-304', color: 0x9a9c9e, cuts: h.cyl.flatMap((c) => valveXs(d, c, true).map((vx) => ({ r: er, depth: 0.0012, at: [vx - h.x, 0, xs * 0.0006] as V3, dir: [0, 0, -xs] as V3 }))) }));
+      out.push(group('exhaust manifold', rs, { item: 'exhaust-manifold', mat: 'cast-iron', hot: 800, says: 'cast iron, one to each bank; about 800 °C at full load (typical of a petrol engine\'s)' })); ends.push(fromBank([0, logY - 0.2 * B, logZ], h.lean));
+      // (a heat shield of aluminised steel outside it, over the log and its runners)
+      const sz = xs * (logZ + 0.2 * B + 0.012), sy0 = logY - 0.75 * B, sy1 = yport + 0.3 * B;
+      out.push(box('exhaust heat shield', [h.L, sy1 - sy0, 0.0008], fromBank([h.x, (sy0 + sy1) / 2, sz], h.lean), { rot: [h.lean, 0, 0], item: 'heat-shield', mat: 'steel-low', color: 0xb8b8b0, finish: 'machined', says: 'aluminised steel sheet, 0.8 mm (typical)' })); }
+    if (ends.length === 2) {
+      // (the two banks joined at the engine's middle by a crossover pipe down each side and under its oil pan, the
+      // exhaust leaving from its middle, clear of the transaxle at its back end)
+      const yLow = -(d.swing + 0.02 + 0.45 * B) - 0.045, a = ends[0]!, b = ends[1]!;
+      out.push(P('exhaust crossover', { tube: { r: 0.2 * B, wall: 0.0015, pts: [a, [0, yLow, a[2]], [0, yLow, b[2]], b] } }, [0, 0, 0], { item: 'exhaust-pipe', mat: 'stainless-304', color: 0x8a8278, finish: 'brushed', hot: 700, one: true, says: 'joining the banks under the oil pan (typical of a transverse V6\'s)' })); }
   } else {
     // (a vee's: from each bank's port on its outside, out and forward to a muffler across the engine's front)
     const p1 = (c: { lean: number }, vx: number): V3 => fromBank([vx, yport, exSide(d, c.lean) * (Wb / 2 + 0.3 * B)], c.lean), mx = len / 2 + 0.18, my = p1(cyl[0]!, 0)[1], mz = Math.abs(p1(cyl[0]!, 0)[2]) + 0.02;
@@ -639,7 +709,8 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   }
   // (what hangs on its front, on a belt from the crank's pulley: its alternator and water pump, a tensioner)
   const belt: [number, number, number][] = [[0, 0, dr]], bh = 0.004;
-  const altR = Math.max(0.065, Math.min(0.09, 0.85 * B)), altL = altR * 2.1, altAt: [number, number] = [-(Math.max(Wc, tcW) / 2 + altR + 0.02), deck * 0.55];
+  const altR = Math.max(0.065, Math.min(0.09, 0.85 * B)), altL = altR * 2.1, altAt: [number, number] = [-(Math.max(Wc, tcW) / 2 + altR + 0.02), d.banked ? -0.07 : deck * 0.55];
+  // (a banked vee's alternator low beside its crankcase, under its bank, where its barrel and exhaust lean away from it)
   if (small) {
     // (a small engine's charging: a stator of coils under its flywheel, its magnets in the flywheel's rim (a magneto), no belt)
     out.push(group('flywheel stator', [ringX('stator core', 0.52 * B, 0.9 * B, 0.11 * B, [0, 0, 0], { passes: ['stator coil'], item: 'lamination-stack', mat: 'steel-electrical', color: 0x5a5c60, fill: 0.6 }), ...Array.from({ length: 6 }, (_, k) => ({ ...wound({ name: 'stator coil', ri: 0.035 * B, ro: 0.08 * B, L: 0.1 * B, d: 0.0005, centre: true }), at: [0, 0.71 * B * Math.cos((k * PI) / 3), 0.71 * B * Math.sin((k * PI) / 3)] as V3, rot: CYL_X }))], { at: [back - 0.004 - 0.055 * B, 0, 0], says: 'a stator of coils the flywheel\'s magnets sweep: its charging and its spark' }));
@@ -660,8 +731,8 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       ...[-0.05, -0.95].map((f) => ({ ...use('bearing 608 ZZ', [altL * f, 0, 0], { rot: CYL_X }) })),
       al('alternator pulley', 0.006, 0.03, 0.025, 0.02, { mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })], { item: 'alternator', at: [bx - 0.02, altAt[1], -altAt[0]] }));
     // (its bracket from the barrel's side out to its rear housing)
-    const xbk = bx - 0.02 - altL * 0.85, zb0 = d.cams === 'dohc' && !d.vee && !d.air ? Math.max(...[-0.006, 0, 0.006].map((o) => barrelHalfAt(d, cyl, xbk + o))) + 0.0005 : Wb / 2, zb1 = -altAt[0] - altR;
-    out.push(box('alternator bracket', [0.012, 0.04, zb1 - zb0], [xbk, altAt[1], (zb0 + zb1) / 2], { item: 'alternator-bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }));
+    const xbk = bx - 0.02 - altL * 0.85, zb0 = d.cams === 'dohc' && !d.vee && !d.air ? Math.max(...[-0.006, 0, 0.006].map((o) => barrelHalfAt(d, cyl, xbk + o))) + 0.0005 : d.banked ? Wc / 2 + 0.0005 : Wb / 2, zb1 = -altAt[0] - altR, ybk = d.banked ? ysk + 0.025 : altAt[1];
+    out.push(box('alternator bracket', [0.012, 0.04, zb1 - zb0], [xbk, ybk, (zb0 + zb1) / 2], { item: 'alternator-bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }));
     if (!d.air) {
       // (its water pump over the crank's pulley, through the timing cover: its volute round its impeller, its front
       // plate with its seal, its shaft, its pulley in the belt's plane)
@@ -694,7 +765,8 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
     // (where beside the crankcase there is no room for it (a short single's), it sits up on the crankcase beside the
     // barrel on its intake side (away from its exhaust) and turns the ring gear through an idle gear between them, as a
     // single-cylinder ATV's starter does; its solenoid on its outboard side)
-    const above = !d.vee && Wc / 2 + 0.003 + sR > sz, sAt: V3 = above ? [sx, d.yb0 + sR + 0.004, Wb / 2 + sR + 0.004] : [sx, -0.2 * B, -sz], out1 = sAt[2] >= 0 ? 1 : -1;
+    const above = !d.vee && Wc / 2 + 0.003 + sR > sz, sAt: V3 = above ? [sx, d.yb0 + sR + 0.004, Wb / 2 + sR + 0.004] : [sx, -0.2 * B, d.banked ? sz : -sz], out1 = sAt[2] >= 0 ? 1 : -1;
+    // (a banked vee's on its other side from an inline's: the side its radiator's fan is not on)
     if (above) {
       const D = Math.hypot(sAt[1], sAt[2]), rr = fwR + 0.006 + rgM, rp = (rgM * 10) / 2, ri = (D - rr - rp) / 2, zi = Math.max(12, Math.round((2 * ri) / rgM)), ux = sAt[1] / D, uz = sAt[2] / D, bw = 0.012 + 0.04 * B;
       out.push({ ...toothed({ name: 'starter idle gear', m: rgM, z: zi, b: 0.012, bore: 0.012, mat: 'steel-alloy', item: 'spur-gear', says: 'between the starter\'s pinion and the ring gear' }), at: [fx + bw / 2 + 0.006 + 0.0015, (rr + ri) * ux, (rr + ri) * uz], rot: [0, PI / 2, 0] });
@@ -706,7 +778,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   // (an air-cooled engine's blower housing over its flywheel's fan and its barrels, its muffler and air cleaner)
   if (d.air) {
     out.push(box('blower housing', [0.06, deck + 0.3 * B - ysk, Wc + 0.3 * B], [fx, (deck + 0.3 * B + ysk) / 2, 0], { shell: 0.0012, mat: 'steel-low', color: 0xc82020, finish: 'paint', says: 'pressed steel, leading the flywheel\'s fan\'s air over the fins' }));
-    const acAt: V3 = d.vee ? [0, deck + 0.8 * B + 0.6 * B + 0.45 * B, 0] : [-(len * 0.45 + 0.3 * B + 0.6 * B + 0.4 * B), yport + 0.5 * B, Wb / 2 + 0.9 * B];
+    const acAt: V3 = d.twin ? [0, deck + 0.8 * B + 0.6 * B + 0.45 * B, 0] : [-(len * 0.45 + 0.3 * B + 0.6 * B + 0.4 * B), yport + 0.5 * B, Wb / 2 + 0.9 * B];
     out.push(group('air cleaner', [box('air cleaner case', [0.8 * B, 0.9 * B, 0.6 * B], [0, 0, 0], { shell: 0.0015, mat: 'abs', color: 0x1a1a1a, finish: 'texture', item: 'air-cleaner-case', passes: ['air filter'] }), box('air filter', [0.7 * B, 0.7 * B, 0.4 * B], [0, 0, 0], { mat: 'paper', color: 0xd8c890, fill: 0.3, item: 'air-filter-element' })], { item: 'air-cleaner', at: acAt }));
   }
   // ==== what reads it, cools it, cleans it and wires it (an injected, liquid-cooled twin-cam car engine's, each typical

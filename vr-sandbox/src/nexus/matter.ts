@@ -97,6 +97,7 @@ export const MATTER: Record<string, Row> = {
   rubber: r('elastomer', 'rubber, natural or synthetic unsaid', false, 'rubber.natural'),
   nbr: r('elastomer', 'nitrile rubber (NBR)', true, 'rubber.natural'),
   epdm: r('elastomer', 'EPDM rubber', true, 'rubber.natural'),
+  neoprene: r('elastomer', 'Polychloroprene (neoprene) rubber', true, 'rubber.natural'),
   silicone: r('elastomer', 'silicone rubber', true, 'rubber.natural'),
   fkm: r('elastomer', 'fluoroelastomer (FKM)', true, 'rubber.natural'),
   foam: r('foam', 'foam, polymer and density unsaid', false, 'foam.eva'),

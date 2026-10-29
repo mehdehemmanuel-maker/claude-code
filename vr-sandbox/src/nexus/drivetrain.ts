@@ -9,7 +9,8 @@
 // on its +z side; its differential where it is told (the drive shafts' line, relative to its middle).
 
 import type { Part, V3 } from './kits';
-import { chainPath, housing, toothed, turned } from './makers';
+import { chainPath, chainRun, housing, toothed, turned } from './makers';
+import { partOf } from './assembly';
 import { use } from './components';
 import { massOf } from './mass';
 
@@ -23,7 +24,13 @@ const gearZ = (name: string, m: number, z: number, b: number, bore: number, at: 
 /** A shaft turned along z through `at`, `L` long. */
 const shaftZ = (name: string, r: number, L: number, at: V3, item: string): Part => turned({ name, steps: [[r * 0.8, L * 0.1], [r, L * 0.8], [r * 0.8, L * 0.1]], mat: 'steel-alloy', item, at: [at[0], at[1], at[2] - L / 2], rot: [PI / 2, 0, 0], finish: 'ground' });
 
-export interface GearboxSpec { kind: 'manual' | 'cvt'; /** its room: fore-aft (x), up (y), across (z), m */ room: V3; /** its differential's axis, relative to its middle (x, y); none for a gearbox behind an engine in line (a truck's), its output to a driveshaft */ diff: [number, number] | null; /** the most torque it takes, N·m */ torque: number; /** a manual's ratios, first to top */ ratios?: number[]; final?: number; says?: string }
+export interface GearboxSpec { kind: 'manual' | 'cvt' | 'automatic'; /** its room: fore-aft (x), up (y), across (z), m */ room: V3; /** its differential's axis, relative to its middle (x, y); none for a gearbox behind an engine in line (a truck's), its output to a driveshaft */ diff: [number, number] | null; /** the most torque it takes, N·m */ torque: number; /** a manual's ratios, first to top */ ratios?: number[]; final?: number; says?: string }
+/** A torque converter on an input's axis in its bell housing: its impeller (on the engine's drive plate), its turbine
+ *  (on the input shaft) and its stator between them; their sizes from the room. */
+function torqueConverter(at: [number, number], H: number, W: number): Part {
+  const tcR = Math.min(H / 2 - 0.02, 0.13);
+  return group('torque converter', [ringZ('impeller', 0.03, tcR, 0.04, [at[0], at[1], W / 2 - 0.05], { item: 'tc-impeller', mat: 'steel-low', color: 0x8a8c90, fill: 0.35 }), ringZ('turbine', 0.03, tcR * 0.95, 0.035, [at[0], at[1], W / 2 - 0.09], { item: 'tc-turbine', mat: 'steel-low', color: 0x9a9ca0, fill: 0.35 }), ringZ('stator', 0.03, tcR * 0.6, 0.02, [at[0], at[1], W / 2 - 0.07], { item: 'tc-stator', mat: 'al-a380', color: 0xa8aaae, fill: 0.4 })], { item: 'torque-converter' });
+}
 export interface GearboxBuilt { gearbox: Part; kg: number; pieces: number }
 const made = new Map<string, GearboxBuilt>();
 /** A transaxle: case, shafts, gears, bearings, seals, final drive and differential; a manual's gear train and shift, or a
@@ -60,7 +67,7 @@ export function transaxle(s: GearboxSpec): GearboxBuilt {
       out.push(turned({ name: 'selector rod', steps: [[0.006, span * 0.9]], mat: 'steel-alloy', item: 'selector-rod', at: [outAt[0] + 0.05 + k * 0.015, rodY, -span * 0.45], rot: [PI / 2, 0, 0] }));
       out.push(P('shift fork', { box: [0.05, rodY - outAt[1], 0.006] }, [outAt[0] + 0.03 + k * 0.015, (rodY + outAt[1]) / 2, zz], { item: 'shift-fork', mat: 'steel-low', color: 0x6a6c70, finish: 'cast', fill: 0.6 }));
     }
-  } else {
+  } else if (s.kind === 'cvt') {
     // (a CVT: a pulley of two conical sheaves on each shaft, one sliding, the push belt between them at its middle ratio,
     // about 30 mm wide (typical of a car's); a torque converter in its bell housing on the input)
     const sheave = (name: string, r: number, at: V3, sd: number): Part => P(name, { lathe: [[0.015, 0], [r, 0], [r, 0.004], [0.03, 0.02 + r * 0.15], [0.015, 0.02 + r * 0.15], [0.015, 0]] }, at, { rot: [sd * PI / 2, 0, 0], item: 'cvt-sheave', mat: 'steel-alloy', color: 0x9a9ca0, finish: 'ground' });
@@ -75,8 +82,31 @@ export function transaxle(s: GearboxSpec): GearboxBuilt {
       elems.push(P('belt element', { box: [0.0018, 0.012, 0.03] }, [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, zc], { rot: [0, 0, ang + PI / 2], item: 'push-belt-element', mat: 'steel-alloy', color: 0x8a8c90, finish: 'ground', fill: 0.7 })); }
     for (const sd of [-1, 1]) elems.push(P('belt ring pack', { tube: { r: 0.0012, pts: pts.map(([x, y]) => [x, y, zc + sd * 0.011] as V3) } }, [0, 0, 0], { item: 'push-belt-ring', mat: 'steel-spring', color: 0xb0b2b6, finish: 'ground', fill: 0.8, says: 'twelve thin maraging steel rings nested, drawn as one band' }));
     out.push(group('push belt', elems, { item: 'push-belt', says: `${n} steel elements on two ring packs` }));
-    const tcR = Math.min(H / 2 - 0.02, 0.13);
-    out.push(group('torque converter', [ringZ('impeller', 0.03, tcR, 0.04, [inP[0], inP[1], W / 2 - 0.05], { item: 'tc-impeller', mat: 'steel-low', color: 0x8a8c90, fill: 0.35 }), ringZ('turbine', 0.03, tcR * 0.95, 0.035, [inP[0], inP[1], W / 2 - 0.09], { item: 'tc-turbine', mat: 'steel-low', color: 0x9a9ca0, fill: 0.35 }), ringZ('stator', 0.03, tcR * 0.6, 0.02, [inP[0], inP[1], W / 2 - 0.07], { item: 'tc-stator', mat: 'al-a380', color: 0xa8aaae, fill: 0.4 })], { item: 'torque-converter' }));
+    out.push(torqueConverter(inP, H, W));
+  } else if (s.kind === 'automatic') {
+    // (a planetary automatic laid across: its torque converter in the bell on the engine's axis; its input turning a
+    // drive sprocket, a link chain across to a driven sprocket on its gear train's axis below (as the 4T65-E's drive
+    // chain does); on that axis two simple planetary sets (a sun, three planets on a carrier, an internal ring), and a
+    // clutch pack beside each, which its valve body applies for each gear; their sizes from its torque)
+    const inP: [number, number] = [inAt[0], inAt[1]], gP: [number, number] = [outAt[0] - 0.02, outAt[1] - 0.06], zc = W / 2 - 0.14;
+    out.push(torqueConverter(inP, H, W));
+    const zs = 25, cd = Math.hypot(inP[0] - gP[0], inP[1] - gP[1]), pitch = 0.0095, rs = (pitch * zs) / (2 * Math.PI);
+    const sprocket = (name: string, at: [number, number]) => ({ ...toothed({ name, m: pitch / Math.PI, z: zs, b: 0.03, bore: 0.03, mat: 'steel-alloy', item: 'chain-sprocket' }), at: [at[0], at[1], zc] as V3 });
+    out.push(sprocket('drive sprocket', inP), sprocket('driven sprocket', gP));
+    const path = chainPath([[inP[0], inP[1], rs], [gP[0], gP[1], rs]]).map(([u, v]) => [u, v, zc] as V3);
+    out.push({ ...partOf(chainRun({ name: 'drive chain', p: pitch, roller: 0.006, width: 0.03, path, closed: true })), item: 'drive-chain', says: `a link chain on two ${zs}-tooth sprockets ${(cd * 1000).toFixed(0)} mm apart (its pitch and width typical of a transverse automatic's)` });
+    const mp = Math.max(0.0015, m * 0.8), Zs = 30, Zr = 72, Zp = (Zr - Zs) / 2, rp = (mp * (Zs + Zp)) / 2;
+    for (const [k, zz] of [[1, z0 + 0.06], [2, z0 + 0.06 + 0.075]] as [number, number][]) {
+      const set: Part[] = [{ ...toothed({ name: 'sun gear', m: mp, z: Zs, b: fw, bore: 0.022, mat: 'steel-alloy', item: 'sun-gear' }), at: [0, 0, 0] as V3 }];
+      for (let j = 0; j < 3; j++) { const a = (2 * Math.PI * j) / 3; set.push({ ...toothed({ name: 'planet gear', m: mp, z: Zp, b: fw, bore: 0.012, mat: 'steel-alloy', item: 'planet-gear' }), at: [rp * Math.cos(a), rp * Math.sin(a), 0] as V3 }); }
+      const rr = (mp * Zr) / 2;
+      set.push(ringZ('ring gear', rr + 1.25 * mp, rr + 1.25 * mp + 0.006, fw, [0, 0, 0], { item: 'ring-gear', mat: 'steel-alloy', color: 0x8a8c90, finish: 'ground', says: `${Zr} teeth cut inside it (its teeth not drawn)` }));
+      set.push(ringZ('planet carrier', 0.012, rp + 0.01, 0.004, [0, 0, fw / 2 + 0.004], { item: 'planet-carrier', mat: 'steel-low', color: 0x6a6c70, finish: 'machined' }));
+      // (its clutch pack: friction plates and steel plates in turn, about 2 mm each, typical)
+      const pack: Part[] = Array.from({ length: 8 }, (_, q) => ringZ(q % 2 ? 'steel clutch plate' : 'friction clutch plate', rr * 0.55, rr * 0.95, 0.0018, [0, 0, fw / 2 + 0.012 + q * 0.0022], { item: q % 2 ? 'clutch-plate' : 'clutch-friction-plate', mat: q % 2 ? 'steel-low' : 'paper', color: q % 2 ? 0x9a9ca0 : 0x6a4a2a }));
+      out.push(group(`planetary set ${k}`, [...set, group('clutch pack', pack, { item: 'clutch-pack' })], { item: 'planetary-gearset', at: [gP[0], gP[1], zz], says: `a sun of ${Zs}, three planets of ${Zp}, a ring of ${Zr}: alone, ${(1 + Zr / Zs).toFixed(2)} to 1 with its ring held` }));
+    }
+    out.push(P('valve body', { box: [L * 0.6, 0.05, W * 0.5] }, [0, -H / 2 + 0.035, 0], { item: 'valve-body', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', fill: 0.55, says: 'its passages and spool valves, which its solenoids switch to apply each clutch (about 0.55 metal, an estimate)' }));
   }
   // (its final drive: a pinion on the output shaft, a ring gear on the differential's case; their sizes from its final
   // ratio (about 4 to 1, typical) on their centre distance)
@@ -101,7 +131,7 @@ export function transaxle(s: GearboxSpec): GearboxBuilt {
   const nb = Math.max(8, Math.round((2 * (L + H)) / 0.09));
   for (let k = 0; k < nb; k++) { const f = k / nb, per = 2 * (L + H); let d = f * per, x: number, y: number; if (d < L) { x = -L / 2 + d; y = H / 2 + 0.006; } else if ((d -= L) < H) { x = L / 2 + 0.006; y = H / 2 - d; } else if ((d -= H) < L) { x = L / 2 - d; y = -H / 2 - 0.006; } else { d -= L; x = -L / 2 - 0.006; y = -H / 2 + d; }
     out.push(use('bolt M8x30', [x, y, W * 0.05 + 0.012], { rot: [PI / 2, 0, 0], name: 'case bolt' })); }
-  const gearbox = group('gearbox', out, { item: s.kind === 'cvt' ? 'cvt-transaxle' : s.diff ? 'manual-transaxle' : 'manual-gearbox', says: s.says ?? '' });
+  const gearbox = group('gearbox', out, { item: s.kind === 'cvt' ? 'cvt-transaxle' : s.kind === 'automatic' ? 'automatic-transaxle' : s.diff ? 'manual-transaxle' : 'manual-gearbox', says: s.says ?? '' });
   const count = (q: Part): number => (q.shape ? 1 : 0) + (q.parts ?? []).reduce((a, r) => a + count(r), 0);
   const res = { gearbox, kg: massOf(gearbox), pieces: count(gearbox) };
   made.set(key, res); return res;

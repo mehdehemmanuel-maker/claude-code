@@ -1030,3 +1030,23 @@ Found on reading:
 - **The ACM CCS 2012 code form** was wrong (it expected "10.…"). Its concept ids are eight digits (10010293); fixed.
   The ACM site is not reachable from here, so the chip nodes are coded on ICS, which is known, rather than by guessed
   ACM ids.
+- **2026-10-29, the 2004 Chevrolet Monte Carlo SS from its first parts (asked by the user as a challenge).** Its figures
+from search results (spec pages blocked from here): 197.9 × 72.7 × 55.2 in, 110.5 in wheelbase, 62/61 in track, 11.93 in
+vented and 10.94 in solid discs, struts at both ends, P225/60R16, 5 × 115 studs; the 3800 Series II (L36) V6, 96.5 ×
+86.4 mm, 200 hp, 225 lb-ft; its lines, ground clearance, wheel offset and engine place are estimates, said so. What it
+took, by the clock (08:00:35 to 08:22:15 for the build, its checks clean): the engine owner learned a banked vee (it
+knew only a vee twin: one pin, a head on each cylinder): cylinders by bank with paired rods on pins at 0, 120 and 240°
+(the 3800's split pins drawn as one, said), four mains, a barrel and a head along each bank, bulkheads bored where
+the banks' bores pass, an intake plenum in the vee with its injectors and rails, a manifold, gasket and heat shield on
+each bank and a crossover under the pan; the transaxle owner an automatic (torque converter, drive chain, two planetary
+sets with clutch packs, valve body); the car record a V's angle and an iron block; the cooling module placed by the
+heat gate's own distance from the engine's hottest forward piece (it had been a fixed 0.11 m from a box that left a V's
+manifold out); the heat figures moved into make/heat-limits.ts so placing reads them without an import cycle; CV boots
+neoprene (polychloroprene, typical figures), as they are made, the generic 80 °C rubber failing beside an 81 °C
+transaxle; an automatic's drive plate filed as a kind of flywheel. Found by the checks and fixed: 31 then 32 rule
+findings (an alternator inside a bank, exhausts starting inside the head, a rail through the runners, pistons in the
+bulkheads, the crossover through the transaxle, the fan 73 mm from a manifold, the drive plate's absence), then 7 unmet
+recipes. Result: 8,702 pieces, built in about 2.5 s; nothing runs into, rubs or overheats anything; every recipe met.
+Not done: its drawn mass is 780 kg of its published 1,558 kg (the rest padded and said); its body is a generic coupe on
+estimated lines and is not recognisable as a Monte Carlo (its grille, lamps, side sculpting and deck spoiler not
+drawn); its board freezes the page for tens of seconds (the checks run on the page's own thread).
