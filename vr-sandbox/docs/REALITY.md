@@ -1072,3 +1072,18 @@ saves less than the stored count suggested: the builds already held a repeated p
 places 9,717 pieces with 2,677 objects; 2,520 after; the Cascadia 4,434, 3,400 after), at 14 to 63 ms a build. Not taken
 from the library: pieces outside sealed parts (17 places in the code change a part after it is made: the detail pass,
 the critic's moves, conditions), until those work on copies.
+- **2026-10-29, the Monte Carlo as in the user's photograph.** Its lines measured off the photograph (side-on), scaled by
+its 110.5-in. wheelbase (its tyres agree to 2 %), its overhangs by their published lengths (the photograph foreshortens
+its ends): the windscreen's foot 0.274 of its length, its roof from 0.40, its back glass's foot 0.76, its belt 0.675 of
+its height; estimates, said so. A body kit any car can carry (`BodyKit`, `bodyKit` in machines.ts, fitted to the skin as
+made by `skinOf`, `archLip`, `lowAt`, `topAt`, `endAt` in panels.ts): riveted flares round each arch, skirts, a front lip,
+a rear valance, a scoop's insert on each rear quarter, a wing (a cambered blade on two uprights, end plates), each in the
+inventory. Wheels may carry an accent painted down each spoke and round the rim (look layers, not pieces). The user's
+build a second record (gloss black, the kit red, 20-in. black and red wheels on 245/35R20s; colours sampled from the
+photograph). Found on the way: a real model in the car kit took a colour picked at random when no colour was said (why
+the stock car rendered silver; the kit now says which choices were said); a rear seat's back was sized by the roof and
+glass over it, not the deck lid (the measured lines brought the lid over it; any car's deck lid now counts). Rules: 0
+findings; recipes: all met. Blind check: read as "a black two-door coupe with red aftermarket add-ons", taken for a
+Holden Monaro / Pontiac GTO at about 25 % confidence, not a Monte Carlo; its list: flares flat and stuck on, a smooth body
+without mirrors or shut lines that read, the arches seen through, a crude wing, the lip and valance floating as blades,
+the scoop insert an outline that reads as a bracket, the skirts flat bars, the ends unfinished.

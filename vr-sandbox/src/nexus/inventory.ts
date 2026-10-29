@@ -1349,6 +1349,21 @@ pt('striker', 'striker', 'forge', 'steel-alloy', 'a bent steel loop the latch cl
 pt('prop-rod', 'hood prop rod', 'draw', 'steel-low', 'a bent steel rod that holds the hood open', [600, 8, 8]);
 }
 
+// ==== a body kit, piece by piece (machines.ts bodyKit fits them to the skin) ============================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Body kit parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Body kits', 'assembly', 'assemble', of, says, '', { size });
+pt('fender-flare', 'fender flare', 'mould', 'abs', 'a moulded ABS band round a wheel arch, riveted to the fender (typical of bolt-on flares)', [900, 450, 20]);
+pt('side-skirt', 'side skirt', 'mould', 'abs', 'a moulded ABS skirt along the rocker, screwed along its foot and taped along its top', [1800, 90, 25]);
+pt('front-lip', 'front lip', 'mould', 'abs', 'a moulded ABS lip under the front bumper, screwed up into its foot', [1600, 15, 120]);
+pt('rear-valance', 'rear valance', 'mould', 'abs', 'a moulded ABS valance under the rear bumper', [1600, 15, 100]);
+pt('quarter-scoop', 'quarter scoop insert', 'mould', 'abs', 'a moulded ABS insert in a scoop on the rear quarter', [500, 450, 12]);
+pt('wing-blade', 'wing blade', 'laminate', 'fibreglass', 'a cambered blade laid up in glass fibre and resin, painted', [1600, 40, 320]);
+pt('wing-upright', 'wing upright', 'cast', 'al-a380', 'a cast aluminium upright, bolted through the deck lid', [150, 200, 12]);
+pt('wing-endplate', 'wing end plate', 'mould', 'abs', 'a moulded ABS plate across the blade\'s end', [400, 130, 6]);
+as('rear-wing', 'rear wing', 'wing-blade wing-upright*2 wing-endplate*2', 'a blade on two uprights with an end plate at each end, bolted through the deck lid (its bolts not drawn)', [1700, 250, 400]);
+}
+
 // ==== single parts as they are drawn in the vehicles (one material, one process each): named so they are known ====
 {
 const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Vehicle parts', 'part', make, of, says, '', { size });

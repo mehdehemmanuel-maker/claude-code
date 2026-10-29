@@ -684,7 +684,10 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
 const overhead = new WeakMap<Patch, V3[]>();
 export function roofOf(parts: Part[]): (x: number) => number {
   const pts: V3[] = [];
-  for (const p of parts) { if (!p.shape || !('surf' in p.shape) || !/roof|glass|windscreen|pillar/i.test(p.name)) continue; const pt = p.shape.surf; let got = overhead.get(pt); if (!got) { got = patchPoints(pt, 24, 12, false).filter((q) => Math.abs(q[2]) < 0.35); overhead.set(pt, got); } pts.push(...got); }
+  // (and its deck lid, skin and inner frame, built round the skin as a closure: what a rear seat's back must stay under)
+  const all: Part[] = [...parts]; const lid = (q: Part) => { for (const c of q.parts ?? []) { all.push(c); lid(c); } };
+  for (const q of parts) if (/^deck lid/.test(q.name) && !q.rot && !(q.at ?? [0, 0, 0]).some((v) => v !== 0)) lid(q);
+  for (const p of all) { if (!p.shape || !('surf' in p.shape) || !/roof|glass|windscreen|pillar|deck lid/i.test(p.name)) continue; const pt = p.shape.surf; let got = overhead.get(pt); if (!got) { got = patchPoints(pt, 24, 12, false).filter((q) => Math.abs(q[2]) < 0.35); overhead.set(pt, got); } pts.push(...got); }
   return (x) => { let y = Infinity; for (const q of pts) if (Math.abs(q[0] - x) < 0.06 && q[1] > 0.6 && q[1] < y) y = q[1]; return y; };
 }
 /** The body's sides from inside: at x and height y, the least half-width of its skins that face sideways there (its
@@ -736,4 +739,44 @@ export function practise<K extends keyof BodyRules>(rule: K, values: BodyRules[K
   const better = tried.filter((t) => t.on < now.on && t.held < now.held).sort((a, b) => a.on + a.held - (b.on + b.held))[0];
   if (!better) return { kept: base[rule], tried, update: null };
   return { kept: better.value, tried, update: { n: RULE_UPDATES.length + 1, rule: String(rule), found: `on ${on.length} bodies the critic scored ${now.on.toFixed(0)}, on ${heldOut.length} it had not seen ${now.held.toFixed(0)}`, was: JSON.stringify(base[rule]), now: `${JSON.stringify(better.value)} (scored ${better.on.toFixed(0)} and ${better.held.toFixed(0)})` } };
+}
+
+// ---- reading a finished skin: what is fitted onto it (a body kit) is fitted to the skin as made ---------------------------
+/** The painted skins as points, each with the way it faces (its lamps, glass, liners and seams left out). */
+export interface Skin { pts: { at: V3; n: V3 }[] }
+const skinPts = new WeakMap<Patch, { at: V3; n: V3 }[]>();
+export function skinOf(parts: Part[]): Skin {
+  const pts: Skin['pts'] = [];
+  for (const p of parts) {
+    if (!p.shape || !('surf' in p.shape) || /liner|handle|lamp|light|grille|glass|windscreen|plate|seam|shut line|mirror/.test(p.name)) continue;
+    const pt = p.shape.surf; let got = skinPts.get(pt);
+    if (!got) { got = []; for (let i = 0; i <= 64; i++) for (let j = 0; j <= 32; j++) { const q = patchAt(pt, i / 64, j / 32); got.push({ at: q.at, n: q.n }); } skinPts.set(pt, got); }
+    pts.push(...got);
+  }
+  return { pts };
+}
+/** Round a wheel on the right side, seen from the side: at each angle over its axle (from ahead of it, 0, over the top,
+ *  to behind it, π), how far from its axle the skin's opening is (the arch's lip), and how far out the skin is there. */
+export function archLip(s: Skin, x0: number, y0: number, R: number, angles: number[]): { a: number; r: number; z: number }[] {
+  const side = s.pts.filter((q) => q.at[2] > 0.2 && Math.abs(q.n[2]) > 0.3);
+  return angles.map((a) => {
+    let r = Infinity, z = 0;
+    for (const q of side) { const dx = q.at[0] - x0, dy = q.at[1] - y0, d = Math.hypot(dx, dy); if (d < R * 0.95 || d > R + 0.35) continue;
+      const qa = Math.atan2(dy, dx); if (Math.abs(qa - a) > 0.04) continue; if (d < r) { r = d; z = q.at[2]; } }
+    return { a, r, z };
+  });
+}
+/** Along its length at x, the skin's lowest point on the right side (its rocker, its bumpers' foot), and how far out it is
+ *  there; and the highest point near its middle (its hood, roof or deck). */
+export function lowAt(s: Skin, x: number): { y: number; z: number } {
+  let y = Infinity, z = 0; for (const q of s.pts) if (q.at[2] > 0.1 && Math.abs(q.at[0] - x) < 0.03 && q.at[1] < y) { y = q.at[1]; z = q.at[2]; } return { y, z };
+}
+export function topAt(s: Skin, x: number): number { let y = -Infinity; for (const q of s.pts) if (Math.abs(q.at[2]) < 0.25 && Math.abs(q.at[0] - x) < 0.03 && q.n[1] > 0.3) y = Math.max(y, q.at[1]); return y; }
+/** At height y, its outline in plan at the front (the most forward point of the skin, every 5 cm across it) or the back. */
+export function endAt(s: Skin, y: number, front: boolean): [number, number][] {
+  // (only its own end: where the skin there is within 25 cm of its very end, so its sides by the wheels are not taken)
+  const best = new Map<number, number>(), here = s.pts.filter((q) => Math.abs(q.at[1] - y) <= 0.03 && (front ? q.at[0] > 0 : q.at[0] < 0));
+  const most = front ? Math.max(...here.map((q) => q.at[0])) : Math.min(...here.map((q) => q.at[0]));
+  for (const q of here) { const k = Math.round(q.at[2] / 0.05); const was = best.get(k); if (was === undefined || (front ? q.at[0] > was : q.at[0] < was)) best.set(k, q.at[0]); }
+  return [...best].filter(([, x]) => Math.abs(x - most) < 0.25).sort((a, b) => a[0] - b[0]).map(([k, x]) => [x, k * 0.05]);
 }

@@ -590,7 +590,7 @@ export const plural = (name: string): string => { const n = name.replace(/^an? /
 /** The kit the words name: a scene before the things in it ("a street with lamp posts" is the street), else the first named. */
 /** The choices the words make (an option named, or a number with the choice's unit), the rest drawn at random. */
 export function choose(k: Kit, words: string, r: () => number): Pick {
-  const t = ` ${words.toLowerCase()} `, out: Pick = {}, taken = new Set<string | number>();
+  const t = ` ${words.toLowerCase()} `, out: Pick = {}, taken = new Set<string | number>(), said: string[] = [];
   for (const ch of k.choices) {
     let hit: string | number | undefined;
     // the options named, in the order they are said; one already taken by a choice like this one is not taken again
@@ -604,7 +604,10 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
       if (m) { const v = Number(m[1]); hit = (ch.options as number[]).reduce((a, o) => (Math.abs(o - v) < Math.abs(a - v) ? o : a), ch.options[0] as number); }
     }
     out[ch.key] = hit ?? ch.options[Math.floor(r() * ch.options.length) % ch.options.length]!;
+    if (hit !== undefined) said.push(ch.key);
   }
+  // (which were said, not picked at random: a real model keeps its own colour unless one is said)
+  out.named = said.join(',');
   // a few words that pick by meaning
   if (k.id === 'car' && /\b(electric|ev|tesla)\b/.test(t)) out.power = 'electric';
   if (k.id === 'tree' && /\bfall\b/.test(t)) out.season = 'autumn';
