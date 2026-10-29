@@ -581,7 +581,7 @@ export const BOARDS_BUILT: Record<string, string> = {
   "The 6502 from its transistors: a real program run switch by switch, checked against its fast model":"2026-10-28T02:22:33.000Z",
   "Proximity and mates: each thing carries the room and the mates it needs, as numbers; nothing told what a door or a sofa is":"2026-10-28T02:22:33.000Z",
   "A body from its measured segments, its math on every part":"2026-10-28T02:22:33.000Z",
-  "What it is made of, and what it carries: a copper and an aluminium rod side by side under a steel block, opened down to its elements, weighed and balanced, and as a path for heat, current and force":"2026-10-29T01:41:57.000Z",
+  "What it is made of, and what it carries: a copper and an aluminium rod side by side under a steel block, opened down to its elements, weighed and balanced, and as a path for heat, current and force":"2026-10-29T01:42:13.000Z",
   "Two agents: one goes to sit, opening the way; one keeps within a lead's length of it":"2026-10-28T05:32:52.000Z",
   "An agent opens a door: it sees it, walks to it, takes hold, pulls; the door swings in the physics":"2026-10-28T02:22:33.000Z",
   "Who notices what: a car running, a person behind it, one at its door, a CO alarm; in the open or shut in a garage":"2026-10-28T02:22:33.000Z",
