@@ -67,6 +67,12 @@ export const KINDS: Record<string, [LawKind, string]> = {
   'beam.plastic-moment': [V, 'A fully plastic section with an elastic-perfectly-plastic material.'],
   // materials
   'hooke': [C, 'Linear elasticity: stress is proportional to strain below the proportional limit.'],
+  'section.circle.area': [G, 'The area inside a circle.'],
+  'section.circle.second-moment': [G, 'The integral of y² dA over a circle.'],
+  'section.circle.polar-moment': [G, 'The integral of r² dA over a circle: the sum of its two second moments.'],
+  'section.rect.torsion-constant': [A, 'Roark\'s closed form to the series solution of Saint-Venant\'s torsion of a rectangle, close for any proportions.'],
+  'shaft.torsional-stiffness': [V, 'Saint-Venant torsion over a whole uniform bar: its twist per length is the torque over G J.'],
+  'beam.flexural-stiffness': [V, 'Euler and Bernoulli\'s beam integrated over its length with its ends held each way in turn: every end stiffness is a multiple of E I / L.'],
   'bar.axial-stiffness': [V, 'Hooke\'s law over a whole uniform bar: its strain is the force over E A, its give that strain times its length.'],
   'stress.von-mises': [V, 'The distortion-energy criterion for a plane state of one normal and one shear stress.'],
   'thermal.expansion': [C, 'Linear thermal expansion: α is a material property, near constant over a moderate range.'],

@@ -488,10 +488,10 @@ entry below.
 | A | Context and process: CLAUDE.md trimmed, the one test, nodes dated, the gate under a minute | done |
 | B | Contact graph from the geometry (`graphOf`, node `graph`), each distinct thing once | done |
 | C | One solver for what flows (`flowOver`, node `flow`): heat, current, force | done |
-| D | Each edge by the book's laws; evidence and ± (GUM type B from families' spans) | done for heat, current, axial force; bending stiffness still by beam formulas in `graph.ts`, not book laws (Phase 2) |
-| E | Seen in 3D: coloured by level, smooth fields through each piece (Fourier between known points), bent as beams bend (Hermite) | done; arrows for the flow through each contact not yet (Phase 2) |
-| F | Force: 3D frame (`bentUnder`, node `bend`): deflection, von Mises stress, first yield, linear buckling, thermal loads, supports by kind and at a point | done; supports not yet settings on the node (Phase 2) |
-| G | Accuracy that grows: slices along the flow, the answer shown settling | done for flow; convergence not yet said by `bend` (Phase 2) |
+| D | Each edge by the book's laws; evidence and ± (GUM type B from families' spans) | done (the frame's sections and stiffnesses through the book, phase 2.3) |
+| E | Seen in 3D: coloured by level, smooth fields through each piece (Fourier between known points), bent as beams bend (Hermite), arrows across contacts | done |
+| F | Force: 3D frame (`bentUnder`, node `bend`): deflection, von Mises stress, first yield, linear buckling, thermal loads, supports by kind and at a point | done (supports as settings, phase 2.3) |
+| G | Accuracy that grows: slices along the flow, the answer shown settling | done |
 | H | Fed into what exists: heat gate by conduction, placement's heat map, the con-rod check | done for those; the other load rows in Phase 4 |
 | I | Retired: `path.network` → `flow`, `path.properties` → `bend`, their code deleted | done |
 
@@ -804,4 +804,15 @@ checked no output at all, so the exactness reported for it earlier rested on a p
 settles: cut into half as many slices and worked again, the two said and how far apart. If it does not settle, it says it
 may be held too loosely to stand. The flow's view draws what crosses each contact between pieces as an arrow the way it goes,
 sized by how much (`arrowsOf`), drawn over everything so it reads through the solid it crosses (`overlay` on an override;
-a stand-in keeps every marker whatever its level). Still to do in 2.3: bending stiffness through the book's laws.
+a stand-in keeps every marker whatever its level).
+
+**Phase 2.3 done: the frame through the book (2026-10-29).** Every section and stiffness of the frame is now a law of the
+book, worked through the law engine (units, its domain, its evidence), not a formula of the frame's own: six new laws,
+each with its source and worked example, run as its own test: the area, second moment and polar moment of a circle
+(Shigley table A-18), the torsion constant of a rectangle (Roark's Formulas for Stress and Strain, 7th ed., table 10.7;
+an approximation, kind said), the torsional stiffness of a bar G J / L, and the flexural stiffness of a beam E I / L,
+each end stiffness of a beam element a whole multiple of it (Przemieniecki 1968, ch. 5); with the rectangle's area and
+second moment, the bar's axial stiffness and the isotropic shear modulus already in the book. Each is worked once for each
+distinct set of figures. A law that refuses its figures is said, and that beam carries nothing. The frame says the laws it
+used. Its tests come out as before, to the same digits (the same mathematics, now with one owner).
+

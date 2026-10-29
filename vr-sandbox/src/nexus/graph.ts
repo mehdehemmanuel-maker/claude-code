@@ -431,6 +431,8 @@ export interface Bent {
   /** The push at which it buckles (linear buckling: the least λ making K + λ K_g singular, K_g from each beam's axial
    *  force under this push; inverse iteration), where asked; null where it does not under this push (all in tension). */
   bucklesAt: number | null;
+  /** The book's laws every section and stiffness was worked by. */
+  laws: string[];
 }
 
 /**
@@ -455,6 +457,16 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     return Eof.get(m)!;
   };
   const props = g.pieces.map((p) => mat(p.mat)), centre = g.pieces.map((p) => p.node.obb!.c);
+  // every section and stiffness through the book's own laws (step D for the frame): each worked once for each distinct
+  // set of figures; a law that refuses its figures is said, and that beam carries nothing
+  const kept = new Map<string, number>(), refused = new Set<string>(), lawsUsed = new Set<string>();
+  const U: Record<string, string> = { r: 'm', b: 'm', h: 'm', a: 'm', c: 'm', L: 'm', A: 'm^2', I: 'm^4', J: 'm^4', E: 'Pa', G: 'Pa', nu: '-' };
+  const book = (id: string, v: Record<string, number>): number => {
+    const key = `${id}|${Object.values(v).join(',')}`, was = kept.get(key); if (was !== undefined) return was;
+    const d = apply(lawById(id), Object.fromEntries(Object.entries(v).map(([s, x]) => [s, setting(s, x, U[s] ?? '-', 'the frame')])));
+    lawsUsed.add(id); if (d.value === null) refused.add(`${id}: ${d.refusal?.domain ?? 'no value'}`);
+    const out = d.value ?? 0; kept.set(key, out); return out;
+  };
   const noE = g.pieces.filter((_, i) => !props[i]); if (noE.length) lacking.push(`${noE.length} pieces with no elastic modulus known, carrying nothing (${[...new Set(noE.map((p) => p.mat ?? 'no material'))].slice(0, 6).join(', ')})`);
   // a piece's section across an axis: area, second moments about its two other axes (in that axis's frame), torsion
   const sectionOf = (i: number, k: number) => {
@@ -462,10 +474,9 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     // (a part said to fill only some of its box, a forged I-section's 0.62, carries that share of the box's section and
     // its second moments: the part's own statement, as its mass takes it)
     const fl = p.node.p.fill && p.node.p.fill > 0 && p.node.p.fill < 1 ? p.node.p.fill : 1;
-    if (s && 'cyl' in s && k === 1) { const r = Math.sqrt(h[0] * h[2]), A = Math.PI * r * r, I = (Math.PI * r ** 4) / 4; return { A: fl * A, I1: fl * I, I2: fl * I, J: fl * 2 * I, u1: o[0], u2: o[1] }; }
-    const b = 2 * h[o[0]]!, d = 2 * h[o[1]]!, A = b * d, a = Math.max(b, d), c = Math.min(b, d);
-    // (a rectangle's torsion constant, Roark table 10.7: a c³ (1/3 − 0.21 c/a (1 − c⁴ / 12 a⁴)))
-    return { A: fl * A, I1: (fl * b * d ** 3) / 12, I2: (fl * d * b ** 3) / 12, J: fl * a * c ** 3 * (1 / 3 - 0.21 * (c / a) * (1 - c ** 4 / (12 * a ** 4))), u1: o[0], u2: o[1] };
+    if (s && 'cyl' in s && k === 1) { const r = Math.sqrt(h[0] * h[2]), I = book('section.circle.second-moment', { r }); return { A: fl * book('section.circle.area', { r }), I1: fl * I, I2: fl * I, J: fl * book('section.circle.polar-moment', { r }), u1: o[0], u2: o[1] }; }
+    const b = 2 * h[o[0]]!, d = 2 * h[o[1]]!;
+    return { A: fl * book('section.rect.area', { b, h: d }), I1: fl * book('section.rect.second-moment', { b, h: d }), I2: fl * book('section.rect.second-moment', { b: d, h: b }), J: fl * book('section.rect.torsion-constant', { a: Math.max(b, d), c: Math.min(b, d) }), u1: o[0], u2: o[1] };
   };
   const entries: [number, number, number][] = [], elems: { a: number; b: number; K: number[][]; R: THREE.Vector3[]; A: number; Iy: number; Iz: number; J: number; cy: number; cz: number; cj: number; y?: number; th: number }[] = [];
   const beam = (a: number, b: number, E: number, G: number, A: number, Iy: number, Iz: number, J: number, ey?: THREE.Vector3, c?: { cy: number; cz: number; cj: number; y?: number; alpha?: number }) => {
@@ -474,7 +485,9 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     if (y.lengthSq() < 1e-12) { y = Math.abs(ex.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0); y.addScaledVector(ex, -y.dot(ex)); }
     y.normalize(); const z = new THREE.Vector3().crossVectors(ex, y), R = [ex, y, z];
     const K = Array.from({ length: 12 }, () => new Array<number>(12).fill(0)), set = (i: number, j: number, v: number) => { K[i]![j] = v; K[j]![i] = v; };
-    const EA = (E * A) / L, GJ = (G * J) / L, z12 = (12 * E * Iz) / L ** 3, z6 = (6 * E * Iz) / L ** 2, z4 = (4 * E * Iz) / L, z2 = (2 * E * Iz) / L, y12 = (12 * E * Iy) / L ** 3, y6 = (6 * E * Iy) / L ** 2, y4 = (4 * E * Iy) / L, y2 = (2 * E * Iy) / L;
+    // (each end stiffness a whole multiple of the beam's flexural stiffness E I / L: 12/L², 6/L, 4 and 2 of it)
+    const EA = book('bar.axial-stiffness', { E, A, L }), GJ = book('shaft.torsional-stiffness', { G, J, L }), kz = book('beam.flexural-stiffness', { E, I: Iz, L }), ky = book('beam.flexural-stiffness', { E, I: Iy, L });
+    const z12 = (12 * kz) / L ** 2, z6 = (6 * kz) / L, z4 = 4 * kz, z2 = 2 * kz, y12 = (12 * ky) / L ** 2, y6 = (6 * ky) / L, y4 = 4 * ky, y2 = 2 * ky;
     set(0, 0, EA); set(0, 6, -EA); set(6, 6, EA); set(3, 3, GJ); set(3, 9, -GJ); set(9, 9, GJ);
     set(1, 1, z12); set(1, 5, z6); set(1, 7, -z12); set(1, 11, z6); set(5, 5, z4); set(5, 7, -z6); set(5, 11, z2); set(7, 7, z12); set(7, 11, -z6); set(11, 11, z4);
     set(2, 2, y12); set(2, 4, -y6); set(2, 8, -y12); set(2, 10, -y6); set(4, 4, y4); set(4, 8, y6); set(4, 10, y2); set(8, 8, y12); set(8, 10, y6); set(10, 10, y4);
@@ -494,11 +507,11 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
       const o = g.pieces[e.a]!.node.obb!, ax = centre[e.b]!.clone().sub(centre[e.a]!).normalize(), k = o.u.map((u) => Math.abs(u.dot(ax))).reduce((m, v, i, arr) => (v > arr[m]! ? i : m), 0), s = sectionOf(e.a, k);
       // (its outer fibres: half its side across each axis, a cylinder's radius; the twist's shear at its widest)
       const hh = g.pieces[e.a]!.node.obb!.h, cy = hh[s.u1]!, cz = hh[s.u2]!;
-      beam(e.a, e.b, pa.E, pa.E / (2 * (1 + pa.nu)), s.A, s.I1, s.I2, s.J, o.u[s.u1], { cy, cz, cj: Math.max(cy, cz), y: pa.y, alpha: pa.alpha });
+      beam(e.a, e.b, pa.E, book('shear-modulus.isotropic', { E: pa.E, nu: pa.nu }), s.A, s.I1, s.I2, s.J, o.u[s.u1], { cy, cz, cj: Math.max(cy, cz), y: pa.y, alpha: pa.alpha });
     } else {
       // two pieces bonded through their patch, as a round section of its area; moduli in series
-      const E = (2 * pa.E * pb.E) / (pa.E + pb.E), nu = (pa.nu + pb.nu) / 2, A = Math.max(e.area, 1e-12), I = (A * A) / (4 * Math.PI);
-      beam(e.a, e.b, E, E / (2 * (1 + nu)), A, I, I, 2 * I, undefined, { cy: Math.sqrt(A / Math.PI), cz: Math.sqrt(A / Math.PI), cj: Math.sqrt(A / Math.PI), y: pa.y !== undefined && pb.y !== undefined ? Math.min(pa.y, pb.y) : pa.y ?? pb.y, alpha: pa.alpha !== undefined && pb.alpha !== undefined ? (pa.alpha + pb.alpha) / 2 : undefined });
+      const E = (2 * pa.E * pb.E) / (pa.E + pb.E), nu = (pa.nu + pb.nu) / 2, r = Math.sqrt(Math.max(e.area, 1e-12) / Math.PI), A = book('section.circle.area', { r }), I = book('section.circle.second-moment', { r });
+      beam(e.a, e.b, E, book('shear-modulus.isotropic', { E, nu }), A, I, I, book('section.circle.polar-moment', { r }), undefined, { cy: Math.sqrt(A / Math.PI), cz: Math.sqrt(A / Math.PI), cj: Math.sqrt(A / Math.PI), y: pa.y !== undefined && pb.y !== undefined ? Math.min(pa.y, pb.y) : pa.y ?? pb.y, alpha: pa.alpha !== undefined && pb.alpha !== undefined ? (pa.alpha + pb.alpha) / 2 : undefined });
     }
   }
   // only what is joined to what is held
@@ -578,5 +591,6 @@ export function bentUnder(g: Graph, held: number[], loaded: number[], load: V3, 
     }
     bucklesAt = lam > 0 && Number.isFinite(lam) ? lam * L : null;
   }
-  return { moved, turned, give, bucklesAt, stiffness: give && give > 0 ? L / give : null, converged: sol.converged, steps: sol.steps, residual: sol.residual, floating: n - seen.size, lacking, evidence, stress, yieldsAt };
+  if (refused.size) lacking.push(`refused by the book: ${[...refused].slice(0, 3).join('; ')}`);
+  return { laws: [...lawsUsed], moved, turned, give, bucklesAt, stiffness: give && give > 0 ? L / give : null, converged: sol.converged, steps: sol.steps, residual: sol.residual, floating: n - seen.size, lacking, evidence, stress, yieldsAt };
 }
