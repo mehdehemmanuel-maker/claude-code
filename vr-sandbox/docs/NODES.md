@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 568 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 569 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -38,11 +38,11 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 71 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 72 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 528 tested here (their own tests: that they do what they say, not that the world does); 30 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 529 tested here (their own tests: that they do what they say, not that the world does); 30 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 568 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 569 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -60,7 +60,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 
-## 2 · Make: shapes, parts, things (72)
+## 2 · Make: shapes, parts, things (73)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -119,6 +119,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Standard part by size** (`part.family`): A part drawn whole from its standard, its sizes set one by one: 41 families (bolts, nuts, bearings, steppers, rails, extrusions, beams, pipes…) *specified, tested here, before the update*
 - **Starting battery** (`battery.starter`): A 12 V lead-acid starting battery by its BCI group (its case is the standard): six cells of plates and separators, straps, joints through the partitions, electrolyte, vent caps and SAE posts. *specified, tested here, before the update*
 - **Stop light** (`seed.stoplight`): A signal on its pole, its lenses facing +z: red, yellow or green lit (300 mm lenses, typical) *hypothetical, untested, before the update*
+- **Stored part (the built-parts library)** (`stock.part`): A piece from the built-parts library, where every piece every build makes is stored once by its design, at every depth (a car, its engine, the head, the valve, its spring): taken out as it was made, with what it is … *hypothetical, tested here*
 - **Strap across** (`make.strap`): A strap cast or welded over every piece named like a pattern, one for each side they stand on (a cell's plate straps over their lugs, a busbar over a row of terminals); or, in series, the pieces on each side joined … *derived, tested here, before the update*
 - **Terrain** (`terrain`): Ground over w by d, its hills from a seeded noise (the same seed, the same land): relief is how high its highest is over its lowest, roughness how much small detail it has *hypothetical, tested here, before the update*
 - **Terrain of grass patches** (`seed.terrain`): Ground of hills from a seed, covered a foot square at a time with Grass patches standing on it (or bare) *hypothetical, untested, before the update*
@@ -194,11 +195,11 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
 - **Approved** (`gauntlet.approved`): What has come through the gauntlet so far (read from its verdicts), and what was turned back and why *derived, tested here, before the update*
-- **Balance (what is conserved)** (`check.balance`): What goes in against what comes out and what is kept, of one thing that is conserved (energy, mass, momentum along one axis, charge): every wire into In and into Out summed in one unit, and the imbalance. *derived, tested here*
 - **Candidates** (`gauntlet.candidates`): What is put through the gauntlet: blocks of the library (all, of a kind or a field, or made by you), or entries of the inventory (under a path, or yours), or named ones. *given, tested here, before the update*
 - **Check a limit** (`check.limit`): A value against its limit: whether it passes, the margin left, and the factor of safety *derived, tested here, before the update*
 - **Clashes** (`clash`): Which of the things a thing places run into one another (a car parked into a house, a pipe through a beam): their boxes, as far down as asked, overlapping by more than a touch. *derived, tested here, before the update*
 - **Comes apart to the bottom?** (`audit.explode`): How far a build really comes apart: the share of its mass in lumps (a piece drawn as one though what it is named for is an assembly in the inventory: a headlamp, a door, a fuel tank), each said with what it should … *derived, tested here, before the update*
+- **Conservation balance (in − out − accumulation)** (`check.balance`): What goes in against what comes out and what is kept, of one thing that is conserved (energy, mass, momentum along one axis, charge): every wire into In and into Out summed in one unit, and the imbalance. *derived, tested here*
 - **Contact graph** (`graph`): The contact graph of any thing, read from its geometry with nothing typed: every piece a node, every two that touch an edge, with where they meet, which way, how hard they press and over what patch; the groups that … *derived, tested here*
 - **Feed the proposals in** (`gauntlet.feed`): The proposals with a source (read off a drawing, a reference, or the web) entered in the inventory, what each holds first; the inferred stay proposed until a source confirms them *derived, tested here, before the update*
 - **Frame analysis (3D beams)** (`bend`): Any thing as a 3D frame of beams, read from its geometry (What touches what), nothing typed: each piece cut into slices, each slice a beam of its own section and material (stretch, twist and bending both ways, … *derived, tested here*

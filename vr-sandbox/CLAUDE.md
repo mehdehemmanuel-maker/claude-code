@@ -195,6 +195,9 @@ the task list and lose the why. So the why lives here, and every round is checke
   something color like why is metal silvery grey why is copper its color … a auto texture that is editable like paint
   jobs or design", and "thing built before the update just throw it away it's gonna be too buggy … you can rebuild it
   way faster and way better now" (2026-10-29: phases 3 and 5 of the plan in `docs/REALITY.md`)
+- "Make sure every peice built is stored correctly in node librarie every sub component stored every sub sub component
+  make that a law you either use what's in the library or create something and store in the library" (2026-10-29: the
+  built-parts library, `stock.ts`, and law 4 below)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say
@@ -224,6 +227,7 @@ known gaps are there too.
 | Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
 | The one test (every domain), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
+| The built-parts library: every piece every build makes, stored by design, and its law | `nexus/stock.ts` (`src/data/stock.json` generated) |
 | Running boards (cache, lists, units on wires, groups, clock) | `nexus/dataflow.ts` |
 | Starter boards | `nexus/starters.ts` |
 | Navigation (libraries, flows, search) | `nexus/navigate.ts` (`docs/ATLAS.md` generated) |
@@ -265,6 +269,12 @@ known gaps are there too.
 3. If what you are about to write makes one named thing (a car builder, a kart builder), stop. Find the general rule
    that makes it and its relatives from data (a wheeled vehicle from its axles, tyres, frame, seats, power, implements).
    Per-product data (a real model's published figures) is fine; per-product code is a template.
+4. The library law: every piece a build makes, at every depth (the car, its engine, the head, the valve, its spring), is
+   taken from the library or made and stored in it. The built-parts library (`nexus/stock.ts`, kept in
+   `src/data/stock.json`) stores each piece once by its design; every node that makes a thing is a build, and the one test
+   fails on a piece built and not stored, one stored that no build makes any more, or one stored where its build no
+   longer has it. `UPDATE_DOCS=quick` stores what is new and deletes what is outdated; reach for what is stored (search
+   the library, the Stored part node) before drawing a piece again.
 
 ## The drift gate: before spending a round on a fix
 

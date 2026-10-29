@@ -17,6 +17,7 @@ import { fieldOf } from '../../src/nexus/navigate';
 import { builtOf } from '../../src/nexus/evidence';
 import { parseUnit } from '../../src/ganglia/units';
 import { run } from '../../src/nexus/view/code-worker';
+import { builtPieces, stockProblems } from '../../src/nexus/stock';
 
 // a board's code blocks run here as the page's worker runs them
 const env: Env = { code: async (lang, code, inputs) => (await run({ id: 0, lang: lang as 'js', code, facts: {}, input: '', vars: inputs })).value };
@@ -56,11 +57,20 @@ const tested = new Map<string, string[]>(), queue: Record<string, string[]> = {}
 const unitOk = (u: string) => { if (/^(USD|EUR|GBP)$/.test(u)) return true; try { parseUnit(u); return true; } catch { return false; } };
 
 describe('every domain, in one pass', () => {
-  beforeAll(async () => { if (process.env.UPDATE_DOCS) (await import('./docs')).writeDocs(process.env.UPDATE_DOCS === 'quick'); }, 600_000);
+  beforeAll(async () => { if (process.env.UPDATE_DOCS) await (await import('./docs')).writeDocs(process.env.UPDATE_DOCS === 'quick'); }, 600_000);
   it('nothing outdated is kept: every source file is reached from the node app', () => {
     const seen = reached(), stray = sources().filter((f) => !seen.has(f)).map((f) => relative(root, f));
     expect(stray, `reached by nothing in the node app; delete them, or reach them from a node: ${stray.join(', ')}`).toEqual([]);
   });
+  // (the law of the built-parts library: every piece every build makes, at every depth, is taken from the library or
+  // stored in it; nothing stored that no build makes; src/nexus/stock.ts)
+  it('every piece built is in the built-parts library, and nothing in it is outdated', async () => {
+    if (process.env.UPDATE_DOCS) return;
+    const all = await builtPieces(), p = stockProblems(all), say = (n: { name: string }[]) => n.slice(0, 12).map((x) => x.name).join(', ') + (n.length > 12 ? ` and ${n.length - 12} more` : '');
+    expect(p.unstored.length, `${p.unstored.length} pieces built and not stored (UPDATE_DOCS=quick stores them): ${say(p.unstored)}`).toBe(0);
+    expect(p.outdated.length, `${p.outdated.length} pieces stored that no build makes any more (UPDATE_DOCS=quick deletes them): ${say(p.outdated)}`).toBe(0);
+    expect(p.misplaced.length, `${p.misplaced.length} pieces stored where their build no longer has them (UPDATE_DOCS=quick): ${say(p.misplaced)}`).toBe(0);
+  }, 120_000);
   for (const d of DOMAINS) {
     it(d.name, async () => {
       const nodes = [...LIBRARY.values()].filter((b: BlockDef) => b.domains.includes(d.id));

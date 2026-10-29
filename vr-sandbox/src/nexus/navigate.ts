@@ -26,6 +26,7 @@ import { PROGRAMS } from './logic/programs';
 import { starterBoards } from './starters';
 import { searchCatalogue } from './catalogue';
 import { NAMED } from './navigate-named';
+import { stocked } from './stock';
 import type { Board, BoardNode, BoardEdge } from './boards';
 
 const nodesIn = (b: Board): (BoardNode & { id: string })[] => Object.entries(b.nodes).filter(([, n]) => !n.deleted && n.block).map(([id, n]) => ({ ...n, id }));
@@ -70,6 +71,7 @@ export function libraries(): Library[] {
     { id: 'inventory', name: 'Inventory', type: 'products', says: 'what real products contain, all the way down to their materials', source: 'src/nexus/inventory.ts', entries: () => [...INVENTORY.values()].map((it) => ({ library: 'inventory', id: it.id, name: it.name, says: it.says })) },
     { id: 'components', name: 'Designed components', type: 'parts', says: 'parts drawn once in 3D from their standard, used by every build', source: 'src/nexus/components.ts', entries: () => DESIGNED.map((d) => ({ library: 'components', id: d, name: d, says: `use("${d} …")` })) },
     { id: 'families', name: 'Part families', type: 'parts', says: 'kinds of part made to any size by their standard\'s table', source: 'src/nexus/families.ts', entries: () => FAMILIES.map((f) => ({ library: 'families', id: f.id, name: f.name, says: f.says })) },
+    { id: 'stock', name: 'Built parts', type: 'parts', says: 'every piece every build makes, at every depth, stored once by its design: a build takes its pieces from here or stores the new ones here', source: 'src/data/stock.json', entries: () => [...stocked().values()].map((s) => ({ library: 'stock', id: s.key, name: s.name, says: `${s.kids.length ? `${s.kids.reduce((a, [, n]) => a + n, 0)} pieces in it; ` : ''}used by ${s.usedBy.length} build${s.usedBy.length === 1 ? '' : 's'} (${s.usedBy.slice(0, 3).map((u) => u.replace(/#.*/, '')).join(', ')}${s.usedBy.length > 3 ? ', …' : ''})` })) },
     { id: 'catalogue', name: 'Catalogue sizes', type: 'parts', says: 'every standard size of every family', source: 'src/nexus/catalogue.ts', entries: () => catalogue().map((l) => ({ library: 'catalogue', id: l, name: l, says: '' })) },
     { id: 'faces', name: 'Standard faces', type: 'parts', says: 'hole patterns parts mate by (NEMA motor faces, ISO 9409 flanges, bolt circles)', source: 'src/nexus/mate.ts', entries: () => rec(STANDARD, (k) => k, (_k, v) => v.says, 'faces') },
     { id: 'sections', name: 'Line sections', type: 'parts', says: 'what a line is across: wires, cables, hoses, pipes, traces, roads', source: 'src/nexus/placement/line.ts', entries: () => SECTIONS.map((x) => ({ library: 'sections', id: x.id, name: x.name, says: x.source })) },
@@ -97,6 +99,7 @@ export function libraries(): Library[] {
   found.set('catalogue', [{ node: 'card.part', key: 'what', how: 'found' }]);
   return L.map((l) => {
     const reach = [...(found.get(l.id) ?? [])];
+    if (l.id === 'stock') return { ...l, count: idsOf.get(l.id)!.size, reach: [{ node: 'stock.part', key: 'id', how: 'found' }] };
     if (l.id === 'catalogue') return { ...l, count: lines.size, reach, partly: `${nDrawn.toLocaleString('en-US')} of its ${lines.size.toLocaleString('en-US')} sizes, those of the ${DESIGNED.length} kinds drawn in 3D; the rest are known by name and size and not drawn yet` };
     for (const n of NAMED[l.id] ?? []) if (LIBRARY.has(n) && !reach.some((r) => r.node === n)) reach.push({ node: n, how: 'named' });
     return { ...l, count: idsOf.get(l.id)!.size, reach: SAID[l.id]?.includes('*') ? [{ node: '*', how: 'all' }] : reach };
@@ -116,6 +119,7 @@ export function useOf(l: Library, e: Entry): Pick<Found, 'add' | 'board'> {
   if (l.type === 'nodes') return { add: { block: e.id } };
   if (l.id === 'boards') return { board: e.id };
   if (l.id === 'inventory') return { add: { block: 'read', set: { id: `item:${e.id}`, kind: 'item' } } };
+  if (l.id === 'stock') return { add: { block: 'stock.part', set: { id: e.id } } };
   if (l.id === 'catalogue') return DESIGNED.includes(e.id.split(' ')[0]!) ? { add: { block: 'card.part', set: { what: e.id } } } : {};
   const via = l.reach.find((r) => r.how === 'found' && r.key) ?? l.reach.find((r) => r.how === 'named');
   return via && via.node !== '*' ? { add: { block: via.node, ...(via.key ? { set: { [via.key]: e.id } } : {}) } } : {};

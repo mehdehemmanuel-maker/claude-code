@@ -17,6 +17,9 @@ import { LIBRARY, libraryCatalogue } from '../../src/nexus/blocks';
 import { NAMED_BY, atlasText } from '../../src/nexus/navigate';
 import { starterBoards } from '../../src/nexus/starters';
 import { disciplinesText } from '../../src/data/disciplines';
+import { builtPieces, stockJson } from '../../src/nexus/stock';
+import { boundsOfAll } from '../../src/nexus/assembly';
+import * as THREE from 'three';
 
 const root = join(__dirname, '../..');
 const files = (d = join(root, 'src'), out: string[] = []): string[] => { for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) files(p, out); else if (p.endsWith('.ts')) out.push(p); } return out; };
@@ -154,8 +157,11 @@ function builtText(): string {
 
 /** Writes every generated doc; `quick`, only the nodes' dates and the catalogue (seconds, not the minute and more the
  *  dependency map's cross-check of every law takes). */
-export function writeDocs(quick = false): void {
+export async function writeDocs(quick = false): Promise<void> {
   writeFileSync(join(root, 'src/nexus/built.ts'), builtText());
+  // (the built-parts library: every piece every build makes, by design; written in the quick run too, as builds change often)
+  const mm = (t: Parameters<typeof boundsOfAll>[0]) => { const v = boundsOfAll(t).getSize(new THREE.Vector3()); return [v.x, v.y, v.z].map((x) => (Number.isFinite(x) ? +(x * 1000).toPrecision(3) : 0)).join(' × ') + ' mm'; };
+  writeFileSync(join(root, 'src/data/stock.json'), stockJson(await builtPieces(), mm));
   writeFileSync(join(root, 'docs/NODES.md'), libraryCatalogue() + '\n');
   writeFileSync(join(root, 'docs/DISCIPLINES.md'), disciplinesText() + '\n');
   if (quick) return;

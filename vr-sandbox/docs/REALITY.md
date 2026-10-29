@@ -1050,3 +1050,16 @@ recipes. Result: 8,702 pieces, built in about 2.5 s; nothing runs into, rubs or 
 Not done: its drawn mass is 780 kg of its published 1,558 kg (the rest padded and said); its body is a generic coupe on
 estimated lines and is not recognisable as a Monte Carlo (its grille, lamps, side sculpting and deck spoiler not
 drawn); its board freezes the page for tens of seconds (the checks run on the page's own thread).
+- **2026-10-29, the library law: every piece built is stored (asked by the user: "you either use what's in the library or
+create something and store in the library").** `stock.ts`: a piece is stored by its design (its shape, material, cuts,
+make and what it is, and the pieces in it each by design and by where it sits), not by its name, colour, look, place or
+neighbours, so one design used in many places and many builds is one entry. Every node that makes a thing is a build (each
+real vehicle model once each): 126 builds, 4,287 pieces stored at every depth, 1,394 of them made of others; of the 640
+the Monte Carlo is made of, 218 are shared with other builds. Written to `src/data/stock.json` (421 kB) by the docs run;
+the one test fails on a piece built and not stored, stored and no longer built, or stored where its build no longer has it.
+Searchable as "Built parts" in the library; the Stored part node takes any of them out (its build run once: about 3 s for
+a car, measured), with what it is made of and the builds that use it. Found on the way: `check.balance` had no
+specification and the plain gate failed on the last two commits (they were checked with UPDATE_DOCS=quick, which skips
+that check); specified. Gate with the law's check: 36.5 s. Not yet: a piece a person makes in the browser is not stored
+for good (only what the committed builds make is); the builders do not yet ask the library first when they draw (the
+same design drawn twice is stored once, but still drawn twice).
