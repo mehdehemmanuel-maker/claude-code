@@ -566,24 +566,30 @@ specifies a method:
    analysis: 3D Euler–Bernoulli beam network (deflection, von Mises stress, linear buckling, thermal load)"; `flow`:
    "Lumped network analysis: steady conduction, DC current, axial stiffness"; `graph`: "Contact graph (adjacency from
    geometry)"; `matter`: "Material properties"; `explode`: "Disassembly (bill of materials tree)".
-2. **Classification on recognised schemes**, so it is read the same by anyone: physics by APS PhySH, mathematics by
+2. **The engineering disciplines as a tree** (`src/data/disciplines.ts`, `docs/DISCIPLINES.md`, populated 2026-10-29:
+   17 disciplines, 363 entries; discipline, branch, specialty, e.g. civil → transportation → railway engineering, civil →
+   urban and land development → landscape engineering, manufacturing → additive → powder bed fusion), each discipline
+   organised after the body that divides it (ASCE's institutes, ASME's divisions, IEEE's societies, AIChE, TMS/ASM/MRS,
+   SME/IISE with ISO/ASTM 52900, AIAA, SAE, SNAME, ANS, BMES, INCOSE, ASABE), labelled as compiled after them. Each node
+   is classified to the deepest entry that fits, beside its scheme code below.
+3. **Classification on recognised schemes**, so it is read the same by anyone: physics by APS PhySH, mathematics by
    MSC2020, engineering by the ISO International Classification for Standards (ICS), computing by ACM CCS 2012,
    economics and finance by JEL; the code kept on the node and shown with it.
-3. **Model specification** on every node that models anything: governing equation(s) or law ids from the book; model
+4. **Model specification** on every node that models anything: governing equation(s) or law ids from the book; model
    class (analytical, empirical, lumped 0-D, 1-D, 3-D discretised, statistical, data); steady or transient; linear or
    not; the numerical method (conjugate gradients, inverse iteration, backward Euler, …); assumptions and validity range
    (as `valid` holds now, made complete); its references.
-4. **Role in a pipeline**, replacing kind and ability with precise ones: data source, geometry operation, analysis
+5. **Role in a pipeline**, replacing kind and ability with precise ones: data source, geometry operation, analysis
    (a model of physics), numerical solver, assessment (against a stated criterion or standard), data transformation,
    control flow, visualisation, I/O.
-5. **Physical domain from the quantities on its ports** (`quantities.ts` dimensions), not typed: a node whose outputs are
+6. **Physical domain from the quantities on its ports** (`quantities.ts` dimensions), not typed: a node whose outputs are
    W and K is thermal because of them.
-6. **Ids** hierarchical and technical (`solid.frame`, `heat.conduction.network`), the old ids kept as aliases so no board
+7. **Ids** hierarchical and technical (`solid.frame`, `heat.conduction.network`), the old ids kept as aliases so no board
    breaks.
-7. **Held by the one test**: every node has its scheme code, its role, its model specification where it models, and a
+8. **Held by the one test**: every node has its scheme code, its role, its model specification where it models, and a
    name that is not a question; a node without them fails.
 
-Order: the schema and the test's check (points 2 to 7's fields) first, the nodes renamed and classified as Step J
+Order: the schema and the test's check (points 2 to 8's fields) first, the nodes renamed and classified as Step J
 re-works each one (a node is current when it is both re-checked and specified), so nothing is renamed twice.
 
 **Then, in order:**

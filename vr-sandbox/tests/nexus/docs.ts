@@ -16,6 +16,7 @@ import { MATTER, matterOf } from '../../src/nexus/matter';
 import { LIBRARY, libraryCatalogue } from '../../src/nexus/blocks';
 import { NAMED_BY, atlasText } from '../../src/nexus/navigate';
 import { starterBoards } from '../../src/nexus/starters';
+import { disciplinesText } from '../../src/data/disciplines';
 
 const root = join(__dirname, '../..');
 const files = (d = join(root, 'src'), out: string[] = []): string[] => { for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) files(p, out); else if (p.endsWith('.ts')) out.push(p); } return out; };
@@ -153,6 +154,7 @@ function builtText(): string {
 export function writeDocs(quick = false): void {
   writeFileSync(join(root, 'src/nexus/built.ts'), builtText());
   writeFileSync(join(root, 'docs/NODES.md'), libraryCatalogue() + '\n');
+  writeFileSync(join(root, 'docs/DISCIPLINES.md'), disciplinesText() + '\n');
   if (quick) return;
   writeFileSync(join(root, 'src/nexus/navigate-named.ts'), namedText());
   writeFileSync(join(root, 'docs/ATLAS.md'), atlasText());

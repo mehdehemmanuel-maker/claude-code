@@ -2,6 +2,28 @@
 
 Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 556 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
+## Fields and the disciplines they reach
+
+The fields below are the library's own; the engineering disciplines are a tree of 17 disciplines and 363 entries in all (docs/DISCIPLINES.md).
+
+| Field | Disciplines |
+| --- | --- |
+| Mechanical | Mechanical engineering (8 branches) |
+| Structural & civil | Civil engineering (11 branches) |
+| Electrical | Electrical engineering (8 branches) |
+| Electronics & embedded | Electronic and computer engineering (8 branches) |
+| Controls & robotics | Control and robotics engineering (4 branches) |
+| Thermal & fluids | Thermal and fluid sciences (7 branches); Heating, ventilation, air conditioning and refrigeration (4 branches) |
+| Materials | Materials science and engineering (9 branches) |
+| Manufacturing | Manufacturing and industrial engineering (9 branches) |
+| Vehicles | Vehicle engineering (9 branches); Marine engineering and naval architecture (6 branches) |
+| Aerospace | Aerospace engineering (7 branches) |
+| Chemical & process | Chemical and process engineering (9 branches) |
+| Energy & environment | Energy engineering (7 branches); Nuclear engineering (6 branches) |
+| Biomedical & life | Biomedical engineering (7 branches); Agricultural and biosystems engineering (4 branches) |
+| Software & data | Systems and software engineering (5 branches) |
+| Operations & projects | Industrial engineering (7 branches); Construction engineering and management (5 branches) |
+
 ## Evidence
 
 What each node's own contribution rests on, read from what it is (src/nexus/evidence.ts); a value on a wire is as strong as the weakest node it rests on.

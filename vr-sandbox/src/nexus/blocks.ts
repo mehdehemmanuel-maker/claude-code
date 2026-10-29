@@ -8,6 +8,7 @@
 // What runs a board of blocks, caches, maps over lists and opens groups is src/nexus/dataflow.ts; this file only says
 // what each block is and does.
 
+import { DISCIPLINE, DISCIPLINES, FIELD_DISCIPLINES } from '../data/disciplines';
 import { EVIDENCE, EVIDENCE_SAYS, UPDATE_SAYS, evidenceOf, type NodeEvidence } from './evidence';
 import { dimensionOf, fromSI, parseUnit, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
@@ -351,6 +352,10 @@ export function stageOf(b: BlockDef): string {
 export function libraryCatalogue(): string {
   const first = (t: string) => { const one = t.replace(/\s+/g, ' '), m = /^(.+?\.)(\s|$)/.exec(one), f = m ? m[1]! : one; return f.length > 220 ? `${f.slice(0, f.lastIndexOf(' ', 217))} …` : f; };
   const all = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.') || b.id === 'group.in' || b.id === 'group.out'), lines = ['# The node library', '', `Generated from the library (\`libraryCatalogue()\` in \`src/nexus/blocks.ts\`); \`tests/nexus/docs.ts\` fails if it is out of date (write it again with \`UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts\`). ${all.length} nodes, on ${STAGES.length} shelves in the order a board runs; a node's shelf is read from what it is (\`stageOf\`), never filed by hand.`, ''];
+  // the library's fields and the engineering disciplines each reaches into (docs/DISCIPLINES.md: the whole tree; step K
+  // classifies each node to the deepest entry that fits)
+  lines.push('## Fields and the disciplines they reach', '', `The fields below are the library's own; the engineering disciplines are a tree of ${DISCIPLINES.length} disciplines and ${DISCIPLINE.size} entries in all (docs/DISCIPLINES.md).`, '', '| Field | Disciplines |', '| --- | --- |',
+    ...DOMAINS.filter((d) => FIELD_DISCIPLINES[d.id]).map((d) => `| ${d.name} | ${FIELD_DISCIPLINES[d.id]!.map((k) => { const x = DISCIPLINE.get(k)!; return `${x.name} (${x.sub.length} branches)`; }).join('; ')} |`), '');
   // what each node's own contribution rests on, and how it is checked (src/nexus/evidence.ts)
   { const ev = all.map(evidenceOf), count = (f: (e: NodeEvidence) => boolean) => ev.filter(f).length;
     lines.push('## Evidence', '', 'What each node\'s own contribution rests on, read from what it is (src/nexus/evidence.ts); a value on a wire is as strong as the weakest node it rests on.', '', '| Evidence | Nodes | Means |', '| --- | --- | --- |', ...EVIDENCE.map((k) => `| ${k} | ${count((e) => e.kind === k)} | ${EVIDENCE_SAYS[k]} |`), '', `Checked: ${count((e) => e.validation === 'compared with an independent reference')} compared with an independent reference (laws the rest of the book reaches another way, agreeing); ${count((e) => e.validation === 'tested here')} tested here (their own tests: that they do what they say, not that the world does); ${count((e) => e.validation === 'untested')} untested; none validated against experiment.`, '', `Built before ${UPDATE_SAYS}: ${count((e) => e.beforeUpdate)} of ${ev.length} (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.`, ''); }
