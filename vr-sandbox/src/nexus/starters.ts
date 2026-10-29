@@ -280,6 +280,22 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'Turned: why it shines in a streak'; wire(b, 'f0', 'says', 'why', 'value');
     return tidy(b);
   }],
+  ['Colours with no dye: titanium anodised from 10 to 100 volts, and steel tempered as its oxide thickens, each colour worked out from light crossing a film of oxide', () => {
+    // a film on a metal (docs/REALITY.md phase 3.3): the colour is the film's thickness, by interference
+    const b = emptyBoard('Colours with no dye');
+    const rows: [string, Record<string, unknown>, string][] = [
+      ...[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v): [string, Record<string, unknown>, string] => [`ti${v}`, { metal: 'titanium', film: 'TiO2 (amorphous)', by: 'anodised at a voltage', volts: v }, `Titanium, ${v} V`]),
+      ...[0, 10, 20, 30, 40, 50, 60, 70, 80, 90].map((d): [string, Record<string, unknown>, string] => [`fe${d}`, { metal: 'iron', film: 'Fe3O4 (magnetite)', by: 'given in nm', d }, `Steel, oxide ${d} nm`])];
+    rows.forEach(([id, set, label], k) => {
+      placeBlock(b, 'optics.film', 0, 0, set, `c_${id}`); b.nodes[`c_${id}`]!.label = label;
+      placeBlock(b, 'shape.cyl', 0, 0, { name: label, mat: k < 10 ? 'titanium' : 'steel-low', finish: 'polished', r: 0.025, h: 0.006 }, `s_${id}`); wire(b, `c_${id}`, 'hex', `s_${id}`, 'color');
+      placeBlock(b, 'place', 0, 0, { x: (k % 10) * 0.06 - 0.27, y: 0.003, z: k < 10 ? -0.04 : 0.04 }, `p_${id}`); wire(b, `s_${id}`, 'part', `p_${id}`, 'thing');
+    });
+    placeBlock(b, 'combine', 0, 0, { name: 'coupons' }, 'all'); rows.forEach(([id]) => wire(b, `p_${id}`, 'placed', 'all', 'things'));
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'Back: titanium, 10 to 100 V; front: steel, oxide 0 to 90 nm'; wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'Titanium at 30 V: why it is blue'; wire(b, 'c_ti30', 'says', 'why', 'value');
+    return tidy(b);
+  }],
   ['Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one', () => {
     // a material is what goes into it and how it is arranged (docs/REALITY.md phase 2.4): each worked out, not looked up
     const b = emptyBoard('Materials from their phases');

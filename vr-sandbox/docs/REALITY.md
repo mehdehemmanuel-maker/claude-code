@@ -926,4 +926,16 @@ maps to its process (machined → turned, chrome → polished, cast → sand cas
 names are finishes themselves, wirable into any shape (a new `finish` input). A node, `surface.finish` (ICS 17.040.20),
 tested on the cusp formula and Davies' share; a starter board of five steel bars, iron's colour from its optics, one per
 process. Seen: turned and ground streak along the axis, polished mirrors the room, blasted is evenly matt, cast grainy.
-Left: a turned end face shows radial marks where facing leaves rings; oxides and heat tint (the second half) next.
+Left: a turned end face shows radial marks where facing leaves rings.
+- **2026-10-29, phase 3.3, colours with no dye (second half).** A film on a metal, worked out: Airy's sum of every
+reflection inside the film, r = (r₀₁ + r₁₂ e^{2iβ})/(1 + r₀₁ r₁₂ e^{2iβ}), β = 2π N₁ d/λ, with complex indices (an absorbing
+film damps the wave from below), wavelength by wavelength through the CIE eye under daylight (`colour.ts`
+`reflectanceFilm`, `filmColour`). Films kept with their measured n + i k (refractiveindex.info, CC0): amorphous TiO₂
+(Jolivet et al. 2023), hematite and magnetite (Querry 1985), amorphous alumina (Boidin et al. 2016). Checked: titanium
+under TiO₂ runs bronze, purple, blue, pale blue, gold, rose, magenta, teal, green as it thickens, the anodised palette;
+at 2 nm per volt (inside the published 1.5 to 3) it lands on the Heliyon chart's colour at each of 10 to 100 V. Iron
+under magnetite runs straw, brown, purple, blue, grey-blue: the temper colours. Hematite gives duller ones, so heat
+tint is taken as magnetite (the oxide next to the steel), said. Not found: visible data for Cu₂O (Querry's starts at
+2.5 µm) and for chromium oxide, so copper's tarnish and stainless heat tint wait for data; a temperature and time to a
+thickness needs the oxide's growth law, not kept yet. A node, `optics.film` (tested: no film is the bare metal by
+Fresnel; a quarter wave of n 1.5 on n 3 reflects ((3 − 1.5²)/(3 + 1.5²))² at 550 nm), and a board of twenty coupons.
