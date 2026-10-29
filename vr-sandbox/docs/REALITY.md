@@ -897,3 +897,19 @@ of push, 17.1 J left mechanical, 96.8 J to heat (0.028 K warmer, at most); the c
 its motion and 83.8 J to heat; the pendulum, 0.345 J of its 32.2 J to heat over its run (the hinge solver's loss: in the
 real thing, the hinge's friction and the air).
 
+
+**Phase 3, steps 1 and 2: a metal's colour from its physics (2026-10-29).** The user: "why is metal silvery grey, why is
+copper its colour". Now worked out, not chosen (`colour.ts`, `data/optics.ts`, node Reflectance colour (Fresnel, CIE
+1931), `optics.colour`): each metal's complex refractive index n + i k measured at every wavelength (Johnson and Christy
+1972 and 1974, Rakić 1998, Querry 1987, Golovashkin, from the refractiveindex.info database, public domain) gives what
+it reflects at each (Fresnel); the CIE 1931 observer under D65 daylight weighs that into XYZ, and the sRGB primaries into
+what a screen shows. The eye and the light as tabulated in colour-science (the CIE's server was not reachable from
+here). Compared with Hoffman's table of metals' reflectance in linear sRGB (Physics and Math of Shading, SIGGRAPH 2013),
+worked independently: palladium (0.733, 0.697, 0.652) to the digit (the node's own test), chromium 0.550/0.556/0.554
+against 0.549/0.556/0.554, aluminium within 0.01, platinum within 0.006, copper, nickel and iron within 0.04, titanium
+0.08 brighter (another measurement of it), zinc within 0.09. Gold comes out past what sRGB can show (red 1.04): more
+saturated than a screen, said. Found: the first data for tungsten, platinum, zinc and lead (Werner 2009, from
+electron energy-loss spectra) made platinum reflect 95 % where it reflects about 65 %; replaced by optical
+measurements. Tin has none covering the visible here; lead's starts at 450 nm (held below, said). It says why: copper
+gives back 94 % of red, 62 % of green and 54 % of blue, its electrons taking the bluer light; silver 98 to 99 % of every
+colour, so white-silver. A starter board of fourteen polished spheres, each coloured only by this.

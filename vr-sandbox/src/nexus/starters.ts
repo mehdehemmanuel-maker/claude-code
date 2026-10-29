@@ -250,6 +250,20 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
     return b;
   }],
+  ['Metals, coloured by their physics: fourteen polished metals, each its colour worked out from how it reflects every wavelength of daylight, none chosen', () => {
+    // each metal's colour from its measured n + i k (docs/REALITY.md phase 3): Fresnel, the CIE 1931 eye, daylight, sRGB
+    const b = emptyBoard('Metals, coloured by their physics');
+    const metals = ['silver', 'aluminium', 'platinum', 'palladium', 'nickel', 'cobalt', 'zinc', 'lead', 'titanium', 'chromium', 'iron', 'tungsten', 'copper', 'gold'];
+    metals.forEach((m, k) => {
+      placeBlock(b, 'optics.colour', 0, 0, { metal: m }, `c${k}`); b.nodes[`c${k}`]!.label = `${m[0]!.toUpperCase()}${m.slice(1)}: why it is its colour`;
+      placeBlock(b, 'shape.sphere', 0, 0, { name: m, mat: 'steel-low', finish: 'chrome', r: 0.03 }, `s${k}`); wire(b, `c${k}`, 'hex', `s${k}`, 'color');
+      placeBlock(b, 'place', 0, 0, { x: (k % 7) * 0.075 - 0.225, y: 0.03, z: Math.floor(k / 7) * 0.08 }, `p${k}`); wire(b, `s${k}`, 'part', `p${k}`, 'thing');
+    });
+    placeBlock(b, 'combine', 0, 0, { name: 'fourteen metals' }, 'all'); metals.forEach((_, k) => wire(b, `p${k}`, 'placed', 'all', 'things'));
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'Back row: silver to cobalt … front: the rest, gold last'; wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'Copper: why'; wire(b, 'c12', 'says', 'why', 'value');
+    return tidy(b);
+  }],
   ['Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one', () => {
     // a material is what goes into it and how it is arranged (docs/REALITY.md phase 2.4): each worked out, not looked up
     const b = emptyBoard('Materials from their phases');
