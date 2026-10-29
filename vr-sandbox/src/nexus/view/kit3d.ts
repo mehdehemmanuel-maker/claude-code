@@ -36,13 +36,13 @@ FINISH.machined = { rough: 0.42, metal: 0.85 }; FINISH.forged = { rough: 0.6, me
  *  which way it runs (a turned or ground part's marks round its axis: fine along it, long round it). Every figure an
  *  estimate of how the surface reads at arm's length (sand grain about 0.3 to 1 mm; a turned finish's feed marks tenths
  *  of a millimetre; paint's orange peel a few millimetres). */
-export const GRAIN: Record<string, { size: number; depth: number; rough: number; stretch?: [number, number, number] }> = {
-  cast: { size: 0.0008, depth: 0.55, rough: 0.16 }, forged: { size: 0.004, depth: 0.3, rough: 0.1 }, machined: { size: 0.00035, depth: 0.16, rough: 0.05, stretch: [0.04, 1, 0.04] },
-  ground: { size: 0.00018, depth: 0.08, rough: 0.04, stretch: [0.04, 1, 0.04] }, brushed: { size: 0.00025, depth: 0.14, rough: 0.07, stretch: [0.03, 1, 0.03] }, satin: { size: 0.0004, depth: 0.08, rough: 0.04 },
+export const GRAIN: Record<string, { size: number; depth: number; rough: number; stretch?: [number, number, number]; /** marks round the piece's own axis (y): measured by radius and height, so a faced end shows rings */ radial?: boolean }> = {
+  cast: { size: 0.0008, depth: 0.55, rough: 0.16 }, forged: { size: 0.004, depth: 0.3, rough: 0.1 }, machined: { size: 0.00035, depth: 0.16, rough: 0.05, radial: true },
+  ground: { size: 0.00018, depth: 0.08, rough: 0.04, radial: true }, brushed: { size: 0.00025, depth: 0.14, rough: 0.07, stretch: [0.03, 1, 0.03] }, satin: { size: 0.0004, depth: 0.08, rough: 0.04 },
   paint: { size: 0.003, depth: 0.05, rough: 0.03 }, enamel: { size: 0.002, depth: 0.03, rough: 0.02 }, texture: { size: 0.0006, depth: 0.35, rough: 0.12 }, matte: { size: 0.001, depth: 0.15, rough: 0.1 }, plate: { size: 0.0005, depth: 0.05, rough: 0.03 },
-  tread: { size: 0.0008, depth: 0.3, rough: 0.1 }, weld: { size: 0.002, depth: 0.6, rough: 0.2, stretch: [1, 0.25, 1] }, thread: { size: 0.0004, depth: 0.2, rough: 0.06 }, weave: { size: 0.0012, depth: 0.4, rough: 0.1, stretch: [1, 0.3, 1] },
+  tread: { size: 0.0008, depth: 0.3, rough: 0.1 }, weld: { size: 0.002, depth: 0.6, rough: 0.2, stretch: [1, 0.25, 1] }, thread: { size: 0.0004, depth: 0.2, rough: 0.06, radial: true }, weave: { size: 0.0012, depth: 0.4, rough: 0.1, stretch: [1, 0.3, 1] },
   // (a process's own: a cut surface's marks one feed apart, round its axis; a print's layers; a blast's dimples)
-  turned: { size: 0.00015, depth: 0.16, rough: 0.05, stretch: [0.04, 1, 0.04] }, 'face-milled': { size: 0.0001, depth: 0.14, rough: 0.05, stretch: [0.05, 1, 0.05] }, printed: { size: 0.0002, depth: 0.45, rough: 0.08, stretch: [1, 0.06, 1] },
+  turned: { size: 0.00015, depth: 0.16, rough: 0.05, radial: true }, 'face-milled': { size: 0.0001, depth: 0.14, rough: 0.05, stretch: [0.05, 1, 0.05] }, printed: { size: 0.0002, depth: 0.45, rough: 0.08, stretch: [1, 0.06, 1] },
   lapped: { size: 0.00008, depth: 0.03, rough: 0.02 }, 'bead blasted': { size: 0.0004, depth: 0.12, rough: 0.05 }, 'sand cast': { size: 0.0008, depth: 0.55, rough: 0.16 }, 'die cast': { size: 0.0005, depth: 0.12, rough: 0.05 }, 'spark eroded': { size: 0.00025, depth: 0.35, rough: 0.1 },
   // (a metallic paint's flakes: aluminium platelets about 10 to 30 µm across, each tilted its own way: the sparkle)
   flake: { size: 0.00004, depth: 0.25, rough: 0.12 },
@@ -60,44 +60,63 @@ const NO_GRAIN = { size: 0.001, depth: 0, rough: 0 };
 function grained(m: THREE.MeshStandardMaterial, g: (typeof GRAIN)[string], x?: Worn): void {
   const gs = (x?.graphics ?? []).slice(0, 2), ax = { x: 0, y: 1, z: 2 }, rc = 0.001 + 0.012 * (x?.wear ?? 0);
   const u = { uGrainF: { value: 1 / g.size }, uGrainA: { value: g.depth }, uGrainR: { value: g.rough }, uGrainS: { value: new THREE.Vector3(...(g.stretch ?? [1, 1, 1])) },
-    uWear: { value: x?.wear ?? 0 }, uChipK: { value: 1 / rc }, uUnder: { value: new THREE.Color(x?.under?.color ?? 0) }, uUnderM: { value: x?.under?.metal ?? 0 }, uUnderR: { value: x?.under?.rough ?? 0.5 }, uRust: { value: x?.under?.kind === 'rust' ? 1 : 0 }, uHasUnder: { value: x?.under ? 1 : 0 },
+    uGrainRad: { value: g.radial ? 1 : 0 }, uWear: { value: x?.wear ?? 0 }, uChipK: { value: 1 / rc }, uUnder: { value: new THREE.Color(x?.under?.color ?? 0) }, uUnderM: { value: x?.under?.metal ?? 0 }, uUnderR: { value: x?.under?.rough ?? 0.5 }, uRust: { value: x?.under?.kind === 'rust' ? 1 : 0 }, uHasUnder: { value: x?.under ? 1 : 0 },
     uG: { value: [0, 1].map((i) => { const q = gs[i]; return q ? new THREE.Vector4(ax[q.axis], q.at, q.width / 2, q.kind === 'stripe' ? 1 : q.kind === 'above' ? 2 : 3) : new THREE.Vector4(0, 0, 0, 0); }) }, uGC: { value: [0, 1].map((i) => new THREE.Color(gs[i]?.colour ?? 0)) } };
   const looked = !!x && (x.wear > 0 || gs.length > 0);
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos; varying vec3 vLocalPos;' + (looked ? '\nattribute float aCurv; attribute float aEdge; varying float vCurv; varying float vEdge;' : '')).replace('#include <begin_vertex>', '#include <begin_vertex>\nvLocalPos = transformed;' + (looked ? '\nvCurv = aCurv; vEdge = aEdge;' : '') + '\n#ifdef USE_INSTANCING\nvGrainPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n#else\nvGrainPos = transformed;\n#endif');
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos; varying vec3 vLocalPos; varying vec3 vLocalN;' + (looked ? '\nattribute float aCurv; attribute float aEdge; varying float vCurv; varying float vEdge;' : '')).replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvLocalN = objectNormal;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvLocalPos = transformed;' + (looked ? '\nvCurv = aCurv; vEdge = aEdge;' : '') + '\n#ifdef USE_INSTANCING\nvGrainPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n#else\nvGrainPos = transformed;\n#endif');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-varying vec3 vGrainPos; varying vec3 vLocalPos; uniform float uGrainF;
+varying vec3 vGrainPos; varying vec3 vLocalPos; varying vec3 vLocalN; uniform float uGrainF;
 ${looked ? 'varying float vCurv; varying float vEdge;' : ''}
-uniform float uWear; uniform float uChipK; uniform vec3 uUnder; uniform float uUnderM; uniform float uUnderR; uniform float uRust; uniform float uHasUnder; uniform vec4 uG[2]; uniform vec3 uGC[2];
+uniform float uGrainRad; uniform float uWear; uniform float uChipK; uniform vec3 uUnder; uniform float uUnderM; uniform float uUnderR; uniform float uRust; uniform float uHasUnder; uniform vec4 uG[2]; uniform vec3 uGC[2];
 float wMask = 0.0, wDirt = 0.0; uniform float uGrainA; uniform float uGrainR; uniform vec3 uGrainS;
 float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float gNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(gHash(i), gHash(i + vec3(1,0,0)), f.x), mix(gHash(i + vec3(0,1,0)), gHash(i + vec3(1,1,0)), f.x), f.y), mix(mix(gHash(i + vec3(0,0,1)), gHash(i + vec3(1,0,1)), f.x), mix(gHash(i + vec3(0,1,1)), gHash(i + vec3(1,1,1)), f.x), f.y), f.z); }
+vec3 gPos() { return uGrainRad > 0.5 ? vec3(length(vLocalPos.xz), vLocalPos.y, 0.0) : vGrainPos; }
 float gHeight(vec3 p) { vec3 q = p * uGrainF * uGrainS; return 0.65 * gNoise(q) + 0.35 * gNoise(q * 2.7 + 11.0); }
 vec3 gPerturb(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) { vec3 vSigmaX = normalize(dFdx(surf_pos.xyz)); vec3 vSigmaY = normalize(dFdy(surf_pos.xyz)); vec3 vN = surf_norm; vec3 R1 = cross(vSigmaY, vN); vec3 R2 = cross(vN, vSigmaX); float fDet = dot(vSigmaX, R1) * faceDirection; vec3 vGrad = sign(fDet) * (dHdxy.x * R1 + dHdxy.y * R2); return normalize(abs(fDet) * surf_norm - vGrad); }`)
       .replace('#include <color_fragment>', looked ? `#include <color_fragment>
 for (int i = 0; i < 2; i++) { vec4 q = uG[i]; if (q.w < 0.5) continue; float c = q.x < 0.5 ? vLocalPos.x : q.x < 1.5 ? vLocalPos.y : vLocalPos.z;
-  if ((q.w < 1.5 && abs(c - q.y) < q.z) || (q.w > 1.5 && q.w < 2.5 && c > q.y) || (q.w > 2.5 && c < q.y)) diffuseColor.rgb = uGC[i]; }
+  float d = q.w < 1.5 ? q.z - abs(c - q.y) : q.w < 2.5 ? c - q.y : q.y - c;
+  diffuseColor.rgb = mix(diffuseColor.rgb, uGC[i], clamp(d / max(fwidth(c), 1e-7) + 0.5, 0.0, 1.0)); }
 if (uWear > 0.0) {
   float k = vCurv, n1 = gNoise(vGrainPos * 300.0), n3 = gNoise(vGrainPos * 1400.0 + 3.0), n2 = gNoise(vGrainPos * 90.0 + 7.0);
   // (a chip's outline is crisp and ragged: the reach from the edge varied at two scales, then cut sharply)
   float reach = vEdge * uChipK / (0.35 + 0.9 * n1 + 0.45 * n3);
-  float convex = max(smoothstep(0.5 * uChipK, uChipK, k) * step(0.45, n1), 1.0 - smoothstep(0.9, 1.0, reach)), hollow = smoothstep(0.0, 0.5 * uChipK, -k);
-  float patches = step(n2, uWear * 0.12) * step(0.5, n3);
+  float fw = max(fwidth(reach), 0.03), convex = max(smoothstep(0.5 * uChipK, uChipK, k) * smoothstep(0.4, 0.5, n1), 1.0 - smoothstep(1.0 - fw, 1.0 + fw, reach)), hollow = smoothstep(0.0, 0.5 * uChipK, -k);
+  float patches = smoothstep(uWear * 0.05, uWear * 0.05 - 0.01, n2) * smoothstep(0.6, 0.65, n3);
+  // (a chip's edge shows the paint's thickness: a thin band of the lighter primer under it)
+  float rim = uHasUnder * (1.0 - uRust) * (smoothstep(1.0 - fw, 1.0 + fw, reach) - smoothstep(1.12 - fw, 1.12 + fw, reach));
   wMask = uHasUnder * clamp((uRust > 0.5 ? hollow * 1.3 + patches * 1.6 : convex + patches * step(0.5, n1)) * min(1.0, uWear * 1.6), 0.0, 1.0);
   wDirt = clamp(hollow * uWear * 0.8 + uWear * 0.12 * n2, 0.0, 0.85);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55, 0.53, 0.5), rim * 0.7 * (1.0 - wMask));
   diffuseColor.rgb = mix(diffuseColor.rgb, uUnder, wMask);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.08, 0.065, 0.045), wDirt);
 }` : '#include <color_fragment>')
       .replace('#include <metalnessmap_fragment>', looked ? '#include <metalnessmap_fragment>\nmetalnessFactor = mix(mix(metalnessFactor, uUnderM, wMask), 0.0, wDirt);' : '#include <metalnessmap_fragment>')
-      .replace('#include <lights_physical_fragment>', looked ? '#include <lights_physical_fragment>\n#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= 1.0 - max(wMask, wDirt);\n#endif' : '#include <lights_physical_fragment>')
+      // (marks round the axis stretch the highlight across them on the round side; a faced end, square to the axis, has
+      // rings, not a lay one way: no anisotropy there)
+      .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_ANISOTROPY\nif (uGrainRad > 0.5) { material.anisotropy *= 1.0 - abs(normalize(vLocalN).y); material.alphaT = mix(pow2(material.roughness), 1.0, pow2(material.anisotropy)); }\n#endif' + (looked ? '\n#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= 1.0 - max(wMask, wDirt);\n#endif' : ''))
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-float gFeat = length(fwidth(vGrainPos * uGrainS)) * uGrainF, gFade = 1.0 - smoothstep(0.35, 1.0, gFeat), gH = gHeight(vGrainPos);
+vec3 gP = gPos(); float gFeat = length(fwidth(gP * uGrainS)) * uGrainF, gFade = 1.0 - smoothstep(0.35, 1.0, gFeat), gH = gHeight(gP);
 if (gFade > 0.0) normal = gPerturb(-vViewPosition, normal, vec2(dFdx(gH), dFdy(gH)) * uGrainA * gFade, faceDirection);`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor + (gHeight(vGrainPos * 0.37) - 0.5) * uGrainR, 0.02, 1.0);' + (looked ? '\nroughnessFactor = mix(mix(roughnessFactor, uUnderR, wMask), 1.0, wDirt);' : ''));
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor + (gHeight(gPos() * 0.37) - 0.5) * uGrainR, 0.02, 1.0);' + (looked ? '\nroughnessFactor = mix(mix(roughnessFactor, uUnderR, wMask), 1.0, wDirt);' : ''));
   };
   m.customProgramCacheKey = () => (looked ? 'grain-look' : 'grain');
+}
+/** A studio for what the renderer reflects (its environment, prefiltered once): a dark room with softboxes (a long one
+ *  overhead, strips either side, one behind), and a floor lighter than the walls, so a metal shows a horizon (its floor
+ *  in its lower half, the room's dark above it) and each light as a shape, not three blobs over a square, as a product
+ *  photograph does. Its size does not matter: what is reflected is taken as far off. */
+export function studioScene(): THREE.Scene {
+  const st = new THREE.Scene(), room = new THREE.Mesh(new THREE.BoxGeometry(40, 16, 40), new THREE.MeshBasicMaterial({ color: 0x34373d, side: THREE.BackSide })); room.position.y = 6; st.add(room);
+  const box = (w: number, h: number, at: [number, number, number], rot: [number, number, number], k: number) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color().setScalar(k), side: THREE.DoubleSide })); m.position.set(...at); m.rotation.set(...rot); st.add(m); };
+  box(38, 38, [0, -1.9, 0], [-Math.PI / 2, 0, 0], 0.32);
+  box(14, 4, [0, 13.5, 0], [Math.PI / 2, 0, 0], 4); for (const z of [-1, 1]) box(16, 1.2, [0, 4, z * 12], [0, 0, 0], 3); for (const x of [-1, 1]) box(1.5, 6, [x * 14, 4, 0], [0, Math.PI / 2, 0], 2.2); box(30, 0.4, [0, 0.4, -15], [0, 0, 0], 1.5);
+  box(6, 6, [9, 7, 9], [0, -Math.PI / 4, 0], 1.2);
+  return st;
 }
 const RUST = new THREE.Color(0x7a3a1a), DIRT = new THREE.Color(0x5a5040);
 const matFor = (color0: number, mat: string | undefined, glow: boolean, finish?: string, wear0 = 0, open = false, look?: Look): THREE.MeshStandardMaterial => {

@@ -966,3 +966,17 @@ coordinates broke the ground finish's anisotropy (pieces drawn white). Seen: the
 edges and rims, the tube rusts in spots. Left: a smooth piece with no edges (the ring) does not chip, true to the
 rule but perhaps not to wear by handling; decals and text not yet; heat tint from computed temperatures still needs
 the oxide's growth law.
+- **2026-10-29, phase 3.5, close-ups and a blind check (first round).** Five boards rendered close and given to an agent
+with no context, asked what is cheap or fake. Its top findings: every object showed one and the same reflection (three
+blobs over a square: three.js's RoomEnvironment), so fourteen metals read as one sphere copied; stripes and chip edges
+stair-stepped; chips scattered on flat faces; turned ends showing coarse wedges where facing leaves rings; gold olive
+(its colour checked: linear 1.04, 0.73, 0.37 against the measured 1.0, 0.78, 0.34, so the lighting, not the colour).
+Fixed: one studio environment for the app (`kit3d.ts` `studioScene`: a room with softboxes and a lighter floor, so a
+metal shows a horizon and each light as a shape; the dock and the part viewer share it); graphics and chip outlines
+antialiased by each pixel's footprint; a primer rim at each chip (the paint's thickness); stray wear patches cut
+right down; turned, machined, ground and threaded grain measured by radius and height from the piece's axis, and
+its anisotropy off on faces square to the axis (rings on a faced end, no wedges). Seen after: the spheres read as
+photographed balls, the bars' ends clean, the chips crisp. Left from the check: no floor under things in the space
+(by the space's design: a void with a grid; a stage for look-dev boards is a choice for the user); no scale cue; a
+polished bar mirrors mostly floor and reads flat grey; blasted and cast metal still read near plaster; plastics have
+no subsurface glow; sheet parts (the tube cut) have no thickness.

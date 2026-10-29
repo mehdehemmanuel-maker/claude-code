@@ -4,8 +4,8 @@
 // space (view/space.html: any scale, a headset) is one press further.
 
 import * as THREE from 'three';
+import { studioScene } from './kit3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { SpaceView, type Shown } from './space3d';
 
 export class Dock3D {
@@ -26,7 +26,7 @@ export class Dock3D {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 0.95;
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.renderer.localClippingEnabled = true;
     host.appendChild(this.renderer.domElement); this.renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
-    this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture; this.scene.environmentIntensity = 0.6;
+    this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(studioScene(), 0.02).texture; this.scene.environmentIntensity = 0.75;
     this.scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x101820, 0.4));
     // the sun: high and to one side, casting shadows onto what is under it and onto the ground (a plane that shows only
     // the shadows on it), both sized each frame by how far off the view is, so a bolt and a truck are each lit alike
