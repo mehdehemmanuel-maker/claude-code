@@ -196,6 +196,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   jobs or design", and "thing built before the update just throw it away it's gonna be too buggy … you can rebuild it
   way faster and way better now" (2026-10-29: phases 3 and 5 of the plan in `docs/REALITY.md`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
+- "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
+  measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say
+  plainly "I don't know" or "a guess". A headline number says what it counts (not "371 current" when 332 are laws), and
+  "nothing contradicts it" is said only where something was there to contradict it.
 
 ## What can honestly be promised
 
