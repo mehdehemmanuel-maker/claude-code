@@ -794,3 +794,14 @@ Thermal analysis (conduction, convection, radiation) (`thermal`, gloss How hot e
 80A21), checked exactly: 10 W through two sealed copper cubes, 20 + 10 R; and the free cube warming toward 100 °C in
 time, 100 − 80 (1 + dt/RC)⁻²⁰⁰ to the digit (the continuous exponential is 0.11 % above, the step's own error). On the
 rods board, 5 W into the steel block settles it at 35.3 °C, the rods' tops at 31 °C.
+
+**Phase 2.3, the engine's leftovers, first round (2026-10-29).** Frame analysis takes how each held piece is held: clamped,
+pinned, or the components held as a Nastran SPC numbers them (1 2 3 along x y z, 4 5 6 turning about them), one for each
+held group ("1235 and 135": a column pinned at its foot and on a slide at its top). A piece held only in part can be
+pushed. Checked: that column buckles at Euler's π² E I / L² to 10⁻⁵. It now gives its worst stress (`stress`), and the
+warmed bar held at both ends is checked against E α ΔT = 117.875 MPa exactly in its own test (found: that test had
+checked no output at all, so the exactness reported for it earlier rested on a probe, not the test). It says how its answer
+settles: cut into half as many slices and worked again, the two said and how far apart. If it does not settle, it says it
+may be held too loosely to stand. The flow's view draws what crosses each contact between pieces as an arrow the way it goes,
+sized by how much (`arrowsOf`), drawn over everything so it reads through the solid it crosses (`overlay` on an override;
+a stand-in keeps every marker whatever its level). Still to do in 2.3: bending stiffness through the book's laws.

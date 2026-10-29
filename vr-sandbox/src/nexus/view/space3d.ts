@@ -40,6 +40,9 @@ function fieldGeometry(geo: THREE.BufferGeometry, f: Field | Bend): THREE.Buffer
   g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.computeBoundingSphere(); fieldDrawn.set(f, g); return g;
 }
+const overlayMats = new Map<number, THREE.MeshBasicMaterial>();
+/** A marker drawn over everything (`overlay`): unlit, not hidden by what is in front. */
+const overlayMaterial = (c: number) => overlayMats.get(c) ?? overlayMats.set(c, new THREE.MeshBasicMaterial({ color: c, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 })).get(c)!;
 const fieldMaterial = () => (fieldMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0, envMapIntensity: 0.5 }));
 
 /** A thing to show, and which node shows it (so pressing it in the space chooses that node). */
@@ -87,7 +90,7 @@ const PROXY_PIECES = 48;
  *  from the whole: the size of the biggest piece it leaves out (0 when it leaves none). Made once per distinct thing,
  *  the first time it is far enough off to need one (the Seed document's render pyramid, 3.12: the error, projected to
  *  the screen, chooses the level). */
-interface Proxy { pieces: { part: Part; m: THREE.Matrix4; over: Override; size: number }[]; error: number; /** coarser levels: the first k pieces, and the size of the biggest each leaves out */ levels: { k: number; error: number }[] }
+interface Proxy { pieces: { part: Part; m: THREE.Matrix4; over: Override; size: number }[]; error: number; /** coarser levels: the first k pieces, and the size of the biggest each leaves out */ levels: { k: number; error: number }[]; /** markers drawn over everything (`overlay`): always drawn, whatever the level */ marks: Proxy['pieces'] }
 const proxies = new WeakMap<object, Proxy>();
 function proxyOf(t: Assembly): Proxy {
   const was = proxies.get(t); if (was) return was;
@@ -100,7 +103,7 @@ function proxyOf(t: Assembly): Proxy {
   // its stand-in made from only some of it, is never stood in for by that: its error is the whole of it)
   const rest = new Float64Array(all.length + 1); for (let i = all.length - 1; i >= 0; i--) rest[i] = rest[i + 1]! + all[i]!.size ** 2;
   const whole = all.length >= 200_000 ? boundsOfAll(t).getSize(new THREE.Vector3()).length() : 0, err = (k: number) => Math.max(whole, all[k]?.size ?? 0, Math.sqrt(rest[Math.min(k, all.length)]!) / 2);
-  const p: Proxy = { pieces: all.slice(0, PROXY_PIECES), error: err(PROXY_PIECES), levels: [4, 12, PROXY_PIECES].map((k) => ({ k: Math.min(k, all.length), error: err(k) })) };
+  const p: Proxy = { pieces: all.slice(0, PROXY_PIECES), error: err(PROXY_PIECES), levels: [4, 12, PROXY_PIECES].map((k) => ({ k: Math.min(k, all.length), error: err(k) })), marks: all.filter((q) => q.over.overlay).slice(0, 300) };
   proxies.set(t, p); return p;
 }
 
@@ -284,7 +287,7 @@ export class SpaceView {
           // the coarsest level of its stand-in whose error is under the threshold (4 pieces, 12, 48)
           const lv = p.levels.find((l) => l.error * per < ERR_PX * this.coarse);
           if (lv) {
-            for (const q of p.pieces.slice(0, lv.k)) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const g0 = leafGeometry(q.part); if (!g0) continue; const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : g0, mat = fb ? fieldMaterial() : leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name); }
+            for (const q of [...p.pieces.slice(0, lv.k), ...p.marks.filter((x) => !p.pieces.slice(0, lv.k).includes(x))]) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const g0 = leafGeometry(q.part); if (!g0) continue; const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : g0, mat = o.overlay ? overlayMaterial(o.color ?? q.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name); }
             stand++; continue;
           }
         }
@@ -295,7 +298,7 @@ export class SpaceView {
       for (const l of leavesOf(t)) {
         const o = effective(overs, l.part.name); if (o.hide) continue;
         const g0 = leafGeometry(l.part); if (!g0) continue;
-        const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : g0, mat = fb ? fieldMaterial() : leafMaterial(l.part, o);
+        const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : g0, mat = o.overlay ? overlayMaterial(o.color ?? l.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(l.part, o);
         add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, l.m), owner, l.part.name);
       }
     }
@@ -306,7 +309,7 @@ export class SpaceView {
       if (!mesh || mesh.instanceMatrix.count < n) {
         if (mesh) { this.group.remove(mesh); mesh.dispose(); }
         mesh = new THREE.InstancedMesh(b.geo, b.mat, Math.max(16, 2 ** Math.ceil(Math.log2(n))));
-        mesh.castShadow = true; mesh.receiveShadow = true;
+        const top = (b.mat as THREE.Material).depthTest === false; mesh.castShadow = !top; mesh.receiveShadow = !top; if (top) mesh.renderOrder = 10;
         mesh.frustumCulled = false; this.meshes.set(key, mesh); this.group.add(mesh);
       }
       mesh.position.copy(this.origin); mesh.updateMatrix();

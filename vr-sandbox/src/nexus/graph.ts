@@ -259,6 +259,21 @@ export function coloured(g: Graph, level: (number | null)[], name = 'coloured by
   return { name, items };
 }
 
+/** What flows across each contact between pieces (not between slices of one), seen as an arrow there (step E): pointing
+ *  the way it goes, along the contact's normal, its length growing with how much crosses (the most a sixth of the thing's
+ *  size), white so it reads over the colours. At most the 300 that carry most. */
+export function arrowsOf(g: Graph, through: number[], size: number): Assembly['items'] {
+  const most = Math.max(0, ...g.edges.map((e, q) => (oneBody(g, e) ? 0 : Math.abs(through[q] ?? 0)))); if (!(most > 0)) return [];
+  const up = new THREE.Vector3(0, 1, 0), mk = { color: 0xf5f5f5, finish: 'satin', mat: undefined };
+  return g.edges.map((e, q) => ({ e, q, t: oneBody(g, e) ? 0 : Math.abs(through[q] ?? 0) })).filter((x) => x.t > most * 0.02).sort((a, b) => b.t - a.t).slice(0, 300).map(({ e, q, t }) => {
+    const ca = g.pieces[e.a]!.node.box!.getCenter(new THREE.Vector3()), cb = g.pieces[e.b]!.node.box!.getCenter(new THREE.Vector3());
+    let u = new THREE.Vector3(...e.normal).normalize(); if (u.lengthSq() < 0.5) u = cb.clone().sub(ca).normalize(); if (u.dot(cb.clone().sub(ca)) < 0) u.negate(); if ((through[q] ?? 0) < 0) u.negate();
+    const L = size * (0.04 + (0.13 * t) / most), r = L * 0.07, at = new THREE.Vector3(...e.at).addScaledVector(u, -L / 2), e3 = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(up, u));
+    const arrow: Part = { name: 'flow arrow', parts: [{ name: 'shaft', shape: { cyl: [r, L * 0.7] }, at: [0, L * 0.35, 0], ...mk }, { name: 'head', shape: { cone: [r * 2.4, L * 0.3] }, at: [0, L * 0.85, 0], ...mk }] };
+    return { of: arrow, at: at.toArray() as V3, rot: [e3.x, e3.y, e3.z] as V3, s: 1, over: { overlay: true } };
+  });
+}
+
 /** Each whole piece drawn once and bent (`Bend`): its slices' movements and turns, scaled by `scale` to be seen, run along
  *  it as the beam bends between them; coloured by how far each point moves. */
 export function bentWhole(g: Graph, moved: (V3 | null)[], turned: (V3 | null)[], scale: number, whole: Graph, name: string): Assembly {
