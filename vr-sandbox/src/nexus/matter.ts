@@ -18,7 +18,9 @@ import { thermalOf, woodThermal } from '../engineering/thermal';
 import { FUSION } from '../engineering/fusion';
 import { PERIODIC, PERIODIC_SOURCE } from '../data/periodic';
 import { WOODS, woodDensity } from '../data/woods';
-import { MIXES, mixDensity } from '../data/mixes';
+import { MIXES, MIXTURES, mixDensity } from '../data/mixes';
+import { CONSTITUENTS } from '../data/constituents';
+import { mix, type Arrangement, type Phase } from './mixture';
 
 export type Evidence = 'handbook' | 'specified' | 'typical' | 'estimated' | 'derived' | 'stand-in' | 'secondary';
 export interface Prop { key: string; name: string; value: number; unit: string; source: string; evidence: Evidence; note?: string }
@@ -131,6 +133,13 @@ export const MATTER: Record<string, Row> = {
   bread: r('food', 'bread', false), cheese: r('food', 'cheese', false), ham: r('food', 'ham', false), tomato: r('food', 'tomato', false), lettuce: r('food', 'lettuce', false), butter: r('food', 'butter', false), chicken: r('food', 'chicken', false), egg: r('food', 'egg', false), avocado: r('food', 'avocado', false), bacon: r('food', 'bacon', false), chocolate: r('food', 'chocolate', false),
 };
 
+// the phases mixtures are made of, and the mixtures themselves: materials like any other
+for (const [id, c] of Object.entries(CONSTITUENTS)) if (!MATTER[id]) MATTER[id] = r((c.family ?? 'composite') as Family, c.is, true);
+for (const [id, x] of Object.entries(MIXTURES)) MATTER[id] = r(x.family as Family, x.name, true);
+const PROP_SAYS: Record<string, [string, string]> = { density: ['density', 'kg/m^3'], E: ['elastic modulus', 'Pa'], nu: ['Poisson\'s ratio', '1'], k: ['thermal conductivity', 'W/m K'], c: ['specific heat', 'J/kg K'], conductivity: ['electrical conductivity', 'S/m'], alpha: ['thermal expansion', '1/K'], ultimate: ['ultimate strength', 'Pa'], yield: ['yield strength', 'Pa'] };
+const says = (key: string): [string, string] => { const [b, ...rest] = key.split(' '), p = PROP_SAYS[b!] ?? [b!, '']; return [rest.length ? `${p[0]} ${rest.join(' ')}` : p[0], p[1]]; };
+const RANK: Record<Evidence, number> = { specified: 5, handbook: 5, secondary: 4, derived: 4, typical: 2, estimated: 1, 'stand-in': 0 };
+
 const handbookById = new Map(HANDBOOK.map((m) => [m.id, m]));
 /** The handbook grade a material's numbers come from, and whether it is that material or a stand-in for it. */
 export function handbookOf(id: string | undefined): { m: Material; same: boolean } | null {
@@ -180,6 +189,12 @@ export function matterOf(id: string): Matter {
   // (a species' heat from its specific gravity by the Wood Handbook's own relations: across the grain, at 12 % moisture)
   if (w) { const t = woodThermal(w.G12); props.push({ key: 'c', name: 'specific heat', value: t.c, unit: 'J/kg K', source: `${t.source}; from its specific gravity ${w.G12}`, evidence: 'derived' }, { key: 'k', name: 'thermal conductivity (across the grain)', value: t.k, unit: 'W/m K', source: `${t.source}; from its specific gravity ${w.G12}`, evidence: 'derived', note: 'across the grain; along it 1.5 to 2.8 times as much (Wood Handbook ch. 4)' }); }
   if (w) props.push({ key: 'E', name: 'modulus of elasticity (bending, along the grain)', value: w.MOE, unit: 'Pa', source: w.source, evidence: 'handbook', note: 'small clear specimens: lumber of a grade is less' }, { key: 'ultimate', name: 'modulus of rupture (bending, along the grain)', value: w.MOR, unit: 'Pa', source: w.source, evidence: 'handbook', note: 'small clear specimens: lumber of a grade is less' });
+  // a phase's own figures (src/data/constituents.ts): over any stand-in or typical figure, never over the handbook's own
+  const own = (key: string) => props.findIndex((p) => p.key === key), put = (q: Prop) => { const i = own(q.key); if (i >= 0) { if (RANK[props[i]!.evidence] >= RANK[q.evidence] && props[i]!.evidence !== 'stand-in' && props[i]!.evidence !== 'typical') return; props.splice(i, 1); } props.push(q); };
+  const cons = CONSTITUENTS[id]; if (cons) for (const [key, f] of Object.entries(cons.figures)) { const [name, unit] = says(key); put({ key, name, value: f.value, unit, source: f.source, evidence: f.evidence }); }
+  // a mixture: worked out from its phases' figures by the mathematics of composites (src/nexus/mixture.ts)
+  const mx = MIXTURES[id];
+  if (mx) { const w = mixedMatter(mx); for (const q of w.props) put(q); for (const c of w.cannot) disagreements.push(`not worked out: ${c}`); }
   const el = pureElement(id);
   if (el && PERIODIC[el]?.melt) props.push({ key: 'melts', name: 'melting point', value: PERIODIC[el]!.melt!, unit: 'K', source: `${PERIODIC[el]!.name}: ${PERIODIC_SOURCE}`, evidence: 'secondary' });
   const out: Matter = {
@@ -193,6 +208,21 @@ export function matterOf(id: string): Matter {
     if (Object.keys(span).length) out.span = span;
   }
   return out;
+}
+
+/** Any mix of materials (each by its id, with its fraction), arranged so: its properties worked out from its phases'
+ *  figures by the mathematics of composites (src/nexus/mixture.ts), each with its method, its bounds and how it is known:
+ *  derived where the rule is exact and the phases' figures are a handbook's or a maker's; typical where the rule is exact
+ *  but a figure under it is only typical; estimated where a model is used (within the bounds it says). */
+export function mixedMatter(mx: { phases: [string, number][]; by: 'volume' | 'mass'; arrangement: Arrangement; matrix?: string; porosity?: number; gas?: string }): { props: Prop[]; cannot: string[]; phi: number[] } {
+  for (const [pid] of mx.phases) if (!MATTER[pid] && !CONSTITUENTS[pid] && !pureElement(pid)) throw new Error(`"${pid}" is not a material here`);
+  const keys: [keyof Phase, string][] = [['density', 'density'], ['E', 'E'], ['Eacross', 'E across'], ['nu', 'nu'], ['k', 'k'], ['c', 'c'], ['conductivity', 'conductivity'], ['alpha', 'alpha'], ['ultimate', 'ultimate']];
+  const phaseOf = (pid: string) => { const m = matterOf(pid), p: Phase = { name: pid }, ev: Evidence[] = []; for (const [k, key] of keys) { const q = m.props.find((x) => x.key === key && x.evidence !== 'stand-in'); if (q) { (p as unknown as Record<string, number>)[k] = q.value; ev.push(q.evidence); } } return { p, ev }; };
+  const ph = mx.phases.map(([pid, f]) => ({ ...phaseOf(pid), frac: f })), gas = mx.gas ? phaseOf(mx.gas).p : undefined, weakest = Math.min(...ph.flatMap((x) => x.ev.map((e) => RANK[e])));
+  const r0 = mix(ph.map((x) => ({ p: x.p, frac: x.frac })), mx.by, mx.arrangement, { matrix: mx.matrix ? mx.phases.findIndex(([p]) => p === mx.matrix) : undefined, porosity: mx.porosity, gas });
+  const recipe = `${mx.phases.map(([p, f]) => `${p} ${f}`).join(', ')} by ${mx.by}, ${mx.arrangement}${mx.porosity ? `, ${mx.porosity} pores` : ''}`;
+  const props = Object.entries(r0.props).map(([key, e]): Prop => { const [name, unit] = says(key); return { key, name, value: e.value, unit, source: `worked out from its phases (${recipe}): ${e.method}`, evidence: e.exact ? (weakest >= 4 ? 'derived' : 'typical') : 'estimated', ...(e.lo !== undefined ? { note: `between ${+e.lo.toPrecision(4)} and ${+e.hi!.toPrecision(4)} ${unit} for any arrangement of these fractions (Hashin–Shtrikman, or Voigt and Reuss)` } : {}) }; });
+  return { props, cannot: r0.cannot, phi: r0.phi };
 }
 
 /** What a material is, in a line: specified or not, and how its numbers are known. */

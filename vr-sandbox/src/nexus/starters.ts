@@ -250,6 +250,26 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
     return b;
   }],
+  ['Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one', () => {
+    // a material is what goes into it and how it is arranged (docs/REALITY.md phase 2.4): each worked out, not looked up
+    const b = emptyBoard('Materials from their phases');
+    placeBlock(b, 'mixture', 0, 0, { phases: 'carbon-fibre-t300 0.6, epoxy 0.4', arrangement: 'aligned fibres' }, 'cfrp'); b.nodes.cfrp!.label = 'Carbon fibre and epoxy, 60 % fibre, unidirectional';
+    placeBlock(b, 'view.table', 0, 0, {}, 'cfrpt'); b.nodes.cfrpt!.label = 'Its properties, each with its bounds and method'; wire(b, 'cfrp', 'properties', 'cfrpt', 'rows');
+    placeBlock(b, 'mixture', 0, 0, { phases: 'silicone 0.4, alumina 0.6', arrangement: 'particles', matrix: 'silicone' }, 'paste'); b.nodes.paste!.label = 'Thermal paste: alumina in silicone, 60 %';
+    placeBlock(b, 'view.table', 0, 0, {}, 'pastet'); wire(b, 'paste', 'properties', 'pastet', 'rows');
+    placeBlock(b, 'mixture', 0, 0, { phases: 'al-6061 1', arrangement: 'open foam', porosity: 0.9 }, 'foam'); b.nodes.foam!.label = 'Aluminium foam, 10 % dense';
+    placeBlock(b, 'view.table', 0, 0, {}, 'foamt'); wire(b, 'foam', 'properties', 'foamt', 'rows');
+    // the laminate as a part: a 1 m bar of it beside one of steel, each pushed 10 N sideways at its top
+    for (const [id, mat, colour, x] of [['lam', 'cfrp-ud-60', '#2b2b2e', -0.05], ['stl', 'steel-low', '#7a8088', 0.05]] as const) {
+      placeBlock(b, 'shape.box', 0, 0, { name: `${mat} bar`, mat, color: colour, finish: 'satin', w: 0.02, h: 1, d: 0.02 }, id);
+      placeBlock(b, 'place', 0, 0, { x, y: 0.5 }, `${id}p`); wire(b, id, 'part', `${id}p`, 'thing');
+      placeBlock(b, 'bend', 0, 0, { load: 10, dir: '+x', slices: 16 }, `${id}b`); wire(b, `${id}p`, 'placed', `${id}b`, 'thing');
+      placeBlock(b, 'view.show', 0, 0, {}, `${id}s`); wire(b, `${id}b`, 'says', `${id}s`, 'value');
+      placeBlock(b, 'space.show', 0, 0, {}, `${id}v`); wire(b, `${id}b`, 'seen', `${id}v`, 'thing');
+    }
+    b.nodes.lamb!.label = 'The laminate bar, 10 N sideways'; b.nodes.stlb!.label = 'The steel bar, 10 N sideways';
+    return tidy(b);
+  }],
   ['What it is made of, and what it carries: a copper and an aluminium rod side by side under a steel block, opened down to its elements, weighed and balanced, and as a path for heat, current and force', () => {
     // any thing opened as its materials (docs/REALITY.md, step 7): the same three pieces read as what they are made of,
     // their mass, centre and inertia, and as a path: the rods side by side (a + between them), then the block, along y

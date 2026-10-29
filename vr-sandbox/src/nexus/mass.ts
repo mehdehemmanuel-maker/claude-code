@@ -8,7 +8,9 @@ import type { Part, Shape } from './kits';
 import { pureElement } from './elements';
 import { PERIODIC } from '../data/periodic';
 import { WOODS, woodDensity } from '../data/woods';
-import { MIXES, mixDensity } from '../data/mixes';
+import { MIXES, MIXTURES, mixDensity } from '../data/mixes';
+import { CONSTITUENTS } from '../data/constituents';
+import { mix } from './mixture';
 
 /** Densities, kg/m³ (typical values). */
 export const DENSITY: Record<string, number> = {
@@ -37,6 +39,12 @@ export function densityKg(mat: string): number | undefined {
 // the species and the mixes: worked out, from a species' specific gravity, from what goes into a mix's cubic metre
 for (const [id, w] of Object.entries(WOODS)) DENSITY[id] = woodDensity(w);
 for (const [id, m] of Object.entries(MIXES)) DENSITY[id] = mixDensity(m);
+// the phases mixtures are made of, where the table above has none; and each mixture's, worked from its phases'
+for (const [id, c] of Object.entries(CONSTITUENTS)) if (DENSITY[id] === undefined && c.figures.density) DENSITY[id] = c.figures.density.value;
+for (const [id, x] of Object.entries(MIXTURES)) {
+  const ph = x.phases.map(([p, f]) => ({ p: { name: p, density: DENSITY[p] }, frac: f })), d = mix(ph, x.by, x.arrangement, { porosity: x.porosity, gas: x.gas ? { name: x.gas, density: DENSITY[x.gas] } : undefined }).props.density;
+  if (d) DENSITY[id] = d.value;
+}
 const vol = (s: Shape): number => {
   if ('box' in s) return s.box[0] * s.box[1] * s.box[2];
   if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return (Math.PI * h * (r * r + r * r2 + r2 * r2)) / 3; }

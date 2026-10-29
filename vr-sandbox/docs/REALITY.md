@@ -816,3 +816,25 @@ second moment, the bar's axial stiffness and the isotropic shear modulus already
 distinct set of figures. A law that refuses its figures is said, and that beam carries nothing. The frame says the laws it
 used. Its tests come out as before, to the same digits (the same mathematics, now with one owner).
 
+
+**Phase 2.4, materials from their phases (2026-10-29).** The user: "do advanced math to figure materials out … populate
+it with what's possible, different types, mixes … link it to an open source buy tomorrow". A material is now worked
+out from what goes into it and how it is arranged (`mixture.ts`; `mixedMatter` in `matter.ts`; node Composite and
+mixture properties (micromechanics), `mixture`): density by volume fractions and specific heat by mass (Kopp–Neumann),
+exactly; stiffness, heat and electrical conduction within Hashin and Shtrikman's bounds for any number of phases, and
+estimated by the arrangement: particles in a matrix (Maxwell, Hashin), aligned fibres (rule of mixtures along,
+Halpin–Tsai and Rayleigh across, a fibre's own modulus across where it has one), random in a plane (Tsai–Pagano), woven
+(the mean of along and across), layers (Voigt and Reuss), grains (Bruggeman), open foam (Gibson–Ashby); expansion by
+Turner; strength along aligned fibres as the ideal. A solid solution (an alloy mixed atom by atom) is refused its
+conduction and says why (brass conducts 120 W/m K, a mix of copper and zinc would say 300). The phases' figures are in
+`data/constituents.ts`: Toray's T300 datasheet for the carbon fibre, a secondary table for E-glass, Incropera for air,
+and the rest typical, each said so until a supplier's datasheet confirms it. Seven mixtures are materials like any
+other (`MIXTURES`, parts may be made of them): unidirectional carbon/epoxy at 60 %, random and woven glass/epoxy,
+aluminium with 20 % silicon carbide, thermal paste, concrete as aggregate in paste, aluminium foam at 10 %. Checked:
+carbon/epoxy along the fibres 139.2 GPa against Toray's own laminate at 60 %, 140 GPa (its ideal strength 2,136 MPa
+against Toray's 1,820, the 85 % laminates reach); across it 7.7 GPa (typical 8 to 10); woven glass/epoxy 23.9 GPa
+(circuit-board laminate is about 24); aluminium–silicon carbide 92.7 GPa within bounds of 92.7 to 114.7 (measured
+about 100; the matrix bound is the lower one); concrete 33 GPa, 2.0 W/m K, 2,475 kg/m³. On a new starter board a 1 m
+bar of the laminate bends 1.48 mm under 10 N where steel bends 1.005, as their moduli say (the frame takes the laminate
+as isotropic at its along-fibre modulus: right for bending along the fibres, too stiff in twist). Next: suppliers'
+datasheets, open-source, to confirm or replace every typical figure (asked for tomorrow).
