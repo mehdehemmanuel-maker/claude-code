@@ -9,5 +9,7 @@ export default defineConfig({
   test: {
     include: ['tests/{unit,golden,nexus}/**/*.test.ts'],
     testTimeout: 60_000,
+    // (the TypeScript each run compiles, kept on disk between runs: about a quarter of the gate's time was this, redone each time)
+    fsModuleCache: true,
   },
 });

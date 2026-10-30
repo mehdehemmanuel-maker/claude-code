@@ -17,6 +17,7 @@ import { Engine, emptyBoard, placeBlock } from './dataflow';
 import { designOf, isAssembly, isPart, type Assembly } from './assembly';
 import type { Part } from './kits';
 import STORED from '../data/stock.json';
+import { runMany } from './pool';
 import './seeds';
 
 type Thing = Part | Assembly;
@@ -84,10 +85,36 @@ export function buildOf(id: string): Promise<Map<string, Thing>> {
   return r;
 }
 /** Every piece every builder makes, at every depth, by design. */
-export async function builtPieces(): Promise<Map<string, Found>> {
+export async function builtPieces(o: { wide?: boolean } = {}): Promise<Map<string, Found>> {
   const all = new Map<string, Found>();
-  for (const b of builders()) for (const [src, t] of await buildOf(b.id)) piecesIn(t, src, all);
+  if (!o.wide) { for (const b of builders()) for (const [src, t] of await buildOf(b.id)) piecesIn(t, src, all); return all; }
+  // (side by side, each build run and walked by a worker (pool.ts), then merged here in the builders' own order, so the
+  // same piece is found first in the same place as walking them one after another; a piece met again does not have what
+  // is under it walked again, as there. The pieces come back without their geometry: enough to check the library
+  // against, not to write it, which walks them here)
+  const ids = builders().map((b) => b.id), got = await runMany(ids.map((id) => ({ block: '#task:stock.walk', inputs: { id }, set: {} })), (j) => walkBuild(String(j.inputs.id)), { wide: true });
+  got.results.forEach((r, k) => { if (r instanceof Error) throw new Error(`${ids[k]}: ${r.message}`);
+    for (const { src, entries } of (r as { builds: { src: string; entries: [string, string, string, [string, number][]][] }[] }).builds) {
+      const skip: string[] = [];
+      for (const [key, name, path, kids] of entries) {
+        if (skip.some((q) => (q === '' ? path !== '' : path.startsWith(q + '.')))) continue;
+        const was = all.get(key); if (was) { was.usedBy.add(src); skip.push(path); continue; }
+        all.set(key, { key, name, thing: undefined as unknown as Thing, from: src, path, kids: new Map(kids), usedBy: new Set([src]) });
+      } } });
   return all;
+}
+/** One builder's builds walked as `piecesIn` walks them (each design once, under the first place met), without geometry:
+ *  what a worker sends back for the library to be checked side by side. */
+export async function walkBuild(id: string): Promise<{ builds: { src: string; entries: [string, string, string, [string, number][]][] }[] }> {
+  const builds: { src: string; entries: [string, string, string, [string, number][]][] }[] = [];
+  // (every meeting of a design in walk order, a repeat with no kids and not walked into, as piecesIn does: the merge then
+  // adds this build to the users of a design met again here, as walking them in order does)
+  for (const [src, t] of await buildOf(id)) { const entries: [string, string, string, [string, number][]][] = [], seen = new Set<string>();
+    const walk = (x: Thing, path: string) => { const key = designOf(x).key; if (seen.has(key)) { entries.push([key, x.name || 'unnamed', path, []]); return; } seen.add(key);
+      const ks = kidsOf(x), kids = new Map<string, number>(); for (const k of ks) { const kk = designOf(k).key; kids.set(kk, (kids.get(kk) ?? 0) + 1); }
+      entries.push([key, x.name || 'unnamed', path, [...kids]]); ks.forEach((k, i) => walk(k, path ? `${path}.${i}` : String(i))); };
+    walk(t, ''); builds.push({ src, entries }); }
+  return { builds };
 }
 
 // ---- what is stored, and held to ---------------------------------------------------------------------------------------

@@ -53,7 +53,7 @@ async function pool(): Promise<Hand[]> {
   return starting;
 }
 
-export interface ManyOptions { /** Run here, never on workers. */ here?: boolean; /** A block not built in, carried to the workers. */ carry?: Carry }
+export interface ManyOptions { /** Run here, never on workers. */ here?: boolean; /** On the workers whatever the first trial took (a batch known to be long: every build in the library). */ wide?: boolean; /** A block not built in, carried to the workers. */ carry?: Carry }
 export interface Many { results: (Outputs | Error)[]; wide: boolean; workers: number; ms: number }
 /** Every job run, side by side where it pays, each its outputs or what went wrong, in the order given. `one` runs a job
  *  where it is (the caller's own runner, with what it keeps). */
@@ -63,7 +63,7 @@ export async function runMany(jobs: Job[], one: (j: Job) => Promise<Outputs>, o:
   if (!jobs.length) return { results, wide: false, workers: 0, ms: 0 };
   await here(0); const each = performance.now() - t0, n = inWorker() || o.here || oneThread() ? 1 : await cores();
   // (wide only when the rest, one after another, would take longer than starting the workers and running them side by side)
-  const wide = n > 1 && jobs.length > 2 && (hands.length ? each * (jobs.length - 1) > 50 : each * (jobs.length - 1) > START_MS + (each * (jobs.length - 1)) / n);
+  const wide = n > 1 && jobs.length > 2 && (o.wide ||hands.length ? each * (jobs.length - 1) > 50 : each * (jobs.length - 1) > START_MS + (each * (jobs.length - 1)) / n);
   if (!wide) { for (let k = 1; k < jobs.length; k++) await here(k); return { results, wide: false, workers: 1, ms: performance.now() - t0 }; }
   const hs = await pool(); let next = 1;
   await Promise.all(hs.map(async (h) => { while (next < jobs.length) { const k = next++, id = ++seq;

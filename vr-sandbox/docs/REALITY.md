@@ -1292,3 +1292,9 @@ partial, 7 not built). First runs: a spring, BLOCKED (fatigue life unverified, n
 solids), its three measurable requirements passing; an inline four from its parts, REJECTED for three real reasons (its
 coil housing over PBT's 140 °C by conduction from the exhaust, its least factor of safety 0.93 at 6,500 rpm, its
 valves floating at 6,270 rpm), 410 components, 20 s.
+- **2026-10-30, the gate under a minute again.** It had reached 63.8 s: 27.1 s of it the built-parts check (every build
+in the library run and walked), about 18 s compiling the TypeScript on every run. The check now runs its builds on the
+pool's workers and merges them in the builders' own order (`builtPieces({ wide: true })`, `walkBuild`), proved the same
+as walking them one after another: 4,703 pieces, each first met in the same place, the same users, 0 differences (two
+merge faults found that way and fixed). The compiled TypeScript is kept between runs (vitest's `fsModuleCache`).
+Measured: the gate 42.2 s on its first run, 37.9 s after.
