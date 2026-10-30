@@ -3,7 +3,8 @@
 // one draw of a noisy instrument, so a picture is judged by several judges apart, each told only the criteria, and what
 // they say is gathered as a measurement: each criterion's mean, its spread and its 95 % interval, what they agree is wrong.
 //
-// The key is read where the work runs: under Node from GEMINI_API_KEY (the environment's secrets). A page holds no key
+// Keys are read where the work runs: under Node from GEMINI_API_KEY and FAL_KEY (fal.ai, drawing first where set; the
+// environment's secrets). A page holds no key
 // (anything in a page is anyone's), so there these nodes say they cannot run. Nothing here is made up when a call fails:
 // the failure is said as the service gave it (a model gone, busy, or the key's quota spent).
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
@@ -12,6 +13,8 @@ import { encodePng } from './reconstruct';
 /** Models tried in order: the first that answers is used (a model retired or busy passes to the next). */
 export const SEEING = ['gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.5-flash'];
 export const DRAWING = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-3-pro-image'];
+/** fal.ai's image models, tried before Gemini's where FAL_KEY is set (fal.run, its pictures on fal.media). */
+export const FAL_DRAWING = ['fal-ai/flux/schnell', 'fal-ai/flux/dev'];
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 function keyOf(): string {
@@ -19,6 +22,8 @@ function keyOf(): string {
   if (!k) throw new Error('no Gemini key where this runs: it runs under Node with GEMINI_API_KEY set (the environment\'s secrets); a page holds no keys');
   return k;
 }
+/** A picture's type from its first bytes: JPEG (FF D8), WebP (RIFF…WEBP), else PNG. */
+const mimeOf = (u: Uint8Array): string => (u[0] === 0xff && u[1] === 0xd8 ? 'image/jpeg' : u[0] === 0x52 && u[8] === 0x57 ? 'image/webp' : 'image/png');
 const b64 = (u: Uint8Array): string => { if (typeof Buffer !== 'undefined') return Buffer.from(u).toString('base64'); let s = ''; for (const x of u) s += String.fromCharCode(x); return btoa(s); };
 const unb64 = (s: string): Uint8Array => (typeof Buffer !== 'undefined' ? new Uint8Array(Buffer.from(s, 'base64')) : Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0)));
 
@@ -57,12 +62,32 @@ async function call(models: string[], body: object, signal?: AbortSignal): Promi
 
 /** Pictures looked at, and a question about them answered in words (or JSON, asked for). */
 export async function see(pictures: unknown[], prompt: string, o: { json?: boolean; temperature?: number; signal?: AbortSignal } = {}): Promise<{ text: string; model: string; ms: number }> {
-  const parts = [...pictures.map((x) => ({ inline_data: { mime_type: 'image/png', data: b64(pngOf(x)) } })), { text: prompt }];
+  const parts = [...pictures.map((x) => { const u = pngOf(x); return { inline_data: { mime_type: mimeOf(u), data: b64(u) } }; }), { text: prompt }];
   const { r, model, ms } = await call(SEEING, { contents: [{ parts }], generationConfig: { ...(o.json ? { responseMimeType: 'application/json' } : {}), temperature: o.temperature ?? 1 } }, o.signal);
   return { text: r.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '', model, ms };
 }
-/** A picture drawn from words: its PNG (or what the model gave), and whatever it said with it. */
+/** A picture drawn by fal.ai (where FAL_KEY is set): the first of its models that answers, the picture fetched from its URL. */
+async function drawFal(prompt: string, signal?: AbortSignal): Promise<{ png: Uint8Array; said: string; model: string; ms: number }> {
+  const key = typeof process !== 'undefined' ? process.env?.FAL_KEY : undefined; if (!key) throw new Error('no FAL_KEY');
+  const said: string[] = [];
+  for (const m of FAL_DRAWING) {
+    const t0 = Date.now(); let res: Response;
+    try { res = await fetch(`https://fal.run/${m}`, { method: 'POST', headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, image_size: 'landscape_16_9', num_images: 1 }), signal }); }
+    catch (e) { said.push(`${m}: ${(e as Error).message}`); continue; }
+    const r = await res.json() as { images?: { url: string }[]; detail?: unknown };
+    if (!res.ok || !r.images?.[0]?.url) { said.push(`${m}: ${res.status} ${JSON.stringify(r.detail ?? r).slice(0, 120)}`); continue; }
+    const img = await fetch(r.images[0].url, { signal }); if (!img.ok) { said.push(`${m}: its picture ${img.status}`); continue; }
+    return { png: new Uint8Array(await img.arrayBuffer()), said: '', model: `fal ${m}`, ms: Date.now() - t0 };
+  }
+  throw new Error(`fal.ai did not draw: ${said.join('; ')}`);
+}
+/** A picture drawn from words: by fal.ai where its key is set, else (or failing that) Gemini's image models. */
 export async function draw(prompt: string, o: { signal?: AbortSignal } = {}): Promise<{ png: Uint8Array; said: string; model: string; ms: number }> {
+  let falSaid = '';
+  if (typeof process !== 'undefined' && process.env?.FAL_KEY) { try { return await drawFal(prompt, o.signal); } catch (e) { falSaid = (e as Error).message; } }
+  try { return await drawGemini(prompt, o); } catch (e) { throw new Error(falSaid ? `${falSaid}; then ${(e as Error).message}` : (e as Error).message); }
+}
+async function drawGemini(prompt: string, o: { signal?: AbortSignal } = {}): Promise<{ png: Uint8Array; said: string; model: string; ms: number }> {
   const { r, model, ms } = await call(DRAWING, { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } }, o.signal);
   const parts = r.candidates?.[0]?.content?.parts ?? [], im = parts.find((p) => p.inlineData);
   if (!im?.inlineData) throw new Error(`${model} drew nothing${parts.length ? `: ${parts.map((p) => p.text ?? '').join(' ').slice(0, 160)}` : ''}`);
@@ -110,7 +135,7 @@ node({ id: 'ai.judge', name: 'Blind judge (vision model)', kind: 'critic', abili
 
 node({ id: 'ai.draw', name: 'Picture from words (image model)', kind: 'generator', ability: 'generate', domains: ['vehicles', 'mechanical', 'manufacturing', 'everyday', 'software', 'intelligence'],
   spec: { gloss: 'What does an image model draw for these words?', discipline: 'intelligence.generative', role: 'data source', codes: [MODEL_CODE] },
-  says: 'Words sent to an image model (Gemini\'s), a picture back for each try: ideas to look at, judge, and model from. Its tries are separate calls, so they differ. Runs where a Gemini key with image quota is (under Node, GEMINI_API_KEY); without quota it says so, and draws nothing',
+  says: 'Words sent to an image model (fal.ai\'s FLUX where FAL_KEY is set, else Gemini\'s), a picture back for each try: ideas to look at, judge, and model from. Its tries are separate calls, so they differ. Runs under Node where a key is; where none can draw it says why, and draws nothing',
   settings: [{ key: 'prompt', label: 'Words', type: 'code', default: 'A side view of a coupe with a red aerodynamic body kit, studio light, plain grey background, the whole car in frame' }, { key: 'tries', label: 'Pictures', type: 'number', default: 1 }],
   ports: { inputs: [P('prompt', 'text', { optional: true, label: 'words (the setting, if not wired)' })], outputs: [P('pictures', 'list<record>'), P('says', 'text')] },
   run: async (i, c) => { const words = String(i.prompt ?? c.set.prompt), n = Math.max(1, Math.min(8, Math.round(Number(c.set.tries ?? 1))));

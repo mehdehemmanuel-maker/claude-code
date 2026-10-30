@@ -292,7 +292,7 @@ known gaps are there too.
 | Computers from transistors; chips from netlists | `nexus/computer.ts`, `nexus/logic/` |
 | Inventory, pieces, looks, breakdown queue | `nexus/inventory.ts`, `pieces.ts`, `looks.ts`, `breakdown.ts` |
 | Research and the gap map | `nexus/research.ts`, `data/references.ts` |
-| Models over the web (Gemini): pictures judged blind as a measurement, drawn from words, wordings tried | `nexus/genai.ts` (key: `GEMINI_API_KEY`, under Node only) |
+| Models over the web (Gemini): pictures judged blind as a measurement, drawn from words, wordings tried | `nexus/genai.ts` (keys: `GEMINI_API_KEY`, `FAL_KEY`, under Node only) |
 | The gauntlet | `nexus/gauntlet.ts`, `view/gauntlet.ts` |
 | Seeds (window to city) | `nexus/seeds.ts` |
 | Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts` |
