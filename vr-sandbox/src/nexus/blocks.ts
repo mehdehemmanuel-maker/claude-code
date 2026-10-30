@@ -70,6 +70,7 @@ import { assemble } from './logic/asm6502';
 import { Cpu6502 } from './logic/cpu6502';
 import { PROGRAMS } from './logic/programs';
 import { layout as layoutOf } from './make/space';
+import { perfect } from './make/pipeline';
 import { LOGICS, SECTIONS, endOn, makeLine, outer, route, sectionOf, sizeBore, sizeWire, tetherOf, vary, type Logic, type Section } from './placement/line';
 import { boreThrough, onto } from './mate';
 import { engineLoads, springCase, type LoadRow } from './loads';
@@ -1879,6 +1880,13 @@ const BUILT_THINGS: BlockDef[] = [
       const r = rollingOf(v); return { vehicle: v, mass: massOf(v), pieces: placedCount(v), wheelbase: m.axles[0]!.x - m.axles[m.axles.length - 1]!.x, machine: m, rolling: r.thing, joints: r.joints };
     },
     tests: [{ set: { kind: 'kart' }, inputs: {}, outputs: { wheelbase: 1.04 }, rel: 1e-6 }] }),
+  def({ id: 'make.whole', name: 'Made whole (the attention-to-detail pass and its critic)', kind: 'logic', ability: 'transform', domains: ['vehicles', 'mechanical', 'manufacturing', 'everyday'],
+    spec: { gloss: 'What a thing made is still missing: its joints, finishes, road kit (mirrors, plates), and what its critic finds', discipline: 'mechanical.design', role: 'data transformation', codes: [{ scheme: 'ICS', code: '01.110', label: 'Technical product documentation' }] },
+    says: 'A thing taken through the make pipeline (make/pipeline.ts): its conditions, its details by rule (welds, screws, finishes; on a road vehicle its mirrors and number plates), and its critic, again until nothing more is put right; what each stage did, and what the critic found and could not put right',
+    settings: [{ key: 'words', label: 'Conditions (words: its age, where it stands …)', type: 'text', default: '' }],
+    ports: { inputs: [thing('thing', 'the thing made')], outputs: [thing('whole', 'made whole'), P('stages', 'table'), P('findings', 'table', { label: 'what its critic said' }), P('added', 'integer', { label: 'pieces added' })] },
+    run: (i, c) => { const t = i.thing as Part; if (!t || !('name' in t)) throw new Error('wire a thing in'); const r = perfect(t, String(c.set.words ?? ''));
+      return { whole: r.part, stages: r.stages.map((s) => ({ stage: s.stage, did: s.did.length, first: s.did.slice(0, 3).join('; ') })), findings: r.findings.map((f) => ({ check: f.check, part: f.part, fixed: !!f.fixed, says: f.says })), added: r.parts[1] - r.parts[0] }; } }),
   def({ id: 'vehicle.model', name: 'Vehicle (a real model)', kind: 'generator', ability: 'generate', domains: ['vehicles', 'mechanical'], says: 'A real vehicle by its maker\'s published figures (each with its source), built down to its wheel nuts: a Toyota Corolla, a Freightliner Cascadia, a Honda Rancher, a CRF450R, a Toyota forklift, a John Deere X350, a rental kart',
     settings: [{ key: 'model', label: 'Model', type: 'choice', default: 'corolla', choices: MACHINES.map((m) => m.short ?? m.id) }], every: 'model',
     ports: { inputs: [P('color', 'text', { optional: true, label: 'colour (as made, if not set)' }), P('model', 'text', { optional: true, label: 'which model, by its name or its record\'s id (the setting, if not wired)' })], outputs: [P('vehicle', 'part'), N('mass', 'kg', { label: 'mass drawn' }), N('published', 'kg', { label: 'its published mass' }), P('pieces', 'integer'), P('source', 'text'), P('machine', 'any'), thing('rolling', 'to let go (its wheels apart)'), P('joints', 'any', { label: 'its wheels\' axles, for Let it go' })] },

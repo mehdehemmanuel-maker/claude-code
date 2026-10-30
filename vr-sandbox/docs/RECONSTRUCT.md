@@ -157,6 +157,20 @@ two-door coupe … facing left", a Charger or a Monaro at 15–25 %: no longer a
   read where 5.047 m fits); its ends and roof are now read as the model's own and how far the outline stands past it, at
   the model's own depth there.
 
+## Fourth round: the shapes the check found missing (2026-10-30)
+
+- **Made whole** (`make.whole`, new node): the make pipeline (its details by rule and its critic) as a node; Picture to
+  model now judges the car made whole, so it has its wing mirrors and number plates as the viewer's finished car does.
+  Its critic found the front lip's side pieces, fitted 0.6 m long last round, in the front wheels' room: side pieces now
+  stop 30 mm short of each arch (a rule, `machines.ts`).
+- **Flares** may reach in over the arch's opening (`inset`), as a wide flare does: the front flare's overlap with the
+  picture's 0.24 → 0.75.
+- **Wing end plates** sized apart from the blade (`plate`, `plateH`); **rims** fitted by size, the tyres keeping their
+  diameter: the picture's are 21 in (245/30R21), not 20.
+- Not moved: the rear flare, the tail lamp (the fit pushed it taller and further round, the wrong way: not stored), the
+  mirror (the detail pass's typical mirror, 36 px from the picture's and smaller; nothing fits its size yet), the fuel
+  door (no rule makes one).
+
 ## Not done yet (said plainly)
 
 - Multi-view: each photograph gets its own camera (the nodes are per photograph), but nothing yet joins them into one

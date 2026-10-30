@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 584 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 585 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -33,16 +33,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 314 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 315 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 74 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 532 tested here (their own tests: that they do what they say, not that the world does); 42 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 532 tested here (their own tests: that they do what they say, not that the world does); 43 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 584 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 585 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -60,7 +60,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 
-## 2 · Make: shapes, parts, things (75)
+## 2 · Make: shapes, parts, things (76)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -101,6 +101,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Living fittings** (`seed.fittings.living`): What makes a room a living room: a sofa facing a television on its stand, a low table between (a 2.1 m three-seat sofa, typical) *hypothetical, untested, before the update*
 - **Logic or memory cell** (`chip.cell`): Transistors made into a cell: a 6T SRAM bit (two inverters holding it, two pass gates) or a NAND2 gate (two p-type in parallel, two n-type in series), with its first metal wires. *hypothetical, tested here, before the update*
 - **Loop round a block** (`path.loop`): A path round a rectangle, in its lane (inset from the road's middle), driven with the block on the right as traffic keeps right; and where it must stop: before each crossing it meets, every so many metres *hypothetical, tested here, before the update*
+- **Made whole (the attention-to-detail pass and its critic)** (`make.whole`): A thing taken through the make pipeline (make/pipeline.ts): its conditions, its details by rule (welds, screws, finishes; on a road vehicle its mirrors and number plates), and its critic, again until nothing more is … *derived, untested*
 - **Motherboard** (`pc.board`): A motherboard of a form factor (ATX, microATX, Mini-ITX: their standards' sizes) with the package in its socket: memory modules (JEDEC DDR4), power stages, chipset, a PCIe x16 slot, an M.2 2280 drive, power … *hypothetical, tested here, before the update*
 - **Neighbourhood** (`seed.neighbourhood`): Streets of blocks with four houses to a block, each house's plan and colours and the car in its drive picked from the seed (change the seed for another street), and cars driving round it, stopping at its lights, as … *hypothetical, untested, before the update*
 - **Part** (`card.part`): A real part, drawn whole from its standard with every piece inside it: 41 kinds (stepper nema17 40, led red 5mm, bearing 608, rail MGN12H 400, motorplate nema17 t3 aluminium, bolt M8x30, screw M3x10, panhead M1.6 L2 … *specified, tested here, before the update*

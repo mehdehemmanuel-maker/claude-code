@@ -392,7 +392,7 @@ export const LINE_KEYS: Record<string, [number, number, number]> = { nose: [0.4,
 const HIDDEN = /wheelhouse|inner|wall$|back$|shut line/;
 /** The kit's own figures a fit may move, each by its piece and field, its range and its first step. */
 export const KIT_KEYS: Record<string, [string, string, number, number, number]> = {
-  'flare width': ['flares', 'w', 0.03, 0.15, 0.01], 'flare thickness': ['flares', 't', 0.008, 0.05, 0.004], 'flare from': ['flares', 'from', 0, 40, 3], 'flare to': ['flares', 'to', 140, 180, 3],
+  'flare width': ['flares', 'w', 0.03, 0.15, 0.01], 'flare inset': ['flares', 'inset', 0, 0.1, 0.01], 'wing plate length': ['wing', 'plate', 0.15, 0.8, 0.03], 'wing plate height': ['wing', 'plateH', 0.05, 0.3, 0.02], 'flare thickness': ['flares', 't', 0.008, 0.05, 0.004], 'flare from': ['flares', 'from', 0, 40, 3], 'flare to': ['flares', 'to', 140, 180, 3],
   'skirt height': ['skirts', 'h', 0.03, 0.15, 0.01], 'lip depth': ['lip', 'd', 0.04, 0.2, 0.01], 'lip out': ['lip', 'out', 0, 0.06, 0.005], 'valance depth': ['valance', 'd', 0.04, 0.2, 0.01],
   'lip side length': ['lip', 'sd', 0.1, 0.7, 0.03], 'lip side height': ['lip', 'sh', 0.03, 0.16, 0.01], 'valance side length': ['valance', 'sd', 0.1, 0.8, 0.03], 'valance side height': ['valance', 'sh', 0.03, 0.16, 0.01], 'valance side rise': ['valance', 'rise', 0, 0.3, 0.02],
   'wing height': ['wing', 'h', 0.05, 0.3, 0.02], 'wing back': ['wing', 'back', -0.05, 0.3, 0.02], 'wing chord': ['wing', 'chord', 0.15, 0.4, 0.02], 'wing span': ['wing', 'span', 0.6, 1, 0.03], 'wing pitch': ['wing', 'pitch', 0, 20, 2],
@@ -430,6 +430,7 @@ export class Rig {
     const ln = (this.m.lines ?? {}) as unknown as Record<string, number>, kit = (this.m.kit ?? {}) as unknown as Record<string, Record<string, number> | undefined>;
     return names.flatMap((key): Key[] => {
       const l = LINE_KEYS[key] ?? GLASS_KEYS[key]; if (l) return [{ key, x0: Number(ln[key] ?? (l[0] + l[1]) / 2), lo: l[0], hi: l[1], step: l[2], group }];
+      if (key === 'rim diameter') { const t = tyreOf(this.m.axles[0]!.tyre); return t ? [{ key, x0: Math.round(t.rim / 0.0254), lo: 14, hi: 24, step: 1, group }] : []; }
       const fk = FACE_KEYS[key]; if (fk) { const now = (this.m.lines?.face as Record<string, number> | undefined)?.[fk[0]]; return [{ key, x0: Number(now ?? (fk[1] + fk[2]) / 2), lo: fk[1], hi: fk[2], step: fk[3], group }]; }
       const k = KIT_KEYS[key]; if (!k || !kit[k[0]]) return []; const now = kit[k[0]]![k[1]];
       return [{ key, x0: Number(now ?? (k[2] + k[3]) / 2), lo: k[2], hi: k[3], step: k[4], group }];
@@ -442,6 +443,9 @@ export class Rig {
     if (v.has('front overhang') || v.has('rear overhang')) { const fo = v.get('front overhang') ?? this.m.L / 2 - this.fa, ro = v.get('rear overhang') ?? this.ra + this.m.L / 2, lo = this.ra - ro, hi = this.fa + fo; dx = (lo + hi) / 2; m = { ...m, L: hi - lo, axles: m.axles.map((a) => ({ ...a, x: a.x - dx })) }; }
     // (its tyres a size of the same width on the same rim, their sidewall what makes the diameter; its body over them)
     if (v.has('tyre diameter')) m = { ...m, axles: m.axles.map((a) => { const t = tyreOf(a.tyre); if (!t || !/^\D*\d{2,3}\/\d{2,3}/.test(a.tyre)) return a; const asp = Math.max(20, Math.min(90, Math.round(((v.get('tyre diameter')! - t.rim) / (2 * t.W)) * 100))); return { ...a, tyre: `${Math.round(t.W * 1000)}/${asp}R${Math.round(t.rim / 0.0254)}` }; }) };
+    // (its rims a size larger or smaller, its tyres' sidewalls taking up the difference: the same diameter, as a plus-size
+    // fitment keeps it)
+    if (v.has('rim diameter')) m = { ...m, axles: m.axles.map((a) => { const t = tyreOf(a.tyre); if (!t || !/^\D*\d{2,3}\/\d{2,3}/.test(a.tyre)) return a; const rin = Math.round(v.get('rim diameter')!), asp = Math.max(20, Math.min(90, Math.round(((t.D - rin * 0.0254) / (2 * t.W)) * 100))); return { ...a, tyre: `${Math.round(t.W * 1000)}/${asp}R${rin}` }; }) };
     if (v.has('clearance')) m = { ...m, clearance: v.get('clearance')! };
     if (v.has('height')) m = { ...m, H: v.get('height')! };
     const fk = keys.filter((k) => FACE_KEYS[k.key]); if (fk.length && m.lines) m = { ...m, lines: { ...m.lines, face: { ...m.lines.face, ...Object.fromEntries(fk.map((k) => [FACE_KEYS[k.key]![0], v.get(k.key)!])) } } };
@@ -473,7 +477,8 @@ export class Rig {
     if (machine.kit && kit === 'live') ps.push(...bodyKit(machine, machine.kit, ps));
     else if (machine.kit) { const f = this.kitFrozen(), fo = this.m.L / 2 - this.fa, ro = this.ra + this.m.L / 2, v = new Map(keys.map((k, i) => [k.key, x[i]!])), dF = (v.get('front overhang') ?? fo) - fo, dR = (v.get('rear overhang') ?? ro) - ro;
       parts.push({ name: 'kit ahead', at: [dF, 0, 0], parts: f.front } as Part, { name: 'kit between', parts: f.mid } as Part, { name: 'kit behind', at: [-dR, 0, 0], parts: f.rear } as Part); }
-    if (discs) for (const a of machine.axles) { const t = tyreOf(a.tyre); if (!t || a.track <= 0) continue; for (const sd of [-1, 1]) parts.push({ name: 'tyre seen', shape: { cyl: [t.D / 2, t.W] }, at: [a.x + dx, t.D / 2, (sd * a.track) / 2], rot: [Math.PI / 2, 0, 0], color: 0x111111 } as Part); }
+    // (and its rims as discs of their own size, on the tyres' outer faces: what a side view sees of a wheel)
+    if (discs) for (const a of machine.axles) { const t = tyreOf(a.tyre); if (!t || a.track <= 0) continue; for (const sd of [-1, 1]) parts.push({ name: 'tyre seen', shape: { cyl: [t.D / 2, t.W] }, at: [a.x + dx, t.D / 2, (sd * a.track) / 2], rot: [Math.PI / 2, 0, 0], color: 0x111111 } as Part, { name: `${Math.round(t.rim / 0.0254)} in alloy rim`, shape: { cyl: [t.rim / 2 + 0.012, 0.01] }, at: [a.x + dx, t.D / 2, (sd * (a.track + t.W)) / 2 + sd * 0.006], rot: [Math.PI / 2, 0, 0], color: 0x2a2a2a } as Part); }
     return { root: { name: 'seen', parts } as Part, camera, dx };
   }
   /** Its body, kit and wheels as a camera sees them at figures x, at scale s of the picture (coarse: see silhouette); its
@@ -507,8 +512,9 @@ export function fitBy(cost: (x: number[]) => number, keys: { x0: number; lo: num
 /** What owns each feature: the figures that move it (its windows by its body lines, its flares by the kit's flares …). */
 export const FEATURE_FIT: { features: RegExp; keys: string[]; says: string }[] = [
   { features: /glass|door/, keys: ['belt', 'roofF', 'roofR', 'cowl', 'dloR', 'doorR'], says: 'its windows and door: its belt, its roof\'s ends, its windscreen\'s foot, where its side glass ends and its door\'s top rear corner' },
-  { features: /flare/, keys: ['flare width', 'flare thickness', 'flare from', 'flare to'], says: 'its flares: how wide, how proud, round from and to where' },
-  { features: /wing/, keys: ['wing height', 'wing back', 'wing chord', 'wing span', 'wing pitch'], says: 'its wing: how high, how far ahead of the tail, how deep, how wide, its pitch' },
+  { features: /flare/, keys: ['flare width', 'flare thickness', 'flare from', 'flare to', 'flare inset'], says: 'its flares: how wide, how proud, round from and to where, how far in over the opening' },
+  { features: /wing/, keys: ['wing height', 'wing back', 'wing chord', 'wing span', 'wing pitch', 'wing plate length', 'wing plate height'], says: 'its wing: how high, how far ahead of the tail, how deep, how wide, its pitch, its end plates' },
+  { features: /rim/, keys: ['rim diameter'], says: 'its rims: their size (its tyres the same diameter)' },
   { features: /lamp/, keys: ['headlamp height', 'tail lamp height', 'tail lamp wrap'], says: 'its lamps: how tall, and how far its tail lamps wrap round its sides' },
   { features: /skirt|lip|valance/, keys: ['skirt height', 'lip out', 'lip side length', 'lip side height', 'valance side length', 'valance side height', 'valance side rise'], says: 'its skirts, its lip and valance and their side pieces' },
 ];

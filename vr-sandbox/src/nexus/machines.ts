@@ -68,7 +68,8 @@ export interface Plate { d: number; t: number; out: number; sd?: number; sh?: nu
 export interface BodyKit {
   color: number; mat?: string; says: string;
   /** a flare round each arch: so wide out from the lip, so thick (how far proud of the skin), round from and to what angle
-   *  over the axle (degrees from straight ahead), riveted every so many degrees, their heads painted (black where not said) */ flares?: { w: number; t: number; from?: number; to?: number; every?: number; heads?: number };
+   *  over the axle (degrees from straight ahead), riveted every so many degrees, their heads painted (black where not said);
+   *  reaching so far inside the arch's lip over its opening, as a wide flare does (0 where not said) */ flares?: { w: number; t: number; from?: number; to?: number; every?: number; heads?: number; inset?: number };
   /** a skirt along each rocker between the arches: so tall over the skin's foot, so thick */ skirts?: { h: number; t: number };
   /** a lip under the front bumper and a valance under the rear: so deep along the car, so thick, reaching so far past the
    *  skin; and where said, a side piece down each of the bumper's corners: so long along the car from its end (sd), so tall
@@ -78,7 +79,8 @@ export interface BodyKit {
   /** a ducktail spoiler moulded along the deck lid's tail: so tall at its trailing edge, so deep along the deck, across so much of the width */ spoiler?: { h: number; d: number; span: number };
   /** a wing on the deck: its chord, its height over the deck, its span as a share of the width, its pitch (degrees, its
    *  leading edge down, as a wing pressing the car down is set), how far its trailing edge is ahead of the tail, its
-   *  blade's colour (its end plates and uprights the kit's) */ wing?: { chord: number; h: number; span: number; pitch: number; back: number; color: number };
+   *  blade's colour (its end plates and uprights the kit's); its end plates so long and so tall, m (from its chord where
+   *  not said) */ wing?: { chord: number; h: number; span: number; pitch: number; back: number; color: number; plate?: number; plateH?: number };
 }
 export interface Machine {
   /** a tube frame's upper rails, m above the ground (an ATV's, under its seat and racks) */ upper?: number;
@@ -799,7 +801,8 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
     // (the lip's radius read off the skin's samples, smoothed round the arch: the middle of five, then their mean, so a
     // sample caught on a shut line or a panel's edge does not notch the flare)
     const med = lip0.map((_, i) => { const w5 = lip0.slice(Math.max(0, i - 2), i + 3).map((q) => q.r).sort((x, y) => x - y); return w5[Math.floor(w5.length / 2)]!; });
-    const lip = lip0.map((q, i) => { const w5 = med.slice(Math.max(0, i - 2), i + 3); return { ...q, r: w5.reduce((x, y) => x + y, 0) / w5.length }; });
+    // (a wide flare's inner edge set in over the opening, but never nearer the tyre than 15 mm)
+    const inset = k.flares?.inset ?? 0, lip = lip0.map((q, i) => { const w5 = med.slice(Math.max(0, i - 2), i + 3), r = w5.reduce((x, y) => x + y, 0) / w5.length; return { ...q, r: Math.max(R + 0.015, r - inset) }; });
     return { a, R, lip, front: a.x === Math.max(...m.axles.map((b) => b.x)) }; });
   if (k.flares) for (const { a, R, lip, front } of arches) {
     if (lip.length < 4) continue;
@@ -861,7 +864,9 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
       // (its end where the skin ends at its side, not at the middle: a rounded nose or tail turns back at its corners, and
       // a piece run out to the middle's end hangs in the air past them)
       const atSide = near.filter((q) => q.at[2] > z0 - 0.08), xEnd = atSide.length ? (front ? Math.max(...atSide.map((q) => q.at[0])) : Math.min(...atSide.map((q) => q.at[0]))) : end;
-      const e = xEnd + (front ? o.out : -o.out), far = xEnd - (front ? 1 : -1) * o.sd;
+      // (and short of the wheel's arch, so the wheel keeps its room to move: 30 mm round it, typical)
+      const ar = arches.find((q) => q.front === front), room = ar ? (front ? ar.a.x + ar.R + 0.03 : ar.a.x - ar.R - 0.03) : -Infinity;
+      const e = xEnd + (front ? o.out : -o.out), far = front ? Math.max(xEnd - o.sd, room) : Math.min(xEnd + o.sd, room);
       const side2: [number, number][] = [[e, foot + rise], [far, foot], [far, foot - o.sh], [e, foot + rise - o.sh]];
       if (Number.isFinite(z0)) for (const sd of [-1, 1]) kit.push(P(`${front ? 'front lip' : 'rear valance'} side ${side(sd)}`, { prism: { pts: side2, L: o.t } }, [0, 0, sd * (z0 + o.t / 2)], { ...own, item: front ? 'front-lip' : 'rear-valance', joins: [front ? 'front lip' : 'rear valance', front ? 'bumper cover' : 'rear bumper cover'], fixed: 'screwed to the bumper cover\'s corner', says: `its side piece down the bumper's corner, ${(o.sd * 1000).toFixed(0)} mm along it: moulded ABS (typical)` }));
     }
@@ -902,7 +907,7 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
       for (let i = 0; i <= 12; i++) { const u = i / 12, th = 0.12 * c * 2.5 * (0.2969 * Math.sqrt(u) - 0.126 * u - 0.3516 * u * u + 0.2843 * u ** 3 - 0.1036 * u ** 4) , cam = 0.04 * c * 4 * u * (1 - u); foil.push([c / 2 - u * c, cam + th]); }
       for (let i = 12; i >= 0; i--) { const u = i / 12, th = 0.12 * c * 2.5 * (0.2969 * Math.sqrt(u) - 0.126 * u - 0.3516 * u * u + 0.2843 * u ** 3 - 0.1036 * u ** 4), cam = 0.04 * c * 4 * u * (1 - u); foil.push([c / 2 - u * c, cam - th]); }
       const y = deck + g.h, rot: V3 = [0, 0, -g.pitch * deg], zU = span * 0.32, ups = [-1, 1].map((sd) => P(`wing upright ${side(sd)}`, { box: [c * 0.45, g.h + 0.004, 0.012] }, [xc, deck + g.h / 2 - 0.002, sd * zU], { ...own, mat: 'al-a380', item: 'wing-upright', joins: ['deck lid', 'wing blade'], fixed: 'bolted through the deck lid', says: 'an upright: cast aluminium, bolted through the deck lid (typical; its bolts under the lid not drawn)' }));
-      const plates = [-1, 1].map((sd) => P(`wing end plate ${side(sd)}`, { prism: { pts: [[c * 0.62, -0.06], [-c * 0.62, -0.03], [-c * 0.62, 0.07], [c * 0.45, 0.05]], L: 0.006 } }, [xc, y, sd * (span / 2 + 0.003)], { ...own, item: 'wing-endplate', joins: ['wing blade'], says: 'an end plate, moulded ABS' }));
+      const pl = (g.plate ?? c * 1.24) / 2, ph = g.plateH ?? 0.13, plates = [-1, 1].map((sd) => P(`wing end plate ${side(sd)}`, { prism: { pts: [[pl, -ph * 0.46], [-pl, -ph * 0.23], [-pl, ph * 0.54], [pl * 0.73, ph * 0.38]], L: 0.006 } }, [xc, y, sd * (span / 2 + 0.003)], { ...own, item: 'wing-endplate', joins: ['wing blade'], says: 'an end plate, moulded ABS' }));
       kit.push(P('rear wing', undefined, [0, 0, 0], { item: 'rear-wing', joins: ['deck lid'], says: `a wing on the deck: its blade ${(c * 1000).toFixed(0)} mm in chord and ${(span * 1000).toFixed(0)} mm across, ${(g.h * 1000).toFixed(0)} mm over the deck, set ${g.pitch}° leading edge down`, parts: [
         P('wing blade', { prism: { pts: foil, L: span } }, [xc, y, 0], { rot, mat: 'fibreglass', color: g.color, finish: 'paint', item: 'wing-blade', joins: ['wing upright left', 'wing upright right', 'wing end plate left', 'wing end plate right'] }), ...ups, ...plates] }));
     }
@@ -1758,12 +1763,13 @@ export const MACHINES: Machine[] = [
   // of a car), each ± in the doc; a figure the picture did not fix kept as it was)
   { ...MONTE_CARLO_04, id: 'montecarlo04-kit', short: 'monte carlo custom', name: 'Chevrolet Monte Carlo SS (2004), black with a red body kit', color: 0x141416,
     H: 1.43, clearance: 0.13, lines: { ...MONTE_CARLO_04.lines!, nose: 0.515, cowl: 0.281, roofF: 0.434, roofR: 0.646, deck: 0.774, tail: 0.762, cowlH: 0.706, deckH: 0.835, belt: 0.641, dloR: 0.68, doorR: 0.584, face: { ...MONTE_CARLO_04.lines!.face, lamp: 0.104, wrap: 0.385 } },
-    axles: MONTE_CARLO_04.axles.map((a) => ({ ...a, tyre: '245/35R20' })),
+    // (its rims 21 in by the picture's (fitted, 2026-10-30), on tyres of the same diameter as before)
+    axles: MONTE_CARLO_04.axles.map((a) => ({ ...a, tyre: '245/30R21' })),
     rims: { ...MONTE_CARLO_04.rims, color: 0x18181a, accent: 0xb3121f, lip: 0xb3121f, cap: 0x1a1a1c },
-    kit: { color: 0xb3121f, flares: { w: 0.066, t: 0.0096, from: 27, to: 160, every: 16 }, skirts: { h: 0.109, t: 0.03 }, lip: { d: 0.12, t: 0.02, out: 0.016, sd: 0.6, sh: 0.09, rise: 0 }, valance: { d: 0.1, t: 0.018, out: 0.008, sd: 0.52, sh: 0.07, rise: 0.11 },
+    kit: { color: 0xb3121f, flares: { w: 0.083, t: 0.01, from: 22, to: 156, every: 16, inset: 0.05 }, skirts: { h: 0.099, t: 0.03 }, lip: { d: 0.12, t: 0.02, out: 0.033, sd: 0.54, sh: 0.09, rise: 0 }, valance: { d: 0.1, t: 0.018, out: 0.008, sd: 0.36, sh: 0.07, rise: 0.11 },
       scoop: [[0.874, 0.799], [0.405, 0.818], [0.399, 0.737], [0.464, 0.618], [0.55, 0.498], [0.643, 0.428], [0.872, 0.404], [0.845, 0.442], [0.777, 0.461], [0.698, 0.539], [0.619, 0.653], [0.568, 0.767], [0.851, 0.764]],
       vent: [[0.851, 0.764], [0.568, 0.767], [0.619, 0.653], [0.698, 0.539], [0.777, 0.461], [0.845, 0.442]],
-      wing: { chord: 0.15, h: 0.05, span: 0.686, pitch: 8, back: 0.275, color: 0x141416 },
+      wing: { chord: 0.236, h: 0.069, span: 0.686, pitch: 8, back: 0.3, color: 0x141416, plate: 0.475, plateH: 0.097 },
       says: 'its body kit as in its owner\'s photograph: red flares, skirts, lip, valance and scoop inserts, a black wing with red end plates and uprights; each piece\'s size read off the photograph (estimates), moulded ABS (typical)' },
     says: MONTE_CARLO_04.says + '; this one gloss black, with a red body kit and black and red 20-in. wheels, as in its owner\'s photograph' },
   {
