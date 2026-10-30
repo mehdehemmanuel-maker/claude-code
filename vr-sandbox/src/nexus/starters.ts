@@ -377,6 +377,14 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'bs'); wire(b, 'bar', 'says', 'bs', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'be'); b.nodes.be!.label = 'Its effects'; wire(b, 'bar', 'effects', 'be', 'rows');
     return tidy(b);
   }],
+  ['Choosing and fitting: a 40 kN/m coil spring as light as can be, 1.3 times as strong as it must be, from five ASTM wires and three to eight coils, its wire\'s size fitted in each: every way of choosing ranked, what each reached, and which cannot do it', () => {
+    const b = emptyBoard('Choosing and fitting');
+    placeBlock(b, 'fit.target', 0, 0, { block: 'seed.spring-checked', vary: 'wire music-wire-a228|oil-tempered-a229|hard-drawn-a227|chrome-silicon-a401|stainless-302-a313\nd 0.002..0.005\nn 3..8 int', goals: 'rate = 40000\nworst > 1.3\nmass min', most: 60 }, 'fit'); b.nodes.fit!.label = 'Which wire, how many coils, what size';
+    placeBlock(b, 'view.table', 0, 0, {}, 'ch'); b.nodes.ch!.label = 'Every way of choosing, best first'; wire(b, 'fit', 'choices', 'ch', 'rows');
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'fit', 'says', 'sy', 'value');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'fit', 'thing', 'show', 'thing');
+    return tidy(b);
+  }],
   ['Trade-offs: a coil spring as light as can be and as stiff as can be, its factor of safety kept over 1.2: every design tried across its wire, coil and turns, the best kept (none beaten on both), charted, the one giving up least marked, and each made, side by side', () => {
     const b = emptyBoard('Trade-offs');
     placeBlock(b, 'trade.offs', 0, 0, { block: 'seed.spring-checked', vary: 'd 0.002..0.005\nD 0.015..0.035\nn 3..10', goals: 'mass min\nrate max\nworst > 1.2' }, 'tr'); b.nodes.tr!.label = 'Light against stiff, kept safe';

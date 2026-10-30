@@ -17,6 +17,7 @@ import { register, type BlockDef, type Type } from './blocks';
 import { Engine, emptyBoard, groupBlock, placeBlock, wire } from './dataflow';
 import type { Board } from './boards';
 import { PHOTOS } from './photo-marks';
+import { SPRING_WIRES } from '../engineering/springs';
 import './reconstruct';
 
 /** A board being built, a node at a time, and saved as a seed. */
@@ -516,7 +517,8 @@ function springChecked(): void {
   const s = new Seed('Coil spring, made and loaded');
   const d = s.input('d', 'number', 0.003, 'wire diameter, m', undefined, 'm'), D = s.input('D', 'number', 0.024, 'mean coil diameter, m', undefined, 'm'), n = s.input('n', 'number', 5, 'active coils'), L = s.input('L', 'number', 0.04, 'length as fitted, m', undefined, 'm'), st = s.input('stroke', 'number', 0.008, 'compressed further by, m', undefined, 'm');
   const coil = s.n('make.coil', {}, 'the spring, made'); s.w(d, 'value', coil, 'd'); s.w(D, 'value', coil, 'D'); s.w(n, 'value', coil, 'n'); s.w(L, 'value', coil, 'L');
-  const load = s.n('load.spring', {}, 'under its load'); s.w(coil, 'spring', load, 'spring'); s.w(st, 'value', load, 'stroke');
+  const wire = s.input('wire', 'text', 'chrome-silicon-a401', 'its wire (ASTM grade, Shigley tables 10-4 to 10-6)', Object.keys(SPRING_WIRES));
+  const load = s.n('load.spring', {}, 'under its load'); s.w(coil, 'spring', load, 'spring'); s.w(st, 'value', load, 'stroke'); s.w(wire, 'value', load, 'wire'); s.w(wire, 'value', coil, 'wire');
   s.output('spring', 'part', coil, 'spring'); s.output('mass', 'number', coil, 'mass', 'kg'); s.output('rate', 'number', coil, 'rate', 'N/m'); s.output('worst', 'number', load, 'worst'); s.output('checks', 'table', load, 'rows');
   s.save('seed.spring-checked', 'Coil spring, made and loaded', 'A helical compression spring made from its wire and coils (the coil maker) and put under its working stroke (Spring under load): its mass, its rate, and its least factor of safety, wire stress and coil bind among them. Folded so a fit, a trade-off or a sensitivity can move its wire and coils as one', ['mechanical'],
     { gloss: 'What does a coil spring of this wire and these coils weigh, how stiff is it, and does it hold its stroke?', discipline: 'mechanical.design', role: 'analysis', codes: [{ scheme: 'MSC2020', code: '74K10', label: 'Rods (beams, columns, shafts, arches, rings, etc.)' }],

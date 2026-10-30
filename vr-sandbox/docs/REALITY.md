@@ -1216,3 +1216,16 @@ limit, 26 on the front from 12.6 g at 16.6 kN/m to 32.6 g at 77.4 kN/m, the limi
 knee d 3.59 mm, D 19.7 mm, 3.24 coils, 25.1 g, 66.5 kN/m; 198 ms. A bar, area against stress kept under 4 MPa: 27 on the
 front from 0.0027 m², 68 ms. Seen and fixed in its board's screenshots: a chart drew the first wire in (its x) as its y;
 26 springs strung in a 0.7 m row were drawn far off as boxes, now laid in a square (174 × 143 mm), each a spring.
+- **2026-10-30, choosing inside a fit (no new node).** Asked for "best of choices", the space was searched first:
+`size.select` picks only batteries and `size.line` only wire gauges and bores; Variants already drew from lists. So
+Fit to a target, Trade-offs and What matters take choices instead (`name a|b|c`, `name lo..hi int`, one parser,
+`rangesOf` in `dataflow.ts`); a fit tries each way of choosing with its values fitted inside, ranks them (`choices`) and
+shows what the best makes (`thing`). A choice not among an input's own is refused by name. With a wish (min, max) among
+its goals, values asked for and limits now weigh 10⁵ over it (it had traded a 40 kN/m rate down to 27 kN/m for mass).
+Found and fixed on the way: a wire into an input a block does not have was kept and carried nothing (the folded spring's
+wire grade never reached its load check): `wire()` now refuses it; Spring under load and Engine under load take their
+wire grade wired, and the coil maker takes it too, its rate from the grade's own G (stainless 69 GPa, music wire 81.7)
+rather than 79 GPa for all. Measured: a 40 kN/m spring, 1.3 times as strong as it must be, as light as can be, from five
+ASTM wires, 3 to 8 coils and the wire's size fitted: music wire, 3 coils, 3.57 mm, 29.3 g; stainless needs 4 coils,
+44.9 g; hard-drawn and stainless cannot in 3 (said, with what each reached); 30 ways, 1,542 runs, 0.46 to 0.75 s. Seen
+in its screenshot and fixed: a coil drawn with 12 points a turn read as an octagon; 32 now.
