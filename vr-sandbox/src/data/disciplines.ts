@@ -371,6 +371,37 @@ systems Systems and software engineering | INCOSE's handbook; ACM CCS 2012 for c
     testing Software testing
     data Data engineering
 
+intelligence Intelligence (AI) engineering | ISO/IEC 22989 (AI concepts and terminology) and 42001 (AI management); ACM CCS 2012 (computing methodologies: artificial intelligence, machine learning); NIST's AI Risk Management Framework. No body divides it into branches yet: these are Nexus's own, labelled so
+  models Model engineering
+    selection Model selection and routing (which model for which task, its fallbacks)
+    adaptation Fine-tuning and adaptation
+    serving Serving, cost and latency
+  prompt Prompt engineering
+    wording Wording and templates
+    context Context and examples (few-shot, grounding)
+    trial Prompt trials and optimisation (measured against each other)
+  evaluation Evaluation engineering
+    judge Model-as-judge (blind, criteria, several judges)
+    calibration Calibration and agreement (a score that means the same each time)
+    benchmark Benchmarks and test sets
+  agents Agent engineering
+    tools Tool use and actions
+    planning Planning and decomposition
+    memory Memory and state
+    multi Multi-agent systems (roles, review, debate)
+  perception Machine perception (vision, speech, sensing)
+  generative Generative design (images, shapes and plans from models)
+  retrieval Data and retrieval for models
+  safety AI safety, security and governance (keys, injection, guardrails, provenance)
+
+pipeline Pipeline and flow engineering | no professional body divides it yet: Nexus's own division, after dataflow practice (Kahn process networks, 1974; directed-acyclic-graph workflows) and INCOSE's systems view, labelled so
+  dataflow Dataflow design (nodes, typed wires, folding a pipeline into one node)
+  execution Execution (incremental runs, caching by content, parallel workers)
+  search Design search and optimisation loops (fits, trade-offs, variants, choices)
+  sensitivity Sensitivity and uncertainty through a pipeline
+  verification Pipeline verification (baselines, differences, gauntlets)
+  orchestration Orchestration of people, agents and machines in one flow
+
 earth Mining, petroleum and geological engineering | SME (mining) and SPE
   mining Mining engineering
     surface Surface mining
@@ -414,6 +445,7 @@ export const FIELD_DISCIPLINES: Record<string, string[]> = {
   thermal: ['mechanical.thermofluids', 'mechanical.hvac'], materials: ['materials'], manufacturing: ['manufacturing'], vehicles: ['vehicle', 'marine'],
   aerospace: ['aerospace'], chemical: ['chemical'], energy: ['energy', 'nuclear'], life: ['biomedical', 'agricultural'], software: ['systems'],
   operations: ['manufacturing.industrial', 'civil.construction'],
+  intelligence: ['intelligence'], pipelines: ['pipeline'],
 };
 
 /** The tree as an outline, for the docs. */

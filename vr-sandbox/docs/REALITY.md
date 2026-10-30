@@ -1275,3 +1275,13 @@ flat shading), 4.2/10, "missing mirrors and door handles", "low-polygon" (2 each
 words and Prompt trial are built; every image model refused with RESOURCE_EXHAUSTED (the key's free tier carries no
 image quota), so no picture has been drawn and neither has been run end to end. ZenRows: the network policy refuses
 api.zenrows.com (CONNECT 403), so it has not been tried.
+- **2026-10-30, two new disciplines.** `data/disciplines.ts`: Intelligence (AI) engineering, after ISO/IEC 22989 and
+42001, ACM CCS 2012 and NIST's AI RMF (no body divides it into branches yet; its branches are Nexus's own, said so):
+model engineering, prompt engineering (wording, context, trials), evaluation engineering (model-as-judge, calibration,
+benchmarks), agent engineering (tools, planning, memory, multi-agent), machine perception, generative design, retrieval,
+safety and governance. Pipeline and flow engineering, its own discipline, not a branch of AI: its tools run engines and
+springs as much as models (dataflow design, execution, design search, sensitivity, verification, orchestration); no body
+divides it yet, so its division is Nexus's own, after dataflow practice. Library fields Intelligence (AI) (4 nodes: Ask
+Claude, Blind judge, Picture from words, Prompt trial) and Pipelines & flow (8: Fit to a target, Trade-offs, Variants,
+What matters, Difference, Pipelines tried, Sweep, Tester). Sweep, Tester and Ask Claude given their specs. The gate:
+23 of 23, 56 s against its minute.

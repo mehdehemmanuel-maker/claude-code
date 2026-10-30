@@ -1,6 +1,6 @@
 # Engineering disciplines
 
-Generated from `src/data/disciplines.ts`: 17 disciplines, 365 entries in all (discipline, branch, specialty). Each discipline is organised after the body named with it; nodes are classified to the deepest entry that fits (docs/REALITY.md, step K).
+Generated from `src/data/disciplines.ts`: 19 disciplines, 394 entries in all (discipline, branch, specialty). Each discipline is organised after the body named with it; nodes are classified to the deepest entry that fits (docs/REALITY.md, step K).
 
 ## Civil engineering (`civil`)
 
@@ -411,6 +411,43 @@ After INCOSE's handbook; ACM CCS 2012 for computing.
   - Software design (`systems.software.design`)
   - Software testing (`systems.software.testing`)
   - Data engineering (`systems.software.data`)
+
+## Intelligence (AI) engineering (`intelligence`)
+
+After ISO/IEC 22989 (AI concepts and terminology) and 42001 (AI management); ACM CCS 2012 (computing methodologies: artificial intelligence, machine learning); NIST's AI Risk Management Framework. No body divides it into branches yet: these are Nexus's own, labelled so.
+
+- Model engineering (`intelligence.models`)
+  - Model selection and routing (which model for which task, its fallbacks) (`intelligence.models.selection`)
+  - Fine-tuning and adaptation (`intelligence.models.adaptation`)
+  - Serving, cost and latency (`intelligence.models.serving`)
+- Prompt engineering (`intelligence.prompt`)
+  - Wording and templates (`intelligence.prompt.wording`)
+  - Context and examples (few-shot, grounding) (`intelligence.prompt.context`)
+  - Prompt trials and optimisation (measured against each other) (`intelligence.prompt.trial`)
+- Evaluation engineering (`intelligence.evaluation`)
+  - Model-as-judge (blind, criteria, several judges) (`intelligence.evaluation.judge`)
+  - Calibration and agreement (a score that means the same each time) (`intelligence.evaluation.calibration`)
+  - Benchmarks and test sets (`intelligence.evaluation.benchmark`)
+- Agent engineering (`intelligence.agents`)
+  - Tool use and actions (`intelligence.agents.tools`)
+  - Planning and decomposition (`intelligence.agents.planning`)
+  - Memory and state (`intelligence.agents.memory`)
+  - Multi-agent systems (roles, review, debate) (`intelligence.agents.multi`)
+- Machine perception (vision, speech, sensing) (`intelligence.perception`)
+- Generative design (images, shapes and plans from models) (`intelligence.generative`)
+- Data and retrieval for models (`intelligence.retrieval`)
+- AI safety, security and governance (keys, injection, guardrails, provenance) (`intelligence.safety`)
+
+## Pipeline and flow engineering (`pipeline`)
+
+After no professional body divides it yet: Nexus's own division, after dataflow practice (Kahn process networks, 1974; directed-acyclic-graph workflows) and INCOSE's systems view, labelled so.
+
+- Dataflow design (nodes, typed wires, folding a pipeline into one node) (`pipeline.dataflow`)
+- Execution (incremental runs, caching by content, parallel workers) (`pipeline.execution`)
+- Design search and optimisation loops (fits, trade-offs, variants, choices) (`pipeline.search`)
+- Sensitivity and uncertainty through a pipeline (`pipeline.sensitivity`)
+- Pipeline verification (baselines, differences, gauntlets) (`pipeline.verification`)
+- Orchestration of people, agents and machines in one flow (`pipeline.orchestration`)
 
 ## Mining, petroleum and geological engineering (`earth`)
 

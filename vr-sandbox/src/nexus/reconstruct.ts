@@ -815,7 +815,7 @@ node({ id: 'fit.lines', name: 'Body fitted to a picture (analysis by synthesis)'
     return { figures, before: fit.before.errPx, after: fit.errPx, iou: fit.iou, machine: fitted, vehicle: makeMachine(fitted), camera: seen, recipe: `${r.id}: ${r.says}; ${fit.evaluations} trials in ${(fit.ms / 1000).toFixed(0)} s` };
   } });
 
-node({ id: 'recon.search', name: 'Pipelines tried (which way of fitting matches best)', kind: 'critic', ability: 'check', domains: ['vehicles', 'manufacturing', 'science'], pure: true,
+node({ id: 'recon.search', name: 'Pipelines tried (which way of fitting matches best)', kind: 'critic', ability: 'check', domains: ['vehicles', 'manufacturing', 'science', 'pipelines'], pure: true,
   spec: { gloss: 'Of the ways to fit a model to a picture, which matches it best, and at what cost?', discipline: 'manufacturing.metrology.inspection', role: 'assessment', codes: [ACM_CV, { scheme: 'MSC2020', code: '65K10', label: 'Numerical optimization and variational techniques' }] },
   says: 'Each recipe (RECIPES: which outline it is held to, its cost one way or both, what is free, its stages) run on the same picture and the same model, and each judged alike: both ways against the dense outline at half size with its skins drawn fine, its overlap, its error in pixels and in millimetres at the scale its wheelbase sets, and its time as measured. The best is the one Body fitted to a picture keeps (BEST_RECIPE, set from this, its results kept in docs/RECONSTRUCT.md)',
   settings: [{ key: 'recipes', label: 'Recipes to try', type: 'text', default: RECIPES.map((r) => r.id).join(' ') }],

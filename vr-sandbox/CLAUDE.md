@@ -229,6 +229,12 @@ the task list and lose the why. So the why lives here, and every round is checke
   generators are genius on accident they'll really invent a new technology … create a prompt engineer test what prompts
   work best for activating its genius have some type of confidence rating" (2026-10-30: `genai.ts`: Blind judge, Picture
   from words, Prompt trial, Views round a thing; the key's image quota is the user's to enable)
+- "Intelligence or Ai engineering needs to be a main category of engineering as well Prompt engineering to be a sub
+  category of it and agentic flow or whatever pipeline engineering or maybe pipeline engineering should be its own type of
+  engineering idk you think on that" (2026-10-30: two main disciplines in `data/disciplines.ts`: Intelligence (AI)
+  engineering (models, prompt, evaluation, agents, perception, generative, retrieval, safety) and Pipeline and flow
+  engineering (its own: pipelines run engines and springs as much as AI); library fields Intelligence (AI) and Pipelines &
+  flow)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say

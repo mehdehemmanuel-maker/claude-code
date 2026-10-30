@@ -4,7 +4,7 @@ Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tes
 
 ## Fields and the disciplines they reach
 
-The fields below are the library's own; the engineering disciplines are a tree of 17 disciplines and 365 entries in all (docs/DISCIPLINES.md).
+The fields below are the library's own; the engineering disciplines are a tree of 19 disciplines and 394 entries in all (docs/DISCIPLINES.md).
 
 | Field | Disciplines |
 | --- | --- |
@@ -23,6 +23,8 @@ The fields below are the library's own; the engineering disciplines are a tree o
 | Biomedical & life | Biomedical engineering (7 branches); Agricultural and biosystems engineering (4 branches) |
 | Software & data | Systems and software engineering (5 branches) |
 | Operations & projects | Industrial engineering (8 branches); Construction engineering and management (5 branches) |
+| Intelligence (AI) | Intelligence (AI) engineering (8 branches) |
+| Pipelines & flow | Pipeline and flow engineering (6 branches) |
 
 ## Evidence
 
@@ -42,7 +44,7 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 
 Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 538 tested here (their own tests: that they do what they say, not that the world does); 48 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 596 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 596 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -231,7 +233,7 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Sensitivity (elementary effects)** (`what.matters`): Any block in the library, or a whole pipeline folded into one, run along paths that move its inputs or settings one at a time across their ranges: for each output, each value ranked by how much it moves it over its … *derived, tested here*
 - **Silhouette comparison (IoU, signed contour error)** (`compare.outline`): The model's silhouette against the outline traced on the photograph: their overlap (intersection over union), and at each outline point how far the model's edge is, + where the model falls short of the photograph, − … *derived, tested here*
 - **Switch-level cell characterisation** (`cell.characterise`): One of a chip's own gates, of the kind you pick (the commonest first), copied out of its netlist and run at switch level through every input: its truth table, and whether it gives the gate its pull-down network says. *derived, tested here*
-- **Tester** (`test.block`): A block of the library put to its own tests, then pushed far from its defaults (zero, a thousandth, a thousand times, negative): each failure and each crash said, and whether it answered or refused in words *derived, tested here, before the update*
+- **Tester** (`test.block`): A block of the library put to its own tests, then pushed far from its defaults (zero, a thousandth, a thousand times, negative): each failure and each crash said, and whether it answered or refused in words *derived, tested here*
 - **Turn it over and check** (`check.turning`): A piston engine turned through a whole revolution of its crank, a step at a time: at each, its crank and every piston and rod where they then are, tried against everything else (block, caps, pan, pump, cams in the … *derived, tested here, before the update*
 - **What it is made of** (`made.of`): Any thing opened as its materials all the way down: its own tree with each thing's mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a … *derived, tested here*
 
@@ -250,7 +252,7 @@ Physics, motion, the clock, chips run from their transistors, engines under load
 - **Run an engine** (`engine.run`): Any piston engine run from what it is (its bore, stroke, rod, compression, cylinders and the intake valves its head is built with): each cylinder crank degree by crank degree, filled as its valves let it (Taylor's … *simplified, tested here, before the update*
 - **Spring under load** (`load.spring`): A coiled spring as it was made (its wire, its coil, its coils, its free and fitted lengths, read off the part), compressed as fitted and by a stroke more: its rate and forces, its wire's stress against what the wire … *derived, tested here, before the update*
 - **Sweep** (`sweep`): The room a thing needs as it turns from one angle to another about a pivot: it, at so many angles between, as one thing (its envelope), for Clashes to check against what is round it (a door's swing against the bed, an … *derived, tested here, before the update*
-- **Sweep (stress test)** (`sweep.range`): Any block in the library run over a range of one of its inputs (an engine's speed, a beam's load, a loan's rate), the rest wired in as for the block itself: every answer in a table, and the worst of them and where it … *derived, tested here, before the update*
+- **Sweep (stress test)** (`sweep.range`): Any block in the library run over a range of one of its inputs (an engine's speed, a beam's load, a loan's rate), the rest wired in as for the block itself: every answer in a table, and the worst of them and where it … *derived, tested here*
 - **Switch-level simulation against an instruction-set model** (`logic.run`): A program assembled and run on a chip's transistors, at switch level, half a clock cycle at a time, against 64 KB of memory; and beside it on the fast model (the instruction set as its manual gives it), compared … *simplified, untested*
 - **Thermal analysis (conduction, convection, radiation)** (`thermal`): How hot each piece of any thing gets, over its contact graph (Contact graph), nothing typed: pieces held at a temperature (the hottest, the lowest, a name or a material), heat put into others (a chip, a coil, a … *derived, tested here, before the update*
 - **Through time** (`math.ode`): How quantities change when their rates are known: one line a rate ("y' = -k * y"), where each starts ("y = 1"), from one time to another. *derived, tested here*
@@ -349,7 +351,7 @@ Tables, values, charts, the 3D view, the space.
 
 Groups, notes, code, asking, events.
 
-- **Ask Claude** (`ai.ask`): Asks Claude, or Nexus where Claude cannot be reached; {input} is what comes in *hypothetical, untested, before the update*
+- **Ask Claude** (`ai.ask`): Asks Claude, or Nexus where Claude cannot be reached; {input} is what comes in *hypothetical, untested*
 - **Code** (`code`): Code with ports: each input is a name in it, what it returns (an object, port by port, or one value) fills its outputs. *derived, untested, before the update*
 - **Group input** (`group.in`): What comes into the group, under this name *derived, untested, before the update*
 - **Group output** (`group.out`): What goes out of the group, under this name *derived, untested, before the update*
