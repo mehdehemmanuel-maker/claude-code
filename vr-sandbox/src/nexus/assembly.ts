@@ -333,6 +333,14 @@ export function hash(s: string): string {
   for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193); b = Math.imul(b ^ c, 0x5bd1e995) ^ (b >>> 15); }
   return (a >>> 0).toString(36) + (b >>> 0).toString(36);
 }
+/** What a function gives, remembered by its input's content (the hash of its key): asked again for the same, anywhere in
+ *  the app, it is not worked out again. Kept for the last `limit` inputs. For a maker's work: a car made once from its
+ *  record is not made again for the next board, node or fit that asks for the same record. */
+export function remembered<A, R>(keyOf: (a: A) => string, fn: (a: A) => R, limit = 32): ((a: A) => R) & { hits: () => number; misses: () => number } {
+  const kept = new Map<string, R>(); let hits = 0, misses = 0;
+  const f = (a: A): R => { const k = hash(keyOf(a)), was = kept.get(k); if (was !== undefined) { hits++; kept.delete(k); kept.set(k, was); return was; } misses++; const r = fn(a); kept.set(k, r); if (kept.size > limit) kept.delete(kept.keys().next().value!); return r; };
+  return Object.assign(f, { hits: () => hits, misses: () => misses });
+}
 
 // ---- a piece's design, and pieces taken from the library -------------------------------------------------------------
 /** Not the design: where it is, what it is called and said to be, its colour and look (variants over it), and what it is

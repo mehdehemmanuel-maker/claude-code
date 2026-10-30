@@ -1188,3 +1188,10 @@ variant's seed mixed through an integer hash first: unmixed, Park–Miller's fir
 almost in step (widths 0.771, 0.999, 1.227 …), now unrelated. Measured: twelve windows over width, height and frame from
 seed 1, twelve different in 12 draws (31 ms), the same twelve again from seed 1; five drawn from two frames only, 2
 different, 3 said to be repeats it could not avoid.
+- **2026-10-30, remembered by content, everywhere.** Every engine now shares one memo (`SHARED`, `dataflow.ts`) unless
+handed its own: a node's outputs kept by its content key (its block, version, settings and what came in), so the same
+node run on another board, inside a folded node or a fit is not run again. And `remembered` (`assembly.ts`), the same for
+any function by its input's content, used first for making a machine from its record (with the detail it is made at in
+its key; each caller given its own top, its pieces shared). Measured: the Monte Carlo on a second board 815 ms → 1 ms;
+making it again from its record 680 ms → under 1 ms. The built-parts library is unchanged by it (no piece added or
+dropped). Not measured: Picture to model end to end (its time is the fits', which this does not shorten).

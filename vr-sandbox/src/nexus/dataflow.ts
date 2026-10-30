@@ -126,6 +126,10 @@ export class Memo {
   get size() { return this.m.size; }
   clear() { this.m.clear(); }
 }
+/** The memo every engine shares unless it is given its own: a node's outputs kept by its content key (its block and
+ *  version, its settings, the keys of what came in), so a node run anywhere in the app, on any board, inside any folded
+ *  one or fit, is not run again for the same. */
+export const SHARED = new Memo(20_000);
 /** How often each block was used and run, and failed, and how long it took: what the library and the engine learn from. */
 export const USAGE = new Map<string, { runs: number; fails: number; ms: number }>();
 
@@ -142,7 +146,7 @@ export class Engine {
   private kids = new Map<string, Engine>();
   /** What comes into a group's board: by group.in name, its value and its key. */
   feeds: Record<string, { value: unknown; key: string }> = {};
-  constructor(public board: Board, public env: Env = {}, public memo = new Memo()) { rewire(board); }
+  constructor(public board: Board, public env: Env = {}, public memo: Memo = SHARED) { rewire(board); }
 
   /** The board changed shape: nodes or wires added or taken away. Everything is looked at on the next run. */
   reshape(b: Board = this.board): void { rewire(b); this.board = b; this.shaped = false; this.all = true; }
@@ -584,7 +588,7 @@ export function makeBlock(b: Board, gid: string, meta: { id?: string; name: stri
 
 // ---- the spawner: one seed run for each row, each with its own sizes, choices and place ----------------------------------
 /** What every seed run by a spawner has worked out, shared: rows asking the same give the very same thing. */
-const SEEDS = new Memo(50_000);
+const SEEDS = SHARED;
 /** A group's board run by its engine with what came in: what its outputs give. */
 async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>): Promise<Outputs> {
   k.feeds = Object.fromEntries(Object.entries(inputs).map(([name, value]) => [name, { value, key: hash(stable(value)) }]));
@@ -603,7 +607,7 @@ async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>): 
 function runnerOf(d: BlockDef): (inputs: Record<string, unknown>, set: Record<string, unknown>) => Promise<Outputs> {
   if (d.run) return async (inputs, set) => { const o = d.run!(inputs, { set, time: 0 } as Ctx); return o instanceof Promise ? await o : o; };
   if (!d.graph) throw new Error(`${d.name} has nothing to run`);
-  const k = new Engine(d.graph, {}, new Memo(20_000)); return (inputs) => runInside(k, d.graph!, inputs);
+  const k = new Engine(d.graph, {}); return (inputs) => runInside(k, d.graph!, inputs);
 }
 /** A library block run on its own with these inputs: its outputs (a seed's whole board, run where it is needed). */
 export async function runBlock(id: string, inputs: Record<string, unknown>, env: Env = {}): Promise<Outputs> {

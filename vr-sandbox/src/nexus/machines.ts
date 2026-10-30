@@ -15,7 +15,8 @@ import { packToFit, starterBattery, use } from './components';
 import { engineBuilt, type EngineSpec } from './engines';
 import { driveshaft, heavyAxle, transaxle } from './drivetrain';
 import { coil as coiled } from './makers';
-import { boundsOfAll, massOfAll, partOf, place, type Assembly, type Placed } from './assembly';
+import { boundsOfAll, massOfAll, partOf, place, remembered, type Assembly, type Placed } from './assembly';
+import { detail } from './lod';
 import { massOf } from './mass';
 import { aftertreatment, airTank, batteryBox, closureOf, coolingModule, exhaustSystem, bumper, cabStep, dayCab, exhaustStack, fifthWheel, fuelTank, hood, ladderFrame, quarterFender, type TruckBody } from './fittings';
 import { AMBIENT, HEAT_FALLOFF, MAX_SERVICE } from './make/heat-limits';
@@ -1227,7 +1228,12 @@ function suspension(a: Axle, t: Tyre, f: { z: number; y: number }, end: string, 
 }
 
 /** The machine made. */
-export function makeMachine(m: Machine, pick: Pick = {}): Part {
+/** A machine made from its record (`made`): remembered by its record's content and the detail it is made at, so the same
+ *  record is made once however many boards, nodes and fits ask for it; each caller given its own top (its pieces shared,
+ *  never changed in place). */
+const madeOnce = remembered((a: { m: Machine; pick: Pick }) => JSON.stringify([a.m, a.pick, detail()]), (a: { m: Machine; pick: Pick }) => made(a.m, a.pick), 16);
+export function makeMachine(m: Machine, pick: Pick = {}): Part { return { ...madeOnce({ m, pick }) }; }
+function made(m: Machine, pick: Pick = {}): Part {
   const out: Part[] = [], col = m.color, front = Math.max(...m.axles.map((a) => a.x)), rear = Math.min(...m.axles.map((a) => a.x)), c = m.clearance;
   const tyres = m.axles.map((a) => tyreOf(a.tyre)!), off = m.extras.includes('fenders') || m.kind === 'motorcycle';
   // wheels, on their axles

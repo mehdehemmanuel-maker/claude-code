@@ -13,7 +13,7 @@ import { EVIDENCE_SAYS, boardBuiltOf, builtOf, evidenceOf } from '../evidence';
 import { DISCIPLINE } from '../../data/disciplines';
 import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { isAssembly, partOf } from '../assembly';
-import { Engine, Memo, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
+import { Engine, SHARED, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
 import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
 import { starterBoards } from '../starters';
 import { LIBRARY_TYPES, allLibraries, fieldOf, needsOf, nextFor, reachText, search, useOf, type Found } from '../navigate';
@@ -55,7 +55,7 @@ const env: Env = {
 // ---- the board ------------------------------------------------------------------------------------------------------
 let root: Board = emptyBoard('My pipeline');
 let path: string[] = [];
-const memo = new Memo();
+const memo = SHARED;
 let engine = new Engine(root, env, memo);
 const sel = new Set<string>(); let selWire: string | null = null;
 const undo: string[] = [], redo: string[] = [];
