@@ -47,20 +47,20 @@ drew as octagons.
    calibrated (real photographs and known-bad renders scored on the same criteria, so 6/10 means the same each time);
    wordings evolved (the best wording rewritten by a text model each round and tried again, a fit in words); an idea's
    new mechanism named by the judge and queued in the research notes as unsourced, to be checked, never taken as fact.
-4. **Web access for nodes (ZenRows), once the user adds the key and allows its host.** The key goes in the environment's secrets (never the
+3. **Web access for nodes (ZenRows), once the user adds the key and allows its host.** The key goes in the environment's secrets (never the
    repo, never the page). The pages are static, with no server to hold a key, so a web node runs where the key is:
    under Node (Claude's research runs, scripts, the tests); a page could reach it only through a small server holding the
    key, a decision for the user. First nodes: fetch a page as text, search, and feed `research.notes` its sources.
-5. **Stand-in for slow blocks:** learn a cheap model of a block from its trials, fit and trade off on it, check the
+4. **Stand-in for slow blocks:** learn a cheap model of a block from its trials, fit and trade off on it, check the
    answer on the real block.
-6. **Baseline guard:** record any board's outputs; on any later run, `diff` against them and say what changed.
-7. **Where it breaks:** the boundary in a block's inputs where a check flips from pass to fail.
-8. **How likely it fails:** from each input's ± (`spreadOf` already carries ±), the chance an output crosses its limit.
-9. **Picture to model in parallel:** its fits score trials inside one node; make each trial a block run so the pool and
+5. **Baseline guard:** record any board's outputs; on any later run, `diff` against them and say what changed.
+6. **Where it breaks:** the boundary in a block's inputs where a check flips from pass to fail.
+7. **How likely it fails:** from each input's ± (`spreadOf` already carries ±), the chance an output crosses its limit.
+8. **Picture to model in parallel:** its fits score trials inside one node; make each trial a block run so the pool and
    CMA-ES can take it (it is 15 minutes now).
-10. **Sound (Fish Audio or another, once the user adds a key):** what a thing sounds like, read from what it is (an
+9. **Sound (Fish Audio or another, once the user adds a key):** what a thing sounds like, read from what it is (an
    engine's firing frequency, a motor's whine), the "what does it sound like?" the round checklist asks.
-11. **Carried over:** the Cascadia's engine bay, cab, grille and axle internals; any body from its segment table
+10. **Carried over:** the Cascadia's engine bay, cab, grille and axle internals; any body from its segment table
    (`LIFE.md` step 6c).
 
 ## Keeping it lean (audit 2026-10-30)
