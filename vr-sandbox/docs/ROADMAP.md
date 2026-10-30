@@ -32,63 +32,61 @@ Bugs these tools found and fixed: a wire into an input a block lacks carried not
 blocks lost their inputs' defaults inside fits; a chart drew its x as its y; every spring wire had one stiffness; coils
 drew as octagons.
 
-## The CAD plan (2026-10-30): from parametric meshes to an engineering package
+## The plan, in one (2026-10-30)
 
-Asked: editable parametric solids, assemblies with real constraints, independent verification, change propagation, files
-another CAD program opens. Answered honestly that day: parametric but meshes; mates in a chain, no constraint solver;
-verified mostly by our own code; changes follow wires, not geometry; nothing exports. The steps, each done only when its
-check passes:
+Every fix and every step in one order: what blocks the rest first, then what the user sees, then the CAD plan, then the
+rest. Each is done only when its check passes, measured, and said.
 
-0. **The gate under a minute again** (63 s now): measure which checks are slow, keep the fast ones in the gate, move the
-   slow boards to a longer run. Done when the gate is measured under 45 s.
-1. **A real solid kernel (OpenCascade, compiled for the web and Node):** `nexus/brep.ts` turns every Part into an exact
-   solid (primitives; lathe as a revolve; extrusions; tubes as swept pipes; lofts; NURBS skins thickened to sheet), cuts
-   as true booleans, fillets and chamfers as features. Done when the bolt, spring, valve, piston and engine block convert,
-   OpenCascade calls each solid valid, and its volume times density matches our mass within 1 % (and how many pieces fail
-   to convert is said, not hidden).
-2. **Export:** STEP with the assembly tree and names (opens as solids in SolidWorks, Fusion, FreeCAD), STL, 3MF and glTF,
-   and a bill of materials (part, count, material, mass, standard). Done when a STEP of the engine is read back by
-   OpenCascade with the same solids, count and volume.
-3. **Independent verification:** interference by exact booleans checked against our checker; stress on test brackets by
-   CalculiX checked against our beam analysis and the textbook case. Done when they agree, and every disagreement is
-   listed.
-4. **A constraint solver:** mates as equations (coincident, concentric, distance, angle, parallel), all solved at once,
-   degrees of freedom counted, under- and over-constrained said. Done when a 20-part gearbox (housing, shafts, bearings,
-   gears, cover, bolts) solves, a four-bar linkage moves through its range, and the rules come back clean.
-5. **Changes that follow geometry:** interfaces that drive, so a hole resized finds its bolt, washer and nut and resizes
-   them from their standard family, then re-checks and re-exports. Done when an M8 to M10 change in the gearbox does so
-   and Difference lists every part it touched.
+**A. Unblock**
+1. **The gate under a minute** (50 to 63 s, its limit 60): measure which checks are slow; keep the fast in the gate, move
+   slow boards to a longer run. Done when measured under 45 s.
+2. **Image generation on** (fal.ai credit added by the user): run in a session that has the keys and the open network;
+   draw, then run the Prompt trial. Done when pictures are drawn and judged and the wordings ranked.
 
-## Next, in order
+**B. Fix what is wrong now**
+3. **The engine the compiler rejected:** the coil housing over PBT's 140 °C by conduction from the exhaust (shield it,
+   move it, or a material that stands it); the least factor of safety 0.93 at 6,500 rpm; the valves floating at 6,270 rpm
+   (the valve spring). Done when the Engineering compiler board says RELEASE CANDIDATE or BLOCKED only on what is not built.
+4. **The build gallery:** the Monte Carlo's lip and valance end plates stand off the body (lay them with Onto a surface);
+   specks float by the ATV's bars and the dirt bike's lamp; the bolt's thread is smooth (cut it as geometry); the lawn
+   tractor shows no deck; the car kit drew a random car for "rancher" and "cascadia" without a word (say so, or find
+   the machine). Done when each is re-shot and a blind judge no longer names it.
 
-1. **Fix what the build screenshots show** (2026-10-30 gallery). The Monte Carlo's lip and valance end pieces stand off
-   the body as plates (lay them with `onto.surface`); specks float by the ATV's bars and the dirt bike's lamp; the bolt's
-   thread is smooth (cut it as geometry); the lawn tractor shows no deck; the car kit drew a random car for "rancher"
-   and "cascadia" without saying it did not know them (it must say so, or find the machine).
-2. **Imagine, judge, build (the AI image layer's loop), once the Gemini key has image quota.** Built and working: Blind
-   judge (`ai.judge`), Views round a thing; built, waiting on quota: Picture from words (`ai.draw`), Prompt trial
-   (`prompt.trial`). The loop beyond them, each step a node: (a) draw many ideas for one thing, (b) judge each blind for
-   invention and for whether it would work, (c) a vision model marks the best one's features (wheel centres, outline,
-   panel and shut lines), which Picture to model needs and now takes by hand, (d) Picture to model, (e) the model drawn
-   from the idea's own camera and judged against the idea, (f) corrected where they differ. Beside it: the judge
-   calibrated (real photographs and known-bad renders scored on the same criteria, so 6/10 means the same each time);
-   wordings evolved (the best wording rewritten by a text model each round and tried again, a fit in words); an idea's
-   new mechanism named by the judge and queued in the research notes as unsourced, to be checked, never taken as fact.
-3. **Web access for nodes (ZenRows), once the user adds the key and allows its host.** The key goes in the environment's secrets (never the
-   repo, never the page). The pages are static, with no server to hold a key, so a web node runs where the key is:
-   under Node (Claude's research runs, scripts, the tests); a page could reach it only through a small server holding the
-   key, a decision for the user. First nodes: fetch a page as text, search, and feed `research.notes` its sources.
-4. **Stand-in for slow blocks:** learn a cheap model of a block from its trials, fit and trade off on it, check the
-   answer on the real block.
-5. **Baseline guard:** record any board's outputs; on any later run, `diff` against them and say what changed.
-6. **Where it breaks:** the boundary in a block's inputs where a check flips from pass to fail.
-7. **How likely it fails:** from each input's ± (`spreadOf` already carries ±), the chance an output crosses its limit.
-8. **Picture to model in parallel:** its fits score trials inside one node; make each trial a block run so the pool and
-   CMA-ES can take it (it is 15 minutes now).
-9. **Sound (Fish Audio or another, once the user adds a key):** what a thing sounds like, read from what it is (an
-   engine's firing frequency, a motor's whine), the "what does it sound like?" the round checklist asks.
-10. **Carried over:** the Cascadia's engine bay, cab, grille and axle internals; any body from its segment table
-   (`LIFE.md` step 6c).
+**C. The compiler, completed**
+5. **Stage 27, correction:** a failed requirement handed to Fit to a target with the inputs What matters says reach it;
+   the record carried through again; an iteration limit, repeated-state detection, rollback; what cannot be fixed marked
+   HUMAN_REVIEW_REQUIRED. Done when it fixes item 3's two load failures by itself.
+6. **The CAD kernel (OpenCascade):** every part an exact solid (revolves, extrusions, swept pipes, lofts, thickened skins,
+   true booleans, fillets, chamfers); the compiler's stage 10 and 12 checks become real. Done when the bolt, spring,
+   valve, piston and block convert, are valid, and their volume times density matches our mass within 1 %, with what
+   fails to convert counted.
+7. **Export:** STEP with the assembly tree and names, STL, 3MF, glTF, a bill of materials. Done when the engine's STEP is
+   read back with the same solids, count and volume.
+8. **Independent verification:** interference by exact booleans against our checker; stress by CalculiX against our beam
+   analysis and the textbook. Done when they agree, every disagreement listed.
+9. **A constraint solver:** mates as equations solved at once, degrees of freedom counted, under- and over-constrained
+   said. Done when a 20-part gearbox solves, a four-bar linkage moves through its range, and the rules come back clean.
+10. **Changes that follow geometry:** a resized hole finds its bolt, washer and nut and resizes them from their standard,
+   re-checks, re-exports. Done when M8 to M10 in the gearbox does so and Difference lists each part touched.
+11. **The compiler's missing stages:** tolerances and fits (15), fatigue and vibration (18), drawings (22), the
+   multi-agent audit (25: blind judges by discipline, each shown only its own evidence), conflict resolution (26: by the
+   deterministic engine, never a vote).
+
+**D. The AI layer's loop**
+12. **Imagine, judge, build:** draw many ideas; judge each blind for invention and whether it would work; a vision model
+   marks the best one's features; Picture to model; the model drawn from the idea's camera and judged against it;
+   corrected. With the judge calibrated on real photographs, wordings evolved, and an idea's mechanism queued in the
+   research notes as unsourced.
+13. **Web nodes (ZenRows):** fetch, search, and feed the research notes their sources.
+
+**E. Tools for every category**
+14. **Stand-in for slow blocks;** 15. **baseline guard** (any board's outputs recorded, Difference on every later run);
+   16. **where it breaks** (the pass-to-fail boundary); 17. **how likely it fails** (from each input's ±);
+   18. **Picture to model in parallel** (each trial a block run, for the pool and CMA-ES: 15 minutes now);
+   19. **sound** (what a thing sounds like, from what it is).
+
+**F. Carried over**
+20. The Cascadia's engine bay, cab, grille and axle internals; any body from its segment table (`LIFE.md` 6c).
 
 ## Keeping it lean (audit 2026-10-30)
 
