@@ -766,7 +766,8 @@ register({ version: 1, by: 'built in', pure: true, id: 'what.matters', name: 'Se
       const top = Math.max(...rows.map((q) => q.star)) || 0;
       rows.sort((a, b) => b.star - a.star); ranked[w] = rows.map((q) => q.v.name);
       for (const q of rows) { const share = top ? q.star / top : 0; if (share > 1e-6) moves.add(q.j);
-        effects.push({ output: w, value: q.v.name, 'μ*': +q.star.toPrecision(4), 'μ': +q.mu.toPrecision(4), 'σ': +q.sd.toPrecision(4), 'of the most': +share.toFixed(3),
+        const z = (x: number) => (share <= 1e-6 ? 0 : +x.toPrecision(4)); // (what is a millionth of the most is rounding, not an effect)
+        effects.push({ output: w, value: q.v.name, 'μ*': z(q.star), 'μ': z(q.mu), 'σ': z(q.sd), 'of the most': +share.toFixed(3),
           how: share <= 1e-6 ? 'does nothing' : q.sd <= 0.1 * q.star ? (q.mu >= 0 ? 'straight, up' : 'straight, down') : Math.abs(q.mu) >= 0.9 * q.star ? `bends or acts with another, always ${q.mu >= 0 ? 'up' : 'down'}` : 'bends or acts with another, both ways', effects: q.n }); }
     }
     const nothing = vary.filter((_, j) => !moves.has(j)).map((v) => v.name);

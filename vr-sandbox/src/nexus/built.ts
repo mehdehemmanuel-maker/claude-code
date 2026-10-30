@@ -593,7 +593,7 @@ export const BUILT: Record<string, string> = {
   "view.show":"2026-10-25T09:05:20.000Z",
   "view.table":"2026-10-27T08:19:24.000Z",
   "wall":"2026-10-26T13:27:56.000Z",
-  "what.matters":"2026-10-30T09:40:28.000Z",
+  "what.matters":"2026-10-30T09:42:14.000Z",
   "zone":"2026-10-27T23:47:14.000Z"
 };
 /** Nodes whose definition could not be found written out (made in a loop): dated by nothing, so said as before the update. */
@@ -621,8 +621,8 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Picture to model: the Monte Carlo fitted to the AI-made picture of how its owner wants it, by the one folded node (open it for its steps): its outline, then its features one group at a time; then seen from the picture's own camera and judged four ways apart, side by side with the picture, and what to ask for next":"2026-10-30T08:00:20.000Z",
   "Fit to a target: one node that sizes anything to what is asked of it: a bar's area for a stress, an engine's bore for the speed its valves float at; any block, or any pipeline folded into one, its inputs moved within ranges until its outputs meet their goals":"2026-10-30T08:35:27.000Z",
   "Onto a surface: any outline laid onto any thing and following its curve: a vent onto the Monte Carlo's hood in tiles, a badge onto its door, each saying how close it keeps to the surface":"2026-10-30T08:35:27.000Z",
-  "Variants of anything: twelve windows drawn by seed over their width, height and frame, each made, none twice (checked by what each is, not its seed), laid in a row; change the seed for another twelve":"2026-10-30T09:40:31.000Z",
-  "What matters: which of a block's inputs move which of its outputs, and how much: a window's width and height against its mass and size, a bar's load and area against its stress; ranked, straight or bent, and what moves nothing (change the block to ask it of anything, an engine, a whole pipeline folded into one)":"2026-10-30T09:40:31.000Z",
+  "Variants of anything: twelve windows drawn by seed over their width, height and frame, each made, none twice (checked by what each is, not its seed), laid in a row; change the seed for another twelve":"2026-10-30T09:42:14.000Z",
+  "What matters: which of a block's inputs move which of its outputs, and how much: a window's width and height against its mass and size, a bar's load and area against its stress; ranked, straight or bent, and what moves nothing (change the block to ask it of anything, an engine, a whole pipeline folded into one)":"2026-10-30T09:53:37.000Z",
   "Pipelines tried: every recipe for fitting a model to a picture run on the Monte Carlo's, each judged alike (overlap, error both ways, time), the best kept for Picture to model":"2026-10-29T17:42:14.000Z",
   "Chevrolet Monte Carlo SS (2004), built from its first parts: its 3.8 L V6 and four-speed automatic drawn piece by piece, checked that nothing runs into anything and that it comes apart to the bottom":"2026-10-29T08:38:27.000Z",
   "Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one":"2026-10-29T02:24:45.000Z",
