@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 596 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 600 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 322 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 325 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 78 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 79 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 538 tested here (their own tests: that they do what they say, not that the world does); 48 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 540 tested here (their own tests: that they do what they say, not that the world does); 50 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 596 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 600 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -62,7 +62,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 
-## 2 · Make: shapes, parts, things (79)
+## 2 · Make: shapes, parts, things (80)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -80,6 +80,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Coat** (`make.coat`): A part coated with another material, filling it and standing proud of it each side along its thinnest way: paste pressed into a grid, paint, plating, an overmould. *hypothetical, tested here, before the update*
 - **Coil spring, made and loaded** (`seed.spring-checked`): A helical compression spring made from its wire and coils (the coil maker) and put under its working stroke (Spring under load): its mass, its rate, and its least factor of safety, wire stress and coil bind among them. *hypothetical, untested*
 - **Coiled spring** (`make.coil`): Wire coiled round a mandrel, its ends closed: a valve's spring, a clutch's, a pen's *hypothetical, tested here, before the update*
+- **Compile: start (inputs, requirements, parameters)** (`compile.start`): Stages 1, 3 and 8 of the compiler: a design record begun for a thing: what it came from, its requirements (a line each: "R1: rate = 40000 N/m ±2 %: what it is for"), its parameters with how each is known (verified, … *hypothetical, tested here*
 - **Cone** (`shape.cone`): A cone along y: base radius and height *hypothetical, tested here, before the update*
 - **Connecting rod** (`engine.rod`): A connecting rod forged to its I-section, its cap cracked off, its two shells and two bolts *hypothetical, tested here, before the update*
 - **Crankshaft** (`engine.crank`): A crankshaft forged in one: its main journals, a pin for each throw at its firing angle, webs and counterweights, its nose and flange *hypothetical, tested here, before the update*
@@ -206,7 +207,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. *derived, tested here*
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what … *derived, tested here, before the update*
 
-## 5 · Check (26)
+## 5 · Check (29)
 
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
@@ -217,6 +218,9 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Check a limit** (`check.limit`): A value against its limit: whether it passes, the margin left, and the factor of safety *derived, tested here, before the update*
 - **Clashes** (`clash`): Which of the things a thing places run into one another (a car parked into a house, a pipe through a beam): their boxes, as far down as asked, overlapping by more than a touch. *derived, tested here, before the update*
 - **Comes apart to the bottom?** (`audit.explode`): How far a build really comes apart: the share of its mass in lumps (a piece drawn as one though what it is named for is an assembly in the inventory: a headlamp, a door, a fuel tank), each said with what it should … *derived, tested here, before the update*
+- **Compile: bill of materials and its audit** (`compile.bom`): Stages 6 and 7: the thing read into a hierarchical bill of materials (each component: its parent, how many, its material, how it is made, the standard it is to, its mass, and that its geometry is a mesh, not yet a … *derived, untested*
+- **Compile: release gate and package** (`compile.release`): Stages 28 to 30: the release gate over every check in the record that was made on the thing as it is now (a check on an earlier design no longer counts): rejected where anything fails, blocked where anything is … *derived, tested here*
+- **Compile: verify (interference, requirements)** (`compile.verify`): Stages 13 and 17 checked by engines other than the one that made the thing: every surface against every other (the rules checker: interference, clearance, heat), and each requirement against the outputs wired in (a … *derived, untested*
 - **Conservation balance (in − out − accumulation)** (`check.balance`): What goes in against what comes out and what is kept, of one thing that is conserved (energy, mass, momentum along one axis, charge): every wire into In and into Out summed in one unit, and the imbalance. *derived, tested here*
 - **Contact graph** (`graph`): The contact graph of any thing, read from its geometry with nothing typed: every piece a node, every two that touch an edge, with where they meet, which way, how hard they press and over what patch; the groups that … *derived, tested here*
 - **Difference (any two)** (`diff`): Any two things wired in, of any kind (two numbers, two records, two tables, two parts, two whole cars, before and after a fit, one variant and the next) and every difference between them, down to each number and each … *derived, tested here*

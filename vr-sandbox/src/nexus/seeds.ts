@@ -20,6 +20,7 @@ import { PHOTOS } from './photo-marks';
 import { SPRING_WIRES } from '../engineering/springs';
 import './reconstruct';
 import './genai';
+import './compiler';
 
 /** A board being built, a node at a time, and saved as a seed. */
 class Seed {

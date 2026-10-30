@@ -238,6 +238,9 @@ the task list and lose the why. So the why lives here, and every round is checke
 - "whenever your making an ai in the loop flow explain it to me like this ai waits for this then reads and writes too x
   and then x writes too z" (2026-10-30): every flow with a model in it is explained step by step: who waits for what,
   what it reads, what it writes and to whom, and where a step can fail
+- the 30-stage "Industrial-grade autonomous CAD engineering compiler" (2026-10-30), with "turn this into a node pipeline
+  somehow": its data contract, statuses and release gate as `compiler.ts` and nodes Compile: start, bill of materials,
+  verify, release; each of its stages mapped to what does it here or what it waits on (`docs/COMPILER.md`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say
@@ -296,6 +299,7 @@ known gaps are there too.
 | Inventory, pieces, looks, breakdown queue | `nexus/inventory.ts`, `pieces.ts`, `looks.ts`, `breakdown.ts` |
 | Research and the gap map | `nexus/research.ts`, `data/references.ts` |
 | Models over the web (Gemini): pictures judged blind as a measurement, drawn from words, wordings tried | `nexus/genai.ts` (keys: `GEMINI_API_KEY`, `FAL_KEY`, under Node only) |
+| The engineering compiler: one design record through stages (requirements, BOM, checks with their engine and input hash), the release gate | `nexus/compiler.ts` (`docs/COMPILER.md`) |
 | The gauntlet | `nexus/gauntlet.ts`, `view/gauntlet.ts` |
 | Seeds (window to city) | `nexus/seeds.ts` |
 | Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts` |

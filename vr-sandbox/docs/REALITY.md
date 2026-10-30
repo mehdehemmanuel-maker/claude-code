@@ -1285,3 +1285,10 @@ divides it yet, so its division is Nexus's own, after dataflow practice. Library
 Claude, Blind judge, Picture from words, Prompt trial) and Pipelines & flow (8: Fit to a target, Trade-offs, Variants,
 What matters, Difference, Pipelines tried, Sweep, Tester). Sweep, Tester and Ask Claude given their specs. The gate:
 23 of 23, 56 s against its minute.
+- **2026-10-30, the engineering compiler.** The user's 30-stage compiler as `compiler.ts` and four nodes (Compile:
+start, bill of materials, verify, release): one design record through the stages, every check naming its engine and the
+design hash it checked, the release gate their Loop F; the 30 stages mapped in `docs/COMPILER.md` (10 built, 13
+partial, 7 not built). First runs: a spring, BLOCKED (fatigue life unverified, no interfaces declared, meshes not
+solids), its three measurable requirements passing; an inline four from its parts, REJECTED for three real reasons (its
+coil housing over PBT's 140 °C by conduction from the exhaust, its least factor of safety 0.93 at 6,500 rpm, its
+valves floating at 6,270 rpm), 410 components, 20 s.
