@@ -52,8 +52,6 @@ async function pool(): Promise<Hand[]> {
   starting ??= (async () => { const n = Math.max(1, await cores()); const h = isNode ? await nodeHands(n) : pageHands(n); for (const x of h) x.on(reply); hands = h; return h; })();
   return starting;
 }
-/** The workers stopped (they start again when next needed). */
-export function stopWorkers(): void { for (const h of hands) h.stop(); hands = []; starting = null; }
 
 export interface ManyOptions { /** Run here, never on workers. */ here?: boolean; /** A block not built in, carried to the workers. */ carry?: Carry }
 export interface Many { results: (Outputs | Error)[]; wide: boolean; workers: number; ms: number }

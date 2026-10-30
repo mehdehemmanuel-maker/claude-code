@@ -155,4 +155,3 @@ export function findQuantities(text: string): Said[] {
   return out;
 }
 
-export const DIMS = { volume: [0, 3, 0, 0, 0, 0] as Dim, mass: M, length: L, time: T, current: I, temperature: K, force: N, pressure: PA, energy: J, power: W, voltage: V, resistance: OHM, speed: [0, 1, -1, 0, 0, 0] as Dim, accel: [0, 1, -2, 0, 0, 0] as Dim, torque: [1, 2, -2, 0, 0, 0] as Dim, frequency: [0, 0, -1, 0, 0, 0] as Dim, charge: [0, 0, 1, 1, 0, 0] as Dim };

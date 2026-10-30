@@ -6,8 +6,7 @@
 // like any other: its sizes, its make-up down to the elements, how it is made, and what it does by its law.
 // Where a series is not a standard's but a grid of the common sizes makers sell (springs, heaters, fans), it says so.
 
-import { BEARINGS, CHAINS, CIRCLIPS, IPE, KEYS, LM, METRIC, NPS40, callFamily } from './families';
-import type { Item } from './inventory';
+import { BEARINGS, CHAINS, CIRCLIPS, IPE, KEYS, LM, METRIC, NPS40 } from './families';
 import { KINDS } from './kinds';
 import { linesOf } from './kinds/core';
 
@@ -102,9 +101,6 @@ export function catalogue(family?: string): string[] {
   if (family) { let l = byFamily.get(family); if (!l) byFamily.set(family, (l = SERIES[family]?.lines() ?? [])); return l; }
   return (lines ??= Object.keys(SERIES).flatMap((f) => catalogue(f)));
 }
-const made = new Map<string, Item | null>();
-/** The part a line of the catalogue calls, made by its family the first time, kept after. */
-export function catalogueItem(line: string): Item | null { if (!made.has(line)) { const r = callFamily(line); made.set(line, r && typeof r === 'object' ? r : null); } return made.get(line)!; }
 /** The lines a few words find, without making their parts: each word a part of the line, the more the better. */
 export function searchCatalogue(q: string, n = 20): string[] {
   const ws = q.toLowerCase().split(/\s+/).filter(Boolean); if (!ws.length) return [];

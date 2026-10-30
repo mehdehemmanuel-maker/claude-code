@@ -2,29 +2,7 @@
 // of charge, gives less of it the faster it is drawn (its maker's own capacity table, not a formula), sags under load
 // by its internal resistance, and is flat when its voltage under load falls to the end voltage its maker rates it to.
 
-import type { Price } from './motors';
 
-export interface BatteryData {
-  id: string;
-  label: string;
-  chemistry: 'lead-acid-vrla' | 'nimh';
-  /** Cells in series in one block, and the block's nominal voltage. */
-  cells: number;
-  V: number;
-  /** The maker's capacity table: hours to discharge at a constant current, the Ah it gave, and the end voltage per cell. */
-  capacity: { hours: number; Ah: number; endPerCell: number }[];
-  /** Internal resistance of a charged block, ohm. */
-  internalR: number;
-  mass: number;
-  /** Block size, m: length, width, height over the terminals. */
-  dims: [number, number, number];
-  /** What it is made of, inside, as its maker describes it: each sub-component and what it does. */
-  construction: { part: string; is: string }[];
-  /** The cell reaction: what is spent while it gives charge (and made again when charged). */
-  reaction: string;
-  price?: Price;
-  source: string;
-}
 
 /**
  * Starting batteries by their BCI group: the case's size is the standard (BCI, Battery Council International, group size

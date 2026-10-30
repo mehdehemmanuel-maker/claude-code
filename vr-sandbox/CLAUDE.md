@@ -220,6 +220,10 @@ the task list and lose the why. So the why lives here, and every round is checke
   its goals, each value with its ±; the minimiser and the fit with ± in `numeric.ts`, driven at once or by a board's run)
 - "Okay yes but I need ss updates frequently" (2026-10-30): screenshots of what was made, sent as each piece of work
   lands (the board in the app, the thing in 3D), not only at the end of a round
+- "I'm gonna give you zenrows for the nodes … superior access to the web … report to me where you at what you've done
+  and updated road map thoroughly check code and context for bloat and unnecessary or outdated things" (2026-10-30: keys
+  the user gives go in the environment's secrets, never in the repo or the page; accounts and keys are the user's to make,
+  not Claude's; the road map is `docs/ROADMAP.md`)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say

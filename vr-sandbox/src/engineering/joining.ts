@@ -11,19 +11,7 @@ export function weldable(a: WeldClass, b: WeldClass) {
   return pair === 'stainless+steel';
 }
 
-/**
- * Nominal shear capacity of a fillet weld: R = 0.707 a L (0.6 F_EXX) (AWS D1.1 / AISC J2.4, without phi).
- * The weaker of weld metal and heat-affected base metal governs.
- */
-export function filletWeldCapacity(leg: number, length: number, Fexx: number, baseUltimateHaz: number) {
-  const throat = 0.7071 * leg;
-  return throat * length * 0.6 * Math.min(Fexx, baseUltimateHaz);
-}
 
-/** Heat input Q = eta V I / v, J/m (process efficiency eta: GMAW 0.8, GTAW 0.6, SMAW 0.8). */
-export function heatInput(eta: number, volts: number, amps: number, travelSpeed: number) {
-  return (eta * volts * amps) / Math.max(travelSpeed, 1e-4);
-}
 
 export interface Adhesive {
   id: string;
@@ -85,12 +73,6 @@ export const ADHESIVES: Record<string, Adhesive> = {
   },
 };
 
-/** Substrate multiplier for an adhesive on a given material category. */
-export function substrateFactor(a: Adhesive, category: string) {
-  if (a.poorOn.includes(category)) return 0.05;
-  if (a.onlyOn.length > 0 && !a.onlyOn.includes(category)) return 0.1;
-  return 1;
-}
 
 export interface Solder {
   id: string;

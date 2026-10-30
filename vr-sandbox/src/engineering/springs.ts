@@ -88,7 +88,3 @@ export function surgeFrequency(s: CoilSpring) {
   return ((2 * s.d) / (Math.PI * s.D ** 2 * s.Na)) * Math.sqrt(s.wire.G / (32 * s.wire.density));
 }
 
-/** Helical torsion spring rate per radian, Shigley eq. 10-51: k' = d^4 E / (10.8 D N) per turn. */
-export function torsionSpringRate(d: number, D: number, N: number, E: number) {
-  return (d ** 4 * E) / (10.8 * D * N) / (2 * Math.PI);
-}

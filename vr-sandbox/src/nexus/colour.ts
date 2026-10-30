@@ -9,14 +9,6 @@ import { CIE_SOURCE, CMF_X, CMF_Y, CMF_Z, D65, FILM_NK, METAL_NK, NM } from '../
 
 /** At normal incidence, the share of light of one wavelength a surface of index n + i k reflects, from air (Fresnel). */
 export const reflectanceNormal = (n: number, k: number): number => ((n - 1) ** 2 + k * k) / ((n + 1) ** 2 + k * k);
-/** At an angle θ from the normal (radians), unpolarised light (the mean of s and p), for a metal: Fresnel with the complex
- *  index, written as a² + b² over the surface's own terms (Born and Wolf, Principles of Optics, §14.4). */
-export function reflectanceAt(n: number, k: number, theta: number): number {
-  const s = Math.sin(theta), c = Math.cos(theta), n2k2 = n * n - k * k - s * s, root = Math.sqrt(n2k2 * n2k2 + 4 * n * n * k * k);
-  const a = Math.sqrt(Math.max(0, (root + n2k2) / 2)), b = Math.sqrt(Math.max(0, (root - n2k2) / 2));
-  const Rs = ((a - c) ** 2 + b * b) / ((a + c) ** 2 + b * b), Rp = Rs * (((a - s * Math.tan(theta)) ** 2 + b * b) / ((a + s * Math.tan(theta)) ** 2 + b * b));
-  return (Rs + Rp) / 2;
-}
 
 const norm = NM.reduce((t, _, i) => t + D65[i]! * CMF_Y[i]!, 0);
 /** A reflectance spectrum (on the 380–780 nm grid) as XYZ under D65, Y of a perfect white 1. */

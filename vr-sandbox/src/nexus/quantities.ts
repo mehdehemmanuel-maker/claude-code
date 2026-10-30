@@ -8,7 +8,7 @@
 // words say nothing, to the dimension's general quantity. A few ports whose names mislead are set by hand (AS).
 
 import type { Law, Port } from './law';
-import { dimOf, dimText, sameDim, type Dim } from './dimension';
+import { dimOf, sameDim, type Dim } from './dimension';
 
 export interface QuantityDef {
   id: string;
@@ -152,8 +152,6 @@ export function quantityOf(l: Pick<Law, 'id'>, p: Port): QuantityDef | undefined
   const d = dimOf(p.unit), here = QUANTITIES.filter((x) => sameDim(x.dim, d));
   return here.find((x) => x.words?.test(p.name)) ?? here.find((x) => x.general) ?? (here.length === 1 ? here[0] : undefined);
 }
-/** A dimension in words: its quantities' names, or its base units when none is registered. */
-export const dimSays = (d: Dim): string => { const here = QUANTITIES.filter((x) => sameDim(x.dim, d)); return here.length ? here.map((x) => x.name).join(' or ') : dimText(d); };
 /** What a variable is in a law, in a sentence. */
 export function meaning(l: Pick<Law, 'id' | 'name'>, p: Port): string {
   const x = quantityOf(l, p);
