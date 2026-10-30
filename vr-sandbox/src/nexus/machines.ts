@@ -868,8 +868,14 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
       // (and short of the wheel's arch, so the wheel keeps its room to move: 30 mm round it, typical)
       const ar = arches.find((q) => q.front === front), room = ar ? (front ? ar.a.x + ar.R + 0.03 : ar.a.x - ar.R - 0.03) : -Infinity;
       const e = xEnd + (front ? o.out : -o.out), far = front ? Math.max(xEnd - o.sd, room) : Math.min(xEnd + o.sd, room);
-      const side2: [number, number][] = [[e, foot + rise], [far, foot], [far, foot - o.sh], [e, foot + rise - o.sh]];
-      if (Number.isFinite(z0)) for (const sd of [-1, 1]) kit.push(P(`${front ? 'front lip' : 'rear valance'} side ${side(sd)}`, { prism: { pts: side2, L: o.t } }, [0, 0, sd * (z0 + o.t / 2)], { ...own, item: front ? 'front-lip' : 'rear-valance', joins: [front ? 'front lip' : 'rear valance', front ? 'bumper cover' : 'rear bumper cover'], fixed: 'screwed to the bumper cover\'s corner', says: `its side piece down the bumper's corner, ${(o.sd * 1000).toFixed(0)} mm along it: moulded ABS (typical)` }));
+      // (laid on the skin as Onto a surface lays an outline: in strips, each on the skin where it is and turned to follow
+      // it, so the piece wraps the corner as it rolls in toward its end, not a flat plate at the corner's widest)
+      const sh = o.sh, topAt = (x: number) => foot + rise - (rise * (x - e)) / (far - e), zAt = (x: number) => { const h = topAt(x), here = near.filter((q) => Math.abs(q.at[0] - x) < 0.02 && q.at[1] > h - sh - 0.03 && q.at[1] < h + 0.03); return here.length ? Math.max(...here.map((q) => q.at[2])) : z0; };
+      const n = Math.max(2, Math.ceil(Math.abs(far - e) / 0.03)), xs2 = Array.from({ length: n + 1 }, (_, i) => e + ((far - e) * i) / n), zs2 = xs2.map(zAt);
+      if (Number.isFinite(z0)) for (const sd of [-1, 1]) kit.push(P(`${front ? 'front lip' : 'rear valance'} side ${side(sd)}`, undefined, [0, 0, 0], { ...own, item: front ? 'front-lip' : 'rear-valance', joins: [front ? 'front lip' : 'rear valance', front ? 'bumper cover' : 'rear bumper cover'], fixed: 'screwed to the bumper cover\'s corner', says: `its side piece down the bumper's corner, ${(o.sd * 1000).toFixed(0)} mm along it, following it: moulded ABS (typical)`, parts: xs2.slice(1).map((xb, i) => {
+        const xa = xs2[i]!, za = zs2[i]!, zb = zs2[i + 1]!, len = Math.hypot(xb - xa, zb - za) + 0.001, ang = Math.atan2(zb - za, xb - xa), ta = topAt(xa), tb = topAt(xb);
+        return P(`${front ? 'front lip' : 'rear valance'} side ${side(sd)} strip ${i + 1}`, { prism: { pts: [[-len / 2, ta], [len / 2, tb], [len / 2, tb - sh], [-len / 2, ta - sh]], L: o.t } }, [(xa + xb) / 2, 0, sd * ((za + zb) / 2 + o.t / 2)], { ...own, rot: [0, -sd * ang, 0], item: front ? 'front-lip' : 'rear-valance' });
+      }) }));
     }
   };
   if (k.lip) plate(k.lip, true);

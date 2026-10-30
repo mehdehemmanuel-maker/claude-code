@@ -1328,3 +1328,9 @@ tractor's deck hung at foot height, 12 cm deep, and read as a footboard: it now 
 off the ground, 5.5 in deep, with a side chute and anti-scalp wheels (typical); the rules check still clean. Left: the
 Monte Carlo's end plates (item 4's last); the dirt bike's 3 and the ATV's 1 rules findings (frame tubes meeting at their
 joints, there before this). The gate: 24 of 24, 45.6 s.
+- **2026-10-30, the Monte Carlo's lip and valance end plates on the body.** Each side piece was one flat plate set at the
+corner's widest point, so where the bumper rolls in toward its end it stood off it. It is now laid as Onto a surface lays
+an outline: in strips about 30 mm long, each on the skin where it is (the skin's samples at that length and height) and
+turned to follow it. Before and after shot from the same camera: both pieces now follow their corners. Left: faint
+seams where the strips meet. With this, item 4's five gallery faults are all fixed; a blind judge has not yet been
+shown them. The gate: 24 of 24, 42.6 s.
