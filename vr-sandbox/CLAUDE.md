@@ -213,6 +213,11 @@ the task list and lose the why. So the why lives here, and every round is checke
   my Monte carlo too you seen mine it's not too pretty right now" (2026-10-29: the side picture is the goal, not a
   photograph; recipes tried and judged alike by Pipelines tried, the best kept; node Picture to model, folded; results in
   `docs/RECONSTRUCT.md`)
+- "once you make something once you won't need to again so what's something that you would use a lot … complexity is
+  right around the corner with a system like this and a lot of things can be reused across different types of categories
+  that you wouldn't normally expect a lot of the tools you have you know can be more advanced" (2026-10-30: tools built
+  once for every category; first, Fit to a target (`fit.target`, `dataflow.ts`): any block or folded pipeline fitted to
+  its goals, each value with its ±; the minimiser and the fit with ± in `numeric.ts`, driven at once or by a board's run)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say

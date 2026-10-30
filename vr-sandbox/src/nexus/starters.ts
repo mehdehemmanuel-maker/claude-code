@@ -345,6 +345,14 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     for (const [k, l] of [['objectives', 'How right, four ways: silhouette, features, surface, dimensions'], ['orientation', 'Facing the way the picture does?'], ['features', 'Each feature against the model\'s own part'], ['regions', 'Where its edges disagree most'], ['dimensions', 'Its dimensions: the picture\'s, the model\'s, the published'], ['groups', 'Each feature group, before and after'], ['figures', 'Each body figure, and what it rests on'], ['feature figures', 'Each feature figure, and what it rests on'], ['ask', 'What to ask for next']] as const) { placeBlock(b, 'view.show', 0, 0, {}, `v${k}`); b.nodes[`v${k}`]!.label = l; wire(b, 'i2m', k, `v${k}`, 'value'); }
     return tidy(b);
   }],
+  ['Fit to a target: one node that sizes anything to what is asked of it: a bar\'s area for a stress, an engine\'s bore for the speed its valves float at; any block, or any pipeline folded into one, its inputs moved within ranges until its outputs meet their goals', () => {
+    const b = emptyBoard('Fit to a target');
+    placeBlock(b, 'in.number', 0, 0, { value: 5000 }, 'F'); b.nodes.F!.label = 'The load, N';
+    placeBlock(b, 'fit.target', 0, 0, { block: 'law.stress.axial', vary: 'A 0.0005..0.01', goals: 'sigma = 2e6', most: 80 }, 'bar'); b.nodes.bar!.label = 'A bar\'s area so it carries the load at 2 MPa'; wire(b, 'F', 'value', 'bar', 'F');
+    placeBlock(b, 'fit.target', 0, 0, { block: 'load.engine', vary: 'bore 0.06..0.1', goals: 'floatRpm = 7000', most: 60 }, 'eng'); b.nodes.eng!.label = 'An engine\'s bore so its valves float at 7,000 rpm';
+    for (const [k, l] of [['bar', 'The bar'], ['eng', 'The engine']] as const) { placeBlock(b, 'view.show', 0, 0, {}, `${k}Says`); b.nodes[`${k}Says`]!.label = l; wire(b, k, 'says', `${k}Says`, 'value'); placeBlock(b, 'view.show', 0, 0, {}, `${k}Fig`); b.nodes[`${k}Fig`]!.label = `${l}: each value, its ±, fixed or not`; wire(b, k, 'figures', `${k}Fig`, 'value'); }
+    return tidy(b);
+  }],
   ['Pipelines tried: every recipe for fitting a model to a picture run on the Monte Carlo\'s, each judged alike (overlap, error both ways, time), the best kept for Picture to model', () => {
     const b = emptyBoard('Pipelines tried');
     placeBlock(b, 'photo.load', 0, 0, { id: 'mc-side' }, 'ph'); b.nodes.ph!.label = 'The picture';

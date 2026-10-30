@@ -1150,3 +1150,13 @@ when added, hung past the bumpers' corners; the picture's length read off one pl
 7.05 px (IoU 0.918), features' edges 11.0 → 6.5 px, their middles 19.2 → 7.5 px, overlap 0.41 → 0.56; surface unchanged;
 depth and the unseen sides unknown. Rules clean on all three Monte Carlos. Blind check: a two-door coupe facing left,
 not yet a Monte Carlo; the wing, flares, rims, lamps and the missing mirror are what it names.
+- **2026-10-30, tools built once for every category: Fit to a target.** One node (`fit.target`, in `dataflow.ts` where
+groups are run) drives any block, or any pipeline folded into one, with some of its inputs or settings moved within
+ranges, until its outputs meet their goals (= a value, under or over a limit, least or most, several at once): each
+value scanned first, then Nelder–Mead; each with its ± (how far before a goal slips 1 %) and whether the goals fix it;
+every trial kept, none run twice, and inside a folded one what the values do not reach worked out once. The minimiser
+and the fit with ± written once in `numeric.ts` as the points they ask for, driven at once (the picture fits) or by a
+board's run. Measured: a bar's area for 2 MPa under 5 kN, 0.0025 m² in 30 runs (12 ms); an engine's bore so its valves
+float at 7,000 rpm, 71.1 ± 0.9 mm in 23 runs (7.6 s); a window built and weighed, folded into one node, its width for
+20 kg, 0.748 ± 0.009 m in 24 runs (48 ms). Asked for what cannot be had (valves floating over 7,500 rpm with a factor of
+2 at once), it says which goals it did not meet and which values the goals do not fix.

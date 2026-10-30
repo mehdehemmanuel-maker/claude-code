@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 585 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 586 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -33,16 +33,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 315 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 316 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 74 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 532 tested here (their own tests: that they do what they say, not that the world does); 43 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 533 tested here (their own tests: that they do what they say, not that the world does); 43 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 585 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 586 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -141,7 +141,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Wound roll** (`make.roll`): Strips laid over one another and wound round a core: a lithium cell's cathode, separator and anode; a coil's wire; a film capacitor; a roll of tape. *hypothetical, tested here, before the update*
 - **Wrap in** (`make.wrap`): A part wrapped in an envelope of a sheet folded round it and sealed at its edges, open at its top: a separator round a battery plate, a bag, a sleeve, shrink wrap *hypothetical, tested here, before the update*
 
-## 3 · Arrange and mate (28)
+## 3 · Arrange and mate (29)
 
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
@@ -150,6 +150,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Clear away** (`clear`): What a thing places, less whatever comes within a distance of another thing (grass under a road, trees where a house stands) or, with "keep", only those: deleting by where things are *derived, tested here, before the update*
 - **Combine** (`combine`): Several things as one assembly, each where it is: a frame and its motors, a city and the swarm over it *derived, tested here, before the update*
 - **Fit in** (`fit`): Every piece of a thing whose name a pattern finds taken out, and the thing wired in put in its place (where it was, turned as it was): a tyre made in depth on every wheel, a real battery pack for the box that stood … *derived, tested here, before the update*
+- **Fit to a target** (`fit.target`): Any block in the library, a law, a maker, a check, or a whole pipeline folded into one (Picture to model, a seed), run again and again with some of its inputs or settings moved within ranges, until its outputs meet … *derived, tested here*
 - **Frame** (`frame`): A named place on a thing, facing a way: where something is set on it, or where it is set on something (a door's middle, a house's drive). *derived, tested here, before the update*
 - **Geometry fitted to its features (windows, flares, wing, skirts; the intake taken off the picture)** (`fit.features`): The model's own parts moved to where the picture's features are, as the same camera sees them, group by group: its windows and door by its body lines, its flares, its wing, its skirts, lip and valance by the kit's … *derived, untested*
 - **Hole** (`hole`): A hole drilled into a part: its radius and depth, where it starts on the part and which way it goes in; with sides, a hex or square pocket. *derived, tested here, before the update*

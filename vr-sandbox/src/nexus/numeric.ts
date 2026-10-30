@@ -389,19 +389,46 @@ export function ode(f: Rates, y0: readonly number[], t0: number, t1: number, o: 
  *  function worked out by building and rendering a thing can be minimised. `step` is each number's first stride; it
  *  stops when the simplex's values agree to `ftol` (absolute) or after `most` evaluations. Each number may be held in a
  *  range (`lo`, `hi`): a point outside is moved to its edge. */
-export function minimize(f: (x: number[]) => number, x0: number[], o: { step?: number[]; ftol?: number; most?: number; lo?: number[]; hi?: number[] } = {}): { x: number[]; value: number; evaluations: number; converged: boolean } {
+export type Minimum = { x: number[]; value: number; evaluations: number; converged: boolean };
+export type MinOptions = { step?: number[]; ftol?: number; most?: number; lo?: number[]; hi?: number[] };
+/** (the method once, as the points it asks to have weighed: driven by a function that answers at once, or by one that
+ *  answers later, a board's run) */
+function* simplex(x0: number[], o: MinOptions): Generator<number[], Minimum, number> {
   const n = x0.length, clampX = (x: number[]) => x.map((v, i) => Math.min(o.hi?.[i] ?? Infinity, Math.max(o.lo?.[i] ?? -Infinity, v)));
-  let evals = 0; const F = (x: number[]) => { evals++; const v = f(x); return Number.isFinite(v) ? v : Infinity; };
+  let evals = 0; function* F(x: number[]): Generator<number[], number, number> { evals++; const v: number = yield x; return Number.isFinite(v) ? v : Infinity; }
   const pts = [clampX(x0)]; for (let i = 0; i < n; i++) { const p = x0.slice(); p[i] = p[i]! + (o.step?.[i] ?? (Math.abs(p[i]!) * 0.05 || 0.05)); pts.push(clampX(p)); }
-  let vals = pts.map(F); const most = o.most ?? 200 * n, ftol = o.ftol ?? 1e-8;
+  let vals: number[] = []; for (const p of pts) vals.push(yield* F(p)); const most = o.most ?? 200 * n, ftol = o.ftol ?? 1e-8;
   while (evals < most) {
     const ord = vals.map((v, i) => i).sort((a, b) => vals[a]! - vals[b]!); const P = ord.map((i) => pts[i]!), V = ord.map((i) => vals[i]!); pts.splice(0, pts.length, ...P); vals = V;
     if (Math.abs(vals[n]! - vals[0]!) <= ftol) return { x: pts[0]!, value: vals[0]!, evaluations: evals, converged: true };
     const c = Array.from({ length: n }, (_, j) => pts.slice(0, n).reduce((s, p) => s + p[j]!, 0) / n), at = (t: number) => clampX(c.map((cj, j) => cj + t * (pts[n]![j]! - cj)));
-    const r = at(-1), fr = F(r);
-    if (fr < vals[0]!) { const e = at(-2), fe = F(e); if (fe < fr) { pts[n] = e; vals[n] = fe; } else { pts[n] = r; vals[n] = fr; } }
+    const r = at(-1), fr = yield* F(r);
+    if (fr < vals[0]!) { const e = at(-2), fe = yield* F(e); if (fe < fr) { pts[n] = e; vals[n] = fe; } else { pts[n] = r; vals[n] = fr; } }
     else if (fr < vals[n - 1]!) { pts[n] = r; vals[n] = fr; }
-    else { const k = at(fr < vals[n]! ? -0.5 : 0.5), fk = F(k); if (fk < Math.min(fr, vals[n]!)) { pts[n] = k; vals[n] = fk; } else { for (let i = 1; i <= n; i++) { pts[i] = clampX(pts[i]!.map((v, j) => pts[0]![j]! + 0.5 * (v - pts[0]![j]!))); vals[i] = F(pts[i]!); } } }
+    else { const k = at(fr < vals[n]! ? -0.5 : 0.5), fk = yield* F(k); if (fk < Math.min(fr, vals[n]!)) { pts[n] = k; vals[n] = fk; } else { for (let i = 1; i <= n; i++) { pts[i] = clampX(pts[i]!.map((v, j) => pts[0]![j]! + 0.5 * (v - pts[0]![j]!))); vals[i] = yield* F(pts[i]!); } } }
   }
   const b = vals.indexOf(Math.min(...vals)); return { x: pts[b]!, value: vals[b]!, evaluations: evals, converged: false };
 }
+const drive = <R>(g: Generator<number[], R, number>, f: (x: number[]) => number): R => { let s = g.next(); while (!s.done) s = g.next(f(s.value)); return s.value; };
+const driveAsync = async <R>(g: Generator<number[], R, number>, f: (x: number[]) => number | Promise<number>): Promise<R> => { let s = g.next(); while (!s.done) s = g.next(await f(s.value)); return s.value; };
+export function minimize(f: (x: number[]) => number, x0: number[], o: MinOptions = {}): Minimum { return drive(simplex(x0, o), f); }
+/** The same, for a function that answers later (a block run, a board). */
+export function minimizeAsync(f: (x: number[]) => number | Promise<number>, x0: number[], o: MinOptions = {}): Promise<Minimum> { return driveAsync(simplex(x0, o), f); }
+
+// ---- fitting figures, each with its ± ------------------------------------------------------------------------------
+export interface Fit { x: number[]; before: number; after: number; pm: number[]; fixed: boolean[]; evaluations: number }
+/** Figures moved to bring a cost down (Nelder–Mead within each one's range), and each one's ± after: how far it can move
+ *  alone before the cost grows by `rise` (one where not said: a pixel, where the cost is in pixels; from the cost's
+ *  curvature there). One the cost hardly moves with over its whole range is not fixed by what the cost sees. */
+type FitOptions = { most?: number; x0?: number[]; ftol?: number; rise?: number };
+function* fitting(keys: { x0: number; lo: number; hi: number; step: number }[], o: FitOptions): Generator<number[], Fit, number> {
+  const x0 = o.x0 ?? keys.map((k) => k.x0), before: number = yield x0;
+  const r = yield* simplex(x0, { step: keys.map((k) => k.step), lo: keys.map((k) => k.lo), hi: keys.map((k) => k.hi), most: o.most ?? 60, ftol: o.ftol ?? 0.05 });
+  let evals = r.evaluations + 1; const best = r.value <= before ? r : { x: x0, value: before };
+  const pm: number[] = [];
+  for (let i = 0; i < keys.length; i++) { const k = keys[i]!, at = (d: number) => { const x = best.x.slice(); x[i] = Math.min(k.hi, Math.max(k.lo, x[i]! + d)); return x; };
+    const up: number = yield at(k.step), dn: number = yield at(-k.step); evals += 2; const curv = (up + dn - 2 * best.value) / (k.step * k.step); pm.push(curv > 1e-15 ? Math.sqrt((2 * (o.rise ?? 1)) / curv) : Infinity); }
+  return { x: best.x, before, after: best.value, pm, fixed: keys.map((k, i) => pm[i]! < (k.hi - k.lo) / 2), evaluations: evals };
+}
+export function fitBy(cost: (x: number[]) => number, keys: { x0: number; lo: number; hi: number; step: number }[], o: FitOptions = {}): Fit { return drive(fitting(keys, o), cost); }
+export function fitByAsync(cost: (x: number[]) => number | Promise<number>, keys: { x0: number; lo: number; hi: number; step: number }[], o: FitOptions = {}): Promise<Fit> { return driveAsync(fitting(keys, o), cost); }

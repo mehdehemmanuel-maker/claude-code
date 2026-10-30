@@ -16,7 +16,8 @@ import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type
 import { fromSI, sameDim, toSI } from '../ganglia/units';
 import type { Part } from './kits';
 import { fromLibrary, hash, type Assembly, type Placed } from './assembly';
-const P_ = (name: string, type: Type): PortDef => ({ name, type });
+import { fitByAsync } from './numeric';
+const P_ = (name: string, type: Type): PortDef => ({ name, type }), PL = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
 
 // ---- keys -----------------------------------------------------------------------------------------------------------
 // (a key's hash: assembly.ts, where the design of every piece is keyed)
@@ -359,16 +360,7 @@ export class Engine {
     if (!b.graph) throw new Error(`${b.name} has nothing to run`);
     // a group, or a block made of a pipeline: its own board, with what came in
     let k = this.kids.get(id); if (!k || k.board !== b.graph) { k = new Engine(b.graph, this.env, this.memo); this.kids.set(id, k); }
-    k.feeds = Object.fromEntries(Object.entries(inputs).map(([name, value]) => [name, { value, key: hash(stable(value)) }]));
-    k.reshape(); await k.run();
-    const out: Outputs = {};
-    for (const n of nodesOf(b.graph)) {
-      const x: BoardNode = b.graph.nodes[n.id]!; if (x.block !== 'group.out') continue;
-      const s = k.state.get(n.id), name = String(x.set?.name ?? 'y');
-      if (!s || s.status !== 'ok') { const bad = [...k.state.entries()].find(([, v]) => v.status === 'failed'); throw new Error(`inside, ${bad ? `${b.graph.nodes[bad[0]]?.label || bad[0]}: ${bad[1].error}` : `${name} has nothing`}`); }
-      out[name] = s.out!.value;
-    }
-    return out;
+    return runInside(k, b.graph, inputs);
   }
   /** The engine running a group's board, once it has run. */
   inside(id: string): Engine | undefined { return this.kids.get(id); }
@@ -592,6 +584,26 @@ export function makeBlock(b: Board, gid: string, meta: { id?: string; name: stri
 // ---- the spawner: one seed run for each row, each with its own sizes, choices and place ----------------------------------
 /** What every seed run by a spawner has worked out, shared: rows asking the same give the very same thing. */
 const SEEDS = new Memo(50_000);
+/** A group's board run by its engine with what came in: what its outputs give. */
+async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>): Promise<Outputs> {
+  k.feeds = Object.fromEntries(Object.entries(inputs).map(([name, value]) => [name, { value, key: hash(stable(value)) }]));
+  k.reshape(); await k.run();
+  const out: Outputs = {};
+  for (const n of nodesOf(g)) {
+    const x: BoardNode = g.nodes[n.id]!; if (x.block !== 'group.out') continue;
+    const s = k.state.get(n.id), name = String(x.set?.name ?? 'y');
+    if (!s || s.status !== 'ok') { const bad = [...k.state.entries()].find(([, v]) => v.status === 'failed'); throw new Error(`inside, ${bad ? `${g.nodes[bad[0]]?.label || bad[0]}: ${bad[1].error}` : `${name} has nothing`}`); }
+    out[name] = s.out!.value;
+  }
+  return out;
+}
+/** A block run again and again (a fit's trials): one that runs, called; one made of a board, through one engine kept for
+ *  all of them, so what the trials' values do not reach inside it is worked out once. */
+function runnerOf(d: BlockDef): (inputs: Record<string, unknown>, set: Record<string, unknown>) => Promise<Outputs> {
+  if (d.run) return async (inputs, set) => { const o = d.run!(inputs, { set, time: 0 } as Ctx); return o instanceof Promise ? await o : o; };
+  if (!d.graph) throw new Error(`${d.name} has nothing to run`);
+  const k = new Engine(d.graph, {}, new Memo(20_000)); return (inputs) => runInside(k, d.graph!, inputs);
+}
 /** A library block run on its own with these inputs: its outputs (a seed's whole board, run where it is needed). */
 export async function runBlock(id: string, inputs: Record<string, unknown>, env: Env = {}): Promise<Outputs> {
   const b = emptyBoard(), d = block(id); if (!d) throw new Error(`no block "${id}" in the library`);
@@ -600,6 +612,48 @@ export async function runBlock(id: string, inputs: Record<string, unknown>, env:
   const s = e.state.get('it'); if (!s || s.status !== 'ok') throw new Error(`${d.name}: ${s?.error ?? 'did not run'}`);
   return s.out!;
 }
+register({ version: 1, by: 'built in', pure: true, id: 'fit.target', name: 'Fit to a target', kind: 'solver', ability: 'optimise', domains: ['mechanical', 'structural', 'electrical', 'vehicles', 'finance', 'everyday'],
+    spec: { gloss: 'What values of its inputs make any block meet its targets?', discipline: 'mechanical.design', role: 'numerical solver', codes: [{ scheme: 'MSC2020', code: '90C56', label: 'Derivative-free methods and methods using generalized derivatives' }, { scheme: 'MSC2020', code: '65K10', label: 'Numerical optimization and variational techniques' }],
+      model: { equations: ['minimise Σ over its goals: ((y − t) / s)² for y = t; max(0, (t − y) / s)² for y > t, max(0, (y − t) / s)² for y < t (each × 10: a limit outweighs a wish); ± y / s₀ for least and most', 's = |t| (1 where t = 0), s₀ = |y| where it started'], class: 'analytical', time: 'steady', linear: false, method: 'each input scanned over its range (7 points, the best kept), then Nelder–Mead within the ranges; each input\'s ± from the cost\'s curvature (numeric.ts fitBy)', references: ['Nelder & Mead, Comput. J. 7, 308 (1965)', 'Nocedal & Wright, Numerical Optimization, 2nd ed., ch. 9 (derivative-free) and 17 (penalty methods)'] } },
+    says: 'Any block in the library, a law, a maker, a check, or a whole pipeline folded into one (Picture to model, a seed), run again and again with some of its inputs or settings moved within ranges, until its outputs meet the goals asked of them: one equal to a value, one kept under or over a limit, one as low or as high as it goes, several at once. The best values, each with its ± (how far it can move before the goals slip) and whether the goals fix it at all; what each output reached against its goal; and every trial. One node to size anything to what is asked of it',
+    settings: [{ key: 'block', label: 'Block (its id)', type: 'text', default: 'load.engine' }, { key: 'vary', label: 'Moved, each a line: name from..to', type: 'code', default: 'bore 0.06..0.1' },
+      { key: 'goals', label: 'Goals, each a line: output = v, output > v, output < v, output min, output max', type: 'code', default: 'floatRpm = 7000' },
+      { key: 'most', label: 'At most, trials', type: 'number', default: 120 }, { key: 'blockSet', label: 'Its other settings (JSON)', type: 'code', default: '{}' }],
+    ports: (st) => { const t = block(String(st.block ?? 'load.engine')), set = (() => { try { return JSON.parse(String(st.blockSet ?? '{}')) as Record<string, unknown>; } catch { return {}; } })(), moved = new Set(String(st.vary ?? '').split('\n').map((l) => l.trim().split(/\s+/)[0]).filter(Boolean));
+      const ins = t ? portsOf(t, { ...defaultsOf(t), ...set }).inputs.filter((q) => !moved.has(q.name)).map((q) => ({ ...q, optional: true })) : [];
+      return { inputs: ins, outputs: [PL('best', 'record', { label: 'the values found' }), PL('figures', 'table', { label: 'each value, its ± and whether it is fixed' }), PL('goals', 'table', { label: 'each goal and what it reached' }), PL('met', 'boolean', { label: 'every limit and value met' }), PL('trials', 'table'), PL('outputs', 'record', { label: 'the block\'s outputs at the best' }), PL('says', 'text')] }; },
+    run: async (i, c) => {
+      const t = block(String(c.set.block)); if (!t || (!t.run && !t.graph)) throw new Error(`no block "${c.set.block}" that runs`);
+      let set0: Record<string, unknown>; try { set0 = { ...defaultsOf(t), ...(JSON.parse(String(c.set.blockSet ?? '{}')) as Record<string, unknown>) }; } catch { throw new Error('its settings are not JSON'); }
+      const ins = new Set(portsOf(t, set0).inputs.map((q) => q.name)), keysOf = new Set((t.settings ?? []).map((q) => q.key));
+      const vary = String(c.set.vary ?? '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = /^(\S+)\s+(-?[\d.eE+-]+)\s*\.\.\s*(-?[\d.eE+-]+)$/.exec(l); if (!m) throw new Error(`"${l}": a line is a name and its range, as "bore 0.06..0.1"`); const lo = Number(m[2]), hi = Number(m[3]);
+        if (!ins.has(m[1]!) && !keysOf.has(m[1]!)) throw new Error(`the ${t.name} has no input or setting "${m[1]}"`); return { name: m[1]!, lo: Math.min(lo, hi), hi: Math.max(lo, hi), x0: (lo + hi) / 2, step: Math.abs(hi - lo) / 10, isSet: !ins.has(m[1]!) }; });
+      const goals = String(c.set.goals ?? '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = /^(\S+)\s*(=|<|>|min|max)\s*(-?[\d.eE+-]+)?$/.exec(l); if (!m || ((m[2] === '=' || m[2] === '<' || m[2] === '>') && m[3] === undefined)) throw new Error(`"${l}": a goal is an output and what it should be, as "worst > 2" or "mass min"`); return { name: m[1]!, op: m[2]! as '=' | '<' | '>' | 'min' | 'max', t: Number(m[3] ?? 0) }; });
+      if (!vary.length || !goals.length) throw new Error('give it something to move and a goal');
+      // (each trial the block run with the values tried, a whole pipeline folded into one as well as a block that runs: its
+      // outputs kept by the values, so no trial is run twice, and inside it what the values do not reach worked out once for
+      // every trial (one memo for them all))
+      const runT = runnerOf(t), memo = new Map<string, Record<string, unknown>>(), trials: Record<string, unknown>[] = [], run = async (x: number[]) => { const k = x.map((v) => v.toPrecision(10)).join(','); let r = memo.get(k);
+        if (!r) { const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; vary.forEach((v, j) => { if (v.isSet) set[v.name] = x[j]; else inp[v.name] = x[j]; }); r = await runT(inp, set) as Record<string, unknown>; memo.set(k, r);
+          for (const g of goals) if (!(g.name in r)) throw new Error(`the ${t.name} gives no "${g.name}"`); } return r; };
+      const first = await run(vary.map((v) => v.x0)), s0 = goals.map((g) => Math.abs(Number(first[g.name])) || 1);
+      const miss = (g: (typeof goals)[number], y: number, j: number): number => { const s = Math.abs(g.t) || 1; return g.op === '=' ? ((y - g.t) / s) ** 2 : g.op === '>' ? 10 * Math.max(0, (g.t - y) / s) ** 2 : g.op === '<' ? 10 * Math.max(0, (y - g.t) / s) ** 2 : (g.op === 'min' ? 1 : -1) * (y / s0[j]!); };
+      const cost = async (x: number[]) => { const r = await run(x); let sum = 0; goals.forEach((g, j) => { const y = Number(r[g.name]); sum += Number.isFinite(y) ? miss(g, y, j) : 1e6; });
+        trials.push({ ...Object.fromEntries(vary.map((v, j) => [v.name, +x[j]!.toPrecision(5)])), ...Object.fromEntries(goals.map((g) => [g.name, Number(r[g.name])])), cost: +sum.toPrecision(5) }); return sum; };
+      // (each value scanned over its range first, the best of seven kept: a fit starts in the deepest valley it can see, not
+      // the nearest; a lesson from fitting a camera)
+      const x = vary.map((v) => v.x0);
+      for (let j = 0; j < vary.length; j++) { let best = Infinity, bx = x[j]!; for (let k = 0; k < 7; k++) { const y = x.slice(); y[j] = vary[j]!.lo + ((vary[j]!.hi - vary[j]!.lo) * k) / 6; const cc = await cost(y); if (cc < best) { best = cc; bx = y[j]!; } } x[j] = bx; }
+      // (its ± how far each can move before a goal slips by 1 % of itself: a miss of 1 % costs 0.0001)
+      const f = await fitByAsync(cost, vary, { x0: x, most: Number(c.set.most ?? 120), ftol: 1e-8, rise: 1e-4 }), r = await run(f.x);
+      const rows = goals.map((g) => { const y = Number(r[g.name]), met = g.op === '=' ? Math.abs(y - g.t) <= 0.01 * (Math.abs(g.t) || 1) : g.op === '>' ? y >= g.t : g.op === '<' ? y <= g.t : true; return { goal: `${g.name} ${g.op}${g.op === 'min' || g.op === 'max' ? '' : ` ${g.t}`}`, reached: +y.toPrecision(5), met }; });
+      const met = rows.every((q) => q.met);
+      return { best: Object.fromEntries(vary.map((v, j) => [v.name, f.x[j]!])), figures: vary.map((v, j) => ({ value: v.name, found: +f.x[j]!.toPrecision(5), pm: Number.isFinite(f.pm[j]!) ? +f.pm[j]!.toPrecision(3) : 'unbounded', fixed: f.fixed[j]!, range: `${v.lo}..${v.hi}` })), goals: rows, met, trials, outputs: r,
+        says: `${t.name}: ${vary.map((v, j) => `${v.name} ${+f.x[j]!.toPrecision(4)}`).join(', ')} after ${memo.size} runs; ${met ? 'every goal met' : `not met: ${rows.filter((q) => !q.met).map((q) => `${q.goal} (reached ${q.reached})`).join(', ')}`}${f.fixed.some((fx) => !fx) ? `; not fixed by these goals: ${vary.filter((_, j) => !f.fixed[j]).map((v) => v.name).join(', ')}` : ''}` };
+    },
+    // (a bar's area found so its stress is 2 MPa under 5 kN: 0.0025 m²)
+    tests: [{ set: { block: 'law.stress.axial', vary: 'A 0.0005..0.01', goals: 'sigma = 2e6', most: 80 }, inputs: { F: 5000 }, outputs: { met: true, best: { A: 0.0025 } }, rel: 0.01 }] } as BlockDef);
+
 const PLACE_COLS = new Set(['x', 'y', 'z', 'rx', 'ry', 'rz', 's']);
 register({ id: 'spawn', name: 'Spawn', kind: 'generator', ability: 'generate', domains: ['everyday', 'structural', 'operations'], version: 1, by: 'built in', pure: true,
   // it moves with the clock when what it spawns does (a street of moving cars), and not otherwise

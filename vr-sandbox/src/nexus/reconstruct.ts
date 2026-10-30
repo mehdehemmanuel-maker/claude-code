@@ -20,7 +20,7 @@ import * as THREE from 'three';
 import { unzlibSync, zlibSync } from 'fflate';
 import { layout } from './make/space';
 import { geometry } from './view/kit3d';
-import { minimize } from './numeric';
+import { minimize, fitBy } from './numeric';
 import type { Part, V3 } from './kits';
 import { tessellate, type Patch } from './surface';
 import { PHOTOS, photoOf, type Mark, type Trace } from './photo-marks';
@@ -496,17 +496,6 @@ export class Rig {
 }
 
 // ---- fitting figures to what is seen -----------------------------------------------------------------------------------
-/** Figures moved to bring a cost down (Nelder–Mead within each one's range), and each one's ± after: how far it can move
- *  alone before the cost grows by one (from the cost's curvature there). One the cost hardly moves with over its whole
- *  range is not fixed by what is seen. */
-export function fitBy(cost: (x: number[]) => number, keys: { x0: number; lo: number; hi: number; step: number }[], o: { most?: number; x0?: number[]; ftol?: number } = {}): { x: number[]; before: number; after: number; pm: number[]; fixed: boolean[]; evaluations: number } {
-  const x0 = o.x0 ?? keys.map((k) => k.x0), before = cost(x0);
-  const r = minimize(cost, x0, { step: keys.map((k) => k.step), lo: keys.map((k) => k.lo), hi: keys.map((k) => k.hi), most: o.most ?? 60, ftol: o.ftol ?? 0.05 });
-  let evals = r.evaluations + 1; const best = r.value <= before ? r : { x: x0, value: before };
-  const pm = keys.map((k, i) => { const at = (d: number) => { const x = best.x.slice(); x[i] = Math.min(k.hi, Math.max(k.lo, x[i]! + d)); evals++; return cost(x); };
-    const up = at(k.step), dn = at(-k.step), curv = (up + dn - 2 * best.value) / (k.step * k.step); return curv > 1e-9 ? Math.sqrt(2 / curv) : Infinity; });
-  return { x: best.x, before, after: best.value, pm, fixed: keys.map((k, i) => pm[i]! < (k.hi - k.lo) / 2), evaluations: evals };
-}
 
 // ---- correcting the geometry feature by feature ------------------------------------------------------------------------
 /** What owns each feature: the figures that move it (its windows by its body lines, its flares by the kit's flares …). */
