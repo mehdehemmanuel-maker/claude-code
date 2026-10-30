@@ -21,7 +21,7 @@ import { aftertreatment, airTank, batteryBox, closureOf, coolingModule, exhaustS
 import { AMBIENT, HEAT_FALLOFF, MAX_SERVICE } from './make/heat-limits';
 import { WHEEL } from './kinds/fasteners';
 import type { Choice, Iface, Kit, Part, Pick, Shape, V3 } from './kits';
-import { archLip, bodyPanels, endAt, insideOf, lowAt, roofOf, skinOf, tailOf, topAt, type BodyPlan, type KeepOut, type WheelAt } from './panels';
+import { archLip, bodyPanels, endAt, insideOf, lowAt, roofOf, skinIn, skinOf, tailOf, topAt, type BodyPlan, type KeepOut, type WheelAt } from './panels';
 import { patchPoints, type Patch } from './surface';
 import { getMaterial } from '../data/materials';
 import type { Station } from './form';
@@ -808,7 +808,7 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
     if (lip.length < 4) continue;
     const w = k.flares.w, t = k.flares.t, nm = front ? 'front fender flare' : 'rear fender flare', on = front ? 'front fender' : 'rear quarter panel';
     // (on the most the skin stands out under the band, so it sits on the skin, not in it)
-    const band = s.pts.filter((q) => q.at[2] > 0.2 && Math.abs(q.n[2]) > 0.3 && (() => { const d = Math.hypot(q.at[0] - a.x, q.at[1] - R), qa = Math.atan2(q.at[1] - R, q.at[0] - a.x); return qa > lip[0]!.a && qa < lip[lip.length - 1]!.a && d > Math.min(...lip.map((l) => l.r)) - 0.005 && d < Math.max(...lip.map((l) => l.r)) + w; })());
+    const rB = Math.max(...lip.map((l) => l.r)) + w + 0.01, band = skinIn(s, [a.x - rB, R - rB, 0.2], [a.x + rB, R + rB, 1e9]).filter((q) => q.at[2] > 0.2 && Math.abs(q.n[2]) > 0.3 && (() => { const d = Math.hypot(q.at[0] - a.x, q.at[1] - R), qa = Math.atan2(q.at[1] - R, q.at[0] - a.x); return qa > lip[0]!.a && qa < lip[lip.length - 1]!.a && d > Math.min(...lip.map((l) => l.r)) - 0.005 && d < Math.max(...lip.map((l) => l.r)) + w; })());
     // (the skin's own z near a point, the most it stands out there; the lip's where there is none, over the opening)
     const zs = (x: number, y: number, or: number) => { let z = -Infinity; for (const q of band) if (Math.abs(q.at[0] - x) < 0.025 && Math.abs(q.at[1] - y) < 0.025) z = Math.max(z, q.at[2]); return Number.isFinite(z) ? z : or; };
     // (a moulded band: proudest at its inner edge, rolled over the arch's lip, falling back onto the skin at its outer
@@ -851,7 +851,7 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
     const foot = Math.min(...xs.map((x) => lowAt(s, x).y).filter(Number.isFinite));
     // (only across where the bumper comes down to its foot: not out under its corners, where it has rolled up, or the plate
     // would hang there under nothing)
-    const footAt = (x: number, z: number) => { let y = Infinity; for (const q of s.pts) if (Math.abs(q.at[0] - x) < 0.06 && Math.abs(Math.abs(q.at[2]) - Math.abs(z)) < 0.04) y = Math.min(y, q.at[1]); return y; };
+    const footAt = (x: number, z: number) => { let y = Infinity; for (const q of skinIn(s, [x - 0.06, -1e9, -1e9], [x + 0.06, 1e9, 1e9])) if (Math.abs(q.at[0] - x) < 0.06 && Math.abs(Math.abs(q.at[2]) - Math.abs(z)) < 0.04) y = Math.min(y, q.at[1]); return y; };
     const line = endAt(s, foot + 0.03, front).filter(([x, z]) => footAt(x, z) < foot + 0.06);
     if (line.length < 4) return;
     const pts: [number, number][] = [...line.map(([x, z]): [number, number] => [x + (front ? o.out : -o.out), z]), ...line.slice().reverse().map(([x, z]): [number, number] => [x - (front ? o.d : -o.d), z])];
@@ -860,7 +860,7 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
     // its top edge rising toward the end by `rise`, its foot hanging `sh` under that)
     if (o.sd && o.sh) {
       const far0 = end - (front ? 1 : -1) * o.sd, rise = o.rise ?? 0, lo0 = Math.min(end, far0), hi0 = Math.max(end, far0);
-      const near = s.pts.filter((q) => q.at[2] > 0.2 && q.at[0] > lo0 && q.at[0] < hi0 && q.at[1] > foot - 0.05 && q.at[1] < foot + rise + 0.3), z0 = Math.max(...near.map((q) => q.at[2]));
+      const near = skinIn(s, [lo0, foot - 0.05, 0.2], [hi0, foot + rise + 0.3, 1e9]).filter((q) => q.at[2] > 0.2 && q.at[0] > lo0 && q.at[0] < hi0 && q.at[1] > foot - 0.05 && q.at[1] < foot + rise + 0.3), z0 = Math.max(...near.map((q) => q.at[2]));
       // (its end where the skin ends at its side, not at the middle: a rounded nose or tail turns back at its corners, and
       // a piece run out to the middle's end hangs in the air past them)
       const atSide = near.filter((q) => q.at[2] > z0 - 0.08), xEnd = atSide.length ? (front ? Math.max(...atSide.map((q) => q.at[0])) : Math.min(...atSide.map((q) => q.at[0]))) : end;
@@ -877,7 +877,7 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
   const ra = m.axles.filter((a) => a.track > 0).reduce((b, a) => (a.x < b.x ? a : b));
   if (k.scoop) {
     const pts = k.scoop.map(([x, y]): [number, number] => [x, y]), xs = pts.map((q) => q[0] + ra.x), ys = pts.map((q) => q[1]);
-    const under = s.pts.filter((q) => q.at[2] > 0.2 && q.at[0] > Math.min(...xs) && q.at[0] < Math.max(...xs) && q.at[1] > Math.min(...ys) && q.at[1] < Math.max(...ys)), z0 = Math.max(...under.map((q) => q.at[2])), t = 0.012;
+    const under = skinIn(s, [Math.min(...xs), Math.min(...ys), 0.2], [Math.max(...xs), Math.max(...ys), 1e9]).filter((q) => q.at[2] > 0.2 && q.at[0] > Math.min(...xs) && q.at[0] < Math.max(...xs) && q.at[1] > Math.min(...ys) && q.at[1] < Math.max(...ys)), z0 = Math.max(...under.map((q) => q.at[2])), t = 0.012;
     // (and the vent it frames: a black moulded mesh across the opening between it and the door, closed behind, as a
     // bolt-on scoop's is)
     const vent = k.vent?.map(([x, y]): [number, number] => [x, y]);
@@ -891,7 +891,7 @@ export function bodyKit(m: Machine, k: BodyKit, out: Part[]): Part[] {
   if (k.spoiler) {
     const sp = k.spoiler, lid = s.pts.filter((q) => /^deck lid/.test(q.of) && q.n[1] > 0.3 && Math.abs(q.at[2]) < 0.3), xb = Math.min(...lid.map((q) => q.at[0])) + 0.015, xf = xb + sp.d;
     // (its skins drawn as one side mirrored: matched by how far out from the middle)
-    const deckAt = (x: number, z: number) => { let y = -Infinity; for (const q of s.pts) if (/^deck lid/.test(q.of) && q.n[1] > 0.3 && Math.abs(q.at[0] - x) < 0.03 && Math.abs(Math.abs(q.at[2]) - Math.abs(z)) < 0.06) y = Math.max(y, q.at[1]); return y; };
+    const deckAt = (x: number, z: number) => { let y = -Infinity; for (const q of skinIn(s, [x - 0.03, -1e9, -Math.abs(z) - 0.06], [x + 0.03, 1e9, Math.abs(z) + 0.06])) if (/^deck lid/.test(q.of) && q.n[1] > 0.3 && Math.abs(q.at[0] - x) < 0.03 && Math.abs(Math.abs(q.at[2]) - Math.abs(z)) < 0.06) y = Math.max(y, q.at[1]); return y; };
     // (across as much of its span as the deck lid's top is there, at both its edges)
     let half = (sp.span * m.W) / 2; while (half > 0.2 && !(Number.isFinite(deckAt(xf, half)) && Number.isFinite(deckAt(xb, half)) && Number.isFinite(deckAt(xf, -half)) && Number.isFinite(deckAt(xb, -half)))) half -= 0.02;
     const zs = Array.from({ length: 9 }, (_, i) => -half + (2 * half * i) / 8);

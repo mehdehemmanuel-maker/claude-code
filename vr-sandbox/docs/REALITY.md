@@ -1160,3 +1160,14 @@ board's run. Measured: a bar's area for 2 MPa under 5 kN, 0.0025 m² in 30 runs 
 float at 7,000 rpm, 71.1 ± 0.9 mm in 23 runs (7.6 s); a window built and weighed, folded into one node, its width for
 20 kg, 0.748 ± 0.009 m in 24 runs (48 ms). Asked for what cannot be had (valves floating over 7,500 rpm with a factor of
 2 at once), it says which goals it did not meet and which values the goals do not fix.
+- **2026-10-30, one level of detail, a spatial index, and drawing only what can be seen.** Measured first: a Monte
+Carlo of a new shape took about 2.7 s to make (its body 1.5 to 2 s, reading its skin 1 s in 81,510 surface samples, its
+kit 0.1 s) and its outline 7 s to draw. Built once for everything: the level of detail (`lod.ts`: 1 as designed, less
+coarser), read by the renderer's surfaces, turned parts, spheres, cones and tori and by skin sampling, and by Fit to a
+target's trials (the answer always run again at 1); a spatial index over points (`PointGrid`, `make/space.ts`), which
+the skin's queries now use; and drawing only what can be seen: a piece under a pixel on the screen (more at a coarser
+detail) left out, and one wholly behind what is nearer left out before its triangles are made, biggest first. On the
+Monte Carlo from the picture's camera: 772 of its pieces drawn, 4,926 hidden, 72 too small; its outline unchanged
+(IoU 1.0000 against drawing all of them); the outline drawn in 1.7 s, not 7 s. Coarser detail: making 2.7 → 1.9 s at
+0.3, its outline still 0.989 of the full one's. Not yet: the body's making itself (its skins fitted through their
+sections) is untouched, and the 3D viewer's own stand-ins are not yet tied to this level.

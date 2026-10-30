@@ -17,6 +17,7 @@ import { fromSI, sameDim, toSI } from '../ganglia/units';
 import type { Part } from './kits';
 import { fromLibrary, hash, type Assembly, type Placed } from './assembly';
 import { fitByAsync } from './numeric';
+import { atDetailAsync } from './lod';
 const P_ = (name: string, type: Type): PortDef => ({ name, type }), PL = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
 
 // ---- keys -----------------------------------------------------------------------------------------------------------
@@ -618,7 +619,7 @@ register({ version: 1, by: 'built in', pure: true, id: 'fit.target', name: 'Fit 
     says: 'Any block in the library, a law, a maker, a check, or a whole pipeline folded into one (Picture to model, a seed), run again and again with some of its inputs or settings moved within ranges, until its outputs meet the goals asked of them: one equal to a value, one kept under or over a limit, one as low or as high as it goes, several at once. The best values, each with its ± (how far it can move before the goals slip) and whether the goals fix it at all; what each output reached against its goal; and every trial. One node to size anything to what is asked of it',
     settings: [{ key: 'block', label: 'Block (its id)', type: 'text', default: 'load.engine' }, { key: 'vary', label: 'Moved, each a line: name from..to', type: 'code', default: 'bore 0.06..0.1' },
       { key: 'goals', label: 'Goals, each a line: output = v, output > v, output < v, output min, output max', type: 'code', default: 'floatRpm = 7000' },
-      { key: 'most', label: 'At most, trials', type: 'number', default: 120 }, { key: 'blockSet', label: 'Its other settings (JSON)', type: 'code', default: '{}' }],
+      { key: 'most', label: 'At most, trials', type: 'number', default: 120 }, { key: 'detail', label: 'Detail during its trials (1 as designed; less, faster and coarser: lod.ts)', type: 'number', default: 1 }, { key: 'blockSet', label: 'Its other settings (JSON)', type: 'code', default: '{}' }],
     ports: (st) => { const t = block(String(st.block ?? 'load.engine')), set = (() => { try { return JSON.parse(String(st.blockSet ?? '{}')) as Record<string, unknown>; } catch { return {}; } })(), moved = new Set(String(st.vary ?? '').split('\n').map((l) => l.trim().split(/\s+/)[0]).filter(Boolean));
       const ins = t ? portsOf(t, { ...defaultsOf(t), ...set }).inputs.filter((q) => !moved.has(q.name)).map((q) => ({ ...q, optional: true })) : [];
       return { inputs: ins, outputs: [PL('best', 'record', { label: 'the values found' }), PL('figures', 'table', { label: 'each value, its ± and whether it is fixed' }), PL('goals', 'table', { label: 'each goal and what it reached' }), PL('met', 'boolean', { label: 'every limit and value met' }), PL('trials', 'table'), PL('outputs', 'record', { label: 'the block\'s outputs at the best' }), PL('says', 'text')] }; },
@@ -643,9 +644,11 @@ register({ version: 1, by: 'built in', pure: true, id: 'fit.target', name: 'Fit 
       // (each value scanned over its range first, the best of seven kept: a fit starts in the deepest valley it can see, not
       // the nearest; a lesson from fitting a camera)
       const x = vary.map((v) => v.x0);
-      for (let j = 0; j < vary.length; j++) { let best = Infinity, bx = x[j]!; for (let k = 0; k < 7; k++) { const y = x.slice(); y[j] = vary[j]!.lo + ((vary[j]!.hi - vary[j]!.lo) * k) / 6; const cc = await cost(y); if (cc < best) { best = cc; bx = y[j]!; } } x[j] = bx; }
+      await atDetailAsync(Number(c.set.detail ?? 1), async () => { for (let j = 0; j < vary.length; j++) { let best = Infinity, bx = x[j]!; for (let k = 0; k < 7; k++) { const y = x.slice(); y[j] = vary[j]!.lo + ((vary[j]!.hi - vary[j]!.lo) * k) / 6; const cc = await cost(y); if (cc < best) { best = cc; bx = y[j]!; } } x[j] = bx; } });
       // (its ± how far each can move before a goal slips by 1 % of itself: a miss of 1 % costs 0.0001)
-      const f = await fitByAsync(cost, vary, { x0: x, most: Number(c.set.most ?? 120), ftol: 1e-8, rise: 1e-4 }), r = await run(f.x);
+      const f = await atDetailAsync(Number(c.set.detail ?? 1), () => fitByAsync(cost, vary, { x0: x, most: Number(c.set.most ?? 120), ftol: 1e-8, rise: 1e-4 }));
+      // (the answer run again as designed, whatever detail its trials were run at: what it reaches is what is said)
+      memo.clear(); const r = await run(f.x);
       const rows = goals.map((g) => { const y = Number(r[g.name]), met = g.op === '=' ? Math.abs(y - g.t) <= 0.01 * (Math.abs(g.t) || 1) : g.op === '>' ? y >= g.t : g.op === '<' ? y <= g.t : true; return { goal: `${g.name} ${g.op}${g.op === 'min' || g.op === 'max' ? '' : ` ${g.t}`}`, reached: +y.toPrecision(5), met }; });
       const met = rows.every((q) => q.met);
       return { best: Object.fromEntries(vary.map((v, j) => [v.name, f.x[j]!])), figures: vary.map((v, j) => ({ value: v.name, found: +f.x[j]!.toPrecision(5), pm: Number.isFinite(f.pm[j]!) ? +f.pm[j]!.toPrecision(3) : 'unbounded', fixed: f.fixed[j]!, range: `${v.lo}..${v.hi}` })), goals: rows, met, trials, outputs: r,

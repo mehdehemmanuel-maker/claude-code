@@ -23,6 +23,8 @@
 
 import { curvatures, curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
 import type { Part } from './kits';
+import { detail, divisions } from './lod';
+import { PointGrid } from './make/space';
 import type { Lines } from './machines';
 
 /** A wheel as the body sees it: its middle (z its mid-plane's distance out), radius, width, and how it moves. */
@@ -760,7 +762,13 @@ export function practise<K extends keyof BodyRules>(rule: K, values: BodyRules[K
 // ---- reading a finished skin: what is fitted onto it (a body kit) is fitted to the skin as made ---------------------------
 /** The painted skins as points, each with the way it faces (its lamps, glass, liners and seams left out). */
 export interface Skin { pts: { at: V3; n: V3; of: string }[] }
-const skinPts = new WeakMap<Patch, { at: V3; n: V3 }[]>();
+type SkinPt = Skin['pts'][number];
+const grids = new WeakMap<Skin, PointGrid<SkinPt>>(), INF = 1e9;
+/** The skin's points inside a box (open where a bound is ±INF), found by its spatial index (built once for the skin). */
+export function skinIn(s: Skin, lo: [number, number, number], hi: [number, number, number]): SkinPt[] {
+  let g = grids.get(s); if (!g) { g = new PointGrid(s.pts, (q) => q.at, 0.05); grids.set(s, g); } return g.inBox(lo, hi);
+}
+const skinPtsAt = new Map<number, WeakMap<Patch, { at: V3; n: V3 }[]>>();
 export function skinOf(parts: Part[]): Skin {
   const pts: Skin['pts'] = [];
   // (and the skins of what is built round them, a door, the hood, the deck lid: groups drawn where they stand)
@@ -768,8 +776,9 @@ export function skinOf(parts: Part[]): Skin {
   parts.forEach(walk);
   for (const p of all) {
     if (!p.shape || !('surf' in p.shape) || /liner|wheelhouse|handle|lamp|light|grille|glass|windscreen|plate|seam|shut line|mirror/.test(p.name)) continue;
-    const pt = p.shape.surf; let got = skinPts.get(pt);
-    if (!got) { got = []; for (let i = 0; i <= 64; i++) for (let j = 0; j <= 32; j++) { const q = patchAt(pt, i / 64, j / 32); got.push({ at: q.at, n: q.n }); } skinPts.set(pt, got); }
+    // (sampled as finely as the detail now asks: 64 × 32 as designed)
+    const pt = p.shape.surf, d = detail(), nu = divisions(64, 8), nv = divisions(32, 4), skinPts = skinPtsAt.get(d) ?? skinPtsAt.set(d, new WeakMap()).get(d)!; let got = skinPts.get(pt);
+    if (!got) { got = []; for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) { const q = patchAt(pt, i / nu, j / nv); got.push({ at: q.at, n: q.n }); } skinPts.set(pt, got); }
     for (const q of got) pts.push({ ...q, of: p.name });
   }
   return { pts };
@@ -777,7 +786,7 @@ export function skinOf(parts: Part[]): Skin {
 /** Round a wheel on the right side, seen from the side: at each angle over its axle (from ahead of it, 0, over the top,
  *  to behind it, π), how far from its axle the skin's opening is (the arch's lip), and how far out the skin is there. */
 export function archLip(s: Skin, x0: number, y0: number, R: number, angles: number[]): { a: number; r: number; z: number }[] {
-  const side = s.pts.filter((q) => q.at[2] > 0.2 && Math.abs(q.n[2]) > 0.3);
+  const side = skinIn(s, [x0 - R - 0.36, y0 - R - 0.36, 0.2], [x0 + R + 0.36, y0 + R + 0.36, INF]).filter((q) => Math.abs(q.n[2]) > 0.3);
   return angles.map((a) => {
     let r = Infinity, z = 0;
     for (const q of side) { const dx = q.at[0] - x0, dy = q.at[1] - y0, d = Math.hypot(dx, dy); if (d < R * 0.95 || d > R + 0.35) continue;
@@ -788,13 +797,13 @@ export function archLip(s: Skin, x0: number, y0: number, R: number, angles: numb
 /** Along its length at x, the skin's lowest point on the right side (its rocker, its bumpers' foot), and how far out it is
  *  there; and the highest point near its middle (its hood, roof or deck). */
 export function lowAt(s: Skin, x: number): { y: number; z: number } {
-  let y = Infinity, z = 0; for (const q of s.pts) if (q.at[2] > 0.1 && Math.abs(q.at[0] - x) < 0.03 && q.at[1] < y) { y = q.at[1]; z = q.at[2]; } return { y, z };
+  let y = Infinity, z = 0; for (const q of skinIn(s, [x - 0.03, -INF, 0.1], [x + 0.03, INF, INF])) if (q.at[2] > 0.1 && Math.abs(q.at[0] - x) < 0.03 && q.at[1] < y) { y = q.at[1]; z = q.at[2]; } return { y, z };
 }
-export function topAt(s: Skin, x: number): number { let y = -Infinity; for (const q of s.pts) if (Math.abs(q.at[2]) < 0.25 && Math.abs(q.at[0] - x) < 0.03 && q.n[1] > 0.3) y = Math.max(y, q.at[1]); return y; }
+export function topAt(s: Skin, x: number): number { let y = -Infinity; for (const q of skinIn(s, [x - 0.03, -INF, -0.25], [x + 0.03, INF, 0.25])) if (Math.abs(q.at[2]) < 0.25 && Math.abs(q.at[0] - x) < 0.03 && q.n[1] > 0.3) y = Math.max(y, q.at[1]); return y; }
 /** At height y, its outline in plan at the front (the most forward point of the skin, every 5 cm across it) or the back. */
 export function endAt(s: Skin, y: number, front: boolean): [number, number][] {
   // (only its own end: where the skin there is within 25 cm of its very end, so its sides by the wheels are not taken)
-  const best = new Map<number, number>(), here = s.pts.filter((q) => Math.abs(q.at[1] - y) <= 0.03 && (front ? q.at[0] > 0 : q.at[0] < 0));
+  const best = new Map<number, number>(), here = skinIn(s, [front ? 0 : -INF, y - 0.03, -INF], [front ? INF : 0, y + 0.03, INF]).filter((q) => Math.abs(q.at[1] - y) <= 0.03 && (front ? q.at[0] > 0 : q.at[0] < 0));
   const most = front ? Math.max(...here.map((q) => q.at[0])) : Math.min(...here.map((q) => q.at[0]));
   for (const q of here) { const k = Math.round(q.at[2] / 0.05); const was = best.get(k); if (was === undefined || (front ? q.at[0] > was : q.at[0] < was)) best.set(k, q.at[0]); }
   return [...best].filter(([, x]) => Math.abs(x - most) < 0.25).sort((a, b) => a[0] - b[0]).map(([k, x]) => [x, k * 0.05]);

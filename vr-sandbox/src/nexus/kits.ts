@@ -630,3 +630,4 @@ export function makeKit(k: Kit, words: string, seed: number): { kit: Kit; pick: 
   const sub = (id: string, over: Pick = {}): Part => { const kk = byId.get(id)!; const pick = { ...choose(kk, '', r), ...over }; return { ...kk.build(pick, r, sub), kit: kk.id }; };
   const pick = choose(k, words, r); return { kit: k, pick, part: { ...k.build(pick, r, sub), kit: k.id } };
 }
+

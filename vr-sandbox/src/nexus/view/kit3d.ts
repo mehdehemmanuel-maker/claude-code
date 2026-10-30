@@ -9,6 +9,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { FINISH_MAKE, edgeRadius, surfaceOf } from '../finish';
 import { resolveLook, type Graphic, type Look } from '../appearance';
 import type { Cut, Part, Shape } from '../kits';
+import { detail, divisions } from '../lod';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { massOf } from '../mass';
 import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
@@ -214,7 +215,8 @@ function surfGeometry(pt: Patch): THREE.BufferGeometry {
   // (a facet every 30 mm along it, and one for every 3° it turns: a tight corner is drawn round, not as a chord, so two
   // skins a few millimetres apart round it, as a lamp's lens over its housing, are drawn apart and not through each other)
   const run = (f: (t: number) => [number, number]): [number, number] => { let d = 0, turn = 0, q = patchAt(pt, ...f(0)).at, prev: number[] | null = null; for (let k = 1; k <= 32; k++) { const r = patchAt(pt, ...f(k / 32)).at, c = [r[0] - q[0], r[1] - q[1], r[2] - q[2]], l = Math.hypot(c[0]!, c[1]!, c[2]!); d += l; if (prev && l > 1e-9) { const pl = Math.hypot(prev[0]!, prev[1]!, prev[2]!); if (pl > 1e-9) turn += Math.acos(Math.max(-1, Math.min(1, (c[0]! * prev[0]! + c[1]! * prev[1]! + c[2]! * prev[2]!) / (l * pl)))); } if (l > 1e-9) prev = c; q = r; } return [d, turn]; };
-  const steps = (rs: [number, number][]) => Math.max(6, Math.min(160, Math.round(Math.max(...rs.map(([d, turn]) => Math.max(d / 0.03, turn / 0.052))))));
+  // (fewer at a coarser detail (kits.ts detail): a skin far off, or seen many times over in a fit)
+  const steps = (rs: [number, number][]) => divisions(Math.max(6, Math.min(160, Math.round(Math.max(...rs.map(([d, turn]) => Math.max(d / 0.03, turn / 0.052)))))), 4);
   const t = tessellate(pt, steps([run((a) => [a, 0.5]), run((a) => [a, 0]), run((a) => [a, 1])]), steps([run((b) => [0.5, b]), run((b) => [0, b]), run((b) => [1, b])])), g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3)); g.setIndex(t.idx);
   return g;
@@ -242,16 +244,16 @@ export function geometry(s: Shape, mat: string | undefined, make?: 'pressed', fa
   if ('loft' in s) return loftGeometry(s.loft);
   if ('tube' in s) return tubeGeometry(s.tube);
   // (turned, or with flat sides where it has them: a nut's six, round its bore)
-  if ('lathe' in s) return sharpLathe(s.lathe, facets ?? 40);
+  if ('lathe' in s) return sharpLathe(s.lathe, facets ?? divisions(40, 8));
   if ('prism' in s) { const sh = new THREE.Shape(s.prism.pts.map(([x, y]) => new THREE.Vector2(x, y))); for (const h of s.prism.holes ?? []) sh.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y)))); const g = new THREE.ExtrudeGeometry(sh, { depth: s.prism.L, bevelEnabled: false, curveSegments: 1 }); g.translate(0, 0, -s.prism.L / 2); return g; }
   // a round part with flat sides (a hex head, a nut): its flats, its edges broken
   if (facets && 'cyl' in s) return new THREE.CylinderGeometry(s.cyl[2] ?? s.cyl[0], s.cyl[0], s.cyl[1], facets);
   const f = edgeRadius(mat, thinnest(s), make);
   if ('box' in s) { const [w, h, d] = s.box; return f > 1e-4 ? new RoundedBoxGeometry(w, h, d, 2, f) : new THREE.BoxGeometry(w, h, d); }
   if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return filletCyl(r2, h, r, f); }
-  if ('sphere' in s) return new THREE.SphereGeometry(s.sphere, 18, 12);
-  if ('cone' in s) return new THREE.ConeGeometry(s.cone[0], s.cone[1], 16);
-  if ('torus' in s) return new THREE.TorusGeometry(s.torus[0], s.torus[1], 12, 28);
+  if ('sphere' in s) return new THREE.SphereGeometry(s.sphere, divisions(18, 6), divisions(12, 4));
+  if ('cone' in s) return new THREE.ConeGeometry(s.cone[0], s.cone[1], divisions(16, 6));
+  if ('torus' in s) return new THREE.TorusGeometry(s.torus[0], s.torus[1], divisions(12, 4), divisions(28, 8));
   if ('capsule' in s) return new THREE.CapsuleGeometry(s.capsule[0], s.capsule[1], 4, 12);
   return null;
 }
@@ -277,7 +279,7 @@ export function leafGeometry(p: Part): THREE.BufferGeometry | null {
 }
 function leafGeometryMade(p: Part): THREE.BufferGeometry | null {
   if (!p.shape || 'stars' in p.shape || 'field' in p.shape || 'heap' in p.shape) return null;
-  const key = JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts]); if (leafGeos.has(key)) return leafGeos.get(key)!;
+  const key = JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts, detail()]); if (leafGeos.has(key)) return leafGeos.get(key)!;
   let g = geometry(p.shape, p.mat, p.make, p.facets);
   if (g && p.base) { const s = p.shape, h = 'cyl' in s ? s.cyl[1] : 'cone' in s ? s.cone[1] : 'capsule' in s ? s.capsule[1] : 'box' in s ? s.box[1] : 0; g = g.clone(); g.translate(0, h / 2, 0); }
   if (g && p.cuts?.length) g = drill(g, p.cuts, key);

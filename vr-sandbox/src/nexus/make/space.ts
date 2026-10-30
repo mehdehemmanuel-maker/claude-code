@@ -213,3 +213,30 @@ export function clearPath(ways: THREE.Vector3[][], boxes: OBB[], r: number, near
   return null;
 }
 
+
+// ---- what is near: a spatial index over points ---------------------------------------------------------------------------
+/** Points indexed by where they are (proximity hashing): each in a cube of side `h`, so what lies near a place, or inside a
+ *  box, is found by looking only in the cubes there, not at every point. For any thing's points: a skin a kit is fitted to,
+ *  parts a checker looks among, agents a sense reaches. */
+export class PointGrid<T> {
+  private readonly cells = new Map<number, T[]>(); private readonly lo: [number, number, number]; private readonly n: [number, number, number];
+  constructor(items: readonly T[], private readonly at: (t: T) => readonly [number, number, number], readonly h = 0.05) {
+    const lo: [number, number, number] = [Infinity, Infinity, Infinity], hi: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+    for (const t of items) { const p = at(t); for (let j = 0; j < 3; j++) { lo[j] = Math.min(lo[j]!, p[j]!); hi[j] = Math.max(hi[j]!, p[j]!); } }
+    if (!items.length) { this.lo = [0, 0, 0]; this.n = [1, 1, 1]; return; }
+    this.lo = lo; this.n = [0, 1, 2].map((j) => Math.floor((hi[j]! - lo[j]!) / h) + 1) as [number, number, number];
+    for (const t of items) { const k = this.keyOf(at(t)); let c = this.cells.get(k); if (!c) this.cells.set(k, (c = [])); c.push(t); }
+  }
+  private cell(v: number, j: number): number { return Math.min(this.n[j]! - 1, Math.max(0, Math.floor((v - this.lo[j]!) / this.h))); }
+  private keyOf(p: readonly [number, number, number]): number { return (this.cell(p[0], 0) * this.n[1] + this.cell(p[1], 1)) * this.n[2] + this.cell(p[2], 2); }
+  /** Every point inside the box (its edges in), each axis's bounds open where not finite. */
+  inBox(lo: readonly [number, number, number], hi: readonly [number, number, number]): T[] {
+    const a = [0, 1, 2].map((j) => this.cell(lo[j]!, j)), b = [0, 1, 2].map((j) => this.cell(hi[j]!, j)), out: T[] = [];
+    for (let i = a[0]!; i <= b[0]!; i++) for (let j = a[1]!; j <= b[1]!; j++) for (let k = a[2]!; k <= b[2]!; k++) {
+      const c = this.cells.get((i * this.n[1] + j) * this.n[2] + k); if (!c) continue;
+      for (const t of c) { const p = this.at(t); if (p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1] && p[2] >= lo[2] && p[2] <= hi[2]) out.push(t); } }
+    return out;
+  }
+  /** Every point within r of p. */
+  near(p: readonly [number, number, number], r: number): T[] { return this.inBox([p[0] - r, p[1] - r, p[2] - r], [p[0] + r, p[1] + r, p[2] + r]).filter((t) => { const q = this.at(t); return (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 + (q[2] - p[2]) ** 2 <= r * r; }); }
+}

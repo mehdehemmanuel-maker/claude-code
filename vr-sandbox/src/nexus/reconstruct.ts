@@ -22,6 +22,7 @@ import { layout } from './make/space';
 import { geometry } from './view/kit3d';
 import { minimize, fitBy } from './numeric';
 import type { Part, V3 } from './kits';
+import { detail } from './lod';
 import { tessellate, type Patch } from './surface';
 import { PHOTOS, photoOf, type Mark, type Trace } from './photo-marks';
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
@@ -129,7 +130,7 @@ export function solveCamera(pairs: Pair[], w: number, h: number, start: Camera):
 }
 
 // ---- rendering a silhouette -------------------------------------------------------------------------------------------
-const geos = new WeakMap<object, THREE.BufferGeometry | null>(), coarser = new Map<number, WeakMap<object, THREE.BufferGeometry | null>>();
+const geosAt = new Map<number, WeakMap<object, THREE.BufferGeometry | null>>(), coarser = new Map<number, WeakMap<object, THREE.BufferGeometry | null>>(), geosNow = () => { const d = detail(); return geosAt.get(d) ?? geosAt.set(d, new WeakMap()).get(d)!; };
 /** A freeform skin drawn with n facets each way, not by its curvature (the viewer's): for seeing its outline many times
  *  over at a few pixels a facet, where its curvature's hundreds of facets cost more than they show. */
 function coarseSurf(pt: Patch, n: number): THREE.BufferGeometry { const t = tessellate(pt, n, n), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3)); g.setIndex(t.idx); return g; }
@@ -137,10 +138,18 @@ function coarseSurf(pt: Patch, n: number): THREE.BufferGeometry { const t = tess
  *  any piece covers the pixel. `skip` leaves out pieces by name (what the photograph does not show); `coarse` draws its
  *  freeform skins with that many facets each way (see coarseSurf). */
 export function silhouette(root: Part, c: Camera, skip?: RegExp, coarse?: number): Uint8Array {
-  const m = new Uint8Array(c.w * c.h), B = basis(c), v = new THREE.Vector3(), kept = coarse ? (coarser.get(coarse) ?? coarser.set(coarse, new WeakMap()).get(coarse)!) : geos;
-  for (const n of layout(root)) {
-    const p = n.p; if (!p.shape || (skip && skip.test(p.name))) continue;
-    let g = kept.get(p.shape); if (g === undefined) { try { g = coarse && 'surf' in p.shape ? coarseSurf(p.shape.surf, coarse) : geometry(p.shape, p.mat, p.make, p.facets); } catch { g = null; } kept.set(p.shape, g); }
+  const m = new Uint8Array(c.w * c.h), B = basis(c), v = new THREE.Vector3(), kept = coarse ? (coarser.get(coarse) ?? coarser.set(coarse, new WeakMap()).get(coarse)!) : geosNow();
+  // (only what can add to the outline: the biggest drawn first, and a piece whose box on the screen is already wholly
+  // covered, or is under a pixel, left out before its triangles are made, as Same-camera view does)
+  const { w, h } = c, minPx = 0.75 / detail();
+  const all = layout(root).filter((n) => n.p.shape && !(skip && skip.test(n.p.name))).map((n) => ({ n, sc: onScreen(n, c, B) }))
+    .filter((q) => !q.sc || (q.sc.u1 >= 0 && q.sc.v1 >= 0 && q.sc.u0 < w && q.sc.v0 < h && Math.max(q.sc.u1 - q.sc.u0, q.sc.v1 - q.sc.v0) >= minPx))
+    .sort((a, b) => (b.sc ? (b.sc.u1 - b.sc.u0) * (b.sc.v1 - b.sc.v0) : Infinity) - (a.sc ? (a.sc.u1 - a.sc.u0) * (a.sc.v1 - a.sc.v0) : Infinity));
+  for (const { n, sc } of all) {
+    if (sc) { const x0 = Math.max(0, Math.floor(sc.u0)), x1 = Math.min(w - 1, Math.ceil(sc.u1)), y0 = Math.max(0, Math.floor(sc.v0)), y1 = Math.min(h - 1, Math.ceil(sc.v1));
+      let covered = true; for (let y = y0; y <= y1 && covered; y++) for (let x = x0; x <= x1; x++) if (!m[y * w + x]) { covered = false; break; } if (covered) continue; }
+    const p = n.p;
+    let g = kept.get(p.shape!); if (g === undefined) { try { g = coarse && 'surf' in p.shape! ? coarseSurf(p.shape.surf, coarse) : geometry(p.shape!, p.mat, p.make, p.facets); } catch { g = null; } kept.set(p.shape!, g); }
     if (!g) continue;
     const pos = g.attributes.position!, idx = g.index, pr: ([number, number, number] | null)[] = [];
     for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(n.m); pr.push(project(c, [v.x, v.y, v.z], B)); }
@@ -242,15 +251,31 @@ export function twoSided(model: Uint8Array, T: Target): { err: number; toModel: 
  *  far (along the camera's axis, m), and its colour shaded by a light from over the camera's shoulder (Lambert, both
  *  faces lit). From the same camera as the picture, so it is set against the picture the right way round, feature by
  *  feature. */
-export interface View { w: number; h: number; depth: Float32Array; id: Int32Array; names: string[]; rgb: Uint8Array; camera: Camera }
+export interface View { w: number; h: number; depth: Float32Array; id: Int32Array; names: string[]; rgb: Uint8Array; camera: Camera; /** pieces drawn, left out as under the smallest size worth drawing, left out as hidden behind what is nearer */ drawn: number; small: number; hidden: number }
+/** Each piece's box as the camera sees it: its pixels across and down, and the nearest of it (null where any of it is
+ *  behind the camera: drawn, as it cannot be judged). */
+function onScreen(n: { box: THREE.Box3 | null }, c: Camera, B: ReturnType<typeof basis>): { u0: number; u1: number; v0: number; v1: number; z: number } | null {
+  const b = n.box; if (!b || b.isEmpty()) return null; let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity, z = Infinity;
+  for (let k = 0; k < 8; k++) { const q = project(c, [k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.y : b.min.y, k & 4 ? b.max.z : b.min.z], B); if (!q) return null; u0 = Math.min(u0, q[0]); u1 = Math.max(u1, q[0]); v0 = Math.min(v0, q[1]); v1 = Math.max(v1, q[1]); z = Math.min(z, q[2]); }
+  return { u0, u1, v0, v1, z };
+}
 export function renderView(root: Part, c: Camera, skip?: RegExp, coarse?: number): View {
-  const { w, h } = c, depth = new Float32Array(w * h).fill(Infinity), id = new Int32Array(w * h).fill(-1), rgb = new Uint8Array(w * h * 3), names: string[] = [], B = basis(c), v = new THREE.Vector3(), kept = coarse ? (coarser.get(coarse) ?? coarser.set(coarse, new WeakMap()).get(coarse)!) : geos;
+  const { w, h } = c, depth = new Float32Array(w * h).fill(Infinity), id = new Int32Array(w * h).fill(-1), rgb = new Uint8Array(w * h * 3), names: string[] = [], B = basis(c), v = new THREE.Vector3(), kept = coarse ? (coarser.get(coarse) ?? coarser.set(coarse, new WeakMap()).get(coarse)!) : geosNow();
   const L = unit([-B.fw[0] + 0.6 * B.up[0] - 0.3 * B.rt[0], -B.fw[1] + 0.6 * B.up[1] - 0.3 * B.rt[1], -B.fw[2] + 0.6 * B.up[2] - 0.3 * B.rt[2]]);
-  for (const n of layout(root)) {
-    const p = n.p; if (!p.shape || (skip && skip.test(p.name))) continue;
-    let g = kept.get(p.shape); if (g === undefined) { try { g = coarse && 'surf' in p.shape ? coarseSurf(p.shape.surf, coarse) : geometry(p.shape, p.mat, p.make, p.facets); } catch { g = null; } kept.set(p.shape, g); }
+  // (what is worth drawing, as a person would see it (perception-weighted): a piece smaller on the screen than a pixel
+  // (more at a coarser detail) is left out, and one wholly behind what is already drawn nearer is left out before its
+  // triangles are made; the biggest drawn first, so what hides the rest is there to hide it)
+  const minPx = 0.75 / detail(); let small = 0, hidden = 0, drawn = 0;
+  const all = layout(root).filter((n) => n.p.shape && !(skip && skip.test(n.p.name))).map((n) => ({ n, sc: onScreen(n, c, B) }))
+    .filter((q) => { if (!q.sc) return true; const { u0, u1, v0, v1 } = q.sc; if (u1 < 0 || v1 < 0 || u0 >= w || v0 >= h) return false; if (Math.max(u1 - u0, v1 - v0) < minPx) { small++; return false; } return true; })
+    .sort((a, b) => (b.sc ? (b.sc.u1 - b.sc.u0) * (b.sc.v1 - b.sc.v0) : Infinity) - (a.sc ? (a.sc.u1 - a.sc.u0) * (a.sc.v1 - a.sc.v0) : Infinity));
+  for (const { n, sc } of all) {
+    if (sc) { const x0 = Math.max(0, Math.floor(sc.u0)), x1 = Math.min(w - 1, Math.ceil(sc.u1)), y0 = Math.max(0, Math.floor(sc.v0)), y1 = Math.min(h - 1, Math.ceil(sc.v1));
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) <= 60_000) { let covered = true; for (let y = y0; y <= y1 && covered; y++) for (let x = x0; x <= x1; x++) if (!(depth[y * w + x]! < sc.z)) { covered = false; break; } if (covered) { hidden++; continue; } } }
+    const p = n.p;
+    let g = kept.get(p.shape!); if (g === undefined) { try { g = coarse && 'surf' in p.shape! ? coarseSurf(p.shape.surf, coarse) : geometry(p.shape!, p.mat, p.make, p.facets); } catch { g = null; } kept.set(p.shape!, g); }
     if (!g) continue;
-    const k = names.length; names.push(p.name); const col = p.color ?? 0x8a8d91, cr = (col >> 16) & 255, cg = (col >> 8) & 255, cb = col & 255;
+    drawn++; const k = names.length; names.push(p.name); const col = p.color ?? 0x8a8d91, cr = (col >> 16) & 255, cg = (col >> 8) & 255, cb = col & 255;
     const pos = g.attributes.position!, idx = g.index, W: V3[] = [], pr: ([number, number, number] | null)[] = [];
     for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(n.m); const q: V3 = [v.x, v.y, v.z]; W.push(q); pr.push(project(c, q, B)); }
     const tri = (a: number, b: number, d: number) => {
@@ -265,7 +290,7 @@ export function renderView(root: Part, c: Camera, skip?: RegExp, coarse?: number
     };
     if (idx) for (let i = 0; i < idx.count; i += 3) tri(idx.getX(i), idx.getX(i + 1), idx.getX(i + 2)); else for (let i = 0; i < pos.count; i += 3) tri(i, i + 1, i + 2);
   }
-  return { w, h, depth, id, names, rgb, camera: c };
+  return { w, h, depth, id, names, rgb, camera: c, drawn, small, hidden };
 }
 /** How far every pixel is from the nearest of a set of pixels (a two-pass 3–4 chamfer, Borgefors 1986), in pixels. */
 export function distTo(set: Uint8Array, w: number, h: number): Float32Array {
