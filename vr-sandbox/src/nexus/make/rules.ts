@@ -102,7 +102,7 @@ export function clearances(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = 
 // (what heat harms: polymers, rubbers, foams, fabrics and the metals that melt or soften low (lead, solder, zinc alloy);
 // a steel, iron or aluminium part near a manifold is cooled by what it is bolted to and is the engine's own business)
 /** What heat harms: the polymers, rubbers, foams, fabrics and low-melting metals (each with its limit in MAX_SERVICE). */
-export const HARMED = /^(rubber|nbr|epdm|neoprene|silicone|fkm|pu|foam|pet|cotton|paper|pp|pe|xlpe|abs|pvc|pc|pmma|nylon|pbt|pom|ptfe|epoxy|phenolic|fibreglass|lead|solder|zamak)$/;
+export const HARMED = /^(rubber|nr|nbr|epdm|neoprene|silicone|fkm|pu|foam|pet|cotton|paper|pp|pe|xlpe|abs|pvc|pc|pmma|nylon|pbt|pom|ptfe|epoxy|phenolic|fibreglass|lead|solder|zamak)$/;
 /** Whether a straight line between two points passes through a solid piece other than the two (a shield between them:
  *  the head between an exhaust port and a valve's seal, a heat shield's sheet, a cover over a gasket). Any opaque piece
  *  stops what radiates; the piece that stops it is held to its own limit in its turn. Glass lets it through. */

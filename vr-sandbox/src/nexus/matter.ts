@@ -95,6 +95,7 @@ export const MATTER: Record<string, Row> = {
   epoxy: r('polymer', 'bisphenol-A epoxy, amine cured', true),
   phenolic: r('polymer', 'phenolic resin (Bakelite type)', true, 'polymer.phenolic', true),
   rubber: r('elastomer', 'rubber, natural or synthetic unsaid', false, 'rubber.natural'),
+  nr: r('elastomer', 'natural rubber (NR, cis-polyisoprene), vulcanised', true, 'rubber.natural', true),
   nbr: r('elastomer', 'nitrile rubber (NBR)', true, 'rubber.natural'),
   epdm: r('elastomer', 'EPDM rubber', true, 'rubber.natural'),
   neoprene: r('elastomer', 'Polychloroprene (neoprene) rubber', true, 'rubber.natural'),

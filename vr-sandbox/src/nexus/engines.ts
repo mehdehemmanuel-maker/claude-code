@@ -224,7 +224,11 @@ export function crankshaft(s: EngineSpec, d = engineDims(s)): Part {
  *  their main saddles), its liners, its main caps with their bolts, and its main bearing shells. */
 export function cylinderBlock(s: EngineSpec, d = engineDims(s)): Part {
   const { B, n, deck, yb0, Wb, Wc, wc, we, len, ysk, rm, shellT, wm } = d, cyl = cylinders(s, d), iron = s.block === 'iron';
-  const cast = { mat: iron ? 'cast-iron' : 'al-a380', color: iron ? 0x4a4c4e : 0x8c8e90, finish: 'cast', one: true }, parts: Part[] = [];
+  // (a liquid-cooled casting held at its coolant's temperature by its jacket: about 105 °C at full load, typical (a
+  // thermostat opens at 82 to 95 °C and the coolant runs a little over it); the heat check reads it as fixed there, so
+  // what the exhaust gives the casting is carried away, as it is, not spread through it. An estimate: the metal by the
+  // exhaust ports runs hotter)
+  const cooled = d.jacket > 0 ? { hot: COOLANT } : {}, cast = { mat: iron ? 'cast-iron' : 'al-a380', color: iron ? 0x4a4c4e : 0x8c8e90, finish: 'cast', one: true, ...cooled }, parts: Part[] = [];
   const liner = iron && !d.diesel ? 0 : (d.diesel ? 0.05 : 0.025) * B, bore = B / 2 + liner, H = deck - yb0;
   // (an ohv block's bores for its cam, its lifters and its pushrods, in the frame of what they are bored in)
   const ohv = d.cams === 'ohv' ? ohvTrain(d, cyl) : null, rods = ohv?.rods ?? [];
@@ -330,26 +334,30 @@ const valvePart = (d: Dims, ex: boolean): Part => { const r = valveR(d, ex), hea
   return turned({ name: ex ? 'exhaust valve' : 'intake valve', steps: [[r, head], [r * 0.45, 0.6 * r], [stem, vL - head - 0.6 * r]], mat: ex ? 'stainless-304' : 'steel-alloy', color: ex ? 0xa8a6a0 : 0xc8ccd2, item: ex ? 'valve-exhaust' : 'valve-intake', finish: 'ground', says: `its head ${(2 * r * 1000).toFixed(1)} mm across, its stem ${(2 * stem * 1000).toFixed(1)} mm, ${(vL * 1000).toFixed(0)} mm long${ex ? ', stainless for the heat' : ''}` }); };
 const retainerPart = (d: Dims, wire: number, D: number): Part => { const stem = stemOf(d), retT = 0.06 * d.B; return P('valve spring retainer', { lathe: [[stem + 0.001, 0], [D / 2 + wire / 2 + 0.0005, 0], [D / 2 + wire / 2 + 0.0005, retT * 0.4], [stem + 0.004, retT], [stem + 0.001, retT], [stem + 0.001, 0]] }, [0, 0, 0], { item: 'valve-retainer', mat: 'steel-alloy', color: 0x8a8c90, finish: 'machined' }); };
 const tappetPart = (d: Dims): Part => { const B = d.B, h = 0.3 * B; return P('bucket tappet', { lathe: [[0.145 * B, 0], [0.16 * B, 0], [0.16 * B, h], [0, h], [0, h - 0.004], [0.145 * B, h - 0.004], [0.145 * B, 0]] }, [0, 0, 0], { item: 'bucket-tappet', mat: 'steel-alloy', color: 0x8a8c90, finish: 'ground' }); };
+/** A liquid-cooled engine's coolant at full load, °C (typical: a thermostat opening at 82 to 95 °C, the coolant a little over it). */
+export const COOLANT = 105;
 const springDesigns = new Map<string, ReturnType<typeof designSpring>>();
 /** A valve spring sized by what it carries: on 0.24 bore across and about half a bore fitted (typical proportions), the
  *  thinnest chrome-silicon wire (the valve spring wire: Shigley) and the least preload that hold its valve, retainer,
  *  keepers, tappet (or half its rocker) and a third of itself on the cam's nose at the engine's redline with 1.2 to
- *  spare, its wire's stress within its allowable and clear of coil bind at full lift. Five active coils. */
+ *  spare, its wire's stress within its allowable and clear of coil bind at full lift. Three to six active coils (fewer
+ *  let a thicker wire clear coil bind, and a spring's force at a given stress grows as its wire's cube: how springs for
+ *  high speeds are wound); where none holds, the best is kept and says so (`ok` false, read by Engine under load). */
 export const springOf = (d: Dims) => { const k = `${d.B}|${d.valves}|${d.cams}|${d.redline}|${d.tip}`; let v = springDesigns.get(k); if (!v) springDesigns.set(k, (v = designSpring(d))); return v; };
 function designSpring(d: Dims) {
-  const { B } = d, L = 0.46 * B, n = 5, lift = 0.11 * B, wire = SPRING_WIRES['chrome-silicon-a401']!, stem = stemOf(d);
+  const { B } = d, L = 0.46 * B, lift = 0.11 * B, wire = SPRING_WIRES['chrome-silicon-a401']!, stem = stemOf(d);
   let best: { d: number; D: number; L: number; L0: number; n: number; holds: number; ok: boolean } | null = null;
   // (its coil round its stem's seal with half a millimetre to spare, its retainer inside its bucket tappet (a twin-cam's)
   // with 0.3 mm to spare: the largest coil and the thinnest wire, then the least preload, that do)
-  for (const Dr of [0.24, 0.23, 0.22, 0.21, 0.2]) { const D = Dr * B;
-  for (let dw = 0.03 * B; dw <= 0.06 * B + 1e-12 && D / dw >= 4; dw += 0.001 * B) { if (D / 2 - dw / 2 < stem + 0.003 + 0.0005 || (d.cams === 'dohc' && D / 2 + dw / 2 + 0.0005 > 0.145 * B - 0.0003)) continue; for (const ratio of [0.82, 0.79, 0.76, 0.73, 0.7]) {
+  for (const n of [5, 4, 6, 3]) for (const Dr of [0.24, 0.23, 0.22, 0.21, 0.2]) { const D = Dr * B;
+  for (let dw = 0.03 * B; dw <= 0.06 * B + 1e-12 && D / dw >= 4; dw += 0.001 * B) { if (D / 2 - dw / 2 < stem + 0.003 + 0.0005 || (d.cams === 'dohc' && D / 2 + dw / 2 + 0.0005 > 0.145 * B - 0.0003)) continue; for (const ratio of [0.82, 0.79, 0.76, 0.73, 0.7, 0.67, 0.64]) {
     const L0 = L / ratio, cs = { d: dw, D, Na: n, L0, wire }, k = springRate(cs), F = k * (L0 - L + lift);
     const mvt = massOf(valvePart(d, false)) + massOf(retainerPart(d, dw, D)) + 2 * 7850 * 0.0025 * 0.06 * B * 0.004 + (d.cams === 'dohc' ? massOf(tappetPart(d)) : 7850 * 0.7 * 0.15 * B * 0.1 * B * 0.35 * B / 2) + (wire.density * PI * D * (n + 2) * PI * dw * dw) / 4 / 3;
     const holds = (2 * Math.sqrt(F / (4.5 * lift * mvt)) * 60) / (2 * PI), fits = shearStress(cs, F) <= allowableShear(cs) && L - lift >= 1.1 * solidLength(cs);
     const v = { d: dw, D, L, L0, n, holds, ok: fits && holds >= 1.2 * d.redline };
     if (v.ok) return v; if (fits && (!best || holds > best.holds)) best = v;
   } } }
-  return best ?? { d: 0.032 * B, D: 0.24 * B, L, L0: L / 0.8, n, holds: 0, ok: false };
+  return best ?? { d: 0.032 * B, D: 0.24 * B, L, L0: L / 0.8, n: 5, holds: 0, ok: false };
 }
 /** One of a head's pieces made to its engine's size, in its own frame. */
 export function headPiece(s: EngineSpec, which: HeadPiece, d = engineDims(s)): Part {
@@ -383,7 +391,7 @@ const placed = (q: Part, at: V3): Part => ({ ...q, at });
 export function cylinderHead(s: EngineSpec, d = engineDims(s), bank?: number, given: HeadParts = {}): Part {
   const piece = (w: HeadPiece): Part => given[w] ?? headPiece(s, w, d);
   const { B, deck, Wb, Hh, td, gasket, valves, cams, len, we } = d, cylAll = cylinders(s, d), hd = bank === undefined ? headsOf({ ...d, vee: false }, cylAll, len)[0]! : headsOf(d, cylAll, len)[bank]!, cyl = hd.cyl;
-  const iron = d.diesel, cast = { mat: iron ? 'cast-iron' : 'al-a380', color: iron ? 0x50525a : 0x9a9c9e, finish: 'cast', one: true }, parts: Part[] = [];
+  const iron = d.diesel, cast = { mat: iron ? 'cast-iron' : 'al-a380', color: iron ? 0x50525a : 0x9a9c9e, finish: 'cast', one: true, ...(d.jacket > 0 ? { hot: COOLANT } : {}) }, parts: Part[] = [];
   const y0 = deck + gasket, Lh = hd.L, x0 = hd.x, Wh = Wb, tw = 0.05 * B; void we;
   const xs = exSide(d, cyl[0]!.lean), train = cams === 'ohv' ? ohvTrain(d, cylAll).rods.filter((q) => hd.idx.includes(q.bank)) : [];
   // (its valves: four to a cylinder, two intake and two exhaust across it, or two in a row; their heads' sizes a share of
@@ -872,8 +880,8 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
     o2('oxygen sensor', [cx, cTop - cH - 0.065, cz - 0.06 - 0.02 - 0.0005]);
     // (its mounts: a rubber mount on a bracket over the timing end, and a torque rod's bush low on the exhaust side; the
     // third is on the gearbox, which is not drawn)
-    out.push(group('engine mount', [box('mount bracket', [0.05, 0.02, 0.07], [0, 0.01, 0], { item: 'bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('mount rubber', { cyl: [0.035, 0.035] }, [0, 0.02 + 0.0005 + 0.0175, 0], { item: 'mount-rubber', mat: 'rubber', color: 0x1a1a1a })], { item: 'engine-mount', at: [front + 0.036, deck + gasket + Hh + 0.0665, -0.08], joins: ['timing cover rim'], joint: 'mount', says: 'the timing end\'s: its rubber under the car\'s body rail (typical of a transverse engine)' }));
-    out.push(group('engine mount', [box('mount bracket', [0.06, 0.04, 0.03], [0, 0, -0.015], { item: 'bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('mount rubber', { cyl: [0.025, 0.03] }, [0, 0, -0.03 - 0.0005 - 0.015], { rot: [PI / 2, 0, 0], item: 'mount-rubber', mat: 'rubber', color: 0x1a1a1a })], { item: 'engine-mount', at: [0, 0.035, -Wc / 2 - 0.0005], joins: ['crankcase wall'], joint: 'mount', says: 'a torque rod\'s bush, low behind (typical)' }));
+    out.push(group('engine mount', [box('mount bracket', [0.05, 0.02, 0.07], [0, 0.01, 0], { item: 'bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('mount rubber', { cyl: [0.035, 0.035] }, [0, 0.02 + 0.0005 + 0.0175, 0], { item: 'mount-rubber', mat: 'nr', color: 0x1a1a1a })], { item: 'engine-mount', at: [front + 0.036, deck + gasket + Hh + 0.0665, -0.08], joins: ['timing cover rim'], joint: 'mount', says: 'the timing end\'s: its rubber under the car\'s body rail (typical of a transverse engine)' }));
+    out.push(group('engine mount', [box('mount bracket', [0.06, 0.04, 0.03], [0, 0, -0.015], { item: 'bracket', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('mount rubber', { cyl: [0.025, 0.03] }, [0, 0, -0.03 - 0.0005 - 0.015], { rot: [PI / 2, 0, 0], item: 'mount-rubber', mat: 'nr', color: 0x1a1a1a })], { item: 'engine-mount', at: [0, 0.035, -Wc / 2 - 0.0005], joins: ['crankcase wall'], joint: 'mount', says: 'a torque rod\'s bush, low behind (typical)' }));
     // (a shield of aluminised steel on its bracket's side toward the catalyst, as its rubber cannot take the heat at that
     // distance (typical: a pressed plate on the bracket))
     out.push(box('mount heat shield', [0.001, 0.07, 0.06], [0.04, 0.035, -Wc / 2 - 0.035], { item: 'heat-shield', mat: 'steel-low', color: 0xb8b8b0, finish: 'machined', says: 'aluminised steel, between the catalyst and the torque rod\'s rubber' }));

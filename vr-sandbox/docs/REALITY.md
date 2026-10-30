@@ -1298,3 +1298,16 @@ pool's workers and merges them in the builders' own order (`builtPieces({ wide: 
 as walking them one after another: 4,703 pieces, each first met in the same place, the same users, 0 differences (two
 merge faults found that way and fixed). The compiled TypeScript is kept between runs (vitest's `fsModuleCache`).
 Measured: the gate 42.2 s on its first run, 37.9 s after.
+- **2026-10-30, the engine the compiler rejected, three causes found.** (1) The valve spring: its designer was held to
+five active coils and found none that holds the valves to 1.2 × the 6,500 rpm redline (its best 6,271 rpm), and gave it
+back without saying so; it now winds three to six coils (a thicker wire clears coil bind, and a spring's force at one
+stress goes as its wire's cube), and says where it still falls short (`ok` false): 3.14 mm wire, valves float at 6,942
+rpm (short of its own 7,800 aim, past the redline), the least factor of safety at 6,500 rpm 0.93 → 1.0007. (2) Heat: a
+liquid-cooled block and head were nothing but metal to the heat check, so the 800 °C manifold heated the whole head; they
+are now held at the coolant's temperature (`COOLANT`, 105 °C, typical, said an estimate). The coil housing's 171 to
+174 °C is gone; on the Corolla 15 findings (valve stem seals at 231 to 240 °C among them, so "every engine comes back
+clean" had gone stale) became 1. (3) What is left is real and marginal: the engine mount's rubber, now said natural
+rubber (NR, k 0.13 W/m K, Engineering Toolbox; 80 °C service) and so worked out rather than taken as hot as its
+neighbour, reaches 84 °C on its bracket off the 105 °C block: a heat shield, a longer bracket or a hotter-rated compound,
+a choice left to the user, not tuned away. The Monte Carlo's 10 findings (its exhaust heat shield into its alternator)
+were there before and are not from this.
