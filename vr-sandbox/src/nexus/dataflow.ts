@@ -15,7 +15,7 @@ import { ALIASES, aliasSet, block, clockOf, rng, defaultsOf, dimOf, elemOf, fits
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
 import { fromSI, sameDim, toSI } from '../ganglia/units';
 import type { Part } from './kits';
-import { boundsOfAll, designOf, fromLibrary, hash, isAssembly, isPart, place, type Assembly, type Placed } from './assembly';
+import { boundsOfAll, designOf, fromLibrary, hash, isAssembly, isPart, massOfAll, place, type Assembly, type Placed } from './assembly';
 import { fitByAsync } from './numeric';
 import { atDetailAsync } from './lod';
 const P_ = (name: string, type: Type): PortDef => ({ name, type }), PL = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
@@ -607,7 +607,9 @@ async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>): 
 function runnerOf(d: BlockDef): (inputs: Record<string, unknown>, set: Record<string, unknown>) => Promise<Outputs> {
   if (d.run) return async (inputs, set) => { const o = d.run!(inputs, { set, time: 0 } as Ctx); return o instanceof Promise ? await o : o; };
   if (!d.graph) throw new Error(`${d.name} has nothing to run`);
-  const k = new Engine(d.graph, {}); return (inputs) => runInside(k, d.graph!, inputs);
+  // (an input not given takes its default, as it would placed on a board: a window's frame colour when only its size moves)
+  const k = new Engine(d.graph, {}), dflt = Object.fromEntries(portsOf(d, defaultsOf(d)).inputs.filter((q) => q.default !== undefined).map((q) => [q.name, q.default]));
+  return (inputs) => runInside(k, d.graph!, { ...dflt, ...Object.fromEntries(Object.entries(inputs).filter(([, v]) => v !== undefined)) });
 }
 /** A library block run on its own with these inputs: its outputs (a seed's whole board, run where it is needed). */
 export async function runBlock(id: string, inputs: Record<string, unknown>, env: Env = {}): Promise<Outputs> {
@@ -719,6 +721,60 @@ register({ version: 1, by: 'built in', pure: true, id: 'variants', name: 'Varian
   },
   // (five bars, each its own load: five stresses, none twice)
   tests: [{ set: { block: 'law.stress.axial', vary: 'F 1000..5000', count: 5, seed: 1 }, inputs: { A: 0.001 }, outputs: { distinct: 5, repeats: 0 } }] } as BlockDef);
+
+// ---- what matters: which of anything's inputs move which of its outputs, and how much ------------------------------------
+register({ version: 1, by: 'built in', pure: true, id: 'what.matters', name: 'Sensitivity (elementary effects)', kind: 'critic', ability: 'check', domains: ['mechanical', 'structural', 'electrical', 'vehicles', 'finance', 'everyday'],
+  spec: { gloss: 'Which of its inputs move any block\'s outputs, by how much, and which act together or bend?', discipline: 'mechanical.design', role: 'numerical solver', codes: [{ scheme: 'MSC2020', code: '62K15', label: 'Factorial statistical designs' }, { scheme: 'MSC2020', code: '65C05', label: 'Monte Carlo methods' }],
+    model: { equations: ['each value x_j scaled to u_j in 0..1 over its range; a path of k + 1 runs from a drawn start on a 4-level grid, each step moving one value by Δ = 2/3', 'its effect there EE_j = (y(u + Δ e_j) − y(u)) / Δ: y\'s change for the whole range of x_j', 'μ*_j = mean |EE_j| (how much it moves y), σ_j = their spread (it bends y or acts with another), over r paths'], class: 'analytical', time: 'steady', linear: false,
+      method: 'Morris\'s elementary effects with Campolongo\'s μ*: r (k + 1) runs, each run once whatever asks it again', references: ['Morris, Factorial sampling plans for preliminary computational experiments, Technometrics 33, 161 (1991)', 'Campolongo, Cariboni & Saltelli, An effective screening design for sensitivity analysis of large models, Environ. Model. Softw. 22, 1509 (2007)', 'Saltelli et al., Global Sensitivity Analysis: The Primer, Wiley (2008), ch. 3'] } },
+  says: 'Any block in the library, or a whole pipeline folded into one, run along paths that move its inputs or settings one at a time across their ranges: for each output, each value ranked by how much it moves it over its whole range, whether it does so straight or bent (or only together with another), and what does nothing at all. What to fit, what to fix, what to leave alone, before spending a run on it',
+  settings: [{ key: 'block', label: 'Block (its id)', type: 'text', default: 'load.engine' }, { key: 'vary', label: 'Moved, each a line: name from..to', type: 'code', default: 'bore 0.07..0.09\nstroke 0.07..0.1\nrpm 3000..7000' },
+    { key: 'watch', label: 'Outputs watched (by name, a space between; a thing by its mass, width, height, depth as thing.mass; blank: every number it gives and every thing measured)', type: 'text', default: 'floatRpm worst' }, { key: 'paths', label: 'Paths (r)', type: 'number', default: 10 }, { key: 'seed', label: 'Seed', type: 'number', default: 1 }, { key: 'blockSet', label: 'Its other settings (JSON)', type: 'code', default: '{}' }],
+  ports: (st) => { const t = block(String(st.block ?? 'load.engine')), set = (() => { try { return JSON.parse(String(st.blockSet ?? '{}')) as Record<string, unknown>; } catch { return {}; } })(), moved = new Set(String(st.vary ?? '').split('\n').map((l) => l.trim().split(/\s+/)[0]).filter(Boolean));
+    const ins = t ? portsOf(t, { ...defaultsOf(t), ...set }).inputs.filter((q) => !moved.has(q.name)).map((q) => ({ ...q, optional: true })) : [];
+    return { inputs: ins, outputs: [PL('effects', 'table', { label: 'each value on each output: μ*, μ, σ' }), PL('ranked', 'record', { label: 'for each output, the values from most to least' }), PL('nothing', 'list<text>', { label: 'values that move no output watched' }), PL('runs', 'integer'), PL('says', 'text')] }; },
+  run: async (i, c) => {
+    const t = block(String(c.set.block)); if (!t || (!t.run && !t.graph)) throw new Error(`no block "${c.set.block}" that runs`);
+    let set0: Record<string, unknown>; try { set0 = { ...defaultsOf(t), ...(JSON.parse(String(c.set.blockSet ?? '{}')) as Record<string, unknown>) }; } catch { throw new Error('its settings are not JSON'); }
+    const ins = new Set(portsOf(t, set0).inputs.map((q) => q.name)), keysOf = new Set((t.settings ?? []).map((q) => q.key));
+    const vary = String(c.set.vary ?? '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = /^(\S+)\s+(-?[\d.eE+-]+)\s*\.\.\s*(-?[\d.eE+-]+)$/.exec(l); if (!m) throw new Error(`"${l}": a line is a name and its range, as "bore 0.06..0.1"`);
+      if (!ins.has(m[1]!) && !keysOf.has(m[1]!)) throw new Error(`the ${t.name} has no input or setting "${m[1]}"`); return { name: m[1]!, lo: Number(m[2]), hi: Number(m[3]), isSet: !ins.has(m[1]!) }; });
+    if (!vary.length) throw new Error('give it something to move');
+    const runT = runnerOf(t), kept = new Map<string, Outputs>(), k = vary.length, r = Math.max(2, Math.min(100, Math.round(Number(c.set.paths ?? 10)))), levels = 4, D = levels / (2 * (levels - 1));
+    // (a thing it makes measured as a person would: its mass, and its width, height and depth, watched like any number)
+    const measured = (o: Outputs): Outputs => { const m: Outputs = { ...o }; for (const [n, v] of Object.entries(o)) if (isPart(v) || isAssembly(v)) { const bx = boundsOfAll(v); m[`${n}.mass`] = massOfAll(v); if (!bx.isEmpty()) { m[`${n}.width`] = bx.max.x - bx.min.x; m[`${n}.height`] = bx.max.y - bx.min.y; m[`${n}.depth`] = bx.max.z - bx.min.z; } } return m; };
+    const at = async (u: number[]): Promise<Outputs> => { const key = u.map((v) => v.toFixed(6)).join(','); let o = kept.get(key);
+      if (!o) { const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; vary.forEach((v, j) => { const x = v.lo + (v.hi - v.lo) * u[j]!; if (v.isSet) set[v.name] = x; else inp[v.name] = x; }); o = measured(await runT(inp, set)); kept.set(key, o); } return o; };
+    let watch = String(c.set.watch ?? '').split(/[\s,]+/).filter(Boolean);
+    const ee = new Map<string, number[]>(), push = (j: number, w: string, e: number) => { const key = `${j}|${w}`; (ee.get(key) ?? ee.set(key, []).get(key)!).push(e); };
+    for (let p = 0; p < r; p++) {
+      // (a start on the grid's lower levels, so a step up stays inside; each value stepped once, in a drawn order, up or down)
+      const g = rng(mixSeed(Number(c.set.seed ?? 1), p, 0)), u = vary.map(() => Math.floor(g() * (levels / 2)) / (levels - 1)), order = vary.map((_, j) => j), sign = vary.map(() => (g() < 0.5 ? 1 : -1));
+      for (let j = k - 1; j > 0; j--) { const q = Math.floor(g() * (j + 1)); [order[j], order[q]] = [order[q]!, order[j]!]; }
+      for (let j = 0; j < k; j++) if (sign[j]! < 0) u[j] = u[j]! + D;
+      let y0 = await at(u);
+      if (!watch.length) watch = Object.entries(y0).filter(([, v]) => typeof v === 'number').map(([n]) => n);
+      if (!watch.length) throw new Error(`the ${t.name} gives no number and no thing to measure`);
+      for (const w of watch) if (!(w in y0)) throw new Error(`the ${t.name} gives no "${w}"`);
+      for (const j of order) { const u1 = u.slice(); u1[j] = u[j]! + sign[j]! * D; const y1 = await at(u1);
+        for (const w of watch) { const a = Number(y0[w]), b = Number(y1[w]); if (Number.isFinite(a) && Number.isFinite(b)) push(j, w, (sign[j]! * (b - a)) / D); }
+        u[j] = u1[j]!; y0 = y1; }
+    }
+    const effects: Record<string, unknown>[] = [], ranked: Record<string, string[]> = {}, moves = new Set<number>();
+    for (const w of watch) {
+      const rows = vary.map((v, j) => { const e = ee.get(`${j}|${w}`) ?? [], n = e.length || 1, mu = e.reduce((s, x) => s + x, 0) / n, star = e.reduce((s, x) => s + Math.abs(x), 0) / n, sd = Math.sqrt(e.reduce((s, x) => s + (x - mu) ** 2, 0) / Math.max(1, n - 1)); return { j, v, mu, star, sd, n: e.length }; });
+      const top = Math.max(...rows.map((q) => q.star)) || 0;
+      rows.sort((a, b) => b.star - a.star); ranked[w] = rows.map((q) => q.v.name);
+      for (const q of rows) { const share = top ? q.star / top : 0; if (share > 1e-6) moves.add(q.j);
+        effects.push({ output: w, value: q.v.name, 'μ*': +q.star.toPrecision(4), 'μ': +q.mu.toPrecision(4), 'σ': +q.sd.toPrecision(4), 'of the most': +share.toFixed(3),
+          how: share <= 1e-6 ? 'does nothing' : q.sd <= 0.1 * q.star ? (q.mu >= 0 ? 'straight, up' : 'straight, down') : Math.abs(q.mu) >= 0.9 * q.star ? `bends or acts with another, always ${q.mu >= 0 ? 'up' : 'down'}` : 'bends or acts with another, both ways', effects: q.n }); }
+    }
+    const nothing = vary.filter((_, j) => !moves.has(j)).map((v) => v.name);
+    return { effects, ranked, nothing, runs: kept.size,
+      says: `${t.name} in ${kept.size} runs over ${r} paths: ${watch.map((w) => [w, effects.filter((e) => e.output === w && e.how !== 'does nothing').map((e) => e.value as string)] as const).filter(([, m]) => m.length).map(([w, m]) => `${w} moved most by ${m[0]}${m.length > 1 ? `, then ${m.slice(1).join(', ')}` : ''}`).join('; ') || 'nothing watched moved'}${nothing.length ? `; ${nothing.join(', ')} move${nothing.length > 1 ? '' : 's'} nothing watched` : ''}` };
+  },
+  // (a bar's stress σ = F / A: its load moves it more than its area over these ranges, and both move it)
+  tests: [{ set: { block: 'law.stress.axial', vary: 'F 1000..5000\nA 0.001..0.002', watch: 'sigma', paths: 6 }, inputs: {}, outputs: { nothing: [], ranked: { sigma: ['F', 'A'] } } }] } as BlockDef);
 
 const PLACE_COLS = new Set(['x', 'y', 'z', 'rx', 'ry', 'rz', 's']);
 register({ id: 'spawn', name: 'Spawn', kind: 'generator', ability: 'generate', domains: ['everyday', 'structural', 'operations'], version: 1, by: 'built in', pure: true,

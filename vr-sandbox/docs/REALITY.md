@@ -1195,3 +1195,14 @@ any function by its input's content, used first for making a machine from its re
 its key; each caller given its own top, its pieces shared). Measured: the Monte Carlo on a second board 815 ms → 1 ms;
 making it again from its record 680 ms → under 1 ms. The built-parts library is unchanged by it (no piece added or
 dropped). Not measured: Picture to model end to end (its time is the fits', which this does not shorten).
+- **2026-10-30, what matters (sensitivity), for anything.** Node `what.matters`, Sensitivity (elementary effects)
+(`dataflow.ts`): any block or folded pipeline run along Morris's paths, each moved value stepped once a path across a
+4-level grid; for each output watched, each value's μ* (how far it moves it over its whole range), μ and σ (straight, or
+bent or acting with another), ranked, and what moves nothing. A thing it makes is measured as a person would (its mass,
+width, height, depth) and watched like a number. Measured: a bar's stress, load before area, both bent (σ = F/A), 11 runs,
+2 ms; a window, width moved by w alone, height by h alone, mass by both together (its glass w × h), 11 runs, 40 ms; the
+engine under load at 7000 rpm, 32 runs, 10.4 s: its valves' float speed moved by bore alone, its least factor of safety by
+rpm then bore, and its stroke by nothing, checked: the least is always the valve spring keeping its valve on the cam
+(0.81), which no stroke reaches, while the rod's pull does move with stroke (108 → 159 MPa at 70 → 100 mm). Found with it
+and fixed: a folded block run inside a fit, variants or this was not given its inputs' defaults (a window without its
+frame colour made nothing); `runnerOf` now gives them, as placing it on a board does.

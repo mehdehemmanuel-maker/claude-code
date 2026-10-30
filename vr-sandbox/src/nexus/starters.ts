@@ -369,6 +369,14 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'says'); wire(b, 'win', 'says', 'says', 'value'); placeBlock(b, 'view.show', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'Each, what was drawn'; wire(b, 'win', 'rows', 'rows', 'value');
     return tidy(b);
   }],
+  ['What matters: which of a block\'s inputs move which of its outputs, and how much: a window\'s width and height against its mass and size, a bar\'s load and area against its stress; ranked, straight or bent, and what moves nothing (change the block to ask it of anything, an engine, a whole pipeline folded into one)', () => {
+    const b = emptyBoard('What matters');
+    placeBlock(b, 'what.matters', 0, 0, { block: 'seed.window', vary: 'w 0.6..1.8\nh 0.8..1.6', watch: '', paths: 8 }, 'win'); b.nodes.win!.label = 'A window: what moves what';
+    placeBlock(b, 'view.show', 0, 0, {}, 'ws'); wire(b, 'win', 'says', 'ws', 'value'); placeBlock(b, 'view.show', 0, 0, {}, 'we'); b.nodes.we!.label = 'Each effect'; wire(b, 'win', 'effects', 'we', 'value');
+    placeBlock(b, 'what.matters', 0, 0, { block: 'law.stress.axial', vary: 'F 1000..5000\nA 0.001..0.002', watch: 'sigma', paths: 8 }, 'bar'); b.nodes.bar!.label = 'A bar: what moves its stress';
+    placeBlock(b, 'view.show', 0, 0, {}, 'bs'); wire(b, 'bar', 'says', 'bs', 'value');
+    return tidy(b);
+  }],
   ['Pipelines tried: every recipe for fitting a model to a picture run on the Monte Carlo\'s, each judged alike (overlap, error both ways, time), the best kept for Picture to model', () => {
     const b = emptyBoard('Pipelines tried');
     placeBlock(b, 'photo.load', 0, 0, { id: 'mc-side' }, 'ph'); b.nodes.ph!.label = 'The picture';
