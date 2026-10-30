@@ -1254,3 +1254,14 @@ its hubs and discs 1.6 % larger, its front axle tube 49 → 64 mm for 126 % more
 lines refitted to the picture). Its mass the same to 10⁻¹³ kg: a car is held to its published mass, so the kit's weight
 comes out of "the rest of it" (said, not hidden; whether a kit should add to the published mass is a choice not yet
 made). The board in the page, both cars built and compared: about 5 s.
+- **2026-10-30, fit in parallel.** `numeric.ts`: `eigenSym` (cyclic Jacobi; checked against a 3×3 with known eigenvalues
+to six places), and CMA-ES (Hansen 2016, his constants), a minimiser asking for a batch of points at once, driven by
+`minimizeBatchAsync`/`fitByBatchAsync`. Fit to a target takes `method` (auto, one at a time (Nelder–Mead), in batches
+(CMA-ES)); auto is batches for three values or more; its first scan's seven points go at once either way, through the pool.
+Goals may name a moved value (rpm max). Measured: Rosenbrock (2 and 5 values) reached by both (CMA-ES in more trials, 870
+against 206, in 145 rounds of 6); Rastrigin in 3 (many valleys): CMA-ES 1.38, Nelder–Mead stuck at 16.9. On the engine,
+bore, stroke and speed moved for the highest speed that holds (valves not floating below 7,000 rpm, least factor of
+safety over 1): CMA-ES on 4 workers 31.3 s, on one thread 59.6 s, the same answer (70 mm, 7,000 rpm, every goal met);
+Nelder–Mead 47.6 s and its limit missed (1.0 reached). In the page 38.2 s, every goal met. Its stroke not fixed by these
+goals, as What matters found. Picture to model's fits do not go through this yet: each scores its trials inside one node,
+not as a block run, so nothing can be handed to a worker.

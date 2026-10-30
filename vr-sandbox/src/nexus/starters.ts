@@ -385,6 +385,13 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'fit', 'thing', 'show', 'thing');
     return tidy(b);
   }],
+  ['Fit in parallel: the highest speed an engine holds (its valves not floating below 7,000 rpm, every part at least as strong as its load), its bore, stroke and speed moved together, eight tries at once each round (CMA-ES), the eight side by side, one for each core (the run says how many and how long)', () => {
+    const b = emptyBoard('Fit in parallel');
+    placeBlock(b, 'fit.target', 0, 0, { block: 'load.engine', vary: 'bore 0.07..0.09\nstroke 0.07..0.1\nrpm 5000..8000', goals: 'floatRpm > 7000\nworst > 1\nrpm max', most: 160, method: 'in batches (CMA-ES)' }, 'fit'); b.nodes.fit!.label = 'As fast as it holds';
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'fit', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'fg'); b.nodes.fg!.label = 'Each value, its ±'; wire(b, 'fit', 'figures', 'fg', 'rows');
+    placeBlock(b, 'view.table', 0, 0, {}, 'gl'); b.nodes.gl!.label = 'Each goal, what it reached'; wire(b, 'fit', 'goals', 'gl', 'rows');
+    return tidy(b);
+  }],
   ['Run many at once: what moves an engine\'s valve float and its least factor of safety, its 29 trials laid out first and run side by side, one for each core the machine has (the run says how many and how long)', () => {
     const b = emptyBoard('Run many at once');
     placeBlock(b, 'what.matters', 0, 0, { block: 'load.engine', vary: 'bore 0.07..0.09\nstroke 0.07..0.1\nrpm 3000..7000', watch: 'floatRpm worst', paths: 10, seed: 2 }, 'eng'); b.nodes.eng!.label = 'An engine: what moves what';

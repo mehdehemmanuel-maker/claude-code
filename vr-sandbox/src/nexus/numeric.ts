@@ -432,3 +432,69 @@ function* fitting(keys: { x0: number; lo: number; hi: number; step: number }[], 
 }
 export function fitBy(cost: (x: number[]) => number, keys: { x0: number; lo: number; hi: number; step: number }[], o: FitOptions = {}): Fit { return drive(fitting(keys, o), cost); }
 export function fitByAsync(cost: (x: number[]) => number | Promise<number>, keys: { x0: number; lo: number; hi: number; step: number }[], o: FitOptions = {}): Promise<Fit> { return driveAsync(fitting(keys, o), cost); }
+
+// ---- in batches: a minimiser that asks for many points at once, so they can be worked out side by side ------------------
+/** A symmetric matrix's eigenvalues and eigenvectors (columns of V), by cyclic Jacobi rotations: exact to rounding for the
+ *  small matrices a fit's covariance is. Golub & Van Loan, Matrix Computations, 4th ed., §8.5. */
+export function eigenSym(A0: number[][]): { values: number[]; V: number[][] } {
+  const n = A0.length, A = A0.map((r) => r.slice()), V: number[][] = A.map((_, i) => A.map((__, j) => (i === j ? 1 : 0)));
+  for (let sweep = 0; sweep < 60; sweep++) {
+    let off = 0; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) off += A[i]![j]! ** 2; if (off < 1e-30) break;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+      const apq = A[p]![q]!; if (Math.abs(apq) < 1e-300) continue;
+      const th = (A[q]![q]! - A[p]![p]!) / (2 * apq), t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1)), c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < n; k++) { const akp = A[k]![p]!, akq = A[k]![q]!; A[k]![p] = c * akp - s * akq; A[k]![q] = s * akp + c * akq; }
+      for (let k = 0; k < n; k++) { const apk = A[p]![k]!, aqk = A[q]![k]!; A[p]![k] = c * apk - s * aqk; A[q]![k] = s * apk + c * aqk; }
+      for (let k = 0; k < n; k++) { const vkp = V[k]![p]!, vkq = V[k]![q]!; V[k]![p] = c * vkp - s * vkq; V[k]![q] = s * vkp + c * vkq; }
+    }
+  }
+  return { values: A.map((r, i) => r[i]!), V };
+}
+export type BatchOptions = MinOptions & { /** points asked for at once (λ); at least 4 + ⌊3 ln n⌋ */ batch?: number; /** its first step, a share of each range */ sigma?: number; seed?: number };
+/** CMA-ES (Hansen's covariance matrix adaptation evolution strategy): each round a batch of λ points drawn round its mean
+ *  from a normal whose shape it learns from the best of the last ones, so the batch can be worked out side by side. Within
+ *  lo..hi (each value scaled to its range; a point outside is worked out at the nearest inside, its distance outside
+ *  added). Hansen, The CMA Evolution Strategy: A Tutorial, arXiv:1604.00772 (2016), its eqs. and default constants. */
+function* cmaes(x0: number[], o: BatchOptions): Generator<number[][], Minimum, number[]> {
+  const n = x0.length, lo = o.lo ?? x0.map((v) => v - 1), hi = o.hi ?? x0.map((v) => v + 1), span = lo.map((l, i) => hi[i]! - l || 1);
+  const toX = (u: number[]) => u.map((v, i) => lo[i]! + span[i]! * v), clamp = (u: number[]) => u.map((v) => Math.min(1, Math.max(0, v)));
+  const lam = Math.max(4 + Math.floor(3 * Math.log(n)), o.batch ?? 0), mu = Math.floor(lam / 2), w0 = Array.from({ length: mu }, (_, i) => Math.log(mu + 0.5) - Math.log(i + 1)), ws = w0.reduce((a, b) => a + b, 0), w = w0.map((v) => v / ws), mueff = 1 / w.reduce((a, b) => a + b * b, 0);
+  const cc = (4 + mueff / n) / (n + 4 + (2 * mueff) / n), cs = (mueff + 2) / (n + mueff + 5), c1 = 2 / ((n + 1.3) ** 2 + mueff), cmu = Math.min(1 - c1, (2 * (mueff - 2 + 1 / mueff)) / ((n + 2) ** 2 + mueff)), ds = 1 + 2 * Math.max(0, Math.sqrt((mueff - 1) / (n + 1)) - 1) + cs, chiN = Math.sqrt(n) * (1 - 1 / (4 * n) + 1 / (21 * n * n));
+  let m = clamp(x0.map((v, i) => (v - lo[i]!) / span[i]!)), sigma = o.sigma ?? 0.3, C: number[][] = m.map((_, i) => m.map((__, j) => (i === j ? 1 : 0))), pc = m.map(() => 0), ps = m.map(() => 0), evals = 0, g = 0;
+  // (a seeded stream, so a fit is the same each time it is asked: mulberry32, and Box–Muller for its normals)
+  let st = ((o.seed ?? 1) * 0x9e3779b9) >>> 0; const uni = () => { st = (st + 0x6d2b79f5) >>> 0; let t = st; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const normal = () => Math.sqrt(-2 * Math.log(uni() || 1e-300)) * Math.cos(2 * Math.PI * uni());
+  let best = { x: toX(m), value: Infinity }; const most = o.most ?? 100 * n * lam, ftol = o.ftol ?? 1e-8, hist: number[] = [];
+  while (evals < most) {
+    const { values, V } = eigenSym(C), D = values.map((v) => Math.sqrt(Math.max(v, 1e-20)));
+    const ys = Array.from({ length: lam }, () => { const z = m.map(() => normal()); return m.map((_, i) => V[i]!.reduce((s, vij, j) => s + vij * D[j]! * z[j]!, 0)); });
+    const us = ys.map((y) => m.map((mi, i) => mi + sigma * y[i]!)), inside = us.map(clamp);
+    const f0 = yield inside.map(toX); evals += lam; g++;
+    const f = f0.map((v, k) => (Number.isFinite(v) ? v : 1e300) + 1e3 * us[k]!.reduce((s, u, i) => s + (u - inside[k]![i]!) ** 2, 0));
+    const ord = f.map((_, k) => k).sort((a, b) => f[a]! - f[b]!); if (f0[ord[0]!]! < best.value) best = { x: toX(inside[ord[0]!]!), value: f0[ord[0]!]! };
+    const yw = m.map((_, i) => ord.slice(0, mu).reduce((s, k, r) => s + w[r]! * ys[k]![i]!, 0)); m = clamp(m.map((mi, i) => mi + sigma * yw[i]!));
+    // (C^(-1/2) y_w = B D⁻¹ Bᵀ y_w)
+    const bt = V[0]!.map((_, j) => V.reduce((s, row, i) => s + row[j]! * yw[i]!, 0)), cinv = m.map((_, i) => V[i]!.reduce((s, vij, j) => s + (vij * bt[j]!) / D[j]!, 0));
+    ps = ps.map((p, i) => (1 - cs) * p + Math.sqrt(cs * (2 - cs) * mueff) * cinv[i]!);
+    const psn = Math.hypot(...ps), hs = psn / Math.sqrt(1 - (1 - cs) ** (2 * g)) < (1.4 + 2 / (n + 1)) * chiN ? 1 : 0;
+    pc = pc.map((p, i) => (1 - cc) * p + hs * Math.sqrt(cc * (2 - cc) * mueff) * yw[i]!);
+    C = C.map((row, i) => row.map((cij, j) => (1 - c1 - cmu + (1 - hs) * c1 * cc * (2 - cc)) * cij + c1 * pc[i]! * pc[j]! + cmu * ord.slice(0, mu).reduce((s, k, r) => s + w[r]! * ys[k]![i]! * ys[k]![j]!, 0)));
+    sigma *= Math.exp((cs / ds) * (psn / chiN - 1));
+    hist.push(f[ord[0]!]!); const recent = hist.slice(-(10 + Math.ceil((30 * n) / lam)));
+    if (sigma * Math.max(...D) < 1e-7 || (recent.length >= 10 + Math.ceil((30 * n) / lam) && Math.max(...recent) - Math.min(...recent) <= ftol)) return { x: best.x, value: best.value, evaluations: evals, converged: true };
+  }
+  return { x: best.x, value: best.value, evaluations: evals, converged: false };
+}
+const driveBatchAsync = async <R>(g: Generator<number[][], R, number[]>, f: (xs: number[][]) => Promise<number[]>): Promise<R> => { let s = g.next(); while (!s.done) s = g.next(await f(s.value)); return s.value; };
+/** A minimum found by CMA-ES, every batch handed to `f` at once (to be worked out side by side: pool.ts). */
+export function minimizeBatchAsync(f: (xs: number[][]) => Promise<number[]>, x0: number[], o: BatchOptions = {}): Promise<Minimum> { return driveBatchAsync(cmaes(x0, o), f); }
+/** fitBy in batches: CMA-ES within the ranges, then each value's ± from the cost's curvature, its two sides for every value
+ *  asked for at once. */
+export async function fitByBatchAsync(costs: (xs: number[][]) => Promise<number[]>, keys: { x0: number; lo: number; hi: number; step: number }[], o: FitOptions & { batch?: number; seed?: number } = {}): Promise<Fit> {
+  const x0 = o.x0 ?? keys.map((k) => k.x0), [before] = await costs([x0]);
+  const r = await minimizeBatchAsync(costs, x0, { lo: keys.map((k) => k.lo), hi: keys.map((k) => k.hi), most: o.most ?? 60, ftol: o.ftol ?? 0.05, batch: o.batch, seed: o.seed, sigma: 0.25 });
+  const best = r.value <= before! ? r : { x: x0, value: before! };
+  const sides = keys.flatMap((k, i) => [k.step, -k.step].map((d) => { const x = best.x.slice(); x[i] = Math.min(k.hi, Math.max(k.lo, x[i]! + d)); return x; })), v = await costs(sides);
+  const pm = keys.map((k, i) => { const curv = (v[2 * i]! + v[2 * i + 1]! - 2 * best.value) / (k.step * k.step); return curv > 1e-15 ? Math.sqrt((2 * (o.rise ?? 1)) / curv) : Infinity; });
+  return { x: best.x, before: before!, after: best.value, pm, fixed: keys.map((k, i) => pm[i]! < (k.hi - k.lo) / 2), evaluations: r.evaluations + 1 + sides.length };
+}
