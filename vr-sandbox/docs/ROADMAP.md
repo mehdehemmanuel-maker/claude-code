@@ -32,6 +32,33 @@ Bugs these tools found and fixed: a wire into an input a block lacks carried not
 blocks lost their inputs' defaults inside fits; a chart drew its x as its y; every spring wire had one stiffness; coils
 drew as octagons.
 
+## The CAD plan (2026-10-30): from parametric meshes to an engineering package
+
+Asked: editable parametric solids, assemblies with real constraints, independent verification, change propagation, files
+another CAD program opens. Answered honestly that day: parametric but meshes; mates in a chain, no constraint solver;
+verified mostly by our own code; changes follow wires, not geometry; nothing exports. The steps, each done only when its
+check passes:
+
+0. **The gate under a minute again** (63 s now): measure which checks are slow, keep the fast ones in the gate, move the
+   slow boards to a longer run. Done when the gate is measured under 45 s.
+1. **A real solid kernel (OpenCascade, compiled for the web and Node):** `nexus/brep.ts` turns every Part into an exact
+   solid (primitives; lathe as a revolve; extrusions; tubes as swept pipes; lofts; NURBS skins thickened to sheet), cuts
+   as true booleans, fillets and chamfers as features. Done when the bolt, spring, valve, piston and engine block convert,
+   OpenCascade calls each solid valid, and its volume times density matches our mass within 1 % (and how many pieces fail
+   to convert is said, not hidden).
+2. **Export:** STEP with the assembly tree and names (opens as solids in SolidWorks, Fusion, FreeCAD), STL, 3MF and glTF,
+   and a bill of materials (part, count, material, mass, standard). Done when a STEP of the engine is read back by
+   OpenCascade with the same solids, count and volume.
+3. **Independent verification:** interference by exact booleans checked against our checker; stress on test brackets by
+   CalculiX checked against our beam analysis and the textbook case. Done when they agree, and every disagreement is
+   listed.
+4. **A constraint solver:** mates as equations (coincident, concentric, distance, angle, parallel), all solved at once,
+   degrees of freedom counted, under- and over-constrained said. Done when a 20-part gearbox (housing, shafts, bearings,
+   gears, cover, bolts) solves, a four-bar linkage moves through its range, and the rules come back clean.
+5. **Changes that follow geometry:** interfaces that drive, so a hole resized finds its bolt, washer and nut and resizes
+   them from their standard family, then re-checks and re-exports. Done when an M8 to M10 change in the gearbox does so
+   and Difference lists every part it touched.
+
 ## Next, in order
 
 1. **Fix what the build screenshots show** (2026-10-30 gallery). The Monte Carlo's lip and valance end pieces stand off
