@@ -1179,3 +1179,12 @@ how far each corner stands off the surface is measured and said. On the Monte Ca
 Made of shapes every module already reads (prisms), so it weighs, lays out and is checked as any part is. Not yet: the
 kit's own scoop and lip pieces, made before this, still place themselves their own way; cutting an outline through a
 surface (a window in a wall) is not this tool.
+- **2026-10-30, variants of anything, none twice.** Node Variants of anything (`variants`, `dataflow.ts`): any block or
+folded pipeline made again and again, some of its inputs or settings drawn by seed from ranges (`w 0.6..1.8`, `n 2..6
+int`) or lists (`frame a|b|c`); what each made compared by what it is (things by the built-parts library's design key
+and their colours, numbers to seven figures), not by its seed, and one the same as one before drawn again; says how many
+differ in what they are and in design, and how many could not be made different (what is drawn from too small). Each
+variant's seed mixed through an integer hash first: unmixed, Park–Miller's first draws followed neighbouring variants
+almost in step (widths 0.771, 0.999, 1.227 …), now unrelated. Measured: twelve windows over width, height and frame from
+seed 1, twelve different in 12 draws (31 ms), the same twelve again from seed 1; five drawn from two frames only, 2
+different, 3 said to be repeats it could not avoid.

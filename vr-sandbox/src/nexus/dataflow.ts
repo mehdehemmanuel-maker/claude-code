@@ -11,11 +11,11 @@
 // suggestions: what is dead, what is the same twice, what wiring repeats and could be one block.
 
 import { EVIDENCE, evidenceOf, nonphysical, rankOf, weakestOf, type EvidenceKind, type NodeEvidence } from './evidence';
-import { ALIASES, aliasSet, block, clockOf, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
+import { ALIASES, aliasSet, block, clockOf, rng, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
 import { fromSI, sameDim, toSI } from '../ganglia/units';
 import type { Part } from './kits';
-import { fromLibrary, hash, type Assembly, type Placed } from './assembly';
+import { boundsOfAll, designOf, fromLibrary, hash, isAssembly, isPart, place, type Assembly, type Placed } from './assembly';
 import { fitByAsync } from './numeric';
 import { atDetailAsync } from './lod';
 const P_ = (name: string, type: Type): PortDef => ({ name, type }), PL = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
@@ -656,6 +656,65 @@ register({ version: 1, by: 'built in', pure: true, id: 'fit.target', name: 'Fit 
     },
     // (a bar's area found so its stress is 2 MPa under 5 kN: 0.0025 m²)
     tests: [{ set: { block: 'law.stress.axial', vary: 'A 0.0005..0.01', goals: 'sigma = 2e6', most: 80 }, inputs: { F: 5000 }, outputs: { met: true, best: { A: 0.0025 } }, rel: 0.01 }] } as BlockDef);
+
+// ---- variants of anything, none twice ------------------------------------------------------------------------------------
+/** One seed for each variant and each draw, its parts mixed (an integer hash, Wellons' lowbias32) so neighbouring
+ *  variants' streams are unrelated: Park–Miller's first draws follow neighbouring seeds almost in step. */
+function mixSeed(seed: number, k: number, d: number): number {
+  let x = (Math.imul(Math.round(seed), 0x9e3779b1) ^ Math.imul(k + 1, 0x85ebca77) ^ Math.imul(d + 1, 0xc2b2ae3d)) >>> 0;
+  x ^= x >>> 16; x = Math.imul(x, 0x7feb352d) >>> 0; x ^= x >>> 15; x = Math.imul(x, 0x846ca68b) >>> 0; x ^= x >>> 16; return (x >>> 0) + 1;
+}
+/** A drawn variant's identity: what it made, each thing by its design (the built-parts library's key) and its colours, each
+ *  number to seven figures, each word as it is; and its design alone, its looks left out. */
+function identityOf(out: Outputs): { all: string; design: string } {
+  const looks = (t: unknown, acc: number[]): number[] => { if (isAssembly(t)) t.items.forEach((it) => looks(it.of, acc)); else if (isPart(t)) { if (t.color !== undefined) acc.push(t.color); t.parts?.forEach((q) => looks(q, acc)); } return acc; };
+  const des: Record<string, unknown> = {}, all: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(out)) {
+    if (isPart(v) || isAssembly(v)) { const d = designOf(v).key; des[k] = d; all[k] = [d, looks(v, [])]; }
+    else if (Array.isArray(v) && v.some((x) => isPart(x) || isAssembly(x))) { const ds = v.map((x) => (isPart(x) || isAssembly(x) ? designOf(x).key : x)); des[k] = ds; all[k] = [ds, v.map((x) => looks(x, []))]; }
+    else if (typeof v === 'number') all[k] = Number.isFinite(v) ? Number(v.toPrecision(7)) : String(v);
+    else if (typeof v !== 'function' && typeof v !== 'object') all[k] = v;
+  }
+  return { all: hash(stable(all)), design: hash(stable(des)) };
+}
+register({ version: 1, by: 'built in', pure: true, id: 'variants', name: 'Variants of anything (none twice)', kind: 'generator', ability: 'generate', domains: ['everyday', 'structural', 'vehicles', 'mechanical', 'manufacturing'],
+  spec: { gloss: 'Many different versions of anything, each from its seed, none the same as another', discipline: 'mechanical.design', role: 'data source', codes: [{ scheme: 'MSC2020', code: '65C10', label: 'Random number generation in numerical analysis' }, { scheme: 'MSC2020', code: '68P05', label: 'Data structures' }],
+    model: { equations: ['each variant k: each moved value drawn from its range or its list by the seeded stream of seed + k (Park–Miller)', 'two variants the same when what they made hashes the same: things by their design and colours, numbers to seven figures'], class: 'analytical', time: 'steady', linear: false, references: ['Park & Miller, Random number generators: good ones are hard to find, CACM 31, 1192 (1988)'] } },
+  says: 'Any block, or any pipeline folded into one, made again and again with some of its inputs or settings drawn from ranges or lists by seed: a window\'s width and frame, a house\'s plan and paint, a car\'s colour and wheels. What each made is compared by what it is (its design, the built-parts library\'s key, and its colours, not its seed), and one the same as one before is drawn again, so no two are alike, and says how many really differ: in design, and in look. The same seed, the same set',
+  settings: [{ key: 'block', label: 'Block (its id)', type: 'text', default: 'seed.window' }, { key: 'vary', label: 'Drawn, each a line: name lo..hi, name lo..hi int, or name a|b|c', type: 'code', default: 'w 0.6..1.8\nh 0.8..1.6\nframe #f4f4f2|#2b2b2b|#7a4a2a' },
+    { key: 'count', label: 'How many', type: 'number', default: 12 }, { key: 'seed', label: 'Seed', type: 'number', default: 1 }, { key: 'tries', label: 'Draws allowed for each, to find one not made before', type: 'number', default: 20 }, { key: 'blockSet', label: 'Its other settings (JSON)', type: 'code', default: '{}' }],
+  ports: (st) => { const t = block(String(st.block ?? 'seed.window')), set = (() => { try { return JSON.parse(String(st.blockSet ?? '{}')) as Record<string, unknown>; } catch { return {}; } })(), moved = new Set(String(st.vary ?? '').split('\n').map((l) => l.trim().split(/\s+/)[0]).filter(Boolean));
+    const ins = t ? portsOf(t, { ...defaultsOf(t), ...set }).inputs.filter((q) => !moved.has(q.name)).map((q) => ({ ...q, optional: true })) : [];
+    return { inputs: ins, outputs: [PL('rows', 'table', { label: 'each variant: what was drawn, and what it made' }), PL('things', 'list<assembly>', { label: 'what each made (its first thing)' }), PL('laid', 'assembly', { label: 'them all in a row, a little apart' }), PL('distinct', 'integer', { label: 'different in what they are' }), PL('designs', 'integer', { label: 'different in design (their looks left out)' }), PL('repeats', 'integer', { label: 'the same as one before after every draw' }), PL('says', 'text')] }; },
+  run: async (i, c) => {
+    const t = block(String(c.set.block)); if (!t || (!t.run && !t.graph)) throw new Error(`no block "${c.set.block}" that runs`);
+    let set0: Record<string, unknown>; try { set0 = { ...defaultsOf(t), ...(JSON.parse(String(c.set.blockSet ?? '{}')) as Record<string, unknown>) }; } catch { throw new Error('its settings are not JSON'); }
+    const ins = new Set(portsOf(t, set0).inputs.map((q) => q.name)), keysOf = new Set((t.settings ?? []).map((q) => q.key));
+    const vary = String(c.set.vary ?? '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = /^(\S+)\s+(.+)$/.exec(l); if (!m) throw new Error(`"${l}": a line is a name and what it is drawn from`);
+      const name = m[1]!, what = m[2]!.trim(), r = /^(-?[\d.eE+-]+)\s*\.\.\s*(-?[\d.eE+-]+)(\s+int)?$/.exec(what); if (!ins.has(name) && !keysOf.has(name)) throw new Error(`the ${t.name} has no input or setting "${name}"`);
+      return { name, isSet: !ins.has(name), lo: r ? Number(r[1]) : 0, hi: r ? Number(r[2]) : 0, int: !!r?.[3], opts: r ? null : what.split('|').map((x) => x.trim()).filter(Boolean) }; });
+    if (!vary.length) throw new Error('give it something to draw');
+    const runT = runnerOf(t), n = Math.max(1, Math.min(500, Math.round(Number(c.set.count ?? 12)))), seed = Number(c.set.seed ?? 1), tries = Math.max(1, Math.round(Number(c.set.tries ?? 20)));
+    const seen = new Set<string>(), designs = new Set<string>(), rows: Record<string, unknown>[] = [], things: (Part | Assembly)[] = []; let repeats = 0, draws = 0;
+    for (let k = 0; k < n; k++) {
+      let got: { vals: Record<string, unknown>; out: Outputs; id: { all: string; design: string } } | null = null;
+      for (let d = 0; d < tries; d++) {
+        const r = rng(mixSeed(seed, k, d)), vals = Object.fromEntries(vary.map((v) => { const x = v.opts ? v.opts[Math.floor(r() * v.opts.length)] : v.lo + (v.hi - v.lo) * r(); return [v.name, v.int && typeof x === 'number' ? Math.round(x) : typeof x === 'number' ? Number(x.toPrecision(4)) : x]; }));
+        const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; for (const v of vary) { if (v.isSet) set[v.name] = vals[v.name]; else inp[v.name] = vals[v.name]; }
+        const out = await runT(inp, set); draws++; const id = identityOf(out); got = { vals, out, id }; if (!seen.has(id.all)) break;
+      }
+      const { vals, out, id } = got!; if (seen.has(id.all)) repeats++; seen.add(id.all); designs.add(id.design);
+      const th = Object.values(out).find((v) => isPart(v) || isAssembly(v)) as Part | Assembly | undefined; if (th) things.push(th);
+      rows.push({ variant: k + 1, ...vals, ...Object.fromEntries(Object.entries(out).filter(([, v]) => typeof v === 'number').map(([key, v]) => [key, +(v as number).toPrecision(5)])), is: id.all.slice(0, 8) });
+    }
+    // (in a row along x, each a tenth of its width apart, standing on y = 0: what a person looks along to see them differ)
+    let x = 0; const items: Placed[] = things.map((th) => { const b = boundsOfAll(th), w = b.isEmpty() ? 1 : b.max.x - b.min.x, at: [number, number, number] = [x - (b.isEmpty() ? 0 : b.min.x), b.isEmpty() ? 0 : -b.min.y, 0]; x += w * 1.1; return place(th, at); });
+    const laid: Assembly = { name: `${t.name}: ${n} variants`, items: items.map((it) => ({ ...it, at: [it.at[0] - x / 2, it.at[1], it.at[2]] as [number, number, number] })) };
+    return { rows, things, laid, distinct: seen.size, designs: designs.size, repeats,
+      says: `${n} variants of the ${t.name} from seed ${seed} (${draws} drawn): ${seen.size} different in what they are, ${designs.size} in design${repeats ? `; ${repeats} could not be made different in ${tries} draws (what is drawn from is too small)` : ''}` };
+  },
+  // (five bars, each its own load: five stresses, none twice)
+  tests: [{ set: { block: 'law.stress.axial', vary: 'F 1000..5000', count: 5, seed: 1 }, inputs: { A: 0.001 }, outputs: { distinct: 5, repeats: 0 } }] } as BlockDef);
 
 const PLACE_COLS = new Set(['x', 'y', 'z', 'rx', 'ry', 'rz', 's']);
 register({ id: 'spawn', name: 'Spawn', kind: 'generator', ability: 'generate', domains: ['everyday', 'structural', 'operations'], version: 1, by: 'built in', pure: true,

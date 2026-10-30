@@ -362,6 +362,13 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     for (const k of ['vent', 'badge']) { placeBlock(b, 'view.show', 0, 0, {}, `${k}Says`); wire(b, k, 'says', `${k}Says`, 'value'); }
     return tidy(b);
   }],
+  ['Variants of anything: twelve windows drawn by seed over their width, height and frame, each made, none twice (checked by what each is, not its seed), laid in a row; change the seed for another twelve', () => {
+    const b = emptyBoard('Variants of anything');
+    placeBlock(b, 'variants', 0, 0, { block: 'seed.window', vary: 'w 0.6..1.8\nh 0.8..1.6\nframe #f4f4f2|#2b2b2b|#7a4a2a', count: 12, seed: 1 }, 'win'); b.nodes.win!.label = 'Twelve windows, none twice';
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'win', 'laid', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'says'); wire(b, 'win', 'says', 'says', 'value'); placeBlock(b, 'view.show', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'Each, what was drawn'; wire(b, 'win', 'rows', 'rows', 'value');
+    return tidy(b);
+  }],
   ['Pipelines tried: every recipe for fitting a model to a picture run on the Monte Carlo\'s, each judged alike (overlap, error both ways, time), the best kept for Picture to model', () => {
     const b = emptyBoard('Pipelines tried');
     placeBlock(b, 'photo.load', 0, 0, { id: 'mc-side' }, 'ph'); b.nodes.ph!.label = 'The picture';
