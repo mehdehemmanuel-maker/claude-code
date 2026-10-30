@@ -235,6 +235,9 @@ the task list and lose the why. So the why lives here, and every round is checke
   engineering (models, prompt, evaluation, agents, perception, generative, retrieval, safety) and Pipeline and flow
   engineering (its own: pipelines run engines and springs as much as AI); library fields Intelligence (AI) and Pipelines &
   flow)
+- "whenever your making an ai in the loop flow explain it to me like this ai waits for this then reads and writes too x
+  and then x writes too z" (2026-10-30): every flow with a model in it is explained step by step: who waits for what,
+  what it reads, what it writes and to whom, and where a step can fail
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say
