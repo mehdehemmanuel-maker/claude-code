@@ -1229,3 +1229,15 @@ rather than 79 GPa for all. Measured: a 40 kN/m spring, 1.3 times as strong as i
 ASTM wires, 3 to 8 coils and the wire's size fitted: music wire, 3 coils, 3.57 mm, 29.3 g; stainless needs 4 coils,
 44.9 g; hard-drawn and stainless cannot in 3 (said, with what each reached); 30 ways, 1,542 runs, 0.46 to 0.75 s. Seen
 in its screenshot and fixed: a coil drawn with 12 points a turn read as an octagon; 32 now.
+- **2026-10-30, run many at once.** `pool.ts` and `trial-worker.ts`: trials of any block handed to workers, one for each
+core (Web Workers in the page, worker threads under Node, the worker bundled by rolldown into node_modules/.cache), each
+with the whole library; a pipeline you folded is carried to them by its board. A batch goes wide only when its first
+trial, timed, says the rest would take longer than starting the workers (measured: 825 ms for four, 1,960 ms the first
+time it is bundled; 4 ms for seven trials once they are up); inside a worker nothing goes wider. What matters, Trade-offs
+(its spread), Variants (each first draw) and Fit to a target (each way of choosing, its own fit) lay their trials out
+first and run them as one batch. Measured on 4 cores, the same jobs with NEXUS_ONE_THREAD=1 and without, the same answers
+both ways: a fit of the engine's bore for a 7,000 rpm float, choosing among five spring wires, 42.9 s → 21.7 s; What
+matters on the engine, 29 trials, 9.7 s → 7.3 s with the workers' start in it; the spring's 30 ways of choosing, 0.82 →
+0.52 s. In the page four workers started and the engine's board ran in 9.4 s without error; one thread in the page was
+not measured. Not yet through the pool: a single fit's own steps (Nelder–Mead asks one point at a time) and Picture to
+model's fits, whose 15 minutes are mostly that.

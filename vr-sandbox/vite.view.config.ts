@@ -6,5 +6,7 @@ export default defineConfig({
   root: 'view',
   base: './',
   publicDir: 'public',
+  // (the pool's workers (src/nexus/pool.ts) as modules: each loads the whole library, and waits on it at its top level)
+  worker: { format: 'es' },
   build: { outDir: '../dist-view', emptyOutDir: true, target: 'es2022', chunkSizeWarningLimit: 4000, rollupOptions: { input: { index: 'view/index.html', space: 'view/space.html', look: 'view/look.html', nodes: 'view/nodes.html', gauntlet: 'view/gauntlet.html' } } },
 });

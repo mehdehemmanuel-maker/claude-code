@@ -18,6 +18,7 @@ import type { Part } from './kits';
 import { boundsOfAll, designOf, fromLibrary, hash, isAssembly, isPart, massOfAll, place, type Assembly, type Placed } from './assembly';
 import { fitByAsync, minimizeAsync } from './numeric';
 import { atDetailAsync } from './lod';
+import { runMany, type Carry, type Job } from './pool';
 const P_ = (name: string, type: Type): PortDef => ({ name, type }), PL = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
 
 // ---- keys -----------------------------------------------------------------------------------------------------------
@@ -607,7 +608,7 @@ async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>): 
 }
 /** A block run again and again (a fit's trials): one that runs, called; one made of a board, through one engine kept for
  *  all of them, so what the trials' values do not reach inside it is worked out once. */
-function runnerOf(d: BlockDef): (inputs: Record<string, unknown>, set: Record<string, unknown>) => Promise<Outputs> {
+export function runnerOf(d: BlockDef): (inputs: Record<string, unknown>, set: Record<string, unknown>) => Promise<Outputs> {
   if (d.run) return async (inputs, set) => { const o = d.run!(inputs, { set, time: 0 } as Ctx); return o instanceof Promise ? await o : o; };
   if (!d.graph) throw new Error(`${d.name} has nothing to run`);
   // (an input not given takes its default, as it would placed on a board: a window's frame colour when only its size moves)
@@ -638,6 +639,9 @@ function rangesOf(t: BlockDef, set0: Record<string, unknown>, text: string): Mov
     const known = listOf(m[1]!), bad = known ? opts.filter((o) => !known.includes(o)) : []; if (bad.length) throw new Error(`the ${t.name}'s ${m[1]} is not ${bad.join(' or ')}: it is one of ${known!.join(', ')}`);
     return { name: m[1]!, lo: 0, hi: opts.length - 1, isSet, opts }; });
 }
+/** What a worker must be handed to run a block: nothing for one built in (each worker has the library), its board for a
+ *  pipeline folded by you. */
+function carryOf(t: BlockDef): { carry?: Carry } { return t.graph && t.by !== 'built in' ? { carry: { id: t.id, name: t.name, graph: t.graph, says: t.says, domains: t.domains } } : {}; }
 /** A moved value at u, 0..1 across what it is moved over: a number in its range, a whole number, or one of its choices. */
 function valueAt(v: Moved, u: number): number | string { if (v.opts) return v.opts[Math.min(v.opts.length - 1, Math.floor(u * v.opts.length))]!; const x = v.lo + (v.hi - v.lo) * u; return v.int ? Math.round(x) : x; }
 /** The k-th point of Halton's sequence in base b: points that fill a range evenly, each new one in the biggest gap left. */
@@ -686,11 +690,26 @@ register({ version: 1, by: 'built in', pure: true, id: 'fit.target', name: 'Fit 
         const f = await atDetailAsync(Number(c.set.detail ?? 1), () => fitByAsync(cost, vary.map((v) => ({ ...v, lo: Math.min(v.lo, v.hi), hi: Math.max(v.lo, v.hi) })), { x0: x, most: Number(c.set.most ?? 120), ftol: 1e-8, rise: 1e-4 * hard }));
         return { f, cost: f.after };
       };
-      const tried: { pick: (string | number)[]; f: Awaited<ReturnType<typeof fitOne>>['f']; cost: number; r: Record<string, unknown>; rows: ReturnType<typeof metOf> }[] = [];
-      for (const pick of combos) { const o = await fitOne(pick); tried.push({ pick, ...o, r: {}, rows: [] }); }
-      // (each answer run again as designed, whatever detail its trials were run at: what it reaches is what is said; the best
-      // the one meeting every goal at the least cost, else the least cost)
-      memo.clear(); for (const q of tried) { q.r = await run(q.f.x, q.pick); q.rows = metOf(q.r); }
+      type Tried = { pick: (string | number)[]; f: { x: number[]; pm: number[]; fixed: boolean[] }; cost: number; r: Record<string, unknown>; rows: ReturnType<typeof metOf> };
+      const tried: Tried[] = []; let wide = '';
+      if (combos.length > 1) {
+        // (several ways of choosing: each its own fit (this node again, its choices made), run at once, side by side where
+        // that pays (pool.ts); with nothing left to fit, the block itself run with each)
+        const extra = (() => { try { return JSON.parse(String(c.set.blockSet ?? '{}')) as Record<string, unknown>; } catch { return {}; } })(), self = block('fit.target')!;
+        const jobs: Job[] = combos.map((pick) => { const inp: Record<string, unknown> = { ...i }, bs: Record<string, unknown> = { ...extra }; picks.forEach((v, j) => { if (v.isSet) bs[v.name] = pick[j]; else inp[v.name] = pick[j]; });
+          return vary.length ? { block: 'fit.target', inputs: inp, set: { ...c.set, vary: vary.map((v) => `${v.name} ${v.lo}..${v.hi}`).join('\n'), blockSet: JSON.stringify(bs) } } : { block: t.id, inputs: inp, set: { ...set0, ...bs } }; });
+        const batch = await runMany(jobs, (j) => (vary.length ? Promise.resolve(self.run!(j.inputs, { set: j.set, time: 0 } as Ctx)) : runT(j.inputs, j.set)), carryOf(t));
+        if (batch.wide) wide = ` (side by side on ${batch.workers} workers, ${(batch.ms / 1000).toFixed(1)} s)`;
+        batch.results.forEach((o, n) => { if (o instanceof Error) throw new Error(`choosing ${picks.map((v, j) => `${v.name} ${combos[n]![j]}`).join(', ')}: ${o.message}`);
+          const sub = o as Record<string, unknown>, r = (vary.length ? sub.outputs : sub) as Record<string, unknown>, fig = (sub.figures ?? []) as { pm: number | string; fixed: boolean }[], rows = metOf(r);
+          if (vary.length) for (const q of (sub.trials ?? []) as Record<string, unknown>[]) trials.push({ ...Object.fromEntries(picks.map((v, j) => [v.name, combos[n]![j]])), ...q });
+          tried.push({ pick: combos[n]!, f: { x: vary.map((v) => Number((sub.best as Record<string, unknown> | undefined)?.[v.name])), pm: fig.map((q) => (typeof q.pm === 'number' ? q.pm : Infinity)), fixed: fig.map((q) => q.fixed) }, cost: goals.reduce((sum, g, j) => { const y = Number(r[g.name]); return sum + (Number.isFinite(y) ? miss(g, y, j) : 1e6); }, 0), r, rows }); });
+      } else {
+        const o = await fitOne(combos[0]!); tried.push({ pick: combos[0]!, f: o.f, cost: o.cost, r: {}, rows: [] });
+        // (the answer run again as designed, whatever detail its trials were run at: what it reaches is what is said)
+        memo.clear(); for (const q of tried) { q.r = await run(q.f.x, q.pick); q.rows = metOf(q.r); }
+      }
+      // (the best the one meeting every goal at the least cost, else the least cost)
       const ranked = [...tried].sort((a, b) => Number(b.rows.every((q) => q.met)) - Number(a.rows.every((q) => q.met)) || a.cost - b.cost), top = ranked[0]!, f = top.f, r = top.r, rows = top.rows, met = rows.every((q) => q.met);
       // (each way of choosing: what was chosen, whether it does what is asked, what it reached (its wishes first, what differs
       // most between them), then the values fitted inside it)
@@ -698,7 +717,7 @@ register({ version: 1, by: 'built in', pure: true, id: 'fit.target', name: 'Fit 
       const choices = picks.length ? ranked.map((q) => ({ ...Object.fromEntries(picks.map((v, j) => [v.name, q.pick[j]])), met: q.rows.every((g) => g.met) ? 'yes' : 'no', ...Object.fromEntries(order.map((k) => [q.rows[k]!.goal, q.rows[k]!.reached])), ...Object.fromEntries(vary.map((v, j) => [v.name, +q.f.x[j]!.toPrecision(4)])), cost: +q.cost.toPrecision(4) })) : [];
       const made = Object.values(r).find((v) => isPart(v) || isAssembly(v)) as Part | Assembly | undefined;
       return { best: { ...Object.fromEntries(picks.map((v, j) => [v.name, top.pick[j]])), ...Object.fromEntries(vary.map((v, j) => [v.name, f.x[j]!])) }, figures: vary.map((v, j) => ({ value: v.name, found: +f.x[j]!.toPrecision(5), pm: Number.isFinite(f.pm[j]!) ? +f.pm[j]!.toPrecision(3) : 'unbounded', fixed: f.fixed[j]!, range: `${v.lo}..${v.hi}` })), goals: rows, met, choices, trials, outputs: r, ...(made ? { thing: isAssembly(made) ? made : { name: made.name, items: [place(made, [0, 0, 0])] } } : {}),
-        says: `${t.name}: ${[...picks.map((v, j) => `${v.name} ${top.pick[j]}`), ...vary.map((v, j) => `${v.name} ${+f.x[j]!.toPrecision(4)}`)].join(', ')}${picks.length ? ` (best of ${combos.length} ways of choosing${ranked[1] ? `; next ${picks.map((v, j) => `${v.name} ${ranked[1]!.pick[j]}`).join(', ')}${ranked[1]!.rows.every((g) => g.met) ? '' : ', missing a goal'}` : ''})` : ''} after ${trials.length} runs; ${met ? 'every goal met' : `not met: ${rows.filter((q) => !q.met).map((q) => `${q.goal} (reached ${q.reached})`).join(', ')}`}${f.fixed.some((fx) => !fx) ? `; not fixed by these goals: ${vary.filter((_, j) => !f.fixed[j]).map((v) => v.name).join(', ')}` : ''}` };
+        says: `${t.name}: ${[...picks.map((v, j) => `${v.name} ${top.pick[j]}`), ...vary.map((v, j) => `${v.name} ${+f.x[j]!.toPrecision(4)}`)].join(', ')}${picks.length ? ` (best of ${combos.length} ways of choosing${wide}${ranked[1] ? `; next ${picks.map((v, j) => `${v.name} ${ranked[1]!.pick[j]}`).join(', ')}${ranked[1]!.rows.every((g) => g.met) ? '' : ', missing a goal'}` : ''})` : ''} after ${trials.length} runs; ${met ? 'every goal met' : `not met: ${rows.filter((q) => !q.met).map((q) => `${q.goal} (reached ${q.reached})`).join(', ')}`}${f.fixed.some((fx) => !fx) ? `; not fixed by these goals: ${vary.filter((_, j) => !f.fixed[j]).map((v) => v.name).join(', ')}` : ''}` };
     },
     // (a bar's area found so its stress is 2 MPa under 5 kN: 0.0025 m²)
     tests: [{ set: { block: 'law.stress.axial', vary: 'A 0.0005..0.01', goals: 'sigma = 2e6', most: 80 }, inputs: { F: 5000 }, outputs: { met: true, best: { A: 0.0025 } }, rel: 0.01 },
@@ -744,12 +763,16 @@ register({ version: 1, by: 'built in', pure: true, id: 'variants', name: 'Varian
     if (!vary.length) throw new Error('give it something to draw');
     const runT = runnerOf(t), n = Math.max(1, Math.min(500, Math.round(Number(c.set.count ?? 12)))), seed = Number(c.set.seed ?? 1), tries = Math.max(1, Math.round(Number(c.set.tries ?? 20)));
     const seen = new Set<string>(), designs = new Set<string>(), rows: Record<string, unknown>[] = [], things: (Part | Assembly)[] = []; let repeats = 0, draws = 0;
+    const drawn = (k: number, d: number) => { const r = rng(mixSeed(seed, k, d)), vals = Object.fromEntries(vary.map((v) => { const x = v.opts ? v.opts[Math.floor(r() * v.opts.length)] : v.lo + (v.hi - v.lo) * r(); return [v.name, v.int && typeof x === 'number' ? Math.round(x) : typeof x === 'number' ? Number(x.toPrecision(4)) : x]; }));
+      const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; for (const v of vary) { if (v.isSet) set[v.name] = vals[v.name]; else inp[v.name] = vals[v.name]; } return { vals, job: { block: t.id, inputs: inp, set } as Job }; };
+    // (each variant's first draw made at once, side by side where that pays (pool.ts); a draw the same as one before drawn
+    // again after, one at a time)
+    const firsts = Array.from({ length: n }, (_, k) => drawn(k, 0)), batch = await runMany(firsts.map((f) => f.job), (j) => runT(j.inputs, j.set), carryOf(t));
     for (let k = 0; k < n; k++) {
       let got: { vals: Record<string, unknown>; out: Outputs; id: { all: string; design: string } } | null = null;
       for (let d = 0; d < tries; d++) {
-        const r = rng(mixSeed(seed, k, d)), vals = Object.fromEntries(vary.map((v) => { const x = v.opts ? v.opts[Math.floor(r() * v.opts.length)] : v.lo + (v.hi - v.lo) * r(); return [v.name, v.int && typeof x === 'number' ? Math.round(x) : typeof x === 'number' ? Number(x.toPrecision(4)) : x]; }));
-        const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; for (const v of vary) { if (v.isSet) set[v.name] = vals[v.name]; else inp[v.name] = vals[v.name]; }
-        const out = await runT(inp, set); draws++; const id = identityOf(out); got = { vals, out, id }; if (!seen.has(id.all)) break;
+        const { vals, job } = d === 0 ? firsts[k]! : drawn(k, d), was = d === 0 ? batch.results[k]! : undefined; if (was instanceof Error) throw was;
+        const out = was ?? await runT(job.inputs, job.set); draws++; const id = identityOf(out); got = { vals, out, id }; if (!seen.has(id.all)) break;
       }
       const { vals, out, id } = got!; if (seen.has(id.all)) repeats++; seen.add(id.all); designs.add(id.design);
       const th = Object.values(out).find((v) => isPart(v) || isAssembly(v)) as Part | Assembly | undefined; if (th) things.push(th);
@@ -759,7 +782,7 @@ register({ version: 1, by: 'built in', pure: true, id: 'variants', name: 'Varian
     let x = 0; const items: Placed[] = things.map((th) => { const b = boundsOfAll(th), w = b.isEmpty() ? 1 : b.max.x - b.min.x, at: [number, number, number] = [x - (b.isEmpty() ? 0 : b.min.x), b.isEmpty() ? 0 : -b.min.y, 0]; x += w * 1.1; return place(th, at); });
     const laid: Assembly = { name: `${t.name}: ${n} variants`, items: items.map((it) => ({ ...it, at: [it.at[0] - x / 2, it.at[1], it.at[2]] as [number, number, number] })) };
     return { rows, things, laid, distinct: seen.size, designs: designs.size, repeats,
-      says: `${n} variants of the ${t.name} from seed ${seed} (${draws} drawn): ${seen.size} different in what they are, ${designs.size} in design${repeats ? `; ${repeats} could not be made different in ${tries} draws (what is drawn from is too small)` : ''}` };
+      says: `${n} variants of the ${t.name} from seed ${seed} (${draws} drawn${batch.wide ? `, the first of each side by side on ${batch.workers} workers` : ''}): ${seen.size} different in what they are, ${designs.size} in design${repeats ? `; ${repeats} could not be made different in ${tries} draws (what is drawn from is too small)` : ''}` };
   },
   // (five bars, each its own load: five stresses, none twice)
   tests: [{ set: { block: 'law.stress.axial', vary: 'F 1000..5000', count: 5, seed: 1 }, inputs: { A: 0.001 }, outputs: { distinct: 5, repeats: 0 } }] } as BlockDef);
@@ -783,15 +806,20 @@ register({ version: 1, by: 'built in', pure: true, id: 'what.matters', name: 'Se
     const runT = runnerOf(t), kept = new Map<string, Outputs>(), k = vary.length, r = Math.max(2, Math.min(100, Math.round(Number(c.set.paths ?? 10)))), levels = 4, D = levels / (2 * (levels - 1));
     // (a thing it makes measured as a person would: its mass, and its width, height and depth, watched like any number)
     const measured = (o: Outputs): Outputs => { const m: Outputs = { ...o }; for (const [n, v] of Object.entries(o)) if (isPart(v) || isAssembly(v)) { const bx = boundsOfAll(v); m[`${n}.mass`] = massOfAll(v); if (!bx.isEmpty()) { m[`${n}.width`] = bx.max.x - bx.min.x; m[`${n}.height`] = bx.max.y - bx.min.y; m[`${n}.depth`] = bx.max.z - bx.min.z; } } return m; };
-    const at = async (u: number[]): Promise<Outputs> => { const key = u.map((v) => v.toFixed(6)).join(','); let o = kept.get(key);
-      if (!o) { const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; vary.forEach((v, j) => { const x = valueAt(v, u[j]!); if (v.isSet) set[v.name] = x; else inp[v.name] = x; }); o = measured(await runT(inp, set)); kept.set(key, o); } return o; };
+    const jobOf = (u: number[]): Job => { const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; vary.forEach((v, j) => { const x = valueAt(v, u[j]!); if (v.isSet) set[v.name] = x; else inp[v.name] = x; }); return { block: t.id, inputs: inp, set }; };
+    const keyOf = (u: number[]) => u.map((v) => v.toFixed(6)).join(',');
+    const at = async (u: number[]): Promise<Outputs> => { const key = keyOf(u); let o = kept.get(key); if (!o) { const j = jobOf(u); o = measured(await runT(j.inputs, j.set)); kept.set(key, o); } return o; };
     let watch = String(c.set.watch ?? '').split(/[\s,]+/).filter(Boolean);
     const ee = new Map<string, number[]>(), push = (j: number, w: string, e: number) => { const key = `${j}|${w}`; (ee.get(key) ?? ee.set(key, []).get(key)!).push(e); };
-    for (let p = 0; p < r; p++) {
-      // (a start on the grid's lower levels, so a step up stays inside; each value stepped once, in a drawn order, up or down)
-      const g = rng(mixSeed(Number(c.set.seed ?? 1), p, 0)), u = vary.map(() => Math.floor(g() * (levels / 2)) / (levels - 1)), order = vary.map((_, j) => j), sign = vary.map(() => (g() < 0.5 ? 1 : -1));
+    // (every path laid out before any of it runs, a start on the grid's lower levels so a step up stays inside, each value
+    // stepped once in a drawn order, up or down; so all its points run at once, side by side where that pays (pool.ts))
+    const paths = Array.from({ length: r }, (_, p) => { const g = rng(mixSeed(Number(c.set.seed ?? 1), p, 0)), u = vary.map(() => Math.floor(g() * (levels / 2)) / (levels - 1)), order = vary.map((_, j) => j), sign = vary.map(() => (g() < 0.5 ? 1 : -1));
       for (let j = k - 1; j > 0; j--) { const q = Math.floor(g() * (j + 1)); [order[j], order[q]] = [order[q]!, order[j]!]; }
       for (let j = 0; j < k; j++) if (sign[j]! < 0) u[j] = u[j]! + D;
+      const pts = [u.slice()], w = u.slice(); for (const j of order) { w[j] = w[j]! + sign[j]! * D; pts.push(w.slice()); } return { u, order, sign, pts }; });
+    const todo = [...new Map(paths.flatMap((q) => q.pts).map((u) => [keyOf(u), u])).values()], batch = await runMany(todo.map(jobOf), (j) => runT(j.inputs, j.set), carryOf(t));
+    batch.results.forEach((o, n) => { if (o instanceof Error) throw new Error(`${t.name}: ${o.message}`); kept.set(keyOf(todo[n]!), measured(o)); });
+    for (const { u, order, sign } of paths) {
       let y0 = await at(u);
       if (!watch.length) watch = Object.entries(y0).filter(([, v]) => typeof v === 'number').map(([n]) => n);
       if (!watch.length) throw new Error(`the ${t.name} gives no number and no thing to measure`);
@@ -812,7 +840,7 @@ register({ version: 1, by: 'built in', pure: true, id: 'what.matters', name: 'Se
     }
     const nothing = vary.filter((_, j) => !moves.has(j)).map((v) => v.name);
     return { effects, ranked, nothing, runs: kept.size,
-      says: `${t.name} in ${kept.size} runs over ${r} paths: ${watch.map((w) => [w, effects.filter((e) => e.output === w && e.how !== 'does nothing').map((e) => e.value as string)] as const).filter(([, m]) => m.length).map(([w, m]) => `${w} moved most by ${m[0]}${m.length > 1 ? `, then ${m.slice(1).join(', ')}` : ''}`).join('; ') || 'nothing watched moved'}${nothing.length ? `; ${nothing.join(', ')} move${nothing.length > 1 ? '' : 's'} nothing watched` : ''}` };
+      says: `${t.name} in ${kept.size} runs over ${r} paths${batch.wide ? ` (side by side on ${batch.workers} workers, ${(batch.ms / 1000).toFixed(1)} s)` : ''}: ${watch.map((w) => [w, effects.filter((e) => e.output === w && e.how !== 'does nothing').map((e) => e.value as string)] as const).filter(([, m]) => m.length).map(([w, m]) => `${w} moved most by ${m[0]}${m.length > 1 ? `, then ${m.slice(1).join(', ')}` : ''}`).join('; ') || 'nothing watched moved'}${nothing.length ? `; ${nothing.join(', ')} move${nothing.length > 1 ? '' : 's'} nothing watched` : ''}` };
   },
   // (a bar's stress σ = F / A: its load moves it more than its area over these ranges, and both move it)
   tests: [{ set: { block: 'law.stress.axial', vary: 'F 1000..5000\nA 0.001..0.002', watch: 'sigma', paths: 6 }, inputs: {}, outputs: { nothing: [], ranked: { sigma: ['F', 'A'] } } }] } as BlockDef);
@@ -839,16 +867,19 @@ register({ version: 1, by: 'built in', pure: true, id: 'trade.offs', name: 'Pare
     const runT = runnerOf(t), kept = new Map<string, { u: number[]; out: Outputs; f: number[]; miss: number }>();
     // (each design kept by its values: f its goals, each to be made as small as it goes (a max turned round), miss how far it
     // is outside its limits, 0 inside them)
-    const at = async (u0: number[]) => { const u = u0.map((x) => Math.min(1, Math.max(0, x))), key = u.map((x) => x.toFixed(6)).join(','); let d = kept.get(key);
-      if (!d) { const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; vary.forEach((v, j) => { const x = valueAt(v, u[j]!); if (v.isSet) set[v.name] = x; else inp[v.name] = x; });
-        let out: Outputs; try { out = await runT(inp, set); } catch { out = {}; }
+    const clamp = (u0: number[]) => u0.map((x) => Math.min(1, Math.max(0, x))), keyOf = (u: number[]) => u.map((x) => x.toFixed(6)).join(',');
+    const jobOf = (u: number[]): Job => { const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; vary.forEach((v, j) => { const x = valueAt(v, u[j]!); if (v.isSet) set[v.name] = x; else inp[v.name] = x; }); return { block: t.id, inputs: inp, set }; };
+    const at = async (u0: number[], given?: Outputs | Error) => { const u = clamp(u0), key = keyOf(u); let d = kept.get(key);
+      if (!d) { let out: Outputs; if (given) out = given instanceof Error ? {} : given; else { const j = jobOf(u); try { out = await runT(j.inputs, j.set); } catch { out = {}; } }
         // (a goal may be one of the values moved itself: as little area as can be)
         out = { ...Object.fromEntries(vary.map((v, j) => [v.name, valueAt(v, u[j]!)])), ...out };
         const f = goals.map((g) => { const y = Number(out[g.name]); return Number.isFinite(y) ? (g.op === 'min' ? y : -y) : Infinity; });
         const miss = limits.reduce((s, g) => { const y = Number(out[g.name]), sc = Math.abs(g.v) || 1; return s + (!Number.isFinite(y) ? 1e3 : g.op === '>' ? Math.max(0, (g.v - y) / sc) ** 2 : Math.max(0, (y - g.v) / sc) ** 2); }, 0);
         d = { u, out, f, miss }; kept.set(key, d); } return d; };
     const nS = Math.max(4, Math.min(400, Math.round(Number(c.set.samples ?? 40)))), off = 1 + (Math.abs(Math.round(Number(c.set.seed ?? 0))) % 997);
-    for (let k = 0; k < nS; k++) await at(vary.map((_, j) => halton(k + off, PRIMES[j % PRIMES.length]!)));
+    // (the spread laid out first and run at once, side by side where that pays (pool.ts))
+    const spread = Array.from({ length: nS }, (_, k) => clamp(vary.map((_, j) => halton(k + off, PRIMES[j % PRIMES.length]!)))), batch = await runMany(spread.map(jobOf), (j) => runT(j.inputs, j.set), carryOf(t));
+    for (let k = 0; k < nS; k++) await at(spread[k]!, batch.results[k]);
     if (![...kept.values()].some((d) => d.f.every(Number.isFinite))) throw new Error(`the ${t.name} gave no ${goals.map((g) => g.name).join(' or ')} anywhere in these ranges`);
     // (each goal scaled from its best to its worst among designs that keep the limits; the refinement weights spread evenly)
     const scale = () => { const ok = [...kept.values()].filter((d) => d.miss === 0 && d.f.every(Number.isFinite)), all = ok.length ? ok : [...kept.values()].filter((d) => d.f.every(Number.isFinite));
@@ -875,7 +906,7 @@ register({ version: 1, by: 'built in', pure: true, id: 'trade.offs', name: 'Pare
     return { front: front.map((d) => ({ ...rowOf(d), knee: d === knee ? '◆' : '' })), knee: knee ? rowOf(knee) : {}, xs: front.map((d) => sign(0) * d.f[0]!), ys: front.map((d) => sign(1) * d.f[1]!),
       laid: { name: `${t.name}: its front`, items: items.map((it) => ({ ...it, at: [it.at[0] - x / 2, it.at[1], it.at[2] - (Math.ceil(things.length / cols) - 1) * cell / 2] as [number, number, number] })) } as Assembly,
       tried: [...kept.values()].map((d) => ({ ...rowOf(d), keeps: d.miss === 0 ? 'yes' : 'no' })),
-      says: `${t.name}: ${kept.size} designs tried, ${ok.length} keep ${limits.length ? limits.map((g) => `${g.name} ${g.op} ${g.v}`).join(', ') : 'every limit'}, ${front.length} on the front (${goals.map((g) => `${g.name} ${g.op}`).join(' against ')})${knee ? `; giving up least: ${Object.entries(rowOf(knee)).map(([k, v]) => `${k} ${v}`).join(', ')}` : ''}${limits.length && !ok.length ? '; none keeps the limits in these ranges' : ''}` };
+      says: `${t.name}: ${kept.size} designs tried${batch.wide ? ` (the first ${nS} side by side on ${batch.workers} workers)` : ''}, ${ok.length} keep ${limits.length ? limits.map((g) => `${g.name} ${g.op} ${g.v}`).join(', ') : 'every limit'}, ${front.length} on the front (${goals.map((g) => `${g.name} ${g.op}`).join(' against ')})${knee ? `; giving up least: ${Object.entries(rowOf(knee)).map(([k, v]) => `${k} ${v}`).join(', ')}` : ''}${limits.length && !ok.length ? '; none keeps the limits in these ranges' : ''}` };
   },
   // (a bar: as little area as can be, as low a stress as can be; every area trades one for the other, so the front runs
   // along the whole range, and a limit on stress cuts off its thin end)

@@ -251,6 +251,7 @@ known gaps are there too.
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
 | The built-parts library: every piece every build makes, stored by design, and its law | `nexus/stock.ts` (`src/data/stock.json` generated) |
 | Running boards (cache, lists, units on wires, groups, clock) | `nexus/dataflow.ts` |
+| Running many trials at once (workers, one for each core, each with the whole library) | `nexus/pool.ts`, `nexus/trial-worker.ts` |
 | Starter boards | `nexus/starters.ts` |
 | Navigation (libraries, flows, search) | `nexus/navigate.ts` (`docs/ATLAS.md` generated) |
 | Only what the app reaches is kept | the reach check in `tests/nexus/domains.test.ts` |

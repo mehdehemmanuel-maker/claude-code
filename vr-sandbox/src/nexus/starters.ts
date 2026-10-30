@@ -385,6 +385,12 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'fit', 'thing', 'show', 'thing');
     return tidy(b);
   }],
+  ['Run many at once: what moves an engine\'s valve float and its least factor of safety, its 29 trials laid out first and run side by side, one for each core the machine has (the run says how many and how long)', () => {
+    const b = emptyBoard('Run many at once');
+    placeBlock(b, 'what.matters', 0, 0, { block: 'load.engine', vary: 'bore 0.07..0.09\nstroke 0.07..0.1\nrpm 3000..7000', watch: 'floatRpm worst', paths: 10, seed: 2 }, 'eng'); b.nodes.eng!.label = 'An engine: what moves what';
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'eng', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ef'); b.nodes.ef!.label = 'Each effect'; wire(b, 'eng', 'effects', 'ef', 'rows');
+    return tidy(b);
+  }],
   ['Trade-offs: a coil spring as light as can be and as stiff as can be, its factor of safety kept over 1.2: every design tried across its wire, coil and turns, the best kept (none beaten on both), charted, the one giving up least marked, and each made, side by side', () => {
     const b = emptyBoard('Trade-offs');
     placeBlock(b, 'trade.offs', 0, 0, { block: 'seed.spring-checked', vary: 'd 0.002..0.005\nD 0.015..0.035\nn 3..10', goals: 'mass min\nrate max\nworst > 1.2' }, 'tr'); b.nodes.tr!.label = 'Light against stiff, kept safe';
