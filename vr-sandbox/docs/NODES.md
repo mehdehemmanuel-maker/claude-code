@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 586 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 587 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -33,16 +33,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 316 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 317 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 74 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 533 tested here (their own tests: that they do what they say, not that the world does); 43 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 534 tested here (their own tests: that they do what they say, not that the world does); 43 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 586 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 587 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -141,7 +141,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Wound roll** (`make.roll`): Strips laid over one another and wound round a core: a lithium cell's cathode, separator and anode; a coil's wire; a film capacitor; a roll of tape. *hypothetical, tested here, before the update*
 - **Wrap in** (`make.wrap`): A part wrapped in an envelope of a sheet folded round it and sealed at its edges, open at its top: a separator round a battery plate, a bag, a sleeve, shrink wrap *hypothetical, tested here, before the update*
 
-## 3 · Arrange and mate (29)
+## 3 · Arrange and mate (30)
 
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
@@ -162,6 +162,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Mate by a measure** (`relate`): A mate as a number, put on the thing itself: to the nearest thing named like the one you give, a measure held in a range: the distance between their middles, the gap between their surfaces, how far off its front the … *derived, tested here, before the update*
 - **Mirror** (`mirror`): A thing and its mirror image across a plane through the origin *derived, tested here, before the update*
 - **Onto a shaft** (`onto`): A part with a bore slid onto a round piece of another, their axes made one: a sprocket onto a cam's nose, a bearing onto its shaft, a pulley onto a crank. *derived, tested here, before the update*
+- **Onto a surface (any outline, laid on and following it)** (`onto.surface`): Any flat outline, a vent, a badge, a decal, a sign, a panel, an address number, laid onto any thing's surface: drawn as seen looking along a direction (its u across to the right, its v up), cast onto the thing from a … *derived, tested here*
 - **Pattern of** (`array`): A thing many times in a pattern, one thing stored and every one placed: in a row (each a step on from the last), round a ring (about y, each turned to face out: a drone's four motors, a wheel's bolts), or on a grid nx … *hypothetical, tested here, before the update*
 - **Place** (`place`): A thing put at a place (x, y, z), turned about x, y and z, at a scale; or at each point of a table wired in (posts at a chain's free ends, bolts at their holes, lamps along a roof), each moved by x, y, z. *derived, tested here, before the update*
 - **Place a part** (`place.solve`): Where a part should go, found, never typed: it is taken out, the space round where it could go is mapped (heat, motion, reach), and every place it fits whole, standing on something (or within a bracket of it) and … *derived, tested here, before the update*

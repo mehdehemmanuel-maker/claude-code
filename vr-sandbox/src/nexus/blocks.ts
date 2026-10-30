@@ -72,7 +72,8 @@ import { PROGRAMS } from './logic/programs';
 import { layout as layoutOf } from './make/space';
 import { perfect } from './make/pipeline';
 import { LOGICS, SECTIONS, endOn, makeLine, outer, route, sectionOf, sizeBore, sizeWire, tetherOf, vary, type Logic, type Section } from './placement/line';
-import { boreThrough, onto } from './mate';
+import { boreThrough, onto, ontoSurface } from './mate';
+import { geometry } from './view/kit3d';
 import { engineLoads, springCase, type LoadRow } from './loads';
 import { SPRING_WIRES } from '../engineering/springs';
 /** A load case's row as a table's: its figure, limit and factor, in the units it is said in. */
@@ -89,7 +90,7 @@ import { FITS, HEAD_PIECES, conRod, crankshaft, cylinderBlock, cylinderHead, eng
 const pieceKey = (w: string): string => w.replace(/ (\w)/g, (_, c: string) => c.toUpperCase());
 import { BOARDS, PROCESSES, SOCKETS, desktop, die, motherboard, nandCell, packageOf, sramCell, transistor } from './computer';
 const KINDS_OF_VEHICLE = ['car', 'truck', 'atv', 'motorcycle', 'forklift', 'mower', 'kart'];
-import type { Part } from './kits';
+import type { Part, V3 } from './kits';
 import type { Board } from './boards';
 
 // ---- the three ways a block is found ---------------------------------------------------------------------------------
@@ -2482,6 +2483,19 @@ const BUILT_THINGS: BlockDef[] = [
       const p = fastener({ kind, head, drive: String(c.set.drive) as 'none', point: String(c.set.point) as 'chamfer', thread: String(c.set.thread) as 'helix', mat: String(c.set.mat), d, L: Number(i.L ?? 0.04), ...(pitch ? { pitch } : {}), ...(Number(i.threadL) ? { threadL: Number(i.threadL) } : {}), ...(s ? { s } : {}), ...(k ? { k } : {}), ...(Number(i.grip) ? { grip: Number(i.grip) } : {}) });
       return { fastener: p, mass: massOf(p), pieces: p.parts!.length }; },
     tests: [{ inputs: { d: 0.008, L: 0.04 }, outputs: { pieces: 4 } }, { set: { kind: 'rivet', head: 'button' }, inputs: { d: 0.005, L: 0.012, grip: 0.008 }, outputs: { pieces: 3 } }] }),
+  def({ id: 'onto.surface', name: 'Onto a surface (any outline, laid on and following it)', kind: 'logic', ability: 'connect', domains: ['mechanical', 'manufacturing', 'vehicles', 'structural', 'everyday'],
+    spec: { gloss: 'Any flat outline laid onto any surface, following its curve', discipline: 'mechanical.design', role: 'data transformation', codes: [{ scheme: 'ICS', code: '01.100.20', label: 'Mechanical engineering drawings' }],
+      model: { equations: ['each tile\'s middle cast along d onto the surface (the first triangle it meets); the tile set on the tangent plane there: its x the drawing\'s right less its part along the normal n, its y = n × x', 'the gap: each corner on that plane cast back along −n to the surface'], class: 'analytical', time: 'steady', linear: false, references: ['Sutherland & Hodgman, Reentrant polygon clipping, CACM 17, 32 (1974)', 'Möller & Trumbore, Fast, minimum storage ray-triangle intersection (1997)'] } },
+    says: 'Any flat outline, a vent, a badge, a decal, a sign, a panel, an address number, laid onto any thing\'s surface: drawn as seen looking along a direction (its u across to the right, its v up), cast onto the thing from a point; in tiles where asked, each on the surface\'s tangent where its middle lands, so a big one follows a curved hood or door; so thick, standing so far off it. Says how far its corners stand off the surface, so how well it follows it is measured',
+    settings: [{ key: 'outline', label: 'Outline, m: u,v u,v …', type: 'text', default: '-0.15,-0.05 0.15,-0.05 0.15,0.05 -0.15,0.05' }, { key: 'at', label: 'From, m: x y z', type: 'text', default: '0 0 1' }, { key: 'toward', label: 'Looking along: x y z', type: 'text', default: '0 0 -1' }, { key: 'up', label: 'Its up: x y z', type: 'text', default: '0 1 0' },
+      { key: 't', label: 'Thick, m', type: 'number', default: 0.003 }, { key: 'proud', label: 'Off the surface, m', type: 'number', default: 0 }, { key: 'tile', label: 'Tiles across, m (0: one piece)', type: 'number', default: 0 }, { key: 'name', label: 'Called', type: 'text', default: 'badge' }, { key: 'mat', label: 'Material', type: 'text', default: 'abs' }, { key: 'color', label: 'Colour', type: 'text', default: '#c8ccd2' }],
+    ports: { inputs: [thing('thing', 'what it goes onto')], outputs: [thing('piece', 'the piece'), thing('with', 'the thing with it on'), P('tiles', 'integer'), L('gap', 0, 'the most a corner stands off the surface'), P('says', 'text')] },
+    run: (i, c) => { const t = i.thing as Part; if (!t || !('name' in t)) throw new Error('wire a thing in'); const v3 = (k: string) => String(c.set[k] ?? '').trim().split(/[\s,]+/).map(Number) as V3;
+      const pts = String(c.set.outline ?? '').trim().split(/\s+/).map((q) => q.split(',').map(Number) as [number, number]);
+      const r = ontoSurface(t, pts, { at: v3('at'), toward: v3('toward'), up: v3('up'), t: Number(c.set.t ?? 0.003), proud: Number(c.set.proud ?? 0), tile: Number(c.set.tile ?? 0), name: String(c.set.name ?? 'badge'), mat: String(c.set.mat ?? 'abs'), color: hex(String(c.set.color ?? '#c8ccd2')), geometry, layout: (p) => layoutOf(p) });
+      if (typeof r === 'string') throw new Error(r); return { piece: r.piece, with: { name: t.name, parts: [t, r.piece] } as Part, tiles: r.tiles, gap: Math.round(r.gap * 1e5) / 1e5 + 0, says: r.says }; },
+    // (a badge onto a 1 m cube from in front of it: on its face, flat, nothing off it)
+    tests: [{ set: { outline: '-0.1,-0.05 0.1,-0.05 0.1,0.05 -0.1,0.05', at: '0 0 1', toward: '0 0 -1', up: '0 1 0', t: 0.004 }, inputs: { thing: { name: 'cube', shape: { box: [1, 1, 1] }, mat: 'steel-low' } }, outputs: { tiles: 1, gap: 0 }, rel: 1e-6 }] }),
   def({ id: 'onto', name: 'Onto a shaft', kind: 'logic', ability: 'connect', domains: ['mechanical', 'manufacturing', 'vehicles'], says: 'A part with a bore slid onto a round piece of another, their axes made one: a sprocket onto a cam\'s nose, a bearing onto its shaft, a pulley onto a crank. Its place is where it sits along the shaft, not coordinates typed in; its fit is what the bore and the shaft measure (a clearance it slides on with, or an interference it is pressed on with); a bore too small will not go on',
     settings: [{ key: 'shaft', label: 'The shaft (named like)', type: 'text', default: 'nose|shaft|axle' }, { key: 'from', label: 'Measured from its', type: 'choice', default: 'end', choices: ['end', 'start'] }],
     ports: { inputs: [P('on', 'part', { label: 'what has the shaft' }), P('it', 'part', { label: 'what goes on it' }), L('inset', 0, 'from that end to its middle'), N('turn', 'deg', { default: 0, optional: true, label: 'turned about the shaft' })], outputs: [P('both', 'part'), P('placed', 'part'), L('gap', 0, 'clearance across (− interference)'), P('fit', 'text')] },

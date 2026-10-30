@@ -353,6 +353,15 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     for (const [k, l] of [['bar', 'The bar'], ['eng', 'The engine']] as const) { placeBlock(b, 'view.show', 0, 0, {}, `${k}Says`); b.nodes[`${k}Says`]!.label = l; wire(b, k, 'says', `${k}Says`, 'value'); placeBlock(b, 'view.show', 0, 0, {}, `${k}Fig`); b.nodes[`${k}Fig`]!.label = `${l}: each value, its ±, fixed or not`; wire(b, k, 'figures', `${k}Fig`, 'value'); }
     return tidy(b);
   }],
+  ['Onto a surface: any outline laid onto any thing and following its curve: a vent onto the Monte Carlo\'s hood in tiles, a badge onto its door, each saying how close it keeps to the surface', () => {
+    const b = emptyBoard('Onto a surface');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'car'); b.nodes.car!.label = 'The car';
+    placeBlock(b, 'onto.surface', 0, 0, { outline: '-0.25,-0.12 0.25,-0.12 0.3,0.12 -0.3,0.12', at: '1.55 2.5 0.3', toward: '0 -1 0', up: '1 0 0', t: 0.006, tile: 0.06, name: 'hood vent', color: '#b3121f', mat: 'abs' }, 'vent'); b.nodes.vent!.label = 'A vent onto its hood, from above, in tiles'; wire(b, 'car', 'vehicle', 'vent', 'thing');
+    placeBlock(b, 'onto.surface', 0, 0, { outline: '-0.12,-0.03 0.12,-0.03 0.12,0.03 -0.12,0.03', at: '0.3 0.75 -2', toward: '0 0 1', up: '0 1 0', t: 0.003, name: 'door badge', color: '#d8dce0', mat: 'al-6061' }, 'badge'); b.nodes.badge!.label = 'A badge onto its left door'; wire(b, 'vent', 'with', 'badge', 'thing');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'badge', 'with', 'show', 'thing');
+    for (const k of ['vent', 'badge']) { placeBlock(b, 'view.show', 0, 0, {}, `${k}Says`); wire(b, k, 'says', `${k}Says`, 'value'); }
+    return tidy(b);
+  }],
   ['Pipelines tried: every recipe for fitting a model to a picture run on the Monte Carlo\'s, each judged alike (overlap, error both ways, time), the best kept for Picture to model', () => {
     const b = emptyBoard('Pipelines tried');
     placeBlock(b, 'photo.load', 0, 0, { id: 'mc-side' }, 'ph'); b.nodes.ph!.label = 'The picture';

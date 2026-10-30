@@ -1171,3 +1171,11 @@ Monte Carlo from the picture's camera: 772 of its pieces drawn, 4,926 hidden, 72
 (IoU 1.0000 against drawing all of them); the outline drawn in 1.7 s, not 7 s. Coarser detail: making 2.7 → 1.9 s at
 0.3, its outline still 0.989 of the full one's. Not yet: the body's making itself (its skins fitted through their
 sections) is untouched, and the 3D viewer's own stand-ins are not yet tied to this level.
+- **2026-10-30, any outline onto any surface.** `ontoSurface` (`mate.ts`) and node Onto a surface (`onto.surface`): a
+flat outline drawn as seen looking along a direction, cast onto any thing's drawn surface (ray against its triangles, only
+the pieces whose box the ray crosses), in tiles where asked, each set on the surface's tangent where its middle lands;
+how far each corner stands off the surface is measured and said. On the Monte Carlo: a 1,320 cm² vent onto its hood in
+40 tiles, every corner within 0.5 mm of the hood; a badge onto its door, within 0.1 mm; both with the car made in 6 s.
+Made of shapes every module already reads (prisms), so it weighs, lays out and is checked as any part is. Not yet: the
+kit's own scoop and lip pieces, made before this, still place themselves their own way; cutting an outline through a
+surface (a window in a wall) is not this tool.
