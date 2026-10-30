@@ -842,6 +842,21 @@ node({ id: 'render.view', name: 'Same-camera view (z-buffered render)', kind: 'l
   run: (i, c) => { const t = i.thing as Part; if (!t || !('name' in t)) throw new Error('wire a thing in'); const v = renderView(t, scaled(camOf(i.camera), Number(c.set.scale ?? 1)));
     return { view: brief(v, `a ${v.w} × ${v.h} view of ${v.names.length} parts`), parts: new Set(v.id).size - (v.id.includes(-1) ? 1 : 0) }; } });
 
+// (a thing seen from round it, each view framed on its size: what a judge that knows nothing of it is shown)
+const SIDES: Record<string, V3> = { side: [0, 0.08, 1], front: [1, 0.12, 0], back: [-1, 0.12, 0], 'three-quarter front': [1, 0.45, 0.9], 'three-quarter back': [-1, 0.45, 0.9], top: [0.001, 1, 0] };
+node({ id: 'views.around', name: 'Views round a thing', kind: 'generator', ability: 'generate', domains: ['vehicles', 'mechanical', 'manufacturing', 'everyday'],
+  spec: { gloss: 'What does it look like from each side?', discipline: 'electrical.signals', role: 'visualisation', codes: [VISION] },
+  says: 'Any thing drawn from the sides named (side, front, back, three-quarter front or back, top), each camera aimed at its middle from far enough that it fills most of the picture: pictures of it to compare, keep or show a judge',
+  settings: [{ key: 'sides', label: 'Seen from (a comma between)', type: 'text', default: 'side, three-quarter front, front' }, { key: 'px', label: 'Picture width, px', type: 'number', default: 640 }],
+  ports: { inputs: [P('thing', 'assembly')], outputs: [P('views', 'list<record>'), P('says', 'text')] },
+  run: (i, c) => { const t = i.thing as Part; if (!t || !('name' in t)) throw new Error('wire a thing in');
+    const b = new THREE.Box3(); for (const l of layout(t)) if (l.box) b.union(l.box); if (b.isEmpty()) throw new Error('it has nothing to see');
+    const mid: V3 = [(b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2], size = Math.max(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z), w = Math.max(64, Math.round(Number(c.set.px ?? 640))), h = Math.round(w * 0.625);
+    const sides = String(c.set.sides ?? 'side').split(',').map((x) => x.trim()).filter(Boolean); for (const s of sides) if (!SIDES[s]) throw new Error(`"${s}" is not a side: ${Object.keys(SIDES).join(', ')}`);
+    const views = sides.map((s) => { const d = SIDES[s]!, n = Math.hypot(...d), dist = size * 2.2, eye: V3 = [mid[0] + (d[0] / n) * dist, mid[1] + (d[1] / n) * dist, mid[2] + (d[2] / n) * dist];
+      const v = renderView(t, { eye, target: mid, roll: 0, f: (0.8 * w * dist) / size, w, h }); return { ...v, side: s }; });
+    return { views, says: `${t.name} from ${sides.length} side${sides.length > 1 ? 's' : ''}: ${sides.join(', ')}` }; } });
+
 node({ id: 'fit.features', name: 'Geometry fitted to its features (windows, flares, wing, skirts; the intake taken off the picture)', kind: 'solver', ability: 'optimise', domains: ['vehicles', 'manufacturing', 'science'],
   spec: { gloss: 'Which figures put each of its features where the picture has it?', discipline: 'mechanical.design', role: 'numerical solver', codes: [ACM_CV, { scheme: 'MSC2020', code: '65K10', label: 'Numerical optimization and variational techniques' }],
     model: { equations: ['for each group of features: minimise mean over its features of (edge error both ways + ½ the offset of their middles) + the outline\'s error both ways, over the figures that own them', 'a traced outline put onto the model\'s surface: P = eye + z (w + a r + b u) at the view\'s depth z'], class: 'analytical', time: 'steady', linear: false, method: 'Nelder–Mead, group by group (FEATURE_FIT); each figure\'s ± from the curvature; a figure not fixed goes back to what it was', references: ['Nelder & Mead, Comput. J. 7, 308 (1965)', 'Hartley & Zisserman, Multiple View Geometry, 2nd ed., §8.1 (back-projection)'] } },

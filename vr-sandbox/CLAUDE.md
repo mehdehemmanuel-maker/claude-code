@@ -224,6 +224,11 @@ the task list and lose the why. So the why lives here, and every round is checke
   and updated road map thoroughly check code and context for bloat and unnecessary or outdated things" (2026-10-30: keys
   the user gives go in the environment's secrets, never in the repo or the page; accounts and keys are the user's to make,
   not Claude's; the road map is `docs/ROADMAP.md`)
+- "a layer where you rout image prompts to an ai image generator for ideas and then model them and maybe even rout that
+  image to a blind instance that judges it on criteria … multiple images that need generated and judged … the ai image
+  generators are genius on accident they'll really invent a new technology … create a prompt engineer test what prompts
+  work best for activating its genius have some type of confidence rating" (2026-10-30: `genai.ts`: Blind judge, Picture
+  from words, Prompt trial, Views round a thing; the key's image quota is the user's to enable)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say
@@ -281,6 +286,7 @@ known gaps are there too.
 | Computers from transistors; chips from netlists | `nexus/computer.ts`, `nexus/logic/` |
 | Inventory, pieces, looks, breakdown queue | `nexus/inventory.ts`, `pieces.ts`, `looks.ts`, `breakdown.ts` |
 | Research and the gap map | `nexus/research.ts`, `data/references.ts` |
+| Models over the web (Gemini): pictures judged blind as a measurement, drawn from words, wordings tried | `nexus/genai.ts` (key: `GEMINI_API_KEY`, under Node only) |
 | The gauntlet | `nexus/gauntlet.ts`, `view/gauntlet.ts` |
 | Seeds (window to city) | `nexus/seeds.ts` |
 | Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts` |

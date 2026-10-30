@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 592 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 596 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -33,16 +33,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 320 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 322 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 76 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 78 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 538 tested here (their own tests: that they do what they say, not that the world does); 44 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 538 tested here (their own tests: that they do what they say, not that the world does); 48 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 592 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 596 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -60,7 +60,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 
-## 2 · Make: shapes, parts, things (77)
+## 2 · Make: shapes, parts, things (79)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -107,6 +107,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Neighbourhood** (`seed.neighbourhood`): Streets of blocks with four houses to a block, each house's plan and colours and the car in its drive picked from the seed (change the seed for another street), and cars driving round it, stopping at its lights, as … *hypothetical, untested, before the update*
 - **Part** (`card.part`): A real part, drawn whole from its standard with every piece inside it: 41 kinds (stepper nema17 40, led red 5mm, bearing 608, rail MGN12H 400, motorplate nema17 t3 aluminium, bolt M8x30, screw M3x10, panhead M1.6 L2 … *specified, tested here, before the update*
 - **Photograph (pixels and its marks)** (`photo.load`): A photograph from the library (view/public/photos), decoded to its pixels, with the points marked on it (photo-marks.ts: its wheels, its outline round it by region), who marked them and how, the thing it is of, and … *hypothetical, tested here*
+- **Picture from words (image model)** (`ai.draw`): Words sent to an image model (Gemini's), a picture back for each try: ideas to look at, judge, and model from. *hypothetical, untested*
 - **Picture to model** (`seed.image-to-model`): A picture of a thing (a photograph, or a made picture of how it is wanted) to its model: its marks laid on the picture's edges, its outline made dense, the model its picture is of, the camera solved from its wheels, … *hypothetical, untested*
 - **Piston and rings** (`engine.piston`): A piston with its three rings, its wrist pin and the pin's two clips, sized from the bore *hypothetical, tested here, before the update*
 - **Piston engine** (`engine.whole`): A whole piston engine from its first parts: block, crank, pistons and rods, head, timing, oiling, intake, exhaust and what hangs on it. *hypothetical, tested here, before the update*
@@ -135,6 +136,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Tyre** (`tyre`): A tyre as it is made, from its size (a code off its sidewall, or its width, aspect and rim): inner liner, body ply, beads and their apexes, steel belts, cap ply, undertread, sidewalls, and its tread of blocks in … *estimated, tested here, before the update*
 - **Vehicle** (`vehicle`): Any wheeled vehicle from what it is: its kind (its seats, body lines and controls as its kind's, scaled to its length), its axles (wired in, or its kind's), its size, frame, power and what it carries; built part by … *hypothetical, tested here, before the update*
 - **Vehicle (a real model)** (`vehicle.model`): A real vehicle by its maker's published figures (each with its source), built down to its wheel nuts: a Toyota Corolla, a Freightliner Cascadia, a Honda Rancher, a CRF450R, a Toyota forklift, a John Deere X350, a … *specified, tested here, before the update*
+- **Views round a thing** (`views.around`): Any thing drawn from the sides named (side, front, back, three-quarter front or back, top), each camera aimed at its middle from far enough that it fills most of the picture: pictures of it to compare, keep or show a … *hypothetical, untested*
 - **Wall** (`seed.wall`): A wall along x standing on the ground, its face to +z: plain, with a door or a window mated into its opening by their frames, or none at all (an open side, where a hall meets a room) *hypothetical, untested, before the update*
 - **Wall with an opening** (`wall`): A wall along x, standing on y = 0, with an opening for a door or a window (or none) at an offset from its middle; gives the opening's middle, where a door or a window goes *hypothetical, tested here, before the update*
 - **Winding** (`make.wound`): Enamelled wire wound close, turn by turn: on a former round its axis (a solenoid: an injector's, an ignition coil's, a clutch's), round a ring's band (a toroid: a stator's, an armature's), or round a rectangular pole … *hypothetical, tested here, before the update*
@@ -178,7 +180,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Variants of anything (none twice)** (`variants`): Any block, or any pipeline folded into one, made again and again with some of its inputs or settings drawn from ranges or lists by seed: a window's width and frame, a house's plan and paint, a car's colour and wheels. *hypothetical, tested here*
 - **Zone** (`zone`): The room a thing needs kept clear, put on the thing itself and worked out from its own size: in front of a face, so deep (a toilet's clear floor, a kitchen's work aisle), or swept from a hinge at one edge of that face … *derived, tested here, before the update*
 
-## 4 · Choose, size and decide (18)
+## 4 · Choose, size and decide (19)
 
 Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is wanted; if, compare, pick one.
 
@@ -192,6 +194,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Pareto front (trade-offs)** (`trade.offs`): Any block, or any pipeline folded into one, with goals that pull against each other (as light as can be and as stiff as can be; as cheap and as fast), and limits it must keep (a factor of safety over 1.5): many … *derived, tested here*
 - **Pick by duty** (`size.select`): A catalogue item picked by the duty it must do, the duty read from the thing, never typed: a starting battery by its engine (fuel and displacement as the engine states them: about 1 cold-cranking amp per cubic inch … *derived, tested here, before the update*
 - **Pick one** (`pick`): One of several things, by name: plug in what each choice is (a bathroom's fittings, a kitchen's, a bedroom's…), and the choice says which comes out *derived, tested here, before the update*
+- **Prompt trial (words against words)** (`prompt.trial`): Several ways of asking an image model for the same thing (a line each; {it} stands for the thing named), each drawn several times and every picture judged blind on the same criteria: the wordings ranked by their score … *derived, untested*
 - **Repairs** (`repair.library`): What the autopilot may do about a finding, by the rule it answers, least costly first: nudge a part clear of what it runs into, move it (the placement solver), put a heat shield between. *derived, tested here, before the update*
 - **Say why** (`explain`): Why a result is as it is, in plain lines, shortest first: a placement (where it went, what bound it, why where it was did not do, the next best and what each gives up, how many places failed each test, where the … *derived, tested here, before the update*
 - **Show a map** (`field.show`): A map drawn in 3D as coloured cells, blue (good) to red (bad): only the cells at least so bad, or a slice across it. *derived, tested here, before the update*
@@ -201,12 +204,13 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. *derived, tested here*
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what … *derived, tested here, before the update*
 
-## 5 · Check (25)
+## 5 · Check (26)
 
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
 - **Accuracy, four ways (silhouette, features, surface, dimensions)** (`check.accuracy`): The model against the picture from the picture's own camera, as four separate answers, never one blended score: its silhouette (does the outline match, both ways), its features (each traced feature against the model's … *derived, untested*
 - **Approved** (`gauntlet.approved`): What has come through the gauntlet so far (read from its verdicts), and what was turned back and why *derived, tested here, before the update*
+- **Blind judge (vision model)** (`ai.judge`): Pictures of anything (a render of a build from several sides, a photograph, a picture an image model drew) shown to a vision model that is told nothing but the criteria, several times apart: what it says the thing is, … *derived, untested*
 - **Candidates** (`gauntlet.candidates`): What is put through the gauntlet: blocks of the library (all, of a kind or a field, or made by you), or entries of the inventory (under a path, or yours), or named ones. *given, tested here, before the update*
 - **Check a limit** (`check.limit`): A value against its limit: whether it passes, the margin left, and the factor of safety *derived, tested here, before the update*
 - **Clashes** (`clash`): Which of the things a thing places run into one another (a car parked into a house, a pipe through a beam): their boxes, as far down as asked, overlapping by more than a touch. *derived, tested here, before the update*

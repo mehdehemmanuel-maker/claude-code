@@ -38,20 +38,29 @@ drew as octagons.
    the body as plates (lay them with `onto.surface`); specks float by the ATV's bars and the dirt bike's lamp; the bolt's
    thread is smooth (cut it as geometry); the lawn tractor shows no deck; the car kit drew a random car for "rancher"
    and "cascadia" without saying it did not know them (it must say so, or find the machine).
-2. **Web access for nodes (ZenRows), once the user adds the key.** The key goes in the environment's secrets (never the
+2. **Imagine, judge, build (the AI image layer's loop), once the Gemini key has image quota.** Built and working: Blind
+   judge (`ai.judge`), Views round a thing; built, waiting on quota: Picture from words (`ai.draw`), Prompt trial
+   (`prompt.trial`). The loop beyond them, each step a node: (a) draw many ideas for one thing, (b) judge each blind for
+   invention and for whether it would work, (c) a vision model marks the best one's features (wheel centres, outline,
+   panel and shut lines), which Picture to model needs and now takes by hand, (d) Picture to model, (e) the model drawn
+   from the idea's own camera and judged against the idea, (f) corrected where they differ. Beside it: the judge
+   calibrated (real photographs and known-bad renders scored on the same criteria, so 6/10 means the same each time);
+   wordings evolved (the best wording rewritten by a text model each round and tried again, a fit in words); an idea's
+   new mechanism named by the judge and queued in the research notes as unsourced, to be checked, never taken as fact.
+4. **Web access for nodes (ZenRows), once the user adds the key and allows its host.** The key goes in the environment's secrets (never the
    repo, never the page). The pages are static, with no server to hold a key, so a web node runs where the key is:
    under Node (Claude's research runs, scripts, the tests); a page could reach it only through a small server holding the
    key, a decision for the user. First nodes: fetch a page as text, search, and feed `research.notes` its sources.
-3. **Stand-in for slow blocks:** learn a cheap model of a block from its trials, fit and trade off on it, check the
+5. **Stand-in for slow blocks:** learn a cheap model of a block from its trials, fit and trade off on it, check the
    answer on the real block.
-4. **Baseline guard:** record any board's outputs; on any later run, `diff` against them and say what changed.
-5. **Where it breaks:** the boundary in a block's inputs where a check flips from pass to fail.
-6. **How likely it fails:** from each input's ± (`spreadOf` already carries ±), the chance an output crosses its limit.
-7. **Picture to model in parallel:** its fits score trials inside one node; make each trial a block run so the pool and
+6. **Baseline guard:** record any board's outputs; on any later run, `diff` against them and say what changed.
+7. **Where it breaks:** the boundary in a block's inputs where a check flips from pass to fail.
+8. **How likely it fails:** from each input's ± (`spreadOf` already carries ±), the chance an output crosses its limit.
+9. **Picture to model in parallel:** its fits score trials inside one node; make each trial a block run so the pool and
    CMA-ES can take it (it is 15 minutes now).
-8. **Sound (Fish Audio or another, once the user adds a key):** what a thing sounds like, read from what it is (an
+10. **Sound (Fish Audio or another, once the user adds a key):** what a thing sounds like, read from what it is (an
    engine's firing frequency, a motor's whine), the "what does it sound like?" the round checklist asks.
-9. **Carried over:** the Cascadia's engine bay, cab, grille and axle internals; any body from its segment table
+11. **Carried over:** the Cascadia's engine bay, cab, grille and axle internals; any body from its segment table
    (`LIFE.md` step 6c).
 
 ## Keeping it lean (audit 2026-10-30)

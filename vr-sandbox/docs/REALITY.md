@@ -1265,3 +1265,13 @@ safety over 1): CMA-ES on 4 workers 31.3 s, on one thread 59.6 s, the same answe
 Nelder–Mead 47.6 s and its limit missed (1.0 reached). In the page 38.2 s, every goal met. Its stroke not fixed by these
 goals, as What matters found. Picture to model's fits do not go through this yet: each scores its trials inside one node,
 not as a block run, so nothing can be handed to a worker.
+- **2026-10-30, models over the web: a blind judge, and drawing.** `genai.ts` (key `GEMINI_API_KEY`, read under Node
+only; a page holds none) and `views.around` in `reconstruct.ts`. Blind judge: pictures shown to a vision model told
+nothing but the criteria, n judges apart; each criterion's mean, spread and 95 % interval (Student's t), agreement, the
+faults they share. Measured (gemini-3-flash-preview, 3 judges): the custom Monte Carlo from the 3D viewer, called "modified
+sports coupe", 4.67/10, agreement 0.93, its red kit "tacked on" (2 of 3) and polygon edges on curves (2 of 3); the
+Corolla, "four-door sedan", 5.27/10, its plate poorly set (2 of 3); the Monte Carlo from Views round a thing (640 px,
+flat shading), 4.2/10, "missing mirrors and door handles", "low-polygon" (2 each); 10 to 11 s a judging. Picture from
+words and Prompt trial are built; every image model refused with RESOURCE_EXHAUSTED (the key's free tier carries no
+image quota), so no picture has been drawn and neither has been run end to end. ZenRows: the network policy refuses
+api.zenrows.com (CONNECT 403), so it has not been tried.

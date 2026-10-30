@@ -385,6 +385,21 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'fit', 'thing', 'show', 'thing');
     return tidy(b);
   }],
+  ['Blind judge: the Monte Carlo drawn from three sides and shown to a vision model told nothing but the criteria, three judges apart: what they call it, each criterion scored as a measurement (mean, spread, 95 % interval), what they agree is wrong. Runs where a Gemini key is (under Node, GEMINI_API_KEY); a page holds no key and says so', () => {
+    const b = emptyBoard('Blind judge');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'car'); b.nodes.car!.label = 'The car as in the picture';
+    placeBlock(b, 'views.around', 0, 0, { sides: 'side, three-quarter front, front' }, 'vw'); wire(b, 'car', 'vehicle', 'vw', 'thing');
+    placeBlock(b, 'ai.judge', 0, 0, { judges: 3 }, 'jd'); b.nodes.jd!.label = 'Judged blind'; wire(b, 'vw', 'views', 'jd', 'pictures');
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'jd', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'sc'); b.nodes.sc!.label = 'Each criterion'; wire(b, 'jd', 'scores', 'sc', 'rows');
+    placeBlock(b, 'view.table', 0, 0, {}, 'fl'); b.nodes.fl!.label = 'What they say is wrong'; wire(b, 'jd', 'faults', 'fl', 'rows');
+    return tidy(b);
+  }],
+  ['Prompt trial: four ways of asking an image model for one thing, each drawn three times, every picture judged blind on the same criteria (and whether it invents something that would work): the wordings ranked with their 95 % intervals, which beats which for certain, the best pictures. Needs a Gemini key with image quota', () => {
+    const b = emptyBoard('Prompt trial');
+    placeBlock(b, 'prompt.trial', 0, 0, {}, 'pt'); b.nodes.pt!.label = 'Words against words';
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'pt', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'rk'); b.nodes.rk!.label = 'Each wording, ranked'; wire(b, 'pt', 'ranked', 'rk', 'rows');
+    return tidy(b);
+  }],
   ['Fit in parallel: the highest speed an engine holds (its valves not floating below 7,000 rpm, every part at least as strong as its load), its bore, stroke and speed moved together, eight tries at once each round (CMA-ES), the eight side by side, one for each core (the run says how many and how long)', () => {
     const b = emptyBoard('Fit in parallel');
     placeBlock(b, 'fit.target', 0, 0, { block: 'load.engine', vary: 'bore 0.07..0.09\nstroke 0.07..0.1\nrpm 5000..8000', goals: 'floatRpm > 7000\nworst > 1\nrpm max', most: 160, method: 'in batches (CMA-ES)' }, 'fit'); b.nodes.fit!.label = 'As fast as it holds';
