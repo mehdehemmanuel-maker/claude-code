@@ -398,3 +398,73 @@ export function fromLibrary<T>(t: T): T {
   walk(t); return t;
 }
 const stillAll = (p: Part): boolean => !(p.travel || p.joint || p.link || p.movesWith || p.swing || p.spin) && (p.parts ?? []).every(stillAll);
+
+// ---- the difference between any two things ---------------------------------------------------------------------------
+/** One difference found: where (a path down the two, by names), what kind, what it was and is, and by how much. */
+export interface DiffRow { path: string; change: 'changed' | 'added' | 'removed' | 'reshaped' | 'material' | 'recoloured' | 'moved' | 'turned' | 'kind'; a?: unknown; b?: unknown; by?: number; share?: number }
+export interface Diff { rows: DiffRow[]; same: number; marked?: Part | Assembly; more: number }
+/** Colours a difference is shown in, on the second thing: the same dimmed, the new green, the reshaped or remade orange,
+ *  the moved or turned blue, what is gone red (drawn where it was). */
+export const DIFF_COLOURS = { same: 0x4a4f57, added: 0x2fbf71, changed: 0xff8a1f, moved: 0x3a8dde, removed: 0xe5484d } as const;
+const SHOWN_ELSEWHERE = new Set(['name', 'parts', 'at', 'rot', 'color', 'says', 'item', 'kit', 'made', 'sealed', 'look', 'wear', 'text', 'link', 'meant', 'mates']);
+/** Every difference between a and b, down to each number, each piece and each place: numbers, words, lists, records,
+ *  tables, parts and assemblies alike. Numbers equal within `tol` of the larger are the same; a part or assembly whose
+ *  design and place are the same as the other's is passed over whole (its design key says so). At most `most` rows are
+ *  kept; how many more there were is said. A thing's difference also comes back drawn: b, each piece coloured by what
+ *  became of it, and what a had and b has not put back in red where it was. */
+export function diff(a: unknown, b: unknown, o: { tol?: number; most?: number } = {}): Diff {
+  const tol = o.tol ?? 1e-6, most = o.most ?? 400, rows: DiffRow[] = []; let same = 0, more = 0;
+  const push = (r: DiffRow) => { if (rows.length < most) rows.push(r); else more++; };
+  const show = (x: unknown): unknown => (isPart(x) ? `part ${x.name}` : isAssembly(x) ? `assembly ${x.name}` : Array.isArray(x) ? `${x.length} items` : x && typeof x === 'object' ? `{${Object.keys(x).slice(0, 4).join(', ')}}` : x);
+  const values = (p: string, x: unknown, y: unknown, kind: DiffRow['change'] = 'changed'): void => {
+    if (x === y) return;
+    if ((isPart(x) || isAssembly(x)) && (isPart(y) || isAssembly(y))) { things(p, x, y); return; }
+    if (typeof x === 'number' && typeof y === 'number') { if (Number.isNaN(x) && Number.isNaN(y)) return; const by = y - x, big = Math.max(Math.abs(x), Math.abs(y)); if (Math.abs(by) > tol * big) push({ path: p, change: kind, a: x, b: y, by, ...(x !== 0 ? { share: by / Math.abs(x) } : {}) }); return; }
+    if (Array.isArray(x) && Array.isArray(y)) { for (let k = 0; k < Math.max(x.length, y.length); k++) { const q = `${p}[${k}]`; if (k >= x.length) push({ path: q, change: 'added', b: show(y[k]) }); else if (k >= y.length) push({ path: q, change: 'removed', a: show(x[k]) }); else values(q, x[k], y[k], kind); } return; }
+    if (x && y && typeof x === 'object' && typeof y === 'object' && !Array.isArray(x) && !Array.isArray(y)) { for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) { const q = p ? `${p}.${k}` : k, u = (x as Record<string, unknown>)[k], v = (y as Record<string, unknown>)[k]; if (u === undefined && v !== undefined) push({ path: q, change: 'added', b: show(v) }); else if (v === undefined && u !== undefined) push({ path: q, change: 'removed', a: show(u) }); else values(q, u, v, kind); } return; }
+    push({ path: p, change: typeof x !== typeof y || Array.isArray(x) !== Array.isArray(y) ? 'kind' : kind, a: show(x), b: show(y) });
+  };
+  const place = (p: string, x: { at?: V3; rot?: V3 }, y: { at?: V3; rot?: V3 }): boolean => {
+    const at0 = x.at ?? [0, 0, 0], at1 = y.at ?? [0, 0, 0], r0 = x.rot ?? [0, 0, 0], r1 = y.rot ?? [0, 0, 0], d = Math.hypot(at1[0] - at0[0], at1[1] - at0[1], at1[2] - at0[2]), t = Math.max(...r0.map((r, k) => Math.abs(r1[k]! - r)));
+    if (d > 1e-7) push({ path: p, change: 'moved', a: at0.map(round), b: at1.map(round), by: d }); if (t > 1e-7) push({ path: p, change: 'turned', a: r0.map(round), b: r1.map(round), by: t }); return d > 1e-7 || t > 1e-7;
+  };
+  /** Pieces paired by name, the k-th of a name in a with the k-th in b. */
+  const pair = <T>(xs: T[], ys: T[], nameOf: (t: T) => string): { both: [T, T][]; gone: T[]; come: T[] } => {
+    const left = new Map<string, T[]>(); for (const x of xs) (left.get(nameOf(x)) ?? left.set(nameOf(x), []).get(nameOf(x))!).push(x);
+    const both: [T, T][] = [], come: T[] = []; for (const y of ys) { const l = left.get(nameOf(y)); const x = l?.shift(); if (x !== undefined) both.push([x, y]); else come.push(y); }
+    return { both, gone: [...left.values()].flat(), come };
+  };
+  const things = (p: string, x: Part | Assembly, y: Part | Assembly): void => {
+    if (designOf(x).key === designOf(y).key && (isPart(x) ? (x as Part).color === (y as Part).color : true)) { same++; return; }
+    if (isPart(x) !== isPart(y)) { push({ path: p, change: 'kind', a: show(x), b: show(y) }); return; }
+    if (isPart(x) && isPart(y)) {
+      for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) { if (SHOWN_ELSEWHERE.has(k)) continue; const u = (x as unknown as Record<string, unknown>)[k], v = (y as unknown as Record<string, unknown>)[k];
+        if (u === undefined && v === undefined) continue; values(`${p}.${k}`, u, v, k === 'shape' || k === 'cuts' ? 'reshaped' : k === 'mat' || k === 'finish' ? 'material' : 'changed'); }
+      if (x.color !== y.color) push({ path: `${p}.color`, change: 'recoloured', a: x.color === undefined ? undefined : `#${x.color.toString(16).padStart(6, '0')}`, b: y.color === undefined ? undefined : `#${y.color.toString(16).padStart(6, '0')}` });
+      const m = pair(x.parts ?? [], y.parts ?? [], (q) => q.name);
+      for (const [u, v] of m.both) { const q = `${p}/${v.name}`; place(q, u, v); things(q, u, v); }
+      for (const u of m.gone) push({ path: `${p}/${u.name}`, change: 'removed', a: show(u) }); for (const v of m.come) push({ path: `${p}/${v.name}`, change: 'added', b: show(v) });
+      return;
+    }
+    const xa = x as Assembly, ya = y as Assembly, m = pair(xa.items, ya.items, (it) => it.of.name);
+    for (const [u, v] of m.both) { const q = `${p}/${v.of.name}`; place(q, u, v); if (Math.abs((u.s ?? 1) - (v.s ?? 1)) > tol) push({ path: `${q}.s`, change: 'reshaped', a: u.s, b: v.s, by: v.s - u.s }); things(q, u.of, v.of); }
+    for (const u of m.gone) push({ path: `${p}/${u.of.name}`, change: 'removed', a: show(u.of) }); for (const v of m.come) push({ path: `${p}/${v.of.name}`, change: 'added', b: show(v.of) });
+  };
+  values('', a, b);
+  // (the second thing drawn by what became of each piece: paths as above, so a piece takes the colour its own row gives it)
+  let marked: Part | Assembly | undefined;
+  if ((isPart(a) || isAssembly(a)) && (isPart(b) || isAssembly(b))) {
+    const kindAt = new Map<string, DiffRow['change']>(); for (const r of rows) { const at = r.path.replace(/\.[^/]*$/, ''), was = kindAt.get(at); if (!was || r.change === 'added' || (r.change !== 'moved' && r.change !== 'turned')) kindAt.set(at, r.change); }
+    const colourOf = (path: string, inherited: number): number => { const k = kindAt.get(path); return k === 'added' ? DIFF_COLOURS.added : k === 'removed' ? DIFF_COLOURS.removed : k === 'moved' || k === 'turned' ? DIFF_COLOURS.moved : k ? DIFF_COLOURS.changed : inherited; };
+    const changedUnder = (path: string) => [...kindAt.keys()].some((q) => q.startsWith(path + '/'));
+    const paint = (t: Part | Assembly, path: string, inherited: number, gone: Part | Assembly | undefined): Part | Assembly => {
+      const c = colourOf(path, inherited), keep = c === DIFF_COLOURS.added ? c : changedUnder(path) || c !== inherited ? c : inherited;
+      if (isPart(t)) { const g = gone && isPart(gone) ? pair(gone.parts ?? [], t.parts ?? [], (q) => q.name).gone : [];
+        return { ...t, color: keep, parts: [...(t.parts ?? []).map((q) => { const w = gone && isPart(gone) ? (gone.parts ?? []).find((z) => z.name === q.name) : undefined; return { ...(paint(q, `${path}/${q.name}`, keep === DIFF_COLOURS.added ? keep : DIFF_COLOURS.same, w) as Part), at: q.at, rot: q.rot }; }), ...g.map((q) => ({ ...(paint(q, `${path}/${q.name}`, DIFF_COLOURS.removed, undefined) as Part), color: DIFF_COLOURS.removed }))] } as Part; }
+      const g = gone && isAssembly(gone) ? pair(gone.items, t.items, (it) => it.of.name).gone : [];
+      return { ...t, items: [...t.items.map((it) => { const w = gone && isAssembly(gone) ? gone.items.find((z) => z.of.name === it.of.name)?.of : undefined; return { ...it, of: paint(it.of, `${path}/${it.of.name}`, keep === DIFF_COLOURS.added ? keep : DIFF_COLOURS.same, w) }; }), ...g.map((it) => ({ ...it, of: paint(it.of, `${path}/${it.of.name}`, DIFF_COLOURS.removed, undefined) }))] };
+    };
+    marked = paint(b, '', DIFF_COLOURS.same, a);
+  }
+  return { rows, same, more, ...(marked ? { marked } : {}) };
+}

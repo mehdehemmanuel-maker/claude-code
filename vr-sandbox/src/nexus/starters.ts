@@ -391,6 +391,15 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'eng', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ef'); b.nodes.ef!.label = 'Each effect'; wire(b, 'eng', 'effects', 'ef', 'rows');
     return tidy(b);
   }],
+  ['Difference: the Monte Carlo as Chevrolet sold it against the one in the picture, every piece compared: its 21 in. wheels and their tyres for the 16s, its body kit added, its panels reshaped, each by how much and where, and the custom one drawn by what changed (new green, reshaped orange, moved blue, gone red)', () => {
+    const b = emptyBoard('Difference');
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo' }, 'pub'); b.nodes.pub!.label = 'As sold';
+    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'cus'); b.nodes.cus!.label = 'As in the picture';
+    placeBlock(b, 'diff', 0, 0, {}, 'df'); b.nodes.df!.label = 'What is different'; wire(b, 'pub', 'vehicle', 'df', 'a'); wire(b, 'cus', 'vehicle', 'df', 'b');
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'df', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'rw'); b.nodes.rw!.label = 'Each difference, where'; wire(b, 'df', 'rows', 'rw', 'rows');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'df', 'marked', 'show', 'thing');
+    return tidy(b);
+  }],
   ['Trade-offs: a coil spring as light as can be and as stiff as can be, its factor of safety kept over 1.2: every design tried across its wire, coil and turns, the best kept (none beaten on both), charted, the one giving up least marked, and each made, side by side', () => {
     const b = emptyBoard('Trade-offs');
     placeBlock(b, 'trade.offs', 0, 0, { block: 'seed.spring-checked', vary: 'd 0.002..0.005\nD 0.015..0.035\nn 3..10', goals: 'mass min\nrate max\nworst > 1.2' }, 'tr'); b.nodes.tr!.label = 'Light against stiff, kept safe';

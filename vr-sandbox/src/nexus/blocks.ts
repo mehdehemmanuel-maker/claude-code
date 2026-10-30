@@ -42,7 +42,7 @@ import { GEARHEADS, MOTORS } from '../data/motors';
 import { motorModel, windingR } from '../engineering/dcmotor';
 import { AMBIENT } from '../engineering/thermal';
 import type { Jolt } from './realize';
-import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
+import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, diff, distinctCount, frame, matrixOf, framesOf, isAssembly, isPart, massOfAll, mateTo, mirror, place, placedCount, type Assembly, type Override } from './assembly';
 import { massOf } from './mass';
 import { MACHINES, TREADS, makeMachine, rollingOf, styledCar, styles, tyreBuilt, tyreOf, type Axle, type Machine, type Susp, type Tread } from './machines';
 import { cellPack, explodeAudit, liCell, starterBattery } from './components';
@@ -87,6 +87,8 @@ import { feed, findItem, itemOf, treeLines } from './inventory';
 import { judge } from './breakdown';
 import { FITS, HEAD_PIECES, conRod, crankshaft, cylinderBlock, cylinderHead, engineBuilt, engineDims, headPiece, pistonAssembly, type EngineSpec, type HeadPiece } from './engines';
 /** A head's piece's port: its name run together ("intake valve" → intakeValve). */
+/** A value as a short word for a table: a number to five figures, a list by its length, anything else as it says itself. */
+const fmt = (x: unknown): unknown => (x === undefined ? '' : typeof x === 'number' ? +x.toPrecision(5) : Array.isArray(x) ? x.map((v) => (typeof v === 'number' ? +v.toPrecision(4) : v)).join(', ') : x);
 const pieceKey = (w: string): string => w.replace(/ (\w)/g, (_, c: string) => c.toUpperCase());
 import { BOARDS, PROCESSES, SOCKETS, desktop, die, motherboard, nandCell, packageOf, sramCell, transistor } from './computer';
 const KINDS_OF_VEHICLE = ['car', 'truck', 'atv', 'motorcycle', 'forklift', 'mower', 'kart'];
@@ -2308,6 +2310,36 @@ const BUILT_THINGS: BlockDef[] = [
       const r = engineLoads(s, { rpm: Number(i.rpm ?? 6500), pmax: Number(i.pmax ?? 0) || d.pmax, piston: got('piston'), rod: got('rod'), spring: got('spring'), wire: String(i.wire ?? c.set.wire) });
       return { rows: r.rows.map(tableRow), worst: r.worst?.factor ?? Infinity, floatRpm: r.floatRpm, ok: r.rows.every((x) => x.ok), says: r.says }; },
     tests: [{ inputs: { cylinders: 1, bore: 0.077, stroke: 0.058, rpm: 3600 }, set: { valves: '2', cams: 'ohv', cooling: 'air' }, outputs: { ok: true } }] }),
+  def({ id: 'diff', name: 'Difference (any two)', kind: 'critic', ability: 'check', domains: ['mechanical', 'structural', 'electrical', 'vehicles', 'manufacturing', 'finance', 'everyday', 'software'],
+    spec: { gloss: 'What is different between these two, and where?', discipline: 'mechanical.design', role: 'assessment', codes: [{ scheme: 'MSC2020', code: '68P05', label: 'Data structures' }, { scheme: 'MSC2020', code: '68W32', label: 'Algorithms on strings' }],
+      model: { equations: ['two numbers differ when |b − a| > tol · max(|a|, |b|)', 'pieces paired by name down both trees (the k-th of a name in a with the k-th in b); a pair whose design key and colour are equal passed over whole', 'a row for each piece and kind of change: how many of its numbers changed, and the largest change (in its own unit: metres for a shape)'], class: 'analytical', time: 'steady', linear: false, method: 'one walk down both at once (assembly.ts diff), its design keys (designOf) skipping what is the same', references: ['Myers, An O(ND) difference algorithm and its variations, Algorithmica 1, 251 (1986), for the idea: say only what changed, by where'] } },
+    says: 'Any two things wired in, of any kind (two numbers, two records, two tables, two parts, two whole cars, before and after a fit, one variant and the next) and every difference between them, down to each number and each piece: what was added, taken away, reshaped (which size, by how much), remade in another material, recoloured, moved or turned, and where, by the names down the tree. Between two things, what each weighs and spans as well, and the second drawn by what became of each piece: the same dimmed, new green, reshaped orange, moved blue, gone red where it was',
+    settings: [{ key: 'tol', label: 'Numbers the same within (a share of the larger)', type: 'number', default: 1e-6 }, { key: 'by', label: 'A row for', type: 'choice', default: 'each piece', choices: ['each piece', 'each number'] }, { key: 'most', label: 'At most, rows', type: 'number', default: 400 }],
+    ports: { inputs: [P('a', 'any', { label: 'the first (before)' }), P('b', 'any', { label: 'the second (after)' })], outputs: [P('rows', 'table', { label: 'each difference, where' }), N('count', undefined, { label: 'differences' }), P('same', 'boolean', { label: 'no difference at all' }), P('kinds', 'record', { label: 'how many of each kind' }), P('marked', 'assembly', { label: 'the second, coloured by what changed' }), P('says', 'text')] },
+    run: (i, c) => {
+      const a = i.a, b = i.b, most = Math.max(1, Math.round(Number(c.set.most ?? 400))), each = c.set.by === 'each number', d = diff(a, b, { tol: Number(c.set.tol ?? 1e-6), most: each ? most : 1e6 }), thing = (x: unknown): x is Part | Assembly => isPart(x) || isAssembly(x);
+      const pct = (x: number | undefined) => (x === undefined ? '' : `${(x * 100).toPrecision(3)} %`);
+      // (a row for each piece and kind of change, its numbers gathered (how many, the largest share), the largest first: a
+      // car's wheel is one row, not one for each point of its hub's profile)
+      const ORDER: Record<string, number> = { added: 0, removed: 1, kind: 2, material: 3, reshaped: 4, moved: 5, turned: 6, recoloured: 7, changed: 8 };
+      const grouped = each ? d.rows.map((r) => ({ where: r.path || '(whole)', change: r.change, was: fmt(r.a), now: fmt(r.b), by: r.by === undefined ? '' : +r.by.toPrecision(4), share: pct(r.share) }))
+        : [...d.rows.reduce((m, r) => { const piece = r.change === 'moved' || r.change === 'turned' || r.change === 'added' || r.change === 'removed' ? r.path : r.path.replace(/\.[^/]*$/, ''), field = r.path.slice(piece.length).replace(/^\./, '').replace(/\[\d+\]/g, '[]'), k = `${piece}|${r.change}`, g = m.get(k);
+            // (the largest change by how far it went, not by its share: a point near the origin moved 3 cm is thousands of per cent)
+            if (!g) m.set(k, { piece, change: r.change, n: 1, fields: new Set([field]), top: Math.abs(r.by ?? 0), r }); else { g.n++; g.fields.add(field); const sh = Math.abs(r.by ?? 0); if (sh > g.top) { g.top = sh; g.r = r; } } return m; }, new Map<string, { piece: string; change: string; n: number; fields: Set<string>; top: number; r: (typeof d.rows)[number] }>()).values()]
+          .sort((x, y) => ORDER[x.change]! - ORDER[y.change]! || y.top - x.top).slice(0, most)
+          .map((g) => ({ where: g.piece || '(whole)', change: g.change, what: g.n > 1 ? `${g.n} numbers: ${[...g.fields].filter(Boolean).slice(0, 3).join(', ')}${g.fields.size > 3 ? ', …' : ''}` : [...g.fields][0] ?? '', was: g.n > 1 ? '' : fmt(g.r.a), now: g.n > 1 ? '' : fmt(g.r.b), most: g.r.by === undefined ? '' : +g.r.by.toPrecision(4) }));
+      const rows: Record<string, unknown>[] = grouped;
+      let whole = '';
+      if (thing(a) && thing(b)) { const ma = massOfAll(a), mb = massOfAll(b), ba = boundsOfAll(a), bb = boundsOfAll(b), sz = (x: typeof ba) => (x.isEmpty() ? [0, 0, 0] : [x.max.x - x.min.x, x.max.y - x.min.y, x.max.z - x.min.z]);
+        const sa = sz(ba), sb = sz(bb); rows.unshift({ where: '(whole) mass, kg', change: Math.abs(mb - ma) > 1e-9 ? 'changed' : 'same', was: +ma.toPrecision(5), now: +mb.toPrecision(5), by: +(mb - ma).toPrecision(4), share: ma ? `${(((mb - ma) / ma) * 100).toPrecision(3)} %` : '' }, { where: '(whole) size, m', change: sa.some((v, k) => Math.abs(v - sb[k]!) > 1e-6) ? 'changed' : 'same', was: sa.map((v) => +v.toPrecision(4)).join(' × '), now: sb.map((v) => +v.toPrecision(4)).join(' × '), by: '', share: '' });
+        whole = `; ${+(mb - ma).toPrecision(3)} kg (${+ma.toPrecision(4)} → ${+mb.toPrecision(4)})`; }
+      const kinds: Record<string, number> = {}; for (const r of d.rows) kinds[r.change] = (kinds[r.change] ?? 0) + 1;
+      const pieces = new Set(d.rows.map((r) => r.path.replace(/\.[^/]*$/, ''))).size, n = d.rows.length + d.more, list = Object.entries(kinds).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${v} ${k}`).join(', ');
+      return { rows, count: n, same: n === 0, kinds, ...(d.marked ? { marked: isAssembly(d.marked) ? d.marked : { name: d.marked.name, items: [place(d.marked, [0, 0, 0])] } } : {}),
+        says: n === 0 ? `the same${d.same ? ` (${d.same} piece${d.same > 1 ? 's' : ''} or more the same design)` : ''}` : `${n} difference${n > 1 ? 's' : ''} in ${pieces} place${pieces > 1 ? 's' : ''}: ${list}${d.more ? ` (the first ${d.rows.length} kept)` : ''}${whole}` };
+    },
+    tests: [{ inputs: { a: { bore: 0.08, cams: 'dohc', mass: 120 }, b: { bore: 0.081, cams: 'dohc', mass: 120 } }, outputs: { count: 1, same: false, kinds: { changed: 1 } } },
+      { inputs: { a: { name: 'block', shape: { box: [0.1, 0.1, 0.1] }, at: [0, 0, 0], mat: 'steel', parts: [{ name: 'pin', shape: { cyl: [0.01, 0.05] }, at: [0, 0.05, 0] }] }, b: { name: 'block', shape: { box: [0.12, 0.1, 0.1] }, at: [0, 0, 0], mat: 'aluminium-6061', parts: [{ name: 'pin', shape: { cyl: [0.01, 0.05] }, at: [0, 0.06, 0] }] } }, outputs: { kinds: { reshaped: 1, material: 1, moved: 1 } } }] }),
   def({ id: 'sweep.range', name: 'Sweep (stress test)', kind: 'critic', ability: 'check', domains: ['mechanical', 'structural', 'electrical', 'finance', 'everyday'], says: 'Any block in the library run over a range of one of its inputs (an engine\'s speed, a beam\'s load, a loan\'s rate), the rest wired in as for the block itself: every answer in a table, and the worst of them and where it falls. A stress test of anything the library holds, without building a board for each value',
     settings: [{ key: 'block', label: 'Block (its id)', type: 'text', default: 'load.engine' }, { key: 'vary', label: 'Input run over the range', type: 'text', default: 'rpm' }, { key: 'from', label: 'From', type: 'number', default: 1000 }, { key: 'to', label: 'To', type: 'number', default: 7000 }, { key: 'steps', label: 'Steps', type: 'number', default: 13 }, { key: 'watch', label: 'Output watched', type: 'text', default: 'worst' }, { key: 'worstIs', label: 'Worst is the', type: 'choice', default: 'lowest', choices: ['lowest', 'highest'] }, { key: 'blockSet', label: 'Its settings (JSON)', type: 'code', default: '{}' }],
     ports: (st) => { const t = LIBRARY.get(String(st.block ?? 'load.engine')), set = (() => { try { return JSON.parse(String(st.blockSet ?? '{}')) as Record<string, unknown>; } catch { return {}; } })();

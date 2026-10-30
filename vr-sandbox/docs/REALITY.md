@@ -1241,3 +1241,16 @@ matters on the engine, 29 trials, 9.7 s → 7.3 s with the workers' start in it;
 0.52 s. In the page four workers started and the engine's board ran in 9.4 s without error; one thread in the page was
 not measured. Not yet through the pool: a single fit's own steps (Nelder–Mead asks one point at a time) and Picture to
 model's fits, whose 15 minutes are mostly that.
+- **2026-10-30, the difference between any two things.** Asked for it, the space was searched first: what compares is
+for pictures (`compareOutline`, `compareFeatures`, `compareEdges`) and two numbers (`logic.compare`). `diff` in
+`assembly.ts` and node Difference (any two) (`blocks.ts`): numbers, words, lists, records, tables, parts and whole
+assemblies, one walk down both, pieces paired by name, a pair whose design key (`designOf`) and colour agree passed over
+whole. A row for each piece and kind of change (added, removed, reshaped, remade in another material, recoloured, moved,
+turned), how many of its numbers changed and the largest change; every number on asking. Between two things, what each
+weighs and spans, and the second drawn by what became of each piece (same dimmed, new green, reshaped orange, moved blue,
+gone red where it was). Measured: the Monte Carlo as sold against the custom one, 8,704 and 5,770 pieces: 35,447 numbers
+in 288 places, 0.42 to 0.76 s; first its 16 in. wheels and 225/60R16 tyres for 21s and 245/30R21, its body kit added,
+its hubs and discs 1.6 % larger, its front axle tube 49 → 64 mm for 126 % more torque, every body panel reshaped (its
+lines refitted to the picture). Its mass the same to 10⁻¹³ kg: a car is held to its published mass, so the kit's weight
+comes out of "the rest of it" (said, not hidden; whether a kit should add to the published mass is a choice not yet
+made). The board in the page, both cars built and compared: about 5 s.
