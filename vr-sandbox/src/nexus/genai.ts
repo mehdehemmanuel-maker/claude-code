@@ -75,6 +75,8 @@ async function drawFal(prompt: string, signal?: AbortSignal): Promise<{ png: Uin
     try { res = await fetch(`https://fal.run/${m}`, { method: 'POST', headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, image_size: 'landscape_16_9', num_images: 1 }), signal }); }
     catch (e) { said.push(`${m}: ${(e as Error).message}`); continue; }
     const r = await res.json() as { images?: { url: string }[]; detail?: unknown };
+    // (fal's 403 "User is locked. Reason: TOP_UP" is an empty balance: said so, and the other model not asked the same)
+    if (res.status === 403 && /locked|TOP_UP|balance/i.test(JSON.stringify(r))) throw new Error('fal.ai: the account has no credit ("User is locked: TOP_UP"); add credit at https://fal.ai/dashboard/billing');
     if (!res.ok || !r.images?.[0]?.url) { said.push(`${m}: ${res.status} ${JSON.stringify(r.detail ?? r).slice(0, 120)}`); continue; }
     const img = await fetch(r.images[0].url, { signal }); if (!img.ok) { said.push(`${m}: its picture ${img.status}`); continue; }
     return { png: new Uint8Array(await img.arrayBuffer()), said: '', model: `fal ${m}`, ms: Date.now() - t0 };
