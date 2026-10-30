@@ -377,6 +377,15 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'bs'); wire(b, 'bar', 'says', 'bs', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'be'); b.nodes.be!.label = 'Its effects'; wire(b, 'bar', 'effects', 'be', 'rows');
     return tidy(b);
   }],
+  ['Trade-offs: a coil spring as light as can be and as stiff as can be, its factor of safety kept over 1.2: every design tried across its wire, coil and turns, the best kept (none beaten on both), charted, the one giving up least marked, and each made, side by side', () => {
+    const b = emptyBoard('Trade-offs');
+    placeBlock(b, 'trade.offs', 0, 0, { block: 'seed.spring-checked', vary: 'd 0.002..0.005\nD 0.015..0.035\nn 3..10', goals: 'mass min\nrate max\nworst > 1.2' }, 'tr'); b.nodes.tr!.label = 'Light against stiff, kept safe';
+    placeBlock(b, 'view.chart', 0, 0, {}, 'ch'); b.nodes.ch!.label = 'Its front: rate (N/m) against mass (kg)'; wire(b, 'tr', 'xs', 'ch', 'x'); wire(b, 'tr', 'ys', 'ch', 'y');
+    placeBlock(b, 'view.table', 0, 0, {}, 'ft'); b.nodes.ft!.label = 'The front, the knee ◆'; wire(b, 'tr', 'front', 'ft', 'rows');
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'tr', 'says', 'sy', 'value');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'tr', 'laid', 'show', 'thing');
+    return tidy(b);
+  }],
   ['Pipelines tried: every recipe for fitting a model to a picture run on the Monte Carlo\'s, each judged alike (overlap, error both ways, time), the best kept for Picture to model', () => {
     const b = emptyBoard('Pipelines tried');
     placeBlock(b, 'photo.load', 0, 0, { id: 'mc-side' }, 'ph'); b.nodes.ph!.label = 'The picture';

@@ -1206,3 +1206,13 @@ rpm then bore, and its stroke by nothing, checked: the least is always the valve
 (0.81), which no stroke reaches, while the rod's pull does move with stroke (108 → 159 MPa at 70 → 100 mm). Found with it
 and fixed: a folded block run inside a fit, variants or this was not given its inputs' defaults (a window without its
 frame colour made nothing); `runnerOf` now gives them, as placing it on a board does.
+- **2026-10-30, trade-offs (a Pareto front), for anything.** Node `trade.offs` (`dataflow.ts`): any block or folded
+pipeline, two goals or more (`min`, `max`, a moved value among them) and limits (`<`, `>`): designs spread over the ranges
+by Halton's sequence, then each weight's augmented Chebyshev distance minimised (Nelder–Mead, within the ranges); the
+front is every design that keeps the limits and no other beats on every goal, its knee the one nearest the ideal. Seed
+`seed.spring-checked` (Coil spring, made and loaded: the coil maker into Spring under load, folded) gives it a real
+conflict. Measured: the spring, light against stiff with its least factor of safety over 1.2, 210 designs, 138 keep the
+limit, 26 on the front from 12.6 g at 16.6 kN/m to 32.6 g at 77.4 kN/m, the limit binding along it (1.20 to 1.27), its
+knee d 3.59 mm, D 19.7 mm, 3.24 coils, 25.1 g, 66.5 kN/m; 198 ms. A bar, area against stress kept under 4 MPa: 27 on the
+front from 0.0027 m², 68 ms. Seen and fixed in its board's screenshots: a chart drew the first wire in (its x) as its y;
+26 springs strung in a 0.7 m row were drawn far off as boxes, now laid in a square (174 × 143 mm), each a spring.

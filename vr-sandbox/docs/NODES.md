@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 589 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 591 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -33,16 +33,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 318 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 319 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 75 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 76 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 536 tested here (their own tests: that they do what they say, not that the world does); 43 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 537 tested here (their own tests: that they do what they say, not that the world does); 44 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 589 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 197 of 591 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -60,7 +60,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 
-## 2 · Make: shapes, parts, things (76)
+## 2 · Make: shapes, parts, things (77)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -76,6 +76,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Chain round wheels** (`make.chain`): Roller chain round sprockets in a plane, link by link (inner links of plates, bushes and rollers; outer of plates and pins): a timing drive, a bicycle's, a conveyor's. *hypothetical, tested here, before the update*
 - **City** (`seed.city`): A city of neighbourhoods, n by n, each its own streets, houses and cars from its own seed *hypothetical, untested, before the update*
 - **Coat** (`make.coat`): A part coated with another material, filling it and standing proud of it each side along its thinnest way: paste pressed into a grid, paint, plating, an overmould. *hypothetical, tested here, before the update*
+- **Coil spring, made and loaded** (`seed.spring-checked`): A helical compression spring made from its wire and coils (the coil maker) and put under its working stroke (Spring under load): its mass, its rate, and its least factor of safety, wire stress and coil bind among them. *hypothetical, untested*
 - **Coiled spring** (`make.coil`): Wire coiled round a mandrel, its ends closed: a valve's spring, a clutch's, a pen's *hypothetical, tested here, before the update*
 - **Cone** (`shape.cone`): A cone along y: base radius and height *hypothetical, tested here, before the update*
 - **Connecting rod** (`engine.rod`): A connecting rod forged to its I-section, its cap cracked off, its two shells and two bolts *hypothetical, tested here, before the update*
@@ -177,7 +178,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Variants of anything (none twice)** (`variants`): Any block, or any pipeline folded into one, made again and again with some of its inputs or settings drawn from ranges or lists by seed: a window's width and frame, a house's plan and paint, a car's colour and wheels. *hypothetical, tested here*
 - **Zone** (`zone`): The room a thing needs kept clear, put on the thing itself and worked out from its own size: in front of a face, so deep (a toilet's clear floor, a kitchen's work aisle), or swept from a hinge at one edge of that face … *derived, tested here, before the update*
 
-## 4 · Choose, size and decide (17)
+## 4 · Choose, size and decide (18)
 
 Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is wanted; if, compare, pick one.
 
@@ -188,6 +189,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Map of the space** (`field`): A map of one quantity over the space round part of a thing, cell by cell, where things could go (cells inside a solid piece left out): heat (°C: the rules' own fall-off from each hot surface, blocked by anything solid … *simplified, tested here, before the update*
 - **Maps as one cost** (`field.combine`): Maps of the same space as one cost per cell: each read as how bad it is (heat over a limit, room under a gap, reach short of an arm), weighted and added. *derived, tested here, before the update*
 - **Next size up** (`logic.next-size`): The smallest standard size at least the size worked out: a bolt from its diameter, a beam from its depth *derived, tested here, before the update*
+- **Pareto front (trade-offs)** (`trade.offs`): Any block, or any pipeline folded into one, with goals that pull against each other (as light as can be and as stiff as can be; as cheap and as fast), and limits it must keep (a factor of safety over 1.5): many … *derived, tested here*
 - **Pick by duty** (`size.select`): A catalogue item picked by the duty it must do, the duty read from the thing, never typed: a starting battery by its engine (fuel and displacement as the engine states them: about 1 cold-cranking amp per cubic inch … *derived, tested here, before the update*
 - **Pick one** (`pick`): One of several things, by name: plug in what each choice is (a bathroom's fittings, a kitchen's, a bedroom's…), and the choice says which comes out *derived, tested here, before the update*
 - **Repairs** (`repair.library`): What the autopilot may do about a finding, by the rule it answers, least costly first: nudge a part clear of what it runs into, move it (the placement solver), put a heat shield between. *derived, tested here, before the update*

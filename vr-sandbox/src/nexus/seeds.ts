@@ -510,10 +510,23 @@ function imageToModel(): void {
       model: { equations: ['minimise ½ (mean d(outline, model edge) + mean d(model edge, outline)) over its lines, overhangs, stance, details and camera, the model rendered from the camera each trial'], class: 'analytical', time: 'steady', linear: false, method: 'the recipe kept (BEST_RECIPE in reconstruct.ts): the camera\'s distance scanned, then Nelder–Mead in stages, coarse to fine', references: ['Nelder & Mead, Comput. J. 7, 308 (1965)', 'Hartley & Zisserman, Multiple View Geometry, 2nd ed. (analysis by synthesis)', 'Kass, Witkin & Terzopoulos, IJCV 1, 321 (1988) (active contours)'] } });
 }
 
+function springChecked(): void {
+  // (a coil spring made from its wire and coils and put straight under its load: what it weighs, how stiff it is, and its
+  // least factor of safety (wire stress, room left before its coils touch), one node to size or trade off springs by)
+  const s = new Seed('Coil spring, made and loaded');
+  const d = s.input('d', 'number', 0.003, 'wire diameter, m', undefined, 'm'), D = s.input('D', 'number', 0.024, 'mean coil diameter, m', undefined, 'm'), n = s.input('n', 'number', 5, 'active coils'), L = s.input('L', 'number', 0.04, 'length as fitted, m', undefined, 'm'), st = s.input('stroke', 'number', 0.008, 'compressed further by, m', undefined, 'm');
+  const coil = s.n('make.coil', {}, 'the spring, made'); s.w(d, 'value', coil, 'd'); s.w(D, 'value', coil, 'D'); s.w(n, 'value', coil, 'n'); s.w(L, 'value', coil, 'L');
+  const load = s.n('load.spring', {}, 'under its load'); s.w(coil, 'spring', load, 'spring'); s.w(st, 'value', load, 'stroke');
+  s.output('spring', 'part', coil, 'spring'); s.output('mass', 'number', coil, 'mass', 'kg'); s.output('rate', 'number', coil, 'rate', 'N/m'); s.output('worst', 'number', load, 'worst'); s.output('checks', 'table', load, 'rows');
+  s.save('seed.spring-checked', 'Coil spring, made and loaded', 'A helical compression spring made from its wire and coils (the coil maker) and put under its working stroke (Spring under load): its mass, its rate, and its least factor of safety, wire stress and coil bind among them. Folded so a fit, a trade-off or a sensitivity can move its wire and coils as one', ['mechanical'],
+    { gloss: 'What does a coil spring of this wire and these coils weigh, how stiff is it, and does it hold its stroke?', discipline: 'mechanical.design', role: 'analysis', codes: [{ scheme: 'MSC2020', code: '74K10', label: 'Rods (beams, columns, shafts, arches, rings, etc.)' }],
+      model: { equations: ['k = G d⁴ / (8 D³ n)', 'τ = K_B 8 F D / (π d³), K_B = (4C + 2) / (4C − 3), C = D / d'], class: 'analytical', time: 'steady', linear: false, method: 'the coil maker and Spring under load, folded', references: ['Shigley\'s Mechanical Engineering Design, 10th ed., ch. 10 (eqs. 10-5, 10-9)'] } });
+}
+
 /** Every seed, in the order each needs the ones before it. */
 let made = false;
 export function makeSeeds(): void {
   if (made) return; made = true;
-  window_(); door(); wallSeed(); toilet(); sink(); bed(); fittingsAll(); room(); house(); car(); grass(); terrain(); road(); stoplight(); crossing(); roads(); neighbourhood(); city(); imageToModel();
+  window_(); door(); wallSeed(); toilet(); sink(); bed(); fittingsAll(); room(); house(); car(); grass(); terrain(); road(); stoplight(); crossing(); roads(); neighbourhood(); city(); imageToModel(); springChecked();
 }
 makeSeeds();

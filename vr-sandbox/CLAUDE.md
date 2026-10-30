@@ -218,6 +218,8 @@ the task list and lose the why. So the why lives here, and every round is checke
   that you wouldn't normally expect a lot of the tools you have you know can be more advanced" (2026-10-30: tools built
   once for every category; first, Fit to a target (`fit.target`, `dataflow.ts`): any block or folded pipeline fitted to
   its goals, each value with its ±; the minimiser and the fit with ± in `numeric.ts`, driven at once or by a board's run)
+- "Okay yes but I need ss updates frequently" (2026-10-30): screenshots of what was made, sent as each piece of work
+  lands (the board in the app, the thing in 3D), not only at the end of a round
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say

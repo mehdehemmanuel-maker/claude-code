@@ -16,7 +16,7 @@ import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type
 import { fromSI, sameDim, toSI } from '../ganglia/units';
 import type { Part } from './kits';
 import { boundsOfAll, designOf, fromLibrary, hash, isAssembly, isPart, massOfAll, place, type Assembly, type Placed } from './assembly';
-import { fitByAsync } from './numeric';
+import { fitByAsync, minimizeAsync } from './numeric';
 import { atDetailAsync } from './lod';
 const P_ = (name: string, type: Type): PortDef => ({ name, type }), PL = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
 
@@ -776,6 +776,78 @@ register({ version: 1, by: 'built in', pure: true, id: 'what.matters', name: 'Se
   },
   // (a bar's stress σ = F / A: its load moves it more than its area over these ranges, and both move it)
   tests: [{ set: { block: 'law.stress.axial', vary: 'F 1000..5000\nA 0.001..0.002', watch: 'sigma', paths: 6 }, inputs: {}, outputs: { nothing: [], ranked: { sigma: ['F', 'A'] } } }] } as BlockDef);
+
+// ---- trade-offs: the best of anything when its goals pull against each other ------------------------------------------------
+/** What is moved, each line "name lo..hi": a block's inputs or settings, checked against it. */
+function rangesOf(t: BlockDef, set0: Record<string, unknown>, text: string): { name: string; lo: number; hi: number; isSet: boolean }[] {
+  const ins = new Set(portsOf(t, set0).inputs.map((q) => q.name)), keysOf = new Set((t.settings ?? []).map((q) => q.key));
+  return text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = /^(\S+)\s+(-?[\d.eE+-]+)\s*\.\.\s*(-?[\d.eE+-]+)$/.exec(l); if (!m) throw new Error(`"${l}": a line is a name and its range, as "bore 0.06..0.1"`);
+    if (!ins.has(m[1]!) && !keysOf.has(m[1]!)) throw new Error(`the ${t.name} has no input or setting "${m[1]}"`); return { name: m[1]!, lo: Number(m[2]), hi: Number(m[3]), isSet: !ins.has(m[1]!) }; });
+}
+/** The k-th point of Halton's sequence in base b: points that fill a range evenly, each new one in the biggest gap left. */
+function halton(k: number, b: number): number { let f = 1, r = 0; for (let i = k; i > 0; i = Math.floor(i / b)) { f /= b; r += f * (i % b); } return r; }
+const PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
+register({ version: 1, by: 'built in', pure: true, id: 'trade.offs', name: 'Pareto front (trade-offs)', kind: 'solver', ability: 'optimise', domains: ['mechanical', 'structural', 'electrical', 'vehicles', 'finance', 'everyday'],
+  spec: { gloss: 'When its goals pull against each other (light against strong, cheap against fast), which designs are best, and what does each give up?', discipline: 'mechanical.design', role: 'numerical solver', codes: [{ scheme: 'MSC2020', code: '90C29', label: 'Multi-objective and goal programming' }, { scheme: 'MSC2020', code: '90C56', label: 'Derivative-free methods and methods using generalized derivatives' }],
+    model: { equations: ['a design is on the front when no other meeting every limit is as good on every goal and better on one (Pareto)', 'each value spread over its range by Halton\'s sequence; then for each weight w, minimise max_k w_k (f_k − f_k*) / (f_k⁺ − f_k*) + 0.01 Σ_k (f_k − f_k*) / (f_k⁺ − f_k*) + 100 Σ (limit missed / limit)² (augmented Chebyshev: it reaches the front where it bends inward too)', 'its knee: the design on the front nearest the ideal (each goal at its best), each goal scaled by its spread'], class: 'analytical', time: 'steady', linear: false,
+      method: 'Halton sampling, then Nelder–Mead on each weight\'s Chebyshev distance, from the best sampled for it, within the ranges; every design tried kept, the front taken from all of them', references: ['Miettinen, Nonlinear Multiobjective Optimization, Kluwer (1999), ch. 3.4 (achievement functions)', 'Steuer & Choo, An interactive weighted Tchebycheff procedure, Math. Program. 26, 326 (1983)', 'Halton, Numer. Math. 2, 84 (1960)', 'Das & Dennis, A closer look at drawbacks of minimizing weighted sums of objectives, Struct. Optim. 14, 63 (1997)'] } },
+  says: 'Any block, or any pipeline folded into one, with goals that pull against each other (as light as can be and as stiff as can be; as cheap and as fast), and limits it must keep (a factor of safety over 1.5): many designs tried across its ranges, and the best kept, those that no other beats on every goal at once. Each with what it gives on every goal, the one in the middle that gives up least (its knee), and what each made laid out side by side. The choice between them is yours: this shows what each costs',
+  settings: [{ key: 'block', label: 'Block (its id)', type: 'text', default: 'seed.spring-checked' }, { key: 'vary', label: 'Moved, each a line: name from..to', type: 'code', default: 'd 0.002..0.005\nD 0.015..0.035\nn 3..10' },
+    { key: 'goals', label: 'Goals, each a line: output min, output max; limits: output < v, output > v', type: 'code', default: 'mass min\nrate max\nworst > 1.2' },
+    { key: 'samples', label: 'Designs spread first', type: 'number', default: 40 }, { key: 'weights', label: 'Then refined toward, weights', type: 'number', default: 6 }, { key: 'most', label: 'Trials each', type: 'number', default: 30 }, { key: 'blockSet', label: 'Its other settings (JSON)', type: 'code', default: '{}' }],
+  ports: (st) => { const t = block(String(st.block ?? 'seed.spring-checked')), set = (() => { try { return JSON.parse(String(st.blockSet ?? '{}')) as Record<string, unknown>; } catch { return {}; } })(), moved = new Set(String(st.vary ?? '').split('\n').map((l) => l.trim().split(/\s+/)[0]).filter(Boolean));
+    const ins = t ? portsOf(t, { ...defaultsOf(t), ...set }).inputs.filter((q) => !moved.has(q.name)).map((q) => ({ ...q, optional: true })) : [];
+    return { inputs: ins, outputs: [PL('front', 'table', { label: 'the best: none beaten on every goal' }), PL('knee', 'record', { label: 'the one that gives up least' }), PL('xs', 'list<number>', { label: 'the front, its first goal' }), PL('ys', 'list<number>', { label: 'the front, its second goal' }), PL('laid', 'assembly', { label: 'what each on the front made, side by side in a square' }), PL('tried', 'table', { label: 'every design tried' }), PL('says', 'text')] }; },
+  run: async (i, c) => {
+    const t = block(String(c.set.block)); if (!t || (!t.run && !t.graph)) throw new Error(`no block "${c.set.block}" that runs`);
+    let set0: Record<string, unknown>; try { set0 = { ...defaultsOf(t), ...(JSON.parse(String(c.set.blockSet ?? '{}')) as Record<string, unknown>) }; } catch { throw new Error('its settings are not JSON'); }
+    const vary = rangesOf(t, set0, String(c.set.vary ?? '')), lines = String(c.set.goals ?? '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const m = /^(\S+)\s*(min|max|<|>)\s*(-?[\d.eE+-]+)?$/.exec(l); if (!m || ((m[2] === '<' || m[2] === '>') && m[3] === undefined)) throw new Error(`"${l}": a goal is "output min" or "output max", a limit "output < v" or "output > v"`); return { name: m[1]!, op: m[2]!, v: Number(m[3] ?? 0) }; });
+    const goals = lines.filter((g) => g.op === 'min' || g.op === 'max'), limits = lines.filter((g) => g.op === '<' || g.op === '>');
+    if (!vary.length) throw new Error('give it something to move'); if (goals.length < 2) throw new Error('a trade-off needs two goals or more (one goal: Fit to a target)');
+    const runT = runnerOf(t), kept = new Map<string, { u: number[]; out: Outputs; f: number[]; miss: number }>();
+    // (each design kept by its values: f its goals, each to be made as small as it goes (a max turned round), miss how far it
+    // is outside its limits, 0 inside them)
+    const at = async (u0: number[]) => { const u = u0.map((x) => Math.min(1, Math.max(0, x))), key = u.map((x) => x.toFixed(6)).join(','); let d = kept.get(key);
+      if (!d) { const inp: Record<string, unknown> = { ...i }, set = { ...set0 }; vary.forEach((v, j) => { const x = v.lo + (v.hi - v.lo) * u[j]!; if (v.isSet) set[v.name] = x; else inp[v.name] = x; });
+        let out: Outputs; try { out = await runT(inp, set); } catch { out = {}; }
+        // (a goal may be one of the values moved itself: as little area as can be)
+        out = { ...Object.fromEntries(vary.map((v, j) => [v.name, v.lo + (v.hi - v.lo) * u[j]!])), ...out };
+        const f = goals.map((g) => { const y = Number(out[g.name]); return Number.isFinite(y) ? (g.op === 'min' ? y : -y) : Infinity; });
+        const miss = limits.reduce((s, g) => { const y = Number(out[g.name]), sc = Math.abs(g.v) || 1; return s + (!Number.isFinite(y) ? 1e3 : g.op === '>' ? Math.max(0, (g.v - y) / sc) ** 2 : Math.max(0, (y - g.v) / sc) ** 2); }, 0);
+        d = { u, out, f, miss }; kept.set(key, d); } return d; };
+    const nS = Math.max(4, Math.min(400, Math.round(Number(c.set.samples ?? 40)))), off = 1 + (Math.abs(Math.round(Number(c.set.seed ?? 0))) % 997);
+    for (let k = 0; k < nS; k++) await at(vary.map((_, j) => halton(k + off, PRIMES[j % PRIMES.length]!)));
+    if (![...kept.values()].some((d) => d.f.every(Number.isFinite))) throw new Error(`the ${t.name} gave no ${goals.map((g) => g.name).join(' or ')} anywhere in these ranges`);
+    // (each goal scaled from its best to its worst among designs that keep the limits; the refinement weights spread evenly)
+    const scale = () => { const ok = [...kept.values()].filter((d) => d.miss === 0 && d.f.every(Number.isFinite)), all = ok.length ? ok : [...kept.values()].filter((d) => d.f.every(Number.isFinite));
+      return goals.map((_, q) => { const ys = all.map((d) => d.f[q]!); const lo = Math.min(...ys), hi = Math.max(...ys); return { lo, span: hi - lo || Math.abs(lo) || 1 }; }); };
+    const nW = Math.max(0, Math.min(40, Math.round(Number(c.set.weights ?? 6)))), most = Math.max(5, Math.round(Number(c.set.most ?? 30))), g0 = rng(mixSeed(off, 0, 0));
+    for (let w = 0; w < nW; w++) {
+      const wt = goals.length === 2 ? [(w + 0.5) / nW, 1 - (w + 0.5) / nW] : (() => { const r = goals.map(() => -Math.log(g0() || 1e-9)), s = r.reduce((a, b) => a + b, 0); return r.map((x) => x / s); })();
+      const sc = scale(), cheb = (d: { f: number[]; miss: number }) => { const z = d.f.map((y, q) => (y - sc[q]!.lo) / sc[q]!.span); return Math.max(...z.map((x, q) => wt[q]! * x)) + 0.01 * z.reduce((a, b) => a + b, 0) + 100 * d.miss; };
+      const start = [...kept.values()].filter((d) => d.f.every(Number.isFinite)).sort((a, b) => cheb(a) - cheb(b))[0]!;
+      await minimizeAsync(async (u) => { const d = await at(u); return d.f.every(Number.isFinite) ? cheb(d) : 1e9; }, start.u, { step: vary.map(() => 0.08), most, lo: vary.map(() => 0), hi: vary.map(() => 1), ftol: 1e-6 });
+    }
+    // (the front: every design that keeps its limits and that no other beats on every goal at once)
+    const ok = [...kept.values()].filter((d) => d.miss === 0 && d.f.every(Number.isFinite));
+    const front = ok.filter((a) => !ok.some((b) => b !== a && b.f.every((y, q) => y <= a.f[q]!) && b.f.some((y, q) => y < a.f[q]!))).sort((a, b) => a.f[0]! - b.f[0]!);
+    const sc = scale(), knee = front.length ? front.map((d) => ({ d, r: Math.hypot(...d.f.map((y, q) => (y - sc[q]!.lo) / sc[q]!.span)) })).sort((a, b) => a.r - b.r)[0]!.d : undefined;
+    const valsOf = (d: { u: number[] }) => Object.fromEntries(vary.map((v, j) => [v.name, +(v.lo + (v.hi - v.lo) * d.u[j]!).toPrecision(4)]));
+    const rowOf = (d: { u: number[]; out: Outputs }) => ({ ...valsOf(d), ...Object.fromEntries([...goals, ...limits].map((g) => [g.name, +Number(d.out[g.name]).toPrecision(4)])) });
+    const things = front.map((d) => Object.values(d.out).find((v) => isPart(v) || isAssembly(v)) as Part | Assembly | undefined).filter((x): x is Part | Assembly => !!x);
+    // (in a square, the front's order along each row then back row by row, each cell as wide as the widest and a quarter
+    // more: seen together close up, not strung out where the far ones are drawn as boxes)
+    const boxes = things.map((th) => boundsOfAll(th)), cell = 1.25 * Math.max(1e-3, ...boxes.map((b) => (b.isEmpty() ? 0 : Math.max(b.max.x - b.min.x, b.max.z - b.min.z)))), cols = Math.ceil(Math.sqrt(things.length)), x = cols * cell - cell;
+    const items: Placed[] = things.map((th, k) => { const b = boxes[k]!, cx = b.isEmpty() ? 0 : (b.min.x + b.max.x) / 2, cz = b.isEmpty() ? 0 : (b.min.z + b.max.z) / 2; return place(th, [(k % cols) * cell - cx, b.isEmpty() ? 0 : -b.min.y, Math.floor(k / cols) * cell - cz]); });
+    const sign = (q: number) => (goals[q]!.op === 'min' ? 1 : -1);
+    return { front: front.map((d) => ({ ...rowOf(d), knee: d === knee ? '◆' : '' })), knee: knee ? rowOf(knee) : {}, xs: front.map((d) => sign(0) * d.f[0]!), ys: front.map((d) => sign(1) * d.f[1]!),
+      laid: { name: `${t.name}: its front`, items: items.map((it) => ({ ...it, at: [it.at[0] - x / 2, it.at[1], it.at[2] - (Math.ceil(things.length / cols) - 1) * cell / 2] as [number, number, number] })) } as Assembly,
+      tried: [...kept.values()].map((d) => ({ ...rowOf(d), keeps: d.miss === 0 ? 'yes' : 'no' })),
+      says: `${t.name}: ${kept.size} designs tried, ${ok.length} keep ${limits.length ? limits.map((g) => `${g.name} ${g.op} ${g.v}`).join(', ') : 'every limit'}, ${front.length} on the front (${goals.map((g) => `${g.name} ${g.op}`).join(' against ')})${knee ? `; giving up least: ${Object.entries(rowOf(knee)).map(([k, v]) => `${k} ${v}`).join(', ')}` : ''}${limits.length && !ok.length ? '; none keeps the limits in these ranges' : ''}` };
+  },
+  // (a bar: as little area as can be, as low a stress as can be; every area trades one for the other, so the front runs
+  // along the whole range, and a limit on stress cuts off its thin end)
+  tests: [{ set: { block: 'law.stress.axial', vary: 'A 0.001..0.01', goals: 'A min\nsigma min\nsigma < 4e6', samples: 12, weights: 2, most: 10 }, inputs: { F: 10000 }, outputs: { knee: {} }, rel: 1 }] } as BlockDef);
 
 const PLACE_COLS = new Set(['x', 'y', 'z', 'rx', 'ry', 'rz', 's']);
 register({ id: 'spawn', name: 'Spawn', kind: 'generator', ability: 'generate', domains: ['everyday', 'structural', 'operations'], version: 1, by: 'built in', pure: true,

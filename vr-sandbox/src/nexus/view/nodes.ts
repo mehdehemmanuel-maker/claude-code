@@ -287,7 +287,7 @@ function paintMap(dpr: number, W0: number, H0: number): void {
   mapBox = { x: bx, y: by, w: mw, h: mh, x0, y0, s: sc };
 }
 function paintBody(id: string, gg: Geo, s: NodeState | undefined): void {
-  const n = cur().nodes[id]!, x = gg.x + 10, y = gg.bodyY, w = gg.w - 20, h = gg.bodyH - 6, inV = local.board === cur() ? local.wiresInto(id)[0] : undefined;
+  const n = cur().nodes[id]!, x = gg.x + 10, y = gg.bodyY, w = gg.w - 20, h = gg.bodyH - 6, inV = local.board === cur() ? (local.wiresInto(id).find((e) => e.in === 'y') ?? local.wiresInto(id)[0]) : undefined; // (a chart is drawn from its y, whichever was wired first)
   const inState = inV ? stateOf(inV.from) : undefined, val = inV ? inState?.out?.[inV.out!] : undefined, op = inV ? geo(inV.from).outs.find((q) => q.p.name === inV.out)?.p : undefined;
   rr(x, y, w, h, 8); g.fillStyle = '#080c13'; g.fill();
   const b = n.block;
