@@ -188,6 +188,22 @@ function sharpLathe(pts: [number, number][], facets: number): THREE.BufferGeomet
   if (geos.length === 1) return geos[0]!;
   const m = mergeGeometries(geos, false); return m ?? new THREE.LatheGeometry(v, facets);
 }
+/** A turned profile with its longest run at its largest radius cut as an ISO metric thread of pitch P: a right-hand
+ *  helix, its flanks at 60°, its depth 0.6134 P below the major diameter (ISO 68-1, external), its crest flat for P/8.
+ *  The rest of the profile turned as it is. Ten rows to a pitch: a close-up's worth, so only where drawn close. */
+export function threadedLathe(pts: [number, number][], P: number, facets = 48): THREE.BufferGeometry {
+  const R = Math.max(...pts.map(([r]) => r)); let at = -1, run = 0;
+  for (let i = 0; i + 1 < pts.length; i++) if (Math.abs(pts[i]![0] - R) < 1e-9 && Math.abs(pts[i + 1]![0] - R) < 1e-9 && Math.abs(pts[i + 1]![1] - pts[i]![1]) > run) { at = i; run = Math.abs(pts[i + 1]![1] - pts[i]![1]); }
+  if (at < 0 || run < 2 * P) return sharpLathe(pts, facets);
+  const y0 = pts[at]![1], y1 = pts[at + 1]![1], h = 0.6134 * P, rows = Math.ceil((run / P) * 10), pos: number[] = [], uv: number[] = [], idx: number[] = [];
+  // (the radius at a height and an angle: a triangle wave along the helix, its crest flat for an eighth of a pitch)
+  const rAt = (y: number, phi: number) => { const f = ((((y - y0) / P - phi / (2 * Math.PI)) % 1) + 1) % 1, tri = Math.abs(2 * f - 1); return R - h * Math.max(0, Math.min(1, (tri - 0.125) / 0.875)); };
+  for (let j = 0; j <= rows; j++) { const y = y0 + ((y1 - y0) * j) / rows; for (let i = 0; i <= facets; i++) { const phi = (2 * Math.PI * i) / facets, r = rAt(y, phi); pos.push(r * Math.sin(phi), y, r * Math.cos(phi)); uv.push(i / facets, j / rows); } }
+  for (let j = 0; j < rows; j++) for (let i = 0; i < facets; i++) { const a = j * (facets + 1) + i, b = a + facets + 1; if (y1 < y0) idx.push(a, b, a + 1, b, b + 1, a + 1); else idx.push(a, a + 1, b, b, a + 1, b + 1); }
+  const helix = new THREE.BufferGeometry(); helix.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); helix.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); helix.setIndex(idx); helix.computeVertexNormals();
+  const ends = [pts.slice(0, at + 1), pts.slice(at + 1)].filter((e) => e.length >= 2).map((e) => sharpLathe(e, facets));
+  return mergeGeometries([...ends, helix.toNonIndexed()], false) ?? sharpLathe(pts, facets);
+}
 /** A cylinder (or a tapered one) with its rims rounded to r: a lathed profile. */
 export function filletCyl(r0: number, h: number, r1: number, f: number, seg = 24): THREE.BufferGeometry {
   if (f < 1e-4) return new THREE.CylinderGeometry(r1, r0, h, seg);
@@ -412,6 +428,8 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
   const swingers: ((t: number, f: number) => void)[] = []; let clockT = 0;
   const group = new THREE.Group(), turners: ((dt: number) => void)[] = [], nodes: { obj: THREE.Object3D; home: THREE.Vector3; depth: number }[] = [];
   let lights = 0; const maxL = o.maxLights ?? 6;
+  // (threads cut only where a few are drawn, close: a bolt alone, not each of a car's thousand)
+  let threads = 0; const countThreads = (p: Part) => { if (p.pitch) threads++; p.parts?.forEach(countThreads); }; countThreads(root); const cut = threads > 0 && threads <= 24;
   const draw = (p: Part, depth: number): THREE.Object3D => {
     const g = new THREE.Group(); g.name = p.name; g.userData.part = p;
     if (p.at) g.position.set(...p.at); if (p.rot) g.rotation.set(...p.rot);
@@ -419,7 +437,7 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
       if ('stars' in p.shape) { const gx = galaxy(p.shape.stars); g.add(gx.obj); turners.push(gx.turn); }
       else if ('field' in p.shape) g.add(land(p.shape.field));
       else if ('heap' in p.shape) g.add(heap(p.shape.heap));
-      else { const geo = geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.look?.wear) surfaceShape(geo); if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape, p.look))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+      else { const geo = cut && p.pitch && 'lathe' in p.shape ? threadedLathe(p.shape.lathe, p.pitch) : geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.look?.wear) surfaceShape(geo); if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape, p.look))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
     }
     else if (p.item && !p.parts?.length) {
       // a part that is an item of the inventory and has no shape of its own: drawn as that item looks, at its size (not

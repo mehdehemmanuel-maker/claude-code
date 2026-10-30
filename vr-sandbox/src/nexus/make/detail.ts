@@ -70,6 +70,8 @@ function onShape(to: Node, at: THREE.Vector3, margin: number): boolean {
   if ('lathe' in s) return Math.hypot(at.x, at.z) <= Math.max(...s.lathe.map(([r]) => r)) - margin;
   if ('sphere' in s) return at.length() <= s.sphere + margin;
   if ('loft' in s) { const st = stationAt(s.loft, at.x); return !!st && insideBy(st, at.y, at.z * 0.98) > -1e-3 && (surfaceZ(st, at.y) ?? 0) + 0.01 >= Math.abs(at.z) - 0.01; }
+  // (a tube by its run, not its box: a bent or slanted tube's box is mostly air, and a screw laid on it floats)
+  if ('tube' in s) { const q = s.tube.pts.map((x) => new THREE.Vector3(...x)), seg = new THREE.Line3(), near = new THREE.Vector3(); let d = Infinity; for (let i = 1; i < q.length; i++) { seg.set(q[i - 1]!, q[i]!); seg.closestPointToPoint(at, true, near); d = Math.min(d, near.distanceTo(at)); } return d <= s.tube.r + margin; }
   return true;
 }
 /** Whether a fastener's head (a stack r round and h high on host's face at `at`, standing out along its axis k, sign sk)

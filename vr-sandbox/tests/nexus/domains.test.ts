@@ -18,6 +18,7 @@ import { builtOf } from '../../src/nexus/evidence';
 import { parseUnit } from '../../src/ganglia/units';
 import { run } from '../../src/nexus/view/code-worker';
 import { builtPieces, stockProblems } from '../../src/nexus/stock';
+import { KITS, makeKit } from '../../src/nexus/kits';
 
 // a board's code blocks run here as the page's worker runs them
 const env: Env = { code: async (lang, code, inputs) => (await run({ id: 0, lang: lang as 'js', code, facts: {}, input: '', vars: inputs })).value };
@@ -71,6 +72,11 @@ describe('every domain, in one pass', () => {
     expect(p.outdated.length, `${p.outdated.length} pieces stored that no build makes any more (UPDATE_DOCS=quick deletes them): ${say(p.outdated)}`).toBe(0);
     expect(p.misplaced.length, `${p.misplaced.length} pieces stored where their build no longer has them (UPDATE_DOCS=quick): ${say(p.misplaced)}`).toBe(0);
   }, 120_000);
+  // (a kit given words that name another kit's thing makes that thing and says so, never a random one of its own)
+  it('words that name another kit are made by it, and it is said', () => {
+    const car = KITS.find((k) => k.id === 'car')!;
+    for (const [w, id] of [['rancher', 'atv'], ['cascadia', 'semi truck'], ['corolla', 'car']] as const) { const m = makeKit(car, w, 7); expect(m.kit.id, w).toBe(id); expect(!!m.moved, w).toBe(id !== 'car'); }
+  });
   for (const d of DOMAINS) {
     it(d.name, async () => {
       const nodes = [...LIBRARY.values()].filter((b: BlockDef) => b.domains.includes(d.id));

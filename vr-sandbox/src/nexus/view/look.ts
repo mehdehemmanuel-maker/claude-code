@@ -57,7 +57,7 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(6, 10, 5
 scene.add(sun, new THREE.HemisphereLight(0xdfe8f2, 0x6a645c, 0.3));
 const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ color: 0xb8bbbf, roughness: 0.95 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 const made = makeKit(kit, words, seed), part = q.get('perfect') === '0' ? made.part : perfect(made.part, words).part, view = kitView(part, { maxLights: 0 });
-scene.add(view.group);
+scene.add(view.group); if (made.moved) console.info(made.moved);
 // (exploded, the whole set back on the floor: what moved down is lifted with the rest, not sunk under it)
 if (q.get('explode')) { view.explode(Number(q.get('explode'))); const b0 = new THREE.Box3().setFromObject(view.group); if (!b0.isEmpty() && b0.min.y < 0) view.group.position.y -= b0.min.y; }
 // a pose: each wheel that steers turned, each that rises risen, and what is carried with it moved with it
@@ -168,7 +168,7 @@ function landmarksOf(side: number): Record<string, number[]> {
 }
 const look = {
   parts: () => meshes.filter((m) => m.visible).map((m) => { const p = (m.userData.part ?? {}) as { mat?: string; finish?: string; says?: string; shell?: number }, b = new THREE.Box3().setFromObject(m); return { name: m.name, path: pathOf(m), mat: p.mat, finish: p.finish, color: hex(m), says: p.says, shell: p.shell, link: linkOfObj(m) || undefined, joint: (p as Part).joint, min: r3(b.min), max: r3(b.max), tris: (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position').count) / 3 }; }),
-  facts: () => ({ name: part.name, says: (part as { says?: string }).says, size: r3(size), parts: meshes.length, made: (made as { says?: string }).says }),
+  facts: () => ({ name: part.name, says: (part as { says?: string }).says, size: r3(size), parts: meshes.length, made: (made as { says?: string }).says, moved: made.moved }),
   pick: (x: number, y: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera); const hit = ray.intersectObjects(meshes.filter((m) => m.visible), false)[0]; if (!hit) return null; const p = (hit.object.userData.part ?? {}) as { says?: string; mat?: string }; return { name: hit.object.name, path: pathOf(hit.object), at: r3(hit.point), distance: +hit.distance.toFixed(3), mat: p.mat, says: p.says }; },
   clash: (touch = 0.001) => meshClashes(meshes.filter((m) => m.visible).map(worldTris), { touch }),
   // where points of the thing fall in the picture (CSS pixels), and where a pixel falls on a plane z = const (the side

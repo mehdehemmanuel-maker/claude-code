@@ -1316,3 +1316,15 @@ shield hung 0.75 bore below the log manifold, low enough to reach into the alter
 still covering the manifold's face. The banked engine's oil filter sat under the hot bank by the front; on a V it now
 sits on the far side, 0.35 of the block's length back (an inline engine keeps its place). The rules check on the V6:
 10 findings → 0. The gate: 23 of 23, 40.4 s.
+- **2026-10-30, the build gallery, four of its five faults.** (1) The car kit given "rancher" or "cascadia" drew a
+random car without a word: a kit now knows its machines by their short names, and words that name another kit's thing
+and not its own are made by that kit and said so ("\"rancher\" names an ATV, not a car: made as an ATV"; on the look
+page's console and in `facts().moved`); checked in the one test. (2) Specks floated by the ATV's bars and the dirt bike's
+front: screws laid on a tube were laid on its box, mostly air for a slanted one (`onShape` now reads a tube by its run).
+The dirt bike's number plate leaned forward off its fork; it now lies along the fork in front of its legs. (3) The bolt's
+thread was a smooth cylinder: its pitch is now on its part, and the renderer cuts it as an ISO thread (60° flanks, 0.6134
+P deep, ten rows to a pitch) where 24 threaded parts or fewer are drawn, so a car's thousands are not. (4) The lawn
+tractor's deck hung at foot height, 12 cm deep, and read as a footboard: it now hangs at a 2.5 in cut, its lip 40 mm
+off the ground, 5.5 in deep, with a side chute and anti-scalp wheels (typical); the rules check still clean. Left: the
+Monte Carlo's end plates (item 4's last); the dirt bike's 3 and the ATV's 1 rules findings (frame tubes meeting at their
+joints, there before this). The gate: 24 of 24, 45.6 s.

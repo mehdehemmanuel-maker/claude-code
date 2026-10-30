@@ -74,11 +74,11 @@ const threadFill = (d: number, P0: number) => ((d - 0.6495 * P0) / d) ** 2;
  *  root's bore. */
 const nutFill = (s: number, d: number, P0: number) => { const A = ((3 * Math.sqrt(3)) / 2) * (s / Math.sqrt(3)) ** 2, r1 = (d - 1.0825 * P0) / 2, r2 = (d - 0.6495 * P0) / 2; return (A - PI * r2 * r2) / (A - PI * r1 * r1); };
 /** A shank: plain under the head for a, then its thread to its end, the end chamfered to the thread's root. The thread is
- *  drawn as its major cylinder (its helix not drawn) and finished as a rolled thread. */
+ *  its major cylinder and its pitch: the renderer cuts its helix where it is drawn close, and finishes it as rolled. */
 const shank = (name: string, d: number, P0: number, L: number, a: number, at: Partial<Part>): Part[] => {
   const root = (d - 1.0825 * P0) / 2, out: Part[] = [];
   if (a > 0) out.push(P(name, lathe([[0, 0], [d / 2, 0], [d / 2, -a], [0, -a]]), at));
-  out.push(P(name, lathe([[0, -a], [d / 2, -a], [d / 2, -L + P0], [root, -L], [0, -L]]), { ...at, finish: 'thread', fill: threadFill(d, P0) }));
+  out.push(P(name, lathe([[0, -a], [d / 2, -a], [d / 2, -L + P0], [root, -L], [0, -L]]), { ...at, finish: 'thread', fill: threadFill(d, P0), pitch: P0 * mm }));
   return out;
 };
 const P = (name: string, shape: Part['shape'], more: Partial<Part> = {}): Part => ({ name, shape, at: [0, 0, 0], ...more });
@@ -201,7 +201,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   threadedrod: {
     says: 'DIN 976: threaded its whole length', leaves: 'the thread drawn as its major cylinder',
-    make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.length), mat = matIn(it), root = (d - 1.0825 * P0) / 2; return [P(it.name, lathe([[0, -L / 2], [root, -L / 2], [d / 2, -L / 2 + P0], [d / 2, L / 2 - P0], [root, L / 2], [0, L / 2]]), { mat, ...looks(it, mat), finish: 'thread', fill: threadFill(d, P0) })]; },
+    make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.length), mat = matIn(it), root = (d - 1.0825 * P0) / 2; return [P(it.name, lathe([[0, -L / 2], [root, -L / 2], [d / 2, -L / 2 + P0], [d / 2, L / 2 - P0], [root, L / 2], [0, L / 2]]), { mat, ...looks(it, mat), finish: 'thread', fill: threadFill(d, P0), pitch: P0 * mm })]; },
     iface: (p) => [{ kind: 'studs', role: 'provides', d: thr(p).d * mm, n: 1 }],
   },
   dowel: {

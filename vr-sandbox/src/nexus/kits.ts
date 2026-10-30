@@ -92,6 +92,7 @@ export interface Part {
    *  or joined to by the joints laid on it, welded, bolted, screwed or sealed (the joints rule's) */ joins?: string[];
   /** characters printed on its broad faces (a number plate's), dark on its own colour */ text?: string;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
+  /** a thread's pitch, m: its helix cut into its major cylinder where it is drawn close (a part alone, a few fasteners) */ pitch?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far
    *  in bump (m) — so the room kept round it is the room it sweeps through all of that; or how a part slides, with all of
@@ -625,9 +626,13 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
   return out;
 }
 /** A thing made by a kit from words: its choices, its parts, its mass. */
-export function makeKit(k: Kit, words: string, seed: number): { kit: Kit; pick: Pick; part: Part } {
+export function makeKit(k: Kit, words: string, seed: number): { kit: Kit; pick: Pick; part: Part; moved?: string } {
+  // (words that name another kit and not this one are made by the kit they name, and it is said: never a random one of
+  // this kit drawn in their place without a word)
+  let moved: string | undefined;
+  if (words && !k.words.test(words)) { const o = KITS.find((x) => x !== k && x.words.test(words)); if (o) { const a = (n: string) => `${/^[aeiou]/i.test(n) ? 'an' : 'a'} ${n}`; moved = `"${words}" names ${a(o.name)}, not ${a(k.name)}: made as ${a(o.name)}`; k = o; } }
   let s = seed >>> 0 || 1; const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   const sub = (id: string, over: Pick = {}): Part => { const kk = byId.get(id)!; const pick = { ...choose(kk, '', r), ...over }; return { ...kk.build(pick, r, sub), kit: kk.id }; };
-  const pick = choose(k, words, r); return { kit: k, pick, part: { ...k.build(pick, r, sub), kit: k.id } };
+  const pick = choose(k, words, r); return { kit: k, pick, part: { ...k.build(pick, r, sub), kit: k.id }, ...(moved ? { moved } : {}) };
 }
 

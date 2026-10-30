@@ -1406,7 +1406,9 @@ function made(m: Machine, pick: Pick = {}): Part {
     out.push(loft('rear fenders', [{ x: (front + rear) / 2 - 0.1, w: 0.25, lo: ry - 0.1, hi: m.seatH ?? ry, n: 4 }, { x: rear + rt.D * 0.5, w: m.W / 2 - 0.04, lo: ry - 0.07, hi: ry - 0.01, n: 8 }, { x: rear, w: m.W / 2, lo: ry - 0.05, hi: ry + 0.01, n: 8 }, { x: -m.L / 2 + 0.03, w: m.W / 2 - 0.06, lo: ry - 0.09, hi: ry - 0.03, n: 6 }], 'pp', col, { shell: 0.003, finish: 'paint' }));
   }
   if (ex.has('tank')) out.push(loft('tank and shrouds', [{ x: front - 0.3, w: 0.17, lo: m.H * 0.6, hi: m.H * 0.8, n: 3 }, { x: front - 0.55, w: 0.16, lo: m.H * 0.55, hi: (m.seatH ?? m.H * 0.75) + 0.02, n: 3 }, { x: front - 0.75, w: 0.1, lo: m.H * 0.6, hi: (m.seatH ?? m.H * 0.75) - 0.01, n: 3 }], 'pe', col, { shell: 0.004, finish: 'paint', says: 'the fuel tank under its radiator shrouds (typical of motocross)' }));
-  if (ex.has('number')) out.push(P('race number board', { box: [0.02, 0.2, 0.26] }, [front - 0.22, m.H * 0.82, 0], { rot: [0, 0, -(m.rake ?? 0.47)], mat: 'pp', color: 0xf2f2ee, shell: 0.003, finish: 'texture' }));
+  // (along its fork, in front of its legs, from its top clamp down: as a number plate is strapped to a motocross fork)
+  if (ex.has('number')) { const ft0 = tyres[0]!, top: [number, number] = [front - 0.32 + 0.03, m.H * 0.78 + 0.08], dx0 = front - 0.01 - top[0], dy0 = ft0.D / 2 - top[1], len0 = Math.hypot(dx0, dy0), u = [dx0 / len0, dy0 / len0] as const, n = [-u[1], u[0]] as const, off = 0.024 + 0.01 + 0.012;
+    out.push(P('race number board', { box: [0.02, 0.2, 0.26] }, [top[0] + u[0] * 0.13 + n[0] * off, top[1] + u[1] * 0.13 + n[1] * off, 0], { rot: [0, 0, Math.atan2(u[0], -u[1])], mat: 'pp', color: 0xf2f2ee, shell: 0.003, finish: 'texture', fixed: 'strapped round its fork legs', says: 'its front number plate, moulded polypropylene (typical)' })); }
   if (ex.has('hood') && m.kind === 'mower') out.push(loft('hood', [{ x: m.L / 2 - 0.02, w: 0.2, lo: c + 0.24, hi: m.H * 0.55, n: 5 }, { x: front + 0.05, w: 0.27, lo: c + 0.26, hi: m.H * 0.62, n: 6 }, { x: (front + rear) / 2 + 0.15, w: 0.28, lo: c + 0.27, hi: m.H * 0.64, n: 6 }], 'abs', col, { shell: 0.003, finish: 'paint' }));
   if (ex.has('cab') && tb) out.push(dayCab(tb), hood(tb, travelOf(m.axles[0]!).bump), bumper(tb));
   else if (ex.has('cab')) {
@@ -1466,9 +1468,15 @@ function made(m: Machine, pick: Pick = {}): Part {
   }
   if (ex.has('deck')) {
     // a 42 in twin-blade deck: its housing as wide as its cut and two blades' circles side by side, short front to back
-    const cut = 1.067, dz = cut / 2 + 0.06, dxw = cut / 4 + 0.03, dx = (front - fR + rear + rR) / 2, dy = c + 0.1;
-    out.push(loft('mower deck', [{ x: -dxw, w: dz * 0.9, lo: -0.02, hi: 0.06, n: 4 }, { x: 0, w: dz, lo: -0.04, hi: 0.08, n: 5 }, { x: dxw, w: dz * 0.9, lo: -0.02, hi: 0.06, n: 4 }], 'steel-low', m.color, { at: [dx, dy, 0], shell: 0.0027, finish: 'paint', says: 'a 42 in deck of 12-gauge steel (John Deere\'s Accel Deep deck: 2.7 mm)', parts: [-1, 1].map((s2) => P(`mower blade ${s2 > 0 ? 'right' : 'left'}`, { box: [0.05, 0.005, cut / 2 - 0.02] }, [0, -0.025, s2 * cut / 4], { mat: 'steel-alloy', color: 0x9a9a9a, finish: 'brushed', says: 'a 21 in blade, its tip at about 5,500 m/min (ANSI B71.1 caps it at 19,000 ft/min, 5,791 m/min)' })) }));
-    for (const s2 of [-1, 1]) out.push(tube(`deck hanger ${s2 > 0 ? 'right' : 'left'}`, 0.008, [[dx, dy + 0.075, s2 * half * 0.8], [dx + 0.05, c + 0.22, s2 * half * 0.8]], 'steel-low', 0x2a2a2a));
+    // (hung at a middle cut, 2.5 in: its skirt's lip about 40 mm above the ground and its blades at the cut, its housing
+    // 5.5 in deep, as an Accel Deep deck's is; a side chute on its right, an anti-scalp wheel at each front corner; typical)
+    const cut = 1.067, dz = cut / 2 + 0.06, dxw = cut / 4 + 0.03, dx = (front - fR + rear + rR) / 2, lip = 0.04, deep = 0.14, dy = lip + 0.05;
+    out.push(loft('mower deck', [{ x: -dxw, w: dz * 0.9, lo: lip + 0.012 - dy, hi: lip + deep * 0.8 - dy, n: 4 }, { x: 0, w: dz, lo: lip - dy, hi: lip + deep - dy, n: 5 }, { x: dxw, w: dz * 0.9, lo: lip + 0.012 - dy, hi: lip + deep * 0.8 - dy, n: 4 }], 'steel-low', m.color, { at: [dx, dy, 0], shell: 0.0027, finish: 'paint', says: 'a 42 in deck of 12-gauge steel, 5.5 in deep (John Deere\'s Accel Deep deck: 2.7 mm), hung at a 2.5 in cut', parts: [
+      ...[-1, 1].map((s2) => P(`mower blade ${s2 > 0 ? 'right' : 'left'}`, { box: [0.05, 0.005, cut / 2 - 0.02] }, [0, 0.0635 - dy, s2 * cut / 4], { mat: 'steel-alloy', color: 0x9a9a9a, finish: 'brushed', says: 'a 21 in blade at a 2.5 in cut, its tip at about 5,500 m/min (ANSI B71.1 caps it at 19,000 ft/min, 5,791 m/min)' })),
+      P('discharge chute', { box: [0.26, 0.09, 0.2] }, [-0.02, lip + 0.05 - dy, dz + 0.08], { rot: [0.25, 0, 0], mat: 'pp', color: 0x1a1a1a, finish: 'matte', fixed: 'hinged on its deck\'s side, sprung down', says: 'its side discharge chute, moulded polypropylene (typical)' }),
+      ...[-1, 1].map((s2) => P(`anti-scalp wheel ${s2 > 0 ? 'right' : 'left'}`, { cyl: [0.035, 0.025] }, [dxw + 0.04, lip + 0.035 - 0.03 - dy, s2 * (dz - 0.04)], { rot: [PI / 2, 0, 0], mat: 'pp', color: 0x1a1a1a, finish: 'matte', fixed: 'on a bolt through a bracket welded to its deck', says: 'an anti-scalp wheel, 70 mm, riding 5 mm over level ground (typical)' })),
+    ] }));
+    for (const s2 of [-1, 1]) out.push(tube(`deck hanger ${s2 > 0 ? 'right' : 'left'}`, 0.008, [[dx, lip + deep - 0.005, s2 * half * 0.8], [dx + 0.05, c + 0.22, s2 * half * 0.8]], 'steel-low', 0x2a2a2a));
   }
   // a rack: two rails, bars across coped to them (each bar's end as far into its rail as the rail's round lets its rim
   // reach the rail's face, so the end is hidden in it), and posts 16 mm down to the frame, each end inside what it meets
@@ -1875,8 +1883,10 @@ const COLOURS: [string, number][] = [['white', 0xf2f2ee], ['black', 0x17181a], [
 const colourOf = (n: string | number | undefined, d: number) => COLOURS.find(([c]) => c === n)?.[1] ?? d;
 const machineKit = (id: string, name: string, words: RegExp, kinds: string[], says: string, more: Choice[] = []): Kit => {
   const ms = MACHINES.filter((m) => kinds.includes(m.kind));
+  // (its words, and each of its models by its own short name: "rancher" is an ATV, not a car of no kind)
+  const shorts = ms.map((m) => m.short).filter((x): x is string => !!x).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   return {
-    id, name, words, says,
+    id, name, words: shorts.length ? new RegExp(`${words.source}|\\b(?:${shorts.join('|')})\\b`, 'i') : words, says,
     choices: [{ key: 'model', name: 'model', options: ms.map((m) => m.short ?? m.name) }, { key: 'colour', name: 'colour', options: ['as made', ...COLOURS.map(([c]) => c)] }, ...more],
     build(c) { const m = ms.find((x) => (x.short ?? x.name) === c.model) ?? ms[0]!; return makeMachine({ ...m, color: c.colour === 'as made' ? m.color : colourOf(c.colour, m.color) }, c); },
   };
