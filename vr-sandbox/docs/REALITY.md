@@ -1311,3 +1311,8 @@ rubber (NR, k 0.13 W/m K, Engineering Toolbox; 80 °C service) and so worked out
 neighbour, reaches 84 °C on its bracket off the 105 °C block: a heat shield, a longer bracket or a hotter-rated compound,
 a choice left to the user, not tuned away. The Monte Carlo's 10 findings (its exhaust heat shield into its alternator)
 were there before and are not from this.
+- **2026-10-30, the Monte Carlo's V6 bay, 10 findings to 0.** Two causes, both placement. The V engine's exhaust heat
+shield hung 0.75 bore below the log manifold, low enough to reach into the alternator; it now ends 0.35 bore below it,
+still covering the manifold's face. The banked engine's oil filter sat under the hot bank by the front; on a V it now
+sits on the far side, 0.35 of the block's length back (an inline engine keeps its place). The rules check on the V6:
+10 findings → 0. The gate: 23 of 23, 40.4 s.
