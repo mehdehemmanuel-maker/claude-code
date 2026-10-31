@@ -1360,3 +1360,9 @@ and the crankcase ends, without one, were 7 % off. Now a hole takes only the sha
 two `fill`s are deleted. Still ours to fix: the spokes' loft volume (1.7 %) and the V6 block's overlapping and leaning
 bores (22 to 80 %, counted twice or as full circles by `mass.ts`). Bugs of mine on the way: a loft returned as a
 shell, prisms with repeated points, openings as inner loops (all fixed, each found by a volume that did not match).
+- **2026-10-31, export.** `export.files` (in `brep.ts`, the solids' owner) and the board Export: a thing's exact solids
+written as STEP AP242 through OpenCascade's XDE (each solid named by its path in the thing's tree, its colour, mm),
+STL, 3MF and glTF from the kernel's tessellation (within 0.2 mm), and a BOM as CSV; the STEP read back by the kernel.
+Measured on the inline four: written in 58 s (72.7, 85.3, 19.1 and 72.8 MB; at 0.1 mm the meshes made a 156 MB STL and
+took 92 s, so 0.2 mm), read back in 16 s: 1,512 solids and 21,043.605 cm³, the same count and volume as written. The
+glTF has 1,512 named nodes, the 3MF 1,512 objects, the STL 1,747,280 triangles. The gate: 24 of 24, 48.9 s.

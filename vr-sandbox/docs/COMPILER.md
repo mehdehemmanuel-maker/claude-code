@@ -25,7 +25,7 @@ Statuses: PASS, FAIL, UNVERIFIED, BLOCKED. The release (the user's Loop F): REJE
 is unverified, blocked, or a requirement is unchecked; otherwise RELEASE CANDIDATE, awaiting a person's approval.
 Approval for production is never given by code.
 
-## The 30 stages here (11 built, 13 partial, 6 not built)
+## The 30 stages here (11 built, 14 partial, 5 not built)
 
 | Stage | Name | State | What does it here |
 | --- | --- | --- | --- |
@@ -51,7 +51,7 @@ Approval for production is never given by code.
 | 20 | Design for manufacture | partial | makers by process, made.of; no tool-reach or draft checks yet |
 | 21 | Cost, weight, optimisation | built | fit.target, trade.offs, what.matters, variants |
 | 22 | Drawings | not built | not built |
-| 23 | Export (STEP, STL, 3MF) | not built | not built (road map step 2) |
+| 23 | Export (STEP, STL, 3MF) | partial | export.files (brep.ts): STEP AP242 named and coloured, STL, 3MF, glTF, BOM CSV; its STEP read back and counted; not yet: a STEP assembly tree |
 | 24 | Reference comparison | built | check.accuracy, view.compare, compare.outline |
 | 25 | Independent audits | partial | compile.verify (each check names its engine); ai.judge (a blind model) |
 | 26 | Conflict resolution | not built | not built |

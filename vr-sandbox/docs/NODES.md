@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 603 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 604 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 328 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 329 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 79 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 542 tested here (their own tests: that they do what they say, not that the world does); 51 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 543 tested here (their own tests: that they do what they say, not that the world does); 51 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 603 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 604 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -354,12 +354,13 @@ Tables, values, charts, the 3D view, the space.
 - **Side by side from the same camera** (`view.compare`): Three panels: the picture; the model from the picture's own camera (the right way round); and the picture dimmed with each traced feature's edge in green and the model's own part's in red. *derived, untested*
 - **Table view** (`view.table`): Rows shown as a table on the board: each row a line, each field a column, as wide as its widest value *derived, tested here, before the update*
 
-## 11 · Board tools (5)
+## 11 · Board tools (6)
 
 Groups, notes, code, asking, events.
 
 - **Ask Claude** (`ai.ask`): Asks Claude, or Nexus where Claude cannot be reached; {input} is what comes in *hypothetical, untested*
 - **Code** (`code`): Code with ports: each input is a name in it, what it returns (an object, port by port, or one value) fills its outputs. *derived, untested, before the update*
+- **Export (STEP, STL, 3MF, glTF, BOM)** (`export.files`): A thing written as files: STEP (each solid named by its place in the thing's tree, coloured, millimetres), STL, 3MF and glTF (the kernel's own meshes of the exact solids), and its bill of materials as CSV; the STEP … *derived, tested here*
 - **Group input** (`group.in`): What comes into the group, under this name *derived, untested, before the update*
 - **Group output** (`group.out`): What goes out of the group, under this name *derived, untested, before the update*
 - **Note** (`note`): Words on the board, for people: it runs nothing *derived, tested here, before the update*

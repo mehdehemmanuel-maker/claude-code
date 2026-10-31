@@ -92,7 +92,7 @@ export const STAGES: { n: number; name: string; here: string; state: 'built' | '
   { n: 20, name: 'Design for manufacture', here: 'makers by process, made.of; no tool-reach or draft checks yet', state: 'partial' },
   { n: 21, name: 'Cost, weight, optimisation', here: 'fit.target, trade.offs, what.matters, variants', state: 'built' },
   { n: 22, name: 'Drawings', here: 'not built', state: 'not built' },
-  { n: 23, name: 'Export (STEP, STL, 3MF)', here: 'not built (road map step 2)', state: 'not built' },
+  { n: 23, name: 'Export (STEP, STL, 3MF)', here: 'export.files (brep.ts): STEP AP242 named and coloured, STL, 3MF, glTF, BOM CSV; its STEP read back and counted; not yet: a STEP assembly tree', state: 'partial' },
   { n: 24, name: 'Reference comparison', here: 'check.accuracy, view.compare, compare.outline', state: 'built' },
   { n: 25, name: 'Independent audits', here: 'compile.verify (each check names its engine); ai.judge (a blind model)', state: 'partial' },
   { n: 26, name: 'Conflict resolution', here: 'not built', state: 'not built' },

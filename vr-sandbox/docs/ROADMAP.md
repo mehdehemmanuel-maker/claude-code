@@ -71,7 +71,12 @@ rest. Each is done only when its check passes, measured, and said.
    hollow parts, 40 sweeps). Left: hollow parts (an inward offset), freeform skins thickened, fillets as features, the
    V6 boxes' mass by the kernel's volume.
 7. **Export:** STEP with the assembly tree and names, STL, 3MF, glTF, a bill of materials. Done when the engine's STEP is
-   read back with the same solids, count and volume.
+   read back with the same solids, count and volume. **Built 2026-10-31** (`export.files`, `filesOf` and `readStep` in
+   `brep.ts`; board Export): the inline four written in 58 s as STEP AP242 (72.7 MB, each of its 1,512 solids named by
+   its path, coloured), STL (85.3 MB), 3MF (19.1 MB), glTF (72.8 MB) and its BOM as CSV; the STEP read back by the
+   kernel in 16 s: 1,512 solids, 21,043.605 cm³, the same as written. Left: the assembly as a STEP tree (names carry
+   the path for now), a download button on the board (its files are Blobs on its output), and the 35 pieces not yet
+   solids, which are not in the files (said).
 8. **Independent verification:** interference by exact booleans against our checker; stress by CalculiX against our beam
    analysis and the textbook. Done when they agree, every disagreement listed.
 9. **A constraint solver:** mates as equations solved at once, degrees of freedom counted, under- and over-constrained
