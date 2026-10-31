@@ -10,6 +10,21 @@
 //
 // Its frame: the crank's axis along x, its front (the timing drive) toward +x, its flywheel toward -x; its cylinders up
 // +y from the crank's axis at y = 0; its intake side +z, its exhaust side -z.
+//
+// ROUTE MAP (read the section the work needs, by searching its name; not the file):
+//   the spec and its fits ............ EngineSpec, FITS, fitOf, engineDims (every size from bore and stroke)
+//   where cylinders, heads, mains are  cylinders, headsOf, mainsOf, valveXs, plugAt, fromBank, ohvTrain
+//   bottom end ....................... pistonAssembly, conRod, crankshaft, cylinderBlock (bulkheads, main caps, barrel)
+//   head and valvetrain .............. cylinderHead (deck, combustion chambers, ports, cams, caps), headPiece, valvePart,
+//                                      retainerPart, tappetPart, designSpring (the valve spring by its redline), springOf
+//   plugs, coils, injectors .......... sparkPlug; in cylinderHead and engineBuilt ('port injector', 'fuel rail')
+//   the whole engine ................. engineBuilt: pistons and rods, heads, cam covers, timing drive and cover, damper,
+//                                      flywheel, oiling ('oil pan', 'oil pump', 'oil pickup', 'oil filter'), intake,
+//                                      exhaust (heat shields), alternator, water pump, belt, starter, A/C, mounts
+//   heat ............................. COOLANT (castings held at the coolant's temperature)
+//   small makers here ................ starterSolenoid, rectifierDiode, muffler, carburettor, bolt, threadFor
+//   outside this file ................ shared makers: makers.ts (turned, wound, coiled); fasteners: components.ts;
+//                                      load cases: loads.ts; rules on it: make/rules.ts; the nodes: blocks.ts ('engine.')
 
 import type { Part, V3 } from './kits';
 import { chainPath, chainRun, coil, housing, mouldedChip, ringClip, toothed, turned, wound } from './makers';

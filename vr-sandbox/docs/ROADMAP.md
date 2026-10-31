@@ -34,6 +34,33 @@ Bugs these tools found and fixed: a wire into an input a block lacks carried not
 blocks lost their inputs' defaults inside fits; a chart drew its x as its y; every spring wire had one stiffness; coils
 drew as octagons.
 
+## First, by the user's direction (2026-10-31): the app does the work, not hand edits
+
+Why: the app is built from code edited by hand with typed numbers; nothing learns, and judgement, research and
+population are all done by hand. These come before the numbered plan below, with item 9 (constraints) beside them.
+
+- **I. An AI in the app that works through nodes.** A panel to talk to: it reads the board, the library and the docs
+  by the router (only what the question needs), and answers by placing, wiring, setting and running nodes, each step
+  shown and undoable; it never edits the app's code. Its key stays on a small Node relay the app is served with (a page
+  holds no key); `api.claude` is its model call. Done when it builds and runs a board from a sentence ("a 40 kN/m
+  spring as light as can be") and says what it did, step by step.
+- **II. AI-gate pipelines for what is easy but many.** One small tagged task per call, never a hundred in one prompt;
+  each answer through gates that can fail it: its schema, its units and ranges, its quote found word for word in the
+  page it cites, a second model's blind check where judgement is needed; what fails goes back with why, or to a person.
+  First: a research board (a product or material by name → ZenRows search and fetch → Claude takes out each figure with
+  its quote and link → gates → a queue for approval). Done when it fills a product's published figures, each sourced,
+  and its rejects are listed with why.
+- **III. Prompt engineering as engineering.** Prompts as versioned nodes with tags (task, inputs, output schema, what
+  it must not do), measured against each other (Prompt trial, for words as well as pictures), their failure rates kept;
+  a library of prompts that have earned their place, as parts have.
+- **IV. Pictures that show where parts are** in known machines (an image model told one thing at a time: this part,
+  this machine, this view), judged blind against the sources: once an image service has credit.
+- **V. Targeted context** (done 2026-10-31): `CLAUDE.md` a summary and a router; the user's words in `docs/WANTED.md`;
+  route maps atop the large modules; the step-back rule (two minutes or three tries: is a pipeline missing?).
+
+Keys (2026-10-31, measured): Claude works (`api.claude`, 1.3 s); ZenRows works; fal.ai, Higgsfield and Gemini's image
+models refuse for credit or quota.
+
 ## The plan, in one (2026-10-30)
 
 Every fix and every step in one order: what blocks the rest first, then what the user sees, then the CAD plan, then the

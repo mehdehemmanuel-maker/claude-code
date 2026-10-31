@@ -7,6 +7,24 @@
 //
 // What runs a board of blocks, caches, maps over lists and opens groups is src/nexus/dataflow.ts; this file only says
 // what each block is and does.
+//
+// ROUTE MAP: its sections, in order (search a section's title to jump to it; read only that section):
+//   · the three ways a block is found
+//   · ports and values
+//   · the library
+//   · built-in blocks
+//   · things made and placed: shapes, parts by their sizes, places, patterns, variants (src/nexus/assembly.ts)
+//   · the world: ground, scattering, walls with openings, choosing, rows to spawn from
+//   · physics and motion: what is made, let go; joints; what moves and the room it needs
+//   · time and motion: what changes as the clock runs
+//   · vehicles from what they are: tyres, batteries, axles, the vehicle itself; fitting shared parts in; taking apar
+//   · a computer from the transistor up
+//   · making things as they are made: one node per process or geometry, shared by everything made that way
+//   · an engine from its first parts up (engines.ts), and the makers its parts share with every other machine
+//   · under load: what a made part carries, its stress, its margin (src/nexus/loads.ts), and a stress test over a ra
+//   · research as a pipeline: notes → reference → its parts and theirs → what is drawn against it → what to do next
+//   · the gauntlet: what a node (or an entry) must come through to be approved; the unknown queue, sorted and
+//   nodes elsewhere register themselves from their owners (see the owners table in CLAUDE.md); search a node by its id
 
 import { DISCIPLINE, DISCIPLINES, FIELD_DISCIPLINES } from '../data/disciplines';
 import { EVIDENCE, EVIDENCE_SAYS, UPDATE_SAYS, evidenceOf, type NodeEvidence } from './evidence';

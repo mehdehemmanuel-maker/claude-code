@@ -180,7 +180,8 @@ node({ id: 'api.claude', name: 'Claude (Anthropic Messages API)', kind: 'ai', ab
   ports: { inputs: [P('prompt', 'text', { optional: true })], outputs: [P('text', 'text'), P('model', 'text', { label: 'the model that answered' }), P('stop', 'text', { label: 'why it stopped' }), P('says', 'text')] },
   run: async (i, c) => {
     envKey('ANTHROPIC_API_KEY', 'the environment\'s secrets'); const words = String(i.prompt ?? c.set.prompt ?? ''); if (!words.trim()) throw new Error('nothing to ask: wire words in or set them');
-    const { default: Anthropic } = await import('@anthropic-ai/sdk'), client = new Anthropic(), t0 = Date.now();
+    // (to Anthropic itself: a container's own ANTHROPIC_BASE_URL is for its own use, not for the user's key)
+    const { default: Anthropic } = await import('@anthropic-ai/sdk'), client = new Anthropic({ baseURL: 'https://api.anthropic.com' }), t0 = Date.now();
     const r = await client.beta.messages.create({ model: String(c.set.model), max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', output_config: { effort: String(c.set.effort) as 'medium' }, ...(String(c.set.system ?? '').trim() ? { system: String(c.set.system) } : {}), messages: [{ role: 'user', content: words }] }, { signal: capped(c.signal) });
     const text = r.content.map((b) => (b.type === 'text' ? b.text : '')).join(''), fell = r.content.some((b) => b.type === 'fallback');
     if (r.stop_reason === 'refusal') throw new Error(`declined (${r.stop_details?.category ?? 'no category'}): ${r.stop_details?.explanation ?? ''}`);

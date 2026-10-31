@@ -10,6 +10,20 @@
 // published dimensions, tyres, wheelbase, track, mass, engine and part list, and its panels approximate its shape.
 // Where the parts drawn weigh less than its published mass, the rest (trim, wiring, fluids, what is not drawn) is
 // one part of that mass, said as such; where they weigh more, that is said too.
+//
+// ROUTE MAP (read the section the work needs, by searching its name; not the file):
+//   tyres ............................ tyreOf (a size code read), tyreSection, TREADS, tyreBuilt (casing, plies, tread)
+//   wheels, brakes, suspension ....... wheel, cornerOf, axleBrake, suspension, travelOf, rollingOf (for the physics)
+//   the body ......................... bodyPlanOf, body (panels, doors, hood, deck lid), bodyKit (flares, skirts, lip,
+//                                      valance, scoops, wing, spoiler), styledCar and STYLE (a body style's typical figures)
+//   frames and the bay ............... bulkhead, rearFrame, frontFrame, bayOf, floorOf, packOf (a battery pack), exhaustPath
+//   power ............................ engineSpecOf, engineSize, engine, driveUnit, EDU (an electric drive unit)
+//   the whole machine ................ makeMachine (cached), made: axles, frame, body, seats, power, controls, extras
+//                                      (mast, deck, racks, number board, fenders, cab, ...), each by `m.extras`
+//   real products .................... MACHINES: each a record of its maker's published figures, with its source
+//   as kits .......................... machineKit, VEHICLE_KITS (what words pick what machine)
+//   outside this file ................ panels: panels.ts; the engine: engines.ts; exhaust and fittings: fittings.ts;
+//                                      gearbox: drivetrain.ts; the nodes: blocks.ts ('vehicle.')
 
 import { packToFit, starterBattery, use } from './components';
 import { engineBuilt, type EngineSpec } from './engines';

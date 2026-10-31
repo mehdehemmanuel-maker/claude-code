@@ -9,6 +9,20 @@
 // block once for each item. A group runs its own board with what comes in, and is opened only when it is run or looked
 // into. What a node did, how long it took and how often it failed is kept, for the person and for the engine's own
 // suggestions: what is dead, what is the same twice, what wiring repeats and could be one block.
+//
+// ROUTE MAP: its sections, in order (search a section's title to jump to it; read only that section):
+//   · keys
+//   · merged blocks
+//   · what a node is
+//   · editing a board of blocks
+//   · trees: fold, open, cut back
+//   · smarter: what is dead, what is twice, what repeats
+//   · the spawner: one seed run for each row, each with its own sizes, choices and place
+//   · variants of anything, none twice
+//   · fit to a target (search 'fit.target'), with rangesOf and runnerOf above it
+//   · what matters: which of anything's inputs move which of its outputs, and how much
+//   · trade-offs: the best of anything when its goals pull against each other
+//   nodes elsewhere register themselves from their owners (see the owners table in CLAUDE.md); search a node by its id
 
 import { EVIDENCE, evidenceOf, nonphysical, rankOf, weakestOf, type EvidenceKind, type NodeEvidence } from './evidence';
 import { ALIASES, aliasSet, block, clockOf, rng, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
