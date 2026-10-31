@@ -370,6 +370,7 @@ systems Systems and software engineering | INCOSE's handbook; ACM CCS 2012 for c
     design Software design
     testing Software testing
     data Data engineering
+    interaction Interaction design: controls worked by hand (buttons, sticks, sliders, input devices)
 
 intelligence Intelligence (AI) engineering | ISO/IEC 22989 (AI concepts and terminology) and 42001 (AI management); ACM CCS 2012 (computing methodologies: artificial intelligence, machine learning); NIST's AI Risk Management Framework. No body divides it into branches yet: these are Nexus's own, labelled so
   models Model engineering

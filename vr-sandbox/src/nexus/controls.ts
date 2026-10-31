@@ -42,7 +42,7 @@ export function pushStick(name: string, x: number, y: number, dt: number, speed:
 }
 
 const P = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
-const spec = (gloss: string): BlockDef['spec'] => ({ gloss, discipline: 'software.interaction.controls', role: 'data source', codes: [{ scheme: 'ACM CCS 2012', code: '10003120.10003121.10003128', label: 'Human-centered computing: interaction techniques' }] });
+const spec = (gloss: string): BlockDef['spec'] => ({ gloss, discipline: 'systems.software.interaction', role: 'data source', codes: [{ scheme: 'ACM CCS 2012', code: '10003120.10003121.10003128', label: 'Human-centered computing: interaction techniques' }] });
 
 /** A button put on a thing: a round cap on a short base, on the top of what it is given (or on the face asked), named so
  *  a press on it in the 3D world is a press of this control. */
