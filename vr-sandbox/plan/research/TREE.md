@@ -273,6 +273,144 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] Model output statistics: correcting a biased model against observations, cheaper than assimilation
 - [ ] Shadowing: when a chaotic run still follows some true one
 
+## Branches grafted in round 4 (open)
+
+### From Self-describing interfaces (`18-self-describing-interfaces.md`)
+- [ ] ISO 80000 parts 1 to 13 as a data file: is there an open machine-readable ISQ (mp-units' ISQ definitions, QUDT quantity kinds)?
+- [ ] QUDT (Quantities, Units, Dimensions and Types) ontology: quantity kinds as RDF, a ready-made kind tree with licence to check.
+- [ ] The SI Digital Framework (BIPM) and D-SI: machine-readable SI and measurement metadata.
+- [ ] W3C Web of Things Thing Description, and IDTA 02017 Asset Interfaces Description that wraps it.
+- [ ] AutomationML (IEC 62714) interface classes and its "ExternalInterface" concept: CAEX ports that link plant objects.
+- [ ] Modelica connectors (`flow`, `stream`) as the oldest typed physical port standard, and the Modelica Standard Library's SIunits.
+- [ ] FMI 3.0 terminals and icons: how co-simulation units declare grouped connectors.
+- [ ] SysML v2 ports, interfaces and quantity kinds (ISQ library inside SysML v2).
+- [ ] IEC 81346 reference designations: structural ids for parts in a plant, and the IDTA BoM extension built on it.
+- [ ] GS1 and the EU Digital Product Passport: product self-description reaching consumers.
+- [ ] LeoCAD and BrickLink Studio connection data, compared with LDCad's snap metas (still open from round 3).
+- [ ] The Tsugite source code (released on GitHub?) and Larsson's later work on joints (e.g. curved or non-orthogonal joinery).
+- [ ] Assembly sequence planning from interface data (disassembly graphs, AND/OR graphs; Homem de Mello and Sanderson).
+- [ ] Poka-yoke catalogues (Shingo) as a library of keying features for the agent to propose.
+- [ ] ISO 2768 general tolerances as the default when a person states none.
+- [ ] Bluetooth GATT and the assigned numbers registry: another self-describing device vocabulary with UUIDs.
+- [ ] CANopen EDS / device profiles (CiA 402) and EtherCAT ESI: drive self-description beside IO-Link.
+- [ ] Units checking in TypeScript (branded types, template-literal types) for Nexus's own code, distinct from the run-time check on wires.
+- [ ] The 2π problem in the SI (proposals to make the radian a base unit; Quincey, Mohr): a sourced basis for decision B2.
+- [ ] MTM (Methods-Time Measurement) as an openly described alternative to proprietary DFA time tables.
+
+### From The physics core in a browser (`19-physics-core-browser.md`)
+- [ ] Read Rumoca's `rumoca-phase-structural` crate in full: its matching, BLT and IC planning, and its diagnostic types.
+- [ ] Read StateSelection.jl's source for the integer-linear singularity pre-pass, the least documented step.
+- [ ] Pryce's Σ-method and the DAESA tool: structural analysis with a better index estimate than Pantelides.
+- [ ] Mattsson–Söderlind dummy derivatives (1993) and the later "dummy derivatives done right" corrections.
+- [ ] Measure Jolt `wasm-compat` bit-identity across Chromium, Firefox and WebKit with Playwright (no one has published it).
+- [ ] Build JoltPhysics.js with `CROSS_PLATFORM_DETERMINISTIC=ON` and compare bundle size and speed.
+- [ ] diffsol through wasm-pack: bundle size, API for a mass matrix, and a stiff benchmark in three browsers.
+- [ ] SUNDIALS IDA through Emscripten: does it build, size, and speed against diffsol.
+- [ ] FMI-LS-WASM with jco: can a WIT FMU run in a browser today?
+- [ ] OpenModelica PRs #16063 and #16060: what "browser simulation" means there and what differed from native.
+- [ ] The FMI-LS-DAE arXiv preprint (2606.22544) for its test results and its plan for index above 1 and events.
+- [ ] Base Modelica's MCP-0031 text itself (not found this pass) and its version status.
+- [ ] RATTLE and SHAKE for constrained mechanisms, and Lie-group integrators for rigid-body rotation.
+- [ ] Discrete-gradient methods for pH systems with a state-dependent mass matrix, in code.
+- [ ] Modia.jl's diagnostics, and Modia3D's way of coupling multibody and DAE (relevant to Jolt coupling).
+- [ ] The ASEE web bond-graph tool: what it generates, and whether its causality messages read well.
+- [ ] Bevy's banned-method list and Box2D v3's determinism tests as models for our lint and battery.
+- [ ] WebAssembly 3.0's deterministic profile: which engines expose it and whether a page can ask for it.
+- [ ] CORE-MATH correctly rounded functions compiled to wasm as our `detmath`, instead of writing our own.
+- [ ] Simscape's "dependent dynamic states" diagnostics in depth: how it finds the components and equations.
+- [ ] The Modelica Buildings library's list of physics mistakes (pressure references, steady-state mixes) as a
+- [ ] ODE+ and YSSIM: do they compute in the browser, and how do they report errors?
+
+### From Organisations that do not fail, and deep accidents (`20-organisations-accidents.md`)
+- [ ] The NIOSH/CDC "normal accident theory-based complexity assessment": its graph attributes, read in full
+- [ ] Rochlin, La Porte and Roberts (1987) on carrier flight decks: the original HRO evidence
+- [ ] Vaughan's normalisation of deviance and the Columbia board, for the AI's drift
+- [ ] Rasmussen's AcciMap as a post-mortem diagram across levels (operator to regulator)
+- [ ] Extreme value statistics (GEV, peaks over threshold) and how long a record must be: a node for design bases
+- [ ] Paleotsunami and paleoflood evidence as data with claim status (Jogan 869, Cascadia 1700)
+- [ ] Damage-tolerance rules after Lusaka (1977) and Aloha 243 (1988); widespread fatigue damage; FAA AC 25.571
+- [ ] Paris-law crack growth and NASGRO data as a sourced kind in Nexus
+- [ ] Ariane 501 recommendation list in full, and Leveson's critique of the inquiry
+- [ ] Fukushima Unit 1 isolation condenser: which valve closed and why (TEPCO, NRA, Diet commission disagree)
+- [ ] Air France 447 human-factors annex: startle, dual input, the flight director's role
+- [ ] Mode confusion research (Sarter and Woods, "How in the world did we ever get into that mode?") for the AI's modes
+- [ ] Endsley's situation awareness levels and the Automation Transparency literature, for the hand-over schema
+- [ ] Deepwater Horizon blowout preventer forensics (DNV): buckled pipe and shear-ram geometry as an interface failure
+- [ ] INSAG-1 against INSAG-7 against the Russian accounts: holding contested records
+- [ ] Woods' "theory of graceful extensibility" and resilience engineering metrics
+- [ ] Cook's "How Complex Systems Fail" (1998), eighteen points, as a checklist for Nexus's own architecture
+- [ ] Chaos engineering (Netflix Chaos Monkey, game days) as a Safety-II practice for Nexus's runtime
+- [ ] The Learning from Incidents community's facilitation guides (Etsy debriefing guide) for the post-mortem node
+- [ ] Signal detection theory for reading tests (the PSAM negative-pressure paper) as a reviewer-calibration method
+- [ ] Boeing 737 MAX and AF447 together: what the AI should tell a person about automation they did not know existed
+
+### From Grammars of space and cities (`21-space-city-grammars.md`)
+- [ ] Hillier's *Space is the Machine* (1996) and the "generic function" argument: why integration predicts co-presence.
+- [ ] Angular segment analysis and choice (betweenness) at metric radii, as used in modern space syntax practice.
+- [ ] Turner's visibility graph analysis and agent-based "exosomatic visual architecture" (agents that walk by isovists).
+- [ ] Peponis's convex and s-partitions and the formal definition of axial maps (Turner, Penn, Hillier 2005 "an algorithmic definition of the axial map").
+- [ ] Duarte's Malagueira grammar and his "discursive grammar" for mass customised housing.
+- [ ] Shape grammar interpreters (GRAPE, SortalGI, Shaper2D) and their licences.
+- [ ] Tensor-field street modelling (Chen, Esch, Wonka, Müller, Zhang 2008) as an alternative to L-systems.
+- [ ] Inverse procedural modelling: fitting a grammar's parameters to a target city or building (Talton et al. 2011, Metropolis procedural modelling).
+- [ ] Space standards as sourced data: England's Nationally Described Space Standard, Neufert's tables, and what may be stored.
+- [ ] Daylight in the browser: Radiance ports to WebAssembly, Ladybug/Honeybee's open methods, EN 17037's metrics.
+- [ ] Fire egress simulation (Pathfinder, open JuPedSim) as the dynamic check beside static travel distance.
+- [ ] Japanese room modules: tatami counts (jō) as an area unit and kiwari for interiors (shoin style).
+- [ ] The Roman castrum and Laws of the Indies (1573) as city grammars written as law.
+- [ ] Islamic courtyard house grammars and Hanson's genotypes across cultures (to counter RPLAN's single culture).
+- [ ] Kahn's served and servant spaces and Hertzberger's thresholds as checkable relations.
+- [ ] Lynch's *Good City Form* (1981): performance dimensions (vitality, sense, fit, access, control) as city measures.
+- [ ] Computational legibility studies that compare sketch maps with space syntax measures.
+- [ ] Building information as graphs: IFC's IfcRelSpaceBoundary and IfcSpace as the import route for `space.graph` (spec 05's IFC reader).
+- [ ] Townscaper's irregular quad grid and dual-grid tile deformation, in detail.
+- [ ] Model synthesis (Merrell 2007), WFC's predecessor, for 3D buildings with exact constraints.
+
+### From Growth and self-organisation (`22-growth-self-organisation.md`)
+- [ ] Topology optimisation (SIMP, level-set, BESO) compared head to head with CAO/SKO and constructal trees
+- [ ] Wolff's law and bone remodelling models (Huiskes, Carter) as sourced adaptive-growth rules
+- [ ] Root architecture models (OpenSimRoot, CRootBox) for growing under soil demand fields
+- [ ] Plant phototropism and auxin canalisation (Sachs) as the biology under space colonisation
+- [ ] Physarum solvers for Steiner and shortest-path problems, with their proofs (Bonifaci et al.)
+- [ ] Ant colony optimisation with damage ensembles for robust routing
+- [ ] River network self-organisation (optimal channel networks, Rodríguez-Iturbe and Rinaldo)
+- [ ] Banavar–Maritan–Rinaldo network allometry as a cleaner alternative to WBE
+- [ ] Maximum entropy production (Kleidon, Dewar) and its own contested status
+- [ ] Modular self-reconfiguring robots (M-TRAN, ATRON, Roombots) as physical grow-where-needed
+- [ ] Programmable matter and claytronics (Goldstein) and their scaling limits
+- [ ] Turing reaction–diffusion patterns as placement fields for modules (Kondo's fish stripes)
+- [ ] Gene-regulatory-network evolution for shape (Bongard's evo-devo robots, CPPN/HyperNEAT encodings)
+- [ ] Neural cellular automata for regenerating images (Mordvintsev et al., Distill 2020) as a repair model
+- [ ] Self-healing materials (microcapsules, vascular healing networks, White and Sottos) with vascular layouts from Murray
+- [ ] Shape-memory polymer and liquid-crystal-elastomer 4D printing as powered counterparts to hygromorphs
+- [ ] Hygromorphic building skins in service (HygroSkin, ICD Stuttgart pavilions) and their weathering data
+- [ ] Spider silk and web repair as local-rule structural maintenance
+- [ ] Biofilm architecture and channels as quorum-driven construction
+- [ ] Termite mound ventilation (Turner; King, Ocko and Mahadevan) as grow-where-needed for airflow
+- [ ] The 2017 critical note on Kilobot self-assembly: its authorship and standing
+
+### From Keeping knowledge true at scale (`23-truth-at-scale.md`)
+- [ ] Peer prediction and Bayesian truth serum (Prelec 2004): eliciting honest reports without ground truth, for claims that never resolve.
+- [ ] Hierarchical Dawid–Skene in Stan or a small JS sampler: what it would cost to run in the browser per claim kind.
+- [ ] Item response theory (Rasch) as the model of item difficulty for engineering values.
+- [ ] Wikidata's WikiProject Retractions and the P5824 graph: could Nexus read retraction status straight from Wikidata.
+- [ ] OpenAlex's `is_retracted` field and the "Retracted papers in OpenAlex" study (arXiv:2403.13339) as a second retraction feed.
+- [ ] PubPeer and post-publication review as an earlier signal than retraction.
+- [ ] Datasheet revision tracking: manufacturers' change notices (PCN) in electronics as a correction feed for parts.
+- [ ] in-toto and SLSA (supply-chain attestations) as a model for signing each step of a build, not only the product.
+- [ ] Sigstore or minisign for signing stored-piece manifests without key management pain.
+- [ ] RO-Crate (research objects) as a package format for a board plus its data, provenance and licence.
+- [ ] Interlaboratory comparison statistics (ISO 13528, robust means, Paule–Mandel, DerSimonian–Laird random effects) as alternatives to CODATA's expansion factor.
+- [ ] The "dark uncertainty" literature (Thompson & Ellison) on unexplained between-lab spread.
+- [ ] Conformal prediction for calibrated intervals on AI numeric estimates without a distributional assumption.
+- [ ] Data provenance for LLM training (Data Provenance Initiative, Longpre et al.) and licence audits of popular datasets.
+- [ ] Watermarking and detecting AI-generated text in contributions, and why detectors are unreliable.
+- [ ] Metaculus's scoring (peer and baseline scores) and its handling of ambiguous resolution.
+- [ ] Futarchy and decision markets (Hanson) applied to choosing which library gaps to measure first.
+- [ ] Community Notes' bridging algorithm (matrix factorisation that rewards agreement across disagreeing groups) as a consensus rule.
+- [ ] Wikipedia's Lift Wing revert-risk model as a design reference for a Nexus "claim risk" score, with its model card.
+- [ ] The FAIR data principles and how they compare with REUSE and PROV for Nexus data files.
+
 ## Rounds
 
 | Round | Date | Passes | Branches explored | New branches grafted |
@@ -280,3 +418,4 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 | 1 | 2026-10-31 | 01 to 05 | AI CAD, topology and mating, agents and structure, civil and names, search and perception | — (the tree did not exist yet) |
 | 2 | 2026-10-31 | 06 to 11 | engineering and languages, life and equations, mathematics, games and the vast, philosophy, prompts and judges | the open branches above, from what the passes touched in passing |
 | 3 | 2026-10-31 | 12 to 17 | nature's collective genius; crafts, toys and ancient engineering; sound, film, magic and experiences; safety and failures; commons and citizen science; unseen sciences, old games and cooking | 128 |
+| 4 | 2026-10-31 | 18-self-describing-interfaces.md, 19-physics-core-browser.md, 20-organisations-accidents.md, 21-space-city-grammars.md, 22-growth-self-organisation.md, 23-truth-at-scale.md | Self-describing interfaces; The physics core in a browser; Organisations that do not fail, and deep accidents; Grammars of space and cities; Growth and self-organisation; Keeping knowledge true at scale | 124 |

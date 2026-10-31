@@ -79,3 +79,21 @@ first two rounds, without being told of each other:
   on state, not time).
 - **Spec 00 (structure)**: a non-punitive near-miss log for the AI; stop the line on a failed check; dailies (the AI
   shows what changed and the person approves, notes or kills each version).
+
+---
+
+## Round 4 (2026-10-31): two near branches and four far ones
+
+| # | Finding | Passes | What it means |
+| --- | --- | --- | --- |
+| 20 | **A defect in Nexus today**: the wire check compares dimensions only, so 60 rpm into Hz gives 6.283 Hz (a 2π error), gray becomes sievert, torque wires to energy, radians to percent, and a temperature difference in °C becomes an absolute temperature; a port with no unit wires to anything. `quantities.ts` already tells these kinds apart, for laws only | 18 (measured on a scratch copy of the units code) | fix first (spec 10, T11): the wire check reads quantity kinds from `quantities.ts`, never a second kind system |
+| 21 | **The number was known and never reached the decision** (the Comet's missing fatigue rule, Ariane's trajectory "agreed" out of the spec, TEPCO's 15.7 m wave in 2008, Deepwater's 1,400 psi against 0) | 20 | each sourced value linked to the decisions it bears on; a new estimate reopens them; two readings of one quantity that disagree stop the line |
+| 22 | **Protections that open the accident path** (Ariane's diagnostic read as flight data; valves closing on loss of power stopped cooling; a stall warning silent when its inputs were invalid; Chernobyl's rod tips) | 20 | status and value as separate port types; "invalid" shown loudly, never as silence; a protective action's transient checked, not only its end state; failure responses checked across the whole board |
+| 23 | **Perrow's complexity and coupling are graph properties** (common-mode dependencies including shared place, undeclared cycles, derived values shown as sensed, slack, min-cut size) | 20, with 08 (graphs) | place any board on Perrow's chart from its structure |
+| 24 | **Post-mortems by timeline, contributing factors and a hindsight guard**, not five whys | 20 (Allspaw, Dekker, Google SRE) | corrects round 3's post-mortem template |
+| 25 | **AI-written values must never replace sourced ones** (model collapse happens when real data is replaced, not when synthetic is added beside it) | 23 (Shumailov et al. 2024; Gerstgrasser et al. 2024) | AI-written values sit beside sourced ones; the AI never cites AI-written entries as evidence; every derived value carries its share of AI-made inputs |
+| 26 | **Retractions do not reach what is built on them** (5.4 % of later citations mention the retraction) | 23 | source DOIs checked against Crossref's open Retraction Watch data; everything derived from a retracted source marked |
+| 27 | **Scores that use who wrote something are harsher on newcomers**; stated AI confidence is overconfident | 23 (ORES, Lift Wing) | score the evidence, the author only as a prior; gates tested with author fields swapped; the AI's confidence Brier-scored, labelled uncalibrated until it is |
+| 28 | **The browser physics core must be written**: no JS implementation of Pantelides or tearing exists; Rumoca (Rust in WebAssembly) simulates 28 % of the Modelica Standard Library's examples; determinism across browsers is unmeasured anywhere, and the Jolt build we load lacks its cross-platform determinism option | 19 | spec 09 writes its own structural passes (StateSelection.jl's order); spec 11 needs a deterministic Jolt build, a deterministic maths module and a CI battery in three browsers |
+| 29 | **Every growth method has five parts**: a demand field, a local rule, a budget, an ensemble of loads or damage, a stop condition; loops come from resilience, not efficiency | 22, with 12 | one `grow` node family fed by demands parts emit; resilience as an objective over an ensemble with an n − 1 check |
+| 30 | **Generators propose, measures decide**: floor-plan generation improved by verifiable rewards; circulation and daylight are the missing ones; rooms carry demands of their neighbours as a bolt does; a building module is an interface standard | 21 | space measures as nodes (depth, integration, intimacy gradient, egress, daylight), each reporting its own stability; wave function collapse for texture only |

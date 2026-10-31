@@ -1372,3 +1372,543 @@ Relevant files: `/home/user/claude-code/vr-sandbox/plan/BOOK-OF-QUESTIONS.md` (t
 68. How is a calibrated model kept from being presented as a predictive one?
 69. Where two methods overlap (rays and waves; particles and continuum), how are they blended at the seam?
 70. Which of these fields' failures (the criticality overclaim, flashover misread, Sabine's limits) would we repeat if no rule stopped us?
+
+---
+
+## Chapter 14. Self-describing interfaces
+
+*From `research/18-self-describing-interfaces.md` (round 4).*
+
+### Units and kinds (spec 09, 10)
+1. Should Nexus adopt the ISQ (ISO 80000) quantity tree as data, or start with a smaller hand-built tree for the kinds its blocks use?
+2. Is the angle a base dimension in Nexus (as some proposals for SI suggest) or a kind of dimensionless quantity?
+3. Should rpm be cyclic (rev/min) or angular (rad/s) by definition, and which blocks today assume which?
+4. Does any existing board wire an rpm output into a Hz input today, and would its result move by 2π if fixed?
+5. Which existing ports carry temperature differences in °C, and do any convert to K through `convert`?
+6. Should a ΔT port be a separate quantity, a flag on the port, or inferred from the block's law?
+7. How should a unitless port be declared: `1`, `-`, a named ratio, or a count?
+8. Should width + height give length (mp-units), or should Nexus refuse adding different specific quantities?
+9. Where does a quantity cast live in a board: a node, a wire annotation, or a field on the receiving port?
+10. Are money units a kind in the tree, and are currencies convertible only through a sourced, dated rate node?
+11. How should kinds be shown on a wire so a person sees "torque" versus "energy" at a glance?
+12. Should the AI be allowed to insert a context (conversion) node without the person's approval?
+13. Do laws in `lawgraph.ts` declare specific quantities (wall thickness, not length) for their inputs?
+14. How many units in `units.ts` share a dimension but differ in kind, and is the list complete?
+15. Should Gy and Sv conversion be refused outright or allowed only through a weighting-factor node with a source?
+16. What is the cost of a kind check per wire on a large board, and does it need caching?
+
+### Interface records and vocabularies (spec 01)
+17. What sizes must each interface kind carry (the template), and who writes the first fifteen templates?
+18. Should interface kind ids be IRIs, IRDI-like codes, or plain strings with a version suffix?
+19. Can Nexus legally ship ECLASS property definitions, or only reference their IRDIs?
+20. Does the IEC CDD give free access to the ISO 273 or ISO 4762 properties as data elements?
+21. Which ECLASS or IEC CDD properties already exist for thread size, clearance hole and counterbore depth?
+22. How is a breaking change to an interface template detected automatically?
+23. Should an adapter between interface versions be a node, a function in the template, or a stored part?
+24. How does a part declare a vendor-specific interface, and how is it shown as such in the UI?
+25. When a vendor subtype mates a base kind, which fields are dropped, and is the person told?
+26. Should a motor's mechanical, electrical and signal interfaces live in one record list or in separate ones per medium?
+27. How do interface records relate to the effort-and-flow ports of spec 09: one record, or two linked?
+28. Is "per-interface declaration" enough, or do some parts need a USB-style association grouping interfaces into a function?
+29. What validator runs on an interface record, and when (on save, on load, on mate)?
+30. Should every interface carry a `semanticId` list (ours plus external) like AAS?
+
+### Mating, symmetry, keys (spec 01, 09)
+31. How is α and β symmetry computed from an interface's pattern, and does it match a person's intuition?
+32. When a pattern's symmetry allows several poses, which does the solver pick, and is it stable across runs?
+33. How does the agent decide that an orientation matters and a key is needed?
+34. Which keying features does Nexus offer: offset pin, flat, keyway, D-shaft, unequal bolt circle?
+35. How does the solver prove a wrong orientation cannot mate after a key is added?
+36. How does mating negotiate interface versions, and where is the outcome recorded?
+37. Should a half-inserted pin (partial engagement) be a state the solver can hold?
+38. How are LDCad-style axial profiles (sections) represented for threads, splines and tapers?
+39. What happens to an interface when its part is mirrored: which kinds flip handedness?
+40. Where do "slide" declarations come from for bearings, linear rails and dovetails?
+41. Can the solver detect a slide that passes one feature through another (stud through anti-stud)?
+
+### Fit and tolerance (spec 01, 10)
+42. Which GD&T concepts does Nexus need first: position, MMC, virtual condition, datums?
+43. Should clearance holes be computed from the floating-fastener formula or read from ISO 273 and checked against it?
+44. What position tolerance does Nexus assume when a person states none?
+45. How does a fit grade (H7/h6) become an interval on the interface sizes (spec 10's interval mode)?
+46. Does ISO 14405-1's notion of size (two-point versus envelope) matter for any mate Nexus makes?
+47. How are tolerance stacks across a chain of mates computed and shown?
+
+### Joinery and fabrication (spec 01 joinery task)
+48. Should the voxel joint node reuse Tsugite's open code, if its licence allows, or reimplement it?
+49. What voxel resolution suits Nexus's timber joints, and does exhaustive search stay fast enough in the browser?
+50. How is Tsugite's durability check (short grain) represented when the material is not wood?
+51. How does the milling-tool radius become a host rule in `negativeOf`?
+52. Can Tsugite's "single milling direction" gate be generalised to any tool access check in `Keep`?
+53. Should friction area be passed to Jolt's contact model, and with what honest limits?
+
+### Assembly (DFA) (spec 01, 07)
+54. Can the Boothroyd–Dewhurst handling and insertion tables be used, given their copyright?
+55. Is there an open, sourced set of assembly time standards (MTM, MOST) Nexus could use instead?
+56. How does the agent answer DFA's three questions for a part automatically?
+57. Should the DFA index be shown on every assembly node, or only on request?
+58. How does tool access for fastening (wrench room) feed DFA's insertion difficulty?
+
+### Exchange and standards (spec 01, 03, 11)
+59. Can replicad/OpenCascade write STEP Part 113 hole features, or only plain faces?
+60. Is AP242 edition 4 published, and what does its assembly PMI add?
+61. Which AAS submodel templates are worth emitting first for a Nexus part?
+62. Is a Nexus "Interfaces" submodel a plausible IDTA template candidate, and what is the review process?
+63. Can the in-app Claude read the OPC Foundation's RAG/MCP companion specifications, and under what licence?
+64. Should Nexus import IODD files to make sensor parts with real process data and units?
+65. Should Nexus import LDraw parts with their snap metas as a test set for interface mating?
+66. How does a shadow layer of interfaces stay in step when the source part changes?
+67. How does Nexus map its interface kinds to AP242 kinematic pairs (revolute, prismatic, cylindrical)?
+
+### Trust (spec 10)
+68. Which self-descriptions does Nexus trust without validation today, and which should it stop trusting?
+69. Should an imported device description (IODD, AAS) carry "manufacturer-stated" status until checked?
+70. How is a malformed interface record reported to the person and to the agent?
+
+---
+
+## Chapter 15. The physics core in a browser
+
+*From `research/19-physics-core-browser.md` (round 4).*
+
+### The structural compiler
+1. Do we scalarise array equations (losing their structure, as Otter warns), or keep arrays through matching from the
+2. Which matching algorithm: Hopcroft–Karp, or simple augmenting paths with a good order? At what board size does it
+3. Pantelides plus dummy derivatives, or Pryce's Σ-method? Which gives better explanations?
+4. How do we choose dummy derivatives so the choice is stable when the user edits one node, and does not flip the
+5. Do we ever need dynamic state selection (the pendulum crossing 90°), which StateSelection.jl leaves out?
+6. Which tearing heuristic: Modia's, Cellier's, or the user marking tear variables by hand?
+7. How do we detect an integer-linear subsystem from node equations written in our expression language?
+8. How do we prove our core right: against StateSelection.jl's tests, against Rumoca's output, or against OpenModelica on
+9. Where does symbolic solving (making y explicit) end and numeric Newton begin, and who decides?
+10. Can the agent read the `system.compile` decisions and propose a fix as nodes, and how is the fix checked?
+11. How do we explain a structural singularity that comes from the *whole* board when every block is locally balanced?
+12. What is the smallest message that tells a novice "you have two grounds" or "you have no ground"?
+13. Which illegal configurations, like Simscape's sources in parallel, can we detect on the port graph alone before any
+14. How do events (`when`, `reinit`, zero crossings) enter the structure, and does the BLT change at an event?
+15. Do we support variable structure (a clutch engaging changes the index), and how?
+16. How are discrete (clocked) parts sorted with continuous ones?
+
+### Solvers
+17. Rosenbrock-W in TypeScript first, or diffsol in wasm first? What does each cost in bundle size and in verification?
+18. How fast is a TS Rodas4 on a 100-state stiff system in Chrome, Firefox and Safari? Not measured anywhere found.
+19. Does SUNDIALS IDA compile cleanly with Emscripten, and how large is it?
+20. Do we need sparse direct LU in the browser, and which (KLU through wasm, or our own)?
+21. How do we get Jacobians: forward-mode automatic differentiation over our expressions (spec 10), finite
+22. What tolerances by default, and how are they shown to the user as a trust statement?
+23. When does a symplectic solver refuse a board (dissipation, contacts, inputs)?
+24. Can RATTLE handle the joint types our kinematic parts carry (`kinds/motion.ts`)?
+25. Is implicit midpoint stable enough for stiff electrical networks, or does it ring?
+26. How do we couple an acausal subsystem with Jolt's rigid bodies: co-simulation at Jolt's step, or the joint in our
+27. What step size and interpolation contract does that coupling need to keep energy honest?
+28. Do discrete gradients need a Hamiltonian written in closed form for every pH node, and who writes it?
+
+### Determinism
+29. Is the prebuilt `jolt-physics` 1.1.0 `wasm-compat` bit-identical in Chrome, Firefox and Safari on our scenes?
+30. Does the multithreaded Jolt build stay deterministic at different thread counts in browsers?
+31. What does `CROSS_PLATFORM_DETERMINISTIC` cost on our scenes, against Jolt's ≈ 8 %?
+32. Is the WASM SIMD build deterministic across engines, given that relaxed SIMD is not used?
+33. Where else in our code do transcendentals feed a simulation (geometry from replicad, mates, sources)?
+34. Does OpenCascade's wasm build give bit-identical geometry across engines, and does physics depend on it?
+35. Does a deterministic maths module change any existing test's numbers, and by how much?
+36. Is determinism needed only for replay and sharing, or also for the fold test (block against inside)?
+37. Do we pin wasm binaries by hash in the board file, so a replay names the engine it needs, as Verse pins
+38. What does a desync detector show the user: the first step and the first body that differ?
+
+### FMI and exchange
+39. When will FMI-LS-DAE leave alpha, and will it allow index above 1?
+40. Does FMI-LS-WASM's WIT mapping work in browsers today (jco transpilation), or only in wasmtime?
+41. Can a folded Nexus block export as FMI-LS-DAE with units, sources and validity envelopes as annotations?
+42. Does OpenModelica's `#16063` produce FMUs we can load, and do they match native, as `#16060` claims?
+43. Is Base Modelica stable enough to export now, or will the format move under us?
+44. How do we carry the "every number sourced" rule through an FMU's parameters?
+45. Can SSP (System Structure and Parameterization) carry our board wiring alongside FMUs?
+
+### Physics and meaning
+46. Which domains get pH forms first: mechanical translation and rotation, electrical, hydraulic?
+47. Are thermal ports effort × flow = power (temperature × entropy flow), or the usual temperature and heat flow
+48. How are stream connectors (convected enthalpy) represented in our ports?
+49. Can the conservation watch name which node leaks energy, not only that energy leaks?
+50. What is the energy residual threshold that separates round-off from a bug, per solver and tolerance?
+51. Do variational integrators help our creatures and robots (`creatures.ts`, `motion.ts`)?
+52. How do we state that a contact model breaks energy conservation on purpose (PC-R5's "says so")?
+
+### Users, agent and trust
+53. How does the agent use the structural decisions to build a valid model without trial and error, against ModiGen's
+54. Should the agent be forbidden to "fix" a singular model by deleting equations, and required to explain the physics
+55. Which messages do novices understand: a test with real users on five planted faults?
+56. How do we show a high-index system to a user: "these parts move together", with the dependent state greyed?
+57. When the compiler differentiates an equation, does the user see the new equation, and its units checked?
+58. Does every compile result carry a hash of the board, so a message stays tied to the version it was about?
+
+### Scale and performance
+59. At what board size does the interpreted residual become too slow in VR (a 90 Hz frame)?
+60. Can compilation run in a worker so the editor stays responsive, as Rumoca's "on every keystroke" suggests?
+61. Is WebGPU of any use for implicit DAE solves (batched Jacobians, ensembles)?
+62. How do ensembles (round 3) of stiff DAEs fit in browser memory?
+63. Should large models be compiled once and cached by hash in the board's storage?
+64. Is Rumoca usable as a dependency (wasm size, API stability, MSL subset), or only as a reference?
+
+---
+
+## Chapter 16. Organisations that do not fail, and deep accidents
+
+*From `research/20-organisations-accidents.md` (round 4).*
+
+### Perrow and measurement
+1. Can interactive complexity be computed from a Nexus board's graph alone, or does it need the physics (unplanned interactions are by definition not wired)?
+2. How do we find couplings that are not edges: shared space, heat, vibration, a common supplier, a common data source?
+3. What is the right unit of coupling: propagation time over response time, buffer capacity, or min-cut size?
+4. Does folding a board into one node hide or reduce its complexity score, and should folding preserve the score as a functor law?
+5. Can Perrow's chart be validated: do boards in the high-high quadrant actually fail more in Nexus's simulations?
+6. How do we stop the Perrow score becoming one number people optimise (Goodhart), against "reluctance to simplify"?
+7. When adding a redundant part, how does Nexus show whether it added more complexity than protection?
+8. Does the NIOSH normal-accident complexity assessment define graph metrics we can reuse directly?
+9. Which of Perrow's markers can be detected in a software board (the AI's pipeline) rather than a physical one?
+10. Should common-mode analysis include the AI itself (one model reviewing its own work is a common mode)?
+
+### HROs and the pipeline
+11. What does "deference to expertise" mean when the expert is a solver and the orchestrator is a language model?
+12. Who may halt the whole build, as the junior sailor could halt the deck, and how is a halt cleared?
+13. How do we measure "sensitivity to operations" for the AI: how current is its picture of the board?
+14. What is a near miss for the AI, precisely, and who classifies it?
+15. How is "commitment to resilience" shown: does Nexus rehearse recovery from a broken board?
+16. Can HRO principles be checked, or only cultivated, and which of them can be a rule in the constitution?
+17. How do HROs avoid alarm fatigue from preoccupation with failure, and what threshold suits Nexus's gates?
+
+### Safety-II and FRAM
+18. Which FRAM aspects map onto existing Nexus port kinds, and which need new ones?
+19. How is variability of a coupling represented: a category (early, late, omitted), a distribution, or both?
+20. Can FRAM's resonance be computed (Monte Carlo over variabilities), or is it only a qualitative method?
+21. What is "work as done" for the AI, and how do we capture it without changing it?
+22. How do we count what went right without drowning in successes?
+23. Which successful adaptations of the AI should become standard practice, and who decides?
+24. Is a FRAM model of the AI's own build loop worth making before spec 00 is built?
+
+### Dekker, post-mortems and blame
+25. What does "local rationality" mean for a language model: is its context window the whole of what it "could see"?
+26. How is the chronicle made rich enough to reconstruct what the AI saw at each moment?
+27. Should post-mortems for AI failures blame prompts, tools, specs, or none, and how is that not just shifting blame?
+28. What severity triggers a mandatory post-mortem in Nexus, defined in advance?
+29. How is the hindsight guard enforced when the reviewer is a model that may already know the outcome from context?
+30. How do we measure whether post-mortems change anything (the SRE "feedback on effectiveness")?
+31. What replaces root cause in the post-mortem record: contributing factors with weights, a network, a timeline?
+32. Can the same post-mortem format serve a user's failed bridge and the AI's failed build?
+33. How do we keep the near-miss log non-punitive when the AI's "career" is its evaluation scores?
+
+### Comet and structures
+34. Which Nexus parts need damage-tolerance records first: pressure vessels, fuselages, bridges, cranes?
+35. How does Nexus represent a specimen's history (proof load, cold work) so a test result is not applied to the wrong population?
+36. Can Nexus compute stress concentrations at cut-outs well enough to warn, or only flag "cut-out in a pressurised skin"?
+37. Where do sourced crack-growth laws (Paris law constants) come from, with what licence?
+38. How is "a place no inspection can see" represented: an inspection-access field on each surface?
+39. Should every structural part declare safe-life, fail-safe or damage-tolerant, and what does each demand of its neighbours (an interface question)?
+
+### Ariane and reuse
+40. How is a block's validation envelope recorded when it was validated by testing rather than by analysis?
+41. How does Nexus compare a new board's demand with a reused block's envelope when the demand is a trajectory, not a number?
+42. Should float-to-integer conversions in Nexus's own code be linted, and do we have any?
+43. How does the AI record "I chose not to check this", and how is that surfaced later?
+44. How do we stop identical redundant blocks counting as independent?
+45. What is the "no function runs unless needed" rule for Nexus nodes: should idle nodes be switched off by phase?
+
+### Fukushima and design bases
+46. How many years of record does a value need for a given return period, and which statistical method states it (extreme value theory)?
+47. Where do paleo records (tsunami deposits, Jogan 869) enter as evidence, with what status?
+48. How is "elevation and location" carried by every part so floods, fires and blasts can be intersected?
+49. How does Nexus record a higher estimate that was referred to a committee, and when does it force a reopen?
+50. Can "fail-safe direction" be declared per hazard, and how are conflicts between hazards shown?
+51. Should Onagawa-style margins above requirement be suggested automatically, and how is their cost shown?
+
+### AF447 and hand-over
+52. What exactly must the AI say when it hands control to a person, and can it be a fixed schema?
+53. How does the app show mode (which solver tier, which checks are on) without clutter, on a phone and in VR?
+54. How is an alarm whose inputs are invalid shown differently from an alarm that is off?
+55. When should the AI withhold guidance because its inputs are suspect?
+56. How do we keep users' skills practised when the AI does most work (drills, seeded faults)?
+57. How does the AI know a person is confused (startle, repeated inputs) and what may it do then?
+58. Should the AI keep running its model after a hand-over, as a second opinion, and how loud may it be?
+
+### Deepwater Horizon and disagreeing readings
+59. What tolerance turns two disagreeing readings into a stop, and is it the readings' own stated uncertainty?
+60. How can the reviewer panel detect an ad hoc explanation (one without a model or source)?
+61. Which data that was available and unused (the BOP transducers) can Nexus detect: unused sensors in a board?
+62. Can a negative-pressure test be a Nexus node with its own pass rule that cannot be argued around?
+
+### Chernobyl and protective actions
+63. How does Nexus check the transient of every protective action, and for which node kinds is that tractable?
+64. Which limits in Nexus boards are computed reports that should be live, displayed and interlocked?
+65. How are known defects (positive scram, 1983) pushed to every board that uses the affected part?
+66. How does Nexus store contested accounts (INSAG-1 against INSAG-7 against dissent) and show which it relies on?
+
+### Across the cases
+67. Can Nexus detect "a known number without a path to the decision" automatically?
+68. Can Nexus detect protections that create new accident paths (safety devices that add complexity)?
+69. Which boundaries (test to production, version to version, AI to person) should every board mark explicitly?
+70. Which of these eleven cases should be built as worked boards in Nexus to test its own checks (would Nexus have caught it)?
+
+---
+
+## Chapter 17. Grammars of space and cities
+
+*From `research/21-space-city-grammars.md` (round 4).*
+
+### The model
+1. Is one `space.graph` type enough for a flat, a building and a city, or does each scale need its own node and edge kinds?
+2. Should doors be edges, or nodes (a threshold with its own width, swing and fire rating) linked by edges?
+3. How does a building fold into one node of a street graph while keeping each entrance as a port?
+4. Where do multi-storey relations live: `above` edges, a stair as a space, or a graph per floor joined by stairs?
+5. How is privacy rank given: by the person, by room type from a sourced table, or derived from the program?
+6. Should a room's demands (a wet wall, a quiet neighbour) be the same interface type as a bolt's clearance, or a sibling?
+7. What is the key that makes a wrong adjacency impossible, and when should it only warn?
+8. How is a Lynch role stored so that one thing can hold different roles for different observers?
+9. What is the minimum provenance a generated plan must carry to be reproducible from its seed?
+10. How does a module (cai grade, ken, structural grid) attach to a building so every derived size cites it?
+
+### The measures
+11. Which integration normalisation should Nexus show by default (RRA by the diamond value, or angular segment measures)?
+12. Can `space.depth` be checked against depthmapX outputs without taking GPL code into the repository?
+13. What radius values matter for buildings versus cities, and should radius be in steps or metres?
+14. How should the intimacy gradient be scored when a plan has rings (more than one route to a room)?
+15. What counts as circulation area in an open plan with no corridors?
+16. Should egress limits be stored per code edition and occupancy, and who supplies them when no open source holds the table?
+17. Is daylight simulated in the browser fast enough for sDA over 3,650 hours on a headset, or only on a desktop?
+18. Which weather files can be used and redistributed (EPW from which sources, under what licence)?
+19. How is uniformity of daylight reported beside sDA so a mean cannot hide a dark corner?
+20. How is ASE's glare proxy kept apart from a true glare metric in the labels?
+21. What is the isovist grid spacing for a room, and does the result change materially with it?
+22. Can a stability score be computed cheaply (how many perturbations, how large)?
+23. Which acoustic separation measure fits early design (a rule by room pair, or a transmission estimate from wall build-ups)?
+24. How are furniture clearances sourced (which standard or handbook, and may its figures be stored)?
+25. How do the measures handle non-Manhattan and curved walls?
+
+### The grammars
+26. Is MarkovJunior's rule form (ordered rewrites, random order, a goal) the right base, or CGA's shape operations, or both as two node kinds?
+27. Can the Palladian grammar's 69 rules be encoded and checked against the plans of the *Quattro libri* as a test suite?
+28. Is the prairie grammar's fireplace-first additive form a general pattern (a core and its zones) worth a node of its own?
+29. How are grammar stages enforced (a rule may fire only in its stage)?
+30. Should shape emergence (re-seeing parts no rule made) be supported at all, given subshape detection is NP-hard?
+31. How does a rule ask an occlusion question (would this window face a wall 2 m away) without full geometry each step?
+32. How does a grammar guarantee termination, and how is a non-terminating rule set reported?
+33. Can CGA's floating split (`~1`) be generalised into the constraint solver that lays out rooms?
+34. Which open CGA-like implementations exist with permissive licences, if any?
+35. How are grammars versioned so a saved building regenerates the same after the grammar changes?
+36. Can an agent infer a grammar from a few plans (grammar induction), and how would its rules be checked?
+37. Should WFC be allowed to place structure at all, or only texture, given it cannot enforce global connectivity?
+38. On irregular grids (Townscaper), how are tiles deformed while keeping their interfaces exact?
+
+### Generators and learning
+39. Is there a floor-plan data set with a licence that allows use and that is not single-culture apartments?
+40. Can RPLAN or LIFULL-derived data legally be used in Nexus, and with what attribution?
+41. Is a learned layout model small enough to run in the browser, or must it be a server call?
+42. How does Nexus show a learned plan's inherited genotype (the culture of its data) to the person?
+43. Would RLVR with Nexus's own measures as rewards be worth training, and on what hardware?
+44. Is Merrell's wall-sliding optimisation reproducible enough from a seed to be the deterministic default?
+45. How many samples (best-of-k) does the agent draw before choosing, and is the rejection rate shown?
+46. Can architects' preference scores (function, flow, overall) be collected inside Nexus as a reviewer panel judge?
+47. What does the agent do when no plan satisfies the program: relax which constraint first, and say so how?
+
+### Modules and codes
+48. Can the Yingzao Fashi's grade table be confirmed from a primary or scholarly edition and stored with its source?
+49. Is the first-grade cai 9 by 6 cun, and what length was the Song cun (it varied)?
+50. How should Nexus hold the gap between kiwari manuals and measured buildings: two sources, or a distribution?
+51. Can modern modules (a 600 mm grid, a 7.5 m parking bay, a 1.2 m planning grid) be held as the same kind of standard?
+52. How does a module interact with metric and imperial inputs without silent rounding?
+53. Should a structural grid and a planning grid be separate interfaces that must be reconciled?
+
+### Cities
+54. Is Parish and Müller's self-sensitive L-system the right first street generator, or a tensor-field or agent-grown one?
+55. How are real street networks (OpenStreetMap, ODbL) brought in and kept apart from generated ones?
+56. Can natural movement (integration plus attractors) be validated against any open pedestrian count data?
+57. How is Lynch's legibility measured in a generated city without people (agent problem trips, or proxies only)?
+58. How do zoning rules (setbacks, heights, plot ratios) enter as rules with their source and jurisdiction?
+59. At what scale does a city stop being a graph of buildings and become a field (density, land use)?
+60. How do lots, buildings and streets share one seed so regenerating one neighbourhood does not move another?
+
+### Being in it and the agent
+61. In VR, what is the best way to show integration and depth: colour on the floor, a heat haze, or numbers on demand?
+62. Can a person sketch a bubble diagram by hand in VR and have it read as a `space.graph`?
+63. Should the agent be required to run the gradient, circulation and fit measures before it shows any plan?
+64. What prompt form makes an LLM write a program graph reliably (JSON schema, a table, a small DSL)?
+65. How does the agent explain a plan's failure in architects' words (served and servant, dead end, single aspect)?
+66. How are a person's own plans (their flat) captured to decode and compare?
+
+---
+
+## Chapter 18. Growth and self-organisation
+
+*From `research/22-growth-self-organisation.md` (round 4).*
+
+### Networks and resilience
+1. What exact γ thresholds and fluctuation strengths in Katifori 2010 mark the switch from tree to loops, and can Nexus reproduce Fig. 2?
+2. Does the loop density in real leaves match the model quantitatively, or only qualitatively?
+3. For engineered pipe or wiring networks, which damage model is realistic: one random link, a spatially correlated cut (a dug trench), or cascading failure?
+4. How should `check.n-1` choose its acceptance threshold for each domain (water, power, structure)?
+5. Can damage and fluctuation objectives be combined into one ensemble, and do they give different loop layouts?
+6. How does Ronellenfitsch–Katifori growth enter as "local deterministic terms", and can that be generalised to growing 3D domains?
+7. Does growth help escape local optima in solid topology optimisation as it does in flow networks?
+8. What are the Hu–Cai adaptation equations exactly, and what is their loop/tree phase diagram?
+9. How sensitive is Tero's Physarum model to the choice of source–sink sampling, and what are its parameters for the Tokyo result?
+10. Is TL/MST, MD and FT the right trio of metrics for every Nexus network, or do pipes need pressure-specific metrics?
+11. How do adaptive-network results compare with Steiner-tree or MILP optima on the same instance?
+12. Can a grown network be certified (a lower bound proving how far from optimal it is)?
+
+### Sizing laws
+13. Over what Reynolds and Womersley numbers does each Murray exponent hold, with sources?
+14. Which human or animal datasets give measured branching exponents, and how scattered are they?
+15. Does Murray's law apply to non-Newtonian fluids (blood at low shear, slurries), and with what exponent?
+16. What is the Murray equivalent for heat conduction trees, electrical bus bars and diffusion-limited pores?
+17. Does Zheng et al. 2017 actually report the 25× figure, and against what baseline?
+18. Should Murray sizing be a node or a rule checked on any branching flow network?
+19. How do manufacturing size steps (standard pipe sizes) interact with a continuous Murray optimum?
+20. What is the cost function in engineering (material, pumping energy over life, space), and does it give exponent 3?
+
+### Allometry and contested theory
+21. What is the current (2024–2026) state of the 2/3 against 3/4 metabolic-exponent debate?
+22. Did WBE or their critics publish a resolution after Savage 2008?
+23. Which parts of WBE (space-filling, invariant terminals) are uncontested and usable as design rules?
+24. Do Banavar–Maritan–Rinaldo network models give the same exponents with fewer assumptions?
+25. Should Nexus show contested exponents as an interval, a set of named models, or both?
+26. Is there any quantitative prediction of the constructal law that was made before the data and then tested?
+27. Do constructal conduction trees beat SIMP topology optimisation on the same objective, or only match it?
+28. What do Kleidon's maximum-entropy-production arguments claim, and are they less contested than constructal ones?
+29. How should the "do not claim" register phrase a contested theory so the AI neither cites it nor dismisses its useful constructions?
+30. Which published peer-reviewed critiques of the constructal law exist beyond referee reports and one book?
+
+### Growing algorithms
+31. How should space-colonisation demand points carry weights (flow, priority), and how does weighting change the tree?
+32. Can space colonisation grow networks that avoid obstacles (keep-outs from interfaces) and respect clearance?
+33. How do L-systems and space colonisation combine (grammar for local form, colonisation for global placement)?
+34. What is the right stop condition: demand consumed, budget spent, or marginal benefit below cost (the ant bridge criterion)?
+35. How does CAO compare with modern level-set or SIMP methods on fatigue life, not just peak stress?
+36. What did the 2003 reinterpretation of notch stress as bending stress change in CAO, and is it published in English?
+37. Can CAO and SKO run on Nexus's exact solids (OpenCascade), or do they need a mesh representation and remeshing?
+38. How should a grown shape become a manufacturable solid (smoothing, minimum feature size, draft angles)?
+39. Can growth respect standard parts (grow up to a standard boss, then snap to an interface)?
+
+### Self-assembly and agents
+40. How long did the 1,024-Kilobot assemblies take, and what share of runs needed human help?
+41. What is the accuracy, in robot diameters, of additive against subtractive Kilobot shape formation?
+42. Can the seed requirement be replaced by leader election, as the critical note suggests, and at what cost?
+43. Which TERMES and Kilobot results are proofs and which are experiments?
+44. What local rule makes an army ant join or leave a bridge, measured, and what holding force does an ant exert?
+45. Does the ant bridge's stopping point match the geometric cost–benefit optimum quantitatively?
+46. What are the measured material properties of fire-ant aggregations (viscosity, elasticity) for a `structure.living` node?
+47. How does coercion at the raft edge generalise to construction swarms (trapping rules)?
+48. Can agents of different kinds (robots and people) share one living-structure model?
+
+### Quorum and consensus
+49. Under what conditions does LuxR–AHL signalling *not* trigger at high concentration, per the primer?
+50. What is the best mathematical model of quorum sensing with decay and diffusion, and its hysteresis width?
+51. How do quorum-quenching enzymes and cheaters map onto adversarial reviewers in an AI gate?
+52. What do Oddi, Reina and Trianni (ANTS 2024) find about precision against speed for quorum estimation?
+53. How should independent checks be weighted in `gate.quorum` so that correlated judges count once?
+54. When is a single-option quorum enough, and when is Seeley's cross-inhibition between options needed?
+
+### Morphogenesis and repair
+55. Have independent labs reproduced Durant 2017's persistent two-headed planaria?
+56. What are the full limb outcomes in Murugan 2022 (share of animals, structures regrown), from the paper itself?
+57. What fraction of designed xenobots behaved as simulated, and how was the gap measured?
+58. Which Levin-lab claims are experiments, which are models, and which are philosophical framing (TAME)?
+59. Can a "stored target plus local repair" loop handle a design whose target changes (re-specification)?
+60. How does Doursat's gene-regulatory model read gradients, and is the code available?
+61. Can field-defined placement of modules (morphogenetic engineering) keep the functor law for folded blocks?
+
+### Hygromorphs and 4D printing
+62. Which hygroexpansion coefficients for wood veneer, PLA–wood filament and cellulose composites are published and sourced?
+63. How accurate is Timoshenko's bilayer formula for printed hygromorphs, and where does it fail (large curvature, anisotropy)?
+64. How fast do printed hygromorphs respond, and how many cycles do they survive before fatigue?
+65. How did Correa 2020 obtain multi-phase motion in the pine scale, and can it be expressed as a node graph?
+66. Can the wheat awn's ratchet plus humidity drive be modelled as a reusable interface (one-way friction plus actuator)?
+
+### Nexus-wide
+67. Should `grow` be one node with a rule parameter, or a family of nodes sharing a contract?
+68. How does a grown result stay deterministic under floating-point and parallel evaluation (replay)?
+69. How do demand fields compose when several parts demand the same space?
+70. Which existing owner (dataflow, numeric, kits) hosts the growth loop without becoming a second owner?
+
+---
+
+## Chapter 19. Keeping knowledge true at scale
+
+*From `research/23-truth-at-scale.md` (round 4).*
+
+### Contributors and weighting
+1. What is the unit of a "rater" in Nexus: a person, a dataset, a model id, a model id plus prompt version, or a whole AI pipeline?
+2. How many resolved claims does a source need before its learned reliability outweighs the prior for its type?
+3. How are correlated sources detected automatically (same numbers to the last digit, same scrape origin, same model)?
+4. Should a source's reliability be one number, or vary by quantity kind (a maker good on dimensions, poor on efficiency)?
+5. Does Dawid–Skene's label-swap ambiguity matter for categorical claims like "which standard", and how many gold items fix it?
+6. Can item difficulty (GLAD) be estimated for engineering values, e.g. "thermal conductivity of a composite" is hard, "bolt head width" easy?
+7. How is a user told their contributions are being weighted, without discouraging them?
+8. Should a person be able to see their own learned reliability, and challenge it?
+9. Does weighting by agreement punish the one contributor who is right against a copied majority?
+10. What prior should a brand-new human contributor get compared with a brand-new AI pipeline?
+
+### AI writing into the library
+11. What fraction of today's stored values are already "typical" or AI-estimated, measured, not guessed?
+12. How should the lineage fraction be weighted: by count of inputs, or by sensitivity of the output to each?
+13. What lineage-fraction threshold should block a release, and should it differ by field?
+14. How is a cycle "AI output supported only by AI outputs" detected when a human copies an AI value by hand?
+15. How is diversity of a library kind measured so that narrowing (collapse) is visible early?
+16. Should the AI be shown AI-written claims at all when building, or only sourced ones plus a gap marker?
+17. When the AI fills a gap, should it give a range wide enough to cover the real tail, and how wide is honest?
+18. Does caching `docs/FOR-AI.md` and library context create a feedback loop where the AI's past outputs shape its future ones?
+19. Should AI-written claims expire unless confirmed within some period?
+20. How do we keep "fresh real data" coming in when the user is one person: scheduled scrapes, datasheet imports, measurements?
+
+### Retractions and citation health
+21. How many DOIs in `data/references.ts` today, and has any been retracted or corrected?
+22. How often should the retraction check run, and should it alert or only badge?
+23. What should happen to a stored piece whose data came from a later-corrected (not retracted) source?
+24. How are non-DOI sources (datasheets, web pages) watched for change: hash of the page, archive copy, retrieved date?
+25. Can a datasheet revision be treated as a "correction notice" for every claim drawn from the earlier revision?
+26. How is "supporting vs mentioning" decided for our own use of a source: by hand, by an AI gate, or by the source's type?
+27. Should Nexus use scite or a similar service, or only Crossref's open data, given cost and licence?
+28. What is the engineering equivalent of the replication rate: how often do datasheet figures match independent tests?
+29. Which source types (manufacturer, distributor, hobbyist review, standards table) shrink most under independent measurement?
+30. How do we treat a retracted paper that is cited for a method still valid (not its result)?
+
+### Provenance and licence
+31. Is PROV-JSON or JSON-LD the export, and does anyone downstream read either?
+32. How large does the provenance graph grow per board, and does it need compaction (PROV bundles)?
+33. Should each stored piece's manifest be signed, and with whose key, for a single-user app?
+34. What licence do user-contributed values carry by default, and is that the user's decision (QUESTIONS.md)?
+35. Which current data files have unclear licences (scraped tables, datasheets)?
+36. Can a CC BY-SA source value be stored in a library under a different licence, and what does export then carry?
+37. Do Nexus's exports (STEP, glTF, BOM) carry provenance and licence in their own metadata fields?
+38. Should rendered pictures the app makes carry C2PA credentials, marking AI-drawn ones as `trainedAlgorithmicMedia`?
+39. Are pictures judged blind (genai.ts) themselves stored with provenance of which model judged them?
+40. How is SPDX 3.0's Dataset profile mapped to a Nexus data file, field by field?
+
+### Kinds and consensus
+41. Who approves a new quantity kind or interface type in a one-user app: the user, a blind AI judge, or both?
+42. How long should a new kind wait before it is created, and is time meaningful when the AI works in seconds?
+43. When two sources disagree on a convention (thread naming, port naming), is ISO-style consensus even possible here?
+44. Should "sustained opposition" be recorded from AI judges, and what counts as sustained for a model?
+45. When should the value fit (node 9) refuse to give one value and instead keep two clusters (like G)?
+46. Is the CODATA rule "all normalised residuals ≤ 2" right for engineering data, which is far less consistent?
+47. Should an expansion factor be published on every fitted value, as CODATA does?
+48. Which NIST grade can any Nexus value honestly claim; can any reach "certified-like"?
+49. How is a "consensus value" kept traceable when its inputs are datasheets with no stated uncertainty?
+50. When CODATA 2026 lands (early 2027), what is the plan to update and list what moved, given T1?
+
+### Calibration and forecasting
+51. What tasks does the in-app AI do that produce a resolvable forecast (estimates, fits, "will it pass")?
+52. How many resolved forecasts per task tag are needed before showing calibrated confidence?
+53. Brier for categorical, CRPS or interval coverage for numeric: which does the ledger show the user?
+54. Can a simulation count as resolution, or only a measurement or sourced value?
+55. Should recalibration be per model version, and reset when the model or prompt changes?
+56. Is the user's own forecasting record worth showing, or does it feel like grading?
+57. Should aggregated AI forecasts be extremized as GJP did, and does that apply to correlated model calls?
+58. How are forecasts on questions that never resolve kept from flattering the score?
+59. Could a short "probability training" step (like GJP's under-an-hour module) be offered to the user, and does it help engineering estimates?
+60. How does the ledger stay honest if the AI also writes the resolution (e.g. picks which sourced value it is checked against)?
+
+### Fairness and gates
+61. Which existing gates in Nexus see author or origin features at all?
+62. What score difference in the author-flip audit counts as a failure?
+63. Does labelling claims "AI-written" make users distrust correct ones, and should the label be softer once calibrated?
+64. Is a claim from a newcomer that passes every physical check ever held back, and should it be?
+65. How do we stop a reputation prior from becoming permanent (the rich-get-richer of trust)?
+66. Should gates be audited for drift over time, as Lift Wing warns old ORES models drift?

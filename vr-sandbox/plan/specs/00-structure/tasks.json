@@ -145,6 +145,19 @@
    "after": [
     "S5"
    ]
+  },
+  {
+   "id": "S13",
+   "title": "Post-mortems as a timeline, contributing factors and a hindsight guard (Allspaw, Dekker, SRE), replacing five whys; Perrow's chart computed from any board's structure (research 20)",
+   "meets": [
+    "S-R3"
+   ],
+   "owner": "plan/, graph.ts",
+   "check": "a failed task's post-mortem has a timeline and factors, and names no culprit",
+   "status": "failing",
+   "after": [
+    "S10"
+   ]
   }
  ]
 }

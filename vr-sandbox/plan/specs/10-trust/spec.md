@@ -59,3 +59,8 @@ or a label (typical, estimate) by rule, not by check. Sensitivities come from re
 | T8 | Forward-mode differentiation through boards | sensitivities equal finite differences within tolerance and are faster, measured | 00 |
 | T9 | The "cannot simulate" register, read by the AI | asked to "simulate a person's mind", the AI cites the register | 00 |
 | T10 | Floating-point lint | each planted pattern is flagged with its case | 00 |
+| T11 | **First**: the wire check uses quantity kinds from `quantities.ts` (research 18 found 60 rpm into Hz gives 6.283 Hz, torque wiring to energy, gray to sievert, a °C difference made absolute) | each of those five wirings is refused or converted correctly; a port with no unit no longer wires to anything | — |
+| T12 | Retraction check: source DOIs against Crossref's open Retraction Watch data; everything derived marked | a planted retracted DOI marks its descendants | T3 |
+| T13 | AI-written values beside sourced ones, never replacing them (C27); the share of AI-made inputs on every derived value | an AI-written value cannot overwrite a sourced one; a derived value shows its AI share | T3 |
+| T14 | Values linked to the decisions they bear on; a new estimate reopens them; two readings of one quantity that disagree stop the line (C28) | a revised figure reopens its linked decision; two disagreeing readings raise an andon | T3, 00 S10 |
+| T15 | The AI's stated confidence Brier-scored as forecasts resolve; labelled "uncalibrated" until it is | the score shown with its count of resolved forecasts | 00 S5 |

@@ -54,3 +54,6 @@ inputs change, whether anything looks at its output or not. Runs are not guarant
 | LW6 | The chronicle | "when did the bridge fail" answered from a run's log | LW2 |
 | LW7 | Process boards gated on state | a recipe and a heat treatment run as boards; a step with no done-condition is flagged | 00 |
 | LW8 | Scale anchors and rebasing | at 10 km from the origin a 1 mm part does not jitter, measured | spec 04 P4 |
+| LW9 | Determinism across browsers: a Jolt build with its cross-platform determinism option; a deterministic maths module (V8 and JavaScriptCore differ on some Math results); a CI battery in three browsers (research 19) | the same run hashes equal in Chromium, Firefox and WebKit | LW2 |
+| LW10 | A `grow` node family: demand field, local rule, budget, load or damage ensemble, stop condition; resilience with an n − 1 check (research 22) | a grown network survives the loss of any one edge where the objective asks it to | 09 P1 |
+| LW11 | Space measures as nodes (justified depth, integration, intimacy gradient, egress distance, daylight), each with its stability under small edits (research 21) | a plan's measures reported with how much they move under a one-door edit | — |
