@@ -64,8 +64,6 @@ export function curveAt(c: Curve, u: number): { at: V3; d1: V3; d2: V3 } {
 }
 /** A curve's curvature at u: |C′ × C″| / |C′|³. */
 export const curvature = (c: Curve, u: number) => { const { d1, d2 } = curveAt(c, u); return len(cross(d1, d2)) / Math.max(1e-12, len(d1) ** 3); };
-/** A curve's points, n + 1 of them, for drawing it or laying a skin across it. */
-export const curvePoints = (c: Curve, n = 48): V3[] => Array.from({ length: n + 1 }, (_, i) => curveAt(c, i / n).at);
 
 // ---- surfaces -----------------------------------------------------------------------------------------------------
 /** A tensor-product NURBS surface: rows of control points along u, each row along v. */
@@ -116,7 +114,6 @@ export interface Patch { s: Surface; uv?: [UV, UV, UV, UV]; /** or the region ab
  *  are, as u (else straight above the line's own ends): a door's shut line leaning forward as it rises */ top?: [number, number]; off?: number }
 const asPatch = (x: Surface | Patch): Patch => ('net' in x ? { s: x } : x);
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
-/** Where (a, b) in a patch's own square falls on its surface (bilinear between its corners). */
 // (by the line and the surface it is on: one line shared by two patches on different surfaces has two lengths)
 const runs = new WeakMap<UV[], WeakMap<Surface, number[]>>();
 /** Where a share a of the way along a line on a surface falls, by its length on the surface (not in (u, v)). */
@@ -146,7 +143,6 @@ export function patchAt(pt: Patch, a: number, b: number): SurfacePoint {
   const [u, v] = uvOf(pt, a, b), sp = surfaceAt(pt.s, clamp01(u), clamp01(v));
   return pt.off ? { ...sp, at: add(sp.at, mul(sp.n, pt.off)) } : sp;
 }
-/** A patch's points over a grid of na × nb (and its mirror's after them, where it has one). */
 // (what a skin's points are depends only on it and how finely it is sampled: kept by the skin, as everything else known of it)
 const sampled = new WeakMap<object, Map<string, V3[]>>();
 export function patchPoints(x: Surface | Patch, na = 16, nb = 12, mirrored = true): V3[] {
@@ -185,14 +181,6 @@ function areaOf(pt: Patch, nu: number, nv: number): number {
   for (let i = 0; i <= nu; i++) { g.push([]); for (let j = 0; j <= nv; j++) g[i]!.push(patchAt(pt, i / nu, j / nv).at); }
   for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) A += len(cross(sub(g[i + 1]![j]!, g[i]![j]!), sub(g[i]![j + 1]!, g[i]![j]!))) * 0.5 + len(cross(sub(g[i + 1]![j]!, g[i + 1]![j + 1]!), sub(g[i]![j + 1]!, g[i + 1]![j + 1]!))) * 0.5;
   return A * (pt.s.mirror ? 2 : 1);
-}
-/** Bounds of a patch and its mirror: a whole surface's from its control net (it lies within the net's hull), a part's
- *  from its points. */
-export function surfaceBounds(x: Surface | Patch): { min: V3; max: V3 } {
-  const pt = asPatch(x), pts = pt.uv || pt.off ? patchPoints(pt, 20, 14) : pt.s.net.flat().flatMap((q) => (pt.s.mirror ? [q, [q[0], q[1], -q[2]] as V3] : [q]));
-  const min: V3 = [Infinity, Infinity, Infinity], max: V3 = [-Infinity, -Infinity, -Infinity];
-  for (const q of pts) for (let k = 0; k < 3; k++) { min[k] = Math.min(min[k]!, q[k]!); max[k] = Math.max(max[k]!, q[k]!); }
-  return { min, max };
 }
 
 // ---- through given points: interpolation (The NURBS Book 9.2.1 and 9.2.5) -------------------------------------------
@@ -247,11 +235,6 @@ export function fitThrough(Q: V3[], t: number[], n: number, p: number, lambda: n
   const X: V3[] = new Array(m); for (let c = m - 1; c >= 0; c--) { let acc = B[c]!; for (let j = c + 1; j < m; j++) acc = sub(acc, mul(X[j]!, A[c]![j]!)); X[c] = mul(acc, 1 / (A[c]![c]! || 1e-300)); }
   return { P: Array.from({ length: nn }, (_, i) => fixed.get(i) ?? X[idx.get(i)!]!), U };
 }
-/** A curve through the points given, in their order (degree 3, or less where there are fewer than four). */
-export function interpolate(Q: V3[], p = 3, ends: { d0?: V3; d1?: V3 } = {}): Curve {
-  const m = Q.length + (ends.d0 ? 1 : 0) + (ends.d1 ? 1 : 0), d = Math.min(p, m - 1), t = chordParams(Q), U = averagedKnots(withEnds(t, !!ends.d0, !!ends.d1), d);
-  return { P: through(Q, t, U, d, ends.d0, ends.d1), U };
-}
 /** A skin through rows of points: each row a section (all with as many points), the surface passing through every
  *  point given. Each section is interpolated on parameters shared by all of them, then each column of the sections'
  *  control points across the sections (a skinned or lofted surface by interpolation). */
@@ -275,11 +258,6 @@ export function skinThrough(rows: V3[][], o: { p?: number; q?: number; mirror?: 
   const Kc = K + (o.e0 ? 1 : 0) + (o.e1 ? 1 : 0), pc = Math.min(o.p ?? 3, Kc - 1), U = averagedKnots(withEnds(ub, !!o.e0, !!o.e1), pc);
   const cols = Array.from({ length: Mc }, (_, j) => { const col = R.map((r) => r[j]!), ch = chord(col); return through(col, ub, U, pc, o.e0 ? mul(unit(o.e0), ch) : undefined, o.e1 ? mul(unit(o.e1), ch) : undefined); });
   return { net: Array.from({ length: Kc }, (_, i) => cols.map((c) => c[i]!)), U, V, p: pc, q, mirror: o.mirror };
-}
-/** Where on a skin a section's point falls: the (u, v) its interpolation gave it (the averaged chord parameters). */
-export function skinParams(rows: V3[][], u?: number[]): { u: number[]; v: number[] } {
-  const avg = (ts: number[][]) => ts[0]!.map((_, j) => ts.reduce((a, t) => a + t[j]!, 0) / ts.length);
-  return { v: avg(rows.map(chordParams)), u: u ?? avg(Array.from({ length: rows[0]!.length }, (_, j) => chordParams(rows.map((r) => r[j]!)))) };
 }
 
 // ---- making surfaces -------------------------------------------------------------------------------------------------
@@ -320,17 +298,6 @@ export function fromEdge(s: Surface, row: (E: V3, d: V3, i: number) => V3[], o: 
 export function skin(sections: Curve[], o: { mirror?: boolean; q?: number } = {}): Surface {
   const n = sections[0]!.P.length; if (sections.some((c) => c.P.length !== n)) throw new Error('every section needs as many control points');
   return { net: sections.map((c) => c.P.map((P) => [...P] as V3)), p: Math.min(3, sections.length - 1), q: o.q ?? Math.min(3, n - 1), mirror: o.mirror };
-}
-/** A Coons patch from four boundary curves, as a control net nu × nv: the patch's points at the net's places, each the
- *  two ruled surfaces less the bilinear one (top: u = 0 … 1 at v = 0; bottom at v = 1; left: v = 0 … 1 at u = 0; right
- *  at u = 1; corners shared). */
-export function coons(top: Curve, bottom: Curve, left: Curve, right: Curve, nu = 7, nv = 6): Surface {
-  const T = (u: number) => curveAt(top, u).at, B = (u: number) => curveAt(bottom, u).at, L = (v: number) => curveAt(left, v).at, R = (v: number) => curveAt(right, v).at;
-  const c00 = T(0), c10 = T(1), c01 = B(0), c11 = B(1), net: V3[][] = [];
-  for (let i = 0; i < nu; i++) { const u = i / (nu - 1); net.push([]); for (let j = 0; j < nv; j++) { const v = j / (nv - 1);
-    const ruledU = add(mul(T(u), 1 - v), mul(B(u), v)), ruledV = add(mul(L(v), 1 - u), mul(R(v), u)), bil = add(add(mul(c00, (1 - u) * (1 - v)), mul(c10, u * (1 - v))), add(mul(c01, (1 - u) * v), mul(c11, u * v)));
-    net[i]!.push(sub(add(ruledU, ruledV), bil)); } }
-  return { net };
 }
 /** Made to cross its mirror smoothly: the row on z = 0 kept on it, the next row moved only in z (one tangent plane). */
 export function symmetric(s: Surface, axisRow: 'first' | 'last' = 'first'): Surface {
@@ -426,17 +393,6 @@ export function zebra(x: Surface | Patch, view: V3 = [-1, -0.3, -0.6], axis: V3 
   return { psi, breaks: worst / Math.max(1e-9, typical / Math.max(1, cnt)), at };
 }
 
-/** Fairing where a fault is, not everywhere: the net relaxed within so many rows and columns of (u, v) (where zebra lines
- *  broke, or curvature wobbled), its boundary held, the rest of the surface as it was. */
-export function fairNear(s: Surface, u: number, v: number, reach = 2, passes = 3, k = 0.5): Surface {
-  const ci = Math.round(u * (s.net.length - 1)), cj = Math.round(v * (s.net[0]!.length - 1)); let net = s.net.map((r) => r.map((P) => [...P] as V3));
-  for (let t = 0; t < passes; t++) {
-    const next = net.map((r) => r.map((P) => [...P] as V3));
-    for (let i = Math.max(1, ci - reach); i <= Math.min(net.length - 2, ci + reach); i++) for (let j = Math.max(1, cj - reach); j <= Math.min(net[0]!.length - 2, cj + reach); j++) { const m = mul(add(add(net[i - 1]![j]!, net[i + 1]![j]!), add(net[i]![j - 1]!, net[i]![j + 1]!)), 0.25); next[i]![j] = add(net[i]![j]!, mul(sub(m, net[i]![j]!), k)); }
-    net = next;
-  }
-  return { ...s, net };
-}
 /** A curve's curvature comb: its curvature at n + 1 places, signed in the plane it mostly lies in, and how many times
  *  it turns the other way (an inflection: a line meant to sweep one way that wavers). */
 export function comb(c: Curve, n = 64, band = 0.02): { k: number[]; inflections: number; peak: number } {

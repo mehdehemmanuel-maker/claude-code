@@ -3,6 +3,7 @@
 // natural convection and radiation. Hot enough, metal glows; hot enough, wood chars. Values are typical handbook
 // properties near room temperature; each names its source.
 
+import { SIGMA_SB } from '../data/constants';
 import type { Material } from '../data/materials';
 
 export interface ThermalProps {
@@ -17,7 +18,7 @@ export interface ThermalProps {
 
 /** Room temperature, deg C. */
 export const AMBIENT = 20;
-const SIGMA = 5.670374419e-8;
+const SIGMA = SIGMA_SB;
 const K0 = 273.15;
 
 const T = (c: number, k: number, emissivity: number, source: string): ThermalProps => ({ c, k, emissivity, source });
@@ -26,6 +27,7 @@ const BY_ID: Record<string, ThermalProps> = {
   'steel.a36': T(486, 51.9, 0.8, 'MatWeb ASTM A36: c 0.486 J/g K, k 51.9 W/m K; emissivity of mill-scale steel 0.7-0.85'),
   'steel.1018-cd': T(486, 51.9, 0.6, 'MatWeb AISI 1018: c 0.486 J/g K, k 51.9 W/m K; cold-drawn surface 0.5-0.7'),
   'steel.4140-ann': T(473, 42.6, 0.7, 'MatWeb AISI 4140 annealed: c 0.473 J/g K, k 42.6 W/m K'),
+  'steel.4140-qt': T(473, 42.6, 0.7, 'MatWeb AISI 4140: c 0.473 J/g K, k 42.6 W/m K (as annealed: its temper changes them little)'),
   'steel.52100': T(475, 46.6, 0.3, 'MatWeb AISI 52100: c 0.475 J/g K, k 46.6 W/m K; polished 0.1-0.3'),
   'steel.music-wire': T(486, 50, 0.4, 'MatWeb high-carbon spring steel (typical)'),
   'stainless.304': T(500, 16.2, 0.4, 'MatWeb 304 annealed: c 0.500 J/g K, k 16.2 W/m K; 2B finish 0.3-0.45'),
@@ -71,7 +73,9 @@ const BY_ID: Record<string, ThermalProps> = {
 };
 
 /** Wood at 12% moisture: Wood Handbook ch. 4 (FPL-GTR-282), from the wood's specific gravity. */
-function woodThermal(G: number): ThermalProps {
+/** A wood's specific heat and conductivity across the grain from its specific gravity, at 12 % moisture (Wood Handbook,
+ *  eqs. 4-7, 4-11 to 4-13). */
+export function woodThermal(G: number): ThermalProps {
   const mc = 12;
   // conductivity across the grain, eq. 4-7: k = G (B + C MC) + A
   const k = G * (0.1941 + 0.004064 * mc) + 0.01864;
@@ -94,19 +98,6 @@ export function thermalOf(m: Material): ThermalProps {
     : T(440, 7.6, 0.4, 'NdFeB vendor data (e.g. Arnold): c 0.44 J/g K, k 7.6-9 W/m K; nickel plated');
   throw new Error(`no thermal data for ${m.id}`);
 }
-
-/**
- * Of heat made at a contact, the share that goes into side A: Blok's partition by thermal effusivity sqrt(k rho c).
- * The surface that soaks heat away faster takes more of it (steel on wood: the steel takes about 95%).
- */
-export function heatShare(a: Material, b: Material | null): number {
-  if (!b) return 0.5;
-  const ea = Math.sqrt(thermalOf(a).k * a.density * thermalOf(a).c), eb = Math.sqrt(thermalOf(b).k * b.density * thermalOf(b).c);
-  return ea / (ea + eb);
-}
-
-/** Of plastic work, the share that becomes heat (the rest is stored in the metal's dislocations): Taylor-Quinney. */
-export const TAYLOR_QUINNEY = 0.9;
 
 /**
  * Heat a part loses to still room air, W: natural convection (the simplified laminar air correlation for a surface

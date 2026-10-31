@@ -2,23 +2,26 @@
 // compiled first (the compiler fetched once from a CDN), Python in Pyodide (fetched once from a CDN), C++ as the
 // JavaScript it was turned into. It is given the facts and the step before's output; it may ask for pipeline steps
 // (step("…")) and say things (say("…")); what it returns, or its last Python value or `result`, is its output. It has no
-// page to touch; the forge stops it if it runs too long.
+// page to touch; the forge stops it if it runs too long. A block on a board of blocks (src/nexus/dataflow.ts) gives it
+// its inputs by name (`vars`): each is a name in the code, and what it returns comes back as it is, not as words.
 
 const TS_URL = 'https://cdn.jsdelivr.net/npm/typescript@5.6.3/+esm';
 const PY_URL = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
-type Msg = { id: number; lang: 'js' | 'ts' | 'python' | 'cpp'; code: string; facts: Record<string, number>; input: string };
+type Msg = { id: number; lang: 'js' | 'ts' | 'python' | 'cpp'; code: string; facts: Record<string, number>; input: string; vars?: Record<string, unknown> };
 let ts: { transpile(code: string, o: object): string } | null = null;
 let py: { runPythonAsync(code: string, o?: object): Promise<unknown>; toPy(x: unknown): unknown; globals: { set(k: string, v: unknown): void; get(k: string): unknown } } | null = null;
 
-async function run(m: Msg): Promise<{ value: string; logs: string[]; steps: string[] }> {
-  const logs: string[] = [], steps: string[] = [];
-  const show = (x: unknown) => (typeof x === 'string' ? x : JSON.stringify(x));
+/** Runs a step's code; the worker's own, and what a test gives a board to run its code headless. */
+export async function run(m: Msg): Promise<{ value: unknown; logs: string[]; steps: string[] }> {
+  const logs: string[] = [], steps: string[] = [], vars = m.vars ?? {};
+  const show = (x: unknown) => (m.vars ? x : typeof x === 'string' ? x : JSON.stringify(x));
   const api = { facts: m.facts, input: m.input, step: (w: string) => { steps.push(String(w)); }, say: (w: string) => { steps.push(`say ${w}`); }, log: (...xs: unknown[]) => { logs.push(xs.map(show).join(' ')); } };
   if (m.lang === 'python') {
     if (!py) { let mod: { loadPyodide(o: object): Promise<typeof py> }; try { mod = (await import(/* @vite-ignore */ `${PY_URL}pyodide.mjs`)) as typeof mod; } catch { throw new Error('Python runs in Pyodide, fetched from cdn.jsdelivr.net the first time: it could not be reached from here (offline, or blocked)'); } py = await mod.loadPyodide({ indexURL: PY_URL }); }
     const p = py!;
     p.globals.set('facts', p.toPy(m.facts)); p.globals.set('input', m.input); p.globals.set('step', api.step); p.globals.set('say', api.say); p.globals.set('log', api.log);
     p.globals.set('result', undefined);
+    for (const [k, v] of Object.entries(vars)) p.globals.set(k, p.toPy(v));
     const out = await p.runPythonAsync(m.code), result = p.globals.get('result');
     const v = result ?? out; const plain = v && typeof v === 'object' && 'toJs' in (v as object) ? (v as { toJs(): unknown }).toJs() : v;
     return { value: plain === undefined || plain === null ? '' : show(plain instanceof Map ? Object.fromEntries(plain) : plain), logs, steps };
@@ -31,9 +34,10 @@ async function run(m: Msg): Promise<{ value: string; logs: string[]; steps: stri
   }
   // a lone expression is its own value
   const body = /\breturn\b/.test(js) || /;\s*\S/.test(js.trim().replace(/;\s*$/, '')) || /^\s*(let|const|var|if|for|while|function)\b/.test(js) ? js : `return (${js.replace(/;\s*$/, '')});`;
-  const f = new Function('facts', 'input', 'step', 'say', 'log', 'forward', 'turn', 'halt', 'distance', `"use strict";\n${body}`) as (...a: unknown[]) => unknown;
+  const names = Object.keys(vars).filter((k) => /^[A-Za-z_$][\w$]*$/.test(k));
+  const f = new Function('facts', 'input', 'step', 'say', 'log', 'forward', 'turn', 'halt', 'distance', ...names, `"use strict";\n${body}`) as (...a: unknown[]) => unknown;
   const dev = (w: string) => api.step(`device first ${w}`);
-  const v = await f(api.facts, api.input, api.step, api.say, api.log, (x: number) => dev(`forward ${x}`), (d: number) => dev(`turn ${d}`), () => dev('stop'), () => m.facts.rover_distance ?? 4000);
+  const v = await f(api.facts, api.input, api.step, api.say, api.log, (x: number) => dev(`forward ${x}`), (d: number) => dev(`turn ${d}`), () => dev('stop'), () => m.facts.rover_distance ?? 4000, ...names.map((k) => vars[k]));
   return { value: v === undefined ? '' : show(v), logs, steps };
 }
 /** TypeScript's simple type annotations taken off by pattern, where the compiler cannot be had: interfaces and type
@@ -47,7 +51,8 @@ function stripTypes(src: string): string {
     .replace(/\s+as\s+[\w[\]<>|.]+/g, '')
     .replace(/(\w|\))!(?=[.)\],;\s])/g, '$1');
 }
-self.onmessage = async (e: MessageEvent<Msg>) => {
+// (only where it is a worker: imported by a test, it only lends `run`)
+if (typeof self !== 'undefined' && typeof window === 'undefined') self.onmessage = async (e: MessageEvent<Msg>) => {
   const m = e.data;
   try { self.postMessage({ id: m.id, ...(await run(m)) }); }
   catch (err) { self.postMessage({ id: m.id, error: (err as Error).message ?? String(err) }); }

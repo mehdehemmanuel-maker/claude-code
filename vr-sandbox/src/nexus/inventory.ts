@@ -9,9 +9,7 @@
 // standard parts carry their standard's name and sizes (ISO 4762 screws, the 608 bearing's 8 × 22 × 7 mm, the NEMA 17
 // face). Counts and masses marked "about" or "typical" vary from maker to maker.
 
-import { shapes, type Section } from './cell';
-import type { Board } from './boards';
-import { callFamily, FAMILIES } from './families';
+import { callFamily } from './families';
 import { ELEMENTS, elementId, elementsOf, makeup, makeupSays } from './elements';
 import { LIFE, MOLECULES, daltonsOf } from './life';
 
@@ -49,7 +47,7 @@ export const PROCESSES: Record<Process, { says: string; here: boolean }> = {
   chemistry: { says: 'made by chemistry: refined, reacted or synthesised', here: false },
   roll: { says: 'hot-rolled in a mill: needs a rolling mill', here: false },
   swage: { says: 'swaged: compacted by a swaging machine', here: false },
-  grow: { says: 'grown by living cells, from food, as their genes direct', here: false },
+  grow: { says: 'grown by living cells, from food, as their genes direct', here: false }
 };
 export type Kind = 'product' | 'assembly' | 'part' | 'material' | 'element';
 export interface Item {
@@ -78,7 +76,6 @@ function memo<T>(f: (id: string) => T): (id: string) => T {
   let at = -1; const kept = new Map<string, T>();
   return (id) => { if (at !== rev) { kept.clear(); at = rev; } let v = kept.get(id); if (v === undefined) { v = f(id); kept.set(id, v); } return v; };
 }
-/** An entry, compactly: id, name, "Category/Subcategory[/Sub-subcategory]", kind, process, "child*n child …", says, spec, more. */
 /** Ids written by hand twice: the second would replace the first unseen (a gear pump turned into one of its gears). */
 export const WRITTEN_TWICE: string[] = [];
 function e(id: string, name: string, path: string, kind: Kind, make: Process, of: string, says: string, spec = '', more: Partial<Item> = {}): void {
@@ -135,8 +132,10 @@ m('neoprene', 'neoprene', 'Polymers/Elastomers', 'belts and surrounds', '');
 m('rubber', 'natural rubber', 'Polymers/Elastomers', 'tyres', '');
 m('epoxy', 'epoxy', 'Polymers/Thermosets', 'coatings, potting, moulding compound', '');
 m('phenolic', 'phenolic', 'Polymers/Thermosets', 'potentiometer substrates, handles', '');
+m('friction-composite', 'friction composite', 'Polymers/Composites', 'a brake pad\'s friction material: phenolic resin binding steel fibre, graphite, barite and copper (typical shares)', '');
 m('fr4', 'FR-4 laminate', 'Composites/Laminates', 'woven glass in epoxy: the board circuits are on', '');
 m('fibreglass', 'glass fibre', 'Composites/Fibres', 'tension cords, insulation sleeving', '');
+m('glass-wool', 'glass wool', 'Composites/Fibres', 'silencer packing, heat insulation', '');
 m('cfrp', 'carbon fibre in epoxy', 'Composites/Laminates', 'stiff and light', '');
 m('paper', 'paper', 'Other materials/Natural', 'cones, separators', '');
 m('wood-veneer', 'wood veneer', 'Other materials/Natural', 'plies for plywood', '');
@@ -579,12 +578,26 @@ e('nimh-positive', 'nickel hydroxide electrode', 'Electrical/Power/Cell parts', 
 e('nimh-negative', 'metal hydride electrode', 'Electrical/Power/Cell parts', 'part', 'coat', 'lani5 nickel', 'a hydrogen-storing alloy pasted on a perforated nickel strip');
 e('silver-oxide-pellet', 'silver oxide cathode', 'Electrical/Power/Cell parts', 'part', 'sinter', 'ag2o graphite', 'a pressed pellet of silver oxide and graphite');
 e('battery-label', 'label', 'Electrical/Power/Cell parts', 'part', 'laminate', 'pet', 'the printed shrink sleeve round the can');
-e('plate-positive', 'positive plate', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead pbo2', 'a cast lead-alloy grid pasted with lead dioxide');
-e('plate-negative', 'negative plate', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead', 'a cast lead-alloy grid pasted with sponge lead');
+e('plate-positive', 'positive plate', 'Electrical/Power/Lead-acid parts', 'assembly', 'assemble', 'pb-grid paste-positive', 'a cast lead-alloy grid pasted with lead dioxide');
+e('plate-negative', 'negative plate', 'Electrical/Power/Lead-acid parts', 'assembly', 'assemble', 'pb-grid paste-negative', 'a cast lead-alloy grid pasted with sponge lead');
 e('plate-separator', 'plate separator', 'Electrical/Power/Lead-acid parts', 'part', 'extrude', 'pe', 'a ribbed polyethylene envelope round a plate (or, in AGM and gel cells, a glass mat)');
 e('battery-case', 'battery case', 'Electrical/Power/Lead-acid parts', 'part', 'mould', 'pp', 'the moulded box of cells, a wall between each');
 e('battery-lid', 'battery lid', 'Electrical/Power/Lead-acid parts', 'part', 'mould', 'pp', 'the lid heat-sealed onto the case, its vents in it');
 e('battery-post', 'terminal post', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead', 'a cast lead post through the lid, joined to its cells\' straps');
+e('pb-grid', 'cast grid', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead', 'a lead-calcium grid cast in one: its frame, bars, wires and lug', '', { size: [140, 120, 1.2] });
+e('paste-positive', 'positive paste', 'Electrical/Power/Lead-acid parts', 'part', 'coat', 'pbo2', 'lead dioxide paste pressed into a grid and cured: porous, about half of it pores', '', { size: [140, 120, 1.8] });
+e('paste-negative', 'negative paste', 'Electrical/Power/Lead-acid parts', 'part', 'coat', 'lead', 'sponge lead paste pressed into a grid and cured', '', { size: [140, 120, 1.5] });
+e('la-strap', 'plate strap', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead', 'lead cast across the lugs of a cell\'s plates of one sign', '', { size: [40, 8, 16] });
+e('la-intercell', 'intercell connector', 'Electrical/Power/Lead-acid parts', 'part', 'cast', 'lead', 'lead welded through a partition, joining one cell\'s strap to the next one\'s', '', { size: [12, 14, 14] });
+e('battery-vent-cap', 'vent cap', 'Electrical/Power/Lead-acid parts', 'part', 'mould', 'pp', 'a moulded cap over a cell\'s filling hole, venting its gas', '', { size: [22, 6, 22] });
+e('battery-tray', 'battery tray', 'Electrical/Power/Batteries', 'part', 'mould', 'pp', 'the moulded tray a car\'s battery sits in', '', { size: [260, 6, 200] });
+e('battery-clamp', 'battery hold-down clamp', 'Electrical/Power/Batteries', 'part', 'stamp', 'steel-low', 'a pressed bar across the battery, on two J-bolts', '', { size: [30, 8, 220] });
+e('pack-tray', 'pack tray flange', 'Electrical/Power/Battery packs', 'part', 'cast', 'al-6061', 'a cast aluminium side rail of a pack\'s tray, bolted to the sill', '', { size: [1800, 30, 20] });
+e('pack-lid', 'pack lid', 'Electrical/Power/Battery packs', 'part', 'stamp', 'al-6061', 'a pressed aluminium lid sealing a pack', '', { size: [1800, 4, 1300] });
+e('cold-plate', 'module cold plate', 'Electrical/Power/Battery packs', 'part', 'stamp', 'al-6063', 'two stamped aluminium sheets brazed into a plate with glycol channels, glued under a module\'s cells', 'carries the cells\' heat to the car\'s coolant loop', { size: [1800, 4, 300] });
+e('tray-wall', 'pack tray wall', 'Electrical/Power/Battery packs', 'part', 'extrude', 'al-6063', 'a hollow extruded aluminium wall round a pack\'s tray', 'takes a side crash and holds the lid\'s seal', { size: [1800, 80, 8] });
+e('la-cell', 'lead-acid cell', 'Electrical/Power/Lead-acid parts', 'assembly', 'assemble', 'plate-positive plate-negative plate-separator la-strap*2', 'a 2 V cell: positive and negative plates stacked alternately, each positive in a separator envelope, a strap across each sign\'s lugs', '', { size: [36, 150, 165] });
+e('battery-sli', '12 V starting battery', 'Electrical/Power/Batteries', 'product', 'assemble', 'battery-case battery-lid la-cell*6 la-intercell*5 battery-post*2 battery-vent-cap*6 acid-electrolyte', 'six 2 V cells in series in a moulded case under a lid, its posts through the lid (a flooded SLI battery)', '', { size: [240, 225, 175] });
 e('cathode-sheet', 'cathode sheet', 'Electrical/Power/Cell parts', 'part', 'coat', 'nmc al-foil', 'lithium nickel manganese cobalt oxide coated both sides of aluminium foil');
 e('anode-sheet', 'anode sheet', 'Electrical/Power/Cell parts', 'part', 'coat', 'graphite copper-foil', 'graphite coated both sides of copper foil');
 e('separator-film', 'separator film', 'Electrical/Power/Cell parts', 'part', 'extrude', 'pe', 'a porous polyethylene film between the electrodes');
@@ -735,6 +748,11 @@ e('steel-belt', 'steel belt', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'la
 e('cap-ply', 'cap ply', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'laminate', 'nylon rubber', 'nylon cords wound round over the belts, against their growth at speed');
 e('inner-liner', 'inner liner', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'laminate', 'rubber', 'the airtight butyl layer inside');
 e('tyre-casing', 'casing', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'laminate', 'nylon rubber', 'nylon fabric in rubber, bead to bead');
+e('tyre-belt', 'steel belt', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'laminate', 'steel-low rubber', 'brass-coated steel cords in rubber, laid at an angle under the tread', '', { size: [600, 2, 180] });
+e('tyre-cap-ply', 'cap ply', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'laminate', 'nylon rubber', 'nylon cords wound round over the belts', '', { size: [600, 1, 180] });
+e('tyre-liner', 'inner liner', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'laminate', 'rubber', 'a sheet of halobutyl rubber inside the casing that holds the air', '', { size: [600, 1, 400] });
+e('tyre-apex', 'bead apex', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'extrude', 'rubber', 'a wedge of hard rubber over the bead, stiffening the lower sidewall', '', { size: [600, 30, 10] });
+e('pneumatic-tyre', 'pneumatic tyre', 'Mechanical/Vehicle parts/Wheels', 'assembly', 'assemble', 'tyre-casing tyre-sidewall*2 tyre-bead*2 tyre-apex*2 tyre-belt tyre-liner tyre-tread', 'a casing of cord plies bead to bead, steel belts and a tread over its crown, sidewalls, beads and a liner, vulcanised in its mould', '', { size: [630, 205, 630] });
 e('tyre-bead-folding', 'folding bead', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'laminate', 'aramid', 'an aramid bundle in place of steel wire, so the tyre folds');
 e('tube-body', 'tube body', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'mould', 'rubber', 'the butyl tube, spliced and cured');
 e('valve-stem', 'valve stem', 'Mechanical/Vehicle parts/Tyre parts', 'part', 'machine', 'brass', 'the valve and its stem vulcanised into the tube (a Presta\'s body, often aluminium)');
@@ -783,6 +801,22 @@ e('rivet-mandrel', 'rivet mandrel', 'Hardware/Fasteners/Rivet parts', 'part', 'c
 e('rivet-mandrel-stainless', 'stainless rivet mandrel', 'Hardware/Fasteners/Rivet parts', 'part', 'cold-head', 'stainless-304', 'a stainless mandrel, for a stainless rivet');
 e('nylon-insert', 'nylon insert', 'Hardware/Fasteners/Nut parts', 'part', 'mould', 'nylon', 'the nylon ring crimped into a lock nut\'s collar, its bore a little under the thread');
 e('ntc-bead', 'NTC bead', 'Electrical/Sensors/Thermistor parts', 'part', 'sinter', 'ntc-ceramic', 'a sintered bead of nickel-manganese oxide, its resistance falling as it warms');
+// (a sensor as the sensor maker draws it (makers.ts sensor): its body by kind, its element by what it senses, its plug;
+// sizes in mm, typical of an automotive sensor's)
+e('crush-washer', 'copper crush washer', 'Mechanical/Seals/Gaskets', 'part', 'stamp', 'copper', 'a soft copper washer crushed under a threaded fitting\'s hex to seal it (an M12 sensor\'s about 12 × 16 × 1.5 mm, typical)', '', { size: [16, 1.5, 16] });
+e('sensor-case', 'sensor case', 'Electrical/Sensors/Sensor parts', 'part', 'mould', 'pbt', 'a moulded glass-filled PBT case round the element and its leads', '', { size: [30, 25, 30] });
+e('sensor-body', 'sensor body', 'Electrical/Sensors/Sensor parts', 'part', 'machine', 'stainless-304', 'a turned stainless body: a probe\'s hex and thread, or a puck\'s sleeve its bolt goes through', '', { size: [20, 40, 20] });
+e('connector-shroud', 'connector shroud', 'Electrical/Sensors/Sensor parts', 'part', 'mould', 'pbt', 'the moulded shroud of a sensor\'s plug, keyed so its mating plug goes on one way', '', { size: [15, 12, 20] });
+e('terminal', 'terminal pin', 'Electrical/Sensors/Sensor parts', 'part', 'stamp', 'brass', 'a tinned brass pin in the plug\'s shroud', '', { size: [1, 10, 1] });
+e('seismic-mass', 'seismic mass', 'Electrical/Sensors/Sensor parts', 'part', 'machine', 'brass', 'the brass ring that presses on a knock sensor\'s piezo ring as the block rings', '', { size: [20, 6, 20] });
+e('thermistor-element', 'NTC thermistor element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'ntc-ceramic', 'a sintered nickel-manganese spinel bead whose resistance falls as it warms', '', { size: [3, 4, 3] });
+e('piezo-element', 'piezo element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'pzt', 'a sintered PZT ring, poled, giving a charge when it is squeezed', '', { size: [20, 2, 20] });
+e('hall-element', 'Hall element', 'Electrical/Sensors/Sensor parts', 'part', 'etch', 'silicon', 'a silicon Hall die: a field through it gives a voltage across it', '', { size: [2, 0.5, 2] });
+e('zirconia-element', 'zirconia element', 'Electrical/Sensors/Sensor parts', 'part', 'sinter', 'zirconia', 'a yttria-stabilised zirconia thimble, platinum electrodes each side', '', { size: [5, 25, 5] });
+e('strain-element', 'strain element', 'Electrical/Sensors/Sensor parts', 'part', 'etch', 'silicon', 'a silicon diaphragm with strain gauges diffused in it', '', { size: [3, 0.5, 3] });
+e('sensor-threaded', 'threaded sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-body connector-shroud crush-washer terminal', 'a threaded probe: its element in its tip (a temperature sender, a pressure switch, an oxygen sensor)', '', { size: [20, 50, 20] });
+e('sensor-puck', 'puck sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-case sensor-body seismic-mass connector-shroud terminal', 'a puck bolted through its middle: a knock sensor\'s piezo ring under its seismic mass', '', { size: [30, 25, 30] });
+e('sensor-block', 'block sensor', 'Electrical/Sensors/Sensors', 'assembly', 'assemble', 'sensor-case connector-shroud terminal', 'a moulded block on a lug: a Hall position sensor, a pressure sensor', '', { size: [25, 15, 30] });
 e('ferrule-sleeve', 'ferrule sleeve', 'Electrical/Wiring and connectors/Ferrule parts', 'part', 'draw', 'copper tin', 'the tinned copper tube crimped over the strands');
 e('ferrule-collar', 'ferrule collar', 'Electrical/Wiring and connectors/Ferrule parts', 'part', 'mould', 'pp', 'the coloured plastic collar, its colour its wire size');
 e('pushfit-body', 'push-fit body', 'Fluid/Fittings/Push-fit parts', 'part', 'mould', 'pom', 'the moulded body');
@@ -891,7 +925,7 @@ e('wheel-scooter', 'scooter wheel', 'Mechanical/Vehicle parts/Wheels', 'assembly
 e('deck-scooter', 'scooter deck', 'Mechanical/Vehicles/Scooters', 'part', 'extrude', 'al-6063', 'an aluminium profile extruded, cut and machined: the battery rides inside it');
 e('stem-scooter', 'scooter stem', 'Mechanical/Vehicles/Scooters', 'assembly', 'weld', `${F('tube round 40x2 900 aluminium')} al-a380`, 'a tube welded to a cast folding hinge');
 e('brake-disc', 'brake disc', 'Mechanical/Vehicle parts/Brakes', 'part', 'stamp', 'stainless-304', 'cut from stainless plate, drilled to shed heat and water', '120 mm');
-e('brake-caliper-disc', 'disc brake caliper', 'Mechanical/Vehicle parts/Brakes', 'assembly', 'assemble', `al-a380 brake-pad*2 spring-compression ${F('bolt M6x20')}*2`, 'a cast body that a cable pulls shut, squeezing pads on the disc');
+e('brake-caliper-disc', 'disc brake caliper', 'Mechanical/Vehicle parts/Brakes', 'assembly', 'assemble', `al-a380 disc-brake-pad*2 spring-compression ${F('bolt M6x20')}*2`, 'a cast body that a cable pulls shut, squeezing pads on the disc');
 e('throttle-thumb', 'thumb throttle', 'Electrical/Vehicles/Scooters', 'product', 'assemble', 'magnet-ndfeb ic-package pc wire-hookup*3', 'a lever turning a magnet past a Hall sensor: its voltage is how hard you press');
 e('e-scooter', 'electric scooter', 'Electrical/Vehicles/Scooters', 'product', 'assemble', `deck-scooter stem-scooter hub-motor wheel-scooter ${F('pack 10S3P')} esc throttle-thumb brake-disc brake-caliper-disc lcd-module ${F('bolt M6x20')}*12`, 'a hub motor in the front wheel driven by a controller from a 36 V pack in the deck; a disc brake at the back; the stem folds', 'about 12 kg, 25 km/h (typical)');
 // a skateboard
@@ -1034,6 +1068,520 @@ m('tungsten', 'tungsten', 'Metals', 'the metal with the highest melting point: l
 m('al-4043', '4043 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % silicon: a filler wire that flows well', 'AWS A5.10 ER4043');
 m('al-5356', '5356 aluminium filler', 'Metals/Aluminium alloys', 'aluminium with 5 % magnesium: a stronger filler wire', 'AWS A5.10 ER5356');
 
+// ==== batteries fitted in machines (drawn by src/nexus/components.ts and machines.ts) ============================================
+e('battery-mount', 'battery and its tray', 'Electrical/Power/Batteries', 'assembly', 'assemble', `battery-tray battery-sli battery-clamp ${F('threadedrod M6 250')}*2 ${F('nut M6')}*2`, 'a car\'s starting battery on its tray, held down', '', { size: [260, 240, 200] });
+e('pack-ev', 'traction battery pack', 'Electrical/Power/Battery packs', 'assembly', 'assemble', `pack-tray*2 pack-lid cold-plate tray-wall*4 ${F('cell 21700')}`, 'cells in modules in a tray under a lid, under the cabin floor', '', { size: [1900, 110, 1300] });
+e('pack-hybrid', 'hybrid battery pack', 'Electrical/Power/Battery packs', 'assembly', 'assemble', `${F('cell 18650')}`, 'a small pack of cells under the rear seat', '', { size: [500, 200, 600] });
+
+// ==== a highway tractor's fittings, each drawn whole by src/nexus/fittings.ts =============================================
+{
+// (each one's size, mm, typical of a highway tractor's)
+const SZ: Record<string, [number, number, number]> = {'trk-lamp-housing':  [300, 170, 180], 'trk-lamp-lens':  [300, 170, 4], 'trk-reflector':  [150, 150, 60], 'trk-led-board':  [50, 50, 8], 'trk-headlamp':  [300, 170, 180], 'trk-marker-lamp':  [100, 35, 50], 'trk-mirror-arm':  [600, 25, 25], 'trk-mirror-head':  [380, 200, 70], 'trk-mirror-glass':  [340, 170, 4], 'trk-mirror-bracket':  [60, 60, 30], 'trk-mirror':  [600, 700, 300], 'trk-door-skin':  [1000, 950, 2], 'trk-door-inner':  [960, 1500, 2], 'trk-door-glass':  [880, 580, 5], 'trk-window-seal':  [900, 25, 20], 'trk-door-hinge':  [90, 36, 36], 'trk-door-handle':  [160, 35, 30], 'trk-door-latch':  [80, 60, 30], 'trk-door':  [1000, 1600, 100], 'trk-cab-floor':  [1600, 6, 2200], 'trk-cab-back':  [2200, 1700, 3], 'trk-cab-roof':  [1100, 140, 2260], 'trk-cab-side':  [400, 1700, 3], 'trk-a-pillar':  [1100, 70, 70], 'trk-windscreen':  [1050, 1050, 7], 'trk-sun-visor':  [320, 12, 2200], 'trk-grab-handle':  [750, 30, 30], 'trk-cab-mount-rubber':  [110, 110, 60], 'trk-cab-mount-bracket':  [140, 12, 140], 'trk-cab-mount':  [140, 100, 140], 'trk-cab':  [1650, 1850, 2280], 'trk-hood-shell':  [1500, 1100, 2400], 'trk-hood-hinge':  [120, 40, 40], 'trk-grille-surround':  [1100, 60, 50], 'trk-grille-bar':  [1050, 35, 30], 'trk-grille':  [1150, 750, 60], 'trk-hood':  [1600, 1150, 2400], 'trk-bumper-shell':  [140, 360, 1960], 'trk-bumper-end':  [160, 360, 240], 'trk-bumper-bracket':  [120, 200, 12], 'trk-bumper':  [300, 360, 2440], 'trk-frame-rail':  [6200, 287, 85], 'trk-crossmember':  [200, 180, 770], 'trk-gusset':  [240, 220, 8], 'trk-crossmember-set':  [240, 220, 800], 'trk-tank-shell':  [1290, 640, 640], 'trk-tank-end':  [650, 650, 6], 'trk-tank-baffle':  [630, 630, 3], 'trk-filler-neck':  [90, 60, 90], 'trk-fuel-cap':  [110, 30, 110], 'trk-tank-strap':  [660, 660, 8], 'trk-strap-liner':  [650, 650, 5], 'trk-tank-bracket':  [90, 300, 330], 'trk-fuel-tank':  [1300, 700, 700], 'trk-at-can':  [1240, 600, 600], 'trk-at-can-end':  [610, 610, 6], 'trk-dpf-core':  [500, 480, 480], 'trk-scr-core':  [500, 480, 480], 'trk-step-tread':  [420, 30, 370], 'trk-aftertreatment':  [1250, 650, 650], 'trk-stack-pipe':  [2600, 127, 127], 'trk-heat-shield':  [900, 150, 150], 'trk-stack-clamp':  [140, 140, 12], 'trk-stack-bracket':  [90, 60, 6], 'trk-exhaust-stack':  [2700, 150, 500], 'trk-fw-plate':  [914, 50, 914], 'trk-fw-jaw':  [140, 50, 120], 'trk-fw-handle':  [500, 18, 18], 'trk-fw-bracket':  [300, 100, 80], 'trk-fw-pin':  [120, 50, 50], 'trk-fw-angle':  [750, 100, 100], 'trk-fifth-wheel':  [914, 300, 914], 'trk-step-bracket':  [12, 400, 700], 'trk-step':  [420, 400, 700], 'trk-quarter-fender':  [800, 400, 650], 'trk-fender-bracket':  [300, 24, 24], 'trk-mud-flap':  [8, 620, 600], 'trk-flap-hanger':  [500, 28, 28], 'trk-quarter-fender-set':  [800, 450, 700], 'trk-fender-flap-set':  [900, 900, 700], 'trk-air-tank-shell':  [700, 240, 240], 'trk-air-tank-end':  [240, 240, 8], 'trk-drain-valve':  [40, 24, 24], 'trk-air-tank':  [720, 250, 250], 'trk-battery-box-shell': [560, 270, 360], 'trk-battery-box-lid': [570, 3, 370], 'trk-battery-box': [560, 280, 360]};
+const pt = (id: string, name: string, make: Process, of: string, says: string) => e(id, name, 'Mechanical/Vehicles/Highway tractors', 'part', make, of, says, '', { size: SZ[id] });
+const as = (id: string, name: string, of: string, says: string) => e(id, name, 'Mechanical/Vehicles/Highway tractors', 'assembly', 'assemble', of, says, '', { size: SZ[id] });
+pt('trk-lamp-housing', 'lamp housing', 'mould', 'pc', 'a moulded polycarbonate housing, its three ears screwed to what carries it');
+pt('trk-lamp-lens', 'lamp lens', 'mould', 'pc', 'clear or amber polycarbonate, hard-coated against stones and sun');
+pt('trk-reflector', 'lamp reflector', 'mould', 'pc', 'a moulded bowl, vacuum-metallised (its aluminium film too thin to list)');
+as('trk-led-board', 'LED board', `pcb-bare ${F('led white 5mm')}*6`, 'LEDs on a circuit board at the reflector focus');
+as('trk-headlamp', 'headlamp', `trk-lamp-housing trk-lamp-lens trk-reflector trk-led-board ${F('bolt M6x20')}*3`, 'a headlamp: housing, reflector, LED board, lens, three screws');
+as('trk-marker-lamp', 'marker lamp', `trk-lamp-housing trk-lamp-lens ${F('led yellow 5mm')}*2`, 'an amber clearance or identification lamp (FMVSS 108)');
+pt('trk-mirror-arm', 'mirror arm', 'bend', 'steel-low', 'a bent steel tube');
+pt('trk-mirror-head', 'mirror head', 'mould', 'abs', 'the moulded case its glass sits in');
+pt('trk-mirror-glass', 'mirror glass', 'grind', 'glass', 'silvered glass');
+pt('trk-mirror-bracket', 'mirror bracket', 'cast', 'al-a380', 'a die-cast bracket on the door');
+as('trk-mirror', 'mirror', `trk-mirror-arm*2 trk-mirror-head trk-mirror-glass trk-mirror-bracket*2 ${F('bolt M8x25')}*4`, 'a west-coast mirror');
+pt('trk-door-skin', 'door skin', 'stamp', 'al-5052', 'the pressed aluminium outer panel');
+pt('trk-door-inner', 'door inner panel', 'stamp', 'al-5052', 'the pressed inner panel its trim and mechanisms hang on');
+pt('trk-door-glass', 'door glass', 'grind', 'glass', 'tempered glass');
+pt('trk-window-seal', 'window seal', 'extrude', 'epdm', 'an extruded rubber run the glass slides in');
+pt('trk-door-hinge', 'door hinge', 'cast', 'steel-low', 'a cast steel hinge');
+pt('trk-door-handle', 'door handle', 'cast', 'zamak', 'a die-cast, chromed handle');
+pt('trk-door-latch', 'door latch', 'stamp', 'steel-low', 'the latch that catches the striker');
+as('trk-door', 'door', `trk-door-skin trk-door-inner trk-door-glass trk-window-seal*4 trk-door-hinge*2 trk-door-handle trk-door-latch ${F('bolt M8x25')}*4`, 'a cab door');
+pt('trk-cab-floor', 'cab floor panel', 'stamp', 'al-5052', 'a pressed aluminium floor or cowl panel');
+pt('trk-cab-back', 'cab back wall', 'stamp', 'al-5052', 'the pressed aluminium back wall');
+pt('trk-cab-roof', 'cab roof', 'stamp', 'al-5052', 'the pressed aluminium roof');
+pt('trk-cab-side', 'cab side panel', 'stamp', 'al-5052', 'a pressed aluminium side panel');
+pt('trk-a-pillar', 'A-pillar', 'extrude', 'al-6063', 'an aluminium extrusion beside the windscreen');
+pt('trk-windscreen', 'windscreen', 'grind', 'glass', 'laminated glass (its PVB interlayer too thin to list)');
+pt('trk-sun-visor', 'sun visor', 'stamp', 'al-5052', 'an exterior visor over the windscreen');
+pt('trk-grab-handle', 'grab handle', 'bend', 'stainless-304', 'a stainless handle beside the door');
+pt('trk-cab-mount-rubber', 'cab mount rubber', 'mould', 'rubber', 'a rubber isolator');
+pt('trk-cab-mount-bracket', 'cab mount bracket', 'stamp', 'steel-low', 'a bracket on the frame rail');
+as('trk-cab-mount', 'cab mount', `trk-cab-mount-rubber trk-cab-mount-bracket ${F('nut M16')} ${F('washer M16')}*2`, 'a rubber cab mount, bolted through');
+as('trk-cab', 'cab', `trk-cab-floor*2 trk-cab-back trk-door-glass trk-cab-roof trk-a-pillar*3 trk-windscreen*2 trk-cab-side*6 trk-door*2 trk-mirror*2 trk-grab-handle*2 trk-sun-visor trk-marker-lamp*5 trk-cab-mount*4`, 'a day cab');
+pt('trk-hood-shell', 'hood shell', 'mould', 'fibreglass', 'a sheet-moulded fibreglass hood with its fenders');
+pt('trk-hood-hinge', 'hood hinge', 'cast', 'steel-low', 'a cast hinge the hood tilts on');
+pt('trk-grille-surround', 'grille surround', 'mould', 'abs', 'chromed moulded plastic');
+pt('trk-grille-bar', 'grille bar', 'extrude', 'al-6063', 'an extruded aluminium bar');
+as('trk-grille', 'grille', `trk-grille-surround*4 trk-grille-bar*7 ${F('bolt M6x20')}*4`, 'a grille');
+as('trk-hood', 'hood', `trk-hood-shell trk-grille trk-headlamp*2 trk-hood-hinge*2 ${F('bolt M10x30')}*4`, 'a tilting hood');
+pt('trk-bumper-shell', 'bumper shell', 'stamp', 'steel-low', 'a pressed, chromed steel bumper');
+pt('trk-bumper-end', 'bumper end cap', 'mould', 'pp', 'a moulded end cap');
+pt('trk-bumper-bracket', 'bumper bracket', 'stamp', 'steel-low', 'a bracket bolted through the frame rail');
+as('trk-bumper', 'front bumper', `trk-bumper-shell trk-bumper-end*2 trk-bumper-bracket*2 ${F('nut M12')}*8`, 'a front bumper');
+pt('trk-frame-rail', 'frame rail', 'roll', 'steel-alloy', 'a heat-treated steel C-channel, rolled');
+pt('trk-crossmember', 'cross member channel', 'stamp', 'steel-low', 'a pressed channel between the rails');
+pt('trk-gusset', 'gusset', 'stamp', 'steel-low', 'a plate joining a cross member to a rail');
+as('trk-crossmember-set', 'cross member', `trk-crossmember*2 trk-gusset*2 ${F('nut M16')}*8`, 'a cross member and its gussets, bolted');
+pt('trk-tank-shell', 'tank shell', 'roll', 'al-5052', 'a rolled aluminium shell');
+pt('trk-tank-end', 'tank end', 'stamp', 'al-5052', 'a pressed end, welded in');
+pt('trk-tank-baffle', 'tank baffle', 'stamp', 'al-5052', 'a baffle against surge');
+pt('trk-filler-neck', 'filler neck', 'draw', 'al-6063', 'a drawn filler neck');
+pt('trk-fuel-cap', 'fuel cap', 'cast', 'zamak', 'a locking cap');
+pt('trk-tank-strap', 'tank strap', 'stamp', 'stainless-304', 'a stainless strap');
+pt('trk-strap-liner', 'strap liner', 'extrude', 'rubber', 'a rubber liner under a strap');
+pt('trk-tank-bracket', 'tank bracket', 'cast', 'al-a380', 'a cast bracket on the rail');
+as('trk-fuel-tank', 'fuel tank', `trk-tank-shell trk-tank-end*2 trk-tank-baffle*2 trk-filler-neck trk-fuel-cap trk-tank-strap*2 trk-strap-liner*2 trk-tank-bracket*2 ${F('nut M16')}*6`, 'a fuel tank on its brackets');
+pt('trk-at-can', 'aftertreatment can', 'roll', 'stainless-304', 'a rolled stainless can');
+pt('trk-at-can-end', 'aftertreatment can end', 'stamp', 'stainless-304', 'a pressed stainless end');
+pt('trk-dpf-core', 'particulate filter core', 'sinter', 'alumina', 'a ceramic wall-flow filter');
+pt('trk-scr-core', 'SCR catalyst core', 'sinter', 'alumina', 'a ceramic catalyst substrate');
+pt('trk-step-tread', 'step tread', 'extrude', 'al-6063', 'a serrated aluminium tread');
+as('trk-aftertreatment', 'aftertreatment unit', `trk-at-can trk-at-can-end*2 trk-dpf-core trk-scr-core trk-step-tread trk-tank-strap*2 trk-strap-liner*2 trk-tank-bracket*2 ${F('nut M16')}*6`, 'its exhaust aftertreatment');
+pt('trk-stack-pipe', 'stack pipe', 'draw', 'stainless-304', 'a stainless exhaust pipe');
+pt('trk-heat-shield', 'heat shield', 'stamp', 'stainless-304', 'a perforated stainless shield');
+pt('trk-stack-clamp', 'stack clamp', 'stamp', 'stainless-304', 'a band clamp');
+pt('trk-stack-bracket', 'stack bracket', 'stamp', 'steel-low', 'a bracket to the cab back');
+as('trk-exhaust-stack', 'exhaust stack', `trk-stack-pipe trk-heat-shield trk-stack-clamp*2 trk-stack-bracket ${F('bolt M10x30')}`, 'an exhaust stack');
+pt('trk-fw-plate', 'fifth wheel top plate', 'cast', 'cast-iron', 'a cast top plate with its throat');
+pt('trk-fw-jaw', 'locking jaw', 'forge', 'steel-alloy', 'a forged jaw round the kingpin');
+pt('trk-fw-handle', 'release handle', 'bend', 'steel-low', 'a bent rod');
+pt('trk-fw-bracket', 'fifth wheel bracket', 'cast', 'cast-iron', 'a cast bracket');
+pt('trk-fw-pin', 'bracket pin', 'machine', 'steel-alloy', 'a pivot pin');
+pt('trk-fw-angle', 'mounting angle', 'roll', 'steel-low', 'a rolled angle on the rail');
+as('trk-fifth-wheel', 'fifth wheel', `trk-fw-plate trk-fw-jaw trk-fw-handle trk-fw-bracket*2 trk-fw-pin*2 trk-fw-angle*2 ${F('nut M16')}*8`, 'a fifth wheel');
+pt('trk-step-bracket', 'step bracket', 'stamp', 'al-5052', 'a pressed step bracket');
+as('trk-step', 'cab step', `trk-step-tread*2 trk-step-bracket*2 ${F('nut M12')}*2`, 'a cab step');
+pt('trk-quarter-fender', 'quarter fender panel', 'mould', 'pp', 'a moulded fender');
+pt('trk-fender-bracket', 'fender bracket', 'bend', 'steel-low', 'a tube bracket');
+pt('trk-mud-flap', 'mud flap', 'mould', 'rubber', 'a rubber flap');
+pt('trk-flap-hanger', 'flap hanger', 'bend', 'steel-low', 'a tube hanger');
+as('trk-quarter-fender-set', 'quarter fender', `trk-quarter-fender trk-fender-bracket*2`, 'a quarter fender on its brackets');
+as('trk-fender-flap-set', 'quarter fender and mud flap', `trk-quarter-fender trk-fender-bracket*2 trk-mud-flap trk-flap-hanger`, 'a quarter fender, a mud flap behind it');
+pt('trk-battery-box-shell', 'battery box', 'stamp', 'al-5052', 'a pressed and welded aluminium box');
+pt('trk-battery-box-lid', 'battery box lid', 'stamp', 'al-5052', 'its lid');
+as('trk-battery-box', 'battery box', `trk-battery-box-shell*5 trk-battery-box-lid battery-sli*3 trk-tank-bracket*2 ${F('nut M16')}*4`, 'a battery box on the frame, its batteries in it');
+pt('trk-air-tank-shell', 'air tank shell', 'roll', 'steel-low', 'a rolled steel shell');
+pt('trk-air-tank-end', 'air tank end', 'stamp', 'steel-low', 'a pressed end');
+pt('trk-drain-valve', 'drain valve', 'machine', 'brass', 'a brass drain valve');
+as('trk-air-tank', 'air tank', `trk-air-tank-shell trk-air-tank-end*2 trk-drain-valve trk-tank-strap*2 trk-strap-liner*2`, 'an air reservoir for the brakes');
+}
+
+// ==== a piston engine, part by part (src/nexus/engines.ts builds it): what each piece is, how it is made, of what =========
+// (sizes typical of a 2.0 L car four's: the engine builder sizes every piece from its bore and stroke)
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Engines/Engine parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Engines/Engine assemblies', 'assembly', 'assemble', of, says, '', { size });
+pt('block-casting', 'cylinder block casting', 'cast', 'al-a380', 'cast round sand cores (its water jacket, its crankcase), its bores, deck and main saddles machined; cast iron in a heavy diesel', [450, 260, 200]);
+pt('cylinder-liner', 'cylinder liner', 'cast', 'cast-iron', 'a centrifugally cast iron sleeve, bored and honed, the piston running in it', [140, 260, 140]);
+pt('main-cap', 'main bearing cap', 'cast', 'cast-iron', 'cast and machined in place with the block (line-bored with it), bolted under each main saddle', [30, 50, 110]);
+pt('main-bearing-shell', 'main bearing shell', 'stamp', 'steel-low al-6061 tin', 'a steel back lined with an aluminium–tin bearing alloy, a half-round shell', [20, 30, 60]);
+pt('rod-bearing-shell', 'rod bearing shell', 'stamp', 'steel-low al-6061 tin', 'a steel back lined with bearing alloy, a half-round shell in the big end', [20, 25, 50]);
+pt('crankshaft', 'crankshaft', 'forge', 'steel-alloy', 'forged in one: its main journals, crank pins, webs and counterweights, its nose and flange; its journals ground and hardened', [450, 140, 140]);
+pt('piston', 'piston', 'cast', 'al-a380', 'cast in a silicon–aluminium alloy, its crown, ring grooves, pin bosses and skirt machined', [81, 50, 81]);
+pt('piston-ring', 'piston ring', 'machine', 'cast-iron', 'a split ring of iron or steel, its face coated, sprung against the bore', [81, 2, 81]);
+pt('wrist-pin', 'wrist pin', 'grind', 'steel-alloy', 'a hollow pin, case-hardened and ground, through the piston\'s bosses and the rod\'s small end', [65, 20, 20]);
+pt('wrist-pin-clip', 'wrist pin clip', 'stamp', 'steel-spring', 'a spring-steel ring in a groove at each end of the pin\'s bore', [20, 1, 20]);
+pt('con-rod', 'connecting rod', 'forge', 'steel-alloy', 'forged to its I-section, its big end cracked to make its cap, its small end bushed', [50, 200, 60]);
+pt('rod-cap', 'rod cap', 'forge', 'steel-alloy', 'the big end\'s cap, cracked off the forging so it fits only its own rod', [50, 25, 60]);
+pt('head-casting', 'cylinder head casting', 'cast', 'al-a380', 'cast round cores (its ports, its water jacket), its deck, combustion chambers, valve seats and cam saddles machined', [440, 130, 200]);
+pt('valve-intake', 'intake valve', 'forge', 'steel-alloy', 'its head forged on its stem and ground to its seat', [30, 105, 30]);
+pt('valve-exhaust', 'exhaust valve', 'forge', 'stainless-304', 'a heat-resisting steel head friction-welded to its stem, ground to its seat', [26, 105, 26]);
+pt('valve-spring', 'valve spring', 'coil', 'steel-spring', 'chrome-silicon wire coiled and shot-peened', [24, 42, 24]);
+pt('valve-retainer', 'valve spring retainer', 'machine', 'steel-alloy', 'the cap on the spring, its taper holding the keepers', [24, 6, 24]);
+pt('valve-keeper', 'valve keeper', 'machine', 'steel-alloy', 'a half-cone collet in the stem\'s groove, two to a valve', [8, 8, 4]);
+pt('valve-guide', 'valve guide', 'sinter', 'bronze', 'a sintered sleeve pressed into the head, the stem sliding in it', [11, 40, 11]);
+pt('valve-stem-seal', 'valve stem seal', 'mould', 'fkm steel-low', 'a rubber lip on a steel case over the guide\'s top', [12, 10, 12]);
+pt('bucket-tappet', 'bucket tappet', 'machine', 'steel-alloy', 'a hardened cup over the valve\'s end, the cam\'s lobe on its face', [31, 25, 31]);
+pt('camshaft', 'camshaft', 'cast', 'cast-iron', 'chilled cast iron, its lobes and journals ground (or lobes pressed on a tube)', [430, 40, 40]);
+pt('cam-cap', 'camshaft cap', 'cast', 'al-a380', 'machined with the head, bolted over each cam journal', [20, 20, 45]);
+pt('rocker-arm', 'rocker arm', 'cast', 'steel-low', 'a cast or pressed lever on its shaft, pushed by the cam or a pushrod, pushing the valve', [60, 15, 20]);
+pt('rocker-shaft', 'rocker shaft', 'grind', 'steel-alloy', 'a ground hollow shaft the rockers turn on', [400, 18, 18]);
+pt('pushrod', 'pushrod', 'draw', 'steel-low', 'a drawn steel tube, its ends hardened balls or cups', [8, 250, 8]);
+pt('lifter', 'valve lifter', 'machine', 'steel-alloy', 'a hardened follower riding on the cam in its bore in the block', [20, 40, 20]);
+pt('head-gasket', 'head gasket', 'stamp', 'stainless-304', 'layers of embossed stainless steel (multi-layer steel), its bores and passages cut', [450, 1, 200]);
+pt('timing-sprocket', 'timing sprocket', 'machine', 'steel-alloy', 'its teeth cut for its chain, hardened', [80, 15, 80]);
+pt('timing-gear', 'timing gear', 'machine', 'steel-alloy', 'a cut gear turning the cam (or the pumps) off the crank', [100, 20, 100]);
+pt('chain-plate', 'chain plate', 'stamp', 'steel-alloy', 'a link plate stamped from strip and its holes pierced', [20, 12, 2]);
+pt('chain-bush', 'chain bush', 'cold-head', 'steel-alloy', 'a bush pressed into the inner plates', [6, 10, 6]);
+as('chain-inner-link', 'inner link', 'chain-plate*2 chain-bush*2 chain-roller*2', 'two plates pressed on two bushes, a roller on each', [20, 12, 10]);
+as('chain-outer-link', 'outer link', 'chain-plate*2 chain-pin*2', 'two plates riveted on two pins', [20, 12, 14]);
+as('roller-chain', 'roller chain', 'chain-inner-link chain-outer-link', 'inner and outer links, turn and turn about', [14, 900, 14]);
+pt('chain-guide', 'chain guide', 'mould', 'nylon steel-low', 'a nylon pad on a pressed steel back the chain slides on', [200, 20, 15]);
+pt('chain-tensioner', 'chain tensioner', 'machine', 'al-a380 steel-alloy steel-spring', 'a spring- and oil-loaded plunger pushing a guide against the chain', [60, 40, 40]);
+pt('timing-cover', 'timing cover', 'cast', 'al-a380', 'a die-cast cover over the timing drive, sealed to the block and head', [300, 300, 30]);
+pt('damper-hub', 'damper hub', 'cast', 'cast-iron', 'the hub keyed to the crank\'s nose, the belt\'s grooves turned in it', [150, 40, 150]);
+pt('damper-rubber', 'damper rubber', 'mould', 'epdm', 'the rubber ring bonded between the hub and the inertia ring', [150, 20, 150]);
+pt('damper-ring', 'damper inertia ring', 'cast', 'cast-iron', 'an iron ring on the rubber, damping the crank\'s twisting', [150, 20, 150]);
+as('torsional-damper', 'crank pulley and damper', 'damper-hub damper-rubber damper-ring', 'a hub, rubber and an inertia ring on the crank\'s nose, the belt on it', [150, 40, 150]);
+pt('flywheel-disc', 'flywheel', 'cast', 'cast-iron', 'a turned iron disc bolted to the crank\'s flange, its face ground for the clutch', [280, 25, 280]);
+pt('starter-ring-gear', 'starter ring gear', 'machine', 'steel-alloy', 'a hardened gear shrunk on the flywheel, the starter\'s pinion meshing with it', [300, 15, 300]);
+as('flywheel', 'flywheel and ring gear', 'flywheel-disc starter-ring-gear', 'the flywheel, its ring gear shrunk on', [300, 25, 300]);
+pt('oil-pan', 'oil pan', 'stamp', 'steel-low', 'pressed from sheet steel (or cast aluminium), bolted under the block', [420, 120, 220]);
+pt('pan-gasket', 'oil pan gasket', 'mould', 'nbr', 'a moulded rubber seal round the pan\'s flange', [420, 3, 220]);
+pt('gerotor-inner', 'oil pump inner rotor', 'sinter', 'steel-low', 'a sintered rotor, one lobe fewer than its outer, turned by the crank', [50, 12, 50]);
+pt('gerotor-outer', 'oil pump outer rotor', 'sinter', 'steel-low', 'a sintered ring with lobes inside, turning off centre round the inner', [70, 12, 70]);
+pt('oil-pump-body', 'oil pump body', 'cast', 'al-a380', 'a die-cast body and cover round its rotors', [90, 30, 90]);
+as('oil-pump', 'oil pump', 'oil-pump-body gerotor-inner gerotor-outer', 'a gerotor pump: an inner rotor driving an outer in a body', [90, 30, 90]);
+pt('oil-pickup', 'oil pickup', 'draw', 'steel-low', 'a bent tube from the pump down to a strainer in the sump', [200, 100, 50]);
+pt('filter-can', 'oil filter can', 'draw', 'steel-low', 'a deep-drawn steel can, painted', [76, 100, 76]);
+pt('filter-base', 'oil filter base plate', 'stamp', 'steel-low', 'its threaded base plate, the can rolled over it', [76, 8, 76]);
+as('oil-filter', 'oil filter', 'filter-can filter-element filter-base', 'a pleated paper element in a steel can, screwed on its base plate', [76, 100, 76]);
+pt('intake-plenum', 'intake plenum', 'mould', 'nylon fibreglass', 'glass-filled nylon, moulded in shells and welded', [400, 100, 120]);
+pt('intake-runner', 'intake runner', 'mould', 'nylon fibreglass', 'a moulded runner from the plenum to a port', [60, 200, 60]);
+pt('throttle-housing', 'throttle body', 'cast', 'al-a380', 'a die-cast bore, its shaft and motor housing', [80, 80, 80]);
+pt('throttle-plate', 'throttle plate', 'stamp', 'brass', 'a disc on its shaft that opens the bore', [60, 1, 60]);
+as('throttle-body', 'throttle body', 'throttle-housing throttle-plate', 'a plate on a shaft in a bore, turned by a motor', [80, 80, 80]);
+as('intake-manifold', 'intake manifold', 'intake-plenum intake-runner', 'a plenum and a runner to each port', [400, 200, 150]);
+pt('injector-body', 'injector body', 'machine', 'stainless-304', 'a turned body, its nozzle drilled', [15, 60, 15]);
+pt('injector-needle', 'injector needle', 'grind', 'steel-alloy', 'a ground needle lifted off its seat by the coil', [3, 40, 3]);
+as('fuel-injector', 'fuel injector', 'injector-body injector-needle winding', 'a coil lifting a needle off its seat in a nozzle', [15, 60, 15]);
+pt('fuel-rail', 'fuel rail', 'draw', 'stainless-304', 'a drawn tube feeding each injector', [400, 20, 20]);
+pt('coil-housing', 'ignition coil housing', 'mould', 'pbt epoxy', 'a moulded case, its windings cast in epoxy', [30, 100, 30]);
+pt('coil-boot', 'coil boot', 'mould', 'silicone', 'a silicone boot onto the plug', [20, 40, 20]);
+as('ignition-coil', 'ignition coil', 'coil-housing winding*2 lamination-stack coil-boot', 'a primary and a secondary winding on a core in a case, over its plug', [30, 120, 30]);
+pt('exhaust-manifold', 'exhaust manifold', 'cast', 'cast-iron', 'cast in one (or welded steel tube), a runner from each port into a collector', [400, 150, 150]);
+pt('manifold-gasket', 'manifold gasket', 'stamp', 'stainless-304', 'embossed stainless sheet between the manifold and the head', [400, 1, 50]);
+pt('cam-cover', 'cam cover', 'mould', 'nylon fibreglass', 'a moulded cover over the cams (cast aluminium on a diesel)', [440, 60, 180]);
+pt('cam-cover-gasket', 'cam cover gasket', 'mould', 'nbr', 'a moulded rubber seal in the cover\'s groove', [440, 4, 180]);
+pt('stator-ring', 'stator', 'stamp', 'steel-electrical', 'its laminations stamped and stacked, its windings in its slots', [120, 30, 120]);
+pt('starter-can', 'starter motor housing', 'draw', 'steel-low', 'a drawn steel can, its field magnets inside', [70, 120, 70]);
+pt('starter-pinion', 'starter pinion', 'machine', 'steel-alloy', 'a small gear thrown into the ring gear by the solenoid', [30, 25, 30]);
+pt('solenoid-can', 'solenoid can', 'draw', 'steel-low', 'a deep-drawn steel can, the coil\'s magnetic return', [40, 80, 40]);
+pt('contact-disc', 'contact disc', 'stamp', 'copper', 'the copper disc the plunger drives across the two contacts', [30, 4, 30]);
+as('starter-solenoid', 'starter solenoid', 'solenoid-can winding plunger-core contact-disc terminal-stud*2', 'a coil and plunger throwing the pinion in and closing the motor\'s contacts', [40, 80, 40]);
+as('starter-motor', 'starter motor', 'starter-can armature starter-solenoid starter-pinion carbon-brush*2', 'a motor turning a pinion thrown into the flywheel\'s ring gear', [80, 180, 80]);
+pt('pump-shaft', 'pump shaft', 'grind', 'steel-alloy', 'a ground shaft in its bearing, the pulley on one end and the impeller on the other', [15, 100, 15]);
+as('water-pump', 'water pump', 'pump-housing impeller pump-shaft shaft-seal', 'an impeller on a shaft in a housing, its seal between', [120, 80, 120]);
+pt('ribbed-belt', 'ribbed belt', 'mould', 'epdm aramid', 'a ribbed rubber belt on aramid cords', [1500, 4, 20]);
+pt('idler-pulley', 'idler pulley', 'machine', 'steel-low', 'a pressed or turned pulley on its bearing', [70, 25, 70]);
+pt('tensioner-arm', 'tensioner arm', 'cast', 'al-a380', 'a cast arm sprung against the belt', [100, 30, 40]);
+as('belt-tensioner', 'belt tensioner', 'tensioner-arm idler-pulley', 'an arm and pulley sprung against the belt', [100, 70, 70]);
+pt('turbine-housing', 'turbine housing', 'cast', 'cast-iron', 'a cast iron scroll the exhaust spins the turbine in', [250, 220, 200]);
+pt('compressor-housing', 'compressor housing', 'cast', 'al-a380', 'a cast aluminium scroll round the compressor wheel', [250, 220, 150]);
+pt('turbo-core', 'turbocharger core', 'machine', 'cast-iron steel-alloy', 'the bearing housing, its shaft and bearings', [120, 120, 120]);
+pt('turbine-wheel', 'turbine wheel', 'cast', 'nickel-alloy', 'an investment-cast nickel alloy wheel welded to its shaft', [100, 60, 100]);
+pt('compressor-wheel', 'compressor wheel', 'machine', 'al-2024', 'a machined aluminium wheel on the shaft\'s cold end', [100, 50, 100]);
+as('turbocharger', 'turbocharger', 'turbine-housing compressor-housing turbo-core turbine-wheel compressor-wheel', 'a turbine in the exhaust spinning a compressor for the intake', [300, 250, 250]);
+pt('carb-body', 'carburettor body', 'cast', 'zamak', 'die-cast round its venturi, its jets and passages drilled', [50, 60, 50]);
+pt('float-bowl', 'float bowl', 'cast', 'zamak', 'a die-cast bowl under the body, its fuel kept level by the float', [45, 30, 45]);
+pt('carb-float', 'carburettor float', 'mould', 'nylon', 'a hollow float lifting the needle shut as the bowl fills', [35, 15, 35]);
+pt('main-jet', 'main jet', 'machine', 'brass', 'a brass jet drilled to its size, metering the fuel', [6, 10, 6]);
+as('carburettor', 'carburettor', 'carb-body float-bowl carb-float main-jet throttle-plate', 'a venturi drawing fuel from a float bowl through a jet, a throttle plate after it', [60, 80, 60]);
+as('piston-assembly', 'piston and rings', 'piston piston-ring*3 wrist-pin wrist-pin-clip*2', 'a piston, its three rings, its pin and the pin\'s clips', [81, 60, 81]);
+as('con-rod-assembly', 'connecting rod', 'con-rod rod-cap rod-bearing-shell*2', 'a rod, its cap, its two bearing shells (its bolts the library\'s)', [60, 200, 80]);
+pt('air-cleaner-case', 'air cleaner case', 'mould', 'abs', 'a moulded case round its filter, its inlet snorkel and its outlet to the carburettor', [70, 80, 50]);
+pt('air-filter-element', 'air filter element', 'fab', 'paper', 'pleated filter paper in a foam pre-cleaner (typical of a small engine\'s)', [60, 60, 35]);
+as('air-cleaner', 'air cleaner', 'air-cleaner-case air-filter-element', 'a filter in its case on the carburettor\'s throat', [70, 80, 50]);
+as('engine-block', 'cylinder block', 'block-casting main-cap main-bearing-shell*2', 'the block casting, its main caps and bearing shells (its bolts the library\'s)', [450, 300, 220]);
+as('cylinder-head', 'cylinder head', 'head-casting valve-intake valve-exhaust valve-spring*2 valve-retainer*2 valve-keeper*4 valve-guide*2 valve-stem-seal*2', 'the head casting, its valves and their springs, retainers, keepers, guides and seals', [440, 140, 200]);
+as('timing-drive', 'timing drive', 'timing-sprocket*2 roller-chain chain-guide chain-tensioner', 'sprockets on the crank and cams, the chain round them, its guide and tensioner', [300, 400, 40]);
+as('timing-gears', 'timing gears', 'timing-gear*2', 'a gear on the crank turning a gear on the cam', [150, 150, 30]);
+as('engine-ice', 'piston engine', 'engine-block cylinder-head crankshaft piston-assembly con-rod-assembly head-gasket oil-pan oil-pump flywheel exhaust-manifold', 'its block, head, crank, pistons and rods, its timing, oiling, intake, exhaust and what hangs on it', [600, 600, 500]);
+}
+
+// ==== a gearbox, part by part (src/nexus/drivetrain.ts builds it) ======================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Drivetrain/Gearbox parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Drivetrain/Gearboxes', 'assembly', 'assemble', of, says, '', { size });
+pt('bell-housing', 'bell housing', 'cast', 'al-a380', 'die-cast round the clutch or the torque converter, bolted to the engine\'s back', [300, 350, 150]);
+pt('gearbox-case', 'gearbox case', 'cast', 'al-a380', 'die-cast round the shafts, its bearings\' bores machined', [300, 350, 200]);
+pt('input-shaft', 'input shaft', 'machine', 'steel-alloy', 'turned and ground, its gears cut on it or splined to it, case-hardened', [30, 350, 30]);
+pt('output-shaft', 'output shaft', 'machine', 'steel-alloy', 'turned and ground, carrying the driven gears and the final drive\'s pinion', [35, 320, 35]);
+pt('transmission-gear', 'transmission gear', 'machine', 'steel-alloy', 'hobbed, shaved, case-hardened and ground', [90, 18, 90]);
+pt('synchro-ring', 'synchro ring', 'forge', 'brass', 'a brass ring whose cone matches the gear\'s speed to its shaft before it engages', [60, 10, 60]);
+pt('selector-rod', 'selector rod', 'grind', 'steel-alloy', 'a ground rod the shift forks slide on', [12, 300, 12]);
+pt('shift-fork', 'shift fork', 'cast', 'steel-low', 'a fork in a synchro sleeve\'s groove, moved by its rod', [60, 80, 8]);
+pt('cvt-sheave', 'pulley sheave', 'forge', 'steel-alloy', 'a forged conical disc, its face ground, one of a pulley\'s two', [160, 30, 160]);
+as('cvt-pulley', 'variable pulley', 'cvt-sheave*2', 'two sheaves on a shaft, one sliding to change the belt\'s radius', [160, 60, 160]);
+pt('push-belt-element', 'belt element', 'stamp', 'steel-alloy', 'a fine-blanked steel element, its flanks against the sheaves', [30, 12, 2]);
+pt('push-belt-ring', 'belt ring pack', 'roll', 'steel-spring', 'a nest of thin maraging steel rings carrying the elements', [700, 1, 10]);
+as('push-belt', 'push belt', 'push-belt-element push-belt-ring*2', 'some 400 elements pushed round on two ring packs', [700, 12, 30]);
+pt('tc-impeller', 'converter impeller', 'stamp', 'steel-low', 'pressed vanes brazed in the converter\'s shell, turned by the engine', [260, 50, 260]);
+pt('tc-turbine', 'converter turbine', 'stamp', 'steel-low', 'pressed vanes on the gearbox\'s input, driven by the oil', [250, 40, 250]);
+pt('tc-stator', 'converter stator', 'cast', 'al-a380', 'cast vanes on a one-way clutch, turning the oil back to the impeller', [150, 25, 150]);
+as('torque-converter', 'torque converter', 'tc-impeller tc-turbine tc-stator', 'an impeller and a turbine facing each other in oil, a stator between', [270, 100, 270]);
+pt('final-drive-pinion', 'final drive pinion', 'machine', 'steel-alloy', 'a gear on the output shaft driving the ring gear', [60, 25, 60]);
+pt('final-drive-gear', 'final drive ring gear', 'machine', 'steel-alloy', 'a large gear bolted to the differential\'s case', [220, 25, 220]);
+pt('diff-case', 'differential case', 'cast', 'cast-iron', 'a cast case round the pinions and side gears, the ring gear bolted to it', [140, 120, 140]);
+pt('pinion-shaft', 'pinion shaft', 'grind', 'steel-alloy', 'the shaft the differential\'s pinions turn on', [16, 100, 16]);
+pt('diff-pinion', 'differential pinion', 'forge', 'steel-alloy', 'a bevel pinion between the side gears', [36, 15, 36]);
+pt('diff-side-gear', 'side gear', 'forge', 'steel-alloy', 'a bevel gear splined to a drive shaft', [50, 15, 50]);
+as('differential', 'differential', 'diff-case pinion-shaft diff-pinion*2 diff-side-gear*2 final-drive-gear', 'a case turned by its ring gear, its pinions letting its two side gears turn at different speeds', [220, 160, 220]);
+as('manual-transaxle', 'manual transaxle', 'bell-housing gearbox-case input-shaft output-shaft transmission-gear synchro-ring shift-fork selector-rod final-drive-pinion differential', 'a gearbox and differential in one case, beside a transverse engine', [350, 350, 350]);
+as('manual-gearbox', 'manual gearbox', 'bell-housing gearbox-case input-shaft output-shaft transmission-gear synchro-ring shift-fork selector-rod', 'a gearbox in line behind its engine, its output to a driveshaft', [950, 500, 420]);
+pt('driveshaft-tube', 'driveshaft tube', 'roll', 'steel-low', 'a seam-welded steel tube, balanced', [1500, 115, 115]);
+pt('slip-yoke', 'slip yoke', 'forge', 'steel-alloy', 'a splined yoke that lets the driveshaft lengthen', [130, 115, 115]);
+as('driveshaft', 'driveshaft', 'driveshaft-tube slip-yoke universal-joint*2', 'a balanced tube, a slip yoke, a universal joint at each end', [1500, 120, 120]);
+as('cvt-transaxle', 'CVT transaxle', 'bell-housing gearbox-case input-shaft output-shaft cvt-pulley*2 push-belt torque-converter final-drive-pinion differential', 'a belt between two variable pulleys, its torque converter and its differential in one case', [350, 350, 350]);
+}
+
+// ==== a car's closures, part by part (fittings.ts closureOf builds them round the body's skins) =========================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Car body parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Car closures', 'assembly', 'assemble', of, says, '', { size });
+pt('door-skin', 'door skin', 'stamp', 'steel-low', 'the door\'s outer panel, pressed 0.8 mm and hemmed over its inner', [1100, 800, 3]);
+pt('door-inner-panel', 'door inner panel', 'stamp', 'steel-low', 'pressed 0.7 mm, its openings for the regulator and speaker, hemmed into its skin', [1100, 800, 110]);
+pt('door-trim-panel', 'door trim panel', 'mould', 'pp', 'moulded polypropylene, clipped to the inner panel', [1100, 700, 40]);
+pt('intrusion-beam', 'side impact beam', 'draw', 'steel-alloy', 'a high-strength drawn tube across the door, welded to brackets at its ends', [1000, 32, 32]);
+as('door-hinge', 'door hinge', 'hinge-leaf*2 hinge-pin', 'two pressed leaves on a pin, one bolted to the door, one to the pillar', [60, 60, 30]);
+pt('door-check', 'door check strap', 'stamp', 'steel-low', 'a strap that holds the door open at its stops', [120, 12, 8]);
+pt('latch-housing', 'latch housing', 'mould', 'pbt steel-low', 'a moulded case on a steel plate round the latch\'s claw', [30, 80, 50]);
+pt('latch-claw', 'latch claw', 'stamp', 'steel-alloy', 'a hardened claw that closes round the striker', [6, 30, 25]);
+pt('lock-actuator', 'lock actuator', 'assemble', 'pbt copper steel-low', 'a small motor and gear that lock and unlock the latch', [25, 40, 25]);
+as('door-latch', 'door latch', 'latch-housing latch-claw lock-actuator', 'a claw that closes round the striker, its lock motor', [40, 120, 60]);
+pt('regulator-rail', 'regulator rail', 'roll', 'steel-low', 'a rolled steel rail the glass\'s carrier runs on', [25, 600, 8]);
+pt('window-motor', 'window motor', 'assemble', 'steel-low copper', 'a small geared motor winding the regulator\'s cable', [60, 60, 60]);
+pt('regulator-cable', 'regulator cable', 'draw', 'steel-alloy', 'a stranded steel cable round the rails\' pulleys', [1500, 3, 3]);
+as('window-regulator', 'window regulator', 'regulator-rail*2 window-motor regulator-cable', 'two rails, a cable round them and a motor, lifting the glass', [300, 600, 60]);
+pt('loudspeaker-car', 'door speaker', 'assemble', 'pp ferrite-hard copper steel-low', 'a 6.5 in. cone speaker in the door', [150, 50, 150]);
+pt('door-inner-handle', 'inside door handle', 'mould', 'abs', 'a moulded lever in the trim panel', [120, 25, 20]);
+pt('door-seal', 'door seal', 'extrude', 'epdm', 'an extruded rubber seal round the door\'s opening', [3600, 16, 16]);
+as('car-door', 'car door', 'intrusion-beam door-hinge*2 door-check door-latch window-regulator loudspeaker-car door-inner-handle door-seal', 'what is built into a door between its skin and its trim', [1100, 800, 130]);
+pt('hood-skin', 'hood skin', 'stamp', 'steel-low', 'the hood\'s outer panel, pressed and hemmed over its inner frame', [1100, 50, 1400]);
+pt('deck-lid-skin', 'deck lid skin', 'stamp', 'steel-low', 'the deck lid\'s outer panel, pressed and hemmed over its inner frame', [900, 50, 1300]);
+pt('closure-inner', 'closure inner frame', 'stamp', 'steel-low', 'a pressed inner frame, its openings between ribs, hemmed into its skin', [1100, 25, 1400]);
+pt('hood-insulator', 'hood insulator', 'laminate', 'cotton', 'a felt pad clipped under the hood', [1000, 12, 1200]);
+as('closure-hinge', 'hood or lid hinge', 'hinge-leaf hinge-pin', 'a pressed arm on its pin, bolted to the body', [120, 40, 10]);
+as('closure-latch', 'hood or lid latch', 'latch-housing latch-claw', 'a claw in a housing that closes round the striker', [50, 60, 80]);
+pt('striker', 'striker', 'forge', 'steel-alloy', 'a bent steel loop the latch closes round', [30, 20, 30]);
+pt('prop-rod', 'hood prop rod', 'draw', 'steel-low', 'a bent steel rod that holds the hood open', [600, 8, 8]);
+}
+
+// ==== a body kit, piece by piece (machines.ts bodyKit fits them to the skin) ============================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Body kit parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Body kits', 'assembly', 'assemble', of, says, '', { size });
+pt('fender-flare', 'fender flare', 'mould', 'abs', 'a moulded ABS band round a wheel arch, riveted to the fender (typical of bolt-on flares)', [900, 450, 20]);
+pt('side-skirt', 'side skirt', 'mould', 'abs', 'a moulded ABS skirt along the rocker, screwed along its foot and taped along its top', [1800, 90, 25]);
+pt('front-lip', 'front lip', 'mould', 'abs', 'a moulded ABS lip under the front bumper, screwed up into its foot', [1600, 15, 120]);
+pt('rear-valance', 'rear valance', 'mould', 'abs', 'a moulded ABS valance under the rear bumper', [1600, 15, 100]);
+pt('ducktail-spoiler', 'ducktail spoiler', 'mould', 'abs', 'a moulded ABS lip along a deck lid\'s tail, taped and screwed on', [1500, 100, 300]);
+pt('scoop-vent', 'scoop vent', 'mould', 'abs', 'a black moulded mesh across a bolt-on scoop\'s opening, closed behind', [450, 400, 4]);
+pt('quarter-scoop', 'quarter scoop insert', 'mould', 'abs', 'a moulded ABS insert in a scoop on the rear quarter', [500, 450, 12]);
+pt('wing-blade', 'wing blade', 'laminate', 'fibreglass', 'a cambered blade laid up in glass fibre and resin, painted', [1600, 40, 320]);
+pt('wing-upright', 'wing upright', 'cast', 'al-a380', 'a cast aluminium upright, bolted through the deck lid', [150, 200, 12]);
+pt('wing-endplate', 'wing end plate', 'mould', 'abs', 'a moulded ABS plate across the blade\'s end', [400, 130, 6]);
+as('rear-wing', 'rear wing', 'wing-blade wing-upright*2 wing-endplate*2', 'a blade on two uprights with an end plate at each end, bolted through the deck lid (its bolts not drawn)', [1700, 250, 400]);
+}
+
+// ==== single parts as they are drawn in the vehicles (one material, one process each): named so they are known ====
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Vehicle parts', 'part', make, of, says, '', { size });
+pt('counterweight', 'counterweight', 'cast', 'cast-iron', 'a forklift\'s cast iron counterweight behind its rear axle, balancing its load', [1100, 700, 1000]);
+pt('vehicle-hub', 'hub', 'cast', 'steel-low', 'a wheel\'s hub: its flange the wheel bolts to, its barrel round its bearing (cast or forged, machined)', [160, 80, 160]);
+pt('trailing-beam', 'trailing beam', 'forge', 'steel-alloy', 'an air-suspended axle\'s trailing arm, forged, its bush at its front', [900, 120, 90]);
+pt('spring-leaf', 'leaf', 'roll', 'steel-spring', 'one leaf of a leaf spring: rolled spring steel, cut, its ends formed, heat-treated', [1500, 20, 90]);
+pt('beam-hanger', 'beam hanger', 'cast', 'steel-low', 'a cast bracket on the frame rail the trailing beam pivots in', [200, 300, 120]);
+pt('mast-upright', 'upright', 'roll', 'steel-low', 'a forklift mast\'s rolled channel, its rollers running in it', [100, 2000, 60]);
+pt('fork-blade', 'blade', 'forge', 'steel-alloy', 'a fork tine\'s blade, forged with its shank', [1070, 40, 100]);
+pt('fork-shank', 'shank', 'forge', 'steel-alloy', 'a fork\'s upright shank, its hooks on the carriage', [40, 400, 100]);
+pt('brake-disc-solid', 'brake disc', 'cast', 'cast-iron', 'a solid cast iron disc, its faces ground', [260, 12, 260]);
+pt('brake-disc-vented', 'vented brake disc', 'cast', 'cast-iron', 'a cast iron disc, two faces joined by vanes, its faces ground', [280, 26, 280]);
+pt('brake-drum', 'brake drum', 'cast', 'cast-iron', 'a cast iron drum, its inside turned for the shoes', [280, 80, 280]);
+pt('engine-hood-fl', 'engine hood', 'stamp', 'steel-low', 'a forklift\'s pressed steel hood over its engine, the seat on it', [900, 30, 1000]);
+pt('wheel-disc', 'wheel disc', 'stamp', 'steel-low', 'a steel wheel\'s pressed centre, welded into its barrel', [400, 20, 400]);
+pt('seat-frame', 'seat frame', 'weld', 'steel-low', 'a seat\'s frame of pressed and tubular steel, welded', [500, 40, 500]);
+pt('mast-tie', 'mast tie', 'weld', 'steel-low', 'a cross tie welded between a mast\'s uprights', [900, 100, 60]);
+pt('sill', 'sill', 'stamp', 'steel-low', 'a pressing along the body\'s bottom edge between the arches', [1800, 150, 100]);
+pt('sill-inner', 'sill inner', 'stamp', 'steel-low', 'the sill\'s inner pressing, its box closed by the sill\'s skin', [1800, 150, 100]);
+pt('floor-pan', 'floor pan', 'stamp', 'steel-low', 'the floor\'s main pressing, its ribs pressed in', [1600, 50, 700]);
+pt('rear-floor', 'rear floor', 'stamp', 'steel-low', 'the floor under the rear seat and the boot, pressed', [1000, 50, 1200]);
+pt('trunk-floor', 'trunk floor', 'stamp', 'steel-low', 'the boot\'s floor pressing, its spare-wheel well pressed in', [900, 150, 1200]);
+pt('floor', 'floor', 'stamp', 'steel-low', 'a floor pressing', [1000, 50, 1000]);
+pt('tilt-pivot', 'tilt pivot', 'cast', 'steel-low', 'a cast bracket the mast tilts on', [150, 150, 100]);
+pt('spring-hanger', 'spring hanger', 'cast', 'steel-low', 'a cast bracket on the frame a leaf spring\'s eye pins to', [150, 200, 100]);
+pt('spring-shackle', 'spring shackle', 'forge', 'steel-low', 'a forged link from a spring\'s back eye to its hanger, so the spring can lengthen', [150, 120, 80]);
+pt('back-glass', 'back glass', 'laminate', 'glass', 'the rear window: tempered glass, its heater lines printed on it', [1200, 500, 5]);
+pt('windscreen', 'windscreen', 'laminate', 'glass pvb', 'two sheets of glass bonded to a layer of PVB', [1400, 900, 5]);
+pt('side-window', 'side window', 'laminate', 'glass', 'a door\'s or quarter\'s tempered glass', [800, 450, 4]);
+pt('quarter-window', 'quarter window', 'laminate', 'glass', 'a small fixed window behind a door', [300, 250, 4]);
+pt('quarter-panel', 'quarter panel', 'stamp', 'steel-low', 'the body side\'s rear pressing round the rear arch, one with its pillars and sill', [1500, 700, 300]);
+pt('fender', 'fender', 'stamp', 'steel-low', 'a front wing over the wheel, pressed (moulded on a motorcycle or quad)', [900, 600, 300]);
+pt('knuckle', 'bearing housing', 'cast', 'cast-iron', 'a steering knuckle\'s or hub carrier\'s housing round its wheel bearing, cast', [150, 150, 150]);
+pt('axle-housing', 'axle housing', 'cast', 'steel-low', 'a cast axle housing round the final drive and the half shafts', [800, 200, 200]);
+pt('axle-carrier', 'axle carrier', 'cast', 'steel-low', 'a cast carrier at a twist beam\'s end, its stub axle on it', [150, 150, 100]);
+pt('axle-pivot', 'axle pivot', 'weld', 'steel-low', 'a welded bracket an axle pivots in', [200, 150, 150]);
+pt('guard-rail', 'guard rail', 'weld', 'steel-low', 'a welded tube rail of an overhead guard', [1000, 40, 40]);
+pt('tunnel-side', 'tunnel side', 'stamp', 'steel-low', 'a side of the floor\'s centre tunnel, pressed', [1200, 200, 30]);
+pt('tunnel-top', 'tunnel top', 'stamp', 'steel-low', 'the top of the floor\'s centre tunnel, pressed', [1200, 30, 250]);
+pt('back-panel', 'back panel', 'stamp', 'steel-low', 'the body\'s rear panel under the boot opening', [1300, 300, 100]);
+pt('roof', 'roof', 'stamp', 'steel-low', 'the roof\'s outer panel, pressed', [1800, 30, 1300]);
+pt('wheelhouse', 'wheelhouse', 'stamp', 'steel-low', 'an inner wheel arch, pressed', [900, 500, 300]);
+pt('twist-beam', 'twist beam', 'roll', 'steel-alloy', 'a rear twist beam: a rolled V-section tube between its trailing arms', [1300, 100, 100]);
+pt('damper-bracket-arm', 'damper bracket arm', 'stamp', 'steel-low', 'a pressed bracket a damper\'s lower eye bolts to', [150, 100, 60]);
+pt('steering-wheel-boss', 'steering wheel boss', 'cast', 'al-a380', 'the cast hub of a steering wheel, splined to its column', [100, 60, 100]);
+pt('steering-wheel-spoke', 'steering wheel spoke', 'cast', 'al-a380', 'a cast spoke of a steering wheel\'s frame, under its moulding', [150, 20, 30]);
+pt('dash-panel', 'dash panel', 'stamp', 'steel-low', 'the bulkhead between the engine bay and the cabin, pressed', [1300, 500, 100]);
+pt('cross-car-beam', 'cross-car beam', 'weld', 'steel-low', 'a welded tube across the cabin the instrument panel and steering column hang on', [1300, 60, 60]);
+pt('seat-shell', 'seat shell', 'mould', 'fibreglass', 'a moulded seat shell', [400, 500, 400]);
+pt('heel-kick', 'heel kick', 'stamp', 'steel-low', 'the step in the floor under the rear seat, pressed', [1300, 200, 100]);
+pt('instrument-panel', 'dashboard', 'mould', 'pp', 'the instrument panel\'s moulded substrate and skin', [1300, 300, 500]);
+pt('guard-bar', 'guard bar', 'weld', 'steel-low', 'a welded bar of an overhead guard\'s top', [900, 30, 30]);
+pt('seat-pan', 'seat pan', 'mould', 'pp', 'a moulded seat pan', [450, 100, 450]);
+pt('damper-turret', 'damper turret', 'stamp', 'steel-low', 'a pressed tower round a strut\'s top mount', [200, 250, 200]);
+pt('joint-boot', 'joint boot', 'mould', 'neoprene', 'a moulded rubber gaiter over a constant-velocity joint', [100, 100, 100]);
+pt('nose-kart', 'nose', 'mould', 'pe', 'a kart\'s moulded front bumper fairing', [400, 150, 600]);
+pt('cover-rim', 'cover rim', 'mould', 'abs', 'a wheel cover\'s moulded rim', [400, 20, 400]);
+pt('toe-board', 'toe board', 'stamp', 'steel-low', 'the sloping floor at the footwell\'s front, pressed', [1300, 300, 300]);
+pt('wheelhouse-liner', 'wheelhouse liner', 'mould', 'pp', 'a moulded liner inside a wheel arch', [900, 500, 200]);
+pt('rack-bar', 'rack', 'machine', 'steel-alloy', 'a steering rack\'s bar, its teeth cut along it', [700, 25, 25]);
+pt('cowl-panel', 'cowl panel', 'stamp', 'steel-low', 'the pressing under the windscreen\'s foot', [1300, 100, 200]);
+pt('floor-tray', 'floor tray', 'stamp', 'al-5052', 'a kart\'s aluminium floor tray', [1000, 10, 600]);
+pt('side-pod', 'side pod', 'mould', 'pe', 'a kart\'s moulded side pod', [600, 200, 200]);
+pt('rear-bumper-kart', 'rear bumper', 'mould', 'pe', 'a kart\'s moulded rear bumper', [300, 300, 1300]);
+pt('trailing-arm', 'trailing arm', 'stamp', 'steel-low', 'a pressed trailing arm', [400, 100, 80]);
+pt('subframe-side', 'subframe side', 'stamp', 'steel-low', 'a side member of a subframe, pressed and welded', [600, 100, 100]);
+pt('subframe-cross-member', 'subframe cross member', 'stamp', 'steel-low', 'a subframe\'s cross member, pressed and welded', [100, 100, 800]);
+pt('strut-tower-wall', 'strut tower wall', 'stamp', 'steel-low', 'a wall of a strut\'s tower, pressed', [200, 300, 10]);
+pt('swingarm', 'swingarm', 'weld', 'steel-low', 'a welded swingarm', [500, 80, 300]);
+pt('fender-deck', 'fender deck', 'mould', 'pp', 'a tractor\'s moulded fender deck over its rear wheels', [700, 300, 900]);
+pt('mower-blade', 'mower blade', 'stamp', 'steel-spring', 'a mower\'s blade, cut and its edges ground, its tips lifted', [550, 6, 60]);
+pt('steering-column', 'steering column', 'draw', 'steel-low', 'a drawn steel column tube round its shaft', [600, 40, 40]);
+pt('cover-spoke', 'cover spoke', 'mould', 'abs', 'a spoke of a wheel cover\'s moulding', [150, 10, 30]);
+pt('cover-hub', 'cover hub', 'mould', 'abs', 'the centre of a wheel cover\'s moulding', [150, 20, 150]);
+pt('rack-rail', 'rack rail', 'weld', 'steel-low', 'a welded rail of a rack', [800, 20, 20]);
+pt('tail-light-housing', 'tail lights', 'mould', 'pmma abs', 'a tail lamp moulded in one: housing and lens', [400, 150, 150]);
+pt('pivot-bracket', 'pivot bracket', 'stamp', 'steel-low', 'a pressed bracket an arm pivots in', [100, 100, 60]);
+pt('arm-pressing', 'arm pressing', 'stamp', 'steel-low', 'a pressing of a suspension arm', [400, 30, 100]);
+pt('spring-pad', 'spring pad', 'mould', 'rubber', 'a rubber pad a coil spring sits on', [120, 10, 120]);
+pt('spring-seat', 'spring seat', 'stamp', 'steel-low', 'a pressed seat a coil spring sits in', [150, 20, 150]);
+pt('upright-foot', 'upright foot', 'cast', 'steel-low', 'the foot of an upright, cast', [100, 80, 100]);
+pt('carrier-leg', 'carrier leg', 'cast', 'cast-iron', 'a leg of a brake caliper\'s carrier bracket, cast', [60, 80, 30]);
+pt('drive-shaft', 'drive shaft', 'forge', 'steel-alloy', 'a drive shaft\'s bar between its joints, forged and induction-hardened', [600, 30, 30]);
+pt('steering-shaft', 'steering shaft', 'draw', 'steel-alloy', 'the shaft in the steering column', [600, 20, 20]);
+pt('intermediate-shaft', 'intermediate shaft', 'draw', 'steel-alloy', 'the shaft from the column to the rack, a joint at each end', [300, 20, 20]);
+pt('pivot-sleeve', 'pivot sleeve', 'draw', 'steel-low', 'a sleeve an arm\'s bush is pressed into', [60, 40, 40]);
+pt('brake-dust-shield', 'brake dust shield', 'stamp', 'steel-low', 'a pressed shield behind a brake disc', [300, 30, 300]);
+pt('c-pillar', 'c pillar', 'stamp', 'steel-low', 'the body\'s rear roof pillar, pressed', [400, 500, 100]);
+pt('steering-arm', 'steering arm', 'forge', 'steel-alloy', 'a forged arm a tie rod turns the knuckle by', [150, 30, 40]);
+pt('anti-roll-bar', 'anti roll bar', 'draw', 'steel-spring', 'a bent spring-steel bar linking the two sides\' suspension', [1200, 25, 300]);
+pt('rack-housing', 'rack housing', 'cast', 'al-a380', 'the cast housing the steering rack slides in', [700, 60, 60]);
+pt('triple-clamp', 'triple clamp', 'cast', 'al-6061', 'a forged or cast clamp holding a motorcycle\'s fork tubes and steering stem', [200, 30, 100]);
+pt('bar-clamp', 'bar clamp', 'cast', 'al-6061', 'a clamp holding the handlebar', [50, 40, 40]);
+pt('pod-bracket', 'pod bracket', 'weld', 'steel-low', 'a bracket a kart\'s side pod hangs on', [100, 50, 50]);
+pt('centre-pad', 'centre pad', 'cast', 'al-a380', 'the centre pad of a wheel', [100, 20, 100]);
+pt('load-backrest-bar', 'load backrest bar', 'weld', 'steel-low', 'a bar of a forklift\'s load backrest', [1000, 20, 20]);
+pt('load-backrest-rail', 'load backrest rail', 'weld', 'steel-low', 'a rail of a forklift\'s load backrest', [1000, 30, 30]);
+pt('front-axle-kart', 'axle', 'machine', 'steel-alloy', 'a turned axle', [1000, 30, 30]);
+pt('axle-sprocket', 'axle sprocket', 'machine', 'al-7075', 'a sprocket on the rear axle, its teeth cut', [200, 8, 200]);
+pt('footpeg', 'footpeg', 'cast', 'steel-low', 'a cast footpeg, its teeth for the boot', [100, 30, 40]);
+pt('down-tube', 'down tube', 'draw', 'steel-alloy', 'a frame tube', [600, 40, 40]);
+pt('head-tube', 'head tube', 'draw', 'steel-alloy', 'the frame\'s head tube the steering stem turns in', [200, 50, 50]);
+pt('cross-tube', 'cross tube', 'draw', 'steel-low', 'a frame cross tube', [600, 30, 30]);
+pt('subframe', 'subframe', 'weld', 'al-6061', 'a welded subframe', [600, 50, 300]);
+pt('race-number-board', 'race number board', 'mould', 'pe', 'a moulded number board', [300, 200, 10]);
+pt('grip', 'grip', 'mould', 'rubber', 'a moulded handlebar grip', [130, 30, 30]);
+pt('spoke-flange', 'spoke flange', 'cast', 'al-6061', 'a hub\'s flange the spokes hook into', [100, 10, 100]);
+pt('knob', 'knob', 'mould', 'rubber', 'a knob of an off-road tyre\'s tread', [20, 20, 20]);
+pt('arm', 'arm', 'weld', 'steel-low', 'a welded suspension arm', [400, 40, 40]);
+pt('rack', 'rack', 'weld', 'steel-low', 'a welded carrier rack', [600, 40, 600]);
+pt('front-fenders-quad', 'fenders', 'mould', 'pp', 'moulded fenders', [800, 300, 1000]);
+pt('chain-run', 'chain top run', 'stamp', 'steel-alloy', 'a run of roller chain', [600, 10, 10]);
+pt('drive-sprocket', 'drive sprocket', 'machine', 'steel-alloy', 'a sprocket on the gearbox\'s output, its teeth cut', [60, 10, 60]);
+pt('lower-triple-clamp', 'lower triple clamp', 'cast', 'al-6061', 'the lower clamp of a motorcycle\'s fork', [200, 30, 100]);
+pt('mount-rubber', 'mount', 'mould', 'rubber', 'a rubber mount', [100, 60, 60]);
+pt('bush-rubber', 'bush', 'mould', 'rubber', 'a rubber bush', [50, 40, 40]);
+}
+
+// ==== a seat, part by part (machines.ts seatPart) =====================================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Seat parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Seats', 'assembly', 'assemble', of, says, '', { size });
+pt('seat-foam', 'seat foam', 'mould', 'pu', 'polyurethane foam moulded to its shape', [500, 100, 500]);
+pt('seat-cover', 'seat cover', 'laminate', 'pet', 'woven fabric (or leather) cut and sewn over its foam', [500, 10, 500]);
+pt('seat-spring', 'sinuous spring', 'bend', 'steel-spring', 'a zig-zag of spring wire across a seat\'s frame', [400, 10, 40]);
+pt('recliner-disc', 'recliner plate', 'stamp', 'steel-low', 'a fine-blanked toothed disc of a recliner', [70, 6, 70]);
+pt('recliner-pawl', 'recliner pawl', 'stamp', 'steel-alloy', 'a hardened pawl that locks a recliner\'s discs', [30, 8, 4]);
+as('recliner', 'recliner', 'recliner-disc*2 recliner-pawl', 'two toothed discs locked by a pawl, the backrest\'s pivot', [70, 20, 70]);
+pt('headrest-post', 'headrest post', 'bend', 'steel-low', 'a chromed steel rod the headrest slides on', [11, 160, 11]);
+as('headrest', 'headrest', 'seat-foam seat-cover headrest-post*2', 'foam in its cover on two posts', [80, 200, 260]);
+pt('seat-rail-lower', 'lower seat rail', 'roll', 'steel-low', 'a rolled channel bolted to the floor', [420, 30, 40]);
+pt('seat-rail-upper', 'upper seat rail', 'roll', 'steel-low', 'a rolled channel sliding in the lower on balls', [380, 30, 30]);
+pt('rail-ball', 'rail balls', 'grind', 'steel-chrome', 'hardened balls the upper rail rolls on', [8, 35, 8]);
+pt('seat-riser', 'seat riser', 'stamp', 'steel-low', 'a pressed riser from the rail to the frame', [300, 100, 4]);
+pt('seat-latch-bar', 'seat latch bar', 'bend', 'steel-low', 'the bar under the seat\'s front that frees the rails', [400, 10, 10]);
+as('seat-rail', 'seat rail', 'seat-rail-lower seat-rail-upper rail-ball', 'an upper rail sliding in a lower on balls', [420, 60, 40]);
+as('car-seat', 'car seat', 'seat-foam seat-cover seat-spring seat-frame recliner seat-rail', 'foam on springs in a welded frame under its covers, a recliner, a headrest, on two rails', [550, 1000, 550]);
+as('bench-seat', 'bench seat', 'seat-foam seat-cover seat-spring seat-frame', 'foam on springs on a frame under its covers', [500, 700, 1300]);
+}
+
+// ==== a cooling module, part by part (fittings.ts coolingModule) ====================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Cooling parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Cooling', 'assembly', 'assemble', of, says, '', { size });
+pt('radiator-tube', 'radiator tube', 'extrude', 'al-6063', 'a flat folded or extruded aluminium tube', [600, 2, 26]);
+pt('radiator-fin', 'radiator fin', 'roll', 'al-6063', 'thin aluminium strip folded and louvred, brazed between the tubes', [600, 8, 26]);
+pt('radiator-tank', 'radiator tank', 'mould', 'nylon fibreglass', 'a glass-filled nylon tank crimped onto the core\'s header', [45, 400, 40]);
+pt('radiator-cap', 'radiator cap', 'stamp', 'steel-low rubber', 'a pressure cap, its spring and seal', [40, 20, 40]);
+pt('coolant', 'coolant', 'chemistry', 'water', 'a half-and-half mix of ethylene glycol and water', [100, 100, 100]);
+as('radiator', 'radiator', 'radiator-tube radiator-fin radiator-tank*2', 'flat tubes and folded fins brazed into a core, a tank at each end', [650, 400, 30]);
+as('condenser', 'condenser', 'radiator-tube radiator-fin radiator-tank*2', 'the air conditioning\'s condenser, built as a radiator is', [620, 370, 16]);
+as('charge-air-cooler', 'charge air cooler', 'radiator-tube radiator-fin radiator-tank*2', 'cools the turbo\'s air before the engine, built as a radiator is', [900, 850, 50]);
+pt('cooling-fan', 'cooling fan', 'mould', 'pp', 'a moulded fan, its hub and blades in one', [400, 50, 400]);
+pt('fan-motor', 'fan motor', 'assemble', 'steel-low copper', 'a 12 V motor turning the fan', [90, 70, 90]);
+pt('fan-clutch', 'fan clutch', 'assemble', 'al-a380 steel-low', 'a viscous clutch turning a truck\'s fan as hot as it needs', [150, 80, 150]);
+pt('fan-shroud', 'fan shroud', 'mould', 'pp', 'a moulded shroud leading the fan\'s air through the core', [650, 400, 60]);
+pt('coolant-hose', 'coolant hose', 'extrude', 'epdm', 'a moulded rubber hose on its clips', [400, 35, 35]);
+as('cooling-module', 'cooling module', 'radiator fan-shroud coolant-hose', 'a radiator (and condenser or charge air cooler), a fan in its shroud, its hoses', [650, 450, 150]);
+}
+
+// ==== an exhaust and a steering joint, part by part (fittings.ts exhaustSystem; machines.ts) =========================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Exhaust parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicles/Exhaust', 'assembly', 'assemble', of, says, '', { size });
+pt('exhaust-pipe', 'exhaust pipe', 'bend', 'stainless-304', 'a bent stainless tube from the manifold to the tail', [3500, 50, 50]);
+pt('converter-shell', 'converter shell', 'roll', 'stainless-304', 'a rolled stainless can round the substrate', [260, 120, 120]);
+pt('catalyst-substrate', 'catalyst substrate', 'extrude', 'alumina mgo quartz platinum', 'an extruded cordierite honeycomb, washcoated with alumina and platinum-group metals', [220, 100, 100]);
+pt('converter-mat', 'converter mat', 'laminate', 'mica', 'an intumescent mat holding the substrate in its can', [220, 6, 300]);
+pt('heat-shield', 'heat shield', 'stamp', 'stainless-304', 'a pressed stainless shield', [250, 140, 140]);
+as('catalytic-converter', 'catalytic converter', 'converter-shell catalyst-substrate converter-mat heat-shield', 'a washcoated ceramic honeycomb held in its mat in a stainless can', [260, 140, 140]);
+pt('silencer-shell', 'silencer shell', 'roll', 'stainless-304', 'a rolled stainless shell, its ends seamed', [420, 150, 150]);
+pt('silencer-baffle', 'baffle', 'stamp', 'stainless-304', 'a pressed baffle across a silencer', [140, 1, 140]);
+pt('perforated-tube', 'perforated tube', 'roll', 'stainless-304', 'a tube pierced with holes inside a silencer', [400, 40, 40]);
+pt('silencer-packing', 'silencer packing', 'laminate', 'fibreglass', 'glass wool round its tubes', [400, 100, 100]);
+as('resonator', 'resonator', 'silencer-shell perforated-tube silencer-packing', 'a perforated tube in packing in a shell', [300, 100, 100]);
+as('muffler', 'muffler', 'silencer-shell silencer-baffle*2 perforated-tube*3 silencer-packing', 'baffles and perforated tubes in a shell', [420, 150, 150]);
+pt('uj-yoke', 'yoke', 'forge', 'steel-alloy', 'a forged yoke, its ears bored for the spider\'s caps', [30, 30, 30]);
+pt('uj-spider', 'spider', 'forge', 'steel-alloy', 'a forged cross, its four arms ground', [30, 10, 30]);
+pt('uj-cap', 'bearing cap', 'stamp', 'steel-alloy', 'a drawn cup of needle rollers on a spider\'s arm', [11, 6, 11]);
+as('universal-joint', 'universal joint', 'uj-yoke*2 uj-spider uj-cap*4', 'two yokes at right angles on a cross, its arms in needle-bearing caps', [40, 30, 30]);
+}
+
+// ==== a heavy axle, part by part (drivetrain.ts heavyAxle) =============================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Drivetrain/Axle parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Drivetrain/Axles', 'assembly', 'assemble', of, says, '', { size });
+pt('carrier-housing', 'carrier housing', 'cast', 'cast-iron', 'a cast housing the pinion and the differential\'s bearings sit in, bolted into the axle\'s bowl', [400, 400, 400]);
+pt('axle-shaft', 'axle shaft', 'forge', 'steel-alloy', 'a forged and induction-hardened shaft, splined into its side gear, its flange bolted to its hub', [1000, 55, 55]);
+pt('axle-beam', 'axle beam', 'forge', 'steel-alloy', 'a steer axle\'s forged I-beam, its kingpin bosses at its ends', [1800, 130, 100]);
+pt('kingpin', 'kingpin', 'grind', 'steel-alloy', 'a ground pin a steering knuckle turns on', [50, 260, 50]);
+as('drive-axle', 'drive axle', 'axle-housing differential axle-shaft*2', 'a banjo housing, its carrier and differential, its two axle shafts', [2000, 500, 500]);
+as('steer-axle', 'steer axle', 'axle-beam kingpin*2', 'a forged I-beam and its kingpins', [2000, 200, 150]);
+pt('bearing-hanger-body', 'bearing hanger housing', 'weld', 'steel-low', 'a plate welded onto a kart\'s rail and a housing bored for the axle\'s bearing', [80, 110, 50]);
+as('bearing-hanger', 'axle bearing hanger', `bearing-hanger-body ${F('bearing 6206')}`, 'a hanger welded to the frame, a 6206 ball bearing pressed in, the axle through it', [80, 110, 50]);
+}
+
+// ==== a disc brake's caliper, part by part (machines.ts) ==============================================================
+{
+const pt = (id: string, name: string, make: Process, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicle parts/Brake parts', 'part', make, of, says, '', { size });
+const as = (id: string, name: string, of: string, says: string, size: [number, number, number]) => e(id, name, 'Mechanical/Vehicle parts/Brakes', 'assembly', 'assemble', of, says, '', { size });
+pt('caliper-body', 'caliper body', 'cast', 'cast-iron', 'cast in one: its piston half, its finger half and the bridge over the disc, its bore machined', [150, 90, 70]);
+pt('caliper-carrier', 'caliper carrier', 'cast', 'cast-iron', 'a cast bracket bolted to the knuckle, the caliper sliding on its pins', [150, 60, 50]);
+pt('caliper-piston', 'caliper piston', 'machine', 'steel-chrome', 'a chromed steel (or phenolic) piston in the caliper\'s bore', [54, 40, 54]);
+pt('piston-seal-brake', 'piston seal', 'mould', 'epdm', 'a square-section seal in the bore\'s groove that pulls the piston back', [60, 3, 60]);
+pt('dust-boot', 'dust boot', 'mould', 'epdm', 'a rubber boot over the piston\'s mouth', [60, 10, 60]);
+pt('pad-backing', 'pad backing plate', 'stamp', 'steel-low', 'a fine-blanked steel plate the friction material is bonded to', [120, 55, 5]);
+pt('pad-friction', 'pad friction', 'mould', 'friction-composite', 'resin-bonded friction material, pressed and cured on its plate', [110, 50, 11]);
+as('disc-brake-pad', 'disc brake pad', 'pad-backing pad-friction', 'friction material bonded to a steel backing plate', [120, 55, 16]);
+pt('caliper-bracket', 'caliper bracket', 'weld', 'steel-low', 'a steel plate welded to the frame or a bearing hanger, a caliper bolted to it', [80, 50, 40]);
+as('brake-caliper-fixed', 'fixed brake caliper', 'caliper-body caliper-piston*2 disc-brake-pad*2', 'a fixed caliper: two opposed pistons in a body astride the disc, a pad each side (a kart\'s, typical)', [40, 60, 70]);
+pt('guide-pin', 'guide pin', 'grind', 'steel-alloy', 'a ground pin the caliper slides on, in its rubber boot', [9, 50, 9]);
+pt('bleed-screw', 'bleed screw', 'machine', 'steel-low', 'a hollow screw to bleed air from the caliper', [6, 18, 6]);
+as('brake-caliper', 'brake caliper', 'caliper-body caliper-piston disc-brake-pad*2 guide-pin*2 bleed-screw', 'a sliding caliper: its cast body, its piston, two pads, its guide pins', [160, 100, 80]);
+}
+
 // ==== life: molecules, cells, tissues, organs, the human body, the organisms used in technology (src/nexus/life) =====
 for (const mo of MOLECULES) { const da = daltonsOf(mo); put({ id: mo.id, name: mo.name, path: ['Life', 'Molecules', ...mo.group.split('/').slice(1)], kind: 'material', make: /Salts|Gases|Biominerals/.test(mo.group) ? 'stock' : 'grow', of: [], says: mo.says, ...(da ? { da: +da.toFixed(1) } : {}) }); }
 for (const e of LIFE) put({ id: e.id, name: e.name, path: e.path.split('/'), kind: e.kind, make: 'grow', of: e.of.map((c) => ({ ...c })), says: e.says, ...(e.spec ? { spec: e.spec } : {}), ...(e.size ? { size: e.size } : {}), ...(e.members ? { members: e.members } : {}), g: e.g, ...(e.look ? { look: e.look } : {}), ...(Object.keys(e.mass).length ? { mass: { ...e.mass } } : {}) });
@@ -1136,21 +1684,7 @@ export const massMakeup = memo((id: string): Record<string, number> | null => {
   for (const k of Object.keys(out)) out[k]! /= all;
   return out;
 });
-/** The atoms in one of an item, element by element: its grams by element over each one's atomic weight, times
- *  Avogadro's number; kept as these counts until it is opened, they are its atoms as a mapped probability. */
-export const atomsOf = memo((id: string): { total: number; by: { el: string; n: number; share: number }[] } | null => {
-  const i = items.get(id), mk = massMakeup(id); if (!i || !mk) return null; const g = gramsOfItem(i); if (!g) return null;
-  const by = Object.entries(mk).map(([el, f]) => ({ el, n: (g * f / ELEMENTS[el]!.w) * 6.02214076e23 })), total = by.reduce((a, b) => a + b.n, 0);
-  return { total, by: by.map((b) => ({ ...b, share: b.n / total })).sort((a, b) => b.n - a.n) };
-});
-/** How many of a thing there are in an item, all the way down (red cells in a body, synapses in a brain). */
-export const countIn = (id: string, what: string): number => {
-  const memoN = new Map<string, number>();
-  const n = (x: string): number => { if (x === what) return 1; const k = memoN.get(x); if (k !== undefined) return k; memoN.set(x, 0); const i = items.get(x); let t = 0; if (i) for (const c of i.of) t += c.n * n(c.id); memoN.set(x, t); return t; };
-  return n(id);
-};
 
-/** The tree of what is in an item, every level, as lines to read. */
 /** The tree of what is in an item, every level, as lines to read: inside what is bought too (its maker's parts, said
  *  as bought), each material's make-up under it, down to the elements. */
 export function treeLines(id: string, most = 60): string[] {
@@ -1165,14 +1699,6 @@ export function treeLines(id: string, most = 60): string[] {
   };
   walk(id, 0, 1, new Set());
   return out;
-}
-/** A part's shape to print or cast it here: a hollow box of its size for a housing or case, a disc for a gear or wheel. */
-export function sectionsOf(i: Item): Section[] {
-  const [w, d, h] = i.size ?? [30, 30, 10];
-  if (/gear/.test(i.id)) return [{ outline: shapes.gear(Math.max(10, Math.round(w / 1.5)), 1), holes: [shapes.circle(2.5)], z0: 0, z1: h }];
-  if (/wheel|pulley|roller|collar|coupling|hub/.test(i.id)) return [{ outline: shapes.circle(w / 2), holes: [shapes.circle(Math.max(1.5, w / 8))], z0: 0, z1: h }];
-  if (/case|housing|holder|head|cap|bobbin/.test(i.id)) return [{ outline: shapes.rect(w, d), z0: 0, z1: 1.2 }, { outline: shapes.rect(w, d), holes: [shapes.rect(w - 3, d - 3)], z0: 1.2, z1: h }];
-  return [{ outline: shapes.rect(w, d), z0: 0, z1: h }];
 }
 
 // ==== feeding it fast ====================================================================================================
@@ -1209,58 +1735,17 @@ export function feed(text: string): { added: Item[]; refused: string[] } {
   }
   return { added, refused };
 }
+/** An entry of yours taken out of the inventory: refused for what is seeded (only what was fed is yours to take out),
+ *  and for anything another entry holds (take that out first, or change it). */
+export function removeItem(id: string): { ok: boolean; says: string } {
+  const it = items.get(id); if (!it) return { ok: false, says: `nothing in the inventory is ${id}` };
+  if (!it.yours) return { ok: false, says: `${it.name} is seeded, not yours: it stays` };
+  const held = [...items.values()].filter((x) => x.id !== id && x.of.some((c) => c.id === id));
+  if (held.length) return { ok: false, says: `${it.name} is in ${held.slice(0, 3).map((x) => x.name).join(', ')}${held.length > 3 ? ', …' : ''}: take those out first` };
+  items.delete(id); rev++; return { ok: true, says: `${it.name} taken out` };
+}
 /** An entry as one line of the fast format, to copy, change and feed again. */
 export const lineOf = (i: Item) => [i.id, i.name, i.path.join('/'), i.kind, i.make, i.of.map((c) => (c.n > 1 ? `${c.id}*${c.n}` : c.id)).join(' '), i.says, i.spec ?? ''].join(' | ');
 
 // ==== as boards =========================================================================================================
-/** The whole inventory as a board of its categories: category, subcategory and sub-subcategory, each entry filed under
- *  them; the adjustable families marked ⚙ with their sizes. */
-export function boardOfInventory(at = Date.now()): Board {
-  const b: Board = { title: 'Inventory', kind: 'categories', about: '', nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: 'inventory' };
-  let e2 = 0; const node = (id: string, label: string, note: string) => { if (!b.nodes[id]) b.nodes[id] = { label, note }; return id; }, link = (a: string, c: string) => { b.edges[`e${e2++}`] = { from: a, to: c, rel: 'contains' }; };
-  const root = node('inv', 'Inventory', 'Everything the forge knows how to make, by what it is');
-  for (const [cat, subs] of categories()) {
-    const cid = node(`c-${cat}`, cat, ''); link(root, cid);
-    for (const [sub, subsubs] of subs) {
-      const sid = sub ? node(`s-${cat}-${sub}`, sub, '') : cid; if (sub) link(cid, sid);
-      for (const [ss, ids] of subsubs) {
-        const ssid = ss ? node(`ss-${cat}-${sub}-${ss}`, ss, '') : sid; if (ss) link(sid, ssid);
-        for (const id of ids) { const i = items.get(id)!; if (i.adjustable && !i.family) continue; const sm = i.kind === 'material' ? null : summary(id); link(ssid, node(`i-${id}`, `${i.family ? '⚙ ' : ''}${i.name}`, `${i.says}${i.spec ? ` · ${i.spec}` : ''}${sm ? ` · made here: ${sm.made}, bought: ${sm.bought}, from stock: ${sm.stock}` : ''}${i.family ? ` · adjustable: "${FAMILIES.find((f) => f.id === i.family)?.examples[1] ?? i.family}"` : ''}`)); }
-      }
-    }
-  }
-  for (const f of FAMILIES) { const id = `f-${f.id}`, under = `ss-${f.path.join('-')}`; node(id, `⚙ ${f.name} (any size)`, `${f.says}. Call it: ${f.examples.join(', ')}. Sizes: ${f.params.map((q) => `${q.key} ${q.values ? q.values.join('/') : `${q.min}–${q.max} ${q.unit}`}`).join('; ')}`); link(b.nodes[under] ? under : root, id); }
-  const n = [...items.values()].filter((i) => !(i.adjustable && !i.family)).length;
-  b.about = `${n} entries in ${categories().size} categories, and ${FAMILIES.length} adjustable families (⚙) that make any size asked for. Each entry is mapped to what is inside it, down to its materials; open one's tree, or make it ("inventory make nema17", "inventory make screw M4x20").`;
-  return b;
-}
-/** What is inside an item, every level down to its materials, as a board. */
-export function boardOfTree(id: string, at = Date.now()): Board | null {
-  const top = items.get(id); if (!top) return null;
-  const b: Board = { title: `Inside: ${top.name}`, kind: 'categories', about: `${top.says}. Every part inside it, and what is inside that, down to its materials and their elements (each element one node, where every branch meets); each marked by how it is made here (made, bought, or from stock).`, nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `inventory:${id}` };
-  let e2 = 0;
-  const walk = (x: string, under: string | null, n: number, path: string) => {
-    const i = items.get(x); if (!i || Object.keys(b.nodes).length >= 600) return; const r = routeOf(i), nid = `${path}/${x}`.replace(/[^a-z0-9/.-]/gi, '-');
-    b.nodes[nid] = { label: `${n !== 1 ? `${countSays(n)} × ` : ''}${i.name}`, note: `${i.says}${i.spec ? ` · ${i.spec}` : ''} · ${i.kind === 'material' ? 'from stock' : r.bought ? r.why : `made here: ${r.why}`}` };
-    if (under) b.edges[`e${e2++}`] = { from: under, to: nid, rel: 'contains' };
-    if (path.split('/').length < 8) for (const c of i.of) walk(c.id, nid, c.n, `${path}/${x}`);
-    // a material: what it is made of; an element is one node, so every branch that comes to it meets there
-    if (i.kind === 'material' && i.makeup) for (const m of i.makeup) {
-      const el = items.get(m.id); if (!el) continue;
-      if (el.kind === 'element') { const fid = `fund/${m.id}`; if (!b.nodes[fid]) b.nodes[fid] = { label: `⚛ ${el.name}`, note: el.says }; b.edges[`e${e2++}`] = { from: nid, to: fid, rel: `${m.pct >= 1 ? m.pct.toFixed(1) : m.pct.toFixed(2)} % of it` }; }
-      else if (path.split('/').length < 9) walk(m.id, nid, 1, `${path}/${x}`);
-    }
-  };
-  walk(id, null, 1, '');
-  return b;
-}
 /** Making an item, as a pipeline: each thing inside it made (or bought, or taken from stock), then it put together. */
-export function makeBoard(id: string, at = Date.now()): Board | null {
-  const i = items.get(id); if (!i) return null; const r = routeOf(i);
-  const steps: [string, string, { kind: 'trigger' | 'action'; what: string }][] = [['t', 'Run', { kind: 'trigger', what: 'when I press run' }]];
-  i.of.forEach((c, k) => { const ci = items.get(c.id); if (ci) steps.push([`c${k}`, `${c.n > 1 ? `${c.n} × ` : ''}${ci.name}`, { kind: 'action', what: `inventory make ${c.id}${c.n > 1 ? ` x${c.n}` : ''}` }]); });
-  steps.push(['f', `${r.bought ? 'Take' : r.process === 'print' ? 'Print' : r.process === 'cast' ? 'Cast' : 'Put together'} the ${i.name}`, { kind: 'action', what: `inventory finish ${id}` }]);
-  const b: Board = { title: `Make: ${i.name}`, kind: 'flow', about: `${i.says}. Each step makes (or buys, or takes from stock) one thing inside it, each of those made the same way all the way down; the last step ${r.bought ? 'takes it as bought' : r.why}.`, nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `inventory:${id}` };
-  steps.forEach(([sid, label, step], k) => { b.nodes[sid] = { label, step }; if (k) b.edges[`e${k}`] = { from: steps[k - 1]![0], to: sid, rel: 'flows to' }; });
-  return b;
-}

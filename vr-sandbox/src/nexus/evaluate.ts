@@ -4,6 +4,7 @@
 
 import { dimText, type Dim } from './dimension';
 import { hashOf } from './identity';
+import { simpsonRule } from './numeric';
 import { carriesValue, weakest, type Status } from './status';
 import { OPERATORS, bindsOf, show, type Leaf, type Term } from './term';
 
@@ -96,15 +97,7 @@ const numericOnce = (t: Term, env: Values, halve: boolean, seen: Map<Term, numbe
     const lo = numeric(t.lo, env, halve, seen), hi = numeric(t.hi, env, halve, seen), panels = t.cells.value;
     if (lo === null || hi === null || panels === null) return null;
     const n = halve ? Math.max(1, Math.floor(panels / 2)) : panels;
-    const h = (hi - lo) / (2 * n);
-    let s = 0;
-    for (let i = 0; i <= 2 * n; i++) {
-      const f = numeric(t.body, { ...env, [t.over.sym]: { value: lo + i * h } }, halve);
-      if (f === null) return null;
-      if (!Number.isFinite(f)) return NaN;
-      s += (i === 0 || i === 2 * n ? 1 : i % 2 ? 4 : 2) * f;
-    }
-    return (s * h) / 3;
+    return simpsonRule((x) => numeric(t.body, { ...env, [t.over.sym]: { value: x } }, halve), lo, hi, n);
   }
   const args = t.args.map((a) => numeric(a, env, halve, seen));
   // a predicate one known part decides is decided, whatever the unknown parts are: false and anything is false, true
@@ -166,15 +159,6 @@ export function evaluate(name: string, term: Term, env: Env, cite?: { law: strin
   }
   if (statuses.length === 0) status = 'derived';
   return brand({ ...base, value, status, ...(u2 > 0 ? { uncertainty: Math.sqrt(u2) } : {}), hash });
-}
-
-/** Re-evaluate a record from its own term and inputs: the value must come back (the derivation test). */
-export const recompute = (d: Derivation): Derivation => (d.term.kind === 'leaf' ? ofLeaf(d.term) : evaluate(d.name, d.term, d.inputs, d.law ? { law: d.law, unit: d.unit, ...(d.cites ? { also: [...d.cites] } : {}) } : undefined));
-
-/** The same record with a wider uncertainty and the reason: an observer's resolution, never a smaller one. */
-export function withUncertainty(d: Derivation, uncertainty: number, because: string): Derivation {
-  if (uncertainty < (d.uncertainty ?? 0)) throw new Error(`${d.name}: an uncertainty is never narrowed by hand`);
-  return brand({ ...d, uncertainty, because: d.because ? `${d.because}; ${because}` : because });
 }
 
 /** A judgement the evidence cannot decide: inside a bound's uncertainty. Not unknown: what is known is said. */

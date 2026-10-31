@@ -1,56 +1,58 @@
-# Nexus and the forge: read this before any work here
+# Nexus and the space: read this before any work here
 
 This file is the anchor against drift. Long recursive work loses the point when each round optimises what it can measure
 (tests green, numbers sourced, findings fixed) and forgets what the person asked for. Summaries after a context reset keep
 the task list and lose the why. So the why lives here, and every round is checked against it.
 
-## What is wanted (the user's own words, kept)
+## What is wanted (the summary; every word the user said is in `docs/WANTED.md`)
 
-- "don't make templates for individual generation paths that's mock, make it have a pipeline where it can generate
-  trillions of different combination of just anything based on any condition improve realism … there needs to be an
-  attention to detail part of the pipeline"
-- "merge them don't discard one or just not incorporate it, they may complement each other … why are there two different
-  generators"
-- "parts need to have more rules on them like if there a moving part like a tire an auger … then it's recommended it has a
-  given amount of space"
-- "I'm not sure how the car or go karts you made are such low qualities when you have so many parts mapped out and
-  interconnectable and can expand any part for its sub parts"
-- "generate every single vehicle, every vehicle type, make, model … forklift, semi, crane … plane, jet, with real parts …
-  every go kart, four wheeler, dirt bike … every mower, every power tool, really buildable … click it and it is a 1-1
-  exact model of the real product, expandable"
-- "ask yourself what aren't you asking yourself; don't just think of math, think of emotion: how would they think about
-  this, what would they say is bad about this, and then recursively fix it"
-- "there's a lot of missing pieces … you haven't configured an environment that makes it easy for you to do certain
-  things … handling texture and complicated shells … looking at how you got through the math, what could be better …
-  recursively upgrade every process and sub-process: the car's fenders and panels, unibody, hoods" (the roadmap with it:
-  Bezier/NURBS, proportional falloff, symmetry; a creator and a critic that changes the creator's rules; wireframe boxing
-  then skinning; zebra stripes; G2/G3; practise on a front fender first)
-- the CAD toolset list (2026-10-08): automatic constraints (tangency, coincidence, symmetry), a parametric feature tree,
-  G2/G3 smoothing, clean quads, SubD cages, zebra and reflection maps, draft-angle analysis, wall-thickness checks,
-  generative design, command prediction
-- "don't just adopt all these tools: improve them, expand, find flaws, find a branch it opens that no one thought of; try
-  to be the system that future systems reference"
-- "Create every car there is you don't just design the outside … design each sub component the motor and other parts
-  but also you first need to design the sub components of that and so on and then you can save that component under its
-  name and category and now every other build using any of them is already ready screws nuts bolts, radios, buttons,
-  wires … mix and match and make emergent builds like a semi truck-atv hybrid, 3d printer with robot arms on it, a new most
-  efficient motor, a whole industrial plant … start small and work your way up … the most common parts" (2026-10-08:
-  the component library, `components.ts`)
-- "do the same thing for every 3d printer, metal filament and everything and robotic arms even the most advanced, all
-  versions of filament makers, even metal filament makers, study all bots even filabot … futuristic manufacturing … tony
-  stark level engineering" (2026-10-08: manufacturing built from the library)
-- "money manager / business agent with employees on computers and a board room with a giant screen I can edit, basically
-  a node tree that maps things in my situation out; don't lose context, find time for it" (2026-10-08: queued)
-- "go through every part and make sure that every other part is inside and every part that's in those parts … almost
-  100% visually accurate … scaling build up from tiny parts to full builds has 100 realistic shape and complexity; delete
-  all the old build things off the app, they're old and low quality … upgrade the whole app's UI and abilities"
-  (2026-10-08: `missingIn` in `components.ts`; old builds to be listed before they are removed)
-- "don't forget bearings have sub components as well" (2026-10-08: rings, balls, cage, shields drawn)
-- "for each new part stored it has to be queued for a break down just in case it has sub components, and then if it does
-  it's the same for any new parts added … look for even more components in the sub component … some kind of table lookup;
-  if the very specific part doesn't exist in the table queue it too, but first it has to be broken down" (2026-10-08:
-  `breakdown.ts`, `npm run breakdown`)
-- Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
+- **A node system that builds anything** from real parts, each part from its own sub-parts down to the bolt (and the
+  transistor), every piece stored once and reused (the library law), any board folded into one reusable node, so
+  complexity compounds: a motor, a drone, a swarm, a car, a house, a city.
+- **Real, not mocked:** real products true to their published figures, built from the inside out, explodable to the
+  bottom; physics, materials (down to the elements), rules for what may touch, heat and clearance; honest about what is
+  approximated. A real product's own data is held fixed: a finding on it is checked against the real product first and
+  never tuned away to please our checker.
+- **No manual work, no guessing:** parts say what they need and solvers place, route, size, check and fix (constraints,
+  changes that follow, repair loops as nodes); the eight fundamental systems (spatial, material, physical laws, time and
+  change, causality, composition, multiscale, rendering) as the frame, rendering the output, not the foundation.
+- **AI in the loop, engineered:** every service a node; prompts engineered like circuits (one tagged task per call,
+  failure-aware pipelines of AI gates, judged blind, never one giant prompt); an AI in the app that works through nodes;
+  every AI flow explained step by step (who waits for what, reads what, writes what, where it can fail).
+- **Speed and focus:** small cases first; stop anything past two minutes and ask whether a pipeline is missing; test what
+  changed, not everything; targeted context (this file routes to the rest); screenshots as work lands.
+- **Always:** no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly. "don't lie
+  again it hurt my feelings": never state a time, a count or a result that was not measured or checked; say "I don't
+  know" or "a guess" where it is one.
+
+## Where to read for what (targeted context: read only what the work needs)
+
+| If the work is about | Read |
+| --- | --- |
+| What the user asked, in their words, and when | `docs/WANTED.md` |
+| Which module owns a concern, in full (its nodes, its rules) | `docs/OWNERS.md` (the one-line table is below) |
+| What is next, and in what order; what is done | `docs/ROADMAP.md` (status at its top) |
+| Upgrades proposed for the whole system, by its eight systems and the platform, in order | `docs/UPGRADES.md` |
+| The plan: the vision and the advantage, the rules and their checks (`CONSTITUTION.md`), the phases' specs with failing tasks, the decisions, the research, the questions | `plan/README.md` (start there) |
+| How the AI in the app is told to build (its whole instruction) | `docs/FOR-AI.md` |
+| What depends on what in the code; the disciplines tree nodes are classed by | `docs/DEPENDENCIES.md`, `docs/DISCIPLINES.md` (both generated) |
+| What was done and measured, round by round | `docs/REALITY.md` (a log: search it, do not read it whole) |
+| The engineering compiler's 30 stages | `docs/COMPILER.md` |
+| Placement, routing, sizing, repair | `docs/PLACEMENT.md` |
+| Agents, awareness, bodies, gases | `docs/LIFE.md` |
+| Picture to model, reconstruction | `docs/RECONSTRUCT.md` |
+| Detail against reference products | `docs/GAP-MAP.md` |
+| Every node, generated | `docs/NODES.md`; the library's map `docs/ATLAS.md` |
+| The node engine's history (why it is as it is) | `docs/NODE-ENGINE.md` (history; files it names may be gone) |
+| A large module (`engines.ts`, `machines.ts`, `blocks.ts`, `dataflow.ts`) | its route map at its top: read the section named there, not the file |
+
+## When work is slow: step back
+
+- Past about **two minutes** on one run, or **three tries** at one fix: stop. Ask whether this is population (easy, just
+  many) or a **missing pipeline** (the same judgement made by hand again and again). If it is a missing pipeline, say so
+  and build the pipeline (a board of nodes, AI gates where judgement is needed) instead of doing the next one by hand.
+- Test what changed: `npm run check` on the one thing, `npm run gate:field` on the fields touched; the whole gate once,
+  before pushing. A test that guards nothing the change touches is not run while working.
 
 ## What can honestly be promised
 
@@ -61,108 +63,79 @@ source, and its shape approximates the surface. Say that plainly. Never call a m
 
 ## One owner per concern: extend these, never write a second one
 
+One line each, paths under `src/`; the full row (what each owns, its nodes, its rules) is in `docs/OWNERS.md`: read the row before working on
+its concern. The organising principle (interfaces, envelopes, one graph), the branches beyond standard tools and the
+known gaps are there too.
+
 | Concern | Owner |
 | --- | --- |
-| Words to wants, figures, questions; designs from laws | `src/nexus/conceive.ts` |
-| Generated structure for any intent; its body in space | `src/nexus/generate.ts`, `src/nexus/realize-space.ts` |
-| Machines as real hardware from generated elements | `src/nexus/embody/` (`any.ts`, `tree.ts` load path, `stock.ts`) |
-| Real products and what each contains, down to elements | `src/nexus/inventory.ts` (about 1,500 items) |
-| Parts made to any size by their standard | `src/nexus/families.ts`, `catalogue.ts`, `partspace.ts` |
-| Parts designed once in 3D from their standard, saved by name and category, used by every build (`use("bolt M8x30")`); assemblies of them (a bolted joint) | `src/nexus/components.ts` (kit `part`; checked over every catalogue size in `tests/nexus/components.test.ts`) |
-| A part's mass from its shape, material and fill | `src/nexus/mass.ts` (re-exported by `kits.ts`) |
-| Whether a drawn part holds every part its inventory says is in it, all the way down (`missingIn`); each component's own check runs it | `src/nexus/components.ts` |
-| The breakdown queue: every item stored is queued, each thing in it looked up in the table (the inventory, its inner parts, the family that makes that size), what is not there or is listed only as its materials waits, said with what wants it | `src/nexus/breakdown.ts` (`npm run breakdown -- report.md`) |
-| A part designed whole (`Part.sealed`, set on every library component) is fitted as it comes: the make pipeline's detail rules, its finish strip and its critic's moves leave it | `src/nexus/make/detail.ts` (`sealedIn`) |
-| A miniature guideway's sizes (HIWIN's MGN table) and how it is drawn (every inner proportion named as typical) | `src/nexus/families.ts` (`MGN`, `mgnDims`), `src/nexus/components.ts` (`railParts`) |
-| A face that carries what is fastened to it (a carriage's top, a tool flange: `Iface` kind `mount`), the free end of what moves, joined only to what holds it | `src/nexus/kits.ts`, `src/nexus/make/critic.ts` (chains) |
-| A fastener locks two links only where it meets the other (apart by more than 20 µm it runs clear, as a rub does) | `src/nexus/make/critic.ts` (held) |
-| A hole drilled in any part, any way (`Part.cuts`: round, or n-sided, a hex socket): cut from what is drawn (three-bvh-csg, each shape drilled once), its volume out of the mass | `src/nexus/kits.ts` (`Cut`), `src/nexus/view/kit3d.ts` (`drill`), `src/nexus/mass.ts` |
-| A cutaway draws a solid's section flat and hatched in its own colour (a shell's inside as it is) | `src/nexus/view/look.ts` (`cut`) |
-| Room to slide: a part that slides (`travel.slide`, a carriage on its rail) swept along its travel with all of its link; a fixed part in that sweep is in its way | `src/nexus/make/critic.ts` (critique) |
-| How a picture is lit: a part alone in a bright room (a light table, so metal reads as metal), a vehicle in the softbox studio | `src/nexus/view/look.ts` |
-| Parts placed by their mating faces: a port's pattern of holes, threads or pins (`Port` in `kits.ts`; NEMA faces, ISO 9409 flanges) mates its mirror, the part is placed by it and its fasteners laid from the library | `src/nexus/mate.ts` (`fit`, `mate`, `assemble`; kit `part` with "a + b") |
-| What an inventory item looks like, how it comes apart | `src/nexus/pieces.ts`, `looks.ts` |
-| An item the library draws, seen in 3D: drawn as the library draws it (not its look), taken apart by the viewer's own explode, each piece opening into its pieces, the part the library draws it as, or (one piece) what it is made of, drawn | `src/nexus/view/explode.ts` (`showPart`), `src/nexus/components.ts` (`componentOf`) |
-| How a drawn part comes apart (`explode`): what is the part itself stays, those round it go out from its middle, those at its middle out past its ends along its length (heaviest first, each kind as one), and no piece parted onto another | `src/nexus/view/kit3d.ts` |
-| The library on the phone: every drawn kind of part by trade, each size with its drawing's mass against its standard; three presses to stand it before you | `src/nexus/view/apps.ts` (`libraryApp`) |
-| A clear room: in a headset nothing floats in your view unasked (one chip asks what to build; the clock is on the phone; the robot stands back to your side, its thought shown only while you look at it); the phone drawn half again a real one's size | `src/nexus/view/forge.ts` |
-| Things with choices, as a placed tree of parts | `src/nexus/kits.ts` (drawn by `view/kit3d.ts`) |
-| Conditions on loads, holds and reach | `src/nexus/conditions.ts` |
-| Conditions on how a made thing is (age, setting, material, size) | `src/nexus/make/conditions.ts` |
-| Edges as made (radius by material and process) | `src/nexus/finish.ts` |
-| Oriented-box layout and contacts of a placed tree | `src/nexus/make/space.ts` |
-| Attention to detail (joints, fasteners, seals, finishes, wear) | `src/nexus/make/detail.ts` |
-| Critic (room to move, held up, walls, through, standing) | `src/nexus/make/critic.ts` |
-| The make pipeline (conditions, detail, critic, in rounds) | `src/nexus/make/pipeline.ts` |
-| Wheeled machines of every kind, from their published figures | `src/nexus/machines.ts` (cars, karts, ATVs, motorcycles, forklifts, trucks, lawn tractors) |
-| Lofts, bent tubes, turned profiles: mass, bounds, covering boxes | `src/nexus/form.ts` |
-| Freeform surfaces: NURBS curves and skins, interpolation, regions and trims, fairness, zebra, draft, seams | `src/nexus/surface.ts` |
-| Panelled bodies on curve networks (side skin, hood, deck, cabin; arches from the wheels' sweep; keep-outs) | `src/nexus/panels.ts` (rules in `BODY_RULES`, their history in `RULE_UPDATES`) |
-| Vehicles as points in a want-space (not a maker) | `src/nexus/vehicle.ts` |
-| Interface contracts (shaft/bore, studs/nuts, chain/sprocket, drive/torque) | `Iface` in `src/nexus/kits.ts`, checked in `src/nexus/make/critic.ts` |
-| A made thing on its own, framed, for review | `view/look.html` → `src/nexus/view/look.ts` |
-| Places, rides and games | `places.ts`, `karting.ts`, `coaster.ts`, `pingpong.ts` |
-
-## The organising principle: interfaces, envelopes, one graph
-
-Parts declare what they provide and require (`Iface`): a hub needs a shaft of its bore, a nut needs a stud of its thread, a
-driven axle carries at most a torque, a chain needs sprockets of its pitch. The critic pairs and checks every one with
-numbers, and an interface is a connection, never an interference (an axle in its hub is not "in its way"). Interference is
-judged by envelope, not by box: a wheel sweeps a ring (tyre to rim bore) with room to its arch and beside its sidewall, a
-blade sweeps a disc inside its housing, and no repair rests a part on a moving one. Grow this, rather than adding layers:
-next are mounts (bolt patterns), electrical (voltage, current), thermal (heat rejected) and service access.
-
-Branches beyond the standard tools (the user asked for what no one thought of; keep growing these):
-- **A skin is the fairest surface that clears everything inside it.** Arches come from the tyre's sweep through its lock
-  and bump, not drawn; the hood from the engine and strut tops under it; next the roof from the seated people's heads.
-- **The mesh is only ever a projection of the math.** Never edited, so it never needs retopology.
-- **Panels are named by what they are for** (the arch of the front wheel, the hood), so changing a figure re-makes the
-  same panels: no topological naming problem.
-- **Constraints carry their reason**: G1 across a shut line because a highlight crosses it; a crease at the belt by
-  intent; clearance because a part moves.
-- **Lines are control polygons, not points forced through**: a B-spline never wavers more than its polygon.
-- **Coincidence by construction, not by checking**: a panel meeting another is built on its edge (split by knot insertion,
-  then built column for column on it), so they share knots and meet everywhere; the critic's check then only confirms.
-- **A maker checks its own output before the critic does**: the wheelhouse liner is pushed out where it is in the sweep;
-  what goes inside a body (seats, the dashboard's beam) is fitted to the body as made, measured off its skins.
-- Next: shut lines placed by draft (where one press direction stops being formable); zebra judged from where people
-  stand; rule updates kept only when they help cases they were not tuned on and do not worsen the blind judge.
-
-Capability atlas (the user's direction, 2026-10-08): learn from open engineering tools (FreeCAD and Open CASCADE for
-geometry and constraints, Gmsh and SALOME for meshing, MOOSE, Elmer, Code_Aster and OpenFOAM for physics, OpenModelica
-for systems, LinuxCNC for machines) as ideas and architecture, each operation as UI → command → data → algorithm →
-constraints → failure modes. Ideas and interfaces only: their code is GPL/LGPL and is not copied in.
-
-Known gaps (from the 2026-10-08 audit, still open):
-- the inventory knows what is in a product but not where it sits; the kits know where but not what. Joining them, so
-  every placed part is an inventory item that expands into its sub-parts, is the merge that ends "two generators".
-  Begun (2026-10-08, the user: "design each sub component … save that component under its name and category and now
-  every other build using any of them is already ready"): `components.ts` draws stock and fasteners from their standards
-  (9,074 catalogue sizes), and the wheel nuts, wheel studs, the detail pass's bolts and anchor bolts come from it; the
-  ball bearings (rings, raceways, balls, cage, shields or seals), the steppers (bells, stator and coils, rotor cups
-  and magnet, shaft, bearings, tie screws, leads and plug) and the HIWIN MGN7–15 guideways, C and H (rail, block,
-  end caps, seals, retaining wires, both circuits of balls, seal screws; MGN15's grease nipple; within 6 % of HIWIN's
-  masses, 66 balls in an MGN12H as rebuilders count) are drawn whole, every part their inventory lists inside them.
-  GT2 pulleys (any tooth count and bore: PowerDrive's pitch and outside diameters and set-screw rule) and their ISO 4029
-  set screws, in tapped holes drilled through the hub, are drawn whole too.
-  The breakdown queue (2026-10-09) waits on nothing: 59,046 items taken, none listed only as its materials, none
-  shaped from several materials in one process, nothing missing from the table, its deepest chain of things in
-  things 12. The ~410 parts broken out of them have typical sizes and looks (`looks.ts`), not yet drawn as components
-  of their own. Still
-  drawn inline by their makers: most of every machine (brackets, bearings, springs, hinges, wiring, electronics);
-  each is next to become a component, smallest and commonest first;
-- the forge routes a make ask to three generators (`embodyAny`, `conceive`, `kits`) by guesswork;
-- the go-kart on the track (`view/kart3d.ts`) is drawn by hand, apart from `machines.ts`;
-- planes, jets, cranes and power tools are not yet in `machines.ts` (a fixed wing, a boom, a handheld tool are each new
-  architectures: add them as data on general builders, as the wheeled ones are).
+| Constants, quantities, units | `data/constants.ts`, `nexus/quantities.ts` |
+| Laws (terms, kinds, nodes, solving, chains) | `nexus/book/`, `lawBlocks` in `blocks.ts`, `lawgraph.ts` |
+| Numeric methods (roots, integrals, slopes, ODEs, linear systems) | `nexus/numeric.ts` |
+| Materials and everything known of them; any mix worked out from its phases | `nexus/matter.ts`, `nexus/mixture.ts` (data: `mass.ts`, `elements.ts`, `data/materials.ts`, `periodic.ts`, `woods.ts`, `mixes.ts`, `constituents.ts`) |
+| What a thing is made of; mass, centre, inertia, heat capacity | `nexus/madeof.ts` |
+| Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
+| The one test (every domain), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
+| Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
+| The built-parts library: every piece every build makes, stored by design, and its law | `nexus/stock.ts` (`src/data/stock.json` generated) |
+| Running boards (cache, lists, units on wires, groups, clock) | `nexus/dataflow.ts` |
+| Running many trials at once (workers, one for each core, each with the whole library) | `nexus/pool.ts`, `nexus/trial-worker.ts` |
+| Starter boards | `nexus/starters.ts` |
+| Navigation (libraries, flows, search) | `nexus/navigate.ts` (`docs/ATLAS.md` generated) |
+| Only what the app reaches is kept | the reach check in `tests/nexus/domains.test.ts` |
+| Things placed, never copied; frames; fit in; take apart | `nexus/assembly.ts` |
+| Layout, contacts, contact patches of a placed tree | `nexus/make/space.ts` |
+| The contact graph of any thing (what touches what, from the geometry; each distinct thing once); what flows through it, how it bends, buckles and grows when warmed (steps C to F) | `nexus/graph.ts` (nodes `graph`, `flow`, `bend`) |
+| Rules: interference, clearance, heat gate | `nexus/make/rules.ts` |
+| Critic, detail, conditions, the make pipeline | `nexus/make/` (`critic.ts`, `detail.ts`, `conditions.ts`, `pipeline.ts`) |
+| Mating by faces, ports, round faces, bores | `nexus/mate.ts` |
+| Mates as measures in ranges; proximity | `nexus/placement/proximity.ts`, `relate.ts` |
+| Placement, fields, sizing, repair, lines and routing | `nexus/placement/` |
+| Loads on made parts; stress sweeps | `nexus/loads.ts` |
+| Rigid-body physics (Jolt) | `nexus/sim.ts` |
+| Servo motion | `nexus/motion.ts` |
+| Power: engines run from their numbers, powertrains | `nexus/power/` |
+| Parts: kits, shapes, cuts, mass | `nexus/kits.ts`, `mass.ts`, `form.ts`, `surface.ts`, `finish.ts` (and the surface a process leaves) |
+| The level of detail every maker and the renderer read; a spatial index over points | `nexus/lod.ts`; `PointGrid` in `nexus/make/space.ts` |
+| How a part looks: colour from optics, films, the look stack | `nexus/colour.ts`, `appearance.ts`, `data/optics.ts` |
+| Parts from standards; components; catalogue | `nexus/families.ts`, `catalogue.ts`, `components.ts` |
+| Kinds of bought part as data (sizes, materials, standards, mass), by trade: each becomes a family | `nexus/kinds/` (`core.ts` says how one is written) |
+| Units and dimensions; the typed knowledge the laws are checked against | `ganglia/units.ts`, `ganglia/types.ts` |
+| Engineering by its own equations: springs (Shigley), DC motors, heat, fusion of materials, joining | `engineering/` (`springs.ts`, `dcmotor.ts`, `thermal.ts`, `fusion.ts`, `joining.ts`) |
+| Makers by process (fastener, winding, sensor, …) | `nexus/makers.ts` |
+| Engines, gearboxes, fittings, closures | `nexus/engines.ts`, `drivetrain.ts`, `fittings.ts` |
+| Vehicles, tyres, machines | `nexus/machines.ts`, `panels.ts` |
+| Computers from transistors; chips from netlists | `nexus/computer.ts`, `nexus/logic/` |
+| Inventory, pieces, looks, breakdown queue | `nexus/inventory.ts`, `pieces.ts`, `looks.ts`, `breakdown.ts` |
+| Research and the gap map | `nexus/research.ts`, `data/references.ts` |
+| Models and services over the web: pictures judged blind as a measurement, drawn from words, wordings tried; every service a node of its own (`api.claude`, `api.gemini.see`, `api.gemini.draw`, `api.fal.draw`, `api.higgsfield`, `api.zenrows`) | `nexus/genai.ts` (keys under Node only: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `HIGGSFIELD_KEY_ID` and `HIGGSFIELD_KEY_SECRET`, `ZENROWS_API_KEY`) |
+| The AI in the app: Claude working through the node system's own eight tools (find, card, build a board from a short plan, open a starter board, change the board in place, read, fold into a saved block, docs), on the board open and with the blocks you saved, its answer checked by a second model against its steps, told only `docs/FOR-AI.md` (keep that file short: it is sent with every call, cached), never the app's code; its relay (`npm run app`) keeps the key off the page | `nexus/agent.ts` (node Claude builds a board; panel Ask Claude; relay in `vite.view.config.ts`) |
+| The engineering compiler: one design record through stages (requirements, BOM, checks with their engine and input hash), the release gate | `nexus/compiler.ts` (`docs/COMPILER.md`) |
+| Exact solids: every piece made a B-rep solid by OpenCascade (replicad 1.1.0), placed, its holes cut by booleans, checked valid, measured; what is not made counted; export (STEP, STL, 3MF, glTF, BOM); interference by booleans against the rules | `nexus/brep.ts` (nodes Exact solids, Compile: exact solids, Export, Interference two ways) |
+| Stress by an engine apart: CalculiX (Node only, where installed), set against the book and our frame analysis | `nexus/fea.ts` (node Stress three ways) |
+| The gauntlet | `nexus/gauntlet.ts`, `view/gauntlet.ts` |
+| Seeds (window to city) | `nexus/seeds.ts` |
+| Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts` |
+| Expressions in words and units (the formula language nodes take); embodied machines | `nexus/generate.ts`, `nexus/embody/` |
+| Controls worked by hand while it runs (Button, Stick, Slider; a button put on a thing); being in it (walking, keys, phone controls, gamepad) | `nexus/controls.ts`, `nexus/view/pad.ts` |
+| The app: dashboard, board, 3D dock, space, renderer, look | `nexus/view/` (`dashboard.ts`, `nodes.ts`, `dock3d.ts`, `space.ts`, `space3d.ts`, `kit3d.ts`, `look.ts`) |
 
 ## Before writing a new file or function
 
 1. `ls src/nexus` (the whole listing: never `| head`, which hid `vehicle.ts` once and it was overwritten) and grep for the
    concern. If it is in the table, extend its owner. Before writing a file, check that it does not already exist.
-2. If what you are about to write makes one named thing (a car builder, a kart builder), stop. Find the general rule
+2. Only the node setup is current. A library, a build or a module that the node app (its pages, its nodes, the boards
+   they make) does not reach is outdated: never merge it in or build on it; delete it. Check with the reach scan
+   (what `view/*.html` imports, followed through every import) before keeping anything that looks old.
+3. If what you are about to write makes one named thing (a car builder, a kart builder), stop. Find the general rule
    that makes it and its relatives from data (a wheeled vehicle from its axles, tyres, frame, seats, power, implements).
    Per-product data (a real model's published figures) is fine; per-product code is a template.
+4. The library law: every piece a build makes, at every depth (the car, its engine, the head, the valve, its spring), is
+   taken from the library or made and stored in it. The built-parts library (`nexus/stock.ts`, kept in
+   `src/data/stock.json`) stores each piece once by its design; every node that makes a thing is a build, and the one test
+   fails on a piece built and not stored, one stored that no build makes any more, or one stored where its build no
+   longer has it. `UPDATE_DOCS=quick` stores what is new and deletes what is outdated; reach for what is stored (search
+   the library, the Stored part node) before drawing a piece again.
 
 ## The drift gate: before spending a round on a fix
 
@@ -204,7 +177,14 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
 
 ## Working here
 
-- Gate: `npm run gate` (long; run it in the background and log to a file). Build the viewer:
-  `npx vite build --config vite.view.config.ts --logLevel error`.
-- Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing.
+- Gate: `npm run gate`: the type check and the one test, `tests/nexus/domains.test.ts` (every domain's nodes, their own
+  tests, one quick board per field, the reach check), under a minute; CI runs the same. `UPDATE_DOCS=1 npx vitest run`
+  writes the generated docs and the nodes' dates (twice where nodes' code changed). Nodes built before the update are
+  marked as such: the queue to re-check. Build the viewer: `npx vite build --config vite.view.config.ts --logLevel error`.
+- Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing. Run them with `npm run probe --
+  <file>` (stopped at two minutes). A rules check on one thing or one part of it: `CHECK=corolla [ONLY=regex]
+  [WITHIN=/3/0] npm run check`. While working, the gate on the fields touched: `npm run gate:field -- Mechanical` (4 s
+  for one field, against 46 s whole); the docs once with `npm run docs`; the whole gate before pushing.
+- Node's built-in fetch reaches the web here only with `NODE_USE_ENV_PROXY=1` (the container's proxy; set in the
+  scripts above).
 - Never put API keys in the repo or in client code.

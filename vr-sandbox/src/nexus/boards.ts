@@ -8,11 +8,15 @@
 // (src/nexus/view/boards3d.ts). A board is stored as one document: nodes and edges keyed by id, a deleted one marked so
 // rather than removed (a patch can only merge), and written whole without them when it is written whole.
 
-import { find, type Node as TaxNode } from './embody/taxonomy';
 import type { FlowRun, Step } from './flows';
 
-export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string; /** On a flow: what the node does when the flow runs. */ step?: Step }
-export interface BoardEdge { from: string; to: string; rel?: string; label?: string; note?: string; deleted?: boolean }
+export interface BoardNode { label: string; note?: string; x?: number | null; y?: number | null; px?: number | null; py?: number | null; deleted?: boolean; kind?: string; /** On a flow: what the node does when the flow runs. */ step?: Step
+  /** On a pipeline of blocks (src/nexus/dataflow.ts): the library block it is (src/nexus/blocks.ts), its settings, and,
+   *  for a group, the board inside it. */
+  block?: string; set?: Record<string, unknown>; inner?: Board }
+export interface BoardEdge { from: string; to: string; rel?: string; label?: string; note?: string; deleted?: boolean
+  /** A wire between blocks: from the output port named `out` to the input port named `in`. */
+  out?: string; in?: string }
 export interface Board {
   title: string; kind?: string; about?: string;
   nodes: Record<string, BoardNode>; edges: Record<string, BoardEdge>;
@@ -35,15 +39,7 @@ export interface Live { id: string; label: string; note: string; pin: { x: numbe
 export type LiveEdge = BoardEdge & { id: string };
 export type Patch = Partial<Omit<Board, 'nodes' | 'edges'>> & { nodes?: Record<string, Partial<BoardNode>>; edges?: Record<string, Partial<BoardEdge>> };
 
-export const RELS = ['connects', 'contains', 'is a kind of', 'calls', 'depends on', 'flows to', 'feeds', 'feeds back to', 'reads', 'writes', 'shares', 'causes', 'constrains', 'implements', 'alternative to'] as const;
-export const HIER = new Set(['contains', 'is a kind of']);
-export const UNDIRECTED = new Set(['connects', 'shares', 'alternative to']);
-/** A loop back (a redesign, a critique fed into the ask again): drawn, but it orders nothing. */
-export const BACK = new Set(['feeds back to']);
-/** Links that only say two things belong together: they order along the derived tree, nothing else. */
-export const STRUCT = (r?: string) => !r || HIER.has(r) || UNDIRECTED.has(r);
 /** Which end of a directed link is derived first: what is depended on, or read, before what needs it. */
-export const BEFORE = (e: BoardEdge): [string, string] => (/^(depends on|reads|is a kind of)$/.test(e.rel ?? '') ? [e.to, e.from] : [e.from, e.to]);
 export const LEVELS = ['category', 'subcategory', 'sub-subcategory'] as const;
 
 /** Each view keeps its own places: the categories' x, y; the pipeline's px, py. A node has a place only once it is dragged. */
@@ -77,45 +73,7 @@ export interface Derived {
   step: Map<string, number>; into: Map<string, string[]>;
 }
 /** What the links make: each node's place under the most connected neighbour, the categories, and the steps of the pipeline. */
-export function derive(b: Board | null): Derived {
-  const ns = nodesOf(b), es = edgesOf(b);
-  const key = `${ns.map((n) => `${n.id}:${n.label}`).join(',')}|${es.map((e) => `${e.from}>${e.to}:${e.rel ?? ''}`).join(',')}`;
-  const nb = new Map(ns.map((n) => [n.id, new Set<string>()])), label = new Map(ns.map((n) => [n.id, n.label]));
-  for (const e of es) if (e.from !== e.to && nb.has(e.from) && nb.has(e.to)) { nb.get(e.from)!.add(e.to); nb.get(e.to)!.add(e.from); }
-  const deg = new Map<string, number>(), deg2 = new Map<string, number>();
-  for (const [id, s] of nb) deg.set(id, s.size);
-  for (const [id, s] of nb) { let t = 0; for (const x of s) t += deg.get(x)!; deg2.set(id, t); }
-  const order = ns.map((n) => n.id).sort((a, c) => deg.get(c)! - deg.get(a)! || deg2.get(c)! - deg2.get(a)! || label.get(a)!.localeCompare(label.get(c)!) || (a < c ? -1 : a > c ? 1 : 0));
-  const rank = new Map(order.map((id, i) => [id, i]));
-  const parent = new Map<string, string>(), kids = new Map<string, string[]>(), depth = new Map<string, number>(), root = new Map<string, string>();
-  for (const id of order) {
-    let best: string | undefined;
-    for (const x of nb.get(id)!) if (rank.get(x)! < rank.get(id)! && (best === undefined || rank.get(x)! < rank.get(best)!)) best = x;
-    if (best !== undefined) { parent.set(id, best); if (!kids.has(best)) kids.set(best, []); kids.get(best)!.push(id); depth.set(id, depth.get(best)! + 1); root.set(id, root.get(best)!); }
-    else { depth.set(id, 0); root.set(id, id); }
-  }
-  const roots = order.filter((id) => !parent.has(id));
-  const hue = new Map<string, number>(); let h = 0; for (const r of roots) if (deg.get(r)! > 0) hue.set(r, (h++ % 8) + 1);
-  const size = new Map<string, number>();
-  for (let i = order.length - 1; i >= 0; i--) { const id = order[i]!; size.set(id, 1 + (kids.get(id) ?? []).reduce((t, k) => t + size.get(k)!, 0)); }
-  // the order of derivation: along the tree, and along every directed link
-  const into = new Map<string, string[]>(), add = (f: string, t: string) => { if (!into.has(t)) into.set(t, []); into.get(t)!.push(f); };
-  for (const e of es) {
-    if (BACK.has(e.rel ?? '') || e.from === e.to) continue;
-    if (STRUCT(e.rel)) { if (parent.get(e.to) === e.from) add(e.from, e.to); else if (parent.get(e.from) === e.to) add(e.to, e.from); }
-    else { const [f, t] = BEFORE(e); add(f, t); }
-  }
-  const step = new Map<string, number>(), on = new Set<string>();
-  const st = (id: string): number => { if (step.has(id)) return step.get(id)!; if (on.has(id)) return 0; on.add(id); let v = 0; for (const f of into.get(id) ?? []) v = Math.max(v, st(f) + 1); on.delete(id); step.set(id, v); return v; };
-  for (const id of order) st(id);
-  return { key, nb, deg, order, rank, parent, kids, depth, root, roots, hue, size, step, into };
-}
 export type Level = (typeof LEVELS)[number] | 'item' | 'unlinked';
-export const levelOf = (d: Derived, id: string): Level => ((d.deg.get(id) ?? 0) === 0 ? 'unlinked' : LEVELS[d.depth.get(id)!] ?? 'item');
-/** From its category down to it. */
-export const pathTo = (d: Derived, id: string): string[] => { const out: string[] = []; for (let x: string | undefined = id; x !== undefined; x = d.parent.get(x)) out.unshift(x); return out; };
-/** The categories, the largest first. */
-export const categoriesOf = (d: Derived): string[] => d.roots.filter((r) => d.deg.get(r)! > 0).sort((a, c) => d.size.get(c)! - d.size.get(a)! || d.rank.get(a)! - d.rank.get(c)!);
 
 export interface Box { w: number; h: number }
 /** Where each node goes, unless it has been dragged: in the categories view, each category a column with what sits under
@@ -170,12 +128,6 @@ export function layout(d: Derived, view: View, box: (id: string) => Box, aspect 
   }
   return pos;
 }
-/** Where each node stands: where it was dragged to, else where its links put it. */
-export function placesOf(b: Board, d: Derived, view: View, box: (id: string) => Box): Map<string, { x: number; y: number }> {
-  const auto = layout(d, view, box), out = new Map<string, { x: number; y: number }>();
-  for (const n of nodesOf(b, view)) out.set(n.id, n.pin ?? auto.get(n.id) ?? { x: 0, y: 0 });
-  return out;
-}
 
 // ---- edits: each a patch, merged into the board and written as it is --------------------------------------------------
 export const deepMerge = <T extends object>(a: T | undefined, b: object): T => {
@@ -191,29 +143,6 @@ export function compact(b: Board): Board {
   return o;
 }
 export const uid = (p: string): string => p + Math.random().toString(36).slice(2, 9);
-/** A new node: just its word, linked from another if given. Where it goes and what it is come from its links. */
-export function addNode(label: string, linkTo?: string, id = uid('n'), rel = 'connects'): { id: string; patch: Patch } {
-  const patch: Patch = { nodes: { [id]: { label: label.trim() } } };
-  if (linkTo) patch.edges = { [uid('e')]: { from: linkTo, to: id, rel } };
-  return { id, patch };
-}
-/** A name not on the board yet: the name itself where it is free, else it numbered ("Check 2", "Check 3"), so two nodes
- *  may say the same and still be told apart. */
-export function freeName(b: Board | null, label: string): string {
-  const base = label.trim().replace(/\s+\d+$/, ''), taken = new Set(nodesOf(b).map((n) => n.label.toLowerCase()));
-  if (!taken.has(label.trim().toLowerCase())) return label.trim();
-  for (let k = 2; ; k++) if (!taken.has(`${base} ${k}`.toLowerCase())) return `${base} ${k}`;
-}
-/** A node again, beside itself: its words, its note and its step, linked to what it is linked to, under a name of its own. */
-export function duplicateNode(b: Board, id: string, nid = uid('n')): { id: string; label: string; patch: Patch } | null {
-  const n = b.nodes[id]; if (!n || n.deleted) return null;
-  const label = freeName(b, n.label), copy: BoardNode = { label, ...(n.note ? { note: n.note } : {}), ...(n.kind ? { kind: n.kind } : {}), ...(n.step ? { step: { ...n.step } } : {}) };
-  // set just beside it where it is pinned, so the two are seen as a pair
-  for (const [kx, ky] of [['x', 'y'], ['px', 'py']] as const) { const x = n[kx], y = n[ky]; if (typeof x === 'number' && typeof y === 'number') { copy[kx] = x + 40; copy[ky] = y + 40; } }
-  const edges: Record<string, BoardEdge> = {};
-  for (const e of edgesOf(b)) { if (e.from !== id && e.to !== id) continue; if (e.from === e.to) continue; edges[uid('e')] = { from: e.from === id ? nid : e.from, to: e.to === id ? nid : e.to, ...(e.rel ? { rel: e.rel } : {}), ...(e.label ? { label: e.label } : {}) }; }
-  return { id: nid, label, patch: { nodes: { [nid]: copy }, ...(Object.keys(edges).length ? { edges } : {}) } };
-}
 /** A link between two nodes. One deleted before between the same two is brought back, so the board does not fill with dead ones. */
 export function link(b: Board, from: string, to: string, rel = 'connects'): Patch | null {
   if (from === to) return null;
@@ -222,74 +151,8 @@ export function link(b: Board, from: string, to: string, rel = 'connects'): Patc
   const dead = Object.entries(b.edges ?? {}).find(([, e]) => e && e.deleted && same(e));
   return { edges: { [dead ? dead[0] : uid('e')]: { from, to, rel, deleted: false, label: '', note: '' } } };
 }
-/** Link two nodes, or unlink them if they are linked (every link between them goes). On a flow the link is "flows to",
- *  from the first to the second: the second runs after it. */
-export function toggleLink(b: Board, a: string, c: string, rel = 'connects'): { patch: Patch; linked: boolean } | null {
-  if (a === c) return null;
-  const between = edgesOf(b).filter((e) => (e.from === a && e.to === c) || (e.from === c && e.to === a));
-  if (between.length) return { patch: { edges: Object.fromEntries(between.map((e) => [e.id, { deleted: true }])) }, linked: false };
-  const p = link(b, a, c, rel);
-  return p ? { patch: p, linked: true } : null;
-}
-export function deleteNode(b: Board, id: string): Patch {
-  const patch: Patch = { nodes: { [id]: { deleted: true } }, edges: {} };
-  for (const e of edgesOf(b)) if (e.from === id || e.to === id) patch.edges![e.id] = { deleted: true };
-  return patch;
-}
-export function moveNode(id: string, view: View, x: number, y: number): Patch { const [kx, ky] = KX(view); return { nodes: { [id]: { [kx]: Math.round(x), [ky]: Math.round(y) } } }; }
-/** Let go of every place a node was dragged to in this view: the links lay it out again. */
-export function unpin(b: Board, view: View): Patch | null {
-  const [kx, ky] = KX(view), pinned = nodesOf(b, view).filter((n) => n.pin);
-  return pinned.length ? { nodes: Object.fromEntries(pinned.map((n) => [n.id, { [kx]: null, [ky]: null }])) } : null;
-}
-/** The nodes a word finds: the one it names first, then those it begins, then those it is in; the most connected first. */
-export function findNodes(b: Board, d: Derived, q: string, except?: string): Live[] {
-  const qq = q.trim().toLowerCase(), score = (n: Live) => { const l = n.label.toLowerCase(); return l === qq ? 0 : l.startsWith(qq) ? 1 : 2; };
-  return nodesOf(b).filter((n) => n.id !== except && (!qq || n.label.toLowerCase().includes(qq))).sort((a, c) => (qq ? score(a) - score(c) : 0) || d.rank.get(a.id)! - d.rank.get(c.id)!);
-}
-
-// ---- a board made from a build: what its parts are, as the embodiment filed them ---------------------------------------
-export interface PartLike { id: string; name: string; category: string; mass?: number }
-const nameOfCategory = (path: string) => find(path)?.name ?? path.split('/').pop()!.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
-/** The ask, the categories its parts fall in (domain, category, subcategory, as the taxonomy files them), and the parts,
- *  alike ones as one ("4 × tyre 235/45 R18"), each linked from what contains it. What heads it is what the links make
- *  head it: the node with the most connections, which need not be the ask. */
-export function boardOfBuild(ask: string, name: string, parts: PartLike[], at = Date.now()): Board {
-  const b: Board = { title: `This build: ${name}`.slice(0, 80), kind: 'categories', about: `Made from the build standing in the forge, "${ask}": the categories its ${parts.length} parts are filed in, and the parts, alike ones as one.`, nodes: { in: { label: ask } }, edges: {}, createdAt: at, updatedAt: at, source: ask };
-  let e = 0;
-  const edge = (from: string, to: string) => { b.edges[`e${e++}`] = { from, to, rel: 'contains' }; };
-  const items = new Map<string, { label: string; count: number; mass: number; under: string }>();
-  for (const p of parts) {
-    const segs = p.category.split('/').filter(Boolean);
-    let under = 'in';
-    segs.forEach((_, i) => {
-      const path = segs.slice(0, i + 1).join('/'), id = `c-${path.replace(/[^a-z0-9]+/gi, '-')}`;
-      if (!b.nodes[id]) { b.nodes[id] = { label: nameOfCategory(path) }; edge(under, id); }
-      under = id;
-    });
-    // parts that differ only by their number are alike: magnet 1 and magnet 3, N42 (N out), are two of one magnet
-    const alike = p.name.replace(/^([^\d,:(]+?) \d+(?=[,:(]|$)/, '$1'), key = `${under}|${alike}`, it = items.get(key) ?? { label: alike, count: 0, mass: 0, under };
-    it.count++; it.mass += p.mass ?? 0; items.set(key, it);
-  }
-  let i = 0;
-  for (const it of items.values()) { const id = `i${i++}`; b.nodes[id] = { label: it.count > 1 ? `${it.count} × ${it.label}` : it.label, note: it.mass ? `${Number(it.mass.toPrecision(4))} kg in all` : '' }; edge(it.under, id); }
-  return b;
-}
 
 // ---- a board of what Nexus knows: a branch of its taxonomy -------------------------------------------------------------
 /** A branch of the taxonomy as a board: each entry a node under what holds it, its note what it is, the law that decides
  *  it, and what in Nexus makes it, or that nothing does yet; an entry Nexus makes is marked so. Its categories are what
  *  the links make them, as on every board. */
-export function boardOfKnowledge(t: TaxNode, at = Date.now()): Board {
-  const b: Board = { title: `Nexus knows: ${t.name}`, kind: 'categories', about: '', nodes: {}, edges: {}, createdAt: at, updatedAt: at, source: `taxonomy:${t.id}` };
-  let e = 0, entries = 0, made = 0;
-  const add = (n: TaxNode, under?: string) => {
-    const id = `k-${n.id.replace(/[^a-z0-9]+/gi, '-')}`, laws = n.principles.map((p) => p.law);
-    b.nodes[id] = { label: n.name, note: [n.says, ...laws, n.made ? `Nexus makes it: ${n.made}.` : under ? 'Nexus knows it by name and law only: nothing makes it yet.' : ''].filter(Boolean).join(' · '), ...(n.made ? { kind: 'made' } : {}) };
-    if (under) { b.edges[`e${e++}`] = { from: under, to: id, rel: 'contains' }; entries++; if (n.made) made++; }
-    for (const c of n.children) add(c, id);
-  };
-  add(t);
-  b.about = `What Nexus knows of ${t.name.toLowerCase()}, as its taxonomy files it: ${entries} entries, ${made} of them made or measured by Nexus (marked ●), the rest known by name and law only.`;
-  return b;
-}

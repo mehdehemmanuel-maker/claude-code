@@ -83,7 +83,7 @@ export const MOTORS: Record<string, MotorData> = {
     rotorInertia: 142e-7,
     thermal: { Rwh: 1.93, Rha: 4.65, tauW: 42.8, tauM: 809, maxWinding: 155 },
     price: { amount: 502.09, currency: 'EUR', seen: '2026-10', note: 'maxon online shop, 1 to 4 units, the RE 40 150 W graphite page (148866, the 12 V winding; the 24 V one not confirmed)' },
-    source: 'maxon RE 40 Ø40 mm, graphite brushes, 150 W, order no. 148867 (24 V winding), current maxon online data: K_t 30.2 mN·m/A, 317 rpm/V, R 0.299 Ω, no-load 7580 rpm at 137 mA, stall 2420 mN·m, nominal 6 A, rotor 142 g·cm², R_th 1.93 + 4.65 K/W, τ 42.8 s winding and 809 s motor, 480 g. (148866 is the 12 V winding; older catalogue editions give R 0.317 Ω, τ_motor 1120 s.)',
+    source: 'maxon RE 40 Ø40 mm, graphite brushes, 150 W, order no. 148867 (24 V winding), current maxon online data: K_t 30.2 mN·m/A, 317 rpm/V, R 0.299 Ω, no-load 7580 rpm at 137 mA, stall 2420 mN·m, nominal 6 A, rotor 142 g·cm², R_th 1.93 + 4.65 K/W, τ 42.8 s winding and 809 s motor, 480 g. (148866 is the 12 V winding; older catalogue editions give R 0.317 Ω, τ_motor 1120 s.)'
   },
   'motor.dc.brushed.d100-250w-24v': {
     id: 'motor.dc.brushed.d100-250w-24v', label: 'Brushed PM DC motor, Ø100 mm, 250 W, 24 V', V: 24,
@@ -95,8 +95,8 @@ export const MOTORS: Record<string, MotorData> = {
     mass: 2.12, diameter: 0.1, length: 0.085, shaft: 0.008,
     thermal: null,
     insulation: { maxWinding: 130, note: 'insulation class not published: class B (130 °C), usual for such motors, assumed' },
-    source: 'Unite MY1016 24 V 250 W sellers\' data (rated 2750 rpm, 13.7 A, 250 W; no-load 0.7 to 2.2 A; stall 682 N·cm; 2.12 kg; case Ø100 × 85 mm). Shaft Ø8 mm estimated.',
-  },
+    source: 'Unite MY1016 24 V 250 W sellers\' data (rated 2750 rpm, 13.7 A, 250 W; no-load 0.7 to 2.2 A; stall 682 N·cm; 2.12 kg; case Ø100 × 85 mm). Shaft Ø8 mm estimated.'
+  }
 };
 
 export const GEARHEADS: Record<string, GearheadData> = {
@@ -106,19 +106,7 @@ export const GEARHEADS: Record<string, GearheadData> = {
     mass: 0.36, diameter: 0.042, length: 0.0555, shaft: 0.012,
     fits: ['motor.dc.coreless.d40-150w-24v'],
     price: { amount: 234.36, currency: 'EUR', seen: '2026-10', note: 'maxon online shop, GP 42 C 12:1 ceramic version, 1 to 4 units, before VAT and shipping' },
-    source: 'maxon planetary gearhead GP 42 C Ø42 mm, 3 to 15 N·m, ceramic version, order no. 203115, current maxon data: 12:1, 2 stages, 81% max efficiency, 7.5 N·m continuous, ball-bearing output, 240 N radial 12 mm from the flange (older catalogue editions: 360 N), 150 N axial, 360 g, 55.5 mm long, Ø12 mm shaft',
-  },
+    source: 'maxon planetary gearhead GP 42 C Ø42 mm, 3 to 15 N·m, ceramic version, order no. 203115, current maxon data: 12:1, 2 stages, 81% max efficiency, 7.5 N·m continuous, ball-bearing output, 240 N radial 12 mm from the flange (older catalogue editions: 360 N), 150 N axial, 360 g, 55.5 mm long, Ø12 mm shaft'
+  }
 };
 
-/**
- * What builds saved before the catalogue named things by what they are called them (by maker and order number): they
- * still load.
- */
-const LEGACY: Record<string, string> = {
-  'maxon.re40-148866': 'motor.dc.coreless.d40-150w-24v', 'maxon.re40-148867': 'motor.dc.coreless.d40-150w-24v', 'unite.my1016': 'motor.dc.brushed.d100-250w-24v',
-  'maxon.gp42c-12': 'gearhead.planetary.d42-12to1', 'maxon.gp42c-203115': 'gearhead.planetary.d42-12to1',
-};
-export const currentId = (id: string) => LEGACY[id] ?? id;
-
-export const getMotor = (id: string) => MOTORS[currentId(id)] ?? MOTORS['motor.dc.coreless.d40-150w-24v']!;
-export const getGearhead = (id: string) => (id === 'none' ? null : GEARHEADS[currentId(id)] ?? null);

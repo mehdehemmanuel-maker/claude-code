@@ -7,11 +7,17 @@
 // pattern that is not symmetric in one. The second part is then placed so the faces meet, square to each other, and the
 // fasteners are laid from the component library (src/nexus/components.ts), each its length from the plies it clamps.
 // So an assembly is not placed by hand: what meets is what mates, and nothing is put where it does not fit.
+//
+// And by their round faces: a part with a bore slid onto a round piece of another (a sprocket onto a cam's nose, a
+// bearing onto its shaft, a pulley onto a crank), their axes made one, its fit said by what the bore and the shaft
+// measure (`onto`); and a part bored wherever another passes through it (a pushrod's bore through a block, a bolt's
+// through a plate), each hole cut in the pieces it runs through and no others (`boreThrough`).
 
 import * as THREE from 'three';
 import { boltedJoint, use } from './components';
 import { METRIC, NEMA_FACE } from './families';
-import type { Part, Port, V3 } from './kits';
+import type { Cut, Part, Port, Shape, V3 } from './kits';
+import { piecesOf as boxesOf } from './form';
 
 const TOL = 0.0002;
 /** The standards' patterns, centres in metres: a NEMA motor's face (NEMA ICS 16: the four tapped holes on a square, the
@@ -114,4 +120,142 @@ export function assemble(name: string, parts: Part[]): { part: Part; mates: stri
   }
   unplaced.push(...todo.map((x) => `${x.name}: mates nothing placed (its ports: ${(x.ports ?? []).map((q) => `${q.name} ${q.sex} ${q.thread}`).join(', ') || 'none'})`));
   return { part: { name, at: [0, 0, 0], says: `${name}: ${mates.join('; ')}`, parts: [...placed, ...extra] }, mates, unplaced };
+}
+
+// ---- by their round faces -------------------------------------------------------------------------------------------------
+const matrixOfPart = (p: Part) => new THREE.Matrix4().compose(v(p.at ?? [0, 0, 0]), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
+/** Every drawn piece of a part with where it is in the part's frame (through every group it is in). */
+function piecesIn(root: Part, m0 = new THREE.Matrix4()): { p: Part; m: THREE.Matrix4; path: number[] }[] {
+  const out: { p: Part; m: THREE.Matrix4; path: number[] }[] = [];
+  const walk = (p: Part, m: THREE.Matrix4, path: number[]) => { const mm = m.clone().multiply(matrixOfPart(p)); if (p.shape) out.push({ p, m: mm, path }); (p.parts ?? []).forEach((q, i) => walk(q, mm, [...path, i])); };
+  walk(root, m0, []); return out;
+}
+/** A round piece's axis in its own frame (along its y: a cylinder's, a turned part's; along its z: an extruded part's),
+ *  its two ends there, its outside radius and its bore (0 where it is solid). */
+function roundOf(s: Shape, base?: boolean): { a: V3; b: V3; r: number; bore: number } | null {
+  if ('cyl' in s) { const h = s.cyl[1], lo = base ? 0 : -h / 2; return { a: [0, lo, 0], b: [0, lo + h, 0], r: Math.max(s.cyl[0], s.cyl[2] ?? s.cyl[0]), bore: 0 }; }
+  if ('lathe' in s) { const ys = s.lathe.map((q) => q[1]), xs = s.lathe.map((q) => q[0]); return { a: [0, Math.min(...ys), 0], b: [0, Math.max(...ys), 0], r: Math.max(...xs), bore: Math.min(...xs) }; }
+  if ('prism' in s) { const L = s.prism.L, hole = s.prism.holes?.[0]; return { a: [0, 0, -L / 2], b: [0, 0, L / 2], r: Math.max(...s.prism.pts.map(([x, y]) => Math.hypot(x, y))), bore: hole ? Math.min(...hole.map(([x, y]) => Math.hypot(x, y))) * Math.cos(Math.PI / hole.length) : 0 }; }
+  return null;
+}
+/** Where a part's bore is, in its own frame: the round piece of it with the narrowest hole through it (a gear's teeth, a
+ *  bearing's inner ring, a pulley's hub): its axis's two ends and the hole's radius. */
+export function boreOf(p: Part): { a: THREE.Vector3; b: THREE.Vector3; r: number; piece: string } | null {
+  let best: { a: THREE.Vector3; b: THREE.Vector3; r: number; piece: string } | null = null;
+  for (const n of piecesIn({ ...p, at: [0, 0, 0], rot: [0, 0, 0] })) { const q = roundOf(n.p.shape!, n.p.base); if (!q || q.bore <= 0) continue; if (!best || q.bore < best.r) best = { a: v(q.a).applyMatrix4(n.m), b: v(q.b).applyMatrix4(n.m), r: q.bore, piece: n.p.name }; }
+  return best;
+}
+/** A shaft: the first round piece of a part named like `re` (a cam's nose, a crank's nose, an axle): its axis's two ends
+ *  in the part's frame and its radius. */
+export function shaftOf(p: Part, re: RegExp): { a: THREE.Vector3; b: THREE.Vector3; r: number; piece: string } | null {
+  for (const n of piecesIn(p)) { if (!re.test(n.p.name)) continue; const q = roundOf(n.p.shape!, n.p.base); if (q) return { a: v(q.a).applyMatrix4(n.m), b: v(q.b).applyMatrix4(n.m), r: q.r, piece: n.p.name }; }
+  return null;
+}
+export interface OntoFit { part: Part; gap: number; says: string }
+/** A part slid onto a shaft of another: its bore's axis made the shaft's, its middle `from` the shaft's far end (b) by
+ *  `inset` (or from its near end, a), turned `turn` about it; the fit by what the bore and shaft measure: a clearance
+ *  (it slides on, keyed or clamped), or an interference (pressed or shrunk on). It and the shaft are said to pass one
+ *  another where they meet. In the frame `on` is in. */
+export function onto(on: Part, shaft: string | RegExp, it: Part, o: { from?: 'end' | 'start'; inset?: number; turn?: number } = {}): OntoFit | string {
+  const re = typeof shaft === 'string' ? new RegExp(shaft, 'i') : shaft, S = shaftOf(on, re); if (!S) return `nothing round in the ${on.name} is named like "${shaft}"`;
+  const Bo = boreOf(it); if (!Bo) return `the ${it.name} has no bore to go on with`;
+  const gap = Bo.r - S.r; if (gap < -0.02 * S.r) return `the ${it.name}'s bore (${(2 * Bo.r * 1000).toFixed(2)} mm) is too small for the ${S.piece} (${(2 * S.r * 1000).toFixed(2)} mm): it would not go on`;
+  // (its axis turned onto the shaft's, then about it; its bore's middle where it is to sit)
+  const dS = S.b.clone().sub(S.a).normalize(), dB = Bo.b.clone().sub(Bo.a).normalize(), q = new THREE.Quaternion().setFromUnitVectors(dB, dS).premultiply(new THREE.Quaternion().setFromAxisAngle(dS, o.turn ?? 0));
+  const end = o.from === 'start' ? S.a : S.b, into = o.from === 'start' ? dS : dS.clone().negate(), target = end.clone().addScaledVector(into, o.inset ?? 0), mid = Bo.a.clone().add(Bo.b).multiplyScalar(0.5).applyQuaternion(q);
+  const at = target.sub(mid), e = new THREE.Euler().setFromQuaternion(q);
+  const fit = gap >= 0 ? `a clearance of ${(gap * 2e6).toFixed(0)} µm across: it slides on, keyed or clamped${gap > 0.02 * S.r ? ' (loose: more than 4 % of the shaft, it would want a sleeve)' : ''}` : `an interference of ${(-gap * 2e6).toFixed(0)} µm across: pressed or shrunk on`;
+  const part: Part = { ...it, at: [at.x, at.y, at.z], rot: [e.x, e.y, e.z], passes: [...new Set([...(it.passes ?? []), S.piece])] };
+  return { part, gap, says: `the ${it.name} on the ${S.piece}: its ${(2 * Bo.r * 1000).toFixed(2)} mm bore on ${(2 * S.r * 1000).toFixed(2)} mm, ${fit}` };
+}
+/** The line a part runs along (its longest way, through the middles of its pieces' boxes) and how far it reaches from
+ *  that line, in the frame it is drawn in. */
+export function lineOf(p: Part): { a: THREE.Vector3; b: THREE.Vector3; r: number } {
+  const pts: THREE.Vector3[] = [];
+  for (const n of piecesIn(p)) {
+    const s = n.p.shape!, bx: { c: V3; u?: [V3, V3, V3]; h: V3 }[] = 'box' in s ? [{ c: [0, 0, 0], h: [s.box[0] / 2, s.box[1] / 2, s.box[2] / 2] }] : 'cyl' in s ? [{ c: [0, n.p.base ? s.cyl[1] / 2 : 0, 0], h: [s.cyl[0], s.cyl[1] / 2, s.cyl[0]] }] : 'loft' in s || 'tube' in s || 'lathe' in s || 'prism' in s || 'surf' in s ? boxesOf(s as never) : [];
+    for (const b of bx) { const u = b.u ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]]; pts.push(v(b.c).applyMatrix4(n.m)); for (let k = 0; k < 3; k++) for (const sg of [-1, 1]) pts.push(v(b.c).addScaledVector(v(u[k]!), sg * b.h[k]!).applyMatrix4(n.m)); }
+  }
+  const c = pts.reduce((a, q) => a.add(q), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, pts.length));
+  // (its longest way: the covariance's first eigenvector, by power iteration)
+  const C = [0, 0, 0, 0, 0, 0, 0, 0, 0]; for (const q of pts) { const d = q.clone().sub(c).toArray(); for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) C[i * 3 + j]! += d[i]! * d[j]!; }
+  let d = new THREE.Vector3(1, 0.7, 0.3).normalize(); for (let k = 0; k < 60; k++) { const n2 = new THREE.Vector3(C[0]! * d.x + C[1]! * d.y + C[2]! * d.z, C[3]! * d.x + C[4]! * d.y + C[5]! * d.z, C[6]! * d.x + C[7]! * d.y + C[8]! * d.z); if (n2.lengthSq() < 1e-30) break; d = n2.normalize(); }
+  let lo = Infinity, hi = -Infinity, r = 0; for (const q of pts) { const t = q.clone().sub(c).dot(d); lo = Math.min(lo, t); hi = Math.max(hi, t); r = Math.max(r, q.clone().sub(c).addScaledVector(d, -t).length()); }
+  return { a: c.clone().addScaledVector(d, lo), b: c.clone().addScaledVector(d, hi), r };
+}
+/** The run of a line from a to b inside a piece's shape's box (in its own frame): its two ends' parameters, or null. */
+function runIn(s: Shape, base: boolean | undefined, a: THREE.Vector3, b: THREE.Vector3): [number, number] | null {
+  let lo: number[], hi: number[];
+  if ('box' in s) { lo = s.box.map((x) => -x / 2); hi = s.box.map((x) => x / 2); }
+  else { const q = roundOf(s, base); if (!q) return null; const ax = q.a[1] !== q.b[1] ? 1 : 2; lo = [-q.r, -q.r, -q.r]; hi = [q.r, q.r, q.r]; lo[ax] = Math.min(q.a[ax]!, q.b[ax]!); hi[ax] = Math.max(q.a[ax]!, q.b[ax]!); }
+  if ('box' in s && base) { lo[1] = 0; hi[1] = s.box[1]; }
+  const d = b.clone().sub(a); let t0 = 0, t1 = 1;
+  for (let k = 0; k < 3; k++) { const dk = d.getComponent(k), ak = a.getComponent(k); if (Math.abs(dk) < 1e-12) { if (ak < lo[k]! || ak > hi[k]!) return null; continue; } let ta = (lo[k]! - ak) / dk, tb = (hi[k]! - ak) / dk; if (ta > tb) [ta, tb] = [tb, ta]; t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); }
+  return t1 > t0 ? [t0, t1] : null;
+}
+/** A host bored wherever a guest passes through it: a hole along the guest's line, as wide as it reaches and the
+ *  clearance more, cut in each piece of the host it runs through (and no other); the host said to pass it. Both in one
+ *  frame. Says how many holes, in which pieces. */
+export function boreThrough(host: Part, guest: Part, clearance = 0.0005): { part: Part; holes: string[]; says: string } {
+  const L = lineOf(guest), r = L.r + clearance, holes: string[] = [];
+  const cutFor = (p: Part, m: THREE.Matrix4): Cut | null => {
+    if (!p.shape) return null; const inv = m.clone().invert(), a = L.a.clone().applyMatrix4(inv), b = L.b.clone().applyMatrix4(inv);
+    // (the guest's line run on past its ends a little, so a hole it fills to its end is cut to the face)
+    const d = b.clone().sub(a), ext = 0.002 / Math.max(1e-9, d.length()), A = a.clone().addScaledVector(d, -ext), Bb = b.clone().addScaledVector(d, ext), run = runIn(p.shape, p.base, A, Bb); if (!run) return null;
+    const D = Bb.clone().sub(A), from = A.clone().addScaledVector(D, run[0]), to = A.clone().addScaledVector(D, run[1]), len = to.distanceTo(from); if (len < 1e-5) return null;
+    const dir = to.clone().sub(from).normalize(); return { r, depth: len, at: from.toArray() as V3, dir: dir.toArray() as V3 };
+  };
+  const walk = (p: Part, m: THREE.Matrix4): Part => { const mm = m.clone().multiply(matrixOfPart(p)), c = cutFor(p, mm); if (c) holes.push(p.name); return { ...p, ...(c ? { cuts: [...(p.cuts ?? []), c] } : {}), ...(p.parts ? { parts: p.parts.map((q) => walk(q, mm)) } : {}) }; };
+  // (the host's own place is the frame both are in: its pieces' places are taken from there)
+  const kids = (host.parts ?? []).map((q) => walk(q, matrixOfPart(host))), c0 = cutFor(host, matrixOfPart(host)); if (c0) holes.unshift(host.name);
+  const part: Part = { ...host, ...(c0 ? { cuts: [...(host.cuts ?? []), c0] } : {}), ...(host.parts ? { parts: kids } : {}), passes: [...new Set([...(host.passes ?? []), guest.name])] };
+  return { part, holes, says: holes.length ? `${holes.length} hole${holes.length > 1 ? 's' : ''} of ${(2 * r * 1000).toFixed(1)} mm for the ${guest.name}, through ${[...new Set(holes)].join(', ')}` : `the ${guest.name} passes through nothing of the ${host.name}` };
+}
+
+// ---- any outline onto any surface ---------------------------------------------------------------------------------------
+export interface OntoSurface { piece: Part; tiles: number; missed: number; /** the most any tile's corner stands off the surface under it (+ clear of it, − into it), m */ gap: number; area: number; says: string }
+/** Where a ray first meets a thing's drawn surface (its pieces as the viewer draws them, only those whose box it crosses),
+ *  and the surface's normal there, facing the ray. */
+export function rayOnto(nodes: { m: THREE.Matrix4; box: THREE.Box3 | null; mesh: () => THREE.Mesh | null }[], from: THREE.Vector3, dir: THREE.Vector3): { at: THREE.Vector3; n: THREE.Vector3; d: number } | null {
+  const ray = new THREE.Ray(from, dir), rc = new THREE.Raycaster(from, dir, 0, 100); let best: THREE.Intersection | null = null;
+  for (const q of nodes) { if (!q.box || !ray.intersectsBox(q.box)) continue; const mesh = q.mesh(); if (!mesh) continue; const hit = rc.intersectObject(mesh, false)[0]; if (hit && (!best || hit.distance < best.distance)) best = hit; }
+  if (!best?.face) return null; const n = best.face.normal.clone().transformDirection(best.object.matrixWorld); if (n.dot(dir) > 0) n.negate();
+  return { at: best.point.clone(), n, d: best.distance };
+}
+/** The part of a polygon inside a rectangle (Sutherland–Hodgman, one edge of the rectangle at a time). */
+function clipRect(poly: [number, number][], x0: number, y0: number, x1: number, y1: number): [number, number][] {
+  let out = poly; const edge = (inside: (p: [number, number]) => boolean, cut: (a: [number, number], b: [number, number]) => [number, number]) => { const src = out; out = []; for (let i = 0; i < src.length; i++) { const a = src[i]!, b = src[(i + 1) % src.length]!; if (inside(b)) { if (!inside(a)) out.push(cut(a, b)); out.push(b); } else if (inside(a)) out.push(cut(a, b)); } };
+  const atX = (x: number) => (a: [number, number], b: [number, number]): [number, number] => [x, a[1] + ((b[1] - a[1]) * (x - a[0])) / (b[0] - a[0])], atY = (y: number) => (a: [number, number], b: [number, number]): [number, number] => [a[0] + ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]), y];
+  edge((p) => p[0] >= x0, atX(x0)); if (out.length) edge((p) => p[0] <= x1, atX(x1)); if (out.length) edge((p) => p[1] >= y0, atY(y0)); if (out.length) edge((p) => p[1] <= y1, atY(y1));
+  return out;
+}
+const areaOf = (p: [number, number][]) => p.reduce((a, q, i) => { const r = p[(i + 1) % p.length]!; return a + q[0] * r[1] - r[0] * q[1]; }, 0) / 2;
+/** Any flat outline (a vent, a badge, a decal, a sign, a panel, an address number) laid onto any thing's surface: drawn in
+ *  a plane looking along `toward` (its u to the right, its v up as `up` says, metres), cast onto the thing from `at`; in
+ *  tiles `tile` across where asked, each set on the surface's tangent where its middle lands, so a large one follows a
+ *  curved surface piecewise; `t` thick, standing `proud` off the surface (0: on it). Says how far the tiles' corners stand
+ *  off the surface under them, so how well it follows it is measured, not assumed. */
+export function ontoSurface(target: Part, outline: [number, number][], o: { at: V3; toward: V3; up?: V3; t: number; proud?: number; tile?: number; name: string; mat?: string; color?: number; finish?: string; item?: string; geometry: (s: Shape, mat?: string, make?: 'pressed', facets?: number) => THREE.BufferGeometry | null; layout: (p: Part) => { p: Part; m: THREE.Matrix4; box: THREE.Box3 | null }[] }): OntoSurface | string {
+  if (outline.length < 3) return 'an outline needs three points or more';
+  const D = new THREE.Vector3(...o.toward).normalize(), up0 = new THREE.Vector3(...(o.up ?? [0, 1, 0])), U = up0.clone().sub(D.clone().multiplyScalar(up0.dot(D))).normalize(), R = D.clone().cross(U).normalize();
+  if (!Number.isFinite(U.x) || U.lengthSq() < 0.5) return 'its up is along its direction: give an up across it';
+  const cache = new Map<object, THREE.Mesh | null>(), nodes = o.layout(target).filter((n) => n.p.shape).map((n) => ({ m: n.m, box: n.box, mesh: () => { let me = cache.get(n.p); if (me === undefined) { const g = o.geometry(n.p.shape!, n.p.mat, n.p.make, n.p.facets); me = g ? new THREE.Mesh(g) : null; if (me) { me.matrixAutoUpdate = false; me.matrixWorld.copy(n.m); } cache.set(n.p, me); } return me; } }));
+  const A = new THREE.Vector3(...o.at), plane = (u: number, v: number) => A.clone().addScaledVector(R, u).addScaledVector(U, v);
+  const xs = outline.map((p) => p[0]), ys = outline.map((p) => p[1]), tile = o.tile ?? 0, area = Math.abs(areaOf(outline));
+  const tiles: [number, number][][] = [];
+  if (tile > 0) for (let x = Math.min(...xs); x < Math.max(...xs); x += tile) for (let y = Math.min(...ys); y < Math.max(...ys); y += tile) { const c = clipRect(outline, x, y, x + tile, y + tile); if (c.length >= 3 && Math.abs(areaOf(c)) > 1e-8) tiles.push(c); }
+  else tiles.push(outline);
+  const parts: Part[] = []; let missed = 0, gap = 0;
+  for (const tl of tiles) {
+    const a2 = areaOf(tl), cx = tl.reduce((s, p, i) => { const q = tl[(i + 1) % tl.length]!; return s + (p[0] + q[0]) * (p[0] * q[1] - q[0] * p[1]); }, 0) / (6 * a2), cy = tl.reduce((s, p, i) => { const q = tl[(i + 1) % tl.length]!; return s + (p[1] + q[1]) * (p[0] * q[1] - q[0] * p[1]); }, 0) / (6 * a2);
+    const hit = rayOnto(nodes, plane(cx, cy).addScaledVector(D, -1), D); if (!hit) { missed++; continue; }
+    const N = hit.n, X = R.clone().sub(N.clone().multiplyScalar(R.dot(N))).normalize(), Y = N.clone().cross(X), proud = o.proud ?? 0;
+    // (how far each corner of the tile, on its tangent plane, stands off the surface beneath it)
+    for (const p of tl) { const c = hit.at.clone().addScaledVector(X, p[0] - cx).addScaledVector(Y, p[1] - cy), h = rayOnto(nodes, c.clone().addScaledVector(N, 0.05), N.clone().negate()); if (h) { const g = 0.05 - h.d; if (Math.abs(g) > Math.abs(gap)) gap = g; } }
+    const e = new THREE.Euler().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, N), 'XYZ'), at = hit.at.clone().addScaledVector(N, proud + o.t / 2);
+    parts.push({ name: o.name, shape: { prism: { pts: tl.map((p): [number, number] => [p[0] - cx, p[1] - cy]), L: o.t } }, at: [at.x, at.y, at.z], rot: [e.x, e.y, e.z], ...(o.mat ? { mat: o.mat } : {}), ...(o.color !== undefined ? { color: o.color } : {}), ...(o.finish ? { finish: o.finish } : {}), ...(o.item ? { item: o.item } : {}) } as Part);
+  }
+  if (!parts.length) return `it lands on nothing: nothing of the ${target.name} lies along ${o.toward.join(', ')} from ${o.at.join(', ')}`;
+  const piece: Part = parts.length === 1 ? parts[0]! : { name: o.name, ...(o.item ? { item: o.item } : {}), parts };
+  return { piece, tiles: parts.length, missed, gap, area, says: `${o.name}: ${(area * 1e4).toFixed(0)} cm² laid onto the ${target.name} in ${parts.length} ${parts.length === 1 ? 'piece' : 'tiles'}${missed ? ` (${missed} over nothing, left out)` : ''}, ${(o.t * 1000).toFixed(1)} mm thick; its corners within ${(Math.abs(gap) * 1000).toFixed(1)} mm of the surface` };
 }

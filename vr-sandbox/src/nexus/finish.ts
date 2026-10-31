@@ -29,17 +29,52 @@ export function edgeRadius(mat: string | undefined, thinnest: number, make?: 'pr
   const r = ruleFor(mat), mm = typeof r.mm === 'number' ? r.mm : r.mm(thinnest * 1000);
   return Math.max(0, Math.min(mm / 1000, thinnest / 3));
 }
-/** The rules as lines a board can show and a person can change: "edges <rule> <mm> mm". */
-export const edgeLines = (): string[] => EDGE_RULES.map((r) => `edges ${r.id} ${typeof r.mm === 'number' ? `${r.mm} mm` : 'by thickness'}: ${r.says} (${r.source})`);
-/** A rule changed by its line: "edges wood 4 mm", "edges machined metal 0.2". */
-export function setEdge(line: string): string {
-  const m = /^edges\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(?:mm)?\b/i.exec(line.trim()); if (!m) return 'Say it as "edges <kind> <mm>": "edges wood 4 mm".';
-  const r = EDGE_RULES.find((x) => x.id === m[1]!.toLowerCase() || x.mats.includes(m[1]!.toLowerCase())); if (!r) return `No edge rule for "${m[1]}": there are ${EDGE_RULES.map((x) => x.id).join(', ')}.`;
-  r.mm = Number(m[2]); r.source = 'set by you'; return `Edges of ${r.id} now ${r.mm} mm (${r.says}).`;
-}
 /** The edge rule's material for a build's material (src/data/materials.ts ids): metals machined, cast iron cast, plastics
  *  moulded, wood eased, glass arrissed, concrete chamfered, brick worn, cloth and foam soft. */
-export function edgeMatOf(id: string | undefined): string | undefined {
-  if (!id) return undefined; const k = id.split('.')[0]!;
-  return ({ steel: 'steel-low', stainless: 'steel-low', aluminum: 'al-6061', copper: 'copper', brass: 'copper', titanium: 'steel-low', composite: 'steel-low', 'cast-iron': 'cast-iron', wood: 'wood', cork: 'wood', polymer: 'abs', rubber: 'rubber', glass: 'glass', concrete: 'concrete', ceramic: 'brick', textile: 'cotton', leather: 'leather', foam: 'foam' } as Record<string, string>)[k];
+
+// ---- the surface a process leaves: its roughness, its lay, and how it looks (docs/REALITY.md phase 3, step 3) ----------
+// A surface looks as its micro-geometry slopes: light falling on it leaves along each facet's normal, so a surface whose
+// facets tilt little shows a sharp highlight and one whose facets tilt much a broad sheen. Where the process sets the
+// geometry it is worked out: a turned or face-milled surface is a row of arcs of the tool's nose radius r, spaced by the
+// feed f, so its roughness is Ra = f² / (18√3 r) (the parabola's own; Shaw, Metal Cutting Principles) and its facets
+// tilt evenly between ± f / 2r across the lay (rms f / 2√3 r), little along it; a printed surface is the same with its
+// layer height as the feed and half of it as the radius. Where a process leaves a random surface (grinding, blasting,
+// casting) its slopes are typical of it, said so. How much light stays in the mirror direction at all is the surface's
+// height against the light's wavelength (Davies: exp(−(4π Rq cos θ / λ)²), at 550 nm, square on); how it looks, its
+// facets' rms slope as a microfacet roughness (GGX α ≈ the rms slope; Walter et al., EGSR 2007).
+
+export interface SurfaceMake { id: string; says: string; lay: boolean; source: string;
+  /** a kinematic surface: the feed (or layer) f, mm, and the radius it is cut or laid with, mm */ cusp?: { f: number; r: number; slopeAlong: number };
+  /** a random surface: its Ra, µm, and its facets' rms slope across and along its lay */ random?: { Ra: number; across: number; along: number } }
+export const SURFACE_MAKES: SurfaceMake[] = [
+  { id: 'turned', says: 'turned on a lathe: the tool\'s nose arcs, one feed apart, round the part', lay: true, cusp: { f: 0.15, r: 0.8, slopeAlong: 0.01 }, source: 'Ra = f² / 18√3 r (Shaw, Metal Cutting Principles); a finishing feed 0.15 mm/rev and a 0.8 mm nose (typical); along the lay, an estimate' },
+  { id: 'face-milled', says: 'face milled: an insert\'s nose arcs, one feed per tooth apart', lay: true, cusp: { f: 0.1, r: 0.8, slopeAlong: 0.015 }, source: 'Ra = f_z² / 18√3 r (the same geometry); 0.1 mm per tooth, a 0.8 mm nose (typical); along the lay, an estimate' },
+  { id: 'printed', says: '3D printed in layers (material extrusion): each layer a rounded bead one layer high', lay: true, cusp: { f: 0.2, r: 0.1, slopeAlong: 0.05 }, source: 'the layer as the feed and half of it as the bead\'s radius; 0.2 mm layers (typical); the bead\'s own skin, an estimate' },
+  { id: 'ground', says: 'ground: an abrasive wheel\'s grits ploughing fine scratches along it', lay: true, random: { Ra: 0.4, across: 0.08, along: 0.02 }, source: 'Ra 0.1 to 1.6 µm (the common roughness charts: ASME B46.1, Machinery\'s Handbook; typical); slopes typical of ground steel' },
+  { id: 'brushed', says: 'brushed with an abrasive belt or pad: long scratches one way', lay: true, random: { Ra: 0.5, across: 0.15, along: 0.02 }, source: 'a No. 4 brushed finish, Ra about 0.4 to 0.8 µm (typical); slopes an estimate' },
+  { id: 'polished', says: 'polished to a mirror', lay: false, random: { Ra: 0.02, across: 0.01, along: 0.01 }, source: 'a mirror polish (No. 8), Ra about 0.01 to 0.05 µm (typical); slopes an estimate' },
+  { id: 'lapped', says: 'lapped: loose abrasive under a flat plate, every way', lay: false, random: { Ra: 0.1, across: 0.03, along: 0.03 }, source: 'Ra 0.05 to 0.4 µm (the roughness charts; typical); slopes an estimate' },
+  { id: 'bead blasted', says: 'bead blasted: dimpled every way by glass beads', lay: false, random: { Ra: 2, across: 0.35, along: 0.35 }, source: 'Ra 1 to 3 µm (typical); a matte, its slopes an estimate' },
+  { id: 'sand cast', says: 'sand cast: the sand\'s grains printed in its skin', lay: false, random: { Ra: 12.5, across: 0.5, along: 0.5 }, source: 'Ra 12.5 to 25 µm (the roughness charts; typical); slopes an estimate' },
+  { id: 'die cast', says: 'die cast: the steel die\'s finish', lay: false, random: { Ra: 1.2, across: 0.15, along: 0.15 }, source: 'Ra 0.8 to 1.6 µm (the roughness charts; typical); slopes an estimate' },
+  { id: 'forged', says: 'forged, its scale cleaned off', lay: false, random: { Ra: 6, across: 0.3, along: 0.3 }, source: 'Ra 3.2 to 12.5 µm (the roughness charts; typical); slopes an estimate' },
+  { id: 'spark eroded', says: 'spark eroded (EDM): a field of tiny craters', lay: false, random: { Ra: 3, across: 0.35, along: 0.35 }, source: 'Ra 0.8 to 6.3 µm (the roughness charts; typical); slopes an estimate' },
+];
+
+export interface Surface { id: string; says: string; Ra: number; Rq: number; across: number; along: number; alphaAcross: number; alphaAlong: number; specular: number; lay: boolean; how: string; source: string }
+/** The surface a process leaves, with its own feed and radius where it is cut (mm), and how it looks. */
+export function surfaceOf(id: string, o: { f?: number; r?: number } = {}): Surface {
+  const m = SURFACE_MAKES.find((x) => x.id === id); if (!m) throw new Error(`"${id}" is not a process kept here (${SURFACE_MAKES.map((x) => x.id).join(', ')})`);
+  let Ra: number, Rq: number, across: number, along: number, how: string;
+  if (m.cusp) {
+    const f = o.f ?? m.cusp.f, r = o.r ?? m.cusp.r; if (!(f > 0 && r > 0)) throw new Error('a feed and a radius above nothing');
+    // (the arcs as parabolas y = x² / 2r over a feed: Ra f²/18√3r, Rq f²/4√45 r, slopes even across ± f/2r)
+    Ra = (f * f) / (18 * Math.sqrt(3) * r) * 1000; Rq = (f * f) / (4 * Math.sqrt(45) * r) * 1000; across = Math.min(1, f / (2 * Math.sqrt(3) * r)); along = m.cusp.slopeAlong;
+    how = `worked out from its feed ${f} mm and radius ${r} mm`;
+  } else { Ra = m.random!.Ra; Rq = 1.25 * Ra; across = m.random!.across; along = m.random!.along; how = 'typical of the process'; }
+  // (how much of the light stays in the mirror direction: Davies, at 550 nm, square on)
+  const specular = Math.exp(-(((4 * Math.PI * Rq) / 0.55) ** 2));
+  return { id: m.id, says: m.says, Ra, Rq, across, along, alphaAcross: across, alphaAlong: along, specular, lay: m.lay, how, source: m.source };
 }
+/** A finish word the parts here carry, as the process that leaves it. */
+export const FINISH_MAKE: Record<string, string> = { ...Object.fromEntries(SURFACE_MAKES.map((m) => [m.id, m.id])), machined: 'turned', chrome: 'polished', cast: 'sand cast', satin: 'bead blasted', thread: 'turned' };

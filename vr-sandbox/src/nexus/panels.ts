@@ -23,6 +23,8 @@
 
 import { curvatures, curveAt, fairness, fromEdge, greville, patchAt, patchPoints, pointAt, skinThrough, split, surfaceAt, type Curve, type Patch, type Surface, type UV, type V3 } from './surface';
 import type { Part } from './kits';
+import { detail, divisions } from './lod';
+import { PointGrid } from './make/space';
 import type { Lines } from './machines';
 
 /** A wheel as the body sees it: its middle (z its mid-plane's distance out), radius, width, and how it moves. */
@@ -135,8 +137,11 @@ function lined(b: BodyPlan, r: BodyRules): Lined {
   // in plan: a rounded rectangle, its corners superellipses (G2 where they meet the straight), flared out round each arch
   // where the tyre's face needs it
   const corner = (d: number, R: number) => (d >= R ? 1 : (1 - (1 - d / R) ** r.plan.k) ** (1 / r.plan.k));
+  // (its haunches: full over each wheel, easing to its waist along the doors between, over a wheel's diameter and more)
+  const hipAt = (x: number, front: number) => { let g = 0; for (const wh of b.wheels) { const reach = wh.R * 2 + 0.4, d = Math.abs(x - wh.x); if (d >= reach) continue; const t = 0.5 + 0.5 * Math.cos((Math.PI * d) / reach); g = Math.max(g, (wh.x > 0 ? front : 1) * t * t * (3 - 2 * t)); } return g; };
   const plan = (x: number) => {
     let w = W2 * Math.min(corner(xN - x, r.plan.nose), corner(x - xT, r.plan.tail));
+    if (ln.haunch) w -= ln.haunch.waist * (1 - hipAt(x, ln.haunch.front ?? 0.5)) * (w / W2);
     for (const wh of b.wheels) { const need = wh.z + wh.w / 2 + r.room.side + r.flare, reach = wh.R + r.room.radial + 0.25, d = Math.abs(x - wh.x); if (need > W2 * 0.97 && d < reach) { const t = 0.5 + 0.5 * Math.cos((Math.PI * d) / reach), s3 = t * t * (3 - 2 * t); w = Math.max(w, Math.min(W2, need) * s3 + w * (1 - s3)); } }
     return w;
   };
@@ -164,7 +169,7 @@ function lined(b: BodyPlan, r: BodyRules): Lined {
     [xCowl + hoodRun * 0.4, noseH + (cowlY - noseH) * 0.55], [xN - 0.16, noseH + 0.008], [xN - 0.04, noseH - 0.004], [xN, noseH - 0.022],
   ]);
   const top = (x: number) => { const n = need(x); return n === -Infinity ? drawn(x) : -softMin(-drawn(x), -n, 0.04); };
-  const shoulder = (x: number) => softMin(top(x) - 0.06, belt - r.side.shoulder, 0.08);
+  const shoulder = (x: number) => softMin(top(x) - 0.06, belt - r.side.shoulder + (ln.haunch?.lift ?? 0) * (ln.haunch ? (x < 0 ? hipAt(x, 0) : 0) : 0), 0.08);
   // the cabin's top line: the windscreen from the cowl, rounding into the roof, the roof, the back glass to the deck
   const wsRun = xCowl - xRoofF, bgRun = xRoofR - xDeck, rb = cowlY;
   const roof = lineBy([
@@ -215,15 +220,17 @@ type Deep<T> = { [K in keyof T]?: T[K] extends object ? Deep<T[K]> : T[K] };
 let trial: { rules?: Deep<BodyRules>; lines?: Partial<Lines> } | null = null;
 export function tryBody(t: { rules?: Deep<BodyRules>; lines?: Partial<Lines> } | null): void { trial = t; made.clear(); }
 const merged = <T>(a: T, b: Deep<T> | undefined): T => { if (!b) return a; const o = { ...(a as object) } as Record<string, unknown>; for (const [k, v] of Object.entries(b)) o[k] = v && typeof v === 'object' && !Array.isArray(v) && o[k] && typeof o[k] === 'object' ? merged(o[k], v as Deep<unknown>) : v; return o as T; };
-export function bodyPanels(b0: BodyPlan, r0: BodyRules = BODY_RULES): Part[] {
+/** `quick`: without the lids' check against what is under them (millimetres; for seeing its shape many times over, as a
+ *  photograph is fitted). */
+export function bodyPanels(b0: BodyPlan, r0: BodyRules = BODY_RULES, quick = false): Part[] {
   const r = trial ? merged(r0, trial.rules) : r0, b = trial?.lines ? { ...b0, lines: { ...b0.lines, ...trial.lines } } : b0;
-  const key = JSON.stringify([{ ...b, color: 0 }, r]), kept = made.get(key); if (kept) return kept.map(copy(b.color));
+  const key = JSON.stringify([{ ...b, color: 0 }, r, quick]), kept = made.get(key); if (kept) return kept.map(copy(b.color));
   // (then looked at as made: its hood or deck, crowned from the side's top edge, can stand a few millimetres short of what
   // is under it near that edge, as a strut's tower; where it does, the lid alone is crowned more there, by what is
   // missing over the share of its crown that reaches that far out (about 40%), and the body made again, up to three
   // times: the creator's own check, as its liner's is; the side skin, and the doors on it, are not touched)
   let b2: BodyPlan = { ...b, color: UNPAINTED }, out = makeBody(b2, r);
-  for (let k = 0; k < 3; k++) { const short = lidShort(out, b2); if (!short.some((d) => d > 0.001)) break; b2 = { ...b2, lift: [...(b2.lift ?? []), ...(b2.inside ?? []).flatMap((q, i) => (short[i]! > 0.001 ? [{ x0: q.min[0], x1: q.max[0], dy: (short[i]! + 0.004) / 0.4 }] : []))] }; out = makeBody(b2, r); }
+  for (let k = 0; k < (quick ? 0 : 3); k++) { const short = lidShort(out, b2); if (!short.some((d) => d > 0.001)) break; b2 = { ...b2, lift: [...(b2.lift ?? []), ...(b2.inside ?? []).flatMap((q, i) => (short[i]! > 0.001 ? [{ x0: q.min[0], x1: q.max[0], dy: (short[i]! + 0.004) / 0.4 }] : []))] }; out = makeBody(b2, r); }
   if (made.size > 64) made.clear(); made.set(key, out); return out.map(copy(b.color));
 }
 /** The nearest point on a ruled strip (a recess's wall: a degree-1 net of rows of two points), and how far: its quads
@@ -348,7 +355,9 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   // its doors: two a side where it has them (its maker's count, else by its length), or one long one (a coupe's, about
   // 1.15 m: typical), the rear quarter running forward to meet it
   const doors = !b.lines.bed && xFD - xRD > 0.6, twoDoors = doors && (b.lines.doors ? b.lines.doors === 2 : xFD - xRD > 1.6);
-  if (doors && !twoDoors) xRD = Math.max(xRD, xFD - 1.15);
+  // (a coupe's one long door: its rear edge where its maker puts its top rear corner (doorR), upright, short of its rear
+  // arch; else about 1.15 m long, typical)
+  if (doors && !twoDoors) xRD = b.lines.doorR !== undefined ? Math.max(rArchFront + 0.04, b.L / 2 - b.lines.doorR * b.L) : Math.max(xRD, xFD - 1.15);
   // (the B pillar between the doors by their lengths, the front one a little longer (typical), not by the roof: a short
   // car's rear arch would otherwise leave its rear door a hand's width)
   const xB = twoDoors ? xRD + 0.47 * (xFD - xRD) : ln.xB;
@@ -383,7 +392,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
   const vTopF = Math.min(vAt(uMidF, yTopF - 0.012), vUnder(hl0, uG, 0.012)), lampW: Win = { u0: hl0, u1: uG, v0: hb0, v1: vTopF }, grilleW: Win = { u0: uG, u1: 1, v0: Math.min(gv0, hb0), v1: Math.min(vAt(uN(0.01), yTopF - 0.012), vUnder(uG, 1, 0.012)) }, intakeW: Win = { u0: uI, u1: 1, v0: vI0, v1: vI1 };
   // the back: its tail lamps round the corners, under the deck's edge, from the tail's face out along the sides; the
   // valance low across the bumper
-  const yTopT = pointAt(side, uTl(0.08), 1)[1], uMidT = uTl(0.22), tb0 = vAt(uMidT, yTopT - 0.03 - 0.12), lowT = ln.low(ln.xT + 0.05);
+  const yTopT = pointAt(side, uTl(0.08), 1)[1], uMidT = uTl(0.22), tb0 = vAt(uMidT, yTopT - 0.03 - (b.lines.face?.tail ?? 0.12)), lowT = ln.low(ln.xT + 0.05);
   // (a lamp's opening only where the skin turns gently enough to set its housing in as deep as it asks, its back no
   // nearer than 80% of its depth to folding: round a box van's tight tail corner, the longest run of the window that
   // does, not all of it)
@@ -392,7 +401,7 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
     if (ok.every(Boolean)) return w; let best: [number, number] = [0, -1]; for (let i = 0; i <= N; i++) if (ok[i]) { let j = i; while (j + 1 <= N && ok[j + 1]) j++; if (j - i > best[1] - best[0]) best = [i, j]; i = j; }
     return best[1] - best[0] >= 4 ? { ...w, u0: w.u0 + ((w.u1 - w.u0) * best[0]) / N, u1: w.u0 + ((w.u1 - w.u0) * best[1]) / N } : w;
   };
-  const tailW: Win = roomy({ u0: uZ(W2 * 0.5, false), u1: Math.min(uTl(0.45), U(rArchBack - 0.08)), v0: tb0, v1: Math.min(vAt(uMidT, yTopT - 0.015), vUnder(uZ(W2 * 0.5, false), Math.min(uTl(0.45), U(rArchBack - 0.08)), 0.015)) }, 0.04), valW: Win = { u0: 0, u1: uTl(0.35), v0: vAt(uTl(0.01), lowT + 0.025), v1: vAt(uTl(0.01), lowT + 0.085) };
+  const wrapT = b.lines.face?.wrap ?? 0.45, tailW: Win = roomy({ u0: uZ(W2 * 0.5, false), u1: Math.min(uTl(wrapT), U(rArchBack - 0.08)), v0: tb0, v1: Math.min(vAt(uMidT, yTopT - 0.015), vUnder(uZ(W2 * 0.5, false), Math.min(uTl(wrapT), U(rArchBack - 0.08)), 0.015)) }, 0.04), valW: Win = { u0: 0, u1: uTl(0.35), v0: vAt(uTl(0.01), lowT + 0.025), v1: vAt(uTl(0.01), lowT + 0.085) };
   const fWins = [lampW, grilleW, intakeW], tWins = [tailW, valW];
   // a panel round openings: its run in slabs along u, each from its foot (round the arches in it) up to its top, less the
   // openings over that slab
@@ -666,7 +675,16 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
         const half = frame ? 0.012 : r.cabin.pillar, edges = [uB0, ...cuts.sort((a2, b2) => b2 - a2).flatMap((x) => [Uc(x + half), Uc(x - half)]), uCe];
         for (let k = 0; k + 1 < edges.length; k += 2) out.push(frame && k > 0 ? glass('rear quarter windows', [[edges[k + 1]!, vg0], [edges[k]!, vg0], [edges[k]!, v3 - p], [edges[k + 1]!, v3 - p]], 'its rear quarter glass, fixed in the body behind its rear door (typical)') : glass('rear side windows', [[edges[k + 1]!, vg0], [edges[k]!, vg0], [edges[k]!, v3 - p], [edges[k + 1]!, v3 - p]], 'its rear side glass (typical)'));
         for (const x of cuts) out.push(trim(frame ? 'rear door frames' : 'D pillars', [[Uc(x - half), vg0], [Uc(x + half), vg0], [Uc(x + half), v3 - p], [Uc(x - half), v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: frame ? 'its rear door\'s window frame, where its glass runs on behind the door, trimmed black (typical)' : 'a pillar between its rear side windows, trimmed black (typical)' }));
-      } else out.push(glass('side windows', [[uCe, vg0], [uS, vg0], [uS, v3 - p], [uCe, v3 - p]], 'its side glass (typical)'));
+      } else {
+        // (a coupe's one long door, its glass ending where its maker ends the door's top (doorR), a fixed quarter glass in
+        // the body behind it past a thin black bar: its door glass drops, its quarter glass does not)
+        const xQ = b.lines.doorR !== undefined ? b.L / 2 - b.lines.doorR * b.L : -Infinity, hq = 0.014;
+        if (xQ - hq > xCe + 0.08 && xQ + hq < xB + 0.2) {
+          out.push(glass('side windows', [[Uc(xQ + hq), vg0], [uS, vg0], [uS, v3 - p], [Uc(xQ + hq), v3 - p]], 'its door glass (typical)'));
+          out.push(glass('rear quarter windows', [[uCe, vg0], [Uc(xQ - hq), vg0], [Uc(xQ - hq), v3 - p], [uCe, v3 - p]], 'its quarter glass, fixed in the body behind its door (typical)'));
+          out.push(trim('rear door frames', [[Uc(xQ - hq), vg0], [Uc(xQ + hq), vg0], [Uc(xQ + hq), v3 - p], [Uc(xQ - hq), v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', says: 'the bar between its door glass and its quarter glass, trimmed black (typical)' }));
+        } else out.push(glass('side windows', [[uCe, vg0], [uS, vg0], [uS, v3 - p], [uCe, v3 - p]], 'its side glass (typical)'));
+      }
       // (where its door is set back from its windscreen's foot, the corner between its glass and its A pillar a black sail,
       // fixed: its glass in its door)
       if (uS < 1 - 1e-6) out.push(trim('mirror sails', [[uS, vg0], [1, vg0], [1, v3 - p], [uS, v3 - p]], { mat: 'pp', color: 0x141414, shell: 0.002, make: undefined, finish: 'texture', fixed: 'clipped into the corner at the foot of its A pillar', says: 'the black sail between its front door glass and its A pillar, ahead of its door (typical)' }));
@@ -684,7 +702,10 @@ function makeBody(b: BodyPlan, r: BodyRules): Part[] {
 const overhead = new WeakMap<Patch, V3[]>();
 export function roofOf(parts: Part[]): (x: number) => number {
   const pts: V3[] = [];
-  for (const p of parts) { if (!p.shape || !('surf' in p.shape) || !/roof|glass|windscreen|pillar/i.test(p.name)) continue; const pt = p.shape.surf; let got = overhead.get(pt); if (!got) { got = patchPoints(pt, 24, 12, false).filter((q) => Math.abs(q[2]) < 0.35); overhead.set(pt, got); } pts.push(...got); }
+  // (and its deck lid, skin and inner frame, built round the skin as a closure: what a rear seat's back must stay under)
+  const all: Part[] = [...parts]; const lid = (q: Part) => { for (const c of q.parts ?? []) { all.push(c); lid(c); } };
+  for (const q of parts) if (/^deck lid/.test(q.name) && !q.rot && !(q.at ?? [0, 0, 0]).some((v) => v !== 0)) lid(q);
+  for (const p of all) { if (!p.shape || !('surf' in p.shape) || !/roof|glass|windscreen|pillar|deck lid/i.test(p.name)) continue; const pt = p.shape.surf; let got = overhead.get(pt); if (!got) { got = patchPoints(pt, 24, 12, false).filter((q) => Math.abs(q[2]) < 0.35); overhead.set(pt, got); } pts.push(...got); }
   return (x) => { let y = Infinity; for (const q of pts) if (Math.abs(q[0] - x) < 0.06 && q[1] > 0.6 && q[1] < y) y = q[1]; return y; };
 }
 /** The body's sides from inside: at x and height y, the least half-width of its skins that face sideways there (its
@@ -736,4 +757,54 @@ export function practise<K extends keyof BodyRules>(rule: K, values: BodyRules[K
   const better = tried.filter((t) => t.on < now.on && t.held < now.held).sort((a, b) => a.on + a.held - (b.on + b.held))[0];
   if (!better) return { kept: base[rule], tried, update: null };
   return { kept: better.value, tried, update: { n: RULE_UPDATES.length + 1, rule: String(rule), found: `on ${on.length} bodies the critic scored ${now.on.toFixed(0)}, on ${heldOut.length} it had not seen ${now.held.toFixed(0)}`, was: JSON.stringify(base[rule]), now: `${JSON.stringify(better.value)} (scored ${better.on.toFixed(0)} and ${better.held.toFixed(0)})` } };
+}
+
+// ---- reading a finished skin: what is fitted onto it (a body kit) is fitted to the skin as made ---------------------------
+/** The painted skins as points, each with the way it faces (its lamps, glass, liners and seams left out). */
+export interface Skin { pts: { at: V3; n: V3; of: string }[] }
+type SkinPt = Skin['pts'][number];
+const grids = new WeakMap<Skin, PointGrid<SkinPt>>(), INF = 1e9;
+/** The skin's points inside a box (open where a bound is ±INF), found by its spatial index (built once for the skin). */
+export function skinIn(s: Skin, lo: [number, number, number], hi: [number, number, number]): SkinPt[] {
+  let g = grids.get(s); if (!g) { g = new PointGrid(s.pts, (q) => q.at, 0.05); grids.set(s, g); } return g.inBox(lo, hi);
+}
+const skinPtsAt = new Map<number, WeakMap<Patch, { at: V3; n: V3 }[]>>();
+export function skinOf(parts: Part[]): Skin {
+  const pts: Skin['pts'] = [];
+  // (and the skins of what is built round them, a door, the hood, the deck lid: groups drawn where they stand)
+  const all: Part[] = []; const walk = (q: Part) => { all.push(q); if (!q.shape && !q.rot && !(q.at ?? [0, 0, 0]).some((v) => v !== 0)) q.parts?.forEach(walk); };
+  parts.forEach(walk);
+  for (const p of all) {
+    if (!p.shape || !('surf' in p.shape) || /liner|wheelhouse|handle|lamp|light|grille|glass|windscreen|plate|seam|shut line|mirror/.test(p.name)) continue;
+    // (sampled as finely as the detail now asks: 64 × 32 as designed)
+    const pt = p.shape.surf, d = detail(), nu = divisions(64, 8), nv = divisions(32, 4), skinPts = skinPtsAt.get(d) ?? skinPtsAt.set(d, new WeakMap()).get(d)!; let got = skinPts.get(pt);
+    if (!got) { got = []; for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) { const q = patchAt(pt, i / nu, j / nv); got.push({ at: q.at, n: q.n }); } skinPts.set(pt, got); }
+    for (const q of got) pts.push({ ...q, of: p.name });
+  }
+  return { pts };
+}
+/** Round a wheel on the right side, seen from the side: at each angle over its axle (from ahead of it, 0, over the top,
+ *  to behind it, π), how far from its axle the skin's opening is (the arch's lip), and how far out the skin is there. */
+export function archLip(s: Skin, x0: number, y0: number, R: number, angles: number[]): { a: number; r: number; z: number }[] {
+  const side = skinIn(s, [x0 - R - 0.36, y0 - R - 0.36, 0.2], [x0 + R + 0.36, y0 + R + 0.36, INF]).filter((q) => Math.abs(q.n[2]) > 0.3);
+  return angles.map((a) => {
+    let r = Infinity, z = 0;
+    for (const q of side) { const dx = q.at[0] - x0, dy = q.at[1] - y0, d = Math.hypot(dx, dy); if (d < R * 0.95 || d > R + 0.35) continue;
+      const qa = Math.atan2(dy, dx); if (Math.abs(qa - a) > 0.04) continue; if (d < r) { r = d; z = q.at[2]; } }
+    return { a, r, z };
+  });
+}
+/** Along its length at x, the skin's lowest point on the right side (its rocker, its bumpers' foot), and how far out it is
+ *  there; and the highest point near its middle (its hood, roof or deck). */
+export function lowAt(s: Skin, x: number): { y: number; z: number } {
+  let y = Infinity, z = 0; for (const q of skinIn(s, [x - 0.03, -INF, 0.1], [x + 0.03, INF, INF])) if (q.at[2] > 0.1 && Math.abs(q.at[0] - x) < 0.03 && q.at[1] < y) { y = q.at[1]; z = q.at[2]; } return { y, z };
+}
+export function topAt(s: Skin, x: number): number { let y = -Infinity; for (const q of skinIn(s, [x - 0.03, -INF, -0.25], [x + 0.03, INF, 0.25])) if (Math.abs(q.at[2]) < 0.25 && Math.abs(q.at[0] - x) < 0.03 && q.n[1] > 0.3) y = Math.max(y, q.at[1]); return y; }
+/** At height y, its outline in plan at the front (the most forward point of the skin, every 5 cm across it) or the back. */
+export function endAt(s: Skin, y: number, front: boolean): [number, number][] {
+  // (only its own end: where the skin there is within 25 cm of its very end, so its sides by the wheels are not taken)
+  const best = new Map<number, number>(), here = skinIn(s, [front ? 0 : -INF, y - 0.03, -INF], [front ? INF : 0, y + 0.03, INF]).filter((q) => Math.abs(q.at[1] - y) <= 0.03 && (front ? q.at[0] > 0 : q.at[0] < 0));
+  const most = front ? Math.max(...here.map((q) => q.at[0])) : Math.min(...here.map((q) => q.at[0]));
+  for (const q of here) { const k = Math.round(q.at[2] / 0.05); const was = best.get(k); if (was === undefined || (front ? q.at[0] > was : q.at[0] < was)) best.set(k, q.at[0]); }
+  return [...best].filter(([, x]) => Math.abs(x - most) < 0.25).sort((a, b) => a[0] - b[0]).map(([k, x]) => [x, k * 0.05]);
 }

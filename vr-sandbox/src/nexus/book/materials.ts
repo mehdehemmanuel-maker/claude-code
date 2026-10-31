@@ -1,4 +1,4 @@
-// The book, materials: the kept laws (src/ganglia/laws.ts) as terms. Every term is SI; the ports say the
+// The book, materials: the kept laws as terms (closures in src/ganglia/laws.ts until docs/REALITY.md step 3). Every term is SI; the ports say the
 // units people write. Metadata is the kept data's own; the terms and domains are written here.
 
 import { L } from './define';
@@ -12,6 +12,51 @@ export const MATERIALS = [
     inputs: [["E", "Pa", "elastic modulus"], ["eps", "-", "strain"]], output: ["sigma", "Pa", "stress"],
     term: (v) => mul(v.E, v.eps),
     source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015", kind: "textbook" }, example: { inputs: {"E":200000000000,"eps":0.001}, output: 200000000 },
+  }),
+  L({
+    id: "bar.axial-stiffness", name: "Axial stiffness of a bar", statement: "A bar pulled or pushed along its length gives by the force times its length over its modulus and its section, so its stiffness is E A over L: Hooke's law over the whole bar.", formula: "k = E A / L",
+    valid: "Linear elastic range; a uniform bar loaded along its axis, not buckled.",
+    inputs: [["E", "Pa", "elastic modulus"], ["A", "m^2", "section"], ["L", "m", "length"]], output: ["k", "N/m", "stiffness"],
+    term: (v) => div(mul(v.E, v.A), v.L),
+    source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, eq. 4-4", kind: "textbook" }, example: { inputs: {"E":200000000000,"A":0.0001,"L":1}, output: 20000000 },
+  }),
+  // (what a frame's beams are made of, each from the book: Frame analysis reads every section and stiffness through these)
+  L({
+    id: "section.circle.area", name: "Area of a circle", statement: "A round section of radius r has area π r².", formula: "A = π r²",
+    valid: "A solid round section.", inputs: [["r", "m", "radius"]], output: ["A", "m^2", "area"],
+    term: (v) => mul(PI(), pow(v.r, 2)),
+    source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, table A-18", kind: "textbook" }, example: { inputs: { r: 0.01 }, output: 0.0003141592653589793 },
+  }),
+  L({
+    id: "section.circle.second-moment", name: "Second moment of a circle", statement: "About any diameter a solid round section has second moment π r⁴ / 4.", formula: "I = π r⁴ / 4",
+    valid: "A solid round section.", inputs: [["r", "m", "radius"]], output: ["I", "m^4", "second moment"],
+    term: (v) => div(mul(PI(), pow(v.r, 4)), k(4)),
+    source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, table A-18", kind: "textbook" }, example: { inputs: { r: 0.01 }, output: 7.853981633974483e-09 },
+  }),
+  L({
+    id: "section.circle.polar-moment", name: "Polar moment of a circle", statement: "About its axis a solid round section has polar moment π r⁴ / 2, which is also its torsion constant.", formula: "J = π r⁴ / 2",
+    valid: "A solid round section.", inputs: [["r", "m", "radius"]], output: ["J", "m^4", "polar moment"],
+    term: (v) => div(mul(PI(), pow(v.r, 4)), k(2)),
+    source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, table A-18", kind: "textbook" }, example: { inputs: { r: 0.01 }, output: 1.5707963267948965e-08 },
+  }),
+  L({
+    id: "section.rect.torsion-constant", name: "Torsion constant of a rectangle", statement: "A solid rectangle twisted resists as its torsion constant, a c³ (1/3 − 0.21 (c/a)(1 − c⁴ / 12 a⁴)), a its longer side and c its shorter: less than its polar moment, as its corners carry little.", formula: "J = a c³ (1/3 − 0.21 (c/a)(1 − c⁴/(12 a⁴)))",
+    valid: "A solid rectangle, a ≥ c; within about 4 % of the exact series.", inputs: [["a", "m", "longer side"], ["c", "m", "shorter side"]], output: ["J", "m^4", "torsion constant"],
+    term: (v) => mul(mul(v.a, pow(v.c, 3)), sub(k(1 / 3), mul(mul(k(0.21), div(v.c, v.a)), sub(k(1), div(pow(v.c, 4), mul(k(12), pow(v.a, 4))))))),
+    domain: (v) => [{ says: "its longer side given as a", holds: ge(v.a, v.c) }],
+    source: { cite: "Young & Budynas, Roark's Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002, table 10.7 (solid rectangular section)", kind: "textbook" }, example: { inputs: { a: 0.04, c: 0.02 }, output: 7.324166666666669e-08, rel: 1e-12 },
+  }),
+  L({
+    id: "shaft.torsional-stiffness", name: "Torsional stiffness of a bar", statement: "A uniform bar twisted turns by the torque times its length over G J, so its stiffness in twist is G J over L.", formula: "k = G J / L",
+    valid: "Linear elastic; a uniform bar twisted about its axis, its ends free to warp.", inputs: [["G", "Pa", "shear modulus"], ["J", "m^4", "torsion constant"], ["L", "m", "length"]], output: ["k", "N m", "stiffness in twist, per radian"],
+    term: (v) => div(mul(v.G, v.J), v.L),
+    source: { cite: "Budynas & Nisbett, Shigley's Mechanical Engineering Design, 10th ed., McGraw-Hill 2015, ch. 4 (torsion)", kind: "textbook" }, example: { inputs: { G: 80e9, J: 1e-8, L: 1 }, output: 800 },
+  }),
+  L({
+    id: "beam.flexural-stiffness", name: "Flexural stiffness of a beam", statement: "A uniform beam bent between its two ends resists as E I over L: each of its end stiffnesses is a whole multiple of it, 4 E I/L and 2 E I/L turning, 6 E I/L² and 12 E I/L³ across.", formula: "k = E I / L",
+    valid: "Linear elastic, small movements, slender (shear left out: Euler and Bernoulli).", inputs: [["E", "Pa", "elastic modulus"], ["I", "m^4", "second moment"], ["L", "m", "length"]], output: ["k", "N m", "flexural stiffness"],
+    term: (v) => div(mul(v.E, v.I), v.L),
+    source: { cite: "Przemieniecki, Theory of Matrix Structural Analysis, McGraw-Hill 1968, ch. 5 (the beam element's stiffness)", kind: "textbook" }, example: { inputs: { E: 200e9, I: 1e-8, L: 1 }, output: 2000 },
   }),
   L({
     id: "stress.von-mises", name: "Von Mises stress", statement: "A ductile metal under bending and twisting together yields when root(σ^2 + 3 τ^2) reaches its yield strength.", formula: "σ' = √(σ² + 3τ²)",
@@ -47,6 +92,7 @@ export const MATERIALS = [
     valid: "A lower (Reuss) bound; carbon fibre is itself much less stiff across than along, which lowers it further.",
     inputs: [["Vf", "-", "fibre volume fraction"], ["Ef", "Pa", "fibre modulus (transverse)"], ["Em", "Pa", "matrix modulus"]], output: ["E", "Pa", "transverse modulus"],
     term: (v) => div(k(1), add(div(v.Vf, v.Ef), div(sub(k(1), v.Vf), v.Em))),
+    domain: (v) => [{ says: 'a fibre fraction between 0 and about 0.7 (what can be packed)', holds: and(ge(v.Vf, k(0)), le(v.Vf, est('greatest fibre fraction', 0.7, '1', 'the most fibre that can be packed'))) }],
     source: { cite: "Hull & Clyne, An Introduction to Composite Materials, 2nd ed., Cambridge 1996", kind: "textbook" }, example: { inputs: {"Vf":0.3,"Ef":60000000000,"Em":2400000000}, output: 3370786516.853933 },
   }),
   L({

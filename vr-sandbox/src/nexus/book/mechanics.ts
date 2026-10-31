@@ -1,4 +1,4 @@
-// The book, mechanics: the kept laws (src/ganglia/laws.ts) as terms. Every term is SI; the ports say the
+// The book, mechanics: the kept laws as terms (closures in src/ganglia/laws.ts until docs/REALITY.md step 3). Every term is SI; the ports say the
 // units people write. Metadata is the kept data's own; the terms and domains are written here.
 
 import { L } from './define';
@@ -40,6 +40,7 @@ export const MECHANICS = [
     valid: "A grade of p% is θ = atan(p/100).",
     inputs: [["m", "kg", "mass"], ["theta", "rad", "slope angle"]], output: ["F", "N", "grade force"],
     term: (v) => mul(v.m, CONST.g, sin(v.theta)),
+    domain: (v) => [{ says: 'a slope between straight down and straight up: −90° ≤ θ ≤ 90°', holds: and(ge(v.theta, k(-Math.PI / 2)), le(v.theta, k(Math.PI / 2))) }],
     source: { cite: "Gillespie, Fundamentals of Vehicle Dynamics, SAE 1992, ch. 4 (rolling resistance); Engineering ToolBox, Rolling Resistance", kind: "textbook", url: "https://www.engineeringtoolbox.com/rolling-friction-resistance-d_1303.html" }, example: { inputs: {"m":120,"theta":0.049958395721942765}, output: 58.7664877443385 },
   }),
   L({

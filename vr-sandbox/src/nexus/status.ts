@@ -1,4 +1,4 @@
-// The status lattice (docs/NEXUS-RESTART.md Part IX). A value's status says what kind of evidence it rests on; a
+// The status lattice. A value's status says what kind of evidence it rests on; a
 // derivation is as weak as its weakest input. There is no default: a variable with no evidence is `unknown`, and an
 // unknown stays unknown through every derivation.
 
@@ -28,5 +28,3 @@ export const rank = (s: Status) => STATUS_ORDER.indexOf(s);
 export const weakest = (...s: Status[]): Status => s.reduce((w, x) => (rank(x) > rank(w) ? x : w), 'fundamental');
 /** Statuses that carry a number. */
 export const carriesValue = (s: Status) => rank(s) <= rank('hypothesized');
-/** Statuses that may bind a runtime variable (a hypothesis may not until it is validated). */
-export const mayBind = (s: Status) => rank(s) < rank('hypothesized');

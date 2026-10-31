@@ -6,11 +6,12 @@
 // span and area (f = m^(3/8) g^(1/2) b^(−23/24) S^(−1/3) ρ^(−3/8); Pennycuick 2008). A dragon is fiction: this one is
 // sized as a real flier of its mass would have to be.
 
+import { STANDARD_GRAVITY } from '../data/constants';
 import { addKit, massOf, type Part, type Pick, type V3 } from './kits';
 /** A body's mass as its source gives it: its simple shapes say where the mass is, scaled so the whole weighs what it should. */
 function toMass(p: Part, kg: number): Part { const m = massOf(p), k = m > 0 ? kg / m : 1; const walk = (q: Part) => { if (q.mat === 'tissue') q.fill = (q.fill ?? 1) * k; q.parts?.forEach(walk); }; walk(p); return p; }
 
-const G = 9.80665, RHO = 1.225;
+const G = STANDARD_GRAVITY, RHO = 1.225;
 const P = (name: string, shape: Part['shape'], at: V3, more: Partial<Part> = {}): Part => ({ name, ...(shape ? { shape } : {}), at, ...more });
 /** A leg that swings from its top: an upper and a lower part, so long, so thick, swinging at a point in the stride. */
 const leg = (name: string, at: V3, len: number, r: number, color: number, phase: number, amp = 0.45, axis: 'x' | 'z' = 'z'): Part =>
@@ -120,5 +121,4 @@ addKit({
 });
 
 /** How far a creature's legs and wings go round in a stride (0–1), and so how each swinging part is turned now. */
-export const swingAt = (s: NonNullable<Part['swing']>, t: number, freq: number): number => s.amp * Math.sin(2 * Math.PI * (freq * t + s.phase));
 export type { Pick };

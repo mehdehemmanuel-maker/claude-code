@@ -170,7 +170,6 @@ export const MATTER: Record<string, [string, number, string]> = {
 export const matOf = (m: V) => MATTER[String(m)] ?? MATTER.steel!;
 /** The R20 preferred numbers (ISO 3), 1 to 10. */
 export const R20 = [1, 1.12, 1.25, 1.4, 1.6, 1.8, 2, 2.24, 2.5, 2.8, 3.15, 3.55, 4, 4.5, 5, 5.6, 6.3, 7.1, 8, 9];
-export const r20 = (lo: number, hi: number) => [0.1, 1, 10, 100, 1000, 10000].flatMap((d) => R20.map((x) => +(x * d).toPrecision(3))).filter((x) => x >= lo && x <= hi);
 /** ISO preferred lengths, mm. */
 export const PREF = [2, 2.5, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 30, 32, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 90, 100, 110, 120, 130, 140, 150, 160, 180, 200, 220, 240, 260, 280, 300];
 export const pref = (lo: number, hi: number) => PREF.filter((x) => x >= lo && x <= hi);

@@ -3,6 +3,8 @@
 // and slows down in time to stop on its target (from speed v it needs v² / 2a to stop), so it starts and stops softly
 // and never overshoots. A base on two driven wheels (a differential drive) turns each wheel by how far its side
 // travels: v ∓ ω b / 2 over the wheel's radius, so turning in place spins them opposite ways.
+import { STANDARD_GRAVITY } from '../data/constants';
+
 
 /** One joint's motion along one coordinate (an angle, rad; or a distance, m): where it is, and how fast it goes. */
 export class Servo {
@@ -24,24 +26,7 @@ export class Servo {
 
 /** A joint turning in 3D (a quaternion), driven the same way along the angle between where it points and its target. */
 export interface Quat { x: number; y: number; z: number; w: number }
-export class QServo {
-  vel = 0;
-  constructor(public vmax: number, public amax: number) {}
-  /** How far to turn this step (rad) toward a target the angle `left` away: the trapezoidal step. */
-  step(left: number, dt: number): number {
-    if (left < 1e-5 && this.vel < 1e-5) { this.vel = 0; return left; }
-    const want = Math.min(this.vmax, Math.sqrt(2 * this.amax * left));
-    this.vel += Math.max(-this.amax * dt, Math.min(this.amax * dt, want - this.vel));
-    return Math.min(left, Math.max(0, this.vel * dt));
-  }
-}
-
-/** The angular speed of each wheel of a differential drive (rad/s, left and right) for a speed forward v (m/s) and a
- *  turning rate ω (rad/s, positive to the left), its wheels b apart (m), each of radius r (m). */
-export function wheelSpeeds(v: number, omega: number, b: number, r: number): [number, number] {
-  return [(v - (omega * b) / 2) / r, (v + (omega * b) / 2) / r];
-}
 
 /** How far a body on wheels pitches when it speeds up or slows down: as far as its suspension gives under the inertial
  *  push, a / g of its stiffness angle (rad), forward when it brakes. */
-export const pitchOf = (accel: number, give = 0.35) => Math.max(-0.06, Math.min(0.06, (-accel / 9.80665) * give));
+export const pitchOf = (accel: number, give = 0.35) => Math.max(-0.06, Math.min(0.06, (-accel / STANDARD_GRAVITY) * give));

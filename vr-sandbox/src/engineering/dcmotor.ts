@@ -5,7 +5,7 @@
 // through the thermal resistances on its datasheet. Past its insulation's limit the winding fails open and the motor
 // never runs again. A gearhead multiplies torque by its ratio, less its own losses, and divides speed by it.
 
-import type { GearheadData, MotorData } from '../data/motors';
+import type { MotorData } from '../data/motors';
 import { AMBIENT, heatLoss } from './thermal';
 
 /** Resistance coefficient of annealed copper near room temperature, per K (IEC 60028). */
@@ -91,33 +91,3 @@ export function estimatedThermal(d: MotorData): MotorThermal {
 /** Winding resistance at winding temperature t (deg C). */
 export const windingR = (m: MotorModel, t: number) => m.R25 * (1 + COPPER_ALPHA * (t - 25));
 
-/** Torque at the motor's shaft carrying current I while turning at w: K_t I, less friction against the motion. */
-export function shaftTorque(m: MotorModel, I: number, w: number): number {
-  const against = w !== 0 ? Math.sign(w) : Math.sign(I);
-  return m.Kt * I - m.Tf * against;
-}
-
-/** Torque at a gearhead's output for torque T at the motor turning at w (motor side): its losses go against the power. */
-export function throughGear(T: number, w: number, g: GearheadData | null): number {
-  if (!g) return T;
-  const driving = T * w >= 0;
-  return T * g.ratio * (driving ? g.efficiency : 1 / g.efficiency);
-}
-
-export interface MotorHeat {
-  /** Winding and housing temperatures, deg C. */
-  winding: number;
-  housing: number;
-}
-
-/**
- * One step of the motor's two-node heating (implicit, stable for any dt): copper loss `Pw` into the winding, `Ph`
- * (friction, gear losses) into the housing, the housing cooling to `ambient`.
- */
-export function heatStep(th: MotorThermal, s: MotorHeat, Pw: number, Ph: number, dt: number, ambient = AMBIENT): MotorHeat {
-  // [Cw/dt + 1/Rwh, -1/Rwh; -1/Rwh, Ch/dt + 1/Rwh + 1/Rha] [Tw; Th] = [Cw/dt Tw0 + Pw; Ch/dt Th0 + Ph + Ta/Rha]
-  const a = th.Cw / dt + 1 / th.Rwh, b = -1 / th.Rwh, c = th.Ch / dt + 1 / th.Rwh + 1 / th.Rha;
-  const r1 = (th.Cw / dt) * s.winding + Pw, r2 = (th.Ch / dt) * s.housing + Ph + ambient / th.Rha;
-  const det = a * c - b * b;
-  return { winding: (r1 * c - b * r2) / det, housing: (a * r2 - b * r1) / det };
-}

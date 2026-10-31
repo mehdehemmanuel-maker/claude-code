@@ -70,6 +70,8 @@ function onShape(to: Node, at: THREE.Vector3, margin: number): boolean {
   if ('lathe' in s) return Math.hypot(at.x, at.z) <= Math.max(...s.lathe.map(([r]) => r)) - margin;
   if ('sphere' in s) return at.length() <= s.sphere + margin;
   if ('loft' in s) { const st = stationAt(s.loft, at.x); return !!st && insideBy(st, at.y, at.z * 0.98) > -1e-3 && (surfaceZ(st, at.y) ?? 0) + 0.01 >= Math.abs(at.z) - 0.01; }
+  // (a tube by its run, not its box: a bent or slanted tube's box is mostly air, and a screw laid on it floats)
+  if ('tube' in s) { const q = s.tube.pts.map((x) => new THREE.Vector3(...x)), seg = new THREE.Line3(), near = new THREE.Vector3(); let d = Infinity; for (let i = 1; i < q.length; i++) { seg.set(q[i - 1]!, q[i]!); seg.closestPointToPoint(at, true, near); d = Math.min(d, near.distanceTo(at)); } return d <= s.tube.r + margin; }
   return true;
 }
 /** Whether a fastener's head (a stack r round and h high on host's face at `at`, standing out along its axis k, sign sk)
@@ -271,7 +273,7 @@ export const RULES: DetailRule[] = [
       for (const x of c.nodes) {
         const p = x.p, m = p.mat; if (!m || p.detail || p.finish) continue;
         const f = m === 'wood' || m === 'oak' || m === 'bamboo' ? 'grain' : m === 'brick' ? 'brick' : m === 'concrete' || m === 'render' ? 'concrete' : m === 'tile' ? 'tiles' : m === 'asphalt' ? 'asphalt' : m === 'rubber' ? ('torus' in (p.shape ?? {}) ? 'tread' : 'rubber') : m === 'cotton' || m === 'silk' || m === 'foam' ? 'weave' : m === 'leather' ? 'leather' : m === 'cast-iron' ? 'cast' : /^al-/.test(m) && !p.make ? 'brushed' : classOf(m) === 'metal' ? 'paint' : m === 'granite' || m === 'marble' ? 'stone' : classOf(m) === 'polymer' && m !== 'pc' && m !== 'pmma' ? 'texture' : null;
-        if (f) { p.finish = f; n++; }
+        if (f) { p.finish = f; p.finishBy = 'finishes'; n++; }
       }
       return n;
     },
@@ -445,7 +447,7 @@ export const RULES: DetailRule[] = [
         // back where its glass is and rounded in front, on a short stalk from the door (typical of a car's)
         // (its back flat where its glass lies, 30 mm in from each end: the glass on it, not sunk at one end and off it at the other)
         const head = [{ x: 0, w: 0.032, lo: -0.04, hi: 0.035, n: 3 }, { x: 0.03, w: 0.046, lo: -0.056, hi: 0.05, n: 3 }, { x: 0.19, w: 0.046, lo: -0.062, hi: 0.056, n: 3 }, { x: 0.22, w: 0.028, lo: -0.045, hi: 0.04, n: 3 }];
-        for (const side of [-1, 1]) { const mp = put(T, 'road kit', { name: 'wing mirror', shape: { loft: { st: head } }, mat: 'abs', color: body?.p.color ?? 0x1a1a1a, shell: 0.0025, finish: 'paint', parts: [{ name: 'mirror glass', shape: { box: [0.15, 0.09, 0.003] }, at: [0.11, 0, side * 0.0498], mat: 'glass', color: 0xc8d4dc, finish: 'chrome', detail: 'road kit', fixed: 'bonded to its backing plate on the mirror\'s housing' }, { name: 'mirror stalk', shape: { box: [0.06, 0.035, 0.05] }, at: [-0.025, -0.035, 0], mat: 'abs', color: 0x161616, finish: 'texture', detail: 'road kit', fixed: 'bolted through its foot to its door' }] }, new THREE.Vector3(mx, mY, side * (side0 - 0.05)), 2, side); mp.rot = [0, -side * Math.PI / 2, 0]; n++; }
+        for (const side of [-1, 1]) { const mp = put(T, 'road kit', { name: 'wing mirror', shape: { loft: { st: head } }, mat: 'abs', color: T.p.mirrors ?? body?.p.color ?? 0x1a1a1a, shell: 0.0025, finish: 'paint', parts: [{ name: 'mirror glass', shape: { box: [0.15, 0.09, 0.003] }, at: [0.11, 0, side * 0.0498], mat: 'glass', color: 0xc8d4dc, finish: 'chrome', detail: 'road kit', fixed: 'bonded to its backing plate on the mirror\'s housing' }, { name: 'mirror stalk', shape: { box: [0.06, 0.035, 0.05] }, at: [-0.025, -0.035, 0], mat: 'abs', color: 0x161616, finish: 'texture', detail: 'road kit', fixed: 'bolted through its foot to its door' }] }, new THREE.Vector3(mx, mY, side * (side0 - 0.05)), 2, side); mp.rot = [0, -side * Math.PI / 2, 0]; n++; }
       }
       return n;
     },
@@ -500,7 +502,7 @@ export function addDetails(root: Part, cond: Conditions, on: (r: DetailRule) => 
     if (!on(r)) continue;
     // laid out afresh for each rule: what one adds, the next can see
     // (a part designed whole, a component from the library, is fitted as it comes: nothing laid on it or in it)
-    const nodes = layout(root).filter((n) => !sealedIn(n)), all = new THREE.Box3(), grown = grownOf(nodes); for (const x of nodes) if (x.box) all.union(x.box);
+    const nodes = layout(root, undefined, { sealedWhole: true }).filter((n) => !sealedIn(n)), all = new THREE.Box3(), grown = grownOf(nodes); for (const x of nodes) if (x.box) all.union(x.box);
     const m0 = massOf(root), ctx: Ctx = { ...base, living: grown, nodes, touch: r.id === 'joints' ? contacts(nodes, engineered) : [], centre: all.isEmpty() ? new THREE.Vector3() : all.getCenter(new THREE.Vector3()), size: all.isEmpty() ? 1 : all.getSize(new THREE.Vector3()).length(), mass: massOf(root) };
     counts[r.id] = r.run(ctx); base.doors = ctx.doors; kg[r.id] = massOf(root) - m0;
   }
@@ -508,4 +510,5 @@ export function addDetails(root: Part, cond: Conditions, on: (r: DetailRule) => 
 }
 /** A thing without the details a pipeline added (to add them again after it is changed). */
 /** (what the critic cut, an opening for a wheel, is a change to the thing itself, and stays) */
-export function stripDetails(p: Part): Part { if (p.sealed) return p; return { ...p, parts: p.parts?.filter((q) => !q.detail || q.detail === 'room to move').map(stripDetails), finish: undefined, wear: undefined }; }
+// (only the finishes it chose itself, by material: a finish its maker gave a part (a wheel painted, not polished) stays)
+export function stripDetails(p: Part): Part { if (p.sealed) return p; return { ...p, parts: p.parts?.filter((q) => !q.detail || q.detail === 'room to move').map(stripDetails), finish: p.finishBy ? undefined : p.finish, finishBy: undefined, wear: undefined }; }

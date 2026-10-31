@@ -10,10 +10,16 @@
 // carry something units cannot know (Kleiber's ¾ from a network's geometry, Basquin's exponent from a metal).
 
 import { BOOK, lawById, lawByHash } from './book';
-import { dimOf, integerNullSpace, sameDim, type Dim } from './dimension';
+import { dimOf, integerNullSpace, sameDim } from './dimension';
 import { evaluate, ofLeaf, type Derivation } from './evaluate';
-import { apply, invert, type Law } from './law';
-import { div, leaf, mul, OPERATORS, pow, substitute, variable, type Term } from './term';
+import { apply, invert, invertFound, type Law, type Port } from './law';
+import { bindsOf, div, leaf, mul, OPERATORS, pow, substitute, variable, varsOf, type Term } from './term';
+import { bracketsOf, integrate, solveLinear, type Found } from './numeric';
+import { calc } from './generate';
+import { isPlain, quantityById, quantityOf, type QuantityDef } from './quantities';
+import { KINDS } from './book/kinds';
+import type { Status } from './status';
+import { CONST } from './book/constants';
 import { fromSI, parseUnit } from '../ganglia/units';
 
 // ---- records ----------------------------------------------------------------------------------------------------------
@@ -53,9 +59,34 @@ export function solve(id: string, sym: string, env: Record<string, Derivation>, 
     const t = mul(one, p === 1 ? div(outVar, rest) : pow(div(outVar, rest), 1 / p));
     return evaluate(name ?? port.name, t, { ...env }, { law: l.hash, unit: port.unit });
   }
-  if (!bracket) throw new Error(`${id}: ${sym} is not a power in it; give a bracket to invert in`);
-  const x = invert(l, sym, out.value!, env, bracket, (n, v, un) => setting(n, v, un, 'the inversion'));
-  return x === null ? ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown' })) : ofLeaf(leaf(name ?? port.name, fromSI(x, port.unit), port.unit, { class: 'assumed', by: 'the law graph', grounds: `${l.name} solved numerically for ${port.name}` }));
+  // the search and the inversion run the law's term without its domain, so a narrow domain does not hide the answer;
+  // whether the law holds at the answer is the caller's to check (the law node puts it back)
+  const free: Law = { ...l, domain: [] }, target = out.value!;
+  const f = (x: number) => { const d = apply(free, { ...env, [sym]: setting(port.name, x, port.unit, 'the search') }); return d.value === null ? NaN : d.value - target; };
+  let also = '', r: Found | null = null;
+  const mk = (n: string, v: number, un: string) => setting(n, v, un, 'the inversion');
+  if (!bracket) {
+    // no bracket given: look for every one, the law's output against the target over every decade; take the first whose
+    // answer the law holds at, else the first
+    const all = bracketsOf(f);
+    if (!all.length) return ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown', by: 'the law graph', grounds: `no value of ${port.name} from −10⁴⁰ to 10⁴⁰ makes ${l.name} give ${says(out)}` }));
+    const tries = all.slice(0, 12).map((b) => (b[0] === b[1] ? { value: b[0], converged: true, iterations: 0, evaluations: 0, error: 0, method: 'the search' } : invertFound(free, sym, target, env, b, mk, { ftol: 0 }))).filter((t) => t.value !== null);
+    // a root is where the law gives the target, not where it changes sign through a pole (1/(1/f − 1/d) at f = d)
+    const tries2 = tries.filter((t) => Math.abs(f(t.value!)) <= 1e-6 * Math.max(Math.abs(target), 1e-300));
+    const holds = (t: { value: number | null }) => apply(l, { ...env, [sym]: setting(port.name, t.value!, port.unit, 'the check') }).status !== 'outside-validity';
+    r = tries2.find(holds) ?? tries2[0] ?? null;
+    const good = tries2.filter(holds).length;
+    if (tries2.length > 1) also = `; one of ${tries2.length} values that solve it (${good} where the law holds; the positive one nearest 1 ${port.unit || ''} where it holds is taken: set a range to choose another)`;
+  } else {
+    if (!(f(bracket[0]) * f(bracket[1]) <= 0)) return ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown', by: 'the law graph', grounds: `no value of ${port.name} from ${bracket[0]} to ${bracket[1]} ${port.unit} makes ${l.name} give ${says(out)}` }));
+    r = invertFound(free, sym, target, env, bracket, mk, { ftol: 0 });
+  }
+  let x = r?.value ?? null;
+  // an answer a rounding away from an exact zero of the law is that zero
+  if (x !== null && x !== 0 && Math.abs(x) < 1e-8 && f(0) === 0) x = 0;
+  if (x === null || !r) return ofLeaf(leaf(name ?? port.name, null, port.unit, { class: 'unknown', by: 'the law graph', grounds: r?.warning ?? 'the inversion found nothing' }));
+  // (the inversion works in the port's own unit, as the value is set)
+  return ofLeaf(leaf(name ?? port.name, x, port.unit, { class: 'assumed', by: 'the law graph', grounds: `${l.name} solved numerically for ${port.name} by ${r.method}, ${r.converged ? 'converged' : 'not converged'} in ${r.iterations} steps (±${r.error.toPrecision(2)} ${port.unit || 'in its unit'})${also}` }));
 }
 /** A record's value in a unit. */
 export const valueIn = (d: Derivation, unit = d.unit): number | null => (d.value === null ? null : fromSI(d.value, unit));
@@ -91,101 +122,12 @@ export function leavesUnder(d: Derivation, out: Derivation[] = []): Derivation[]
   return out;
 }
 
-// ---- principles ---------------------------------------------------------------------------------------------------------
-export const PRINCIPLES = {
-  'conservation of mass': 'what goes in comes out or stays: atoms are neither made nor lost',
-  'conservation of energy': 'energy changes form and moves but is never made or lost (the first law)',
-  'conservation of momentum': 'a push is a change of momentum, and every push has its equal push back',
-  'conservation of charge': 'charge flows but is never made or lost',
-  counting: 'things counted through a steady system: what it holds is what flows through it times how long each stays',
-  'the Boltzmann factor': 'a state an energy E above another is e^(−E/kT) as likely: why everything goes faster warm',
-  'the random walk': 'molecules wander at random, so they spread as the square root of time',
-  equilibrium: 'at equilibrium nothing can lower its free energy further: gradients, solubility, vapour pressure, osmosis',
-  'the second law': 'entropy does not fall: there is a least work for every separation and a most work from every heat',
-  geometry: 'lengths, areas and volumes, and how they scale',
-  'least dissipation': 'a network that grew to waste least power: branching radii, space-filling trees',
-  gravitation: 'masses pull each other: weight, pressure with depth, buoyancy',
-  electromagnetism: 'charges and currents push each other and make fields',
-  waves: 'light and sound bend, diffract and interfere',
-  quanta: 'light and matter come in quanta of h ν',
-  elasticity: 'a solid pushes back in proportion to how far it is strained, until it yields',
-  'fit to data': 'a relation fitted to measurements, its constants from its data: the kind of law a principle should one day replace',
-} as const;
-export type Principle = keyof typeof PRINCIPLES;
-const P = (...p: Principle[]) => p;
-/** What each law rests on. */
-export const RESTS: Record<string, Principle[]> = {
-  // the universal book
-  'balance.steady': P('conservation of mass'), 'balance.difference': P('conservation of mass'), 'junction.sum': P('conservation of mass'), 'transport.advection': P('conservation of mass'), 'flux.area': P('conservation of mass', 'geometry'), 'total.mass': P('counting'), 'total.flow': P('counting'), 'total.rate': P('counting'), 'rate.per-mass': P('counting'), 'share.of': P('conservation of mass'), 'residence.mass': P('counting', 'conservation of mass'), 'amount.concentration': P('counting'), 'power.molar': P('conservation of energy'), 'mass.flow': P('conservation of mass'), 'time.scaled-by-rate': P('counting'), 'concentration.difference': P('conservation of mass'), 'humidity.vapour-pressure': P('equilibrium'), 'rates.add': P('counting'), 'hazard.dose': P('fit to data'), 'stages.series': P('counting'), 'moles.of-mass': P('counting'), 'faraday.flux': P('conservation of charge'), 'radiation.linear': P('quanta', 'the Boltzmann factor'), 'conductance.parallel': P('conservation of energy'), 'power.net': P('conservation of energy'), 'power.sum': P('conservation of energy'), 'energy.power-time': P('conservation of energy'), 'dose.time': P('counting'), 'life.expectancy.gompertz-makeham': P('fit to data', 'counting'), 'molar.mass-flow': P('conservation of mass'), 'volume.ellipsoid': P('geometry'), 'area.sphere-of-volume': P('geometry'), 'area.shaped': P('geometry'), 'power.per-mass': P('counting'), 'volume.of-box': P('geometry'), 'reaction.rate-from-power': P('conservation of energy'), 'residence.stock': P('counting', 'conservation of mass'), 'stoichiometry.mass': P('conservation of mass'), 'heat.latent-flow': P('conservation of energy'),
-  'distance.speed-time': P('geometry'), 'volume.cylinder': P('geometry'), 'mass.volume': P('geometry'), 'mixing.density': P('conservation of mass', 'geometry'),
-  'starling.filtration': P('conservation of momentum', 'equilibrium'), poiseuille: P('conservation of momentum'), 'murray.branching': P('least dissipation'), 'network.scaling': P('least dissipation', 'geometry'), 'kleiber.scaling': P('least dissipation', 'fit to data'),
-  'diffusion.front': P('the random walk', 'conservation of mass'), 'diffusion.erf': P('the random walk'), 'diffusion.sphere-limit': P('the random walk', 'conservation of mass'),
-  'osmotic.van-t-hoff': P('equilibrium'), 'free-energy.gradient': P('equilibrium'), 'henry.solubility': P('equilibrium'), 'gas.concentration': P('the Boltzmann factor'), 'vapour.pressure': P('equilibrium', 'the Boltzmann factor'), 'sorption.gab': P('equilibrium', 'fit to data'),
-  'arrhenius.ratio': P('the Boltzmann factor'), 'decay.first-order': P('counting'), 'loss.first-order': P('counting'), 'total.volume': P('counting'), 'stoichiometry.moles': P('conservation of mass'), 'saturation.share': P('counting'), 'half-life': P('counting'), 'growth.doubling': P('counting'), 'mortality.gompertz': P('fit to data'),
-  'column.self-weight': P('gravitation', 'geometry'), 'fatigue.basquin': P('fit to data'), 'conduction.series': P('conservation of energy'), 'evaporation.max': P('conservation of energy', 'the random walk'), 'laplace.pressure': P('conservation of energy', 'geometry'), 'stokes.drag': P('conservation of momentum'),
-  'corrosion.penetration': P('conservation of charge', 'conservation of mass'), 'porosity.powers': P('conservation of mass', 'fit to data'), 'diffusivity.papadakis': P('the random walk', 'fit to data'),
-  // the kept book
-  'fick.diffusion': P('the random walk'), 'diffusion.time': P('the random walk'), nernst: P('equilibrium'), 'gibbs.energy': P('equilibrium'), 'michaelis-menten': P('counting', 'equilibrium'), 'faraday.electrolysis': P('conservation of charge', 'conservation of mass'), 'butler-volmer': P('the Boltzmann factor'),
-  ohm: P('electromagnetism'), joule: P('conservation of energy'), 'wire.resistance': P('electromagnetism', 'geometry'), 'copper.tempco': P('fit to data'), 'wire.drop': P('electromagnetism'), 'motor.torque': P('electromagnetism'), 'motor.back-emf': P('electromagnetism'), 'motor.current': P('electromagnetism'), 'motor.time-constant': P('conservation of momentum'),
-  'lead-acid.ocv': P('fit to data'), 'energy.electric': P('conservation of energy'), 'rc.time-constant': P('electromagnetism'), 'capacitor.energy': P('conservation of energy'), 'inductor.energy': P('conservation of energy'), 'power.electric': P('conservation of energy'), 'electrostatic.pull': P('electromagnetism'), 'cmos.dynamic': P('conservation of energy'), seebeck: P('fit to data'), 'strain.gauge': P('elasticity'),
-  'pv.power': P('conservation of energy'), 'coulomb.law': P('electromagnetism'), 'shockley.diode': P('the Boltzmann factor'), 'wave.speed.electromagnetic': P('electromagnetism', 'waves'), 'cable.equation': P('electromagnetism'),
-  'drag.aero': P('conservation of momentum'), 'lift.aero': P('conservation of momentum'), 'gas.isothermal-work': P('conservation of energy'), reynolds: P('conservation of momentum'), 'darcy-weisbach': P('conservation of momentum', 'fit to data'), buoyancy: P('gravitation'), hydrostatic: P('gravitation'), 'thrust.ideal-static': P('conservation of momentum', 'conservation of energy'), 'acoustic.mass-law': P('waves', 'conservation of momentum'),
-  bernoulli: P('conservation of energy'), continuity: P('conservation of mass'), landauer: P('the second law'), 'information.choices': P('counting'), 'rayleigh.resolution': P('waves'), 'diffraction.limit': P('waves'), 'shannon.capacity': P('counting'), 'shannon.sampling': P('waves'), queueing: P('counting'),
-  'lorentz.force': P('electromagnetism'), 'magnetic.pull': P('electromagnetism'), 'skin.depth': P('electromagnetism'), 'ampere.law': P('electromagnetism'), 'faraday.induction': P('electromagnetism'),
-  hooke: P('elasticity'), 'stress.von-mises': P('elasticity'), 'thermal.expansion': P('fit to data'), 'fatigue.endurance.steel': P('fit to data'), 'composite.rule-of-mixtures': P('elasticity'), 'composite.transverse': P('elasticity'), 'sinter.scale': P('geometry'), 'piezo.stroke': P('electromagnetism', 'elasticity'), 'young.contact': P('equilibrium'), 'carbonation.capacity': P('conservation of mass'), griffith: P('conservation of energy', 'elasticity'), 'hall-petch': P('fit to data'),
-  'newton.second': P('conservation of momentum'), weight: P('gravitation'), 'friction.coulomb': P('fit to data'), 'rolling.resistance': P('fit to data'), 'grade.force': P('gravitation', 'geometry'), 'power.linear': P('conservation of energy'), 'power.rotary': P('conservation of energy'), 'wheel.torque': P('conservation of momentum'), 'traction.limit': P('fit to data'),
-  'energy.kinetic': P('conservation of energy'), 'energy.potential': P('conservation of energy', 'gravitation'), 'braking.distance': P('conservation of energy'), 'cornering.limit': P('conservation of momentum'), 'pendulum.period': P('gravitation', 'conservation of energy'), 'natural.frequency': P('elasticity', 'conservation of momentum'), centripetal: P('conservation of momentum', 'geometry'),
-  'inertia.disc': P('geometry'), 'inertia.rod-end': P('geometry'), 'parallel-axis': P('geometry'), 'energy.rotational': P('conservation of energy'), 'free-fall.speed': P('conservation of energy', 'gravitation'), 'flywheel.specific-energy': P('elasticity', 'conservation of energy'), 'spring.energy': P('conservation of energy', 'elasticity'),
-  'time.dilation.gravity': P('gravitation'), 'sound.speed': P('elasticity', 'waves'), 'conservation.momentum': P('conservation of momentum'), 'hill.muscle': P('fit to data'), froude: P('gravitation', 'conservation of energy'), tsiolkovsky: P('conservation of momentum'), 'planck.energy': P('quanta'), 'snell.law': P('waves'), 'bragg.law': P('waves'),
-  'stress.axial': P('elasticity'), 'stress.bending': P('elasticity'), 'beam.simply-supported.udl': P('elasticity'), 'beam.simply-supported.point': P('elasticity'), 'beam.cantilever.point': P('elasticity'), 'buckling.euler': P('elasticity'), 'torsion.solid': P('elasticity'), 'torsion.twist': P('elasticity'), 'buckling.johnson': P('elasticity', 'fit to data'), 'slenderness.transition': P('elasticity'), 'stress.hoop': P('conservation of momentum'), 'weld.fillet.shear': P('elasticity'), 'beam.plastic-moment': P('elasticity'),
-  convection: P('conservation of energy', 'fit to data'), conduction: P('conservation of energy', 'the random walk'), 'convection.natural': P('fit to data'), radiation: P('quanta', 'the Boltzmann factor'), 'heat.capacity': P('conservation of energy'), 'lumped.time-constant': P('conservation of energy'), 'thermal.network': P('conservation of energy'), 'thermal.resistance.conduction': P('conservation of energy'),
-  'shaft.diameter.static': P('elasticity'), 'bearing.life.l10': P('fit to data'), 'bearing.life.hours': P('counting'), 'spring.rate': P('elasticity'), capstan: P('conservation of momentum', 'fit to data'), 'chain.speed': P('geometry'), 'chain.pull': P('conservation of momentum'), 'gear.output.torque': P('conservation of energy'), 'bolt.torque.nut-factor': P('fit to data'), 'belt.speed': P('geometry'), 'screw.force': P('conservation of energy'), 'gear.lewis': P('elasticity'), 'spring.torsion.rate': P('elasticity'), 'screw.efficiency': P('conservation of energy'), 'hertz.contact': P('elasticity'), grubler: P('geometry'),
-  'mass.prism': P('geometry'), 'extent.from-mass': P('geometry'), 'weight.per-length': P('gravitation'), 'statics.two-supports.symmetric': P('conservation of momentum'), 'beam.simply-supported.central-patch.moment': P('conservation of momentum'), 'beam.overhang.self-moment': P('conservation of momentum'), 'section.rect.area': P('geometry'), 'section.rect.modulus': P('geometry'), 'section.rect.second-moment': P('geometry'), 'beam.simply-supported.central-patch.sag': P('elasticity'), 'beam.overhang.self-sag': P('elasticity'), 'beam.simply-supported.first-period': P('elasticity', 'conservation of momentum'), 'cantilever.root-moment': P('conservation of momentum'), 'cantilever.root-shear': P('conservation of momentum'), 'cantilever.tip-sag': P('elasticity'), 'bolt.tensile-stress-area': P('geometry'), 'bolt-group.tension': P('conservation of momentum'), 'bolt-group.bending': P('conservation of momentum'), 'inertia.prism.centre': P('geometry'), 'pendulum.physical.period': P('gravitation', 'conservation of energy'), 'pendulum.period-factor': P('gravitation'), 'pendulum.amplitude-factor': P('gravitation'),
-  carnot: P('the second law'), 'weld.heat-input': P('conservation of energy'), arrhenius: P('the Boltzmann factor'), 'absorbed.solar': P('conservation of energy'), 'separation.work': P('the second law'), 'ideal.gas': P('the Boltzmann factor'), 'clausius-clapeyron': P('equilibrium'), 'boltzmann.distribution': P('the Boltzmann factor'), 'first.law': P('conservation of energy'),
-};
-/** What a law rests on: as written above, else a fitted relation if it has fitted constants, else unplaced. */
-export function principlesOf(l: Law): Principle[] | 'unplaced' {
-  const r = RESTS[l.id]; if (r) return r;
-  if (/rule of thumb|maker|distributor/.test(l.source.kind)) return P('fit to data');
-  return 'unplaced';
-}
-/** How laws feed or contain one another. */
-export const LINKS: [from: string, to: string, how: string][] = [
-  ['free-energy.gradient', 'nernst', 'at equilibrium (ΔG = 0) the gradient\'s free energy gives the Nernst potential'],
-  ['boltzmann.distribution', 'arrhenius', 'a rate is the share of molecules over the barrier: the Boltzmann factor at the activation energy'],
-  ['arrhenius', 'arrhenius.ratio', 'two rates by Arrhenius over each other'],
-  ['stoichiometry.mass', 'carbonation.capacity', 'stoichiometry with one CO₂ a CaO'],
-  ['network.scaling', 'kleiber.scaling', 'the network\'s exponent is Kleiber\'s'],
-  ['poiseuille', 'murray.branching', 'least work against Poiseuille flow gives Murray\'s cube law'],
-  ['murray.branching', 'network.scaling', 'Murray-type branching (β = n^−⅓) in a network gives the small-vessel exponent'],
-  ['decay.first-order', 'half-life', 'where the first-order loss is a half'],
-  ['decay.first-order', 'growth.doubling', 'the same exponential with the sign turned'],
-  ['fick.diffusion', 'diffusion.front', 'Fick\'s flux through the reacted layer, conserved at the front'],
-  ['fick.diffusion', 'diffusion.erf', 'Fick\'s flux conserved everywhere gives his second law, whose solution from a held surface is the error function'],
-  ['fick.diffusion', 'diffusion.sphere-limit', 'Fick\'s flux balanced by consumption in a sphere'],
-  ['diffusion.time', 'diffusion.front', 'both go as √(D t): the random walk'],
-  ['ideal.gas', 'gas.concentration', 'the ideal gas, as moles a volume'],
-  ['ideal.gas', 'osmotic.van-t-hoff', 'dilute solutes press like a gas (van \'t Hoff)'],
-  ['clausius-clapeyron', 'vapour.pressure', 'the slope integrated at a constant latent heat'],
-  ['vapour.pressure', 'evaporation.max', 'the skin\'s and the air\'s vapour pressures drive evaporation'],
-  ['convection', 'evaporation.max', 'the Lewis relation: mass transfer follows heat transfer'],
-  ['osmotic.van-t-hoff', 'starling.filtration', 'the osmotic pressure that holds water back'],
-  ['faraday.electrolysis', 'corrosion.penetration', 'Faraday\'s mass, spread over the area as thickness'],
-  ['porosity.powers', 'diffusivity.papadakis', 'the paste\'s porosity sets how fast CO₂ diffuses'],
-  ['diffusivity.papadakis', 'diffusion.front', 'the diffusivity of the carbonated layer'],
-  ['gas.concentration', 'diffusion.front', 'the CO₂ held at the surface'],
-  ['weight', 'column.self-weight', 'its weight a volume against its strength'],
-  ['conduction', 'conduction.series', 'Fourier\'s layers in series'],
-  ['queueing', 'residence.stock', 'Little\'s law for a continuum'],
-  ['residence.stock', 'balance.steady', 'a stock held steady by its flows'],
-];
-
 // ---- the shapes of math ---------------------------------------------------------------------------------------------------
 /** A product of powers: its constant (SI), each input's exponent, and the constants with units in it (R, F, g), each
  *  with its exponent; null where the term is not one. */
 export interface Monomial { c: number; e: Record<string, number>; k: { name: string; unit: string; e: number }[] }
 export function monomial(t: Term): Monomial | null {
-  if (t.kind === 'leaf') return t.value === null ? null : { c: t.value, e: {}, k: sameDim(t.dim, [0, 0, 0, 0, 0]) && !/mol/.test(t.unit) ? [] : [{ name: t.name, unit: t.unit, e: 1 }] };
+  if (t.kind === 'leaf') return t.value === null ? null : { c: t.value, e: {}, k: sameDim(t.dim, [0, 0, 0, 0, 0, 0]) ? [] : [{ name: t.name, unit: t.unit, e: 1 }] };
   if (t.kind === 'var') return { c: 1, e: { [t.sym]: 1 }, k: [] };
   if (t.kind !== 'app') return null;
   const of = t.args.map(monomial); if (of.some((x) => !x)) return null;
@@ -227,13 +169,7 @@ export function families(laws: readonly Law[] = BOOK): { skeleton: string; laws:
 }
 
 // ---- laws found from units ------------------------------------------------------------------------------------------------
-/** The amount of substance a unit carries: the units here keep the mole dimensionless, but finding laws needs it counted
- *  (so that moles a volume and moles a volume a second cannot hide in a volume). */
-export function molesOf(unit: string): number {
-  const [top, ...under] = unit.split('/'), count = (s: string) => [...s.matchAll(/\bmol(?:\^(-?\d+))?\b/g)].reduce((a, m) => a + Number(m[1] ?? 1), 0);
-  return count(top ?? '') - under.reduce((a, s) => a + count(s), 0);
-}
-const dim6 = (unit: string): number[] => [...dimOf(unit), molesOf(unit)];
+const dim6 = (unit: string): number[] => [...dimOf(unit)];
 /** Rayleigh's method: the product of powers the units of these quantities allow for the output, when they allow one;
  *  otherwise the dimensionless groups the answer is some function of. */
 export function discover(output: [name: string, unit: string], inputs: [name: string, unit: string][]): { forced: boolean; exponents?: Record<string, number>; groups: number[][]; says: string } {
@@ -261,29 +197,293 @@ export function forcedByUnits(l: Law): { verdict: 'forced' | 'open' | 'not a pro
   return { verdict: free.length ? 'open' : 'forced', says: free.length ? `its dimensional part is forced; ${free.map((p) => p.name).join(', ')} carry the rest` : `forced: ${d.says.split(':')[0]} — its constant ${num(m.c)} is all it adds` };
 }
 
-// ---- routes between quantities ----------------------------------------------------------------------------------------------
-/** The laws that make a quantity of a dimension from quantities of dimensions at hand, in one step or two. */
-export function routes(target: string, have: string[], laws: readonly Law[] = BOOK): string[][] {
-  const t = dimOf(target), hv = have.map(dimOf), has = (d: Dim) => hv.some((h) => sameDim(h, d));
-  const direct = laws.filter((l) => sameDim(dimOf(l.output.unit), t) && l.inputs.every((p) => has(dimOf(p.unit))));
-  const out: string[][] = direct.map((l) => [l.id]);
-  const makers = laws.filter((l) => l.inputs.every((p) => has(dimOf(p.unit))));
+/** The graph in numbers: laws by principle and shape, families of shared math, what units force. */
+
+// ---- laws chained through the quantities they share (docs/REALITY.md, step 4) -------------------------------------------
+/** A value the problem knows: its name, the quantity it is, and, where a name alone would join it to the wrong port,
+ *  the ports it is pinned to ("convection.A"). */
+export interface Known { name: string; quantity: string; d: Derivation; pins?: string[] }
+export interface ChainStep { law: string; lawName: string; kind: string; solved: string; gives: string; quantity: string; uses: Record<string, string>; value: number | null; unit: string; status: Status; note?: string }
+export interface Chain {
+  /** The answer, as a record that carries every law and value it rests on. */
+  result: Derivation | null;
+  /** The laws applied, in order, that the answer rests on (not every law the search fired). */
+  steps: ChainStep[];
+  /** What was taken to be what: a value of one name joined to a port of another, and values filled by convention. */
+  assumed: string[];
+  /** Where a law, applied to values the chain already had, gives one of them otherwise. */
+  disagreements: string[];
+  /** Where it does agree: a law the chain did not need, checked against what it found. */
+  agreements: string[];
+  /** Other laws that gave the target, and their values: more than one model fits. */
+  alternatives: string[];
+  /** The weakest evidence it rests on, and the weakest kind of law. */
+  weakest: Status | null;
+  weakestKind: string | null;
+  says: string;
+}
+interface Var { name: string; quantity: string; d: Derivation; pins: string[]; step: number }
+/** A way to a value: known, or a law solved for one of its ports from ways to the others. */
+type Plan = { known: Var } | { l: Law; x: Port; args: Map<string, Plan>; cost: number; rank: number };
+
+const KIND_RANK = ['fundamental', 'definition', 'geometry', 'derived', 'constitutive', 'approximation', 'empirical'];
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9µ]+/g, ' ').trim();
+/** Quantities that mean too many things to join by quantity alone: a length is a span, a diameter, a depth; these join
+ *  by name or pin only. A force, a stress, a resistivity has one role in a problem, and joins by quantity. */
+const BY_NAME = new Set(['length', 'area', 'volume', 'second-moment', 'section-modulus', 'time', 'temperature', 'temperature-difference', 'speed', 'angular-speed', 'frequency', 'angle', 'energy', 'concentration', 'amount', 'mass-flow', 'volume-flow']);
+const byName = (q: QuantityDef) => BY_NAME.has(q.id) || q.dim.every((x) => x === 0);
+const cost = (p: Plan): number => ('known' in p ? 0 : p.cost);
+
+/**
+ * From what is known, the laws chained to reach a quantity, as many steps as it takes, sought from the target back (so
+ * only laws on a way to it are applied): a law is solved for the port that is the quantity wanted, every other port
+ * known or itself found the same way. Of the ways found, the fewest laws, then the strongest kind of law, is taken; the
+ * others reached are said, with their values. A port joins a known value by its pin; else by its name or symbol; else,
+ * for a quantity with one role in a problem (a force, a stress, a resistivity), to the one value of that quantity known,
+ * said as an assumption; a quantity of many roles (a length, an area, a time) joins only by name or pin. Where no single
+ * law can be solved, two laws sharing the same two unknowns are solved together by Newton's method. Every law not on
+ * the way whose values the chain has is checked against them: agreements and disagreements both said.
+ */
+export function chain(knowns: Known[], target: { quantity: string; name?: string }, o: { most?: number; laws?: readonly Law[]; gravity?: boolean } = {}): Chain {
+  const laws = o.laws ?? BOOK, most = o.most ?? 6, gravity = o.gravity !== false;
+  const vars: Var[] = knowns.map((k) => ({ name: k.name, quantity: k.quantity, d: k.d, pins: k.pins ?? [], step: -1 }));
+  const steps: ChainStep[] = [], assumed: string[] = [], disagreements: string[] = [], agreements: string[] = [], alternatives: string[] = [];
+  const tq = quantityById(target.quantity), portQ = (l: Law, p: Port) => quantityOf(l, p);
+  const rank = (l: Law) => KIND_RANK.indexOf(KINDS[l.id]?.[0] ?? 'derived');
+  let g: Var | undefined;
+  /** The known value a port joins: undefined when none, null when more than one could and none is named. */
+  const bind = (l: Law, p: Port, pool: Var[] = vars): Var | null | undefined => {
+    const pinned = pool.find((v) => v.pins.includes(`${l.id}.${p.sym}`)); if (pinned) return pinned;
+    const q = portQ(l, p); if (!q) return undefined;
+    const same = pool.filter((v) => v.quantity === q.id && !v.pins.length);
+    const named = same.filter((v) => norm(v.name) === norm(p.name) || v.name === p.sym);
+    if (named.length === 1) return named[0];
+    // a port that means any value of its quantity takes the one value of it there is; a port that means one value in
+    // particular (a critical load, a yield strength) takes only a value of its own name
+    // a port that means any value of its quantity takes the one value of it there is that is itself named plainly (a
+    // weight into σ = F/A); a port or a value that means one in particular (a critical load, an applied voltage) joins
+    // only by name
+    const plain = same.filter((v) => isPlain(q, v.name));
+    if (!byName(q) && isPlain(q, p.name)) { if (plain.length === 1) return plain[0]; if (plain.length > 1) return null; }
+    if (q.id === 'acceleration' && gravity && /gravity/i.test(p.name)) return (g ??= { name: 'standard gravity', quantity: 'acceleration', d: ofLeaf(CONST.g), pins: [], step: -1 });
+    return undefined;
+  };
+  /** The known value a quantity wanted by a port's name is. */
+  const knownFor = (q: QuantityDef, name?: string) => vars.find((v) => v.quantity === q.id && (!name || norm(v.name) === norm(name) || !byName(q) && isPlain(q, name) && isPlain(q, v.name) && vars.filter((w) => w.quantity === q.id && isPlain(q, w.name)).length === 1));
+  const memo = new Map<string, Plan | null>();
+  const plans = (q: QuantityDef, name: string | undefined, depth: number, path: Set<string>): Plan[] => {
+    const out: Plan[] = [];
+    for (const l of laws) {
+      if (path.has(`law:${l.id}`)) continue;
+      const inTerm = new Set(varsOf(l.term).map((v) => v.sym));
+      for (const x of [l.output, ...l.inputs.filter((p) => inTerm.has(p.sym))]) {
+        if (portQ(l, x)?.id !== q.id || (name && norm(x.name) !== norm(name) && x.sym !== name && (byName(q) || !isPlain(q, name)))) continue;
+        const args = new Map<string, Plan>(), taken = new Set<Var>(); let ok = true;
+        for (const r of [...l.inputs, l.output]) {
+          if (r === x) continue;
+          const v = bind(l, r);
+          if (v === null) { ok = false; break; }
+          if (v) { if (taken.has(v)) { ok = false; break; } taken.add(v); args.set(r.sym, { known: v }); continue; }
+          const rq = portQ(l, r); if (!rq || depth <= 1) { ok = false; break; }
+          const sub = way(rq, r.name, depth - 1, new Set([...path, `law:${l.id}`])); if (!sub) { ok = false; break; }
+          args.set(r.sym, sub);
+        }
+        if (ok) out.push({ l, x, args, cost: 1 + [...args.values()].reduce((t, a) => t + cost(a), 0), rank: rank(l) });
+      }
+    }
+    return out.sort((a, b) => cost(a) - cost(b) || ('rank' in a && 'rank' in b ? a.rank - b.rank : 0));
+  };
+  const way = (q: QuantityDef, name: string | undefined, depth: number, path: Set<string>): Plan | null => {
+    const v = knownFor(q, name); if (v) return { known: v };
+    const key = `${q.id}|${byName(q) ? norm(name ?? '') : ''}`;
+    if (path.has(key)) return null;
+    const mk = `${key}|${depth}`; if (memo.has(mk)) return memo.get(mk)!;
+    memo.set(mk, null);
+    const best = plans(q, name, depth, new Set([...path, key]))[0] ?? null;
+    memo.set(mk, best);
+    return best;
+  };
+  // the plan worked out: each law once, its value a record that carries what it rests on
+  const done = new Map<Plan, Var | null>();
+  const run = (p: Plan): Var | null => {
+    if ('known' in p) return p.known;
+    if (done.has(p)) return done.get(p)!;
+    const env: Record<string, Derivation> = {}, uses: Record<string, string> = {};
+    for (const [sym, a] of p.args) { const v = run(a); if (!v || v.d.value === null) { done.set(p, null); return null; } env[sym] = v.d; uses[sym] = v.name; }
+    let d: Derivation;
+    try { d = p.x === p.l.output ? apply(p.l, env, p.x.name) : solve(p.l.id, p.x.sym, env, p.x.name); } catch { done.set(p, null); return null; }
+    if (p.x !== p.l.output && d.value !== null) { const back = apply(p.l, { ...Object.fromEntries(p.l.inputs.filter((q) => q !== p.x).map((q) => [q.sym, env[q.sym]!])), [p.x.sym]: d }); if (back.refusal) d = { ...back, name: p.x.name, value: null }; }
+    for (const [sym, a] of p.args) { if (!('known' in a)) continue; const r = [...p.l.inputs, p.l.output].find((q) => q.sym === sym)!, v = a.known; if (v === g) assumed.push('gravity is standard gravity, 9.80665 m/s² (ISO 80000-3)'); else if (norm(v.name) !== norm(r.name) && v.name !== r.sym && !v.pins.length) assumed.push(`${v.name} is taken as the ${r.name} (${r.sym}) of ${p.l.name}`); }
+    for (const [sym, a] of p.args) if (!('known' in a)) { const v = done.get(a), r = [...p.l.inputs, p.l.output].find((q) => q.sym === sym)!; if (v && norm(v.name) !== norm(r.name)) assumed.push(`${v.name} is taken as the ${r.name} (${r.sym}) of ${p.l.name}`); }
+    steps.push({ law: p.l.id, lawName: p.l.name, kind: KINDS[p.l.id]?.[0] ?? 'derived', solved: p.x.sym, gives: p.x.name, quantity: portQ(p.l, p.x)!.id, uses, value: d.value === null ? null : valueIn(d, p.x.unit), unit: p.x.unit, status: d.status, ...(d.refusal ? { note: `${p.l.name} does not hold here: it needs ${d.refusal.domain}` } : {}) });
+    const v: Var = { name: p.x.name, quantity: portQ(p.l, p.x)!.id, d, pins: [], step: steps.length - 1 };
+    done.set(p, v); vars.push(v);
+    return d.value === null ? null : v;
+  };
+  let end: Var | null = null;
+  const all = (() => { const k = target.name ? vars.find((v) => v.quantity === tq.id && norm(v.name) === norm(target.name!)) : knownFor(tq); if (k) return [{ known: k } as Plan]; for (let depth = 1; depth <= most; depth++) { memo.clear(); const ps = plans(tq, target.name, depth, new Set([`${tq.id}|${byName(tq) ? norm(target.name ?? '') : ''}`])); if (ps.length) return ps; } return []; })();
+  if (all.length) {
+    end = run(all[0]!);
+    // the other ways that reach it, and what they give
+    for (const alt of all.slice(1, 4)) {
+      const before = steps.length, v = run(alt); steps.splice(before);
+      if (!v || v.d.value === null || !end || end.d.value === null || 'known' in alt) continue;
+      const same = Math.abs(v.d.value - end.d.value) <= 1e-6 * Math.abs(end.d.value);
+      alternatives.push(`${alt.l.name} (${KINDS[alt.l.id]?.[0] ?? 'derived'}, ${alt.cost} law${alt.cost === 1 ? '' : 's'}) also gives ${v.name} = ${num(fromSI(v.d.value, tq.unit))} ${tq.unit}${same ? ', the same' : ''}`);
+      if (!same) disagreements.push(`${alt.l.name} gives ${num(fromSI(v.d.value, tq.unit))} ${tq.unit} where ${(all[0] as { l: Law }).l?.name ?? 'the chain'} gives ${num(fromSI(end.d.value, tq.unit))} ${tq.unit}`);
+    }
+  }
+  // nothing found law by law: two laws that share the same two unknowns, the rest known, solved together
+  if (!end) {
+    type Half = { l: Law; unk: Port[]; binds: Map<string, Var> };
+    const halves: Half[] = [];
+    for (const l of laws) {
+      const inTerm = new Set(varsOf(l.term).map((v) => v.sym)), binds = new Map<string, Var>(), unk: Port[] = []; let ok = true;
+      for (const p of [...l.inputs, l.output]) { const v = bind(l, p); if (v === null) { ok = false; break; } if (v) binds.set(p.sym, v); else if (p === l.output || inTerm.has(p.sym)) unk.push(p); else { ok = false; break; } }
+      if (ok && unk.length === 2 && unk.every((p) => portQ(l, p)) && portQ(l, unk[0]!)!.id !== portQ(l, unk[1]!)!.id) halves.push({ l, unk, binds });
+    }
+    const qsOf = (h: Half) => h.unk.map((p) => portQ(h.l, p)!.id).sort().join();
+    outer: for (let i = 0; i < halves.length; i++) for (let j = i + 1; j < halves.length; j++) {
+      const A = halves[i]!, B = halves[j]!;
+      if (qsOf(A) !== qsOf(B) || !A.unk.some((p) => portQ(A.l, p)!.id === tq.id)) continue;
+      // the two laws' unknowns are the same two things only where their names say so, or where each is plain
+      if (!A.unk.every((p) => { const q = portQ(A.l, p)!, o = B.unk.find((r) => portQ(B.l, r)!.id === q.id)!; return norm(p.name) === norm(o.name) || (!byName(q) && isPlain(q, p.name) && isPlain(q, o.name)); })) continue;
+      const qs = A.unk.map((p) => portQ(A.l, p)!.id), pa = A.unk, pb = qs.map((q) => B.unk.find((p) => portQ(B.l, p)!.id === q)!);
+      const resid = (z: number[]) => !z.every(Number.isFinite) ? [NaN, NaN] : [A, B].map((H, k) => {
+        const ps = k ? pb : pa, env: Record<string, Derivation> = {}; for (const [sym, v] of H.binds) env[sym] = v.d;
+        ps.forEach((p, n) => { env[p.sym] = setting(p.name, fromSI(z[n]!, p.unit), p.unit, 'the joint solution'); });
+        const d = apply({ ...H.l, domain: [] }, env), want = env[H.l.output.sym]!.value!;
+        return d.value === null ? NaN : (d.value - want) / Math.max(Math.abs(want), 1e-300);
+      });
+      for (const start of [1, 10, 0.1, 100, 0.01]) {
+        let z = [start, start], ok = false;
+        for (let it = 0; it < 100 && !ok; it++) {
+          const r = resid(z); if (!r.every(Number.isFinite)) break;
+          if (Math.max(...r.map(Math.abs)) < 1e-12) { ok = true; break; }
+          const J = [0, 1].map((row) => [0, 1].map((col) => { const h = 1e-7 * Math.max(Math.abs(z[col]!), 1e-12), zz = [...z]; zz[col]! += h; return (resid(zz)[row]! - r[row]!) / h; }));
+          const dz = solveLinear(J, r.map((x) => -x)); if (!dz) break;
+          z = z.map((x, n) => x + dz[n]!);
+        }
+        if (!ok) continue;
+        const kind = [KINDS[A.l.id]?.[0] ?? 'derived', KINDS[B.l.id]?.[0] ?? 'derived'].sort((a, b) => KIND_RANK.indexOf(b) - KIND_RANK.indexOf(a))[0]!;
+        pa.forEach((p, n) => {
+          const d = ofLeaf(leaf(p.name, fromSI(z[n]!, p.unit), p.unit, { class: 'assumed', by: 'the law graph', grounds: `${A.l.name} and ${B.l.name} solved together for ${pa.map((x) => x.name).join(' and ')} by Newton's method` }));
+          steps.push({ law: `${A.l.id} + ${B.l.id}`, lawName: `${A.l.name} with ${B.l.name}`, kind, solved: p.sym, gives: p.name, quantity: qs[n]!, uses: Object.fromEntries([...A.binds, ...B.binds].map(([sym, v]) => [sym, v.name])), value: valueIn(d, p.unit), unit: p.unit, status: 'assumed' });
+          const v: Var = { name: p.name, quantity: qs[n]!, d, pins: [], step: steps.length - 1 }; vars.push(v);
+          if (qs[n] === tq.id) end = v;
+        });
+        break outer;
+      }
+    }
+  }
+  // every other law whose values are all known or found, checked against them: what was given as well as what was found
+  {
+    for (const l of laws) {
+      if (steps.some((st) => st.law === l.id || st.law.split(' + ').includes(l.id))) continue;
+      const binds = new Map<string, Var>(); let ok = true;
+      for (const p of [...l.inputs, l.output]) { const v = bind(l, p); if (!v || [...binds.values()].includes(v)) { ok = false; break; } binds.set(p.sym, v); }
+      if (!ok || [...binds.values()].every((v) => v === g)) continue;
+      const d = apply(l, Object.fromEntries(l.inputs.map((p) => [p.sym, binds.get(p.sym)!.d]))), have = binds.get(l.output.sym)!;
+      if (d.value === null || have.d.value === null) continue;
+      const tol = 1e-6 * Math.abs(have.d.value) + 2 * Math.hypot(d.uncertainty ?? 0, have.d.uncertainty ?? 0);
+      (Math.abs(d.value - have.d.value) <= tol ? agreements : disagreements).push(`${l.name} gives ${have.name} = ${num(fromSI(d.value, l.output.unit))} ${l.output.unit}; the chain has ${num(fromSI(have.d.value, l.output.unit))} ${l.output.unit}`);
+    }
+  }
+  const kinds = steps.map((st) => st.kind).sort((a, b) => KIND_RANK.indexOf(b) - KIND_RANK.indexOf(a));
+  const fin = end as Var | null;
+  const says = !fin || fin.d.value === null ? `no chain of laws reaches ${tq.name}${target.name ? ` (${target.name})` : ''} from ${knowns.map((k) => k.name).join(', ')}${steps.some((s) => s.note) ? `: ${steps.find((s) => s.note)!.note}` : ''}` : `${fin.name} = ${num(valueIn(fin.d, tq.unit) ?? NaN)} ${tq.unit}, by ${steps.length} law${steps.length === 1 ? '' : 's'}: ${steps.map((st) => st.lawName).join(' → ') || 'it was known'}`;
+  return { result: fin && fin.d.value !== null ? fin.d : null, steps, assumed: [...new Set(assumed)], disagreements, agreements, alternatives, weakest: fin ? fin.d.status : null, weakestKind: kinds[0] ?? null, says };
+}
+
+/** Each law checked against the rest of the book: its worked example's inputs given, its output sought through the other
+ *  laws alone. Where another way reaches it, the two must agree; where they do not, one is an approximation of the other
+ *  or a different model of the same thing, and both are said. */
+export function crossCheck(laws: readonly Law[] = BOOK, most = 3): { law: string; agree: boolean; own: number; other: number; unit: string; by: string[]; within?: number }[] {
+  const out: { law: string; agree: boolean; own: number; other: number; unit: string; by: string[]; within?: number }[] = [];
+  // (a shape's formulas are not ways to each other: a length is not said to be which length of which shape, so a box's
+  // width would be taken for a circle's diameter; geometry laws are left out of the chains that check another)
+  const pool = laws.filter((x) => KINDS[x.id]?.[0] !== 'geometry');
   for (const l of laws) {
-    if (!sameDim(dimOf(l.output.unit), t) || direct.includes(l)) continue;
-    const missing = l.inputs.filter((p) => !has(dimOf(p.unit)));
-    const via = missing.map((p) => makers.find((m) => sameDim(dimOf(m.output.unit), dimOf(p.unit))));
-    if (via.every(Boolean)) out.push([...new Set(via.map((m) => m!.id)), l.id]);
+    const ex = l.example; if (!ex) continue;
+    const knowns = l.inputs.filter((p) => ex.inputs[p.sym] !== undefined && quantityOf(l, p)).map((p) => ({ name: p.name, quantity: quantityOf(l, p)!.id, d: setting(p.name, ex.inputs[p.sym]!, p.unit, 'the worked example') }));
+    const q = quantityOf(l, l.output); if (!q) continue;
+    const c = chain(knowns, { quantity: q.id, name: l.output.name }, { laws: pool.filter((x) => x !== l), most });
+    if (!c.result || c.result.value === null || !c.steps.length) continue;
+    const other = fromSI(c.result.value, l.output.unit), by = c.steps.map((s) => s.law);
+    // (an approximation agrees with the law it approximates within its truncation: taken as 0.1 % (an estimate of what
+    // an approximation in the book claims inside its stated range), the difference said)
+    const approx = [l.id, ...by].some((id) => KINDS[id]?.[0] === 'approximation' || KINDS[id]?.[0] === 'empirical'), within = approx ? 1e-3 : 1e-6;
+    out.push({ law: l.id, agree: Math.abs(other - ex.output) <= within * Math.abs(ex.output), own: ex.output, other, unit: l.output.unit, by, ...(approx ? { within } : {}) });
   }
   return out;
 }
 
-/** The graph in numbers: laws by principle and shape, families of shared math, what units force. */
-export function graphSummary(laws: readonly Law[] = BOOK) {
-  const byPrinciple: Record<string, string[]> = {}, byShape: Record<string, number> = {}, units: Record<string, string[]> = {};
-  for (const l of laws) {
-    const p = principlesOf(l); for (const x of p === 'unplaced' ? ['unplaced'] : p) (byPrinciple[x] ??= []).push(l.id);
-    const s = shapeOf(l); byShape[s] = (byShape[s] ?? 0) + 1;
-    const f = forcedByUnits(l).verdict; (units[f] ??= []).push(l.id);
+// ---- a law in the math hierarchy -----------------------------------------------------------------------------------
+/** A law's term written in the formula language the math nodes take (the Formula node; an integral is the Integral
+ *  node's, named here by `bound`): leaves as their SI values, each input by a plain name. */
+export function asFormula(t: Term, name: (sym: string) => string, bound: (b: Term) => string): string {
+  const f = (x: Term): string => asFormula(x, name, bound);
+  if (t.kind === 'leaf') return t.value! < 0 ? `(${t.value!.toPrecision(17)})` : t.value!.toPrecision(17);
+  if (t.kind === 'var') return name(t.sym);
+  if (t.kind === 'bind') return bound(t);
+  const [a, b] = t.args;
+  switch (t.op) {
+    case 'add': return `(${f(a!)} + ${f(b!)})`; case 'sub': return `(${f(a!)} - ${f(b!)})`;
+    case 'mul': return `(${f(a!)} * ${f(b!)})`; case 'div': return `(${f(a!)} / ${f(b!)})`;
+    case 'pow': return `(${f(a!)} ^ (${t.k!.toPrecision(17)}))`; case 'neg': return `(0 - ${f(a!)})`;
+    case 'le': return `((${f(a!)}) <= (${f(b!)}))`; case 'ge': return `((${f(a!)}) >= (${f(b!)}))`; case 'lt': return `((${f(a!)}) < (${f(b!)}))`; case 'gt': return `((${f(a!)}) > (${f(b!)}))`;
+    case 'and': return `((${f(a!)}) and (${f(b!)}))`; case 'or': return `((${f(a!)}) or (${f(b!)}))`;
+    default: return `${t.op}(${t.args.map(f).join(', ')})`;
   }
-  return { laws: laws.length, byPrinciple, byShape, units, families: families(laws), links: LINKS.length };
+}
+/** Whether a law sits in the math hierarchy with nothing contradicting it (the user, 2026-10-29: "if the law nodes fall
+ *  into the math node hierarchy with no contradictions then they're safe"): (1) its term, rewritten as the math nodes'
+ *  formula (an integral as the Integral node's), gives what the law gives; (2) its worked example holds; (3) solved for
+ *  each of its inputs from that example, it gives back a value at which it holds again; (4) no chain of other laws to
+ *  the same quantity from the same inputs gives another answer. Its units are held already: a law whose term and ports
+ *  disagree in dimension is never built. */
+export interface Fit { law: string; fits: boolean; checks: { check: string; ok: boolean; says: string }[] }
+export function lawFits(l: Law, others?: Map<string, { agree: boolean; other: number; by: string[] }>): Fit {
+  const checks: Fit['checks'] = [], ex = l.example, close = (a: number, b: number, rel: number) => Math.abs(a - b) <= rel * Math.max(Math.abs(a), Math.abs(b), 1e-300);
+  if (!ex) return { law: l.id, fits: false, checks: [{ check: 'worked example', ok: false, says: 'no worked example to hold it against' }] };
+  const si = (sym: string, v: number) => { const p = l.inputs.find((q) => q.sym === sym)!, u = parseUnit(p.unit); return v * u.scale + (u.offset ?? 0); };
+  const names = new Map(l.inputs.map((p, k) => [p.sym, `v${k}`])), binds = bindsOf(l.term), values: Record<string, number> = {};
+  for (const p of l.inputs) values[names.get(p.sym)!] = si(p.sym, ex.inputs[p.sym]!);
+  // (1) through the math nodes' formula, an integral by the Integral node's adaptive Simpson
+  try {
+    const scope = (v: Record<string, number>) => ({ get: (n: string) => v[n], names: () => Object.keys(v) });
+    const boundName = new Map(binds.map((b, j) => [b, `b${j}`]));
+    for (const b of [...binds].reverse()) {
+      if (b.kind !== 'bind') continue;
+      const over = 'x0', lo = Number(calc(asFormula(b.lo, (s) => names.get(s)!, (q) => boundName.get(q as never)!), scope(values))), hi = Number(calc(asFormula(b.hi, (s) => names.get(s)!, (q) => boundName.get(q as never)!), scope(values)));
+      const body = asFormula(b.body, (s) => (s === b.over.sym ? over : names.get(s)!), (q) => boundName.get(q as never)!);
+      const r = integrate((x) => Number(calc(body, scope({ ...values, [over]: x }))), lo, hi, { method: 'adaptive-simpson', tol: 1e-12 });
+      values[boundName.get(b)!] = r.value ?? NaN;
+    }
+    const viaMath = Number(calc(asFormula(l.term, (s) => names.get(s)!, (q) => boundName.get(q as never)!), scope(values)));
+    const own = apply({ ...l, domain: [] }, Object.fromEntries(l.inputs.map((p) => [p.sym, setting(p.name, ex.inputs[p.sym]!, p.unit, 'the worked example')]))).value;
+    const ok = own !== null && Number.isFinite(viaMath) && close(viaMath, own, binds.length ? 1e-6 : 1e-9);
+    checks.push({ check: 'written in the math nodes', ok, says: ok ? `the math nodes give it again (${viaMath.toPrecision(6)} in SI)` : `the math nodes give ${viaMath} where the law gives ${own}` });
+  } catch (e) { checks.push({ check: 'written in the math nodes', ok: false, says: `cannot be written in the math nodes: ${(e as Error).message}` }); }
+  // (2) its worked example
+  const env = Object.fromEntries(l.inputs.map((p) => [p.sym, setting(p.name, ex.inputs[p.sym]!, p.unit, 'the worked example')]));
+  const fwd = apply(l, env), out = fwd.value === null ? null : fromSI(fwd.value, l.output.unit);
+  const exOk = out !== null && close(out, ex.output, ex.rel ?? 1e-6);
+  checks.push({ check: 'worked example', ok: exOk, says: exOk ? `gives ${out!.toPrecision(6)} ${l.output.unit}, as ${ex.from}` : `gives ${out} where ${ex.from} gives ${ex.output}` });
+  // (3) solved for each input, it holds again where it lands
+  const back: string[] = [];
+  for (const p of l.inputs) {
+    if (p.unit && parseUnit(p.unit).offset) continue;
+    const others = { ...env, [l.output.sym]: setting(l.output.name, ex.output, l.output.unit, 'the worked example') }; delete (others as Record<string, unknown>)[p.sym];
+    let got: number | null = null;
+    try { const d = solve(l.id, p.sym, others); got = d.value === null ? null : fromSI(d.value, p.unit); } catch { got = null; }
+    if (got === null) { back.push(`${p.sym} not solvable here`); continue; }
+    const again = apply({ ...l, domain: [] }, { ...env, [p.sym]: setting(p.name, got, p.unit, 'the inversion') }).value;
+    if (again === null || !close(fromSI(again, l.output.unit), ex.output, 1e-5)) checks.push({ check: `solved for ${p.sym}`, ok: false, says: `solved for ${p.name} it gives ${got} ${p.unit}, where the law then gives ${again === null ? 'nothing' : fromSI(again, l.output.unit)} not ${ex.output}` });
+  }
+  if (!checks.some((c) => c.check.startsWith('solved for'))) checks.push({ check: 'solved for each input', ok: true, says: back.length ? `holds again wherever it is solved (${back.join('; ')}: no value in range, not a contradiction)` : 'holds again for each input solved' });
+  // (4) no other law contradicts it
+  const o = others?.get(l.id);
+  if (o) checks.push({ check: 'against other laws', ok: o.agree, says: o.agree ? `the same through ${o.by.join(' → ')}` : `${o.by.join(' → ')} gives ${o.other} ${l.output.unit} where it gives ${ex.output}` });
+  return { law: l.id, fits: checks.every((c) => c.ok), checks };
 }

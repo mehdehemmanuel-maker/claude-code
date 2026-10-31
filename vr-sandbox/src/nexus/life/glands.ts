@@ -85,13 +85,5 @@ venom-gland | venom gland (rattlesnake) | Life/Organisms/Glands | part | venom:0
 ink-sac | ink sac (cuttlefish) | Life/Organisms/Glands | part | cephalopod-ink:2 marine-tissue:* | 4 | 35x18x12 | bag | its ink gland makes melanin granules and stores them with mucus; squirted as a decoy or a cloud (typical) | its mass an estimate
 slime-gland | slime gland (hagfish) | Life/Organisms/Glands | part | keratin:0.002 mucin:0.001 marine-tissue:* | 0.02 | 4x3x3 | gland | about 150 pairs along its flanks: thread cells and mucous cells that, squeezed into sea water, make about a litre of slime in a fraction of a second (Fudge et al. 2005) | its mass an estimate
 `);
-/** The kinds of gland, what each makes, and who has it: a new creature is given glands from here as it is given cells. */
-export const GLAND_KINDS: { id: string; makes: string; in: string[] }[] = [
-  { id: 'eccrine-sweat-gland', makes: 'sweat', in: ['human'] }, { id: 'sebaceous-gland', makes: 'sebum', in: ['human'] }, { id: 'ceruminous-gland', makes: 'cerumen', in: ['human'] },
-  { id: 'axillary-apocrine', makes: 'protein and fat that bacteria turn to odour', in: ['human'] }, { id: 'lacrimal-gland', makes: 'tear-fluid', in: ['human'] }, { id: 'meibomian-gland', makes: 'meibum', in: ['human'] },
-  { id: 'salivary-glands', makes: 'saliva', in: ['human'] }, { id: 'choroid-plexus', makes: 'cerebrospinal-fluid', in: ['human'] }, { id: 'mammary-gland', makes: 'milk', in: ['reproductive-system-female'] }, { id: 'hair-follicle', makes: 'keratin (hair)', in: ['human'] },
-  { id: 'silk-gland', makes: 'fibroin and sericin (silk)', in: ['silkworm'] }, { id: 'ampullate-gland', makes: 'spidroin (dragline silk)', in: ['golden-orb-weaver'] }, { id: 'wax-gland', makes: 'beeswax', in: ['honey-bee'] },
-  { id: 'lantern', makes: 'light (luciferin oxidised by luciferase)', in: ['firefly'] }, { id: 'venom-gland', makes: 'venom', in: ['rattlesnake'] }, { id: 'ink-sac', makes: 'cephalopod-ink', in: ['cuttlefish'] }, { id: 'slime-gland', makes: 'hagfish-slime', in: ['hagfish'] },
-];
 // a granulosa cell, built like the others
 export const GLAND_CELLS: LifeEntry[] = [...MAKER_CELLS, ...cellOf({ id: 'granulosa-cell', name: 'granulosa cell', path: 'Life/Cells/Ovary', v: 700, size: [12, 12, 10], nuc: 100, mito: 6, ser: 3, look: 'cell', says: 'wraps the egg in its follicle, feeds it, and makes estradiol' }), ...cellOf({ id: 'primordial-oocyte', name: 'resting egg cell (primordial oocyte)', path: 'Life/Cells/Germ', v: 14000, size: [30, 30, 30], nuc: 1500, mito: 4, look: 'cell', genome: 'genome-haploid', says: 'an egg cell about 30 µm across, paused in its first division since before birth (typical); it grows to 120 µm as its follicle ripens' })];

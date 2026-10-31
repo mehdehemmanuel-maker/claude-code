@@ -27,6 +27,7 @@ export type Shape =
   /** a freeform skin (a NURBS surface, or a part of one: src/nexus/surface.ts), its wall its shell */ | { surf: Patch }
   | { stars: { n: number; arms: number; pitch: number; radius: number; bulge: number; kind: 'spiral' | 'barred' | 'elliptical' | 'lenticular' | 'irregular'; flat: number; tint: number; seed: number } }
   | { field: { size: number; relief: number; kind: string; water: number; seed: number; color: number } }
+  /** ground: heights on an n × n grid of cells over w by d (row by row along x, then z; (n + 1)² of them), its soil `base` deep under its lowest */ | { ground: { w: number; d: number; n: number; h: number[]; base: number } }
   /** a heap of like things: so many, each its size, piled in a cone so wide and high (drawn as up to 20,000 of them) */
   | { heap: { n: number; size: V3; r: number; h: number; colors: number[]; seed: number } };
 /** A mating face of a part: a pattern of holes through it, threads tapped into it, or pins (studs) standing out of it, on
@@ -36,7 +37,9 @@ export type Shape =
  *  part it is on is placed by it (src/nexus/mate.ts), its fasteners laid from the component library. */
 export interface Port {
   /** what it is called on its part ("front face", "tool flange") */ name: string;
-  sex: 'holes' | 'threads' | 'pins';
+  /** (a frame: where a thing is set, nothing fastened: a door in its opening, a car on its drive; mated by `mateTo` in
+   *  assembly.ts, never by a pattern) */
+  sex: 'holes' | 'threads' | 'pins' | 'frame';
   /** the thread or bolt it takes (M3, M6, M12x1.5) and the pattern's centres in its face, m */ thread: string; pattern: [number, number][];
   at: V3; n: V3; u: V3;
   /** how thick the part is behind the face where the holes are (the ply a bolt passes), or how deep its threads go, m */ t: number;
@@ -56,10 +59,22 @@ export interface Iface {
  *  diameter), r across, from `at` on its face along `dir` (a unit vector into it) for `depth`. It is cut from what is
  *  drawn, so the clash finder and every view see it, and its volume leaves the part's mass. */
 export interface Cut { r: number; depth: number; at: V3; dir: V3; n?: number }
+/** A zone a part keeps clear, in its own frame: a box (its middle and size), or a sector swept about an upright axis
+ *  (the hinge, the radius, the direction it starts and ends, the height it spans from y0); why, with the figures. */
+export interface Keep { name: string; kind: 'box' | 'sector'; at: V3; size?: V3; r?: number; from?: V3; to?: V3; y0?: number; h?: number; why: string; /** only while (a state: 'cooking', 'door opening'); else always */ when?: string }
+/** A mate as a number: from the part that carries it to the nearest thing named like `to`, a measure (the distance between
+ *  them, the gap between their surfaces, how far off its front the other is, how much of the other it sees, how much
+ *  higher the other is) held within min and max; only while a state holds, if it says one; why, with its figures. Bolts
+ *  meeting their holes are mates of another kind (src/nexus/mate.ts); a zone (Keep) is a mate that nothing be in it. */
+export interface Mate { name: string; to: string; measure: 'distance' | 'gap' | 'facing' | 'sees' | 'height'; min?: number; max?: number; /** its front, in its own frame (facing, sees) */ face?: '+z' | '-z' | '+x' | '-x'; /** the eye's height over the floor (sees) */ eye?: number; when?: string; why: string }
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
   /** holes drilled into it (its own frame) */ cuts?: Cut[];
+  /** a plain shape that wholly encloses what is drawn (a winding's turns of fine wire, inside the ring they are wound
+   *  within): the rules test this in its place, so what clears it clears every turn in it */ envelope?: Shape;
   /** a hollow shape's wall, m (its mass is its surface times this) */ shell?: number;
+  /** how its maker made it, in its maker's own figures (a coil's wire, mean diameter, free and installed lengths, coils; a
+   *  gear's module and teeth): what a load case reads, so what is calculated is what is drawn */ made?: Record<string, number | string>;
   /** how it is held where its maker says (a centre cap clipped into its bore, a lens bonded in its housing): the joints
    *  rule adds nothing to it */ fixed?: string;
   /** what passes through an opening in it (a dashboard's for the steering column): fitted there, not one through the other */ passes?: string[];
@@ -77,6 +92,7 @@ export interface Part {
    *  or joined to by the joints laid on it, welded, bolted, screwed or sealed (the joints rule's) */ joins?: string[];
   /** characters printed on its broad faces (a number plate's), dark on its own colour */ text?: string;
   /** the share of its shape that is solid (a vented disc, an engine's block round its cavities) */ fill?: number;
+  /** a thread's pitch, m: its helix cut into its major cylinder where it is drawn close (a part alone, a few fasteners) */ pitch?: number;
   /** grows from its base, not its middle (a branch from the trunk): its shape stands on its own origin */ base?: boolean;
   /** how a turning part moves besides turning: steered so far either way (rad) about the upright through it, risen so far
    *  in bump (m) — so the room kept round it is the room it sweeps through all of that; or how a part slides, with all of
@@ -91,7 +107,11 @@ export interface Part {
   /** a round part drawn with so many flat sides (a hex head: 6) */ facets?: number;
   /** it glows (a lamp's light, lit or not) */ glow?: boolean;
   /** how its surface looks at its true size, as its material and making leave it: grain, brick, tread, weave… */ finish?: string;
+  /** its mirrors' colour, where its maker (or its owner) painted them other than its body (on the thing's root) */ mirrors?: number;
+  /** its finish was chosen by the make pipeline's rule of that name (by its material), not by its maker: so taking the
+   *  pipeline's work off takes it off */ finishBy?: string;
   /** how worn it is, 0 new to 1 derelict */ wear?: number;
+  /** its look's layers: substrate, treatment, coat, wear (appearance.ts) */ look?: import('./appearance').Look;
   /** it goes on public roads (and so carries number plates and mirrors): where it is sold, so its plates are that
    *  market's (US 12 × 6 in, AAMVA; else EU 520 × 110 mm) */ road?: boolean | 'us' | 'eu';
   /** made as one piece with what holds it (a tyre's tread blocks, a casting's fins): held by being part of it */ one?: boolean;
@@ -100,6 +120,13 @@ export interface Part {
   /** how a skin meets its neighbours along an edge of it, and why (src/nexus/panels.ts says these; the critic checks
    *  them with numbers): in one tangent plane across a shut line (G1: a highlight runs on across it), a deliberate crease
    *  (G0 only), or square to its own mirror at the middle */ meets?: { part: string; edge: 'a0' | 'a1' | 'b0' | 'b1'; kind: 'G1' | 'crease' | 'mirror'; why: string }[];
+  /** the room it needs kept clear round it, in its own frame, each zone with the math it comes from: a door's leaf's
+   *  sweep (a quarter disc from its hinge, its radius the leaf's width), the floor in front of a toilet a code asks for.
+   *  Whatever else stands in one is found by proximity (src/nexus/placement/proximity.ts) and moved */ keep?: Keep[];
+  /** how it mates with what is round it, each by a measure held in a range (src/nexus/placement/relate.ts): a sofa facing
+   *  a television, sitting so far from it, seeing it */ mates?: Mate[];
+  /** where it is on purpose where a rule would otherwise move it, by what that rule keeps clear: 'in a doorway' (a
+   *  draught screen, a barrier, a bookcase blocking a door that is not used) */ meant?: string[];
   /** its maker's published mass, kg: what is not drawn (its part named "the rest of it") makes up the difference */ published?: number;
   /** the kit that made it, on the root of each thing a kit makes (a street's cars and houses each carry theirs) */ kit?: string;
   /** what it is in the inventory (an item's id) or the words its family makes it from ("bolt M12x40", "tube 32x2"): so it
@@ -107,6 +134,10 @@ export interface Part {
   /** designed whole and checked on its own (a component from the library, src/nexus/components.ts): the make pipeline
    *  lays no detail on it and moves nothing in it, as a bought part is fitted as it comes */ sealed?: string;
   /** added by the make pipeline's attention to detail, and by which rule (so it can be taken off and added again) */ detail?: string;
+  /** its surface's working temperature, °C, where it runs hot (an exhaust manifold, a turbo): what is near it is held to
+   *  what its material stands (src/nexus/make/rules.ts) */ hot?: number;
+  /** the gap it keeps from everything it does not run on, m (a belt, a fan's blades, a chain) */ clear?: number;
+  /** what it runs on, by name, which it may touch (a belt's pulleys) */ runsOn?: string[];
   parts?: Part[]; says?: string;
 }
 export type Pick = Record<string, string | number>;
@@ -550,7 +581,6 @@ scene('armoury', 'a sword rack', /\b(sword rack|armou?ry|swords on a rack|collec
 
 // ---- counting what there is, and choosing from words ----
 const byId = { get: (id: string) => KITS.find((k) => k.id === id) };
-export const kitById = (id: string): Kit | undefined => byId.get(id);
 /** How many different things a kit makes, as a power of ten: the product of its choices, times every kit it uses to the
  *  number of times it uses it. */
 export function log10Kinds(k: Kit, seen = new Set<string>()): number {
@@ -558,20 +588,13 @@ export function log10Kinds(k: Kit, seen = new Set<string>()): number {
   return k.choices.reduce((a, ch) => a + Math.log10(ch.options.length), 0) + (k.uses ?? []).reduce((a, u) => a + u.n * log10Kinds(byId.get(u.kit)!, s), 0);
 }
 /** How many things all the kits make between them, as a power of ten. */
-export function log10All(): number { const ls = KITS.map((k) => log10Kinds(k)), m = Math.max(...ls); return m + Math.log10(ls.reduce((a, l) => a + 10 ** (l - m), 0)); }
 /** A kit's thing named in the plural: a galaxy's galaxies, a sandwich's sandwiches, a scene's without its "a". */
 export const plural = (name: string): string => { const n = name.replace(/^an? /, ''); const m = /^(.*?)( \(a prop\))?$/.exec(n)!; const w = m[1]!; return `${/(s|x|ch|sh)$/.test(w) ? `${w}es` : /[^aeiou]y$/.test(w) ? `${w.slice(0, -1)}ies` : /s$/.test(w) ? w : `${w}s`}${m[2] ?? ''}`; };
-export const sayKinds = (l: number): string => (l < 6 ? Math.round(10 ** l).toLocaleString('en-US') : l < 15 ? `${(10 ** (l - Math.floor(l))).toFixed(1)} × 10^${Math.floor(l)}` : `about 10^${Math.round(l)}`);
 
 /** The kit the words name: a scene before the things in it ("a street with lamp posts" is the street), else the first named. */
-export function kitFor(words: string): Kit | null {
-  const t = words.toLowerCase(), hits = KITS.map((k) => ({ k, m: k.words.exec(t) })).filter((x) => x.m);
-  if (!hits.length) return null; const scenes = hits.filter((x) => x.k.uses && x.k.choices.length === 1);
-  return (scenes[0] ?? hits.sort((a, b) => a.m!.index - b.m!.index)[0]!).k;
-}
 /** The choices the words make (an option named, or a number with the choice's unit), the rest drawn at random. */
 export function choose(k: Kit, words: string, r: () => number): Pick {
-  const t = ` ${words.toLowerCase()} `, out: Pick = {}, taken = new Set<string | number>();
+  const t = ` ${words.toLowerCase()} `, out: Pick = {}, taken = new Set<string | number>(), said: string[] = [];
   for (const ch of k.choices) {
     let hit: string | number | undefined;
     // the options named, in the order they are said; one already taken by a choice like this one is not taken again
@@ -585,7 +608,10 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
       if (m) { const v = Number(m[1]); hit = (ch.options as number[]).reduce((a, o) => (Math.abs(o - v) < Math.abs(a - v) ? o : a), ch.options[0] as number); }
     }
     out[ch.key] = hit ?? ch.options[Math.floor(r() * ch.options.length) % ch.options.length]!;
+    if (hit !== undefined) said.push(ch.key);
   }
+  // (which were said, not picked at random: a real model keeps its own colour unless one is said)
+  out.named = said.join(',');
   // a few words that pick by meaning
   if (k.id === 'car' && /\b(electric|ev|tesla)\b/.test(t)) out.power = 'electric';
   if (k.id === 'tree' && /\bfall\b/.test(t)) out.season = 'autumn';
@@ -600,8 +626,13 @@ export function choose(k: Kit, words: string, r: () => number): Pick {
   return out;
 }
 /** A thing made by a kit from words: its choices, its parts, its mass. */
-export function makeKit(k: Kit, words: string, seed: number): { kit: Kit; pick: Pick; part: Part } {
+export function makeKit(k: Kit, words: string, seed: number): { kit: Kit; pick: Pick; part: Part; moved?: string } {
+  // (words that name another kit and not this one are made by the kit they name, and it is said: never a random one of
+  // this kit drawn in their place without a word)
+  let moved: string | undefined;
+  if (words && !k.words.test(words)) { const o = KITS.find((x) => x !== k && x.words.test(words)); if (o) { const a = (n: string) => `${/^[aeiou]/i.test(n) ? 'an' : 'a'} ${n}`; moved = `"${words}" names ${a(o.name)}, not ${a(k.name)}: made as ${a(o.name)}`; k = o; } }
   let s = seed >>> 0 || 1; const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   const sub = (id: string, over: Pick = {}): Part => { const kk = byId.get(id)!; const pick = { ...choose(kk, '', r), ...over }; return { ...kk.build(pick, r, sub), kit: kk.id }; };
-  const pick = choose(k, words, r); return { kit: k, pick, part: { ...k.build(pick, r, sub), kit: k.id } };
+  const pick = choose(k, words, r); return { kit: k, pick, part: { ...k.build(pick, r, sub), kit: k.id }, ...(moved ? { moved } : {}) };
 }
+

@@ -85,8 +85,9 @@ export function tubeLegs(t: Tube): Leg[] {
   for (let i = 1; i < p.length - 1; i++) {
     const c = p[i]!, u = unit(sub(p[i - 1]!, c)), v = unit(sub(p[i + 1]!, c)), cos = Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2])), turn = Math.PI - Math.acos(cos);
     if (turn < 1e-3) continue; // straight through
-    // cut back no further than half of either leg
-    const cut = Math.min(R * Math.tan(turn / 2), len3(sub(p[i - 1]!, c)) / 2, len3(sub(p[i + 1]!, c)) / 2), r = cut / Math.tan(turn / 2);
+    // cut back no further than half of a leg it shares with another corner, or nine tenths of an end's leg (no corner at
+    // its other end; a tenth kept straight, where it is pushed on to what it joins)
+    const cut = Math.min(R * Math.tan(turn / 2), len3(sub(p[i - 1]!, c)) * (i === 1 ? 0.9 : 0.5), len3(sub(p[i + 1]!, c)) * (i === p.length - 2 ? 0.9 : 0.5)), r = cut / Math.tan(turn / 2);
     const a = add(c, mul(u, cut)), b = add(c, mul(v, cut));
     out.push({ kind: 'line', a: from, b: a, len: len3(sub(a, from)) }, { kind: 'arc', a, b, c, len: r * turn });
     from = b;
