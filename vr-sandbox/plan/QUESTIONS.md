@@ -19,6 +19,9 @@ something.
 | U9 | Should the evaluator be a different model from the builder (more cost, fewer lenient passes)? | Spec 00, S7 | yes, for tasks that change geometry | **2026-10-31: different kinds of reviewer, tested with different prompts**; made a subject of the prompt-engineering research (`research/11-prompts-reviewers-drawing.md`). |
 | U10 | Start phase 0 now? | Nothing is built until you say | yes | **2026-10-31: still in research mode**: a wider research wave first (life, engineering, every language and framework, philosophy, astronomy, contests, the Game of Life, the Mandelbrot set, π, the universal equations, games and anything "irrelevant" that is genius), and the book of questions (`BOOK-OF-QUESTIONS.md`). |
 
+| U11 | The research wave proposes three new specs: 09 the physics core (effort-and-flow ports, an equation compiler, folding tested as exact), 10 trust in numbers (intervals, Monte Carlo, exact sensitivities, CODATA 2022, a "cannot simulate" register), 11 the living world (only the observed computed, replay, affordances, a chronicle, scale anchors). Accept them, and in the order proposed (`research/00-synthesis.md`)? | They change what is built first | accept; CODATA 2022 fixed at once | — |
+| U12 | Amend spec 08 so the AI writes the profile directly when the request gives the sizes, and the image model draws shape only (letters, not digits)? The research found no image model hits exact colours, and models struggle with exact coordinates | It decides whether the picture path is the main one or the fallback | amend | — |
+
 ## Still open in the research
 
 | Id | Question | How it will be answered |
