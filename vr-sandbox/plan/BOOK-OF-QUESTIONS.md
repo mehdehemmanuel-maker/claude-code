@@ -7,7 +7,9 @@ The first chapter's questions come from the state of Nexus today; the rest come 
 
 1. Nexus itself · 2. All of engineering, its languages and frameworks · 3. Life and the universal equations ·
 4. Mathematics · 5. Games, visualisation, the very large, and contests · 6. Philosophy, knowledge, invention, learning
-and ethics · 7. Prompts, judges, and a picture to exact geometry
+and ethics · 7. Prompts, judges, and a picture to exact geometry · 8. Nature's collective genius · 9. Crafts, toys,
+folding and ancient engineering · 10. Sound, film, magic and designed experiences · 11. Safety cultures and famous
+failures · 12. Commons, citizen science and people together · 13. Unseen sciences, old games and cooking
 
 A question is answered by writing the answer under it with its date and how it was found (a measurement, a source, a
 decision record). An answered question is not deleted: the answer stays beside it.
@@ -919,3 +921,454 @@ Relevant files: `/home/user/claude-code/vr-sandbox/plan/BOOK-OF-QUESTIONS.md` (t
 86. Should hidden and centre lines (ISO 128) ever be allowed, given how they complicate parsing?
 87. If dimensions must be read, does a digit-only reader checked against line lengths reach under 1 % error on our pictures?
 88. How does a profile become 3D (extruded or turned), and where does each parameter of that step come from?
+
+---
+
+## Chapter 8. Nature's collective genius
+
+*From `research/12-nature-collective.md` (round 3, a far branch).*
+
+1. What least set of function verbs covers both a bolt and a burr?
+2. Can every part be described by the function it performs for its neighbour, not by its shape?
+3. When a biological story proves a myth, does the engineered result still count as biomimicry?
+4. How should a catalogue grade evidence: measured, modelled, inferred, anecdotal?
+5. Which dimensionless numbers decide whether a natural mechanism survives a change of scale?
+6. Why did Fastskin fail where flexible shark skin succeeded, and what in Nexus would have caught it?
+7. Is compliance generally necessary for surface textures to work in flow?
+8. Can contact splitting be an interface type with its counterpart geometry?
+9. What does a gecko pad need from its neighbour: flatness, cleanliness, a material?
+10. Is self-cleaning a property of a part, an interface, or an environment?
+11. Why does the tubercles' stall delay depend on Reynolds number, and where does it stop helping?
+12. How is "inspired by" told from "works like" automatically?
+13. Can a node prove it transferred the mechanism and not just the form?
+14. Why does Physarum match the rail network's cost but lose on fault tolerance?
+15. Which model parameter is how much an engineer values redundancy?
+16. Can a Physarum solver handle many sources and sinks with demand that changes, as cities have?
+17. If memory lives in tube diameters, can an agent's memory live in the scene graph rather than its context?
+18. What evaporation rate suits an AI stigmergy board, and how would we measure it?
+19. When does stigmergy beat direct messages between agents, and when does it fail?
+20. Can ant colony optimisation and Physarum be one network solver (positive feedback with decay)?
+21. Does Bonifaci's convergence proof extend to many terminals (the Steiner case)?
+22. What quorum suits a panel of AI judges, and how should it change with the stakes?
+23. Are stop signals better than voting for choosing among AI designs?
+24. How do bees avoid deadlock between two equal sites, and what is the AI's equivalent?
+25. Why six or seven neighbours: a limit of perception or optimal robustness?
+26. Does a rule by count make simulated crowds more real than one by radius as density changes?
+27. What hysteresis appears in our swarms, and is it a bug or a feature?
+28. How few informed agents steer a crowd, and does it apply to evacuation design?
+29. Can a TERMES-style compiler guarantee completion for any structure in our library?
+30. Which structures are provably impossible to build by local rules alone?
+31. Can one compiled assembly order drive robot builds and explode animations alike?
+32. How should termite rules be adapted for agents building a city from parts?
+33. What does the octopus imply for how much a folded node should decide alone?
+34. Where is the line between a subassembly's reflex and the central plan?
+35. Can segmented control inspire controllers for long robotic or cable parts?
+36. How much control can be pushed into a body's compliance?
+37. Can a body's capacity as a reservoir be a design measure?
+38. Is uniform stress actually optimal, or only good enough for growth?
+39. How does CAO compare with modern topology optimisation in quality and cost?
+40. Can tensile triangles be applied by the AI, without FEM, to every fillet it makes?
+41. What does a tree's fork teach about joining two load paths without a notch stress?
+42. How does a remodelling solver avoid oscillating?
+43. What strain thresholds should drive adaptation in materials other than bone?
+44. Why do bones remove underloaded material and trees not, and which suits which product?
+45. Is bone's yearly renewal a model for maintenance cycles in infrastructure?
+46. How is toughness kept from being confused with fracture toughness in the library?
+47. Which levels of nacre's hierarchy do the toughening, and can each be modelled?
+48. What makes bark-spider silk tough: sequence, expression or spinning?
+49. Can a material node carry properties that depend on process, as silk's do?
+50. How is self-healing's capsule-wall trade-off modelled as a constraint?
+51. Should our repair loops carry a "healing efficiency"?
+52. Which failures in a city simulation could heal themselves?
+53. How is a beloved claim (the wood-wide web) audited for citation bias?
+54. How many independent measurements before a claim enters the library?
+55. Which famous biomimicry cases have primary data we can reproduce?
+56. Can the termite convection cell be simulated and match the measured flows?
+57. What would Eastgate look like redesigned on the 2015 mechanism rather than the myth?
+58. Can a search by function suggest a mechanism before a form is in mind?
+59. Should parts and organisms share one ontology, or linked graphs?
+60. How are species differences held in one strategy record?
+61. What is nature's bill of materials, and does any organism keep one?
+62. Which natural systems build with no blueprint at all, and what does that mean for "no manual work"?
+63. Can growth (trees, bone, Physarum) be one "grow where needed" node with stimuli plugged in?
+64. What does being wrong cost a swarm decision, and how does the bees' protocol price it?
+65. Do natural networks optimise for typical load or for fluctuation and damage?
+66. If nature's optimisers are slow and local, where does Nexus need global solvers?
+
+---
+
+## Chapter 9. Crafts, toys, folding and ancient engineering
+
+*From `research/13-crafts-toys-ancient.md` (round 3, a far branch).*
+
+1. What is the least frozen primitive of a part system, and who may change it?
+2. Can backward compatibility be proved by checking every new interface against every old one?
+3. Why did studded Technic's mismatched pitches last 25 years, and what is our equivalent debt?
+4. Should interfaces mate in one direction only, as Duplo takes LEGO but not the reverse?
+5. Is clutch a property of one interface or of a population of made parts?
+6. How is an interface whose quality depends on the process (moulding, machining) represented?
+7. How much of an interface's fit budget goes to accumulated tolerance and how much to one feature?
+8. If two clone systems share a pitch but not a thread, is that one interface or two?
+9. Can an interface standard hold with no owner, as LDraw does?
+10. What governance stops an open library forking into incompatible dialects?
+11. Does a library need "obsolete but kept" as well as "deprecated"?
+12. Should we show an interface's combinatorial richness (LEGO's 915 million)?
+13. Which part families have exact number fields, and can Nexus compute in them?
+14. Can the type system forbid a wrong connection outright, rather than a solver warn?
+15. Is *ad quadratum* a family of interfaces (√2 between levels) rather than a style?
+16. What is our Zome green strut: the one exception that completes a closed system?
+17. Can a grid be local, a lattice per subassembly, and still mate across lattices?
+18. When do imperial and metric grids meet closely enough to bridge with an adapter?
+19. Can joinery be a boolean pair plus a slide axis, or does it need friction and grain?
+20. How do wood's grain and seasonal movement become part of a joint's demands?
+21. Is a wedge or pin a part, or part of the interface?
+22. How is a joint that tightens under load modelled?
+23. What is the check for "this joint cannot be assembled in any order"?
+24. Can CNC tool access be an interface demand, joinery's wrench room?
+25. Should Nexus offer fitted interfaces derived from scanned neighbours, the Inca way?
+26. Is "the mistake becomes the target" a design method we can offer?
+27. When is interchangeability worth what it costs in forgiveness?
+28. Can Japanese joinery, Chinese bracket sets and European scarf joints share one taxonomy?
+29. Is a fold an interface between two facets of one part?
+30. How should problems hard to verify (global flat-foldability) be treated: heuristics, SAT, or warnings?
+31. Can TreeMaker's "tree in, pattern out" be the template for every inverse-design node?
+32. What allowances turn ideal paper folding into folding thick panels?
+33. How are a structure's stowed and deployed states both first-class shapes?
+34. Does a deployable need a check of its whole path, with no self-collision?
+35. How is shape accuracy after deployment specified and checked?
+36. Can kirigami's stable states be a discrete set of configurations of one part?
+37. Is a Hoberman linkage one part with one freedom, or many parts with many constraints?
+38. Which origami axioms map onto CAD sketch constraints, and which go beyond them?
+39. Could fold patterns be a universal sheet interface ("foldable along…")?
+40. Is a stitch an interface between loops?
+41. Can Knitout's machine-independent layer be the model for every manufacturing output?
+42. How does a knit's stretch become a demand on the part beside it (a foot on a shoe)?
+43. What is knittability in our terms: a constraint on the graph?
+44. Is a deck of Jacquard cards a program, a part, or a step of manufacture?
+45. Can weaves (plain, twill, satin) be parameter nodes with predicted anisotropy?
+46. How are yarn carriers and needle beds scheduled as resources?
+47. Is a medieval rule of thumb a design code, and how is the end of its validity recorded?
+48. Can Heyman's "find one admissible equilibrium" become a general existence check?
+49. Which old rules encode equilibrium and which only taste?
+50. How is a rule's origin (Roriczer, 1486) cited inside the graph?
+51. Should materials carry self-healing as a mechanism with its trigger and response?
+52. What does a lost recipe (Damascus) warn about materials whose properties depend on their source?
+53. Can a site's hydrology be the neighbour of a qanat, with its gradient as the demand?
+54. How is a windcatcher's dependence on wind, temperature cycle and dust modelled?
+55. Is a stepwell a structure that follows a variable, and how do interfaces handle a moving datum?
+56. Can shared water management be an interface between people and a structure?
+57. What did Vitruvius get wrong, or we misread, and how are disputed sources handled?
+58. Which ancient techniques were tuned for speed of building rather than strength?
+59. How do we mark that a historical claim rests on one paper of 2025?
+60. What should a child's construction set and an aerospace deployable share in our data model?
+61. When should Nexus suggest a joint with no fastener instead of a bolt?
+62. Can parts' interfaces be learned by mining which LDraw parts occur together?
+63. What is the smallest teaching set of parts that shows every interface type: our "Meccano No. 1"?
+64. How do we measure whether an interface system is still alive after 10, 50 or 100 years?
+
+---
+
+## Chapter 10. Sound, film, magic and designed experiences
+
+*From `research/14-sound-film-magic.md` (round 3, a far branch).*
+
+1. What is our "1 V per octave": the one convention letting any output drive any input?
+2. Should signals be relative (knob plus input) or absolute by default, and where does each break?
+3. When two cables meet in one input, is summing always right (forces, tolerances, ownership)?
+4. What should a physical port's default be: the published nominal value, or "unconnected"?
+5. How many channels is a cable: sixteen, or any number of swarm members?
+6. Which inputs should trigger and which store in an engineering graph, and who decides?
+7. Can the order wires were drawn ever change a result today, and how would we test it never does?
+8. What is a board's power budget in compute, latency and tokens, and how is it shown?
+9. Should feedback loops be allowed, and how is a one-sample delay said physically?
+10. What is the smallest set of nodes that lets a person perform a simulation live?
+11. How is a graph played live in VR, by hand, without breaking it?
+12. What does a macro knob mean for a drone: which parameters, which safe ranges, from what sources?
+13. When does a presentation view hide too much, and how is a fault behind it found?
+14. Is a photo of a patch enough to reproduce a board, and what must a snapshot hold?
+15. What can patch sheets teach the library law?
+16. Modular players learn by re-patching others' patches: can Nexus teach the same way?
+17. How does a hot-swapped node keep its state (velocity, temperature, charge)?
+18. Should simulation time be rational, and what does exact time buy for causality?
+19. At what cycle boundary does a live edit take effect in a physics simulation?
+20. Can text (live coding) and a graph be two views of one model, kept in step?
+21. What would building a bridge live before an audience look like?
+22. Which materials have published modal data, and which would be estimates?
+23. Can every contact make sound, and what does it cost per contact in a browser (measured)?
+24. How is a generated sound labelled an approximation without breaking immersion?
+25. Is sound a better alarm than sight in VR, given inattentional blindness?
+26. Can a person hear a design fault (an unbalanced rotor) before seeing it?
+27. What listening test would make a modal sound "checked"?
+28. How does sound follow the scale mode: does a shrunken person hear higher?
+29. What is our strength order when the AI, the person and a solver disagree?
+30. Should every agent edit live in its own layer, mutable and removable without trace?
+31. What is a payload boundary: which subassemblies load only when exploded?
+32. Where do variant sets beat separate nodes, and where do they hide real differences?
+33. Can a board export to OpenUSD faithfully, and what would be lost?
+34. What is the work-item dot for an AI gate, and what states may it be in?
+35. What does "recook only the dirty" require of identity and hashing?
+36. What is a dailies session: who reviews, what is shown, what is decided?
+37. How are notes pinned in space and time on a version so they survive a rebuild?
+38. How does the engineering view prove its numbers are sourced?
+39. What is the frustum rule for VR, and where does it fail (motion at the edge)?
+40. Can a person's captured motion drive a robot node, and how is retargeting error shown?
+41. What did virtual production lose against location shooting, and does Nexus lose the same against reality?
+42. How did the Brain Bar change worlds without breaking the shot, and what is ours?
+43. Which of our moments are natural blinks (teleport, mode switch) where change blindness is certain?
+44. Should solver changes be refused during a blink, or applied and announced?
+45. How do we measure whether people notice an AI change: what is our gorilla test?
+46. Is the AI's avatar a gaze cue, and how is it kept from hijacking attention?
+47. Which of Kuhn's three kinds does each of our flows risk deceiving?
+48. Can an honesty audit run automatically over the event log?
+49. When does simplifying for teaching become misdirection?
+50. Could tutorials reveal the method after the effect, as magicians teach?
+51. Does a polished JARVIS interface make people trust results too much, and how is that countered?
+52. What is the time-misdirection risk: work done before the person began to watch?
+53. Can a magician's "convincer" be used honestly, as proof a result is real?
+54. What is each scene's beacon, and can it be computed (the most important open item)?
+55. How far can a beacon be seen, and does it scale with the scale mode?
+56. Where is forced perspective allowed, and how is it said?
+57. What does the person do while a two-minute solver runs?
+58. How is a wait estimate given without guessing?
+59. What does a cue stack look like as nodes, and who calls the show?
+60. How are safety interlocks made impossible for show or AI nodes to override?
+61. Which tutorial structure suits which learner?
+62. Does every tutorial step pass "Ask Why"?
+63. What is a part panel's capture–focus–engage path, and what does it cost?
+64. How is fatigue detected in a long VR session (head motion, dwell)?
+65. With many people present, how are actors (AI, simulations) told apart from people?
+66. How does the AI choose whom to give a one-on-one, without favour or intrusion?
+67. What is the "house lights down" ritual for entering VR?
+68. How do escape-room masters hint without breaking flow, and can the AI do the same?
+69. What do museum designers know about how much text people read, and what does it mean for labels?
+70. Which theatre roles (stage manager, dramaturg, props) map onto AI agents?
+71. How do Imagineers rehearse a new attraction, and what is our cue-to-cue for a new feature?
+72. Can a designed experience run on real engineering data without falsifying it for drama?
+
+---
+
+## Chapter 11. Safety cultures and famous failures
+
+*From `research/16-safety-failures.md` (round 3, a far branch).*
+
+1. What is our gust lock: a hidden state a complex model can be left in, unnoticed?
+2. Which actions are complex enough for a checklist, and which would one make worse?
+3. When should a checklist in a node editor be READ-DO, and when DO-CONFIRM?
+4. How do we prove an item was done, not ticked?
+5. Why did the checklist work in 2009 and not in Ontario in 2014, and which is Nexus more like?
+6. What is the authority gradient between the person and the AI, and who fears to contradict whom?
+7. How does a gate in an AI pipeline raise a concern the orchestrator cannot ignore?
+8. Who runs our near-miss log so reporting carries no penalty?
+9. What is a near miss where nothing physical is at stake?
+10. How do we tell the AI's honest error from an at-risk shortcut from recklessness, and answer each?
+11. Which of our incentives reward shortcuts (speed, green tests)?
+12. Which barriers in a design are truly independent, and which share a cause?
+13. Can fault trees come from a part graph automatically, and what does that miss?
+14. How is a probability shown so no one reads 1 in 100,000 as fact?
+15. When is a probability a target dressed as an estimate?
+16. How is disagreement between estimators shown without averaging it away?
+17. Where do we show commanded state as if it were real (the TMI lamp)?
+18. Should every simulated sensor carry its own failure modes (stuck, drift, mislabelled)?
+19. What is the AI's process model, and how could it part from the board?
+20. For each AI action, what do "too late" and "stopped too soon" mean?
+21. Can STPA be applied to prompt pipelines themselves?
+22. What does drift look like in a library over months?
+23. Which margins, tracked across versions, make drift visible?
+24. When does an accepted anomaly become normal, and how do we count it?
+25. Is the Swiss-cheese model too static for software that changes daily?
+26. What is a latent condition in a parts library (one wrong datasheet value inherited by 400 boards)?
+27. Should a defect in one part send a recall-style warning to every board using it?
+28. What is a contact poka-yoke for a software port?
+29. Which quantities must ports carry as dimensions to make the Mars Climate Orbiter error impossible?
+30. Should conversion ever be implicit, and what does always making it explicit cost?
+31. How are frames and handedness (left and right threads, coordinate frames) keyed?
+32. Which real connector standards (PISS, IEC 60309) should become interface keys, sourced?
+33. Can asymmetry be suggested when two parts could go together two ways?
+34. What does a fixed-value poka-yoke (a count) look like in a bill of materials?
+35. What does a motion-step poka-yoke look like for assembly sequences?
+36. Where should Nexus stop the line, and who may restart it?
+37. How is a stop gate kept from becoming an alarm everyone learns to bypass?
+38. How is the repair loop kept from "fixing" a real product's data so a check passes?
+39. Should Action Priority replace a single risk score everywhere, AI confidence included?
+40. What is "detection" for a simulator: which check would catch this mode?
+41. Which changes trigger a Hyatt re-check: geometry, connection, use, material, supplier?
+42. How do we detect that a load path has moved through a connection not designed for it?
+43. How do we catch defects that predate any change, like Hyatt's base design?
+44. How is shop-drawing detail shown without drowning people?
+45. How is a change of use (rink to restaurant) modelled as a change of load?
+46. Which dynamic checks run by default: flutter, galloping, lateral excitation, resonance, fatigue?
+47. How are people modelled as part of a dynamic system (walkers, helmsmen, pilots)?
+48. Can a static solver be stopped from saying "safe" when no dynamic check ran?
+49. How does a part carry its tested envelope, and what happens outside it?
+50. How is extrapolation shown (36 °F against 53 °F tested)?
+51. How is slow degradation modelled (water in a pool deck for forty years)?
+52. Should we simulate progressive collapse, load moving to neighbours after one connection fails?
+53. What inspection logic should a building or machine carry?
+54. Which software failure modes (races, overflows) attach to software parts?
+55. When software replaces a hardware interlock, what evidence is required?
+56. How is automation's authority and its documentation represented (MCAS)?
+57. How is a single sensor feeding a safety function flagged automatically?
+58. How is a ship's envelope in a canal (wind, bank effects, squat) modelled with its operator?
+59. What is the least post-mortem a failed simulation must produce?
+60. How are the five whys kept from stopping at "human error"?
+61. How are lessons pushed at the point of use rather than searched for?
+62. How is an incident linked to the part classes and interface keys involved?
+63. Which famous failures can be rebuilt as reproducible tests with sourced numbers?
+64. Should every reference failure be a regression test the checker must catch?
+65. How is a library of failures kept from being read as proof a design is safe once each is checked?
+66. What is "public relations" in Nexus (green dashboards?), and how does reality come first?
+67. How are reports kept honest when the AI is rewarded for finishing?
+68. Who reviews the reviewers, and how are blind judges kept from drifting?
+69. What does defence in depth mean for the anti-hallucination pipeline?
+70. How much of each famous failure was technical and how much organisational, and can we model organisations?
+71. Should Nexus model an investigation itself (from wreck to cause) as a graph?
+72. What does a design that cannot be assembled wrong look like at the scale of a city?
+
+---
+
+## Chapter 12. Commons, citizen science and people together
+
+*From `research/15-commons-citizens.md` (round 3, a far branch).*
+
+1. What made a protease that beat experts for a decade fall to gamers in three weeks: the people, the tool, or the framing?
+2. When does a game's score stop matching the truth, and how would anyone notice?
+3. Can a recipe a person wrote still be theirs once an AI improves it?
+4. What is our equivalent of EteRNA's weekly lab: a check the simulation cannot fake?
+5. How many anomalies hide behind every classification with no "other" option?
+6. Should the first to flag an anomaly name it?
+7. How is a vote weighted when its maker's past agreement cannot yet be measured?
+8. Are hidden calibration tasks ethical if people cannot tell them from real ones?
+9. Is "beating the algorithm" lasting, or true only until the next algorithm?
+10. When people's strategies are distilled into a bot, who owns the bot?
+11. Which of Ostrom's principles breaks first when a commons goes global?
+12. What is the boundary of a digital commons anyone can copy?
+13. Can sanctions be graduated where a new account is free?
+14. How is quality control kept from killing newcomers?
+15. What false-positive rate is right for an AI that rejects parts?
+16. Does verifiability favour the already published over the true and new?
+17. What is a neutral point of view for an engineering choice?
+18. When does a tag in common use become law, and who notices?
+19. Whose needs never get a tag because they are not in the room?
+20. Is a final decider a weakness or a necessity?
+21. What is Nexus's "userspace" that must never break?
+22. Did Stack Overflow die of AI, or was AI the second blow?
+23. If an AI trained on a commons drains it, what does it owe back?
+24. Can a commons charge an AI without closing itself to people?
+25. Why is the spreadsheet's grid easier than named variables?
+26. If nearly every spreadsheet holds errors, why are they trusted?
+27. What is the smallest first step that leads someone to authoring?
+28. Does remixing grow skill or replace it?
+29. What credit actually feels like credit to a twelve-year-old?
+30. Should a creator economy's money be allowed into a knowledge commons?
+31. Do creator payouts gather wealth at the top?
+32. What can a child build in redstone that an adult engineer cannot imagine?
+33. Can a file still open in fifty years?
+34. Is "the network is optional" compatible with shared worlds?
+35. When two people put the same bolt in different holes at once, what is the right merge?
+36. Does "last writer wins" lose meaning people care about?
+37. Who orders writes when there is no server?
+38. How large may a part's history grow before it is a burden?
+39. Should deleting ever be truly irreversible in a commons?
+40. What reputation signal can a group of fake accounts not fake?
+41. Should reputation travel between worlds?
+42. Is it griefing if it is funny?
+43. How do you punish without humiliating?
+44. If most toxicity comes from ordinary people on a bad day, should design target moods rather than people?
+45. What makes someone give away a part that took them a month?
+46. Does visible reuse move people more than money?
+47. How does a blind person feel a gear mesh in 3D?
+48. What is the spatial-sound grammar for "this is too hot"?
+49. Can every drag be done with one switch?
+50. How are sounds captioned when the sound is the physics?
+51. Where does a caption sit in 3D, readable and comfortable?
+52. What does plain language look like for tolerances and units?
+53. Can a translation keep a technical term exactly right?
+54. Should signing avatars be built at all, and who decides?
+55. How do cognitive differences change what "undo" must mean?
+56. Can a part's description be good enough that a blind expert prefers it to the model?
+57. What would Ostrom say about an AI as a member of a commons?
+58. Should the AI vote on tags?
+59. How can an AI be wrong in public, safely?
+60. What least evidence lets a community-made part be called real?
+61. Who validates the validators?
+62. How is popularity kept from being taken for correctness?
+63. What share of the library should be unverified, and is that healthy?
+64. How do strangers become friends while building something together?
+65. What extraordinary thing becomes possible only when a million ordinary people share parts?
+
+---
+
+## Chapter 13. Unseen sciences, old games and cooking
+
+*From `research/17-unseen-sciences.md` (round 3, a far branch).*
+
+1. When should a node run one member and when fifty, and who decides: the person, the node, or a measured sensitivity?
+2. How many members make a 1-in-20 tail trustworthy, and how is sampling noise shown in the band?
+3. What is our "observation error", and can every sensor and published figure carry one?
+4. When a product's published figure disagrees with an assimilated estimate, which wins, and is the rule written?
+5. Can a board's error-doubling time be measured by twin runs, and what is a horizon for a machine that is not chaotic?
+6. When a surrogate beats the physics on a benchmark, does it replace it, sit beside it, or only ever be checked against it?
+7. What is our spread-against-skill test where no ground truth exists?
+8. Can ensemble spread be shown inside the 3D scene (ghosted paths) without clutter?
+9. Is a clustered ensemble ("three regimes: 60 %, 30 %, 10 %") more honest than a mean and a band?
+10. What is the adjoint of a node graph, and could every node carry a derivative so whole boards fit to data?
+11. How do we stop people reading an ensemble's mean as a possible single outcome, when it is blurred and maybe impossible?
+12. What does starting-state uncertainty mean for a design not yet built, against a thing being measured?
+13. Which of our systems (cities, grids, swarms, supply chains) are near criticality, where an average means nothing?
+14. How does Nexus say a toy model shows something real material does not?
+15. How is a calibrated parameter kept from leaking where it was not calibrated?
+16. When is a particle model unavoidable and when is a continuum enough, and can a node choose?
+17. What is the least-bad way to show a power-law risk to a non-expert?
+18. Can softened stiffness be bounded: how wrong does it make the answer?
+19. Does every method have a Schroeder frequency: a computable point where it stops holding?
+20. Should the hand calculation always show beside the simulation, and how large a gap is a finding?
+21. Can a machine built to the bolt predict its vibration signature before it exists?
+22. What happens when a simulated fault spectrum is set against a real one from a phone's accelerometer?
+23. Where does listening beat a number for judging a design?
+24. How does Nexus follow a quantity over a product's life, not just at one moment?
+25. How do standards' limits (by machine class, by mounting) become node rules without going stale?
+26. Who sets an acceptance criterion, and how is that shown?
+27. What safety factor goes on a simulated time, and where is it sourced?
+28. How does our vocabulary keep indicator and event apart?
+29. Could Nexus publish Verification and Validation guides generated from its tests?
+30. What is each domain's "design fire": the standard bad day (a design storm, load, crowd)?
+31. When a simulation passes the code and a real test fails, how does the failure flow back into the library?
+32. When should Nexus refuse a life-safety question altogether?
+33. Can symmetry detection run on every saved part and store it compressed?
+34. When a "symmetric" real product measures asymmetric, is that an error or a fact to keep?
+35. Which conservation laws must every physics board report, and what drift is acceptable?
+36. Can a solver solve one sector and replicate it, and prove the loads symmetric too?
+37. Is a broken symmetry a design signal to surface ("mirror-symmetric except here")?
+38. Can the 17 wallpaper groups be generators in a pattern node?
+39. What is a "God's number" for a design space: the furthest any design is from a valid one?
+40. Could group theory describe the AI's allowed edits, and make some provably reversible?
+41. What does the umpire know that players do not, and how is that enforced in the data?
+42. For each domain, how much is tables and dice, and how much judgement?
+43. How is an umpire's judgement audited afterwards?
+44. Can an AI umpire be judged blind against a human one?
+45. What is the least hidden information that makes a multi-agent simulation feel real?
+46. How do message delays and noisy reports become standard node properties?
+47. When players exploit a rule gap, is that a bug report against the rules?
+48. Should our node contracts carry errata as board games do?
+49. What does a wordless tutorial for building a motor look like?
+50. Can a puzzle be built that only someone who understands a concept can solve?
+51. Which outputs are insight and which predictions, and are they labelled?
+52. Is "argue and roll" useful for questions with no physics (policy, society)?
+53. Can every process (cooking, manufacturing, assembly) be one board type: materials in states, operations between?
+54. What share of real recipes and work instructions are under-specified, and can the flow graph find it?
+55. Should every timed step convert to one gated on state?
+56. Is mise en place a general rule: precompute and validate every input before the run?
+57. Can a brigade scheduler run our own AI pipeline (stations, a pass, re-fire on failure)?
+58. How is chemistry that needs dryness modelled: reactions gated by another state?
+59. Can log-reduction tables be a general dose model (heat, radiation, fatigue cycles)?
+60. Where does taste come in: a human-preference gate for the senses?
+61. Should toy, full and calibrated be a first-class axis of every model?
+62. What is the shared shape of simulation → metric → criterion → decision across fire, sound, vibration and weather?
+63. Which fields keep a hand calculation as a sanity check, and can every node have one?
+64. What is our observation network (the real data we assimilate), and how is its quality watched?
+65. How is "not simulated" said in the scene itself, not only in a footnote?
+66. Is a public validation dataset the most important trust asset we could build?
+67. What does an ensemble of designs (not of states) look like: optimisation, or something more honest?
+68. How is a calibrated model kept from being presented as a predictive one?
+69. Where two methods overlap (rays and waves; particles and continuum), how are they blended at the seam?
+70. Which of these fields' failures (the criticality overclaim, flashover misread, Sabine's limits) would we repeat if no rule stopped us?

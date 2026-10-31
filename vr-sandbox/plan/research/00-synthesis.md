@@ -46,3 +46,36 @@ interfaces need ports that carry power); spec 11 with spec 04 (being in it needs
   nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL).
 - **Spec 01** (interfaces): interfaces carry what flows through them (power, fluid, signal) as effort-and-flow ports
   (spec 09), so a shaft is a mechanical port as well as a cylinder.
+
+---
+
+## Round 3 (2026-10-31): what the far branches agree on
+
+Six passes into territories chosen because they looked unrelated (`12` to `17`). Where they meet each other, and the
+first two rounds, without being told of each other:
+
+| # | Finding | Passes | What it means |
+| --- | --- | --- | --- |
+| 12 | **The interface should make a wrong connection impossible, not merely warned of**: keyed by shape (Zome's hole shapes, the medical gas pin index), by unit and kind (the Mars Climate Orbiter's pound-force seconds), by attachment strategy (a gecko pad demands a flatness) | 13 crafts, 16 safety, 12 nature; with 06/07 (typed ports) | spec 01 amended: every interface carries a key (dimension and unit, medium, mechanical pattern, handedness); mismatches cannot connect; conversion only in a visible node |
+| 13 | **Never break old parts**: a published interface is never changed in place; versions are added, with adapters; nothing is overwritten | 13 (LEGO's compatibility, Duplo, Meccano's century), 15 (Linux's "don't break userspace"), 14 (versions never overwritten in film) | a rule in the constitution; interface versions in spec 01 |
+| 14 | **Every claim carries its status**: measured, calibrated (against what, valid for what), typical, inspired only, disputed, myth; estimates keep their spread and their makers; citations are not evidence | 12 (Eastgate, the wood-wide web), 16 (Challenger's 1 in 100 to 1 in 100,000), 17 (calibrated avalanche parameters), 15 (verifiability) | spec 10 (trust in numbers) grows a claim-status field and a calibrated-parameter type; the research agents count independent measurements, not citations |
+| 15 | **Every method checks its own validity at run time and refuses past it** (the Schroeder frequency; a tested envelope; a regime gate; a static solver may not say "safe" without dynamic checks) | 17, 16, 12; with round 2's finding 4 | spec 09/10: validity checked when the node runs, not only declared |
+| 16 | **Many independent judges reaching a quorum, with stop signals and a voice for every gate** (bees' cross-inhibition; ensembles; Crew Resource Management) | 12, 17, 16; with 11 (juries of different families) | the reviewer panel gains a quorum rule and the right of any gate to raise a concern the orchestrator must answer |
+| 17 | **Lessons pushed where they are needed, failures carried by parts** (failure modes on every part; incidents linked to interface keys; "this does not fit" on every view) | 16 (NASA's lessons system unused when pulled), 15 (Hanny's Voorwerp) | a failure-mode record on parts (spec 01); the Hyatt gate on any change to a connection; an anomaly button |
+| 18 | **Show what is, never what was commanded or what distracts** (the TMI lamp; change blindness; looking is not seeing) | 16, 14 | measured and commanded state apart; changes never applied unseen during a blink; an honesty audit over every flow |
+| 19 | **Inverse design as a pattern**: requirement in, part out (TreeMaker; the TERMES compiler; Physarum's networks; Mattheck's growth) | 13, 12 | a node pattern for spec 07: inverse-design nodes with a proof or a score |
+
+## Proposed amendments from round 3
+
+- **Spec 01 (interfaces)**: keys that forbid wrong connections; interface versions and adapters; two modes, standard
+  (interchangeable) and fitted (derived from the neighbour, the Inca way); joinery as an interface with no fastener
+  (a boolean pair, a slide axis, a lock, tool access); a failure-mode record on every part and the "Hyatt gate" on
+  changes to connections; a grid primitive per part family with a closure check.
+- **Spec 10 (trust in numbers)**: claim status; calibrated parameters; quantity kinds beyond units (toughness is not
+  fracture toughness); ensembles by default where chaos or uncertainty rule; an assimilate node to fit simulations to
+  real data.
+- **Spec 11 (the living world)**: affordances (round 2) plus stigmergy for agents, swarms by count of neighbours,
+  an umpire node holding the true state, a chronicle; process boards (materials in states, operations between, gated
+  on state, not time).
+- **Spec 00 (structure)**: a non-punitive near-miss log for the AI; stop the line on a failed check; dailies (the AI
+  shows what changed and the person approves, notes or kills each version).

@@ -22,6 +22,8 @@ something.
 | U11 | The research wave proposes three new specs: 09 the physics core (effort-and-flow ports, an equation compiler, folding tested as exact), 10 trust in numbers (intervals, Monte Carlo, exact sensitivities, CODATA 2022, a "cannot simulate" register), 11 the living world (only the observed computed, replay, affordances, a chronicle, scale anchors). Accept them, and in the order proposed (`research/00-synthesis.md`)? | They change what is built first | accept; CODATA 2022 fixed at once | — |
 | U12 | Amend spec 08 so the AI writes the profile directly when the request gives the sizes, and the image model draws shape only (letters, not digits)? The research found no image model hits exact colours, and models struggle with exact coordinates | It decides whether the picture path is the main one or the fallback | amend | — |
 
+| U13 | Accept round 3's amendments (`research/00-synthesis.md`, round 3): interfaces that make a wrong connection impossible, versioned, standard or fitted, joinery without fasteners, failure modes carried by parts; claim status and calibrated parameters; ensembles; agents by stigmergy with an umpire; a near-miss log and stop-the-line for the AI? | They change specs 00, 01, 10 and 11 | accept | — |
+
 ## Still open in the research
 
 | Id | Question | How it will be answered |
