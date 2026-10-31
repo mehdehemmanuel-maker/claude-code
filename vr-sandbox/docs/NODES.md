@@ -44,7 +44,7 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 
 Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 546 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 192 of 616 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 200 of 616 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
