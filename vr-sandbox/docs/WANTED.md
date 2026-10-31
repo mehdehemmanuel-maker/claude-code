@@ -318,3 +318,5 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   life,engineering,philosophy, astronomy, contests game of life,Mandelbrot, math like pie, universal equations create a list
   of questions that's a book in itself" (answers recorded in `plan/QUESTIONS.md`; the research wave in `plan/research/`;
   the book of questions in `plan/BOOK-OF-QUESTIONS.md`)
+- 2026-10-31: "Okay compile and branch research so we can keep finding things we may have overlooked or genius thing that
+  are unrelated" (the research tree, `plan/research/TREE.md`, with its method; round 3 into far branches)
