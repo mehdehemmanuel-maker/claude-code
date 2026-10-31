@@ -280,3 +280,20 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-10-31: "Okay go through and make navigation absolute and also propose full system upgrades" (done: search
   finds every node by name and id, every board, every app feature, misspelt and plain words; every source file and every
   document routed from CLAUDE.md, both held by the gate; the proposal in `docs/UPGRADES.md`)
+- 2026-10-31: "Okay 1-2(but variants I can choose weather I'm ghost mode or whatever also I can change my perception
+  change time Change my sight or whatever that would be good skip 3 for now 4 populate the civil engineering 5. Yes we
+  need advanced topology that don't just apply specifically to a thing we can have geometry mating or inverting for
+  example if you make a bolt you can past it's input geometry into a surface of anything easily like we need very
+  advanced smart stuff stop playing and we especially need faster searches advanced names populate the library with
+  just names and stuff like words specific too it like subcategory's … but don't make those count as there only real
+  nodes count for faster searches advanced names index phone layout colorful iron man Jarvis phone app but named
+  moosky typ of thing just advance everything but before you do anything I want you to take what I just said and
+  research I'm finding new emerging ais new frameworks new tools that we can pick from. For example there's
+  implicit.build it's like a topology cad machine, they got Roblox vibe coding now similar to this but where going way
+  more advanced for the complexity of this project how do we structure this so we don't mess shit up forget shit or you
+  know start doing circles or just tripping, there's vibe scad beta, there's so many VIBE CADS like vibe cad studio, and
+  cascadeur, google deep mind, Motorola, geometric deep learning go through for the next 1 hour I want you to create the
+  most amazing structure reverse engineer each of these stitch them together then make them plan even better highly
+  detailed clear plan well thought out context aware on current situation as well and yea steal go through and steal dig
+  dig everywhere take your time and just research for now think of all the right questions to ask ask all of them keep
+  asking questions and conceptually scraping until you can't anymore" (research first; the plan in `docs/PLAN-NEXT.md`)
