@@ -1438,3 +1438,14 @@ user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node
   tower's top to 5.01 m; walking put the eye at 1.6 m; on a 390 × 844 touch screen, a tap on the drawn button added a
   crate; in the space, walking set S to 1 with the eye at 1.6 m and E added 3 crates. No page errors. Not tried: a real
   phone, a real gamepad, a headset (the hand's ray goes through the same press as the mouse, untested here).
+- **2026-10-31, navigation made absolute.** Measured first, over every entry: all 614 nodes were found first by their
+  exact names, but plain and misspelt words failed ("buton", "sprng", "joystick", "intractable", "make a house",
+  "scrape a website": nothing; "walk": unrelated parts). Now: words that say nothing left out, each misspelt word
+  corrected to the nearest the library has (edit distance 1 for short words, 2 for longer), more other words (ALSO), the
+  nearest match where nothing has every word, an id typed whole found as itself, and the app's own 22 features as a
+  library (`APP`). After: nodes by name 613 of 614 first and 614 in the first three; by id the same; every board by its
+  name and every app feature in the first three; the 20 plain and misspelt questions in the gate all land in the first
+  three (e.g. "buton" Button, "intractable" Button, "make a house" House, "scrape a website" ZenRows, "exprt step"
+  Export). Two tests hold it: navigation (a fourth of the nodes in the gate, every one in the docs run; about 12 ms a
+  search) and routing (every source file named by an owner row, every document routed from CLAUDE.md and every route
+  there). The routing test found 14 files no row named (`kinds/`, `ganglia/`): rows added.

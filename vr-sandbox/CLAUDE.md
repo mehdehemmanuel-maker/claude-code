@@ -32,6 +32,9 @@ the task list and lose the why. So the why lives here, and every round is checke
 | What the user asked, in their words, and when | `docs/WANTED.md` |
 | Which module owns a concern, in full (its nodes, its rules) | `docs/OWNERS.md` (the one-line table is below) |
 | What is next, and in what order; what is done | `docs/ROADMAP.md` (status at its top) |
+| Upgrades proposed for the whole system, by its eight systems and the platform, in order | `docs/UPGRADES.md` |
+| How the AI in the app is told to build (its whole instruction) | `docs/FOR-AI.md` |
+| What depends on what in the code; the disciplines tree nodes are classed by | `docs/DEPENDENCIES.md`, `docs/DISCIPLINES.md` (both generated) |
 | What was done and measured, round by round | `docs/REALITY.md` (a log: search it, do not read it whole) |
 | The engineering compiler's 30 stages | `docs/COMPILER.md` |
 | Placement, routing, sizing, repair | `docs/PLACEMENT.md` |
@@ -95,6 +98,9 @@ known gaps are there too.
 | The level of detail every maker and the renderer read; a spatial index over points | `nexus/lod.ts`; `PointGrid` in `nexus/make/space.ts` |
 | How a part looks: colour from optics, films, the look stack | `nexus/colour.ts`, `appearance.ts`, `data/optics.ts` |
 | Parts from standards; components; catalogue | `nexus/families.ts`, `catalogue.ts`, `components.ts` |
+| Kinds of bought part as data (sizes, materials, standards, mass), by trade: each becomes a family | `nexus/kinds/` (`core.ts` says how one is written) |
+| Units and dimensions; the typed knowledge the laws are checked against | `ganglia/units.ts`, `ganglia/types.ts` |
+| Engineering by its own equations: springs (Shigley), DC motors, heat, fusion of materials, joining | `engineering/` (`springs.ts`, `dcmotor.ts`, `thermal.ts`, `fusion.ts`, `joining.ts`) |
 | Makers by process (fastener, winding, sensor, …) | `nexus/makers.ts` |
 | Engines, gearboxes, fittings, closures | `nexus/engines.ts`, `drivetrain.ts`, `fittings.ts` |
 | Vehicles, tyres, machines | `nexus/machines.ts`, `panels.ts` |

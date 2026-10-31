@@ -59,6 +59,33 @@ const rec = <T>(o: Record<string, T>, name: (k: string, v: T) => string, says: (
 const lab = (v: unknown) => (v && typeof v === 'object' && 'label' in v ? String((v as { label: string }).label) : '');
 const boards = () => starterBoards();
 
+/** The app's own features, each where it is and how it is reached, so a search for what to do finds how to do it as
+ *  surely as it finds a node: [id, name, how]. */
+export const APP: [string, string, string][] = [
+  ['app.walk', 'Walk in it', 'Walk through the 3D world at your own height: the Walk button over the 3D view, or V; W A S D or the drawn stick to move, drag to look, Shift runs, Esc stops'],
+  ['app.ask', 'Ask Claude', 'Claude builds for you through the nodes: the board\'s side panel (nothing chosen), Ask Claude; it opens starter boards, places, wires, runs, folds into saved blocks; served by npm run app'],
+  ['app.space', 'The space (immersive, a headset)', 'Space ↗ on the 3D view, or view/space.html: the world at any scale (µm to km), panels floating, Enter VR in a headset'],
+  ['app.enter', 'Fill the page with the 3D view', '⤢ Enter on the 3D view (Esc comes back)'],
+  ['app.controls', 'Controls you work while it runs', 'Button, Stick and Slider nodes: drawn over the 3D view, worked by keys, a phone, a gamepad; a button put on a thing is pressed in 3D (the Controls starter board)'],
+  ['app.fold', 'Fold into a group', 'Choose blocks (shift-drag a box), then Ctrl G or Fold into a group: what crosses its edge becomes its ports'],
+  ['app.saveblock', 'Save a group as a library block', 'Choose a group, Save to the library: placed anywhere after, by its name'],
+  ['app.saveboard', 'Save the board', 'Side panel, This board: Save to the library\'s Boards (under a field), Export JSON, Import JSON'],
+  ['app.commands', 'Commands and adding blocks by name', 'Ctrl K, or the box at the top: type a block\'s name, or a command'],
+  ['app.add', 'Add a block', 'Drag it from the library, double-click empty space, or Ctrl K and its name'],
+  ['app.wire', 'Wire blocks', 'Drag from an output to an input; drag a wire off an input to move it'],
+  ['app.undo', 'Undo and redo', 'Ctrl Z, Ctrl Shift Z, or the arrows at the top'],
+  ['app.delete', 'Delete', 'Choose and press Del, or Delete in the side panel; a suggestion offers to cut what feeds nothing'],
+  ['app.heat', 'Heat: what took the time', 'Heat at the top: each block coloured by how long it ran'],
+  ['app.cut', 'Cut it open (cutaway)', 'Cut on the 3D view: across x, then z, then y, then whole again'],
+  ['app.fit', 'See it all (fit)', 'Fit on the 3D view or at the top, or F'],
+  ['app.zoom', 'Zoom to a piece', 'Double press a piece in the 3D view: flown to and framed close'],
+  ['app.time', 'The clock (time)', 'The bar under the 3D view: play, scrub, its span and rate; what moves with time runs'],
+  ['app.variations', 'Variations side by side', 'Choose a node with choices: each choice worked out in Variations, a press to take one'],
+  ['app.gauntlet', 'The gauntlet', 'Gauntlet ↗ at the top: gates, a queue, a sorter, a recursive loop of checks'],
+  ['app.export', 'Export files (STEP, STL, 3MF, glTF)', 'The Export node (export.files), or the Export starter board'],
+  ['app.library', 'Browse the library', 'The left panel: by stage, field, ability, kind, or every library by type'],
+];
+
 /** Every library, each with what reaches it. */
 export function libraries(): Library[] {
   const blocks = [...LIBRARY.values()].filter((b) => !b.id.startsWith('group.'));
@@ -83,10 +110,11 @@ export function libraries(): Library[] {
     { id: 'gases', name: 'Gases', type: 'matter', says: 'substances given off, with what they do at each concentration', source: 'src/nexus/aware/gas.ts', entries: () => rec(SUBSTANCES, (_k, v) => v.name, () => '', 'gases') },
     { id: 'actors', name: 'Actors', type: 'bodies', says: 'bodies that act and sense (an adult, a child), by their proportions', source: 'src/nexus/aware/tags.ts', entries: () => rec(ACTORS, (_k, v) => v.name, (_k, v) => `${v.height} m, ${v.mass} kg`, 'actors') },
     { id: 'references', name: 'References', type: 'knowledge', says: 'researched things, compiled from sourced notes', source: 'src/nexus/research.ts', entries: () => rec(REFERENCE_NOTES, (_k, v) => v.name, () => '', 'references') },
+    { id: 'app', name: 'The app itself', type: 'knowledge', says: 'what the app does and where: each of its features and how to reach it', source: 'src/nexus/navigate.ts (APP)', entries: () => APP.map(([id, name, says]) => ({ library: 'app', id, name, says })) },
     { id: 'programs', name: 'Programs', type: 'knowledge', says: 'programs for the chips that run here', source: 'src/nexus/logic/programs.ts', entries: () => rec(PROGRAMS, (k) => k, (_k, v) => v.says, 'programs') },
   ];
   // (the node library and the boards are reached by the library panel itself)
-  const SAID: Record<string, string[]> = { nodes: ['*'], laws: ['*'], seeds: ['*'], boards: ['*'] };
+  const SAID: Record<string, string[]> = { nodes: ['*'], laws: ['*'], seeds: ['*'], boards: ['*'], app: ['*'] };
   // (a setting reaches the library, or libraries, whose entries most of its choices are: at least half of them, and two)
   const idsOf = new Map(L.map((l) => [l.id, new Set(l.entries().map((e) => e.id))])), found = new Map<string, Library['reach']>();
   for (const b of blocks) for (const s of b.settings ?? []) {
@@ -132,24 +160,81 @@ export function useOf(l: Library, e: Entry): Pick<Found, 'add' | 'board'> {
  *  by either the technical term or the plain question finds it. */
 const specified = (b: BlockDef): string => (b.spec ? `${b.spec.gloss}. ${b.says} ${DISCIPLINE.get(b.spec.discipline)?.name ?? ''} ${b.spec.codes.map((c) => `${c.code} ${c.label}`).join(' ')}` : b.says);
 /** Words a person searches by that the library says another way: each also finds what its others name. */
-const ALSO: Record<string, string[]> = { collision: ['interference', 'runs into', 'clash'], collide: ['interference', 'runs into'], clash: ['interference', 'runs into'], cad: ['solid', 'b-rep', 'step'], fea: ['calculix', 'three ways'], 'finite': ['calculix'], optimise: ['fit to a target', 'pareto'], optimize: ['fit to a target', 'pareto'], sensitivity: ['what matters'], ai: ['vision model', 'image model', 'intelligence'] };
+const ALSO: Record<string, string[]> = { joystick: ['stick'], gamepad: ['stick', 'control'], controller: ['stick', 'control'], interactable: ['button', 'stick', 'slider'], interactive: ['button', 'stick', 'slider'], intractable: ['button', 'stick', 'slider'], clickable: ['button'], press: ['button'], toggle: ['button', 'switch'], switch: ['toggle'], knob: ['slider'], dial: ['slider'],
+  scrape: ['web page', 'zenrows'], website: ['web'], webpage: ['web'], internet: ['web'], online: ['web'], browse: ['web'],
+  heavy: ['mass'], weight: ['mass'], weigh: ['mass'], weighs: ['mass'], light: ['lamp', 'mass'], mass: ['weight'], price: ['cost', 'money'], cost: ['price', 'money'], money: ['cost', 'price'], cheap: ['cost'],
+  walk: ['walk'], move: ['stick', 'place', 'motion'], drive: ['stick', 'vehicle'], car: ['vehicle', 'corolla', 'monte carlo'], vehicle: ['car', 'machine'], truck: ['cascadia'], bike: ['dirt bike'], motorcycle: ['dirt bike'],
+  person: ['body', 'actor', 'agent'], human: ['body', 'actor', 'agent'], people: ['body', 'actor', 'agent'], robot: ['agent', 'actuator'],
+  photo: ['picture', 'image'], picture: ['image', 'photo'], image: ['picture', 'draw'], draw: ['image'], render: ['view', 'image'],
+  hot: ['heat', 'temperature'], cold: ['heat', 'temperature'], warm: ['heat'], strong: ['stress', 'strength'], strength: ['stress'], break: ['stress', 'fail'], breaks: ['stress', 'fail'], test: ['check', 'sweep'],
+  copy: ['array', 'pattern'], repeat: ['array', 'pattern'], many: ['array', 'pattern', 'spawn'], grid: ['array'], row: ['array'], circle: ['ring', 'array'],
+  join: ['mate', 'combine'], attach: ['mate'], connect: ['mate', 'wire'], fasten: ['bolt', 'fastener'], screw: ['bolt', 'thread'], nut: ['nut'], hole: ['bore', 'cut', 'hole'],
+  save: ['save', 'export'], file: ['export'], download: ['export'], step: ['export', 'step'], stl: ['export'],
+  chat: ['claude', 'ask'], gpt: ['claude', 'ai'], llm: ['claude', 'ai'], agent: ['agent'], home: ['house'], building: ['house', 'building'], town: ['city'],
+ collision: ['interference', 'runs into', 'clash'], collide: ['interference', 'runs into'], clash: ['interference', 'runs into'], cad: ['solid', 'b-rep', 'step'], fea: ['calculix', 'three ways'], 'finite': ['calculix'], optimise: ['fit to a target', 'pareto'], optimize: ['fit to a target', 'pareto'], sensitivity: ['what matters'], ai: ['vision model', 'image model', 'intelligence'] };
+const lowKept = new Map<string, [Entry, { n: string; i: string; all: string }][]>();
+/** A library's entries with their name, id and all they say in lower case, worked out once. */
+const lowered = (l: Library) => { let x = lowKept.get(l.id); if (!x) { x = entriesOf(l).map((e) => { const n = e.name.toLowerCase(), i = e.id.toLowerCase(); return [e, { n, i, all: `${n} ${i} ${e.says.toLowerCase()}` }]; }); lowKept.set(l.id, x); } return x; };
+/** Words a request is written with that say nothing of what is wanted ("make me a house" is "house"). */
+const STOP = new Set('a an the to of for with in on at by and or me my i we you it its this that these those make build create show give get find want need needs some how do does can could would what which please is are be from into using use'.split(' '));
+let vocab: Map<string, number> | null = null;
+/** Every word in every library's names, ids and says, with how often it comes: what a misspelt word is corrected to. */
+function vocabulary(): Map<string, number> {
+  if (vocab) return vocab; const v = new Map<string, number>();
+  const add = (t: string) => { for (const w of t.toLowerCase().split(/[^a-z0-9]+/)) if (w.length >= 3) v.set(w, (v.get(w) ?? 0) + 1); };
+  for (const l of allLibraries()) if (l.id !== 'catalogue' && l.id !== 'stock') for (const e of entriesOf(l)) add(`${e.name} ${e.id} ${e.says}`);
+  for (const k of Object.keys(ALSO)) v.set(k, (v.get(k) ?? 0) + 50);
+  return (vocab = v);
+}
+/** The edit distance between two words (letters put in, taken out, changed, or two swapped), stopping past `most`. */
+function distance(a: string, b: string, most: number): number {
+  if (Math.abs(a.length - b.length) > most) return most + 1;
+  let prev2: number[] = [], prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) { const row = [i]; let low = i;
+    for (let j = 1; j <= b.length; j++) { let d = Math.min(prev[j]! + 1, row[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1)); if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d = Math.min(d, prev2[j - 2]! + 1); row.push(d); low = Math.min(low, d); }
+    if (low > most) return most + 1; prev2 = prev; prev = row; }
+  return prev[b.length]!;
+}
+/** A word as the library spells it: itself where the library has it (or a word it begins), else the nearest word the
+ *  library has (one letter off for short words, two for longer), the commonest of the nearest. */
+export function spelt(w: string): string {
+  // (only plain words: an id, a size or a word with its punctuation is taken as written)
+  if (!/^[a-z]+$/.test(w) || w.length < 3) return w; const v = vocabulary(); if (v.has(w) || ALSO[w]) return w;
+  for (const k of v.keys()) if (k.startsWith(w)) return w;
+  const most = w.length <= 5 ? 1 : 2; let best = w, bd = most + 1, bn = 0;
+  for (const [k, n] of v) { const d = distance(w, k, most); if (d < bd || (d === bd && n > bn)) { best = k; bd = d; bn = n; } }
+  return bd <= most ? best : w;
+}
+/**
+ * Everything matching some words, across every library, best first. The words as written are read as the library
+ * would: words that say nothing of what is wanted left out, each misspelt word corrected to the nearest the library has,
+ * and each read with its other words (ALSO). Every word must be found (in the name, the id or what it says), ranked by
+ * where; where nothing has every word, what has all but one (or, of two words, one) comes after, so a search finds
+ * the nearest there is rather than nothing.
+ */
 export function search(q: string, most = 40): Found[] {
-  const ws = q.toLowerCase().split(/\s+/).filter(Boolean); if (!ws.length) return [];
+  const raw = q.toLowerCase().split(/\s+/).filter(Boolean); if (!raw.length) return [];
+  const kept = raw.filter((w) => !STOP.has(w)), ws = (kept.length ? kept : raw).map(spelt), typed = raw.join(' ');
   const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), forms = (w: string) => [w, ...(ALSO[w] ?? [])];
-  const out: Found[] = [], rank = (name: string, says: string, id: string): number => {
-    const n = name.toLowerCase(), all = `${n} ${id.toLowerCase()} ${says.toLowerCase()}`; if (!ws.every((w) => forms(w).some((f) => all.includes(f)))) return 0;
-    // (the name itself, then starting with it, then each word whole in it ("STEP" for step, over "stepper"), then each
-    // word starting one, then inside one; found by another word for it, a little under)
+  const out: Found[] = [], partial: Found[] = [], need = ws.length <= 2 ? 1 : ws.length - 1;
+  const rank = (n: string, i: string, all: string): number => {
+    const hit = ws.filter((w) => forms(w).some((f) => all.includes(f))).length;
+    if (hit < ws.length) return hit >= need ? -hit : 0;
+    // (the name itself or the id itself, then starting with it, then each word whole in it ("STEP" for step, over
+    // "stepper"), then each word starting one, then inside one; found by another word for it, a little under)
     const whole = ws.join(' '), inName = (re: (w: string) => RegExp) => ws.every((w) => forms(w).some((f) => re(f).test(n)));
-    return n === whole ? 100 : n.startsWith(whole) ? 60 : inName((w) => new RegExp(`\\b${esc(w)}\\b`)) ? 45 : inName((w) => new RegExp(`\\b${esc(w)}`)) ? 40 : ws.every((w) => n.includes(w)) ? 25 : ws.every((w) => all.includes(w)) ? 5 : 4;
+    // (a name or an id typed whole as written, little words and all, is the thing itself: "Show a map", "math.ode")
+    if (n === typed || i === typed) return 100;
+    return n === whole || i === whole ? 100 : n.startsWith(typed) || n.startsWith(whole) ? 60 : inName((w) => new RegExp(`\\b${esc(w)}\\b`)) ? 45 : inName((w) => new RegExp(`\\b${esc(w)}`)) ? 40 : ws.every((w) => n.includes(w)) ? 25 : ws.every((w) => forms(w).some((f) => i.includes(f))) ? 20 : ws.every((w) => all.includes(w)) ? 5 : 4;
   };
   for (const l of allLibraries()) {
     if (l.id === 'catalogue') continue;
-    for (const e of entriesOf(l)) { const r = rank(e.name, e.says, e.id); if (!r) continue;
-      const f: Found = { library: l.id, libraryName: l.name, id: e.id, name: e.name, says: e.says, score: r + (l.type === 'nodes' ? 3 : 0) };
-      out.push({ ...f, ...useOf(l, e) }); } }
-  for (const line of searchCatalogue(q, 10)) { const d = DESIGNED.includes(line.split(' ')[0]!); out.push({ library: 'catalogue', libraryName: 'Catalogue sizes', id: line, name: line, says: d ? 'a standard size, drawn whole' : 'a standard size, known and not drawn yet', score: 4, ...(d ? { add: { block: 'card.part', set: { what: line } } } : {}) }); }
-  return out.sort((a, b) => b.score - a.score || a.name.length - b.name.length).slice(0, most);
+    for (const [e, lo] of lowered(l)) { const r = rank(lo.n, lo.i, lo.all); if (!r) continue;
+      const f: Found = { library: l.id, libraryName: l.name, id: e.id, name: e.name, says: e.says, score: r > 0 ? r + (l.type === 'nodes' ? 3 : 0) : (3 * -r) / ws.length };
+      (r > 0 ? out : partial).push({ ...f, ...useOf(l, e) }); } }
+  for (const line of searchCatalogue(ws.join(' '), 10)) { const d = DESIGNED.includes(line.split(' ')[0]!); out.push({ library: 'catalogue', libraryName: 'Catalogue sizes', id: line, name: line, says: d ? 'a standard size, drawn whole' : 'a standard size, known and not drawn yet', score: 4, ...(d ? { add: { block: 'card.part', set: { what: line } } } : {}) }); }
+  const by = (a: Found, b: Found) => b.score - a.score || a.name.length - b.name.length;
+  return [...out.sort(by), ...(out.length < most ? partial.sort(by) : [])].slice(0, most);
 }
 
 /** How a node's work flows. */

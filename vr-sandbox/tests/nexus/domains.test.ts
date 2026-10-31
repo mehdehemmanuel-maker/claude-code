@@ -13,7 +13,7 @@ import '../../src/nexus/seeds';
 import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
 import { Engine, type Env } from '../../src/nexus/dataflow';
 import { starterBoards } from '../../src/nexus/starters';
-import { fieldOf } from '../../src/nexus/navigate';
+import { APP, fieldOf, search } from '../../src/nexus/navigate';
 import { builtOf } from '../../src/nexus/evidence';
 import { parseUnit } from '../../src/ganglia/units';
 import { run } from '../../src/nexus/view/code-worker';
@@ -62,6 +62,34 @@ describe('every domain, in one pass', () => {
   it('nothing outdated is kept: every source file is reached from the node app', () => {
     const seen = reached(), stray = sources().filter((f) => !seen.has(f)).map((f) => relative(root, f));
     expect(stray, `reached by nothing in the node app; delete them, or reach them from a node: ${stray.join(', ')}`).toEqual([]);
+  });
+  // (navigation is absolute: every node by its name and its id, every starter board by its name, every feature of the
+  // app by its name, found in the first three; and plain or misspelt words find what is meant. A sample of the nodes
+  // here (every fourth); every one when the docs are written)
+  it('navigation finds everything, by name, by id, and by plain or misspelt words', () => {
+    const top = (q: string, ok: (f: ReturnType<typeof search>[number]) => boolean) => search(q, 3).some(ok), lost: string[] = [];
+    const nodes = [...LIBRARY.values()].filter((d) => !d.id.startsWith('group.')).filter((_, k) => process.env.UPDATE_DOCS || k % 4 === 0);
+    for (const d of nodes) for (const q of [d.name, d.id]) if (!top(q, (f) => f.id === d.id || f.add?.block === d.id)) lost.push(`node "${q}"`);
+    for (const [t] of starterBoards()) { const q = t.split(':')[0]!; if (!top(q, (f) => f.board === t)) lost.push(`board "${q.slice(0, 50)}"`); }
+    for (const [id, name] of APP) if (!top(name, (f) => f.id === id)) lost.push(`app "${name}"`);
+    // (asked as a person asks: [what is typed, what must come in the first three])
+    const ASKED: [string, string][] = [['buton', 'control.button'], ['joystick', 'control.stick'], ['intractable', 'control.button'], ['walk', 'app.walk'], ['make a house', 'seed.house'],
+      ['scrape a website', 'api.zenrows'], ['exprt step', 'export.files'], ['wieght', 'law.weight'], ['ask claude', 'agent.build'], ['explode', 'explode'], ['take apart', 'explode'], ['collision', 'check.rules'],
+      ['stres test', 'sweep.range'], ['sprng', 'load.spring'], ['city', 'seed.city'], ['person', 'body'], ['fold into a group', 'app.fold'], ['undo', 'app.undo'], ['slider', 'control.slider'], ['fit to a target', 'fit.target']];
+    for (const [q, want] of ASKED) if (!top(q, (f) => f.id === want || f.add?.block === want)) lost.push(`asked "${q}" (wants ${want}; got ${search(q, 3).map((f) => f.add?.block ?? f.id).join(', ')})`);
+    expect(lost, `not found in the first three: ${lost.join('; ')}`).toEqual([]);
+  }, 120_000);
+  // (the context's routing is absolute too: every source file is named in CLAUDE.md or docs/OWNERS.md, by its file or
+  // its folder, so whoever works here is routed to every file by the owners table)
+  it('every source file has an owner in the docs', () => {
+    const said = readFileSync(join(root, 'CLAUDE.md'), 'utf8') + readFileSync(join(root, 'docs/OWNERS.md'), 'utf8');
+    const orphan = sources().map((f) => relative(join(root, 'src'), f)).filter((f) => { const dir = dirname(f), base = f.split('/').pop()!;
+      return !said.includes(base) && !said.includes(`${dir}/\``) && !said.includes(`${dir.replace(/^nexus\//, '')}/\``) && !said.includes(`\`${dir}/`) && !said.includes(`${dir.replace(/^nexus\//, '')}/\` `); });
+    expect(orphan, `files no owner row names: ${orphan.join(', ')}`).toEqual([]);
+    // (and every document is routed to from CLAUDE.md's table, and every document it routes to is there)
+    const claude = readFileSync(join(root, 'CLAUDE.md'), 'utf8'), docs = readdirSync(join(root, 'docs')).filter((f) => f.endsWith('.md'));
+    expect(docs.filter((f) => !claude.includes(`docs/${f}`)), 'documents CLAUDE.md does not route to').toEqual([]);
+    expect([...claude.matchAll(/docs\/([A-Z-]+\.md)/g)].map((m) => m[1]!).filter((f) => !docs.includes(f)), 'documents CLAUDE.md routes to that are not there').toEqual([]);
   });
   // (the law of the built-parts library: every piece every build makes, at every depth, is taken from the library or
   // stored in it; nothing stored that no build makes; src/nexus/stock.ts)

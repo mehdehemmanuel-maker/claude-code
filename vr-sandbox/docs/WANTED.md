@@ -277,3 +277,6 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   Slider nodes worked by keys, a gamepad, drawn controls on a phone, a hand's ray, or a button put on a thing and
   pressed in 3D; walking in the world at your own height. Read as "a fully interactable node"; another person joining
   the same world is not built)
+- 2026-10-31: "Okay go through and make navigation absolute and also propose full system upgrades" (done: search
+  finds every node by name and id, every board, every app feature, misspelt and plain words; every source file and every
+  document routed from CLAUDE.md, both held by the gate; the proposal in `docs/UPGRADES.md`)

@@ -102,10 +102,12 @@ export function catalogue(family?: string): string[] {
   return (lines ??= Object.keys(SERIES).flatMap((f) => catalogue(f)));
 }
 /** The lines a few words find, without making their parts: each word a part of the line, the more the better. */
+let lowLines: [string, string, string[]][] | undefined;
 export function searchCatalogue(q: string, n = 20): string[] {
   const ws = q.toLowerCase().split(/\s+/).filter(Boolean); if (!ws.length) return [];
   const scored: [string, number][] = [];
-  const toks = (l: string) => l.toLowerCase().split(/\s+/);
-  for (const l of catalogue()) { const low = l.toLowerCase(); let s = 0, whole = 0; for (const w of ws) if (low.includes(w)) { s += w.length; if (toks(l).some((t) => t === w || t.startsWith(w))) whole += w.length; } if (s >= ws.join('').length * 0.75) scored.push([l, s + whole - low.length / 100]); }
+  // (each line lower-cased and cut into words once, for every search after)
+  lowLines ??= catalogue().map((l) => { const low = l.toLowerCase(); return [l, low, low.split(/\s+/)] as [string, string, string[]]; });
+  for (const [l, low, tk] of lowLines) { let s = 0, whole = 0; for (const w of ws) if (low.includes(w)) { s += w.length; if (tk.some((t) => t === w || t.startsWith(w))) whole += w.length; } if (s >= ws.join('').length * 0.75) scored.push([l, s + whole - low.length / 100]); }
   return scored.sort((a, b) => b[1] - a[1]).slice(0, n).map(([l]) => l);
 }
