@@ -366,7 +366,7 @@ Groups, notes, code, asking, events.
 
 - **Ask Claude** (`ai.ask`): Asks Claude, or Nexus where Claude cannot be reached; {input} is what comes in *hypothetical, untested*
 - **Claude (Anthropic Messages API)** (`api.claude`): Words sent to Claude through the Anthropic API (its SDK; ANTHROPIC_API_KEY under Node), its answer back. *hypothetical, untested*
-- **Claude builds a board** (`agent.build`): A request in words handed to Claude, which works only through the node system's own tools: searching the library and the example boards, reading a node before it uses it, reading the docs by their router, placing, … *hypothetical, untested*
+- **Claude builds a board** (`agent.build`): A request in words handed to Claude, which works only through the node system's own five tools (docs/FOR-AI.md, its whole instruction): find blocks, read a block's card, build a whole board from a short plan and run … *hypothetical, untested*
 - **Code** (`code`): Code with ports: each input is a name in it, what it returns (an object, port by port, or one value) fills its outputs. *derived, untested, before the update*
 - **Export (STEP, STL, 3MF, glTF, BOM)** (`export.files`): A thing written as files: STEP (each solid named by its place in the thing's tree, coloured, millimetres), STL, 3MF and glTF (the kernel's own meshes of the exact solids), and its bill of materials as CSV; the STEP … *derived, tested here*
 - **Gemini: look at pictures** (`api.gemini.see`): Pictures and words sent to Google's Gemini (GEMINI_API_KEY under Node), its answer back; its models tried in turn where one is gone or busy *hypothetical, untested*
