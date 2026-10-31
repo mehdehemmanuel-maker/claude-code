@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 606 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 612 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -36,17 +36,17 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
 | derived | 331 | worked out from what it is given by laws that hold here; no weaker than its inputs |
-| given | 9 | set by whoever made the board |
+| given | 10 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 79 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 84 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 543 tested here (their own tests: that they do what they say, not that the world does); 53 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 543 tested here (their own tests: that they do what they say, not that the world does); 59 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 192 of 606 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 192 of 612 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
-## 1 · Start: values and inputs (11)
+## 1 · Start: values and inputs (12)
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
@@ -61,8 +61,9 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Text** (`in.text`): Words you type, carried on a wire to whatever reads text (a label, a search, a note) *given, tested here, before the update*
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
+- **ZenRows: read a web page** (`api.zenrows`): A web page fetched through ZenRows (ZENROWS_API_KEY under Node): its scripts run where asked, its words back as Markdown or its HTML as it is. *given, untested*
 
-## 2 · Make: shapes, parts, things (80)
+## 2 · Make: shapes, parts, things (83)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -94,10 +95,13 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Enclosure with cells** (`make.enclosure`): A moulded enclosure in one piece: its floor, walls and partitions dividing it into cells along its length, ribs under each cell; and its lid. *hypothetical, tested here, before the update*
 - **Engine piece** (`engine.piece`): One of a cylinder head's pieces made to the engine's size, on its own: an intake or exhaust valve, a valve spring, its retainer, a bucket tappet, a spark plug, an ignition coil. *hypothetical, tested here, before the update*
 - **Extrude** (`shape.extrude`): A profile drawn in x and y (mm), pushed out along z to a length: a bracket, a beam, a plate of any outline *hypothetical, tested here, before the update*
+- **fal.ai: draw from words (FLUX)** (`api.fal.draw`): Words sent to fal.ai's FLUX models (FAL_KEY under Node), a picture back; an account with no credit is said as fal says it *hypothetical, untested*
 - **Fastener (any)** (`make.fastener`): Any bolt, screw, stud, rivet or pin from one node: its head (a polygon of 4, 6 or 8 sides, round, pan, button, countersunk, flanged or none), its drive, its shank, its thread drawn as a helix to its pitch, its point; … *hypothetical, tested here, before the update*
 - **Fill** (`make.fill`): Each cell of an enclosure filled with a liquid to a height: a battery's acid, a tank's fuel, a radiator's coolant. *hypothetical, tested here, before the update*
 - **Floor plan** (`plan.rooms`): A house's rooms laid out from its plan: rows of rooms split by "/", rooms in a row by ",", each "type W x D" in metres ("bedroom 4x4, bathroom 2.5x3 / kitchen 4x3.5, living 5x3.5"); or a plan by name. *hypothetical, tested here, before the update*
+- **Gemini: draw from words** (`api.gemini.draw`): Words sent to Gemini's image models (GEMINI_API_KEY under Node), a picture back; the image quota is the key's, and where it is spent the service says so *hypothetical, untested*
 - **Grass patch** (`seed.grass`): A foot square (0.3048 m) of lawn: blades scattered on soil from a seed (each drawn blade standing for many) *hypothetical, untested, before the update*
+- **Higgsfield: pictures and video** (`api.higgsfield`): A request to one of Higgsfield's models (its path, as its docs name it: higgsfield-ai/soul/v2/standard for pictures, a video model's for video), its words and any pictures' addresses, sent with HIGGSFIELD_KEY_ID and … *hypothetical, untested*
 - **House** (`seed.house`): A house: its rooms laid out from the plan you pick (studio, 1, 2 or 3 bed) either side of a hall, each spawned as a Room with its fittings, its doors onto the hall and its windows outside decided by what each wall … *hypothetical, untested, before the update*
 - **Into its cells** (`make.into`): A thing put into each cell of an enclosure (its frames "cell 1", …), every other one turned half round if asked, so each one's plus lies beside the next one's minus. *derived, tested here, before the update*
 - **Kitchen fittings** (`seed.fittings.kitchen`): What makes a room a kitchen: a run of base cabinets and a worktop along the back wall, the sink in it, a stove and a fridge (cabinets 600 deep, 900 high; a 760 mm range; a 750 × 1750 mm fridge: typical) *hypothetical, untested, before the update*
@@ -356,13 +360,15 @@ Tables, values, charts, the 3D view, the space.
 - **Side by side from the same camera** (`view.compare`): Three panels: the picture; the model from the picture's own camera (the right way round); and the picture dimmed with each traced feature's edge in green and the model's own part's in red. *derived, untested*
 - **Table view** (`view.table`): Rows shown as a table on the board: each row a line, each field a column, as wide as its widest value *derived, tested here, before the update*
 
-## 11 · Board tools (6)
+## 11 · Board tools (8)
 
 Groups, notes, code, asking, events.
 
 - **Ask Claude** (`ai.ask`): Asks Claude, or Nexus where Claude cannot be reached; {input} is what comes in *hypothetical, untested*
+- **Claude (Anthropic Messages API)** (`api.claude`): Words sent to Claude through the Anthropic API (its SDK; ANTHROPIC_API_KEY under Node), its answer back. *hypothetical, untested*
 - **Code** (`code`): Code with ports: each input is a name in it, what it returns (an object, port by port, or one value) fills its outputs. *derived, untested, before the update*
 - **Export (STEP, STL, 3MF, glTF, BOM)** (`export.files`): A thing written as files: STEP (each solid named by its place in the thing's tree, coloured, millimetres), STL, 3MF and glTF (the kernel's own meshes of the exact solids), and its bill of materials as CSV; the STEP … *derived, tested here*
+- **Gemini: look at pictures** (`api.gemini.see`): Pictures and words sent to Google's Gemini (GEMINI_API_KEY under Node), its answer back; its models tried in turn where one is gone or busy *hypothetical, untested*
 - **Group input** (`group.in`): What comes into the group, under this name *derived, untested, before the update*
 - **Group output** (`group.out`): What goes out of the group, under this name *derived, untested, before the update*
 - **Note** (`note`): Words on the board, for people: it runs nothing *derived, tested here, before the update*
