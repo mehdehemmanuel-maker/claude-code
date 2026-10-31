@@ -600,7 +600,8 @@ export const BUILT: Record<string, string> = {
   "vehicle":"2026-10-26T17:22:21.000Z",
   "vehicle.axle":"2026-10-26T17:22:21.000Z",
   "vehicle.model":"2026-10-26T17:22:21.000Z",
-  "verify.interference":"2026-10-31T05:24:16.000Z",
+  "verify.interference":"2026-10-31T05:25:18.000Z",
+  "verify.stress":"2026-10-31T05:25:18.000Z",
   "view.3d":"2026-10-25T09:16:19.000Z",
   "view.chart":"2026-10-25T09:05:20.000Z",
   "view.compare":"2026-10-29T20:43:30.000Z",
@@ -613,7 +614,7 @@ export const BUILT: Record<string, string> = {
   "zone":"2026-10-27T23:47:14.000Z"
 };
 /** Nodes whose definition could not be found written out (made in a loop): dated by nothing, so said as before the update. */
-export const UNDATED: string[] = ["verify.stress"];
+export const UNDATED: string[] = [];
 /** Each starter board (a build), and when any of it was last changed: one made before the update, and not rebuilt since, is
  *  said to be from before it (its parts and its answers not yet re-worked through the contact graph, the frame and the
  *  laws with units). */
