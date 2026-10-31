@@ -422,7 +422,7 @@ export function wire(b: Board, from: string, out: string, to: string, inp: strin
   const d = blockOf(b.nodes[to]!), port = d ? portsOf(d, { ...defaultsOf(d), ...(b.nodes[to]!.set ?? {}) }).inputs.find((p) => p.name === inp) : undefined, many = port?.many ?? false;
   // (a wire into an input the block does not have would carry nothing and say nothing: a setting with no input of its name
   // is not wired over, so it is refused here, where it is made)
-  if (d && !port && !d.graph && !['group.out', 'view.show', 'view.table', 'view.chart', 'view.gauge', 'space.show'].includes(d.id)) throw new Error(`${d.name} has no input "${inp}"`);
+  if (d && !port && !(d.graph && !portsOf(d, { ...defaultsOf(d), ...(b.nodes[to]!.set ?? {}) }).inputs.length) && !['group.out', 'view.show', 'view.table', 'view.chart', 'view.gauge', 'space.show'].includes(d.id)) throw new Error(`${d.name} has no input "${inp}"`);
   if (!many) for (const e of edgesOf(b)) if (isWire(e) && e.to === to && e.in === inp) b.edges[e.id] = { ...b.edges[e.id]!, deleted: true };
   b.edges[id] = { from, to, rel: 'feeds', out, in: inp }; return id;
 }

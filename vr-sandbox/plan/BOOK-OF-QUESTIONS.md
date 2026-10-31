@@ -2458,3 +2458,481 @@ Relevant files: `/home/user/claude-code/vr-sandbox/plan/BOOK-OF-QUESTIONS.md` (t
 64. Which reviewer checks a cost rollup, and what new information can it bring (a second source, a re-solve)?
 65. How are cost and carbon included in the evaluation sets of spec 00?
 66. Should a cost or carbon target ever be allowed to override a strength check in an automatic solver?
+
+---
+
+## Chapter 26. The token experiment
+
+*From `research/30-token-experiment.md` (round 6).*
+
+### On the measurement
+1. Do Haiku, Sonnet and Opus 5.5 truly share one tokenizer, or only agree on these 64 boards and the probe strings?
+2. Does a `lines` string in a tool input cost extra output tokens for escaping newlines and quotes when the model
+3. What baseline would `count_tokens` give for a truly empty content block, if an API form accepts one?
+4. How much does the forced `tool_choice` change output length against the agent's normal `auto` with effort low?
+5. Do the ratios hold for boards the agent writes in practice, which may be smaller than the starters (mean 13
+6. How do the counts change if labels are carried (as JSON strings against quoted NBN labels)?
+7. Do `change` calls (a few lines against a board) show the same ratio as whole builds?
+8. What share of an agent run's tokens is writing plans at all, against reading tool results (`runLines`) and the guide?
+9. Is the result the same in a long conversation, where the written plan is re-read as input on every turn?
+10. Would minified JSON written by the model (it chose spaced JSON here) close any of the gap?
+
+### On validity
+11. With 20 repeats per cell instead of 2, does NBN's validity differ from JSON's at all?
+12. Does Sonnet make the `place.place` mistake, or is it a Haiku habit?
+13. Would writing `name=block` instead of `name:block` remove the doubled block ids?
+14. Would one NBN example per FOR-AI item (build, change, fit) cut the unquoted-space errors?
+15. How often does JSON's "object as a string" failure occur over many runs, and does the SDK's strict tool mode stop it?
+16. Do one-line repair messages (`plan=2 bed: quote it`) get fixed on the next call, and at what token cost?
+17. Does a literal on an input lead the model to skip `in.number` nodes that a person would want to see and drag?
+18. Is validity better when the cards are in the same notation as the board (a card printed as an NBN template line)?
+19. How does each notation fare on `fit.target`, whose settings are themselves multi-line text?
+20. How does the model handle port names with spaces and commas in NBN, which no task here tested?
+
+### On the design
+21. Should NBN print `node.output` always (canonical) and accept `node` (liberal), or never allow elision?
+22. Where should the grammar live so that FOR-AI.md, the parser and the round-trip test cannot drift apart?
+23. Should a group (`collapse`) be writable in the notation, as an indented block or a `fold` line?
+24. Is `$name=value` worth its rule when only 5 of 831 starter nodes needed it?
+25. Should the canonical printer round floats (`1.5707963267948966`) and show units, and is that still exact?
+26. Should the notation carry each value's status (measured, catalogue, typical, estimate) as research 27 B3.8 says?
+27. Does the board key (a hash of the canonical line) need the labels in it or not?
+28. Can a wire into a missing input be refused for folded blocks without breaking old boards?
+29. Should `math.expr`'s ports be shown on its card as "the names in expr", and how do other dynamic-port blocks show theirs?
+30. If the plan's `s` accepted input values, would JSON's gap to NBN shrink, and by how much on the starters?
+
+---
+
+## Chapter 27. A small trusted kernel
+
+*From `research/31-trusted-kernel.md` (round 6).*
+
+### The boundary of the kernel
+1. Is 2,160 lines the right budget, or should `lrat.ts` and `gap.ts` sit in a second ring with a lower badge?
+2. Should the kernel be TypeScript at all, or a small verified WASM module (CakeML-style) called from TypeScript?
+3. How can an import-boundary check also stop dynamic `import()` and `globalThis` tampering by code in the page?
+4. Can a run-time token in a module closure resist a plugin with the same JavaScript realm, or does the kernel need
+5. Does the kernel need the Worker sandbox (no network, no DOM) in production, or only in CI?
+6. Which JS engines will the manifest name (V8, SpiderMonkey, JavaScriptCore), and do the checkers give identical
+7. Is `BigInt` arithmetic identical across engines for the sizes Nexus will use, and has any engine shipped a `BigInt`
+8. Should the kernel refuse to run on an engine version it has not been tested on?
+9. Where does the canonical serialisation of a term come from: JSON with sorted keys, or a bespoke text form (27's
+10. Can `print.ts` be small and still produce words a non-engineer will accept as the meaning of a claim?
+11. Who accepts the printed statement for a shared block made by someone else?
+
+### Numbers
+12. Is bit-stepping `nextUp` enough, or does Nexus need error-free transforms (`twoSum`) to keep intervals tight?
+13. What enclosures of sin, cos, exp, log and pow can be written in under 150 lines, with what proofs of their bounds?
+14. How wide do intervals grow on a typical Nexus law chain (a bolt preload to a joint's slip), and does that make
+15. Should the kernel use affine arithmetic or Taylor models to fight the dependency problem, and how much code would
+16. What tolerance is right in a `witness` check of a mate residual: absolute, relative, or tied to the
+17. Can a float64 witness from Jolt or replicad ever certify more than "at this point", given how chaotic contact is?
+18. Is the exact-rational route fast enough for `farkas.ts` on a frame of a few thousand members?
+19. Should dimension exponents be integers only, or rationals (for √Hz in noise densities)?
+20. Should angle be a base dimension, and what breaks in `lawgraph.ts` if it is?
+21. How should the kernel treat logarithmic units (dB) and offset units (°C) in claims?
+
+### Geometry
+22. Can a separating-plane certificate be found for every pair of non-convex parts that keep a gap, or does it need a
+23. What is the certificate that a part sits *in* a hole cut for it (the exemption) without a name: an interface
+24. How does the kernel bound the distance between OpenCascade's exact solid and its tessellation, if it cannot trust
+25. Could the kernel check B-rep facts directly (a point inside a solid, a face's normal) with exact predicates, or is
+26. How large are gap certificates for an engine of 3,000 parts, and can they be stored and shipped with a board?
+27. Can the `sweep` certificate handle rotation (a crank) as well as translation, with interval enclosures of the
+28. What is the right claim for "touching is allowed here" (a bearing seat), so that gap ≥ 0 and crossing ≤ 0 are both
+29. Can heat claims (`rules.ts` heat) be put in kernel form, or do they rest on a model that is only `simplified`?
+
+### Solvers and proofs
+30. Does cvc5's WASM build emit proofs, and how large are they for Nexus's typical constraints?
+31. Does CaDiCaL compile to WASM with LRAT output intact, and what is the memory ceiling in a browser tab?
+32. Which Nexus questions are naturally SAT (configuration, compatibility, a kit that fits) and which are LP or
+33. Is the kernel's own CNF encoder a weak point (an encoding bug certifies the wrong formula), and how is it tested?
+34. Should Nexus accept Alethe proofs and run a small Alethe checker, or only LRAT and Farkas, and keep SMT outside the
+35. Can an LP certificate from a float solver be rounded to exact rationals and still pass, as Flyspeck's did?
+36. What happens when an AI-generated proof is correct but its claim is not what the user asked for: how is that
+37. Can the `rewrite` rule set stay fixed, or will each new law need a new rule, and who checks those rules?
+38. Should the rewrite rules themselves be checked offline in Lean before they enter the kernel (Alive-style)?
+
+### Adversaries and failure
+39. If the in-app AI is rewarded for green badges, how fast will it find what the kernel does not inspect?
+40. What is the Nexus equivalent of metaprogramming that bypasses the front end (a crafted JSON board loaded directly)?
+41. How should the planted-certificate corpus be organised so that it grows with every kernel bug found?
+42. Is a second kernel written by another AI model independent enough, or do models share blind spots?
+43. When the two kernels disagree, who decides, and what does the user see meanwhile?
+44. Should the kernel cap certificate size and check time, and what does a refusal for size mean to the user?
+45. Can a malicious shared block make the kernel hang (a cover tree of depth 10⁹), and how is that bounded?
+46. How do we stop the critic's "nothing found" from being shown as if it were a certificate?
+47. Should a board that was checked by an older kernel version be re-checked automatically, or shown as checked by
+
+### Standards and acceptance
+48. Would any certifying body accept a browser-run checker as a qualified tool, and under which standard first?
+49. What would a TQL-5 or TCL1 dossier for the Nexus kernel contain, page by page?
+50. If a Nexus result is used to skip a physical test, which criterion-2 objectives become due?
+51. Do civil codes (Eurocode, AISC) say anything about software-checked calculations that the kernel should meet?
+52. How does ISO 26262's tool error detection (TD) argument apply when the checker and the generator are in the same
+53. Should the kernel's requirements be written as testable sentences traced to tests, DO-330 style, from the start?
+
+### Cost and scope
+54. Which three certificate kinds would cover most of what users ask Nexus to check in the first year?
+55. What does a `cover` certificate cost to produce for a 6-parameter bracket, against the FEA it replaces?
+56. Should cheap kinds (`dims`, `witness`, `table`) run on every edit and costly ones (`cover`, `lrat`, `gap`) on save,
+57. Is it worth verifying `rat.ts` and `interval.ts` in Lean, and what would that cost in person-weeks?
+58. What is the seL4-like ratio for Nexus: how many lines of proof per line of kernel, if the kernel were verified?
+59. Can Nexus reuse an existing verified checker (cake_lpr in WASM) rather than write `lrat.ts`?
+60. How much of `evidence.ts`'s lattice belongs in the kernel, and how much is display?
+
+### People and words
+61. How does a badge explain "checked on the mesh, trusts the tessellation" in words a hobbyist reads in two seconds?
+62. Should a user be able to see the certificate (the planes, the boxes), and does seeing it build trust or noise?
+63. Who in the project owns the kernel, and is that one person enough (the bus factor of a trusted base)?
+64. How is the user told that a claim was *judged* by the second model rather than *checked*, without the judged
+65. When a user's own words contain the error (Hales's hand-translation link), what tool helps them see it?
+
+---
+
+## Chapter 28. Engines worth taking for early cutoff
+
+*From `research/32-engines-to-adopt.md` (round 6).*
+
+### Digest and cutoff
+1. Which block outputs today carry a `Map`, a `Set`, a function or a class instance, and so would get a never-equal token?
+2. Does `stable()` on a large `Assembly` cost more than the node that made it, on the heaviest starter board?
+3. Is `designOf` from `assembly.ts` a complete digest of a part, or does it omit placement or material?
+4. Are block outputs ever mutated after they are returned (which would make a `WeakMap` digest cache wrong)?
+5. Should floats be digested bit-exact or rounded to a declared tolerance, and who declares it, the port or the block?
+6. Does a `-0` versus `0` difference matter anywhere in Nexus outputs?
+7. How should `NaN` digest, given `JSON.stringify(NaN)` is `null`?
+8. Which `_`-prefixed output keys (`_evidence`, `_balance`) must be part of the digest for evidence and balance to stay right?
+9. Does the uncertainty `±u` on a wire need its own digest, or is the number in the key enough?
+10. Is per-port cutoff ever wrong when a block's outputs are correlated (two ports from one object)?
+11. What is the measured cutoff rate on the starter boards after step 3: how many nodes per edit stop rerunning?
+12. Does a B-rep from replicad have a deterministic exported form to digest (STEP text with timestamps?)?
+13. Should geometry digest its mesh, its B-rep export, or its recipe (the inputs that made it)?
+14. How large is the 64-bit `hash` collision risk at the memo's 20,000 entries, measured rather than estimated?
+15. Does a group's `boardKey` change when only a node's x, y position moves, and should it?
+
+### Purity, versions, effects
+16. How many blocks in the library read `Date`, `Math.random`, `fetch` or the agent while defaulting to pure?
+17. Are the 20 explicit `pure: false` declarations the complete set, and which other blocks should join them?
+18. Can a block's code version be derived automatically from its `run` source text hash instead of a hand-raised `version`?
+19. Does `clockOf` cover every block whose output depends on simulated time?
+20. What does `b.live(set)` key on, and is it a volatility class of its own?
+21. Should seeded blocks put their seed in the key explicitly, so cutoff holds across reloads?
+22. Is a block that calls Claude ever cacheable (same prompt, same model, temperature 0)?
+
+### Observers and pull
+23. What exactly counts as observed in `view/nodes.ts`: visible nodes, the 3D view's sources, open panels, all three?
+24. Does the 3D view pull through a single sink node, or does it read many node states directly?
+25. Should a node that is stale but shown display its last value greyed, or nothing?
+26. When the agent reads a node, must it trigger a pull, or read the last value with its revision and staleness?
+27. Do checks and the compiler's release gate count as observers that force everything they depend on?
+28. Does leaving nodes dirty across runs break `mapsOver`'s `mapsTouched` bookkeeping?
+29. How does `fit.target` (thousands of trials through `runnerOf`) interact with observers: is each trial a pull?
+30. Should an unobserved node's kept outputs be dropped from memory after a while (Observable terminates unreachable variables)?
+
+### Async
+31. How often does a slider drag today start a new `run()` while one is still awaiting a slow block?
+32. Does dropping a superseded result lose `USAGE` timing that the engine's suggestions rely on?
+33. Should a superseded block be aborted (its own `AbortSignal`) or allowed to finish and fill the memo?
+34. Can `step` run independent nodes concurrently (`Promise.all` per Kahn level) without breaking the evidence and uncertainty passes, which read upstream state?
+35. Do workers in `pool.ts` return results in a way that can be superseded by run number?
+36. How does `spreadOf` (re-running a block at ±u) interact with cutoff: are its extra calls memoised?
+
+### Durability and the shared memo
+37. Should `fresh()` clear only this engine's states and leave `SHARED` alone?
+38. Is a 20,000-entry LRU the right size for `SHARED`, measured by hit rate on the starter boards?
+39. Which inputs are "high durability" in practice: library tables, standards, CODATA — and are they ever wired as settings?
+40. Does a library update (new `stock.json`, new materials data) need to bump a high-band revision, and who does it?
+41. Is durability worth having inside one board, or only for library boards inside spawners and groups?
+
+### Cycles and fixpoints
+42. Which real Nexus problems want a loop: thermal-mechanical coupling, controllers, iterative sizing?
+43. Are those monotone on a finite-height order, as Salsa requires, or do they need a tolerance-based convergence instead?
+44. What iteration cap and what failure message should a `loop` node give?
+45. Should a loop node's iterations be visible as a sweep (each iteration a row)?
+46. Does Kahn's leftover set name the cycle clearly enough for the person, or should it show the SCC (Tarjan, as HyperFormula)?
+
+### Lists and deltas
+47. How often do list ports carry more than 1,000 rows on real boards (cities, swarms)?
+48. Do rows carry stable ids today, or only positions?
+49. Would `@tanstack/db-ivm`'s operators (map, filter, join, reduce) cover the spawner and the sweep?
+50. Does `db-ivm` run in a worker and in Node (the gate) alike?
+51. What is the cost of converting Nexus lists to and from Z-set style multisets at each node boundary?
+
+### Measuring
+52. What is the gate's time with the step-1 equivalence check on every field, against every fourth field?
+53. Which starter board has the slowest single edit today, and what fraction of that is reruns that would be cut off?
+54. Should `Report` count "looked but cut off" separately from "cached" for the person?
+55. Can the step-1 check be a property test (fast-check is a dev dependency) over random edits to random settings?
+56. How is "measured incrementality" stored round to round, so a regression in rerun counts fails like a wrong number?
+
+### Libraries and sources
+57. Does Vue 3.6's port of alien-signals keep reference cutoff, or add `hasChanged` (Object.is) semantics? (Not read.)
+58. What does `@solidjs/signals` do on a cycle and on an equal value? (Not read.)
+59. Is HyperFormula's `recomputeVertex` boolean actually used to stop propagation in `postprocess`? (Not read.)
+60. What is the alien-signals maintainer's stated policy on breaking changes (three majors in 2025)?
+61. Does the js-reactivity-benchmark include an async workload, and how does Solid 2.0 do on it?
+62. Has anyone published a benchmark of an incremental engine where node cost dominates bookkeeping, like Nexus's?
+63. Is Jane Street's Incremental licence confirmed MIT in its current opam release?
+64. Does Salsa's 0.28 line still have no async queries?
+65. What did the 2024-06 TC39 "algorithms for signals" discussion settle, if anything, about async?
+
+---
+
+## Chapter 29. Stocks, flows and simulated societies
+
+*From `research/33-stocks-flows-societies.md` (round 6).*
+
+### Stocks, flows and conservation
+1. Is a stock a node kind of its own, or a port property ("this port integrates") on any node?
+2. How does a stock-and-flow flow relate to spec 09's effort-and-flow port: is an SD flow the "flow" variable of a port whose effort is the stock level?
+3. What tolerance should the conservation residual have, per quantity kind, and who sets it?
+4. Is conservation checked every step or only at observation (spec 11 lazy evaluation)?
+5. When a stock is unobserved and lazily not computed (LW1), how is conservation still guaranteed?
+6. Should a cloud carry a quantity counter (cumulative in and out) so the ledger closes visibly?
+7. Which quantity kinds are conserved (mass, energy, money, people) and which are not (morale, information)?
+8. Can money be conserved in a world with a central bank node that creates it, or is the bank a labelled cloud?
+9. Should `clip outflows` distribute the cut across several outflows proportionally or by priority, and who states which?
+10. Is a negative stock of people ever valid (a backlog is; a population is not)?
+11. How are conveyors and queues (Stella's conveyor stocks) represented: as stock arrays or as delay nodes?
+12. How are Vensim's DELAY3 and SMOOTH macros mapped to their own hidden stocks in Nexus, visible or folded?
+13. Should a folded board (one node) still expose its internal stocks to the conservation check?
+14. How do discrete agents (individuals) and continuous stocks (counts) exchange quantity without rounding leaks?
+
+### Notation and interchange
+15. Should Nexus read Vensim `.mdl` directly or only via XMILE?
+16. Which XMILE optional features (arrays, conveyors, queues, macros, modules) are needed first?
+17. Can SDEverywhere's generated JavaScript be used as a reference for docking, licence permitting?
+18. What licence does SDEverywhere carry, and PySD (to check before reuse)?
+19. Does XMILE's diagram section map to Nexus board layout, or is layout regenerated?
+20. Should causal loop diagrams (no stocks) be a board of their own, convertible to stocks and flows?
+21. Should loop polarity and loop dominance (which loop drives behaviour when) be computed and shown?
+22. Is Insight Maker's mix of SD and ABM in one model the right model for Nexus, or must the levels be separate boards with a hand-off node?
+
+### Time and integration
+23. Which integrator is the default for SD boards: Euler at fixed DT (as the tools do, for comparability) or the spec 09 compiler's?
+24. How is DT chosen and stated, and does the DT-halving check run automatically on publish?
+25. How does an SD board's DT interact with Jolt's fixed physics step in a mixed world?
+26. Are event-driven agents and fixed-step stocks scheduled in one loop, and in what order?
+
+### ODD and description
+27. Which ODD fields can be generated from the board, and which must a person or the AI write?
+28. What makes an ODD field "filled" rather than present but empty, checkably?
+29. Is the delta-ODD for a fork generated from a board diff?
+30. Should Nexus adopt Visual ODD's pictures for the VR view of a world's card?
+31. Does an SD-only world need the Design concepts section, or is it waived as ODD 2020 allows?
+32. Should TRACE's whole cycle (data, verification, corroboration) be a second card, or part of spec 10's claim status?
+33. Who is accountable for a world's card when the AI built it: the user, the AI, both named?
+
+### Labels and validation
+34. What exactly earns `forecast` rather than `calibrated`: an out-of-sample period, of what length?
+35. How is the equivalence level of a docking (numerical, distributional, relational) measured, statistically?
+36. Which test decides distributional equivalence: Kolmogorov–Smirnov, Mann–Whitney, or the one the 1996 paper used?
+37. Should a label degrade automatically when the board changes after calibration?
+38. How are proxy labels propagated: a stock fed by a proxy series makes all downstream outputs proxy-labelled?
+39. Who may set a world's label: only a check, or a person with a stated reason?
+40. Should Schelling-type mechanism demos be blocked from being linked to a real place without a different label?
+41. How does a world label "pattern-oriented" validation (several patterns at once, Grimm) versus one curve fit?
+
+### Economies and inventory
+42. Should Sterman's 1989 fitted parameters be the defaults for anchor-and-adjust, and which fit (the mean, the median player)?
+43. Does the Beer Game board need to replicate the classic 4-week delay structure exactly to dock with the published results?
+44. Which inventory policies can be written as plain stock-and-flow boards and which need agent nodes?
+45. How does the newsvendor critical fractile tie to spec 12's cost data (c_u, c_o sourced)?
+46. Can an EVE MER month close as a ledger (money supply change = faucets − sinks), and by how much does it not?
+47. What licence do CCP's MER data downloads carry for reuse in Nexus?
+48. Is the OSRS wiki price data licensed for redistribution (CC BY-NC-SA, as wiki text is?), or only for live fetching?
+49. Should a Nexus world economy have a published "MER" of its own, generated from its stocks and flows?
+50. How would a Sugarscape-style economy and an SD money stock be docked against each other?
+
+### Epidemics, traffic, ecology
+51. Should SIR, SEIR and agent SIR share parameters by name so the docking test is automatic?
+52. Which Covasim or CovidSim outputs are suitable known answers for a Nexus agent SIR (licence, size)?
+53. What thread-count independence can Nexus promise when it uses Web Workers for agents?
+54. Should NaSch be validated against a published fundamental diagram, and which road's data is open?
+55. How would SUMO networks enter Nexus: import of `.net.xml`, or TraCI over a socket from a server?
+56. Should the hare-lynx series be a fixture with its proxy label, as a lesson in what not to claim?
+57. Which NetLogo library models have licences that allow porting as Nexus seeds?
+
+### Agents and the AI
+58. When the AI explains a world, does it quote the ODD card and the label first?
+59. Should the AI be required to propose a second generator before calling an emergent pattern "explained"?
+60. Should leverage-point tags be inferred by the AI from node kinds, or set by hand?
+61. How does the umpire (L-R5) relate to conservation: may it create or destroy quantity, and if so is it a cloud?
+62. Should every stochastic node declare its distribution and carry its own distribution test, as B11 asks?
+63. Can the chronicle (LW6) answer "where did this unit of money come from" by following flows backwards?
+64. How much of a world's run record must be kept so a third party can rerun it a year later (codecheck)?
+
+---
+
+## Chapter 30. Human comfort and human load
+
+*From `research/34-comfort-load.md` (round 6).*
+
+### Thermal
+1. Which edition of ISO 7730 should Nexus cite, and what did the 2025 revision change in PMV or the categories?
+2. Should `check.pmv-ppd` implement the ISO 7730 iteration exactly as in Annex D, and test against its tabulated cases?
+3. How does Nexus decide a space is "occupant-controlled naturally conditioned" for the adaptive model?
+4. What prevailing mean outdoor temperature source should the living world use: a weather series, a climate normal?
+5. Is the UTCI polynomial approximation accurate enough, and over what input box?
+6. Should Nexus run the Fiala model itself (transient) for exposures that change minute by minute?
+7. How are metabolic rates for activities sourced (ISO 8996 tables, Compendium of Physical Activities)?
+8. How is clothing insulation per garment sourced (ISO 9920), and how does a body part family carry it?
+9. Should local discomfort (draught rating, radiant asymmetry) be separate nodes?
+10. How does PMV's known bias in warm, free-running buildings get stated in its trust grade?
+11. Are there validated comfort models for children, older people, or people with reduced thermoregulation?
+12. How should a heat-stress node for workers (WBGT, ISO 7243; PHS, ISO 7933) sit beside UTCI?
+
+### Handling and strength
+13. Where is the official NIOSH frequency and coupling multiplier table, 2021 revision, in machine-readable form?
+14. How should the composite and variable lifting indices (CLI, VLI) be represented: one node or a fold?
+15. Does ISO 11228-1:2021 change the reference masses by population (for example a lower mass for protecting more of the population)?
+16. What does ISO 11228-2 (push/pull) give in numbers, and how does it relate to the Liberty Mutual tables?
+17. What does ISO 11228-3 (repetitive handling, OCRA) need as inputs that Nexus could derive from a motion?
+18. Are the Potvin 2021 Liberty Mutual equations openly published with their coefficients?
+19. Which population do Snook's subjects represent, and how far does it transfer?
+20. Can Dodds 2014 centile tables be used under a licence that allows embedding?
+21. Are there grip and pinch strength datasets by hand posture (pinch, key, power) suitable for a handle check?
+22. How should strength decline with fatigue over a shift be modelled, if at all?
+23. Should a manual-handling check attach to a part (via its interface) or to a task (a sequence of motions)?
+
+### Pressure, vibration, noise
+24. What sigmoid parameters for human tissue, if any, are published beyond animal models?
+25. How should shear be added to the pressure–time check?
+26. Can Nexus estimate interface pressure from Jolt contact, or does it need a soft-tissue FE model?
+27. What does the headset's facial interface pressure look like over an hour, and is it measured anywhere?
+28. Which ISO 2631-1 weighting filters (Wk, Wd, Wf) are needed, and is a tested open implementation available?
+29. Should motion sickness from low-frequency vehicle motion (ISO 2631-1 Annex D, MSDV) be a node for vehicles Nexus simulates?
+30. How should ISO 5349-1 hand-arm weighting be computed from a simulated tool's acceleration?
+31. Which countries deviate from 2002/44/EC action and limit values, and how?
+32. How should A-weighting (IEC 61672-1) be implemented and verified against its tolerance table?
+33. Should a noise node give the NIOSH excess-risk curve as well as dose?
+34. How does Nexus's sound model (round on sound) produce a level at the ear that a dose node can trust?
+
+### The eye and the headset
+35. What is the measured focal distance of Quest 3 / Meta VR Glasses, and can it be read from the runtime?
+36. What are the exact Shibata 2011 zone constants, and do they hold for HMD viewing as for desktop stereo?
+37. What numbers does ISO 9241-392 actually give for disparity limits and interocular differences?
+38. Is there a published comfort limit on the rate of change of vergence (Kim et al. 2014) Nexus should apply to zooming?
+39. Does scaling the world (S) change vergence demand on near objects, and should near-plane clipping protect the eye?
+40. What is the real pixels per degree across the Quest 3 lens (centre vs edge), and where should text sit?
+41. Is "em ≥ 0.6°" the right unit, or should Nexus use x-height in dmm as Büttner does?
+42. Should panel text sizes be set in degrees and converted to canvas px at draw time (angular scaling)?
+43. How should IPD set the rendered stereo, and is it read from the device or from the person's body part?
+
+### Placement and interaction
+44. Is a board centre at −10° better than at −15° for long sessions, given neck flexion and headset mass?
+45. What headset mass and centre of mass put load on the neck, and how does UI pitch change the neck moment?
+46. Should the board curve (a cylinder about the head) instead of being flat at 44°–56° wide?
+47. Where should the chat go for left-handed people, and should placement mirror by handedness?
+48. Is ray at 0.9 m or touch at 0.44 m better for the keyboard, for typing speed and arm fatigue (gorilla arm)?
+49. What is the keyboard's key size today in degrees, and does it meet 2.5°?
+50. How should panels follow: parented, lazy follow, or summoned, and what thresholds?
+51. Should panels pass a check in seated mode as well as standing?
+52. How should Nexus handle people who cannot turn their head 30° (accessibility, VRC-style)?
+
+### Locomotion and sickness
+53. What vignette field and fade times does Meta's TunnelingEffect use by default?
+54. Is a snap angle of 30° or 45° better for a design tool where you often turn a little?
+55. Should zoom (S) count as locomotion for comfort, and what rate limit keeps it comfortable?
+56. Should strafing be allowed by default when the person is inspecting a part sideways?
+57. How should speed scale with S so crossing a city and a bolt both feel natural?
+58. What does Saredakis 2020 show for SSQ by exposure band (0–10, 10–20, > 20 min)?
+59. Should Nexus record SSQ, or the shorter Fast Motion Sickness scale during a session?
+60. What cut-off SSQ score should trigger a change in comfort preset?
+61. How do frame drops in Nexus's own rendering (Jolt plus OpenCascade on the main thread) affect sickness, and what frame-time check is needed?
+62. Is a 30-minute break prompt right for an expert who has adapted, and should it adapt itself?
+63. Should a "comfort budget" (time, motion, VAC) be tracked per session and shown?
+
+### The check nodes as a whole
+64. How should a check node report a population share when its source gives only a limit (NIOSH) and not a distribution?
+65. How should two checks that disagree (OSHA vs NIOSH dose) be shown without one seeming to win?
+66. Who reviews each standard's transcription into a node, and how is that recorded (spec 10)?
+67. Which of these standards can be quoted in a node under their licences, and which only paraphrased?
+
+---
+
+## Chapter 31. Repair, wear and the long life of things
+
+*From `research/35-repair-wear.md` (round 6).*
+
+### Life laws and evidence
+1. Which Weibull form does Nexus store by default: two-parameter, three-parameter, or a mixture for parts with
+2. Where do life-law parameters come from for a hobbyist part with no field data: a similar part, a test, or none
+3. How is the stress a life was measured at stated, so that a life at another stress can be scaled (and by which
+4. Should MTBF be displayed at all, or only as a refused field with an explanation?
+5. How is a competing-risks life (fatigue and corrosion both acting) combined, and is the combination shown?
+6. What evidence kind does a bearing catalogue's L10 rating carry?
+7. Can a life law be fitted inside Nexus from a user's failure records (with censored data), and who checks the fit?
+8. How does spec 10's interval mode carry a Weibull shape parameter's uncertainty into a system R(t)?
+9. Which original text of Nowlan and Heap resolves the conflicting column percentages, and where is it held?
+10. Is a "cannot predict" register entry needed for electronics, where the critics say handbook methods are invalid?
+
+### Physics of failure on interfaces
+11. Which interface kinds carry which mechanisms: does a `shaft` interface carry fretting and fatigue, a `mount`
+12. Where does the load history for `wear.integrate` come from: Jolt's live run, a declared duty cycle, or both,
+13. Which Miner variant is the default, and which allowable damage sum, by material and code?
+14. Is rainflow counting run inside the dataflow engine or as a worker, and is it deterministic for replay?
+15. What initial flaw size does a Paris integration assume when the user gives none?
+16. How is the stress intensity geometry factor Y obtained for a real part: a handbook case, or an FEA node?
+17. Where is an Archard K stored: on a material pair table, with lubricant and regime, and sourced how?
+18. How does wear change geometry: does a worn bushing's bore grow in the exact solid, and does that feed back into
+19. Which ISO 9223 category does a placed object get: chosen, or derived from a location (the world map of spec 11)?
+20. How do coatings enter: zinc thickness over its corrosion rate gives years to first maintenance?
+21. Is creep in scope for a first version, and for which parts (bolts in hot joints, plastics under load)?
+22. Can the bolt's interface derive its fatigue class from its standard, as it derives its clearance hole?
+23. How is a bolted joint's preload loss (relaxation, embedding, self-loosening) modelled over time?
+24. How does temperature cycling for electronics (solder fatigue, Coffin-Manson) get a mission profile?
+25. What is the validity envelope of each law, written in dimensionless terms (ΔK/ΔKth, sliding speed, PV limit)?
+
+### System reliability
+26. Can a reliability block diagram be derived from a function and the interfaces it passes through without the user
+27. How are common-cause failures represented (one corrosive environment acting on both redundant bolts)?
+28. Does the folding law hold for RBDs when a block contains repairable parts (availability rather than reliability)?
+29. Is Monte Carlo of system life cheap enough in the browser for a car-sized assembly, or must it be lazy?
+30. How is a fault tree's top event named and linked to a function on an interface?
+31. Should minimal cut sets be shown in the 3D view, highlighting the parts whose joint failure ends the function?
+32. How does FMECA criticality relate to the AIAG-VDA Action Priority already noted in research 16; is one chosen?
+
+### Maintenance and RCM
+33. Is the RCM seven-question chain a node, a board template, or a view over existing nodes?
+34. How is "operating context" (question 1 of JA1011) captured: the duty cycle, the environment, the user?
+35. Who decides consequences (safety, operational, economic): the AI with a sourced argument, or always the user?
+36. How are hidden functions (a relief valve, a smoke alarm) marked on interfaces so failure-finding tasks appear?
+37. Can the P-F interval be computed for wear mechanisms where detectability is a gauge reading, not a crack?
+38. Does Nexus produce a maintenance schedule as an output, and in what form (calendar, hours, cycles)?
+39. Should scheduled tasks be simulated in the living world, so a neglected machine visibly degrades?
+40. How does condition monitoring data (a user's real vibration readings) come in and update the state?
+
+### Disassembly and repair sequence
+41. Can directional blocking graphs be computed fast enough from replicad solids for hundreds of parts in a browser?
+42. Are bounding-box approximations (what `exploded()` uses) good enough as a first pass, with exact solids only to
+43. How are flexible parts (cables, clips, seals) handled in blocking, since they deform to come out?
+44. Which directions are tried: the six axes, fastener axes, mate normals, or sampled?
+45. How are destructive steps (cutting adhesive, drilling a rivet) represented, and do they make the part
+46. Is the target of a selective disassembly chosen by the user, by the RBD's weakest link, or both?
+47. How is reassembly different from reverse disassembly (torque sequences, new fasteners, gaskets replaced)?
+48. Should the sequence carry the wrench room check (`Keep` zones) at every step, so a step needing a tool that
+49. How is a tool table sourced (tool sizes and kinds from standards; scaling factors from iFixit or our own)?
+50. Can the repair sequence be performed by the user in VR with hands, and is their real time recorded against the
+51. How does the ordered explode stay deterministic (same order every run) for replay and sharing?
+
+### Scores and law
+52. Which priority-part lists and weights apply to things that are not phones (a bicycle, a battery, a house)?
+53. Does Nexus show a computed EU class for a phone model, and how is it labelled so it is never mistaken for an
+54. How are world-facts (spare-part years, price ratio, documentation) entered and sourced, and what is shown when
+55. Should the repair score compare against the official score for real products where both exist, as a check on
+56. How are "parts removed for access" scored, which EN 45554 omits?
+57. Is the French durability index's reliability term computable from Nexus's life laws?
+58. Which jurisdictions' repair laws are tracked first, and who keeps the dates current?
+59. How is parts pairing represented on an interface without implying Nexus can defeat it?
+60. Do repair laws' price thresholds (SB 244's $50 and $100) require spec 12's cost to be wholesale cost?
+
+### Circularity and long life
+61. Is MCI computed per part, per assembly, or both, and does folding hold for it?
+62. Where do the industry-average lifetime Lav and use Uav come from for a novel thing?
+63. Does a remanufactured part keep its identity in the store (the Cat answer: no) or get a new instance with a
+64. How does `rebuild.cycle` model Ise-style renewal of a whole recipe versus Theseus-style plank-by-plank?
+65. Should the chronicle record which instance of a part sits in a thing, so a user can ask "how much of this is
+66. Can a core-return policy be a node that feeds both cost (deposit, credit) and material flows?
+67. How is knowledge loss represented: a recipe that no one can build any more (Ise's point about carpenters)?

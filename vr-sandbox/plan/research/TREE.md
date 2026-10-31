@@ -545,6 +545,127 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] Commodity price indices that are public-domain (World Bank Pink Sheet, IMF primary commodity prices) as LME substitutes.
 - [ ] Kitting and BOM formats (IPC-2581, KiCad BOM, OpenBOM) for importing priced bills of materials.
 
+## Branches grafted in round 6 (open)
+
+### From The token experiment (`30-token-experiment.md`)
+- [ ] Rerun the generation test at scale (20 repeats, Haiku and Sonnet, effort low, auto tool choice) with the repair loop on.
+- [ ] Measure a whole agent run's token budget by phase (guide, find, card, build, results, answer, second judge).
+- [ ] Cards printed as NBN template lines (`s:seed.spring-checked d= D= n= L=`): fewer tokens and fewer wiring faults?
+- [ ] The `math.expr` card and every other block whose ports follow its settings: an audit of what the card shows.
+- [ ] Why `wire()` accepted `k.value>s.rate` on `seed.spring-checked`: the graph exemption, and every block it covers.
+- [ ] Strict tool schemas (`strict: true`) against the "nodes as a string" failure, and against invented keys.
+- [ ] A provenance layer for labels in NBN, measured against the 7,663 label tokens of the starters.
+- [ ] The house board's measured mass, 226,300 kg for a house, a car and a room: is `measure` counting something twice?
+- [ ] Token counts for `change` diffs in NBN against JSON `change` objects, on real edit sequences.
+- [ ] Prompt caching in practice: the guide's cache hit rate across agent calls, from `usage` in the agent's runs.
+- [ ] Constrained decoding with a published grammar (llguidance, XGrammar) for local models, where the API cannot.
+- [ ] A frequency-matched short alias table for the commonest blocks (`view.show`, `in.number`, `place`), measured.
+
+### From A small trusted kernel (`31-trusted-kernel.md`)
+- [ ] Verified interval arithmetic libraries (Coq's Interval package by Melquiond, Flocq) as a model for `interval.ts` and its proofs
+- [ ] Shewchuk's adaptive exact geometric predicates and CGAL's exact-predicates kernel, as the base of `gap.ts`
+- [ ] Certified collision detection: conservative advancement and interval continuous collision detection (Redon et al.), for the `sweep` kind
+- [ ] VeriPB pseudo-Boolean proofs (Gocht, Nordström) for counting and cardinality constraints that CNF encodes badly
+- [ ] Exact LP solvers with certificates (SoPlex's exact mode, QSopt_ex) as producers for `farkas.ts`
+- [ ] Proof-carrying code's original encodings (Necula and Lee 1996), as a template for shipping certificates with shared blocks
+- [ ] Lean's Kernel Arena and `comparator`: how Lean organises adversarial tests of its checkers, and what a Nexus arena would copy
+- [ ] nanoda's design (Rust, independent of the C++ kernel) as a case study in writing a genuinely independent second checker
+- [ ] Taylor models (Berz and Makino; COSY) and validated ODE solvers (CAPD, VNODE-LP) for certified motion and dynamics claims
+- [ ] Certified FEA: a-posteriori error estimators with guaranteed bounds (equilibrated residuals, Prager–Synge) as certificates for stress claims
+- [ ] Reproducible floating point across JS engines: how V8 and SpiderMonkey differ in `Math.*` accuracy, measured
+- [ ] CakeML or Wasm-verified compilation (WasmCert, Iris-Wasm) for shipping a verified checker as WASM into the browser
+- [ ] N-version programming studies (Knight and Leveson 1986) on correlated failures between independently written programs
+- [ ] Assurance cases (GSN, SACM) as the format for the kernel's qualification dossier
+- [ ] Spec mining from Alive2-style disagreements: using checker failures to find where Nexus's own semantics are vague
+- [ ] Coq's and Isabelle's "proof term size" engineering (reflection, compressed certificates) for keeping Nexus certificates small enough to ship
+- [ ] Machine-checked statics and structural codes (any work formalising Eurocode or AISC checks) as targets for the `farkas` and `cover` kinds
+- [ ] AI red-teaming of verifiers beyond Lean (reports of AI finding soundness bugs in Coq, Isabelle, Z3) as a measure of how adversarial the in-app agent may become
+
+### From Engines worth taking for early cutoff (`32-engines-to-adopt.md`)
+- [ ] Skip (SkipLabs) reactive TypeScript services: an incremental engine aimed at services, not UIs; not looked at.
+- [ ] `@lazy-promise/alien-signals`: how it adds async to alien-signals, and whether its pending model fits Nexus.
+- [ ] Vue 3.6's `@vue/reactivity` source: what it changed from alien-signals while porting (effect scopes, `hasChanged`).
+- [ ] TanStack DB's live queries: how `db-ivm` is driven from a reactive store, as a template for list ports.
+- [ ] ElectricSQL's d2ts paper or notes on differential dataflow in TypeScript, and why they forked d2mini.
+- [ ] Feldera's recursive SQL (fixpoints over Z-sets) as the model for a `loop` node over lists.
+- [ ] Adapton's nominal memoisation in a TypeScript port, for row ids that survive reordering.
+- [ ] Tarjan SCC display of loops on the canvas (HyperFormula's `TopSort.ts` is a short iterative implementation).
+- [ ] WebCrypto SHA-256 cost for digesting large meshes in the browser, against a 64-bit hash.
+- [ ] Canonical STEP or B-rep export from OpenCascade with timestamps and ids stripped, for a geometry digest.
+- [ ] MobX's `comparer.structural` and `computed.struct`: an existing structural-cutoff API to compare with the digest.
+- [ ] Svelte 5's 160× cellx outlier in the benchmark: what pathology it hit, so Nexus avoids the same.
+- [ ] tldraw's `@tldraw/state` (signia's successor): it has history and diffs on computeds, close to list deltas.
+- [ ] `$mol_wire`'s fastest-on-mol result: its "atoms with fibers" handle async by restarting; compare with Observable's supersede.
+- [ ] Bonsai (Jane Street, js_of_ocaml): Incremental in the browser at scale, and what it costs in bundle size.
+- [ ] Excel's multithreaded recalculation and its "thread-safe function" registration, for running pure blocks concurrently per Kahn level.
+- [ ] Lean 4 or Roslyn incremental compilation as further evidence on what keeps cutoff effective (rust-analyzer's "positions sneaking in").
+
+### From Stocks, flows and simulated societies (`33-stocks-flows-societies.md`)
+- [ ] Sterman's "bathtub dynamics" studies (Sweeney and Sterman 2000): people misjudge stocks from flows; a Nexus teaching view.
+- [ ] Loop dominance analysis (eigenvalue elasticity, pathway participation metrics) for showing which loop drives a run.
+- [ ] System dynamics model validation tests (Barlas 1996; Forrester and Senge 1980 "Tests for building confidence").
+- [ ] The Vensim and Stella conveyor and queue semantics, and their exact XMILE definitions.
+- [ ] Inverse generative social science (Vu, Epstein et al., JASSS 26(2) 9, 2023): AI search for multiple generators.
+- [ ] Artificial Anasazi (Axtell et al. 2002) as a calibrated historical ABM and its later critiques.
+- [ ] Pattern-oriented modelling (Grimm et al. 2005, Science) as the validation method behind ODD's "patterns".
+- [ ] MASON's Sugarscape reimplementation (Bigbee, Cioffi-Revilla, Luke 2005) and what it found.
+- [ ] Agent-based macroeconomics (Eurace, the Mark-0/Mark-I models, the CRISIS project) and stock-flow consistent (SFC) models in post-Keynesian economics (Godley and Lavoie): a balance-sheet conservation discipline for money.
+- [ ] The SFC "transactions flow matrix" (every row and column sums to zero) as a ready-made conservation check for money.
+- [ ] MATSim (agent-based transport, day-plans and replanning) beside SUMO.
+- [ ] The Intelligent Driver Model and the kinematic-wave (LWR) model as continuous counterparts docked to NaSch.
+- [ ] The GAMA platform and its GAML language (spatial ABM with GIS) as an alternative to NetLogo.
+- [ ] Starsim (IDM's successor framework to Covasim) and its multi-disease design.
+- [ ] The RAMP/SPI-M model consensus process in the UK (several models compared before advice): docking as policy practice.
+- [ ] Second Life's and Ultima Online's economies (UO's early resource collapse) as cautionary game-economy cases.
+- [ ] Path of Exile and World of Warcraft gold sinks; Valve's Steam Market data and Yanis Varoufakis's work at Valve.
+- [ ] The CoMSES Net model library and its ODD-required code release (computational model library and peer review badge).
+- [ ] Reproducibility badges (ACM artifact badges, CODECHECK certificates) as a pattern for a Nexus "rerun" badge.
+- [ ] Ecopath with Ecosim: mass-balanced food webs, a conservation-checked ecology model in wide use.
+
+### From Human comfort and human load (`34-comfort-load.md`)
+- [ ] ISO 7730:2025 (EN ISO 7730:2025) changes from the 2005 edition
+- [ ] ISO 7933 Predicted Heat Strain and ISO 7243 WBGT for work in heat
+- [ ] ISO 8996 metabolic rate and ISO 9920 clothing insulation as data tables for the thermal nodes
+- [ ] The UTCI operational polynomial (Bröde et al. 2012) and its error against the full Fiala model
+- [ ] JOS-3 or the Fiala model in open code, for a browser thermoregulation solver
+- [ ] The Potvin 2021 Liberty Mutual equations and their coefficients
+- [ ] ISO 11228-2 push/pull and ISO 11228-3 OCRA repetitive handling
+- [ ] Rapid Upper Limb Assessment (RULA), REBA and the Strain Index as pose-based checks from a simulated motion
+- [ ] Linder-Ganz and Gefen sigmoid parameters, and human tissue-engineered data
+- [ ] ISO 2631-1 Annex D motion sickness dose value for vehicles and ships Nexus simulates
+- [ ] IEC 61672-1 A-weighting filter tolerances and an open verified implementation
+- [ ] Kim et al. 2014 on the rate of change of vergence–accommodation conflict, for zoom limits
+- [ ] Varifocal and light-field headsets (Meta Half Dome, Butterscotch) and what they remove from the VAC check
+- [ ] Neck load from headset mass and UI pitch (biomechanics studies of HMD wear)
+- [ ] Gorilla-arm fatigue measures (Consumed Endurance, Hincapié-Ramos 2014) for ray and touch panels
+- [ ] Meta Horizon OS VRC accessibility requirements (snap turn, seated mode) as checks
+- [ ] Fast Motion Sickness scale (Keshavarz and Hecht 2011) and the Virtual Reality Sickness Questionnaire (Kim 2018)
+- [ ] Saredakis 2020 and Howard and Van Zandt 2021 meta-analyses read in full for duration and individual differences
+- [ ] WebXR's own exposure of focal distance, IPD and field of view (or the lack of it)
+- [ ] Curved (cylindrical) panel layouts and their legibility versus flat panels at 40°–60° width
+
+### From Repair, wear and the long life of things (`35-repair-wear.md`)
+- [ ] The original Nowlan-Heap report (NTIS ADA066579), to settle the six-pattern percentages and read its exhibits.
+- [ ] SAE JA1012 (the guide to JA1011) and Moubray's RCM II text, for the decision diagrams as data.
+- [ ] ISO 9224 long-term corrosion models and ISO 9223 dose-response functions as nodes, tied to a world map of climate.
+- [ ] FKM guideline tables of critical damage sums, and pyLife as a reference implementation to test against.
+- [ ] Wilson and Latombe's non-directional blocking graph (1994) and its use in ASAP or Fusion 360 Assembly datasets for
+- [ ] The "thousands of physically valid industrial assemblies" benchmark used in arXiv 2501.05156: its name and licence.
+- [ ] iFixit's proxy-time table and tool scaling factors: whether published, and under what licence.
+- [ ] EN 45554's full parameter tables and its Annex on fasteners, and EN 45552 (durability) and EN 45553 (remanufacture).
+- [ ] The JRC repairability methods for laptops and other product groups now in preparation under ESPR.
+- [ ] Digital Product Passports under ESPR (Regulation 2024/1781) as the format a Nexus product could export.
+- [ ] Damage-tolerant design rules (FAA AC 25.571, widespread fatigue damage) as a worked case for `inspect.interval`.
+- [ ] Prognostics and health management (remaining useful life estimation, particle filters) as the live counterpart.
+- [ ] Wöhler's railway axle tests (1850s-60s) and the Comet as historical cases for the gallery.
+- [ ] Solder-joint fatigue models (Engelmaier) and IPC-9701 for electronics mission profiles.
+- [ ] Japanese wooden-joint (sashimono, tsugite) carpentry as design for disassembly without fasteners.
+- [ ] Repair cafés and Restart Project fault data (Open Repair Data Standard) as real failure-mode statistics.
+- [ ] Fairphone and Framework laptop teardown data as sources of priority-part weights and module designs.
+- [ ] Bicycle and car service manuals (torque tables, service intervals) as sourced maintenance tasks to import.
+- [ ] Availability and spares optimisation (METRIC, Sherbrooke) for fleets in the living world.
+- [ ] Wabi-sabi and kintsugi: visible repair as a value, for how Nexus draws repaired parts.
+
 ## Rounds
 
 | Round | Date | Passes | Branches explored | New branches grafted |
@@ -554,3 +675,4 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 | 3 | 2026-10-31 | 12 to 17 | nature's collective genius; crafts, toys and ancient engineering; sound, film, magic and experiences; safety and failures; commons and citizen science; unseen sciences, old games and cooking | 128 |
 | 4 | 2026-10-31 | 18-self-describing-interfaces.md, 19-physics-core-browser.md, 20-organisations-accidents.md, 21-space-city-grammars.md, 22-growth-self-organisation.md, 23-truth-at-scale.md | Self-describing interfaces; The physics core in a browser; Organisations that do not fail, and deep accidents; Grammars of space and cities; Growth and self-organisation; Keeping knowledge true at scale | 124 |
 | 5 | 2026-10-31 | 24-quantity-kinds.md, 25-incremental-computation.md, 26-proofs-and-programs.md, 27-notations.md, 28-body-medicine.md, 29-cost-markets.md | Quantity kinds done right; Incremental, lazy and demand-driven computation; AI that proves, and shapes that explain themselves; Notations; The body as an engineered system, and medicine's safety; What things cost, and how markets behave | 120 |
+| 6 | 2026-10-31 | 30-token-experiment.md, 31-trusted-kernel.md, 32-engines-to-adopt.md, 33-stocks-flows-societies.md, 34-comfort-load.md, 35-repair-wear.md | The token experiment; A small trusted kernel; Engines worth taking for early cutoff; Stocks, flows and simulated societies; Human comfort and human load; Repair, wear and the long life of things | 107 |

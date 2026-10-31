@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
-import { Engine, type Env } from '../../src/nexus/dataflow';
+import { Engine, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
 import { starterBoards } from '../../src/nexus/starters';
 import { APP, fieldOf, search } from '../../src/nexus/navigate';
 import { builtOf } from '../../src/nexus/evidence';
@@ -79,6 +79,17 @@ describe('every domain, in one pass', () => {
     for (const [q, want] of ASKED) if (!top(q, (f) => f.id === want || f.add?.block === want)) lost.push(`asked "${q}" (wants ${want}; got ${search(q, 3).map((f) => f.add?.block ?? f.id).join(', ')})`);
     expect(lost, `not found in the first three: ${lost.join('; ')}`).toEqual([]);
   }, 120_000);
+  // (the AI's guide shows a plan that must run as written: its wire goes into an input the block has, and a wire into an
+  // input a block lacks, a folded block too, is refused where it is made, never carried silently (2026-10-31: the guide
+  // wired a spring's output `rate` as an input, and the board ran on its defaults with no word said))
+  it('the guide\'s plan runs, and a wire into a missing input is refused', async () => {
+    const guide = readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'), plan = JSON.parse(/`(\{"nodes".*?\})`/.exec(guide)![1]!) as { nodes: Record<string, { b: string; s?: Record<string, unknown> }>; wires: string[] };
+    const b = emptyBoard('guide');
+    for (const [nm, n] of Object.entries(plan.nodes)) { const d = LIBRARY.get(n.b)!; expect(d, n.b).toBeTruthy(); placeBlock(b, d.id, 0, 0, { ...defaultsOf(d), ...(n.s ?? {}) }, nm); }
+    for (const w of plan.wires) { const [f, t] = w.split('>'), [a, o] = f!.split('.'), [c, i] = t!.split('.'); wire(b, a!, o!, c!, i!); }
+    const e = new Engine(b); await e.run(); expect([...e.state.values()].every((s) => s.status === 'ok')).toBe(true);
+    expect(() => wire(b, 'k', 'value', 's', 'rate')).toThrow(/no input "rate"/);
+  }, 60_000);
   // (the context's routing is absolute too: every source file is named in CLAUDE.md or docs/OWNERS.md, by its file or
   // its folder, so whoever works here is routed to every file by the owners table)
   it('every source file has an owner in the docs', () => {

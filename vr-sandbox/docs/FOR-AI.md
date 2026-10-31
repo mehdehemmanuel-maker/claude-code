@@ -25,9 +25,9 @@ You have eight tools. Use as few calls as you can; most requests need three or f
 2. `card` id → the block on one line: `in: name:type(unit)` (a `?` is optional), `out: …`, `set: key=default [choices]`.
    Only card what you will place.
 3. `build` a plan → a new board, run, and every node's result in a line. A plan:
-   `{"nodes": {"s": {"b": "seed.spring-checked"}, "k": {"b": "in.number", "s": {"value": "40000 N/m"}}}, "wires": ["k.value>s.rate"]}`
+   `{"nodes": {"s": {"b": "seed.spring-checked"}, "k": {"b": "in.number", "s": {"value": "6"}}}, "wires": ["k.value>s.n"]}`
    Names (`s`, `k`) are yours: short. `b` is the block id, `s` its settings (only keys its card lists). A wire is
-   `from.output>to.input`.
+   `from.output>to.input`, into an input its card lists (an output such as `rate` cannot be set: to reach a rate, use `fit.target`).
 4. `open` a starter board's title → it becomes the board, run. Start from one when it is near what is asked: it is
    cheaper than building it.
 5. `change` → edits to the board as it is: `add` (as a plan's nodes), `set` (`{"s": {"key": value}}`), `remove`

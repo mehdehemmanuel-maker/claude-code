@@ -1458,3 +1458,13 @@ user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node
   plates 8.8541878128e-11 → 8.8541878188e-11 F; a long wire's field 4.000000002e-5 → 3.999999999e-5 T; the Compton
   shift 2.42631023868e-12 → 2.42631023538e-12 m. Their expected answers were reworked from the 2022 constants; the
   gate then passed (26 of 26).
+
+## 2026-10-31: the AI's guide wired a spring's output as an input, and the engine said nothing (fixed)
+
+Found by research pass 30 (the token experiment) and checked with a probe. `docs/FOR-AI.md`, sent with every call, showed
+the plan `k.value>s.rate`; `rate` is an output of `seed.spring-checked`. Folded blocks were exempt from the "no input of
+that name" check in `wire` (`dataflow.ts`), so the wire was kept, carried nothing, and the spring ran on its defaults:
+11,308.6 N/m, not 40,000 N/m, with no word said. A wire into `nothere` was kept the same way. Now the check covers folded
+blocks too (unless the block has no inputs at all); both wires are refused with the input named. The example wires `n`
+(6 coils: 9,423.8 N/m, measured) and says an output cannot be set (use `fit.target`). The one test runs the guide's plan
+as written and checks the refusal. Gate: 27 passed. All 64 starter boards still build under the check.

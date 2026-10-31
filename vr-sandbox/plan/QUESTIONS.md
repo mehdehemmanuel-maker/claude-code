@@ -50,4 +50,4 @@ and date, and open price data is scarce (USGS free; metal exchange prices cost $
 ## U15. A short board notation for the AI (asked 2026-10-31, research 27)
 
 Should the AI write boards in a short notation with named nets (33 characters against 129 for the JSON plan in one
-example; tokens not yet counted)? Proposed: measure tokens first with an A/B, keep JSON as the stored form. **Unanswered.**
+example)? **Measured since (research 30)**: across all 64 starter boards it takes 0.556 of the JSON plan's tokens; teaching it costs 62 tokens; the model wrote it in 0.47 of JSON's output tokens. Proposed: adopt it, JSON kept as the stored form, validity measured on a larger set first. **Unanswered.**
