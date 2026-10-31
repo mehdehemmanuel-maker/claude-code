@@ -84,6 +84,11 @@ export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3,
   }
   return out;
 }
+/** Every pair the rules try for interference, and what the triangle test says of each: for setting beside another
+ *  engine's verdict (brep.ts, exact booleans), each piece by its place in the tree. */
+export function interferencePairs(ms: Mesh3[], touch = 0.0002): { a: string; b: string; pa: string; pb: string; owners: [string, string]; through: boolean }[] {
+  return candidates(ms).map(([a, b]) => ({ a: a.name, b: b.name, pa: a.node.path, pb: b.node.path, owners: [ownerOf(a.node).p.name, ownerOf(b.node).p.name] as [string, string], through: meshClashes([a, b], { touch, edge: 'scaled', fused: () => false }).some((x) => x.kind === 'through') }));
+}
 /** The gaps kept: a piece that says its clearance (Part.clear) closer than that to anything it does not run on. */
 export function clearances(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => true): Finding[] {
   const out: Finding[] = [];

@@ -7,6 +7,7 @@ import type { Part, Shape, V3 } from './kits';
 import { sectionPoint, tubeLegs } from './form';
 import { massOf, densityKg } from './mass';
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
+import { trianglesOf, interferencePairs } from './make/rules';
 
 // (the kernel's types are its own; this module hands out only what it measures)
 type Solid = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -91,37 +92,38 @@ export function solidOfShape(r: Replicad, s: Shape, facets?: number): Solid {
 /** The kernel's own validity check (BRepCheck_Analyzer). */
 function valid(sol: Solid): boolean { try { const oc = (R as unknown as { getOC: () => any }).getOC(), a = new oc.BRepCheck_Analyzer(sol.wrapped, true, false); const ok = typeof a.IsValid_2 === 'function' ? a.IsValid_2() : a.IsValid(); a.delete(); return !!ok; } catch { return false; } }
 
-export interface SolidRow { path: string; name: string; shape: string; ok: boolean; why?: string; valid?: boolean; volume?: number; kg?: number; ourKg: number; diff?: number; fill?: number; shell?: boolean; cuts: number }
-export interface Solids { rows: SolidRow[]; made: number; failed: number; invalid: number; volume: number; kg: number; ourKg: number; byWhy: Record<string, number>; solids: { path: string; solid: Solid }[] }
+export interface SolidRow { path: string; /** its place in the tree by index ("/12/3"), as layout and the rules say it */ ix: string; name: string; shape: string; ok: boolean; why?: string; valid?: boolean; volume?: number; kg?: number; ourKg: number; diff?: number; fill?: number; shell?: boolean; cuts: number }
+export interface Solids { rows: SolidRow[]; made: number; failed: number; invalid: number; volume: number; kg: number; ourKg: number; byWhy: Record<string, number>; solids: { path: string; ix: string; solid: Solid }[] }
 
 /** Every piece of a thing as an exact solid, placed (each part's at and rot, three's XYZ order), its holes cut: what was
  *  made, what was not and why, each one's volume by the kernel times its density against our own mass of it. A hollow
  *  part (a shell) is not made yet: said, and counted. */
-export async function solidsOf(thing: Part, o: { keep?: boolean } = {}): Promise<Solids> {
-  const r = await kernel(), rows: SolidRow[] = [], solids: { path: string; solid: Solid }[] = [];
-  const walk = (p: Part, path: string, place: (s: Solid) => Solid) => {
+export async function solidsOf(thing: Part, o: { keep?: boolean; /** keep only these (by their index path) */ only?: Set<string> } = {}): Promise<Solids> {
+  const r = await kernel(), rows: SolidRow[] = [], solids: { path: string; ix: string; solid: Solid }[] = [];
+  const walk = (p: Part, path: string, ix: string, place: (s: Solid) => Solid) => {
     const here = (s: Solid) => { let x = s; if (p.rot) { const [a, b, c] = p.rot; if (c) x = x.rotate(c * deg, [0, 0, 0], [0, 0, 1]); if (b) x = x.rotate(b * deg, [0, 0, 0], [0, 1, 0]); if (a) x = x.rotate(a * deg, [0, 0, 0], [1, 0, 0]); } if (p.at) x = x.translate(p.at); return place(x); };
     const me = `${path}/${p.name}`;
-    if (p.shape && p.kg === undefined) {
-      const own = massOf({ ...p, parts: undefined }), row: SolidRow = { path: me, name: p.name, shape: Object.keys(p.shape)[0]!, ok: false, ourKg: own, cuts: p.cuts?.length ?? 0, ...(p.fill !== undefined && p.fill !== 1 ? { fill: p.fill } : {}) };
+    // (a piece with a stated mass is made a solid all the same: only its mass is not set against its volume)
+    if (p.shape) {
+      const own = massOf({ ...p, parts: undefined }), row: SolidRow = { path: me, ix, name: p.name, shape: Object.keys(p.shape)[0]!, ok: false, ourKg: own, cuts: p.cuts?.length ?? 0, ...(p.fill !== undefined && p.fill !== 1 ? { fill: p.fill } : {}) };
       try {
         if (p.shell) { row.shell = true; throw new Error('a hollow part (its wall offset inward: not built yet)'); }
         let s = solidOfShape(r, p.shape, p.facets);
         if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; s = s.translate([0, h / 2, 0]); }
         for (const c of p.cuts ?? []) { const d = norm(c.dir), hole = c.n ? solidOfShape(r, { cyl: [c.r, c.depth] }, c.n).rotate(Math.acos(Math.max(-1, Math.min(1, d[1]))) * deg, [0, 0, 0], Math.hypot(d[2], d[0]) > 1e-9 ? [d[2], 0, -d[0]] : [1, 0, 0]).translate(add(c.at, mul(d, c.depth / 2))) : r.makeCylinder(c.r, c.depth, c.at, d); s = s.cut(hole); hole.delete?.(); }
-        const v = Math.abs(r.measureVolume(s)), rho = p.mat ? densityKg(p.mat) : undefined;
-        Object.assign(row, { ok: true, valid: valid(s), volume: v, ...(rho ? { kg: v * rho * (p.fill ?? 1), diff: own > 0 ? (v * rho * (p.fill ?? 1)) / own - 1 : undefined } : {}) });
+        const v0 = r.measureVolume(s); if (v0 < 0) throw new Error('its profile crosses itself (the kernel measures it inside out)'); const v = v0, rho = p.mat ? densityKg(p.mat) : undefined;
+        Object.assign(row, { ok: true, valid: valid(s), volume: v, ...(rho && p.kg === undefined ? { kg: v * rho * (p.fill ?? 1), diff: own > 0 ? (v * rho * (p.fill ?? 1)) / own - 1 : undefined } : {}) });
         // (each solid freed once measured, unless kept: the kernel's memory is its own, not the garbage collector's)
-        if (o.keep) solids.push({ path: me, solid: here(s) }); else s.delete?.();
+        if (o.keep && (!o.only || o.only.has(ix))) solids.push({ path: me, ix, solid: here(s) }); else s.delete?.();
       } catch (e) { row.why = e instanceof Error && e.message ? e.message : `the kernel could not make this ${row.shape}${'tube' in p.shape ? ' (a sweep along its run)' : ''}`; }
       rows.push(row);
     }
-    for (const q of p.parts ?? []) walk(q, me, here);
+    (p.parts ?? []).forEach((q, k) => walk(q, me, `${ix}/${k}`, here));
   };
-  walk(thing, '', (s) => s);
+  walk(thing, '', '', (s) => s);
   const made = rows.filter((x) => x.ok), byWhy: Record<string, number> = {};
   for (const x of rows) if (!x.ok) { const k = (x.why ?? '').replace(/\d[\d.]*/g, '#').slice(0, 80); byWhy[k] = (byWhy[k] ?? 0) + 1; }
-  return { rows, made: made.length, failed: rows.length - made.length, invalid: made.filter((x) => !x.valid).length, volume: made.reduce((a, x) => a + (x.volume ?? 0), 0), kg: made.reduce((a, x) => a + (x.kg ?? 0), 0), ourKg: made.reduce((a, x) => a + x.ourKg, 0), byWhy, solids };
+  return { rows, made: made.length, failed: rows.length - made.length, invalid: made.filter((x) => !x.valid).length, volume: made.reduce((a, x) => a + (x.volume ?? 0), 0), kg: made.reduce((a, x) => a + (x.kg ?? 0), 0), ourKg: made.filter((x) => x.kg !== undefined).reduce((a, x) => a + x.ourKg, 0), byWhy, solids };
 }
 
 // ---- as a node -------------------------------------------------------------------------------------------------------
@@ -194,3 +196,28 @@ register({ version: 1, by: 'built in', pure: true, id: 'export.files', name: 'Ex
     // (each file a Blob: a page saves it as it is, and a board's inspector shows its size, not its bytes)
     return { files: Object.fromEntries(Object.entries(files).map(([k, b]) => [k, new Blob([b as BlobPart])])), list: Object.entries(files).map(([name, b]) => ({ file: name, kB: +(b.length / 1024).toFixed(1) })), readBack: back ?? {}, says: `${Object.keys(files).length} files of ${solids.made} solids${solids.failed ? ` (${solids.failed} pieces not solids, left out: see Exact solids)` : ''}${back ? `; the STEP read back: ${back.solids} solids, ${(back.volume * 1e6).toPrecision(5)} cm³ against ${(solids.volume * 1e6).toPrecision(5)} written: ${same ? 'the same' : 'NOT the same'}` : ''}` }; },
   tests: [{ inputs: { thing: { name: 'bar', shape: { box: [0.1, 0.02, 0.02] }, at: [0, 0, 0], mat: 'steel-low' } }, set: { formats: 'step' }, outputs: { readBack: { solids: 1, volume: 0.00004 } } }] } as BlockDef);
+
+// ---- independent verification: what runs into what, by exact booleans against the rules' triangles -----------------
+/** Each pair the rules try for interference, judged twice: by the rules' triangle test (rules.ts, the meshes as drawn)
+ *  and by the kernel's boolean (the volume the two exact solids share). Where they agree, and every pair where they do
+ *  not, with the shared volume: an engine other than the one that drew it, set beside the checker. */
+export async function interferenceCrossCheck(thing: Part, o: { least?: number } = {}): Promise<{ pairs: number; both: number; neither: number; meshOnly: { a: string; b: string; mm3: number }[]; exactOnly: { a: string; b: string; mm3: number }[]; unmade: number }> {
+  const least = o.least ?? 1e-9, pairs = interferencePairs(trianglesOf(thing)), s = await solidsOf(thing, { keep: true, only: new Set(pairs.flatMap((q) => [q.pa, q.pb])) }), by = new Map(s.solids.map((x) => [x.ix, x.solid]));
+  let both = 0, neither = 0, unmade = 0; const meshOnly: { a: string; b: string; mm3: number }[] = [], exactOnly: typeof meshOnly = [];
+  for (const q of pairs) { const A = by.get(q.pa), B = by.get(q.pb); if (!A || !B) { unmade++; continue; }
+    // (copies: a boolean consumes what it is given, and each solid is in more than one pair)
+    let v = 0; try { const c = A.clone().intersect(B.clone()); v = Math.abs(measureVolumeSafe(c)); c.delete?.(); } catch { unmade++; continue; }
+    const exact = v > least, row = { a: q.a, b: q.b, mm3: +(v * 1e9).toPrecision(3) };
+    if (exact && q.through) both++; else if (!exact && !q.through) neither++; else if (q.through) meshOnly.push(row); else exactOnly.push(row); }
+  for (const x of s.solids) x.solid.delete?.();
+  return { pairs: pairs.length, both, neither, meshOnly, exactOnly, unmade };
+}
+const measureVolumeSafe = (x: Solid): number => { try { return R!.measureVolume(x); } catch { return 0; } };
+register({ version: 1, by: 'built in', pure: true, id: 'verify.interference', name: 'Interference two ways (exact booleans, the rules)', kind: 'critic', ability: 'check', domains: ['mechanical', 'manufacturing', 'vehicles'],
+  spec: { gloss: 'Do the rules\' triangle test and a CAD kernel\'s booleans agree on what runs into what?', discipline: 'mechanical.design', role: 'assessment', codes: [{ scheme: 'ACM CCS 2012', code: '10010147.10010371.10010396', label: 'Computing methodologies: shape modeling' }],
+    model: { equations: ['a pair clashes by the kernel where its two exact solids share more than 1 mm³'], class: 'analytical', time: 'steady', linear: true, method: 'each pair the rules try (rules.ts, its excuses applied: fitted through, fastened, joined), judged by the triangle test and by OpenCascade\'s boolean common', references: ['Möller, A fast triangle-triangle intersection test, J. Graphics Tools 2, 25 (1997)', 'OpenCascade Technology 7.x, Boolean Operations user guide'] } },
+  says: 'Every pair of pieces the rules try for interference, judged twice: by the rules\' triangle test on the meshes, and by the volume the two exact solids share (OpenCascade\'s boolean). Where both say clash, where both say clear, and every pair where they disagree, with the volume shared: a piece wholly inside another crosses no surface, so the triangles miss it and the kernel does not',
+  ports: { inputs: [P('thing', 'part')], outputs: [P('rows', 'table', { label: 'every disagreement' }), P('agree', 'integer'), P('disagree', 'integer'), P('says', 'text')] },
+  run: async (i) => { const t = i.thing as Part; if (!t || typeof t.name !== 'string') throw new Error('wire a thing in'); const x = await interferenceCrossCheck(t);
+    const rows = [...x.exactOnly.map((r) => ({ ...r, triangles: 'clear', kernel: `shares ${r.mm3} mm³` })), ...x.meshOnly.map((r) => ({ ...r, triangles: 'clash', kernel: `shares ${r.mm3} mm³` }))].sort((a, b) => b.mm3 - a.mm3);
+    return { rows, agree: x.both + x.neither, disagree: rows.length, says: `${x.pairs} pairs tried: both clash ${x.both}, both clear ${x.neither}; only the kernel finds ${x.exactOnly.length} (pieces inside others, which cross no surface), only the triangles ${x.meshOnly.length}; ${x.unmade} not judged (a piece not made a solid)` }; } } as BlockDef);
