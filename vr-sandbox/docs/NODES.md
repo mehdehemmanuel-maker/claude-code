@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 613 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 616 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -36,20 +36,21 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
 | derived | 331 | worked out from what it is given by laws that hold here; no weaker than its inputs |
-| given | 10 | set by whoever made the board |
+| given | 13 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 85 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 543 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 546 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 192 of 613 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 192 of 616 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
-## 1 · Start: values and inputs (12)
+## 1 · Start: values and inputs (15)
 
 Numbers, text, lists, tables, the clock, cards of materials and parts: what a board starts from.
 
+- **Button** (`control.button`): A button you press while the board runs: on a computer by its key, on a phone by the button drawn on the screen, in a headset by a hand's ray; given a thing, the button is put on it (on top, the front or the side) and … *given, tested here*
 - **Laws by field** (`law.fields`): Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas) *specified, tested here*
 - **List of numbers** (`in.list`): Numbers you type, split by commas: wire it into any block to run that block once for each *given, tested here, before the update*
 - **Material property record** (`card.material`): A material as the kept data has it: density, stiffness, strengths *derived, tested here*
@@ -57,6 +58,8 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Quantity** (`quantity`): One of the quantities laws are written in (a force, a stress, a temperature, a concentration…): what it is, its SI unit and dimension, and every law in the book it appears in, with what kind of law each is. *exact, tested here*
 - **Range** (`in.range`): Evenly spaced numbers from one end to the other: a sweep *given, tested here, before the update*
 - **Read** (`read`): A block of the library or an entry of the inventory read as it is (block:… or item:…, or either by its id or words): a block's ports, settings, tests and sources; an entry's place, make and what is in it *derived, tested here, before the update*
+- **Slider** (`control.slider`): A slider you drag while the board runs, on the controls drawn over the 3D view (a computer or a phone): a value between its two ends, in its unit, wired into anything *given, tested here*
+- **Stick (move and steer)** (`control.stick`): A stick you push while the board runs: on a computer the arrow keys (or W A S D when you are not walking), on a phone a stick drawn on the screen, in a headset the right hand's stick. *given, tested here*
 - **Table** (`in.table`): Rows you paste, the first row their headings (comma or tab separated): numbers read as numbers *given, tested here, before the update*
 - **Text** (`in.text`): Words you type, carried on a wire to whatever reads text (a label, a search, a note) *given, tested here, before the update*
 - **What a material is** (`matter`): What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its … *estimated, tested here*
