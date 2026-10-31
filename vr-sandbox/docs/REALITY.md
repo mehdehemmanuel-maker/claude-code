@@ -1413,3 +1413,10 @@ user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node
   boards at the agent's top changed the order the library's modules start in, and the pool's bundled worker failed to
   start (`init_blocks is not a function`); the pool waited forever on a worker that had died. Fixed both: the agent
   loads those two when it runs, and a worker that fails now fails what waited on it, with why, and the pool is made again.
+
+- **2026-10-31, the agent made cheap.** The same request (a spring of 40 kN/m, as light as can be) before and after. Before:
+  ten tools, a long system prompt, a node placed and wired a call at a time: 21 steps, 77,050 tokens in, 2,830 out. After:
+  five tools answering in lines, the board sent whole as one plan, `docs/FOR-AI.md` as the instruction, cached: 5 steps
+  (find, find, card, card, build), 3,557 tokens in fresh, 7,302 read from cache (billed at a tenth), 1,121 out; the same
+  answer (0.12993 kg at 40,009 N/m by `fit.target`). One earlier run of the new version took 13 steps, guessing
+  `fit.target`'s line syntax; FOR-AI.md now states it. Measured once each; a model's runs vary.
