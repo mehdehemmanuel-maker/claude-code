@@ -1420,3 +1420,12 @@ user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node
   (find, find, card, card, build), 3,557 tokens in fresh, 7,302 read from cache (billed at a tenth), 1,121 out; the same
   answer (0.12993 kg at 40,009 N/m by `fit.target`). One earlier run of the new version took 13 steps, guessing
   `fit.target`'s line syntax; FOR-AI.md now states it. Measured once each; a model's runs vary.
+- **2026-10-31, the agent given the rest of what a person can do.** Open a starter board, change the board in place,
+  fold nodes into a saved library block, and a second model checking the answer against the steps. Measured once each:
+  "make a reusable coil spring sizer, then use it at 5 mm and 40 mm" took 7 steps (find, find, card, find, build, fold,
+  build), the saved block ran to the same rate as the board it was folded from (11,779.8 N/m, 0.194 kg), checker PASS;
+  1,650 + 5,940 tokens in fresh, 25,054 cached, 2,766 out. "Open the Export board, make its bolt M10, which files and
+  how big is the STEP" took 11 steps; a setting it guessed (`thread`) was refused with the block's real ones, it wired
+  the bolt's input instead: M10 × 30, 0.02623 kg, STEP 63 kB; checker PASS. In the app (`npm run app`), 10 steps in
+  30.8 s; the block kept in the browser's library; the board shown with it. Its answer named the defaults it left
+  inside the block (a different coil count from the first run, so 18,847.7 N/m): a fold keeps what is inside it.

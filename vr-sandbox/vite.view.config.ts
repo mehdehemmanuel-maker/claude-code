@@ -9,8 +9,8 @@ const relay = (): Plugin => {
   const handle = (load: (id: string) => Promise<Record<string, any>>) => async (req: any, res: any, next: () => void) => {
     if (req.url !== '/api/agent' || req.method !== 'POST') return next();
     let body = ''; for await (const c of req) body += c;
-    try { const { request, model, effort } = JSON.parse(body || '{}'); await load(seeds); const m = await load(agent);
-      const r = await m.agentBuild(String(request ?? ''), { model, effort, seconds: 180, steps: 40 });
+    try { const { request, model, effort, board, blocks } = JSON.parse(body || '{}'); await load(seeds); const m = await load(agent);
+      const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40 });
       res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(r)); }
     catch (e) { res.statusCode = 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: (e as Error).message })); }
   };

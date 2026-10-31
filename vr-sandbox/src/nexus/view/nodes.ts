@@ -625,10 +625,11 @@ function boardInspector(el: HTMLElement): void {
   document.getElementById('iAskGo')!.onclick = async () => {
     const q = (document.getElementById('iAsk') as HTMLTextAreaElement).value.trim(), out = document.getElementById('iAskOut')!; if (!q) return;
     out.textContent = 'Claude is working through the nodes…';
-    try { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: q }) });
+    try { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: q, board: root, blocks: (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })() }) });
       if (res.status === 404) throw new Error('this page is served without the relay: run it with npm run app');
-      const r = await res.json() as { board?: Board; steps?: { tool: string; result: string }[]; answer?: string; stopped?: string; error?: string }; if (r.error || !r.board) throw new Error(r.error ?? 'no board came back');
-      askShown = `<b>${r.steps?.length ?? 0} steps</b>${r.stopped ? ` (${esc(r.stopped)})` : ''}<br>${esc(r.answer ?? '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>')}<details><summary>Each step</summary>${(r.steps ?? []).map((st, k) => `${k + 1}. ${esc(st.tool)}: ${esc(st.result.slice(0, 140))}`).join('<br>')}</details>`;
+      const r = await res.json() as { board?: Board; steps?: { tool: string; result: string }[]; answer?: string; stopped?: string; error?: string; made?: Saved[]; checked?: string }; if (r.error || !r.board) throw new Error(r.error ?? 'no board came back');
+      askShown = `<b>${r.steps?.length ?? 0} steps</b>${r.stopped ? ` (${esc(r.stopped)})` : ''}<br>${esc(r.answer ?? '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>')}${r.made?.length ? `<br><b>Saved to the library:</b> ${r.made.map((x) => esc(x.name)).join(', ')}` : ''}${r.checked ? `<details><summary>Checked by a second model: ${esc(r.checked.trim().split('\n').pop() ?? '')}</summary>${esc(r.checked).replace(/\n/g, '<br>')}</details>` : ''}<details><summary>Each step</summary>${(r.steps ?? []).map((st, k) => `${k + 1}. ${esc(st.tool)}: ${esc(st.result.slice(0, 140))}`).join('<br>')}</details>`;
+      for (const x of r.made ?? []) { const d = groupBlock(x.graph, { id: x.id, name: x.name, says: x.says, domains: x.domains, by: 'you' }); register(d); keepBlock(d); }
       pushUndo(); useBoard(tidy(r.board)); save(); fit(); runSoon(); renderAll();
     } catch (e) { out.textContent = `could not: ${(e as Error).message}`; }
   };
