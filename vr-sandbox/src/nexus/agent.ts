@@ -12,8 +12,8 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { block, defaultsOf, portsOf, register, type BlockDef, type PortDef, type Type } from './blocks';
 import { Engine, emptyBoard, placeBlock, wire } from './dataflow';
-import { search } from './navigate';
-import { starterBoards } from './starters';
+// (navigation and the starter boards are loaded when the agent runs, not when the library does: imported at the top they
+// change the order the library's modules start in, and a worker that loads the whole library then fails to start)
 import type { Board } from './boards';
 
 /** The docs the agent may read, by topic: the router in CLAUDE.md, as files under docs/. */
@@ -68,6 +68,7 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
   const model = o.model ?? 'claude-haiku-5-5', board: Board = o.board ?? emptyBoard(request.slice(0, 60)), steps: AgentStep[] = [], t0 = Date.now(), until = t0 + 1000 * (o.seconds ?? 180);
   let engine: Engine | undefined, tokIn = 0, tokOut = 0, stopped: string | undefined;
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: request }];
+  const [{ search }, { starterBoards }] = await Promise.all([import('./navigate'), import('./starters')]);
   const doTool = async (name: string, a: Record<string, unknown>): Promise<string> => {
     switch (name) {
       case 'search_library': return JSON.stringify(search(String(a.query ?? ''), Math.min(25, Number(a.limit ?? 12))).map((f) => ({ id: f.add?.block ?? f.id, name: f.name, library: f.libraryName, says: f.says.slice(0, 160), ...(f.board ? { board: f.board } : {}) })));

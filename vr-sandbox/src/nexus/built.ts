@@ -8,6 +8,7 @@ export const UPDATE = '2026-10-28T06:21:22.000Z';
 export const BUILT: Record<string, string> = {
   "afford":"2026-10-27T21:39:12.000Z",
   "agent":"2026-10-28T05:16:00.000Z",
+  "agent.build":"2026-10-31T08:09:06.000Z",
   "ai.ask":"2026-10-30T13:27:03.000Z",
   "ai.draw":"2026-10-30T13:27:03.000Z",
   "ai.judge":"2026-10-30T13:27:03.000Z",

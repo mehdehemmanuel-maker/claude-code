@@ -42,7 +42,9 @@ async function nodeHands(n: number): Promise<Hand[]> {
     const { build } = await import(/* @vite-ignore */ 'roll' + 'down') as { build(o: object): Promise<unknown> };
     await build({ input: src, platform: 'node', external: (id: string) => !id.startsWith('.') && !id.startsWith('/') && !id.startsWith('\0'), output: { file: out, format: 'esm', codeSplitting: false }, logLevel: 'silent' });
   }
-  return Array.from({ length: n }, () => { const w = new Worker(out); w.unref(); return { post: (m) => w.postMessage(m), on: (f) => w.on('message', f), stop: () => void w.terminate() }; });
+  // (a worker that cannot start, or dies, fails what was waiting on the pool with why, and the pool is made again: never
+  // a wait that does not end)
+  return Array.from({ length: n }, () => { const w = new Worker(out); w.unref(); w.on('error', (e) => { const why = `a worker failed: ${(e as Error).message}`; for (const [id, x] of [...waiting]) { waiting.delete(id); x.no(new Error(why)); } hands = []; starting = null; }); return { post: (m) => w.postMessage(m), on: (f) => w.on('message', f), stop: () => void w.terminate() }; });
 }
 function pageHands(n: number): Hand[] {
   return Array.from({ length: n }, () => { const w = new Worker(new URL('./trial-worker.ts', import.meta.url), { type: 'module' }); return { post: (m) => w.postMessage(m), on: (f) => { w.onmessage = (e: MessageEvent<Reply>) => f(e.data); }, stop: () => w.terminate() }; });

@@ -1409,3 +1409,7 @@ and 11.3 g. Models: the cheapest by default (the user, 2026-10-31): fal FLUX sch
 user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node asks. The Claude node now goes to
 `api.anthropic.com` itself (the container's own ANTHROPIC_BASE_URL is not for the user's key). Two shells lost to
 `pkill -f` matching its own command line: processes are now stopped by their port.
+  The agent's first commit hung the docs step silently for over ten minutes: importing navigation and the starter
+  boards at the agent's top changed the order the library's modules start in, and the pool's bundled worker failed to
+  start (`init_blocks is not a function`); the pool waited forever on a worker that had died. Fixed both: the agent
+  loads those two when it runs, and a worker that fails now fails what waited on it, with why, and the pool is made again.

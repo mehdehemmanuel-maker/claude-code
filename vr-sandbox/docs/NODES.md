@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 612 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 613 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -40,11 +40,11 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 84 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 85 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 543 tested here (their own tests: that they do what they say, not that the world does); 59 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 543 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 192 of 612 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 192 of 613 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (12)
 
@@ -360,12 +360,13 @@ Tables, values, charts, the 3D view, the space.
 - **Side by side from the same camera** (`view.compare`): Three panels: the picture; the model from the picture's own camera (the right way round); and the picture dimmed with each traced feature's edge in green and the model's own part's in red. *derived, untested*
 - **Table view** (`view.table`): Rows shown as a table on the board: each row a line, each field a column, as wide as its widest value *derived, tested here, before the update*
 
-## 11 · Board tools (8)
+## 11 · Board tools (9)
 
 Groups, notes, code, asking, events.
 
 - **Ask Claude** (`ai.ask`): Asks Claude, or Nexus where Claude cannot be reached; {input} is what comes in *hypothetical, untested*
 - **Claude (Anthropic Messages API)** (`api.claude`): Words sent to Claude through the Anthropic API (its SDK; ANTHROPIC_API_KEY under Node), its answer back. *hypothetical, untested*
+- **Claude builds a board** (`agent.build`): A request in words handed to Claude, which works only through the node system's own tools: searching the library and the example boards, reading a node before it uses it, reading the docs by their router, placing, … *hypothetical, untested*
 - **Code** (`code`): Code with ports: each input is a name in it, what it returns (an object, port by port, or one value) fills its outputs. *derived, untested, before the update*
 - **Export (STEP, STL, 3MF, glTF, BOM)** (`export.files`): A thing written as files: STEP (each solid named by its place in the thing's tree, coloured, millimetres), STL, 3MF and glTF (the kernel's own meshes of the exact solids), and its bill of materials as CSV; the STEP … *derived, tested here*
 - **Gemini: look at pictures** (`api.gemini.see`): Pictures and words sent to Google's Gemini (GEMINI_API_KEY under Node), its answer back; its models tried in turn where one is gone or busy *hypothetical, untested*
