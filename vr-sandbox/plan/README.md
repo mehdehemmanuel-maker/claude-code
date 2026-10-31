@@ -16,6 +16,7 @@ Nothing here is built yet. A phase starts when the user says so.
 | `specs/NN-name/` | one per phase. The phases begun soonest are split into `requirements.md` (what it shall do, each line traced to the user's words), `design.md` (how, and which owners it extends) and `tasks.json` (each task failing until its check passes); the later ones are one `spec.md` holding the same three parts, split when they start | the phase's work |
 | `research/` | what the research found, in short, with its sources named | added to when research is done again |
 | `QUESTIONS.md` | what only the user can decide, and what the research could not answer | as questions are answered |
+| `BOOK-OF-QUESTIONS.md` | every question Nexus must answer, by territory: its own state, engineering, life, mathematics, games and the vast, philosophy, prompts and judges | as research adds and answers them |
 
 Every spec extends the owners named in `../CLAUDE.md`. Nothing here is a second owner.
 
