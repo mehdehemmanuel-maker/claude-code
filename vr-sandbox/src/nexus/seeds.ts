@@ -22,6 +22,7 @@ import './reconstruct';
 import './genai';
 import './compiler';
 import './fea';
+import './agent';
 
 /** A board being built, a node at a time, and saved as a seed. */
 class Seed {

@@ -13,8 +13,10 @@ import { encodePng } from './reconstruct';
 /** Models tried in order: the first that answers is used (a model retired or busy passes to the next). */
 export const SEEING = ['gemini-3-flash-preview', 'gemini-3.8-flash', 'gemini-3.5-flash'];
 export const DRAWING = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-3-pro-image'];
-/** fal.ai's image models, tried before Gemini's where FAL_KEY is set (fal.run, its pictures on fal.media). */
-export const FAL_DRAWING = ['fal-ai/flux/schnell', 'fal-ai/flux/dev'];
+/** fal.ai's image models, tried before Gemini's where FAL_KEY is set (fal.run, its pictures on fal.media): the
+ *  cheapest only (FLUX schnell); a heavier one only where a node asks for it by name (the user, 2026-10-31: "use the
+ *  cheapest models and not heavy only when absolutely needed"). */
+export const FAL_DRAWING = ['fal-ai/flux/schnell'];
 const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 function keyOf(): string {
@@ -67,10 +69,10 @@ export async function see(pictures: unknown[], prompt: string, o: { json?: boole
   return { text: r.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '', model, ms };
 }
 /** A picture drawn by fal.ai (where FAL_KEY is set): the first of its models that answers, the picture fetched from its URL. */
-async function drawFal(prompt: string, signal?: AbortSignal): Promise<{ png: Uint8Array; said: string; model: string; ms: number }> {
+async function drawFal(prompt: string, signal?: AbortSignal, models: string[] = FAL_DRAWING): Promise<{ png: Uint8Array; said: string; model: string; ms: number }> {
   const key = typeof process !== 'undefined' ? process.env?.FAL_KEY : undefined; if (!key) throw new Error('no FAL_KEY');
   const said: string[] = [];
-  for (const m of FAL_DRAWING) {
+  for (const m of models) {
     const t0 = Date.now(); let res: Response;
     try { res = await fetch(`https://fal.run/${m}`, { method: 'POST', headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, image_size: 'landscape_16_9', num_images: 1 }), signal }); }
     catch (e) { said.push(`${m}: ${(e as Error).message}`); continue; }
@@ -175,8 +177,8 @@ const capped = (signal?: AbortSignal): AbortSignal => (signal && typeof AbortSig
 
 node({ id: 'api.claude', name: 'Claude (Anthropic Messages API)', kind: 'ai', ability: 'ask', domains: ['intelligence', 'software', 'everyday'],
   spec: { gloss: 'What does Claude answer to these words?', discipline: 'intelligence.models.selection', role: 'data source', codes: [API_CODE] },
-  says: 'Words sent to Claude through the Anthropic API (its SDK; ANTHROPIC_API_KEY under Node), its answer back. Claude Opus 5.5 unless another is chosen; its depth set by effort (its thinking cannot be turned off on Opus 5.5). Where a request is declined for policy reasons it is tried again on the model\'s default fallback, server-side, and said. Waits two minutes at most',
-  settings: [{ key: 'model', label: 'Model', type: 'choice', default: 'claude-opus-5-5', choices: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'] }, { key: 'effort', label: 'Effort', type: 'choice', default: 'medium', choices: ['low', 'medium', 'high', 'xhigh', 'max'] }, { key: 'system', label: 'Its standing instructions', type: 'code', default: '' }, { key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: '' }],
+  says: 'Words sent to Claude through the Anthropic API (its SDK; ANTHROPIC_API_KEY under Node), its answer back. Claude Haiku 5.5 at low effort unless another is chosen (the cheapest first; a heavier model only where the task needs it). Where a request is declined for policy reasons it is tried again on the model\'s default fallback, server-side, and said. Waits two minutes at most',
+  settings: [{ key: 'model', label: 'Model (the cheapest unless the task needs more)', type: 'choice', default: 'claude-haiku-5-5', choices: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-1'] }, { key: 'effort', label: 'Effort', type: 'choice', default: 'low', choices: ['low', 'medium', 'high', 'xhigh', 'max'] }, { key: 'system', label: 'Its standing instructions', type: 'code', default: '' }, { key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: '' }],
   ports: { inputs: [P('prompt', 'text', { optional: true })], outputs: [P('text', 'text'), P('model', 'text', { label: 'the model that answered' }), P('stop', 'text', { label: 'why it stopped' }), P('says', 'text')] },
   run: async (i, c) => {
     envKey('ANTHROPIC_API_KEY', 'the environment\'s secrets'); const words = String(i.prompt ?? c.set.prompt ?? ''); if (!words.trim()) throw new Error('nothing to ask: wire words in or set them');
@@ -205,9 +207,9 @@ node({ id: 'api.gemini.draw', name: 'Gemini: draw from words', kind: 'generator'
 node({ id: 'api.fal.draw', name: 'fal.ai: draw from words (FLUX)', kind: 'generator', ability: 'generate', domains: ['intelligence', 'software', 'everyday'],
   spec: { gloss: 'What does FLUX on fal.ai draw for these words?', discipline: 'intelligence.generative', role: 'data source', codes: [MODEL_CODE] },
   says: 'Words sent to fal.ai\'s FLUX models (FAL_KEY under Node), a picture back; an account with no credit is said as fal says it',
-  settings: [{ key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: '' }],
+  settings: [{ key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: '' }, { key: 'model', label: 'Model (the cheapest unless a picture needs more)', type: 'choice', default: 'fal-ai/flux/schnell', choices: ['fal-ai/flux/schnell', 'fal-ai/flux/dev'] }],
   ports: { inputs: [P('prompt', 'text', { optional: true })], outputs: [P('picture', 'record'), P('model', 'text'), P('says', 'text')] },
-  run: async (i, c) => { const r = await drawFal(String(i.prompt ?? c.set.prompt), capped(c.signal)); return { picture: { png: r.png, said: r.said, model: r.model }, model: r.model, says: `${r.model}, ${(r.ms / 1000).toFixed(1)} s` }; } });
+  run: async (i, c) => { const r = await drawFal(String(i.prompt ?? c.set.prompt), capped(c.signal), [String(c.set.model ?? 'fal-ai/flux/schnell')]); return { picture: { png: r.png, said: r.said, model: r.model }, model: r.model, says: `${r.model}, ${(r.ms / 1000).toFixed(1)} s` }; } });
 
 node({ id: 'api.higgsfield', name: 'Higgsfield: pictures and video', kind: 'generator', ability: 'generate', domains: ['intelligence', 'software', 'everyday'],
   spec: { gloss: 'What does a Higgsfield model make from these words and pictures?', discipline: 'intelligence.generative', role: 'data source', codes: [MODEL_CODE] },

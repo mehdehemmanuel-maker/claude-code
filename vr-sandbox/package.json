@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "app": "vite build --config vite.view.config.ts --logLevel error && NODE_USE_ENV_PROXY=1 vite preview --config vite.view.config.ts --port 5173",
     "gate": "tsc --noEmit -p . && vitest run",
     "gate:field": "tsc --noEmit -p . && vitest run tests/nexus/domains.test.ts -t",
     "docs": "UPDATE_DOCS=quick vitest run tests/nexus/domains.test.ts",

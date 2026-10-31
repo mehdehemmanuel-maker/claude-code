@@ -595,6 +595,8 @@ if (PAGE) document.getElementById('libQ')!.addEventListener('input', renderLibra
 for (const t of document.querySelectorAll<HTMLButtonElement>('#libTop .tabs button')) t.onclick = () => { libBy = t.dataset.by as typeof libBy; for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === t); renderLibrary(); };
 
 // ---- the inspector: each block's own calculator ---------------------------------------------------------------------
+/** Claude's last answer here, kept across redraws. */
+let askShown = '';
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 function renderInspector(full: boolean): void {
   wall.changed?.(); if (!PAGE) return;
@@ -613,10 +615,23 @@ function boardInspector(el: HTMLElement): void {
   el.innerHTML = `<div class="ititle"><input id="iTitle" value="${esc(b.title ?? '')}" /></div>
     <p class="says">${n} block${n === 1 ? '' : 's'} · last change: ${lastReport.ran} block${lastReport.ran === 1 ? '' : 's'} ran, ${lastReport.cached} reused (nothing they read changed)${lastReport.failed ? `, ${lastReport.failed} failed` : ''}${lastReport.waiting ? `, ${lastReport.waiting} waiting` : ''}, in ${lastReport.ms.toFixed(1)} ms</p>
     <h3>Suggestions</h3><div id="iSug">${sg.length || needs.length ? '' : '<p class="says">Nothing: no dead branches, no twins, no repeated wiring, and nothing its work leaves out.</p>'}</div>
+    <h3>Ask Claude</h3><div class="row"><textarea id="iAsk" rows="3" placeholder="Build … (Claude works through the nodes: it searches, reads, places, wires, runs and checks, then answers)"></textarea></div><div class="row"><button id="iAskGo">Build it</button></div><div id="iAskOut" class="says">${askShown}</div>
     <h3>Start from</h3><div id="iDemos"></div>
     <h3>This board</h3><div class="row"><label>Its field</label><select id="iField">${DOMAINS.map((d) => `<option value="${d.id}" ${d.id === (savedBoards().find((x) => x.title === b.title)?.field ?? fieldOf(b)) ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div><div class="btns"><button id="iKeep" class="hot">Save to the library's Boards</button><button id="iExport">Export JSON</button><button id="iImport">Import JSON</button><button id="iTidy">Tidy</button><button id="iFresh">Run all afresh</button><button id="iClear">Clear</button></div>
     <h3>How</h3><div class="kbd"><b>Drag</b> from an output to an input to wire · <b>drag</b> an input's wire off to move it · <b>double-click</b> empty space to add, a group to open · <b>shift-drag</b> to choose many · <b>Ctrl G</b> fold into a group · <b>Del</b> delete · <b>Ctrl Z</b> undo · <b>F</b> fit · <b>Ctrl K</b> commands · a list wired into one value runs the block once for each item</div>`;
   (document.getElementById('iTitle') as HTMLInputElement).onchange = (e) => edit((x) => { x.title = (e.target as HTMLInputElement).value; });
+  // (asking Claude: the relay this page is served with runs it under Node, where the key is; its board opened as an
+  // imported one is, undoable; its steps and its answer shown under the box)
+  document.getElementById('iAskGo')!.onclick = async () => {
+    const q = (document.getElementById('iAsk') as HTMLTextAreaElement).value.trim(), out = document.getElementById('iAskOut')!; if (!q) return;
+    out.textContent = 'Claude is working through the nodes…';
+    try { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: q }) });
+      if (res.status === 404) throw new Error('this page is served without the relay: run it with npm run app');
+      const r = await res.json() as { board?: Board; steps?: { tool: string; result: string }[]; answer?: string; stopped?: string; error?: string }; if (r.error || !r.board) throw new Error(r.error ?? 'no board came back');
+      askShown = `<b>${r.steps?.length ?? 0} steps</b>${r.stopped ? ` (${esc(r.stopped)})` : ''}<br>${esc(r.answer ?? '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>')}<details><summary>Each step</summary>${(r.steps ?? []).map((st, k) => `${k + 1}. ${esc(st.tool)}: ${esc(st.result.slice(0, 140))}`).join('<br>')}</details>`;
+      pushUndo(); useBoard(tidy(r.board)); save(); fit(); runSoon(); renderAll();
+    } catch (e) { out.textContent = `could not: ${(e as Error).message}`; }
+  };
   const s = document.getElementById('iSug')!;
   for (const x of sg) {
     const d = document.createElement('div'); d.className = 'sug'; d.innerHTML = `<span>${esc(x.says)}</span>`;

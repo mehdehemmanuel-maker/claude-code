@@ -43,7 +43,11 @@ population are all done by hand. These come before the numbered plan below, with
   by the router (only what the question needs), and answers by placing, wiring, setting and running nodes, each step
   shown and undoable; it never edits the app's code. Its key stays on a small Node relay the app is served with (a page
   holds no key); `api.claude` is its model call. Done when it builds and runs a board from a sentence ("a 40 kN/m
-  spring as light as can be") and says what it did, step by step.
+  spring as light as can be") and says what it did, step by step. **Built 2026-10-31** (`agent.ts`, panel Ask Claude,
+  `npm run app`): asked for a 40 kN/m spring and its mass, Claude Haiku built and ran it in 21 steps and 15.7 s under
+  Node (correcting a setting the spring does not have from the error it got), and in the app in 9 steps and 12.6 s
+  with Fit to a target (949 trials: 40,000 N/m, 11.3 g). Left: folding what it builds into a saved node, and its
+  answers checked by a second model where they carry judgement.
 - **II. AI-gate pipelines for what is easy but many.** One small tagged task per call, never a hundred in one prompt;
   each answer through gates that can fail it: its schema, its units and ranges, its quote found word for word in the
   page it cites, a second model's blind check where judgement is needed; what fails goes back with why, or to a person.

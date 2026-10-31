@@ -1399,3 +1399,13 @@ container's proxy ("fetch failed" for every host but one) until `NODE_USE_ENV_PR
 (a rules check on one thing: the lawn tractor built in 0.2 s and checked in 2.7 s; the engine's injectors alone 2.5 s,
 against about 15 s for the engine whole), `npm run gate:field` (one field in 4.2 s against 46 s whole), `npm run probe`
 and `npm run docs`, each with the two-minute cap where it runs a probe or a check.
+- **2026-10-31, Claude in the app, through the nodes; cheapest models first.** `agent.ts`: Claude with the node
+system's own tools only (search, describe, example boards, docs by topic, place, wire, set, remove, run, read), a
+system prompt that makes it find, read before use, run, fix, and answer only from what its tools returned. Node Claude
+builds a board, the panel Ask Claude, and a relay on the app's server (`npm run app`: the built pages and `/api/agent`,
+the key under Node only). Measured: under Node, 21 steps, 15.7 s, 77,050 tokens in and 2,830 out, a 40,013 N/m spring of
+19.4 g after one correction it made itself; in the app, 9 steps, 12.6 s, Fit to a target over 949 trials, 40,000 N/m
+and 11.3 g. Models: the cheapest by default (the user, 2026-10-31): fal FLUX schnell only (a picture in 2.8 s once the
+user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node asks. The Claude node now goes to
+`api.anthropic.com` itself (the container's own ANTHROPIC_BASE_URL is not for the user's key). Two shells lost to
+`pkill -f` matching its own command line: processes are now stopped by their port.
