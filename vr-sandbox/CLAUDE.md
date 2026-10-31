@@ -246,6 +246,13 @@ the task list and lose the why. So the why lives here, and every round is checke
   tried on a small case first and a whole vehicle only once that is fast; anything past about two minutes is stopped,
   not waited on, and said
 - "go through and update your context and navigation get rid of any outdated context or flawed navigation" (2026-10-31)
+- "So the questions are you accurately building the Corolla or are you accidentally making it more efficient potentially
+  spotting planned obsolescence", then "stop focusing on the cars what should we really be focusing on" (2026-10-31): a
+  real product's own data is held fixed; a finding on it is checked against the real product first, and never tuned
+  away to please our checker. The focus is the machinery that makes and fixes anything (constraints, changes that
+  follow, the repair loop as nodes), not one car
+- "Okay do that also here a burner Higgs field api … put all apis as nodes with outputs and inputs" (2026-10-31): every
+  service a node; keys kept out of the repo (the environment's secrets, or this session's private scratchpad file)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say
@@ -303,7 +310,7 @@ known gaps are there too.
 | Computers from transistors; chips from netlists | `nexus/computer.ts`, `nexus/logic/` |
 | Inventory, pieces, looks, breakdown queue | `nexus/inventory.ts`, `pieces.ts`, `looks.ts`, `breakdown.ts` |
 | Research and the gap map | `nexus/research.ts`, `data/references.ts` |
-| Models over the web (Gemini): pictures judged blind as a measurement, drawn from words, wordings tried | `nexus/genai.ts` (keys: `GEMINI_API_KEY`, `FAL_KEY`, under Node only) |
+| Models and services over the web: pictures judged blind as a measurement, drawn from words, wordings tried; every service a node of its own (`api.claude`, `api.gemini.see`, `api.gemini.draw`, `api.fal.draw`, `api.higgsfield`, `api.zenrows`) | `nexus/genai.ts` (keys under Node only: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `HIGGSFIELD_KEY_ID` and `HIGGSFIELD_KEY_SECRET`, `ZENROWS_API_KEY`) |
 | The engineering compiler: one design record through stages (requirements, BOM, checks with their engine and input hash), the release gate | `nexus/compiler.ts` (`docs/COMPILER.md`) |
 | Exact solids: every piece made a B-rep solid by OpenCascade (replicad 1.1.0), placed, its holes cut by booleans, checked valid, measured; what is not made counted; export (STEP, STL, 3MF, glTF, BOM); interference by booleans against the rules | `nexus/brep.ts` (nodes Exact solids, Compile: exact solids, Export, Interference two ways) |
 | Stress by an engine apart: CalculiX (Node only, where installed), set against the book and our frame analysis | `nexus/fea.ts` (node Stress three ways) |
@@ -374,5 +381,10 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
   tests, one quick board per field, the reach check), under a minute; CI runs the same. `UPDATE_DOCS=1 npx vitest run`
   writes the generated docs and the nodes' dates (twice where nodes' code changed). Nodes built before the update are
   marked as such: the queue to re-check. Build the viewer: `npx vite build --config vite.view.config.ts --logLevel error`.
-- Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing.
+- Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing. Run them with `npm run probe --
+  <file>` (stopped at two minutes). A rules check on one thing or one part of it: `CHECK=corolla [ONLY=regex]
+  [WITHIN=/3/0] npm run check`. While working, the gate on the fields touched: `npm run gate:field -- Mechanical` (4 s
+  for one field, against 46 s whole); the docs once with `npm run docs`; the whole gate before pushing.
+- Node's built-in fetch reaches the web here only with `NODE_USE_ENV_PROXY=1` (the container's proxy; set in the
+  scripts above).
 - Never put API keys in the repo or in client code.

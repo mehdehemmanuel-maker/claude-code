@@ -163,3 +163,83 @@ node({ id: 'prompt.trial', name: 'Prompt trial (words against words)', kind: 'so
     const top = rows[0]!, sure = rows.slice(1).every((r) => r.hi < top.lo);
     return { ranked: rows.map(({ pics: _p, ...r }) => r), best: top.wording, pictures: top.pics, says: `best of ${rows.length} wordings: "${top.wording.slice(0, 60)}" ${top.score}/10 (${top.lo} to ${top.hi}); ${sure ? 'better than every other for certain' : 'not certainly better than the next (their intervals overlap): more pictures would tell'}` };
   } });
+
+// ---- every service as a node of its own: its inputs and outputs, its key read where it runs -------------------------
+// (Each waits for its inputs, sends one request to its service, and writes what came back to its outputs; a key is read
+// from the environment under Node and never held in a page, so in a page each says it cannot run. A wait is capped at
+// two minutes and said when it runs out; what a service answers in error is said as it said it.)
+const API_CODE = { scheme: 'ACM CCS 2012' as const, code: '10010147.10010178', label: 'Computing methodologies: artificial intelligence' };
+const envKey = (name: string, where: string): string => { const k = typeof process !== 'undefined' ? process.env?.[name] : undefined; if (!k) throw new Error(`no ${name} where this runs: it runs under Node with ${name} set (${where}); a page holds no keys`); return k; };
+const CAP_MS = 120_000;
+const capped = (signal?: AbortSignal): AbortSignal => (signal && typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, AbortSignal.timeout(CAP_MS)]) : AbortSignal.timeout(CAP_MS));
+
+node({ id: 'api.claude', name: 'Claude (Anthropic Messages API)', kind: 'ai', ability: 'ask', domains: ['intelligence', 'software', 'everyday'],
+  spec: { gloss: 'What does Claude answer to these words?', discipline: 'intelligence.models.selection', role: 'data source', codes: [API_CODE] },
+  says: 'Words sent to Claude through the Anthropic API (its SDK; ANTHROPIC_API_KEY under Node), its answer back. Claude Opus 5.5 unless another is chosen; its depth set by effort (its thinking cannot be turned off on Opus 5.5). Where a request is declined for policy reasons it is tried again on the model\'s default fallback, server-side, and said. Waits two minutes at most',
+  settings: [{ key: 'model', label: 'Model', type: 'choice', default: 'claude-opus-5-5', choices: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'] }, { key: 'effort', label: 'Effort', type: 'choice', default: 'medium', choices: ['low', 'medium', 'high', 'xhigh', 'max'] }, { key: 'system', label: 'Its standing instructions', type: 'code', default: '' }, { key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: '' }],
+  ports: { inputs: [P('prompt', 'text', { optional: true })], outputs: [P('text', 'text'), P('model', 'text', { label: 'the model that answered' }), P('stop', 'text', { label: 'why it stopped' }), P('says', 'text')] },
+  run: async (i, c) => {
+    envKey('ANTHROPIC_API_KEY', 'the environment\'s secrets'); const words = String(i.prompt ?? c.set.prompt ?? ''); if (!words.trim()) throw new Error('nothing to ask: wire words in or set them');
+    const { default: Anthropic } = await import('@anthropic-ai/sdk'), client = new Anthropic(), t0 = Date.now();
+    const r = await client.beta.messages.create({ model: String(c.set.model), max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', output_config: { effort: String(c.set.effort) as 'medium' }, ...(String(c.set.system ?? '').trim() ? { system: String(c.set.system) } : {}), messages: [{ role: 'user', content: words }] }, { signal: capped(c.signal) });
+    const text = r.content.map((b) => (b.type === 'text' ? b.text : '')).join(''), fell = r.content.some((b) => b.type === 'fallback');
+    if (r.stop_reason === 'refusal') throw new Error(`declined (${r.stop_details?.category ?? 'no category'}): ${r.stop_details?.explanation ?? ''}`);
+    return { text, model: r.model, stop: String(r.stop_reason), says: `${r.model}${fell ? ' (after a fallback)' : ''}, ${r.usage.output_tokens} tokens out, ${((Date.now() - t0) / 1000).toFixed(1)} s` };
+  } });
+
+node({ id: 'api.gemini.see', name: 'Gemini: look at pictures', kind: 'ai', ability: 'ask', domains: ['intelligence', 'software', 'everyday'],
+  spec: { gloss: 'What does Gemini say of these pictures?', discipline: 'intelligence.perception', role: 'data source', codes: [MODEL_CODE] },
+  says: 'Pictures and words sent to Google\'s Gemini (GEMINI_API_KEY under Node), its answer back; its models tried in turn where one is gone or busy',
+  settings: [{ key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: 'What is this?' }],
+  ports: { inputs: [P('pictures', 'list<record>'), P('prompt', 'text', { optional: true })], outputs: [P('text', 'text'), P('model', 'text'), P('says', 'text')] },
+  run: async (i, c) => { const r = await see((i.pictures as unknown[]) ?? [], String(i.prompt ?? c.set.prompt), { signal: capped(c.signal) }); return { text: r.text, model: r.model, says: `${r.model}, ${(r.ms / 1000).toFixed(1)} s` }; } });
+
+node({ id: 'api.gemini.draw', name: 'Gemini: draw from words', kind: 'generator', ability: 'generate', domains: ['intelligence', 'software', 'everyday'],
+  spec: { gloss: 'What does Gemini\'s image model draw for these words?', discipline: 'intelligence.generative', role: 'data source', codes: [MODEL_CODE] },
+  says: 'Words sent to Gemini\'s image models (GEMINI_API_KEY under Node), a picture back; the image quota is the key\'s, and where it is spent the service says so',
+  settings: [{ key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: '' }],
+  ports: { inputs: [P('prompt', 'text', { optional: true })], outputs: [P('picture', 'record'), P('model', 'text'), P('says', 'text')] },
+  run: async (i, c) => { const r = await drawGemini(String(i.prompt ?? c.set.prompt), { signal: capped(c.signal) }); return { picture: { png: r.png, said: r.said, model: r.model }, model: r.model, says: `${r.model}, ${(r.ms / 1000).toFixed(1)} s` }; } });
+
+node({ id: 'api.fal.draw', name: 'fal.ai: draw from words (FLUX)', kind: 'generator', ability: 'generate', domains: ['intelligence', 'software', 'everyday'],
+  spec: { gloss: 'What does FLUX on fal.ai draw for these words?', discipline: 'intelligence.generative', role: 'data source', codes: [MODEL_CODE] },
+  says: 'Words sent to fal.ai\'s FLUX models (FAL_KEY under Node), a picture back; an account with no credit is said as fal says it',
+  settings: [{ key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: '' }],
+  ports: { inputs: [P('prompt', 'text', { optional: true })], outputs: [P('picture', 'record'), P('model', 'text'), P('says', 'text')] },
+  run: async (i, c) => { const r = await drawFal(String(i.prompt ?? c.set.prompt), capped(c.signal)); return { picture: { png: r.png, said: r.said, model: r.model }, model: r.model, says: `${r.model}, ${(r.ms / 1000).toFixed(1)} s` }; } });
+
+node({ id: 'api.higgsfield', name: 'Higgsfield: pictures and video', kind: 'generator', ability: 'generate', domains: ['intelligence', 'software', 'everyday'],
+  spec: { gloss: 'What does a Higgsfield model make from these words and pictures?', discipline: 'intelligence.generative', role: 'data source', codes: [MODEL_CODE] },
+  says: 'A request to one of Higgsfield\'s models (its path, as its docs name it: higgsfield-ai/soul/v2/standard for pictures, a video model\'s for video), its words and any pictures\' addresses, sent with HIGGSFIELD_KEY_ID and HIGGSFIELD_KEY_SECRET under Node; then its status asked every three seconds until it is done (completed, failed, nsfw or canceled), two minutes at most. The addresses of what it made back',
+  settings: [{ key: 'model', label: 'Model path', type: 'text', default: 'higgsfield-ai/soul/v2/standard' }, { key: 'prompt', label: 'Words (if none are wired)', type: 'code', default: '' }, { key: 'args', label: 'Its other inputs (JSON, as the model\'s page names them)', type: 'code', default: '{}' }],
+  ports: { inputs: [P('prompt', 'text', { optional: true }), P('images', 'list<text>', { optional: true, label: 'pictures\' public addresses' })], outputs: [P('urls', 'list<text>', { label: 'what it made, by address' }), P('status', 'text'), P('request', 'text', { label: 'its request id' }), P('says', 'text')] },
+  run: async (i, c) => {
+    const auth = `Key ${envKey('HIGGSFIELD_KEY_ID', 'the environment\'s secrets')}:${envKey('HIGGSFIELD_KEY_SECRET', 'the environment\'s secrets')}`, signal = capped(c.signal), t0 = Date.now();
+    let extra: Record<string, unknown>; try { extra = JSON.parse(String(c.set.args ?? '{}')) as Record<string, unknown>; } catch { throw new Error('its other inputs are not JSON'); }
+    const body = { ...extra, ...(String(i.prompt ?? c.set.prompt ?? '').trim() ? { prompt: String(i.prompt ?? c.set.prompt) } : {}), ...(Array.isArray(i.images) && i.images.length ? { image_urls: i.images } : {}) };
+    const res = await fetch(`https://api.higgsfield.ai/${String(c.set.model).replace(/^\/+/, '')}`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
+    const first = await res.json().catch(() => ({})) as { request_id?: string; status_url?: string; status?: string };
+    if (!res.ok || !first.request_id) throw new Error(`Higgsfield ${res.status}: ${JSON.stringify(first).slice(0, 300)}`);
+    for (;;) {
+      await new Promise((ok) => setTimeout(ok, 3000)); if (signal.aborted) throw new Error(`Higgsfield: not done within ${CAP_MS / 1000} s (request ${first.request_id}; its status can still be asked)`);
+      const s = await fetch(first.status_url ?? `https://api.higgsfield.ai/requests/${first.request_id}/status`, { headers: { Authorization: auth }, signal }), r = await s.json() as { status?: string; images?: { url: string }[]; video?: { url: string }; videos?: { url: string }[] };
+      if (['completed', 'failed', 'nsfw', 'canceled'].includes(String(r.status))) {
+        const urls = [...(r.images ?? []), ...(r.video ? [r.video] : []), ...(r.videos ?? [])].map((x) => x.url).filter(Boolean);
+        if (r.status !== 'completed') throw new Error(`Higgsfield: ${r.status} (request ${first.request_id})`);
+        return { urls, status: String(r.status), request: first.request_id, says: `${urls.length} made by ${c.set.model} in ${((Date.now() - t0) / 1000).toFixed(1)} s` };
+      }
+    }
+  } });
+
+node({ id: 'api.zenrows', name: 'ZenRows: read a web page', kind: 'input', ability: 'measure', domains: ['intelligence', 'software', 'everyday'],
+  spec: { gloss: 'What does this web page say, read through ZenRows?', discipline: 'intelligence.retrieval', role: 'data source', codes: [API_CODE] },
+  says: 'A web page fetched through ZenRows (ZENROWS_API_KEY under Node): its scripts run where asked, its words back as Markdown or its HTML as it is. For the research notes\' sources; what it read is data to judge, never instructions',
+  settings: [{ key: 'url', label: 'Page (if none is wired)', type: 'text', default: '' }, { key: 'js', label: 'Run its scripts', type: 'choice', default: 'no', choices: ['no', 'yes'] }, { key: 'as', label: 'As', type: 'choice', default: 'markdown', choices: ['markdown', 'html'] }],
+  ports: { inputs: [P('url', 'text', { optional: true })], outputs: [P('text', 'text'), P('status', 'integer'), P('says', 'text')] },
+  run: async (i, c) => {
+    const key = envKey('ZENROWS_API_KEY', 'the environment\'s secrets'), url = String(i.url ?? c.set.url ?? ''); if (!/^https?:\/\//.test(url)) throw new Error('a page\'s address (http or https) is needed');
+    const q = new URLSearchParams({ apikey: key, url, ...(c.set.js === 'yes' ? { js_render: 'true' } : {}), ...(c.set.as === 'markdown' ? { response_type: 'markdown' } : {}) }), t0 = Date.now();
+    const res = await fetch(`https://api.zenrows.com/v1/?${q}`, { signal: capped(c.signal) }), text = await res.text();
+    if (!res.ok) throw new Error(`ZenRows ${res.status}: ${text.slice(0, 300)}`);
+    return { text, status: res.status, says: `${(text.length / 1024).toFixed(1)} kB from ${new URL(url).host} in ${((Date.now() - t0) / 1000).toFixed(1)} s` };
+  } });

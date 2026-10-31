@@ -1389,3 +1389,13 @@ compression ratio (new `cr`, typical 10.5; 5.9 mm deep, as deep as the 8.9 mm de
 the plugs seated at their roof. Measured after: inline four 1 finding (the mount rubber, as before), Monte Carlo 0,
 lawn tractor 0, dirt bike 3 and ATV 1 (as before), Corolla 226 (as before: its battery's heat beside the EGR pipe).
 Each check 1 to 23 s. The gate: 24 of 24, 46.8 s.
+- **2026-10-31, every service a node; the loop made quicker.** `api.claude` (Anthropic SDK 0.135.0, the newest release
+two weeks old; Claude Opus 5.5, effort, server-side fallback), `api.gemini.see`, `api.gemini.draw`, `api.fal.draw`,
+`api.higgsfield` (from its docs: POST the model's path with `Authorization: Key id:secret`, then its status until
+completed, failed, nsfw or canceled) and `api.zenrows`. Measured live with the user's keys: ZenRows read example.com in
+0.6 s; Higgsfield accepted the key and said "not_enough_credits" (403); fal.ai "User is locked: TOP_UP"; Gemini's image
+models RESOURCE_EXHAUSTED; Claude not run (no ANTHROPIC_API_KEY here). Found on the way: Node's fetch did not use the
+container's proxy ("fetch failed" for every host but one) until `NODE_USE_ENV_PROXY=1`. Faster loop: `npm run check`
+(a rules check on one thing: the lawn tractor built in 0.2 s and checked in 2.7 s; the engine's injectors alone 2.5 s,
+against about 15 s for the engine whole), `npm run gate:field` (one field in 4.2 s against 46 s whole), `npm run probe`
+and `npm run docs`, each with the two-minute cap where it runs a probe or a check.

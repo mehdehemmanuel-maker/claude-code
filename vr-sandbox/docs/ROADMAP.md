@@ -126,7 +126,9 @@ on the user's keys and network: 2.
    marks the best one's features; Picture to model; the model drawn from the idea's camera and judged against it;
    corrected. With the judge calibrated on real photographs, wordings evolved, and an idea's mechanism queued in the
    research notes as unsourced.
-13. **Web nodes (ZenRows):** fetch, search, and feed the research notes their sources.
+13. **Web nodes (ZenRows):** fetch, search, and feed the research notes their sources. **Fetch built 2026-10-31**
+   (`api.zenrows`, read example.com in 0.6 s), with every other service as a node (Claude, Gemini, fal.ai, Higgsfield);
+   left: search, and wiring into the research notes.
 
 **E. Tools for every category**
 14. **Stand-in for slow blocks;** 15. **baseline guard** (any board's outputs recorded, Difference on every later run);

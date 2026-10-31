@@ -9,10 +9,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "gate": "tsc --noEmit -p . && vitest run",
+    "gate:field": "tsc --noEmit -p . && vitest run tests/nexus/domains.test.ts -t",
+    "docs": "UPDATE_DOCS=quick vitest run tests/nexus/domains.test.ts",
+    "probe": "NODE_USE_ENV_PROXY=1 timeout 120 vitest run --silent=false",
+    "check": "NODE_USE_ENV_PROXY=1 timeout 120 vitest run tests/nexus/check.test.ts --silent=false",
     "nexus:build": "vite build --config vite.nexus.config.ts",
     "breakdown": "vite build --config vite.nexus.config.ts --logLevel error && node dist-nexus/breakdown.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.135.0",
     "@sinclair/typebox": "^0.34.52",
     "fflate": "^0.8.3",
     "jolt-physics": "^1.1.0",
