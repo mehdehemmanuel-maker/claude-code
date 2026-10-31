@@ -4,6 +4,10 @@ Where Nexus is, what was done last, and what is next, in the order it is meant t
 keep their own detail (`NODE-ENGINE.md`, `PLACEMENT.md`, `LIFE.md`, `RECONSTRUCT.md`, `GAP-MAP.md`); what was done and
 measured is logged in `REALITY.md`. This file is the one list of what comes next: change it when the order changes.
 
+**Next (2026-10-31): the work ahead is planned in `plan/` (start at `plan/README.md`): the structure first, then the
+interfaces (parts that carry their negative), search and names, the web, being in it, civil, Moosky. This file keeps the
+record of what was done.**
+
 ## Where it is (measured 2026-10-31)
 
 - 605 blocks in the library (330 of them laws), 552 with their own tests; 23 of them folded pipelines; 63 starter boards;

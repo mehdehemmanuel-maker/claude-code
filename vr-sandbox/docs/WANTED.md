@@ -296,4 +296,7 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   most amazing structure reverse engineer each of these stitch them together then make them plan even better highly
   detailed clear plan well thought out context aware on current situation as well and yea steal go through and steal dig
   dig everywhere take your time and just research for now think of all the right questions to ask ask all of them keep
-  asking questions and conceptually scraping until you can't anymore" (research first; the plan in `docs/PLAN-NEXT.md`)
+  asking questions and conceptually scraping until you can't anymore" (research first; the plan in `plan/`)
+- 2026-10-31: "Okay wait don't rush you said we have a competitive advantage with my logic using the bolt as an example I
+  appreciate that also I want you to compile a deeper plan create a file or doc or whatever to keep it structured" (done:
+  `plan/`, the interfaces spec the deepest; `docs/PLAN-NEXT.md` folded into it)

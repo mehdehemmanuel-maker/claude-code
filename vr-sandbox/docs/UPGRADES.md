@@ -1,5 +1,8 @@
 # Full system upgrades: a proposal (2026-10-31)
 
+*Superseded by `plan/` (the user's answer to this proposal, the research behind it, and the phases in order). Kept
+for the record.*
+
 What would change Nexus most, by system, each with what holds it back today (measured, or said as not measured), what
 to build, and how we would know it is done. Ordered at the end by what each unblocks. Nothing here is started; the user
 chooses. The road map (`ROADMAP.md`) takes what is chosen.

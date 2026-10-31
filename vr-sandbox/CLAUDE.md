@@ -33,7 +33,7 @@ the task list and lose the why. So the why lives here, and every round is checke
 | Which module owns a concern, in full (its nodes, its rules) | `docs/OWNERS.md` (the one-line table is below) |
 | What is next, and in what order; what is done | `docs/ROADMAP.md` (status at its top) |
 | Upgrades proposed for the whole system, by its eight systems and the platform, in order | `docs/UPGRADES.md` |
-| The next plan: the research behind it (AI CAD tools, topology and mating, agents, civil data, search and perception), the structure against drift, the phases in order, the open questions | `docs/PLAN-NEXT.md` |
+| The plan: the vision and the advantage, the rules and their checks (`CONSTITUTION.md`), the phases' specs with failing tasks, the decisions, the research, the questions | `plan/README.md` (start there) |
 | How the AI in the app is told to build (its whole instruction) | `docs/FOR-AI.md` |
 | What depends on what in the code; the disciplines tree nodes are classed by | `docs/DEPENDENCIES.md`, `docs/DISCIPLINES.md` (both generated) |
 | What was done and measured, round by round | `docs/REALITY.md` (a log: search it, do not read it whole) |
