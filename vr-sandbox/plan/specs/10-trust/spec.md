@@ -5,7 +5,7 @@ Accepted 2026-10-31 (U11, U13). From the synthesis, round 2 findings 4, 5 and 11
 ## Starts from (checked 2026-10-31)
 
 Uncertainty rides wires to first order (`evidence.ts`, `spreadOf`): the GUM's linear method, whose validity the GUM
-itself limits. Constants in `src/data/constants.ts` are CODATA 2018; CODATA 2022 is published. Numbers carry a source
+itself limits. Constants in `src/data/constants.ts` moved to CODATA 2022 on 2026-10-31 (T1's values done; their correlations not yet). Numbers carry a source
 or a label (typical, estimate) by rule, not by check. Sensitivities come from repeated runs (`what.matters`).
 
 ## Requirements
