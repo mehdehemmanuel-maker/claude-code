@@ -34,6 +34,16 @@ half free of AI.
 5. **Into 3D.** The profile becomes an extrusion or a turned part (the shapes we have: prism, lathe), its sizes from
    step 4, its fit to the picture said (the largest gap in mm); it gains interfaces where its holes are (spec 01).
 
+## Amended 2026-10-31 (the user's yes to U12; research 11)
+
+No image model hits exact colours (IMG.LY's 23-model benchmark) and vision-language models struggle with exact
+coordinates (Img2CAD). So: **Path 1 first**: where the request gives the sizes, the AI writes the profile directly
+(exact by construction), no image model. **Path 2** only where the shape is known and the sizes are not: the image
+carries shape and topology; **letters (A, B, C) name values the request holds, never digits to be read**; colours are
+classified by CIELAB bands, never exact hex; several pictures are drawn, only those passing the gate kept, and the
+shape most of them agree on taken; each model's failure rates choose the model. The brief and the gate are in
+`research/11-prompts-reviewers-drawing.md`.
+
 ## Requirements
 
 - **K-R1.** WHEN a profile is asked for in words, THE SYSTEM SHALL ask the image model with a brief that fixes every

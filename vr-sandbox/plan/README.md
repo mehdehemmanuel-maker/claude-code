@@ -56,6 +56,9 @@ Spec: `specs/01-interfaces/`.
 | 4 | Being in it: physics, ghost, scale, time, sight | `specs/04-being-in-it/` | after 1; real devices after 3 | not started |
 | 5 | Civil engineering, populated | `specs/05-civil/` | after 1 and 2 (it needs both) | not started |
 | 6 | Nexus on the phone (JARVIS style) | `specs/06-phone/` | after 3 | not started |
+| 9 | The physics core: ports that carry what flows, equations without direction, exact folding | `specs/09-physics-core/` | beside 1 | not started |
+| 10 | Trust in numbers: uncertainty, claim status, ensembles, sensitivities, the "cannot simulate" register | `specs/10-trust/` | after 0 (CODATA 2022 at once) | not started |
+| 11 | The living world: only the observed computed, replay, affordances, stigmergy, an umpire, a chronicle | `specs/11-living-world/` | with 4 | not started |
 | 8 | A picture to a 3D profile (the AI draws, a parser with no AI copies) | `specs/08-sketch-to-3d/` | after 1; the brief after research 11 | not started |
 | 7 | Further (Evolve, lattices, schemas, USD, shared world) | `specs/07-later/` | after 1 to 6 hold | not started |
 

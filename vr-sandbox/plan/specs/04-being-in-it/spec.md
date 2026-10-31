@@ -56,4 +56,5 @@ physics (`sim.ts`) steps at a fixed 1/240 s and records a track. The views draw 
 | P5 | Time: slow, fast, pause, rewind | rewind 10 s and the crates stand again, poses equal to the saved ones within 1 mm | P1 |
 | P6 | Sights, each with its legend | a screenshot of each on the engine; the blind check names each | — |
 | P7 | The corrector's ghost and band | an arm asked past its motor's torque shows where it saturates | P1 |
+| P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and announced; an honesty audit over every flow (research 14, 16) | a change made during a teleport is announced after it; a sensor disagreeing with its command is flagged | P1 |
 | P8 | Comfort in a headset | on a Quest (after spec 03): snap turn, vignette, constant speed | spec 03 |

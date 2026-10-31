@@ -320,3 +320,5 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   the book of questions in `plan/BOOK-OF-QUESTIONS.md`)
 - 2026-10-31: "Okay compile and branch research so we can keep finding things we may have overlooked or genius thing that
   are unrelated" (the research tree, `plan/research/TREE.md`, with its method; round 3 into far branches)
+- 2026-10-31: "Yes add everything useful to the plan or research folder or whatever it's called then continue research"
+  (specs 09, 10, 11 written; specs 00, 01, 08 amended; rules C19 to C26; research round 4)

@@ -1,14 +1,150 @@
 {
-  "spec": "00-structure",
-  "rule": "A task is failing until its check passes, run by the evaluator.",
-  "tasks": [
-    { "id": "S1", "title": "The constitution with its checks and states", "meets": ["S-R1"], "owner": "plan/CONSTITUTION.md", "check": "every rule names a check or says unenforced and which task adds it", "status": "failing", "evidence": "written 2026-10-31 (C1 to C18); waiting on the evaluator (S7), which alone passes a task", "after": [] },
-    { "id": "S2", "title": "PROGRESS.md, and the session loop written into CLAUDE.md's working notes", "meets": ["S-R5"], "owner": "PROGRESS.md, CLAUDE.md", "check": "a fresh agent given only CLAUDE.md finds the spec in hand and the next task in under five reads", "status": "failing", "after": [] },
-    { "id": "S3", "title": "Hooks: push gate, budget, honesty, loop breaker", "meets": ["S-R6"], "owner": ".claude/settings.json, scripts/hooks/", "check": "each hook tried once on purpose and refuses: a push without a gate stamp; a commit past its owners; a number with no command; a fourth try", "status": "failing", "after": [] },
-    { "id": "S4", "title": "The provenance check, the placeholder scan and the secret scan in the gate", "meets": ["S-R7"], "owner": "tests/nexus/domains.test.ts", "check": "a planted unsourced figure, a planted placeholder and a planted key pattern each fail the gate; removed, it passes", "status": "failing", "after": [] },
-    { "id": "S5", "title": "Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them", "meets": ["S-R4"], "owner": "evals/, package.json", "check": "npm run eval:agent prints steps, tokens, seconds, right or wrong for each, and the baseline is recorded in REALITY.md with its command", "status": "failing", "after": [] },
-    { "id": "S6", "title": "The routing test covers plan/ as it covers docs/", "meets": ["S-R1"], "owner": "tests/nexus/domains.test.ts", "check": "a plan file not routed from CLAUDE.md or plan/README.md fails the test", "status": "failing", "after": [] },
-    { "id": "S7", "title": "The evaluator: its brief, three scored examples, the rule that only it flips a task", "meets": ["S-R2"], "owner": "plan/specs/00-structure/evaluator.md", "check": "given a passing and a failing piece of past work, it judges both right", "status": "failing", "after": ["S5"] },
-    { "id": "S8", "title": "The first decision records (0001 to 0007) written", "meets": ["S-R3"], "owner": "plan/decisions/", "check": "each has options, choice, assumption and re-test", "status": "failing", "evidence": "written 2026-10-31; waiting on the evaluator (S7)", "after": [] }
-  ]
+ "spec": "00-structure",
+ "rule": "A task is failing until its check passes, run by the evaluator.",
+ "tasks": [
+  {
+   "id": "S1",
+   "title": "The constitution with its checks and states",
+   "meets": [
+    "S-R1"
+   ],
+   "owner": "plan/CONSTITUTION.md",
+   "check": "every rule names a check or says unenforced and which task adds it",
+   "status": "failing",
+   "evidence": "written 2026-10-31 (C1 to C18); waiting on the evaluator (S7), which alone passes a task",
+   "after": []
+  },
+  {
+   "id": "S2",
+   "title": "PROGRESS.md, and the session loop written into CLAUDE.md's working notes",
+   "meets": [
+    "S-R5"
+   ],
+   "owner": "PROGRESS.md, CLAUDE.md",
+   "check": "a fresh agent given only CLAUDE.md finds the spec in hand and the next task in under five reads",
+   "status": "failing",
+   "after": []
+  },
+  {
+   "id": "S3",
+   "title": "Hooks: push gate, budget, honesty, loop breaker",
+   "meets": [
+    "S-R6"
+   ],
+   "owner": ".claude/settings.json, scripts/hooks/",
+   "check": "each hook tried once on purpose and refuses: a push without a gate stamp; a commit past its owners; a number with no command; a fourth try",
+   "status": "failing",
+   "after": []
+  },
+  {
+   "id": "S4",
+   "title": "The provenance check, the placeholder scan and the secret scan in the gate",
+   "meets": [
+    "S-R7"
+   ],
+   "owner": "tests/nexus/domains.test.ts",
+   "check": "a planted unsourced figure, a planted placeholder and a planted key pattern each fail the gate; removed, it passes",
+   "status": "failing",
+   "after": []
+  },
+  {
+   "id": "S5",
+   "title": "Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them",
+   "meets": [
+    "S-R4"
+   ],
+   "owner": "evals/, package.json",
+   "check": "npm run eval:agent prints steps, tokens, seconds, right or wrong for each, and the baseline is recorded in REALITY.md with its command",
+   "status": "failing",
+   "after": []
+  },
+  {
+   "id": "S6",
+   "title": "The routing test covers plan/ as it covers docs/",
+   "meets": [
+    "S-R1"
+   ],
+   "owner": "tests/nexus/domains.test.ts",
+   "check": "a plan file not routed from CLAUDE.md or plan/README.md fails the test",
+   "status": "failing",
+   "after": []
+  },
+  {
+   "id": "S7",
+   "title": "The evaluator: its brief, three scored examples, the rule that only it flips a task",
+   "meets": [
+    "S-R2"
+   ],
+   "owner": "plan/specs/00-structure/evaluator.md",
+   "check": "given a passing and a failing piece of past work, it judges both right",
+   "status": "failing",
+   "after": [
+    "S5"
+   ]
+  },
+  {
+   "id": "S8",
+   "title": "The first decision records (0001 to 0007) written",
+   "meets": [
+    "S-R3"
+   ],
+   "owner": "plan/decisions/",
+   "check": "each has options, choice, assumption and re-test",
+   "status": "failing",
+   "evidence": "written 2026-10-31; waiting on the evaluator (S7)",
+   "after": []
+  },
+  {
+   "id": "S9",
+   "title": "The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may raise a concern the orchestrator must answer (Crew Resource Management)",
+   "meets": [
+    "S-R2"
+   ],
+   "owner": "agent.ts, plan/specs/00-structure/evaluator.md",
+   "check": "a planted wrong answer is caught; a raised concern blocks until answered",
+   "status": "failing",
+   "after": [
+    "S7"
+   ]
+  },
+  {
+   "id": "S10",
+   "title": "Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response)",
+   "meets": [
+    "S-R6"
+   ],
+   "owner": "scripts/hooks/, agent.ts",
+   "check": "an open andon blocks 'done'; a caught near miss is logged with its kind",
+   "status": "failing",
+   "after": [
+    "S3"
+   ]
+  },
+  {
+   "id": "S11",
+   "title": "Dailies: the AI shows what changed since the last session, and the person approves, notes or kills each version; versions never overwritten",
+   "meets": [
+    "S-R5"
+   ],
+   "owner": "agent.ts, view/",
+   "check": "a session opens with its changes listed; a killed version is kept but not used",
+   "status": "failing",
+   "after": [
+    "S2"
+   ]
+  },
+  {
+   "id": "S12",
+   "title": "Prompts as versioned prompt nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL)",
+   "meets": [
+    "S-R2"
+   ],
+   "owner": "agent.ts, genai.ts",
+   "check": "an injected instruction in a fetched page does not reach the planner",
+   "status": "failing",
+   "after": [
+    "S5"
+   ]
+  }
+ ]
 }
