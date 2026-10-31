@@ -88,6 +88,17 @@ function inside(s: Shape | undefined, c: { at: [number, number, number]; dir: [n
     let ta = (lo[k]! - a) / d, tb = (hi[k]! - a) / d; if (ta > tb) [ta, tb] = [tb, ta]; t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); }
   return Math.max(0, t1 - t0);
 }
+/** How much of a hole's round section lies inside the shape across its run, m²: for a box and a hole along one of its
+ *  axes, the circle clipped to the box's section (by 256 strips); for anything else, the whole circle. */
+function acrossInside(s: Shape | undefined, c: { r: number; at: [number, number, number]; dir: [number, number, number] }): number {
+  const L = Math.hypot(...c.dir) || 1, k = c.dir.findIndex((x) => Math.abs(x / L) > 1 - 1e-9);
+  if (!s || !('box' in s) || k < 0) return Math.PI * c.r * c.r;
+  const [u, v] = [0, 1, 2].filter((i) => i !== k) as [number, number], hu = s.box[u]! / 2, hv = s.box[v]! / 2, au = c.at[u]!, av = c.at[v]!;
+  if (Math.abs(au) + c.r <= hu && Math.abs(av) + c.r <= hv) return Math.PI * c.r * c.r;
+  const u0 = Math.max(-hu, au - c.r), u1 = Math.min(hu, au + c.r), n = 256; if (u1 <= u0) return 0;
+  let A = 0; for (let i = 0; i < n; i++) { const x = u0 + ((i + 0.5) * (u1 - u0)) / n, h = Math.sqrt(Math.max(0, c.r * c.r - (x - au) ** 2)); A += Math.max(0, Math.min(hv, av + h) - Math.max(-hv, av - h)); }
+  return (A * (u1 - u0)) / n;
+}
 /** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
 /** The volume a shape encloses, m³ (before what is drilled out of it, and its fill). */
 export const volumeOf = (s: Shape): number => vol(s);
@@ -96,7 +107,8 @@ export function massOf(p: Part): number {
   const flats = p.facets && p.shape && ('cyl' in p.shape || 'lathe' in p.shape) ? (p.facets * Math.sin((2 * Math.PI) / p.facets)) / (2 * Math.PI) : 1;
   // (less what is drilled out of it: each hole its own cylinder, or its n-sided prism)
   // (only as deep as it runs inside the shape: a bore along a pushrod drilled through a gasket takes the gasket's thickness)
-  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.n ? (c.n / 2) * Math.sin((2 * Math.PI) / c.n) : Math.PI) * c.r * c.r * inside(p.shape, c), 0);
+  // (and only as much of its round as lies inside: a saddle bored along a box's face takes half its circle, not all of it)
+  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.n ? ((c.n / 2) * Math.sin((2 * Math.PI) / c.n)) / Math.PI : 1) * acrossInside(p.shape, c) * inside(p.shape, c), 0);
   const rho = p.mat ? densityKg(p.mat) : undefined;
   const own = p.kg !== undefined ? p.kg : p.shape && rho ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * rho * (p.fill ?? 1) : 0;
   return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);

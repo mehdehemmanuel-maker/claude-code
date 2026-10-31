@@ -385,16 +385,18 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'fit', 'thing', 'show', 'thing');
     return tidy(b);
   }],
-  ['Engineering compiler: an inline four carried through the compiler\'s stages as one record (its requirements, a bill of materials read from its parts, every surface checked against every other, each requirement checked against its load case) to the release gate: rejected, blocked or a release candidate, with every reason, and which of the 30 stages are built here', () => {
+  ['Engineering compiler: an inline four carried through the compiler\'s stages as one record (its requirements, a bill of materials read from its parts, every piece made an exact solid by a CAD kernel, every surface checked against every other, each requirement checked against its load case) to the release gate: rejected, blocked or a release candidate, with every reason, and which of the 30 stages are built here', () => {
     const b = emptyBoard('Engineering compiler');
     placeBlock(b, 'engine.whole', 0, 0, {}, 'eng'); b.nodes.eng!.label = 'The engine, from its parts';
     placeBlock(b, 'load.engine', 0, 0, {}, 'ld'); b.nodes.ld!.label = 'Under load at its redline';
     placeBlock(b, 'compile.start', 0, 0, { project: 'inline four', requirements: 'R1: worst > 1: every part holds at its redline\nR2: floatRpm > 6500 rpm: valves do not float below redline\nR3: mass < 160 kg: weight budget' }, 'st'); b.nodes.st!.label = '1, 3, 8: requirements';
     placeBlock(b, 'compile.bom', 0, 0, {}, 'bom'); b.nodes.bom!.label = '6, 7: bill of materials';
+    placeBlock(b, 'compile.solids', 0, 0, {}, 'so'); b.nodes.so!.label = '10, 12: exact solids';
     placeBlock(b, 'compile.verify', 0, 0, { take: 'worst floatRpm' }, 'vf'); b.nodes.vf!.label = '13, 17: verified';
     placeBlock(b, 'compile.release', 0, 0, {}, 'rl'); b.nodes.rl!.label = '28 to 30: release gate';
-    for (const n of ['st', 'bom', 'vf', 'rl']) wire(b, 'eng', 'engine', n, 'thing');
-    wire(b, 'st', 'record', 'bom', 'record'); wire(b, 'bom', 'record', 'vf', 'record'); wire(b, 'vf', 'record', 'rl', 'record');
+    for (const n of ['st', 'bom', 'so', 'vf', 'rl']) wire(b, 'eng', 'engine', n, 'thing');
+    wire(b, 'st', 'record', 'bom', 'record'); wire(b, 'bom', 'record', 'so', 'record'); wire(b, 'so', 'record', 'vf', 'record'); wire(b, 'vf', 'record', 'rl', 'record');
+    placeBlock(b, 'view.table', 0, 0, {}, 'sl'); b.nodes.sl!.label = 'Each piece as a solid, the worst first'; wire(b, 'so', 'rows', 'sl', 'rows');
     wire(b, 'ld', 'worst', 'vf', 'worst'); wire(b, 'ld', 'floatRpm', 'vf', 'floatRpm');
     placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'rl', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ck'); b.nodes.ck!.label = 'Every check'; wire(b, 'rl', 'checks', 'ck', 'rows');
     placeBlock(b, 'view.table', 0, 0, {}, 'bt'); b.nodes.bt!.label = 'Bill of materials'; wire(b, 'bom', 'bom', 'bt', 'rows');

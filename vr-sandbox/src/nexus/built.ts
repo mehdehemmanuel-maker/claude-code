@@ -42,8 +42,9 @@ export const BUILT: Record<string, string> = {
   "combine":"2026-10-26T12:29:11.000Z",
   "compare.outline":"2026-10-29T14:25:46.000Z",
   "compile.bom":"2026-10-30T15:30:38.000Z",
-  "compile.correct":"2026-10-31T02:31:21.000Z",
+  "compile.correct":"2026-10-31T02:36:25.000Z",
   "compile.release":"2026-10-30T15:30:38.000Z",
+  "compile.solids":"2026-10-31T03:08:28.000Z",
   "compile.start":"2026-10-30T15:30:38.000Z",
   "compile.verify":"2026-10-30T15:30:38.000Z",
   "ctrl.pid":"2026-10-28T06:44:13.000Z",
@@ -609,7 +610,7 @@ export const BUILT: Record<string, string> = {
   "zone":"2026-10-27T23:47:14.000Z"
 };
 /** Nodes whose definition could not be found written out (made in a loop): dated by nothing, so said as before the update. */
-export const UNDATED: string[] = [];
+export const UNDATED: string[] = ["solid.exact"];
 /** Each starter board (a build), and when any of it was last changed: one made before the update, and not rebuilt since, is
  *  said to be from before it (its parts and its answers not yet re-worked through the contact graph, the frame and the
  *  laws with units). */
@@ -636,8 +637,8 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Variants of anything: twelve windows drawn by seed over their width, height and frame, each made, none twice (checked by what each is, not its seed), laid in a row; change the seed for another twelve":"2026-10-30T09:42:14.000Z",
   "What matters: which of a block's inputs move which of its outputs, and how much: a window's width and height against its mass and size, a bar's load and area against its stress; ranked, straight or bent, and what moves nothing (change the block to ask it of anything, an engine, a whole pipeline folded into one)":"2026-10-30T10:03:44.000Z",
   "Choosing and fitting: a 40 kN/m coil spring as light as can be, 1.3 times as strong as it must be, from five ASTM wires and three to eight coils, its wire's size fitted in each: every way of choosing ranked, what each reached, and which cannot do it":"2026-10-30T10:39:36.000Z",
-  "Engineering compiler: an inline four carried through the compiler's stages as one record (its requirements, a bill of materials read from its parts, every surface checked against every other, each requirement checked against its load case) to the release gate: rejected, blocked or a release candidate, with every reason, and which of the 30 stages are built here":"2026-10-30T15:30:38.000Z",
-  "Compiler correction (stage 27): an inline four held to two requirements at its redline, its least factor of safety over 1 and its valves holding to 1.2 times its redline; what fails handed to What matters and Fit to a target over its bore, stroke and valve spring wire, re-checked by the engine's load case on its own, and the release gate after. What cannot be reached is marked HUMAN_REVIEW_REQUIRED, with what limits it":"2026-10-31T02:31:25.000Z",
+  "Engineering compiler: an inline four carried through the compiler's stages as one record (its requirements, a bill of materials read from its parts, every piece made an exact solid by a CAD kernel, every surface checked against every other, each requirement checked against its load case) to the release gate: rejected, blocked or a release candidate, with every reason, and which of the 30 stages are built here":"2026-10-31T03:08:32.000Z",
+  "Compiler correction (stage 27): an inline four held to two requirements at its redline, its least factor of safety over 1 and its valves holding to 1.2 times its redline; what fails handed to What matters and Fit to a target over its bore, stroke and valve spring wire, re-checked by the engine's load case on its own, and the release gate after. What cannot be reached is marked HUMAN_REVIEW_REQUIRED, with what limits it":"2026-10-31T02:36:25.000Z",
   "Blind judge: the Monte Carlo drawn from three sides and shown to a vision model told nothing but the criteria, three judges apart: what they call it, each criterion scored as a measurement (mean, spread, 95 % interval), what they agree is wrong. Runs where a Gemini key is (under Node, GEMINI_API_KEY); a page holds no key and says so":"2026-10-30T13:08:33.000Z",
   "Prompt trial: four ways of asking an image model for one thing, each drawn three times, every picture judged blind on the same criteria (and whether it invents something that would work): the wordings ranked with their 95 % intervals, which beats which for certain, the best pictures. Needs a Gemini key with image quota":"2026-10-30T13:08:33.000Z",
   "Fit in parallel: the highest speed an engine holds (its valves not floating below 7,000 rpm, every part at least as strong as its load), its bore, stroke and speed moved together, eight tries at once each round (CMA-ES), the eight side by side, one for each core (the run says how many and how long)":"2026-10-30T12:21:42.000Z",

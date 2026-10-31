@@ -1346,3 +1346,17 @@ values wired in). Measured on the inline four's load case: valves held to 7,800 
 valve spring: wire stress at full stroke" (the spring is designed to its allowable stress, so no bore or wire reaches
 1.3). Plainly: it shrank the bore to the bottom of its range (2.0 L to 1.5 L) because no requirement held the
 displacement; and the drawn engine is not rebuilt with the values yet. The gate: 24 of 24, 44.4 s.
+- **2026-10-31, the CAD kernel: exact solids.** OpenCascade through replicad 1.1.0 (pinned; 1.2.0 was a week old),
+`brep.ts`, nodes Exact solids and Compile: exact solids (the compiler's stages 10 and 12, now on the Engineering
+compiler board). Measured: the kernel loads in 263 ms under Node; the bolt, spring, valve, piston and block each made
+exact solids, every one valid by the kernel's analyser, volume × density against our mass 0.00 %. The inline four:
+1,512 of 1,547 pieces, 0 invalid, 0 off by more than 1 %, 84.37 kg against our 84.36 kg, 16.5 s; the board 33.2 s under
+Node, its solids stage 18.7 s in the app. The Monte Carlo: 5,623 of 5,762, 0 invalid, 50.5 s. Not made, counted: 27
+(engine) and 40 (car) sweeps the kernel refuses (dense windings, bond wires, a belt, a seal), 8 and 99 hollow parts. A
+spline spine tried for the windings made them, but invalid or 4 to 10 % off and the car nine times slower: taken out,
+and they are counted as not made. What the kernel found in our own code: `mass.ts` subtracted a saddle bored along a
+box's face (a main bearing's) as a whole hole; the bulkhead and main cap carried hand-set `fill`s to make up for it,
+and the crankcase ends, without one, were 7 % off. Now a hole takes only the share of its circle inside the box; the
+two `fill`s are deleted. Still ours to fix: the spokes' loft volume (1.7 %) and the V6 block's overlapping and leaning
+bores (22 to 80 %, counted twice or as full circles by `mass.ts`). Bugs of mine on the way: a loft returned as a
+shell, prisms with repeated points, openings as inner loops (all fixed, each found by a volume that did not match).

@@ -63,7 +63,13 @@ rest. Each is done only when its check passes, measured, and said.
 6. **The CAD kernel (OpenCascade):** every part an exact solid (revolves, extrusions, swept pipes, lofts, thickened skins,
    true booleans, fillets, chamfers); the compiler's stage 10 and 12 checks become real. Done when the bolt, spring,
    valve, piston and block convert, are valid, and their volume times density matches our mass within 1 %, with what
-   fails to convert counted.
+   fails to convert counted. **Built 2026-10-31** (`brep.ts`, nodes Exact solids and Compile: exact solids): the bolt,
+   spring, valve, piston and block each made exact, every solid valid, volume × density against our mass 0.00 % on
+   each; the inline four 1,512 of 1,547 pieces (0 invalid, 0 off by more than 1 %; not made: 27 dense windings and bond
+   wires the kernel will not sweep, 8 hollow parts), the Monte Carlo 5,623 of 5,762 (0 invalid; 27 off by more than 1 %,
+   each our own formula's: 20 spokes' loft volume 1.7 %, 7 V6 block boxes whose bores overlap or lean; not made: 99
+   hollow parts, 40 sweeps). Left: hollow parts (an inward offset), freeform skins thickened, fillets as features, the
+   V6 boxes' mass by the kernel's volume.
 7. **Export:** STEP with the assembly tree and names, STL, 3MF, glTF, a bill of materials. Done when the engine's STEP is
    read back with the same solids, count and volume.
 8. **Independent verification:** interference by exact booleans against our checker; stress by CalculiX against our beam

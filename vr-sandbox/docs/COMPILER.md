@@ -25,7 +25,7 @@ Statuses: PASS, FAIL, UNVERIFIED, BLOCKED. The release (the user's Loop F): REJE
 is unverified, blocked, or a requirement is unchecked; otherwise RELEASE CANDIDATE, awaiting a person's approval.
 Approval for production is never given by code.
 
-## The 30 stages here (10 built, 13 partial, 7 not built)
+## The 30 stages here (11 built, 13 partial, 6 not built)
 
 | Stage | Name | State | What does it here |
 | --- | --- | --- | --- |
@@ -38,9 +38,9 @@ Approval for production is never given by code.
 | 7 | BOM audit | built | compile.bom (material, method, standard, interfaces each checked) |
 | 8 | Parameters (verified, derived, estimated, unknown) | partial | compile.start params, by status and source |
 | 9 | Datums and coordinates | partial | frames (assembly.ts frame, frames.of) |
-| 10 | Parametric geometry (CAD kernel) | partial | makers by process; no B-rep kernel yet (road map step 1: OpenCascade) |
+| 10 | Parametric geometry (CAD kernel) | partial | makers by process; compile.solids and solid.exact make every piece an exact OpenCascade solid (brep.ts); not yet: hollow skins, dense windings, fillets as features |
 | 11 | Assembly and constraint solving | partial | mate, assemble, onto, place.solve; no simultaneous solver yet (road map step 4) |
-| 12 | Solid and topology validation | not built | needs the B-rep kernel: BLOCKED until then |
+| 12 | Solid and topology validation | built | compile.solids: each solid checked by the kernel (BRepCheck_Analyzer), its volume against the BOM's mass |
 | 13 | Interference and clearance | built | compile.verify (rules checker, triangle against triangle) |
 | 14 | Kinematics | partial | check.turning, sim (Jolt), motion.ts |
 | 15 | Tolerances and GD&T | not built | fits in ISO 286 terms in the critic only |

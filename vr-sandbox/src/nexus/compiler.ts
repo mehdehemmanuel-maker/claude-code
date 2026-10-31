@@ -15,13 +15,14 @@ import { contracts } from './make/critic';
 import { rulesOf } from './make/rules';
 import { block as blockById, portsOf, defaultsOf } from './blocks';
 import { runBlock, runnerOf, stable } from './dataflow';
+import { solidsOf, solidsSaid } from './brep';
 
 export type Status = 'PASS' | 'FAIL' | 'UNVERIFIED' | 'BLOCKED';
 export interface Requirement { id: string; says: string; output: string; op: '=' | '<' | '>' | '<=' | '>='; value: number; unit: string; tol?: number }
 export interface Component { id: string; name: string; parent: string; qty: number; material: string; method: string; standard: string; mass: number; geometry: 'mesh' | 'solid'; source: string }
 export interface Iface { id: string; kind: string; parent: string; child: string; ok: boolean; rows: string[] }
 export interface Param { name: string; value: number | string; unit: string; status: 'verified' | 'derived' | 'estimated' | 'unknown'; source: string }
-export interface Check { stage: number; name: string; status: Status; evidence: string; by: string; input: string; requirement?: string }
+export interface Check { stage: number; name: string; status: Status; evidence: string; by: string; input: string; requirement?: string; /** what it checks, where a later check of the same replaces it ("exact-solids") */ key?: string }
 export interface DesignRecord {
   project: string; version: number; made: string;
   inputs: { kind: string; ref: string }[]; unknowns: string[];
@@ -57,9 +58,9 @@ export function judgeRequirement(q: Requirement, y: unknown): { status: Status; 
 /** The release gate (the user's Loop F): any mandatory FAIL rejects; any UNVERIFIED or BLOCKED blocks; all automated
  *  checks passing makes a release candidate, never an approval (that needs people, and is not this code's to give). */
 export function releaseOf(r: DesignRecord, thing?: Part): { status: string; why: string[] } {
-  // (a requirement's newest check stands for it: a correction's re-check replaces the check it corrected, which stays in
+  // (a requirement's newest check stands for it, and any check's that says what it checks (its key): a correction's re-check replaces the check it corrected, which stays in
   // the record as history)
-  const now = keyOfThing(thing), newest = new Map(r.checks.map((c, k) => [c.requirement ?? `#${k}`, k])), live = r.checks.filter((c, k) => (!thing || c.input === now || c.input === 'record') && newest.get(c.requirement ?? `#${k}`) === k), stale = r.checks.filter((c) => thing && c.input !== now && c.input !== 'record').length;
+  const what = (c: Check, k: number) => c.requirement ?? c.key ?? `#${k}`, now = keyOfThing(thing), newest = new Map(r.checks.map((c, k) => [what(c, k), k])), live = r.checks.filter((c, k) => (!thing || c.input === now || c.input === 'record') && newest.get(what(c, k)) === k), stale = r.checks.filter((c) => thing && c.input !== now && c.input !== 'record').length;
   const fail = live.filter((c) => c.status === 'FAIL'), open = live.filter((c) => c.status === 'UNVERIFIED' || c.status === 'BLOCKED'), unchecked = r.requirements.filter((q) => !live.some((c) => c.requirement === q.id));
   const why = [...fail.map((c) => `FAIL (stage ${c.stage}) ${c.name}: ${c.evidence}`), ...open.map((c) => `${c.status} (stage ${c.stage}) ${c.name}: ${c.evidence}`), ...unchecked.map((q) => `UNVERIFIED ${q.id}: nothing has checked it`), ...(stale ? [`${stale} check(s) made on an earlier design no longer count`] : [])];
   for (const w of r.review ?? []) why.push(`HUMAN_REVIEW_REQUIRED: ${w}`);
@@ -78,9 +79,9 @@ export const STAGES: { n: number; name: string; here: string; state: 'built' | '
   { n: 7, name: 'BOM audit', here: 'compile.bom (material, method, standard, interfaces each checked)', state: 'built' },
   { n: 8, name: 'Parameters (verified, derived, estimated, unknown)', here: 'compile.start params, by status and source', state: 'partial' },
   { n: 9, name: 'Datums and coordinates', here: 'frames (assembly.ts frame, frames.of)', state: 'partial' },
-  { n: 10, name: 'Parametric geometry (CAD kernel)', here: 'makers by process; no B-rep kernel yet (road map step 1: OpenCascade)', state: 'partial' },
+  { n: 10, name: 'Parametric geometry (CAD kernel)', here: 'makers by process; compile.solids and solid.exact make every piece an exact OpenCascade solid (brep.ts); not yet: hollow skins, dense windings, fillets as features', state: 'partial' },
   { n: 11, name: 'Assembly and constraint solving', here: 'mate, assemble, onto, place.solve; no simultaneous solver yet (road map step 4)', state: 'partial' },
-  { n: 12, name: 'Solid and topology validation', here: 'needs the B-rep kernel: BLOCKED until then', state: 'not built' },
+  { n: 12, name: 'Solid and topology validation', here: 'compile.solids: each solid checked by the kernel (BRepCheck_Analyzer), its volume against the BOM\'s mass', state: 'built' },
   { n: 13, name: 'Interference and clearance', here: 'compile.verify (rules checker, triangle against triangle)', state: 'built' },
   { n: 14, name: 'Kinematics', here: 'check.turning, sim (Jolt), motion.ts', state: 'partial' },
   { n: 15, name: 'Tolerances and GD&T', here: 'fits in ISO 286 terms in the critic only', state: 'not built' },
@@ -145,7 +146,7 @@ node({ id: 'compile.bom', name: 'Compile: bill of materials and its audit', kind
       { stage: 7, name: 'every piece has a material', status: noMat.length ? 'FAIL' : 'PASS', evidence: noMat.length ? `${noMat.length} of ${leaves.length} pieces have none: ${noMat.slice(0, 4).map((c) => c.name).join(', ')}` : `${leaves.length} pieces, each with its material`, by: 'BOM audit (compiler.ts, read from the tree)', input },
       { stage: 7, name: 'every piece can be made', status: noMethod.length ? 'UNVERIFIED' : 'PASS', evidence: noMethod.length ? `${noMethod.length} pieces with neither a process nor a material to read one from` : 'each piece has its process or a material that says one', by: 'BOM audit (compiler.ts)', input },
       { stage: 5, name: 'every interface fits its mate', status: badIf.length ? 'FAIL' : ifaces.length ? 'PASS' : 'UNVERIFIED', evidence: badIf.length ? badIf.slice(0, 3).map((f) => `${f.child} on ${f.parent}: ${f.rows.filter((r) => r.endsWith('(no)')).join('; ')}`).join(' | ') : ifaces.length ? `${ifaces.length} interfaces, each met` : 'it declares no interfaces to check', by: 'interface contracts (make/critic.ts)', input },
-      { stage: 10, name: 'geometry is exact solids', status: 'BLOCKED', evidence: 'its geometry is meshes; no B-rep kernel yet (road map step 1)', by: 'compiler.ts', input },
+      { stage: 10, name: 'geometry is exact solids', status: 'BLOCKED', evidence: 'its geometry is meshes until Compile: exact solids makes them solids', by: 'compiler.ts', input, key: 'exact-solids' },
     ];
     const out = revise(rec, 6, `bill of materials: ${bom.length} components, ${ifaces.length} interfaces`, (n) => { n.components = bom; n.interfaces = ifaces; n.checks.push(...checks); });
     return { record: out, bom: bom.map((c) => ({ id: c.id, qty: c.qty, material: c.material || '?', method: c.method || '?', standard: c.standard, kg: c.mass })), findings: checks.map((c) => ({ stage: c.stage, check: c.name, status: c.status, evidence: c.evidence })), says: `${bom.length} components (${leaves.length} pieces), ${ifaces.length} interfaces; ${checks.filter((c) => c.status === 'FAIL').length} failed, ${checks.filter((c) => c.status === 'BLOCKED' || c.status === 'UNVERIFIED').length} open` };
@@ -167,6 +168,20 @@ node({ id: 'compile.verify', name: 'Compile: verify (interference, requirements)
     for (const q of rec.requirements) { const j = judgeRequirement(q, outs[q.output]); checks.push({ stage: 17, name: `${q.id}${q.says ? `: ${q.says}` : ''}`, status: j.status, evidence: j.evidence, by: 'requirement check (compiler.ts, against the outputs wired in)', input, requirement: q.id }); }
     const out = revise(rec, 13, `verified: ${checks.length} checks`, (n) => n.checks.push(...checks));
     return { record: out, checks: checks.map((x) => ({ stage: x.stage, check: x.name, status: x.status, evidence: x.evidence })), says: `${checks.filter((x) => x.status === 'PASS').length} pass, ${checks.filter((x) => x.status === 'FAIL').length} fail, ${checks.filter((x) => x.status === 'UNVERIFIED').length} unverified` };
+  } });
+
+node({ id: 'compile.solids', name: 'Compile: exact solids (B-rep)', kind: 'critic', ability: 'check', domains: ['pipelines', 'mechanical', 'manufacturing', 'vehicles'],
+  spec: { gloss: 'Is its geometry exact solids, each valid, and does the mass their volumes give agree with the bill of materials?', discipline: 'pipeline.verification', role: 'assessment', codes: [CODE], model: { equations: ['m = Σ ρ V over the pieces made solids, against the BOM\'s mass of the same pieces'], class: 'analytical', time: 'steady', linear: true, method: 'Exact solids (brep.ts, OpenCascade): each piece made a solid, checked by the kernel, measured', references: [...REF, 'OpenCascade Technology 7.x, Modeling Algorithms user guide'] } },
+  says: 'Stages 10 and 12: the thing made exact solids by a CAD kernel other than the code that drew it, each checked valid by it, and the mass their volumes give set against the bill of materials\' for the same pieces. Every piece made and valid passes stage 10; any not made blocks it (said, with why); any not valid fails it. The mass agrees within 1 %, or fails, with the pieces that differ most',
+  ports: { inputs: [P('record', 'record'), P('thing', 'part')], outputs: [P('record', 'record'), P('rows', 'table'), P('says', 'text')] },
+  run: async (i) => {
+    const rec = recOf(i.record), t = partOf(i.thing), input = keyOfThing(t), s = await solidsOf(t), said = solidsSaid(s), off = s.ourKg > 0 ? s.kg / s.ourKg - 1 : 0;
+    const checks: Check[] = [
+      { stage: 10, name: 'geometry is exact solids', status: s.invalid ? 'FAIL' : s.failed ? 'BLOCKED' : 'PASS', evidence: said.says, by: 'Exact solids (brep.ts, OpenCascade)', input, key: 'exact-solids' },
+      { stage: 12, name: 'mass from exact volumes agrees with the BOM', status: Math.abs(off) <= 0.01 ? 'PASS' : 'FAIL', evidence: `${s.kg.toPrecision(5)} kg from ${s.made} solids against ${s.ourKg.toPrecision(5)} kg for them (${(off * 100).toFixed(2)} %)`, by: 'Exact solids (brep.ts, OpenCascade)', input, key: 'exact-mass' },
+    ];
+    const out = revise(rec, 10, `exact solids: ${s.made} of ${s.rows.length}`, (n) => n.checks.push(...checks));
+    return { record: out, rows: said.rows, says: said.says };
   } });
 
 /** A requirement as a goal for Fit to a target: "worst > 1.3" (its limits as fit.target reads them). */

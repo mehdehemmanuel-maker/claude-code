@@ -285,15 +285,15 @@ export function cylinderBlock(s: EngineSpec, d = engineDims(s)): Part {
     parts.push(box('crankcase end', [we, yb0, Wc - 2 * wc], [sd * (len / 2 - we / 2), yb0 / 2, 0], { ...cast, cuts: [{ r: endSaddle, depth: we, at: [we / 2, -yb0 / 2, 0], dir: [-1, 0, 0] }, ...camBore([0, yb0 / 2, 0], we)] }));
     for (const sz of [-1, 1]) { const z0 = capW0 / 2, z1 = Wc / 2 - wc; parts.push(box('crankcase end', [we, -ysk, z1 - z0], [sd * (len / 2 - we / 2), ysk / 2, sz * (z0 + z1) / 2], cast)); }
   }
-  const bw = wm, bh = yb0 - wc, saddle = rm + shellT, bV = bw * bh * (Wc - 2 * wc), full = PI * saddle * saddle * bw;
-  for (const x of mains) parts.push(box('bulkhead', [bw, bh, Wc - 2 * wc], [x, bh / 2, 0], { ...cast, fill: (bV - full / 2) / (bV - full), cuts: [{ r: saddle, depth: bw, at: [bw / 2, -bh / 2, 0], dir: [-1, 0, 0] }, ...(d.banked ? cyl.filter((c) => Math.abs(c.x - x) < bore + bw / 2).map((c) => boreAlong(fromBank([c.x, deck, 0], c.lean), fromBank([c.x, 0, 0], c.lean), bore, [x, bh / 2, 0])) : []), ...camBore([x, bh / 2, 0], bw).map((k) => ({ ...k, at: [bw / 2, k.at[1], k.at[2]] as V3 })), ...liftBoresAll([x, bh / 2, 0])], says: 'its main saddle bored in it' }));
+  const bw = wm, bh = yb0 - wc, saddle = rm + shellT;
+  for (const x of mains) parts.push(box('bulkhead', [bw, bh, Wc - 2 * wc], [x, bh / 2, 0], { ...cast, cuts: [{ r: saddle, depth: bw, at: [bw / 2, -bh / 2, 0], dir: [-1, 0, 0] }, ...(d.banked ? cyl.filter((c) => Math.abs(c.x - x) < bore + bw / 2).map((c) => boreAlong(fromBank([c.x, deck, 0], c.lean), fromBank([c.x, 0, 0], c.lean), bore, [x, bh / 2, 0])) : []), ...camBore([x, bh / 2, 0], bw).map((k) => ({ ...k, at: [bw / 2, k.at[1], k.at[2]] as V3 })), ...liftBoresAll([x, bh / 2, 0])], says: 'its main saddle bored in it' }));
   const casting = group('block casting', parts, { item: 'block-casting', mat: cast.mat, says: `cast ${iron ? 'iron' : 'aluminium'} round its cores, ${(len * 1000).toFixed(0)} × ${((deck - ysk) * 1000).toFixed(0)} × ${(Wc * 1000).toFixed(0)} mm` });
   const out: Part[] = [casting];
   if (liner) for (const c of cyl) out.push(P('cylinder liner', { lathe: [[B / 2, 0], [bore, 0], [bore, H], [B / 2, H], [B / 2, 0]] }, [c.x, yb0 * Math.cos(c.lean), yb0 * Math.sin(c.lean)], { rot: [c.lean, 0, 0], item: 'cylinder-liner', mat: 'cast-iron', color: 0x5a5c60, finish: 'machined', says: d.diesel ? 'a wet liner, its coolant against it' : 'cast in' }));
   // (its main caps: each under its bulkhead, its saddle's other half, bolted up into the bulkhead by two bolts)
-  const capH = saddle + 0.12 * B, capW = 2 * (rm + 0.22 * B), cV = bw * capH * capW, t = threadFor(B);
+  const capH = saddle + 0.12 * B, capW = 2 * (rm + 0.22 * B), t = threadFor(B);
   for (const x of mains) {
-    out.push(box('main cap', [bw, capH, capW], [x, -capH / 2, 0], { item: 'main-cap', mat: 'cast-iron', color: 0x5a5c60, finish: 'cast', fill: (cV - full / 2) / (cV - full), cuts: [{ r: saddle, depth: bw, at: [bw / 2, capH / 2, 0], dir: [-1, 0, 0] }] }));
+    out.push(box('main cap', [bw, capH, capW], [x, -capH / 2, 0], { item: 'main-cap', mat: 'cast-iron', color: 0x5a5c60, finish: 'cast', cuts: [{ r: saddle, depth: bw, at: [bw / 2, capH / 2, 0], dir: [-1, 0, 0] }] }));
     for (const sd of [-1, 1]) out.push(bolt(t, capH + 0.35 * B, [x, -capH, sd * (rm + 0.12 * B)], [PI, 0, 0], 'main cap bolt'));
     for (const up of [true, false]) out.push(halfRing(`main bearing shell (${up ? 'upper' : 'lower'})`, rm, saddle, wm * 0.9, [x, 0, 0], up, { item: 'main-bearing-shell', mat: 'steel-low', color: 0xb89a6a, finish: 'machined' }));
   }
