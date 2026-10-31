@@ -414,6 +414,15 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'rl', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ck'); b.nodes.ck!.label = 'Every check'; wire(b, 'rl', 'checks', 'ck', 'rows');
     return tidy(b);
   }],
+  ['Export: an M8 bolt as exact solids, written as STEP (named, coloured), STL, 3MF, glTF and its bill of materials, and the STEP read back by the kernel to prove it went out whole (wire any thing in: the engine is 1,512 solids and about a minute)', () => {
+    const b = emptyBoard('Export');
+    placeBlock(b, 'part.family', 0, 0, { family: 'bolt' }, 'bolt'); b.nodes.bolt!.label = 'An M8 bolt';
+    placeBlock(b, 'export.files', 0, 0, {}, 'ex'); b.nodes.ex!.label = 'Its files'; wire(b, 'bolt', 'part', 'ex', 'thing');
+    placeBlock(b, 'view.table', 0, 0, {}, 'ls'); b.nodes.ls!.label = 'Each file'; wire(b, 'ex', 'list', 'ls', 'rows');
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'ex', 'says', 'sy', 'value');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'bolt', 'part', 'show', 'thing');
+    return tidy(b);
+  }],
   ['Blind judge: the Monte Carlo drawn from three sides and shown to a vision model told nothing but the criteria, three judges apart: what they call it, each criterion scored as a measurement (mean, spread, 95 % interval), what they agree is wrong. Runs where a Gemini key is (under Node, GEMINI_API_KEY); a page holds no key and says so', () => {
     const b = emptyBoard('Blind judge');
     placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'car'); b.nodes.car!.label = 'The car as in the picture';
