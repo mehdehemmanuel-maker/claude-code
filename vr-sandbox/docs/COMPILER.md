@@ -55,7 +55,7 @@ Approval for production is never given by code.
 | 24 | Reference comparison | built | check.accuracy, view.compare, compare.outline |
 | 25 | Independent audits | partial | compile.verify (each check names its engine); ai.judge (a blind model) |
 | 26 | Conflict resolution | not built | not built |
-| 27 | Recursive correction | partial | auto.loop (rules repairs), fit.target (parameters to goals); stale checks void by hash |
+| 27 | Recursive correction | partial | compile.correct (failed requirements: What matters, then Fit to a target, re-checked by the block alone; rounds, rollback, repeated state, HUMAN_REVIEW_REQUIRED); auto.loop (rules repairs); not yet: the drawn thing rebuilt with the corrected values |
 | 28 | Final regression | built | compile.release (only checks on the current design count) |
 | 29 | Release gate | built | compile.release |
 | 30 | Delivery and archive | partial | compile.release (the record, its revisions, BOM, unknowns, coverage); no CAD files yet |
@@ -72,9 +72,26 @@ Approval for production is never given by code.
 
 ## Next for it
 
-- Stage 27, correction: on a failed requirement, Fit to a target moves the parameters that reach it (What matters says
-  which) and the record is carried through again, with an iteration limit, repeated-state detection and rollback; what
-  cannot be resolved is marked HUMAN_REVIEW_REQUIRED.
+- Stage 27, built as `compile.correct` (2026-10-31; board Compiler correction). Its flow, step by step: it waits for a
+  record from Verify; reads which requirements' newest checks FAIL; hands their outputs and the values offered to What
+  matters, which runs the block along paths and writes back what moves nothing (left alone); hands every requirement, as
+  goals at once, and the values that do move them to Fit to a target, which runs the block until it writes back its best
+  values; runs the block once more on its own at those values (the fit does not certify itself) and judges every
+  requirement afresh; keeps the round only if it fails fewer than the last (else rolls back), stops on a state seen
+  before, at most three rounds, each with twice the trials; writes a new revision of the record with a stage 27 check per
+  requirement (the newest check of a requirement stands for it at the release gate; the old stays as history), the
+  values chosen as derived parameters, and what it could not reach as HUMAN_REVIEW_REQUIRED, which blocks release. It can
+  fail where the block cannot be run with the values (an error, said), or where nothing offered moves a failed output
+  (said, and sent to review).
+  Measured on the inline four's load case (bore 70 to 90 mm, stroke 80 to 100 mm, five ASTM spring wires): R1 least
+  factor of safety > 1 and R2 valves holding to 7,800 rpm (1.2 × redline): R2 failed at 6,942 rpm; What matters found
+  the stroke moves neither; one round moved the bore to 70 mm and the wire to chrome-silicon (A401): 8,030 rpm, least
+  factor 1.013, both PASS, release REJECTED → RELEASE CANDIDATE, 19.8 s for the board. Asked for a least factor over
+  1.3, it fixed R2, came back to the same values in its second round and stopped; R1 to review: "the least factor of
+  10, valve spring: wire stress at full stroke" (the spring designer sizes its wire to its allowable stress, so no bore
+  or wire reaches 1.3: that designer's margin is a person's choice). What it shows plainly: it took the bore to the
+  bottom of its range, 2.0 L to 1.5 L, because no requirement held the displacement; a correction is only as good as
+  the requirements it is held to. Not yet: the drawn engine rebuilt with the values (the checks say so).
 - Stages 10, 12, 23: the B-rep kernel and STEP export (road map, the CAD plan, steps 1 and 2).
 - Stage 11: the constraint solver (the CAD plan, step 4). Stage 15: tolerances and fits. Stage 18: fatigue (Goodman,
   stress-life). Stage 22: drawings. Stage 25: the multi-agent audit (blind judges per discipline, each shown only its own

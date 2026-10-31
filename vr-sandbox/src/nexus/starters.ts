@@ -401,6 +401,17 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.table', 0, 0, {}, 'sg'); b.nodes.sg!.label = 'The 30 stages here'; wire(b, 'rl', 'stages', 'sg', 'rows');
     return tidy(b);
   }],
+  ['Compiler correction (stage 27): an inline four held to two requirements at its redline, its least factor of safety over 1 and its valves holding to 1.2 times its redline; what fails handed to What matters and Fit to a target over its bore, stroke and valve spring wire, re-checked by the engine\'s load case on its own, and the release gate after. What cannot be reached is marked HUMAN_REVIEW_REQUIRED, with what limits it', () => {
+    const b = emptyBoard('Compiler correction');
+    placeBlock(b, 'load.engine', 0, 0, {}, 'ld'); b.nodes.ld!.label = 'Under load at its redline';
+    placeBlock(b, 'compile.start', 0, 0, { project: 'inline four', requirements: 'R1: worst > 1: every part holds at its redline\nR2: floatRpm > 7800 rpm: valves hold to 1.2 times its redline' }, 'st'); b.nodes.st!.label = '1, 3, 8: requirements';
+    placeBlock(b, 'compile.verify', 0, 0, { take: 'worst floatRpm', rules: 'no' }, 'vf'); b.nodes.vf!.label = '17: verified'; wire(b, 'st', 'record', 'vf', 'record'); wire(b, 'ld', 'worst', 'vf', 'worst'); wire(b, 'ld', 'floatRpm', 'vf', 'floatRpm');
+    placeBlock(b, 'compile.correct', 0, 0, { block: 'load.engine', vary: 'bore 0.07..0.09\nstroke 0.08..0.1\nwire music-wire-a228|oil-tempered-a229|hard-drawn-a227|chrome-silicon-a401|stainless-302-a313' }, 'cr'); b.nodes.cr!.label = '27: corrected'; wire(b, 'vf', 'record', 'cr', 'record');
+    placeBlock(b, 'compile.release', 0, 0, {}, 'rl'); b.nodes.rl!.label = '28 to 30: release gate'; wire(b, 'cr', 'record', 'rl', 'record');
+    placeBlock(b, 'view.show', 0, 0, {}, 'cs'); wire(b, 'cr', 'says', 'cs', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'rd'); b.nodes.rd!.label = 'Each round'; wire(b, 'cr', 'rounds', 'rd', 'rows');
+    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'rl', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ck'); b.nodes.ck!.label = 'Every check'; wire(b, 'rl', 'checks', 'ck', 'rows');
+    return tidy(b);
+  }],
   ['Blind judge: the Monte Carlo drawn from three sides and shown to a vision model told nothing but the criteria, three judges apart: what they call it, each criterion scored as a measurement (mean, spread, 95 % interval), what they agree is wrong. Runs where a Gemini key is (under Node, GEMINI_API_KEY); a page holds no key and says so', () => {
     const b = emptyBoard('Blind judge');
     placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'car'); b.nodes.car!.label = 'The car as in the picture';

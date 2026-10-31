@@ -13,6 +13,8 @@ import { massOf } from './mass';
 import { layout } from './make/space';
 import { contracts } from './make/critic';
 import { rulesOf } from './make/rules';
+import { block as blockById, portsOf, defaultsOf } from './blocks';
+import { runBlock, runnerOf, stable } from './dataflow';
 
 export type Status = 'PASS' | 'FAIL' | 'UNVERIFIED' | 'BLOCKED';
 export interface Requirement { id: string; says: string; output: string; op: '=' | '<' | '>' | '<=' | '>='; value: number; unit: string; tol?: number }
@@ -26,6 +28,7 @@ export interface DesignRecord {
   requirements: Requirement[]; components: Component[]; interfaces: Iface[]; params: Param[]; checks: Check[];
   revisions: { version: number; stage: number; what: string; hash: string }[];
   release?: { status: string; why: string[] };
+  /** what the automated stages could not settle and a person must (stage 27's HUMAN_REVIEW_REQUIRED) */ review?: string[];
 }
 /** The design the record is of, as a key: what a check's input hash is made of, so a changed thing voids its checks. */
 const keyOfThing = (t: Part | undefined) => (t ? designOf(t).key : 'none');
@@ -54,10 +57,13 @@ export function judgeRequirement(q: Requirement, y: unknown): { status: Status; 
 /** The release gate (the user's Loop F): any mandatory FAIL rejects; any UNVERIFIED or BLOCKED blocks; all automated
  *  checks passing makes a release candidate, never an approval (that needs people, and is not this code's to give). */
 export function releaseOf(r: DesignRecord, thing?: Part): { status: string; why: string[] } {
-  const now = keyOfThing(thing), live = r.checks.filter((c) => !thing || c.input === now || c.input === 'record'), stale = r.checks.length - live.length;
+  // (a requirement's newest check stands for it: a correction's re-check replaces the check it corrected, which stays in
+  // the record as history)
+  const now = keyOfThing(thing), newest = new Map(r.checks.map((c, k) => [c.requirement ?? `#${k}`, k])), live = r.checks.filter((c, k) => (!thing || c.input === now || c.input === 'record') && newest.get(c.requirement ?? `#${k}`) === k), stale = r.checks.filter((c) => thing && c.input !== now && c.input !== 'record').length;
   const fail = live.filter((c) => c.status === 'FAIL'), open = live.filter((c) => c.status === 'UNVERIFIED' || c.status === 'BLOCKED'), unchecked = r.requirements.filter((q) => !live.some((c) => c.requirement === q.id));
   const why = [...fail.map((c) => `FAIL (stage ${c.stage}) ${c.name}: ${c.evidence}`), ...open.map((c) => `${c.status} (stage ${c.stage}) ${c.name}: ${c.evidence}`), ...unchecked.map((q) => `UNVERIFIED ${q.id}: nothing has checked it`), ...(stale ? [`${stale} check(s) made on an earlier design no longer count`] : [])];
-  return { status: fail.length ? 'REJECTED' : open.length || unchecked.length ? 'BLOCKED' : 'RELEASE CANDIDATE (awaiting human engineering approval)', why };
+  for (const w of r.review ?? []) why.push(`HUMAN_REVIEW_REQUIRED: ${w}`);
+  return { status: fail.length ? 'REJECTED' : open.length || unchecked.length || r.review?.length ? 'BLOCKED' : 'RELEASE CANDIDATE (awaiting human engineering approval)', why };
 }
 
 // ---- the 30 stages, and what does each here ------------------------------------------------------------------------------
@@ -89,7 +95,7 @@ export const STAGES: { n: number; name: string; here: string; state: 'built' | '
   { n: 24, name: 'Reference comparison', here: 'check.accuracy, view.compare, compare.outline', state: 'built' },
   { n: 25, name: 'Independent audits', here: 'compile.verify (each check names its engine); ai.judge (a blind model)', state: 'partial' },
   { n: 26, name: 'Conflict resolution', here: 'not built', state: 'not built' },
-  { n: 27, name: 'Recursive correction', here: 'auto.loop (rules repairs), fit.target (parameters to goals); stale checks void by hash', state: 'partial' },
+  { n: 27, name: 'Recursive correction', here: 'compile.correct (failed requirements: What matters, then Fit to a target, re-checked by the block alone; rounds, rollback, repeated state, HUMAN_REVIEW_REQUIRED); auto.loop (rules repairs); not yet: the drawn thing rebuilt with the corrected values', state: 'partial' },
   { n: 28, name: 'Final regression', here: 'compile.release (only checks on the current design count)', state: 'built' },
   { n: 29, name: 'Release gate', here: 'compile.release', state: 'built' },
   { n: 30, name: 'Delivery and archive', here: 'compile.release (the record, its revisions, BOM, unknowns, coverage); no CAD files yet', state: 'partial' },
@@ -151,17 +157,62 @@ node({ id: 'compile.verify', name: 'Compile: verify (interference, requirements)
   settings: [{ key: 'rules', label: 'Check interference and clearance', type: 'choice', default: 'yes', choices: ['yes', 'no'] }, { key: 'take', label: 'Values wired in, by the outputs the requirements name (a space between)', type: 'text', default: '' }],
   // (an input for each value the requirements are checked against, named as the requirement names it: a load case's
   // worst wired into "worst"; its mass is the thing's own unless one is wired)
-  ports: (st) => ({ inputs: [P('record', 'record'), P('thing', 'part'), ...String(st.take ?? '').split(/[\s,]+/).filter(Boolean).map((n) => P(n, 'number', { optional: true })), P('outputs', 'record', { optional: true, label: 'or a record of values by name' })], outputs: [P('record', 'record'), P('checks', 'table'), P('says', 'text')] }),
+  ports: (st) => ({ inputs: [P('record', 'record'), P('thing', 'part', { optional: true, label: 'the thing (without it, only the values wired in are checked)' }), ...String(st.take ?? '').split(/[\s,]+/).filter(Boolean).map((n) => P(n, 'number', { optional: true })), P('outputs', 'record', { optional: true, label: 'or a record of values by name' })], outputs: [P('record', 'record'), P('checks', 'table'), P('says', 'text')] }),
   run: (i, c) => {
     const taken = Object.fromEntries(String(c.set.take ?? '').split(/[\s,]+/).filter(Boolean).filter((n) => i[n] !== undefined).map((n) => [n, i[n]]));
-    const rec = recOf(i.record), t = partOf(i.thing), outs: Record<string, unknown> = { mass: massOf(t), ...((i.outputs as Record<string, unknown>) ?? {}), ...taken }, input = keyOfThing(t), checks: Check[] = [];
-    if (c.set.rules !== 'no') { const r = rulesOf(t), by = (k: string) => r.findings.filter((f) => (f as { kind?: string }).kind === k || (f as { rule?: string }).rule === k);
+    const rec = recOf(i.record), t = i.thing === undefined ? undefined : partOf(i.thing), outs: Record<string, unknown> = { ...(t ? { mass: massOf(t) } : {}), ...((i.outputs as Record<string, unknown>) ?? {}), ...taken }, input = t ? keyOfThing(t) : 'record', checks: Check[] = [];
+    if (t && c.set.rules !== 'no') { const r = rulesOf(t), by = (k: string) => r.findings.filter((f) => (f as { kind?: string }).kind === k || (f as { rule?: string }).rule === k);
       const inter = by('interference'), all = r.findings;
       checks.push({ stage: 13, name: 'nothing runs into anything', status: all.length ? 'FAIL' : 'PASS', evidence: all.length ? `${all.length} findings over ${r.pieces} meshes, ${inter.length} interference: ${all.slice(0, 2).map((f) => (f as { says?: string }).says ?? '').join('; ')}` : `${r.pieces} meshes, none crossing, none too close, nothing too hot`, by: 'rules checker (make/rules.ts)', input }); }
     for (const q of rec.requirements) { const j = judgeRequirement(q, outs[q.output]); checks.push({ stage: 17, name: `${q.id}${q.says ? `: ${q.says}` : ''}`, status: j.status, evidence: j.evidence, by: 'requirement check (compiler.ts, against the outputs wired in)', input, requirement: q.id }); }
     const out = revise(rec, 13, `verified: ${checks.length} checks`, (n) => n.checks.push(...checks));
     return { record: out, checks: checks.map((x) => ({ stage: x.stage, check: x.name, status: x.status, evidence: x.evidence })), says: `${checks.filter((x) => x.status === 'PASS').length} pass, ${checks.filter((x) => x.status === 'FAIL').length} fail, ${checks.filter((x) => x.status === 'UNVERIFIED').length} unverified` };
   } });
+
+/** A requirement as a goal for Fit to a target: "worst > 1.3" (its limits as fit.target reads them). */
+const goalOf = (q: Requirement) => `${q.output} ${q.op === '<=' ? '<' : q.op === '>=' ? '>' : q.op} ${q.value}`;
+node({ id: 'compile.correct', name: 'Compile: correct (failed requirements fitted, re-checked)', kind: 'solver', ability: 'optimise', domains: ['pipelines', 'mechanical', 'vehicles', 'manufacturing'],
+  spec: { gloss: 'Which design values make the failed requirements pass without failing the rest, or else, what must a person decide?', discipline: 'pipeline.verification', role: 'numerical solver', codes: [CODE, { scheme: 'MSC2020', code: '90C56', label: 'Derivative-free methods and methods using generalized derivatives' }],
+    model: { equations: ['the failed requirements\' outputs: the values that move them (elementary effects, What matters)', 'every requirement a goal at once (Fit to a target), so one is not traded for another', 'a round kept only if it fails fewer than the last; a state seen before ends it'], class: 'analytical', time: 'steady', linear: false, method: 'What matters, then Fit to a target over the values it names; the fitted values run again through the block on its own and judged afresh (the fit does not certify itself); up to so many rounds, each with twice the trials', references: [...REF, 'Morris, Factorial sampling plans for preliminary computational experiments, Technometrics 33, 161 (1991)'] } },
+  says: 'Stage 27: the requirements the record says fail, corrected by the design values that reach them. What matters is asked which of the values offered move the failed outputs (what moves nothing is left alone); Fit to a target moves those, holding every requirement at once; the values found are run through the block again on its own and every requirement judged afresh, a new check each (the old ones stay, as history). A round is kept only if it fails fewer than the one before (else rolled back); a state seen before stops it; so many rounds at most. What it cannot fix is marked HUMAN_REVIEW_REQUIRED, and the release gate blocks on it. The values it chose join the record\'s parameters as derived, from this stage',
+  settings: [{ key: 'block', label: 'The block the requirements\' outputs come from (its id)', type: 'text', default: 'load.engine' }, { key: 'vary', label: 'Design values it may move, each a line: name from..to; chosen: name a|b|c', type: 'code', default: 'bore 0.07..0.09\nstroke 0.08..0.1' },
+    { key: 'rounds', label: 'At most, rounds', type: 'number', default: 3 }, { key: 'most', label: 'Trials in its first round', type: 'number', default: 60 }, { key: 'blockSet', label: 'The block\'s other settings (JSON)', type: 'code', default: '{}' }],
+  ports: { inputs: [P('record', 'record')], outputs: [P('record', 'record'), P('values', 'record', { label: 'the design values it chose' }), P('rounds', 'table', { label: 'each round: what it tried, what failed' }), P('checks', 'table'), P('says', 'text')] },
+  run: async (i, c) => {
+    const rec = recOf(i.record), id = String(c.set.block), d = blockById(id); if (!d) throw new Error(`no block "${id}"`);
+    let set0: Record<string, unknown>; try { set0 = JSON.parse(String(c.set.blockSet ?? '{}')) as Record<string, unknown>; } catch { throw new Error('its settings are not JSON'); }
+    const last = (q: Requirement) => [...rec.checks].reverse().find((x) => x.requirement === q.id), failed = rec.requirements.filter((q) => last(q)?.status === 'FAIL');
+    if (!failed.length) return { record: rec, values: {}, rounds: [], checks: tableOf(rec), says: 'no requirement fails: nothing to correct' };
+    const lines = String(c.set.vary ?? '').split('\n').map((l) => l.trim()).filter(Boolean), goals = rec.requirements.map(goalOf).join('\n');
+    // (what moves the failed outputs: the rest is left as it is)
+    const wm = await runBlock('what.matters', { block: id, vary: lines.join('\n'), watch: [...new Set(failed.map((q) => q.output))].join(' '), paths: 6, blockSet: JSON.stringify(set0) });
+    const still = new Set((wm.nothing as string[] | undefined) ?? []), moved = lines.filter((l) => !still.has(l.split(/\s+/)[0]!));
+    // (the fitted values run through the block on its own, its inputs as inputs and its settings as settings, and judged)
+    const ins = new Set(portsOf(d, { ...defaultsOf(d), ...set0 }).inputs.map((q) => q.name)), run = runnerOf(d);
+    const judge = async (v: Record<string, unknown>) => { const inp = Object.fromEntries(Object.entries(v).filter(([k]) => ins.has(k))), st = { ...defaultsOf(d), ...set0, ...Object.fromEntries(Object.entries(v).filter(([k]) => !ins.has(k))) }, o = await run(inp, st);
+      // (what holds it back, where the block says each check's factor: its least)
+      const rs = Array.isArray((o as Record<string, unknown>).rows) ? ((o as Record<string, unknown>).rows as { what?: string; factor?: number }[]).filter((x) => typeof x.factor === 'number') : [], low = rs.length ? rs.reduce((a, b) => (b.factor! < a.factor! ? b : a)) : undefined;
+      return rec.requirements.map((q) => ({ q, ...judgeRequirement(q, (o as Record<string, unknown>)[q.output]), ...(low && Math.abs(Number((o as Record<string, unknown>)[q.output]) - low.factor!) <= 0.01 * low.factor! ? { limit: `it is the least factor of ${rs.length}, ${low.what}` } : {}) })); };
+    const rows: Record<string, unknown>[] = [], seen = new Set<string>(); let best: { v: Record<string, unknown>; js: Awaited<ReturnType<typeof judge>> } | undefined, why = '';
+    if (!moved.length) why = `none of the values offered (${lines.map((l) => l.split(/\s+/)[0]).join(', ')}) moves ${failed.map((q) => q.output).join(' or ')}`;
+    for (let r = 1; moved.length && r <= Number(c.set.rounds ?? 3); r++) {
+      const fit = await runBlock('fit.target', { block: id, vary: moved.join('\n'), goals, most: Number(c.set.most ?? 60) * 2 ** (r - 1), blockSet: JSON.stringify(set0) }), v = (fit.best ?? {}) as Record<string, unknown>, key = stable(v);
+      if (seen.has(key)) { rows.push({ round: r, tried: key, fails: '', kept: 'no: a state seen before; stopped' }); why ||= 'it came back to values already tried'; break; } seen.add(key);
+      const js = await judge(v), nf = js.filter((x) => x.status !== 'PASS').length, was = best ? best.js.filter((x) => x.status !== 'PASS').length : failed.length + 1;
+      const keep = nf < was; rows.push({ round: r, tried: key, fails: js.filter((x) => x.status !== 'PASS').map((x) => x.q.id).join(' ') || 'none', kept: keep ? 'yes' : 'no: no better than the last, rolled back' });
+      if (keep) best = { v, js }; if (best && best.js.every((x) => x.status === 'PASS')) break;
+    }
+    const checks: Check[] = [], review: string[] = [];
+    if (best) for (const x of best.js) checks.push({ stage: 27, name: `${x.q.id}${x.q.says ? `: ${x.q.says}` : ''} (corrected)`, status: x.status, evidence: `${x.evidence}, at ${Object.entries(best.v).map(([k, y]) => `${k} ${typeof y === 'number' ? +y.toPrecision(4) : y}`).join(', ')} (the ${d.name} run again on its own; the drawn thing not yet rebuilt with them)`, by: 'correction (compiler.ts: What matters, Fit to a target, then the block alone)', input: 'record', requirement: x.q.id });
+    const left = best ? best.js.filter((x) => x.status !== 'PASS').map((x) => x.q) : failed, limitOf = (q: Requirement) => (best?.js.find((x) => x.q === q) as { limit?: string } | undefined)?.limit;
+    for (const q of left) review.push(`${q.id} (${goalOf(q)}) not reached by ${moved.map((l) => l.split(/\s+/)[0]).join(', ') || 'anything offered'}${why ? `: ${why}` : ''}${limitOf(q) ? `; ${limitOf(q)}` : ''}`);
+    const out = revise(rec, 27, best ? `corrected: ${Object.keys(best.v).join(', ')} moved; ${left.length} left for review` : 'not corrected', (n) => {
+      n.checks.push(...checks); if (review.length) n.review = [...(n.review ?? []), ...review];
+      if (best) for (const [k, y] of Object.entries(best.v)) { n.params = n.params.filter((p) => p.name !== k); n.params.push({ name: k, value: typeof y === 'number' ? +y.toPrecision(6) : String(y), unit: '', status: 'derived', source: 'stage 27 correction: fitted to the requirements' }); } });
+    return { record: out, values: best?.v ?? {}, rounds: rows, checks: checks.map((x) => ({ stage: x.stage, check: x.name, status: x.status, evidence: x.evidence })),
+      says: `${failed.length} failed (${failed.map((q) => q.id).join(', ')}); moved ${moved.map((l) => l.split(/\s+/)[0]).join(', ') || 'nothing'}${still.size ? ` (${[...still].join(', ')} ${still.size === 1 ? 'moves' : 'move'} nothing failed, left alone)` : ''}; ${rows.length} round${rows.length === 1 ? '' : 's'}; ${left.length ? `HUMAN_REVIEW_REQUIRED: ${left.map((q) => q.id).join(', ')}` : 'every requirement passes'}` };
+  },
+  tests: [{ inputs: { record: { project: 'x', version: 1, made: '', inputs: [], unknowns: [], requirements: [{ id: 'R1', says: '', output: 'worst', op: '>', value: 1, unit: '' }], components: [], interfaces: [], params: [], checks: [{ stage: 17, name: 'R1', status: 'PASS', evidence: '', by: 'x', input: 'record', requirement: 'R1' }], revisions: [] } }, outputs: { says: 'no requirement fails: nothing to correct' } }] });
 
 node({ id: 'compile.release', name: 'Compile: release gate and package', kind: 'critic', ability: 'check', domains: ['pipelines', 'mechanical', 'manufacturing', 'vehicles'],
   spec: { gloss: 'May this design be released, and if not, what stops it?', discipline: 'pipeline.verification', role: 'assessment', codes: [CODE], model: { equations: ['REJECTED if any check FAILs; BLOCKED if any is UNVERIFIED or BLOCKED or a requirement is unchecked; else RELEASE CANDIDATE'], class: 'data', time: 'steady', linear: true, method: 'only checks on the current design count (by its design hash); approval is a person\'s', references: REF } },

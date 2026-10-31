@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 600 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 601 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 325 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 326 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 9 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 79 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 540 tested here (their own tests: that they do what they say, not that the world does); 50 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 541 tested here (their own tests: that they do what they say, not that the world does); 50 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 600 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 601 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -183,7 +183,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Variants of anything (none twice)** (`variants`): Any block, or any pipeline folded into one, made again and again with some of its inputs or settings drawn from ranges or lists by seed: a window's width and frame, a house's plan and paint, a car's colour and wheels. *hypothetical, tested here*
 - **Zone** (`zone`): The room a thing needs kept clear, put on the thing itself and worked out from its own size: in front of a face, so deep (a toilet's clear floor, a kitchen's work aisle), or swept from a hinge at one edge of that face … *derived, tested here, before the update*
 
-## 4 · Choose, size and decide (19)
+## 4 · Choose, size and decide (20)
 
 Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is wanted; if, compare, pick one.
 
@@ -191,6 +191,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Camera resection from known points (pinhole, least squares)** (`camera.solve`): The camera that took the photograph, solved from the points whose places on the thing its published figures fix (a vehicle's wheel centres and tyre edges, from its wheelbase, track and tyre size): its eye, aim, roll … *derived, untested*
 - **Choose** (`logic.if`): The first value where the test holds, else the second *derived, tested here, before the update*
 - **Compare** (`logic.compare`): Whether a is less than, more than, or equal to b *derived, tested here, before the update*
+- **Compile: correct (failed requirements fitted, re-checked)** (`compile.correct`): Stage 27: the requirements the record says fail, corrected by the design values that reach them. *derived, tested here*
 - **Map of the space** (`field`): A map of one quantity over the space round part of a thing, cell by cell, where things could go (cells inside a solid piece left out): heat (°C: the rules' own fall-off from each hot surface, blocked by anything solid … *simplified, tested here, before the update*
 - **Maps as one cost** (`field.combine`): Maps of the same space as one cost per cell: each read as how bad it is (heat over a limit, room under a gap, reach short of an arm), weighted and added. *derived, tested here, before the update*
 - **Next size up** (`logic.next-size`): The smallest standard size at least the size worked out: a bolt from its diameter, a beam from its depth *derived, tested here, before the update*

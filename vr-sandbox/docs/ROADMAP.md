@@ -55,7 +55,11 @@ rest. Each is done only when its check passes, measured, and said.
 **C. The compiler, completed**
 5. **Stage 27, correction:** a failed requirement handed to Fit to a target with the inputs What matters says reach it;
    the record carried through again; an iteration limit, repeated-state detection, rollback; what cannot be fixed marked
-   HUMAN_REVIEW_REQUIRED. Done when it fixes item 3's two load failures by itself.
+   HUMAN_REVIEW_REQUIRED. Done when it fixes item 3's two load failures by itself. **Built 2026-10-31** (`compile.correct`,
+   board Compiler correction): the valve float fixed by itself (6,942 → 8,030 rpm, release REJECTED → RELEASE
+   CANDIDATE); a least factor of 1.3 sent to review, naming the valve spring's wire stress. Item 3's first failures were
+   fixed by hand before this existed, so "by itself" was shown on the float that was left. Still partial: the drawn
+   engine is not rebuilt with the corrected values.
 6. **The CAD kernel (OpenCascade):** every part an exact solid (revolves, extrusions, swept pipes, lofts, thickened skins,
    true booleans, fillets, chamfers); the compiler's stage 10 and 12 checks become real. Done when the bolt, spring,
    valve, piston and block convert, are valid, and their volume times density matches our mass within 1 %, with what

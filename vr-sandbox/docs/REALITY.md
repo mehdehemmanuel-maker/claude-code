@@ -1334,3 +1334,15 @@ an outline: in strips about 30 mm long, each on the skin where it is (the skin's
 turned to follow it. Before and after shot from the same camera: both pieces now follow their corners. Left: faint
 seams where the strips meet. With this, item 4's five gallery faults are all fixed; a blind judge has not yet been
 shown them. The gate: 24 of 24, 42.6 s.
+- **2026-10-31, the compiler's stage 27, correction.** `compile.correct` and the board Compiler correction: a record's
+failed requirements handed to What matters (which values move them) and Fit to a target (every requirement a goal at
+once), the values found run through the block again on its own and every requirement judged afresh; rounds kept only
+if better (else rolled back), a repeated state stops it, three rounds at most; what is left HUMAN_REVIEW_REQUIRED, which
+the release gate now blocks on. The gate also changed: a requirement's newest check stands for it (a correction's
+re-check replaces the check it corrected; the old stays in the record). Verify runs without a drawn thing (only the
+values wired in). Measured on the inline four's load case: valves held to 7,800 rpm failed at 6,942; one round, bore
+70 mm and chrome-silicon wire, 8,030 rpm and least factor 1.013, both pass, REJECTED → RELEASE CANDIDATE, the board
+19.8 s under Node and 18.1 s in the app. Asked for a least factor over 1.3: sent to review, "the least factor of 10,
+valve spring: wire stress at full stroke" (the spring is designed to its allowable stress, so no bore or wire reaches
+1.3). Plainly: it shrank the bore to the bottom of its range (2.0 L to 1.5 L) because no requirement held the
+displacement; and the drawn engine is not rebuilt with the values yet. The gate: 24 of 24, 44.4 s.
