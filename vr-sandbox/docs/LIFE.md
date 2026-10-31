@@ -475,5 +475,5 @@ reach test enforces it), so nothing stale is sorted in with what is current. The
 - **What a board may be missing** (the board's suggestions): things it places itself and never checks, zones or mates
   put on and never kept, what plays with time and no clock, numbers worked out and never shown, each with the nodes
   that would give it. A board's field is read from its nodes, no longer filed by hand.
-- **`docs/ATLAS.md`**: all of it written out, kept current by `tests/nexus/navigate.test.ts`.
+- **`docs/ATLAS.md`**: all of it written out, kept current by the one test, `tests/nexus/domains.test.ts` (with `UPDATE_DOCS=1`).
 

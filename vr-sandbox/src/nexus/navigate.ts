@@ -131,11 +131,17 @@ export function useOf(l: Library, e: Entry): Pick<Found, 'add' | 'board'> {
 /** What a node says, with its specification where it has one: its plain gloss, its discipline and its codes, so a search
  *  by either the technical term or the plain question finds it. */
 const specified = (b: BlockDef): string => (b.spec ? `${b.spec.gloss}. ${b.says} ${DISCIPLINE.get(b.spec.discipline)?.name ?? ''} ${b.spec.codes.map((c) => `${c.code} ${c.label}`).join(' ')}` : b.says);
+/** Words a person searches by that the library says another way: each also finds what its others name. */
+const ALSO: Record<string, string[]> = { collision: ['interference', 'runs into', 'clash'], collide: ['interference', 'runs into'], clash: ['interference', 'runs into'], cad: ['solid', 'b-rep', 'step'], fea: ['calculix', 'three ways'], 'finite': ['calculix'], optimise: ['fit to a target', 'pareto'], optimize: ['fit to a target', 'pareto'], sensitivity: ['what matters'], ai: ['vision model', 'image model', 'intelligence'] };
 export function search(q: string, most = 40): Found[] {
   const ws = q.toLowerCase().split(/\s+/).filter(Boolean); if (!ws.length) return [];
+  const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), forms = (w: string) => [w, ...(ALSO[w] ?? [])];
   const out: Found[] = [], rank = (name: string, says: string, id: string): number => {
-    const n = name.toLowerCase(), all = `${n} ${id.toLowerCase()} ${says.toLowerCase()}`; if (!ws.every((w) => all.includes(w))) return 0;
-    const whole = ws.join(' '); return n === whole ? 100 : n.startsWith(whole) ? 60 : ws.every((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(n)) ? 40 : ws.every((w) => n.includes(w)) ? 25 : 5;
+    const n = name.toLowerCase(), all = `${n} ${id.toLowerCase()} ${says.toLowerCase()}`; if (!ws.every((w) => forms(w).some((f) => all.includes(f)))) return 0;
+    // (the name itself, then starting with it, then each word whole in it ("STEP" for step, over "stepper"), then each
+    // word starting one, then inside one; found by another word for it, a little under)
+    const whole = ws.join(' '), inName = (re: (w: string) => RegExp) => ws.every((w) => forms(w).some((f) => re(f).test(n)));
+    return n === whole ? 100 : n.startsWith(whole) ? 60 : inName((w) => new RegExp(`\\b${esc(w)}\\b`)) ? 45 : inName((w) => new RegExp(`\\b${esc(w)}`)) ? 40 : ws.every((w) => n.includes(w)) ? 25 : ws.every((w) => all.includes(w)) ? 5 : 4;
   };
   for (const l of allLibraries()) {
     if (l.id === 'catalogue') continue;

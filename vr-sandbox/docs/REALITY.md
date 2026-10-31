@@ -1366,3 +1366,10 @@ STL, 3MF and glTF from the kernel's tessellation (within 0.2 mm), and a BOM as C
 Measured on the inline four: written in 58 s (72.7, 85.3, 19.1 and 72.8 MB; at 0.1 mm the meshes made a 156 MB STL and
 took 92 s, so 0.2 mm), read back in 16 s: 1,512 solids and 21,043.605 cm³, the same count and volume as written. The
 glTF has 1,512 named nodes, the 3MF 1,512 objects, the STL 1,747,280 triangles. The gate: 24 of 24, 48.9 s.
+- **2026-10-31, context and navigation brought up to date.** Every file path the context docs name was checked against
+the tree: `NODE-ENGINE.md` named 12 deleted files (now marked, and a note at its top that it is history), `LIFE.md` a
+test merged into the one test. The owners tables gained `fea.ts` and what `brep.ts` now holds. The road map's counts
+measured again (605 blocks, 330 laws, 552 tested, 63 starters, 4,731 stored pieces, 180 source files) and what is done,
+in progress and waiting said at its top. Search: a word whole in a name now ranks over a word it only starts, and a few
+words people search by find what the library says another way (collision found only physics laws before; now both
+interference checkers first). Biomedical & life had no node; the body and the gas node are in it.

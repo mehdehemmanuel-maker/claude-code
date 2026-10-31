@@ -4,13 +4,15 @@ Where Nexus is, what was done last, and what is next, in the order it is meant t
 keep their own detail (`NODE-ENGINE.md`, `PLACEMENT.md`, `LIFE.md`, `RECONSTRUCT.md`, `GAP-MAP.md`); what was done and
 measured is logged in `REALITY.md`. This file is the one list of what comes next: change it when the order changes.
 
-## Where it is (measured 2026-10-30)
+## Where it is (measured 2026-10-31)
 
-- 591 blocks in the library (330 of them laws), 547 with their own tests; 23 of them folded pipelines; 58 starter boards;
-  4,703 distinct pieces in the built-parts library.
-- 176 source files. The gate (type check and the one test) passes, 21 of 21, in 49 to 52 s against its one-minute limit.
+- 605 blocks in the library (330 of them laws), 552 with their own tests; 23 of them folded pipelines; 63 starter boards;
+  4,731 distinct pieces in the built-parts library.
+- 180 source files. The gate (type check and the one test) passes, 24 of 24, in 44 to 49 s against its one-minute limit.
 - Machines drawn whole: the Monte Carlo SS (as sold, and as in the user's picture), a Corolla, a Rancher ATV, a Cascadia
   day cab, a dirt bike, a forklift, a go-kart, a lawn tractor; their engines and gearboxes from their first parts.
+- Every piece can be made an exact solid (OpenCascade, `brep.ts`) and written as STEP, STL, 3MF and glTF; stress can be
+  checked by CalculiX where it is installed (`fea.ts`, Node only; installed in this container by apt, not in CI).
 
 ## Done this stretch (2026-10-30), each a tool for every category
 
@@ -36,6 +38,10 @@ drew as octagons.
 
 Every fix and every step in one order: what blocks the rest first, then what the user sees, then the CAD plan, then the
 rest. Each is done only when its check passes, measured, and said.
+
+Done so far: 1 (gate), 3 (engines; the mount rubber left as a choice), 4 (the gallery's five faults; not yet shown to a
+blind judge), 5 (stage 27, partial: the drawn thing is not rebuilt), 6 (exact solids), 7 (export). In progress: 8. Waiting
+on the user's keys and network: 2.
 
 **A. Unblock**
 1. **The gate under a minute** (50 to 63 s, its limit 60): measure which checks are slow; keep the fast in the gate, move
@@ -78,7 +84,15 @@ rest. Each is done only when its check passes, measured, and said.
    the path for now), a download button on the board (its files are Blobs on its output), and the 35 pieces not yet
    solids, which are not in the files (said).
 8. **Independent verification:** interference by exact booleans against our checker; stress by CalculiX against our beam
-   analysis and the textbook. Done when they agree, every disagreement listed.
+   analysis and the textbook. Done when they agree, every disagreement listed. **In progress 2026-10-31** (nodes Stress three
+   ways, Interference two ways): a 0.5 m steel post, its top's movement by the book 5.2083 mm, CalculiX 5.1763 (−0.6 %),
+   our frame 5.0877 (−2.3 %); its stress by the book 125.0 MPa at its foot, our frame 125.7 (+0.6 %), CalculiX 60.94 at
+   256 mm up against the book's 60.94 there. Interference on the inline four: 656 pairs, 501 agreed, 121 found only by
+   the kernel (pieces wholly inside others, which a triangle test cannot see: the flywheel and its ring gear share
+   10,800 mm³), 34 not judged (a piece not a solid). Left: sort the 121 into real faults and drawn-so; the stress
+   comparison on a drawn part (the rod) needs a mesher for its solid (gmsh, installed here). The Monte Carlo's
+   cross-check was stopped: over 20 minutes; it waits until it is made fast (pairs judged in parallel, not 5,800 solids
+   kept).
 9. **A constraint solver:** mates as equations solved at once, degrees of freedom counted, under- and over-constrained
    said. Done when a 20-part gearbox solves, a four-bar linkage moves through its range, and the rules come back clean.
 10. **Changes that follow geometry:** a resized hole finds its bolt, washer and nut and resizes them from their standard,
@@ -108,5 +122,9 @@ rest. Each is done only when its check passes, measured, and said.
 - Deleted: 14 exports nothing used (dead engineering formulas, a catalogue cache, a dimension table, `stopWorkers`) and
   the imports only they used. `OWNERS.md` named five test files merged long ago into the one test; it names the one now.
 - Still to do: 413 exports are used only inside their own file (the `export` word is noise, the code is used);
-  `REALITY.md` is a 131 kB log and `NODE-ENGINE.md` names 12 files deleted on 2026-10-28 (both are history, kept as such);
-  the gate is near its minute.
+  `REALITY.md` is a log (history, kept as such); `NODE-ENGINE.md` now says at its top that it is history and where the
+  current owners are (it names files deleted on 2026-10-28); the gate is at 44 to 49 s of its minute.
+- 2026-10-31: search finds a word whole in a name before a word it only starts ("STEP" before "stepper"), and knows a
+  few words people search by that the library says another way (collision → interference, optimize → fit, fea →
+  CalculiX); Biomedical & life had no node in it (the body and what a gas does to people now are); every file the
+  context docs name exists, or is said deleted.

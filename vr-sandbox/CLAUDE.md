@@ -241,6 +241,11 @@ the task list and lose the why. So the why lives here, and every round is checke
 - the 30-stage "Industrial-grade autonomous CAD engineering compiler" (2026-10-30), with "turn this into a node pipeline
   somehow": its data contract, statuses and release gate as `compiler.ts` and nodes Compile: start, bill of materials,
   verify, release; each of its stages mapped to what does it here or what it waits on (`docs/COMPILER.md`)
+- "Hurry up with these" (2026-10-31), then, after a cross-check on the whole Monte Carlo ran over 20 minutes: "why are you
+  focusing on a rear axle … that's taking way too long why are you letting things get to that point". So: every check is
+  tried on a small case first and a whole vehicle only once that is fast; anything past about two minutes is stopped,
+  not waited on, and said
+- "go through and update your context and navigation get rid of any outdated context or flawed navigation" (2026-10-31)
 - Always: no mocks; every number sourced, or labelled typical or an estimate; failures reported honestly.
 - "don't lie again it hurt my feelings" (2026-10-29, after times and claims were stated as facts that were never
   measured): never state a time, a speed, a count or a result that was not measured or checked. Measure it first, or say
@@ -300,7 +305,8 @@ known gaps are there too.
 | Research and the gap map | `nexus/research.ts`, `data/references.ts` |
 | Models over the web (Gemini): pictures judged blind as a measurement, drawn from words, wordings tried | `nexus/genai.ts` (keys: `GEMINI_API_KEY`, `FAL_KEY`, under Node only) |
 | The engineering compiler: one design record through stages (requirements, BOM, checks with their engine and input hash), the release gate | `nexus/compiler.ts` (`docs/COMPILER.md`) |
-| Exact solids: every piece made a B-rep solid by OpenCascade (replicad 1.1.0), placed, its holes cut by booleans, checked valid, measured; what is not made counted | `nexus/brep.ts` (nodes Exact solids, Compile: exact solids) |
+| Exact solids: every piece made a B-rep solid by OpenCascade (replicad 1.1.0), placed, its holes cut by booleans, checked valid, measured; what is not made counted; export (STEP, STL, 3MF, glTF, BOM); interference by booleans against the rules | `nexus/brep.ts` (nodes Exact solids, Compile: exact solids, Export, Interference two ways) |
+| Stress by an engine apart: CalculiX (Node only, where installed), set against the book and our frame analysis | `nexus/fea.ts` (node Stress three ways) |
 | The gauntlet | `nexus/gauntlet.ts`, `view/gauntlet.ts` |
 | Seeds (window to city) | `nexus/seeds.ts` |
 | Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts` |

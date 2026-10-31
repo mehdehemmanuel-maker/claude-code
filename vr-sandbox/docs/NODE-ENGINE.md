@@ -1,5 +1,8 @@
 # The node engine: a universal, colourful node pipeline
 
+> **History, kept as such (read 2026-10-31).** This is the node engine's plan as drafted on 2026-10-25 and grown since. The forge, its room and many files it names (`apps.ts`, `boards3d.ts`, `calls.ts`, `src/ganglia/`) were deleted on 2026-10-28; what is current is the owners table in `CLAUDE.md` and the order in `docs/ROADMAP.md`. Read this for why things are as they are, not for where they are.
+
+
 Plan draft 1, 2026-10-25, with the first build (same day) recorded in [§0.1](#01-what-is-built-and-measured).
 Targets marked **target** are goals that will be measured. Only §0.1 says what already runs.
 
@@ -195,7 +198,7 @@ now the board reaches it:
 - **Sweep**: the room a turn needs, as one thing; **Clashes** gained "with", so a door's swing is checked against the bed
   and not against itself.
 Checked against the laws, not against last time: a 1 m rod hinged at its end, let go from 60°, swings with the period
-2π √(2L / 3g) × 1.073 (the elliptic factor for 60°) gives, within 3 % (`tests/nexus/physics-nodes.test.ts`); a tower
+2π √(2L / 3g) × 1.073 (the elliptic factor for 60°) gives, within 3 % (`tests/nexus/physics-nodes.test.ts`, since merged into the one test, `tests/nexus/domains.test.ts`); a tower
 left alone stands; shoved by a 120 mm steel ball at 300 N for 0.1 s it falls and rests. Starter boards: a ball into a
 tower, a door's swing and what it hits, a pendulum.
 **Wheels that roll** (later the same day): a Hinge can be driven by a motor from its datasheet (`data/motors.ts`: the
@@ -203,7 +206,7 @@ maxon RE 40 and the MY1016 scooter motor, their published constants) through a g
 at the torque its constants give at the speed it turns, K_t (V − K_t ω) / R − T_f (`sim.ts`). A cart (an aluminium deck on
 four rubber wheels, each on a hinge, the back two driven) pulls away and settles at 6.5 m/s, within 5 % of the speed
 the motor's constants give through 12:1 on a 0.1 m wheel, drawing its stall current (24 V over its winding, about 80 A)
-to start (`tests/nexus/physics-nodes.test.ts`). Let it go gives each joint's motor speed, current, peak current and
+to start (the one test now). Let it go gives each joint's motor speed, current, peak current and
 energy. Honest limits: nothing limits the current (a driver would hold it to the motor's 6 A continuous; the gearhead is
 rated 7.5 N·m, under the stall torque through it), and the Car seed is still one body (its wheels do not turn): a seed
 that keeps its wheels as their own things, hinged, is next.
@@ -340,7 +343,7 @@ on its own page).
 | The same board as a panel in the space: its canvas as the panel's picture, pressed and dragged by a ray or the mouse | `src/nexus/view/nodes-wall.ts`, `nodes.ts` (`wall`) | Built |
 | Parts in 3D: a Part block (words in, the library's real part out: 33 families drawn whole, with mass, pieces and its own check), Next size up (ISO 262), a 3D view block turned by hand on the canvas, full screen with taking apart, and the part viewer one press away | `blocks.ts` (`card.part`, `logic.next-size`, `view.3d`), `src/nexus/view/nodes3d.ts` | Built; seen in Chromium (software WebGL) |
 
-Measured on the build container by `tests/nexus/dataflow.test.ts` (not a Quest, not your machine):
+Measured on the build container by `tests/nexus/dataflow.test.ts` (since merged into the one test) (not a Quest, not your machine):
 
 | Case | Target | Measured |
 | --- | --- | --- |
@@ -424,7 +427,7 @@ Each kind has its own colour family (§9). All of them share the same ports, wir
 | 1 | **Input** | A value that enters the graph: typed in, a slider, a dial, a file, a sensor, a live feed | a load slider in N, a CSV file, today's exchange rate, the headset's hand position |
 | 2 | **Constant and card** | A fixed record from the library, carrying its source | steel S355, an M8 bolt, a NEMA 17 stepper, an employee, a client |
 | 3 | **Calculator** | A self-contained tool artifact. It works on its own as a small app and also has ports | beam deflection, bolt preload, Ohm's law and power, gear train, loan and NPV, unit converter, BMI, concrete mix |
-| 4 | **Law** | One equation from `laws.ts`, with checked units and its domain of validity | Euler buckling, Fourier conduction, Kleiber's law |
+| 4 | **Law** | One equation from the book (`src/nexus/book/`), with checked units and its domain of validity | Euler buckling, Fourier conduction, Kleiber's law |
 | 5 | **Solver** | Runs a calculation backwards, optimises or iterates | "what diameter gives 30 MPa", goal seek, minimise mass under a stress limit, root finding, linear programming |
 | 6 | **Code block** | Code with typed ports, in JS, TS, Python or C++. Inputs arrive as variables, the result fills the outputs | parse a supplier's quote, a custom scoring rule |
 | 7 | **AI block** | Asks Claude, or Nexus offline. Its output can be held to a schema so it gives typed values, not just prose | classify a request, extract figures from a PDF, suggest the next three blocks |
@@ -519,7 +522,7 @@ were not tuned on. That is the project's drift gate applied to the engine itself
 3. **Shared storage:** a sub-tree used in many places is stored once (content-addressed, by hash).
 4. **Parallel runs:** independent branches run at the same time in a pool of workers. Pure blocks run off the main
    thread, so the canvas and the headset never stutter.
-5. **Drawing:** the canvas draws nodes in batches (one texture or instanced mesh, as `boards3d.ts` does now), culls
+5. **Drawing:** the canvas draws nodes in batches (one texture or instanced mesh, as the forge's wall did), culls
    what is off screen, and draws distant nodes as coloured dots.
 6. **Save format:** extends the board document. Boards saved now open unchanged. Saves are patches, so a large board
    saves only what changed.
@@ -592,7 +595,7 @@ inventory). A block whose tests fail cannot leave draft.
 
 **Where it runs**
 1. The browser on a screen: the main editor, and the fastest to build and test.
-2. The phone in the forge: the library app (`apps.ts`) gets a node mode.
+2. The phone in the forge: the library app (`apps.ts`, deleted with the forge on 2026-10-28) was to get a node mode.
 3. The forge wall and the board-room screen: the same graph on the big screen, editable by pointing, and the
    `boards3d.ts` wall becomes a block canvas.
 4. Fully around you in VR: you grab nodes, pull wires by hand, and step into a group.
