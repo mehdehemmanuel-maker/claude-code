@@ -41,3 +41,13 @@ something.
 | R11 | Where do our AI's steps and tokens go, and what is its failure rate, today? | the baseline (spec 00, S5) |
 | R12 | Does replicad's OpenCascade history (`Generated`, `Modified`) survive our booleans well enough to name faces by what made them? | a probe before spec 01, I9 |
 | R13 | What edge distance and wall rules hold for materials other than structural steel (aluminium, plastics, wood)? | sources per material, before spec 01, I7; labelled typical where none |
+
+## U14. Cost and carbon (asked 2026-10-31, research 29)
+
+Should Nexus carry what things cost and emit (spec 12)? Carbon can roll up exactly like mass; cost needs quantity, place
+and date, and open price data is scarce (USGS free; metal exchange prices cost $25k a year to republish). **Unanswered.**
+
+## U15. A short board notation for the AI (asked 2026-10-31, research 27)
+
+Should the AI write boards in a short notation with named nets (33 characters against 129 for the JSON plan in one
+example; tokens not yet counted)? Proposed: measure tokens first with an A/B, keep JSON as the stored form. **Unanswered.**

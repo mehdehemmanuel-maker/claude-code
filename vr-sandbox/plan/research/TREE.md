@@ -411,6 +411,140 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] Wikipedia's Lift Wing revert-risk model as a design reference for a Nexus "claim risk" score, with its model card.
 - [ ] The FAIR data principles and how they compare with REUSE and PROV for Nexus data files.
 
+## Branches grafted in round 5 (open)
+
+### From Quantity kinds done right (`24-quantity-kinds.md`)
+- [ ] Measurement scale types (Stevens: nominal, ordinal, interval, ratio; plus logarithmic and cyclic) as a field on every quantity, and what operations each allows.
+- [ ] Cyclic quantities (angles that wrap at 360°, time of day, compass bearings): averaging and differencing on a circle.
+- [ ] Vector and tensor character of quantities (ISO 80000), and coordinate frames on ports, as SysML v2's next work item.
+- [ ] Uncertainty carried with kind: GUM uncertainty on a point versus on a difference (a temperature difference's uncertainty is not the difference of uncertainties).
+- [ ] Kennedy's dimension types and type inference: can Nexus infer kinds through a whole board, not only per port?
+- [ ] Hart's "Multidimensional Analysis" (1995), dimensional analysis with matrices of quantities, for Nexus's matrix and table types.
+- [ ] Natural units and systems where c = 1 or ħ = 1, and whether Nexus's physics core ever needs them.
+- [ ] Medication dosing errors and the "do not use" abbreviation lists (µg versus mg, U versus 0), as a source of unit rules for spoken input.
+- [ ] Engineering standards that define kinds by procedure (Rockwell hardness, Shore durometer, Charpy energy): units that are numbers only within a test method.
+- [ ] Currency as a kind with time-varying bridges (exchange rates, inflation), and money as a point (a price at a date) versus a difference.
+- [ ] The CCU's 2026 to 2035 strategy and any planned SI Brochure appendix on angles and counting quantities.
+- [ ] The CCU focus group on counting and number quantities: whether "number of entities" gets its own unit or dimension.
+- [ ] QUDT's "D" dimension exponent: how it is used, and whether it could carry angle without a base unit.
+- [ ] LOINC and FHIR's use of UCUM for imported health and lab data in the living world.
+- [ ] GIS and survey units (US survey foot retired 2022, geoid height versus ellipsoid height) as an affine-origin case.
+- [ ] Unit handling in other node-graph tools (Grasshopper, Houdini, Blender geometry nodes, LabVIEW's unit labels) and how their users work around it.
+- [ ] Units in LLM tool calls: how often agents drop or invent units when writing values, and a benchmark Nexus could run on its own agent.
+- [ ] Photometric versus radiometric kinds (lumen versus watt) and the luminous efficacy bridge, which needs a spectrum.
+
+### From Incremental, lazy and demand-driven computation (`25-incremental-computation.md`)
+- [ ] HyperFormula's source (an open JS spreadsheet engine with a dependency graph and calculation chain) as a reference implementation in Nexus's own language.
+- [ ] alien-signals' algorithm and Vue 3.6's adoption of it: a fast push-pull core that might be taken whole for the engine's marking pass.
+- [ ] The TC39 Signals polyfill and its stage: whether a standard primitive will exist in browsers in time to build on.
+- [ ] DBSP (Budiu et al.) and Feldera: an algebra that makes any query incremental; whether Nexus's list nodes could be compiled to it.
+- [ ] Adapton's nominal memoization paper (OOPSLA 2015) in detail, for spawner rows and list edits.
+- [ ] Jane Street's "Seven Implementations of Incremental" talk in full: pseudo-height, bind nodes, and their mistakes.
+- [ ] rustc's query system and its on-disk incremental cache: persisting verified traces between sessions.
+- [ ] Salsa's cycle handling (fixed-point iteration for cyclic queries) for Nexus's loops and solvers.
+- [ ] Datalog engines with incremental maintenance (Soufflé, Differential Datalog/DDlog) for interface rules "what may touch".
+- [ ] Build Systems à la Carte's treatment of minimality and correctness proofs: a property test Nexus could run (incremental result equals from-scratch result).
+- [ ] Houdini's compiled blocks and "invoke compiled" nodes: how a sub-network is compiled to skip per-node overhead.
+- [ ] Unreal PCG's runtime generation scheduling policies in detail (priorities, budgets per frame).
+- [ ] TouchDesigner's "cook on change if asked" internals and its performance monitor as a UI model.
+- [ ] Grasshopper 2 (in development) and whether McNeel added cutoff or lazy solving.
+- [ ] Observable notebooks' runtime (dataflow cells, lazy invisible cells), already named in research 09, not yet studied for mechanism.
+- [ ] Excel's LAMBDA and dynamic arrays: how spill ranges change the dependency tree.
+- [ ] Kinetic data structures (Acar's thesis keyword): incremental geometry under motion, for physics broad-phase.
+- [ ] The Glimmer/Ember autotracking model (revision tags) as another version-number design.
+- [ ] Incremental parsing (tree-sitter) as a model for incremental geometry edits.
+- [ ] Memory budgets and eviction policies for memo tables (PCG's element cap; Salsa's LRU; Bazel's disk cache GC).
+- [ ] Reproducible-builds work (reproducible-builds.org) on finding nondeterminism sources: a checklist for LW9.
+
+### From AI that proves, and shapes that explain themselves (`26-proofs-and-programs.md`)
+- [ ] Translation validation literature after Pnueli and Necula (Alive and Alive2 for LLVM peephole rules) as a model for validating each AI board edit
+- [ ] Alive-style SMT checking of Nexus's own rewrite rules (`lawgraph.ts` simplifications) before they ship
+- [ ] Flyspeck and Hales's use of certificates for linear programs and interval computations in a machine-checked proof
+- [ ] Interval arithmetic certificates (Tucker's Lorenz attractor proof) as a template for "safe over a tolerance range"
+- [ ] Verified e-graphs: proofs from egglog checked in Lean or Coq (the egg-to-Coq work and "egg proofs" follow-ups)
+- [ ] Tensat and Diospyros as examples of e-graph extraction under resource costs (ILP extraction), for cost functions over mass, price and part count
+- [ ] DreamCoder's wake-sleep library learning and how its abstractions compare to babble's on CAD corpora
+- [ ] Mesh decompilers before Szalinski (Reincarnate, the tool Szalinski composes with) and B-rep feature recognition
+- [ ] SketchGraphs and constraint-graph datasets as a source of real CAD constraint programs for the AI
+- [ ] Neural CAD program generators after 2023 (CAD-Recode, Text2CAD, and similar) measured against an exact re-execution check
+- [ ] Version-space algebra and PROSE (Microsoft's FlashFill framework) as a library for `by.example`
+- [ ] Interactive disambiguation in programming by example (distinguishing inputs, "active learning" of programs)
+- [ ] Lean's `sorry`-tracking and blueprint tools (leanblueprint) as a model for showing a board's unproved subgoals as a dependency graph
+- [ ] The de Bruijn criterion (small trusted kernel) applied to Nexus: what would a Nexus kernel be
+- [ ] Hardware and safety-critical certification (DO-178C tool qualification, IEC 61508) for what a checked AI design would need to be accepted
+- [ ] Certified programming with dependent types for units (F# units of measure, Idris) as alternatives to SMT refinement
+- [ ] SAT and SMT solvers in WASM with proof output (CaDiCaL WASM builds, cvc5 WASM), to check unsat in-page
+- [ ] Reward hacking in RL provers (proving the simplified statement) and what that predicts for an RL-trained CAD agent
+- [ ] AlphaGeometry 2 and its improved symbolic engine: what more deduction rules buy, analogous to a richer Nexus solver set
+
+### From Notations (`27-notations.md`)
+- [ ] Measure Claude's tokenizer on JSON plans vs NBN vs compact JSON across all starter boards (the decisive experiment).
+- [ ] Grammar-constrained decoding through hosted APIs: what strict tool schemas allow, and llguidance / XGrammar for local models.
+- [ ] SELFIES-style construction for boards: a derivation grammar where every string is a well-typed board.
+- [ ] Canonical labelling of graphs (nauty, the algorithm behind canonical SMILES) for a board key that ignores node names.
+- [ ] Shannon's juggling theorem and ladder diagrams as a model of timed resource use (machines, robots, traffic).
+- [ ] Benesh vs Labanotation for recording robot and avatar motion in Nexus's bodies (`docs/LIFE.md`).
+- [ ] LilyPond and MusicXML: how a text music notation handles layers, voices and engraving rules.
+- [ ] Notation for kinematic chains: Denavit–Hartenberg parameters as a four-number-per-joint notation.
+- [ ] Crease patterns and flat-foldability checks (Maekawa's and Kawasaki's theorems) as notation checksums.
+- [ ] Hangul's featural design as a model for naming interface keys so related keys look related.
+- [ ] Systematic chemical names (IUPAC nomenclature) as a long-form notation vs SMILES: when the long form is safer.
+- [ ] Bond graph notation (power bonds, causal strokes) as a text notation for spec 09.
+- [ ] Petri net and BPMN notations for processes and assembly sequences.
+- [ ] Morse code, Braille and Huffman: frequency-matched code lengths, so the commonest blocks get the shortest names.
+- [ ] APL's tacit (point-free) style and its readability debate, for whether boards should name intermediate nodes at all.
+- [ ] Electrical one-line diagrams and IEC 61850 SCL as compact notations for power systems (spec 05).
+- [ ] Stenography (Pitman, Gregg, steno chords) as a human answer to "write fast, read later".
+- [ ] Diff and patch notations (unified diff, JSON Patch, operational transforms) for the `change` tool and shared boards.
+- [ ] Dance and juggling "trick dictionaries" as libraries of named, composable fragments (the library law in performance).
+- [ ] How engravers and choreologists check each other's work: second-reader practices as a model for the reviewer panel.
+
+### From The body as an engineered system, and medicine's safety (`28-body-medicine.md`)
+- [ ] Pulse Physiology Engine's source and circuit solver, read for a WebAssembly port and its exact validation-matrix format
+- [ ] CAESAR (Civilian American and European Surface Anthropometry Resource) and national civilian surveys, for a non-military default body
+- [ ] The USAF multivariate accommodation method (Hudson, Zehner, Meindl 1998) and PCA boundary manikins, read in full
+- [ ] Daniels' original 1952 WADC note "The 'Average Man'?", to replace the secondary accounts
+- [ ] ISO 10328's full test geometry and its P7–P8 levels, and ISO 22675 for ankle-foot devices
+- [ ] Pressure ulcer science: time-at-pressure damage curves (Reswick and Rogers 1976; later Gefen), as a time-dependent interface limit
+- [ ] Digital human modelling tools (RAMSIS, JACK, Siemens Process Simulate Human) and their fit methods
+- [ ] Statistical shape models of the body (SMPL, STAR) driven from a few measurements, and their bias by population
+- [ ] ISO 11228 (manual handling) and the NIOSH lifting equation as human-load checks
+- [ ] ISO 7730 and the PMV/PPD thermal comfort model, and Fiala/UTCI thermoregulation models, for the living world
+- [ ] IEC 60601-1 (basic safety and essential performance of medical electrical equipment) and its "essential performance" idea
+- [ ] STPA applied to medical devices (Leveson's work on infusion pumps), beside ISO 14971
+- [ ] FDA MAUDE adverse event database and recall data as a post-market feed linked to interface keys
+- [ ] The 2026 FDA final guidance on human factors content, read in full for its three categories and decision questions
+- [ ] GRADE for diagnostic tests and for modelled evidence (GRADE's 2020s guidance on models), as a direct template for model nodes
+- [ ] Cochrane's RoB 2 and ROBINS-I tools as per-source bias checklists for engineering papers
+- [ ] Registered Reports and the Center for Open Science's pre-registration templates, for frozen checks
+- [ ] Clinical decision rules (Wells score, Ottawa ankle rules) as small sourced decision nodes with known sensitivity
+- [ ] FMI co-simulation of physiology models (Bodylight, Modelica Physiolibrary) beside Nexus's own solver
+- [ ] Implant standards: ISO 5832 (implant metals), ISO 7206 (hip stems), ASTM F2996 (FE analysis of hip stems), as interface-with-bone cases
+- [ ] Ergonomic standards for VR headsets (IEC 63145, ISO 9241-392 on stereoscopic comfort) for Nexus's own hardware use
+- [ ] Medical gas, connector and luer misconnection standards (ISO 80369 small-bore connectors), extending 16's keyed ports
+
+### From What things cost, and how markets behave (`29-cost-markets.md`)
+- [ ] The full text of Ashby's cost chapter and Granta's process attribute ranges: what is open, what is licensed.
+- [ ] Open machine-hour and labour-rate data by country (BLS OEWS, Eurostat, ILOSTAT) as the regional layer for should-cost.
+- [ ] Feature-based machining cost from B-rep (setups, removed volume, tool access) on replicad solids.
+- [ ] 3D-printing cost models (slicer time estimates, material, machine amortisation) as the first should-cost node.
+- [ ] Total cost of ownership (Ellram) and life-cycle cost (maintenance, energy, disposal) beside purchase cost.
+- [ ] Target costing and value engineering (Japanese genka kikaku): cost as a design input rather than an output.
+- [ ] EN 15804 modules A–D and EPD registries (EC3 by Building Transparency, ÖKOBAUDAT) as open carbon sources.
+- [ ] The Product Environmental Footprint (PEF) and its EF database, and the EU Digital Product Passport beyond batteries.
+- [ ] Grid carbon intensity data (Electricity Maps, Ember) for converting process energy to carbon by place and hour.
+- [ ] Material criticality methods (EU CRM list, Graedel's criticality space) as a richer supply-risk layer than import reliance.
+- [ ] Herfindahl–Hirschman concentration from USGS world production tables, computed per element.
+- [ ] Inventory theory (EOQ, newsvendor, (s,S) policies) as nodes, and their relation to the Beer Game.
+- [ ] Forrester's *Industrial Dynamics* (1961) and the system dynamics stock-and-flow notation as a board language.
+- [ ] Proper scoring rules (Brier, logarithmic) and prediction markets for contributed estimates.
+- [ ] Combinatorial clock auctions and the FCC incentive auction (2016–17) as models for allocating scarce simulated resources.
+- [ ] Agent-based computational economics (Santa Fe artificial stock market, Sugarscape trade) for the living world.
+- [ ] EVE's PLEX and real-money exchange, and other game economies with published data (RuneScape Grand Exchange).
+- [ ] Parametric cost estimating in aerospace and defence (NASA cost models, DoD should-cost reviews) and their open handbooks.
+- [ ] Commodity price indices that are public-domain (World Bank Pink Sheet, IMF primary commodity prices) as LME substitutes.
+- [ ] Kitting and BOM formats (IPC-2581, KiCad BOM, OpenBOM) for importing priced bills of materials.
+
 ## Rounds
 
 | Round | Date | Passes | Branches explored | New branches grafted |
@@ -419,3 +553,4 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 | 2 | 2026-10-31 | 06 to 11 | engineering and languages, life and equations, mathematics, games and the vast, philosophy, prompts and judges | the open branches above, from what the passes touched in passing |
 | 3 | 2026-10-31 | 12 to 17 | nature's collective genius; crafts, toys and ancient engineering; sound, film, magic and experiences; safety and failures; commons and citizen science; unseen sciences, old games and cooking | 128 |
 | 4 | 2026-10-31 | 18-self-describing-interfaces.md, 19-physics-core-browser.md, 20-organisations-accidents.md, 21-space-city-grammars.md, 22-growth-self-organisation.md, 23-truth-at-scale.md | Self-describing interfaces; The physics core in a browser; Organisations that do not fail, and deep accidents; Grammars of space and cities; Growth and self-organisation; Keeping knowledge true at scale | 124 |
+| 5 | 2026-10-31 | 24-quantity-kinds.md, 25-incremental-computation.md, 26-proofs-and-programs.md, 27-notations.md, 28-body-medicine.md, 29-cost-markets.md | Quantity kinds done right; Incremental, lazy and demand-driven computation; AI that proves, and shapes that explain themselves; Notations; The body as an engineered system, and medicine's safety; What things cost, and how markets behave | 120 |
