@@ -89,7 +89,18 @@ on the user's keys and network: 2.
    our frame 5.0877 (−2.3 %); its stress by the book 125.0 MPa at its foot, our frame 125.7 (+0.6 %), CalculiX 60.94 at
    256 mm up against the book's 60.94 there. Interference on the inline four: 656 pairs, 501 agreed, 121 found only by
    the kernel (pieces wholly inside others, which a triangle test cannot see: the flywheel and its ring gear share
-   10,800 mm³), 34 not judged (a piece not a solid). Left: sort the 121 into real faults and drawn-so; the stress
+   10,800 mm³), 34 not judged (a piece not a solid). **Sorted 2026-10-31** (45 distinct pairs): (a) drawn solid where
+   the real part is hollow, the inner part right and the outer never cut for it, about 80 % of the volume: the oil pump
+   body round its rotor (24,300 mm³), the injector bodies round their coils (11,120), the barrel bored at the bore and
+   not the liner's outside (9,080), valve guides and stem seals, valves in their ports, sensors round their piezo
+   elements, flanges and leads, journals and pins inside shells drawn into them (510 and 343 a set); (b) real layout
+   faults, small: the pistons into the bulkheads (324 each), the plugs' electrodes into the crowns, the cam tube and the
+   coil housing, the catalyst and the tail pipe, the front pipe and its shield, the filter gasket and the crankcase wall,
+   the crank nose and the oil pan's end, the ring gear and the crank sensor's pole, a liner and the knock boss; (c) the
+   ribbed belt through its pulleys' rims and the starter pinion on its shaft (drawing approximations, 16 to 116). What
+   it shows: the rules checker is blind to a piece inside another (a triangle test sees only surfaces crossing), which
+   is why (a) and (b) were never found. Queued, item 8b: containment in the checker (a point of one inside the other,
+   by ray parity, where no surface crosses), then (a) cut and (b) moved. Also left: the stress
    comparison on a drawn part (the rod) needs a mesher for its solid (gmsh, installed here). The Monte Carlo's
    cross-check was stopped: over 20 minutes; it waits until it is made fast (pairs judged in parallel, not 5,800 solids
    kept).

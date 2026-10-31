@@ -1373,3 +1373,10 @@ measured again (605 blocks, 330 laws, 552 tested, 63 starters, 4,731 stored piec
 in progress and waiting said at its top. Search: a word whole in a name now ranks over a word it only starts, and a few
 words people search by find what the library says another way (collision found only physics laws before; now both
 interference checkers first). Biomedical & life had no node; the body and the gas node are in it.
+- **2026-10-31, interference, sorted.** The kernel's 121 overlaps on the inline four that the rules missed are 45
+distinct pairs: drawn solid where the part is hollow (about 80 % of the volume: the oil pump body round its rotor, the
+injectors round their coils, the barrel bored at the bore and not the liner's outside, sensors round their elements,
+shells drawn into their journals), real layout faults (pistons into bulkheads 324 mm³ each, plug electrodes into the
+crowns, the cam tube and the coil housing, the catalyst and the tail pipe, and five more), and drawing approximations
+(the belt through its pulleys' rims). The cause of the misses: the rules' triangle test sees surfaces crossing, so a
+piece wholly inside another is invisible to it. Queued as item 8b. Measured in 54 s on the engine alone.
