@@ -24,6 +24,7 @@ import { wall } from './nodes';
 import { SpaceView, type Shown } from './space3d';
 import { Keyboard } from './keyboard';
 import { makeRelay, type Relay } from './relay';
+import { Pad, Walker } from './pad';
 
 const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
 // ?emulate: an emulated Quest 3 (Meta's IWER), so a browser test can put on the headset, aim a hand and pull its trigger
@@ -233,6 +234,19 @@ function recentre(): void { const head = renderer.xr.getCamera(), p = head.getWo
 function refresh(): void { view.show(wall.shown() as Shown[]); bar.draw(); }
 wall.ran = refresh;
 
+// ---- being in it: walking at your own size, and the board's controls (view/pad.ts) -------------------------------------
+// (walking puts the world at its true size, S = 1, about where you were looking, puts the panels away and stands you on
+// its ground at eye height; stopping gives the panels back)
+const walker = new Walker(camera, renderer.domElement, orbit); walker.metre = () => S(); walker.ground = () => world.position.y;
+const pad = new Pad(document.body, walker, (on) => {
+  if (on) { zoomAbout(1 / S(), orbit.target.clone()); panelsShown = false; ui.visible = false; const t = orbit.target.clone(), d = camera.position.clone().sub(t).setY(0);
+    walker.enter(t.clone().add(d.normalize().multiplyScalar(Math.max(3, Math.min(30, d.length())))), t); }
+  else { walker.exit(); panelsShown = true; ui.visible = true; }
+});
+pad.el.querySelector<HTMLElement>('.walk')!.style.top = '56px'; pad.el.classList.add('raised');
+/** A press on a piece of a thing: a button put on it is worked (down and up); true when it was one. */
+function pressPiece(down: boolean): boolean { const p = view.pieceAt(ray); return !!p && pad.pressPiece(p.name, down); }
+
 // ---- pointing: the mouse on a screen, a hand's ray in a headset --------------------------------------------------------
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 type Target = { kind: 'board' } | { kind: 'panel'; panel: Panel; uv: THREE.Vector2 } | { kind: 'keys'; uv: THREE.Vector2 } | { kind: 'thing'; key: string } | null;
@@ -249,7 +263,7 @@ function press(t: Target): boolean {
   if (t.kind === 'board') return board.down(ray);
   if (t.kind === 'panel') { t.panel.press(t.uv); t.panel.draw(); return true; }
   if (t.kind === 'keys') { const k = keyboard.keyAt(t.uv); if (k) { const r = keyboard.press(k); typing = keyboard.text; if (r === 'send') { void send(keyboard.text); keyboard.text = ''; } keyboard.draw(); chat.draw(); } return true; }
-  if (t.kind === 'thing') { wall.choose(t.key); return false; }
+  if (t.kind === 'thing') { if (pressPiece(true)) return false; if (!walker.on) wall.choose(t.key); return false; }
   return false;
 }
 let mouseOnBoard = false;
@@ -261,7 +275,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   if (press(t)) { orbit.enabled = false; mouseOnBoard = t?.kind === 'board'; }
 });
 renderer.domElement.addEventListener('pointermove', (e) => { if (!mouseOnBoard) return; ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera); board.move(ray); });
-window.addEventListener('pointerup', () => { if (mouseOnBoard) board.up(); mouseOnBoard = false; orbit.enabled = true; });
+window.addEventListener('pointerup', () => { if (mouseOnBoard) board.up(); mouseOnBoard = false; if (!walker.on) orbit.enabled = true; pad.releaseAll(); });
 renderer.domElement.addEventListener('dblclick', (e) => {
   ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
   if (panelsShown && board.distance(ray) < Infinity) return;
@@ -278,6 +292,7 @@ renderer.domElement.addEventListener('wheel', (e) => {
 }, { passive: false });
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('input, textarea')) return;
+  if (walker.on) return;
   if (e.key === 'f' || e.key === 'F') fit();
   else if (e.key === 'b' || e.key === 'B') { boardBig = !boardBig; layPanels(); bar.draw(); }
   else if (e.key === 'h' || e.key === 'H' || e.key === 'Tab') { e.preventDefault(); panelsShown = !panelsShown; ui.visible = panelsShown; }
@@ -296,7 +311,7 @@ for (let i = 0; i < 2; i++) {
   const grip = renderer.xr.getControllerGrip(i); grip.add(models.createControllerModel(grip)); rig.add(grip);
   const hand = { ctl, line, ball, held: false }; hands.push(hand);
   ctl.addEventListener('selectstart', () => { ray.setFromXRController(ctl); const t = aimed(); if (press(t) && t?.kind === 'board') hand.held = true; });
-  ctl.addEventListener('selectend', () => { if (hand.held) { board.up(); hand.held = false; } });
+  ctl.addEventListener('selectend', () => { if (hand.held) { board.up(); hand.held = false; } pad.releaseAll(); });
   ctl.addEventListener('squeezestart', () => recentre());
 }
 renderer.xr.addEventListener('sessionstart', () => { layPanels(); window.setTimeout(recentre, 300); bar.draw(); chat.draw(); });
@@ -319,7 +334,7 @@ board.show();
 let first = true, last = performance.now();
 renderer.setAnimationLoop((now) => {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (!renderer.xr.isPresenting) { orbit.update(); ui.position.copy(camera.getWorldPosition(new THREE.Vector3())); ui.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion())); }
+  if (!renderer.xr.isPresenting) { if (!walker.on) orbit.update(); ui.position.copy(camera.getWorldPosition(new THREE.Vector3())); ui.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion())); }
   else {
     sticks(dt);
     for (const h of hands) { ray.setFromXRController(h.ctl); if (h.held) board.move(ray); const t = ray.intersectObjects([board.group, bar.mesh, chat.mesh], true)[0]; h.ball.visible = !!t; if (t) h.ball.position.copy(t.point); h.line.scale.z = t ? t.distance : 3; }

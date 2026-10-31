@@ -1429,3 +1429,12 @@ user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node
   the bolt's input instead: M10 × 30, 0.02623 kg, STEP 63 kB; checker PASS. In the app (`npm run app`), 10 steps in
   30.8 s; the block kept in the browser's library; the board shown with it. Its answer named the defaults it left
   inside the block (a different coil count from the first run, so 18,847.7 N/m): a fold keeps what is inside it.
+- **2026-10-31, controls and being in it.** Button, Stick and Slider nodes (`controls.ts`), drawn and worked by
+  `view/pad.ts` in the dashboard's 3D view and in the space; a walk at eye height. The engine gained `live` on a block
+  (what it reads from outside, as a key), because a control's node otherwise was skipped as unchanged; found by the first
+  headless test (2 presses, 0 crates added), after it 2 presses gave 2 crates. Measured in Chromium (software GL) on
+  the starter board Controls: E twice added 2 crates; a mouse press on the button drawn on the crate added 1; the arrow
+  keys (up 1.2 s, right 0.7 s) drove the cart to (0.48, −1.42) m, away from you and to the right; the slider set the
+  tower's top to 5.01 m; walking put the eye at 1.6 m; on a 390 × 844 touch screen, a tap on the drawn button added a
+  crate; in the space, walking set S to 1 with the eye at 1.6 m and E added 3 crates. No page errors. Not tried: a real
+  phone, a real gamepad, a headset (the hand's ray goes through the same press as the mouse, untested here).

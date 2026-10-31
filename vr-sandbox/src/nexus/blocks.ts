@@ -240,6 +240,9 @@ export interface BlockDef {
   /** It reads the board's clock (or holds a block that does): run again whenever the time changes. By its settings where
    *  that hangs on them (a spawner of a seed that moves). */
   clock?: boolean | ((set: Record<string, unknown>) => boolean);
+  /** What it reads from outside the board, said as a key (a control's state, worked by hand while the board runs): when
+   *  it changes, the node runs again though nothing wired in or set on it did. */
+  live?: (set: Record<string, unknown>) => string;
   /** A setting whose every choice is a different thing made (a real model): the gauntlet makes and checks each, not only
    *  the one it is set to. */
   every?: string;

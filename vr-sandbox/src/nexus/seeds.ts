@@ -23,6 +23,7 @@ import './genai';
 import './compiler';
 import './fea';
 import './agent';
+import './controls';
 
 /** A board being built, a node at a time, and saved as a seed. */
 class Seed {

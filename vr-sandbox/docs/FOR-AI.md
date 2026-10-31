@@ -42,7 +42,8 @@ You have eight tools. Use as few calls as you can; most requests need three or f
 The board you start on is the one the person has open (it may be empty). Blocks they saved are in the library too.
 Blocks reach outside as well: `api.zenrows` (read a web page), `api.fal.draw` (an image, cheapest model), `api.claude`
 (a question to a model), `export.files` (STEP, STL, 3MF, glTF), the checks (`verify.*`, rules, stress). Use them as
-any block; a missing key is said back.
+any block; a missing key is said back. To make something a person works: `control.button` (give it a thing: the
+button goes on it), `control.stick` (wire `px`, `pz`, `turn` into `place` x, z, ry to drive a thing), `control.slider`.
 
 Where a request is a target ("a spring of 40 kN/m, as light as can be"), do not tune by hand: place `fit.target`
 (it moves any block's inputs until its outputs meet goals) and read its `best`. Its settings are lines: `block` the id,

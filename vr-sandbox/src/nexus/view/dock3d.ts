@@ -43,6 +43,10 @@ export class Dock3D {
     // (a double press on any piece flies the view to it, framed close: a bolt in a truck, a gate in a chip)
     this.renderer.domElement.addEventListener('dblclick', (e) => { const h = this.hitAt(e.clientX, e.clientY); if (h) { this.frameBox(h.box); this.lastPiece = h.name; } });
     // a press that did not turn the view chooses what it lands on
+    // (a press on a button put on a thing works the button and nothing else: taken before the orbit sees it)
+    let held = '';
+    host.addEventListener('pointerdown', (e) => { const h = this.piecePress && this.hitAt(e.clientX, e.clientY); if (h && this.piecePress!(h.name, true)) { held = h.name; e.stopPropagation(); } }, true);
+    window.addEventListener('pointerup', () => { if (held) { this.piecePress?.(held, false); held = ''; } });
     let down: [number, number] | null = null;
     this.renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
     this.renderer.domElement.addEventListener('pointerup', (e) => { if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 4) this.pick(e); down = null; });
@@ -97,6 +101,12 @@ export class Dock3D {
   }
   /** How long the last frames took to draw, ms (a moving mean). */
   frameMs = 0;
+  /** Walking in it (view/pad.ts moves the camera; the orbit leaves it be). */
+  walking = false;
+  /** A press on a piece, down or up: true when it was taken (a button put on a thing), and the view is not turned by it. */
+  piecePress: ((name: string, down: boolean) => boolean) | null = null;
+  /** What a walk moves and turns: the camera, the canvas a drag looks with, the orbit put aside. */
+  get eyes(): { camera: THREE.PerspectiveCamera; canvas: HTMLCanvasElement; orbit: OrbitControls } { return { camera: this.camera, canvas: this.renderer.domElement, orbit: this.controls }; }
 
   /** The sun and its shadows fitted round what is looked at: its shadow's box as wide as the view, the ground under what
    *  is shown. Below a few centimetres off, no shadows: a GPU's 32-bit positions cannot place a shadow at those scales
@@ -124,7 +134,7 @@ export class Dock3D {
   }
   private frame(now: number): void {
     if (!this.host.offsetParent && this.host.clientWidth === 0) return;
-    this.controls.update(); this.layGrid(); if (this.cut) this.clipAll();
+    if (!this.walking) this.controls.update(); this.layGrid(); if (this.cut) this.clipAll();
     // the haze, and so the view's reach, follows how far off the view is: near, a street fades in a few hundred metres;
     // pulled back, a whole world can be seen (where it fades, nothing more is drawn: what makes no end affordable)
     const dist = this.camera.position.distanceTo(this.controls.target), fog = this.scene.fog as THREE.FogExp2;

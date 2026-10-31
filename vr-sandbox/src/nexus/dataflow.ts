@@ -297,6 +297,7 @@ export class Engine {
     if (b.id === 'group.in') { const f = this.feeds[String(set.name)]; if (f) { set.value = f.value; keys.push(`feed=${f.key}`); } else if (!('value' in (n.set ?? {}))) missing.push(`what comes into the group as ${String(set.name)}`); }
     if (missing.length) { put({ status: 'waiting', error: `waiting on ${missing.join(', ')}`, out: undefined, key: undefined }); r.waiting++; return; }
     if (clockOf(b, set)) keys.push(`t=${this.env.time ?? 0}`);
+    if (b.live) keys.push(`live=${b.live(set)}`);
     const key = hash(`${b.id}@${b.version}:${b.graph ? boardKey(b.graph) : ''}|${stable(set)}|${keys.join('|')}${b.pure ? '' : `#${id}`}`);
     if (was.status === 'ok' && was.key === key) { put({ cached: true }); r.cached++; return; }
     const kept = b.pure ? this.memo.get(key) : undefined;

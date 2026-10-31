@@ -269,3 +269,11 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   problem also we need a time threshold … step back and say this isn't a population issue this is a missing detailed
   pipelines issue" (done: `CLAUDE.md` cut to a summary and a router, this file, route maps atop the large modules, the
   step-back rule; the in-app AI and the AI-gate pipelines next)
+- 2026-10-31: "Make it's so an ai don't have to use barely any tokens or anything to build also start explain this app to
+  me like im the ai" (done: five compact tools, whole-board plans, `docs/FOR-AI.md` as the cached instruction); "Next
+  give it full abilities" (done: open, change, fold into saved blocks, a second model's check, the board open); "Okay
+  make it so user can be in the environment add a friend intractable node it basically is buttons or like mobile
+  controls or computer control you know or you can put button on things that's intractable" (done: Button, Stick,
+  Slider nodes worked by keys, a gamepad, drawn controls on a phone, a hand's ray, or a button put on a thing and
+  pressed in 3D; walking in the world at your own height. Read as "a fully interactable node"; another person joining
+  the same world is not built)

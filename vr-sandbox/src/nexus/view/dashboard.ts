@@ -10,6 +10,7 @@
 
 import { wall, type RanNode } from './nodes';
 import { Dock3D } from './dock3d';
+import { Pad, Walker } from './pad';
 import type { Shown } from './space3d';
 import { runBlock } from '../dataflow';
 import { show, type PortDef } from '../blocks';
@@ -22,6 +23,14 @@ const thingy = (v: unknown): v is Part | Assembly => isAssembly(v) || isPart(v);
 
 // ---- the 3D view -----------------------------------------------------------------------------------------------------
 const dock = new Dock3D($('view3d'), (key) => wall.choose(key));
+// (being in it: the controls the board asks for drawn over the view, and a walk at your own height; walking fills the page)
+const walker = new Walker(dock.eyes.camera, dock.eyes.canvas, dock.eyes.orbit);
+const pad = new Pad($('view3d'), walker, (on) => {
+  if (on) { if (!$('dock').classList.contains('big')) enter(true); const { camera, orbit } = dock.eyes, t = orbit.target.clone(), d = camera.position.clone().sub(t).setY(0), far = Math.max(3, Math.min(30, d.length()));
+    dock.walking = true; walker.enter(t.clone().add(d.normalize().multiplyScalar(far)).setY(0), t); }
+  else { walker.exit(); dock.walking = false; }
+});
+dock.piecePress = (name, down) => pad.pressPiece(name, down);
 const shown = (): Shown[] => wall.shown().filter((s) => thingy(s.thing)) as Shown[];
 $('fit3d').onclick = () => dock.fit();
 $('cut3d').onclick = () => { const a = dock.nextSection(); $('cut3d').textContent = a ? `Cut ${a}` : 'Cut'; };

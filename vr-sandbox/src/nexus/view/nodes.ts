@@ -9,6 +9,7 @@
 // a worker (code-worker.ts), off the page. Asking Claude needs a relay to Claude, which this page does not have: such a
 // block says so rather than pretending.
 
+import { CONTROL_BLOCKS, type ControlSpec } from '../controls';
 import { EVIDENCE_SAYS, boardBuiltOf, builtOf, evidenceOf } from '../evidence';
 import { DISCIPLINE } from '../../data/disciplines';
 import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
@@ -905,6 +906,15 @@ export const wall = {
     for (const n of nodesOf(root)) { if (root.nodes[n.id]!.block !== 'space.show') continue; const w = engine.wiresInto(n.id)[0], v = w ? engine.state.get(w.from)?.out?.[w.out!] : undefined; if (v && typeof v === 'object') out.push({ key: n.id, thing: v }); }
     return out;
   },
+  /** The controls on the board (Button, Stick, Slider nodes), each once by its name: what the pad draws. */
+  controls(): ControlSpec[] {
+    const out: ControlSpec[] = [], seen = new Set<string>();
+    for (const n of nodesOf(root)) { const x = root.nodes[n.id]!; if (!(CONTROL_BLOCKS as readonly string[]).includes(x.block ?? '')) continue; const d = block(x.block!), set = { ...(d ? defaultsOf(d) : {}), ...(x.set ?? {}) }, name = String(set.name ?? '');
+      if (seen.has(`${x.block}:${name}`)) continue; seen.add(`${x.block}:${name}`); out.push({ id: n.id, block: x.block as ControlSpec['block'], name, set }); }
+    return out;
+  },
+  /** A control was worked: its nodes run again, and what they feed (nothing kept for undo: a press is not an edit). */
+  controlsChanged(): void { for (const n of nodesOf(root)) if ((CONTROL_BLOCKS as readonly string[]).includes(root.nodes[n.id]!.block ?? '')) engine.touch(n.id); runSoon(); },
   /** A node chosen from outside (pressed in the space): the board goes to it. */
   choose(id: string): void {
     if (path.length) up(0);

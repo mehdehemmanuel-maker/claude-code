@@ -414,6 +414,25 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'rl', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ck'); b.nodes.ck!.label = 'Every check'; wire(b, 'rl', 'checks', 'ck', 'rows');
     return tidy(b);
   }],
+  ['Controls you work while it runs: a stick drives the cart (the arrow keys, W A S D, a phone\'s drawn stick, a gamepad), the green button on the crate adds a crate to the row each press (E, the drawn button, or press it on the crate in 3D), the slider raises the tower; Walk (V) to stand in it at your own height', () => {
+    const b = emptyBoard('Controls');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'cart', w: 0.8, h: 0.4, d: 1.2, color: '#ef6c00', mat: 'abs' }, 'cart'); b.nodes.cart!.label = 'The cart';
+    placeBlock(b, 'control.stick', 0, 0, { name: 'Drive', speed: 3, mode: 'steer' }, 'drive'); b.nodes.drive!.label = 'Drive (stick)';
+    placeBlock(b, 'place', 0, 0, { y: 0.2 }, 'pc'); b.nodes.pc!.label = 'Where it has driven'; wire(b, 'cart', 'part', 'pc', 'thing'); wire(b, 'drive', 'px', 'pc', 'x'); wire(b, 'drive', 'pz', 'pc', 'z'); wire(b, 'drive', 'turn', 'pc', 'ry');
+    placeBlock(b, 'shape.box', 0, 0, { name: 'crate', w: 0.5, h: 0.5, d: 0.5, color: '#8d6e63', mat: 'abs' }, 'crate'); b.nodes.crate!.label = 'A crate';
+    placeBlock(b, 'control.button', 0, 0, { name: 'Add a crate', key: 'E', colour: 'green', face: 'top' }, 'add'); b.nodes.add!.label = 'Button on the crate'; wire(b, 'crate', 'part', 'add', 'thing');
+    placeBlock(b, 'place', 0, 0, { x: -2.5, y: 0.25 }, 'pb'); b.nodes.pb!.label = 'The crate with its button'; wire(b, 'add', 'thing', 'pb', 'thing');
+    placeBlock(b, 'math.expr', 0, 0, { expr: 'p + 1' }, 'n1'); b.nodes.n1!.label = 'One more than the presses'; wire(b, 'add', 'presses', 'n1', 'p');
+    placeBlock(b, 'array', 0, 0, { pattern: 'line', dx: 0.6 }, 'row'); b.nodes.row!.label = 'The row of crates'; wire(b, 'crate', 'part', 'row', 'thing'); wire(b, 'n1', 'result', 'row', 'n');
+    placeBlock(b, 'place', 0, 0, { x: -2.5, y: 0.25, z: -2 }, 'pr'); wire(b, 'row', 'row', 'pr', 'thing');
+    placeBlock(b, 'control.slider', 0, 0, { name: 'Tower height', min: 0.5, max: 6, value: 2, unit: 'm' }, 'hgt'); b.nodes.hgt!.label = 'Tower height (slider)';
+    placeBlock(b, 'shape.box', 0, 0, { name: 'tower', w: 0.6, d: 0.6, color: '#5c6bc0', mat: 'abs' }, 'tower'); wire(b, 'hgt', 'value', 'tower', 'h');
+    placeBlock(b, 'math.expr', 0, 0, { expr: 'h / 2' }, 'ty'); b.nodes.ty!.label = 'Standing on the ground'; wire(b, 'hgt', 'value', 'ty', 'h');
+    placeBlock(b, 'place', 0, 0, { x: 2.5, z: -2 }, 'pt'); wire(b, 'tower', 'part', 'pt', 'thing'); wire(b, 'ty', 'result', 'pt', 'y');
+    placeBlock(b, 'combine', 0, 0, { name: 'the yard' }, 'all'); for (const x of ['pc', 'pb', 'pr', 'pt']) wire(b, x, 'placed', 'all', 'things');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    return tidy(b);
+  }],
   ['Export: an M8 bolt as exact solids, written as STEP (named, coloured), STL, 3MF, glTF and its bill of materials, and the STEP read back by the kernel to prove it went out whole (wire any thing in: the engine is 1,512 solids and about a minute)', () => {
     const b = emptyBoard('Export');
     placeBlock(b, 'part.family', 0, 0, { family: 'bolt' }, 'bolt'); b.nodes.bolt!.label = 'An M8 bolt';
