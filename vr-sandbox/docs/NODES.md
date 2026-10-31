@@ -4,7 +4,7 @@ Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tes
 
 ## Fields and the disciplines they reach
 
-The fields below are the library's own; the engineering disciplines are a tree of 19 disciplines and 394 entries in all (docs/DISCIPLINES.md).
+The fields below are the library's own; the engineering disciplines are a tree of 19 disciplines and 395 entries in all (docs/DISCIPLINES.md).
 
 | Field | Disciplines |
 | --- | --- |

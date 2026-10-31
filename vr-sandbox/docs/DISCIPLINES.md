@@ -1,6 +1,6 @@
 # Engineering disciplines
 
-Generated from `src/data/disciplines.ts`: 19 disciplines, 394 entries in all (discipline, branch, specialty). Each discipline is organised after the body named with it; nodes are classified to the deepest entry that fits (docs/REALITY.md, step K).
+Generated from `src/data/disciplines.ts`: 19 disciplines, 395 entries in all (discipline, branch, specialty). Each discipline is organised after the body named with it; nodes are classified to the deepest entry that fits (docs/REALITY.md, step K).
 
 ## Civil engineering (`civil`)
 
@@ -411,6 +411,7 @@ After INCOSE's handbook; ACM CCS 2012 for computing.
   - Software design (`systems.software.design`)
   - Software testing (`systems.software.testing`)
   - Data engineering (`systems.software.data`)
+  - Interaction design: controls worked by hand (buttons, sticks, sliders, input devices) (`systems.software.interaction`)
 
 ## Intelligence (AI) engineering (`intelligence`)
 
