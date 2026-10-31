@@ -37,7 +37,7 @@ physics (`sim.ts`) steps at a fixed 1/240 s and records a track. The views draw 
   motor targets; the board reads poses back each frame. Saved states every half second in a ring (Jolt's state
   recorder) for rewind; replay is the same fixed steps.
 - **Perception ring** (`view/pad.ts`): the modes as one state `{ move: walk | ghost, scale, timeScale, sight }`; one
-  hue per mode (the same as Moosky's); the headset's menu on the wrist.
+  hue per mode (the same as the phone app's); the headset's menu on the wrist.
 - **Sights**: one effect pass per mode (x-ray by rim-lit transparency; edges by `EdgesGeometry`; heat and stress by a
   value per piece through a colour map, viridis for truth; night; section planes with capping; explode by the explode
   we have).

@@ -54,7 +54,8 @@ Spec: `specs/01-interfaces/`.
 | 3 | Out of the container: the app on the web | `specs/03-web/` | when hosting is chosen (`QUESTIONS.md` U1) | waiting on the user |
 | 4 | Being in it: physics, ghost, scale, time, sight | `specs/04-being-in-it/` | after 1; real devices after 3 | not started |
 | 5 | Civil engineering, populated | `specs/05-civil/` | after 1 and 2 (it needs both) | not started |
-| 6 | Moosky, the phone app | `specs/06-moosky/` | after 3; the name after U3 | waiting on the user |
+| 6 | Nexus on the phone (JARVIS style) | `specs/06-phone/` | after 3 | not started |
+| 8 | A picture to a 3D profile (the AI draws, a parser with no AI copies) | `specs/08-sketch-to-3d/` | after 1; the brief after research 11 | not started |
 | 7 | Further (Evolve, lattices, schemas, USD, shared world) | `specs/07-later/` | after 1 to 6 hold | not started |
 
 Why this order (decision `decisions/0002-order.md`): the structure first, because everything after leans on it; the

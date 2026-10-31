@@ -300,3 +300,21 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-10-31: "Okay wait don't rush you said we have a competitive advantage with my logic using the bolt as an example I
   appreciate that also I want you to compile a deeper plan create a file or doc or whatever to keep it structured" (done:
   `plan/`, the interfaces spec the deepest; `docs/PLAN-NEXT.md` folded into it)
+- 2026-10-31: "This app is gonna be the next wav in humanity it's for the world where everyone can be a genius from just an
+  idea or Anton can simulate anything life civil or anything design rooms or anything no we can use nexus as the name
+  okay and task size is this for you or the in app ai because in app a task can be however big as long as it's context
+  and hallucination aware before piping forward. To another pass or just branching in the first place no create a new
+  test a simple one that actually capture everything just throw something together just think outside the box as for 7
+  I'm unsure what you mean but it's ok also with 2d sketches this can be an ai image generator with a specific prompt like
+  generate and his part outlined in a 3d engineering with labeled dimensions or something like that that was probably
+  way off but yea that image passes to a a image parser it's scan the black lines an put it into the environment setup in
+  3d this part should use no ai so just so it don't hallucinate if you tell it specifically outline this in black then we
+  only have to copy black paste it do also add in the prompt don't use black on any thing else or even better just tell it
+  specifically what ui should look like leaving no room for failure also for the reviewer you need different kinds test
+  different prompts and or add this to advanced research prompt engineering also where still in research mode research
+  all engineering every single language every frame work everything keep see what others are doing look for complexly
+  irrelevant thing that are genius visualization maybe a random game has behaviors we need maybe things ain't what they
+  seem search deep think about everything that ain't been covered yet and needs advanced research I want you to research
+  life,engineering,philosophy, astronomy, contests game of life,Mandelbrot, math like pie, universal equations create a list
+  of questions that's a book in itself" (answers recorded in `plan/QUESTIONS.md`; the research wave in `plan/research/`;
+  the book of questions in `plan/BOOK-OF-QUESTIONS.md`)
