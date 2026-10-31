@@ -1449,3 +1449,12 @@ user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node
   Export). Two tests hold it: navigation (a fourth of the nodes in the gate, every one in the docs run; about 12 ms a
   search) and routing (every source file named by an owner row, every document routed from CLAUDE.md and every route
   there). The routing test found 14 files no row named (`kinds/`, `ganglia/`): rows added.
+- **2026-10-31, constants to CODATA 2022** (spec 10, task T1). Values taken from NIST's own listing
+  (physics.nist.gov/cuu/Constants/Table/allascii.txt, "2022 CODATA adjustment", read 2026-10-31), not from memory.
+  Moved: μ₀ 1.25663706212e-6 → 1.25663706127e-6; ε₀ 8.8541878128e-12 → 8.8541878188e-12; Rydberg energy
+  13.605693122994 → 13.605693122990 eV; electron mass 9.1093837015e-31 → 9.1093837139e-31 kg; atomic mass constant
+  1.66053906660e-27 → 1.66053906892e-27 kg; G unchanged; the Coulomb constant derived anew (8987551786.2). Outputs that
+  moved, found by the gate (cmd: `npm run gate`): three law nodes' own tests, by under a part in a billion: parallel
+  plates 8.8541878128e-11 → 8.8541878188e-11 F; a long wire's field 4.000000002e-5 → 3.999999999e-5 T; the Compton
+  shift 2.42631023868e-12 → 2.42631023538e-12 m. Their expected answers were reworked from the 2022 constants; the
+  gate then passed (26 of 26).

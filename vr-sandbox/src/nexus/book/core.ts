@@ -126,7 +126,7 @@ export const CORE = [
   // ---- electricity -----------------------------------------------------------------------------------------------------
   L({ id: 'wire.field', name: 'Magnetic field of a long wire', statement: 'A current in a long straight wire makes a field round it falling as the distance.', formula: 'B = μ₀ I / (2π r)',
     valid: 'A long straight wire, outside it.', inputs: [['I', 'A', 'current'], ['r', 'm', 'distance']], output: ['B', 'T', 'flux density'],
-    term: (v) => div(mul(CONST.mu0, v.I), mul(k(2), PI(), v.r)), source: GRIFFITHS, example: { inputs: { I: 10, r: 0.05 }, output: 4.000000002177503e-5, rel: 1e-12, from: ex } }),
+    term: (v) => div(mul(CONST.mu0, v.I), mul(k(2), PI(), v.r)), source: GRIFFITHS, example: { inputs: { I: 10, r: 0.05 }, output: 3.999999999471869e-5, rel: 1e-12, from: ex } }),
   L({ id: 'resistors.series', name: 'Resistors in series', statement: 'Resistors one after another add.', formula: 'R = R₁ + R₂',
     valid: 'The same current through both.', inputs: [['R1', 'ohm', 'one resistance'], ['R2', 'ohm', 'the other resistance']], output: ['R', 'ohm', 'series resistance'],
     term: (v) => add(v.R1, v.R2), source: HH, example: { inputs: { R1: 100, R2: 220 }, output: 320, rel: 1e-12, from: ex } }),
@@ -151,7 +151,7 @@ export const CORE = [
     term: (v) => div(mul(pow(v.n, 2), pow(CONST.h, 2)), mul(k(8), v.m, pow(v.L, 2))), source: GRIFFITHS_Q, example: { inputs: { n: 1, m: 9.1093837015e-31, L: 1e-9 }, output: 0.37603016261673744, rel: 1e-12, from: `${ex}: an electron in a 1 nm well` } }),
   L({ id: 'compton', name: 'Compton shift', statement: 'X-rays scattered by electrons come off longer by an amount set only by the angle.', formula: 'Δλ = (h / (m_e c)) (1 − cos θ)',
     valid: 'Scattering by free electrons at rest.', inputs: [['theta', 'rad', 'scattering angle']], output: ['dl', 'm', 'wavelength shift'],
-    term: (v) => mul(div(CONST.h, mul(CONST.me, CONST.c)), sub(k(1), cos(v.theta))), source: GRIFFITHS_Q, example: { inputs: { theta: Math.PI / 2 }, output: 2.4263102386830918e-12, rel: 1e-12, from: ex } }),
+    term: (v) => mul(div(CONST.h, mul(CONST.me, CONST.c)), sub(k(1), cos(v.theta))), source: GRIFFITHS_Q, example: { inputs: { theta: Math.PI / 2 }, output: 2.4263102353803167e-12, rel: 1e-12, from: ex } }),
   // ---- chemistry -------------------------------------------------------------------------------------------------------
   L({ id: 'equilibrium.constant', name: 'Equilibrium constant from Gibbs energy', statement: 'A reaction goes as far as its standard Gibbs energy allows: the more negative, the further.', formula: 'K = e^(−ΔG° / R T)',
     valid: 'Ideal behaviour, standard states.', inputs: [['dG', 'J/mol', 'standard Gibbs energy change'], ['T', 'K', 'temperature']], output: ['K', '-', 'equilibrium constant'],

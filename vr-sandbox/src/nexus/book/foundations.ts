@@ -196,7 +196,7 @@ export const FOUNDATIONS = [
     valid: 'A black body (a grey one too: the peak does not move with emissivity).',
     inputs: [['T', 'K', 'temperature']], output: ['lambda', 'm', 'peak wavelength'],
     term: (v) => div(CONST.b, v.T), domain: (v) => [{ says: 'a temperature above absolute zero', holds: gt(v.T, zero('K')) }],
-    source: { cite: 'CODATA 2018 (b); Planck\'s law maximised, as in Atkins, Physical Chemistry, 11th ed., 2018', kind: 'textbook' }, example: { inputs: { T: 5772 }, output: 5.020394932432432e-7, rel: 1e-12, from: `${ex}: the Sun's effective temperature` },
+    source: { cite: 'CODATA 2022 (b, exact and unchanged from 2018); Planck\'s law maximised, as in Atkins, Physical Chemistry, 11th ed., 2018', kind: 'textbook' }, example: { inputs: { T: 5772 }, output: 5.020394932432432e-7, rel: 1e-12, from: `${ex}: the Sun's effective temperature` },
   }),
   L({
     id: 'hydrogen.levels', name: 'Energy levels of hydrogen', statement: 'The electron of a hydrogen atom can have only the energies −13.6 eV over the square of a whole number.', formula: 'E_n = −R_y / n²',
@@ -228,7 +228,7 @@ export const FOUNDATIONS = [
     id: 'capacitance.plates', name: 'Capacitance of parallel plates', statement: 'Two plates hold more charge the larger they are and the closer, by the permittivity between them.', formula: 'C = ε₀ ε_r A / d',
     valid: 'Plates wide beside their gap (fringing left out).',
     inputs: [['er', '-', 'relative permittivity'], ['A', 'm^2', 'plate area'], ['d', 'm', 'gap']], output: ['C', 'F', 'capacitance'],
-    term: (v) => div(mul(CONST.eps0, v.er, v.A), v.d), source: GRIFFITHS, example: { inputs: { er: 1, A: 0.01, d: 1e-3 }, output: 8.8541878128e-11, rel: 1e-12, from: ex },
+    term: (v) => div(mul(CONST.eps0, v.er, v.A), v.d), source: GRIFFITHS, example: { inputs: { er: 1, A: 0.01, d: 1e-3 }, output: 8.8541878188e-11, rel: 1e-12, from: ex },
   }),
   L({
     id: 'lorentz.charge', name: 'Magnetic force on a moving charge', statement: 'A charge moving across a magnetic field is pushed sideways by its charge times its speed times the field.', formula: 'F = q v B',
