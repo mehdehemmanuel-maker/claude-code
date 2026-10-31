@@ -140,11 +140,16 @@ export function fillCells(container: Part, o: { L: number; W: number; h: number;
 // plate are stamped; an engine's block, a gearbox's case, a pump's body are cored castings, their walls round cavities)
 
 /** A turned part along y from y = 0: its steps, each [radius, length] (m) one after the other, a stepped shaft, pin, valve
- *  or axle; `bore` drills it through. */
-export function turned(o: { name: string; steps: [number, number][]; bore?: number; mat: string; color?: number; item?: string; finish?: string; says?: string; at?: V3; rot?: V3 }): Part {
+ *  or axle; `bore` drills it through; `cavity` bores it out wider between heights ([radius, from, to]: a housing's pocket
+ *  round what it holds, an injector's round its coil), so what is inside it is in a space, not in its metal. */
+export function turned(o: { name: string; steps: [number, number][]; bore?: number; cavity?: [number, number, number][]; mat: string; color?: number; item?: string; finish?: string; says?: string; at?: V3; rot?: V3 }): Part {
   const pts: [number, number][] = [[o.bore ?? 0, 0]]; let y = 0;
   for (const [r, l] of o.steps) { pts.push([r, y], [r, y + l]); y += l; }
-  pts.push([o.bore ?? 0, y], [o.bore ?? 0, 0]);
+  // (its inside from the top down: the bore, widened to each cavity where it is)
+  const ins = (h: number) => Math.max(o.bore ?? 0, ...(o.cavity ?? []).filter(([, a, b]) => h > a && h < b).map(([r]) => r));
+  const cuts = [...new Set([0, y, ...(o.cavity ?? []).flatMap(([, a, b]) => [Math.max(0, a), Math.min(y, b)])])].sort((a, b) => b - a);
+  for (let k = 0; k + 1 < cuts.length; k++) { const r = ins((cuts[k]! + cuts[k + 1]!) / 2); pts.push([r, cuts[k]!], [r, cuts[k + 1]!]); }
+  pts.push([o.bore ?? 0, 0]);
   return { name: o.name, shape: { lathe: pts }, at: o.at ?? [0, 0, 0], ...(o.rot ? { rot: o.rot } : {}), mat: o.mat, color: o.color ?? 0x9a9ca0, finish: o.finish ?? 'machined', ...(o.item ? { item: o.item } : {}), says: o.says ?? `turned: ${o.steps.map(([r, l]) => `Ø${(r * 2000).toFixed(1)} × ${(l * 1000).toFixed(1)}`).join(', ')} mm` };
 }
 /** A coil of wire along y from y = 0: wire d, mean diameter D, free length L, n active coils and a closed coil at each end

@@ -443,6 +443,6 @@ export function exhaustSystem(pts: V3[], r: number): Part[] {
     { name: 'muffler shell', shape: { cyl: [mR, mL] }, at: [0, 0, 0], ...ss, shell: 0.0012, item: 'silencer-shell' },
     ...[-0.08, 0.08].map((y): Part => ({ name: 'baffle', shape: { cyl: [mR - 0.002, 0.0012] }, at: [0, y, 0], ...ss, item: 'silencer-baffle' })),
     ...[[-0.03, 0], [0.03, 0.02], [0, -0.03]].map(([x, z]): Part => ({ name: 'perforated tube', shape: { cyl: [r * 0.8, mL - 0.04] }, at: [x!, 0, z!] as V3, ...ss, shell: 0.0012, fill: 0.7, item: 'perforated-tube' })),
-    { name: 'packing', shape: { cyl: [mR - 0.004, 0.12] }, at: [0, -0.14, 0], mat: 'fibreglass', color: 0xe8e0c8, fill: 0.08, item: 'silencer-packing' }] });
+    { name: 'packing', shape: { cyl: [mR - 0.004, 0.118] }, at: [0, -0.14, 0], mat: 'fibreglass', color: 0xe8e0c8, fill: 0.08, item: 'silencer-packing', passes: ['perforated tube'], says: 'glass fibre packed round the perforated tubes in its end chamber' }] });
   return out;
 }

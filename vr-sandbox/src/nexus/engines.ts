@@ -25,6 +25,7 @@ const PI = Math.PI;
 export interface EngineSpec {
   name?: string; cyl: number; /** m */ bore: number; /** m */ stroke: number; layout?: 'inline' | 'vee'; /** degrees between its banks */ vee?: number;
   fuel: 'petrol' | 'diesel'; block: 'al' | 'iron'; cooling?: 'liquid' | 'air'; cams?: 'dohc' | 'sohc' | 'ohv'; valves?: 2 | 4; turbo?: boolean;
+  /** its compression ratio (typical if not said: 10.5 petrol, 17 diesel) */ cr?: number;
   starter?: 'electric' | 'recoil'; /** how its fuel is metered (injection, unless it is a single or air-cooled) */ induction?: 'injection' | 'carburettor'; /** its rod's length, centre to centre, m (1.6 strokes if not said, typical) */ rod?: number; /** the speed its parts are sized to carry, rpm (typical if not said: 6,500 a car's petrol engine, 2,100 a heavy diesel, 3,600 a governed small engine) */ redline?: number; /** its peak cylinder pressure, Pa (typical if not said: 8 MPa petrol, 18 MPa diesel) */ pmax?: number; says?: string;
   /** what its maker chose where engines differ (its pump, its drive to the gearbox, its cam phasing, its injection, its
    *  EGR): one of FITS by name, or said outright; each choice sourced where it is set */ fit?: EngineFit | string;
@@ -400,7 +401,11 @@ export function cylinderHead(s: EngineSpec, d = engineDims(s), bank?: number, gi
   const portY = y0 + td + 0.17 * B, seat = y0 + td + d.seatH, floorT = seat - (portY + 0.15 * B), pr = (valves === 4 ? 0.15 : 0.13) * B;
   // (the pushrods' bores through its deck and its spring floor, beside its ports)
   const rodBores = (at: V3) => train.map((q) => boreAlong(q.hi, q.lo, 0.03 * B + 0.0015, at));
-  parts.push(box('head deck', [Lh, td, Wh], [x0, y0 + td / 2, 0], { ...cast, cuts: [...vs.map((v) => ({ r: v.r * 1.02, depth: td, at: [v.x - x0, td / 2, v.z] as V3, dir: [0, -1, 0] as V3 })), ...cyl.map((c) => ({ r: d.diesel ? 0.052 * B : 0.06 * B, depth: td, at: [plugAt(d, c).x - x0, td / 2, plugAt(d, c).z] as V3, dir: [0, -1, 0] as V3 })), ...rodBores([x0, y0 + td / 2, 0])], says: 'its combustion chambers and valve seats machined in it' }));
+  // (its combustion chambers: each the volume its compression ratio leaves over the piston at the top of its stroke,
+  // V_c = V_s / (CR − 1), so as deep over the bore as the stroke over CR − 1; cut as deep as the deck allows, 3 mm of metal
+  // kept, where a real pent roof rises on into the head above it)
+  const cr = s.cr ?? (d.diesel ? 17 : 10.5), hc = Math.min(s.stroke / (cr - 1), td - 0.003);
+  parts.push(box('head deck', [Lh, td, Wh], [x0, y0 + td / 2, 0], { ...cast, cuts: [...(d.diesel ? [] : cyl.map((c) => ({ r: 0.48 * B, depth: hc, at: [c.x - x0, -td / 2, 0] as V3, dir: [0, 1, 0] as V3 }))), ...vs.map((v) => ({ r: v.r * 1.02, depth: td, at: [v.x - x0, td / 2, v.z] as V3, dir: [0, -1, 0] as V3 })), ...cyl.map((c) => ({ r: d.diesel ? 0.052 * B : 0.06 * B, depth: td, at: [plugAt(d, c).x - x0, td / 2, plugAt(d, c).z] as V3, dir: [0, -1, 0] as V3 })), ...rodBores([x0, y0 + td / 2, 0])], says: 'its combustion chambers and valve seats machined in it' }));
   const sideY = y0 + td + (Hh - td) / 2;
   for (const sd of [-1, 1]) parts.push(box('head side', [Lh, Hh - td, tw], [x0, sideY, sd * (Wh / 2 - tw / 2)], { ...cast, cuts: [...vs.filter((v) => (v.ex ? xs : -xs) === sd).map((v) => ({ r: pr + 0.01 * B, depth: tw, at: [v.x - x0, portY - sideY, sd * tw / 2] as V3, dir: [0, 0, -sd] as V3 })), ...rodBores([x0, sideY, sd * (Wh / 2 - tw / 2)])] }));
   // (its ends, its cams' bores through them)
@@ -472,8 +477,8 @@ export function cylinderHead(s: EngineSpec, d = engineDims(s), bank?: number, gi
   // (its plugs down its towers, a coil on each; or its injectors)
   for (const c of cyl) {
     const pa = plugAt(d, c);
-    if (!d.diesel) { out.push(placed(piece('spark plug'), [pa.x, y0, pa.z])); out.push(placed(piece('ignition coil'), [pa.x, y0 + 0.08, pa.z]));
-    } else out.push(group('fuel injector', [turned({ name: 'injector body', steps: [[0.05 * B, td + 0.02], [0.075 * B, 0.18]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.15]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.01, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.07 * B, L: 0.04, d: 0.0003 }), at: [0, 0.14, 0] as V3 }], { item: 'fuel-injector', at: [pa.x, y0, pa.z] }));
+    if (!d.diesel) { out.push(placed(piece('spark plug'), [pa.x, y0 + Math.min(s.stroke / ((s.cr ?? 10.5) - 1), td - 0.003), pa.z])); out.push(placed(piece('ignition coil'), [pa.x, y0 + 0.08, pa.z]));
+    } else out.push(group('fuel injector', [turned({ name: 'injector body', steps: [[0.05 * B, td + 0.02], [0.075 * B, 0.18]], cavity: [[0.012 * B + 0.0003, 0.01, 0.165], [0.07 * B + 0.0004, 0.1396, 0.1804]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.15]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.01, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.07 * B, L: 0.04, d: 0.0003 }), at: [0, 0.14, 0] as V3 }], { item: 'fuel-injector', at: [pa.x, y0, pa.z] }));
   }
   return group(bank === undefined ? 'cylinder head' : `cylinder head ${bank + 1}`, out, { item: 'cylinder-head' });
 }
@@ -624,7 +629,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   out.push(bolt(d.diesel ? 'M16' : 'M14', 0.016, [-panL * 0.3, panBot - 0.002, 0], [PI, 0, 0], 'oil drain plug'));
   // (a gerotor round the crank's nose: its inner rotor about 0.9 bore across, its outer ring round it, typical)
   const gm = (0.9 * B) / 11;
-  out.push(group('oil pump', [ringX('oil pump body', 0.2 * B, 0.65 * B, 0.025, [0, 0, 0], { item: 'oil-pump-body', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', fill: 0.7 }), { ...toothed({ name: 'oil pump inner rotor', m: gm, z: 9, b: 0.012, bore: 0.42 * B, mat: 'steel-low', item: 'gerotor-inner' }), at: [0, 0, 0], rot: [0, PI / 2, 0] }, ringX('oil pump outer rotor', 0.45 * B + 0.002, 0.57 * B, 0.012, [0, 0, 0], { item: 'gerotor-outer', mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })], { item: 'oil-pump', at: [front + 0.0125, 0, 0] }));
+  out.push(group('oil pump', [P('oil pump body', { lathe: (() => { const w = 0.025, g = 0.0004, a = 0.2 * B, o = 0.65 * B, rr = 0.57 * B + g, h = 0.006 + g; return [[a, -w / 2], [o, -w / 2], [o, w / 2], [a, w / 2], [a, h], [rr, h], [rr, -h], [a, -h], [a, -w / 2]] as [number, number][]; })() }, [0, 0, 0], { rot: CYL_X, item: 'oil-pump-body', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', says: 'its body and cover round the rotors, 0.4 mm clear of them (typical)' }), { ...toothed({ name: 'oil pump inner rotor', m: gm, z: 9, b: 0.012, bore: 0.42 * B, mat: 'steel-low', item: 'gerotor-inner' }), at: [0, 0, 0], rot: [0, PI / 2, 0] }, ringX('oil pump outer rotor', 0.45 * B + 0.002, 0.57 * B, 0.012, [0, 0, 0], { item: 'gerotor-outer', mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })], { item: 'oil-pump', at: [front + 0.0125, 0, 0] }));
   // (its strainer back in the sump, but no further back than the pan's own end wall: a short engine's is nearer its pump)
   const strX = Math.max(front - 0.126, panBack + 0.012), pk1 = Math.max(front - 0.06, (front + strX) / 2);
   out.push(group('oil pickup', [P('pickup tube', { tube: { r: 0.008, wall: 0.0012, pts: [[front + 0.0125, -0.65 * B - 0.009, 0], [front + 0.0125, Math.min(-0.65 * B - 0.03, panBot + 0.06), 0], [pk1, panBot + 0.035, 0], [strX + 0.006, panBot + 0.035, 0]] } }, [0, 0, 0], { mat: 'steel-low', color: 0x6a6c70, one: true }), P('strainer', { cyl: [0.035, 0.012] }, [strX, panBot + 0.035, 0], { rot: CYL_X, mat: 'steel-low', color: 0x8a8c90, fill: 0.35, one: true, says: 'a mesh over the pickup\'s mouth' })], { item: 'oil-pickup' }));
@@ -647,7 +652,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       // of an electronic throttle); in its own frame, its +y the engine's -x)
       const etc = !d.vee && !d.air && !(d.n <= 2) && d.cams === 'dohc' ? [group('throttle motor', [P('motor can', { cyl: [0.012, 0.03] }, [0, 0, 0], { shell: 0.001, item: 'motor-can', mat: 'steel-low', color: 0x2a2a2a })], { item: 'throttle-motor', at: [-(0.38 * B + 0.0125), 0.02, 0] }), group('throttle position sensor', [box('sensor case', [0.02, 0.02, 0.012], [0, 0, 0.006], { item: 'sensor-case', mat: 'pbt', color: 0x2a2a2a, finish: 'texture' })], { item: 'throttle-position-sensor', at: [0, 0.02, 0.38 * B + 0.0005] })] : [];
       out.push(group('throttle body', [P('throttle housing', { lathe: [[0.3 * B, 0], [0.38 * B, 0], [0.38 * B, 0.5 * B], [0.3 * B, 0.5 * B], [0.3 * B, 0]] }, [0, 0, 0], { item: 'throttle-housing', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast' }), P('throttle plate', { cyl: [0.29 * B, 0.0012] }, [0, 0.25 * B, 0], { item: 'throttle-plate', mat: 'brass', color: 0xc8a050, rot: [0.3, 0, 0] }), ...etc], { item: 'throttle-body', at: [-plL / 2, plY, plZ], rot: [0, 0, PI / 2] }));
-      for (const c of inl) out.push(group('port injector', [turned({ name: 'injector body', steps: [[0.08 * B, 0.03], [0.11 * B, 0.03]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.05]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.005, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.1 * B, L: 0.015, d: 0.0002 }), at: [0, 0.0325, 0] as V3 }], { item: 'fuel-injector', at: [c.x, c.y + ir - 0.01, c.z + 0.12 * B] }));
+      for (const c of inl) out.push(group('port injector', [turned({ name: 'injector body', steps: [[0.08 * B, 0.03], [0.11 * B, 0.03]], cavity: [[0.012 * B + 0.0003, 0.005, 0.0555], [0.1 * B + 0.0004, 0.0321, 0.0479]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.05]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.005, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.1 * B, L: 0.015, d: 0.0002 }), at: [0, 0.0325, 0] as V3 }], { item: 'fuel-injector', at: [c.x, c.y + ir - 0.01, c.z + 0.12 * B] }));
       const ry = yport + ir - 0.01 + 0.06 + 0.009;
       out.push(P('fuel rail', { tube: { r: 0.009, wall: 0.0012, pts: [[-len / 2 + 0.03, ry, zport + 0.12 * B], [len / 2 - 0.03, ry, zport + 0.12 * B]] } }, [0, 0, 0], { item: 'fuel-rail', mat: 'stainless-304', color: 0xc8ccd2 }));
     }
@@ -659,7 +664,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       for (const vx of valveXs(d, c, false)) {
         const a0 = fromBank([vx, yport, -xs * Wb / 2], c.lean), a1 = fromBank([vx, yport, -xs * (Wb / 2 + 0.3 * B)], c.lean);
         runs.push(P('intake runner', { tube: { r: ir, wall: 0.003, pts: [a0, a1, [vx, pY - 0.25 * B, 0]] } }, [0, 0, 0], { one: true, item: 'intake-runner', mat: 'al-a380', color: 0x8c8e90, finish: 'cast', passes: ['injector body', 'injector needle'] }));
-        inj.push(group('port injector', [turned({ name: 'injector body', steps: [[0.08 * B, 0.03], [0.11 * B, 0.03]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.05]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.005, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.1 * B, L: 0.015, d: 0.0002 }), at: [0, 0.0325, 0] as V3 }], { item: 'fuel-injector', at: a1 }));
+        inj.push(group('port injector', [turned({ name: 'injector body', steps: [[0.08 * B, 0.03], [0.11 * B, 0.03]], cavity: [[0.012 * B + 0.0003, 0.005, 0.0555], [0.1 * B + 0.0004, 0.0321, 0.0479]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.05]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.005, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.1 * B, L: 0.015, d: 0.0002 }), at: [0, 0.0325, 0] as V3 }], { item: 'fuel-injector', at: a1 }));
       } }
     out.push(group('intake manifold', [box('intake plenum', [len * 0.85, 0.7 * B, 0.9 * B], [0, pY, 0], { passes: ['intake runner'], item: 'intake-plenum', mat: 'al-a380', shell: 0.004, color: 0x8c8e90, finish: 'cast' }), ...runs], { item: 'intake-manifold', says: 'cast aluminium: a plenum along the vee, a runner down to each port (typical of a pushrod V6\'s)' }));
     out.push(...inj);
@@ -741,7 +746,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
       ...[0, 1, 2, 3, 4, 5].map((k) => rectifierDiode([-altL * 0.95, altR * 0.5 * Math.cos(k), altR * 0.5 * Math.sin(k)])),
       { ...mouldedChip({ name: 'voltage regulator', w: 0.01, d: 0.006, h: 0.0025, pins: 8 }), at: [-altL * 0.97, -altR * 0.4, 0] as V3, rot: [0, 0, PI / 2] as V3 },
       ...[-1, 1].map((sd) => box('carbon brush', [0.005, 0.005, 0.012], [-altL * 0.9, sd * 0.012, 0.012], { item: 'carbon-brush', mat: 'graphite', color: 0x2a2a2a })),
-      ...[-0.05, -0.95].map((f) => ({ ...use('bearing 608 ZZ', [altL * f, 0, 0], { rot: CYL_X }) })),
+      ...[-0.05, -0.95].map((f) => ({ ...use('bearing 6203 ZZ', [altL * f, 0, 0], { rot: CYL_X }) })),
       al('alternator pulley', 0.006, 0.03, 0.025, 0.02, { mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })], { item: 'alternator', at: [bx - 0.02, altAt[1], -altAt[0]] }));
     // (its bracket from the barrel's side out to its rear housing)
     const xbk = bx - 0.02 - altL * 0.85, zb0 = d.cams === 'dohc' && !d.vee && !d.air ? Math.max(...[-0.006, 0, 0.006].map((o) => barrelHalfAt(d, cyl, xbk + o))) + 0.0005 : d.banked ? Wc / 2 + 0.0005 : Wb / 2, zb1 = -altAt[0] - altR, ybk = d.banked ? ysk + 0.025 : altAt[1];

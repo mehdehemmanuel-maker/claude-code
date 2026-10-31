@@ -71,6 +71,25 @@ export function candidates(ms: Mesh3[]): [Mesh3, Mesh3][] {
   const byNode = new Map<Node, Mesh3>(); for (const m of ms) byNode.set(m.node, m);
   return contacts(ms.map((m) => m.node)).filter((c) => c.depth > 0.0005).map((c) => [byNode.get(c.a)!, byNode.get(c.b)!] as [Mesh3, Mesh3]).filter(([a, b]) => a && b && !linked(a, b) && !fastens(a, b) && !said(a, b));
 }
+const CAST_ROUND = /mould-compound|potting|encapsula/;
+/** Whether a point is inside a closed surface: a ray from it, slightly skewed off the axes so it misses edges, crosses
+ *  the surface an odd number of times (Möller–Trumbore for each crossing). An open surface has no inside. */
+function inside(p: [number, number, number], t: Tris): boolean {
+  if (!t.closed || p[0] < t.lo[0] || p[1] < t.lo[1] || p[2] < t.lo[2] || p[0] > t.hi[0] || p[1] > t.hi[1] || p[2] > t.hi[2]) return false;
+  const d = [0.99984, 0.01313, 0.01211], v = t.v; let n = 0;
+  for (let k = 0; k < t.n; k++) { const o = k * 9, e1 = [v[o + 3]! - v[o]!, v[o + 4]! - v[o + 1]!, v[o + 5]! - v[o + 2]!], e2 = [v[o + 6]! - v[o]!, v[o + 7]! - v[o + 1]!, v[o + 8]! - v[o + 2]!];
+    const h = [d[1]! * e2[2]! - d[2]! * e2[1]!, d[2]! * e2[0]! - d[0]! * e2[2]!, d[0]! * e2[1]! - d[1]! * e2[0]!], det = e1[0]! * h[0]! + e1[1]! * h[1]! + e1[2]! * h[2]!; if (Math.abs(det) < 1e-18) continue;
+    const s0 = [p[0] - v[o]!, p[1] - v[o + 1]!, p[2] - v[o + 2]!], u = (s0[0]! * h[0]! + s0[1]! * h[1]! + s0[2]! * h[2]!) / det; if (u < 0 || u > 1) continue;
+    const q = [s0[1]! * e1[2]! - s0[2]! * e1[1]!, s0[2]! * e1[0]! - s0[0]! * e1[2]!, s0[0]! * e1[1]! - s0[1]! * e1[0]!], w = (d[0]! * q[0]! + d[1]! * q[1]! + d[2]! * q[2]!) / det; if (w < 0 || u + w > 1) continue;
+    if ((e2[0]! * q[0]! + e2[1]! * q[1]! + e2[2]! * q[2]!) / det > 0) n++; }
+  return n % 2 === 1;
+}
+/** Whether a lies within b: three of its points, spread through its triangles, each inside b's closed surface. */
+function within(a: Mesh3, b: Mesh3): boolean {
+  // (inside a hollow part, a shell, is in its hollow: only crossing its wall is a fault, and the triangles see that)
+  const ta = T(a), tb = T(b); if (!tb.closed || !ta.n || b.p.shell) return false;
+  return [0, Math.floor(ta.n / 3), Math.floor((2 * ta.n) / 3)].every((k) => { const o = k * 9, v = ta.v; return inside([(v[o]! + v[o + 3]! + v[o + 6]!) / 3, (v[o + 1]! + v[o + 4]! + v[o + 7]!) / 3, (v[o + 2]! + v[o + 5]! + v[o + 8]!) / 3], tb); });
+}
 export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3, b: Mesh3) => boolean } = {}): Finding[] {
   const out: Finding[] = [], seen = new Set<string>(), tol = o.touch ?? 0.0002;
   // (first the pieces' oriented boxes, fast: only pairs whose boxes press into each other by more than half a millimetre,
@@ -78,9 +97,12 @@ export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3,
   const cands = candidates(ms).filter(([a, b]) => !o.pair || o.pair(a, b));
   for (const [a, b] of cands) {
     const key = [ownerOf(a.node).path, ownerOf(b.node).path].sort().join('|'); if (seen.has(key)) continue;
-    const c = meshClashes([a, b], { touch: tol, edge: 'scaled', fused: () => false }).find((x) => x.kind === 'through'); if (!c) continue;
+    const c = meshClashes([a, b], { touch: tol, edge: 'scaled', fused: () => false }).find((x) => x.kind === 'through');
+    // (no surface crossing, and yet one inside the other: a triangle test cannot see that, so its points are tried)
+    // (save inside what is cast round it: a moulding or a potting compound holds its wires and its die by being poured on them)
+    const inner = c ? null : within(a, b) ? [a, b] : within(b, a) ? [b, a] : null; if (!c && (!inner || CAST_ROUND.test(inner[1]!.p.item ?? ''))) continue;
     seen.add(key);
-    out.push({ rule: 'interference', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, pa: ownerOf(a.node).path, pb: ownerOf(b.node).path, says: `the ${a.name} runs into the ${b.name}`, ...(c.at ? { at: c.at as [number, number, number] } : {}) });
+    out.push({ rule: 'interference', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, pa: ownerOf(a.node).path, pb: ownerOf(b.node).path, says: inner ? `the ${inner[0]!.name} is inside the ${inner[1]!.name}` : `the ${a.name} runs into the ${b.name}`, ...(c?.at ? { at: c.at as [number, number, number] } : {}) });
   }
   return out;
 }

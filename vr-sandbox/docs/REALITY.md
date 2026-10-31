@@ -1380,3 +1380,12 @@ shells drawn into their journals), real layout faults (pistons into bulkheads 32
 crowns, the cam tube and the coil housing, the catalyst and the tail pipe, and five more), and drawing approximations
 (the belt through its pulleys' rims). The cause of the misses: the rules' triangle test sees surfaces crossing, so a
 piece wholly inside another is invisible to it. Queued as item 8b. Measured in 54 s on the engine alone.
+- **2026-10-31, the checker sees a piece inside another (item 8b).** Containment by ray parity where no surface
+crosses, three points of the inner each tried; moulding and potting (cast round what they hold) and a hollow part's
+hollow excused. 21 found on the inline four that the triangles missed, each fixed at its maker: a cavity in `turned`
+(injector bores and coil pockets), the oil pump's body and cover round its rotors (a hand-set fill of 0.7 deleted),
+6203 bearings on the alternator's 17 mm shaft (608s have an 8 mm bore), combustion chambers cut in the head's deck by
+compression ratio (new `cr`, typical 10.5; 5.9 mm deep, as deep as the 8.9 mm deck allows of the 10.3 mm wanted) with
+the plugs seated at their roof. Measured after: inline four 1 finding (the mount rubber, as before), Monte Carlo 0,
+lawn tractor 0, dirt bike 3 and ATV 1 (as before), Corolla 226 (as before: its battery's heat beside the EGR pipe).
+Each check 1 to 23 s. The gate: 24 of 24, 46.8 s.

@@ -99,8 +99,17 @@ on the user's keys and network: 2.
    the crank nose and the oil pan's end, the ring gear and the crank sensor's pole, a liner and the knock boss; (c) the
    ribbed belt through its pulleys' rims and the starter pinion on its shaft (drawing approximations, 16 to 116). What
    it shows: the rules checker is blind to a piece inside another (a triangle test sees only surfaces crossing), which
-   is why (a) and (b) were never found. Queued, item 8b: containment in the checker (a point of one inside the other,
-   by ray parity, where no surface crosses), then (a) cut and (b) moved. Also left: the stress
+   is why (a) and (b) were never found. **8b built 2026-10-31:** the checker now tries, where no surface crosses,
+   whether one piece is inside another (three of its points, each by a ray's crossings); what is cast round its
+   contents (a moulding, potting) and what is inside a hollow part's hollow are not faults; packing says what passes
+   through it. On the inline four it found 21 the triangles missed; fixed at their makers: `turned` takes a cavity (the
+   injectors' bores and coil pockets), the oil pump body drawn as body and cover round its rotors (its hand-set fill of
+   0.7 deleted), the alternator's 608 bearings (8 mm bore) on its 17 mm shaft made 6203s, and each head's combustion
+   chambers cut in its deck by the compression ratio (`cr`, typical 10.5 where not said; as deep as the deck allows,
+   5.9 mm of the 10.3 mm a 10.5:1 chamber wants), its plug seated at the chamber's roof, clear of the piston. The
+   inline four back to its one finding (the mount rubber), the Monte Carlo 0, the lawn tractor 0, the dirt bike's 3 and
+   the ATV's 1 as before; the Corolla's whole car 226 as before (its battery beside the EGR pipe: heat, its own fix
+   next). Also left: the stress
    comparison on a drawn part (the rod) needs a mesher for its solid (gmsh, installed here). The Monte Carlo's
    cross-check was stopped: over 20 minutes; it waits until it is made fast (pairs judged in parallel, not 5,800 solids
    kept).
