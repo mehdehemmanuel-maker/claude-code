@@ -126,5 +126,5 @@ on the user's keys and network: 2.
   current owners are (it names files deleted on 2026-10-28); the gate is at 44 to 49 s of its minute.
 - 2026-10-31: search finds a word whole in a name before a word it only starts ("STEP" before "stepper"), and knows a
   few words people search by that the library says another way (collision → interference, optimize → fit, fea →
-  CalculiX); Biomedical & life had no node in it (the body and what a gas does to people now are); every file the
+  CalculiX); Biomedical & life had no node in it (the body and Gas emission and dispersion (renamed from a question, as the naming rule asks) now are, and the body's board is that field's quick board in the one test; Physics & science now has no starter board of its own, its nodes' own tests still run); every file the
   context docs name exists, or is said deleted.

@@ -44,7 +44,7 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 
 Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 543 tested here (their own tests: that they do what they say, not that the world does); 53 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 606 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 192 of 606 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (11)
 
@@ -71,7 +71,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Battery pack** (`battery.pack`): Cells in a pack: so many groups in series, each so many cells in parallel standing in staggered rows, a busbar over each group, the groups in modules, the modules in a tray. *hypothetical, tested here, before the update*
 - **Bed** (`seed.bed`): A bed with its head to the wall at z = 0, its foot toward +z: frame, mattress, headboard and two pillows; twin, full, queen or king (US mattress sizes) *hypothetical, untested, before the update*
 - **Bedroom fittings** (`seed.fittings.bedroom`): What makes a room a bedroom: a queen bed against the back wall, a bedside table each side, a wardrobe in the corner (600 deep, typical) *hypothetical, untested, before the update*
-- **Body** (`body`): A human body from its measured segments, not drawn by eye: laid out from its height by Drillis and Contini's proportions, its sixteen segments each the share of its mass de Leva measured (men and women apart), shaped … *estimated, tested here, before the update*
+- **Body** (`body`): A human body from its measured segments, not drawn by eye: laid out from its height by Drillis and Contini's proportions, its sixteen segments each the share of its mass de Leva measured (men and women apart), shaped … *estimated, tested here*
 - **Box** (`shape.box`): A block: width (x), height (y), depth (z) *hypothetical, tested here, before the update*
 - **Car** (`seed.car`): A mid-size sedan, its middle on the ground at the origin, facing +x: body, cabin, windows, four wheels (tyre and rim), lamps and bumpers; its paint yours (4.7 × 1.8 × 1.45 m, typical) *hypothetical, untested, before the update*
 - **Cast grid** (`make.grid`): A grid cast in one: a frame round its edge, bars upright and wires across inside it, and a lug at its top. *hypothetical, tested here, before the update*
@@ -273,9 +273,9 @@ Physics, motion, the clock, chips run from their transistors, engines under load
 What things give off and afford, gases, who notices what, agents and their goals.
 
 - **Agent** (`agent`): A body with senses and a goal. *simplified, untested, before the update*
+- **Gas emission and dispersion** (`gas`): A gas as a substance, not a smell: what a thing gives off in a state (an engine running: its exhaust from its displacement and speed, at most the carbon monoxide and hydrocarbons a catalyst car may give at idle; a … *simplified, tested here*
 - **Goal** (`goal`): What an agent sets out to do, as a verb and a target: open it (a door, a gate, a lid), go to it, or keep away from it; the target found by its name, or by what it lets a body do (sit on, open, grasp …), the nearest or … *given, tested here, before the update*
 - **What it gives off** (`signature`): What every part of a thing gives off, read from what it is, never tagged by hand: how far it is seen (its size against the eye's one arcminute, less the lower its contrast), how far it is heard if it makes sound by … *simplified, tested here, before the update*
-- **What it gives off into the air** (`gas`): A gas as a substance, not a smell: what a thing gives off in a state (an engine running: its exhaust from its displacement and speed, at most the carbon monoxide and hydrocarbons a catalyst car may give at idle; a … *simplified, tested here, before the update*
 - **What it lets you do** (`afford`): What every part of a thing lets a body do, read from its shape, mass, joints and material against that body (an adult, or a child of 8: its grip, reach, knee height, stride and strength from its stature): grasp a bar … *simplified, tested here, before the update*
 - **Who notices what** (`sense`): What each observer takes in where it stands, facing what it faces: a person sees by rays out from its eyes packed as its acuity is (sharp where it looks, thin to the side), each meeting the first thing in its way; … *simplified, tested here, before the update*
 

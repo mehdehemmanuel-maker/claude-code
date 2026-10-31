@@ -26,7 +26,7 @@ const env: Env = { code: async (lang, code, inputs) => (await run({ id: 0, lang:
 // legacy suite): what a person opens first in that field
 const QUICK: Record<string, string> = {
   electrical: 'Electrical: a resistor heating', electronics: 'The 6502 from its transistors', finance: 'Business: cash flow',
-  manufacturing: 'A battery built from its parts', mechanical: 'Physics: a steel ball let go', science: 'A body from its measured segments',
+  manufacturing: 'A battery built from its parts', mechanical: 'Physics: a steel ball let go', life: 'A body from its measured segments',
   software: 'The gauntlet as nodes', structural: 'What it is made of, and what it carries', vehicles: 'Power as nodes',
 };
 const root = resolve(__dirname, '../..');
