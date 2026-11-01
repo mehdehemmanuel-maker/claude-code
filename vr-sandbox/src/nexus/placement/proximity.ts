@@ -166,7 +166,7 @@ export function zoneFor(box: THREE.Box3, o: { kind: 'front' | 'swing'; face: '+z
 // connect solved apart. Each joint says how far off it is (mm, degrees); a part given facing the wrong way (its frame's n
 // with its partner's, not against it) is said to be turned end for end to meet; the freedom left is six for each part
 // moved less the rank of the joints' Jacobian there (a motor's face and its four holes are 19 equations of rank 6, not
-// 19 constraints), each free motion said in words; where the joints cannot all hold, the fewest that fight are found by
+// 19 constraints), each free motion said in words; where the joints cannot all hold, a set that fights is found by
 // leaving each out in turn (the deletion filter: Chinneck & Dravnieks, Locating minimal infeasible constraint sets in
 // linear programs, ORSA Journal on Computing 3(2), 1991; here on a nonlinear system) and named.
 
@@ -184,7 +184,7 @@ export interface JointsSolved {
   poses: Record<string, { at: V3; rot: V3 }>; parts: Part[]; joints: JointRow[];
   /** six for each part moved, less the rank of the joints' Jacobian where they stopped */ freedom: number; rank: number; equations: number; unknowns: number;
   /** each motion the joints leave, in words */ free: string[]; flipped: string[];
-  /** the fewest joints that fight, where they cannot all hold; and those of them that, left out alone, let all the rest hold */ fight: string[] | null; leaveOut: string[];
+  /** a set of joints that fight, where they cannot all hold (each needed to the fight; one such set, not always the smallest); and those of them that, left out alone, let all the rest hold */ fight: string[] | null; leaveOut: string[];
   held: string[]; sets: number; steps: number; says: string;
 }
 
@@ -233,14 +233,15 @@ export function solveJoints(parts: Part[], joints: Joint[], o: { fixed?: string[
   for (const set of sets) {
     const js = joints.filter((j) => set.includes(j.a.part)), ground = set.filter((n) => fixed.has(n));
     if (!ground.length) { ground.push(set[0]!); held.push(set[0]!); }
-    const solved = solveSet(set, ground, js, given, F);
+    const solved = solveTried(set, ground, js, given, F);
     for (const [k, p] of solved.poses) poses.set(k, p);
     rows.push(...solved.rows); free.push(...solved.free); flippedAll.push(...solved.flipped);
     freedom += solved.freedom; rank += solved.rank; equations += solved.equations; unknowns += solved.unknowns; steps += solved.steps;
     if (!solved.rows.every((r) => r.holds)) {
-      // (the fewest that fight: each left out in turn, kept out where the rest still cannot all hold)
+      // (the joints that fight: each left out in turn, kept out where the rest still cannot all hold, so every one named is
+      // needed to the fight; it is one such set, not always the smallest, and one in each set of parts at a time)
       const holdsAll = (sub: Joint[]) => setsOf(sub).every((ss) => { const g = ss.filter((n) => ground.includes(n)); if (!g.length) g.push(ss[0]!);
-        return solveSet(ss, g, sub.filter((j) => ss.includes(j.a.part)), given, F).rows.every((r) => r.holds); });
+        return solveTried(ss, g, sub.filter((j) => ss.includes(j.a.part)), given, F).rows.every((r) => r.holds); });
       let S = js.slice(); for (const j of js) { const T = S.filter((x) => x !== j); if (!holdsAll(T)) S = T; }
       fight = [...(fight ?? []), ...S.map((j) => j.name)]; leaveOut.push(...S.filter((j) => holdsAll(js.filter((x) => x !== j))).map((j) => j.name));
     }
@@ -250,7 +251,7 @@ export function solveJoints(parts: Part[], joints: Joint[], o: { fixed?: string[
   const worst = rows.filter((r) => !r.holds);
   const says = [`${joints.length} joint${joints.length === 1 ? '' : 's'} on ${named.length} parts, ${equations} equations of rank ${rank} for ${unknowns} unknowns: ${freedom} freedom left${free.length ? ` (${free.join('; ')})` : ''}`,
     worst.length ? `${worst.length} do not hold: ${worst.map((r) => `${r.joint} ${r.mm} mm, ${r.deg}°`).join('; ')}` : 'every joint holds',
-    ...(fight ? [`the fewest that fight: ${fight.join(', ')}${leaveOut.length ? `; leave out ${leaveOut.join(' or ')} and the rest hold` : ''}`] : []),
+    ...(fight ? [`these fight, each needed to it: ${fight.join(', ')}${leaveOut.length ? `; leave out ${leaveOut.join(' or ')} and the rest hold` : ''}`] : []),
     ...(flippedAll.length ? [`turned end for end to meet: ${flippedAll.join(', ')}`] : []), ...(held.length ? [`nothing fixed in its set: held where it stands, ${held.join(', ')}`] : [])].join('; ');
   return { poses: out, parts: placed, joints: rows, freedom, rank, equations, unknowns, free, flipped: flippedAll, fight, leaveOut, held, sets: sets.length, steps, says };
 }
@@ -262,10 +263,24 @@ function setsOf(joints: Joint[]): string[][] {
   for (const j of joints) { const a = find(j.a.part), b = find(j.b.part); if (a !== b) root.set(a, b); }
   return [...new Set(named.map(find))].map((r) => named.filter((n) => find(n) === r));
 }
+/** A set solved from where its parts were given, and, where its joints do not all hold, again from other starting turns
+ *  (seeded, so alike every run) before they are said to fight: a least-squares descent can stop short of where they all
+ *  hold (two hinges and a pin, consistent, once stopped so: the evaluator, 2026-11-01). The least of the tries is kept; a
+ *  part's flip is judged against the pose it was given, never a start. */
+function solveTried(set: string[], ground: string[], js: Joint[], given: Map<string, { t: THREE.Vector3; q: THREE.Quaternion }>, F: Frames) {
+  const first = solveSet(set, ground, js, given, F); if (first.rows.every((r) => r.holds)) return first;
+  let best = first, cost = (x: typeof first) => x.rows.reduce((a, r) => a + r.mm + r.deg, 0), seed = 11;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  for (let k = 0; k < 6; k++) {
+    const start = new Map([...given].map(([n, g]) => { if (ground.includes(n)) return [n, g]; const ax = new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize(); return [n, { t: g.t, q: new THREE.Quaternion().setFromAxisAngle(ax, Math.PI * (0.5 + rnd())).multiply(g.q) }]; }));
+    const s = solveSet(set, ground, js, start, F, given); if (s.rows.every((r) => r.holds)) return s; if (cost(s) < cost(best)) best = s;
+  }
+  return best;
+}
 type Frames = (j: Joint) => { A: { at: THREE.Vector3; n: THREE.Vector3; u: THREE.Vector3 }; B: { at: THREE.Vector3; n: THREE.Vector3; u: THREE.Vector3 } };
 /** One set the joints connect: started where each moving part meets the parts placed before it (the least turn from where
  *  it was given), then every joint solved together. */
-function solveSet(set: string[], ground: string[], js: Joint[], given: Map<string, { t: THREE.Vector3; q: THREE.Quaternion }>, F: Frames) {
+function solveSet(set: string[], ground: string[], js: Joint[], given: Map<string, { t: THREE.Vector3; q: THREE.Quaternion }>, F: Frames, asGiven = given) {
   const moving = set.filter((n) => !ground.includes(n)), pose = new Map<string, { t: THREE.Vector3; q: THREE.Quaternion }>();
   for (const g of ground) pose.set(g, { t: given.get(g)!.t.clone(), q: given.get(g)!.q.clone() });
   const world = (name: string, f: { at: THREE.Vector3; n: THREE.Vector3; u: THREE.Vector3 }, P = pose) => { const p = P.get(name)!; return { p: f.at.clone().applyQuaternion(p.q).add(p.t), n: f.n.clone().applyQuaternion(p.q), u: f.u.clone().applyQuaternion(p.q) }; };
@@ -284,7 +299,9 @@ function solveSet(set: string[], ground: string[], js: Joint[], given: Map<strin
     for (const j of mine) { const f = F(j), meB = j.b.part === next, mine2 = meB ? f.B : f.A, other = world(meB ? j.a.part : j.b.part, meB ? f.A : f.B);
       // (seen from either end the turn is the same: b's u is a's turned by it about a's n, and a's is b's turned by it about b's)
       const th = j.turn ?? 0, wO = other.n.clone().cross(other.u), U = other.u.clone().multiplyScalar(Math.cos(th)).addScaledVector(wO, Math.sin(th));
-      if (other.n.dot(mine2.n.clone().applyQuaternion(g.q)) > 1e-9) flipped.set(j.name, next);
+      // (a part given with its frame's n along its partner's, not against it, is turned end for end to meet; a ball holds only
+      // a point, so its n says nothing and it is never said to be flipped)
+      if (j.kind !== 'ball' && other.n.dot(mine2.n.clone().applyQuaternion(asGiven.get(next)!.q)) > 1e-9) flipped.set(j.name, next);
       pairs.push({ l: mine2.at.clone(), w: other.p.clone(), k: 1 }, { l: mine2.at.clone().addScaledVector(mine2.n, L), w: other.p.clone().addScaledVector(other.n, -L), k: 1 });
       if (j.kind === 'fixed' || j.kind === 'slider') pairs.push({ l: mine2.at.clone().addScaledVector(mine2.u, L), w: other.p.clone().addScaledVector(U, L), k: 1 }); }
     // (and, lightly, its own axes where it was given: what the joints leave free stays as it was turned)

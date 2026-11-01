@@ -2289,3 +2289,19 @@ that met no wall counted as endless wall (now no wall: refused by its edge dista
 request's check was widened after the first runs, from its counterbore alone to any rule of its standards, nothing cut.
 Checked with `npm run gate` (the tests "the AI's tools lead with what fails, and take a change only when what held still
 holds" and "the interface nodes on their starter boards…").
+
+## 2026-11-01: I12 and I13 pass; what their evaluators found, mended (spec 01, I12, I13)
+
+Round fourteen: 01.I12 passed (fifteen faults planted, each caught; the evaluator's own trials: sixty given poses of a
+motor, each joint kind alone, a four-bar loop, chains, one hundred and sixty injected fights, each named) and 01.I13
+passed (the boards run, its own screenshots taken and looked at). Mended from what they named: a system whose joints
+all hold, by construction, could stop at a least short of that and be reported as fighting (two of one hundred and
+fifty of the evaluator's random systems; one in a thousand of a probe's, two hinges and a pin): where a set does not all
+hold it is now solved again from other starting turns, seeded, before a fight is named, and that system is in the test;
+a part on a ball joint is no longer said to be flipped (a ball holds a point, its direction says nothing); and "the
+fewest that fight" said more than the deletion filter gives: it names one set in which each joint is needed to the
+fight, not always the smallest, and now says so. Two node outputs with no test of their own now have one: an
+assertion's warning text where it fails, and the joint solver's freedom and rank beside the joints that fight. A blind
+reader of the two boards' 3D views named the parts (a plate, a round boss, an angle; a disc with six bolts) and what
+looked wrong: kept as fault D16 (a dark part on the dark view, a ground grid on one board and not the other, pieces
+counted that cannot be seen, a round plate's facets). Checked with `npm run gate`.
