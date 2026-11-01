@@ -2329,3 +2329,16 @@ where none is, and says which. Rows held: 3 to 6 mm (IT5 to IT9), 6 to 10 (IT6 t
 IT8), those read from ISO 286-2:2010's own Table 1 by two readers for the evaluation set, each row within a tenth of the
 formula. A 6 mm size falls in the band over 3 up to and including 6, as the table's headings say. Checked with `npm run
 gate` (the tests "the tables negatives need, each row with its source" and "the interfaces evaluation set…").
+
+## 2026-11-01: I15 fails its first judging: "first" cannot be shown; a correction (spec 01, I15)
+
+The evaluator read the history of `evals/interfaces/cases.json`: cases 1, 2, 3 and 7 first appear in the same commit as
+`negativeOf` (I5), cases 4 and 5 with I7's checks, 10 with I9, 8 with I10, 9 with I11; only cases 6, 11 and 12 are in
+the set before their code. So the check's "the set exists … before I5 is built" is not shown, and earlier entries here
+that call those cases "worked by hand first" say more than the history can show: correct them by this one. The task's
+evidence and the set's own description now say what the history shows. Whether to reword the check to what can be
+shown, or to accept the order as it was, is the user's to say; it waits on them. The evaluator also found that the gate
+holds the three waiting cases' limits by their width only, not their offsets (k5's +2 µm, N9's 0): a wrong offset of the
+right width would pass until I17 builds them from rows that hold the offsets. Every number of cases 6, 11 and 12 it
+checked against the sources it opened itself, and found right. The order seen with `git log --follow -- evals/interfaces/cases.json`
+and `git show 4b20a12 --stat`.

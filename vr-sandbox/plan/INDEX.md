@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 24 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 24 passing (by the evaluator), 7 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 17 (12 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -115,7 +115,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | I12 | Joints: frame-to-frame joints solved together; residual, flipped, freedom left (Jacobian rank), the fewest that fight named | I8 | passing (evaluator claude-sonnet, 2026-11-01) |
 | I13 | The nodes (interfaces, negative, imprint, pattern, relation, joint, assert) with their own tests; starter boards 'Paste a bolt onto anything' and … | I11, I12 | passing (evaluator claude-sonnet, 2026-11-01) |
 | I14 | The AI: FOR-AI's rule to mate by joints and imprints; assert nodes; its replies lead with what fails; a shadow board published only when its … | I13 | passing (evaluator claude-sonnet, 2026-11-01) |
-| I15 | The interfaces evaluation set: the twelve cases of design §4, numbers worked out by hand from the sources first | I3 | claimed |
+| I15 | The interfaces evaluation set: the twelve cases of design §4, numbers worked out by hand from the sources first | I3 | failing (evaluator: 'before I5 is built' is not shown, and the history shows the contrary: evals/interfaces/cases.json first exists in 4b20a) |
 | I16 | Drag to imprint in the 3D view: the negative shown before cutting (remove, keep, contact), its verdict, accept or cancel; copy and paste a face's … | I13 | failing |
 | I17 | The rest of R18 by the same model: bearing (housing and shaft), dowel, key and keyways, pipe thread, panel cut-out | I10, I12 | failing |
 | I18 | Interface versions: a published interface never changed in place; new versions with adapters or a declared break (C19; LEGO, Meccano, Linux's … | I2 | failing |

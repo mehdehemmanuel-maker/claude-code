@@ -1,5 +1,5 @@
 {
-  "says": "The interface evaluation set (spec 01, design §4): each case's inputs and its expected numbers, worked out by hand from the sources of §2.3 before the code ran (ISO 273, DIN 974-1, ISO 4762 in threads.ts, ISO 2306, Bossard's engagement lengths, ISO 286-1's Table 1, NEMA ICS 16 in kinds/motion.ts, the insert maker's table); cases 6, 11 and 12 from SKF's catalogue, ISO 286-2, ISO 8734 and ISO 2338, DIN 6885-1 and ISO/R 773, each read by two readers apart. Each case names the tests that run it, or the task it waits on. Sizes in mm.",
+  "says": "The interface evaluation set (spec 01, design §4): each case's inputs and its expected numbers, worked out by hand from the sources of §2.3 (cases 1 to 5 and 7 to 10 committed with the code that runs them, so their order cannot be shown; cases 6, 11 and 12 before theirs) (ISO 273, DIN 974-1, ISO 4762 in threads.ts, ISO 2306, Bossard's engagement lengths, ISO 286-1's Table 1, NEMA ICS 16 in kinds/motion.ts, the insert maker's table); cases 6, 11 and 12 from SKF's catalogue, ISO 286-2, ISO 8734 and ISO 2338, DIN 6885-1 and ISO/R 773, each read by two readers apart. Each case names the tests that run it, or the task it waits on. Sizes in mm.",
   "cases": [
     {
       "case": 1,
