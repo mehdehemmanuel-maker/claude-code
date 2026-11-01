@@ -1960,3 +1960,14 @@ out ten times), the board's text as seen 0.62° (13 px) and 0.52° (11 px), the 
 1.28 m. I1 passed its second judging. S10's sixth verdict: the answer reached `runOf` but not, there, the near-miss check;
 now `runOf` is run with numbers and no board (at-risk) and with a refusal owned up to (an error only). Checked with
 `npm run gate`.
+
+## 2026-11-01: the small brake caliper's bleed screw and bolts no longer drawn through its piston and pads (fault D14, T24)
+
+Two of the clashes interference found once nothing was excused by its name (fault D14) were in the small sliding caliper
+every light vehicle shares (`wheel()` in `src/nexus/machines.ts`): its bleed screw reached 1.1 mm into the piston with no
+hole cut for it, and its two bolts, at 0.3 of the caliper's length from its middle, went through the pads' friction. Now
+the bleed screw threads into a hole cut in the piston half from its outer edge, its inner end 1 mm short of the piston's
+bore and to the side of the bridge, and the two bolts pass beside the pads (the pad's half width, the bolt's radius and
+1.5 mm). A probe of `rulesOf` on the Honda Rancher: 7 interference findings before the bleed screw's hole, 5 after, 1 after
+the bolts (a frame cross tube through the engine's oil pickup, not mended yet); the go kart 0. The Cascadia's frame bolts
+are not mended. Checked with `npm run gate`.
