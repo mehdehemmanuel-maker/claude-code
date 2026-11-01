@@ -21,8 +21,20 @@ export function checkPush(stamp, commitTree) {
  * hook" in a sentence is not a push (2026-11-01: a looser pattern stopped a command that only wrote such a sentence).
  */
 export function pushes(cmd) {
-  const run = cmd.replace(/<<-?\s*(['"]?)(\w+)\1[\s\S]*?\n\s*\2\s*(?=\n|$)/g, ' ').replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, ' ');
-  return /(?:^|[\n;&|(])\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git\s+(?:(?:-C|-c)\s+\S+\s+|--?[a-z-]+(?:=\S+)?\s+)*push\b/.test(run);
+  // (here-documents are text, not run; everything else, quoted or not, is read, so `bash -c "git push"`, `xargs git push`
+  // and `/usr/bin/git push` are caught: the evaluator got round a first version that skipped quotes and paths (2026-11-01);
+  // a sentence in quotes that names "git push" is refused too, which errs on the safe side)
+  const run = cmd.replace(/<<-?\s*(['"]?)(\w+)\1[\s\S]*?\n\s*\2\s*(?=\n|$)/g, ' ');
+  return /(?:^|[^\w.-])(?:\S*\/)?git\s+(?:(?:-C|-c)\s+\S+\s+|--?[a-z-]+(?:=\S+)?\s+)*push\b/.test(run);
+}
+/** The environment git commands run in from a hook: without GIT_DIR and GIT_WORK_TREE, which git sets for a hook in a
+ *  linked worktree and which made the first version read the project folder as the repository's top (the evaluator, in a
+ *  worktree, 2026-11-01: the budget and honesty let everything through, the push check refused everything). */
+export function gitEnv() { const e = { ...process.env }; delete e.GIT_DIR; delete e.GIT_WORK_TREE; return e; }
+/** The repository's top folder, and this project's folder within it, found from the project's own path. */
+export function whereIs(project) {
+  const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: project, env: gitEnv(), encoding: 'utf8' }).trim();
+  return { repo, prefix: project.slice(repo.length + 1) };
 }
 
 /** The tree of the project's folder as it stands on disk (tracked and untracked, ignoring what .gitignore ignores). */
@@ -30,6 +42,7 @@ export function workingTree(repoRoot, prefix) {
   const idx = join(tmpdir(), `gate-index-${process.pid}-${Math.floor(performance.now())}`);
   const env = { ...process.env, GIT_INDEX_FILE: idx };
   try {
+    delete env.GIT_DIR; delete env.GIT_WORK_TREE;
     execFileSync('git', ['read-tree', '--empty'], { cwd: repoRoot, env });
     execFileSync('git', ['add', '-A', '--', prefix], { cwd: repoRoot, env });
     return execFileSync('git', ['write-tree', `--prefix=${prefix}/`], { cwd: repoRoot, env, encoding: 'utf8' }).trim();
@@ -37,7 +50,7 @@ export function workingTree(repoRoot, prefix) {
 }
 /** The tree of the project's folder in a commit. */
 export function commitTree(repoRoot, prefix, sha) {
-  return execFileSync('git', ['rev-parse', `${sha}:${prefix}`], { cwd: repoRoot, encoding: 'utf8' }).trim();
+  return execFileSync('git', ['rev-parse', `${sha}:${prefix}`], { cwd: repoRoot, env: gitEnv(), encoding: 'utf8' }).trim();
 }
 
 // ---- change budget (C12): a commit stays within its task's owners, or names a decision ----------------------------

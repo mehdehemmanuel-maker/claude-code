@@ -8,7 +8,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pushes } from './lib.mjs';
 
-let cmd = ''; try { cmd = String(JSON.parse(readFileSync(0, 'utf8'))?.tool_input?.command ?? ''); } catch { process.exit(0); }
+// (what it cannot read it refuses, rather than letting a push through unread (the evaluator, 2026-11-01))
+let cmd = ''; try { cmd = String(JSON.parse(readFileSync(0, 'utf8'))?.tool_input?.command ?? ''); } catch { process.stderr.write('push gate: the command could not be read; refused\n'); process.exit(2); }
 if (!pushes(cmd)) process.exit(0);
 const r = spawnSync('node', [join(dirname(fileURLToPath(import.meta.url)), 'push-check.mjs'), '--head'], { encoding: 'utf8' });
 if (r.status !== 0) { process.stderr.write(r.stderr || 'push refused (the push gate)\n'); process.exit(2); }

@@ -4,14 +4,15 @@
 // number names the command or test it came from). The message file is the first argument.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkBudget, checkHonesty, entriesOf, ownersFromPlan } from './lib.mjs';
+import { checkBudget, checkHonesty, entriesOf, gitEnv, ownersFromPlan, whereIs } from './lib.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const git = (...a) => execFileSync('git', a, { cwd: project, encoding: 'utf8' });
-const repo = git('rev-parse', '--show-toplevel').trim(), prefix = relative(repo, project);
-if (existsSync(join(repo, '.git', 'MERGE_HEAD'))) process.exit(0); // (a merge brings others' commits, each already judged)
+const { repo, prefix } = whereIs(project);
+// (git keeps the index it was given (GIT_INDEX_FILE, a partial commit's), but not GIT_DIR: see gitEnv)
+const git = (...a) => execFileSync('git', a, { cwd: repo, env: gitEnv(), encoding: 'utf8' });
+if (existsSync(join(git('rev-parse', '--absolute-git-dir').trim(), 'MERGE_HEAD'))) process.exit(0); // (a merge brings others' commits, each already judged)
 const msg = readFileSync(process.argv[2], 'utf8').split('\n').filter((l) => !l.startsWith('#')).join('\n');
 const files = git('diff', '--cached', '--name-only').split('\n').filter(Boolean).map((f) => (f.startsWith(`${prefix}/`) ? f.slice(prefix.length + 1) : `../${f}`));
 if (!files.some((f) => !f.startsWith('../')) && !files.some((f) => f === '../CLAUDE.md' || f === '../.claude/settings.json')) process.exit(0); // (nothing of this project)

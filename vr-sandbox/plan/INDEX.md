@@ -80,7 +80,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- | --- | --- |
 | S1 | The constitution with its checks and states | — | failing |
 | S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing |
-| S3 | Hooks: push gate, budget, honesty, loop breaker | — | failing |
+| S3 | Hooks: push gate, budget, honesty, loop breaker | — | failing (evaluator: The commit hook does not refuse a commit past its owners in a linked worktree (tried: not refused, three times); the pro) |
 | S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S6 | The routing test covers plan/ as it covers docs/ | — | passing (evaluator claude-sonnet, 2026-11-01) |

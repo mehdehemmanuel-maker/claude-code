@@ -13,3 +13,5 @@ export function progressOf(text: string): { task: string; note: string };
 export function checkLoop(state: Record<string, { fails: number; note: string }>, task: string, note: string): Check;
 export function pushes(cmd: string): boolean;
 export function entriesOf(text: string): string[];
+export function gitEnv(): NodeJS.ProcessEnv;
+export function whereIs(project: string): { repo: string; prefix: string };

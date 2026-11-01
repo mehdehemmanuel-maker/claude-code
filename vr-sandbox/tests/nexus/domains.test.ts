@@ -7,8 +7,9 @@
 // "we don't need all these tests"); commit f509152 holds them.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { execSync, spawnSync } from 'node:child_process';
 import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
 import { nearMissesOf } from '../../src/nexus/agent';
@@ -190,7 +191,9 @@ describe('every domain, in one pass', () => {
     expect(progressOf('Task in hand: 00.S3\npipeline: 00.S3: no\npipeline: 00.S2: x')).toEqual({ task: '00.S3', note: 'no' });
     // (the Claude Code hook stops a command that pushes, not one that only says the word: it once stopped one that did)
     for (const [c, w] of [['git push -u origin x', true], ['cd a && git push', true], ['git -C .. push origin b', true], ['npm run gate && git push -q', true],
-      ['echo "git push"', false], ['cat <<EOF\ngit push now\nEOF', false], ["echo git's pre-push hook", false], ['git commit -m "push it"', false]] as const) expect(pushes(c), c).toBe(w);
+      ['bash -c "git push"', true], ['xargs git push < refs', true], ['/usr/bin/git push origin x', true], ['echo "git push"', true],
+      ['cat <<EOF\ngit push now\nEOF', false], ["echo git's pre-push hook", false], ['git commit -m "push it"', false]] as const) expect(pushes(c), c).toBe(w);
+    expect(checkBudget('tidy, decision 9999', ['src/nexus/blocks.ts'], owners, ['0010']).ok, 'a decision that does not exist').toBe(false);
   });
   // (stop the line (spec 00, S10; C25): an open andon keeps its task, and every task that waits on it, from passing; each near
   // miss has its kind and its response; the AI in the app logs the near misses its runs caught)
@@ -212,6 +215,35 @@ describe('every domain, in one pass', () => {
   it('no probe is left where the gate runs', () => {
     expect(readdirSync(join(root, 'tests/nexus')).filter((f) => f.startsWith('zz_'))).toEqual([]);
   });
+  // (the hooks as installed, not only their functions (the evaluator found the wiring broken where the functions passed):
+  // a throwaway repository with the real hook scripts, git's hooks on, and each refusal tried, in the clone and in a linked
+  // worktree; and the push check given two branches, the one the gate did not pass first)
+  it('the hooks, installed in a repository, refuse in a clone and in a linked worktree', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-')), top = join(tmp, 'repo'), proj = join(top, 'vr-sandbox'), env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+    for (const k of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete (env as Record<string, unknown>)[k];
+    const sh = (cwd: string, ...a: string[]) => spawnSync('git', a, { cwd, env, encoding: 'utf8' });
+    try {
+      cpSync(join(root, 'scripts'), join(proj, 'scripts'), { recursive: true });
+      for (const f of ['plan/specs/00-structure/tasks.json', 'plan/owners.json', 'plan/decisions/0010-consolidation.md']) cpSync(join(root, f), join(proj, f), { recursive: true });
+      mkdirSync(join(proj, 'docs'), { recursive: true }); mkdirSync(join(proj, 'src'), { recursive: true });
+      writeFileSync(join(proj, 'docs/REALITY.md'), '# log\n'); writeFileSync(join(proj, 'src/x.ts'), 'export const x = 1;\n'); writeFileSync(join(proj, '.gitignore'), '.gate-ok\n');
+      sh(top, 'init', '-q'); sh(top, 'config', 'core.hooksPath', 'vr-sandbox/scripts/hooks/git'); sh(top, 'add', '-A'); expect(sh(top, 'commit', '-q', '--no-verify', '-m', 'start').status).toBe(0);
+      const tryCommit = (cwd: string, file: string, text: string, msg: string) => { writeFileSync(join(cwd, file), text, { flag: 'a' }); sh(cwd, 'add', '-A'); const r = sh(cwd, 'commit', '-q', '-m', msg); if (r.status !== 0) sh(cwd, 'reset', '-q', '--hard'); else sh(cwd, 'reset', '-q', '--hard', 'HEAD~1'); return r; };
+      expect(tryCommit(proj, 'src/x.ts', '// more\n', '[00.S3] past its owners').status, 'a commit past its owners').not.toBe(0);
+      expect(tryCommit(proj, 'src/x.ts', '// more\n', 'decision 9999').status, 'a decision that does not exist').not.toBe(0);
+      expect(tryCommit(proj, 'docs/REALITY.md', '\n## e\n\nIt runs 40 % faster.\n', 'a log entry').status, 'a number with no command').not.toBe(0);
+      expect(tryCommit(proj, 'docs/REALITY.md', '\n## e\n\nIt passed (`npm run gate`), 40 tests.\n', 'a log entry').status, 'with its command').toBe(0);
+      expect(sh(top, 'worktree', 'add', '-q', join(tmp, 'wt')).status).toBe(0);
+      expect(tryCommit(join(tmp, 'wt', 'vr-sandbox'), 'src/x.ts', '// more\n', '[00.S3] past its owners, from a worktree').status, 'the same refusal in a linked worktree').not.toBe(0);
+      // (the push check: a stamp of the tree at HEAD; an ungated commit pushed first beside it is refused)
+      const head = sh(top, 'rev-parse', 'HEAD').stdout.trim(), tree = sh(top, 'rev-parse', 'HEAD:vr-sandbox').stdout.trim();
+      writeFileSync(join(proj, '.gate-ok'), JSON.stringify({ tree }));
+      writeFileSync(join(proj, 'src/x.ts'), '// ungated\n', { flag: 'a' }); sh(top, 'add', '-A'); sh(top, 'commit', '-q', '--no-verify', '-m', 'ungated'); const ungated = sh(top, 'rev-parse', 'HEAD').stdout.trim(); sh(top, 'reset', '-q', '--hard', head);
+      const check = (refs: string[]) => spawnSync('node', [join(proj, 'scripts/hooks/push-check.mjs')], { cwd: top, env, input: refs.map((r) => `refs/heads/b ${r} refs/heads/b ${'0'.repeat(40)}`).join('\n'), encoding: 'utf8' }).status;
+      expect(check([head]), 'the stamped commit').toBe(0);
+      expect(check([ungated, head]), 'an ungated branch pushed beside a stamped one').not.toBe(0);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  }, 60_000);
   // (the session's handoff (spec 00, S2): PROGRESS.md is short, names the task in hand (a task that exists) and the last
   // commit the gate passed, so a fresh session finds where the work stands in one read)
   it('PROGRESS.md is short and names a real task in hand', () => {

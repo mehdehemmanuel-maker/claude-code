@@ -1602,7 +1602,8 @@ failures on the task in hand until `PROGRESS.md` answers, in a line `pipeline: <
 Each check is a pure function in `scripts/hooks/lib.mjs`, tried on purpose by the test "each hook refuses what it is there
 to refuse" in `tests/nexus/domains.test.ts`. The Claude Code hook stopped one of the builder's own commands the moment it
 was installed: its first pattern read "git's pre-push hook", written into this entry, as a push. It now strips
-here-documents and quoted text and looks for `git … push` as a command; nine cases are in the test.
+here-documents and quoted text and looks for `git … push` as a command; eight cases are in the test (the entry first said
+nine: the evaluator counted eight).
 Tried live in this clone before the commit that brought them (`git commit` on planted changes, `node scripts/gate.mjs`
 with three failures recorded): a commit past the owners and a commit naming no task were refused; a fourth gate run was
 refused. The honesty check let a planted entry through twice before it held: first because the planted entry and a real
@@ -1650,3 +1651,19 @@ where from the desktop window it was 0.29° to 0.50°), the bar in two rows (39�
 area 90 px (2.74°), the keyboard 0.62 m wide (keys 2.59°) and 45° below the eye (it covered the bar at 34°, 7.18° clear
 now), chat 42° aside and 3.06° clear of the board. Last run: every limit held, and every panel stayed where it was after
 walking. The departures from research 34's first numbers are decision 0012; a real Quest is spec 03's task W5.
+
+## 2026-11-01: the hooks, mended where the evaluator broke them (spec 00, S3)
+
+The evaluator failed S3 (`plan/specs/00-structure/verdicts/00.S3.json`): in an ordinary clone all four hooks refused as
+the check says, but in a linked worktree, where git sets GIT_DIR for a hook, the scripts read the project folder as the
+repository's top, so the change budget and honesty let everything through and the push check refused everything; the push
+check judged only the last of several branches pushed at once; the gate had no two-minute stop; the Claude Code hook was got
+round by `bash -c`, `xargs` and `/usr/bin/git`, and let through what it could not read; and the gate tested only the pure
+functions, so four wiring faults planted in the scripts passed it. Mended: every hook finds the repository without GIT_DIR
+and runs git from its top (`whereIs`, `gitEnv` in `scripts/hooks/lib.mjs`); every branch pushed is judged; each gate step is
+stopped at two minutes; the Claude Code hook reads every `git … push` outside a here-document, quoted or not, path or not,
+and refuses what it cannot read. And the gate now tries the hooks as installed (the test "the hooks, installed in a
+repository, refuse in a clone and in a linked worktree"): a throwaway repository with the real scripts and git's hooks on, a
+commit past its owners, one naming a decision that does not exist, a log entry with an unsourced number, the same past-owners
+commit from a linked worktree, and two branches pushed with the ungated one first, each refused. Planted again, the old
+repository detection and the last-branch-only check each fail that test. Not caught: a number written in words.

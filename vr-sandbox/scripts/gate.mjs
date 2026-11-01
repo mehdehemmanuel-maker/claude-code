@@ -4,14 +4,14 @@
 //     line "pipeline: <task>: …" in PROGRESS.md says whether a pipeline is missing.
 //   - When it passes: `.gate-ok` holds the tree of this folder exactly as it was tested, so a push is refused unless the
 //     commit holds that same tree (C11). Files the run itself changed void the stamp.
-import { spawnSync, execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkLoop, progressOf, workingTree } from './hooks/lib.mjs';
+import { checkLoop, progressOf, whereIs, workingTree } from './hooks/lib.mjs';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: project, encoding: 'utf8' }).trim(), prefix = relative(repo, project);
+const { repo, prefix } = whereIs(project);
 const STATE = join(project, '.gate-fails.json'), STAMP = join(project, '.gate-ok'), PROGRESS = join(project, 'PROGRESS.md');
 const state = existsSync(STATE) ? JSON.parse(readFileSync(STATE, 'utf8')) : {};
 const { task, note } = progressOf(existsSync(PROGRESS) ? readFileSync(PROGRESS, 'utf8') : '');
@@ -22,7 +22,8 @@ if (loop.reset) state[task] = { fails: 0, note };
 
 if (existsSync(STAMP)) rmSync(STAMP);
 const before = workingTree(repo, prefix);
-const run = (cmd, args) => spawnSync(cmd, args, { cwd: project, stdio: 'inherit' }).status === 0;
+// (each step stopped at two minutes (C13): a run past it is a failure, counted by the loop breaker)
+const run = (cmd, args) => { const r = spawnSync(cmd, args, { cwd: project, stdio: 'inherit', timeout: 120_000, killSignal: 'SIGKILL' }); if (r.error?.code === 'ETIMEDOUT' || r.signal) console.error(`\n${cmd} ${args.join(' ')} stopped at two minutes\n`); return r.status === 0; };
 const passed = run('npx', ['tsc', '--noEmit', '-p', '.']) && run('npx', ['vitest', 'run']);
 const s = state[task] ?? { fails: 0, note };
 if (!passed) {
