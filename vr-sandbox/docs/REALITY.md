@@ -2074,3 +2074,21 @@ of steel: the volume taken is its profile's volume of revolution within 0.1 %, t
 one solid of the same volume, and the views' drilled mesh is within 0.5 % (24 sides). Writing it found two clashes the rule
 does not see (fault D15, open): a piece wider than the hole it stands in (a head 9.5 mm round in a 7.5 mm hole, plain or
 turned), and a piece sunk wholly in another with a face flush. Checked with `npm run gate`.
+
+## 2026-11-01: the negative of an interface: what a screw or a motor's face asks of what receives it (spec 01, I5)
+
+`negativeOf` in `src/nexus/interfaces.ts` gives, for a screw's thread or a motor's face and a host's material and thickness,
+the interface the host gains and the bodies to cut, keep clear and bear on, every size from I3's tables or labelled typical,
+or a refusal with its rule, its numbers and its source. Through a plate: a clearance hole (ISO 273) and, for a cap screw, a
+counterbore (DIN 974-1, its depth the ISO 4762 head's height and 0.5 mm, typical), the face its head bears on, and a keep
+along the axis for the key (typical). Into a metal: a tapped hole drilled to ISO 2306 as deep as Bossard's engagement for the
+host's family and Rm asks, with two pitches for the tap's run-out (typical) and the drill's 118° point; refused where the
+part is thinner. Into a polymer: no thread cut, a heat-set insert's hole from its maker's table (CNC Kitchen's standard
+inserts, a blind hole L + 1 mm deep as its drawing says; opened and read again by a second reader against ruthex's table,
+whose holes are 0.1 mm smaller from M4 up) and the insert as a part. A NEMA face: its four holes on their square and its
+pilot's bore, 22 H7 from ISO 286-1's table. The evaluation set's cases 1, 2, 3 and 7 (`evals/interfaces/cases.json`, their
+numbers worked by hand from the sources first) each give their numbers in the one test (the test "the negative of an
+interface: the evaluation cases give their numbers"): an M8 cap screw through 10 mm of steel, a 9.0 mm hole under a 15 mm
+counterbore 8.5 mm deep; an M6 into 8 mm of 6061 refused, 12 mm of thread needed (2.0 d, its Rm 310 MPa); an M4 into PLA, a
+5.7 mm hole 9.1 mm deep and the TC-M4x8.1 insert; a NEMA 17 on 5 mm, four 3.4 mm holes on a 31 mm square and a 22 mm bore,
+0 to +21 µm. Checked with `npm run gate`.

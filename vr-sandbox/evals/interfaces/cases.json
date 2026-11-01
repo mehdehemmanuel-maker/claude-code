@@ -1,0 +1,89 @@
+{
+  "says": "The interface evaluation set (spec 01, design §4): each case's inputs and its expected numbers, worked out by hand from the sources of §2.3 before the code ran (ISO 273, DIN 974-1, ISO 4762 in threads.ts, ISO 2306, Bossard's engagement lengths, ISO 286-1's Table 1, NEMA ICS 16 in kinds/motion.ts, the insert maker's table). Sizes in mm.",
+  "cases": [
+    {
+      "case": 1,
+      "what": "an M8 socket cap screw through a 10 mm steel plate, medium fit",
+      "asking": {
+        "kind": "thread.external",
+        "thread": "M8",
+        "head": "socket",
+        "through": true
+      },
+      "host": {
+        "material": "steel-low",
+        "thickness": 10
+      },
+      "expect": {
+        "mirror": "hole.clearance",
+        "hole": 9.0,
+        "counterbore": 15,
+        "counterbore_depth": 8.5,
+        "keep": true,
+        "contact": true
+      },
+      "worked": "ISO 273 medium for M8: 9.0; DIN 974-1 series 1 for M8: 15; depth the ISO 4762 head's k 8 and 0.5 (typical) = 8.5, within the 10 mm plate"
+    },
+    {
+      "case": 2,
+      "what": "an M6 screw into 6061 aluminium, plate 8 mm",
+      "asking": {
+        "kind": "thread.external",
+        "thread": "M6",
+        "through": false,
+        "class": "8.8"
+      },
+      "host": {
+        "material": "al-6061",
+        "thickness": 8
+      },
+      "expect": {
+        "refused": "engagement",
+        "need": 12,
+        "have": 8
+      },
+      "worked": "6061-T6 Rm 310 MPa (the handbook): Bossard's aluminium row over 180 MPa gives 2.0 d for 8.8, so 12 mm of thread; the plate is 8: refused"
+    },
+    {
+      "case": 3,
+      "what": "an M4 screw into a PLA part 10 mm thick",
+      "asking": {
+        "kind": "thread.external",
+        "thread": "M4",
+        "through": false
+      },
+      "host": {
+        "material": "pla",
+        "thickness": 10
+      },
+      "expect": {
+        "mirror": "hole.insert",
+        "insert": true,
+        "insert_hole": 5.7,
+        "insert_depth": 9.1
+      },
+      "worked": "a polymer: no thread cut; CNC Kitchen's TC-M4x8.1 insert (8.1 mm long, 6.3 mm across) in its 5.7 mm hole, blind L + 1 = 9.1 mm deep, within the 10 mm part; the insert placed as a part"
+    },
+    {
+      "case": 7,
+      "what": "a NEMA 17 motor onto a 5 mm plate",
+      "asking": {
+        "kind": "face",
+        "nema": "17"
+      },
+      "host": {
+        "material": "al-6061",
+        "thickness": 5
+      },
+      "expect": {
+        "mirror": "holes",
+        "holes": 4,
+        "hole": 3.4,
+        "square": 31,
+        "pilot": 22,
+        "pilot_upper_um": 21
+      },
+      "worked": "NEMA 17's face: four M3 on a 31 mm square, a 22 mm pilot; ISO 273 medium for M3: 3.4; the pilot's bore 22 H7: 0 to +21 µm (ISO 286-1 Table 1, IT7 at 18 to 30 mm)"
+    }
+  ]
+}

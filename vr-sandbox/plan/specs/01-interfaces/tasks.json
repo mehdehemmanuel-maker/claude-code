@@ -66,11 +66,12 @@
    ],
    "owner": "interfaces.ts",
    "check": "evaluation cases 1, 2, 3, 7 give their expected numbers",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I3",
     "I4"
-   ]
+   ],
+   "evidence": "2026-11-01: negativeOf in interfaces.ts: through, a clearance hole (ISO 273) and for a cap screw a counterbore (DIN 974-1) with the face its head bears on and a keep for the key; into a metal, a tapped hole drilled to ISO 2306 as deep as Bossard's engagement asks, refused where the part is thinner; into a polymer, a heat-set insert's hole from its maker's table and the insert as a part; a NEMA face's four holes and its pilot's bore (H7 from ISO 286-1's table); evals/interfaces/cases.json's cases 1, 2, 3 and 7, worked by hand from the sources, each giving its numbers in the one test"
   },
   {
    "id": "I6",

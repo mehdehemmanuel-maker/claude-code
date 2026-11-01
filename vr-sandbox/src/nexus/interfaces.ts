@@ -9,6 +9,9 @@
 import * as THREE from 'three';
 import type { Iface, Part, Port, Shape, V3 } from './kits';
 import { isAssembly, matrixOf, type Assembly } from './assembly';
+import { matterOf } from './matter';
+import { METRIC } from './threads';
+import { NEMA_FACE } from './kinds/motion';
 
 export type InterfaceKind = 'holes' | 'threads' | 'pins' | 'frame' | 'shaft' | 'bore' | 'thread.external' | 'thread.internal' | 'drive' | 'chain' | 'face';
 export interface Interface {
@@ -145,6 +148,7 @@ export const TABLE_SOURCES: Record<string, TableSource> = {
   'ISO 15065': { title: 'ISO 15065:2005 Countersinks for countersunk head screws with head configuration in accordance with ISO 7721 (Table 1)', url: 'https://cdn.standards.iteh.ai/samples/37365/57c8c6dac6864ac5a6f7bfa6fdd06111/ISO-15065-2005.pdf', publisher: 'ISO (a preview hosted by iTeh Standards)', standard: true },
   'EN 1993-1-8': { title: 'EN 1993-1-8:2005 Eurocode 3, design of joints, Table 3.3', url: 'https://dokumen.pub/eurocode-3-design-of-steel-structures-part-1-8-design-of-joints-2005nbsped.html', publisher: 'CEN (a copy on dokumen.pub; and a BSI scan)', standard: true, second: 'DSTU-N B EN 1993-1-8, the Ukrainian adoption' },
   'Bossard engagement': { title: 'Bossard, length of engaged thread (recommended from trials, M6 to M16; bracketed values by the VDI 2230 formula)', url: 'https://assets.eu.ctfassets.net/0vp0u5uh75zd/3wPlDC2XQOYT3XOdwCk6lz/9a9282ffd29746a7a7f6b0149509f1cf/052_Length_engaged_thread_Fastening_EN_01_2025.pdf', publisher: 'Bossard (a fastener maker)', standard: false },
+  'CNC Kitchen inserts': { title: 'CNC Kitchen heat-set insert dimensions and design guidelines (standard inserts, metric)', url: 'https://www.cnckitchen.com/s/CNCKitchen_Heat-Set-Insert-Dimensions-and-Design-Guidelines.pdf', publisher: 'CNC Kitchen (TwoChefs GmbH), the insert maker', standard: false, second: 'ruthex RX inserts, its table on its product pages: https://www.ruthex.de/en/products/ruthex-gewindeeinsatz-m4-50-stuck-rx-m4x8-1-messing-gewindebuchsen (its holes 0.1 mm smaller from M4 up)' },
   'ISO 286-1': { title: 'ISO 286-1:1988 limits and fits: the tolerance factor, the grades as multiples of it, the size steps, Table 1, as reproduced in BHEL corporate standard AA0230201', url: 'https://www.bhel.com/sites/default/files/specificationaa0230201-1440410133.pdf', publisher: 'Bharat Heavy Electricals Ltd, a reproduction', standard: false, second: 'IS 919 (Part 1):1993, identical to ISO 286-1 (Bureau of Indian Standards)' },
 };
 
@@ -195,6 +199,13 @@ export const ENGAGEMENT: Record<string, { Rm: number; '8.8'?: number; '10.9'?: n
   'aluminium, Rm over 330 (AlMgSi1 F32)': { Rm: 330, '8.8': 1.4, '10.9': 1.6, src: 'Bossard engagement' },
 };
 
+/** Heat-set inserts for thermoplastics (PLA, ABS, PETG): CNC Kitchen's standard inserts, their length L, outside D1, the hole
+ *  D2 and the least wall W round it (its table); a blind hole L + 1 mm deep (its drawing: "min. L+1mm"). */
+export const INSERT: Record<string, { series: string; L: number; od: number; hole: number; depth: number; wall: number; src: 'CNC Kitchen inserts' }> = Object.fromEntries(([
+  ['M2', 'TC-M2x3.0', 3, 3.6, 3.2, 1.3], ['M2.5', 'TC-M2.5x4.0', 4, 4.6, 4, 1.6], ['M3', 'TC-M3x5.7', 5.7, 4.6, 4, 1.6], ['M4', 'TC-M4x8.1', 8.1, 6.3, 5.7, 2.1],
+  ['M5', 'TC-M5x9.5', 9.5, 7.1, 6.5, 2.6], ['M6', 'TC-M6x12.7', 12.7, 8.7, 8.1, 3.3], ['M8', 'TC-M8x12.7', 12.7, 10.2, 9.7, 4.5],
+] as const).map(([k, series, L, od, hole, wall]) => [k, { series, L, od, hole, depth: +(L + 1).toFixed(1), wall, src: 'CNC Kitchen inserts' as const }]));
+
 /** ISO 286-1's standard tolerance for a size and a grade (IT5 to IT16, sizes to 500 mm), in µm: i = 0.45∛D + 0.001 D, D the
  *  geometric mean of the size's step, the grade a multiple of i. Derived from the formula and said so: the standard's Table 1
  *  is rounded by its own rules and is to be preferred (its values at three steps are kept here to set beside). */
@@ -207,3 +218,74 @@ export function itTolerance(size: number, grade: number): { um: number; step: [n
   const lo = Math.max(IT_STEPS[k - 1]!, 1), hi = IT_STEPS[k]!, D = Math.sqrt(lo * hi), i = 0.45 * Math.cbrt(D) + 0.001 * D;
   return { um: m * i, step: [IT_STEPS[k - 1]!, hi], derived: `derived: ${m} i, i = 0.45∛D + 0.001 D, D = ${D.toFixed(3)} mm (ISO 286-1's formula; its Table 1 rounds)` };
 }
+
+// ---- the negative: what a part's interface asks of the part that receives it (spec 01, I5; design §2.2) ------------------
+// A screw's thread through a plate asks a clearance hole (and a counterbore for a cap screw's head); into a metal, a tapped
+// hole as deep as the thread must reach; into a plastic, a heat-set insert's hole and the insert; a motor's face, its holes
+// and its pilot's bore. Every size from §2.3's tables, or labelled typical; what cannot be done is refused, with its rule,
+// its numbers and its source, and nothing is cut.
+
+/** A body of the negative, in the interface's frame (its face at the origin, the hole running along −y, into the host). */
+export interface ToolBody { role: 'remove' | 'keep' | 'add' | 'contact'; /** a turned body: [radius, depth] from the face, m */ prof?: [number, number][]; at?: V3; /** a keep's or a contact's size */ r?: number; r0?: number; length?: number; why: string }
+export interface Negative { mirror: { kind: 'hole.clearance' | 'hole.tapped' | 'hole.insert' | 'bore' | 'holes'; size: Record<string, number | string>; std?: string; fit?: string }; tools: ToolBody[]; parts: Part[]; why: string[] }
+export interface Refusal { refused: true; rule: string; need: number; have: number; unit: string; source: string; why: string }
+/** What asks for a negative: a screw's thread (its head's kind, its class), or a motor's face by its NEMA frame. */
+export type Asking = { kind: 'thread.external'; thread: string; head?: 'socket' | 'hex' | 'pan'; class?: '8.8' | '10.9' | '12.9'; through?: boolean } | { kind: 'face'; nema: string };
+const MM = 1e-3, POINT = (59 * Math.PI) / 180; // (a twist drill's point, 118°: half of it from the axis)
+
+/** How far a screw of this class must go into this material (Bossard's rows, by the host's family and its Rm; the
+ *  nearest row of its family below where its Rm is under every row's, said so). */
+export function engagementOf(material: string, cls: '8.8' | '10.9' | '12.9' = '8.8'): { k: number; row: string; why: string } | null {
+  const m = matterOf(material), Rm = (m.props.find((p) => p.key === 'ultimate')?.value ?? 0) / 1e6;
+  const fam = m.family === 'steel' || m.family === 'stainless steel' ? /^steel/ : m.family === 'cast iron' ? /cast iron/ : m.family === 'aluminium' ? /^aluminium/ : null; if (!fam) return null;
+  const rows = Object.entries(ENGAGEMENT).filter(([k, r]) => fam.test(k) && r[cls] !== undefined).sort((a, b) => b[1].Rm - a[1].Rm); if (!rows.length) return null;
+  const hit = rows.find(([, r]) => Rm > r.Rm) ?? rows[rows.length - 1]!, under = !(Rm > hit[1].Rm);
+  return { k: hit[1][cls]!, row: hit[0], why: `${hit[1][cls]} d for class ${cls} in ${hit[0]} (Bossard; its Rm ${Rm.toFixed(0)} MPa${under ? `, under the row's ${hit[1].Rm}: the nearest row, so it may be short` : ''})` };
+}
+
+/** The negative an interface asks of a host of this material and thickness (m), or a refusal. */
+export function negativeOf(it: Asking, host: { material: string; thickness: number }, o: { fit?: 'fine' | 'medium' | 'coarse' } = {}): Negative | Refusal {
+  const t = host.thickness, fit = o.fit ?? 'medium', fam = matterOf(host.material).family;
+  if (it.kind === 'face') {
+    const f = NEMA_FACE_OF(it.nema); if (!f) return refuse('a NEMA face we hold', 0, 0, '', 'NEMA ICS 16 (kinds/motion.ts)', `no NEMA ${it.nema} face here`);
+    const c = CLEARANCE[f.thread]; if (!c) return refuse('ISO 273', 0, 0, '', 'ISO 273', `no clearance hole for ${f.thread}`);
+    const h = (f.holes / 2) * MM, r = (c[fit] / 2) * MM, pil = IT_TABLE[f.pilot <= 30 && f.pilot > 18 ? '18-30' : ''], dev = pil ? pil.IT7 : itTolerance(f.pilot, 7).um;
+    const tools: ToolBody[] = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => ({ role: 'remove' as const, prof: [[r, 0], [r, t]] as [number, number][], at: [a! * h, 0, b! * h] as V3, why: `ISO 273 ${fit} clearance for the face's ${f.thread} screws: ${c[fit]} mm, on its ${f.holes} mm square` }));
+    tools.push({ role: 'remove', prof: [[(f.pilot / 2) * MM, 0], [(f.pilot / 2) * MM, t]], at: [0, 0, 0], why: `the pilot's bore, ${f.pilot} H7 (ISO 286-1: 0 to +${dev} µm${pil ? ', its Table 1' : ', derived'}), through: the shaft passes it` });
+    return { mirror: { kind: 'holes', size: { holes: f.holes, thread: f.thread, pilot: f.pilot }, std: 'NEMA ICS 16', fit: `ISO 273 ${fit}; pilot H7` }, tools, parts: [], why: tools.map((x) => x.why) };
+  }
+  const th = it.thread, T = METRIC_OF(th), d = Number(th.slice(1)); if (!T) return refuse('ISO 261', 0, 0, '', 'ISO 261', `no thread ${th}`);
+  if (it.through ?? true) {
+    // (through: a clearance hole; a cap screw's head in a counterbore (DIN 974-1, series 1), its depth the head's height
+    // and 0.5 mm (typical: DIN 974-1 fixes none))
+    const c = CLEARANCE[th]; if (!c) return refuse('ISO 273', 0, 0, '', 'ISO 273', `no clearance hole for ${th}`);
+    const r = (c[fit] / 2) * MM, why = [`ISO 273 ${fit} clearance for ${th}: ${c[fit]} mm`], tools: ToolBody[] = [];
+    if (it.head === 'socket') {
+      const cb = COUNTERBORE[th]; if (!cb) return refuse('DIN 974-1', 0, 0, '', 'DIN 974-1', `no counterbore for ${th}`);
+      const depth = (T.k + 0.5) * MM, R = (cb.d1 / 2) * MM; if (depth >= t) return refuse('the counterbore within the plate', depth / MM, t / MM, 'mm', 'DIN 974-1; ISO 4762', `a counterbore ${(depth / MM).toFixed(1)} mm deep for an ISO 4762 head of ${T.k} mm does not fit a ${(t / MM).toFixed(1)} mm plate`);
+      tools.push({ role: 'remove', prof: [[R, 0], [R, depth], [r, depth], [r, t]], why: `counterbore ${cb.d1} mm (DIN 974-1, series 1) ${(depth / MM).toFixed(1)} mm deep (the ISO 4762 head's ${T.k} mm and 0.5 mm, typical), over the ${c[fit]} mm hole` });
+      tools.push({ role: 'contact', r0: r, r: (T.dk / 2) * MM, at: [0, -depth, 0], why: `the head bears on the counterbore's floor: from the hole's ${c[fit]} mm to the head's ${T.dk} mm (ISO 4762)` });
+      tools.push({ role: 'keep', r: R, length: 3 * d * MM, at: [0, 0, 0], why: `room along the axis for the hex key: the counterbore's ${cb.d1} mm, ${3 * d} mm out (typical)` });
+      why.push(tools[0]!.why);
+    } else tools.push({ role: 'remove', prof: [[r, 0], [r, t]], why: why[0]! });
+    return { mirror: { kind: 'hole.clearance', size: { thread: th, d: c[fit] * MM }, std: 'ISO 273', fit: `ISO 273 ${fit}` }, tools, parts: [], why };
+  }
+  // (into the host: a metal is tapped, as deep as the thread must reach (Bossard), drilled for tapping (ISO 2306) with two
+  // pitches more for the tap's run-out (typical) and the drill's 118° point; a polymer takes a heat-set insert)
+  if (fam === 'polymer') {
+    const ins = INSERT[th]; if (!ins) return refuse('an insert maker\'s table', 0, 0, '', 'INSERT', `no heat-set insert row for ${th}`);
+    const r = (ins.hole / 2) * MM, depth = ins.depth * MM; if (depth > t) return refuse('the insert\'s hole within the part', ins.depth, t / MM, 'mm', ins.src, `the ${ins.series}'s hole is ${ins.depth} mm deep, the part ${(t / MM).toFixed(1)} mm`);
+    const insert: Part = { name: `heat-set insert ${th}`, item: `insert-${th.toLowerCase()}`, shape: { tube: { r: (ins.od / 2) * MM, wall: ((ins.od - d) / 2) * MM, pts: [[0, 0, 0], [0, -ins.L * MM, 0]] } }, at: [0, 0, 0], mat: 'brass', says: `${ins.series}: ${ins.L} mm long, ${ins.od} mm across, pressed in hot (${TABLE_SOURCES[ins.src]?.publisher ?? ins.src})` };
+    const why = [`a ${fam}: a thread is not cut in it; a heat-set insert (${ins.series}) in a ${ins.hole} mm hole ${ins.depth} mm deep (${ins.src})`];
+    return { mirror: { kind: 'hole.insert', size: { thread: th, d: ins.hole * MM, depth }, std: ins.src, fit: 'insert' }, tools: [{ role: 'remove', prof: [[r, 0], [r, depth], [0, depth + r / Math.tan(POINT)]], why: why[0]! }], parts: [insert], why };
+  }
+  const e = engagementOf(host.material, it.class ?? '8.8'); if (!e) return refuse('a thread\'s engagement in this material', 0, 0, '', 'Bossard engagement', `no engagement row for ${fam}: ${host.material}`);
+  const need = e.k * d; if (need * MM > t) return refuse('engagement', need, t / MM, 'mm', 'Bossard engagement', `an ${th} needs ${need.toFixed(1)} mm of thread (${e.why}); the part is ${(t / MM).toFixed(1)} mm`);
+  const dr = TAP_DRILL[th]; if (!dr) return refuse('ISO 2306', 0, 0, '', 'ISO 2306', `no tap drill for ${th}`);
+  const rd = (dr.drill / 2) * MM, depth = Math.min(t, (need + 2 * dr.P) * MM), blind = depth < t;
+  const prof: [number, number][] = blind ? [[rd, 0], [rd, depth], [0, depth + rd / Math.tan(POINT)]] : [[rd, 0], [rd, t]];
+  const why = [`tapped ${th}: drilled ${dr.drill} mm (ISO 2306), ${need.toFixed(1)} mm of thread (${e.why})${blind ? `, the drill ${(depth / MM).toFixed(1)} mm deep (two pitches for the tap's run-out, typical) and its 118° point` : ', through'}`];
+  return { mirror: { kind: 'hole.tapped', size: { thread: th, drill: dr.drill * MM, thread_depth: need * MM }, std: 'ISO 2306', fit: '6H' }, tools: [{ role: 'remove', prof, why: why[0]! }], parts: [], why };
+}
+const METRIC_OF = (th: string) => METRIC[th], NEMA_FACE_OF = (n: string) => NEMA_FACE[n];
+const refuse = (rule: string, need: number, have: number, unit: string, source: string, why: string): Refusal => ({ refused: true, rule, need, have, unit, source, why });

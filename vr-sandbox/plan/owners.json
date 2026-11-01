@@ -44,5 +44,9 @@
     "src/nexus/built.ts",
     "src/nexus/fittings.ts",
     "src/nexus/mate.ts"
+  ],
+  "01.I5": [
+    "src/nexus/interfaces.ts",
+    "evals/interfaces/cases.json"
   ]
 }

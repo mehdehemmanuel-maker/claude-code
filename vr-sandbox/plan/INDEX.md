@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 11 passing (by the evaluator), 9 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 11 passing (by the evaluator), 10 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 15 (11 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -103,7 +103,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | I2 | The Interface record, and every part's interfaces read from its ports, old interfaces, bore and shaft (no part changed) | I1 | claimed, in part |
 | I3 | The tables negatives need, each row sourced: ISO 273 fine and coarse (and M24), tap drills (ISO 2306 or derived d − P), counterbores (DIN 974-1), … | I1 | claimed |
 | I4 | Cuts as solids: a lathe-profile cut (counterbore, countersink, drill point) in brep.ts and in the views' drill; Keep as a cylinder | I2 | claimed |
-| I5 | negativeOf: the mirror interface and the tool bodies (remove, keep, add, contact), by the host's material (insert for plastics, pilot for wood) | I3, I4 | failing |
+| I5 | negativeOf: the mirror interface and the tool bodies (remove, keep, add, contact), by the host's material (insert for plastics, pilot for wood) | I3, I4 | claimed |
 | I6 | imprint: stand an interface on any surface point (normal, edge rule, turn) | I5 | failing |
 | I7 | The checks before cutting (wall, depth, spacing, room, breaking in), each refusing with its rule, its numbers and its source | I6 | failing |
 | I8 | Apply: cut, add the keep zones, give the host the mirror interface and the imprint record | I7 | failing |

@@ -28,7 +28,7 @@ import { lawDims, lawWitness, wireDims } from '../../src/nexus/certify';
 import { setting } from '../../src/nexus/lawgraph';
 import { apply } from '../../src/nexus/law';
 import { BOOK } from '../../src/nexus/book';
-import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, interfacesOf, itTolerance } from '../../src/nexus/interfaces';
+import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, interfacesOf, itTolerance, negativeOf, type Asking, type Negative, type Refusal } from '../../src/nexus/interfaces';
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
@@ -548,7 +548,7 @@ describe('every domain, in one pass', () => {
   // tenth of the standard's rounded table)
   it('the tables negatives need, each row with its source', () => {
     for (const [k, s] of Object.entries(TABLE_SOURCES)) { expect(s.url, `${k}: an address`).toMatch(/^https:\/\//); expect(s.publisher.length, `${k}: who published it`).toBeGreaterThan(3); }
-    const tables = { CLEARANCE, TAP_DRILL, COUNTERBORE, COUNTERSINK, ENGAGEMENT, IT_TABLE } as Record<string, Record<string, { src: string }>>;
+    const tables = { CLEARANCE, TAP_DRILL, COUNTERBORE, COUNTERSINK, ENGAGEMENT, IT_TABLE, INSERT } as Record<string, Record<string, { src: string }>>;
     for (const [t, rows] of Object.entries(tables)) for (const [k, r] of Object.entries(rows)) expect(TABLE_SOURCES[r.src], `${t} ${k}: its source`).toBeTruthy();
     expect(TABLE_SOURCES[BOLT_SPACING.src]).toBeTruthy();
     for (const [k, r] of Object.entries(CLEARANCE)) expect(r.fine < r.medium && r.medium < r.coarse, `${k}: fine, medium, coarse in order`).toBe(true);
@@ -584,6 +584,29 @@ describe('every domain, in one pass', () => {
     expect(Math.abs(mv / row.volume! - 1), `the views' drilled plate ${(mv * 1e9).toFixed(0)} mm³, the solid's ${(row.volume! * 1e9).toFixed(0)} mm³`).toBeLessThan(0.005);
     // (a head wider than the hole it stands in is not found, in a plain hole as in this one: fault D15, open)
   }, 120_000);
+  // (the negative an interface asks (spec 01, I5): the evaluation set's cases 1, 2, 3 and 7 (evals/interfaces/cases.json,
+  // their numbers worked by hand from the sources before the code ran) give their expected numbers: a clearance hole and
+  // its counterbore, a tapped hole refused for want of thread, an insert's hole and the insert, a motor's face)
+  it('the negative of an interface: the evaluation cases give their numbers', () => {
+    const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; asking: Asking; host: { material: string; thickness: number }; expect: Record<string, number | string | boolean> }[] };
+    const mm = (x: number) => +(x * 1000).toFixed(4), got: string[] = [];
+    for (const c of set.cases) {
+      const n = negativeOf(c.asking, { material: c.host.material, thickness: c.host.thickness / 1000 }), e = c.expect, say = (k: string, v: unknown) => got.push(`case ${c.case} ${k}: ${JSON.stringify(v)}`);
+      if (e.refused) { const r = n as Refusal; expect(r.refused, `case ${c.case} refused: ${r.why ?? ''}`).toBe(true); expect([r.rule, +r.need.toFixed(3), r.have], `case ${c.case}: by what rule, how much`).toEqual([e.refused, e.need, e.have]); expect(r.why.length).toBeGreaterThan(20); say('refused', r.why); continue; }
+      const g = n as Negative; expect((n as Refusal).refused, `case ${c.case}: ${(n as Refusal).why ?? ''}`).toBeUndefined(); expect(g.mirror.kind, `case ${c.case}: its mirror`).toBe(e.mirror);
+      const removes = g.tools.filter((x) => x.role === 'remove');
+      if (e.hole !== undefined) expect(mm(removes[0]!.prof!.at(-1)![0] * 2), `case ${c.case}: the hole`).toBe(e.hole);
+      if (e.counterbore !== undefined) expect([mm(removes[0]!.prof![0]![0] * 2), mm(removes[0]!.prof![1]![1])], `case ${c.case}: the counterbore and its depth`).toEqual([e.counterbore, e.counterbore_depth]);
+      if (e.keep) expect(g.tools.some((x) => x.role === 'keep'), `case ${c.case}: a keep along the axis`).toBe(true);
+      if (e.contact) expect(g.tools.some((x) => x.role === 'contact'), `case ${c.case}: the face that bears`).toBe(true);
+      if (e.insert) { expect(g.parts.map((p) => p.name), `case ${c.case}: the insert placed as a part`).toEqual([`heat-set insert ${(c.asking as { thread: string }).thread}`]); const row = INSERT[(c.asking as { thread: string }).thread]!; expect([mm(removes[0]!.prof![0]![0] * 2), mm(removes[0]!.prof![1]![1])], `case ${c.case}: the insert's hole and depth, its maker's`).toEqual([row.hole, row.depth]); if (e.insert_hole !== undefined) expect([row.hole, row.depth]).toEqual([e.insert_hole, e.insert_depth]); }
+      if (e.holes !== undefined) { const small = removes.filter((x) => mm(x.prof![0]![0] * 2) === e.hole), pilot = removes.find((x) => mm(x.prof![0]![0] * 2) === e.pilot);
+        expect(small.length, `case ${c.case}: its holes`).toBe(e.holes); expect(small.map((x) => mm(Math.abs(x.at![0]) * 2)), `case ${c.case}: on its square`).toEqual(Array(e.holes as number).fill(e.square)); expect(pilot?.why, `case ${c.case}: the pilot's bore`).toMatch(new RegExp(`\\+${e.pilot_upper_um} µm`)); }
+      for (const w of g.why) expect(w, `case ${c.case}: each size says where it came from`).toMatch(/ISO|DIN|Bossard|NEMA|typical|insert|derived/);
+      say('ok', g.why[0]);
+    }
+    expect(got.length).toBe(set.cases.length);
+  });
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
   // plate's hole is not)
