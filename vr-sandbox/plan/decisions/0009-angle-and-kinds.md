@@ -19,7 +19,11 @@ mp-units' quantity specs).
 The second. The laws stay as they are; the check moves to kinds; 2π appears only in a named bridge from rotational
 frequency to angular speed.
 
-## Assumption, and when to test it again
+## The assumption it rests on
 
-That a kind on every port is cheap to infer (`quantityOf`) and to confirm. Test when T11 lands: if more than a few ports
-need a person to name their kind, revisit.
+That a kind on every port is cheap to infer (`quantityOf`) and to confirm.
+
+## When to test it again
+
+When T11 lands: if more than a few ports need a person to name their kind, revisit. (State 2026-11-01: T11 landed for
+units that name their kind; no port needed a person yet; ports with no unit are still open.)

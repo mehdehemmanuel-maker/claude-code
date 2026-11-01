@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129: 5 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 5 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
 | Rules in the constitution | 29 (20 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -72,7 +72,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 ## Every task, by spec
 
-### 00-structure (13)
+### 00-structure (14)
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
@@ -89,6 +89,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S11 | Dailies: the AI shows what changed since the last session, and the person approves, notes or kills each version; versions never overwritten | S2 | failing |
 | S12 | Prompts as versioned prompt nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL) | S5 | failing |
 | S13 | Post-mortems as a timeline, contributing factors and a hindsight guard (Allspaw, Dekker, SRE), replacing five whys; Perrow's chart computed from … | S10 | failing |
+| S14 | The one test (specs/00-structure/the-one-test.md): the lamp on the shelf, run from the request through the AI, each pass line scored against … | S5 | failing |
 
 ### 01-interfaces (27)
 
@@ -263,7 +264,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 ## Rules not yet enforced
 
-- **C9** A real product's own data is held fixed; a finding on it is checked against the product, never tuned away (unenforced: spec 00, task S5)
+- **C9** A real product's own data is held fixed; a finding on it is checked against the product, never tuned away (unenforced: spec 00, task S14)
 - **C10** Never state a time, count or result that was not measured (unenforced: spec 00, task S3)
 - **C11** No push unless the gate passed on that commit (unenforced: spec 00, task S3 (the 2026-10-31 red push is why))
 - **C12** A task stays in its budget: its owner, its tests and docs; past it, a decision record (unenforced: spec 00, task S3)

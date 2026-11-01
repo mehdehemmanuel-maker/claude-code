@@ -31,7 +31,7 @@ the task list and lose the why. So the why lives here, and every round is checke
 | --- | --- |
 | What the user asked, in their words, and when | `docs/WANTED.md` |
 | Which module owns a concern, in full (its nodes, its rules) | `docs/OWNERS.md` (the one-line table is below) |
-| What is next, and in what order | `plan/INDEX.md` (the start queue, every task) |
+| What is next, and in what order; the task in hand | `PROGRESS.md` (the task in hand, the next three, what is open), `plan/INDEX.md` (the start queue, every task) |
 | The plan: the vision and the advantage, the rules and their checks (`CONSTITUTION.md`), the phases' specs with failing tasks, the decisions, the research, the questions | `plan/README.md` (how it works), `plan/INDEX.md` (its state, compiled: every task, every fault found in the code, the open questions) |
 | How the AI in the app is told to build (its whole instruction) | `docs/FOR-AI.md` |
 | What depends on what in the code; the disciplines tree nodes are classed by | `docs/DEPENDENCIES.md`, `docs/DISCIPLINES.md` (both generated) |
@@ -175,6 +175,10 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
 
 ## Working here
 
+- **The session loop** (spec 00, S2): read `PROGRESS.md` (the task in hand, the next three, what is open); take the next
+  task of the start queue (`plan/README.md`); write its failing test first; build it within the task's owners; run the
+  gate; commit with the task's id in the message (`[00.S3]`); push (the push hook refuses a commit the gate has not
+  passed); ask the evaluator (`plan/specs/00-structure/evaluator.md`) for a verdict; then rewrite `PROGRESS.md`.
 - Gate: `npm run gate`: the type check and the one test, `tests/nexus/domains.test.ts` (every domain's nodes, their own
   tests, one quick board per field, the reach check), under a minute; CI runs the same. `UPDATE_DOCS=1 npx vitest run`
   writes the generated docs and the nodes' dates (twice where nodes' code changed). Nodes built before the update are

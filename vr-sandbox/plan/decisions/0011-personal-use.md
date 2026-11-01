@@ -8,7 +8,14 @@ The user's words: "1 idk 2 I didn't mean to say Motorola idk what that was maybe
 it's only for me so I have a computer a phone and a oculus 14 idk what that means 15 idk know what those terms mean
 there undefined".
 
-## Choices
+## Options
+
+For each question the user was asked: wait for an answer the user does not have, or take the plainest reading of
+what was said and let the builder make the technical choices, saying each and keeping each reversible.
+
+## Choice
+
+The second, question by question:
 
 - **Who it is for**: the user alone, on a computer, a phone and an Oculus (Quest). Spec 03 serves a private address,
   not a public site; spec 06 is a web app on the phone, no store app.
@@ -23,6 +30,11 @@ there undefined".
 - **How questions are asked from now on**: in plain words, no undefined terms; a technical choice the user need not
   make is made by the builder, said, and reversible.
 
-## When to test again
+## The assumption it rests on
+
+That the user, who uses Nexus alone on three devices, is better served by working defaults said plainly than by
+questions in terms they do not use.
+
+## When to test it again
 
 When phase 3 starts (hosting), and if the user says the short form or any default is wrong.

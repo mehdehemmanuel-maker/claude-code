@@ -7,7 +7,14 @@ optimize everything before we start").
 
 Six research rounds left overlapping tasks, a rule said twice, a book of 2,244 questions and a superseded proposal doc.
 
+## Options
+
+1. Keep everything gathered (2,244 questions, every task as written) and start building
+2. Cut to what changes what is built, merge what overlaps, write a start queue, then start (the user's words)
+
 ## Choice
+
+The second:
 
 - **Tasks merged** (the survivor carries both checks): 10 T4 and T16 into T11 (quantity kinds); 11 LW1 into LW13 (lazy
   pull); 11 LW14 into LW2 (the run record is the replay log); 09 P7 into P2 (the equation compiler's own passes); 04 P8
@@ -22,7 +29,10 @@ Six research rounds left overlapping tasks, a rule said twice, a book of 2,244 q
 - **A start queue** in `README.md`, checked by `compile.py` for order.
 - `docs/UPGRADES.md` deleted (superseded by `plan/`; in git history).
 
-## Assumption, and when to test it again
+## The assumption it rests on
 
-That the questions removed would not change what is built. Test: when a phase starts, skim its research files' (A)
-findings for anything a kept question does not cover.
+That the questions removed would not change what is built.
+
+## When to test it again
+
+When a phase starts: skim its research files' (A) findings for anything a kept question does not cover.

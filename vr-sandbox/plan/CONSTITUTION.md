@@ -16,8 +16,8 @@ what it misses is said), **unenforced** (no check yet: the spec that will add on
 | C5 | Every node has its own tests, a spec (gloss, discipline, role), and runs on its quick board | the domain tests | enforced |
 | C6 | Navigation: every node, board and app feature found by name in the first three; plain and misspelt questions land | the navigation test | enforced (a quarter of the nodes in the gate; all in the docs run) |
 | C7 | Every number is sourced, or labelled typical, derived or an estimate | provenance check | enforced for `src/data/` since 2026-11-01 (the provenance scan); figures elsewhere (the kinds, the makers) not yet |
-| C8 | No mocks: nothing stands in for what it claims to be | partly the domain tests (nodes run for real) | partly: no scan for placeholder figures; spec 00, task S4 |
-| C9 | A real product's own data is held fixed; a finding on it is checked against the product, never tuned away | the golden products set | **unenforced**: spec 00, task S5 |
+| C8 | No mocks: nothing stands in for what it claims to be | partly the domain tests (nodes run for real) | partly: placeholder words in data scanned since 2026-11-01 (S4); a figure that only looks real (a round guess) is not caught |
+| C9 | A real product's own data is held fixed; a finding on it is checked against the product, never tuned away | the one test of a real product (`specs/00-structure/the-one-test.md`; the user's answer to U6) | **unenforced**: spec 00, task S14 |
 | C10 | Never state a time, count or result that was not measured | honesty hook on `REALITY.md` and `PROGRESS.md` (a number needs the command it came from) | **unenforced**: spec 00, task S3 |
 | C11 | No push unless the gate passed on that commit | push hook | **unenforced**: spec 00, task S3 (the 2026-10-31 red push is why) |
 | C12 | A task stays in its budget: its owner, its tests and docs; past it, a decision record | change-budget hook | **unenforced**: spec 00, task S3 |

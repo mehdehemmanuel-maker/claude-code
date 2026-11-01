@@ -44,7 +44,7 @@
    ],
    "owner": "tests/nexus/domains.test.ts",
    "check": "a planted unsourced figure, a planted placeholder and a planted key pattern each fail the gate; removed, it passes",
-   "status": "claimed",
+   "status": "passing",
    "after": [],
    "evidence": "2026-11-01: tests/nexus/domains.test.ts with tests/nexus/scans.ts; a planted unsourced record and a TODO in src/data/woods.ts and an AWS-shaped key in a tracked doc each failed it, by file and line; removed, it passes"
   },
@@ -56,7 +56,7 @@
    ],
    "owner": "evals/, package.json",
    "check": "npm run eval:agent prints steps, tokens, seconds, right or wrong for each, and the baseline is recorded in REALITY.md with its command",
-   "status": "claimed",
+   "status": "passing",
    "after": [],
    "evidence": "2026-11-01: npm run eval:agent (tests/evals/agent.eval.ts), 30 requests; baseline 16 of 30 right with claude-haiku-5-5, then 30 of 30 with one rule added to docs/FOR-AI.md (every number from a node); one run each; recorded in docs/REALITY.md. The products set: U6 was answered with the one simple test (the-one-test.md), not a list of products; it waits on that test."
   },
@@ -68,7 +68,7 @@
    ],
    "owner": "tests/nexus/domains.test.ts",
    "check": "a plan file not routed from CLAUDE.md or plan/README.md fails the test",
-   "status": "claimed",
+   "status": "passing",
    "after": [],
    "evidence": "2026-11-01: tests/nexus/domains.test.ts, \"every source file has an owner in the docs\": a planted plan/STRAY.md and a planted plan/specs/99-x/a.md each failed it; the real plan passes"
   },
@@ -80,7 +80,7 @@
    ],
    "owner": "plan/specs/00-structure/evaluator.md",
    "check": "given a passing and a failing piece of past work, it judges both right",
-   "status": "failing",
+   "status": "passing",
    "after": [
     "S5"
    ]
@@ -160,6 +160,19 @@
    "status": "failing",
    "after": [
     "S10"
+   ]
+  },
+  {
+   "id": "S14",
+   "title": "The one test (specs/00-structure/the-one-test.md): the lamp on the shelf, run from the request through the AI, each pass line scored against numbers worked out by hand first; today's baseline recorded",
+   "meets": [
+    "S-R4"
+   ],
+   "owner": "tests/evals/, evals/one-test/",
+   "check": "npm run eval:one prints each of the 18 pass lines as passed, failed (with the measured value beside the expected) or not yet possible (naming the missing part); the expected numbers are in a file with their sources and never change after a run",
+   "status": "failing",
+   "after": [
+    "S5"
    ]
   }
  ]

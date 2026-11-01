@@ -139,6 +139,37 @@ describe('every domain, in one pass', () => {
     if (existsSync(built)) for (const f of walk(built)) bad.push(...secrets(readFileSync(f, 'utf8'), relative(root, f)));
     expect(bad).toEqual([]);
   }, 60_000);
+  // (the plan's own rules hold their shape (spec 00, S1 and S8): every rule of the constitution names its check and its state,
+  // and a rule not yet enforced names the task that will enforce it, which exists; every decision record has its context,
+  // the options weighed, the choice, the assumption it rests on and when to test it again)
+  it('every rule names its check and its task, and every decision its options, choice, assumption and re-test', () => {
+    const ids = new Set<string>();
+    for (const d of readdirSync(join(root, 'plan/specs'))) { const sp = d.slice(0, 2), dir = join(root, 'plan/specs', d);
+      if (existsSync(join(dir, 'tasks.json'))) for (const t of JSON.parse(readFileSync(join(dir, 'tasks.json'), 'utf8')).tasks as { id: string }[]) ids.add(`${sp} ${t.id}`);
+      if (existsSync(join(dir, 'spec.md'))) for (const m of readFileSync(join(dir, 'spec.md'), 'utf8').matchAll(/^\| ([A-Z]+\d+) \|/gm)) ids.add(`${sp} ${m[1]}`); }
+    const bad: string[] = [], rows = readFileSync(join(root, 'plan/CONSTITUTION.md'), 'utf8').split('\n').filter((l) => /^\| C\d+ \|/.test(l));
+    expect(rows.length).toBeGreaterThan(20);
+    for (const r of rows) { const c = r.split('|').map((x) => x.trim()), [id, , check, state] = [c[1]!, c[2]!, c[3]!, c[4]!];
+      if (!check) bad.push(`${id}: no check named`);
+      if (!/^(\*\*unenforced\*\*|enforced|partly)/.test(state)) bad.push(`${id}: its state says neither enforced, partly nor unenforced`);
+      if (/unenforced|^partly/.test(state)) { const named = [...state.matchAll(/spec (\d\d), tasks? ([A-Z]+\d+)(?: and ([A-Z]+\d+))?/g)];
+        if (/unenforced/.test(state) && !named.length) bad.push(`${id}: unenforced and names no task that will enforce it`);
+        for (const m of named) for (const t of [m[2], m[3]].filter(Boolean)) if (!ids.has(`${m[1]} ${t}`)) bad.push(`${id}: names spec ${m[1]} task ${t}, which does not exist`); } }
+    for (const f of readdirSync(join(root, 'plan/decisions')).filter((x) => /^\d{4}-.*\.md$/.test(x))) { const t = readFileSync(join(root, 'plan/decisions', f), 'utf8');
+      for (const h of ['## Context', '## Options', '## Choice', '## The assumption it rests on', '## When to test it again']) if (!t.includes(h)) bad.push(`${f}: no "${h}"`); }
+    expect(bad).toEqual([]);
+  });
+  // (the session's handoff (spec 00, S2): PROGRESS.md is short, names the task in hand (a task that exists) and the last
+  // commit the gate passed, so a fresh session finds where the work stands in one read)
+  it('PROGRESS.md is short and names a real task in hand', () => {
+    const t = readFileSync(join(root, 'PROGRESS.md'), 'utf8'), lines = t.split('\n').filter(Boolean);
+    expect(lines.length, 'under 40 lines').toBeLessThan(40);
+    const m = /^Task in hand: (\d\d)\.([A-Z]+\d+)/m.exec(t); expect(m, 'a "Task in hand: NN.ID" line').toBeTruthy();
+    const dir = readdirSync(join(root, 'plan/specs')).find((d) => d.startsWith(m![1]!))!, f = join(root, 'plan/specs', dir);
+    const known = (existsSync(join(f, 'tasks.json')) ? readFileSync(join(f, 'tasks.json'), 'utf8') : '') + (existsSync(join(f, 'spec.md')) ? readFileSync(join(f, 'spec.md'), 'utf8') : '');
+    expect(known.includes(`"id": "${m![2]}"`) || known.includes(`| ${m![2]} |`), `task ${m![1]}.${m![2]} exists`).toBe(true);
+    expect(/^Last commit the gate passed: [0-9a-f]{7}/m.test(t)).toBe(true);
+  });
   // (only the evaluator passes a task (spec 00, S7): a task marked passing has the evaluator's pass in its verdict file)
   it('no task is marked passing but by the evaluator', () => {
     const vd = join(root, 'plan/specs/00-structure/verdicts'), bad: string[] = [];
