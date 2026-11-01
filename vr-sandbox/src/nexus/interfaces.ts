@@ -150,6 +150,7 @@ export const TABLE_SOURCES: Record<string, TableSource> = {
   'Bossard engagement': { title: 'Bossard, length of engaged thread (recommended from trials, M6 to M16; bracketed values by the VDI 2230 formula)', url: 'https://assets.eu.ctfassets.net/0vp0u5uh75zd/3wPlDC2XQOYT3XOdwCk6lz/9a9282ffd29746a7a7f6b0149509f1cf/052_Length_engaged_thread_Fastening_EN_01_2025.pdf', publisher: 'Bossard (a fastener maker)', standard: false },
   'CNC Kitchen inserts': { title: 'CNC Kitchen heat-set insert dimensions and design guidelines (standard inserts, metric)', url: 'https://www.cnckitchen.com/s/CNCKitchen_Heat-Set-Insert-Dimensions-and-Design-Guidelines.pdf', publisher: 'CNC Kitchen (TwoChefs GmbH), the insert maker', standard: false, second: 'ruthex RX inserts, its table on its product pages: https://www.ruthex.de/en/products/ruthex-gewindeeinsatz-m4-50-stuck-rx-m4x8-1-messing-gewindebuchsen (its holes 0.1 mm smaller from M4 up)' },
   'ISO 286-1': { title: 'ISO 286-1:1988 limits and fits: the tolerance factor, the grades as multiples of it, the size steps, Table 1, as reproduced in BHEL corporate standard AA0230201', url: 'https://www.bhel.com/sites/default/files/specificationaa0230201-1440410133.pdf', publisher: 'Bharat Heavy Electricals Ltd, a reproduction', standard: false, second: 'IS 919 (Part 1):1993, identical to ISO 286-1 (Bureau of Indian Standards)' },
+  'ISO 286-2': { title: 'ISO 286-2:2010 limits and fits, Table 1: the standard tolerance grades by size (taken from ISO 286-1:2010), its sample pages', url: 'https://cdn.standards.iteh.ai/samples/54915/7d6147c29fed4e31af36b60561e88752/ISO-286-2-2010.pdf', publisher: 'ISO, sample pages hosted by iTeh Standards', standard: true, second: 'read 2026-11-01 by two readers apart (spec 01, I15), every row agreeing with Roymech\'s and the Technical University of Košice\'s ISO 286-2 tables' },
 };
 
 /** ISO 273 clearance holes, fine, medium and coarse series (tolerance fields H12, H13, H14, for information there). */
@@ -211,8 +212,20 @@ export const INSERT: Record<string, { series: string; L: number; od: number; hol
  *  is rounded by its own rules and is to be preferred (its values at three steps are kept here to set beside). */
 export const IT_STEPS = [0, 3, 6, 10, 18, 30, 50, 80, 120, 180, 250, 315, 400, 500];
 export const IT_MULTIPLE: Record<number, number> = { 5: 7, 6: 10, 7: 16, 8: 25, 9: 40, 10: 64, 11: 100, 12: 160, 13: 250, 14: 400, 15: 640, 16: 1000 };
-export const IT_TABLE: Record<string, { IT6: number; IT7: number; IT8: number; src: 'ISO 286-1' }> = { '6-10': { IT6: 9, IT7: 15, IT8: 22, src: 'ISO 286-1' }, '18-30': { IT6: 13, IT7: 21, IT8: 33, src: 'ISO 286-1' }, '50-80': { IT6: 19, IT7: 30, IT8: 46, src: 'ISO 286-1' } };
+/** Table 1's own values, µm, by size step (over the first, up to and including the second): what rules where held. The
+ *  rows from ISO 286-2:2010's Table 1 agree with the reproduction of ISO 286-1 on every grade both give. */
+export const IT_TABLE: Record<string, { IT5?: number; IT6?: number; IT7?: number; IT8?: number; IT9?: number; src: 'ISO 286-1' | 'ISO 286-2' }> = {
+  '3-6': { IT5: 5, IT6: 8, IT7: 12, IT8: 18, IT9: 30, src: 'ISO 286-2' }, '6-10': { IT6: 9, IT7: 15, IT8: 22, src: 'ISO 286-1' },
+  '18-30': { IT5: 9, IT6: 13, IT7: 21, IT8: 33, src: 'ISO 286-2' }, '50-80': { IT5: 13, IT6: 19, IT7: 30, IT8: 46, src: 'ISO 286-2' },
+};
+/** A standard tolerance, µm: Table 1's own value where its row is held here, else the formula's (itFormula), said so. The
+ *  formula is not the table at every size: IT6 over 3 to 6 mm is 7.3 by it and 8 by the table (fault D17, 2026-11-01). */
 export function itTolerance(size: number, grade: number): { um: number; step: [number, number]; derived: string } {
+  const f = itFormula(size, grade), row = IT_TABLE[`${f.step[0]}-${f.step[1]}`], v = row?.[`IT${grade}` as 'IT5'];
+  return v !== undefined ? { um: v, step: f.step, derived: `${row!.src}, Table 1: IT${grade} over ${f.step[0]} to ${f.step[1]} mm` } : f;
+}
+/** ISO 286-1's formula, unrounded (where Table 1 holds no row here). */
+export function itFormula(size: number, grade: number): { um: number; step: [number, number]; derived: string } {
   const k = IT_STEPS.findIndex((x, i) => i > 0 && size <= x); if (size <= 0 || k < 1) throw new Error(`ISO 286-1's formula is for sizes above 0 and to 500 mm: ${size}`);
   const m = IT_MULTIPLE[grade]; if (!m) throw new Error(`IT${grade}: the formula gives IT5 to IT16`);
   const lo = Math.max(IT_STEPS[k - 1]!, 1), hi = IT_STEPS[k]!, D = Math.sqrt(lo * hi), i = 0.45 * Math.cbrt(D) + 0.001 * D;
@@ -249,7 +262,7 @@ export function negativeOf(it: Asking, host: { material: string; thickness: numb
   if (it.kind === 'face') {
     const f = NEMA_FACE_OF(it.nema); if (!f) return refuse('a NEMA face we hold', 0, 0, '', 'NEMA ICS 16 (kinds/motion.ts)', `no NEMA ${it.nema} face here`);
     const c = CLEARANCE[f.thread]; if (!c) return refuse('ISO 273', 0, 0, '', 'ISO 273', `no clearance hole for ${f.thread}`);
-    const h = (f.holes / 2) * MM, r = (c[fit] / 2) * MM, pil = IT_TABLE[f.pilot <= 30 && f.pilot > 18 ? '18-30' : ''], dev = pil ? pil.IT7 : itTolerance(f.pilot, 7).um;
+    const h = (f.holes / 2) * MM, r = (c[fit] / 2) * MM, it7 = itTolerance(f.pilot, 7), dev = it7.um, pil = !/^derived/.test(it7.derived);
     const tools: ToolBody[] = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => ({ role: 'remove' as const, prof: [[r, 0], [r, t]] as [number, number][], at: [a! * h, 0, b! * h] as V3, why: `ISO 273 ${fit} clearance for the face's ${f.thread} screws: ${c[fit]} mm, on its ${f.holes} mm square` }));
     tools.push({ role: 'remove', prof: [[(f.pilot / 2) * MM, 0], [(f.pilot / 2) * MM, t]], at: [0, 0, 0], why: `the pilot's bore, ${f.pilot} H7 (ISO 286-1: 0 to +${dev} µm${pil ? ', its Table 1' : ', derived'}), through: the shaft passes it` });
     return { mirror: { kind: 'holes', size: { holes: f.holes, thread: f.thread, pilot: f.pilot }, std: 'NEMA ICS 16', fit: `ISO 273 ${fit}; pilot H7` }, tools, parts: [], why: tools.map((x) => x.why) };

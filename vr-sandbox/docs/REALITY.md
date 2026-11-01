@@ -2320,3 +2320,12 @@ found that the app's ISO 286-1 tolerance is the standard's formula, unrounded, w
 fit has been needed so far, but at 3 to 6 mm the formula gives IT6 7.3 µm against the table's 8 (fault D17, for I17).
 Checked with `npm run gate` (the test "the interfaces evaluation set: every case of the design, worked by hand, run or
 waiting").
+
+## 2026-11-01: a standard tolerance from ISO 286's table where it is held (spec 01, I17 in part; fault D17)
+
+`itTolerance` gave ISO 286-1's formula alone; Table 1 is what rules, and they differ at some sizes (IT6 over 3 to 6 mm:
+7.3 µm by the formula, 8 by the table). It now gives Table 1's value wherever that size's row is held, the formula only
+where none is, and says which. Rows held: 3 to 6 mm (IT5 to IT9), 6 to 10 (IT6 to IT8), 18 to 30 and 50 to 80 (IT5 to
+IT8), those read from ISO 286-2:2010's own Table 1 by two readers for the evaluation set, each row within a tenth of the
+formula. A 6 mm size falls in the band over 3 up to and including 6, as the table's headings say. Checked with `npm run
+gate` (the tests "the tables negatives need, each row with its source" and "the interfaces evaluation set…").

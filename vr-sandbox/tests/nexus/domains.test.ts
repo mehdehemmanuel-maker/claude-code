@@ -38,7 +38,7 @@ import { lawDims, lawWitness, wireDims } from '../../src/nexus/certify';
 import { setting } from '../../src/nexus/lawgraph';
 import { apply } from '../../src/nexus/law';
 import { BOOK } from '../../src/nexus/book';
-import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, interfacesOf, itTolerance, negativeOf, piecesIn, type Asking, type Negative, type Refusal } from '../../src/nexus/interfaces';
+import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, interfacesOf, itFormula, itTolerance, negativeOf, piecesIn, type Asking, type Negative, type Refusal } from '../../src/nexus/interfaces';
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
@@ -621,8 +621,13 @@ describe('every domain, in one pass', () => {
     for (const [k, r] of Object.entries(TAP_DRILL)) { const d = Number(k.slice(1)); if (METRIC[k]) expect(r.P, `${k}: the pitch ISO 261 gives`).toBe(METRIC[k]!.p); expect(Math.abs(r.drill - (d - r.P)), `${k}: about d − P`).toBeLessThanOrEqual(0.05 + 1e-9); }
     for (const [k, r] of Object.entries(COUNTERBORE)) { if (METRIC[k]) expect(r.d1, `${k}: wider than its ISO 4762 head`).toBeGreaterThan(METRIC[k]!.dk + 0.4); if (CLEARANCE[k]) expect(r.d2, `${k}: its hole ISO 273 medium`).toBe(CLEARANCE[k]!.medium); }
     for (const [k, r] of Object.entries(COUNTERSINK)) { expect(r.Dc).toBeLessThan(r.DcMax); if (CLEARANCE[k]) expect(r.dh, `${k}: its hole ISO 273 medium`).toBe(CLEARANCE[k]!.medium); }
+    // (each of Table 1's rows set beside the formula: within a tenth; and Table 1 is what itTolerance gives where held, the
+    // formula where not (it gave the formula alone, 7.3 µm for IT6 at 6 mm where the table gives 8: fault D17))
     for (const [step, r] of Object.entries(IT_TABLE)) { const mid = (Number(step.split('-')[0]) + Number(step.split('-')[1])) / 2;
-      for (const g of [6, 7, 8] as const) { const t = itTolerance(mid, g); expect(Math.abs(t.um - r[`IT${g}`]) / r[`IT${g}`], `IT${g} at ${step} mm: ${t.um.toFixed(1)} µm by the formula, ${r[`IT${g}`]} in the table`).toBeLessThan(0.1); expect(t.derived).toMatch(/^derived/); } }
+      for (const g of [5, 6, 7, 8, 9] as const) { const want = r[`IT${g}`]; if (want === undefined) continue; const f = itFormula(mid, g), t = itTolerance(mid, g);
+        expect(Math.abs(f.um - want) / want, `IT${g} at ${step} mm: ${f.um.toFixed(1)} µm by the formula, ${want} in the table`).toBeLessThan(0.1); expect(f.derived).toMatch(/^derived/);
+        expect([t.um, t.derived], `IT${g} at ${step} mm: the table's`).toEqual([want, expect.stringMatching(/^ISO 286-[12], Table 1/)]); } }
+    expect([itTolerance(6, 6).um, itTolerance(6.0001, 6).um], 'IT6 at exactly 6 mm, the band over 3 to 6; just over it, the next').toEqual([8, 9]); expect(itTolerance(120, 7).derived, 'no row held: the formula, said').toMatch(/^derived/);
     expect(+BOLT_SPACING.e1.least(18).toFixed(6)).toBe(21.6); expect(BOLT_SPACING.p1.most(20)).toBe(200);
   });
   // (a turned cut made as it is cut (spec 01, I4): an M8 counterbore to DIN 974-1 (15 mm across, 8.4 mm deep: the head's
