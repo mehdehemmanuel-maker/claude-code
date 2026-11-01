@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129: 3 passing (by the evaluator), 4 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 129: 4 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
 | Rules in the constitution | 29 (20 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -80,7 +80,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing |
 | S3 | Hooks: push gate, budget, honesty, loop breaker | — | failing |
 | S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | passing (evaluator claude-sonnet, 2026-11-01) |
-| S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | claimed |
+| S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S6 | The routing test covers plan/ as it covers docs/ | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | failing |
 | S8 | The first decision records (0001 to 0007) written | — | failing |

@@ -7,15 +7,18 @@ import { it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import '../../src/nexus/seeds';
 import { agentBuild, type AgentRun } from '../../src/nexus/agent';
-import { Engine } from '../../src/nexus/dataflow';
+import { Engine, emptyBoard, placeBlock } from '../../src/nexus/dataflow';
 import { CONSTANTS } from '../../src/data/constants';
 
 const g = CONSTANTS.g.value, R = CONSTANTS.R.value;
+/** The checked spring's rate with 6 coils, as the app's own spring node gives it (worked out before the cases run). */
+let springRate6 = NaN;
 type Check = (run: AgentRun, e: Engine) => string | null; // null: right; else why not
 /** Some node on the board gives this number (within rel), as any of its outputs, or any item of a list it gives. */
 const gives = (want: number, rel = 0.01): Check => (_r, e) => {
   const seen: number[] = [];
-  for (const s of e.state.values()) for (const v of Object.values(s.out ?? {})) for (const x of Array.isArray(v) ? v : [v]) if (typeof x === 'number' && Number.isFinite(x)) { seen.push(x); if (Math.abs(x - want) <= rel * Math.abs(want)) return null; }
+  // (not the numbers typed in: an input node gives what was typed, which may be the answer's own figure by chance)
+  for (const [id, s] of e.state) if (!/^in\./.test(e.board.nodes[id]?.block ?? '')) for (const v of Object.values(s.out ?? {})) for (const x of Array.isArray(v) ? v : [v]) if (typeof x === 'number' && Number.isFinite(x)) { seen.push(x); if (Math.abs(x - want) <= rel * Math.abs(want)) return null; }
   return `no node gives ${+want.toPrecision(6)}; nearest ${seen.length ? +seen.sort((a, b) => Math.abs(a - want) - Math.abs(b - want))[0]!.toPrecision(6) : 'none'}`;
 };
 const runsClean: Check = (_r, e) => { const bad = [...e.state].filter(([, s]) => s.status !== 'ok'); return e.state.size === 0 ? 'the board is empty' : bad.length ? `${bad.length} nodes not ok: ${bad[0]![1].error?.slice(0, 80)}` : null; };
@@ -27,7 +30,7 @@ export const CASES: [string, Check][] = [
   ['12 V across 4 ohms: what current flows?', gives(12 / 4)],
   ['Power turned to heat by 2 A through 10 ohms?', gives(2 ** 2 * 10)],
   ['Stress in a 10 mm diameter round rod pulled with 5 kN?', gives(5000 / (Math.PI * 0.005 ** 2))],
-  ['Make the checked coil spring with 6 active coils and tell me its rate.', gives(9423.828125)],
+  ['Make the checked coil spring with 6 active coils and tell me its rate.', (r, e) => gives(springRate6)(r, e)],
   ['Heat needed to warm 2 kg of water by 10 K, its specific heat 4186 J/kg K?', gives(2 * 4186 * 10)],
   ['How much does a 1 m steel bar grow warmed by 50 K, expansion coefficient 12e-6 per K?', gives(1 * 12e-6 * 50)],
   ['Pressure of 1 mol of ideal gas at 300 K in 0.0249 cubic metres?', gives(1 * R * 300 / 0.0249)],
@@ -55,6 +58,7 @@ export const CASES: [string, Check][] = [
 ];
 
 it('the AI, on its evaluation set', async () => {
+  { const b = emptyBoard('spring'); placeBlock(b, 'seed.spring-checked', 0, 0, { n: 6 }, 's'); const x = new Engine(b); await x.run(); springRate6 = x.state.get('s')?.out?.rate as number; console.log(`the checked spring with 6 coils, from the app's own node: ${springRate6} N/m`); }
   const only = Number(process.env.EVAL_ONLY ?? CASES.length), model = process.env.EVAL_MODEL || undefined, rows: Record<string, unknown>[] = [];
   const one = async ([req, check]: [string, Check], k: number) => {
     const t0 = Date.now(); let row: Record<string, unknown>;

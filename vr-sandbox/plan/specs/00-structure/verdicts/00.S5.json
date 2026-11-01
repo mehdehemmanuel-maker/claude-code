@@ -1,0 +1,25 @@
+{
+ "task": "00.S5",
+ "verdict": "pass",
+ "model": "claude-sonnet",
+ "date": "2026-11-01",
+ "commit": "484bf58",
+ "ran": [
+  "Read tests/evals/agent.eval.ts (74 lines), vitest.eval.config.ts, the eval:agent script in package.json (NODE_USE_ENV_PROXY=1 vitest run --config vitest.eval.config.ts tests/evals/agent.eval.ts --silent=false) and the REALITY.md entry at line 1546 ('the AI's evaluation set, its baseline').",
+  "Counted CASES: 30 requests (26 numbers, 2 starter boards, 1 screw, 1 fold), as REALITY.md says.",
+  "EVAL_ONLY=5 npm run eval:agent (run 1 of 2, key loaded into the environment only): printed one line per request 'RIGHT|WRONG k. request | steps N, in N (+N cached), out N, S s | why', then 'RESULT 5 of 5 right; steps 19; tokens in 52 (+58569 cached), out 2885; 27 s summed'. Steps, tokens, seconds and right or wrong are all printed for each. Lines print in completion order (4,2,1,5,3), and are sorted only in the EVAL_OUT file.",
+  "Expected numbers: 25 of the 26 number checks are worked out in the file from g and R of data/constants.ts or from the request's own figures (2*g, 0.5*m*v^2, 12/4, pi*0.005^2, sqrt(1.4*R*T/M) and so on). ONE IS TYPED IN: the coil spring's rate, gives(9423.828125). By hand, 77.2e9*0.003^4/(8*0.024^3*6) = 9423.83 (chrome-silicon G, seed.spring-checked defaults), so it is correct, but it is a literal, not computed from springRate/SPRING_WIRES, which contradicts the file header ('never typed in from memory') and REALITY.md ('worked out in the test from the app's own constants').",
+  "No-board scoring, without the API (a temporary probe in tests/evals, EVAL_ONLY=0, deleted afterwards): ran every one of the 30 checks against an empty board; 0 of 30 accepted it (gives reports 'no node gives X; nearest none', runsClean reports 'the board is empty'). A request answered with no board is scored wrong.",
+  "Read the baseline entry: command given (`EVAL_OUT=\u2026 npm run eval:agent`), 16 of 30 right with 48 steps, tokens and seconds, then 30 of 30 after one rule added to docs/FOR-AI.md. Both are one run each and are labelled so. I did not re-run all 30 (limit), so the 16 and the 30 are not reproduced by me; the 5-request run agrees in form and in rightness with the 30-of-30 claim.",
+  "Products set: plan/QUESTIONS.md U6 was answered 2026-10-31 NOT with a list of products but with 'one new, simple test that captures everything' (the-one-test.md, 'the lamp on the shelf'). The products set is therefore still open and has no code (design.md names evals/products/). The task title says 'the products set once the user names them', so the task text lets it wait; tasks.json evidence ('waits on the user naming them (U6)') is stale against U6's answer.",
+  "git status after all runs: clean apart from this verdict file."
+ ],
+ "planted": [
+  "Wrong expectation (request 1's check changed to gives(2*g*1.5)), then EVAL_ONLY=1 npm run eval:agent (run 2 of 2): printed 'WRONG 1. ... | steps 6, in 16 (+26673 cached), out 798, 6.7 s | no node gives 29.42; nearest 19.6133' and 'RESULT 0 of 1 right'. CAUGHT; reverted.",
+  "An always-null `gives` was planted but my probe used an empty board, where it still rejected (no numbers to match); this showed only that an empty board cannot pass. Reverted. Not counted as a catch."
+ ],
+ "missing": [],
+ "notes": [
+  "Not blocking, for the builder: (1) compute the spring's rate in the test from springRate and SPRING_WIRES, or say it is a typed figure; REALITY.md and the file header say none are typed. (2) `gives` accepts the number on ANY node output, an input constant included, so small values such as 1 (60 rpm to Hz) or 0.5 (efficiency) could match by chance; the check is weaker than 'the answer node'. (3) Update the S5 evidence and U6 text: the products set is not waiting on a list, the user replaced it with the one test; say whether S5's products half is dropped or waits on the one test."
+ ]
+}
