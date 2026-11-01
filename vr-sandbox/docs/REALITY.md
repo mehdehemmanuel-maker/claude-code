@@ -1622,3 +1622,17 @@ blame. The AI in the app now logs its own on every run (`nearMisses` in `AgentRu
 an error; an answer with numbers and no board is at-risk), checked by the same test. And the gate now fails while a probe
 is left in `tests/nexus/` (the test "no probe is left where the gate runs"; a planted one failed it): a probe the gate
 picked up was one of the near misses.
+
+## 2026-11-01: a claim status on every figure in the data files (spec 10, T3; constitution C21)
+
+Every record of `src/data/` that holds numbers now carries a claim status in the app's one vocabulary of evidence kinds
+(`EVIDENCE` in `src/nexus/evidence.ts`: exact, measured, specified, derived, estimated, hypothetical, …), checked in the
+gate by `unstated` in `tests/nexus/scans.ts` beside the source scan (the test "every figure in data has a source, no
+placeholder stands in data, no key is written down"). The words the files already used are read as statuses rather than
+rewritten (`confidence: handbook` is specified, `evidence: typical` is estimated, a constant's `exact` is exact or
+measured). Measured before, with a probe of that scan: 144 records had none. Given now, each the weakest of its record's
+figures: the periodic table and the woods specified (handbook tables), the three fluids specified, the maxon motor and
+gearhead specified (the maker's data), the Unite motor estimated (sellers' figures and an estimated shaft), the batteries
+estimated (their cases' sizes are standard, their mass, amps and inner layers typical), two mixtures derived and
+hypothetical. A planted record with a source but no status fails it; so did removing one fluid's status. Not covered:
+figures outside `src/data/`; and C21's words disputed, myth and inspired-only have no evidence kind yet.

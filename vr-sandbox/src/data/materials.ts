@@ -368,9 +368,9 @@ export function getMaterial(id: string): Material {
 
 /** Water and air at 20 C. */
 export const FLUIDS = {
-  freshWater: { density: 998.2, source: 'CRC Handbook, water at 20 C' },
-  seaWater: { density: 1025, source: 'UNESCO seawater at 35 PSU, 15 C' },
-  air: { density: 1.204, source: 'ISA / CRC, dry air at 20 C, 101.325 kPa' },
+  freshWater: { density: 998.2, status: 'specified', source: 'CRC Handbook, water at 20 C' },
+  seaWater: { density: 1025, status: 'specified', source: 'UNESCO seawater at 35 PSU, 15 C' },
+  air: { density: 1.204, status: 'specified', source: 'ISA / CRC, dry air at 20 C, 101.325 kPa' },
 };
 
 export { STANDARD_GRAVITY } from './constants';

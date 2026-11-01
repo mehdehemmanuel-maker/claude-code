@@ -9,7 +9,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { placeholders, secrets, unsourced } from './scans';
+import { placeholders, secrets, unsourced, unstated } from './scans';
+import { EVIDENCE } from '../../src/nexus/evidence';
 import { nearMissesOf } from '../../src/nexus/agent';
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -132,8 +133,12 @@ describe('every domain, in one pass', () => {
     expect(unsourced({ PARTS: { m8: { d: 0.008, source: 'ISO 4762' } } }, 'planted')).toEqual([]);
     expect(placeholders("  m8: { d: 0.008 }, // TODO the real pitch", 'planted')).toHaveLength(1);
     expect(secrets(`const k = 'sk-ant-${'a'.repeat(30)}';`, 'planted')).toHaveLength(1);
+    // (and every figure has its claim status (spec 10, T3; C21), in the app's one vocabulary of evidence kinds)
+    expect(unstated({ PARTS: { m8: { d: 0.008, source: 'ISO 4762' } } }, 'planted', EVIDENCE)).toHaveLength(1);
+    expect(unstated({ PARTS: { m8: { d: 0.008, source: 'ISO 4762', status: 'specified' } } }, 'planted', EVIDENCE)).toEqual([]);
+    expect(unstated({ P_STATUS: 'probably', PARTS: {} }, 'planted', EVIDENCE), 'a status not in the vocabulary').toHaveLength(1);
     const data = readdirSync(join(root, 'src/data')).filter((f) => f.endsWith('.ts')), bad: string[] = [];
-    for (const f of data) bad.push(...unsourced(await import(`../../src/data/${f}`), `src/data/${f}`));
+    for (const f of data) { const m = await import(`../../src/data/${f}`); bad.push(...unsourced(m, `src/data/${f}`), ...unstated(m, `src/data/${f}`, EVIDENCE)); }
     for (const dir of ['src/data', 'src/nexus/kinds', 'src/nexus/book']) for (const f of readdirSync(join(root, dir)).filter((x) => x.endsWith('.ts'))) bad.push(...placeholders(readFileSync(join(root, dir, f), 'utf8'), `${dir}/${f}`));
     const tracked = execSync('git ls-files --cached --others --exclude-standard', { cwd: root, encoding: 'utf8' }).split('\n').filter((f) => f && !/\.(png|jpe?g|gif|webp|wasm|glb|gltf|bin|ico|woff2?|ttf|zip|gz)$/i.test(f) && existsSync(join(root, f)));
     for (const f of tracked) { const t = readFileSync(join(root, f), 'utf8'); bad.push(...secrets(t, f)); }

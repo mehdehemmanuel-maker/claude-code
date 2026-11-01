@@ -11,7 +11,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- |
 | Tasks in the specs | 130: 5 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
-| Rules in the constitution | 29 (15 not yet enforced by a check) |
+| Rules in the constitution | 29 (14 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
@@ -273,7 +273,6 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 - **C18** Licences kept: no copied standard tables; no-derivative files kept unmodified; a source's licence on every imported row (unenforced: spec 02, task N2; spec 05, task V1)
 - **C19** A published interface is never changed in place: a new version, with an adapter or a declared break (unenforced: spec 01, task I18)
 - **C20** An interface makes a wrong connection impossible, not merely warned: keyed by dimension and unit, medium, mechanical pattern, handedness; conversion only in a visible node (unenforced: spec 01, task I19)
-- **C21** Every claim carries its status: measured, calibrated (against what, valid for what), typical, derived, inspired only, disputed, myth; estimates keep their spread and their makers (unenforced: spec 10, task T3)
 - **C22** Every method checks its validity when it runs and refuses past it; a static check never reports "safe" where dynamic checks were not run (unenforced: spec 09, task P4; spec 10, task T5)
 - **C23** A change to a connection, load path or use is re-checked before it is accepted (the Hyatt gate) (unenforced: spec 01, task I21)
 - **C24** Show what is measured, never what was commanded as if it were the state; never change what matters while a person cannot see it (unenforced: spec 04, task P9)

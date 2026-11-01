@@ -6,6 +6,8 @@
 export interface Wood { name: string; botanical: string; kind: 'softwood' | 'hardwood'; G12: number; MOE: number; MOR: number; source: string }
 const WH = 'USDA Forest Products Laboratory, Wood Handbook (FPL-GTR-282, 2021), Table 5-3a, at 12 % moisture';
 
+/** Its claim status (spec 10, T3): the Wood Handbook's tabled figures. */
+export const WOODS_STATUS = 'specified';
 export const WOODS: Record<string, Wood> = {
   'douglas-fir': { name: 'Douglas-fir (coast)', botanical: 'Pseudotsuga menziesii', kind: 'softwood', G12: 0.48, MOE: 13.4e9, MOR: 85e6, source: WH },
   'red-oak': { name: 'northern red oak', botanical: 'Quercus rubra', kind: 'hardwood', G12: 0.63, MOE: 12.5e9, MOR: 99e6, source: WH },

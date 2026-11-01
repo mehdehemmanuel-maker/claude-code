@@ -7,6 +7,8 @@
 // source's figures for them are predictions, not measurements.
 
 export interface ElementData { Z: number; name: string; weight: number; density: number | null; melt: number | null; boil: number | null; phase: string }
+/** Its claim status (spec 10, T3): a reference table's figures (a secondary compilation of the CRC Handbook and IUPAC). */
+export const PERIODIC_STATUS = 'specified';
 export const PERIODIC_SOURCE = 'Periodic-Table-JSON (Bowserinator), compiled from Wikipedia citing the CRC Handbook and IUPAC; secondary, not checked against the CRC edition';
 
 export const PERIODIC: Record<string, ElementData> = {

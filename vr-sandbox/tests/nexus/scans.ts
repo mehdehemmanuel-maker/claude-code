@@ -24,6 +24,34 @@ export function unsourced(mod: Record<string, unknown>, file: string): string[] 
   return out;
 }
 
+/**
+ * The claim status of each record (spec 10, task T3; constitution C21), in the app's one vocabulary of evidence kinds
+ * (`EVIDENCE` in `src/nexus/evidence.ts`): its own `status`, or what the data files already say in their own words
+ * (`confidence`, `evidence`, a constant's `exact`), read through `SAID`; or the file's `…_STATUS` export where one status
+ * holds for all of it. Records holding numbers with none of these are returned.
+ */
+export const SAID: Record<string, Record<string, string>> = {
+  confidence: { spec: 'specified', handbook: 'specified', estimated: 'estimated' },
+  evidence: { specified: 'specified', handbook: 'specified', secondary: 'specified', typical: 'estimated' },
+  exact: { true: 'exact', false: 'measured' },
+};
+export function unstated(mod: Record<string, unknown>, file: string, kinds: readonly string[]): string[] {
+  const whole = Object.entries(mod).find(([k, v]) => /(^|_)STATUS$/.test(k) && typeof v === 'string');
+  if (whole) return kinds.includes(whole[1] as string) ? [] : [`${file}: ${whole[0]} = ${whole[1]}, not a status`];
+  const out: string[] = [];
+  const statusOf = (o: Record<string, unknown>) => { if (typeof o.status === 'string' && kinds.includes(o.status)) return o.status;
+    for (const [k, m] of Object.entries(SAID)) if (k in o && String(o[k]) in m) return m[String(o[k])]; return undefined; };
+  const walk = (v: unknown, path: string, has: boolean, depth: number) => {
+    if (depth > 8 || !v || typeof v !== 'object' || ArrayBuffer.isView(v)) return;
+    if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${path}[${i}]`, has, depth + 1)); return; }
+    const o = v as Record<string, unknown>, own = has || !!statusOf(o);
+    if (!own && Object.values(o).some((x) => typeof x === 'number')) out.push(`${file}: ${path}`);
+    for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object') walk(x, `${path}.${k}`, own, depth + 1);
+  };
+  for (const [k, v] of Object.entries(mod)) walk(v, k, false, 0);
+  return out;
+}
+
 /** Words that stand in for what is not there yet, in a data file. */
 export const PLACEHOLDER = /\bTODO\b|\bFIXME\b|lorem ipsum|\bTBD\b|\bXXX\b|\bplaceholder\b/i;
 export function placeholders(text: string, file: string): string[] {

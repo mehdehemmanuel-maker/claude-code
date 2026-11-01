@@ -12,6 +12,9 @@
  */
 export interface BciGroup { group: string; dims: [number, number, number]; kg: number; cca: number; Ah: number; /** plates in each of its six cells, typical */ plates: number; fits: string }
 const IN = 0.0254;
+/** Its claim status (spec 10, T3), the weakest of each record's figures: the cases' sizes are specified (BCI, the
+ *  makers' cell datasheets), but each record's mass, amps and inner layers are typical or reported, so each is an estimate. */
+export const BATTERIES_STATUS = 'estimated';
 export const BCI_SOURCE = 'BCI (Battery Council International) group size chart for the case dimensions; mass, cold-cranking amps, amp-hours and plates typical of the group, not any one maker\'s';
 export const BCI_GROUPS: Record<string, BciGroup> = {
   '35': { group: '35', dims: [9.0625 * IN, 6.875 * IN, 8.875 * IN], kg: 17, cca: 550, Ah: 50, plates: 13, fits: 'many Japanese cars (Toyota, Honda, Nissan): typical' },

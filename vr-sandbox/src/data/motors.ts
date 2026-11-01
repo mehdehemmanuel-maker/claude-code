@@ -4,6 +4,8 @@
 // winding may run come from the same sheet. What a sheet doesn't give is said to be estimated, and how.
 
 export interface MotorData {
+  /** Its claim status (spec 10, T3): a maker's own data is specified; sellers' figures, or any figure estimated, an estimate. */
+  status: 'specified' | 'estimated';
   id: string;
   label: string;
   /** Nominal voltage, V. */
@@ -52,6 +54,8 @@ export interface Price {
 }
 
 export interface GearheadData {
+  /** Its claim status (spec 10, T3). */
+  status: 'specified' | 'estimated';
   id: string;
   label: string;
   ratio: number;
@@ -76,6 +80,7 @@ export interface GearheadData {
 
 export const MOTORS: Record<string, MotorData> = {
   'motor.dc.coreless.d40-150w-24v': {
+    status: 'specified',
     id: 'motor.dc.coreless.d40-150w-24v', label: 'Coreless brushed DC motor, Ø40 mm, 150 W, 24 V winding', V: 24,
     published: { noLoadSpeed: 7580, noLoadCurrent: 0.137, stallCurrent: 80.2, stallTorque: 2.42, terminalR: 0.299, torqueConstant: 0.0302 },
     maxContinuousCurrent: 6,
@@ -86,6 +91,7 @@ export const MOTORS: Record<string, MotorData> = {
     source: 'maxon RE 40 Ø40 mm, graphite brushes, 150 W, order no. 148867 (24 V winding), current maxon online data: K_t 30.2 mN·m/A, 317 rpm/V, R 0.299 Ω, no-load 7580 rpm at 137 mA, stall 2420 mN·m, nominal 6 A, rotor 142 g·cm², R_th 1.93 + 4.65 K/W, τ 42.8 s winding and 809 s motor, 480 g. (148866 is the 12 V winding; older catalogue editions give R 0.317 Ω, τ_motor 1120 s.)'
   },
   'motor.dc.brushed.d100-250w-24v': {
+    status: 'estimated',
     id: 'motor.dc.brushed.d100-250w-24v', label: 'Brushed PM DC motor, Ø100 mm, 250 W, 24 V', V: 24,
     // sellers' figures for this motor vary; this set is the one that is consistent with itself: 250 W out at 2750 rpm
     // drawing 13.7 A, 1.4 A with no load (listed 0.7 to 2.2 A). Its stall torque is also published (6.82 N m), and is
@@ -101,6 +107,7 @@ export const MOTORS: Record<string, MotorData> = {
 
 export const GEARHEADS: Record<string, GearheadData> = {
   'gearhead.planetary.d42-12to1': {
+    status: 'specified',
     id: 'gearhead.planetary.d42-12to1', label: 'Planetary gearhead, Ø42 mm, 12:1, two stages', ratio: 12, efficiency: 0.81,
     maxContinuousTorque: 7.5, maxRadial: 240, radialAt: 0.012, maxAxial: 150,
     mass: 0.36, diameter: 0.042, length: 0.0555, shaft: 0.012,
