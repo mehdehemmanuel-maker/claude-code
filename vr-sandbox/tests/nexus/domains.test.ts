@@ -133,7 +133,7 @@ describe('every domain, in one pass', () => {
     const data = readdirSync(join(root, 'src/data')).filter((f) => f.endsWith('.ts')), bad: string[] = [];
     for (const f of data) bad.push(...unsourced(await import(`../../src/data/${f}`), `src/data/${f}`));
     for (const dir of ['src/data', 'src/nexus/kinds', 'src/nexus/book']) for (const f of readdirSync(join(root, dir)).filter((x) => x.endsWith('.ts'))) bad.push(...placeholders(readFileSync(join(root, dir, f), 'utf8'), `${dir}/${f}`));
-    const tracked = execSync('git ls-files', { cwd: root, encoding: 'utf8' }).split('\n').filter((f) => f && !/\.(png|jpe?g|gif|webp|wasm|glb|gltf|bin|ico|woff2?|ttf|zip|gz)$/i.test(f) && existsSync(join(root, f)));
+    const tracked = execSync('git ls-files --cached --others --exclude-standard', { cwd: root, encoding: 'utf8' }).split('\n').filter((f) => f && !/\.(png|jpe?g|gif|webp|wasm|glb|gltf|bin|ico|woff2?|ttf|zip|gz)$/i.test(f) && existsSync(join(root, f)));
     for (const f of tracked) { const t = readFileSync(join(root, f), 'utf8'); bad.push(...secrets(t, f)); }
     const built = join(root, 'dist-view'), walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : /\.(js|html|css|json|md)$/.test(e.name) ? [join(d, e.name)] : []);
     if (existsSync(built)) for (const f of walk(built)) bad.push(...secrets(readFileSync(f, 'utf8'), relative(root, f)));

@@ -1,0 +1,24 @@
+{
+  "task": "00.S4",
+  "verdict": "fail",
+  "model": "claude-sonnet",
+  "date": "2026-11-01",
+  "commit": "33e350b",
+  "ran": [
+    "npx vitest run tests/nexus/domains.test.ts -t \"source, no placeholder\" on the clean tree: 1 passed (about 2 s).",
+    "Read tests/nexus/scans.ts and the test: the unsourced and placeholder scans read src/data/*.ts (readdir, so new files are seen); the key scan reads only files from `git ls-files` plus dist-view.",
+    "npm run gate once on the clean tree at the end: 31 passed, 1 failed. The one failure is the plan-routing test (S6): plan/README.md does not route to specs/00-structure/verdicts/00.S6.json and 04.P10.json (other evaluators' verdict files, untracked, not mentioned in plan/README.md). The S4 test passed in that run. This failure is not caused by S4 but means the whole gate is not green on the clean tree as found.",
+    "git status at the end: only the untracked verdicts/ folder (with this verdict file); every planted fault removed and the original files restored."
+  ],
+  "planted": [
+    "Unsourced figure: appended `export const ZZ_PLANTED = { m8: { d: 0.008, mass: 0.012 } }` to src/data/motors.ts. Caught: 'src/data/motors.ts: ZZ_PLANTED.m8'. Removed.",
+    "Placeholder: appended `// TODO the real value` to src/data/woods.ts. Caught: 'src/data/woods.ts:16'. Removed.",
+    "Key pattern (invented, fake sk-ant- plus 30 Q): appended to src/data/constants.ts (tracked). Caught: 'src/data/constants.ts:52'. Removed.",
+    "Key pattern (invented, fake AIza plus 35 Z) appended to docs/FOR-AI.md (tracked). Caught: 'docs/FOR-AI.md:63'. Removed.",
+    "Key pattern (invented fake sk-ant- key) in a NEW, untracked file src/data/zz_planted_key.ts. NOT caught: the test passed. Removed."
+  ],
+  "missing": [
+    "The key scan takes its file list from `git ls-files`, so a key written into a new file that is not yet `git add`ed passes the gate. A new file is the usual way a key enters a repo, and the gate normally runs before the add. The requirement and CLAUDE.md say 'no key is written anywhere in the repository'. Fix: list `git ls-files --cached --others --exclude-standard` instead, and plant a case in an untracked file.",
+    "Smaller: the placeholder scan covers only src/data, src/nexus/kinds and src/nexus/book, and S-R7 says 'in the data', so that part is acceptable. The planted cases inside the test call the scan functions on strings and do not show the repository scan itself sees a fault; the repository scans were shown to catch faults only by my own plants."
+  ]
+}

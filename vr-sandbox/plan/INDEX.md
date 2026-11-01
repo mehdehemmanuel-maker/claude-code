@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129: 0 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 129: 1 passing (by the evaluator), 5 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
 | Rules in the constitution | 29 (20 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -79,9 +79,9 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S1 | The constitution with its checks and states | — | failing |
 | S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing |
 | S3 | Hooks: push gate, budget, honesty, loop breaker | — | failing |
-| S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | claimed |
+| S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | failing (evaluator: The key scan takes its file list from `git ls-files`, so a key written into a new file that is not yet `git add`ed passe) |
 | S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | claimed |
-| S6 | The routing test covers plan/ as it covers docs/ | — | claimed |
+| S6 | The routing test covers plan/ as it covers docs/ | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | failing |
 | S8 | The first decision records (0001 to 0007) written | — | failing |
 | S9 | The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may … | S7 | failing |
@@ -157,7 +157,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | P6 | Sights, each with its legend | — | failing |
 | P7 | The corrector's ghost and band | P1 | failing |
 | P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and … | P1 | failing |
-| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ … | — | claimed, in part, 2026-11-01: panels carried; board 9° below at 1.23 m, bar 48° wide, chat 42° aside at 1.3 m, keyboard 0.9 m, measured emulated; text size not yet measured; no real Quest yet |
+| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ … | — | failing (evaluator: chat is at 42 deg to the side; the task states 30 deg (the builder changed it after seeing overlap, but the stated numbe) |
 | P11 | Moving comfortably: fixed speeds (stopped, 1.4, 3 m/s), snap turn 30°/45° on the right stick, a vignette while moving, zoom rate capped and about … | P10 | failing |
 
 ### 05-civil (7)

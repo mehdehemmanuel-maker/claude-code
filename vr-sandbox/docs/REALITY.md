@@ -1561,3 +1561,17 @@ One rule added to `docs/FOR-AI.md` ("Every number you give comes from a node on 
 a request answered with no board is answered wrong"), the same 30 run again (one run): 30 of 30 right; 109 steps; tokens
 in 322 fresh + 386,970 read from the cache, out 17,854; 141 s summed. Building costs more than answering from memory:
 about 2.3 times the cached input and 1.2 times the output. One run each: how much a second run would vary is not known.
+
+## 2026-11-01: the evaluator (spec 00, S7), its first four verdicts, and what it caught
+
+`plan/specs/00-structure/evaluator.md`: a fresh agent on another model (Claude Sonnet; the builder is Claude Opus),
+given the task, its check and the evidence, never the builder's reasoning; it runs the check, plants the faults the check
+guards against, and writes a verdict file; only its `pass` marks a task passing (the one test and `compile.py` both
+check it). What the builder had marked passing became "claimed". Its first verdicts: 00.S6 pass (it planted five faults;
+the four the check names were caught); 04.P10 fail (the chat at 42° and the bar at 0.62 differ from the task's 30° and
+0.74 with no record of why in the plan, the text size is not measured, the script compares nothing against the limits, no
+real Quest); 00.S4 fail: a key in a file not yet added to git was not scanned (the scan read `git ls-files` only), and the
+whole gate was red: the verdict files were not routed from `plan/README.md`, and they had been pushed without the gate
+being run first (the builder's fault, against the rule that a push waits on the gate). Both fixed: the key scan now reads
+untracked files too (a planted key in a new file fails it), and the README routes the verdicts. S6 passing and P10
+failing, judged rightly against what was known of them, meet S7's own check.
