@@ -654,7 +654,7 @@ describe('every domain, in one pass', () => {
   // its counterbore, a tapped hole refused for want of thread, an insert's hole and the insert, a motor's face)
   it('the negative of an interface: the evaluation cases give their numbers', () => {
     const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; asking: Asking; host: { material: string; thickness: number }; expect?: Record<string, number | string | boolean> }[] };
-    const mm = (x: number) => +(x * 1000).toFixed(4), got: string[] = [], ours = set.cases.filter((c) => c.expect);
+    const mm = (x: number) => +(x * 1000).toFixed(4), got: string[] = [], ours = set.cases.filter((c) => c.expect && c.asking); // (a case with a fastener asking and its numbers: the cases waiting on 01.I17 have no asking)
     expect(ours.map((c) => c.case), 'the cases I5 answers for').toEqual([1, 2, 3, 7]);
     for (const c of ours) {
       const n = negativeOf(c.asking, { material: c.host.material, thickness: c.host.thickness / 1000 }), e = c.expect!, say = (k: string, v: unknown) => got.push(`case ${c.case} ${k}: ${JSON.stringify(v)}`);
@@ -960,6 +960,35 @@ describe('every domain, in one pass', () => {
     expect((await t.doTool('build', { nodes: [{ b: 'in.number' }] })).split('\n').filter((l) => l.startsWith('!')), 'as a list: one refusal').toEqual(['! nodes: write them as an object, {"name": {"b": "block id", "s": {…}}}']);
     const guide = readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'); expect(guide, 'FOR-AI\'s rule: parts put together by joint and imprint, never by typed positions').toMatch(/Never place parts by typed positions[^]*`joint`[^]*`imprint`[^]*`assert`/);
   }, 120_000);
+  // (the interfaces evaluation set (spec 01, I15; design §4): its twelve cases, the design's rows in order, each with its
+  // numbers worked out by hand from its sources; each named by the tests that run it, or waiting on the task that will
+  // build it, its numbers then held to themselves and to the ISO 286 tolerances the app holds)
+  it('the interfaces evaluation set: every case of the design, worked by hand, run or waiting', () => {
+    type Case = { case: number; what: string; expect: Record<string, number | string | number[]>; worked?: string; by?: string[]; waits?: string; sources?: { url: string; publisher: string }[] };
+    const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: Case[] }, design = readFileSync(join(root, 'plan/specs/01-interfaces/design.md'), 'utf8');
+    const sec = design.slice(design.indexOf('## 4. How we will know'), design.indexOf('## 5.')), rows = sec.split('\n').filter((l) => /^\| [a-z]/.test(l) && !/^\| Case/.test(l)).map((l) => l.split('|')[1]!.trim());
+    expect(set.cases.map((c) => c.case), 'twelve cases').toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(rows.length, 'the design\'s twelve rows').toBe(12); set.cases.forEach((c, k) => expect(c.what.startsWith(rows[k]!), `case ${c.case} is the design's row ${k + 1}: "${rows[k]}"`).toBe(true));
+    const tests = new Set([...readFileSync(join(root, 'tests/nexus/domains.test.ts'), 'utf8').matchAll(/^  it\('((?:[^'\\]|\\.)*)'/gm)].map((m) => m[1]!.replace(/\\'/g, "'")));
+    const tasks = new Map((JSON.parse(readFileSync(join(root, 'plan/specs/01-interfaces/tasks.json'), 'utf8')) as { tasks: { id: string; status: string }[] }).tasks.map((t) => [`01.${t.id}`, t.status]));
+    for (const c of set.cases) {
+      // (its numbers (an expect) and how they were worked (a worked), on the case or in the record it is run by)
+      const found = { worked: [] as string[], expect: 0 }, walk = (o: unknown): void => { if (!o || typeof o !== 'object') return; for (const [k, v] of Object.entries(o)) { if (k === 'worked' && typeof v === 'string') found.worked.push(v); else if (k === 'expect' && v && typeof v === 'object') found.expect += Object.keys(v).length; walk(v); } };
+      walk(c); expect(found.worked.some((w) => w.length > 40) && found.expect > 0, `case ${c.case}: its numbers and how they were worked`).toBe(true);
+      if (c.by) { expect(c.by.length, `case ${c.case}: the tests that run it`).toBeGreaterThan(0); for (const t of c.by) expect(tests.has(t), `case ${c.case}: the test "${t}" is in the gate`).toBe(true); continue; }
+      expect(c.waits && tasks.has(c.waits) && tasks.get(c.waits) !== 'passing', `case ${c.case}: run by a test, or waiting on a task not yet passing (${c.waits})`).toBe(true);
+      expect((c.sources ?? []).filter((x) => /^https:\/\//.test(x.url)).length, `case ${c.case}: its sources`).toBeGreaterThanOrEqual(2);
+    }
+    // (the waiting cases held to themselves: each pair of limits spans its IT grade; and to the tolerances the app holds)
+    const e = (n: number) => set.cases.find((c) => c.case === n)!.expect, span = (x: unknown) => (x as number[])[1]! - (x as number[])[0]!, it = (d: number, g: number) => Math.round(itTolerance(d, g).um);
+    const b6 = e(6); expect([span(b6.shaft_um), span(b6.housing_um)], 'k5 and H7 span IT5 and IT7').toEqual([b6.IT5_18_30, b6.IT7_50_80]); expect([it(25, 5), it(52, 7)], 'the app\'s IT5 at 25 mm, IT7 at 52 mm').toEqual([b6.IT5_18_30, b6.IT7_50_80]);
+    const d11 = e(11); expect([span(d11.pin_um), span(d11.hole_um), span(d11.sliding_um)], 'm6, H7, G7 span IT6, IT7, IT7').toEqual([d11.IT6_3_6, d11.IT7_3_6, d11.IT7_3_6]);
+    expect(d11.pin_mm, 'the pin\'s limits, 6 mm and its deviations').toEqual((d11.pin_um as number[]).map((u) => +(6 + u / 1000).toFixed(3))); expect(it(6, 7), 'the app\'s IT7 at 6 mm').toBe(d11.IT7_3_6);
+    // (where the app's formula and ISO 286's table differ, the fault is open and named)
+    if (it(6, 6) !== d11.IT6_3_6) expect(readFileSync(join(root, 'plan/DEFECTS.md'), 'utf8'), 'the app\'s IT6 at 6 mm is not the table\'s: fault D17 open').toMatch(/^\| D17 \|.*\| open \|/m);
+    const k12 = e(12); expect([span(k12.shaft_um), span(k12.hub_um), it(8, 9)], 'N9 and JS9 span IT9 at 8 mm, as the app gives it').toEqual([k12.IT9_6_10, k12.IT9_6_10, k12.IT9_6_10]);
+    expect([k12.d_minus_t1, k12.d_plus_t2], 'under the shaft\'s keyway and over the hub\'s, at 30 mm').toEqual([30 - (k12.t1 as number), 30 + (k12.t2 as number)]); expect((k12.hub_um as number[])[0], 'JS9 about zero').toBe(-(k12.hub_um as number[])[1]!);
+  });
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
   // plate's hole is not)

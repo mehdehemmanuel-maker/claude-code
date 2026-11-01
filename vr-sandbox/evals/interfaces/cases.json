@@ -1,5 +1,5 @@
 {
-  "says": "The interface evaluation set (spec 01, design §4): each case's inputs and its expected numbers, worked out by hand from the sources of §2.3 before the code ran (ISO 273, DIN 974-1, ISO 4762 in threads.ts, ISO 2306, Bossard's engagement lengths, ISO 286-1's Table 1, NEMA ICS 16 in kinds/motion.ts, the insert maker's table). Sizes in mm.",
+  "says": "The interface evaluation set (spec 01, design §4): each case's inputs and its expected numbers, worked out by hand from the sources of §2.3 before the code ran (ISO 273, DIN 974-1, ISO 4762 in threads.ts, ISO 2306, Bossard's engagement lengths, ISO 286-1's Table 1, NEMA ICS 16 in kinds/motion.ts, the insert maker's table); cases 6, 11 and 12 from SKF's catalogue, ISO 286-2, ISO 8734 and ISO 2338, DIN 6885-1 and ISO/R 773, each read by two readers apart. Each case names the tests that run it, or the task it waits on. Sizes in mm.",
   "cases": [
     {
       "case": 1,
@@ -38,7 +38,11 @@
           "ok": true
         },
         "worked": "in the middle of a 100 mm plate: its edge 50 mm from the 9 mm hole (EN 1993-1-8 asks 1.2 × 9 = 10.8); no other hole; the counterbore 8.5 mm within its 10 mm"
-      }
+      },
+      "by": [
+        "the negative of an interface: the evaluation cases give their numbers",
+        "the checks before cutting: cases 2, 4 and 5 refused by their rule and value, case 1 passing"
+      ]
     },
     {
       "case": 2,
@@ -76,7 +80,11 @@
           "have": 8
         },
         "worked": "its depth measured along its line, 8 mm; the thread asks 12 (Bossard): refused before anything else"
-      }
+      },
+      "by": [
+        "the negative of an interface: the evaluation cases give their numbers",
+        "the checks before cutting: cases 2, 4 and 5 refused by their rule and value, case 1 passing"
+      ]
     },
     {
       "case": 3,
@@ -96,7 +104,10 @@
         "insert_hole": 5.7,
         "insert_depth": 9.1
       },
-      "worked": "a polymer: no thread cut; CNC Kitchen's TC-M4x8.1 insert (8.1 mm long, 6.3 mm across) in its 5.7 mm hole, blind L + 1 = 9.1 mm deep, within the 10 mm part; the insert placed as a part"
+      "worked": "a polymer: no thread cut; CNC Kitchen's TC-M4x8.1 insert (8.1 mm long, 6.3 mm across) in its 5.7 mm hole, blind L + 1 = 9.1 mm deep, within the 10 mm part; the insert placed as a part",
+      "by": [
+        "the negative of an interface: the evaluation cases give their numbers"
+      ]
     },
     {
       "case": 4,
@@ -128,7 +139,10 @@
           "have": 4
         },
         "worked": "the hole ISO 273 medium, d0 9.0 mm; EN 1993-1-8 Table 3.3 asks e2 ≥ 1.2 d0 = 10.8 mm; the edge is 50 − 46 = 4 mm from its line: refused, 6.8 mm short"
-      }
+      },
+      "by": [
+        "the checks before cutting: cases 2, 4 and 5 refused by their rule and value, case 1 passing"
+      ]
     },
     {
       "case": 5,
@@ -165,7 +179,66 @@
           "have": 15
         },
         "worked": "an M8 hole of 9.0 mm already at the middle; the new one 15 mm from it; EN 1993-1-8 asks p1 ≥ 2.2 d0 = 19.8 mm: refused"
-      }
+      },
+      "by": [
+        "the checks before cutting: cases 2, 4 and 5 refused by their rule and value, case 1 passing"
+      ]
+    },
+    {
+      "case": 6,
+      "what": "a 6205 bearing into a housing and onto a shaft",
+      "waits": "01.I17",
+      "bearing": {
+        "name": "SKF 6205",
+        "d": 25,
+        "D": 52,
+        "B": 15
+      },
+      "expect": {
+        "shaft": "k5",
+        "shaft_um": [
+          2,
+          11
+        ],
+        "housing": "H7",
+        "housing_um": [
+          0,
+          30
+        ],
+        "IT5_18_30": 9,
+        "IT7_50_80": 30,
+        "da_min": 30.6,
+        "Da_max": 46.4,
+        "ra_max": 1.0
+      },
+      "worked": "SKF 6205: d 25, D 52, B 15 (its product page). A rotating inner ring under normal load: the shaft k5 (SKF's shaft table); a stationary outer ring in a solid steel or cast iron housing: H7 (its housing table). ISO 286-2: k5 over 18 to 30 mm is +2 to +11 µm (its width 9 = IT5 at 18 to 30); H7 over 50 to 80 mm is 0 to +30 µm (IT7 = 30). The shoulders from SKF: the shaft's at least 30.6 mm, the housing's at most 46.4 mm, fillets at most 1 mm.",
+      "sources": [
+        {
+          "url": "https://www.skf.com/us/products/rolling-bearings/ball-bearings/deep-groove-ball-bearings/productid-6205",
+          "publisher": "SKF (6205 product page; its dimensions and abutments, read in inches and converted)"
+        },
+        {
+          "url": "https://www.skf.com/binaries/pub12/Images/0901d196802809de-Rolling-bearings---17000_1-EN_tcm_12-121486.pdf",
+          "publisher": "SKF Rolling bearings catalogue 17000/1 EN (2018), shaft and housing tolerance tables"
+        },
+        {
+          "url": "https://cdn.standards.iteh.ai/samples/54915/7d6147c29fed4e31af36b60561e88752/ISO-286-2-2010.pdf",
+          "publisher": "ISO 286-2:2010, Table 1 (IT grades; sample pages via iTeh)"
+        },
+        {
+          "url": "https://silvia.malakova.website.tuke.sk/konst-ANG/ISO%20Tolerances%20for%20Shafts%20and%20Holes.pdf",
+          "publisher": "Technical University of Košice, ISO 286-2 tables (H7, k5)"
+        },
+        {
+          "url": "https://www.roymech.co.uk/Useful_Tables/ISO_Tolerances/ISO_286_2H.html",
+          "publisher": "Roymech, ISO 286-2 hole limits"
+        },
+        {
+          "url": "https://www.roymech.co.uk/Useful_Tables/ISO_Tolerances/ISO_286_2s.html",
+          "publisher": "Roymech, ISO 286-2 shaft limits"
+        }
+      ],
+      "read": "2026-11-01, by two readers apart (a workflow), every value agreeing"
     },
     {
       "case": 7,
@@ -186,7 +259,10 @@
         "pilot": 22,
         "pilot_upper_um": 21
       },
-      "worked": "NEMA 17's face: four M3 on a 31 mm square, a 22 mm pilot; ISO 273 medium for M3: 3.4; the pilot's bore 22 H7: 0 to +21 µm (ISO 286-1 Table 1, IT7 at 18 to 30 mm)"
+      "worked": "NEMA 17's face: four M3 on a 31 mm square, a 22 mm pilot; ISO 273 medium for M3: 3.4; the pilot's bore 22 H7: 0 to +21 µm (ISO 286-1 Table 1, IT7 at 18 to 30 mm)",
+      "by": [
+        "the negative of an interface: the evaluation cases give their numbers"
+      ]
     },
     {
       "case": 8,
@@ -206,7 +282,10 @@
           "washers": 2
         },
         "worked": "grip 16; ISO 7089 washers 1.6 each; ISO 4032 nut 6.8; two pitches 2.5: 28.5 mm; the shortest ISO 4017 M8 length sold at or above it, 30 mm"
-      }
+      },
+      "by": [
+        "the fastener for a stack: case 8 chooses its bolt; the machines' fasteners unchanged"
+      ]
     },
     {
       "case": 9,
@@ -241,7 +320,10 @@
           ]
         },
         "worked": "M8's hole 9.0 mm (ISO 273 medium); EN 1993-1-8 asks 1.2 d0 = 10.8 mm from the bore's edge to each hole's centre: the bolt circle at least 20 + 10.8 = 30.8 mm round; the bore made 50 mm, 25 + 10.8 = 35.8 mm; six holes in the flange and the cover at that radius; the bolts through 10 + 6 mm as case 8 works it, bolt M8x30; widening the bore runs the bore, the radius, the circle, both parts' holes and the bolts again, and not the two plates"
-      }
+      },
+      "by": [
+        "the bore widened: the bolt circle, the bolts and the cover's holes follow"
+      ]
     },
     {
       "case": 10,
@@ -284,7 +366,136 @@
           "lost_round": true
         },
         "worked": "the imprint at x 10, z −20 mm on the top of a 100 × 10 × 100 plate; the plate made 20 mm tall about its middle: its top is now at y = 10 mm, so the imprint is made again there and its hole runs the new 20 mm; one cut, the old one gone. The plate made 15 mm wide: x = 10 mm is off it, no face answers: lost. The plate made a ball: the surface there faces otherwise: lost."
-      }
+      },
+      "by": [
+        "a box made taller keeps its imprint on the top; a face removed says it is lost"
+      ]
+    },
+    {
+      "case": 11,
+      "what": "a dowel 6 m6 into two plates",
+      "waits": "01.I17",
+      "expect": {
+        "pin": "m6",
+        "pin_um": [
+          4,
+          12
+        ],
+        "pin_mm": [
+          6.004,
+          6.012
+        ],
+        "hole": "H7",
+        "hole_um": [
+          0,
+          12
+        ],
+        "IT6_3_6": 8,
+        "IT7_3_6": 12,
+        "band": "over 3 up to and including 6",
+        "joint": "fixed",
+        "sliding_side": "G7",
+        "sliding_um": [
+          4,
+          16
+        ]
+      },
+      "worked": "ISO 8734 (hardened) gives the dowel's diameter as m6 only; ISO 2338 (unhardened) m6 or h8. 6 mm falls in ISO 286's band over 3 up to and including 6 (not 6 to 10, where m6 would be +6 to +15): m6 +4 to +12 µm (6.004 to 6.012 mm; its width 8 = IT6), H7 0 to +12 µm (IT7 = 12). An m6 pin in an H7 hole is a transition fit by its makers (Misumi's JIS fit table, Ganter): it locates the two plates, a fixed joint. Where one plate must come off, its makers give its hole G7 (+4 to +16 µm), not H7. Our ISO 286-1 formula gives IT6 7.3 µm at 3 to 6 mm where Table 1 gives 8: the table rules (fault D17).",
+      "sources": [
+        {
+          "url": "https://standards.iteh.ai/catalog/standards/iso/63b23e14-2faf-4202-b387-3db6074db25a/iso-8734-1997",
+          "publisher": "ISO 8734:1997 (sample pages via iTeh)"
+        },
+        {
+          "url": "https://cdn.standards.iteh.ai/samples/20001/5b26cece48c448b782c0de1eccb5b16c/ISO-2338-1997.pdf",
+          "publisher": "ISO 2338:1997 (sample via iTeh)"
+        },
+        {
+          "url": "https://cdn.standards.iteh.ai/samples/54915/7d6147c29fed4e31af36b60561e88752/ISO-286-2-2010.pdf",
+          "publisher": "ISO 286-2:2010, Table 1 (IT grades)"
+        },
+        {
+          "url": "https://us.misumi-ec.com/pdf/tech/mech/US2010_fa_p3539_3540.pdf",
+          "publisher": "MISUMI, excerpt of JIS B 0401 (H7, G7, m6 at 3 to 6 mm)"
+        },
+        {
+          "url": "https://us.misumi-ec.com/pdf/press/us_12e_pr1261.pdf",
+          "publisher": "MISUMI, basis of selection for fits (an m6 pin in H7: transition)"
+        },
+        {
+          "url": "https://www.ekinsun.com/custom-fasteners/dowel-pin-size-chart/",
+          "publisher": "EKINSUN (pin maker): H7 pressed side, G7 sliding side"
+        },
+        {
+          "url": "https://www.roymech.co.uk/Useful_Tables/ISO_Tolerances/ISO_286_2s.html",
+          "publisher": "Roymech, ISO 286-2 shaft limits (m6)"
+        }
+      ],
+      "read": "2026-11-01, by two readers apart, every value agreeing; the sliding side's hole the makers' advice, not a standard"
+    },
+    {
+      "case": 12,
+      "what": "a key 8 × 7 in a 30 mm shaft and its hub",
+      "waits": "01.I17",
+      "expect": {
+        "shaft_range": [
+          22,
+          30
+        ],
+        "b": 8,
+        "h": 7,
+        "t1": 4.0,
+        "t1_tol": [
+          0,
+          0.2
+        ],
+        "t2": 3.3,
+        "t2_tol": [
+          0,
+          0.2
+        ],
+        "shaft_fit": "N9",
+        "shaft_um": [
+          -36,
+          0
+        ],
+        "hub_fit": "JS9",
+        "hub_um": [
+          -18,
+          18
+        ],
+        "IT9_6_10": 36,
+        "d_minus_t1": 26.0,
+        "d_plus_t2": 33.3
+      },
+      "worked": "DIN 6885-1 (and ISO/R 773): a shaft over 22 up to 30 mm takes an 8 × 7 key; the shaft's keyway 4.0 mm deep (+0.2), the hub's 3.3 mm (+0.2): for a 30 mm shaft, 26.0 mm under the keyway and 33.3 mm over the hub's. A normal fit: the shaft's keyway N9 (0 to -36 µm for 8 mm, ISO 286-2's row over 6 to 10, its width 36 = IT9), the hub's JS9 (±18 µm). One keyseat cutter maker lists N9 for 8 mm as -5 to -41 µm; the standard's own table and five others give 0 to -36: the standard rules.",
+      "sources": [
+        {
+          "url": "https://cdn.standards.iteh.ai/samples/5056/1948771c55e14209b6e286c4c8fa1401/SIST-ISO-R-773-1996.pdf",
+          "publisher": "SIST ISO/R 773 (identical to ISO/R 773; sample via iTeh)"
+        },
+        {
+          "url": "https://live-katalog.ganternorm.com/pdf/ganter/en/6885-1.pdf?dispositiontype=attachment",
+          "publisher": "Ganter Norm, DIN 6885-1 extract"
+        },
+        {
+          "url": "https://www.wilh-wernecke.de/docs/Datenblatt_Passfedern-DIN-6885.pdf",
+          "publisher": "Wilhelm Wernecke, DIN 6885 data sheet"
+        },
+        {
+          "url": "https://www.fasten.it/en/norms/norm/din_6885-1",
+          "publisher": "Fasten.it, DIN 6885-1 reproduced by permission of DIN"
+        },
+        {
+          "url": "https://law.resource.org/pub/in/bis/S01/is.919.2.1993.pdf",
+          "publisher": "IS 919 (Part 2):1993, identical to ISO 286-2:1988 (N9, JS9)"
+        },
+        {
+          "url": "https://us.misumi-ec.com/pdf/tech/mech/US2010_fa_p3557_3558.pdf",
+          "publisher": "MISUMI, JIS B 1301 excerpt"
+        }
+      ],
+      "read": "2026-11-01, by two readers apart, every value agreeing but one cutter maker's N9 row (said)"
     }
   ]
 }

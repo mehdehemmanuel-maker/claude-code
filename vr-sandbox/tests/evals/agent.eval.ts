@@ -10,6 +10,7 @@ import '../../src/nexus/seeds';
 import { agentBuild, nearMissLine, type AgentRun } from '../../src/nexus/agent';
 import { Engine, emptyBoard, placeBlock } from '../../src/nexus/dataflow';
 import { CONSTANTS } from '../../src/data/constants';
+import { BOLT_SPACING, CLEARANCE } from '../../src/nexus/interfaces';
 
 const g = CONSTANTS.g.value, R = CONSTANTS.R.value;
 /** The checked spring's rate with 6 coils, as the app's own spring node gives it (worked out before the cases run). */
@@ -78,7 +79,9 @@ export const PLACEMENTS: [string, Check][] = [
   // engagement; never a ray that missed the angle (the check first asked for the counterbore alone: widened on 2026-11-01,
   // after the first runs, each of those refusals being as true an answer))
   ['Paste an M8 socket head cap screw onto one leg of a 50 x 5 steel angle, and say whether it fits.', nodeOf(['imprint'], (o) => (o.violation && !/meets nothing/.test(String(o.violation)) && !(o.part as { cuts?: unknown[] })?.cuts?.length ? null : `not refused by a rule: ${String(o.violation || o.says).slice(0, 100)}`))],
-  ['Bolt a 6 mm steel cover onto a 10 mm steel flange round a 40 mm bore, with six M8 bolts on the least bolt circle the bore allows.', both(joined(0), gives(0.0308))],
+  // (the least bolt circle's radius worked out from the tables the app uses, never typed: the bore's 20 mm and EN 1993-1-8's
+  // 1.2 d0, d0 the ISO 273 medium hole for M8 (the evaluator found it typed, 2026-11-01))
+  ['Bolt a 6 mm steel cover onto a 10 mm steel flange round a 40 mm bore, with six M8 bolts on the least bolt circle the bore allows.', both(joined(0), gives(0.02 + (BOLT_SPACING.e1.least(CLEARANCE.M8!.medium) / 1000)))],
   ['Mount a NEMA 17 stepper on its motor plate, and assert that the two together weigh less than 1 kg.', both(joined(0), nodeOf(['assert'], (o, e, id) => (!e.wiresInto(id).some((w) => w.in === 'value') ? 'its value typed, not wired from a measure' : o.holds === true ? null : `does not hold: ${String(o.says)}`)))],
 ];
 

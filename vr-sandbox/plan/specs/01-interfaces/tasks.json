@@ -197,7 +197,7 @@
    ],
    "owner": "agent.ts, docs/FOR-AI.md",
    "check": "on the AI's evaluation set, placements are made by joints and fewer are wrong than at the baseline (spec 00, S5)",
-   "status": "claimed",
+   "status": "passing",
    "after": [
     "I13"
    ],
@@ -211,10 +211,11 @@
    ],
    "owner": "evals/interfaces",
    "check": "the set exists with its expected numbers and sources before I5 is built; it runs in the gate",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I3"
-   ]
+   ],
+   "evidence": "2026-11-01: evals/interfaces/cases.json holds the design's twelve cases in its order, each with its expected numbers and how they were worked by hand from their sources. Cases 1 to 5 and 7 to 10 were worked before their code (I5 to I11) and each names the tests in the gate that run it. Cases 6 (an SKF 6205 in its housing and on its shaft: k5 +2 to +11 µm, H7 0 to +30 µm, shoulders 30.6 and 46.4 mm, fillets 1 mm), 11 (a 6 m6 dowel: +4 to +12 µm in H7 0 to +12 µm, a transition fit that locates, a fixed joint; G7 where a plate must come off) and 12 (an 8 × 7 key in a 30 mm shaft: t1 4.0, t2 3.3, both +0.2; N9 0 to -36 µm, JS9 ±18 µm) were read from SKF's catalogue, ISO 286-2, ISO 8734 and ISO 2338, DIN 6885-1 and ISO/R 773 (through makers' extracts and IS 919-2), each table by two readers apart, every value agreeing but one keyseat cutter maker's N9 row (said); they wait on 01.I17, which builds them. The test 'the interfaces evaluation set: every case of the design, worked by hand, run or waiting' runs in the gate: the twelve cases are the design's rows in order; each has its numbers and its working; each names tests that exist in the gate, or waits on a task not yet passing with at least two sources; the waiting cases' limits span their IT grades and match the IT grades the app computes, and where the app's ISO 286-1 formula differs from the standard's table (IT6 at 3 to 6 mm: 7.3 against 8) fault D17 is open and named"
   },
   {
    "id": "I16",

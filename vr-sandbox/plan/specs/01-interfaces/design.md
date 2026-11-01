@@ -171,8 +171,10 @@ extends `placement/proximity.ts`, still the one solver.
 - **Assertion nodes**: `assert` (a measured quantity, a target, a tolerance) over volume, mass, centre of mass, box,
   least wall, clearance, interference, joint residual. The agent's `build` and `change` replies lead with the
   assertions that fail.
-- **A shadow board**: `change` builds into a copy; the open board is replaced only when the copy's checks pass; a failed
-  copy stays readable (`read` can open it) without replacing the accepted one.
+- **A shadow board**: `change` builds into a copy; the open board is replaced only when the copy keeps every check that
+  held on the board it was made from (a check new with the change and failing is said first, `FAILS`, but does not block:
+  a board may be built to show a refusal); a copy that breaks one stays readable (`read` can open it) without replacing
+  the accepted one. (Reworded 2026-11-01 to say what is built, as I14's evaluator asked.)
 
 ### 2.9 The person (R17)
 

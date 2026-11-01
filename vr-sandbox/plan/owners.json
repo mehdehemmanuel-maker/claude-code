@@ -77,5 +77,8 @@
   "src/nexus/blocks.ts",
   "src/nexus/built.ts",
   "src/nexus/starters.ts"
+ ],
+ "01.I15": [
+  "evals/interfaces/cases.json"
  ]
 }

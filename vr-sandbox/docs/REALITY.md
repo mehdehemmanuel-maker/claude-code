@@ -2305,3 +2305,18 @@ assertion's warning text where it fails, and the joint solver's freedom and rank
 reader of the two boards' 3D views named the parts (a plate, a round boss, an angle; a disc with six bolts) and what
 looked wrong: kept as fault D16 (a dark part on the dark view, a ground grid on one board and not the other, pieces
 counted that cannot be seen, a round plate's facets). Checked with `npm run gate`.
+
+## 2026-11-01: I14 passes; the interfaces evaluation set whole (spec 01, I14, I15)
+
+01.I14 passed on its first judging. Its evaluator ran the AI itself, two sets per side: 30 of 30 placement requests right
+after, 14 of 30 at the baseline, and 6 of 15 when the rule's section was taken out of FOR-AI (the set catches losing it).
+Its two notes are mended: the design said a change is taken only when the copy's checks pass, where the code takes it
+unless it breaks a check that held (the design now says what is built), and one expected number in the placement set was
+typed (the least bolt circle's radius, now worked out from the tables the app uses). The interfaces evaluation set now
+holds all twelve of the design's cases. The three not yet built (a 6205 bearing in its housing and on its shaft, a 6 m6
+dowel, an 8 × 7 key) were read from SKF's catalogue, ISO 286-2, ISO 8734 and ISO 2338, DIN 6885-1 and ISO/R 773, each
+table by two readers apart; every value agreed but one keyseat cutter maker's N9 row, which the case says. Working them
+found that the app's ISO 286-1 tolerance is the standard's formula, unrounded, where its table rules: they agree where a
+fit has been needed so far, but at 3 to 6 mm the formula gives IT6 7.3 µm against the table's 8 (fault D17, for I17).
+Checked with `npm run gate` (the test "the interfaces evaluation set: every case of the design, worked by hand, run or
+waiting").

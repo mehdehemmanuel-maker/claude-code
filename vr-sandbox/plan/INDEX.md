@@ -9,8 +9,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 23 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
-| Faults found in the code | 16 (11 fixed) |
+| Tasks in the specs | 130: 24 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
+| Faults found in the code | 17 (11 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -60,6 +60,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | D14 | Bolts and washers drawn through walls with no hole cut for them, hidden until 2026-11-01 by the excuse by name and the 0.5 mm skip: 204 more clashes on the Freightliner Cascadia (its frame rails' bolts, gussets in cross members) and 8 on the Honda Rancher (bleed screws in caliper bodies, caliper bolts through the pads). The small caliper mended 2026-11-01 (its bleed screw in a hole of its own, 1 mm short of the piston; its two bolts beside the pads): the Rancher has 1 left (a frame cross tube through the engine's oil pickup). Every bolted joint now bores the plies seated in its grip (`boreGrips`), and the Cascadia's cross members and bumper brackets are seated on their rails: its findings 500 to 334, none left on its rails' bolts; left: its tank straps' bolts, its differential's insides, its grille and hood, and its rails drawn web inboard where a ladder frame's are web outboard (turned round, its cross members meet the engine and the hood) | `src/nexus/machines.ts` (the trucks' frames, the ATV's brakes) | open | 10.T24 |
 | D15 | Two clashes the interference rule does not see, found 2026-11-01 writing I4's test: a piece standing in a hole cut in another and wider than the hole (a head 9.5 mm round in a hole 7.5 mm round, plain or turned) is not found; and a piece sunk wholly in another with one face flush with the other's is not found (no surface crosses, and the inside test lands on the shared face) | `src/nexus/make/rules.ts` | open | 10.T24 |
 | D16 | The 3D view as a reader with no context saw it (the blind check of round fourteen, 2026-11-01, on the two interface starter boards): a dark steel part nearly black on the near-black view, read as a ramp; a ground grid on one board and none on another, so a part seems to hover; the count of pieces drawn many more than one sees (shanks, washers and nuts inside or under the plates: true, but unsaid); a round plate drawn with a few straight facets; grid lines drawn over a part's side and over the view's labels | `src/nexus/view/dock3d.ts`, `src/nexus/view/kit3d.ts` | open | 01.I16 |
+| D17 | `itTolerance` gives ISO 286-1's formula, unrounded, where its Table 1 is what rules: they agree where a fit has been needed so far (IT7 50 to 80 mm: 29.7 against 30; IT5 18 to 30: 9.2 against 9; IT9 6 to 10: 35.9 against 36), but at 3 to 6 mm IT6 is 7.3 by the formula and 8 by the table (found 2026-11-01 working evaluation case 11, a 6 m6 dowel). A fit worked from it would be narrow by a part of a micrometre | `src/nexus/interfaces.ts` | open | 01.I17 |
 
 ## Findings by theme (numbers are rows of `research/00-synthesis.md`)
 
@@ -113,8 +114,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | I11 | Copy and paste an interface; pattern and relation nodes; a shared pattern read by both parts | I8 | passing (evaluator claude-sonnet, 2026-11-01) |
 | I12 | Joints: frame-to-frame joints solved together; residual, flipped, freedom left (Jacobian rank), the fewest that fight named | I8 | passing (evaluator claude-sonnet, 2026-11-01) |
 | I13 | The nodes (interfaces, negative, imprint, pattern, relation, joint, assert) with their own tests; starter boards 'Paste a bolt onto anything' and … | I11, I12 | passing (evaluator claude-sonnet, 2026-11-01) |
-| I14 | The AI: FOR-AI's rule to mate by joints and imprints; assert nodes; its replies lead with what fails; a shadow board published only when its … | I13 | claimed |
-| I15 | The interfaces evaluation set: the twelve cases of design §4, numbers worked out by hand from the sources first | I3 | failing |
+| I14 | The AI: FOR-AI's rule to mate by joints and imprints; assert nodes; its replies lead with what fails; a shadow board published only when its … | I13 | passing (evaluator claude-sonnet, 2026-11-01) |
+| I15 | The interfaces evaluation set: the twelve cases of design §4, numbers worked out by hand from the sources first | I3 | claimed |
 | I16 | Drag to imprint in the 3D view: the negative shown before cutting (remove, keep, contact), its verdict, accept or cancel; copy and paste a face's … | I13 | failing |
 | I17 | The rest of R18 by the same model: bearing (housing and shaft), dowel, key and keyways, pipe thread, panel cut-out | I10, I12 | failing |
 | I18 | Interface versions: a published interface never changed in place; new versions with adapters or a declared break (C19; LEGO, Meccano, Linux's … | I2 | failing |
