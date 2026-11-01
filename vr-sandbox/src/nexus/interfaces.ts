@@ -130,3 +130,80 @@ export function interfacesOf(t: Part | Assembly): { list: Interface[]; clashes: 
   const seen = new Map<string, number>(); for (const x of list) seen.set(x.id, (seen.get(x.id) ?? 0) + 1);
   return { list, clashes: [...seen].filter(([, n]) => n > 1).map(([id, count]) => ({ id, count })) };
 }
+
+// ---- the tables a negative is sized from (spec 01, I3; design §2.3) ------------------------------------------------------
+// Each row from a document opened on 2026-11-01 and read again by a second reader against another publisher's copy (a
+// workflow of two agents a table: every value agreed, but where the second copy lacked the row). Each row names its source;
+// what a standard does not fix is said, never filled in. Values in mm unless said.
+
+/** Where the rows come from: the document opened, who published it, whether it is the standard's own text. */
+export interface TableSource { title: string; url: string; publisher: string; standard: boolean; second?: string }
+export const TABLE_SOURCES: Record<string, TableSource> = {
+  'ISO 273': { title: 'ISO 273:1979 Fasteners: clearance holes for bolts and screws (its table, p. 2)', url: 'https://cdn.standards.iteh.ai/samples/4183/1a8db2e6de054d2e9bed7d40be64d6e1/ISO-273-1979.pdf', publisher: 'ISO (a preview hosted by iTeh Standards)', standard: true, second: 'IS 1821:1987, identical to ISO 273 (Bureau of Indian Standards): https://law.resource.org/pub/in/bis/S01/is.1821.1987.pdf' },
+  'ISO 2306': { title: 'ISO 2306:1972 Drills for use prior to tapping screw threads (Table 1)', url: 'https://cdn.standards.iteh.ai/samples/7135/5bef5f85e78040d6b848307ffd62d83f/ISO-2306-1972.pdf', publisher: 'ISO (a preview hosted by iTeh Standards)', standard: true, second: 'Darmet, recommended drill sizes for taps: https://darmet.com.pl/en/technical/4179-recommended-drill-bit-sizes-for-taps-and-forming-taps' },
+  'DIN 974-1': { title: 'DIN 974-1:2008-02 Counterbores, Table 1, series 1 (for ISO 4762), as reproduced in Tabellenbuch Schrauben, Muttern und Zubehör (2014)', url: 'https://api.pageplace.de/preview/DT0400.9783410231622_A34075842/preview-9783410231622_A34075842.pdf', publisher: 'Beuth Verlag (DIN\'s publisher), a reproduction', standard: false, second: 'Ifanger, Flachsenkungen nach DIN 974-1: https://www.defruytier.be/uploads/product/files/ifanger-VFL.pdf' },
+  'ISO 15065': { title: 'ISO 15065:2005 Countersinks for countersunk head screws with head configuration in accordance with ISO 7721 (Table 1)', url: 'https://cdn.standards.iteh.ai/samples/37365/57c8c6dac6864ac5a6f7bfa6fdd06111/ISO-15065-2005.pdf', publisher: 'ISO (a preview hosted by iTeh Standards)', standard: true },
+  'EN 1993-1-8': { title: 'EN 1993-1-8:2005 Eurocode 3, design of joints, Table 3.3', url: 'https://dokumen.pub/eurocode-3-design-of-steel-structures-part-1-8-design-of-joints-2005nbsped.html', publisher: 'CEN (a copy on dokumen.pub; and a BSI scan)', standard: true, second: 'DSTU-N B EN 1993-1-8, the Ukrainian adoption' },
+  'Bossard engagement': { title: 'Bossard, length of engaged thread (recommended from trials, M6 to M16; bracketed values by the VDI 2230 formula)', url: 'https://assets.eu.ctfassets.net/0vp0u5uh75zd/3wPlDC2XQOYT3XOdwCk6lz/9a9282ffd29746a7a7f6b0149509f1cf/052_Length_engaged_thread_Fastening_EN_01_2025.pdf', publisher: 'Bossard (a fastener maker)', standard: false },
+  'ISO 286-1': { title: 'ISO 286-1:1988 limits and fits: the tolerance factor, the grades as multiples of it, the size steps, Table 1, as reproduced in BHEL corporate standard AA0230201', url: 'https://www.bhel.com/sites/default/files/specificationaa0230201-1440410133.pdf', publisher: 'Bharat Heavy Electricals Ltd, a reproduction', standard: false, second: 'IS 919 (Part 1):1993, identical to ISO 286-1 (Bureau of Indian Standards)' },
+};
+
+/** ISO 273 clearance holes, fine, medium and coarse series (tolerance fields H12, H13, H14, for information there). */
+export const CLEARANCE: Record<string, { fine: number; medium: number; coarse: number; src: 'ISO 273' }> = Object.fromEntries(([
+  ['M1.6', 1.7, 1.8, 2], ['M2', 2.2, 2.4, 2.6], ['M2.5', 2.7, 2.9, 3.1], ['M3', 3.2, 3.4, 3.6], ['M4', 4.3, 4.5, 4.8], ['M5', 5.3, 5.5, 5.8], ['M6', 6.4, 6.6, 7],
+  ['M8', 8.4, 9, 10], ['M10', 10.5, 11, 12], ['M12', 13, 13.5, 14.5], ['M14', 15, 15.5, 16.5], ['M16', 17, 17.5, 18.5], ['M20', 21, 22, 24], ['M24', 25, 26, 28], ['M30', 31, 33, 35],
+] as const).map(([k, fine, medium, coarse]) => [k, { fine, medium, coarse, src: 'ISO 273' as const }]));
+
+/** ISO 2306 drills before tapping, coarse threads: the drill, and the pitch it is for (about d − P, the standard says). */
+export const TAP_DRILL: Record<string, { drill: number; P: number; src: 'ISO 2306' }> = Object.fromEntries(([
+  ['M1.6', 1.25, 0.35], ['M1.8', 1.45, 0.35], ['M2', 1.6, 0.4], ['M2.2', 1.75, 0.45], ['M2.5', 2.05, 0.45], ['M3', 2.5, 0.5], ['M3.5', 2.9, 0.6], ['M4', 3.3, 0.7],
+  ['M4.5', 3.7, 0.75], ['M5', 4.2, 0.8], ['M6', 5, 1], ['M7', 6, 1], ['M8', 6.8, 1.25], ['M9', 7.8, 1.25], ['M10', 8.5, 1.5], ['M11', 9.5, 1.5], ['M12', 10.2, 1.75],
+  ['M14', 12, 2], ['M16', 14, 2], ['M18', 15.5, 2.5], ['M20', 17.5, 2.5], ['M22', 19.5, 2.5], ['M24', 21, 3],
+] as const).map(([k, drill, P]) => [k, { drill, P, src: 'ISO 2306' as const }]));
+
+/** DIN 974-1 counterbores, series 1 (for ISO 4762 heads): the counterbore's diameter d1, the through hole d2 (medium).
+ *  DIN 974-1 fixes no depth: it gives a way to work one out, so a counterbore's depth here is the head's height and an
+ *  allowance, labelled so where it is used. */
+export const COUNTERBORE: Record<string, { d1: number; d2: number; src: 'DIN 974-1' }> = Object.fromEntries(([
+  ['M3', 6.5, 3.4], ['M3.5', 6.5, 3.9], ['M4', 8, 4.5], ['M5', 10, 5.5], ['M6', 11, 6.6], ['M8', 15, 9], ['M10', 18, 11], ['M12', 20, 13.5], ['M14', 24, 15.5],
+  ['M16', 26, 17.5], ['M18', 30, 20], ['M20', 33, 22], ['M22', 36, 24], ['M24', 40, 26],
+] as const).map(([k, d1, d2]) => [k, { d1, d2, src: 'DIN 974-1' as const }]));
+
+/** ISO 15065 countersinks (90°) for countersunk heads to ISO 7721 (ISO 2009, 7046 and their kin): Dc, its least and its
+ *  most, and the hole. The standard ends at M10; ISO 10642 socket heads are outside it (DIN 74 F gives theirs: not here). */
+export const COUNTERSINK: Record<string, { Dc: number; DcMax: number; dh: number; src: 'ISO 15065' }> = Object.fromEntries(([
+  ['M3', 6.3, 6.5, 3.4], ['M3.5', 8.2, 8.4, 3.9], ['M4', 9.4, 9.6, 4.5], ['M5', 10.4, 10.65, 5.5], ['M6', 12.6, 12.85, 6.6], ['M8', 17.3, 17.55, 9], ['M10', 20, 20.3, 11],
+] as const).map(([k, Dc, DcMax, dh]) => [k, { Dc, DcMax, dh, src: 'ISO 15065' as const }]));
+
+/** EN 1993-1-8 Table 3.3: the least and the most end and edge distances and spacings of bolts in steel, from the hole d0
+ *  and the thinner outer part's thickness t (mm): the most for steel to EN 10025 exposed to the weather (no most is given
+ *  where not exposed; the slotted-hole distances e3, e4 and the staggered rows' p1,0, p1,i are in the standard, not here). */
+export const BOLT_SPACING = {
+  e1: { least: (d0: number) => 1.2 * d0, most: (t: number) => 4 * t + 40 }, e2: { least: (d0: number) => 1.2 * d0, most: (t: number) => 4 * t + 40 },
+  p1: { least: (d0: number) => 2.2 * d0, most: (t: number) => Math.min(14 * t, 200) }, p2: { least: (d0: number) => 2.4 * d0, most: (t: number) => Math.min(14 * t, 200) },
+  src: 'EN 1993-1-8' as const,
+};
+
+/** How far a screw must go into a tapped hole, as a multiple of its diameter, by the host's material and the screw's class
+ *  (coarse thread): Bossard's recommended values from trials, M6 to M16 (a VDI 2230 calculation gives the exact one). */
+export const ENGAGEMENT: Record<string, { Rm: number; '8.8'?: number; '10.9'?: number; '12.9'?: number; src: 'Bossard engagement' }> = {
+  'steel, Rm over 360 (S235, C15)': { Rm: 360, '8.8': 1, '10.9': 1.25, '12.9': 1.4, src: 'Bossard engagement' },
+  'steel, Rm over 500 (S355, C35)': { Rm: 500, '8.8': 0.9, '10.9': 1, '12.9': 1.2, src: 'Bossard engagement' },
+  'steel heat-treated, Rm over 800 (42CrMo4 V)': { Rm: 800, '8.8': 0.8, '10.9': 0.9, '12.9': 1, src: 'Bossard engagement' },
+  'grey cast iron, Rm over 220 (GJL 250)': { Rm: 220, '8.8': 1, '10.9': 1.25, '12.9': 1.4, src: 'Bossard engagement' },
+  'aluminium, Rm over 180 (AlMg3 F18)': { Rm: 180, '8.8': 2, src: 'Bossard engagement' },
+  'aluminium, Rm over 330 (AlMgSi1 F32)': { Rm: 330, '8.8': 1.4, '10.9': 1.6, src: 'Bossard engagement' },
+};
+
+/** ISO 286-1's standard tolerance for a size and a grade (IT5 to IT16, sizes to 500 mm), in µm: i = 0.45∛D + 0.001 D, D the
+ *  geometric mean of the size's step, the grade a multiple of i. Derived from the formula and said so: the standard's Table 1
+ *  is rounded by its own rules and is to be preferred (its values at three steps are kept here to set beside). */
+export const IT_STEPS = [0, 3, 6, 10, 18, 30, 50, 80, 120, 180, 250, 315, 400, 500];
+export const IT_MULTIPLE: Record<number, number> = { 5: 7, 6: 10, 7: 16, 8: 25, 9: 40, 10: 64, 11: 100, 12: 160, 13: 250, 14: 400, 15: 640, 16: 1000 };
+export const IT_TABLE: Record<string, { IT6: number; IT7: number; IT8: number; src: 'ISO 286-1' }> = { '6-10': { IT6: 9, IT7: 15, IT8: 22, src: 'ISO 286-1' }, '18-30': { IT6: 13, IT7: 21, IT8: 33, src: 'ISO 286-1' }, '50-80': { IT6: 19, IT7: 30, IT8: 46, src: 'ISO 286-1' } };
+export function itTolerance(size: number, grade: number): { um: number; step: [number, number]; derived: string } {
+  const k = IT_STEPS.findIndex((x, i) => i > 0 && size <= x); if (size <= 0 || k < 1) throw new Error(`ISO 286-1's formula is for sizes above 0 and to 500 mm: ${size}`);
+  const m = IT_MULTIPLE[grade]; if (!m) throw new Error(`IT${grade}: the formula gives IT5 to IT16`);
+  const lo = Math.max(IT_STEPS[k - 1]!, 1), hi = IT_STEPS[k]!, D = Math.sqrt(lo * hi), i = 0.45 * Math.cbrt(D) + 0.001 * D;
+  return { um: m * i, step: [IT_STEPS[k - 1]!, hi], derived: `derived: ${m} i, i = 0.45∛D + 0.001 D, D = ${D.toFixed(3)} mm (ISO 286-1's formula; its Table 1 rounds)` };
+}

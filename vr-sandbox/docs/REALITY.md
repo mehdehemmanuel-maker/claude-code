@@ -2044,3 +2044,21 @@ the one test on a real run's near misses, and their lines are read exactly; chan
 that is not there, an input nothing feeds) and open's (a starter board that is not there) are made by the real tools in the
 test and caught with their kinds; the page's summary counts are checked against its rows. With the runner's list emptied,
 the test fails. Checked with `npm run gate`.
+
+## 2026-11-01: the tables a negative is sized from, each row from a document opened (spec 01, I3)
+
+The tables a hole, a counterbore, a countersink, a tapped hole and a bolt pattern need (spec 01, design §2.3) were opened,
+copied and checked by a workflow of two readers a table: one opened a document holding it and copied its rows with a quote
+of each; the other opened the same document again and a second copy from another publisher, and compared every value.
+ISO 273 (15 sizes, three series: 45 values, all agreed with IS 1821, its Indian adoption); ISO 2306 tap drills (23 sizes:
+92 values agreed); DIN 974-1 counterbores (series 1, from a Beuth reproduction, agreeing with Ifanger's table) and ISO 15065
+countersinks (to M10, where the standard ends); EN 1993-1-8 Table 3.3 (every cell agreed with a BSI scan and the Ukrainian
+adoption; the second reader found the first had put two figure captions under the wrong panel, which nothing here uses);
+Bossard's engagement lengths (VDI 2230 named; no second source gives its bracketed values); ISO 286-1's formula and grades
+(32 values agreed with IS 919). They are `CLEARANCE`, `TAP_DRILL`, `COUNTERBORE`, `COUNTERSINK`, `BOLT_SPACING`,
+`ENGAGEMENT` and `itTolerance` in `src/nexus/interfaces.ts`, each row naming its source in `TABLE_SOURCES` (its address, its
+publisher, whether it is the standard's own text). What a standard does not fix is said: DIN 974-1 gives no counterbore
+depth; ISO 15065 stops at M10. `boreGrips` now takes its holes from `CLEARANCE`. The one test (the test "the tables negatives
+need, each row with its source") holds every row to a source and the tables to each other (the kinds' clearance holes are
+ISO 273 medium; each tap drill within 0.05 mm of d − P; each counterbore wider than its head; the formula within a tenth of
+the standard's rounded table). Checked with `npm run gate`.

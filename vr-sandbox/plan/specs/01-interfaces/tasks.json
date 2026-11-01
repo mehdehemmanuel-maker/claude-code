@@ -36,10 +36,11 @@
    ],
    "owner": "interfaces.ts (tables), threads.ts",
    "check": "every row carries a source or a label; spot values agree with their source, checked by the evaluator against the source itself",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I1"
-   ]
+   ],
+   "evidence": "2026-11-01: interfaces.ts holds ISO 273 (fine, medium, coarse, M1.6 to M30), ISO 2306 tap drills (M1.6 to M24), DIN 974-1 counterbores (series 1, M3 to M24; no depth: the standard fixes none), ISO 15065 countersinks (M3 to M10, where it ends), EN 1993-1-8 Table 3.3 (e1, e2, p1, p2), Bossard's engagement lengths (VDI 2230 named), ISO 286-1's formula with three steps of its table; each row names its source (TABLE_SOURCES: address, publisher, the standard's own text or not); each table opened and read again by a second reader against another copy"
   },
   {
    "id": "I4",

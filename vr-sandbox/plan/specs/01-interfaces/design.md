@@ -88,13 +88,13 @@ Every size in a negative comes from a table with its source, or a formula with i
 
 | Value | Source | Have it? |
 | --- | --- | --- |
-| clearance hole, fine / medium / coarse | ISO 273 | medium (`kinds/motion.ts`); fine, coarse and M24 to add |
-| tap drill | ISO 2306 (drills for tapping); or d − P, labelled derived | to add |
-| counterbore for ISO 4762 heads | DIN 974-1 | to add |
-| countersink for ISO 10642 heads | ISO 15065 | to add |
-| thread engagement in a tapped hole | VDI 2230 gives it by material; else 1.0 d steel, 1.25 d cast iron, 2.0 d aluminium, labelled typical | to add |
-| edge and spacing distances (bolted steel) | EN 1993-1-8, table 3.3 (as remembered: e₁, e₂ ≥ 1.2 d₀; p₁ ≥ 2.2 d₀; p₂ ≥ 2.4 d₀; to be checked against the standard before use) | to add |
-| shaft and hole tolerances | ISO 286-1's formulas for the tolerance unit and grades, derived and said so (the standard's tables are not copied) | to add |
+| clearance hole, fine / medium / coarse | ISO 273 | have, M1.6 to M30 (`CLEARANCE`, `interfaces.ts`); `kinds/motion.ts`'s medium checked against it |
+| tap drill | ISO 2306 (drills for tapping); or d − P, labelled derived | have, ISO 2306 M1.6 to M24 (`TAP_DRILL`) |
+| counterbore for ISO 4762 heads | DIN 974-1 | have, series 1, M3 to M24 (`COUNTERBORE`); its depth is not fixed by the standard |
+| countersink for countersunk heads | ISO 15065 (heads to ISO 7721: ISO 2009, 7046; ISO 10642 is outside it, DIN 74 F) | have, M3 to M10, where it ends (`COUNTERSINK`) |
+| thread engagement in a tapped hole | VDI 2230 gives it by material; Bossard's values from trials, M6 to M16 | have, Bossard's (`ENGAGEMENT`) |
+| edge and spacing distances (bolted steel) | EN 1993-1-8, table 3.3 (checked: e₁, e₂ ≥ 1.2 d₀, most 4t + 40 mm exposed; p₁ ≥ 2.2 d₀; p₂ ≥ 2.4 d₀, most the smaller of 14t and 200 mm) | have (`BOLT_SPACING`) |
+| shaft and hole tolerances | ISO 286-1's formulas for the tolerance unit and grades, derived and said so (the standard's tables are not copied) | have, IT5 to IT16 to 500 mm (`itTolerance`), three steps of its table beside it |
 | heat-set insert holes | the insert maker's table, per maker | to add, one maker first |
 | bearing shoulders | the bearing maker's catalogue (abutment diameters) | to add, one series first |
 | fastener lengths, heads, nuts, washers | ISO 4762, 4017, 4032, 7089 (`threads.ts`, `catalogue.ts`) | have |

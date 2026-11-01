@@ -28,7 +28,9 @@ import { lawDims, lawWitness, wireDims } from '../../src/nexus/certify';
 import { setting } from '../../src/nexus/lawgraph';
 import { apply } from '../../src/nexus/law';
 import { BOOK } from '../../src/nexus/book';
-import { interfacesOf } from '../../src/nexus/interfaces';
+import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, interfacesOf, itTolerance } from '../../src/nexus/interfaces';
+import { CLEAR } from '../../src/nexus/kinds/motion';
+import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
 import { boreGrips } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
@@ -539,6 +541,25 @@ describe('every domain, in one pass', () => {
     if (process.env.UPDATE_DOCS || !existsSync(file)) writeFileSync(file, JSON.stringify(ids, null, 1) + '\n');
     else expect(ids, 'the same ids as the build that wrote tests/nexus/interfaces.ids.json (UPDATE_DOCS=1 writes it again)').toEqual(JSON.parse(readFileSync(file, 'utf8')));
   }, 60_000);
+  // (the tables a negative is sized from (spec 01, I3): every row names its source, each source a document opened (its
+  // address, its publisher, whether it is the standard's own text); and the rows agree with each other where they meet:
+  // the clearance holes the kinds use are ISO 273's medium; a tap drill is about d − P for the pitch ISO 261 gives; a
+  // counterbore is wider than the head it takes and holes through as ISO 273 medium; ISO 286-1's formula lands within a
+  // tenth of the standard's rounded table)
+  it('the tables negatives need, each row with its source', () => {
+    for (const [k, s] of Object.entries(TABLE_SOURCES)) { expect(s.url, `${k}: an address`).toMatch(/^https:\/\//); expect(s.publisher.length, `${k}: who published it`).toBeGreaterThan(3); }
+    const tables = { CLEARANCE, TAP_DRILL, COUNTERBORE, COUNTERSINK, ENGAGEMENT, IT_TABLE } as Record<string, Record<string, { src: string }>>;
+    for (const [t, rows] of Object.entries(tables)) for (const [k, r] of Object.entries(rows)) expect(TABLE_SOURCES[r.src], `${t} ${k}: its source`).toBeTruthy();
+    expect(TABLE_SOURCES[BOLT_SPACING.src]).toBeTruthy();
+    for (const [k, r] of Object.entries(CLEARANCE)) expect(r.fine < r.medium && r.medium < r.coarse, `${k}: fine, medium, coarse in order`).toBe(true);
+    for (const [k, v] of Object.entries(CLEAR)) expect(v, `${k}: the kinds' clearance hole is ISO 273 medium`).toBe(CLEARANCE[k]!.medium);
+    for (const [k, r] of Object.entries(TAP_DRILL)) { const d = Number(k.slice(1)); if (METRIC[k]) expect(r.P, `${k}: the pitch ISO 261 gives`).toBe(METRIC[k]!.p); expect(Math.abs(r.drill - (d - r.P)), `${k}: about d − P`).toBeLessThanOrEqual(0.05 + 1e-9); }
+    for (const [k, r] of Object.entries(COUNTERBORE)) { if (METRIC[k]) expect(r.d1, `${k}: wider than its ISO 4762 head`).toBeGreaterThan(METRIC[k]!.dk + 0.4); if (CLEARANCE[k]) expect(r.d2, `${k}: its hole ISO 273 medium`).toBe(CLEARANCE[k]!.medium); }
+    for (const [k, r] of Object.entries(COUNTERSINK)) { expect(r.Dc).toBeLessThan(r.DcMax); if (CLEARANCE[k]) expect(r.dh, `${k}: its hole ISO 273 medium`).toBe(CLEARANCE[k]!.medium); }
+    for (const [step, r] of Object.entries(IT_TABLE)) { const mid = (Number(step.split('-')[0]) + Number(step.split('-')[1])) / 2;
+      for (const g of [6, 7, 8] as const) { const t = itTolerance(mid, g); expect(Math.abs(t.um - r[`IT${g}`]) / r[`IT${g}`], `IT${g} at ${step} mm: ${t.um.toFixed(1)} µm by the formula, ${r[`IT${g}`]} in the table`).toBeLessThan(0.1); expect(t.derived).toMatch(/^derived/); } }
+    expect(+BOLT_SPACING.e1.least(18).toFixed(6)).toBe(21.6); expect(BOLT_SPACING.p1.most(20)).toBe(200);
+  });
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
   // plate's hole is not)

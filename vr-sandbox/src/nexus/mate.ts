@@ -16,10 +16,9 @@
 import * as THREE from 'three';
 import { boltedJoint, use } from './components';
 import { METRIC, NEMA_FACE } from './families';
-import { CLEAR } from './kinds/motion';
 import type { Cut, Part, Port, Shape, V3 } from './kits';
 import { piecesOf as boxesOf } from './form';
-import { boreOf, matrixOfPart, piecesIn, roundOf, shaftOf } from './interfaces';
+import { CLEARANCE, boreOf, matrixOfPart, piecesIn, roundOf, shaftOf } from './interfaces';
 export { boreOf, shaftOf };
 
 const TOL = 0.0002;
@@ -209,14 +208,14 @@ function materialRuns(s: Shape, base: boolean | undefined, a: THREE.Vector3, b: 
 
 /** Every bolted joint in a thing bores the plies in its grip (fault D14: frame rails, gussets and brackets were drawn with
  *  their bolts through them and no hole): what lies between the washer under its head and the washer under its nut is
- *  what it clamps, so each piece there gets a clearance hole on the bolt's line (ISO 273 medium, `CLEAR`), and no piece
+ *  what it clamps, so each piece there gets a clearance hole on the bolt's line (ISO 273 medium, `CLEARANCE` in interfaces.ts), and no piece
  *  past its washers is bored (a shank run on into something else is still a clash). A piece already holed on that line is
  *  left as it is. A joint is a group holding a washer under its head and one under its nut (`boltedJoint`). Nothing is
  *  changed in place: the pieces holed and the groups over them are new. */
 export function boreGrips(root: Part): { part: Part; holes: number; joints: number } {
   const mmm = 1e-3, under = (p: Part, re: RegExp) => p.parts?.find((q) => re.test(q.name));
   const jointOf = (p: Part) => { const hw = under(p, /washer under the head$/), nw = under(p, /washer under the nut$/), th = hw && /^(M[\d.]+) /.exec(hw.name)?.[1], T = th ? METRIC[th] : undefined;
-    return hw && nw && th && T ? { top: (hw.at?.[1] ?? 0) + T.h * mmm, y0: hw.at?.[1] ?? 0, y1: (nw.at?.[1] ?? 0) + T.h * mmm, bottom: nw.at?.[1] ?? 0, r: ((CLEAR[th] ?? Number(th.slice(1)) * 1.1) * mmm) / 2 } : null; };
+    return hw && nw && th && T ? { top: (hw.at?.[1] ?? 0) + T.h * mmm, y0: hw.at?.[1] ?? 0, y1: (nw.at?.[1] ?? 0) + T.h * mmm, bottom: nw.at?.[1] ?? 0, r: ((CLEARANCE[th]?.medium ?? Number(th.slice(1)) * 1.1) * mmm) / 2 } : null; };
   // (each joint's line from the face its head's washer bears on to the far face of its nut's washer, and where along it
   // its grip begins and ends: a piece whose material runs on into a washer's seat is not seated as a ply, and is left
   // unbored, its clash shown (bored, a washer drawn inside a rail's web was hidden: 2026-11-01))
