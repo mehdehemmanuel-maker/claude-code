@@ -56,7 +56,7 @@ def unit_dim(unit):
     return tuple(dim)
 
 
-UN = {'neg', 'abs', 'exp', 'ln', 'log10', 'log2', 'sqrt'}
+UN = {'neg', 'abs', 'exp', 'ln', 'log10', 'log2', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan'}
 BI = {'sub', 'div', 'min', 'max'}
 NA = {'add', 'mul'}
 
@@ -120,6 +120,64 @@ def dim_of(t, dims):
     return ZERO
 
 
+# the circle, in decimal, written apart from the kernel's: pi by Machin, sin and cos by their series after reducing by
+# 2 pi, atan by its series after reducing by 1/x and halving, asin and acos through it
+def _atan_series(x):
+    getcontext().prec += 10
+    s, t, k, x2 = Decimal(0), x, 0, x * x
+    while True:
+        term = t / (2 * k + 1)
+        if abs(term) < Decimal(10) ** (-(getcontext().prec + 5)):
+            break
+        s += term if k % 2 == 0 else -term
+        t *= x2
+        k += 1
+    getcontext().prec -= 10
+    return +s
+
+
+_PI = {}
+
+
+def pi():
+    p = getcontext().prec
+    if p not in _PI:
+        _PI[p] = 16 * _atan_series(Decimal(1) / 5) - 4 * _atan_series(Decimal(1) / 239)
+    return _PI[p]
+
+
+def _sin_cos(x, cosine):
+    getcontext().prec += 20
+    two_pi = 2 * pi()
+    x = x - two_pi * (x / two_pi).to_integral_value()
+    s, t, k = (Decimal(1), Decimal(1), 0) if cosine else (x, x, 1)
+    while True:
+        t = -t * x * x / ((k + 1) * (k + 2))
+        k += 2
+        if abs(t) < Decimal(10) ** (-(getcontext().prec + 5)):
+            break
+        s += t
+    getcontext().prec -= 20
+    return +s
+
+
+def atan(x):
+    if abs(x) > 1:
+        r = pi() / 2 - atan(1 / abs(x))
+        return r if x > 0 else -r
+    for _ in range(3):
+        x = x / (1 + (1 + x * x).sqrt())
+    return 8 * _atan_series(x)
+
+
+def asin(x):
+    if abs(x) > 1:
+        raise Refused('undecided', 'an arcsine past 1')
+    if abs(x) == 1:
+        return pi() / 2 if x > 0 else -pi() / 2
+    return atan(x / (1 - x * x).sqrt())
+
+
 def dec(fr):
     return Decimal(fr.numerator) / Decimal(fr.denominator)
 
@@ -172,6 +230,21 @@ def value(t, env):
             if v[0] < 0:
                 raise Refused('undecided', 'a root of less than zero')
             return v[0].sqrt()
+        if op == 'sin':
+            return _sin_cos(v[0], False)
+        if op == 'cos':
+            return _sin_cos(v[0], True)
+        if op == 'tan':
+            c = _sin_cos(v[0], True)
+            if c == 0:
+                raise Refused('undecided', 'a tangent where the cosine is zero')
+            return _sin_cos(v[0], False) / c
+        if op == 'atan':
+            return atan(v[0])
+        if op == 'asin':
+            return asin(v[0])
+        if op == 'acos':
+            return pi() / 2 - asin(v[0])
         if op == 'exp':
             if abs(v[0]) > 1000:
                 raise Refused('undecided', 'an exponent past 1000 either way')

@@ -1,8 +1,8 @@
 // Intervals with rational endpoints, rounded outward (the kernel, spec 10, T23; research 31 B1.3): every operation gives
 // an interval holding every value the exact operation could give for any points of its arguments. Endpoints are kept to
 // PREC significant bits, the lower rounded down and the upper up, so sizes stay bounded and the enclosure is kept.
-// exp, ln and roots are worked out by series with a bounded remainder, never by the host's Math (which promises
-// nothing about its last bit). What is not here (sin, cos and the rest) is refused as undecided: the kernel fails closed.
+// exp, ln, roots, sin, cos, tan and their inverses are worked out by series with a bounded remainder, never by the host's
+// Math (which promises nothing about its last bit). What is not here (erf, integrals) is refused as undecided.
 
 import { HALF, KernelError, ONE, TWO, ZERO, absR, add as addR, bits, cmp, div as divR, fromText, le, lt, maxR, minR, mul as mulR, neg as negR, pow2, powInt as powR, rat, roundTo, sub as subR, type Rat } from './rat';
 
@@ -100,6 +100,52 @@ export function pow(a: Iv, k: Rat): Iv {
   if (k.d === 2n) { if (big) throw new KernelError('undecided', 'a power too large to work out'); return powInt(sqrt(a), Number(k.n)); }
   return exp(mul(point(k), ln(a)));
 }
+
+// ---- the circle: π enclosed by Machin's formula; sin and cos by their series after reducing by π/2; atan by its series
+// after halving; asin and acos through atan. Each series alternates with falling terms, so its error is under the next
+// term; an interval of width w moves sin and cos by at most w (both are 1-Lipschitz) ----------------------------------------
+function atanSmall(x: Rat): Iv { // |x| ≤ 1/4: x − x³/3 + x⁵/5 − …
+  const x2 = mulR(x, x); let t = x, s = x, i = 0;
+  for (; i < 400; i++) { t = roundTo(negR(mulR(t, x2)), PREC + 24, false); const term = divR(t, rat(BigInt(2 * i + 3))); s = addR(s, term); if (lt(absR(term), EPS)) break; }
+  const rem = addR(absR(divR(mulR(t, x2), rat(BigInt(2 * i + 5)))), mulR(rat(BigInt(i + 2)), pow2(-(PREC + 20))));
+  return tidy(subR(s, rem), addR(s, rem));
+}
+let PI: Iv | null = null;
+export const pi = (): Iv => (PI ??= sub(mul(point(rat(16n)), atanSmall(rat(1n, 5n))), mul(point(rat(4n)), atanSmall(rat(1n, 239n)))));
+function sinSeries(r: Rat, cosine: boolean): Iv { // |r| ≤ 1: sin r = r − r³/3! + …, cos r = 1 − r²/2! + …
+  const r2 = mulR(r, r); let t = cosine ? ONE : r, s = t, i = 0;
+  for (; i < 400; i++) { const k = cosine ? 2 * i + 1 : 2 * i + 2; t = roundTo(negR(divR(mulR(t, r2), rat(BigInt(k * (k + 1))))), PREC + 24, false); s = addR(s, t); if (lt(absR(t), EPS)) break; }
+  const rem = addR(absR(t), mulR(rat(BigInt(i + 2)), pow2(-(PREC + 20))));
+  return tidy(subR(s, rem), addR(s, rem));
+}
+function sinPoint(x: Rat, shift: number): Iv { // sin(x + shift·π/2)
+  const P = pi(), half = mulR(addR(P.lo, P.hi), rat(1n, 4n)), q = divR(x, half), k = (q.n >= 0n ? (q.n + q.d / 2n) / q.d : -((-q.n + q.d / 2n) / q.d));
+  if (k > 1n << 40n || k < -(1n << 40n)) throw new KernelError('undecided', 'an angle too large to reduce');
+  const r = sub(point(x), mul(point(rat(k)), mul(P, point(HALF)))); // x − k·π/2, an interval (π is)
+  const m = mulR(addR(r.lo, r.hi), HALF), w = subR(r.hi, r.lo), quarter = Number(((k + BigInt(shift)) % 4n + 4n) % 4n);
+  const base = quarter % 2 === 0 ? sinSeries(m, false) : sinSeries(m, true), signed = quarter >= 2 ? neg(base) : base;
+  return { lo: maxR(rat(-1n), subR(signed.lo, w)), hi: minR(ONE, addR(signed.hi, w)) };
+}
+const lipschitz = (a: Iv, f: (x: Rat) => Iv): Iv => { const m = mulR(addR(a.lo, a.hi), HALF), w = mulR(subR(a.hi, a.lo), HALF), c = f(m); return { lo: maxR(rat(-1n), subR(c.lo, w)), hi: minR(ONE, addR(c.hi, w)) }; };
+export const sin = (a: Iv): Iv => lipschitz(a, (x) => sinPoint(x, 0));
+export const cos = (a: Iv): Iv => lipschitz(a, (x) => sinPoint(x, 1));
+export const tan = (a: Iv): Iv => div(sin(a), cos(a));
+function atanR(x: Rat): Iv {
+  if (lt(ONE, absR(x))) { const r = atanR(divR(ONE, x)), h = mul(pi(), point(HALF)); return x.n > 0n ? sub(h, r) : sub(neg(h), r); }
+  // halved twice, atan x = 2 atan(x / (1 + √(1 + x²))), so |x| ≤ tan(π/16) < 1/4; the root enclosed, its ends both used
+  let v: Iv = point(x), times = 1n;
+  for (let j = 0; j < 2; j++) { v = div(v, add(point(ONE), sqrt(add(point(ONE), mul(v, v))))); times *= 2n; }
+  const lo = atanSmall(v.lo), hi = atanSmall(v.hi);
+  return { lo: mulR(lo.lo, rat(times)), hi: mulR(hi.hi, rat(times)) };
+}
+export const atan = (a: Iv): Iv => ({ lo: atanR(a.lo).lo, hi: atanR(a.hi).hi }); // rising: its ends' enclosures
+function asinR(x: Rat): Iv {
+  if (lt(ONE, absR(x))) throw new KernelError('undecided', 'an arcsine past ±1');
+  if (le(ONE, absR(x))) { const h = mul(pi(), point(HALF)); return x.n > 0n ? h : neg(h); }
+  return atan(div(point(x), sqrt(point(subR(ONE, mulR(x, x))))));
+}
+export const asin = (a: Iv): Iv => ({ lo: asinR(a.lo).lo, hi: asinR(a.hi).hi });
+export const acos = (a: Iv): Iv => sub(mul(pi(), point(HALF)), asin(a));
 
 export const contains = (a: Iv, x: Rat): boolean => le(a.lo, x) && le(x, a.hi);
 export const width = (a: Iv): Rat => subR(a.hi, a.lo);

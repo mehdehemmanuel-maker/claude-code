@@ -1,13 +1,13 @@
 // The kernel's expressions (spec 10, T23; research 31 B1.5): read strictly from JSON arrays, ["num", "3/4"], ["var", "x"],
 // [op, ...args], with caps on depth and size; their dimension decided exactly; their value enclosed by intervals.
-// An operator not here is refused as undecided (the kernel fails closed); sin, cos and their kin are not here yet.
+// An operator not here (erf, an integral) is refused as undecided: the kernel fails closed.
 
 import { KernelError, fromText, rat, type Rat } from './rat';
 import * as I from './interval';
 import { DIMLESS, divDim, isDimless, mulDim, powDim, sameDim, dimText, type Dim } from './dim';
 
 export type KTerm = readonly ['num', string] | readonly ['var', string] | readonly [string, ...unknown[]];
-const UNARY = ['neg', 'abs', 'exp', 'ln', 'log10', 'log2', 'sqrt'], BINARY = ['sub', 'div', 'min', 'max'], NARY = ['add', 'mul'];
+const UNARY = ['neg', 'abs', 'exp', 'ln', 'log10', 'log2', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan'], BINARY = ['sub', 'div', 'min', 'max'], NARY = ['add', 'mul'];
 
 /** Checked as it is read: its shape, its size (at most 64 deep and 10,000 nodes), every number exact. */
 export function parseTerm(t: unknown, depth = 0, count = { n: 0 }): KTerm {
@@ -60,6 +60,12 @@ export function enclose(t: KTerm, env: Record<string, I.Iv>): I.Iv {
     case 'log10': return I.div(I.ln(e(a[0]!)), I.ln(I.point(rat(10n))));
     case 'log2': return I.div(I.ln(e(a[0]!)), I.ln(I.point(rat(2n))));
     case 'pow': return I.pow(e(a[0]!), fromText(a[1] as unknown as string) as Rat);
+    case 'sin': return I.sin(e(a[0]!));
+    case 'cos': return I.cos(e(a[0]!));
+    case 'tan': return I.tan(e(a[0]!));
+    case 'asin': return I.asin(e(a[0]!));
+    case 'acos': return I.acos(e(a[0]!));
+    case 'atan': return I.atan(e(a[0]!));
     default: throw new KernelError('undecided', `an operator not in the kernel: ${op}`);
   }
 }

@@ -1933,3 +1933,14 @@ parts from standards, and so on); the test also holds interfaces.ts named in bot
 rules test fails when a task cites a decision by its number that does not exist. Checked with `npm run gate`
 (the tests "every source file has an owner in the docs" and "every rule names its check and its task, and every decision
 its options, choice, assumption and re-test").
+
+## 2026-11-01: the kernel decides sine, cosine, tangent and their inverses (spec 10, T23)
+
+`src/kernel/interval.ts` now encloses π by Machin's formula (16 atan(1/5) − 4 atan(1/239)), sin and cos by their series
+after reducing by π/2 (an interval of width w moves either by at most w), tan as their quotient, atan by its series after
+taking 1/x past 1 and halving twice, asin and acos through atan; each series alternates with falling terms, so its error is
+under the next term. The second checker (`scripts/kernel2.py`) has its own, written apart in decimal. Over the book (the
+test "the kernel: closed, exact, each kind refusing what is planted, and a second checker agreeing", which now allows at
+most 3 laws undecided): 327 of 330 laws certified for their dimensions and their value at the worked example (318
+before), 3 undecided (two integrals, one erf). Eleven points across sine's family each pass at their true value and are
+refused moved a millionth, and the two checkers agree on all of them. Checked with `npm run gate`.

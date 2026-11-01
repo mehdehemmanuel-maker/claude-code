@@ -16,6 +16,8 @@ import { callTools, certifiedOf, certifiedView, gateOf, nearMissesOf, nearMisses
 import { createHash } from 'node:crypto';
 /** agentBuild's loop, its text pinned (the test "an open andon stops the line…" says why). */
 const LOOP_PIN = 'e7c58c011e23a80e';
+/** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
+const UNDECIDED_MOST = 3;
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
@@ -382,7 +384,7 @@ describe('every domain, in one pass', () => {
       if (!w.ok) { expect(w.refused, `${l.id}: its value ${w.why}`).toBe('undecided'); continue; }
       expect(check(moved).refused, `${l.id}: its value moved a millionth is refused`).toBe('wrong');
     }
-    expect(undecided, 'laws the kernel cannot yet decide (sine and its kin, erf, integrals)').toBeLessThanOrEqual(12);
+    expect(undecided, 'laws the kernel cannot yet decide (erf, integrals)').toBeLessThanOrEqual(UNDECIDED_MOST);
     // (at the tolerance's edge, so a checker more lax or more strict than the claim disagrees: half the band inside, one
     // and a half outside)
     const edge = (x: string, f: string, v: number, k: number) => W([f, ['var', 'x']], { x }, String(v * (1 + k * 1e-9)), '1e-9');
@@ -400,7 +402,11 @@ describe('every domain, in one pass', () => {
     const red = JSON.parse(readFileSync(join(root, 'tests/nexus/kernel.red.json'), 'utf8')) as unknown[];
     expect(red.length, 'the red teams\' certificates').toBeGreaterThan(15);
     for (const c of red) expect(check(c).ok, `a red team's false certificate refused: ${JSON.stringify(c).slice(0, 120)}`).toBe(false);
-    const corpus = [...right, ...Object.values(planted).flat(), C('judged', {}), ...edges, ...red, ...book];
+    // (sine and its kin, at points across their range, in the corpus both checkers judge)
+    const trig = [['sin', '1'], ['sin', '-2.5'], ['sin', '100'], ['cos', '0.3'], ['cos', '3.14159'], ['tan', '1.2'], ['atan', '0.5'], ['atan', '-7'], ['asin', '0.3'], ['asin', '1'], ['acos', '-0.9']].flatMap(([f, x]) => {
+      const v = (Math as unknown as Record<string, (n: number) => number>)[f!]!(Number(x)); return [W([f, ['var', 'x']], { x: x! }, String(v), '1e-12'), W([f, ['var', 'x']], { x: x! }, String(v * (1 + 1e-6)), '1e-9')]; });
+    expect(trig.map((c) => check(c).ok), 'each true value passes, each moved a millionth is refused').toEqual(trig.map((_, i) => i % 2 === 0));
+    const corpus = [...right, ...Object.values(planted).flat(), C('judged', {}), ...edges, ...red, ...trig, ...book];
     const two = spawnSync('python3', ['scripts/kernel2.py'], { cwd: root, input: JSON.stringify(corpus), encoding: 'utf8', maxBuffer: 1 << 26 });
     expect(two.status, two.stderr).toBe(0);
     const theirs = JSON.parse(two.stdout) as { ok: boolean }[];
