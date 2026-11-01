@@ -14,8 +14,8 @@ import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
 import { callTools, certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, relayBody, runOf, stepOf, toolsFor, turnOf, type AgentRun, type AgentStep } from '../../src/nexus/agent';
 import { createHash } from 'node:crypto';
-/** agentBuild's loop, its text pinned (the test "an open andon stops the line…" says why). */
-const LOOP_PIN = 'e7c58c011e23a80e';
+/** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
+const AGENT_PIN = '827c6d19f645c051';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
 const UNDECIDED_MOST = 3;
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
@@ -254,7 +254,9 @@ describe('every domain, in one pass', () => {
   // (stop the line (spec 00, S10; C25): an open andon keeps its task, and every task that waits on it, from passing; each near
   // miss has its kind and its response; the AI in the app logs the near misses its runs caught)
   it('an open andon stops the line, and every near miss has its kind and its response', async () => {
-    const rows = (f: string) => readFileSync(join(root, 'plan', f), 'utf8').split('\n').filter((l) => /^\| /.test(l) && !/^\| (Id|Date) \|/.test(l) && !/^\| -/.test(l)).map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
+    // (every line that starts a table row, however it is spaced: '|A2|…' was skipped in silence before (the evaluator,
+    // 2026-11-01))
+    const rows = (f: string) => readFileSync(join(root, 'plan', f), 'utf8').split('\n').filter((l) => /^\|/.test(l) && !/^\|\s*(Id|Date)\s*\|/.test(l) && !/^\|\s*:?-/.test(l)).map((l) => l.replace(/\|\s*$/, '').split('|').slice(1).map((c) => c.trim()));
     const andons = rows('ANDON.md'), open = andons.filter((r) => !/^closed/.test(r[4]!)).map((r) => r[2]!), bad: string[] = [];
     const git = (...a: string[]) => spawnSync('git', a, { cwd: root, encoding: 'utf8' }), deep = git('rev-parse', '-q', '--verify', 'HEAD~3^{commit}').status === 0;
     for (const r of andons) { if (!/^\d\d\.[A-Z]+\d+$/.test(r[2]!) || !r[3]) bad.push(`andon ${r[0]}: needs a task and what failed`);
@@ -321,11 +323,33 @@ describe('every domain, in one pass', () => {
     const rec = (st: AgentStep[], answer: string) => runOf({ start: emptyBoard('t'), board: emptyBoard('t'), steps: st, answer, model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: [] }).then((x) => x.nearMisses.map((m) => m.kind));
     expect(await rec([], 'The spring weighs 19.6 N.'), 'numbers with no board').toEqual(['at-risk']);
     expect(await rec([stepOf('build', {}, '! wire a.x>b.y: no input "y"', 1)], 'The wire into b was refused: it has no input y.'), 'a refusal owned up to').toEqual(['error']);
+    // (every refusal the tools make, made by the tools themselves and caught with its kind: change's (a node not there, a
+    // setting a block lacks), place's (a block not there, a setting it lacks), a wire written wrong; an answer past change's
+    // refusals is reckless; a refused build then a starter board opened leaves no refusal standing (the change tool's
+    // refusals were guarded by nothing: the evaluator, 2026-11-01))
+    const runTools = async (calls: { name: string; input: Record<string, unknown> }[], answer: string) => { const tt = await toolsFor(emptyBoard('t')), st: AgentStep[] = [];
+      for (const [k, c] of calls.entries()) await callTools([{ id: `${k}`, ...c }], tt.doTool, st);
+      return (await runOf({ start: emptyBoard('t'), board: tt.board(), steps: st, answer, model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: tt.made })).nearMisses; };
+    const changed = await runTools([{ name: 'build', input: { nodes: { a: { b: 'in.number', s: { value: 2 } } } } }, { name: 'change', input: { set: { ghost: { value: 1 }, a: { nosuchsetting: 3 } } } }], 'Done: the value is 5.');
+    expect(changed.map((m) => `${m.kind} ${m.tool}`), 'change\'s refusals, then an answer past them').toEqual(['error change', 'error change', 'reckless answer']);
+    expect(changed.map((m) => m.what).slice(0, 2).join(' | ')).toMatch(/no node ghost.*\| a: no setting nosuchsetting/);
+    const placed = await runTools([{ name: 'build', input: { nodes: { a: { b: 'no.such.block' }, b: { b: 'in.number', s: { value: 1, nosuch: 2 } } }, wires: ['b.value to a.x'] } }], 'Three of them were refused: no block, no setting, a wire written wrong.');
+    expect(placed.map((m) => `${m.kind} ${m.tool}`), 'place\'s and the wire\'s refusals, owned up to').toEqual(['error build', 'error build', 'error build']);
+    expect(placed.map((m) => m.what).join(' | ')).toMatch(/no block "no\.such\.block".*\| b: in\.number has no setting nosuch.*\| wire "b\.value to a\.x": write it a\.out>b\.in/);
+    const reopened = await runTools([{ name: 'build', input: { nodes: { a: { b: 'no.such.block' } } } }, { name: 'open', input: { title: starterBoards()[0]![0].slice(0, 20) } }], 'Opened the starter board.');
+    expect(reopened.map((m) => `${m.kind} ${m.tool}`), 'a board opened after a refused build: nothing standing, nothing reckless').toEqual(['error build']);
+    // (and the node 'Claude builds a board' gives the near misses its run caught, as the page and the runners show them)
+    const outs = (await import('../../src/nexus/agent')).nodeOutputsOf({ ...(await runOf({ start: emptyBoard('t'), board: emptyBoard('t'), steps: [], answer: 'It weighs 4 kg.', model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: [] })) }, 1);
+    expect(outs['near misses'], 'the node\'s near misses').toEqual([{ kind: 'at-risk', tool: 'answer', what: expect.any(String), response: expect.any(String) }]);
+    expect(portsOf(LIBRARY.get('agent.build')!, {}).outputs.map((p) => p.name), 'the node has an output for them').toContain('near misses');
+    expect(String(outs.says)).toMatch(/1 near miss \(at-risk\)/);
     // (the page shows each near miss with its kind and its response, open when one is reckless, and it is called with the
     // run's own (the guard of this was lost in a rewrite once: the evaluator, 2026-11-01))
     const pageView = nearMissesView(run.nearMisses, (x) => x);
     for (const m of run.nearMisses) expect(pageView, `the page shows the ${m.kind} near miss, its kind and its response`).toContain(`<b>${m.kind}</b> ${m.what} (${m.response})`);
     expect(pageView, 'open when one is reckless').toMatch(/^<details open>/);
+    const escView = nearMissesView(run.nearMisses, (x) => `[${x}]`);
+    for (const m of run.nearMisses) for (const f of [m.tool, m.kind, m.what, m.response]) expect(escView, 'each field escaped as the page escapes it').toContain(`[${f}]`);
     expect(nearMissesView(run.nearMisses.filter((m) => m.kind !== 'reckless'), (x) => x), 'and only then').toMatch(/^<details>/);
     expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the page puts the run\'s near misses beside the answer').toContain('${nearMissesView(r.nearMisses, esc)}');
     // (a model's reply read by turnOf, as agentBuild reads every one: its answer every text block in order; its tool calls;
@@ -339,12 +363,13 @@ describe('every domain, in one pass', () => {
     expect(body, 'stopped, with its steps').toContain("return runOf({ start, board: t.board(), steps, answer: '', model");
     expect(body.match(/return /g)?.length, 'and no other way').toBe(2);
     for (const line of ['const turn = turnOf(r);', 'if (turn.ends) { const answer = turn.answer;', 'content: await callTools(turn.uses, t.doTool, steps)']) expect(body, 'every reply read by turnOf, its calls by callTools').toContain(line);
-    // (its loop's text pinned: a change to it (a step dropped between turns, an answer garbled) fails here until the loop is
-    // read again and its new text pinned on purpose)
-    const loop = body.slice(body.indexOf('for (let turn = 0'), body.indexOf("return runOf({ start, board: t.board(), steps, answer: ''"));
-    expect(createHash('sha256').update(loop).digest('hex').slice(0, 16), "agentBuild's loop changed: read it again (each reply through turnOf, each turn's calls through callTools, its end through runOf) and pin its new text").toBe(LOOP_PIN);
-    const relay = readFileSync(join(root, 'vite.view.config.ts'), 'utf8');
-    for (const line of ["const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40 });", "res.end(m.relayBody(r));"]) expect(relay, 'the relay sends the run as agentBuild made it').toContain(line);
+    // (its whole text pinned, its setup with its loop: a change to it (a wrapper dropping refusals from every tool's result,
+    // a step dropped between turns, an answer garbled) fails here until it is read again and its new text pinned on purpose
+    // (its setup was not pinned: the evaluator, 2026-11-01))
+    expect(createHash('sha256').update(body).digest('hex').slice(0, 16), "agentBuild changed: read it again (its tools from toolsFor as they are, each reply through turnOf, each turn's calls through callTools, its end through runOf) and pin its new text").toBe(AGENT_PIN);
+    // (the relay's handling of a run, exactly: from agentBuild's call to the run sent, nothing between that could strip it)
+    const relay = readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), callLine = "const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40 });";
+    expect(relay.slice(relay.indexOf(callLine), relay.indexOf('res.end(m.relayBody(r));') + 24), 'the relay sends the run as agentBuild made it').toBe(`${callLine}\n      res.setHeader('Content-Type', 'application/json'); res.end(m.relayBody(r));`);
     // (the relay sends the page all of the run: its near misses, diff and certificates)
     const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
     expect(readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), 'the relay answers with relayBody').toMatch(/res\.end\(m\.relayBody\(r\)\)/);

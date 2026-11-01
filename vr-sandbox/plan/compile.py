@@ -190,7 +190,9 @@ def queue(tasks: list[dict]) -> list[str]:
 
 def table_rows(name: str) -> list[list[str]]:
     p = PLAN / name
-    return [cells(l) for l in p.read_text().split('\n') if l.startswith('| ') and not re.match(r'^\| (Id|Date) \|', l) and not l.startswith('| ---')] if p.exists() else []
+    # (every line that starts a table row is read, however it is spaced: a row written '|A2|…' was skipped in silence, so an
+    # open andon written so stopped nothing (the evaluator, 2026-11-01))
+    return [cells(l) for l in p.read_text().split('\n') if l.startswith('|') and not re.match(r'^\|\s*(Id|Date)\s*\|', l) and not re.match(r'^\|\s*:?-', l)] if p.exists() else []
 
 def defects() -> list[list[str]]:
     p = PLAN / 'DEFECTS.md'

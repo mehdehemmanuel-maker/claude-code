@@ -1985,3 +1985,17 @@ Making the two agree on why they refuse, not only on whether, found three places
 and an exponent of any size read by the second checker; each now done alike. The one test (the kernel's) checks each red
 team certificate in under 2 s, a product of 4000 twos decided, and both checkers' reasons equal over the whole corpus;
 with the bound taken out, it fails (the product of 4000 powers of two ran 75 s again). Checked with `npm run gate`.
+
+## 2026-11-01: every refusal the AI's tools make caught with its kind, made by the tools themselves (spec 00, S10)
+
+S10's seventh verdict: the near misses were shown through the run's own code for the build tool's refusals, failed tools
+and failed nodes, but the change tool's refusals were guarded by nothing (its "! " marking taken out, no refusal on a
+change could be logged, and the gate stayed green); nor were place's (a block not there, a setting it lacks) or a wire
+written wrong; nor a board opened after a refused build. Now the one test runs each through `toolsFor` and `callTools`
+and `runOf`, with no stand-in model: change's two refusals then an answer past them (error, error, reckless); place's two
+and the wire's, owned up to (three errors); a refused build then a starter board opened (one error, nothing standing).
+The node 'Claude builds a board' now gives its run's near misses (`nodeOutputsOf`, run in the test on a real run's
+record); agentBuild's whole text is pinned, its setup with its loop; the relay's handling is read exactly from the call to
+the send; the page's escape is tried with an escape that marks each field; and a table row written `|A2|`, with no space,
+is read by the test and by `plan/compile.py` (it was skipped in silence). With change's marking taken out, the test fails;
+with an open andon written `|A2|`, the test and `python3 plan/compile.py --check` fail. Checked with `npm run gate`.
