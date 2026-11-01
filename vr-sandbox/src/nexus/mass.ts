@@ -99,6 +99,13 @@ function acrossInside(s: Shape | undefined, c: { r: number; at: [number, number,
   let A = 0; for (let i = 0; i < n; i++) { const x = u0 + ((i + 0.5) * (u1 - u0)) / n, h = Math.sqrt(Math.max(0, c.r * c.r - (x - au) ** 2)); A += Math.max(0, Math.min(hv, av + h) - Math.max(-hv, av - h)); }
   return (A * (u1 - u0)) / n;
 }
+/** A turned cut's volume, m³: its profile ([radius, depth] points from its face) spun about its line, frustum by frustum,
+ *  to the depth given (where the cut runs out of the part). */
+function turnedVolume(prof: [number, number][], upTo: number): number {
+  let v = 0; for (let i = 0; i + 1 < prof.length; i++) { const [r0, d0] = prof[i]!, [r1, d1] = prof[i + 1]!; if (d1 <= d0) continue; const a = Math.min(d0, upTo), b = Math.min(d1, upTo); if (b <= a) continue;
+    const ra = r0 + ((r1 - r0) * (a - d0)) / (d1 - d0), rb = r0 + ((r1 - r0) * (b - d0)) / (d1 - d0); v += (Math.PI * (b - a) * (ra * ra + ra * rb + rb * rb)) / 3; }
+  return v;
+}
 /** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
 /** The volume a shape encloses, m³ (before what is drilled out of it, and its fill). */
 export const volumeOf = (s: Shape): number => vol(s);
@@ -110,7 +117,9 @@ export function massOf(p: Part): number {
   // (and only as much of its round as lies inside: a saddle bored along a box's face takes half its circle, not all of it)
   // (a cut of any section, a keyway or a cut-out: its outline's area along the depth it runs inside; its outline taken whole,
   // not clipped to the shape's sides (spec 01, I17))
-  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.sect ? sectArea(c.sect) : (c.n ? ((c.n / 2) * Math.sin((2 * Math.PI) / c.n)) / Math.PI : 1) * acrossInside(p.shape, c)) * inside(p.shape, c), 0);
+  // (a turned cut, a counterbore or a drill's point: its profile's volume of revolution, frustum by frustum (Pappus), as far
+  // as it runs inside; it took a plain cylinder of its hole's radius, missing a counterbore's ring (fault D18, 2026-11-01))
+  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.prof ? turnedVolume(c.prof, inside(p.shape, c)) : (c.sect ? sectArea(c.sect) : (c.n ? ((c.n / 2) * Math.sin((2 * Math.PI) / c.n)) / Math.PI : 1) * acrossInside(p.shape, c)) * inside(p.shape, c)), 0);
   const rho = p.mat ? densityKg(p.mat) : undefined;
   const own = p.kg !== undefined ? p.kg : p.shape && rho ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * rho * (p.fill ?? 1) : 0;
   return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);

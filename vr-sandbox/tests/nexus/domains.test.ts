@@ -643,6 +643,8 @@ describe('every domain, in one pass', () => {
     const want = Math.PI * ((cb.d1 / 2000) ** 2 * t + (cb.d2 / 2000) ** 2 * (T - t)), sol = await solidsOf(plate), row = sol.rows[0]!;
     expect(row.ok && row.valid, `made and valid: ${row.why ?? ''}`).toBe(true);
     const taken = 0.06 * T * 0.06 - row.volume!; expect(Math.abs(taken / want - 1), `taken ${(taken * 1e9).toFixed(1)} mm³, the profile's ${(want * 1e9).toFixed(1)} mm³`).toBeLessThan(0.001);
+    // (and its mass takes the same: it took a plain cylinder of the hole's radius, 43 % short (fault D18, 2026-11-01))
+    const massTaken = (0.06 * T * 0.06 * 7850 - massOf(plate)) / 7850; expect(Math.abs(massTaken / want - 1), `the mass takes ${(massTaken * 1e9).toFixed(1)} mm³`).toBeLessThan(1e-9);
     const back = await readStep((await filesOf(plate, { formats: ['step'] })).files['counterbored plate.step'] ?? Object.values((await filesOf(plate, { formats: ['step'] })).files)[0]!);
     expect([back.solids, Math.abs(back.volume / row.volume! - 1) < 0.001], 'its STEP read back: one solid, the same volume').toEqual([1, true]);
     // (the head stands 1 mm proud of the plate: one sunk wholly in it with a face flush is not seen by the checker at all, its

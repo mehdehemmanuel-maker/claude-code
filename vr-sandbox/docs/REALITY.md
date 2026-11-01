@@ -2355,3 +2355,11 @@ ends, 4 mm deep in a block, and a 22.3 mm hole with its 3.2 × 1.7 mm notch thro
 outline's area times their depth in the mass (to a part in a thousand million), the solid (within 0.1 %) and the views
 (within 0.5 %); a key in the slot is not a clash and a block 20 mm wide in it is. One 12 mm wide in it is not seen: fault
 D15's blind spot (a piece standing in a cut and wider than it), open under 10.T24.
+
+## 2026-11-01: a part's mass takes a turned cut's own volume (fault D18; spec 01, I17 in part)
+
+I17's designers found that a part's mass took every cut as a plain cylinder of its hole's radius, so a counterbore's ring
+was never taken out and a drill's point counted as full depth: an M8 counterbore with its 9 mm hole in a 20 mm plate took
+1272.3 mm³ where its profile holds 2222.4 mm³, 43 % short (one probe run). A turned cut now takes its profile's volume
+of revolution, frustum by frustum, as far as it runs inside the part. The test "a counterbore cut as a solid, its volume
+its profile's, its STEP the same" now holds the mass to the profile too. Checked with `npm run gate`.
