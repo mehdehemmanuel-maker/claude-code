@@ -2212,3 +2212,23 @@ on it; widened to 50 mm, all follow to 35.8 mm; the nodes that ran again, read f
 order, are the bore, the radius, the circle, both parts' holes and the bolts, each saying what it made, and the two plates
 are not made again. A first try read the engine's `cached` flag for this, which stays as it was for a node not visited:
 the run counts are what say a node ran. Checked with `npm run gate`.
+
+## 2026-11-01: the page's near misses checked by driving the page; I8 and I10 pass; I9 keeps to its own piece (spec 00, S10; spec 01, I8, I9, I10)
+
+S10's twelfth verdict said that widening the text pins on the page one region at a time would not converge (four more
+ways to hide the near misses lay just past them), and that the page should be run. `tests/evals/ask.eval.ts`
+(`npm run eval:ask`, no key needed) builds the pages, serves the dashboard in a headless browser, answers its request to the
+relay with `relayBody` of a run the AI's real tools made (a refused wire, a failing node, a tool that failed, an answer past
+the refusal: no model, no stand-in), presses Ask, waits for the board the answer opened to run, and reads the Ask Claude
+panel as a person sees it: visible, the answer there, the count of each kind, and each near miss as its kind and what it
+was. One run: it passed, the panel reading "Near misses caught: 4 (3 error, 0 at-risk, 1 reckless)". The evaluator's four
+page faults, each tried once: `renderAll` emptying the panel, the panel emptied after the board's run, the panel hidden,
+the panel in a comment: each fails it. The one test also now pins each near miss's step, compares the relay's whole body to
+the run, requires a near-miss row's "what happened" and holds a reckless row as strictly as the app's own table, and shows
+`plan/compile.py` refusing two steps down a chain. I8 (its second judging) and I10 (its first) passed. I9's first verdict:
+an imprint re-made after a change could hop onto another piece standing over it, a piece made into sub-parts kept a stale
+imprint, two of its "lost" paths had no test, and an imprint first put on a step would be lost with nothing changed. Now it
+is re-made only on its own piece, from just above its own face; lost, said why, where the piece has no surface of its own,
+its checks now refuse it (a lid in its key's room; a plate too thin for its counterbore) or the face it stood on as the
+farthest out is no longer so; and an imprint on a step keeps to its step. A face "made by" a feature is not held: there is
+no shape history here, said in the task's evidence. Checked with `npm run gate` and `npm run eval:ask`.

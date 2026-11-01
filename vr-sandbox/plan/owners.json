@@ -68,5 +68,9 @@
     "src/nexus/numeric.ts",
     "evals/interfaces/cases.json",
     "src/nexus/built.ts"
+  ],
+  "00.S10": [
+    "package.json",
+    "tests/evals/ask.eval.ts"
   ]
 }

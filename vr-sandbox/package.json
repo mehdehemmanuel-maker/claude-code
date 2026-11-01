@@ -19,7 +19,8 @@
     "eval:agent": "NODE_USE_ENV_PROXY=1 vitest run --config vitest.eval.config.ts tests/evals/agent.eval.ts --silent=false",
     "hooks": "git config core.hooksPath vr-sandbox/scripts/hooks/git && echo \"hooks on: the push gate, the change budget, honesty\"",
     "eval:headset": "vite build --config vite.view.config.ts --logLevel error && node tests/evals/headset.cjs",
-    "eval:one": "NODE_USE_ENV_PROXY=1 vitest run --config vitest.eval.config.ts tests/evals/one.eval.ts --silent=false"
+    "eval:one": "NODE_USE_ENV_PROXY=1 vitest run --config vitest.eval.config.ts tests/evals/one.eval.ts --silent=false",
+    "eval:ask": "vite build --config vite.view.config.ts --logLevel error && vitest run --config vitest.eval.config.ts tests/evals/ask.eval.ts --silent=false"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",

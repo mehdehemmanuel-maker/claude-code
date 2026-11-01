@@ -419,7 +419,10 @@ export function applyImprint(host: Part, im: Imprinted, of: string): { part: Par
   const depth = Math.max(...holes.map((x) => Math.max(...x.prof!.map((p) => p[1])))), taken = new Set((q.p.ports ?? []).map((x) => x.name)), base = `${of} (imprinted)`;
   let name = base; for (let k = 2; taken.has(name); k++) name = `${base} ${k}`;
   const port: Port = { name, sex, thread, pattern, at: at.toArray() as V3, n: n.toArray() as V3, u: u.toArray() as V3, t: depth };
-  const rec = { of, at: port.at, n: port.n, u: port.u, turn: im.turn, mirror: neg.mirror.kind, port: name, why: neg.why, asking: im.asking, face: { normal: port.n, extreme: 'max' as const, near: port.at }, made: { cuts, keep: keeps } };
+  // (its face's query: its normal, near where it stood, and 'the farthest out along it' only where it was so: a face on a
+  // step below another of the same normal keeps to its own step (the evaluator, 2026-11-01))
+  const bx0 = q.p.shape ? boxIn(q.p.shape, q.p.base) : null, far0 = bx0 ? Math.max(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => new THREE.Vector3(bx0[k & 1 ? 1 : 0][0]!, bx0[k & 2 ? 1 : 0][1]!, bx0[k & 4 ? 1 : 0][2]!).dot(n))) : undefined, outmost = far0 !== undefined && at.dot(n) >= far0 - 1e-6;
+  const rec = { of, at: port.at, n: port.n, u: port.u, turn: im.turn, mirror: neg.mirror.kind, port: name, why: neg.why, asking: im.asking, face: { normal: port.n, ...(outmost ? { extreme: 'max' as const } : {}), near: port.at }, made: { cuts, keep: keeps } };
   const swap = (p: Part, path: number[]): Part => path.length ? { ...p, parts: p.parts!.map((c, i) => (i === path[0] ? swap(c, path.slice(1)) : c)) } : { ...p, cuts: [...(p.cuts ?? []), ...cuts], keep: [...(p.keep ?? []), ...keeps], ports: [...(p.ports ?? []), port], imprints: [...(p.imprints ?? []), rec] };
   return { part: swap(host, q.path), port, says: `${cuts.length} cut${cuts.length > 1 ? 's' : ''} in the ${q.p.name} for ${of}, ${keeps.length} keep zone${keeps.length === 1 ? '' : 's'}; it gains ${sex} ${thread} (${neg.mirror.std ?? ''})` };
 }
@@ -434,6 +437,9 @@ export function reapplyImprints(host: Part, o: { geometry?: (s: Shape) => THREE.
   const at = (p: Part, path: number[]): Part => path.reduce((x, i) => x.parts![i]!, p);
   const swap = (p: Part, path: number[], f: (x: Part) => Part): Part => (path.length ? { ...p, parts: p.parts!.map((c, i) => (i === path[0] ? swap(c, path.slice(1), f) : c)) } : f(p));
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  // (a part that carries imprints and has no surface of its own now (made into sub-parts): each of them lost, said so)
+  const walkAll = (p: Part, path: number[]): void => { if (!p.shape && p.imprints?.some((r) => !r.lost)) { for (const r of p.imprints.filter((x) => !x.lost)) lost.push({ of: r.of, why: 'the piece it stood on has no surface of its own now' }); part = swap(part, path, (x) => ({ ...x, imprints: (x.imprints ?? []).map((r) => (r.lost ? r : { ...r, lost: 'the piece it stood on has no surface of its own now' })) })); } (p.parts ?? []).forEach((c, i) => walkAll(c, [...path, i])); };
+  walkAll(host, []);
   for (const q of piecesIn(host)) for (const rec of q.p.imprints ?? []) {
     if (rec.lost || !rec.face || !rec.asking || !rec.made) continue;
     // (off: its cuts, keep zones, port and record)
@@ -443,10 +449,13 @@ export function reapplyImprints(host: Part, o: { geometry?: (s: Shape) => THREE.
     const loseIt = (why: string) => { lost.push({ of: rec.of, why }); part = swap(part, q.path, (p) => ({ ...p, imprints: [...(p.imprints ?? []), { ...rec, lost: why }] })); };
     if (!h) { loseIt('no face answers there: the point it stood over is off the piece now'); continue; }
     const hn = new THREE.Vector3(...h.n); if (hn.dot(n) < Math.cos((0.5 * Math.PI) / 180)) { loseIt(`the surface there faces otherwise now (${((Math.acos(Math.min(1, hn.dot(n))) * 180) / Math.PI).toFixed(1)}° from the face it stood on)`); continue; }
-    const bx = boxIn(piece.shape!, piece.base); if (bx) { const far = Math.max(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => new THREE.Vector3(bx[k & 1 ? 1 : 0][0]!, bx[k & 2 ? 1 : 0][1]!, bx[k & 4 ? 1 : 0][2]!).dot(n))); if (new THREE.Vector3(...h.at).dot(n) < far - 1e-6) { loseIt('another face with its normal lies farther out: not the face it stood on'); continue; } }
-    const W = (v: THREE.Vector3) => v.applyMatrix4(m).toArray() as V3, from = W(new THREE.Vector3(...h.at).addScaledVector(n, 0.5)), dir = n.clone().negate().transformDirection(m).toArray() as V3;
+    const bx = boxIn(piece.shape!, piece.base); if (bx && rec.face.extreme === 'max') { const far = Math.max(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => new THREE.Vector3(bx[k & 1 ? 1 : 0][0]!, bx[k & 2 ? 1 : 0][1]!, bx[k & 4 ? 1 : 0][2]!).dot(n))); if (new THREE.Vector3(...h.at).dot(n) < far - 1e-6) { loseIt('another face with its normal lies farther out: not the face it stood on, the farthest'); continue; } }
+    // (the ray from just above its own face, a tenth of a millimetre: a piece over it (a lid) is not met first)
+    const W = (v: THREE.Vector3) => v.applyMatrix4(m).toArray() as V3, from = W(new THREE.Vector3(...h.at).addScaledVector(n, 1e-4)), dir = n.clone().negate().transformDirection(m).toArray() as V3;
     const im = imprint(part, rec.asking as Asking, from, dir, { turn: rec.turn, ...(o.geometry ? { geometry: o.geometry } : {}) });
     if ('refused' in im) { loseIt(`its checks refuse it there now: ${im.why}`); continue; }
+    // (and only on its own piece: another standing over it now is not its face (it hopped onto one: the evaluator, 2026-11-01))
+    if (im.path.join('/') !== q.path.join('/')) { loseIt(`the ${im.piece} stands over it now: its own face is not the one met`); continue; }
     part = applyImprint(part, im, rec.of).part; kept.push(rec.of);
   }
   return { part, kept, lost };

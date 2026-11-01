@@ -301,6 +301,8 @@ describe('every domain, in one pass', () => {
     // (each kind with the response it calls for: a reckless act calls for stopping and telling the user)
     for (const r of rows('NEAR-MISS.md')) { if (!['error', 'at-risk', 'reckless'].includes(r[2]!)) bad.push(`near miss "${r[1]!.slice(0, 40)}": kind ${r[2]}`); if (!r[4]) bad.push(`near miss "${r[1]!.slice(0, 40)}": no response`);
       if (!/^\d{4}-\d\d-\d\d$/.test(r[0] ?? '')) bad.push(`near miss "${r[1]!.slice(0, 40)}": its date ${r[0]}`); if (!r[3]) bad.push(`near miss "${r[1]!.slice(0, 40)}": nothing says what caught it`);
+      if (!r[1]) bad.push(`near miss of ${r[0]}: nothing says what happened`);
+      if (r[2] === 'reckless' && (!/^stop, and tell the user\b/i.test(r[4]!) || /\b(never|not|don'?t|no|without|later|but)\b/i.test(r[4]!))) bad.push(`near miss "${r[1]!.slice(0, 40)}": a reckless act's response is to stop and tell the user, first, and nothing taking it back`);
       if (r[2] === 'reckless' && !(/\bstop/i.test(r[4]!) && /\buser\b/i.test(r[4]!))) bad.push(`near miss "${r[1]!.slice(0, 40)}": reckless, and its response is not to stop and tell the user`);
       // (an error's response is the fix and the check added; an at-risk act's, the process changed: each names a check, a
       // test, a hook, a gate, a refusal, a rule or a decision, or shows the code)
@@ -331,6 +333,7 @@ describe('every domain, in one pass', () => {
     expect(steps[0]!.result.length, 'the build\'s record is cut').toBeLessThanOrEqual(300);
     const run = await runOf({ start: emptyBoard('t'), board: tools.board(), steps, answer: 'All done. The sum is 4.', model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: tools.made });
     expect(run.nearMisses.map((m) => `${m.kind} ${m.tool}`), 'a refused wire, a block failed past the cut, a tool failed, an answer past a standing refusal').toEqual(['error build', 'error build', 'error card', 'reckless answer']);
+    expect(run.nearMisses.map((m) => m.step), 'each at its own step (the build the first, the card the second, the answer after them)').toEqual([1, 1, 2, 2]);
     expect(run.nearMisses[1]!.what, 'the block that failed').toMatch(/^node div failed/);
     // (and through runOf its answer reaches the near misses: numbers with no board are at-risk; a refusal the answer owns
     // up to is an error only, not reckless (the answer dropped at runOf's door passed before: the evaluator, 2026-11-01))
@@ -395,7 +398,8 @@ describe('every domain, in one pass', () => {
     const relay = readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), callLine = "const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40 });";
     expect(relay.slice(relay.indexOf(callLine), relay.indexOf('res.end(m.relayBody(r));') + 24), 'the relay sends the run as agentBuild made it').toBe(`${callLine}\n      res.setHeader('Content-Type', 'application/json'); res.end(m.relayBody(r));`);
     // (the relay sends the page all of the run: its near misses, diff and certificates)
-    const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses, 'every near miss sent whole: its step, tool, what, kind and response').toEqual(run.nearMisses); expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
+    const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses, 'every near miss sent whole: its step, tool, what, kind and response').toEqual(run.nearMisses);
+    expect(sent, 'and the whole run as it was made (its certificates and diff too)').toEqual(JSON.parse(JSON.stringify(run))); expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
     // (every near miss the run catches has its kind's response, from the one table: a reckless one, to stop and tell the
     // user (the run's own were held to nothing: the evaluator, 2026-11-01))
     // (held as the log's rows are: a reckless act's, to stop and tell the user, said first; an error's or an at-risk act's
@@ -408,8 +412,17 @@ describe('every domain, in one pass', () => {
     // naming the task and the one that waits on it)
     const cp = mkdtempSync(join(tmpdir(), 'plan-')); cpSync(join(root, 'plan'), join(cp, 'plan'), { recursive: true });
     writeFileSync(join(cp, 'plan/ANDON.md'), `${readFileSync(join(cp, 'plan/ANDON.md'), 'utf8').trimEnd()}\n| A99 | 2026-11-01 | 00.S5 | planted to show the refusal | open |\n`);
-    const cc = spawnSync('python3', [join(cp, 'plan/compile.py'), '--check'], { encoding: 'utf8' }); rmSync(cp, { recursive: true, force: true });
+    const cc = spawnSync('python3', [join(cp, 'plan/compile.py'), '--check'], { encoding: 'utf8' });
     expect([cc.status !== 0, /00\.S5 is passing with andon A99 open/.test(cc.stdout + cc.stderr), /00\.S7 is passing with andon A99 open/.test(cc.stdout + cc.stderr)], `compile.py refuses an open andon and what waits on it: ${(cc.stdout + cc.stderr).slice(0, 300)}`).toEqual([true, true, true]);
+    // (and two steps down the chain: an open andon on a failing task that a failing one waits on, which a passing one waits
+    // on in turn (only the first step was shown: the evaluator, 2026-11-01))
+    const tj = join(cp, 'plan/specs/00-structure/tasks.json'), tasks0 = JSON.parse(readFileSync(tj, 'utf8')) as { tasks: { id: string; after: string[] }[] };
+    for (const t of tasks0.tasks) { if (t.id === 'S9') t.after = ['S8']; if (t.id === 'S6') t.after = ['S9']; } writeFileSync(tj, JSON.stringify(tasks0, null, 1));
+    writeFileSync(join(cp, 'plan/ANDON.md'), `${readFileSync(join(root, 'plan/ANDON.md'), 'utf8').trimEnd()}\n| A98 | 2026-11-01 | 00.S8 | planted two steps up | open |\n`);
+    const cc2 = spawnSync('python3', [join(cp, 'plan/compile.py'), '--check'], { encoding: 'utf8' }); rmSync(cp, { recursive: true, force: true });
+    expect(/00\.S6 is passing with andon A98 open \(on 00\.S8, which it waits on\)/.test(cc2.stdout + cc2.stderr), `compile.py two steps down: ${(cc2.stdout + cc2.stderr).slice(0, 300)}`).toBe(true);
+    // (the page itself is read by running it: npm run eval:ask drives the built page with a real run's relay answer)
+    expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).scripts['eval:ask'], 'the page checked by running it').toMatch(/tests\/evals\/ask\.eval\.ts/);
     // (the runners' and the page's handling of a run, read exactly from agentBuild's call to the near misses printed or
     // shown: a print skipped, a list emptied or a page clearing them between, passed before (the evaluator, 2026-11-01))
     const region = (t: string, a: string, b: string) => { const i = t.indexOf(a), j = t.indexOf(b, i); return i < 0 || j < 0 ? '' : t.slice(i, t.indexOf('\n', j)); };
@@ -726,7 +739,8 @@ describe('every domain, in one pass', () => {
   // (an imprint keeps to its face by what the face is (spec 01, I9; R10; evaluation case 10): the plate made 10 mm taller,
   // the imprint is made again on its top, its hole through the new depth, the old cut gone; the plate made too narrow for
   // where it stood, or made round, it is lost and said so, never moved)
-  it('a box made taller keeps its imprint on the top; a face removed says it is lost', () => {
+  it('a box made taller keeps its imprint on the top; a face removed says it is lost', async () => {
+    const { geometry } = await import('../../src/nexus/view/kit3d');
     const c10 = (JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; asking: Asking; host: { material: string }; reapply?: { plate: number[]; at: number[]; taller: number[]; narrower: number[]; expect: { kept_top: number; kept_depth: number; cuts: number } } }[] }).cases.find((c) => c.case === 10)!;
     const r = c10.reapply!, box = (b: number[]): Part['shape'] => ({ box: b.map((x) => x / 1000) as V3 }), withShape = (h: Part, sh: Part['shape']): Part => ({ ...h, parts: [{ ...h.parts![0]!, shape: sh }] });
     const host: Part = { name: 'host', parts: [{ name: 'plate', item: 'plate', mat: c10.host.material, shape: box(r.plate), at: [0, 0, 0] }] };
@@ -736,6 +750,25 @@ describe('every domain, in one pass', () => {
     expect(tp.cuts!.length, 'one cut: the old one gone').toBe(r.expect.cuts);
     expect([+(tp.cuts![0]!.at[1] * 1000).toFixed(4), +(tp.cuts![0]!.depth * 1000).toFixed(4), +(tp.cuts![0]!.at[0] * 1000).toFixed(4), +(tp.cuts![0]!.at[2] * 1000).toFixed(4)], 'on the new top, through the new depth, where it stood').toEqual([r.expect.kept_top, r.expect.kept_depth, r.at[0], r.at[1]]);
     expect([tp.ports?.length, tp.imprints?.length, tp.imprints?.[0]?.lost], 'its port and its record once').toEqual([1, 1, undefined]);
+    // (a lid set over it: the imprint kept on its own plate, not moved onto the lid (it hopped onto one: the evaluator,
+    // 2026-11-01))
+    // (a lid 43 mm over it, clear of the key's 24 mm of room: kept on its own plate; a lid 13 mm over it, in that room: its
+    // room check refuses it, lost and said so)
+    const lid = (y: number): Part => ({ ...done, parts: [done.parts![0]!, { name: 'lid', item: 'lid', mat: 'steel-low', shape: { box: [0.1, 0.004, 0.1] }, at: [0, y, 0] }] }), kl = reapplyImprints(lid(0.05)), low = reapplyImprints(lid(0.02));
+    expect([kl.kept, kl.lost, kl.part.parts![1]!.cuts?.length ?? 0, kl.part.parts![0]!.cuts?.length], 'a lid well over it: kept on its own plate, the lid not cut').toEqual([['M8 cap screw'], [], 0, 1]);
+    expect([low.kept, low.lost.map((x) => /room/.test(x.why))], 'a lid in its key\'s room: lost, by its room check').toEqual([[], [true]]);
+    // (made too thin for its counterbore: its checks refuse it, so it is lost and said so; made into sub-parts, it has no
+    // surface: lost; first put on a step below the piece's top, it keeps to its step when nothing changes, and is lost when
+    // the step is raised above... (a face the farthest out at first, made not so, is lost))
+    const thin = reapplyImprints(withShape(done, box([100, 6, 100]))); expect([thin.kept, thin.lost.map((x) => x.why.slice(0, 26))], 'too thin for its counterbore').toEqual([[], ['its checks refuse it there']]);
+    const split = reapplyImprints({ ...done, parts: [{ ...done.parts![0]!, shape: undefined, parts: [{ name: 'half', shape: box([50, 10, 100]), at: [0.025, 0, 0] }] }] }); expect(split.lost.map((x) => x.why), 'made into sub-parts').toEqual(['the piece it stood on has no surface of its own now']);
+    const step: Part['shape'] = { prism: { pts: [[-0.05, -0.005], [0.05, -0.005], [0.05, 0.005], [0, 0.005], [0, 0.015], [-0.05, 0.015]], L: 0.1 } };
+    const stepHost: Part = { name: 'host', parts: [{ name: 'stepped', item: 'stepped', mat: 'steel-low', shape: step, at: [0, 0, 0] }] };
+    const sim = imprint(stepHost, c10.asking, [0.025, 1, 0.01], [0, -1, 0], { geometry: (sh) => geometry(sh, undefined) }) as Imprinted; expect((sim as unknown as Refusal).refused, `on the lower step: ${(sim as unknown as Refusal).why ?? ''}`).toBeUndefined();
+    const onStep = applyImprint(stepHost, sim, 'M8 cap screw').part, same = reapplyImprints(onStep, { geometry: (sh) => geometry(sh, undefined) });
+    expect([same.kept, same.lost], 'on a step, nothing changed: kept').toEqual([['M8 cap screw'], []]);
+    const raised = reapplyImprints(withShape(done, { prism: { pts: [[-0.05, -0.005], [0.05, -0.005], [0.05, 0.005], [0.02, 0.005], [0.02, 0.015], [-0.05, 0.015]], L: 0.1 } }), { geometry: (sh) => geometry(sh, undefined) });
+    expect([raised.kept, raised.lost.map((x) => x.why.slice(0, 33))], 'the top it stood on, the farthest out, now below another of its normal').toEqual([[], ['another face with its normal lies']]);
     for (const [what, sh] of [['narrower', box(r.narrower)], ['round', { sphere: 0.05 }]] as const) { const g = reapplyImprints(withShape(done, sh)), gp = g.part.parts![0]!;
       expect([g.kept, g.lost.map((x) => x.of)], `${what}: lost`).toEqual([[], ['M8 cap screw']]); expect(g.lost[0]!.why.length).toBeGreaterThan(20);
       expect([gp.cuts?.length ?? 0, gp.ports?.length ?? 0, gp.imprints?.[0]?.lost], `${what}: nothing of it moved anywhere; its record says it is lost`).toEqual([0, 0, g.lost[0]!.why]); }

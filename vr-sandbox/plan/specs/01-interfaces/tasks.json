@@ -109,7 +109,7 @@
    ],
    "owner": "mate.ts, kits.ts",
    "check": "after an imprint, the host's new interface finds a fastener by fit() (the hole finds its bolt)",
-   "status": "claimed",
+   "status": "passing",
    "after": [
     "I7"
    ],
@@ -127,7 +127,7 @@
    "after": [
     "I8"
    ],
-   "evidence": "2026-11-01: an imprint's record keeps what asked it and a query for its face (its normal, the farthest along it, near where it stood); reapplyImprints in mate.ts takes each imprint's cuts, keep zones and port off its piece, finds its face again by that query (met from outside at the point it stood over), and makes it afresh there (the negative for the depth the piece now has, its checks run again); where no face answers, the surface faces otherwise, or the checks refuse, it is lost and said so, nothing of it moved; evaluation case 10: the plate made 10 mm taller keeps its imprint on its top, its hole through the new 20 mm; made too narrow or round, the imprint is lost"
+   "evidence": "2026-11-01: an imprint's record keeps what asked it and a query for its face (its normal, the farthest along it, near where it stood); reapplyImprints in mate.ts takes each imprint's cuts, keep zones and port off its piece, finds its face again by that query (met from outside at the point it stood over), and makes it afresh there (the negative for the depth the piece now has, its checks run again); where no face answers, the surface faces otherwise, or the checks refuse, it is lost and said so, nothing of it moved; evaluation case 10: the plate made 10 mm taller keeps its imprint on its top, its hole through the new 20 mm; made too narrow or round, the imprint is lost; mended after its first verdict: re-made only on its own piece (its ray from just above its own face; a piece over it is not cut), lost where the piece has no surface of its own, where its checks now refuse it, or where the face it stood on as the farthest out is no longer so; first put on a step, it keeps to its step. 'Made by' (a face by the feature that made it) is not held: there is no shape history here"
   },
   {
    "id": "I10",
@@ -137,7 +137,7 @@
    ],
    "owner": "mate.ts, catalogue.ts",
    "check": "evaluation case 8 chooses the expected bolt; the engine's fasteners are unchanged or better, compared before and after",
-   "status": "claimed",
+   "status": "passing",
    "after": [
     "I8"
    ],

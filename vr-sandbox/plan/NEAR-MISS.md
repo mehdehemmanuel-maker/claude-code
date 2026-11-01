@@ -5,8 +5,9 @@ for, never a culprit. An **error** is a slip (the response: fix it and add the c
 **at-risk** act is a shortcut that skipped a check (the response: change the process so the check cannot be skipped); a
 **reckless** act goes on past a known refusal on purpose (the response: stop, and tell the user). The AI in the app catches
 its own on each run (`nearMisses` in `src/nexus/agent.ts`: a refusal said back, a tool or a node that failed, numbers with
-no board, an answer given past a refusal still standing): the page shows them beside the answer, the node 'Claude builds
-a board' gives them on its output `near misses`, and the evaluation runners print them.
+no board, an answer given past a refusal still standing): the page shows them beside the answer (shown by driving the
+built page, `npm run eval:ask`), the node 'Claude builds a board' gives them on its output `near misses`, and the
+evaluation runners print them.
 
 | Date | What happened | Kind | Caught by | Response |
 | --- | --- | --- | --- | --- |
