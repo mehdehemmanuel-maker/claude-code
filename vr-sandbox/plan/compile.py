@@ -91,7 +91,7 @@ def user_questions() -> list[tuple[str, str, bool]]:
     for l in (PLAN / 'QUESTIONS.md').read_text().split('\n'):
         if re.match(r'^\| U\d+ \|', l):
             c = cells(l)
-            out.append((c[0], c[1], c[-1] in ('', '—', '-')))
+            out.append((c[0], c[1], c[-1] in ('', '—', '-') or 'asked again' in c[-1]))
     return out
 
 def research_passes(findings: list[tuple[int, str, str]]) -> list[dict]:
