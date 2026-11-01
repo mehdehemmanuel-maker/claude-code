@@ -33,4 +33,4 @@ ever opened it. The OpenCascade and Jolt WebAssembly builds are loaded by the pa
 | W2 | The pages deployed with the right headers | the address opens on a phone and a Quest; the Controls board works; screenshots from the devices | W1 |
 | W3 | The relay as a function, keys as secrets, the spend cap | Ask Claude answers through it; a request past the cap is refused and says so; no key in any page (scanned) | W1 |
 | W4 | Deploy only from a gate-passed commit | a deploy of an unstamped commit is refused | W2, spec 00 S3 |
-| W5 | Measured on devices: load time, frame rate on the city board, search latency | numbers recorded in REALITY.md with how measured | W2 |
+| W5 | Measured on devices: load time, frame rate on the city board, search latency; headset comfort on a real Quest (decision 0012: whether turning to chat strains) | numbers recorded in REALITY.md with how measured | W2 |

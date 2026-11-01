@@ -1636,3 +1636,17 @@ gearhead specified (the maker's data), the Unite motor estimated (sellers' figur
 estimated (their cases' sizes are standard, their mass, amps and inner layers typical), two mixtures derived and
 hypothetical. A planted record with a source but no status fails it; so did removing one fluid's status. Not covered:
 figures outside `src/data/`; and C21's words disputed, myth and inspired-only have no evidence kind yet.
+
+## 2026-11-01: headset comfort measured against every limit, and the layout fixed until all hold (spec 04, P10; decision 0012)
+
+The evaluator failed P10: the chat and bar had moved from the task's numbers with no record, text size was not measured,
+the measuring script compared nothing against limits, no real Quest. Now `npm run eval:headset` (`tests/evals/headset.cjs`)
+builds the pages, enters the emulated Meta Quest 3, measures every panel, the board's text and the smallest target of the
+bar, the chat and the keyboard in degrees, checks each against its limit, walks the player 2 m right and 3 m ahead and
+checks again, and fails on any one outside. Its first run found three more faults beside the ones known: the bar's
+clock/history toggle was 0.73° (a target needs 2.5°), every one-row bar button under 2.5° at any scale the 58° width allows,
+and the keyboard's keys 2.34° tall. Fixed: the board drawn at a fixed 780 css px in a headset (its text 0.60° and 0.71°,
+where from the desktop window it was 0.29° to 0.50°), the bar in two rows (39° wide, buttons 2.62° or more), the chat's typing
+area 90 px (2.74°), the keyboard 0.62 m wide (keys 2.59°) and 45° below the eye (it covered the bar at 34°, 7.18° clear
+now), chat 42° aside and 3.06° clear of the board. Last run: every limit held, and every panel stayed where it was after
+walking. The departures from research 34's first numbers are decision 0012; a real Quest is spec 03's task W5.

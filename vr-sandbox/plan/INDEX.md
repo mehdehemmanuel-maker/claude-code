@@ -27,7 +27,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 2. **11.LW15** Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by its canonical fo
 3. **10.T11** First: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets quantity, proposed by quantityOf and confirmed; fits checks kind, th
 4. **11.LW12** First, before LW13: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as volatile); canonica
-5. **04.P10** Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ 0.6°; the bar sca
+5. **04.P10** Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css px so its text
 6. **00.S4** The provenance check, the placeholder scan and the secret scan in the gate
 7. **00.S5** Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them
 8. **00.S7** The evaluator: its brief, three scored examples, the rule that only it flips a task
@@ -146,7 +146,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | W2 | The pages deployed with the right headers | W1 | failing |
 | W3 | The relay as a function, keys as secrets, the spend cap | W1 | failing |
 | W4 | Deploy only from a gate-passed commit | W2, spec 00 S3 | failing |
-| W5 | Measured on devices: load time, frame rate on the city board, search latency | W2 | failing |
+| W5 | Measured on devices: load time, frame rate on the city board, search latency; headset comfort on a real Quest (decision 0012: whether turning to … | W2 | failing |
 
 ### 04-being-in-it (10)
 
@@ -160,7 +160,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | P6 | Sights, each with its legend | — | failing |
 | P7 | The corrector's ghost and band | P1 | failing |
 | P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and … | P1 | failing |
-| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ … | — | failing (evaluator: chat is at 42 deg to the side; the task states 30 deg (the builder changed it after seeing overlap, but the stated numbe) |
+| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css … | — | failing (evaluator: chat is at 42 deg to the side; the task states 30 deg (the builder changed it after seeing overlap, but the stated numbe) |
 | P11 | Moving comfortably: fixed speeds (stopped, 1.4, 3 m/s), snap turn 30°/45° on the right stick, a vignette while moving, zoom rate capped and about … | P10 | failing |
 
 ### 05-civil (7)

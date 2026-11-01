@@ -19,7 +19,7 @@ import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { NodesWall } from './nodes-wall';
+import { NH, NW, NodesWall } from './nodes-wall';
 import { wall } from './nodes';
 import { SpaceView, type Shown } from './space3d';
 import { Keyboard } from './keyboard';
@@ -131,11 +131,19 @@ function layGrid(): void {
 interface Hit { x0: number; y0: number; x1: number; y1: number; act: (x: number) => void }
 /** A flat panel drawn on a canvas, pressed where its buttons are. */
 class Panel {
-  readonly mesh: THREE.Mesh; readonly c = document.createElement('canvas'); readonly g: CanvasRenderingContext2D; readonly tex: THREE.CanvasTexture; hits: Hit[] = [];
-  constructor(readonly w: number, readonly h: number, readonly px: number, private readonly paint: (p: Panel) => void) {
+  readonly mesh: THREE.Mesh; readonly c = document.createElement('canvas'); readonly g: CanvasRenderingContext2D; tex: THREE.CanvasTexture; hits: Hit[] = [];
+  constructor(public w: number, public h: number, public px: number, private readonly paint: (p: Panel) => void) {
     this.c.width = px; this.c.height = Math.round((px * h) / w); this.g = this.c.getContext('2d')!;
     this.tex = new THREE.CanvasTexture(this.c); this.tex.colorSpace = THREE.SRGBColorSpace;
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: this.tex, transparent: true }));
+  }
+  /** Another size and shape (the bar is one row on a screen, two in a headset): a new canvas size, plane and texture. */
+  shape(w: number, h: number, px: number): void {
+    if (w === this.w && h === this.h && px === this.px) return;
+    this.w = w; this.h = h; this.px = px; this.c.width = px; this.c.height = Math.round((px * h) / w);
+    this.mesh.geometry.dispose(); this.mesh.geometry = new THREE.PlaneGeometry(w, h);
+    const old = this.tex; this.tex = new THREE.CanvasTexture(this.c); this.tex.colorSpace = THREE.SRGBColorSpace; (this.mesh.material as THREE.MeshBasicMaterial).map = this.tex; old.dispose();
+    this.draw();
   }
   draw(): void { this.hits = []; this.g.clearRect(0, 0, this.c.width, this.c.height); this.paint(this); this.tex.needsUpdate = true; }
   press(uv: THREE.Vector2): void { const x = uv.x * this.c.width, y = (1 - uv.y) * this.c.height; this.hits.find((r) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1)?.act(x); }
@@ -150,37 +158,44 @@ function round(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: 
 let tMode: 'auto' | 'clock' | 'history' = 'auto';
 /** The space bar: S (what a cell is, the decades to jump to, fit), the planes of the grid, T (the clock, or the board's history), and
  *  what is drawn. */
-const bar = new Panel(1.7, 0.1, 2400, (p) => {
-  const g = p.g, H = p.c.height; g.fillStyle = '#0b1220ee'; round(g, 0, 0, p.c.width, H, 24); g.fill();
+// (one row on a screen; in a headset two rows, S over T, so every button is 90 px or more of a narrower bar: in one row
+// the bar could not keep within the 58° Meta designs for and give its buttons the 2.5° a target needs (measured, research 34))
+const BAR_ONE = [1.7, 0.1, 2400] as const, BAR_TWO = [0.9, 0.2, 1400] as const;
+const bar = new Panel(...BAR_ONE, (p) => {
+  const g = p.g, two = p.h / p.w > 0.15, H = two ? p.c.height / 2 : p.c.height, bw = (w: number) => (two ? Math.max(w, 90) : w);
+  g.fillStyle = '#0b1220ee'; round(g, 0, 0, p.c.width, p.c.height, 24); g.fill();
   g.textBaseline = 'middle'; g.font = `700 22px ${FONT}`; g.fillStyle = '#ffd740'; g.fillText('S · SCALE', 24, H / 2 - 18);
   g.font = `600 28px ${FONT}`; g.fillStyle = '#e6eef8'; g.fillText(`1 cell = ${lengthSaid(grid.cell || 1)}`, 24, H / 2 + 16);
-  let x = 300; for (const [name, cell] of [['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3], ['Mm', 1e6]] as const) { p.button(name, x, 22, 84, H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += 92; }
+  let x = two ? 250 : 300; for (const [name, cell] of [['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3], ['Mm', 1e6]] as const) { p.button(name, x, 22, bw(84), H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += bw(84) + 8; }
   p.button('Fit', x, 22, 90, H - 44, fit); x += 100; p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130;
-  for (const k of ['xz', 'xy', 'yz'] as const) { p.button(k.toUpperCase(), x, 22, 84, H - 44, () => { grid.planes[k] = !grid.planes[k]; grid.dirty = true; }, grid.planes[k]); x += 92; }
-  x += 22; g.font = `700 22px ${FONT}`; g.fillStyle = '#69f0ae'; g.fillText('T · TIME', x, H / 2 - 18);
+  for (const k of ['xz', 'xy', 'yz'] as const) { p.button(k.toUpperCase(), x, 22, bw(84), H - 44, () => { grid.planes[k] = !grid.planes[k]; grid.dirty = true; }, grid.planes[k]); x += bw(84) + 8; }
+  // (in two rows, T begins the second row; its buttons are moved down by a row's height, and its mode button made full height)
+  const T0 = two ? H : 0; if (two) x = 24; else x += 22;
+  g.font = `700 22px ${FONT}`; g.fillStyle = '#69f0ae'; g.fillText('T · TIME', x, T0 + H / 2 - 18);
   // T is the clock (what moves: traffic, signals) or the board's history; the clock first when anything moves with it
   const ck = wall.clock(), clockMode = tMode === 'clock' || (tMode === 'auto' && ck.moves);
-  p.button(clockMode ? 'clock' : 'history', x - 4, H / 2 + 2, 104, 34, () => { tMode = clockMode ? 'history' : 'clock'; bar.draw(); }); x += 112;
-  const tx = x, tw = 470, sx = tx + 84, sw = tw - 170;
+  if (two) { x += 130; p.button(clockMode ? 'clock' : 'history', x, T0 + 22, 130, H - 44, () => { tMode = clockMode ? 'history' : 'clock'; bar.draw(); }); x += 140; }
+  else { p.button(clockMode ? 'clock' : 'history', x - 4, H / 2 + 2, 104, 34, () => { tMode = clockMode ? 'history' : 'clock'; bar.draw(); }); x += 112; }
+  const tx = x, tw = two ? 620 : 470, sx = tx + bw(64) + 20, sw = tw - 2 * (bw(64) + 20) - (two ? 0 : 42);
   const slide = (f: number, act: (f: number) => void) => {
-    g.fillStyle = '#1c2a3d'; round(g, sx, H / 2 - 8, sw, 16, 8); g.fill(); g.fillStyle = '#69f0ae'; round(g, sx, H / 2 - 8, Math.max(16, sw * f), 16, 8); g.fill();
-    g.beginPath(); g.arc(sx + sw * f, H / 2, 16, 0, Math.PI * 2); g.fill();
-    p.hits.push({ x0: sx - 10, y0: 0, x1: sx + sw + 10, y1: H, act: (px) => act(Math.max(0, Math.min(1, (px - sx) / sw))) });
+    g.fillStyle = '#1c2a3d'; round(g, sx, T0 + H / 2 - 8, sw, 16, 8); g.fill(); g.fillStyle = '#69f0ae'; round(g, sx, T0 + H / 2 - 8, Math.max(16, sw * f), 16, 8); g.fill();
+    g.beginPath(); g.arc(sx + sw * f, T0 + H / 2, 16, 0, Math.PI * 2); g.fill();
+    p.hits.push({ x0: sx - 10, y0: T0, x1: sx + sw + 10, y1: T0 + H, act: (px) => act(Math.max(0, Math.min(1, (px - sx) / sw))) });
   };
   if (clockMode) {
-    p.button(ck.playing ? '❚❚' : '▶', tx, 22, 64, H - 44, () => { wall.play(!wall.clock().playing); bar.draw(); }, ck.playing);
+    p.button(ck.playing ? '❚❚' : '▶', tx, T0 + 22, bw(64), H - 44, () => { wall.play(!wall.clock().playing); bar.draw(); }, ck.playing);
     const [w0] = wall.window(); slide((ck.t - w0) / ck.span, (f) => wall.setTime(w0 + f * ck.span));
-    p.button('×' + (ck.rate >= 1000 ? `${ck.rate / 1000}k` : String(ck.rate)), sx + sw + 14, 22, 64, H - 44, () => { wall.rate(({ 1: 10, 10: 100, 100: 1000 } as Record<number, number>)[ck.rate] ?? 1); wall.span(({ 1: 600, 10: 3600, 100: 86400 } as Record<number, number>)[ck.rate] ?? 120); bar.draw(); });
-    g.font = `500 24px ${FONT}`; g.fillStyle = ck.moves ? '#a7ffeb' : '#5f6f84'; g.fillText(ck.moves ? `t = ${ck.t.toFixed(1)} s` : 'nothing moves', tx + tw + 8, H / 2 - 16);
+    p.button('×' + (ck.rate >= 1000 ? `${ck.rate / 1000}k` : String(ck.rate)), sx + sw + 14, T0 + 22, bw(64), H - 44, () => { wall.rate(({ 1: 10, 10: 100, 100: 1000 } as Record<number, number>)[ck.rate] ?? 1); wall.span(({ 1: 600, 10: 3600, 100: 86400 } as Record<number, number>)[ck.rate] ?? 120); bar.draw(); });
+    g.font = `500 24px ${FONT}`; g.fillStyle = ck.moves ? '#a7ffeb' : '#5f6f84'; g.fillText(ck.moves ? `t = ${ck.t.toFixed(1)} s` : 'nothing moves', tx + tw + 8, T0 + H / 2 - 16);
   } else {
     const h = wall.history();
-    p.button('◀', tx, 22, 64, H - 44, () => wall.goto(h.at - 1));
+    p.button('◀', tx, T0 + 22, bw(64), H - 44, () => wall.goto(h.at - 1));
     slide(h.count > 1 ? h.at / (h.count - 1) : 1, (f) => wall.goto(Math.round(f * (h.count - 1))));
-    p.button('▶', sx + sw + 14, 22, 64, H - 44, () => wall.goto(h.at + 1));
-    g.font = `500 24px ${FONT}`; g.fillStyle = '#9fb3c8'; g.fillText(`${h.at + 1} / ${h.count}`, tx + tw + 8, H / 2 - 16);
+    p.button('▶', sx + sw + 14, T0 + 22, bw(64), H - 44, () => wall.goto(h.at + 1));
+    g.font = `500 24px ${FONT}`; g.fillStyle = '#9fb3c8'; g.fillText(`${h.at + 1} / ${h.count}`, tx + tw + 8, T0 + H / 2 - 16);
   }
   const st = view.stats; g.fillStyle = '#7f8ea3'; g.font = `500 22px ${FONT}`;
-  const sayIt = `${st.instances.toLocaleString()} drawn in ${st.draws} draw${st.draws === 1 ? '' : 's'}${st.boxes ? `, ${st.boxes.toLocaleString()} far off as boxes` : ''}`; g.fillText(sayIt, tx + tw + 8, H / 2 + 16);
+  const sayIt = `${st.instances.toLocaleString()} drawn in ${st.draws} draw${st.draws === 1 ? '' : 's'}${st.boxes ? `, ${st.boxes.toLocaleString()} far off as boxes` : ''}`; g.fillText(sayIt, tx + tw + 8, T0 + H / 2 + 16);
 });
 
 /** Chat: what you say goes to Claude Code (src/nexus/view/relay.ts); its last lines, and the line being typed. */
@@ -193,7 +208,8 @@ const chat = new Panel(0.62, 0.22, 900, (p) => {
   for (const l of said.slice(-4)) { for (const line of wrap(g, l, p.c.width - 48).slice(0, 3)) { g.fillStyle = l.startsWith('You:') ? '#e6eef8' : '#9fb3c8'; g.fillText(line, 24, y); y += 30; } y += 6; if (y > p.c.height - 80) break; }
   g.fillStyle = '#162132'; round(g, 20, p.c.height - 62, p.c.width - 40, 46, 10); g.fill(); g.fillStyle = typing ? '#e6eef8' : '#5f6f84'; g.textBaseline = 'middle';
   g.fillText(typing || (renderer.xr.isPresenting ? 'Press here to type' : 'Type in the box at the top left'), 34, p.c.height - 39);
-  p.hits.push({ x0: 0, y0: p.c.height - 70, x1: p.c.width, y1: p.c.height, act: () => { if (renderer.xr.isPresenting) { keyboard.mesh.visible = !keyboard.mesh.visible; placeKeyboard(); } else chatInput.focus(); } });
+  // (the place to type: 90 px of the panel's height, 2.5° or more from 1.3 m in a headset (research 34 found 70 px, 2.0°))
+  p.hits.push({ x0: 0, y0: p.c.height - 90, x1: p.c.width, y1: p.c.height, act: () => { if (renderer.xr.isPresenting) { keyboard.mesh.visible = !keyboard.mesh.visible; placeKeyboard(); } else chatInput.focus(); } });
 });
 function wrap(g: CanvasRenderingContext2D, t: string, w: number): string[] { const out: string[] = []; let line = ''; for (const word of t.split(/\s+/)) { const tryL = line ? `${line} ${word}` : word; if (g.measureText(tryL).width > w && line) { out.push(line); line = word; } else line = tryL; } if (line) out.push(line); return out; }
 let relay: Relay | null = null; void makeRelay().then((r) => { relay = r; });
@@ -210,10 +226,12 @@ document.body.appendChild(chatInput);
 const back = document.createElement('a'); back.href = './index.html'; back.textContent = '◀ Dashboard';
 back.style.cssText = 'position:fixed;left:16px;bottom:16px;padding:8px 14px;border-radius:10px;border:1px solid #5a3f9a;background:linear-gradient(90deg,#1b3a5a,#3a1b5a);color:#e6eef8;font:14px system-ui;text-decoration:none;z-index:5';
 document.body.appendChild(back);
-const keyboard = new Keyboard(false); keyboard.mesh.visible = false;
+// (0.62 m wide: each key 40.7 mm tall, 2.59° from 0.9 m; at 0.56 m they were 2.34°, under the 2.5° a target needs)
+const keyboard = new Keyboard(false, 0.62); keyboard.mesh.visible = false;
 // (in a headset, 0.9 m from the eye and below it: nearer than 1 m it is in the band Meta's comfort pages say to avoid,
 // 0.5 to 0.8 m, where the eyes strain to focus (research 34; spec 04, P10))
-function placeKeyboard(): void { keyboard.mesh.position.set(0, -0.5, -0.75); keyboard.mesh.rotation.set(-0.6, 0, 0); }
+// 45° below the eye, tilted to face it, so it clears the bar above it (measured: at 34° below it covered the bar)
+function placeKeyboard(): void { const a = THREE.MathUtils.degToRad(45); keyboard.mesh.position.set(0, -0.9 * Math.sin(a), -0.9 * Math.cos(a)); keyboard.mesh.rotation.set(-a, 0, 0); }
 
 const board = new NodesWall((t) => { said.push(`Board: ${t}`); chat.draw(); });
 
@@ -230,9 +248,10 @@ function layPanels(): void {
   if (xr) { chat.mesh.visible = true; board.group.scale.setScalar(boardBig ? 0.6 : 0.38); board.group.position.set(0, -1.25 * Math.tan(THREE.MathUtils.degToRad(10)), -1.25); board.group.rotation.set(-THREE.MathUtils.degToRad(10), 0, 0);
     // (the board's drawing does not sit centred on its own origin: centred by its measured box, so it is straight ahead)
     { ui.updateWorldMatrix(true, true); const c = ui.worldToLocal(new THREE.Box3().setFromObject(board.group).getCenter(new THREE.Vector3())); board.group.position.x -= c.x; }
-    bar.mesh.position.set(0, -0.42, -1.1); bar.mesh.scale.setScalar(0.62);
+    bar.shape(...BAR_TWO); bar.mesh.position.set(0, -0.62, -1.1); bar.mesh.scale.setScalar(1);
     const side = THREE.MathUtils.degToRad(42); chat.mesh.position.set(-1.3 * Math.sin(side), 0, -1.3 * Math.cos(side)); chat.mesh.rotation.set(0, side, 0); chat.mesh.scale.setScalar(1); }
-  else if (boardBig) { board.group.scale.setScalar(0.5); board.group.position.set(-0.12, 0.06, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.visible = false; }
+  else bar.shape(...BAR_ONE);
+  if (xr) { /* laid above */ } else if (boardBig) { board.group.scale.setScalar(0.5); board.group.position.set(-0.12, 0.06, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.visible = false; }
   else { chat.mesh.visible = true; board.group.scale.setScalar(0.36); board.group.position.set(0.36, 0.1, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.position.set(-0.78, 0.4, -1.25); chat.mesh.scale.setScalar(0.65); chat.mesh.rotation.set(0, 0, 0); }
   // the panels are drawn over what is made: they are what you work with, never hidden inside it
   ui.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (m) { m.depthTest = false; m.depthWrite = false; } o.renderOrder = 50; });
@@ -245,15 +264,23 @@ function recentre(): void { const head = renderer.xr.getCamera(), p = head.getWo
 function carry(d: THREE.Vector3): void { rig.position.add(d); ui.position.add(d); xrPivot.add(d); }
 /** Where each panel stands from your eyes, measured: how far, how far off to the side and below, how wide it looks
  *  (in degrees). For checking the layout against the comfort numbers, in a headset or an emulated one. */
-function comfort(): Record<string, { distance: number; side: number; below: number; width: number }> {
+function comfort(): Record<string, { distance: number; side: number; below: number; width: number; height?: number }> {
   const head = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye = head.getWorldPosition(new THREE.Vector3()), f = head.getWorldDirection(new THREE.Vector3());
-  const yaw = Math.atan2(f.x, -f.z), out: Record<string, { distance: number; side: number; below: number; width: number }> = {};
+  const yaw = Math.atan2(f.x, -f.z), out: Record<string, { distance: number; side: number; below: number; width: number; height?: number }> = {};
   for (const [name, o] of [['board', board.group], ['bar', bar.mesh], ['chat', chat.mesh], ['keyboard', keyboard.mesh]] as const) {
     if (!o.visible) continue; o.updateWorldMatrix(true, true);
     const box = new THREE.Box3().setFromObject(o), c = box.getCenter(new THREE.Vector3()).sub(eye), d = c.length(), sz = box.getSize(new THREE.Vector3());
     const across = Math.hypot(sz.x, sz.z), deg = THREE.MathUtils.radToDeg;
-    out[name] = { distance: d, side: deg(Math.atan2(c.x, -c.z) - yaw), below: deg(-Math.asin(c.y / d)), width: deg(2 * Math.atan(across / 2 / d)) };
+    const lo = box.min.y - eye.y, hi = box.max.y - eye.y, h = Math.hypot(c.x, c.z) || 1e-9;
+    out[name] = { distance: d, side: deg(Math.atan2(c.x, -c.z) - yaw), below: deg(-Math.asin(c.y / d)), width: deg(2 * Math.atan(across / 2 / d)), height: deg(Math.atan2(hi, h) - Math.atan2(lo, h)) };
   }
+  // (sizes as the eye sees them, in degrees: the board's smallest and usual text (11 and 13 css px over its drawn width),
+  // the smallest dimension of the smallest target on the bar, the chat and the keyboard)
+  const sz = (m: number, d: number) => THREE.MathUtils.radToDeg(2 * Math.atan(m / 2 / d)), dist = (o: THREE.Object3D) => new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()).distanceTo(eye);
+  if (board.group.visible) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), d = dist(board.group); out.text = { distance: d, side: 0, below: 0, width: sz(11 * perPx, d) }; out.text13 = { distance: d, side: 0, below: 0, width: sz(13 * perPx, d) }; }
+  const smallest = (p: Panel) => Math.min(...p.hits.map((h) => Math.min((h.x1 - h.x0) * (p.w * p.mesh.scale.x) / p.c.width, (h.y1 - h.y0) * (p.h * p.mesh.scale.y) / p.c.height)));
+  for (const [name, p] of [['bar target', bar], ['chat target', chat]] as const) if (p.mesh.visible && p.hits.length) { const d = dist(p.mesh); out[name] = { distance: d, side: 0, below: 0, width: sz(smallest(p), d) }; }
+  if (keyboard.mesh.visible) { const d = dist(keyboard.mesh); out['key'] = { distance: d, side: 0, below: 0, width: sz(keyboard.smallestKey(), d) }; }
   return out;
 }
 
@@ -341,8 +368,12 @@ for (let i = 0; i < 2; i++) {
   ctl.addEventListener('selectend', () => { if (hand.held) { board.up(); hand.held = false; } pad.releaseAll(); });
   ctl.addEventListener('squeezestart', () => recentre());
 }
-renderer.xr.addEventListener('sessionstart', () => { layPanels(); window.setTimeout(recentre, 300); bar.draw(); chat.draw(); });
-renderer.xr.addEventListener('sessionend', () => { ui.position.set(0, 0, 0); ui.rotation.set(0, 0, 0); layPanels(); chat.draw(); });
+// (in a headset the board is drawn at a fixed width, so its text has a fixed size in degrees whatever the desktop window's
+// width: 780 css px over its 0.912 m, from 1.23 m, gives its smallest text (11 px) 0.6°, the size Meta calls comfortable;
+// from the window it was 0.29° to 0.50° (research 34))
+const BOARD_CSS_PX = 780; let boardStyle = '';
+renderer.xr.addEventListener('sessionstart', () => { boardStyle = wall.canvas.style.cssText; wall.canvas.style.width = `${BOARD_CSS_PX}px`; wall.canvas.style.height = `${Math.round((BOARD_CSS_PX * NH) / NW)}px`; wall.fit(); layPanels(); window.setTimeout(recentre, 300); bar.draw(); chat.draw(); });
+renderer.xr.addEventListener('sessionend', () => { wall.canvas.style.cssText = boardStyle; wall.fit(); ui.position.set(0, 0, 0); ui.rotation.set(0, 0, 0); layPanels(); chat.draw(); });
 /** The sticks: the right zooms S about the point before you, the left carries you where you look, and turns you. */
 function sticks(dt: number): void {
   const session = renderer.xr.getSession(); if (!session) return;
