@@ -10,9 +10,9 @@ What a board is built from: the node library, its laws, its seeds (nodes built f
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Node library | 215 | the library panel | `src/nexus/blocks.ts` |
+| Node library | 262 | the library panel | `src/nexus/blocks.ts` |
 | Laws | 330 | the library panel | `src/nexus/law.ts` |
-| Seeds | 21 | the library panel | `src/nexus/seeds.ts` |
+| Seeds | 23 | the library panel | `src/nexus/seeds.ts` |
 
 ### Flows
 
@@ -20,7 +20,7 @@ Boards: whole pipelines of nodes to start from, and yours.
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Starter boards | 46 | the library panel | `src/nexus/starters.ts` |
+| Starter boards | 64 | the library panel | `src/nexus/starters.ts` |
 
 ### Products
 
@@ -28,9 +28,9 @@ Real things by their makers' figures: machines, powertrains, the inventory of wh
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Machines | 7 | `vehicle.model` (its model), `engine.run` (its model); `drive`, `vehicle` (in their code) | `src/nexus/machines.ts` |
+| Machines | 10 | `vehicle.model` (its model), `engine.run` (its model); `drive`, `vehicle` (in their code) | `src/nexus/machines.ts` |
 | Powertrains | 1 | `drive`, `engine.run` (in their code) | `src/nexus/power/drive.ts` |
-| Inventory | 2,397 | `optics.colour` (its metal), `optics.film` (its metal); the mat of 20 nodes (`matter`, `shape.box`, `shape.cyl`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
+| Inventory | 2,408 | `optics.colour` (its metal), `optics.film` (its metal); the mat of 20 nodes (`matter`, `shape.box`, `shape.cyl`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
 
 ### Parts
 
@@ -40,6 +40,7 @@ What builds are made of, by standard: designed components, families sized by the
 | --- | --- | --- | --- |
 | Designed components | 41 | `part.family` (its family); `card.part` (in its code) | `src/nexus/components.ts` |
 | Part families | 340 | `part.family` (its family) | `src/nexus/families.ts` |
+| Built parts | 4,735 | `stock.part` (its id) | `src/data/stock.json` |
 | Catalogue sizes | 56,064 | `card.part` (its what): 14,577 of its 56,064 sizes, those of the 41 kinds drawn in 3D; the rest are known by name and size and not drawn yet | `src/nexus/catalogue.ts` |
 | Standard faces | 14 | **no node reaches it yet** | `src/nexus/mate.ts` |
 | Line sections | 11 | `tether` (its section), `line` (its section), `route` (its section) | `src/nexus/placement/line.ts` |
@@ -71,6 +72,7 @@ What is known and run: researched references, programs.
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
 | References | 1 | `research.notes` (in its code) | `src/nexus/research.ts` |
+| The app itself | 22 | the library panel | `src/nexus/navigate.ts (APP)` |
 | Programs | 3 | `logic.run` (its program) | `src/nexus/logic/programs.ts` |
 
 Not reached by any node yet: Standard faces. Each is a node to make, or a setting to give one.
@@ -79,14 +81,14 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 | Flow | Nodes | Which |
 | --- | --- | --- |
-| Worked once: from its inputs, again only when they change (most nodes) | 528 | the rest |
+| Worked once: from its inputs, again only when they change (most nodes) | 572 | the rest |
 | With the clock: again as the board's time goes on | 2 | Approved, Clock |
 | Worked once, played by the clock: a simulation run once and posed at any time | 3 | Agent, Follow a path, Let it go |
 | Many at once: one thing for each row or point: spawned, scattered, patterned | 6 | City, Neighbourhood, Pattern of, Road system, Scatter, Spawn |
 | To a fixed point: rounds until nothing more changes: repairs, research, gauntlets | 5 | Autopilot, Loop round a block, Repairs, Research loop (to the bottom), Run the gauntlet |
 | On an event: when something happens | 1 | When… |
-| From outside: fetched or run elsewhere (a source online, a worker, Claude) | 4 | Ask Claude, Code, Netlist, Search the web (Wikidata) |
-| Shown: an end of a flow: a table, a value, a chart, the space | 17 | 3D view, Chart, Check a limit, Clashes, Comes apart to the bottom?, Gauge, Mass, centre and inertia, Measure, Note, Nothing runs into anything?, Say why, Show, Show a map, Show in space, Table view, Task, What it is made of |
+| From outside: fetched or run elsewhere (a source online, a worker, Claude) | 7 | Ask Claude, Claude (Anthropic Messages API), Claude builds a board, Code, Gemini: look at pictures, Search the web (Wikidata), Transistor-level netlist |
+| Shown: an end of a flow: a table, a value, a chart, the space | 19 | 3D view, Chart, Check a limit, Clashes, Comes apart to the bottom?, Gauge, Interfaces, Mass, centre and inertia, Measure, Note, Nothing runs into anything?, Say why, Show, Show a map, Show in space, Side by side from the same camera, Table view, Task, What it is made of |
 
 ## Flows to start from
 
@@ -102,12 +104,30 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 | The gauntlet as nodes: makers through gate after gate, the unknown s… | software | 26 | 1 2 5 9 10 | · |
 | The 6502 from its transistors: a real program run switch by switch, … | electronics | 9 | 5 6 10 | · |
 | Proximity and mates: each thing carries the room and the mates it ne… | structural | 8 | 2 3 4 10 | · |
-| A body from its measured segments, its math on every part | science | 9 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
+| A body from its measured segments, its math on every part | life | 9 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
 | Metals, coloured by their physics: fourteen polished metals, each it… | structural | 45 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
 | Steel, finished five ways: turned, ground, polished, bead blasted an… | structural | 19 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
 | Colours with no dye: titanium anodised from 10 to 100 volts, and ste… | structural | 63 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
 | One shape, eight looks: bare steel, aluminium and copper coloured by… | structural | 27 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
 | Paint jobs and wear: a striped panel new and worn, a two-tone drum, … | structural | 21 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
+| Picture to model: the Monte Carlo fitted to the AI-made picture of h… | vehicles | 12 | 1 2 10 | · |
+| Fit to a target: one node that sizes anything to what is asked of it… | pipelines | 7 | 1 3 10 | it makes things and never shows them |
+| Onto a surface: any outline laid onto any thing and following its cu… | mechanical | 6 | 2 3 10 | · |
+| Variants of anything: twelve windows drawn by seed over their width,… | structural | 4 | 3 10 | · |
+| What matters: which of a block's inputs move which of its outputs, a… | finance | 6 | 5 10 | · |
+| Choosing and fitting: a 40 kN/m coil spring as light as can be, 1.3 … | finance | 4 | 3 10 | · |
+| Engineering compiler: an inline four carried through the compiler's … | mechanical | 12 | 2 5 6 10 | it makes things and never shows them |
+| Compiler correction (stage 27): an inline four held to two requireme… | vehicles | 9 | 2 4 5 6 10 | · |
+| Controls you work while it runs: a stick drives the cart (the arrow … | structural | 15 | 1 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
+| Export: an M8 bolt as exact solids, written as STEP (named, coloured… | mechanical | 5 | 2 10 11 | · |
+| Blind judge: the Monte Carlo drawn from three sides and shown to a v… | vehicles | 6 | 2 5 10 | it makes things and never shows them |
+| Prompt trial: four ways of asking an image model for one thing, each… | software | 3 | 4 10 | · |
+| Fit in parallel: the highest speed an engine holds (its valves not f… | finance | 4 | 3 10 | it makes things and never shows them |
+| Run many at once: what moves an engine's valve float and its least f… | finance | 3 | 5 10 | · |
+| Difference: the Monte Carlo as Chevrolet sold it against the one in … | mechanical | 6 | 2 5 10 | · |
+| Trade-offs: a coil spring as light as can be and as stiff as can be,… | finance | 5 | 4 10 | · |
+| Pipelines tried: every recipe for fitting a model to a picture run o… | vehicles | 7 | 2 4 5 9 10 | it makes things and never shows them |
+| Chevrolet Monte Carlo SS (2004), built from its first parts: its 3.8… | mechanical | 7 | 2 5 10 | · |
 | Materials from their phases: carbon fibre and epoxy, thermal paste a… | structural | 16 | 2 3 5 8 10 | · |
 | What it is made of, and what it carries: a copper and an aluminium r… | structural | 28 | 2 3 5 6 10 | · |
 | Two agents: one goes to sit, opening the way; one keeps within a lea… | structural | 11 | 1 2 6 7 10 | · |
@@ -141,4 +161,4 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 ## Nodes no starter board uses yet
 
-73 of 236 (laws aside): Add, Ask Claude, Balance (what is conserved), Battery runtime, Bore where it passes, Break-even, Chain round wheels, Choose, Compare, Compound growth, Cone, Critical path, Crossing, Cut gear or sprocket, Divide, Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Hole, Integral, Internal rate of return, Keep where, LED resistor, Laws by field, List of numbers, Machining time, Margin and markup, Mate by a measure, Mirror, Move rows, Onto a shaft, Onto the ground, Overall equipment effectiveness, PID loop on a lag, Pass, Percent change, Point along, Power, Quantity, RC filter corner, Round, Rows on a grid, Rules over rows, Search the web (Wikidata), Signal cycle, Slope, Solar panel, a day, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Standard part by size, Straight-line depreciation, Tether, Text, Through time, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Voltage divider, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, Zone.
+96 of 285 (laws aside): Accuracy, four ways (silhouette, features, surface, dimensions), Add, Ask Claude, Battery runtime at constant power, Body fitted to a picture (analysis by synthesis), Bore where it passes, Break-even analysis (cost–volume–profit), Chain round wheels, Choose, Claude (Anthropic Messages API), Claude builds a board, Coil spring, made and loaded, Compare, Compound interest (future value), Cone, Conservation balance (in − out − accumulation), Critical path method (CPM), Crossing, Cut gear or sprocket, Daily photovoltaic energy yield, Dense outline on the image's edges (active contour, one step), Divide, Exact solids (B-rep, OpenCascade), Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Gemini: draw from words, Gemini: look at pictures, Geometry fitted to its features (windows, flares, wing, skirts; the intake taken off the picture), Gross margin and markup, Higgsfield: pictures and video, Hole, Integral, Interfaces, Interference two ways (exact booleans, the rules), Internal rate of return, Keep where, LED series current-limiting resistor, Laws by field, List of numbers, Machining time, Made whole (the attention-to-detail pass and its critic), Mate by a measure, Mirror, Move rows, Next best view or measurement (uncertainty ranking), Onto a shaft, Onto the ground, Overall equipment effectiveness (OEE), PID loop on a lag, Pass, Photogrammetric dimensions (back-projection onto its middle plane), Picture from words (image model), Point along, Power, Quantity, RC low-pass cutoff frequency (−3 dB), Relative change (percentage), Resistive voltage divider (unloaded), Round, Rows on a grid, Rules over rows, Same-camera view (z-buffered render), Search the web (Wikidata), Side by side from the same camera, Signal cycle, Silhouette comparison (IoU, signed contour error), Silhouette rendering from a camera, Slope, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Stored part (the built-parts library), Straight-line depreciation, Stress three ways (CalculiX, the book, our frame), Tether, Through time, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, ZenRows: read a web page, Zone, fal.ai: draw from words (FLUX).

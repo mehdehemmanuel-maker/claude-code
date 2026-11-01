@@ -1,14 +1,14 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 04.P10
-Spec in hand: spec 04, being in it (`plan/specs/04-being-in-it/`)
-Last commit the gate passed: dbb31fb (2026-11-01)
+Task in hand: 01.I2
+Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
+Last commit the gate passed: e148190 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
-1. 01.I1: the interface record and who owns it
+1. 04.P10: its fourth verdict (blocks only on the board, wires from the side panel), and mend it if it fails
 2. 10.T3: its fourth verdict, and mend it if it fails
-3. 10.T24: interference as a gate (faults D8, D9), once the interface record says where a fastener sits
+3. 10.T24: interference as a gate (faults D8, D9): a fastener excused only where its interface says it sits
 
 ## Open, and why
 

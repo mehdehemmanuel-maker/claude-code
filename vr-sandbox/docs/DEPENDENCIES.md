@@ -562,22 +562,22 @@ Each law's worked example given, its output sought through the other laws alone 
 | handbook materials | `src/data/materials.ts` | E, ν, yield, ultimate, elongation, conductivity, friction, restitution, colour; source and confidence; ids like steel.a36 | `nexus/blocks.ts`, `nexus/machines.ts`, `nexus/matter.ts`, `nexus/navigate.ts` |
 | thermal | `src/engineering/thermal.ts` | c, k, emissivity by handbook id | `engineering/dcmotor.ts`, `nexus/blocks.ts`, `nexus/graph.ts`, `nexus/matter.ts` |
 | fusion | `src/engineering/fusion.ts` | melting, expansion, bond, base element by handbook id | `nexus/matter.ts` |
-| density | `src/nexus/mass.ts` | density by the ids parts carry (typical) | `nexus/assembly.ts`, `nexus/blocks.ts`, `nexus/components.ts`, `nexus/drivetrain.ts`, `nexus/engines.ts`, `nexus/gauntlet.ts`, `nexus/graph.ts`, `nexus/kits.ts`, `nexus/loads.ts`, `nexus/machines.ts`, `nexus/madeof.ts`, `nexus/matter.ts`, `nexus/sim.ts`, `nexus/view/kit3d.ts`, `nexus/view/nodes3d.ts` |
+| density | `src/nexus/mass.ts` | density by the ids parts carry (typical) | `nexus/assembly.ts`, `nexus/blocks.ts`, `nexus/brep.ts`, `nexus/compiler.ts`, `nexus/components.ts`, `nexus/drivetrain.ts`, `nexus/engines.ts`, `nexus/gauntlet.ts`, `nexus/graph.ts`, `nexus/kits.ts`, `nexus/loads.ts`, `nexus/machines.ts`, `nexus/madeof.ts`, `nexus/matter.ts`, `nexus/sim.ts`, `nexus/view/kit3d.ts`, `nexus/view/nodes3d.ts` |
 | composition | `src/nexus/elements.ts` | alloys, formulas, blends down to elements, by the ids parts carry | `nexus/inventory.ts`, `nexus/life/index.ts`, `nexus/matter.ts`, `nexus/pieces.ts` |
 | service limit | `src/nexus/make/rules.ts` | most service temperature, °C, by the ids parts carry | `nexus/placement/line.ts`, `nexus/placement/model.ts`, `nexus/placement/repair.ts`, `nexus/placement/solve.ts` |
-| the material system | `src/nexus/matter.ts` | every part material id: its family, what it is exactly or that it is unspecified, its handbook grade (its own, or a stand-in, said); every property with its source and evidence | `nexus/blocks.ts`, `nexus/graph.ts`, `nexus/loads.ts`, `nexus/madeof.ts`, `nexus/make/rules.ts`, `nexus/sim.ts` |
+| the material system | `src/nexus/matter.ts` | every part material id: its family, what it is exactly or that it is unspecified, its handbook grade (its own, or a stand-in, said); every property with its source and evidence | `nexus/blocks.ts`, `nexus/fea.ts`, `nexus/graph.ts`, `nexus/loads.ts`, `nexus/madeof.ts`, `nexus/make/rules.ts`, `nexus/sim.ts` |
 | elements | `src/data/periodic.ts` | 118 elements: weight, density, melting and boiling points (secondary: compiled from Wikipedia citing CRC and IUPAC) | `nexus/mass.ts`, `nexus/matter.ts` |
 | wood species | `src/data/woods.ts` | species by the Wood Handbook: specific gravity, MOE, MOR at 12 % moisture | `nexus/mass.ts`, `nexus/matter.ts` |
 | mixes | `src/data/mixes.ts` | mixes by what goes into a cubic metre: their density and make-up follow | `nexus/elements.ts`, `nexus/mass.ts`, `nexus/matter.ts` |
 | words to matter | `src/nexus/kinds/core.ts` | a word → inventory id, density, label | **nothing** |
-| spring wires | `src/engineering/springs.ts` | ASTM spring wires: A, m, G, E, density | `nexus/blocks.ts`, `nexus/engines.ts`, `nexus/loads.ts` |
+| spring wires | `src/engineering/springs.ts` | ASTM spring wires: A, m, G, E, density | `nexus/blocks.ts`, `nexus/engines.ts`, `nexus/loads.ts`, `nexus/seeds.ts` |
 | adhesives | `src/engineering/joining.ts` | adhesives by the handbook categories | **nothing** |
 | gases | `src/nexus/aware/gas.ts` | molar mass, smell, harm, flammable limits | `nexus/aware/sense.ts`, `nexus/navigate.ts` |
 | edges | `src/nexus/finish.ts` | edge radius by material | **nothing** |
 
 ## The materials parts carry
 
-128 material ids in the one table (`MATTER` in `src/nexus/matter.ts`): 80 specified (a grade, a species, a type, a mix), 48 known only by their family (said unspecified). Handbook grade: 19 their own, 45 a stand-in (said), 64 none. With a density: 123; a strength: 64; a friction: 64; a specific heat: 75; a melting point: 23; a make-up down to elements: 75. Tables that disagree on one property: 4.
+130 material ids in the one table (`MATTER` in `src/nexus/matter.ts`): 82 specified (a grade, a species, a type, a mix), 48 known only by their family (said unspecified). Handbook grade: 20 their own, 46 a stand-in (said), 64 none. With a density: 130; a strength: 66; a friction: 66; a specific heat: 77; a melting point: 23; a make-up down to elements: 76. Tables that disagree on one property: 4.
 
 | Material | Family | Specified | Handbook grade | Density | Strength | Disagreements |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -597,23 +597,23 @@ Each law's worked example given, its output sought through the other laws alone 
 | `asphalt` asphalt concrete, mix unsaid | concrete and mortar | **no** | Concrete C30 (stand-in) | 2300 (typical) | — | — |
 | `avocado` avocado | food | **no** | — | 1000 (typical) | — | — |
 | `bacon` bacon | food | **no** | — | 1000 (typical) | — | — |
-| `bamboo` bamboo culm, species unsaid | wood | **no** | Birch plywood (stand-in) | **none** | — | — |
+| `bamboo` bamboo culm, species unsaid | wood | **no** | Birch plywood (stand-in) | 700 (typical) | — | — |
 | `battery` a battery, chemistry unsaid | battery | **no** | — | 1500 (typical) | — | — |
 | `brass` free-cutting brass C36000 | copper alloy | yes | Brass C360 half hard | 8500 (typical) | 310 MPa (handbook) | — |
 | `bread` bread | food | **no** | — | 250 (typical) | — | — |
 | `brick` fired clay brick | ceramic | yes | Fired clay brick | 1900 (typical) | 3.5 MPa (estimated) | — |
 | `bronze` tin bronze | copper alloy | **no** | Brass C360 half hard (stand-in) | 8800 (typical) | — | — |
 | `butter` butter | food | **no** | — | 911 (typical) | — | — |
-| `carbon-fibre` carbon fibre reinforced polymer, layup unsaid | composite | **no** | Carbon fibre laminate (quasi-isotropic) (stand-in) | **none** | — | — |
+| `carbon-fibre` carbon fibre reinforced polymer, layup unsaid | composite | **no** | Carbon fibre laminate (quasi-isotropic) (stand-in) | 1600 (typical) | — | — |
 | `carbon-fibre-t300` carbon fibre, standard modulus (Toray T300), the bare fibre | ceramic | yes | — | 1760 (specified) | 3530 MPa (specified) | — |
-| `cardboard` corrugated board | wood product | **no** | — | **none** | — | — |
+| `cardboard` corrugated board | wood product | **no** | — | 690 (typical) | — | — |
 | `cast-iron` grey cast iron, class 30 | cast iron | yes | Grey cast iron, class 30 | 7200 (typical) | 214 MPa (handbook) | — |
 | `cement-paste` hardened portland cement paste, water to cement 0.5 | concrete and mortar | yes | — | 1950 (typical) | 3 MPa (typical) | — |
 | `ceramic` a technical ceramic, unsaid | ceramic | **no** | — | 3900 (typical) | — | — |
 | `cfrp-ud-60` carbon fibre and epoxy, unidirectional, 60 % fibre by volume | composite | yes | — | 1536 (typical) | 2136 MPa (estimated) | — |
 | `cheese` cheese | food | **no** | — | 1100 (typical) | — | — |
 | `chicken` chicken | food | **no** | — | 1050 (typical) | — | — |
-| `chocolate` chocolate | food | **no** | — | **none** | — | — |
+| `chocolate` chocolate | food | **no** | — | 1300 (typical) | — | — |
 | `concrete` concrete, mix and strength class unsaid, plain (no reinforcing said) | concrete and mortar | **no** | Concrete C30 (stand-in) | 2400 (typical) | — | — |
 | `concrete-aggregate-70` concrete as its phases: granite aggregate in hardened cement paste, 70 % aggregate by volume | concrete and mortar | yes | — | 2475 (typical) | — | not worked out: electrical conductivity: a phase's is not known |
 | `concrete-c25` normal-weight concrete, about 25 MPa, as its hardened phases | concrete and mortar | yes | — | 2335 (derived) | — | not worked out: electrical conductivity: a phase's is not known |
@@ -641,7 +641,7 @@ Each law's worked example given, its output sought through the other laws alone 
 | `graphite` graphite | ceramic | yes | — | 1800 (typical) | 40 MPa (typical) | — |
 | `ham` ham | food | **no** | — | 1050 (typical) | — | — |
 | `hfo2` hafnium dioxide | ceramic | yes | — | 9680 (typical) | — | — |
-| `ice` ice | fluid | yes | — | **none** | — | — |
+| `ice` ice | fluid | yes | — | 917 (typical) | — | — |
 | `lead` commercially pure lead | other metal | yes | — | 11340 (typical) | 5 MPa (typical) | — |
 | `leaf` leaf | living tissue | **no** | — | 600 (typical) | — | — |
 | `leather` leather, tannage unsaid | textile and paper | **no** | Leather (vegetable-tanned cowhide) (stand-in) | 860 (typical) | — | — |
@@ -652,8 +652,10 @@ Each law's worked example given, its output sought through the other laws alone 
 | `mls-steel` multi-layer steel gasket sheet (spring steel, coated) | steel | **no** | Steel AISI 1018 cold drawn (stand-in) | 7900 (typical) | — | — |
 | `nbr` nitrile rubber (NBR) | elastomer | yes | Natural rubber / latex (stand-in) | 1200 (typical) | 15 MPa (typical) | — |
 | `ndfeb` sintered neodymium-iron-boron magnet | other metal | yes | — | 7500 (typical) | 80 MPa (typical) | — |
+| `neoprene` Polychloroprene (neoprene) rubber | elastomer | yes | Natural rubber / latex (stand-in) | 1230 (typical) | 15 MPa (typical) | — |
 | `nickel-alloy` a nickel alloy, grade unsaid | other metal | **no** | — | 8400 (typical) | — | — |
 | `nickel-plate` electroplated nickel | other metal | yes | — | 8900 (typical) | 150 MPa (typical) | — |
+| `nr` natural rubber (NR, cis-polyisoprene), vulcanised | elastomer | yes | Natural rubber / latex | 930 (typical) | 20 MPa (handbook) | — |
 | `ntc-ceramic` nickel-manganese spinel thermistor ceramic | ceramic | yes | — | 5000 (typical) | 60 MPa (typical) | — |
 | `nylon` polyamide, PA6 or PA66 unsaid | polymer | **no** | Printed micro carbon fibre filled nylon (stand-in) | 1140 (typical) | — | — |
 | `oak` oak (Quercus), red or white unsaid | wood | **no** | Birch plywood (stand-in) | 750 (typical) | — | — |
@@ -683,7 +685,7 @@ Each law's worked example given, its output sought through the other laws alone 
 | `silicon-carbide` silicon carbide, sintered | ceramic | yes | — | 3210 (typical) | 400 MPa (typical) | — |
 | `silicone` silicone rubber | elastomer | yes | Natural rubber / latex (stand-in) | 1150 (typical) | 7 MPa (typical) | — |
 | `silk` silk | textile and paper | yes | Coated nylon ripstop (tent cloth) (stand-in) | 1300 (typical) | — | — |
-| `silver` fine silver | other metal | yes | — | 10490 (secondary) | 170 MPa (typical) | — |
+| `silver` fine silver | other metal | yes | — | 10490 (typical) | 170 MPa (typical) | — |
 | `sio2` silicon dioxide (thermal oxide) | glass | yes | — | 2200 (typical) | 50 MPa (typical) | — |
 | `soil` soil, type unsaid | soil | **no** | — | 1500 (typical) | — | — |
 | `solder` tin-lead or lead-free solder, alloy unsaid | other metal | **no** | — | 7400 (typical) | — | — |

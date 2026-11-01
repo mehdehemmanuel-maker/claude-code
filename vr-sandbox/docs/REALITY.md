@@ -1829,3 +1829,17 @@ bar. `npm run eval:headset` now measures the smallest block (4.13° as the board
 pressed ten times) and makes a wire through the side panel's own buttons (wires 9 to 10); every limit held in one run.
 Decision 0012 is brought up to the numbers measured. The board's ports and wires still work with a mouse on a screen.
 Checked with `npm run gate`.
+
+## 2026-11-01: the interface record begins, read from what parts already say (spec 01, I1 and I2; decision 0014)
+
+`interfacesOf` in `src/nexus/interfaces.ts` reads every port (holes, threads, pins, a frame) and every old interface (a
+shaft and its bore, studs and their nuts, a drive, a chain, a mount) of every part in a thing as one record: its kind,
+its sizes in SI, its standard, the kinds it meets, its frame in the thing's own frame where the port gives one, and an id
+of names from the thing down to the part (siblings of one name told apart by where they stand). Nothing is written onto a
+part. A node, Interfaces, shows any thing's. The test "every port and old interface of a thing is one interface with a
+stable id" sweeps every designed component at its example and three machines (a go-kart, a Honda Rancher, a Freightliner
+Cascadia): 44 things, 720 interfaces, one for each port and each old interface, no id two share, each thing's digest the
+same after reading it, and every id the same as a build in another process wrote (`tests/nexus/interfaces.ids.json`).
+`mate.ts` now reads the part-placing function from `interfaces.ts`, so there is one. Not yet: every starter board's
+things (the task's whole check), frames for old interfaces (read from drawn bores and shafts, the next step), and the
+standards' tables (I3). Checked with `npm run gate`.

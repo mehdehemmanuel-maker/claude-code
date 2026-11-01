@@ -23,6 +23,10 @@ import { lawDims, lawWitness, wireDims } from '../../src/nexus/certify';
 import { setting } from '../../src/nexus/lawgraph';
 import { apply } from '../../src/nexus/law';
 import { BOOK } from '../../src/nexus/book';
+import { interfacesOf } from '../../src/nexus/interfaces';
+import { DESIGNED, exampleOf, use } from '../../src/nexus/components';
+import { KITS, makeKit, type Part } from '../../src/nexus/kits';
+import type { Assembly } from '../../src/nexus/assembly';
 import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
 import { nodesOf } from '../../src/nexus/boards';
 import { starterBoards } from '../../src/nexus/starters';
@@ -31,7 +35,6 @@ import { builtOf } from '../../src/nexus/evidence';
 import { parseUnit } from '../../src/ganglia/units';
 import { run } from '../../src/nexus/view/code-worker';
 import { builtPieces, stockProblems } from '../../src/nexus/stock';
-import { KITS, makeKit } from '../../src/nexus/kits';
 
 // a board's code blocks run here as the page's worker runs them
 const env: Env = { code: async (lang, code, inputs) => (await run({ id: 0, lang: lang as 'js', code, facts: {}, input: '', vars: inputs })).value };
@@ -385,6 +388,30 @@ describe('every domain, in one pass', () => {
       expect(gs.verdicts.filter((v) => v.refused === 'wrong').map((v) => `${title}: ${v.what}: ${v.why}`), 'no starter board certificate wrong').toEqual([]);
     }
     expect(laws, 'law nodes on the starter boards certified at the point they ran').toBeGreaterThan(0);
+  }, 60_000);
+  // (the interface record (spec 01, I2): every port and every old interface of a thing read as exactly one interface, with
+  // an id no other shares, nothing changed by the reading; the ids as the last build wrote them (tests/nexus/
+  // interfaces.ids.json, UPDATE_DOCS=1 writes it), so a second build in another process gives the same ids. The corpus: every
+  // designed component at its example and three machines; every starter board's things is the task's whole check, not run
+  // here (see its REALITY entry))
+  it('every port and old interface of a thing is one interface with a stable id', () => {
+    const things: [string, Part | Assembly][] = DESIGNED.map((f) => [f, use(exampleOf(f))]);
+    for (const [id, words] of [['go kart', 'a go kart'], ['atv', 'a honda rancher'], ['semi truck', 'a freightliner cascadia']] as const) { const k = KITS.find((x) => x.id === id); expect(k, `the ${id} kit`).toBeTruthy(); things.push([words, makeKit(k!, words, 7).part]); }
+    expect(things.length, 'the corpus').toBeGreaterThan(40);
+    const ids: Record<string, string[]> = {}, kinds = new Set<string>();
+    for (const [name, t] of things) {
+      let ports = 0, ifaces = 0; const count = (p: Part | Assembly): void => { ports += p.ports?.length ?? 0; if ('items' in p) { for (const it of p.items) count(it.of); return; } ifaces += p.iface?.length ?? 0; for (const k of p.parts ?? []) count(k); };
+      count(t); const before = digest(t), r = interfacesOf(t);
+      expect(r.list.filter((x) => 'port' in x.from).length, `${name}: one interface per port`).toBe(ports);
+      expect(r.list.filter((x) => 'iface' in x.from).length, `${name}: one interface per old interface`).toBe(ifaces);
+      expect(r.clashes, `${name}: no id two share`).toEqual([]);
+      expect(digest(t), `${name}: nothing changed by reading it`).toBe(before);
+      ids[name] = r.list.map((x) => x.id).sort(); for (const x of r.list) kinds.add(x.kind);
+    }
+    expect([...kinds].sort(), 'the kinds the corpus holds').toEqual(expect.arrayContaining(['bore', 'frame', 'holes', 'shaft', 'thread.external', 'thread.internal']));
+    const file = join(root, 'tests/nexus/interfaces.ids.json');
+    if (process.env.UPDATE_DOCS || !existsSync(file)) writeFileSync(file, JSON.stringify(ids, null, 1) + '\n');
+    else expect(ids, 'the same ids as the build that wrote tests/nexus/interfaces.ids.json (UPDATE_DOCS=1 writes it again)').toEqual(JSON.parse(readFileSync(file, 'utf8')));
   }, 60_000);
   // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01)); looked for
   // wherever the gate's own include reaches (vite.config.ts), every folder down, not only the top of tests/nexus (the

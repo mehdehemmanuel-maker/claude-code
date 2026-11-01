@@ -88,6 +88,7 @@ known gaps are there too.
 | The contact graph of any thing (what touches what, from the geometry; each distinct thing once); what flows through it, how it bends, buckles and grows when warmed (steps C to F) | `nexus/graph.ts` (nodes `graph`, `flow`, `bend`) |
 | Rules: interference, clearance, heat gate | `nexus/make/rules.ts` |
 | Critic, detail, conditions, the make pipeline | `nexus/make/` (`critic.ts`, `detail.ts`, `conditions.ts`, `pipeline.ts`) |
+| The interface record: what a part offers or asks where it meets another, read from its ports and old interfaces, with a stable id (spec 01; decisions 0004, 0014) | `nexus/interfaces.ts` |
 | Mating by faces, ports, round faces, bores | `nexus/mate.ts` |
 | Mates as measures in ranges; proximity | `nexus/placement/proximity.ts`, `relate.ts` |
 | Placement, fields, sizing, repair, lines and routing | `nexus/placement/` |

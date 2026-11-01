@@ -18,6 +18,7 @@ import { boltedJoint, use } from './components';
 import { METRIC, NEMA_FACE } from './families';
 import type { Cut, Part, Port, Shape, V3 } from './kits';
 import { piecesOf as boxesOf } from './form';
+import { matrixOfPart } from './interfaces';
 
 const TOL = 0.0002;
 /** The standards' patterns, centres in metres: a NEMA motor's face (NEMA ICS 16: the four tapped holes on a square, the
@@ -123,7 +124,6 @@ export function assemble(name: string, parts: Part[]): { part: Part; mates: stri
 }
 
 // ---- by their round faces -------------------------------------------------------------------------------------------------
-const matrixOfPart = (p: Part) => new THREE.Matrix4().compose(v(p.at ?? [0, 0, 0]), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
 /** Every drawn piece of a part with where it is in the part's frame (through every group it is in). */
 function piecesIn(root: Part, m0 = new THREE.Matrix4()): { p: Part; m: THREE.Matrix4; path: number[] }[] {
   const out: { p: Part; m: THREE.Matrix4; path: number[] }[] = [];

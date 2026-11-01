@@ -40,6 +40,7 @@ import { MATTER, matterOf, mixedMatter } from './matter';
 import { ARRANGEMENTS, type Arrangement } from './mixture';
 import { FILMS_MEASURED, METALS_MEASURED, colourOfNK, filmColour, metalColour, reflectanceFilm, xyzOf, linearSRGB, hexOf } from './colour';
 import { FILM_NK, METAL_NK, NM } from '../data/optics';
+import { interfacesOf } from './interfaces';
 import { SURFACE_MAKES, surfaceOf } from './finish';
 import { resolveLook, type Graphic, type Look } from './appearance';
 import { madeOf, massProperties } from './madeof';
@@ -1313,6 +1314,14 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [thing()], outputs: [N('mass', 'kg'), L('w', 0, 'width'), L('h', 0, 'height'), L('d', 0, 'depth'), P('placed', 'integer', { label: 'pieces placed' }), P('distinct', 'integer', { label: 'things stored' })] },
     run: (i) => { const t = asThing(i.thing), b = boundsOfAll(t), z = b.isEmpty(); return { mass: massOfAll(t), w: z ? 0 : b.max.x - b.min.x, h: z ? 0 : b.max.y - b.min.y, d: z ? 0 : b.max.z - b.min.z, placed: placedCount(t), distinct: distinctCount(t) }; },
     tests: [{ inputs: { thing: { name: 'b', shape: { box: [0.1, 0.2, 0.3] }, mat: 'steel-low' } }, outputs: { mass: 0.006 * 7850, w: 0.1, h: 0.2, d: 0.3, placed: 1 }, rel: 1e-9 }], sink: true }),
+  // (spec 01, I2: what every part of a thing offers or asks where it meets another, read from its ports and its old
+  // interfaces, one record each with an id that says where it is; nothing changed)
+  def({ id: 'interfaces', name: 'Interfaces', spec: { gloss: 'What does each part offer, or ask of, what it meets?', discipline: 'mechanical.design', role: 'data transformation', codes: [{ scheme: 'ICS', code: '21.020', label: 'Characteristics and design of machines, apparatus, equipment' }, { scheme: 'ICS', code: '21.060', label: 'Fasteners' }] }, kind: 'critic', ability: 'measure', domains: ['mechanical', 'structural', 'everyday'], says: 'Every interface of a thing: each port (holes, threads, pins, a frame) and each shaft, bore, stud, drive or chain its parts offer or ask, with where it sits, its size, what it meets, and an id that says where it is',
+    ports: { inputs: [thing()], outputs: [P('interfaces', 'table'), P('count', 'integer'), P('clashes', 'integer', { label: 'ids two would share' }), P('says', 'text')] },
+    run: (i) => { const r = interfacesOf(asThing(i.thing)), byKind = new Map<string, number>(); for (const x of r.list) byKind.set(x.kind, (byKind.get(x.kind) ?? 0) + 1);
+      return { interfaces: r.list.map((x) => ({ id: x.id, kind: x.kind, size: Object.entries(x.size).map(([k, v]) => `${k} ${typeof v === 'number' ? +v.toPrecision(4) : v}`).join(', '), meets: x.mates.join(' '), at: x.frame ? x.frame.at.join(', ') : 'not said' })), count: r.list.length, clashes: r.clashes.length,
+        says: `${r.list.length} interface(s): ${[...byKind].map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}${r.clashes.length ? `; ${r.clashes.length} id(s) two would share: ${r.clashes.map((c) => c.id).join(', ')}` : ''}` }; },
+    tests: [{ inputs: { thing: { name: 'plate', shape: { box: [0.1, 0.01, 0.1] }, ports: [{ name: 'face', sex: 'holes', thread: 'M6', pattern: [[0.02, 0.02], [-0.02, -0.02]], at: [0, 0.005, 0], n: [0, 1, 0], u: [1, 0, 0], t: 0.01 }], parts: [{ name: 'boss', at: [0, 0.01, 0], shape: { cyl: [0.01, 0.02] }, iface: [{ kind: 'shaft', role: 'provides', d: 0.02 }] }] } }, outputs: { count: 2, clashes: 0 } }], sink: true }),
   def({ id: 'made.of', name: 'What it is made of', kind: 'critic', ability: 'measure', domains: ['materials', 'mechanical', 'structural', 'everyday'], says: 'Any thing opened as its materials all the way down: its own tree with each thing\'s mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a grade, a species, or only a family), by element, and what is not known (no material, no density, only a family, a mass stated rather than worked out)',
     settings: [{ key: 'depth', label: 'Levels of its tree', type: 'number', default: 6 }],
     ports: { inputs: [thing()], outputs: [N('mass', 'kg'), P('materials', 'table'), P('elements', 'table'), P('tree', 'table'), P('unknown', 'list<text>'), P('says', 'text')] },

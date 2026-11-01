@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 616 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 617 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 331 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 332 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 13 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 85 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 546 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 547 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 200 of 616 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 200 of 617 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -215,7 +215,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. *derived, tested here*
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what … *derived, tested here, before the update*
 
-## 5 · Check (33)
+## 5 · Check (34)
 
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
@@ -237,6 +237,7 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Feed the proposals in** (`gauntlet.feed`): The proposals with a source (read off a drawing, a reference, or the web) entered in the inventory, what each holds first; the inferred stay proposed until a source confirms them *derived, tested here, before the update*
 - **Frame analysis (3D beams)** (`bend`): Any thing as a 3D frame of beams, read from its geometry (What touches what), nothing typed: each piece cut into slices, each slice a beam of its own section and material (stretch, twist and bending both ways, … *derived, tested here*
 - **How finely is it made?** (`check.fidelity`): A drawn thing measured for how finely it is made: its pieces and kinds; how many, and how much of it, are still plain boxes (a casting drawn as a slab wants its ribs, bosses and fillets); how many are shaped (turned, … *derived, tested here, before the update*
+- **Interfaces** (`interfaces`): Every interface of a thing: each port (holes, threads, pins, a frame) and each shaft, bore, stud, drive or chain its parts offer or ask, with where it sits, its size, what it meets, and an id that says where it is *derived, tested here*
 - **Interference two ways (exact booleans, the rules)** (`verify.interference`): Every pair of pieces the rules try for interference, judged twice: by the rules' triangle test on the meshes, and by the volume the two exact solids share (OpenCascade's boolean). *derived, untested*
 - **Lumped network analysis** (`flow`): Heat, current or force through any thing between two sets of its pieces, over its contact graph (What touches what), nothing typed: the ends chosen by what pieces are (the highest, the lowest, or a name or material). *derived, tested here*
 - **Mass, centre and inertia** (`mass.properties`): What follows from a thing's pieces, nothing counted twice: its mass, its centre of mass, its inertia about that centre (each piece's own, exact for a box, a cylinder or a ball, else its box, an estimate, plus its mass … *estimated, tested here*

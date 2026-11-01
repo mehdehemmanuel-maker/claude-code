@@ -8,8 +8,9 @@
    "meets": [],
    "owner": "plan/decisions, CLAUDE.md, docs/OWNERS.md",
    "check": "the routing test passes with interfaces.ts named; the decision record exists",
-   "status": "failing",
-   "after": []
+   "status": "claimed",
+   "after": [],
+   "evidence": "decision 0014 (refining 0004); interfaces.ts named in CLAUDE.md and docs/OWNERS.md; the routing test passes (2026-11-01)"
   },
   {
    "id": "I2",
@@ -19,12 +20,13 @@
     "R2",
     "R3"
    ],
-   "owner": "kits.ts, interfaces.ts",
+   "owner": "kits.ts, interfaces.ts, blocks.ts (its node), mate.ts (the placing function read from interfaces.ts), built.ts (the node's date written by the docs)",
    "check": "for every starter board's things, each port and old interface gives exactly one interface with a stable id; ids unchanged across two builds",
-   "status": "failing",
+   "status": "claimed, in part",
    "after": [
     "I1"
-   ]
+   ],
+   "evidence": "2026-11-01: interfacesOf reads every port and old interface; the gate sweeps 41 components and 3 machines (44 things, 720 interfaces, no id shared, nothing changed, ids as another process wrote them); not yet every starter board's things, nor frames read from drawn bores and shafts"
   },
   {
    "id": "I3",
