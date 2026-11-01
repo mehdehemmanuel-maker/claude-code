@@ -18,7 +18,7 @@ const LIMITS = [
   ['chat distance (m)', (m) => m.chat.distance, 1.2, 1.4],
   ['keyboard distance (m, outside the 0.5 to 0.8 m band)', (m) => m.keyboard.distance, 0.85, 0.95],
   ['keyboard below the eye (°, 45 by the task)', (m) => m.keyboard.below, 43, 47],
-  ['keyboard clear of the bar (° between their edges, seen from the eye)', (m) => (m.keyboard.below - m.keyboard.height / 2) - (m.bar.below + m.bar.height / 2), 0, 90],
+  ['keyboard clear of the bar (° from the bar\'s lower edge down to the keyboard\'s upper edge, the least at any direction across them, as the eye sees them)', (m) => m['keyboard gap'].width, 0.5, 90],
   ['bar clear of the board (° between their edges)', (m) => (m.bar.below - m.bar.height / 2) - (m.board.below + m.board.height / 2), 0, 90],
   ['board text, smallest (11 px), em (°, 0.4 the least)', (m) => m.text.width, 0.4, 5],
   ['board text, usual (13 px), em (°, 0.6 comfortable)', (m) => m.text13.width, 0.6, 5],
@@ -33,7 +33,7 @@ const LIMITS = [
   // canvas; the canvas itself, its width in css px and where it stands (the evaluator, 2026-11-01))
   ['every target a hand presses, the smallest as seen (°)', (m) => m['every target'].width, 2.5, 90],
   ['board text as seen, 13 px, the least across the canvas (°)', (m) => m['board text seen'].width, 0.6, 5],
-  ['board text as seen, 11 px, the least across the canvas (°)', (m) => m['board text seen'].height, 0.4, 5],
+  ['board text as seen, the least drawn (11 px today), the least across the canvas (°)', (m) => m['board text seen'].height, 0.4, 5],
   ['board canvas drawn at 780 css px', (m) => m.canvas.width, 780, 780],
   ['board canvas below the eye (°, 10 by the task)', (m) => m.canvas.below, 8, 12],
   ['board canvas distance (m, 1.25 by the task)', (m) => m.canvas.distance, 1.15, 1.35],
@@ -56,7 +56,9 @@ const srv = http.createServer((q, r) => { const p = path.join(root, decodeURICom
     // each text measured there too)
     for (const mode of ['chosen', 'library']) {
       const what = await pg.evaluate((m) => window.space.emulate.side(m), mode); await pg.waitForTimeout(200); const m = await pg.evaluate(() => window.space.comfort());
-      for (const [name, v, lo] of [[`side panel target, ${mode} (${what})`, m['side target']?.width, 2.5], [`side panel text, ${mode} (${what})`, m['side text']?.width, 0.6]]) { const ok = v >= lo; console.log(`${ok ? 'ok  ' : 'FAIL'} smallest ${name} (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit ${lo} or more)`); if (!ok) fails++; }
+      // (and every target as seen in that state, the side panel's with the rest: the library's were measured only square on
+      // (the evaluator, 2026-11-01))
+      for (const [name, v, lo] of [[`side panel target, ${mode} (${what})`, m['side target']?.width, 2.5], [`side panel text, ${mode} (${what})`, m['side text']?.width, 0.6], [`target as seen, ${mode}: ${m['every target']?.what}`, m['every target']?.width, 2.5]]) { const ok = v >= lo; console.log(`${ok ? 'ok  ' : 'FAIL'} smallest ${name} (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit ${lo} or more)`); if (!ok) fails++; }
       if (shots) await pg.screenshot({ path: path.join(shots, `headset-side-${mode}.png`) });
     }
     await pg.evaluate(() => window.space.emulate.side('chosen'));
@@ -76,12 +78,17 @@ const srv = http.createServer((q, r) => { const p = path.join(root, decodeURICom
     await pg.keyboard.press('b'); await pg.waitForTimeout(300);
     { const m = await pg.evaluate(() => window.space.comfort()); let n = 0; for (const [name, f, lo, hi] of LIMITS) { let v; try { v = f(m); } catch { v = NaN; } if (!(v >= lo && v <= hi)) { n++; console.log(`FAIL after pressing B: ${name}: ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'}`); } } console.log(`${n ? 'FAIL' : 'ok  '} after pressing B every limit holds`); fails += n; }
     // (a wire made as a hand makes it in a headset: a block's output from the side panel, another block, its input there)
-    const wired = await pg.evaluate(() => {
+    // (and in the side panel's wiring state, every target as seen, its ← here and ✕ with the rest (the evaluator,
+    // 2026-11-01: the side panel's other states were measured square on only))
+    const half = await pg.evaluate(() => {
       const w = window.space.wall, n = () => Object.values(w.board().edges).filter((e) => !e.deleted && e.in).length, n0 = n();
-      w.add('in.number'); const a = window.space.emulate.press('→ wire');
-      w.add('law.newton.second'); const b = window.space.emulate.press('← here', 0);
-      return { pressed: a && b, before: n0, after: n() };
-    });
+      w.add('in.number'); const a = window.space.emulate.press('→ wire'); w.add('law.newton.second'); return { a, n0 };
+    }); await pg.waitForTimeout(200);
+    { const m = await pg.evaluate(() => window.space.comfort()), v = m['every target']?.width, ok = v >= 2.5; console.log(`${ok ? 'ok  ' : 'FAIL'} smallest target as seen, wiring: ${m['every target']?.what} (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit 2.5 or more)`); if (!ok) fails++; }
+    const wired = await pg.evaluate((h) => {
+      const w = window.space.wall, n = () => Object.values(w.board().edges).filter((e) => !e.deleted && e.in).length;
+      const b = window.space.emulate.press('← here', 0); return { pressed: h.a && b, before: h.n0, after: n() };
+    }, half);
     { const ok = wired.pressed && wired.after === wired.before + 1; console.log(`${ok ? 'ok  ' : 'FAIL'} a wire made from the side panel's buttons: ${wired.pressed ? 'pressed' : 'a button was not there'}, wires ${wired.before} to ${wired.after}`); if (!ok) fails++; }
     if (shots) await pg.screenshot({ path: path.join(shots, 'headset-wired.png') });
     // (walked two ways: by carry(), and by the left stick as a hand pushes it, the way walking goes in use (a stick that

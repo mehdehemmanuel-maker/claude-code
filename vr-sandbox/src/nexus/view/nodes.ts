@@ -156,6 +156,13 @@ const toWorld = (sx: number, sy: number) => [(sx - view.ox) / view.k, (sy - view
 /** On the dashboard (view/index.html), or hosted: the space puts the same board on a panel (nodes-wall.ts). */
 const PAGE = !!document.getElementById('app');
 const cv = (document.getElementById('cv') as HTMLCanvasElement | null) ?? hostedCanvas(), g = cv.getContext('2d')!;
+// (the least text drawn in the last paint, in css px, as it was drawn (its font under the transform it was drawn with):
+// what the headset's comfort measures, not the constants 11 and 13 px (a smaller label drawn was not seen: the evaluator,
+// 2026-11-01))
+let leastDrawn = Infinity, leastNow = Infinity;
+{ const fill = g.fillText.bind(g); g.fillText = (t: string, x: number, y: number, mw?: number): void => {
+  const m = /(\d+(?:\.\d+)?)px/.exec(g.font); if (m && String(t).trim()) { const tr = g.getTransform(); leastNow = Math.min(leastNow, (Number(m[1]) * Math.hypot(tr.a, tr.b)) / (window.devicePixelRatio || 1)); }
+  if (mw === undefined) fill(t, x, y); else fill(t, x, y, mw); }; }
 /** Hosted, the board draws on a canvas of its own, laid out off the page (so it has a size) and shown by the forge. */
 function hostedCanvas(): HTMLCanvasElement {
   const c = document.createElement('canvas'); c.style.cssText = 'position:fixed;left:-30000px;top:0;width:1600px;height:900px;pointer-events:none;visibility:hidden';
@@ -182,7 +189,7 @@ const orbitOf = (id: string) => orbits.get(id) ?? orbits.set(id, { yaw: 0.7, pit
 const dimmed = (): Set<string> => new Set((suggestions ??= suggest(cur(), curEngine())).filter((s) => s.kind === 'dead').flatMap((s) => s.nodes));
 
 function paint(): void {
-  drawQueued = false; spinning = false;
+  drawQueued = false; spinning = false; leastNow = Infinity;
   const dpr = window.devicePixelRatio || 1, W0 = cv.clientWidth, H0 = cv.clientHeight;
   if (cv.width !== Math.round(W0 * dpr) || cv.height !== Math.round(H0 * dpr)) { cv.width = Math.round(W0 * dpr); cv.height = Math.round(H0 * dpr); }
   g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W0, H0);
@@ -272,7 +279,7 @@ function paint(): void {
   if (box) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.strokeStyle = '#40c4ff'; g.fillStyle = '#40c4ff18'; g.lineWidth = 1; const x = Math.min(box.x0, box.x1), y = Math.min(box.y0, box.y1); g.fillRect(x, y, Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0)); g.strokeRect(x, y, Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0)); }
   paintMap(dpr, W0, H0);
   if (!nodesOf(b).length) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#5f6f84'; g.font = '15px system-ui'; g.textAlign = 'center'; g.fillText('Drag a block from the library, or type its name above (Ctrl K)', W0 / 2, H0 / 2); g.textAlign = 'left'; }
-  wall.painted?.();
+  leastDrawn = leastNow; wall.painted?.();
   if (spinning || pulses.length || [...glow.values()].some((x) => t - x < 800)) draw();
 }
 /** The whole board small, in a corner, with what is in view outlined: where the rest of it is. Shown only when some of
@@ -879,6 +886,8 @@ export const wall = {
   headset(px: number, zoom = 0): void { leastTarget = px; leastZoom = zoom; if (wallActive) fit(); },
   /** The board's zoom (css px a unit of the sheet): text and blocks are drawn at it. */
   zoomK: (): number => view.k,
+  /** The least text drawn on the board in its last paint, in css px, as drawn. */
+  leastText: (): number => leastDrawn,
   /** What a press at a point of the canvas (css px) would take: a block, a port, a wire, or nothing. */
   probe: (x: number, y: number): string | null => hit(x, y)?.kind ?? null,
   /** Every block on the board as drawn, in the canvas's css px. */

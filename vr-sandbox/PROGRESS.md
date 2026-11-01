@@ -12,8 +12,8 @@ Last commit the gate passed: 62aa108 (2026-11-01)
 
 ## Open, and why
 
-- Verdicts in: 00.S1, S2, S3, 10.T3 and 01.I1 pass. 00.S10 failed a seventh time and 04.P10 a sixth; S10 mended (every
-  tool's refusals caught through the tools themselves), P10 being mended (the side panel's library state as seen).
+- Verdicts in: 00.S1, S2, S3, 10.T3 and 01.I1 pass. 00.S10 failed a seventh time and 04.P10 a sixth; each mended (every
+  tool's refusals caught through the tools themselves; every side panel state, the text as drawn, as seen), to be judged again.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).

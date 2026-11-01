@@ -292,12 +292,14 @@ function everyTarget(eye: THREE.Vector3): { name: string; deg: number }[] {
   }
   return out;
 }
-/** The board's text as seen, at nine points across its canvas: the least height of its 13 px and its 11 px (at zoom k). */
-function boardText(eye: THREE.Vector3, k = wall.zoomK()): { t13: number; t11: number; px: number } {
-  const cw = wall.canvas.clientWidth, chh = wall.canvas.clientHeight; let t13 = Infinity, t11 = Infinity, px = Infinity;
+/** The board's text as seen, at nine points across its canvas: the least height of its usual 13 px, and of the least text
+ *  it drew (11 px at zoom 1 today), each under the zoom it is drawn at (`drawn`, css px: the board's own record of its last
+ *  paint; worked at 11 px × k where nothing is drawn yet, as when the zoom's floor is set). */
+function boardText(eye: THREE.Vector3, k = wall.zoomK(), drawn?: number): { t13: number; t11: number; px: number; least: number } {
+  const cw = wall.canvas.clientWidth, chh = wall.canvas.clientHeight, least = drawn !== undefined && Number.isFinite(drawn) ? drawn : 11 * k; let t13 = Infinity, t11 = Infinity, px = Infinity;
   for (const u of [0.05, 0.5, 0.95]) for (const v of [0.05, 0.5, 0.95]) { const x = u * cw, y = v * chh, at = (hpx: number) => seen(board.canvasMesh, NW, NH, cw, chh, { x0: x - hpx / 2, y0: y - hpx / 2, x1: x + hpx / 2, y1: y + hpx / 2 }, eye);
-    t13 = Math.min(t13, at(13 * k)); t11 = Math.min(t11, at(11 * k)); px = Math.min(px, at(10) / 10); }
-  return { t13, t11, px };
+    t13 = Math.min(t13, at(13 * k)); t11 = Math.min(t11, at(least)); px = Math.min(px, at(10) / 10); }
+  return { t13, t11, px, least };
 }
 
 /** You move, and what you work with comes with you: the panels and the point the zoom turns about go where you go, so
@@ -327,10 +329,22 @@ function comfort(): Record<string, { distance: number; side: number; below: numb
   // evaluator found them unmeasured, at 1.1° and 0.9°, 2026-11-01); and the bar's rows)
   if (board.group.visible) for (const z of board.sizes()) { const d = dist(z.mesh); if (z.target !== undefined) out[`${z.name} target`] = { distance: d, side: 0, below: 0, width: sz(z.target, d) }; out[`${z.name} text`] = { distance: d, side: 0, below: 0, width: sz(z.text, d) }; }
   if (out.bar) out.bar.rows = bar.h / bar.w > 0.15 ? 2 : 1;
+  // (the keyboard clear of the bar as the eye sees them: at each direction across them, the bar's lower edge above the
+  // keyboard's upper edge, the least of these (from their centres' boxes it read 6.60° where it was far less: the
+  // evaluator, 2026-11-01); each edge sampled where it stands, in degrees round (azimuth) and up (elevation) from the eye)
+  if (bar.mesh.visible && keyboard.mesh.visible) {
+    const edge = (mesh: THREE.Object3D, w: number, h: number, top: boolean): [number, number][] => { mesh.updateWorldMatrix(true, false); const pts: [number, number][] = [];
+      for (let i = 0; i <= 40; i++) { const p = new THREE.Vector3(((i / 20 - 1) * w) / 2, ((top ? 1 : -1) * h) / 2, 0).applyMatrix4(mesh.matrixWorld).sub(eye); pts.push([THREE.MathUtils.radToDeg(Math.atan2(p.x, -p.z) - yaw), THREE.MathUtils.radToDeg(Math.atan2(p.y, Math.hypot(p.x, p.z)))]); }
+      return pts.sort((a, b) => a[0] - b[0]); };
+    const at = (e: [number, number][], az: number): number | undefined => { for (let i = 1; i < e.length; i++) { const [a0, l0] = e[i - 1]!, [a1, l1] = e[i]!; if (az >= a0 && az <= a1) return a1 === a0 ? l0 : l0 + ((l1 - l0) * (az - a0)) / (a1 - a0); } return undefined; };
+    const kg = keyboard.mesh.geometry as THREE.PlaneGeometry, ke = edge(keyboard.mesh, kg.parameters.width, kg.parameters.height, true), be = edge(bar.mesh, bar.w, bar.h, false);
+    let gap = Infinity; for (const [az, l] of ke) { const b = at(be, az); if (b !== undefined) gap = Math.min(gap, b - l); } for (const [az, l] of be) { const k = at(ke, az); if (k !== undefined) gap = Math.min(gap, l - k); }
+    out['keyboard gap'] = { distance: 0, side: 0, below: 0, width: gap };
+  }
   // (every target a hand presses, as seen: the smallest, and which; the board's text as seen across its canvas; the canvas
   // itself (its css width, where it stands))
   { const all = everyTarget(eye), least = all.reduce((a, b) => (b.deg < a.deg ? b : a), { name: 'none', deg: Infinity }); out['every target'] = { distance: 0, side: 0, below: 0, width: least.deg, what: `${least.name} (of ${all.length})` } as never;
-    if (board.group.visible) { const t = boardText(eye); out['board text seen'] = { distance: 0, side: 0, below: 0, width: t.t13, height: t.t11 };
+    if (board.group.visible) { const t = boardText(eye, wall.zoomK(), wall.leastText()); out['board text seen'] = { distance: 0, side: 0, below: 0, width: t.t13, height: t.t11, what: `the least drawn ${t.least.toFixed(1)} css px` } as never;
       const cm = board.canvasMesh; cm.updateWorldMatrix(true, false); const c = cm.getWorldPosition(new THREE.Vector3()).sub(eye), d = c.length();
       out['canvas'] = { distance: d, side: THREE.MathUtils.radToDeg(Math.atan2(c.x, -c.z) - yaw), below: THREE.MathUtils.radToDeg(-Math.asin(c.y / d)), width: wall.canvas.clientWidth }; } }
   // (every block on the board is a target a hand presses (to choose it, to move it): the smallest, as drawn)

@@ -1999,3 +1999,17 @@ record); agentBuild's whole text is pinned, its setup with its loop; the relay's
 the send; the page's escape is tried with an escape that marks each field; and a table row written `|A2|`, with no space,
 is read by the test and by `plan/compile.py` (it was skipped in silence). With change's marking taken out, the test fails;
 with an open andon written `|A2|`, the test and `python3 plan/compile.py --check` fail. Checked with `npm run gate`.
+
+## 2026-11-01: the side panel's every state, the board's text as drawn and the keyboard's gap measured as the eye sees them (spec 04, P10)
+
+P10's sixth verdict: the side panel in its library state was measured only square on (as seen, a library button 4.7 %
+smaller was 2.48° and the run said ok); the keyboard's clearance of the bar was worked from the panels' boxes (it printed
+6.60°); and the board's text was worked from the constants 11 and 13 px, so a smaller label drawn was not seen. Now
+`npm run eval:headset` measures every target as seen in each of the side panel's states (a block chosen, the library, and
+wiring); the board records the least text it drew in its last paint, its font under the transform it was drawn with
+(`wall.leastText()` in `src/nexus/view/nodes.ts`), and that is what is measured as seen; and the keyboard's clearance is
+the least, at any direction across them, from the bar's lower edge down to the keyboard's upper edge. One clean run: every
+limit held; the keyboard 1.81° clear of the bar; the least target as seen 2.68° (bar), 2.59° (chosen), 2.52° (library),
+2.58° (wiring); the least text drawn 0.52° as seen. The evaluator's three uncaught plants, each tried once: the library's
+buttons 236 to 225 fails (2.48°); the keyboard at 43° below fails (−0.13° clear); a 7 px label on every block fails (0.33°).
+Checked with `npm run eval:headset` and `npm run gate`.
