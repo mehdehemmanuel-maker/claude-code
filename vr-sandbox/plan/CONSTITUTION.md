@@ -11,7 +11,7 @@ what it misses is said), **unenforced** (no check yet: the spec that will add on
 | --- | --- | --- | --- |
 | C1 | Nothing outdated is kept: every source file is reached from the app | the reach test, `tests/nexus/domains.test.ts` | enforced |
 | C2 | One owner per concern; every file has an owner row | the routing test (every source file named in `CLAUDE.md` or `docs/OWNERS.md`) | partly: a file named is not proved to be the only owner of its concern |
-| C3 | Every document is routed from `CLAUDE.md`, and every route leads somewhere | the routing test | enforced (for `docs/`; `plan/` added by spec 00, task S6) |
+| C3 | Every document is routed from `CLAUDE.md`, and every route leads somewhere | the routing test | enforced (`docs/` and `plan/`, since 2026-11-01) |
 | C4 | The library law: every piece every build makes is stored once; nothing stored that no build makes | the stock test | enforced |
 | C5 | Every node has its own tests, a spec (gloss, discipline, role), and runs on its quick board | the domain tests | enforced |
 | C6 | Navigation: every node, board and app feature found by name in the first three; plain and misspelt questions land | the navigation test | enforced (a quarter of the nodes in the gate; all in the docs run) |

@@ -101,6 +101,15 @@ describe('every domain, in one pass', () => {
     const claude = readFileSync(join(root, 'CLAUDE.md'), 'utf8'), docs = readdirSync(join(root, 'docs')).filter((f) => f.endsWith('.md'));
     expect(docs.filter((f) => !claude.includes(`docs/${f}`)), 'documents CLAUDE.md does not route to').toEqual([]);
     expect([...claude.matchAll(/docs\/([A-Z-]+\.md)/g)].map((m) => m[1]!).filter((f) => !docs.includes(f)), 'documents CLAUDE.md routes to that are not there').toEqual([]);
+    // (the plan is routed the same way (spec 00, task S6): CLAUDE.md routes to plan/README.md; every file in plan/ is named
+    // there by its name, or lies in a folder named there (a spec's folder, decisions/, research/); every path it names is there)
+    expect(claude.includes('plan/README.md'), 'CLAUDE.md routes to plan/README.md').toBe(true);
+    const planDir = join(root, 'plan'), readme = readFileSync(join(planDir, 'README.md'), 'utf8');
+    const planFiles = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? planFiles(join(d, e.name)) : [relative(planDir, join(d, e.name))]);
+    const routed = (f: string) => { const parts = f.split('/'); return parts.length === 1 ? readme.includes(`\`${f}\``) : ['decisions', 'research'].includes(parts[0]!) ? readme.includes(`${parts[0]}/`) : readme.includes(`${parts.slice(0, -1).join('/')}/`); };
+    expect(planFiles(planDir).filter((f) => f !== 'README.md' && !f.includes('__pycache__') && !routed(f)), 'plan files plan/README.md does not route to').toEqual([]);
+    const named = [...readme.matchAll(/`((?:specs|decisions|research)\/[\w./-]*|[A-Z][\w-]*\.(?:md|py)|[a-z]+\.py)`/g)].map((m) => m[1]!);
+    expect(named.filter((f) => !f.includes('NN') && !existsSync(join(planDir, f.replace(/\/$/, '')))), 'paths plan/README.md names that are not there').toEqual([]);
   });
   // (the law of the built-parts library: every piece every build makes, at every depth, is taken from the library or
   // stored in it; nothing stored that no build makes; src/nexus/stock.ts)

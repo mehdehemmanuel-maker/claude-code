@@ -66,8 +66,9 @@
    ],
    "owner": "tests/nexus/domains.test.ts",
    "check": "a plan file not routed from CLAUDE.md or plan/README.md fails the test",
-   "status": "failing",
-   "after": []
+   "status": "passing",
+   "after": [],
+   "evidence": "2026-11-01: tests/nexus/domains.test.ts, \"every source file has an owner in the docs\": a planted plan/STRAY.md and a planted plan/specs/99-x/a.md each failed it; the real plan passes"
   },
   {
    "id": "S7",
