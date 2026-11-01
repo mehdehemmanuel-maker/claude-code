@@ -1513,3 +1513,18 @@ with the old key the same test fails. It also fails any block that says it is pu
 network or the AI in its own run, unless what it reads it gives as `measured` (two found: the 6502's speed, now measured;
 `compile.start`'s `new Date(0)`, a fixed date). What a block calls further down is not seen by that scan. Gate: 30 passed
 in 50.0 s (one run; 51.3 s before the change).
+
+## 2026-11-01: the headset panels come with you, laid to comfort numbers (spec 04, P10; fault D11)
+
+`space.ts`: walking with the left stick now moves the panels and the zoom's pivot with the player (`carry`); before, they
+stayed where they stood until a squeeze brought them back. In a headset the panels are laid to research 34's numbers
+(Meta's comfort and panel pages): the board 10° below the eye at 1.25 m, tilted back to face you, centred by its measured
+box; the bar under it; the chat to the side at 1.3 m, turned to face you; the keyboard 0.9 m away (it was 0.69 m, inside
+the 0.5 to 0.8 m band Meta says to avoid). `space.comfort()` measures each panel from the eye. Measured in an emulated
+Meta Quest 3 (IWER), one session: board 1.23 m, 9.1° below, 51.1° wide, straight ahead; bar 1.18 m, 20.9° below, 48.2°
+wide (inside the 58° Meta designs for); chat 1.30 m, 42° to the side, 26.8° wide; keyboard 0.90 m, 33.7° below. After
+moving 2 m right and 3 m ahead, every one of those numbers was the same. The chat was first put at 30°, as research 34
+proposed: the screenshot showed it over the board's edge, so it went to 42° and the board from 0.42 to 0.38 of its size
+(past Meta's 30° comfortable turn of the head, inside its 55° most). Not done: the board's text size in degrees (research
+34 found it near the 0.4° minimum) is not measured or changed; snap turn, a vignette and fixed speeds are P11; nothing
+was tried on a real Quest.

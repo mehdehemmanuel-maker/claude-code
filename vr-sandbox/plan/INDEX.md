@@ -9,8 +9,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129 (5 begun, the rest not started) |
-| Faults found in the code | 13 (7 fixed) |
+| Tasks in the specs | 129 (6 begun, the rest not started) |
+| Faults found in the code | 13 (8 fixed) |
 | Rules in the constitution | 29 (21 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -52,7 +52,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | D8 | The interference check excuses any pair where either part is named like a fastener (bolt, clip, plug, …), against every other part | `src/nexus/make/rules.ts:43`, `:50` | open | 10.T24 |
 | D9 | The interference check ignores overlaps shallower than 0.5 mm | `src/nexus/make/rules.ts:72` | open | 10.T24 |
 | D10 | A wire into an input a folded block lacks was kept silently; the AI's guide taught one (`k.value>s.rate`, `rate` being an output) and the spring ran on its defaults (11,308.6 N/m, not 40,000) | `src/nexus/dataflow.ts:425`, `docs/FOR-AI.md` | fixed 2026-10-31: refused with the input named; the guide wires `n`; the gate runs the guide's plan | — |
-| D11 | The headset panels are added to the scene, not to the player's rig, so they stay behind when you move | `src/nexus/view/space.ts:219` | open | 04.P10 |
+| D11 | The headset panels are added to the scene, not to the player's rig, so they stay behind when you move | `src/nexus/view/space.ts:219` | fixed 2026-11-01: walking carries the panels and the zoom's pivot; measured in an emulated Quest 3, every panel's distance and angle unchanged after moving 2 m right and 3 m ahead | 04.P10 |
 | D12 | Explode only spreads parts out (a container's contents lifted): no order, no direction of removal, no fasteners, no tools | `src/nexus/assembly.ts:294` | open | 01.I27 |
 | D13 | Constants were CODATA 2018 | `src/data/constants.ts` | fixed 2026-10-31: CODATA 2022 values; three expected outputs recomputed | 10.T1 |
 
@@ -157,7 +157,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | P6 | Sights, each with its legend | — | failing |
 | P7 | The corrector's ghost and band | P1 | failing |
 | P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and … | P1 | failing |
-| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ … | — | failing |
+| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ … | — | mostly passing 2026-11-01: panels carried; board 9° below at 1.23 m, bar 48° wide, chat 42° aside at 1.3 m, keyboard 0.9 m, measured emulated; text size not yet measured; no real Quest yet |
 | P11 | Moving comfortably: fixed speeds (stopped, 1.4, 3 m/s), snap turn 30°/45° on the right stick, a vignette while moving, zoom rate capped and about … | P10 | failing |
 
 ### 05-civil (7)

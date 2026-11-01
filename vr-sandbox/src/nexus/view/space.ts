@@ -211,7 +211,9 @@ const back = document.createElement('a'); back.href = './index.html'; back.textC
 back.style.cssText = 'position:fixed;left:16px;bottom:16px;padding:8px 14px;border-radius:10px;border:1px solid #5a3f9a;background:linear-gradient(90deg,#1b3a5a,#3a1b5a);color:#e6eef8;font:14px system-ui;text-decoration:none;z-index:5';
 document.body.appendChild(back);
 const keyboard = new Keyboard(false); keyboard.mesh.visible = false;
-function placeKeyboard(): void { keyboard.mesh.position.set(-0.2, -0.38, -0.55); keyboard.mesh.rotation.set(-0.5, 0, 0); }
+// (in a headset, 0.9 m from the eye and below it: nearer than 1 m it is in the band Meta's comfort pages say to avoid,
+// 0.5 to 0.8 m, where the eyes strain to focus (research 34; spec 04, P10))
+function placeKeyboard(): void { keyboard.mesh.position.set(0, -0.5, -0.75); keyboard.mesh.rotation.set(-0.6, 0, 0); }
 
 const board = new NodesWall((t) => { said.push(`Board: ${t}`); chat.draw(); });
 
@@ -221,7 +223,15 @@ ui.add(board.group, bar.mesh, chat.mesh, keyboard.mesh);
 let panelsShown = true, boardBig = false;
 function layPanels(): void {
   const xr = renderer.xr.isPresenting;
-  if (xr) { chat.mesh.visible = true; board.group.scale.setScalar(boardBig ? 0.6 : 0.42); board.group.position.set(0.12, 0.08, -1.25); board.group.rotation.set(0, 0, 0); bar.mesh.position.set(0, -0.44, -1.05); bar.mesh.scale.setScalar(0.9); chat.mesh.position.set(-0.95, 0.15, -1.0); chat.mesh.rotation.set(0, 0.45, 0); chat.mesh.scale.setScalar(1); }
+  // (in a headset, laid to the comfort numbers of research 34 (spec 04, P10; Meta's comfort and panel pages): the board
+  // before you, 10° below the eye at 1.25 m and tilted back to face you; the bar under it, within the 58° Meta designs
+  // for; the chat to the side at 1.3 m, turned to face you: 42°, so it clears the board (measured: at 30° it
+  // overlapped the board's edge), past Meta's 30° comfortable turn of the head and inside its 55° most)
+  if (xr) { chat.mesh.visible = true; board.group.scale.setScalar(boardBig ? 0.6 : 0.38); board.group.position.set(0, -1.25 * Math.tan(THREE.MathUtils.degToRad(10)), -1.25); board.group.rotation.set(-THREE.MathUtils.degToRad(10), 0, 0);
+    // (the board's drawing does not sit centred on its own origin: centred by its measured box, so it is straight ahead)
+    { ui.updateWorldMatrix(true, true); const c = ui.worldToLocal(new THREE.Box3().setFromObject(board.group).getCenter(new THREE.Vector3())); board.group.position.x -= c.x; }
+    bar.mesh.position.set(0, -0.42, -1.1); bar.mesh.scale.setScalar(0.62);
+    const side = THREE.MathUtils.degToRad(42); chat.mesh.position.set(-1.3 * Math.sin(side), 0, -1.3 * Math.cos(side)); chat.mesh.rotation.set(0, side, 0); chat.mesh.scale.setScalar(1); }
   else if (boardBig) { board.group.scale.setScalar(0.5); board.group.position.set(-0.12, 0.06, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.visible = false; }
   else { chat.mesh.visible = true; board.group.scale.setScalar(0.36); board.group.position.set(0.36, 0.1, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.position.set(-0.78, 0.4, -1.25); chat.mesh.scale.setScalar(0.65); chat.mesh.rotation.set(0, 0, 0); }
   // the panels are drawn over what is made: they are what you work with, never hidden inside it
@@ -229,6 +239,23 @@ function layPanels(): void {
 }
 /** Where the panels stand in a headset: before you, where you are when you ask. */
 function recentre(): void { const head = renderer.xr.getCamera(), p = head.getWorldPosition(new THREE.Vector3()), f = head.getWorldDirection(new THREE.Vector3()); f.y = 0; f.normalize(); ui.position.copy(p); ui.lookAt(p.clone().sub(f)); xrPivot.copy(p).addScaledVector(f, 0.9).setY(p.y - 0.4); }
+
+/** You move, and what you work with comes with you: the panels and the point the zoom turns about go where you go, so
+ *  walking never leaves them behind (fault D11: they were left where they stood until you squeezed to bring them). */
+function carry(d: THREE.Vector3): void { rig.position.add(d); ui.position.add(d); xrPivot.add(d); }
+/** Where each panel stands from your eyes, measured: how far, how far off to the side and below, how wide it looks
+ *  (in degrees). For checking the layout against the comfort numbers, in a headset or an emulated one. */
+function comfort(): Record<string, { distance: number; side: number; below: number; width: number }> {
+  const head = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye = head.getWorldPosition(new THREE.Vector3()), f = head.getWorldDirection(new THREE.Vector3());
+  const yaw = Math.atan2(f.x, -f.z), out: Record<string, { distance: number; side: number; below: number; width: number }> = {};
+  for (const [name, o] of [['board', board.group], ['bar', bar.mesh], ['chat', chat.mesh], ['keyboard', keyboard.mesh]] as const) {
+    if (!o.visible) continue; o.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(o), c = box.getCenter(new THREE.Vector3()).sub(eye), d = c.length(), sz = box.getSize(new THREE.Vector3());
+    const across = Math.hypot(sz.x, sz.z), deg = THREE.MathUtils.radToDeg;
+    out[name] = { distance: d, side: deg(Math.atan2(c.x, -c.z) - yaw), below: deg(-Math.asin(c.y / d)), width: deg(2 * Math.atan(across / 2 / d)) };
+  }
+  return out;
+}
 
 // ---- what is shown ---------------------------------------------------------------------------------------------------
 function refresh(): void { view.show(wall.shown() as Shown[]); bar.draw(); }
@@ -323,7 +350,7 @@ function sticks(dt: number): void {
     const ax = src.gamepad?.axes; if (!ax || ax.length < 4) continue;
     const x = Math.abs(ax[2]!) > 0.15 ? ax[2]! : 0, y = Math.abs(ax[3]!) > 0.15 ? ax[3]! : 0;
     if (src.handedness === 'right' && y) zoomAbout(Math.exp(-y * dt * 1.6), xrPivot);
-    if (src.handedness === 'left' && (x || y)) { const head = renderer.xr.getCamera(), f = head.getWorldDirection(new THREE.Vector3()); f.y = 0; f.normalize(); const r = new THREE.Vector3(-f.z, 0, f.x); rig.position.addScaledVector(f, -y * dt * 1.2).addScaledVector(r, x * dt * 1.2); }
+    if (src.handedness === 'left' && (x || y)) { const head = renderer.xr.getCamera(), f = head.getWorldDirection(new THREE.Vector3()); f.y = 0; f.normalize(); const r = new THREE.Vector3(-f.z, 0, f.x); carry(f.multiplyScalar(-y * dt * 1.2).addScaledVector(r, x * dt * 1.2)); }
   }
 }
 
@@ -363,4 +390,4 @@ const emulate = emulated && {
   trigger: (v: number) => emulated!.controllers.right.updateButtonValue('trigger', v),
   stick: (y: number) => emulated!.controllers.right.updateAxes('thumbstick', 0, y),
 };
-(window as unknown as { space: object }).space = { emulate, presenting: () => renderer.xr.isPresenting, S, fit, jump, focusOn: (x: number, y: number, z: number, cell: number) => focusOn(new THREE.Vector3(x, y, z), cell), zoomAbout, stats: () => view.stats, shown: () => wall.shown().length, pivot, grid: () => ({ cell: grid.cell, planes: grid.planes }), panels: (on: boolean) => { panelsShown = on; ui.visible = on; }, demo: (i: number) => wall.demo(i), wall, camera, orbit };
+(window as unknown as { space: object }).space = { emulate, comfort, carry: (x: number, z: number) => carry(new THREE.Vector3(x, 0, z)), keyboard: () => { keyboard.mesh.visible = true; placeKeyboard(); }, presenting: () => renderer.xr.isPresenting, S, fit, jump, focusOn: (x: number, y: number, z: number, cell: number) => focusOn(new THREE.Vector3(x, y, z), cell), zoomAbout, stats: () => view.stats, shown: () => wall.shown().length, pivot, grid: () => ({ cell: grid.cell, planes: grid.planes }), panels: (on: boolean) => { panelsShown = on; ui.visible = on; }, demo: (i: number) => wall.demo(i), wall, camera, orbit };
