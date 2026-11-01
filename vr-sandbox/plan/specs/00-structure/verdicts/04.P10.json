@@ -1,0 +1,16 @@
+{ "task": "04.P10", "verdict": "fail", "model": "claude-sonnet", "date": "2026-11-01", "commit": "33e350b",
+  "ran": [
+    "npx vite build --config vite.view.config.ts --logLevel error && node comfort.cjs dist-view shots (emulated Meta Quest 3, IWER): board 1.23 m, 9.07 deg below, 0 deg side, 51.05 deg wide; bar 1.18 m, 20.9 deg below, 48.22 deg wide; chat 1.30 m, 42 deg to the side, 26.82 deg wide; keyboard 0.90 m, 33.69 deg below. After carry(2,-3) every number identical.",
+    "Read space.ts layPanels/carry/comfort and the REALITY.md entry: the entry itself says the board's text size is not measured or changed and nothing was tried on a real Quest."
+  ],
+  "planted": [
+    "removed ui.position.add(d) from carry(): the script's AFTER numbers moved (board 2.69 m, -131.7 deg side), so the carried-with-player check is caught; file restored, dist-view rebuilt, git status shows only the verdicts dir."
+  ],
+  "missing": [
+    "chat is at 42 deg to the side; the task states 30 deg (the builder changed it after seeing overlap, but the stated number is not met and the task/research was not amended)",
+    "the bar is scaled 0.62; the task states 0.74",
+    "the board's width in css px (about 1,000) and its text size in degrees (>= 0.6 deg) are not measured; comfort() reports only the panel's overall width",
+    "no measurement that every target (buttons, keys) is >= 2.5 deg; comfort() does not measure targets",
+    "the script only prints numbers; there is no pass/fail comparison against the stated limits",
+    "the real-Quest check is not done (the task text asks for it once spec 03 is up; emulator is stated as emulator)"
+  ] }
