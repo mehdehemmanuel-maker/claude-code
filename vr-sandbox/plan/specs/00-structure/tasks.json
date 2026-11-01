@@ -168,7 +168,7 @@
    "meets": [
     "S-R4"
    ],
-   "owner": "tests/evals/, evals/one-test/",
+   "owner": "tests/evals/, evals/one-test/, package.json",
    "check": "npm run eval:one prints each of the 18 pass lines as passed, failed (with the measured value beside the expected) or not yet possible (naming the missing part); the expected numbers are in a file with their sources and never change after a run",
    "status": "failing",
    "after": [

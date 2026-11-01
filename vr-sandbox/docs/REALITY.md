@@ -1667,3 +1667,16 @@ repository, refuse in a clone and in a linked worktree"): a throwaway repository
 commit past its owners, one naming a decision that does not exist, a log entry with an unsourced number, the same past-owners
 commit from a linked worktree, and two branches pushed with the ungated one first, each refused. Planted again, the old
 repository detection and the last-branch-only check each fail that test. Not caught: a number written in words.
+
+## 2026-11-01: the one test's first baseline: 2 of 18 lines (spec 00, S14)
+
+`npm run eval:one` (`tests/evals/one.eval.ts`) gives the AI in the app the one test's request, typed as a person types it
+("put a lamp on a shelf on my wal and make it so i can turn it on"), runs the board it builds, and scores the 18 pass lines
+fixed beforehand in `evals/one-test/expected.json`: 5 can be scored today; 13 say what must exist first (interfaces, live
+physics, perception, the phone) or that their numbers are still to be worked out by hand from sources. First run (one
+run, claude-haiku-5-5, its answer read by a second model): 2 of 18 pass: "wal" was read as wall and the lamp and shelf
+were found (line 1); a wall was built with its material named (line 3). Failed: no sourced bulb figures on the lamp (9);
+nothing folded and placed three times (15); the second model found an unsupported claim (17: "aluminium 6061", which no
+step set). 20 steps, 3,637 tokens in fresh and 71,866 read from the cache, 6,164 out, 34 s. The AI said plainly that the
+lamp does not light yet and the wall is not joined to the shelf. An earlier run of the runner scored line 3 wrongly (it
+read a node's block from the wrong record); fixed before this run.
