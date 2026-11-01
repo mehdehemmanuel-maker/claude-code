@@ -22,9 +22,9 @@
    ],
    "owner": "PROGRESS.md, CLAUDE.md",
    "check": "a fresh agent given only CLAUDE.md finds the spec in hand and the next task in under five reads",
-   "status": "failing",
+   "status": "passing",
    "after": [],
-   "evidence": "failed its verdict 2026-11-01 (stale handoff, form-only test); rewritten, and the test now checks the spec, the next three, the commit and CLAUDE.md's loop against plan/INDEX.md; to be judged again"
+   "evidence": "the evaluator passed it 2026-11-01 at e834436 (verdicts/00.S2.json), after a first fail: two reads from CLAUDE.md to the spec in hand and the next task, each true at that commit; 22 plants caught; two residual gaps reported (the next three need not be the first three open; a task mended after a fail reads as failing)"
   },
   {
    "id": "S3",

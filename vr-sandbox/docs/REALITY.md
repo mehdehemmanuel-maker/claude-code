@@ -1754,3 +1754,21 @@ time by pushing the emulated left stick, checking that the player moved and ever
 limits in one run of `npm run eval:headset` (an emulated Quest 3, not a headset): the strip's smallest target 2.65°, the
 side panel's 2.71°, its smallest text 0.64° to 0.67°, the strip's 0.77°; the stick moved the player 1.52 m. A cost: in the
 headset the library shows five blocks a page, so the largest field takes 36 pages. A real Quest is still spec 03, W5.
+
+## 2026-11-01: the AI's failures past the record's cut, the page's view guarded; figures in pairs and alone (spec 00, S10; spec 10, T3)
+
+S10's second verdict: the AI's near misses were read from each step's result after it was cut to 300 characters, so on a
+board of more than a few nodes a failed node or a refusal past the cut was missed; nothing guarded the page's view of them;
+an andon did not stop a task whose "after" is written in words ("spec 04 P4", "spec 00 S3", a whole spec, "V3 to V6");
+and an error's or an at-risk act's response was checked only as not empty. Now each step keeps its refusals and failures
+whole beside the cut record (`stepOf` in `src/nexus/agent.ts`, the one agentBuild uses), the page's view is one function
+(`nearMissesView`) the test checks and finds in `src/nexus/view/nodes.ts`, the chain of "after" is read in every form the
+specs use (in the test and in `compile.py`), and an error's or at-risk act's response must name a check, a test, a hook, a
+refusal or a rule. T3's second verdict: figures held as [name, number] pairs (a mix's parts, a mixture's phases) and a
+number exported alone went unseen by both scans, and `src/data/mixes.ts` had ten such records with no status; and the log
+said again more than was true. Now both are figures to the scans; the mixes are estimated (typical proportions, each with
+its basis), the three constants exported by name carry their constant's source and status, and `materials.ts` no longer
+re-exports one. Each of the evaluators' misses planted again fails the tests "an open andon stops the line, and every near
+miss has its kind and its response" and "every figure in data has a source, no placeholder stands in data, no key is
+written down". What the scans call a figure is still their own idea of one: a number inside a text, or in a function's
+body, is not seen. Checked with `npm run gate`.

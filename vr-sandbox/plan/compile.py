@@ -229,8 +229,16 @@ def main() -> None:
     # (the line stopped downstream too: every task that waits on the andon's task, through the whole chain of "after"
     # (the evaluator found only the task itself refused here, 2026-11-01); a closed andon names the commit that fixed it)
     by_key = {t['key']: t for t in tasks}
+    # ("after" in every way the specs write it: "S3", "02 N3", "spec 04 P4", "V3 to V6", a whole spec ("spec 03", "01 (…)"))
     def deps(t: dict) -> list[str]:
-        return [f"{m.group(1) or t['spec']}.{m.group(2)}" for a in t['after'] for m in [re.match(r'^(?:(\d\d)\s+)?([A-Z]+\d+)$', a)] if m]
+        out = []
+        for a in t['after']:
+            y = re.sub(r'^spec\s+', '', a.strip())
+            if (m := re.match(r'^(\d\d)\s+([A-Z]+\d+)$', y)): out.append(f'{m.group(1)}.{m.group(2)}')
+            elif (m := re.match(r'^([A-Z]+)(\d+) to (?:[A-Z]+)?(\d+)$', y)): out += [f"{t['spec']}.{m.group(1)}{i}" for i in range(int(m.group(2)), int(m.group(3)) + 1)]
+            elif (m := re.match(r'^(\d\d)\b(\s*\(.*\))?$', y)): out += [k for k in by_key if k.startswith(m.group(1) + '.')]
+            elif re.match(r'^[A-Z]+\d+$', y): out.append(f"{t['spec']}.{y}")
+        return out
     for r in open_andons:
         down, todo = set(), [r[2]]
         while todo:

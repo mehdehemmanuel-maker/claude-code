@@ -19,6 +19,7 @@ import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
 import { starterBoards } from '../starters';
 import { LIBRARY_TYPES, allLibraries, fieldOf, needsOf, nextFor, reachText, search, useOf, type Found } from '../navigate';
 import { fullScreen, shot } from './nodes3d';
+import { nearMissesView, type NearMiss } from '../agent';
 import '../seeds';
 import type { Part } from '../kits';
 
@@ -628,8 +629,8 @@ function boardInspector(el: HTMLElement): void {
     out.textContent = 'Claude is working through the nodes…';
     try { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: q, board: root, blocks: (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })() }) });
       if (res.status === 404) throw new Error('this page is served without the relay: run it with npm run app');
-      const r = await res.json() as { board?: Board; steps?: { tool: string; result: string }[]; answer?: string; stopped?: string; error?: string; made?: Saved[]; checked?: string; nearMisses?: { step: number; tool: string; what: string; kind: string; response: string }[] }; if (r.error || !r.board) throw new Error(r.error ?? 'no board came back');
-      askShown = `<b>${r.steps?.length ?? 0} steps</b>${r.stopped ? ` (${esc(r.stopped)})` : ''}<br>${esc(r.answer ?? '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>')}${r.made?.length ? `<br><b>Saved to the library:</b> ${r.made.map((x) => esc(x.name)).join(', ')}` : ''}${r.checked ? `<details><summary>Checked by a second model: ${esc(r.checked.trim().split('\n').pop() ?? '')}</summary>${esc(r.checked).replace(/\n/g, '<br>')}</details>` : ''}${r.nearMisses?.length ? `<details${r.nearMisses.some((m) => m.kind === 'reckless') ? ' open' : ''}><summary>Near misses caught: ${r.nearMisses.length} (${['error', 'at-risk', 'reckless'].map((k) => `${r.nearMisses!.filter((m) => m.kind === k).length} ${k}`).join(', ')})</summary>${r.nearMisses.map((m) => `step ${m.step}, ${esc(m.tool)}: <b>${esc(m.kind)}</b> ${esc(m.what)} (${esc(m.response)})`).join('<br>')}</details>` : ''}<details><summary>Each step</summary>${(r.steps ?? []).map((st, k) => `${k + 1}. ${esc(st.tool)}: ${esc(st.result.slice(0, 140))}`).join('<br>')}</details>`;
+      const r = await res.json() as { board?: Board; steps?: { tool: string; result: string }[]; answer?: string; stopped?: string; error?: string; made?: Saved[]; checked?: string; nearMisses?: NearMiss[] }; if (r.error || !r.board) throw new Error(r.error ?? 'no board came back');
+      askShown = `<b>${r.steps?.length ?? 0} steps</b>${r.stopped ? ` (${esc(r.stopped)})` : ''}<br>${esc(r.answer ?? '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>')}${r.made?.length ? `<br><b>Saved to the library:</b> ${r.made.map((x) => esc(x.name)).join(', ')}` : ''}${r.checked ? `<details><summary>Checked by a second model: ${esc(r.checked.trim().split('\n').pop() ?? '')}</summary>${esc(r.checked).replace(/\n/g, '<br>')}</details>` : ''}${nearMissesView(r.nearMisses, esc)}<details><summary>Each step</summary>${(r.steps ?? []).map((st, k) => `${k + 1}. ${esc(st.tool)}: ${esc(st.result.slice(0, 140))}`).join('<br>')}</details>`;
       for (const x of r.made ?? []) { const d = groupBlock(x.graph, { id: x.id, name: x.name, says: x.says, domains: x.domains, by: 'you' }); register(d); keepBlock(d); }
       pushUndo(); useBoard(tidy(r.board)); save(); fit(); runSoon(); renderAll();
     } catch (e) { out.textContent = `could not: ${(e as Error).message}`; }

@@ -48,3 +48,6 @@ export const STANDARD_GRAVITY = CONSTANTS.g.value;
 export const SIGMA_SB = CONSTANTS.sigmaSB.value;
 /** Faraday constant, C/mol. */
 export const FARADAY = CONSTANTS.F.value;
+/** Where the three names above come from, and their claim status: each is its constant's own (spec 10, T3). */
+export const ALIAS_SOURCES: Record<string, string> = { STANDARD_GRAVITY: CONSTANTS.g.source, SIGMA_SB: CONSTANTS.sigmaSB.source, FARADAY: CONSTANTS.F.source };
+export const ALIAS_STATUS: Record<string, string> = { STANDARD_GRAVITY: CONSTANTS.g.exact ? 'exact' : 'measured', SIGMA_SB: CONSTANTS.sigmaSB.exact ? 'exact' : 'measured', FARADAY: CONSTANTS.F.exact ? 'exact' : 'measured' };

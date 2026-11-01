@@ -1,8 +1,8 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 00.S2
+Task in hand: 00.S10
 Spec in hand: spec 00, the structure (`plan/specs/00-structure/`)
-Last commit the gate passed: e834436 (2026-11-01)
+Last commit the gate passed: 936ce93 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -12,9 +12,9 @@ Last commit the gate passed: e834436 (2026-11-01)
 
 ## Open, and why
 
-- Verdicts in: 00.S1 and 00.S3 pass; 00.S2, 00.S10 and 10.T3 failed, each mended since (the handoff checked against the
-  plan; the line stopped all the way down; figures in lists given a status), being judged again. 04.P10 failed again
-  (the board's strip and side panel too small in a headset): mended and measured, to be judged again.
+- Verdicts in: 00.S1, 00.S2 and 00.S3 pass. 00.S10 and 10.T3 failed a second time (failures past the record's cut;
+  figures as pairs), each mended since, to be judged again; 04.P10 (third try) is being judged.
+- 10.T23 (the kernel) is begun beside the queue's work: exact fractions, intervals, dims and witness, not yet committed.
 - 11.LW12 and 10.T1 are claimed in part; their open parts are in `plan/DEFECTS.md` (D7) and the task rows.
 - The one test (`npm run eval:one`) passes 2 of its 18 lines; the rest wait on specs 01, 03, 04 and 06.
 

@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 7 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 8 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (9 fixed) |
 | Rules in the constitution | 29 (13 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -79,7 +79,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | Id | Task | After | State |
 | --- | --- | --- | --- |
 | S1 | The constitution with its checks and states | — | passing (evaluator claude-sonnet, 2026-11-01) |
-| S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing (evaluator: The next task found is not the next task: PROGRESS.md at 956fe8c names 00.S10 and 10.T3 as next, and both are already bu) |
+| S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S3 | Hooks: push gate, budget, honesty, loop breaker | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | passing (evaluator claude-sonnet, 2026-11-01) |
@@ -87,7 +87,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | passing (evaluator claude-sonnet, 2026-11-01) |
 | S8 | The first decision records (0001 to 0007) written | — | failing |
 | S9 | The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may … | S7 | failing |
-| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The line is not stopped downstream: only direct dependents of an open andon are refused. A task two steps down (S13, aft) |
+| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The near-miss catcher misses real failures because it reads results that agentBuild has already cut to 300 characters (s) |
 | S11 | Dailies: the AI shows what changed since the last session, and the person approves, notes or kills each version; versions never overwritten | S2 | failing |
 | S12 | Prompts as versioned prompt nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL) | S5 | failing |
 | S13 | Post-mortems as a timeline, contributing factors and a hindsight guard (Allspaw, Dekker, SRE), replacing five whys; Perrow's chart computed from … | S10 | failing |
@@ -214,7 +214,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- | --- | --- |
 | T1 | CODATA 2022 with correlations | 00 | claimed, in part: values done 2026-10-31 (CODATA 2022); correlations not yet |
 | T2 | Interval and ensemble modes; GUM validity probe | 00 | failing |
-| T3 | Claim status on every value (C21) | 00 S4 | failing (evaluator: The check says 'fails a value with no status'. The scan (unstated in tests/nexus/scans.ts) only counts a record that has) |
+| T3 | Claim status on every value (C21) | 00 S4 | failing (evaluator: The check says 'fails a value with no status'. Figures held as [name, number] pairs are still unseen by the scan: plante) |
 | T5 | Envelopes on sourced numbers (C22) | T3 | failing |
 | T6 | Ensembles by default where chaos or uncertainty rule; horizon badge | T2 | failing |
 | T7 | Assimilation node | T6 | failing |

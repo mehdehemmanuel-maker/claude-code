@@ -56,7 +56,14 @@ const TOOLS: Anthropic.Tool[] = [
 let guide: string | undefined;
 const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')); };
 
-export interface AgentStep { tool: string; input: unknown; result: string; ms: number; /** the tool threw: its result is the error */ failed?: true }
+export interface AgentStep { tool: string; input: unknown; result: string; ms: number; /** the tool threw: its result is the error */ failed?: true;
+  /** the result's refusals and failed nodes, each line whole: kept apart from the result, which is cut to 300 characters
+   *  (a failure past the cut was lost before: the evaluator, 2026-11-01) */ alerts?: string[] }
+/** A tool call as the run keeps it: its result cut short for the record, its refusals and failures kept whole. */
+export function stepOf(tool: string, input: unknown, out: string, ms: number, failed = false): AgentStep {
+  const alerts = out.split('\n').filter((l) => l.startsWith('! ') || /^\S+ (failed|error): /.test(l)).map((l) => l.slice(0, 300));
+  return { tool, input, result: out.slice(0, 300), ms, ...(failed ? { failed: true as const } : {}), ...(alerts.length ? { alerts } : {}) };
+}
 /** A block the agent folded and saved: enough to register it again anywhere (a page keeps it with the blocks you saved). */
 export interface AgentBlock { id: string; name: string; says: string; domains: string[]; graph: Board }
 /**
@@ -74,16 +81,24 @@ export function nearMissesOf(steps: AgentStep[], answer: string, board: Board): 
   const out: NearMiss[] = [];
   steps.forEach((s, k) => {
     if (s.failed) { out.push({ step: k + 1, tool: s.tool, what: `the tool failed: ${s.result.slice(0, 160)}`, kind: 'error', response: 'the error went back to the model as the tool\'s result; corrected in a later step, or said in the answer' }); return; }
-    for (const l of s.result.split('\n')) {
+    for (const l of s.alerts ?? s.result.split('\n')) {
       if (l.startsWith('! ')) out.push({ step: k + 1, tool: s.tool, what: l.slice(2), kind: 'error', response: 'refused by the engine and said back; corrected in a later step, or said in the answer' });
       else { const f = /^(\S+) (failed|error): (.*)$/.exec(l); if (f) out.push({ step: k + 1, tool: s.tool, what: `node ${f[1]} failed: ${f[3]!.slice(0, 160)}`, kind: 'error', response: 'the failure went back to the model with the board\'s run; corrected in a later step, or said in the answer' }); }
     } });
   if (/\d/.test(answer) && !nodesOf(board).length) out.push({ step: steps.length, tool: 'answer', what: 'numbers given with no board behind them', kind: 'at-risk', response: 'the guide forbids it (docs/FOR-AI.md); the evaluation set counts it wrong' });
   const lastChange = steps.map((s, k) => [s, k] as const).filter(([s]) => ['build', 'change', 'open'].includes(s.tool) && !s.failed).pop();
-  const standing = lastChange ? lastChange[0].result.split('\n').filter((l) => l.startsWith('! ')) : [];
+  const standing = lastChange ? (lastChange[0].alerts ?? lastChange[0].result.split('\n')).filter((l) => l.startsWith('! ')) : [];
   if (standing.length && !/refus|could ?n[o']t|cannot|can't|unable|failed|did ?n[o']t|does ?n[o']t|is ?n[o']t|not (yet|wired|joined|connected|done|built|possible|there)|no input|no setting|missing/i.test(answer))
     out.push({ step: steps.length, tool: 'answer', what: `answered past ${standing.length} refusal(s) still standing, without a word of it (first: ${standing[0]!.slice(2, 120)})`, kind: 'reckless', response: 'stop, and tell the user: shown beside the answer on the page, and printed by the evaluation runners' });
   return out;
+}
+
+/** The near misses as the page shows them beside the answer (open when one is reckless): each with its step, its kind,
+ *  what happened and the response it calls for. `esc` makes text safe for the page. */
+export function nearMissesView(misses: readonly NearMiss[] | undefined, esc: (s: string) => string): string {
+  if (!misses?.length) return '';
+  const count = (['error', 'at-risk', 'reckless'] as const).map((k) => `${misses.filter((m) => m.kind === k).length} ${k}`).join(', ');
+  return `<details${misses.some((m) => m.kind === 'reckless') ? ' open' : ''}><summary>Near misses caught: ${misses.length} (${count})</summary>${misses.map((m) => `step ${m.step}, ${esc(m.tool)}: <b>${esc(m.kind)}</b> ${esc(m.what)} (${esc(m.response)})`).join('<br>')}</details>`;
 }
 
 /** A second model's reading of the answer against the steps it came from: each number traced to a tool's result, each
@@ -165,7 +180,7 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
       return { board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, nearMisses: nearMissesOf(steps, answer, board), ...(checked ? { checked } : {}) }; }
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const b of r.content) if (b.type === 'tool_use') { const s0 = Date.now(); let out: string, err = false; try { out = await doTool(b.name, (b.input ?? {}) as Record<string, unknown>); } catch (e) { out = (e as Error).message; err = true; }
-      steps.push({ tool: b.name, input: b.input, result: out.slice(0, 300), ms: Date.now() - s0, ...(err ? { failed: true as const } : {}) }); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
+      steps.push(stepOf(b.name, b.input, out, Date.now() - s0, err)); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
     messages.push({ role: 'user', content: results });
   }
   return { board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, stopped, nearMisses: nearMissesOf(steps, '', board) };

@@ -5,8 +5,9 @@
 
 /** A figure: a number, a list of numbers, a table of rows of numbers, or a typed array. (Figures held only in lists went
  *  unseen by both scans: all of `optics.ts` (the evaluator, judging 10.T3, 2026-11-01).) */
+// (and a list of [name, number] pairs, as a mix's parts are; and a number exported alone (the evaluator, 2026-11-01))
 export const figure = (x: unknown): boolean => typeof x === 'number' || ArrayBuffer.isView(x)
-  || (Array.isArray(x) && x.length > 0 && x.every((y) => typeof y === 'number' || (Array.isArray(y) && y.length > 0 && y.every((z) => typeof z === 'number'))));
+  || (Array.isArray(x) && x.length > 0 && x.every((y) => typeof y === 'number' || (Array.isArray(y) && y.length > 0 && y.some((z) => typeof z === 'number') && y.every((z) => typeof z === 'number' || typeof z === 'string'))));
 
 /** Keys that say where a record's figures come from, or what kind of figure they are (typical, derived, an estimate). */
 const SOURCED = /^(source|sources|src|ref|refs|reference|references|confidence|basis|label|cite|citation|origin|provenance|evidence)$/i;
@@ -17,8 +18,12 @@ const SOURCED = /^(source|sources|src|ref|refs|reference|references|confidence|b
  */
 export function unsourced(mod: Record<string, unknown>, file: string): string[] {
   if (Object.keys(mod).some((k) => /(^|_)SOURCES?$/.test(k) && typeof mod[k] === 'string' && (mod[k] as string).trim().length > 8)) return [];
+  // (or a …_SOURCES record naming each export's source, for figures exported alone)
+  const each = Object.entries(mod).find(([k, v]) => /(^|_)SOURCES?$/.test(k) && !!v && typeof v === 'object' && !Array.isArray(v)) as [string, Record<string, unknown>] | undefined;
+  const named = (k: string) => !!each && typeof each[1][k] === 'string' && (each[1][k] as string).trim().length > 8;
   const out: string[] = [];
   const walk = (v: unknown, path: string, ok: boolean, depth: number) => {
+    if (depth === 0 && typeof v === 'number') { if (!ok) out.push(`${file}: ${path}`); return; }
     if (depth > 8 || !v || typeof v !== 'object') return;
     if (figure(v)) { if (!ok) out.push(`${file}: ${path}`); return; }
     if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${path}[${i}]`, ok, depth + 1)); return; }
@@ -26,7 +31,7 @@ export function unsourced(mod: Record<string, unknown>, file: string): string[] 
     if (!has && Object.values(o).some(figure)) out.push(`${file}: ${path}`);
     for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object' && !figure(x)) walk(x, `${path}.${k}`, has, depth + 1);
   };
-  for (const [k, v] of Object.entries(mod)) walk(v, k, false, 0);
+  for (const [k, v] of Object.entries(mod)) if (k !== each?.[0]) walk(v, k, named(k), 0);
   return out;
 }
 
@@ -52,6 +57,7 @@ export function unstated(mod: Record<string, unknown>, file: string, kinds: read
   const statusOf = (o: Record<string, unknown>) => { if (typeof o.status === 'string' && kinds.includes(o.status)) return o.status;
     for (const [k, m] of Object.entries(SAID)) if (k in o && String(o[k]) in m) return m[String(o[k])]; return undefined; };
   const walk = (v: unknown, path: string, has: boolean, depth: number) => {
+    if (depth === 0 && typeof v === 'number') { if (!has) out.push(`${file}: ${path}`); return; }
     if (depth > 8 || !v || typeof v !== 'object') return;
     if (figure(v)) { if (!has) out.push(`${file}: ${path}`); return; }
     if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${path}[${i}]`, has, depth + 1)); return; }

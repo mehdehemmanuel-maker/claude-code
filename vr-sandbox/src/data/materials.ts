@@ -373,4 +373,3 @@ export const FLUIDS = {
   air: { density: 1.204, status: 'specified', source: 'ISA / CRC, dry air at 20 C, 101.325 kPa' },
 };
 
-export { STANDARD_GRAVITY } from './constants';

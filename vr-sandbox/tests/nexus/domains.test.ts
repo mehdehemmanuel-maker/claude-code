@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
-import { nearMissesOf } from '../../src/nexus/agent';
+import { nearMissesOf, nearMissesView, stepOf } from '../../src/nexus/agent';
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
@@ -151,6 +151,11 @@ describe('every domain, in one pass', () => {
     expect(unstated({ GRID: [380, 385], T_STATUS: { GRID: 'exact' } }, 'planted', EVIDENCE)).toEqual([]);
     expect(unstated({ GRID: [380, 385], T_STATUS: { GRID: 'probably' } }, 'planted', EVIDENCE), 'a wrong word for one export').toHaveLength(2);
     expect(unstated({ GRID: [380, 385], T_STATUS: { GRID: 'exact', CURVE: 'measured' } }, 'planted', EVIDENCE), 'a status for an export not there').toHaveLength(1);
+    // (figures as [name, number] pairs, as a mix's parts; a number exported alone; each named in …_SOURCES and …_STATUS)
+    expect(unstated({ MIX: { m1: { source: 'ACI 211.1', parts: [['cement', 330], ['water', 165]] } } }, 'planted', EVIDENCE), '[name, number] pairs').toHaveLength(1);
+    expect(unsourced({ MIX: { m1: { parts: [['cement', 330]] } } }, 'planted'), '[name, number] pairs, no source').toHaveLength(1);
+    expect([...unsourced({ LIMIT: 0.0073 }, 'planted'), ...unstated({ LIMIT: 0.0073 }, 'planted', EVIDENCE)], 'a number exported alone').toHaveLength(2);
+    expect([...unsourced({ LIMIT: 0.0073, X_SOURCES: { LIMIT: 'ISO 286-1 Table 1' } }, 'planted'), ...unstated({ LIMIT: 0.0073, X_STATUS: { LIMIT: 'specified' } }, 'planted', EVIDENCE)]).toEqual([]);
     const data = readdirSync(join(root, 'src/data')).filter((f) => f.endsWith('.ts')), bad: string[] = [];
     for (const f of data) { const m = await import(`../../src/data/${f}`); bad.push(...unsourced(m, `src/data/${f}`), ...unstated(m, `src/data/${f}`, EVIDENCE)); }
     for (const dir of ['src/data', 'src/nexus/kinds', 'src/nexus/book']) for (const f of readdirSync(join(root, dir)).filter((x) => x.endsWith('.ts'))) bad.push(...placeholders(readFileSync(join(root, dir, f), 'utf8'), `${dir}/${f}`));
@@ -224,17 +229,32 @@ describe('every domain, in one pass', () => {
       if (/^closed/.test(r[4]!)) { const c = /^closed \d{4}-\d\d-\d\d by commit ([0-9a-f]{7,40})\b/.exec(r[4]!);
         if (!c) bad.push(`andon ${r[0]}: closed without naming the commit that fixed it`); else if (deep && git('cat-file', '-e', `${c[1]}^{commit}`).status !== 0) bad.push(`andon ${r[0]}: closed by ${c[1]}, which is not a commit`); } }
     const vd = join(root, 'plan/specs/00-structure/verdicts'), passing = (k: string) => existsSync(join(vd, `${k}.json`)) && JSON.parse(readFileSync(join(vd, `${k}.json`), 'utf8')).verdict === 'pass';
-    const waits = new Map<string, string[]>(), key = (sp: string, x: string) => (/^\d\d /.test(x) ? x.replace(' ', '.') : `${sp}.${x}`);
+    // ("after" in every way the specs write it: "S3", "02 N3", "spec 04 P4", "V3 to V6", a whole spec ("spec 03", "01 (…)");
+    // a research pass waited on is not a task (the prose forms were missed: the evaluator, 2026-11-01))
+    const raw = new Map<string, { sp: string; after: string[] }>();
     for (const d of readdirSync(join(root, 'plan/specs'))) { const sp = d.slice(0, 2), f = join(root, 'plan/specs', d, 'tasks.json'), md = join(root, 'plan/specs', d, 'spec.md');
-      if (existsSync(f)) for (const t of JSON.parse(readFileSync(f, 'utf8')).tasks as { id: string; after: string[] }[]) waits.set(`${sp}.${t.id}`, t.after.map((x) => key(sp, x)));
-      if (existsSync(md)) for (const m of readFileSync(md, 'utf8').matchAll(/^\| ([A-Z]+\d+) \|[^|]*\|[^|]*\| ([^|]*) \|/gm)) waits.set(`${sp}.${m[1]}`, m[2]!.replace(/—/g, '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => key(sp, x))); }
+      if (existsSync(f)) for (const t of JSON.parse(readFileSync(f, 'utf8')).tasks as { id: string; after: string[] }[]) raw.set(`${sp}.${t.id}`, { sp, after: t.after });
+      if (existsSync(md)) for (const m of readFileSync(md, 'utf8').matchAll(/^\| ([A-Z]+\d+) \|[^|]*\|[^|]*\| ([^|]*) \|/gm)) raw.set(`${sp}.${m[1]}`, { sp, after: m[2]!.replace(/—/g, '').split(',').map((x) => x.trim()).filter(Boolean) }); }
+    const keys = [...raw.keys()], keysOf = (sp: string, x: string): string[] => {
+      const y = x.replace(/^spec\s+/, ''); let m;
+      if ((m = /^(\d\d)\s+([A-Z]+\d+)$/.exec(y))) return [`${m[1]}.${m[2]}`];
+      if ((m = /^([A-Z]+)(\d+) to (?:[A-Z]+)?(\d+)$/.exec(y))) { const out: string[] = []; for (let i = Number(m[2]); i <= Number(m[3]); i++) out.push(`${sp}.${m[1]}${i}`); return out; }
+      if ((m = /^(\d\d)\b(\s*\(.*\))?$/.exec(y))) return keys.filter((k) => k.startsWith(`${m![1]}.`));
+      if (/^[A-Z]+\d+$/.test(y)) return [`${sp}.${y}`];
+      return []; };
+    const waits = new Map<string, string[]>([...raw].map(([k, v]) => [k, v.after.flatMap((x) => keysOf(v.sp, x))]));
+    expect(waits.get('11.LW8'), '"spec 04 P4" read as 04.P4').toContain('04.P4');
+    expect(waits.get('03.W4'), '"spec 00 S3" read as 00.S3').toContain('00.S3');
     // (every task downstream, through the whole chain of "after": C25 says nothing downstream is called done (a task two
     // steps down passed while the line was stopped, the evaluator found, 2026-11-01))
     const downstream = (k: string): Set<string> => { const out = new Set<string>(), todo = [k]; while (todo.length) { const x = todo.pop()!; for (const [t, a] of waits) if (a.includes(x) && !out.has(t)) { out.add(t); todo.push(t); } } return out; };
     for (const k of open) { if (passing(k)) bad.push(`${k} passes with an open andon`); for (const t of downstream(k)) if (passing(t)) bad.push(`${t} passes while ${k}, which it waits on (directly or not), has an open andon`); }
     // (each kind with the response it calls for: a reckless act calls for stopping and telling the user)
     for (const r of rows('NEAR-MISS.md')) { if (!['error', 'at-risk', 'reckless'].includes(r[2]!)) bad.push(`near miss "${r[1]!.slice(0, 40)}": kind ${r[2]}`); if (!r[4]) bad.push(`near miss "${r[1]!.slice(0, 40)}": no response`);
-      if (r[2] === 'reckless' && !(/\bstop/i.test(r[4]!) && /\buser\b/i.test(r[4]!))) bad.push(`near miss "${r[1]!.slice(0, 40)}": reckless, and its response is not to stop and tell the user`); }
+      if (r[2] === 'reckless' && !(/\bstop/i.test(r[4]!) && /\buser\b/i.test(r[4]!))) bad.push(`near miss "${r[1]!.slice(0, 40)}": reckless, and its response is not to stop and tell the user`);
+      // (an error's response is the fix and the check added; an at-risk act's, the process changed: each names a check, a
+      // test, a hook, a gate, a refusal, a rule or a decision, or shows the code)
+      if ((r[2] === 'error' || r[2] === 'at-risk') && !/\b(check\w*|test\w*|hooks?|gates?|refus\w*|fails?|failing|rules?|decision|andon)\b|`/i.test(r[4]!)) bad.push(`near miss "${r[1]!.slice(0, 40)}": ${r[2]}, and its response names no check or change of process`); }
     expect(bad).toEqual([]);
     // (the AI's own run: a refusal said back, a tool that failed, a node that failed, numbers with no board, and going on past
     // a refusal without a word of it (reckless))
@@ -243,6 +263,16 @@ describe('every domain, in one pass', () => {
     expect(nearMissesOf([{ tool: 'card', input: {}, result: 'no block "nope"', ms: 1, failed: true }, { tool: 'build', input: {}, result: 'n1 failed: division by zero', ms: 1 }], 'No number here.', emptyBoard('x')).map((m) => `${m.kind} ${m.tool}`)).toEqual(['error card', 'error build']);
     expect(nearMissesOf([{ tool: 'build', input: {}, result: '! wire a.x>b.y: no input "y"', ms: 1 }, { tool: 'change', input: {}, result: 'b ok y=2', ms: 1 }], 'Done.', emptyBoard('x')).map((m) => m.kind), 'a refusal corrected by a later change is not reckless').toEqual(['error']);
     expect(nearMissesOf([{ tool: 'build', input: {}, result: '! wire a.x>b.y: no input "y"', ms: 1 }], 'The wire into b was refused: b has no input y.', emptyBoard('x')).map((m) => m.kind), 'nor one the answer owns up to').toEqual(['error']);
+    // (a board of many nodes: its failure past the record's 300 characters still caught, as agentBuild keeps the step)
+    const long = [...Array.from({ length: 21 }, (_, i) => `n${i} ok out=${i}`), 'div failed: divided by zero', '! wire a.x>b.y: no input "y"'].join('\n');
+    expect(long.length, 'the result is longer than the record keeps').toBeGreaterThan(300);
+    expect(nearMissesOf([stepOf('build', {}, long, 1)], 'It is refused at b: no input y.', emptyBoard('x')).map((m) => m.what.slice(0, 16)), 'a failure past the cut').toEqual(['node div failed:', 'wire a.x>b.y: no']);
+    // (the page shows them beside the answer: the view used, and what it shows)
+    const view = nearMissesView(misses, (x) => x);
+    for (const m of misses) expect(view, `the page shows the ${m.kind} near miss`).toContain(m.what);
+    expect(view, 'open when one is reckless').toMatch(/^<details open>/);
+    expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the page puts them beside the answer').toMatch(/nearMissesView\(r\.nearMisses, esc\)/);
+    for (const f of ['tests/evals/agent.eval.ts', 'tests/evals/one.eval.ts']) expect(readFileSync(join(root, f), 'utf8'), `${f} prints them`).toMatch(/near miss/);
   });
   // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01)); looked for
   // wherever the gate's own include reaches (vite.config.ts), every folder down, not only the top of tests/nexus (the
