@@ -15,7 +15,7 @@ what it misses is said), **unenforced** (no check yet: the spec that will add on
 | C4 | The library law: every piece every build makes is stored once; nothing stored that no build makes | the stock test | enforced |
 | C5 | Every node has its own tests, a spec (gloss, discipline, role), and runs on its quick board | the domain tests | enforced |
 | C6 | Navigation: every node, board and app feature found by name in the first three; plain and misspelt questions land | the navigation test | enforced (a quarter of the nodes in the gate; all in the docs run) |
-| C7 | Every number is sourced, or labelled typical, derived or an estimate | provenance check | **unenforced**: spec 00, task S4 |
+| C7 | Every number is sourced, or labelled typical, derived or an estimate | provenance check | enforced for `src/data/` since 2026-11-01 (the provenance scan); figures elsewhere (the kinds, the makers) not yet |
 | C8 | No mocks: nothing stands in for what it claims to be | partly the domain tests (nodes run for real) | partly: no scan for placeholder figures; spec 00, task S4 |
 | C9 | A real product's own data is held fixed; a finding on it is checked against the product, never tuned away | the golden products set | **unenforced**: spec 00, task S5 |
 | C10 | Never state a time, count or result that was not measured | honesty hook on `REALITY.md` and `PROGRESS.md` (a number needs the command it came from) | **unenforced**: spec 00, task S3 |
@@ -25,7 +25,7 @@ what it misses is said), **unenforced** (no check yet: the spec that will add on
 | C14 | Names are not nodes: the node count is what runs | the names-index test | **unenforced**: spec 02, task N6 |
 | C15 | Faces are never referred to by their index; parts mate by interfaces, not by typed positions where an interface exists | interface tests | **unenforced**: spec 01, tasks I9 and I14 |
 | C16 | Checks by number first; a picture is a second check, never the only one | the AI's evaluation set and the evaluator's contract | **unenforced**: spec 00, task S5; spec 01, task I15 |
-| C17 | Keys never in the repo or a page | a secret scan in the gate | partly: the rule is in `CLAUDE.md`; no scan. Spec 00, task S4 |
+| C17 | Keys never in the repo or a page | a secret scan in the gate | enforced since 2026-11-01: the secret scan over every tracked file and the built pages |
 | C18 | Licences kept: no copied standard tables; no-derivative files kept unmodified; a source's licence on every imported row | the import check | **unenforced**: spec 02, task N2; spec 05, task V1 |
 | C19 | A published interface is never changed in place: a new version, with an adapter or a declared break | the interface version test | **unenforced**: spec 01, task I18 |
 | C20 | An interface makes a wrong connection impossible, not merely warned: keyed by dimension and unit, medium, mechanical pattern, handedness; conversion only in a visible node | the interface key test | **unenforced**: spec 01, task I19 |

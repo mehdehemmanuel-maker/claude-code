@@ -8,6 +8,8 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { placeholders, secrets, unsourced } from './scans';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, fits as fitsPorts, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
@@ -120,6 +122,23 @@ describe('every domain, in one pass', () => {
       if (/Math\.random|Date\.now|new Date\(|performance\.now|fetch\(|\bc\.ai\b/.test(src) && !portsOf(d, defaultsOf(d)).outputs.some((o) => o.measured)) reads.push(d.id); }
     expect(reads, 'pure blocks that read the clock, chance, the network or the AI: say pure: false, or give what they read as measured').toEqual([]);
   });
+  // (what is written is scanned (spec 00, S4; constitution C7, C8, C17): every figure in a data file has a source or a label;
+  // no placeholder in a data file; no key written anywhere in the repository or the built pages. Each scan is first run on
+  // a planted case, which must fail it, so a scan that has stopped seeing is caught)
+  it('every figure in data has a source, no placeholder stands in data, no key is written down', async () => {
+    expect(unsourced({ PARTS: { m8: { d: 0.008, mass: 0.012 } } }, 'planted')).toHaveLength(1);
+    expect(unsourced({ PARTS: { m8: { d: 0.008, source: 'ISO 4762' } } }, 'planted')).toEqual([]);
+    expect(placeholders("  m8: { d: 0.008 }, // TODO the real pitch", 'planted')).toHaveLength(1);
+    expect(secrets(`const k = 'sk-ant-${'a'.repeat(30)}';`, 'planted')).toHaveLength(1);
+    const data = readdirSync(join(root, 'src/data')).filter((f) => f.endsWith('.ts')), bad: string[] = [];
+    for (const f of data) bad.push(...unsourced(await import(`../../src/data/${f}`), `src/data/${f}`));
+    for (const dir of ['src/data', 'src/nexus/kinds', 'src/nexus/book']) for (const f of readdirSync(join(root, dir)).filter((x) => x.endsWith('.ts'))) bad.push(...placeholders(readFileSync(join(root, dir, f), 'utf8'), `${dir}/${f}`));
+    const tracked = execSync('git ls-files', { cwd: root, encoding: 'utf8' }).split('\n').filter((f) => f && !/\.(png|jpe?g|gif|webp|wasm|glb|gltf|bin|ico|woff2?|ttf|zip|gz)$/i.test(f) && existsSync(join(root, f)));
+    for (const f of tracked) { const t = readFileSync(join(root, f), 'utf8'); bad.push(...secrets(t, f)); }
+    const built = join(root, 'dist-view'), walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : /\.(js|html|css|json|md)$/.test(e.name) ? [join(d, e.name)] : []);
+    if (existsSync(built)) for (const f of walk(built)) bad.push(...secrets(readFileSync(f, 'utf8'), relative(root, f)));
+    expect(bad).toEqual([]);
+  }, 60_000);
   // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
   // two functions, a typed array's kind; and the same value, built in another order, keys the same)
   it('a value\'s digest tells apart what is different and only that', () => {

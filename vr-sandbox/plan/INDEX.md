@@ -9,9 +9,9 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129 (6 begun, the rest not started) |
+| Tasks in the specs | 129 (7 begun, the rest not started) |
 | Faults found in the code | 13 (8 fixed) |
-| Rules in the constitution | 29 (21 not yet enforced by a check) |
+| Rules in the constitution | 29 (20 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
@@ -79,7 +79,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S1 | The constitution with its checks and states | — | failing |
 | S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing |
 | S3 | Hooks: push gate, budget, honesty, loop breaker | — | failing |
-| S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | failing |
+| S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | passing |
 | S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | failing |
 | S6 | The routing test covers plan/ as it covers docs/ | — | passing |
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | failing |
@@ -263,7 +263,6 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 ## Rules not yet enforced
 
-- **C7** Every number is sourced, or labelled typical, derived or an estimate (unenforced: spec 00, task S4)
 - **C9** A real product's own data is held fixed; a finding on it is checked against the product, never tuned away (unenforced: spec 00, task S5)
 - **C10** Never state a time, count or result that was not measured (unenforced: spec 00, task S3)
 - **C11** No push unless the gate passed on that commit (unenforced: spec 00, task S3 (the 2026-10-31 red push is why))

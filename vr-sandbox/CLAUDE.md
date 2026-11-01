@@ -73,7 +73,7 @@ known gaps are there too.
 | Materials and everything known of them; any mix worked out from its phases | `nexus/matter.ts`, `nexus/mixture.ts` (data: `mass.ts`, `elements.ts`, `data/materials.ts`, `periodic.ts`, `woods.ts`, `mixes.ts`, `constituents.ts`) |
 | What a thing is made of; mass, centre, inertia, heat capacity | `nexus/madeof.ts` |
 | Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
-| The one test (every domain), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
+| The one test (every domain), the scans of what is written (sources, placeholders, keys), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/scans.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
 | The built-parts library: every piece every build makes, stored by design, and its law | `nexus/stock.ts` (`src/data/stock.json` generated) |
 | Running boards (cache, lists, units on wires, groups, clock) | `nexus/dataflow.ts` |

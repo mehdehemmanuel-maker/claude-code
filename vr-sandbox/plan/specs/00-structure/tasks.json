@@ -44,8 +44,9 @@
    ],
    "owner": "tests/nexus/domains.test.ts",
    "check": "a planted unsourced figure, a planted placeholder and a planted key pattern each fail the gate; removed, it passes",
-   "status": "failing",
-   "after": []
+   "status": "passing",
+   "after": [],
+   "evidence": "2026-11-01: tests/nexus/domains.test.ts with tests/nexus/scans.ts; a planted unsourced record and a TODO in src/data/woods.ts and an AWS-shaped key in a tracked doc each failed it, by file and line; removed, it passes"
   },
   {
    "id": "S5",

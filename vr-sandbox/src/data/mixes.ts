@@ -14,7 +14,7 @@ export const mixDensity = (m: Mix): number => m.parts.reduce((a, [, kg]) => a + 
 /** A material made of phases mixed so (src/nexus/mixture.ts works out its properties from theirs): by volume or mass
  *  fraction, how the phases are arranged, which is continuous (the matrix), and for a foam how much of it is pores. Each
  *  is a common make of its kind, not one supplier's. */
-export interface Mixture { name: string; phases: [id: string, frac: number][]; by: 'volume' | 'mass'; arrangement: 'particles' | 'aligned fibres' | 'random fibres' | 'woven' | 'layers' | 'grains' | 'open foam' | 'solid solution'; matrix?: string; porosity?: number; gas?: string; family: 'composite' | 'foam' | 'concrete and mortar' }
+export interface Mixture { /** where its figures come from, where they are not a phase's own: derived (worked out here) or a chosen example */ basis?: string; name: string; phases: [id: string, frac: number][]; by: 'volume' | 'mass'; arrangement: 'particles' | 'aligned fibres' | 'random fibres' | 'woven' | 'layers' | 'grains' | 'open foam' | 'solid solution'; matrix?: string; porosity?: number; gas?: string; family: 'composite' | 'foam' | 'concrete and mortar' }
 export const MIXTURES: Record<string, Mixture> = {
   'cfrp-ud-60': { name: 'carbon fibre and epoxy, unidirectional, 60 % fibre by volume', phases: [['carbon-fibre-t300', 0.6], ['epoxy', 0.4]], by: 'volume', arrangement: 'aligned fibres', matrix: 'epoxy', family: 'composite' },
   'gfrp-random-30': { name: 'chopped glass fibre and epoxy, random in a plane, 30 % fibre by volume', phases: [['e-glass', 0.3], ['epoxy', 0.7]], by: 'volume', arrangement: 'random fibres', matrix: 'epoxy', family: 'composite' },
@@ -25,9 +25,9 @@ export const MIXTURES: Record<string, Mixture> = {
   // what was a typed density, worked out from its phases
   'pa66-gf30': { name: 'polyamide 66 with 30 % short glass fibre by mass (injection moulded: the fibres taken as random in the plane)', phases: [['pa66', 0.7], ['e-glass', 0.3]], by: 'mass', arrangement: 'random fibres', matrix: 'pa66', family: 'composite' },
   fr4: { name: 'FR-4: woven E-glass in epoxy, about 50 % glass by volume', phases: [['e-glass', 0.5], ['epoxy', 0.5]], by: 'volume', arrangement: 'woven', matrix: 'epoxy', family: 'composite' },
-  'glass-wool': { name: 'glass wool insulation, 24 kg/m³ (E-glass fibres in air; radiation through it left out, so it conducts a little more than said)', phases: [['e-glass', 1]], by: 'volume', arrangement: 'open foam', porosity: 1 - 24 / 2540, gas: 'air', family: 'foam' },
+  'glass-wool': { name: 'glass wool insulation, 24 kg/m³ (E-glass fibres in air; radiation through it left out, so it conducts a little more than said)', phases: [['e-glass', 1]], by: 'volume', arrangement: 'open foam', porosity: 1 - 24 / 2540, gas: 'air', basis: 'derived: its porosity from its stated 24 kg/m³ over E-glass at 2540 kg/m³', family: 'foam' },
   // the 25 MPa concrete's own recipe (MIXES) as its hardened phases: cement 330 kg / 3150 and water 165 kg as paste,
   // sand 750 / 2650, granite 1090 / 2700, and the 4.35 % of its cubic metre none of them fill as air
   'concrete-c25': { name: 'normal-weight concrete, about 25 MPa, as its hardened phases', phases: [['cement-paste', 0.2698], ['sand-quartz', 0.2830], ['granite', 0.4037], ['air', 0.0435]], by: 'volume', arrangement: 'particles', matrix: 'cement-paste', family: 'concrete and mortar' },
-  'al-foam-10': { name: 'open-cell aluminium foam, 10 % dense', phases: [['al-6061', 1]], by: 'volume', arrangement: 'open foam', porosity: 0.9, gas: 'air', family: 'foam' },
+  'al-foam-10': { name: 'open-cell aluminium foam, 10 % dense', basis: 'a chosen example: 10 % dense, said in its name, not one maker\'s product', phases: [['al-6061', 1]], by: 'volume', arrangement: 'open foam', porosity: 0.9, gas: 'air', family: 'foam' },
 };

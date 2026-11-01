@@ -1528,3 +1528,17 @@ proposed: the screenshot showed it over the board's edge, so it went to 42° and
 (past Meta's 30° comfortable turn of the head, inside its 55° most). Not done: the board's text size in degrees (research
 34 found it near the 0.4° minimum) is not measured or changed; snap turn, a vignette and fixed speeds are P11; nothing
 was tried on a real Quest.
+
+## 2026-11-01: what is written is scanned (spec 00, S4; constitution C7, C17)
+
+`tests/nexus/scans.ts`, run by the one test: every record in `src/data/` that holds numbers says where they come from
+(itself, a record that holds it, or the file's `…SOURCE` export); no placeholder word (TODO, FIXME, TBD, XXX, lorem
+ipsum, placeholder) in `src/data/`, `src/nexus/kinds/` or `src/nexus/book/`; no key shape (Anthropic, Google, GitHub,
+AWS, a private key block, a long key written into a setting by name) in any tracked file or the built pages. Each scan
+is first run on a planted case that must fail it. Measured before: 126 records without a machine-readable source, in
+three files: the periodic table (118; its source was already in `PERIODIC_SOURCE`, now read), the BCI battery groups
+(6 of 9; its source was in prose only, now `BCI_SOURCE`, labelled typical) and two mixtures (now `basis`: one derived,
+one a chosen example). No placeholder and no key shape was found. The six real keys kept outside the repository were
+looked for by value in every tracked file and the built pages: none found (checked once, by hand: the gate cannot see
+them). Planted in the repository (an unsourced record and a TODO in `woods.ts`, an AWS-shaped key in a tracked doc), each
+failed the gate by file and line; removed, it passes. Not covered yet: figures outside `src/data/` (the kinds, makers).
