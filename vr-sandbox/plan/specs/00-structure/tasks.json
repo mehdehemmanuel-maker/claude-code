@@ -10,8 +10,8 @@
    ],
    "owner": "plan/CONSTITUTION.md",
    "check": "every rule names a check or says unenforced and which task adds it",
-   "status": "failing",
-   "evidence": "written 2026-10-31 (C1 to C18); waiting on the evaluator (S7), which alone passes a task",
+   "status": "passing",
+   "evidence": "the evaluator passed it 2026-11-01 (verdicts/00.S1.json, at 956fe8c): 15 of its 19 plants caught; the four it missed (a placeholder check word, a bold rule id, an empty decision section, a misnamed decision file) now caught, each planted again",
    "after": []
   },
   {
@@ -23,7 +23,8 @@
    "owner": "PROGRESS.md, CLAUDE.md",
    "check": "a fresh agent given only CLAUDE.md finds the spec in hand and the next task in under five reads",
    "status": "failing",
-   "after": []
+   "after": [],
+   "evidence": "failed its verdict 2026-11-01 (stale handoff, form-only test); rewritten, and the test now checks the spec, the next three, the commit and CLAUDE.md's loop against plan/INDEX.md; to be judged again"
   },
   {
    "id": "S3",

@@ -1690,3 +1690,19 @@ value shown hides the 1. The test "a value goes along a wire only into its own k
 into `law.carnot` solved for Tc and is refused. The other wires from a unit into a port with none, on the starter boards,
 all go into generic ports (the math, view and check.limit blocks), which take any quantity by design; fault D1 is closed.
 Checked with `npm run gate`.
+
+## 2026-11-01: the handoff checked against the plan, not only its form (spec 00, S2; S1's gaps)
+
+The evaluator failed S2: `PROGRESS.md` named two "next" tasks already built, a commit six behind, and its test checked only
+the form, so a wrong spec, a passing task in hand, next tasks that do not exist, a commit 0000000 and a CLAUDE.md with the
+loop deleted all passed. `PROGRESS.md` is rewritten to the truth, and the test "PROGRESS.md is short and true to where the
+work stands" now reads each task's state from `plan/INDEX.md` and checks: the spec named is a folder that holds the task in
+hand; the task in hand exists and is not passing; each task named next exists, is neither passing nor claimed, is not the
+task in hand, and is in the start queue; the commit named is a commit, an ancestor of HEAD and at most three behind it;
+CLAUDE.md routes "what is next" to the file and holds the loop from reading it to rewriting it. A new test, "plan/INDEX.md is
+what the plan compiles to", runs `python3 plan/compile.py --check`, so the states it reads are the plan's own; the start
+queue in INDEX.md now shows each task's state. Each of the evaluator's plants that passed before, and a few more (the spec of
+another task, an old commit, a claimed task named next, one not in the queue), was planted again and each failed the test.
+S1 passed its verdict; the four things its evaluator saw slip through (a check written "TBD", a rule id in bold, a
+decision's section left empty, a decision file misnamed) are now refused, each planted and caught. The secret scan reads
+files only (a linked node_modules, listed as untracked, made it fail in the evaluator's worktree). Checked with `npm run gate`.

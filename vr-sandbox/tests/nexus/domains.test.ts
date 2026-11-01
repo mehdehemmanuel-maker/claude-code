@@ -146,7 +146,7 @@ describe('every domain, in one pass', () => {
     const data = readdirSync(join(root, 'src/data')).filter((f) => f.endsWith('.ts')), bad: string[] = [];
     for (const f of data) { const m = await import(`../../src/data/${f}`); bad.push(...unsourced(m, `src/data/${f}`), ...unstated(m, `src/data/${f}`, EVIDENCE)); }
     for (const dir of ['src/data', 'src/nexus/kinds', 'src/nexus/book']) for (const f of readdirSync(join(root, dir)).filter((x) => x.endsWith('.ts'))) bad.push(...placeholders(readFileSync(join(root, dir, f), 'utf8'), `${dir}/${f}`));
-    const tracked = execSync('git ls-files --cached --others --exclude-standard', { cwd: root, encoding: 'utf8' }).split('\n').filter((f) => f && !/\.(png|jpe?g|gif|webp|wasm|glb|gltf|bin|ico|woff2?|ttf|zip|gz)$/i.test(f) && existsSync(join(root, f)));
+    const tracked = execSync('git ls-files --cached --others --exclude-standard', { cwd: root, encoding: 'utf8' }).split('\n').filter((f) => f && !/\.(png|jpe?g|gif|webp|wasm|glb|gltf|bin|ico|woff2?|ttf|zip|gz)$/i.test(f) && existsSync(join(root, f)) && statSync(join(root, f)).isFile()); // (files only: a linked node_modules is listed as untracked (the evaluator's worktree, 2026-11-01))
     for (const f of tracked) { const t = readFileSync(join(root, f), 'utf8'); bad.push(...secrets(t, f)); }
     const built = join(root, 'dist-view'), walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : /\.(js|html|css|json|md)$/.test(e.name) ? [join(d, e.name)] : []);
     if (existsSync(built)) for (const f of walk(built)) bad.push(...secrets(readFileSync(f, 'utf8'), relative(root, f)));
@@ -160,16 +160,21 @@ describe('every domain, in one pass', () => {
     for (const d of readdirSync(join(root, 'plan/specs'))) { const sp = d.slice(0, 2), dir = join(root, 'plan/specs', d);
       if (existsSync(join(dir, 'tasks.json'))) for (const t of JSON.parse(readFileSync(join(dir, 'tasks.json'), 'utf8')).tasks as { id: string }[]) ids.add(`${sp} ${t.id}`);
       if (existsSync(join(dir, 'spec.md'))) for (const m of readFileSync(join(dir, 'spec.md'), 'utf8').matchAll(/^\| ([A-Z]+\d+) \|/gm)) ids.add(`${sp} ${m[1]}`); }
-    const bad: string[] = [], rows = readFileSync(join(root, 'plan/CONSTITUTION.md'), 'utf8').split('\n').filter((l) => /^\| C\d+ \|/.test(l));
+    // (a rule row however its id is written (bold too), a check that is a word standing in for one refused, a decision's
+    // sections not empty and every file in decisions/ named as one: gaps the evaluator found, 2026-11-01)
+    const bad: string[] = [], rows = readFileSync(join(root, 'plan/CONSTITUTION.md'), 'utf8').split('\n').filter((l) => /^\|\s*\**C\d+\**\s*\|/.test(l));
     expect(rows.length).toBeGreaterThan(20);
     for (const r of rows) { const c = r.split('|').map((x) => x.trim()), [id, , check, state] = [c[1]!, c[2]!, c[3]!, c[4]!];
-      if (!check) bad.push(`${id}: no check named`);
+      if (!check || /^(tbd|todo|tba|none|n\/a|-|\?+|…|\.\.\.)$/i.test(check.replace(/\*/g, '').trim())) bad.push(`${id}: no check named`);
       if (!/^(\*\*unenforced\*\*|enforced|partly)/.test(state)) bad.push(`${id}: its state says neither enforced, partly nor unenforced`);
       if (/unenforced|^partly/.test(state)) { const named = [...state.matchAll(/spec (\d\d), tasks? ([A-Z]+\d+)(?: and ([A-Z]+\d+))?/g)];
         if (/unenforced/.test(state) && !named.length) bad.push(`${id}: unenforced and names no task that will enforce it`);
         for (const m of named) for (const t of [m[2], m[3]].filter(Boolean)) if (!ids.has(`${m[1]} ${t}`)) bad.push(`${id}: names spec ${m[1]} task ${t}, which does not exist`); } }
-    for (const f of readdirSync(join(root, 'plan/decisions')).filter((x) => /^\d{4}-.*\.md$/.test(x))) { const t = readFileSync(join(root, 'plan/decisions', f), 'utf8');
-      for (const h of ['## Context', '## Options', '## Choice', '## The assumption it rests on', '## When to test it again']) if (!t.includes(h)) bad.push(`${f}: no "${h}"`); }
+    for (const f of readdirSync(join(root, 'plan/decisions')).filter((x) => x.endsWith('.md') && x !== 'README.md')) { const t = readFileSync(join(root, 'plan/decisions', f), 'utf8');
+      if (!/^\d{4}-[a-z0-9-]+\.md$/.test(f)) bad.push(`${f}: a decision is named NNNN-words.md`);
+      for (const h of ['## Context', '## Options', '## Choice', '## The assumption it rests on', '## When to test it again']) {
+        const body = new RegExp(`^${h}\\s*\\n([\\s\\S]*?)(?=^## |(?![\\s\\S]))`, 'm').exec(t)?.[1]?.trim();
+        if (!t.includes(h)) bad.push(`${f}: no "${h}"`); else if (!body) bad.push(`${f}: "${h}" is empty`); } }
     expect(bad).toEqual([]);
   });
   // (the hooks (spec 00, S3; C10 to C13), each tried once on purpose: a push of what the gate did not pass; a commit past
@@ -249,16 +254,53 @@ describe('every domain, in one pass', () => {
       expect(check([ungated, head]), 'an ungated branch pushed beside a stamped one').not.toBe(0);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   }, 60_000);
-  // (the session's handoff (spec 00, S2): PROGRESS.md is short, names the task in hand (a task that exists) and the last
-  // commit the gate passed, so a fresh session finds where the work stands in one read)
-  it('PROGRESS.md is short and names a real task in hand', () => {
-    const t = readFileSync(join(root, 'PROGRESS.md'), 'utf8'), lines = t.split('\n').filter(Boolean);
-    expect(lines.length, 'under 40 lines').toBeLessThan(40);
-    const m = /^Task in hand: (\d\d)\.([A-Z]+\d+)/m.exec(t); expect(m, 'a "Task in hand: NN.ID" line').toBeTruthy();
-    const dir = readdirSync(join(root, 'plan/specs')).find((d) => d.startsWith(m![1]!))!, f = join(root, 'plan/specs', dir);
-    const known = (existsSync(join(f, 'tasks.json')) ? readFileSync(join(f, 'tasks.json'), 'utf8') : '') + (existsSync(join(f, 'spec.md')) ? readFileSync(join(f, 'spec.md'), 'utf8') : '');
-    expect(known.includes(`"id": "${m![2]}"`) || known.includes(`| ${m![2]} |`), `task ${m![1]}.${m![2]} exists`).toBe(true);
-    expect(/^Last commit the gate passed: [0-9a-f]{7}/m.test(t)).toBe(true);
+  // (the session's handoff (spec 00, S2): PROGRESS.md is short and true to where the work stands, so a fresh session finds the
+  // spec in hand and the next task in two reads: the spec it names exists and holds the task in hand; the task in hand and
+  // the next three exist and are not passing (the next three not claimed either, and from the start queue); the commit it
+  // names is real, an ancestor of HEAD and at most three behind it; and CLAUDE.md still routes to it and holds the loop.
+  // The states are read from plan/INDEX.md, which the next test proves is compiled from the plan as it stands. (A first
+  // version checked the form only: a wrong spec, a passing task in hand, next tasks that do not exist, a commit 0000000
+  // and a file six commits stale all passed it (the evaluator, 2026-11-01).))
+  it('PROGRESS.md is short and true to where the work stands', () => {
+    const t = readFileSync(join(root, 'PROGRESS.md'), 'utf8');
+    expect(t.split('\n').length, 'under 40 lines').toBeLessThan(40);
+    const index = readFileSync(join(root, 'plan/INDEX.md'), 'utf8'), state = new Map<string, string>();
+    let spec = '';
+    for (const l of index.split('\n')) { const h = /^### (\d\d)-/.exec(l); if (h) spec = h[1]!; const r = /^\| ([A-Z]+\d+) \|.*\| ([^|]+) \|$/.exec(l); if (spec && r) state.set(`${spec}.${r[1]}`, r[2]!.trim()); }
+    expect(state.size, 'task states read from plan/INDEX.md').toBeGreaterThan(50);
+    const m = /^Task in hand: (\d\d\.[A-Z]+\d+)/m.exec(t); expect(m, 'a "Task in hand: NN.ID" line').toBeTruthy();
+    const inHand = m![1]!;
+    expect(state.has(inHand), `task ${inHand} exists`).toBe(true);
+    expect(state.get(inHand), `${inHand}, the task in hand, is not passing`).not.toMatch(/^passing/);
+    const sp = /^Spec in hand: spec (\d\d)\b.*?`(plan\/specs\/[^`]+?)\/?`/m.exec(t); expect(sp, 'a "Spec in hand: spec NN, … (`plan/specs/NN-…/`)" line').toBeTruthy();
+    expect(existsSync(join(root, sp![2]!)) && sp![2]!.startsWith(`plan/specs/${sp![1]}-`), `${sp![2]} is spec ${sp![1]}'s folder`).toBe(true);
+    expect(inHand.startsWith(`${sp![1]}.`), `the task in hand, ${inHand}, is in the spec in hand, ${sp![1]}`).toBe(true);
+    const next = /^## Next three[^\n]*\n([\s\S]*?)(?=^## )/m.exec(t)?.[1] ?? '', ids = [...new Set(next.match(/\b\d\d\.[A-Z]+\d+\b/g) ?? [])];
+    expect(ids.length, 'the next three name tasks').toBeGreaterThan(0);
+    const queue = /^## The start queue[\s\S]*?(?=^## )/m.exec(readFileSync(join(root, 'plan/README.md'), 'utf8'))?.[0] ?? '';
+    const queued = [...queue.matchAll(/\b(\d\d\.[A-Z]+\d+)\b/g)].map((q) => q[1]!), open = queued.filter((k) => !/^(passing|claimed)/.test(state.get(k) ?? '') && k !== inHand);
+    for (const k of ids) {
+      expect(state.has(k), `${k}, named next, exists`).toBe(true);
+      expect(k, 'the task in hand is not also named next').not.toBe(inHand);
+      expect(state.get(k), `${k}, named next, is neither passing nor claimed`).not.toMatch(/^(passing|claimed)/);
+      if (open.length >= 3) expect(queued, `${k}, named next, is in the start queue (plan/README.md), which still has ${open.length} open`).toContain(k);
+    }
+    const c = /^Last commit the gate passed: ([0-9a-f]{7,40})\b/m.exec(t); expect(c, 'a "Last commit the gate passed: <sha>" line').toBeTruthy();
+    const git = (...a: string[]) => spawnSync('git', a, { cwd: root, encoding: 'utf8' });
+    // (a shallow clone too short to hold three commits (CI checks out one) cannot judge the commit; any deeper history must)
+    if (git('rev-parse', '-q', '--verify', 'HEAD~3^{commit}').status === 0) {
+      expect(git('cat-file', '-e', `${c![1]}^{commit}`).status, `${c![1]} is a commit`).toBe(0);
+      expect(git('merge-base', '--is-ancestor', c![1]!, 'HEAD').status, `${c![1]} is an ancestor of HEAD`).toBe(0);
+      expect(Number(git('rev-list', '--count', `${c![1]}..HEAD`).stdout.trim()), `${c![1]} is at most three commits behind HEAD (rewrite PROGRESS.md as the loop says)`).toBeLessThanOrEqual(3);
+    }
+    const claude = readFileSync(join(root, 'CLAUDE.md'), 'utf8');
+    expect(/^\| What is next[^\n]*`PROGRESS\.md`/m.test(claude), 'CLAUDE.md routes "what is next" to PROGRESS.md').toBe(true);
+    expect(/read `PROGRESS\.md`[\s\S]*?then rewrite `PROGRESS\.md`/.test(claude), 'CLAUDE.md holds the session loop, from reading PROGRESS.md to rewriting it').toBe(true);
+  });
+  // (the plan's index is the plan as it stands: compiled again, nothing differs, and the plan has no problem)
+  it('plan/INDEX.md is what the plan compiles to', () => {
+    const r = spawnSync('python3', ['plan/compile.py', '--check'], { cwd: root, encoding: 'utf8' });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
   });
   // (only the evaluator passes a task (spec 00, S7): a task marked passing has the evaluator's pass in its verdict file)
   it('no task is marked passing but by the evaluator', () => {

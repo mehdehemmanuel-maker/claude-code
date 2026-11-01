@@ -9,9 +9,9 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 5 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 6 passing (by the evaluator), 4 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (9 fixed) |
-| Rules in the constitution | 29 (14 not yet enforced by a check) |
+| Rules in the constitution | 29 (13 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
@@ -23,19 +23,19 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 ## The start queue (from `README.md`)
 
-1. **00.S6** The routing test covers plan/ as it covers docs/
-2. **11.LW15** Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by its canonical fo
-3. **10.T11** First: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets quantity, proposed by quantityOf and confirmed; fits checks kind, th
-4. **11.LW12** First, before LW13: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as volatile); canonica
-5. **04.P10** Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css px so its text
-6. **00.S4** The provenance check, the placeholder scan and the secret scan in the gate
-7. **00.S5** Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them
-8. **00.S7** The evaluator: its brief, three scored examples, the rule that only it flips a task
-9. **00.S3** Hooks: push gate, budget, honesty, loop breaker
-10. **10.T3** Claim status on every value (C21)
-11. **10.T18** Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C29)
-12. **10.T23** The kernel (src/kernel/, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside itself; certificate
-13. **01.I1** Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md
+1. **00.S6** [passing] The routing test covers plan/ as it covers docs/
+2. **11.LW15** [passing] Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry
+3. **10.T11** [claimed] First: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets quantity, proposed by quantityOf and confirmed; 
+4. **11.LW12** [claimed in part] First, before LW13: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as
+5. **04.P10** [failing, by the evaluator] Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 78
+6. **00.S4** [passing] The provenance check, the placeholder scan and the secret scan in the gate
+7. **00.S5** [passing] Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them
+8. **00.S7** [passing] The evaluator: its brief, three scored examples, the rule that only it flips a task
+9. **00.S3** [failing, by the evaluator] Hooks: push gate, budget, honesty, loop breaker
+10. **10.T3** [claimed] Claim status on every value (C21)
+11. **10.T18** [failing] Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C
+12. **10.T23** [failing] The kernel (src/kernel/, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside
+13. **01.I1** [failing] Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md
 
 ## Waiting on the user
 
@@ -78,8 +78,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
-| S1 | The constitution with its checks and states | — | failing |
-| S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing |
+| S1 | The constitution with its checks and states | — | passing (evaluator claude-sonnet, 2026-11-01) |
+| S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing (evaluator: The next task found is not the next task: PROGRESS.md at 956fe8c names 00.S10 and 10.T3 as next, and both are already bu) |
 | S3 | Hooks: push gate, budget, honesty, loop breaker | — | failing (evaluator: The commit hook does not refuse a commit past its owners in a linked worktree (tried: not refused, three times); the pro) |
 | S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | passing (evaluator claude-sonnet, 2026-11-01) |
@@ -214,14 +214,14 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- | --- | --- |
 | T1 | CODATA 2022 with correlations | 00 | claimed, in part: values done 2026-10-31 (CODATA 2022); correlations not yet |
 | T2 | Interval and ensemble modes; GUM validity probe | 00 | failing |
-| T3 | Claim status on every value (C21) | 00 S4 | failing |
+| T3 | Claim status on every value (C21) | 00 S4 | claimed 2026-11-01: every figure in src/data carries a claim status from the evidence vocabulary; the gate refuses one without |
 | T5 | Envelopes on sourced numbers (C22) | T3 | failing |
 | T6 | Ensembles by default where chaos or uncertainty rule; horizon badge | T2 | failing |
 | T7 | Assimilation node | T6 | failing |
 | T8 | Forward-mode differentiation through boards | 00 | failing |
 | T9 | The "cannot simulate" register, read by the AI | 00 | failing |
 | T10 | Floating-point lint | 00 | failing |
-| T11 | **First**: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets `quantity`, proposed by `quantityOf` and … | — | claimed, in part, 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); unitless ports still take anything |
+| T11 | **First**: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets `quantity`, proposed by `quantityOf` and … | — | claimed 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); a law's dimensionless input takes only a number (fault D1 closed) |
 | T12 | Retraction check: source DOIs against Crossref's open Retraction Watch data; everything derived marked | T3 | failing |
 | T13 | AI-written values beside sourced ones, never replacing them (C27); the share of AI-made inputs on every derived value | T3 | failing |
 | T14 | Values linked to the decisions they bear on; a new estimate reopens them; two readings of one quantity that disagree stop the line (C28) | T3, 00 S10 | failing |
@@ -269,7 +269,6 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 - **C9** A real product's own data is held fixed; a finding on it is checked against the product, never tuned away (unenforced: spec 00, task S14)
 - **C14** Names are not nodes: the node count is what runs (unenforced: spec 02, task N6)
 - **C15** Faces are never referred to by their index; parts mate by interfaces, not by typed positions where an interface exists (unenforced: spec 01, tasks I9 and I14)
-- **C16** Checks by number first; a picture is a second check, never the only one (unenforced: spec 00, task S5; spec 01, task I15)
 - **C18** Licences kept: no copied standard tables; no-derivative files kept unmodified; a source's licence on every imported row (unenforced: spec 02, task N2; spec 05, task V1)
 - **C19** A published interface is never changed in place: a new version, with an adapter or a declared break (unenforced: spec 01, task I18)
 - **C20** An interface makes a wrong connection impossible, not merely warned: keyed by dimension and unit, medium, mechanical pattern, handedness; conversion only in a visible node (unenforced: spec 01, task I19)

@@ -24,7 +24,7 @@ what it misses is said), **unenforced** (no check yet: the spec that will add on
 | C13 | Two minutes on one run, or three failed tries: stop, and ask whether a pipeline is missing | loop-breaker hook | enforced since 2026-11-01: the loop breaker in `npm run gate` (`scripts/gate.mjs`; spec 00, task S3) |
 | C14 | Names are not nodes: the node count is what runs | the names-index test | **unenforced**: spec 02, task N6 |
 | C15 | Faces are never referred to by their index; parts mate by interfaces, not by typed positions where an interface exists | interface tests | **unenforced**: spec 01, tasks I9 and I14 |
-| C16 | Checks by number first; a picture is a second check, never the only one | the AI's evaluation set and the evaluator's contract | **unenforced**: spec 00, task S5; spec 01, task I15 |
+| C16 | Checks by number first; a picture is a second check, never the only one | the AI's evaluation set and the evaluator's contract | partly: the AI's 30 requests are scored by number (`npm run eval:agent`, spec 00, task S5); nothing yet refuses a picture as the only check (spec 01, task I15) |
 | C17 | Keys never in the repo or a page | a secret scan in the gate | enforced since 2026-11-01: the secret scan over every tracked file and the built pages |
 | C18 | Licences kept: no copied standard tables; no-derivative files kept unmodified; a source's licence on every imported row | the import check | **unenforced**: spec 02, task N2; spec 05, task V1 |
 | C19 | A published interface is never changed in place: a new version, with an adapter or a declared break | the interface version test | **unenforced**: spec 01, task I18 |

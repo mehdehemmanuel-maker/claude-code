@@ -17,9 +17,10 @@ problems: list[str] = []
 # (the builder's word only: "claimed" until the evaluator's verdict (specs/00-structure/evaluator.md) says pass)
 STATE = {
     '10.T1': 'claimed, in part: values done 2026-10-31 (CODATA 2022); correlations not yet',
-    '10.T11': 'claimed, in part, 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); unitless ports still take anything',
+    '10.T11': 'claimed 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); a law\'s dimensionless input takes only a number (fault D1 closed)',
     '11.LW12': 'claimed, in part, 2026-11-01: early cutoff counted in the gate; effects scanned only in each block\'s own run',
     '04.P10': 'claimed, in part, 2026-11-01: panels carried; board 9° below at 1.23 m, bar 48° wide, chat 42° aside at 1.3 m, keyboard 0.9 m, measured emulated; text size not yet measured; no real Quest yet',
+    '10.T3': 'claimed 2026-11-01: every figure in src/data carries a claim status from the evidence vocabulary; the gate refuses one without',
     '11.LW15': 'claimed 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it',
 }
 
@@ -236,7 +237,11 @@ def main() -> None:
     by = {t['key']: t for t in tasks}
     for i, k in enumerate(queue(tasks), 1):
         t = by.get(k)
-        if t: w(f"{i}. **{k}** {re.sub(r'[*`]', '', t['title'])[:160]}")
+        # (each with its state, so the handoff in PROGRESS.md can be checked against the queue (the evaluator, S2))
+        st = t['status'] if t else ''
+        label = ('passing' if st.startswith('passing') else 'failing, by the evaluator' if st.startswith('failing (evaluator') else
+                 'claimed in part' if re.match(r'claimed,? in part', st) else 'claimed' if st.startswith('claimed') else 'failing')
+        if t: w(f"{i}. **{k}** [{label}] {re.sub(r'[*`]', '', t['title'])[:140]}")
     w('')
     w('## Waiting on the user')
     w('')
@@ -294,11 +299,19 @@ def main() -> None:
     w('## Plan problems found')
     w('')
     w('\n'.join(f'- {p}' for p in problems) if problems else 'None.')
-    (PLAN / 'INDEX.md').write_text('\n'.join(L) + '\n')
+    index = '\n'.join(L) + '\n'
     # the book's contents, from its chapters
     bp = PLAN / 'BOOK-OF-QUESTIONS.md'; bs = bp.read_text()
     rows = '\n'.join(['| Section | Questions |', '| --- | --- |'] + [f'| {ch} | {n} |' for ch, n in bk])
     bs = re.sub(r'(<!-- contents: written by plan/compile.py -->\n).*?(<!-- /contents -->)', lambda m: m.group(1) + rows + '\n' + m.group(2), bs, flags=re.S)
+    # (--check: write nothing; fail when INDEX.md or the book's contents are not what the plan compiles to now (the gate
+    # runs it, so a state read from INDEX.md is the plan's own))
+    if '--check' in sys.argv:
+        stale = [n for n, now, f in (('INDEX.md', index, PLAN / 'INDEX.md'), ('BOOK-OF-QUESTIONS.md', bs, bp)) if f.read_text() != now]
+        for n in stale: print(f'{n} is not what the plan compiles to: run python3 plan/compile.py')
+        for p in problems: print(' -', p)
+        sys.exit(1 if stale or problems else 0)
+    (PLAN / 'INDEX.md').write_text(index)
     bp.write_text(bs)
     print(f'INDEX.md written: {len(tasks)} tasks, {len(ds)} faults, {len(rp)} passes, {len(problems)} problems')
     for p in problems: print(' -', p)
