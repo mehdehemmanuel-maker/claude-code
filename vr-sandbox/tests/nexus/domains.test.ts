@@ -164,7 +164,8 @@ describe('every domain, in one pass', () => {
   });
   it('a value\'s digest tells apart what is different and only that', () => {
     const differ: [unknown, unknown][] = [[new Map([[1, 2]]), new Map()], [new Set([1]), new Set([2])], [NaN, null], [-0, 0], [() => 1, () => 1],
-      [new Float32Array([1]), new Float64Array([1])], [{ a: undefined }, {}], [new Map([[1, 2]]), { 1: 2 }]];
+      [new Float32Array([1]), new Float64Array([1])], [{ a: undefined }, {}], [new Map([[1, 2]]), { 1: 2 }],
+      [new Float64Array([1, 2]), new Float64Array([1, 3])], [new (class Bolt { d = 8 })(), new (class Nut { d = 8 })()]];
     for (const [a, b] of differ) expect(digest(a), `${digest(a)} against ${digest(b)}`).not.toBe(digest(b));
     expect(digest(new Map([[1, 'a'], [2, 'b']]))).toBe(digest(new Map([[2, 'b'], [1, 'a']])));
     expect(digest(new Set([3, 1]))).toBe(digest(new Set([1, 3])));

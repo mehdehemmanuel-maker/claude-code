@@ -1,24 +1,25 @@
 {
   "task": "11.LW15",
-  "verdict": "fail",
+  "verdict": "pass",
   "model": "claude-sonnet",
   "date": "2026-11-01",
-  "commit": "50ae0b6",
+  "commit": "fa919cb",
   "ran": [
-    "npx vitest run tests/nexus/domains.test.ts -t 'digest tells apart|Mechanical': 2 passed",
-    "read digest/valueKey in src/nexus/dataflow.ts and the three-way block in each domain test (first run, touched and run again, fresh with its own Memo)",
-    "npm run gate on the clean tree: 32 passed, 1 skipped, 63.8 s"
+    "read digest, valueKey, Memo and the key line in Engine.runNode (src/nexus/dataflow.ts): object inputs key by valueKey = hash(digest(v)); settings, input defaults and board keys use digest; stable() is no longer used for keys",
+    "npx vitest run tests/nexus/domains.test.ts -t 'digest tells apart|Map that changes|Mechanical': 3 passed",
+    "read the three-way block in each domain test: first run, every node touched and run again from the cache, fresh with its own Memo, and a third engine on that Memo which must serve every pure node from it (counted) and give the same, node by node",
+    "npm run gate on the clean tree at the end: 33 passed, 1 skipped, 60.8 s (63.7 s wall); git diff src is empty, no tests/nexus/zz_* left"
   ],
   "planted": [
-    "digest writes a Map as '{' (D6 fault in digest): caught by 'a value's digest tells apart what is different and only that'",
-    "on the was.key === key shortcut, the cached node given back with an extra field: caught, 'gives another answer when run again from the cache' on every node of the mechanical quick board",
-    "Memo.get returns the stored outputs with an extra field, whole domains.test.ts run: NOT caught (32 passed); no pure node of any quick board's first run is served from the Memo, so the 'cached' side of the comparison never exercises a Memo hit",
-    "valueKey returns the one string 'zz' for every object (every object-fed node collides): NOT caught by any cached-against-fresh block; only the unrelated built-parts library test failed (80 pieces unstored), by side effect",
-    "valueKey put back to hash(stable(v)) for objects (the exact fault D6, keys not telling Maps apart): NOT caught, all 32 passed"
+    "valueKey for objects back to hash(stable(v)) (fault D6 itself, the one the first verdict found unseen): CAUGHT by 'a node fed a Map that changes runs again' (reader saw 1, expected 2)",
+    "valueKey returns the constant 'zz' for every object: CAUGHT by the same Map test",
+    "Memo.get returns the stored outputs with an extra field: CAUGHT, Mechanical fails 'gives another answer served from the shared cache' on the quick board's nodes",
+    "Memo.set stores outputs with an extra field: CAUGHT the same way",
+    "the was.key === key shortcut returns altered outputs: CAUGHT, 'gives another answer when run again from the cache'",
+    "digest writes a Set as its size only: CAUGHT by the digest test; digest drops Map values: CAUGHT by the digest test and the Map-node test; Map entries left unsorted: CAUGHT; NaN written as null: CAUGHT",
+    "digest of a typed array truncated to its first element: NOT caught (the digest test compares Float32 and Float64 of the same one value, never two arrays differing in an element); class name dropped from the digest of class instances: NOT caught. Neither is in the check column (a Map-valued change seen; cached equals fresh on every quick board), so they do not fail the task, but a typed-array content test would be one line",
+    "keys.push of a node's own setting replaced by a constant: not a fault (the key also holds digest(set) whole), no effect expected and none seen",
+    "all faults removed; git diff src is empty"
   ],
-  "missing": [
-    "nothing in the gate fails if keys go back to stable() (D6 itself): the digest test checks the function digest alone, not that the engine's keys use it; needs a board test where a node fed a Map (or Set, typed array) has the Map changed to another with the same stable() writing, and the node downstream must run again and give the new answer",
-    "the cached-equals-fresh comparison never serves a pure node from the Memo or from a colliding key on the quick boards, so a wrong cache hit (equal keys, different inputs) is not seen; the only planted fault it caught is on the 'was.key === key' return, which cannot show that equal keys mean equal answers",
-    "the task text says the check shows the guarded fault is caught; two of the three cache faults planted at the keys and the Memo went unseen"
-  ]
+  "missing": []
 }
