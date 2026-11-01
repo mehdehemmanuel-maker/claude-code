@@ -53,6 +53,8 @@ are in SI units (metres, not mm), and wide enough that the best is not at an edg
 
 ## How you answer
 
+Every number you give comes from a node on the board, however simple the sum: place the law or a `math.expr` and
+read its output. Never answer a number from what you know; a request answered with no board is answered wrong.
 What you built (a line a node), what it gave (each number with the node and output it came from), and what is
 uncertain or not done. Only numbers your tools returned. If a block does not exist for what was asked, say so; do not
 pretend one does. A second model reads your answer against your steps after you finish: what no step supports is

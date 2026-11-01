@@ -1542,3 +1542,22 @@ one a chosen example). No placeholder and no key shape was found. The six real k
 looked for by value in every tracked file and the built pages: none found (checked once, by hand: the gate cannot see
 them). Planted in the repository (an unsourced record and a TODO in `woods.ts`, an AWS-shaped key in a tracked doc), each
 failed the gate by file and line; removed, it passes. Not covered yet: figures outside `src/data/` (the kinds, makers).
+
+## 2026-11-01: the AI's evaluation set, its baseline, and one rule that took it from 16 to 30 of 30 (spec 00, S5)
+
+`npm run eval:agent` (`tests/evals/agent.eval.ts`, kept out of the gate: it spends real tokens) gives the agent 30 fixed
+requests: 26 numbers to work out (weights, energies, stresses, gas pressure, a pendulum, drag, a beam's moment, 60 rpm in
+hertz, a wall's heat flow), two starter boards to open, a screw to make and a spring to fold. Each is checked with no
+model: the board the agent built is run, and the request is right when the number, worked out in the test from the
+app's own constants, stands on some node within 1 %, or when what was asked was made or folded. Five run at a time,
+`check: false` (the second model's reading is not part of right or wrong), the app's default model, claude-haiku-5-5.
+
+Baseline (one run, `EVAL_OUT=… npm run eval:agent`): 16 of 30 right; 48 tool steps; tokens in 212 fresh + 170,936 read
+from the cache, out 14,748; 107 s summed. 13 of the 14 wrong took no step at all: the agent answered the number from
+what it knows and built nothing (the guide said to answer only with numbers its tools returned, but not to build
+first). The fourteenth built a wall's heat flow without the 800 W on its board.
+
+One rule added to `docs/FOR-AI.md` ("Every number you give comes from a node on the board, however simple the sum …
+a request answered with no board is answered wrong"), the same 30 run again (one run): 30 of 30 right; 109 steps; tokens
+in 322 fresh + 386,970 read from the cache, out 17,854; 141 s summed. Building costs more than answering from memory:
+about 2.3 times the cached input and 1.2 times the output. One run each: how much a second run would vary is not known.

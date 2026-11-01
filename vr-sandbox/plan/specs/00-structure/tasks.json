@@ -56,8 +56,9 @@
    ],
    "owner": "evals/, package.json",
    "check": "npm run eval:agent prints steps, tokens, seconds, right or wrong for each, and the baseline is recorded in REALITY.md with its command",
-   "status": "failing",
-   "after": []
+   "status": "passing",
+   "after": [],
+   "evidence": "2026-11-01: npm run eval:agent (tests/evals/agent.eval.ts), 30 requests; baseline 16 of 30 right with claude-haiku-5-5, then 30 of 30 with one rule added to docs/FOR-AI.md (every number from a node); one run each; recorded in docs/REALITY.md. The products set waits on the user naming them (U6)."
   },
   {
    "id": "S6",
