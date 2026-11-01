@@ -10,7 +10,8 @@ ever opened it. The OpenCascade and Jolt WebAssembly builds are loaded by the pa
 
 ## Requirements
 
-- **W-R1.** THE SYSTEM SHALL serve the app at a public address that a phone and a Quest browser open.
+- **W-R1.** THE SYSTEM SHALL serve the app at a private address (for the user alone, decision 0011), over HTTPS, that the
+  user's computer, phone and Quest browser open.
 - **W-R2.** THE SYSTEM SHALL run the AI relay as a server function holding the keys; no key SHALL reach a page.
 - **W-R3.** THE SYSTEM SHALL serve the WebAssembly with the headers its threaded builds need (cross-origin isolation),
   or fall back to the single-threaded builds and say so.
@@ -28,7 +29,7 @@ ever opened it. The OpenCascade and Jolt WebAssembly builds are loaded by the pa
 
 | Id | Task | Check | After |
 | --- | --- | --- | --- |
-| W1 | The user chooses the host and a spending cap | the answers in `QUESTIONS.md` | the user |
+| W1 | Confirm with the user the proposed host and cap (decision 0011: a Supabase function for the relay, a free static host behind a private link, $5 a day to start) | the user's yes in `QUESTIONS.md` | — |
 | W2 | The pages deployed with the right headers | the address opens on a phone and a Quest; the Controls board works; screenshots from the devices | W1 |
 | W3 | The relay as a function, keys as secrets, the spend cap | Ask Claude answers through it; a request past the cap is refused and says so; no key in any page (scanned) | W1 |
 | W4 | Deploy only from a gate-passed commit | a deploy of an unstamped commit is refused | W2, spec 00 S3 |

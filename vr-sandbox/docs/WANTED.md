@@ -322,3 +322,12 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   are unrelated" (the research tree, `plan/research/TREE.md`, with its method; round 3 into far branches)
 - 2026-10-31: "Yes add everything useful to the plan or research folder or whatever it's called then continue research"
   (specs 09, 10, 11 written; specs 00, 01, 08 amended; rules C19 to C26; research round 4)
+- 2026-11-01: "Okay no pause research compile and organize data" (research paused; `plan/INDEX.md` compiled by
+  `plan/compile.py`; `plan/DEFECTS.md`)
+- 2026-11-01: "Okay find the best questions get rid of all the others also compile and optimize everything before we
+  start" (the book cut to its best 171; tasks and rules merged; a start queue; decision 0010)
+- 2026-11-01: "Okay so where are we" and "What the plan" (the state and the plan, told plainly)
+- 2026-11-01: "1 idk 2 I didn't mean to say Motorola idk what that was maybe I was saying motor something idk 4 a it's only
+  for me so I have a computer a phone and a oculus 14 idk what that means 15 idk know what those terms mean there
+  undefined" (Nexus is for the user alone on three devices; Motorola dropped; questions asked in plain words from now on,
+  technical choices made by the builder; decision 0011)

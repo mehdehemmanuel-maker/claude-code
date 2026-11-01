@@ -12,7 +12,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | Tasks in the specs | 129 (1 begun, the rest not started) |
 | Faults found in the code | 13 (2 fixed) |
 | Rules in the constitution | 29 (21 not yet enforced by a check) |
-| Questions for the user | 15 (5 unanswered: U1, U2, U4, U14, U15) |
+| Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
 | Research branches | 82 explored, 469 open, 3 touched |
@@ -37,11 +37,6 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 ## Waiting on the user
 
-- **U1** Where may the app and its AI relay be hosted, and what is the most it may spend on the AI in a day?
-- **U2** Which Motorola work did you mean?
-- **U4** The phone app: a web app only, or a store app later too?
-- **U14** Should Nexus carry what things cost and emit (spec 12)?
-- **U15** Should the AI write boards in a short notation with named nets instead of JSON plans?
 
 ## Faults found in the code (from `DEFECTS.md`)
 
@@ -144,7 +139,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
-| W1 | The user chooses the host and a spending cap | the user | failing |
+| W1 | Confirm with the user the proposed host and cap (decision 0011: a Supabase function for the relay, a free static host behind a private link, $5 a … | — | failing |
 | W2 | The pages deployed with the right headers | W1 | failing |
 | W3 | The relay as a function, keys as secrets, the spend cap | W1 | failing |
 | W4 | Deploy only from a gate-passed commit | W2, spec 00 S3 | failing |

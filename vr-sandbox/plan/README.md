@@ -75,14 +75,14 @@ each task here exists and comes after every task it waits on.
 | 0 | The structure: rules with checks, specs, decisions, evaluation sets, hooks | `specs/00-structure/` | now (the user's go) | not started |
 | 1 | Interfaces: parts that carry their negative; imprint onto any surface; changes that follow; placement by mating | `specs/01-interfaces/` | after 0 | not started |
 | 2 | Search in tiers and the names index | `specs/02-search-names/` | after 0 (beside 1) | not started |
-| 3 | Out of the container: the app on the web | `specs/03-web/` | when hosting is chosen (`QUESTIONS.md` U1) | waiting on the user |
+| 3 | Out of the container: the app on the web | `specs/03-web/` | after 0; the proposed host confirmed with the user (decision 0011) | not started |
 | 4 | Being in it: physics, ghost, scale, time, sight | `specs/04-being-in-it/` | after 1; real devices after 3 | not started |
 | 5 | Civil engineering, populated | `specs/05-civil/` | after 1 and 2 (it needs both) | not started |
 | 6 | Nexus on the phone (JARVIS style) | `specs/06-phone/` | after 3 | not started |
 | 9 | The physics core: ports that carry what flows, equations without direction, exact folding | `specs/09-physics-core/` | beside 1 | not started |
 | 10 | Trust in numbers: uncertainty, claim status, ensembles, sensitivities, the "cannot simulate" register | `specs/10-trust/` | after 0 (CODATA 2022 at once) | not started |
 | 11 | The living world: only the observed computed, replay, affordances, stigmergy, an umpire, a chronicle | `specs/11-living-world/` | with 4 | not started |
-| 12 | Cost and carbon: money and CO₂e as quantities, carbon rolled up like mass, cost as a function of quantity and place, supply risk | `specs/12-cost-carbon/` | after 10 T11 (awaiting the user's yes, U14) | not started |
+| 12 | Cost and carbon: money and CO₂e as quantities, carbon rolled up like mass, cost as a function of quantity and place, supply risk | `specs/12-cost-carbon/` | waits until the user answers U14 (asked again in plain words) | not started |
 | 8 | A picture to a 3D profile (the AI draws, a parser with no AI copies) | `specs/08-sketch-to-3d/` | after 1; the brief after research 11 | not started |
 | 7 | Further (Evolve, lattices, schemas, USD, shared world) | `specs/07-later/` | after 1 to 6 hold | not started |
 
