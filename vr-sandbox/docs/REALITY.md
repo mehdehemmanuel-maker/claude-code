@@ -2092,3 +2092,16 @@ interface: the evaluation cases give their numbers"): an M8 cap screw through 10
 counterbore 8.5 mm deep; an M6 into 8 mm of 6061 refused, 12 mm of thread needed (2.0 d, its Rm 310 MPa); an M4 into PLA, a
 5.7 mm hole 9.1 mm deep and the TC-M4x8.1 insert; a NEMA 17 on 5 mm, four 3.4 mm holes on a 31 mm square and a 22 mm bore,
 0 to +21 µm. Checked with `npm run gate`.
+
+## 2026-11-01: I3 and I4 pass; S10's near misses held to their kind's response and sent whole (spec 01, I3, I4; spec 00, S10)
+
+I3 passed its first judging (the evaluator opened the sources and checked spot values from every table against them;
+`plan/specs/00-structure/verdicts/01.I3.json`), and I4 its first (it cut a countersink, a drill point and a stacked
+profile along a tilted line besides, each within 1e-10 % of its profile and read back from STEP; it noted that `mass.ts`
+does not yet take a turned cut's volume off a part's mass, and that a bowtie profile is not refused). S10's ninth verdict:
+the relay could strip each near miss's kind or its response, the run's own near misses were held to no response, and a
+runner's print could be skipped around its checked line. Now the one test requires the relay's near misses equal to the
+run's, field by field; every near miss the run catches takes its kind and response from one table (`NEAR_MISS_RESPONSE` in
+`src/nexus/agent.ts`), each response said and a reckless one's to stop and tell the user; and the runners' and the page's
+handling of a run, from agentBuild's call or the reply to the near misses printed or shown, are read exactly (pinned). The
+evaluator's three uncaught faults and a fourth, each tried once, now fail the test. Checked with `npm run gate`.

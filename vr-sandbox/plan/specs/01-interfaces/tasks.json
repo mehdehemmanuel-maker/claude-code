@@ -36,7 +36,7 @@
    ],
    "owner": "interfaces.ts (tables), threads.ts",
    "check": "every row carries a source or a label; spot values agree with their source, checked by the evaluator against the source itself",
-   "status": "claimed",
+   "status": "passing",
    "after": [
     "I1"
    ],
@@ -50,7 +50,7 @@
    ],
    "owner": "kits.ts, brep.ts, view/kit3d.ts, make/rules.ts",
    "check": "a counterbored hole's volume equals its profile's volume of revolution within 0.1 %; the solid is valid; STEP reads back the same volume",
-   "status": "claimed",
+   "status": "passing",
    "after": [
     "I2"
    ],

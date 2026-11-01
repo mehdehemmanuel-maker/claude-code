@@ -12,8 +12,15 @@ import { tmpdir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
-import { callTools, certifiedOf, certifiedView, gateOf, nearMissLine, nearMissesOf, nearMissesView, relayBody, runOf, stepOf, toolsFor, turnOf, type AgentRun, type AgentStep } from '../../src/nexus/agent';
+import { NEAR_MISS_RESPONSE, callTools, certifiedOf, certifiedView, gateOf, nearMissLine, nearMissesOf, nearMissesView, relayBody, runOf, stepOf, toolsFor, turnOf, type AgentRun, type AgentStep } from '../../src/nexus/agent';
 import { createHash } from 'node:crypto';
+/** The runners' and the page's handling of a run, from agentBuild's call (or the reply) to its near misses printed or
+ *  shown, their texts pinned (the test "an open andon stops the line…" says why). */
+const RUN_PINS: [string, string, string, string][] = [
+  ['tests/evals/agent.eval.ts', '      const r = await agentBuild(req', 'console.log(`   near miss: ${m}`);', '4774ef8e900bc2db'],
+  ['tests/evals/one.eval.ts', '  const t0 = Date.now(), r = await agentBuild(EXPECTED.request', 'console.log(`near miss, ${nearMissLine(m)}`);', '08e2a1d87952e6e5'],
+  ['src/nexus/view/nodes.ts', '      const r = await res.json()', '${nearMissesView(r.nearMisses, esc)}', 'f20d8562e069d7bd'],
+];
 /** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
 const AGENT_PIN = '827c6d19f645c051';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
@@ -384,7 +391,15 @@ describe('every domain, in one pass', () => {
     const relay = readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), callLine = "const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40 });";
     expect(relay.slice(relay.indexOf(callLine), relay.indexOf('res.end(m.relayBody(r));') + 24), 'the relay sends the run as agentBuild made it').toBe(`${callLine}\n      res.setHeader('Content-Type', 'application/json'); res.end(m.relayBody(r));`);
     // (the relay sends the page all of the run: its near misses, diff and certificates)
-    const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
+    const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses, 'every near miss sent whole: its step, tool, what, kind and response').toEqual(run.nearMisses); expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
+    // (every near miss the run catches has its kind's response, from the one table: a reckless one, to stop and tell the
+    // user (the run's own were held to nothing: the evaluator, 2026-11-01))
+    for (const r of Object.values(NEAR_MISS_RESPONSE)) { expect(r.response.length, 'a response said').toBeGreaterThan(20); if (r.kind === 'reckless') expect(/\bstop/i.test(r.response) && /\buser\b/i.test(r.response), 'reckless: stop, and tell the user').toBe(true); }
+    for (const m of [...misses, ...run.nearMisses, ...changed, ...placed, ...reopened, ...rest]) expect(Object.values(NEAR_MISS_RESPONSE).some((r) => r.kind === m.kind && r.response === m.response), `${m.kind} ${m.tool}: its kind's response`).toBe(true);
+    // (the runners' and the page's handling of a run, read exactly from agentBuild's call to the near misses printed or
+    // shown: a print skipped, a list emptied or a page clearing them between, passed before (the evaluator, 2026-11-01))
+    const region = (t: string, a: string, b: string) => { const i = t.indexOf(a), j = t.indexOf(b, i); return i < 0 || j < 0 ? '' : t.slice(i, t.indexOf('\n', j)); };
+    for (const [f, a, b, pin] of RUN_PINS) expect(createHash('sha256').update(region(readFileSync(join(root, f), 'utf8'), a, b)).digest('hex').slice(0, 16), `${f}: its handling of a run's near misses changed: read it again and pin its new text`).toBe(pin);
     expect(readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), 'the relay answers with relayBody').toMatch(/res\.end\(m\.relayBody\(r\)\)/);
     // (the two runners print each near miss by nearMissLine, its kind first (run here on the run's own), read exactly: a
     // runner that printed none, or printed them without their kind, passed before (the evaluator, 2026-11-01))

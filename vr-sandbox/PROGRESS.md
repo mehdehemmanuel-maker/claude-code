@@ -2,7 +2,7 @@
 
 Task in hand: 00.S10
 Spec in hand: spec 00, structure (`plan/specs/00-structure/`)
-Last commit the gate passed: 832c6e6 (2026-11-01)
+Last commit the gate passed: 4b20a12 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -12,9 +12,9 @@ Last commit the gate passed: 832c6e6 (2026-11-01)
 
 ## Open, and why
 
-- Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1 and 04.P10 (its seventh judging) pass. 00.S10 failed an eighth time; mended
-  (the node's run and the runners' prints read exactly, every tool's refusal made), to be judged again.
-- 01.I3, I4 and I5 claimed: the standards' tables, each row from a document opened; turned cuts made as solids; the negative of an interface (its evaluation cases, the test "the negative of an interface: the evaluation cases give their numbers"); to be judged.
+- Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1, 01.I3, 01.I4 and 04.P10 pass. 00.S10 failed a ninth time; mended (the relay's
+  near misses sent whole, every caught near miss held to its kind's response, the runners and page read exactly).
+- 01.I5 claimed: the negative of an interface (its evaluation cases, the test "the negative of an interface: the evaluation cases give their numbers"); to be judged.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).

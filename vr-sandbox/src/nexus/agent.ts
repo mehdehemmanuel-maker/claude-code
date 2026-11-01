@@ -100,20 +100,31 @@ export async function certifiedOf(before: Board, after: Board): Promise<Pick<Age
   const e = new Engine(after); await e.run();
   return { diff, certificates: certificatesOf(after, e, touched) };
 }
+/** What each near miss the run catches is, and the response its kind calls for (plan/NEAR-MISS.md: an error's, the fix
+ *  and the check that caught it; an at-risk act's, the process that forbids it; a reckless act's, to stop and tell the
+ *  user), one table so the test holds every one to its kind's rule. */
+export const NEAR_MISS_RESPONSE = {
+  'tool failed': { kind: 'error', response: 'the error went back to the model as the tool\'s result; corrected in a later step, or said in the answer' },
+  refused: { kind: 'error', response: 'refused by the engine and said back; corrected in a later step, or said in the answer' },
+  'node failed': { kind: 'error', response: 'the failure went back to the model with the board\'s run; corrected in a later step, or said in the answer' },
+  'no board': { kind: 'at-risk', response: 'the guide forbids it (docs/FOR-AI.md); the evaluation set counts it wrong' },
+  'past a refusal': { kind: 'reckless', response: 'stop, and tell the user: shown beside the answer on the page, and printed by the evaluation runners' },
+} as const satisfies Record<string, { kind: NearMiss['kind']; response: string }>;
+const caught = (what: keyof typeof NEAR_MISS_RESPONSE) => NEAR_MISS_RESPONSE[what];
 /** The near misses of a run, from its steps (each refusal the engine said back) and its answer. */
 export function nearMissesOf(steps: AgentStep[], answer: string, board: Board): NearMiss[] {
   const out: NearMiss[] = [];
   steps.forEach((s, k) => {
-    if (s.failed) { out.push({ step: k + 1, tool: s.tool, what: `the tool failed: ${s.result.slice(0, 160)}`, kind: 'error', response: 'the error went back to the model as the tool\'s result; corrected in a later step, or said in the answer' }); return; }
+    if (s.failed) { out.push({ step: k + 1, tool: s.tool, what: `the tool failed: ${s.result.slice(0, 160)}`, ...caught('tool failed') }); return; }
     for (const l of s.alerts ?? s.result.split('\n')) {
-      if (l.startsWith('! ')) out.push({ step: k + 1, tool: s.tool, what: l.slice(2), kind: 'error', response: 'refused by the engine and said back; corrected in a later step, or said in the answer' });
-      else { const f = /^(\S+) (failed|error): (.*)$/.exec(l); if (f) out.push({ step: k + 1, tool: s.tool, what: `node ${f[1]} failed: ${f[3]!.slice(0, 160)}`, kind: 'error', response: 'the failure went back to the model with the board\'s run; corrected in a later step, or said in the answer' }); }
+      if (l.startsWith('! ')) out.push({ step: k + 1, tool: s.tool, what: l.slice(2), ...caught('refused') });
+      else { const f = /^(\S+) (failed|error): (.*)$/.exec(l); if (f) out.push({ step: k + 1, tool: s.tool, what: `node ${f[1]} failed: ${f[3]!.slice(0, 160)}`, ...caught('node failed') }); }
     } });
-  if (/\d/.test(answer) && !nodesOf(board).length) out.push({ step: steps.length, tool: 'answer', what: 'numbers given with no board behind them', kind: 'at-risk', response: 'the guide forbids it (docs/FOR-AI.md); the evaluation set counts it wrong' });
+  if (/\d/.test(answer) && !nodesOf(board).length) out.push({ step: steps.length, tool: 'answer', what: 'numbers given with no board behind them', ...caught('no board') });
   const lastChange = steps.map((s, k) => [s, k] as const).filter(([s]) => ['build', 'change', 'open'].includes(s.tool) && !s.failed).pop();
   const standing = lastChange ? (lastChange[0].alerts ?? lastChange[0].result.split('\n')).filter((l) => l.startsWith('! ')) : [];
   if (standing.length && !/refus|could ?n[o']t|cannot|can't|unable|failed|did ?n[o']t|does ?n[o']t|is ?n[o']t|not (yet|wired|joined|connected|done|built|possible|there)|no input|no setting|missing/i.test(answer))
-    out.push({ step: steps.length, tool: 'answer', what: `answered past ${standing.length} refusal(s) still standing, without a word of it (first: ${standing[0]!.slice(2, 120)})`, kind: 'reckless', response: 'stop, and tell the user: shown beside the answer on the page, and printed by the evaluation runners' });
+    out.push({ step: steps.length, tool: 'answer', what: `answered past ${standing.length} refusal(s) still standing, without a word of it (first: ${standing[0]!.slice(2, 120)})`, ...caught('past a refusal') });
   return out;
 }
 
