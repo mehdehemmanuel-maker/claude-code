@@ -16,6 +16,7 @@ problems: list[str] = []
 # Task states the tables cannot carry (a spec.md table has no status column): what is done, said here with its date.
 STATE = {
     '10.T1': 'values done 2026-10-31 (CODATA 2022); correlations not yet',
+    '11.LW15': 'passing 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it',
 }
 
 # The synthesis's findings by theme (each finding number in exactly one theme).

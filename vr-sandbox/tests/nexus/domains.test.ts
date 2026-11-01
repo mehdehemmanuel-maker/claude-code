@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
-import { Engine, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
+import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
 import { starterBoards } from '../../src/nexus/starters';
 import { APP, fieldOf, search } from '../../src/nexus/navigate';
 import { builtOf } from '../../src/nexus/evidence';
@@ -82,6 +82,17 @@ describe('every domain, in one pass', () => {
   // (the AI's guide shows a plan that must run as written: its wire goes into an input the block has, and a wire into an
   // input a block lacks, a folded block too, is refused where it is made, never carried silently (2026-10-31: the guide
   // wired a spring's output `rate` as an input, and the board ran on its defaults with no word said))
+  // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
+  // two functions, a typed array's kind; and the same value, built in another order, keys the same)
+  it('a value\'s digest tells apart what is different and only that', () => {
+    const differ: [unknown, unknown][] = [[new Map([[1, 2]]), new Map()], [new Set([1]), new Set([2])], [NaN, null], [-0, 0], [() => 1, () => 1],
+      [new Float32Array([1]), new Float64Array([1])], [{ a: undefined }, {}], [new Map([[1, 2]]), { 1: 2 }]];
+    for (const [a, b] of differ) expect(digest(a), `${digest(a)} against ${digest(b)}`).not.toBe(digest(b));
+    expect(digest(new Map([[1, 'a'], [2, 'b']]))).toBe(digest(new Map([[2, 'b'], [1, 'a']])));
+    expect(digest(new Set([3, 1]))).toBe(digest(new Set([1, 3])));
+    expect(digest({ b: 1, a: [1, { c: 2 }] })).toBe(digest({ a: [1, { c: 2 }], b: 1 }));
+    const loop: Record<string, unknown> = { a: 1 }; loop.self = loop; expect(digest(loop)).toContain('<loop');
+  });
   it('the guide\'s plan runs, and a wire into a missing input is refused', async () => {
     const guide = readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'), plan = JSON.parse(/`(\{"nodes".*?\})`/.exec(guide)![1]!) as { nodes: Record<string, { b: string; s?: Record<string, unknown> }>; wires: string[] };
     const b = emptyBoard('guide');
@@ -146,6 +157,22 @@ describe('every domain, in one pass', () => {
         const b = board![1](), e = new Engine(b, env); await e.run();
         expect(fieldOf(b)).toBe(d.id);
         for (const [id, s] of e.state) if (s.status === 'failed') bad.push(`board "${quick}": ${b.nodes[id]?.label || id} failed: ${s.error}`);
+        // (a cached run equals a fresh one (spec 11, LW15): every node touched and run again, served from the cache, gives
+        // what it gave; and the board run anew with a cache of its own, nothing remembered, gives the same, node by node)
+        // (a block not pure (it reads the clock, the gauntlet's state, the web) is never served from the cache, so it is not
+        // compared; nor is a port that measures the run itself, its time or speed)
+        const outs = (x: Engine) => new Map([...x.state].filter(([id, s]) => s.status === 'ok' && LIBRARY.get(x.board.nodes[id]!.block!)?.pure).map(([id, s]) => {
+          const skip = new Set(x.ports(id).outputs.filter((p) => p.measured).map((p) => p.name));
+          return [id, digest(Object.fromEntries(Object.entries(s.out ?? {}).filter(([k]) => !skip.has(k))))];
+        }));
+        const first = outs(e);
+        for (const id of e.sequence) e.touch(id);
+        await e.run();
+        const again = outs(e), f = new Engine(board![1](), env, new Memo()); await f.run(); const fresh = outs(f);
+        for (const [id, dg] of first) {
+          if (again.get(id) !== dg) bad.push(`board "${quick}": ${b.nodes[id]?.label || id} gives another answer when run again from the cache`);
+          if (fresh.get(id) !== dg) bad.push(`board "${quick}": ${b.nodes[id]?.label || id} gives another answer run fresh than from the cache`);
+        }
       }
       expect(bad).toEqual([]);
     }, 60_000);

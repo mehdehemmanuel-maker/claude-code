@@ -9,8 +9,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129 (2 begun, the rest not started) |
-| Faults found in the code | 13 (2 fixed) |
+| Tasks in the specs | 129 (3 begun, the rest not started) |
+| Faults found in the code | 13 (3 fixed) |
 | Rules in the constitution | 29 (21 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -47,7 +47,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | D3 | `degC` always adds 273.15, so a 10 °C difference becomes 283.15 K | `src/ganglia/units.ts:38` | open | 10.T11 |
 | D4 | The units file's header cites `dimensionsOf` and `ganglia.test.ts`; neither exists | `src/ganglia/units.ts:4` | open | 10.T11 |
 | D5 | No early cutoff: a node's key is built from its inputs' keys, not their values, so a node that reruns to the same value reruns everything below it | `src/nexus/dataflow.ts:289` | open | 11.LW12 |
-| D6 | `stable()` writes every Map and Set as `{}` and every function as `undefined`, so it cannot tell such values apart (group feeds already rely on it) | `src/nexus/dataflow.ts:42` | open | 11.LW15 |
+| D6 | `stable()` writes every Map and Set as `{}` and every function as `undefined`, so it cannot tell such values apart (group feeds already rely on it) | `src/nexus/dataflow.ts:42` | fixed 2026-11-01: keys use `digest` (Maps, Sets, typed arrays, NaN, −0, functions told apart); the gate checks cached against fresh | 11.LW15 |
 | D7 | Blocks count as pure unless they say otherwise; nothing checks a block that reads the clock, chance or the network | `src/nexus/dataflow.ts:301` (`b.pure`) | open | 11.LW12 |
 | D8 | The interference check excuses any pair where either part is named like a fastener (bolt, clip, plug, …), against every other part | `src/nexus/make/rules.ts:43`, `:50` | open | 10.T24 |
 | D9 | The interference check ignores overlaps shallower than 0.5 mm | `src/nexus/make/rules.ts:72` | open | 10.T24 |
@@ -248,7 +248,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | LW11 | Space measures as nodes (justified depth, integration, intimacy gradient, egress distance, daylight), each with its stability under small edits … | — | failing |
 | LW12 | **First, before LW13**: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as … | — | failing |
 | LW13 | Push a mark, pull the work (absorbs LW1, lazy evaluation): observers (view, panels, checks, exports, the agent) pull; only stale nodes on their … | LW12 | failing |
-| LW15 | Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by … | — | failing |
+| LW15 | Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by … | — | passing 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it |
 | LW16 | Every simulated world carries an ODD description, its update order, one label (demo, calibrated, compared, docked, forecast) and its worker count … | LW2 | failing |
 
 ### 12-cost-carbon (5)

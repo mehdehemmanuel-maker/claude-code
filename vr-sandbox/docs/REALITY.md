@@ -1468,3 +1468,20 @@ that name" check in `wire` (`dataflow.ts`), so the wire was kept, carried nothin
 blocks too (unless the block has no inputs at all); both wires are refused with the input named. The example wires `n`
 (6 coils: 9,423.8 N/m, measured) and says an output cannot be set (use `fit.target`). The one test runs the guide's plan
 as written and checks the refusal. Gate: 27 passed. All 64 starter boards still build under the check.
+
+## 2026-11-01: a cached run is checked against a fresh one; keys tell apart what they could not (spec 11, LW15; fault D6)
+
+`digest` (in `dataflow.ts`, keys) replaces `stable` wherever a key is made: a node's settings, its inputs' defaults, a
+group's feeds and a board's key. `stable` wrote every Map and Set as `{}` and every function as `undefined`, so a folded
+block fed two different Maps could be served the other's answer. The one test now runs each field's quick board three
+ways: as the gate always did; every node touched and run again (served from the cache); and anew with a cache of its own.
+Every pure node must give the same in all three. A test also checks the digest tells apart two Maps, two Sets, NaN and
+null, −0 and 0, two functions, Float32 and Float64 arrays, and keys the same value built in another order the same.
+
+The first run of the check found three nodes that differed: the 6502's simulation (`logic.run`) reports how fast it ran
+(`hz`, `modelHz`, and its `says`), which moves from run to run; and two gauntlet nodes (`research.loop`, `on.event`)
+read the gauntlet's state, shared across the app, which grows between runs. The first now declares those ports
+`measured` (a new `PortDef` field: a measurement of the run, never compared, never a sign that what follows changed);
+the gauntlet nodes are not pure, so they are never served from the cache and are not compared. A planted fault (a
+cached node given back with one field changed) failed the check on three nodes of the mechanical quick board. Gate:
+29 passed in 51.3 s (one run).

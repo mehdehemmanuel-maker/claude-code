@@ -44,12 +44,44 @@ export function stable(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(stable).join(',')}]`;
   return `{${Object.keys(v as object).sort().filter((k) => (v as Record<string, unknown>)[k] !== undefined).map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(',')}}`;
 }
+const fnIds = new WeakMap<object, number>(); let fnNext = 0;
+/** A value written so two values write the same only when they are the same (spec 11, LW15; fault D6): what `stable`
+ *  cannot tell apart, this does. A Map or a Set by its entries (in a sorted order, so the order they were added in does
+ *  not matter), a typed array by its kind and every element, NaN, −0 and ±Infinity as themselves (JSON writes them all as
+ *  null or 0), undefined kept where an object holds it, a class instance by its class as well as its fields, a function by
+ *  its identity (the same function the same; two functions never alike), a loop in the value said, not followed. */
+export function digest(v: unknown, path: object[] = []): string {
+  if (v === undefined) return 'u';
+  if (v === null) return 'n';
+  switch (typeof v) {
+    case 'number': return Object.is(v, -0) ? '-0' : Number.isNaN(v) ? 'NaN' : String(v);
+    case 'string': return JSON.stringify(v);
+    case 'boolean': return v ? 't' : 'f';
+    case 'bigint': return `${v}n`;
+    case 'symbol': return `sym(${String(v.description)})`;
+    case 'function': { let k = fnIds.get(v); if (k === undefined) { k = ++fnNext; fnIds.set(v, k); } return `fn#${k}`; }
+  }
+  const o = v as object;
+  if (path.includes(o)) return `<loop ${path.length - path.indexOf(o)}>`;
+  path.push(o);
+  try {
+    if (Array.isArray(o)) return `[${o.map((x) => digest(x, path)).join(',')}]`;
+    if (ArrayBuffer.isView(o)) { const a = o as unknown as ArrayLike<number | bigint>; let s = `${o.constructor.name}(`; for (let i = 0; i < a.length; i++) s += (i ? ',' : '') + digest(a[i], path); return `${s})`; }
+    if (o instanceof ArrayBuffer) return digest(new Uint8Array(o), path);
+    if (o instanceof Map) return `Map{${[...o].map(([k, x]) => `${digest(k, path)}=>${digest(x, path)}`).sort().join(',')}}`;
+    if (o instanceof Set) return `Set{${[...o].map((x) => digest(x, path)).sort().join(',')}}`;
+    if (o instanceof Date) return `Date(${o.getTime()})`;
+    if (o instanceof RegExp) return `RegExp(${String(o)})`;
+    const name = Object.getPrototypeOf(o)?.constructor?.name, rec = o as Record<string, unknown>;
+    return `${name && name !== 'Object' ? name : ''}{${Object.keys(rec).sort().map((k) => `${JSON.stringify(k)}:${digest(rec[k], path)}`).join(',')}}`;
+  } finally { path.pop(); }
+}
 const boardKeys = new WeakMap<Board, string>();
 /** A board's shape and settings as one key (kept on it, so a library block's board is hashed once). */
 export function boardKey(b: Board): string {
   let k = boardKeys.get(b); if (k) return k;
   const ns = nodesOf(b).map((n) => n.id).sort(), es = edgesOf(b).filter(isWire).map((e) => `${e.from}.${e.out}>${e.to}.${e.in}`).sort();
-  k = hash(`${ns.map((id) => { const n = b.nodes[id]!; return `${id}=${n.block}:${stable(n.set ?? {})}:${n.inner ? boardKey(n.inner) : ''}`; }).join(';')}|${es.join(';')}`);
+  k = hash(`${ns.map((id) => { const n = b.nodes[id]!; return `${id}=${n.block}:${digest(n.set ?? {})}:${n.inner ? boardKey(n.inner) : ''}`; }).join(';')}|${es.join(';')}`);
   boardKeys.set(b, k); return k;
 }
 export const isWire = (e: BoardEdge): boolean => !!e.out && !!e.in;
@@ -290,15 +322,15 @@ export class Engine {
           if (u && typeof s.out[w.out!] === 'number' && typeof v === 'number') { const src = `${w.from}.${w.out}`, du = Math.abs((convert((s.out[w.out!] as number) + u, fromUnit, p.unit) as number) - v); spreadIn.set(src, [...(spreadIn.get(src) ?? []), { input: p.name, ...(p.many ? { at: vals.length - 1 } : {}), du }]); }
         }
         inputs[p.name] = p.many ? vals : vals[0];
-      } else if (n.set && p.name in n.set && n.set[p.name] !== '' && n.set[p.name] !== null) { inputs[p.name] = n.set[p.name]; keys.push(`${p.name}=${stable(n.set[p.name])}`); }
-      else if (p.default !== undefined) { inputs[p.name] = p.default; keys.push(`${p.name}=${stable(p.default)}`); }
+      } else if (n.set && p.name in n.set && n.set[p.name] !== '' && n.set[p.name] !== null) { inputs[p.name] = n.set[p.name]; keys.push(`${p.name}=${digest(n.set[p.name])}`); }
+      else if (p.default !== undefined) { inputs[p.name] = p.default; keys.push(`${p.name}=${digest(p.default)}`); }
       else if (!p.optional) missing.push(p.label ?? p.name);
     }
     if (b.id === 'group.in') { const f = this.feeds[String(set.name)]; if (f) { set.value = f.value; keys.push(`feed=${f.key}`); } else if (!('value' in (n.set ?? {}))) missing.push(`what comes into the group as ${String(set.name)}`); }
     if (missing.length) { put({ status: 'waiting', error: `waiting on ${missing.join(', ')}`, out: undefined, key: undefined }); r.waiting++; return; }
     if (clockOf(b, set)) keys.push(`t=${this.env.time ?? 0}`);
     if (b.live) keys.push(`live=${b.live(set)}`);
-    const key = hash(`${b.id}@${b.version}:${b.graph ? boardKey(b.graph) : ''}|${stable(set)}|${keys.join('|')}${b.pure ? '' : `#${id}`}`);
+    const key = hash(`${b.id}@${b.version}:${b.graph ? boardKey(b.graph) : ''}|${digest(set)}|${keys.join('|')}${b.pure ? '' : `#${id}`}`);
     if (was.status === 'ok' && was.key === key) { put({ cached: true }); r.cached++; return; }
     const kept = b.pure ? this.memo.get(key) : undefined;
     if (kept) { put({ status: 'ok', out: kept, key, cached: true, error: undefined, ...(await this.spreadOf(id, b, inputs, set, kept, spreadIn, ports)) }); r.cached++; return; }
@@ -545,7 +577,7 @@ export function shapeKeys(b: Board): Map<string, string> {
     const n = b.nodes[id]!, d = blockOf(n);
     if (!d || !d.pure) { out.set(id, hash(`${id}!`)); continue; }
     const ins = e.wiresInto(id).map((w) => `${w.in}<${out.get(w.from)}.${w.out}`).sort();
-    out.set(id, hash(`${d.id}@${d.version}:${d.graph ? boardKey(d.graph) : ''}|${stable({ ...defaultsOf(d), ...(n.set ?? {}) })}|${ins.join('|')}`));
+    out.set(id, hash(`${d.id}@${d.version}:${d.graph ? boardKey(d.graph) : ''}|${digest({ ...defaultsOf(d), ...(n.set ?? {}) })}|${ins.join('|')}`));
   }
   return out;
 }
@@ -610,7 +642,7 @@ export function makeBlock(b: Board, gid: string, meta: { id?: string; name: stri
 const SEEDS = SHARED;
 /** A group's board run by its engine with what came in: what its outputs give. */
 async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>): Promise<Outputs> {
-  k.feeds = Object.fromEntries(Object.entries(inputs).map(([name, value]) => [name, { value, key: hash(stable(value)) }]));
+  k.feeds = Object.fromEntries(Object.entries(inputs).map(([name, value]) => [name, { value, key: hash(digest(value)) }]));
   k.reshape(); await k.run();
   const out: Outputs = {};
   for (const n of nodesOf(g)) {
