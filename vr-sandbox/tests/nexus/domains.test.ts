@@ -21,6 +21,8 @@ const RUN_PINS: [string, string, string, string][] = [
   ['tests/evals/one.eval.ts', '  const t0 = Date.now(), r = await agentBuild(EXPECTED.request', 'console.log(`near miss, ${nearMissLine(m)}`);', '08e2a1d87952e6e5'],
   ['src/nexus/view/nodes.ts', '      const r = await res.json()', '${nearMissesView(r.nearMisses, esc)}', 'f20d8562e069d7bd'],
 ];
+/** The relay's handler, its whole text pinned (the test "an open andon stops the line…" says why). */
+const RELAY_PIN = '88a20876daf9c4f4';
 /** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
 const AGENT_PIN = '827c6d19f645c051';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
@@ -394,12 +396,33 @@ describe('every domain, in one pass', () => {
     const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses, 'every near miss sent whole: its step, tool, what, kind and response').toEqual(run.nearMisses); expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
     // (every near miss the run catches has its kind's response, from the one table: a reckless one, to stop and tell the
     // user (the run's own were held to nothing: the evaluator, 2026-11-01))
-    for (const r of Object.values(NEAR_MISS_RESPONSE)) { expect(r.response.length, 'a response said').toBeGreaterThan(20); if (r.kind === 'reckless') expect(/\bstop/i.test(r.response) && /\buser\b/i.test(r.response), 'reckless: stop, and tell the user').toBe(true); }
-    for (const m of [...misses, ...run.nearMisses, ...changed, ...placed, ...reopened, ...rest]) expect(Object.values(NEAR_MISS_RESPONSE).some((r) => r.kind === m.kind && r.response === m.response), `${m.kind} ${m.tool}: its kind's response`).toBe(true);
+    // (held as the log's rows are: a reckless act's, to stop and tell the user, said first; an error's or an at-risk act's
+    // naming the check or the rule that caught it; and each caught thing given its own entry)
+    for (const [k, r] of Object.entries(NEAR_MISS_RESPONSE)) { if (r.kind === 'reckless') expect(r.response, `${k}: stop, and tell the user, first`).toMatch(/^stop, and tell the user\b/);
+      else expect(r.response, `${k}: names the check or the rule that caught it`).toMatch(/\b(check\w*|test\w*|hooks?|gates?|refus\w*|fails?|failing|rules?|decision|andon)\b/i); }
+    const entryOf = (m: { what: string; tool: string }) => (m.what.startsWith('the tool failed') ? 'tool failed' : m.what.startsWith('node ') ? 'node failed' : m.what.startsWith('numbers given') ? 'no board' : m.what.startsWith('answered past') ? 'past a refusal' : 'refused');
+    for (const m of [...misses, ...run.nearMisses, ...changed, ...placed, ...reopened, ...rest]) { const e = NEAR_MISS_RESPONSE[entryOf(m)]; expect([m.kind, m.response], `${m.tool}: ${m.what.slice(0, 40)}: its own entry's kind and response`).toEqual([e.kind, e.response]); }
+    // (compile.py's own andon refusal, shown: a copy of the plan with an open andon on a passing task fails its --check,
+    // naming the task and the one that waits on it)
+    const cp = mkdtempSync(join(tmpdir(), 'plan-')); cpSync(join(root, 'plan'), join(cp, 'plan'), { recursive: true });
+    writeFileSync(join(cp, 'plan/ANDON.md'), `${readFileSync(join(cp, 'plan/ANDON.md'), 'utf8').trimEnd()}\n| A99 | 2026-11-01 | 00.S5 | planted to show the refusal | open |\n`);
+    const cc = spawnSync('python3', [join(cp, 'plan/compile.py'), '--check'], { encoding: 'utf8' }); rmSync(cp, { recursive: true, force: true });
+    expect([cc.status !== 0, /00\.S5 is passing with andon A99 open/.test(cc.stdout + cc.stderr), /00\.S7 is passing with andon A99 open/.test(cc.stdout + cc.stderr)], `compile.py refuses an open andon and what waits on it: ${(cc.stdout + cc.stderr).slice(0, 300)}`).toEqual([true, true, true]);
     // (the runners' and the page's handling of a run, read exactly from agentBuild's call to the near misses printed or
     // shown: a print skipped, a list emptied or a page clearing them between, passed before (the evaluator, 2026-11-01))
     const region = (t: string, a: string, b: string) => { const i = t.indexOf(a), j = t.indexOf(b, i); return i < 0 || j < 0 ? '' : t.slice(i, t.indexOf('\n', j)); };
     for (const [f, a, b, pin] of RUN_PINS) expect(createHash('sha256').update(region(readFileSync(join(root, f), 'utf8'), a, b)).digest('hex').slice(0, 16), `${f}: its handling of a run's near misses changed: read it again and pin its new text`).toBe(pin);
+    // (and what those lines call is agent.ts's own, nothing in its place: imported from it, named nowhere else (a local
+    // stand-in for nearMissesView or nearMissLine, its pinned line kept, passed: the evaluator, 2026-11-01))
+    for (const [f, name, from, uses] of [['src/nexus/view/nodes.ts', 'nearMissesView', '../agent', 1], ['tests/evals/agent.eval.ts', 'nearMissLine', '../../src/nexus/agent', 1], ['tests/evals/one.eval.ts', 'nearMissLine', '../../src/nexus/agent', 1]] as const) {
+      const t = readFileSync(join(root, f), 'utf8');
+      expect(new RegExp(`^import \\{[^}]*\\b${name}\\b[^}]*\\} from '${from.replace(/[./]/g, (c) => `\\${c}`)}';$`, 'm').test(t), `${f}: ${name} imported from agent.ts`).toBe(true);
+      expect((t.match(new RegExp(`\\b${name}\\b`, 'g')) ?? []).length, `${f}: ${name} named only where it is imported and used`).toBe(1 + uses); }
+    // (the relay's whole handler read exactly, mounted, and answering where the page asks)
+    const vite = readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), handler = vite.slice(vite.indexOf('  const handle = '), vite.indexOf('\n  let dev: ViteDevServer'));
+    expect(createHash('sha256').update(handler).digest('hex').slice(0, 16), "the relay's handler changed: read it again (agentBuild's run sent by relayBody, whole) and pin its new text").toBe(RELAY_PIN);
+    expect(vite, 'the relay mounted').toMatch(/^\s*plugins: \[relay\(\)\],$/m);
+    expect(/req\.url !== '([^']+)'/.exec(handler)?.[1], 'it answers where the page asks').toBe(`/${/fetch\('\.\/([^']+)'/.exec(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'))?.[1]}`);
     expect(readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), 'the relay answers with relayBody').toMatch(/res\.end\(m\.relayBody\(r\)\)/);
     // (the two runners print each near miss by nearMissLine, its kind first (run here on the run's own), read exactly: a
     // runner that printed none, or printed them without their kind, passed before (the evaluator, 2026-11-01))

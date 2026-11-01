@@ -104,10 +104,10 @@ export async function certifiedOf(before: Board, after: Board): Promise<Pick<Age
  *  and the check that caught it; an at-risk act's, the process that forbids it; a reckless act's, to stop and tell the
  *  user), one table so the test holds every one to its kind's rule. */
 export const NEAR_MISS_RESPONSE = {
-  'tool failed': { kind: 'error', response: 'the error went back to the model as the tool\'s result; corrected in a later step, or said in the answer' },
-  refused: { kind: 'error', response: 'refused by the engine and said back; corrected in a later step, or said in the answer' },
-  'node failed': { kind: 'error', response: 'the failure went back to the model with the board\'s run; corrected in a later step, or said in the answer' },
-  'no board': { kind: 'at-risk', response: 'the guide forbids it (docs/FOR-AI.md); the evaluation set counts it wrong' },
+  'tool failed': { kind: 'error', response: 'the tool\'s own check failed it, and its error went back to the model as its result; corrected in a later step, or said in the answer' },
+  refused: { kind: 'error', response: 'refused by the engine\'s check and said back to the model; corrected in a later step, or said in the answer' },
+  'node failed': { kind: 'error', response: 'the node fails when the board runs, and the failure went back to the model with the run; corrected in a later step, or said in the answer' },
+  'no board': { kind: 'at-risk', response: 'the guide\'s rule forbids it (docs/FOR-AI.md); the evaluation set counts it wrong' },
   'past a refusal': { kind: 'reckless', response: 'stop, and tell the user: shown beside the answer on the page, and printed by the evaluation runners' },
 } as const satisfies Record<string, { kind: NearMiss['kind']; response: string }>;
 const caught = (what: keyof typeof NEAR_MISS_RESPONSE) => NEAR_MISS_RESPONSE[what];

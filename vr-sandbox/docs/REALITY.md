@@ -2140,3 +2140,16 @@ on it (`Part.imprints` in `kits.ts`); the thing asked is not changed. `portOfInt
 as a port. The one test (the test "after an imprint, the host's new interface finds its bolt by fit()") imprints an M8 cap
 screw on a 10 mm steel plate and applies it: one counterbored cut where it was put, one keep zone, the imprint recorded; the
 plate's new port finds the M8 bolt by `fit()`, and an M10 bolt does not fit it. Checked with `npm run gate`.
+
+## 2026-11-01: I5 passes; S10's pinned lines call only agent.ts's own, the relay read whole (spec 01, I5; spec 00, S10)
+
+I5 passed its first judging (the evaluator planted faults in the tables and the negative; each that moves a number the cases
+expect failed the test; it noted that the successful tapped hole and the two thin-part refusals are held by no case).
+S10's tenth verdict: a pinned line could be kept while what it calls was swapped (a local stand-in for `nearMissesView` in
+the page, or for `nearMissLine` in a runner), the relay could be patched one line above its pin or unmounted, and the run's
+own error and at-risk responses were held only to their length. Now the one test requires each of those names imported from
+`agent.ts` and named nowhere else; reads the relay's whole handler exactly, that it is mounted and that it answers where the
+page asks; holds each runtime response as the log's rows are held (a reckless one says to stop and tell the user first; an
+error's or at-risk's names the check or rule that caught it), and each caught thing to its own entry; and shows
+`plan/compile.py`'s own andon refusal on a copy of the plan with an open andon. The three uncaught faults, each tried once,
+now fail it. Checked with `npm run gate`.
