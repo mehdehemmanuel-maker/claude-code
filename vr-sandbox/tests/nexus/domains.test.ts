@@ -30,6 +30,7 @@ import { apply } from '../../src/nexus/law';
 import { BOOK } from '../../src/nexus/book';
 import { interfacesOf } from '../../src/nexus/interfaces';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
+import { boreGrips } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
 import { KITS, makeKit, type Part } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
@@ -532,6 +533,19 @@ describe('every domain, in one pass', () => {
     const withHole = rulesOf({ name: 'joint', parts: [plate([{ r: 0.0045, depth: 0.006, at: [0, 0.003, 0], dir: [0, -1, 0] }]), bolt] }).findings.filter((f) => f.rule === 'interference' && /wall plate/.test(`${f.a} ${f.b}`));
     expect(withHole.map((f) => `${f.a} × ${f.b}: ${f.says}`), 'the same bolt in the hole cut for it').toEqual([]);
     expect(readFileSync(join(root, 'src/nexus/make/rules.ts'), 'utf8'), 'nothing excused by a name').not.toMatch(/fastenerRe|\bfastens\(/);
+    // (a bolted joint bores the plies in its grip, and only those seated in it (fault D14): two 6 mm plates between an M8's
+    // washers are each holed (ISO 273 medium, 9 mm) and nothing clashes; a plate drawn 1 mm into the head's washer is left
+    // unbored, and its clash is found; every machine is made so (`boreGrips` at the end of machines.ts's made))
+    const ply = (name: string, y: number): Part => ({ name, item: 'flat bar 60x6', shape: { box: [0.06, 0.006, 0.06] }, at: [0, y, 0], mat: 'steel-low' });
+    const j12 = { ...boltedJoint('M8', 12), name: 'the M8 joint' }, h = 0.0016;
+    const good = boreGrips({ name: 'two plates', parts: [ply('plate one', -h - 0.003), ply('plate two', -h - 0.009), j12] });
+    expect([good.joints, good.holes], 'one joint, a hole in each plate').toEqual([1, 2]);
+    expect(good.part.parts!.slice(0, 2).map((p) => (p.cuts ?? []).map((c) => +(2 * c.r * 1000).toFixed(2))), 'each 9 mm across').toEqual([[9], [9]]);
+    expect(rulesOf(good.part).findings.filter((f) => f.rule === 'interference').map((f) => `${f.a} × ${f.b}`), 'nothing clashes').toEqual([]);
+    const off = boreGrips({ name: 'a plate in the washer', parts: [ply('plate one', -h - 0.002), ply('plate two', -h - 0.009), j12] });
+    expect(off.part.parts![0]!.cuts, 'the plate drawn into the washer: not bored').toBeUndefined();
+    expect(rulesOf(off.part).findings.filter((f) => f.rule === 'interference').some((f) => /plate one/.test(`${f.a} ${f.b}`)), 'and its clash is found').toBe(true);
+    expect(readFileSync(join(root, 'src/nexus/machines.ts'), 'utf8'), 'every machine made so').toMatch(/return boreGrips\(P\(m\.name/);
   }, 60_000);
   // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01)); looked for
   // wherever the gate's own include reaches (vite.config.ts), every folder down, not only the top of tests/nexus (the

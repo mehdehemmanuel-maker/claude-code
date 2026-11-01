@@ -168,14 +168,18 @@ export function bumper(b: TruckBody): Part {
     box('bumper shell', [0.14, h, 2 * (w - 0.22)], [front - 0.07, y, 0], { item: 'trk-bumper-shell', mat: 'steel-low', color: 0xc8ccd2, shell: 0.004, make: 'pressed', finish: 'chrome' }),
     ...[-1, 1].map((s) => box('bumper end cap', [0.16, h, 0.24], [front - 0.1, y, s * (w - 0.11)], { rot: [0, s * 0.35, 0], item: 'trk-bumper-end', mat: 'pp', color: 0x1a1b1e, shell: 0.004, finish: 'texture' })),
     ...[-1, 1].map((s) => box('bumper bracket', [0.12, 0.2, 0.012], [front - 0.2, b.railY - 0.05, s * (b.railZ + b.railW / 2 + 0.006)], { item: 'trk-bumper-bracket', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint' })),
-    ...[-1, 1].flatMap((s) => [[-0.04, -0.07], [0.04, -0.07], [-0.04, 0.03], [0.04, 0.03]].map(([dx, dy]) => through('M12', b.railT + 0.012, [front - 0.2 + dx!, b.railY + dy!, s * (b.railZ + b.railW / 2 + 0.012)], s > 0 ? 'z' : '-z'))),
+    // (each head's washer on the bracket's outer face: the washers were drawn inside the brackets before (fault D14); the
+    // ISO 7089 washer of an M12, 2.5 mm)
+    ...[-1, 1].flatMap((s) => [[-0.04, -0.07], [0.04, -0.07], [-0.04, 0.03], [0.04, 0.03]].map(([dx, dy]) => through('M12', b.railT + 0.012, [front - 0.2 + dx!, b.railY + dy!, s * (b.railZ + b.railW / 2 + 0.012 + 0.0025)], s > 0 ? 'z' : '-z'))),
   ], { says: 'its front bumper: shell, end caps, brackets bolted through its rails (M12)' });
 }
 
 // ---- frame, tanks, exhaust, fifth wheel, steps, fenders ------------------------------------------------------------------
 /** A frame rail's section, a C-channel opening toward the frame's middle (s: its side). */
 const channel = (H: number, W: number, t: number, s: number): [number, number][] => {
-  // (drawn along local z, turned to run along x: local x is the machine's -z)
+  // (drawn along local z, turned to run along x: local x is the machine's -z; its web inboard, its flanges turned out. A
+  // ladder frame's rails are the other way round (flanges in), as the tank's and battery box's brackets expect: fault D14,
+  // open; turned round, the cross members reach the web and meet the engine and the hood)
   const o = -s, pts: [number, number][] = [[-W / 2, -H / 2], [W / 2, -H / 2], [W / 2, -H / 2 + t], [-W / 2 + t, -H / 2 + t], [-W / 2 + t, H / 2 - t], [W / 2, H / 2 - t], [W / 2, H / 2], [-W / 2, H / 2]];
   return pts.map(([u, v]) => [u * o, v]);
 };
@@ -183,13 +187,17 @@ const channel = (H: number, W: number, t: number, s: number): [number, number][]
  *  channel held at its ends by a gusset bolted through the rail's web with four M16 bolts (huck bolts in the factory:
  *  bolts here). */
 export function ladderFrame(b: TruckBody, at: number[]): Part[] {
-  const L = b.fx1 - b.fx0, xm = (b.fx0 + b.fx1) / 2, out: Part[] = [], zIn = b.railZ - b.railW / 2;
+  const L = b.fx1 - b.fx0, xm = (b.fx0 + b.fx1) / 2, out: Part[] = [];
   for (const s of [-1, 1]) out.push(P(`frame rail ${s > 0 ? 'right' : 'left'}`, { prism: { pts: channel(b.railH, b.railW, b.railT, s), L } }, [xm, b.railY, s * b.railZ], { rot: [0, PI / 2, 0], item: 'trk-frame-rail', mat: 'steel-alloy', color: 0x1a1a1a, finish: 'paint', make: 'pressed', says: `C-channel ${(b.railT * 1000).toFixed(0)} × ${(b.railW * 1000).toFixed(0)} × ${(b.railH * 1000).toFixed(0)} mm (Freightliner)` }));
   for (const xx of at) {
-    const parts: Part[] = [box('cross member web', [0.2, 0.006, 2 * zIn - 0.024], [0, 0, 0], { item: 'trk-crossmember', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', make: 'pressed' }), box('cross member flange', [0.006, 0.18, 2 * zIn - 0.024], [-0.1, 0.0, 0], { item: 'trk-crossmember', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', make: 'pressed' })];
+    // (the rail's web is its inner side, its inner face at zW; each gusset 8 mm on that face, the cross member up to it
+    // (0.1 mm clear); each bolt's head and washer on the gusset's face, its nut's on the web's outer face, inside the
+    // channel: the gusset stood 11 mm off the web and the washers were drawn inside it before (fault D14))
+    const zW = b.railZ - b.railW / 2, cmL = 2 * (zW - 0.0081), wash = 0.003; // (the ISO 7089 washer of an M16, 3 mm: threads.ts)
+    const parts: Part[] = [box('cross member web', [0.2, 0.006, cmL], [0, 0, 0], { item: 'trk-crossmember', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', make: 'pressed' }), box('cross member flange', [0.006, 0.18, cmL], [-0.1, 0.0, 0], { item: 'trk-crossmember', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', make: 'pressed' })];
     for (const s of [-1, 1]) {
-      parts.push(box('gusset', [0.24, 0.22, 0.008], [0, 0, s * (zIn - 0.004 - b.railT)], { item: 'trk-gusset', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', make: 'pressed' }));
-      for (const [dx, dy] of [[-0.08, -0.07], [0.08, -0.07], [-0.08, 0.07], [0.08, 0.07]]) parts.push(through('M16', b.railT + 0.008, [dx!, dy!, s * (zIn + 0.002)], s > 0 ? '-z' : 'z', 'cross member bolt'));
+      parts.push(box('gusset', [0.24, 0.22, 0.008], [0, 0, s * (zW - 0.004)], { item: 'trk-gusset', mat: 'steel-low', color: 0x1a1a1a, finish: 'paint', make: 'pressed' }));
+      for (const [dx, dy] of [[-0.08, -0.07], [0.08, -0.07], [-0.08, 0.07], [0.08, 0.07]]) parts.push(through('M16', b.railT + 0.008, [dx!, dy!, s * (zW - 0.008 - wash)], s > 0 ? '-z' : 'z', 'cross member bolt'));
     }
     out.push(group('cross member', 'trk-crossmember-set', [xx, b.railY, 0], parts, { fixed: 'bolted through its gussets to its frame rails\' webs' }));
   }

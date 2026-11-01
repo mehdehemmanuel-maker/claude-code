@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { boltedJoint, use } from './components';
 import { METRIC, NEMA_FACE } from './families';
+import { CLEAR } from './kinds/motion';
 import type { Cut, Part, Port, Shape, V3 } from './kits';
 import { piecesOf as boxesOf } from './form';
 import { boreOf, matrixOfPart, piecesIn, roundOf, shaftOf } from './interfaces';
@@ -157,12 +158,17 @@ export function lineOf(p: Part): { a: THREE.Vector3; b: THREE.Vector3; r: number
   let lo = Infinity, hi = -Infinity, r = 0; for (const q of pts) { const t = q.clone().sub(c).dot(d); lo = Math.min(lo, t); hi = Math.max(hi, t); r = Math.max(r, q.clone().sub(c).addScaledVector(d, -t).length()); }
   return { a: c.clone().addScaledVector(d, lo), b: c.clone().addScaledVector(d, hi), r };
 }
-/** The run of a line from a to b inside a piece's shape's box (in its own frame): its two ends' parameters, or null. */
-function runIn(s: Shape, base: boolean | undefined, a: THREE.Vector3, b: THREE.Vector3): [number, number] | null {
+/** A piece's shape's box in its own frame (a round piece's from its axis and radius), or null. */
+function boxIn(s: Shape, base: boolean | undefined): [number[], number[]] | null {
   let lo: number[], hi: number[];
   if ('box' in s) { lo = s.box.map((x) => -x / 2); hi = s.box.map((x) => x / 2); }
   else { const q = roundOf(s, base); if (!q) return null; const ax = q.a[1] !== q.b[1] ? 1 : 2; lo = [-q.r, -q.r, -q.r]; hi = [q.r, q.r, q.r]; lo[ax] = Math.min(q.a[ax]!, q.b[ax]!); hi[ax] = Math.max(q.a[ax]!, q.b[ax]!); }
   if ('box' in s && base) { lo[1] = 0; hi[1] = s.box[1]; }
+  return [lo, hi];
+}
+/** The run of a line from a to b inside a piece's shape's box (in its own frame): its two ends' parameters, or null. */
+function runIn(s: Shape, base: boolean | undefined, a: THREE.Vector3, b: THREE.Vector3): [number, number] | null {
+  const bx = boxIn(s, base); if (!bx) return null; const [lo, hi] = bx;
   const d = b.clone().sub(a); let t0 = 0, t1 = 1;
   for (let k = 0; k < 3; k++) { const dk = d.getComponent(k), ak = a.getComponent(k); if (Math.abs(dk) < 1e-12) { if (ak < lo[k]! || ak > hi[k]!) return null; continue; } let ta = (lo[k]! - ak) / dk, tb = (hi[k]! - ak) / dk; if (ta > tb) [ta, tb] = [tb, ta]; t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); }
   return t1 > t0 ? [t0, t1] : null;
@@ -184,6 +190,59 @@ export function boreThrough(host: Part, guest: Part, clearance = 0.0005): { part
   const kids = (host.parts ?? []).map((q) => walk(q, matrixOfPart(host))), c0 = cutFor(host, matrixOfPart(host)); if (c0) holes.unshift(host.name);
   const part: Part = { ...host, ...(c0 ? { cuts: [...(host.cuts ?? []), c0] } : {}), ...(host.parts ? { parts: kids } : {}), passes: [...new Set([...(host.passes ?? []), guest.name])] };
   return { part, holes, says: holes.length ? `${holes.length} hole${holes.length > 1 ? 's' : ''} of ${(2 * r * 1000).toFixed(1)} mm for the ${guest.name}, through ${[...new Set(holes)].join(', ')}` : `the ${guest.name} passes through nothing of the ${host.name}` };
+}
+
+/** Where a line from a to b runs through a piece's material (in its own frame), as parameters along it: exact for a box
+ *  and for a prism (its section's polygon, its holes too, along its length, z from −L/2 to L/2), the box of the rest. */
+function materialRuns(s: Shape, base: boolean | undefined, a: THREE.Vector3, b: THREE.Vector3): [number, number][] {
+  if (!('prism' in s)) { const r = runIn(s, base, a, b); return r ? [r] : []; }
+  const { pts, L, holes } = s.prism, d = b.clone().sub(a);
+  let t0 = 0, t1 = 1; if (Math.abs(d.z) < 1e-12) { if (a.z < -L / 2 || a.z > L / 2) return []; } else { let ta = (-L / 2 - a.z) / d.z, tb = (L / 2 - a.z) / d.z; if (ta > tb) [ta, tb] = [tb, ta]; t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); }
+  if (t1 <= t0) return [];
+  const rings = [pts, ...(holes ?? [])], inside = (x: number, y: number) => { let n = 0; for (const r of rings) for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i]!, [xj, yj] = r[j]!; if ((yi! > y) !== (yj! > y) && x < ((xj! - xi!) * (y - yi!)) / (yj! - yi!) + xi!) n++; } return n % 2 === 1; };
+  const ts = [t0, t1]; for (const r of rings) for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i]!, [xj, yj] = r[j]!, ex = xj! - xi!, ey = yj! - yi!, den = d.x * ey - d.y * ex; if (Math.abs(den) < 1e-15) continue;
+    const t = ((xi! - a.x) * ey - (yi! - a.y) * ex) / den, u = ((xi! - a.x) * d.y - (yi! - a.y) * d.x) / den; if (u >= 0 && u <= 1 && t > t0 && t < t1) ts.push(t); }
+  ts.sort((x, y) => x - y); const out: [number, number][] = [];
+  for (let i = 1; i < ts.length; i++) { const m = (ts[i - 1]! + ts[i]!) / 2; if (ts[i]! - ts[i - 1]! > 1e-9 && inside(a.x + d.x * m, a.y + d.y * m)) { const last = out[out.length - 1]; if (last && Math.abs(last[1] - ts[i - 1]!) < 1e-9) last[1] = ts[i]!; else out.push([ts[i - 1]!, ts[i]!]); } }
+  return out;
+}
+
+/** Every bolted joint in a thing bores the plies in its grip (fault D14: frame rails, gussets and brackets were drawn with
+ *  their bolts through them and no hole): what lies between the washer under its head and the washer under its nut is
+ *  what it clamps, so each piece there gets a clearance hole on the bolt's line (ISO 273 medium, `CLEAR`), and no piece
+ *  past its washers is bored (a shank run on into something else is still a clash). A piece already holed on that line is
+ *  left as it is. A joint is a group holding a washer under its head and one under its nut (`boltedJoint`). Nothing is
+ *  changed in place: the pieces holed and the groups over them are new. */
+export function boreGrips(root: Part): { part: Part; holes: number; joints: number } {
+  const mmm = 1e-3, under = (p: Part, re: RegExp) => p.parts?.find((q) => re.test(q.name));
+  const jointOf = (p: Part) => { const hw = under(p, /washer under the head$/), nw = under(p, /washer under the nut$/), th = hw && /^(M[\d.]+) /.exec(hw.name)?.[1], T = th ? METRIC[th] : undefined;
+    return hw && nw && th && T ? { top: (hw.at?.[1] ?? 0) + T.h * mmm, y0: hw.at?.[1] ?? 0, y1: (nw.at?.[1] ?? 0) + T.h * mmm, bottom: nw.at?.[1] ?? 0, r: ((CLEAR[th] ?? Number(th.slice(1)) * 1.1) * mmm) / 2 } : null; };
+  // (each joint's line from the face its head's washer bears on to the far face of its nut's washer, and where along it
+  // its grip begins and ends: a piece whose material runs on into a washer's seat is not seated as a ply, and is left
+  // unbored, its clash shown (bored, a washer drawn inside a rail's web was hidden: 2026-11-01))
+  const joints: { a: THREE.Vector3; b: THREE.Vector3; g0: number; g1: number; r: number; box: THREE.Box3 }[] = [];
+  const scan = (p: Part, m: THREE.Matrix4) => { const mm = m.clone().multiply(matrixOfPart(p)), j = jointOf(p);
+    if (j) { const a = new THREE.Vector3(0, j.top, 0).applyMatrix4(mm), b = new THREE.Vector3(0, j.bottom, 0).applyMatrix4(mm), span = j.top - j.bottom;
+      joints.push({ a, b, g0: (j.top - j.y0) / span, g1: (j.top - j.y1) / span, r: j.r, box: new THREE.Box3().setFromPoints([a, b]).expandByScalar(j.r) }); return; }
+    for (const q of p.parts ?? []) scan(q, mm); };
+  scan(root, new THREE.Matrix4());
+  let holes = 0;
+  const walk = (p: Part, m: THREE.Matrix4): Part => { const mm = m.clone().multiply(matrixOfPart(p));
+    if (jointOf(p)) return p;
+    let cuts = p.cuts; const bx = p.shape && joints.length ? boxIn(p.shape, p.base) : null;
+    if (bx) { const wb = new THREE.Box3(); for (let k = 0; k < 8; k++) wb.expandByPoint(new THREE.Vector3(bx[k & 1 ? 1 : 0][0]!, bx[k & 2 ? 1 : 0][1]!, bx[k & 4 ? 1 : 0][2]!).applyMatrix4(mm));
+      const inv = mm.clone().invert();
+      for (const j of joints) { if (!j.box.intersectsBox(wb)) continue; const A = j.a.clone().applyMatrix4(inv), B = j.b.clone().applyMatrix4(inv), runs = materialRuns(p.shape!, p.base, A, B); if (!runs.length) continue;
+        const Lj = A.distanceTo(B), seat = 0.0003 / Math.max(Lj, 1e-9); // (a ply touching a washer's face is seated; one into it by 0.3 mm is not)
+        if (runs.some(([u0, u1]) => u0 < j.g0 - seat || u1 > j.g1 + seat)) continue;
+        const lo = Math.max(0, Math.min(...runs.map((x) => x[0])) - 0.001 / Lj), hi = Math.min(1, Math.max(...runs.map((x) => x[1])) + 0.001 / Lj);
+        const D = B.clone().sub(A), from = A.clone().addScaledVector(D, lo), to = A.clone().addScaledVector(D, hi), len = to.distanceTo(from); if (len < 1e-5) continue;
+        const dir = to.clone().sub(from).normalize(), r = j.r;
+        if ((cuts ?? []).some((c) => { const cd = new THREE.Vector3(...c.dir).normalize(); if (Math.abs(cd.dot(dir)) < 0.9998) return false; const rel = from.clone().sub(new THREE.Vector3(...c.at)); return rel.sub(cd.multiplyScalar(rel.dot(cd))).length() < Math.max(c.r, r); })) continue;
+        cuts = [...(cuts ?? []), { r, depth: len, at: from.toArray() as V3, dir: dir.toArray() as V3 }]; holes++; } }
+    return { ...p, ...(cuts !== p.cuts ? { cuts } : {}), ...(p.parts ? { parts: p.parts.map((q) => walk(q, mm)) } : {}) };
+  };
+  return { part: walk(root, new THREE.Matrix4()), holes, joints: joints.length };
 }
 
 // ---- any outline onto any surface ---------------------------------------------------------------------------------------

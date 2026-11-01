@@ -2013,3 +2013,22 @@ limit held; the keyboard 1.81° clear of the bar; the least target as seen 2.68�
 2.58° (wiring); the least text drawn 0.52° as seen. The evaluator's three uncaught plants, each tried once: the library's
 buttons 236 to 225 fails (2.48°); the keyboard at 43° below fails (−0.13° clear); a 7 px label on every block fails (0.33°).
 Checked with `npm run eval:headset` and `npm run gate`.
+
+## 2026-11-01: a bolted joint bores the plies seated in its grip; the Cascadia's frame bolts seated (fault D14, T24)
+
+Fault D14's larger half: the Freightliner Cascadia had 500 interference findings once nothing was excused by its name,
+most of them bolts and washers drawn through its frame rails with no hole. A rule instead of 200 hand fixes: every bolted
+joint bores what lies between the washer under its head and the washer under its nut, with an ISO 273 medium clearance
+hole on its line (`boreGrips` in `src/nexus/mate.ts`, run at the end of every machine's making in `machines.ts`). A piece
+whose material runs on more than 0.3 mm into a washer's seat is not a ply seated in the joint and is left unbored, its clash
+shown: the first try bored every piece in the grip, and a washer drawn inside a rail's web went unseen (the checker does not
+see a washer inside a wall once a hole is through it). With that rule the truck's cross members showed the real fault: each
+gusset stood 11 mm off the rail's web and each bolt's washer was drawn inside the web; now each gusset is on the web's face
+and each washer on its ply (`ladderFrame` in `fittings.ts`), and the bumper brackets' bolts seated on their brackets. A probe
+of `rulesOf` on the Cascadia: 500 findings before, 334 after, none on its rails' bolts, washers or nuts (frame rails × hex
+bolts 52 to 0, washers 52 to 0, nuts 12 to 1, gussets × cross members 20 to 0, bumper brackets × bolts 8 to 0); the same
+categories compared before and after the seating: only fewer, none new. The Honda Rancher keeps 1 (a cross tube through the
+oil pickup), the go kart 0. Not mended: the tank straps' bolts, the differential's insides, the grille and hood; and the rails
+are drawn with their web inboard, where a ladder frame's is outboard (turned round, the cross members meet the engine and the
+hood: left for its own round). The one test gives the rule two plates, bored and clean, and a plate drawn into a washer,
+unbored and found. Checked with `npm run gate`.

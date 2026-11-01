@@ -42,6 +42,7 @@ import { getMaterial } from '../data/materials';
 import type { Station } from './form';
 import * as THREE from 'three';
 import { clearPath, layout, sat, type OBB } from './make/space';
+import { boreGrips } from './mate';
 
 const IN = 0.0254, LB = 0.45359237, PI = Math.PI;
 
@@ -1742,7 +1743,8 @@ function made(m: Machine, pick: Pick = {}): Part {
     const rest = m.mass - modelled;
     if (rest > 0) parts.push(P('the rest of it', undefined, [(front + rear) / 2, c + 0.3, 0], { kg: rest, says: `what is not drawn (trim, wiring, fluids, fittings): its published ${Math.round(m.mass)} kg${m.massSays ? ` (${m.massSays})` : ''} less the ${Math.round(modelled)} kg of parts drawn` }));
   }
-  return P(m.name, undefined, [0, 0, 0], { parts, road: m.road, ...(m.mirrors !== undefined ? { mirrors: m.mirrors } : {}), published: m.mass, says: m.says + (m.mass && modelled > m.mass * 1.02 ? ` (its parts as drawn weigh ${Math.round(modelled)} kg, more than its published ${Math.round(m.mass)} kg: a fault in the drawing)` : '') });
+  // (every bolted joint bores the plies in its grip: fault D14, their holes were not drawn)
+  return boreGrips(P(m.name, undefined, [0, 0, 0], { parts, road: m.road, ...(m.mirrors !== undefined ? { mirrors: m.mirrors } : {}), published: m.mass, says: m.says + (m.mass && modelled > m.mass * 1.02 ? ` (its parts as drawn weigh ${Math.round(modelled)} kg, more than its published ${Math.round(m.mass)} kg: a fault in the drawing)` : '') })).part;
 }
 // a part's mass for the reckoning above: the one rule everything is weighed by (mass.ts), from the start, so a machine
 // made before the kits are loaded is not reckoned as weighing nothing (which once made its "rest" its whole published

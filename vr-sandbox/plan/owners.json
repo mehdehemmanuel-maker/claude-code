@@ -1,46 +1,48 @@
 {
- "_says": "The owners of tasks written in a spec's table (spec.md), declared before work on them starts: the change budget (scripts/hooks/lib.mjs, constitution C12) refuses a commit naming such a task until its owners are here. Paths from vr-sandbox/.",
- "10.T3": [
-  "src/data/",
-  "src/nexus/evidence.ts"
- ],
- "10.T11": [
-  "src/ganglia/units.ts",
-  "src/nexus/blocks.ts",
-  "src/nexus/dataflow.ts",
-  "src/nexus/quantities.ts"
- ],
- "11.LW12": [
-  "src/nexus/dataflow.ts",
-  "src/nexus/blocks.ts"
- ],
- "11.LW15": [
-  "src/nexus/dataflow.ts",
-  "src/nexus/blocks.ts"
- ],
- "04.P10": [
-  "src/nexus/view/space.ts",
-  "src/nexus/view/keyboard.ts",
-  "src/nexus/view/nodes-wall.ts",
-  "package.json",
-  "src/nexus/view/nodes.ts"
- ],
- "10.T23": [
-  "src/kernel/",
-  "src/nexus/certify.ts",
-  "scripts/kernel2.py"
- ],
- "10.T18": [
-  "src/nexus/certify.ts",
-  "src/nexus/agent.ts",
-  "src/nexus/blocks.ts",
-  "src/nexus/view/nodes.ts"
- ],
- "10.T24": [
-  "src/nexus/make/rules.ts",
-  "src/nexus/engines.ts",
-  "src/nexus/machines.ts",
-  "src/data/stock.json",
-  "src/nexus/built.ts"
- ]
+  "_says": "The owners of tasks written in a spec's table (spec.md), declared before work on them starts: the change budget (scripts/hooks/lib.mjs, constitution C12) refuses a commit naming such a task until its owners are here. Paths from vr-sandbox/.",
+  "10.T3": [
+    "src/data/",
+    "src/nexus/evidence.ts"
+  ],
+  "10.T11": [
+    "src/ganglia/units.ts",
+    "src/nexus/blocks.ts",
+    "src/nexus/dataflow.ts",
+    "src/nexus/quantities.ts"
+  ],
+  "11.LW12": [
+    "src/nexus/dataflow.ts",
+    "src/nexus/blocks.ts"
+  ],
+  "11.LW15": [
+    "src/nexus/dataflow.ts",
+    "src/nexus/blocks.ts"
+  ],
+  "04.P10": [
+    "src/nexus/view/space.ts",
+    "src/nexus/view/keyboard.ts",
+    "src/nexus/view/nodes-wall.ts",
+    "package.json",
+    "src/nexus/view/nodes.ts"
+  ],
+  "10.T23": [
+    "src/kernel/",
+    "src/nexus/certify.ts",
+    "scripts/kernel2.py"
+  ],
+  "10.T18": [
+    "src/nexus/certify.ts",
+    "src/nexus/agent.ts",
+    "src/nexus/blocks.ts",
+    "src/nexus/view/nodes.ts"
+  ],
+  "10.T24": [
+    "src/nexus/make/rules.ts",
+    "src/nexus/engines.ts",
+    "src/nexus/machines.ts",
+    "src/data/stock.json",
+    "src/nexus/built.ts",
+    "src/nexus/fittings.ts",
+    "src/nexus/mate.ts"
+  ]
 }
