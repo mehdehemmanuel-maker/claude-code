@@ -16,7 +16,7 @@
 import * as THREE from 'three';
 import { boltedJoint, use } from './components';
 import { METRIC, NEMA_FACE } from './families';
-import type { Cut, Part, Port, Shape, V3 } from './kits';
+import type { Cut, Keep, Part, Port, Shape, V3 } from './kits';
 import { piecesOf as boxesOf } from './form';
 import { BOLT_SPACING, CLEARANCE, boreOf, matrixOfPart, negativeOf, piecesIn, roundOf, shaftOf, type Asking, type Negative, type Refusal } from './interfaces';
 export { boreOf, shaftOf };
@@ -330,7 +330,7 @@ export function standOn(host: Part, from: V3, dir: V3, o: { turn?: number; geome
 
 // ---- the checks before cutting (spec 01, I7; design §2.4, step 3) -------------------------------------------------------
 export interface CutCheck { check: 'depth' | 'edge distance' | 'spacing' | 'room' | 'breaking in'; ok: boolean; need: number; have: number; unit: 'mm'; rule: string; source: string }
-export interface Imprinted { frame: { at: V3; n: V3; u: V3 }; piece: string; negative: Negative; checks: CutCheck[] }
+export interface Imprinted { frame: { at: V3; n: V3; u: V3 }; piece: string; path: number[]; turn: number; negative: Negative; checks: CutCheck[] }
 /** An interface imprinted where a ray meets a host: stood on the surface (standOn), the host measured along the hole's
  *  line (its depth there) and across it (its edge, by rays from the hole's middle), the negative made for the host's
  *  material and that depth (negativeOf), then checked before anything is cut: the depth the negative asks, the edge
@@ -362,6 +362,35 @@ export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn
     const other = piecesIn(host).find((x) => x.p !== q.p && !!x.p.shape && (() => { const bx = new THREE.Box3(); const s = x.p.shape!; const half = 'box' in s ? s.box.map((y) => y / 2) : null; if (!half) return false; for (let c = 0; c < 8; c++) bx.expandByPoint(new THREE.Vector3(c & 1 ? half[0]! : -half[0]!, c & 2 ? half[1]! : -half[1]!, c & 4 ? half[2]! : -half[2]!).applyMatrix4(x.m)); return bx.intersectsBox(box); })());
     if (!put({ check: 'room', ok: !other, need: +(((k.length ?? 0)) / mm).toFixed(3), have: other ? 0 : +((k.length ?? 0) / mm).toFixed(3), unit: 'mm', rule: `room along the axis for ${k.why.split(':')[0]}${other ? `: the ${other.p.name} is in it` : ''}`, source: 'its keep' })) return refusal(checks); }
   put({ check: 'depth', ok: true, need: +(depth / mm).toFixed(3), have: +(depth / mm).toFixed(3), unit: 'mm', rule: 'the negative made for the depth found', source: neg.mirror.std ?? '' });
-  return { frame: { at: f.at, n: f.n, u: f.u }, piece: f.piece, negative: neg, checks };
+  return { frame: { at: f.at, n: f.n, u: f.u }, piece: f.piece, path: q.path, turn: o.turn ?? 0, negative: neg, checks };
+}
+
+/** An imprint applied (spec 01, I8; R9): its negative's remove bodies cut into the piece (turned cuts, its own frame), its
+ *  keep bodies made the piece's keep zones, the mirror interface the piece gains made a port the fastener's finds by fit()
+ *  (a clearance hole's holes, a tapped or insert hole's threads), and the imprint recorded on the piece. The thing is not
+ *  changed in place: the piece and what holds it are new. */
+export function applyImprint(host: Part, im: Imprinted, of: string): { part: Part; port: Port; says: string } {
+  const q = piecesIn(host).find((x) => x.path.join('/') === im.path.join('/'))!, inv = q.m.clone().invert();
+  const loc = (v: V3) => new THREE.Vector3(...v).applyMatrix4(inv), dirL = (v: V3) => new THREE.Vector3(...v).transformDirection(inv);
+  const at = loc(im.frame.at), n = dirL(im.frame.n), u = dirL(im.frame.u), w = u.clone().cross(n).normalize(), neg = im.negative;
+  // (a tool's place in the interface's frame: x along u, y along n (the hole runs along −y), z across both)
+  const place = (p?: V3) => at.clone().addScaledVector(u, p?.[0] ?? 0).addScaledVector(n, p?.[1] ?? 0).addScaledVector(w, p?.[2] ?? 0);
+  const cuts: Cut[] = neg.tools.filter((x) => x.role === 'remove').map((x) => { const prof = x.prof!, rIn = Math.min(...prof.filter((p) => p[0] > 0).map((p) => p[0])), depth = Math.max(...prof.map((p) => p[1]));
+    return { r: rIn, depth, at: place(x.at).toArray() as V3, dir: n.clone().negate().toArray() as V3, ...(prof.length === 2 && prof[0]![0] === prof[1]![0] ? {} : { prof }) }; });
+  const keeps: Keep[] = neg.tools.filter((x) => x.role === 'keep').map((x) => { const a = place(x.at), b = a.clone().addScaledVector(n, x.length ?? 0), box = new THREE.Box3().setFromPoints([a, b]).expandByScalar(x.r ?? 0), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+    return { name: `room for ${of}`, kind: 'box', at: c.toArray() as V3, size: sz.toArray() as V3, why: x.why }; });
+  const holes = neg.tools.filter((x) => x.role === 'remove'), pattern: [number, number][] = holes.length > 1 ? holes.filter((x) => (x.at?.[0] ?? 0) !== 0 || (x.at?.[2] ?? 0) !== 0).map((x) => [x.at![0], x.at![2]]) : [[0, 0]];
+  const thread = String(neg.mirror.size.thread ?? ''), sex: Port['sex'] = neg.mirror.kind === 'hole.tapped' || neg.mirror.kind === 'hole.insert' ? 'threads' : 'holes';
+  const depth = Math.max(...holes.map((x) => Math.max(...x.prof!.map((p) => p[1])))), name = `${of} (imprinted)`;
+  const port: Port = { name, sex, thread, pattern, at: at.toArray() as V3, n: n.toArray() as V3, u: u.toArray() as V3, t: depth };
+  const rec = { of, at: port.at, n: port.n, u: port.u, turn: im.turn, mirror: neg.mirror.kind, port: name, why: neg.why };
+  const swap = (p: Part, path: number[]): Part => path.length ? { ...p, parts: p.parts!.map((c, i) => (i === path[0] ? swap(c, path.slice(1)) : c)) } : { ...p, cuts: [...(p.cuts ?? []), ...cuts], keep: [...(p.keep ?? []), ...keeps], ports: [...(p.ports ?? []), port], imprints: [...(p.imprints ?? []), rec] };
+  return { part: swap(host, q.path), port, says: `${cuts.length} cut${cuts.length > 1 ? 's' : ''} in the ${q.p.name} for ${of}, ${keeps.length} keep zone${keeps.length === 1 ? '' : 's'}; it gains ${sex} ${thread} (${neg.mirror.std ?? ''})` };
+}
+/** A fastener's interface as a port fit() reads: a bolt's or a screw's thread (its shank) as a pin of its size, where its
+ *  head bears, along its shank. */
+export function portOfInterface(it: { kind: string; size: Record<string, number | string>; frame: { at: V3; n: V3; u: V3 } | null; name?: string }): Port | null {
+  if (it.kind !== 'thread.external' || !it.frame) return null; const d = Number(it.size.d); if (!Number.isFinite(d)) return null;
+  return { name: it.name ?? 'thread', sex: 'pins', thread: `M${+(d * 1000).toFixed(1)}`, pattern: [[0, 0]], at: it.frame.at, n: it.frame.n, u: it.frame.u, t: 0 };
 }
 const refusal = (checks: CutCheck[]): Refusal => { const c = checks[checks.length - 1]!; return { refused: true, rule: c.check, need: c.need, have: c.have, unit: c.unit, source: c.source, why: `${c.check} ${c.have} mm, ${c.rule} asks ${c.need} mm (${c.source})` }; };

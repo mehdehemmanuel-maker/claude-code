@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 13 passing (by the evaluator), 10 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 13 passing (by the evaluator), 11 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 15 (11 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -106,7 +106,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | I5 | negativeOf: the mirror interface and the tool bodies (remove, keep, add, contact), by the host's material (insert for plastics, pilot for wood) | I3, I4 | claimed |
 | I6 | imprint: stand an interface on any surface point (normal, edge rule, turn) | I5 | claimed |
 | I7 | The checks before cutting (wall, depth, spacing, room, breaking in), each refusing with its rule, its numbers and its source | I6 | claimed |
-| I8 | Apply: cut, add the keep zones, give the host the mirror interface and the imprint record | I7 | failing |
+| I8 | Apply: cut, add the keep zones, give the host the mirror interface and the imprint record | I7 | claimed |
 | I9 | Face queries: an imprint keeps to its face by what the face is (made by, normal and extreme, near); said lost, never moved | I8 | failing |
 | I10 | fastenerFor: the fastener from the catalogue for a stack (through, tapped, insert), said why; mate() lays every fastener through it; boreThrough's … | I8 | failing |
 | I11 | Copy and paste an interface; pattern and relation nodes; a shared pattern read by both parts | I8 | failing |

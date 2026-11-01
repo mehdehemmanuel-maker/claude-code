@@ -109,10 +109,11 @@
    ],
    "owner": "mate.ts, kits.ts",
    "check": "after an imprint, the host's new interface finds a fastener by fit() (the hole finds its bolt)",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I7"
-   ]
+   ],
+   "evidence": "2026-11-01: applyImprint in mate.ts cuts an imprint's remove bodies into its piece (turned cuts in the piece's own frame), makes its keep bodies the piece's keep zones, gives the piece the mirror interface as a port (holes for a clearance hole, threads for a tapped or insert hole), and records the imprint (Part.imprints in kits.ts); the thing asked is not changed; in the one test the plate's new port finds the M8 bolt's own interface by fit(), and an M10's does not"
   },
   {
    "id": "I9",

@@ -39,7 +39,7 @@ import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, 
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
-import { boreGrips, imprint, standOn, type Imprinted } from '../../src/nexus/mate';
+import { applyImprint, boreGrips, fit, imprint, portOfInterface, standOn, type Imprinted } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
 import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
@@ -654,6 +654,20 @@ describe('every domain, in one pass', () => {
       expect(Math.abs(f.u[0]! * f.n[0]! + f.u[1]! * f.n[1]! + f.u[2]! * f.n[2]!), `${c.what}: u in the surface`).toBeLessThan(1e-9); }
     const turned = standOn(cases[0]!.host, cases[0]!.from, cases[0]!.dir, { turn: Math.PI / 2 })!, plain = standOn(cases[0]!.host, cases[0]!.from, cases[0]!.dir)!;
     expect(deg(turned.u, plain.u), 'turned a quarter about n').toBeCloseTo(90, 6); expect(standOn(cases[0]!.host, [0, 0.5, 0], [0, 1, 0]), 'a ray that meets nothing').toBeNull();
+  });
+  // (an imprint applied (spec 01, I8; R9): case 1's negative cut into its plate (the counterbore a turned cut), its keep a
+  // zone, and the plate given the mirror interface: a port of holes the M8 bolt's own interface finds by fit(), as the bolt
+  // found its hole; an M10 does not fit it; the imprint recorded, the thing asked not changed)
+  it('after an imprint, the host\'s new interface finds its bolt by fit()', () => {
+    const plate: Part = { name: 'plate', item: 'plate 100x10x100', mat: 'steel-low', shape: { box: [0.1, 0.01, 0.1] }, at: [0, 0, 0] }, host: Part = { name: 'host', parts: [plate] };
+    const im = imprint(host, { kind: 'thread.external', thread: 'M8', head: 'socket', through: true }, [0.01, 1, -0.02], [0, -1, 0]) as Imprinted; expect((im as unknown as Refusal).refused).toBeUndefined();
+    const done = applyImprint(host, im, 'M8 cap screw'), got = done.part.parts![0]!;
+    expect(host.parts![0]!.cuts, 'the thing asked is not changed').toBeUndefined();
+    expect(got.cuts!.map((c) => [+(c.r * 2000).toFixed(2), c.prof?.length ?? 0, c.dir.map((x) => +x.toFixed(6))]), 'the counterbored hole cut, turned, down into the plate').toEqual([[9, 4, [0, -1, 0]]]);
+    expect(got.cuts![0]!.at.map((x) => +x.toFixed(6)), 'where it was put').toEqual([0.01, 0.005, -0.02]);
+    expect(got.keep?.length, 'its keep a zone').toBe(1); expect(got.imprints?.map((x) => [x.of, x.mirror]), 'the imprint recorded').toEqual([['M8 cap screw', 'hole.clearance']]);
+    const bolt = portOfInterface(interfacesOf(use('bolt M8x30')).list.find((x) => x.kind === 'thread.external')!)!, big = portOfInterface(interfacesOf(use('bolt M10x30')).list.find((x) => x.kind === 'thread.external')!)!;
+    expect(done.port.sex, 'it gains holes').toBe('holes'); expect(fit(done.port, bolt), 'the hole finds its bolt').toEqual({ turn: expect.any(Number) }); expect(typeof fit(done.port, big), 'an M10 does not fit an M8\'s hole').toBe('string');
   });
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the

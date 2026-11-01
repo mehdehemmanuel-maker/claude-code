@@ -2130,3 +2130,13 @@ by hand first, and the one test (the test "the checks before cutting: cases 2, 4
 1 passing") imprints each on its plate: case 2 refused for its thread (12 mm needed, 8 found), case 4 for its edge (10.8
 needed, 4 found), case 5 for its spacing (19.8 needed, 15 found), case 1 passing its edge, room and depth. Checked with
 `npm run gate`.
+
+## 2026-11-01: an imprint applied, and the hole finds its bolt (spec 01, I8)
+
+`applyImprint` in `src/nexus/mate.ts` takes an imprint that passed its checks and applies it: its remove bodies become cuts
+in the piece's own frame (a counterbore as a turned cut), its keep bodies the piece's keep zones, and the piece gains the
+mirror interface as a port (holes for a clearance hole; threads for a tapped hole or an insert's), with the imprint recorded
+on it (`Part.imprints` in `kits.ts`); the thing asked is not changed. `portOfInterface` reads a fastener's thread interface
+as a port. The one test (the test "after an imprint, the host's new interface finds its bolt by fit()") imprints an M8 cap
+screw on a 10 mm steel plate and applies it: one counterbored cut where it was put, one keep zone, the imprint recorded; the
+plate's new port finds the M8 bolt by `fit()`, and an M10 bolt does not fit it. Checked with `npm run gate`.

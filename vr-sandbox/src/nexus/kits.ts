@@ -120,6 +120,8 @@ export interface Part {
   /** made as one piece with what holds it (a tyre's tread blocks, a casting's fins): held by being part of it */ one?: boolean;
   /** what it offers or asks of the parts it meets */ iface?: Iface[];
   /** its mating faces: where it meets another part by a pattern of holes, threads or pins (src/nexus/mate.ts) */ ports?: Port[];
+  /** what was imprinted on it (spec 01, I8): the interface, where it stood (its own frame), how it was turned, the mirror it
+   *  gained, and why each size (src/nexus/mate.ts, applyImprint) */ imprints?: { of: string; at: V3; n: V3; u: V3; turn: number; mirror: string; port: string; why: string[] }[];
   /** how a skin meets its neighbours along an edge of it, and why (src/nexus/panels.ts says these; the critic checks
    *  them with numbers): in one tangent plane across a shut line (G1: a highlight runs on across it), a deliberate crease
    *  (G0 only), or square to its own mirror at the middle */ meets?: { part: string; edge: 'a0' | 'a1' | 'b0' | 'b1'; kind: 'G1' | 'crease' | 'mirror'; why: string }[];
