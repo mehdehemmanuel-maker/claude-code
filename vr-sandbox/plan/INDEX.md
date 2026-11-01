@@ -12,7 +12,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | Tasks in the specs | 129 (1 begun, the rest not started) |
 | Faults found in the code | 13 (2 fixed) |
 | Rules in the constitution | 29 (21 not yet enforced by a check) |
-| Questions for the user | 15 (1 unanswered: U14) |
+| Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
 | Research branches | 82 explored, 469 open, 3 touched |
@@ -37,7 +37,6 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 ## Waiting on the user
 
-- **U14** Should Nexus carry what things cost and emit (spec 12)?
 
 ## Faults found in the code (from `DEFECTS.md`)
 

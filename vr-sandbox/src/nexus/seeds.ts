@@ -1,5 +1,5 @@
 // Seeds: things built out of nodes, each folded into one node and kept in the library for good, so the next thing is
-// built from it (docs/NODE-ENGINE.md; the Seed Node System). A window and a door; a toilet, a sink and a bed; the
+// built from it (the Seed Node System). A window and a door; a toilet, a sink and a bed; the
 // fittings that make a room what it is (a bathroom's, a kitchen's, a bedroom's, a living room's), plugged into a room by
 // its type; a house laid out from a plan you pick, its rooms spawned from it; a car; a foot of grass, and the ground it
 // covers; a road and a stop light, and the streets they make; a neighbourhood of houses and cars, and a city of

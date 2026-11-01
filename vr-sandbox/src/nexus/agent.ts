@@ -18,7 +18,7 @@ import type { Board } from './boards';
 import { edgesOf, nodesOf } from './boards';
 
 /** The docs the agent may read, by topic: the router in CLAUDE.md, as files under docs/. */
-const DOCS: Record<string, string> = { wanted: 'WANTED.md', owners: 'OWNERS.md', roadmap: 'ROADMAP.md', reality: 'REALITY.md', compiler: 'COMPILER.md', placement: 'PLACEMENT.md', life: 'LIFE.md', reconstruct: 'RECONSTRUCT.md', gaps: 'GAP-MAP.md', nodes: 'NODES.md', atlas: 'ATLAS.md' };
+const DOCS: Record<string, string> = { wanted: 'WANTED.md', owners: 'OWNERS.md', reality: 'REALITY.md', compiler: 'COMPILER.md', placement: 'PLACEMENT.md', life: 'LIFE.md', reconstruct: 'RECONSTRUCT.md', gaps: 'GAP-MAP.md', nodes: 'NODES.md', atlas: 'ATLAS.md' };
 
 /** A value said short: what an agent needs to read of it, never the whole of a thing. */
 export function brief(v: unknown, room = 400): string {

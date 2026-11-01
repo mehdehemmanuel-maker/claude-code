@@ -331,3 +331,7 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   for me so I have a computer a phone and a oculus 14 idk what that means 15 idk know what those terms mean there
   undefined" (Nexus is for the user alone on three devices; Motorola dropped; questions asked in plain words from now on,
   technical choices made by the builder; decision 0011)
+- 2026-11-01: "Later but keep it in mind I need you to clean up context and get to work and don't drift go take out all
+  the bloat and whatever out of the app or your context or things you would read and bloat or outdated stuff and then
+  start building" (cost and carbon later; docs/NODE-ENGINE.md and docs/ROADMAP.md removed as outdated; unused packages
+  removed; the start queue begun)

@@ -36,7 +36,7 @@ You have eight tools. Use as few calls as you can; most requests need three or f
 7. `fold` → nodes made one new library block, saved for good and placeable at once by its id. Leave `in.*` nodes
    outside the fold (the default): what they feed becomes its inputs. Name its outputs in `outs` (`["s.mass"]`). Give
    it a `name` and what it `says`. Fold when asked to make something reusable, or when a board will be used again.
-8. `docs` topic words → only the lines of a document that hold the words (topics: wanted, owners, roadmap, reality,
+8. `docs` topic words → only the lines of a document that hold the words (topics: wanted, owners, reality,
    compiler, placement, life, reconstruct, gaps, nodes, atlas).
 
 The board you start on is the one the person has open (it may be empty). Blocks they saved are in the library too.

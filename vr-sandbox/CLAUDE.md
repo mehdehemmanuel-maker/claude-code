@@ -31,7 +31,7 @@ the task list and lose the why. So the why lives here, and every round is checke
 | --- | --- |
 | What the user asked, in their words, and when | `docs/WANTED.md` |
 | Which module owns a concern, in full (its nodes, its rules) | `docs/OWNERS.md` (the one-line table is below) |
-| What is next, and in what order | `plan/INDEX.md` (the start queue, every task); what was done, `docs/ROADMAP.md` |
+| What is next, and in what order | `plan/INDEX.md` (the start queue, every task) |
 | The plan: the vision and the advantage, the rules and their checks (`CONSTITUTION.md`), the phases' specs with failing tasks, the decisions, the research, the questions | `plan/README.md` (how it works), `plan/INDEX.md` (its state, compiled: every task, every fault found in the code, the open questions) |
 | How the AI in the app is told to build (its whole instruction) | `docs/FOR-AI.md` |
 | What depends on what in the code; the disciplines tree nodes are classed by | `docs/DEPENDENCIES.md`, `docs/DISCIPLINES.md` (both generated) |
@@ -42,7 +42,6 @@ the task list and lose the why. So the why lives here, and every round is checke
 | Picture to model, reconstruction | `docs/RECONSTRUCT.md` |
 | Detail against reference products | `docs/GAP-MAP.md` |
 | Every node, generated | `docs/NODES.md`; the library's map `docs/ATLAS.md` |
-| The node engine's history (why it is as it is) | `docs/NODE-ENGINE.md` (history; files it names may be gone) |
 | A large module (`engines.ts`, `machines.ts`, `blocks.ts`, `dataflow.ts`) | its route map at its top: read the section named there, not the file |
 
 ## When work is slow: step back
