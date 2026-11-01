@@ -47,8 +47,8 @@ const TOOLS: Anthropic.Tool[] = [
   { name: 'card', description: 'One block on one line: in, out, set.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'build', description: 'A new board from a plan, placed, wired and run; a line a node back.', input_schema: { type: 'object', properties: plan, required: ['nodes'] } },
   { name: 'open', description: 'A starter board by its title (or the first words of it) as the board, run; a line a node back.', input_schema: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } },
-  { name: 'change', description: 'Changes to the board as it is, then run; lines back for what changed and what failed.', input_schema: { type: 'object', properties: { add: plan.nodes, set: { type: 'object', description: '{name:{key:value}}' }, remove: { type: 'array', items: { type: 'string' } }, wires: plan.wires, unwire: { type: 'array', items: { type: 'string' }, description: '"b.in": what feeds it, cut' } } } },
-  { name: 'read', description: 'One output of a node, in full.', input_schema: { type: 'object', properties: { node: { type: 'string' }, out: { type: 'string' } }, required: ['node', 'out'] } },
+  { name: 'change', description: 'Changes made on a copy of the board, run; the copy is taken only when every check that held still holds (else kept as a shadow, read can read it); lines back, what fails first.', input_schema: { type: 'object', properties: { add: plan.nodes, set: { type: 'object', description: '{name:{key:value}}' }, remove: { type: 'array', items: { type: 'string' } }, wires: plan.wires, unwire: { type: 'array', items: { type: 'string' }, description: '"b.in": what feeds it, cut' } } } },
+  { name: 'read', description: 'One output of a node, in full (shadow: from the last change not taken).', input_schema: { type: 'object', properties: { node: { type: 'string' }, out: { type: 'string' }, shadow: { type: 'boolean' } }, required: ['node', 'out'] } },
   { name: 'fold', description: 'Nodes of the board folded into one new library block, saved: wires crossing in become its inputs, out its outputs (name them in outs). Omit nodes: all but the in.* nodes, which become its inputs. Its card back.', input_schema: { type: 'object', properties: { nodes: { type: 'array', items: { type: 'string' }, description: 'omit for all' }, outs: { type: 'array', items: { type: 'string' }, description: '"node.output": its outputs' }, name: { type: 'string' }, says: { type: 'string' } }, required: ['name', 'says'] } },
   { name: 'docs', description: `Lines of a document holding the words. Topics: ${Object.keys(DOCS).join(', ')}.`, input_schema: { type: 'object', properties: { topic: { type: 'string' }, find: { type: 'string' } }, required: ['topic', 'find'] } },
 ];
@@ -177,39 +177,61 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
   const [{ search }, { starterBoards }] = await Promise.all([import('./navigate'), import('./starters')]), made: AgentBlock[] = [];
   // (blocks a person saved, sent with the request: the agent can place them like any other)
   for (const x of blocks ?? []) if (!block(x.id)) register(groupBlock(x.graph, { id: x.id, name: x.name, says: x.says, domains: x.domains, by: 'you' }));
-  /** The board run, and a line a node: its status and a short reading of its outputs (those asked first; failures always). */
+  /** What fails on a run board, assertions first (spec 01, I14): an assertion that does not hold, then any other check a node
+   *  says it broke (a joint that does not hold, a paste refused, a balance not kept: its `violation`). */
+  const failsOf = (e: Engine, b: Board): string[] => { const rows: [number, string][] = [];
+    for (const n of nodesOf(b)) { const st = e.state.get(n.id), o = (st?.out ?? {}) as Record<string, unknown>; if (st?.status !== 'ok' || typeof o.violation !== 'string' || !o.violation) continue;
+      rows.push([b.nodes[n.id]!.block === 'assert' ? 0 : 1, `${n.id}: ${o.violation.slice(0, 200)}`]); }
+    return rows.sort((x, y) => x[0] - y[0]).map(([, t]) => t); };
+  /** The nodes whose checks hold on a run board: ran, and say nothing broken. */
+  const heldOf = (e: Engine, b: Board): Set<string> => new Set(nodesOf(b).filter((n) => { const st = e.state.get(n.id), v = (st?.out as Record<string, unknown> | undefined)?.violation; return st?.status === 'ok' && !(typeof v === 'string' && v); }).map((n) => n.id));
+  let shadow: { board: Board; engine: Engine } | undefined;
+  /** The board run, and a line a node: what fails first (FAILS: each failing assertion, then each other check broken), then
+   *  each node's status and a short reading of its outputs (those asked first; failures always). */
   const runLines = async (only?: Set<string>): Promise<string[]> => {
     engine = new Engine(board); await engine.run();
-    const ids = nodesOf(board).map((n) => n.id), out: string[] = [];
+    const ids = nodesOf(board).map((n) => n.id), out: string[] = failsOf(engine, board).map((f) => `FAILS ${f}`);
     for (const id of ids) { const st = engine.state.get(id), bad = st?.status !== 'ok'; if (only && !only.has(id) && !bad) continue;
       if (bad) { out.push(`${id} ${st?.status ?? '?'}: ${(st?.error ?? '').slice(0, 160)}`); continue; }
       out.push(`${id} ok ${Object.entries(st!.out ?? {}).filter(([k]) => k !== 'says').slice(0, 6).map(([k, v]) => `${k}=${brief(v, 50)}`).join(' ')}`); }
-    return out.length > 40 ? [...out.slice(0, 40), `… and ${out.length - 40} more nodes, all ok`] : out;
+    return out.length > 40 ? [...out.slice(0, 40), `… and ${out.length - 40} more lines`] : out;
   };
+  /** What a plan's `s` may give a block: its settings, and the value of any input left unwired (as the page sets it). */
+  const keysOf = (d: BlockDef) => new Set([...(d.settings ?? []).map((x) => x.key), ...portsOf(d, defaultsOf(d)).inputs.map((p) => p.name)]);
   /** Nodes placed on the board from a plan's names, each block's settings checked against it: what was wrong, said. */
-  const place = (nodes: Record<string, { b?: string; s?: Record<string, unknown> }>, bad: string[]) => {
-    for (const [nm, n] of Object.entries(nodes)) { const d = block(String(n.b)); if (!d) { bad.push(`${nm}: no block "${n.b}"`); continue; }
-      const keys = new Set((d.settings ?? []).map((x) => x.key)), wrong = Object.keys(n.s ?? {}).filter((k) => !keys.has(k)); if (wrong.length) bad.push(`${nm}: ${d.id} has no setting ${wrong.join(', ')} (it has ${[...keys].join(', ') || 'none'})`);
+  const place = (given: unknown, bad: string[]): string[] => {
+    // (nodes sent as text are read as JSON; anything but an object of named nodes is refused in one line, not one a character)
+    let nodes = given; if (typeof nodes === 'string') { try { nodes = JSON.parse(nodes); } catch { /* said below */ } }
+    if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) { if (given !== undefined) bad.push('nodes: write them as an object, {"name": {"b": "block id", "s": {…}}}'); return []; }
+    for (const [nm, n] of Object.entries(nodes as Record<string, { b?: string; s?: Record<string, unknown> }>)) { const d = block(String(n.b)); if (!d) { bad.push(`${nm}: no block "${n.b}"`); continue; }
+      const keys = keysOf(d), wrong = Object.keys(n.s ?? {}).filter((k) => !keys.has(k)); if (wrong.length) bad.push(`${nm}: ${d.id} has no setting or input ${wrong.join(', ')} (it has ${[...keys].join(', ') || 'none'})`);
       placeBlock(board, d.id, 0, 0, { ...defaultsOf(d), ...Object.fromEntries(Object.entries(n.s ?? {}).filter(([k]) => keys.has(k))) }, nm); board.nodes[nm]!.label = nm; }
+    return Object.keys(nodes).filter((nm) => board.nodes[nm]);
   };
   const wireAll = (ws: string[], bad: string[]) => { for (const w of ws) { const m = /^(\w+)\.(\w+)\s*>\s*(\w+)\.(\w+)$/.exec(String(w).trim()); if (!m) { bad.push(`wire "${w}": write it a.out>b.in`); continue; } try { wire(board, m[1]!, m[2]!, m[3]!, m[4]!); } catch (e) { bad.push(`wire ${w}: ${(e as Error).message}`); } } };
   const doTool = async (name: string, a: Record<string, unknown>): Promise<string> => {
     switch (name) {
       case 'find': return search(String(a.q ?? ''), 10).map((f) => (f.board ? `board "${f.board}" | ${f.says.slice(0, 90)}` : `${f.add?.block ?? f.id}${f.add?.set ? ` ${JSON.stringify(f.add.set)}` : ''} | ${f.name} | ${f.says.slice(0, 90)}`)).join('\n') || 'nothing matches';
       case 'card': { const d = block(String(a.id)); if (!d) throw new Error(`no block "${a.id}"`); return cardOf(d); }
-      case 'build': { const bad: string[] = []; board = emptyBoard(board.title); place((a.nodes ?? {}) as never, bad); wireAll((a.wires ?? []) as string[], bad); return [...bad.map((x) => `! ${x}`), ...(await runLines())].join('\n'); }
+      case 'build': { const bad: string[] = []; board = emptyBoard(board.title); place(a.nodes ?? {}, bad); wireAll((a.wires ?? []) as string[], bad); return [...bad.map((x) => `! ${x}`), ...(await runLines())].join('\n'); }
       case 'open': { const t = String(a.title ?? '').toLowerCase(), hit = starterBoards().find(([title]) => title.toLowerCase().startsWith(t)) ?? starterBoards().find(([title]) => title.toLowerCase().includes(t));
         if (!hit) throw new Error(`no starter board "${a.title}": find it first`); board = hit[1](); return [`opened "${hit[0].slice(0, 80)}"`, ...(await runLines())].join('\n'); }
       case 'change': { const bad: string[] = [], touched = new Set<string>();
+        // (made on a copy: the board open is replaced only when every check that held on it still holds (design §2.8))
+        if (!engine) { engine = new Engine(board); await engine.run(); }
+        const accepted = board, before = engine, held = heldOf(before, accepted); board = JSON.parse(JSON.stringify(board)) as Board;
         for (const id of (a.remove ?? []) as string[]) { if (!board.nodes[id]) { bad.push(`no node ${id}`); continue; } board.nodes[id] = { ...board.nodes[id]!, deleted: true }; for (const e of edgesOf(board)) if (e.from === id || e.to === id) board.edges[e.id] = { ...board.edges[e.id]!, deleted: true }; }
         for (const w of (a.unwire ?? []) as string[]) { const [to, inp] = String(w).split('.'); const hit = edgesOf(board).filter((e) => e.to === to && e.in === inp); if (!hit.length) bad.push(`nothing feeds ${w}`); for (const e of hit) board.edges[e.id] = { ...board.edges[e.id]!, deleted: true }; touched.add(to!); }
         for (const [id, kv] of Object.entries((a.set ?? {}) as Record<string, Record<string, unknown>>)) { const n = board.nodes[id], d = n?.block ? block(n.block) : undefined; if (!n || !d) { bad.push(`no node ${id}`); continue; }
-          const keys = new Set((d.settings ?? []).map((x) => x.key)); for (const [k, v] of Object.entries(kv)) { if (!keys.has(k)) { bad.push(`${id}: no setting ${k} (it has ${[...keys].join(', ')})`); continue; } n.set = { ...(n.set ?? {}), [k]: v }; } touched.add(id); }
-        const add = (a.add ?? {}) as Record<string, { b?: string }>; place(add as never, bad); Object.keys(add).forEach((k) => touched.add(k));
+          const keys = keysOf(d); for (const [k, v] of Object.entries(kv)) { if (!keys.has(k)) { bad.push(`${id}: no setting or input ${k} (it has ${[...keys].join(', ')})`); continue; } n.set = { ...(n.set ?? {}), [k]: v }; } touched.add(id); }
+        for (const k of place(a.add, bad)) touched.add(k);
         const ws = (a.wires ?? []) as string[]; wireAll(ws, bad); ws.forEach((w) => touched.add(String(w).split('>')[1]?.trim().split('.')[0] ?? ''));
         // (what the changes reach downstream is said too: a setting moved shows where it went)
         for (const e of edgesOf(board)) if (touched.has(e.from)) touched.add(e.to);
-        return [...bad.map((x) => `! ${x}`), ...(await runLines(touched))].join('\n'); }
+        const lines = [...bad.map((x) => `! ${x}`), ...(await runLines(touched))], now = heldOf(engine!, board), broke = [...held].filter((id) => board.nodes[id] && !board.nodes[id]!.deleted && !now.has(id));
+        if (broke.length) { shadow = { board, engine: engine! }; board = accepted; engine = before;
+          return [`NOT TAKEN: it breaks what held (${broke.join(', ')}); the board is as it was. The change is kept as a shadow (read it with shadow: true); change again to mend it.`, ...lines].join('\n'); }
+        shadow = undefined; return lines.join('\n'); }
       case 'fold': {
         // (by default every node but the inputs (in.number, in.text, …): those stay outside, so what they feed becomes the new block's inputs)
         const ids = ((a.nodes as string[] | undefined) ?? nodesOf(board).filter((n) => !board.nodes[n.id]!.block?.startsWith('in.')).map((n) => n.id)).filter((id) => board.nodes[id] && !board.nodes[id]!.deleted);
@@ -218,7 +240,7 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
         const f = collapse(board, ids, String(a.name)), r = makeBlock(f.board, f.id, { name: String(a.name), says: String(a.says ?? ''), by: 'you' });
         board = r.board; const d = r.block; made.push({ id: d.id, name: d.name, says: d.says ?? '', domains: d.domains ?? ['software'], graph: d.graph! });
         return `${r.duplicateOf ? `does what ${r.duplicateOf} does already: that one placed. ` : 'saved. '}${cardOf(d)}`; }
-      case 'read': { const st = engine?.state.get(String(a.node)); if (!st) throw new Error('build first'); if (!st.out || !(String(a.out) in st.out)) throw new Error(`${a.node} has no output ${a.out}`); const v = st.out[String(a.out)];
+      case 'read': { const from = a.shadow ? shadow?.engine : engine; if (a.shadow && !from) throw new Error('no change is waiting as a shadow'); const st = from?.state.get(String(a.node)); if (!st) throw new Error('build first'); if (!st.out || !(String(a.out) in st.out)) throw new Error(`${a.node} has no output ${a.out}`); const v = st.out[String(a.out)];
         return (Array.isArray(v) ? v.slice(0, 60).map((x) => brief(x, 240)).join('\n') + (v.length > 60 ? `\n… ${v.length - 60} more rows` : '') : brief(v, 2000)).slice(0, 6000); }
       case 'docs': { const f = DOCS[String(a.topic)]; if (!f) throw new Error(`no topic "${a.topic}"`); const { readFileSync } = await import(/* @vite-ignore */ 'node:fs');
         const lines = readFileSync(new URL(`../../docs/${f}`, import.meta.url), 'utf8').split('\n'), w = String(a.find ?? '').toLowerCase(), hits = lines.map((l, k) => (l.toLowerCase().includes(w) ? k : -1)).filter((k) => k >= 0).slice(0, 4);

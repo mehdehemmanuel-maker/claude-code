@@ -2,7 +2,8 @@
 // built is run, and the request is right when a number it asked for stands on the board (any node, any output, within
 // 1 %), or when what it asked to be made or folded was. Every expected number is worked out here from the same constants
 // the app uses, never typed in from memory. Run: `npm run eval:agent` (needs ANTHROPIC_API_KEY; costs real tokens);
-// `EVAL_ONLY=3` runs the first three; `EVAL_MODEL` picks the model (the app's default when unset).
+// `EVAL_ONLY=3` runs the first three; `EVAL_MODEL` picks the model (the app's default when unset); `EVAL_SET=placements` runs
+// the requests that put parts together instead (spec 01, I14); `EVAL_REPEAT=3` runs each three times; `EVAL_PICK=4` the fourth alone.
 import { it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import '../../src/nexus/seeds';
@@ -57,22 +58,50 @@ export const CASES: [string, Check][] = [
   ['Build the checked coil spring and fold the board into one block called My spring.', both(runsClean, (r) => (r.made.length ? null : 'no block made'))],
 ];
 
+/** A node of one of these blocks on the board that ran and passes f (null: right); else why not. */
+type Out = Record<string, unknown>;
+const nodeOf = (blocks: string[], f: (o: Out, e: Engine, id: string) => string | null): Check => (_r, e) => {
+  const ids = Object.keys(e.board.nodes).filter((id) => blocks.includes(e.board.nodes[id]!.block ?? '')); if (!ids.length) return `no ${blocks.join(' or ')} node`;
+  const why = ids.map((id) => { const st = e.state.get(id); return st?.status !== 'ok' ? `${id} ${st?.status ?? 'not run'}: ${st?.error?.slice(0, 80) ?? ''}` : f((st.out ?? {}) as Out, e, id); });
+  return why.includes(null) ? null : why[0]!;
+};
+const joined = (free: number): Check => nodeOf(['joint', 'joints.solve'], (o) => (o.freedom === free && !o.violation ? null : `freedom ${String(o.freedom)}${o.violation ? `; ${String(o.violation).slice(0, 100)}` : ''}`));
+/** Parts placed by joints or pasted by imprints, not by typed positions: the placement blocks it used. */
+const placedBy = (e: Engine) => { const bs = Object.values(e.board.nodes).map((n) => n.block ?? ''); return { joints: bs.filter((b) => /^(joint|joints\.solve|imprint|imprint\.pattern)$/.test(b)).length, typed: bs.filter((b) => b === 'place').length }; };
+/** Requests that put parts together (spec 01, I14): right when the parts are joined and hold, pasted and cut, or refused by
+ *  the rule that refuses them; each also says whether it was placed by joints or by typed positions. */
+export const PLACEMENTS: [string, Check][] = [
+  ['Mount a NEMA 17 stepper motor on its motor plate.', joined(0)],
+  ['Paste an M8 socket head cap screw onto the top of a steel plate 100 x 10 x 100 mm, 20 mm from its middle.', nodeOf(['imprint'], (o) => { const p = o.part as { cuts?: { at: number[] }[]; ports?: unknown[] }, c = p?.cuts?.[0];
+    return o.violation ? String(o.violation).slice(0, 100) : !c || p.cuts!.length !== 1 || !p.ports?.length ? 'no hole cut, or no port' : Math.abs(Math.hypot(c.at[0]!, c.at[2]!) - 0.02) > 5e-4 || Math.abs(c.at[1]! - 0.005) > 5e-4 ? `cut at (${c.at.map((x) => +(x * 1000).toFixed(1)).join(', ')}) mm, not 20 mm from the middle of the top` : o.freedom === 1 ? null : `the screw left ${String(o.freedom)} freedom`; })],
+  // (refused by a rule of its standards, nothing cut: its counterbore deeper than the leg, its edge distance, a tapped hole's
+  // engagement; never a ray that missed the angle (the check first asked for the counterbore alone: widened on 2026-11-01,
+  // after the first runs, each of those refusals being as true an answer))
+  ['Paste an M8 socket head cap screw onto one leg of a 50 x 5 steel angle, and say whether it fits.', nodeOf(['imprint'], (o) => (o.violation && !/meets nothing/.test(String(o.violation)) && !(o.part as { cuts?: unknown[] })?.cuts?.length ? null : `not refused by a rule: ${String(o.violation || o.says).slice(0, 100)}`))],
+  ['Bolt a 6 mm steel cover onto a 10 mm steel flange round a 40 mm bore, with six M8 bolts on the least bolt circle the bore allows.', both(joined(0), gives(0.0308))],
+  ['Mount a NEMA 17 stepper on its motor plate, and assert that the two together weigh less than 1 kg.', both(joined(0), nodeOf(['assert'], (o, e, id) => (!e.wiresInto(id).some((w) => w.in === 'value') ? 'its value typed, not wired from a measure' : o.holds === true ? null : `does not hold: ${String(o.says)}`)))],
+];
+
 it('the AI, on its evaluation set', async () => {
   { const b = emptyBoard('spring'); placeBlock(b, 'seed.spring-checked', 0, 0, { n: 6 }, 's'); const x = new Engine(b); await x.run(); springRate6 = x.state.get('s')?.out?.rate as number; console.log(`the checked spring with 6 coils, from the app's own node: ${springRate6} N/m`); }
-  const only = Number(process.env.EVAL_ONLY ?? CASES.length), model = process.env.EVAL_MODEL || undefined, rows: Record<string, unknown>[] = [];
+  const SET = process.env.EVAL_SET === 'placements' ? PLACEMENTS : CASES, only = Number(process.env.EVAL_ONLY ?? SET.length), model = process.env.EVAL_MODEL || undefined, rows: Record<string, unknown>[] = [];
   const one = async ([req, check]: [string, Check], k: number) => {
     const t0 = Date.now(); let row: Record<string, unknown>;
     try {
       const r = await agentBuild(req, { ...(model ? { model } : {}), seconds: 120, check: false });
       const e = new Engine(r.board); await e.run(); const why = check(r, e);
-      row = { k: k + 1, request: req, right: !why, why: why ?? '', steps: r.steps.length, in: r.tokens.in, cached: r.tokens.cached, out: r.tokens.out, s: +((Date.now() - t0) / 1000).toFixed(1), model: r.model, stopped: r.stopped ?? '', near: r.nearMisses.map(nearMissLine) };
+      const by = placedBy(e);
+      row = { k: k + 1, request: req, right: !why, why: why ?? '', joints: by.joints, typed: by.typed, steps: r.steps.length, in: r.tokens.in, cached: r.tokens.cached, out: r.tokens.out, s: +((Date.now() - t0) / 1000).toFixed(1), model: r.model, stopped: r.stopped ?? '', near: r.nearMisses.map(nearMissLine) };
     } catch (x) { row = { k: k + 1, request: req, right: false, why: `failed: ${(x as Error).message.slice(0, 120)}`, steps: 0, in: 0, cached: 0, out: 0, s: +((Date.now() - t0) / 1000).toFixed(1) }; }
-    rows.push(row); console.log(`${row.right ? 'RIGHT' : 'WRONG'} ${row.k}. ${req.slice(0, 60)} | steps ${row.steps}, in ${row.in} (+${row.cached} cached), out ${row.out}, ${row.s} s ${row.why ? `| ${row.why}` : ''}`); for (const m of (row.near as string[] | undefined) ?? []) console.log(`   near miss: ${m}`);
+    rows.push(row); console.log(`${row.right ? 'RIGHT' : 'WRONG'} ${row.k}. ${req.slice(0, 60)} | steps ${row.steps}, in ${row.in} (+${row.cached} cached), out ${row.out}, ${row.s} s${SET === PLACEMENTS ? `, by joints ${String(row.joints)}, typed places ${String(row.typed)}` : ''} ${row.why ? `| ${row.why}` : ''}`); for (const m of (row.near as string[] | undefined) ?? []) console.log(`   near miss: ${m}`);
   };
-  const todo = CASES.slice(0, only).map((c, k) => [c, k] as const);
+  // (EVAL_REPEAT runs each request that many times: one run of a few requests is too few to compare)
+  // (EVAL_PICK=4 runs the fourth request alone)
+  const times = Math.max(1, Number(process.env.EVAL_REPEAT ?? 1)), pick = Number(process.env.EVAL_PICK ?? 0), todo = SET.slice(0, only).flatMap((c, k) => (pick && k + 1 !== pick ? [] : Array.from({ length: times }, () => [c, k] as const)));
   for (let i = 0; i < todo.length; i += 5) await Promise.all(todo.slice(i, i + 5).map(([c, k]) => one(c, k)));
   rows.sort((a, b) => (a.k as number) - (b.k as number));
   const right = rows.filter((r) => r.right).length, sum = (f: string) => rows.reduce((a, r) => a + (r[f] as number), 0);
+  if (SET === PLACEMENTS) console.log(`placed by joints or imprints: ${rows.filter((r) => (r.joints as number) > 0).length} of ${rows.length}; by typed places: ${rows.filter((r) => (r.typed as number) > 0).length}`);
   console.log(`\nRESULT ${right} of ${rows.length} right; steps ${sum('steps')}; tokens in ${sum('in')} (+${sum('cached')} cached), out ${sum('out')}; ${sum('s').toFixed(0)} s summed`);
   if (process.env.EVAL_OUT) writeFileSync(process.env.EVAL_OUT, JSON.stringify(rows, null, 1));
 }, 1_800_000);

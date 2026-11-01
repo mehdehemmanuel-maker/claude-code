@@ -197,10 +197,11 @@
    ],
    "owner": "agent.ts, docs/FOR-AI.md",
    "check": "on the AI's evaluation set, placements are made by joints and fewer are wrong than at the baseline (spec 00, S5)",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I13"
-   ]
+   ],
+   "evidence": "2026-11-01: docs/FOR-AI.md gains the rule: never place parts by typed positions where they have ports or a surface; joint (by their ports), joints.solve, imprint (a bolt pasted onto a point of any part), imprint.pattern then joint for two parts through one pattern; hold what matters with assert; replies start with FAILS lines, said first. agent.ts: build and change replies lead with what fails (each failing assertion, then each other check a node says it broke: a joint that does not hold, a paste refused); change is made on a copy of the board, taken only when every check that held still holds, else kept as a shadow read can read (read {shadow: true}) and the board left as it was (a check new and failing is said first but does not block: the copy's checks are those of the board it was made from); a plan's s may give an unwired input its value; nodes sent as text are read, as a list refused in one line. The AI's evaluation set gains five placement requests (tests/evals/agent.eval.ts PLACEMENTS: a stepper on its plate, a screw pasted 20 mm from a plate's middle, a screw on a 50 x 5 angle's leg (refused by a rule), a cover bolted on a flange, a stepper on its plate with an assertion of their mass), each checked without a model by what stands on the board; npm run eval:agent with EVAL_SET=placements EVAL_REPEAT=3, claude-haiku-5-5: baseline (the system at a545060, the same runner) 7 of 15 right, 9 of 15 placed by joints or imprints, 3 by typed places; after, 15 of 15 right, 15 of 15 by joints or imprints, none by typed places; the main 30 requests 30 of 30 after. One set of three runs each. The check of the angle request was widened after the first runs from 'refused by its counterbore' to 'refused by a rule of its standards, nothing cut'. The runs found a fault in the checks before cutting (I7): a hole whose middle a direction could not reach the wall from counted as endless wall; a paste grazing an angle's corner was cut. Mended in mate.ts and tested"
   },
   {
    "id": "I15",

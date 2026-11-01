@@ -2268,3 +2268,24 @@ them in the page found two faults the tests had not: the bolts were not drawn at
 because a cylinder is drawn about its middle and the bolts stood the plates from y = 0 (now they stand on the face the
 flange's holes were cut in); and the boss was pasted at its rim, not its middle, for the same reason. Screenshots by
 `node tests/evals/board-shot.cjs "<title>" out.png`, of each board, no page errors. Checked with `npm run gate`.
+
+## 2026-11-01: the AI puts parts together by joints, leads with what fails, and changes on a shadow (spec 01, I14)
+
+FOR-AI gains its rule: never place parts by typed positions where they have ports or a surface; `joint`, `joints.solve`,
+`imprint` (and `imprint.pattern` then `joint` for two parts through one pattern); hold what matters with `assert`; say
+first what fails. The AI's `build` and `change` replies now start with `FAILS` lines (each failing assertion, then each
+other check a node says it broke); a `change` is made on a copy and taken only when every check that held still holds,
+else the board stays as it was and the copy is a shadow `read` can read. Five placement requests were added to the AI's
+evaluation set, each checked by what stands on the board. Measured by `npm run eval:agent` with `EVAL_SET=placements
+EVAL_REPEAT=3`, claude-haiku-5-5, one set of three runs each: the baseline (the system at a545060 with the same runner)
+7 of 15 right, 9 of 15 placed by joints or imprints and 3 by typed places; first after, 7 of 15 again (the rule alone
+moved placements to joints, 13 of 15, but the tools tripped it); then, with the tools mended, 12 of 15; with one line for
+two parts through one pattern, 15 of 15, all by joints or imprints, none typed; the main 30 requests 30 of 30 (one run).
+What the runs found and mended: a point given on a plate's top started its ray on the surface and pasted onto the face
+beyond (the ray now starts 1 mm behind the point); a ray that missed said only that, so the AI could not aim again (it now
+says where the part spans); a plan's nodes sent as text gave one error a character, about 500 lines (read as JSON, or
+refused in one line); and, in the checks before cutting, a paste grazing an angle's corner was cut, because a direction
+that met no wall counted as endless wall (now no wall: refused by its edge distance, 0 mm against 10.8 mm). The angle
+request's check was widened after the first runs, from its counterbore alone to any rule of its standards, nothing cut.
+Checked with `npm run gate` (the tests "the AI's tools lead with what fails, and take a change only when what held still
+holds" and "the interface nodes on their starter boards…").

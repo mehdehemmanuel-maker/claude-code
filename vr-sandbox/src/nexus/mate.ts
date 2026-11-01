@@ -384,7 +384,9 @@ export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn
   const u = new THREE.Vector3(...f.u), v = n.clone().cross(u).normalize(), mid = at.clone().addScaledVector(n, -depth / 2); let edge = Infinity;
   const inv = q.m.clone().invert(), solo: Part = { name: 'piece', parts: [{ ...q.p, parts: undefined, at: [0, 0, 0], rot: [0, 0, 0] }] };
   for (let k = 0; k < 12; k++) { const a = (k * Math.PI) / 6, w = u.clone().multiplyScalar(Math.cos(a)).addScaledVector(v, Math.sin(a)), h = standOn(solo, mid.clone().applyMatrix4(inv).toArray() as V3, w.clone().transformDirection(inv).toArray() as V3, o);
-    if (h) edge = Math.min(edge, new THREE.Vector3(...h.at).applyMatrix4(q.m).distanceTo(mid)); }
+    // (a direction that meets nothing: the hole's middle is not within the piece there (a ray grazing its face, a hole at its
+    // edge): no wall at all, never an endless one (the AI pasted onto an angle's corner and was let through: 2026-11-01))
+    edge = h ? Math.min(edge, new THREE.Vector3(...h.at).applyMatrix4(q.m).distanceTo(mid)) : 0; }
   const e = BOLT_SPACING.e2.least(d0 / mm) * mm, p1 = BOLT_SPACING.p1.least(d0 / mm) * mm;
   if (!put({ check: 'edge distance', ok: edge >= e - 1e-9, need: +(e / mm).toFixed(3), have: +(edge / mm).toFixed(3), unit: 'mm', rule: `e₂ ≥ 1.2 d₀ = 1.2 × ${(d0 / mm).toFixed(1)} mm`, source: 'EN 1993-1-8' })) return refusal(checks);
   // (its spacing from the piece's other holes, and that it breaks into none: their lines in the piece's frame)
@@ -394,7 +396,7 @@ export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn
   // (the room its keep needs, out along n, against the thing's other pieces' boxes)
   for (const k of neg.tools.filter((x) => x.role === 'keep')) { const a = at.clone().addScaledVector(n, 1e-4), b = at.clone().addScaledVector(n, k.length ?? 0), box = new THREE.Box3().setFromPoints([a, b]).expandByScalar(k.r ?? 0);
     const other = piecesIn(host).find((x) => x.p !== q.p && !!x.p.shape && (() => { const bx = new THREE.Box3(); const s = x.p.shape!; const half = 'box' in s ? s.box.map((y) => y / 2) : null; if (!half) return false; for (let c = 0; c < 8; c++) bx.expandByPoint(new THREE.Vector3(c & 1 ? half[0]! : -half[0]!, c & 2 ? half[1]! : -half[1]!, c & 4 ? half[2]! : -half[2]!).applyMatrix4(x.m)); return bx.intersectsBox(box); })());
-    if (!put({ check: 'room', ok: !other, need: +(((k.length ?? 0)) / mm).toFixed(3), have: other ? 0 : +((k.length ?? 0) / mm).toFixed(3), unit: 'mm', rule: `room along the axis for ${k.why.split(':')[0]}${other ? `: the ${other.p.name} is in it` : ''}`, source: 'its keep' })) return refusal(checks); }
+    if (!put({ check: 'room', ok: !other, need: +(((k.length ?? 0)) / mm).toFixed(3), have: other ? 0 : +((k.length ?? 0) / mm).toFixed(3), unit: 'mm', rule: `${k.why.split(':')[0]}${other ? `: the ${other.p.name} is in it` : ''}`, source: 'its keep' })) return refusal(checks); }
   put({ check: 'depth', ok: true, need: +(depth / mm).toFixed(3), have: +(depth / mm).toFixed(3), unit: 'mm', rule: 'the negative made for the depth found', source: neg.mirror.std ?? '' });
   return { frame: { at: f.at, n: f.n, u: f.u }, piece: f.piece, path: q.path, turn: o.turn ?? 0, asking, negative: neg, checks };
 }

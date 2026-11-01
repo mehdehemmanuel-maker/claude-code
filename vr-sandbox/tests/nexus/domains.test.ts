@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 /** The runners' and the page's handling of a run, from agentBuild's call (or the reply) to its near misses printed or
  *  shown, their texts pinned (the test "an open andon stops the line…" says why). */
 const RUN_PINS: [string, string, string, string][] = [
-  ['tests/evals/agent.eval.ts', '      const r = await agentBuild(req', 'console.log(`   near miss: ${m}`);', '4774ef8e900bc2db'],
+  ['tests/evals/agent.eval.ts', '      const r = await agentBuild(req', 'console.log(`   near miss: ${m}`);', '883bb487a91e3abd'],
   ['tests/evals/one.eval.ts', '  const t0 = Date.now(), r = await agentBuild(EXPECTED.request', 'console.log(`near miss, ${nearMissLine(m)}`);', '08e2a1d87952e6e5'],
   ['src/nexus/view/nodes.ts', '      const r = await res.json()', 'renderAll();', '98c38ebfaba4eed8'],
 ];
@@ -351,10 +351,10 @@ describe('every domain, in one pass', () => {
       return (await runOf({ start: emptyBoard('t'), board: tt.board(), steps: st, answer, model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: tt.made })).nearMisses; };
     const changed = await runTools([{ name: 'build', input: { nodes: { a: { b: 'in.number', s: { value: 2 } } } } }, { name: 'change', input: { set: { ghost: { value: 1 }, a: { nosuchsetting: 3 } } } }], 'Done: the value is 5.');
     expect(changed.map((m) => `${m.kind} ${m.tool}`), 'change\'s refusals, then an answer past them').toEqual(['error change', 'error change', 'reckless answer']);
-    expect(changed.map((m) => m.what).slice(0, 2).join(' | ')).toMatch(/no node ghost.*\| a: no setting nosuchsetting/);
+    expect(changed.map((m) => m.what).slice(0, 2).join(' | ')).toMatch(/no node ghost.*\| a: no setting or input nosuchsetting/);
     const placed = await runTools([{ name: 'build', input: { nodes: { a: { b: 'no.such.block' }, b: { b: 'in.number', s: { value: 1, nosuch: 2 } } }, wires: ['b.value to a.x'] } }], 'Three of them were refused: no block, no setting, a wire written wrong.');
     expect(placed.map((m) => `${m.kind} ${m.tool}`), 'place\'s and the wire\'s refusals, owned up to').toEqual(['error build', 'error build', 'error build']);
-    expect(placed.map((m) => m.what).join(' | ')).toMatch(/no block "no\.such\.block".*\| b: in\.number has no setting nosuch.*\| wire "b\.value to a\.x": write it a\.out>b\.in/);
+    expect(placed.map((m) => m.what).join(' | ')).toMatch(/no block "no\.such\.block".*\| b: in\.number has no setting or input nosuch.*\| wire "b\.value to a\.x": write it a\.out>b\.in/);
     const reopened = await runTools([{ name: 'build', input: { nodes: { a: { b: 'no.such.block' } } } }, { name: 'open', input: { title: starterBoards()[0]![0].slice(0, 20) } }], 'Opened the starter board.');
     expect(reopened.map((m) => `${m.kind} ${m.tool}`), 'a board opened after a refused build: nothing standing, nothing reckless').toEqual(['error build']);
     // (and change's other two refusals (a node to take away that is not there, an input to unwire that nothing feeds) and
@@ -907,6 +907,10 @@ describe('every domain, in one pass', () => {
     expect([(po('on angle').part as Part).cuts ?? [], po('on angle').violation], 'the angle\'s 5 mm leg refused, nothing cut').toEqual([[], expect.stringMatching(/counterbore 8\.5 mm deep.*5\.0 mm plate/)]);
     expect([po('gained').holds, po('gained').violation], 'its assertion holds: the plate gained its hole as an interface').toEqual([true, '']);
     expect(pe.state.get('on angle')!.warnings?.join(' '), 'the refusal a warning on its node').toMatch(/refused/);
+    // (pasted onto the angle's edge, its ray grazing its face: the hole's middle not within it, refused by its edge distance
+    // (it was let through, an edge never met counted as endless wall: the AI found it, 2026-11-01))
+    pb.nodes['on angle']!.set = { ...pb.nodes['on angle']!.set, x: 1, y: 0, z: 0.025, toward: '-x' }; pe.touch('on angle'); await pe.run();
+    expect([(po('on angle').part as Part).cuts ?? [], po('on angle').violation], 'refused at the edge, nothing cut').toEqual([[], expect.stringMatching(/edge distance 0 mm/)]);
     const [, cover] = byTitle(/^The cover follows the bore/), cb = cover(), ce = new Engine(cb); await ce.run();
     const co = (id: string) => ce.state.get(id)!.out as Record<string, unknown>, holesAt = () => { const t = co('cover on flange').together as Part, cv = t.parts![1]!, qq = new THREE.Quaternion().setFromEuler(new THREE.Euler(...cv.rot!));
       return (cv.cuts ?? []).map((c) => new THREE.Vector3(...c.at).applyQuaternion(qq).add(new THREE.Vector3(...cv.at!))).map((v) => +(Math.hypot(v.x, v.z) * 1000).toFixed(2)); };
@@ -918,6 +922,35 @@ describe('every domain, in one pass', () => {
     expect(+(((co('cover on flange').together as Part).parts![1]!.at![1]) * 1000).toFixed(3) + 0, 'the cover on the flange\'s top').toBe(8);
     cb.nodes.bore!.set = { ...cb.nodes.bore!.set, value: 0.05 }; ce.touch('bore'); await ce.run();
     expect([co('cover on flange').freedom, co('cover on flange').violation], 'widened: still on, still held').toEqual([0, '']); expect(holesAt(), 'its holes followed to the 35.8 mm circle').toEqual(Array(6).fill(35.8));
+  }, 120_000);
+  // (the AI builds by joints and leads with what fails (spec 01, I14; design §2.8), through its real tools, no model (C8):
+  // a build whose assertion fails answers FAILS first; a change that breaks a check that held is not taken, the board left as
+  // it was and the change kept as a shadow read can read; a change that keeps every check is taken; a plan's s may give an
+  // unwired input its value)
+  it('the AI\'s tools lead with what fails, and take a change only when what held still holds', async () => {
+    const t = await toolsFor(emptyBoard('asked')), plan = { nodes: { m: { b: 'part.family', s: { family: 'stepper' } }, p: { b: 'part.family', s: { family: 'motorplate' } }, j: { b: 'joint' }, w: { b: 'measure' }, a: { b: 'assert', s: { what: 'their mass', how: 'at most', target: 0.1 } } }, wires: ['p.part>j.a', 'm.part>j.b', 'j.together>w.thing', 'w.mass>a.value'] };
+    const built = await t.doTool('build', plan), lines = built.split('\n');
+    expect(lines[0], 'the failing assertion first').toMatch(/^FAILS a: their mass is 0\.33\d+: FAILS \(at most 0\.1; off by/); expect(lines.slice(1).some((l) => /^FAILS/.test(l)), 'and no other check fails').toBe(false);
+    expect(built, 'the motor on its plate by its four holes').toMatch(/j ok .*freedom=0/);
+    // (the assertion mended: taken)
+    const ok = await t.doTool('change', { set: { a: { target: 1 } } }); expect(ok, 'taken').not.toMatch(/NOT TAKEN|FAILS/); expect(t.board().nodes.a!.set!.target).toBe(1);
+    // (a change that breaks the assertion that held: not taken, the board as it was, the change readable as a shadow)
+    const before = JSON.stringify(t.board()), no = await t.doTool('change', { set: { a: { target: 0.1 } } });
+    expect(no.split('\n').slice(0, 2), 'not taken, and why, then what fails').toEqual(['NOT TAKEN: it breaks what held (a); the board is as it was. The change is kept as a shadow (read it with shadow: true); change again to mend it.', expect.stringMatching(/^FAILS a: /)]);
+    expect(JSON.stringify(t.board()), 'the board as it was').toBe(before);
+    expect(await t.doTool('read', { node: 'a', out: 'holds', shadow: true }), 'the shadow read').toBe('false'); expect(await t.doTool('read', { node: 'a', out: 'holds' }), 'the board\'s own').toBe('true');
+    // (and one that breaks the joint (the motor's port named wrong): the joint and all that rests on it named)
+    const nj = await t.doTool('change', { set: { j: { pb: 'no such port' } } }); expect(nj.split('\n')[0], 'the joint broken').toMatch(/^NOT TAKEN: it breaks what held \(j, w, a\)/); expect(JSON.stringify(t.board())).toBe(before);
+    // (a plan's s gives an unwired input its value: the screw pasted 20 mm from the plate's middle)
+    // (at a point on the plate's top itself, as one would give it: pasted on the top, not on the face beyond (it was, twice))
+    const p2 = await t.doTool('build', { nodes: { sc: { b: 'part.family', s: { family: 'screw', thread: 'M8', length: 30 } }, pl: { b: 'shape.box', s: { w: 0.1, h: 0.01, d: 0.1 } }, im: { b: 'imprint', s: { x: 0.02, y: 0.005, z: 0 } } }, wires: ['sc.part>im.it', 'pl.part>im.part'] });
+    expect(p2, 'no setting refused, and the paste made').not.toMatch(/^!|FAILS/m); expect(p2).toMatch(/im ok .*freedom=1/); expect(await t.doTool('read', { node: 'im', out: 'says' }), 'on its top').toMatch(/stood on the box at \(20, 5, 0\) mm/);
+    // (a ray that misses says where the part is, to aim again)
+    await t.doTool('change', { set: { im: { x: 0.2 } } }); expect(await t.doTool('read', { node: 'im', out: 'violation', shadow: true }), 'where it is').toMatch(/meets nothing of it; it spans x -50…50, y -5…5, z -50…50 mm in its own frame/);
+    // (a plan's nodes sent as text are read; as a list, refused in one line, not one a character (it sent 500: 2026-11-01))
+    expect(await t.doTool('build', { nodes: JSON.stringify({ k: { b: 'in.number', s: { value: 2 } } }) }), 'as text: read').toMatch(/^k ok value=2/);
+    expect((await t.doTool('build', { nodes: [{ b: 'in.number' }] })).split('\n').filter((l) => l.startsWith('!')), 'as a list: one refusal').toEqual(['! nodes: write them as an object, {"name": {"b": "block id", "s": {…}}}']);
+    const guide = readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'); expect(guide, 'FOR-AI\'s rule: parts put together by joint and imprint, never by typed positions').toMatch(/Never place parts by typed positions[^]*`joint`[^]*`imprint`[^]*`assert`/);
   }, 120_000);
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
