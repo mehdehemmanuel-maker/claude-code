@@ -2062,3 +2062,15 @@ depth; ISO 15065 stops at M10. `boreGrips` now takes its holes from `CLEARANCE`.
 need, each row with its source") holds every row to a source and the tables to each other (the kinds' clearance holes are
 ISO 273 medium; each tap drill within 0.05 mm of d − P; each counterbore wider than its head; the formula within a tenth of
 the standard's rounded table). Checked with `npm run gate`.
+
+## 2026-11-01: a counterbore cut as it is made: its turned profile an exact solid, in the views and in the rule (spec 01, I4)
+
+A cut may now be turned: `Cut.prof` in `src/nexus/kits.ts` gives its profile from its face (radius, depth), revolved about
+its line. `brep.ts` makes it an exact solid by OpenCascade's revolution, the views drill it with a lathe (`kit3d.ts`), and
+the interference rule takes the cut's width where the guest's middle is along it (a head in its counterbore, a shank in its
+hole). The one test (the test "a counterbore cut as a solid, its volume its profile's, its STEP the same") cuts an M8
+counterbore to DIN 974-1 (15 mm across, 8.4 mm deep: the head's 8 mm and 0.4 mm, typical) over its 9 mm hole through 20 mm
+of steel: the volume taken is its profile's volume of revolution within 0.1 %, the solid is valid, its STEP reads back as
+one solid of the same volume, and the views' drilled mesh is within 0.5 % (24 sides). Writing it found two clashes the rule
+does not see (fault D15, open): a piece wider than the hole it stands in (a head 9.5 mm round in a 7.5 mm hole, plain or
+turned), and a piece sunk wholly in another with a face flush. Checked with `npm run gate`.

@@ -9,8 +9,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 11 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
-| Faults found in the code | 14 (11 fixed) |
+| Tasks in the specs | 130: 11 passing (by the evaluator), 9 claimed by the builder and not yet judged, the rest failing |
+| Faults found in the code | 15 (11 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -58,6 +58,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | D12 | Explode only spreads parts out (a container's contents lifted): no order, no direction of removal, no fasteners, no tools | `src/nexus/assembly.ts:294` | open | 01.I27 |
 | D13 | Constants were CODATA 2018 | `src/data/constants.ts` | fixed 2026-10-31: CODATA 2022 values; three expected outputs recomputed | 10.T1 |
 | D14 | Bolts and washers drawn through walls with no hole cut for them, hidden until 2026-11-01 by the excuse by name and the 0.5 mm skip: 204 more clashes on the Freightliner Cascadia (its frame rails' bolts, gussets in cross members) and 8 on the Honda Rancher (bleed screws in caliper bodies, caliper bolts through the pads). The small caliper mended 2026-11-01 (its bleed screw in a hole of its own, 1 mm short of the piston; its two bolts beside the pads): the Rancher has 1 left (a frame cross tube through the engine's oil pickup). Every bolted joint now bores the plies seated in its grip (`boreGrips`), and the Cascadia's cross members and bumper brackets are seated on their rails: its findings 500 to 334, none left on its rails' bolts; left: its tank straps' bolts, its differential's insides, its grille and hood, and its rails drawn web inboard where a ladder frame's are web outboard (turned round, its cross members meet the engine and the hood) | `src/nexus/machines.ts` (the trucks' frames, the ATV's brakes) | open | 10.T24 |
+| D15 | Two clashes the interference rule does not see, found 2026-11-01 writing I4's test: a piece standing in a hole cut in another and wider than the hole (a head 9.5 mm round in a hole 7.5 mm round, plain or turned) is not found; and a piece sunk wholly in another with one face flush with the other's is not found (no surface crosses, and the inside test lands on the shared face) | `src/nexus/make/rules.ts` | open | 10.T24 |
 
 ## Findings by theme (numbers are rows of `research/00-synthesis.md`)
 
@@ -101,7 +102,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | I1 | Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | I2 | The Interface record, and every part's interfaces read from its ports, old interfaces, bore and shaft (no part changed) | I1 | claimed, in part |
 | I3 | The tables negatives need, each row sourced: ISO 273 fine and coarse (and M24), tap drills (ISO 2306 or derived d − P), counterbores (DIN 974-1), … | I1 | claimed |
-| I4 | Cuts as solids: a lathe-profile cut (counterbore, countersink, drill point) in brep.ts and in the views' drill; Keep as a cylinder | I2 | failing |
+| I4 | Cuts as solids: a lathe-profile cut (counterbore, countersink, drill point) in brep.ts and in the views' drill; Keep as a cylinder | I2 | claimed |
 | I5 | negativeOf: the mirror interface and the tool bodies (remove, keep, add, contact), by the host's material (insert for plastics, pilot for wood) | I3, I4 | failing |
 | I6 | imprint: stand an interface on any surface point (normal, edge rule, turn) | I5 | failing |
 | I7 | The checks before cutting (wall, depth, spacing, room, breaking in), each refusing with its rule, its numbers and its source | I6 | failing |

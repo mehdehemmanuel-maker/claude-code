@@ -247,9 +247,11 @@ function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string): THREE.BufferG
   const had = drilled.get(key); if (had) return had;
   let a = new Brush(clean(g)); a.updateMatrixWorld();
   for (const c of cuts) {
-    // (a cylinder from just outside its face to its depth inside, its axis along the hole)
-    const dir = new THREE.Vector3(...c.dir).normalize(), b = new Brush(clean(new THREE.CylinderGeometry(c.r, c.r, c.depth + 2e-4, c.n ?? 24)));
-    b.quaternion.setFromUnitVectors(UP, dir); b.position.set(...c.at).addScaledVector(dir, c.depth / 2 - 1e-4); b.updateMatrixWorld();
+    // (a cylinder from just outside its face to its depth inside, its axis along the hole; a turned cut its profile turned
+    // about that axis, from just outside its face)
+    const dir = new THREE.Vector3(...c.dir).normalize(), turned = c.prof ? [[0, -1e-4], [c.prof[0]![0], -1e-4], ...c.prof, [0, c.prof[c.prof.length - 1]![1]]].map(([a, y]) => new THREE.Vector2(a!, y!)) : null;
+    const b = new Brush(clean(turned ? new THREE.LatheGeometry(turned, c.n ?? 24) : new THREE.CylinderGeometry(c.r, c.r, c.depth + 2e-4, c.n ?? 24)));
+    b.quaternion.setFromUnitVectors(UP, dir); b.position.set(...c.at); if (!turned) b.position.addScaledVector(dir, c.depth / 2 - 1e-4); b.updateMatrixWorld();
     a = csg.evaluate(a, b, SUBTRACTION);
   }
   const out = a.geometry; drilled.set(key, out); return out;

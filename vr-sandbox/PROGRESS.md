@@ -6,15 +6,15 @@ Last commit the gate passed: 832c6e6 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
-1. 01.I4: cuts as solids (a counterbore, a countersink, a drill point), so a hole is drawn as it is made
-2. 01.I5: the negative of an interface (the hole a bolt needs, by the host's material), sized from I3's tables
-3. 01.I6: imprint: stand an interface on any surface point (its normal, the edge rule, its turn)
+1. 01.I5: the negative of an interface (the hole a bolt needs, by the host's material), sized from I3's tables
+2. 01.I6: imprint: stand an interface on any surface point (its normal, the edge rule, its turn)
+3. 01.I7: the checks before cutting (wall, depth, spacing, room), each refusing with its rule and its source
 
 ## Open, and why
 
 - Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1 and 04.P10 (its seventh judging) pass. 00.S10 failed an eighth time; mended
   (the node's run and the runners' prints read exactly, every tool's refusal made), to be judged again.
-- 01.I3 claimed: the standards' tables, each row from a document opened and read again against a second copy; to be judged.
+- 01.I3 and 01.I4 claimed: the standards' tables, each row from a document opened; turned cuts made as solids; to be judged.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).

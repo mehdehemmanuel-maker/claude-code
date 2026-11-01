@@ -34,7 +34,7 @@ import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
 import { boreGrips } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
-import { KITS, makeKit, type Part } from '../../src/nexus/kits';
+import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
 import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
 import { nodesOf } from '../../src/nexus/boards';
@@ -560,6 +560,30 @@ describe('every domain, in one pass', () => {
       for (const g of [6, 7, 8] as const) { const t = itTolerance(mid, g); expect(Math.abs(t.um - r[`IT${g}`]) / r[`IT${g}`], `IT${g} at ${step} mm: ${t.um.toFixed(1)} µm by the formula, ${r[`IT${g}`]} in the table`).toBeLessThan(0.1); expect(t.derived).toMatch(/^derived/); } }
     expect(+BOLT_SPACING.e1.least(18).toFixed(6)).toBe(21.6); expect(BOLT_SPACING.p1.most(20)).toBe(200);
   });
+  // (a turned cut made as it is cut (spec 01, I4): an M8 counterbore to DIN 974-1 (15 mm across, 8.4 mm deep: the head's
+  // 8 mm and 0.4 mm, typical) over its 9 mm hole (ISO 273 medium) through 20 mm of plate, made an exact solid: what it
+  // takes away is its profile's volume of revolution within 0.1 %, the solid is valid, and its STEP reads back the same;
+  // the views drill the same profile; the bolt's head in the counterbore and its shank in the hole are not clashes)
+  it('a counterbore cut as a solid, its volume its profile\'s, its STEP the same', async () => {
+    const { solidsOf, filesOf, readStep } = await import('../../src/nexus/brep');
+    const cb = COUNTERBORE.M8!, t = 0.0084, T = 0.02, prof: [number, number][] = [[cb.d1 / 2000, 0], [cb.d1 / 2000, t], [cb.d2 / 2000, t], [cb.d2 / 2000, T]];
+    const cut = { r: cb.d2 / 2000, depth: T, at: [0, T / 2, 0] as V3, dir: [0, -1, 0] as V3, prof };
+    const plate: Part = { name: 'counterbored plate', item: 'flat bar 60x20', shape: { box: [0.06, T, 0.06] }, at: [0, 0, 0], mat: 'steel-low', cuts: [cut] };
+    const want = Math.PI * ((cb.d1 / 2000) ** 2 * t + (cb.d2 / 2000) ** 2 * (T - t)), sol = await solidsOf(plate), row = sol.rows[0]!;
+    expect(row.ok && row.valid, `made and valid: ${row.why ?? ''}`).toBe(true);
+    const taken = 0.06 * T * 0.06 - row.volume!; expect(Math.abs(taken / want - 1), `taken ${(taken * 1e9).toFixed(1)} mm³, the profile's ${(want * 1e9).toFixed(1)} mm³`).toBeLessThan(0.001);
+    const back = await readStep((await filesOf(plate, { formats: ['step'] })).files['counterbored plate.step'] ?? Object.values((await filesOf(plate, { formats: ['step'] })).files)[0]!);
+    expect([back.solids, Math.abs(back.volume / row.volume! - 1) < 0.001], 'its STEP read back: one solid, the same volume').toEqual([1, true]);
+    // (the head stands 1 mm proud of the plate: one sunk wholly in it with a face flush is not seen by the checker at all, its
+    // surfaces crossing nothing (a gap of the checker's, recorded in docs/REALITY.md, not this task's))
+    const head = { name: 'cap screw head', item: 'cap screw', shape: { cyl: [0.0065, 0.008] }, at: [0, T / 2 - 0.003, 0], mat: 'steel-alloy' } as Part, shank = { name: 'cap screw shank', item: 'cap screw', shape: { cyl: [0.004, 0.012] }, at: [0, T / 2 - 0.007 - 0.006, 0], mat: 'steel-alloy' } as Part;
+    expect(rulesOf({ name: 'seated', parts: [plate, head, shank] }).findings.filter((f) => f.rule === 'interference').map((f) => `${f.a} × ${f.b}`), 'a head in the counterbore, a shank in the hole').toEqual([]);
+    // (the views drill the same profile: the drilled mesh's volume, by its triangles, within 0.5 % (a 24-sided turning))
+    const { leafGeometry } = await import('../../src/nexus/view/kit3d'), g = leafGeometry(plate)!, pos = g.attributes.position!, ix = g.index; let mv = 0;
+    for (let i = 0; i < (ix ? ix.count : pos.count); i += 3) { const v = [0, 1, 2].map((k) => { const j = ix ? ix.getX(i + k) : i + k; return [pos.getX(j), pos.getY(j), pos.getZ(j)]; }); mv += (v[0]![0]! * (v[1]![1]! * v[2]![2]! - v[1]![2]! * v[2]![1]!) - v[0]![1]! * (v[1]![0]! * v[2]![2]! - v[1]![2]! * v[2]![0]!) + v[0]![2]! * (v[1]![0]! * v[2]![1]! - v[1]![1]! * v[2]![0]!)) / 6; }
+    expect(Math.abs(mv / row.volume! - 1), `the views' drilled plate ${(mv * 1e9).toFixed(0)} mm³, the solid's ${(row.volume! * 1e9).toFixed(0)} mm³`).toBeLessThan(0.005);
+    // (a head wider than the hole it stands in is not found, in a plain hole as in this one: fault D15, open)
+  }, 120_000);
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
   // plate's hole is not)

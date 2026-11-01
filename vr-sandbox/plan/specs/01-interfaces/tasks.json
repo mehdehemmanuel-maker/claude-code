@@ -50,10 +50,11 @@
    ],
    "owner": "kits.ts, brep.ts, view/kit3d.ts, make/rules.ts",
    "check": "a counterbored hole's volume equals its profile's volume of revolution within 0.1 %; the solid is valid; STEP reads back the same volume",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I2"
-   ]
+   ],
+   "evidence": "2026-11-01: a cut may be turned (Cut.prof: its profile from its face, revolved about its line); brep.ts makes it an exact solid, the views drill it by a lathe, the interference rule takes its width where the guest's middle is; the one test cuts an M8 counterbore (DIN 974-1) over its hole through 20 mm: the volume taken is its profile's within 0.1 %, the solid valid, its STEP read back the same, the views' mesh within 0.5 %"
   },
   {
    "id": "I5",

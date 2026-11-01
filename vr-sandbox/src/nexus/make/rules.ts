@@ -52,7 +52,10 @@ const inCut = (host: Mesh3, guest: Mesh3): boolean => {
   const inv = host.node.m.clone().invert(), c = guest.node.obb.c.clone().applyMatrix4(inv);
   return host.p.cuts.some((k) => { const ax = new THREE.Vector3(...k.dir).normalize(), rel = c.clone().sub(new THREE.Vector3(...k.at)), along = rel.dot(ax), off = rel.clone().sub(ax.clone().multiplyScalar(along)).length();
     const half = guest.node.obb!.h, u = guest.node.obb!.u, wdir = ax.clone().transformDirection(host.node.m), widths = [0, 1, 2].filter((i) => Math.abs(u[i]!.dot(wdir)) < 0.7).map((i) => half[i]!);
-    const rg = widths.length ? Math.max(...widths) : Math.min(...half); return off + rg <= k.r * 1.08 + 0.0005; });
+    // (a turned cut is as wide, where the guest's middle is along it, as its profile there: a head in its counterbore, a
+    // shank in its hole)
+    const rk = k.prof ? Math.max(k.r, ...k.prof.flatMap((q, i) => { const nx = k.prof![i + 1]; if (!nx) return Math.abs(along - q[1]) < 1e-9 ? [q[0]] : []; return along >= Math.min(q[1], nx[1]) - 1e-9 && along <= Math.max(q[1], nx[1]) + 1e-9 ? [Math.max(q[0], nx[0])] : []; })) : k.r;
+    const rg = widths.length ? Math.max(...widths) : Math.min(...half); return off + rg <= rk * 1.08 + 0.0005; });
 };
 // (what a piece or anything it is in says passes through it or is joined to it, against the names of the other piece and
 // of what it is in: a sprocket says the chain's links pass it, whichever of its pieces meets whichever of theirs)
