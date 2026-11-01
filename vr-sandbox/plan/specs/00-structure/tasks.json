@@ -117,12 +117,13 @@
    "meets": [
     "S-R6"
    ],
-   "owner": "scripts/hooks/, plan/ANDON.md, plan/NEAR-MISS.md, agent.ts",
+   "owner": "scripts/hooks/, plan/ANDON.md, plan/NEAR-MISS.md, agent.ts, view/nodes.ts (the page shows the near misses)",
    "check": "an open andon blocks 'done'; a caught near miss is logged with its kind",
    "status": "failing",
    "after": [
     "S3"
-   ]
+   ],
+   "evidence": "failed its verdict 2026-11-01 (only direct dependents stopped; tool and node failures not caught; nothing read the near misses; probes looked for at the top of one folder); each mended and planted again; to be judged again"
   },
   {
    "id": "S11",

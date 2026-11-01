@@ -1,0 +1,37 @@
+{
+ "task": "00.S10",
+ "verdict": "fail",
+ "model": "claude-sonnet",
+ "date": "2026-11-01",
+ "commit": "956fe8c",
+ "ran": [
+  "Setup: git checkout --detach 956fe8c; linked node_modules into vr-sandbox. Read plan/specs/00-structure/evaluator.md, tasks.json (S10 check: \"an open andon blocks 'done'; a caught near miss is logged with its kind\"; after S3), plan/ANDON.md (A1 closed), plan/NEAR-MISS.md (7 rows: 4 error, 3 at-risk, 0 reckless), nearMissesOf in src/nexus/agent.ts, the two tests in tests/nexus/domains.test.ts, plan/compile.py.",
+  "python3 plan/compile.py: 'INDEX.md written: 130 tasks, 13 faults, 35 passes, 0 problems', exit 0; INDEX.md unchanged.",
+  "npx vitest run tests/nexus/domains.test.ts -t 'an open andon stops the line': 1 passed. -t 'no probe is left': 1 passed. npx tsc --noEmit -p .: exit 0.",
+  "Whole suite (npx vitest run): 38 passed, 1 failed ('every figure in data has a source...': EISDIR reading 'node_modules'). That failure comes from the setup symlink: .gitignore says 'node_modules/', which does not ignore a symlink, so the secret scan lists it and tries to read it. It is my environment, not the builder's work, and is not held against S10.",
+  "Read the S10 consumers: nothing outside agent.ts and the test reads AgentRun.nearMisses (no UI, no eval, no file written), so 'logged' means a field on the returned run object.",
+  "Note: S10 is declared 'after S3', and 00.S3's verdict at this commit is fail (kept until judged again). Not held against S10's own check.",
+  "Probe (a temporary tests/nexus/zz_probe test, deleted): nearMissesOf given thrown-tool-error results ('no block \"nope\"', 'build first') and a failed node line ('n1 error: division by zero') returned []. The NearMiss docstring in agent.ts says an error includes 'a tool that failed'. doTool's thrown messages are stored with no '! ' prefix (steps.push drops the err flag), so they are never logged.",
+  "Worktree at end: git status shows only the setup symlink vr-sandbox/node_modules; every planted change reverted (git checkout of ANDON.md, NEAR-MISS.md, INDEX.md, agent.ts; planted files and directories removed)."
+ ],
+ "planted": [
+  "Open andon row on 00.S4 (has a pass verdict) in plan/ANDON.md: the andon test FAILED ('00.S4 passes with an open andon'); compile.py reported '00.S4 is passing with andon A2 open' and exited 1. CAUGHT.",
+  "Open andon on 00.S3 plus a planted pass verdict for 00.S10 (waits directly on S3): the andon test FAILED ('00.S10 passes while 00.S3, which it waits on, has an open andon'), but compile.py printed 0 problems and exited 0. The test CAUGHT it; compile.py did NOT, although ANDON.md says 'the one test and compile.py both refuse it'.",
+  "Open andon on 00.S3 plus a planted pass verdict for 00.S13 (waits on S10, which waits on S3; two steps downstream): the andon test PASSED and compile.py reported 0 problems. NOT CAUGHT. C25 says 'nothing downstream is called done while it is open'; ANDON.md and README say 'every task / all that waits on it'.",
+  "NEAR-MISS.md row with kind 'oops': andon/near-miss test FAILED (kind oops). CAUGHT.",
+  "NEAR-MISS.md row with an empty response: test FAILED (no response). CAUGHT.",
+  "agent.ts: error branch's kind changed to 'at-risk': test FAILED (expected ['error','at-risk']). CAUGHT.",
+  "agent.ts: at-risk branch disabled (if (false)): test FAILED. CAUGHT.",
+  "ANDON.md row closed with the bare word 'closed' (no fixing commit named, though ANDON.md says it 'is closed only by the change that fixes it, named here'): test passed and compile.py exited 0. NOT CAUGHT.",
+  "NEAR-MISS.md row of kind 'reckless' with the response 'carry on, nothing to see' (the file says reckless calls for 'stop, and tell the user'): test passed. NOT CAUGHT (the response is only checked as non-empty).",
+  "tests/nexus/zz_probe_a.test.ts: 'no probe is left where the gate runs' FAILED naming it. CAUGHT.",
+  "zz_probe files in tests/unit, tests/golden and tests/nexus/sub (all inside the gate's vitest include 'tests/{unit,golden,nexus}/**/*.test.ts'; vitest ran all three): the probe test PASSED. NOT CAUGHT. The test reads only the top level of tests/nexus."
+ ],
+ "missing": [
+  "The line is not stopped downstream: only direct dependents of an open andon are refused. A task two steps down (S13, after S10, after S3) can pass while S3 has an open andon (planted: test and compile.py both silent). C25 says 'nothing downstream', ANDON.md and plan/README.md say 'all that waits on it'. It needs a walk through the whole chain of 'after'.",
+  "compile.py refuses only the andon's own task, never a task that waits on it, yet ANDON.md says 'the one test and compile.py both refuse it' (planted: open andon on S3 and S10 passing gave 0 problems, exit 0). Either compile.py checks dependents or the doc stops claiming it.",
+  "The near-miss log of the AI in the app does not catch 'a tool that failed', which the NearMiss comment in agent.ts says it does: a thrown tool error ('no block ...', 'build first', 'no tool ...') and a failed node ('n1 error: ...') give no near miss (probe returned []). Only lines starting with '! ' are logged, and the step record drops the error flag. Nothing reads or writes AgentRun.nearMisses (no page, no eval, no file), so 'logged' is a field on a returned object.",
+  "'no probe is left where the gate runs' covers only top-level tests/nexus, not everywhere the gate runs tests (tests/unit, tests/golden, subfolders of tests/nexus); NEAR-MISS.md says the gate 'now fails while a zz_probe_* file is present' without that limit.",
+  "Smaller gaps against the documents' own words: a closed andon need not name the change that closed it; 'each with its response' is checked only as non-empty, so a reckless row with a response that is not 'stop, and tell the user' passes. No reckless case is produced or tested anywhere in code."
+ ]
+}

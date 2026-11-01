@@ -210,20 +210,40 @@ describe('every domain, in one pass', () => {
   it('an open andon stops the line, and every near miss has its kind and its response', () => {
     const rows = (f: string) => readFileSync(join(root, 'plan', f), 'utf8').split('\n').filter((l) => /^\| /.test(l) && !/^\| (Id|Date) \|/.test(l) && !/^\| -/.test(l)).map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
     const andons = rows('ANDON.md'), open = andons.filter((r) => !/^closed/.test(r[4]!)).map((r) => r[2]!), bad: string[] = [];
-    for (const r of andons) if (!/^\d\d\.[A-Z]+\d+$/.test(r[2]!) || !r[3]) bad.push(`andon ${r[0]}: needs a task and what failed`);
+    const git = (...a: string[]) => spawnSync('git', a, { cwd: root, encoding: 'utf8' }), deep = git('rev-parse', '-q', '--verify', 'HEAD~3^{commit}').status === 0;
+    for (const r of andons) { if (!/^\d\d\.[A-Z]+\d+$/.test(r[2]!) || !r[3]) bad.push(`andon ${r[0]}: needs a task and what failed`);
+      // (closed only by the change that fixes it, named: "closed <date> by commit <sha>", and the commit is real)
+      if (/^closed/.test(r[4]!)) { const c = /^closed \d{4}-\d\d-\d\d by commit ([0-9a-f]{7,40})\b/.exec(r[4]!);
+        if (!c) bad.push(`andon ${r[0]}: closed without naming the commit that fixed it`); else if (deep && git('cat-file', '-e', `${c[1]}^{commit}`).status !== 0) bad.push(`andon ${r[0]}: closed by ${c[1]}, which is not a commit`); } }
     const vd = join(root, 'plan/specs/00-structure/verdicts'), passing = (k: string) => existsSync(join(vd, `${k}.json`)) && JSON.parse(readFileSync(join(vd, `${k}.json`), 'utf8')).verdict === 'pass';
-    const waits = new Map<string, string[]>();
-    for (const d of readdirSync(join(root, 'plan/specs'))) { const f = join(root, 'plan/specs', d, 'tasks.json'); if (!existsSync(f)) continue;
-      for (const t of JSON.parse(readFileSync(f, 'utf8')).tasks as { id: string; after: string[] }[]) waits.set(`${d.slice(0, 2)}.${t.id}`, t.after.map((x) => (/^\d\d /.test(x) ? x.replace(' ', '.') : `${d.slice(0, 2)}.${x}`))); }
-    for (const k of open) { if (passing(k)) bad.push(`${k} passes with an open andon`); for (const [t, a] of waits) if (a.includes(k) && passing(t)) bad.push(`${t} passes while ${k}, which it waits on, has an open andon`); }
-    for (const r of rows('NEAR-MISS.md')) { if (!['error', 'at-risk', 'reckless'].includes(r[2]!)) bad.push(`near miss "${r[1]!.slice(0, 40)}": kind ${r[2]}`); if (!r[4]) bad.push(`near miss "${r[1]!.slice(0, 40)}": no response`); }
+    const waits = new Map<string, string[]>(), key = (sp: string, x: string) => (/^\d\d /.test(x) ? x.replace(' ', '.') : `${sp}.${x}`);
+    for (const d of readdirSync(join(root, 'plan/specs'))) { const sp = d.slice(0, 2), f = join(root, 'plan/specs', d, 'tasks.json'), md = join(root, 'plan/specs', d, 'spec.md');
+      if (existsSync(f)) for (const t of JSON.parse(readFileSync(f, 'utf8')).tasks as { id: string; after: string[] }[]) waits.set(`${sp}.${t.id}`, t.after.map((x) => key(sp, x)));
+      if (existsSync(md)) for (const m of readFileSync(md, 'utf8').matchAll(/^\| ([A-Z]+\d+) \|[^|]*\|[^|]*\| ([^|]*) \|/gm)) waits.set(`${sp}.${m[1]}`, m[2]!.replace(/—/g, '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => key(sp, x))); }
+    // (every task downstream, through the whole chain of "after": C25 says nothing downstream is called done (a task two
+    // steps down passed while the line was stopped, the evaluator found, 2026-11-01))
+    const downstream = (k: string): Set<string> => { const out = new Set<string>(), todo = [k]; while (todo.length) { const x = todo.pop()!; for (const [t, a] of waits) if (a.includes(x) && !out.has(t)) { out.add(t); todo.push(t); } } return out; };
+    for (const k of open) { if (passing(k)) bad.push(`${k} passes with an open andon`); for (const t of downstream(k)) if (passing(t)) bad.push(`${t} passes while ${k}, which it waits on (directly or not), has an open andon`); }
+    // (each kind with the response it calls for: a reckless act calls for stopping and telling the user)
+    for (const r of rows('NEAR-MISS.md')) { if (!['error', 'at-risk', 'reckless'].includes(r[2]!)) bad.push(`near miss "${r[1]!.slice(0, 40)}": kind ${r[2]}`); if (!r[4]) bad.push(`near miss "${r[1]!.slice(0, 40)}": no response`);
+      if (r[2] === 'reckless' && !(/\bstop/i.test(r[4]!) && /\buser\b/i.test(r[4]!))) bad.push(`near miss "${r[1]!.slice(0, 40)}": reckless, and its response is not to stop and tell the user`); }
     expect(bad).toEqual([]);
+    // (the AI's own run: a refusal said back, a tool that failed, a node that failed, numbers with no board, and going on past
+    // a refusal without a word of it (reckless))
     const misses = nearMissesOf([{ tool: 'build', input: {}, result: '! wire k.value>s.rate: no input "rate"\ns ok rate=11308', ms: 1 }], 'It weighs 19.6 N.', emptyBoard('x'));
-    expect(misses.map((m) => m.kind)).toEqual(['error', 'at-risk']);
+    expect(misses.map((m) => m.kind)).toEqual(['error', 'at-risk', 'reckless']);
+    expect(nearMissesOf([{ tool: 'card', input: {}, result: 'no block "nope"', ms: 1, failed: true }, { tool: 'build', input: {}, result: 'n1 failed: division by zero', ms: 1 }], 'No number here.', emptyBoard('x')).map((m) => `${m.kind} ${m.tool}`)).toEqual(['error card', 'error build']);
+    expect(nearMissesOf([{ tool: 'build', input: {}, result: '! wire a.x>b.y: no input "y"', ms: 1 }, { tool: 'change', input: {}, result: 'b ok y=2', ms: 1 }], 'Done.', emptyBoard('x')).map((m) => m.kind), 'a refusal corrected by a later change is not reckless').toEqual(['error']);
+    expect(nearMissesOf([{ tool: 'build', input: {}, result: '! wire a.x>b.y: no input "y"', ms: 1 }], 'The wire into b was refused: b has no input y.', emptyBoard('x')).map((m) => m.kind), 'nor one the answer owns up to').toEqual(['error']);
   });
-  // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01))
+  // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01)); looked for
+  // wherever the gate's own include reaches (vite.config.ts), every folder down, not only the top of tests/nexus (the
+  // evaluator planted one in tests/unit, tests/golden and a folder under tests/nexus, 2026-11-01)
   it('no probe is left where the gate runs', () => {
-    expect(readdirSync(join(root, 'tests/nexus')).filter((f) => f.startsWith('zz_'))).toEqual([]);
+    const inc = /include:\s*\['tests\/\{([^}]+)\}\/\*\*\/\*\.test\.ts'\]/.exec(readFileSync(join(root, 'vite.config.ts'), 'utf8'));
+    expect(inc, "the gate's include, read from vite.config.ts").toBeTruthy();
+    const walk = (d: string): string[] => existsSync(d) ? readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]) : [];
+    expect(inc![1]!.split(',').flatMap((d) => walk(join(root, 'tests', d.trim()))).filter((f) => /(^|\/)zz_/.test(f)).map((f) => relative(root, f))).toEqual([]);
   });
   // (the hooks as installed, not only their functions (the evaluator found the wiring broken where the functions passed):
   // a throwaway repository with the real hook scripts, git's hooks on, and each refusal tried, in the clone and in a linked

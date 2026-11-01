@@ -226,8 +226,21 @@ def main() -> None:
     w(f'| Questions in the book | {sum(n for _, n in bk)} in {len(bk)} sections (the best of 2,244; decision 0010) |')
     andons = table_rows('ANDON.md'); misses = table_rows('NEAR-MISS.md')
     open_andons = [r for r in andons if not r[4].startswith('closed')]
+    # (the line stopped downstream too: every task that waits on the andon's task, through the whole chain of "after"
+    # (the evaluator found only the task itself refused here, 2026-11-01); a closed andon names the commit that fixed it)
+    by_key = {t['key']: t for t in tasks}
+    def deps(t: dict) -> list[str]:
+        return [f"{m.group(1) or t['spec']}.{m.group(2)}" for a in t['after'] for m in [re.match(r'^(?:(\d\d)\s+)?([A-Z]+\d+)$', a)] if m]
     for r in open_andons:
-        if any(t['key'] == r[2] and t['status'].startswith('passing') for t in tasks): problems.append(f"{r[2]} is passing with andon {r[0]} open")
+        down, todo = set(), [r[2]]
+        while todo:
+            x = todo.pop()
+            for t in tasks:
+                if x in deps(t) and t['key'] not in down: down.add(t['key']); todo.append(t['key'])
+        for k in [r[2]] + sorted(down):
+            if by_key.get(k, {}).get('status', '').startswith('passing'): problems.append(f"{k} is passing with andon {r[0]} open (on {r[2]}{'' if k == r[2] else ', which it waits on'})")
+    for r in andons:
+        if r[4].startswith('closed') and not re.match(r'^closed \d{4}-\d\d-\d\d by commit [0-9a-f]{7,40}\b', r[4]): problems.append(f"andon {r[0]} is closed without naming the commit that fixed it")
     w(f'| Andons (stop the line) | {len(open_andons)} open, {len(andons) - len(open_andons)} closed |')
     w(f'| Near misses logged | {len(misses)} ({", ".join(f"{sum(1 for r in misses if r[2] == k)} {k}" for k in ("error", "at-risk", "reckless"))}) |')
     w(f'| Plan problems found by this script | {len(problems)} |')

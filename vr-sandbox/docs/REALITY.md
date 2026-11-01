@@ -1706,3 +1706,19 @@ another task, an old commit, a claimed task named next, one not in the queue), w
 S1 passed its verdict; the four things its evaluator saw slip through (a check written "TBD", a rule id in bold, a
 decision's section left empty, a decision file misnamed) are now refused, each planted and caught. The secret scan reads
 files only (a linked node_modules, listed as untracked, made it fail in the evaluator's worktree). Checked with `npm run gate`.
+
+## 2026-11-01: the line stopped all the way down, and the AI's near misses shown (spec 00, S10)
+
+The evaluator failed S10: an open andon stopped only the tasks that wait on its task directly (a task two steps down could
+pass), and `compile.py` stopped only the task itself; a closed andon need not name its fix; a reckless near miss could carry
+any response; the AI's own log missed a tool that threw and a node that failed, and nothing read it; and probes were looked
+for only at the top of `tests/nexus`. Mended: the test "an open andon stops the line, and every near miss has its kind and its
+response" and `compile.py` both walk the whole chain of "after" (the tasks of every spec's table too); a closed andon reads
+"closed <date> by commit <sha>" and the commit must exist; a reckless row's response must say to stop and tell the user. The
+AI's run (`nearMissesOf`, `src/nexus/agent.ts`) now logs a tool that failed and a node that failed, and calls an answer
+given past a refusal still standing, without a word of it, reckless; the page shows the near misses beside the answer and
+`npm run eval:agent` and `npm run eval:one` print them. "no probe is left where the gate runs" reads the gate's include from
+`vite.config.ts` and looks in every folder under it. Each of the evaluator's plants that passed before was planted again
+(an andon on 00.S3 with a task one and two steps down passing, a bare "closed", a closing commit that does not exist, a
+reckless row answered "carry on", a probe in `tests/unit`, `tests/golden` and a folder under `tests/nexus`): each fails the
+test. Checked with `npm run gate`.

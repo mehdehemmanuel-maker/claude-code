@@ -56,22 +56,33 @@ const TOOLS: Anthropic.Tool[] = [
 let guide: string | undefined;
 const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')); };
 
-export interface AgentStep { tool: string; input: unknown; result: string; ms: number }
+export interface AgentStep { tool: string; input: unknown; result: string; ms: number; /** the tool threw: its result is the error */ failed?: true }
 /** A block the agent folded and saved: enough to register it again anywhere (a page keeps it with the blocks you saved). */
 export interface AgentBlock { id: string; name: string; says: string; domains: string[]; graph: Board }
 /**
  * A near miss the run caught (spec 00, S10; no blame, each with its kind and the response it calls for): an `error` is a
- * slip the engine refused and said back (a wire into an input that is not there, a setting a block does not have, a tool
- * that failed); `at-risk` is an answer that states numbers with no board behind them (the evaluation set found 13 of 30
- * answered so before the guide forbade it). `reckless` (going on past a refusal on purpose) is judged by a person, not here.
+ * slip the engine refused and said back (a wire into an input that is not there, a setting a block does not have), a tool
+ * that failed, or a node that failed when the board ran; `at-risk` is an answer that states numbers with no board behind
+ * them (the evaluation set found 13 of 30 answered so before the guide forbade it); `reckless` is an answer given past a
+ * refusal that still stands (the last step that changed the board was refused in part) without a word of it. Shown on the
+ * page with the answer and printed by the evaluation runners.
  */
-export interface NearMiss { step: number; tool: string; what: string; kind: 'error' | 'at-risk'; response: string }
+export interface NearMiss { step: number; tool: string; what: string; kind: 'error' | 'at-risk' | 'reckless'; response: string }
 export interface AgentRun { board: Board; steps: AgentStep[]; answer: string; model: string; tokens: { in: number; out: number; cached: number; written: number }; made: AgentBlock[]; checked?: string; stopped?: string; nearMisses: NearMiss[] }
 /** The near misses of a run, from its steps (each refusal the engine said back) and its answer. */
 export function nearMissesOf(steps: AgentStep[], answer: string, board: Board): NearMiss[] {
   const out: NearMiss[] = [];
-  steps.forEach((s, k) => { for (const l of s.result.split('\n')) if (l.startsWith('! ')) out.push({ step: k + 1, tool: s.tool, what: l.slice(2), kind: 'error', response: 'refused by the engine and said back; corrected in a later step, or said in the answer' }); });
+  steps.forEach((s, k) => {
+    if (s.failed) { out.push({ step: k + 1, tool: s.tool, what: `the tool failed: ${s.result.slice(0, 160)}`, kind: 'error', response: 'the error went back to the model as the tool\'s result; corrected in a later step, or said in the answer' }); return; }
+    for (const l of s.result.split('\n')) {
+      if (l.startsWith('! ')) out.push({ step: k + 1, tool: s.tool, what: l.slice(2), kind: 'error', response: 'refused by the engine and said back; corrected in a later step, or said in the answer' });
+      else { const f = /^(\S+) (failed|error): (.*)$/.exec(l); if (f) out.push({ step: k + 1, tool: s.tool, what: `node ${f[1]} failed: ${f[3]!.slice(0, 160)}`, kind: 'error', response: 'the failure went back to the model with the board\'s run; corrected in a later step, or said in the answer' }); }
+    } });
   if (/\d/.test(answer) && !nodesOf(board).length) out.push({ step: steps.length, tool: 'answer', what: 'numbers given with no board behind them', kind: 'at-risk', response: 'the guide forbids it (docs/FOR-AI.md); the evaluation set counts it wrong' });
+  const lastChange = steps.map((s, k) => [s, k] as const).filter(([s]) => ['build', 'change', 'open'].includes(s.tool) && !s.failed).pop();
+  const standing = lastChange ? lastChange[0].result.split('\n').filter((l) => l.startsWith('! ')) : [];
+  if (standing.length && !/refus|could ?n[o']t|cannot|can't|unable|failed|did ?n[o']t|does ?n[o']t|is ?n[o']t|not (yet|wired|joined|connected|done|built|possible|there)|no input|no setting|missing/i.test(answer))
+    out.push({ step: steps.length, tool: 'answer', what: `answered past ${standing.length} refusal(s) still standing, without a word of it (first: ${standing[0]!.slice(2, 120)})`, kind: 'reckless', response: 'stop, and tell the user: shown beside the answer on the page, and printed by the evaluation runners' });
   return out;
 }
 
@@ -154,7 +165,7 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
       return { board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, nearMisses: nearMissesOf(steps, answer, board), ...(checked ? { checked } : {}) }; }
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const b of r.content) if (b.type === 'tool_use') { const s0 = Date.now(); let out: string, err = false; try { out = await doTool(b.name, (b.input ?? {}) as Record<string, unknown>); } catch (e) { out = (e as Error).message; err = true; }
-      steps.push({ tool: b.name, input: b.input, result: out.slice(0, 300), ms: Date.now() - s0 }); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
+      steps.push({ tool: b.name, input: b.input, result: out.slice(0, 300), ms: Date.now() - s0, ...(err ? { failed: true as const } : {}) }); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
     messages.push({ role: 'user', content: results });
   }
   return { board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, stopped, nearMisses: nearMissesOf(steps, '', board) };

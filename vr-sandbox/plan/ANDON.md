@@ -2,7 +2,8 @@
 
 An andon is raised when a check fails on something already called done: a task passing by the evaluator, the gate on a
 pushed commit, a fault fixed that comes back. While it is open, that task, and every task that waits on it, cannot be
-called passing (the one test and `compile.py` both refuse it). It is closed only by the change that fixes it, named here.
+called passing, however far down the chain of "after" it waits (the one test and `compile.py` both refuse it). It is
+closed only by the change that fixes it, named here: "closed <date> by commit <sha>", a commit that exists.
 No blame: the row says what failed and what fixed it, never who.
 
 | Id | Raised | Task | What failed | State |
