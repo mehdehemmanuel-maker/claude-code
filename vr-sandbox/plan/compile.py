@@ -14,12 +14,13 @@ PLAN = Path(__file__).resolve().parent
 problems: list[str] = []
 
 # Task states the tables cannot carry (a spec.md table has no status column): what is done, said here with its date.
+# (the builder's word only: "claimed" until the evaluator's verdict (specs/00-structure/evaluator.md) says pass)
 STATE = {
-    '10.T1': 'values done 2026-10-31 (CODATA 2022); correlations not yet',
-    '10.T11': 'mostly passing 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); unitless ports still take anything',
-    '11.LW12': 'partly passing 2026-11-01: early cutoff counted in the gate; effects scanned only in each block\'s own run',
-    '04.P10': 'mostly passing 2026-11-01: panels carried; board 9° below at 1.23 m, bar 48° wide, chat 42° aside at 1.3 m, keyboard 0.9 m, measured emulated; text size not yet measured; no real Quest yet',
-    '11.LW15': 'passing 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it',
+    '10.T1': 'claimed, in part: values done 2026-10-31 (CODATA 2022); correlations not yet',
+    '10.T11': 'claimed, in part, 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); unitless ports still take anything',
+    '11.LW12': 'claimed, in part, 2026-11-01: early cutoff counted in the gate; effects scanned only in each block\'s own run',
+    '04.P10': 'claimed, in part, 2026-11-01: panels carried; board 9° below at 1.23 m, bar 48° wide, chat 42° aside at 1.3 m, keyboard 0.9 m, measured emulated; text size not yet measured; no real Quest yet',
+    '11.LW15': 'claimed 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it',
 }
 
 # The synthesis's findings by theme (each finding number in exactly one theme).
@@ -67,6 +68,16 @@ def spec_tasks() -> list[dict]:
         t['key'] = f"{t['spec']}.{t['id']}"
         if t['key'] in STATE:
             t['status'] = STATE[t['key']]
+    # (only the evaluator passes a task: its verdict file, a pass, overrides the builder's word; a builder's "passing"
+    # without one is a plan problem)
+    vd = PLAN / 'specs/00-structure/verdicts'
+    for t in out:
+        f = vd / f"{t['key']}.json"
+        if f.exists():
+            v = json.loads(f.read_text())
+            t['status'] = f"passing (evaluator {v.get('model', '?')}, {v.get('date', '?')})" if v.get('verdict') == 'pass' else f"failing (evaluator: {'; '.join(v.get('missing', []))[:120]})"
+        elif t['status'].startswith('passing'):
+            problems.append(f"{t['key']} says passing with no evaluator's verdict")
     return out
 
 def check_tasks(tasks: list[dict]) -> None:
@@ -200,7 +211,7 @@ def main() -> None:
     w('')
     w('| What | Count |')
     w('| --- | --- |')
-    w(f'| Tasks in the specs | {len(tasks)} ({sum(1 for t in tasks if t["status"] != "failing")} begun, the rest not started) |')
+    w(f'| Tasks in the specs | {len(tasks)}: {sum(1 for t in tasks if t["status"].startswith("passing"))} passing (by the evaluator), {sum(1 for t in tasks if t["status"].startswith("claimed"))} claimed by the builder and not yet judged, the rest failing |')
     w(f'| Faults found in the code | {len(ds)} ({sum(1 for d in ds if d[3].lower().startswith("fixed"))} fixed) |')
     w(f'| Rules in the constitution | {len(rs)} ({len(unenf)} not yet enforced by a check) |')
     w(f'| Questions for the user | {len(qs)} ({len(open_q)} unanswered: {", ".join(q[0] for q in open_q)}) |')

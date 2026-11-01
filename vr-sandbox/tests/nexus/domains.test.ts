@@ -139,6 +139,14 @@ describe('every domain, in one pass', () => {
     if (existsSync(built)) for (const f of walk(built)) bad.push(...secrets(readFileSync(f, 'utf8'), relative(root, f)));
     expect(bad).toEqual([]);
   }, 60_000);
+  // (only the evaluator passes a task (spec 00, S7): a task marked passing has the evaluator's pass in its verdict file)
+  it('no task is marked passing but by the evaluator', () => {
+    const vd = join(root, 'plan/specs/00-structure/verdicts'), bad: string[] = [];
+    for (const d of readdirSync(join(root, 'plan/specs'))) { const f = join(root, 'plan/specs', d, 'tasks.json'); if (!existsSync(f)) continue;
+      for (const t of JSON.parse(readFileSync(f, 'utf8')).tasks as { id: string; status: string }[]) if (/^passing/.test(t.status)) {
+        const v = join(vd, `${d.slice(0, 2)}.${t.id}.json`); if (!existsSync(v) || JSON.parse(readFileSync(v, 'utf8')).verdict !== 'pass') bad.push(`${d.slice(0, 2)}.${t.id}`); } }
+    expect(bad, 'marked passing with no pass from the evaluator').toEqual([]);
+  });
   // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
   // two functions, a typed array's kind; and the same value, built in another order, keys the same)
   it('a value\'s digest tells apart what is different and only that', () => {

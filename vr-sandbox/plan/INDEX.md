@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129 (8 begun, the rest not started) |
+| Tasks in the specs | 129: 0 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
 | Rules in the constitution | 29 (20 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -79,9 +79,9 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S1 | The constitution with its checks and states | — | failing |
 | S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing |
 | S3 | Hooks: push gate, budget, honesty, loop breaker | — | failing |
-| S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | passing |
-| S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | passing |
-| S6 | The routing test covers plan/ as it covers docs/ | — | passing |
+| S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | claimed |
+| S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | claimed |
+| S6 | The routing test covers plan/ as it covers docs/ | — | claimed |
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | failing |
 | S8 | The first decision records (0001 to 0007) written | — | failing |
 | S9 | The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may … | S7 | failing |
@@ -157,7 +157,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | P6 | Sights, each with its legend | — | failing |
 | P7 | The corrector's ghost and band | P1 | failing |
 | P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and … | P1 | failing |
-| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ … | — | mostly passing 2026-11-01: panels carried; board 9° below at 1.23 m, bar 48° wide, chat 42° aside at 1.3 m, keyboard 0.9 m, measured emulated; text size not yet measured; no real Quest yet |
+| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ … | — | claimed, in part, 2026-11-01: panels carried; board 9° below at 1.23 m, bar 48° wide, chat 42° aside at 1.3 m, keyboard 0.9 m, measured emulated; text size not yet measured; no real Quest yet |
 | P11 | Moving comfortably: fixed speeds (stopped, 1.4, 3 m/s), snap turn 30°/45° on the right stick, a vignette while moving, zoom rate capped and about … | P10 | failing |
 
 ### 05-civil (7)
@@ -209,7 +209,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
-| T1 | CODATA 2022 with correlations | 00 | values done 2026-10-31 (CODATA 2022); correlations not yet |
+| T1 | CODATA 2022 with correlations | 00 | claimed, in part: values done 2026-10-31 (CODATA 2022); correlations not yet |
 | T2 | Interval and ensemble modes; GUM validity probe | 00 | failing |
 | T3 | Claim status on every value (C21) | 00 S4 | failing |
 | T5 | Envelopes on sourced numbers (C22) | T3 | failing |
@@ -218,7 +218,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | T8 | Forward-mode differentiation through boards | 00 | failing |
 | T9 | The "cannot simulate" register, read by the AI | 00 | failing |
 | T10 | Floating-point lint | 00 | failing |
-| T11 | **First**: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets `quantity`, proposed by `quantityOf` and … | — | mostly passing 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); unitless ports still take anything |
+| T11 | **First**: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets `quantity`, proposed by `quantityOf` and … | — | claimed, in part, 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); unitless ports still take anything |
 | T12 | Retraction check: source DOIs against Crossref's open Retraction Watch data; everything derived marked | T3 | failing |
 | T13 | AI-written values beside sourced ones, never replacing them (C27); the share of AI-made inputs on every derived value | T3 | failing |
 | T14 | Values linked to the decisions they bear on; a new estimate reopens them; two readings of one quantity that disagree stop the line (C28) | T3, 00 S10 | failing |
@@ -246,9 +246,9 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | LW9 | Determinism across browsers: a Jolt build with its cross-platform determinism option; a deterministic maths module (V8 and JavaScriptCore differ … | LW2 | failing |
 | LW10 | A `grow` node family: demand field, local rule, budget, load or damage ensemble, stop condition; resilience with an n − 1 check (research 22) | 09 P1 | failing |
 | LW11 | Space measures as nodes (justified depth, integration, intimacy gradient, egress distance, daylight), each with its stability under small edits … | — | failing |
-| LW12 | **First, before LW13**: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as … | — | partly passing 2026-11-01: early cutoff counted in the gate; effects scanned only in each block's own run |
+| LW12 | **First, before LW13**: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as … | — | claimed, in part, 2026-11-01: early cutoff counted in the gate; effects scanned only in each block's own run |
 | LW13 | Push a mark, pull the work (absorbs LW1, lazy evaluation): observers (view, panels, checks, exports, the agent) pull; only stale nodes on their … | LW12 | failing |
-| LW15 | Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by … | — | passing 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it |
+| LW15 | Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by … | — | claimed 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it |
 | LW16 | Every simulated world carries an ODD description, its update order, one label (demo, calibrated, compared, docked, forecast) and its worker count … | LW2 | failing |
 
 ### 12-cost-carbon (5)

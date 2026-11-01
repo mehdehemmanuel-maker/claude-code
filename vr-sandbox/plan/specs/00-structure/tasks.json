@@ -44,7 +44,7 @@
    ],
    "owner": "tests/nexus/domains.test.ts",
    "check": "a planted unsourced figure, a planted placeholder and a planted key pattern each fail the gate; removed, it passes",
-   "status": "passing",
+   "status": "claimed",
    "after": [],
    "evidence": "2026-11-01: tests/nexus/domains.test.ts with tests/nexus/scans.ts; a planted unsourced record and a TODO in src/data/woods.ts and an AWS-shaped key in a tracked doc each failed it, by file and line; removed, it passes"
   },
@@ -56,7 +56,7 @@
    ],
    "owner": "evals/, package.json",
    "check": "npm run eval:agent prints steps, tokens, seconds, right or wrong for each, and the baseline is recorded in REALITY.md with its command",
-   "status": "passing",
+   "status": "claimed",
    "after": [],
    "evidence": "2026-11-01: npm run eval:agent (tests/evals/agent.eval.ts), 30 requests; baseline 16 of 30 right with claude-haiku-5-5, then 30 of 30 with one rule added to docs/FOR-AI.md (every number from a node); one run each; recorded in docs/REALITY.md. The products set waits on the user naming them (U6)."
   },
@@ -68,7 +68,7 @@
    ],
    "owner": "tests/nexus/domains.test.ts",
    "check": "a plan file not routed from CLAUDE.md or plan/README.md fails the test",
-   "status": "passing",
+   "status": "claimed",
    "after": [],
    "evidence": "2026-11-01: tests/nexus/domains.test.ts, \"every source file has an owner in the docs\": a planted plan/STRAY.md and a planted plan/specs/99-x/a.md each failed it; the real plan passes"
   },
