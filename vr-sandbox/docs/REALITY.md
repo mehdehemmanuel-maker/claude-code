@@ -1586,3 +1586,27 @@ where a node fed a Map has it changed to another Map (the old writing wrote both
 the new value. Planted again: the old key and an altering cache each fail the gate now. Gate: 33 passed in 65.0 s (one
 run; over the one-minute aim; earlier runs 50.0 s here and 63.8 s in the evaluator's: run-to-run variance is large and
 not separated from the new check's cost).
+
+## 2026-11-01: the hooks (spec 00, S3; constitution C10 to C13)
+
+Four checks that refuse, so the rules hold by running rather than by being remembered. `npm run gate` is now
+`scripts/gate.mjs`: the type check and the one test as before, then `.gate-ok`, the tree of this folder exactly as it was
+tested (a run that changes files gives no stamp). The push gate (git's pre-push hook, and a Claude Code hook on Bash in
+`../.claude/settings.json` for a clone where `npm run hooks` was not run) refuses a commit whose tree is not the stamped
+one. The change budget (git's commit-msg hook) refuses a commit that changes code past the owners of the task its message
+names, or names no task, unless it names a decision record; the plan, the docs and the tests are open to any task; tasks
+written in a spec's table get their owners in `plan/owners.json` before work starts. Honesty (the same hook) refuses an
+entry added to this log, or a line added to `PROGRESS.md`, that states a number without the command or test it came from
+(dates, ids, hashes and versions are not counted). The loop breaker (in the gate) refuses a fourth run after three
+failures on the task in hand until `PROGRESS.md` answers, in a line `pipeline: <task>: …`, whether a pipeline is missing.
+Each check is a pure function in `scripts/hooks/lib.mjs`, tried on purpose by the test "each hook refuses what it is there
+to refuse" in `tests/nexus/domains.test.ts`. The Claude Code hook stopped one of the builder's own commands the moment it
+was installed: its first pattern read "git's pre-push hook", written into this entry, as a push. It now strips
+here-documents and quoted text and looks for `git … push` as a command; nine cases are in the test.
+Tried live in this clone before the commit that brought them (`git commit` on planted changes, `node scripts/gate.mjs`
+with three failures recorded): a commit past the owners and a commit naming no task were refused; a fourth gate run was
+refused. The honesty check let a planted entry through twice before it held: first because the planted entry and a real
+one were added as one hunk (now each `## ` entry is judged on its own), then because its `git diff` was given a path from
+the top of the repository while running inside this folder, so it read nothing (now `:(top)`); the first slip made a
+local commit, undone with `git reset --soft` before anything was pushed. Its unit test had passed both times: the wiring
+was what failed, which is why each hook is also tried live.

@@ -11,7 +11,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- |
 | Tasks in the specs | 130: 5 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
-| Rules in the constitution | 29 (20 not yet enforced by a check) |
+| Rules in the constitution | 29 (16 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
@@ -265,10 +265,6 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 ## Rules not yet enforced
 
 - **C9** A real product's own data is held fixed; a finding on it is checked against the product, never tuned away (unenforced: spec 00, task S14)
-- **C10** Never state a time, count or result that was not measured (unenforced: spec 00, task S3)
-- **C11** No push unless the gate passed on that commit (unenforced: spec 00, task S3 (the 2026-10-31 red push is why))
-- **C12** A task stays in its budget: its owner, its tests and docs; past it, a decision record (unenforced: spec 00, task S3)
-- **C13** Two minutes on one run, or three failed tries: stop, and ask whether a pipeline is missing (unenforced (a rule in `CLAUDE.md` today): spec 00, task S3)
 - **C14** Names are not nodes: the node count is what runs (unenforced: spec 02, task N6)
 - **C15** Faces are never referred to by their index; parts mate by interfaces, not by typed positions where an interface exists (unenforced: spec 01, tasks I9 and I14)
 - **C16** Checks by number first; a picture is a second check, never the only one (unenforced: spec 00, task S5; spec 01, task I15)

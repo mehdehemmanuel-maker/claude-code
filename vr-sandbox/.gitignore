@@ -11,3 +11,5 @@ dist-view-dev/
 dist-view-survey/
 bench-out/
 data/ext/
+.gate-ok
+.gate-fails.json

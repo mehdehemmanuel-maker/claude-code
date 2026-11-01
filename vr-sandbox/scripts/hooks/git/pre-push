@@ -1,0 +1,4 @@
+#!/bin/sh
+# The push gate (spec 00, S3; C11): each commit pushed must hold exactly the tree `npm run gate` passed.
+# Installed with `npm run hooks` (git config core.hooksPath vr-sandbox/scripts/hooks/git).
+exec node "$(git rev-parse --show-toplevel)/vr-sandbox/scripts/hooks/push-check.mjs" "$@"

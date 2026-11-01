@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { placeholders, secrets, unsourced } from './scans';
+import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, fits as fitsPorts, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
@@ -158,6 +159,32 @@ describe('every domain, in one pass', () => {
     for (const f of readdirSync(join(root, 'plan/decisions')).filter((x) => /^\d{4}-.*\.md$/.test(x))) { const t = readFileSync(join(root, 'plan/decisions', f), 'utf8');
       for (const h of ['## Context', '## Options', '## Choice', '## The assumption it rests on', '## When to test it again']) if (!t.includes(h)) bad.push(`${f}: no "${h}"`); }
     expect(bad).toEqual([]);
+  });
+  // (the hooks (spec 00, S3; C10 to C13), each tried once on purpose: a push of what the gate did not pass; a commit past
+  // its task's owners or naming no task; a number written with no command or test; a fourth gate run after three failures)
+  it('each hook refuses what it is there to refuse', () => {
+    expect(checkPush(null, 'abc').ok, 'no stamp').toBe(false);
+    expect(checkPush({ tree: 'abc' }, 'abd').ok, 'another tree').toBe(false);
+    expect(checkPush({ tree: 'abc' }, 'abc').ok).toBe(true);
+    const owners = ownersFromPlan(join(root, 'plan'));
+    expect(owners('00.S3'), 'the plan gives S3 its owners').toContain('scripts/');
+    expect(checkBudget('[00.S3] the hooks', ['scripts/gate.mjs', 'tests/nexus/domains.test.ts', 'plan/INDEX.md'], owners, []).ok).toBe(true);
+    expect(checkBudget('[00.S3] the hooks', ['scripts/gate.mjs', 'src/nexus/blocks.ts'], owners, []).ok, 'past its owners').toBe(false);
+    expect(checkBudget('tidy', ['src/nexus/blocks.ts'], owners, []).ok, 'code with no task named').toBe(false);
+    expect(checkBudget('tidy, decision 0010', ['src/nexus/blocks.ts'], owners, ['0010']).ok, 'a decision named').toBe(true);
+    expect(checkBudget('a verdict', ['plan/specs/00-structure/verdicts/00.S3.json'], owners, []).ok, 'the plan alone').toBe(true);
+    expect(checkBudget('[99.Z9] x', ['src/nexus/blocks.ts'], owners, []).ok, 'a task with no owners written').toBe(false);
+    expect(checkHonesty(['The gate passed, 33 tests in 65.0 s.']).ok, 'a number with no command').toBe(false);
+    expect(checkHonesty(['The gate (`npm run gate`) passed, 33 tests in 65.0 s.']).ok).toBe(true);
+    expect(checkHonesty(entriesOf('## one\n\nThe gate (`npm run gate`) passed, 33 tests.\n\n## two\n\nThe engine runs 40 % faster.')).ok, 'an entry added beside another').toBe(false);
+    expect(checkHonesty(['Fault D12 and task 10.T11 noted on 2026-11-01 at commit 5eb0103 (spec 04, step 3).']).ok, 'dates and ids are not measurements').toBe(true);
+    expect(checkLoop({ '00.S3': { fails: 3, note: '' } }, '00.S3', '').ok, 'a fourth try').toBe(false);
+    expect(checkLoop({ '00.S3': { fails: 3, note: '' } }, '00.S3', 'no: three separate faults').ok, 'answered').toBe(true);
+    expect(checkLoop({ '00.S3': { fails: 2, note: '' } }, '00.S3', '').ok).toBe(true);
+    expect(progressOf('Task in hand: 00.S3\npipeline: 00.S3: no\npipeline: 00.S2: x')).toEqual({ task: '00.S3', note: 'no' });
+    // (the Claude Code hook stops a command that pushes, not one that only says the word: it once stopped one that did)
+    for (const [c, w] of [['git push -u origin x', true], ['cd a && git push', true], ['git -C .. push origin b', true], ['npm run gate && git push -q', true],
+      ['echo "git push"', false], ['cat <<EOF\ngit push now\nEOF', false], ["echo git's pre-push hook", false], ['git commit -m "push it"', false]] as const) expect(pushes(c), c).toBe(w);
   });
   // (the session's handoff (spec 00, S2): PROGRESS.md is short, names the task in hand (a task that exists) and the last
   // commit the gate passed, so a fresh session finds where the work stands in one read)

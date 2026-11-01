@@ -73,6 +73,7 @@ known gaps are there too.
 | Materials and everything known of them; any mix worked out from its phases | `nexus/matter.ts`, `nexus/mixture.ts` (data: `mass.ts`, `elements.ts`, `data/materials.ts`, `periodic.ts`, `woods.ts`, `mixes.ts`, `constituents.ts`) |
 | What a thing is made of; mass, centre, inertia, heat capacity | `nexus/madeof.ts` |
 | Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
+| The hooks that refuse: the push gate (a push only of what the gate passed), the change budget (a commit within its task's owners), honesty (a number with its command), the loop breaker (three failed gate runs, then ask whether a pipeline is missing) | `scripts/gate.mjs`, `scripts/hooks/` (`npm run hooks` installs git's; Claude Code's in `../.claude/settings.json`) |
 | The one test (every domain), the scans of what is written (sources, placeholders, keys), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/scans.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
 | The built-parts library: every piece every build makes, stored by design, and its law | `nexus/stock.ts` (`src/data/stock.json` generated) |
@@ -179,7 +180,8 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
   task of the start queue (`plan/README.md`); write its failing test first; build it within the task's owners; run the
   gate; commit with the task's id in the message (`[00.S3]`); push (the push hook refuses a commit the gate has not
   passed); ask the evaluator (`plan/specs/00-structure/evaluator.md`) for a verdict; then rewrite `PROGRESS.md`.
-- Gate: `npm run gate`: the type check and the one test, `tests/nexus/domains.test.ts` (every domain's nodes, their own
+- Gate: `npm run gate` (`scripts/gate.mjs`): the type check and the one test, then a stamp of exactly what passed (the push
+  hook reads it), `tests/nexus/domains.test.ts` (every domain's nodes, their own
   tests, one quick board per field, the reach check), under a minute; CI runs the same. `UPDATE_DOCS=1 npx vitest run`
   writes the generated docs and the nodes' dates (twice where nodes' code changed). Nodes built before the update are
   marked as such: the queue to re-check. Build the viewer: `npx vite build --config vite.view.config.ts --logLevel error`.

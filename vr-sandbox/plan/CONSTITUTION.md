@@ -18,10 +18,10 @@ what it misses is said), **unenforced** (no check yet: the spec that will add on
 | C7 | Every number is sourced, or labelled typical, derived or an estimate | provenance check | enforced for `src/data/` since 2026-11-01 (the provenance scan); figures elsewhere (the kinds, the makers) not yet |
 | C8 | No mocks: nothing stands in for what it claims to be | partly the domain tests (nodes run for real) | partly: placeholder words in data scanned since 2026-11-01 (S4); a figure that only looks real (a round guess) is not caught |
 | C9 | A real product's own data is held fixed; a finding on it is checked against the product, never tuned away | the one test of a real product (`specs/00-structure/the-one-test.md`; the user's answer to U6) | **unenforced**: spec 00, task S14 |
-| C10 | Never state a time, count or result that was not measured | honesty hook on `REALITY.md` and `PROGRESS.md` (a number needs the command it came from) | **unenforced**: spec 00, task S3 |
-| C11 | No push unless the gate passed on that commit | push hook | **unenforced**: spec 00, task S3 (the 2026-10-31 red push is why) |
-| C12 | A task stays in its budget: its owner, its tests and docs; past it, a decision record | change-budget hook | **unenforced**: spec 00, task S3 |
-| C13 | Two minutes on one run, or three failed tries: stop, and ask whether a pipeline is missing | loop-breaker hook | **unenforced** (a rule in `CLAUDE.md` today): spec 00, task S3 |
+| C10 | Never state a time, count or result that was not measured | honesty hook on `REALITY.md` and `PROGRESS.md` (a number needs the command it came from) | enforced since 2026-11-01: the honesty check in git's commit-msg hook (`scripts/hooks/commit-check.mjs`; spec 00, task S3) |
+| C11 | No push unless the gate passed on that commit | push hook | enforced since 2026-11-01: the push gate (git's pre-push hook and Claude Code's, `scripts/hooks/push-check.mjs`; spec 00, task S3; two red pushes are why) |
+| C12 | A task stays in its budget: its owner, its tests and docs; past it, a decision record | change-budget hook | enforced since 2026-11-01: the change budget in git's commit-msg hook (spec 00, task S3) |
+| C13 | Two minutes on one run, or three failed tries: stop, and ask whether a pipeline is missing | loop-breaker hook | enforced since 2026-11-01: the loop breaker in `npm run gate` (`scripts/gate.mjs`; spec 00, task S3) |
 | C14 | Names are not nodes: the node count is what runs | the names-index test | **unenforced**: spec 02, task N6 |
 | C15 | Faces are never referred to by their index; parts mate by interfaces, not by typed positions where an interface exists | interface tests | **unenforced**: spec 01, tasks I9 and I14 |
 | C16 | Checks by number first; a picture is a second check, never the only one | the AI's evaluation set and the evaluator's contract | **unenforced**: spec 00, task S5; spec 01, task I15 |

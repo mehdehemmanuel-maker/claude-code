@@ -31,7 +31,7 @@
    "meets": [
     "S-R6"
    ],
-   "owner": ".claude/settings.json, scripts/hooks/",
+   "owner": ".claude/settings.json, scripts/, package.json, .gitignore",
    "check": "each hook tried once on purpose and refuses: a push without a gate stamp; a commit past its owners; a number with no command; a fourth try",
    "status": "failing",
    "after": []
@@ -116,7 +116,7 @@
    "meets": [
     "S-R6"
    ],
-   "owner": "scripts/hooks/, agent.ts",
+   "owner": "scripts/hooks/, plan/ANDON.md, plan/NEAR-MISS.md, agent.ts",
    "check": "an open andon blocks 'done'; a caught near miss is logged with its kind",
    "status": "failing",
    "after": [
