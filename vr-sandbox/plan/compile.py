@@ -184,6 +184,10 @@ def queue(tasks: list[dict]) -> list[str]:
                     problems.append(f'start queue: {k} waits on {dep}, which does not come before it')
     return keys
 
+def table_rows(name: str) -> list[list[str]]:
+    p = PLAN / name
+    return [cells(l) for l in p.read_text().split('\n') if l.startswith('| ') and not re.match(r'^\| (Id|Date) \|', l) and not l.startswith('| ---')] if p.exists() else []
+
 def defects() -> list[list[str]]:
     p = PLAN / 'DEFECTS.md'
     return [cells(l) for l in p.read_text().split('\n') if re.match(r'^\| D\d+ \|', l)] if p.exists() else []
@@ -219,6 +223,12 @@ def main() -> None:
     w(f'| Findings in the synthesis | {len(fs)} |')
     w(f'| Research branches | {sum(t[1] for t in tr)} explored, {sum(t[2] for t in tr)} open, {sum(t[3] for t in tr)} touched |')
     w(f'| Questions in the book | {sum(n for _, n in bk)} in {len(bk)} sections (the best of 2,244; decision 0010) |')
+    andons = table_rows('ANDON.md'); misses = table_rows('NEAR-MISS.md')
+    open_andons = [r for r in andons if not r[4].startswith('closed')]
+    for r in open_andons:
+        if any(t['key'] == r[2] and t['status'].startswith('passing') for t in tasks): problems.append(f"{r[2]} is passing with andon {r[0]} open")
+    w(f'| Andons (stop the line) | {len(open_andons)} open, {len(andons) - len(open_andons)} closed |')
+    w(f'| Near misses logged | {len(misses)} ({", ".join(f"{sum(1 for r in misses if r[2] == k)} {k}" for k in ("error", "at-risk", "reckless"))}) |')
     w(f'| Plan problems found by this script | {len(problems)} |')
     w('')
     w('## The start queue (from `README.md`)')

@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { placeholders, secrets, unsourced } from './scans';
+import { nearMissesOf } from '../../src/nexus/agent';
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
@@ -185,6 +186,26 @@ describe('every domain, in one pass', () => {
     // (the Claude Code hook stops a command that pushes, not one that only says the word: it once stopped one that did)
     for (const [c, w] of [['git push -u origin x', true], ['cd a && git push', true], ['git -C .. push origin b', true], ['npm run gate && git push -q', true],
       ['echo "git push"', false], ['cat <<EOF\ngit push now\nEOF', false], ["echo git's pre-push hook", false], ['git commit -m "push it"', false]] as const) expect(pushes(c), c).toBe(w);
+  });
+  // (stop the line (spec 00, S10; C25): an open andon keeps its task, and every task that waits on it, from passing; each near
+  // miss has its kind and its response; the AI in the app logs the near misses its runs caught)
+  it('an open andon stops the line, and every near miss has its kind and its response', () => {
+    const rows = (f: string) => readFileSync(join(root, 'plan', f), 'utf8').split('\n').filter((l) => /^\| /.test(l) && !/^\| (Id|Date) \|/.test(l) && !/^\| -/.test(l)).map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
+    const andons = rows('ANDON.md'), open = andons.filter((r) => !/^closed/.test(r[4]!)).map((r) => r[2]!), bad: string[] = [];
+    for (const r of andons) if (!/^\d\d\.[A-Z]+\d+$/.test(r[2]!) || !r[3]) bad.push(`andon ${r[0]}: needs a task and what failed`);
+    const vd = join(root, 'plan/specs/00-structure/verdicts'), passing = (k: string) => existsSync(join(vd, `${k}.json`)) && JSON.parse(readFileSync(join(vd, `${k}.json`), 'utf8')).verdict === 'pass';
+    const waits = new Map<string, string[]>();
+    for (const d of readdirSync(join(root, 'plan/specs'))) { const f = join(root, 'plan/specs', d, 'tasks.json'); if (!existsSync(f)) continue;
+      for (const t of JSON.parse(readFileSync(f, 'utf8')).tasks as { id: string; after: string[] }[]) waits.set(`${d.slice(0, 2)}.${t.id}`, t.after.map((x) => (/^\d\d /.test(x) ? x.replace(' ', '.') : `${d.slice(0, 2)}.${x}`))); }
+    for (const k of open) { if (passing(k)) bad.push(`${k} passes with an open andon`); for (const [t, a] of waits) if (a.includes(k) && passing(t)) bad.push(`${t} passes while ${k}, which it waits on, has an open andon`); }
+    for (const r of rows('NEAR-MISS.md')) { if (!['error', 'at-risk', 'reckless'].includes(r[2]!)) bad.push(`near miss "${r[1]!.slice(0, 40)}": kind ${r[2]}`); if (!r[4]) bad.push(`near miss "${r[1]!.slice(0, 40)}": no response`); }
+    expect(bad).toEqual([]);
+    const misses = nearMissesOf([{ tool: 'build', input: {}, result: '! wire k.value>s.rate: no input "rate"\ns ok rate=11308', ms: 1 }], 'It weighs 19.6 N.', emptyBoard('x'));
+    expect(misses.map((m) => m.kind)).toEqual(['error', 'at-risk']);
+  });
+  // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01))
+  it('no probe is left where the gate runs', () => {
+    expect(readdirSync(join(root, 'tests/nexus')).filter((f) => f.startsWith('zz_'))).toEqual([]);
   });
   // (the session's handoff (spec 00, S2): PROGRESS.md is short, names the task in hand (a task that exists) and the last
   // commit the gate passed, so a fresh session finds where the work stands in one read)

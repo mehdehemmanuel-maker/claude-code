@@ -59,7 +59,21 @@ const guideOf = async (): Promise<string> => { if (guide) return guide; const { 
 export interface AgentStep { tool: string; input: unknown; result: string; ms: number }
 /** A block the agent folded and saved: enough to register it again anywhere (a page keeps it with the blocks you saved). */
 export interface AgentBlock { id: string; name: string; says: string; domains: string[]; graph: Board }
-export interface AgentRun { board: Board; steps: AgentStep[]; answer: string; model: string; tokens: { in: number; out: number; cached: number; written: number }; made: AgentBlock[]; checked?: string; stopped?: string }
+/**
+ * A near miss the run caught (spec 00, S10; no blame, each with its kind and the response it calls for): an `error` is a
+ * slip the engine refused and said back (a wire into an input that is not there, a setting a block does not have, a tool
+ * that failed); `at-risk` is an answer that states numbers with no board behind them (the evaluation set found 13 of 30
+ * answered so before the guide forbade it). `reckless` (going on past a refusal on purpose) is judged by a person, not here.
+ */
+export interface NearMiss { step: number; tool: string; what: string; kind: 'error' | 'at-risk'; response: string }
+export interface AgentRun { board: Board; steps: AgentStep[]; answer: string; model: string; tokens: { in: number; out: number; cached: number; written: number }; made: AgentBlock[]; checked?: string; stopped?: string; nearMisses: NearMiss[] }
+/** The near misses of a run, from its steps (each refusal the engine said back) and its answer. */
+export function nearMissesOf(steps: AgentStep[], answer: string, board: Board): NearMiss[] {
+  const out: NearMiss[] = [];
+  steps.forEach((s, k) => { for (const l of s.result.split('\n')) if (l.startsWith('! ')) out.push({ step: k + 1, tool: s.tool, what: l.slice(2), kind: 'error', response: 'refused by the engine and said back; corrected in a later step, or said in the answer' }); });
+  if (/\d/.test(answer) && !nodesOf(board).length) out.push({ step: steps.length, tool: 'answer', what: 'numbers given with no board behind them', kind: 'at-risk', response: 'the guide forbids it (docs/FOR-AI.md); the evaluation set counts it wrong' });
+  return out;
+}
 
 /** A second model's reading of the answer against the steps it came from: each number traced to a tool's result, each
  *  claim to what was asked and done. It sees only the request, the steps (short) and the answer: a few thousand tokens. */
@@ -137,13 +151,13 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
     if (r.stop_reason === 'refusal') throw new Error(`declined: ${r.stop_details?.explanation ?? ''}`);
     if (r.stop_reason !== 'tool_use') { const answer = r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
       const checked = o.check === false ? undefined : await checkOf(client, request, steps, answer, o.check ?? 'claude-sonnet-5-5', (u) => { tokIn += u.input_tokens; tokOut += u.output_tokens; }).catch((e) => `not checked: ${(e as Error).message}`);
-      return { board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, ...(checked ? { checked } : {}) }; }
+      return { board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, nearMisses: nearMissesOf(steps, answer, board), ...(checked ? { checked } : {}) }; }
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const b of r.content) if (b.type === 'tool_use') { const s0 = Date.now(); let out: string, err = false; try { out = await doTool(b.name, (b.input ?? {}) as Record<string, unknown>); } catch (e) { out = (e as Error).message; err = true; }
       steps.push({ tool: b.name, input: b.input, result: out.slice(0, 300), ms: Date.now() - s0 }); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
     messages.push({ role: 'user', content: results });
   }
-  return { board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, stopped };
+  return { board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, stopped, nearMisses: nearMissesOf(steps, '', board) };
 }
 
 const P = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });

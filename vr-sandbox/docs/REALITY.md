@@ -1610,3 +1610,15 @@ one were added as one hunk (now each `## ` entry is judged on its own), then bec
 the top of the repository while running inside this folder, so it read nothing (now `:(top)`); the first slip made a
 local commit, undone with `git reset --soft` before anything was pushed. Its unit test had passed both times: the wiring
 was what failed, which is why each hook is also tried live.
+
+## 2026-11-01: stop the line, and the near-miss log (spec 00, S10; constitution C25)
+
+`plan/ANDON.md`: an andon is raised when a check fails on something already called done; while it is open, its task and
+every task that waits on it cannot pass (the test "an open andon stops the line, and every near miss has its kind and its
+response" in `tests/nexus/domains.test.ts`, and `python3 plan/compile.py`); a planted open andon on a passing task failed
+it. One andon so far, closed: the gate red on a pushed commit (unrouted verdict files). `plan/NEAR-MISS.md`: seven real
+near misses from these two days, each with its kind (error, at-risk, reckless) and the response it called for, no
+blame. The AI in the app now logs its own on every run (`nearMisses` in `AgentRun`: each refusal the engine said back is
+an error; an answer with numbers and no board is at-risk), checked by the same test. And the gate now fails while a probe
+is left in `tests/nexus/` (the test "no probe is left where the gate runs"; a planted one failed it): a probe the gate
+picked up was one of the near misses.

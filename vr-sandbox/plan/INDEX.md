@@ -11,12 +11,14 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- |
 | Tasks in the specs | 130: 5 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
-| Rules in the constitution | 29 (16 not yet enforced by a check) |
+| Rules in the constitution | 29 (15 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
 | Research branches | 82 explored, 469 open, 3 touched |
 | Questions in the book | 171 in 13 sections (the best of 2,244; decision 0010) |
+| Andons (stop the line) | 0 open, 1 closed |
+| Near misses logged | 7 (4 error, 3 at-risk, 0 reckless) |
 | Plan problems found by this script | 0 |
 
 ## The start queue (from `README.md`)
@@ -275,7 +277,6 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 - **C22** Every method checks its validity when it runs and refuses past it; a static check never reports "safe" where dynamic checks were not run (unenforced: spec 09, task P4; spec 10, task T5)
 - **C23** A change to a connection, load path or use is re-checked before it is accepted (the Hyatt gate) (unenforced: spec 01, task I21)
 - **C24** Show what is measured, never what was commanded as if it were the state; never change what matters while a person cannot see it (unenforced: spec 04, task P9)
-- **C25** A failed check stops the line: nothing downstream is called done while it is open (unenforced: spec 00, task S10)
 - **C26** Folding preserves behaviour exactly: a folded block computes what its inside computes (unenforced: spec 09, task P3)
 - **C27** AI-written values sit beside sourced ones and never replace them; the AI never cites AI-written entries as evidence, and never invents a value (a price, a carbon factor, any figure): an estimate is labelled with its method (absorbs C30, decision 0010) (unenforced: spec 10, task T13; spec 12, task CC1)
 - **C28** Two readings of one quantity that disagree stop the line until reconciled (unenforced: spec 10, task T14)

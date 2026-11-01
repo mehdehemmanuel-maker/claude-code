@@ -33,7 +33,7 @@ what it misses is said), **unenforced** (no check yet: the spec that will add on
 | C22 | Every method checks its validity when it runs and refuses past it; a static check never reports "safe" where dynamic checks were not run | the validity tests | **unenforced**: spec 09, task P4; spec 10, task T5 |
 | C23 | A change to a connection, load path or use is re-checked before it is accepted (the Hyatt gate) | the change re-check | **unenforced**: spec 01, task I21 |
 | C24 | Show what is measured, never what was commanded as if it were the state; never change what matters while a person cannot see it | UI tests | **unenforced**: spec 04, task P9 |
-| C25 | A failed check stops the line: nothing downstream is called done while it is open | the andon test | **unenforced**: spec 00, task S10 |
+| C25 | A failed check stops the line: nothing downstream is called done while it is open | the andon test | enforced since 2026-11-01: `plan/ANDON.md`, read by the one test and `compile.py` (spec 00, task S10) |
 | C26 | Folding preserves behaviour exactly: a folded block computes what its inside computes | the fold test on every saved block | **unenforced**: spec 09, task P3 |
 | C27 | AI-written values sit beside sourced ones and never replace them; the AI never cites AI-written entries as evidence, and never invents a value (a price, a carbon factor, any figure): an estimate is labelled with its method (absorbs C30, decision 0010) | the provenance check | **unenforced**: spec 10, task T13; spec 12, task CC1 |
 | C28 | Two readings of one quantity that disagree stop the line until reconciled | the reading-conflict check | **unenforced**: spec 10, task T14 |
