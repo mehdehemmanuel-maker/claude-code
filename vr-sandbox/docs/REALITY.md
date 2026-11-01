@@ -1878,3 +1878,17 @@ minimap is drawn; the run probes a port and finds the block taken, not the port;
 `npm run eval:headset` (an emulated Quest 3): every limit held, the text 0.63° and 0.53° as drawn as the board opens and
 after the strip's − is pressed ten times, the smallest block 4.54°, every limit held again after pressing B. Checked
 with `npm run gate`.
+
+## 2026-11-01: old interfaces given frames where the drawing tells them (spec 01, I2)
+
+An old interface (a shaft, a bore, a stud) said nothing of where it sits. Now `interfacesOf` gives it a frame where it can
+be told and only there: a bolt's shank and a nut's thread by the components' own convention (axis y, bearing face at
+y = 0, the shank down −y); a bore or a shaft by the round piece drawn, only where its diameter agrees with the one said
+within 0.5 mm (the critic's own tolerance); otherwise no frame, and the record says why. The round-face finders
+(`piecesIn`, `roundOf`, `boreOf`, `shaftOf`) moved into `src/nexus/interfaces.ts` unchanged; `mate.ts` reads them back.
+Over the gate's corpus (41 components at their examples and three machines; counted by a probe over the same things the
+test "every port and old interface of a thing is one interface with a stable id" sweeps): 420 of 434 external threads
+framed (the rest are parts with several studs), all 187 internal threads, 19 of 35 bores, 4 of 15 shafts. Unframed: 14
+bores with no round bore drawn and 2 where the size said and the size drawn differ, 11 shafts with no round piece drawn,
+and the drives, chains and the one mount, which have no frame rule yet. The test holds every bolt's shank framed, every
+framed bore and shaft within 0.5 mm of its said size, and every unframed one saying why. Checked with `npm run gate`.

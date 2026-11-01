@@ -421,7 +421,7 @@ describe('every domain, in one pass', () => {
     const things: [string, Part | Assembly][] = DESIGNED.map((f) => [f, use(exampleOf(f))]);
     for (const [id, words] of [['go kart', 'a go kart'], ['atv', 'a honda rancher'], ['semi truck', 'a freightliner cascadia']] as const) { const k = KITS.find((x) => x.id === id); expect(k, `the ${id} kit`).toBeTruthy(); things.push([words, makeKit(k!, words, 7).part]); }
     expect(things.length, 'the corpus').toBeGreaterThan(40);
-    const ids: Record<string, string[]> = {}, kinds = new Set<string>();
+    const ids: Record<string, string[]> = {}, kinds = new Set<string>(); let said = 0, framed = 0;
     for (const [name, t] of things) {
       let ports = 0, ifaces = 0; const count = (p: Part | Assembly): void => { ports += p.ports?.length ?? 0; if ('items' in p) { for (const it of p.items) count(it.of); return; } ifaces += p.iface?.length ?? 0; for (const k of p.parts ?? []) count(k); };
       count(t); const before = digest(t), r = interfacesOf(t);
@@ -430,7 +430,14 @@ describe('every domain, in one pass', () => {
       expect(r.clashes, `${name}: no id two share`).toEqual([]);
       expect(digest(t), `${name}: nothing changed by reading it`).toBe(before);
       ids[name] = r.list.map((x) => x.id).sort(); for (const x of r.list) kinds.add(x.kind);
+      // (frames where they can be told: a bolt's and a nut's by the components' convention; a bore or a shaft only where
+      // the round piece drawn agrees with the size said within 0.5 mm, else none and why)
+      for (const x of r.list) { if (!('iface' in x.from)) continue; said++; if (x.frame) framed++;
+        if (x.kind === 'thread.external' && (x.size.n ?? 1) === 1) expect(x.frame, `${name}: ${x.id}, a bolt's shank, framed`).not.toBeNull();
+        if ((x.kind === 'bore' || x.kind === 'shaft') && x.frame) expect(Math.abs(Number(x.size.drawn) - Number(x.size.d)), `${name}: ${x.id} framed where drawn and said agree`).toBeLessThanOrEqual(0.0005 + 1e-9);
+        if ((x.kind === 'bore' || x.kind === 'shaft') && !x.frame) expect(x.says ?? '', `${name}: ${x.id} unframed, and why`).toMatch(/drawn/); }
     }
+    expect(framed, 'old interfaces framed').toBeGreaterThan(0);
     expect([...kinds].sort(), 'the kinds the corpus holds').toEqual(expect.arrayContaining(['bore', 'frame', 'holes', 'shaft', 'thread.external', 'thread.internal']));
     const file = join(root, 'tests/nexus/interfaces.ids.json');
     if (process.env.UPDATE_DOCS || !existsSync(file)) writeFileSync(file, JSON.stringify(ids, null, 1) + '\n');

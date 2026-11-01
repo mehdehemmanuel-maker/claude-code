@@ -26,7 +26,7 @@
    "after": [
     "I1"
    ],
-   "evidence": "2026-11-01: interfacesOf reads every port and old interface; the gate sweeps 41 components and 3 machines (44 things, 720 interfaces, no id shared, nothing changed, ids as another process wrote them); not yet every starter board's things, nor frames read from drawn bores and shafts"
+   "evidence": "2026-11-01: interfacesOf reads every port and old interface; frames for bolts and nuts by convention, for bores and shafts where the drawing agrees; the gate sweeps 41 components and 3 machines (44 things, no id shared, nothing changed, ids as another process wrote them); not yet every starter board's things"
   },
   {
    "id": "I3",

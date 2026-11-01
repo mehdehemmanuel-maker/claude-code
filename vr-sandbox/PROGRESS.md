@@ -2,7 +2,7 @@
 
 Task in hand: 00.S10
 Spec in hand: spec 00, the structure (`plan/specs/00-structure/`)
-Last commit the gate passed: b56fb33 (2026-11-01)
+Last commit the gate passed: d20a29c (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -15,7 +15,7 @@ Last commit the gate passed: b56fb33 (2026-11-01)
 - Verdicts in: 00.S1, S2, S3 pass. 00.S10, 10.T3 and 04.P10 failed a fourth time; each mended (the run tested by running
   it; Sets and any depth scanned; the headset's text as drawn, no minimap, ports probed, B ignored), to be judged again.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate two red teams found now refused),
-  and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames from drawn bores to come).
+  and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 11.LW12 and 10.T1 are claimed in part; their open parts are in `plan/DEFECTS.md` (D7) and the task rows.
 - The one test (`npm run eval:one`) passes 2 of its 18 lines; the rest wait on specs 01, 03, 04 and 06.
 

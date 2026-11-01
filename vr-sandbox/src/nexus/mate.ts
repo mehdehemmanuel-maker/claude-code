@@ -18,7 +18,8 @@ import { boltedJoint, use } from './components';
 import { METRIC, NEMA_FACE } from './families';
 import type { Cut, Part, Port, Shape, V3 } from './kits';
 import { piecesOf as boxesOf } from './form';
-import { matrixOfPart } from './interfaces';
+import { boreOf, matrixOfPart, piecesIn, roundOf, shaftOf } from './interfaces';
+export { boreOf, shaftOf };
 
 const TOL = 0.0002;
 /** The standards' patterns, centres in metres: a NEMA motor's face (NEMA ICS 16: the four tapped holes on a square, the
@@ -124,33 +125,6 @@ export function assemble(name: string, parts: Part[]): { part: Part; mates: stri
 }
 
 // ---- by their round faces -------------------------------------------------------------------------------------------------
-/** Every drawn piece of a part with where it is in the part's frame (through every group it is in). */
-function piecesIn(root: Part, m0 = new THREE.Matrix4()): { p: Part; m: THREE.Matrix4; path: number[] }[] {
-  const out: { p: Part; m: THREE.Matrix4; path: number[] }[] = [];
-  const walk = (p: Part, m: THREE.Matrix4, path: number[]) => { const mm = m.clone().multiply(matrixOfPart(p)); if (p.shape) out.push({ p, m: mm, path }); (p.parts ?? []).forEach((q, i) => walk(q, mm, [...path, i])); };
-  walk(root, m0, []); return out;
-}
-/** A round piece's axis in its own frame (along its y: a cylinder's, a turned part's; along its z: an extruded part's),
- *  its two ends there, its outside radius and its bore (0 where it is solid). */
-function roundOf(s: Shape, base?: boolean): { a: V3; b: V3; r: number; bore: number } | null {
-  if ('cyl' in s) { const h = s.cyl[1], lo = base ? 0 : -h / 2; return { a: [0, lo, 0], b: [0, lo + h, 0], r: Math.max(s.cyl[0], s.cyl[2] ?? s.cyl[0]), bore: 0 }; }
-  if ('lathe' in s) { const ys = s.lathe.map((q) => q[1]), xs = s.lathe.map((q) => q[0]); return { a: [0, Math.min(...ys), 0], b: [0, Math.max(...ys), 0], r: Math.max(...xs), bore: Math.min(...xs) }; }
-  if ('prism' in s) { const L = s.prism.L, hole = s.prism.holes?.[0]; return { a: [0, 0, -L / 2], b: [0, 0, L / 2], r: Math.max(...s.prism.pts.map(([x, y]) => Math.hypot(x, y))), bore: hole ? Math.min(...hole.map(([x, y]) => Math.hypot(x, y))) * Math.cos(Math.PI / hole.length) : 0 }; }
-  return null;
-}
-/** Where a part's bore is, in its own frame: the round piece of it with the narrowest hole through it (a gear's teeth, a
- *  bearing's inner ring, a pulley's hub): its axis's two ends and the hole's radius. */
-export function boreOf(p: Part): { a: THREE.Vector3; b: THREE.Vector3; r: number; piece: string } | null {
-  let best: { a: THREE.Vector3; b: THREE.Vector3; r: number; piece: string } | null = null;
-  for (const n of piecesIn({ ...p, at: [0, 0, 0], rot: [0, 0, 0] })) { const q = roundOf(n.p.shape!, n.p.base); if (!q || q.bore <= 0) continue; if (!best || q.bore < best.r) best = { a: v(q.a).applyMatrix4(n.m), b: v(q.b).applyMatrix4(n.m), r: q.bore, piece: n.p.name }; }
-  return best;
-}
-/** A shaft: the first round piece of a part named like `re` (a cam's nose, a crank's nose, an axle): its axis's two ends
- *  in the part's frame and its radius. */
-export function shaftOf(p: Part, re: RegExp): { a: THREE.Vector3; b: THREE.Vector3; r: number; piece: string } | null {
-  for (const n of piecesIn(p)) { if (!re.test(n.p.name)) continue; const q = roundOf(n.p.shape!, n.p.base); if (q) return { a: v(q.a).applyMatrix4(n.m), b: v(q.b).applyMatrix4(n.m), r: q.r, piece: n.p.name }; }
-  return null;
-}
 export interface OntoFit { part: Part; gap: number; says: string }
 /** A part slid onto a shaft of another: its bore's axis made the shaft's, its middle `from` the shaft's far end (b) by
  *  `inset` (or from its near end, a), turned `turn` about it; the fit by what the bore and shaft measure: a clearance
