@@ -43,7 +43,8 @@ const frameOf = (p: Part, q: Port): Frame => { const m = matOf(p), r = new THREE
  *  the second's pattern, mirrored, lands on the first's: or why they do not. */
 export function fit(a: Port, b: Port): { turn: number } | string {
   const pair = [a.sex, b.sex].sort().join('+');
-  if (!['holes+threads', 'holes+holes', 'holes+pins'].includes(pair)) return `${a.sex} do not take ${b.sex}`;
+  // (a pin into threads is a screw's or a stud's own interface meeting a tapped hole or an insert (spec 01, I8))
+  if (!['holes+threads', 'holes+holes', 'holes+pins', 'pins+threads'].includes(pair)) return `${a.sex} do not take ${b.sex}`;
   if (a.thread.toLowerCase() !== b.thread.toLowerCase()) return `${a.thread} is not ${b.thread}`;
   if (a.pattern.length !== b.pattern.length || !a.pattern.length) return `${a.pattern.length} against ${b.pattern.length}`;
   // (b's point (r, φ) lands at angle θ - φ in a's face: the mirror, turned by θ)
@@ -87,6 +88,7 @@ export function mate(a: Part, pa: string, b: Part, pb: string): { b: Part; faste
   const qa = a.ports?.find((q) => q.name === pa), qb = b.ports?.find((q) => q.name === pb);
   if (!qa || !qb) return `no port ${!qa ? `${pa} on the ${a.name}` : `${pb} on the ${b.name}`}`;
   const f = fit(qa, qb); if (typeof f === 'string') return `the ${b.name}'s ${pb} does not mate the ${a.name}'s ${pa}: ${f}`;
+  if ([qa.sex, qb.sex].sort().join('+') === 'pins+threads') return `the ${a.name}'s ${pa} and the ${b.name}'s ${pb} are a pin and threads: a fastener meets threads (fastenerFor); parts are mated through holes`;
   const A = frameOf(a, qa), c = Math.cos(f.turn), s = Math.sin(f.turn);
   // (b's face turned to face a's: its normal against a's, its u turned by the fit about a's normal)
   const N = A.n.clone().negate(), U = A.u.clone().multiplyScalar(c).addScaledVector(A.w, s), W = N.clone().cross(U);
@@ -404,7 +406,7 @@ export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn
 export function applyImprint(host: Part, im: Imprinted, of: string): { part: Part; port: Port; says: string } {
   const q = piecesIn(host).find((x) => x.path.join('/') === im.path.join('/'))!, inv = q.m.clone().invert();
   const loc = (v: V3) => new THREE.Vector3(...v).applyMatrix4(inv), dirL = (v: V3) => new THREE.Vector3(...v).transformDirection(inv);
-  const at = loc(im.frame.at), n = dirL(im.frame.n), u = dirL(im.frame.u), w = u.clone().cross(n).normalize(), neg = im.negative;
+  const at = loc(im.frame.at), n = dirL(im.frame.n), u = dirL(im.frame.u), w = n.clone().cross(u).normalize(), neg = im.negative; // (w = n × u, as frameOf and mate() read a port)
   // (a tool's place in the interface's frame: x along u, y along n (the hole runs along −y), z across both)
   const place = (p?: V3) => at.clone().addScaledVector(u, p?.[0] ?? 0).addScaledVector(n, p?.[1] ?? 0).addScaledVector(w, p?.[2] ?? 0);
   const cuts: Cut[] = neg.tools.filter((x) => x.role === 'remove').map((x) => { const prof = x.prof!, rIn = Math.min(...prof.filter((p) => p[0] > 0).map((p) => p[0])), depth = Math.max(...prof.map((p) => p[1]));
@@ -413,7 +415,9 @@ export function applyImprint(host: Part, im: Imprinted, of: string): { part: Par
     return { name: `room for ${of}`, kind: 'box', at: c.toArray() as V3, size: sz.toArray() as V3, why: x.why }; });
   const holes = neg.tools.filter((x) => x.role === 'remove'), pattern: [number, number][] = holes.length > 1 ? holes.filter((x) => (x.at?.[0] ?? 0) !== 0 || (x.at?.[2] ?? 0) !== 0).map((x) => [x.at![0], x.at![2]]) : [[0, 0]];
   const thread = String(neg.mirror.size.thread ?? ''), sex: Port['sex'] = neg.mirror.kind === 'hole.tapped' || neg.mirror.kind === 'hole.insert' ? 'threads' : 'holes';
-  const depth = Math.max(...holes.map((x) => Math.max(...x.prof!.map((p) => p[1])))), name = `${of} (imprinted)`;
+  // (each imprinted port named apart: mate() and assemble() find a port by its name)
+  const depth = Math.max(...holes.map((x) => Math.max(...x.prof!.map((p) => p[1])))), taken = new Set((q.p.ports ?? []).map((x) => x.name)), base = `${of} (imprinted)`;
+  let name = base; for (let k = 2; taken.has(name); k++) name = `${base} ${k}`;
   const port: Port = { name, sex, thread, pattern, at: at.toArray() as V3, n: n.toArray() as V3, u: u.toArray() as V3, t: depth };
   const rec = { of, at: port.at, n: port.n, u: port.u, turn: im.turn, mirror: neg.mirror.kind, port: name, why: neg.why, asking: im.asking, face: { normal: port.n, extreme: 'max' as const, near: port.at }, made: { cuts, keep: keeps } };
   const swap = (p: Part, path: number[]): Part => path.length ? { ...p, parts: p.parts!.map((c, i) => (i === path[0] ? swap(c, path.slice(1)) : c)) } : { ...p, cuts: [...(p.cuts ?? []), ...cuts], keep: [...(p.keep ?? []), ...keeps], ports: [...(p.ports ?? []), port], imprints: [...(p.imprints ?? []), rec] };

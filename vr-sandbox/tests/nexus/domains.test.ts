@@ -7,6 +7,7 @@
 // "we don't need all these tests"); commit f509152 holds them.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
@@ -19,10 +20,10 @@ import { createHash } from 'node:crypto';
 const RUN_PINS: [string, string, string, string][] = [
   ['tests/evals/agent.eval.ts', '      const r = await agentBuild(req', 'console.log(`   near miss: ${m}`);', '4774ef8e900bc2db'],
   ['tests/evals/one.eval.ts', '  const t0 = Date.now(), r = await agentBuild(EXPECTED.request', 'console.log(`near miss, ${nearMissLine(m)}`);', '08e2a1d87952e6e5'],
-  ['src/nexus/view/nodes.ts', '      const r = await res.json()', '${nearMissesView(r.nearMisses, esc)}', 'f20d8562e069d7bd'],
+  ['src/nexus/view/nodes.ts', '      const r = await res.json()', 'renderAll();', '98c38ebfaba4eed8'],
 ];
 /** The relay's handler, its whole text pinned (the test "an open andon stops the line…" says why). */
-const RELAY_PIN = '88a20876daf9c4f4';
+const RELAY_PIN = 'b7aa7c96748b5309';
 /** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
 const AGENT_PIN = '827c6d19f645c051';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
@@ -37,7 +38,7 @@ import { lawDims, lawWitness, wireDims } from '../../src/nexus/certify';
 import { setting } from '../../src/nexus/lawgraph';
 import { apply } from '../../src/nexus/law';
 import { BOOK } from '../../src/nexus/book';
-import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, interfacesOf, itTolerance, negativeOf, type Asking, type Negative, type Refusal } from '../../src/nexus/interfaces';
+import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, interfacesOf, itTolerance, negativeOf, piecesIn, type Asking, type Negative, type Refusal } from '../../src/nexus/interfaces';
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
@@ -268,7 +269,7 @@ describe('every domain, in one pass', () => {
   it('an open andon stops the line, and every near miss has its kind and its response', async () => {
     // (every line that starts a table row, however it is spaced: '|A2|…' was skipped in silence before (the evaluator,
     // 2026-11-01))
-    const rows = (f: string) => readFileSync(join(root, 'plan', f), 'utf8').split('\n').filter((l) => /^\|/.test(l) && !/^\|\s*(Id|Date)\s*\|/.test(l) && !/^\|\s*:?-/.test(l)).map((l) => l.replace(/\|\s*$/, '').split('|').slice(1).map((c) => c.trim()));
+    const rows = (f: string) => readFileSync(join(root, 'plan', f), 'utf8').split('\n').map((l) => l.trim()).filter((l) => /^\|/.test(l) && !/^\|\s*(Id|Date)\s*\|/.test(l) && !/^\|\s*:?-/.test(l)).map((l) => l.replace(/\|\s*$/, '').split('|').slice(1).map((c) => c.trim()));
     const andons = rows('ANDON.md'), open = andons.filter((r) => !/^closed/.test(r[4]!)).map((r) => r[2]!), bad: string[] = [];
     const git = (...a: string[]) => spawnSync('git', a, { cwd: root, encoding: 'utf8' }), deep = git('rev-parse', '-q', '--verify', 'HEAD~3^{commit}').status === 0;
     for (const r of andons) { if (!/^\d\d\.[A-Z]+\d+$/.test(r[2]!) || !r[3]) bad.push(`andon ${r[0]}: needs a task and what failed`);
@@ -299,6 +300,7 @@ describe('every domain, in one pass', () => {
     for (const k of open) { if (passing(k)) bad.push(`${k} passes with an open andon`); for (const t of downstream(k)) if (passing(t)) bad.push(`${t} passes while ${k}, which it waits on (directly or not), has an open andon`); }
     // (each kind with the response it calls for: a reckless act calls for stopping and telling the user)
     for (const r of rows('NEAR-MISS.md')) { if (!['error', 'at-risk', 'reckless'].includes(r[2]!)) bad.push(`near miss "${r[1]!.slice(0, 40)}": kind ${r[2]}`); if (!r[4]) bad.push(`near miss "${r[1]!.slice(0, 40)}": no response`);
+      if (!/^\d{4}-\d\d-\d\d$/.test(r[0] ?? '')) bad.push(`near miss "${r[1]!.slice(0, 40)}": its date ${r[0]}`); if (!r[3]) bad.push(`near miss "${r[1]!.slice(0, 40)}": nothing says what caught it`);
       if (r[2] === 'reckless' && !(/\bstop/i.test(r[4]!) && /\buser\b/i.test(r[4]!))) bad.push(`near miss "${r[1]!.slice(0, 40)}": reckless, and its response is not to stop and tell the user`);
       // (an error's response is the fix and the check added; an at-risk act's, the process changed: each names a check, a
       // test, a hook, a gate, a refusal, a rule or a decision, or shows the code)
@@ -398,7 +400,7 @@ describe('every domain, in one pass', () => {
     // user (the run's own were held to nothing: the evaluator, 2026-11-01))
     // (held as the log's rows are: a reckless act's, to stop and tell the user, said first; an error's or an at-risk act's
     // naming the check or the rule that caught it; and each caught thing given its own entry)
-    for (const [k, r] of Object.entries(NEAR_MISS_RESPONSE)) { if (r.kind === 'reckless') expect(r.response, `${k}: stop, and tell the user, first`).toMatch(/^stop, and tell the user\b/);
+    for (const [k, r] of Object.entries(NEAR_MISS_RESPONSE)) { if (r.kind === 'reckless') { expect(r.response, `${k}: stop, and tell the user, first`).toMatch(/^stop, and tell the user[:.]/); expect(r.response, `${k}: and nothing taking it back`).not.toMatch(/\b(never|not|don'?t|no|without)\b/i); }
       else expect(r.response, `${k}: names the check or the rule that caught it`).toMatch(/\b(check\w*|test\w*|hooks?|gates?|refus\w*|fails?|failing|rules?|decision|andon)\b/i); }
     const entryOf = (m: { what: string; tool: string }) => (m.what.startsWith('the tool failed') ? 'tool failed' : m.what.startsWith('node ') ? 'node failed' : m.what.startsWith('numbers given') ? 'no board' : m.what.startsWith('answered past') ? 'past a refusal' : 'refused');
     for (const m of [...misses, ...run.nearMisses, ...changed, ...placed, ...reopened, ...rest]) { const e = NEAR_MISS_RESPONSE[entryOf(m)]; expect([m.kind, m.response], `${m.tool}: ${m.what.slice(0, 40)}: its own entry's kind and response`).toEqual([e.kind, e.response]); }
@@ -419,8 +421,13 @@ describe('every domain, in one pass', () => {
       expect(new RegExp(`^import \\{[^}]*\\b${name}\\b[^}]*\\} from '${from.replace(/[./]/g, (c) => `\\${c}`)}';$`, 'm').test(t), `${f}: ${name} imported from agent.ts`).toBe(true);
       expect((t.match(new RegExp(`\\b${name}\\b`, 'g')) ?? []).length, `${f}: ${name} named only where it is imported and used`).toBe(1 + uses); }
     // (the relay's whole handler read exactly, mounted, and answering where the page asks)
-    const vite = readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), handler = vite.slice(vite.indexOf('  const handle = '), vite.indexOf('\n  let dev: ViteDevServer'));
-    expect(createHash('sha256').update(handler).digest('hex').slice(0, 16), "the relay's handler changed: read it again (agentBuild's run sent by relayBody, whole) and pin its new text").toBe(RELAY_PIN);
+    // (the relay whole, its handler and both its mounts (a mount dropped, or the module wrapped as it is loaded, passed when
+    // only the handler was read: the evaluator, 2026-11-01)); the page's whole handling of a reply, to its renderAll(), and
+    // its answer drawn in the side panel)
+    const vite = readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), relayAt = vite.indexOf('const relay = (): Plugin => {'), relayText = vite.slice(relayAt, vite.indexOf('\n};', relayAt) + 3), handler = relayText;
+    expect(createHash('sha256').update(relayText).digest('hex').slice(0, 16), "the relay changed: read it again (agentBuild's run sent by relayBody, whole, from both its mounts) and pin its new text").toBe(RELAY_PIN);
+    expect((relayText.match(/s\.middlewares\.use\(handle\(/g) ?? []).length, 'both servers mount it').toBe(2);
+    expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the side panel draws what the reply made').toContain('${askShown}');
     expect(vite, 'the relay mounted').toMatch(/^\s*plugins: \[relay\(\)\],$/m);
     expect(/req\.url !== '([^']+)'/.exec(handler)?.[1], 'it answers where the page asks').toBe(`/${/fetch\('\.\/([^']+)'/.exec(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'))?.[1]}`);
     expect(readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), 'the relay answers with relayBody').toMatch(/res\.end\(m\.relayBody\(r\)\)/);
@@ -695,8 +702,26 @@ describe('every domain, in one pass', () => {
     expect(got.cuts!.map((c) => [+(c.r * 2000).toFixed(2), c.prof?.length ?? 0, c.dir.map((x) => +x.toFixed(6))]), 'the counterbored hole cut, turned, down into the plate').toEqual([[9, 4, [0, -1, 0]]]);
     expect(got.cuts![0]!.at.map((x) => +x.toFixed(6)), 'where it was put').toEqual([0.01, 0.005, -0.02]);
     expect(got.keep?.length, 'its keep a zone').toBe(1); expect(got.imprints?.map((x) => [x.of, x.mirror]), 'the imprint recorded').toEqual([['M8 cap screw', 'hole.clearance']]);
-    const bolt = portOfInterface(interfacesOf(use('bolt M8x30')).list.find((x) => x.kind === 'thread.external')!)!, big = portOfInterface(interfacesOf(use('bolt M10x30')).list.find((x) => x.kind === 'thread.external')!)!;
-    expect(done.port.sex, 'it gains holes').toBe('holes'); expect(fit(done.port, bolt), 'the hole finds its bolt').toEqual({ turn: expect.any(Number) }); expect(typeof fit(done.port, big), 'an M10 does not fit an M8\'s hole').toBe('string');
+    const boltOf = (w: string) => portOfInterface(interfacesOf(use(w)).list.find((x) => x.kind === 'thread.external')!)!, bolt = boltOf('bolt M8x30'), big = boltOf('bolt M10x30');
+    // (the host's own new interface, read off its piece (the port applyImprint returns was read before: the evaluator,
+    // 2026-11-01))
+    const own = got.ports!.find((p) => p.name === done.port.name)!; expect(own, 'the host has its new interface').toBeTruthy();
+    expect(own.sex, 'it gains holes').toBe('holes'); expect(fit(own, bolt), 'the hole finds its bolt').toEqual({ turn: expect.any(Number) }); expect(typeof fit(own, big), 'an M10 does not fit an M8\'s hole').toBe('string');
+    // (a tapped hole and an insert's: the host gains threads its screw finds; each of its size only)
+    for (const [mat, t, asking, w, other, kind] of [['steel-low', 0.02, { kind: 'thread.external', thread: 'M6', through: false }, 'bolt M6x30', 'bolt M8x30', 'hole.tapped'], ['pla', 0.01, { kind: 'thread.external', thread: 'M4', through: false }, 'bolt M4x20', 'bolt M5x20', 'hole.insert']] as const) {
+      const h: Part = { name: 'host', parts: [{ name: 'block', item: 'block', mat, shape: { box: [0.1, t, 0.1] }, at: [0, 0, 0] }] }, ti = imprint(h, asking as Asking, [0, 1, 0], [0, -1, 0]) as Imprinted;
+      expect((ti as unknown as Refusal).refused, `${kind}: ${(ti as unknown as Refusal).why ?? ''}`).toBeUndefined(); const tp = applyImprint(h, ti, w).part.parts![0]!, port = tp.ports![0]!;
+      expect([tp.imprints![0]!.mirror, port.sex, port.thread], `${kind}: the host gains threads`).toEqual([kind, 'threads', w.split(' ')[1]!.split('x')[0]]);
+      expect(fit(port, boltOf(w)), `${kind}: its screw finds it`).toEqual({ turn: expect.any(Number) }); expect(typeof fit(port, boltOf(other)), `${kind}: another size does not`).toBe('string'); }
+    // (on a turned piece in a turned group: the cut where the ray met it and along the ray, in the piece's own frame)
+    const tilted: Part = { name: 'host', parts: [{ name: 'arm', at: [0.2, 0.1, -0.05], rot: [0.3, 0.5, 0], parts: [{ name: 'tilted plate', item: 'plate', mat: 'steel-low', shape: { box: [0.1, 0.01, 0.1] }, at: [0.01, 0, 0], rot: [0, 0, 0.4] }] }] };
+    const ray = new THREE.Vector3(0.21, 0.6, -0.04), tim = imprint(tilted, { kind: 'thread.external', thread: 'M8', head: 'socket', through: true }, ray.toArray() as V3, [0, -1, 0]) as Imprinted;
+    const tg = applyImprint(tilted, tim, 'M8 cap screw').part, piece = piecesIn(tg).find((q) => q.p.name === 'tilted plate')!, c = piece.p.cuts![0]!;
+    expect(new THREE.Vector3(...c.at).applyMatrix4(piece.m).distanceTo(new THREE.Vector3(...tim.frame.at)), 'the cut where the ray met the turned plate').toBeLessThan(1e-9);
+    expect(new THREE.Vector3(...c.dir).transformDirection(piece.m).dot(new THREE.Vector3(...tim.frame.n)), 'and into it, against its outward normal').toBeCloseTo(-1, 9);
+    // (two imprints on one piece: two ports, named apart)
+    const two = applyImprint(done.part, imprint(done.part, { kind: 'thread.external', thread: 'M8', head: 'socket', through: true }, [-0.03, 1, 0.03], [0, -1, 0]) as Imprinted, 'M8 cap screw').part.parts![0]!;
+    expect(two.ports!.map((p) => p.name), 'two ports, named apart').toEqual(['M8 cap screw (imprinted)', 'M8 cap screw (imprinted) 2']);
   });
   // (an imprint keeps to its face by what the face is (spec 01, I9; R10; evaluation case 10): the plate made 10 mm taller,
   // the imprint is made again on its top, its hole through the new depth, the old cut gone; the plate made too narrow for

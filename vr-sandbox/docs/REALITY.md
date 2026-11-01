@@ -2183,3 +2183,18 @@ Rancher, the go kart and the Cascadia were written down (`tests/nexus/fasteners.
 unchanged") finds each machine's the same, and evaluation case 8 (plates of 10 and 6 mm, M8) chooses bolt M8x30, ISO 4017,
 as worked by hand (28.5 mm asked). My own hand figure for an M4 into an insert was wrong (I wrote 10 mm; the rule asks at
 least 10.1, so 12): the test holds the rule's 12. Checked with `npm run gate`.
+
+## 2026-11-01: a tapped or insert hole finds its screw; S10's page, relay and log rows read whole (spec 01, I8; spec 00, S10)
+
+I8's first verdict failed it: a tapped or insert imprint gave its host threads, and `fit()` had no pair for a screw's pin
+into threads, so two of the three kinds of hole could not find their fastener; and the test read the port `applyImprint`
+returned, not the host's own. Now `fit()` takes a pin into threads (and `mate()` refuses that pair between two parts, which
+mate through holes), each imprinted port is named apart, its pattern is laid as `mate()` reads a port (w = n × u), and the one
+test reads the host's own new port: a clearance hole finds its M8 bolt and not an M10; a tapped hole in steel finds its M6 and
+not an M8; an insert's hole in PLA finds its M4 and not an M5; on a turned plate in a turned group the cut lies where the ray
+met it and runs into it; two imprints on one piece give two ports named apart. S10's eleventh verdict: a fault one line past
+the page's pinned region, a relay mount dropped or its module wrapped, an andon row with a leading space, and a near-miss row
+with no date or nothing saying what caught it each passed. Now the page's whole handling of a reply, to its `renderAll()`, and
+the relay whole with both its mounts are read exactly; table rows are read however indented, in the test and in
+`plan/compile.py`; a near-miss row needs its date and what caught it; and a reckless response may not take its stop back.
+Each of the evaluator's uncaught faults, tried once, now fails the test. Checked with `npm run gate`.

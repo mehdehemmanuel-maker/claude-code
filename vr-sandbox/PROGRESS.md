@@ -2,7 +2,7 @@
 
 Task in hand: 00.S10
 Spec in hand: spec 00, structure (`plan/specs/00-structure/`)
-Last commit the gate passed: c997966 (2026-11-01)
+Last commit the gate passed: 83a8ccb (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -12,8 +12,8 @@ Last commit the gate passed: c997966 (2026-11-01)
 
 ## Open, and why
 
-- Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1, 01.I3 to I7, and 04.P10 pass. 00.S10 failed a tenth time; mended (what
-  the pinned lines call is agent.ts's own, the relay's handler read whole, compile.py's andon refusal shown).
+- Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1, 01.I3 to I7, and 04.P10 pass. 00.S10 failed an eleventh time and 01.I8
+  its first; both mended (the page's whole handling and the relay's mounts read; a tapped or insert hole finds its screw).
 - 01.I8, I9 and I10 claimed: an imprint applied, kept to its face when the part changes, the fastener for a stack; being judged (`npm run gate`).
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
