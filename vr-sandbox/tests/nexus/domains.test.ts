@@ -406,18 +406,34 @@ describe('every domain, in one pass', () => {
     // both checkers)
     const red = JSON.parse(readFileSync(join(root, 'tests/nexus/kernel.red.json'), 'utf8')) as unknown[];
     expect(red.length, 'the red teams\' certificates').toBeGreaterThan(15);
-    for (const c of red) expect(check(c).ok, `a red team's false certificate refused: ${JSON.stringify(c).slice(0, 120)}`).toBe(false);
+    for (const c of red) { const t0 = performance.now(), v = check(c), ms = performance.now() - t0; expect(v.ok, `a red team's false certificate refused: ${JSON.stringify(c).slice(0, 120)}`).toBe(false); expect(ms, `checked in time: ${JSON.stringify(c).slice(0, 120)}`).toBeLessThan(2000); }
+    // (a check ends in time however its legal steps are stacked (the red team, 2026-11-01: a power of a power of a power
+    // of two ran 8 s, a product of 4000 powers of two 75 s): every value at every step is held to 2^±MAX_BITS, past it
+    // undecided, in both checkers; a product of 4000 twos, within the bound, is decided; and where the two checkers work a
+    // power alike (a half's power of zero, a half's power past 1024, a power by exp past 1000, a fraction too long, an
+    // exponent too large) they refuse alike. (A claim with no tolerance at all can pass the kernel, which works exactly,
+    // where the second, in decimals, is undecided: sound both ways, and not in the corpus))
+    const two4000 = (2n ** 4000n).toString(), P2 = ['pow', ['num', '2'], '1024'];
+    const budget = [W(['mul', ...Array(4000).fill(P2)], {}, '1', '0'), W(['mul', ...Array(4000).fill(['num', '2'])], {}, `${two4000[0]}.${two4000.slice(1, 30)}e${two4000.length - 1}`, '1e-20'),
+      W(['pow', P2, '17'], {}, '1', '0'), C('witness', { term: ['pow', ['var', 'x'], '3/2'], at: { x: '0' }, value: '0', tol: { rel: '0', abs: '1e-12' } }), W(['pow', ['var', 'x'], '1501/2'], { x: '2' }, '1', '0'),
+      W(['pow', ['var', 'x'], '5/3'], { x: '1e1000' }, '1', '0'), W(['var', 'x'], { x: `1/${'7'.repeat(400)}` }, '0', '0'), W(['var', 'x'], { x: '1e5000' }, '1e5000', '0')];
+    const ruled = budget.map((c) => { const t0 = performance.now(), v = check(c); return { v, ms: performance.now() - t0 }; });
+    expect(ruled.map((r) => (r.v.ok ? 'ok' : r.v.refused)), ruled.map((r) => r.v.why).join('; ')).toEqual(['undecided', 'ok', 'undecided', 'ok', 'undecided', 'undecided', 'malformed', 'malformed']);
+    expect(ruled.map((r) => r.ms).filter((ms) => ms >= 2000), 'each decided in under 2 s').toEqual([]);
     // (sine and its kin, at points across their range, in the corpus both checkers judge)
     const trig = [['sin', '1'], ['sin', '-2.5'], ['sin', '100'], ['cos', '0.3'], ['cos', '3.14159'], ['tan', '1.2'], ['atan', '0.5'], ['atan', '-7'], ['asin', '0.3'], ['asin', '1'], ['acos', '-0.9']].flatMap(([f, x]) => {
       const v = (Math as unknown as Record<string, (n: number) => number>)[f!]!(Number(x)); return [W([f, ['var', 'x']], { x: x! }, String(v), '1e-12'), W([f, ['var', 'x']], { x: x! }, String(v * (1 + 1e-6)), '1e-9')]; });
     expect(trig.map((c) => check(c).ok), 'each true value passes, each moved a millionth is refused').toEqual(trig.map((_, i) => i % 2 === 0));
-    const corpus = [...right, ...Object.values(planted).flat(), C('judged', {}), ...edges, ...red, ...trig, ...book];
+    const corpus = [...right, ...Object.values(planted).flat(), C('judged', {}), ...edges, ...red, ...trig, ...budget, ...book];
     const two = spawnSync('python3', ['scripts/kernel2.py'], { cwd: root, input: JSON.stringify(corpus), encoding: 'utf8', maxBuffer: 1 << 26 });
     expect(two.status, two.stderr).toBe(0);
-    const theirs = JSON.parse(two.stdout) as { ok: boolean }[];
+    const theirs = JSON.parse(two.stdout) as { ok: boolean; refused: string | null }[];
     expect(red.map((_, i) => theirs[right.length + Object.values(planted).flat().length + 1 + edges.length + i]!.ok).filter(Boolean).length, 'the second checker passes none of them either').toBe(0);
-    const differ = corpus.map((c, i) => [check(c).ok, theirs[i]!.ok, i] as const).filter(([a, b]) => a !== b);
-    expect(differ.map(([a, b, i]) => `${i}: kernel ${a}, second ${b}: ${JSON.stringify(corpus[i]).slice(0, 120)}`), 'the two checkers agree').toEqual([]);
+    // (they agree on each verdict and, where both refuse, on why: wrong, undecided or malformed (the red team, 2026-11-01:
+    // the kernel said malformed where the second said undecided, and only the verdicts were compared))
+    const said = (v: { ok: boolean; refused?: string | null }) => (v.ok ? 'ok' : v.refused);
+    const differ = corpus.map((c, i) => [said(check(c)), said(theirs[i]!), i] as const).filter(([a, b]) => a !== b);
+    expect(differ.map(([a, b, i]) => `${i}: kernel ${a}, second ${b}: ${JSON.stringify(corpus[i]).slice(0, 120)}`), 'the two checkers agree, and on why they refuse').toEqual([]);
   }, 60_000);
   // (propose, then certify (spec 10, T18; C29): a change's certificates come from the boards and the nodes' own runs; the
   // kernel checks them with no second model; a planted wrong one stops the board being taken; every starter board with

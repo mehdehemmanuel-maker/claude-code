@@ -1971,3 +1971,17 @@ bore and to the side of the bridge, and the two bolts pass beside the pads (the 
 1.5 mm). A probe of `rulesOf` on the Honda Rancher: 7 interference findings before the bleed screw's hole, 5 after, 1 after
 the bolts (a frame cross tube through the engine's oil pickup, not mended yet); the go kart 0. The Cascadia's frame bolts
 are not mended. Checked with `npm run gate`.
+
+## 2026-11-01: a kernel check ends in time however its steps are stacked; the two checkers agree on why they refuse (spec 10, T23)
+
+The third red team could not make the kernel pass a false certificate (it compared 152 enclosures of exp, ln, roots and
+fractional powers against 120-digit decimals: every one held its true value), but two well-formed certificates made it
+compute far past 5 s: a power of a power of a power of two (199 bytes, 8 s, then Node's own BigInt limit) and a product
+of 4000 powers of two (75 s). Rounding to 96 bits bounded a number's digits, not its size. Now every value at every step
+is held to 2^±16384 (`held` in `src/kernel/rat.ts`, at each step of `tidy` in `interval.ts`, and before a whole power is
+worked out when it is sure to pass), and `scripts/kernel2.py` holds the same bound at each step of its sums and products.
+Making the two agree on why they refuse, not only on whether, found three places where they worked a power differently
+(a half's power of zero, a half's power past 1024, a power by exp past 1000), a fraction of any length read by the kernel,
+and an exponent of any size read by the second checker; each now done alike. The one test (the kernel's) checks each red
+team certificate in under 2 s, a product of 4000 twos decided, and both checkers' reasons equal over the whole corpus;
+with the bound taken out, it fails (the product of 4000 powers of two ran 75 s again). Checked with `npm run gate`.

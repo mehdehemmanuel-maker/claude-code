@@ -24,7 +24,9 @@ endpoints rounded outward to 96 bits (not float `nextUp`, so no rounding mode is
 whose remainder is bounded, never the host's `Math`; dimensions as six rational exponents, angle dimensionless as
 decision 0009 keeps it (research 31 B1.4 proposed angle as a base: not taken, to agree with the wire check); a unit
 table that is the units' own dimensions (`src/kernel/units.json`, the gate fails if they differ); a strict envelope
-(an unknown field, kind or size is malformed); the kinds dims, witness and judged. A certificate of any other kind is
+(an unknown field, kind or size is malformed); every value at every step held to 2^±16384, past it undecided (added
+2026-11-01, when a red team stacked legal powers into a check of 75 s: rounding to 96 bits bounds a number's digits, not
+its size), the second checker holding the same bound; the kinds dims, witness and judged. A certificate of any other kind is
 refused as malformed; sin, cos, tan, their inverses, erf and integrals are refused as undecided. The second checker
 (`scripts/kernel2.py`) is Python with `fractions` and `decimal` at 60 digits: other language, other methods, the same
 unit data. Values in a witness are in SI, converted outside the kernel by `src/ganglia/units.ts`, and the term is

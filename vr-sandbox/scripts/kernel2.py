@@ -5,7 +5,7 @@ list of verdicts, {"ok": bool, "refused": str|null}, one for each. The gate runs
 and fails where they disagree.
 
 Its methods, unlike the kernel's: a unit is read by a scanner over its text, not by splitting; a dimension is a tuple of
-Fractions; a value is worked out with Python's decimal module at 60 digits (its exp, ln and sqrt are correctly rounded),
+Fractions; a value is worked out with Python's decimal module at 450 digits (its exp, ln and sqrt are correctly rounded),
 not by interval series; the value claimed passes only well inside the tolerance, is wrong only well outside it, and is
 undecided between. The unit table is the kernel's data (src/kernel/units.json): shared data, not shared code.
 """
@@ -62,9 +62,24 @@ NA = {'add', 'mul'}
 
 
 def num(x):
-    if not isinstance(x, str) or len(x) > 400 or not re.fullmatch(r'-?\d+(\.\d+)?([eE][+-]?\d+)?|-?\d+/\d+', x):
+    m = re.fullmatch(r'-?\d+(?:\.(\d+))?(?:[eE]([+-]?\d+))?|-?\d+/\d+', x) if isinstance(x, str) and len(x) <= 400 else None
+    if not m:
         raise Refused('malformed', f'not a number: {str(x)[:30]}')
+    # (its exponent held before the number is made, as the kernel holds it: 1e999999999 was worked out whole before)
+    if abs(int(m.group(2) or 0) - len(m.group(1) or '')) > 4000:
+        raise Refused('malformed', 'an exponent too large')
     return Fraction(x)
+
+
+# The kernel's size bound (MAX_BITS in src/kernel/rat.ts): a value past 2^±16384 at any step is undecided.
+TOP = Decimal(2) ** 16384
+BOTTOM = 1 / TOP
+
+
+def held(x):
+    if x != 0 and (abs(x) > TOP or abs(x) < BOTTOM):
+        raise Refused('undecided', 'a value past 2^±16384 while it is worked out')
+    return x
 
 
 def shape(t, depth=0):
@@ -183,6 +198,10 @@ def dec(fr):
 
 
 def value(t, env):
+    return held(_value(t, env))
+
+
+def _value(t, env):
     op, a = t[0], t[1:]
     try:
         if op == 'num':
@@ -192,8 +211,10 @@ def value(t, env):
                 raise Refused('malformed', f'no value for {a[0]}')
             return env[a[0]]
         if op == 'pow':
+            # (as the kernel works it: a whole power or a half's whole power held to 1024 either way; the rest as
+            # exp(k·ln x), its exponent held to 1000 either way)
             x, k = value(a[0], env), Fraction(a[1])
-            if abs(k.numerator) > (1 << 20) or (k.denominator <= 2 and abs(k.numerator) > 1024 * k.denominator):
+            if k.denominator <= 2 and abs(k.numerator) > 1024:
                 raise Refused('undecided', 'a power too large')
             if k == 0:
                 return Decimal(1)
@@ -201,16 +222,21 @@ def value(t, env):
                 raise Refused('undecided', 'a negative power of zero')
             if k.denominator == 1:
                 return x ** int(k)
+            if k.denominator == 2:
+                if x < 0:
+                    raise Refused('undecided', 'a root of less than zero')
+                return x.sqrt() ** int(k.numerator)
             if x <= 0:
                 raise Refused('undecided', 'a power of zero or less')
-            return (dec(k) * x.ln()).exp()
+            y = dec(k) * x.ln()
+            if abs(y) > 1000:
+                raise Refused('undecided', 'an exponent past 1000 either way')
+            return y.exp()
         v = [value(x, env) for x in a]
-        if op == 'add':
-            return sum(v, Decimal(0))
-        if op == 'mul':
-            out = Decimal(1)
-            for x in v:
-                out *= x
+        if op in NA:  # (held at every step, as the kernel holds each step of its sum and product)
+            out = v[0]
+            for x in v[1:]:
+                out = held(out + x if op == 'add' else out * x)
             return out
         if op == 'sub':
             return v[0] - v[1]

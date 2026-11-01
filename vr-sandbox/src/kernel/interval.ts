@@ -1,14 +1,16 @@
 // Intervals with rational endpoints, rounded outward (the kernel, spec 10, T23; research 31 B1.3): every operation gives
 // an interval holding every value the exact operation could give for any points of its arguments. Endpoints are kept to
-// PREC significant bits, the lower rounded down and the upper up, so sizes stay bounded and the enclosure is kept.
+// PREC significant bits, the lower rounded down and the upper up, so their digits stay few and the enclosure is kept; their
+// size (a number's power of two, which rounding does not bound) is held to MAX_BITS (rat.ts) at every step.
 // exp, ln, roots, sin, cos, tan and their inverses are worked out by series with a bounded remainder, never by the host's
 // Math (which promises nothing about its last bit). What is not here (erf, integrals) is refused as undecided.
 
-import { HALF, KernelError, ONE, TWO, ZERO, absR, add as addR, bits, cmp, div as divR, fromText, le, lt, maxR, minR, mul as mulR, neg as negR, pow2, powInt as powR, rat, roundTo, sub as subR, type Rat } from './rat';
+import { HALF, KernelError, ONE, TWO, ZERO, absR, add as addR, bits, cmp, div as divR, fromText, held, le, lt, maxR, minR, mul as mulR, neg as negR, pow2, powInt as powR, rat, roundTo, sub as subR, type Rat } from './rat';
 
 export interface Iv { readonly lo: Rat; readonly hi: Rat }
 export const PREC = 96;
-const tidy = (lo: Rat, hi: Rat): Iv => ({ lo: roundTo(lo, PREC, false), hi: roundTo(hi, PREC, true) });
+// (each endpoint held to the kernel's size bound, MAX_BITS in rat.ts, at every step)
+const tidy = (lo: Rat, hi: Rat): Iv => ({ lo: held(roundTo(lo, PREC, false)), hi: held(roundTo(hi, PREC, true)) });
 export const point = (r: Rat): Iv => ({ lo: r, hi: r });
 
 export const add = (a: Iv, b: Iv): Iv => tidy(addR(a.lo, b.lo), addR(a.hi, b.hi));
