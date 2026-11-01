@@ -137,10 +137,11 @@
    ],
    "owner": "mate.ts, catalogue.ts",
    "check": "evaluation case 8 chooses the expected bolt; the engine's fasteners are unchanged or better, compared before and after",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I8"
-   ]
+   ],
+   "evidence": "2026-11-01: fastenerFor in mate.ts gives the catalogue's fastener for a stack and says why: through, an ISO 4017 bolt with ISO 7089 washers and its ISO 4032 nut, the shortest sold (catalogue.ts soldLengths) leaving two pitches past the nut; tapped, an ISO 4762 cap screw engaged as Bossard asks for the tapped part's material (1.5 d, typical, where it has no row), never deeper than the threads; into an insert, its length less 1 mm, short of its hole; mate() lays both kinds through it; boreThrough cuts a bolt's or screw's hole to ISO 273 medium; evaluation case 8 chooses bolt M8x30; the four machines' fasteners equal to a snapshot taken before the change (tests/nexus/fasteners.before.json)"
   },
   {
    "id": "I11",

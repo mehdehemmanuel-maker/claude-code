@@ -54,5 +54,12 @@
     "src/nexus/brep.ts",
     "src/nexus/kits.ts",
     "evals/interfaces/cases.json"
+  ],
+  "01.I10": [
+    "src/nexus/mate.ts",
+    "src/nexus/catalogue.ts",
+    "src/nexus/blocks.ts",
+    "evals/interfaces/cases.json",
+    "src/nexus/built.ts"
   ]
 }

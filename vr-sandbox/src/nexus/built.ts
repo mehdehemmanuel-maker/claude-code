@@ -28,7 +28,7 @@ export const BUILT: Record<string, string> = {
   "battery.starter":"2026-10-26T17:22:21.000Z",
   "bend":"2026-10-29T01:28:50.000Z",
   "body":"2026-10-31T06:02:25.000Z",
-  "bore":"2026-10-27T05:02:15.000Z",
+  "bore":"2026-11-01T16:40:00.000Z",
   "camera.solve":"2026-10-29T14:25:46.000Z",
   "card.material":"2026-10-29T05:25:29.000Z",
   "card.part":"2026-10-25T09:16:19.000Z",

@@ -189,6 +189,26 @@
       "worked": "NEMA 17's face: four M3 on a 31 mm square, a 22 mm pilot; ISO 273 medium for M3: 3.4; the pilot's bore 22 H7: 0 to +21 µm (ISO 286-1 Table 1, IT7 at 18 to 30 mm)"
     },
     {
+      "case": 8,
+      "what": "two plates (10 and 6 mm) bolted, M8",
+      "fastener": {
+        "thread": "M8",
+        "plies": [
+          10,
+          6
+        ],
+        "how": "through",
+        "expect": {
+          "words": "bolt M8x30",
+          "std": "ISO 4017",
+          "L": 30,
+          "nut": "nut M8",
+          "washers": 2
+        },
+        "worked": "grip 16; ISO 7089 washers 1.6 each; ISO 4032 nut 6.8; two pitches 2.5: 28.5 mm; the shortest ISO 4017 M8 length sold at or above it, 30 mm"
+      }
+    },
+    {
       "case": 10,
       "what": "a box made 10 mm taller after an imprint on its top",
       "asking": {

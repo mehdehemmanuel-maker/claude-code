@@ -17,6 +17,9 @@ const within = (lo: number, hi: number) => PREF.filter((x) => x >= lo && x <= hi
 const SOCKET: Record<string, [number, number]> = { 'M1.6': [3, 16], M2: [3, 20], 'M2.5': [4, 25], M3: [5, 30], M4: [6, 40], M5: [8, 50], M6: [10, 60], M8: [12, 80], M10: [16, 100], M12: [20, 120], M14: [25, 140], M16: [25, 160], M20: [30, 200], M24: [40, 200] };
 const HEX: Record<string, [number, number]> = { M3: [6, 30], M4: [8, 40], M5: [10, 50], M6: [12, 60], M8: [16, 80], M10: [20, 100], M12: [25, 120], M14: [30, 140], M16: [30, 150], M20: [40, 200], M24: [50, 200] };
 const SET: Record<string, [number, number]> = { M2: [2, 10], 'M2.5': [2.5, 12], M3: [3, 16], M4: [4, 20], M5: [5, 25], M6: [6, 30], M8: [8, 40], M10: [10, 50], M12: [12, 60] };
+/** The lengths a standard's fastener of a thread is sold in, mm, shortest first (ISO 4017 hex bolts; ISO 4762 socket
+ *  cap screws): what fastenerFor (mate.ts) chooses from. */
+export const soldLengths = (std: 'ISO 4017' | 'ISO 4762', thread: string): number[] => { const r = (std === 'ISO 4017' ? HEX : SOCKET)[thread]; return r ? within(r[0], r[1]) : []; };
 /** The E series of preferred values (IEC 60063): E24 for resistors, E6 for capacitors. */
 export const E24 = [1, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2, 2.2, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1];
 export const E6 = [1, 1.5, 2.2, 3.3, 4.7, 6.8];

@@ -2168,3 +2168,18 @@ now refuse it, it is lost and said so, nothing of it moved. Evaluation case 10 (
 imprint on the top; a face removed says it is lost"): the plate made 10 mm taller keeps its imprint on its new top, its hole
 through the new 20 mm, the old cut gone; made too narrow for where it stood, or made a ball, the imprint is lost. Checked
 with `npm run gate`.
+
+## 2026-11-01: the fastener for a stack, from the catalogue, said why; the machines' fasteners unchanged (spec 01, I10)
+
+`fastenerFor` in `src/nexus/mate.ts` gives the fastener the catalogue sells for a stack of plies and why each length:
+through them all, an ISO 4017 hex bolt with an ISO 7089 washer under its head and its ISO 4032 nut, the shortest sold
+(`soldLengths` in `catalogue.ts`) that leaves two pitches past the nut (typical practice); into a tapped last ply, an
+ISO 4762 cap screw engaged as far as Bossard's table asks for that ply's material (1.5 d, typical, where it has no row),
+never deeper than the threads go less 0.5 mm; into a heat-set insert, engaged its length less 1 mm (typical), short of its
+hole. `mate()` lays both its kinds of fastener through it and says why; `boreThrough` cuts a bolt's or a screw's hole to
+ISO 273 medium for its thread (its 0.5 mm stays for anything else). Before the change, the fasteners of the Corolla, the
+Rancher, the go kart and the Cascadia were written down (`tests/nexus/fasteners.before.json`, at a8ecae3: 506, 220, 178 and
+1584 pieces); after it, the one test (the test "the fastener for a stack: case 8 chooses its bolt; the machines' fasteners
+unchanged") finds each machine's the same, and evaluation case 8 (plates of 10 and 6 mm, M8) chooses bolt M8x30, ISO 4017,
+as worked by hand (28.5 mm asked). My own hand figure for an M4 into an insert was wrong (I wrote 10 mm; the rule asks at
+least 10.1, so 12): the test holds the rule's 12. Checked with `npm run gate`.

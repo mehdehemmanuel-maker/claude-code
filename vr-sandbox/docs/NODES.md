@@ -44,7 +44,7 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 
 Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 547 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 200 of 617 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 199 of 617 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -159,7 +159,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
 - **Body fitted to a picture (analysis by synthesis)** (`fit.lines`): The vehicle moved until its rendered silhouette meets the outline on the picture, both ways (where it falls short and where it stands past it): its body lines (where its windscreen's foot, its roof, its back glass's … *derived, untested*
-- **Bore where it passes** (`bore`): A part bored wherever another runs through it: a hole along the other's line, as wide as it reaches and a clearance more, cut in each piece it passes and in no other (a pushrod's bore through a block, its gasket and … *derived, tested here, before the update*
+- **Bore where it passes** (`bore`): A part bored wherever another runs through it: a hole along the other's line, cut in each piece it passes and in no other; for a bolt, a screw or a stud its standard's clearance hole (ISO 273 medium for its thread), … *derived, tested here*
 - **Clear away** (`clear`): What a thing places, less whatever comes within a distance of another thing (grass under a road, trees where a house stands) or, with "keep", only those: deleting by where things are *derived, tested here, before the update*
 - **Combine** (`combine`): Several things as one assembly, each where it is: a frame and its motors, a city and the swarm over it *derived, tested here, before the update*
 - **Fit in** (`fit`): Every piece of a thing whose name a pattern finds taken out, and the thing wired in put in its place (where it was, turned as it was): a tyre made in depth on every wheel, a real battery pack for the box that stood … *derived, tested here, before the update*

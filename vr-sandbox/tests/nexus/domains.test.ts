@@ -41,7 +41,7 @@ import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, 
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
-import { applyImprint, boreGrips, fit, imprint, portOfInterface, reapplyImprints, standOn, type Imprinted } from '../../src/nexus/mate';
+import { applyImprint, boreGrips, boreThrough, fastenerFor, fit, imprint, portOfInterface, reapplyImprints, standOn, type Fastener, type Imprinted } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
 import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
@@ -715,6 +715,24 @@ describe('every domain, in one pass', () => {
       expect([g.kept, g.lost.map((x) => x.of)], `${what}: lost`).toEqual([[], ['M8 cap screw']]); expect(g.lost[0]!.why.length).toBeGreaterThan(20);
       expect([gp.cuts?.length ?? 0, gp.ports?.length ?? 0, gp.imprints?.[0]?.lost], `${what}: nothing of it moved anywhere; its record says it is lost`).toEqual([0, 0, g.lost[0]!.why]); }
   });
+  // (the fastener for a stack (spec 01, I10): evaluation case 8 chooses its bolt; a tapped and an insert stack each the
+  // catalogue's screw, said why; mate() lays its fasteners through it; a bolt's bore is ISO 273's; and the four machines'
+  // fasteners as they were before (tests/nexus/fasteners.before.json, taken at a8ecae3, before the change))
+  it('the fastener for a stack: case 8 chooses its bolt; the machines\' fasteners unchanged', () => {
+    const c8 = (JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; fastener?: { thread: string; plies: number[]; how: 'through'; expect: Record<string, unknown> } }[] }).cases.find((c) => c.case === 8)!.fastener!;
+    const f = fastenerFor({ thread: c8.thread, plies: c8.plies.map((x) => x / 1000), how: c8.how }) as Fastener;
+    expect({ words: f.words, std: f.std, L: f.L, nut: f.nut, washers: f.washers }, f.why.join('; ')).toEqual(c8.expect);
+    expect(boltedJoint('M8', 16).parts!.find((p) => /bolt/.test(p.name))!.name, 'the joint lays the same bolt').toMatch(/M8 × 30 hex bolt/);
+    const tap = fastenerFor({ thread: 'M6', plies: [0.006, 0.02], how: 'tapped', host: 'al-6061' }) as Fastener, ins = fastenerFor({ thread: 'M4', plies: [0.003, 0.012], how: 'insert' }) as Fastener;
+    expect([tap.words, tap.why.some((w) => /Bossard/.test(w))], 'tapped into 6061: engaged 12 mm, the screw 6 + 12 = 18 mm or the next sold').toEqual(['screw M6x18', true]);
+    expect(ins.words, 'into a TC-M4x8.1: from 3 + 7.1 = 10.1 to 3 + 9.1 = 12.1 mm, so 12').toBe('screw M4x12');
+    expect(boreThrough({ name: 'plate', shape: { box: [0.1, 0.01, 0.1] }, at: [0, 0, 0] }, use('bolt M8x30')).says, 'a bolt\'s bore ISO 273 medium').toMatch(/9\.0 mm \(ISO 273 medium for M8\)/);
+    const before = JSON.parse(readFileSync(join(root, 'tests/nexus/fasteners.before.json'), 'utf8')) as Record<string, Record<string, number>>, now: Record<string, Record<string, number>> = {};
+    for (const [id, w] of [['car', 'a toyota corolla'], ['atv', 'a honda rancher'], ['go kart', 'a go kart'], ['semi truck', 'a freightliner cascadia']]) { const t = makeKit(KITS.find((x) => x.id === id)!, w!, 7).part, m: Record<string, number> = {};
+      const walk = (p: Part) => { if (/\b(bolt|screw|nut|washer|stud)\b/i.test(p.name) && (p.shape || p.parts) && !(p.parts ?? []).some((q) => /\b(bolt|screw|nut|washer|stud)\b/i.test(q.name))) { const k = p.name.replace(/ \d+$/, ''); m[k] = (m[k] ?? 0) + 1; } for (const q of p.parts ?? []) walk(q); };
+      walk(t); now[w!] = Object.fromEntries(Object.entries(m).sort()); }
+    expect(now, 'every fastener of the four machines as it was before').toEqual(before);
+  }, 300_000);
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
   // plate's hole is not)

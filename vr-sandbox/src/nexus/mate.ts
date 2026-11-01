@@ -18,7 +18,8 @@ import { boltedJoint, use } from './components';
 import { METRIC, NEMA_FACE } from './families';
 import type { Cut, Keep, Part, Port, Shape, V3 } from './kits';
 import { piecesOf as boxesOf } from './form';
-import { BOLT_SPACING, CLEARANCE, boreOf, matrixOfPart, negativeOf, piecesIn, roundOf, shaftOf, type Asking, type Negative, type Refusal } from './interfaces';
+import { BOLT_SPACING, CLEARANCE, INSERT, boreOf, engagementOf, matrixOfPart, negativeOf, piecesIn, roundOf, shaftOf, type Asking, type Negative, type Refusal } from './interfaces';
+import { soldLengths } from './catalogue';
 export { boreOf, shaftOf };
 
 const TOL = 0.0002;
@@ -56,6 +57,30 @@ export function fit(a: Port, b: Port): { turn: number } | string {
   return 'their patterns are not one another\'s mirror';
 }
 
+/** The fastener the catalogue sells for a stack of plies (spec 01, I10), and why: through them all, an ISO 4017 hex bolt
+ *  with an ISO 7089 washer under its head and under its ISO 4032 nut, the shortest sold that leaves two pitches past the nut
+ *  (typical practice); into a tapped last ply, an ISO 4762 cap screw engaged as far as Bossard's table asks for that ply's
+ *  material (1.5 d, typical, where its material has no row), never deeper than the threads go less 0.5 mm; into a heat-set
+ *  insert, a cap screw engaged its insert's length less 1 mm (typical), short of the insert's hole. Sizes in m. */
+export interface Fastener { words: string; std: string; thread: string; L: number; nut?: string; washers: number; why: string[] }
+export function fastenerFor(s: { thread: string; plies: number[]; how: 'through' | 'tapped' | 'insert'; host?: string; class?: '8.8' | '10.9' | '12.9' }): Fastener | Refusal {
+  const T = METRIC[s.thread], d = Number(s.thread.slice(1)); if (!T) return { refused: true, rule: 'ISO 261', need: 0, have: 0, unit: '', source: 'ISO 261', why: `no metric thread ${s.thread}` };
+  const mm = (x: number) => +(x * 1000).toFixed(3), plies = s.plies.map(mm), no = (rule: string, need: number, have: number, source: string, why: string): Refusal => ({ refused: true, rule, need: +need.toFixed(3), have: +have.toFixed(3), unit: 'mm', source, why });
+  if (s.how === 'through') {
+    const grip = plies.reduce((a, b) => a + b, 0), need = grip + 2 * T.h + T.m + 2 * T.p, sold = soldLengths('ISO 4017', s.thread), L = sold.find((x) => x >= need - 1e-9);
+    if (L === undefined) return no('a length sold', need, sold.at(-1) ?? 0, 'ISO 4017', `${need.toFixed(1)} mm of bolt asked; ISO 4017 sells ${s.thread} up to ${sold.at(-1) ?? 0} mm`);
+    return { words: `bolt ${s.thread}x${L}`, std: 'ISO 4017', thread: s.thread, L, nut: `nut ${s.thread}`, washers: 2, why: [`through ${plies.join(' + ')} = ${grip} mm of plies`, `an ISO 7089 washer under its head and under its nut, ${T.h} mm each`, `its ISO 4032 nut ${T.m} mm`, `two pitches past the nut, ${2 * T.p} mm (typical practice)`, `${need.toFixed(1)} mm: the shortest ISO 4017 length sold, ${L} mm`] };
+  }
+  const through = plies.slice(0, -1).reduce((a, b) => a + b, 0), last = plies.at(-1) ?? 0, sold = soldLengths('ISO 4762', s.thread);
+  if (s.how === 'insert') { const ins = INSERT[s.thread]; if (!ins) return no('an insert', 0, 0, 'CNC Kitchen inserts', `no heat-set insert for ${s.thread}`);
+    const lo = through + ins.L - 1, hi = through + Math.min(ins.depth, last), L = sold.find((x) => x >= lo - 1e-9 && x <= hi + 1e-9);
+    if (L === undefined) return no('a length sold between', lo, hi, 'ISO 4762; CNC Kitchen inserts', `a cap screw of ${lo.toFixed(1)} to ${hi.toFixed(1)} mm asked (its ${ins.series}'s length less 1 mm, typical, short of its hole); ISO 4762 sells none between`);
+    return { words: `screw ${s.thread}x${L}`, std: 'ISO 4762', thread: s.thread, L, washers: 0, why: [`through ${through} mm`, `into a ${ins.series} insert ${ins.L} mm long: engaged its length less 1 mm (typical), short of its ${ins.depth} mm hole`, `the shortest ISO 4762 length sold between, ${L} mm`] }; }
+  const e = s.host ? engagementOf(s.host, s.class ?? '8.8') : null, want = (e?.k ?? 1.5) * d, eng = Math.min(want, last - 0.5), lo = through + eng, hi = through + last - 0.5, L = sold.find((x) => x >= lo - 0.01 && x <= hi + 1e-9);
+  if (L === undefined) return no('a length sold between', lo, hi, 'ISO 4762', `a cap screw of ${lo.toFixed(1)} to ${hi.toFixed(1)} mm asked; ISO 4762 sells none between`);
+  return { words: `screw ${s.thread}x${L}`, std: 'ISO 4762', thread: s.thread, L, washers: 0, why: [`through ${through} mm`, e ? `engaged ${want.toFixed(1)} mm (${e.why})` : `engaged ${want.toFixed(1)} mm (1.5 d, typical: no engagement row for its material)`, ...(eng < want ? [`only ${eng.toFixed(1)} mm: the threads go ${last} mm`] : []), `the shortest ISO 4762 length sold between ${lo.toFixed(1)} and ${hi.toFixed(1)} mm, ${L} mm`] };
+}
+
 /** Places b so its port meets a's: its face on a's, square to it, its pattern on a's; and lays the fasteners that hold
  *  them, in the frame both are placed in. a and b are parts of one assembly (their at and rot in its frame). */
 export function mate(a: Part, pa: string, b: Part, pb: string): { b: Part; fasteners: Part[]; passes: string[]; says: string } | string {
@@ -74,16 +99,18 @@ export function mate(a: Part, pa: string, b: Part, pb: string): { b: Part; faste
   const T = METRIC[H.thread.replace(/x.*/, '')], d = Number(H.thread.slice(1).replace(/x.*/, '')), axis = (p: THREE.Vector3, words: string, more: Partial<Part>) => { const qq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), up), ee = new THREE.Euler().setFromQuaternion(qq); return use(words, [p.x, p.y, p.z], { rot: [ee.x, ee.y, ee.z], ...more }); };
   let says: string;
   if (other.sex === 'threads') {
-    // cap screws (ISO 4762) through the holes into the threads, engaged 1.5 d or as deep as the threads go, the shortest sold
-    const L = [4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100].find((x) => x >= back * 1000 + Math.min(1.5 * d, other.t * 1000 - 0.5) - 0.01 && x <= back * 1000 + other.t * 1000 - 0.5) ?? Math.round(back * 1000 + Math.min(1.5 * d, other.t * 1000 - 0.5));
+    // cap screws (ISO 4762) through the holes into the threads, as fastenerFor chooses them (the tapped part's material's
+    // engagement, or 1.5 d; never deeper than the threads go), the shortest sold
+    const tapped = holesB ? a : b, ff = fastenerFor({ thread: H.thread.replace(/x.*/, ''), plies: [back, other.t], how: 'tapped', ...(tapped.mat ? { host: tapped.mat } : {}) });
+    const L = 'refused' in ff ? Math.round(back * 1000 + Math.min(1.5 * d, other.t * 1000 - 0.5)) : ff.L;
     for (const [i, p] of pts.entries()) out.push(axis(p.clone().addScaledVector(up, back), `screw ${H.thread}x${L}`, { name: `${nm} screw ${i + 1}`, fixed: `through the ${nm} into the ${holesB ? a.name : b.name}'s thread`, passes: [] }));
-    says = `${pts.length} × ${H.thread} × ${L} cap screws through the ${nm} into the ${holesB ? a.name : b.name}`;
+    says = `${pts.length} × ${H.thread} × ${L} cap screws through the ${nm} into the ${holesB ? a.name : b.name}${'refused' in ff ? ` (${ff.why}: the nearest)` : `: ${ff.why.join('; ')}`}`;
   } else if (other.sex === 'holes') {
     // through both: a bolt, a washer under its head and under its nut (src/nexus/components.ts boltedJoint's stack)
     if (!T) return `no metric thread ${H.thread}`;
-    const grip = (qa.t + qb.t) * 1000;
+    const grip = (qa.t + qb.t) * 1000, ff = fastenerFor({ thread: H.thread, plies: [qa.t, qb.t], how: 'through' }); if ('refused' in ff) return ff.why;
     for (const [i, p] of pts.entries()) { const qq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), up), ee = new THREE.Euler().setFromQuaternion(qq), at2 = p.clone().addScaledVector(up, back + T.h / 1000); out.push({ ...boltedJoint(H.thread, grip), name: `${nm} bolt ${i + 1}`, at: [at2.x, at2.y, at2.z], rot: [ee.x, ee.y, ee.z] }); }
-    says = `${pts.length} bolts, washers and nuts through ${grip.toFixed(1)} mm`;
+    says = `${pts.length} ${ff.words} bolts (${ff.std}), washers and nuts through ${grip.toFixed(1)} mm: ${ff.why.join('; ')}`;
   } else {
     // pins through the holes: a nut on each, against the back of the part with the holes
     for (const [i, p] of pts.entries()) out.push(axis(p.clone().addScaledVector(up, back), `nut ${H.thread}`, { name: `${nm} nut ${i + 1}`, fixed: `run onto its pin against the ${nm} and torqued` }));
@@ -176,7 +203,10 @@ function runIn(s: Shape, base: boolean | undefined, a: THREE.Vector3, b: THREE.V
  *  clearance more, cut in each piece of the host it runs through (and no other); the host said to pass it. Both in one
  *  frame. Says how many holes, in which pieces. */
 export function boreThrough(host: Part, guest: Part, clearance = 0.0005): { part: Part; holes: string[]; says: string } {
-  const L = lineOf(guest), r = L.r + clearance, holes: string[] = [];
+  // (a fastener's hole is its standard's: ISO 273 medium for its thread, read from its name ("M8 × 30 hex bolt", "bolt
+  // M8x30"); anything else, as wide as it reaches and the clearance more (spec 01, I10))
+  const th = /\bM(\d+(?:\.\d+)?)\b/.exec(guest.name)?.[0], std = th && /\b(bolt|screw|stud|pin)\b/i.test(guest.name) ? CLEARANCE[th] : undefined;
+  const L = lineOf(guest), r = std ? std.medium / 2000 : L.r + clearance, holes: string[] = [];
   const cutFor = (p: Part, m: THREE.Matrix4): Cut | null => {
     if (!p.shape) return null; const inv = m.clone().invert(), a = L.a.clone().applyMatrix4(inv), b = L.b.clone().applyMatrix4(inv);
     // (the guest's line run on past its ends a little, so a hole it fills to its end is cut to the face)
@@ -188,7 +218,7 @@ export function boreThrough(host: Part, guest: Part, clearance = 0.0005): { part
   // (the host's own place is the frame both are in: its pieces' places are taken from there)
   const kids = (host.parts ?? []).map((q) => walk(q, matrixOfPart(host))), c0 = cutFor(host, matrixOfPart(host)); if (c0) holes.unshift(host.name);
   const part: Part = { ...host, ...(c0 ? { cuts: [...(host.cuts ?? []), c0] } : {}), ...(host.parts ? { parts: kids } : {}), passes: [...new Set([...(host.passes ?? []), guest.name])] };
-  return { part, holes, says: holes.length ? `${holes.length} hole${holes.length > 1 ? 's' : ''} of ${(2 * r * 1000).toFixed(1)} mm for the ${guest.name}, through ${[...new Set(holes)].join(', ')}` : `the ${guest.name} passes through nothing of the ${host.name}` };
+  return { part, holes, says: holes.length ? `${holes.length} hole${holes.length > 1 ? 's' : ''} of ${(2 * r * 1000).toFixed(1)} mm${std ? ` (ISO 273 medium for ${th})` : ''} for the ${guest.name}, through ${[...new Set(holes)].join(', ')}` : `the ${guest.name} passes through nothing of the ${host.name}` };
 }
 
 /** Where a line from a to b runs through a piece's material (in its own frame), as parameters along it: exact for a box
