@@ -153,10 +153,11 @@
    ],
    "owner": "blocks.ts, interfaces.ts, numeric.ts",
    "check": "evaluation case 9: the bore widened, the bolt circle, the bolts and the cover's holes follow; the run log names each step",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I8"
-   ]
+   ],
+   "evidence": "2026-11-01: four nodes in blocks.ts: relation.boltcircle (the least bolt circle round a bore: its radius and 1.2 d0, EN 1993-1-8, d0 ISO 273), pattern.circle (one record both parts read), imprint.pattern (each hole imprinted, checked and cut, the part given the port), fasten.pattern (fastenerFor's bolt at each point); evaluation case 9 as a board: the bore widened 40 to 50 mm, the radius 30.8 to 35.8 mm, the flange's and the cover's six holes and the bolts follow, the nodes that ran again in the engine's order each saying what it made, the plates not made again"
   },
   {
    "id": "I12",

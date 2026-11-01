@@ -61,5 +61,12 @@
     "src/nexus/blocks.ts",
     "evals/interfaces/cases.json",
     "src/nexus/built.ts"
+  ],
+  "01.I11": [
+    "src/nexus/blocks.ts",
+    "src/nexus/interfaces.ts",
+    "src/nexus/numeric.ts",
+    "evals/interfaces/cases.json",
+    "src/nexus/built.ts"
   ]
 }

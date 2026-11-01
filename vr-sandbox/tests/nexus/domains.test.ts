@@ -758,6 +758,32 @@ describe('every domain, in one pass', () => {
       walk(t); now[w!] = Object.fromEntries(Object.entries(m).sort()); }
     expect(now, 'every fastener of the four machines as it was before').toEqual(before);
   }, 300_000);
+  // (a shared pattern and the changes that follow (spec 01, I11; evaluation case 9): a board where the bore feeds the bolt
+  // circle's radius, one circle both the flange's and the cover's holes read, and the bolts laid from it; the bore widened
+  // 40 to 50 mm, the radius, the circle, both parts' holes and the bolts follow, in the engine's order, each saying what it
+  // made, and the two plates are not made again)
+  it('the bore widened: the bolt circle, the bolts and the cover\'s holes follow', async () => {
+    const c9 = (JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; follows?: { thread: string; count: number; bore: number[]; flange: number; cover: number; expect: { r: number[]; bolt: string; holes: number; ran: string[]; cached: string[] } } }[] }).cases.find((c) => c.case === 9)!.follows!;
+    const b = emptyBoard('the cover follows the bore');
+    placeBlock(b, 'in.number', 0, 0, { value: c9.bore[0]! / 1000, unit: 'm' }, 'bore'); placeBlock(b, 'relation.boltcircle', 200, 0, { thread: c9.thread }, 'circle radius'); placeBlock(b, 'pattern.circle', 400, 0, { thread: c9.thread, count: c9.count }, 'bolt circle');
+    placeBlock(b, 'shape.cyl', 0, 200, { name: 'flange', mat: 'steel-low' }, 'flange'); placeBlock(b, 'shape.cyl', 0, 400, { name: 'cover', mat: 'steel-low' }, 'cover');
+    placeBlock(b, 'in.number', -200, 200, { value: 0.08, unit: 'm' }, 'plate radius'); placeBlock(b, 'in.number', -200, 300, { value: c9.flange / 1000, unit: 'm' }, 'flange thickness'); placeBlock(b, 'in.number', -200, 400, { value: c9.cover / 1000, unit: 'm' }, 'cover thickness');
+    placeBlock(b, 'imprint.pattern', 600, 200, {}, 'flange holes'); placeBlock(b, 'imprint.pattern', 600, 400, {}, 'cover holes'); placeBlock(b, 'fasten.pattern', 600, 0, {}, 'bolts');
+    for (const [f, o, t, i] of [['bore', 'value', 'circle radius', 'bore'], ['circle radius', 'r', 'bolt circle', 'r'], ['plate radius', 'value', 'flange', 'r'], ['flange thickness', 'value', 'flange', 'h'], ['plate radius', 'value', 'cover', 'r'], ['cover thickness', 'value', 'cover', 'h'],
+      ['flange', 'part', 'flange holes', 'part'], ['bolt circle', 'pattern', 'flange holes', 'pattern'], ['cover', 'part', 'cover holes', 'part'], ['bolt circle', 'pattern', 'cover holes', 'pattern'], ['bolt circle', 'pattern', 'bolts', 'pattern'], ['flange thickness', 'value', 'bolts', 't1'], ['cover thickness', 'value', 'bolts', 't2']] as const) wire(b, f, o, t, i);
+    const e = new Engine(b); await e.run(); const out = (id: string) => e.state.get(id)!.out as Record<string, unknown>;
+    const radii = (p: Part) => (p.cuts ?? []).map((c) => +(Math.hypot(c.at[0], c.at[2]) * 1000).toFixed(3));
+    const look = () => ({ r: +((out('circle radius').r as number) * 1000).toFixed(3), flange: radii(out('flange holes').part as Part), cover: radii(out('cover holes').part as Part), bolt: out('bolts').bolt, at: (out('bolts').at as { x: number; z: number }[]).map((a) => +(Math.hypot(a.x, a.z) * 1000).toFixed(3)) });
+    const first = look(); expect(first, 'at 40 mm').toEqual({ r: c9.expect.r[0], flange: Array(c9.expect.holes).fill(c9.expect.r[0]), cover: Array(c9.expect.holes).fill(c9.expect.r[0]), bolt: c9.expect.bolt, at: Array(c9.expect.holes).fill(c9.expect.r[0]) });
+    const runs0 = new Map(e.sequence.map((id) => [id, e.state.get(id)!.runs]));
+    b.nodes.bore!.set = { ...b.nodes.bore!.set, value: c9.bore[1]! / 1000 }; e.touch('bore'); await e.run();
+    expect(look(), 'widened to 50 mm, everything that reads it follows').toEqual({ r: c9.expect.r[1], flange: Array(c9.expect.holes).fill(c9.expect.r[1]), cover: Array(c9.expect.holes).fill(c9.expect.r[1]), bolt: c9.expect.bolt, at: Array(c9.expect.holes).fill(c9.expect.r[1]) });
+    // (the run log: the nodes that ran again, in the engine's order, and what each said; the plates not made again)
+    const ran = e.sequence.filter((id) => e.state.get(id)!.runs > runs0.get(id)!), log = ran.map((id) => `${id}: ${String((e.state.get(id)!.out as { says?: unknown } | undefined)?.says ?? e.state.get(id)!.out?.value ?? '')}`);
+    expect(ran, log.join('\n')).toEqual(c9.expect.ran); for (const id of c9.expect.cached) expect(e.state.get(id)!.runs, `${id} not made again`).toBe(runs0.get(id));
+    expect(log.slice(1).every((l) => /\d/.test(l)), 'each step says what it made').toBe(true);
+    expect((out('cover holes').part as Part).ports!.length, 'the cover\'s holes a port its bolts find').toBe(c9.expect.holes);
+  }, 120_000);
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
   // plate's hole is not)

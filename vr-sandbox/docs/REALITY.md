@@ -2198,3 +2198,17 @@ with no date or nothing saying what caught it each passed. Now the page's whole 
 the relay whole with both its mounts are read exactly; table rows are read however indented, in the test and in
 `plan/compile.py`; a near-miss row needs its date and what caught it; and a reckless response may not take its stop back.
 Each of the evaluator's uncaught faults, tried once, now fails the test. Checked with `npm run gate`.
+
+## 2026-11-01: the cover follows the bore: a shared bolt circle, its relation and its imprints as nodes (spec 01, I11)
+
+Four nodes in `src/nexus/blocks.ts`, each with its own test: `relation.boltcircle` gives the least bolt circle round a bore
+(the bore's radius and the end distance EN 1993-1-8 asks of each hole from its edge, 1.2 d0, d0 the ISO 273 medium hole);
+`pattern.circle` holds a bolt circle as one record every part wired from it reads, never a copy; `imprint.pattern` imprints
+each of its holes on a part's top face (stood on the face, its negative made, checked, cut, the part given the holes as a
+port); `fasten.pattern` lays `fastenerFor`'s bolt at each point. Evaluation case 9 (a flange's bore widened 40 to 50 mm,
+worked by hand first) is a board in the one test (the test "the bore widened: the bolt circle, the bolts and the cover's
+holes follow"): at 40 mm the circle is 30.8 mm round and the flange's six holes, the cover's six and the six bolts M8x30 lie
+on it; widened to 50 mm, all follow to 35.8 mm; the nodes that ran again, read from the engine's run counts in its own
+order, are the bore, the radius, the circle, both parts' holes and the bolts, each saying what it made, and the two plates
+are not made again. A first try read the engine's `cached` flag for this, which stays as it was for a node not visited:
+the run counts are what say a node ran. Checked with `npm run gate`.

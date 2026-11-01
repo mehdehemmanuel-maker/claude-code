@@ -40,7 +40,7 @@ import { MATTER, matterOf, mixedMatter } from './matter';
 import { ARRANGEMENTS, type Arrangement } from './mixture';
 import { FILMS_MEASURED, METALS_MEASURED, colourOfNK, filmColour, metalColour, reflectanceFilm, xyzOf, linearSRGB, hexOf } from './colour';
 import { FILM_NK, METAL_NK, NM } from '../data/optics';
-import { interfacesOf } from './interfaces';
+import { BOLT_SPACING, CLEARANCE, interfacesOf } from './interfaces';
 import { SURFACE_MAKES, surfaceOf } from './finish';
 import { resolveLook, type Graphic, type Look } from './appearance';
 import { madeOf, massProperties } from './madeof';
@@ -91,7 +91,7 @@ import { PROGRAMS } from './logic/programs';
 import { layout as layoutOf } from './make/space';
 import { perfect } from './make/pipeline';
 import { LOGICS, SECTIONS, endOn, makeLine, outer, route, sectionOf, sizeBore, sizeWire, tetherOf, vary, type Logic, type Section } from './placement/line';
-import { boreThrough, onto, ontoSurface } from './mate';
+import { applyImprint, boreThrough, fastenerFor, imprint, onto, ontoSurface } from './mate';
 import { geometry } from './view/kit3d';
 import { engineLoads, springCase, type LoadRow } from './loads';
 import { SPRING_WIRES } from '../engineering/springs';
@@ -1322,6 +1322,41 @@ const BUILT_THINGS: BlockDef[] = [
       return { interfaces: r.list.map((x) => ({ id: x.id, kind: x.kind, size: Object.entries(x.size).map(([k, v]) => `${k} ${typeof v === 'number' ? +v.toPrecision(4) : v}`).join(', '), meets: x.mates.join(' '), at: x.frame ? x.frame.at.join(', ') : 'not said' })), count: r.list.length, clashes: r.clashes.length,
         says: `${r.list.length} interface(s): ${[...byKind].map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}${r.clashes.length ? `; ${r.clashes.length} id(s) two would share: ${r.clashes.map((c) => c.id).join(', ')}` : ''}` }; },
     tests: [{ inputs: { thing: { name: 'plate', shape: { box: [0.1, 0.01, 0.1] }, ports: [{ name: 'face', sex: 'holes', thread: 'M6', pattern: [[0.02, 0.02], [-0.02, -0.02]], at: [0, 0.005, 0], n: [0, 1, 0], u: [1, 0, 0], t: 0.01 }], parts: [{ name: 'boss', at: [0, 0.01, 0], shape: { cyl: [0.01, 0.02] }, iface: [{ kind: 'shaft', role: 'provides', d: 0.02 }] }] } }, outputs: { count: 2, clashes: 0 } }], sink: true }),
+  // (a shared pattern and the changes that follow (spec 01, I11; design §2.6): a relation node gives the smallest bolt circle
+  // a bore leaves room for; one pattern node holds the circle both parts read; an imprint node cuts it into each; a fasten
+  // node lays its bolts. Widen the bore and the engine runs them again in its own order, each saying what it made)
+  def({ id: 'relation.boltcircle', name: 'Bolt circle from a bore', spec: { gloss: 'How small may a bolt circle be round a bore of this size?', discipline: 'mechanical.design', role: 'data transformation', codes: [{ scheme: 'ICS', code: '21.060', label: 'Fasteners' }, { scheme: 'ICS', code: '91.080.13', label: 'Steel structures' }] }, kind: 'logic', ability: 'transform', domains: ['mechanical', 'structural'],
+    says: 'The least radius of a bolt circle round a bore: the bore\'s radius and the end distance EN 1993-1-8 asks of each hole from the bore\'s edge, 1.2 d0, d0 its ISO 273 medium clearance hole',
+    settings: [{ key: 'thread', label: 'Bolt thread', type: 'choice', default: 'M8', choices: Object.keys(CLEARANCE) }],
+    ports: { inputs: [L('bore', 0.04, 'the bore\'s diameter')], outputs: [N('r', 'm', { label: 'the bolt circle\'s least radius' }), P('says', 'text')] },
+    run: (i, c) => { const th = String(c.set.thread), d0 = CLEARANCE[th]!.medium / 1000, bore = Number(i.bore ?? 0.04), r = bore / 2 + BOLT_SPACING.e1.least(d0 * 1000) / 1000;
+      return { r, says: `a ${(bore * 1000).toFixed(1)} mm bore: the ${th} holes (${(d0 * 1000).toFixed(1)} mm, ISO 273 medium) at least 1.2 d0 = ${(1.2 * d0 * 1000).toFixed(1)} mm from its edge (EN 1993-1-8): the bolt circle ${(r * 1000).toFixed(1)} mm round` }; },
+    tests: [{ inputs: { bore: 0.04 }, outputs: { r: 0.0308 }, rel: 1e-9 }] }),
+  def({ id: 'pattern.circle', name: 'Bolt circle', spec: { gloss: 'Where are the holes of a bolt circle, that each part reads alike?', discipline: 'mechanical.design', role: 'data transformation', codes: [{ scheme: 'ICS', code: '21.060', label: 'Fasteners' }] }, kind: 'generator', ability: 'generate', domains: ['mechanical', 'structural'],
+    says: 'A bolt circle as one record: its count, its radius, its turn and its thread, the points round it; every part wired from it reads the same one, never a copy (R15)',
+    settings: [{ key: 'thread', label: 'Bolt thread', type: 'choice', default: 'M8', choices: Object.keys(CLEARANCE) }, { key: 'count', label: 'Holes', type: 'number', default: 6 }],
+    ports: { inputs: [L('r', 0.0308, 'its radius'), N('phase', 'rad', { default: 0, optional: true, label: 'its turn' })], outputs: [P('pattern', 'record'), P('says', 'text')] },
+    run: (i, c) => { const n = Math.max(1, Math.round(Number(c.set.count))), r = Number(i.r ?? 0.0308), ph = Number(i.phase ?? 0), points = Array.from({ length: n }, (_, k) => [r * Math.cos(ph + (2 * Math.PI * k) / n), r * Math.sin(ph + (2 * Math.PI * k) / n)] as [number, number]);
+      return { pattern: { kind: 'circle', thread: String(c.set.thread), count: n, r, phase: ph, points }, says: `${n} × ${c.set.thread} on a ${(r * 2000).toFixed(1)} mm circle` }; },
+    tests: [{ inputs: { r: 0.03 }, outputs: { says: '6 × M8 on a 60.0 mm circle' } }] }),
+  def({ id: 'imprint.pattern', name: 'Imprint a pattern', spec: { gloss: 'Which holes does a pattern cut in a part, by its standards, checked first?', discipline: 'mechanical.design', role: 'geometry operation', codes: [{ scheme: 'ICS', code: '21.060', label: 'Fasteners' }, { scheme: 'ICS', code: '25.080', label: 'Machine tools' }] }, kind: 'logic', ability: 'transform', domains: ['mechanical', 'structural', 'manufacturing'],
+    says: 'Each hole of a pattern imprinted where it falls on a part\'s top face: stood on the face, its negative made for the part\'s material and depth (a clearance hole for its bolt, ISO 273), checked (edge, spacing, room), cut, and the part given the holes as a port its bolts find; a hole that cannot be cut is said, with its rule',
+    settings: [{ key: 'fit', label: 'Clearance', type: 'choice', default: 'medium', choices: ['fine', 'medium', 'coarse'] }],
+    ports: { inputs: [P('part', 'part'), P('pattern', 'record')], outputs: [P('part', 'part'), N('holes'), P('says', 'text')] },
+    run: (i, c) => { const p = i.part as Part, pat = i.pattern as { thread: string; points: [number, number][] }; if (!isPart(p) || !pat?.points) throw new Error('a part and a pattern');
+      let host: Part = { name: 'host', parts: [{ ...p, at: [0, 0, 0], rot: [0, 0, 0] }] }; const said: string[] = []; let holes = 0;
+      for (const [x, z] of pat.points) { const im = imprint(host, { kind: 'thread.external', thread: pat.thread, head: 'hex', through: true }, [x, 10, z], [0, -1, 0], { fit: c.set.fit as 'medium' });
+        if ('refused' in im) { said.push(`at ${(x * 1000).toFixed(1)}, ${(z * 1000).toFixed(1)} mm: ${im.why}`); continue; } host = applyImprint(host, im, `${pat.thread} bolt`).part; holes++; }
+      const out = { ...host.parts![0]!, at: p.at ?? [0, 0, 0], ...(p.rot ? { rot: p.rot } : {}) };
+      return { part: out, holes, says: `${holes} of ${pat.points.length} ${pat.thread} holes cut in the ${p.name}${said.length ? `; not cut: ${said.join('; ')}` : ''}` }; },
+    tests: [{ inputs: { part: { name: 'cover', item: 'cover', mat: 'steel-low', shape: { cyl: [0.08, 0.006] }, at: [0, 0, 0] }, pattern: { thread: 'M8', points: [[0.03, 0], [-0.03, 0]] } }, outputs: { holes: 2 } }] }),
+  def({ id: 'fasten.pattern', name: 'Bolts for a pattern', spec: { gloss: 'Which bolts hold two plates through a pattern, and where?', discipline: 'mechanical.design', role: 'data transformation', codes: [{ scheme: 'ICS', code: '21.060', label: 'Fasteners' }] }, kind: 'logic', ability: 'transform', domains: ['mechanical', 'structural'],
+    says: 'The bolt the catalogue sells for two plates through a pattern (ISO 4017, its washers and nut, the shortest sold: fastenerFor), one at each of its points, and why that one',
+    ports: { inputs: [P('pattern', 'record'), L('t1', 0.012, 'the first plate'), L('t2', 0.006, 'the second plate')], outputs: [P('bolt', 'text'), N('count'), P('at', 'table'), P('says', 'text')] },
+    run: (i) => { const pat = i.pattern as { thread: string; points: [number, number][] }; if (!pat?.points) throw new Error('a pattern');
+      const f = fastenerFor({ thread: pat.thread, plies: [Number(i.t1 ?? 0.012), Number(i.t2 ?? 0.006)], how: 'through' }); if ('refused' in f) throw new Error(f.why);
+      return { bolt: f.words, count: pat.points.length, at: pat.points.map(([x, z]) => ({ x, z })), says: `${pat.points.length} × ${f.words} (${f.std}): ${f.why.join('; ')}` }; },
+    tests: [{ inputs: { pattern: { thread: 'M8', points: [[0.03, 0]] }, t1: 0.01, t2: 0.006 }, outputs: { bolt: 'bolt M8x30', count: 1 } }] }),
   def({ id: 'made.of', name: 'What it is made of', kind: 'critic', ability: 'measure', domains: ['materials', 'mechanical', 'structural', 'everyday'], says: 'Any thing opened as its materials all the way down: its own tree with each thing\'s mass and share (a thing placed many times counted at each place, once), its mass by material (each said as exactly as it is known: a grade, a species, or only a family), by element, and what is not known (no material, no density, only a family, a mass stated rather than worked out)',
     settings: [{ key: 'depth', label: 'Levels of its tree', type: 'number', default: 6 }],
     ports: { inputs: [thing()], outputs: [N('mass', 'kg'), P('materials', 'table'), P('elements', 'table'), P('tree', 'table'), P('unknown', 'list<text>'), P('says', 'text')] },

@@ -209,6 +209,41 @@
       }
     },
     {
+      "case": 9,
+      "what": "a flange's bore widened 40 → 50 mm",
+      "follows": {
+        "thread": "M8",
+        "count": 6,
+        "bore": [
+          40,
+          50
+        ],
+        "flange": 10,
+        "cover": 6,
+        "expect": {
+          "r": [
+            30.8,
+            35.8
+          ],
+          "bolt": "bolt M8x30",
+          "holes": 6,
+          "ran": [
+            "bore",
+            "circle radius",
+            "bolt circle",
+            "flange holes",
+            "cover holes",
+            "bolts"
+          ],
+          "cached": [
+            "flange",
+            "cover"
+          ]
+        },
+        "worked": "M8's hole 9.0 mm (ISO 273 medium); EN 1993-1-8 asks 1.2 d0 = 10.8 mm from the bore's edge to each hole's centre: the bolt circle at least 20 + 10.8 = 30.8 mm round; the bore made 50 mm, 25 + 10.8 = 35.8 mm; six holes in the flange and the cover at that radius; the bolts through 10 + 6 mm as case 8 works it, bolt M8x30; widening the bore runs the bore, the radius, the circle, both parts' holes and the bolts again, and not the two plates"
+      }
+    },
+    {
       "case": 10,
       "what": "a box made 10 mm taller after an imprint on its top",
       "asking": {
