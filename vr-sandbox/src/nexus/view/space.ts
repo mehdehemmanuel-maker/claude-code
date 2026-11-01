@@ -167,7 +167,9 @@ const bar = new Panel(...BAR_ONE, (p) => {
   g.textBaseline = 'middle'; g.font = `700 22px ${FONT}`; g.fillStyle = '#ffd740'; g.fillText('S · SCALE', 24, H / 2 - 18);
   g.font = `600 28px ${FONT}`; g.fillStyle = '#e6eef8'; g.fillText(`1 cell = ${lengthSaid(grid.cell || 1)}`, 24, H / 2 + 16);
   let x = two ? 250 : 300; for (const [name, cell] of [['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3], ['Mm', 1e6]] as const) { p.button(name, x, 22, bw(84), H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += bw(84) + 8; }
-  p.button('Fit', x, 22, 90, H - 44, fit); x += 100; p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130;
+  // (no Board button in a headset: there the board at its larger size covered the chat and the bar (the evaluator,
+  // 2026-11-01); its own zoom, the strip's + and −, makes it larger)
+  p.button('Fit', x, 22, 90, H - 44, fit); x += 100; if (!two) { p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130; }
   for (const k of ['xz', 'xy', 'yz'] as const) { p.button(k.toUpperCase(), x, 22, bw(84), H - 44, () => { grid.planes[k] = !grid.planes[k]; grid.dirty = true; }, grid.planes[k]); x += bw(84) + 8; }
   // (in two rows, T begins the second row; its buttons are moved down by a row's height, and its mode button made full height)
   const T0 = two ? H : 0; if (two) x = 24; else x += 22;
@@ -251,6 +253,8 @@ function layPanels(): void {
     bar.shape(...BAR_TWO); bar.mesh.position.set(0, -0.62, -1.1); bar.mesh.scale.setScalar(1);
     const side = THREE.MathUtils.degToRad(42); chat.mesh.position.set(-1.3 * Math.sin(side), 0, -1.3 * Math.cos(side)); chat.mesh.rotation.set(0, side, 0); chat.mesh.scale.setScalar(1); }
   else bar.shape(...BAR_ONE);
+  // (the least a target on the board may be, in its css px: 2.5° at the board's distance; set in a headset, nothing on a screen)
+  if (xr) { boardBig = false; const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), m = 2 * 1.25 * Math.tan(THREE.MathUtils.degToRad(1.25)); wall.headset(Math.ceil(m / perPx) + 1); } else wall.headset(0);
   if (xr) { /* laid above */ } else if (boardBig) { board.group.scale.setScalar(0.5); board.group.position.set(-0.12, 0.06, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.visible = false; }
   else { chat.mesh.visible = true; board.group.scale.setScalar(0.36); board.group.position.set(0.36, 0.1, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.position.set(-0.78, 0.4, -1.25); chat.mesh.scale.setScalar(0.65); chat.mesh.rotation.set(0, 0, 0); }
   // the panels are drawn over what is made: they are what you work with, never hidden inside it
@@ -285,6 +289,8 @@ function comfort(): Record<string, { distance: number; side: number; below: numb
   // evaluator found them unmeasured, at 1.1° and 0.9°, 2026-11-01); and the bar's rows)
   if (board.group.visible) for (const z of board.sizes()) { const d = dist(z.mesh); if (z.target !== undefined) out[`${z.name} target`] = { distance: d, side: 0, below: 0, width: sz(z.target, d) }; out[`${z.name} text`] = { distance: d, side: 0, below: 0, width: sz(z.text, d) }; }
   if (out.bar) out.bar.rows = bar.h / bar.w > 0.15 ? 2 : 1;
+  // (every block on the board is a target a hand presses (to choose it, to move it): the smallest, as drawn)
+  if (board.group.visible && Number.isFinite(wall.smallestBlock())) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), d = dist(board.group); out['block'] = { distance: d, side: 0, below: 0, width: sz(wall.smallestBlock() * perPx, d) }; }
   return out;
 }
 
@@ -433,6 +439,8 @@ const emulate = emulated && {
     if (mode === 'chosen') for (const id of Object.keys(wall.board().nodes)) { wall.choose(id); if (wall.chosen()?.inputs.some((q) => q.number || q.choices)) break; }
     board.drawSide(); return mode === 'library' ? 'the library' : wall.chosen()?.label ?? 'nothing';
   },
+  /** A button of the board's side panel pressed by its label (the same act a hand's ray sets off), the first, or the nth. */
+  press: (label: string, nth = 0): boolean => board.pressLabel(label, nth),
   /** Where the eyes are in the world. */
   eye: () => renderer.xr.getCamera().getWorldPosition(new THREE.Vector3()).toArray(),
 };

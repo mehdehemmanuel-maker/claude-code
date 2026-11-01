@@ -28,6 +28,7 @@ const LIMITS = [
   ['smallest target on the board\'s strip (°)', (m) => m['strip target'].width, 2.5, 90],
   ['strip text, smallest (°, 0.6 comfortable)', (m) => m['strip text'].width, 0.6, 5],
   ['side panel text, smallest (°, 0.6 comfortable)', (m) => m['side text'].width, 0.6, 5],
+  ['smallest block on the board (°: a hand chooses and moves it; ports are wired from the side panel)', (m) => m.block.width, 2.5, 90],
 ];
 const srv = http.createServer((q, r) => { const p = path.join(root, decodeURIComponent(q.url.split('?')[0])); fs.readFile(p, (e, d) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { 'Content-Type': types[path.extname(p)] || 'application/octet-stream' }); r.end(d); }); }).listen(4179);
 (async () => {
@@ -50,6 +51,18 @@ const srv = http.createServer((q, r) => { const p = path.join(root, decodeURICom
       if (shots) await pg.screenshot({ path: path.join(shots, `headset-side-${mode}.png`) });
     }
     await pg.evaluate(() => window.space.emulate.side('chosen'));
+    // (every block stays a target a hand can press however far the board is zoomed out: ten presses of the strip's −)
+    await pg.evaluate(() => { for (let i = 0; i < 10; i++) window.space.wall.zoom(1 / 1.25); }); await pg.waitForTimeout(200);
+    { const v = (await pg.evaluate(() => window.space.comfort())).block?.width, ok = v >= 2.5; console.log(`${ok ? 'ok  ' : 'FAIL'} smallest block after zooming out ten times (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit 2.5 or more)`); if (!ok) fails++; }
+    // (a wire made as a hand makes it in a headset: a block's output from the side panel, another block, its input there)
+    const wired = await pg.evaluate(() => {
+      const w = window.space.wall, n = () => Object.values(w.board().edges).filter((e) => !e.deleted && e.in).length, n0 = n();
+      w.add('in.number'); const a = window.space.emulate.press('→ wire');
+      w.add('law.newton.second'); const b = window.space.emulate.press('← here', 0);
+      return { pressed: a && b, before: n0, after: n() };
+    });
+    { const ok = wired.pressed && wired.after === wired.before + 1; console.log(`${ok ? 'ok  ' : 'FAIL'} a wire made from the side panel's buttons: ${wired.pressed ? 'pressed' : 'a button was not there'}, wires ${wired.before} to ${wired.after}`); if (!ok) fails++; }
+    if (shots) await pg.screenshot({ path: path.join(shots, 'headset-wired.png') });
     // (walked two ways: by carry(), and by the left stick as a hand pushes it, the way walking goes in use (a stick that
     // moved the player and not the panels passed when only carry() was tried: the evaluator, 2026-11-01))
     const moved = (before, after, how) => { let n = 0; for (const k of Object.keys(before)) for (const f of ['distance', 'side', 'below']) if (Math.abs(before[k][f] - after[k][f]) > 1e-4) { n++; bad(`${k} ${f} moved when the player walked ${how} (${before[k][f].toFixed(3)} to ${after[k][f].toFixed(3)})`); } return n; };

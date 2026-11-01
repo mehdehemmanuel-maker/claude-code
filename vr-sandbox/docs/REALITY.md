@@ -1815,3 +1815,17 @@ the evaluator's shapes planted fails the test "every figure in data has a source
 is written down", and no record in `src/data/` was newly found without a status. Not seen, and said so in C21's row: a
 number inside a text or a function, and the JSON data files (`src/data/stock.json`, which the builds generate). Checked
 with `npm run gate`.
+
+## 2026-11-01: in a headset, blocks are pressed and wires made from the side panel (spec 04, P10; decision 0012)
+
+P10's third verdict: the board's own ports (1.1° across) and wires (0.8°) were targets a hand's ray presses, under the
+2.5° a target needs, and unmeasured; the Board button made the board 72° wide over the chat and the bar; decision 0012
+still gave the old numbers. Each review had found another kind of target unmeasured, so this round answered the class:
+in a headset a hand presses only whole blocks on the board (`hit` in `src/nexus/view/nodes.ts` skips ports and wires
+there), the board's zoom never lets the smallest block fall under 2.5° (the space tells the board how many of its pixels
+that is at its distance), and wires are made from the side panel (`src/nexus/view/nodes-wall.ts`): a block's output by
+"→ wire", the other block's input by "← here", a wire taken away by "✕ cut". The Board button is gone from the headset's
+bar. `npm run eval:headset` now measures the smallest block (4.13° as the board opens, 2.64° after the strip's −
+pressed ten times) and makes a wire through the side panel's own buttons (wires 9 to 10); every limit held in one run.
+Decision 0012 is brought up to the numbers measured. The board's ports and wires still work with a mouse on a screen.
+Checked with `npm run gate`.

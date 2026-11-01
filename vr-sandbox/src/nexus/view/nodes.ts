@@ -336,11 +336,16 @@ function shade(hex: string): string { if (!hex.startsWith('#')) return hex; cons
 
 // ---- pointing ---------------------------------------------------------------------------------------------------------
 type Hit = { kind: 'in' | 'out'; id: string; port: string } | { kind: 'node'; id: string } | { kind: 'wire'; id: string } | null;
+// (in a headset (`leastTarget`, css px, set by the space for 2.5° at the board's distance) a hand's ray presses only whole
+// blocks and the sheet: a port is 20 px across and a wire 14, 1.1° and 0.8°, too small to aim at (the evaluator,
+// 2026-11-01); wiring is done from the side panel's buttons there, and the zoom keeps every block at least that size)
+let leastTarget = 0;
+const kLeast = (): number => { if (!leastTarget) return 0.08; const hs = nodesOf(cur()).map((n) => { const g = geo(n.id); return Math.min(g.w, g.h); }); return hs.length ? leastTarget / Math.min(...hs) : 0.08; };
 function hit(sx: number, sy: number): Hit {
   const [x, y] = toWorld(sx, sy), r = 10 / view.k, ns = nodesOf(cur()).map((n) => n.id).filter((id) => cur().nodes[id]!.block || cur().nodes[id]!.inner).reverse();
-  for (const id of ns) { const gg = geo(id); for (const q of gg.outs) if (Math.hypot(x - (gg.x + gg.w), y - q.y) < r) return { kind: 'out', id, port: q.p.name }; for (const q of gg.ins) if (Math.hypot(x - gg.x, y - q.y) < r) return { kind: 'in', id, port: q.p.name }; }
+  if (!leastTarget) for (const id of ns) { const gg = geo(id); for (const q of gg.outs) if (Math.hypot(x - (gg.x + gg.w), y - q.y) < r) return { kind: 'out', id, port: q.p.name }; for (const q of gg.ins) if (Math.hypot(x - gg.x, y - q.y) < r) return { kind: 'in', id, port: q.p.name }; }
   for (const id of ns) { const gg = geo(id); if (x >= gg.x && x <= gg.x + gg.w && y >= gg.y && y <= gg.y + gg.h) return { kind: 'node', id }; }
-  for (const e of edgesOf(cur())) { if (!isWire(e)) continue; const p = wirePath(e); if (!p) continue; for (let i = 0; i <= 30; i++) { const [px, py] = bez(p[0], p[1], p[2], p[3], i / 30); if (Math.hypot(px - x, py - y) < 7 / view.k) return { kind: 'wire', id: e.id }; } }
+  if (!leastTarget) for (const e of edgesOf(cur())) { if (!isWire(e)) continue; const p = wirePath(e); if (!p) continue; for (let i = 0; i <= 30; i++) { const [px, py] = bez(p[0], p[1], p[2], p[3], i / 30); if (Math.hypot(px - x, py - y) < 7 / view.k) return { kind: 'wire', id: e.id }; } }
   return null;
 }
 let mode: 'none' | 'pan' | 'drag' | 'wire' | 'box' | 'pinch' | 'orbit' = 'none', last = { x: 0, y: 0 }, moved = false, dragStart: Map<string, [number, number]> = new Map();
@@ -415,7 +420,7 @@ cv.addEventListener('dblclick', (e) => {
   if (h?.kind === 'node' && cur().nodes[h.id]?.inner) { enter(h.id); return; }
   if (!h) { const [wx, wy] = toWorld(p.x, p.y); placeAt = [wx, wy]; openCmd(''); }
 });
-function zoomAt(sx: number, sy: number, f: number): void { const k = Math.max(0.08, Math.min(3, view.k * f)); const [wx, wy] = toWorld(sx, sy); view.k = k; view.ox = sx - wx * k; view.oy = sy - wy * k; draw(); }
+function zoomAt(sx: number, sy: number, f: number): void { const lo = kLeast(), k = Math.max(lo, Math.min(Math.max(3, lo), view.k * f)); const [wx, wy] = toWorld(sx, sy); view.k = k; view.ox = sx - wx * k; view.oy = sy - wy * k; draw(); }
 cv.addEventListener('wheel', (e) => { e.preventDefault(); const p = pos(e); if (e.ctrlKey || Math.abs(e.deltaY) > Math.abs(e.deltaX) * 2 && !e.shiftKey) zoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0015)); else { view.ox -= e.deltaX; view.oy -= e.deltaY; draw(); } }, { passive: false });
 cv.addEventListener('dragover', (e) => { e.preventDefault(); });
 cv.addEventListener('drop', (e) => { e.preventDefault(); const id = e.dataTransfer?.getData('text/block'); if (!id) return; const p = pos(e); const [x, y] = toWorld(p.x, p.y); addBlock(id, x - W / 2, y - 20); });
@@ -472,10 +477,10 @@ function fit(): void {
   const x0 = Math.min(...ns.map((n) => n.x)), y0 = Math.min(...ns.map((n) => n.y)), x1 = Math.max(...ns.map((n) => n.x + n.w)), y1 = Math.max(...ns.map((n) => n.y + n.h));
   // the whole board where it fits at a size that can be read; else readable, from its start (pan or zoom for the rest)
   const whole = Math.min((cv.clientWidth - 60) / (x1 - x0), (cv.clientHeight - 60) / (y1 - y0)), least = cv.clientWidth < 600 ? 0.55 : 0.8;
-  const k = Math.min(1.15, Math.max(least, whole));
+  const lo = Math.max(least, kLeast()), k = Math.max(kLeast(), Math.min(1.15, Math.max(least, whole)));
   view.k = k;
-  view.ox = whole >= least ? cv.clientWidth / 2 - ((x0 + x1) / 2) * k : 30 - x0 * k;
-  view.oy = whole >= least || (y1 - y0) * k < cv.clientHeight - 60 ? cv.clientHeight / 2 - ((y0 + y1) / 2) * k : 30 - y0 * k; draw();
+  view.ox = whole >= lo ? cv.clientWidth / 2 - ((x0 + x1) / 2) * k : 30 - x0 * k;
+  view.oy = whole >= lo || (y1 - y0) * k < cv.clientHeight - 60 ? cv.clientHeight / 2 - ((y0 + y1) / 2) * k : 30 - y0 * k; draw();
 }
 /**
  * Lays a board out in columns by how far each block is from where its values start, each column in the order of what
@@ -867,6 +872,17 @@ export const wall = {
   changed: null as null | (() => void),
   down: (x: number, y: number) => pointerDown({ x, y }, 901), move: (x: number, y: number) => pointerMove({ x, y }, 901), up: (x: number, y: number) => pointerUp({ x, y }, 901),
   fit, tidy: () => { edit((b) => { tidy(b); }); fit(); }, undo: doUndo, redo: doRedo, heat: toggleHeat,
+  /** In a headset: the least size, in css px, a press target may be (0 on a screen); blocks only are pressed then. */
+  headset(px: number): void { leastTarget = px; if (wallActive) fit(); },
+  /** The smallest block as drawn, in css px (its least side): every block is a target a hand presses. */
+  smallestBlock: (): number => { const hs = nodesOf(cur()).map((n) => { const g = geo(n.id); return Math.min(g.w, g.h); }); return hs.length ? Math.min(...hs) * view.k : Infinity; },
+  /** Wire an output of one block into an input of another, as a drag would, with its checks said. */
+  connect(from: string, out: string, to: string, inp: string): boolean {
+    const r = local.canWire(from, out, to, inp); if (!r.ok) { toast(r.why, true); return false; }
+    edit((b) => { wire(b, from, out, to, inp); }); if (r.convert) toast(`converted on the wire: ${r.convert}`); wall.changed?.(); return true;
+  },
+  /** The wire into an input taken away. */
+  unwire(to: string, inp: string): void { const w = local.wiresInto(to).find((x) => x.in === inp); if (w) { edit((b) => { b.edges[w.id] = { ...b.edges[w.id]!, deleted: true }; }); wall.changed?.(); } },
   zoom: (f: number) => zoomAt(cv.clientWidth / 2, cv.clientHeight / 2, f),
   up1: () => { if (path.length) up(path.length - 1); },
   demos: () => DEMOS.map(([n]) => n),
@@ -874,12 +890,12 @@ export const wall = {
   add: (blockId: string) => addBlock(blockId),
   title: () => [root.title || 'Board', ...path.map((g0, i) => { let b = root; for (const x of path.slice(0, i)) b = b.nodes[x]!.inner!; return b.nodes[g0]?.label || 'Group'; })].join(' › '),
   /** The block chosen, with each input you may set (those not wired), as it stands. */
-  chosen(): { id: string; label: string; says: string; inputs: WallInput[]; group: boolean } | null {
+  chosen(): { id: string; label: string; says: string; inputs: WallInput[]; outputs: { name: string; label: string }[]; group: boolean } | null {
     if (sel.size !== 1) return null; const id = [...sel][0]!, n = cur().nodes[id]; if (!n) return null; const d = blockOf(n), into = local.wiresInto(id);
     const inputs = portsFor(id).inputs.map((q) => { const v = n.set?.[q.name] ?? q.default, wired = into.some((e) => e.in === q.name); return { name: q.name, label: q.label ?? q.name, ...(q.unit ? { unit: q.unit } : {}), value: wired ? 'wired' : v === undefined ? '—' : show(typeof v === 'string' && q.type === 'number' ? readQuantity(v, q.unit) : v, q.unit), number: (q.type === 'number' || q.type === 'integer') && !q.choices?.length, wired, ...(q.choices?.length ? { choices: q.choices } : {}) }; });
     const st = d?.settings?.find((x) => x.type === 'quantity' || x.type === 'number');
     if (st) inputs.unshift({ name: `set:${st.key}`, label: st.label, value: show(typeof n.set?.[st.key] === 'string' ? readQuantity(String(n.set?.[st.key]), String(n.set?.unit ?? '') || undefined) : n.set?.[st.key] ?? st.default, String(n.set?.unit ?? '') || undefined), number: true, wired: false });
-    return { id, label: n.label || d?.name || '', says: d?.says ?? '', inputs, group: !!n.inner };
+    return { id, label: n.label || d?.name || '', says: d?.says ?? '', inputs, outputs: portsFor(id).outputs.map((q) => ({ name: q.name, label: q.label ?? q.name })), group: !!n.inner };
   },
   /** An input of the chosen block made bigger or smaller by a factor (a hand cannot type well): 1.1 is ten percent more. */
   nudge(name: string, f: number): void {

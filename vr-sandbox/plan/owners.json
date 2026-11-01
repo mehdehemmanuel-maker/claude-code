@@ -22,7 +22,8 @@
   "src/nexus/view/space.ts",
   "src/nexus/view/keyboard.ts",
   "src/nexus/view/nodes-wall.ts",
-  "package.json"
+  "package.json",
+  "src/nexus/view/nodes.ts"
  ],
  "10.T23": [
   "src/kernel/",

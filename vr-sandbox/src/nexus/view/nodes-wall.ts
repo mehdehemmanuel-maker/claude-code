@@ -18,7 +18,7 @@ export const NW = 2.4, NH = 1.35, SH = 0.09, SIDE_W = 0.62, GAP = 0.015;
 // 0.3° to 0.6° (the evaluator, 2026-11-01). The same pixels per metre as on a screen; more metres.)
 const SH_XR = 0.16, SIDE_W_XR = 0.92;
 const SPX = 2048, LPX0 = 900, PX_PER_M = LPX0 / SIDE_W;
-interface Hit { x0: number; y0: number; x1: number; y1: number; act: () => void }
+interface Hit { x0: number; y0: number; x1: number; y1: number; act: () => void; label?: string }
 /** The side panel's sizes, in its pixels: on a screen, and in a headset. */
 const SIDE = {
   screen: { title: 30, label: 40, says: 26, saysLh: 34, saysLines: 3, inLabel: 28, inValue: 34, bw: 100, bh: 80, rowH: 104, top: 290, lib: 84, libGap: 12, libName: 32, help: 30, helpLh: 50, foot: 84, footW: 260, font: 30, nav: 80 },
@@ -43,6 +43,8 @@ export class NodesWall {
   /** The text sizes drawn on the strip and the side panel, in their pixels (the smallest is measured). */
   private stripFonts: number[] = []; private sideFonts: number[] = [];
   private demo = 0; private library = false; private shelf = 0; private page = 0; private inPage = 0;
+  /** In a headset, a wire being made from the side panel: its output chosen, its input not yet. */
+  private wiring: { from: string; out: string; label: string } | null = null;
   private pressing: { on: 'board'; x: number; y: number } | null = null;
   private stale = true; private lastUpload = 0; private size = '';
   private readonly plane = new THREE.Plane(); private readonly at = new THREE.Vector3();
@@ -65,7 +67,7 @@ export class NodesWall {
    *  metre, so its targets and text are larger as the eye sees them. */
   headset(on: boolean): void {
     if (on === this.xr) return;
-    this.xr = on; this.sh = on ? SH_XR : SH; this.sw = on ? SIDE_W_XR : SIDE_W;
+    this.xr = on; this.sh = on ? SH_XR : SH; this.sw = on ? SIDE_W_XR : SIDE_W; this.wiring = null;
     this.spy = Math.round((SPX * this.sh) / NW); this.lpx = Math.round(PX_PER_M * this.sw); this.lpy = Math.round(PX_PER_M * (NH + this.sh + GAP));
     const remake = (p: { mesh: THREE.Mesh; tex: THREE.CanvasTexture }, c: HTMLCanvasElement, w: number, h: number) => {
       p.mesh.geometry.dispose(); p.mesh.geometry = new THREE.PlaneGeometry(w, h); p.tex.dispose();
@@ -84,6 +86,8 @@ export class NodesWall {
     }
     return out;
   }
+  /** A side-panel button pressed by its label: what a hand's ray on it sets off (for a browser test). */
+  pressLabel(label: string, nth = 0): boolean { const h = this.sideHits.filter((x) => x.label === label)[nth]; h?.act(); return !!h; }
   /** The library shown in the side panel, or the chosen block (as the strip's ＋ Blocks button does). */
   libraryShown(on: boolean): void { this.library = on; this.page = 0; this.drawStrip(); this.drawSide(); }
   show(): string { this.group.visible = true; wall.active = true; wall.fit(); this.drawStrip(); this.drawSide(); return `${wall.title()}: point and press to wire, move and turn; the strip above for the boards to start from.`; }
@@ -148,7 +152,7 @@ export class NodesWall {
     g.clearRect(0, 0, W, H); g.fillStyle = '#0b1220ee'; round(g, 0, 0, W, H, 26); g.fill();
     g.textBaseline = 'middle';
     const text = (t: string, x: number, y: number, size: number = M.font, colour = '#dfe7f1', weight = 400) => { g.font = `${weight} ${size}px ${FONT}`; g.fillStyle = colour; g.fillText(t, x, y); if (t) this.sideFonts.push(size); };
-    const btn = (label: string, x: number, y: number, w: number, h: number, act: () => void, hue = '#1c2a3d') => { g.fillStyle = hue; round(g, x, y, w, h, 12); g.fill(); g.font = `600 ${M.font}px ${FONT}`; g.fillStyle = '#e6eef8'; const tw = g.measureText(label).width; g.fillText(label, x + (w - tw) / 2, y + h / 2); if (label) this.sideFonts.push(M.font); this.sideHits.push({ x0: x, y0: y, x1: x + w, y1: y + h, act }); };
+    const btn = (label: string, x: number, y: number, w: number, h: number, act: () => void, hue = '#1c2a3d') => { g.fillStyle = hue; round(g, x, y, w, h, 12); g.fill(); g.font = `600 ${M.font}px ${FONT}`; g.fillStyle = '#e6eef8'; const tw = g.measureText(label).width; g.fillText(label, x + (w - tw) / 2, y + h / 2); if (label) this.sideFonts.push(M.font); this.sideHits.push({ x0: x, y0: y, x1: x + w, y1: y + h, act, label }); };
     // (how many characters fit a width at a size: a clip by measure, so the larger text in a headset never runs off the panel)
     const fit = (t: string, size: number, w: number, weight = 400) => { g.font = `${weight} ${size}px ${FONT}`; if (g.measureText(t).width <= w) return t; let n = t.length; while (n > 1 && g.measureText(`${t.slice(0, n)}…`).width > w) n--; return `${t.slice(0, n)}…`; };
     text(fit(wall.title(), M.title, W - 60, 600), 30, M.title * 1.5, M.title, '#9fb3c8', 600);
@@ -176,14 +180,28 @@ export class NodesWall {
     }
     text(fit(c.label, M.label, W - 60, 700), 30, navY + M.label * 0.5, M.label, '#ffffff', 700);
     const after = wrapText(g, c.says, 30, navY + M.label * 1.75, W - 60, M.says, M.saysLh, M.saysLines, '#8796aa', this.sideFonts);
-    // (inputs a page at a time when they do not all fit: in a headset, about six)
-    const top = Math.max(M.top, after + 10), foot = H - M.foot - 30, room = (this.xr ? foot - M.nav - 30 : foot) - top;
-    const per = Math.max(1, Math.min(12, Math.floor(room / M.rowH))), pages = Math.max(1, Math.ceil(c.inputs.length / per)); this.inPage = Math.min(this.inPage, pages - 1);
+    // (inputs a page at a time when they do not all fit: in a headset, about six; there its outputs too, each to wire
+    // from, and each input to wire into or cut, since a hand's ray cannot hit the board's ports (each 1.1°))
+    let top = Math.max(M.top, after + 10); const foot = H - M.foot - 30;
+    const wiring = this.wiring;
+    if (this.xr && wiring) { text(fit(`Wiring from ${wiring.label}: choose a block, then ← here`, M.inLabel, W - 90 - M.bw), 30, top + M.bh / 2, M.inLabel, '#ffd740', 600); btn('✕', W - 30 - M.bw, top, M.bw, M.bh, () => { this.wiring = null; this.drawSide(); }); top += M.rowH; }
+    type Row = { kind: 'in'; q: (typeof c.inputs)[number] } | { kind: 'out'; o: (typeof c.outputs)[number] };
+    const rows: Row[] = [...c.inputs.map((q) => ({ kind: 'in' as const, q })), ...(this.xr ? c.outputs.map((o) => ({ kind: 'out' as const, o })) : [])];
+    const room = (this.xr ? foot - M.nav - 30 : foot) - top;
+    const per = Math.max(1, Math.min(12, Math.floor(room / M.rowH))), pages = Math.max(1, Math.ceil(rows.length / per)); this.inPage = Math.min(this.inPage, pages - 1);
     let y = top; const textW = W - 60 - 2 * M.bw - 40;
-    for (const q of c.inputs.slice(this.inPage * per, this.inPage * per + per)) {
+    for (const r of rows.slice(this.inPage * per, this.inPage * per + per)) {
+      const bx = W - 30 - 2 * M.bw - 20, by = y + (M.rowH - M.bh) / 2;
+      if (r.kind === 'out') {
+        text(fit(`${r.o.label} (out)`, M.inLabel, textW), 30, y + M.rowH / 2, M.inLabel, '#9be7c4');
+        btn('→ wire', bx, by, 2 * M.bw + 20, M.bh, () => { this.wiring = { from: c.id, out: r.o.name, label: `${c.label}.${r.o.label}` }; this.say(`wiring from ${c.label}.${r.o.label}: choose a block, then its input`); this.drawSide(); }, '#173a2c');
+        y += M.rowH; continue;
+      }
+      const q = r.q;
       text(fit(q.label, M.inLabel, textW), 30, y + M.inLabel * 0.7, M.inLabel, q.wired ? '#6b7a8f' : '#c8d4e3');
       text(fit(q.value, M.inValue, textW, 600), 30, y + M.inLabel * 1.4 + M.inValue * 0.6, M.inValue, q.wired ? '#6b7a8f' : '#ffffff', 600);
-      const bx = W - 30 - 2 * M.bw - 20, by = y + (M.rowH - M.bh) / 2;
+      if (this.xr && wiring && wiring.from !== c.id) { btn('← here', bx, by, 2 * M.bw + 20, M.bh, () => { if (wall.connect(wiring.from, wiring.out, c.id, q.name)) { this.say(`wired ${wiring.label} into ${c.label}.${q.label}`); this.wiring = null; } this.drawSide(); }, '#1b3a5a'); y += M.rowH; continue; }
+      if (this.xr && q.wired) { btn('✕ cut', bx, by, 2 * M.bw + 20, M.bh, () => { wall.unwire(c.id, q.name); this.say(`the wire into ${c.label}.${q.label} cut`); this.drawSide(); }, '#3a1b1b'); y += M.rowH; continue; }
       if (q.choices && !q.wired) { btn('◀', bx, by, M.bw, M.bh, () => { this.say(`${q.label}: ${wall.step(q.name, -1)}`); this.drawSide(); }); btn('▶', bx + M.bw + 20, by, M.bw, M.bh, () => { this.say(`${q.label}: ${wall.step(q.name, 1)}`); this.drawSide(); }); }
       if (q.number && !q.wired) { btn('−', bx, by, M.bw, M.bh, () => wall.nudge(q.name, 1 / 1.1)); btn('+', bx + M.bw + 20, by, M.bw, M.bh, () => wall.nudge(q.name, 1.1)); }
       y += M.rowH;
