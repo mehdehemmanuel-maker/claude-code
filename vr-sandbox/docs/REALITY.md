@@ -2117,3 +2117,16 @@ own normals across the triangle met. The one test (the test "an interface stands
 sloped face") gives it a box's top, a cylinder's side, a box turned 30° inside a turned group, and a wedge's slope through
 its mesh: each frame's normal within 0.5° of the surface's and each point within 0.1 mm of the one worked out by hand; a
 quarter turn turns `u` by 90°; a ray that meets nothing gives nothing. Checked with `npm run gate`.
+
+## 2026-11-01: the checks before cutting, each refusing with its rule, its numbers and its source (spec 01, I7)
+
+`imprint` in `src/nexus/mate.ts` stands an interface on a host where a ray meets it (`standOn`), measures the host along
+the hole's line (its depth there, the far face met from beyond it) and across it (its edge, by twelve rays from the hole's
+middle), makes the negative for the host's own material and that depth (`negativeOf`), and checks before anything is cut:
+the edge distance and the spacing from the host's other holes by EN 1993-1-8 Table 3.3 from the hole d0, that it breaks
+into no other hole, and the room its keep needs among the thing's other pieces. The first check that fails is the refusal,
+with the value needed and the value found; nothing is cut (that is I8). The evaluation set gained cases 4 and 5, each worked
+by hand first, and the one test (the test "the checks before cutting: cases 2, 4 and 5 refused by their rule and value, case
+1 passing") imprints each on its plate: case 2 refused for its thread (12 mm needed, 8 found), case 4 for its edge (10.8
+needed, 4 found), case 5 for its spacing (19.8 needed, 15 found), case 1 passing its edge, room and depth. Checked with
+`npm run gate`.

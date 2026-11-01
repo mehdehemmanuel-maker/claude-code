@@ -6,15 +6,15 @@ Last commit the gate passed: 4b20a12 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
-1. 01.I7: the checks before cutting (wall, depth, spacing, room), each refusing with its rule and its source
-2. 01.I8: apply: cut, add the keep zones, give the host the mirror interface and the imprint record
-3. 01.I9: face queries: an imprint keeps to its face by what the face is; said lost, never moved
+1. 01.I8: apply: cut, add the keep zones, give the host the mirror interface and the imprint record
+2. 01.I9: face queries: an imprint keeps to its face by what the face is; said lost, never moved
+3. 01.I10: fastenerFor: the fastener from the catalogue for a stack (through, tapped, insert), said why
 
 ## Open, and why
 
 - Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1, 01.I3, 01.I4 and 04.P10 pass. 00.S10 failed a ninth time; mended (the relay's
   near misses sent whole, every caught near miss held to its kind's response, the runners and page read exactly).
-- 01.I5 and I6 claimed: the negative of an interface (its evaluation cases, the test "the negative of an interface: the evaluation cases give their numbers"); an interface stood on any surface; to be judged.
+- 01.I5, I6 and I7 claimed: the negative of an interface, an interface stood on any surface, the checks before cutting; to be judged (`npm run gate`).
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).

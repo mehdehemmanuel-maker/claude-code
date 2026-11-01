@@ -18,7 +18,7 @@ import { boltedJoint, use } from './components';
 import { METRIC, NEMA_FACE } from './families';
 import type { Cut, Part, Port, Shape, V3 } from './kits';
 import { piecesOf as boxesOf } from './form';
-import { CLEARANCE, boreOf, matrixOfPart, piecesIn, roundOf, shaftOf } from './interfaces';
+import { BOLT_SPACING, CLEARANCE, boreOf, matrixOfPart, negativeOf, piecesIn, roundOf, shaftOf, type Asking, type Negative, type Refusal } from './interfaces';
 export { boreOf, shaftOf };
 
 const TOL = 0.0002;
@@ -327,3 +327,41 @@ export function standOn(host: Part, from: V3, dir: V3, o: { turn?: number; geome
   }
   return best ? { at: best.at.toArray() as V3, n: best.n.toArray() as V3, u: best.u.toArray() as V3, piece: best.piece, exact: best.exact } : null;
 }
+
+// ---- the checks before cutting (spec 01, I7; design §2.4, step 3) -------------------------------------------------------
+export interface CutCheck { check: 'depth' | 'edge distance' | 'spacing' | 'room' | 'breaking in'; ok: boolean; need: number; have: number; unit: 'mm'; rule: string; source: string }
+export interface Imprinted { frame: { at: V3; n: V3; u: V3 }; piece: string; negative: Negative; checks: CutCheck[] }
+/** An interface imprinted where a ray meets a host: stood on the surface (standOn), the host measured along the hole's
+ *  line (its depth there) and across it (its edge, by rays from the hole's middle), the negative made for the host's
+ *  material and that depth (negativeOf), then checked before anything is cut: the depth the negative asks, the edge
+ *  distance and the spacing from the host's other holes (EN 1993-1-8 Table 3.3, from the hole d0), the room its keep needs
+ *  against the thing's other pieces, and that it breaks into no other hole. The first check that fails is the refusal,
+ *  with its rule, the value needed and the value found; nothing is cut here (I8 cuts). */
+export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn?: number; fit?: 'fine' | 'medium' | 'coarse'; geometry?: (s: Shape) => THREE.BufferGeometry | null } = {}): Imprinted | Refusal {
+  const f = standOn(host, from, dir, o); if (!f) return { refused: true, rule: 'a surface to stand on', need: 0, have: 0, unit: '', source: '', why: 'the ray meets nothing of the host' };
+  const at = new THREE.Vector3(...f.at), n = new THREE.Vector3(...f.n), q = piecesIn(host).find((x) => x.p.name === f.piece)!, mm = 1e-3;
+  // (its depth: the far side met from beyond it, coming back along n)
+  const far = standOn({ name: 'piece', parts: [{ ...q.p, parts: undefined, at: [0, 0, 0], rot: [0, 0, 0] }] }, at.clone().addScaledVector(n, -10).applyMatrix4(q.m.clone().invert()).toArray() as V3, n.clone().transformDirection(q.m.clone().invert()).toArray() as V3, o);
+  const farAt = far ? new THREE.Vector3(...far.at).applyMatrix4(q.m) : at, depth = at.distanceTo(farAt);
+  const neg = negativeOf(asking, { material: q.p.mat ?? 'steel-low', thickness: depth }, o.fit ? { fit: o.fit } : {}); if ('refused' in neg) return neg;
+  const removes = neg.tools.filter((x) => x.role === 'remove'), d0 = 2 * Math.min(...removes.map((x) => Math.min(...x.prof!.filter((p) => p[0] > 0).map((p) => p[0])))), widest = Math.max(...removes.flatMap((x) => x.prof!.map((p) => p[0])));
+  const checks: CutCheck[] = [], put = (c: CutCheck) => { checks.push(c); return c.ok; };
+  // (its edge: from the hole's middle, rays across it in twelve directions find the nearest edge of the piece)
+  const u = new THREE.Vector3(...f.u), v = n.clone().cross(u).normalize(), mid = at.clone().addScaledVector(n, -depth / 2); let edge = Infinity;
+  const inv = q.m.clone().invert(), solo: Part = { name: 'piece', parts: [{ ...q.p, parts: undefined, at: [0, 0, 0], rot: [0, 0, 0] }] };
+  for (let k = 0; k < 12; k++) { const a = (k * Math.PI) / 6, w = u.clone().multiplyScalar(Math.cos(a)).addScaledVector(v, Math.sin(a)), h = standOn(solo, mid.clone().applyMatrix4(inv).toArray() as V3, w.clone().transformDirection(inv).toArray() as V3, o);
+    if (h) edge = Math.min(edge, new THREE.Vector3(...h.at).applyMatrix4(q.m).distanceTo(mid)); }
+  const e = BOLT_SPACING.e2.least(d0 / mm) * mm, p1 = BOLT_SPACING.p1.least(d0 / mm) * mm;
+  if (!put({ check: 'edge distance', ok: edge >= e - 1e-9, need: +(e / mm).toFixed(3), have: +(edge / mm).toFixed(3), unit: 'mm', rule: `e₂ ≥ 1.2 d₀ = 1.2 × ${(d0 / mm).toFixed(1)} mm`, source: 'EN 1993-1-8' })) return refusal(checks);
+  // (its spacing from the piece's other holes, and that it breaks into none: their lines in the piece's frame)
+  for (const c of q.p.cuts ?? []) { const ca = new THREE.Vector3(...c.at).applyMatrix4(q.m), cd = new THREE.Vector3(...c.dir).transformDirection(q.m), rel = at.clone().sub(ca), off = rel.sub(cd.clone().multiplyScalar(rel.dot(cd))).length(), rc = Math.max(c.r, ...(c.prof ?? []).map((p) => p[0]));
+    if (!put({ check: 'breaking in', ok: off >= rc + widest, need: +((rc + widest) / mm).toFixed(3), have: +(off / mm).toFixed(3), unit: 'mm', rule: 'the hole clear of the piece\'s other holes', source: 'its own cuts' })) return refusal(checks);
+    if (!put({ check: 'spacing', ok: off >= p1 - 1e-9, need: +(p1 / mm).toFixed(3), have: +(off / mm).toFixed(3), unit: 'mm', rule: `p₁ ≥ 2.2 d₀ = 2.2 × ${(d0 / mm).toFixed(1)} mm`, source: 'EN 1993-1-8' })) return refusal(checks); }
+  // (the room its keep needs, out along n, against the thing's other pieces' boxes)
+  for (const k of neg.tools.filter((x) => x.role === 'keep')) { const a = at.clone().addScaledVector(n, 1e-4), b = at.clone().addScaledVector(n, k.length ?? 0), box = new THREE.Box3().setFromPoints([a, b]).expandByScalar(k.r ?? 0);
+    const other = piecesIn(host).find((x) => x.p !== q.p && !!x.p.shape && (() => { const bx = new THREE.Box3(); const s = x.p.shape!; const half = 'box' in s ? s.box.map((y) => y / 2) : null; if (!half) return false; for (let c = 0; c < 8; c++) bx.expandByPoint(new THREE.Vector3(c & 1 ? half[0]! : -half[0]!, c & 2 ? half[1]! : -half[1]!, c & 4 ? half[2]! : -half[2]!).applyMatrix4(x.m)); return bx.intersectsBox(box); })());
+    if (!put({ check: 'room', ok: !other, need: +(((k.length ?? 0)) / mm).toFixed(3), have: other ? 0 : +((k.length ?? 0) / mm).toFixed(3), unit: 'mm', rule: `room along the axis for ${k.why.split(':')[0]}${other ? `: the ${other.p.name} is in it` : ''}`, source: 'its keep' })) return refusal(checks); }
+  put({ check: 'depth', ok: true, need: +(depth / mm).toFixed(3), have: +(depth / mm).toFixed(3), unit: 'mm', rule: 'the negative made for the depth found', source: neg.mirror.std ?? '' });
+  return { frame: { at: f.at, n: f.n, u: f.u }, piece: f.piece, negative: neg, checks };
+}
+const refusal = (checks: CutCheck[]): Refusal => { const c = checks[checks.length - 1]!; return { refused: true, rule: c.check, need: c.need, have: c.have, unit: c.unit, source: c.source, why: `${c.check} ${c.have} mm, ${c.rule} asks ${c.need} mm (${c.source})` }; };

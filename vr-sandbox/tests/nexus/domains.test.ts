@@ -39,7 +39,7 @@ import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, 
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
-import { boreGrips, standOn } from '../../src/nexus/mate';
+import { boreGrips, imprint, standOn, type Imprinted } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
 import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
@@ -603,10 +603,11 @@ describe('every domain, in one pass', () => {
   // their numbers worked by hand from the sources before the code ran) give their expected numbers: a clearance hole and
   // its counterbore, a tapped hole refused for want of thread, an insert's hole and the insert, a motor's face)
   it('the negative of an interface: the evaluation cases give their numbers', () => {
-    const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; asking: Asking; host: { material: string; thickness: number }; expect: Record<string, number | string | boolean> }[] };
-    const mm = (x: number) => +(x * 1000).toFixed(4), got: string[] = [];
-    for (const c of set.cases) {
-      const n = negativeOf(c.asking, { material: c.host.material, thickness: c.host.thickness / 1000 }), e = c.expect, say = (k: string, v: unknown) => got.push(`case ${c.case} ${k}: ${JSON.stringify(v)}`);
+    const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; asking: Asking; host: { material: string; thickness: number }; expect?: Record<string, number | string | boolean> }[] };
+    const mm = (x: number) => +(x * 1000).toFixed(4), got: string[] = [], ours = set.cases.filter((c) => c.expect);
+    expect(ours.map((c) => c.case), 'the cases I5 answers for').toEqual([1, 2, 3, 7]);
+    for (const c of ours) {
+      const n = negativeOf(c.asking, { material: c.host.material, thickness: c.host.thickness / 1000 }), e = c.expect!, say = (k: string, v: unknown) => got.push(`case ${c.case} ${k}: ${JSON.stringify(v)}`);
       if (e.refused) { const r = n as Refusal; expect(r.refused, `case ${c.case} refused: ${r.why ?? ''}`).toBe(true); expect([r.rule, +r.need.toFixed(3), r.have], `case ${c.case}: by what rule, how much`).toEqual([e.refused, e.need, e.have]); expect(r.why.length).toBeGreaterThan(20); say('refused', r.why); continue; }
       const g = n as Negative; expect((n as Refusal).refused, `case ${c.case}: ${(n as Refusal).why ?? ''}`).toBeUndefined(); expect(g.mirror.kind, `case ${c.case}: its mirror`).toBe(e.mirror);
       const removes = g.tools.filter((x) => x.role === 'remove');
@@ -620,7 +621,19 @@ describe('every domain, in one pass', () => {
       for (const w of g.why) expect(w, `case ${c.case}: each size says where it came from`).toMatch(/ISO|DIN|Bossard|NEMA|typical|insert|derived/);
       say('ok', g.why[0]);
     }
-    expect(got.length).toBe(set.cases.length);
+    expect(got.length).toBe(ours.length);
+  });
+  // (the checks before cutting (spec 01, I7): imprinted on a steel or aluminium plate where the case says, cases 2, 4 and 5
+  // are refused by the rule and by the value worked out by hand (no thread room; an edge too near; a hole too near
+  // another), and case 1 passes every check)
+  it('the checks before cutting: cases 2, 4 and 5 refused by their rule and value, case 1 passing', () => {
+    const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; asking: Asking; host: { material: string }; imprint?: { plate: [number, number, number]; at: [number, number]; holes: [number, number][]; expect: { ok?: boolean; refused?: string; need?: number; have?: number } } }[] };
+    const ours = set.cases.filter((c) => c.imprint); expect(ours.map((c) => c.case), 'the cases I7 answers for').toEqual([1, 2, 4, 5]);
+    for (const c of ours) { const im = c.imprint!, [W, T, Dp] = im.plate.map((x) => x / 1000) as [number, number, number];
+      const plate: Part = { name: 'plate', item: `plate ${im.plate.join('x')}`, mat: c.host.material, shape: { box: [W, T, Dp] }, at: [0, 0, 0], ...(im.holes.length ? { cuts: im.holes.map(([x, z]) => ({ r: CLEARANCE.M8!.medium / 2000, depth: T, at: [x / 1000, T / 2, z / 1000] as V3, dir: [0, -1, 0] as V3 })) } : {}) };
+      const r = imprint({ name: 'host', parts: [plate] }, c.asking, [im.at[0] / 1000, 1, im.at[1] / 1000], [0, -1, 0]);
+      if (im.expect.ok) { expect((r as Refusal).refused, `case ${c.case} passes: ${(r as Refusal).why ?? ''}`).toBeUndefined(); expect((r as Imprinted).checks.every((k) => k.ok), `case ${c.case}: every check holds`).toBe(true); expect((r as Imprinted).checks.map((k) => k.check)).toEqual(['edge distance', 'room', 'depth']); continue; }
+      const f = r as Refusal; expect(f.refused, `case ${c.case} refused`).toBe(true); expect([f.rule, f.need, f.have], `case ${c.case}: ${f.why}`).toEqual([im.expect.refused, im.expect.need, im.expect.have]); expect(f.source.length).toBeGreaterThan(3); }
   });
   // (an interface stood on any point of any surface (spec 01, I6): on a box's top, a cylinder's side and a sloped face (a
   // box turned inside a turned group, met exactly; and a wedge's slope, met on the views' mesh), the frame's n within 0.5°

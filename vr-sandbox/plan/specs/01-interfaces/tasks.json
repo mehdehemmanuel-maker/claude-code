@@ -95,10 +95,11 @@
    ],
    "owner": "mate.ts, make/rules.ts",
    "check": "evaluation cases 2, 4, 5 are refused with the right rule and value; case 1 passes",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I6"
-   ]
+   ],
+   "evidence": "2026-11-01: imprint in mate.ts stands the interface on the host (standOn), measures the host along the hole's line (its depth) and across it (its edge, by twelve rays from the hole's middle), makes the negative for that material and depth (negativeOf), then checks before cutting: edge distance and spacing by EN 1993-1-8 Table 3.3 from the hole d0, breaking into another hole, room for its keep among the thing's other pieces; the first that fails is the refusal with its rule, the value needed and found; evals/interfaces cases 2, 4 and 5 refused by their rule and value (engagement 12 for 8 mm; edge 10.8 for 4 mm; spacing 19.8 for 15 mm), case 1 passing every check"
   },
   {
    "id": "I8",
