@@ -80,5 +80,17 @@
  ],
  "01.I15": [
   "evals/interfaces/cases.json"
+ ],
+ "01.I17": [
+  "evals/interfaces/cases.json",
+  "src/nexus/brep.ts",
+  "src/nexus/built.ts",
+  "src/nexus/form.ts",
+  "src/nexus/interfaces.ts",
+  "src/nexus/kits.ts",
+  "src/nexus/make/rules.ts",
+  "src/nexus/mass.ts",
+  "src/nexus/mate.ts",
+  "src/nexus/view/kit3d.ts"
  ]
 }

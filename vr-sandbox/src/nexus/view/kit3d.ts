@@ -12,7 +12,7 @@ import type { Cut, Part, Shape } from '../kits';
 import { detail, divisions } from '../lod';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { massOf } from '../mass';
-import { sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
+import { cutFrame, sectionPoint, tubeLegs, type Loft, type Station, type Tube } from '../form';
 import { patchAt, tessellate, type Patch } from '../surface';
 import { findItem, resolve } from '../inventory';
 import { lookOf } from '../pieces';
@@ -249,6 +249,11 @@ function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string): THREE.BufferG
   for (const c of cuts) {
     // (a cylinder from just outside its face to its depth inside, its axis along the hole; a turned cut its profile turned
     // about that axis, from just outside its face)
+    // (a cut of any section, a keyway or a panel's cut-out: its outline pushed in along its axis, from just outside its face,
+    // turned so its x lies along its u (spec 01, I17))
+    if (c.sect) { const f = cutFrame(c), g2 = new THREE.ExtrudeGeometry(new THREE.Shape(c.sect.map(([x, y]) => new THREE.Vector2(x, y))), { depth: c.depth + 1e-4, bevelEnabled: false, curveSegments: 1 }); g2.translate(0, 0, -1e-4);
+      const b = new Brush(clean(g2)); b.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.w), new THREE.Vector3(...f.d))); b.position.set(...c.at); b.updateMatrixWorld();
+      a = csg.evaluate(a, b, SUBTRACTION); continue; }
     const dir = new THREE.Vector3(...c.dir).normalize(), turned = c.prof ? [[0, -1e-4], [c.prof[0]![0], -1e-4], ...c.prof, [0, c.prof[c.prof.length - 1]![1]]].map(([a, y]) => new THREE.Vector2(a!, y!)) : null;
     const b = new Brush(clean(turned ? new THREE.LatheGeometry(turned, c.n ?? 24) : new THREE.CylinderGeometry(c.r, c.r, c.depth + 2e-4, c.n ?? 24)));
     b.quaternion.setFromUnitVectors(UP, dir); b.position.set(...c.at); if (!turned) b.position.addScaledVector(dir, c.depth / 2 - 1e-4); b.updateMatrixWorld();

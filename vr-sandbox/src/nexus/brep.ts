@@ -4,7 +4,7 @@
 // (geometry is exact solids) and, after it, STEP. What cannot be made yet is counted and said, never drawn as a mesh and
 // called a solid. The road map's item 6.
 import type { Part, Shape, V3 } from './kits';
-import { sectionPoint, tubeLegs } from './form';
+import { cutFrame, sectionPoint, tubeLegs } from './form';
 import { massOf, densityKg } from './mass';
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
 import { trianglesOf, interferencePairs } from './make/rules';
@@ -112,7 +112,12 @@ export async function solidsOf(thing: Part, o: { keep?: boolean; /** keep only t
         if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; s = s.translate([0, h / 2, 0]); }
         for (const c of p.cuts ?? []) { const d = norm(c.dir), turn = (x: Solid) => x.rotate(Math.acos(Math.max(-1, Math.min(1, d[1]))) * deg, [0, 0, 0], Math.hypot(d[2], d[0]) > 1e-9 ? [d[2], 0, -d[0]] : [1, 0, 0]);
           // (a turned cut, its profile revolved about the line from its face: a counterbore, a countersink, a drill's point)
-          const hole = c.prof ? turn(revolved(r, [[0, 0], ...c.prof, [0, c.prof[c.prof.length - 1]![1]]])).translate(c.at) : c.n ? turn(solidOfShape(r, { cyl: [c.r, c.depth] }, c.n)).translate(add(c.at, mul(d, c.depth / 2))) : r.makeCylinder(c.r, c.depth, c.at, d); s = s.cut(hole); hole.delete?.(); }
+          // (a cut of any section, a keyway or a panel's cut-out: its outline drawn where it lies, a hair outside the face, and
+          // pushed in along its axis its depth and that hair (spec 01, I17))
+          const sect = () => { const f = cutFrame(c), e = 1e-5, at3 = (x: number, y: number): V3 => add(add(add(c.at, mul(f.u, x)), mul(f.w, y)), mul(f.d, -e)), pts = c.sect!;
+            const wire = r.assembleWire(pts.map(([x, y], i) => { const [x1, y1] = pts[(i + 1) % pts.length]!; return r.makeLine(at3(x, y), at3(x1, y1)); }));
+            return r.basicFaceExtrusion(r.makeFace(wire), new r.Vector(mul(f.d, c.depth + e))); };
+          const hole = c.sect ? sect() : c.prof ? turn(revolved(r, [[0, 0], ...c.prof, [0, c.prof[c.prof.length - 1]![1]]])).translate(c.at) : c.n ? turn(solidOfShape(r, { cyl: [c.r, c.depth] }, c.n)).translate(add(c.at, mul(d, c.depth / 2))) : r.makeCylinder(c.r, c.depth, c.at, d); s = s.cut(hole); hole.delete?.(); }
         const v0 = r.measureVolume(s); if (v0 < 0) throw new Error('its profile crosses itself (the kernel measures it inside out)'); const v = v0, rho = p.mat ? densityKg(p.mat) : undefined;
         Object.assign(row, { ok: true, valid: valid(s), volume: v, ...(rho && p.kg === undefined ? { kg: v * rho * (p.fill ?? 1), diff: own > 0 ? (v * rho * (p.fill ?? 1)) / own - 1 : undefined } : {}) });
         // (each solid freed once measured, unless kept: the kernel's memory is its own, not the garbage collector's)

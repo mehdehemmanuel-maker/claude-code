@@ -61,7 +61,11 @@ export interface Iface {
 export interface Cut { r: number; depth: number; at: V3; dir: V3; n?: number;
   /** a turned cut (a counterbore, a countersink, a drill's point): its profile as [radius, depth from its face] points from
    *  the face to the bottom, revolved about the cut's line; `r` stays the radius of its through hole (spec 01, I4) */
-  prof?: [number, number][] }
+  prof?: [number, number][];
+  /** a cut of any section (a keyway, a panel's cut-out: spec 01, I17): its outline as [x, y] points in the plane of its face
+   *  about `at`, x along `u` and y along dir × u, cut `depth` along `dir` (form.ts cutFrame); `r` stays the radius of the
+   *  circle round it, for what reads a hole as round */
+  sect?: [number, number][]; u?: V3 }
 /** A zone a part keeps clear, in its own frame: a box (its middle and size), or a sector swept about an upright axis
  *  (the hinge, the radius, the direction it starts and ends, the height it spans from y0); why, with the figures. */
 export interface Keep { name: string; kind: 'box' | 'sector'; at: V3; size?: V3; r?: number; from?: V3; to?: V3; y0?: number; h?: number; why: string; /** only while (a state: 'cooking', 'door opening'); else always */ when?: string }

@@ -2342,3 +2342,16 @@ holds the three waiting cases' limits by their width only, not their offsets (k5
 right width would pass until I17 builds them from rows that hold the offsets. Every number of cases 6, 11 and 12 it
 checked against the sources it opened itself, and found right. The order seen with `git log --follow -- evals/interfaces/cases.json`
 and `git show 4b20a12 --stat`.
+
+## 2026-11-01: a cut of any section (spec 01, I17 in part)
+
+A cut was round, turned (a counterbore's profile) or a round's polygon. A keyway and a panel's cut-out are neither, so a
+cut may now carry its outline (`Cut.sect`, points in the plane of its face, `u` along its face): the exact solid cuts that
+outline its depth along its axis (brep.ts), the views drill the same (kit3d.ts), the mass takes its area times the depth it
+runs inside (mass.ts), and the interference rule lets a part stand in it only where the part is as far from its edges as it
+is wide (rules.ts), where a round reading of it, its outer circle, would let through a part wider than it. The test "a cut
+of any section: a slot and a notched cut-out, alike in mass, solid and views" (`npm run gate`): a slot 40 × 8 mm with round
+ends, 4 mm deep in a block, and a 22.3 mm hole with its 3.2 × 1.7 mm notch through a 3 mm panel each take away their
+outline's area times their depth in the mass (to a part in a thousand million), the solid (within 0.1 %) and the views
+(within 0.5 %); a key in the slot is not a clash and a block 20 mm wide in it is. One 12 mm wide in it is not seen: fault
+D15's blind spot (a piece standing in a cut and wider than it), open under 10.T24.

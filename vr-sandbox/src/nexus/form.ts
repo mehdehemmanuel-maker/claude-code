@@ -102,6 +102,23 @@ export const tubeVolume = (t: Tube) => tubeLength(t) * Math.PI * (t.r ** 2 - (t.
 /** A profile's area (the shoelace sum), its perimeter, and so its prism's volume and skin. */
 export const profileArea = (pts: [number, number][]): number => { let a = 0; for (let i = 0; i < pts.length; i++) { const [x0, y0] = pts[i]!, [x1, y1] = pts[(i + 1) % pts.length]!; a += x0 * y1 - x1 * y0; } return Math.abs(a) / 2; };
 const perimeterOf = (pts: [number, number][]): number => { let l = 0; for (let i = 0; i < pts.length; i++) { const [x0, y0] = pts[i]!, [x1, y1] = pts[(i + 1) % pts.length]!; l += Math.hypot(x1 - x0, y1 - y0); } return l; };
+/** A cut of any section (spec 01, I17: a keyway, a panel's cut-out): its own frame, from its axis d (into the part), u
+ *  across its face (given, else any square to d) and w = d × u; a point of its section (x, y) lies at at + x u + y w. */
+export function cutFrame(c: { dir: V3; u?: V3 }): { d: V3; u: V3; w: V3 } {
+  const n = (v: V3): V3 => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }, d = n(c.dir);
+  let u: V3 = c.u ? c.u : Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]; const k = u[0] * d[0] + u[1] * d[1] + u[2] * d[2]; u = n([u[0] - k * d[0], u[1] - k * d[1], u[2] - k * d[2]]);
+  return { d, u, w: [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]] };
+}
+/** A section's area, m² (the shoelace sum). */
+export const sectArea = (pts: [number, number][]): number => profileArea(pts);
+/** Whether (x, y) lies inside a section (its crossings counted), and how far it is from the section's nearest edge. */
+export function inSect(pts: [number, number][], x: number, y: number): { inside: boolean; edge: number } {
+  let inside = false, edge = Infinity;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i]!, [xj, yj] = pts[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    const dx = xj - xi, dy = yj - yi, L2 = dx * dx + dy * dy, t = L2 ? Math.max(0, Math.min(1, ((x - xi) * dx + (y - yi) * dy) / L2)) : 0; edge = Math.min(edge, Math.hypot(x - xi - t * dx, y - yi - t * dy)); }
+  return { inside, edge };
+}
 const sectionArea = (p: Prism): number => profileArea(p.pts) - (p.holes ?? []).reduce((a, h) => a + profileArea(h), 0);
 export const prismVolume = (p: Prism): number => sectionArea(p) * p.L;
 export const prismArea = (p: Prism): number => (perimeterOf(p.pts) + (p.holes ?? []).reduce((a, h) => a + perimeterOf(h), 0)) * p.L + 2 * sectionArea(p);

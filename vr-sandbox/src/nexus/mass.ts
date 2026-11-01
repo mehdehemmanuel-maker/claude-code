@@ -2,7 +2,7 @@
 // density and the share of it that is solid) and its parts'. Apart from the kits (src/nexus/kits.ts re-exports it), so
 // whatever makes parts (the component library, the wheeled machines) can weigh them without loading every kit.
 
-import { latheArea, latheVolume, loftArea, loftVolume, prismArea, prismVolume, tubeLength, tubeVolume } from './form';
+import { latheArea, latheVolume, loftArea, loftVolume, prismArea, prismVolume, sectArea, tubeLength, tubeVolume } from './form';
 import { surfaceArea } from './surface';
 import type { Part, Shape } from './kits';
 import { pureElement } from './elements';
@@ -108,7 +108,9 @@ export function massOf(p: Part): number {
   // (less what is drilled out of it: each hole its own cylinder, or its n-sided prism)
   // (only as deep as it runs inside the shape: a bore along a pushrod drilled through a gasket takes the gasket's thickness)
   // (and only as much of its round as lies inside: a saddle bored along a box's face takes half its circle, not all of it)
-  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.n ? ((c.n / 2) * Math.sin((2 * Math.PI) / c.n)) / Math.PI : 1) * acrossInside(p.shape, c) * inside(p.shape, c), 0);
+  // (a cut of any section, a keyway or a cut-out: its outline's area along the depth it runs inside; its outline taken whole,
+  // not clipped to the shape's sides (spec 01, I17))
+  const holes = (p.cuts ?? []).reduce((v, c) => v + (c.sect ? sectArea(c.sect) : (c.n ? ((c.n / 2) * Math.sin((2 * Math.PI) / c.n)) / Math.PI : 1) * acrossInside(p.shape, c)) * inside(p.shape, c), 0);
   const rho = p.mat ? densityKg(p.mat) : undefined;
   const own = p.kg !== undefined ? p.kg : p.shape && rho ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * rho * (p.fill ?? 1) : 0;
   return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);

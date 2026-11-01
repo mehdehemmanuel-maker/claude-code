@@ -14,6 +14,7 @@
 
 import * as THREE from 'three';
 import type { Part } from '../kits';
+import { cutFrame, inSect } from '../form';
 import { contacts, layout, type Node } from './space';
 import { leastDistance, meshClashes, trisOf, type Tris, type TriMesh } from './critic';
 import { leafGeometry } from '../view/kit3d';
@@ -50,7 +51,13 @@ const linked = (a: Mesh3, b: Mesh3) => { const A = ownerOf(a.node), B = ownerOf(
 const inCut = (host: Mesh3, guest: Mesh3): boolean => {
   if (!host.p.cuts?.length || !guest.node.obb) return false;
   const inv = host.node.m.clone().invert(), c = guest.node.obb.c.clone().applyMatrix4(inv);
-  return host.p.cuts.some((k) => { const ax = new THREE.Vector3(...k.dir).normalize(), rel = c.clone().sub(new THREE.Vector3(...k.at)), along = rel.dot(ax), off = rel.clone().sub(ax.clone().multiplyScalar(along)).length();
+  return host.p.cuts.some((k) => {
+    // (a cut of any section: the guest's middle within its depth and its outline, as far from its edges as the guest is wide
+    // across it (a key in its keyway, a connector in its cut-out: spec 01, I17))
+    if (k.sect) { const f = cutFrame(k), rel = c.clone().sub(new THREE.Vector3(...k.at)), along = rel.dot(new THREE.Vector3(...f.d)), sp = inSect(k.sect, rel.dot(new THREE.Vector3(...f.u)), rel.dot(new THREE.Vector3(...f.w)));
+      const half = guest.node.obb!.h, u = guest.node.obb!.u, wdir = new THREE.Vector3(...f.d).transformDirection(host.node.m), widths = [0, 1, 2].filter((i) => Math.abs(u[i]!.dot(wdir)) < 0.7).map((i) => half[i]!);
+      return along >= -0.0005 && along <= k.depth + 0.0005 && sp.inside && (widths.length ? Math.min(...widths) : 0) <= sp.edge * 1.08 + 0.0005; }
+    const ax = new THREE.Vector3(...k.dir).normalize(), rel = c.clone().sub(new THREE.Vector3(...k.at)), along = rel.dot(ax), off = rel.clone().sub(ax.clone().multiplyScalar(along)).length();
     const half = guest.node.obb!.h, u = guest.node.obb!.u, wdir = ax.clone().transformDirection(host.node.m), widths = [0, 1, 2].filter((i) => Math.abs(u[i]!.dot(wdir)) < 0.7).map((i) => half[i]!);
     // (a turned cut is as wide, where the guest's middle is along it, as its profile there: a head in its counterbore, a
     // shank in its hole)

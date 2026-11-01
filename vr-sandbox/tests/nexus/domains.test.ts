@@ -44,6 +44,7 @@ import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
 import { applyImprint, boreGrips, boreThrough, fastenerFor, fit, imprint, portOfInterface, reapplyImprints, standOn, type Fastener, type Imprinted } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
+import { massOf } from '../../src/nexus/mass';
 import { jointsOfPorts, solveJoints, type Joint, type JointsSolved } from '../../src/nexus/placement/proximity';
 import { NEMA_FACE } from '../../src/nexus/families';
 import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
@@ -653,6 +654,36 @@ describe('every domain, in one pass', () => {
     for (let i = 0; i < (ix ? ix.count : pos.count); i += 3) { const v = [0, 1, 2].map((k) => { const j = ix ? ix.getX(i + k) : i + k; return [pos.getX(j), pos.getY(j), pos.getZ(j)]; }); mv += (v[0]![0]! * (v[1]![1]! * v[2]![2]! - v[1]![2]! * v[2]![1]!) - v[0]![1]! * (v[1]![0]! * v[2]![2]! - v[1]![2]! * v[2]![0]!) + v[0]![2]! * (v[1]![0]! * v[2]![1]! - v[1]![1]! * v[2]![0]!)) / 6; }
     expect(Math.abs(mv / row.volume! - 1), `the views' drilled plate ${(mv * 1e9).toFixed(0)} mm³, the solid's ${(row.volume! * 1e9).toFixed(0)} mm³`).toBeLessThan(0.005);
     // (a head wider than the hole it stands in is not found, in a plain hole as in this one: fault D15, open)
+  }, 120_000);
+  // (a cut of any section (spec 01, I17): a slot with round ends 40 × 8 mm milled 4 mm into a block, and a round hole
+  // with its anti-rotation notch punched through a 3 mm panel; each takes away its outline's area times its depth, in the
+  // mass, in the exact solid and in the views alike; a key standing in the slot is not a clash, a block wider than it is)
+  it('a cut of any section: a slot and a notched cut-out, alike in mass, solid and views', async () => {
+    const { solidsOf } = await import('../../src/nexus/brep'), { leafGeometry } = await import('../../src/nexus/view/kit3d'), { sectArea } = await import('../../src/nexus/form');
+    const meshVol = (p: Part) => { const g = leafGeometry(p)!, pos = g.attributes.position!, ix = g.index; let mv = 0;
+      for (let i = 0; i < (ix ? ix.count : pos.count); i += 3) { const v = [0, 1, 2].map((k) => { const j = ix ? ix.getX(i + k) : i + k; return [pos.getX(j), pos.getY(j), pos.getZ(j)]; }); mv += (v[0]![0]! * (v[1]![1]! * v[2]![2]! - v[1]![2]! * v[2]![1]!) - v[0]![1]! * (v[1]![0]! * v[2]![2]! - v[1]![2]! * v[2]![0]!) + v[0]![2]! * (v[1]![0]! * v[2]![1]! - v[1]![1]! * v[2]![0]!)) / 6; }
+      return mv; };
+    // (the slot: its two ends round, an end mill's 8 mm, as 24 points a half-circle)
+    const slot: [number, number][] = [...Array.from({ length: 25 }, (_, i) => { const a = -Math.PI / 2 + (Math.PI * i) / 24; return [0.016 + 0.004 * Math.cos(a), 0.004 * Math.sin(a)] as [number, number]; }), ...Array.from({ length: 25 }, (_, i) => { const a = Math.PI / 2 + (Math.PI * i) / 24; return [-0.016 + 0.004 * Math.cos(a), 0.004 * Math.sin(a)] as [number, number]; })];
+    // (the cut-out: a 22.3 mm round with a 3.2 × 1.7 mm notch at its top, as a 64-gon broken by the notch)
+    const R = 0.0223 / 2, nw = 0.0032 / 2, notch: [number, number][] = []; for (let i = 0; i <= 64; i++) { const a = Math.PI / 2 + Math.asin(nw / R) + ((2 * Math.PI - 2 * Math.asin(nw / R)) * i) / 64; notch.push([R * Math.cos(a), R * Math.sin(a)]); }
+    notch.push([nw, R * Math.cos(Math.asin(nw / R)) + 0.0017], [-nw, R * Math.cos(Math.asin(nw / R)) + 0.0017]);
+    for (const [name, box, sect, depth, u] of [['keyed block', [0.06, 0.03, 0.06], slot, 0.004, [1, 0, 0]], ['panel', [0.06, 0.003, 0.06], notch, 0.003, [0, 0, 1]]] as [string, V3, [number, number][], number, V3][]) {
+      const cut = { r: Math.max(...sect.map(([x, y]) => Math.hypot(x, y))), depth, at: [0, box[1] / 2, 0] as V3, dir: [0, -1, 0] as V3, u, sect };
+      const p: Part = { name, item: name, shape: { box }, at: [0, 0, 0], mat: 'steel-low', cuts: [cut] }, want = sectArea(sect) * depth, V = box[0] * box[1] * box[2];
+      expect(Math.abs((V * 7850 - massOf(p)) / 7850 / want - 1), `${name}: the mass less its outline's area times its depth`).toBeLessThan(1e-9);
+      const row = (await solidsOf(p)).rows[0]!; expect(row.ok && row.valid, `${name}: made and valid: ${row.why ?? ''}`).toBe(true);
+      expect(Math.abs((V - row.volume!) / want - 1), `${name}: the solid takes ${((V - row.volume!) * 1e9).toFixed(1)} mm³, its outline ${(want * 1e9).toFixed(1)} mm³`).toBeLessThan(0.001);
+      // (the views: what the drilled mesh loses to the cut, against the outline's area times its depth (the plate itself drawn
+      // with its edges broken, which a thin panel's volume shows))
+      const lost = meshVol({ ...p, cuts: undefined }) - meshVol(p); expect(Math.abs(lost / want - 1), `${name}: the views drill ${(lost * 1e9).toFixed(1)} mm³, its outline ${(want * 1e9).toFixed(1)} mm³`).toBeLessThan(0.005);
+    }
+    // (an 8 × 7 key 32 mm long standing in the slot, 3 mm proud: not a clash; a block 20 mm wide in its place is (one 12 mm
+    // wide, standing in the slot and wider than it, is not seen: fault D15, open, the checker's, not the cut's))
+    const block: Part = { name: 'keyed block', item: 'keyed block', shape: { box: [0.06, 0.03, 0.06] }, at: [0, 0, 0], mat: 'steel-low', cuts: [{ r: 0.02, depth: 0.004, at: [0, 0.015, 0], dir: [0, -1, 0], u: [1, 0, 0], sect: slot }] };
+    const stand = (w: number): Part => ({ name: w > 0.008 ? 'wide block' : 'key 8x7x32', item: 'key', shape: { box: [0.032, 0.007, w - 0.0001] }, at: [0, 0.015 - 0.004 + 0.0035, 0], mat: 'steel-alloy' });
+    const clash = (g: Part) => rulesOf({ name: 'keyed', parts: [block, g] }).findings.filter((f) => f.rule === 'interference').map((f) => `${f.a} × ${f.b}`);
+    expect(clash(stand(0.008)), 'a key in its keyway').toEqual([]); expect(clash(stand(0.02)).length, 'a block wider than the keyway').toBeGreaterThan(0);
   }, 120_000);
   // (the negative an interface asks (spec 01, I5): the evaluation set's cases 1, 2, 3 and 7 (evals/interfaces/cases.json,
   // their numbers worked by hand from the sources before the code ran) give their expected numbers: a clearance hole and
