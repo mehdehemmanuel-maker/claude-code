@@ -81,10 +81,11 @@
    ],
    "owner": "mate.ts",
    "check": "on a box's top, a cylinder's side and a sloped face, the frame's n is within 0.5° of the surface normal and the hole lies where pointed within 0.1 mm",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I5"
-   ]
+   ],
+   "evidence": "2026-11-01: standOn in mate.ts meets a ray with a thing's surface and gives the frame an interface stands in there (at, its outward n, u along the piece's own axis in the surface, turned about n as asked): boxes, plain cylinders and spheres exactly in their own frames, any other shape by the views' mesh with its normals blended; the one test's box top, cylinder side, a box turned 30° in a turned group, and a wedge's slope, each within 0.5° and 0.1 mm of the numbers worked by hand"
   },
   {
    "id": "I7",

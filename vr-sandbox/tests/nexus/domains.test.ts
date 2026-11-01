@@ -39,7 +39,7 @@ import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, 
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
-import { boreGrips } from '../../src/nexus/mate';
+import { boreGrips, standOn } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
 import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
@@ -621,6 +621,26 @@ describe('every domain, in one pass', () => {
       say('ok', g.why[0]);
     }
     expect(got.length).toBe(set.cases.length);
+  });
+  // (an interface stood on any point of any surface (spec 01, I6): on a box's top, a cylinder's side and a sloped face (a
+  // box turned inside a turned group, met exactly; and a wedge's slope, met on the views' mesh), the frame's n within 0.5°
+  // of the surface's normal and the hole within 0.1 mm of where the ray points, each worked out by hand; turned about n by
+  // what is asked)
+  it('an interface stands on a box\'s top, a cylinder\'s side and a sloped face', async () => {
+    const { geometry } = await import('../../src/nexus/view/kit3d');
+    const deg = (a: number[], b: number[]) => (Math.acos(Math.min(1, Math.max(-1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!))) * 180) / Math.PI, gap = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
+    const S = Math.sin(Math.PI / 6), C = Math.cos(Math.PI / 6), zc = 0.004, xc = Math.sqrt(0.02 ** 2 - zc ** 2), yTop = 0.1 + (0.01 - (0.005 * -S)) / C;
+    const cases: { what: string; host: Part; from: V3; dir: V3; at: V3; n: V3 }[] = [
+      { what: 'a box\'s top', host: { name: 'h', parts: [{ name: 'block', shape: { box: [0.1, 0.02, 0.06] }, at: [0, 0, 0] }] }, from: [0.012, 0.5, -0.007], dir: [0, -1, 0], at: [0.012, 0.01, -0.007], n: [0, 1, 0] },
+      { what: 'a cylinder\'s side', host: { name: 'h', parts: [{ name: 'round bar', shape: { cyl: [0.02, 0.1] }, at: [0, 0, 0] }] }, from: [0.5, 0.013, zc], dir: [-1, 0, 0], at: [xc, 0.013, zc], n: [xc / 0.02, 0, zc / 0.02] },
+      { what: 'a sloped face (a box turned 30° in a turned group)', host: { name: 'h', parts: [{ name: 'tilted', at: [0.3, 0.1, 0], rot: [0, 0, Math.PI / 6], parts: [{ name: 'tilted block', shape: { box: [0.1, 0.02, 0.06] }, at: [0, 0, 0] }] }] }, from: [0.305, 1, 0.01], dir: [0, -1, 0], at: [0.305, yTop, 0.01], n: [-S, C, 0] },
+      { what: 'a sloped face (a wedge, its mesh)', host: { name: 'h', parts: [{ name: 'wedge', shape: { prism: { pts: [[0, 0], [0.1, 0], [0, 0.05]], L: 0.04 } }, at: [0, 0, 0] }] }, from: [0.03, 1, 0.005], dir: [0, -1, 0], at: [0.03, 0.035, 0.005], n: [0.05 / Math.hypot(0.05, 0.1), 0.1 / Math.hypot(0.05, 0.1), 0] },
+    ];
+    for (const c of cases) { const f = standOn(c.host, c.from, c.dir, { geometry: (sh) => geometry(sh, undefined) })!; expect(f, `${c.what}: met`).toBeTruthy();
+      expect(deg(f.n, c.n), `${c.what}: n within 0.5° of the surface's normal`).toBeLessThan(0.5); expect(gap(f.at, c.at), `${c.what}: where pointed within 0.1 mm`).toBeLessThan(0.0001);
+      expect(Math.abs(f.u[0]! * f.n[0]! + f.u[1]! * f.n[1]! + f.u[2]! * f.n[2]!), `${c.what}: u in the surface`).toBeLessThan(1e-9); }
+    const turned = standOn(cases[0]!.host, cases[0]!.from, cases[0]!.dir, { turn: Math.PI / 2 })!, plain = standOn(cases[0]!.host, cases[0]!.from, cases[0]!.dir)!;
+    expect(deg(turned.u, plain.u), 'turned a quarter about n').toBeCloseTo(90, 6); expect(standOn(cases[0]!.host, [0, 0.5, 0], [0, 1, 0]), 'a ray that meets nothing').toBeNull();
   });
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the

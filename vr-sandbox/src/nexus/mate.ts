@@ -291,3 +291,39 @@ export function ontoSurface(target: Part, outline: [number, number][], o: { at: 
   const piece: Part = parts.length === 1 ? parts[0]! : { name: o.name, ...(o.item ? { item: o.item } : {}), parts };
   return { piece, tiles: parts.length, missed, gap, area, says: `${o.name}: ${(area * 1e4).toFixed(0)} cm² laid onto the ${target.name} in ${parts.length} ${parts.length === 1 ? 'piece' : 'tiles'}${missed ? ` (${missed} over nothing, left out)` : ''}, ${(o.t * 1000).toFixed(1)} mm thick; its corners within ${(Math.abs(gap) * 1000).toFixed(1)} mm of the surface` };
 }
+
+// ---- imprint: an interface stood on any point of any surface (spec 01, I6; design §2.4, step 1) -------------------------
+/** Where a ray first meets a thing's surface, and the frame an interface stands in there: `at` on the surface, `n` its
+ *  outward normal (the hole runs along −n, into the host), `u` laid along the piece's own first axis as it lies in the
+ *  surface (a box's x, a cylinder's axis on its side; its x on its end), turned about `n` by `turn`. Boxes, plain cylinders
+ *  (r2 unsaid) and spheres are met exactly, in their own frames (a faceted mesh misses a curved side by more than a tenth of
+ *  a millimetre); any other shape by its drawn mesh (`geometry`, the views' own), its normal from the mesh's own normals
+ *  blended across the triangle met. In the thing's frame; null where the ray meets nothing. */
+export function standOn(host: Part, from: V3, dir: V3, o: { turn?: number; geometry?: (s: Shape) => THREE.BufferGeometry | null } = {}): { at: V3; n: V3; u: V3; piece: string; exact: boolean } | null {
+  const O = new THREE.Vector3(...from), D = new THREE.Vector3(...dir).normalize();
+  let best: { t: number; at: THREE.Vector3; n: THREE.Vector3; u: THREE.Vector3; piece: string; exact: boolean } | null = null;
+  for (const q of piecesIn(host)) {
+    const s = q.p.shape!, inv = q.m.clone().invert(), o2 = O.clone().applyMatrix4(inv), d2 = D.clone().transformDirection(inv), sc = D.clone().applyMatrix3(new THREE.Matrix3().setFromMatrix4(inv)).length();
+    const hits: { t: number; n: THREE.Vector3; u: THREE.Vector3 }[] = [];
+    if ('box' in s) { const h = s.box.map((x) => x / 2), lo = q.p.base ? [-h[0]!, 0, -h[2]!] : h.map((x) => -x), hi = q.p.base ? [h[0]!, s.box[1], h[2]!] : h;
+      for (let k = 0; k < 3; k++) for (const side of [-1, 1]) { const dk = d2.getComponent(k); if (Math.abs(dk) < 1e-12) continue; const plane = side < 0 ? lo[k]! : hi[k]!, t = (plane - o2.getComponent(k)) / dk; if (t <= 0) continue;
+        const p = o2.clone().addScaledVector(d2, t); if ([0, 1, 2].every((j) => j === k || (p.getComponent(j) >= lo[j]! - 1e-12 && p.getComponent(j) <= hi[j]! + 1e-12))) { const n = new THREE.Vector3().setComponent(k, side); hits.push({ t, n, u: k === 0 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0) }); } } }
+    else if ('cyl' in s && (s.cyl[2] === undefined || s.cyl[2] === s.cyl[0])) { const [r, hh] = s.cyl, y0 = q.p.base ? 0 : -hh / 2, y1 = y0 + hh;
+      const a = d2.x ** 2 + d2.z ** 2, b = 2 * (o2.x * d2.x + o2.z * d2.z), c = o2.x ** 2 + o2.z ** 2 - r * r, disc = b * b - 4 * a * c;
+      if (a > 1e-18 && disc >= 0) for (const t of [(-b - Math.sqrt(disc)) / (2 * a), (-b + Math.sqrt(disc)) / (2 * a)]) { if (t <= 0) continue; const p = o2.clone().addScaledVector(d2, t); if (p.y >= y0 - 1e-12 && p.y <= y1 + 1e-12) hits.push({ t, n: new THREE.Vector3(p.x, 0, p.z).normalize(), u: new THREE.Vector3(0, 1, 0) }); }
+      for (const [y, ny] of [[y0, -1], [y1, 1]] as const) { if (Math.abs(d2.y) < 1e-12) continue; const t = (y - o2.y) / d2.y; if (t <= 0) continue; const p = o2.clone().addScaledVector(d2, t); if (p.x ** 2 + p.z ** 2 <= r * r + 1e-15) hits.push({ t, n: new THREE.Vector3(0, ny, 0), u: new THREE.Vector3(1, 0, 0) }); } }
+    else if ('sphere' in s) { const r = s.sphere, b = 2 * o2.dot(d2), c = o2.lengthSq() - r * r, disc = b * b - 4 * d2.lengthSq() * c;
+      if (disc >= 0) for (const t of [(-b - Math.sqrt(disc)) / (2 * d2.lengthSq()), (-b + Math.sqrt(disc)) / (2 * d2.lengthSq())]) if (t > 0) { const p = o2.clone().addScaledVector(d2, t), n = p.clone().normalize(); hits.push({ t, n, u: new THREE.Vector3(0, 1, 0).sub(n.clone().multiplyScalar(n.y)).lengthSq() > 1e-9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0) }); } }
+    else if (o.geometry) { const g = o.geometry(s); if (g) { const mesh = new THREE.Mesh(g), hit = new THREE.Raycaster(o2, d2.clone().normalize()).intersectObject(mesh, false)[0];
+      if (hit?.face) { const nn = g.attributes.normal, f = hit.face, bc = hit.barycoord; const n = nn && bc ? new THREE.Vector3().fromBufferAttribute(nn as THREE.BufferAttribute, f.a).multiplyScalar(bc.x).add(new THREE.Vector3().fromBufferAttribute(nn as THREE.BufferAttribute, f.b).multiplyScalar(bc.y)).add(new THREE.Vector3().fromBufferAttribute(nn as THREE.BufferAttribute, f.c).multiplyScalar(bc.z)).normalize() : f.normal.clone();
+        if (n.dot(d2) > 0) n.negate(); hits.push({ t: hit.distance / d2.length(), n, u: new THREE.Vector3(1, 0, 0) }); } } }
+    for (const h of hits) {
+      const tw = h.t / sc; if (best && tw >= best.t) continue; // (the ray's length in the thing's frame: the piece may be scaled)
+      const nW = h.n.clone().transformDirection(q.m), at = o2.clone().addScaledVector(d2, h.t).applyMatrix4(q.m);
+      let u = h.u.clone().transformDirection(q.m); u.sub(nW.clone().multiplyScalar(u.dot(nW))); if (u.lengthSq() < 1e-12) u = new THREE.Vector3(1, 0, 0).sub(nW.clone().multiplyScalar(nW.x)); u.normalize();
+      if (o.turn) u.applyAxisAngle(nW, o.turn);
+      best = { t: tw, at, n: nW, u, piece: q.p.name, exact: !('prism' in s || 'lathe' in s || 'loft' in s || 'tube' in s || 'surf' in s || 'cone' in s || ('cyl' in s && s.cyl[2] !== undefined && s.cyl[2] !== s.cyl[0])) };
+    }
+  }
+  return best ? { at: best.at.toArray() as V3, n: best.n.toArray() as V3, u: best.u.toArray() as V3, piece: best.piece, exact: best.exact } : null;
+}

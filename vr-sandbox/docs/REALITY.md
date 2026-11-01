@@ -2105,3 +2105,15 @@ run's, field by field; every near miss the run catches takes its kind and respon
 `src/nexus/agent.ts`), each response said and a reckless one's to stop and tell the user; and the runners' and the page's
 handling of a run, from agentBuild's call or the reply to the near misses printed or shown, are read exactly (pinned). The
 evaluator's three uncaught faults and a fourth, each tried once, now fail the test. Checked with `npm run gate`.
+
+## 2026-11-01: an interface stood on any point of any surface (spec 01, I6)
+
+`standOn` in `src/nexus/mate.ts` meets a ray with a thing's surface and gives the frame an interface stands in there: the
+point, the surface's outward normal (a hole runs along its reverse, into the host) and `u` laid along the piece's own first
+axis as it lies in the surface, turned about the normal as asked. Boxes, plain cylinders and spheres are met exactly in
+their own frames, since a faceted mesh misses a curved side by more than the tenth of a millimetre asked (a 24-sided
+cylinder of 20 mm radius by up to 0.17 mm); any other shape is met on the views' mesh, its normal blended from the mesh's
+own normals across the triangle met. The one test (the test "an interface stands on a box's top, a cylinder's side and a
+sloped face") gives it a box's top, a cylinder's side, a box turned 30° inside a turned group, and a wedge's slope through
+its mesh: each frame's normal within 0.5° of the surface's and each point within 0.1 mm of the one worked out by hand; a
+quarter turn turns `u` by 90°; a ray that meets nothing gives nothing. Checked with `npm run gate`.
