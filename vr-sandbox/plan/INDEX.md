@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129: 4 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 129: 5 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
 | Rules in the constitution | 29 (20 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -82,7 +82,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S6 | The routing test covers plan/ as it covers docs/ | — | passing (evaluator claude-sonnet, 2026-11-01) |
-| S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | failing |
+| S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | passing (evaluator claude-sonnet, 2026-11-01) |
 | S8 | The first decision records (0001 to 0007) written | — | failing |
 | S9 | The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may … | S7 | failing |
 | S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing |

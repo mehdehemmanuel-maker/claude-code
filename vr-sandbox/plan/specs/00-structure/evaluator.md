@@ -2,7 +2,8 @@
 
 A task is failing until the evaluator says it passes. The builder (the AI that wrote the change) never marks its own
 work passing: it marks a task `claimed`, with its evidence, and asks for a verdict. The rule is checked by the one
-test: a task whose status is `passing` has a `pass` verdict in `verdicts/`, made after the task's last change.
+test: a task whose status is `passing` has a `pass` verdict in `verdicts/` whose `task` names it. (Not yet checked: that
+the verdict came after the task's last change; a pass stays until the task is judged again.)
 
 ## Who it is
 
@@ -54,7 +55,7 @@ was true; what the check asked (the plan does what it says) was not. **Verdict: 
 is not an input; the spring ran on its defaults".
 
 **3. Fail, partly met: headset comfort (spec 04, P10), had it been claimed whole.** Check: "each angle and distance
-measured in the emulated session within the stated limits". The evaluator runs the measuring script: distances and
-angles stand within limits and do not move when the player walks. But the task's own text also asks for text "≥ 0.6°",
-and no measurement of text size exists. **Verdict: fail**, missing: "the board's text size in degrees is not measured".
+measured in the emulated session within the stated limits". The evaluator runs the measuring script: the panels
+do not move from the player when the player walks, but the chat stands at 42° and the bar at 0.62 where the task says
+30° and 0.74, the task's text "≥ 0.6°" has no measurement, and the script compares nothing against the limits. **Verdict: fail** (as the evaluator found on 2026-11-01), missing: those four.
 (A task met in part is failing; the builder splits it or finishes it.)

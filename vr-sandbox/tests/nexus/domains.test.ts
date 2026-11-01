@@ -145,6 +145,7 @@ describe('every domain, in one pass', () => {
     for (const d of readdirSync(join(root, 'plan/specs'))) { const f = join(root, 'plan/specs', d, 'tasks.json'); if (!existsSync(f)) continue;
       for (const t of JSON.parse(readFileSync(f, 'utf8')).tasks as { id: string; status: string }[]) if (/^passing/.test(t.status)) {
         const v = join(vd, `${d.slice(0, 2)}.${t.id}.json`); if (!existsSync(v) || JSON.parse(readFileSync(v, 'utf8')).verdict !== 'pass') bad.push(`${d.slice(0, 2)}.${t.id}`); } }
+    for (const f of readdirSync(vd).filter((x) => x.endsWith('.json'))) { const v = JSON.parse(readFileSync(join(vd, f), 'utf8')); if (v.task !== f.replace(/\.json$/, '')) bad.push(`${f} names its task ${v.task}`); if (!['pass', 'fail'].includes(v.verdict)) bad.push(`${f}: verdict ${v.verdict}`); }
     expect(bad, 'marked passing with no pass from the evaluator').toEqual([]);
   });
   // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
