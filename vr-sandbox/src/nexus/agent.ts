@@ -117,6 +117,8 @@ export function nearMissesOf(steps: AgentStep[], answer: string, board: Board): 
   return out;
 }
 
+/** One near miss as the evaluation runners print it: its kind first, then where and what, then the response. */
+export const nearMissLine = (m: NearMiss): string => `${m.kind}: step ${m.step} (${m.tool}): ${m.what} | ${m.response}`;
 /** The near misses as the page shows them beside the answer (open when one is reckless): each with its step, its kind,
  *  what happened and the response it calls for. `esc` makes text safe for the page. */
 export function nearMissesView(misses: readonly NearMiss[] | undefined, esc: (s: string) => string): string {

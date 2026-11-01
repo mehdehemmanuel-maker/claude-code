@@ -1,19 +1,19 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 04.P10
-Spec in hand: spec 04, being in it (`plan/specs/04-being-in-it/`)
-Last commit the gate passed: 62aa108 (2026-11-01)
+Task in hand: 00.S10
+Spec in hand: spec 00, structure (`plan/specs/00-structure/`)
+Last commit the gate passed: 832c6e6 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
-1. 00.S10: its seventh verdict, and mend it if it fails
-2. 01.I3: the standards' tables the negatives need, each row from a document actually opened
-3. 01.I4: cuts as solids (a counterbore, a countersink, a drill point), so a hole is drawn as it is made
+1. 01.I3: the standards' tables the negatives need, each row from a document actually opened (sources being opened)
+2. 01.I4: cuts as solids (a counterbore, a countersink, a drill point), so a hole is drawn as it is made
+3. 01.I5: the negative of an interface (the hole a bolt needs, by the host's material)
 
 ## Open, and why
 
-- Verdicts in: 00.S1, S2, S3, 10.T3 and 01.I1 pass. 00.S10 failed a seventh time and 04.P10 a sixth; each mended (every
-  tool's refusals caught through the tools themselves; every side panel state, the text as drawn, as seen), to be judged again.
+- Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1 and 04.P10 (its seventh judging) pass. 00.S10 failed an eighth time; mended
+  (the node's run and the runners' prints read exactly, every tool's refusal made), to be judged again.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).

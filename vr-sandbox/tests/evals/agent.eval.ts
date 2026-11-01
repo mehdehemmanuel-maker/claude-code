@@ -6,7 +6,7 @@
 import { it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import '../../src/nexus/seeds';
-import { agentBuild, type AgentRun } from '../../src/nexus/agent';
+import { agentBuild, nearMissLine, type AgentRun } from '../../src/nexus/agent';
 import { Engine, emptyBoard, placeBlock } from '../../src/nexus/dataflow';
 import { CONSTANTS } from '../../src/data/constants';
 
@@ -65,7 +65,7 @@ it('the AI, on its evaluation set', async () => {
     try {
       const r = await agentBuild(req, { ...(model ? { model } : {}), seconds: 120, check: false });
       const e = new Engine(r.board); await e.run(); const why = check(r, e);
-      row = { k: k + 1, request: req, right: !why, why: why ?? '', steps: r.steps.length, in: r.tokens.in, cached: r.tokens.cached, out: r.tokens.out, s: +((Date.now() - t0) / 1000).toFixed(1), model: r.model, stopped: r.stopped ?? '', near: r.nearMisses.map((m) => `${m.kind}: ${m.what.slice(0, 80)}`) };
+      row = { k: k + 1, request: req, right: !why, why: why ?? '', steps: r.steps.length, in: r.tokens.in, cached: r.tokens.cached, out: r.tokens.out, s: +((Date.now() - t0) / 1000).toFixed(1), model: r.model, stopped: r.stopped ?? '', near: r.nearMisses.map(nearMissLine) };
     } catch (x) { row = { k: k + 1, request: req, right: false, why: `failed: ${(x as Error).message.slice(0, 120)}`, steps: 0, in: 0, cached: 0, out: 0, s: +((Date.now() - t0) / 1000).toFixed(1) }; }
     rows.push(row); console.log(`${row.right ? 'RIGHT' : 'WRONG'} ${row.k}. ${req.slice(0, 60)} | steps ${row.steps}, in ${row.in} (+${row.cached} cached), out ${row.out}, ${row.s} s ${row.why ? `| ${row.why}` : ''}`); for (const m of (row.near as string[] | undefined) ?? []) console.log(`   near miss: ${m}`);
   };

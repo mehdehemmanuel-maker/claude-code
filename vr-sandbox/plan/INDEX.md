@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 10 passing (by the evaluator), 7 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 11 passing (by the evaluator), 7 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 14 (11 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -27,7 +27,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 2. **11.LW15** [passing] Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry
 3. **10.T11** [claimed] First: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets quantity, proposed by quantityOf and confirmed; 
 4. **11.LW12** [claimed in part] First, before LW13: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as
-5. **04.P10** [failing, by the evaluator] Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 78
+5. **04.P10** [passing] Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 78
 6. **00.S4** [passing] The provenance check, the placeholder scan and the secret scan in the gate
 7. **00.S5** [passing] Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them
 8. **00.S7** [passing] The evaluator: its brief, three scored examples, the rule that only it flips a task
@@ -88,7 +88,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | passing (evaluator claude-sonnet, 2026-11-01) |
 | S8 | The first decision records (0001 to 0007) written | — | failing |
 | S9 | The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may … | S7 | failing |
-| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The near-miss half is partly met: 'a caught near miss is logged with its kind' is shown through the run's own code for t) |
+| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The near-miss half is partly met. 'A caught near miss is logged with its kind' is shown, through the AI's own tools and ) |
 | S11 | Dailies: the AI shows what changed since the last session, and the person approves, notes or kills each version; versions never overwritten | S2 | failing |
 | S12 | Prompts as versioned prompt nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL) | S5 | failing |
 | S13 | Post-mortems as a timeline, contributing factors and a hindsight guard (Allspaw, Dekker, SRE), replacing five whys; Perrow's chart computed from … | S10 | failing |
@@ -161,7 +161,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | P6 | Sights, each with its legend | — | failing |
 | P7 | The corrector's ghost and band | P1 | failing |
 | P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and … | P1 | failing |
-| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css … | — | failing (evaluator: 'Every target at least 2.5 deg' as the eye sees it is not checked in the side panel's library state. The side panel in i) |
+| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css … | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | P11 | Moving comfortably: fixed speeds (stopped, 1.4, 3 m/s), snap turn 30°/45° on the right stick, a vignette while moving, zoom rate capped and about … | P10 | failing |
 
 ### 05-civil (7)

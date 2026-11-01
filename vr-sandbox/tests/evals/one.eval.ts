@@ -7,7 +7,7 @@ import { it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import '../../src/nexus/seeds';
-import { agentBuild, type AgentRun } from '../../src/nexus/agent';
+import { agentBuild, nearMissLine, type AgentRun } from '../../src/nexus/agent';
 import { Engine } from '../../src/nexus/dataflow';
 import { nodesOf } from '../../src/nexus/boards';
 
@@ -35,5 +35,5 @@ it('the one test: the lamp on the shelf', async () => {
   }
   console.log(`\nRESULT ${passed} of 18 lines pass (${scored} could be scored today); ${r.steps.length} steps; tokens in ${r.tokens.in} (+${r.tokens.cached} cached), out ${r.tokens.out}; ${((Date.now() - t0) / 1000).toFixed(0)} s; model ${r.model}; near misses ${r.nearMisses.length}`);
   console.log(`the answer: ${r.answer.replace(/\s+/g, ' ').slice(0, 600)}`);
-  for (const m of r.nearMisses) console.log(`near miss, step ${m.step} (${m.tool}): ${m.kind}: ${m.what} | ${m.response}`);
+  for (const m of r.nearMisses) console.log(`near miss, ${nearMissLine(m)}`);
 }, 600_000);

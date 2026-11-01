@@ -2032,3 +2032,15 @@ oil pickup), the go kart 0. Not mended: the tank straps' bolts, the differential
 are drawn with their web inboard, where a ladder frame's is outboard (turned round, the cross members meet the engine and the
 hood: left for its own round). The one test gives the rule two plates, bored and clean, and a plate drawn into a washer,
 unbored and found. Checked with `npm run gate`.
+
+## 2026-11-01: P10 passes; S10's node and runners read exactly, every refusal the tools make made (spec 04, P10; spec 00, S10)
+
+P10 passed its seventh judging (the evaluator's 49 plants, each caught but four it does not hold against the task; its
+verdict in `plan/specs/00-structure/verdicts/04.P10.json`). S10's eighth verdict: the node 'Claude builds a board' could go
+back to dropping its near misses, and the two evaluation runners could print none, or print them without their kind, with
+the gate green: each was guarded by a declared port or a regexp. Now the node's run is read exactly (agentBuild's run
+handed to `nodeOutputsOf`, nothing between); both runners print each near miss by `nearMissLine` (its kind first), run in
+the one test on a real run's near misses, and their lines are read exactly; change's two other refusals (a node to take away
+that is not there, an input nothing feeds) and open's (a starter board that is not there) are made by the real tools in the
+test and caught with their kinds; the page's summary counts are checked against its rows. With the runner's list emptied,
+the test fails. Checked with `npm run gate`.

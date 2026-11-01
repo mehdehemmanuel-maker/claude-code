@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
-import { callTools, certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, relayBody, runOf, stepOf, toolsFor, turnOf, type AgentRun, type AgentStep } from '../../src/nexus/agent';
+import { callTools, certifiedOf, certifiedView, gateOf, nearMissLine, nearMissesOf, nearMissesView, relayBody, runOf, stepOf, toolsFor, turnOf, type AgentRun, type AgentStep } from '../../src/nexus/agent';
 import { createHash } from 'node:crypto';
 /** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
 const AGENT_PIN = '827c6d19f645c051';
@@ -339,11 +339,21 @@ describe('every domain, in one pass', () => {
     expect(placed.map((m) => m.what).join(' | ')).toMatch(/no block "no\.such\.block".*\| b: in\.number has no setting nosuch.*\| wire "b\.value to a\.x": write it a\.out>b\.in/);
     const reopened = await runTools([{ name: 'build', input: { nodes: { a: { b: 'no.such.block' } } } }, { name: 'open', input: { title: starterBoards()[0]![0].slice(0, 20) } }], 'Opened the starter board.');
     expect(reopened.map((m) => `${m.kind} ${m.tool}`), 'a board opened after a refused build: nothing standing, nothing reckless').toEqual(['error build']);
+    // (and change's other two refusals (a node to take away that is not there, an input to unwire that nothing feeds) and
+    // open's (a starter board that is not there): every refusal the tools make, made here (three were made by nothing: the
+    // evaluator, 2026-11-01))
+    const rest = await runTools([{ name: 'build', input: { nodes: { a: { b: 'in.number', s: { value: 2 } } } } }, { name: 'change', input: { remove: ['ghost'], unwire: ['a.nothing'] } }, { name: 'open', input: { title: 'no such starter board at all' } }], 'Two changes and an opening were refused: no node ghost, nothing feeds a.nothing, no such board.');
+    expect(rest.map((m) => `${m.kind} ${m.tool}`), 'change\'s remove and unwire refused, open refused').toEqual(['error change', 'error change', 'error open']);
+    expect(rest.map((m) => m.what).join(' | ')).toMatch(/no node ghost.*\| nothing feeds a\.nothing.*\| .*no starter board/);
     // (and the node 'Claude builds a board' gives the near misses its run caught, as the page and the runners show them)
     const outs = (await import('../../src/nexus/agent')).nodeOutputsOf({ ...(await runOf({ start: emptyBoard('t'), board: emptyBoard('t'), steps: [], answer: 'It weighs 4 kg.', model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: [] })) }, 1);
     expect(outs['near misses'], 'the node\'s near misses').toEqual([{ kind: 'at-risk', tool: 'answer', what: expect.any(String), response: expect.any(String) }]);
     expect(portsOf(LIBRARY.get('agent.build')!, {}).outputs.map((p) => p.name), 'the node has an output for them').toContain('near misses');
     expect(String(outs.says)).toMatch(/1 near miss \(at-risk\)/);
+    // (the node's run is exactly agentBuild's run handed to nodeOutputsOf, nothing between (its run went back to dropping
+    // them, and nothing failed: the evaluator, 2026-11-01))
+    const agentSrc0 = readFileSync(join(root, 'src/nexus/agent.ts'), 'utf8'), nodeRun = agentSrc0.slice(agentSrc0.indexOf("  run: async (i, c) => { const t0 = Date.now(), r = await agentBuild(String(i.request ?? c.set.request)"), agentSrc0.indexOf('} } as BlockDef);', agentSrc0.indexOf("id: 'agent.build'")) + 17);
+    expect(nodeRun, "the node's run, read exactly").toBe("  run: async (i, c) => { const t0 = Date.now(), r = await agentBuild(String(i.request ?? c.set.request), { model: String(c.set.model), effort: c.set.effort as 'low', steps: Number(c.set.steps), seconds: Number(c.set.seconds), signal: c.signal });\n    return nodeOutputsOf(r, (Date.now() - t0) / 1000); } } as BlockDef);");
     // (the page shows each near miss with its kind and its response, open when one is reckless, and it is called with the
     // run's own (the guard of this was lost in a rewrite once: the evaluator, 2026-11-01))
     const pageView = nearMissesView(run.nearMisses, (x) => x);
@@ -374,8 +384,15 @@ describe('every domain, in one pass', () => {
     // (the relay sends the page all of the run: its near misses, diff and certificates)
     const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
     expect(readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), 'the relay answers with relayBody').toMatch(/res\.end\(m\.relayBody\(r\)\)/);
-    expect(readFileSync(join(root, 'tests/evals/agent.eval.ts'), 'utf8'), 'the evaluation set prints each').toMatch(/for \(const m of \(row\.near[^)]*\)[^)]*\)\s*console\.log\(`\s*near miss/);
-    expect(readFileSync(join(root, 'tests/evals/one.eval.ts'), 'utf8'), 'the one test prints each').toMatch(/for \(const m of r\.nearMisses\) console\.log\(`near miss/);
+    // (the two runners print each near miss by nearMissLine, its kind first (run here on the run's own), read exactly: a
+    // runner that printed none, or printed them without their kind, passed before (the evaluator, 2026-11-01))
+    for (const m of run.nearMisses) expect(nearMissLine(m), 'a near miss printed with its kind first').toBe(`${m.kind}: step ${m.step} (${m.tool}): ${m.what} | ${m.response}`);
+    const ev = readFileSync(join(root, 'tests/evals/agent.eval.ts'), 'utf8'), one = readFileSync(join(root, 'tests/evals/one.eval.ts'), 'utf8');
+    for (const line of ['near: r.nearMisses.map(nearMissLine) };', 'for (const m of (row.near as string[] | undefined) ?? []) console.log(`   near miss: ${m}`);']) expect(ev, 'the evaluation set prints each, by nearMissLine').toContain(line);
+    expect(one, 'the one test prints each, by nearMissLine').toContain('for (const m of r.nearMisses) console.log(`near miss, ${nearMissLine(m)}`);');
+    // (and the page's count of each kind is the rows' own)
+    const counts = (['error', 'at-risk', 'reckless'] as const).map((k) => `${run.nearMisses.filter((m) => m.kind === k).length} ${k}`).join(', ');
+    expect(pageView, 'its summary counts each kind as its rows do').toContain(`Near misses caught: ${run.nearMisses.length} (${counts})`);
   });
   // (the kernel (spec 10, T23; research 31): closed (it imports nothing outside its folder, touches no host but BigInt and
   // DataView, and no file of it passes 250 lines); its unit table is the units' own; each kind passes what is true and
