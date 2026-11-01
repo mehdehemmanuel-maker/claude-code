@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129: 2 passing (by the evaluator), 5 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 129: 2 passing (by the evaluator), 4 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (8 fixed) |
 | Rules in the constitution | 29 (20 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -248,7 +248,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | LW11 | Space measures as nodes (justified depth, integration, intimacy gradient, egress distance, daylight), each with its stability under small edits … | — | failing |
 | LW12 | **First, before LW13**: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as … | — | claimed, in part, 2026-11-01: early cutoff counted in the gate; effects scanned only in each block's own run |
 | LW13 | Push a mark, pull the work (absorbs LW1, lazy evaluation): observers (view, panels, checks, exports, the agent) pull; only stale nodes on their … | LW12 | failing |
-| LW15 | Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by … | — | claimed 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it |
+| LW15 | Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by … | — | failing (evaluator: nothing in the gate fails if keys go back to stable() (D6 itself): the digest test checks the function digest alone, not) |
 | LW16 | Every simulated world carries an ODD description, its update order, one label (demo, calibrated, compared, docked, forecast) and its worker count … | LW2 | failing |
 
 ### 12-cost-carbon (5)
