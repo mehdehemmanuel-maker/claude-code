@@ -160,7 +160,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | P6 | Sights, each with its legend | — | failing |
 | P7 | The corrector's ghost and band | P1 | failing |
 | P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and … | P1 | failing |
-| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css … | — | failing (evaluator: chat is at 42 deg to the side; the task states 30 deg (the builder changed it after seeing overlap, but the stated numbe) |
+| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css … | — | failing (evaluator: 'Every target at least 2.5 deg' is not met and not measured: the board's strip buttons (1.1 deg tall, press zone 1.5 deg) |
 | P11 | Moving comfortably: fixed speeds (stopped, 1.4, 3 m/s), snap turn 30°/45° on the right stick, a vignette while moving, zoom rate capped and about … | P10 | failing |
 
 ### 05-civil (7)

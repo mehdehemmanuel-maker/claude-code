@@ -1,16 +1,32 @@
-{ "task": "04.P10", "verdict": "fail", "model": "claude-sonnet", "date": "2026-11-01", "commit": "33e350b",
-  "ran": [
-    "npx vite build --config vite.view.config.ts --logLevel error && node comfort.cjs dist-view shots (emulated Meta Quest 3, IWER): board 1.23 m, 9.07 deg below, 0 deg side, 51.05 deg wide; bar 1.18 m, 20.9 deg below, 48.22 deg wide; chat 1.30 m, 42 deg to the side, 26.82 deg wide; keyboard 0.90 m, 33.69 deg below. After carry(2,-3) every number identical.",
-    "Read space.ts layPanels/carry/comfort and the REALITY.md entry: the entry itself says the board's text size is not measured or changed and nothing was tried on a real Quest."
-  ],
-  "planted": [
-    "removed ui.position.add(d) from carry(): the script's AFTER numbers moved (board 2.69 m, -131.7 deg side), so the carried-with-player check is caught; file restored, dist-view rebuilt, git status shows only the verdicts dir."
-  ],
-  "missing": [
-    "chat is at 42 deg to the side; the task states 30 deg (the builder changed it after seeing overlap, but the stated number is not met and the task/research was not amended)",
-    "the bar is scaled 0.62; the task states 0.74",
-    "the board's width in css px (about 1,000) and its text size in degrees (>= 0.6 deg) are not measured; comfort() reports only the panel's overall width",
-    "no measurement that every target (buttons, keys) is >= 2.5 deg; comfort() does not measure targets",
-    "the script only prints numbers; there is no pass/fail comparison against the stated limits",
-    "the real-Quest check is not done (the task text asks for it once spec 03 is up; emulator is stated as emulator)"
-  ] }
+{
+ "task": "04.P10",
+ "verdict": "fail",
+ "model": "claude-sonnet",
+ "date": "2026-11-01",
+ "commit": "956fe8c",
+ "ran": [
+  "git checkout --detach 956fe8c; linked node_modules; read evaluator.md, the P10 row (spec 04), decision 0012, research 34 (A9 and section B7/B8), the REALITY.md entry, tests/evals/headset.cjs, space.ts (layPanels, carry, comfort, sticks, placeKeyboard), keyboard.ts, nodes-wall.ts.",
+  "npm run eval:headset on the clean commit (exit 0, about 15 s): board 1.23 m, 9.07 deg below, 0.00 deg off centre; bar 39.23 deg wide; chat 42.00 deg aside, 3.06 deg clear of the board, 1.30 m; keyboard 0.90 m, 7.18 deg clear of the bar; board text 0.60 deg (11 px) and 0.71 deg (13 px); smallest bar target 2.62 deg, chat target 2.74 deg, key 2.59 deg; after carry(2,-3) every panel unchanged; 'all within their limits'.",
+  "Own probe (scratchpad probe.cjs, outside the repo) in the same emulated Quest 3 session, measuring the board group's other two planes, which the eval never measures. The board is three panels: the main canvas (780 css px over 0.912 m, measured), a strip above it (2048 px over 0.912 m, 1.31 m from the eye) and a side panel (900 px over 0.236 m, 1.32 m from the eye). Both are pressed by the hand's ray in a headset (NodesWall.down). From the geometry and the draw code in nodes-wall.ts: strip buttons are 57 px tall, 1.11 deg (press zone 1.50 deg); side-panel buttons (the minus and plus, the arrows, Open, Cut branch, the library rows) are 80 to 84 px tall, 0.91 to 0.95 deg. Side-panel text is 0.27 to 0.34 deg (24 to 30 px). Strip text is 0.59 deg. So these targets are well under the 2.5 deg the task states for every target, and the side-panel text is under the 0.4 deg least.",
+  "Read headset.cjs against the task's words: its limits cover bar, chat and keyboard targets only (the REALITY entry says so too); the keyboard's 45 deg below the eye has no limit (only its distance and clearance from the bar); the walk is a direct call of space.carry(), not the stick."
+ ],
+ "planted": [
+  "Removed ui.position.add(d) from carry() in space.ts: CAUGHT (exit 1, 16 outside their limits; bar, chat, keyboard, text and target distances all moved). Restored.",
+  "Chat at 30 deg instead of 42: CAUGHT (exit 1, 'chat clear of the board' -8.94). Restored.",
+  "Bar in one row in the headset (BAR_ONE in layPanels): CAUGHT (exit 1, bar width 67.89 deg over 58; bar target 1.09 deg under 2.5). Restored.",
+  "BOARD_CSS_PX 780 changed to 1000: CAUGHT (exit 1, 13 px text 0.55 deg under 0.6). Restored.",
+  "Chat typing area shrunk from 90 px to 70 px: CAUGHT (exit 1, chat target 2.13 deg under 2.5). Restored.",
+  "Keyboard 70 deg below the eye instead of 45 (placeKeyboard): NOT CAUGHT (exit 0, 'all within their limits'); no limit on the keyboard's angle below the eye. Restored.",
+  "Left stick bypassing carry() (sticks() calling rig.position.add instead of carry, which is fault D11 as it happens in use): NOT CAUGHT (exit 0, 'every panel where it was'); the eval walks by calling space.carry() directly, never by driving the emulated left thumbstick. Restored.",
+  "Chat at 52 deg instead of the stated 42: NOT CAUGHT (exit 0); the limit is 0 to 55 deg, so the number the task and decision 0012 give is not held to. Minor. Restored.",
+  "After every plant: git checkout -- space.ts; final git status shows only the node_modules symlink the setup asked for; dist-view rebuilt from the clean source and the eval re-run (exit 0)."
+ ],
+ "missing": [
+  "'Every target at least 2.5 deg' is not met and not measured: the board's strip buttons (1.1 deg tall, press zone 1.5 deg) and side-panel buttons (0.91 to 0.95 deg) are hand-ray targets in the headset and are far under 2.5 deg. comfort() and LIMITS measure only the bar, the chat input and the keyboard keys. The fix is either to enlarge them (or draw the strip and side panel larger or nearer) and measure them, or to amend the task and decision 0012 to say which targets are exempt and why.",
+  "The board's text is measured only on its main canvas (780 css px). The side panel's text is 0.27 to 0.34 deg, under the 0.4 deg least the task states for the board's text, and the strip text is 0.59 deg, under the 0.6 deg comfortable, and neither is measured.",
+  "'The keyboard at 0.9 m, 45 deg below' has no measurement for the angle: a keyboard 70 deg below the eye passes the eval. Add a limit around 45 deg, as the board's 10 deg has 8 to 12.",
+  "'After walking every panel is where it was' is shown only by calling space.carry() directly. The code that walks in use (the left stick in sticks()) is not exercised, so a recurrence of D11 there passes. Drive the emulated left thumbstick (emulated.controllers.left.updateAxes) and measure after it.",
+  "The chat's 42 deg (the number in the task and decision 0012) is checked only as at most 55 deg, so 52 deg passes; and 'the bar in two rows' is shown only indirectly (width and target limits), not measured. Both minor beside the first three.",
+  "A real Quest is not tested; this is stated honestly as spec 03 W5 and is not held against the task."
+ ]
+}

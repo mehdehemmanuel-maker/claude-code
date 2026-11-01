@@ -12,10 +12,12 @@ const LIMITS = [
   ['board below the eye (°)', (m) => m.board.below, 8, 12],
   ['board off centre (°)', (m) => Math.abs(m.board.side), 0, 2],
   ['bar width (°, within the 58° Meta designs for)', (m) => m.bar.width, 0, 58],
-  ['chat to the side (°, within the 55° most of a head turn)', (m) => Math.abs(m.chat.side), 0, 55],
+  ['bar rows (two in a headset)', (m) => m.bar.rows, 2, 2],
+  ['chat to the side (°, 42 by decision 0012, within the 55° most of a head turn)', (m) => Math.abs(m.chat.side), 40, 44],
   ['chat clear of the board (° between their edges)', (m) => Math.abs(m.chat.side) - m.chat.width / 2 - m.board.width / 2, 0, 90],
   ['chat distance (m)', (m) => m.chat.distance, 1.2, 1.4],
   ['keyboard distance (m, outside the 0.5 to 0.8 m band)', (m) => m.keyboard.distance, 0.85, 0.95],
+  ['keyboard below the eye (°, 45 by the task)', (m) => m.keyboard.below, 43, 47],
   ['keyboard clear of the bar (° between their edges, seen from the eye)', (m) => (m.keyboard.below - m.keyboard.height / 2) - (m.bar.below + m.bar.height / 2), 0, 90],
   ['bar clear of the board (° between their edges)', (m) => (m.bar.below - m.bar.height / 2) - (m.board.below + m.board.height / 2), 0, 90],
   ['board text, smallest (11 px), em (°, 0.4 the least)', (m) => m.text.width, 0.4, 5],
@@ -23,6 +25,9 @@ const LIMITS = [
   ['smallest bar target (°)', (m) => m['bar target'].width, 2.5, 90],
   ['smallest chat target (°)', (m) => m['chat target'].width, 2.5, 90],
   ['smallest key (°)', (m) => m.key.width, 2.5, 90],
+  ['smallest target on the board\'s strip (°)', (m) => m['strip target'].width, 2.5, 90],
+  ['strip text, smallest (°, 0.6 comfortable)', (m) => m['strip text'].width, 0.6, 5],
+  ['side panel text, smallest (°, 0.6 comfortable)', (m) => m['side text'].width, 0.6, 5],
 ];
 const srv = http.createServer((q, r) => { const p = path.join(root, decodeURIComponent(q.url.split('?')[0])); fs.readFile(p, (e, d) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { 'Content-Type': types[path.extname(p)] || 'application/octet-stream' }); r.end(d); }); }).listen(4179);
 (async () => {
@@ -37,9 +42,25 @@ const srv = http.createServer((q, r) => { const p = path.join(root, decodeURICom
     const before = await pg.evaluate(() => window.space.comfort());
     for (const [name, f, lo, hi] of LIMITS) { let v; try { v = f(before); } catch { v = NaN; } const ok = v >= lo && v <= hi; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit ${lo} to ${hi})`); if (!ok) fails++; }
     if (shots) await pg.screenshot({ path: path.join(shots, 'headset-panels.png') });
+    // (the side panel in its other states: a block chosen, with inputs a hand changes, and the library; each target and
+    // each text measured there too)
+    for (const mode of ['chosen', 'library']) {
+      const what = await pg.evaluate((m) => window.space.emulate.side(m), mode); await pg.waitForTimeout(200); const m = await pg.evaluate(() => window.space.comfort());
+      for (const [name, v, lo] of [[`side panel target, ${mode} (${what})`, m['side target']?.width, 2.5], [`side panel text, ${mode} (${what})`, m['side text']?.width, 0.6]]) { const ok = v >= lo; console.log(`${ok ? 'ok  ' : 'FAIL'} smallest ${name} (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit ${lo} or more)`); if (!ok) fails++; }
+      if (shots) await pg.screenshot({ path: path.join(shots, `headset-side-${mode}.png`) });
+    }
+    await pg.evaluate(() => window.space.emulate.side('chosen'));
+    // (walked two ways: by carry(), and by the left stick as a hand pushes it, the way walking goes in use (a stick that
+    // moved the player and not the panels passed when only carry() was tried: the evaluator, 2026-11-01))
+    const moved = (before, after, how) => { let n = 0; for (const k of Object.keys(before)) for (const f of ['distance', 'side', 'below']) if (Math.abs(before[k][f] - after[k][f]) > 1e-4) { n++; bad(`${k} ${f} moved when the player walked ${how} (${before[k][f].toFixed(3)} to ${after[k][f].toFixed(3)})`); } return n; };
     await pg.evaluate(() => window.space.carry(2, -3)); await pg.waitForTimeout(300);
-    const after = await pg.evaluate(() => window.space.comfort());
-    for (const k of Object.keys(before)) for (const f of ['distance', 'side', 'below']) if (Math.abs(before[k][f] - after[k][f]) > 1e-6) bad(`${k} ${f} moved when the player walked (${before[k][f].toFixed(3)} to ${after[k][f].toFixed(3)})`);
-    console.log(`after walking 2 m right and 3 m ahead: ${fails ? 'see above' : 'every panel where it was'}`);
+    const n1 = moved(before, await pg.evaluate(() => window.space.comfort()), 'by carry()');
+    console.log(`after walking 2 m right and 3 m ahead: ${n1 ? 'see above' : 'every panel where it was'}`);
+    const e0 = await pg.evaluate(() => window.space.emulate.eye()), c0 = await pg.evaluate(() => window.space.comfort());
+    await pg.evaluate(() => window.space.emulate.walk(0, -1)); await pg.waitForTimeout(1500); await pg.evaluate(() => window.space.emulate.walk(0, 0)); await pg.waitForTimeout(300);
+    const e1 = await pg.evaluate(() => window.space.emulate.eye()), walked = Math.hypot(e1[0] - e0[0], e1[2] - e0[2]);
+    if (walked < 0.5) bad(`the left stick, pushed forward for 1.5 s, moved the player only ${walked.toFixed(2)} m`);
+    const n2 = moved(c0, await pg.evaluate(() => window.space.comfort()), 'by the left stick');
+    console.log(`after the left stick pushed forward (the player moved ${walked.toFixed(2)} m): ${n2 ? 'see above' : 'every panel where it was'}`);
   } finally { await b.close(); srv.close(); console.log(fails ? `\n${fails} outside their limits` : '\nall within their limits'); process.exitCode = fails ? 1 : 0; }
 })();

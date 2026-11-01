@@ -1738,3 +1738,19 @@ stands in data, no key is written down": a record of number arrays with no statu
 and a typed array, a wrong status word for one export, a status for an export that is not there; each fails. Still not
 covered: figures outside `src/data/`, and C21's calibrated, disputed, myth and inspired-only, which have no evidence kind.
 Checked with `npm run gate`.
+
+## 2026-11-01: every target in the headset 2.5° or more, the board's strip and side panel too (spec 04, P10)
+
+The evaluator failed P10 again: `npm run eval:headset` measured the bar, the chat and the keys, but not the board's own strip
+of buttons (1.1° tall) nor its side panel (buttons 0.9°, text 0.3°), both pressed by a hand's ray; nothing held the keyboard
+to its 45° below the eye, nor the chat to its 42°; and walking was tried only by calling `carry()`, so a left stick that
+moved the player and left the panels behind passed. Now, in a headset, the board's strip is drawn taller and the side
+panel wider, at the same pixels per metre, with larger buttons and text (`headset()` in `src/nexus/view/nodes-wall.ts`; on
+a screen they are as before), and the side panel pages its inputs and the library when they do not fit. `comfort()` in
+`src/nexus/view/space.ts` measures the strip's and the side panel's smallest target and smallest text from their own
+distance, and the bar's rows; the run adds limits for each, for the keyboard at 43° to 47° below the eye, and for the chat
+at 40° to 44° to the side; it measures the side panel with a block chosen and with the library open; and it walks a second
+time by pushing the emulated left stick, checking that the player moved and every panel kept its place. All within their
+limits in one run of `npm run eval:headset` (an emulated Quest 3, not a headset): the strip's smallest target 2.65°, the
+side panel's 2.71°, its smallest text 0.64° to 0.67°, the strip's 0.77°; the stick moved the player 1.52 m. A cost: in the
+headset the library shows five blocks a page, so the largest field takes 36 pages. A real Quest is still spec 03, W5.

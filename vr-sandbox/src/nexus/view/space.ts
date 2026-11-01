@@ -264,9 +264,9 @@ function recentre(): void { const head = renderer.xr.getCamera(), p = head.getWo
 function carry(d: THREE.Vector3): void { rig.position.add(d); ui.position.add(d); xrPivot.add(d); }
 /** Where each panel stands from your eyes, measured: how far, how far off to the side and below, how wide it looks
  *  (in degrees). For checking the layout against the comfort numbers, in a headset or an emulated one. */
-function comfort(): Record<string, { distance: number; side: number; below: number; width: number; height?: number }> {
+function comfort(): Record<string, { distance: number; side: number; below: number; width: number; height?: number; rows?: number }> {
   const head = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye = head.getWorldPosition(new THREE.Vector3()), f = head.getWorldDirection(new THREE.Vector3());
-  const yaw = Math.atan2(f.x, -f.z), out: Record<string, { distance: number; side: number; below: number; width: number; height?: number }> = {};
+  const yaw = Math.atan2(f.x, -f.z), out: Record<string, { distance: number; side: number; below: number; width: number; height?: number; rows?: number }> = {};
   for (const [name, o] of [['board', board.group], ['bar', bar.mesh], ['chat', chat.mesh], ['keyboard', keyboard.mesh]] as const) {
     if (!o.visible) continue; o.updateWorldMatrix(true, true);
     const box = new THREE.Box3().setFromObject(o), c = box.getCenter(new THREE.Vector3()).sub(eye), d = c.length(), sz = box.getSize(new THREE.Vector3());
@@ -281,6 +281,10 @@ function comfort(): Record<string, { distance: number; side: number; below: numb
   const smallest = (p: Panel) => Math.min(...p.hits.map((h) => Math.min((h.x1 - h.x0) * (p.w * p.mesh.scale.x) / p.c.width, (h.y1 - h.y0) * (p.h * p.mesh.scale.y) / p.c.height)));
   for (const [name, p] of [['bar target', bar], ['chat target', chat]] as const) if (p.mesh.visible && p.hits.length) { const d = dist(p.mesh); out[name] = { distance: d, side: 0, below: 0, width: sz(smallest(p), d) }; }
   if (keyboard.mesh.visible) { const d = dist(keyboard.mesh); out['key'] = { distance: d, side: 0, below: 0, width: sz(keyboard.smallestKey(), d) }; }
+  // (the board's strip and side panel too: their smallest target and smallest text, each from its own distance (the
+  // evaluator found them unmeasured, at 1.1° and 0.9°, 2026-11-01); and the bar's rows)
+  if (board.group.visible) for (const z of board.sizes()) { const d = dist(z.mesh); if (z.target !== undefined) out[`${z.name} target`] = { distance: d, side: 0, below: 0, width: sz(z.target, d) }; out[`${z.name} text`] = { distance: d, side: 0, below: 0, width: sz(z.text, d) }; }
+  if (out.bar) out.bar.rows = bar.h / bar.w > 0.15 ? 2 : 1;
   return out;
 }
 
@@ -372,8 +376,8 @@ for (let i = 0; i < 2; i++) {
 // width: 780 css px over its 0.912 m, from 1.23 m, gives its smallest text (11 px) 0.6°, the size Meta calls comfortable;
 // from the window it was 0.29° to 0.50° (research 34))
 const BOARD_CSS_PX = 780; let boardStyle = '';
-renderer.xr.addEventListener('sessionstart', () => { boardStyle = wall.canvas.style.cssText; wall.canvas.style.width = `${BOARD_CSS_PX}px`; wall.canvas.style.height = `${Math.round((BOARD_CSS_PX * NH) / NW)}px`; wall.fit(); layPanels(); window.setTimeout(recentre, 300); bar.draw(); chat.draw(); });
-renderer.xr.addEventListener('sessionend', () => { wall.canvas.style.cssText = boardStyle; wall.fit(); ui.position.set(0, 0, 0); ui.rotation.set(0, 0, 0); layPanels(); chat.draw(); });
+renderer.xr.addEventListener('sessionstart', () => { board.headset(true); boardStyle = wall.canvas.style.cssText; wall.canvas.style.width = `${BOARD_CSS_PX}px`; wall.canvas.style.height = `${Math.round((BOARD_CSS_PX * NH) / NW)}px`; wall.fit(); layPanels(); window.setTimeout(recentre, 300); bar.draw(); chat.draw(); });
+renderer.xr.addEventListener('sessionend', () => { board.headset(false); wall.canvas.style.cssText = boardStyle; wall.fit(); ui.position.set(0, 0, 0); ui.rotation.set(0, 0, 0); layPanels(); chat.draw(); });
 /** The sticks: the right zooms S about the point before you, the left carries you where you look, and turns you. */
 function sticks(dt: number): void {
   const session = renderer.xr.getSession(); if (!session) return;
@@ -420,5 +424,16 @@ const emulate = emulated && {
   },
   trigger: (v: number) => emulated!.controllers.right.updateButtonValue('trigger', v),
   stick: (y: number) => emulated!.controllers.right.updateAxes('thumbstick', 0, y),
+  /** The left stick, as a hand pushes it: walking goes the way it goes in use (sticks(), then carry()). */
+  walk: (x: number, y: number) => emulated!.controllers.left.updateAxes('thumbstick', x, y),
+  /** The board's side panel in one of its states, for measuring: the chosen block (one with inputs a hand can change) or
+   *  the library. Says which block was chosen. */
+  side: (mode: 'chosen' | 'library'): string => {
+    board.libraryShown(mode === 'library');
+    if (mode === 'chosen') for (const id of Object.keys(wall.board().nodes)) { wall.choose(id); if (wall.chosen()?.inputs.some((q) => q.number || q.choices)) break; }
+    board.drawSide(); return mode === 'library' ? 'the library' : wall.chosen()?.label ?? 'nothing';
+  },
+  /** Where the eyes are in the world. */
+  eye: () => renderer.xr.getCamera().getWorldPosition(new THREE.Vector3()).toArray(),
 };
 (window as unknown as { space: object }).space = { emulate, comfort, carry: (x: number, z: number) => carry(new THREE.Vector3(x, 0, z)), keyboard: () => { keyboard.mesh.visible = true; placeKeyboard(); }, presenting: () => renderer.xr.isPresenting, S, fit, jump, focusOn: (x: number, y: number, z: number, cell: number) => focusOn(new THREE.Vector3(x, y, z), cell), zoomAbout, stats: () => view.stats, shown: () => wall.shown().length, pivot, grid: () => ({ cell: grid.cell, planes: grid.planes }), panels: (on: boolean) => { panelsShown = on; ui.visible = on; }, demo: (i: number) => wall.demo(i), wall, camera, orbit };
