@@ -18,11 +18,11 @@ something.
 | U8 | Will you draw 2D profiles by hand (which needs a sketch solver), or are profiles always made from sizes? | Whether to bring in a sketch solver (FreeCAD's planegcs) | from sizes for now | **2026-10-31: profiles from a generated picture.** An image model, told exactly how the picture must look, draws the part's outline in black (nothing else black), with its dimensions; a parser with no AI copies the black lines into the 3D space. Spec `specs/08-sketch-to-3d/spec.md`. |
 | U9 | Should the evaluator be a different model from the builder (more cost, fewer lenient passes)? | Spec 00, S7 | yes, for tasks that change geometry | **2026-10-31: different kinds of reviewer, tested with different prompts**; made a subject of the prompt-engineering research (`research/11-prompts-reviewers-drawing.md`). |
 | U10 | Start phase 0 now? | Nothing is built until you say | yes | **2026-10-31: still in research mode**: a wider research wave first (life, engineering, every language and framework, philosophy, astronomy, contests, the Game of Life, the Mandelbrot set, π, the universal equations, games and anything "irrelevant" that is genius), and the book of questions (`BOOK-OF-QUESTIONS.md`). |
-
 | U11 | The research wave proposes three new specs: 09 the physics core (effort-and-flow ports, an equation compiler, folding tested as exact), 10 trust in numbers (intervals, Monte Carlo, exact sensitivities, CODATA 2022, a "cannot simulate" register), 11 the living world (only the observed computed, replay, affordances, a chronicle, scale anchors). Accept them, and in the order proposed (`research/00-synthesis.md`)? | They change what is built first | accept; CODATA 2022 fixed at once | **2026-10-31: yes** ("add everything useful to the plan") |
 | U12 | Amend spec 08 so the AI writes the profile directly when the request gives the sizes, and the image model draws shape only (letters, not digits)? The research found no image model hits exact colours, and models struggle with exact coordinates | It decides whether the picture path is the main one or the fallback | amend | **2026-10-31: yes** ("add everything useful to the plan") |
-
 | U13 | Accept round 3's amendments (`research/00-synthesis.md`, round 3): interfaces that make a wrong connection impossible, versioned, standard or fitted, joinery without fasteners, failure modes carried by parts; claim status and calibrated parameters; ensembles; agents by stigmergy with an umpire; a near-miss log and stop-the-line for the AI? | They change specs 00, 01, 10 and 11 | accept | **2026-10-31: yes** ("add everything useful to the plan") |
+| U14 | Should Nexus carry what things cost and emit (spec 12)? | Carbon can roll up exactly like mass; cost needs quantity, place and date; open price data is scarce (USGS free; metal exchange prices cost $25k a year to republish) | yes, carbon first (it needs no price data) | — |
+| U15 | Should the AI write boards in a short notation with named nets instead of JSON plans? | Measured (research 30): over all 64 starter boards it takes 0.556 of the JSON plan's tokens; teaching it costs 62 tokens; the model wrote it in 0.47 of JSON's output tokens; validity on 8 builds each too few to rank | adopt it, JSON kept as the stored form, validity measured on a larger set first | — |
 
 ## Still open in the research
 
@@ -41,13 +41,3 @@ something.
 | R11 | Where do our AI's steps and tokens go, and what is its failure rate, today? | the baseline (spec 00, S5) |
 | R12 | Does replicad's OpenCascade history (`Generated`, `Modified`) survive our booleans well enough to name faces by what made them? | a probe before spec 01, I9 |
 | R13 | What edge distance and wall rules hold for materials other than structural steel (aluminium, plastics, wood)? | sources per material, before spec 01, I7; labelled typical where none |
-
-## U14. Cost and carbon (asked 2026-10-31, research 29)
-
-Should Nexus carry what things cost and emit (spec 12)? Carbon can roll up exactly like mass; cost needs quantity, place
-and date, and open price data is scarce (USGS free; metal exchange prices cost $25k a year to republish). **Unanswered.**
-
-## U15. A short board notation for the AI (asked 2026-10-31, research 27)
-
-Should the AI write boards in a short notation with named nets (33 characters against 129 for the JSON plan in one
-example)? **Measured since (research 30)**: across all 64 starter boards it takes 0.556 of the JSON plan's tokens; teaching it costs 62 tokens; the model wrote it in 0.47 of JSON's output tokens. Proposed: adopt it, JSON kept as the stored form, validity measured on a larger set first. **Unanswered.**

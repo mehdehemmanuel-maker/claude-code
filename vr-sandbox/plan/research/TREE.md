@@ -13,7 +13,7 @@ may have overlooked or genius things that are unrelated".
 2. **Ask each pass for three things**: what it found (with sources and marks: checked, from memory, inferred); what
    Nexus should take (each as a node, a rule, a data model or a way of working); and **new branches**: the leads it saw
    and did not follow, each one line.
-3. **Graft**: add the report to `research/`, its questions to `../BOOK-OF-QUESTIONS.md`, its new branches to this tree
+3. **Graft** (`python3 plan/research/graft.py`, which also recompiles `../INDEX.md`; each pass gets `BRIEF.md`): add the report to `research/`, its questions to `../BOOK-OF-QUESTIONS.md`, its new branches to this tree
    as open, and update `00-synthesis.md` where passes agree.
 4. **Prune nothing**: a branch that led nowhere is marked "explored: nothing to take", so it is not explored again.
 
@@ -38,7 +38,7 @@ Legend: `[x]` explored (report), `[ ]` open, `[~]` touched in passing, worth a p
 - [~] AI tutors and explanation quality (10)
 - [ ] Multi-agent design teams (roles, debate, markets of agents)
 - [ ] AI for scientific discovery (hypothesis generation, automated labs, "AI scientist" systems)
-- [ ] Program synthesis and inductive logic (learning rules from examples)
+- [x] Program synthesis and inductive logic (learning rules from examples) (explored: 26)
 
 ### 2. Geometry, topology and making
 - [x] Interfaces, negatives, constraints, topological naming (02)
@@ -113,7 +113,7 @@ Legend: `[x]` explored (report), `[ ]` open, `[~]` touched in passing, worth a p
 - [x] Philosophy of models, ontologies, invention, learning, ethics (10)
 - [x] Citizen science (Foldit, Galaxy Zoo, Zooniverse: ordinary people solving hard problems) (15)
 - [x] Open communities and governance (Wikipedia, Linux, OpenStreetMap: how commons stay healthy) (15)
-- [ ] Economics, markets and pricing of parts (cost models, supply chains)
+- [x] Economics, markets and pricing of parts (cost models, supply chains) (explored: 29)
 - [ ] Law as code (contracts, building codes made executable)
 - [ ] Languages and translation (everyone, everywhere)
 - [x] Accessibility in depth (blind, deaf, motor, cognitive) (15)
@@ -276,25 +276,25 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 ## Branches grafted in round 4 (open)
 
 ### From Self-describing interfaces (`18-self-describing-interfaces.md`)
-- [ ] ISO 80000 parts 1 to 13 as a data file: is there an open machine-readable ISQ (mp-units' ISQ definitions, QUDT quantity kinds)?
-- [ ] QUDT (Quantities, Units, Dimensions and Types) ontology: quantity kinds as RDF, a ready-made kind tree with licence to check.
+- [x] ISO 80000 parts 1 to 13 as a data file: is there an open machine-readable ISQ (mp-units' ISQ definitions, QUDT quantity kinds)? (explored: 24)
+- [x] QUDT (Quantities, Units, Dimensions and Types) ontology: quantity kinds as RDF, a ready-made kind tree with licence to check. (explored: 24)
 - [ ] The SI Digital Framework (BIPM) and D-SI: machine-readable SI and measurement metadata.
 - [ ] W3C Web of Things Thing Description, and IDTA 02017 Asset Interfaces Description that wraps it.
 - [ ] AutomationML (IEC 62714) interface classes and its "ExternalInterface" concept: CAEX ports that link plant objects.
 - [ ] Modelica connectors (`flow`, `stream`) as the oldest typed physical port standard, and the Modelica Standard Library's SIunits.
 - [ ] FMI 3.0 terminals and icons: how co-simulation units declare grouped connectors.
-- [ ] SysML v2 ports, interfaces and quantity kinds (ISQ library inside SysML v2).
+- [x] SysML v2 ports, interfaces and quantity kinds (ISQ library inside SysML v2). (explored: 24)
 - [ ] IEC 81346 reference designations: structural ids for parts in a plant, and the IDTA BoM extension built on it.
 - [ ] GS1 and the EU Digital Product Passport: product self-description reaching consumers.
 - [ ] LeoCAD and BrickLink Studio connection data, compared with LDCad's snap metas (still open from round 3).
 - [ ] The Tsugite source code (released on GitHub?) and Larsson's later work on joints (e.g. curved or non-orthogonal joinery).
-- [ ] Assembly sequence planning from interface data (disassembly graphs, AND/OR graphs; Homem de Mello and Sanderson).
+- [x] Assembly sequence planning from interface data (disassembly graphs, AND/OR graphs; Homem de Mello and Sanderson). (explored: 35)
 - [ ] Poka-yoke catalogues (Shingo) as a library of keying features for the agent to propose.
 - [ ] ISO 2768 general tolerances as the default when a person states none.
 - [ ] Bluetooth GATT and the assigned numbers registry: another self-describing device vocabulary with UUIDs.
 - [ ] CANopen EDS / device profiles (CiA 402) and EtherCAT ESI: drive self-description beside IO-Link.
 - [ ] Units checking in TypeScript (branded types, template-literal types) for Nexus's own code, distinct from the run-time check on wires.
-- [ ] The 2π problem in the SI (proposals to make the radian a base unit; Quincey, Mohr): a sourced basis for decision B2.
+- [x] The 2π problem in the SI (proposals to make the radian a base unit; Quincey, Mohr): a sourced basis for decision B2. (explored: 24)
 - [ ] MTM (Methods-Time Measurement) as an openly described alternative to proprietary DFA time tables.
 
 ### From The physics core in a browser (`19-physics-core-browser.md`)
@@ -434,33 +434,33 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] Photometric versus radiometric kinds (lumen versus watt) and the luminous efficacy bridge, which needs a spectrum.
 
 ### From Incremental, lazy and demand-driven computation (`25-incremental-computation.md`)
-- [ ] HyperFormula's source (an open JS spreadsheet engine with a dependency graph and calculation chain) as a reference implementation in Nexus's own language.
-- [ ] alien-signals' algorithm and Vue 3.6's adoption of it: a fast push-pull core that might be taken whole for the engine's marking pass.
-- [ ] The TC39 Signals polyfill and its stage: whether a standard primitive will exist in browsers in time to build on.
-- [ ] DBSP (Budiu et al.) and Feldera: an algebra that makes any query incremental; whether Nexus's list nodes could be compiled to it.
+- [x] HyperFormula's source (an open JS spreadsheet engine with a dependency graph and calculation chain) as a reference implementation in Nexus's own language. (explored: 32)
+- [x] alien-signals' algorithm and Vue 3.6's adoption of it: a fast push-pull core that might be taken whole for the engine's marking pass. (explored: 32)
+- [x] The TC39 Signals polyfill and its stage: whether a standard primitive will exist in browsers in time to build on. (explored: 32)
+- [x] DBSP (Budiu et al.) and Feldera: an algebra that makes any query incremental; whether Nexus's list nodes could be compiled to it. (explored: 32)
 - [ ] Adapton's nominal memoization paper (OOPSLA 2015) in detail, for spawner rows and list edits.
-- [ ] Jane Street's "Seven Implementations of Incremental" talk in full: pseudo-height, bind nodes, and their mistakes.
+- [x] Jane Street's "Seven Implementations of Incremental" talk in full: pseudo-height, bind nodes, and their mistakes. (explored: 32)
 - [ ] rustc's query system and its on-disk incremental cache: persisting verified traces between sessions.
-- [ ] Salsa's cycle handling (fixed-point iteration for cyclic queries) for Nexus's loops and solvers.
+- [x] Salsa's cycle handling (fixed-point iteration for cyclic queries) for Nexus's loops and solvers. (explored: 32)
 - [ ] Datalog engines with incremental maintenance (Soufflé, Differential Datalog/DDlog) for interface rules "what may touch".
 - [ ] Build Systems à la Carte's treatment of minimality and correctness proofs: a property test Nexus could run (incremental result equals from-scratch result).
 - [ ] Houdini's compiled blocks and "invoke compiled" nodes: how a sub-network is compiled to skip per-node overhead.
 - [ ] Unreal PCG's runtime generation scheduling policies in detail (priorities, budgets per frame).
 - [ ] TouchDesigner's "cook on change if asked" internals and its performance monitor as a UI model.
 - [ ] Grasshopper 2 (in development) and whether McNeel added cutoff or lazy solving.
-- [ ] Observable notebooks' runtime (dataflow cells, lazy invisible cells), already named in research 09, not yet studied for mechanism.
+- [x] Observable notebooks' runtime (dataflow cells, lazy invisible cells), already named in research 09, not yet studied for mechanism. (explored: 32)
 - [ ] Excel's LAMBDA and dynamic arrays: how spill ranges change the dependency tree.
 - [ ] Kinetic data structures (Acar's thesis keyword): incremental geometry under motion, for physics broad-phase.
-- [ ] The Glimmer/Ember autotracking model (revision tags) as another version-number design.
+- [x] The Glimmer/Ember autotracking model (revision tags) as another version-number design. (explored: 32)
 - [ ] Incremental parsing (tree-sitter) as a model for incremental geometry edits.
 - [ ] Memory budgets and eviction policies for memo tables (PCG's element cap; Salsa's LRU; Bazel's disk cache GC).
 - [ ] Reproducible-builds work (reproducible-builds.org) on finding nondeterminism sources: a checklist for LW9.
 
 ### From AI that proves, and shapes that explain themselves (`26-proofs-and-programs.md`)
-- [ ] Translation validation literature after Pnueli and Necula (Alive and Alive2 for LLVM peephole rules) as a model for validating each AI board edit
+- [x] Translation validation literature after Pnueli and Necula (Alive and Alive2 for LLVM peephole rules) as a model for validating each AI board edit (explored: 31)
 - [ ] Alive-style SMT checking of Nexus's own rewrite rules (`lawgraph.ts` simplifications) before they ship
-- [ ] Flyspeck and Hales's use of certificates for linear programs and interval computations in a machine-checked proof
-- [ ] Interval arithmetic certificates (Tucker's Lorenz attractor proof) as a template for "safe over a tolerance range"
+- [x] Flyspeck and Hales's use of certificates for linear programs and interval computations in a machine-checked proof (explored: 31)
+- [x] Interval arithmetic certificates (Tucker's Lorenz attractor proof) as a template for "safe over a tolerance range" (explored: 31)
 - [ ] Verified e-graphs: proofs from egglog checked in Lean or Coq (the egg-to-Coq work and "egg proofs" follow-ups)
 - [ ] Tensat and Diospyros as examples of e-graph extraction under resource costs (ILP extraction), for cost functions over mass, price and part count
 - [ ] DreamCoder's wake-sleep library learning and how its abstractions compare to babble's on CAD corpora
@@ -470,15 +470,15 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] Version-space algebra and PROSE (Microsoft's FlashFill framework) as a library for `by.example`
 - [ ] Interactive disambiguation in programming by example (distinguishing inputs, "active learning" of programs)
 - [ ] Lean's `sorry`-tracking and blueprint tools (leanblueprint) as a model for showing a board's unproved subgoals as a dependency graph
-- [ ] The de Bruijn criterion (small trusted kernel) applied to Nexus: what would a Nexus kernel be
-- [ ] Hardware and safety-critical certification (DO-178C tool qualification, IEC 61508) for what a checked AI design would need to be accepted
-- [ ] Certified programming with dependent types for units (F# units of measure, Idris) as alternatives to SMT refinement
-- [ ] SAT and SMT solvers in WASM with proof output (CaDiCaL WASM builds, cvc5 WASM), to check unsat in-page
+- [x] The de Bruijn criterion (small trusted kernel) applied to Nexus: what would a Nexus kernel be (explored: 31)
+- [x] Hardware and safety-critical certification (DO-178C tool qualification, IEC 61508) for what a checked AI design would need to be accepted (explored: 31)
+- [~] Certified programming with dependent types for units (F# units of measure, Idris) as alternatives to SMT refinement (touched in 24)
+- [x] SAT and SMT solvers in WASM with proof output (CaDiCaL WASM builds, cvc5 WASM), to check unsat in-page (explored: 31)
 - [ ] Reward hacking in RL provers (proving the simplified statement) and what that predicts for an RL-trained CAD agent
 - [ ] AlphaGeometry 2 and its improved symbolic engine: what more deduction rules buy, analogous to a richer Nexus solver set
 
 ### From Notations (`27-notations.md`)
-- [ ] Measure Claude's tokenizer on JSON plans vs NBN vs compact JSON across all starter boards (the decisive experiment).
+- [x] Measure Claude's tokenizer on JSON plans vs NBN vs compact JSON across all starter boards (the decisive experiment). (explored: 30)
 - [ ] Grammar-constrained decoding through hosted APIs: what strict tool schemas allow, and llguidance / XGrammar for local models.
 - [ ] SELFIES-style construction for boards: a derivation grammar where every string is a well-typed board.
 - [ ] Canonical labelling of graphs (nauty, the algorithm behind canonical SMILES) for a board key that ignores node names.
@@ -505,11 +505,11 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] The USAF multivariate accommodation method (Hudson, Zehner, Meindl 1998) and PCA boundary manikins, read in full
 - [ ] Daniels' original 1952 WADC note "The 'Average Man'?", to replace the secondary accounts
 - [ ] ISO 10328's full test geometry and its P7–P8 levels, and ISO 22675 for ankle-foot devices
-- [ ] Pressure ulcer science: time-at-pressure damage curves (Reswick and Rogers 1976; later Gefen), as a time-dependent interface limit
+- [x] Pressure ulcer science: time-at-pressure damage curves (Reswick and Rogers 1976; later Gefen), as a time-dependent interface limit (explored: 34)
 - [ ] Digital human modelling tools (RAMSIS, JACK, Siemens Process Simulate Human) and their fit methods
 - [ ] Statistical shape models of the body (SMPL, STAR) driven from a few measurements, and their bias by population
-- [ ] ISO 11228 (manual handling) and the NIOSH lifting equation as human-load checks
-- [ ] ISO 7730 and the PMV/PPD thermal comfort model, and Fiala/UTCI thermoregulation models, for the living world
+- [x] ISO 11228 (manual handling) and the NIOSH lifting equation as human-load checks (explored: 34)
+- [x] ISO 7730 and the PMV/PPD thermal comfort model, and Fiala/UTCI thermoregulation models, for the living world (explored: 34)
 - [ ] IEC 60601-1 (basic safety and essential performance of medical electrical equipment) and its "essential performance" idea
 - [ ] STPA applied to medical devices (Leveson's work on infusion pumps), beside ISO 14971
 - [ ] FDA MAUDE adverse event database and recall data as a post-market feed linked to interface keys
@@ -520,7 +520,7 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] Clinical decision rules (Wells score, Ottawa ankle rules) as small sourced decision nodes with known sensitivity
 - [ ] FMI co-simulation of physiology models (Bodylight, Modelica Physiolibrary) beside Nexus's own solver
 - [ ] Implant standards: ISO 5832 (implant metals), ISO 7206 (hip stems), ASTM F2996 (FE analysis of hip stems), as interface-with-bone cases
-- [ ] Ergonomic standards for VR headsets (IEC 63145, ISO 9241-392 on stereoscopic comfort) for Nexus's own hardware use
+- [x] Ergonomic standards for VR headsets (IEC 63145, ISO 9241-392 on stereoscopic comfort) for Nexus's own hardware use (explored: 34)
 - [ ] Medical gas, connector and luer misconnection standards (ISO 80369 small-bore connectors), extending 16's keyed ports
 
 ### From What things cost, and how markets behave (`29-cost-markets.md`)
@@ -535,12 +535,12 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] Grid carbon intensity data (Electricity Maps, Ember) for converting process energy to carbon by place and hour.
 - [ ] Material criticality methods (EU CRM list, Graedel's criticality space) as a richer supply-risk layer than import reliance.
 - [ ] Herfindahl–Hirschman concentration from USGS world production tables, computed per element.
-- [ ] Inventory theory (EOQ, newsvendor, (s,S) policies) as nodes, and their relation to the Beer Game.
-- [ ] Forrester's *Industrial Dynamics* (1961) and the system dynamics stock-and-flow notation as a board language.
+- [x] Inventory theory (EOQ, newsvendor, (s,S) policies) as nodes, and their relation to the Beer Game. (explored: 33)
+- [x] Forrester's *Industrial Dynamics* (1961) and the system dynamics stock-and-flow notation as a board language. (explored: 33)
 - [ ] Proper scoring rules (Brier, logarithmic) and prediction markets for contributed estimates.
 - [ ] Combinatorial clock auctions and the FCC incentive auction (2016–17) as models for allocating scarce simulated resources.
-- [ ] Agent-based computational economics (Santa Fe artificial stock market, Sugarscape trade) for the living world.
-- [ ] EVE's PLEX and real-money exchange, and other game economies with published data (RuneScape Grand Exchange).
+- [x] Agent-based computational economics (Santa Fe artificial stock market, Sugarscape trade) for the living world. (explored: 33)
+- [~] EVE's PLEX and real-money exchange, and other game economies with published data (RuneScape Grand Exchange). (touched in 33)
 - [ ] Parametric cost estimating in aerospace and defence (NASA cost models, DoD should-cost reviews) and their open handbooks.
 - [ ] Commodity price indices that are public-domain (World Bank Pink Sheet, IMF primary commodity prices) as LME substitutes.
 - [ ] Kitting and BOM formats (IPC-2581, KiCad BOM, OpenBOM) for importing priced bills of materials.
@@ -552,7 +552,7 @@ Each line a lead a round-3 pass noticed and did not follow; to be placed under i
 - [ ] Measure a whole agent run's token budget by phase (guide, find, card, build, results, answer, second judge).
 - [ ] Cards printed as NBN template lines (`s:seed.spring-checked d= D= n= L=`): fewer tokens and fewer wiring faults?
 - [ ] The `math.expr` card and every other block whose ports follow its settings: an audit of what the card shows.
-- [ ] Why `wire()` accepted `k.value>s.rate` on `seed.spring-checked`: the graph exemption, and every block it covers.
+- [x] Why `wire()` accepted `k.value>s.rate` on `seed.spring-checked`: the graph exemption, and every block it covers. (explored and fixed 2026-10-31: `../DEFECTS.md` D10)
 - [ ] Strict tool schemas (`strict: true`) against the "nodes as a string" failure, and against invented keys.
 - [ ] A provenance layer for labels in NBN, measured against the 7,663 label tokens of the starters.
 - [ ] The house board's measured mass, 226,300 kg for a house, a car and a room: is `measure` counting something twice?

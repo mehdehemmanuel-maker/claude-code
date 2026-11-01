@@ -2,14 +2,44 @@
 
 The user asked (2026-10-31) for "a list of questions that's a book in itself": every question Nexus must answer to
 become what it is meant to be, the hard ones and the ones no one thought to ask. Each chapter gathers one territory.
-The first chapter's questions come from the state of Nexus today; the rest come from the research wave of 2026-10-31
-(its reports in `research/`), each chapter naming the report it came from:
+The first chapter's questions come from the state of Nexus today; the rest come from the research rounds of 2026-10-31
+(their reports in `research/`), each chapter naming the report it came from:
 
-1. Nexus itself · 2. All of engineering, its languages and frameworks · 3. Life and the universal equations ·
-4. Mathematics · 5. Games, visualisation, the very large, and contests · 6. Philosophy, knowledge, invention, learning
-and ethics · 7. Prompts, judges, and a picture to exact geometry · 8. Nature's collective genius · 9. Crafts, toys,
-folding and ancient engineering · 10. Sound, film, magic and designed experiences · 11. Safety cultures and famous
-failures · 12. Commons, citizen science and people together · 13. Unseen sciences, old games and cooking
+<!-- contents: written by plan/compile.py -->
+| Chapter | Questions |
+| --- | --- |
+| 1. Nexus itself: the questions its own state raises | 53 |
+| 2. All of engineering, its languages and frameworks | 96 |
+| 3. Life and the universal equations | 96 |
+| 4. Mathematics: fractals, π, precision, proof, composition | 96 |
+| 5. Games, visualisation, the very large, and contests | 100 |
+| 6. Philosophy, knowledge, invention, learning and ethics | 134 |
+| 7. Prompts, judges, and a picture to exact geometry | 88 |
+| 8. Nature's collective genius | 66 |
+| 9. Crafts, toys, folding and ancient engineering | 64 |
+| 10. Sound, film, magic and designed experiences | 72 |
+| 11. Safety cultures and famous failures | 72 |
+| 12. Commons, citizen science and people together | 65 |
+| 13. Unseen sciences, old games and cooking | 70 |
+| 14. Self-describing interfaces | 70 |
+| 15. The physics core in a browser | 64 |
+| 16. Organisations that do not fail, and deep accidents | 70 |
+| 17. Grammars of space and cities | 66 |
+| 18. Growth and self-organisation | 70 |
+| 19. Keeping knowledge true at scale | 66 |
+| 20. Quantity kinds done right | 69 |
+| 21. Incremental, lazy and demand-driven computation | 70 |
+| 22. AI that proves, and shapes that explain themselves | 66 |
+| 23. Notations | 65 |
+| 24. The body as an engineered system, and medicine's safety | 72 |
+| 25. What things cost, and how markets behave | 66 |
+| 26. The token experiment | 30 |
+| 27. A small trusted kernel | 65 |
+| 28. Engines worth taking for early cutoff | 65 |
+| 29. Stocks, flows and simulated societies | 64 |
+| 30. Human comfort and human load | 67 |
+| 31. Repair, wear and the long life of things | 67 |
+<!-- /contents -->
 
 A question is answered by writing the answer under it with its date and how it was found (a measurement, a source, a
 decision record). An answered question is not deleted: the answer stays beside it.

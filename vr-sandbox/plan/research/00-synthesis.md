@@ -4,6 +4,9 @@ Eleven research passes in two waves (`01` to `05`, then `06` to `11`). This file
 means for the plan, and what is proposed (not decided). Each point names the passes that reached it independently;
 agreement across passes that were not told of each other is the strongest signal we have.
 
+
+The findings are numbered across rounds; `../INDEX.md` groups them by theme and names the passes behind each.
+
 ## Where the passes agree
 
 | # | Finding | Passes that reached it | What it means for Nexus |

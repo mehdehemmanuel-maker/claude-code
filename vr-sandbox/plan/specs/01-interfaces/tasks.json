@@ -28,7 +28,7 @@
   },
   {
    "id": "I3",
-   "title": "The tables negatives need, each row sourced: ISO 273 fine and coarse (and M24), tap drills (ISO 2306 or derived d \u2212 P), counterbores (DIN 974-1), countersinks (ISO 15065), engagement (VDI 2230 or typical), edge and spacing (EN 1993-1-8 t. 3.3, checked), ISO 286-1 tolerance formulas (derived)",
+   "title": "The tables negatives need, each row sourced: ISO 273 fine and coarse (and M24), tap drills (ISO 2306 or derived d − P), counterbores (DIN 974-1), countersinks (ISO 15065), engagement (VDI 2230 or typical), edge and spacing (EN 1993-1-8 t. 3.3, checked), ISO 286-1 tolerance formulas (derived)",
    "meets": [
     "R5"
    ],
@@ -75,7 +75,7 @@
     "R7"
    ],
    "owner": "mate.ts",
-   "check": "on a box's top, a cylinder's side and a sloped face, the frame's n is within 0.5\u00b0 of the surface normal and the hole lies where pointed within 0.1 mm",
+   "check": "on a box's top, a cylinder's side and a sloped face, the frame's n is within 0.5° of the surface normal and the hole lies where pointed within 0.1 mm",
    "status": "failing",
    "after": [
     "I5"
@@ -191,7 +191,7 @@
   },
   {
    "id": "I15",
-   "title": "The interfaces evaluation set: the twelve cases of design \u00a74, numbers worked out by hand from the sources first",
+   "title": "The interfaces evaluation set: the twelve cases of design §4, numbers worked out by hand from the sources first",
    "meets": [
     "R18"
    ],
@@ -321,6 +321,40 @@
    "after": [
     "I2"
    ]
+  },
+  {
+   "id": "I25",
+   "title": "A body as a part family with ports (segments, joints, compartments; ISO 7250 names; ANSUR II, Rajagopal 2016 with their validity); body surfaces as host interfaces whose demand map makes a socket, seat or handle as its negative; `check.humanfit` person by person over a sample, never a percentile (research 28)",
+   "meets": [],
+   "owner": "interfaces.ts and the owners named",
+   "check": "a seat checked over ANSUR II rows reports the share fitted and who is not",
+   "status": "failing",
+   "after": [
+    "01"
+   ],
+   "from": "research 28, 26, 35 (moved from spec 09, 2026-11-01)"
+  },
+  {
+   "id": "I26",
+   "title": "`refactor.pattern` (Szalinski-like, egglog in WebAssembly) and `explain.equal`: placed parts turned into a pattern with a certificate that the two are equal (research 26)",
+   "meets": [],
+   "owner": "interfaces.ts and the owners named",
+   "check": "twelve placed bolts become a bolt circle; the rewrite chain shown",
+   "status": "failing",
+   "after": [],
+   "from": "research 28, 26, 35 (moved from spec 09, 2026-11-01)"
+  },
+  {
+   "id": "I27",
+   "title": "Ordered `disassemble` from blocking graphs on exact solids, fasteners from interfaces, tools named; `repair.score` (EU 2023/1669 and iFixit) showing the path behind its number; wear and damage as interface states (Miner, Paris, Archard per surface pair, ISO 9223), lifetimes as Weibull with their stress and evidence kind (research 35)",
+   "meets": [],
+   "owner": "interfaces.ts and the owners named",
+   "check": "a phone-like assembly's battery path scored, the path shown; a pair's wear advanced over a load history",
+   "status": "failing",
+   "after": [
+    "01"
+   ],
+   "from": "research 28, 26, 35 (moved from spec 09, 2026-11-01)"
   }
  ]
 }
