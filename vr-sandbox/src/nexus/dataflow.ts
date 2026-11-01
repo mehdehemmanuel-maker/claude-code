@@ -27,7 +27,7 @@
 import { EVIDENCE, evidenceOf, nonphysical, rankOf, weakestOf, type EvidenceKind, type NodeEvidence } from './evidence';
 import { ALIASES, aliasSet, block, clockOf, rng, defaultsOf, dimOf, elemOf, fits, portsOf, register, type BlockDef, type Ctx, type Outputs, type PortDef, type Ports, type Type } from './blocks';
 import { edgesOf, nodesOf, uid, type Board, type BoardEdge, type BoardNode, type LiveEdge } from './boards';
-import { fromSI, sameDim, toSI } from '../ganglia/units';
+import { relate } from '../ganglia/units';
 import type { Part } from './kits';
 import { boundsOfAll, designOf, fromLibrary, hash, isAssembly, isPart, massOfAll, place, type Assembly, type Placed } from './assembly';
 import { fitByAsync, fitByBatchAsync, minimizeAsync } from './numeric';
@@ -307,7 +307,7 @@ export class Engine {
     if (this.loop.has(id)) { put({ status: 'failed', error: 'in a loop: it feeds what feeds it', out: undefined, key: undefined }); r.failed++; return; }
     const set = { ...defaultsOf(b), ...(n.set ?? {}) }, ports = portsOf(b, set), wires = this.into.get(id) ?? [];
     // what comes in, and the key it all makes
-    const inputs: Record<string, unknown> = {}, keys: string[] = [], missing: string[] = [];
+    const inputs: Record<string, unknown> = {}, keys: string[] = [], missing: string[] = [], refused: string[] = [];
     // what came in uncertain: by the source that is uncertain, each input it feeds and its ± in that input's unit
     const spreadIn = new Map<string, { input: string; at?: number; du: number }[]>();
     for (const p of ports.inputs) {
@@ -317,7 +317,8 @@ export class Engine {
         for (const w of ws.sort((a, c) => (a.from < c.from ? -1 : a.from > c.from ? 1 : 0))) {
           const s = this.state.get(w.from);
           if (!s || s.status !== 'ok' || !s.out || !(w.out! in s.out)) { missing.push(`${p.label ?? p.name} (from ${this.board.nodes[w.from]?.label || w.from}, ${s?.status === 'failed' ? 'which failed' : 'which has nothing yet'})`); continue; }
-          const fromUnit = this.ports(w.from).outputs.find((o) => o.name === w.out)?.unit, v = convert(s.out[w.out!], fromUnit, p.unit), u = s.uncertainty?.[w.out!];
+          const fromUnit = this.ports(w.from).outputs.find((o) => o.name === w.out)?.unit, u = s.uncertainty?.[w.out!];
+          let v: unknown; try { v = convert(s.out[w.out!], fromUnit, p.unit); } catch (e) { refused.push(`${p.label ?? p.name} (from ${this.board.nodes[w.from]?.label || w.from}): ${(e as Error).message}`); continue; }
           vals.push(v); keys.push(`${p.name}<${s.key}.${w.out}${u ? `±${u}` : ''}`);
           if (u && typeof s.out[w.out!] === 'number' && typeof v === 'number') { const src = `${w.from}.${w.out}`, du = Math.abs((convert((s.out[w.out!] as number) + u, fromUnit, p.unit) as number) - v); spreadIn.set(src, [...(spreadIn.get(src) ?? []), { input: p.name, ...(p.many ? { at: vals.length - 1 } : {}), du }]); }
         }
@@ -327,6 +328,7 @@ export class Engine {
       else if (!p.optional) missing.push(p.label ?? p.name);
     }
     if (b.id === 'group.in') { const f = this.feeds[String(set.name)]; if (f) { set.value = f.value; keys.push(`feed=${f.key}`); } else if (!('value' in (n.set ?? {}))) missing.push(`what comes into the group as ${String(set.name)}`); }
+    if (refused.length) { put({ status: 'failed', error: `wired in from another kind of quantity: ${refused.join('; ')}`, out: undefined, key: undefined }); r.failed++; return; }
     if (missing.length) { put({ status: 'waiting', error: `waiting on ${missing.join(', ')}`, out: undefined, key: undefined }); r.waiting++; return; }
     if (clockOf(b, set)) keys.push(`t=${this.env.time ?? 0}`);
     if (b.live) keys.push(`live=${b.live(set)}`);
@@ -437,8 +439,12 @@ export function unitCombined(a: string | undefined, b: string | undefined, op: '
 const evidenceKept = new WeakMap<BlockDef, NodeEvidence>();
 export function convert(v: unknown, from?: string, to?: string): unknown {
   if (!from || !to || from === to) return v;
-  const a = dimOf(from), b = dimOf(to); if (!a || !b || !sameDim(a, b)) return v;
-  const one = (x: unknown) => (typeof x === 'number' ? fromSI(toSI(x, from), to) : x);
+  // (money, or a unit the parser does not read, passes as it is: it has no dimension to check)
+  const a = dimOf(from), b = dimOf(to); if (!a || !b) return v;
+  // (a value of another dimension or another kind is never passed on as if it were this one (spec 10, T11; fault D1):
+  // the node it goes into fails, saying why, where before the number went in unconverted)
+  const r = relate(from, to); if (!r.ok) throw new Error(r.why);
+  const one = (x: unknown) => (typeof x === 'number' ? r.convert(x) : x);
   return Array.isArray(v) ? v.map(one) : one(v);
 }
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());

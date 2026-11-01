@@ -10,7 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
-import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
+import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, fits as fitsPorts, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
+import { relate } from '../../src/ganglia/units';
 import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
 import { starterBoards } from '../../src/nexus/starters';
 import { APP, fieldOf, search } from '../../src/nexus/navigate';
@@ -82,6 +83,24 @@ describe('every domain, in one pass', () => {
   // (the AI's guide shows a plan that must run as written: its wire goes into an input the block has, and a wire into an
   // input a block lacks, a folded block too, is refused where it is made, never carried silently (2026-10-31: the guide
   // wired a spring's output `rate` as an input, and the board ran on its defaults with no word said))
+  // (a number goes along a wire only into its own kind of quantity (spec 10, T11; faults D1 to D3): a turn is a cycle, so
+  // 60 rpm is 1 Hz, not 2π; an energy is not a torque though both are N·m; an absorbed dose is not a dose equivalent; a
+  // level in dB goes only into dB; a temperature is not a temperature difference, so 10 °C of rise is 10 K, not 283.15)
+  it('a value goes along a wire only into its own kind, converted rightly', () => {
+    const near = (a: number, b: number) => Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(b));
+    for (const [v, from, to, want] of [[60, 'rpm', 'Hz', 1], [1, 'Hz', 'rpm', 60], [1, 'Hz', 'rad/s', 2 * Math.PI], [60, 'rpm', 'rad/s', 2 * Math.PI], [2 * Math.PI, 'rad/s', 'Hz', 1],
+      [10, 'ΔdegC', 'ΔK', 10], [9, 'ΔdegF', 'ΔK', 5], [20, 'degC', 'K', 293.15], [3, 'dB', 'dB', 3], [1, 'kWh', 'J', 3.6e6], [1, 'kN m', 'N m', 1000]] as const) {
+      const r = relate(from, to); expect(r.ok, `${from} → ${to}: ${r.ok ? '' : r.why}`).toBe(true);
+      if (r.ok) expect(near(r.convert(v), want), `${v} ${from} → ${to} gave ${r.convert(v)}, wants ${want}`).toBe(true);
+    }
+    for (const [from, to] of [['J', 'N m'], ['N m', 'kWh'], ['Gy', 'Sv'], ['Sv', 'krad'], ['dB', '1'], ['-', 'dB'], ['degC', 'ΔK'], ['ΔK', 'degC'], ['K', 'ΔK'], ['m', 'N']] as const)
+      expect(relate(from, to).ok, `${from} → ${to} is refused`).toBe(false);
+    // (the laws' temperature differences take a difference: a temperature wired in is refused, a rise in °C converts)
+    const dT = portsOf(LIBRARY.get('law.heat.capacity')!, defaultsOf(LIBRARY.get('law.heat.capacity')!)).inputs.find((p) => p.name === 'dT')!;
+    expect(dT.unit).toBe('ΔK');
+    expect(fitsPorts({ name: 'T', type: 'number', unit: 'degC' }, dT).ok).toBe(false);
+    expect(fitsPorts({ name: 'rise', type: 'number', unit: 'ΔdegC' }, dT).ok).toBe(true);
+  });
   // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
   // two functions, a typed array's kind; and the same value, built in another order, keys the same)
   it('a value\'s digest tells apart what is different and only that', () => {

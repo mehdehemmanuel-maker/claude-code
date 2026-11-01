@@ -28,7 +28,7 @@
 
 import { DISCIPLINE, DISCIPLINES, FIELD_DISCIPLINES } from '../data/disciplines';
 import { EVIDENCE, EVIDENCE_SAYS, UPDATE_SAYS, evidenceOf, type NodeEvidence } from './evidence';
-import { dimensionOf, fromSI, parseUnit, sameDim, toSI, type Dim } from '../ganglia/units';
+import { dimensionOf, fromSI, parseUnit, relate, sameDim, toSI, type Dim } from '../ganglia/units';
 import type { Source } from '../ganglia/types';
 import { MATERIALS } from '../data/materials';
 import { calc, num, type Scope } from './generate';
@@ -280,7 +280,9 @@ export function fits(out: PortDef, inp: PortDef): { ok: true; map: boolean; conv
     const a = dimOf(out.unit), b = dimOf(inp.unit);
     if (!a || !b) return { ok: false, why: `${out.unit} is not ${inp.unit}` };
     if (!sameDim(a, b)) return { ok: false, why: `${out.label ?? out.name} is in ${out.unit} and ${inp.label ?? inp.name} wants ${inp.unit}: not the same kind of quantity` };
-    return { ok: true, map, convert: `${out.unit} → ${inp.unit}` };
+    // (the same dimension is not enough: the same kind (spec 10, T11): a torque is not an energy, a temperature not a rise)
+    const r = relate(out.unit, inp.unit); if (!r.ok) return { ok: false, why: `${out.label ?? out.name} into ${inp.label ?? inp.name}: ${r.why}` };
+    return { ok: true, map, convert: r.how };
   }
   return { ok: true, map };
 }
@@ -1021,7 +1023,10 @@ const targetOf = (text: string) => { const m = /^\s*([^()]+?)\s*(?:\(([^)]*)\))?
 export function lawBlocks(): BlockDef[] {
   return BOOK.map((law) => {
     const all = [...law.inputs, law.output], tags = TAGS[law.id] ?? [], field = FIELD_OF.get(law.id), [kind, why] = LAW_KINDS[law.id] ?? ['derived', ''];
-    const portOf = (p: (typeof all)[number], out = false) => N(p.sym, unitOf(p.unit), { label: `${p.name} (${p.sym})`, ...(!out && LAW_DEFAULTS[law.id]?.[p.sym] !== undefined ? { optional: true, default: LAW_DEFAULTS[law.id]![p.sym] } : {}) });
+    // (a temperature difference takes a difference's unit, so a temperature wired into it is refused, not offset by
+    // 273.15 (spec 10, T11): the law's own term keeps K, the same number)
+    const unitAt = (p: (typeof all)[number]) => { const u0 = unitOf(p.unit); return u0 === 'K' && quantityOf(law, p)?.id === 'temperature-difference' ? 'ΔK' : u0; };
+    const portOf = (p: (typeof all)[number], out = false) => N(p.sym, unitAt(p), { label: `${p.name} (${p.sym})`, ...(!out && LAW_DEFAULTS[law.id]?.[p.sym] !== undefined ? { optional: true, default: LAW_DEFAULTS[law.id]![p.sym] } : {}) });
     const ex = law.example, inTerm = new Set(varsOf(law.term).map((v) => v.sym));
     return def({
       id: `law.${law.id}`, name: law.name, kind: 'law', ability: 'calculate',

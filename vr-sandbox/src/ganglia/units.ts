@@ -1,8 +1,10 @@
 // Units and dimensions. Every quantity the ganglia handle has a dimension in the SI base quantities (mass, length,
 // time, current, temperature), and a unit is a scale (and, for Celsius, an offset) onto SI. Two uses:
-//   - checking laws: a law is dimensionally homogeneous when changing the size of any base unit rescales its output
-//     exactly as its output's dimension says (dimensionsOf + the scaling test in ganglia.test.ts); a misplaced power
-//     (d^2 for d^3) fails it
+//   - checking laws: every law's terms carry units, and a law is checked by their dimensions (`parseUnit`, used by
+//     `src/nexus/dimension.ts` and the law tests in `tests/nexus/domains.test.ts`)
+//   - checking wires (`relate`): a value goes into another unit only where both are the same kind of quantity, not only
+//     the same dimension (spec 10, T11): a turn is a cycle (60 rpm is 1 Hz), an energy is not a torque, an absorbed
+//     dose is not a dose equivalent, a level in dB goes only into dB, a temperature is not a temperature difference
 //   - reading what is said: "a 265 lb kart at 8 mph", "20 N·m", "3/4 in": every number with its unit, in SI, with its
 //     dimension, so a request is understood whatever units it comes in (findQuantities)
 
@@ -36,6 +38,8 @@ export const UNITS: Record<string, UnitDef> = {
   // amount of substance: the mole, 6.02214076e23 entities exactly (SI 2019)
   mol: u([0, 0, 0, 0, 0, 1]), mmol: u([0, 0, 0, 0, 0, 1], 1e-3), kmol: u([0, 0, 0, 0, 0, 1], 1e3),
   K: u(K), degC: u(K, 1, 273.15), degF: u(K, 5 / 9, 255.3722222222222),
+  // a temperature difference, a kind of its own (a rise of 10 °C is 10 K, never 283.15 K): no offset
+  'ΔK': u(K), 'ΔdegC': u(K), 'ΔdegF': u(K, 5 / 9),
   N: u(N), kN: u(N, 1e3), mN: u(N, 1e-3), uN: u(N, 1e-6), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
   // a millimetre of mercury, as medicine writes pressure: 133.322387415 Pa (ISO 80000-4 Annex)
   mmHg: u(PA, 133.322387415),
@@ -52,6 +56,49 @@ export const UNITS: Record<string, UnitDef> = {
   Hz: u([0, 0, -1, 0, 0, 0]), kHz: u([0, 0, -1, 0, 0, 0], 1e3), MHz: u([0, 0, -1, 0, 0, 0], 1e6), GHz: u([0, 0, -1, 0, 0, 0], 1e9), rpm: u([0, 0, -1, 0, 0, 0], (2 * Math.PI) / 60),
   T: u([1, 0, -2, -1, 0, 0]), mT: u([1, 0, -2, -1, 0, 0], 1e-3), F: u([-1, -2, 4, 2, 0, 0]), uF: u([-1, -2, 4, 2, 0, 0], 1e-6), C: u([0, 0, 1, 1, 0, 0]), S: u([-1, -2, 3, 2, 0, 0]), H: u([1, 2, -2, -2, 0, 0]), mH: u([1, 2, -2, -2, 0, 0], 1e-3),
 };
+
+// ------------------------------------------------------------------------------------------------ kinds on wires
+// What a unit counts of a turn: an angle (rad, deg, rev, and a turning speed in rpm) counts radians; a frequency (Hz)
+// counts cycles, and a cycle is one turn. So between the two a turn is 2π radians; where only one side says angle, the
+// SI's own reading (a radian is 1) is kept.
+const ANGLE = new Set(['rad', 'deg', 'rev', 'rpm']), CYCLE = new Set(['Hz', 'kHz', 'MHz', 'GHz']);
+// Units that name a kind their dimension does not: an energy, a dose absorbed, a dose weighed for harm. A force times a
+// length is a torque (or a moment), never an energy, though both are N·m.
+const KIND_OF: Record<string, string> = Object.fromEntries([
+  ...['J', 'kJ', 'MJ', 'Wh', 'kWh', 'eV', 'keV', 'MeV'].map((x) => [x, 'energy']),
+  ...['Gy', 'krad'].map((x) => [x, 'absorbed dose']), ...['Sv', 'mSv', 'uSv'].map((x) => [x, 'dose equivalent']),
+]);
+const FORCE = new Set(['N', 'kN', 'mN', 'uN', 'lbf', 'kgf']), LENGTH = new Set(['m', 'mm', 'cm', 'km', 'um', 'µm', 'nm', 'in', 'inch', 'ft', 'mi']);
+const POINT = new Set(['K', 'degC', 'degF']), DIFFERENCE = new Set(['ΔK', 'ΔdegC', 'ΔdegF']);
+const base = (t: string) => t.replace(/\^.*$/, '');
+/** What a unit says of its kind beyond its dimension. */
+function kindOfUnit(unit: string): { turn: number; cycle: number; kinds: string[]; level: boolean; temp?: 'point' | 'difference' } {
+  const s = unit.replace(/·/g, ' ').replace(/\*/g, ' ').trim(), [num, ...rest] = s.split('/');
+  const nt = num!.trim().split(/\s+/).filter(Boolean), dt = rest.join(' ').trim().split(/\s+/).filter(Boolean);
+  const pow = (t: string) => { const m = /\^(-?\d+(?:\.\d+)?)$/.exec(t); return m ? Number(m[1]) : 1; };
+  let turn = 0, cycle = 0; for (const [ts, k] of [[nt, 1], [dt, -1]] as const) for (const t of ts) { if (ANGLE.has(base(t))) turn += k * pow(t); if (CYCLE.has(base(t))) cycle += k * pow(t); }
+  const side = (ts: string[]) => (ts.length === 1 && KIND_OF[base(ts[0]!)] && pow(ts[0]!) === 1 ? KIND_OF[base(ts[0]!)]! : ts.length === 2 && ts.every((t) => pow(t) === 1) && ((FORCE.has(ts[0]!) && LENGTH.has(ts[1]!)) || (LENGTH.has(ts[0]!) && FORCE.has(ts[1]!))) ? 'torque' : '');
+  const whole = !dt.length && nt.length === 1 ? nt[0]! : '';
+  return { turn, cycle, kinds: [side(nt), side(dt)], level: [...nt, ...dt].some((t) => base(t) === 'dB'), ...(POINT.has(whole) ? { temp: 'point' as const } : DIFFERENCE.has(whole) ? { temp: 'difference' as const } : {}) };
+}
+/**
+ * Whether a value in one unit may go into another, and how it converts (spec 10, T11): the same dimension, and the same
+ * kind. Refused, with the reason, where the kinds differ; a turn counted as a cycle where one side counts turns and the
+ * other cycles.
+ */
+export function relate(from: string, to: string): { ok: true; convert: (v: number) => number; how: string } | { ok: false; why: string } {
+  if (from === to) return { ok: true, convert: (v) => v, how: 'the same unit' };
+  let a, b; try { a = parseUnit(from); b = parseUnit(to); } catch (e) { return { ok: false, why: `${from} into ${to}: ${(e as Error).message}` }; }
+  if (!sameDim(a.dim, b.dim)) return { ok: false, why: `${from} is not ${to}: not the same dimension` };
+  const ka = kindOfUnit(from), kb = kindOfUnit(to);
+  if (ka.level || kb.level) return { ok: false, why: `${from} into ${to}: a level in dB goes only into dB (into anything else it needs its reference)` };
+  for (const i of [0, 1]) { const x = ka.kinds[i], y = kb.kinds[i]; if (x && y && x !== y) return { ok: false, why: `${from} is ${i ? 'per ' : ''}${x} and ${to} is ${i ? 'per ' : ''}${y}: not the same kind, though the same dimension` }; }
+  if ((ka.temp === 'point' && kb.temp === 'difference') || (ka.temp === 'difference' && kb.temp === 'point')) return { ok: false, why: `${from} is a ${ka.temp === 'point' ? 'temperature' : 'temperature difference'} and ${to} a ${kb.temp === 'point' ? 'temperature' : 'temperature difference'}: one is not the other` };
+  // a turn is a cycle: from radians counted to cycles counted, over 2π, and back
+  const k = ka.turn !== kb.turn && ka.turn + ka.cycle === kb.turn + kb.cycle ? (2 * Math.PI) ** (kb.cycle - ka.cycle) : 1;
+  const off = ka.temp === 'difference' || kb.temp === 'difference' ? 0 : 1;
+  return { ok: true, convert: (v) => ((v * a.scale + off * (a.offset ?? 0)) / k - off * (b.offset ?? 0)) / b.scale, how: `${from} → ${to}${k !== 1 ? ' (a turn is a cycle)' : ''}` };
+}
 
 const add = (a: Dim, b: Dim, k = 1): Dim => a.map((x, i) => x + k * b[i]!) as Dim;
 export const sameDim = (a: Dim, b: Dim) => a.every((x, i) => Math.abs(x - b[i]!) < 1e-9);
